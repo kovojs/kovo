@@ -1380,13 +1380,16 @@ export const CartBadge = component({
     const bootstrap = emitQueryPlanBootstrapModule([
       {
         clockExportName: 'CartBadge$clockUpdatePlans',
+        componentName: 'components/cart/cart-badge',
         exportName: 'CartBadge$queryUpdatePlans',
         importPath: '../components/cart/cart-badge.client.js',
         queryNames: { cart: 'queries/cart-query' },
       },
       {
+        componentName: 'components/cart/cart-panel',
         exportName: 'CartPanel$queryUpdatePlans',
         importPath: '../components/cart/cart-panel.client.js',
+        queryNames: {},
       },
     ]);
 
@@ -1415,9 +1418,11 @@ export const CartBadge = component({
     // components keeps both update plans; the aliased locals feed the merge helper.
     expect(bootstrap.source).toContain('const queryPlans = mergeCompiledQueryUpdatePlans([');
     expect(bootstrap.source).toContain(
-      `  { plans: ${badgeQueryLocal}, queryNames: {"cart":"queries/cart-query"} },`,
+      `  { componentName: "components/cart/cart-badge", plans: ${badgeQueryLocal}, queryNames: {"cart":"queries/cart-query"} },`,
     );
-    expect(bootstrap.source).toContain(`  { plans: ${panelQueryLocal} },`);
+    expect(bootstrap.source).toContain(
+      `  { componentName: "components/cart/cart-panel", plans: ${panelQueryLocal}, queryNames: {} },`,
+    );
     expect(bootstrap.source).toContain('const clockUpdatePlans = [');
     expect(bootstrap.source).toContain(`  ...${badgeClockLocal},`);
     expect(bootstrap.source).toContain('installKovoLoader({');

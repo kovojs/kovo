@@ -123,8 +123,9 @@ interface ComponentRootStampMetadata {
   readonly deps: readonly string[];
   readonly domName: string;
   readonly props?: Readonly<Record<string, unknown>>;
+  readonly serverRefresh: boolean;
   readonly staleDeps: readonly string[];
-  readonly target: string;
+  readonly target?: string;
 }
 
 /** A descriptor-snapshotted opening tag consumed by post-render framework stampers. @internal */
@@ -160,6 +161,13 @@ export function stampKovoComponentRoot<Request = unknown>(
       ),
     ),
   );
+  attrs = setOrAppendHtmlAttribute(attrs, 'kovo-plan-owner', metadata.componentName);
+  if (!metadata.serverRefresh) {
+    return replaceHtmlOpeningTag(snapshot.html, opening, attrs);
+  }
+  if (metadata.target === undefined) {
+    throw new TypeError('Refreshable component root stamps require a fragment target.');
+  }
   attrs = setOrAppendHtmlAttribute(attrs, 'kovo-fragment-target', metadata.target);
   attrs = setOrAppendHtmlAttribute(attrs, 'kovo-live-component', metadata.componentName);
   attrs = setOrAppendHtmlAttribute(
@@ -256,7 +264,6 @@ function componentRootStampMetadata<Request>(
   if (disableServerRefresh !== undefined && typeof disableServerRefresh !== 'boolean') {
     throw new TypeError('Component disableServerRefresh metadata must be boolean.');
   }
-  if (disableServerRefresh === true) return null;
 
   const authoredName = optionalOwnDataValue(options.component, 'name', 'Component descriptor');
   const componentName = options.componentName ?? authoredName;
@@ -303,18 +310,22 @@ function componentRootStampMetadata<Request>(
   }
   if (domName === undefined) return null;
 
-  const propKeys = componentPropKeys(definition);
-  const stampedProps = snapshotStampedProps(propKeys, options.props);
-  const target =
-    options.target ?? componentFragmentTarget(domName, options.props, stampedProps, options.jsxKey);
+  const serverRefresh = disableServerRefresh !== true;
+  const propKeys = serverRefresh ? componentPropKeys(definition) : [];
+  const stampedProps = serverRefresh ? snapshotStampedProps(propKeys, options.props) : undefined;
+  const target = serverRefresh
+    ? (options.target ??
+      componentFragmentTarget(domName, options.props, stampedProps, options.jsxKey))
+    : undefined;
 
   return witnessFreeze({
     componentName,
     deps: witnessFreeze(deps),
     domName,
     ...(stampedProps === undefined ? {} : { props: stampedProps }),
+    serverRefresh,
     staleDeps: witnessFreeze(staleDeps),
-    target,
+    ...(target === undefined ? {} : { target }),
   });
 }
 

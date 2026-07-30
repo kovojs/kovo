@@ -22,10 +22,10 @@ interface InstalledLoader {
   delegatedHandlers: boolean;
   enhancedMutations: {
     fetch: (url: string, options: unknown) => unknown;
-    queryPlans: Record<string, KovoApplier>;
   };
   events: readonly string[];
   executionTriggers: boolean;
+  queryPlans: Record<string, KovoApplier>;
 }
 
 type KovoApplier = (root: unknown, value: unknown, context?: unknown) => unknown;
@@ -93,6 +93,28 @@ function runBootstrap(
       calls.push(options);
       return { dispose: () => runOptions.onLoaderDispose?.(), islandSignalScope: {} };
     },
+    mergeCompiledQueryUpdatePlans: (
+      sources: readonly {
+        plans: Record<string, KovoApplier>;
+        queryNames: Record<string, string>;
+      }[],
+    ) => {
+      const merged: Record<string, KovoApplier> = {};
+      for (const source of sources) {
+        for (const [localName, plan] of Object.entries(source.plans)) {
+          const runtimeName = source.queryNames[localName];
+          if (runtimeName === undefined) continue;
+          const previous = merged[runtimeName];
+          merged[runtimeName] = previous
+            ? (root, value, context) => {
+                previous(root, value, context);
+                return plan(root, value, context);
+              }
+            : plan;
+        }
+      }
+      return merged;
+    },
   };
   const exports: {
     installKovoDeferredRuntime?: () => unknown;
@@ -122,8 +144,18 @@ function runBootstrap(
 describe('emitQueryPlanBootstrapModule — same-name export collision (B2, SPEC §5.2/§4.8)', () => {
   it('aliases collided exports so the emitted module has no duplicate import binding', () => {
     const bootstrap = emitQueryPlanBootstrapModule([
-      { exportName: 'Demo$queryUpdatePlans', importPath: '../components/a/demo.client.js' },
-      { exportName: 'Demo$queryUpdatePlans', importPath: '../components/b/demo.client.js' },
+      {
+        componentName: 'components/a/demo',
+        exportName: 'Demo$queryUpdatePlans',
+        importPath: '../components/a/demo.client.js',
+        queryNames: { todos: 'todos' },
+      },
+      {
+        componentName: 'components/b/demo',
+        exportName: 'Demo$queryUpdatePlans',
+        importPath: '../components/b/demo.client.js',
+        queryNames: { cart: 'cart' },
+      },
     ]);
 
     // Two same-named imports must resolve to DISTINCT local aliases (otherwise a duplicate
@@ -151,7 +183,7 @@ describe('emitQueryPlanBootstrapModule — same-name export collision (B2, SPEC 
       '../components/b/demo.client.js': { Demo$queryUpdatePlans: demoB },
     });
 
-    const plans = installed.enhancedMutations.queryPlans;
+    const plans = installed.queryPlans;
     expect(typeof plans.todos).toBe('function');
     expect(typeof plans.cart).toBe('function');
     expect(plans.todos!({}, {})).toBe('A-todos');
@@ -161,12 +193,16 @@ describe('emitQueryPlanBootstrapModule — same-name export collision (B2, SPEC 
   it('merges same-query-key plans so both components’ appliers run (no clobber, §4.8)', () => {
     const bootstrap = emitQueryPlanBootstrapModule([
       {
+        componentName: 'components/cart-badge',
         exportName: 'CartBadge$queryUpdatePlans',
         importPath: '../components/cart-badge.client.js',
+        queryNames: { cart: 'cart' },
       },
       {
+        componentName: 'components/cart-panel',
         exportName: 'CartPanel$queryUpdatePlans',
         importPath: '../components/cart-panel.client.js',
+        queryNames: { cart: 'cart' },
       },
     ]);
 
@@ -187,7 +223,7 @@ describe('emitQueryPlanBootstrapModule — same-name export collision (B2, SPEC 
       '../components/cart-panel.client.js': { CartPanel$queryUpdatePlans: panel },
     });
 
-    const plans = installed.enhancedMutations.queryPlans;
+    const plans = installed.queryPlans;
     expect(typeof plans.cart).toBe('function');
 
     plans.cart!({}, { count: 7 });
@@ -198,13 +234,13 @@ describe('emitQueryPlanBootstrapModule — same-name export collision (B2, SPEC 
   it('emits no imports and an empty merged map for zero inputs', () => {
     const bootstrap = emitQueryPlanBootstrapModule([]);
     const installed = runBootstrap(bootstrap.source, {});
-    expect(installed.enhancedMutations.queryPlans).toEqual({});
+    expect(installed.queryPlans).toEqual({});
   });
 
   it('wires the boot-pinned framework mutation transport instead of a late global fetch lookup', () => {
     const bootstrap = emitQueryPlanBootstrapModule([]);
     expect(bootstrap.source).toContain(
-      "import { applyDeferredStreamResponseToRuntime, createBrowserKovoRoot, createQueryStore, defaultEnhancedFetch, installInlineKovoLoader, installKovoLoader } from '@kovojs/browser/generated';",
+      "import { applyDeferredStreamResponseToRuntime, createBrowserKovoRoot, createQueryStore, defaultEnhancedFetch, installInlineKovoLoader, installKovoLoader, mergeCompiledQueryUpdatePlans } from '@kovojs/browser/generated';",
     );
     expect(bootstrap.source).toContain('fetch: defaultEnhancedFetch,');
     expect(bootstrap.source).not.toContain('=> fetch(');

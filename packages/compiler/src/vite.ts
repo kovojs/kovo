@@ -77,6 +77,7 @@ import {
   parseDiagnosticsForSourceFile,
 } from './scan/parse.js';
 import { deriveRegistryIdentity } from './registry-identities.js';
+import { resolveComponentQueryRuntimeNames } from './scan/query-runtime-identities.js';
 import { rewriteClientModuleRuntimeImportsForBrowser } from './emit/client.js';
 import { emitQueryPlanBootstrapModule, type QueryPlanBootstrapInput } from './emit/bootstrap.js';
 import { lowerStandaloneSourceDerivedRegistryDeclarations } from './source-derived-lowering.js';
@@ -489,7 +490,9 @@ interface ViteCompileResult {
   hmrImpact?: HmrImpactMetadata | null;
   queryPlanBootstrapMetadata?: {
     readonly clockExportName?: string;
+    readonly componentName: string;
     readonly exportName: string;
+    readonly queryNames?: Readonly<Record<string, string>>;
   };
   renderPlanFingerprint?: string | null;
   renderPlanFingerprintInput?: Readonly<Record<string, string>>;
@@ -542,7 +545,9 @@ interface ViteCompileMetadata {
   hmrImpact: HmrImpactMetadata | null;
   queryPlanBootstrapMetadata?: {
     readonly clockExportName?: string;
+    readonly componentName: string;
     readonly exportName: string;
+    readonly queryNames?: Readonly<Record<string, string>>;
   };
   renderPlanFingerprint: string | null;
   renderPlanFingerprintInput: Readonly<Record<string, string>>;
@@ -1157,6 +1162,7 @@ function createBoundKovoVitePlugin(
           if (optimisticModule !== undefined && isCurrent()) {
             recordViteCompileResult(
               transformDevState,
+              transformRoot,
               fileName,
               source,
               emptyViteCompileMetadata(),
@@ -1201,6 +1207,7 @@ function createBoundKovoVitePlugin(
               const transformed = transformViteCompileResult(
                 transformDevState,
                 options,
+                transformRoot,
                 fileName,
                 source,
                 resolvedResult,
@@ -1230,6 +1237,7 @@ function createBoundKovoVitePlugin(
         const transformed = transformViteCompileResult(
           transformDevState,
           options,
+          transformRoot,
           fileName,
           source,
           result,
@@ -1337,6 +1345,7 @@ function createBoundKovoVitePlugin(
             if (optimisticModule !== undefined && isCurrent()) {
               recordViteCompileResult(
                 hotUpdateDevState,
+                hotUpdateRoot,
                 fileName,
                 source,
                 emptyViteCompileMetadata(),
@@ -1422,7 +1431,14 @@ function createBoundKovoVitePlugin(
             fileName,
             hasAppContractOperation,
           );
-          recordViteCompileResult(hotUpdateDevState, fileName, source, metadata, emittedFiles);
+          recordViteCompileResult(
+            hotUpdateDevState,
+            hotUpdateRoot,
+            fileName,
+            source,
+            metadata,
+            emittedFiles,
+          );
           // SPEC §6.2.1: compile output becomes observable only after a fresh evaluated cache has
           // imported and assembled the entire closed app. A failed candidate leaves the broker's
           // prior generation active and emits no success/reload event.
@@ -1689,6 +1705,7 @@ function insertQueryPlanBootstrapInput(
 function transformViteCompileResult(
   devState: ViteDevStateStore,
   options: KovoVitePluginOptions,
+  rootDirectory: string,
   fileName: string,
   source: string,
   result: ViteCompileResult,
@@ -1711,7 +1728,7 @@ function transformViteCompileResult(
   if (errorDiagnostics.length > 0) throw new Error(viteDiagnosticErrorMessage(errorDiagnostics));
   const metadata = snapshotViteCompileMetadata(result);
   if (!shouldRetainResult()) return null;
-  recordViteCompileResult(devState, fileName, source, metadata, emittedFiles);
+  recordViteCompileResult(devState, rootDirectory, fileName, source, metadata, emittedFiles);
 
   let serverSource: string | undefined;
   for (let index = 0; index < emittedFiles.length; index += 1) {
@@ -2691,91 +2708,65 @@ function importedQueryDerivedKey(
     }
   }
   if (!entry) return null;
-
+  const extension = compilerRegExpTest(/\.[cm]?[tj]sx?$/, entry.moduleSpecifier) ? '' : '.ts';
   return deriveRegistryIdentity(
-    resolveImportedModuleFileName(fileName, entry.moduleSpecifier),
+    slashPath(resolve(dirname(fileName), `${entry.moduleSpecifier}${extension}`)),
     entry.importedName,
   ).key;
 }
 
 function queryPlanBootstrapInputForComponent(
+  rootDirectory: string,
   fileName: string,
   source: string,
   importPath: string,
   metadata: NonNullable<ViteCompileMetadata['queryPlanBootstrapMetadata']>,
 ): QueryPlanBootstrapInput {
-  const queryNames = componentQueryPlanRuntimeNames(source, fileName);
+  const queryNames = resolveViteComponentQueryRuntimeNames(
+    rootDirectory,
+    fileName,
+    source,
+    metadata.queryNames,
+  );
   return compilerFreeze({
-    ...metadata,
+    ...(metadata.clockExportName === undefined
+      ? {}
+      : { clockExportName: metadata.clockExportName }),
+    componentName: metadata.componentName,
+    exportName: metadata.exportName,
     importPath,
-    ...(compilerObjectKeys(queryNames).length === 0 ? {} : { queryNames }),
+    queryNames,
   });
 }
 
-/**
- * Resolve the component-local aliases used by emitted update-plan functions to the
- * source-derived registry identities used by SSR, wire chunks, the query store, and optimism.
- */
-function componentQueryPlanRuntimeNames(
-  source: string,
+function resolveViteComponentQueryRuntimeNames(
+  rootDirectory: string,
   fileName: string,
+  source: string,
+  knownNames?: Readonly<Record<string, string>>,
 ): Readonly<Record<string, string>> {
-  const model = parseComponentModule(fileName, source);
-  const entries = allComponentOptionObjectEntries(model, 'queries');
-  const queryNames = compilerCreateNullRecord<string>();
-  const entryLength = compilerArrayLength(entries, 'Vite component query-plan entries');
-  for (let index = 0; index < entryLength; index += 1) {
-    const rawEntry = compilerOwnDataValue(entries, index, 'Vite component query-plan entries');
-    if (typeof rawEntry !== 'object' || rawEntry === null || compilerArrayIsArray(rawEntry)) {
-      throw new TypeError(`Vite component query-plan entries[${index}] must be an own object.`);
-    }
-    const localName = compilerOwnDataValue(
-      rawEntry,
-      'key',
-      `Vite component query-plan entries[${index}]`,
-    );
-    const rawBinding = compilerOwnDataValue(
-      rawEntry,
-      'queryBinding',
-      `Vite component query-plan entries[${index}]`,
-    );
-    if (typeof localName !== 'string' || localName.length === 0) {
-      throw new TypeError(`Vite component query-plan entries[${index}].key must be non-empty.`);
-    }
-    if (
-      rawBinding === undefined ||
-      typeof rawBinding !== 'object' ||
-      rawBinding === null ||
-      compilerArrayIsArray(rawBinding)
-    ) {
-      continue;
-    }
-    const queryExpression = compilerOwnDataValue(
-      rawBinding,
-      'queryKeyExpression',
-      `Vite component query-plan entries[${index}].queryBinding`,
-    );
-    if (typeof queryExpression !== 'string' || queryExpression.length === 0) continue;
-    const runtimeName = importedQueryDerivedKey(model, fileName, queryExpression);
-    if (runtimeName === null) continue;
-    const existing = compilerOwnDataValue(
-      queryNames,
-      localName,
-      'Vite component query-plan runtime names',
-    );
-    if (existing !== undefined && existing !== runtimeName) {
+  const programFileName = isAbsolute(fileName) ? fileName : resolve(rootDirectory, fileName);
+  const resolveNames = () =>
+    resolveComponentQueryRuntimeNames({
+      fileName: programFileName,
+      knownNames,
+      rootDirectory,
+      source,
+    });
+  if (!compilerRegExpTest(/\.\s*query\s*\(/u, source)) return resolveNames();
+
+  const project = createCompilerOwnedAppContractProject({
+    rootDirectory,
+    rootNames: [programFileName],
+  });
+  return project.withEntryResolutions(programFileName, (programSource) => {
+    if (programSource !== source) {
       throw new TypeError(
-        `Kovo Vite resolved conflicting runtime query identities for component alias "${localName}".`,
+        `Kovo Vite query identity project refused a stale source snapshot for ${fileName}.`,
       );
     }
-    compilerDefineOwnDataProperty(queryNames, localName, runtimeName);
-  }
-  return compilerFreeze(queryNames);
-}
-
-function resolveImportedModuleFileName(fileName: string, moduleSpecifier: string): string {
-  const extension = compilerRegExpTest(/\.[cm]?[tj]sx?$/, moduleSpecifier) ? '' : '.ts';
-  return slashPath(resolve(dirname(fileName), `${moduleSpecifier}${extension}`));
+    return resolveNames();
+  });
 }
 
 function snapshotViteQueryShapeFact(
@@ -3071,7 +3062,12 @@ function snapshotViteQueryPlanBootstrapMetadata(
   const keys = compilerObjectKeys(value);
   for (let index = 0; index < keys.length; index += 1) {
     const key = keys[index]!;
-    if (key !== 'exportName' && key !== 'clockExportName') {
+    if (
+      key !== 'exportName' &&
+      key !== 'clockExportName' &&
+      key !== 'componentName' &&
+      key !== 'queryNames'
+    ) {
       throw new TypeError(`Kovo Vite compile queryPlanBootstrapMetadata.${key} is not supported.`);
     }
   }
@@ -3085,12 +3081,31 @@ function snapshotViteQueryPlanBootstrapMetadata(
     'clockExportName',
     'Vite compile queryPlanBootstrapMetadata',
   );
+  const componentName = compilerOwnDataValue(
+    value,
+    'componentName',
+    'Vite compile queryPlanBootstrapMetadata',
+  );
+  const rawQueryNames = compilerOwnDataValue(
+    value,
+    'queryNames',
+    'Vite compile queryPlanBootstrapMetadata',
+  );
   if (
     typeof exportName !== 'string' ||
     !compilerRegExpTest(/^[A-Za-z_$][A-Za-z0-9_$]*$/u, exportName)
   ) {
     throw new TypeError(
       'Kovo Vite compile queryPlanBootstrapMetadata.exportName must be an identifier.',
+    );
+  }
+  if (
+    typeof componentName !== 'string' ||
+    componentName.length === 0 ||
+    compilerRegExpTest(/\s/u, componentName)
+  ) {
+    throw new TypeError(
+      'Kovo Vite compile queryPlanBootstrapMetadata.componentName must be a non-empty registry identity.',
     );
   }
   if (
@@ -3104,7 +3119,16 @@ function snapshotViteQueryPlanBootstrapMetadata(
   }
   return compilerFreeze({
     ...(clockExportName === undefined ? {} : { clockExportName }),
+    componentName,
     exportName,
+    ...(rawQueryNames === undefined
+      ? {}
+      : {
+          queryNames: snapshotViteStringRecord(
+            rawQueryNames,
+            'queryPlanBootstrapMetadata.queryNames',
+          ),
+        }),
   });
 }
 
@@ -3143,6 +3167,23 @@ function snapshotViteStringList(value: unknown, name: string): string[] {
     compilerArrayAppend(result, entry, `Vite compile ${name}`);
   }
   return result;
+}
+
+function snapshotViteStringRecord(value: unknown, name: string): Readonly<Record<string, string>> {
+  if (typeof value !== 'object' || value === null || compilerArrayIsArray(value)) {
+    throw new TypeError(`Kovo Vite compile ${name} must be an own record.`);
+  }
+  const snapshot = compilerCreateNullRecord<string>();
+  const keys = compilerObjectKeys(value);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    const entry = compilerOwnDataValue(value, key, `Vite compile ${name}`);
+    if (key.length === 0 || typeof entry !== 'string' || entry.length === 0) {
+      throw new TypeError(`Kovo Vite compile ${name} must map non-empty strings.`);
+    }
+    compilerDefineOwnDataProperty(snapshot, key, entry);
+  }
+  return compilerFreeze(snapshot);
 }
 
 function viteOptimisticModuleForFile(
@@ -3274,6 +3315,7 @@ function viteOptimisticModuleForFile(
 
 function recordViteCompileResult(
   store: ViteDevStateStore,
+  rootDirectory: string,
   fileName: string,
   source: string,
   metadata: ViteCompileMetadata,
@@ -3304,6 +3346,7 @@ function recordViteCompileResult(
       metadata.queryPlanBootstrapMetadata === undefined
         ? undefined
         : queryPlanBootstrapInputForComponent(
+            rootDirectory,
             fileName,
             source,
             href,

@@ -12,6 +12,7 @@ import {
   compilerCreateSet,
   compilerFailClosed,
   compilerMapGet,
+  compilerMapForEach,
   compilerMapSet,
   compilerOwnDataValue,
   compilerRegExpTest,
@@ -38,6 +39,7 @@ import {
   componentFragmentTargetNames,
   componentHasInferredFragmentTarget,
   componentOptionObjectKeys,
+  componentOptionObjectEntriesFor,
   componentOptionStaticValue,
   componentRenderHostElementFor,
   componentRenderInputModels,
@@ -61,6 +63,7 @@ import {
   webhookHandlers,
 } from '../scan/parse.js';
 import { dedupeBy, kebabCase } from '../shared.js';
+import { deriveRegistryIdentity } from '../registry-identities.js';
 import type {
   CompileComponentOptions,
   QueryShape,
@@ -141,6 +144,136 @@ export function validateReservedQueryNames(
   )
     ? [diagnosticAt(diagnostics, 'KV304', undefined, 'state')]
     : [];
+}
+
+/**
+ * SPEC §4.8/§5.2: one component-local alias must own one canonical runtime query plan. Until the
+ * compiler emits alias-to-instance ownership metadata, binding the same query twice would merge
+ * both alias appliers under one store identity and let either applier rewrite both instances.
+ */
+export function validateDuplicateCanonicalQueryBindings(
+  diagnostics: DiagnosticFactory,
+  model: ComponentModuleModel,
+  options: Pick<CompileComponentOptions, 'fileName'>,
+): CompilerDiagnostic[] {
+  const found: CompilerDiagnostic[] = [];
+  const componentLength = compilerArrayLength(model.components, 'Query-plan components');
+  for (let componentIndex = 0; componentIndex < componentLength; componentIndex += 1) {
+    const component = ownArrayEntry(model.components, componentIndex, 'Query-plan components');
+    const entries = componentOptionObjectEntriesFor(component, 'queries');
+    const aliases = compilerCreateMap<string, string[]>();
+    const identities = compilerCreateMap<string, string[]>();
+    const entryLength = compilerArrayLength(entries, 'Component query-plan bindings');
+    for (let entryIndex = 0; entryIndex < entryLength; entryIndex += 1) {
+      const entry = ownArrayEntry(entries, entryIndex, 'Component query-plan bindings');
+      appendQueryAlias(aliases, entry.key, entry.key);
+      appendQueryAlias(
+        identities,
+        canonicalQueryBindingIdentity(model, options.fileName, entry),
+        entry.key,
+      );
+    }
+
+    const reported = compilerCreateSet<string>();
+    appendDuplicateQueryBindingDiagnostics(
+      found,
+      reported,
+      aliases,
+      component,
+      diagnostics,
+      'component alias',
+    );
+    appendDuplicateQueryBindingDiagnostics(
+      found,
+      reported,
+      identities,
+      component,
+      diagnostics,
+      'runtime query',
+    );
+  }
+  return found;
+}
+
+function canonicalQueryBindingIdentity(
+  model: ComponentModuleModel,
+  fileName: string,
+  entry: ReturnType<typeof componentOptionObjectEntriesFor>[number],
+): string {
+  const expression = entry.queryBinding?.queryKeyExpression;
+  if (!expression) return `alias:${entry.key}`;
+  const imports = model.namedImports;
+  const importLength = compilerArrayLength(imports, 'Component query-plan imports');
+  for (let index = 0; index < importLength; index += 1) {
+    const imported = ownArrayEntry(imports, index, 'Component query-plan imports');
+    if (
+      imported.localName !== expression ||
+      !compilerStringStartsWith(imported.moduleSpecifier, '.')
+    ) {
+      continue;
+    }
+    const importedFile = resolveRelativeModulePath(fileName, imported.moduleSpecifier);
+    if (importedFile === null) return `expression:${expression}`;
+    return `runtime:${deriveRegistryIdentity(importedFile, imported.importedName).key}`;
+  }
+  return `expression:${expression}`;
+}
+
+function appendQueryAlias(groups: Map<string, string[]>, identity: string, alias: string): void {
+  const values = compilerMapGet(groups, identity) ?? [];
+  compilerArrayAppend(values, alias, 'Component query-plan identity aliases');
+  compilerMapSet(groups, identity, values);
+}
+
+function appendDuplicateQueryBindingDiagnostics(
+  target: CompilerDiagnostic[],
+  reported: Set<string>,
+  groups: Map<string, string[]>,
+  component: ComponentModel,
+  diagnostics: DiagnosticFactory,
+  identityKind: 'component alias' | 'runtime query',
+): void {
+  compilerMapForEach(groups, (aliases, identity) => {
+    if (aliases.length < 2) return;
+    const reportKey = compilerArrayJoin(aliases, '\0');
+    if (compilerSetHas(reported, reportKey)) return;
+    compilerSetAdd(reported, reportKey);
+    const option = componentOption(component, 'queries');
+    const base = diagnosticAt(
+      diagnostics,
+      'KV240',
+      option === undefined
+        ? component.localNameSpan === undefined
+          ? undefined
+          : {
+              start: component.localNameSpan.start,
+              length: component.localNameSpan.end - component.localNameSpan.start,
+            }
+        : { start: option.start, length: option.end - option.start },
+    );
+    const componentName = component.localName ?? '<anonymous component>';
+    const readableIdentity = compilerStringStartsWith(identity, 'runtime:')
+      ? compilerStringSlice(identity, 'runtime:'.length)
+      : compilerStringStartsWith(identity, 'expression:')
+        ? compilerStringSlice(identity, 'expression:'.length)
+        : compilerStringSlice(identity, 'alias:'.length);
+    compilerArrayAppend(
+      target,
+      contextualizeCompilerDiagnostic(base, {
+        help: compilerArrayJoin(
+          [
+            'Would lower to: one component-owned update plan for one canonical runtime query and exact keyed instance.',
+            'Blocked reason: multiple component aliases collapse to one runtime plan identity, but no generated alias-to-instance metadata can prove which alias owns which DOM writes.',
+            'Fixes: keep one binding for this query in the component, or split the bindings into separately owned components until exact alias-to-instance metadata is available.',
+            'SPEC §4.8 makes query updates compiler-emitted per-query plans, and §5.2 requires source-derived identities to remain unambiguous through generated runtime artifacts.',
+          ],
+          '\n',
+        ),
+        message: `Duplicate component query binding. component="${componentName}" ${identityKind}="${readableIdentity}" aliases=${compilerArrayJoin(aliases, ', ')}`,
+      }),
+      'Duplicate component query binding diagnostics',
+    );
+  });
 }
 
 export function validateIsomorphicJustifications(

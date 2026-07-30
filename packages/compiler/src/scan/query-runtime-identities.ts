@@ -1,0 +1,365 @@
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+
+import * as ts from 'typescript';
+
+import {
+  callExpressionAtSpan,
+  frameworkExport,
+  type FrameworkIdentityTypeScript,
+} from '@kovojs/core/internal/framework-identity';
+
+import { compilerOwnedAppContractFactoryEquals } from '../app-contract-resolver.js';
+import { deriveRegistryIdentity } from '../registry-identities.js';
+import { ensureTypescriptRuntime } from '../ts-api.js';
+import {
+  allComponentOptionObjectEntries,
+  parseComponentModule,
+  type CallExpressionModel,
+  type ObjectLiteralEntry,
+} from './parse.js';
+
+ensureTypescriptRuntime(ts);
+
+const KOVO_QUERY_IDENTITY = frameworkExport('@kovojs/server', 'query');
+
+export interface QueryRuntimeIdentityProjectOptions {
+  readonly fileName: string;
+  readonly knownNames?: Readonly<Record<string, string>>;
+  readonly rootDirectory: string;
+  readonly source: string;
+}
+
+/**
+ * Resolve component-local query aliases through one exact compiler-owned TypeScript Program.
+ * This is the Vite/build counterpart to SSR's runtime `.key` read: aliases, namespace members,
+ * barrels, and tsconfig path mappings all resolve to the declaration that owns the wire identity.
+ */
+export function resolveComponentQueryRuntimeNames(
+  options: QueryRuntimeIdentityProjectOptions,
+): Readonly<Record<string, string>> {
+  const fileName = resolve(options.fileName);
+  const source = options.source;
+  if (source.length === 0) return Object.freeze(Object.create(null) as Record<string, string>);
+
+  const compilerOptions = queryIdentityCompilerOptions(options.rootDirectory, fileName);
+  const host = exactEntryCompilerHost(compilerOptions, fileName, source);
+  const program = ts.createProgram({ host, options: compilerOptions, rootNames: [fileName] });
+  const sourceFile = exactProgramSourceFile(program, fileName);
+  if (sourceFile.text !== source) {
+    throw new TypeError(
+      `Kovo query identity project refused a stale source snapshot for ${fileName}.`,
+    );
+  }
+
+  const checker = program.getTypeChecker();
+  const model = parseComponentModule(fileName, source);
+  const entries = allComponentOptionObjectEntries(model, 'queries');
+  const result = Object.create(null) as Record<string, string>;
+  for (const [alias, runtimeName] of Object.entries(options.knownNames ?? {})) {
+    Object.defineProperty(result, alias, {
+      configurable: false,
+      enumerable: true,
+      value: runtimeName,
+      writable: false,
+    });
+  }
+  const models = new Map<string, ReturnType<typeof parseComponentModule>>([[fileName, model]]);
+
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index]!;
+    const known = Object.getOwnPropertyDescriptor(result, entry.key);
+    if (known !== undefined) continue;
+    const runtimeName = runtimeNameForQueryEntry(entry, sourceFile, checker, models);
+    const descriptor = Object.getOwnPropertyDescriptor(result, entry.key);
+    if (descriptor && descriptor.value !== runtimeName) {
+      throw new TypeError(
+        `Kovo query identity project resolved conflicting identities for component alias "${entry.key}".`,
+      );
+    }
+    Object.defineProperty(result, entry.key, {
+      configurable: false,
+      enumerable: true,
+      value: runtimeName,
+      writable: false,
+    });
+  }
+  return Object.freeze(result);
+}
+
+function runtimeNameForQueryEntry(
+  entry: ObjectLiteralEntry,
+  sourceFile: ts.SourceFile,
+  checker: ts.TypeChecker,
+  models: Map<string, ReturnType<typeof parseComponentModule>>,
+): string {
+  const binding = entry.queryBinding;
+  if (binding?.queryKeyExpression === undefined) return entry.key;
+  const span = binding.queryKeySpan;
+  if (span === undefined) {
+    throw unresolvedQueryIdentity(entry.key, binding.queryKeyExpression);
+  }
+  const node = exactNodeAtSpan(sourceFile, span.start, span.end);
+  const identity = node
+    ? runtimeNameForExpression(node, checker, models, new Set<ts.Node>(), 0)
+    : undefined;
+  if (identity === undefined) {
+    throw unresolvedQueryIdentity(entry.key, binding.queryKeyExpression);
+  }
+  return identity;
+}
+
+function runtimeNameForExpression(
+  rawNode: ts.Node,
+  checker: ts.TypeChecker,
+  models: Map<string, ReturnType<typeof parseComponentModule>>,
+  seen: Set<ts.Node>,
+  depth: number,
+): string | undefined {
+  if (depth > 32 || seen.has(rawNode)) return undefined;
+  seen.add(rawNode);
+  const node = unwrapExpression(rawNode);
+  if (ts.isIdentifier(node)) {
+    return runtimeNameForDeclaration(
+      resolvedDeclaration(checker, node),
+      checker,
+      models,
+      seen,
+      depth,
+    );
+  }
+  if (ts.isPropertyAccessExpression(node)) {
+    return runtimeNameForDeclaration(
+      resolvedDeclaration(checker, node.name),
+      checker,
+      models,
+      seen,
+      depth,
+    );
+  }
+  if (
+    ts.isElementAccessExpression(node) &&
+    node.argumentExpression &&
+    (ts.isStringLiteralLike(node.argumentExpression) ||
+      ts.isNumericLiteral(node.argumentExpression))
+  ) {
+    return runtimeNameForDeclaration(
+      resolvedDeclaration(checker, node.argumentExpression),
+      checker,
+      models,
+      seen,
+      depth,
+    );
+  }
+  return undefined;
+}
+
+function runtimeNameForDeclaration(
+  declaration: ts.Declaration | undefined,
+  checker: ts.TypeChecker,
+  models: Map<string, ReturnType<typeof parseComponentModule>>,
+  seen: Set<ts.Node>,
+  depth: number,
+): string | undefined {
+  if (!declaration || seen.has(declaration)) return undefined;
+  seen.add(declaration);
+  if (ts.isVariableDeclaration(declaration) && ts.isIdentifier(declaration.name)) {
+    const direct = directQueryDeclarationIdentity(declaration, models);
+    if (direct !== undefined) return direct;
+    return declaration.initializer
+      ? runtimeNameForExpression(declaration.initializer, checker, models, seen, depth + 1)
+      : undefined;
+  }
+  if (ts.isPropertyAssignment(declaration)) {
+    return runtimeNameForExpression(declaration.initializer, checker, models, seen, depth + 1);
+  }
+  if (ts.isShorthandPropertyAssignment(declaration)) {
+    const symbol = checker.getShorthandAssignmentValueSymbol(declaration);
+    return runtimeNameForDeclaration(
+      symbol?.valueDeclaration ?? symbol?.declarations?.[0],
+      checker,
+      models,
+      seen,
+      depth + 1,
+    );
+  }
+  return undefined;
+}
+
+function directQueryDeclarationIdentity(
+  declaration: ts.VariableDeclaration,
+  models: Map<string, ReturnType<typeof parseComponentModule>>,
+): string | undefined {
+  if (!declaration.initializer || !ts.isIdentifier(declaration.name)) return undefined;
+  const call = queryDeclarationCall(declaration, models);
+  if (call === undefined) return undefined;
+  const explicitKey = call.argumentStaticValues[0];
+  if (typeof explicitKey === 'string') return explicitKey;
+  if (call.exportedConstName !== declaration.name.text) return undefined;
+  return deriveRegistryIdentity(declaration.getSourceFile().fileName, declaration.name.text).key;
+}
+
+function queryDeclarationCall(
+  declaration: ts.VariableDeclaration,
+  models: Map<string, ReturnType<typeof parseComponentModule>>,
+): CallExpressionModel | undefined {
+  const sourceFile = declaration.getSourceFile();
+  let model = models.get(sourceFile.fileName);
+  if (model === undefined) {
+    model = parseComponentModule(sourceFile.fileName, sourceFile.text);
+    models.set(sourceFile.fileName, model);
+  }
+  const initializer = unwrapExpression(declaration.initializer!);
+  if (!ts.isCallExpression(initializer)) return undefined;
+  const start = initializer.getStart(sourceFile);
+  return model.calls.find((call) => {
+    if (call.start !== start || call.end !== initializer.end) return false;
+    if (call.frameworkFactory === 'query') return true;
+    const astCall = callExpressionAtSpan(ts as FrameworkIdentityTypeScript, model.sourceFile, call);
+    return astCall
+      ? compilerOwnedAppContractFactoryEquals(
+          ts as FrameworkIdentityTypeScript,
+          model.sourceFile,
+          astCall.expression,
+          KOVO_QUERY_IDENTITY,
+        )
+      : false;
+  });
+}
+
+function resolvedDeclaration(checker: ts.TypeChecker, node: ts.Node): ts.Declaration | undefined {
+  let symbol = checker.getSymbolAtLocation(node);
+  const seen = new Set<ts.Symbol>();
+  while (symbol && (symbol.flags & ts.SymbolFlags.Alias) !== 0 && !seen.has(symbol)) {
+    seen.add(symbol);
+    symbol = checker.getAliasedSymbol(symbol);
+  }
+  return symbol?.valueDeclaration ?? symbol?.declarations?.[0];
+}
+
+function exactNodeAtSpan(
+  sourceFile: ts.SourceFile,
+  start: number,
+  end: number,
+): ts.Node | undefined {
+  let found: ts.Node | undefined;
+  const visit = (node: ts.Node): void => {
+    if (found || node.end < end || node.getStart(sourceFile) > start) return;
+    if (node.getStart(sourceFile) === start && node.end === end) {
+      found = node;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return found;
+}
+
+function unwrapExpression(node: ts.Node): ts.Node {
+  let current = node;
+  while (
+    ts.isParenthesizedExpression(current) ||
+    ts.isAsExpression(current) ||
+    ts.isSatisfiesExpression(current) ||
+    ts.isNonNullExpression(current) ||
+    ts.isTypeAssertionExpression(current) ||
+    ts.isPartiallyEmittedExpression(current)
+  ) {
+    current = current.expression;
+  }
+  return current;
+}
+
+function exactEntryCompilerHost(
+  options: ts.CompilerOptions,
+  fileName: string,
+  source: string,
+): ts.CompilerHost {
+  const host = ts.createCompilerHost(options);
+  const getSourceFile = host.getSourceFile.bind(host);
+  const readFile = host.readFile.bind(host);
+  const fileExists = host.fileExists.bind(host);
+  host.fileExists = (candidate) => sameFile(candidate, fileName) || fileExists(candidate);
+  host.readFile = (candidate) => (sameFile(candidate, fileName) ? source : readFile(candidate));
+  host.getSourceFile = (candidate, languageVersion, onError, shouldCreateNewSourceFile) =>
+    sameFile(candidate, fileName)
+      ? ts.createSourceFile(
+          candidate,
+          source,
+          languageVersion,
+          true,
+          scriptKindForFileName(candidate),
+        )
+      : getSourceFile(candidate, languageVersion, onError, shouldCreateNewSourceFile);
+  return host;
+}
+
+function queryIdentityCompilerOptions(rootDirectory: string, fileName: string): ts.CompilerOptions {
+  const configFile = boundedTsConfig(rootDirectory, dirname(fileName));
+  let configured: ts.CompilerOptions = {};
+  if (configFile !== undefined) {
+    const read = ts.readConfigFile(configFile, ts.sys.readFile);
+    if (read.error) {
+      throw new TypeError(`Kovo query identity project could not read ${configFile}.`);
+    }
+    configured = ts.parseJsonConfigFileContent(read.config, ts.sys, dirname(configFile)).options;
+  }
+  return {
+    ...configured,
+    allowJs: true,
+    allowImportingTsExtensions: true,
+    jsx: configured.jsx ?? ts.JsxEmit.ReactJSX,
+    jsxImportSource: configured.jsxImportSource ?? '@kovojs/server',
+    module: configured.module ?? ts.ModuleKind.NodeNext,
+    moduleResolution: configured.moduleResolution ?? ts.ModuleResolutionKind.NodeNext,
+    noEmit: true,
+    preserveSymlinks: false,
+    skipLibCheck: true,
+    target: configured.target ?? ts.ScriptTarget.ES2024,
+  };
+}
+
+function boundedTsConfig(rootDirectory: string, startDirectory: string): string | undefined {
+  const boundary = resolve(rootDirectory);
+  let current = resolve(startDirectory);
+  if (!withinDirectory(boundary, current)) return undefined;
+  for (;;) {
+    const candidate = join(current, 'tsconfig.json');
+    if (ts.sys.fileExists(candidate)) return candidate;
+    if (sameFile(current, boundary)) return undefined;
+    current = dirname(current);
+  }
+}
+
+function withinDirectory(parent: string, child: string): boolean {
+  const path = relative(parent, child);
+  return path === '' || (!path.startsWith('..') && !isAbsolute(path));
+}
+
+function exactProgramSourceFile(program: ts.Program, fileName: string): ts.SourceFile {
+  const exact =
+    program.getSourceFile(fileName) ??
+    program.getSourceFiles().find((sourceFile) => sameFile(sourceFile.fileName, fileName));
+  if (exact === undefined) {
+    throw new TypeError(`Kovo query identity project does not contain ${fileName}.`);
+  }
+  return exact;
+}
+
+function scriptKindForFileName(fileName: string): ts.ScriptKind {
+  if (/\.tsx$/iu.test(fileName)) return ts.ScriptKind.TSX;
+  if (/\.jsx$/iu.test(fileName)) return ts.ScriptKind.JSX;
+  if (/\.[cm]?js$/iu.test(fileName)) return ts.ScriptKind.JS;
+  return ts.ScriptKind.TS;
+}
+
+function sameFile(left: string, right: string): boolean {
+  return resolve(left).replaceAll('\\', '/') === resolve(right).replaceAll('\\', '/');
+}
+
+function unresolvedQueryIdentity(alias: string, expression: string): TypeError {
+  return new TypeError(
+    `Kovo could not prove the exact runtime query identity for component alias "${alias}" ` +
+      `from "${expression}". Export a source-derived query (or give it an explicit key) so ` +
+      'SSR, the query store, and generated update plans share one identity.',
+  );
+}

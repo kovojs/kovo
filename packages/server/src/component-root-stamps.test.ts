@@ -60,6 +60,7 @@ describe('component root stamp security', () => {
     expect(stamped).not.toContain('<img');
     expect(stamped).toContain('kovo-c="card-root"');
     expect(stamped).toContain('kovo-deps="existing card"');
+    expect(stamped).toContain('kovo-plan-owner="components/card/card-root"');
     expect(stamped).toContain('>safe</card-root>');
   });
 
@@ -184,6 +185,7 @@ describe('component root stamp security', () => {
     expect(stamped).not.toContain('<img');
     expect(stamped).not.toContain('admin');
     expect(stamped).toContain('kovo-deps="legacy catalog%2Fitems"');
+    expect(stamped).toContain('kovo-plan-owner="components/card/card-root"');
     expect(stamped).toContain(`kovo-fragment-target="${target}"`);
     expect(stamped).toContain(`kovo-live-token="${expectedToken}"`);
     expect(stamped).toContain(
@@ -269,6 +271,30 @@ describe('component root stamp security', () => {
         request: {},
       }),
     ).toBe(html);
+  });
+
+  it('keeps local query ownership on force-off roots without emitting refresh authority', () => {
+    const cardQuery = query('card', { load: () => ({ title: 'safe' }) });
+    const Card = component({
+      disableServerRefresh: true,
+      queries: { card: cardQuery },
+      render: () => undefined,
+    });
+    const stamped = stampKovoComponentRoot({
+      component: Card,
+      componentName: 'components/card/local-card',
+      html: '<article>safe</article>',
+      props: {},
+      request: {},
+    });
+
+    expect(stamped).toContain('kovo-c="local-card"');
+    expect(stamped).toContain('kovo-deps="card"');
+    expect(stamped).toContain('kovo-plan-owner="components/card/local-card"');
+    expect(stamped).not.toContain('kovo-fragment-target');
+    expect(stamped).not.toContain('kovo-live-component');
+    expect(stamped).not.toContain('kovo-live-token');
+    expect(stamped).not.toContain('kovo-props');
   });
 
   it('binds omitted optional props identically in the token and visible JSON attribute', () => {

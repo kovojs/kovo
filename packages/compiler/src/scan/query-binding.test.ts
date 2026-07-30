@@ -29,6 +29,7 @@ describe('query binding structural grammar', () => {
       executable: true,
       hasRefresh: true,
       queryKeyExpression: 'productQuery',
+      queryKeySpan: { end: 85, start: 73 },
       queryExpression: 'productQuery',
     });
   });

@@ -9,6 +9,7 @@ import {
   compilerStringSlice,
 } from '../compiler-security-intrinsics.js';
 import { compilerIrHeader } from '../ir.js';
+import { escapeCssString } from '../shared.js';
 
 const RUNTIME_GENERATED_IMPORT = '@kovojs/browser/generated';
 
@@ -19,10 +20,12 @@ const RUNTIME_GENERATED_IMPORT = '@kovojs/browser/generated';
  */
 export interface QueryPlanBootstrapInput {
   clockExportName?: string;
+  /** @internal Full source-derived registry identity that owns this component's DOM plan. */
+  componentName: string;
   exportName: string;
   importPath: string;
   /** @internal Component-local plan alias → source-derived runtime query identity. */
-  queryNames?: Readonly<Record<string, string>>;
+  queryNames: Readonly<Record<string, string>>;
 }
 
 /**
@@ -148,13 +151,9 @@ export function emitQueryPlanBootstrapModule(
   const planLines: string[] = [];
   for (let index = 0; index < queryAliases.length; index += 1) {
     const input = inputSnapshot[index]!;
-    const queryNames =
-      input.queryNames === undefined
-        ? ''
-        : `, queryNames: ${bootstrapJsonSource(input.queryNames, 'Bootstrap query names')}`;
     compilerArrayAppend(
       planLines,
-      `  { plans: ${queryAliases[index]!}${queryNames} },`,
+      `  { ownerSelector: ${bootstrapJsonSource(`[kovo-plan-owner="${escapeCssString(input.componentName)}"]`, 'Bootstrap owner selector')}, plans: ${queryAliases[index]!}, queryNames: ${bootstrapJsonSource(input.queryNames, 'Bootstrap query names')} },`,
       'Compiler packages/compiler/src/emit/bootstrap.ts collection',
     );
   }

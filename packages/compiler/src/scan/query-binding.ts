@@ -38,7 +38,15 @@ export function queryBindingFromParsedExpression(
       ...(arrow ? queryArgsArrowFacts(sourceFile, arrow) : {}),
       ...(hasRefresh ? { hasRefresh } : {}),
       executable: isRuntimeQueryReference(queryExpression),
-      ...(queryKeyExpression === null ? {} : { queryKeyExpression }),
+      ...(queryKeyExpression === null
+        ? {}
+        : {
+            queryKeyExpression,
+            queryKeySpan: {
+              end: queryExpression.end,
+              start: queryExpression.getStart(sourceFile),
+            },
+          }),
       queryExpression: queryExpression.getText(sourceFile),
     };
   }
@@ -47,7 +55,15 @@ export function queryBindingFromParsedExpression(
   return {
     ...(hasRefresh ? { hasRefresh } : {}),
     executable: isRuntimeQueryReference(unwrappedExpression),
-    ...(queryKeyExpression === null ? {} : { queryKeyExpression }),
+    ...(queryKeyExpression === null
+      ? {}
+      : {
+          queryKeyExpression,
+          queryKeySpan: {
+            end: unwrappedExpression.end,
+            start: unwrappedExpression.getStart(sourceFile),
+          },
+        }),
     queryExpression: unwrappedExpression.getText(sourceFile),
   };
 }

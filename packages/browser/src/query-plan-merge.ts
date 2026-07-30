@@ -1,5 +1,6 @@
 import {
   applyCompiledQueryUpdatePlan,
+  queryBindingRootMatchesIdentity,
   type ApplyCompiledQueryUpdatePlanOptions,
   type CompiledQueryUpdateApplier,
   type CompiledQueryUpdateContext,
@@ -7,16 +8,18 @@ import {
   type CompiledQueryUpdatePlans,
   type QueryBindingRoot,
 } from './query-bindings.js';
-import { queryStoreKey } from './query-store.js';
+import { queryRuntimeElements } from './runtime-dom-security.js';
 import {
   applySecurityIntrinsic,
-  defineSecurityProperties,
   freezeSecurityValue,
   securityArrayIsArray,
   securityGetOwnPropertyDescriptor,
   securityNullRecord,
   securityObjectKeys,
   securityOwnArrayEntry,
+  securitySet,
+  securitySetAdd,
+  securitySetHas,
 } from './security-witness-intrinsics.js';
 
 /**
@@ -25,8 +28,9 @@ import {
  * @generated Bootstrap/runtime ABI only.
  */
 export interface CompiledQueryUpdatePlanSource {
+  ownerSelector: string;
   plans: CompiledQueryUpdatePlans;
-  queryNames?: Readonly<Record<string, string>>;
+  queryNames: Readonly<Record<string, string>>;
 }
 
 /**
@@ -39,37 +43,48 @@ export function mergeCompiledQueryUpdatePlans(
   sources: readonly CompiledQueryUpdatePlanSource[],
 ): CompiledQueryUpdatePlans {
   if (!securityArrayIsArray(sources)) {
-    invalidQueryPlan('sources type');
+    invalidQueryPlan();
   }
 
   const merged = securityNullRecord<CompiledQueryUpdatePlanEntry>();
   for (let sourceIndex = 0; sourceIndex < sources.length; sourceIndex += 1) {
     const sourceEntry = securityOwnArrayEntry(sources, sourceIndex);
     if (!sourceEntry.ok || typeof sourceEntry.value !== 'object' || sourceEntry.value === null) {
-      invalidQueryPlan('sources dense');
+      invalidQueryPlan();
     }
-    const plans = requiredOwnRecord(sourceEntry.value, 'plans') as CompiledQueryUpdatePlans;
-    const queryNames = optionalOwnRecord(sourceEntry.value, 'queryNames');
+    const source = sourceEntry.value as CompiledQueryUpdatePlanSource;
+    const ownerSelector = source.ownerSelector;
+    const plans = source.plans;
+    const queryNames = source.queryNames;
+    const sourceRuntimeNames = securitySet<string>();
 
     const localNames = securityObjectKeys(plans);
     for (let planIndex = 0; planIndex < localNames.length; planIndex += 1) {
       const localNameEntry = securityOwnArrayEntry(localNames, planIndex);
       if (!localNameEntry.ok || localNameEntry.value.length === 0) {
-        invalidQueryPlan('name');
+        invalidQueryPlan();
       }
       const localName = localNameEntry.value;
       const planDescriptor = securityGetOwnPropertyDescriptor(plans, localName);
       if (!planDescriptor || !('value' in planDescriptor)) {
-        invalidQueryPlan('entry ownership');
+        invalidQueryPlan();
       }
       if (planDescriptor.value === undefined) continue;
-      const plan = requirePlanEntry(planDescriptor.value);
+      const plan = planDescriptor.value;
       const runtimeName = mappedRuntimeQueryName(queryNames, localName);
-      // Reuse the store identity validator so emitted plan registries cannot mint a name the wire
-      // and store would later reject.
-      queryStoreKey(runtimeName, undefined);
+      // Clock-only plan entries and other non-query channels are intentionally absent from the
+      // compiler's alias map. The explicit clock scheduler remains their sole DOM writer.
+      if (runtimeName === undefined) continue;
+      if (securitySetHas(sourceRuntimeNames, runtimeName)) {
+        invalidQueryPlan();
+      }
+      securitySetAdd(sourceRuntimeNames, runtimeName);
 
-      const next = normalizePlanApplier(localName, plan);
+      const next = ownedPlanApplier(
+        ownerSelector,
+        runtimeName,
+        normalizePlanApplier(localName, plan),
+      );
       const existingDescriptor = securityGetOwnPropertyDescriptor(merged, runtimeName);
       const existing =
         existingDescriptor && 'value' in existingDescriptor
@@ -82,27 +97,37 @@ export function mergeCompiledQueryUpdatePlans(
               applySecurityIntrinsic(existing, undefined, [root, value, context]);
               return applySecurityIntrinsic(next, undefined, [root, value, context]);
             };
-      defineSecurityProperties(merged, {
-        [runtimeName]: {
-          configurable: true,
-          enumerable: true,
-          value: combined,
-          writable: false,
-        },
-      });
+      (merged as Record<string, CompiledQueryUpdatePlanEntry>)[runtimeName] = combined;
     }
   }
   return freezeSecurityValue(merged);
+}
+
+function ownedPlanApplier(
+  ownerSelector: string,
+  runtimeName: string,
+  applyPlan: CompiledQueryUpdateApplier,
+): CompiledQueryUpdateApplier {
+  return (root, value, context = {}) => {
+    const identity = contextOptions(context).queryIdentity;
+    if (!identity || identity.name !== runtimeName) invalidQueryPlan();
+    const owners = queryRuntimeElements<QueryBindingRoot>(root, ownerSelector);
+    let result: unknown;
+    for (let index = 0; index < owners.length; index += 1) {
+      const ownerEntry = securityOwnArrayEntry(owners, index);
+      if (!ownerEntry.ok) invalidQueryPlan();
+      if (!queryBindingRootMatchesIdentity(ownerEntry.value, identity)) continue;
+      result = applySecurityIntrinsic(applyPlan, undefined, [ownerEntry.value, value, context]);
+    }
+    return result;
+  };
 }
 
 function normalizePlanApplier(
   localName: string,
   plan: CompiledQueryUpdatePlanEntry,
 ): CompiledQueryUpdateApplier {
-  if (typeof plan === 'function') {
-    return (root, value, context = {}) =>
-      applySecurityIntrinsic(plan, undefined, [root, value, context]);
-  }
+  if (typeof plan === 'function') return plan;
   return (root: QueryBindingRoot, value: unknown, context: CompiledQueryUpdateContext = {}) =>
     applyCompiledQueryUpdatePlan(root, localName, value, plan, contextOptions(context));
 }
@@ -111,79 +136,35 @@ function contextOptions(context: CompiledQueryUpdateContext): ApplyCompiledQuery
   const queryIdentity = securityGetOwnPropertyDescriptor(context, 'queryIdentity');
   const queryStore = securityGetOwnPropertyDescriptor(context, 'queryStore');
   if (queryIdentity && !('value' in queryIdentity)) {
-    invalidQueryPlan('queryIdentity ownership');
+    invalidQueryPlan();
   }
   if (queryStore && !('value' in queryStore)) {
-    invalidQueryPlan('queryStore ownership');
+    invalidQueryPlan();
   }
   return {
-    ...(queryIdentity && queryIdentity.value !== undefined
-      ? {
-          queryIdentity: queryIdentity.value as NonNullable<
-            CompiledQueryUpdateContext['queryIdentity']
-          >,
-        }
-      : {}),
-    ...(queryStore && queryStore.value !== undefined
-      ? { queryStore: queryStore.value as NonNullable<CompiledQueryUpdateContext['queryStore']> }
-      : {}),
+    queryIdentity:
+      queryIdentity && 'value' in queryIdentity
+        ? (queryIdentity.value as CompiledQueryUpdateContext['queryIdentity'])
+        : undefined,
+    queryStore:
+      queryStore && 'value' in queryStore
+        ? (queryStore.value as CompiledQueryUpdateContext['queryStore'])
+        : undefined,
   };
 }
 
 function mappedRuntimeQueryName(
-  queryNames: Readonly<Record<string, unknown>> | undefined,
+  queryNames: Readonly<Record<string, unknown>>,
   localName: string,
-): string {
-  if (queryNames === undefined) return localName;
+): string | undefined {
   const descriptor = securityGetOwnPropertyDescriptor(queryNames, localName);
-  if (descriptor === undefined) return localName;
+  if (descriptor === undefined) return undefined;
   if (!('value' in descriptor) || typeof descriptor.value !== 'string') {
-    invalidQueryPlan('query-name mapping type');
+    invalidQueryPlan();
   }
   return descriptor.value;
 }
 
-function requirePlanEntry(value: unknown): CompiledQueryUpdatePlanEntry {
-  if (typeof value === 'function') return value as CompiledQueryUpdateApplier;
-  if (typeof value === 'object' && value !== null && !securityArrayIsArray(value)) {
-    return value as CompiledQueryUpdatePlanEntry;
-  }
-  invalidQueryPlan('entry');
-}
-
-function requiredOwnRecord(value: object, key: string): object {
-  const descriptor = securityGetOwnPropertyDescriptor(value, key);
-  if (
-    !descriptor ||
-    !('value' in descriptor) ||
-    typeof descriptor.value !== 'object' ||
-    descriptor.value === null ||
-    securityArrayIsArray(descriptor.value)
-  ) {
-    invalidQueryPlan(`${key} record`);
-  }
-  return descriptor.value;
-}
-
-function optionalOwnRecord(
-  value: object,
-  key: string,
-): Readonly<Record<string, unknown>> | undefined {
-  const descriptor = securityGetOwnPropertyDescriptor(value, key);
-  if (descriptor === undefined || ('value' in descriptor && descriptor.value === undefined)) {
-    return undefined;
-  }
-  if (
-    !('value' in descriptor) ||
-    typeof descriptor.value !== 'object' ||
-    descriptor.value === null ||
-    securityArrayIsArray(descriptor.value)
-  ) {
-    invalidQueryPlan(`${key} record`);
-  }
-  return descriptor.value as Readonly<Record<string, unknown>>;
-}
-
-function invalidQueryPlan(detail: string): never {
-  throw new TypeError(`Kovo query plan: ${detail}.`);
+function invalidQueryPlan(): never {
+  throw new TypeError('Invalid Kovo query plan.');
 }

@@ -376,7 +376,14 @@ export interface GeneratedQueryUpdatePlanRuntime {
     queries: string[];
   };
   createQueryStore: () => { get(name: string, key?: string): unknown };
-  emitQueryPlanBootstrapModule: (plans: Array<{ exportName: string; importPath: string }>) => {
+  emitQueryPlanBootstrapModule: (
+    plans: Array<{
+      componentName: string;
+      exportName: string;
+      importPath: string;
+      queryNames: Readonly<Record<string, string>>;
+    }>,
+  ) => {
     source: string;
   };
   executeClientArtifact: (
@@ -1152,6 +1159,7 @@ export function generatedBootstrapDeferredBehaviorFact(
       | 'defaultEnhancedFetch'
       | 'installInlineKovoLoader'
       | 'installKovoLoader'
+      | 'mergeCompiledQueryUpdatePlans'
     >
   >,
 ): GeneratedBootstrapDeferredBehaviorFact {
@@ -1163,8 +1171,10 @@ export function generatedBootstrapDeferredBehaviorFact(
   };
   const bootstrap = runtime.emitQueryPlanBootstrapModule([
     {
+      componentName: 'components/cart-badge',
       exportName: 'CartBadge$queryUpdatePlans',
       importPath: '../components/cart-badge.client.js',
+      queryNames: { cart: 'cart' },
     },
   ]);
   const installed = runtime.executeBootstrapModule(
@@ -1428,6 +1438,7 @@ export function executeGeneratedBootstrapModule(
       | 'defaultEnhancedFetch'
       | 'installInlineKovoLoader'
       | 'installKovoLoader'
+      | 'mergeCompiledQueryUpdatePlans'
     >
   >,
 ): ExecuteGeneratedBootstrapModuleResult {

@@ -40,6 +40,8 @@ export interface QueryBindingModel {
   hasRefresh?: boolean;
   /** Readable runtime query reference, absent for object-literal query keys. */
   queryKeyExpression?: string;
+  /** Scanner-owned exact span of the runtime query reference in the authoritative source AST. */
+  queryKeySpan?: SourceSpan;
   queryExpression: string;
 }
 

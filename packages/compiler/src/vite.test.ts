@@ -590,7 +590,9 @@ export const orderPaid = webhook('/webhooks/order-paid', {
       ],
       queryPlanBootstrapMetadata: {
         clockExportName: 'DealCard$clockUpdatePlans',
+        componentName: 'deal-card/deal-card',
         exportName: 'DealCard$queryUpdatePlans',
+        queryNames: { deal: 'queries/deal-by-id-query' },
       },
       renderPlanFingerprint: computeRenderPlanFingerprint(renderPlanFingerprintInput),
       renderPlanFingerprintInput,
@@ -776,7 +778,11 @@ export const orderPaid = webhook('/webhooks/order-paid', {
             source: `export const ${fixture.exportName} = {};\\n`,
           },
         ],
-        queryPlanBootstrapMetadata: { exportName: fixture.exportName },
+        queryPlanBootstrapMetadata: {
+          componentName: fileName.replace(/^src\//u, '').replace(/\.tsx$/u, ''),
+          exportName: fixture.exportName,
+          queryNames: {},
+        },
         renderPlanFingerprint: computeRenderPlanFingerprint(fixture.input),
         renderPlanFingerprintInput: fixture.input,
       };
@@ -802,7 +808,11 @@ export const orderPaid = webhook('/webhooks/order-paid', {
   it('rejects render-plan metadata that does not match the exact compiler input', async () => {
     const plugin = createKovoVitePlugin(() => ({
       files: [{ kind: 'client', source: 'export const Plans = {};\\n' }],
-      queryPlanBootstrapMetadata: { exportName: 'Plans' },
+      queryPlanBootstrapMetadata: {
+        componentName: 'forged',
+        exportName: 'Plans',
+        queryNames: {},
+      },
       renderPlanFingerprint: computeRenderPlanFingerprint({ actual: '{}' }),
       renderPlanFingerprintInput: { forged: '{}' },
     }));

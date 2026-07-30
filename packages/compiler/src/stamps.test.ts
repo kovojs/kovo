@@ -61,13 +61,14 @@ export const Recommendations = component({
     expect(lowering.replacements).toEqual([
       {
         end: kovoDepsStart + "kovo-deps='!product!product%3Ap1'".length,
-        replacement: 'kovo-deps="!product!product%3Ap1 cart"',
+        replacement:
+          'kovo-deps={["!product!product%3Ap1", __kovoEncodeGeneratedDependencyIdentity(cartQuery.key ?? "cart")].join(\' \')}',
         start: kovoDepsStart,
       },
       {
         end: insertPosition,
         replacement:
-          ' kovo-c="recommendations" kovo-fragment-target="recommendations" kovo-live-component="recommendations" kovo-state="{&quot;open&quot;:true}"',
+          ' kovo-c="recommendations" kovo-plan-owner="recommendations" kovo-fragment-target="recommendations" kovo-live-component="recommendations" kovo-state="{&quot;open&quot;:true}"',
         start: insertPosition,
       },
     ]);
@@ -82,10 +83,17 @@ export const Recommendations = component({
         },
         {
           "context": "attribute",
-          "expression": "!product!product%3Ap1 cart",
+          "expression": "["!product!product%3Ap1", __kovoEncodeGeneratedDependencyIdentity(cartQuery.key ?? "cart")].join(' ')",
           "sink": "kovo-deps",
           "source": "server-render",
           "writer": "host dependency stamp",
+        },
+        {
+          "context": "attribute",
+          "expression": "recommendations",
+          "sink": "kovo-plan-owner",
+          "source": "server-render",
+          "writer": "host plan owner stamp",
         },
         {
           "context": "attribute",
@@ -121,8 +129,15 @@ export const Recommendations = component({
         {
           "attr": "kovo-deps",
           "mode": "replace",
-          "value": "!product!product%3Ap1 cart",
+          "value": "["!product!product%3Ap1", __kovoEncodeGeneratedDependencyIdentity(cartQuery.key ?? "cart")].join(' ')",
+          "valueKind": "expression",
           "writer": "host dependency stamp",
+        },
+        {
+          "attr": "kovo-plan-owner",
+          "mode": "insert",
+          "value": "recommendations",
+          "writer": "host plan owner stamp",
         },
         {
           "attr": "kovo-fragment-target",
@@ -1362,7 +1377,7 @@ export const CartBadge = component({
     });
 
     expect(result.files[0]?.source).toContain(
-      '<cart-badge kovo-deps="cart productPage" kovo-fragment-target="cart-badge" kovo-live-component="cart-badge/cart-badge">',
+      '<cart-badge kovo-deps={[__kovoEncodeGeneratedDependencyIdentity(cartQuery.key ?? "cart"), __kovoEncodeGeneratedDependencyIdentity(productPageQuery.key ?? "productPage")].join(\' \')} kovo-plan-owner="cart-badge/cart-badge" kovo-fragment-target="cart-badge" kovo-live-component="cart-badge/cart-badge">',
     );
     expect(() => assertFixpoint(result)).not.toThrow();
   });
@@ -1524,7 +1539,7 @@ export const OrderHistory = component({
     });
 
     expect(result.files[0]?.source).toContain(
-      '<ol kovo-c="order-history" kovo-deps="orderHistory" kovo-fragment-target="order-history" kovo-live-component="order-history/order-history">',
+      '<ol kovo-c="order-history" kovo-deps={[__kovoEncodeGeneratedDependencyIdentity(orderHistoryQuery.key ?? "orderHistory")].join(\' \')} kovo-plan-owner="order-history/order-history" kovo-fragment-target="order-history" kovo-live-component="order-history/order-history">',
     );
     expect(() => assertFixpoint(result)).not.toThrow();
     expect(() => assertRenderEquivalence(result)).not.toThrow();
@@ -1569,7 +1584,7 @@ export const ProductDetail = component({
     });
 
     expect(result.files[0]?.source).toContain(
-      '<section kovo-c="product-detail" kovo-deps="product" kovo-fragment-target="product-detail" kovo-live-component="product-detail/product-detail">',
+      '<section kovo-c="product-detail" kovo-deps={[__kovoEncodeGeneratedDependencyIdentity(productQuery.key ?? "product")].join(\' \')} kovo-plan-owner="product-detail/product-detail" kovo-fragment-target="product-detail" kovo-live-component="product-detail/product-detail">',
     );
     expect(result.files[0]?.source).not.toContain('kovo-props={JSON.stringify({ productId })}');
     expect(() => assertFixpoint(result)).not.toThrow();
@@ -1602,7 +1617,7 @@ export const BrowseContacts = component({
 
     const serverSource = result.files[0]?.source ?? '';
     expect(serverSource).toContain(
-      '<section kovo-c="browse-contacts" kovo-deps="contacts" kovo-fragment-target="browse-contacts" kovo-live-component="browse-contacts/browse-contacts">',
+      '<section kovo-c="browse-contacts" kovo-deps={[__kovoEncodeGeneratedDependencyIdentity(contactsQuery.key ?? "contacts")].join(\' \')} kovo-plan-owner="browse-contacts/browse-contacts" kovo-fragment-target="browse-contacts" kovo-live-component="browse-contacts/browse-contacts">',
     );
     expect(serverSource).not.toContain('JSON.stringify({ page');
     expect(serverSource).not.toContain('kovo-props=');
@@ -1667,7 +1682,7 @@ export const CartBadge = component({
 
     const serverSource = result.files[0]?.source ?? '';
     expect(serverSource).toContain(
-      '<cart-badge kovo-deps="cart" kovo-fragment-target="cart-badge" kovo-live-component="cart-badge/cart-badge" kovo-state="{&quot;open&quot;:true}">',
+      '<cart-badge kovo-deps={[__kovoEncodeGeneratedDependencyIdentity(cartQuery.key ?? "cart")].join(\' \')} kovo-plan-owner="cart-badge/cart-badge" kovo-fragment-target="cart-badge" kovo-live-component="cart-badge/cart-badge" kovo-state="{&quot;open&quot;:true}">',
     );
     expect(serverSource).toContain("'<not-the-host></not-the-host>'");
     expect(serverSource).not.toContain('<not-the-host kovo-deps=');
@@ -1695,7 +1710,7 @@ export const Recommendations = component({
     });
 
     expect(result.files[0]?.source).toContain(
-      '<section kovo-c="recommendations" kovo-deps="!product!product%3Ap1 cart" kovo-fragment-target="recommendations" kovo-live-component="recommendations/recommendations">',
+      '<section kovo-c="recommendations" kovo-deps={["!product!product%3Ap1", __kovoEncodeGeneratedDependencyIdentity(cartQuery.key ?? "cart")].join(\' \')} kovo-plan-owner="recommendations/recommendations" kovo-fragment-target="recommendations" kovo-live-component="recommendations/recommendations">',
     );
     expect(result.diagnostics).toEqual([]);
     expect(() => assertFixpoint(result)).not.toThrow();
@@ -1717,7 +1732,7 @@ export const Recommendations = component({
     });
 
     expect(result.files[0]?.source).toContain(
-      '<section class="card" kovo-deps="!product!product%3Ap1 cart" kovo-c="recommendations" kovo-fragment-target="recommendations" kovo-live-component="recommendations/recommendations">',
+      '<section class="card" kovo-deps={["!product!product%3Ap1", __kovoEncodeGeneratedDependencyIdentity(cartQuery.key ?? "cart")].join(\' \')} kovo-c="recommendations" kovo-plan-owner="recommendations/recommendations" kovo-fragment-target="recommendations" kovo-live-component="recommendations/recommendations">',
     );
     expect(() => assertFixpoint(result)).not.toThrow();
   });

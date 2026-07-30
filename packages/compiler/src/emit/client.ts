@@ -120,15 +120,26 @@ ${importLine}${dependencyImportLines}${dependencyConstantLines}${exports || '// 
 /** @internal Exact plan-export ABI emitted by {@link emitClientModule}. */
 export function emittedClientPlanExportMetadata(
   componentName: string,
+  registryComponentName: string,
   queryUpdatePlans: readonly QueryUpdatePlanFact[],
   clockUpdatePlans: readonly ClockUpdatePlanFact[] = [],
-): { readonly clockExportName?: string; readonly exportName: string } | undefined {
+  queryNames?: Readonly<Record<string, string>>,
+):
+  | {
+      readonly clockExportName?: string;
+      readonly componentName: string;
+      readonly exportName: string;
+      readonly queryNames?: Readonly<Record<string, string>>;
+    }
+  | undefined {
   if (compilerArrayLength(queryUpdatePlans, 'Client query update plans') === 0) return undefined;
   return {
     ...(compilerArrayLength(clockUpdatePlans, 'Client clock update plans') === 0
       ? {}
       : { clockExportName: clientClockPlanExportName(componentName) }),
+    componentName: registryComponentName,
     exportName: clientQueryPlanExportName(componentName),
+    ...(queryNames === undefined ? {} : { queryNames }),
   };
 }
 

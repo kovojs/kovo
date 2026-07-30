@@ -54,6 +54,7 @@ const generatedControlAttributes = [
   'kovo-nav-segment',
   'kovo-param-types',
   'kovo-pending',
+  'kovo-plan-owner',
   'kovo-props',
   'kovo-query',
   'kovo-stamp',
@@ -148,13 +149,17 @@ export const NestedAuthoredControlPlane = component({
       },
       {
         anchors: [
-          "getAttribute('data-mutation-stream')",
-          "getAttribute('data-stream')",
-          "getAttribute('data-kovo-stream')",
-          "form.getAttribute('kovo-deps')",
+          "browserFormSecurity.readAttribute(form, 'data-mutation-stream')",
+          "browserFormSecurity.readAttribute(form, 'data-stream')",
+          "browserFormSecurity.readAttribute(form, 'data-kovo-stream')",
         ],
+        file: 'packages/browser/src/mutation-form.ts',
+        names: ['data-mutation-stream', 'data-stream', 'data-kovo-stream'],
+      },
+      {
+        anchors: ["readDeps(form.getAttribute('kovo-deps'))"],
         file: 'packages/browser/src/mutation-submit.ts',
-        names: ['data-mutation-stream', 'data-stream', 'data-kovo-stream', 'kovo-deps'],
+        names: ['kovo-deps'],
       },
       {
         anchors: [
@@ -230,7 +235,7 @@ export const NestedAuthoredControlPlane = component({
           "security.queryOne(host, 'template[kovo-stamp]')",
           "security.readAttribute(child, 'kovo-key')",
           "readBindingAttribute(element, 'data-bind')",
-          "readRuntimeElementAttribute(closestQueryHost, 'kovo-deps')",
+          "readRuntimeElementAttribute(root, 'kovo-deps')",
           '`[data-derive="${queryName}.${name}"]`',
         ],
         file: 'packages/browser/src/query-bindings.ts',

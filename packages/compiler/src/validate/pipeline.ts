@@ -18,6 +18,7 @@ import { validateDataBindings, validateStampExpressionDrift } from './bindings.j
 import {
   unhandledUpdateCoverageDiagnostics,
   validateDirectDbAccess,
+  validateDuplicateCanonicalQueryBindings,
   validateEventPayloads,
   validateFragmentTargetChildren,
   validateFragmentTargetInputs,
@@ -129,6 +130,9 @@ function graphValidator(run: GraphValidator): CompilerValidator {
 const compilerValidators: readonly CompilerValidator[] = [
   mappedValidator(({ diagnostics, model }) => validateServerFactsInLocalState(diagnostics, model)),
   loweredValidator(({ diagnostics, model }) => validateReservedQueryNames(diagnostics, model)),
+  loweredValidator(({ diagnostics, model, options }) =>
+    validateDuplicateCanonicalQueryBindings(diagnostics, model, options),
+  ),
   loweredValidator(({ diagnostics, model }) =>
     validateRemovedFragmentTargetOption(diagnostics, model),
   ),

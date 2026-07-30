@@ -487,7 +487,9 @@ export interface CompileResult {
   /** @internal Exact emitted plan export names carried to Vite without source-text rediscovery. */
   queryPlanBootstrapMetadata?: {
     readonly clockExportName?: string;
+    readonly componentName: string;
     readonly exportName: string;
+    readonly queryNames?: Readonly<Record<string, string>>;
   };
   renderPlanFingerprint?: string | null;
   /** @internal Exact projected-shape input used to compose one app-wide render-plan token. */

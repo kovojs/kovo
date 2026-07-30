@@ -74,6 +74,7 @@ export interface ServerRenderStampWriteFact {
     | 'kovo-deps'
     | 'kovo-fragment-target'
     | 'kovo-live-component'
+    | 'kovo-plan-owner'
     | 'kovo-props'
     | 'kovo-state';
   mode: 'insert' | 'preserve' | 'replace';
@@ -84,6 +85,7 @@ export interface ServerRenderStampWriteFact {
     | 'host fragment target stamp'
     | 'host identity stamp'
     | 'host live component stamp'
+    | 'host plan owner stamp'
     | 'host props stamp'
     | 'host state stamp';
 }
@@ -796,6 +798,9 @@ function renderHostStampWrites(
   const writes: ServerRenderStampWriteFact[] = [];
   const componentIdentity = componentIdentityStamp(hostElement, target.domComponentName);
   const declaredQueryDeps = declaredQueryDepsStamp(component, hostElement, dependencyEncoder);
+  const planOwner = declaredQueryDeps
+    ? planOwnerStamp(hostElement, target.registryComponentName)
+    : null;
   const fragmentTarget = inferredFragmentTargetStamp(
     component,
     hostElement,
@@ -829,6 +834,27 @@ function renderHostStampWrites(
     compilerArrayAppend(
       writes,
       declaredQueryDeps,
+      'Compiler packages/compiler/src/emit/server-render.ts collection',
+    );
+  }
+  if (planOwner) {
+    if (planOwner.mode === 'replace') {
+      const existing = serverElementAttribute(hostElement, 'kovo-plan-owner');
+      if (existing) {
+        compilerArrayAppend(
+          conflicts,
+          {
+            attribute: existing,
+            attr: 'kovo-plan-owner',
+            writer: 'host plan owner stamp',
+          },
+          'Compiler packages/compiler/src/emit/server-render.ts collection',
+        );
+      }
+    }
+    compilerArrayAppend(
+      writes,
+      planOwner,
       'Compiler packages/compiler/src/emit/server-render.ts collection',
     );
   }
@@ -912,6 +938,24 @@ function liveComponentStamp(
     mode: 'insert',
     value: registryComponentName,
     writer: 'host live component stamp',
+  };
+}
+
+function planOwnerStamp(
+  hostElement: JsxElementModel,
+  registryComponentName: string,
+): ServerRenderStampWriteFact {
+  const existing = serverElementAttribute(hostElement, 'kovo-plan-owner');
+  return {
+    attr: 'kovo-plan-owner',
+    mode:
+      existing === undefined
+        ? 'insert'
+        : existing.value === registryComponentName
+          ? 'preserve'
+          : 'replace',
+    value: registryComponentName,
+    writer: 'host plan owner stamp',
   };
 }
 
@@ -1037,7 +1081,6 @@ function componentQueryDependencyTokens(component: ComponentModel): QueryDepende
 function queryKeyExpressionForBinding(entry: ObjectLiteralEntry): string | null {
   const queryExpression = entry.queryBinding?.queryKeyExpression;
   if (!queryExpression) return null;
-  if (queryExpression === entry.key || queryExpression === `${entry.key}Query`) return null;
   return `${queryExpression}.key ?? ${serverJsonSource(entry.key, 'Query dependency key')}`;
 }
 
@@ -1045,6 +1088,13 @@ function mergeDepValues(
   existing: readonly QueryDependencyToken[],
   declared: readonly QueryDependencyToken[],
 ): QueryDependencyToken[] {
+  const staleAliases = compilerCreateSet<string>();
+  for (let index = 0; index < declared.length; index += 1) {
+    const dependency = declared[index]!;
+    if (dependency.kind !== 'expression') continue;
+    const encoded = encodeFrameworkQueryDependencyToken(dependency.fallback);
+    if (encoded !== undefined) compilerSetAdd(staleAliases, encoded);
+  }
   const seen = compilerCreateSet<string>();
   const merged: QueryDependencyToken[] = [];
   const groups = [existing, declared];
@@ -1052,6 +1102,9 @@ function mergeDepValues(
     const group = compilerSnapshotDenseArray(groups[groupIndex]!, 'Query dependency tokens');
     for (let index = 0; index < group.length; index += 1) {
       const dep = group[index]!;
+      if (groupIndex === 0 && dep.kind === 'encoded' && compilerSetHas(staleAliases, dep.value)) {
+        continue;
+      }
       const key =
         dep.kind === 'expression'
           ? `expr:${dep.value}`
@@ -1131,11 +1184,12 @@ function serverJsonSource(value: unknown, label: string): string {
 }
 
 interface HostStampConflict {
-  attr: 'kovo-c' | 'kovo-fragment-target' | 'kovo-props' | 'kovo-state';
+  attr: 'kovo-c' | 'kovo-fragment-target' | 'kovo-plan-owner' | 'kovo-props' | 'kovo-state';
   attribute: JsxAttributeModel;
   writer:
     | 'host fragment target stamp'
     | 'host identity stamp'
+    | 'host plan owner stamp'
     | 'host props stamp'
     | 'host state stamp';
 }

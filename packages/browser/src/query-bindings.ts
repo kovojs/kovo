@@ -202,6 +202,20 @@ export interface CompiledQueryUpdateContext {
   queryStore?: QueryStore;
 }
 
+/** @internal Match one compiler-owned component root to an exact query instance. */
+export function queryBindingRootMatchesIdentity(
+  root: QueryBindingRoot,
+  queryIdentity: QueryIdentity,
+): boolean {
+  const deps = readQueryDependencyIdentities(readRuntimeElementAttribute(root, 'kovo-deps'));
+  for (let index = 0; index < deps.length; index += 1) {
+    const dependency = deps[index];
+    if (dependency?.name === queryIdentity.name && dependency.key === queryIdentity.key)
+      return true;
+  }
+  return false;
+}
+
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export function createQueryBindingIndex(root: QueryBindingRoot): QueryBindingIndex {
   return {
@@ -402,7 +416,7 @@ export function applyCompiledQueryUpdatePlan(
     bindings:
       readOwnPlanField(plan, 'bindings') === false
         ? []
-        : applyQueryBindings(root, queryName, value, bindingOptions),
+        : applyRootBindings(root, queryName, value, { ...bindingOptions, scopeRoot: root }),
     derives: [],
     stamps: [],
     templateStamps: [],
@@ -428,6 +442,7 @@ export function applyCompiledQueryUpdatePlan(
     for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
       const element = elements[elementIndex];
       if (!element) continue;
+      if (!elementBelongsToScope(element, root)) continue;
       if (!elementBelongsToQueryIdentity(element, options.queryIdentity)) continue;
       writeQueryPlanElement(element, rendered);
       securityArrayAppend(applied.derives, name, 'Browser applied compiled query derives');
@@ -448,6 +463,7 @@ export function applyCompiledQueryUpdatePlan(
     for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
       const element = elements[elementIndex];
       if (!element) continue;
+      if (!elementBelongsToScope(element, root)) continue;
       if (!elementBelongsToQueryIdentity(element, options.queryIdentity)) continue;
       if (selected === undefined || selected === null) {
         removeBoundAttribute(element, attr);
@@ -496,6 +512,7 @@ export function applyCompiledQueryUpdatePlan(
     for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
       const element = elements[elementIndex];
       if (!element) continue;
+      if (!elementBelongsToScope(element, root)) continue;
       if (!elementBelongsToQueryIdentity(element, options.queryIdentity)) continue;
       if (!reconcileTemplateStampHost(element, items)) continue;
       securityArrayAppend(
@@ -965,7 +982,12 @@ function elementBelongsToScope(element: QueryBindingElement, scopeRoot: unknown)
   if (!scopeRoot || element === scopeRoot) return true;
 
   const closestStateHost = closestRuntimeElement<QueryBindingElement>(element, '[kovo-state]');
-  return !closestStateHost || closestStateHost === scopeRoot;
+  if (closestStateHost && closestStateHost !== scopeRoot) return false;
+  if (readRuntimeElementAttribute(scopeRoot, 'kovo-plan-owner') === null) {
+    return true;
+  }
+  const closestPlanOwner = closestRuntimeElement<QueryBindingElement>(element, '[kovo-plan-owner]');
+  return !closestPlanOwner || closestPlanOwner === scopeRoot;
 }
 
 function elementBelongsToQueryIdentity(
@@ -976,16 +998,7 @@ function elementBelongsToQueryIdentity(
 
   const closestQueryHost = closestRuntimeElement<QueryBindingElement>(element, '[kovo-deps]');
   if (!closestQueryHost) return queryIdentity.key === undefined;
-
-  const deps = readQueryDependencyIdentities(
-    readRuntimeElementAttribute(closestQueryHost, 'kovo-deps'),
-  );
-  for (let index = 0; index < deps.length; index += 1) {
-    const dependency = deps[index];
-    if (dependency?.name === queryIdentity.name && dependency.key === queryIdentity.key)
-      return true;
-  }
-  return false;
+  return queryBindingRootMatchesIdentity(closestQueryHost, queryIdentity);
 }
 
 function isQueryBindingElement(value: unknown): value is QueryBindingElement {

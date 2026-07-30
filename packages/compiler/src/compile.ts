@@ -41,9 +41,11 @@ import {
   compilerArrayJoin,
   compilerArrayLength,
   compilerCreateMap,
+  compilerCreateNullRecord,
   compilerCreateSet,
   compilerDefineOwnDataProperty,
   compilerFailClosed,
+  compilerFreeze,
   compilerMapGet,
   compilerMapSet,
   compilerObjectKeys,
@@ -111,6 +113,7 @@ import {
   componentHasInferredFragmentTarget,
   componentModelForSourceSpan,
   componentOptionObjectEntries,
+  componentOptionObjectEntriesFor,
   jsxComments,
   type CallExpressionModel,
   type ComponentModel,
@@ -1695,8 +1698,10 @@ function assembleCompileResult(
   assertEmittedTranslation(client, registryCss, files, confidentialityClosed, parsed.originalModel);
   const queryPlanBootstrapMetadata = emittedClientPlanExportMetadata(
     parsed.componentName,
+    parsed.componentNames.registryKey,
     validated.queryUpdatePlans,
     validated.clockUpdatePlans,
+    localQueryPlanRuntimeNames(parsed.originalModel, parsed.options.fileName),
   );
 
   return {
@@ -2554,6 +2559,40 @@ function exportedObjectFirstQueryCalls(model: ComponentModuleModel) {
       call.arguments.length === 1 &&
       typeof call.argumentStaticValues[0] !== 'string',
   );
+}
+
+function localQueryPlanRuntimeNames(
+  model: ComponentModuleModel,
+  fileName: string,
+): Readonly<Record<string, string>> {
+  const result = compilerCreateNullRecord<string>();
+  const entries = compilerSnapshotDenseArray(
+    componentOptionObjectEntriesFor(firstComponentModel(model), 'queries'),
+    'Component query runtime-name entries',
+  );
+  const calls = compilerSnapshotDenseArray(model.calls, 'Component query runtime-name calls');
+  for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
+    const entry = entries[entryIndex]!;
+    const expression = entry.queryBinding?.queryKeyExpression;
+    if (expression === undefined) {
+      compilerDefineOwnDataProperty(result, entry.key, entry.key);
+      continue;
+    }
+    for (let callIndex = 0; callIndex < calls.length; callIndex += 1) {
+      const call = calls[callIndex]!;
+      if (call.exportedConstName !== expression || !isKovoQueryCall(model, call)) continue;
+      const explicitKey = call.argumentStaticValues[0];
+      compilerDefineOwnDataProperty(
+        result,
+        entry.key,
+        typeof explicitKey === 'string'
+          ? explicitKey
+          : deriveRegistryIdentity(fileName, expression).key,
+      );
+      break;
+    }
+  }
+  return compilerFreeze(result);
 }
 
 function isKovoQueryCall(model: ComponentModuleModel, call: CallExpressionModel) {

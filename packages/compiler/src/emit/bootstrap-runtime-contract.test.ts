@@ -14,7 +14,12 @@ import { emitQueryPlanBootstrapModule } from './bootstrap.js';
 describe('emitted bootstrap ↔ @kovojs/browser/generated import contract', () => {
   it('imports only value names the published @kovojs/browser/generated barrel exports', () => {
     const bootstrap = emitQueryPlanBootstrapModule([
-      { exportName: 'Demo$queryUpdatePlans', importPath: '../components/demo.client.js' },
+      {
+        componentName: 'components/demo',
+        exportName: 'Demo$queryUpdatePlans',
+        importPath: '../components/demo.client.js',
+        queryNames: {},
+      },
     ]);
 
     const match = /import\s*\{([^}]*)\}\s*from\s*['"]@kovojs\/browser\/generated['"]/.exec(

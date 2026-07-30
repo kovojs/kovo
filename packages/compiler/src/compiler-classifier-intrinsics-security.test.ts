@@ -2584,8 +2584,10 @@ export const LiveCard = component({
       };
       source = emitQueryPlanBootstrapModule([
         {
+          componentName: 'components/card/card',
           exportName: 'Card$queryUpdatePlans',
           importPath: './card.client.js',
+          queryNames: {},
         },
       ]).source;
     } finally {
