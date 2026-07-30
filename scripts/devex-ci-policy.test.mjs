@@ -103,6 +103,22 @@ describe('DevEx CI and baseline policy', () => {
     expect(validateDevexCiPolicy(nonBindingBenchmark, { workflowSources })).toContain(
       'gates[3] must collect N>=5 and fail closed before runner budget ratification',
     );
+
+    const tooFewCatalogSamples = structuredClone(ci);
+    tooFewCatalogSamples.gates.find((gate) => gate.id === 'nightly-full-catalog').commands[0] =
+      tooFewCatalogSamples.gates
+        .find((gate) => gate.id === 'nightly-full-catalog')
+        .commands[0].replace('--samples 5', '--samples 4');
+    expect(validateDevexCiPolicy(tooFewCatalogSamples, { workflowSources })).toContain(
+      'gates[5] must retain five authenticated all-44 RSS samples and redacted failures',
+    );
+
+    const discardedCatalogReport = structuredClone(ci);
+    delete discardedCatalogReport.gates.find((gate) => gate.id === 'nightly-full-catalog')
+      .preserveReportOnFailure;
+    expect(validateDevexCiPolicy(discardedCatalogReport, { workflowSources })).toContain(
+      'gates[5] must retain five authenticated all-44 RSS samples and redacted failures',
+    );
   });
 
   it('requires N>=5, exact statistics, reviewed targets, and an exact accepted runner', () => {
@@ -117,6 +133,12 @@ describe('DevEx CI and baseline policy', () => {
     expect(baseline.collection).toMatchObject({
       baselineSampleCount: 5,
       evaluationSampleCount: 5,
+    });
+    expect(baseline.fullCatalogCollection).toMatchObject({
+      artifact: 'kovo-devex-full-catalog',
+      reportSchema: 'kovo-devex-full-catalog/v1',
+      sampleCount: 5,
+      workloadSchema: 'kovo-devex-full-catalog-workload/v1',
     });
     expect(baseline.ratification.noiseMultipliers).toEqual({
       deterministic: 0,
@@ -133,6 +155,21 @@ describe('DevEx CI and baseline policy', () => {
         'collection.evaluationSampleCount must be at least 5',
         'collection must map to the declared nightly CI gate and exact command',
       ]),
+    );
+
+    const tooFewCatalogSamples = structuredClone(baseline);
+    tooFewCatalogSamples.fullCatalogCollection.sampleCount = 4;
+    tooFewCatalogSamples.fullCatalogCollection.command =
+      tooFewCatalogSamples.fullCatalogCollection.command.replace('--samples 5', '--samples 4');
+    expect(validateDevexBaselinePolicy(tooFewCatalogSamples, budgets, ci)).toContain(
+      'fullCatalogCollection must bind N>=5 authenticated retained evidence to KF-DEVEX-007 retirement',
+    );
+
+    const weakenedCatalogRetirement = structuredClone(baseline);
+    weakenedCatalogRetirement.fullCatalogCollection.retirementCondition =
+      'The catalog command ran.';
+    expect(validateDevexBaselinePolicy(weakenedCatalogRetirement, budgets, ci)).toContain(
+      'fullCatalogCollection must bind N>=5 authenticated retained evidence to KF-DEVEX-007 retirement',
     );
 
     const prematurelyRatified = structuredClone(budgets);
@@ -191,7 +228,14 @@ function policyWorkflowSources(policy) {
     if (gate.requiresBrowser) {
       lines.push('      - uses: ./.github/actions/playwright-install');
     }
-    if (['nightly-benchmark', 'nightly-packed-journeys', 'pr-scorecard'].includes(gate.id)) {
+    if (
+      [
+        'nightly-benchmark',
+        'nightly-full-catalog',
+        'nightly-packed-journeys',
+        'pr-scorecard',
+      ].includes(gate.id)
+    ) {
       lines.push(
         '      - run: |',
         '          printf \'%s\\n\' "${ImageOS:-unknown}" "${ImageVersion:-unknown}"',
@@ -207,14 +251,21 @@ function policyWorkflowSources(policy) {
         `          name: ${
           gate.id === 'nightly-packed-journeys'
             ? 'kovo-devex-golden-journey'
-            : 'kovo-devex-baseline'
+            : gate.id === 'nightly-full-catalog'
+              ? 'kovo-devex-full-catalog'
+              : 'kovo-devex-baseline'
         }`,
         ...(gate.id === 'nightly-packed-journeys'
           ? [
               '          path: ${{ runner.temp }}/kovo-devex-golden',
               '          include-hidden-files: true',
             ]
-          : []),
+          : gate.id === 'nightly-full-catalog'
+            ? [
+                '          path: ${{ runner.temp }}/kovo-devex-full-catalog',
+                '          include-hidden-files: true',
+              ]
+            : []),
       );
     }
     if (gate.prVisible) {

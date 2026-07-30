@@ -1,5 +1,5 @@
 {
-  "schema": "kovo-devex-baseline-policy/v3",
+  "schema": "kovo-devex-baseline-policy/v4",
   "status": "unratified",
   "referenceRunner": {
     "kind": "github-hosted-accepted",
@@ -41,6 +41,16 @@
     "hostVariancePosture": "excluded by exact runner fingerprint; cross-fingerprint comparisons are report-only",
     "command": "vp exec node scripts/devex-benchmark.mjs --scenario .release/devex/kovo-packed-scenario.json --samples 5 --output \"$RUNNER_TEMP/kovo-devex-baseline/benchmark.json\" --evaluate --require-ratified"
   },
+  "fullCatalogCollection": {
+    "workflow": ".github/workflows/devex-nightly.yml",
+    "gateId": "nightly-full-catalog",
+    "reportSchema": "kovo-devex-full-catalog/v1",
+    "workloadSchema": "kovo-devex-full-catalog-workload/v1",
+    "sampleCount": 5,
+    "artifact": "kovo-devex-full-catalog",
+    "command": "vp exec node scripts/full-catalog-reproducer.mjs --samples 5 --output \"$RUNNER_TEMP/kovo-devex-full-catalog/report.json\" --artifacts \"$RUNNER_TEMP/kovo-devex-full-catalog/failures\"",
+    "retirementCondition": "The packed all-44-component fixture typechecks, checks, and builds with unimported copies under the ratified peak-RSS budget."
+  },
   "ratification": {
     "command": "vp exec node scripts/devex-benchmark.mjs --ratify --baseline <report> --proposal <reviewed-proposal> --write",
     "proposalSchema": "kovo-devex-budget-proposal/v7",
@@ -55,6 +65,6 @@
   "blockers": [
     "Run the accepted GitHub-hosted ubuntu-24.04 collectors and commit their authenticated five-sample benchmark and dual-dialect journey reports before binding runner-scoped budgets.",
     "Review product targets against that measured baseline; the schema applies the fixed 3x median-absolute-deviation statistical noise allowance.",
-    "Ratify golden-journey install and readiness metrics from the aggregate release-scorecard report; retain full-catalog RSS as non-binding until its own authenticated report schema lands."
+    "Collect and review the authenticated five-sample full-catalog report, then ratify only its peak-RSS metric with a target proposal bound to the exact report and runner."
   ]
 }

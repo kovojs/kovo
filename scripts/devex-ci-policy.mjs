@@ -6,7 +6,7 @@ import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { repoRoot } from './release-packages.mjs';
 
 export const DEVEX_CI_POLICY_SCHEMA = 'kovo-devex-ci-policy/v2';
-export const DEVEX_BASELINE_POLICY_SCHEMA = 'kovo-devex-baseline-policy/v3';
+export const DEVEX_BASELINE_POLICY_SCHEMA = 'kovo-devex-baseline-policy/v4';
 
 const CADENCES = new Set(['per-pr', 'nightly', 'manual']);
 const GATE_SCOPES = new Set(['job', 'step']);
@@ -176,13 +176,20 @@ export function validateDevexCiPolicy(policy, options = {}) {
         !segment.includes(
           gate.id === 'nightly-packed-journeys'
             ? 'name: kovo-devex-golden-journey'
-            : 'name: kovo-devex-baseline',
+            : gate.id === 'nightly-full-catalog'
+              ? 'name: kovo-devex-full-catalog'
+              : 'name: kovo-devex-baseline',
         ))
     ) {
       findings.push(`${label} must preserve its report after a budget breach`);
     }
     if (
-      ['nightly-benchmark', 'nightly-packed-journeys', 'pr-scorecard'].includes(gate.id) &&
+      [
+        'nightly-benchmark',
+        'nightly-full-catalog',
+        'nightly-packed-journeys',
+        'pr-scorecard',
+      ].includes(gate.id) &&
       (!segment.includes('${ImageOS:-unknown}') ||
         !segment.includes('${ImageVersion:-unknown}') ||
         !segment.includes('cat /etc/os-release') ||
@@ -215,6 +222,23 @@ export function validateDevexCiPolicy(policy, options = {}) {
     ) {
       findings.push(
         `${label} must bind both packed starters and the offline agent to one retained N>=5 release scorecard`,
+      );
+    }
+    if (
+      gate.id === 'nightly-full-catalog' &&
+      (gate.preserveReportOnFailure !== true ||
+        !gate.commands.some(
+          (command) =>
+            command.includes('scripts/full-catalog-reproducer.mjs') &&
+            command.includes('--samples 5') &&
+            command.includes('--output ') &&
+            command.includes('--artifacts '),
+        ) ||
+        !segment.includes('path: ${{ runner.temp }}/kovo-devex-full-catalog') ||
+        !segment.includes('include-hidden-files: true'))
+    ) {
+      findings.push(
+        `${label} must retain five authenticated all-44 RSS samples and redacted failures`,
       );
     }
     if (gate.requiresBrowser) {
@@ -339,6 +363,32 @@ export function validateDevexBaselinePolicy(policy, budgets, ciPolicy) {
     !gate.commands.includes(policy?.collection?.command)
   ) {
     findings.push('collection must map to the declared nightly CI gate and exact command');
+  }
+  const fullCatalog = policy?.fullCatalogCollection;
+  const fullCatalogGate = ciPolicy?.gates?.find(
+    (candidate) => candidate.id === fullCatalog?.gateId,
+  );
+  if (
+    fullCatalog?.reportSchema !== 'kovo-devex-full-catalog/v1' ||
+    fullCatalog?.workloadSchema !== 'kovo-devex-full-catalog-workload/v1' ||
+    !Number.isSafeInteger(fullCatalog?.sampleCount) ||
+    fullCatalog.sampleCount < requiredBaselineSamples ||
+    fullCatalog?.artifact !== 'kovo-devex-full-catalog' ||
+    fullCatalog?.retirementCondition !==
+      'The packed all-44-component fixture typechecks, checks, and builds with unimported copies under the ratified peak-RSS budget.' ||
+    !String(fullCatalog?.command ?? '').includes(`--samples ${String(fullCatalog?.sampleCount)}`) ||
+    !String(fullCatalog?.command ?? '').includes('--output ') ||
+    !String(fullCatalog?.command ?? '').includes('--artifacts ') ||
+    !fullCatalogGate ||
+    fullCatalogGate.cadence !== 'nightly' ||
+    fullCatalogGate.releaseRequired !== true ||
+    fullCatalogGate.preserveReportOnFailure !== true ||
+    fullCatalogGate.workflow !== fullCatalog?.workflow ||
+    !fullCatalogGate.commands.includes(fullCatalog?.command)
+  ) {
+    findings.push(
+      'fullCatalogCollection must bind N>=5 authenticated retained evidence to KF-DEVEX-007 retirement',
+    );
   }
   if (
     policy?.ratification?.proposalSchema !== 'kovo-devex-budget-proposal/v7' ||

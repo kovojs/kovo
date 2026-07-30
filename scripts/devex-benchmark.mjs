@@ -55,6 +55,9 @@ export const DEVEX_BENCHMARK_REPORT_SCHEMA = 'kovo-devex-benchmark-report/v5';
 export const DEVEX_DETERMINISTIC_ARTIFACT_REPORT_SCHEMA =
   'kovo-devex-deterministic-artifact-report/v1';
 export const DEVEX_BUDGET_PROPOSAL_SCHEMA = 'kovo-devex-budget-proposal/v7';
+export const DEVEX_FULL_CATALOG_REPORT_SCHEMA = 'kovo-devex-full-catalog/v1';
+export const DEVEX_FULL_CATALOG_SAMPLE_SCHEMA = 'kovo-devex-full-catalog-sample/v1';
+export const DEVEX_FULL_CATALOG_WORKLOAD_SCHEMA = 'kovo-devex-full-catalog-workload/v1';
 export const DEVEX_PACKED_WORKLOAD_SCHEMA = 'kovo-devex-packed-workload/v2';
 export const DEVEX_SCENARIO_RECIPE_SCHEMA = 'kovo-devex-scenario-recipe/v1';
 
@@ -87,6 +90,25 @@ const KOVO_PACKED_DOCS_METRIC_IDS = Object.freeze([
 ]);
 const KOVO_BENCHMARK_CONSUMER = '@kovojs/devex-packed-check-consumer';
 const KOVO_PACKED_RECIPE_PATH = 'scripts/devex-scenarios/kovo-packed-check.json';
+const KOVO_FULL_CATALOG_SCENARIO = 'kovo-packed-full-catalog';
+const KOVO_FULL_CATALOG_COMPONENT_COUNT = 44;
+const KOVO_FULL_CATALOG_PHASES = Object.freeze([
+  Object.freeze({
+    command: 'create-kovo --postgres --retention retained-24h --disable-git',
+    name: 'create',
+  }),
+  Object.freeze({
+    command: 'pnpm install --ignore-workspace --no-frozen-lockfile --store-dir <isolated-store>',
+    name: 'install',
+  }),
+  Object.freeze({
+    command: 'pnpm exec kovo add <all-44-components> --out src/components/ui',
+    name: 'copy',
+  }),
+  Object.freeze({ command: 'pnpm exec tsc --noEmit', name: 'typecheck' }),
+  Object.freeze({ command: 'pnpm run check', name: 'check' }),
+  Object.freeze({ command: 'pnpm run build:prod', name: 'build' }),
+]);
 const authenticatedProductionScenarios = new WeakSet();
 const authenticatedProductionDocsEvidence = new WeakMap();
 const METRIC_UNITS = new Set(['bytes', 'ms']);
@@ -238,6 +260,33 @@ function metricSource(metricId) {
   return DEVEX_METRIC_CONTRACT[metricId]?.source;
 }
 
+function reportEvidenceSource(report) {
+  if (report?.schema === DEVEX_GOLDEN_RELEASE_REPORT_SCHEMA) return 'golden-journey';
+  if (report?.schema === DEVEX_FULL_CATALOG_REPORT_SCHEMA) return 'full-catalog';
+  return 'benchmark';
+}
+
+function reportWorkloadIdentity(report, reportSource) {
+  if (reportSource === 'golden-journey') return goldenJourneyWorkloadIdentity(report);
+  if (reportSource === 'full-catalog') return fullCatalogWorkloadIdentity(report);
+  return benchmarkWorkloadContractIdentity(report);
+}
+
+function validateEvidenceReport(report, reportSource, label, options = {}) {
+  if (reportSource === 'golden-journey') {
+    return validateGoldenReleaseScorecard(report, label);
+  }
+  if (reportSource === 'full-catalog') {
+    return validateFullCatalogReportIdentity(report, label, {
+      requireAcceptedRunner: options.requireAcceptedRunner === true,
+      requireSuccessfulSamples: options.requireSuccessfulSamples === true,
+    });
+  }
+  return options.ratification === true
+    ? validateRatificationReportIdentity(report, label, options.allowArtifactOnly === true)
+    : validateBenchmarkReportIdentity(report, label);
+}
+
 function compareStrings(left, right) {
   return left.localeCompare(right);
 }
@@ -300,6 +349,325 @@ export function packedArtifactBinding(evidence) {
 
 export function benchmarkScenarioDigest(scenario) {
   return sha256(Buffer.from(canonicalJson(scenario)));
+}
+
+export function createFullCatalogWorkloadDefinition(catalog, packageSet) {
+  return {
+    schema: DEVEX_FULL_CATALOG_WORKLOAD_SCHEMA,
+    name: KOVO_FULL_CATALOG_SCENARIO,
+    releasePackages: Array.isArray(packageSet)
+      ? packageSet.map((pkg) => pkg?.name).sort(compareStrings)
+      : [],
+    catalog: {
+      componentCount: catalog?.componentCount,
+      components: Array.isArray(catalog?.components) ? [...catalog.components] : [],
+      source: catalog?.source,
+    },
+    sourcePosture: {
+      copiedOutput: 'src/components/ui',
+      importedDuringProof: false,
+    },
+    phases: KOVO_FULL_CATALOG_PHASES.map((phase) => ({ ...phase })),
+  };
+}
+
+export function fullCatalogScenarioDigest(definition) {
+  return sha256(Buffer.from(canonicalJson(definition)));
+}
+
+export function fullCatalogPackageSetDigest(packageSet) {
+  return sha256(Buffer.from(canonicalJson(packageSet)));
+}
+
+export function fullCatalogWorkloadIdentity(report) {
+  return structuredClone(report?.scenario?.definition);
+}
+
+function validateFullCatalogWorkloadIdentity(identity, label) {
+  const findings = [];
+  if (
+    !exactOwnKeys(identity, [
+      'catalog',
+      'name',
+      'phases',
+      'releasePackages',
+      'schema',
+      'sourcePosture',
+    ]) ||
+    identity?.schema !== DEVEX_FULL_CATALOG_WORKLOAD_SCHEMA ||
+    identity?.name !== KOVO_FULL_CATALOG_SCENARIO
+  ) {
+    findings.push(`${label} must be an exact ${DEVEX_FULL_CATALOG_WORKLOAD_SCHEMA} record`);
+    return findings;
+  }
+  const packageSet = Array.isArray(identity.releasePackages)
+    ? identity.releasePackages.map((name) => ({ name }))
+    : [];
+  const expected = createFullCatalogWorkloadDefinition(identity.catalog, packageSet);
+  if (!sameJson(identity, expected)) {
+    findings.push(`${label} must bind the code-owned full-catalog workload`);
+  }
+  return findings;
+}
+
+export function validateFullCatalogReportIdentity(report, label = 'report', options = {}) {
+  const findings = [];
+  if (
+    !exactOwnKeys(report, [
+      'budget',
+      'catalog',
+      'metrics',
+      'packageSet',
+      'packedRelease',
+      'pass',
+      'runner',
+      'sampleCount',
+      'samples',
+      'scenario',
+      'schema',
+      'source',
+    ]) ||
+    report?.schema !== DEVEX_FULL_CATALOG_REPORT_SCHEMA
+  ) {
+    findings.push(`${label} must be an exact ${DEVEX_FULL_CATALOG_REPORT_SCHEMA} report`);
+    return findings;
+  }
+
+  findings.push(
+    ...validateRunnerFingerprint(report.runner, `${label}.runner`, { requireNamed: true }),
+  );
+  if (
+    options.requireAcceptedRunner === true &&
+    (report.runner?.name !== 'github-hosted-ubuntu-24.04-accepted' ||
+      report.runner?.platform !== 'linux' ||
+      report.runner?.arch !== 'x64' ||
+      !/^github-actions\/ubuntu-24\.04@sha256:[0-9a-f]{64}$/u.test(report.runner?.osImage ?? ''))
+  ) {
+    findings.push(`${label}.runner must be the exact accepted GitHub-hosted ubuntu-24.04 runner`);
+  }
+  if (
+    !exactOwnKeys(report.source, ['commit', 'tree']) ||
+    !validGitObjectId(report.source?.commit) ||
+    report.source?.tree !== 'clean'
+  ) {
+    findings.push(`${label}.source must bind one clean exact Git revision`);
+  }
+  if (
+    !exactOwnKeys(report.packedRelease, ['manifestSha256', 'packageSetSha256', 'schema']) ||
+    report.packedRelease?.schema !== 'kovo.packed-public-packages/v2' ||
+    !validDigest(report.packedRelease?.manifestSha256) ||
+    report.packedRelease?.packageSetSha256 !== fullCatalogPackageSetDigest(report.packageSet)
+  ) {
+    findings.push(`${label}.packedRelease must bind the authenticated packed-release manifest`);
+  }
+
+  const expectedPackageNames = expectedKovoReleasePackages();
+  if (
+    !Array.isArray(report.packageSet) ||
+    report.packageSet.length !== expectedPackageNames.length
+  ) {
+    findings.push(`${label}.packageSet must contain the exact packed release census`);
+  } else {
+    const observedNames = [];
+    const observedTarballs = new Set();
+    for (const [index, pkg] of report.packageSet.entries()) {
+      if (
+        !exactOwnKeys(pkg, ['name', 'sha512', 'version']) ||
+        typeof pkg?.name !== 'string' ||
+        typeof pkg?.version !== 'string' ||
+        pkg.version.trim().length === 0 ||
+        !/^sha512-[A-Za-z0-9+/]+={0,2}$/u.test(pkg?.sha512 ?? '')
+      ) {
+        findings.push(`${label}.packageSet[${String(index)}] has invalid tarball identity`);
+      }
+      observedNames.push(pkg?.name);
+      if (observedTarballs.has(pkg?.sha512)) {
+        findings.push(`${label}.packageSet reuses one tarball identity`);
+      }
+      observedTarballs.add(pkg?.sha512);
+    }
+    if (!sameJson(observedNames, expectedPackageNames)) {
+      findings.push(`${label}.packageSet must retain the exact sorted release package names`);
+    }
+  }
+
+  const components = report.catalog?.components;
+  if (
+    !exactOwnKeys(report.catalog, ['componentCount', 'components', 'source']) ||
+    report.catalog?.componentCount !== KOVO_FULL_CATALOG_COMPONENT_COUNT ||
+    report.catalog?.source !== '@kovojs/ui packed manifest exports' ||
+    !Array.isArray(components) ||
+    components.length !== KOVO_FULL_CATALOG_COMPONENT_COUNT ||
+    new Set(components).size !== KOVO_FULL_CATALOG_COMPONENT_COUNT ||
+    components.some((component) => !/^[a-z][a-z0-9-]*$/u.test(component)) ||
+    !sameJson(components, [...components].sort(compareStrings))
+  ) {
+    findings.push(
+      `${label}.catalog must contain exactly 44 unique sorted authenticated components`,
+    );
+  }
+
+  const expectedDefinition = createFullCatalogWorkloadDefinition(report.catalog, report.packageSet);
+  if (
+    !exactOwnKeys(report.scenario, ['definition', 'digest', 'name']) ||
+    report.scenario?.name !== KOVO_FULL_CATALOG_SCENARIO ||
+    !sameJson(report.scenario?.definition, expectedDefinition) ||
+    report.scenario?.digest !== fullCatalogScenarioDigest(expectedDefinition)
+  ) {
+    findings.push(`${label}.scenario must bind the exact code-owned full-catalog workload`);
+  }
+
+  if (
+    !exactOwnKeys(report.budget, ['binding', 'source', 'thresholdBytes']) ||
+    typeof report.budget?.binding !== 'boolean' ||
+    report.budget?.source !== (report.budget?.binding ? 'ratified' : 'provisional') ||
+    !Number.isFinite(report.budget?.thresholdBytes) ||
+    report.budget.thresholdBytes <= 0
+  ) {
+    findings.push(`${label}.budget must identify a positive ratified or provisional threshold`);
+  }
+  if (
+    !Number.isSafeInteger(report.sampleCount) ||
+    report.sampleCount < 1 ||
+    report.sampleCount > 20
+  ) {
+    findings.push(`${label}.sampleCount must be an integer from 1 through 20`);
+  }
+  if (!Array.isArray(report.samples) || report.samples.length !== report.sampleCount) {
+    findings.push(`${label}.samples must match sampleCount`);
+    return findings;
+  }
+
+  const metricSamples = [];
+  for (const [index, sample] of report.samples.entries()) {
+    const sampleLabel = `${label}.samples[${String(index)}]`;
+    if (
+      !exactOwnKeys(sample, [
+        'budget',
+        'copiedComponents',
+        'copiedSourceFiles',
+        'failure',
+        'functionalPass',
+        'pass',
+        'peakProcessTreeRssBytes',
+        'phases',
+        'sampleIndex',
+        'schema',
+        'unimportedDuringProof',
+      ]) ||
+      sample?.schema !== DEVEX_FULL_CATALOG_SAMPLE_SCHEMA ||
+      sample?.sampleIndex !== index
+    ) {
+      findings.push(`${sampleLabel} must be an exact indexed full-catalog sample`);
+      continue;
+    }
+    if (
+      typeof sample.functionalPass !== 'boolean' ||
+      typeof sample.pass !== 'boolean' ||
+      !Number.isFinite(sample.peakProcessTreeRssBytes) ||
+      sample.peakProcessTreeRssBytes < 0 ||
+      (sample.functionalPass === true && sample.peakProcessTreeRssBytes === 0)
+    ) {
+      findings.push(`${sampleLabel} has invalid outcome or RSS evidence`);
+    }
+    const phaseNames = [];
+    const phasePeaks = [];
+    if (!Array.isArray(sample.phases)) {
+      findings.push(`${sampleLabel}.phases must be an array`);
+    } else {
+      for (const [phaseIndex, phase] of sample.phases.entries()) {
+        if (
+          !exactOwnKeys(phase, ['durationMs', 'name', 'peakProcessTreeRssBytes', 'status']) ||
+          typeof phase?.name !== 'string' ||
+          !Number.isFinite(phase?.durationMs) ||
+          phase.durationMs < 0 ||
+          (phase.status !== null && !Number.isInteger(phase.status)) ||
+          !Number.isFinite(phase?.peakProcessTreeRssBytes) ||
+          phase.peakProcessTreeRssBytes < 0
+        ) {
+          findings.push(`${sampleLabel}.phases[${String(phaseIndex)}] has invalid phase evidence`);
+          continue;
+        }
+        phaseNames.push(phase.name);
+        phasePeaks.push(phase.peakProcessTreeRssBytes);
+      }
+    }
+    const expectedPhaseNames = KOVO_FULL_CATALOG_PHASES.map((phase) => phase.name);
+    if (
+      phaseNames.length > expectedPhaseNames.length ||
+      !sameJson(phaseNames, expectedPhaseNames.slice(0, phaseNames.length))
+    ) {
+      findings.push(`${sampleLabel}.phases must be an ordered prefix of the workload phases`);
+    }
+    if (phasePeaks.length === 0 || sample.peakProcessTreeRssBytes !== Math.max(...phasePeaks)) {
+      findings.push(`${sampleLabel}.peakProcessTreeRssBytes does not match phase evidence`);
+    }
+    if (
+      !exactOwnKeys(sample.budget, ['binding', 'thresholdBytes', 'withinThreshold']) ||
+      sample.budget?.binding !== report.budget.binding ||
+      sample.budget?.thresholdBytes !== report.budget.thresholdBytes ||
+      sample.budget?.withinThreshold !==
+        (sample.peakProcessTreeRssBytes > 0 &&
+          sample.peakProcessTreeRssBytes <= report.budget.thresholdBytes)
+    ) {
+      findings.push(`${sampleLabel}.budget does not match report threshold and observed peak`);
+    }
+    if (
+      !Number.isSafeInteger(sample.copiedComponents) ||
+      sample.copiedComponents < 0 ||
+      sample.copiedComponents > KOVO_FULL_CATALOG_COMPONENT_COUNT ||
+      !Number.isSafeInteger(sample.copiedSourceFiles) ||
+      sample.copiedSourceFiles < 0
+    ) {
+      findings.push(`${sampleLabel} has invalid copied-source evidence`);
+    }
+    if (sample.functionalPass) {
+      if (
+        sample.copiedComponents !== KOVO_FULL_CATALOG_COMPONENT_COUNT ||
+        sample.copiedSourceFiles < KOVO_FULL_CATALOG_COMPONENT_COUNT ||
+        sample.unimportedDuringProof !== true ||
+        !sameJson(phaseNames, expectedPhaseNames) ||
+        sample.phases.some((phase) => phase.status !== 0)
+      ) {
+        findings.push(`${sampleLabel} did not prove every successful workload phase`);
+      }
+      if (sample.failure !== null) {
+        findings.push(`${sampleLabel}.failure must be null on functional success`);
+      }
+    } else if (
+      !exactOwnKeys(sample.failure, ['artifact', 'message', 'phase']) ||
+      typeof sample.failure?.message !== 'string' ||
+      typeof sample.failure?.phase !== 'string'
+    ) {
+      findings.push(`${sampleLabel}.failure must explain a failed functional sample`);
+    }
+    const expectedPass =
+      sample.functionalPass === true &&
+      (report.budget.binding !== true || sample.budget.withinThreshold === true);
+    if (sample.pass !== expectedPass) {
+      findings.push(`${sampleLabel} does not enforce functional and binding RSS outcomes`);
+    }
+    metricSamples.push(sample.peakProcessTreeRssBytes);
+  }
+
+  if (
+    !exactOwnKeys(report.metrics, ['ui.fullCatalog.peakRssBytes']) ||
+    !exactOwnKeys(report.metrics?.['ui.fullCatalog.peakRssBytes'], ['samples', 'unit']) ||
+    report.metrics?.['ui.fullCatalog.peakRssBytes']?.unit !== 'bytes' ||
+    !sameJson(report.metrics?.['ui.fullCatalog.peakRssBytes']?.samples, metricSamples)
+  ) {
+    findings.push(`${label}.metrics must exactly match the per-sample full-catalog RSS evidence`);
+  }
+  if (report.pass !== report.samples.every((sample) => sample.pass === true)) {
+    findings.push(`${label}.pass does not match sample outcomes`);
+  }
+  if (
+    options.requireSuccessfulSamples === true &&
+    (report.sampleCount < 5 || report.samples.some((sample) => sample.functionalPass !== true))
+  ) {
+    findings.push(`${label} ratification requires at least five functionally successful samples`);
+  }
+  return findings;
 }
 
 export const DEVEX_PACKED_PROFILE_COMMAND_DIGEST = sha256(
@@ -2280,7 +2648,9 @@ function validateRatificationProvenance(metricId, metric, record, budgets, optio
       ? new Set([DEVEX_BENCHMARK_REPORT_SCHEMA, DEVEX_DETERMINISTIC_ARTIFACT_REPORT_SCHEMA])
       : evidenceSource === 'golden-journey'
         ? new Set([DEVEX_GOLDEN_RELEASE_REPORT_SCHEMA])
-        : new Set([DEVEX_BENCHMARK_REPORT_SCHEMA]);
+        : evidenceSource === 'full-catalog'
+          ? new Set([DEVEX_FULL_CATALOG_REPORT_SCHEMA])
+          : new Set([DEVEX_BENCHMARK_REPORT_SCHEMA]);
   if (!allowedSchemas.has(source?.schema)) {
     findings.push(
       `${metricId}.ratification.baselineReport.schema must be ${
@@ -2288,7 +2658,9 @@ function validateRatificationProvenance(metricId, metric, record, budgets, optio
           ? `${DEVEX_BENCHMARK_REPORT_SCHEMA} or ${DEVEX_DETERMINISTIC_ARTIFACT_REPORT_SCHEMA}`
           : evidenceSource === 'golden-journey'
             ? DEVEX_GOLDEN_RELEASE_REPORT_SCHEMA
-            : DEVEX_BENCHMARK_REPORT_SCHEMA
+            : evidenceSource === 'full-catalog'
+              ? DEVEX_FULL_CATALOG_REPORT_SCHEMA
+              : DEVEX_BENCHMARK_REPORT_SCHEMA
       }`,
     );
   }
@@ -2319,14 +2691,17 @@ function validateRatificationProvenance(metricId, metric, record, budgets, optio
     findings.push(`${metricId}.ratification baseline report is not valid JSON`);
     return findings;
   }
-  const reportIdentityFindings =
-    evidenceSource === 'golden-journey'
-      ? validateGoldenReleaseScorecard(report, `${metricId}.ratification.baselineReport`)
-      : validateRatificationReportIdentity(
-          report,
-          `${metricId}.ratification.baselineReport`,
-          binding === 'packed-artifact',
-        );
+  const reportIdentityFindings = validateEvidenceReport(
+    report,
+    evidenceSource,
+    `${metricId}.ratification.baselineReport`,
+    {
+      allowArtifactOnly: binding === 'packed-artifact',
+      ratification: true,
+      requireAcceptedRunner: evidenceSource === 'full-catalog',
+      requireSuccessfulSamples: evidenceSource === 'full-catalog',
+    },
+  );
   findings.push(...reportIdentityFindings);
   if (reportIdentityFindings.length > 0) return findings;
   if (
@@ -2339,20 +2714,16 @@ function validateRatificationProvenance(metricId, metric, record, budgets, optio
   if (binding === 'runner' && !sameJson(report.runner, record.runnerFingerprint)) {
     findings.push(`${metricId}.ratification runner does not match its baseline report`);
   }
-  const reportWorkloadIdentity =
-    binding !== 'runner'
-      ? null
-      : evidenceSource === 'golden-journey'
-        ? goldenJourneyWorkloadIdentity(report)
-        : benchmarkWorkloadContractIdentity(report);
-  if (binding === 'runner' && !sameJson(reportWorkloadIdentity, record.workloadIdentity)) {
+  const reportWorkload =
+    binding !== 'runner' ? null : reportWorkloadIdentity(report, evidenceSource);
+  if (binding === 'runner' && !sameJson(reportWorkload, record.workloadIdentity)) {
     findings.push(`${metricId}.ratification workload does not match its baseline report`);
   }
   if (
     binding === 'runner' &&
     evidenceSource === 'benchmark' &&
     budgets?.workload?.status === 'ratified' &&
-    !sameJson(reportWorkloadIdentity, budgets.workload.identity)
+    !sameJson(reportWorkload, budgets.workload.identity)
   ) {
     findings.push(`${metricId}.ratification workload differs from budgets.workload`);
   }
@@ -2596,10 +2967,15 @@ export function validateBudgets(budgets, options = {}) {
               record.workloadIdentity,
               `${metricId}.ratification.workloadIdentity`,
             )
-          : validateWorkloadIdentity(
-              record.workloadIdentity,
-              `${metricId}.ratification.workloadIdentity`,
-            )),
+          : metricSource(metricId) === 'full-catalog'
+            ? validateFullCatalogWorkloadIdentity(
+                record.workloadIdentity,
+                `${metricId}.ratification.workloadIdentity`,
+              )
+            : validateWorkloadIdentity(
+                record.workloadIdentity,
+                `${metricId}.ratification.workloadIdentity`,
+              )),
       );
     }
     if (
@@ -2683,8 +3059,7 @@ function validateProposal(proposal, options = {}) {
  * supplies the product target and rationale; the harness never invents a threshold from one run.
  */
 export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
-  const reportSource =
-    baselineReport?.schema === DEVEX_GOLDEN_RELEASE_REPORT_SCHEMA ? 'golden-journey' : 'benchmark';
+  const reportSource = reportEvidenceSource(baselineReport);
   if (
     reportSource === 'benchmark' &&
     (baselineReport?.scenario?.name !== 'kovo-packed-check' ||
@@ -2701,9 +3076,9 @@ export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
       : [];
   const incompatibleMetrics = proposalMetricIds.filter((metricId) => {
     const source = metricSource(metricId);
-    return reportSource === 'golden-journey'
-      ? source !== 'golden-journey'
-      : !['benchmark', 'packed-docs'].includes(source);
+    if (reportSource === 'golden-journey') return source !== 'golden-journey';
+    if (reportSource === 'full-catalog') return source !== 'full-catalog';
+    return !['benchmark', 'packed-docs'].includes(source);
   });
   if (incompatibleMetrics.length > 0) {
     throw new Error(
@@ -2723,9 +3098,12 @@ export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
     ...validateProposal(proposal, { requiresRunner: runnerBoundProposal }),
   ];
   findings.push(
-    ...(reportSource === 'golden-journey'
-      ? validateGoldenReleaseScorecard(baselineReport, 'baselineReport')
-      : validateRatificationReportIdentity(baselineReport, 'baselineReport', !runnerBoundProposal)),
+    ...validateEvidenceReport(baselineReport, reportSource, 'baselineReport', {
+      allowArtifactOnly: !runnerBoundProposal,
+      ratification: true,
+      requireAcceptedRunner: reportSource === 'full-catalog',
+      requireSuccessfulSamples: reportSource === 'full-catalog',
+    }),
   );
   if (!safeRepositoryRelativePath(options.baselineReportPath)) {
     findings.push('baselineReportPath must be a repository-relative path');
@@ -2840,11 +3218,7 @@ export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
       runnerFingerprint:
         binding === 'packed-artifact' ? null : structuredClone(baselineReport.runner),
       workloadIdentity:
-        binding === 'packed-artifact'
-          ? null
-          : reportSource === 'golden-journey'
-            ? goldenJourneyWorkloadIdentity(baselineReport)
-            : benchmarkWorkloadContractIdentity(baselineReport),
+        binding === 'packed-artifact' ? null : reportWorkloadIdentity(baselineReport, reportSource),
       baselineReport: structuredClone(baselineReportSource),
       ...(binding === 'packed-artifact'
         ? { binding: packedArtifactBinding(baselineMetric.evidence) }
@@ -2873,19 +3247,14 @@ export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
 export function evaluateBudgets(budgets, report, options = {}) {
   const findings = validateBudgets(budgets, options);
   if (findings.length > 0) throw new Error(`Invalid DevEx budgets:\n- ${findings.join('\n- ')}`);
-  const reportSource =
-    report?.schema === DEVEX_GOLDEN_RELEASE_REPORT_SCHEMA ? 'golden-journey' : 'benchmark';
-  const reportFindings =
-    reportSource === 'golden-journey'
-      ? validateGoldenReleaseScorecard(report)
-      : validateBenchmarkReportIdentity(report);
+  const reportSource = reportEvidenceSource(report);
+  const reportFindings = validateEvidenceReport(report, reportSource, 'report', {
+    requireSuccessfulSamples: reportSource === 'full-catalog',
+  });
   if (reportFindings.length > 0) {
     throw new Error(`Invalid ${reportSource} report:\n- ${reportFindings.join('\n- ')}`);
   }
-  const reportWorkload =
-    reportSource === 'golden-journey'
-      ? goldenJourneyWorkloadIdentity(report)
-      : benchmarkWorkloadContractIdentity(report);
+  const reportWorkload = reportWorkloadIdentity(report, reportSource);
   const results = [];
   for (const [metricId, metric] of Object.entries(budgets.metrics)) {
     const source = metricSource(metricId);
@@ -3544,6 +3913,21 @@ export function runDevexBenchmark(argv = process.argv.slice(2)) {
     const baselineBytes = readFileSync(baselinePath);
     const baselineReport = JSON.parse(baselineBytes.toString('utf8'));
     if (baselineReport?.schema === DEVEX_GOLDEN_RELEASE_REPORT_SCHEMA) {
+      const updated = ratifyBudgets(
+        budgets,
+        baselineReport,
+        readJson(path.resolve(args.proposal)),
+        {
+          baselineReportPath: relativeBaselinePath,
+          baselineReportBytes: baselineBytes,
+          repoRoot: budgetsRoot,
+        },
+      );
+      if (args.write) writeJson(args.budgets, updated);
+      else process.stdout.write(`${JSON.stringify(updated, null, 2)}\n`);
+      return 0;
+    }
+    if (baselineReport?.schema === DEVEX_FULL_CATALOG_REPORT_SCHEMA) {
       const updated = ratifyBudgets(
         budgets,
         baselineReport,

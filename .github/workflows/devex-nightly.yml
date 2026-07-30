@@ -132,11 +132,31 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/kovo-setup
+      - name: Identify the accepted hosted runner
+        run: |
+          runner_digest="$(
+            {
+              printf '%s\n' "${ImageOS:-unknown}" "${ImageVersion:-unknown}"
+              cat /etc/os-release
+            } | sha256sum | cut -d' ' -f1
+          )"
+          echo "KOVO_DEVEX_OS_IMAGE=github-actions/ubuntu-24.04@sha256:$runner_digest" >> "$GITHUB_ENV"
+          echo "KOVO_DEVEX_RUNNER_NAME=github-hosted-ubuntu-24.04-accepted" >> "$GITHUB_ENV"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: kovo-devex-packed-release
           path: ${{ runner.temp }}/kovo-devex-packed-release
       - name: Restore authenticated packed release
         run: tar -xzf "$RUNNER_TEMP/kovo-devex-packed-release/kovo-packed-release.tgz" -C .
-      - name: Gate the all-44 copied-component expected failure
-        run: vp exec pnpm run test:devex-known-failures-nightly
+      - name: Collect five authenticated full-catalog RSS samples
+        run: |
+          mkdir -p "$RUNNER_TEMP/kovo-devex-full-catalog"
+          vp exec node scripts/full-catalog-reproducer.mjs --samples 5 --output "$RUNNER_TEMP/kovo-devex-full-catalog/report.json" --artifacts "$RUNNER_TEMP/kovo-devex-full-catalog/failures"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          if-no-files-found: error
+          name: kovo-devex-full-catalog
+          path: ${{ runner.temp }}/kovo-devex-full-catalog
+          include-hidden-files: true
+          retention-days: 30

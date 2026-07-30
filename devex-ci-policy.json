@@ -102,8 +102,11 @@
       "budgetMinutes": 60,
       "timeoutMinutes": 60,
       "runnerCount": 1,
-      "commands": ["vp exec pnpm run test:devex-known-failures-nightly"],
+      "commands": [
+        "vp exec node scripts/full-catalog-reproducer.mjs --samples 5 --output \"$RUNNER_TEMP/kovo-devex-full-catalog/report.json\" --artifacts \"$RUNNER_TEMP/kovo-devex-full-catalog/failures\""
+      ],
       "prVisible": false,
+      "preserveReportOnFailure": true,
       "releaseRequired": true
     }
   ]

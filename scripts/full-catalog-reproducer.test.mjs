@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -5,6 +6,14 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
+import {
+  createFullCatalogWorkloadDefinition,
+  createRunnerFingerprint,
+  fullCatalogPackageSetDigest,
+  fullCatalogScenarioDigest,
+  ratifyBudgets,
+  validateBudgets,
+} from './devex-benchmark.mjs';
 import {
   FULL_CATALOG_REPORT_SCHEMA,
   FULL_CATALOG_SAMPLE_SCHEMA,
@@ -17,6 +26,7 @@ import {
   requireCatalogPhaseSuccess,
   validateFullCatalogReport,
 } from './full-catalog-reproducer.mjs';
+import { releasePackages } from './release-packages.mjs';
 
 const repoRoot = fileURLToPath(new URL('../', import.meta.url));
 const uiManifest = JSON.parse(
@@ -90,6 +100,21 @@ describe('packed full-catalog reproducer', () => {
       source: 'ratified',
       thresholdBytes: 1_900_000_000,
     });
+
+    const breached = validReport();
+    breached.budget = {
+      binding: true,
+      source: 'ratified',
+      thresholdBytes: 1000,
+    };
+    breached.samples[0].budget = {
+      binding: true,
+      thresholdBytes: 1000,
+      withinThreshold: false,
+    };
+    breached.samples[0].pass = false;
+    breached.pass = false;
+    expect(validateFullCatalogReport(breached)).toEqual([]);
   });
 
   it('gives the production-build fixture an explicit retained deployment posture', () => {
@@ -168,84 +193,349 @@ describe('packed full-catalog reproducer', () => {
       (phase) => phase.name !== 'build',
     );
     expect(validateFullCatalogReport(incomplete)).toContain(
-      'samples[0] is missing successful build',
+      'report.samples[0] did not prove every successful workload phase',
     );
 
     const forgedMetric = structuredClone(report);
     forgedMetric.metrics['ui.fullCatalog.peakRssBytes'].samples[0] += 1;
     expect(validateFullCatalogReport(forgedMetric)).toContain(
-      'full-catalog metric samples do not match sample evidence',
+      'report.metrics must exactly match the per-sample full-catalog RSS evidence',
     );
 
     const ignoredBinding = structuredClone(report);
     ignoredBinding.samples[0].budget.binding = true;
     ignoredBinding.samples[0].budget.withinThreshold = false;
     expect(validateFullCatalogReport(ignoredBinding)).toContain(
-      'samples[0].budget does not match report threshold and observed peak',
-    );
-    expect(validateFullCatalogReport(ignoredBinding)).toContain(
-      'samples[0] does not enforce functional and binding RSS outcomes',
+      'report.samples[0].budget does not match report threshold and observed peak',
     );
 
     const duplicateComponent = structuredClone(report);
     duplicateComponent.catalog.components[1] = duplicateComponent.catalog.components[0];
     expect(validateFullCatalogReport(duplicateComponent)).toContain(
-      'catalog must contain exactly 44 unique sorted authenticated components',
+      'report.catalog must contain exactly 44 unique sorted authenticated components',
     );
 
     const forgedPackages = structuredClone(report);
     forgedPackages.packageSet = forgedPackages.packageSet.filter(
       (pkg) => pkg.name !== '@kovojs/ui',
     );
-    expect(validateFullCatalogReport(forgedPackages)).toContain('packageSet omits @kovojs/ui');
+    expect(validateFullCatalogReport(forgedPackages)).toContain(
+      'report.packageSet must contain the exact packed release census',
+    );
+  });
+
+  it('ratifies only the full-catalog RSS metric from five authenticated successful samples', () => {
+    const report = validReport(5);
+    const baselinePath = 'baselines/full-catalog-fixture.json';
+    const baselineBytes = Buffer.from(`${JSON.stringify(report, null, 2)}\n`);
+    const proposal = {
+      schema: 'kovo-devex-budget-proposal/v7',
+      runnerFingerprint: report.runner,
+      metrics: {
+        'ui.fullCatalog.peakRssBytes': {
+          budget: 1_900_000_000,
+          statistic: 'p95',
+          targetRationale:
+            'Keep the complete copied catalog below the reviewed hosted-runner memory target.',
+        },
+      },
+    };
+    const ratified = ratifyBudgets(budgets, report, proposal, {
+      baselineReportBytes: baselineBytes,
+      baselineReportPath: baselinePath,
+      repoRoot,
+    });
+
+    expect(ratified.runner).toEqual(budgets.runner);
+    expect(ratified.workload).toEqual(budgets.workload);
+    expect(ratified.metrics['ui.fullCatalog.peakRssBytes'].ratification).toMatchObject({
+      baseline: 1028,
+      budget: 1_900_000_000,
+      noise: 1,
+      noiseMultiplier: 3,
+      runnerFingerprint: report.runner,
+      sampleCount: 5,
+      statistic: 'p95',
+      threshold: 1_900_000_003,
+      workloadIdentity: report.scenario.definition,
+      baselineReport: {
+        path: baselinePath,
+        schema: FULL_CATALOG_REPORT_SCHEMA,
+        scenarioDigest: report.scenario.digest,
+        scenarioName: report.scenario.name,
+      },
+    });
+    expect(
+      validateBudgets(ratified, {
+        baselineReports: new Map([[baselinePath, baselineBytes]]),
+        repoRoot,
+      }),
+    ).toEqual([]);
+
+    const crossSource = structuredClone(proposal);
+    crossSource.metrics = {
+      'check.cold.durationMs': {
+        budget: 1,
+        targetRationale: 'This metric belongs to the packed benchmark evidence source.',
+      },
+    };
+    expect(() =>
+      ratifyBudgets(budgets, report, crossSource, {
+        baselineReportBytes: baselineBytes,
+        baselineReportPath: baselinePath,
+        repoRoot,
+      }),
+    ).toThrow(
+      'full-catalog baseline cannot ratify metrics from another evidence source: check.cold.durationMs',
+    );
+
+    const wrongRunner = structuredClone(proposal);
+    wrongRunner.runnerFingerprint = createRunnerFingerprint({
+      ...report.runner,
+      cpuModel: 'different hosted CPU',
+    });
+    expect(() =>
+      ratifyBudgets(budgets, report, wrongRunner, {
+        baselineReportBytes: baselineBytes,
+        baselineReportPath: baselinePath,
+        repoRoot,
+      }),
+    ).toThrow('baseline runner fingerprint does not match proposal.runnerFingerprint');
+
+    const changedBytes = Buffer.from(`${JSON.stringify({ ...report, pass: false }, null, 2)}\n`);
+    expect(() =>
+      ratifyBudgets(budgets, report, proposal, {
+        baselineReportBytes: changedBytes,
+        baselineReportPath: baselinePath,
+        repoRoot,
+      }),
+    ).toThrow('baselineReportBytes do not contain baselineReport');
+
+    const tamperedBaseline = new Map([
+      [baselinePath, Buffer.from(baselineBytes.toString('utf8').replace('1024', '1023'))],
+    ]);
+    expect(validateBudgets(ratified, { baselineReports: tamperedBaseline, repoRoot })).toContain(
+      'ui.fullCatalog.peakRssBytes.ratification baseline report digest does not match baselines/full-catalog-fixture.json',
+    );
+  });
+
+  it('accepts the full-catalog report through the production ratification CLI', () => {
+    const temporaryRoot = mkdtempSync(path.join(os.tmpdir(), 'kovo-full-catalog-ratify-'));
+    try {
+      const report = validReport(5);
+      const baselineDirectory = path.join(temporaryRoot, 'baselines');
+      mkdirSync(baselineDirectory);
+      const budgetsPath = path.join(temporaryRoot, 'devex-budgets.json');
+      const baselinePath = path.join(baselineDirectory, 'full-catalog-hosted.json');
+      const proposalPath = path.join(temporaryRoot, 'proposal.json');
+      writeFileSync(budgetsPath, readFileSync(path.join(repoRoot, 'devex-budgets.json')));
+      writeFileSync(
+        path.join(baselineDirectory, 'devex-docs-snapshot-v1.json'),
+        readFileSync(path.join(repoRoot, 'baselines/devex-docs-snapshot-v1.json')),
+      );
+      writeFileSync(baselinePath, `${JSON.stringify(report, null, 2)}\n`);
+      writeFileSync(
+        proposalPath,
+        `${JSON.stringify(
+          {
+            schema: 'kovo-devex-budget-proposal/v7',
+            runnerFingerprint: report.runner,
+            metrics: {
+              'ui.fullCatalog.peakRssBytes': {
+                budget: 1_900_000_000,
+                targetRationale:
+                  'Keep the copied full catalog below the reviewed hosted-runner RSS target.',
+              },
+            },
+          },
+          null,
+          2,
+        )}\n`,
+      );
+
+      const result = spawnSync(
+        process.execPath,
+        [
+          path.join(repoRoot, 'scripts/devex-benchmark.mjs'),
+          '--ratify',
+          '--budgets',
+          budgetsPath,
+          '--baseline',
+          baselinePath,
+          '--proposal',
+          proposalPath,
+          '--write',
+        ],
+        { encoding: 'utf8' },
+      );
+
+      expect(result.stderr).toBe('');
+      expect(result.status).toBe(0);
+      expect(
+        JSON.parse(readFileSync(budgetsPath, 'utf8')).metrics['ui.fullCatalog.peakRssBytes']
+          .ratification,
+      ).toMatchObject({
+        sampleCount: 5,
+        workloadIdentity: report.scenario.definition,
+      });
+    } finally {
+      rmSync(temporaryRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects too few, failed, and altered workload/package/catalog/phase evidence', () => {
+    const proposalFor = (report) => ({
+      schema: 'kovo-devex-budget-proposal/v7',
+      runnerFingerprint: report.runner,
+      metrics: {
+        'ui.fullCatalog.peakRssBytes': {
+          budget: 1_900_000_000,
+          targetRationale: 'Keep the full catalog inside the reviewed memory envelope.',
+        },
+      },
+    });
+    const ratify = (report) =>
+      ratifyBudgets(budgets, report, proposalFor(report), {
+        baselineReportBytes: Buffer.from(`${JSON.stringify(report, null, 2)}\n`),
+        baselineReportPath: 'baselines/full-catalog-fixture.json',
+        repoRoot,
+      });
+
+    expect(() => ratify(validReport(4))).toThrow(
+      'baselineReport ratification requires at least five functionally successful samples',
+    );
+
+    const unacceptedRunner = validReport(5);
+    unacceptedRunner.runner = createRunnerFingerprint({
+      ...unacceptedRunner.runner,
+      name: 'local-full-catalog-observation',
+      osImage: `local/darwin@sha256:${'3'.repeat(64)}`,
+      platform: 'darwin',
+    });
+    expect(() => ratify(unacceptedRunner)).toThrow(
+      'baselineReport.runner must be the exact accepted GitHub-hosted ubuntu-24.04 runner',
+    );
+
+    const failed = validReport(5);
+    failed.samples[2].functionalPass = false;
+    failed.samples[2].pass = false;
+    failed.samples[2].failure = {
+      artifact: null,
+      message: 'check failed',
+      phase: 'check',
+    };
+    failed.pass = false;
+    expect(() => ratify(failed)).toThrow(
+      'baselineReport ratification requires at least five functionally successful samples',
+    );
+
+    const wrongWorkload = validReport(5);
+    wrongWorkload.scenario.definition.sourcePosture.copiedOutput = 'src/ui';
+    wrongWorkload.scenario.digest = fullCatalogScenarioDigest(wrongWorkload.scenario.definition);
+    expect(() => ratify(wrongWorkload)).toThrow(
+      'baselineReport.scenario must bind the exact code-owned full-catalog workload',
+    );
+
+    const wrongPackage = validReport(5);
+    wrongPackage.packageSet[0].name = '@kovojs/not-core';
+    wrongPackage.packedRelease.packageSetSha256 = fullCatalogPackageSetDigest(
+      wrongPackage.packageSet,
+    );
+    expect(() => ratify(wrongPackage)).toThrow(
+      'baselineReport.packageSet must retain the exact sorted release package names',
+    );
+
+    const wrongCatalog = validReport(5);
+    wrongCatalog.catalog.components = [
+      'not-the-packed-component',
+      ...wrongCatalog.catalog.components.slice(1),
+    ];
+    expect(() => ratify(wrongCatalog)).toThrow(
+      'baselineReport.scenario must bind the exact code-owned full-catalog workload',
+    );
+
+    const wrongPhase = validReport(5);
+    wrongPhase.samples[0].phases[4].name = 'invented-check';
+    expect(() => ratify(wrongPhase)).toThrow(
+      'baselineReport.samples[0].phases must be an ordered prefix of the workload phases',
+    );
   });
 });
 
-function validReport() {
+function validReport(sampleCount = 1) {
   const components = packedUiComponentNames(new Map([['@kovojs/ui', { manifest: uiManifest }]]));
-  const phases = ['create', 'install', 'copy', 'typecheck', 'check', 'build'].map((name) => ({
-    durationMs: 1,
-    name,
-    peakProcessTreeRssBytes: 1024,
-    status: 0,
-  }));
-  const sample = {
-    schema: FULL_CATALOG_SAMPLE_SCHEMA,
-    sampleIndex: 0,
-    copiedComponents: 44,
-    copiedSourceFiles: 44,
-    unimportedDuringProof: true,
-    phases,
-    peakProcessTreeRssBytes: 1024,
-    budget: {
-      binding: false,
-      thresholdBytes: 2 * 1024 * 1024 * 1024,
-      withinThreshold: true,
-    },
-    functionalPass: true,
-    pass: true,
-    failure: null,
+  const packageSet = releasePackages()
+    .map(({ name, version }) => ({
+      name,
+      sha512: `sha512-${Buffer.from(name).toString('base64')}`,
+      version,
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name));
+  const catalog = {
+    componentCount: 44,
+    components,
+    source: '@kovojs/ui packed manifest exports',
   };
+  const workload = createFullCatalogWorkloadDefinition(catalog, packageSet);
+  const samples = Array.from({ length: sampleCount }, (_, sampleIndex) => {
+    const peakProcessTreeRssBytes = 1024 + sampleIndex;
+    const phases = ['create', 'install', 'copy', 'typecheck', 'check', 'build'].map((name) => ({
+      durationMs: 1,
+      name,
+      peakProcessTreeRssBytes,
+      status: 0,
+    }));
+    return {
+      schema: FULL_CATALOG_SAMPLE_SCHEMA,
+      sampleIndex,
+      copiedComponents: 44,
+      copiedSourceFiles: 44,
+      unimportedDuringProof: true,
+      phases,
+      peakProcessTreeRssBytes,
+      budget: {
+        binding: false,
+        thresholdBytes: 2 * 1024 * 1024 * 1024,
+        withinThreshold: true,
+      },
+      functionalPass: true,
+      pass: true,
+      failure: null,
+    };
+  });
   return {
     schema: FULL_CATALOG_REPORT_SCHEMA,
-    packageSet: [
-      '@kovojs/core',
-      '@kovojs/headless-ui',
-      '@kovojs/icons',
-      '@kovojs/ui',
-      'create-kovo',
-    ].map((name) => ({ name, sha512: 'sha512-YQ==', version: '0.2.0' })),
-    catalog: {
-      componentCount: 44,
-      components,
-      source: '@kovojs/ui packed manifest exports',
+    runner: createRunnerFingerprint({
+      name: 'github-hosted-ubuntu-24.04-accepted',
+      platform: 'linux',
+      arch: 'x64',
+      node: 'v24.0.0',
+      cpuModel: 'fixture hosted CPU',
+      packageManager: 'pnpm@10.12.1',
+      osImage: `github-actions/ubuntu-24.04@sha256:${'1'.repeat(64)}`,
+    }),
+    source: {
+      commit: 'a'.repeat(40),
+      tree: 'clean',
     },
+    packedRelease: {
+      schema: 'kovo.packed-public-packages/v2',
+      manifestSha256: `sha256:${'2'.repeat(64)}`,
+      packageSetSha256: fullCatalogPackageSetDigest(packageSet),
+    },
+    scenario: {
+      name: workload.name,
+      digest: fullCatalogScenarioDigest(workload),
+      definition: workload,
+    },
+    packageSet,
+    catalog,
     budget: fullCatalogBudget(budgets),
-    sampleCount: 1,
-    samples: [sample],
+    sampleCount,
+    samples,
     metrics: {
       'ui.fullCatalog.peakRssBytes': {
-        samples: [1024],
+        samples: samples.map((sample) => sample.peakProcessTreeRssBytes),
         unit: 'bytes',
       },
     },
