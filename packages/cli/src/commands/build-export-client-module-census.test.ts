@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import {
   assertCompilerClientModuleParityForTests,
   compilerClientModulesFromApprovedSourcesForTests,
+  finalCompilerClientModulesFromBuildPassesForTests,
 } from './build-export.js';
 
 const componentSource = `
@@ -90,6 +91,43 @@ describe('build compiler client-module census', () => {
           exactFinal.map((module) => ({ ...module })),
         ),
       ).toThrow(/refused unproven final compiler client modules/u);
+    } finally {
+      rmSync(fixture.root, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects a final SSR omission hidden by a genuine module from the earlier browser pass', async () => {
+    const fixture = createFixture('ssr-omission');
+    try {
+      const earlierBrowserAndDiscoveryModule =
+        await compilerClientModulesFromApprovedSourcesForTests(
+          fixture.appModulePath,
+          fixture.root,
+          [{ fileName: 'src/app.tsx', source: componentSource }],
+        );
+
+      // This is the masking shape that aggregate union parity alone cannot distinguish:
+      // discovery union = browser A + SSR A, final union = browser A + SSR [].
+      expect(() =>
+        assertCompilerClientModuleParityForTests(
+          earlierBrowserAndDiscoveryModule,
+          earlierBrowserAndDiscoveryModule,
+        ),
+      ).not.toThrow();
+      expect(
+        finalCompilerClientModulesFromBuildPassesForTests(
+          earlierBrowserAndDiscoveryModule,
+          earlierBrowserAndDiscoveryModule,
+          earlierBrowserAndDiscoveryModule,
+        ),
+      ).toEqual(earlierBrowserAndDiscoveryModule);
+      expect(() =>
+        finalCompilerClientModulesFromBuildPassesForTests(
+          earlierBrowserAndDiscoveryModule,
+          earlierBrowserAndDiscoveryModule,
+          [],
+        ),
+      ).toThrow(/changed the discovered client-module role census/u);
     } finally {
       rmSync(fixture.root, { force: true, recursive: true });
     }

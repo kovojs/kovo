@@ -1086,10 +1086,6 @@ export async function runBuildCommand(
         ...clientBuild.clientModules,
         ...discoveredServerClientModules,
       ]);
-      const discoveredClientModuleCensus = compilerClientModuleCensus(
-        discoveredClientModules,
-        'discovered compiler client modules',
-      );
       const appClientModuleStaging = snapshotVersionedClientModuleStaging(buildApp.clientModules);
       const hasGeneratedAppBootstrap = buildSomeDense(
         discoveredClientModules,
@@ -1131,13 +1127,10 @@ export async function runBuildCommand(
         manualClientModules: appClientModuleStaging.stable,
         stylesheetAssets: buildCssAssets,
       });
-      const clientModules = uniqueKovoCompiledClientModules([
-        ...clientBuild.clientModules,
-        ...serverHandlerBuild.clientModules,
-      ]);
-      assertCompilerClientModuleCensus(
-        discoveredClientModuleCensus,
-        compilerClientModuleCensus(clientModules, 'final compiler client modules'),
+      const clientModules = finalCompilerClientModulesFromBuildPasses(
+        clientBuild.clientModules,
+        discoveredServerClientModules,
+        serverHandlerBuild.clientModules,
       );
       if (deriveKovoAppBuildToken(clientModules, nonCompilerClientModules) !== appBuildToken) {
         throw new TypeError(
@@ -7528,6 +7521,37 @@ export function assertCompilerClientModuleParityForTests(
     compilerClientModuleCensus(discovered, 'discovered compiler client modules'),
     compilerClientModuleCensus(final, 'final compiler client modules'),
   );
+}
+
+function finalCompilerClientModulesFromBuildPasses(
+  browser: readonly KovoAppShellCompiledClientModule[],
+  discoveredServer: readonly KovoAppShellCompiledClientModule[],
+  finalServer: readonly KovoAppShellCompiledClientModule[],
+): readonly KovoAppShellCompiledClientModule[] {
+  // The browser pass may intentionally contribute app-bootstrap or other client-only modules.
+  // Compare the two SSR pass results before taking that union: otherwise a module genuinely found
+  // by both the browser and discovery passes can mask its omission from the final runtime-posture
+  // bundle.
+  assertCompilerClientModuleCensus(
+    compilerClientModuleCensus(discoveredServer, 'discovered server compiler client modules'),
+    compilerClientModuleCensus(finalServer, 'final server compiler client modules'),
+  );
+  const discovered = uniqueKovoCompiledClientModules([...browser, ...discoveredServer]);
+  const final = uniqueKovoCompiledClientModules([...browser, ...finalServer]);
+  assertCompilerClientModuleCensus(
+    compilerClientModuleCensus(discovered, 'discovered compiler client modules'),
+    compilerClientModuleCensus(final, 'final compiler client modules'),
+  );
+  return final;
+}
+
+/** @internal Regression seam for production discovery/final pass orchestration. */
+export function finalCompilerClientModulesFromBuildPassesForTests(
+  browser: readonly KovoAppShellCompiledClientModule[],
+  discoveredServer: readonly KovoAppShellCompiledClientModule[],
+  finalServer: readonly KovoAppShellCompiledClientModule[],
+): readonly KovoAppShellCompiledClientModule[] {
+  return finalCompilerClientModulesFromBuildPasses(browser, discoveredServer, finalServer);
 }
 
 function stableKovoServerHandlerSource(source: string): string {
