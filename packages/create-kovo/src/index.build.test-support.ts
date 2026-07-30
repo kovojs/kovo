@@ -66,11 +66,6 @@ export function addNoJsFailureProof(root: string): void {
       '  },',
       '});',
       '',
-      'interface BlockedTitleFailure {',
-      "  code: 'BLOCKED_TITLE';",
-      '  payload: { title: string };',
-      '}',
-      '',
       'export const NoJsFailureProof = component({',
       '  mutations: { blockTitle },',
       '  render: (_queries, _state, slots) => {',
@@ -84,7 +79,9 @@ export function addNoJsFailureProof(root: string): void {
       '          <FormError',
       '            code="BLOCKED_TITLE"',
       '            failure={slots.forms.blockTitle.failure}',
-      '            message={(failure: BlockedTitleFailure) => `Blocked title: ${failure.payload.title}`}',
+      "            message={(failure) => failure.code === 'BLOCKED_TITLE'",
+      '              ? `Blocked title: ${failure.payload.title}`',
+      "              : ''}",
       '          />',
       '          <button type="submit">Save</button>',
       '        </form>',
@@ -289,32 +286,22 @@ function nonParanoidStarterEnv(root: string): NodeJS.ProcessEnv {
 }
 
 export function addStorageQueryWriteProof(root: string): void {
-  const queriesPath = join(root, 'src/queries.ts');
-  let queries = readFileSync(queriesPath, 'utf8');
-  queries = replaceRequired(
-    queries,
-    "import { query, type QueryLoadContext, type Reader } from '@kovojs/server'\nimport { type JsonValue } from '@kovojs/core';",
-    "import { publicAccess, query, type QueryLoadContext, type Reader } from '@kovojs/server'\nimport { publicScopedKey, type JsonValue } from '@kovojs/core'\nimport { type StorageCapability } from '@kovojs/core/storage';",
-    'storage query write proof import',
-  );
-  queries = replaceRequired(
-    queries,
-    'type AppQueryLoadContext = QueryLoadContext<AppQueryRequest, AppDb>;',
+  writeFileSync(
+    join(root, 'src/storage-query-write-proof.ts'),
     [
-      'type AppQueryLoadContext = QueryLoadContext<AppQueryRequest, AppDb>;',
+      "import { publicScopedKey } from '@kovojs/core';",
+      "import type { StorageCapability } from '@kovojs/core/storage';",
+      "import { publicAccess, query, type QueryLoadContext } from '@kovojs/server';",
       '',
-      'type AppStorageWriteQueryLoadContext = AppQueryLoadContext & StorageCapability;',
-      'type AppStorageUploadQueryLoadContext = AppQueryLoadContext & {',
+      'type StorageWriteQueryContext = QueryLoadContext<unknown> & StorageCapability;',
+      'type StorageUploadQueryContext = QueryLoadContext<unknown> & {',
       '  upload(key: string, body: string): Promise<unknown>;',
       '};',
       '',
       'export const storagePutWriteQuery = query({',
       "  access: publicAccess('storage put write query proof'),",
       '  reads: [],',
-      '  async load(',
-      '    _input: unknown,',
-      '    storage?: AppStorageWriteQueryLoadContext,',
-      '  ): Promise<{ ok: true }> {',
+      '  async load(_input: unknown, storage?: StorageWriteQueryContext): Promise<{ ok: true }> {',
       "    if (!storage) throw new Error('storage query proof requires loader context');",
       "    await storage.put(publicScopedKey('receipts/query-write-proof.txt'), 'bad');",
       '    return { ok: true };',
@@ -324,10 +311,7 @@ export function addStorageQueryWriteProof(root: string): void {
       'export const storageDeleteWriteQuery = query({',
       "  access: publicAccess('storage delete write query proof'),",
       '  reads: [],',
-      '  async load(',
-      '    _input: unknown,',
-      '    storage?: AppStorageWriteQueryLoadContext,',
-      '  ): Promise<{ ok: true }> {',
+      '  async load(_input: unknown, storage?: StorageWriteQueryContext): Promise<{ ok: true }> {',
       "    if (!storage) throw new Error('storage query proof requires loader context');",
       "    await storage.delete(publicScopedKey('receipts/query-delete-proof.txt'));",
       '    return { ok: true };',
@@ -337,35 +321,17 @@ export function addStorageQueryWriteProof(root: string): void {
       'export const storageUploadWriteQuery = query({',
       "  access: publicAccess('storage upload write query proof'),",
       '  reads: [],',
-      '  async load(',
-      '    _input: unknown,',
-      '    storageUpload?: AppStorageUploadQueryLoadContext,',
-      '  ): Promise<{ ok: true }> {',
+      '  async load(_input: unknown, storageUpload?: StorageUploadQueryContext): Promise<{ ok: true }> {',
       "    if (!storageUpload) throw new Error('storage upload proof requires loader context');",
       "    await storageUpload.upload('receipts/query-upload-proof.txt', 'bad');",
       '    return { ok: true };',
       '  },',
       '});',
+      '',
     ].join('\n'),
-    'storage query write proof query',
+    'utf8',
   );
-  writeFileSync(queriesPath, queries, 'utf8');
-
-  const appPath = join(root, 'src/app.tsx');
-  let app = readFileSync(appPath, 'utf8');
-  app = replaceRequired(
-    app,
-    "import { contactsQuery } from './queries.js';",
-    "import { contactsQuery, storageDeleteWriteQuery, storagePutWriteQuery, storageUploadWriteQuery } from './queries.js';",
-    'storage query write proof app import',
-  );
-  app = replaceRequired(
-    app,
-    '  queries: [contactsQuery],',
-    '  queries: [contactsQuery, storageDeleteWriteQuery, storagePutWriteQuery, storageUploadWriteQuery],',
-    'storage query write proof app registration',
-  );
-  writeFileSync(appPath, app, 'utf8');
+  formatGeneratedSources(root, ['src/storage-query-write-proof.ts']);
 }
 
 export function addOpaqueStorageQueryWriteProof(root: string): void {
@@ -445,19 +411,20 @@ export function addStorageMutationWriteProof(root: string): void {
     join(root, 'src/storage-mutation-proof.tsx'),
     [
       '/** @jsxImportSource @kovojs/server */',
-      "import { createMemoryStorage } from '@kovojs/core/storage'\nimport { mutation, mutationFormAttributes, publicAccess, s } from '@kovojs/server'\nimport { publicScopedKey } from '@kovojs/core';",
+      "import { publicScopedKey } from '@kovojs/core';",
+      "import { createMemoryStorage } from '@kovojs/core/storage';",
+      "import { mutationFormAttributes, s } from '@kovojs/server';",
       '',
-      "import { appCsrf } from './auth.js';",
+      "import { app } from './kovo.js';",
       '',
       'const storageMutationProof = createMemoryStorage();',
       "await storageMutationProof.put(publicScopedKey('receipts/delete-target.txt'), 'delete target');",
-      "const publicProof = publicAccess('public storage mutation capability proof');",
+      "const publicProof = app.publicAccess('public storage mutation capability proof');",
       '',
-      'export const storageMutationWrite = mutation({',
+      'export const storageMutationWrite = app.mutation({',
       '  access: publicProof,',
-      '  csrf: appCsrf,',
       '  input: s.object({ mode: s.string() }),',
-      '  async handler(input: { mode: string }) {',
+      '  async handler(input) {',
       "    if (input.mode === 'put') {",
       "      await storageMutationProof.put(publicScopedKey('receipts/mutation-put.txt'), 'mutation put ok', {",
       "        contentType: 'text/plain',",
@@ -487,6 +454,11 @@ export function addStorageMutationWriteProof(root: string): void {
       '  );',
       '}',
       '',
+      "export const storageMutationProofRoute = app.route('/storage-mutation-proof', {",
+      '  access: publicProof,',
+      '  page: storageMutationStatus,',
+      '});',
+      '',
     ].join('\n'),
     'utf8',
   );
@@ -498,30 +470,24 @@ export function addStorageMutationWriteProof(root: string): void {
     "import { addContact } from './mutations.js';",
     [
       "import { addContact } from './mutations.js';",
-      "import { storageMutationStatus, storageMutationWrite } from './storage-mutation-proof.js';",
+      "import { storageMutationProofRoute, storageMutationWrite } from './storage-mutation-proof.js';",
     ].join('\n'),
     'storage mutation proof import',
   );
   app = replaceRequired(
     app,
-    '  mutations: [addContact, appSignIn, appSignOut],',
-    '  mutations: [addContact, storageMutationWrite, appSignIn, appSignOut],',
+    '  mutations: [addContact, signInMutation, signOutMutation],',
+    '  mutations: [addContact, storageMutationWrite, signInMutation, signOutMutation],',
     'storage mutation proof registration',
   );
   app = replaceRequired(
     app,
-    "  routes: [\n    route('/', {",
-    [
-      '  routes: [',
-      "    route('/storage-mutation-proof', {",
-      "      access: publicAccess('public storage mutation capability proof'),",
-      '      page: storageMutationStatus,',
-      '    }),',
-      "    route('/', {",
-    ].join('\n'),
-    'storage mutation proof route',
+    '  routes: [homeRoute, loginRoute],',
+    '  routes: [homeRoute, loginRoute, storageMutationProofRoute],',
+    'storage mutation proof route registration',
   );
   writeFileSync(appPath, app, 'utf8');
+  formatGeneratedSources(root, ['src/app.tsx', 'src/storage-mutation-proof.tsx']);
 }
 
 export function addRawSqlOwnerWriteProof(
@@ -701,19 +667,18 @@ export function addStarterMutationDbScopeProof(
     [
       ...(staticStructured ? [] : ["import { sql, trustedSql } from '@kovojs/drizzle';"]),
       staticStructured
-        ? "import { mutation, publicAccess, s } from '@kovojs/server'\nimport { serverValue } from '@kovojs/server/write-safety';"
-        : "import { endpoint, mutation, publicAccess, s } from '@kovojs/server'\nimport { serverValue } from '@kovojs/server/write-safety'\nimport { type EndpointDbContext } from '@kovojs/server/routing';",
+        ? "import { s } from '@kovojs/server';\nimport { serverValue } from '@kovojs/server/write-safety';"
+        : "import { s } from '@kovojs/server';\nimport { serverValue } from '@kovojs/server/write-safety';",
       ...(staticStructured ? [] : ["import { eq } from 'drizzle-orm';"]),
       '',
-      "import { appCsrf, type AppRequest } from './auth.js';",
-      ...(staticStructured ? [] : ["import type { AppDb } from './db.js';"]),
+      "import { app } from './kovo.js';",
       "import { contact } from './model.js';",
       ...(staticStructured ? [] : ["import { contactsQuery } from './queries.js';"]),
       staticStructured
         ? "import { rateLimit, user } from './schema.js';"
         : "import { contacts } from './schema.js';",
       '',
-      "const publicProof = publicAccess('public starter mutation DB scope proof');",
+      "const publicProof = app.publicAccess('public starter mutation DB scope proof');",
       ...(staticStructured
         ? []
         : ["const STARTER_DB_SCOPE_CONTACT_EMAIL = 'starter-scope-proof-contact@example.com';"]),
@@ -721,12 +686,11 @@ export function addStarterMutationDbScopeProof(
       '',
       ...(staticStructured
         ? [
-            'export const starterAuthUserTableWriteProof = mutation({',
+            'export const starterAuthUserTableWriteProof = app.mutation({',
             '  access: publicProof,',
-            '  csrf: appCsrf,',
             '  input: proofInput,',
             "  registry: { tables: ['contacts'], touches: [contact] },",
-            '  async handler(input: { marker: string }, request: AppRequest) {',
+            '  async handler(input, request) {',
             '    void input;',
             '    await request.db.insert(user).values({',
             "      email: 'starter-scope-proof-auth-user@example.com',",
@@ -738,12 +702,11 @@ export function addStarterMutationDbScopeProof(
             '  },',
             '});',
             '',
-            'export const starterAuthRateLimitTableWriteProof = mutation({',
+            'export const starterAuthRateLimitTableWriteProof = app.mutation({',
             '  access: publicProof,',
-            '  csrf: appCsrf,',
             '  input: proofInput,',
             "  registry: { tables: ['contacts'], touches: [contact] },",
-            '  async handler(input: { marker: string }, request: AppRequest) {',
+            '  async handler(input, request) {',
             '    void input;',
             '    await request.db.insert(rateLimit).values({',
             '      count: 1,',
@@ -760,8 +723,8 @@ export function addStarterMutationDbScopeProof(
       ...(staticStructured
         ? []
         : [
-            'async function starterRawAuthTableWrite(db: AppRequest["db"]) {',
-            '    await (db as unknown as { execute(statement: unknown): Promise<unknown> }).execute(',
+            'async function starterRawAuthTableWrite(db: Parameters<Parameters<typeof app.mutation>[0]["handler"]>[1]["db"]) {',
+            '    await db.execute(',
             '      trustedSql(',
             '        sql`insert into "user" (id, name, email, "emailVerified", "createdAt", "updatedAt") values (${\'starter-scope-proof-raw-auth-user\'}, \'blocked raw auth user\', ${\'starter-scope-proof-raw-auth-user@example.com\'}, false, now(), now())`,',
             "        { justification: 'starter raw SQL out-of-scope auth table proof' },",
@@ -769,20 +732,19 @@ export function addStarterMutationDbScopeProof(
             '    );',
             '}',
             '',
-            'export const starterRawAuthTableWriteProof = mutation({',
+            'export const starterRawAuthTableWriteProof = app.mutation({',
             '  access: publicProof,',
-            '  csrf: appCsrf,',
             '  input: proofInput,',
-            "  optimistic: { [contactsQuery.key]: 'await-fragment' },",
+            '  optimistic: [contactsQuery.optimistic(proofInput, (value) => value)],',
             "  registry: { tables: ['contacts'], touches: [contact] },",
-            '  async handler(input: { marker: string }, request: AppRequest) {',
+            '  async handler(input, request) {',
             '    void input;',
             '    await starterRawAuthTableWrite(request.db);',
             '    return { ok: true };',
             '  },',
             '});',
             '',
-            'async function starterAbsentTablesContactWrite(db: AppRequest["db"]) {',
+            'async function starterAbsentTablesContactWrite(db: Parameters<Parameters<typeof app.mutation>[0]["handler"]>[1]["db"]) {',
             '    await db.insert(contacts).values({',
             "      company: 'Absent tables proof',",
             "      email: 'starter-scope-proof-absent-tables@example.com',",
@@ -791,26 +753,25 @@ export function addStarterMutationDbScopeProof(
             '    });',
             '}',
             '',
-            'export const starterAbsentTablesContactWriteProof = mutation({',
+            'export const starterAbsentTablesContactWriteProof = app.mutation({',
             '  access: publicProof,',
-            '  csrf: appCsrf,',
             '  input: proofInput,',
-            "  optimistic: { [contactsQuery.key]: 'await-fragment' },",
+            '  optimistic: [contactsQuery.optimistic(proofInput, (value) => value)],',
             '  registry: { touches: [contact] },',
-            '  async handler(input: { marker: string }, request: AppRequest) {',
+            '  async handler(input, request) {',
             '    void input;',
             '    await starterAbsentTablesContactWrite(request.db);',
             '    return { ok: true };',
             '  },',
             '});',
             '',
-            "export const starterDbScopeStatusEndpoint = endpoint('/api/starter-db-scope-proof', {",
+            "export const starterDbScopeStatusEndpoint = app.endpoint('/api/starter-db-scope-proof', {",
             '  access: publicProof,',
             "  auth: { justification: 'public starter mutation DB scope proof', kind: 'none' },",
             '  csrf: false,',
             "  csrfJustification: 'read-only starter mutation DB scope proof',",
             '  db: true,',
-            '  async handler(_request: Request, context: EndpointDbContext<AppDb>) {',
+            '  async handler(_request, context) {',
             "    const scoped = await context.actAs('demo-user');",
             '    const contactRows = await scoped.db.read',
             '      .select({ id: contacts.id })',
@@ -885,11 +846,16 @@ export function addStarterMutationDbScopeProof(
   );
   app = replaceRequired(
     app,
-    '  mutations: [addContact, appSignIn, appSignOut],',
-    `  mutations: [addContact, ${proofMutations.join(', ')}, appSignIn, appSignOut],`,
+    '  mutations: [addContact, signInMutation, signOutMutation],',
+    `  mutations: [addContact, ${proofMutations.join(', ')}, signInMutation, signOutMutation],`,
     'starter mutation db scope mutation registration',
   );
   writeFileSync(appPath, app, 'utf8');
+  formatGeneratedSources(root, [
+    'src/app.tsx',
+    'src/starter-mutation-db-scope-proof-forms.tsx',
+    'src/starter-mutation-db-scope-proof.ts',
+  ]);
 }
 
 export interface RuntimeMutationSafetyProofOptions {
@@ -1568,6 +1534,7 @@ export function addTrustedOutputProvenanceBuildProof(
       '',
       'interface TrustedOutputProofSlots {',
       '  [slot: string]: unknown;',
+      '  request?: { headers: Headers };',
       '}',
       '',
       'export const TrustedOutputProvenanceProof = component({',
@@ -1585,8 +1552,8 @@ export function addTrustedOutputProvenanceBuildProof(
       '      </a>',
       '      <section>static trusted output proof</section>',
       unsafe
-        ? '      {trustedHtml((slots.request as { headers: Headers } | undefined)?.headers.get("x-proof") ?? "", { reason: "adversarial request-derived HTML proof" })}'
-        : '      {trustedHtml((slots.request as { headers: Headers } | undefined)?.headers.get("x-proof") ?? "", { reason: "reviewed trusted output request header" })}',
+        ? '      {trustedHtml(slots.request?.headers.get("x-proof") ?? "", { reason: "adversarial request-derived HTML proof" })}'
+        : '      {trustedHtml(slots.request?.headers.get("x-proof") ?? "", { reason: "reviewed trusted output request header" })}',
       '    </main>',
       '  ),',
       '});',
@@ -1642,6 +1609,7 @@ export function addOpaqueTrustedOutputAuthorityProof(root: string): void {
       '',
       'interface OpaqueTrustedOutputProofSlots {',
       '  [slot: string]: unknown;',
+      '  request?: { headers: Headers };',
       '}',
       '',
       'export const OpaqueTrustedOutputAuthorityProof = component({',
@@ -1655,8 +1623,8 @@ export function addOpaqueTrustedOutputAuthorityProof(root: string): void {
       '      <a href={browserTrust[dynamicTrustedUrlKey](data.contacts.items[0]?.email ?? "", { reason: "adversarial opaque URL authority proof" })}>',
       '        Dynamic trusted URL authority',
       '      </a>',
-      '      {browserTrust[dynamicTrustedHtmlKey]((slots.request as { headers: Headers } | undefined)?.headers.get("x-dynamic-proof") ?? "", { reason: "adversarial opaque dynamic HTML authority proof" })}',
-      '      {trustedOutputAlias.html((slots.request as { headers: Headers } | undefined)?.headers.get("x-object-proof") ?? "", { reason: "adversarial opaque object HTML authority proof" })}',
+      '      {browserTrust[dynamicTrustedHtmlKey](slots.request?.headers.get("x-dynamic-proof") ?? "", { reason: "adversarial opaque dynamic HTML authority proof" })}',
+      '      {trustedOutputAlias.html(slots.request?.headers.get("x-object-proof") ?? "", { reason: "adversarial opaque object HTML authority proof" })}',
       '    </main>',
       '  ),',
       '});',
@@ -1944,7 +1912,7 @@ export function addAuthSecretLeakProof(root: string, options: { leakToWire?: boo
     ? ['authSecretDirectLeakQuery', 'authSecretTransformedLeakQuery', 'authSecretRenderLeakQuery']
     : ['authSecretLeakQuery'];
   const queryProps = queryNames.map((_name, index) => `secrets${index}`);
-  const queryInsertionAnchor = 'export const contactsQuery = query({';
+  const queryInsertionAnchor = 'export const contactsQuery = app.query({';
   const querySource = (
     name: string,
     rowType: 'AuthSecretLeakRow' | 'AuthSecretRenderLeakRow' | 'AuthSecretSafeRow',
@@ -1997,9 +1965,9 @@ export function addAuthSecretLeakProof(root: string, options: { leakToWire?: boo
               ];
 
     return [
-      `export const ${name} = query({`,
+      `export const ${name} = app.query({`,
       '  access: [app.authenticated],',
-      "  reads: [domain('auth-secret-wire-proof')],",
+      '  reads: [authSecretWire],',
       `  async load(_input, context): Promise<{ readonly [key: string]: JsonValue; items: ${rowType}[] }> {`,
       '    const db = context.db;',
       `    if (!db) throw new Error('${name} requires the framework-provided context.db');`,
@@ -2030,8 +1998,22 @@ export function addAuthSecretLeakProof(root: string, options: { leakToWire?: boo
   ].filter((spec) => queryNames.includes(spec.name));
 
   const queriesPath = join(root, 'src/queries.ts');
+  const modelPath = join(root, 'src/model.ts');
   const schemaPath = join(root, 'src/schema.ts');
+  const model = replaceRequired(
+    readFileSync(modelPath, 'utf8'),
+    'export const contact = domain();',
+    ['export const authSecretWire = domain();', 'export const contact = domain();'].join('\n'),
+    'auth secret wire proof domain declaration',
+  );
+  writeFileSync(modelPath, model, 'utf8');
   let schema = readFileSync(schemaPath, 'utf8');
+  schema = replaceRequired(
+    schema,
+    "import { contact } from './model.js';",
+    "import { authSecretWire, contact } from './model.js';",
+    'auth secret wire proof domain import',
+  );
   const tableFactory = schema.includes('sqliteTable(') ? 'sqliteTable' : 'pgTable';
   schema = replaceRequired(
     schema,
@@ -2051,7 +2033,7 @@ export function addAuthSecretLeakProof(root: string, options: { leakToWire?: boo
       tableFactory === 'sqliteTable'
         ? "    authzPolicy: 'build-only credential wire proof is guarded by the query access decision',"
         : '    authzPolicy: sql`TRUE`,',
-      "    domain: 'auth-secret-wire-proof',",
+      '    domain: authSecretWire,',
       '    key: columns.id,',
       '    readOnly: true,',
       '    secret: [columns.accessToken, columns.password],',
@@ -2067,9 +2049,15 @@ export function addAuthSecretLeakProof(root: string, options: { leakToWire?: boo
   let queries = readFileSync(queriesPath, 'utf8');
   queries = replaceRequired(
     queries,
-    "import { query, type QueryLoadContext, type Reader } from '@kovojs/server'\nimport { type JsonValue } from '@kovojs/core';",
-    "import { domain, query, type QueryLoadContext, type Reader } from '@kovojs/server'\nimport { type JsonValue } from '@kovojs/core';",
+    "import type { JsonValue } from '@kovojs/core';",
+    "import type { JsonValue } from '@kovojs/core';",
     'auth secret proof imports',
+  );
+  queries = replaceRequired(
+    queries,
+    "import { app } from './kovo.js';",
+    ["import { app } from './kovo.js';", "import { authSecretWire } from './model.js';"].join('\n'),
+    'auth secret proof domain import',
   );
   queries = replaceRequired(
     queries,
@@ -2128,7 +2116,12 @@ export function addAuthSecretLeakProof(root: string, options: { leakToWire?: boo
     [
       'export const AuthSecretLeakProof = component({',
       `  queries: { ${queryNames.map((name, index) => `${queryProps[index]}: ${name}`).join(', ')} },`,
-      '  render(data) {',
+      `  render(data: { ${queryProps
+        .map(
+          (name) =>
+            `${name}: { items: Array<{ accessToken?: string | null; id: string; password?: string | null; renderPassword?: string | null }> }`,
+        )
+        .join('; ')} }) {`,
       leakToWire
         ? "    const renderValue = data.secrets2.items[0]?.renderPassword ?? 'redacted';"
         : "    const renderValue = data.secrets0.items[0]?.id ?? 'redacted';",
@@ -2153,6 +2146,7 @@ export function addAuthSecretLeakProof(root: string, options: { leakToWire?: boo
     'auth secret proof query registration',
   );
   writeFileSync(appPath, app, 'utf8');
+  formatGeneratedSources(root, ['src/app.tsx', 'src/model.ts', 'src/queries.ts', 'src/schema.ts']);
 }
 
 export function addOpaqueAuthSecretLeakProof(
@@ -2457,41 +2451,35 @@ export function addSecretViewEgressProof(root: string): void {
     "import { accountSecretView, contacts } from './schema.js';",
     'secret view proof imports',
   );
-  queries = replaceRequired(
-    queries,
-    'type AppQueryLoadContext = QueryLoadContext<AppQueryRequest, AppDb>;',
-    [
-      'type AppQueryLoadContext = QueryLoadContext<AppQueryRequest, AppDb>;',
-      '',
-      'export interface SecretViewEgressRow {',
-      '  readonly [key: string]: JsonValue;',
-      '  id: string | null;',
-      '  token: string | null;',
-      '}',
-      '',
-      'export interface SecretViewEgressResult {',
-      '  readonly [key: string]: JsonValue;',
-      '  items: SecretViewEgressRow[];',
-      '}',
-      '',
-      'export const secretViewEgressQuery = query({',
-      '  access: [app.authenticated],',
-      '  reads: [],',
-      '  async load(_input, context): Promise<SecretViewEgressResult> {',
-      '    const db = context?.db;',
-      '    const items = await db',
-      '      .select({',
-      '        id: accountSecretView.id,',
-      '        token: accountSecretView.token,',
-      '      })',
-      '      .from(accountSecretView);',
-      '    return { items };',
-      '  },',
-      '});',
-      "(secretViewEgressQuery as { key: string }).key = 'secret-view-egress';",
-    ].join('\n'),
-    'secret view proof query',
-  );
+  queries = [
+    queries.trimEnd(),
+    '',
+    'export interface SecretViewEgressRow {',
+    '  readonly [key: string]: JsonValue;',
+    '  id: string | null;',
+    '  token: string | null;',
+    '}',
+    '',
+    'export interface SecretViewEgressResult {',
+    '  readonly [key: string]: JsonValue;',
+    '  items: SecretViewEgressRow[];',
+    '}',
+    '',
+    'export const secretViewEgressQuery = app.query({',
+    '  access: [app.authenticated],',
+    '  reads: [],',
+    '  async load(_input, context): Promise<SecretViewEgressResult> {',
+    '    const items = await context.db',
+    '      .select({',
+    '        id: accountSecretView.id,',
+    '        token: accountSecretView.token,',
+    '      })',
+    '      .from(accountSecretView);',
+    '    return { items };',
+    '  },',
+    '});',
+    '',
+  ].join('\n');
   writeFileSync(queriesPath, queries, 'utf8');
 
   const appPath = join(root, 'src/app.tsx');
@@ -2509,6 +2497,12 @@ export function addSecretViewEgressProof(root: string): void {
     'secret view proof app registration',
   );
   writeFileSync(appPath, app, 'utf8');
+  formatGeneratedSources(root, [
+    'src/_kovo/app-runtime-db-options.ts',
+    'src/app.tsx',
+    'src/queries.ts',
+    'src/schema.ts',
+  ]);
 }
 
 /**
@@ -2521,15 +2515,16 @@ export function addRequestClosedDeclassificationProof(root: string): void {
   let queries = readFileSync(queriesPath, 'utf8');
   queries = replaceRequired(
     queries,
-    "import { query, type QueryLoadContext, type Reader } from '@kovojs/server'\nimport { type JsonValue } from '@kovojs/core';",
+    "import type { JsonValue } from '@kovojs/core';",
     [
       "import { DeclassifyPolicy, secret, trustedReveal } from '@kovojs/core/security';",
-      "import { query, s, type QueryLoadContext, type Reader } from '@kovojs/server'\nimport { type JsonValue } from '@kovojs/core';",
+      "import type { JsonValue } from '@kovojs/core';",
+      "import { s } from '@kovojs/server';",
     ].join('\n'),
     'request-closed declassification proof imports',
   );
   queries = `${queries}\n\n${[
-    'export const requestClosedRevealQuery = query({',
+    'export const requestClosedRevealQuery = app.query({',
     '  access: [app.authenticated],',
     '  output: s.object({ value: s.string() }),',
     '  reads: [],',
@@ -2558,6 +2553,7 @@ export function addRequestClosedDeclassificationProof(root: string): void {
     'request-closed declassification app registration',
   );
   writeFileSync(appPath, app, 'utf8');
+  formatGeneratedSources(root, ['src/app.tsx', 'src/queries.ts']);
 }
 
 export function addRuntimeSecretBoundaryProof(root: string): void {
@@ -2638,12 +2634,13 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
   let queries = readFileSync(queriesPath, 'utf8');
   queries = replaceRequired(
     queries,
-    "import { query, type QueryLoadContext, type Reader } from '@kovojs/server'\nimport { type JsonValue } from '@kovojs/core';",
+    "import type { JsonValue } from '@kovojs/core';",
     [
-      "import { secret } from '@kovojs/core';",
+      "import type { JsonValue } from '@kovojs/core';",
+      "import { secret } from '@kovojs/core/security';",
       "import { sql, trustedSql } from '@kovojs/drizzle';",
+      "import { domain, s } from '@kovojs/server';",
       "import { sql as drizzleSql } from 'drizzle-orm';",
-      "import { domain, query, s, type QueryLoadContext, type Reader } from '@kovojs/server'\nimport { type JsonValue } from '@kovojs/core';",
     ].join('\n'),
     'runtime secret proof query imports',
   );
@@ -2653,12 +2650,10 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
     "import { contacts, runtimeSecretFunctionProof, runtimeSecretProof, runtimeSecretWholeProof } from './schema.js';",
     'runtime secret proof schema import',
   );
-  queries = replaceRequired(
-    queries,
-    'type AppQueryLoadContext = QueryLoadContext<AppQueryRequest, AppDb>;',
+  queries = [
+    queries.trimEnd(),
+    '',
     [
-      'type AppQueryLoadContext = QueryLoadContext<AppQueryRequest, AppDb>;',
-      '',
       'export interface RuntimeSecretBoundaryRow {',
       '  readonly [key: string]: JsonValue;',
       '  id: string;',
@@ -2680,7 +2675,7 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
       "const runtimeSecretFunctionProofDomain = domain('runtime-secret-function-proof');",
       "const runtimeSecretWholeProofDomain = domain('runtime-secret-whole-proof');",
       '',
-      'export const runtimeSecretColumnEngineDenialQuery = query({',
+      'export const runtimeSecretColumnEngineDenialQuery = app.query({',
       '  access: [app.authenticated],',
       '  output: s.object({ items: s.array(runtimeSecretBoundaryRowSchema) }),',
       '  reads: [runtimeSecretProofDomain],',
@@ -2693,7 +2688,7 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
       '  },',
       '});',
       '',
-      'export const runtimeSecretFunctionEngineDenialQuery = query({',
+      'export const runtimeSecretFunctionEngineDenialQuery = app.query({',
       '  access: [app.authenticated],',
       '  output: s.object({ items: s.array(runtimeSecretBoundaryRowSchema) }),',
       '  reads: [runtimeSecretFunctionProofDomain],',
@@ -2710,7 +2705,7 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
       '  },',
       '});',
       '',
-      'export const runtimeSecretWholeTableEngineDenialQuery = query({',
+      'export const runtimeSecretWholeTableEngineDenialQuery = app.query({',
       '  access: [app.authenticated],',
       '  output: s.object({ items: s.array(runtimeSecretBoundaryRowSchema) }),',
       '  reads: [runtimeSecretWholeProofDomain],',
@@ -2723,7 +2718,7 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
       '  },',
       '});',
       '',
-      'export const runtimeSecretComputedEngineDenialQuery = query({',
+      'export const runtimeSecretComputedEngineDenialQuery = app.query({',
       '  access: [app.authenticated],',
       '  output: s.object({ items: s.array(runtimeSecretBoundaryRowSchema) }),',
       '  reads: [runtimeSecretProofDomain],',
@@ -2739,7 +2734,7 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
       '  },',
       '});',
       '',
-      'export const runtimeSecretRawEngineDenialQuery = query({',
+      'export const runtimeSecretRawEngineDenialQuery = app.query({',
       '  access: [app.authenticated],',
       '  output: s.object({ items: s.array(runtimeSecretBoundaryRowSchema) }),',
       '  reads: [runtimeSecretProofDomain],',
@@ -2758,7 +2753,7 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
       '  },',
       '});',
       '',
-      'export const runtimeSecretOpaqueRawEngineDenialQuery = query({',
+      'export const runtimeSecretOpaqueRawEngineDenialQuery = app.query({',
       '  access: [app.authenticated],',
       '  output: s.object({ items: s.array(runtimeSecretBoundaryRowSchema) }),',
       '  reads: [runtimeSecretProofDomain],',
@@ -2777,7 +2772,7 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
       '  },',
       '});',
       '',
-      'export const runtimeSecretViewEngineDenialQuery = query({',
+      'export const runtimeSecretViewEngineDenialQuery = app.query({',
       '  access: [app.authenticated],',
       '  output: s.object({ items: s.array(runtimeSecretBoundaryRowSchema) }),',
       '  reads: [runtimeSecretProofDomain],',
@@ -2796,7 +2791,7 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
       '  },',
       '});',
       '',
-      'export const runtimeSecretReaderRoleProofQuery = query({',
+      'export const runtimeSecretReaderRoleProofQuery = app.query({',
       '  access: [app.authenticated],',
       '  output: s.object({ items: s.array(s.object({ id: s.string(), label: s.string() })) }),',
       '  reads: [runtimeSecretProofDomain],',
@@ -2813,7 +2808,7 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
       '  },',
       '});',
       '',
-      'export const runtimeSecretDefaultRawPublicQuery = query({',
+      'export const runtimeSecretDefaultRawPublicQuery = app.query({',
       '  access: [app.authenticated],',
       '  output: s.object({ items: s.array(runtimeSecretBoundaryRowSchema) }),',
       '  reads: [runtimeSecretProofDomain],',
@@ -2830,7 +2825,7 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
       '  },',
       '});',
       '',
-      'export const runtimeSecretExplicitBoxEgressQuery = query({',
+      'export const runtimeSecretExplicitBoxEgressQuery = app.query({',
       '  access: [app.authenticated],',
       '  reads: [],',
       '  async load(): Promise<RuntimeSecretBoundaryResult> {',
@@ -2839,18 +2834,34 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
       '  },',
       '});',
     ].join('\n'),
-    'runtime secret proof queries',
-  );
+    '',
+  ].join('\n');
   writeFileSync(queriesPath, queries, 'utf8');
+
+  const contractPath = join(root, 'src/kovo.ts');
+  let contract = readFileSync(contractPath, 'utf8');
+  contract = replaceRequired(
+    contract,
+    "import { defineKovo, stylesheet } from '@kovojs/server';",
+    [
+      "import { defineKovo, stylesheet } from '@kovojs/server';",
+      "import { s } from '@kovojs/server';",
+    ].join('\n'),
+    'runtime config secret proof app schema import',
+  );
+  contract = replaceRequired(
+    contract,
+    "  document: { lang: 'en' },",
+    [
+      "  document: { lang: 'en' },",
+      '  env: s.object({ KOVO_CONFIG_SECRET_PROOF: s.secret(s.string()) }),',
+    ].join('\n'),
+    'runtime config secret proof app env',
+  );
+  writeFileSync(contractPath, contract, 'utf8');
 
   const appPath = join(root, 'src/app.tsx');
   let app = readFileSync(appPath, 'utf8');
-  app = replaceRequired(
-    app,
-    '  stylesheet,',
-    ['  s,', '  stylesheet,'].join('\n'),
-    'runtime config secret proof app schema import',
-  );
   app = replaceRequired(
     app,
     "import { contactsQuery } from './queries.js';",
@@ -2859,20 +2870,12 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
   );
   app = replaceRequired(
     app,
-    "  document: { lang: 'en' },",
-    [
-      "  document: { lang: 'en' },",
-      '  env: s.object({ KOVO_CONFIG_SECRET_PROOF: s.secret(s.string()) }),',
-    ].join('\n'),
-    'runtime config secret proof app env',
-  );
-  app = replaceRequired(
-    app,
     '  queries: [contactsQuery],',
     '  queries: [contactsQuery, runtimeSecretColumnEngineDenialQuery, runtimeSecretComputedEngineDenialQuery, runtimeSecretDefaultRawPublicQuery, runtimeSecretExplicitBoxEgressQuery, runtimeSecretFunctionEngineDenialQuery, runtimeSecretOpaqueRawEngineDenialQuery, runtimeSecretRawEngineDenialQuery, runtimeSecretReaderRoleProofQuery, runtimeSecretViewEngineDenialQuery, runtimeSecretWholeTableEngineDenialQuery],',
     'runtime secret proof app registration',
   );
   writeFileSync(appPath, app, 'utf8');
+  formatGeneratedSources(root, ['src/app.tsx', 'src/kovo.ts', 'src/queries.ts', 'src/schema.ts']);
 }
 
 export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
@@ -2966,7 +2969,7 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
       "import type { JsonValue } from '@kovojs/core';",
       "import { sql, trustedSql } from '@kovojs/drizzle';",
       "import { declareSecretReadCapability } from '@kovojs/server/secret-reading';",
-      "import { domain } from '@kovojs/server';",
+      "import { domain, s } from '@kovojs/server';",
       "import { count, eq, sql as drizzleSql } from 'drizzle-orm';",
       "import { alias } from 'drizzle-orm/sqlite-core';",
       '',
@@ -2996,6 +2999,17 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
       '  readonly [key: string]: JsonValue;',
       '  items: SqliteSecretRow[];',
       '}',
+      '',
+      'const sqliteSecretRowsSchema = s.object({',
+      '  items: s.array(',
+      '    s.object({',
+      '      company: s.string().optional(),',
+      '      id: s.string(),',
+      '      label: s.string().optional(),',
+      '      leaked: s.string().optional(),',
+      '    }),',
+      '  ),',
+      '});',
       '',
       "const sqliteRuntimeSecretProofDomain = domain('runtime-secret-proof');",
       '',
@@ -3116,6 +3130,7 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
       '',
       'export const sqliteSecretDerivationQuery = app.query({',
       '  access: [app.authenticated],',
+      '  output: sqliteSecretRowsSchema,',
       '  reads: [sqliteRuntimeSecretProofDomain],',
       '  async load(_input, context): Promise<SqliteSecretRows> {',
       '    const db = context.db;',
@@ -3149,6 +3164,7 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
       '',
       'export const sqliteSecretCteQuery = app.query({',
       '  access: [app.authenticated],',
+      '  output: sqliteSecretRowsSchema,',
       '  reads: [sqliteRuntimeSecretProofDomain],',
       '  async load(_input, context): Promise<SqliteSecretRows> {',
       '    const db = context.db;',
@@ -3168,6 +3184,7 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
       '',
       'export const sqliteSecretSubqueryQuery = app.query({',
       '  access: [app.authenticated],',
+      '  output: sqliteSecretRowsSchema,',
       '  reads: [sqliteRuntimeSecretProofDomain],',
       '  async load(_input, context): Promise<SqliteSecretRows> {',
       '    const db = context.db;',
@@ -3187,6 +3204,7 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
       '',
       'export const sqliteSecretUnionQuery = app.query({',
       '  access: [app.authenticated],',
+      '  output: sqliteSecretRowsSchema,',
       '  reads: [sqliteRuntimeSecretProofDomain],',
       '  async load(_input, context): Promise<SqliteSecretRows> {',
       '    const db = context.db;',
@@ -3219,6 +3237,7 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
       '',
       'export const sqliteSecretMixedChunkQuery = app.query({',
       '  access: [app.authenticated],',
+      '  output: sqliteSecretRowsSchema,',
       '  reads: [sqliteRuntimeSecretProofDomain],',
       '  async load(_input, context): Promise<SqliteSecretRows> {',
       '    const db = context.db;',
@@ -3238,6 +3257,7 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
       '',
       'export const sqliteSecretMixedChunkBuilderQuery = app.query({',
       '  access: [app.authenticated],',
+      '  output: sqliteSecretRowsSchema,',
       '  reads: [contact],',
       '  async load(_input, context): Promise<SqliteSecretRows> {',
       '    const db = context.db;',
@@ -3277,6 +3297,7 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
       '',
       'export const sqliteSecretAggregateQuery = app.query({',
       '  access: [app.authenticated],',
+      '  output: sqliteSecretRowsSchema,',
       '  reads: [sqliteRuntimeSecretProofDomain],',
       '  async load(_input, context): Promise<SqliteSecretRows> {',
       '    const db = context.db;',
@@ -3296,6 +3317,7 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
       '',
       'export const sqliteSecretSubqueryPublicQuery = app.query({',
       '  access: [app.authenticated],',
+      '  output: sqliteSecretRowsSchema,',
       '  reads: [sqliteRuntimeSecretProofDomain],',
       '  async load(_input, context): Promise<SqliteSecretRows> {',
       '    const db = context.db;',
@@ -3324,7 +3346,7 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
   mutations = replaceRequired(
     mutations,
     '  optimistic: [\n    contactsQuery.optimistic(addContactInput, (value, input) => {',
-    "  optimistic: [\n    sqliteSecretMixedChunkBuilderQuery.optimistic('await-fragment'),\n    contactsQuery.optimistic(addContactInput, (value, input) => {",
+    '  optimistic: [\n    sqliteSecretMixedChunkBuilderQuery.optimistic(addContactInput, (value) => value),\n    contactsQuery.optimistic(addContactInput, (value, input) => {',
     'sqlite runtime secret provenance optimistic coverage',
   );
   writeFileSync(mutationsPath, mutations, 'utf8');
@@ -4783,11 +4805,13 @@ function replaceRequired(
 }
 
 function formatGeneratedSources(root: string, files: readonly string[]): void {
-  execFileSync(resolveStarterBin(root, 'vp'), ['fmt', '--write', ...files], {
-    cwd: root,
-    env: withStarterBinOnPath(root),
-    stdio: 'pipe',
-  });
+  for (const file of files) {
+    execFileSync(resolveStarterBin(root, 'vp'), ['fmt', '--write', file], {
+      cwd: root,
+      env: withStarterBinOnPath(root),
+      stdio: 'pipe',
+    });
+  }
 }
 
 function addNamedImportSpecifiersRequired(

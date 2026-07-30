@@ -44,6 +44,7 @@ import {
   execFileSyncErrorOutput,
   fieldValue,
   firstFormHtml,
+  formatGeneratedProjectSources,
   formHtmlByAction,
   freshProductionArtifactIdempotencyToken,
   migrateRuntimeSecretBoundaryProof,
@@ -83,7 +84,7 @@ async function waitForChildExit(
 }
 
 describe('create-kovo starter (build integration: production security artifacts)', () => {
-  // @kovo-security-certifies KV438 analyzer-summary-carrier-laundering
+  // @kovo-security-certifies KV449 analyzer-summary-carrier-laundering
   it('rejects summarized mutation input laundering through the real production build preflight', () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-prod-summary-carrier-'));
 
@@ -94,9 +95,10 @@ describe('create-kovo starter (build integration: production security artifacts)
         join(root, 'src', 'summary-carrier-proof.ts'),
         [
           "import { kovoAnalyzerSummary } from '@kovojs/drizzle';",
-          "import { mutation, s } from '@kovojs/server'\nimport { serverValue } from '@kovojs/server/write-safety';",
+          "import { s } from '@kovojs/server';",
+          "import { serverValue } from '@kovojs/server/write-safety';",
           "import { eq } from 'drizzle-orm';",
-          "import { appAuthed, appCsrf, type AppRequest } from './auth.js';",
+          "import { app } from './kovo.js';",
           "import { account } from './schema.js';",
           '',
           'function exactGuard(context: { guard: { userId: string } }) {',
@@ -104,22 +106,21 @@ describe('create-kovo starter (build integration: production security artifacts)
           '}',
           'kovoAnalyzerSummary(exactGuard, { returns: { kind: "guard", path: "userId" } });',
           '',
-          'export const summaryCarrierLaundering = mutation({',
-          '  access: [appAuthed],',
-          '  csrf: appCsrf,',
+          'export const summaryCarrierLaundering = app.mutation({',
+          '  access: [app.authenticated],',
           '  input: s.object({',
           '    guard: s.object({ userId: s.string() }),',
           '    id: s.string(),',
           '  }),',
-          '  async handler(input, request: AppRequest) {',
+          '  async handler(input, request) {',
           '    async function nestedWrite(',
-          '      db: AppRequest["db"],',
-          '      request: { guard: { userId: string } },',
+          '      db: typeof request.db,',
+          '      claimed: { guard: { userId: string } },',
           '    ) {',
           '      await db',
           '        .update(account)',
           '        .set({',
-          '          userId: serverValue(exactGuard(request), "claimed private owner"),',
+          '          userId: serverValue(exactGuard(claimed), "claimed private owner"),',
           '        })',
           '        .where(eq(account.id, input.id));',
           '    }',
@@ -129,12 +130,33 @@ describe('create-kovo starter (build integration: production security artifacts)
           '});',
         ].join('\n'),
       );
+      const appPath = join(root, 'src/app.tsx');
+      const appWithProofImport = replaceRequired(
+        readFileSync(appPath, 'utf8'),
+        "import { addContact } from './mutations.js';",
+        [
+          "import { addContact } from './mutations.js';",
+          "import { summaryCarrierLaundering } from './summary-carrier-proof.js';",
+        ].join('\n'),
+        'summary carrier proof import',
+      );
+      writeFileSync(
+        appPath,
+        replaceRequired(
+          appWithProofImport,
+          '  mutations: [addContact, signInMutation, signOutMutation],',
+          '  mutations: [addContact, summaryCarrierLaundering, signInMutation, signOutMutation],',
+          'summary carrier proof assembly',
+        ),
+        'utf8',
+      );
+      formatGeneratedProjectSources(root, ['src/app.tsx', 'src/summary-carrier-proof.ts']);
 
       const output = captureBuildFailure(() => buildProductionArtifact(root));
-      expect(output).toContain('KV438');
+      expect(output).toContain('KV449');
       expect(output).toContain('nestedWrite');
-      expect(output).toContain('column=userId');
-      expect(output).toContain('provenance=unknown');
+      expect(output).toContain('unsummarized nested callable');
+      expect(output).toContain('verdict=closed:opaque-transfer');
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -203,7 +225,8 @@ describe('create-kovo starter (build integration: production security artifacts)
       addRuntimeDbImportEndpointProof(root);
 
       const output = captureBuildFailure(() => buildProductionArtifact(root));
-      expect(output).toContain('KV414');
+      expect(output).toContain('SOUND-SUBSET');
+      expect(output).toContain('sound subset bans non-type imports of src/_kovo/app-runtime-db');
       expect(output).toContain('src/_kovo/app-runtime-db');
     } finally {
       rmSync(root, { force: true, recursive: true });
@@ -254,6 +277,22 @@ describe('create-kovo starter (build integration: production security artifacts)
           '});',
         ].join('\n'),
       );
+      const appPath = join(root, 'src/app.tsx');
+      const appWithRouteImport = replaceRequired(
+        readFileSync(appPath, 'utf8'),
+        "import { addContact } from './mutations.js';",
+        [
+          "import { addContact } from './mutations.js';",
+          "import './import-equals-namespace-route.js';",
+        ].join('\n'),
+        'import-equals namespace route import',
+      );
+      writeFileSync(appPath, appWithRouteImport, 'utf8');
+      formatGeneratedProjectSources(root, [
+        'src/app.tsx',
+        'src/import-equals-bridge.ts',
+        'src/import-equals-namespace-route.tsx',
+      ]);
 
       const output = captureBuildFailure(() => buildProductionArtifact(root));
       expect(output).toContain('KV448');
@@ -293,6 +332,18 @@ describe('create-kovo starter (build integration: production security artifacts)
           'void nestedShadow;',
         ].join('\n'),
       );
+      const appPath = join(root, 'src/app.tsx');
+      const appWithRouteImports = replaceRequired(
+        readFileSync(appPath, 'utf8'),
+        "import { addContact } from './mutations.js';",
+        [
+          "import { addContact } from './mutations.js';",
+          "import './lexical-provenance-route.js';",
+        ].join('\n'),
+        'lexical provenance route imports',
+      );
+      writeFileSync(appPath, appWithRouteImports, 'utf8');
+      formatGeneratedProjectSources(root, ['src/app.tsx', 'src/lexical-provenance-route.tsx']);
 
       const output = captureBuildFailure(() => buildProductionArtifact(root));
       expect(output).toContain('KV448');
@@ -376,13 +427,13 @@ describe('create-kovo starter (build integration: production security artifacts)
       linkStarterBuildDependencies(root);
       addRuntimeSecretBoundaryProof(root);
       const proofQueries = readFileSync(join(root, 'src/queries.ts'), 'utf8');
-      const proofApp = readFileSync(join(root, 'src/app.tsx'), 'utf8');
+      const proofApp = readFileSync(join(root, 'src/kovo.ts'), 'utf8');
       const generatedRuntimeDb = readFileSync(join(root, 'src/_kovo/app-runtime-db.ts'), 'utf8');
       const runtimeSecretMigration = readFileSync(
         join(root, 'migrations/001_runtime_secret_boundary.sql'),
         'utf8',
       );
-      expect(proofQueries).toContain("import { secret } from '@kovojs/core';");
+      expect(proofQueries).toContain("import { secret } from '@kovojs/core/security';");
       expect(proofQueries).not.toContain("from './_kovo/app-runtime-db.js'");
       expect(generatedRuntimeDb).not.toContain('declareSecretReadCapability');
       expect(proofQueries).not.toContain('declareSecretReadCapability');
@@ -1373,13 +1424,13 @@ function addRuntimeDbImportEndpointProof(root: string): void {
   writeFileSync(
     join(root, 'src/dogfood-runtime-db.endpoint.ts'),
     [
-      "import { endpoint, publicAccess } from '@kovojs/server';",
       "import { appRuntimeDbProvider } from './_kovo/app-runtime-db.js';",
+      "import { app } from './kovo.js';",
       '',
       'void appRuntimeDbProvider;',
       '',
-      "export const dogfoodReadAuthToken = endpoint('/api/dogfood-runtime-db', {",
-      "  access: publicAccess('runtime DB import proof'),",
+      "export const dogfoodReadAuthToken = app.endpoint('/api/dogfood-runtime-db', {",
+      "  access: app.publicAccess('runtime DB import proof'),",
       "  auth: { justification: 'runtime DB import proof', kind: 'none' },",
       '  csrf: false,',
       "  csrfJustification: 'runtime DB import proof',",
@@ -1399,36 +1450,32 @@ function addRuntimeDbImportEndpointProof(root: string): void {
   let app = readFileSync(appPath, 'utf8');
   app = replaceRequired(
     app,
-    "import { appTheme } from './theme.js';",
+    "import { ContactsRegion } from './components/contacts.js';",
     [
-      "import { appTheme } from './theme.js';",
+      "import { ContactsRegion } from './components/contacts.js';",
       "import { dogfoodReadAuthToken } from './dogfood-runtime-db.endpoint.js';",
     ].join('\n'),
     'runtime DB import proof app import',
   );
   app = replaceRequired(
     app,
-    'endpoints: [healthEndpoint],',
-    'endpoints: [healthEndpoint, dogfoodReadAuthToken],',
+    '  endpoints: [healthEndpoint],',
+    '  endpoints: [healthEndpoint, dogfoodReadAuthToken],',
     'runtime DB import proof endpoint enrollment',
   );
   writeFileSync(appPath, app, 'utf8');
+  formatGeneratedProjectSources(root, ['src/app.tsx', 'src/dogfood-runtime-db.endpoint.ts']);
 }
 
 function addQueryWireProof(root: string): void {
   const queriesPath = join(root, 'src/queries.ts');
-  const queries = replaceRequired(
-    readFileSync(queriesPath, 'utf8'),
-    "import { query, type QueryLoadContext, type Reader } from '@kovojs/server'\nimport { type JsonValue } from '@kovojs/core';",
-    "import { publicAccess, query, type QueryLoadContext, type Reader } from '@kovojs/server'\nimport { type JsonValue } from '@kovojs/core';",
-    '/_q wire proof query import',
-  );
+  const queries = readFileSync(queriesPath, 'utf8');
   writeFileSync(
     queriesPath,
     `${queries}
 
-export const qResponseProofQuery = query({
-  access: publicAccess('public /_q output escaping proof'),
+export const qResponseProofQuery = app.query({
+  access: app.publicAccess('public /_q output escaping proof'),
   load: () => ({
     attacker: '<img src=x onerror="alert(1)"><script>alert(1)</script>',
   }),
@@ -1453,6 +1500,7 @@ export const qResponseProofQuery = query({
     '/_q wire proof query registration',
   );
   writeFileSync(appPath, app, 'utf8');
+  formatGeneratedProjectSources(root, ['src/app.tsx', 'src/queries.ts']);
 }
 
 function addEnhancedMutationWireProof(root: string): void {
@@ -1461,13 +1509,16 @@ function addEnhancedMutationWireProof(root: string): void {
     [
       '/** @jsxImportSource @kovojs/server */',
       "import { component } from '@kovojs/core';",
-      "import { domain, mutation, mutationFormAttributes, publicAccess, query, s } from '@kovojs/server';",
+      "import { domain, mutationFormAttributes, s } from '@kovojs/server';",
       '',
-      "const proofAccess = publicAccess('public enhanced mutation output escaping proof');",
+      "import { app } from './kovo.js';",
+      '',
+      "const proofAccess = app.publicAccess('public enhanced mutation output escaping proof');",
       "const proofDomain = domain('enhanced-mutation-wire-proof');",
+      'const proofInput = s.object({ note: s.string() });',
       'const latestNote = \'<img src=x onerror="alert(1)"><script>alert(1)</script>\';',
       '',
-      'export const enhancedMutationWireProofQuery = query({',
+      'export const enhancedMutationWireProofQuery = app.query({',
       '  access: proofAccess,',
       '  load: () => ({',
       '    note: latestNote,',
@@ -1476,14 +1527,14 @@ function addEnhancedMutationWireProof(root: string): void {
       '  reads: [proofDomain],',
       '});',
       '',
-      'export const refreshEnhancedMutationWireProof = mutation({',
+      'export const refreshEnhancedMutationWireProof = app.mutation({',
       '  access: proofAccess,',
-      '  input: s.object({ note: s.string() }),',
+      '  input: proofInput,',
       '  registry: {',
       '    queries: [enhancedMutationWireProofQuery],',
       '    touches: [proofDomain],',
       '  },',
-      '  optimistic: { [enhancedMutationWireProofQuery.key]: "await-fragment" },',
+      '  optimistic: [enhancedMutationWireProofQuery.optimistic(proofInput, (value) => value)],',
       '  handler(input, _request, context) {',
       '    context.invalidate(proofDomain);',
       '    return input;',
@@ -1524,8 +1575,8 @@ function addEnhancedMutationWireProof(root: string): void {
   );
   const appWithMutation = replaceRequired(
     appWithProofImport,
-    '  mutations: [addContact, appSignIn, appSignOut],',
-    '  mutations: [addContact, refreshEnhancedMutationWireProof, appSignIn, appSignOut],',
+    '  mutations: [addContact, signInMutation, signOutMutation],',
+    '  mutations: [addContact, refreshEnhancedMutationWireProof, signInMutation, signOutMutation],',
     'enhanced mutation wire proof mutation registration',
   );
   const appWithQuery = replaceRequired(
@@ -1536,41 +1587,52 @@ function addEnhancedMutationWireProof(root: string): void {
   );
   const app = replaceRequired(
     appWithQuery,
-    "    route('/', {",
+    'const assembledApp = app.assemble({',
     [
-      "    route('/enhanced-mutation-wire-proof', {",
-      "      access: publicAccess('public enhanced mutation output escaping proof'),",
-      "      meta: { title: 'Enhanced mutation wire proof' },",
-      '      layout: AppLayout,',
-      '      stylesheets,',
-      '      page() {',
-      '        return <EnhancedMutationWireProof />;',
-      '      },',
-      '    }),',
-      "    route('/', {",
+      "const enhancedMutationWireProofRoute = app.route('/enhanced-mutation-wire-proof', {",
+      "  access: app.publicAccess('public enhanced mutation output escaping proof'),",
+      "  meta: { title: 'Enhanced mutation wire proof' },",
+      '  layout: AppLayout,',
+      '  stylesheets: appStylesheets,',
+      '  page() {',
+      '    return <EnhancedMutationWireProof />;',
+      '  },',
+      '});',
+      '',
+      'const assembledApp = app.assemble({',
     ].join('\n'),
     'enhanced mutation wire proof route',
   );
-  writeFileSync(appPath, app, 'utf8');
+  writeFileSync(
+    appPath,
+    replaceRequired(
+      app,
+      '  routes: [homeRoute, loginRoute],',
+      '  routes: [homeRoute, loginRoute, enhancedMutationWireProofRoute],',
+      'enhanced mutation wire proof route registration',
+    ),
+    'utf8',
+  );
+  formatGeneratedProjectSources(root, ['src/app.tsx', 'src/enhanced-mutation-wire-proof.tsx']);
 }
 
 function addNoAccessProvisionMutation(root: string): void {
   const mutationsPath = join(root, 'src/mutations.ts');
-  const mutations = replaceRequired(
+  let mutations = replaceRequired(
     readFileSync(mutationsPath, 'utf8'),
+    "import { s } from '@kovojs/server';",
+    "import { mutation, s } from '@kovojs/server';",
+    'missing-access provision mutation import',
+  );
+  mutations = replaceRequired(
+    mutations,
     'export const appMutations = [addContact];',
     [
       'export const provisionAccount = mutation({',
       '  csrf: false,',
       "  csrfJustification: 'negative access fixture uses no ambient browser authority',",
       '  input: s.object({ marker: s.string() }),',
-      '  registry: { touches: [contact] },',
-      '  handler(',
-      '    _input: { marker: string },',
-      '    _request: AppRequest,',
-      '    context: MutationContext<Record<never, never>>,',
-      '  ) {',
-      '    context.invalidate(contact);',
+      '  handler() {',
       '    return { ok: true };',
       '  },',
       '});',
@@ -1580,21 +1642,7 @@ function addNoAccessProvisionMutation(root: string): void {
     'missing-access provision mutation',
   );
   writeFileSync(mutationsPath, mutations, 'utf8');
-
-  const appPath = join(root, 'src/app.tsx');
-  const appWithMutationImport = replaceRequired(
-    readFileSync(appPath, 'utf8'),
-    "import { addContact } from './mutations.js';",
-    "import { addContact, provisionAccount } from './mutations.js';",
-    'missing-access provision mutation app import',
-  );
-  const app = replaceRequired(
-    appWithMutationImport,
-    '  mutations: [addContact, appSignIn, appSignOut],',
-    '  mutations: [addContact, provisionAccount, appSignIn, appSignOut],',
-    'missing-access provision mutation registration',
-  );
-  writeFileSync(appPath, app, 'utf8');
+  formatGeneratedProjectSources(root, ['src/mutations.ts']);
 }
 
 function addControlProvenanceProof(root: string): void {
@@ -1623,11 +1671,11 @@ function addControlProvenanceProof(root: string): void {
     [
       '/** @jsxImportSource @kovojs/server */',
       "import { component } from '@kovojs/core';",
-      "import { domain, mutation, mutationFormAttributes, publicAccess, s } from '@kovojs/server';",
+      "import { domain, mutationFormAttributes, s } from '@kovojs/server';",
       '',
-      "import { appCsrf } from './auth.js';",
+      "import { app } from './kovo.js';",
       '',
-      "const proofAccess = publicAccess('public dynamic spread and session transition proof');",
+      "const proofAccess = app.publicAccess('public dynamic spread and session transition proof');",
       "const authDomain = domain('auth');",
       'const attackerAttributes: Record<string, string | boolean> = {',
       "  'ON:LOAD': '/c/attacker-selected.client.js#run',",
@@ -1642,9 +1690,8 @@ function addControlProvenanceProof(root: string): void {
       '  return <main data-proof="dynamic-spread" {...attributes}>Caller-owned profile</main>;',
       '}',
       '',
-      'export const authDomainTransition = mutation({',
+      'export const authDomainTransition = app.mutation({',
       '  access: proofAccess,',
-      '  csrf: appCsrf,',
       '  input: s.object({}),',
       '  handler(_input, _request, context) {',
       '    context.invalidate(authDomain);',
@@ -1652,9 +1699,8 @@ function addControlProvenanceProof(root: string): void {
       '  },',
       '});',
       '',
-      'export const samePrincipalCookieRefresh = mutation({',
+      'export const samePrincipalCookieRefresh = app.mutation({',
       '  access: proofAccess,',
-      '  csrf: appCsrf,',
       '  input: s.object({}),',
       '  handler(_input, _request, context) {',
       "    context.setCookie?.('proof_refresh', 'rotated', { httpOnly: true, path: '/', sameSite: 'lax' });",
@@ -1698,28 +1744,39 @@ function addControlProvenanceProof(root: string): void {
   );
   app = replaceRequired(
     app,
-    '  mutations: [addContact, appSignIn, appSignOut],',
-    '  mutations: [addContact, authDomainTransition, samePrincipalCookieRefresh, appSignIn, appSignOut],',
+    '  mutations: [addContact, signInMutation, signOutMutation],',
+    '  mutations: [addContact, authDomainTransition, samePrincipalCookieRefresh, signInMutation, signOutMutation],',
     'control provenance mutations',
   );
   app = replaceRequired(
     app,
-    "    route('/', {",
+    'const assembledApp = app.assemble({',
     [
-      "    route('/control-provenance-proof', {",
-      "      access: publicAccess('public dynamic spread and session transition proof'),",
-      "      meta: { title: 'Control provenance proof' },",
-      '      layout: AppLayout,',
-      '      stylesheets,',
-      '      page() {',
-      '        return <ControlProvenanceProof />;',
-      '      },',
-      '    }),',
-      "    route('/', {",
+      "const controlProvenanceRoute = app.route('/control-provenance-proof', {",
+      "  access: app.publicAccess('public dynamic spread and session transition proof'),",
+      "  meta: { title: 'Control provenance proof' },",
+      '  layout: AppLayout,',
+      '  stylesheets: appStylesheets,',
+      '  page() {',
+      '    return <ControlProvenanceProof />;',
+      '  },',
+      '});',
+      '',
+      'const assembledApp = app.assemble({',
     ].join('\n'),
     'control provenance route',
   );
-  writeFileSync(appPath, app, 'utf8');
+  writeFileSync(
+    appPath,
+    replaceRequired(
+      app,
+      '  routes: [homeRoute, loginRoute],',
+      '  routes: [homeRoute, loginRoute, controlProvenanceRoute],',
+      'control provenance route registration',
+    ),
+    'utf8',
+  );
+  formatGeneratedProjectSources(root, ['src/app.tsx', 'src/control-provenance-proof.tsx']);
 }
 
 function formHtmlByDataProof(html: string, value: string): string {
