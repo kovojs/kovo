@@ -26,23 +26,21 @@ export async function exportGalleryInteractiveStatic({
   try {
     const [appShellModule, serverModule] = await Promise.all([
       viteServer.ssrLoadModule('/src/app-shell.ts'),
-      viteServer.ssrLoadModule('@kovojs/server'),
+      viteServer.ssrLoadModule('@kovojs/server/static-export'),
     ]);
     const { exportStaticApp } = serverModule;
 
     if (typeof exportStaticApp !== 'function') {
-      throw new Error('@kovojs/server must export exportStaticApp.');
-    }
-
-    const app = appShellModule.default ?? appShellModule.galleryInteractiveAppShell?.app;
-    if (!isKovoApp(app)) {
-      throw new Error(
-        'src/app-shell.ts must export a Kovo app as default or galleryInteractiveAppShell.app.',
-      );
+      throw new Error('@kovojs/server/static-export must export exportStaticApp.');
     }
 
     const assets = await readGalleryStylesheetAssets();
-    return await exportStaticApp(app, { assets, outDir });
+    // SPEC.md §9.5: the public static-export boundary owns validation of the opaque app token.
+    // App-authored build scripts must not recover or structurally inspect the underlying KovoApp.
+    return await exportStaticApp(
+      appShellModule.default ?? appShellModule.galleryInteractiveAppShell?.app,
+      { assets, outDir },
+    );
   } finally {
     await viteServer.close();
   }
@@ -106,13 +104,4 @@ function parseCliOptions(args) {
   }
 
   return options;
-}
-
-function isKovoApp(value) {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    Array.isArray(value.routes) &&
-    typeof value.clientModules?.resolve === 'function'
-  );
 }
