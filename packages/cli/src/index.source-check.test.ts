@@ -56,8 +56,8 @@ describe('kovo check current-source proof', () => {
         { name: 'sound-subset', status: 'not-applicable' },
         { name: 'session-authority', status: 'executed' },
         { name: 'app-source-trust', status: 'executed' },
-        { name: 'app-evaluation', status: 'executed' },
         { name: 'stylesheet', status: 'executed' },
+        { name: 'app-evaluation', status: 'executed' },
         { name: 'build-check-graph', status: 'executed' },
         { name: 'graph-diagnostics', status: 'executed' },
       ] as const;
