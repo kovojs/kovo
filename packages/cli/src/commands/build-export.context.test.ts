@@ -21,17 +21,15 @@ function symlinkRuntimePackages(root: string): void {
 
 function appModuleSource(): string {
   return [
-    "import { createApp } from '@kovojs/server/internal/fixture-app';",
     "import { trustedHtml } from '@kovojs/browser';",
-    'export default createApp({',
-    '  diagnostics: [],',
-    '  document: {},',
-    '  endpoints: [],',
-    '  errorShells: {},',
-    '  mutations: [],',
-    '  queries: [],',
-    "  routes: [{ path: '/', page: () => trustedHtml('<main>Home</main>', { reason: 'fixed export context fixture' }) }],",
-    '  stylesheets: [],',
+    "import { defineKovo } from '@kovojs/server';",
+    "const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });",
+    "const home = app.route('/', {",
+    "  access: app.publicAccess('public export context fixture'),",
+    "  page: () => trustedHtml('<main>Home</main>', { reason: 'fixed export context fixture' }),",
+    '});',
+    'export default app.assemble({',
+    '  routes: [home],',
     '});',
     '',
   ].join('\n');
@@ -82,8 +80,12 @@ describe('kovo build/export scoped context', () => {
         outDir: join(root, 'out-second'),
       });
 
-      expect(first.exitCode).toBe(0);
-      expect(second.exitCode).toBe(0);
+      if (first.exitCode !== 0) {
+        throw new Error(`first export failed:\n${JSON.stringify(first, null, 2)}`);
+      }
+      if (second.exitCode !== 0) {
+        throw new Error(`second export failed:\n${JSON.stringify(second, null, 2)}`);
+      }
       expect(process.env[envName]).toBe('before-export');
       expect(readFileSync(join(root, 'out-first/index.html'), 'utf8')).toContain(
         '<main>Home</main>',

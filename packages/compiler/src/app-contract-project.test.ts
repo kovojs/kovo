@@ -54,6 +54,43 @@ describe('D1 compiler-owned exact project resolver', () => {
     expect(result.serverPackageRoots).toEqual([fixture.serverA]);
   });
 
+  it('resolves an authenticated project-relative census against its explicit root', async () => {
+    const fixture = await createFixture();
+    const contract = join(fixture.root, 'app/src/kovo.ts');
+    const entry = join(fixture.root, 'app/src/product-entry.ts');
+    await writeSource(
+      contract,
+      [
+        "import { defineKovo } from '@kovojs/server';",
+        'export const app = defineKovo({',
+        "  appId: '00000000-0000-4000-8000-000000000002',",
+        '});',
+        '',
+      ].join('\n'),
+    );
+    await writeSource(
+      entry,
+      "import { app } from './kovo.js';\nexport const item = app.query({ load() { return 1; } });\n",
+    );
+    const contractName = relative(fixture.root, contract);
+    const entryName = relative(fixture.root, entry);
+    const project = createCompilerOwnedAppContractProject({
+      rootDirectory: fixture.root,
+      rootNames: [contractName, entryName],
+    });
+
+    expect(project.compileEntry(entryName)).toEqual(
+      expect.objectContaining({
+        diagnostics: [],
+        ownerKey: expect.stringMatching(/^d1v7:[a-f0-9]{64}$/u),
+      }),
+    );
+    expect(project.staticFacts().every((fact) => !fact.fileName.startsWith('/'))).toBe(true);
+    expect(project.withEntryResolutions(entryName, (source) => source)).toContain(
+      'app.query({ load()',
+    );
+  });
+
   it('carries app-scoped handler roots into the finite TASK B semantic carrier', async () => {
     const fixture = await createFixture();
     const contract = join(fixture.root, 'app/src/kovo.ts');

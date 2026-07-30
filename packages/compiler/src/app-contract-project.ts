@@ -112,6 +112,8 @@ export interface CompilerOwnedAppContractProject {
 
 /** @internal Exact root names used to construct the compiler-owned TypeScript Program. */
 export interface CreateCompilerOwnedAppContractProjectOptions {
+  /** Base directory for project-relative root names supplied by an authenticated build census. */
+  readonly rootDirectory?: string;
   readonly rootNames: readonly string[];
 }
 
@@ -277,7 +279,8 @@ type AnalyzableFunctionLike =
 export function createCompilerOwnedAppContractProject(
   rawOptions: CreateCompilerOwnedAppContractProjectOptions,
 ): CompilerOwnedAppContractProject {
-  const rootNames = snapshotRootNames(rawOptions);
+  const rootDirectory = snapshotRootDirectory(rawOptions);
+  const rootNames = snapshotRootNames(rawOptions, rootDirectory);
   const consumerRootNames = Object.freeze([...new Set(rawOptions.rootNames)].sort());
   const options = appContractCompilerOptions();
   const program = ts.createProgram({ options, rootNames });
@@ -294,7 +297,7 @@ export function createCompilerOwnedAppContractProject(
   };
 
   const sourceFileFor = (fileName: string): ts.SourceFile => {
-    const exact = programSourceFile(program, fileName);
+    const exact = programSourceFile(program, resolve(rootDirectory, fileName));
     if (!exact) throw new TypeError(`App-contract project does not contain ${fileName}.`);
     return exact;
   };
@@ -594,7 +597,9 @@ export function createCompilerOwnedAppContractProject(
               return file.fileName;
             });
       if (
-        new Set(fileNames.map((fileName) => normalizeFileName(resolve(fileName)))).size !==
+        new Set(
+          fileNames.map((fileName) => normalizeFileName(resolve(rootDirectory, fileName))),
+        ).size !==
         fileNames.length
       ) {
         throw new TypeError('App-contract static census refused duplicate source identities.');
@@ -2720,7 +2725,21 @@ function tryRealServerPackageRoot(resolvedFileName: string): string | undefined 
   return undefined;
 }
 
-function snapshotRootNames(raw: CreateCompilerOwnedAppContractProjectOptions): readonly string[] {
+function snapshotRootDirectory(raw: CreateCompilerOwnedAppContractProjectOptions): string {
+  if (typeof raw !== 'object' || raw === null) {
+    throw new TypeError('App-contract project options must be an object.');
+  }
+  const rootDirectory = raw.rootDirectory ?? process.cwd();
+  if (typeof rootDirectory !== 'string' || rootDirectory.length === 0) {
+    throw new TypeError('App-contract project options.rootDirectory must be a non-empty string.');
+  }
+  return resolve(rootDirectory);
+}
+
+function snapshotRootNames(
+  raw: CreateCompilerOwnedAppContractProjectOptions,
+  rootDirectory: string,
+): readonly string[] {
   if (typeof raw !== 'object' || raw === null || !Array.isArray(raw.rootNames)) {
     throw new TypeError('App-contract project options.rootNames must be an own array.');
   }
@@ -2728,7 +2747,7 @@ function snapshotRootNames(raw: CreateCompilerOwnedAppContractProjectOptions): r
     if (typeof fileName !== 'string' || fileName.length === 0) {
       throw new TypeError(`App-contract project rootNames[${index}] must be a non-empty string.`);
     }
-    return resolve(fileName);
+    return resolve(rootDirectory, fileName);
   });
   if (names.length === 0) throw new TypeError('App-contract project needs at least one root file.');
   return Object.freeze([...new Set(names)].sort());

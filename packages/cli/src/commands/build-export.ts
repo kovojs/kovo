@@ -1526,7 +1526,7 @@ function runPreEvaluationStaticTrustPreflight(
   // Parse and lower this exact snapshot before deriving the loader manifest. Private ABI rows are
   // admitted only when the reviewed compiler added their exact names; authored spellings remain
   // ordinary closed package edges (SPEC §5.2 rule 10 / §6.6).
-  const sourceGraphFacts = sourceGraphFactsFromFiles(files);
+  const sourceGraphFacts = sourceGraphFactsFromFiles(files, root);
   const packageRequests = collectCapabilityPackageRequests(
     files,
     sourceGraphFacts.compilerDependencies,
@@ -3714,18 +3714,21 @@ function runtimeMutationHandlerFingerprint(handler: unknown): string | undefined
 
 function compilerOwnedAppContractProjectForBuild(
   files: readonly BuildCheckSourceFile[],
+  rootDirectory: string,
 ): CompilerOwnedAppContractProject | undefined {
   const rootNames: string[] = [];
   const seen = buildCreateSet<string>();
   const sources = buildSnapshotDenseArray(files, 'App-contract compiler source roots');
   for (let index = 0; index < sources.length; index += 1) {
     const fileName = sources[index]!.fileName;
-    const canonicalFileName = resolve(fileName);
+    const canonicalFileName = resolve(rootDirectory, fileName);
     if (!/\.[cm]?[jt]sx?$/u.test(fileName) || buildSetHas(seen, canonicalFileName)) continue;
     buildSetAdd(seen, canonicalFileName);
     buildSecurityArrayAppend(rootNames, fileName, 'App-contract compiler source roots');
   }
-  return rootNames.length === 0 ? undefined : createCompilerOwnedAppContractProject({ rootNames });
+  return rootNames.length === 0
+    ? undefined
+    : createCompilerOwnedAppContractProject({ rootDirectory, rootNames });
 }
 
 function withBuildAppContractResolutions<Value>(
@@ -3745,7 +3748,10 @@ function withBuildAppContractResolutions<Value>(
   });
 }
 
-function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): SourceGraphFacts {
+function sourceGraphFactsFromFiles(
+  files: readonly BuildCheckSourceFile[],
+  rootDirectory: string = process.cwd(),
+): SourceGraphFacts {
   const compilerDependencies: CompilerGeneratedCapabilityDependency[] = [];
   const compilerSecuritySemanticSources: CompilerSecuritySemanticSource[] = [];
   const compilerTaskBBlockingDiagnostics: CoreGraph.StaticDiagnosticFact[] = [];
@@ -3757,7 +3763,7 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
   const sourceDerivedRegistryTransforms: SourceDerivedRegistryTransform[] = [];
 
   const sourceFiles = buildSnapshotDenseArray(files, 'Build-check source files');
-  const appContractProject = compilerOwnedAppContractProjectForBuild(sourceFiles);
+  const appContractProject = compilerOwnedAppContractProjectForBuild(sourceFiles, rootDirectory);
   // SPEC §5.2 rule 10 / §6.3: derive imported mutation-form ownership once from the same immutable
   // source snapshot used by build/check. Lowering receives only typed, path-scoped facts and never
   // infers authority from a bare identifier or a post-evaluation runtime object.
