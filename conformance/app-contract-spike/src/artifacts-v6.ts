@@ -185,11 +185,8 @@ export async function loadAuthenticatedPackedCompiler(
   const compilerRoot = artifacts.packages.compiler.extractedPackageRoot;
   const dependencyDirectory = join(compilerRoot, 'node_modules');
   await mkdir(join(dependencyDirectory, '@kovojs'), { recursive: true });
-  await symlink(
-    artifacts.packages.core.extractedPackageRoot,
-    join(dependencyDirectory, '@kovojs/core'),
-    'dir',
-  );
+  await linkAuthenticatedPackedKovoDependency(compilerRoot, 'browser', artifacts.packages.browser);
+  await linkAuthenticatedPackedKovoDependency(compilerRoot, 'core', artifacts.packages.core);
   for (const dependency of ['style', 'verify'] as const) {
     await symlink(
       await realpath(join(repoRoot, `packages/compiler/node_modules/@kovojs/${dependency}`)),
@@ -232,6 +229,35 @@ export async function loadAuthenticatedPackedCompiler(
     `${pathToFileURL(entrypoints[1]!.realpath).href}?d1=${cacheKey}`
   )) as Readonly<Record<string, unknown>>;
   return { entrypoints, internal, root };
+}
+
+async function linkAuthenticatedPackedKovoDependency(
+  consumerRoot: string,
+  packageName: 'browser' | 'core',
+  artifact: PackedArtifact,
+): Promise<void> {
+  const expectedName = `@kovojs/${packageName}`;
+  if (artifact.name !== expectedName) {
+    throw new Error(`D1 v6 packed dependency ${expectedName} was paired with ${artifact.name}.`);
+  }
+
+  const authenticatedRoot = await realpath(artifact.extractedPackageRoot);
+  const observedSubject = await directoryContentSubject(authenticatedRoot);
+  if (JSON.stringify(observedSubject) !== JSON.stringify(artifact.packedContents)) {
+    throw new Error(
+      `D1 v6 packed dependency ${expectedName} extracted bytes do not match the authenticated packed content subject.`,
+    );
+  }
+
+  const dependencyLink = join(consumerRoot, 'node_modules', ...expectedName.split('/'));
+  await mkdir(join(consumerRoot, 'node_modules', '@kovojs'), { recursive: true });
+  await symlink(authenticatedRoot, dependencyLink, 'dir');
+  const resolvedRoot = await realpath(dependencyLink);
+  if (resolvedRoot !== authenticatedRoot) {
+    throw new Error(
+      `D1 v6 packed dependency ${expectedName} resolved outside its authenticated extracted package.`,
+    );
+  }
 }
 
 export async function fileSubject(baseDirectory: string, fileName: string): Promise<FileSubject> {
