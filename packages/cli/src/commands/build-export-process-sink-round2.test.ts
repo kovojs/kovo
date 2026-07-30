@@ -129,9 +129,10 @@ export function makeRoutes(route, publicAccess) {
     const entry = writeApp(
       root,
       `import { makeRoutes } from 'external-route-aggregate';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
-export default createApp({ routes: makeRoutes(route, publicAccess) });
+export default app.assemble({ routes: makeRoutes(route, publicAccess) });
 `,
     );
 
@@ -148,16 +149,17 @@ export default createApp({ routes: makeRoutes(route, publicAccess) });
     const entry = writeApp(
       root,
       `import { execFileSync } from 'node:child_process';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 const factories = new Map();
 factories.set('route', route);
 const hiddenRoute = factories.get('route');
 const unsafe = hiddenRoute('/unsafe', {
-  access: publicAccess('mutable factory audit'),
+  access: app.publicAccess('mutable factory audit'),
   page() { execFileSync('/usr/bin/true'); return 'safe'; },
 });
-export default createApp({ routes: [unsafe] });
+export default app.assemble({ routes: [unsafe] });
 `,
     );
 
@@ -170,17 +172,18 @@ export default createApp({ routes: [unsafe] });
     const entry = writeApp(
       root,
       `import { execFileSync } from 'node:child_process';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 const proto = {
   toString() { execFileSync('/usr/bin/true'); return 'safe'; },
 };
 const authored = Object.create(proto);
-const unsafe = route('/unsafe', {
-  access: publicAccess('Object.create protocol audit'),
+const unsafe = app.route('/unsafe', {
+  access: app.publicAccess('Object.create protocol audit'),
   page() { return \`value=\${authored}\`; },
 });
-export default createApp({ routes: [unsafe] });
+export default app.assemble({ routes: [unsafe] });
 `,
     );
 
@@ -193,14 +196,15 @@ export default createApp({ routes: [unsafe] });
     const entry = writeApp(
       root,
       `import { execFileSync } from 'node:child_process';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 function runTag() { execFileSync('/usr/bin/true'); return 'safe'; }
-const unsafe = route('/unsafe', {
-  access: publicAccess('tagged template audit'),
+const unsafe = app.route('/unsafe', {
+  access: app.publicAccess('tagged template audit'),
   page() { return runTag\`ignored\`; },
 });
-export default createApp({ routes: [unsafe] });
+export default app.assemble({ routes: [unsafe] });
 `,
     );
 
@@ -213,19 +217,20 @@ export default createApp({ routes: [unsafe] });
     const entry = writeApp(
       root,
       `import { execFileSync } from 'node:child_process';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 const resource = {
   [Symbol.dispose]() { execFileSync('/usr/bin/true'); },
 };
-const unsafe = route('/unsafe', {
-  access: publicAccess('using protocol audit'),
+const unsafe = app.route('/unsafe', {
+  access: app.publicAccess('using protocol audit'),
   page() {
     { using lease = resource; void lease; }
     return 'safe';
   },
 });
-export default createApp({ routes: [unsafe] });
+export default app.assemble({ routes: [unsafe] });
 `,
       'app.ts',
     );
@@ -239,12 +244,13 @@ export default createApp({ routes: [unsafe] });
     const entry = writeApp(
       root,
       `import { execFileSync } from 'node:child_process';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
-const config = { access: publicAccess('temporal helper audit') };
+const config = { access: app.publicAccess('temporal helper audit') };
 install();
-const unsafe = route('/unsafe', config);
-export default createApp({ routes: [unsafe] });
+const unsafe = app.route('/unsafe', config);
+export default app.assemble({ routes: [unsafe] });
 function install() {
   config.page = () => { execFileSync('/usr/bin/true'); return 'safe'; };
 }
@@ -260,14 +266,15 @@ function install() {
     const entry = writeApp(
       root,
       `import { execFileSync } from 'node:child_process';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
-const config = { access: publicAccess('interprocedural config audit') };
+const config = { access: app.publicAccess('interprocedural config audit') };
 const unsafePage = () => { execFileSync('/usr/bin/true'); return 'safe'; };
 function install(target) { target.page = unsafePage; }
 install(config);
-const unsafe = route('/unsafe', config);
-export default createApp({ routes: [unsafe] });
+const unsafe = app.route('/unsafe', config);
+export default app.assemble({ routes: [unsafe] });
 `,
     );
 
@@ -290,14 +297,15 @@ export default createApp({ routes: [unsafe] });
     const entry = writeApp(
       root,
       `import { execFileSync } from 'node:child_process';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess } from '@kovojs/server';
 import { hiddenRoute } from './route-barrel.js';
 const unsafe = hiddenRoute('/unsafe', {
-  access: publicAccess('barrel factory audit'),
+  access: app.publicAccess('barrel factory audit'),
   page() { execFileSync('/usr/bin/true'); return 'safe'; },
 });
-export default createApp({ routes: [unsafe] });
+export default app.assemble({ routes: [unsafe] });
 `,
       'app.ts',
     );
@@ -311,14 +319,15 @@ export default createApp({ routes: [unsafe] });
     const entry = writeApp(
       root,
       `import { execFileSync } from 'node:child_process';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 const invoke = Reflect.apply;
 const unsafe = invoke(route, undefined, ['/unsafe', {
-  access: publicAccess('Reflect.apply factory audit'),
+  access: app.publicAccess('Reflect.apply factory audit'),
   page() { execFileSync('/usr/bin/true'); return 'safe'; },
 }]);
-export default createApp({ routes: [unsafe] });
+export default app.assemble({ routes: [unsafe] });
 `,
     );
 
@@ -331,14 +340,15 @@ export default createApp({ routes: [unsafe] });
     const entry = writeApp(
       root,
       `import { execFileSync } from 'node:child_process';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 class Registry { static factory = route; }
 const unsafe = Registry.factory('/unsafe', {
-  access: publicAccess('class factory audit'),
+  access: app.publicAccess('class factory audit'),
   page() { execFileSync('/usr/bin/true'); return 'safe'; },
 });
-export default createApp({ routes: [unsafe] });
+export default app.assemble({ routes: [unsafe] });
 `,
       'app.ts',
     );
@@ -352,14 +362,15 @@ export default createApp({ routes: [unsafe] });
     const entry = writeApp(
       root,
       `import { execFileSync } from 'node:child_process';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 const hiddenRoute = new Proxy(route, {});
 const unsafe = hiddenRoute('/unsafe', {
-  access: publicAccess('Proxy factory audit'),
+  access: app.publicAccess('Proxy factory audit'),
   page() { execFileSync('/usr/bin/true'); return 'safe'; },
 });
-export default createApp({ routes: [unsafe] });
+export default app.assemble({ routes: [unsafe] });
 `,
     );
 
@@ -378,22 +389,23 @@ describe('kovo build KV424 strict request-wire corpus', () => {
     const root = fixture('thenable-wire');
     const entry = writeApp(
       root,
-      `import { createApp } from '@kovojs/server/internal/fixture-app';
+      `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, query, route } from '@kovojs/server';
 let currentRequest;
 const authoredThenable = {
   then(resolve) { resolve(currentRequest.headers.get('authorization')); },
 };
-export const leak = query({
-  access: publicAccess('thenable wire audit'),
+export const leak = app.query({
+  access: app.publicAccess('thenable wire audit'),
   async load(_input, { request }) {
     currentRequest = request;
     return await authoredThenable;
   },
 });
-export default createApp({
+export default app.assemble({
   queries: [leak],
-  routes: [route('/', { access: publicAccess('fixture'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('fixture'), page: () => 'safe' })],
 });
 `,
     );
@@ -406,10 +418,11 @@ export default createApp({
     const root = fixture('iterator-wire');
     const entry = writeApp(
       root,
-      `import { createApp } from '@kovojs/server/internal/fixture-app';
+      `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, query, route } from '@kovojs/server';
-export const leak = query({
-  access: publicAccess('iterator wire audit'),
+export const leak = app.query({
+  access: app.publicAccess('iterator wire audit'),
   load(_input, { request }) {
     const authored = {
       *[Symbol.iterator]() { yield request.headers.get('authorization'); },
@@ -418,9 +431,9 @@ export const leak = query({
     return null;
   },
 });
-export default createApp({
+export default app.assemble({
   queries: [leak],
-  routes: [route('/', { access: publicAccess('fixture'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('fixture'), page: () => 'safe' })],
 });
 `,
     );
@@ -433,18 +446,19 @@ export default createApp({
     const root = fixture('callback-wire');
     const entry = writeApp(
       root,
-      `import { createApp } from '@kovojs/server/internal/fixture-app';
+      `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, query, route } from '@kovojs/server';
-export const leak = query({
-  access: publicAccess('callback wire audit'),
+export const leak = app.query({
+  access: app.publicAccess('callback wire audit'),
   load(_input, { request }) {
     const token = request.headers.get('authorization');
     return [0].map(() => token);
   },
 });
-export default createApp({
+export default app.assemble({
   queries: [leak],
-  routes: [route('/', { access: publicAccess('fixture'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('fixture'), page: () => 'safe' })],
 });
 `,
     );
@@ -457,20 +471,21 @@ export default createApp({
     const root = fixture('to-json-wire');
     const entry = writeApp(
       root,
-      `import { createApp } from '@kovojs/server/internal/fixture-app';
+      `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, query, route } from '@kovojs/server';
 class Box {}
-export const leak = query({
-  access: publicAccess('toJSON wire audit'),
+export const leak = app.query({
+  access: app.publicAccess('toJSON wire audit'),
   load(_input, { request }) {
     const box = new Box();
     box.toJSON = () => ({ token: request.headers.get('authorization') });
     return box;
   },
 });
-export default createApp({
+export default app.assemble({
   queries: [leak],
-  routes: [route('/', { access: publicAccess('fixture'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('fixture'), page: () => 'safe' })],
 });
 `,
     );
@@ -483,10 +498,11 @@ export default createApp({
     const root = fixture('catch-wire');
     const entry = writeApp(
       root,
-      `import { createApp } from '@kovojs/server/internal/fixture-app';
+      `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, query, route } from '@kovojs/server';
-export const leak = query({
-  access: publicAccess('catch binding wire audit'),
+export const leak = app.query({
+  access: app.publicAccess('catch binding wire audit'),
   load(_input, { request }) {
     try {
       throw request.headers.get('authorization');
@@ -495,9 +511,9 @@ export const leak = query({
     }
   },
 });
-export default createApp({
+export default app.assemble({
   queries: [leak],
-  routes: [route('/', { access: publicAccess('fixture'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('fixture'), page: () => 'safe' })],
 });
 `,
     );
@@ -511,19 +527,20 @@ export default createApp({
     const entry = writeApp(
       root,
       `import { execFileSync } from 'node:child_process';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 let currentProgram = '/usr/bin/true';
 class Runner { result = execFileSync(currentProgram); }
-const unsafe = route('/unsafe', {
-  access: publicAccess('module class field process audit'),
+const unsafe = app.route('/unsafe', {
+  access: app.publicAccess('module class field process audit'),
   page() {
     currentProgram = '/usr/bin/true';
     new Runner();
     return 'safe';
   },
 });
-export default createApp({ routes: [unsafe] });
+export default app.assemble({ routes: [unsafe] });
 `,
       'app.ts',
     );
@@ -536,20 +553,21 @@ export default createApp({ routes: [unsafe] });
     const root = fixture('module-class-wire');
     const entry = writeApp(
       root,
-      `import { createApp } from '@kovojs/server/internal/fixture-app';
+      `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, query, route } from '@kovojs/server';
 let currentRequest;
 class Box { value = currentRequest.headers.get('authorization'); }
-export const leak = query({
-  access: publicAccess('module class field wire audit'),
+export const leak = app.query({
+  access: app.publicAccess('module class field wire audit'),
   load(_input, { request }) {
     currentRequest = request;
     return new Box().value;
   },
 });
-export default createApp({
+export default app.assemble({
   queries: [leak],
-  routes: [route('/', { access: publicAccess('fixture'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('fixture'), page: () => 'safe' })],
 });
 `,
       'app.ts',
@@ -568,14 +586,15 @@ describe('kovo build KV424 strict JSX and component corpus', () => {
       root,
       `'use strict';
 /** @jsx h */
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 function h() { throw new Error('custom JSX factory evaluated'); }
-const page = route('/', {
-  access: publicAccess('custom JSX factory preflight'),
+const page = app.route('/', {
+  access: app.publicAccess('custom JSX factory preflight'),
   page() { return <div>safe</div>; },
 });
-export default createApp({ routes: [page] });
+export default app.assemble({ routes: [page] });
 `,
       'app.tsx',
     );
@@ -590,15 +609,16 @@ export default createApp({ routes: [page] });
     const entry = writeApp(
       root,
       `/** @jsxImportSource @kovojs/server */
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
-const leak = route('/leak', {
-  access: publicAccess('JSX intrinsic wire audit'),
+const leak = app.route('/leak', {
+  access: app.publicAccess('JSX intrinsic wire audit'),
   page(_context, request) {
     return <div>{request.headers.get('authorization')}</div>;
   },
 });
-export default createApp({ routes: [leak] });
+export default app.assemble({ routes: [leak] });
 `,
       'app.tsx',
     );
@@ -613,17 +633,18 @@ export default createApp({ routes: [leak] });
       root,
       `/** @jsxImportSource @kovojs/server */
 import { execFileSync } from 'node:child_process';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 function DangerousComponent() {
   execFileSync('/usr/bin/true');
   return <div>done</div>;
 }
-const unsafe = route('/unsafe', {
-  access: publicAccess('local JSX component process audit'),
+const unsafe = app.route('/unsafe', {
+  access: app.publicAccess('local JSX component process audit'),
   page() { return <DangerousComponent />; },
 });
-export default createApp({ routes: [unsafe] });
+export default app.assemble({ routes: [unsafe] });
 `,
       'app.tsx',
     );
@@ -637,20 +658,21 @@ export default createApp({ routes: [unsafe] });
     const entry = writeApp(
       root,
       `/** @jsxImportSource @kovojs/server */
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 let currentRequest;
 function LeakComponent() {
   return <div>{currentRequest.headers.get('authorization')}</div>;
 }
-const leak = route('/leak', {
-  access: publicAccess('local JSX component wire audit'),
+const leak = app.route('/leak', {
+  access: app.publicAccess('local JSX component wire audit'),
   page(_context, request) {
     currentRequest = request;
     return <LeakComponent />;
   },
 });
-export default createApp({ routes: [leak] });
+export default app.assemble({ routes: [leak] });
 `,
       'app.tsx',
     );
@@ -675,13 +697,14 @@ export function ExternalComponent() {
       root,
       `/** @jsxImportSource @kovojs/server */
 import { ExternalComponent } from 'external-component';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
-const unsafe = route('/unsafe', {
-  access: publicAccess('external JSX component process audit'),
+const unsafe = app.route('/unsafe', {
+  access: app.publicAccess('external JSX component process audit'),
   page() { return <ExternalComponent />; },
 });
-export default createApp({ routes: [unsafe] });
+export default app.assemble({ routes: [unsafe] });
 `,
       'app.tsx',
     );
@@ -705,15 +728,16 @@ export default createApp({ routes: [unsafe] });
       root,
       `/** @jsxImportSource @kovojs/server */
 import { ExternalComponent } from 'external-component';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
-const leak = route('/leak', {
-  access: publicAccess('external JSX component wire audit'),
+const leak = app.route('/leak', {
+  access: app.publicAccess('external JSX component wire audit'),
   page(_context, request) {
     return <ExternalComponent value={request.headers.get('authorization')} />;
   },
 });
-export default createApp({ routes: [leak] });
+export default app.assemble({ routes: [leak] });
 `,
       'app.tsx',
     );
@@ -747,7 +771,8 @@ export default createApp({ routes: [leak] });
     const entry = writeApp(
       root,
       `import { execFileSync } from 'node:child_process';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 function dangerousDecorator(value) {
   return class extends value {
@@ -759,11 +784,11 @@ function dangerousDecorator(value) {
 }
 @dangerousDecorator
 class Runner {}
-const unsafe = route('/unsafe', {
-  access: publicAccess('decorated constructor process audit'),
+const unsafe = app.route('/unsafe', {
+  access: app.publicAccess('decorated constructor process audit'),
   page() { new Runner(); return 'safe'; },
 });
-export default createApp({ routes: [unsafe] });
+export default app.assemble({ routes: [unsafe] });
 `,
       'app.ts',
     );
@@ -784,10 +809,11 @@ describe('kovo build KV424 strict remaining implicit-protocol corpus', () => {
     const root = fixture('from-entries-iterator-wire');
     const entry = writeApp(
       root,
-      `import { createApp } from '@kovojs/server/internal/fixture-app';
+      `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, query, route } from '@kovojs/server';
-export const leak = query({
-  access: publicAccess('Object.fromEntries iterator wire audit'),
+export const leak = app.query({
+  access: app.publicAccess('Object.fromEntries iterator wire audit'),
   load(_input, { request }) {
     const entries = {
       *[Symbol.iterator]() {
@@ -797,9 +823,9 @@ export const leak = query({
     return Object.fromEntries(entries);
   },
 });
-export default createApp({
+export default app.assemble({
   queries: [leak],
-  routes: [route('/', { access: publicAccess('fixture'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('fixture'), page: () => 'safe' })],
 });
 `,
     );
@@ -812,10 +838,11 @@ export default createApp({
     const root = fixture('from-async-iterator-wire');
     const entry = writeApp(
       root,
-      `import { createApp } from '@kovojs/server/internal/fixture-app';
+      `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, query, route } from '@kovojs/server';
-export const leak = query({
-  access: publicAccess('Array.fromAsync iterator wire audit'),
+export const leak = app.query({
+  access: app.publicAccess('Array.fromAsync iterator wire audit'),
   async load(_input, { request }) {
     const values = {
       async *[Symbol.asyncIterator]() {
@@ -825,9 +852,9 @@ export const leak = query({
     return await Array.fromAsync(values);
   },
 });
-export default createApp({
+export default app.assemble({
   queries: [leak],
-  routes: [route('/', { access: publicAccess('fixture'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('fixture'), page: () => 'safe' })],
 });
 `,
     );
@@ -861,7 +888,8 @@ export default createApp({
         root,
         `import { execFileSync } from 'node:child_process';
 ${extraImport}
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 const dangerous = new Proxy({ value: 'safe' }, {
   get(target, key, receiver) {
@@ -873,11 +901,11 @@ const dangerous = new Proxy({ value: 'safe' }, {
     return Reflect.ownKeys(target);
   },
 });
-const unsafe = route('/', {
-  access: publicAccess('Proxy consumer audit'),
+const unsafe = app.route('/', {
+  access: app.publicAccess('Proxy consumer audit'),
   page() { ${operation} },
 });
-export default createApp({ routes: [unsafe] });
+export default app.assemble({ routes: [unsafe] });
 `,
       );
 
@@ -896,7 +924,8 @@ export default createApp({ routes: [unsafe] });
     const entry = writeApp(
       root,
       `import { execFileSync } from 'node:child_process';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 const dangerousIterable = {
   [Symbol.iterator]() {
@@ -904,15 +933,15 @@ const dangerousIterable = {
     return ['safe'][Symbol.iterator]();
   },
 };
-const unsafe = route('/', {
-  access: publicAccess('destructuring assignment iterator audit'),
+const unsafe = app.route('/', {
+  access: app.publicAccess('destructuring assignment iterator audit'),
   page() {
     let value;
     [value] = dangerousIterable;
     return value;
   },
 });
-export default createApp({ routes: [unsafe] });
+export default app.assemble({ routes: [unsafe] });
 `,
     );
 
@@ -926,18 +955,19 @@ export default createApp({ routes: [unsafe] });
       root,
       `import { execFileSync } from 'node:child_process';
 import querystring from 'node:querystring';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 const originalEscape = querystring.escape;
 querystring.escape = (value) => {
   execFileSync('/usr/bin/true');
   return originalEscape(value);
 };
-const unsafe = route('/', {
-  access: publicAccess('querystring escape mutation audit'),
+const unsafe = app.route('/', {
+  access: app.publicAccess('querystring escape mutation audit'),
   page() { return querystring.stringify({ value: 'safe' }); },
 });
-export default createApp({ routes: [unsafe] });
+export default app.assemble({ routes: [unsafe] });
 `,
     );
 
@@ -950,7 +980,8 @@ export default createApp({ routes: [unsafe] });
     const entry = writeApp(
       root,
       `import { execFileSync } from 'node:child_process';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, query, route } from '@kovojs/server';
 const dangerousPrototype = new Proxy(Object.prototype, {
   get(target, key, receiver) {
@@ -963,16 +994,16 @@ const dangerousPrototype = new Proxy(Object.prototype, {
     return Reflect.get(target, key, receiver);
   },
 });
-export const unsafe = query({
-  access: publicAccess('input prototype Proxy audit'),
+export const unsafe = app.query({
+  access: app.publicAccess('input prototype Proxy audit'),
   load(input) {
     Object.setPrototypeOf(input, dangerousPrototype);
     return input.toString();
   },
 });
-export default createApp({
+export default app.assemble({
   queries: [unsafe],
-  routes: [route('/', { access: publicAccess('fixture'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('fixture'), page: () => 'safe' })],
 });
 `,
     );
@@ -1007,10 +1038,11 @@ export function poisonConsole(consoleObject) {
     const entry = writeApp(
       root,
       `import { poisonConsole } from 'opaque-console-poison';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
-const unsafe = route('/', {
-  access: publicAccess('opaque console mutation audit'),
+const unsafe = app.route('/', {
+  access: app.publicAccess('opaque console mutation audit'),
   page() {
     const restore = poisonConsole(console);
     try {
@@ -1021,7 +1053,7 @@ const unsafe = route('/', {
     }
   },
 });
-export default createApp({ routes: [unsafe] });
+export default app.assemble({ routes: [unsafe] });
 `,
     );
 
@@ -1034,10 +1066,11 @@ export default createApp({ routes: [unsafe] });
     const entry = writeApp(
       root,
       `import { execFileSync } from 'node:child_process';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, query, route } from '@kovojs/server';
-export const unsafe = query({
-  access: publicAccess('Promise.then callback audit'),
+export const unsafe = app.query({
+  access: app.publicAccess('Promise.then callback audit'),
   async load() {
     return await Promise.resolve('safe').then((value) => {
       execFileSync('/usr/bin/true');
@@ -1045,9 +1078,9 @@ export const unsafe = query({
     });
   },
 });
-export default createApp({
+export default app.assemble({
   queries: [unsafe],
-  routes: [route('/', { access: publicAccess('fixture'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('fixture'), page: () => 'safe' })],
 });
 `,
     );
@@ -1116,18 +1149,19 @@ export default createApp({
       const entry = writeApp(
         root,
         `import { execFileSync } from 'node:child_process';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, query, route } from '@kovojs/server';
-export const unsafe = query({
-  access: publicAccess('hostile Promise own then audit'),
+export const unsafe = app.query({
+  access: app.publicAccess('hostile Promise own then audit'),
   async load() {
     ${setup}
     return await promise.then((value) => value);
   },
 });
-export default createApp({
+export default app.assemble({
   queries: [unsafe],
-  routes: [route('/', { access: publicAccess('fixture'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('fixture'), page: () => 'safe' })],
 });
 `,
       );
@@ -1144,7 +1178,8 @@ export default createApp({
       root,
       `/** @jsxImportSource @kovojs/server */
 import { execFileSync } from 'node:child_process';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 function InstallThen({ promise }) {
   Object.defineProperty(promise, 'then', {
@@ -1155,8 +1190,8 @@ function InstallThen({ promise }) {
   });
   return <span>installed</span>;
 }
-const unsafe = route('/', {
-  access: publicAccess('hostile Promise JSX audit'),
+const unsafe = app.route('/', {
+  access: app.publicAccess('hostile Promise JSX audit'),
   async page() {
     const promise = Promise.resolve('safe');
     const view = <InstallThen promise={promise} />;
@@ -1164,7 +1199,7 @@ const unsafe = route('/', {
     return view;
   },
 });
-export default createApp({ routes: [unsafe] });
+export default app.assemble({ routes: [unsafe] });
 `,
       'app.tsx',
     );
@@ -1195,15 +1230,16 @@ export default createApp({ routes: [unsafe] });
       const root = fixture(`protocol-precision-${_label.replaceAll(/[^a-z]+/giu, '-')}`);
       const entry = writeApp(
         root,
-        `import { createApp } from '@kovojs/server/internal/fixture-app';
+        `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
-const safe = route('/', {
-  access: publicAccess('reviewed protocol precision audit'),
+const safe = app.route('/', {
+  access: app.publicAccess('reviewed protocol precision audit'),
   async page() {
     ${body}
   },
 });
-export default createApp({ routes: [safe] });
+export default app.assemble({ routes: [safe] });
 `,
       );
 
@@ -1242,15 +1278,16 @@ describe('kovo build KV424 strict round-two precision corpus', () => {
       const root = fixture(`precision-${_label.replaceAll(' ', '-').toLowerCase()}`);
       const entry = writeApp(
         root,
-        `import { createApp } from '@kovojs/server/internal/fixture-app';
+        `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
-const safe = route('/', {
-  access: publicAccess('reviewed local data precision audit'),
+const safe = app.route('/', {
+  access: app.publicAccess('reviewed local data precision audit'),
   page() {
     ${body}
   },
 });
-export default createApp({ routes: [safe] });
+export default app.assemble({ routes: [safe] });
 `,
       );
 
@@ -1267,17 +1304,18 @@ export default createApp({ routes: [safe] });
     const entry = writeApp(
       root,
       `/** @jsxImportSource @kovojs/server */
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 function Reviewed({ value }) { return <span>{value}</span>; }
-const safe = route('/', {
-  access: publicAccess('reviewed JSX precision audit'),
+const safe = app.route('/', {
+  access: app.publicAccess('reviewed JSX precision audit'),
   page() {
     const data = { value: 'safe' };
     return <Reviewed value={data.value} />;
   },
 });
-export default createApp({ routes: [safe] });
+export default app.assemble({ routes: [safe] });
 `,
       'app.tsx',
     );

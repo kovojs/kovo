@@ -352,15 +352,16 @@ describe('kovo build', () => {
       writeFileSync(
         appPath,
         `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route, stylesheet } from '@kovojs/server';
 import { trustedHtml } from '@kovojs/browser';
 
-export default createApp({
+export default app.assemble({
   stylesheets: [stylesheet('./local.css')],
   routes: [
-    route('/', {
-      access: publicAccess('static asset fixture'),
+    app.route('/', {
+      access: app.publicAccess('static asset fixture'),
       page: () => trustedHtml('<main><img src="/logo.svg" alt="Logo"></main>'),
     }),
   ],
@@ -494,15 +495,16 @@ export default createApp({
       writeFileSync(
         appPath,
         `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 
 import { ContactCard } from './src/contact-card.js';
 
-export default createApp({
+export default app.assemble({
   routes: [
-    route('/contacts', {
-      access: publicAccess('tsx route component fixture'),
+    app.route('/contacts', {
+      access: app.publicAccess('tsx route component fixture'),
       page: () => ContactCard({ name: 'Ada' }),
     }),
   ],
@@ -563,13 +565,14 @@ export function ContactCard(props: { name: string }) {
         appPath,
         `
 /** @jsxImportSource @kovojs/server */
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 
-export default createApp({
+export default app.assemble({
   routes: [
-    route('/jsx', {
-      access: publicAccess('production JSX handler fixture'),
+    app.route('/jsx', {
+      access: app.publicAccess('production JSX handler fixture'),
       page: () => <main>Production JSX</main>,
     }),
   ],
@@ -618,13 +621,14 @@ export default createApp({
         appPath,
         `
 /** @jsxImportSource @kovojs/server */
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 
-export default createApp({
+export default app.assemble({
   routes: [
-    route('/stable', {
-      access: publicAccess('stable handler fixture'),
+    app.route('/stable', {
+      access: app.publicAccess('stable handler fixture'),
       page: () => <main>Stable handler</main>,
     }),
   ],
@@ -679,13 +683,13 @@ export default createApp({
         appPath,
         [
           '/** @jsxImportSource @kovojs/server */',
-          "import { createApp } from '@kovojs/server/internal/fixture-app';",
+          "import { defineKovo } from '@kovojs/server';\nconst app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });",
           "import { route } from '@kovojs/server';",
           "import { CounterIsland } from './components/counter-island.js';",
           '',
-          'export default createApp({',
+          'export default app.assemble({',
           '  routes: [',
-          "    route('/', {",
+          "    app.route('/', {",
           "      access: { kind: 'public', reason: 'island build fixture' },",
           '      page: () => <CounterIsland />,',
           '    }),',
@@ -890,12 +894,13 @@ export default createApp({
       writeFileSync(
         appPath,
         `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { route } from '@kovojs/server';
 
-export default createApp({
+export default app.assemble({
   routes: [
-    route('/missing-access', {
+    app.route('/missing-access', {
       page: () => '<main>Missing access</main>',
     }),
   ],
@@ -940,10 +945,11 @@ export const contacts = query({
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeFileSync(
         appPath,
-        `import { createApp } from '@kovojs/server/internal/fixture-app';
+        `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { contacts } from './src/queries.js';
 
-export default createApp({ queries: [contacts] });
+export default app.assemble({ queries: [contacts] });
 `,
         'utf8',
       );
@@ -1005,17 +1011,18 @@ export default createApp({ queries: [contacts] });
       writeFileSync(
         appPath,
         `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 import { readFile } from 'node:fs/promises';
 
-export const page = route('/closed-files', {
-  access: publicAccess('capability closure fixture'),
+export const page = app.route('/closed-files', {
+  access: app.publicAccess('capability closure fixture'),
   page: () => String(readFile),
 });
 
 throw new Error('capability closure fixture must not be evaluated');
-export default createApp({ routes: [page] });
+export default app.assemble({ routes: [page] });
 `,
         'utf8',
       );
@@ -1052,18 +1059,19 @@ export default createApp({ routes: [page] });
       writeFileSync(
         appPath,
         `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { endpoint, guards, publicAccess, query as defineQuery, s } from '@kovojs/server';import { webhook } from '@kovojs/server/webhooks';
 
 const requestGuard = guards.authed();
 
-export const conflicted = defineQuery({
-  access: publicAccess('public catalog fixture'),
+export const conflicted = app.query({
+  access: app.publicAccess('public catalog fixture'),
   guard: requestGuard,
   load: () => ({ ok: true }),
 });
 
-export const guardedEndpoint = endpoint('/guarded-endpoint', {
+export const guardedEndpoint = app.endpoint('/guarded-endpoint', {
   guard: requestGuard,
   handler: () => new Response('ok'),
   method: 'GET',
@@ -1080,7 +1088,7 @@ export const guardedWebhook = webhook('/guarded-webhook', {
 });
 
 throw new Error('H23 fixture must not be evaluated');
-export default createApp({
+export default app.assemble({
   endpoints: [guardedEndpoint, guardedWebhook],
   queries: [conflicted],
 });
@@ -1169,11 +1177,12 @@ export default {};
       writeFileSync(
         appPath,
         `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { guards, mutation, publicAccess, s } from '@kovojs/server';
 
-const unsafe = mutation('auth/unsafe-cookie', {
-  access: publicAccess('machine callback'),
+const unsafe = app.mutation('auth/unsafe-cookie', {
+  access: app.publicAccess('machine callback'),
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
@@ -1183,8 +1192,8 @@ const unsafe = mutation('auth/unsafe-cookie', {
     return { ok: true };
   },
 });
-const unsafeAuthorization = mutation('auth/unsafe-authorization', {
-  access: publicAccess('browser Authorization callback'),
+const unsafeAuthorization = app.mutation('auth/unsafe-authorization', {
+  access: app.publicAccess('browser Authorization callback'),
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
@@ -1193,8 +1202,8 @@ const unsafeAuthorization = mutation('auth/unsafe-authorization', {
     return { ok: true };
   },
 });
-const unsafeProxyIdentity = mutation('auth/unsafe-proxy-identity', {
-  access: publicAccess('proxy identity callback'),
+const unsafeProxyIdentity = app.mutation('auth/unsafe-proxy-identity', {
+  access: app.publicAccess('proxy identity callback'),
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
@@ -1203,8 +1212,8 @@ const unsafeProxyIdentity = mutation('auth/unsafe-proxy-identity', {
     return { ok: true };
   },
 });
-const unsafeCookieOutput = mutation('auth/unsafe-cookie-output', {
-  access: publicAccess('cookie-minting callback'),
+const unsafeCookieOutput = app.mutation('auth/unsafe-cookie-output', {
+  access: app.publicAccess('cookie-minting callback'),
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
@@ -1212,8 +1221,8 @@ const unsafeCookieOutput = mutation('auth/unsafe-cookie-output', {
     context.setCookie('session', 'attacker');
   },
 });
-const unsafeFakeThis = mutation('auth/unsafe-fake-this', {
-  access: publicAccess('fake this callback'),
+const unsafeFakeThis = app.mutation('auth/unsafe-fake-this', {
+  access: app.publicAccess('fake this callback'),
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
@@ -1222,8 +1231,8 @@ const unsafeFakeThis = mutation('auth/unsafe-fake-this', {
     return { ok: true };
   },
 });
-const safe = mutation('auth/signed-machine', {
-  access: publicAccess('signed machine callback'),
+const safe = app.mutation('auth/signed-machine', {
+  access: app.publicAccess('signed machine callback'),
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
@@ -1234,14 +1243,14 @@ const safe = mutation('auth/signed-machine', {
 const referencedHandler = (_input, request) => ({
   signature: request.headers.get('X-Machine-Signature'),
 });
-const unproven = mutation('auth/unproven-handler', {
-  access: publicAccess('referenced machine callback'),
+const unproven = app.mutation('auth/unproven-handler', {
+  access: app.publicAccess('referenced machine callback'),
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
   handler: referencedHandler,
 });
-const guarded = mutation('auth/session-guarded', {
+const guarded = app.mutation('auth/session-guarded', {
   access: [guards.authed()],
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
@@ -1251,7 +1260,7 @@ const guarded = mutation('auth/session-guarded', {
   },
 });
 const customGuard = () => true;
-const compositeGuarded = mutation('auth/composite-opaque-guard', {
+const compositeGuarded = app.mutation('auth/composite-opaque-guard', {
   access: [guards.all(customGuard, guards.rateLimit({ max: 10, per: 'ip' }))],
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
@@ -1260,7 +1269,7 @@ const compositeGuarded = mutation('auth/composite-opaque-guard', {
     return { signature: request.headers.get('X-Machine-Signature') };
   },
 });
-const globalRateGuarded = mutation('auth/global-rate-guard', {
+const globalRateGuarded = app.mutation('auth/global-rate-guard', {
   access: [guards.rateLimit({ max: 10, per: 'global' })],
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
@@ -1269,7 +1278,7 @@ const globalRateGuarded = mutation('auth/global-rate-guard', {
     return { signature: request.headers.get('X-Machine-Signature') };
   },
 });
-export default createApp({
+export default app.assemble({
   mutations: [
     unsafe,
     unsafeAuthorization,
@@ -1326,11 +1335,12 @@ export default createApp({
       writeFileSync(
         appPath,
         `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { mutation, publicAccess, s } from '@kovojs/server';
 
-const unsafe = mutation('auth/map-poison', {
-  access: publicAccess('machine callback'),
+const unsafe = app.mutation('auth/map-poison', {
+  access: app.publicAccess('machine callback'),
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
@@ -1339,7 +1349,7 @@ const unsafe = mutation('auth/map-poison', {
     return { ok: true };
   },
 });
-const app = createApp({ mutations: [unsafe] });
+const app = app.assemble({ mutations: [unsafe] });
 const nativeMap = Array.prototype.map;
 const nativeApply = Reflect.apply;
 Array.prototype.map = function poisonedMutationMap(callback, thisArg) {
@@ -1384,11 +1394,12 @@ export default app;
       writeFileSync(
         appPath,
         `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { mutation, publicAccess, s } from '@kovojs/server';
 
-const unsafe = mutation('auth/lowercase-poison', {
-  access: publicAccess('machine callback'),
+const unsafe = app.mutation('auth/lowercase-poison', {
+  access: app.publicAccess('machine callback'),
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
@@ -1402,7 +1413,7 @@ String.prototype.toLowerCase = function poisonedHeaderLowercase() {
   if (String(this) === 'Cookie') return 'x-machine-signature';
   return nativeToLowerCase.call(this);
 };
-export default createApp({ mutations: [unsafe] });
+export default app.assemble({ mutations: [unsafe] });
 `,
         'utf8',
       );
@@ -1439,12 +1450,13 @@ export default createApp({ mutations: [unsafe] });
       writeFileSync(
         appPath,
         `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { mutation, publicAccess, s } from '@kovojs/server';
 
 const runtimeKey = 'auth/runtime-key';
-const dynamicKey = mutation(runtimeKey, {
-  access: publicAccess('dynamic-key machine callback'),
+const dynamicKey = app.mutation(runtimeKey, {
+  access: app.publicAccess('dynamic-key machine callback'),
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
@@ -1455,7 +1467,7 @@ const dynamicKey = mutation(runtimeKey, {
 });
 
 throw new Error('dynamic registry-key fixture must not be evaluated');
-export default createApp({ mutations: [dynamicKey] });
+export default app.assemble({ mutations: [dynamicKey] });
 `,
         'utf8',
       );
@@ -1527,9 +1539,10 @@ export const decoy = mutation({
       writeFileSync(
         appPath,
         `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { outside } from '../../unsafe.mjs';
-export default createApp({ mutations: [outside] });
+export default app.assemble({ mutations: [outside] });
 `,
         'utf8',
       );
@@ -1613,7 +1626,8 @@ export const decoy = mutation('auth/colliding-handler', {
         `
 import './safe-decoy.mjs';
 import { createRequire, syncBuiltinESMExports } from 'node:module';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { mutation, publicAccess, s } from '@kovojs/server';
 import { createActual } from 'unsafe-authority-fixture';
 const mutableCrypto = createRequire(import.meta.url)('node:crypto');
@@ -1623,7 +1637,7 @@ mutableCrypto.createHash = () => ({
 });
 syncBuiltinESMExports();
 const actual = createActual({ mutation, publicAccess, s });
-export default createApp({ mutations: [actual] });
+export default app.assemble({ mutations: [actual] });
 `,
         'utf8',
       );
@@ -1662,12 +1676,13 @@ export default createApp({ mutations: [actual] });
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const appSource = `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { guards, mutation, query, route, s } from '@kovojs/server';import { trustedHtml } from '@kovojs/browser';
 
 const allow = guards.rateLimit({ max: 100, per: 'global' });
 
-const adminQuery = query('adminOrders', {
+const adminQuery = app.query('adminOrders', {
   args: s.object({ id: s.string() }),
   guard: allow,
   load(input) {
@@ -1675,7 +1690,7 @@ const adminQuery = query('adminOrders', {
   },
 });
 
-const adminMutation = mutation('admin/update', {
+const adminMutation = app.mutation('admin/update', {
   csrf: false,
   csrfJustification: 'non-browser regression fixture',
   guard: allow,
@@ -1685,11 +1700,11 @@ const adminMutation = mutation('admin/update', {
   },
 });
 
-export default createApp({
+export default app.assemble({
   mutations: [adminMutation],
   queries: [adminQuery],
   routes: [
-    route('/admin', {
+    app.route('/admin', {
       guard: allow,
       page: () => trustedHtml('<main>Admin</main>', { reason: 'build access fixture' }),
     }),
@@ -1835,9 +1850,9 @@ export default createApp({
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const appSource = [
-      "import { createApp } from '@kovojs/server/internal/fixture-app';",
+      "import { defineKovo } from '@kovojs/server';\nconst app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });",
       "import { sharedRoute } from '../shared.mjs';",
-      'export default createApp({ routes: [sharedRoute] });',
+      'export default app.assemble({ routes: [sharedRoute] });',
       '',
     ].join('\n');
     const sharedSource = [
@@ -1945,13 +1960,13 @@ export default createApp({
         appPath,
         [
           "import { DeclassifyPolicy, revealSecret, secret } from '@kovojs/core/security';",
-          "import { createApp } from '@kovojs/server/internal/fixture-app';",
+          "import { defineKovo } from '@kovojs/server';\nconst app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });",
           '',
           "const configSecret = secret('build-only-payment-key');",
           "const credential = revealSecret(configSecret, DeclassifyPolicy.forRevealSecret({ ownerScope: 'application', purpose: 'credential-use' }));",
           'void credential;',
           '',
-          'export default createApp({ routes: [] });',
+          'export default app.assemble({ routes: [] });',
           '',
         ].join('\n'),
         'utf8',
@@ -1990,7 +2005,7 @@ export default createApp({
       writeRetentionProofConfig(root);
       const reviewedSource = (field: 'name' | 'role') =>
         [
-          "import { createApp } from '@kovojs/server/internal/fixture-app';\nimport { trustedAssign } from '@kovojs/server/write-safety';",
+          "import { defineKovo } from '@kovojs/server';\nconst app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });\nimport { trustedAssign } from '@kovojs/server/write-safety';",
           '',
           'export function reviewedGrant(input) {',
           `  return trustedAssign(input.${field}, {`,
@@ -1999,7 +2014,7 @@ export default createApp({
           "    why: { guard: 'guards.role:admin', kind: 'guard-chain' },",
           '  });',
           '}',
-          'export default createApp({ routes: [] });',
+          'export default app.assemble({ routes: [] });',
           '',
         ].join('\n');
       expect(reviewedSource('name')).toHaveLength(reviewedSource('role').length);
@@ -2081,9 +2096,9 @@ export default createApp({
       writeFileSync(
         appPath,
         [
-          "import { createApp } from '@kovojs/server/internal/fixture-app';\nimport { trustedAssign } from '@kovojs/server/write-safety';",
+          "import { defineKovo } from '@kovojs/server';\nconst app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });\nimport { trustedAssign } from '@kovojs/server/write-safety';",
           "export function unreviewedGrant(input) { return trustedAssign(input.role, 'make check green'); }",
-          'export default createApp({ routes: [] });',
+          'export default app.assemble({ routes: [] });',
           '',
         ].join('\n'),
         'utf8',
@@ -2123,10 +2138,10 @@ export default createApp({
       writeFileSync(
         appPath,
         [
-          "import { createApp } from '@kovojs/server/internal/fixture-app';",
+          "import { defineKovo } from '@kovojs/server';\nconst app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });",
           "import { s } from '@kovojs/server';",
           '',
-          'export default createApp({',
+          'export default app.assemble({',
           '  env: s.object({',
           '    KOVO_BUILD_SENTINEL_SECRET: s.secret(s.string()),',
           '  }),',
@@ -2171,11 +2186,11 @@ export default createApp({
         appPath,
         [
           "import { secret, trustedReveal as reveal } from '@kovojs/core/security';",
-          "import { createApp } from '@kovojs/server/internal/fixture-app';",
+          "import { defineKovo } from '@kovojs/server';\nconst app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });",
           '',
           "const options = { justification: 'hidden behind a binding' };",
           "reveal(secret('build-only-payment-key'), options);",
-          'export default createApp({ routes: [] });',
+          'export default app.assemble({ routes: [] });',
           '',
         ].join('\n'),
         'utf8',
@@ -2263,16 +2278,17 @@ export default createApp({
       writeFileSync(
         appPath,
         `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 
 const domain = () => 'not drizzle';
 domain();
 
-export default createApp({
+export default app.assemble({
   routes: [
-    route('/fast-path', {
-      access: publicAccess('non-Drizzle build fast path fixture'),
+    app.route('/fast-path', {
+      access: app.publicAccess('non-Drizzle build fast path fixture'),
       page: () => '<main>Fast path</main>',
     }),
   ],
@@ -2319,7 +2335,8 @@ export async function search(input, db) {
       writeFileSync(
         appPath,
         `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 
 const nativeFilter = Array.prototype.filter;
@@ -2339,10 +2356,10 @@ Array.prototype.filter = function poisonedSourceFilter(callback, thisArg) {
   return nativeApply(nativeFilter, this, [callback, thisArg]);
 };
 
-export default createApp({
+export default app.assemble({
   routes: [
-    route('/filter-poison', {
-      access: publicAccess('static analysis filter poisoning fixture'),
+    app.route('/filter-poison', {
+      access: app.publicAccess('static analysis filter poisoning fixture'),
       page: () => '<main>Filter poison</main>',
     }),
   ],
@@ -2397,13 +2414,14 @@ export async function unsafe(db, input) {
       writeFileSync(
         appPath,
         `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 
-export default createApp({
+export default app.assemble({
   routes: [
-    route('/cached', {
-      access: publicAccess('cache fixture route'),
+    app.route('/cached', {
+      access: app.publicAccess('cache fixture route'),
       page: () => '<main>Cached</main>',
     }),
   ],
@@ -2458,12 +2476,13 @@ export const marker = sql.raw('select 1');
         `
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { domain, mutation, query, route, s } from '@kovojs/server';
 
 const contactDomain = domain();
 const contactsDb = { count: 0 };
-const contactsQuery = query('contacts', {
+const contactsQuery = app.query('contacts', {
   access: { kind: 'public', reason: 'fragment-only optimistic fixture' },
   load: () => ({ count: contactsDb.count }),
   output: s.object({ count: s.number() }),
@@ -2477,7 +2496,7 @@ const ContactsRegion = component({
   ),
 });
 
-const addContact = mutation('contacts/add', {
+const addContact = app.mutation('contacts/add', {
   access: { kind: 'public', reason: 'fragment-only optimistic fixture' },
   input: s.object({}),
   optimistic: { contacts: (draft) => draft },
@@ -2491,11 +2510,11 @@ const addContact = mutation('contacts/add', {
   },
 });
 
-export default createApp({
+export default app.assemble({
   mutations: [addContact],
   queries: [contactsQuery],
   routes: [
-    route('/', {
+    app.route('/', {
       access: { kind: 'public', reason: 'fragment-only optimistic fixture' },
       page: () => <main><ContactsRegion /></main>,
     }),
@@ -2537,22 +2556,23 @@ export default createApp({
       writeFileSync(
         appPath,
         `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { domain, mutation, publicAccess, query, route, s } from '@kovojs/server';import { task } from '@kovojs/server/tasks'
 import { trustedHtml } from '@kovojs/browser';
 
 const contactDomain = domain('model/contact');
 
-const contactsQuery = query('queries/contacts-query', {
-  access: publicAccess('source-derived consumer fixture'),
+const contactsQuery = app.query('queries/contacts-query', {
+  access: app.publicAccess('source-derived consumer fixture'),
   reads: [contactDomain],
   load() {
     return { items: [] };
   },
 });
 
-const addContact = mutation('mutations/add-contact', {
-  access: publicAccess('source-derived consumer fixture'),
+const addContact = app.mutation('mutations/add-contact', {
+  access: app.publicAccess('source-derived consumer fixture'),
   csrf: false,
   csrfJustification: 'non-browser regression fixture',
   input: s.object({ name: s.string() }),
@@ -2570,13 +2590,13 @@ const recordContactTask = task('tasks/record-contact', {
   },
 });
 
-export default createApp({
+export default app.assemble({
   mutations: [addContact],
   queries: [contactsQuery],
   tasks: [recordContactTask],
   routes: [
-    route('/contacts', {
-      access: publicAccess('source-derived consumer fixture'),
+    app.route('/contacts', {
+      access: app.publicAccess('source-derived consumer fixture'),
       page: () => trustedHtml('<main>Contacts</main>', { reason: 'source-derived consumer fixture' }),
     }),
   ],
@@ -2656,38 +2676,39 @@ export const ContactsRegion = defineRegion({
       writeFileSync(
         appPath,
         `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { domain, mutation, publicAccess, query, route, s } from '@kovojs/server';import { trustedHtml } from '@kovojs/browser';
 
 const contactDomain = domain('contact');
 const authDomain = domain('auth');
 
-const contactsQuery = query('queries/contacts-query', {
-  access: publicAccess('derived invalidates fixture'),
+const contactsQuery = app.query('queries/contacts-query', {
+  access: app.publicAccess('derived invalidates fixture'),
   reads: [contactDomain],
   load() {
     return { items: [] };
   },
 });
 
-const contactDetailQuery = query('queries/contact-detail-query', {
-  access: publicAccess('derived invalidates fixture'),
+const contactDetailQuery = app.query('queries/contact-detail-query', {
+  access: app.publicAccess('derived invalidates fixture'),
   reads: [contactDomain],
   load() {
     return { item: null };
   },
 });
 
-const authQuery = query('queries/auth-session-query', {
-  access: publicAccess('derived invalidates fixture'),
+const authQuery = app.query('queries/auth-session-query', {
+  access: app.publicAccess('derived invalidates fixture'),
   reads: [authDomain],
   load() {
     return { user: null };
   },
 });
 
-const updateContact = mutation('mutations/update-contact', {
-  access: publicAccess('derived invalidates fixture'),
+const updateContact = app.mutation('mutations/update-contact', {
+  access: app.publicAccess('derived invalidates fixture'),
   csrf: false,
   csrfJustification: 'non-browser regression fixture',
   input: s.object({ name: s.string() }),
@@ -2704,8 +2725,8 @@ const updateContact = mutation('mutations/update-contact', {
   },
 });
 
-const signIn = mutation('mutations/sign-in', {
-  access: publicAccess('derived invalidates fixture'),
+const signIn = app.mutation('mutations/sign-in', {
+  access: app.publicAccess('derived invalidates fixture'),
   csrf: false,
   csrfJustification: 'non-browser regression fixture',
   input: s.object({ email: s.string() }),
@@ -2719,12 +2740,12 @@ const signIn = mutation('mutations/sign-in', {
   },
 });
 
-export default createApp({
+export default app.assemble({
   mutations: [updateContact, signIn],
   queries: [contactsQuery, contactDetailQuery, authQuery],
   routes: [
-    route('/contacts', {
-      access: publicAccess('derived invalidates fixture'),
+    app.route('/contacts', {
+      access: app.publicAccess('derived invalidates fixture'),
       page: () => trustedHtml('<main>Contacts</main>', { reason: 'derived invalidates fixture' }),
     }),
   ],
@@ -2836,9 +2857,10 @@ export default createApp({
       writeFileSync(
         join(root, 'app.ts'),
         `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import './schema.js';
-export default createApp({});
+export default app.assemble({});
 `,
         'utf8',
       );
@@ -3156,7 +3178,8 @@ export const memberships = pgTable('memberships', {
       writeFileSync(
         appPath,
         `
-import { createApp } from '@kovojs/server/internal/fixture-app';import { createMemoryStorage } from '@kovojs/core/storage'
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });import { createMemoryStorage } from '@kovojs/core/storage'
 import { createStorageDownloadEndpoint } from '@kovojs/server/storage-downloads';
 
 const storage = createMemoryStorage();
@@ -3165,7 +3188,7 @@ const download = createStorageDownloadEndpoint({
   storage,
 });
 
-export default createApp({ endpoints: [download] });
+export default app.assemble({ endpoints: [download] });
 `,
         'utf8',
       );
@@ -3204,7 +3227,8 @@ export default createApp({ endpoints: [download] });
       writeFileSync(
         appPath,
         `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { domain, s } from '@kovojs/server';import { createMemoryWebhookReplayStore, webhook, webhookReplayIdentity } from '@kovojs/server/webhooks'
 import { hmacSignature } from '@kovojs/core/webhooks';
 
@@ -3229,7 +3253,7 @@ const paymentWebhook = webhook('/webhooks/payment', {
   writes: [payment],
 });
 
-export default createApp({
+export default app.assemble({
   egress: {
     enabled: false,
     justification: 'test harness serves the emitted app on an ephemeral loopback port',
@@ -3290,7 +3314,8 @@ export default createApp({
       writeFileSync(
         appPath,
         `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { endpoint, publicAccess } from '@kovojs/server';import { hmacSignature } from '@kovojs/core/webhooks';
 
 const official = hmacSignature({
@@ -3300,8 +3325,8 @@ const official = hmacSignature({
   secret: 'c0c1c2c3c4c5c6c7c8c9cacbcccdcecf',
 });
 const forgedHmac = { ...official, verify: async () => true };
-const forgedEndpoint = endpoint('/forged-hmac', {
-  access: publicAccess('production bundle HMAC provenance control'),
+const forgedEndpoint = app.endpoint('/forged-hmac', {
+  access: app.publicAccess('production bundle HMAC provenance control'),
   auth: { kind: 'verifier', name: official.resolved.scheme, verify: forgedHmac },
   csrf: false,
   csrfJustification: 'machine HMAC provenance control',
@@ -3311,7 +3336,7 @@ const forgedEndpoint = endpoint('/forged-hmac', {
   response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
 });
 
-export default createApp({ endpoints: [forgedEndpoint] });
+export default app.assemble({ endpoints: [forgedEndpoint] });
 `,
         'utf8',
       );
@@ -3349,13 +3374,14 @@ export default createApp({ endpoints: [forgedEndpoint] });
       writeFileSync(
         appPath,
         `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 
-export default createApp({
+export default app.assemble({
   routes: [
-    route('/', {
-      access: publicAccess('build source filter fixture'),
+    app.route('/', {
+      access: app.publicAccess('build source filter fixture'),
       page: () => '<main>Home</main>',
     }),
   ],
@@ -4471,7 +4497,8 @@ export const homeQuery = {
 
 function appModuleSource(): string {
   return `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { domain, mutation, query, route, s } from '@kovojs/server';import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules';
 
 import { trustedHtml } from '@kovojs/browser';
@@ -4483,12 +4510,12 @@ clientModules.put({
   path: '/c/cart.client.js',
   source: ${JSON.stringify(BUILD_FIXTURE_CLIENT_SOURCE)},
 });
-const cartQuery = query('cart', {
+const cartQuery = app.query('cart', {
   access: { kind: 'public', reason: 'build fixture query' },
   load: () => ({ count: db.count }),
   reads: [cart],
 });
-const addToCart = mutation('cart/add', {
+const addToCart = app.mutation('cart/add', {
   access: { kind: 'public', reason: 'build fixture mutation' },
   input: s.object({ quantity: s.number().int().min(1).default(1) }),
   optimistic: { cart: 'await-fragment' },
@@ -4502,7 +4529,7 @@ const addToCart = mutation('cart/add', {
   },
 });
 
-export default createApp({
+export default app.assemble({
   clientModules,
   csrf: {
     secret: ${JSON.stringify(BUILD_FIXTURE_CSRF_SECRET)},
@@ -4515,7 +4542,7 @@ export default createApp({
   mutations: [addToCart],
   queries: [cartQuery],
   routes: [
-    route('/cart', {
+    app.route('/cart', {
       access: { kind: 'public', reason: 'build fixture route' },
       page: () => trustedHtml('<main>Cart ') + db.count + '</main>',
     }),
@@ -4527,12 +4554,13 @@ export default createApp({
 function registryWrappedFragmentBuildAppSource(): string {
   return `
 /** @jsxImportSource @kovojs/server */
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { route } from '@kovojs/server';
 import { ContactsRegion } from './components/contacts-region.js';
 import { addContact, contactsQuery } from './contacts-query.js';
 
-export default createApp({
+export default app.assemble({
   csrf: {
     secret: ${JSON.stringify(BUILD_FIXTURE_CSRF_SECRET)},
     sessionId: () => ${JSON.stringify(BUILD_FIXTURE_CSRF_SESSION_ID)},
@@ -4544,7 +4572,7 @@ export default createApp({
   mutations: [addContact],
   queries: [contactsQuery],
   routes: [
-    route('/', {
+    app.route('/', {
       access: { kind: 'public', reason: 'fragment build fixture' },
       page: () => <main><ContactsRegion /></main>,
     }),
@@ -4630,19 +4658,20 @@ function kebabCaseFixturePart(value: string): string {
 
 function dynamicAppModuleSource(): string {
   return `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { domain, mutation, query, route, s } from '@kovojs/server';
 
 import { trustedHtml } from '@kovojs/browser';
 
 const cart = domain('cart');
 const db = { count: 0 };
-const cartQuery = query('cart', {
+const cartQuery = app.query('cart', {
   access: { kind: 'public', reason: 'build fixture query' },
   load: () => ({ count: db.count }),
   reads: [cart],
 });
-const addToCart = mutation('cart/add', {
+const addToCart = app.mutation('cart/add', {
   access: { kind: 'public', reason: 'build fixture mutation' },
   input: s.object({ quantity: s.number().int().min(1).default(1) }),
   optimistic: { cart: 'await-fragment' },
@@ -4656,7 +4685,7 @@ const addToCart = mutation('cart/add', {
   },
 });
 
-export default createApp({
+export default app.assemble({
   csrf: {
     secret: ${JSON.stringify(BUILD_FIXTURE_CSRF_SECRET)},
     sessionId: () => ${JSON.stringify(BUILD_FIXTURE_CSRF_SESSION_ID)},
@@ -4664,7 +4693,7 @@ export default createApp({
   mutations: [addToCart],
   queries: [cartQuery],
   routes: [
-    route('/cart', {
+    app.route('/cart', {
       access: { kind: 'public', reason: 'build fixture route' },
       page: () => trustedHtml('<main>Cart ') + db.count + '</main>',
     }),
@@ -4698,14 +4727,15 @@ function writeRetentionProofConfig(
 
 function staticAppModuleSource(): string {
   return `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { route } from '@kovojs/server';
 
 import { trustedHtml } from '@kovojs/browser';
 
-export default createApp({
+export default app.assemble({
   routes: [
-    route('/', {
+    app.route('/', {
       access: { kind: 'public', reason: 'build fixture route' },
       page: () => trustedHtml('<main>Static Home</main>'),
     }),
@@ -4717,13 +4747,14 @@ export default createApp({
 function staticStylesheetRouteComponentAppModuleSource(): string {
   return `
 /** @jsxImportSource @kovojs/server */
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { route, stylesheet } from '@kovojs/server';
 import { AutoCssCard } from './src/auto-css-card.js';
 
-export default createApp({
+export default app.assemble({
   routes: [
-    route('/', {
+    app.route('/', {
       access: { kind: 'public', reason: 'build fixture route' },
       page: () => <AutoCssCard />,
     }),
@@ -4736,19 +4767,20 @@ export default createApp({
 function splitStylesheetRouteAppModuleSource(): string {
   return `
 /** @jsxImportSource @kovojs/server */
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { route, stylesheet } from '@kovojs/server';
 import { HomePanel } from './src/home-panel.js';
 import { LoginPanel } from './src/login-panel.js';
 import { SharedCard } from './src/shared-card.js';
 
-export default createApp({
+export default app.assemble({
   routes: [
-    route('/', {
+    app.route('/', {
       access: { kind: 'public', reason: 'build fixture route' },
       page: () => <main><SharedCard /><HomePanel /></main>,
     }),
-    route('/login', {
+    app.route('/login', {
       access: { kind: 'public', reason: 'build fixture route' },
       page: () => <main><SharedCard /><LoginPanel /></main>,
     }),
@@ -4761,21 +4793,22 @@ export default createApp({
 function documentShellRouteSplitAppModuleSource(): string {
   return `
 /** @jsxImportSource @kovojs/server */
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { route, stylesheet } from '@kovojs/server';
 import { HomePanel } from './src/home-panel.js';
 import { LoginPanel } from './src/login-panel.js';
 import { SharedCard } from './src/shared-card.js';
 import { siteDocument } from './document-template.js';
 
-export default createApp({
+export default app.assemble({
   document: siteDocument,
   routes: [
-    route('/', {
+    app.route('/', {
       access: { kind: 'public', reason: 'build fixture route' },
       page: () => <main><SharedCard /><HomePanel /></main>,
     }),
-    route('/login', {
+    app.route('/login', {
       access: { kind: 'public', reason: 'build fixture route' },
       page: () => <main><SharedCard /><LoginPanel /></main>,
     }),
@@ -4788,19 +4821,20 @@ export default createApp({
 function splitSrcStylesheetRouteAppModuleSource(): string {
   return `
 /** @jsxImportSource @kovojs/server */
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { route, stylesheet } from '@kovojs/server';
 import { HomePanel } from './home-panel.js';
 import { LoginPanel } from './login-panel.js';
 import { SharedCard } from './shared-card.js';
 
-export default createApp({
+export default app.assemble({
   routes: [
-    route('/', {
+    app.route('/', {
       access: { kind: 'public', reason: 'build fixture route' },
       page: () => <><SharedCard /><HomePanel /></>,
     }),
-    route('/login', {
+    app.route('/login', {
       access: { kind: 'public', reason: 'build fixture route' },
       page: () => <><SharedCard /><LoginPanel /></>,
     }),
@@ -4813,14 +4847,15 @@ export default createApp({
 function mutationFragmentStylesheetAppModuleSource(): string {
   return `
 /** @jsxImportSource @kovojs/server */
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { mutation, route, s, stylesheet } from '@kovojs/server';
 import { HomePanel } from './src/home-panel.js';
 import { LoginPanel } from './src/login-panel.js';
 import { SharedCard } from './src/shared-card.js';
 import { home } from './src/shared.js';
 
-const touchHome = mutation('home/touch', {
+const touchHome = app.mutation('home/touch', {
   access: { kind: 'public', reason: 'build fixture mutation' },
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
@@ -4833,18 +4868,18 @@ const touchHome = mutation('home/touch', {
   },
 });
 
-export default createApp({
+export default app.assemble({
   egress: {
     enabled: false,
     justification: 'test harness serves the emitted app on an ephemeral loopback port',
   },
   mutations: [touchHome],
   routes: [
-    route('/', {
+    app.route('/', {
       access: { kind: 'public', reason: 'build fixture route' },
       page: () => <main><SharedCard /><HomePanel /></main>,
     }),
-    route('/login', {
+    app.route('/login', {
       access: { kind: 'public', reason: 'build fixture route' },
       page: () => <main><SharedCard /><LoginPanel /></main>,
     }),
@@ -4856,14 +4891,15 @@ export default createApp({
 
 function databaseEnvAppModuleSource(): string {
   return `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { route } from '@kovojs/server';
 
 import { trustedHtml } from '@kovojs/browser';
 
-export default createApp({
+export default app.assemble({
   routes: [
-    route('/db', {
+    app.route('/db', {
       access: { kind: 'public', reason: 'build fixture route' },
       page: () => trustedHtml('<main data-env-name="DATABASE_URL">Database</main>'),
     }),
@@ -4875,12 +4911,13 @@ export default createApp({
 function blockedCloudflareApiAppModuleSource(): string {
   return `
 import { spawnSync } from 'node:child_process';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { route } from '@kovojs/server';
 
-export default createApp({
+export default app.assemble({
   routes: [
-    route('/blocked', {
+    app.route('/blocked', {
       access: { kind: 'public', reason: 'build fixture route' },
       page: () => {
         spawnSync('true');
@@ -4894,14 +4931,15 @@ export default createApp({
 
 function securityPreflightAppModuleSource(): string {
   return `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { route } from '@kovojs/server';
 import { accountById, badRead, inlineContextAccountById } from './security.js';
 
-export default createApp({
+export default app.assemble({
   queries: [accountById, inlineContextAccountById, badRead],
   routes: [
-    route('/', {
+    app.route('/', {
       access: { kind: 'public', reason: 'security preflight fixture' },
       page: () => '<main>Security preflight</main>',
     }),
@@ -4912,15 +4950,16 @@ export default createApp({
 
 function kv414PreflightAppModuleSource(): string {
   return `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 import { accountById } from './account-query.js';
 
-export default createApp({
+export default app.assemble({
   queries: [accountById],
   routes: [
-    route('/', {
-      access: publicAccess('KV414 build preflight fixture'),
+    app.route('/', {
+      access: app.publicAccess('KV414 build preflight fixture'),
       page: () => '<main>KV414 build preflight</main>',
     }),
   ],
@@ -4930,7 +4969,8 @@ export default createApp({
 
 function handlerWriteSinkPreflightAppModuleSource(): string {
   return `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { mutation, s } from '@kovojs/server';import { createMemoryWebhookReplayStore, webhook, webhookReplayIdentity } from '@kovojs/server/webhooks'
 import { task } from '@kovojs/server/tasks';
 
@@ -4944,7 +4984,7 @@ const payments = {};
 const receipts = {};
 const carts = {};
 
-const saveCart = mutation('cart/save', {
+const saveCart = app.mutation('cart/save', {
   input: s.object({ id: s.string() }),
   handler(input, request: { db: typeof appDb }) {
     request.db.insert(carts).values({ id: input.id });
@@ -4975,7 +5015,7 @@ const paymentWebhook = webhook('/webhooks/payment', {
   verifyJustification: 'build preflight regression fixture',
 });
 
-export default createApp({
+export default app.assemble({
   endpoints: [paymentWebhook],
   mutations: [saveCart],
   tasks: [sendReceipt],
@@ -4985,7 +5025,8 @@ export default createApp({
 
 function webhookRecordChangePreflightAppModuleSource(): string {
   return `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { domain, s } from '@kovojs/server';import { createMemoryWebhookReplayStore, webhook, webhookReplayIdentity } from '@kovojs/server/webhooks';
 
 const contact = domain('model/contact');
@@ -5007,7 +5048,7 @@ const paymentWebhook = webhook('/webhooks/payment', {
   writes: [contact],
 });
 
-export default createApp({
+export default app.assemble({
   endpoints: [paymentWebhook],
 });
 `;
@@ -5016,14 +5057,15 @@ export default createApp({
 function trustedHtmlBarrelPreflightAppModuleSource(): string {
   return `
 /** @jsxImportSource @kovojs/server */
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';import { trustedHtml } from '@kovojs/browser';
 import { Promo } from './promo.js';
 
-export default createApp({
+export default app.assemble({
   routes: [
-    route('/', {
-      access: publicAccess('trustedHtml barrel build preflight fixture'),
+    app.route('/', {
+      access: app.publicAccess('trustedHtml barrel build preflight fixture'),
       page: () => <main>{trustedHtml('<h1>Home</h1>', { reason: 'trustedHtml barrel build preflight fixture' })}<Promo /></main>,
     }),
   ],
@@ -5117,17 +5159,18 @@ export const Promo = component({
 
 function fatalOptimisticCoverageAppModuleSource(): string {
   return `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { domain, mutation, query, route, s } from '@kovojs/server';
 
 const cart = domain('cart');
-const cartQuery = query('cart', {
+const cartQuery = app.query('cart', {
   access: { kind: 'public', reason: 'fatal KV310 fixture' },
   load: () => ({ count: 0 }),
   reads: [cart],
 });
 
-const addToCart = mutation('cart/add', {
+const addToCart = app.mutation('cart/add', {
   access: { kind: 'public', reason: 'fatal KV310 fixture' },
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
@@ -5136,11 +5179,11 @@ const addToCart = mutation('cart/add', {
   handler: () => ({ ok: true }),
 });
 
-export default createApp({
+export default app.assemble({
   mutations: [addToCart],
   queries: [cartQuery],
   routes: [
-    route('/', {
+    app.route('/', {
       access: { kind: 'public', reason: 'fatal KV310 fixture' },
       page: () => '<main>Cart</main>',
     }),
@@ -5638,17 +5681,18 @@ function readBuildJson(filePath: string): unknown {
 
 function typescriptAppModuleSource(): string {
   return `
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { mutation, query, route, s } from '@kovojs/server';
 
 import { trustedHtml } from '@kovojs/browser';
 
 const db: { count: number } = { count: 4 };
-const typedQuery = query('typed', {
+const typedQuery = app.query('typed', {
   access: { kind: 'public', reason: 'build fixture query' },
   load: () => ({ count: db.count }),
 });
-export const addToCart = mutation({
+export const addToCart = app.mutation({
   access: { kind: 'public', reason: 'build fixture mutation' },
   input: s.object({ quantity: s.number().int().min(1).default(1) }),
   handler(input) {
@@ -5657,7 +5701,7 @@ export const addToCart = mutation({
   },
 });
 
-export default createApp({
+export default app.assemble({
   csrf: {
     secret: ${JSON.stringify(BUILD_FIXTURE_CSRF_SECRET)},
     sessionId: () => ${JSON.stringify(BUILD_FIXTURE_CSRF_SESSION_ID)},
@@ -5669,7 +5713,7 @@ export default createApp({
   mutations: [addToCart],
   queries: [typedQuery],
   routes: [
-    route('/typed', {
+    app.route('/typed', {
       access: { kind: 'public', reason: 'build fixture route' },
       page: () => trustedHtml('<main>Typed Cart ') + db.count + '</main>',
     }),

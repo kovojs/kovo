@@ -378,7 +378,8 @@ export default {};
       );
       writeFileSync(
         appPath,
-        `import { createApp } from '@kovojs/server/internal/fixture-app';
+        `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { mutation, publicAccess, route, s } from '@kovojs/server';
 
 const lockedFilter = Array.prototype.filter;
@@ -389,8 +390,8 @@ if (poisonInstalled || Array.prototype.filter !== lockedFilter) {
   throw new Error('Array.filter poison unexpectedly installed');
 }
 
-const unsafe = mutation('auth/lowerer-poison', {
-  access: publicAccess('bootstrap poison regression'),
+const unsafe = app.mutation('auth/lowerer-poison', {
+  access: app.publicAccess('bootstrap poison regression'),
   csrf: false,
   csrfJustification: 'exercise the missing-CSRF compiler diagnostic',
   input: s.object({}),
@@ -401,9 +402,9 @@ const unsafe = mutation('auth/lowerer-poison', {
   },
 });
 
-export default createApp({
+export default app.assemble({
   mutations: [unsafe],
-  routes: [route('/', { access: publicAccess('fixture'), page: () => '<main>Unsafe</main>' })],
+  routes: [app.route('/', { access: app.publicAccess('fixture'), page: () => '<main>Unsafe</main>' })],
 });
 `,
         'utf8',
@@ -430,16 +431,17 @@ export default createApp({
     try {
       writeFileSync(
         appPath,
-        `import { createApp } from '@kovojs/server/internal/fixture-app';
+        `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';import { trustedHtml } from '@kovojs/browser';
 
 if (Reflect.set(String.prototype, 'replace', () => 'attacker-output')) {
   throw new Error('String.replace poison unexpectedly installed');
 }
 
-export default createApp({
-  routes: [route('/', {
-    access: publicAccess('bootstrap poison regression'),
+export default app.assemble({
+  routes: [app.route('/', {
+    access: app.publicAccess('bootstrap poison regression'),
     page: () => trustedHtml('<main data-exact-export>Exact export</main>', { reason: 'fixed test fixture' }),
   })],
 });
@@ -494,11 +496,12 @@ export default {};
       );
       writeFileSync(
         appPath,
-        `import { createApp } from '@kovojs/server/internal/fixture-app';
+        `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { mutation, publicAccess, route, s } from '@kovojs/server';
 
-const unsafe = mutation('auth/restart-selective', {
-  access: publicAccess('C69 restart regression'),
+const unsafe = app.mutation('auth/restart-selective', {
+  access: app.publicAccess('C69 restart regression'),
   csrf: false,
   csrfJustification: 'exercise the missing-CSRF compiler diagnostic across restarts',
   input: s.object({}),
@@ -509,9 +512,9 @@ const unsafe = mutation('auth/restart-selective', {
   },
 });
 
-export default createApp({
+export default app.assemble({
   mutations: [unsafe],
-  routes: [route('/', { access: publicAccess('fixture'), page: () => '<main>Unsafe</main>' })],
+  routes: [app.route('/', { access: app.publicAccess('fixture'), page: () => '<main>Unsafe</main>' })],
 });
 `,
         'utf8',
@@ -566,15 +569,16 @@ export default {};
       writeFileSync(
         appPath,
         `import { sql } from '@kovojs/drizzle';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 
 export async function unsafe(db, input) {
   return db.execute(sql.raw(input.id));
 }
 
-export default createApp({
-  routes: [route('/', { access: publicAccess('resolver hook regression'), page: () => '<main>Unsafe</main>' })],
+export default app.assemble({
+  routes: [app.route('/', { access: app.publicAccess('resolver hook regression'), page: () => '<main>Unsafe</main>' })],
 });
 `,
         'utf8',
@@ -638,12 +642,13 @@ export default {};
       );
       writeFileSync(
         appPath,
-        `import { createApp } from '@kovojs/server/internal/fixture-app';
+        `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 import { dangerous } from '../dangerous.ts';
 
-export default createApp({
-  routes: [route('/', { access: publicAccess('source snapshot regression'), page: dangerous })],
+export default app.assemble({
+  routes: [app.route('/', { access: app.publicAccess('source snapshot regression'), page: dangerous })],
 });
 `,
         'utf8',
@@ -704,13 +709,14 @@ export default {};
       );
       writeFileSync(
         appPath,
-        `import { createApp } from '@kovojs/server/internal/fixture-app';
+        `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 const lateModules = import.meta.glob('../late/*.ts', { eager: true });
 if (Object.keys(lateModules).length > 1) throw new Error('unexpected late module count');
 
-export default createApp({
-  routes: [route('/', { access: publicAccess('new source snapshot regression'), page: () => 'safe' })],
+export default app.assemble({
+  routes: [app.route('/', { access: app.publicAccess('new source snapshot regression'), page: () => 'safe' })],
 });
 `,
         'utf8',
@@ -751,10 +757,11 @@ export default createApp({
       writeFileSync(join(root, 'src/client.ts'), 'export {};\n', 'utf8');
       writeFileSync(
         appPath,
-        `import { createApp } from '@kovojs/server/internal/fixture-app';
+        `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
-export default createApp({
-  routes: [route('/', { access: publicAccess('cache symlink regression'), page: () => '<main>Safe</main>' })],
+export default app.assemble({
+  routes: [app.route('/', { access: app.publicAccess('cache symlink regression'), page: () => '<main>Safe</main>' })],
 });
 `,
         'utf8',
@@ -783,15 +790,16 @@ export default createApp({
       writeFileSync(join(root, 'src/client.ts'), 'export {};\n', 'utf8');
       writeFileSync(
         appPath,
-        `import { createApp } from '@kovojs/server/internal/fixture-app';
+        `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, query, route, s } from '@kovojs/server';
 
 if (process.env.APP_PARANOID_MUTATION === 'enable') process.env.KOVO_PARANOID = '1';
 if (process.env.APP_PARANOID_MUTATION === 'disable') delete process.env.KOVO_PARANOID;
 
 const accounts = {};
-const badRead = query('badRead', {
-  access: publicAccess('paranoid disposition regression'),
+const badRead = app.query('badRead', {
+  access: app.publicAccess('paranoid disposition regression'),
   async load(_input, db) {
     await db.update(accounts).set({ role: 'admin' });
     return { id: 'a1' };
@@ -799,10 +807,10 @@ const badRead = query('badRead', {
   output: s.object({ id: s.string() }),
 });
 
-export default createApp({
+export default app.assemble({
   queries: [badRead],
-  routes: [route('/', {
-    access: publicAccess('paranoid disposition regression'),
+  routes: [app.route('/', {
+    access: app.publicAccess('paranoid disposition regression'),
     page: () => '<main>Paranoid disposition</main>',
   })],
 });
@@ -872,14 +880,15 @@ export default createApp({
       writeFileSync(join(root, 'src/client.ts'), 'export {};\n', 'utf8');
       writeFileSync(
         appPath,
-        `import { createApp } from '@kovojs/server/internal/fixture-app';
+        `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 
 process.chdir(process.env.APP_AUTHORED_CWD_MUTATION!);
 
-export default createApp({
-  routes: [route('/', {
-    access: publicAccess('invocation cwd regression'),
+export default app.assemble({
+  routes: [app.route('/', {
+    access: app.publicAccess('invocation cwd regression'),
     page: () => '<main>Invocation cwd</main>',
   })],
 });
@@ -984,18 +993,19 @@ if (
       writeFileSync(
         appPath,
         `import 'kovo-runtime-poison';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { endpoint, publicAccess } from '@kovojs/server';
 
-const proof = endpoint('/proof', {
-  access: publicAccess('runtime intrinsic lockdown regression'),
+const proof = app.endpoint('/proof', {
+  access: app.publicAccess('runtime intrinsic lockdown regression'),
   handler: async () => Response.json({ locked: true }),
   method: 'GET',
   reason: 'runtime intrinsic lockdown regression',
   response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
 });
 
-export default createApp({ endpoints: [proof] });
+export default app.assemble({ endpoints: [proof] });
 `,
         'utf8',
       );
@@ -1024,11 +1034,12 @@ export default createApp({ endpoints: [proof] });
       writeFileSync(join(root, 'src/client.ts'), 'export {};\n', 'utf8');
       writeFileSync(
         join(root, 'app.ts'),
-        `import { createApp } from '@kovojs/server/internal/fixture-app';
+        `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
-export default createApp({
-  routes: [route('/', {
-    access: publicAccess('preset environment regression'),
+export default app.assemble({
+  routes: [app.route('/', {
+    access: app.publicAccess('preset environment regression'),
     page: () => '<main>Preset environment</main>',
   })],
 });
@@ -1101,14 +1112,15 @@ export default defineConfig({ preset: sharedPreset });
       );
       writeFileSync(
         join(root, 'app.ts'),
-        `import { createApp } from '@kovojs/server/internal/fixture-app';
+        `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
 const sharedPreset = (globalThis as any).__kovoSharedBuildPreset;
 sharedPreset.emit = async () => {};
 sharedPreset.inspect = () => [];
-export default createApp({
-  routes: [route('/', {
-    access: publicAccess('preset method authority regression'),
+export default app.assemble({
+  routes: [app.route('/', {
+    access: app.publicAccess('preset method authority regression'),
     page: () => '<main>Preset authority</main>',
   })],
 });
@@ -1151,11 +1163,12 @@ throw new Error('undeclared authored Vite config evaluated');
       );
       writeFileSync(
         appPath,
-        `import { createApp } from '@kovojs/server/internal/fixture-app';
+        `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
-export default createApp({
-  routes: [route('/', {
-    access: publicAccess('C74 undeclared Vite config regression'),
+export default app.assemble({
+  routes: [app.route('/', {
+    access: app.publicAccess('C74 undeclared Vite config regression'),
     page: () => 'C74-safe-document',
   })],
 });
@@ -1187,11 +1200,12 @@ export default createApp({
         mkdirSync(join(root, 'src'), { recursive: true });
         writeFileSync(
           join(root, 'src/app.ts'),
-          `import { createApp } from '@kovojs/server/internal/fixture-app';
+          `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
-export default createApp({
-  routes: [route('/', {
-    access: publicAccess('config preflight regression'),
+export default app.assemble({
+  routes: [app.route('/', {
+    access: app.publicAccess('config preflight regression'),
     page: () => '<main>safe</main>',
   })],
 });

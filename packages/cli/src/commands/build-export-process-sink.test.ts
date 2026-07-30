@@ -18,6 +18,7 @@ function fixture(name: string): string {
   const root = mkdtempSync(join(repoRoot, `.tmp-kovo-process-audit-${name}-`));
   roots.push(root);
   mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+  symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
   symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
   symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
   mkdirSync(join(root, 'src'), { recursive: true });
@@ -100,11 +101,12 @@ describe('kovo build KV424 request process-sink preflight', () => {
     writeFileSync(
       join(root, 'app.mjs'),
       `import { execFileSync } from 'node:child_process';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { mutation, publicAccess, route, s } from '@kovojs/server';
 
-export const hiddenMutation = mutation({
-  access: publicAccess('local process authority audit'),
+export const hiddenMutation = app.mutation({
+  access: app.publicAccess('local process authority audit'),
   input: s.object({ value: s.string() }),
   handler(input) {
     execFileSync(input.value);
@@ -112,9 +114,9 @@ export const hiddenMutation = mutation({
   },
 });
 
-export default createApp({
+export default app.assemble({
   mutations: [hiddenMutation],
-  routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('authority audit'), page: () => 'safe' })],
 });
 `,
       'utf8',
@@ -148,16 +150,17 @@ export function hiddenHandler(input) {
     writeFileSync(
       join(root, 'app.mjs'),
       `import { hiddenHandler } from 'external-actions';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { mutation, publicAccess, route, s } from '@kovojs/server';
-export const hiddenMutation = mutation({
-  access: publicAccess('external package authority audit'),
+export const hiddenMutation = app.mutation({
+  access: app.publicAccess('external package authority audit'),
   input: s.object({ value: s.string() }),
   handler: hiddenHandler,
 });
-export default createApp({
+export default app.assemble({
   mutations: [hiddenMutation],
-  routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('authority audit'), page: () => 'safe' })],
 });
 `,
       'utf8',
@@ -192,18 +195,19 @@ export function invoke(program) {
     writeFileSync(
       join(root, 'app.mjs'),
       `import * as external from 'external-actions';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { mutation, publicAccess, route, s } from '@kovojs/server';
-export const hiddenMutation = mutation({
-  access: publicAccess('external helper authority audit'),
+export const hiddenMutation = app.mutation({
+  access: app.publicAccess('external helper authority audit'),
   input: s.object({ value: s.string() }),
   handler(input) {
     return external.invoke(input.value);
   },
 });
-export default createApp({
+export default app.assemble({
   mutations: [hiddenMutation],
-  routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('authority audit'), page: () => 'safe' })],
 });
 `,
       'utf8',
@@ -221,21 +225,22 @@ export default createApp({
     writeFileSync(
       join(root, 'app.mjs'),
       `import { cmd, commandAllowlist, runCommand } from '@kovojs/server/command'
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { mutation, publicAccess, route, s } from '@kovojs/server';
 const allow = commandAllowlist(['/usr/bin/true'], { justification: 'fixed health probe' });
 const command = cmd('/usr/bin/true', [], { allow });
-export const safeMutation = mutation({
-  access: publicAccess('safe command capability'),
+export const safeMutation = app.mutation({
+  access: app.publicAccess('safe command capability'),
   input: s.object({}),
   async handler() {
     await runCommand(command);
     return { ok: true };
   },
 });
-export default createApp({
+export default app.assemble({
   mutations: [safeMutation],
-  routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('authority audit'), page: () => 'safe' })],
 });
 `,
       'utf8',
@@ -252,18 +257,19 @@ export default createApp({
       join(root, 'app.mjs'),
       `import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { mutation, publicAccess, route, s } from '@kovojs/server';
-export const unsafeRead = mutation({
-  access: publicAccess('raw filesystem authority audit'),
+export const unsafeRead = app.mutation({
+  access: app.publicAccess('raw filesystem authority audit'),
   input: s.object({ value: s.string() }),
   handler(input) {
     return { value: readFileSync(resolve(input.value), 'utf8') };
   },
 });
-export default createApp({
+export default app.assemble({
   mutations: [unsafeRead],
-  routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('authority audit'), page: () => 'safe' })],
 });
 `,
       'utf8',
@@ -281,10 +287,11 @@ export default createApp({
     writeFileSync(
       join(root, 'app.mjs'),
       `import { execFileSync } from 'node:child_process';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { mutation, publicAccess, route, s } from '@kovojs/server';
-export const unsafeReference = mutation({
-  access: publicAccess('process callback authority audit'),
+export const unsafeReference = app.mutation({
+  access: app.publicAccess('process callback authority audit'),
   input: s.object({ value: s.string() }),
   handler(input) {
     [input.value].map(execFileSync);
@@ -292,9 +299,9 @@ export const unsafeReference = mutation({
     return { value: input.value };
   },
 });
-export default createApp({
+export default app.assemble({
   mutations: [unsafeReference],
-  routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('authority audit'), page: () => 'safe' })],
 });
 `,
       'utf8',
@@ -311,19 +318,20 @@ export default createApp({
     writeFileSync(
       join(root, 'app.mjs'),
       `import { Worker } from 'node:worker_threads';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { mutation, publicAccess, route, s } from '@kovojs/server';
-export const unsafeWorker = mutation({
-  access: publicAccess('worker authority audit'),
+export const unsafeWorker = app.mutation({
+  access: app.publicAccess('worker authority audit'),
   input: s.object({ value: s.string() }),
   handler(input) {
     new Worker(input.value, { eval: true });
     return { value: input.value };
   },
 });
-export default createApp({
+export default app.assemble({
   mutations: [unsafeWorker],
-  routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('authority audit'), page: () => 'safe' })],
 });
 `,
       'utf8',
@@ -339,11 +347,12 @@ export default createApp({
     const root = fixture('framework-file-authority');
     writeFileSync(
       join(root, 'app.mjs'),
-      `import { createApp } from '@kovojs/server/internal/fixture-app';
+      `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { mutation, publicAccess, route, s } from '@kovojs/server';import { createFileSystemStorage } from '@kovojs/core/storage'
 import { rootedFiles } from '@kovojs/server/files';
-export const unsafeFiles = mutation({
-  access: publicAccess('request-minted file authority audit'),
+export const unsafeFiles = app.mutation({
+  access: app.publicAccess('request-minted file authority audit'),
   input: s.object({ value: s.string() }),
   async handler(input) {
     await rootedFiles(input.value);
@@ -351,9 +360,9 @@ export const unsafeFiles = mutation({
     return { value: input.value };
   },
 });
-export default createApp({
+export default app.assemble({
   mutations: [unsafeFiles],
-  routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('authority audit'), page: () => 'safe' })],
 });
 `,
       'utf8',
@@ -371,19 +380,20 @@ export default createApp({
     writeFileSync(
       join(root, 'app.mjs'),
       `import { cmd, commandAllowlist, runCommand } from '@kovojs/server/command'
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { mutation, publicAccess, route, s } from '@kovojs/server';
-export const unsafeCommand = mutation({
-  access: publicAccess('request-minted command authority audit'),
+export const unsafeCommand = app.mutation({
+  access: app.publicAccess('request-minted command authority audit'),
   input: s.object({ value: s.string() }),
   handler(input) {
     const allow = commandAllowlist([input.value], { justification: 'request-selected program' });
     return runCommand(cmd(input.value, [], { allow }));
   },
 });
-export default createApp({
+export default app.assemble({
   mutations: [unsafeCommand],
-  routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('authority audit'), page: () => 'safe' })],
 });
 `,
       'utf8',
@@ -401,21 +411,22 @@ export default createApp({
     const staticRoot = JSON.stringify(root);
     writeFileSync(
       join(root, 'app.ts'),
-      `import { createApp } from '@kovojs/server/internal/fixture-app';
+      `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { mutation, publicAccess, route, s } from '@kovojs/server';import { createFileSystemStorage } from '@kovojs/core/storage'
 import { rootedFiles } from '@kovojs/server/files';
 const files = await rootedFiles(${staticRoot});
 const storage = createFileSystemStorage({ root: ${staticRoot} });
-export const safeFiles = mutation({
-  access: publicAccess('static file authority'),
+export const safeFiles = app.mutation({
+  access: app.publicAccess('static file authority'),
   input: s.object({}),
   async handler() {
     return { value: 'safe' };
   },
 });
-export default createApp({
+export default app.assemble({
   mutations: [safeFiles],
-  routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('authority audit'), page: () => 'safe' })],
 });
 void files;
 void storage;
@@ -433,20 +444,21 @@ void storage;
     writeFileSync(
       join(root, 'app.mjs'),
       `import { execFileSync } from 'node:child_process';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { mutation, publicAccess, route, s } from '@kovojs/server';
 function makeRunner() { return (value) => execFileSync(value); }
-export const unsafeCalls = mutation({
-  access: publicAccess('closed request call graph'),
+export const unsafeCalls = app.mutation({
+  access: app.publicAccess('closed request call graph'),
   input: s.object({ method: s.string(), value: s.string() }),
   handler(input) {
     makeRunner()(input.value);
     return { value: input.value };
   },
 });
-export default createApp({
+export default app.assemble({
   mutations: [unsafeCalls],
-  routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('authority audit'), page: () => 'safe' })],
 });
 `,
       'utf8',
@@ -463,11 +475,12 @@ export default createApp({
     writeFileSync(
       join(root, 'app.mjs'),
       `import { execFileSync } from 'node:child_process';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { endpoint, publicAccess, route } from '@kovojs/server';
 const helpers = { run(value) { return execFileSync(value); } };
 function invoke(callback, value) { return callback(value); }
-const unsafeEndpoint = endpoint('/unsafe', {
+const unsafeEndpoint = app.endpoint('/unsafe', {
   method: 'GET',
   reason: 'closed endpoint request call graph',
   response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
@@ -477,9 +490,9 @@ const unsafeEndpoint = endpoint('/unsafe', {
     return new Response('blocked', { headers: { 'cache-control': 'no-store' } });
   },
 });
-export default createApp({
+export default app.assemble({
   endpoints: [unsafeEndpoint],
-  routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('authority audit'), page: () => 'safe' })],
 });
 `,
       'utf8',
@@ -497,10 +510,11 @@ export default createApp({
     writeFileSync(
       join(root, 'app.mjs'),
       `import * as inspector from 'node:inspector';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { mutation, publicAccess, route, s } from '@kovojs/server';
-export const unsafePlatform = mutation({
-  access: publicAccess('closed platform namespaces'),
+export const unsafePlatform = app.mutation({
+  access: app.publicAccess('closed platform namespaces'),
   input: s.object({ method: s.string() }),
   handler(input) {
     inspector.open();
@@ -509,9 +523,9 @@ export const unsafePlatform = mutation({
     return globalThis.process[input.method];
   },
 });
-export default createApp({
+export default app.assemble({
   mutations: [unsafePlatform],
-  routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('authority audit'), page: () => 'safe' })],
 });
 `,
       'utf8',
@@ -530,19 +544,20 @@ export default createApp({
     const root = fixture('raw-environment-wire');
     writeFileSync(
       join(root, 'app.mjs'),
-      `import { createApp } from '@kovojs/server/internal/fixture-app';
+      `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { mutation, publicAccess, route, s } from '@kovojs/server';
 const environment = import.meta.env;
-export const unsafeEnvironment = mutation({
-  access: publicAccess('raw environment wire audit'),
+export const unsafeEnvironment = app.mutation({
+  access: app.publicAccess('raw environment wire audit'),
   input: s.object({}),
   handler() {
     return { secret: environment.APP_SECRET };
   },
 });
-export default createApp({
+export default app.assemble({
   mutations: [unsafeEnvironment],
-  routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('authority audit'), page: () => 'safe' })],
 });
 `,
       'utf8',
@@ -558,9 +573,10 @@ export default createApp({
     const root = fixture('request-credential-wire');
     writeFileSync(
       join(root, 'app.mjs'),
-      `import { createApp } from '@kovojs/server/internal/fixture-app';
+      `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { endpoint, publicAccess, route } from '@kovojs/server';
-const unsafeEndpoint = endpoint('/unsafe', {
+const unsafeEndpoint = app.endpoint('/unsafe', {
   method: 'GET',
   reason: 'request credential wire audit',
   response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
@@ -568,9 +584,9 @@ const unsafeEndpoint = endpoint('/unsafe', {
     return Response.json({ token: request.headers.get('Authorization') });
   },
 });
-export default createApp({
+export default app.assemble({
   endpoints: [unsafeEndpoint],
-  routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('authority audit'), page: () => 'safe' })],
 });
 `,
       'utf8',
@@ -586,17 +602,18 @@ export default createApp({
     const root = fixture('raw-bracket-environment-wire');
     writeFileSync(
       join(root, 'app.mjs'),
-      `import { createApp } from '@kovojs/server/internal/fixture-app';
+      `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { mutation, publicAccess, route, s } from '@kovojs/server';
 const secret = import.meta['env'].APP_SECRET;
-export const unsafeEnvironment = mutation({
-  access: publicAccess('raw bracket environment wire audit'),
+export const unsafeEnvironment = app.mutation({
+  access: app.publicAccess('raw bracket environment wire audit'),
   input: s.object({}),
   handler() { return { secret }; },
 });
-export default createApp({
+export default app.assemble({
   mutations: [unsafeEnvironment],
-  routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('authority audit'), page: () => 'safe' })],
 });
 `,
       'utf8',
@@ -613,16 +630,17 @@ export default createApp({
     writeFileSync(
       join(root, 'app.mjs'),
       `import { execFileSync } from 'node:child_process';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, route } from '@kovojs/server';
-export const unsafeRoute = route('/', {
-  access: publicAccess('route authority audit'),
+export const unsafeRoute = app.route('/', {
+  access: app.publicAccess('route authority audit'),
   page(_context, request) {
     execFileSync('/usr/bin/true');
     return request.headers.get('cookie');
   },
 });
-export default createApp({ routes: [unsafeRoute] });
+export default app.assemble({ routes: [unsafeRoute] });
 `,
       'utf8',
     );
@@ -638,20 +656,21 @@ export default createApp({ routes: [unsafeRoute] });
     const root = fixture('object-factory-authority');
     writeFileSync(
       join(root, 'app.mjs'),
-      `import { createApp } from '@kovojs/server/internal/fixture-app';
+      `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { mutation, publicAccess, route, s } from '@kovojs/server';import { rootedFiles } from '@kovojs/server/files';
 const factories = { mutation };
 export const unsafeMutation = factories.mutation({
-  access: publicAccess('object factory authority audit'),
+  access: app.publicAccess('object factory authority audit'),
   input: s.object({ root: s.string() }),
   async handler(input) {
     await rootedFiles(input.root);
     return { ok: true };
   },
 });
-export default createApp({
+export default app.assemble({
   mutations: [unsafeMutation],
-  routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('authority audit'), page: () => 'safe' })],
 });
 `,
       'utf8',
@@ -672,11 +691,12 @@ export default createApp({
     writeFileSync(
       join(root, 'app.mjs'),
       `import { and, eq, isNotNull } from 'drizzle-orm';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, query, route } from '@kovojs/server';
 const fields = { id: {}, name: {} };
-export const safeQuery = query({
-  access: publicAccess('governed fetch and Drizzle expression audit'),
+export const safeQuery = app.query({
+  access: app.publicAccess('governed fetch and Drizzle expression audit'),
   async load(_input, context) {
     const response = await context.fetch('https://api.example.test/data');
     return {
@@ -685,10 +705,10 @@ export const safeQuery = query({
     };
   },
 });
-export default createApp({
+export default app.assemble({
   egress: { allowDestinations: ['https://api.example.test'] },
   queries: [safeQuery],
-  routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('authority audit'), page: () => 'safe' })],
 });
 `,
       'utf8',
@@ -703,10 +723,11 @@ export default createApp({
     const root = fixture('unsafe-fetch-credentials');
     writeFileSync(
       join(root, 'app.mjs'),
-      `import { createApp } from '@kovojs/server/internal/fixture-app';
+      `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, query, route } from '@kovojs/server';
-export const unsafeQuery = query({
-  access: publicAccess('outbound credential audit'),
+export const unsafeQuery = app.query({
+  access: app.publicAccess('outbound credential audit'),
   async load(_input, context) {
     await context.fetch('https://api.example.test/data', {
       body: context.request.headers.get('authorization'),
@@ -715,10 +736,10 @@ export const unsafeQuery = query({
     return { ok: true };
   },
 });
-export default createApp({
+export default app.assemble({
   egress: { allowDestinations: ['https://api.example.test'] },
   queries: [unsafeQuery],
-  routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('authority audit'), page: () => 'safe' })],
 });
 `,
       'utf8',
@@ -734,19 +755,20 @@ export default createApp({
     const root = fixture('raw-fetch-closed');
     writeFileSync(
       join(root, 'app.mjs'),
-      `import { createApp } from '@kovojs/server/internal/fixture-app';
+      `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { publicAccess, query, route } from '@kovojs/server';
-export const unsafeQuery = query({
-  access: publicAccess('raw outbound network audit'),
+export const unsafeQuery = app.query({
+  access: app.publicAccess('raw outbound network audit'),
   async load() {
     const response = await fetch('https://api.example.test/data');
     return { value: await response.json() };
   },
 });
-export default createApp({
+export default app.assemble({
   egress: { allowDestinations: ['https://api.example.test'] },
   queries: [unsafeQuery],
-  routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('authority audit'), page: () => 'safe' })],
 });
 `,
       'utf8',
@@ -766,13 +788,14 @@ export default createApp({
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { cmd, commandAllowlist, runCommand } from '@kovojs/server/command'
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { mutation, publicAccess, route, s } from '@kovojs/server';import { createFileSystemStorage } from '@kovojs/core/storage'
 import { rootedFiles } from '@kovojs/server/files'
 import { trustedHtml } from '@kovojs/browser';
 
-export const unsafeMatrix = mutation({
-  access: publicAccess('strict request-derived authority matrix'),
+export const unsafeMatrix = app.mutation({
+  access: app.publicAccess('strict request-derived authority matrix'),
   input: s.object({
     args: s.array(s.string()),
     expression: s.string(),
@@ -794,11 +817,11 @@ export const unsafeMatrix = mutation({
   },
 });
 
-export default createApp({
+export default app.assemble({
   mutations: [unsafeMatrix],
   routes: [
-    route('/', {
-      access: publicAccess('matrix route'),
+    app.route('/', {
+      access: app.publicAccess('matrix route'),
       page: () => trustedHtml('<main>safe</main>', { reason: 'fixed test fixture' }),
     }),
   ],
@@ -826,8 +849,9 @@ export default createApp({
     const root = fixture('strict-public-wire-carriers');
     writeFileSync(
       join(root, 'app.ts'),
-      `import { createApp } from '@kovojs/server/internal/fixture-app';
-import { publicAccess, query, route, type QueryLoadContext } from '@kovojs/server';import { trustedHtml } from '@kovojs/browser';
+      `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
+import { publicAccess, query, route } from '@kovojs/server';import { trustedHtml } from '@kovojs/browser';
 
 declare global {
   interface ImportMeta {
@@ -843,9 +867,9 @@ let assigned = import.meta;
 let assignedEnv: Record<string, string>;
 ({ env: assignedEnv } = import.meta);
 
-export const unsafeQuery = query({
-  access: publicAccess('strict public query wire audit'),
-  load(_input: unknown, { request }: QueryLoadContext<Request>) {
+export const unsafeQuery = app.query({
+  access: app.publicAccess('strict public query wire audit'),
+  load(_input: unknown, { request }) {
     return {
       authorization: request.headers.get('authorization'),
       cookie: request.headers.get('cookie'),
@@ -854,8 +878,8 @@ export const unsafeQuery = query({
   },
 });
 
-export const unsafeRoute = route('/', {
-  access: publicAccess('strict public route wire audit'),
+export const unsafeRoute = app.route('/', {
+  access: app.publicAccess('strict public route wire audit'),
   bootstrapScript: meta.env.BOOTSTRAP,
   modulepreloads: [holder.meta.env.PRELOAD, tuple[0].env.TUPLE],
   page(_context, request: Request) {
@@ -865,13 +889,13 @@ export const unsafeRoute = route('/', {
         cookie: request.headers.get('cookie'),
         secret: assigned.env.ROUTE_SECRET,
       }),
-      'credential leak fixture rejected by KV424',
+      { reason: 'credential leak fixture rejected by KV424' },
     );
   },
   prerenderUrls: [assignedEnv.PRERENDER],
 });
 
-export default createApp({ queries: [unsafeQuery], routes: [unsafeRoute] });
+export default app.assemble({ queries: [unsafeQuery], routes: [unsafeRoute] });
 `,
       'utf8',
     );
@@ -890,7 +914,8 @@ export default createApp({ queries: [unsafeQuery], routes: [unsafeRoute] });
     const root = fixture('strict-endpoint-wire');
     writeFileSync(
       join(root, 'app.ts'),
-      `import { createApp } from '@kovojs/server/internal/fixture-app';
+      `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { endpoint, publicAccess, route } from '@kovojs/server';import { trustedHtml } from '@kovojs/browser';
 
 declare global {
@@ -900,8 +925,12 @@ declare global {
 }
 
 const meta = import.meta;
-const unsafeEndpoint = endpoint('/unsafe', {
-  handler(request) {
+const unsafeEndpoint = app.endpoint('/unsafe', {
+  access: app.publicAccess('strict endpoint wire audit'),
+  auth: { justification: 'strict endpoint wire audit', kind: 'none' },
+  csrf: false,
+  csrfJustification: 'read-only strict endpoint wire audit',
+  handler(request: Request) {
     return Response.json({
       authorization: request.headers.get('authorization'),
       cookie: request.headers.get('cookie'),
@@ -913,11 +942,11 @@ const unsafeEndpoint = endpoint('/unsafe', {
   response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
 });
 
-export default createApp({
+export default app.assemble({
   endpoints: [unsafeEndpoint],
   routes: [
-    route('/', {
-      access: publicAccess('endpoint fixture route'),
+    app.route('/', {
+      access: app.publicAccess('endpoint fixture route'),
       page: () => trustedHtml('<main>safe</main>', { reason: 'fixed test fixture' }),
     }),
   ],
@@ -940,21 +969,24 @@ export default createApp({
     const safeRoot = fixture('strict-session-value-safe');
     writeFileSync(
       join(safeRoot, 'app.ts'),
-      `import { createApp } from '@kovojs/server/internal/fixture-app';
-import { publicAccess, route } from '@kovojs/server';import { trustedHtml } from '@kovojs/browser';
-export default createApp<{ session: string }>({
-  routes: [
-    route('/', {
-      access: publicAccess('session value fixture route'),
-      page: () => trustedHtml('<main>safe</main>', { reason: 'fixed test fixture' }),
-    }),
-  ],
-  sessionProvider(request) {
+      `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({
+  appId: '00000000-0000-4000-8000-000000000001',
+  auth: (request: Request) => {
     return {
       setCookies: [],
       value: { session: request.headers.get('cookie') ?? '' },
     };
   },
+});
+import { publicAccess, route } from '@kovojs/server';import { trustedHtml } from '@kovojs/browser';
+export default app.assemble({
+  routes: [
+    app.route('/', {
+      access: app.publicAccess('session value fixture route'),
+      page: () => trustedHtml('<main>safe</main>', { reason: 'fixed test fixture' }),
+    }),
+  ],
 });
 `,
       'utf8',
@@ -966,21 +998,24 @@ export default createApp<{ session: string }>({
     const unsafeRoot = fixture('strict-session-set-cookie-unsafe');
     writeFileSync(
       join(unsafeRoot, 'app.ts'),
-      `import { createApp } from '@kovojs/server/internal/fixture-app';
-import { publicAccess, route } from '@kovojs/server';import { trustedHtml } from '@kovojs/browser';
-export default createApp<{ session: string }>({
-  routes: [
-    route('/', {
-      access: publicAccess('session set-cookie fixture route'),
-      page: () => trustedHtml('<main>safe</main>', { reason: 'fixed test fixture' }),
-    }),
-  ],
-  sessionProvider(request) {
+      `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({
+  appId: '00000000-0000-4000-8000-000000000001',
+  auth: (request: Request) => {
     return {
       setCookies: [request.headers.get('authorization') ?? ''],
       value: { session: request.headers.get('cookie') ?? '' },
     };
   },
+});
+import { publicAccess, route } from '@kovojs/server';import { trustedHtml } from '@kovojs/browser';
+export default app.assemble({
+  routes: [
+    app.route('/', {
+      access: app.publicAccess('session set-cookie fixture route'),
+      page: () => trustedHtml('<main>safe</main>', { reason: 'fixed test fixture' }),
+    }),
+  ],
 });
 `,
       'utf8',
@@ -999,7 +1034,8 @@ export default createApp<{ session: string }>({
       join(root, 'app.ts'),
       String.raw`import { execFileSync } from 'node:child_process';
 import * as serverApi from '@kovojs/server';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { endpoint, publicAccess, route, type EndpointDefinition, type Guard } from '@kovojs/server';
 
 const response = { appOwnedSafety: true, body: 'text', cache: 'no-store' } as const;
@@ -1056,33 +1092,39 @@ memberFactory.endpoint('/member-write', {
   method: 'GET', reason: 'member-write factory audit', response,
 });
 
-const configured: EndpointDefinition<'GET'> = {
+const configured = {
+  access: app.publicAccess('defineProperty config audit'),
+  auth: { justification: 'defineProperty config audit', kind: 'none' },
   handler() { return new Response('safe'); },
   method: 'GET', reason: 'defineProperty config audit', response,
-};
+} satisfies EndpointDefinition<'GET'>;
 Object.defineProperty(configured, 'handler', {
   value(request: Request) {
     execFileSync('config-define-property');
     return new Response(request.url);
   },
 });
-endpoint('/configured', configured);
+app.endpoint('/configured', configured);
 
-const reflectedConfig: EndpointDefinition<'GET'> = {
+const reflectedConfig = {
+  access: app.publicAccess('Reflect.set config audit'),
+  auth: { justification: 'Reflect.set config audit', kind: 'none' },
   handler() { return new Response('safe'); },
   method: 'GET', reason: 'Reflect.set config audit', response,
-};
+} satisfies EndpointDefinition<'GET'>;
 Reflect.set(reflectedConfig, 'handler', (request: Request) => {
   execFileSync('config-reflect-set');
   return new Response(request.url);
 });
-endpoint('/reflected-config', reflectedConfig);
+app.endpoint('/reflected-config', reflectedConfig);
 
-const postSnapshot: EndpointDefinition<'GET'> = {
-  handler() { return new Response('safe'); },
+const postSnapshot = {
+  access: app.publicAccess('post-snapshot precision audit'),
+  auth: { justification: 'post-snapshot precision audit', kind: 'none' },
+  handler(_request: Request) { return new Response('safe'); },
   method: 'GET', reason: 'post-snapshot precision audit', response,
-};
-endpoint('/post-snapshot', postSnapshot);
+} satisfies EndpointDefinition<'GET'>;
+app.endpoint('/post-snapshot', postSnapshot);
 postSnapshot.handler = (request: Request) => {
   execFileSync('post-snapshot-must-stay-safe');
   return new Response(request.url);
@@ -1093,8 +1135,9 @@ pushedAccess.push((request) => {
   execFileSync('access-push');
   return request.url.length > 0;
 });
-endpoint('/access-push', {
+app.endpoint('/access-push', {
   access: pushedAccess,
+  auth: { justification: 'pushed access audit', kind: 'none' },
   handler() { return new Response('ok'); },
   method: 'GET', reason: 'pushed access audit', response,
 });
@@ -1103,8 +1146,9 @@ indexedAccess[0] = (request) => {
   execFileSync('access-index');
   return request.url.length > 0;
 };
-endpoint('/access-index', {
+app.endpoint('/access-index', {
   access: indexedAccess,
+  auth: { justification: 'indexed access audit', kind: 'none' },
   handler() { return new Response('ok'); },
   method: 'GET', reason: 'indexed access audit', response,
 });
@@ -1120,8 +1164,8 @@ Object.defineProperty(Array.prototype, 'map', {
   },
 });
 
-export const serializationRoute = route('/serialize', {
-  access: publicAccess('prototype serialization audit'),
+export const serializationRoute = app.route('/serialize', {
+  access: app.publicAccess('prototype serialization audit'),
   page(_context, request: Request) {
     String(request.url).trim();
     [request.url].map((value) => value);
@@ -1148,7 +1192,7 @@ export const serializationRoute = route('/serialize', {
   },
 });
 
-export default createApp({ routes: [serializationRoute] });
+export default app.assemble({ routes: [serializationRoute] });
 `,
       'utf8',
     );
@@ -1167,7 +1211,7 @@ export default createApp({ routes: [serializationRoute] });
     writeFileSync(
       join(root, 'app.ts'),
       `import { execFileSync } from 'node:child_process';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
 import { publicAccess, query, route, type Schema } from '@kovojs/server';import { trustedHtml } from '@kovojs/browser'
 import { webhook, type WebhookReplayIdentity, type WebhookReplayStore, type WebhookWireResponse } from '@kovojs/server/webhooks'
 import { type MutationReplayStore, type MutationReplayResponse } from '@kovojs/server/replay'
@@ -1246,6 +1290,12 @@ class InheritedRegistry extends BaseRegistry {}
 
 const schema = new InheritedSchema();
 const replay = new InheritedReplay();
+const registry = new InheritedRegistry();
+const app = defineKovo({
+  appId: '00000000-0000-4000-8000-000000000001',
+  clientModules: registry,
+  mutationReplayStore: replay,
+});
 const hook = webhook('/hook', {
   handler() { return { ok: true }; },
   input: schema,
@@ -1253,20 +1303,17 @@ const hook = webhook('/hook', {
   verify: 'none',
   verifyJustification: 'strict inherited adapter fixture',
 });
-const read = query({
-  access: publicAccess('strict inherited schema query'),
+const read = app.query({
+  access: app.publicAccess('strict inherited schema query'),
   args: schema,
   load() { return { ok: true }; },
 });
 
-export default createApp({
-  clientModules: new InheritedRegistry(),
-  endpoints: [hook],
-  mutationReplayStore: replay,
+export default app.assemble({
   queries: [read],
   routes: [
-    route('/', {
-      access: publicAccess('inherited adapter fixture route'),
+    app.route('/', {
+      access: app.publicAccess('inherited adapter fixture route'),
       page: () => trustedHtml('<main>safe</main>', { reason: 'fixed test fixture' }),
     }),
   ],
@@ -1294,7 +1341,8 @@ export default createApp({
     writeFileSync(
       join(root, 'app.ts'),
       String.raw`import * as server from '@kovojs/server';
-import { createApp } from '@kovojs/server/internal/fixture-app';
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { endpoint, publicAccess, route, type EndpointDefinition } from '@kovojs/server';import { rootedFiles } from '@kovojs/server/files'
 import { type EndpointHandler } from '@kovojs/server/routing';
 
@@ -1330,8 +1378,8 @@ const destructured = destructuredEndpoint('/destructured', {
   handler: assignedHandler,
 });
 
-const page = route('/', {
-  access: publicAccess('adversarial classifier route'),
+const page = app.route('/', {
+  access: app.publicAccess('adversarial classifier route'),
   bootstrapScript: (import /* comment */ . meta).\u0065nv.BOOTSTRAP,
   modulepreloads: [import.meta.env.PRELOAD],
   page(_context, request: Request) {
@@ -1343,7 +1391,7 @@ const page = route('/', {
   stylesheets: [import.meta.\u0065nv.STYLE],
 });
 
-export default createApp({ endpoints: [declaredEndpoint, destructured], routes: [page] });
+export default app.assemble({ routes: [page] });
 `,
       'utf8',
     );
@@ -1361,19 +1409,20 @@ export default createApp({ endpoints: [declaredEndpoint, destructured], routes: 
     const root = fixture('safe-intrinsic-calls');
     writeFileSync(
       join(root, 'app.mjs'),
-      `import { createApp } from '@kovojs/server/internal/fixture-app';
+      `import { defineKovo } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { mutation, publicAccess, route, s } from '@kovojs/server';
-export const safeCalls = mutation({
-  access: publicAccess('reviewed intrinsic calls'),
+export const safeCalls = app.mutation({
+  access: app.publicAccess('reviewed intrinsic calls'),
   input: s.object({ value: s.string() }),
   handler(input) {
     const normalized = [input.value].map((value) => String(value).trim());
     return { value: JSON.stringify({ normalized }) };
   },
 });
-export default createApp({
+export default app.assemble({
   mutations: [safeCalls],
-  routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
+  routes: [app.route('/', { access: app.publicAccess('authority audit'), page: () => 'safe' })],
 });
 `,
       'utf8',
