@@ -5,6 +5,7 @@ import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
+import { kovoVitePlugin } from '@kovojs/compiler';
 import { component } from '@kovojs/core';
 import { clientModuleRepresentationDigest } from '@kovojs/core/internal/client-module-url';
 import { createRegisteredDiagnostic, type DiagnosticCode } from '@kovojs/core/internal/diagnostics';
@@ -582,6 +583,25 @@ describe('server app shell Vite dev seam', () => {
       computeRenderPlanFingerprint({}),
     );
     expect(app.clientModules.buildToken()).toMatch(/^[0-9a-f]{64}$/u);
+  });
+
+  it('accepts exact compiler records in dev and refuses lookalike generated records', async () => {
+    const compilerModules = await genuineViteDevCompilerClientModules();
+    const app = createApp();
+
+    await dispatchViteDevSnapshot(app, () => compilerModules);
+
+    expect(
+      app.clientModules.entries().some((module) => module.path === '/c/generated/app.client.js'),
+    ).toBe(true);
+    expect(
+      app.clientModules.entries().some((module) => module.path === '/c/kovo-runtime.client.js'),
+    ).toBe(true);
+
+    const copiedModules = compilerModules.map((module) => ({ ...module }));
+    await expect(dispatchViteDevSnapshot(createApp(), () => copiedModules)).rejects.toThrow(
+      /KV417: Vite dev client-module snapshot publication failed.*permanently closed/,
+    );
   });
 
   it('rejects missing and mixed compiler render-plan fingerprints before publication', async () => {
@@ -2221,6 +2241,27 @@ async function dispatchViteDevSnapshot(
     next,
   );
   expect(next).toHaveBeenCalledOnce();
+}
+
+async function genuineViteDevCompilerClientModules() {
+  const plugin = kovoVitePlugin();
+  await plugin.transform?.(
+    `
+import { component } from '@kovojs/core';
+
+export const DevCard = component({
+  queries: { deals: {} },
+  state: () => ({ count: 0 }),
+  render: ({ deals }) => (
+    <button onClick={() => { state.count += 1; }}>
+      {deals.length}
+    </button>
+  ),
+});
+`,
+    'src/dev-card.tsx',
+  );
+  return plugin.getClientModules?.() ?? [];
 }
 
 function viteDevClientHref(module: VersionedClientModuleInput): string {

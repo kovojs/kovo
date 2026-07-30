@@ -31,6 +31,7 @@ import {
   replaceVersionedClientModuleBuildSnapshot,
   type VersionedClientModuleInput,
 } from './client-modules.js';
+import { pinCompilerOwnedClientModule } from './compiler-client-module-provenance-build.js';
 import {
   copyRequestServerBindings,
   pinRequestIngressSurface,
@@ -834,11 +835,14 @@ function snapshotKovoAppShellViteDevClientModules(
       );
     }
     renderPlanFingerprint = fingerprint;
-    securityArrayPush(modules, witnessFreeze({ path, source: sourceText }));
+    securityArrayPush(
+      modules,
+      pinCompilerOwnedClientModule(module, witnessFreeze({ path, source: sourceText })),
+    );
   }
 
   return witnessFreeze({
-    compilerModules: witnessFreeze(values),
+    compilerModules: witnessFreeze(modules),
     modules: witnessFreeze(modules),
     renderPlanFingerprint: renderPlanFingerprint ?? viteDevDefaultRenderPlanFingerprint,
   });

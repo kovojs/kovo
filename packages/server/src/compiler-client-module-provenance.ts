@@ -1,9 +1,4 @@
 import {
-  compilerOwnedViteClientModuleRole,
-  type CompilerOwnedViteClientModuleRole,
-} from '@kovojs/compiler/internal';
-
-import {
   createFrameworkAsyncContextCell,
   currentFrameworkAsyncContextValue,
   runWithFrameworkAsyncContext,
@@ -18,6 +13,19 @@ import {
   witnessWeakSetAdd,
   witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
+
+/**
+ * @internal Server-owned mirror of the finite compiler role vocabulary.
+ *
+ * Keep this runtime leaf independent of `@kovojs/compiler`: emitted handlers consume only
+ * generated, role-specific registrations, while the build-only bridge authenticates genuine
+ * compiler records before pinning their defensive server snapshots.
+ */
+export type CompilerOwnedViteClientModuleRole =
+  | 'app-bootstrap'
+  | 'component-client'
+  | 'deferred-app-runtime'
+  | 'optimistic-plan';
 
 const pinnedCompilerClientModuleRoles = createWitnessWeakMap<
   object,
@@ -118,38 +126,26 @@ export function takeGeneratedBuildClientModuleSnapshot():
   return scope;
 }
 
-/**
- * @internal Carry genuine compiler identity through server-owned defensive snapshots.
- *
- * The role remains out-of-band: spreading, serializing, proxying, or reconstructing `pinned`
- * cannot copy this WeakMap membership.
- */
-export function pinCompilerOwnedClientModule<Value extends object>(
-  source: unknown,
+/** @internal Pin a role already authenticated by the build bridge or generated-entry protocol. */
+export function pinCompilerOwnedClientModuleRole<Value extends object>(
   pinned: Value,
+  role: CompilerOwnedViteClientModuleRole,
 ): Value {
-  const role = compilerOwnedClientModuleRole(source);
-  if (role !== undefined) witnessWeakMapSet(pinnedCompilerClientModuleRoles, pinned, role);
+  witnessWeakMapSet(pinnedCompilerClientModuleRoles, pinned, role);
   return pinned;
 }
 
-/** @internal Verify either an exact compiler record or a server-pinned copy of one. */
+/** @internal Verify an exact server-pinned compiler or generated-entry record. */
 export function compilerOwnedClientModuleRole(
   value: unknown,
 ): CompilerOwnedViteClientModuleRole | undefined {
   if (typeof value !== 'object' || value === null) return undefined;
-  return (
-    compilerOwnedViteClientModuleRole(value) ??
-    witnessWeakMapGet(pinnedCompilerClientModuleRoles, value)
-  );
+  return witnessWeakMapGet(pinnedCompilerClientModuleRoles, value);
 }
 
 function pinGeneratedBuildClientModule<Value extends object>(
   module: Value,
   role: CompilerOwnedViteClientModuleRole,
 ): Value {
-  witnessWeakMapSet(pinnedCompilerClientModuleRoles, module, role);
-  return module;
+  return pinCompilerOwnedClientModuleRole(module, role);
 }
-
-export type { CompilerOwnedViteClientModuleRole };

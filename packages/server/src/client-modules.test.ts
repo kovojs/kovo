@@ -11,6 +11,8 @@ import { compilerOwnedViteClientModuleRole } from '@kovojs/compiler/internal';
 import { describe, expect, it, vi } from 'vitest';
 
 import { clientModuleBuildTokenHash } from './client-module-registry-intrinsics.js';
+import { pinCompilerOwnedClientModule } from './compiler-client-module-provenance-build.js';
+import { compilerOwnedClientModuleRole } from './compiler-client-module-provenance.js';
 import {
   computeRenderPlanFingerprint,
   createMemoryVersionedClientModuleStore,
@@ -46,7 +48,7 @@ function createRegistry(
   return snapshotVersionedClientModuleRegistry(store);
 }
 
-async function genuineCompilerRuntimeModules(componentName = 'DealCard') {
+async function genuineCompilerOutput(componentName = 'DealCard') {
   const plugin = kovoVitePlugin();
   const source = `
 import { component } from '@kovojs/core';
@@ -70,6 +72,22 @@ export const ${componentName} = component({
     throw new Error('Test compiler did not emit the generated runtime pair.');
   }
   return modules;
+}
+
+async function genuineCompilerRuntimeModules(componentName = 'DealCard') {
+  const modules = await genuineCompilerOutput(componentName);
+  return modules.map((module) =>
+    pinCompilerOwnedClientModule(
+      module,
+      Object.freeze({
+        path: module.path,
+        ...(module.renderPlanFingerprint === undefined
+          ? {}
+          : { renderPlanFingerprint: module.renderPlanFingerprint }),
+        source: module.source,
+      }),
+    ),
+  );
 }
 
 describe('render-plan and app-build identities', () => {
@@ -271,7 +289,7 @@ describe('render-plan and app-build identities', () => {
       modules,
     );
     const runtime = modules.find(
-      (module) => compilerOwnedViteClientModuleRole(module) === 'app-bootstrap',
+      (module) => compilerOwnedClientModuleRole(module) === 'app-bootstrap',
     )!;
 
     expect(ensureKovoLoaderRuntimeClientModule(registry)).toBe(clientHref(runtime));
@@ -279,11 +297,47 @@ describe('render-plan and app-build identities', () => {
     expect(new Set(registry.entries().map(clientHref))).toEqual(new Set(modules.map(clientHref)));
   });
 
+  it('pins only an exact genuine compiler record across the build-only provenance bridge', async () => {
+    const modules = await genuineCompilerOutput();
+    const runtime = modules.find(
+      (module) => compilerOwnedViteClientModuleRole(module) === 'app-bootstrap',
+    )!;
+    const role = compilerOwnedViteClientModuleRole(runtime);
+    const pinned = pinCompilerOwnedClientModule(
+      runtime,
+      Object.freeze({
+        path: runtime.path,
+        renderPlanFingerprint: runtime.renderPlanFingerprint,
+        source: runtime.source,
+      }),
+    );
+
+    expect(role).toBe('app-bootstrap');
+    expect(compilerOwnedClientModuleRole(runtime)).toBeUndefined();
+    expect(compilerOwnedClientModuleRole(pinned)).toBe(role);
+
+    const sourceForgeries = [
+      { ...runtime },
+      new Proxy(runtime, {}),
+      JSON.parse(JSON.stringify(runtime)) as typeof runtime,
+      { path: runtime.path, source: `${runtime.source}\n` },
+    ];
+    for (const source of sourceForgeries) {
+      const candidate = Object.freeze({
+        path: runtime.path,
+        renderPlanFingerprint: runtime.renderPlanFingerprint,
+        source: runtime.source,
+      });
+      expect(pinCompilerOwnedClientModule(source, candidate)).toBe(candidate);
+      expect(compilerOwnedClientModuleRole(candidate)).toBeUndefined();
+    }
+  });
+
   it('refuses a generated app bootstrap whose exact deferred runtime is missing', async () => {
     const registry = createRegistry();
     const modules = await genuineCompilerRuntimeModules();
     const runtime = modules.find(
-      (module) => compilerOwnedViteClientModuleRole(module) === 'app-bootstrap',
+      (module) => compilerOwnedClientModuleRole(module) === 'app-bootstrap',
     )!;
     replaceVersionedClientModuleBuildSnapshot(
       registry,
@@ -302,7 +356,7 @@ describe('render-plan and app-build identities', () => {
   it('refuses copied, proxied, serialized, and malformed generated runtime records', async () => {
     const modules = await genuineCompilerRuntimeModules();
     const runtime = modules.find(
-      (module) => compilerOwnedViteClientModuleRole(module) === 'app-bootstrap',
+      (module) => compilerOwnedClientModuleRole(module) === 'app-bootstrap',
     )!;
     const forgeries = [
       { ...runtime },
@@ -347,11 +401,11 @@ describe('render-plan and app-build identities', () => {
     const first = await genuineCompilerRuntimeModules('DealCard');
     const second = await genuineCompilerRuntimeModules('Pipeline');
     const appRuntimes = [
-      first.find((module) => compilerOwnedViteClientModuleRole(module) === 'app-bootstrap')!,
-      second.find((module) => compilerOwnedViteClientModuleRole(module) === 'app-bootstrap')!,
+      first.find((module) => compilerOwnedClientModuleRole(module) === 'app-bootstrap')!,
+      second.find((module) => compilerOwnedClientModuleRole(module) === 'app-bootstrap')!,
     ];
     const deferredRuntime = first.find(
-      (module) => compilerOwnedViteClientModuleRole(module) === 'deferred-app-runtime',
+      (module) => compilerOwnedClientModuleRole(module) === 'deferred-app-runtime',
     )!;
     replaceVersionedClientModuleBuildSnapshot(
       registry,

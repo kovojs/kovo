@@ -11,7 +11,7 @@ import { isKovoApp } from './app-guards.js';
 import { deriveClosedKovoApp } from './app-snapshot.js';
 import type { AppRouteDeclaration, KovoApp } from './app-types.js';
 import { buildOwnDataProperty, snapshotBuildArray } from './build-security-intrinsics.js';
-import { pinCompilerOwnedClientModule } from './compiler-client-module-provenance.js';
+import { pinCompilerOwnedClientModule } from './compiler-client-module-provenance-build.js';
 import {
   computeRenderPlanFingerprint,
   finalizeVersionedClientModuleBuild,
