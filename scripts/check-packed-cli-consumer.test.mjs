@@ -11,7 +11,7 @@ import {
   productionDependencyNamesFromLockfile,
   sourceImportsPackage,
 } from './check-packed-cli-consumer.mjs';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -24,6 +24,15 @@ ${packages.map((name) => `  '${name}@1.0.0': {}`).join('\n')}
 }
 
 describe('packed CLI consumer proof', () => {
+  it('binds its authored app fixture to one literal receiver identity', () => {
+    const source = readFileSync(
+      new URL('./check-packed-cli-consumer.mjs', import.meta.url),
+      'utf8',
+    );
+    expect(source).toContain("defineKovo({ appId: '00000000-0000-4000-8000-000000000001' })");
+    expect(source).not.toContain('defineKovo({})');
+  });
+
   it('requires the exact cumulative api-v1 protocol and file-count summary', () => {
     const result = {
       batch: 'api-v1',

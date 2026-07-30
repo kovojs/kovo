@@ -722,7 +722,7 @@ async function assertPackedDevJourney(consumerRoot) {
     `import '@kovojs/server/runtime-bootstrap';
 import { defineKovo } from '@kovojs/server';
 
-const app = defineKovo({});
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 const home = app.route('/', {
   access: app.publicAccess('packed devtool smoke'),
   page: () => '<main>Packed dev ready</main>',

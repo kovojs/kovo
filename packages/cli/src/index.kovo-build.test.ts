@@ -352,13 +352,14 @@ describe('kovo build', () => {
       writeFileSync(
         appPath,
         `
-import { defineKovo } from '@kovojs/server';
-const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { publicAccess, route, stylesheet } from '@kovojs/server';
+import { defineKovo, stylesheet } from '@kovojs/server';
+const app = defineKovo({
+  appId: '00000000-0000-4000-8000-000000000001',
+  stylesheets: [stylesheet('./local.css')],
+});
 import { trustedHtml } from '@kovojs/browser';
 
 export default app.assemble({
-  stylesheets: [stylesheet('./local.css')],
   routes: [
     app.route('/', {
       access: app.publicAccess('static asset fixture'),
@@ -3229,7 +3230,13 @@ export default app.assemble({ endpoints: [downloadEndpoint] });
         appPath,
         `
 import { defineKovo } from '@kovojs/server';
-const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
+const app = defineKovo({
+  appId: '00000000-0000-4000-8000-000000000001',
+  egress: {
+    enabled: false,
+    justification: 'test harness serves the emitted app on an ephemeral loopback port',
+  },
+});
 import { domain, s } from '@kovojs/server';import { createMemoryWebhookReplayStore, webhook, webhookReplayIdentity } from '@kovojs/server/webhooks'
 import { hmacSignature } from '@kovojs/core/webhooks';
 
@@ -3256,10 +3263,6 @@ const paymentWebhook = webhook('/webhooks/payment', {
 const paymentWebhookEndpoint = app.endpoint(paymentWebhook);
 
 export default app.assemble({
-  egress: {
-    enabled: false,
-    justification: 'test harness serves the emitted app on an ephemeral loopback port',
-  },
   endpoints: [paymentWebhookEndpoint],
 });
 `,
