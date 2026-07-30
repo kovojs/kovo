@@ -110,7 +110,10 @@ proof; shared root verification belongs in the latest-verification block.
   - Evidence: the focused creator suite passes 56 tests for zero-write refusal and accepted
     single-principal output; the CLI/server KV447 slice passes 135 tests across check, build, and
     the non-blocking dev ledger.
-- [ ] Render the packed starter through public UI/style APIs and pass the named WCAG check.
+- [x] Render the packed starter through public UI/style APIs and pass the named WCAG check.
+  - Evidence: the authenticated packed report at `b0bf20b05` retains styled-UI screenshot digests
+    and records zero violations in login and authenticated-CRUD states for every pinned WCAG 2.2
+    A/AA axe tag.
 
 ## Diagnostics, doctor, add, deploy, and speed
 
@@ -138,23 +141,25 @@ proof; shared root verification belongs in the latest-verification block.
     lockfile changes while reporting the attempted and still-planned work separately.
 - [ ] Fix source-closure scanning so the packed 44-component copy-in fixture typechecks, checks,
       and builds within the ratified RSS budget.
-  - Current proof: exact clean-commit tarballs copy all 44 components without importing them and
-    `tsc --noEmit` passes at 553.8 MiB peak RSS. The provisional 2 GiB probe still kills
-    `kovo check` at 2,083.2 MiB and `kovo build` at 2,058.9 MiB; live process-tree sampling names
-    `vp fmt --list-different` as the oversized phase, so KF-DEVEX-007 remains open.
-- [ ] Publish an instrumented `kovo check` phase census and meet the ratified cold/warm/one-file
-      budgets without dropping a diagnostic-producing phase.
-  - Current proof: the focused source-check census fixture records all 11 ordered phases, including
-    explicit not-applicable phases and per-phase durations, and binds the requested source plus
-    check-graph digest. The census does not claim unmeasured command setup/serialization overhead;
-    packed-profile integration, a pinned runner, N≥5 baseline/noise evidence, and ratification
-    remain open.
-- [ ] Complete one packed create→build→deploy→public-200 journey on the selected Node host.
+  - Current proof: scanner pruning, formatter isolation, process-tree accounting, and bounded
+    attempts are implemented. Retirement requires one same-run report from current canonical
+    tarballs in which typecheck, check, and build all exit 0 below the ratified cap; a below-cap
+    measurement before another failure is not sufficient.
+- [ ] Ratify and meet the cold/warm/one-file G4 budgets on the final packed workload without
+      dropping a diagnostic-producing phase.
+  - Current proof: the focused source-check fixture records all 11 ordered phases and commit
+    `b80fd353c` replaces the build-time Vite server while preserving runnable/teardown behavior.
+    The named-runner N≥5 baseline, noise measurement, threshold derivation, and binding
+    ratification remain open in `plans/devex-gates.md`.
+- [ ] Complete one packed create→build→deploy→public-200 journey on Cloud Run.
+  - Current proof: `.github/workflows/g11-cloud-run.yml` and its packed driver enforce the source
+    SHA, build token, retention posture, public probe, and cleanup contract. G11 remains open until
+    an actual successful deployment artifact records the public URL.
 
 ## Exit
 
 - [ ] Track 1 exit is proven through the Track 2 packed journeys and ratified budgets, with G1-G9,
-      G11, and G15 green.
+      G10, G11, and G15 green.
 
 ## Latest verification
 

@@ -517,7 +517,7 @@ reason}` (`drizzle/derive.ts:41`); `serializeDerivedOptimistic` emits the artifa
     cross-process reuse. Gate with watch-mode correctness and resource-exhaustion tests.
   - Payoff: faster, correct incremental dev/watch builds with a stable cache footprint.
 
-- [ ] **CAP10 · P2 — Machine-readable diagnostics + richer `kovo explain` decision graph.** (SPEC §5.2 rule 5; §5.3/§11.3/§11.4; `plans/devtools.md`)
+- [ ] **CAP10 · P2 — Machine-readable diagnostics + richer `kovo explain` decision graph.** (SPEC §5.2 rule 5; §5.3/§11.3/§11.4; completed devtool implementation in `plans/archive.md`, remaining compiler ownership here)
   - Summary: diagnostics carry typed detail fields (not pre-concatenated English) and every lowering decision
     (extracted handlers, derives, platform substitutions, attribute merges, punts) is emitted as structured
     per-decision provenance an agent/IDE can consume.

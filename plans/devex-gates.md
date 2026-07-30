@@ -62,7 +62,7 @@ reproducer, while the named implementation work item owns retirement.
 - [x] Capture cold install duration, installed bytes, and direct/transitive dependency counts.
   - Evidence: both exact reports record install time/RSS, physical bytes/files, and direct plus
     transitive production dependency counts.
-- [x] Integrate the offline agent journey owned by `plans/devex-agent-loop.md`.
+- [x] Integrate the offline agent journey from the completed Track 3 agent-loop ledger.
   - Evidence: `pnpm run test:devex-offline-agent` passes 3 files and 26 tests for the exact
     scaffold/edit/check/fix protocol, structured diagnostic boundary, installed-doc boundary, and
     deny-all-network posture.
@@ -77,10 +77,13 @@ reproducer, while the named implementation work item owns retirement.
   - Evidence: the authenticated N=1 command in Latest verification records all eleven benchmark
     metrics and binds ready/edit observations to exact response, diagnostic, and source digests.
 - [x] Version the budget schema and reject malformed, invented, or unratified binding budgets.
-  - Evidence: `pnpm run test:devex-foundation-schema` validates `kovo-devex-budgets/v5` and its
-    hostile ratification fixtures while reporting all 16 metrics as unratified.
-- [ ] Ratify each numeric gate from a named runner, baseline, target rationale, sample count,
-      statistic, measured noise, and threshold formula.
+  - Evidence: `pnpm run test:devex-foundation-schema` validates `kovo-devex-budgets/v8` and its
+    hostile ratification fixtures; only the two deterministic snapshot-size metrics are bound.
+- [ ] Ratify each runner-bound numeric gate from the final packed workload, a named runner,
+      baseline, target rationale, sample count, statistic, measured noise, and threshold formula.
+  - Current gap: runner and workload status remain `unratified`; 14 runner-bound metrics have no
+    ratification, fingerprint, or workload identity. The driver, transactional ratifier, and
+    complete phase census are machinery, not N≥5 evidence.
 
 ## Inventory and public-surface evidence
 

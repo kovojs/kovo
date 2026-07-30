@@ -19,24 +19,23 @@ Types remain defense-in-depth; AST/runtime proof remains authoritative.
   - Evidence: `pnpm run check:api-surface` reports 31 intended root names and zero public or
     recursive-publicness leaks.
 - [ ] Reject typo and wrong-table owner annotations in packed TypeScript fixtures.
-  - Integration proof: the fixture is encoded in `scripts/check-packed-drizzle-consumer.mjs`; run
-    the canonical packed command below after integration.
+  - Required proof: run the encoded fixture in `scripts/check-packed-drizzle-consumer.mjs` from the
+    final integrated release manifest.
 - [ ] Reject typo and wrong-table owner-via/fan-out references.
-  - Integration proof: run `pnpm run check:packed-drizzle-consumer` after the canonical release
-    manifest is generated.
+  - Required proof: run `pnpm run check:packed-drizzle-consumer` from that same final manifest.
 - [x] Reject structural SQL fakes while accepting valid typed bridge values.
   - Evidence: `packages/drizzle/src/runtime-surface.test.ts` and the focused parity suite below
     accept witnessed constructors while rejecting native and structural lookalikes.
 - [ ] Pass packed Postgres, SQLite, and every supported Drizzle peer fixture.
-  - Integration proof: `scripts/check-packed-drizzle-consumer.mjs` installs the canonical tarball
-    with the ratified `drizzle-orm@1.0.0-rc.4` fixture and compiles both dialects.
+  - Required proof: `scripts/check-packed-drizzle-consumer.mjs` must install the canonical tarball
+    with the ratified `drizzle-orm@1.0.0-rc.4` fixture and compile both dialects in the final run.
 - [x] Preserve AST/runtime enforcement and explain parity.
   - Evidence: the focused parity suite below covers static resolution, compiler-bound runtime
     metadata, generated registry consumption, and owner-guard use.
 - [ ] Complete the standing API/migration/snapshot/ratchet checklist and expose no recursive leak
       or unapproved `any`.
-  - Remaining integration work: run the canonical packed gate, refresh the parent track/certificate
-    evidence, and close this item from that exact integrated state.
+  - Remaining integration work: run the canonical packed gate and refresh the parent
+    track/certificate evidence from that exact final state.
 
 ## Latest verification
 

@@ -28,9 +28,10 @@ ratchet segment, and release note in one checkpoint.
 - [x] Pass the copied-UI source consumer against only the declared public dependencies.
   - Evidence: `packages/ui/src/copy-in.test.ts` typechecks copied components against the public
     package set; the four-file Style contract suite passes 43 tests.
-- [ ] Pass the canonical packed starter consumer after the final release manifest is resealed.
-  - Current gap: this requires the integration-owned authenticated tarball set; no package-local
-    source or Style contract failure remains.
+- [ ] Pass the canonical packed starter consumer from the final integrated release manifest.
+  - Current gap: the integrated release manifest is resealed, but no same-run final
+    `check-packed-cli-consumer` result is recorded at this HEAD. No package-local Style contract
+    failure remains.
 
 ## UI, headless, and icons
 
@@ -67,9 +68,10 @@ ratchet segment, and release note in one checkpoint.
 - [x] Keep the 44-component manifest and copied-source API contract green before packing.
   - Evidence: the focused UI/headless/icon/migration suite passes 20 tests, including exact
     44-entry metadata, generator round-trip, copy-in compilation, and public-facade reachability.
-- [ ] Pass the canonical packed 44-component gate after the final release manifest is resealed.
-  - Current gap: the source contracts are green; the final authenticated tarball set is
-    integration-owned.
+- [ ] Pass the canonical packed 44-component gate from the final integrated release manifest.
+  - Current gap: the source contracts and packed gate implementation are green; close only after
+    the final integrated `check-packed-cli-consumer` run records the exact
+    44-component/1,737-glyph catalog and Card anatomy from one authenticated manifest.
 
 ## Verifier
 
@@ -159,6 +161,8 @@ ratchet segment, and release note in one checkpoint.
 
 - [ ] Each 5a batch passes its per-batch standing checklist and records a zero-regression
       ratchet segment.
+  - Current gap: the Style and UI/headless/icons final packed boxes above remain open; do not infer
+    this aggregate exit from their package-local tests.
 
 ## Latest verification
 

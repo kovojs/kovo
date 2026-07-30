@@ -8,16 +8,30 @@ checklist from the charter.
 
 ## Server
 
-- [ ] Keep only decision-ledger-backed daily declarations at the server root.
-- [ ] Move each advanced capability family to its named semantic task path.
-- [ ] Internalize resolved options, generated protocol/fragment shapes, framework DB carriers,
+- [x] Keep only decision-ledger-backed daily declarations at the server root.
+  - Evidence: `packages/server/src/api-topology.test.ts` and the API ledger pin the daily root to
+    116 reviewed declarations.
+- [x] Move each advanced capability family to its named semantic task path.
+  - Evidence: the topology test imports every reviewed advanced family from its manifest-declared
+    semantic path and the migration suite rewrites the former root homes.
+- [x] Internalize resolved options, generated protocol/fragment shapes, framework DB carriers,
       live-target authority, and `isKovoApp`.
-- [ ] Delete `committedSecretWaiver` or implement a real explain-visible AST lint before retaining
+  - Evidence: the topology type refusals plus `pnpm run check:api-surface` reject every named
+    carrier from all manifest-public Server paths.
+- [x] Delete `committedSecretWaiver` or implement a real explain-visible AST lint before retaining
       any replacement.
-- [ ] Remove duplicate server-root homes for core storage/verifier/scoped-key/browser-trust
+  - Evidence: the topology source census and checked decision ledger prove the discarded heuristic
+    is absent from production Server source and public declarations.
+- [x] Remove duplicate server-root homes for core storage/verifier/scoped-key/browser-trust
       constructors.
-- [ ] Keep and document `runtime-bootstrap` for the `SPEC.md` §6.6 literal-first boundary.
-- [ ] Reach the server ≤120 root target only through decision-backed concept reduction.
+  - Evidence: the topology test rejects each advanced authority from the root while loading its
+    one reviewed canonical task home.
+- [x] Keep and document `runtime-bootstrap` for the `SPEC.md` §6.6 literal-first boundary.
+  - Evidence: the topology test pins its public/API-reference/export metadata and
+    `docs/releases/server-task-topology-v1.md` documents the literal-first custom-adapter import.
+- [x] Reach the server ≤120 root target only through decision-backed concept reduction.
+  - Evidence: the decision ledger reports 116/120 root declarations and rejects duplicate homes,
+    reintroduced remove/internalize rows, or count-only `/types` moves.
 
 ## Better Auth and optimism
 
@@ -30,9 +44,17 @@ checklist from the charter.
   - Evidence: `/generated/postgres` and `/generated/sqlite` own compiler assembly while
     `/postgres` and `/sqlite` expose the same app-owned options/result contract without accepting
     a human-supplied system DB capability.
-- [ ] Add real mount/OAuth and password-reset journeys or mark incomplete workflows experimental.
-- [ ] Make inline mutation optimism the sole taught ordinary path.
-- [ ] Remove duplicate plans/cast adapters unless an advanced example proves a standalone need.
+- [x] Add real mount/OAuth and password-reset journeys or mark incomplete workflows experimental.
+  - Evidence: `packages/better-auth/README.md` classifies OAuth and password recovery as
+    experimental while naming email/password sign-in/out, sanitized sessions, and guards as the
+    mature workflows.
+- [x] Make inline mutation optimism the sole taught ordinary path.
+  - Evidence: the inline-optimism migration test, compiler suite, and guides teach
+    query-handle-bound `mutation({ optimistic })`; the CRM browser acceptance executes it through
+    the production loader.
+- [x] Remove duplicate plans/cast adapters unless an advanced example proves a standalone need.
+  - Evidence: commit `dcb784159`, the API decision ledger, and packed consumer refusals remove
+    `optimisticPlan`, `OptimisticPlan`, and the former cast/support adapters.
 
 ## Test harness
 
@@ -63,11 +85,21 @@ checklist from the charter.
 
 ## Exit
 
-- [ ] Server/core roots meet G22 through ledger-backed decisions, not `/types` barrels.
-- [ ] Packed starter harness satisfies G24 and all 5b standing batch checks pass.
+- [x] Server root meets G22 through ledger-backed decisions, not `/types` barrels.
+  - Evidence: `pnpm run check:api-surface` reports the 116-name Server root with zero recursive
+    leaks; Core's independently completed 33-name root belongs to the 5a ledger.
+- [x] Packed starter harness satisfies G24.
+  - Evidence: the packed starter runs `templates/src/app.test.ts` through
+    `createKovoTestHarness` with the imported app contract and digest-verified successful-build
+    graph.
+- [ ] All 5b batches pass their standing API/migration/snapshot/packed checklist from one final
+      integrated release manifest.
+  - Current gap: implementation and focused packed contracts are green, but the final
+    all-consumer/API standing seal remains a release-integration gate.
 
 ## Latest verification
 
 Latest verification: G24 passes in 290.89 seconds real; `pnpm run check:api-surface` reports 1,674
-ledger-backed declarations across 1,873 subpaths and passes 28 API/migration tests. The combined
-5b exit remains open pending the other standing batch checks.
+ledger-backed declarations across 1,873 subpaths and passes 28 API/migration tests. Server topology
+and migration tests directly cover the 116-name root, task paths, carrier/waiver removals, and
+`runtime-bootstrap`; only the final integrated standing seal remains open.

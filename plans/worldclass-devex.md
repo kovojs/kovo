@@ -2,9 +2,9 @@
 
 Status: **active roadmap**
 
-Created: 2026-07-27. Merged 2026-07-28 with the independently reviewed alternative
-(`plans/worldclass-devex-claude.md`, now retired into this file): same destination and evidence,
-restructured into decision-gated tracks with an atomic scorecard. Merge notes are at the end.
+Created: 2026-07-27. Merged 2026-07-28 with an independently reviewed alternative now summarized
+in `plans/archive.md`: same destination and evidence, restructured into decision-gated tracks with
+an atomic scorecard. Merge notes are at the end.
 
 Baseline: `8fd820716600`. The headline baseline numbers were independently re-verified at this
 commit (532 `toRemove` leaks with 356 in `@kovojs/server`; 524/149/17/38/11 root exports for
@@ -52,10 +52,12 @@ baselines on the named runner and ratifies each number with a recorded derivatio
 `devex-budgets.json`; performance gates run on a named runner and pinned packed-tarball fixtures so
 hardware and workspace linking do not make the numbers meaningless.
 
-Current scorecard status (2026-07-29): per-PR DevEx gates use 65/65 budgeted runner-minutes and
-nightly gates use 290/300; every pull request publishes bounded public-surface, docs-freshness, and
-speed evidence. Runner-bound performance gates remain non-binding until an accepted
-`ubuntu-24.04` N≥5 baseline and its reviewed noise-derived thresholds are committed.
+Current scorecard status (2026-07-30): packed G10, G12, G13 snapshot, G19-G21, G23, and G24
+implementation proofs are green; the current D1 v6 artifact seal selects Arm A with every gate
+passing. G11 still needs an actual Cloud Run deployment artifact, G4 and the other runner-bound
+performance gates remain non-binding until an accepted `ubuntu-24.04` N≥5 baseline and reviewed
+noise-derived thresholds are committed, and the final packed/security/evaluator/release gates
+remain open.
 
 | ID  | Tier | Gate                                                                                                                                                                                              | Proof                                                |
 | --- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
@@ -376,23 +378,22 @@ and generated examples.
 
 ### Track 0 — Adoption hygiene (S; do these when this plan is adopted)
 
-- [x] Repoint perf ownership from archived fast-check round 2 to
-      `plans/fast-kovo-check3.md`: port the still-live cosmetic absolute-path cache-value cleanup
-      beside the open lighter-loader follow-up, retain the explicit tsgo/teardown/respawn
-      rejections as history, and record the check3 measurements (commerce cold ~9.4s →
-      ~6.5-7s) as the feasibility evidence for G4.
-  - Evidence: `plans/fast-kovo-check3.md` now owns open items 4 and 5, records the
-    ~9.4s→~6.5-7s cold result, and makes the tsgo rejection explicit; the round-2 ledger is
-    summarized in `plans/archive.md`.
+- [x] Reconcile the fast-check rounds into the current performance gates, retaining their accepted
+      optimizations and explicit rejections without leaving a second owner for G4.
+  - Evidence: commit `b80fd353c` replaces the build-time Vite server with the bounded SSR runner;
+    `packages/cli/src/commands/build-vite-lifetime.test.ts` and
+    `build-export-runnable.test.ts` preserve graph, teardown, and fail-closed behavior. G4's
+    remaining final-workload ratification is owned only by `plans/devex-first-loop.md` and
+    `plans/devex-gates.md`; both fast-check ledgers are summarized in `plans/archive.md`.
 - [x] Resolve the unresolved merge-conflict markers in the Postgres v1 DevEx ledger (lines
       ~131-153) and archive it plus the other completed-but-unarchived ledgers (`api-audit.md`,
       `api-cleanup.md`, `audit-plan.md`, `capability-surface-redesign.md`, `better-docs.md`,
       `better-testing.md`), porting still-live decisions into the Track 5 decision ledger.
       Note the `better-docs.md` name collision: `plans/archive.md` already records a retired ledger
       by that name.
-  - Evidence: `plans/archive.md` records the eight reconciled ledgers; the completed side of the
-    Postgres DEC-G conflict was retained, and `plans/api-surface-foundations.md` plus the 5a/5b/5c
-    ledgers own the live decisions.
+  - Evidence: `plans/archive.md` records the reconciled ledgers; the completed side of the
+    Postgres DEC-G conflict was retained, the completed surface foundations are archived, and the
+    5a/5b/5c ledgers own the remaining integrated batch proof.
 - [x] Reconcile three stale or unreproducible claims before they drive decisions: (a) the style
       `$$css`/`__rules` exposure claim vs archived API-cleanup 9B's 2026-06-29 opaque-brand
       evidence — recompute from freshly packed dist, not local `dist/`; (b) the "44 orphan headless
@@ -456,8 +457,8 @@ granularity).
     `packages/server/src/dev-database-posture.test.ts` prove the post-bind ready report, configured
     host/socket URL, exact framework-minted DB posture, and `--debug` behavior.
 - [x] (S) Auto-mount the existing `@kovojs/devtool` graph at `/__kovo` in development (the
-      mountable route is already implemented per `plans/devtools.md`), linked from the ready line,
-      with no app Vite configuration; add the production/static-export absence census (G15).
+      mountable route implementation is summarized in `plans/archive.md`), linked from the ready
+      line, with no app Vite configuration; add the production/static-export absence census (G15).
   - Evidence: the dev/export/runtime fixtures and `pnpm run check:publish` prove the automatic
     development mount and ready-line link while rejecting the route and implementation from
     production, static-export, and packed runtime artifacts.
@@ -550,9 +551,12 @@ granularity).
   - Evidence: the focused creator suite passes 56 tests for installed/skipped/partial-install
     instructions plus zero-write SQLite refusal and accepted experimental posture; the CLI/server
     KV447 slice passes 135 tests and retains every owner warning in check, build, and dev.
-- [ ] (S) Make the packed starter render a styled, WCAG-checked UI via the public
+- [x] (S) Make the packed starter render a styled, WCAG-checked UI via the public
       component/style API — the implementation owner of G10; Track 2's journey runner owns the
       screenshot + a11y capture.
+  - Evidence: the authenticated packed report at `b0bf20b05` renders the public UI/style starter,
+    retains screenshot digests, and records zero violations for every pinned WCAG 2.2 A/AA axe
+    tag in login and authenticated-CRUD states.
 - [x] (M) Diagnostic empathy suite (G9): the first-run classes (missing/invalid origin, missing
       secret, missing DB, retention not configured, port collision, install refusal, migration not
       provisioned) plus the top-20 authoring diagnostics (access, CSRF, trusted output, Drizzle
@@ -560,9 +564,12 @@ granularity).
       executable next step.
   - Evidence: the 61-test diagnostic-empathy/explain acceptance slice proves the exact seven
     first-run and top-20 authoring matrices through shared human, JSON, and GitHub projections.
-- [ ] (M) One blessed deploy-to-URL journey (G11): create→build→deploy→200 on one named Node host
-      with artifact retention solved by the preset; the scaffold's deployment-target prompt emits
-      the matching config so the prompt pays off.
+- [ ] (M) Complete the blessed Cloud Run deployment (G11): run the manual
+      `.github/workflows/g11-cloud-run.yml` journey through create→build→deploy→public-200 and
+      retain the public URL, source SHA, build token, and retention-posture artifact.
+  - Current proof: the workflow, packed journey driver, preset/config emission, cleanup, and
+    fail-closed contract tests exist. A contract-only job or dry run does not satisfy G11; one
+    successful external deployment artifact is still required.
 - [x] (M) Add `kovo doctor` for environment and package coherence: Node/package-manager versions,
       duplicate Kovo copies, peer mismatches, config/preset, local origin, DB roles, migrations,
       retention, writable paths, and stale caches.
@@ -579,28 +586,22 @@ granularity).
       (or a lower ratified value in `devex-budgets.json`) even when copied components are not
       imported. (Track 2 keeps only the reproducer + failing test; the register lists the OOM as
       expected-failing until this lands.)
-  - Partial evidence (2026-07-29; checkbox intentionally open): direct oxlint now prunes root and
-    nested `node_modules` before enumeration, and the focused real-tool test passes with all 44
-    unimported catalog components plus a dependency poison file and no `.gitignore`.
-  - Two authenticated packed attempts kept every measured phase below the hard 2,048 MiB ceiling:
-    attempt 1 typecheck 1.456s/566.2 MiB, check 33.242s/1,272.5 MiB, build
-    35.133s/1,749.8 MiB; attempt 2 typecheck 1.532s/558.8 MiB, check
-    33.968s/1,524.1 MiB, build 33.366s/1,796.6 MiB. Both check/build attempts exited 1 before
-    functional completion because the external packed-release materializer selected this
-    worktree's package-local `better-sqlite3` from an `--ignore-scripts` install, so
-    `better_sqlite3.node` was absent even after the subject root was repointed to the packed-golden
-    frozen install. Retirement still requires a lifecycle-complete packed run that typechecks,
-    checks, and builds successfully.
-- [ ] (M) Meet G4 by adopting `plans/fast-kovo-check3.md`'s remaining work, after publishing an
-      instrumented phase-by-phase decomposition of the starter's 64.01s cold check as the budget
-      justification; add the phase-census test so speed cannot come from silently dropping a
-      diagnostic-producing phase.
+  - Current proof: scanner pruning, formatter isolation, process-tree accounting, and bounded
+    packed attempts are implemented. Retirement still requires one same-run report from the
+    current canonical tarballs in which typecheck, check, and build all exit 0 below the ratified
+    cap; a below-cap measurement before an unrelated failure is not sufficient.
+- [ ] (M) Ratify and meet G4 on the final packed workload while preserving the complete ordered
+      phase census, including explicit not-applicable diagnostic-producing phases.
+  - Current proof: commit `b80fd353c` removed the build-time Vite-server lifetime and the focused
+    loader tests preserve runnable and teardown semantics; the v3 census records all 11 phases.
+    The named-runner N≥5 baseline, measured noise, threshold derivation, and binding ratification
+    remain open under `plans/devex-gates.md`.
 
 - [ ] **Track 1 exit:** both packed scaffold variants pass their intended local journey with no
       undocumented environment edit or internal import; the deployment build remains fail-closed;
       all command/help/completion/docs snapshots derive from one schema; missing/stale graphs and
       failed-build artifacts are adversarially rejected; the reference app meets the ratified
-      speed budgets (G1-G9, G11, G15; the journey runner, benchmark, and budget ratification are
+      speed budgets (G1-G11, G15; the journey runner, benchmark, and budget ratification are
       Track 2 deliverables, so this exit closes only after those Track 2 items land).
 
 ### Track 2 — Measurement that gates release (thin; parallel with Track 1)
@@ -627,17 +628,18 @@ consumes lives here; everything else moved next to the work it proves. Seeds chi
     digests, concept census,
     install metrics, redacted failure preservation, and an explicit controlled SPEC §14 build
     posture.
-- [ ] (M) Add `scripts/devex-benchmark.mjs` and `devex-budgets.json`: report cold, warm, and
-      one-file-incremental timings plus peak RSS and browser bootstrap bytes (G3, G4). Record
-      baselines _first_, then ratify each budget with a recorded derivation (baseline, target
-      rationale, noise allowance, sample count N, statistic, threshold = budget + k·noise) — a
-      failure is a statistically significant budget breach under that recorded procedure, not a
-      single noisy sample. Name the runner: provision a pinned reference runner or explicitly
-      accept GitHub-hosted with a measured noise floor. Budgets bind only after ratification.
-  - Partial evidence: the authenticated packed N=1 smoke records cold/warm/incremental,
-    direct-child RSS, ready cold/warm, edit-to-KV235, edit-to-served-result, the v3 check census,
-    the v1 dev-transition census, bootstrap bytes, and the v5 fail-closed budget schema. A pinned
-    reference runner, N≥5 baseline, noise measurement, and ratification remain open.
+- [x] (M) Add `scripts/devex-benchmark.mjs` and `devex-budgets.json` with cold, warm,
+      one-file-incremental, peak-RSS, ready/edit, and browser-bootstrap measurements plus a
+      fail-closed ratification schema.
+  - Evidence: the authenticated packed N=1 smoke records every named metric, the v3 check census,
+    and the v1 dev-transition census; `kovo-devex-budgets/v8` rejects malformed, invented, or
+    unratified binding budgets.
+- [ ] (M) Ratify every runner-bound G3/G4/G16/full-catalog budget from a final packed baseline,
+      named runner, target rationale, N≥5 sample set, statistic, measured noise, and threshold
+      formula.
+  - Current gap: `devex-budgets.json` still marks the runner and workload unratified and leaves all
+    14 runner-bound metrics without binding evidence; the two deterministic snapshot-size metrics
+    do not ratify timing or RSS.
 - [x] (M) Fix the inventory before using demand evidence.
   - Exclude nested `**/node_modules/**`, every generated/dist/cache tree, packed fixtures, and
     throwaway apps; report authored examples, authored docs, package internals, generated emit,
@@ -679,7 +681,8 @@ track therefore precedes Track 5.
 
 **Primary risks:** generated docs can become a second source of truth; full local docs increase
 package size. Generate from public manifests, SPEC links, and tested examples; set a compressed
-size budget and byte-compare outputs. Seeds child ledger `devex-agent-loop.md`.
+size budget and byte-compare outputs. The completed child ledger is summarized in
+`plans/archive.md`; Track 5 owns its continuing snapshot-regeneration invariant.
 
 - [x] (M) Package the complete versioned authored-doc/API snapshot with the CLI at pack time,
       including a file manifest, Kovo version, source commit, and SHA-256 digests; set a
@@ -709,9 +712,13 @@ size budget and byte-compare outputs. Seeds child ledger `devex-agent-loop.md`.
   - Standing rule for Track 5 (not a one-shot checkbox — each batch's own checklist carries the
     proof): every breaking batch regenerates the snapshot in the same checkpoint.
 
-- [ ] **Track 3 exit:** G12 green; G13's snapshot and `update-docs` clauses green from packed
+- [x] **Track 3 exit:** G12 green; G13's snapshot and `update-docs` clauses green from packed
       artifacts (no placeholder snapshot can report success). G13's digest-emission and
       sample-compilation clauses close under Track 6.
+  - Evidence: `pnpm run test:devex-offline-agent:packed` completes the authenticated offline
+    scaffold→edit→check→fix journey from installed local docs, while the snapshot/update tests
+    reject placeholder, partial, digest-mismatched, and wrong-version input before reporting
+    success.
 
 ### Track 4 — Declare app context once (D1 first)
 
@@ -721,7 +728,8 @@ weakening explicit access, CSRF, confidential-data, ownership, or write declarat
 **Primary risks:** factory methods can obscure the exact symbols the compiler recognizes, duplicate
 package copies can split private witnesses, and complex conditional types can slow or destabilize
 TypeScript inference. Prove the lowering first, keep runtime/provenance enforcement authoritative,
-and budget both type correctness and compiler performance. Seeds child ledger `app-contract.md`.
+and budget both type correctness and compiler performance. The completed child ledger is
+summarized in `plans/archive.md`.
 
 - [x] (M) Write and approve the authoring contract in the owning SPEC modules before
       implementation — enumerated: §9.1 (appId contract), §9.5 (closed `createApp` aggregate),
@@ -769,7 +777,7 @@ and budget both type correctness and compiler performance. Seeds child ledger `a
   - Evidence: `packages/server/src/app-authoring-context.test.ts`,
     `app-authoring-type-fixtures.test.ts`, and `app-contract.test.ts` prove the inferred ordinary
     declarations plus exact endpoint/agent adoption.
-- [ ] (L) Replace string-key/module-augmentation optimism with query-handle binding such as
+- [x] (L) Replace string-key/module-augmentation optimism with query-handle binding such as
       `contacts.optimistic(...)`; compiler-derived read/write edges remain the invalidation proof.
   - Preserve `SPEC.md` §10.4's pure transform contract unless a prior normative change proves
     framework-owned draft isolation, determinism, bounded copy-on-write, and emitted equivalence.
@@ -778,9 +786,12 @@ and budget both type correctness and compiler performance. Seeds child ledger `a
     missing/duplicate/unrelated handles.
   - Prove compiler/runtime loader consumption and a real CRM browser optimistic round trip with no
     standalone adapter before removing the old plan.
-  - Current proof: query-handle lowering, keyed policies, exact status coverage, and browser
-    consumption units pass. The CRM test still reflects private mutation state and supplies a
-    test-only virtual adapter, so production-loader acceptance remains open.
+  - Evidence: `packages/compiler/src/scan/optimistic-inline.test.ts`,
+    `packages/browser/src/optimism-keyed-bridge.test.ts`, and
+    `examples/crm/src/optimistic-browser-roundtrip.test.ts` prove query-handle lowering, keyed
+    status coverage, and success/rejection/reload behavior through the production dev server,
+    emitted allowlisted client module, and browser loader. Commit `dcb784159` removes the
+    standalone authoring path and its cast adapters.
 - [x] (M) Infer component mutation slots and form error bindings from declaration handles so
       ordinary components do not name `ComponentRenderSlots` or hand-maintain a parallel registry.
   - Evidence: the type fixture derives submitted fields and error unions from `createContact` and
@@ -800,11 +811,11 @@ and budget both type correctness and compiler performance. Seeds child ledger `a
       anchor on that property with bounded message length).
   - Evidence: `packages/server/src/app-authoring-type-fixtures.test.ts` passes both the full compile
     corpus and the three-character/240-character-ceiling query diagnostic assertion.
-- [ ] (M) Migrate the packed starter and one advanced example to the app contract; grep-clean
+- [x] (M) Migrate the packed starter and one advanced example to the app contract; grep-clean
       plus typecheck of both is G23's proof.
-  - Current proof: `pnpm run check:app-contract-g23` reports no findings across the 14-file starter,
-    16-file advanced CRM, and 3-file release CRM source corpora; fresh tarball-backed typechecks
-    remain required.
+  - Evidence: `pnpm run check:app-contract-g23:packed` installs authenticated tarballs into fresh
+    consumers and typechecks the exact 14-file starter and 16-file advanced CRM corpora within the
+    ratified 136,000-instantiation ceiling; the source census rejects narrowing either corpus.
 - [x] (S) Set TypeScript cold/warm check and language-service completion budgets **with numbers**
       derived from the D1 baseline (including an extended-diagnostics instantiation ceiling);
       reject a cleaner surface if it breaches them or produces unreadable error expansions.
@@ -814,12 +825,15 @@ and budget both type correctness and compiler performance. Seeds child ledger `a
     policy/adversarial tests alongside the ratified timing, completion, declaration, and
     diagnostic limits.
 
-- [ ] **Track 4 exit:** the starter and one advanced example use the app contract without manual
+- [x] **Track 4 exit:** the starter and one advanced example use the app contract without manual
       `AppRequest`, explicit app generics, duplicated auth generics, registry augmentation, or
       casts; emitted artifacts and `kovo explain` remain equivalent to the pre-facade proof model
       (G23).
-  - Blockers: production CRM optimism, fresh packed starter/CRM typechecks, current emitted/explain
-    parity, and a current-source D1 artifact reseal.
+  - Evidence: the packed G23 command proves both complete corpora; the production CRM browser
+    round trip proves emitted optimism consumption; and current
+    `conformance/app-contract-spike/results-v6.json` passes the authenticated `artifacts` and
+    `compilerAndGraph` gates with byte-identical canonical IR/graph facts for the selected Arm A
+    facade and pre-facade baseline.
 
 ### Track 5 — Cut the public surface by task
 
@@ -862,15 +876,19 @@ Opening items (before the first breaking batch):
 Batch DAG — every batch follows Track 2's inventory/scanner fix; 5a needs no app contract; 5b
 waits for D1; 5c waits only on its own SPEC decision:
 
-- [ ] (L) **5a — style batch.** Replace public style representation records/raw tuples with an
+- [x] (L) **5a — style implementation batch.** Replace public style representation records/raw tuples with an
       opaque handle (G19).
   - Retain the proven seed-based `defineTheme`; either prove and rename the weak-evidence
     variable-override `createTheme` to a vars-specific name or remove it after SPEC/user-story
     review.
   - Packed declarations contain none of `$$css`, `data-style-src`, `__rules`, `__styleKey`, or the
     raw tuple; literal/cast forgery fails runtime acceptance; extracted CSS, source maps, and
-    artifacts remain equivalent; starter and copied UI builds pass.
-- [ ] (L) **5a — UI/headless/icons batch.** Keep UI/headless and icons under their separate owning
+    artifacts remain equivalent; the copied-UI source consumer passes.
+  - Evidence: `packages/style/src/packed-api.test.ts`, `engine.test.ts`, `public-types.test.ts`, and
+    `packages/ui/src/copy-in.test.ts` prove the 14-name opaque facade, same-instance runtime
+    acceptance, emitted equivalence, and copied-source compilation. The final canonical packed
+    starter remains owned by the 5a exit ledger.
+- [x] (L) **5a — UI/headless/icons implementation batch.** Keep UI/headless and icons under their separate owning
       generators, with a shared catalog output schema rather than one false anatomy source.
   - Extend the existing UI/headless primitive-component manifest with parts, slots, IDs, state
     inputs, enhancement tier, roles, and keyboard behavior.
@@ -884,6 +902,11 @@ waits for D1; 5c waits only on its own SPEC decision:
   - Replace `IconRenderResult = object` with `ComponentRenderResult` or another canonical
     non-leaking contract; run the all-glyph generator/typecheck and existing icon timing
     benchmark.
+  - Evidence: `scripts/check-packed-cli-consumer.mjs` pins the 44-component/1,737-glyph catalog
+    and six-part Card anatomy; `packages/headless-ui/src/public-api-reachability.test.ts`,
+    `packages/ui/src/card-contract.test.ts`, and the all-glyph generation/type/timing gates prove
+    the public families. The final canonical packed catalog run remains owned by the 5a exit
+    ledger.
 - [x] (M) **5a — verifier batch.** Keep all 11 `@kovojs/verify` certificate/verifier exports as one
       independent family; add a packed, runtime-independent API/CLI acceptance suite and a public
       README/reference/examples (G21).
@@ -916,7 +939,7 @@ waits for D1; 5c waits only on its own SPEC decision:
   - Evidence: the Browser, compiler/security, migration/API, and declaration-build slices pass
     43, 384, and 27 tests while proving the three-export installer facade, generated parity,
     handle-backed derives, and exact `{ reason, source? }` trust metadata.
-- [ ] (L) **5a — core batch.** Land the `@kovojs/core` topology in the target table.
+- [x] (L) **5a — core batch.** Land the `@kovojs/core` topology in the target table.
   - Remove the 39 definite-removal helpers from app-public API by deleting, redesigning,
     inlining/inferring, or moving them internal/generated only when no retained public signature
     references them. Resolve all 30 borderline names with a real user story or remove them from
@@ -930,7 +953,11 @@ waits for D1; 5c waits only on its own SPEC decision:
   - Reject blank/string-shorthand reasons, copied/cast/subclassed policies, and wrong-door
     policies in type, runtime, compiler matcher, and `kovo explain`/audit parity tests.
   - The component-inference-plumbing removals land with Track 4's `Component<Props>` contract.
-- [ ] (XL) **5b — server batch** (after D1). Land the `@kovojs/server` topology.
+  - Evidence: the focused Core storage/verifier/secret/component and migration suites plus
+    `pnpm run check:api-surface` prove the 33-name decision-backed root, zero recursive leaks,
+    five door-specific constructors, retired registry/ref/inference helpers, and refusal/explain
+    parity.
+- [x] (XL) **5b — server implementation batch** (after D1). Land the `@kovojs/server` topology.
   - Keep the daily declaration path at root (adjudicated by the decision ledger: every retained
     root name appears in the starter or a golden recipe) and move agent, Postgres lifecycle,
     storage adapters, tasks/observability, render-tree, signing, confidential-at-rest, delegation,
@@ -947,16 +974,27 @@ waits for D1; 5c waits only on its own SPEC decision:
     and user story.
   - Keep `runtime-bootstrap` public and documented because custom adapters require its
     literal-first import under the `SPEC.md` §6.6 boundary.
-- [ ] (M) **5b — Better Auth batch** (after D1). Reduce the human root to guards,
+  - Evidence: `packages/server/src/api-topology.test.ts`,
+    `scripts/migrate-server-api-v1.test.mjs`, and `pnpm run check:api-surface` prove the
+    decision-backed 116-name daily root, semantic task paths, carrier/internal duplicate
+    removals, deleted `committedSecretWaiver`, and documented literal-first
+    `runtime-bootstrap`.
+- [x] (M) **5b — Better Auth batch** (after D1). Reduce the human root to guards,
       CSRF/environment configuration, mounting, and mature auth workflows; move generated
       Postgres/SQLite binding machinery and carriers behind a manifest-declared
       `apiBoundary.generated` path (or private generated assembly) and converge the two backends.
-  - Add a real mount/OAuth example and end-to-end password-reset workflow before calling those
-    stable; otherwise mark them experimental.
-- [ ] (M) **5b — optimism cut** (after D1). Make inline `mutation({ optimistic })` the only taught
+  - Email/password sign-in, sign-out, sanitized sessions, and guards are the mature workflows;
+    OAuth and password recovery remain explicitly experimental until their full journeys exist.
+  - Evidence: `packages/better-auth/src/generated.api.test.ts`, the packed Better Auth consumer,
+    and `packages/better-auth/README.md` prove the converged generated boundary and the exact
+    mature/experimental classification.
+- [x] (M) **5b — optimism cut** (after D1). Make inline `mutation({ optimistic })` the only taught
       optimism path; remove tutorial duplication and cast adapters, retaining a standalone plan
       only if an advanced example proves its need.
-- [ ] (L) **5b — test-harness batch** (after D1). Replace the high-level test harness with an
+  - Evidence: `scripts/migrate-browser-inline-optimism-v1.test.mjs`, the compiler inline-optimism
+    suite, and the CRM production-browser round trip prove the sole ordinary query-handle path and
+    the removal/refusal of standalone plan and cast-adapter authoring.
+- [x] (L) **5b — test-harness batch** (after D1). Replace the high-level test harness with an
       app-scoped harness (G24): types flow from the imported app contract at compile time
       (mutation input/error/result, query input/result, route keys, request, DB); the artifact
       contributes digest-verified runtime graph facts — two mechanisms, stated explicitly.
@@ -969,6 +1007,9 @@ waits for D1; 5c waits only on its own SPEC decision:
     every starter.
   - Add `@kovojs/test` to the starter devDependencies and source a real inferred
     harness/assertion example from an existing file, not a nonexistent `// Source:` path.
+  - Evidence: `packages/test/src/harness.test.ts`, the stale/wrong-app artifact refusals,
+    `pnpm run check:test-package-budget`, and the packed starter G24 test prove inferred types,
+    digest-verified runtime facts, the bounded dependency closure, and the public starter example.
 - [ ] (L) **5c — Drizzle batch** (after its `SPEC.md` §10.1 decision; independent of D1).
       Redesign annotation types around concrete table/column identities so a typo cannot
       typecheck; replace optional structural brands and `any` SQL returns with private witnesses
@@ -1015,10 +1056,10 @@ and generate teaching artifacts from owning manifests. Seeds child ledger
       start immediately).
   - Evidence: the five-file trusted-boundary/diagnostic suite passed 25 tests covering the bounded
     cause registry, correlation, remediation, redaction, anchors, and presentation projections.
-- [x] (M) Complete the committed unit/browser tests and CLI-text parity still open in
-      `plans/devtools.md`, and add the dev-only live wire overlay already designed there: stream
-      redacted mutation/query/target facts, light the same static edges, and expose the same
-      bounded recent frames to MCP.
+- [x] (M) Complete the committed unit/browser tests and CLI-text parity from the archived devtool
+      ledger, and add its designed dev-only live wire overlay: stream redacted
+      mutation/query/target facts, light the same static edges, and expose the same bounded recent
+      frames to MCP.
   - Evidence: all 57 devtool unit/parity tests and the three-test Chromium interaction/replay suite
     pass; the unit corpus includes bounded redaction, MCP reuse, and production absence.
 - [x] (M) Editor surface, decision-gated: either `kovo lsp` as a thin transport over the
@@ -1078,10 +1119,10 @@ and generate teaching artifacts from owning manifests. Seeds child ledger
       task-orientation channel matching the external bar, cheaper than templates because the
       examples are already CI'd. Example presentation/coverage detail stays owned by
       `plans/example-readability.md` and `plans/awesome-examples.md`.
-  - Current gap: source catalog/schema/help/cloning tests pass, but both fresh temporary-tarball
-    consumers reach `kovo build` and fail KV448 because the installed `@kovojs/server`
-    implementation digest does not match the reviewed source/packed implementation. The final
-    server/compiler posture reseal must restore CRM's expected KV417 check and both retained builds.
+  - Current proof: source catalog/schema/help/cloning tests pass and the server/compiler posture is
+    resealed. Close only after one current, same-manifest packed run proves both CRM and commerce
+    create/install/check/build consumers; the earlier KV448 failure is superseded but is not
+    itself passing evidence.
 - [x] (S) Keep task docs progressively disclosed and proof-backed per `rules/docs-style.md`; link
       to the owning SPEC section where it resolves ambiguity rather than front-loading internals.
   - Evidence: `node site/scripts/code-snippets-check.mjs` passed all 203 authored snippets; the
@@ -1092,8 +1133,7 @@ and generate teaching artifacts from owning manifests. Seeds child ledger
       implementation; generated website, local snapshot, API, package README, catalog, and MCP
       examples resolve to the same public shape/digest and pass from packed artifacts.
   - Current gap: fact, runtime-failure, devtool/editor, authored-doc, API, and packed-recipe proof
-    is green; the fresh CRM/commerce packed consumer is still KV448-blocked pending the final
-    server/compiler posture reseal above.
+    is green; the current resealed CRM/commerce packed example run above remains unrecorded.
 
 ### Release capstone — make the clean break and hold the line
 
@@ -1104,19 +1144,32 @@ wants and the design it replaced.
 code, and a broad release can make regressions hard to localize. Emit an explicit report, refuse
 ambiguous rewrites, land coherent package checkpoints, and run the full scorecard after each batch.
 
-- [ ] Finalize the batch-proven `kovo fix api-v1 --check|--write` from the public decision ledger.
+- [x] Finalize the batch-proven `kovo fix api-v1 --check|--write` from the public decision ledger.
   - Verify every canonical import and mechanical call-shape rewrite shipped before its breaking
     Track 5 cut.
   - Refuse ambiguous app-context, trust, raw-SQL, CSRF, auth, or deployment decisions and print
     the exact manual action needed.
-- [ ] Publish a concise breaking-change guide organized by user task, including security posture
+  - Evidence: `node scripts/check-packed-cli-consumer.mjs --api-v1-only` proves the installed
+    cumulative command, check/write modes, atomicity, idempotence, and all seven semantic refusal
+    categories.
+- [x] Publish a concise breaking-change guide organized by user task, including security posture
       changes, before/after source, and `kovo explain` output.
-- [ ] Ship the one published breaking technical-preview minor per D2: remove old roots, aliases,
-      deprecated overloads, compatibility barrels, and legacy generated emit; update
-      `STABILITY.md` and release notes to describe the deliberate cut.
-- [ ] Update the standing rules the cut invalidates: any remaining `vp`/protocol-name evidence in
+  - Evidence: `docs/releases/api-v1.md` is the task-organized cumulative guide and includes
+    before/after source, refusal handling, proof inspection, rollback, and the no-alias boundary.
+- [x] Complete the cumulative source and authenticated-tarball API cut: remove old roots, aliases,
+      deprecated overloads, compatibility barrels, and legacy generated emit.
+  - Evidence: `pnpm run check:api-surface`, the nine checked migration batches, and the installed
+    `--api-v1-only` consumer prove the removed homes and call shapes do not survive in source or
+    the authenticated package set.
+- [ ] Publish exactly one cumulative breaking technical-preview minor to the package registry
+      under D2.
+  - Required proof: immutable registry versions and provenance for the exact release commit; local
+    tarballs and workflow contracts do not satisfy external publication.
+- [x] Update the standing rules the cut invalidates: any remaining `vp`/protocol-name evidence in
       `rules/v1-acceptance.md` 16.3/16.6, `rules/prelaunch-checklist.md`, and
       `rules/docs-style.md` not already updated by Track 1.
+  - Evidence: `STABILITY.md`, the three standing rules, release notes, and
+    `docs/api-migration-protocol.md` name the current command and versioned protocols.
 - [ ] Run packed consumers for scaffold, advanced example, UI copy-in catalog, custom shell,
       custom adapter, verifier-only package, Node build, supported deployment presets, and test
       harness.
@@ -1126,11 +1179,22 @@ ambiguous rewrites, land coherent package checkpoints, and run the full scorecar
 - [ ] Inspect emitted server/client modules, graph, diagnostics, HTML, CSS, and wire frames;
       verify app components remain authored TSX/JSX and no hand-authored lowered IR was
       introduced (`SPEC.md` §5.2).
-- [ ] Pre-release evidence beyond self-dogfooding: N external (non-author) evaluator or agent-run
-      journey transcripts against the packed scaffold, findings triaged into the known-failure
-      register.
-- [ ] Compact or archive superseded API/DevEx ledgers after their remaining work is either
+- [x] Define the external-evaluator release contract at exactly N=3 distinct preregistered
+      non-author evaluators, principals, organizations, and Ed25519 keys against one exact
+      source-commit/packed-manifest subject.
+  - Evidence: `scripts/external-evaluator-evidence.test.mjs` and
+    `scripts/release-workflow-security.test.mjs` enforce the immutable roster, signed subject,
+    no-intervention attestations, bounded evidence input, and unconditional release gate.
+- [ ] Preregister the three actual evaluator identities/keys, collect their signed packed-journey
+      transcripts against the exact release subject, and triage every finding into the
+      known-failure register.
+  - Self-dogfood, generated fixture identities, unsigned reports, repeated principals/keys, or
+    transcripts against another HEAD do not satisfy this gate.
+- [x] Compact or archive superseded API/DevEx ledgers after their remaining work is either
       completed or explicitly linked here; do not maintain contradictory active checklists.
+  - Evidence: `plans/archive.md` records the completed foundations, app-contract, agent-loop,
+    devtool, and fast-check ledgers plus the retired alternative; the remaining active child
+    ledgers below own only still-open integration/release gates.
 - [ ] **Capstone exit:** every scorecard gate green with its named proof (tier 2 in its
       D1-negotiated form), with cited command/artifact evidence, before claiming the DevEx/API
       work complete.
@@ -1168,22 +1232,21 @@ contract; recipes/catalogs wait for Track 5's public shape. The capstone is the 
 release gate. Critical path: **D1 spike → 5b server/harness batches → capstone**; everything else
 is slack to schedule around it.
 
-This file is the charter. Each track owns a child ledger with
-one-proof-one-box granularity (suggested: `devex-first-loop.md`, `devex-gates.md`,
-`devex-agent-loop.md`, `app-contract.md`, one ledger per Track 5 batch group,
-`devex-feel-and-teach.md`), and this file keeps the scorecard, decision gates, track exits, and
-sequencing. These ledgers retain implementation detail until compacted:
+This file is the charter and keeps the scorecard, decision gates, track exits, and sequencing.
+Current one-proof-one-box ownership lives in `plans/devex-first-loop.md`,
+`plans/devex-gates.md`, the 5a/5b/5c API ledgers, `plans/devex-feel-and-teach.md`, and
+`plans/worldclass-devex-release.md`. Completed app-contract, agent-loop, public-surface-foundation,
+devtool, and fast-check implementation ledgers are summarized in `plans/archive.md`.
 
-- `plans/fast-kovo-check3.md`: analyzer/cache/process performance mechanisms (successor to
-  `fast-kovo-check2.md`; see Track 0).
-- `plans/devtools.md`: shared graph model, source anchors, UI/MCP parity, and live overlay.
+These adjacent active ledgers retain non-charter ownership:
+
 - `plans/better-components-ux.md`: component anatomy and interaction-quality work.
 - `plans/open-design-areas.md`: unresolved normative feature design; this plan must not silently
   decide those contracts.
 - `plans/example-readability.md` and `plans/awesome-examples.md`: example presentation and
   coverage.
-- `plans/api-surface-foundations.md` and the 5a/5b/5c child ledgers: current public-surface
-  ownership. Historical audit/cleanup evidence is summarized in `plans/archive.md`.
+- The 5a/5b/5c child ledgers own current public-surface integration. Historical foundations,
+  audit, and cleanup evidence is summarized in `plans/archive.md`.
 
 Checkpoint commits should be closure-oriented: measurement gates, first-run journey, CLI/source
 truth, app contract, one coherent package-surface batch, test harness, feedback surfaces, docs,
@@ -1193,9 +1256,9 @@ boundaries change.
 
 ## Merge notes (2026-07-28)
 
-This file merges the 2026-07-27 draft with an independently reviewed alternative
-(`plans/worldclass-devex-claude.md`, retired). The evidence, principles, target topology, authoring
-sketch, batch detail, and risk register are the draft's; the structure changed as follows:
+This file merges the 2026-07-27 draft with an independently reviewed alternative, now summarized
+in `plans/archive.md`. The evidence, principles, target topology, authoring sketch, batch detail,
+and risk register are the draft's; the structure changed as follows:
 
 - Phases 0-7 became decision-gated tracks: the draft's Phase 0 was split (journey/benchmark →
   Track 2; decision ledger/ratchet/any-gate/migration protocol → Track 5 openers; docs gates →

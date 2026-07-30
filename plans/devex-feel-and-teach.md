@@ -95,10 +95,10 @@ compiler/runtime facts; none may become a second analyzer.
   - Evidence: `kovo-package-front-door/v1` validates all 14 manifest-public packages and the
     focused mutation tests reject missing, stale, or repository-internal front doors.
 - [ ] Add `create-kovo --example` only for packed-passing CRM/commerce sources.
-  - Current gap: source catalog/schema/help/cloning tests pass, but both fresh temporary-tarball
-    consumers reach `kovo build` and fail KV448 because the installed `@kovojs/server`
-    implementation digest does not match the reviewed source/packed implementation. The final
-    server/compiler posture reseal must restore CRM's expected KV417 check and both retained builds.
+  - Current proof: source catalog/schema/help/cloning tests pass and the server/compiler posture is
+    resealed. Close only after one current, same-manifest packed run proves both CRM and commerce
+    create/install/check/build consumers; the earlier KV448 result is superseded but is not
+    passing evidence.
 - [x] Keep authored task docs progressively disclosed and proof-backed.
   - Evidence: `node site/scripts/code-snippets-check.mjs` passed all 203 authored snippets and the
     15-test style suite rejects front-loaded SPEC/KV detail, oversized first examples,
@@ -109,8 +109,8 @@ compiler/runtime facts; none may become a second analyzer.
 - [ ] Track 6 exit: equivalent facts/digests across every surface, actionable redacted failures,
       production devtool absence, and all teaching artifacts passing from packed distributions.
   - Current gap: current parity/devtool/editor, docs-style, API-reference, catalog/front-door, and
-    temporary-tarball packed-doc/recipe proof pass; the packed CRM/commerce builds remain
-    KV448-blocked pending the final server/compiler posture reseal.
+    temporary-tarball packed-doc/recipe proof pass; the current resealed CRM/commerce packed
+    example run remains unrecorded.
 
 ## Latest verification
 
@@ -123,6 +123,5 @@ compiler/runtime facts; none may become a second analyzer.
 - The current temporary-tarball packed-doc gate passed for 14 packages, 2,907 classified samples,
   five intended type errors, 878 JSDoc examples, 106 CLI invocations, and 16 compiled/executed
   golden recipes.
-- The fresh packed CRM/commerce consumer test is red only at build: KV448 reports a stale
-  compiler-owned `@kovojs/server` implementation digest before CRM can prove KV417 and before
-  either retained build can complete.
+- The prior packed CRM/commerce result stopped at KV448 before the current server/compiler reseal;
+  rerun the exact retained consumers before closing either remaining checkbox.
