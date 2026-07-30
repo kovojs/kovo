@@ -2,11 +2,10 @@ import type { ComponentChild, JsonValue, RouteSearchValue } from '@kovojs/core';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { publicAccess, verifiedAccess, type AccessDecision } from './access.js';
 import {
-  createAppAgentSession,
-  isAgentDefinition,
-  type AgentDefinition,
-  type AgentSession,
-} from './agent.js';
+  createRegisteredAppAgentSession,
+  isRegisteredAppAgentDefinition,
+} from './agent-app-bridge.js';
+import type { AgentDefinition, AgentSession } from './agent.js';
 import {
   appDeclarationMetadata,
   appDeclarationOwner,
@@ -1209,7 +1208,7 @@ function createAppAgentFactory<RawRequest extends globalThis.Request, Owner exte
 ): InternalAppAgentFactory<RawRequest, Owner> {
   return ((definition: AgentDefinition) => {
     assertContractOpen(state, 'app.agent()');
-    if (!isAgentDefinition(definition)) {
+    if (!isRegisteredAppAgentDefinition(definition)) {
       throw new TypeError(
         'KOVO_APP_AGENT_DECLARATION: app.agent() requires one exact agent() declaration from ' +
           '@kovojs/server/agent; structural copies, casts, and duplicate package instances are ' +
@@ -1239,7 +1238,7 @@ function createAppAgentFactory<RawRequest extends globalThis.Request, Owner exte
       immutable((request: RawRequest, options: InternalAppAgentSessionOptions = {}) => {
         const runtimeApp = contractRuntimeApp(state, 'app.agent().session()');
         const sessionOptions = snapshotAppAgentSessionOptions(options);
-        return createAppAgentSession(definition, {
+        return createRegisteredAppAgentSession(definition, {
           clientIp: (candidate) => resolveRequestClientIp(runtimeApp, candidate),
           ...(runtimeApp.db === undefined ? {} : { db: runtimeApp.db }),
           env: runtimeApp.env,

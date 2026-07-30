@@ -12,6 +12,7 @@ import {
   principalPostureFromRequest,
   registerFrameworkSessionPrincipalSnapshot,
 } from './auth-principal.js';
+import { registerAppAgentDefinition, type BoundAgentSessionOptions } from './agent-app-bridge.js';
 import { frameworkEgressFetch } from './egress.js';
 import {
   isFrameworkManagedDbProvider,
@@ -204,21 +205,6 @@ interface AgentContentRecord {
   readonly value: unknown;
 }
 
-interface BoundAgentSessionOptions<
-  Request extends object,
-  SessionValue,
-  DbValue,
-  EnvValue extends Record<string, unknown>,
-> {
-  readonly clientIp?: (request: Request) => string | undefined;
-  readonly db?: DbProvider<Request, DbValue, SessionValue>;
-  readonly env?: Readonly<EnvValue>;
-  readonly onError?: ServerErrorHandler;
-  readonly onSessionSetCookie?: (rawSetCookie: string) => void;
-  readonly request: Request;
-  readonly sessionProvider?: SessionProvider<Request, SessionValue>;
-}
-
 const toolRecords = createWitnessWeakMap<object, AgentToolRecord>();
 const agentRecords = createWitnessWeakMap<object, AgentRecord>();
 const sessionRecords = createWitnessWeakMap<object, AgentSessionRecord>();
@@ -289,12 +275,10 @@ export function agent<const Name extends string>(
     model: model as AgentOptions['model'],
     tools: snapshot,
   });
+  registerAppAgentDefinition(declaration, (sessionOptions) =>
+    createAppAgentSession(declaration, sessionOptions),
+  );
   return declaration;
-}
-
-/** @internal Exact-identity check used by the app-scoped advanced-capability bridge. */
-export function isAgentDefinition(value: unknown): value is AgentDefinition {
-  return isObject(value) && witnessWeakMapGet(agentRecords, value) !== undefined;
 }
 
 /** @internal Install the compiler-derived terminal operation closure on one exact tool. */
@@ -383,7 +367,7 @@ export async function createAgentSession<
  *
  * @internal
  */
-export async function createAppAgentSession<
+async function createAppAgentSession<
   Request extends object,
   SessionValue,
   DbValue,
