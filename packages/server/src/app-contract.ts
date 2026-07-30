@@ -291,10 +291,17 @@ export interface MutationHandle<
   readonly __kovoMutationTypes?: (input: Input, request: Request, errors: Errors) => Value;
 }
 
-/** Request shape visible after every guard in an app access decision has passed. */
+/**
+ * Preserve the framework-threaded read DB capability while applying executable guard refinements.
+ * A guard is allowed to narrow request/session facts; intersecting its raw request type back into
+ * `AppReadRequest` must not recover write methods that `Reader<Db>` deliberately removed
+ * (SPEC §6.2.1/§6.6/§10.2).
+ */
 export type AppRequestForAccess<Base, Access> = Access extends readonly (infer Item)[]
   ? Item extends Guard<infer _GuardRequest, infer Refined>
-    ? Base & Refined
+    ? Base extends { db: infer ReadDb }
+      ? Omit<Base & Refined, 'db'> & { db: ReadDb }
+      : Base & Refined
     : Base
   : Base;
 
