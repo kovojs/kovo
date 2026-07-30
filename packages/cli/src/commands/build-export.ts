@@ -975,7 +975,17 @@ export async function finishKovoSourceCheckOneShot(
     if (buildJsonStringify(currentIdentity) !== buildJsonStringify(expectedIdentity)) {
       throw new TypeError('Kovo check handoff invocation identity changed before consumption.');
     }
-    const phaseCensus = analysis.phaseCensus;
+    const phaseCensus =
+      analysis.phaseCensus === undefined
+        ? undefined
+        : {
+            phases: buildMapDense(
+              analysis.phaseCensus.phases,
+              'Kovo check handoff phase census',
+              (phase) => ({ ...phase }),
+            ),
+            sourcePath: analysis.phaseCensus.sourcePath,
+          };
     const graphDiagnosticsStartedAt = startSourceCheckPhase(phaseCensus);
     const result = kovoCheckWithDiagnosticSourceCatalog(
       analysis.graph,
