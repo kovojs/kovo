@@ -34,7 +34,9 @@ export function kovoDevDatabasePosture(app: KovoApp): string {
   const posture = frameworkManagedDbProviderDevelopmentPosture(app.db);
   if (posture === 'postgres-pglite') return 'Postgres (PGlite embedded development driver)';
   if (posture === 'postgres-external') return 'Postgres (external node-postgres driver)';
-  if (posture === 'sqlite') return 'SQLite (experimental single-principal driver)';
+  if (posture === 'sqlite') {
+    return 'SQLite (experimental single-principal driver; KV447 owner annotations are audit-only)';
+  }
   return 'application-defined (active driver not introspectable)';
 }
 

@@ -14,7 +14,10 @@ describe('kovo dev database posture', () => {
     const postures = [
       ['postgres-pglite', 'Postgres (PGlite embedded development driver)'],
       ['postgres-external', 'Postgres (external node-postgres driver)'],
-      ['sqlite', 'SQLite (experimental single-principal driver)'],
+      [
+        'sqlite',
+        'SQLite (experimental single-principal driver; KV447 owner annotations are audit-only)',
+      ],
     ] as const;
     for (const [developmentPosture, label] of postures) {
       const db = createFrameworkManagedDbProvider(() => ({}), { developmentPosture });

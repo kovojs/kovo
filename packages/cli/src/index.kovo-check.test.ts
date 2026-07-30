@@ -419,6 +419,35 @@ describe('kovo check', () => {
     expect(kovoCheck({}).exitCode).toBe(0);
   });
 
+  it('prints one advisory KV447 finding for every owner-annotated SQLite table', () => {
+    const result = kovoCheck({
+      sqlSafetyDiagnostics: [
+        {
+          code: 'KV447',
+          message:
+            'Table orders declares owner scoping; SQLite keeps static metadata but has no engine role/RLS layer.',
+          severity: 'warn',
+          site: 'src/schema.sqlite.ts:8',
+        },
+        {
+          code: 'KV447',
+          message:
+            'Table order_items declares ownerVia scoping; SQLite keeps static metadata but has no engine role/RLS layer.',
+          severity: 'warn',
+          site: 'src/schema.sqlite.ts:15',
+        },
+      ],
+    } as Parameters<typeof kovoCheck>[0]);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toContain(
+      'WARN KV447 src/schema.sqlite.ts:8 Table orders declares owner scoping',
+    );
+    expect(result.output).toContain(
+      'WARN KV447 src/schema.sqlite.ts:15 Table order_items declares ownerVia scoping',
+    );
+  });
+
   it('keeps static SQL and declared-write classifier findings advisory for paranoid build preflight', () => {
     const result = kovoCheck(
       {
