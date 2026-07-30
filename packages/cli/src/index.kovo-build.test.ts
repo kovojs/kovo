@@ -3187,8 +3187,9 @@ const download = createStorageDownloadEndpoint({
   secret: '0123456789abcdef0123456789abcdef',
   storage,
 });
+const downloadEndpoint = app.endpoint(download);
 
-export default app.assemble({ endpoints: [download] });
+export default app.assemble({ endpoints: [downloadEndpoint] });
 `,
         'utf8',
       );
@@ -3252,13 +3253,14 @@ const paymentWebhook = webhook('/webhooks/payment', {
   }),
   writes: [payment],
 });
+const paymentWebhookEndpoint = app.endpoint(paymentWebhook);
 
 export default app.assemble({
   egress: {
     enabled: false,
     justification: 'test harness serves the emitted app on an ephemeral loopback port',
   },
-  endpoints: [paymentWebhook],
+  endpoints: [paymentWebhookEndpoint],
 });
 `,
         'utf8',

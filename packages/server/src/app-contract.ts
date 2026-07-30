@@ -384,6 +384,15 @@ export interface AppMutationFactory<Request, Owner extends string | undefined> {
 
 /** Endpoint factory with its managed DB context inferred from `defineKovo({ db })`. */
 export interface AppEndpointFactory<Db, Owner extends string | undefined> {
+  /** Adopt one exact standalone declaration from an advanced endpoint capability subpath. */
+  <
+    const Path extends string,
+    const Method extends EndpointMethod,
+    const Mount extends EndpointMount,
+    EndpointDb,
+  >(
+    declaration: EndpointDeclaration<Path, Method, Mount, EndpointDb>,
+  ): EndpointHandle<Path, Owner>;
   <
     const Path extends string,
     const Method extends EndpointMethod = EndpointMethod,
@@ -1125,10 +1134,38 @@ function createAppLayoutFactory<Request, Owner extends AppId>(
 function createAppEndpointFactory<Db, Owner extends AppId>(
   state: ContractState,
 ): AppEndpointFactory<Db, Owner> {
-  return ((path: string, definition: object) => {
+  return ((pathOrDeclaration: string | EndpointDeclaration, definition?: object) => {
     assertContractOpen(state, 'app.endpoint()');
-    return ownDeclaration(state, 'endpoint', endpoint(path, definition as any));
+    if (
+      (typeof pathOrDeclaration === 'object' || typeof pathOrDeclaration === 'function') &&
+      pathOrDeclaration !== null &&
+      definition === undefined
+    ) {
+      return adoptEndpointDeclaration(state, pathOrDeclaration);
+    }
+    return ownDeclaration(
+      state,
+      'endpoint',
+      endpoint(pathOrDeclaration as string, definition as any),
+    );
   }) as unknown as AppEndpointFactory<Db, Owner>;
+}
+
+function adoptEndpointDeclaration<Declaration extends EndpointDeclaration>(
+  state: ContractState,
+  declaration: Declaration,
+): Declaration {
+  const existing = appDeclarationOwner(declaration);
+  if (existing !== undefined) {
+    if (existing.contract !== state.contract || existing.kind !== 'endpoint') {
+      throw ownerMismatch('endpoint', 'app.endpoint(existing declaration)');
+    }
+    throw new TypeError(
+      'KOVO_APP_DUPLICATE_DECLARATION: app.endpoint(existing declaration) can adopt one exact ' +
+        'advanced endpoint declaration only once.',
+    );
+  }
+  return ownDeclaration(state, 'endpoint', declaration);
 }
 
 function createAppTaskFactory<Owner extends AppId>(state: ContractState): AppTaskFactory<Owner> {
@@ -1551,6 +1588,14 @@ function contractRuntimeApp(state: ContractState, operation: string): RuntimeKov
 }
 
 function ownerMismatch(kind: AppDeclarationKind, location: string): TypeError {
+  if (kind === 'endpoint') {
+    return new TypeError(
+      `KOVO_APP_OWNER_MISMATCH: ${location} requires an exact endpoint handle owned by this ` +
+        'contract. Adopt a standalone advanced declaration once with app.endpoint(declaration); ' +
+        'structural copies, another app, and duplicate @kovojs/server package instances are ' +
+        'rejected (SPEC §6.2.1).',
+    );
+  }
   return new TypeError(
     `KOVO_APP_OWNER_MISMATCH: ${location} requires an exact app.${kind}() handle from this ` +
       'contract. Free-factory declarations, structural copies, another app, and duplicate ' +

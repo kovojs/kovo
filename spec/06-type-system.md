@@ -154,6 +154,15 @@ that one contract. Authors MUST NOT need to name `AppRequest`, `Reader`, `QueryL
 `MutationContext`, `ComponentRenderSlots`, registry augmentations, or explicit app generics for an
 ordinary declaration.
 
+Focused capability subpaths may construct a standalone advanced `EndpointDeclaration`, including
+`webhook()` and `createStorageDownloadEndpoint()`. Such a declaration joins an app only through the
+explicit `app.endpoint(declaration)` bridge, which returns an opaque endpoint handle owned by that
+contract. Adoption is deterministic and exact-identity: it may happen once, creates no ambient
+registry, preserves the capability declaration's runtime/provenance facts, and remains subject to
+the same single-assembly completeness checks. Passing the raw standalone declaration directly to
+`assemble`, adopting it into two contracts, adopting it twice, or assembling a structural copy MUST
+fail the private runtime ownership check.
+
 `defineKovo` snapshots provider descriptors and callbacks but MUST NOT invoke a DB, session/auth,
 environment, CSRF, replay, client-module, or other live provider. Provider evaluation and
 environment parsing begin only when `app.assemble({...})` closes the graph (or when an explicitly

@@ -5,11 +5,13 @@ import { defineKovo } from './app-contract.js';
 import { resolveKovoAppToken, type InferKovoAppTypes } from './app-token.js';
 import { registerAppMutationAdapter } from './app-mutation-adapter.js';
 import { createRequestHandler } from './app.js';
+import { endpoint } from './endpoint.js';
 import { declaredKovoAppId } from './live-target-app-identity.js';
 import { mutation } from './mutation/definition.js';
 import { assignDerivedMutationKey } from './mutation/definition.js';
 import { assignDerivedQueryKey } from './query.js';
 import { s } from './schema.js';
+import { webhook } from './webhook.js';
 
 const APP_ID = '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e';
 
@@ -203,5 +205,97 @@ describe('defineKovo app contract', () => {
         structuralMutation,
       ),
     ).toThrow(/KOVO_APP_MUTATION_ADAPTER/u);
+  });
+
+  it('adopts standalone advanced endpoints by exact identity without ambient registration', () => {
+    const contract = defineKovo({
+      appId: APP_ID,
+      egress: { enabled: false, justification: 'isolated app-contract unit test' },
+    });
+    const standaloneWebhook = webhook('/hooks/contact', {
+      handler: () => ({ ok: true }),
+      input: s.object({ id: s.string() }),
+      verify: 'none',
+      verifyJustification: 'isolated app-contract bridge test',
+    });
+    const adoptedWebhook = contract.endpoint(standaloneWebhook);
+
+    expect(adoptedWebhook).toBe(standaloneWebhook);
+    expectTypeOf(adoptedWebhook.path).toEqualTypeOf<'/hooks/contact'>();
+    if (false) {
+      // @ts-expect-error adopted advanced declarations expose only the opaque endpoint handle.
+      adoptedWebhook.webhookDefinition;
+    }
+    expect(() => contract.endpoint(standaloneWebhook)).toThrow(/KOVO_APP_DUPLICATE_DECLARATION/u);
+
+    const token = contract.assemble({ endpoints: [adoptedWebhook] });
+    type AppTypes = InferKovoAppTypes<typeof token>;
+    expectTypeOf<AppTypes['declarations']['endpoint']>().toEqualTypeOf<typeof adoptedWebhook>();
+    const runtime = resolveKovoAppToken(token, 'app-contract endpoint bridge test');
+    expect(runtime.endpoints).toHaveLength(1);
+    expect(runtime.endpoints[0]).toEqual(
+      expect.objectContaining({
+        method: 'POST',
+        name: '/hooks/contact',
+        path: '/hooks/contact',
+        webhook: true,
+        webhookDefinition: standaloneWebhook.webhookDefinition,
+      }),
+    );
+  });
+
+  it('rejects unadopted, copied, and mixed-owner standalone endpoints', () => {
+    const unadoptedContract = defineKovo({
+      appId: APP_ID,
+      egress: { enabled: false, justification: 'isolated app-contract unit test' },
+    });
+    const unadopted = endpoint('/advanced/unadopted', {
+      access: publicAccess('isolated app-contract bridge test'),
+      auth: { kind: 'none', justification: 'isolated app-contract bridge test' },
+      csrf: false,
+      csrfJustification: 'safe read-only test endpoint',
+      handler: () => new Response('ok'),
+      method: 'GET',
+      reason: 'isolated app-contract bridge test',
+      response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+    });
+    expect(() =>
+      unadoptedContract.assemble({
+        // @ts-expect-error raw standalone declarations must be adopted through app.endpoint().
+        endpoints: [unadopted],
+      }),
+    ).toThrow(/KOVO_APP_OWNER_MISMATCH/u);
+
+    const owner = defineKovo({
+      appId: '6b195013-5860-4b21-8250-a4a65a678db2',
+      egress: { enabled: false, justification: 'isolated app-contract unit test' },
+    });
+    const other = defineKovo({
+      appId: '9229361a-ed2d-492a-b48e-14111655e510',
+      egress: { enabled: false, justification: 'isolated app-contract unit test' },
+    });
+    const advanced = endpoint('/advanced/owned', {
+      access: publicAccess('isolated app-contract bridge test'),
+      auth: { kind: 'none', justification: 'isolated app-contract bridge test' },
+      csrf: false,
+      csrfJustification: 'safe read-only test endpoint',
+      handler: () => new Response('ok'),
+      method: 'GET',
+      reason: 'isolated app-contract bridge test',
+      response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+    });
+    const adopted = owner.endpoint(advanced);
+
+    expect(() => other.endpoint(advanced)).toThrow(/KOVO_APP_OWNER_MISMATCH/u);
+    expect(() =>
+      owner.assemble({
+        endpoints: [
+          {
+            ...adopted,
+            // A structural copy cannot copy the module-private ownership witness.
+          } as typeof adopted,
+        ],
+      }),
+    ).toThrow(/KOVO_APP_OWNER_MISMATCH/u);
   });
 });
