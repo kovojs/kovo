@@ -973,17 +973,23 @@ facts, apply the same redaction registry, prove production absence at the emitte
 and generate teaching artifacts from owning manifests. Seeds child ledger
 `devex-feel-and-teach.md`.
 
-- [ ] (M) Finish compiler-emitted `SourceAnchor { file, start, end }` coverage for declarations,
+- [x] (M) Finish compiler-emitted `SourceAnchor { file, start, end }` coverage for declarations,
       graph nodes/edges, diagnostics, suppressions, and generated-to-authored mappings (can start
       immediately, parallel to Tracks 4-5).
-- [ ] (M) Give trusted-boundary runtime failures a stable safe-cause taxonomy, correlation ID,
+  - Evidence: the focused compiler/devtool/CLI parity run passed 12 files and 230 tests, including
+    exact, root-confined source/config anchors and fail-closed association.
+- [x] (M) Give trusted-boundary runtime failures a stable safe-cause taxonomy, correlation ID,
       remediation, and source/config anchor; keep raw causes server-side and secret-redacted (can
       start immediately).
-- [ ] (M) Complete the committed unit/browser tests and CLI-text parity still open in
+  - Evidence: the five-file trusted-boundary/diagnostic suite passed 25 tests covering the bounded
+    cause registry, correlation, remediation, redaction, anchors, and presentation projections.
+- [x] (M) Complete the committed unit/browser tests and CLI-text parity still open in
       `plans/devtools.md`, and add the dev-only live wire overlay already designed there: stream
       redacted mutation/query/target facts, light the same static edges, and expose the same
       bounded recent frames to MCP.
-- [ ] (M) Editor surface, decision-gated: either `kovo lsp` as a thin transport over the
+  - Evidence: all 57 devtool unit/parity tests and the three-test Chromium interaction/replay suite
+    pass; the unit corpus includes bounded redaction, MCP reuse, and production absence.
+- [x] (M) Editor surface, decision-gated: either `kovo lsp` as a thin transport over the
       compiler's incremental analyzer and diagnostic registry **with a distribution checkbox**
       (extension packaging/marketplace), or the cheaper arm — a VS Code extension consuming
       `kovo-diagnostic/v1` JSON via watch. Editor clients are presentation-only adapters; no
@@ -991,10 +997,14 @@ and generate teaching artifacts from owning manifests. Seeds child ledger
   - Safe code actions perform deterministic source edits only; never auto-insert a security
     waiver, `trusted*` escape, `csrf: false`, raw SQL declaration, or suppression — offer a
     documented decision menu instead.
-- [ ] (S) Assert terminal human output, JSON, GitHub annotations, editor diagnostics, MCP cards,
+  - Evidence: `pnpm run test:devex-editor` passed 29 presentation-only adapter/action tests and
+    verified a deterministic six-entry VSIX.
+- [x] (S) Assert terminal human output, JSON, GitHub annotations, editor diagnostics, MCP cards,
       and devtool inspectors agree on the projected `kovo-diagnostic/v1` fields (code, severity,
       help, source span) — field-level equality on a named fixture corpus, one fixture per
       diagnostic family.
+  - Evidence: `packages/vscode/src/diagnostic-adapter.test.mjs` passed inside the 230-test parity
+    run for the five named diagnostic families and all six projections.
 - [x] (S) Extend API-reference generation to emit a source/package/public-manifest digest and file
       manifest; generate twice in clean temporary directories, compare determinism, and prove the
       site content build consumes the matching digest. Keep `site/gen` ignored unless a separate
@@ -1007,20 +1017,21 @@ and generate teaching artifacts from owning manifests. Seeds child ledger
       against packed `dist` exports; parse every documented CLI invocation against the command
       schema. Mark samples as `executable`, `type-error`, `output`, or `illustrative`; every skip
       has a reviewed reason so pseudocode/transcripts do not weaken the gate (G13).
-  - Evidence: `pnpm run check:publish` classifies all 3,096 samples, compiles 1,139 executable
-    samples and 920 JSDoc examples against packed exports, validates 93 CLI invocations through
-    the command schema, and admits only reviewed output/illustrative exclusions.
+  - Evidence: the current temporary-tarball packed-doc gate classified 2,907 samples, compiled
+    1,140 executable samples and 878 JSDoc examples, and validated 106 CLI invocations.
 - [x] (M) Regenerate API references by task: values and copyable examples first, named supporting
       types second, implementation/protocol types absent from human pages.
   - Evidence: the same suite proves task labels, value/supporting-type grouping, copyable examples
     before signatures, and exclusion of generated/internal and Drizzle runtime carriers across all
-    1,666 documented exports.
-- [ ] (M) Publish one canonical, compiled recipe for each golden task: component, route, query,
+    1,640 documented exports.
+- [x] (M) Publish one canonical, compiled recipe for each golden task: component, route, query,
       mutation, form error, auth, inline optimism, trusted output, storage, upload, webhook, task,
       custom shell, theme, test harness, and deploy posture. Compile and execute the recipes
       against packed packages; run rename drills for component props, query results, route
       params, form fields, and mutation errors, asserting the intended diagnostic and fix;
       validate every source-attribution marker against a real tracked path and exported symbol.
+  - Evidence: `node site/scripts/golden-recipes.mjs` validated 16 tracked sources and five rename
+    drills; the current 14-tarball packed-doc gate compiled and executed all 16 recipes.
 - [x] (S) Generate searchable component and icon catalogs from their owning manifests into one
       catalog schema; show package import, copy command, anatomy where applicable, enhancement
       tier, and accessibility contract.
@@ -1035,13 +1046,22 @@ and generate teaching artifacts from owning manifests. Seeds child ledger
       task-orientation channel matching the external bar, cheaper than templates because the
       examples are already CI'd. Example presentation/coverage detail stays owned by
       `plans/example-readability.md` and `plans/awesome-examples.md`.
-- [ ] (S) Keep task docs progressively disclosed and proof-backed per `rules/docs-style.md`; link
+  - Current gap: source catalog/schema/help/cloning tests pass, but both fresh temporary-tarball
+    consumers reach `kovo build` and fail KV448 because the installed `@kovojs/server`
+    implementation digest does not match the reviewed source/packed implementation. The final
+    server/compiler posture reseal must restore CRM's expected KV417 check and both retained builds.
+- [x] (S) Keep task docs progressively disclosed and proof-backed per `rules/docs-style.md`; link
       to the owning SPEC section where it resolves ambiguity rather than front-loading internals.
+  - Evidence: `node site/scripts/code-snippets-check.mjs` passed all 203 authored snippets; the
+    focused policy suite passed its task-first, proof-step, disclosure, and sample-honesty cases.
 
 - [ ] **Track 6 exit:** the same fixture produces equivalent facts on every surface; runtime
       errors are actionable without leaking secrets; production contains no devtool
       implementation; generated website, local snapshot, API, package README, catalog, and MCP
       examples resolve to the same public shape/digest and pass from packed artifacts.
+  - Current gap: fact, runtime-failure, devtool/editor, authored-doc, API, and packed-recipe proof
+    is green; the fresh CRM/commerce packed consumer is still KV448-blocked pending the final
+    server/compiler posture reseal above.
 
 ### Release capstone — make the clean break and hold the line
 

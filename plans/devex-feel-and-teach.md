@@ -71,10 +71,10 @@ compiler/runtime facts; none may become a second analyzer.
     output, and makes the site reject mismatched input or output records.
 - [x] Compile every JSDoc, generated API, package README, and authored guide sample against packed
       exports.
-  - Evidence: `pnpm run check:publish` compiles 1,139 executable samples and 920 JSDoc examples
-    from the 3,096-sample corpus against attested package tarballs.
+  - Evidence: the current temporary-tarball packed-doc gate compiled 1,140 executable samples and
+    878 JSDoc examples from the 2,907-sample corpus.
 - [x] Parse every documented CLI invocation through the semantic command schema.
-  - Evidence: the same packed gate validates all 93 discovered CLI invocations.
+  - Evidence: the same packed gate validates all 106 discovered CLI invocations.
 - [x] Require reviewed `executable`, `type-error`, `output`, or `illustrative` classifications.
   - Evidence: `scripts/packed-doc-samples.test.mjs` and the packed gate reject unclassified code
     and illustrative skips without a reviewed reason.
@@ -94,12 +94,11 @@ compiler/runtime facts; none may become a second analyzer.
 - [x] Require a valid README/reference or generated-family landing page for every public package.
   - Evidence: `kovo-package-front-door/v1` validates all 14 manifest-public packages and the
     focused mutation tests reject missing, stale, or repository-internal front doors.
-- [x] Add `create-kovo --example` only for packed-passing CRM/commerce sources.
-  - Evidence: the packed consumer test creates both exact release catalogs, installs only tarball
-    dependencies, typechecks, tests, and production-builds each typed mutation/form scaffold. CRM
-    additionally proves default `node()` remains KV417-closed; passing builds select and emit the
-    explicit `retained-24h` deployment assertion. The catalog accounts for every copied/excluded
-    repo source, and strict scaffolds fail closed on a missing or malformed source inventory.
+- [ ] Add `create-kovo --example` only for packed-passing CRM/commerce sources.
+  - Current gap: source catalog/schema/help/cloning tests pass, but both fresh temporary-tarball
+    consumers reach `kovo build` and fail KV448 because the installed `@kovojs/server`
+    implementation digest does not match the reviewed source/packed implementation. The final
+    server/compiler posture reseal must restore CRM's expected KV417 check and both retained builds.
 - [x] Keep authored task docs progressively disclosed and proof-backed.
   - Evidence: `node site/scripts/code-snippets-check.mjs` passed all 203 authored snippets and the
     15-test style suite rejects front-loaded SPEC/KV detail, oversized first examples,
@@ -107,28 +106,23 @@ compiler/runtime facts; none may become a second analyzer.
 
 ## Exit
 
-- [x] Track 6 exit: equivalent facts/digests across every surface, actionable redacted failures,
+- [ ] Track 6 exit: equivalent facts/digests across every surface, actionable redacted failures,
       production devtool absence, and all teaching artifacts passing from packed distributions.
-  - Evidence: current focused parity/devtool/editor, packed-example, docs-style, API-reference
-    digest, catalog/front-door, and API-surface gates in Latest verification pass. The existing
-    packed-publication gate below compiles the classified docs/recipes from all 14 tarballs.
+  - Current gap: current parity/devtool/editor, docs-style, API-reference, catalog/front-door, and
+    temporary-tarball packed-doc/recipe proof pass; the packed CRM/commerce builds remain
+    KV448-blocked pending the final server/compiler posture reseal.
 
 ## Latest verification
 
-- The focused compiler/devtool/CLI/editor/catalog run passed 12 files and 229 tests; all devtool
+- The focused compiler/devtool/CLI/editor run passed 12 files and 230 tests; all devtool
   unit tests passed (10 files, 57 tests), and `pnpm run test:devex-editor` passed 29 tests plus the
-  deterministic six-entry VSIX package check.
-- `pnpm exec vitest --run packages/create-kovo/src/index.example.packed.test.ts
---reporter=verbose` passed both packed CRM/commerce consumers, including install, typecheck,
-  tests, default KV417 proof, and retained production builds. The focused creator/catalog/
-  security-surface run passed 55 tests.
-- `node site/scripts/code-snippets-check.mjs` passed 203 snippets; its 15-test policy suite passed.
-  The API-reference/catalog/front-door suite passed 31 tests and documented all 1,674 current
-  exports with deterministic digest checks.
-- `pnpm run check:docs-samples:packed -- --packed-manifest
-.release/packed-recipes-temp.json` passed in the preceding teaching checkpoint (14 packages;
-  2,941 samples; five intended type errors; 16 compiled/executed golden recipes).
-- `pnpm run check:publish` passed in the same preceding checkpoint (14 packages; 3,096 classified
-  samples; 1,139 executable; 920 JSDoc examples; 93 CLI invocations; zero unexpected type errors).
-- `pnpm --filter @kovojs/compiler run build:dist`, `pnpm --filter create-kovo run build:dist`,
-  `node scripts/api-surface-gate.mjs`, and `git diff --check` passed.
+  deterministic six-entry VSIX package check; the named Chromium suite passed three tests.
+- The focused creator/docs/API run passed 11 files and 146 tests. The authored-snippet command
+  passed 203 snippets, and the golden-recipe command validated 16 tracked recipes plus five rename
+  drills.
+- The current temporary-tarball packed-doc gate passed for 14 packages, 2,907 classified samples,
+  five intended type errors, 878 JSDoc examples, 106 CLI invocations, and 16 compiled/executed
+  golden recipes.
+- The fresh packed CRM/commerce consumer test is red only at build: KV448 reports a stale
+  compiler-owned `@kovojs/server` implementation digest before CRM can prove KV417 and before
+  either retained build can complete.
