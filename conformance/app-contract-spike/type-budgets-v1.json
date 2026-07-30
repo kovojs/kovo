@@ -1,0 +1,68 @@
+{
+  "schema": "kovo.app-contract-type-budgets/v1",
+  "budgetVersion": "2026-07-29.1",
+  "ratification": {
+    "timings": "ratified",
+    "instantiations": "pending-measurement"
+  },
+  "baseline": {
+    "criteriaSubject": {
+      "path": "conformance/app-contract-spike/criteria-v6.json",
+      "sha256": "d05ffa8fe6182e6ffbf69619af15bf64aa5f0788a58f554c80e09f885bf87a98"
+    },
+    "evidenceSubject": {
+      "path": "conformance/app-contract-spike/raw-evidence-v6.json",
+      "sha256": "1f9b8d1e9db96c15b642242c2ecc40ac9b127b262dbb0c87299f8189407a7726"
+    },
+    "variant": "arm-a",
+    "runner": {
+      "architecture": "arm64",
+      "cpuModel": "Apple M4",
+      "nodeVersion": "v24.18.1",
+      "operatingSystem": "darwin 25.2.0",
+      "runnerName": "apple-m4-darwin-arm64-node24-ts6-d1-v6",
+      "typescriptVersion": "6.0.3"
+    },
+    "measurements": {
+      "coldTscP50Ms": 307.01,
+      "warmTscP50Ms": 216.2,
+      "coldCompletionP50Ms": 99.21,
+      "warmCompletionP95Ms": 0.11,
+      "declarationBytes": 12788,
+      "completionCandidateCount": 10,
+      "completionCandidateDigest": "7a3824b477b68558af819b2d70b9af1fb4940c43e814dd1fcbc55420d71b9958",
+      "diagnosticMessageCharactersMaximum": 240,
+      "diagnosticSpanCharacters": 3,
+      "instantiations": null
+    }
+  },
+  "derivation": {
+    "timingHeadroomPercent": 30,
+    "timingRoundingQuantumMs": 50,
+    "warmCompletionCeilingSource": "criteria-v6.performanceThresholds.warmCompletionP95MillisecondsMaximum",
+    "declarationHeadroomPercent": 35,
+    "declarationRoundingQuantumBytes": 500,
+    "instantiationHeadroomPercent": 20,
+    "instantiationRoundingQuantum": 1000
+  },
+  "budgets": {
+    "coldTscP50Ms": 400,
+    "warmTscP50Ms": 300,
+    "coldCompletionP50Ms": 150,
+    "warmCompletionP95Ms": 5,
+    "declarationBytesMaximum": 17500,
+    "completionCandidateCount": 10,
+    "completionCandidateDigest": "7a3824b477b68558af819b2d70b9af1fb4940c43e814dd1fcbc55420d71b9958",
+    "diagnosticMessageCharactersMaximum": 240,
+    "diagnosticSpanCharacters": 3,
+    "instantiationsMaximum": null
+  },
+  "measurement": {
+    "coldTscRepeats": 12,
+    "warmTscRepeats": 12,
+    "coldCompletionRepeats": 12,
+    "warmCompletionRepeats": 60,
+    "timingsEnforcedOnlyOnExactRunner": true,
+    "instantiationsEnforcedOnEveryRunner": true
+  }
+}
