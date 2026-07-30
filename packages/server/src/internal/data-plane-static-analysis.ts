@@ -74,7 +74,7 @@ export interface DataPlaneSourceFile {
   source: string;
 }
 
-/** @internal Normalized error-severity finding from the data-plane analyzers. */
+/** @internal Normalized finding from the data-plane analyzers. */
 export interface DataPlaneDiagnostic extends RegisteredDiagnostic<DiagnosticCode> {
   fileName: string;
   line: number;
@@ -291,13 +291,29 @@ export async function collectDataPlaneAnalysis(options: {
   }
 }
 
+/** @internal Return every Vite build/dev diagnostic from shared data-plane facts. */
+export async function collectDataPlaneDiagnostics(options: {
+  appSourceDir: string;
+  root: string;
+}): Promise<DataPlaneDiagnostic[]> {
+  const analysis = await collectDataPlaneAnalysis(options);
+  return dataPlaneDiagnosticsFromStaticFacts(analysis.staticFacts, analysis.files);
+}
+
 /** @internal Return Vite build/dev error diagnostics from shared data-plane facts. */
 export async function collectDataPlaneErrorDiagnostics(options: {
   appSourceDir: string;
   root: string;
 }): Promise<DataPlaneDiagnostic[]> {
-  const analysis = await collectDataPlaneAnalysis(options);
-  return dataPlaneErrorDiagnosticsFromStaticFacts(analysis.staticFacts, analysis.files);
+  const diagnostics = await collectDataPlaneDiagnostics(options);
+  const errors: DataPlaneDiagnostic[] = [];
+  for (let index = 0; index < diagnostics.length; index += 1) {
+    const diagnostic = diagnostics[index]!;
+    assertRegisteredDiagnostic(diagnostic, `Vite data-plane diagnostics[${index}]`);
+    if ((diagnostic.severity ?? 'error') !== 'error') continue;
+    staticAnalysisArrayAppend(errors, diagnostic, 'Vite data-plane error diagnostics');
+  }
+  return errors;
 }
 
 /** @internal Derive compiler query-shape facts for Vite/compiler invocations. */
@@ -461,7 +477,7 @@ function mergeQueryShapeFactSets(
   return result;
 }
 
-function dataPlaneErrorDiagnosticsFromStaticFacts(
+function dataPlaneDiagnosticsFromStaticFacts(
   staticFacts: StaticBuildAnalysisFactsLike,
   files: readonly DataPlaneSourceFile[],
 ): DataPlaneDiagnostic[] {
@@ -497,9 +513,7 @@ function dataPlaneErrorDiagnosticsFromStaticFacts(
   for (let index = 0; index < raw.length; index += 1) {
     const diagnostic = raw[index]!;
     assertRegisteredDiagnostic(diagnostic, `Vite data-plane diagnostics[${index}]`);
-    if (!isDiagnosticCode(diagnostic.code) || (diagnostic.severity ?? 'error') !== 'error') {
-      continue;
-    }
+    if (!isDiagnosticCode(diagnostic.code)) continue;
     const { fileName, line } = parseDiagnosticSite(diagnostic.site);
     const projected = deriveRegisteredDiagnostic(
       diagnostic,

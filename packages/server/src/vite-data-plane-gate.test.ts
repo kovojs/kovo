@@ -74,6 +74,29 @@ export async function loadProducts(input: { id: string }, db: any) {
 }
 `;
 
+const KV447_SQLITE_OWNER_TABLES = `
+import { kovo } from '@kovojs/drizzle';
+import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
+
+export const sessions = sqliteTable('sessions', {
+  id: text('id').primaryKey(),
+  ownerId: text('owner_id').notNull(),
+}, kovo((columns) => ({
+  domain: 'session',
+  key: columns.id,
+  owner: columns.ownerId,
+})));
+
+export const events = sqliteTable('events', {
+  id: text('id').primaryKey(),
+  sessionId: text('session_id').notNull().references(() => sessions.id),
+}, kovo((columns) => ({
+  domain: 'event',
+  key: columns.id,
+  ownerVia: { parent: sessions, fk: columns.sessionId, parentKey: sessions.id },
+})));
+`;
+
 const KV414_AUTHZ_CENSUS_UNCLASSIFIED = `
 import { query } from "@kovojs/server";
 import { kovo } from "@kovojs/drizzle";
@@ -563,6 +586,28 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     await expect(plugin.buildStart()).resolves.toBeUndefined();
   });
 
+  it('keeps every SQLite owner warning visible and non-blocking during build', async () => {
+    const root = await fixture({ 'src/schema.sqlite.ts': KV447_SQLITE_OWNER_TABLES });
+    const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+    const warnings: string[] = [];
+    await plugin.configResolved({ command: 'build', root });
+
+    await expect(
+      Reflect.apply(plugin.buildStart, { warn: (message: string) => warnings.push(message) }, []),
+    ).resolves.toBeUndefined();
+    expect(warnings).toHaveLength(2);
+    expect(warnings).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(
+          /WARN KV447 .*schema\.sqlite\.ts:\d+ .*Table sessions declares owner/u,
+        ),
+        expect.stringMatching(
+          /WARN KV447 .*schema\.sqlite\.ts:\d+ .*Table events declares ownerVia/u,
+        ),
+      ]),
+    );
+  });
+
   it('fails the build on a KV414 authorization-census canary', async () => {
     const root = await fixture({
       'src/drizzle-types.d.ts': DRIZZLE_QUERY_SHAPE_TYPES,
@@ -1003,6 +1048,25 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     );
     expect(kv422, JSON.stringify(captured)).toBeDefined();
     expect(kv422?.fileName).toMatch(/search\.ts$/);
+  });
+
+  it('keeps every SQLite owner warning visible in the non-blocking dev ledger', async () => {
+    const root = await fixture({ 'src/schema.sqlite.ts': KV447_SQLITE_OWNER_TABLES });
+    const captured: CapturedReport[] = [];
+    const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+
+    await plugin.configResolved({ command: 'serve', root });
+    await configureDevServer(plugin, root, captured);
+    await expect(plugin.buildStart()).resolves.toBeUndefined();
+
+    const sqlite = captured.find((report) => report.fileName.endsWith('schema.sqlite.ts'));
+    expect(sqlite?.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'KV447', message: expect.stringContaining('sessions') }),
+        expect.objectContaining({ code: 'KV447', message: expect.stringContaining('events') }),
+      ]),
+    );
+    expect(sqlite?.diagnostics).toHaveLength(2);
   });
 
   it('re-evaluates (debounced) on a data-plane HMR change and clears the prior teaching record', async () => {

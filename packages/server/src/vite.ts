@@ -41,7 +41,7 @@ import { isParanoidSecurityAdvisoryCode } from '@kovojs/core/internal/security-m
 import {
   collectCompilerQueryShapeFacts as collectCompilerQueryShapeFactsAdapter,
   collectDataPlaneAnalysis as collectDataPlaneAnalysisAdapter,
-  collectDataPlaneErrorDiagnostics as collectDataPlaneErrorDiagnosticsAdapter,
+  collectDataPlaneDiagnostics as collectDataPlaneDiagnosticsAdapter,
   collectRuntimeRegistryFacts as collectRuntimeRegistryFactsAdapter,
   dataPlaneSourceFiles as dataPlaneSourceFilesAdapter,
   isDataPlaneSourceFile,
@@ -81,10 +81,13 @@ import {
 } from './response-security-intrinsics.ts';
 
 const viteClearTimeout = globalThis.clearTimeout;
+const viteConsole = globalThis.console;
+const viteConsoleWarn = viteConsole.warn;
 const viteSetTimeout = globalThis.setTimeout;
 const viteExistsSync = existsSync;
 const vitePathExtname = pathExtname;
 const viteReadFileSync = readFileSync;
+const viteReflectApply = globalThis.Reflect.apply;
 const viteParanoidValue = process.env.KOVO_PARANOID;
 const viteBootParanoidStaticAdvisory = viteParanoidValue === '1' || viteParanoidValue === 'true';
 
@@ -124,7 +127,7 @@ export interface KovoVitePlugin {
 }
 
 interface KovoViteRuntimePlugin extends KovoVitePlugin {
-  buildStart?(): void | Promise<void>;
+  buildStart?(this: KovoViteBuildPluginContext): void | Promise<void>;
   configResolved?(config: KovoViteResolvedConfig): void | Promise<void>;
   configureServer?(
     server: KovoViteDevServer,
@@ -138,6 +141,10 @@ interface KovoViteRuntimePlugin extends KovoVitePlugin {
     id: string,
   ): null | Promise<null | { code: string; map: null }> | { code: string; map: null };
   handleHotUpdate?(context: KovoViteHotUpdateContext): Promise<readonly unknown[]>;
+}
+
+interface KovoViteBuildPluginContext {
+  warn(message: string): void;
 }
 
 interface KovoViteResolvedConfig {
@@ -287,11 +294,12 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
     if (!emit) return;
     let diagnostics: readonly DataPlaneDiagnostic[];
     try {
-      diagnostics = await collectDataPlaneErrorDiagnostics(root, app);
+      diagnostics = await collectDataPlaneDiagnostics(root, app);
     } catch {
       // A transient analyzer/parse failure must not take down the dev server.
       return;
     }
+    logDevDataPlaneWarnings(diagnostics);
 
     const byFile = new Map<string, DataPlaneDiagnostic[]>();
     for (const diagnostic of diagnostics) {
@@ -409,16 +417,19 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
         await runDevDataPlaneGate();
         return;
       }
-      // Build disposition: fail-closed — any error-severity finding fails the build.
+      // Build disposition: warnings remain visible and non-blocking; only error-severity
+      // findings fail closed (SPEC §11 diagnostic severity ownership).
       const diagnostics = snapshotBuildArray(
-        await collectDataPlaneErrorDiagnostics(root, app),
+        await collectDataPlaneDiagnostics(root, app),
         'data-plane build diagnostics',
       );
+      emitBuildDataPlaneWarnings(this, diagnostics);
+      const errors = dataPlaneErrorDiagnostics(diagnostics);
       if (
-        diagnostics.length > 0 &&
-        !paranoidDataPlaneDiagnosticsAreAdvisory(diagnostics, paranoidStaticAdvisory)
+        errors.length > 0 &&
+        !paranoidDataPlaneDiagnosticsAreAdvisory(errors, paranoidStaticAdvisory)
       ) {
-        throw dataPlaneGateError(diagnostics);
+        throw dataPlaneGateError(errors);
       }
     },
     async configureServer(server: KovoViteDevServer) {
@@ -878,11 +889,11 @@ function slashPath(value: string): string {
 /** Debounce window for the dev-mode re-evaluation; one whole-project pass per burst of edits. */
 const DATA_PLANE_GATE_DEBOUNCE_MS = 200;
 
-async function collectDataPlaneErrorDiagnostics(
+async function collectDataPlaneDiagnostics(
   root: string,
   app: string,
 ): Promise<DataPlaneDiagnostic[]> {
-  return collectDataPlaneErrorDiagnosticsAdapter({
+  return collectDataPlaneDiagnosticsAdapter({
     appSourceDir: buildSecurityPathDirname(appEntryFileName(app, root)),
     root,
   });
@@ -984,6 +995,44 @@ function paranoidDataPlaneDiagnosticsAreAdvisory(
     }
   }
   return true;
+}
+
+function dataPlaneErrorDiagnostics(
+  diagnostics: readonly DataPlaneDiagnostic[],
+): DataPlaneDiagnostic[] {
+  const errors: DataPlaneDiagnostic[] = [];
+  for (let index = 0; index < diagnostics.length; index += 1) {
+    const diagnostic = diagnostics[index]!;
+    assertRegisteredDiagnostic(diagnostic, `Data-plane diagnostics[${index}]`);
+    if (diagnostic.severity !== 'error') continue;
+    commitBuildArrayValue(errors, diagnostic, 'data-plane error diagnostics');
+  }
+  return errors;
+}
+
+function emitBuildDataPlaneWarnings(
+  context: KovoViteBuildPluginContext,
+  diagnostics: readonly DataPlaneDiagnostic[],
+): void {
+  for (let index = 0; index < diagnostics.length; index += 1) {
+    const diagnostic = diagnostics[index]!;
+    assertRegisteredDiagnostic(diagnostic, `Data-plane build diagnostics[${index}]`);
+    if (diagnostic.severity === 'error') continue;
+    context.warn(dataPlaneWarningLine(diagnostic));
+  }
+}
+
+function logDevDataPlaneWarnings(diagnostics: readonly DataPlaneDiagnostic[]): void {
+  for (let index = 0; index < diagnostics.length; index += 1) {
+    const diagnostic = diagnostics[index]!;
+    assertRegisteredDiagnostic(diagnostic, `Data-plane dev diagnostics[${index}]`);
+    if (diagnostic.severity === 'error') continue;
+    viteReflectApply(viteConsoleWarn, viteConsole, [dataPlaneWarningLine(diagnostic)]);
+  }
+}
+
+function dataPlaneWarningLine(diagnostic: DataPlaneDiagnostic): string {
+  return `${diagnostic.severity.toUpperCase()} ${diagnostic.code} ${diagnostic.site} ${diagnostic.message}`;
 }
 
 /** Build a dev-ledger module-diagnostics report (teaching disposition) for one app file. */

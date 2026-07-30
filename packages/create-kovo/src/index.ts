@@ -1098,7 +1098,7 @@ function runCreateKovoCli(options: CreateKovoCliOptions): number {
       ...(options.name === undefined ? {} : { name: options.name }),
       ...(options.retention === undefined ? {} : { retention: options.retention }),
     });
-    if (install === 'auto') installKovoProject(result.root);
+    if (install === 'auto') installKovoProject(result.root, 'example');
     process.stdout.write(
       renderExampleSuccess(
         result,
@@ -1130,7 +1130,7 @@ function runCreateKovoCli(options: CreateKovoCliOptions): number {
     ...(options.disableGit === undefined ? {} : { disableGit: options.disableGit }),
     retention,
   });
-  if (install === 'auto') installKovoProject(result.root);
+  if (install === 'auto') installKovoProject(result.root, 'starter');
   process.stdout.write(
     renderSuccess(result, {
       deploymentTarget,
@@ -1153,7 +1153,9 @@ function assertExampleCliOptionsCompatible(options: CreateKovoCliOptions): void 
   }
 }
 
-function installKovoProject(root: string): void {
+type CreateKovoScaffoldKind = 'example' | 'starter';
+
+function installKovoProject(root: string, scaffoldKind: CreateKovoScaffoldKind): void {
   const packageManager = packageManagerCommand();
   try {
     createKovoCommandShell.execFileSync(packageManager, ['install', '--ignore-scripts'], {
@@ -1171,6 +1173,7 @@ function installKovoProject(root: string): void {
   } catch (error) {
     throw new CreateKovoInstallError(
       root,
+      scaffoldKind,
       `safe ${packageManager} install failed: ${
         error instanceof Error ? error.message : String(error)
       }`,
@@ -1180,10 +1183,12 @@ function installKovoProject(root: string): void {
 
 class CreateKovoInstallError extends Error {
   readonly root: string;
+  readonly scaffoldKind: CreateKovoScaffoldKind;
 
-  constructor(root: string, message: string) {
+  constructor(root: string, scaffoldKind: CreateKovoScaffoldKind, message: string) {
     super(message);
     this.root = root;
+    this.scaffoldKind = scaffoldKind;
   }
 }
 
@@ -1497,6 +1502,7 @@ function renderExampleSuccess(
     `  ${packageManager} run typecheck`,
     `  ${packageManager} run test`,
     `  ${packageManager} run dev`,
+    `  ${packageManager} run check`,
     '',
   ].join('\n');
 }
@@ -1523,6 +1529,9 @@ function renderCliError(error: unknown): string {
       `  ${packageManagerCommand()} install --ignore-scripts`,
       `  ${packageManagerCommand()} exec kovo check lifecycle`,
       `  ${packageManagerCommand()} rebuild`,
+      ...(error.scaffoldKind === 'example'
+        ? [`  ${packageManagerCommand()} run typecheck`, `  ${packageManagerCommand()} run test`]
+        : []),
       `  ${packageManagerCommand()} run dev`,
       `  ${packageManagerCommand()} run check`,
     );

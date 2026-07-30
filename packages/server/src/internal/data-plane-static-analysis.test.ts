@@ -408,6 +408,50 @@ export const status = query({
     });
   });
 
+  it('keeps advisory findings in the shared Vite channel without promoting them to errors', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-data-plane-vite-advisory-'));
+    const srcDir = join(root, 'src');
+    await mkdir(srcDir, { recursive: true });
+    await writeFile(join(srcDir, 'schema.ts'), RELEVANT_DRIZZLE_SOURCE.source, 'utf8');
+    vi.doMock('@kovojs/drizzle/internal/static', () => ({
+      deriveMutationTouchRegistry: () => ({}),
+      extractStaticBuildAnalysisFactsFromProject: (
+        _options: unknown,
+        diagnosticRegistrar: MockDiagnosticRegistrar,
+      ) => ({
+        queries: [],
+        sqlSafetyDiagnostics: [
+          analyzerDiagnostic(
+            diagnosticRegistrar,
+            'KV447',
+            'Table sessions declares owner scoping; SQLite has no engine role/RLS layer.',
+            'src/schema.ts:5',
+          ),
+        ],
+        toctouFacts: [],
+        touchGraph: {},
+      }),
+    }));
+    const { collectDataPlaneDiagnostics, collectDataPlaneErrorDiagnostics } = await loadSubject();
+
+    try {
+      await expect(collectDataPlaneDiagnostics({ appSourceDir: srcDir, root })).resolves.toEqual([
+        expect.objectContaining({
+          code: 'KV447',
+          fileName: 'src/schema.ts',
+          line: 5,
+          severity: 'warn',
+          site: 'src/schema.ts:5',
+        }),
+      ]);
+      await expect(
+        collectDataPlaneErrorDiagnostics({ appSourceDir: srcDir, root }),
+      ).resolves.toEqual([]);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('cannot drop discovered unsafe sources through a selective late Array.filter replacement', async () => {
     // SPEC §2/§11.4: evaluated app code shares the build realm. The complete source census
     // must be snapshotted before relevance classification, not handed to a mutable Array filter.

@@ -1470,13 +1470,37 @@ describe('create-kovo starter (CLI)', () => {
   it('creates an advanced example through the same non-interactive schema path', () => {
     const parent = mkdtempSync(join(tmpdir(), 'create-kovo-cli-example-'));
     const root = join(parent, 'Sales Lab');
+    const fileCount = createKovoExampleProject({ example: 'crm', name: 'Sales Lab' }).files.length;
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
       expect(main([root, '--example', 'crm', '--yes', '--no-git', '--no-install'])).toBe(0);
       expect(stderr).not.toHaveBeenCalled();
-      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Kovo example created'));
-      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Example     crm'));
+      expect(stdout).toHaveBeenCalledTimes(1);
+      expect(stdout.mock.calls[0]?.[0]).toBe(
+        [
+          'Kovo example created',
+          '',
+          `  Directory   ${root}`,
+          '  Name        sales-lab',
+          '  Example     crm',
+          '  Retention   unconfigured',
+          '  Install     skipped',
+          '  Git         not initialized',
+          `  Files       ${String(fileCount)}`,
+          '',
+          'Next steps',
+          `  cd '${root}'`,
+          '  pnpm install --ignore-scripts',
+          '  pnpm exec kovo check lifecycle',
+          '  pnpm rebuild',
+          '  pnpm run typecheck',
+          '  pnpm run test',
+          '  pnpm run dev',
+          '  pnpm run check',
+          '',
+        ].join('\n'),
+      );
       expect(existsSync(join(root, 'src/scaffold-app.tsx'))).toBe(true);
       expect(existsSync(join(root, '.git'))).toBe(false);
     } finally {
@@ -1567,23 +1591,30 @@ describe('create-kovo starter (CLI)', () => {
 
     try {
       expect(main([root])).toBe(0);
-      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Kovo app created'));
-      expect(stdout).toHaveBeenCalledWith(expect.stringContaining(`Directory   ${root}`));
-      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Name        hello-cli'));
-      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Dialect     postgres'));
-      expect(stdout).toHaveBeenCalledWith(
-        expect.stringContaining(`Files       ${ALL_FILES.length}`),
+      expect(stdout).toHaveBeenCalledTimes(1);
+      expect(stdout.mock.calls[0]?.[0]).toBe(
+        [
+          'Kovo app created',
+          '',
+          `  Directory   ${root}`,
+          '  Name        hello-cli',
+          '  Dialect     postgres',
+          '  Deploy      node',
+          '  Retention   unconfigured',
+          '  Install     skipped',
+          '  Git         initialized',
+          `  Files       ${String(ALL_FILES.length)}`,
+          '',
+          'Next steps',
+          `  cd '${root}'`,
+          '  pnpm install --ignore-scripts',
+          '  pnpm exec kovo check lifecycle',
+          '  pnpm rebuild',
+          '  pnpm run dev',
+          '  pnpm run check',
+          '',
+        ].join('\n'),
       );
-      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Next steps'));
-      expect(stdout).toHaveBeenCalledWith(expect.stringContaining(`cd '${root}'`));
-      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('pnpm install --ignore-scripts'));
-      expect(stdout).toHaveBeenCalledWith(
-        expect.stringContaining('pnpm exec kovo check lifecycle'),
-      );
-      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('pnpm rebuild'));
-      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('pnpm run dev'));
-      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('pnpm run check'));
-      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Install     skipped'));
       expect(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))).toMatchObject({
         name: 'hello-cli',
       });
@@ -1608,10 +1639,18 @@ describe('create-kovo starter (CLI)', () => {
       process.env.KOVO_EXPERIMENTAL_SQLITE = '1';
       expect(main([root, '--dialect', 'sqlite'])).toBe(1);
       expect(stdout).not.toHaveBeenCalled();
-      expect(stderr).toHaveBeenCalledWith(expect.stringContaining('single-principal/local-dev'));
-      expect(stderr).toHaveBeenCalledWith(expect.stringContaining('No files were written'));
       expect(stderr).toHaveBeenCalledWith(
-        expect.stringContaining('create-kovo <target-directory> --sqlite --experimental-sqlite'),
+        [
+          'create-kovo: SQLite scaffold is experimental and single-principal/local-dev only; it does not provide Kovo authorization/confidentiality guarantees. Re-run with --sqlite --experimental-sqlite to acknowledge KV447 before create-kovo writes the target directory.',
+          '',
+          'No files were written and no install or Git process was started.',
+          '',
+          'To continue with the local-only SQLite posture:',
+          '  create-kovo <target-directory> --sqlite --experimental-sqlite',
+          '',
+          'Use the default Postgres/PGlite starter for engine-enforced authorization.',
+          '',
+        ].join('\n'),
       );
       expect(processMutation).not.toHaveBeenCalled();
       expect(existsSync(root)).toBe(false);
@@ -1722,10 +1761,26 @@ describe('create-kovo starter (CLI)', () => {
         stdio: 'inherit',
       });
       const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
-      expect(output).toContain('Install     complete');
-      expect(output).toContain('pnpm run dev');
-      expect(output).toContain('pnpm run check');
-      expect(output).not.toContain('  pnpm install --ignore-scripts\n');
+      expect(output).toBe(
+        [
+          'Kovo app created',
+          '',
+          `  Directory   ${root}`,
+          '  Name        installed-app',
+          '  Dialect     postgres',
+          '  Deploy      node',
+          '  Retention   unconfigured',
+          '  Install     complete',
+          '  Git         not initialized',
+          `  Files       ${String(ALL_FILES.length)}`,
+          '',
+          'Next steps',
+          `  cd '${root}'`,
+          '  pnpm run dev',
+          '  pnpm run check',
+          '',
+        ].join('\n'),
+      );
     } finally {
       install.mockRestore();
       stdout.mockRestore();
@@ -1747,13 +1802,59 @@ describe('create-kovo starter (CLI)', () => {
       expect(existsSync(join(root, 'package.json'))).toBe(true);
       expect(stdout).not.toHaveBeenCalled();
       const output = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
-      expect(output).toContain('project files were created');
-      expect(output).toContain('pnpm install --ignore-scripts');
-      expect(output).toContain('pnpm exec kovo check lifecycle');
-      expect(output).toContain('pnpm rebuild');
-      expect(output).toContain('pnpm run dev');
-      expect(output).toContain('pnpm run check');
-      expect(output).not.toContain('Kovo app created');
+      expect(output).toBe(
+        [
+          'create-kovo: safe pnpm install failed: network unavailable',
+          '',
+          'The project files were created, but dependency installation did not complete.',
+          '',
+          `  cd '${root}'`,
+          '  pnpm install --ignore-scripts',
+          '  pnpm exec kovo check lifecycle',
+          '  pnpm rebuild',
+          '  pnpm run dev',
+          '  pnpm run check',
+          '',
+        ].join('\n'),
+      );
+    } finally {
+      install.mockRestore();
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(parent, { force: true, recursive: true });
+    }
+  });
+
+  it('reports the selected example checks after a partial install', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'create-kovo-example-install-failure-'));
+    const root = join(parent, 'Example Install Failure');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const install = vi.spyOn(createKovoCommandShell, 'execFileSync').mockImplementation(() => {
+      throw new Error('registry unavailable');
+    });
+
+    try {
+      expect(main([root, '--example', 'crm', '--install', '--disable-git'])).toBe(1);
+      expect(existsSync(join(root, 'package.json'))).toBe(true);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toBe(
+        [
+          'create-kovo: safe pnpm install failed: registry unavailable',
+          '',
+          'The project files were created, but dependency installation did not complete.',
+          '',
+          `  cd '${root}'`,
+          '  pnpm install --ignore-scripts',
+          '  pnpm exec kovo check lifecycle',
+          '  pnpm rebuild',
+          '  pnpm run typecheck',
+          '  pnpm run test',
+          '  pnpm run dev',
+          '  pnpm run check',
+          '',
+        ].join('\n'),
+      );
     } finally {
       install.mockRestore();
       stdout.mockRestore();

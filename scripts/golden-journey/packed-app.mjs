@@ -60,6 +60,19 @@ const PACKED_APPS_CHECK_PHASES = Object.freeze([
   'build-check-graph',
   'graph-diagnostics',
 ]);
+const STARTER_PUBLIC_STYLE_IMPORTS = Object.freeze([
+  '@kovojs/style',
+  '@kovojs/ui/badge',
+  '@kovojs/ui/button',
+  '@kovojs/ui/card',
+]);
+const STARTER_PUBLIC_STYLE_BINDINGS = Object.freeze([
+  '@kovojs/server#stylesheet',
+  '@kovojs/style#*',
+  '@kovojs/ui/badge#Badge',
+  '@kovojs/ui/button#Button',
+  '@kovojs/ui/card#Card',
+]);
 export const PACKED_JOURNEY_PACKAGE_NAMES = Object.freeze([
   '@kovojs/better-auth',
   '@kovojs/browser',
@@ -176,6 +189,11 @@ export async function runPackedAppVariant({
     });
     transcripts.push(transcript('create', create));
     phases.push(requirePackedPhaseSuccess('create', create));
+    requirePackedCreatorHandoff(create, {
+      appRoot,
+      dialect,
+      name: `kovo-golden-${dialect}-${String(sampleIndex + 1)}`,
+    });
 
     secretInventory = discoverEnvSecrets(appRoot);
     const scaffoldSnapshot = snapshotPreCrudState(appRoot, {
@@ -242,13 +260,15 @@ export async function runPackedAppVariant({
     screenshot = browser.screenshot;
     accessibility = browser.accessibility;
     await devServer.stop();
-    transcripts.push({
+    const devObservation = {
       phase: 'dev',
       signal: devServer.exit()?.signal ?? null,
       status: devServer.exit()?.status ?? 0,
       stderr: devServer.transcript().stderr,
       stdout: devServer.transcript().stdout,
-    });
+    };
+    transcripts.push(devObservation);
+    requirePackedSqliteOwnerWarnings(dialect, 'dev', devObservation);
     devServer = undefined;
 
     devServer = startDevServer({
@@ -290,6 +310,7 @@ export async function runPackedAppVariant({
     });
     transcripts.push(transcript('check', check));
     phases.push(requirePackedSourceCheckSuccess(check));
+    requirePackedSqliteOwnerWarnings(dialect, 'check', check);
     buildPosture = declareJourneyProductionRetention(appRoot);
     const build = commandRunner(['pnpm', 'run', 'build:prod'], {
       cwd: appRoot,
@@ -298,6 +319,7 @@ export async function runPackedAppVariant({
     });
     transcripts.push(transcript('build', build));
     phases.push(requirePackedPhaseSuccess('build', build));
+    requirePackedSqliteOwnerWarnings(dialect, 'build', build);
 
     return Object.freeze({
       schema: PACKED_APPS_VARIANT_SCHEMA,
@@ -623,6 +645,12 @@ export function validatePackedAppsReport(report) {
         !/^sha256:[0-9a-f]{64}$/u.test(variant.styledUi?.sha256 ?? '') ||
         !Number.isSafeInteger(variant.styledUi?.styled?.styleSheets) ||
         variant.styledUi.styled.styleSheets < 1 ||
+        !Number.isSafeInteger(variant.styledUi?.styled?.styledSourceElements) ||
+        variant.styledUi.styled.styledSourceElements < 1 ||
+        typeof variant.styledUi?.styled?.buttonBackground !== 'string' ||
+        variant.styledUi.styled.buttonBackground.trim().length === 0 ||
+        variant.styledUi.styled.buttonBackground === 'rgba(0, 0, 0, 0)' ||
+        variant.styledUi.styled.buttonBackground === 'transparent' ||
         typeof variant.styledUi?.styled?.fontFamily !== 'string' ||
         variant.styledUi.styled.fontFamily.trim().length === 0
       ) {
@@ -644,6 +672,31 @@ export function validatePackedAppsReport(report) {
       }
       if (variant.concepts?.counts?.environmentEdits !== 0) {
         findings.push(`${label} required an undocumented environment edit`);
+      }
+      const frameworkImports = variant.concepts?.frameworkImports;
+      const frameworkBindings = variant.concepts?.frameworkBindings;
+      if (!Array.isArray(frameworkImports) || !Array.isArray(frameworkBindings)) {
+        findings.push(`${label} omitted its public style/component API census`);
+      } else {
+        for (const specifier of STARTER_PUBLIC_STYLE_IMPORTS) {
+          if (!frameworkImports.includes(specifier)) {
+            findings.push(`${label} did not author its styled UI through ${specifier}`);
+          }
+        }
+        for (const binding of STARTER_PUBLIC_STYLE_BINDINGS) {
+          if (!frameworkBindings.includes(binding)) {
+            findings.push(`${label} did not author its styled UI through ${binding}`);
+          }
+        }
+        if (
+          frameworkImports.some(
+            (specifier) =>
+              typeof specifier !== 'string' ||
+              /(?:^|\/)(?:generated|internal)(?:\/|$)/u.test(specifier),
+          )
+        ) {
+          findings.push(`${label} styled starter imported an internal/generated Kovo API`);
+        }
       }
       if (
         variant.buildPosture?.schema !== PACKED_APPS_BUILD_POSTURE_SCHEMA ||
@@ -1538,6 +1591,80 @@ export function requirePackedPhaseSuccess(name, observation) {
   return evidence;
 }
 
+export function requirePackedCreatorHandoff(observation, { appRoot, dialect, name }) {
+  const output = String(observation.stdout ?? '');
+  const findings = [];
+  const expectedSummary = [
+    'Kovo app created',
+    '',
+    `  Directory   ${appRoot}`,
+    `  Name        ${name}`,
+    `  Dialect     ${dialect}`,
+    '  Deploy      node',
+    '  Retention   unconfigured',
+    '  Install     skipped',
+    '  Git         not initialized',
+  ].join('\n');
+  if (!output.startsWith(expectedSummary)) {
+    findings.push('creator summary did not exactly match the selected non-interactive scaffold');
+  }
+  if (!/\n  Files       [1-9]\d*\n/u.test(output) || !output.includes('\nNext steps\n')) {
+    findings.push('creator summary omitted its exact positive file count or Next steps boundary');
+  }
+  const expectedNextSteps = [
+    'Next steps',
+    `  cd ${shellQuoteForEvidence(appRoot)}`,
+    '  pnpm install --ignore-scripts',
+    '  pnpm exec kovo check lifecycle',
+    '  pnpm rebuild',
+    '  pnpm run dev',
+    '  pnpm run check',
+    '',
+  ].join('\n');
+  if (!output.endsWith(expectedNextSteps)) {
+    findings.push('creator handoff did not exactly include install, dev, and check in order');
+  }
+  const sqlitePosture = [
+    '  WARNING SQLite is experimental and single-principal/local-dev only.',
+    '  It does not provide Kovo authorization or confidentiality guarantees.',
+    '  KV447: owner annotations are audit metadata, not engine-enforced access control.',
+  ];
+  for (const line of sqlitePosture) {
+    if (dialect === 'sqlite' && !output.includes(line)) {
+      findings.push(`SQLite creator handoff omitted ${line}`);
+    }
+    if (dialect !== 'sqlite' && output.includes(line)) {
+      findings.push(`Postgres creator handoff unexpectedly included ${line}`);
+    }
+  }
+  if (String(observation.stderr ?? '').trim().length > 0) {
+    findings.push('successful creator handoff wrote unexpected stderr');
+  }
+  if (findings.length > 0) {
+    throw new JourneyPhaseError('create', findings.join('; '));
+  }
+}
+
+export function requirePackedSqliteOwnerWarnings(dialect, phase, observation) {
+  const output = `${String(observation.stdout ?? '')}\n${String(observation.stderr ?? '')}`;
+  if (dialect !== 'sqlite') {
+    if (output.includes('KV447')) {
+      throw new JourneyPhaseError(phase, `${phase} emitted SQLite-only KV447 for Postgres`);
+    }
+    return;
+  }
+  const missing = ['session', 'account'].filter(
+    (table) =>
+      !new RegExp(`WARN KV447 [^\\n]*Table ${table} declares owner scoping`, 'u').test(output),
+  );
+  if (missing.length > 0) {
+    throw new JourneyPhaseError(
+      phase,
+      `${phase} omitted per-table KV447 warnings for ${missing.join(', ')}`,
+    );
+  }
+}
+
 export function requirePackedSourceCheckSuccess(observation) {
   const evidence = requirePackedPhaseSuccess('check', observation);
   try {
@@ -1554,6 +1681,11 @@ export function requirePackedSourceCheckSuccess(observation) {
       evidence,
     );
   }
+}
+
+function shellQuoteForEvidence(value) {
+  if (/^[A-Za-z0-9_/:=.,@%+-]+$/u.test(value)) return value;
+  return `'${String(value).replaceAll("'", "'\\''")}'`;
 }
 
 export function parsePackedSourceCheckPhaseCensus(output) {

@@ -16,7 +16,9 @@ import {
   declareJourneyProductionRetention,
   packedSourceCheckPhaseCensusFindings,
   parsePackedSourceCheckPhaseCensus,
+  requirePackedCreatorHandoff,
   requirePackedPhaseSuccess,
+  requirePackedSqliteOwnerWarnings,
   requirePackedSourceCheckSuccess,
   rewriteScaffoldDependenciesToPackedTarballs,
   sanitizeCapturedMutationResponse,
@@ -35,6 +37,71 @@ afterEach(() => {
 describe('packed app golden journey', () => {
   it('runs every WCAG 2.2 A/AA axe tag available to the pinned engine', () => {
     expect(AXE_WCAG_22_AA_TAGS).toEqual(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']);
+  });
+
+  it('requires the exact conditional creator handoff and SQLite warning surfaces', () => {
+    const appRoot = '/tmp/kovo packed app';
+    const nextSteps = [
+      'Next steps',
+      `  cd '${appRoot}'`,
+      '  pnpm install --ignore-scripts',
+      '  pnpm exec kovo check lifecycle',
+      '  pnpm rebuild',
+      '  pnpm run dev',
+      '  pnpm run check',
+      '',
+    ].join('\n');
+    const sqliteOutput = [
+      'Kovo app created',
+      '',
+      `  Directory   ${appRoot}`,
+      '  Name        sqlite-app',
+      '  Dialect     sqlite',
+      '  Deploy      node',
+      '  Retention   unconfigured',
+      '  Install     skipped',
+      '  Git         not initialized',
+      '  Files       42',
+      '',
+      '  WARNING SQLite is experimental and single-principal/local-dev only.',
+      '  It does not provide Kovo authorization or confidentiality guarantees.',
+      '  KV447: owner annotations are audit metadata, not engine-enforced access control.',
+      '',
+      nextSteps,
+    ].join('\n');
+
+    expect(() =>
+      requirePackedCreatorHandoff(
+        { stderr: '', stdout: sqliteOutput },
+        { appRoot, dialect: 'sqlite', name: 'sqlite-app' },
+      ),
+    ).not.toThrow();
+    expect(() =>
+      requirePackedCreatorHandoff(
+        { stderr: '', stdout: sqliteOutput.replace('  pnpm run check\n', '') },
+        { appRoot, dialect: 'sqlite', name: 'sqlite-app' },
+      ),
+    ).toThrow(/install, dev, and check/u);
+
+    const warnings = [
+      'WARN KV447 src/schema.sqlite.ts:45 Table session declares owner scoping',
+      'WARN KV447 src/schema.sqlite.ts:72 Table account declares owner scoping',
+    ].join('\n');
+    expect(() =>
+      requirePackedSqliteOwnerWarnings('sqlite', 'check', { stderr: '', stdout: warnings }),
+    ).not.toThrow();
+    expect(() =>
+      requirePackedSqliteOwnerWarnings('sqlite', 'build', {
+        stderr: '',
+        stdout: warnings.replace('Table account', 'Table audit'),
+      }),
+    ).toThrow(/account/u);
+    expect(() =>
+      requirePackedSqliteOwnerWarnings('postgres', 'dev', {
+        stderr: '',
+        stdout: warnings,
+      }),
+    ).toThrow(/SQLite-only KV447/u);
   });
 
   it('retains streamed response shape without persisting credential-bearing attributes', () => {
@@ -249,6 +316,18 @@ describe('packed app golden journey', () => {
       'variants[0] did not prove an axe-clean styled UI',
     );
 
+    const internalStyleApi = structuredClone(report);
+    internalStyleApi.variants[0].concepts.frameworkImports.push('@kovojs/style/internal');
+    expect(validatePackedAppsReport(internalStyleApi)).toContain(
+      'variants[0] styled starter imported an internal/generated Kovo API',
+    );
+
+    const browserDefaultButton = structuredClone(report);
+    browserDefaultButton.variants[0].styledUi.styled.buttonBackground = 'rgba(0, 0, 0, 0)';
+    expect(validatePackedAppsReport(browserDefaultButton)).toContain(
+      'variants[0] did not retain an authenticated styled-UI screenshot',
+    );
+
     const missingDialect = structuredClone(report);
     missingDialect.variants.pop();
     expect(validatePackedAppsReport(missingDialect)).toContain('variants omit sample 0 sqlite');
@@ -380,7 +459,23 @@ function successfulReport() {
         installedFiles: 10,
         transitiveProductionDependencies: 5,
       },
-      concepts: { counts: { environmentEdits: 0 } },
+      concepts: {
+        counts: { environmentEdits: 0 },
+        frameworkImports: [
+          '@kovojs/server',
+          '@kovojs/style',
+          '@kovojs/ui/badge',
+          '@kovojs/ui/button',
+          '@kovojs/ui/card',
+        ],
+        frameworkBindings: [
+          '@kovojs/server#stylesheet',
+          '@kovojs/style#*',
+          '@kovojs/ui/badge#Badge',
+          '@kovojs/ui/button#Button',
+          '@kovojs/ui/card#Card',
+        ],
+      },
       buildPosture: {
         schema: PACKED_APPS_BUILD_POSTURE_SCHEMA,
         configPath: 'kovo.config.ts',
