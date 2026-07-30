@@ -200,6 +200,9 @@ describe('build/export security bootstrap ordering', () => {
     expect(source).not.toContain('lockServerRequestSafeRuntimeRealm();');
     expect(source).not.toContain('import * as appModule from');
     expect(source).not.toContain("from '@kovojs/server/internal/app-shell-vite'");
+    expect(source).toContain(
+      "const app = resolveKovoAppToken(appToken, 'generated production handler');",
+    );
     expect(source).toContain('appendFrameworkRuntimeArrayValue');
     expect(source).not.toContain('[result.length]');
     expect(source).not.toContain('[hrefOrder.length]');

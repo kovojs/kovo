@@ -2048,6 +2048,9 @@ function validateStaticTrustSuccess(envelope: object, value: unknown): PreEvalua
   for (let index = 0; index < sourceGraphArrayKeys.length; index += 1) {
     staticTrustArrayProperty(sourceGraphValue, sourceGraphArrayKeys[index]!, 'source-graph facts');
   }
+  const components = rehydrateStaticTrustComponents(
+    buildOwnDataValue(sourceGraphValue, 'components', 'Static-trust source-graph facts'),
+  );
   const compilerTaskBFiniteVerdict = buildOwnDataValue(
     sourceGraphValue,
     'compilerTaskBFiniteVerdict',
@@ -2114,6 +2117,7 @@ function validateStaticTrustSuccess(envelope: object, value: unknown): PreEvalua
     files,
     sourceGraphFacts: {
       ...sourceGraphFacts,
+      components,
       registryDeclarationAnchors: registryDeclarationAnchors as Map<
         string,
         KovoDiagnosticSourceAnchor | null
@@ -2121,6 +2125,199 @@ function validateStaticTrustSuccess(envelope: object, value: unknown): PreEvalua
       routeOutcomes: routeOutcomes as Map<string, 'file' | 'stream'>,
     },
   };
+}
+
+/**
+ * Reconstruct compiler diagnostic identity after the trusted static-analysis subprocess boundary.
+ *
+ * The worker authenticates and descriptor-snapshots compiler output before emitting inert JSON.
+ * JSON deliberately cannot carry the diagnostic registry WeakSet identity, so the parent validates
+ * the complete finite wire shape and mints a fresh local registered record before any later
+ * build/check consumer treats it as compiler truth (SPEC §5.2 rule 5 / §6.6).
+ */
+function rehydrateStaticTrustComponents(value: unknown): SourceComponentGraphFacts[] {
+  const source = buildSnapshotDenseArray(
+    value as readonly SourceComponentGraphFacts[],
+    'Static-trust source-graph components',
+  );
+  const components: SourceComponentGraphFacts[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const component = source[index] as unknown;
+    if (component === null || typeof component !== 'object' || buildArrayIsArray(component)) {
+      throw new TypeError(`Static-trust source-graph components[${index}] must be an object.`);
+    }
+    const label = `Static-trust source-graph components[${index}]`;
+    const diagnosticSource = buildSnapshotDenseArray(
+      buildOwnDataValue(component, 'diagnostics', label) as readonly unknown[],
+      `${label}.diagnostics`,
+    );
+    const diagnostics: CompileResult['diagnostics'][number][] = [];
+    for (let diagnosticIndex = 0; diagnosticIndex < diagnosticSource.length; diagnosticIndex += 1) {
+      buildSecurityArrayAppend(
+        diagnostics,
+        rehydrateStaticTrustDiagnostic(
+          diagnosticSource[diagnosticIndex],
+          `${label}.diagnostics[${diagnosticIndex}]`,
+        ),
+        'Rehydrated static-trust compiler diagnostics',
+      );
+    }
+    buildSecurityArrayAppend(
+      components,
+      {
+        agentGraphFacts: staticTrustComponentArray(component, 'agentGraphFacts', label),
+        componentGraphFacts: staticTrustComponentArray(component, 'componentGraphFacts', label),
+        diagnostics,
+        handlerWriteSinkFacts: staticTrustComponentArray(component, 'handlerWriteSinkFacts', label),
+        publishToClientFacts: staticTrustComponentArray(component, 'publishToClientFacts', label),
+        taskGraphFacts: staticTrustComponentArray(component, 'taskGraphFacts', label),
+        updateCoverage: staticTrustComponentArray(component, 'updateCoverage', label),
+      },
+      'Rehydrated static-trust source-graph components',
+    );
+  }
+  return components;
+}
+
+function staticTrustComponentArray<
+  Key extends Exclude<keyof SourceComponentGraphFacts, 'diagnostics'>,
+>(component: object, key: Key, label: string): SourceComponentGraphFacts[Key] {
+  return buildSnapshotDenseArray(
+    buildOwnDataValue(component, key, label) as readonly unknown[],
+    `${label}.${key}`,
+  ) as unknown as SourceComponentGraphFacts[Key];
+}
+
+function rehydrateStaticTrustDiagnostic(
+  value: unknown,
+  label: string,
+): CompileResult['diagnostics'][number] {
+  if (value === null || typeof value !== 'object' || buildArrayIsArray(value)) {
+    throw new TypeError(`${label} must be an object.`);
+  }
+  const keys = buildSnapshotDenseArray(buildObjectKeys(value), `${label} keys`);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    if (
+      key !== 'code' &&
+      key !== 'fileName' &&
+      key !== 'help' &&
+      key !== 'length' &&
+      key !== 'message' &&
+      key !== 'severity' &&
+      key !== 'source' &&
+      key !== 'start'
+    ) {
+      throw new TypeError(`${label}.${key} is not a compiler diagnostic field.`);
+    }
+  }
+  const code = buildOwnDataValue(value, 'code', label);
+  const fileName = buildOwnDataValue(value, 'fileName', label);
+  const help = buildOwnDataValue(value, 'help', label);
+  const length = buildOwnDataValue(value, 'length', label);
+  const message = buildOwnDataValue(value, 'message', label);
+  const severity = buildOwnDataValue(value, 'severity', label);
+  if (
+    !isDiagnosticCode(code) ||
+    typeof fileName !== 'string' ||
+    fileName.length === 0 ||
+    (help !== undefined && (typeof help !== 'string' || help.length === 0)) ||
+    (length !== undefined && !staticTrustNonNegativeInteger(length)) ||
+    typeof message !== 'string' ||
+    message.length === 0 ||
+    typeof severity !== 'string'
+  ) {
+    throw new TypeError(`${label} has an invalid compiler diagnostic wire shape.`);
+  }
+  const source = staticTrustDiagnosticSource(buildOwnDataValue(value, 'source', label), label);
+  const start = staticTrustDiagnosticStart(buildOwnDataValue(value, 'start', label), label);
+  const registered = createRegisteredDiagnostic(
+    code,
+    {
+      fileName,
+      ...(length === undefined ? {} : { length }),
+      ...(source === undefined ? {} : { source }),
+      ...(start === undefined ? {} : { start }),
+    },
+    {
+      ...(help === undefined ? {} : { help }),
+      message,
+    },
+  );
+  if (registered.severity !== severity) {
+    throw new TypeError(`${label}.severity does not match the registered diagnostic definition.`);
+  }
+  return registered;
+}
+
+function staticTrustDiagnosticSource(
+  value: unknown,
+  label: string,
+): { end: number; file: string; start: number } | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || typeof value !== 'object' || buildArrayIsArray(value)) {
+    throw new TypeError(`${label}.source must be an object.`);
+  }
+  const keys = buildSnapshotDenseArray(buildObjectKeys(value), `${label}.source keys`);
+  if (!staticTrustExactKeys(keys, ['end', 'file', 'start'])) {
+    throw new TypeError(`${label}.source must contain only end, file, and start.`);
+  }
+  const end = buildOwnDataValue(value, 'end', `${label}.source`);
+  const file = buildOwnDataValue(value, 'file', `${label}.source`);
+  const start = buildOwnDataValue(value, 'start', `${label}.source`);
+  if (
+    !staticTrustNonNegativeInteger(end) ||
+    typeof file !== 'string' ||
+    file.length === 0 ||
+    !staticTrustNonNegativeInteger(start) ||
+    start > end
+  ) {
+    throw new TypeError(`${label}.source has an invalid source range.`);
+  }
+  return { end, file, start };
+}
+
+function staticTrustDiagnosticStart(
+  value: unknown,
+  label: string,
+): { column: number; line: number } | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || typeof value !== 'object' || buildArrayIsArray(value)) {
+    throw new TypeError(`${label}.start must be an object.`);
+  }
+  const keys = buildSnapshotDenseArray(buildObjectKeys(value), `${label}.start keys`);
+  if (!staticTrustExactKeys(keys, ['column', 'line'])) {
+    throw new TypeError(`${label}.start must contain only column and line.`);
+  }
+  const column = buildOwnDataValue(value, 'column', `${label}.start`);
+  const line = buildOwnDataValue(value, 'line', `${label}.start`);
+  if (
+    !staticTrustNonNegativeInteger(column) ||
+    column < 1 ||
+    !staticTrustNonNegativeInteger(line) ||
+    line < 1
+  ) {
+    throw new TypeError(`${label}.start has an invalid line or column.`);
+  }
+  return { column, line };
+}
+
+function staticTrustExactKeys(keys: readonly string[], expected: readonly string[]): boolean {
+  if (keys.length !== expected.length) return false;
+  const seen = buildCreateSet<string>();
+  for (let index = 0; index < keys.length; index += 1) {
+    buildSetAdd(seen, keys[index]!);
+  }
+  for (let index = 0; index < expected.length; index += 1) {
+    if (!buildSetHas(seen, expected[index]!)) return false;
+  }
+  return true;
+}
+
+function staticTrustNonNegativeInteger(value: unknown): value is number {
+  return (
+    typeof value === 'number' && value >= 0 && value <= 9_007_199_254_740_991 && value % 1 === 0
+  );
 }
 
 function validateStaticTrustSourceFiles(value: unknown, label: string): BuildCheckSourceFile[] {
@@ -7628,7 +7825,7 @@ export function kovoServerHandlerEntrySource(
       runtimeTarget === 'cloudflare'
         ? ''
         : "import '@kovojs/server/internal/sql-parser-authority-bootstrap';",
-      `import { createRequestHandler, deriveClosedKovoApp, runWithGeneratedLiveTargetRegistry } from ${stringifyBuildValue(
+      `import { createRequestHandler, deriveClosedKovoApp, resolveKovoAppToken, runWithGeneratedLiveTargetRegistry } from ${stringifyBuildValue(
         generatedHandlerRuntimeHref(),
       )};`,
       generatedClientModuleEntry === undefined
@@ -7649,7 +7846,8 @@ export function kovoServerHandlerEntrySource(
         : `const appModule = await runWithGeneratedLiveTargetRegistry(() => generatedClientModuleInstaller.load(${stringifyBuildValue(
             generatedClientModuleEntry.renderPlanFingerprint,
           )}, () => import(${stringifyBuildValue(pathToFileURL(appModulePath).href)})));`,
-      'const app = appModule.default ?? appModule.app;',
+      'const appToken = appModule.default ?? appModule.app;',
+      "const app = resolveKovoAppToken(appToken, 'generated production handler');",
       `const stylesheetAssets = ${stringifyBuildValue(stylesheetAssets)};`,
       'export default createRequestHandler(appWithBuildStylesheetAssets(app, stylesheetAssets));',
       '',

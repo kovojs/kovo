@@ -775,8 +775,8 @@ export default app.assemble({
         ),
       ).toEqual(
         expect.arrayContaining([
-          '/c/generated/app.client.js',
-          '/c/kovo-generated-app-runtime.client.js',
+          '/c/kovo-runtime.client.js',
+          '/c/src/components/counter-island.client.js',
         ]),
       );
 

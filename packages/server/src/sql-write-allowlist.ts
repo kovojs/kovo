@@ -33,6 +33,7 @@ const nativeArraySort = Array.prototype.sort;
 type ManagedSqlParserAuthority = (sql: string) => Statement[];
 
 let managedSqlParserAuthority: ManagedSqlParserAuthority | undefined;
+let managedSqlParserAuthorityRegistryObserved = false;
 let managedSqlParserAuthorityRegistrySealed = false;
 
 /** @internal Capability-authenticated Node bootstrap hook; absent from package exports. */
@@ -61,8 +62,9 @@ export function installManagedSqlParserAuthority(
  *
  * Vite can evaluate the trusted bootstrap through more than one module id while retaining this
  * registry as one externalized instance. The exact private capability may acknowledge an already
- * pinned authority, but it can neither replace that authority nor populate a registry that an
- * earlier classifier read already sealed empty (SPEC §6.6 rule 6).
+ * pinned authority and may populate a root-sealed registry before its first classifier read. It
+ * can neither replace that authority nor populate a registry after classifier truth was observed
+ * as empty (SPEC §6.6 rule 6).
  */
 export function ensureManagedSqlParserAuthority(
   capability: unknown,
@@ -75,7 +77,7 @@ export function ensureManagedSqlParserAuthority(
     throw new TypeError('Kovo managed SQL parser authority must be callable.');
   }
   if (managedSqlParserAuthority !== undefined) return;
-  if (managedSqlParserAuthorityRegistrySealed) {
+  if (managedSqlParserAuthorityRegistrySealed && managedSqlParserAuthorityRegistryObserved) {
     throw new TypeError('Kovo managed SQL parser authority registry is sealed.');
   }
   managedSqlParserAuthority = authority;
@@ -137,6 +139,7 @@ export const classifyStatement = securityClassifier(
     // Reading classifier truth closes the install window even for direct/private-module consumers.
     // A platform without a boot-installed authority must stay default-deny rather than accepting a
     // late app-supplied parser.
+    managedSqlParserAuthorityRegistryObserved = true;
     managedSqlParserAuthorityRegistrySealed = true;
     const parserAuthority = managedSqlParserAuthority;
     if (parserAuthority === undefined) {

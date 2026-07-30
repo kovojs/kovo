@@ -38,6 +38,9 @@ const generatedHandlerClientModulesPath = fileURLToPath(
 const generatedHandlerCreateAppPath = fileURLToPath(
   new URL('../../../server/src/app.ts', import.meta.url),
 );
+const generatedHandlerAppTokenPath = fileURLToPath(
+  new URL('../../../server/src/app-token.ts', import.meta.url),
+);
 
 async function executeGeneratedHandlerBundle(
   root: string,
@@ -53,6 +56,7 @@ async function executeGeneratedHandlerBundle(
     appPath,
     [
       `import { createApp } from ${JSON.stringify(generatedHandlerCreateAppPath)};`,
+      `import { createKovoAppToken } from ${JSON.stringify(generatedHandlerAppTokenPath)};`,
       `import { createMemoryVersionedClientModuleStore, snapshotVersionedClientModuleRegistry } from ${JSON.stringify(generatedHandlerClientModulesPath)};`,
       "const stale = [{ path: '/c/stale.client.js', source: 'export const stale = true;' }];",
       'const store = createMemoryVersionedClientModuleStore();',
@@ -61,7 +65,7 @@ async function executeGeneratedHandlerBundle(
       )} });`,
       'const app = createApp({ clientModules: snapshotVersionedClientModuleRegistry(store), routes: [] });',
       `globalThis[${JSON.stringify(resultKey)}] = app;`,
-      'export default app;',
+      'export default createKovoAppToken(app);',
       '',
     ].join('\n'),
     'utf8',

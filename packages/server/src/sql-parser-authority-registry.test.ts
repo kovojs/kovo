@@ -53,6 +53,50 @@ describe('managed SQL parser authority registry', () => {
     expect(() =>
       installManagedSqlParserAuthority(managedSqlParserAuthorityInstallCapability, () => []),
     ).toThrow(/authority registry is sealed/u);
+    expect(() =>
+      ensureManagedSqlParserAuthority(managedSqlParserAuthorityInstallCapability, () => []),
+    ).toThrow(/authority registry is sealed/u);
+  });
+
+  it('lets the exact bootstrap fill a root-sealed registry before classifier truth is observed', () => {
+    const script = `
+      const { existsSync } = await import('node:fs');
+      const { registerHooks } = await import('node:module');
+      registerHooks({
+        resolve(specifier, context, nextResolve) {
+          if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+            const candidate = new URL(specifier.replace(/\\.js$/, '.ts'), context.parentURL);
+            if (existsSync(candidate)) return nextResolve(candidate.href, context);
+          }
+          return nextResolve(specifier, context);
+        },
+      });
+      const capability = await import(
+        new URL('./src/sql-parser-authority-install-capability.ts', import.meta.url)
+      );
+      const registry = await import(new URL('./src/sql-write-allowlist.ts', import.meta.url));
+      registry.sealManagedSqlParserAuthorityRegistry();
+      registry.ensureManagedSqlParserAuthority(
+        capability.managedSqlParserAuthorityInstallCapability,
+        () => [],
+      );
+      const verdict = registry.classifyStatement('SELECT 1', { dialect: 'postgres' });
+      process.exit(verdict.kind === 'proven-safe' ? 0 : 3);
+    `;
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--disable-warning=ExperimentalWarning',
+        '--experimental-transform-types',
+        '--input-type=module',
+        '--eval',
+        script,
+      ],
+      { cwd: new URL('../', import.meta.url), encoding: 'utf8' },
+    );
+
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(0);
   });
 
   it('lets equivalent trusted bootstrap evaluators retain the first pinned authority only', () => {
