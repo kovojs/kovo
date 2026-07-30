@@ -3803,6 +3803,10 @@ const REQUEST_REVIEWED_BUILD_EVALUATED_MODULES = new Set([
   '@kovojs/server/egress',
   '@kovojs/server/files',
   '@kovojs/server/generated/db-capabilities',
+  // Repository-owned adversarial fixtures use this internal bridge to construct otherwise
+  // unreachable aggregate states. KV235 independently rejects the subpath in app-authored input;
+  // its reviewed module initializer must not create unrelated KV424 noise in classifier proofs.
+  '@kovojs/server/internal/fixture-app',
   '@kovojs/server/node',
   '@kovojs/server/password',
   '@kovojs/server/postgres',
@@ -35498,17 +35502,10 @@ function requestCallIsPublicStyleAttrs(call: Node): boolean {
 function requestCallIsPublicMutationFormAttributes(call: Node): boolean {
   const node = unwrapStaticExpression(call);
   if (!Node.isCallExpression(node)) return false;
-  return (
-    !!requestExactPristineDirectImport(
-      node.getExpression(),
-      '@kovojs/server',
-      'mutationFormAttributes',
-    ) ||
-    !!requestExactPristineDirectImport(
-      node.getExpression(),
-      '@kovojs/server/api/data',
-      'mutationFormAttributes',
-    )
+  return !!requestExactPristineDirectImport(
+    node.getExpression(),
+    '@kovojs/server',
+    'mutationFormAttributes',
   );
 }
 

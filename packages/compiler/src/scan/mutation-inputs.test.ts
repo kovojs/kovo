@@ -87,10 +87,10 @@ export const addToCart = mutation({
     });
   });
 
-  it('extracts mutation inputs through subpath aliases and namespace imports', () => {
+  it('extracts mutation inputs through canonical root aliases and namespace imports', () => {
     const source = `
-import { mutation as defineMutation, s as schema } from '@kovojs/server/api/data';
-import * as data from '@kovojs/server/api/data';
+import { mutation as defineMutation, s as schema } from '@kovojs/server';
+import * as data from '@kovojs/server';
 
 const mutationAlias = defineMutation;
 const schemaAlias = schema;
@@ -137,7 +137,7 @@ export const save = mutation({
 
   it('does not trust local schema lookalikes for mutation input facts', () => {
     const source = `
-import { mutation } from '@kovojs/server/api/data';
+import { mutation } from '@kovojs/server';
 
 const s = { object: (value) => value, string: () => 'string' };
 

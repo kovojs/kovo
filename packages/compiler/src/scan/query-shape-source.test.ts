@@ -91,12 +91,12 @@ export const account = query({
     ]);
   });
 
-  it('extracts output schemas through public data subpath aliases and namespace members', () => {
+  it('extracts output schemas through canonical root aliases and namespace members', () => {
     const facts = outputSchemaQueryShapeFactsFromSource(
       'queries.ts',
       `
-import { query as defineQuery, s as schema } from '@kovojs/server/api/data';
-import * as data from '@kovojs/server/api/data';
+import { query as defineQuery, s as schema } from '@kovojs/server';
+import * as data from '@kovojs/server';
 
 const q = defineQuery;
 const schemaAlias = schema;
@@ -123,12 +123,12 @@ export const audit = data.query({
     );
   });
 
-  it('extracts output schemas through root and data-subpath aliases from the shared catalog', () => {
+  it('extracts output schemas through distinct root aliases from the shared catalog', () => {
     const facts = outputSchemaQueryShapeFactsFromSource(
       'queries.ts',
       `
 import { query as rootQuery, s as rootSchema } from '@kovojs/server';
-import { query as dataQuery, s as dataSchema } from '@kovojs/server/api/data';
+import { query as dataQuery, s as dataSchema } from '@kovojs/server';
 
 const defineRoot = rootQuery;
 const defineData = dataQuery;
@@ -174,7 +174,7 @@ export const product = query({ output: s.object({ name: s.string() }) });
       outputSchemaQueryShapeFactsFromSource(
         'queries.ts',
         `
-import { query } from '@kovojs/server/api/data';
+import { query } from '@kovojs/server';
 
 const s = { object: (value) => value, string: () => 'string' };
 export const product = query({ output: s.object({ name: s.string() }) });

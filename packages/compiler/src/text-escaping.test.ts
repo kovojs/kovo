@@ -118,7 +118,7 @@ export const QuestionDetail = component({
     expect(serverSource).toContain("import { escapeText } from '@kovojs/server/internal/escape';");
   });
 
-  it('leaves explicit component render composition as raw HTML', () => {
+  it('escapes opaque capitalized calls while preserving branded rendered HTML at runtime', () => {
     const result = compileComponentModule({
       fileName: 'composed.tsx',
       source: `
@@ -133,7 +133,9 @@ export const Composed = component({
     });
     const serverSource = result.files[0]?.source ?? '';
 
-    expect(serverSource).toContain('{Card({ children: card.body })}');
-    expect(serverSource).not.toContain('escapeText(Card(');
+    // A capitalized call is not proof of a framework component value. Keep the output sink
+    // fail-closed; escapeText() preserves exact framework RenderedHtml values when a reviewed
+    // helper intentionally returns one (SPEC §6.1), while escaping every ordinary return value.
+    expect(serverSource).toContain('{escapeText(Card({ children: card.body }))}');
   });
 });

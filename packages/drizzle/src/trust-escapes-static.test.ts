@@ -14525,6 +14525,18 @@ import { route } from '@kovojs/server';
     expect(facts).toEqual([]);
   });
 
+  it('does not authenticate mutation form helpers from removed public subpaths', () => {
+    const facts = sinksFor(`
+      import { query } from '@kovojs/server';
+      import { mutationFormAttributes } from '@kovojs/server/api/data';
+      export const view = query({ load() {
+        return <form {...mutationFormAttributes({})}>Save</form>;
+      } });
+    `);
+
+    expect(facts).not.toEqual([]);
+  });
+
   it('recognizes the exact public starter style and render authoring surface', () => {
     const facts = sinksFor(`
       import { component, FormError } from '@kovojs/core';
