@@ -750,6 +750,8 @@ describe('create-kovo starter (build integration: production security artifacts)
       expect(proofQueries).toContain('(select classified from runtime_secret_proof) as leaked');
       expect(proofQueries).toContain('drizzleSql<string>`upper(${contacts.name})');
       expect(proofQueries).toContain('label: proof.label');
+      expect(proofQueries).toContain("db.all<SqliteSecretRows['items'][number]>(statement)");
+      expect(proofQueries).not.toContain('db.all(statement)');
       buildParanoidProductionArtifact(root);
 
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
