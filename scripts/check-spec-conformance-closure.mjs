@@ -53,7 +53,7 @@ const transferredSqlSafetyDiagnosticRegistrarDoor =
 const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#diagnosticAt`;
 const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
 const expectedDiagnosticEmissionSiteDigest =
-  'e333e793e6bf1a185fefb23ea8c6c40645c2251b77e050d2d751efe4af0d0e26';
+  '77299cd2302fba4d1074d5e25187d45c93aacd5e4673e4849355c5f6da2da7c1';
 const expectedRootDiagnosticDoorDigest =
   '1660c7877e7a533c282cf38c291a10181bc2e7484d76f479f1d1f41cd51dac77';
 const expectedRegisteredDiagnosticGuardDigest =
@@ -85,7 +85,7 @@ const expectedDiagnosticFactorySinkDigest =
 const expectedDiagnosticEvidenceWitnessDigest =
   '23014067df10912624d8419128d1362787bb212e84ef0aac772d78ad26156aa3';
 const expectedDiagnosticActualLayerReviewDigest =
-  '10293606044b538639a237ca966ee23fc5b84ec464ef22718dd42f31d3fac59f';
+  '23a8ba5c8b976acc45a20f9d3cef5e0db9c7ecea137eb55c5c072c4064b46273';
 const expectedBlockingStaticExportCollectionDigest =
   '3541644c641aec62abd0743093c653abd953e634f6042b941877b699666c4fdd';
 const expectedCompilerValidatorPipelineDigest =
@@ -93,7 +93,7 @@ const expectedCompilerValidatorPipelineDigest =
 const expectedCompileComponentModuleDigest =
   'a22e75b77161b32169cd2d41c0248a61baf55e2296197e6e82adbd5341e4d904';
 const expectedValidateComponentPhaseDigest =
-  'be1a2166351f3e078730062dd975ecb875ccafc554cf47872c8260f8ab2f7b45';
+  '73844a343bcba2f074618fdba85eb9db9733214adb4cfde6d1f73ff8d34285f0';
 const expectedCoreBuildDistCommand =
   'vp pack src/diagnostics-public.ts src/generated.ts src/index.ts src/internal/agent-docs.ts src/internal/cache-influence.ts src/internal/classifier-verdict.ts src/internal/client-module-url-intrinsics.ts src/internal/client-module-url.ts src/internal/component-render.ts src/internal/derivation.ts src/internal/diagnostics.ts src/internal/document-protocol.ts src/internal/emission.ts src/internal/event.ts src/internal/filesystem-intrinsics.ts src/internal/filesystem.ts src/internal/fragment-target.ts src/internal/framework-identity.ts src/internal/graph.ts src/internal/json.ts src/internal/mcp-stdio.ts src/internal/module-ref.ts src/internal/package-prefix.ts src/internal/query-delta.ts src/internal/query-shape-source.ts src/internal/render-plan-token-intrinsics.ts src/internal/render-plan-token.ts src/internal/route-pattern.ts src/internal/security-markers.ts src/internal/security-operation-ir.ts src/internal/security-url.ts src/internal/security-witness-intrinsics.ts src/internal/security.ts src/internal/semantic-attributes.ts src/internal/sink-policy.ts src/internal/source-sink-registry.ts src/internal/sql-safety.ts src/internal/storage.ts src/internal/verifier.ts src/internal/wire-input-grammar.ts src/internal/wire-json.ts src/security.ts src/storage-public.ts src/webhooks.ts --dts';
 // Capability-closure summaries for the few framework-owned loaders whose target is intentionally
@@ -128,7 +128,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ['packages/cli/src/bin.ts', 'c25df08ae63082fc227c0c8cd6e4c71cf68e44a05d238a5890cb4f17d7fcd07b'],
   [
     'packages/cli/src/commands/build-export.ts',
-    '11724dd36feaf77a3f0702cda536c7cc6be459c5ca20445e61484cfd6348a94c',
+    '30bc886c53cb2a1600ac0cca3191965a3aa6c2ccbbfe34b71777657fb59c7ea4',
   ],
   [
     'packages/cli/src/commands/build-static-trust-source-hook.mjs',

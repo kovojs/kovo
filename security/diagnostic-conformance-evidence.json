@@ -230,7 +230,7 @@
         "KV414|packages/drizzle/src/static.ts:1547|drizzleDiagnostic|owner=442134837c243a3b9c32c4fa9f34a28aee69c5c387895efc40e3d864665e1277|body=01ca40c5e7576e06a4af4efebf96a092b62514c5546357e0536742c63804e7a7",
         "KV414|packages/drizzle/src/static.ts:1685|drizzleDiagnostic|owner=b6d5b9ba79fa992d3f53cc963766d2502da0e9251e7478782e663eb7de0f2b94|body=59fe692e38341aca48604f0ff522ffad37c4b0c63c0b2325869ade8c7325a566",
         "KV414|packages/drizzle/src/static.ts:4003|drizzleDiagnostic|owner=3c2a672550b99e77e1ad4387c95d4de942bdced2b2f5b0e40878e22598eb3715|body=c37f09796eac2e738059cb678590216d047ce4507f8ecb56469667c252419ca7",
-        "KV416|packages/compiler/src/compile.ts:2754|createRegisteredDiagnostic|owner=065dda657b12303166f6ca7ce4660e2bfbbbb77589d8ea43b07261db22200c92|body=056de679ba5b495f916750a0317024efb2be648e88b2649511a01850a3f36639",
+        "KV416|packages/compiler/src/compile.ts:2828|createRegisteredDiagnostic|owner=065dda657b12303166f6ca7ce4660e2bfbbbb77589d8ea43b07261db22200c92|body=056de679ba5b495f916750a0317024efb2be648e88b2649511a01850a3f36639",
         "KV417|packages/server/src/build.ts:640|createRegisteredDiagnostic|owner=599e828527407ec51cba2da70ba8a0fc9e84fe36311d1f5075ec50ab543f2f42|body=b3a10da5b9722c35f655ba922d461c343f5d371145083929cdfe4016fc30a640",
         "KV418|packages/cli/src/graph-output.ts:1347|createRegisteredDiagnostic|owner=1c6053c28108fbe65ba6e49061b93198efd3dca0c499c305f7143e72b90ba800|body=54a49095e13f3e36923125ff7c3a548dff66e28e27280fd13210f7d10ad20a18",
         "KV418|packages/cli/src/graph-output.ts:1367|createRegisteredDiagnostic|owner=1c6053c28108fbe65ba6e49061b93198efd3dca0c499c305f7143e72b90ba800|body=54a49095e13f3e36923125ff7c3a548dff66e28e27280fd13210f7d10ad20a18",
