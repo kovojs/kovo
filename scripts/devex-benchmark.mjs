@@ -77,8 +77,8 @@ const KOVO_PACKED_CHECK_PHASES = Object.freeze([
   Object.freeze({ name: 'sound-subset', status: 'not-applicable' }),
   Object.freeze({ name: 'session-authority', status: 'executed' }),
   Object.freeze({ name: 'app-source-trust', status: 'executed' }),
-  Object.freeze({ name: 'app-evaluation', status: 'executed' }),
   Object.freeze({ name: 'stylesheet', status: 'executed' }),
+  Object.freeze({ name: 'app-evaluation', status: 'executed' }),
   Object.freeze({ name: 'build-check-graph', status: 'executed' }),
   Object.freeze({ name: 'graph-diagnostics', status: 'executed' }),
 ]);

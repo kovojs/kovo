@@ -12,8 +12,8 @@ const CHECK_PHASES = Object.freeze([
   ['sound-subset', 'not-applicable'],
   ['session-authority', 'executed'],
   ['app-source-trust', 'executed'],
-  ['app-evaluation', 'executed'],
   ['stylesheet', 'executed'],
+  ['app-evaluation', 'executed'],
   ['build-check-graph', 'executed'],
   ['graph-diagnostics', 'executed'],
 ]);

@@ -55,8 +55,8 @@ const PACKED_APPS_CHECK_PHASES = Object.freeze([
   'sound-subset',
   'session-authority',
   'app-source-trust',
-  'app-evaluation',
   'stylesheet',
+  'app-evaluation',
   'build-check-graph',
   'graph-diagnostics',
 ]);

@@ -1367,8 +1367,8 @@ function fixturePackedCheckPhases() {
     ['sound-subset', 'not-applicable'],
     ['session-authority', 'executed'],
     ['app-source-trust', 'executed'],
-    ['app-evaluation', 'executed'],
     ['stylesheet', 'executed'],
+    ['app-evaluation', 'executed'],
     ['build-check-graph', 'executed'],
     ['graph-diagnostics', 'executed'],
   ].map(([name, status]) => ({ durationMs: 0, name, status }));
