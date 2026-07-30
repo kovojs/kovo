@@ -139,6 +139,17 @@ function runtimeNameForExpression(
       depth,
     );
   }
+  if (ts.isShorthandPropertyAssignment(node)) {
+    // SPEC §4.1: `{ queries: { status } }` still carries the declaration's source-derived
+    // identity. Follow TypeScript's exact shorthand-value symbol; spelling alone proves nothing.
+    const symbol = context.checker.getShorthandAssignmentValueSymbol(node);
+    return runtimeNameForDeclaration(
+      resolvedSymbolDeclaration(context.checker, symbol),
+      context,
+      seen,
+      depth + 1,
+    );
+  }
   if (ts.isPropertyAccessExpression(node)) {
     return runtimeNameForDeclaration(
       resolvedDeclaration(context.checker, node.name),
@@ -184,7 +195,7 @@ function runtimeNameForDeclaration(
   if (ts.isShorthandPropertyAssignment(declaration)) {
     const symbol = context.checker.getShorthandAssignmentValueSymbol(declaration);
     return runtimeNameForDeclaration(
-      symbol?.valueDeclaration ?? symbol?.declarations?.[0],
+      resolvedSymbolDeclaration(context.checker, symbol),
       context,
       seen,
       depth + 1,
@@ -272,7 +283,14 @@ function queryDeclarationCall(
 }
 
 function resolvedDeclaration(checker: TS.TypeChecker, node: TS.Node): TS.Declaration | undefined {
-  let symbol = checker.getSymbolAtLocation(node);
+  return resolvedSymbolDeclaration(checker, checker.getSymbolAtLocation(node));
+}
+
+function resolvedSymbolDeclaration(
+  checker: TS.TypeChecker,
+  initial: TS.Symbol | undefined,
+): TS.Declaration | undefined {
+  let symbol = initial;
   const seen = new Set<TS.Symbol>();
   while (symbol && (symbol.flags & ts.SymbolFlags.Alias) !== 0 && !seen.has(symbol)) {
     seen.add(symbol);

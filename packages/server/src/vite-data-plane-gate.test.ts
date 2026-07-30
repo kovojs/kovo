@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { kovo } from './vite.js';
@@ -45,6 +46,10 @@ interface CapturedReport {
 }
 
 const APP_ENTRY = '/src/app.tsx';
+const FRAMEWORK_SERVER_PACKAGE_ROOT = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../server',
+);
 const APP_SOURCE = `import { defineKovo } from '@kovojs/server';\nconst app = defineKovo({});\nexport default app.assemble({});\n`;
 const APP_CONTRACT_SOURCE = `
 import { defineKovo } from '@kovojs/server';
@@ -683,10 +688,7 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
   it('injects the runtime registry after exact app-contract source authentication', async () => {
     const root = await fixture({ 'src/app.tsx': APP_CONTRACT_SOURCE });
     await mkdir(join(root, 'node_modules/@kovojs'), { recursive: true });
-    await symlink(
-      join(process.cwd(), 'packages/server'),
-      join(root, 'node_modules/@kovojs/server'),
-    );
+    await symlink(FRAMEWORK_SERVER_PACKAGE_ROOT, join(root, 'node_modules/@kovojs/server'));
     const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
     await plugin.configResolved({ command: 'build', root });
 

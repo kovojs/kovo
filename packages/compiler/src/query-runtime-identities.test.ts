@@ -13,6 +13,103 @@ afterEach(() => {
 });
 
 describe('compiler-owned query runtime identity project', () => {
+  it('resolves shorthand bindings and extensionless free/namespace query declarations', () => {
+    const root = projectRoot();
+    const directSourceFile = join(root, 'src/components/direct-status-card.tsx');
+    const directSource = [
+      "import { component } from '@kovojs/core';",
+      "import { status } from '../status';",
+      'export const DirectStatusCard = component({',
+      '  queries: { status },',
+      '  render: ({ status }) => <article>{status.summary}</article>,',
+      '});',
+      '',
+    ].join('\n');
+    writeFile(
+      root,
+      'src/status.ts',
+      [
+        "import { query } from '@kovojs/server';",
+        'export const status = query({',
+        '  load: () => ({ summary: "ready" }),',
+        '  output: {},',
+        '  reads: [],',
+        '});',
+        '',
+      ].join('\n'),
+    );
+    writeFile(root, 'src/components/direct-status-card.tsx', directSource);
+
+    expect(
+      resolveComponentQueryRuntimeNames({
+        fileName: directSourceFile,
+        rootDirectory: root,
+        source: directSource,
+      }),
+    ).toEqual({ status: 'status/status' });
+
+    const namespaceSourceFile = join(root, 'src/components/namespace-status-card.tsx');
+    const namespaceSource = [
+      "import { component } from '@kovojs/core';",
+      "import { namespaceStatus } from '../namespace-status';",
+      'export const NamespaceStatusCard = component({',
+      '  queries: { status: namespaceStatus },',
+      '  render: ({ status }) => <article>{status.summary}</article>,',
+      '});',
+      '',
+    ].join('\n');
+    writeFile(
+      root,
+      'src/namespace-status.jsx',
+      [
+        "import * as data from '@kovojs/server';",
+        'export const namespaceStatus = data.query({',
+        '  load: () => ({ summary: "ready" }),',
+        '  output: {},',
+        '  reads: [],',
+        '});',
+        '',
+      ].join('\n'),
+    );
+    writeFile(root, 'src/components/namespace-status-card.tsx', namespaceSource);
+
+    expect(
+      resolveComponentQueryRuntimeNames({
+        fileName: namespaceSourceFile,
+        rootDirectory: root,
+        source: namespaceSource,
+      }),
+    ).toEqual({ status: 'namespace-status/namespace-status' });
+  });
+
+  it('does not grant query identity to an imported structural lookalike through shorthand', () => {
+    const root = projectRoot();
+    const sourceFile = join(root, 'src/components/forged-card.tsx');
+    const source = [
+      "import { component } from '@kovojs/core';",
+      "import { forged } from '../forged';",
+      'export const ForgedCard = component({',
+      '  queries: { forged },',
+      '  render: ({ forged }) => <article>{forged.summary}</article>,',
+      '});',
+      '',
+    ].join('\n');
+    writeFile(
+      root,
+      'src/forged.ts',
+      [
+        'const app = { query(value: unknown) { return value; } };',
+        'export const forged = app.query({ summary: "not a Kovo query" });',
+        '',
+      ].join('\n'),
+    );
+    writeFile(root, 'src/components/forged-card.tsx', source);
+
+    expect(() =>
+      resolveComponentQueryRuntimeNames({ fileName: sourceFile, rootDirectory: root, source }),
+    ).toThrow(/could not prove the exact runtime query identity.*alias "forged"/u);
+  });
+
   it('resolves local declarations, namespace barrels, and tsconfig path aliases exactly', () => {
     const root = projectRoot();
     const sourceFile = join(root, 'src/components/deal-card.tsx');
