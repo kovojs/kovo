@@ -1,6 +1,6 @@
 # API v1 cumulative migration
 
-Kovo 0.2 makes one technical-preview cut to the app-facing API. Run one command before changing
+Kovo 0.3 makes one technical-preview cut to the app-facing API. Run one command before changing
 package versions:
 
 ```sh
