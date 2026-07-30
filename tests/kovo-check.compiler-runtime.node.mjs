@@ -28,7 +28,7 @@ import {
   queryShapesFromFacts,
 } from '../dist/compiler/src/internal.mjs';
 import { diagnosticDefinitions } from '../dist/core/src/internal/diagnostics.mjs';
-import { createQueryStore, installKovoLoader } from '../dist/browser/src/client.mjs';
+import { createQueryStore, installKovoLoader } from '../dist/browser/src/generated.mjs';
 import { derive } from '../dist/browser/src/index.mjs';
 import {
   applyDeferredStreamResponseToRuntime,
@@ -168,8 +168,6 @@ import {
   verificationLayerKovoCheckDiagnosticsFact,
 } from '../packages/conformance-fixtures/src/verification-fixtures.ts';
 import {
-  createApp,
-  createMemoryStorage,
   domain,
   errorBoundary,
   guards,
@@ -183,6 +181,8 @@ import {
   s,
   t,
 } from '../dist/server/src/index.mjs';
+import { createMemoryStorage } from '../dist/core/src/storage-public.mjs';
+import { createApp } from '../dist/server/src/internal/fixture-app.mjs';
 import { csrfField, csrfToken } from '../dist/server/src/internal/csrf.mjs';
 import { runMutation, runQuery, runRoutePage } from '../dist/server/src/internal/execution.mjs';
 import {

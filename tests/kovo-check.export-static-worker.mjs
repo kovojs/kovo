@@ -7,7 +7,9 @@ import { promisify } from 'node:util';
 
 import { kovoExportStaticBehaviorFact } from '../packages/conformance-fixtures/src/kovo-export-fixtures.ts';
 import { createRegisteredDiagnostic } from '../dist/core/src/internal/diagnostics.mjs';
-import { createApp, exportStaticApp, route as serverRoute } from '../dist/server/src/index.mjs';
+import { route as serverRoute } from '../dist/server/src/index.mjs';
+import { createApp } from '../dist/server/src/internal/fixture-app.mjs';
+import { exportStaticApp } from '../dist/server/src/public-static-export.mjs';
 
 const execFileAsync = promisify(execFile);
 const projectRoot = fileURLToPath(new URL('..', import.meta.url));

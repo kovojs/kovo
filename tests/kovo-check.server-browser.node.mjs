@@ -32,7 +32,7 @@ import {
   createQueryStore,
   defaultEnhancedFetch,
   installKovoLoader,
-} from '../dist/browser/src/client.mjs';
+} from '../dist/browser/src/generated.mjs';
 import { derive } from '../dist/browser/src/index.mjs';
 import {
   applyDeferredStreamResponseToRuntime,
@@ -170,7 +170,6 @@ import {
   verificationLayerKovoCheckDiagnosticsFact,
 } from '../packages/conformance-fixtures/src/verification-fixtures.ts';
 import {
-  createApp,
   domain,
   errorBoundary,
   guards,
@@ -183,8 +182,9 @@ import {
   session,
   s,
   t,
-  exportStaticApp,
 } from '../dist/server/src/index.mjs';
+import { createApp } from '../dist/server/src/internal/fixture-app.mjs';
+import { exportStaticApp } from '../dist/server/src/public-static-export.mjs';
 import { csrfField, csrfToken } from '../dist/server/src/internal/csrf.mjs';
 import { runMutation, runQuery, runRoutePage } from '../dist/server/src/internal/execution.mjs';
 import {
