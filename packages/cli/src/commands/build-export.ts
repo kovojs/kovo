@@ -971,33 +971,12 @@ export async function finishKovoSourceCheckOneShot(
       throw new TypeError('Kovo check handoff compiler provenance is stale.');
     }
     const configPath = findKovoBuildConfig(invocationRoot);
-    const currentConfig =
-      configPath === undefined
-        ? undefined
-        : await runPreEvaluationBuildConfigTrustPreflightInWorker(
-            configPath,
-            invocationRoot,
-            security.paranoidStaticAdvisory,
-            'check',
-            security.invocationEnv,
-          );
-    const currentConfigDigest =
-      currentConfig === undefined
-        ? null
-        : kovoBuildOneShotDigest({
-            files: currentConfig.files,
-            path: slashPath(relative(invocationRoot, currentConfig.path)),
-          });
-    const recordedConfigDigest =
-      analysis.approvedConfig === undefined
-        ? null
-        : kovoBuildOneShotDigest({
-            files: analysis.approvedConfig.files,
-            path: slashPath(relative(invocationRoot, analysis.approvedConfig.path)),
-          });
-    if (currentConfigDigest !== recordedConfigDigest) {
-      throw new TypeError('Kovo check handoff config source is stale.');
-    }
+    revalidateKovoBuildConfigTrustSourceSnapshot(
+      analysis.approvedConfig,
+      invocationRoot,
+      configPath,
+      'check',
+    );
     for (let index = 0; index < analysis.sourceFiles.length; index += 1) {
       const file = analysis.sourceFiles[index]!;
       if (readFileSync(resolve(invocationRoot, file.fileName), 'utf8') !== file.source) {
@@ -2325,7 +2304,7 @@ async function revalidateKovoBuildOneShotAnalysis(
   expectedIdentity: KovoBuildOneShotIdentity,
   security: KovoCommandSecurityDisposition,
   resolvedAppModulePath: string,
-): Promise<PreEvaluationBuildConfigTrust | undefined> {
+): Promise<KovoBuildOneShotApprovedConfig | undefined> {
   const invocationRoot = security.invocationCwd;
   const currentProvenance = resolveKovoArtifactProvenance({
     appModulePath: resolvedAppModulePath,
@@ -2337,33 +2316,12 @@ async function revalidateKovoBuildOneShotAnalysis(
     throw new TypeError('Kovo build handoff compiler provenance is stale.');
   }
   const configPath = findKovoBuildConfig(invocationRoot);
-  const currentConfig =
-    configPath === undefined
-      ? undefined
-      : await runPreEvaluationBuildConfigTrustPreflightInWorker(
-          configPath,
-          invocationRoot,
-          security.paranoidStaticAdvisory,
-          'build',
-          security.invocationEnv,
-        );
-  const currentConfigDigest =
-    currentConfig === undefined
-      ? null
-      : kovoBuildOneShotDigest({
-          files: currentConfig.files,
-          path: slashPath(relative(realpathSync(invocationRoot), currentConfig.path)),
-        });
-  const recordedConfigDigest =
-    analysis.approvedConfig === undefined
-      ? null
-      : kovoBuildOneShotDigest({
-          files: analysis.approvedConfig.files,
-          path: slashPath(relative(realpathSync(invocationRoot), analysis.approvedConfig.path)),
-        });
-  if (currentConfigDigest !== recordedConfigDigest) {
-    throw new TypeError('Kovo build handoff config source is stale.');
-  }
+  const currentConfig = revalidateKovoBuildConfigTrustSourceSnapshot(
+    analysis.approvedConfig,
+    invocationRoot,
+    configPath,
+    'build',
+  );
 
   const currentClientEntry = preEvaluationClientEntryFile(resolvedAppModulePath, invocationRoot);
   const currentFiles = preEvaluationAppSourceFiles(
@@ -3129,6 +3087,61 @@ interface PreEvaluationBuildConfigTrust {
   readonly path: string;
 }
 
+/**
+ * Re-snapshot only the exact config closure that the disposable analyzer worker approved.
+ *
+ * Handoff revalidation must prove byte and module-resolution identity, but it must not allocate a
+ * second static-analysis heap beside retained app/build graphs. The descriptor-bound source walk
+ * rejects escaping/special symlinks and unstable reads and re-resolves extension candidates, so a
+ * source edit, config-path swap, or newly shadowing relative module changes this snapshot and fails
+ * closed.
+ */
+export function snapshotKovoBuildConfigTrustSources(
+  configPath: string,
+  root: string,
+): KovoBuildOneShotApprovedConfig {
+  const configRoot = dirname(configPath);
+  const files = buildMapDense(
+    buildCheckSourceGraphFiles(configPath, root),
+    'Project-root-relative pre-evaluation config sources',
+    (file) => ({
+      fileName: slashPath(relative(root, resolve(configRoot, file.fileName))),
+      source: file.source,
+    }),
+  );
+  return { files, path: configPath };
+}
+
+/** @internal Fail-closed source-only handoff revalidation shared by build and source check. */
+export function revalidateKovoBuildConfigTrustSourceSnapshot(
+  approved: KovoBuildOneShotApprovedConfig | undefined,
+  root: string,
+  configPath: string | undefined,
+  command: 'build' | 'check',
+): KovoBuildOneShotApprovedConfig | undefined {
+  const current =
+    configPath === undefined ? undefined : snapshotKovoBuildConfigTrustSources(configPath, root);
+  if (
+    kovoBuildConfigTrustSourceDigest(current, root) !==
+    kovoBuildConfigTrustSourceDigest(approved, root)
+  ) {
+    throw new TypeError(`Kovo ${command} handoff config source is stale.`);
+  }
+  return current;
+}
+
+function kovoBuildConfigTrustSourceDigest(
+  snapshot: KovoBuildOneShotApprovedConfig | undefined,
+  root: string,
+): string | null {
+  return snapshot === undefined
+    ? null
+    : kovoBuildOneShotDigest({
+        files: snapshot.files,
+        path: slashPath(relative(realpathSync(root), snapshot.path)),
+      });
+}
+
 function runPreEvaluationBuildConfigTrustPreflight(
   configPath: string,
   root: string,
@@ -3140,15 +3153,8 @@ function runPreEvaluationBuildConfigTrustPreflight(
   // module execution and deferred preset methods, and only then permit Vite to evaluate those same
   // bytes. Config discovery is intentionally performed once by the caller so an extension swap
   // cannot select a different file after approval.
-  const configRoot = dirname(configPath);
-  const files = buildMapDense(
-    buildCheckSourceGraphFiles(configPath, root),
-    'Project-root-relative pre-evaluation config sources',
-    (file) => ({
-      fileName: slashPath(relative(root, resolve(configRoot, file.fileName))),
-      source: file.source,
-    }),
-  );
+  const approved = snapshotKovoBuildConfigTrustSources(configPath, root);
+  const files = approved.files;
   const entryFileName = relative(root, configPath) || basename(configPath);
   const facts = requiredBuildStaticAnalysisRuntime().collectStaticBuildTrustFactsFromProject({
     buildConfigEntryFileName: slashPath(entryFileName),
@@ -3156,7 +3162,7 @@ function runPreEvaluationBuildConfigTrustPreflight(
   });
   const { diagnostics, unregisteredSinks } = facts;
   if (diagnostics.length === 0 && unregisteredSinks.length === 0) {
-    return { facts, files, path: configPath };
+    return { ...approved, facts };
   }
 
   const result = kovoCheck(
@@ -3166,9 +3172,9 @@ function runPreEvaluationBuildConfigTrustPreflight(
     },
     { paranoidStaticAdvisory },
   );
-  if (result.exitCode === 0) return { facts, files, path: configPath };
+  if (result.exitCode === 0) return { ...approved, facts };
   if (paranoidStaticAdvisory && paranoidBuildCheckMayProceed(result.output)) {
-    return { facts, files, path: configPath };
+    return { ...approved, facts };
   }
   throw new KovoBuildCheckDiagnosticError(
     `kovo ${command} config preflight failed:\n${buildCheckFailureOutput(result.output)}`,
