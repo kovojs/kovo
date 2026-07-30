@@ -5,8 +5,8 @@ import type {
   Schema,
   SessionProvider,
 } from '@kovojs/server';
-import type { AppMutationAdapter } from '@kovojs/server/custom-adapters';
-import type { CsrfOptions } from '@kovojs/server/security';
+import { type AppMutationAdapter } from '@kovojs/server/custom-adapters';
+import { type CsrfOptions } from '@kovojs/server/security';
 import type { Session, User } from 'better-auth';
 
 import type { BetterAuthCsrfRequestLike } from './environment.js';
