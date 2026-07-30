@@ -1,5 +1,5 @@
 import axe from 'axe-core';
-import { installKovoLoader, type KovoLoader } from '@kovojs/browser/generated';
+import { installKovoClient, type KovoClient } from '@kovojs/browser/client';
 import type { Component } from '@kovojs/core';
 import { applyCheckboxIndeterminate } from '@kovojs/headless-ui/checkbox';
 import { expect, vi } from 'vitest';
@@ -62,15 +62,15 @@ export function installInteractiveGalleryLoader(
   root: HTMLElement,
   options: { events?: readonly string[] } = {},
 ): {
+  client: KovoClient;
   imports: string[];
-  loader: KovoLoader;
 } {
   const imports: string[] = [];
-  const loader = installKovoLoader({
-    // SPEC §4.7/§4.8: the synthetic browser harness has no document-level route hints, so
-    // snapshot the exact compiler-emitted element manifest before asynchronous state derives run.
-    // This also keeps pending derives authorized if test cleanup removes the mounted root.
-    allowedClientModuleUrls: declaredClientModuleUrls(root),
+  // The public custom-shell installer owns the complete delegated-event vocabulary. Call sites
+  // retain this annotation only to document which interactions a focused browser test exercises;
+  // app code cannot narrow the framework's lifecycle/security listeners.
+  void options.events;
+  const client = installKovoClient({
     async importModule(url) {
       const modulePath = normalizeInteractiveClientModulePath(url);
       if (!imports.includes(modulePath)) imports.push(modulePath);
@@ -83,27 +83,10 @@ export function installInteractiveGalleryLoader(
     onError(error) {
       throw error;
     },
-    ...(options.events ? { events: options.events } : {}),
     root,
   });
 
-  return { imports, loader };
-}
-
-function declaredClientModuleUrls(root: HTMLElement): string[] {
-  const elements = [
-    ...(root.matches('[data-kovo-module-allowlist]') ? [root] : []),
-    ...root.querySelectorAll<HTMLElement>('[data-kovo-module-allowlist]'),
-  ];
-  const urls = new Set<string>();
-  for (const element of elements) {
-    for (const url of (element.getAttribute('data-kovo-module-allowlist') ?? '')
-      .split(/\s+/)
-      .filter(Boolean)) {
-      urls.add(url);
-    }
-  }
-  return [...urls];
+  return { client, imports };
 }
 
 function normalizeInteractiveClientModulePath(url: string): string {

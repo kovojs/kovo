@@ -131,7 +131,7 @@ against the state/query shape and are null-aware: traversing a nullable segment 
 `data-state={...}` expressions lower to named, exported, pure derives with declared inputs:
 
 ```js
-import { derive } from '@kovojs/browser/generated';
+// Compiler-emitted artifact for inspection; `derive` is supplied by Kovo's generated ABI.
 
 export const GalleryToggleDemo$button_aria_pressed_derive = derive(['state'], (state) =>
   String(/** @type {{ pressed: boolean }} */ (state).pressed),
