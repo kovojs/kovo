@@ -45,6 +45,7 @@ const analysisToolFiles = Object.freeze([
   'packages/compiler/src/security/capability-closure-model.ts',
   'packages/icons/scripts/icon-plan.mjs',
   'scripts/certificate-module-identity-probe.mjs',
+  'scripts/component-catalog-schema.mjs',
   'scripts/kovo-certificate-format.mjs',
   'scripts/kovo-certificate.mjs',
   'scripts/lib/cli-entry.mjs',

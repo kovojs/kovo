@@ -5,13 +5,13 @@
   "tooling": {
     "analysis": {
       "implementation": "scripts/kovo-certificate.mjs#analyzeKovoCertificate",
-      "sourceTreeSha256": "738d8ebe9ff8115cb76e4171936b21f30cb6ec3ce70f8100d961ac67cb3d4666"
+      "sourceTreeSha256": "e1cad80c3c12af8d38cd4becef0ca2b46c1ec165a031c2b14083cacc1426701d"
     },
     "certificateGeneration": {
       "implementation": "scripts/kovo-certificate-format.mjs#generateKovoCertificateFromAnalysis",
       "sourceTreeSha256": "51e39f7f13afa4640ef58e8647665786662d1955c2bc7ee867200ba50b99beef"
     },
-    "orchestratorSha256": "5077652b51df217bc96b4570a3fadec3bd41032628ccf41b7c264916321305a3",
+    "orchestratorSha256": "23ee16bec40738a92b7de1f2170a3cc5adecf455098c808ec7240d9d1ec4dda9",
     "signing": {
       "implementation": "scripts/kovo-certificate-signature.mjs#signKovoCertificate",
       "sourceTreeSha256": "0285a5e7c56150ae1b3ca702109ca66ccb2347442c86cb6f8a40ddaeb24c0107"
