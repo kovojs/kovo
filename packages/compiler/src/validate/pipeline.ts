@@ -207,7 +207,9 @@ const compilerValidators: readonly CompilerValidator[] = [
   loweredValidator(({ diagnostics, model, options }) =>
     validateEventPayloads(diagnostics, model, options),
   ),
-  loweredValidator(({ diagnostics, model }) => validateDirectDbAccess(diagnostics, model)),
+  // SPEC §5.2 rule 5: direct-DB facts and spans come from the authored parser snapshot, so their
+  // teaching diagnostics must stay in that same source frame.
+  originalValidator(({ diagnostics, model }) => validateDirectDbAccess(diagnostics, model)),
   originalValidator(({ diagnostics, model }) => validateWebhookRecordChanges(diagnostics, model)),
   originalValidator(({ diagnostics, model, options }) =>
     validateDeclaredClockReadsInRender(diagnostics, model, options),

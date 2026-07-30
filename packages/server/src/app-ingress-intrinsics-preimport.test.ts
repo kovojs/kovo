@@ -8,8 +8,8 @@ describe('request ingress bootstrap order', () => {
       Request.prototype.arrayBuffer = async function () {
         return signedSafe.buffer.slice(0);
       };
-      const [core, access, app, endpoints] = await Promise.all([
-        import('@kovojs/core'),
+      const [webhooks, access, app, endpoints] = await Promise.all([
+        import('@kovojs/core/webhooks'),
         import('./access.js'),
         import('./app.js'),
         import('./endpoint.js'),
@@ -20,7 +20,7 @@ describe('request ingress bootstrap order', () => {
         auth: {
           kind: 'custom',
           name: 'preimport-body-auth',
-          verify: core.customVerifier(
+          verify: webhooks.customVerifier(
             'preimport-body-auth',
             ({ payload }) => new TextDecoder().decode(payload) === 'signed-safe',
           ),

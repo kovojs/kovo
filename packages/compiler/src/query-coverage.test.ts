@@ -1418,10 +1418,10 @@ export const CartBadge = component({
     // components keeps both update plans; the aliased locals feed the merge helper.
     expect(bootstrap.source).toContain('const queryPlans = mergeCompiledQueryUpdatePlans([');
     expect(bootstrap.source).toContain(
-      `  { componentName: "components/cart/cart-badge", plans: ${badgeQueryLocal}, queryNames: {"cart":"queries/cart-query"} },`,
+      `  { ownerSelector: "[kovo-plan-owner=\\"components/cart/cart-badge\\"]", plans: ${badgeQueryLocal}, queryNames: {"cart":"queries/cart-query"} },`,
     );
     expect(bootstrap.source).toContain(
-      `  { componentName: "components/cart/cart-panel", plans: ${panelQueryLocal}, queryNames: {} },`,
+      `  { ownerSelector: "[kovo-plan-owner=\\"components/cart/cart-panel\\"]", plans: ${panelQueryLocal}, queryNames: {} },`,
     );
     expect(bootstrap.source).toContain('const clockUpdatePlans = [');
     expect(bootstrap.source).toContain(`  ...${badgeClockLocal},`);

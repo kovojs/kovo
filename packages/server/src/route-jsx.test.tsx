@@ -3,6 +3,7 @@ import { component, ErrorBoundary, FieldError, form, FormError } from '@kovojs/c
 import { describe, expect, it, vi } from 'vitest';
 
 import { createApp } from './app.js';
+import { encodeGeneratedDependencyIdentity } from './component-root-stamps.js';
 import { validateCsrfToken } from './csrf.js';
 import { domain } from './domain.js';
 import { assignDerivedComponentName } from './internal/wire.js';
@@ -231,8 +232,12 @@ describe('route JSX pages', () => {
     );
 
     expect(response.status).toBe(200);
+    const productIdentity = encodeGeneratedDependencyIdentity(
+      'productById',
+      'productById:f10:k2:ids2:p1',
+    );
     expect(response.body).toContain(
-      '<section data-available="yes" data-product="p1" kovo-c="product-detail" kovo-deps="inventoryStatus productById" kovo-fragment-target="product-detail:p1" kovo-live-component="components/products/product-detail/product-detail"',
+      `<section data-available="yes" data-product="p1" kovo-c="product-detail" kovo-deps="inventoryStatus ${productIdentity}" kovo-plan-owner="components/products/product-detail/product-detail" kovo-fragment-target="product-detail:p1" kovo-live-component="components/products/product-detail/product-detail"`,
     );
     expect(response.body).toMatch(/ kovo-live-token="[A-Za-z0-9_-]+"/);
     expect(response.body).toContain(
@@ -282,7 +287,16 @@ describe('route JSX pages', () => {
     // first, then serializable stamped props, so the live headers retain both
     // source/runtime component instances instead of collapsing by leaf name.
     expect(headers.targets).toEqual(
-      'product-detail:featured=productById; product-detail:p2=productById',
+      [
+        `product-detail:featured=${encodeGeneratedDependencyIdentity(
+          'productById',
+          'productById:f10:k2:ids2:p1',
+        )}`,
+        `product-detail:p2=${encodeGeneratedDependencyIdentity(
+          'productById',
+          'productById:f10:k2:ids2:p2',
+        )}`,
+      ].join('; '),
     );
     expect(headers.liveTargets).toEqual(
       [

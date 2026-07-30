@@ -69,6 +69,8 @@ import { isCompilerAuditText } from '../security/audit-text.js';
  * builtins, loader forms, and aliases are refused and their whole handler artifact is omitted.
  */
 
+// Public subpaths canonicalize to the owning package identity; the import-policy registry
+// separately requires the exact @kovojs/core/security surface.
 const PUBLISH_TO_CLIENT_IDENTITY = frameworkExport('@kovojs/core', 'publishToClient');
 const PUBLISH_TO_CLIENT_REASON_PROPERTY = 'reason';
 const COMMONJS_REQUIRE_IDENTIFIER = 'require';

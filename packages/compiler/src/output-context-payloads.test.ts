@@ -80,7 +80,7 @@ export const ClientPayloadCard = component({
 
       export const ClientPayloadCard$queryUpdatePlans = {
         "product"(root, value, context = {}) {
-          return runQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [], templateStamps: [] }, { queryStore: context.queryStore });
+          return runQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [], templateStamps: [] }, { queryIdentity: context.queryIdentity, queryStore: context.queryStore });
         },
       };",
         "clientText": {
@@ -188,7 +188,7 @@ export const PayloadCard = component({
 
       export const PayloadCard$queryUpdatePlans = {
         "product"(root, value, context = {}) {
-          return runQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [{ attr: "aria-description", selector: "[data-bind\\\\:aria-description=\\"product.PayloadCard$article_aria_description_derive\\"]", select(value, root, context) { return PayloadCard$article_aria_description_derive.run(value); } }, { attr: "aria-label", selector: "[data-bind\\\\:aria-label=\\"product.PayloadCard$article_aria_label_derive\\"]", select(value, root, context) { return PayloadCard$article_aria_label_derive.run(value); } }, { attr: "title", selector: "[data-bind\\\\:title=\\"product.PayloadCard$article_title_derive\\"]", select(value, root, context) { return PayloadCard$article_title_derive.run(value); } }], templateStamps: [] }, { queryStore: context.queryStore });
+          return runQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [{ attr: "aria-description", selector: "[data-bind\\\\:aria-description=\\"product.PayloadCard$article_aria_description_derive\\"]", select(value, root, context) { return PayloadCard$article_aria_description_derive.run(value); } }, { attr: "aria-label", selector: "[data-bind\\\\:aria-label=\\"product.PayloadCard$article_aria_label_derive\\"]", select(value, root, context) { return PayloadCard$article_aria_label_derive.run(value); } }, { attr: "title", selector: "[data-bind\\\\:title=\\"product.PayloadCard$article_title_derive\\"]", select(value, root, context) { return PayloadCard$article_title_derive.run(value); } }], templateStamps: [] }, { queryIdentity: context.queryIdentity, queryStore: context.queryStore });
         },
       };",
         "clientText": "<img src=x onerror=alert(1)> & "quoted"",
@@ -298,6 +298,7 @@ export const PayloadCard = component({
       export function renderSource() {
         return \`import { escapeText } from '@kovojs/server/internal/escape';
       import { derive } from '@kovojs/browser/internal/output';
+      import { encodeGeneratedDependencyIdentity as __kovoEncodeGeneratedDependencyIdentity } from '@kovojs/server/internal/wire';
       import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 
       export const PayloadCard$article_title_derive = derive(["product"], (product) => product.name);
@@ -308,7 +309,7 @@ export const PayloadCard = component({
       export const PayloadCard = component({
         queries: { product: productQuery },
         render: ({ product }) => (
-          <article title={product.name} data-bind:title="product.PayloadCard$article_title_derive" aria-label={product.label} data-bind:aria-label="product.PayloadCard$article_aria_label_derive" aria-description={product.summary} data-bind:aria-description="product.PayloadCard$article_aria_description_derive" kovo-c="payload-card" kovo-deps="product" kovo-fragment-target="payload-card" kovo-live-component="payload-card/payload-card">
+          <article title={product.name} data-bind:title="product.PayloadCard$article_title_derive" aria-label={product.label} data-bind:aria-label="product.PayloadCard$article_aria_label_derive" aria-description={product.summary} data-bind:aria-description="product.PayloadCard$article_aria_description_derive" kovo-c="payload-card" kovo-deps={[__kovoEncodeGeneratedDependencyIdentity(productQuery.key ?? "product")].join(' ')} kovo-plan-owner="payload-card/payload-card" kovo-fragment-target="payload-card" kovo-live-component="payload-card/payload-card">
             <h2 data-bind="product.name">{escapeText(product.name)}</h2>
           </article>
         ),
@@ -527,7 +528,7 @@ export const DynamicUrlPayloads = component({
 
       export const DynamicUrlPayloads$queryUpdatePlans = {
         "product"(root, value, context = {}) {
-          return runQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [{ attr: "href", selector: "[data-derive=\\"product.DynamicUrlPayloads$a_href_derive\\"]", select(value, root, context) { return DynamicUrlPayloads$a_href_derive.run(value); } }, { attr: "src", selector: "[data-derive=\\"product.DynamicUrlPayloads$img_src_derive\\"]", trustedUrl: true, select(value, root, context) { return DynamicUrlPayloads$img_src_derive.run(value); } }], templateStamps: [] }, { queryStore: context.queryStore });
+          return runQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [{ attr: "href", selector: "[data-derive=\\"product.DynamicUrlPayloads$a_href_derive\\"]", select(value, root, context) { return DynamicUrlPayloads$a_href_derive.run(value); } }, { attr: "src", selector: "[data-derive=\\"product.DynamicUrlPayloads$img_src_derive\\"]", trustedUrl: true, select(value, root, context) { return DynamicUrlPayloads$img_src_derive.run(value); } }], templateStamps: [] }, { queryIdentity: context.queryIdentity, queryStore: context.queryStore });
         },
       };",
         "diagnostics": [],
@@ -604,7 +605,7 @@ export const TemplatePayloads = component({
             const record = item && typeof item === "object" ? item : {};
             const read = (path) => path.reduce((value, key) => value && typeof value === "object" ? value[key] : undefined, record);
             return ["<li><span data-bind=\\".qty\\">", kovoEscapeHtml(read(["qty"])), "</span> x <span data-bind=\\".name\\">", kovoEscapeHtml(read(["name"])), "</span></li>"].join("");
-          } }] }, { queryStore: context.queryStore });
+          } }] }, { queryIdentity: context.queryIdentity, queryStore: context.queryStore });
         },
       };",
         "diagnostics": [],

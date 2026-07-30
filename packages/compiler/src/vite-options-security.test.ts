@@ -349,6 +349,10 @@ export const saveOrder = mutation({ handler() {}, input: {} });
     const rootB = mkdtempSync(join(process.cwd(), '.tmp-kovo-vite-hot-root-b-'));
     let compiledRoot: string | undefined;
     let releaseRead: ((value: string) => void) | undefined;
+    let markReadStarted: (() => void) | undefined;
+    const readStarted = new Promise<void>((resolve) => {
+      markReadStarted = resolve;
+    });
 
     try {
       const plugin = createKovoVitePlugin((compileOptions) => {
@@ -360,10 +364,12 @@ export const saveOrder = mutation({ handler() {}, input: {} });
         file: join(rootA, 'src/card.tsx'),
         read: () =>
           new Promise<string>((resolveRead) => {
+            markReadStarted?.();
             releaseRead = resolveRead;
           }),
         server: { middlewares: { use() {} } },
       });
+      await readStarted;
       plugin.configResolved?.({ root: rootB });
       releaseRead?.(source);
       await pending;
@@ -404,13 +410,18 @@ export const Shell = component({ render: () => <section>Shell</section> });
     }
   });
 
-  it('keeps the latest same-file hot update when async compiles complete out of order', async () => {
+  it('serializes same-file hot updates and keeps the latest committed result', async () => {
     const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-vite-hot-order-'));
     let releaseOld: (() => void) | undefined;
+    let markOldCompileStarted: (() => void) | undefined;
+    const oldCompileStarted = new Promise<void>((resolve) => {
+      markOldCompileStarted = resolve;
+    });
 
     try {
       const plugin = createKovoVitePlugin(async (compileOptions) => {
         if (compileOptions.source.includes('red')) {
+          markOldCompileStarted?.();
           await new Promise<void>((resolveOld) => {
             releaseOld = resolveOld;
           });
@@ -437,14 +448,15 @@ export const Shell = component({ render: () => <section>Shell</section> });
         read: async () => source.replace('Card</article>', 'red</article>'),
         server,
       });
+      await oldCompileStarted;
       const newUpdate = plugin.handleHotUpdate?.({
         file: join(root, 'src/card.tsx'),
         read: async () => source.replace('Card</article>', 'blue</article>'),
         server,
       });
-      await newUpdate;
       releaseOld?.();
       await oldUpdate;
+      await newUpdate;
 
       expect(plugin.getCssAssetManifest?.().stylesheets).toEqual([
         expect.objectContaining({ criticalCss: '.card{color:blue}' }),
@@ -578,7 +590,7 @@ export const Shell = component({ render: () => <section>Shell</section> });
 
       await plugin.transform(source, id);
       expect(plugin.getCssAssetManifest?.().stylesheets).toHaveLength(1);
-      plugin.watchChange?.(id, { event: 'delete' });
+      await plugin.watchChange?.(id, { event: 'delete' });
       expect(plugin.getCssAssetManifest?.().stylesheets).toEqual([]);
     } finally {
       rmSync(root, { force: true, recursive: true });

@@ -29,7 +29,12 @@ const collectionMethods = new Set(['add', 'delete', 'get', 'has', 'set']);
 // URLSearchParams is a platform encoder, not proof storage. Keep this exception narrow and
 // receiver-specific; every authority-bearing Map/Set/WeakMap/WeakSet operation must route through
 // the captured package helper instead.
-const allowedDirectCalls = new Set(['core/src/internal/route-pattern.ts:search.set']);
+const allowedDirectCalls = new Set([
+  'core/src/internal/route-pattern.ts:search.set',
+  // QueryDocumentCollector is a framework-owned interface whose `add` implementation is supplied
+  // by the renderer. This exact optional call is not an ambient Set/Map proof store.
+  'server/src/route.ts:currentJsxFrameworkContext()?.queries.add',
+]);
 
 describe('authority-bearing collection intrinsic census (SPEC §6.6)', () => {
   it('contains no ambient collection construction or proof-method dispatch', () => {

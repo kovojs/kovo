@@ -135,6 +135,22 @@ describe('exact client-handler executable import policy', () => {
         export const Page = component({ render: () => <button onClick={() => tabsKeyDownForged()}>Go</button> });`,
     },
     {
+      forbidden: ['@kovojs/core', 'publishToClient'],
+      label: 'removed Core-root publishToClient identity',
+      source: `import { publishToClient } from '@kovojs/core';
+        const PUBLIC_VALUE = 'public';
+        export const Page = component({ render: () => <button onClick={() =>
+          publishToClient(PUBLIC_VALUE, { reason: 'public browser configuration' })}>Go</button> });`,
+    },
+    {
+      forbidden: ['@kovojs/core/security-extra', 'publishToClient'],
+      label: 'publishToClient package-subpath lookalike',
+      source: `import { publishToClient } from '@kovojs/core/security-extra';
+        const PUBLIC_VALUE = 'public';
+        export const Page = component({ render: () => <button onClick={() =>
+          publishToClient(PUBLIC_VALUE, { reason: 'public browser configuration' })}>Go</button> });`,
+    },
+    {
       forbidden: ['node:child_process', 'Exec'],
       label: 'type-only import used as a value',
       source: `import type { execFileSync as Exec } from 'node:child_process';
@@ -221,7 +237,7 @@ describe('exact client-handler executable import policy', () => {
   });
 
   it('refuses an audited value import because module evaluation is executable authority', () => {
-    const result = compile(`import { publishToClient } from '@kovojs/core';
+    const result = compile(`import { publishToClient } from '@kovojs/core/security';
       import { PUBLIC_VALUE } from './public-config.js';
       export const Page = component({ render: () => <button onClick={() =>
         publishToClient(PUBLIC_VALUE, { reason: 'public browser configuration' })}>Go</button> });`);
@@ -232,7 +248,7 @@ describe('exact client-handler executable import policy', () => {
   });
 
   it('blocks every handler sharing a globally withheld binding', () => {
-    const result = compile(`import { publishToClient } from '@kovojs/core';
+    const result = compile(`import { publishToClient } from '@kovojs/core/security';
       import { value } from './unreviewed.js';
       export const Page = component({ render: () => <div>
         <button onClick={() => publishToClient(value, { reason: 'public value' })}>A</button>
@@ -262,6 +278,15 @@ describe('exact client-handler executable import policy', () => {
 
 describe('client-handler registry integrity', () => {
   it('requires an exact reviewed module and export pair plus canonical identity', () => {
+    expect(
+      reviewedClientHandlerImportTarget('@kovojs/core/security', 'publishToClient', 'named'),
+    ).toBe('@kovojs/core/security');
+    expect(reviewedCanonicalClientHandlerImportTarget('@kovojs/core', 'publishToClient')).toBe(
+      '@kovojs/core/security',
+    );
+    expect(
+      reviewedClientHandlerImportTarget('@kovojs/core', 'publishToClient', 'named'),
+    ).toBeUndefined();
     expect(
       reviewedClientHandlerImportTarget('@kovojs/headless-ui/tabs', 'tabsKeyDown', 'named'),
     ).toBe('@kovojs/headless-ui/generated');

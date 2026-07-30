@@ -1681,7 +1681,7 @@ describe('compiler conformance corpus', () => {
                     "productGrid",
                   ],
                   "name": "ProductGrid$section_data_page_cursor_derive",
-                  "ref": "/c/__v/a9c04e76005f6cd002a2d78b2d703c3a3b9cc8869e1a7fab12e3c1275cdb05ae/examples/commerce/src/components/product-grid.client.js#ProductGrid$section_data_page_cursor_derive",
+                  "ref": "/c/__v/f7009f396f5dd6d43981de9da760314314deb270e1d58d0fa5411e82597a7632/examples/commerce/src/components/product-grid.client.js#ProductGrid$section_data_page_cursor_derive",
                   "source": {
                     "end": 4439,
                     "file": "examples/commerce/src/components/product-grid.tsx",
@@ -1754,7 +1754,7 @@ describe('compiler conformance corpus', () => {
                     "cart",
                   ],
                   "name": "CartBadge$button_hidden_derive",
-                  "ref": "/c/__v/f59a90d8a5ab98d2efe46afe484b7af00b9f5625b80151838ea85994c3bee85e/conformance/generated/cart-badge.client.js#CartBadge$button_hidden_derive",
+                  "ref": "/c/__v/943708fcd4186a634727e28e185d6c77616c86ae1e443a125df4dca542f33221/conformance/generated/cart-badge.client.js#CartBadge$button_hidden_derive",
                   "source": {
                     "end": 477,
                     "file": "conformance/generated/cart-badge.tsx",

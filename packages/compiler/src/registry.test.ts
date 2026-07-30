@@ -191,7 +191,7 @@ export const ContactStatsRegion = component({
       `'components/interaction-lab/contact-stats-region': import('@kovojs/core').Component<Record<string, unknown>>;`,
     );
     expect(result.loweredSource).toContain(
-      '<section kovo-c="contact-stats-region" kovo-deps="contacts" kovo-fragment-target="contact-stats-region" kovo-live-component="components/interaction-lab/contact-stats-region">',
+      '<section kovo-c="contact-stats-region" kovo-deps={[__kovoEncodeGeneratedDependencyIdentity(contactsQuery.key ?? "contacts")].join(\' \')} kovo-plan-owner="components/interaction-lab/contact-stats-region" kovo-fragment-target="contact-stats-region" kovo-live-component="components/interaction-lab/contact-stats-region">',
     );
     expect(result.loweredSource).toContain(
       `export const ContactStatsRegion$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({

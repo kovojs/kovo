@@ -1844,7 +1844,8 @@ export const HandlerGuidanceProbe = component({
       result = compileComponentModule({
         fileName: 'publish-button.tsx',
         source: `
-import { component, publishToClient } from '@kovojs/core';
+import { component } from '@kovojs/core';
+import { publishToClient } from '@kovojs/core/security';
 import { sendPayment } from './payments';
 import { STRIPE_SECRET_KEY } from '../../config/secrets';
 export const PayButton = component({

@@ -187,6 +187,13 @@ describe('no-JS mutation responses', () => {
       status: 500,
     });
     expect(onError).toHaveBeenCalledWith(thrown, {
+      failure: expect.objectContaining({
+        code: 'KTB003',
+        correlationId: expect.stringMatching(/^ktb_[0-9a-f]{32}$/u),
+        operation: 'no-js-mutation-handler',
+        safeCause: 'handler-execution-failed',
+        schema: 'kovo.trusted-boundary-failure/v1',
+      }),
       mutationKey: 'cart/add',
       operation: 'no-js-mutation-handler',
       request,

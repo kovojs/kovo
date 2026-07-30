@@ -34,6 +34,7 @@ import {
   defaultEnhancedFetch,
   derive,
   installKovoLoader,
+  mergeCompiledQueryUpdatePlans,
 } from '../dist/browser/src/generated.mjs';
 import {
   applyDeferredStreamResponseToRuntime,
@@ -784,7 +785,14 @@ export const CartBadge = component({
 `,
   });
 
-  assert.deepEqual(compiled.diagnostics, []);
+  // This fixture deliberately combines a direct cart.count binding with a derived cart.count
+  // attribute. Preserve the §4.9 coverage warning instead of silencing it with a false refresh
+  // claim; the rest of this D3 test exercises the emitted plan and deferred-stream runtime.
+  assert.deepEqual(
+    compiled.diagnostics.map((diagnostic) => diagnostic.code),
+    ['KV311'],
+  );
+  assert.match(compiled.diagnostics[0]?.help ?? '', /SPEC §4\.9/);
   assert.deepEqual(compilerQueryUpdatePlanFacts(compiled.queryUpdatePlans), [
     {
       componentName: 'CartBadge',
@@ -852,7 +860,16 @@ export const CartBadge = component({
       compiled.files,
       {
         emitQueryPlanBootstrapModule,
-        executeBootstrapModule: executeGeneratedBootstrapModule,
+        executeBootstrapModule(source, planModules, runtime) {
+          return executeGeneratedBootstrapModule(
+            source,
+            {
+              ...planModules,
+              '@kovojs/browser/generated': { mergeCompiledQueryUpdatePlans },
+            },
+            runtime,
+          );
+        },
         executeClientArtifact: executeGeneratedClientArtifact,
         runtime: generatedModuleRuntime,
       },

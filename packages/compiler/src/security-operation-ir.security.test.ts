@@ -3584,6 +3584,27 @@ export const readonlyAppDb = appRuntimeReadonlyDb;
       ),
     ).toEqual([]);
 
+    for (const [label, postgresSpecifier] of [
+      ['removed Postgres root', '@kovojs/server'],
+      ['Postgres subpath lookalike', '@kovojs/server/postgres-extra'],
+    ] as const) {
+      expect(
+        project(
+          endpointSource,
+          runtimeSource
+            .replace(
+              "import { createSqliteAppRuntime } from '@kovojs/server/sqlite';",
+              `import { createPostgresAppRuntimeDb } from '${postgresSpecifier}';`,
+            )
+            .replace(
+              'createSqliteAppRuntime({ seed: APP_SEED, tables: APP_TABLES })',
+              'createPostgresAppRuntimeDb({ seed: APP_SEED, tables: APP_TABLES })',
+            ),
+        ).length,
+        label,
+      ).toBeGreaterThan(0);
+    }
+
     for (const [label, source] of [
       [
         'local capability alias',
@@ -3939,20 +3960,40 @@ export const report = endpoint('/report', {
     ).toHaveLength(2);
   });
 
-  it('rejects standalone CSRF helpers targeting mutations but not same-named local lookalikes', () => {
+  it('complete-mutation-form-security-fields recognizes only the exact public security surface', () => {
     expect(
       kv449(`
-import { csrfField as field, mutation } from '@kovojs/server';
+import { mutation } from '@kovojs/server';
+import { mintCsrfField as field } from '@kovojs/server/security';
 export const save = mutation('save', { handler() {} });
 export function render(context) { return field(context, { mutation: save }); }
 `),
     ).toHaveLength(1);
 
-    expect(
-      kv449(`
-function csrfField(_context, _options) { return '<input>'; }
-export const value = csrfField({}, { mutation: 'lookalike' });
-`),
-    ).toEqual([]);
+    for (const [label, source] of [
+      [
+        'removed root export',
+        `
+import { mintCsrfField as field } from '@kovojs/server';
+export const value = field({}, { mutation: 'removed-root' });
+`,
+      ],
+      [
+        'subpath lookalike',
+        `
+import { mintCsrfField as field } from '@kovojs/server/security-extra';
+export const value = field({}, { mutation: 'lookalike-subpath' });
+`,
+      ],
+      [
+        'local lookalike',
+        `
+function mintCsrfField(_context, _options) { return '<input>'; }
+export const value = mintCsrfField({}, { mutation: 'lookalike-local' });
+`,
+      ],
+    ] as const) {
+      expect(kv449(source), label).toEqual([]);
+    }
   });
 });

@@ -192,7 +192,7 @@ export const ImportOrder = component({
 
       export const ImportOrder$queryUpdatePlans = {
         "product"(root, value, context = {}) {
-          return runQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [{ attr: "style", selector: "[data-derive=\\"product.ImportOrder$img_style_derive\\"]", select(value, root, context) { return ImportOrder$img_style_derive.run(value); } }], templateStamps: [] }, { queryStore: context.queryStore });
+          return runQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [{ attr: "style", selector: "[data-derive=\\"product.ImportOrder$img_style_derive\\"]", select(value, root, context) { return ImportOrder$img_style_derive.run(value); } }], templateStamps: [] }, { queryIdentity: context.queryIdentity, queryStore: context.queryStore });
         },
       };
       ",
@@ -203,6 +203,7 @@ export const ImportOrder = component({
       /** @jsxImportSource @kovojs/server */
       import { escapeText } from '@kovojs/server/internal/escape';
       import { derive, kovoStyleProperty } from '@kovojs/browser/internal/output';
+      import { encodeGeneratedDependencyIdentity as __kovoEncodeGeneratedDependencyIdentity } from '@kovojs/server/internal/wire';
 
       export const ImportOrder$img_style_derive = derive(["product"], (product) => kovoStyleProperty("view-transition-name", product.slug));
       export const ImportOrder$span_style_derive = derive(["state"], (state) => [kovoStyleProperty("width", \\\`\\\${state.value}%\\\`)].filter(Boolean).join('; '));
@@ -212,7 +213,7 @@ export const ImportOrder = component({
         disableServerRefresh: true,
         state: () => ({ value: 50 }),
         render: ({ product, label }, state) => (
-          <import-order kovo-deps="product" kovo-state="{&quot;value&quot;:50}">
+          <import-order kovo-deps={[__kovoEncodeGeneratedDependencyIdentity(productQuery.key ?? "product")].join(' ')} kovo-plan-owner="import-order/import-order" kovo-state="{&quot;value&quot;:50}">
             <img data-derive="product.ImportOrder$img_style_derive" data-derive-attr="style" src="/p1.png" />
             <span style={{ width: \\\`\\\${state.value}%\\\` }} data-bind:style="/c/__v/HASH/import-order.client.js#ImportOrder$span_style_derive" />
             <strong>{escapeText(label.name)}</strong>

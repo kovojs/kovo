@@ -117,6 +117,7 @@ const PUBLIC_SCOPED_KEY_IDENTITIES = [frameworkExport('@kovojs/core', 'publicSco
 const SCOPED_KEY_IDENTITY = frameworkExport('@kovojs/server', 'scopedKey');
 const DERIVED_IDENTITY = frameworkExport('@kovojs/server', 'derived');
 const RESPOND_IDENTITY = frameworkExport('@kovojs/server', 'respond');
+// Public subpaths canonicalize to the owning package identity; surface admission remains exact.
 const PUBLISH_TO_CLIENT_IDENTITY = frameworkExport('@kovojs/core', 'publishToClient');
 const SERVER_STORAGE_FACTORY_IDENTITIES = [
   frameworkExport('@kovojs/core', 'createFileSystemStorage'),
@@ -7491,7 +7492,7 @@ function serverExpressionIsExactGeneratedAppDatabaseFactory(
   if (!ts.isIdentifier(current)) return false;
   const expectedSpecifier =
     current.text === 'createPostgresAppRuntimeDb'
-      ? '@kovojs/server'
+      ? '@kovojs/server/postgres'
       : current.text === 'createSqliteAppRuntime'
         ? '@kovojs/server/sqlite'
         : undefined;

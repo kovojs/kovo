@@ -38,7 +38,7 @@ describe('installed packed Vite provenance', () => {
       );
       materializePackedAppNodeModules(appRoot, packed);
       const fixtureSource = writePackedDevFixture(appRoot);
-      const expectedClientModule = await compilePackedFixtureClientModule(fixtureSource);
+      const expectedClientModule = await compilePackedFixtureClientModule(fixtureSource, appRoot);
       const clientHref = versionedClientModuleHref(
         expectedClientModule.path,
         clientModuleRepresentationDigest(expectedClientModule.source),
@@ -224,9 +224,11 @@ function writePackedDevFixture(root: string): string {
 
 async function compilePackedFixtureClientModule(
   source: string,
+  root: string,
 ): Promise<{ path: string; source: string }> {
   const compiler = kovoVitePlugin();
-  await compiler.transform?.(source, 'src/app.tsx');
+  compiler.configResolved?.({ root });
+  await compiler.transform?.(source, join(root, 'src/app.tsx'));
   const module = compiler
     .getClientModules?.()
     .find(
