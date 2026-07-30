@@ -62,8 +62,21 @@ const PHASES = Object.freeze(['cold', 'warm', 'oneFileIncremental']);
 const PACKED_PROFILE_ID = 'kovo-packed-check/v3';
 const KOVO_FRESH_PACK_PRODUCER_ID = 'kovo-clean-source-pack/v1';
 const KOVO_PRODUCER_ATTESTATION_SCHEMA = 'kovo-devex-producer-attestation/v1';
-const KOVO_PHASE_CENSUS_SCHEMA = 'kovo-devex-phase-census/v3';
+const KOVO_PHASE_CENSUS_SCHEMA = 'kovo-devex-phase-census/v4';
 const KOVO_DEV_PHASE_CENSUS_SCHEMA = 'kovo-devex-dev-phase-census/v1';
+const KOVO_PACKED_CHECK_PHASES = Object.freeze([
+  Object.freeze({ name: 'lifecycle-policy', status: 'not-applicable' }),
+  Object.freeze({ name: 'config-trust', status: 'executed' }),
+  Object.freeze({ name: 'typescript', status: 'not-applicable' }),
+  Object.freeze({ name: 'project-quality', status: 'not-applicable' }),
+  Object.freeze({ name: 'sound-subset', status: 'not-applicable' }),
+  Object.freeze({ name: 'session-authority', status: 'executed' }),
+  Object.freeze({ name: 'app-source-trust', status: 'executed' }),
+  Object.freeze({ name: 'app-evaluation', status: 'executed' }),
+  Object.freeze({ name: 'stylesheet', status: 'executed' }),
+  Object.freeze({ name: 'build-check-graph', status: 'executed' }),
+  Object.freeze({ name: 'graph-diagnostics', status: 'executed' }),
+]);
 const KOVO_PACKED_DOCS_EVIDENCE_SCHEMA = 'kovo-devex-packed-docs-evidence/v1';
 const KOVO_PACKED_ARTIFACT_BINDING_SCHEMA = 'kovo-devex-packed-artifact-binding/v2';
 const KOVO_WORKLOAD_CONTRACT_SCHEMA = 'kovo-devex-workload-contract/v1';
@@ -1151,7 +1164,7 @@ function assertProfileInvocation(result, context, requireMarker) {
   }
   if (!requireMarker) return null;
   const marker =
-    /^kovo-benchmark-phase\/v3 phase=(cold|warm|oneFileIncremental) revision=([01]) edit=(baseline|applied) analysis=(sha256:[0-9a-f]{64}) client=([0-9a-f]{64}) duration=([0-9]+(?:\.[0-9]+)?) rss=(none|[0-9]+)\r?\n?$/u.exec(
+    /^kovo-benchmark-phase\/v4 phase=(cold|warm|oneFileIncremental) revision=([01]) edit=(baseline|applied) analysis=(sha256:[0-9a-f]{64}) graph=(sha256:[0-9a-f]{64}) census=([A-Za-z0-9_-]+) duration=([0-9]+(?:\.[0-9]+)?) rss=(none|[0-9]+)\r?\n?$/u.exec(
       result.stdout ?? '',
     );
   if (!marker || marker[1] !== context.executionPhase) {
@@ -1166,8 +1179,21 @@ function assertProfileInvocation(result, context, requireMarker) {
       `${context.phase} ${context.role} sample ${context.sampleIndex + 1} returned the wrong edit revision`,
     );
   }
-  const durationMs = Number(marker[6]);
-  const peakRssBytes = marker[7] === 'none' ? null : Number(marker[7]);
+  let diagnosticPhases;
+  try {
+    diagnosticPhases = JSON.parse(Buffer.from(marker[6], 'base64url').toString('utf8'));
+  } catch {
+    throw new Error(
+      `${context.phase} ${context.role} sample ${context.sampleIndex + 1} returned malformed diagnostic-phase evidence`,
+    );
+  }
+  const phaseFindings = packedCheckPhaseFindings(
+    diagnosticPhases,
+    `${context.phase} ${context.role} sample ${context.sampleIndex + 1}`,
+  );
+  if (phaseFindings.length > 0) throw new Error(phaseFindings.join('\n'));
+  const durationMs = Number(marker[7]);
+  const peakRssBytes = marker[8] === 'none' ? null : Number(marker[8]);
   if (
     !finiteNonNegative(durationMs) ||
     (peakRssBytes !== null && !finiteNonNegative(peakRssBytes))
@@ -1178,11 +1204,46 @@ function assertProfileInvocation(result, context, requireMarker) {
   }
   return {
     analysisDigest: marker[4],
-    clientDigest: marker[5],
+    checkGraphDigest: marker[5],
+    diagnosticPhases,
     durationMs,
     peakRssBytes,
     revision,
   };
+}
+
+function packedCheckPhaseFindings(phases, label) {
+  const findings = [];
+  if (!Array.isArray(phases) || phases.length !== KOVO_PACKED_CHECK_PHASES.length) {
+    return [
+      `${label} must contain all ${String(
+        KOVO_PACKED_CHECK_PHASES.length,
+      )} packed-check diagnostic phases`,
+    ];
+  }
+  for (let index = 0; index < KOVO_PACKED_CHECK_PHASES.length; index += 1) {
+    const expected = KOVO_PACKED_CHECK_PHASES[index];
+    const observed = phases[index];
+    if (
+      observed?.name !== expected.name ||
+      observed?.status !== expected.status ||
+      !finiteNonNegative(observed?.durationMs) ||
+      (expected.status === 'not-applicable' && observed.durationMs !== 0)
+    ) {
+      findings.push(
+        `${label}.diagnosticPhases[${String(index)}] must prove ${expected.name}=${expected.status}`,
+      );
+    }
+  }
+  return findings;
+}
+
+function fixturePackedCheckPhases() {
+  return KOVO_PACKED_CHECK_PHASES.map((phase) => ({
+    durationMs: 0,
+    name: phase.name,
+    status: phase.status,
+  }));
 }
 
 function validDigest(value) {
@@ -1271,15 +1332,29 @@ function phaseCensus(observations, samples) {
     throw new Error('incremental benchmark edits did not alternate across restored source samples');
   }
   const digestByRevision = new Map();
+  const graphDigestByRevision = new Map();
   for (const observation of observations) {
     const previous = digestByRevision.get(observation.revision);
     if (previous !== undefined && previous !== observation.analysisDigest) {
       throw new Error('benchmark source revision mapped to inconsistent analyzed-input digests');
     }
     digestByRevision.set(observation.revision, observation.analysisDigest);
+    const previousGraph = graphDigestByRevision.get(observation.revision);
+    if (previousGraph !== undefined && previousGraph !== observation.checkGraphDigest) {
+      throw new Error('benchmark source revision mapped to inconsistent check-graph digests');
+    }
+    graphDigestByRevision.set(observation.revision, observation.checkGraphDigest);
   }
   if (digestByRevision.size !== 2 || digestByRevision.get(0) === digestByRevision.get(1)) {
     throw new Error('benchmark phase census did not prove two distinct analyzed source revisions');
+  }
+  if (
+    graphDigestByRevision.size !== 2 ||
+    graphDigestByRevision.get(0) === graphDigestByRevision.get(1)
+  ) {
+    throw new Error(
+      'benchmark phase census did not prove two distinct current-source check graphs',
+    );
   }
   return {
     schema: KOVO_PHASE_CENSUS_SCHEMA,
@@ -1292,7 +1367,8 @@ function phaseCensus(observations, samples) {
       sampleIndex: observation.sampleIndex,
       revision: observation.revision,
       analysisDigest: observation.analysisDigest,
-      clientDigest: observation.clientDigest,
+      checkGraphDigest: observation.checkGraphDigest,
+      diagnosticPhases: observation.diagnosticPhases,
       durationMs: observation.durationMs,
       peakRssBytes: observation.peakRssBytes,
     })),
@@ -1350,6 +1426,7 @@ function validatePhaseCensus(census, sampleCount, label) {
     findings.push(`${label}.analysisInputs must census every prime and timed compiler analysis`);
   } else {
     const digestByRevision = new Map();
+    const graphDigestByRevision = new Map();
     for (let index = 0; index < expectedObservations.length; index += 1) {
       const expected = expectedObservations[index];
       const observed = census.analysisInputs[index];
@@ -1365,9 +1442,15 @@ function validatePhaseCensus(census, sampleCount, label) {
       if (!/^sha256:[0-9a-f]{64}$/u.test(observed.analysisDigest ?? '')) {
         findings.push(`${label}.analysisInputs[${index}].analysisDigest is invalid`);
       }
-      if (!/^[0-9a-f]{64}$/u.test(observed.clientDigest ?? '')) {
-        findings.push(`${label}.analysisInputs[${index}].clientDigest is invalid`);
+      if (!/^sha256:[0-9a-f]{64}$/u.test(observed.checkGraphDigest ?? '')) {
+        findings.push(`${label}.analysisInputs[${index}].checkGraphDigest is invalid`);
       }
+      findings.push(
+        ...packedCheckPhaseFindings(
+          observed.diagnosticPhases,
+          `${label}.analysisInputs[${String(index)}]`,
+        ),
+      );
       if (!finiteNonNegative(observed.durationMs)) {
         findings.push(`${label}.analysisInputs[${index}].durationMs is invalid`);
       }
@@ -1379,9 +1462,20 @@ function validatePhaseCensus(census, sampleCount, label) {
         findings.push(`${label}.analysisInputs maps one revision to multiple source digests`);
       }
       digestByRevision.set(observed.revision, observed.analysisDigest);
+      const previousGraph = graphDigestByRevision.get(observed.revision);
+      if (previousGraph !== undefined && previousGraph !== observed.checkGraphDigest) {
+        findings.push(`${label}.analysisInputs maps one revision to multiple check-graph digests`);
+      }
+      graphDigestByRevision.set(observed.revision, observed.checkGraphDigest);
     }
     if (digestByRevision.size !== 2 || digestByRevision.get(0) === digestByRevision.get(1)) {
       findings.push(`${label}.analysisInputs must prove two distinct analyzed source revisions`);
+    }
+    if (
+      graphDigestByRevision.size !== 2 ||
+      graphDigestByRevision.get(0) === graphDigestByRevision.get(1)
+    ) {
+      findings.push(`${label}.analysisInputs must prove two distinct current-source check graphs`);
     }
   }
   return findings;
@@ -1607,14 +1701,19 @@ export function runBenchmarkScenario(scenario, options = {}) {
             const prime = measure(commands.warm.command, primeContext);
             const evidence = assertProfileInvocation(prime, primeContext, requireMarker);
             const revision = evidence?.revision ?? primeContext.expectedRevision;
+            const analysisDigest =
+              evidence?.analysisDigest ?? `sha256:${String(revision).repeat(64)}`;
             observations.push({
               phase,
               role: 'prime',
               revision,
-              analysisDigest: evidence?.analysisDigest ?? `sha256:${String(revision).repeat(64)}`,
-              clientDigest: evidence?.clientDigest ?? 'f'.repeat(64),
-              durationMs: prime.durationMs,
-              peakRssBytes: prime.peakRssBytes ?? null,
+              analysisDigest,
+              checkGraphDigest:
+                evidence?.checkGraphDigest ??
+                `sha256:${revision === 0 ? 'a'.repeat(64) : 'b'.repeat(64)}`,
+              diagnosticPhases: evidence?.diagnosticPhases ?? fixturePackedCheckPhases(),
+              durationMs: evidence?.durationMs ?? prime.durationMs,
+              peakRssBytes: prime.peakRssBytes ?? evidence?.peakRssBytes ?? null,
               sampleIndex: index,
             });
           }
@@ -1636,13 +1735,16 @@ export function runBenchmarkScenario(scenario, options = {}) {
             role: 'timed',
             revision,
             analysisDigest: evidence?.analysisDigest ?? `sha256:${String(revision).repeat(64)}`,
-            clientDigest: evidence?.clientDigest ?? 'f'.repeat(64),
-            durationMs: result.durationMs,
-            peakRssBytes: result.peakRssBytes ?? null,
+            checkGraphDigest:
+              evidence?.checkGraphDigest ??
+              `sha256:${revision === 0 ? 'a'.repeat(64) : 'b'.repeat(64)}`,
+            diagnosticPhases: evidence?.diagnosticPhases ?? fixturePackedCheckPhases(),
+            durationMs: evidence?.durationMs ?? result.durationMs,
+            peakRssBytes: result.peakRssBytes ?? evidence?.peakRssBytes ?? null,
             sampleIndex: index,
           });
-          const measuredDuration = result.durationMs;
-          const measuredPeakRss = result.peakRssBytes;
+          const measuredDuration = evidence?.durationMs ?? result.durationMs;
+          const measuredPeakRss = result.peakRssBytes ?? evidence?.peakRssBytes;
           if (!finiteNonNegative(measuredDuration)) {
             throw new Error(`${phase} sample ${index + 1} returned an invalid duration`);
           }

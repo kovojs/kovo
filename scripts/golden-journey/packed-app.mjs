@@ -32,6 +32,7 @@ export const packedAppsScenario = 'packed-apps';
 export const PACKED_APPS_REPORT_SCHEMA = 'kovo.golden-journey/packed-apps/v1';
 export const PACKED_APPS_VARIANT_SCHEMA = 'kovo.golden-journey/packed-app/v1';
 export const PACKED_APPS_BUILD_POSTURE_SCHEMA = 'kovo.golden-journey/build-posture/v1';
+export const PACKED_APPS_CHECK_PHASE_CENSUS_SCHEMA = 'kovo-check-phase-census/v1';
 export const AXE_WCAG_22_AA_TAGS = Object.freeze([
   'wcag2a',
   'wcag2aa',
@@ -45,6 +46,20 @@ const READY_TIMEOUT_MS = 90_000;
 const FIRST_200_TIMEOUT_MS = 90_000;
 const COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 const MAX_TRANSCRIPT_BYTES = 2 * 1024 * 1024;
+const PACKED_APPS_CHECK_SOURCE = 'src/app.tsx';
+const PACKED_APPS_CHECK_PHASES = Object.freeze([
+  'lifecycle-policy',
+  'config-trust',
+  'typescript',
+  'project-quality',
+  'sound-subset',
+  'session-authority',
+  'app-source-trust',
+  'app-evaluation',
+  'stylesheet',
+  'build-check-graph',
+  'graph-diagnostics',
+]);
 export const PACKED_JOURNEY_PACKAGE_NAMES = Object.freeze([
   '@kovojs/better-auth',
   '@kovojs/browser',
@@ -258,10 +273,7 @@ export async function runPackedAppVariant({
     });
     devServer = undefined;
 
-    for (const [name, command] of [
-      ['test', ['pnpm', 'run', 'test']],
-      ['check', ['pnpm', 'run', 'check']],
-    ]) {
+    for (const [name, command] of [['test', ['pnpm', 'run', 'test']]]) {
       const observation = commandRunner(command, {
         cwd: appRoot,
         phase: name,
@@ -270,6 +282,14 @@ export async function runPackedAppVariant({
       transcripts.push(transcript(name, observation));
       phases.push(requirePackedPhaseSuccess(name, observation));
     }
+    const check = commandRunner(['pnpm', 'run', 'check'], {
+      cwd: appRoot,
+      env: { KOVO_DEVEX_CHECK_PHASE_CENSUS_SOURCE: PACKED_APPS_CHECK_SOURCE },
+      phase: 'check',
+      timeoutMs: COMMAND_TIMEOUT_MS,
+    });
+    transcripts.push(transcript('check', check));
+    phases.push(requirePackedSourceCheckSuccess(check));
     buildPosture = declareJourneyProductionRetention(appRoot);
     const build = commandRunner(['pnpm', 'run', 'build:prod'], {
       cwd: appRoot,
@@ -572,6 +592,13 @@ export function validatePackedAppsReport(report) {
           findings.push(`${label} is missing successful phase ${required}`);
         }
       }
+      const checkPhase = variant.phases.find((phase) => phase?.name === 'check');
+      findings.push(
+        ...packedSourceCheckPhaseCensusFindings(
+          checkPhase?.sourceCheckPhaseCensus,
+          `${label}.check.sourceCheckPhaseCensus`,
+        ),
+      );
       if (variant.failure !== null) findings.push(`${label}.failure must be null on success`);
       if (variant.accessibility?.violations !== 0) {
         findings.push(`${label} did not prove an axe-clean styled UI`);
@@ -1485,7 +1512,13 @@ async function waitForFirst200(server, timeoutMs) {
 function runMeasuredCommand(command, options) {
   const observation = measureProcessTreeCommand(command, {
     cwd: options.cwd,
-    env: { CI: '1', NO_COLOR: '1', npm_config_audit: 'false', npm_config_fund: 'false' },
+    env: {
+      CI: '1',
+      NO_COLOR: '1',
+      npm_config_audit: 'false',
+      npm_config_fund: 'false',
+      ...options.env,
+    },
     maxBuffer: 128 * 1024 * 1024,
     timeoutMs: options.timeoutMs ?? COMMAND_TIMEOUT_MS,
   });
@@ -1503,6 +1536,90 @@ export function requirePackedPhaseSuccess(name, observation) {
     throw new JourneyPhaseError(name, commandFailureMessage(name, observation), evidence);
   }
   return evidence;
+}
+
+export function requirePackedSourceCheckSuccess(observation) {
+  const evidence = requirePackedPhaseSuccess('check', observation);
+  try {
+    return {
+      ...evidence,
+      sourceCheckPhaseCensus: parsePackedSourceCheckPhaseCensus(observation.stdout),
+    };
+  } catch (error) {
+    throw new JourneyPhaseError(
+      'check',
+      `check did not return the complete authenticated phase census: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      evidence,
+    );
+  }
+}
+
+export function parsePackedSourceCheckPhaseCensus(output) {
+  const line = String(output ?? '')
+    .split(/\r?\n/u)
+    .find((candidate) => candidate.startsWith(`${PACKED_APPS_CHECK_PHASE_CENSUS_SCHEMA} `));
+  if (line === undefined) {
+    throw new TypeError(
+      `${PACKED_APPS_CHECK_PHASE_CENSUS_SCHEMA} evidence is missing from kovo check`,
+    );
+  }
+  let census;
+  try {
+    census = JSON.parse(line.slice(PACKED_APPS_CHECK_PHASE_CENSUS_SCHEMA.length + 1));
+  } catch {
+    throw new TypeError(`${PACKED_APPS_CHECK_PHASE_CENSUS_SCHEMA} evidence is not valid JSON`);
+  }
+  const findings = packedSourceCheckPhaseCensusFindings(
+    census,
+    PACKED_APPS_CHECK_PHASE_CENSUS_SCHEMA,
+  );
+  if (findings.length > 0) throw new TypeError(findings.join('; '));
+  return census;
+}
+
+export function packedSourceCheckPhaseCensusFindings(
+  census,
+  label = PACKED_APPS_CHECK_PHASE_CENSUS_SCHEMA,
+) {
+  const findings = [];
+  if (census?.schema !== PACKED_APPS_CHECK_PHASE_CENSUS_SCHEMA) {
+    findings.push(`${label}.schema must be ${PACKED_APPS_CHECK_PHASE_CENSUS_SCHEMA}`);
+  }
+  if (!/^sha256:[0-9a-f]{64}$/u.test(census?.checkGraphDigest ?? '')) {
+    findings.push(`${label}.checkGraphDigest must be an exact SHA-256 digest`);
+  }
+  if (
+    census?.source?.path !== PACKED_APPS_CHECK_SOURCE ||
+    census?.source?.encoding !== 'utf16le' ||
+    !Number.isSafeInteger(census?.source?.codeUnitLength) ||
+    census.source.codeUnitLength < 1 ||
+    !/^sha256:[0-9a-f]{64}$/u.test(census?.source?.contentHash ?? '')
+  ) {
+    findings.push(`${label}.source must bind ${PACKED_APPS_CHECK_SOURCE} UTF-16 source bytes`);
+  }
+  if (!Array.isArray(census?.phases) || census.phases.length !== PACKED_APPS_CHECK_PHASES.length) {
+    findings.push(
+      `${label}.phases must contain all ${String(PACKED_APPS_CHECK_PHASES.length)} check phases`,
+    );
+    return findings;
+  }
+  for (let index = 0; index < PACKED_APPS_CHECK_PHASES.length; index += 1) {
+    const phase = census.phases[index];
+    const expectedName = PACKED_APPS_CHECK_PHASES[index];
+    if (
+      phase?.name !== expectedName ||
+      phase?.status !== 'executed' ||
+      !Number.isFinite(phase?.durationMs) ||
+      phase.durationMs < 0
+    ) {
+      findings.push(
+        `${label}.phases[${String(index)}] must prove executed ${expectedName} with a finite duration`,
+      );
+    }
+  }
+  return findings;
 }
 
 function commandFailureMessage(name, observation) {

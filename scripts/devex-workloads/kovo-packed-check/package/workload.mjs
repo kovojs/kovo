@@ -3,6 +3,21 @@ import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
+const CHECK_PHASE_CENSUS_SCHEMA = 'kovo-check-phase-census/v1';
+const CHECK_PHASES = Object.freeze([
+  ['lifecycle-policy', 'not-applicable'],
+  ['config-trust', 'executed'],
+  ['typescript', 'not-applicable'],
+  ['project-quality', 'not-applicable'],
+  ['sound-subset', 'not-applicable'],
+  ['session-authority', 'executed'],
+  ['app-source-trust', 'executed'],
+  ['app-evaluation', 'executed'],
+  ['stylesheet', 'executed'],
+  ['build-check-graph', 'executed'],
+  ['graph-diagnostics', 'executed'],
+]);
+
 export const SOURCE_PATH = 'src/components/counter-island.tsx';
 export const SOURCE_VARIANTS = Object.freeze([
   `/** @jsxImportSource @kovojs/server */
@@ -119,6 +134,47 @@ function failBuild(result) {
   );
 }
 
+function phaseCensus(output, source) {
+  const line = String(output ?? '')
+    .split(/\r?\n/u)
+    .find((candidate) => candidate.startsWith(`${CHECK_PHASE_CENSUS_SCHEMA} `));
+  if (line === undefined) {
+    throw new Error('packed Kovo check omitted its authenticated diagnostic-phase census');
+  }
+  let evidence;
+  try {
+    evidence = JSON.parse(line.slice(CHECK_PHASE_CENSUS_SCHEMA.length + 1));
+  } catch {
+    throw new Error('packed Kovo check returned malformed diagnostic-phase census JSON');
+  }
+  if (
+    evidence?.schema !== CHECK_PHASE_CENSUS_SCHEMA ||
+    !/^sha256:[0-9a-f]{64}$/u.test(evidence?.checkGraphDigest ?? '') ||
+    evidence?.source?.path !== SOURCE_PATH ||
+    evidence?.source?.encoding !== 'utf16le' ||
+    evidence?.source?.codeUnitLength !== source.length ||
+    evidence?.source?.contentHash !== sourceAnalysisDigest(source) ||
+    !Array.isArray(evidence?.phases) ||
+    evidence.phases.length !== CHECK_PHASES.length
+  ) {
+    throw new Error('packed Kovo check returned diagnostic-phase evidence for the wrong source');
+  }
+  for (let index = 0; index < CHECK_PHASES.length; index += 1) {
+    const [name, status] = CHECK_PHASES[index];
+    const phase = evidence.phases[index];
+    if (
+      phase?.name !== name ||
+      phase?.status !== status ||
+      !Number.isFinite(phase?.durationMs) ||
+      phase.durationMs < 0 ||
+      (status === 'not-applicable' && phase.durationMs !== 0)
+    ) {
+      throw new Error(`packed Kovo check did not prove diagnostic phase ${name}`);
+    }
+  }
+  return evidence;
+}
+
 function materializeAuthenticatedLockfile() {
   const expected = readFileSync('benchmark-lock.yaml');
   let observed;
@@ -190,6 +246,41 @@ export function runVerifiedBuild() {
     analysisDigest,
     clientDigest: clientModule.digest,
     clientFile: clientModule.file,
+    durationMs,
+    peakRssBytes: invocation === null ? null : peakRssBytes(result.stderr ?? ''),
+  };
+}
+
+export function runVerifiedCheck() {
+  materializeAuthenticatedLockfile();
+  const cli = path.resolve('node_modules/@kovojs/cli/dist/bin.mjs');
+  const command = [process.execPath, cli, 'check', './src/app.tsx'];
+  const invocation = timeInvocation(command);
+  const executable = invocation?.[0] ?? command[0];
+  const args = invocation?.[1] ?? command.slice(1);
+  const started = process.hrtime.bigint();
+  const result = spawnSync(executable, args, {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      KOVO_DEVEX_CHECK_PHASE_CENSUS_SOURCE: SOURCE_PATH,
+    },
+    maxBuffer: 64 * 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const durationMs = Number(process.hrtime.bigint() - started) / 1e6;
+  failBuild(result);
+  if (!/^kovo-check\/v1\r?\n/mu.test(result.stdout ?? '')) {
+    throw new Error('packed Kovo app check returned an unrecognized result');
+  }
+
+  const source = readFileSync(SOURCE_PATH, 'utf8');
+  const census = phaseCensus(result.stdout, source);
+  return {
+    analysisDigest: census.source.contentHash,
+    checkGraphDigest: census.checkGraphDigest,
+    diagnosticPhases: census.phases,
     durationMs,
     peakRssBytes: invocation === null ? null : peakRssBytes(result.stderr ?? ''),
   };

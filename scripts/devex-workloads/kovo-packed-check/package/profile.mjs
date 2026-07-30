@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
-import { SOURCE_PATH, SOURCE_VARIANTS, runVerifiedBuild } from './workload.mjs';
+import { SOURCE_PATH, SOURCE_VARIANTS, runVerifiedCheck } from './workload.mjs';
 
 const phase = process.argv[2];
 if (!['cold', 'warm', 'oneFileIncremental'].includes(phase)) {
@@ -30,16 +30,18 @@ if (phase === 'oneFileIncremental') {
 
 let evidence;
 try {
-  evidence = runVerifiedBuild();
+  evidence = runVerifiedCheck();
 } catch (error) {
   process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
   process.exit(1);
 }
 
 process.stdout.write(
-  `kovo-benchmark-phase/v3 phase=${phase} revision=${revision} edit=${
+  `kovo-benchmark-phase/v4 phase=${phase} revision=${revision} edit=${
     phase === 'oneFileIncremental' ? 'applied' : 'baseline'
-  } analysis=${evidence.analysisDigest} client=${evidence.clientDigest} duration=${evidence.durationMs.toFixed(
-    6,
-  )} rss=${evidence.peakRssBytes ?? 'none'}\n`,
+  } analysis=${evidence.analysisDigest} graph=${evidence.checkGraphDigest} census=${Buffer.from(
+    JSON.stringify(evidence.diagnosticPhases),
+  ).toString('base64url')} duration=${evidence.durationMs.toFixed(6)} rss=${
+    evidence.peakRssBytes ?? 'none'
+  }\n`,
 );

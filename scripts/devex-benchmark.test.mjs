@@ -167,7 +167,7 @@ describe('DevEx benchmark foundation', () => {
     expect(stageRoots.size).toBe(15);
     expect(invocations.filter((item) => item.role === 'prime')).toHaveLength(10);
     expect(report.phaseCensus).toEqual({
-      schema: 'kovo-devex-phase-census/v3',
+      schema: 'kovo-devex-phase-census/v4',
       samples: 5,
       counts: {
         cold: { prime: 0, timed: 5 },
@@ -501,7 +501,12 @@ describe('DevEx benchmark foundation', () => {
     expect(kovoPackedWorkloadSource).toContain("'build', './src/app.tsx'");
     expect(kovoPackedWorkloadSource).toContain("'dist/.kovo/graph.json'");
     expect(kovoPackedProfileSource).toContain("phase === 'oneFileIncremental'");
-    expect(kovoPackedProfileSource).toContain('kovo-benchmark-phase/v3');
+    expect(kovoPackedProfileSource).toContain('kovo-benchmark-phase/v4');
+    expect(kovoPackedProfileSource).toContain('runVerifiedCheck');
+    expect(kovoPackedProfileSource).toContain('graph=${evidence.checkGraphDigest}');
+    expect(kovoPackedWorkloadSource).toContain("'check', './src/app.tsx'");
+    expect(kovoPackedWorkloadSource).toContain('KOVO_DEVEX_CHECK_PHASE_CENSUS_SOURCE');
+    expect(kovoPackedWorkloadSource).toContain('kovo-check-phase-census/v1');
     expect(kovoPackedProfileSource).toContain('duration=');
     expect(kovoPackedProfileSource).toContain('rss=');
     expect(kovoPackedDevProfileSource).toContain("'dev',");
@@ -1179,6 +1184,23 @@ describe('DevEx benchmark foundation', () => {
     expect(() => evaluateBudgets(ratified, forgedPhaseCensus, validationOptions)).toThrow(
       'report.phaseCensus.incrementalRevisions must prove alternating restored source edits',
     );
+    const droppedDiagnosticPhase = benchmarkReport({
+      'check.cold.durationMs': [90, 91, 92, 93, 94],
+    });
+    droppedDiagnosticPhase.phaseCensus.analysisInputs[0].diagnosticPhases.pop();
+    expect(() => evaluateBudgets(ratified, droppedDiagnosticPhase, validationOptions)).toThrow(
+      'must contain all 11 packed-check diagnostic phases',
+    );
+    const forgedCheckGraph = benchmarkReport({
+      'check.cold.durationMs': [90, 91, 92, 93, 94],
+    });
+    forgedCheckGraph.phaseCensus.analysisInputs[0].checkGraphDigest =
+      forgedCheckGraph.phaseCensus.analysisInputs.find(
+        (observation) => observation.revision === 1,
+      ).checkGraphDigest;
+    expect(() => evaluateBudgets(ratified, forgedCheckGraph, validationOptions)).toThrow(
+      'maps one revision to multiple check-graph digests',
+    );
 
     const forgedPhaseMetric = benchmarkReport({
       'check.cold.durationMs': [90, 91, 92, 93, 94],
@@ -1296,7 +1318,8 @@ function fixtureAnalysisInputs(sampleCount, metricSamples = {}) {
           sampleIndex,
           revision,
           analysisDigest: `sha256:${String(revision).repeat(64)}`,
-          clientDigest: 'f'.repeat(64),
+          checkGraphDigest: `sha256:${revision === 0 ? 'a'.repeat(64) : 'b'.repeat(64)}`,
+          diagnosticPhases: fixturePackedCheckPhases(),
           durationMs: phaseValues[phase].durationMs + sampleIndex,
           peakRssBytes: phaseValues[phase].peakRssBytes + sampleIndex,
         });
@@ -1314,13 +1337,30 @@ function fixtureAnalysisInputs(sampleCount, metricSamples = {}) {
         sampleIndex,
         revision,
         analysisDigest: `sha256:${String(revision).repeat(64)}`,
-        clientDigest: 'f'.repeat(64),
+        checkGraphDigest: `sha256:${revision === 0 ? 'a'.repeat(64) : 'b'.repeat(64)}`,
+        diagnosticPhases: fixturePackedCheckPhases(),
         durationMs: duration,
         peakRssBytes: peakRss,
       });
     }
   }
   return inputs;
+}
+
+function fixturePackedCheckPhases() {
+  return [
+    ['lifecycle-policy', 'not-applicable'],
+    ['config-trust', 'executed'],
+    ['typescript', 'not-applicable'],
+    ['project-quality', 'not-applicable'],
+    ['sound-subset', 'not-applicable'],
+    ['session-authority', 'executed'],
+    ['app-source-trust', 'executed'],
+    ['app-evaluation', 'executed'],
+    ['stylesheet', 'executed'],
+    ['build-check-graph', 'executed'],
+    ['graph-diagnostics', 'executed'],
+  ].map(([name, status]) => ({ durationMs: 0, name, status }));
 }
 
 function fixtureDevEvidence(sampleIndex) {
@@ -1405,7 +1445,7 @@ function benchmarkReport(metricSamples, options = {}) {
     }),
     sampleCount,
     phaseCensus: {
-      schema: 'kovo-devex-phase-census/v3',
+      schema: 'kovo-devex-phase-census/v4',
       samples: sampleCount,
       counts: {
         cold: { prime: 0, timed: sampleCount },

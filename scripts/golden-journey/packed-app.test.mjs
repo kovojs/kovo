@@ -7,13 +7,17 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   AXE_WCAG_22_AA_TAGS,
   PACKED_APPS_BUILD_POSTURE_SCHEMA,
+  PACKED_APPS_CHECK_PHASE_CENSUS_SCHEMA,
   PACKED_APPS_REPORT_SCHEMA,
   PACKED_APPS_VARIANT_SCHEMA,
   PACKED_JOURNEY_PACKAGE_NAMES,
   collectInstalledDependencyMetrics,
   conceptCensus,
   declareJourneyProductionRetention,
+  packedSourceCheckPhaseCensusFindings,
+  parsePackedSourceCheckPhaseCensus,
   requirePackedPhaseSuccess,
+  requirePackedSourceCheckSuccess,
   rewriteScaffoldDependenciesToPackedTarballs,
   sanitizeCapturedMutationResponse,
   sanitizeDiagnosticResponseHeaders,
@@ -281,6 +285,59 @@ describe('packed app golden journey', () => {
       phase: 'build',
     });
   });
+
+  it('requires the packed starter check to execute every diagnostic-producing phase', () => {
+    const census = successfulCheckPhaseCensus();
+    const output = [
+      'kovo-check/v1',
+      'OK',
+      `${PACKED_APPS_CHECK_PHASE_CENSUS_SCHEMA} ${JSON.stringify(census)}`,
+      '',
+    ].join('\n');
+
+    expect(parsePackedSourceCheckPhaseCensus(output)).toEqual(census);
+    expect(
+      requirePackedSourceCheckSuccess({
+        durationMs: 4_200,
+        error: null,
+        exitCode: 0,
+        peakRssBytes: 512_000_000,
+        signal: null,
+        stderr: '',
+        stdout: output,
+      }),
+    ).toEqual({
+      durationMs: 4_200,
+      name: 'check',
+      peakProcessTreeRssBytes: 512_000_000,
+      sourceCheckPhaseCensus: census,
+      status: 0,
+    });
+
+    const dropped = structuredClone(census);
+    dropped.phases.splice(3, 1);
+    expect(packedSourceCheckPhaseCensusFindings(dropped)).toContain(
+      'kovo-check-phase-census/v1.phases must contain all 11 check phases',
+    );
+
+    const skipped = structuredClone(census);
+    skipped.phases[4].status = 'not-applicable';
+    expect(packedSourceCheckPhaseCensusFindings(skipped)).toContain(
+      'kovo-check-phase-census/v1.phases[4] must prove executed sound-subset with a finite duration',
+    );
+
+    expect(() =>
+      requirePackedSourceCheckSuccess({
+        durationMs: 4_200,
+        error: null,
+        exitCode: 0,
+        peakRssBytes: 512_000_000,
+        signal: null,
+        stderr: '',
+        stdout: 'kovo-check/v1\nOK\n',
+      }),
+    ).toThrow('complete authenticated phase census');
+  });
 });
 
 function successfulReport() {
@@ -310,7 +367,12 @@ function successfulReport() {
         'test',
         'check',
         'build',
-      ].map((name) => ({ durationMs: 1, name, status: 0 })),
+      ].map((name) => ({
+        durationMs: 1,
+        name,
+        ...(name === 'check' ? { sourceCheckPhaseCensus: successfulCheckPhaseCensus() } : {}),
+        status: 0,
+      })),
       install: {
         directProductionDependencies: 5,
         durationMs: 1,
@@ -351,6 +413,32 @@ function successfulReport() {
       failure: null,
     })),
     pass: true,
+  };
+}
+
+function successfulCheckPhaseCensus() {
+  return {
+    checkGraphDigest: `sha256:${'a'.repeat(64)}`,
+    phases: [
+      'lifecycle-policy',
+      'config-trust',
+      'typescript',
+      'project-quality',
+      'sound-subset',
+      'session-authority',
+      'app-source-trust',
+      'app-evaluation',
+      'stylesheet',
+      'build-check-graph',
+      'graph-diagnostics',
+    ].map((name, index) => ({ durationMs: index + 1, name, status: 'executed' })),
+    schema: PACKED_APPS_CHECK_PHASE_CENSUS_SCHEMA,
+    source: {
+      codeUnitLength: 123,
+      contentHash: `sha256:${'b'.repeat(64)}`,
+      encoding: 'utf16le',
+      path: 'src/app.tsx',
+    },
   };
 }
 
