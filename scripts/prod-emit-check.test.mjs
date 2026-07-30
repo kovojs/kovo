@@ -12,7 +12,7 @@ describe('prod-emit-check gate', () => {
         receivedInput = input;
         return { files: validProdEmitFiles() };
       },
-      createApp() {},
+      defineKovo() {},
       stdout,
     });
 
@@ -45,7 +45,7 @@ describe('prod-emit-check gate', () => {
             ],
           };
         },
-        createApp() {},
+        defineKovo() {},
         stdout: bufferedStdout(),
       }),
     ).rejects.toMatchObject({
@@ -55,16 +55,16 @@ describe('prod-emit-check gate', () => {
     });
   });
 
-  it('fails when the built server entry does not expose createApp', async () => {
+  it('fails when the built server entry does not expose defineKovo', async () => {
     await expect(
       runProdEmitCheck({
         compileComponentModule() {
           return { files: validProdEmitFiles() };
         },
-        createApp: 'not-a-function',
+        defineKovo: 'not-a-function',
         stdout: bufferedStdout(),
       }),
-    ).rejects.toThrow('dist/server createApp export must be a function');
+    ).rejects.toThrow('dist/server defineKovo export must be a function');
   });
 });
 

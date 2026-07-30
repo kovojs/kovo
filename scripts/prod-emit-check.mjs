@@ -10,22 +10,22 @@ export async function loadCompileComponentModule() {
   return compileComponentModule;
 }
 
-export async function loadCreateApp() {
-  const { createApp } = await import('../dist/server/src/index.mjs');
-  return createApp;
+export async function loadDefineKovo() {
+  const { defineKovo } = await import('../dist/server/src/index.mjs');
+  return defineKovo;
 }
 
 export async function runProdEmitCheck({
   compileComponentModule,
-  createApp,
+  defineKovo,
   stdout = process.stdout,
 } = {}) {
   const compile = compileComponentModule ?? (await loadCompileComponentModule());
-  const createAppExport = createApp ?? (await loadCreateApp());
+  const defineKovoExport = defineKovo ?? (await loadDefineKovo());
   assert.equal(
-    typeof createAppExport,
+    typeof defineKovoExport,
     'function',
-    'dist/server createApp export must be a function',
+    'dist/server defineKovo export must be a function',
   );
   const result = compile(generatedProdEmitInput);
   assert.deepEqual(validateGeneratedEmitContract(result.files), []);
