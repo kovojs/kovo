@@ -2746,26 +2746,11 @@ function resolveViteComponentQueryRuntimeNames(
   knownNames?: Readonly<Record<string, string>>,
 ): Readonly<Record<string, string>> {
   const programFileName = isAbsolute(fileName) ? fileName : resolve(rootDirectory, fileName);
-  const resolveNames = () =>
-    resolveComponentQueryRuntimeNames({
-      fileName: programFileName,
-      knownNames,
-      rootDirectory,
-      source,
-    });
-  if (!compilerRegExpTest(/\.\s*query\s*\(/u, source)) return resolveNames();
-
-  const project = createCompilerOwnedAppContractProject({
+  return resolveComponentQueryRuntimeNames({
+    fileName: programFileName,
+    ...(knownNames === undefined ? {} : { knownNames }),
     rootDirectory,
-    rootNames: [programFileName],
-  });
-  return project.withEntryResolutions(programFileName, (programSource) => {
-    if (programSource !== source) {
-      throw new TypeError(
-        `Kovo Vite query identity project refused a stale source snapshot for ${fileName}.`,
-      );
-    }
-    return resolveNames();
+    source,
   });
 }
 

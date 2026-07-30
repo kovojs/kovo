@@ -8,6 +8,7 @@ import {
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
 
+import { createCompilerOwnedAppContractProject } from '../app-contract-project.js';
 import { compilerOwnedAppContractFactoryEquals } from '../app-contract-resolver.js';
 import { deriveRegistryIdentity } from '../registry-identities.js';
 import { typescriptRuntime as ts } from '../ts-api.js';
@@ -25,6 +26,16 @@ export interface QueryRuntimeIdentityProjectOptions {
   readonly knownNames?: Readonly<Record<string, string>>;
   readonly rootDirectory: string;
   readonly source: string;
+}
+
+interface QueryRuntimeIdentityResolutionContext {
+  readonly appContractProjects: Map<
+    string,
+    ReturnType<typeof createCompilerOwnedAppContractProject>
+  >;
+  readonly checker: TS.TypeChecker;
+  readonly models: Map<string, ReturnType<typeof parseComponentModule>>;
+  readonly rootDirectory: string;
 }
 
 /**
@@ -62,12 +73,18 @@ export function resolveComponentQueryRuntimeNames(
     });
   }
   const models = new Map<string, ReturnType<typeof parseComponentModule>>([[fileName, model]]);
+  const context: QueryRuntimeIdentityResolutionContext = {
+    appContractProjects: new Map(),
+    checker,
+    models,
+    rootDirectory: options.rootDirectory,
+  };
 
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index]!;
     const known = Object.getOwnPropertyDescriptor(result, entry.key);
     if (known !== undefined) continue;
-    const runtimeName = runtimeNameForQueryEntry(entry, sourceFile, checker, models);
+    const runtimeName = runtimeNameForQueryEntry(entry, sourceFile, context);
     const descriptor = Object.getOwnPropertyDescriptor(result, entry.key);
     if (descriptor && descriptor.value !== runtimeName) {
       throw new TypeError(
@@ -87,8 +104,7 @@ export function resolveComponentQueryRuntimeNames(
 function runtimeNameForQueryEntry(
   entry: ObjectLiteralEntry,
   sourceFile: TS.SourceFile,
-  checker: TS.TypeChecker,
-  models: Map<string, ReturnType<typeof parseComponentModule>>,
+  context: QueryRuntimeIdentityResolutionContext,
 ): string {
   const binding = entry.queryBinding;
   if (binding?.queryKeyExpression === undefined) return entry.key;
@@ -98,7 +114,7 @@ function runtimeNameForQueryEntry(
   }
   const node = exactNodeAtSpan(sourceFile, span.start, span.end);
   const identity = node
-    ? runtimeNameForExpression(node, checker, models, new Set<TS.Node>(), 0)
+    ? runtimeNameForExpression(node, context, new Set<TS.Node>(), 0)
     : undefined;
   if (identity === undefined) {
     throw unresolvedQueryIdentity(entry.key, binding.queryKeyExpression);
@@ -108,8 +124,7 @@ function runtimeNameForQueryEntry(
 
 function runtimeNameForExpression(
   rawNode: TS.Node,
-  checker: TS.TypeChecker,
-  models: Map<string, ReturnType<typeof parseComponentModule>>,
+  context: QueryRuntimeIdentityResolutionContext,
   seen: Set<TS.Node>,
   depth: number,
 ): string | undefined {
@@ -118,18 +133,16 @@ function runtimeNameForExpression(
   const node = unwrapExpression(rawNode);
   if (ts.isIdentifier(node)) {
     return runtimeNameForDeclaration(
-      resolvedDeclaration(checker, node),
-      checker,
-      models,
+      resolvedDeclaration(context.checker, node),
+      context,
       seen,
       depth,
     );
   }
   if (ts.isPropertyAccessExpression(node)) {
     return runtimeNameForDeclaration(
-      resolvedDeclaration(checker, node.name),
-      checker,
-      models,
+      resolvedDeclaration(context.checker, node.name),
+      context,
       seen,
       depth,
     );
@@ -141,9 +154,8 @@ function runtimeNameForExpression(
       ts.isNumericLiteral(node.argumentExpression))
   ) {
     return runtimeNameForDeclaration(
-      resolvedDeclaration(checker, node.argumentExpression),
-      checker,
-      models,
+      resolvedDeclaration(context.checker, node.argumentExpression),
+      context,
       seen,
       depth,
     );
@@ -153,29 +165,27 @@ function runtimeNameForExpression(
 
 function runtimeNameForDeclaration(
   declaration: TS.Declaration | undefined,
-  checker: TS.TypeChecker,
-  models: Map<string, ReturnType<typeof parseComponentModule>>,
+  context: QueryRuntimeIdentityResolutionContext,
   seen: Set<TS.Node>,
   depth: number,
 ): string | undefined {
   if (!declaration || seen.has(declaration)) return undefined;
   seen.add(declaration);
   if (ts.isVariableDeclaration(declaration) && ts.isIdentifier(declaration.name)) {
-    const direct = directQueryDeclarationIdentity(declaration, models);
+    const direct = directQueryDeclarationIdentity(declaration, context);
     if (direct !== undefined) return direct;
     return declaration.initializer
-      ? runtimeNameForExpression(declaration.initializer, checker, models, seen, depth + 1)
+      ? runtimeNameForExpression(declaration.initializer, context, seen, depth + 1)
       : undefined;
   }
   if (ts.isPropertyAssignment(declaration)) {
-    return runtimeNameForExpression(declaration.initializer, checker, models, seen, depth + 1);
+    return runtimeNameForExpression(declaration.initializer, context, seen, depth + 1);
   }
   if (ts.isShorthandPropertyAssignment(declaration)) {
-    const symbol = checker.getShorthandAssignmentValueSymbol(declaration);
+    const symbol = context.checker.getShorthandAssignmentValueSymbol(declaration);
     return runtimeNameForDeclaration(
       symbol?.valueDeclaration ?? symbol?.declarations?.[0],
-      checker,
-      models,
+      context,
       seen,
       depth + 1,
     );
@@ -185,15 +195,52 @@ function runtimeNameForDeclaration(
 
 function directQueryDeclarationIdentity(
   declaration: TS.VariableDeclaration,
-  models: Map<string, ReturnType<typeof parseComponentModule>>,
+  context: QueryRuntimeIdentityResolutionContext,
 ): string | undefined {
   if (!declaration.initializer || !ts.isIdentifier(declaration.name)) return undefined;
-  const call = queryDeclarationCall(declaration, models);
+  let call = queryDeclarationCall(declaration, context.models);
+  // Ordinary framework query imports resolve without another Program. Only an unresolved, typed
+  // direct `.query()` candidate opens the finite declaration-file project below; that project must
+  // still prove the exact defineKovo receiver, so structural member lookalikes gain no authority.
+  if (call === undefined && isDirectQueryMemberCall(declaration.initializer)) {
+    call = queryDeclarationCallWithAppContractResolution(declaration, context);
+  }
   if (call === undefined) return undefined;
   const explicitKey = call.argumentStaticValues[0];
   if (typeof explicitKey === 'string') return explicitKey;
   if (call.exportedConstName !== declaration.name.text) return undefined;
   return deriveRegistryIdentity(declaration.getSourceFile().fileName, declaration.name.text).key;
+}
+
+function queryDeclarationCallWithAppContractResolution(
+  declaration: TS.VariableDeclaration,
+  context: QueryRuntimeIdentityResolutionContext,
+): CallExpressionModel | undefined {
+  const sourceFile = declaration.getSourceFile();
+  const fileName = resolve(sourceFile.fileName);
+  let project = context.appContractProjects.get(fileName);
+  if (project === undefined) {
+    project = createCompilerOwnedAppContractProject({
+      rootDirectory: context.rootDirectory,
+      rootNames: [fileName],
+    });
+    context.appContractProjects.set(fileName, project);
+  }
+  return project.withEntryResolutions(fileName, (projectSource) => {
+    if (projectSource !== sourceFile.text) {
+      throw new TypeError(
+        `Kovo query identity project refused a stale app-contract source snapshot for ${fileName}.`,
+      );
+    }
+    return queryDeclarationCall(declaration, context.models);
+  });
+}
+
+function isDirectQueryMemberCall(node: TS.Expression): boolean {
+  const expression = unwrapExpression(node);
+  if (!ts.isCallExpression(expression)) return false;
+  const callee = unwrapExpression(expression.expression);
+  return ts.isPropertyAccessExpression(callee) && callee.name.text === 'query';
 }
 
 function queryDeclarationCall(

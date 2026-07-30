@@ -1006,6 +1006,120 @@ export const orderPaid = webhook('/webhooks/order-paid', {
     }
   });
 
+  it('resolves imported app-scoped query keys through component transforms and hot updates', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-vite-imported-app-query-component-'));
+    const src = join(root, 'src');
+    const serverScope = join(root, 'node_modules/@kovojs');
+    mkdirSync(src, { recursive: true });
+    mkdirSync(serverScope, { recursive: true });
+    symlinkSync(frameworkServerPackageRoot, join(serverScope, 'server'), 'dir');
+    writeFileSync(
+      join(src, 'kovo.ts'),
+      [
+        "import { defineKovo } from '@kovojs/server';",
+        'export const app = defineKovo({',
+        "  appId: '00000000-0000-4000-8000-000000000001',",
+        '});',
+        '',
+      ].join('\n'),
+    );
+    writeFileSync(
+      join(src, 'queries.ts'),
+      [
+        "import { app } from './kovo.js';",
+        'export const counterQuery = app.query({ load() { return { count: 1 }; } });',
+        '',
+      ].join('\n'),
+    );
+    const entry = join(src, 'counter.tsx');
+    const source = (revision: string) =>
+      [
+        '/** @jsxImportSource @kovojs/server */',
+        "import { component } from '@kovojs/core';",
+        "import { counterQuery } from './queries.js';",
+        'export const Counter = component({',
+        '  queries: { counter: counterQuery },',
+        `  render: ({ counter }) => <button onClick={() => "${revision}"}>{counter.count}</button>,`,
+        '});',
+        '',
+      ].join('\n');
+    writeFileSync(entry, source('zero'));
+    const plugin = kovoVitePlugin({ include: ['src'] });
+    const stageGeneration = vi.fn(async () => undefined);
+    bindFrameworkKovoViteDevGenerationStage(plugin, stageGeneration);
+    const ws = { send: vi.fn() };
+    const server = {
+      config: { root },
+      environments: {
+        ssr: {
+          hot: { send: vi.fn() },
+          moduleGraph: { invalidateAll: vi.fn() },
+          runner: { clearCache: vi.fn(), import: vi.fn() },
+        },
+      },
+      middlewares: { use() {} },
+      moduleGraph: { invalidateAll: vi.fn() },
+      ws,
+    };
+    plugin.configureServer?.(server);
+
+    try {
+      await expect(plugin.transform(source('zero'), entry)).resolves.toMatchObject({ map: null });
+      expect(
+        plugin.getClientModules?.().find((module) => module.path === '/c/generated/app.client.js')
+          ?.source,
+      ).toContain('queryNames: {"counter":"queries/counter-query"}');
+
+      writeFileSync(entry, source('one'));
+      await expect(
+        plugin.handleHotUpdate?.({
+          file: entry,
+          modules: ['vite-module'],
+          read: async () => source('one'),
+          server,
+        }),
+      ).resolves.toEqual([]);
+      expect(stageGeneration).toHaveBeenCalledOnce();
+      expect(
+        plugin.getClientModules?.().find((module) => module.path === '/c/generated/app.client.js')
+          ?.source,
+      ).toContain('queryNames: {"counter":"queries/counter-query"}');
+
+      writeFileSync(
+        join(src, 'lookalike-queries.ts'),
+        [
+          'const app = {',
+          '  assemble() {},',
+          '  endpoint() {},',
+          '  layout() {},',
+          '  mutation() {},',
+          '  query(value: unknown) { return value; },',
+          '  route() {},',
+          '  task() {},',
+          '};',
+          'export const forgedQuery = app.query({ load() { return { count: 1 }; } });',
+          '',
+        ].join('\n'),
+      );
+      const forgedEntry = join(src, 'forged.tsx');
+      const forgedSource = [
+        "import { component } from '@kovojs/core';",
+        "import { forgedQuery } from './lookalike-queries.js';",
+        'export const Forged = component({',
+        '  queries: { counter: forgedQuery },',
+        '  render: ({ counter }) => <p>{counter.count}</p>,',
+        '});',
+        '',
+      ].join('\n');
+      writeFileSync(forgedEntry, forgedSource);
+      await expect(plugin.transform(forgedSource, forgedEntry)).rejects.toThrow(
+        /could not prove the exact runtime query identity/u,
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('never destructively clears the active runner for closed-contract updates', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-vite-app-contract-hmr-coverage-'));
     const src = join(root, 'src');
