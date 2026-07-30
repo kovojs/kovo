@@ -21,6 +21,10 @@ import { resolveVitePlusQualityBin, type VitePlusQualityBin } from './vite-plus-
 
 const MAX_QUALITY_OUTPUT_BYTES = 16 * 1024 * 1024;
 const PROJECT_QUALITY_THREADS = 1;
+const PROJECT_QUALITY_NODE_MODULE_IGNORES = [
+  '--ignore-pattern=node_modules/**',
+  '--ignore-pattern=**/node_modules/**',
+] as const;
 const QUALITY_CONFIG_SCHEMA = 'kovo-project-quality-config/v1';
 const QUALITY_CONFIG_PROBE = `
 import { pathToFileURL } from 'node:url';
@@ -121,7 +125,11 @@ export async function runProjectQualityCheck(
     linter,
     config.lint,
     'oxlintrc',
-    ['--format=json', `--threads=${String(PROJECT_QUALITY_THREADS)}`],
+    [
+      ...PROJECT_QUALITY_NODE_MODULE_IGNORES,
+      '--format=json',
+      `--threads=${String(PROJECT_QUALITY_THREADS)}`,
+    ],
     root,
     invocationEnv,
   );

@@ -77,6 +77,8 @@ describe('framework-owned project quality check', () => {
         expect.stringMatching(/[/\\]oxlint[/\\]bin[/\\]oxlint$/u),
         '--config',
         expect.stringMatching(/[/\\]\.kovo-project-quality-[\w-]+\.oxlintrc\.json$/u),
+        '--ignore-pattern=node_modules/**',
+        '--ignore-pattern=**/node_modules/**',
         '--format=json',
         '--threads=1',
       ]);
@@ -135,10 +137,11 @@ describe('framework-owned project quality check', () => {
     }
   });
 
-  it('checks unimported copied source through whole-project formatter semantics', async () => {
+  it('checks all 44 unimported copied sources without traversing node_modules', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-project-quality-copy-in-'));
     try {
       mkdirSync(join(root, 'src/components/ui'), { recursive: true });
+      mkdirSync(join(root, 'node_modules/formatter-poison'), { recursive: true });
       writeFileSync(join(root, 'package.json'), '{"type":"module"}\n');
       writeFileSync(
         join(root, 'vite.config.mjs'),
@@ -151,9 +154,20 @@ describe('framework-owned project quality check', () => {
 };\n`,
       );
       writeFileSync(join(root, 'src/app.ts'), 'export const value = 1;\n');
+      for (let index = 0; index < 44; index += 1) {
+        const suffix = String(index).padStart(2, '0');
+        writeFileSync(
+          join(root, `src/components/ui/component-${suffix}.tsx`),
+          index === 23
+            ? 'export const Component23={label:"Component 23"}\n'
+            : `export const Component${suffix} = { label: 'Component ${suffix}' };\n`,
+        );
+      }
+      // No .gitignore is present: the framework-owned command must prune dependency trees itself.
+      // A formatter/linter finding here would prove node_modules escaped the bounded source census.
       writeFileSync(
-        join(root, 'src/components/ui/unimported-card.tsx'),
-        'export const card={label:"Card"}\n',
+        join(root, 'node_modules/formatter-poison/index.ts'),
+        'export const dependency:any={unformatted:true}\n',
       );
 
       const result = await runProjectQualityCheck(root, process.env, 'kovo-check/v1');
@@ -161,8 +175,9 @@ describe('framework-owned project quality check', () => {
       expect(result.error).toBeUndefined();
       expect(result).toMatchObject({ exitCode: 1 });
       expect(result.output).toContain(
-        'ERROR PROJECT-QUALITY src/components/ui/unimported-card.tsx:0-1',
+        'ERROR PROJECT-QUALITY src/components/ui/component-23.tsx:0-1',
       );
+      expect(result.output).not.toContain('node_modules');
       expect(result.output).not.toContain('.kovo-project-quality-');
       expect(readdirSync(root).some((name) => name.startsWith('.kovo-project-quality-'))).toBe(
         false,
