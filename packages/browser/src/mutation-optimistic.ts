@@ -95,7 +95,11 @@ export async function submitOptimisticEnhancedMutation<Input>(
     );
   }
   const optimisticChange = optimisticChangeFromInput(options.input, options.change);
-  const optimisticTargets = resolveOptimisticTargets(options.optimistic, optimisticChange);
+  const optimisticTargets = resolveOptimisticTargets(
+    options.optimistic,
+    optimisticChange,
+    options.store,
+  );
   const queueName = options.optimistic.queue;
 
   if (options.queue) {

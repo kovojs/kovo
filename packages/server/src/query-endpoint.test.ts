@@ -579,7 +579,7 @@ describe('query endpoints', () => {
     });
 
     await expect(renderQueryEndpointResponse(catalogQuery, { request: {} })).resolves.toEqual({
-      body: '<kovo-query name="catalogLimited" href="/_q/catalogLimited">{"rows":[{"id":0},{"id":1},{"id":2}]}</kovo-query>',
+      body: '<kovo-query name="catalogLimited" key="catalogLimited:3" href="/_q/catalogLimited">{"rows":[{"id":0},{"id":1},{"id":2}]}</kovo-query>',
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/html; charset=utf-8',
@@ -837,7 +837,7 @@ describe('query endpoints', () => {
         search: new URLSearchParams({ mode: 'absent' }),
       }),
     ).resolves.toMatchObject({
-      body: '<kovo-query name="product-optional-output" href="/_q/product-optional-output?mode=absent">{"id":"p1"}</kovo-query>',
+      body: '<kovo-query name="product-optional-output" key="product-optional-output:absent" href="/_q/product-optional-output?mode=absent">{"id":"p1"}</kovo-query>',
       status: 200,
     });
     await expect(
@@ -847,7 +847,7 @@ describe('query endpoints', () => {
         search: new URLSearchParams({ mode: 'present' }),
       }),
     ).resolves.toMatchObject({
-      body: '<kovo-query name="product-optional-output" href="/_q/product-optional-output?mode=present">{"id":"p1","note":"available"}</kovo-query>',
+      body: '<kovo-query name="product-optional-output" key="product-optional-output:present" href="/_q/product-optional-output?mode=present">{"id":"p1","note":"available"}</kovo-query>',
       status: 200,
     });
     expect(onError).not.toHaveBeenCalled();

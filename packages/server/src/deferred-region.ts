@@ -16,8 +16,10 @@ import type { StylesheetAsset } from './hints.js';
 import {
   bindCurrentJsxRequestContext,
   currentJsxFrameworkContext,
+  runWithCurrentJsxQueryCollector,
   type DeferredRegionCollector,
 } from './jsx-context.js';
+import { createQueryDocumentCollector } from './query-document-collector.js';
 import { renderServerRenderable, type InternalServerRenderable } from './renderable.js';
 import {
   createSecurityPromise,
@@ -193,7 +195,10 @@ function lowerDeferredRegion<Input>(
   if (!collector) return renderNow();
 
   const streamPriority = deferredStreamPriority(priority);
-  const startDeferredRegion = bindCurrentJsxRequestContext(renderRegion);
+  const deferredQueries = createQueryDocumentCollector();
+  const startDeferredRegion = bindCurrentJsxRequestContext(() =>
+    runWithCurrentJsxQueryCollector(deferredQueries, renderRegion),
+  );
   const startErrorChunk = bindCurrentJsxRequestContext(() =>
     renderDeferredErrorChunk(options, priority, streamPriority),
   );
@@ -212,17 +217,21 @@ function lowerDeferredRegion<Input>(
     withDeferredRegionTimeout(
       pendingRegion,
       normalizeDeferredTimeoutMs(options.timeoutMs),
-      (html) => ({
-        fragments: [
-          {
-            html,
-            priority: streamPriority,
-            ...(options.stylesheets === undefined ? {} : { stylesheets: options.stylesheets }),
-            target: options.target,
-          },
-        ],
-        priority: streamPriority,
-      }),
+      (html) => {
+        const queries = deferredQueries.snapshot();
+        return {
+          fragments: [
+            {
+              html,
+              priority: streamPriority,
+              ...(options.stylesheets === undefined ? {} : { stylesheets: options.stylesheets }),
+              target: options.target,
+            },
+          ],
+          priority: streamPriority,
+          ...(queries.length === 0 ? {} : { queries }),
+        };
+      },
       renderErrorChunk,
       () => {
         revokeDeferredRegion();

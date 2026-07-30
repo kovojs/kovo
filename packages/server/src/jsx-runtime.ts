@@ -76,6 +76,7 @@ import {
   formHelperStringToLowerCase,
 } from './jsx-form-helper-intrinsics.js';
 import {
+  queryEndpointHref,
   readQueryInstanceKey,
   recordQueryRuntimeWarnings,
   runQuery,
@@ -1226,6 +1227,12 @@ async function loadComponentQueries(
     recordQueryRuntimeWarnings(request, result.warnings);
     values[name] = result.value;
     const key = readQueryInstanceKey(resolved.query, result.input);
+    currentJsxFrameworkContext()?.queries?.add({
+      href: queryEndpointHref(resolved.query, result.input),
+      ...(key === undefined ? {} : { key }),
+      name: resolved.query.key,
+      value: result.value,
+    });
     witnessArrayAppend(
       identities,
       key === undefined ? { name: resolved.query.key } : { key, name: resolved.query.key },

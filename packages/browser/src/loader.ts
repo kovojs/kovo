@@ -1,7 +1,7 @@
 import type { BrowserKovoRoot } from './browser-root.js';
 import { withDefaultMutationBroadcast } from './broadcast.js';
 import type { ClockUpdatePlan } from './clock-tick-bus.js';
-import { definedProps } from './defined-props.js';
+import { definedProps, omitDefinedProp } from './defined-props.js';
 import { appendDisposer, drainDisposers } from './dispose-stack.js';
 import { guardKovoDynamicImportModule } from './dynamic-import-url.js';
 import { reportRuntimeContextError } from './error-policy.js';
@@ -174,6 +174,12 @@ export function installGeneratedKovoLoader(
     definedProps({ allowedModuleUrls: allowedClientModuleUrls }),
   );
   const disposers: Array<() => void> = [];
+  const queryStore = options.queryStore ?? options.enhancedMutations?.store;
+  const queryPlans = options.queryPlans ?? options.enhancedMutations?.queryPlans;
+  const queryPlanSubscriptionsOwnApply =
+    queryStore !== undefined &&
+    queryPlans !== undefined &&
+    typeof options.root.querySelectorAll === 'function';
   let queryRuntime: InstalledLoaderQueryRuntime | undefined;
   const rememberAppliedQueries = (queries: readonly QueryIdentity[]): void => {
     queryRuntime?.rememberAppliedQueries(queries);
@@ -211,20 +217,26 @@ export function installGeneratedKovoLoader(
       )
     : undefined;
   const optimisticQueue = optimisticRebaser ? new MutationQueue() : undefined;
-  const enhancedMutationSetup = options.enhancedMutations
+  const enhancedMutationOptions =
+    options.enhancedMutations === undefined
+      ? undefined
+      : queryPlanSubscriptionsOwnApply
+        ? omitDefinedProp(options.enhancedMutations, 'queryPlans')
+        : options.enhancedMutations;
+  const enhancedMutationSetup = enhancedMutationOptions
     ? withDefaultMutationBroadcast({
-        ...options.enhancedMutations,
+        ...enhancedMutationOptions,
         ...definedProps({
-          applyQuery: options.enhancedMutations.applyQuery ?? options.applyQuery,
+          applyQuery: enhancedMutationOptions.applyQuery ?? options.applyQuery,
           buildToken: pageBuildToken,
           broadcastOnError: options.onError
             ? (error: unknown) => {
                 reportRuntimeContextError(options.onError, error, { phase: 'mutation-broadcast' });
               }
             : undefined,
-          importModule: options.enhancedMutations.importModule
+          importModule: enhancedMutationOptions.importModule
             ? guardKovoDynamicImportModule(
-                options.enhancedMutations.importModule,
+                enhancedMutationOptions.importModule,
                 definedProps({ allowedModuleUrls: allowedClientModuleUrls }),
               )
             : importModule,
@@ -267,9 +279,9 @@ export function installGeneratedKovoLoader(
       clockUpdatePlans: options.clockUpdatePlans,
       onError: options.onError,
       queryEventTarget: options.queryEventTarget,
-      queryPlans: options.queryPlans ?? options.enhancedMutations?.queryPlans,
+      queryPlans,
       queryRefetch: options.queryRefetch,
-      queryStore: options.queryStore,
+      queryStore,
       refetchOnFocus: options.refetchOnFocus,
       refetchOnFocusOptOut: options.refetchOnFocusOptOut,
     }),

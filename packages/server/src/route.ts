@@ -51,6 +51,7 @@ import {
 import { createDeferredRegionChunkCollector } from './deferred-region.js';
 import { stampGuardFailureDocumentSecurityFloor } from './document-core.js';
 import type { MutationFail } from './mutation.js';
+import type { QueryDocumentCollector } from './query-document-collector.js';
 import {
   createLiveTargetAttestationWithAuthority,
   type LiveTargetAttestationAuthority,
@@ -731,6 +732,7 @@ export interface RouteJsxContextOptions<Request> {
     target?: string;
   };
   onCsrfSetCookie?: (rawSetCookie: string) => void;
+  queries?: QueryDocumentCollector;
 }
 
 /**
@@ -1818,6 +1820,7 @@ function routeJsxContextOptions<Request>(
     ...(options.maxListItems === undefined ? {} : { maxListItems: options.maxListItems }),
     ...(options.mutationFailure === undefined ? {} : { mutationFailure: options.mutationFailure }),
     ...(options.onCsrfSetCookie === undefined ? {} : { onCsrfSetCookie: options.onCsrfSetCookie }),
+    ...(options.queries === undefined ? {} : { queries: options.queries }),
   };
 }
 

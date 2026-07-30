@@ -660,7 +660,7 @@ export const CartBadge = component({
     ]);
     expect(result.diagnostics).toEqual([]);
     expect(clientSource).toContain(
-      'return runQueryUpdatePlan(root, "cart", value, { bindings: true, derives: [], stamps: [], templateStamps: [] }, { queryStore: context.queryStore });',
+      'return runQueryUpdatePlan(root, "cart", value, { bindings: true, derives: [], stamps: [], templateStamps: [] }, { queryIdentity: context.queryIdentity, queryStore: context.queryStore });',
     );
     expect(() => assertFixpoint(result)).not.toThrow();
   });
@@ -1382,6 +1382,7 @@ export const CartBadge = component({
         clockExportName: 'CartBadge$clockUpdatePlans',
         exportName: 'CartBadge$queryUpdatePlans',
         importPath: '../components/cart/cart-badge.client.js',
+        queryNames: { cart: 'queries/cart-query' },
       },
       {
         exportName: 'CartPanel$queryUpdatePlans',
@@ -1391,7 +1392,7 @@ export const CartBadge = component({
 
     expect(bootstrap.fileName).toBe('generated/app.client.js');
     expect(bootstrap.source).toContain(
-      "import { applyDeferredStreamResponseToRuntime, createBrowserKovoRoot, createQueryStore, defaultEnhancedFetch, installInlineKovoLoader, installKovoLoader } from '@kovojs/browser/generated';",
+      "import { applyDeferredStreamResponseToRuntime, createBrowserKovoRoot, createQueryStore, defaultEnhancedFetch, installInlineKovoLoader, installKovoLoader, mergeCompiledQueryUpdatePlans } from '@kovojs/browser/generated';",
     );
     // B2 (SPEC §5.2): each compiled-plan import is aliased to a per-input-unique local so two
     // same-named components never collide into a duplicate lexical binding. The alias is derived
@@ -1412,9 +1413,11 @@ export const CartBadge = component({
     expect(new Set([badgeQueryLocal, badgeClockLocal, panelQueryLocal]).size).toBe(3);
     // B2 (SPEC §4.8): query plans are MERGED (not shallow-spread) so a query bound by two
     // components keeps both update plans; the aliased locals feed the merge helper.
-    expect(bootstrap.source).toContain('const queryPlans = mergeKovoQueryPlans([');
-    expect(bootstrap.source).toContain(`  ${badgeQueryLocal},`);
-    expect(bootstrap.source).toContain(`  ${panelQueryLocal},`);
+    expect(bootstrap.source).toContain('const queryPlans = mergeCompiledQueryUpdatePlans([');
+    expect(bootstrap.source).toContain(
+      `  { plans: ${badgeQueryLocal}, queryNames: {"cart":"queries/cart-query"} },`,
+    );
+    expect(bootstrap.source).toContain(`  { plans: ${panelQueryLocal} },`);
     expect(bootstrap.source).toContain('const clockUpdatePlans = [');
     expect(bootstrap.source).toContain(`  ...${badgeClockLocal},`);
     expect(bootstrap.source).toContain('installKovoLoader({');
@@ -1426,7 +1429,6 @@ export const CartBadge = component({
     expect(bootstrap.source).toContain('export function installKovoDeferredRuntime');
     expect(bootstrap.source).toContain('export function applyKovoDeferredStreamResponse');
     expect(bootstrap.source).toContain('return applyDeferredStreamResponseToRuntime({');
-    expect(bootstrap.source).toContain('queryPlans,');
     expect(bootstrap.source).toContain('store,');
   });
 });

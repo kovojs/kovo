@@ -68,6 +68,7 @@ import {
   securityEncodeURIComponent,
   securityArrayJoin,
   securityRegExpTest,
+  securityString,
   securityStringIndexOf,
   securityStringSlice,
   securityStringTrim,
@@ -990,9 +991,26 @@ export function readQueryInstanceKey<const Key extends string, Value, Input, Req
   queryDefinition: QueryDefinition<Key, Value, Input, Request>,
   input: Input,
 ): string | undefined {
-  if (queryDefinition.instanceKey === undefined) return undefined;
   if (typeof queryDefinition.instanceKey === 'function') return queryDefinition.instanceKey(input);
-  return queryDefinition.instanceKey;
+  if (queryDefinition.instanceKey !== undefined) return queryDefinition.instanceKey;
+  if (queryDefinition.args === undefined) return undefined;
+  return defaultQueryInstanceKey(queryDefinition.key, input);
+}
+
+/**
+ * @internal Canonical typed-read href for a component query result.
+ *
+ * The initial document records this exact href beside its hydrated value, so focus return,
+ * delta-miss recovery, and explicit refetch do not need to invert an app-authored instance key.
+ */
+export function queryEndpointHref<const Key extends string, Value, Input, Request>(
+  queryDefinition: QueryDefinition<Key, Value, Input, Request>,
+  input: Input,
+): string {
+  return queryEndpointCurrentUrl(
+    queryDefinition.key,
+    queryDefinition.args === undefined ? [] : queryInputSearchEntries(input),
+  );
 }
 
 export function readQueryVersion<const Key extends string, Value, Input, Request>(
@@ -1256,6 +1274,78 @@ function querySearchWithoutArgsSchemaFailure(): QueryEndpointFailure {
 }
 
 type QuerySearchEntry = readonly [string, string];
+
+function defaultQueryInstanceKey(queryKey: string, input: unknown): string | undefined {
+  if (typeof input !== 'object' || input === null || witnessIsArray(input)) return undefined;
+  const names = witnessObjectKeys(input);
+  if (names.length === 0) return undefined;
+  let keyValue = '';
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!;
+    const descriptor = witnessGetOwnPropertyDescriptor(input, name);
+    if (!descriptor || !('value' in descriptor)) {
+      throw new TypeError('Kovo canonical query-key fields must be own-data properties.');
+    }
+    const value = descriptor.value;
+    if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') {
+      // Non-scalar search/filter inputs remain one unkeyed instance unless the query declares an
+      // explicit instanceKey. Keyed optimism intentionally accepts the same scalar-record grammar.
+      return undefined;
+    }
+    keyValue += `${index === 0 ? '' : ':'}${securityString(value)}`;
+  }
+  return `${queryKey}:${keyValue}`;
+}
+
+function queryInputSearchEntries(input: unknown): readonly QuerySearchEntry[] {
+  if (typeof input !== 'object' || input === null || witnessIsArray(input)) {
+    throw new TypeError('Kovo component query args must resolve to a flat own-data record.');
+  }
+  const entries: QuerySearchEntry[] = [];
+  const names = witnessObjectKeys(input);
+  if (names.length > 1_024) {
+    throw new RangeError('Kovo component query args exceed the bounded field limit.');
+  }
+  for (let index = 0; index < names.length; index += 1) {
+    const name = names[index]!;
+    const descriptor = witnessGetOwnPropertyDescriptor(input, name);
+    if (!descriptor || !('value' in descriptor)) {
+      throw new TypeError('Kovo component query args must be stable own-data properties.');
+    }
+    appendQueryInputSearchValues(entries, name, descriptor.value);
+  }
+  return entries;
+}
+
+function appendQueryInputSearchValues(
+  entries: QuerySearchEntry[],
+  name: string,
+  value: unknown,
+): void {
+  if (value === undefined) return;
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    appendQuerySearchEntry(entries, name, securityString(value));
+    return;
+  }
+  if (witnessIsArray(value)) {
+    if (value.length > 1_024) {
+      throw new RangeError(`Kovo component query arg "${name}" exceeds the bounded value limit.`);
+    }
+    for (let index = 0; index < value.length; index += 1) {
+      const descriptor = witnessGetOwnPropertyDescriptor(value, index);
+      if (!descriptor || !('value' in descriptor)) {
+        throw new TypeError(`Kovo component query arg "${name}" must be a dense scalar array.`);
+      }
+      const item = descriptor.value;
+      if (typeof item !== 'string' && typeof item !== 'number' && typeof item !== 'boolean') {
+        throw new TypeError(`Kovo component query arg "${name}" must contain scalar values.`);
+      }
+      appendQuerySearchEntry(entries, name, securityString(item));
+    }
+    return;
+  }
+  throw new TypeError(`Kovo component query arg "${name}" must be a scalar or scalar array.`);
+}
 
 function querySearchInputToRecord(entries: readonly QuerySearchEntry[]): Record<string, unknown> {
   return entriesToRecord(entries);

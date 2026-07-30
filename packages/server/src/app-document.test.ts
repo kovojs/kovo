@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
+import { component } from '@kovojs/core';
 
 import { createApp } from './app.js';
 import { renderAppErrorDocumentResponse, renderAppRouteDocumentResponse } from './app-document.js';
@@ -9,6 +10,7 @@ import { guards } from './guards.js';
 import { renderedHtml, renderHtmlValue } from './html.js';
 import { stylesheet } from './hints.js';
 import { jsx } from './jsx-runtime.js';
+import { query } from './query.js';
 import { layout, notFound, route } from './route.js';
 import { s } from './schema.js';
 import {
@@ -58,6 +60,47 @@ function expectDocumentSecurityFloor(headers: Record<string, string | readonly s
   expect(headerValue(headers, 'x-content-type-options')).toBe('nosniff');
   expect(headerValue(headers, 'cache-control')).toBe('private, no-store');
 }
+
+describe('component query document hydration', () => {
+  it('serializes first-paint query truth with the canonical href and keyed identity', async () => {
+    const dealById = query('queries/deal-by-id-query', {
+      args: s.object({ id: s.string() }),
+      load: ({ id }) => ({ id, stage: 'open' }),
+    });
+    const DealCard = component({
+      props: { dealId: String },
+      queries: {
+        deal: dealById.args((props: { dealId: string }) => ({ id: props.dealId })),
+      },
+      render: ({ deal }: { deal: { id: string; stage: string } }) =>
+        jsx('article', {
+          'data-bind:data-crm-stage': 'deal.stage',
+          'data-crm-stage': deal.stage,
+          children: deal.stage,
+        }),
+    });
+    const dealRoute = route('/deals/:id', {
+      params: s.object({ id: s.string() }),
+      page: ({ params }) => jsx(DealCard, { dealId: params.id }),
+    });
+    const request = new Request('https://example.test/deals/d1');
+
+    const response = await renderAppRouteDocumentResponse({
+      app: createApp({ routes: [dealRoute] }),
+      params: { id: 'd1' },
+      request,
+      route: dealRoute,
+      url: new URL(request.url),
+    });
+    const body = await responseBodyText(response.body);
+
+    expect(body).toContain('data-crm-stage="open"');
+    expect(body).toContain('kovo-query="queries/deal-by-id-query"');
+    expect(body).toContain('key="queries/deal-by-id-query:d1"');
+    expect(body).toContain('data-kovo-query-href="/_q/queries/deal-by-id-query?id=d1"');
+    expect(body).toContain('{"id":"d1","stage":"open"}');
+  });
+});
 
 describe('route search carrier integrity', () => {
   it('does not substitute cached capability bytes through late URLSearchParams iteration', async () => {

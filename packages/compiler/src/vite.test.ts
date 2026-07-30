@@ -592,7 +592,17 @@ export const orderPaid = webhook('/webhooks/order-paid', {
       renderPlanFingerprintInput,
     }));
 
-    await plugin.transform('component(', fileName);
+    await plugin.transform(
+      [
+        "import { component } from '@kovojs/core';",
+        "import { dealByIdQuery } from './queries.js';",
+        'export const DealCard = component({',
+        '  queries: { deal: dealByIdQuery },',
+        '  render: ({ deal }) => <article>{deal.stage}</article>,',
+        '});',
+      ].join('\n'),
+      fileName,
+    );
 
     const modules = plugin.getClientModules?.() ?? [];
     expect(modules).toHaveLength(3);
@@ -604,6 +614,7 @@ export const orderPaid = webhook('/webhooks/order-paid', {
     );
     expect(modules[0]?.source).toContain('DealCard$queryUpdatePlans as kovoQueryPlans_');
     expect(modules[0]?.source).toContain('DealCard$clockUpdatePlans as kovoClockPlans_');
+    expect(modules[0]?.source).toContain('queryNames: {"deal":"queries/deal-by-id-query"}');
     expect(modules[1]).toEqual(
       expect.objectContaining({
         path: kovoDeferredAppRuntimeModulePath,

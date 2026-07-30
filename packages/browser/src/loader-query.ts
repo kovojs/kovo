@@ -11,7 +11,10 @@ import {
 } from './clock-tick-bus.js';
 import { installInlineQueryEventHydration } from './query-events.js';
 import type { QueryEventHydrationTarget } from './query-events.js';
-import type { QueryApplyInterposition } from './query-apply.js';
+import {
+  installCompiledQueryUpdatePlanSubscriptions,
+  type QueryApplyInterposition,
+} from './query-apply.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { QueryBindingRoot } from './query-bindings.js';
 import {
@@ -58,11 +61,25 @@ export function installLoaderQueryRuntime(
     bfcacheReload.dispose();
   });
 
+  // SPEC §9.4/§10.4: enroll generated plans before reading the first inline query script. Every
+  // subsequent store writer (hydration, refetch, live push, settlement, optimism) then reaches the
+  // same plan exactly once. Structural/manual roots retain the direct apply seam below.
+  const queryPlanSubscriptions =
+    options.queryStore && options.queryPlans
+      ? installCompiledQueryUpdatePlanSubscriptions(
+          options.queryStore,
+          options.root,
+          options.queryPlans,
+        )
+      : undefined;
+  if (queryPlanSubscriptions) appendDisposer(disposers, queryPlanSubscriptions);
+  const directQueryPlans = queryPlanSubscriptions ? undefined : options.queryPlans;
+
   const queryVisibleReturn = installQueryVisibleReturnRefetch({
     onError: reportQueryHydrationError,
     ...definedProps({
       applyQuery: options.applyQuery,
-      queryPlans: options.queryPlans,
+      queryPlans: directQueryPlans,
       queryRefetch: options.queryRefetch,
       queryStore: options.queryStore,
       refetchOnFocus: options.refetchOnFocus,
@@ -113,7 +130,7 @@ export function installLoaderQueryRuntime(
           (options.root as unknown as QueryEventHydrationTarget),
         ...definedProps({
           applyQuery: options.applyQuery,
-          queryPlans: options.queryPlans,
+          queryPlans: directQueryPlans,
         }),
       }),
     );

@@ -30,7 +30,9 @@ export type {
   CompiledQueryDerive,
   CompiledQueryStamp,
   CompiledQueryTemplateStamp,
+  CompiledQueryUpdateApplier,
   CompiledQueryUpdateContext,
   CompiledQueryUpdatePlan,
+  CompiledQueryUpdatePlanEntry,
   CompiledQueryUpdatePlans,
 } from './query-bindings.js';

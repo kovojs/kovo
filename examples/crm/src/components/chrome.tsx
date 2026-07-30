@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import type { ComponentChild } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import { Badge, type BadgeVariant } from '@kovojs/ui/badge';
 import * as style from '@kovojs/style';
 
@@ -113,14 +113,15 @@ export function stageBadgeVariant(stage: string): BadgeVariant {
   return STAGE_VARIANT[stage] ?? 'neutral';
 }
 
-/** A capitalized stage chip rendered with the @kojvojs/ui Badge. */
-export function stageBadge(stage: string): string {
-  return (
+/** A capitalized stage chip rendered with the @kovojs/ui Badge. */
+export const StageBadge = component({
+  props: { stage: String },
+  render: ({ stage }: { stage: string }) => (
     <span style={chromeStyles.stageText}>
       <Badge variant={stageBadgeVariant(stage)}>{stage}</Badge>
     </span>
-  );
-}
+  ),
+});
 
 export function CrmShell({
   active,

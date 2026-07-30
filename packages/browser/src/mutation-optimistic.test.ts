@@ -232,6 +232,56 @@ describe('optimistic enhanced mutation submission', () => {
     expect(root.targets.get('reviews:p1')?.html).toBe('<section>Reviews ready</section>');
   });
 
+  it('predicts only query instances held by the current document', async () => {
+    const store = createQueryStore();
+    const rebaser = new OptimisticRebaser(store);
+    const onError = vi.fn();
+    const dealName = 'queries/deal-by-id-query';
+    const dealKey = `${dealName}:d1`;
+    store.set(dealName, { id: 'd1', stage: 'open' }, dealKey);
+
+    const fetch = vi.fn(async () => {
+      expect(store.get(dealName, dealKey)).toEqual({ id: 'd1', stage: 'won' });
+      expect(store.get('queries/open-deals-query')).toBeUndefined();
+      expect(store.get('queries/pipeline-by-stage-query')).toBeUndefined();
+      return mutationTestResponse('/_m/mutations/close-deal', {
+        async text() {
+          return `<kovo-query name="${dealName}" key="${dealKey}">{"id":"d1","stage":"won"}</kovo-query>`;
+        },
+      });
+    });
+
+    await submitOptimisticEnhancedMutation({
+      fetch,
+      form: { action: '/_m/mutations/close-deal', method: 'post' },
+      formData: new FormData(),
+      idem: 'v1_1750000000000_00000000000000000000000000000070',
+      input: { dealId: 'd1' },
+      onError,
+      optimistic: {
+        keys: { [dealName]: () => dealKey },
+        transforms: {
+          [dealName](current) {
+            return { ...(current as { id: string; stage: string }), stage: 'won' };
+          },
+          'queries/open-deals-query'(current) {
+            return { items: [...(current as { items: unknown[] }).items] };
+          },
+          'queries/pipeline-by-stage-query'(current) {
+            return { stages: [...(current as { stages: unknown[] }).stages] };
+          },
+        },
+      },
+      rebaser,
+      root: new FakeMorphRoot(),
+      store,
+    });
+
+    expect(store.get(dealName, dealKey)).toEqual({ id: 'd1', stage: 'won' });
+    expect(rebaser.pendingCount(dealName, dealKey)).toBe(0);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it('F1: merges a prod delta chunk before rebasing instead of storing the raw envelope', async () => {
     // SPEC §9.1.1: a `<kovo-query delta>` response body is a QueryDelta envelope
     // ({set}/{lists}), not the full value. The optimistic apply hook must merge the

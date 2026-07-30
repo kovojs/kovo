@@ -319,7 +319,6 @@ export class OptimisticRebaser {
       storeKey: string;
       transform: OptimisticTransform;
     }> = [];
-
     const queryNames = securityObjectKeys(plan.transforms);
     for (let queryIndex = 0; queryIndex < queryNames.length; queryIndex += 1) {
       const queryEntry = securityOwnArrayEntry(queryNames, queryIndex);
@@ -339,6 +338,7 @@ export class OptimisticRebaser {
         if (!keyEntry.ok) throw new TypeError('Kovo optimistic query keys must be dense.');
         const key = keyEntry.value;
         const storeKey = queryStoreKey(queryName, key);
+        if (!queryStoreHasValue(this.#store, queryName, key)) continue;
         const previous = this.#store.get(queryName, key);
 
         let predicted: unknown;
@@ -820,6 +820,7 @@ export function resolveOptimisticKeys<Input>(
 export function resolveOptimisticTargets<Input>(
   plan: OptimisticPlan<Input>,
   change: OptimisticChange<Input>,
+  store?: QueryStore,
 ): OptimisticQueryTarget[] {
   const targets: OptimisticQueryTarget[] = [];
   const queryNames = securityObjectKeys(plan.transforms);
@@ -831,6 +832,7 @@ export function resolveOptimisticTargets<Input>(
     for (let keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
       const keyEntry = securityOwnArrayEntry(keys, keyIndex);
       if (!keyEntry.ok) throw new TypeError('Kovo optimistic query keys must be dense.');
+      if (store !== undefined && !queryStoreHasValue(store, queryName, keyEntry.value)) continue;
       securityArrayAppend(
         targets,
         keyEntry.value === undefined ? { queryName } : { key: keyEntry.value, queryName },

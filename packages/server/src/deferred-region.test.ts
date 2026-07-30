@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { trustedHtml } from '@kovojs/browser';
+import { component } from '@kovojs/core';
 
 import {
   createFrameworkAsyncContextCell,
@@ -11,6 +12,8 @@ import { Defer, createDeferredRegionChunkCollector } from './deferred-region.js'
 import { renderHtmlValue } from './html.js';
 import { currentJsxRequestContext, runWithJsxRequestContext } from './jsx-context.js';
 import { jsx } from './jsx-runtime.js';
+import { query } from './query.js';
+import { createQueryDocumentCollector } from './query-document-collector.js';
 
 const html = async (value: unknown): Promise<string> => renderHtmlValue(await value);
 const nativePromiseAll = Promise.all;
@@ -25,6 +28,40 @@ afterEach(() => {
 });
 
 describe('Defer JSX primitive', () => {
+  it('ships deferred component query truth with the consuming stream chunk', async () => {
+    const chunks = createDeferredRegionChunkCollector();
+    const initialQueries = createQueryDocumentCollector();
+    const cardQuery = query('queries/deferred-card', {
+      load: () => ({ title: 'Ready' }),
+    });
+    const Card = component({
+      queries: { card: cardQuery },
+      render: ({ card }: { card: { title: string } }) => jsx('strong', { children: card.title }),
+    });
+
+    await html(
+      runWithJsxRequestContext({}, { deferredRegions: chunks, queries: initialQueries }, () =>
+        Defer({
+          fallback: 'Loading',
+          priority: 'after-paint',
+          render: () => jsx(Card, {}),
+          target: 'card',
+        }),
+      ),
+    );
+    const [chunk] = await chunks.chunks();
+
+    expect(initialQueries.snapshot()).toEqual([]);
+    expect(chunk?.queries).toEqual([
+      {
+        href: '/_q/queries/deferred-card',
+        name: 'queries/deferred-card',
+        value: { title: 'Ready' },
+      },
+    ]);
+    expect(chunk?.fragments[0]?.html).toBe('<strong>Ready</strong>');
+  });
+
   it('renders a real kovo-defer placeholder and streams rendered JSX chunks in route context', async () => {
     const collector = createDeferredRegionChunkCollector();
 

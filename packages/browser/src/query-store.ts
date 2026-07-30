@@ -27,6 +27,15 @@ import {
 export type QueryUpdatePlan<Value = unknown> = (value: Value) => void;
 
 /**
+ * @internal A generated-plan subscriber for every keyed and unkeyed instance of one query.
+ *
+ * Optimistic predictions write through the same store as hydration and server truth. Keeping this
+ * family subscription out of the public {@link QueryStore} shape lets generated loaders observe
+ * future keyed instances without turning a compiler/runtime ABI into an app-authored cache API.
+ */
+export type QueryFamilyUpdatePlan<Value = unknown> = (value: Value, key?: string) => void;
+
+/**
  * The client query store: get/set/subscribe to query values and take snapshots.
  */
 export interface QueryStore {
@@ -58,6 +67,13 @@ export interface QueryStore {
 export type QuerySnapshot = Map<string, unknown>;
 
 const queryStorePresence = securityWeakMap<QueryStore, (storeKey: string) => boolean>();
+const queryStoreFamilySubscriptions = securityWeakMap<
+  QueryStore,
+  {
+    plans: Map<string, Set<QueryFamilyUpdatePlan>>;
+    replay(name: string, plan: QueryFamilyUpdatePlan): void;
+  }
+>();
 
 /** Exact query identity; `key` is separate because query names may contain `:`. */
 export interface QueryIdentity {
@@ -81,6 +97,7 @@ export function createQueryStore(): QueryStore {
   // Map/Set/String prototype methods.
   const values = securityMap<string, unknown>();
   const plans = securityMap<string, Set<QueryUpdatePlan>>();
+  const familyPlans = securityMap<string, Set<QueryFamilyUpdatePlan>>();
 
   const store: QueryStore = {
     // L7-2 / SPEC §9.4: the `values` map is otherwise never evicted and its keys
@@ -129,10 +146,17 @@ export function createQueryStore(): QueryStore {
       securityMapSet(values, storeKey, value);
 
       const updatePlans = securityMapGet(plans, storeKey);
-      if (!updatePlans) return;
-      securitySetForEach(updatePlans, (plan) => {
-        plan(value);
-      });
+      if (updatePlans) {
+        securitySetForEach(updatePlans, (plan) => {
+          plan(value);
+        });
+      }
+      const familyUpdatePlans = securityMapGet(familyPlans, name);
+      if (familyUpdatePlans) {
+        securitySetForEach(familyUpdatePlans, (plan) => {
+          plan(value, key);
+        });
+      }
     },
     subscribe<Value = unknown>(
       name: string,
@@ -166,7 +190,55 @@ export function createQueryStore(): QueryStore {
     },
   };
   securityWeakMapSet(queryStorePresence, store, (storeKey) => securityMapHas(values, storeKey));
+  securityWeakMapSet(queryStoreFamilySubscriptions, store, {
+    plans: familyPlans,
+    replay(name, plan) {
+      securityMapForEach(values, (value, storeKey) => {
+        if (storeKey === name) {
+          plan(value);
+          return;
+        }
+        const prefix = `${name}\0`;
+        if (securityStringIndexOf(storeKey, prefix) === 0) {
+          plan(value, securityStringSlice(storeKey, prefix.length));
+        }
+      });
+    },
+  });
   return store;
+}
+
+/**
+ * @internal Subscribe one compiler-emitted plan to every instance of a query family.
+ *
+ * The generated loader uses this so an optimistic `store.set(name, value, key)` follows the same
+ * DOM update path as initial hydration, typed refetch, mutation settlement, and live push.
+ */
+export function subscribeQueryFamily<Value = unknown>(
+  store: QueryStore,
+  name: string,
+  plan: QueryFamilyUpdatePlan<Value>,
+): () => void {
+  const familyState = securityWeakMapGet(queryStoreFamilySubscriptions, store);
+  if (familyState === undefined) {
+    throw new TypeError('Kovo query-family subscriptions require a framework-created query store.');
+  }
+  const families = familyState.plans;
+  const existing = securityMapGet(families, name) ?? securitySet<QueryFamilyUpdatePlan>();
+  securitySetAdd(existing, plan as QueryFamilyUpdatePlan);
+  securityMapSet(families, name, existing);
+  familyState.replay(name, plan as QueryFamilyUpdatePlan);
+
+  return () => {
+    securitySetDelete(existing, plan as QueryFamilyUpdatePlan);
+    let hasLivePlan = false;
+    securitySetForEach(existing, () => {
+      hasLivePlan = true;
+    });
+    if (!hasLivePlan && securityMapGet(families, name) === existing) {
+      securityMapDelete(families, name);
+    }
+  };
 }
 
 /**

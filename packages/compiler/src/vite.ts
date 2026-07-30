@@ -1050,6 +1050,7 @@ function createBoundKovoVitePlugin(
             recordViteCompileResult(
               transformDevState,
               fileName,
+              source,
               emptyViteCompileMetadata(),
               [{ kind: 'client', source: optimisticModule.source }],
               optimisticModule,
@@ -1229,6 +1230,7 @@ function createBoundKovoVitePlugin(
               recordViteCompileResult(
                 hotUpdateDevState,
                 fileName,
+                source,
                 emptyViteCompileMetadata(),
                 [{ kind: 'client', source: optimisticModule.source }],
                 optimisticModule,
@@ -1312,7 +1314,7 @@ function createBoundKovoVitePlugin(
             fileName,
             hasAppContractOperation,
           );
-          recordViteCompileResult(hotUpdateDevState, fileName, metadata, emittedFiles);
+          recordViteCompileResult(hotUpdateDevState, fileName, source, metadata, emittedFiles);
           // SPEC §6.2.1: compile output becomes observable only after a fresh evaluated cache has
           // imported and assembled the entire closed app. A failed candidate leaves the broker's
           // prior generation active and emits no success/reload event.
@@ -1601,7 +1603,7 @@ function transformViteCompileResult(
   if (errorDiagnostics.length > 0) throw new Error(viteDiagnosticErrorMessage(errorDiagnostics));
   const metadata = snapshotViteCompileMetadata(result);
   if (!shouldRetainResult()) return null;
-  recordViteCompileResult(devState, fileName, metadata, emittedFiles);
+  recordViteCompileResult(devState, fileName, source, metadata, emittedFiles);
 
   let serverSource: string | undefined;
   for (let index = 0; index < emittedFiles.length; index += 1) {
@@ -2588,6 +2590,81 @@ function importedQueryDerivedKey(
   ).key;
 }
 
+function queryPlanBootstrapInputForComponent(
+  fileName: string,
+  source: string,
+  importPath: string,
+  metadata: NonNullable<ViteCompileMetadata['queryPlanBootstrapMetadata']>,
+): QueryPlanBootstrapInput {
+  const queryNames = componentQueryPlanRuntimeNames(source, fileName);
+  return compilerFreeze({
+    ...metadata,
+    importPath,
+    ...(compilerObjectKeys(queryNames).length === 0 ? {} : { queryNames }),
+  });
+}
+
+/**
+ * Resolve the component-local aliases used by emitted update-plan functions to the
+ * source-derived registry identities used by SSR, wire chunks, the query store, and optimism.
+ */
+function componentQueryPlanRuntimeNames(
+  source: string,
+  fileName: string,
+): Readonly<Record<string, string>> {
+  const model = parseComponentModule(fileName, source);
+  const entries = allComponentOptionObjectEntries(model, 'queries');
+  const queryNames = compilerCreateNullRecord<string>();
+  const entryLength = compilerArrayLength(entries, 'Vite component query-plan entries');
+  for (let index = 0; index < entryLength; index += 1) {
+    const rawEntry = compilerOwnDataValue(entries, index, 'Vite component query-plan entries');
+    if (typeof rawEntry !== 'object' || rawEntry === null || compilerArrayIsArray(rawEntry)) {
+      throw new TypeError(`Vite component query-plan entries[${index}] must be an own object.`);
+    }
+    const localName = compilerOwnDataValue(
+      rawEntry,
+      'key',
+      `Vite component query-plan entries[${index}]`,
+    );
+    const rawBinding = compilerOwnDataValue(
+      rawEntry,
+      'queryBinding',
+      `Vite component query-plan entries[${index}]`,
+    );
+    if (typeof localName !== 'string' || localName.length === 0) {
+      throw new TypeError(`Vite component query-plan entries[${index}].key must be non-empty.`);
+    }
+    if (
+      rawBinding === undefined ||
+      typeof rawBinding !== 'object' ||
+      rawBinding === null ||
+      compilerArrayIsArray(rawBinding)
+    ) {
+      continue;
+    }
+    const queryExpression = compilerOwnDataValue(
+      rawBinding,
+      'queryKeyExpression',
+      `Vite component query-plan entries[${index}].queryBinding`,
+    );
+    if (typeof queryExpression !== 'string' || queryExpression.length === 0) continue;
+    const runtimeName = importedQueryDerivedKey(model, fileName, queryExpression);
+    if (runtimeName === null) continue;
+    const existing = compilerOwnDataValue(
+      queryNames,
+      localName,
+      'Vite component query-plan runtime names',
+    );
+    if (existing !== undefined && existing !== runtimeName) {
+      throw new TypeError(
+        `Kovo Vite resolved conflicting runtime query identities for component alias "${localName}".`,
+      );
+    }
+    compilerDefineOwnDataProperty(queryNames, localName, runtimeName);
+  }
+  return compilerFreeze(queryNames);
+}
+
 function resolveImportedModuleFileName(fileName: string, moduleSpecifier: string): string {
   const extension = compilerRegExpTest(/\.[cm]?[tj]sx?$/, moduleSpecifier) ? '' : '.ts';
   return slashPath(resolve(dirname(fileName), `${moduleSpecifier}${extension}`));
@@ -3090,6 +3167,7 @@ function viteOptimisticModuleForFile(
 function recordViteCompileResult(
   store: ViteDevStateStore,
   fileName: string,
+  source: string,
   metadata: ViteCompileMetadata,
   files: readonly { kind: string; source: string }[],
   optimisticModule?: OptimisticModuleFact,
@@ -3117,10 +3195,12 @@ function recordViteCompileResult(
     queryPlanBootstrapInput =
       metadata.queryPlanBootstrapMetadata === undefined
         ? undefined
-        : compilerFreeze({
-            ...metadata.queryPlanBootstrapMetadata,
-            importPath: href,
-          });
+        : queryPlanBootstrapInputForComponent(
+            fileName,
+            source,
+            href,
+            metadata.queryPlanBootstrapMetadata,
+          );
     clientHistory = nextViteClientModuleHistory(existing?.clientHistory, href, finalSource);
     const target = parseVersionedClientModuleTarget(href);
     if (

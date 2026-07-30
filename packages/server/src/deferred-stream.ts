@@ -35,7 +35,8 @@ import { witnessGetOwnPropertyDescriptor, witnessObjectIs } from './security-wit
 
 /** A query refresh payload carried by a deferred route-region stream. */
 export interface DeferredQueryChunk {
-  key?: string;
+  href?: string | undefined;
+  key?: string | undefined;
   name: string;
   value: unknown;
 }
@@ -473,6 +474,7 @@ function renderDeferredQueryChunks(queries: readonly DeferredQueryChunk[]): stri
     securityArrayPush(
       rendered,
       renderQueryWireHtml({
+        href: queryChunk.href,
         key: queryChunk.key || undefined,
         name: queryChunk.name,
         value: queryChunk.value,
@@ -770,13 +772,18 @@ function snapshotDeferredQuery(value: unknown): DeferredQueryChunk {
     throw new TypeError('deferred stream queries must be objects.');
   }
   const key = stableDeferredValue(value, 'key', 'deferred stream query');
+  const href = stableDeferredValue(value, 'href', 'deferred stream query');
   const name = stableDeferredValue(value, 'name', 'deferred stream query');
   const queryValue = stableDeferredValue(value, 'value', 'deferred stream query');
   if (key !== undefined && typeof key !== 'string') {
     throw new TypeError('deferred query key must be a string.');
   }
+  if (href !== undefined && typeof href !== 'string') {
+    throw new TypeError('deferred query href must be a string.');
+  }
   if (typeof name !== 'string') throw new TypeError('deferred query name must be a string.');
   return {
+    ...(href === undefined ? {} : { href }),
     ...(key === undefined ? {} : { key }),
     name,
     value: queryValue,

@@ -2,6 +2,7 @@ import type { JsonValue } from '@kovojs/core';
 import { applyQueryDelta, QueryDeltaApplyError } from '@kovojs/core/internal/query-delta';
 import type { QueryDelta } from '@kovojs/core/internal/query-delta';
 import { definedProps } from './defined-props.js';
+import { appendDisposer, drainDisposers } from './dispose-stack.js';
 import { reportRuntimeError } from './error-policy.js';
 import type { RuntimeErrorReporter } from './error-policy.js';
 import {
@@ -10,20 +11,29 @@ import {
   supportsQueryBindings,
 } from './query-bindings.js';
 import type {
-  CompiledQueryUpdatePlan,
+  CompiledQueryUpdateApplier,
+  CompiledQueryUpdatePlanEntry,
   CompiledQueryUpdatePlans,
   QueryBindingIndex,
   QueryBindingRoot,
 } from './query-bindings.js';
 import type { QueryIdentity, QueryStore } from './query-store.js';
-import { createQueryIdentity, queryStoreKey } from './query-store.js';
+import { createQueryIdentity, queryStoreKey, subscribeQueryFamily } from './query-store.js';
 import { rememberQueryRefetchHref } from './query-refetch-metadata.js';
 import type { QueryChunk } from './wire-parser.js';
 import {
+  applySecurityIntrinsic,
   freezeSecurityValue,
   securityArrayAppend,
   securityGetOwnPropertyDescriptor,
+  securityMap,
+  securityMapGet,
+  securityMapHas,
+  securityMapSet,
+  securityObjectKeys,
   securityOwnArrayEntry,
+  securityStringIndexOf,
+  securityStringSlice,
 } from './security-witness-intrinsics.js';
 
 /**
@@ -186,7 +196,7 @@ export function applyQueryChunksToRuntime(
     afterApplyQuery(query, value) {
       const identity = createQueryIdentity(query.name, query.key);
       const planKey = queryStoreKey(query.name, query.key);
-      applyCompiledQueryUpdatePlanIfSupported(
+      applyCompiledQueryUpdatePlanEntryIfSupported(
         options.root,
         query.name,
         value,
@@ -211,16 +221,26 @@ function createLazyBindingIndexReader(): (root: QueryBindingRoot) => QueryBindin
   };
 }
 
-function applyCompiledQueryUpdatePlanIfSupported(
+/** @internal Apply one declarative or compiler-emitted plan through the shared runtime ABI. */
+export function applyCompiledQueryUpdatePlanEntryIfSupported(
   root: unknown,
   queryName: string,
   value: unknown,
-  plan: CompiledQueryUpdatePlan = {},
+  plan: CompiledQueryUpdatePlanEntry = {},
   readBindingIndex?: (root: QueryBindingRoot) => QueryBindingIndex,
   queryIdentity?: QueryIdentity,
   queryStore?: QueryStore,
 ): void {
   if (!root || !supportsQueryBindings(root)) return;
+
+  if (typeof plan === 'function') {
+    const context = {
+      ...(queryIdentity === undefined ? {} : { queryIdentity }),
+      ...(queryStore === undefined ? {} : { queryStore }),
+    };
+    applySecurityIntrinsic(plan as CompiledQueryUpdateApplier, undefined, [root, value, context]);
+    return;
+  }
 
   const options =
     plan.bindings === false || !readBindingIndex
@@ -233,4 +253,105 @@ function applyCompiledQueryUpdatePlanIfSupported(
           ...(queryStore ? { queryStore } : {}),
         };
   applyCompiledQueryUpdatePlan(root, queryName, value, plan, options);
+}
+
+/**
+ * @internal Install compiler-emitted update plans as store subscriptions.
+ *
+ * Hydration, refetch, mutation settlement, live push, and optimistic prediction all write through
+ * the same query store (SPEC §9.4/§10.4). Subscribing once makes those writers share one DOM path
+ * and also covers keyed instances that do not exist until after loader startup.
+ */
+export function installCompiledQueryUpdatePlanSubscriptions(
+  store: QueryStore,
+  root: unknown,
+  plans: CompiledQueryUpdatePlans,
+): (() => void) | undefined {
+  if (!root || !supportsQueryBindings(root)) return undefined;
+
+  const snapshot = securityMap<string, CompiledQueryUpdatePlanEntry>();
+  const familyNames = securityMap<string, true>();
+  const keys = securityObjectKeys(plans);
+  for (let index = 0; index < keys.length; index += 1) {
+    const keyEntry = securityOwnArrayEntry(keys, index);
+    if (!keyEntry.ok) throw new TypeError('Kovo query plan names must be a dense array.');
+    const descriptor = securityGetOwnPropertyDescriptor(plans, keyEntry.value);
+    if (!descriptor || !('value' in descriptor)) {
+      throw new TypeError('Kovo query plans must be own-data properties.');
+    }
+    const plan = descriptor.value;
+    if (plan === undefined) continue;
+    if ((typeof plan !== 'object' || plan === null) && typeof plan !== 'function') {
+      throw new TypeError('Kovo query plan entries must be plan objects or generated appliers.');
+    }
+    const identity = queryPlanIdentityFromStoreKey(keyEntry.value);
+    securityMapSet(snapshot, queryStoreKey(identity.name, identity.key), plan);
+    if (identity.key === undefined) securityMapSet(familyNames, identity.name, true);
+  }
+
+  const disposers: Array<() => void> = [];
+  for (let index = 0; index < keys.length; index += 1) {
+    const keyEntry = securityOwnArrayEntry(keys, index);
+    if (!keyEntry.ok) throw new TypeError('Kovo query plan names must be a dense array.');
+    const identity = queryPlanIdentityFromStoreKey(keyEntry.value);
+    const plan = securityMapGet(snapshot, queryStoreKey(identity.name, identity.key));
+    if (plan === undefined) continue;
+
+    if (identity.key === undefined) {
+      appendDisposer(
+        disposers,
+        subscribeQueryFamily(store, identity.name, (value, key) => {
+          const exact = securityMapGet(snapshot, queryStoreKey(identity.name, key));
+          applyCompiledQueryUpdatePlanEntryIfSupported(
+            root,
+            identity.name,
+            value,
+            exact ?? plan,
+            undefined,
+            createQueryIdentity(identity.name, key),
+            store,
+          );
+        }),
+      );
+      continue;
+    }
+
+    // When a family plan exists its subscriber selects this exact override. An exact-only plan
+    // needs its own keyed subscription so it preserves the previous plan-map contract.
+    if (!securityMapHas(familyNames, identity.name)) {
+      appendDisposer(
+        disposers,
+        store.subscribe(
+          identity.name,
+          (value) => {
+            applyCompiledQueryUpdatePlanEntryIfSupported(
+              root,
+              identity.name,
+              value,
+              plan,
+              undefined,
+              identity,
+              store,
+            );
+          },
+          identity.key,
+        ),
+      );
+    }
+  }
+
+  return () => {
+    drainDisposers(disposers);
+  };
+}
+
+function queryPlanIdentityFromStoreKey(storeKey: string): QueryIdentity {
+  const separator = securityStringIndexOf(storeKey, '\0');
+  if (separator < 0) return createQueryIdentity(storeKey);
+  const name = securityStringSlice(storeKey, 0, separator);
+  const key = securityStringSlice(storeKey, separator + 1);
+  if (securityStringIndexOf(key, '\0') >= 0) {
+    throw new TypeError('Kovo exact query plan keys must contain one store-key separator.');
+  }
+  return createQueryIdentity(name, key);
 }

@@ -37,3 +37,31 @@ export function definedProps<Props extends object>(props: Props): DefinedProps<P
   }
   return result as DefinedProps<Props>;
 }
+
+/** @internal Snapshot enumerable own-data options while dropping one compiler/runtime field. */
+export function omitDefinedProp<Props extends object, Key extends Extract<keyof Props, string>>(
+  props: Props,
+  omitted: Key,
+): Omit<Props, Key> {
+  const result = securityNullRecord();
+  const keys = securityObjectKeys(props);
+  for (let index = 0; index < keys.length; index += 1) {
+    const entry = securityOwnArrayEntry(keys, index);
+    if (!entry.ok) throw new TypeError('Kovo option omission requires stable own-data keys.');
+    const key = entry.value;
+    if (key === omitted) continue;
+    const descriptor = securityGetOwnPropertyDescriptor(props, key);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError('Kovo option omission requires enumerable own-data properties.');
+    }
+    defineSecurityProperties(result, {
+      [key]: {
+        configurable: true,
+        enumerable: true,
+        value: descriptor.value,
+        writable: true,
+      },
+    });
+  }
+  return result as Omit<Props, Key>;
+}

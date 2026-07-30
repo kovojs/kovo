@@ -1207,7 +1207,7 @@ function emitQueryUpdatePlanExport(
     const query = compilerJsonSource(plan.query, 'Query update plan name');
     appendClientValue(
       entryParts,
-      `  ${query}(root, value, context = {}) {\n    return runQueryUpdatePlan(root, ${query}, value, { bindings: true, derives: [${emitClientFactList(plan.derives, emitDerivePlan, 'Query derive plans')}], stamps: [${emitClientFactList(plan.stamps, emitStampPlan, 'Query stamp plans')}], templateStamps: [${emitClientFactList(plan.templateStamps, emitTemplateStampPlan, 'Query template stamp plans')}] }, { queryStore: context.queryStore });\n  },`,
+      `  ${query}(root, value, context = {}) {\n    return runQueryUpdatePlan(root, ${query}, value, { bindings: true, derives: [${emitClientFactList(plan.derives, emitDerivePlan, 'Query derive plans')}], stamps: [${emitClientFactList(plan.stamps, emitStampPlan, 'Query stamp plans')}], templateStamps: [${emitClientFactList(plan.templateStamps, emitTemplateStampPlan, 'Query template stamp plans')}] }, { queryIdentity: context.queryIdentity, queryStore: context.queryStore });\n  },`,
       'Client query update entries',
     );
   }

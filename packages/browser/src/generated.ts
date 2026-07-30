@@ -21,6 +21,7 @@ export type {
   KovoGeneratedLoaderOptions as KovoLoaderOptions,
 } from './loader.js';
 export { applyCompiledQueryUpdatePlan } from './query-bindings.js';
+export { mergeCompiledQueryUpdatePlans } from './query-plan-merge.js';
 export { runQueryUpdatePlan } from './query-update-vm.js';
 export type {
   AppliedCompiledQueryUpdatePlan,
@@ -28,14 +29,17 @@ export type {
   CompiledQueryDerive,
   CompiledQueryStamp,
   CompiledQueryTemplateStamp,
+  CompiledQueryUpdateApplier,
   CompiledQueryUpdateContext,
   CompiledQueryUpdatePlan,
+  CompiledQueryUpdatePlanEntry,
   CompiledQueryUpdatePlans,
   QueryBindingElement,
   QueryBindingRoot,
   TemplateStampHost,
   TemplateStampItem,
 } from './query-bindings.js';
+export type { CompiledQueryUpdatePlanSource } from './query-plan-merge.js';
 export { createQueryStore } from './query-store.js';
 export type { QueryIdentity, QuerySnapshot, QueryStore, QueryUpdatePlan } from './query-store.js';
 export type { QueryApplyInterposition } from './query-apply.js';

@@ -11,7 +11,7 @@ import {
   type ContactListResult,
   type DealDetailResult,
 } from '../queries.js';
-import { money, stageBadge } from '../components/chrome.js';
+import { money, StageBadge } from '../components/chrome.js';
 
 // Deal detail for `/deals/:id`. Moving or closing the deal refreshes this region
 // with the server-updated stage and amount.
@@ -184,7 +184,9 @@ export const DealDetailRegion = component({
             </div>
             <div style={dealDetailStyles.stageSummary}>
               <p style={dealDetailStyles.tabularStrong}>{money(deal.amount)}</p>
-              <div style={dealDetailStyles.stageMeta}>{stageBadge(deal.stage)}</div>
+              <div style={dealDetailStyles.stageMeta}>
+                <StageBadge stage={deal.stage} />
+              </div>
             </div>
           </div>
           {contact ? (

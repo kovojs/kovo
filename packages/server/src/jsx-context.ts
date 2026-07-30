@@ -15,6 +15,7 @@ import {
   formHelperToken,
 } from './jsx-form-helper-intrinsics.js';
 import type { MutationFail } from './mutation.js';
+import type { QueryDocumentCollector } from './query-document-collector.js';
 
 type MaybePromise<Value> = Promise<Value> | Value;
 
@@ -34,6 +35,7 @@ export interface JsxFrameworkContext {
   mutationFormHelpers: JsxMutationFormHelperRegistry;
   mutationFailure?: JsxMutationFailureContext;
   onCsrfSetCookie?: (rawSetCookie: string) => void;
+  queries?: QueryDocumentCollector;
   request: unknown;
 }
 
@@ -73,6 +75,49 @@ export function currentJsxFrameworkContext(): JsxFrameworkContext | undefined {
 
 export function currentJsxMutationFormHelperRegistry(): JsxMutationFormHelperRegistry | undefined {
   return currentFrameworkAsyncContextValue(jsxRequestContext)?.mutationFormHelpers;
+}
+
+/**
+ * Run a nested render with an isolated query collector while preserving the exact request-owned
+ * JSX authority and mutation-helper registry.
+ *
+ * @internal Deferred regions use this so their query truth ships in the same stream chunk as its
+ * consumer instead of racing the already-finalized initial document head.
+ */
+export function runWithCurrentJsxQueryCollector<Value>(
+  queries: QueryDocumentCollector,
+  render: () => MaybePromise<Value>,
+): MaybePromise<Value> {
+  const context = currentFrameworkAsyncContextValue(jsxRequestContext);
+  if (context === undefined) {
+    throw new TypeError('Deferred query collection requires an active JSX request context.');
+  }
+  return runWithFrameworkAsyncContext(
+    jsxRequestContext,
+    {
+      ...(context.anonymousCsrfBindings === undefined
+        ? {}
+        : { anonymousCsrfBindings: context.anonymousCsrfBindings }),
+      ...(context.attestationAuthority === undefined
+        ? {}
+        : { attestationAuthority: context.attestationAuthority }),
+      ...(context.csrf === undefined ? {} : { csrf: context.csrf }),
+      ...(context.deferredRegions === undefined
+        ? {}
+        : { deferredRegions: context.deferredRegions }),
+      ...(context.maxListItems === undefined ? {} : { maxListItems: context.maxListItems }),
+      mutationFormHelpers: context.mutationFormHelpers,
+      ...(context.mutationFailure === undefined
+        ? {}
+        : { mutationFailure: context.mutationFailure }),
+      ...(context.onCsrfSetCookie === undefined
+        ? {}
+        : { onCsrfSetCookie: context.onCsrfSetCookie }),
+      queries,
+      request: context.request,
+    },
+    render,
+  );
 }
 
 export function runWithJsxRequestContext<Value>(
@@ -146,6 +191,7 @@ function createJsxFrameworkContext(
   const onCsrfSetCookie = formHelperOwnDataValue(options, 'onCsrfSetCookie') as
     | ((rawSetCookie: string) => void)
     | undefined;
+  const queries = formHelperOwnDataValue(options, 'queries') as QueryDocumentCollector | undefined;
   const normalizedMutationFailure =
     typeof mutationFailure === 'object' && mutationFailure !== null
       ? (formHelperSnapshotRecord(
@@ -164,6 +210,7 @@ function createJsxFrameworkContext(
       : { mutationFailure: normalizedMutationFailure }),
     mutationFormHelpers: createMutationFormHelperRegistry(),
     ...(onCsrfSetCookie === undefined ? {} : { onCsrfSetCookie }),
+    ...(queries === undefined ? {} : { queries }),
     request,
   };
   return context;

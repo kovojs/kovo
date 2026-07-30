@@ -5,4 +5,5 @@ export { applyDeferredStreamResponseToRuntime } from './apply-deferred-stream.js
 export { createBrowserKovoRoot, defaultEnhancedFetch } from './browser-root.js';
 export { installInlineKovoLoader } from './inline-loader-runtime.js';
 export { installGeneratedKovoLoader as installKovoLoader } from './loader.js';
+export { mergeCompiledQueryUpdatePlans } from './query-plan-merge.js';
 export { createQueryStore } from './query-store.js';

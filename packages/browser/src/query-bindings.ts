@@ -116,6 +116,22 @@ export interface CompiledQueryUpdatePlan {
   templateStamps?: readonly CompiledQueryTemplateStamp[];
 }
 
+/**
+ * Runtime ABI emitted by the compiler for one component-local query plan.
+ *
+ * The plan keeps the component's authored/local query alias (for example `deal`) while the
+ * bootstrap indexes it by the source-derived runtime query identity. The runtime therefore passes
+ * the exact store identity through `context` instead of asking generated code to rediscover it.
+ */
+export type CompiledQueryUpdateApplier = (
+  root: QueryBindingRoot,
+  value: unknown,
+  context?: CompiledQueryUpdateContext,
+) => unknown;
+
+/** One declarative or compiler-emitted query update-plan entry. */
+export type CompiledQueryUpdatePlanEntry = CompiledQueryUpdateApplier | CompiledQueryUpdatePlan;
+
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface AppliedCompiledQueryUpdatePlan {
   bindings: string[];
@@ -129,7 +145,7 @@ export interface AppliedCompiledQueryUpdatePlan {
  * keyed-instance override uses the collision-free `queryStoreKey(name, key)` identity.
  */
 export type CompiledQueryUpdatePlans = Readonly<
-  Record<string, CompiledQueryUpdatePlan | undefined>
+  Record<string, CompiledQueryUpdatePlanEntry | undefined>
 >;
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
@@ -182,6 +198,7 @@ export interface ApplyCompiledQueryUpdatePlanOptions extends ApplyQueryBindingsO
 
 /** Runtime API used by generated runtime integration. */
 export interface CompiledQueryUpdateContext {
+  queryIdentity?: QueryIdentity;
   queryStore?: QueryStore;
 }
 
@@ -390,9 +407,10 @@ export function applyCompiledQueryUpdatePlan(
     stamps: [],
     templateStamps: [],
   };
-  const context: CompiledQueryUpdateContext = options.queryStore
-    ? { queryStore: options.queryStore }
-    : {};
+  const context: CompiledQueryUpdateContext = {
+    ...(options.queryIdentity === undefined ? {} : { queryIdentity: options.queryIdentity }),
+    ...(options.queryStore === undefined ? {} : { queryStore: options.queryStore }),
+  };
 
   const derives = snapshotPlanArray<CompiledQueryDerive>(plan, 'derives');
   for (let deriveIndex = 0; deriveIndex < derives.length; deriveIndex += 1) {
@@ -410,6 +428,7 @@ export function applyCompiledQueryUpdatePlan(
     for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
       const element = elements[elementIndex];
       if (!element) continue;
+      if (!elementBelongsToQueryIdentity(element, options.queryIdentity)) continue;
       writeQueryPlanElement(element, rendered);
       securityArrayAppend(applied.derives, name, 'Browser applied compiled query derives');
     }
@@ -429,6 +448,7 @@ export function applyCompiledQueryUpdatePlan(
     for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
       const element = elements[elementIndex];
       if (!element) continue;
+      if (!elementBelongsToQueryIdentity(element, options.queryIdentity)) continue;
       if (selected === undefined || selected === null) {
         removeBoundAttribute(element, attr);
       } else {
@@ -476,6 +496,7 @@ export function applyCompiledQueryUpdatePlan(
     for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
       const element = elements[elementIndex];
       if (!element) continue;
+      if (!elementBelongsToQueryIdentity(element, options.queryIdentity)) continue;
       if (!reconcileTemplateStampHost(element, items)) continue;
       securityArrayAppend(
         applied.templateStamps,

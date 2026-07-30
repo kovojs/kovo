@@ -182,12 +182,12 @@ describe('optimistic query rebase', () => {
 
   it('F3: a transform that throws on enqueue does not orphan a pending entry', () => {
     // SPEC §10.4: addChange records pending then applies. If the transform throws on enqueue
-    // (store value undefined/wrong shape), the pending entry must NOT be recorded — otherwise
+    // for a held value of the wrong shape, the pending entry must NOT be recorded — otherwise
     // every future applyServerTruth re-runs the throwing transform and throws forever.
     const store = createQueryStore();
     const onError = vi.fn();
     const rebaser = new OptimisticRebaser(store, { onError });
-    // Unseeded store: `store.get('cart')` is undefined; `d.count += 1` throws on undefined.
+    store.set('cart', null);
     const add = (draft: unknown) => {
       (draft as { count: number }).count += 1;
     };
@@ -208,7 +208,7 @@ describe('optimistic query rebase', () => {
     const onError = vi.fn();
     const rebaser = new OptimisticRebaser(store, { onError });
     store.set('cart', { count: 1 });
-    // `reviews` is unseeded → throws.
+    store.set('reviews', null);
     const addCart = (draft: unknown) => {
       (draft as { count: number }).count += 1;
     };

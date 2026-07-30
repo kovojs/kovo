@@ -59,6 +59,7 @@ import {
   type RouteRequestInput,
 } from './route.js';
 import { queryRuntimeWarningHeaderValue, queryRuntimeWarningsFromRequest } from './query.js';
+import { createQueryDocumentCollector } from './query-document-collector.js';
 import { registeredCacheInfluenceForRoot } from './generated-cache-influence-registry.js';
 import type { KovoApp } from './app-types.js';
 import { appLiveTargetAttestationAuthority } from './live-target-app-identity.js';
@@ -187,6 +188,7 @@ export async function renderAppRouteDocumentResponse({
   // Shared with the route JSX context and deferred preflight. A first-anonymous deferred form must
   // render against the same binding whose cookie was committed before streaming headers.
   const anonymousCsrfBindings = createSecurityMap<string, JsxAnonymousCsrfBinding>();
+  const documentQueries = createQueryDocumentCollector();
   let acceptsCsrfSetCookie = true;
   const routeSessionProvider =
     sessionProvider === false ? undefined : (sessionProvider ?? app.sessionProvider);
@@ -212,6 +214,7 @@ export async function renderAppRouteDocumentResponse({
         ? {}
         : { mutationFailure: jsxContext.mutationFailure }),
       maxListItems: app.requestLimits.maxQueryListItems,
+      queries: documentQueries,
       onCsrfSetCookie: (rawSetCookie) => {
         if (!acceptsCsrfSetCookie) {
           throw new Error(
@@ -404,6 +407,7 @@ export async function renderAppRouteDocumentResponse({
         ...(metaContext === undefined ? {} : { metaContext }),
         ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
         loaderRuntimeHref,
+        queries: documentQueries.snapshot(),
         reportingOrigin: requestUrlSnapshot(
           requestCreateUrl(requestUrl(requestForAuthorityNeutralMetadata(request))),
         ).origin,

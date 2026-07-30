@@ -24,7 +24,7 @@ import {
   type PipelineByStageResult,
   type PipelineStageBucket,
 } from '../queries.js';
-import { freshId, money, stageBadge } from '../components/chrome.js';
+import { freshId, money, StageBadge } from '../components/chrome.js';
 
 // Pipeline dashboard for `/`. A new deal refreshes the stage totals and open
 // deals table.
@@ -125,7 +125,9 @@ function renderStageCard(bucket: PipelineStageBucket): string {
   return (
     <Card>
       <div style={pipelineStyles.stackSm}>
-        <div>{stageBadge(bucket.stage)}</div>
+        <div>
+          <StageBadge stage={bucket.stage} />
+        </div>
         <p style={pipelineStyles.tabularStrong}>{money(bucket.total)}</p>
       </div>
     </Card>

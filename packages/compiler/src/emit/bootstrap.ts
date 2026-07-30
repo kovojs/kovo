@@ -21,6 +21,8 @@ export interface QueryPlanBootstrapInput {
   clockExportName?: string;
   exportName: string;
   importPath: string;
+  /** @internal Component-local plan alias → source-derived runtime query identity. */
+  queryNames?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -145,9 +147,14 @@ export function emitQueryPlanBootstrapModule(
   // query name into a combined applier that invokes every contributing component's plan.
   const planLines: string[] = [];
   for (let index = 0; index < queryAliases.length; index += 1) {
+    const input = inputSnapshot[index]!;
+    const queryNames =
+      input.queryNames === undefined
+        ? ''
+        : `, queryNames: ${bootstrapJsonSource(input.queryNames, 'Bootstrap query names')}`;
     compilerArrayAppend(
       planLines,
-      `  ${queryAliases[index]!},`,
+      `  { plans: ${queryAliases[index]!}${queryNames} },`,
       'Compiler packages/compiler/src/emit/bootstrap.ts collection',
     );
   }
@@ -172,28 +179,11 @@ export function emitQueryPlanBootstrapModule(
     kind: 'client',
     source: `${compilerIrHeader}
 // @kovojs-generated-app-runtime/v1
-import { applyDeferredStreamResponseToRuntime, createBrowserKovoRoot, createQueryStore, defaultEnhancedFetch, installInlineKovoLoader, installKovoLoader } from ${runtimeImportSource};
+import { applyDeferredStreamResponseToRuntime, createBrowserKovoRoot, createQueryStore, defaultEnhancedFetch, installInlineKovoLoader, installKovoLoader, mergeCompiledQueryUpdatePlans } from ${runtimeImportSource};
 ${imports ? `${imports}\n` : ''}
-// SPEC.md §4.8: merge same-query-name appliers so a query bound by multiple components keeps
-// every component's update plan instead of clobbering all but the last.
-function mergeKovoQueryPlans(plans) {
-  const merged = {};
-  for (const plan of plans) {
-    if (!plan) continue;
-    for (const name of Object.keys(plan)) {
-      const applier = plan[name];
-      const existing = merged[name];
-      merged[name] = existing
-        ? (root, value, context = {}) => {
-            existing(root, value, context);
-            return applier(root, value, context);
-          }
-        : applier;
-    }
-  }
-  return merged;
-}
-const queryPlans = mergeKovoQueryPlans([
+// SPEC.md §4.8/§6.6: merge same-query plans through runtime-captured controls and index each
+// component-local alias by the source-derived name shared by wire, store, and optimism.
+const queryPlans = mergeCompiledQueryUpdatePlans([
 ${planSources}
 ]);
 const clockUpdatePlans = [
@@ -218,12 +208,13 @@ export function installKovoDeferredRuntime() {
     importModule: (specifier) => import(specifier),
     root: document,
     clockUpdatePlans,
+    queryPlans,
     queryStore: nextStore,
     enhancedMutations: {
       // SPEC §6.6/§9.1: this transport was captured while the framework client runtime loaded;
       // authored component modules cannot replace globalThis.fetch before a later form submit.
       fetch: defaultEnhancedFetch,
-      queryPlans,
+      pendingRoot: document,
       root: runtimeRoot,
       store: nextStore,
     },
@@ -253,7 +244,6 @@ export function applyKovoDeferredStreamResponse(body, options = {}) {
     // morph that removes an island correctly aborts its ctx.signal.
     islandSignalScope: activeLoader.islandSignalScope,
     ...(options.morph ? { morph: options.morph } : {}),
-    queryPlans,
     root: options.root ?? document,
     store,
   });
