@@ -11,7 +11,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "54f7703ba7d9733dadc3f592e8ac32619f8197dd10a473e426292475be0edfe5",
+      "sourceTreeSha256": "c6789db7aab45d5f790fd09c06b5fec7fe5879af845ca14cd1ca7c9bcbf6def1",
       "manifestVariants": [
         {
           "fingerprint": "sha256:65f523e5fc6e4b722b498b204040f16369f1a9dceab9d7854a48bab9b25c700a"
@@ -705,7 +705,7 @@
           "reason": "The custom-shell browser installer captures framework-bounded network and dynamic-loader authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "7bbb10cb797bcdffed0c04b4827a38807ff0e111a7afa1cb19755c2a028f53df"
+      "sourceTreeSha256": "bd0bd1a7b62502d37fee8fb5e6a8f125e87ec88fd2706b6e2f646cff1fcd61ed"
     },
     {
       "manifestVariants": [
@@ -818,7 +818,7 @@
           "reason": "The diagnostic schema constant belongs to the build-time CLI package and is not request-handler authority."
         }
       ],
-      "sourceTreeSha256": "bddaa15e53b8fbcdb7d3c6f2b200689621d8feb9f58ce8e246504d7da91edde0"
+      "sourceTreeSha256": "4817c0df179815337b408011a18555d14eeaee94ca869cfd87dc331fb2a781c2"
     },
     {
       "manifestVariants": [
@@ -1728,7 +1728,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "922686e55bb3b29178b3493fc665bc83385c25bd2c5f87537dad0b1535c0affa"
+      "sourceTreeSha256": "610517af085d2076da2a14062be309764989f8430cbbc38fc11a5aa951b7ca84"
     },
     {
       "manifestVariants": [
@@ -2007,7 +2007,7 @@
           "securityRole": "trust-escape"
         }
       ],
-      "sourceTreeSha256": "bfb3e5fcc095a8a3a41cff6a55174c4bd4a153251f842668403f5d8eeaf4b8eb"
+      "sourceTreeSha256": "2eab46e8537db4df7c771f4d61d8dcb42c9c35bad4410014b0fe1b154988d65e"
     },
     {
       "manifestVariants": [
@@ -13322,6 +13322,7 @@
             "./internal/egress": "./src/internal/egress.ts",
             "./internal/escape": "./src/internal/escape.ts",
             "./internal/execution": "./src/internal/execution.ts",
+            "./internal/fixture-app": "./src/internal/fixture-app.ts",
             "./internal/html": "./src/internal/html.ts",
             "./internal/keyring": "./src/internal/keyring.ts",
             "./internal/managed-db-capabilities": "./src/internal/managed-db-capabilities.ts",
@@ -13340,7 +13341,7 @@
             "./jsx-runtime": "./src/jsx-runtime.ts",
             "./jsx-dev-runtime": "./src/jsx-runtime.ts"
           },
-          "fingerprint": "sha256:76af380912d81e458d27f025984d54e8b8c0a08b73f2e0d4f6f639c35a4acb99"
+          "fingerprint": "sha256:3e3c3251bb018b16bb76a2cf434811ecf0eaa69c34ba1757f04af31c16134558"
         },
         {
           "exports": {
@@ -13540,6 +13541,10 @@
               "types": "./dist/internal/execution.d.mts",
               "default": "./dist/internal/execution.mjs"
             },
+            "./internal/fixture-app": {
+              "types": "./dist/internal/fixture-app.d.mts",
+              "default": "./dist/internal/fixture-app.mjs"
+            },
             "./internal/html": {
               "types": "./dist/internal/html.d.mts",
               "default": "./dist/internal/html.mjs"
@@ -13609,7 +13614,7 @@
               "default": "./dist/jsx-runtime.mjs"
             }
           },
-          "fingerprint": "sha256:7dfc7069e65be9b0ad53632a40f4bf7d259dad5866d191311d0b90306dcc20b3"
+          "fingerprint": "sha256:a7a1218ed0a55135ee7cf9411e53536240097acb79c2efeff970e207c49fee60"
         },
         {
           "exports": {
@@ -13809,6 +13814,10 @@
               "types": "./dist/internal/execution.d.mts",
               "default": "./dist/internal/execution.mjs"
             },
+            "./internal/fixture-app": {
+              "types": "./dist/internal/fixture-app.d.mts",
+              "default": "./dist/internal/fixture-app.mjs"
+            },
             "./internal/html": {
               "types": "./dist/internal/html.d.mts",
               "default": "./dist/internal/html.mjs"
@@ -13878,7 +13887,7 @@
               "default": "./dist/jsx-runtime.mjs"
             }
           },
-          "fingerprint": "sha256:cfd044f63f574ad2cb5bd477ece36e565aac053dc924e9717314cf0b750985c6"
+          "fingerprint": "sha256:b295fb9f6609d07fff1d2f43b3eb8d2c6482e27ba8498c0690205f45c36662d5"
         }
       ],
       "packageName": "@kovojs/server",
@@ -17351,7 +17360,7 @@
           "reason": "derived binds a reviewed adapter to the current request principal through the canonical ScopedKey containment door."
         }
       ],
-      "sourceTreeSha256": "ca96b6474a062e6e4ee53b3c8833891ac74a8572ff8d3909c9e8f75168f7edb3"
+      "sourceTreeSha256": "2250111eb9631b24fb07145dcd57655d3008ec91cd996f953e9d72033ba40ac8"
     },
     {
       "manifestVariants": [
@@ -17900,7 +17909,7 @@
           "securityRole": "request-closed"
         }
       ],
-      "sourceTreeSha256": "47e28709568a949710d8c4a16a331361e7b39a4d9a6d937b08ead65fd157dca9"
+      "sourceTreeSha256": "c848a29c621fdde08fbbeee887d76841417037d91a7b1b8e85a36ed67910316f"
     },
     {
       "manifestVariants": [
