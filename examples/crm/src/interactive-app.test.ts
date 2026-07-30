@@ -1,4 +1,4 @@
-import { runWithCrmGeneratedGraphs } from '../../../tests/example-generated-graphs.setup.js';
+import { runWithCrmGeneratedGraphs } from '../../../tests/example-generated-graphs/crm.js';
 
 import { readFileSync } from 'node:fs';
 

@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:http';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { expect as expectLocator } from '@playwright/test';
 import { chromium, type Browser, type BrowserContext } from 'playwright';
@@ -8,7 +9,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 const CLOSE_MUTATION = 'mutations/close-deal';
 const MOVE_MUTATION = 'mutations/move-deal';
-const CRM_ROOT = resolve('examples/crm');
+const CRM_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const KOVO_BIN = resolve(CRM_ROOT, 'node_modules/.bin/kovo');
 const OPTIMISM_MODULE_PATTERN = /^\/c\/__v\/[a-f0-9]{64}\/src\/mutations\.client\.js$/u;
 

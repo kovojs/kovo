@@ -5,7 +5,6 @@ import {
 import {
   assignDerivedDomainKey,
   assignDerivedQueryKey,
-  componentLiveTargetRenderer,
   registerGeneratedLiveTargetRenderer,
 } from '../packages/server/src/internal/wire.js';
 import { runWithGeneratedLiveTargetRegistry } from '../packages/server/src/live-target-registry.js';
@@ -129,86 +128,15 @@ if (!setupState[setupKey]) {
   });
 }
 
-const [
-  { CartBadge },
-  { OrderHistory },
-  { ProductGrid },
-  { ContactsRegion },
-  { DealDetailRegion },
-  { PipelineRegion },
-  { QuestionDetailRegion },
-  { QuestionListRegion },
-] = await Promise.all([
-  import('../examples/commerce/src/components/cart-badge.js'),
-  import('../examples/commerce/src/components/order-history.js'),
-  import('../examples/commerce/src/components/product-grid.js'),
-  import('../examples/crm/src/components/contacts.js'),
-  import('../examples/crm/src/components/deal-detail.js'),
-  import('../examples/crm/src/components/pipeline.js'),
-  import('../examples/stackoverflow/src/components/question-detail.js'),
-  import('../examples/stackoverflow/src/components/question-list.js'),
-]);
-
-const commerceLiveTargetRenderers = [
-  componentLiveTargetRenderer({
-    component: CartBadge,
-    componentId: 'components/cart-badge/cart-badge',
-  }),
-  componentLiveTargetRenderer({
-    component: ProductGrid,
-    componentId: 'components/product-grid/product-grid',
-  }),
-  componentLiveTargetRenderer({
-    component: OrderHistory,
-    componentId: 'components/order-history/order-history',
-  }),
-];
-
-const crmLiveTargetRenderers = [
-  componentLiveTargetRenderer({
-    component: ContactsRegion,
-    componentId: 'components/contacts/contacts-region',
-  }),
-  componentLiveTargetRenderer({
-    component: PipelineRegion,
-    componentId: 'components/pipeline/pipeline-region',
-  }),
-  componentLiveTargetRenderer({
-    component: DealDetailRegion,
-    componentId: 'components/deal-detail/deal-detail-region',
-  }),
-];
-
-const stackOverflowLiveTargetRenderers = [
-  componentLiveTargetRenderer({
-    component: QuestionListRegion,
-    componentId: 'components/question-list/question-list-region',
-  }),
-  componentLiveTargetRenderer({
-    component: QuestionDetailRegion,
-    componentId: 'components/question-detail/question-detail-region',
-  }),
-];
-
 /**
  * Vitest-only generated-module seam. Production app graphs are evaluated by the Vite/CLI loader,
  * which establishes this owner-local scope before generated renderer side effects run. Tests import
  * source modules eagerly, so they replay only the matching app's generated renderer inventory inside
- * a fresh scope before createApp consumes it (SPEC §6.6/§9.1/§9.5).
+ * a fresh scope before createApp consumes it (SPEC §5.2/§6.6/§9.1/§9.5). Keep app component imports
+ * in `example-generated-graphs/*`: this shared setup runs under every example's compiler-owned
+ * census, so importing another app here would evaluate its unlowered source outside that census.
  */
-export function runWithCommerceGeneratedGraphs<Value>(load: () => Value): Value {
-  return runWithExampleGeneratedGraphs(commerceLiveTargetRenderers, load);
-}
-
-export function runWithCrmGeneratedGraphs<Value>(load: () => Value): Value {
-  return runWithExampleGeneratedGraphs(crmLiveTargetRenderers, load);
-}
-
-export function runWithStackOverflowGeneratedGraphs<Value>(load: () => Value): Value {
-  return runWithExampleGeneratedGraphs(stackOverflowLiveTargetRenderers, load);
-}
-
-function runWithExampleGeneratedGraphs<Value>(
+export function runWithExampleGeneratedGraphs<Value>(
   renderers: readonly Parameters<typeof registerGeneratedLiveTargetRenderer>[0][],
   load: () => Value,
 ): Value {

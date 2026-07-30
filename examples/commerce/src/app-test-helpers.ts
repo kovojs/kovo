@@ -7,7 +7,7 @@ import {
 } from '@kovojs/test/headers';
 import { toNodeHandler } from '@kovojs/server/node';
 import { createExampleTestRequestHandler } from '../../../tests/example-raw-request-handler.js';
-import { runWithCommerceGeneratedGraphs } from '../../../tests/example-generated-graphs.setup.js';
+import { runWithCommerceGeneratedGraphs } from '../../../tests/example-generated-graphs/commerce.js';
 import { htmlFormFacts, htmlFormFieldsByName } from '@kovojs/test/html-fragment';
 import { eq } from 'drizzle-orm';
 

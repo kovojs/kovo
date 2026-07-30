@@ -1,4 +1,4 @@
-import { runWithStackOverflowGeneratedGraphs } from '../../../tests/example-generated-graphs.setup.js';
+import { runWithStackOverflowGeneratedGraphs } from '../../../tests/example-generated-graphs/stackoverflow.js';
 
 import { readFileSync } from 'node:fs';
 
