@@ -122,7 +122,13 @@ import {
   runtimeRegistryWireFactsFromGraph,
   type RuntimeRegistryWireFacts,
 } from '@kovojs/server/internal/runtime-registry-wire';
-import { build as viteBuild, createServer as createViteServer, type Plugin } from 'vite-plus';
+import {
+  build as viteBuild,
+  createRunnableDevEnvironment,
+  resolveConfig as resolveViteConfig,
+  type InlineConfig,
+  type Plugin,
+} from 'vite-plus';
 
 import { parseKovoCommandInvocation } from '../commands-manifest.js';
 import { requireKovoCommandResultProtocol } from '../command-schema.js';
@@ -169,9 +175,9 @@ import {
   type KovoCommandSecurityDisposition,
 } from './security-disposition.js';
 import {
-  captureBuildTimeViteServerLifetime,
+  captureBuildTimeViteRunnableLifetime,
   combineBuildTimeViteFailures,
-  type BuildTimeViteServerLifetime,
+  type BuildTimeViteRunnableLifetime,
 } from './build-vite-lifetime.js';
 import { declaresKovoLifecyclePolicy, runLifecyclePolicyCheck } from './lifecycle-policy.js';
 import { runProjectQualityCheck } from './project-quality.js';
@@ -4515,7 +4521,7 @@ async function loadKovoBuildConfig(
   const configPath = approvedConfig.path;
   const requireFromApp = createRequire(pathToFileURL(appModulePath));
 
-  const lifetime = await createBuildTimeViteServer({
+  const lifetime = await createBuildTimeViteRunnable({
     appType: 'custom',
     configFile: false,
     logLevel: 'error',
@@ -4524,7 +4530,7 @@ async function loadKovoBuildConfig(
     server: buildTimeViteServerOptions(),
     ssr: { noExternal: [/^@kovojs\//] },
   });
-  const { server } = lifetime;
+  const server = lifetime;
   let primaryError: unknown;
   let hasPrimaryError = false;
   try {
@@ -4544,7 +4550,7 @@ async function loadKovoBuildConfig(
     hasPrimaryError = true;
     throw error;
   } finally {
-    await closeBuildTimeViteServerLifetime(lifetime, hasPrimaryError, primaryError);
+    await closeBuildTimeViteLifetime(lifetime, hasPrimaryError, primaryError);
   }
 }
 
@@ -4564,7 +4570,7 @@ async function loadBuildAppModule(
     [appModulePath],
     true,
   );
-  const lifetime = await createBuildTimeViteServer({
+  const lifetime = await createBuildTimeViteRunnable({
     appType: 'custom',
     configFile: false,
     logLevel: 'error',
@@ -4598,7 +4604,7 @@ async function loadBuildAppModule(
     // externalized by Vite.
     ssr: dependencyCapabilityCompleteSsrOptions(),
   });
-  const { server } = lifetime;
+  const server = lifetime;
   let primaryError: unknown;
   let hasPrimaryError = false;
   try {
@@ -4635,7 +4641,7 @@ async function loadBuildAppModule(
     hasPrimaryError = true;
     throw error;
   } finally {
-    await closeBuildTimeViteServerLifetime(lifetime, hasPrimaryError, primaryError);
+    await closeBuildTimeViteLifetime(lifetime, hasPrimaryError, primaryError);
   }
 }
 
@@ -7169,7 +7175,7 @@ async function loadExportAppModule(
     true,
   );
 
-  const lifetime = await createBuildTimeViteServer({
+  const lifetime = await createBuildTimeViteRunnable({
     appType: 'custom',
     configFile: false,
     logLevel: 'error',
@@ -7199,7 +7205,7 @@ async function loadExportAppModule(
     server: buildTimeViteServerOptions(),
     ssr: dependencyCapabilityCompleteSsrOptions(),
   });
-  const { server } = lifetime;
+  const server = lifetime;
   try {
     await preloadKovoSsrSecurityProfile(server, resolvedAppModulePath, root);
     const serverModule = (await server.ssrLoadModule(
@@ -7222,7 +7228,7 @@ async function loadExportAppModule(
         serverModule.staticExportCompileDiagnosticsFromModule,
     };
   } catch (error) {
-    await closeBuildTimeViteServerLifetime(lifetime, true, error);
+    await closeBuildTimeViteLifetime(lifetime, true, error);
     throw error;
   }
 }
@@ -7252,18 +7258,24 @@ function buildTimeViteServerOptions(): { hmr: false } {
   return { hmr: false };
 }
 
-async function createBuildTimeViteServer(
-  config: Parameters<typeof createViteServer>[0],
-): Promise<BuildTimeViteServerLifetime> {
-  const server = await createViteServer(config);
+async function createBuildTimeViteRunnable(
+  config: InlineConfig,
+): Promise<BuildTimeViteRunnableLifetime> {
+  const resolvedConfig = await resolveViteConfig(config, 'serve');
+  const environment = createRunnableDevEnvironment('ssr', resolvedConfig, {
+    hot: false,
+    runnerOptions: { hmr: false, sourcemapInterceptor: false },
+  });
   try {
-    // Capture every owner before config/app evaluation. The lifetime enforces the exact Vite Plus
-    // graph shape and clears only these command-private environments after their runners close.
-    // SPEC §6.6 rule 6: authored code cannot replace the controls used for trust-root teardown.
-    return captureBuildTimeViteServerLifetime(server);
+    await environment.init();
+    // Capture the one SSR graph before framework-profile/config/app evaluation. This deliberately
+    // omits Vite's client graph, HTTP/websocket server, watcher, public-file census, and dependency
+    // optimizer while preserving the exact plugin pipeline and one shared module identity realm.
+    // SPEC §5.2/§6.6 rule 6: authored code cannot replace the controls used for import or teardown.
+    return captureBuildTimeViteRunnableLifetime(environment);
   } catch (error) {
     try {
-      await server.close();
+      await environment.close();
     } catch (teardownError) {
       throw combineBuildTimeViteFailures(error, teardownError);
     }
@@ -7271,8 +7283,8 @@ async function createBuildTimeViteServer(
   }
 }
 
-async function closeBuildTimeViteServerLifetime(
-  lifetime: BuildTimeViteServerLifetime,
+async function closeBuildTimeViteLifetime(
+  lifetime: Pick<BuildTimeViteRunnableLifetime, 'close'>,
   hasPrimaryError: boolean,
   primaryError: unknown,
 ): Promise<void> {

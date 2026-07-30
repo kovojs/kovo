@@ -1,5 +1,5 @@
 /* oxlint-disable typescript/unbound-method -- Captured controls are invoked via boot-pinned Reflect.apply. */
-import type { EnvironmentModuleGraph, ViteDevServer } from 'vite-plus';
+import type { EnvironmentModuleGraph, RunnableDevEnvironment } from 'vite-plus';
 
 import {
   buildApply,
@@ -19,7 +19,6 @@ const NativeError = globalThis.Error;
 const NativeTypeError = globalThis.TypeError;
 const collectionBrandCanary = Symbol('Kovo build-time Vite collection brand canary');
 
-const expectedEnvironmentNames = ['client', 'ssr'] as const;
 const expectedModuleGraphKeys = [
   'environment',
   'urlToModuleMap',
@@ -40,92 +39,106 @@ interface BuildTimeViteModuleGraphOwner {
   readonly sets: readonly Set<unknown>[];
 }
 
-/**
- * A command-scoped Vite server plus the exact graph owners captured before authored evaluation.
- * The capture is deliberately strict: a Vite Plus upgrade that adds another graph collection must
- * update this owner list instead of silently restoring the unbounded retention bug.
- */
-export interface BuildTimeViteServerLifetime {
-  close(): Promise<void>;
-  readonly server: ViteDevServer;
-}
-
-/** @internal Capture the complete throwaway Vite graph lifetime before loading authored modules. */
-export function captureBuildTimeViteServerLifetime(
-  server: ViteDevServer,
-): BuildTimeViteServerLifetime {
-  const environments = requiredOwnObject(server, 'environments', 'Vite server');
-  assertExactOwnKeys(environments, expectedEnvironmentNames, 'Vite server environments');
-  const owners: BuildTimeViteModuleGraphOwner[] = [];
-
-  for (let index = 0; index < expectedEnvironmentNames.length; index += 1) {
-    const environmentName = expectedEnvironmentNames[index]!;
-    const environment = requiredOwnObject(
-      environments,
-      environmentName,
-      `Vite ${environmentName} environment`,
-    );
-    const graph = requiredOwnObject(
-      environment,
-      'moduleGraph',
-      `Vite ${environmentName} environment`,
-    ) as unknown as EnvironmentModuleGraph;
-    assertExactOwnKeys(
-      graph as unknown as object,
-      expectedModuleGraphKeys,
-      `Vite ${environmentName} module graph`,
-    );
-    if (
-      requiredOwnValue(graph as unknown as object, 'environment', 'Vite module graph') !==
-      environmentName
-    ) {
-      throw new NativeTypeError(
-        `Kovo build-time Vite lifecycle expected the ${environmentName} module graph owner name.`,
-      );
-    }
-    const invalidateAll = graph.invalidateAll;
-    if (typeof invalidateAll !== 'function') {
-      throw new NativeTypeError(
-        `Kovo build-time Vite lifecycle expected ${environmentName}.moduleGraph.invalidateAll().`,
-      );
-    }
-    const maps = [
-      requiredMap(graph as unknown as object, 'urlToModuleMap', environmentName),
-      requiredMap(graph as unknown as object, 'idToModuleMap', environmentName),
-      requiredMap(graph as unknown as object, 'etagToModuleMap', environmentName),
-      requiredMap(graph as unknown as object, 'fileToModulesMap', environmentName),
-      requiredMap(graph as unknown as object, '_unresolvedUrlToModuleMap', environmentName),
-    ];
-    const sets = [
-      requiredSet(graph as unknown as object, '_hasResolveFailedErrorModules', environmentName),
-    ];
-    if (
-      typeof requiredOwnValue(graph as unknown as object, '_resolveId', 'Vite module graph') !==
-      'function'
-    ) {
-      throw new NativeTypeError(
-        `Kovo build-time Vite lifecycle expected the ${environmentName} module graph resolver.`,
-      );
-    }
-    buildSecurityArrayAppend(
-      owners,
-      { environment, environmentName, graph, invalidateAll, maps, sets },
-      'Build-time Vite graph owners',
+function captureBuildTimeViteModuleGraphOwner(
+  environment: object,
+  environmentName: string,
+): BuildTimeViteModuleGraphOwner {
+  const graph = requiredOwnObject(
+    environment,
+    'moduleGraph',
+    `Vite ${environmentName} environment`,
+  ) as unknown as EnvironmentModuleGraph;
+  assertExactOwnKeys(
+    graph as unknown as object,
+    expectedModuleGraphKeys,
+    `Vite ${environmentName} module graph`,
+  );
+  if (
+    requiredOwnValue(graph as unknown as object, 'environment', 'Vite module graph') !==
+    environmentName
+  ) {
+    throw new NativeTypeError(
+      `Kovo build-time Vite lifecycle expected the ${environmentName} module graph owner name.`,
     );
   }
+  const invalidateAll = graph.invalidateAll;
+  if (typeof invalidateAll !== 'function') {
+    throw new NativeTypeError(
+      `Kovo build-time Vite lifecycle expected ${environmentName}.moduleGraph.invalidateAll().`,
+    );
+  }
+  const maps = [
+    requiredMap(graph as unknown as object, 'urlToModuleMap', environmentName),
+    requiredMap(graph as unknown as object, 'idToModuleMap', environmentName),
+    requiredMap(graph as unknown as object, 'etagToModuleMap', environmentName),
+    requiredMap(graph as unknown as object, 'fileToModulesMap', environmentName),
+    requiredMap(graph as unknown as object, '_unresolvedUrlToModuleMap', environmentName),
+  ];
+  const sets = [
+    requiredSet(graph as unknown as object, '_hasResolveFailedErrorModules', environmentName),
+  ];
+  if (
+    typeof requiredOwnValue(graph as unknown as object, '_resolveId', 'Vite module graph') !==
+    'function'
+  ) {
+    throw new NativeTypeError(
+      `Kovo build-time Vite lifecycle expected the ${environmentName} module graph resolver.`,
+    );
+  }
+  return { environment, environmentName, graph, invalidateAll, maps, sets };
+}
 
-  const closeServer = server.close;
-  if (typeof closeServer !== 'function') {
-    throw new NativeTypeError('Kovo build-time Vite lifecycle expected server.close().');
+/**
+ * A command-scoped single SSR environment. Unlike a Vite dev server, this owns no client graph,
+ * HTTP server, websocket, watcher, public-file census, or dependency optimizer. Framework profile
+ * modules and the app still share this one runner and graph for their complete lifetime.
+ */
+export interface BuildTimeViteRunnableLifetime {
+  close(): Promise<void>;
+  readonly environment: RunnableDevEnvironment;
+  ssrLoadModule<T extends Record<string, unknown> = Record<string, unknown>>(
+    id: string,
+  ): Promise<T>;
+}
+
+/**
+ * @internal Capture the single runnable SSR graph and its exact teardown/import controls before
+ * loading framework profile modules or authored code.
+ */
+export function captureBuildTimeViteRunnableLifetime(
+  environment: RunnableDevEnvironment,
+): BuildTimeViteRunnableLifetime {
+  if (environment.name !== 'ssr') {
+    throw new NativeTypeError('Kovo build-time Vite runner expected the ssr environment.');
+  }
+  const owner = captureBuildTimeViteModuleGraphOwner(environment, 'ssr');
+  const closeEnvironment = environment.close;
+  if (typeof closeEnvironment !== 'function') {
+    throw new NativeTypeError('Kovo build-time Vite runner expected environment.close().');
+  }
+  const runner = environment.runner;
+  const importModule = runner.import;
+  if (typeof importModule !== 'function') {
+    throw new NativeTypeError('Kovo build-time Vite runner expected runner.import().');
   }
   let closePromise: Promise<void> | undefined;
 
   return {
     close() {
-      closePromise ??= closeCapturedBuildTimeViteServer(server, environments, closeServer, owners);
+      closePromise ??= closeCapturedBuildTimeViteRunnableEnvironment(
+        environment,
+        closeEnvironment,
+        runner,
+        importModule,
+        owner,
+      );
       return closePromise;
     },
-    server,
+    environment,
+    ssrLoadModule<T extends Record<string, unknown>>(id: string): Promise<T> {
+      assertCapturedRunnableShape(environment, closeEnvironment, runner, importModule, owner);
+      return buildApply<Promise<T>>(importModule, runner, [id]);
+    },
   };
 }
 
@@ -141,138 +154,139 @@ export function combineBuildTimeViteFailures(
   );
 }
 
-async function closeCapturedBuildTimeViteServer(
-  server: ViteDevServer,
-  environments: object,
-  closeServer: () => Promise<void>,
-  owners: readonly BuildTimeViteModuleGraphOwner[],
+async function closeCapturedBuildTimeViteRunnableEnvironment(
+  environment: RunnableDevEnvironment,
+  closeEnvironment: () => Promise<void>,
+  runner: RunnableDevEnvironment['runner'],
+  importModule: RunnableDevEnvironment['runner']['import'],
+  owner: BuildTimeViteModuleGraphOwner,
 ): Promise<void> {
   const errors: unknown[] = [];
   try {
-    assertCapturedShape(server, environments, closeServer, owners);
+    assertCapturedRunnableShape(environment, closeEnvironment, runner, importModule, owner);
   } catch (error) {
     appendError(errors, error);
   }
+  try {
+    buildApply(owner.invalidateAll, owner.graph, []);
+  } catch (error) {
+    appendError(errors, error);
+  }
+  try {
+    await buildApply<Promise<void>>(closeEnvironment, environment, []);
+  } catch (error) {
+    appendError(errors, error);
+  }
+  clearCapturedBuildTimeViteModuleGraph(owner, errors);
 
-  // Public invalidation intentionally runs before close so Vite can release transform products
-  // through its supported lifecycle. The owner collections are cleared only after close has shut
-  // down the module runners; no shared/live graph is touched.
-  for (let index = 0; index < owners.length; index += 1) {
-    const owner = owners[index]!;
+  if (errors.length === 1) throw errors[0];
+  if (errors.length > 1) {
+    throw aggregateErrors(errors, 'Kovo build-time Vite runner teardown failed.', errors[0]);
+  }
+}
+
+function assertCapturedRunnableShape(
+  environment: RunnableDevEnvironment,
+  closeEnvironment: () => Promise<void>,
+  runner: RunnableDevEnvironment['runner'],
+  importModule: RunnableDevEnvironment['runner']['import'],
+  owner: BuildTimeViteModuleGraphOwner,
+): void {
+  if (environment.name !== owner.environmentName) {
+    throw new NativeError(
+      'Kovo build-time Vite runner environment name changed during evaluation.',
+    );
+  }
+  if (environment !== owner.environment) {
+    throw new NativeError('Kovo build-time Vite runner environment changed during evaluation.');
+  }
+  if (environment.moduleGraph !== owner.graph) {
+    throw new NativeError('Kovo build-time Vite runner module graph changed during evaluation.');
+  }
+  if (environment.close !== closeEnvironment) {
+    throw new NativeError('Kovo build-time Vite runner close control changed during evaluation.');
+  }
+  if (environment.runner !== runner || runner.import !== importModule) {
+    throw new NativeError('Kovo build-time Vite runner import control changed during evaluation.');
+  }
+  assertCapturedModuleGraphOwner(owner);
+}
+
+function assertCapturedModuleGraphOwner(owner: BuildTimeViteModuleGraphOwner): void {
+  if (requiredOwnObject(owner.environment, 'moduleGraph', 'Vite environment') !== owner.graph) {
+    throw new NativeError(
+      `Kovo build-time Vite ${owner.environmentName} module graph changed during evaluation.`,
+    );
+  }
+  assertExactOwnKeys(
+    owner.graph as unknown as object,
+    expectedModuleGraphKeys,
+    `Vite ${owner.environmentName} module graph`,
+  );
+  if (owner.graph.invalidateAll !== owner.invalidateAll) {
+    throw new NativeError(
+      `Kovo build-time Vite ${owner.environmentName} invalidation control changed during evaluation.`,
+    );
+  }
+  const currentMaps = [
+    requiredMap(owner.graph as unknown as object, 'urlToModuleMap', owner.environmentName),
+    requiredMap(owner.graph as unknown as object, 'idToModuleMap', owner.environmentName),
+    requiredMap(owner.graph as unknown as object, 'etagToModuleMap', owner.environmentName),
+    requiredMap(owner.graph as unknown as object, 'fileToModulesMap', owner.environmentName),
+    requiredMap(
+      owner.graph as unknown as object,
+      '_unresolvedUrlToModuleMap',
+      owner.environmentName,
+    ),
+  ];
+  for (let mapIndex = 0; mapIndex < currentMaps.length; mapIndex += 1) {
+    if (currentMaps[mapIndex] !== owner.maps[mapIndex]) {
+      throw new NativeError(
+        `Kovo build-time Vite ${owner.environmentName} graph map ${mapIndex} changed during evaluation.`,
+      );
+    }
+  }
+  if (
+    requiredSet(
+      owner.graph as unknown as object,
+      '_hasResolveFailedErrorModules',
+      owner.environmentName,
+    ) !== owner.sets[0]
+  ) {
+    throw new NativeError(
+      `Kovo build-time Vite ${owner.environmentName} graph set changed during evaluation.`,
+    );
+  }
+}
+
+function clearCapturedBuildTimeViteModuleGraph(
+  owner: BuildTimeViteModuleGraphOwner,
+  errors: unknown[],
+): void {
+  for (let mapIndex = 0; mapIndex < owner.maps.length; mapIndex += 1) {
+    const map = owner.maps[mapIndex]!;
     try {
-      buildApply(owner.invalidateAll, owner.graph, []);
+      buildMapClear(map);
+      if (buildMapSize(map) !== 0) {
+        throw new NativeError(
+          `Kovo build-time Vite lifecycle did not empty ${owner.environmentName} graph map ${mapIndex}.`,
+        );
+      }
     } catch (error) {
       appendError(errors, error);
     }
   }
-  try {
-    await buildApply<Promise<void>>(closeServer, server, []);
-  } catch (error) {
-    appendError(errors, error);
-  }
-
-  for (let ownerIndex = 0; ownerIndex < owners.length; ownerIndex += 1) {
-    const owner = owners[ownerIndex]!;
-    for (let mapIndex = 0; mapIndex < owner.maps.length; mapIndex += 1) {
-      const map = owner.maps[mapIndex]!;
-      try {
-        buildMapClear(map);
-        if (buildMapSize(map) !== 0) {
-          throw new NativeError(
-            `Kovo build-time Vite lifecycle did not empty ${owner.environmentName} graph map ${mapIndex}.`,
-          );
-        }
-      } catch (error) {
-        appendError(errors, error);
-      }
-    }
-    for (let setIndex = 0; setIndex < owner.sets.length; setIndex += 1) {
-      const set = owner.sets[setIndex]!;
-      try {
-        buildSetClear(set);
-        if (buildSetSize(set) !== 0) {
-          throw new NativeError(
-            `Kovo build-time Vite lifecycle did not empty ${owner.environmentName} graph set ${setIndex}.`,
-          );
-        }
-      } catch (error) {
-        appendError(errors, error);
-      }
-    }
-  }
-
-  if (errors.length === 1) throw errors[0];
-  if (errors.length > 1) {
-    throw aggregateErrors(errors, 'Kovo build-time Vite teardown failed.', errors[0]);
-  }
-}
-
-function assertCapturedShape(
-  server: ViteDevServer,
-  environments: object,
-  closeServer: () => Promise<void>,
-  owners: readonly BuildTimeViteModuleGraphOwner[],
-): void {
-  if (requiredOwnObject(server, 'environments', 'Vite server') !== environments) {
-    throw new NativeError('Kovo build-time Vite server environments changed during evaluation.');
-  }
-  if (server.close !== closeServer) {
-    throw new NativeError('Kovo build-time Vite server close control changed during evaluation.');
-  }
-  assertExactOwnKeys(environments, expectedEnvironmentNames, 'Vite server environments');
-  for (let index = 0; index < owners.length; index += 1) {
-    const owner = owners[index]!;
-    if (
-      requiredOwnObject(environments, owner.environmentName, 'Vite server environments') !==
-      owner.environment
-    ) {
-      throw new NativeError(
-        `Kovo build-time Vite ${owner.environmentName} environment changed during evaluation.`,
-      );
-    }
-    if (requiredOwnObject(owner.environment, 'moduleGraph', 'Vite environment') !== owner.graph) {
-      throw new NativeError(
-        `Kovo build-time Vite ${owner.environmentName} module graph changed during evaluation.`,
-      );
-    }
-    assertExactOwnKeys(
-      owner.graph as unknown as object,
-      expectedModuleGraphKeys,
-      `Vite ${owner.environmentName} module graph`,
-    );
-    if (owner.graph.invalidateAll !== owner.invalidateAll) {
-      throw new NativeError(
-        `Kovo build-time Vite ${owner.environmentName} invalidation control changed during evaluation.`,
-      );
-    }
-    const currentMaps = [
-      requiredMap(owner.graph as unknown as object, 'urlToModuleMap', owner.environmentName),
-      requiredMap(owner.graph as unknown as object, 'idToModuleMap', owner.environmentName),
-      requiredMap(owner.graph as unknown as object, 'etagToModuleMap', owner.environmentName),
-      requiredMap(owner.graph as unknown as object, 'fileToModulesMap', owner.environmentName),
-      requiredMap(
-        owner.graph as unknown as object,
-        '_unresolvedUrlToModuleMap',
-        owner.environmentName,
-      ),
-    ];
-    for (let mapIndex = 0; mapIndex < currentMaps.length; mapIndex += 1) {
-      if (currentMaps[mapIndex] !== owner.maps[mapIndex]) {
+  for (let setIndex = 0; setIndex < owner.sets.length; setIndex += 1) {
+    const set = owner.sets[setIndex]!;
+    try {
+      buildSetClear(set);
+      if (buildSetSize(set) !== 0) {
         throw new NativeError(
-          `Kovo build-time Vite ${owner.environmentName} graph map ${mapIndex} changed during evaluation.`,
+          `Kovo build-time Vite lifecycle did not empty ${owner.environmentName} graph set ${setIndex}.`,
         );
       }
-    }
-    if (
-      requiredSet(
-        owner.graph as unknown as object,
-        '_hasResolveFailedErrorModules',
-        owner.environmentName,
-      ) !== owner.sets[0]
-    ) {
-      throw new NativeError(
-        `Kovo build-time Vite ${owner.environmentName} graph set changed during evaluation.`,
-      );
+    } catch (error) {
+      appendError(errors, error);
     }
   }
 }
