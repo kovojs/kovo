@@ -801,7 +801,7 @@ browser-bundle gates. Seeds one child ledger per batch group.
 
 Opening items (before the first breaking batch):
 
-- [ ] (M) Turn the API inventory into the checked decision ledger and make it the mechanical gate:
+- [x] (M) Turn the API inventory into the checked decision ledger and make it the mechanical gate:
       symbol-level `keep`, `move`, `internalize`, or `remove` decisions (generated family rules
       for UI/icon exports) with canonical home, user story, SPEC link, and evidence; CI fails on a
       public symbol without a ledger row whose packed example compiles and whose contract test
@@ -809,14 +809,20 @@ Opening items (before the first breaking batch):
       declarations without a `keep` row. Reject new public values without a non-test example and
       contract test. Root-count budgets (G22) are tracked as health metrics; the ledger is the
       gate.
+  - Evidence: `node scripts/api-decision-ledger.mjs` validates 1,640 declarations across 1,873
+    subpaths with current root budgets of Core 33/60 and Server 116/116.
 - [ ] (S) Change recursive-publicness from a 532-entry accepted baseline to a descending ratchet
       with no additions; publish per-package counts in CI and reach zero by the end of this track
       (G17). Review fixes for anti-gaming: exporting the leaked internal type is not a fix.
-- [ ] (S) Add the AST-based packed-declaration gate for app-public `any` (G18): a small reviewed
+- [x] (S) Add the AST-based packed-declaration gate for app-public `any` (G18): a small reviewed
       exception file with owner, reason, and expiry; no text grep; no hiding `any` behind an
       alias.
-- [ ] (S) Define the migration-tool protocol and ledger format before the first breaking batch;
+  - Evidence: `scripts/packed-public-any-gate.test.mjs` passes five direct, alias/conditional,
+    third-party-boundary, expiry, ownership, and exact-count cases.
+- [x] (S) Define the migration-tool protocol and ledger format before the first breaking batch;
       every batch must ship and exercise its rewrite/refusal rules before removing the old export.
+  - Evidence: `node scripts/api-migration-protocol.mjs` validates ten versioned check/write
+    batches with eight source-anchored refusal classes.
 
 Batch DAG — every batch follows Track 2's inventory/scanner fix; 5a needs no app contract; 5b
 waits for D1; 5c waits only on its own SPEC decision:

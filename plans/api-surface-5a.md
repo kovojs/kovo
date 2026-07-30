@@ -25,10 +25,12 @@ ratchet segment, and release note in one checkpoint.
       equivalent.
   - Evidence: `packages/style/src/packed-api.test.ts` loads two independent built copies, rejects a
     foreign handle, and compares CSS, rule artifacts, attrs, and nonempty source maps.
-- [ ] Pass packed starter and copied-UI consumers.
-  - Current evidence: the focused Style suite passes 43 tests; the repository-wide packed journey
-    is blocked before consumers by pre-existing pack-security hash drift in Better Auth, CLI,
-    compiler, core, and server artifacts. No Style artifact drift was reported.
+- [x] Pass the copied-UI source consumer against only the declared public dependencies.
+  - Evidence: `packages/ui/src/copy-in.test.ts` typechecks copied components against the public
+    package set; the four-file Style contract suite passes 43 tests.
+- [ ] Pass the canonical packed starter consumer after the final release manifest is resealed.
+  - Current gap: this requires the integration-owned authenticated tarball set; no package-local
+    source or Style contract failure remains.
 
 ## UI, headless, and icons
 
@@ -59,10 +61,15 @@ ratchet segment, and release note in one checkpoint.
   - Evidence: the icon generator and all 1,737 glyph sources return
     `@kovojs/core#ComponentRenderResult`; the old alias is absent from package exports.
 
-- [ ] Pass all-glyph generation/typecheck, icon timing, and packed 44-component gates.
-  - Current evidence: icon generation check, icon `tsc --noEmit`, and the 5-second timing gate
-    pass; the packed journey test covers the 44-component copy-in/catalog contract. The full
-    release-manifest packed consumer remains an integration gate.
+- [x] Pass deterministic all-glyph generation, all-glyph TypeScript checking, and icon timing.
+  - Evidence: `build:icons -- --check` and `tsc --noEmit -p packages/icons/tsconfig.json` cover
+    1,737 glyphs; `check:timing` completes in 16.1 ms against the 5,000 ms budget.
+- [x] Keep the 44-component manifest and copied-source API contract green before packing.
+  - Evidence: the focused UI/headless/icon/migration suite passes 20 tests, including exact
+    44-entry metadata, generator round-trip, copy-in compilation, and public-facade reachability.
+- [ ] Pass the canonical packed 44-component gate after the final release manifest is resealed.
+  - Current gap: the source contracts are green; the final authenticated tarball set is
+    integration-owned.
 
 ## Verifier
 
@@ -123,16 +130,30 @@ ratchet segment, and release note in one checkpoint.
 
 ## Core
 
-- [ ] Resolve the audited 39 remove and 30 borderline families through the decision ledger.
-- [ ] Narrow S3 and HMAC surfaces so implementation inspection/request records are not recursively
+- [x] Resolve the audited 39 remove and 30 borderline families through the decision ledger.
+  - Evidence: `node scripts/api-decision-ledger.mjs` validates every current Core declaration;
+    `core-task-topology-v1` is a removed-state checked migration and the Core root is 33 names.
+- [x] Narrow S3 and HMAC surfaces so implementation inspection/request records are not recursively
       public.
-- [ ] Move human registry augmentation out of public API and retain refs only with a real
+  - Evidence: `storage-public.test.ts` and `verifier.test.ts` keep provider operations, signing
+    material, and resolved inspection records behind opaque internal state.
+- [x] Move human registry augmentation out of public API and retain refs only with a real
       rename-safe library/client example.
-- [ ] Add door-specific validated declassification constructors and internalize destructive audit
+  - Evidence: `index.test.ts`, `exported-symbols.test.mjs`, and the Core migration suite reject the
+    retired registry/ref families while preserving value-inferred query and route contracts.
+- [x] Add door-specific validated declassification constructors and internalize destructive audit
       drains.
-- [ ] Reject blank/shorthand reasons, forged policies, wrong-door policies, and unproven compiler
+  - Evidence: `secret.test.ts` proves the five exact-door constructors and imports the bounded
+    destructive audit drain only from `@kovojs/core/internal/security`.
+- [x] Reject blank/shorthand reasons, forged policies, wrong-door policies, and unproven compiler
       identities across type/runtime/explain tests.
-- [ ] Land component-inference removals with `Component<Props>`.
+  - Evidence: focused Core, compiler capability-closure, Drizzle reveal-audit, and CLI explain
+    tests pass 142 assertions covering type/runtime admission, exact compiler identity, and printed
+    policy parity.
+- [x] Land component-inference removals with `Component<Props>`.
+  - Evidence: `index.test.ts` proves opaque runtime membership plus exact render-derived call-site
+    inference; the migration suite refuses every retired `AnyFunction`/`Checked*`/`ComponentCall*`
+    and render-slot helper.
 
 ## Exit
 
@@ -149,3 +170,5 @@ ratchet segment, and release note in one checkpoint.
   Drizzle explain tests, and the packed client/authoring consumer.
 - `node scripts/packed-public-any-gate.mjs --tarball-dir .release/tarballs` reports zero Browser
   `any`; only the separately owned Core and Server exception ledgers remain.
+- Current Track 5 closure slice: Core/API tests 129, declassification identity/explain tests 13,
+  Style tests 43, UI/headless/icon tests 20, and deterministic 1,737-glyph generation/typecheck.

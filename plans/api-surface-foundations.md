@@ -58,8 +58,12 @@ in a companion JSON artifact once the cleaned inventory lands.
 - [x] Reach zero recursive leaks without promoting leaked implementation types.
   - Evidence: the gate reports `recursive-publicness-v2 total=0`; the baseline records zero
     recursive packages and zero documentation exceptions.
-- [ ] Add an AST-based packed-declaration `any` gate with owner/reason/expiry exceptions.
-- [ ] Reject `any` hidden behind aliases or conditional wrappers.
+- [x] Add an AST-based packed-declaration `any` gate with owner/reason/expiry exceptions.
+  - Evidence: `scripts/packed-public-any-gate.test.mjs` passes all five exception-ledger and AST
+    cases against `kovo-app-public-any-exceptions/v1`.
+- [x] Reject `any` hidden behind aliases or conditional wrappers.
+  - Evidence: the same AST suite resolves `Conditional -> Hidden` through a first-party alias and
+    rejects the nested `any`; comments and third-party declaration internals remain excluded.
 
 ## Migration protocol
 
@@ -76,7 +80,7 @@ in a companion JSON artifact once the cleaned inventory lands.
 
 ## Latest verification
 
-`pnpm run check:api-surface` passes all three gates and 28 mutation tests. The reviewed inventory is
-fully classified, the recursive baseline is zero, and the refusal-only `test-harness-v2` migration
-tool passes its four focused tests. The two packed-declaration `any` items remain owned by the
-integration checkpoint and are not claimed here.
+`node scripts/api-decision-ledger.mjs` validates 1,640 current declarations across 1,873 subpaths
+and `node scripts/api-migration-protocol.mjs` validates ten checked batches. The five-test packed
+declaration AST suite proves the exception and alias-unwrapping mechanisms. The final release-wide
+G18 measurement still belongs to the canonical authenticated tarball checkpoint.
