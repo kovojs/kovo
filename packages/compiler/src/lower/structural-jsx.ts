@@ -3170,10 +3170,15 @@ function lowerAttributeDerive(
   }
 
   removeJsxIrAttribute(candidate.element, candidate.attribute.name);
+  // SPEC.md §4.8: binding stamps are the update plan, not the initial render.
+  // Preserve the authored server expression when the derive still targets the
+  // same attribute so first paint and no-JS output carry the real query value.
+  // Re-targeted derives (for example style handles lowered to `class`) keep
+  // owning their separately generated server representation.
+  if (candidate.targetAttr === candidate.attribute.name) {
+    setJsxIrAttribute(candidate.element, sourceAttributeToIr(candidate.attribute, options));
+  }
   if (candidate.source === 'state') {
-    if (candidate.targetAttr === candidate.attribute.name) {
-      setJsxIrAttribute(candidate.element, sourceAttributeToIr(candidate.attribute, options));
-    }
     setJsxIrAttribute(
       candidate.element,
       generatedJsxIrAttribute(

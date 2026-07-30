@@ -308,7 +308,7 @@ export const PayloadCard = component({
       export const PayloadCard = component({
         queries: { product: productQuery },
         render: ({ product }) => (
-          <article data-bind:title="product.PayloadCard$article_title_derive" data-bind:aria-label="product.PayloadCard$article_aria_label_derive" data-bind:aria-description="product.PayloadCard$article_aria_description_derive" kovo-c="payload-card" kovo-deps="product" kovo-fragment-target="payload-card" kovo-live-component="payload-card/payload-card">
+          <article title={product.name} data-bind:title="product.PayloadCard$article_title_derive" aria-label={product.label} data-bind:aria-label="product.PayloadCard$article_aria_label_derive" aria-description={product.summary} data-bind:aria-description="product.PayloadCard$article_aria_description_derive" kovo-c="payload-card" kovo-deps="product" kovo-fragment-target="payload-card" kovo-live-component="payload-card/payload-card">
             <h2 data-bind="product.name">{escapeText(product.name)}</h2>
           </article>
         ),

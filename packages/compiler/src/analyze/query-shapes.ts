@@ -92,7 +92,11 @@ export function componentQueryShapes(
 
 export function queryNameFromPath(path: string): string | null {
   const separator = compilerStringIndexOf(path, '.');
-  return separator < 0 ? path : compilerStringSlice(path, 0, separator);
+  const query = separator < 0 ? path : compilerStringSlice(path, 0, separator);
+  // SPEC §4.8: optional binding segments retain `?` in the path grammar. When the query result
+  // itself is nullable, `query?.field` marks the root segment; ownership and update-plan lookup
+  // still belong to `query`, not to a fictitious `query?` declaration.
+  return compilerStringEndsWith(query, '?') ? compilerStringSlice(query, 0, -1) : query;
 }
 
 export function queryPathUsesKnownQuery(path: string, knownQueries: ReadonlySet<string>): boolean {

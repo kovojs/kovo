@@ -853,6 +853,70 @@ export const DealCard = component({
     expect(result.diagnostics).toEqual([]);
   });
 
+  it('lowers a nullable query root through optional text and attribute bindings', () => {
+    const result = compileComponentModule({
+      fileName: 'deal-card.tsx',
+      queryShapes: {
+        deal: {
+          kind: 'nullable',
+          shape: {
+            amount: 'number',
+            stage: 'string',
+          },
+        },
+      },
+      source: `
+export const DealCard = component({
+  queries: { deal: {} },
+  render: () => (
+    <deal-card data-amount={deal?.amount} data-stage={deal?.stage}>
+      <input value={deal?.stage} />
+      <span>{deal?.stage}</span>
+    </deal-card>
+  ),
+});
+`,
+    });
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+    const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
+
+    expect(serverSource).toContain(
+      'data-bind:data-amount="deal.DealCard$deal_card_data_amount_derive"',
+    );
+    expect(serverSource).toContain('data-amount={deal?.amount}');
+    expect(serverSource).toContain(
+      'data-bind:data-stage="deal.DealCard$deal_card_data_stage_derive"',
+    );
+    expect(serverSource).toContain('data-stage={deal?.stage}');
+    expect(serverSource).toContain('data-bind:value="deal.DealCard$input_value_derive"');
+    expect(serverSource).toContain('value={deal?.stage}');
+    expect(serverSource).toContain(
+      '<span data-bind="deal?.stage">{escapeText(deal?.stage)}</span>',
+    );
+    expect(clientSource).toContain(
+      'export const DealCard$deal_card_data_stage_derive = derive(["deal"], (deal) => deal?.stage);',
+    );
+    const plan = result.queryUpdatePlans.find((entry) => entry.query === 'deal');
+    expect(plan).toEqual(
+      expect.objectContaining({
+        componentName: 'DealCard',
+        paths: expect.arrayContaining([
+          'deal?.stage',
+          'deal.DealCard$deal_card_data_amount_derive',
+          'deal.DealCard$deal_card_data_stage_derive',
+          'deal.DealCard$input_value_derive',
+        ]),
+        query: 'deal',
+      }),
+    );
+    expect(plan?.stamps?.map((stamp) => stamp.attr).sort()).toEqual([
+      'data-amount',
+      'data-stage',
+      'value',
+    ]);
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('reports KV302 for absent paths under nullable query shape metadata', () => {
     const result = compileComponentModule({
       fileName: 'product-card.tsx',

@@ -461,9 +461,9 @@ export const CartBadge = component({
       'export const CartBadge$button_disabled_derive = derive(["cart"], (cart) => cart.count === 0);',
     );
     expect(serverSource).toContain(
-      '<button data-derive="cart.CartBadge$button_disabled_derive" data-derive-attr="disabled">Checkout</button>',
+      '<button disabled={cart.count === 0} data-derive="cart.CartBadge$button_disabled_derive" data-derive-attr="disabled">Checkout</button>',
     );
-    expect(serverSource).not.toContain('disabled={cart.count === 0}');
+    expect(serverSource).toContain('disabled={cart.count === 0}');
     expect(result.queryUpdatePlans).toMatchInlineSnapshot(`
       [
         {
@@ -531,8 +531,8 @@ export const CartBadge = component({
       'data-bind:aria-expanded="cart.CartBadge$button_aria_expanded_derive"',
     );
     expect(serverSource).toContain('data-bind:aria-busy="cart.CartBadge$button_aria_busy_derive"');
-    expect(serverSource).not.toContain('aria-expanded={cart.open');
-    expect(serverSource).not.toContain('aria-busy={cart.loading');
+    expect(serverSource).toContain("aria-expanded={cart.open ? 'true' : 'false'}");
+    expect(serverSource).toContain("aria-busy={cart.loading ? 'true' : 'false'}");
     expect(result.queryUpdatePlans[0]?.stamps?.map((stamp) => stamp.attr).sort()).toEqual([
       'aria-busy',
       'aria-expanded',

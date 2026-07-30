@@ -4,7 +4,10 @@ import { collectDataBindListStamps } from '../analyze/query-updates.js';
 import {
   compilerArrayAppend,
   compilerArrayIsArray,
+  compilerCreateMap,
   compilerCreateSet,
+  compilerMapGet,
+  compilerMapSet,
   compilerOwnDataValue,
   compilerSetAdd,
   compilerSetHas,
@@ -60,6 +63,7 @@ export function validateDataBindings(
 
   const bindingAttributes = dataBindAttributes(model);
   const output: CompilerDiagnostic[] = [];
+  const queryDerives = queryShapes === null ? undefined : exportedQueryDeriveNamesByInput(model);
   let stateBindingContext: StateBindingValidationContext | undefined;
   const bindings = compilerSnapshotDenseArray(
     bindingAttributes,
@@ -67,7 +71,12 @@ export function validateDataBindings(
   );
   for (let index = 0; index < bindings.length; index += 1) {
     const binding = bindings[index]!;
-    if (queryShapes !== null && binding.query !== null && binding.query !== 'state') {
+    if (
+      queryShapes !== null &&
+      binding.query !== null &&
+      binding.query !== 'state' &&
+      !bindingReferencesExportedQueryDerive(binding, queryDerives!)
+    ) {
       const result = validatePathInQueryShapes(binding.path, queryShapes);
       if (!result.exists) {
         compilerArrayAppend(
@@ -314,6 +323,52 @@ interface StateBindingScope {
 interface StateBindingValidationContext {
   readonly fallback: StateBindingScope;
   readonly scopes: readonly StateBindingScope[];
+}
+
+function bindingReferencesExportedQueryDerive(
+  binding: DataBindAttribute,
+  derivesByInput: ReadonlyMap<string, ReadonlySet<string>>,
+): boolean {
+  if (binding.query === null || binding.query === 'state') return false;
+  const segments = parseBindingPath(binding.path);
+  const query = segments[0];
+  const derive = segments[1];
+  if (
+    segments.length !== 2 ||
+    query?.name !== binding.query ||
+    derive === undefined ||
+    derive.optional
+  ) {
+    return false;
+  }
+  const names = compilerMapGet(derivesByInput, binding.query);
+  return names !== undefined && compilerSetHas(names, derive.name);
+}
+
+function exportedQueryDeriveNamesByInput(
+  model: ComponentModuleModel,
+): ReadonlyMap<string, ReadonlySet<string>> {
+  const namesByInput = compilerCreateMap<string, Set<string>>();
+  const calls = compilerSnapshotDenseArray(callExpressions(model), 'Compiler query derive calls');
+  for (let index = 0; index < calls.length; index += 1) {
+    const call = calls[index]!;
+    if (call.name !== 'derive' || call.exportedConstName === undefined) continue;
+    const inputs = compilerOwnDataValue(
+      call.argumentStringLiteralArrayValues,
+      0,
+      'Compiler query derive argument arrays',
+    );
+    if (!compilerArrayIsArray(inputs)) continue;
+    const inputValues = compilerSnapshotDenseArray(inputs, 'Compiler query derive inputs');
+    for (let inputIndex = 0; inputIndex < inputValues.length; inputIndex += 1) {
+      const input = inputValues[inputIndex];
+      if (typeof input !== 'string' || input === 'state') continue;
+      const names = compilerMapGet(namesByInput, input) ?? compilerCreateSet<string>();
+      compilerSetAdd(names, call.exportedConstName);
+      compilerMapSet(namesByInput, input, names);
+    }
+  }
+  return namesByInput;
 }
 
 function validateStateBindingPath(
