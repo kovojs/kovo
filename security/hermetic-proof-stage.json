@@ -5,7 +5,7 @@
   "tooling": {
     "analysis": {
       "implementation": "scripts/kovo-certificate.mjs#analyzeKovoCertificate",
-      "sourceTreeSha256": "9649da7c529ee89f96de3fe46ef9291292dda99e6d871cb09c273f78d45dac24"
+      "sourceTreeSha256": "738d8ebe9ff8115cb76e4171936b21f30cb6ec3ce70f8100d961ac67cb3d4666"
     },
     "certificateGeneration": {
       "implementation": "scripts/kovo-certificate-format.mjs#generateKovoCertificateFromAnalysis",
