@@ -173,6 +173,9 @@ describe('release workflow authority', () => {
     expect(releaseWorkflow).toContain(
       'devex-run-id: ${{ steps.authorize-release.outputs.devex-run-id }}',
     );
+    expect(releaseWorkflow).toMatch(
+      /external_evaluator_evidence_base64:\n\s+description: [^\n]+\n\s+required: true\n\s+type: string/u,
+    );
     expect(releaseWorkflow).toContain('id: authorize-release');
     expect(releaseWorkflow).toContain(
       'if length == 1 then .[0] else error("expected one trusted aggregate workflow run") end',
@@ -226,6 +229,25 @@ describe('release workflow authority', () => {
     expect(prepare).toContain('name: Archive release security fuzz counterexamples');
     expect(prepare).toContain('path: .kovo/security-failures/**');
     expect(prepare).toContain('"$KOVO_RELEASE_PNPM_CLI" run check:publish');
+    expect(prepare).toContain('name: Require preregistered external evaluator evidence');
+    expect(prepare).toContain('"$KOVO_RELEASE_PNPM_CLI" run check:external-evaluator-evidence');
+    expect(prepare).toContain(
+      'KOVO_EXTERNAL_EVALUATOR_EVIDENCE_BASE64: ${{ inputs.external_evaluator_evidence_base64 }}',
+    );
+    expect(prepare).toContain('name: Archive verified external evaluator evidence');
+    expect(prepare).toContain('name: kovo-external-evaluator-evidence-${{ github.sha }}');
+    expect(prepare).toContain('path: .release/devex/external-evaluators/transcripts.json');
+    expect(prepare).toContain('retention-days: 90');
+    expect(
+      prepare.indexOf('"$KOVO_RELEASE_PNPM_CLI" run check:external-evaluator-evidence'),
+    ).toBeGreaterThan(prepare.indexOf('"$KOVO_RELEASE_PNPM_CLI" run check:publish'));
+    expect(
+      prepare.indexOf('"$KOVO_RELEASE_PNPM_CLI" run check:external-evaluator-evidence'),
+    ).toBeLessThan(prepare.indexOf('name: Archive verified external evaluator evidence'));
+    expect(prepare.indexOf('name: Archive verified external evaluator evidence')).toBeLessThan(
+      prepare.indexOf('name: Upload bounded untrusted release producer files'),
+    );
+    expect(prepare).not.toContain('skip-external-evaluator');
     expect(prepare).toContain('name: Upload bounded untrusted release producer files');
     expect(prepare).toContain(
       'unverified-artifact-id: ${{ steps.upload-unverified-release.outputs.artifact-id }}',

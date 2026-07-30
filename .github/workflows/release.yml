@@ -20,6 +20,10 @@ on:
         required: true
         default: true
         type: boolean
+      external_evaluator_evidence_base64:
+        description: Canonical base64 N=3 signed evaluator transcript JSON (maximum 48 KiB)
+        required: true
+        type: string
 permissions:
   contents: read
 
@@ -201,6 +205,28 @@ jobs:
         env:
           COREPACK_HOME: ${{ runner.temp }}/kovo-corepack-pnpm-10.12.1
           PATH: ${{ runner.temp }}/node-v24.18.0-linux-x64/bin:/usr/bin:/bin
+
+      - name: Require preregistered external evaluator evidence
+        # This release-only capstone gate re-authenticates the current packed
+        # bytes and requires three non-author signed journeys against that exact
+        # HEAD. Missing evidence remains a hard failure; ordinary pull requests
+        # do not run it.
+        run: >-
+          "$RUNNER_TEMP/node-v24.18.0-linux-x64/bin/node"
+          "$KOVO_RELEASE_PNPM_CLI" run check:external-evaluator-evidence
+        env:
+          COREPACK_HOME: ${{ runner.temp }}/kovo-corepack-pnpm-10.12.1
+          KOVO_EXTERNAL_EVALUATOR_EVIDENCE_BASE64: ${{ inputs.external_evaluator_evidence_base64 }}
+          PATH: ${{ runner.temp }}/node-v24.18.0-linux-x64/bin:/usr/bin:/bin
+
+      - name: Archive verified external evaluator evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          if-no-files-found: error
+          include-hidden-files: true
+          name: kovo-external-evaluator-evidence-${{ github.sha }}
+          path: .release/devex/external-evaluators/transcripts.json
+          retention-days: 90
 
       - name: Upload bounded untrusted release producer files
         id: upload-unverified-release

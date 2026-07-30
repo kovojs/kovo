@@ -32,6 +32,7 @@
     "check:c9-sink-inventory": "node scripts/security-cost-budget-runner.mjs --gate c9-sink-inventory",
     "check:certificate": "node scripts/security-cost-budget-runner.mjs --gate certificate",
     "check:certificate-module-identity": "node scripts/security-cost-budget-runner.mjs --gate certificate-module-identity",
+    "check:external-evaluator-evidence": "node scripts/external-evaluator-evidence.mjs",
     "check:framework-export-posture": "node scripts/framework-export-posture-gate.mjs && vitest --run scripts/framework-export-posture-gate.test.mjs --reporter=dot",
     "check:generated-artifacts": "node scripts/check-generated-artifacts.mjs && vitest --run scripts/check-generated-artifacts.test.mjs scripts/generated-artifacts.test.mjs scripts/framework-export-posture-gate.test.mjs --reporter=dot",
     "check:grammar-containment": "node scripts/security-cost-budget-runner.mjs --gate grammar-containment",
