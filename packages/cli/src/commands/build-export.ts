@@ -43,7 +43,11 @@ import {
   isDiagnosticCode,
 } from '@kovojs/core/internal/diagnostics';
 import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
-import { clientModuleRepresentationDigest } from '@kovojs/core/internal/client-module-url';
+import {
+  clientModuleHrefForSourceFile,
+  clientModuleRepresentationDigest,
+  parseVersionedClientModuleTarget,
+} from '@kovojs/core/internal/client-module-url';
 import { ESCAPE_CENSUS_DOORS } from '@kovojs/core/internal/graph';
 import {
   snapshotCacheInfluenceManifest,
@@ -7123,7 +7127,7 @@ function kovoBuildApprovedSourceFilter(
   return (fileName) => buildSetHas(approved, kovoBuildFilterFileName(fileName, buildRoot));
 }
 
-function projectMutationRegistryFactsForBuild(
+export function projectMutationRegistryFactsForBuild(
   appModulePath: string,
   buildRoot: string,
   sourceFiles: readonly BuildCheckSourceFile[],
@@ -7180,6 +7184,80 @@ function projectMutationRegistryFactsForBuild(
         fileName: projectFileName(binding.source.fileName),
       },
     }));
+  const moduleHrefAliases = buildCreateMap<string, string>();
+  let optimisticModules: ProjectMutationRegistryFacts['optimisticModules'];
+  if (exactFacts.optimisticModules !== undefined) {
+    const exactModules = buildSnapshotDenseArray(
+      exactFacts.optimisticModules,
+      'Project optimistic build modules',
+    );
+    const projectedModules: NonNullable<ProjectMutationRegistryFacts['optimisticModules']>[number][] =
+      [];
+    for (let index = 0; index < exactModules.length; index += 1) {
+      const module = exactModules[index]!;
+      const fileName = projectFileName(module.fileName);
+      const href = clientModuleHrefForSourceFile(
+        fileName,
+        clientModuleRepresentationDigest(module.source),
+      );
+      const target = parseVersionedClientModuleTarget(href);
+      if (!target) {
+        throw new TypeError(
+          `Project optimistic build module ${module.fileName} produced a non-canonical client URL.`,
+        );
+      }
+      if (buildMapHas(moduleHrefAliases, module.href)) {
+        throw new TypeError(
+          `Project optimistic build modules reused immutable URL ${module.href}.`,
+        );
+      }
+      buildMapSet(moduleHrefAliases, module.href, href);
+      buildSecurityArrayAppend(
+        projectedModules,
+        {
+          ...module,
+          fileName,
+          href,
+          path: target.path,
+        },
+        'Projected optimistic build modules',
+      );
+    }
+    optimisticModules = projectedModules;
+  }
+  let mutationOptimism: ProjectMutationRegistryFacts['mutationOptimism'];
+  if (exactFacts.mutationOptimism !== undefined) {
+    const projectedOptimism = buildCreateNullRecord<
+      NonNullable<ProjectMutationRegistryFacts['mutationOptimism']>[string]
+    >() as Record<
+      string,
+      NonNullable<ProjectMutationRegistryFacts['mutationOptimism']>[string]
+    >;
+    const mutationKeys = buildSnapshotDenseArray(
+      buildObjectKeys(exactFacts.mutationOptimism),
+      'Project optimistic build mutation keys',
+    );
+    for (let index = 0; index < mutationKeys.length; index += 1) {
+      const key = mutationKeys[index]!;
+      const fact = buildOwnDataValue(
+        exactFacts.mutationOptimism,
+        key,
+        `Project optimistic build mutation ${key}`,
+      ) as NonNullable<ProjectMutationRegistryFacts['mutationOptimism']>[string];
+      const moduleHref = buildMapGet(moduleHrefAliases, fact.moduleHref);
+      if (moduleHref === undefined) {
+        throw new TypeError(
+          `Project optimistic build mutation ${key} has no projected client module.`,
+        );
+      }
+      projectedOptimism[key] = {
+        ...fact,
+        inputFields: mutationInputs[key] ?? fact.inputFields,
+        moduleHref,
+      };
+    }
+    mutationOptimism = projectedOptimism;
+  }
   const viteFiles: BuildCheckSourceFile[] = [];
   for (let index = 0; index < files.length; index += 1) {
     const file = files[index];
@@ -7215,7 +7293,12 @@ function projectMutationRegistryFactsForBuild(
   if (viteFiles.length !== files.length) {
     throw new TypeError('Project mutation build source census changed during path projection.');
   }
-  return { mutationBindings, mutationInputs };
+  return {
+    mutationBindings,
+    mutationInputs,
+    ...(mutationOptimism === undefined ? {} : { mutationOptimism }),
+    ...(optimisticModules === undefined ? {} : { optimisticModules }),
+  };
 }
 
 function kovoBuildFilterFileName(fileName: string, root: string): string {
