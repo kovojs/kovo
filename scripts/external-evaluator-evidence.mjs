@@ -760,7 +760,7 @@ function validateArtifactSubject(subject, label, findings) {
       !exactKeys(pkg, ['name', 'sha512', 'version']) ||
       !substantive(pkg?.name, 2, 256) ||
       !substantive(pkg?.version, 1, 64) ||
-      !/^sha512-[A-Za-z0-9+/]+={0,2}$/u.test(pkg?.sha512 ?? '')
+      !validSha512Integrity(pkg?.sha512)
     ) {
       findings.push(`${label}.packageSet[${String(index)}] is invalid`);
     }
@@ -980,11 +980,20 @@ function validUtcTimestamp(value) {
 }
 
 function validGitObjectId(value) {
-  return /^[0-9a-f]{40,64}$/u.test(value ?? '');
+  return /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u.test(value ?? '');
 }
 
 function validDigest(value) {
   return /^sha256:[0-9a-f]{64}$/u.test(value ?? '');
+}
+
+function validSha512Integrity(value) {
+  if (typeof value !== 'string' || !value.startsWith('sha512-')) return false;
+  try {
+    return canonicalBase64(value.slice('sha512-'.length), 'package integrity').byteLength === 64;
+  } catch {
+    return false;
+  }
 }
 
 function exactKeys(value, expected) {
