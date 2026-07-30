@@ -2,7 +2,6 @@
 // from the resolved session and avoid serving cross-user rows.
 import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
 import { domain, guards, query, route, s } from '@kovojs/server';
-import { runQuery } from '@kovojs/test/internal/integration/fixture-abi';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 interface OwnerSession {
@@ -60,8 +59,8 @@ const invoiceRoute = route('/invoice', {
   guard: guards.authed<OwnerRequest>(),
   search: s.object({ id: s.string() }),
   async page({ search }, request: OwnerRequest) {
-    const result = await runQuery(ownerInvoiceQuery, search, request);
-    const invoice = result.ok ? result.value.invoice : null;
+    const ownerId = request.session?.user.id;
+    const invoice = ownerId ? await readInvoice(request.db, search.id, ownerId) : null;
 
     if (!invoice) {
       return `<main><h1>Invoice</h1><p data-denied>not-found</p></main>`;

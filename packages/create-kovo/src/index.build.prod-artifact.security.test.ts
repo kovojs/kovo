@@ -893,9 +893,12 @@ describe('create-kovo starter (build integration: production security artifacts)
         'utf8',
       );
       expect(proofSource).toContain(
-        'href={trustedUrl(data.contacts.items.map((contact) => contact.email).join(""))}',
+        'href={trustedUrl(data.contacts.items.map((contact) => contact.email).join(',
       );
-      expect(proofSource).toContain('{trustedHtml(slots.request?.headers.get("x-proof") ?? "")}');
+      expect(proofSource).toContain("reason: 'adversarial query-derived URL proof'");
+      expect(proofSource).toContain(
+        "(slots.request as { headers: Headers } | undefined)?.headers.get('x-proof')",
+      );
 
       const output = captureBuildFailure(() => buildProductionArtifact(unsafeRoot));
       expect(output).toContain('KV426');

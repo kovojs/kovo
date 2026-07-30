@@ -15,7 +15,7 @@ const demoHmac = hmacSignature({
 });
 
 const webhookEndpoint = endpoint('/webhooks/signed-callback', {
-  auth: { kind: 'verifier', name: demoHmac.resolved.scheme, verify: demoHmac },
+  auth: { kind: 'verifier', name: demoHmac.scheme, verify: demoHmac },
   csrf: false,
   csrfJustification: 'signed callback verifies raw body',
   async handler(request) {

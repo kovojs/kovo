@@ -30,7 +30,7 @@ describe('create-kovo starter (build integration: packed runtime scaffold)', () 
     try {
       expectPackedKovoPackageShape(app.root);
       // The generated dev-server HTTP suite has its own starter-typecheck shard. Keep this packed
-      // acceptance path focused on the published source-proof and production-artifact commands:
+      // acceptance path focused on the published source check and production-artifact commands:
       // repeating the full PGlite/Vite dev bootstrap would consume the real build's bounded budget.
       const sourceCheck = execFileSync('pnpm', ['run', 'check'], {
         cwd: app.root,
@@ -38,8 +38,10 @@ describe('create-kovo starter (build integration: packed runtime scaffold)', () 
         env: withStarterBinOnPath(app.root),
         maxBuffer: 128 * 1024 * 1024,
       });
-      expect(sourceCheck).toContain('source-proof');
       expect(sourceCheck).toContain('kovo-check/v1');
+      expect(sourceCheck).toContain(
+        'COVERAGE component=ContactsRegion query=contacts.items position="expression" status=fragment',
+      );
       expect(existsSync(join(app.root, 'dist'))).toBe(false);
 
       buildReusableProductionArtifact(app.root);

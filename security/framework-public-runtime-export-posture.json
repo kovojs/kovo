@@ -11,7 +11,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "006dc184c9a412ea54832948f04b954794b3638dcabfac11409145a84fddacb2",
+      "sourceTreeSha256": "b02ddf6eb7eb6aaacba078d89d1491afeb9508dab55a9b3d4d607bd1b7f066f2",
       "manifestVariants": [
         {
           "fingerprint": "sha256:65f523e5fc6e4b722b498b204040f16369f1a9dceab9d7854a48bab9b25c700a"
@@ -705,7 +705,7 @@
           "reason": "The custom-shell browser installer captures framework-bounded network and dynamic-loader authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "bd0bd1a7b62502d37fee8fb5e6a8f125e87ec88fd2706b6e2f646cff1fcd61ed"
+      "sourceTreeSha256": "a8383e228ec8a2b57f601ae58c14f3967e6a25791687cc4484b2243397bf01e0"
     },
     {
       "manifestVariants": [
@@ -818,7 +818,7 @@
           "reason": "The diagnostic schema constant belongs to the build-time CLI package and is not request-handler authority."
         }
       ],
-      "sourceTreeSha256": "f27e5fe4b5dc35497fc6dd7322180cb9841304e3145f04c3bd19ee6d08cf1b87"
+      "sourceTreeSha256": "c705631e1797b8332cd44a60bd619bde1d2e0096e1d23fecd8779660b868d2bc"
     },
     {
       "manifestVariants": [
@@ -1161,9 +1161,7 @@
               "component",
               "ErrorBoundary",
               "FieldError",
-              "FormError",
-              "queryRef",
-              "routeRef"
+              "FormError"
             ],
             "./diagnostics": [
               "<module>"
@@ -1728,7 +1726,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "610517af085d2076da2a14062be309764989f8430cbbc38fc11a5aa951b7ca84"
+      "sourceTreeSha256": "a8dac42acf8061deee2b2fc7fbe78ea0deb370810920207a2161b874f8c807bc"
     },
     {
       "manifestVariants": [
@@ -17360,7 +17358,7 @@
           "reason": "derived binds a reviewed adapter to the current request principal through the canonical ScopedKey containment door."
         }
       ],
-      "sourceTreeSha256": "f528b728e2548d7a9673dd32cc673200b7f0b59075232466eb0f2ef768fd169a"
+      "sourceTreeSha256": "65e963d73becbb6a684791c68af5e49027348df37a04d2a1674b867a75f12382"
     },
     {
       "manifestVariants": [

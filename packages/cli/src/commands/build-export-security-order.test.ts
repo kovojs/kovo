@@ -164,15 +164,41 @@ describe('build/export security bootstrap ordering', () => {
   });
 
   it('imports the server bootstrap owner before generated registry and app modules', () => {
-    const source = kovoServerHandlerEntrySource('/tmp/kovo/app.mjs', {
-      app: [],
-      fragments: {},
-      routes: {},
-    });
+    const source = kovoServerHandlerEntrySource(
+      '/tmp/kovo/app.mjs',
+      {
+        app: [],
+        fragments: {},
+        routes: {},
+      },
+      'node',
+    );
+    const bootstrapImport = source.indexOf(
+      "import '@kovojs/server/internal/sql-parser-authority-bootstrap';",
+    );
     const registryImport = source.indexOf("import './runtime-registry.mjs';");
     const serverImport = source.indexOf(
-      "import { createRequestHandler } from '@kovojs/server/custom-adapters'\nimport { deriveClosedKovoApp, runWithGeneratedLiveTargetRegistry } from '@kovojs/server';",
+      "import { createRequestHandler, deriveClosedKovoApp, runWithGeneratedLiveTargetRegistry } from '@kovojs/server/internal/app-shell-vite';",
     );
+    const appImport = source.indexOf('runWithGeneratedLiveTargetRegistry(() => import(');
+    expect(bootstrapImport).toBe(0);
+    expect(serverImport).toBeGreaterThan(bootstrapImport);
+    expect(registryImport).toBeGreaterThan(serverImport);
+    expect(appImport).toBeGreaterThan(registryImport);
+    expect(
+      kovoServerHandlerEntrySource(
+        '/tmp/kovo/app.mjs',
+        { app: [], fragments: {}, routes: {} },
+        'vercel',
+      ),
+    ).toContain("import '@kovojs/server/internal/sql-parser-authority-bootstrap';");
+    expect(
+      kovoServerHandlerEntrySource(
+        '/tmp/kovo/app.mjs',
+        { app: [], fragments: {}, routes: {} },
+        'cloudflare',
+      ),
+    ).not.toContain('sql-parser-authority-bootstrap');
     expect(source).not.toContain('lockServerRequestSafeRuntimeRealm();');
     expect(source).not.toContain('import * as appModule from');
     expect(source).toContain('appendFrameworkRuntimeArrayValue');
@@ -189,11 +215,15 @@ describe('build/export security bootstrap ordering', () => {
     try {
       JSON.stringify = (() => `null);${marker};//`) as typeof JSON.stringify;
 
-      const handler = kovoServerHandlerEntrySource('/tmp/kovo/app.mjs', {
-        app: [{ href: '/assets/app.css' }],
-        fragments: {},
-        routes: {},
-      });
+      const handler = kovoServerHandlerEntrySource(
+        '/tmp/kovo/app.mjs',
+        {
+          app: [{ href: '/assets/app.css' }],
+          fragments: {},
+          routes: {},
+        },
+        'node',
+      );
       const registry = serializeBuildRuntimeRegistryWireModule({
         browserPosture: {
           externalOrigins: [],

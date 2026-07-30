@@ -130,6 +130,8 @@ against the state/query shape and are null-aware: traversing a nullable segment 
 **2. Named derives — the expression layer.** The toggle's `aria-pressed={String(state.pressed)}` and
 `data-state={...}` expressions lower to named, exported, pure derives with declared inputs:
 
+<!-- kovo-sample: output -->
+
 ```js
 // Compiler-emitted artifact for inspection; `derive` is supplied by Kovo's generated ABI.
 

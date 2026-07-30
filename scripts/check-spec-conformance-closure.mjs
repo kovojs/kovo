@@ -53,7 +53,7 @@ const transferredSqlSafetyDiagnosticRegistrarDoor =
 const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#diagnosticAt`;
 const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
 const expectedDiagnosticEmissionSiteDigest =
-  'cea60ed3dc76357672f16038cdae4a781ed8fbbdcfd0825198acb955aabef9e0';
+  'e333e793e6bf1a185fefb23ea8c6c40645c2251b77e050d2d751efe4af0d0e26';
 const expectedRootDiagnosticDoorDigest =
   '1660c7877e7a533c282cf38c291a10181bc2e7484d76f479f1d1f41cd51dac77';
 const expectedRegisteredDiagnosticGuardDigest =
@@ -85,7 +85,7 @@ const expectedDiagnosticFactorySinkDigest =
 const expectedDiagnosticEvidenceWitnessDigest =
   '23014067df10912624d8419128d1362787bb212e84ef0aac772d78ad26156aa3';
 const expectedDiagnosticActualLayerReviewDigest =
-  'bc6afc79b43108252e63ae97870ba92c9181054137b783fad018383d62f20ab1';
+  '10293606044b538639a237ca966ee23fc5b84ec464ef22718dd42f31d3fac59f';
 const expectedBlockingStaticExportCollectionDigest =
   '3541644c641aec62abd0743093c653abd953e634f6042b941877b699666c4fdd';
 const expectedCompilerValidatorPipelineDigest =
@@ -109,7 +109,7 @@ const reviewedUnresolvedDynamicModuleAcquisitions = new Set([
   'packages/compiler/src/vite-config-source.ts#4b88f6e8e7657d91dbaffe6d75cf4c4bf5863b455fd5cafb901a5c8a1a577d52#2d48f56da770ec53b7e31eacdafd3983b0929513b177d3acfd08d2c3db8012ca',
   'packages/server/src/vite-source.ts#d20810d8378391eeced5375aa3c41998c433b9846f2a612735e2c1d9365d6d41#2d48f56da770ec53b7e31eacdafd3983b0929513b177d3acfd08d2c3db8012ca',
   'packages/server/src/sqlite.ts#6130e055e7a0a3dddfde44acbd354cedb7693528989f72b2f87fed50772369a8#cb1f4aa1ac29147775093dc3c4411e81e956780357d25c102098893d5361a482',
-  'packages/test/src/integration/optimistic-client.ts#76cb9bf08937fb545140200a397317b0b6c6667090c61cc45fc1ccf889b93e88#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
+  'packages/test/src/integration/optimistic-client.ts#a8729bfb3752f70cea20d0871ce5f706d8e49b976176f5c3b0622d220b8bba28#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
   'packages/cli/src/commands/sound-subset.mjs#c4a8eb38e20db4f59cc14cafa3f5dcaa433bc39aad4208dd6a3b6234ca3772b3#0a2e825ccb996448551e9e666568a12ebc039398f5e35848d8adf5b936a5f136',
 ]);
 const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
@@ -128,7 +128,11 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ['packages/cli/src/bin.ts', 'c25df08ae63082fc227c0c8cd6e4c71cf68e44a05d238a5890cb4f17d7fcd07b'],
   [
     'packages/cli/src/commands/build-export.ts',
-    '23397bd2207cd24e16c00ee60d27dc322febb2d73799efe9f6309b02c10ffc90',
+    '11724dd36feaf77a3f0702cda536c7cc6be459c5ca20445e61484cfd6348a94c',
+  ],
+  [
+    'packages/cli/src/commands/build-static-trust-source-hook.mjs',
+    '771e2c338855f3034bcc7594f8571ade71822b6883308314e385c064518de16a',
   ],
   [
     'packages/cli/src/commands/compile.ts',
@@ -144,7 +148,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/cli/src/commands/vite-plus-bin.ts',
-    'c36fbf9c4e92888fb6d3708da71d0cd6f80933c078463f441bd10d91e790d92a',
+    '7ab092de3f68b337aae83eb8cbf3cc496b06c9d61cf6e15446f112595b37b269',
   ],
   [
     'packages/cli/src/dependency-capability-loader.ts',
@@ -164,7 +168,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/core/src/secret.ts',
-    'be8b096472c232fb316fe882787e1b7199284117dd34f6b8066ee0cf06016ff9',
+    'a0fd7ba26b7d62959f7c94d69e3bbd1565d4e91265559a59d28fff7fc0545dbd',
   ],
   [
     'packages/drizzle/src/trust-escapes-static.ts',

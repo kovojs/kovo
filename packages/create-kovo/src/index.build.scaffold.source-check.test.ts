@@ -31,9 +31,10 @@ describe('create-kovo starter (current-source quick check)', () => {
           maxBuffer: 128 * 1024 * 1024,
         });
 
-        expect(output).toContain('source-proof');
         expect(output).toContain('kovo-check/v1');
-        expect(output).toContain('check passed');
+        expect(output).toContain(
+          'COVERAGE component=ContactsRegion query=contacts.items position="expression" status=fragment',
+        );
         expect(output).not.toContain('endpoint-posture');
         expect(existsSync(join(app.root, 'dist'))).toBe(false);
       } finally {

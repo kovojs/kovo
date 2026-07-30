@@ -1816,7 +1816,14 @@ async function runPreEvaluationStaticTrustPreflightInWorker(
       process.execPath,
       [
         ...(sourceMode
-          ? ['--disable-warning=ExperimentalWarning', '--experimental-transform-types']
+          ? [
+              '--disable-warning=ExperimentalWarning',
+              '--experimental-transform-types',
+              '--import',
+              pathToFileURL(
+                resolve(dirname(currentModulePath), 'build-static-trust-source-hook.mjs'),
+              ).href,
+            ]
           : []),
         workerPath,
         request,
@@ -6922,7 +6929,11 @@ async function bundleKovoServerHandler(
       serializeBuildRuntimeRegistryWireModule(options.runtimeRegistry),
       'utf8',
     );
-    writeFileSync(entryPath, kovoServerHandlerEntrySource(appModulePath, stylesheetAssets), 'utf8');
+    writeFileSync(
+      entryPath,
+      kovoServerHandlerEntrySource(appModulePath, stylesheetAssets, options.runtimeTarget),
+      'utf8',
+    );
     await viteBuild({
       appType: 'custom',
       build: {
@@ -7001,6 +7012,12 @@ async function bundleKovoServerHandler(
           {
             find: /^@kovojs\/server\/internal\/execution$/,
             replacement: requireFromCli.resolve('@kovojs/server/internal/execution'),
+          },
+          {
+            find: /^@kovojs\/server\/internal\/sql-parser-authority-bootstrap$/,
+            replacement: requireFromCli.resolve(
+              '@kovojs/server/internal/sql-parser-authority-bootstrap',
+            ),
           },
           {
             find: /^@kovojs\/server\/jsx-dev-runtime$/,
@@ -7296,9 +7313,13 @@ function bundledUndiciRuntimeVitePlugin(): {
 export function kovoServerHandlerEntrySource(
   appModulePath: string,
   stylesheetAssets: KovoBuildStylesheetAssets,
+  runtimeTarget: KovoBuildPresetName,
 ): string {
   return buildJoinStrings(
     [
+      runtimeTarget === 'cloudflare'
+        ? ''
+        : "import '@kovojs/server/internal/sql-parser-authority-bootstrap';",
       "import { createRequestHandler, deriveClosedKovoApp, runWithGeneratedLiveTargetRegistry } from '@kovojs/server/internal/app-shell-vite';",
       "import './runtime-registry.mjs';",
       "import { appendFrameworkRuntimeArrayValue } from '@kovojs/server/internal/execution';",

@@ -1567,7 +1567,7 @@ export function addTrustedOutputProvenanceBuildProof(
       "import { contactsQuery, type ContactListResult } from './queries.js';",
       '',
       'interface TrustedOutputProofSlots {',
-      '  request?: { headers: Headers };',
+      '  [slot: string]: unknown;',
       '}',
       '',
       'export const TrustedOutputProvenanceProof = component({',
@@ -1579,14 +1579,14 @@ export function addTrustedOutputProvenanceBuildProof(
       '  ) => (',
       '    <main data-proof="trusted-output-provenance">',
       unsafe
-        ? '      <a href={trustedUrl(data.contacts.items.map((contact) => contact.email).join(""))}>'
+        ? '      <a href={trustedUrl(data.contacts.items.map((contact) => contact.email).join(""), { reason: "adversarial query-derived URL proof" })}>'
         : '      <a href={trustedUrl(data.contacts.items.map((contact) => contact.email).join(""), { reason: "server-reviewed contact mailto route" })}>',
       '        Unsafe URL',
       '      </a>',
       '      <section>static trusted output proof</section>',
       unsafe
-        ? '      {trustedHtml(slots.request?.headers.get("x-proof") ?? "")}'
-        : '      {trustedHtml(slots.request?.headers.get("x-proof") ?? "", { reason: "reviewed trusted output request header" })}',
+        ? '      {trustedHtml((slots.request as { headers: Headers } | undefined)?.headers.get("x-proof") ?? "", { reason: "adversarial request-derived HTML proof" })}'
+        : '      {trustedHtml((slots.request as { headers: Headers } | undefined)?.headers.get("x-proof") ?? "", { reason: "reviewed trusted output request header" })}',
       '    </main>',
       '  ),',
       '});',
@@ -1641,7 +1641,7 @@ export function addOpaqueTrustedOutputAuthorityProof(root: string): void {
       'const trustedOutputAlias = { html: trustedHtml };',
       '',
       'interface OpaqueTrustedOutputProofSlots {',
-      '  request?: { headers: Headers };',
+      '  [slot: string]: unknown;',
       '}',
       '',
       'export const OpaqueTrustedOutputAuthorityProof = component({',
@@ -1652,11 +1652,11 @@ export function addOpaqueTrustedOutputAuthorityProof(root: string): void {
       '    slots: OpaqueTrustedOutputProofSlots,',
       '  ) => (',
       '    <main data-proof="opaque-trusted-output-authority">',
-      '      <a href={browserTrust[dynamicTrustedUrlKey](data.contacts.items[0]?.email ?? "")}>',
+      '      <a href={browserTrust[dynamicTrustedUrlKey](data.contacts.items[0]?.email ?? "", { reason: "adversarial opaque URL authority proof" })}>',
       '        Dynamic trusted URL authority',
       '      </a>',
-      '      {browserTrust[dynamicTrustedHtmlKey](slots.request?.headers.get("x-dynamic-proof") ?? "")}',
-      '      {trustedOutputAlias.html(slots.request?.headers.get("x-object-proof") ?? "")}',
+      '      {browserTrust[dynamicTrustedHtmlKey]((slots.request as { headers: Headers } | undefined)?.headers.get("x-dynamic-proof") ?? "", { reason: "adversarial opaque dynamic HTML authority proof" })}',
+      '      {trustedOutputAlias.html((slots.request as { headers: Headers } | undefined)?.headers.get("x-object-proof") ?? "", { reason: "adversarial opaque object HTML authority proof" })}',
       '    </main>',
       '  ),',
       '});',

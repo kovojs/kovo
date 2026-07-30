@@ -6,6 +6,7 @@ import '@kovojs/server/internal/sql-parser-authority-bootstrap';
 
 import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
 import { route } from '@kovojs/server';
+import { resolveFixtureAppToken } from '@kovojs/server/internal/fixture-app';
 import {
   createKovoAppShellDevDiagnosticLedger,
   kovoAppShellVitePlugin,
@@ -127,7 +128,9 @@ async function serveWithViteMiddleware(
   app: ReturnType<typeof createApp>,
   diagnostics: ReturnType<typeof createKovoAppShellDevDiagnosticLedger>,
 ): Promise<{ close(): Promise<void>; origin: string }> {
-  const plugin = kovoAppShellVitePlugin(app, { devDiagnostics: diagnostics });
+  const plugin = kovoAppShellVitePlugin(resolveFixtureAppToken(app), {
+    devDiagnostics: diagnostics,
+  });
   const middlewares: KovoAppShellViteMiddleware[] = [];
   plugin.configureServer({
     middlewares: {
