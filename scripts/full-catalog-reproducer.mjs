@@ -163,18 +163,10 @@ export function runFullCatalogSample({
         'create',
         observe(
           'create',
-          commandRunner(
-            [
-              process.execPath,
-              creator,
-              appRoot,
-              '--name',
-              `kovo-full-catalog-${String(sampleIndex + 1)}`,
-              '--postgres',
-              '--disable-git',
-            ],
-            { cwd: temporaryRoot, phase: 'create' },
-          ),
+          commandRunner(fullCatalogCreatorCommand(creator, appRoot, sampleIndex), {
+            cwd: temporaryRoot,
+            phase: 'create',
+          }),
           transcripts,
         ),
       ),
@@ -314,6 +306,27 @@ export function runFullCatalogSample({
   } finally {
     rmSync(temporaryRoot, { recursive: true, force: true });
   }
+}
+
+/**
+ * Create the production-build fixture with an explicit deploy-skew retention proof.
+ *
+ * The full-catalog journey is a controlled local measurement, not a deployment recommendation.
+ * Its build phase must exercise emitted production artifacts rather than stop at the starter's
+ * intentionally unconfigured KV417 posture.
+ */
+export function fullCatalogCreatorCommand(creator, appRoot, sampleIndex) {
+  return Object.freeze([
+    process.execPath,
+    creator,
+    appRoot,
+    '--name',
+    `kovo-full-catalog-${String(sampleIndex + 1)}`,
+    '--postgres',
+    '--retention',
+    'retained-24h',
+    '--disable-git',
+  ]);
 }
 
 export function validateFullCatalogReport(report) {

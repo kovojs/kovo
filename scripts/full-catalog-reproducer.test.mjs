@@ -12,6 +12,7 @@ import {
   assertCopiedCatalog,
   declarePackedCatalogDependencies,
   fullCatalogBudget,
+  fullCatalogCreatorCommand,
   packedUiComponentNames,
   requireCatalogPhaseSuccess,
   validateFullCatalogReport,
@@ -89,6 +90,20 @@ describe('packed full-catalog reproducer', () => {
       source: 'ratified',
       thresholdBytes: 1_900_000_000,
     });
+  });
+
+  it('gives the production-build fixture an explicit retained deployment posture', () => {
+    expect(fullCatalogCreatorCommand('/packed/create-kovo.mjs', '/tmp/catalog-app', 2)).toEqual([
+      process.execPath,
+      '/packed/create-kovo.mjs',
+      '/tmp/catalog-app',
+      '--name',
+      'kovo-full-catalog-3',
+      '--postgres',
+      '--retention',
+      'retained-24h',
+      '--disable-git',
+    ]);
   });
 
   it('retains failed-phase timing and process-tree RSS as reportable evidence', () => {
