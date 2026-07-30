@@ -5,6 +5,7 @@ import { inlineKovoLoaderInstallerSource } from './inline-loader.js';
 type FrameHarness = {
   frame: HTMLIFrameElement;
   loadCount(): number;
+  sourceUrl: string;
   window: Window & typeof globalThis;
 };
 
@@ -27,22 +28,21 @@ async function createFrame(body: string, head: string): Promise<FrameHarness> {
   frame.addEventListener('load', () => {
     loads += 1;
   });
-  frame.src = `/__kovo_inline_security_fixture?case=${frames.length}`;
+  const fixtureUrl = new URL('/__kovo_inline_security_fixture', location.href);
+  fixtureUrl.searchParams.set('case', String(frames.length));
+  fixtureUrl.searchParams.set('document-head', head);
+  fixtureUrl.searchParams.set('document-body', body);
+  frame.src = fixtureUrl.href;
   frames.push(frame);
   document.body.append(frame);
   await vi.waitFor(() => expect(loads).toBe(1));
   const frameWindow = frame.contentWindow;
   if (!frameWindow) throw new Error('missing iframe window');
-  frameWindow.document.open();
-  frameWindow.document.write(
-    `<!doctype html><html><head>${head}</head><body>${body}</body></html>`,
-  );
-  frameWindow.document.close();
-  await new Promise((resolve) => setTimeout(resolve, 0));
   const baselineLoads = loads;
   return {
     frame,
     loadCount: () => loads - baselineLoads + 1,
+    sourceUrl: fixtureUrl.href,
     window: frameWindow as Window & typeof globalThis,
   };
 }
@@ -62,6 +62,7 @@ async function createOpaqueFrame(body: string): Promise<FrameHarness> {
   return {
     frame,
     loadCount: () => loads,
+    sourceUrl: frame.src,
     window: frameWindow as Window & typeof globalThis,
   };
 }
@@ -71,6 +72,7 @@ async function expectHardReload(harness: FrameHarness): Promise<void> {
   // three-engine suite is CPU-bound. Keep the oracle exact, but give the real navigation event a
   // bounded window that matches the browser CI workload.
   await vi.waitFor(() => expect(harness.loadCount()).toBeGreaterThan(1), { timeout: 5_000 });
+  expect(harness.window.location.href).toBe(harness.sourceUrl);
 }
 
 async function installGeneratedInlineLoader(

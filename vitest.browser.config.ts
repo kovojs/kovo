@@ -149,7 +149,18 @@ export default defineConfig({
             </body></html>`);
             return;
           }
-          response.end('<!doctype html><html><head></head><body></body></html>');
+          const fixtureHead = fixtureUrl.searchParams.get('document-head');
+          const fixtureBody = fixtureUrl.searchParams.get('document-body');
+          if ((fixtureHead === null) !== (fixtureBody === null)) {
+            response.statusCode = 400;
+            response.end('Kovo browser fixture requires both document-head and document-body.');
+            return;
+          }
+          response.end(
+            fixtureHead === null
+              ? '<!doctype html><html><head></head><body></body></html>'
+              : `<!doctype html><html><head>${fixtureHead}</head><body>${fixtureBody}</body></html>`,
+          );
         });
       },
     },
