@@ -860,6 +860,7 @@ export function validateKovoBrowserWorkload(manifest, consumerFiles) {
     'profile.mjs',
     'src/app.tsx',
     'src/components/counter-island.tsx',
+    'src/kovo.ts',
     'workload.mjs',
   ]);
   for (const required of requiredConsumerFiles) {

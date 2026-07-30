@@ -55,6 +55,10 @@ const kovoPackedWorkloadSource = readFileSync(
   path.join(repoRoot, 'scripts/devex-workloads/kovo-packed-check/package/workload.mjs'),
   'utf8',
 );
+const kovoPackedContractSource = readFileSync(
+  path.join(repoRoot, 'scripts/devex-workloads/kovo-packed-check/package/src/kovo.ts'),
+  'utf8',
+);
 const kovoPackedBrowserBuildSource = readFileSync(
   path.join(repoRoot, 'scripts/devex-workloads/kovo-packed-check/package/build-browser.mjs'),
   'utf8',
@@ -512,6 +516,7 @@ describe('DevEx benchmark foundation', () => {
     expect(kovoPackedWorkloadSource).not.toContain(
       "import { publicAccess, query, s } from '@kovojs/server'",
     );
+    expect(kovoPackedContractSource).toContain("appId: '6ca7d9e8-9d8f-4b65-a261-3f1a33b3d8c1'");
     expect(kovoPackedProfileSource).toContain('duration=');
     expect(kovoPackedProfileSource).toContain('rss=');
     expect(kovoPackedDevProfileSource).toContain("'dev',");
@@ -611,6 +616,7 @@ describe('DevEx benchmark foundation', () => {
         'profile.mjs',
         'src/app.tsx',
         'src/components/counter-island.tsx',
+        'src/kovo.ts',
         'workload.mjs',
       ].map((file) => ({
         path: file,
