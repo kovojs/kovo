@@ -10,14 +10,14 @@
     },
     {
       "packageName": "create-kovo",
-      "packageVersion": "0.2.0",
-      "sourceTreeSha256": "b02ddf6eb7eb6aaacba078d89d1491afeb9508dab55a9b3d4d607bd1b7f066f2",
+      "packageVersion": "0.3.0",
+      "sourceTreeSha256": "315e3a58a56753e94b9d805d53db7dc29ecb6dec1e5096e6827ea72b84803dd1",
       "manifestVariants": [
         {
-          "fingerprint": "sha256:65f523e5fc6e4b722b498b204040f16369f1a9dceab9d7854a48bab9b25c700a"
+          "fingerprint": "sha256:80d390e85123b76e58a9270f45d1420deaefd869d361bf8181cfa3f310ae6c08"
         },
         {
-          "fingerprint": "sha256:7e12bd4ad88296e801d099e9479c8ac74041631b8c5a39e9de873eef8e9f1873"
+          "fingerprint": "sha256:ab8a54156a8c7a9662163fa21e51ffe2042988d5457151d70d51c75ac634689e"
         }
       ],
       "reason": "public-packages.json declares no app-facing public subpaths"
@@ -61,7 +61,7 @@
               "default": "./dist/internal/server-mount-adapter.mjs"
             }
           },
-          "fingerprint": "sha256:217888a3a84c708c6a5237893cc441fd78abc2cbb44a5e5e57309eee905bfb20"
+          "fingerprint": "sha256:b1e8638dcc3ccd758711702134ba183c16a7b69dcba86ce6f9668a62f1dee753"
         },
         {
           "exports": {
@@ -98,7 +98,7 @@
               "default": "./dist/internal/server-mount-adapter.mjs"
             }
           },
-          "fingerprint": "sha256:821751dde9b809b7c2ba68d2dd2a193c7ce9d3f7ef65ea0c3dbbc625fbc93b3e"
+          "fingerprint": "sha256:d591071dbe1349a9242d2fdc054b21c321b6763dd7ee27e526b0039f4c0ccd04"
         },
         {
           "exports": {
@@ -111,11 +111,11 @@
             "./internal": "./src/internal.ts",
             "./internal/server-mount-adapter": "./src/internal/server-mount-adapter.ts"
           },
-          "fingerprint": "sha256:9d1ec8f6e8b5154abf02cd777d6e17746896ce691bf98fa7c7bc9ca63f8400f3"
+          "fingerprint": "sha256:d99b334c85c8d37396ad816aa5b06fb481d585fa0990a115a930b0ddd8d79e88"
         }
       ],
       "packageName": "@kovojs/better-auth",
-      "packageVersion": "0.2.0",
+      "packageVersion": "0.3.0",
       "postureGroups": [
         {
           "capabilities": [],
@@ -385,7 +385,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "13a2c1a41492a20b8886f132f52e96cff74ce6d5249a989a33f8c9cae1cbca60"
+      "sourceTreeSha256": "c1fa9d9186bb63981eec1848fa835bec167a5fa3ae5d368e9a81e31affdf4623"
     },
     {
       "manifestVariants": [
@@ -407,6 +407,14 @@
               "types": "./dist/internal/delegation.d.mts",
               "default": "./dist/internal/delegation.mjs"
             },
+            "./internal/deferred-app-runtime": {
+              "types": "./dist/deferred-app-runtime-module.d.mts",
+              "default": "./dist/deferred-app-runtime-module.mjs"
+            },
+            "./internal/deferred-app-runtime-identity": {
+              "types": "./dist/deferred-app-runtime-identity.d.mts",
+              "default": "./dist/deferred-app-runtime-identity.mjs"
+            },
             "./internal/hmr-target-snapshot": {
               "types": "./dist/internal/hmr-target-snapshot.d.mts",
               "default": "./dist/internal/hmr-target-snapshot.mjs"
@@ -428,7 +436,7 @@
               "default": "./dist/internal/output.mjs"
             }
           },
-          "fingerprint": "sha256:14b64fc8375b9cea85ca25d524c8d07333dc15cb24feb8fc2ec50563ed122616"
+          "fingerprint": "sha256:068b72419a979f98d4326f1517f1279405b21e934ef4276a48156881155362b7"
         },
         {
           "exports": {
@@ -448,6 +456,14 @@
               "types": "./dist/internal/delegation.d.mts",
               "default": "./dist/internal/delegation.mjs"
             },
+            "./internal/deferred-app-runtime": {
+              "types": "./dist/deferred-app-runtime-module.d.mts",
+              "default": "./dist/deferred-app-runtime-module.mjs"
+            },
+            "./internal/deferred-app-runtime-identity": {
+              "types": "./dist/deferred-app-runtime-identity.d.mts",
+              "default": "./dist/deferred-app-runtime-identity.mjs"
+            },
             "./internal/hmr-target-snapshot": {
               "types": "./dist/internal/hmr-target-snapshot.d.mts",
               "default": "./dist/internal/hmr-target-snapshot.mjs"
@@ -469,7 +485,7 @@
               "default": "./dist/internal/output.mjs"
             }
           },
-          "fingerprint": "sha256:590e2f07cd2ccb7e683c967e8b643f8b1240d33904bfe0cf00d77206a20a7a06"
+          "fingerprint": "sha256:37382b4373fed2973a8e683f4f973a885014c3f214b2fced98bd287bc7658681"
         },
         {
           "exports": {
@@ -477,17 +493,19 @@
             "./client": "./src/client.ts",
             "./generated": "./src/generated.ts",
             "./internal/delegation": "./src/internal/delegation.ts",
+            "./internal/deferred-app-runtime": "./src/deferred-app-runtime-module.ts",
+            "./internal/deferred-app-runtime-identity": "./src/deferred-app-runtime-identity.ts",
             "./internal/hmr-target-snapshot": "./src/internal/hmr-target-snapshot.ts",
             "./internal/inline-loader": "./src/internal/inline-loader.ts",
             "./internal/morph": "./src/internal/morph.ts",
             "./internal/mutation": "./src/internal/mutation.ts",
             "./internal/output": "./src/internal/output.ts"
           },
-          "fingerprint": "sha256:e327a7775f263277b3636109d11a9a1f8b50da1f7277d600e7dc6933710cda97"
+          "fingerprint": "sha256:3f36e44add959c957577dd2a7d5fe2625e3e6666ba152711b7045d85bcc319fa"
         }
       ],
       "packageName": "@kovojs/browser",
-      "packageVersion": "0.2.0",
+      "packageVersion": "0.3.0",
       "postureGroups": [
         {
           "capabilities": [],
@@ -705,29 +723,16 @@
           "reason": "The custom-shell browser installer captures framework-bounded network and dynamic-loader authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "a8383e228ec8a2b57f601ae58c14f3967e6a25791687cc4484b2243397bf01e0"
+      "sourceTreeSha256": "f4d705e70e248a2095d15925ba45f24eced2f42f376820f6725a7f50bec0588b"
     },
     {
       "manifestVariants": [
         {
           "exports": {
-            ".": {
-              "types": "./dist/api.d.mts",
-              "default": "./dist/api.mjs"
-            },
-            "./internal": {
-              "types": "./dist/index.d.mts",
-              "default": "./dist/index.mjs"
-            }
-          },
-          "fingerprint": "sha256:1da4c77e585dfe5b17ec87b17616f6a5167ed3002a1934ce7f4c3f4d4a48e8cd"
-        },
-        {
-          "exports": {
             ".": "./src/api.ts",
             "./internal": "./src/index.ts"
           },
-          "fingerprint": "sha256:6837c702089b1099aadedd04ac4c5126c01ccc1bdaf2204a86670f29b1d7e330"
+          "fingerprint": "sha256:d8c75aa2cffc8af35aa3f4978ac0cce600564d6c5f29a60eeab9ae05c1b2a091"
         },
         {
           "exports": {
@@ -740,11 +745,24 @@
               "default": "./dist/index.mjs"
             }
           },
-          "fingerprint": "sha256:f0c151901ae6d963336ab5298247249ea93543c2a33676ca3fd0de58be0f9393"
+          "fingerprint": "sha256:ddf6b9823743fec40caff46152c37d0f771540d620e3355c0a82f1d6e28478f9"
+        },
+        {
+          "exports": {
+            ".": {
+              "types": "./dist/api.d.mts",
+              "default": "./dist/api.mjs"
+            },
+            "./internal": {
+              "types": "./dist/index.d.mts",
+              "default": "./dist/index.mjs"
+            }
+          },
+          "fingerprint": "sha256:f4558543dc7c81a56201d382af134a48a6992cefdba74d8591771eec8e659024"
         }
       ],
       "packageName": "@kovojs/cli",
-      "packageVersion": "0.2.0",
+      "packageVersion": "0.3.0",
       "postureGroups": [
         {
           "capabilities": [
@@ -818,7 +836,7 @@
           "reason": "The diagnostic schema constant belongs to the build-time CLI package and is not request-handler authority."
         }
       ],
-      "sourceTreeSha256": "faa48bad2c3edc6c8df08a3624f694995a3626c61af26353968a6c4a9894c3bd"
+      "sourceTreeSha256": "11bddcc7f18b343f264744010f337ae28970dcad29500d16788573d3d3b94720"
     },
     {
       "manifestVariants": [
@@ -865,7 +883,7 @@
             "./internal/wire-input-grammar": "./src/internal/wire-input-grammar.ts",
             "./internal/wire-json": "./src/internal/wire-json.ts"
           },
-          "fingerprint": "sha256:21b4bb1e1be31c1055c7fbd72e4e0bcda97540498c819c1cef038ecdc89bc5f5"
+          "fingerprint": "sha256:1d505295ce69a50bcdb3f434fb6a2eed35ca20c5f353ae86c08c28a5b3b1ec68"
         },
         {
           "exports": {
@@ -1030,11 +1048,11 @@
               "default": "./dist/internal/wire-json.mjs"
             }
           },
-          "fingerprint": "sha256:457819560fb289eb0f382feb4635e42d2bd1711e0f11701031ba0d636b75f2f8"
+          "fingerprint": "sha256:21df25de397fff0639cd204e15712acfb9dfcbc54e46fbf5acddada0050f7086"
         }
       ],
       "packageName": "@kovojs/core",
-      "packageVersion": "0.2.0",
+      "packageVersion": "0.3.0",
       "postureGroups": [
         {
           "capabilities": [],
@@ -1726,7 +1744,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "a8dac42acf8061deee2b2fc7fbe78ea0deb370810920207a2161b874f8c807bc"
+      "sourceTreeSha256": "ee83fbec493f21c3755d72ea8d7824d717c0350965353640b4547f416f11baa8"
     },
     {
       "manifestVariants": [
@@ -1753,7 +1771,7 @@
               "default": "./dist/static.mjs"
             }
           },
-          "fingerprint": "sha256:50b4ecab6c1cf42f9413a9fd115b04cffe9aa94046978130ca273b28c4083d6f"
+          "fingerprint": "sha256:33536f15d5891c9c210b0e2558da2ba54535a32a60e491a513f71499f3c9e5eb"
         },
         {
           "exports": {
@@ -1778,7 +1796,7 @@
               "default": "./dist/static.mjs"
             }
           },
-          "fingerprint": "sha256:5aac6d4b2c75686e77ec4bf611b6f1e0d4f70d43aef945b34666ef514433c825"
+          "fingerprint": "sha256:5ee315fc4542c996f5e9afa37e7650c88ab8854fbac1ba7bac3fbd3a14c8afcb"
         },
         {
           "exports": {
@@ -1788,11 +1806,11 @@
             "./internal/runtime-metadata": "./src/runtime-metadata-internal.ts",
             "./internal/static": "./src/static.ts"
           },
-          "fingerprint": "sha256:ddeb653edb811d7d214ba36f4569cbdc0641fa9033015c792e3fb6551a86c936"
+          "fingerprint": "sha256:91ec25959d49bc830feb3cda7b48318d7cb7f53d2bed630410f9b5d45db1f418"
         }
       ],
       "packageName": "@kovojs/drizzle",
-      "packageVersion": "0.2.0",
+      "packageVersion": "0.3.0",
       "postureGroups": [
         {
           "capabilities": [],
@@ -2005,7 +2023,7 @@
           "securityRole": "trust-escape"
         }
       ],
-      "sourceTreeSha256": "2eab46e8537db4df7c771f4d61d8dcb42c9c35bad4410014b0fe1b154988d65e"
+      "sourceTreeSha256": "7ffdbd4811641ed76e32895dfb29affcb433411741184b5fd594abd5e201b7f5"
     },
     {
       "manifestVariants": [
@@ -2050,7 +2068,7 @@
             "./internal": "./src/internal.ts",
             "./internal/primitive": "./src/primitive-internal.ts"
           },
-          "fingerprint": "sha256:28c97b200b5d592458a4d9c0a71ec9478e5e13e4b951addd9f9c1e70999a6ddc"
+          "fingerprint": "sha256:0a9970c2674ea28916a5dcd4bc1ddc3988870ea7415a5f3e621caabd807e1950"
         },
         {
           "exports": {
@@ -2207,7 +2225,7 @@
               "default": "./dist/primitive-internal.mjs"
             }
           },
-          "fingerprint": "sha256:566be5dc4f75d17d26d879a6ef19955e8b0cfccf2a5f5af95ac5962ee81c4873"
+          "fingerprint": "sha256:3a83e419db5896d9476271fee4990e7fecdcd31d1f47ff09b7c9d6b4ea759702"
         },
         {
           "exports": {
@@ -2364,11 +2382,11 @@
               "default": "./dist/primitive-internal.mjs"
             }
           },
-          "fingerprint": "sha256:61bf98bdded63876cd0d44c4348f055b3e01adb914aeda81b245a0e594fbda4a"
+          "fingerprint": "sha256:a1f39294729d8f1796a2ea092e545e6c5cbc5584cb2f00be8af5d8c85e66c47f"
         }
       ],
       "packageName": "@kovojs/headless-ui",
-      "packageVersion": "0.2.0",
+      "packageVersion": "0.3.0",
       "postureGroups": [
         {
           "capabilities": [],
@@ -2755,7 +2773,7 @@
             "./index": null,
             "./*": "./src/*.tsx"
           },
-          "fingerprint": "sha256:495356eda7f81e5b89c3a94120b8960324380db5bae5e744f4079e0f8bfe61f9"
+          "fingerprint": "sha256:26d77d7c05a02b35a01266800557e3dbbbda0793f410b0bdf95ececaa1a6be6d"
         },
         {
           "exports": {
@@ -2769,7 +2787,7 @@
               "default": "./dist/*.mjs"
             }
           },
-          "fingerprint": "sha256:4984e4b9a88f9511704da8a75b2b56957caf55b585e9934d026697f7ddddd3e8"
+          "fingerprint": "sha256:4d5ea652b36a16379cfc064ca4b95f88d77133380a81999e56be9d4569c6aefe"
         },
         {
           "exports": {
@@ -2783,11 +2801,11 @@
               "default": "./dist/*.mjs"
             }
           },
-          "fingerprint": "sha256:aae5b0d89c3171c7706c80055757c8ec4a2671b3b287a9773fc39e593aaa7323"
+          "fingerprint": "sha256:53e3821425a74b1a470b1ec41ceb100a3735aafe7e6809587d90ad297fbe7795"
         }
       ],
       "packageName": "@kovojs/icons",
-      "packageVersion": "0.2.0",
+      "packageVersion": "0.3.0",
       "postureGroups": [
         {
           "capabilities": [],
@@ -13339,7 +13357,7 @@
             "./jsx-runtime": "./src/jsx-runtime.ts",
             "./jsx-dev-runtime": "./src/jsx-runtime.ts"
           },
-          "fingerprint": "sha256:3e3c3251bb018b16bb76a2cf434811ecf0eaa69c34ba1757f04af31c16134558"
+          "fingerprint": "sha256:40aebdee78710334a21d907c9f7dd4717c39d854474b33413d434179be900ce8"
         },
         {
           "exports": {
@@ -13612,7 +13630,7 @@
               "default": "./dist/jsx-runtime.mjs"
             }
           },
-          "fingerprint": "sha256:a7a1218ed0a55135ee7cf9411e53536240097acb79c2efeff970e207c49fee60"
+          "fingerprint": "sha256:47b1a722c603df8231fda098af8d914733ba7a58e9dd363f32e4705eea5d04e1"
         },
         {
           "exports": {
@@ -13885,11 +13903,11 @@
               "default": "./dist/jsx-runtime.mjs"
             }
           },
-          "fingerprint": "sha256:b295fb9f6609d07fff1d2f43b3eb8d2c6482e27ba8498c0690205f45c36662d5"
+          "fingerprint": "sha256:5fc1fe655abf6ac1f3c6cdfb466fb4d89001d1896612620c8b42b875270fbf20"
         }
       ],
       "packageName": "@kovojs/server",
-      "packageVersion": "0.2.0",
+      "packageVersion": "0.3.0",
       "postureGroups": [
         {
           "capabilities": [],
@@ -17358,7 +17376,7 @@
           "reason": "derived binds a reviewed adapter to the current request principal through the canonical ScopedKey containment door."
         }
       ],
-      "sourceTreeSha256": "65e963d73becbb6a684791c68af5e49027348df37a04d2a1674b867a75f12382"
+      "sourceTreeSha256": "96c7c55cb9655556d8f6c30383909fd275cf20fb292070fb7b1f5b619d0f58fd"
     },
     {
       "manifestVariants": [
@@ -17367,7 +17385,7 @@
             ".": "./src/index.ts",
             "./internal": "./src/internal.ts"
           },
-          "fingerprint": "sha256:2e071714c73748fd43018c9c06e8bab0b41326ee0d43c1b3af862f6a125778b0"
+          "fingerprint": "sha256:0dcc9bb20da88bbdda16cdbb8be939edc7799494812d0c5557d1b49cc2c2c08f"
         },
         {
           "exports": {
@@ -17380,11 +17398,11 @@
               "default": "./dist/internal.mjs"
             }
           },
-          "fingerprint": "sha256:9a09667d56aa28967a1c39841f624ddea3bf7c784a0de6a0de2df8a17b4e57b1"
+          "fingerprint": "sha256:4c800785cab3f08611a2e07563d58eedd2bc3863135d260b11ad3dcc470ed997"
         }
       ],
       "packageName": "@kovojs/style",
-      "packageVersion": "0.2.0",
+      "packageVersion": "0.3.0",
       "postureGroups": [
         {
           "capabilities": [],
@@ -17543,7 +17561,7 @@
               "default": "./dist/sqlite.mjs"
             }
           },
-          "fingerprint": "sha256:2e9eb36faf23361a91802dd3361206adeed601f5caee80d49cd647df9b806eba"
+          "fingerprint": "sha256:722baa67dd365e87d6db79290aafe7c8dac37de0177c3e0983d5475c4ccd580f"
         },
         {
           "exports": {
@@ -17636,7 +17654,7 @@
               "default": "./dist/sqlite.mjs"
             }
           },
-          "fingerprint": "sha256:79b7df9280a3dad6528c21761228537106b84570c920a33d8b6aa1bf257532ba"
+          "fingerprint": "sha256:9d9928bbcdd218e3f2ede581ce4e692b2f92151518476298e47316bb6d06b20a"
         },
         {
           "exports": {
@@ -17663,11 +17681,11 @@
             "./postgres": "./src/postgres.ts",
             "./sqlite": "./src/sqlite.ts"
           },
-          "fingerprint": "sha256:928d9d4769cd4fa42351462d45b47a656f6a81274b2264ff68ab17671a8aea97"
+          "fingerprint": "sha256:f5c4c79b1341aaebdafda2fb077ef53f195f6fddc8016e53e7c2cf7b1d20e1fd"
         }
       ],
       "packageName": "@kovojs/test",
-      "packageVersion": "0.2.0",
+      "packageVersion": "0.3.0",
       "postureGroups": [
         {
           "capabilities": [],
@@ -17907,7 +17925,7 @@
           "securityRole": "request-closed"
         }
       ],
-      "sourceTreeSha256": "c848a29c621fdde08fbbeee887d76841417037d91a7b1b8e85a36ed67910316f"
+      "sourceTreeSha256": "230cbf137a72ce422478bb0b3d0c68f932980dc3194fcf294e84eb43c39b85fb"
     },
     {
       "manifestVariants": [
@@ -17958,7 +17976,7 @@
             "./toast": "./src/toast.tsx",
             "./toolbar": "./src/toolbar.tsx"
           },
-          "fingerprint": "sha256:017f1568b1680d64beb230c9a5f0bc2d514d60f6f471bd8a325bf5b76fba4c43"
+          "fingerprint": "sha256:0746b0c55d57bd416d7877d8a6cb5ad596d18065fb9cd4d6440321cd502f442f"
         },
         {
           "exports": {
@@ -18139,7 +18157,7 @@
               "default": "./dist/toolbar.mjs"
             }
           },
-          "fingerprint": "sha256:f9ff803baed08af99f02652c73807af5276e064e9463932bb275ead591e9870c"
+          "fingerprint": "sha256:09f014a87f1282e91aa84a358b4a25838452ee07c83fc3455210fdf93a489e1a"
         },
         {
           "exports": {
@@ -18320,11 +18338,11 @@
               "default": "./dist/toolbar.mjs"
             }
           },
-          "fingerprint": "sha256:fb69d904fd84fc5e7ea3e59cc60a7188ec108ce496e129bbc72e0f266748c5b9"
+          "fingerprint": "sha256:340265d482b71fa012e8261017154c79720d6a0e6f023049ee56f670db0c7181"
         }
       ],
       "packageName": "@kovojs/ui",
-      "packageVersion": "0.2.0",
+      "packageVersion": "0.3.0",
       "postureGroups": [
         {
           "capabilities": [],
@@ -18792,13 +18810,6 @@
       "manifestVariants": [
         {
           "exports": {
-            ".": "./src/index.ts",
-            "./internal/translation": "./src/translation.ts"
-          },
-          "fingerprint": "sha256:4cfef6fff31ab5f4811bc23702d6573f64b6edbff2d5042455a67b7ffa64f35c"
-        },
-        {
-          "exports": {
             ".": {
               "types": "./dist/index.d.mts",
               "default": "./dist/index.mjs"
@@ -18808,11 +18819,18 @@
               "default": "./dist/translation.mjs"
             }
           },
-          "fingerprint": "sha256:5e8b5c0e6f1f05b5400e7201a57100ce3ab816a69a8d7628fda525f6e9d95b03"
+          "fingerprint": "sha256:1cfe6e486757c3d5f006172f95fb8cc4686788a33b1ada8ba94adf94d4e1ffb6"
+        },
+        {
+          "exports": {
+            ".": "./src/index.ts",
+            "./internal/translation": "./src/translation.ts"
+          },
+          "fingerprint": "sha256:dc4988958daa159ecc420767d26ee6216c12a5c7e17d96142bd1cea0ad629f49"
         }
       ],
       "packageName": "@kovojs/verify",
-      "packageVersion": "0.2.0",
+      "packageVersion": "0.3.0",
       "postureGroups": [
         {
           "capabilities": [
