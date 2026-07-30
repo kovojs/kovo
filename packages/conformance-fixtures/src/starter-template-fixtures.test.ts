@@ -519,8 +519,8 @@ export function applyKovoDeferredStreamResponse(body, options = {}) {
       },
       {
         manifest: {
-          name: '@kovojs/conformance-drizzle-pin',
-          scripts: { test: 'vitest --run src/index.test.ts' },
+          name: '@kovojs/conformance-app-contract-spike',
+          scripts: { test: 'vitest --run src/index-v6.test.ts src/artifacts-v6.test.ts' },
         },
       },
     ];
@@ -530,7 +530,7 @@ export function applyKovoDeferredStreamResponse(body, options = {}) {
         runPnpmFilterTaskCommand(
           [
             'pnpm --filter @kovojs/conformance-auth-spike test',
-            'pnpm --filter @kovojs/conformance-drizzle-pin test',
+            'pnpm --filter @kovojs/conformance-app-contract-spike test',
           ].join(' && '),
           packages,
           { cwd: root },
@@ -538,10 +538,10 @@ export function applyKovoDeferredStreamResponse(body, options = {}) {
       ).resolves.toEqual({
         observed: [
           { packageName: '@kovojs/conformance-auth-spike', script: 'test' },
-          { packageName: '@kovojs/conformance-drizzle-pin', script: 'test' },
+          { packageName: '@kovojs/conformance-app-contract-spike', script: 'test' },
         ],
         output:
-          'pnpm-filter-test @kovojs/conformance-auth-spike\npnpm-filter-test @kovojs/conformance-drizzle-pin\n',
+          'pnpm-filter-test @kovojs/conformance-auth-spike\npnpm-filter-test @kovojs/conformance-app-contract-spike\n',
       });
       await expect(
         runPnpmFilterTaskCommand('pnpm --filter @kovojs/conformance-auth-spike test', packages, {

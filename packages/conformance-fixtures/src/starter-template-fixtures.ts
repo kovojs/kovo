@@ -486,7 +486,8 @@ const observedTestScript = scriptsByPackage[packageName]?.test;
 assert.ok(
   observedTestScript === 'vitest --run' ||
     observedTestScript === 'vitest --run src/index.test.ts' ||
-    observedTestScript === 'vitest --run src/index-v6.test.ts',
+    observedTestScript === 'vitest --run src/index-v6.test.ts' ||
+    observedTestScript === 'vitest --run src/index-v6.test.ts src/artifacts-v6.test.ts',
   \`\${packageName} exposes the expected conformance test command (got: \${observedTestScript})\`,
 );
 appendFileSync(process.env.KOVO_CONFORMANCE_OBSERVED, JSON.stringify({ packageName, script: args[2] }) + '\\n');
