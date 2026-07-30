@@ -8,6 +8,7 @@ import {
   assertPackedDocsJourney,
   assertPackedMcpLifecycle,
   assertPackedSemanticApiBoundary,
+  PACKED_DEV_READY_HARNESS_TIMEOUT_MS,
   productionDependencyNamesFromLockfile,
   sourceImportsPackage,
 } from './check-packed-cli-consumer.mjs';
@@ -24,6 +25,14 @@ ${packages.map((name) => `  '${name}@1.0.0': {}`).join('\n')}
 }
 
 describe('packed CLI consumer proof', () => {
+  it('keeps readiness observation grace separate from the cold-start performance target', () => {
+    const budgets = JSON.parse(
+      readFileSync(new URL('../devex-budgets.json', import.meta.url), 'utf8'),
+    );
+    expect(PACKED_DEV_READY_HARNESS_TIMEOUT_MS).toBe(60_000);
+    expect(budgets.metrics['dev.ready.cold.durationMs'].provisionalTarget).toBe(15_000);
+  });
+
   it('binds its authored app fixture to one literal receiver identity', () => {
     const source = readFileSync(
       new URL('./check-packed-cli-consumer.mjs', import.meta.url),

@@ -797,7 +797,7 @@ export default app.assemble({ routes: [home] });
 }
 
 async function waitForPackedDevReady(output, exitCode) {
-  const deadline = Date.now() + 45_000;
+  const deadline = Date.now() + PACKED_DEV_READY_HARNESS_TIMEOUT_MS;
   while (Date.now() < deadline) {
     const current = output();
     const match = /Local URL\s+(http:\/\/127\.0\.0\.1:(?!0\/)\d+\/)/u.exec(current.stdout);
@@ -812,6 +812,8 @@ async function waitForPackedDevReady(output, exitCode) {
   const current = output();
   throw new Error(`Packed kovo dev readiness timed out.\n${current.stdout}\n${current.stderr}`);
 }
+
+export const PACKED_DEV_READY_HARNESS_TIMEOUT_MS = 60_000;
 
 async function stopPackedDev(child) {
   if (child.exitCode !== null) return;
