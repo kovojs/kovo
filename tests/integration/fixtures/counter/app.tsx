@@ -5,7 +5,8 @@
 // the plugin claims any module whose source contains the call token for a Kovo
 // component (vite.ts), so keep that token out of comments in non-component modules.
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { CountBadge } from './count-badge';

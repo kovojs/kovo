@@ -1,6 +1,7 @@
 // L0 platform fixture: native dialog invoker attributes are ordinary light DOM
 // and need no Kovo client handler import (SPEC §4.2, §5.2).
-import { createApp, route } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 const homeRoute = route('/', {

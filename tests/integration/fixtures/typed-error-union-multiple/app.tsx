@@ -2,7 +2,8 @@
 // Mutation wire fixture for SPEC.md §6.3 and §9.2: one mutation can expose
 // multiple declared typed errors and render the selected branch on the wire.
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { CheckoutForm } from './checkout-form';

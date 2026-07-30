@@ -1,7 +1,8 @@
 /** @jsxImportSource @kovojs/server */
 // SPEC §6.5 + §9.5: the request shell resolves the sessionProvider once, then
 // route/query/mutation guards and handlers observe that same session value.
-import { createApp, domain, endpoint, guards, mutation, query, route, s } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { domain, endpoint, guards, mutation, query, route, s } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 interface AppSession {

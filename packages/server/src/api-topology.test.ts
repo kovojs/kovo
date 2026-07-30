@@ -183,6 +183,7 @@ describe('@kovojs/server public topology', () => {
   it('does not duplicate advanced authorities or framework carriers at root', () => {
     for (const name of [
       'agent',
+      'createApp',
       'createPostgresAppRuntimeDb',
       'createRequestHandler',
       'createSigningKeyRing',

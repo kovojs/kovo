@@ -3,7 +3,8 @@
 // while the success response is generated from the mutation's changed domain and
 // the live query-backed component attested by the browser.
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { SubmitControls } from './submit-controls';

@@ -90,7 +90,8 @@ function isImport(candidate: ScannedBindingCandidate, imported: string): boolean
 describe('SPEC §6.6 JSX lexical provenance', () => {
   it('keeps a local generator invocation distinct from imported framework roots', () => {
     const { call } = analyzeSource(`
-      import { createApp, publicAccess, route } from '@kovojs/server';
+      import { createApp } from '@kovojs/server/internal/fixture-app';
+import { publicAccess, route } from '@kovojs/server';
       const safe = route('/', {
         access: publicAccess('local generator provenance'),
         page() {

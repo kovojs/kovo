@@ -1,7 +1,8 @@
 /** @jsxImportSource @kovojs/server */
 // SPEC.md §9.2/§10.3: unexpected mutation failures inside a configured
 // transaction roll back writes and return sanitized server-error responses.
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { mutation, route, s } from '@kovojs/server';
 import { frameworkManagedDbRawTarget } from '@kovojs/server/internal/execution';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 import type { PgliteStatementInput } from '@kovojs/test/pglite';

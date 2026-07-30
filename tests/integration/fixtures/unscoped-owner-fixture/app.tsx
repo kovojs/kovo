@@ -1,6 +1,7 @@
 // SPEC.md §10.1/§10.3: owner-scoped request paths must derive row ownership
 // from the resolved session and avoid serving cross-user rows.
-import { createApp, domain, guards, query, route, s } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { domain, guards, query, route, s } from '@kovojs/server';
 import { runQuery } from '@kovojs/test/internal/integration/fixture-abi';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 

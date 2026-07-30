@@ -1,5 +1,6 @@
 /** @jsxImportSource @kovojs/server */
-import { createApp, route } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 import { PrimitiveStateAttrsCard } from './state-card';

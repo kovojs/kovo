@@ -233,7 +233,7 @@ describe('@kovojs/drizzle capability-escape collector (SPEC §6.6, audit-only, M
 
   it('surfaces one egress allowInternal entry per host:port', () => {
     const capabilities = capabilitiesFor(`
-      import { createApp } from '@kovojs/server';
+      import { createApp } from '@kovojs/server/internal/fixture-app';
       export const app = createApp({
         egress: {
           allowInternal: ['10.0.0.5:9090', '10.0.0.6:9091'],

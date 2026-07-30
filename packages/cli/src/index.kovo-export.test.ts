@@ -21,6 +21,10 @@ const repoRoot = process.cwd();
 
 function symlinkServerPackage(root: string): void {
   mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+  symlinkSync(
+    join(repoRoot, 'packages/conformance-fixtures'),
+    join(root, 'node_modules/@kovojs/conformance-fixtures'),
+  );
   symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
   symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
   symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
@@ -36,7 +40,7 @@ function appModuleSource(options: {
   const exportPrefix = options.exportKind === 'named' ? 'export const app = ' : 'export default ';
 
   return [
-    ...(closed ? ["import { createApp } from '@kovojs/server';"] : []),
+    ...(closed ? ["import { createApp } from '@kovojs/server/internal/fixture-app';"] : []),
     "import { trustedHtml } from '@kovojs/browser';",
     ...(options.prelude ?? []),
     ...(closed
@@ -204,7 +208,8 @@ describe('kovo export', () => {
         [
           '/** @jsxImportSource @kovojs/server */',
           "import { component } from '@kovojs/core';",
-          "import { createApp, publicAccess, query, route } from '@kovojs/server';",
+          "import { createApp } from '@kovojs/server/internal/fixture-app';",
+          "import { publicAccess, query, route } from '@kovojs/server';",
           '',
           "const greetingQuery = query('greeting', {",
           "  access: publicAccess('static export component query'),",

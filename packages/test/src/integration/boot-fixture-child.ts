@@ -19,7 +19,6 @@ import {
 } from '@kovojs/compiler/internal';
 import { toNodeHandler } from '@kovojs/server/node';
 import { shouldHandleKovoAppShellViteRequest } from '@kovojs/server/internal/app-shell-vite';
-import { resolveKovoAppToken } from '@kovojs/server/internal/build';
 import { dataPlaneSourceFiles } from '@kovojs/server/internal/data-plane-static-analysis';
 import { createServer as createViteServer } from 'vite';
 
@@ -139,11 +138,12 @@ export async function bootFixtureInLockedChild(
   });
 
   let instance: FixtureInstance;
+  let routingApp: Parameters<typeof shouldHandleKovoAppShellViteRequest>[1];
   let unregisterSqlSnapshotter = (): void => {};
   try {
-    // SPEC §6.6 rule 6: establish both security roots in this exact `ssr.noExternal`
-    // module graph before Vite evaluates any authored fixture dependency. A native test-runner
-    // import does not protect the separately instantiated SSR copies.
+    // SPEC §6.6 rule 6: establish the Node SQL parser authority and both security roots in this
+    // exact `ssr.noExternal` module graph before Vite evaluates any authored fixture dependency.
+    // A native test-runner import does not protect the separately instantiated SSR copies.
     const compilerBootstrapModule = await vite.ssrLoadModule(
       '@kovojs/compiler/internal/security-bootstrap',
     );
@@ -156,6 +156,7 @@ export async function bootFixtureInLockedChild(
       );
     }
     lockCompilerSecurityRealm();
+    await vite.ssrLoadModule('@kovojs/server/internal/sql-parser-authority-bootstrap');
     await vite.ssrLoadModule('@kovojs/server/runtime-bootstrap');
     const executionModule = await vite.ssrLoadModule('@kovojs/server/internal/execution');
     const registerGeneratedBrowserPostureManifest = (
@@ -180,7 +181,8 @@ export async function bootFixtureInLockedChild(
       );
     }
     unregisterSqlSnapshotter = registerFrameworkSqlSnapshotter(snapshotManagedSqlStatement);
-    const serverModule = await vite.ssrLoadModule('@kovojs/server');
+    const customAdaptersModule = await vite.ssrLoadModule('@kovojs/server/custom-adapters');
+    const fixtureAppModule = await vite.ssrLoadModule('@kovojs/server/internal/fixture-app');
     const managedDbModule = await vite.ssrLoadModule('@kovojs/server/internal/managed-db');
     const appShellModule = await vite.ssrLoadModule('@kovojs/server/internal/app-shell-vite');
     const runWithGeneratedLiveTargetRegistry = verifierReflectGet(
@@ -214,9 +216,20 @@ export async function bootFixtureInLockedChild(
         `Fixture entry ${entry} must \`export default defineFixture(...)\` (exports: ${exportedKeys}).${hint}`,
       );
     }
-    const createRequestHandler = fixtureRequestHandlerFactory(serverModule);
-    const prepareApp = fixtureAppPreparer(appShellModule, managedDbModule);
+    const createRequestHandler = fixtureRequestHandlerFactory(customAdaptersModule);
+    const prepareApp = fixtureAppPreparer(appShellModule, fixtureAppModule, managedDbModule);
     instance = await createFixtureInstance(descriptor, createRequestHandler, prepareApp);
+    const resolveFixtureAppToken = (
+      fixtureAppModule as { resolveFixtureAppToken?: unknown }
+    ).resolveFixtureAppToken;
+    if (typeof resolveFixtureAppToken !== 'function') {
+      throw new TypeError(
+        'Fixture server could not resolve its opaque app token for native request routing.',
+      );
+    }
+    routingApp = verifierApply(resolveFixtureAppToken, undefined, [
+      instance.app,
+    ]) as Parameters<typeof shouldHandleKovoAppShellViteRequest>[1];
   } catch (error) {
     unregisterSqlSnapshotter();
     await vite.close();
@@ -228,10 +241,7 @@ export async function bootFixtureInLockedChild(
     void (async () => {
       if (await tryServeBuiltAsset(req.url ?? '/', distAssetsDir, res)) return;
       if (
-        shouldHandleKovoAppShellViteRequest(
-          req,
-          resolveKovoAppToken(instance.app, 'Kovo fixture request routing'),
-        )
+        shouldHandleKovoAppShellViteRequest(req, routingApp)
       ) {
         await nodeHandler(req, res);
         return;
@@ -262,23 +272,38 @@ export async function bootFixtureInLockedChild(
   };
 }
 
-function fixtureRequestHandlerFactory(serverModule: unknown): FixtureRequestHandlerFactory {
-  const createRequestHandler = (serverModule as { createRequestHandler?: unknown })
+function fixtureRequestHandlerFactory(customAdaptersModule: unknown): FixtureRequestHandlerFactory {
+  const createRequestHandler = (customAdaptersModule as { createRequestHandler?: unknown })
     .createRequestHandler;
   if (typeof createRequestHandler !== 'function') {
     throw new TypeError(
-      'Fixture server could not load @kovojs/server.createRequestHandler from the fixture SSR graph.',
+      'Fixture server could not load @kovojs/server/custom-adapters.createRequestHandler from the fixture SSR graph.',
     );
   }
   return createRequestHandler as FixtureRequestHandlerFactory;
 }
 
-function fixtureAppPreparer(serverModule: unknown, managedDbModule: unknown): FixtureAppPreparer {
+function fixtureAppPreparer(
+  serverModule: unknown,
+  fixtureAppModule: unknown,
+  managedDbModule: unknown,
+): FixtureAppPreparer {
   const deriveClosedKovoApp = (serverModule as { deriveClosedKovoApp?: unknown })
     .deriveClosedKovoApp;
   if (typeof deriveClosedKovoApp !== 'function') {
     throw new TypeError(
       'Fixture server could not load @kovojs/server deriveClosedKovoApp from the fixture SSR graph.',
+    );
+  }
+  const createFixtureAppToken = (
+    fixtureAppModule as { createFixtureAppToken?: unknown }
+  ).createFixtureAppToken;
+  const resolveFixtureAppToken = (
+    fixtureAppModule as { resolveFixtureAppToken?: unknown }
+  ).resolveFixtureAppToken;
+  if (typeof createFixtureAppToken !== 'function' || typeof resolveFixtureAppToken !== 'function') {
+    throw new TypeError(
+      'Fixture server could not establish the opaque fixture-app token bridge in the fixture SSR graph.',
     );
   }
   const createDispatchProxy = (
@@ -369,14 +394,17 @@ function fixtureAppPreparer(serverModule: unknown, managedDbModule: unknown): Fi
       },
       'test-fixture',
     ]);
+    const runtimeApp = verifierApply(resolveFixtureAppToken, undefined, [app]);
+    const derivedRuntimeApp = verifierApply(deriveClosedKovoApp, undefined, [
+      runtimeApp,
+      {
+        db: () => bridgedDb,
+      },
+    ]);
     return verifierFreeze({
-      app: verifierApply(deriveClosedKovoApp, undefined, [
-        app,
-        {
-          db: () => bridgedDb,
-        },
-      ]),
+      app: verifierApply(createFixtureAppToken, undefined, [derivedRuntimeApp]),
       managesDb: true,
+      runtimeApp: derivedRuntimeApp,
     });
   };
 }

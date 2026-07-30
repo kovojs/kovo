@@ -3,6 +3,7 @@
 // the app object closes over a mutable `db` holder, so the same request handler
 // keeps working across resets without rebuilding the Vite module graph.
 import type { KovoApp, RequestHandler } from '@kovojs/server/custom-adapters';
+import type { KovoApp as RuntimeKovoApp } from '@kovojs/server/internal/build';
 import {
   kovoDeclaredWriteDbHandle,
   kovoReadonlyDbHandle,
@@ -86,6 +87,8 @@ export interface PreparedFixtureApp {
   app: KovoApp;
   /** Whether the prepared app owns `request.db` through the framework lifecycle. */
   managesDb: boolean;
+  /** @internal Resolved aggregate used only for framework-owned verification snapshots. */
+  runtimeApp?: RuntimeKovoApp;
 }
 
 export type FixtureAppPreparer = (
@@ -145,7 +148,9 @@ export async function createFixtureInstance(
     const prepared = verifier ? (await verifier.captureSetup(setup)).result : await setup();
     app = prepared.app;
     appManagesDb = prepared.managesDb;
-    queryReadPolicy = verifier ? snapshotQueryReadPolicy(app) : verifierMap();
+    queryReadPolicy = verifier
+      ? snapshotQueryReadPolicy(prepared.runtimeApp ?? (app as unknown as RuntimeKovoApp))
+      : verifierMap();
     routeReadPolicy = verifier ? stableRouteReadPolicy : verifierMap();
     dispatch = createRequestHandler(app);
   };
@@ -295,7 +300,7 @@ function snapshotVerificationRoute(request: Request): FixtureVerificationRoute {
   return verifierFreeze({ kind: 'route', pathname });
 }
 
-function snapshotQueryReadPolicy(app: KovoApp): QueryReadPolicy {
+function snapshotQueryReadPolicy(app: RuntimeKovoApp): QueryReadPolicy {
   const queriesDescriptor = verifierGetOwnPropertyDescriptor(app, 'queries');
   if (queriesDescriptor === undefined || !('value' in queriesDescriptor)) {
     throw new TypeError('fixture app.queries must be a stable own data property.');

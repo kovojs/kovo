@@ -1,3 +1,5 @@
+import '@kovojs/server/internal/sql-parser-authority-bootstrap';
+
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

@@ -1,5 +1,6 @@
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, domain, query, route } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { domain, query, route } from '@kovojs/server';
 import {
   defineFixture,
   type KovoFixtureReaderRequest,

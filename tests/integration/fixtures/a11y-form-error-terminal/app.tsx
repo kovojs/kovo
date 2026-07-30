@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 // SPEC §9.2 + §12.1: enhanced validation errors retain field/error relationships.
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { mutation, route, s } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 import { NewsletterForm } from './newsletter-form';

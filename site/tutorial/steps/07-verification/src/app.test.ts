@@ -3,10 +3,10 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { compileRouteModule } from '@kovojs/compiler';
+import { createApp } from '@kovojs/server/internal/fixture-app';
 import { renderRouteHtml } from '@kovojs/server/rendering';
 import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/test/csrf';
 import { accessFactsFromApp } from '../../../../../packages/server/src/internal/execution.js';
-import { createApp } from '../../../../../packages/server/src/app.js';
 import { renderRoutePageResponse } from '../../../../../packages/server/src/internal/route.js';
 import {
   componentLiveTargetRenderer,

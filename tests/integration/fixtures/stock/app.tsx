@@ -4,7 +4,8 @@
 // badge re-renders; on failure the app's renderFailureFragment morphs an error
 // region carrying the compiler/runtime error channel attrs (data-error-code).
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { BuyForm } from './buy-form';

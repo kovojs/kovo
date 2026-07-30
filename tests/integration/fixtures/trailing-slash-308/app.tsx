@@ -1,5 +1,6 @@
 // SPEC §9.5: trailing slashes normalize to the canonical route before matching.
-import { createApp, route, s } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { route, s } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 const productRoute = route('/products/:id', {

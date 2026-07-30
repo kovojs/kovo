@@ -2,7 +2,8 @@
 // Mutation wire fixture for SPEC.md §10.3: enhanced mutation responses rerun
 // invalidated queries after commit, so fragments and <kovo-query> carry truth.
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { BalanceBadge } from './balance-badge';

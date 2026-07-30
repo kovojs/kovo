@@ -45,7 +45,7 @@ interface CapturedReport {
 }
 
 const APP_ENTRY = '/src/app.tsx';
-const APP_SOURCE = `import { createApp } from '@kovojs/server';\nexport default createApp({ routes: [] });\n`;
+const APP_SOURCE = `import { defineKovo } from '@kovojs/server';\nconst app = defineKovo({});\nexport default app.assemble({});\n`;
 const APP_CONTRACT_SOURCE = `
 import { defineKovo } from '@kovojs/server';
 

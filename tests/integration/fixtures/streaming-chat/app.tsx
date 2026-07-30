@@ -1,5 +1,6 @@
 /** @jsxImportSource @kovojs/server */
-import { createApp, mutation, route, s, stream } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { mutation, route, s, stream } from '@kovojs/server';
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { trustedHtml } from '@kovojs/browser';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';

@@ -4,7 +4,7 @@ import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'typed-link-navigation' });
 
-test('Link() and href() produce plain anchors with path and search params', async ({ page }) => {
+test('<Link> and href() produce plain anchors with path and search params', async ({ page }) => {
   await page.goto('/');
 
   const product = page.locator('#product-link');

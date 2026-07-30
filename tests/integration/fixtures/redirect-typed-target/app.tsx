@@ -2,7 +2,8 @@
 // SPEC §6.4 + §9.1: mutation PRG redirects can be built from typed route targets
 // with params/search and still land on a normal document route.
 import { redirect, type Redirect } from '@kovojs/core';
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { mutation, route, s } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 declare module '@kovojs/core' {

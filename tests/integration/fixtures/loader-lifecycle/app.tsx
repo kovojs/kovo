@@ -2,7 +2,8 @@
 // SPEC.md §4.4/§4.7/§9.1: delegated handlers receive ctx.signal, and
 // the generated live-component mutation response aborts an island it removes.
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, mutation, route, s, stream } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { mutation, route, s, stream } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 export const swapIsland = mutation('loader-lifecycle/swap', {

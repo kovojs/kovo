@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { createApp, respond, route, stylesheet } from '@kovojs/server';
+import { defineKovo, respond, stylesheet } from '@kovojs/server';
 
 import catalogJson from '../../shared/catalog.json' with { type: 'json' };
 
@@ -12,6 +12,12 @@ const catalog = catalogJson as Product[];
 const imageDir = path.join(process.cwd(), '../shared/images');
 
 const benchmarkStylesheets = [stylesheet('../../shared/styles.css')] as const;
+const app = defineKovo({
+  document: { lang: 'en-US' },
+  renderRoute(value) {
+    return typeof value === 'string' ? value : String(value ?? '');
+  },
+});
 
 function formatPrice(price: number): string {
   return `$${price.toFixed(2)}`;
@@ -168,19 +174,22 @@ function Shell({ children }: { children: unknown }): string {
   );
 }
 
-const homeRoute = route('/', {
+const homeRoute = app.route('/', {
+  access: app.publicAccess('public benchmark catalog'),
   meta: { title: 'Kovo Supply Benchmark' },
   page: () => <Shell>{<ListingPage />}</Shell>,
   stylesheets: benchmarkStylesheets,
 });
 
-const productRoute = route('/product/:slug', {
+const productRoute = app.route('/product/:slug', {
+  access: app.publicAccess('public benchmark product details'),
   meta: { title: 'Kovo Supply Product' },
   page: (context) => <Shell>{<ProductPage product={productForSlug(context.params.slug)} />}</Shell>,
   stylesheets: benchmarkStylesheets,
 });
 
-const imageRoute = route('/images/:name', {
+const imageRoute = app.route('/images/:name', {
+  access: app.publicAccess('public immutable benchmark images'),
   page: (context) => {
     const name = String(context.params.name ?? '');
     if (!/^product-\d\d\.webp$/.test(name)) {
@@ -193,10 +202,6 @@ const imageRoute = route('/images/:name', {
   },
 });
 
-export default createApp({
-  document: { lang: 'en-US' },
-  renderRoute(value) {
-    return typeof value === 'string' ? value : String(value ?? '');
-  },
+export default app.assemble({
   routes: [homeRoute, productRoute, imageRoute],
 });

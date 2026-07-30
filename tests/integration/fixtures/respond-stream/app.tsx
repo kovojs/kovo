@@ -1,6 +1,7 @@
 // SPEC.md §6.4: stream route outcomes declare content type/disposition and remain
 // guarded routes before a body is streamed.
-import { createApp, guards, respond, route, unsafeInline } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { guards, respond, route, unsafeInline } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 interface StreamSession {

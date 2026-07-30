@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 // SPEC.md §5.3 + §11.4: explain output names the behavior surface humans drive.
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { CartBadge } from './cart-badge';

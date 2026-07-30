@@ -2,7 +2,8 @@
 // Morph survival fixture: a focused keyed input lives inside a fragment target
 // whose sibling server-truth text changes on enhanced mutation (SPEC §9.1).
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { ProfileEditor } from './profile-editor';

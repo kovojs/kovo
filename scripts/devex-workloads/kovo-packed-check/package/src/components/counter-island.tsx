@@ -1,10 +1,12 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { publicAccess, query, s } from '@kovojs/server';
+import { s } from '@kovojs/server';
+
+import { app } from '../kovo.js';
 
 export const benchmarkRevision = 0;
-export const benchmarkQuery = query({
-  access: publicAccess('DevEx packed reference query'),
+export const benchmarkQuery = app.query({
+  access: app.publicAccess('DevEx packed reference query'),
   load: () => ({ label: 'ready' }),
   output: s.object({ label: s.string() }),
 });

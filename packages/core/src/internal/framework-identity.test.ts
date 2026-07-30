@@ -127,6 +127,15 @@ describe('framework identity resolver', () => {
       module: '@kovojs/server',
     });
     expect(frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'createApp')).toBeUndefined();
+    for (const specifier of [
+      '@kovojs/server/internal/fixture-app',
+      '@kovojs/test/internal/integration/fixture-abi',
+    ]) {
+      expect(frameworkCatalogExportForModuleSpecifier(specifier, 'createApp')).toEqual({
+        exportName: 'createApp',
+        module: '@kovojs/server',
+      });
+    }
   });
 
   it('catalogs the reviewed server-root app-authoring helpers', () => {

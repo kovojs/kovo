@@ -378,7 +378,8 @@ export default {};
       );
       writeFileSync(
         appPath,
-        `import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
+        `import { createApp } from '@kovojs/server/internal/fixture-app';
+import { mutation, publicAccess, route, s } from '@kovojs/server';
 
 const lockedFilter = Array.prototype.filter;
 const poisonInstalled = Reflect.set(Array.prototype, 'filter', function omitUnsafe(values) {
@@ -429,8 +430,8 @@ export default createApp({
     try {
       writeFileSync(
         appPath,
-        `import { createApp, publicAccess, route } from '@kovojs/server'
-import { trustedHtml } from '@kovojs/browser';
+        `import { createApp } from '@kovojs/server/internal/fixture-app';
+import { publicAccess, route } from '@kovojs/server';import { trustedHtml } from '@kovojs/browser';
 
 if (Reflect.set(String.prototype, 'replace', () => 'attacker-output')) {
   throw new Error('String.replace poison unexpectedly installed');
@@ -493,7 +494,8 @@ export default {};
       );
       writeFileSync(
         appPath,
-        `import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
+        `import { createApp } from '@kovojs/server/internal/fixture-app';
+import { mutation, publicAccess, route, s } from '@kovojs/server';
 
 const unsafe = mutation('auth/restart-selective', {
   access: publicAccess('C69 restart regression'),
@@ -564,7 +566,8 @@ export default {};
       writeFileSync(
         appPath,
         `import { sql } from '@kovojs/drizzle';
-import { createApp, publicAccess, route } from '@kovojs/server';
+import { createApp } from '@kovojs/server/internal/fixture-app';
+import { publicAccess, route } from '@kovojs/server';
 
 export async function unsafe(db, input) {
   return db.execute(sql.raw(input.id));
@@ -635,7 +638,8 @@ export default {};
       );
       writeFileSync(
         appPath,
-        `import { createApp, publicAccess, route } from '@kovojs/server';
+        `import { createApp } from '@kovojs/server/internal/fixture-app';
+import { publicAccess, route } from '@kovojs/server';
 import { dangerous } from '../dangerous.ts';
 
 export default createApp({
@@ -700,7 +704,8 @@ export default {};
       );
       writeFileSync(
         appPath,
-        `import { createApp, publicAccess, route } from '@kovojs/server';
+        `import { createApp } from '@kovojs/server/internal/fixture-app';
+import { publicAccess, route } from '@kovojs/server';
 const lateModules = import.meta.glob('../late/*.ts', { eager: true });
 if (Object.keys(lateModules).length > 1) throw new Error('unexpected late module count');
 
@@ -746,7 +751,8 @@ export default createApp({
       writeFileSync(join(root, 'src/client.ts'), 'export {};\n', 'utf8');
       writeFileSync(
         appPath,
-        `import { createApp, publicAccess, route } from '@kovojs/server';
+        `import { createApp } from '@kovojs/server/internal/fixture-app';
+import { publicAccess, route } from '@kovojs/server';
 export default createApp({
   routes: [route('/', { access: publicAccess('cache symlink regression'), page: () => '<main>Safe</main>' })],
 });
@@ -777,7 +783,8 @@ export default createApp({
       writeFileSync(join(root, 'src/client.ts'), 'export {};\n', 'utf8');
       writeFileSync(
         appPath,
-        `import { createApp, publicAccess, query, route, s } from '@kovojs/server';
+        `import { createApp } from '@kovojs/server/internal/fixture-app';
+import { publicAccess, query, route, s } from '@kovojs/server';
 
 if (process.env.APP_PARANOID_MUTATION === 'enable') process.env.KOVO_PARANOID = '1';
 if (process.env.APP_PARANOID_MUTATION === 'disable') delete process.env.KOVO_PARANOID;
@@ -865,7 +872,8 @@ export default createApp({
       writeFileSync(join(root, 'src/client.ts'), 'export {};\n', 'utf8');
       writeFileSync(
         appPath,
-        `import { createApp, publicAccess, route } from '@kovojs/server';
+        `import { createApp } from '@kovojs/server/internal/fixture-app';
+import { publicAccess, route } from '@kovojs/server';
 
 process.chdir(process.env.APP_AUTHORED_CWD_MUTATION!);
 
@@ -976,7 +984,8 @@ if (
       writeFileSync(
         appPath,
         `import 'kovo-runtime-poison';
-import { createApp, endpoint, publicAccess } from '@kovojs/server';
+import { createApp } from '@kovojs/server/internal/fixture-app';
+import { endpoint, publicAccess } from '@kovojs/server';
 
 const proof = endpoint('/proof', {
   access: publicAccess('runtime intrinsic lockdown regression'),
@@ -1015,7 +1024,8 @@ export default createApp({ endpoints: [proof] });
       writeFileSync(join(root, 'src/client.ts'), 'export {};\n', 'utf8');
       writeFileSync(
         join(root, 'app.ts'),
-        `import { createApp, publicAccess, route } from '@kovojs/server';
+        `import { createApp } from '@kovojs/server/internal/fixture-app';
+import { publicAccess, route } from '@kovojs/server';
 export default createApp({
   routes: [route('/', {
     access: publicAccess('preset environment regression'),
@@ -1091,7 +1101,8 @@ export default defineConfig({ preset: sharedPreset });
       );
       writeFileSync(
         join(root, 'app.ts'),
-        `import { createApp, publicAccess, route } from '@kovojs/server';
+        `import { createApp } from '@kovojs/server/internal/fixture-app';
+import { publicAccess, route } from '@kovojs/server';
 const sharedPreset = (globalThis as any).__kovoSharedBuildPreset;
 sharedPreset.emit = async () => {};
 sharedPreset.inspect = () => [];
@@ -1140,7 +1151,8 @@ throw new Error('undeclared authored Vite config evaluated');
       );
       writeFileSync(
         appPath,
-        `import { createApp, publicAccess, route } from '@kovojs/server';
+        `import { createApp } from '@kovojs/server/internal/fixture-app';
+import { publicAccess, route } from '@kovojs/server';
 export default createApp({
   routes: [route('/', {
     access: publicAccess('C74 undeclared Vite config regression'),
@@ -1175,7 +1187,8 @@ export default createApp({
         mkdirSync(join(root, 'src'), { recursive: true });
         writeFileSync(
           join(root, 'src/app.ts'),
-          `import { createApp, publicAccess, route } from '@kovojs/server';
+          `import { createApp } from '@kovojs/server/internal/fixture-app';
+import { publicAccess, route } from '@kovojs/server';
 export default createApp({
   routes: [route('/', {
     access: publicAccess('config preflight regression'),

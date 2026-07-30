@@ -682,7 +682,6 @@ export function renderSource() {
           };
         },
         href: () => '/products/p%201?max=10',
-        Link: () => ({ href: '/products/p1' }),
         redirect: () => ({ location: '/products/p1', status: 303 }),
         routeRef: (path) => ({ path }),
         serverRoute: (path, routeOptions) => ({ load: () => routeOptions.load(), path }),
@@ -690,7 +689,6 @@ export function renderSource() {
     ).resolves.toEqual({
       core: {
         href: '/products/p%201?max=10',
-        link: { href: '/products/p1' },
         redirect: { location: '/products/p1', status: 303 },
         route: { path: '/products/:id' },
         serverRoute: { loadType: 'function', path: '/products/:id' },

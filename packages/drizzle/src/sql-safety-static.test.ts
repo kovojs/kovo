@@ -271,7 +271,8 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
     const diagnostics = diagnosticsForFile(
       'src/app.tsx',
       `
-        import { createApp, endpoint, publicAccess } from '@kovojs/server';
+        import { createApp } from '@kovojs/server/internal/fixture-app';
+import { endpoint, publicAccess } from '@kovojs/server';
         import { appRuntimeDbProvider, appRuntimeDbReady } from './_kovo/app-runtime-db.js';
         import { contactsQuery } from './queries.js';
         import { addContact } from './mutations.js';
@@ -323,7 +324,8 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
       {
         fileName: 'src/app.tsx',
         source: `
-          import { createApp, endpoint, publicAccess } from '@kovojs/server';
+          import { createApp } from '@kovojs/server/internal/fixture-app';
+import { endpoint, publicAccess } from '@kovojs/server';
           import { appRuntimeDbReady, getRawDb } from './db.js';
 
           await appRuntimeDbReady;

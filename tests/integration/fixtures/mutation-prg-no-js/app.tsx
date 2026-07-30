@@ -2,7 +2,8 @@
 // Mutation wire fixture for SPEC.md §9.1 and §9.2: without Kovo-Fragment, the
 // mutation endpoint uses POST-redirect-GET on success and full-page errors.
 import { FormError } from '@kovojs/core';
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 export const subscribe = mutation('newsletter/subscribe', {

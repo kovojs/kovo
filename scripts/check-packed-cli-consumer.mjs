@@ -720,16 +720,15 @@ async function assertPackedDevJourney(consumerRoot) {
   writeFileSync(
     path.join(consumerRoot, 'src', 'app.ts'),
     `import '@kovojs/server/runtime-bootstrap';
-import { createApp, publicAccess, route } from '@kovojs/server';
+import { defineKovo } from '@kovojs/server';
 
-export default createApp({
-  routes: [
-    route('/', {
-      access: publicAccess('packed devtool smoke'),
-      page: () => '<main>Packed dev ready</main>',
-    }),
-  ],
+const app = defineKovo({});
+const home = app.route('/', {
+  access: app.publicAccess('packed devtool smoke'),
+  page: () => '<main>Packed dev ready</main>',
 });
+
+export default app.assemble({ routes: [home] });
 `,
     'utf8',
   );

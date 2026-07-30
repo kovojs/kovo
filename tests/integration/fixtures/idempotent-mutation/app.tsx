@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 // SPEC.md §9.1/§10.3: duplicate Kovo-Idem mutation requests replay the stored response.
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { mutation, route, s } from '@kovojs/server';
 import { createMemoryMutationReplayStore } from '@kovojs/server/replay';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 

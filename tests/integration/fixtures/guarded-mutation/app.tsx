@@ -3,7 +3,8 @@
 // Unauthenticated enhanced failures return Kovo-Reauth; authenticated
 // authorization failures stay on typed mutation error fragments.
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, guards, mutation, route, s } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { guards, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { GuardedPanel } from './guarded-panel';

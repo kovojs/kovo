@@ -29,6 +29,7 @@ const REQUIRED_ROOT_EXPORTS = Object.freeze([
 ]);
 const RETIRED_ROOT_EXPORTS = Object.freeze([
   'KovoApp',
+  'createApp',
   'createRequestHandler',
   'createSigningKeyRing',
   'createVerifier',

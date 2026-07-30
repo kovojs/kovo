@@ -1,7 +1,8 @@
 // SPEC §6.4 and §9.5: route-returned notFound() and unexpected page failures
 // render the configured app error shells with stable statuses.
 import { trustedHtml } from '@kovojs/browser';
-import { createApp, notFound, route } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { notFound, route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 const homeRoute = route('/', {

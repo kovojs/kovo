@@ -3,7 +3,8 @@
 // so existing keyed rows stay connected while the new row is added (SPEC §9.1).
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { trustedHtml } from '@kovojs/browser';
-import { createApp, mutation, route, s, stream } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { mutation, route, s, stream } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 interface FeedRow {

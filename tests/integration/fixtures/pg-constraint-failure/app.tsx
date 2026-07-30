@@ -4,7 +4,8 @@
 // must surface a sanitized server error, roll the whole transaction back, and leave no
 // partial/stale state — proving PGlite gives real Postgres failure semantics.
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { mutation, route, s } from '@kovojs/server';
 import { frameworkManagedDbRawTarget } from '@kovojs/server/internal/execution';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 import type { PgliteStatementInput } from '@kovojs/test/pglite';

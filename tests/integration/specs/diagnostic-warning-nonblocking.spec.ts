@@ -1,7 +1,10 @@
 // SPEC.md §11.3: non-error diagnostics do not block dev serving.
 import { createServer, type Server } from 'node:http';
 
-import { createApp, route } from '@kovojs/server';
+import '@kovojs/server/internal/sql-parser-authority-bootstrap';
+
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { route } from '@kovojs/server';
 import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import {
   createKovoAppShellDevDiagnosticLedger,

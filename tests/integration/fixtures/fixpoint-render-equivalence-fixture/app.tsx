@@ -1,4 +1,5 @@
-import { createApp, route } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 import { FixpointRenderEquivalenceCard, type FixpointState } from './fixpoint-card';

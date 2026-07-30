@@ -82,7 +82,6 @@ export interface GeneratedTypedRouteCompileResult {
 export interface GeneratedTypedRouteNavigationBehaviorFact {
   core: {
     href: string;
-    link: { href?: string };
     redirect: { location?: string; status?: number };
     route: { path?: string };
     serverRoute: { loadType: string; path?: string };
@@ -822,14 +821,12 @@ export const ProductLinks = component({
 `;
 
 const typedRouteRegistryConsumerSource = `
-import { href, Link, redirect, routeRef } from '@kovojs/core';
+import { href, redirect, routeRef } from '@kovojs/core';
 
 href('/cart', {});
 href('/products/:id', { params: { id: 'p 1' }, search: { max: 500 } });
 redirect('/products/:id', { params: { id: 'p1' } });
 routeRef('/products/:id');
-Link('/cart', {});
-Link('/products/:id', { params: { id: 'p1' } });
 
 // @ts-expect-error generated RouteRegistry requires params for dynamic routes.
 href('/products/:id', {});
@@ -852,7 +849,6 @@ export async function generatedTypedRouteNavigationBehaviorFact(options: {
     source: string;
   }): GeneratedTypedRouteCompileResult;
   href(path: string, options?: unknown): string;
-  Link(path: string, options?: unknown): { href?: string };
   redirect(path: string, options?: unknown): { location?: string; status?: number };
   routeRef(path: string): { path?: string };
   serverRoute(path: string, options: { load(): unknown }): { load?: unknown; path?: string };
@@ -878,7 +874,6 @@ export async function generatedTypedRouteNavigationBehaviorFact(options: {
   return {
     core: {
       href: options.href('/products/:id', { params: { id: 'p 1' }, search: { max: 10 } }),
-      link: options.Link('/products/:id', { params: { id: 'p1' } }),
       redirect: options.redirect('/products/:id', { params: { id: 'p1' } }),
       route: options.routeRef('/products/:id'),
       serverRoute: {

@@ -2,7 +2,10 @@
 import { createServer, type Server } from 'node:http';
 
 import { createRegisteredDiagnostic, type DiagnosticCode } from '@kovojs/core/internal/diagnostics';
-import { createApp, route } from '@kovojs/server';
+import '@kovojs/server/internal/sql-parser-authority-bootstrap';
+
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { route } from '@kovojs/server';
 import {
   createKovoAppShellDevDiagnosticLedger,
   kovoAppShellVitePlugin,

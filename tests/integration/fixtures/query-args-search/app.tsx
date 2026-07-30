@@ -1,7 +1,8 @@
 // SPEC §9.4 + §10.2: typed read endpoints parse args from search params and
 // return chunks keyed by the canonical query instance key.
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, route, s } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { ProductCard } from './product-card';

@@ -3,7 +3,8 @@
 // validates credentials and sets a session cookie; a `guards.authed()` route reads
 // the cookie-derived session (via sessionProvider) and renders the signed-in user.
 // Exercises the public auth surface: sessionProvider, guards.authed, setCookie.
-import { createApp, guards, mutation, route, s } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { guards, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 interface AuthSession {

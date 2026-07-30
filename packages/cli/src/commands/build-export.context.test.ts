@@ -10,6 +10,10 @@ const repoRoot = process.cwd();
 
 function symlinkRuntimePackages(root: string): void {
   mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+  symlinkSync(
+    join(repoRoot, 'packages/conformance-fixtures'),
+    join(root, 'node_modules/@kovojs/conformance-fixtures'),
+  );
   symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
   symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
   symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
@@ -17,7 +21,7 @@ function symlinkRuntimePackages(root: string): void {
 
 function appModuleSource(): string {
   return [
-    "import { createApp } from '@kovojs/server';",
+    "import { createApp } from '@kovojs/server/internal/fixture-app';",
     "import { trustedHtml } from '@kovojs/browser';",
     'export default createApp({',
     '  diagnostics: [],',

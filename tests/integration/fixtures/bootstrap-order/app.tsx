@@ -1,6 +1,7 @@
 import { assertBootstrapPoisonBlocked, restoreBootstrapPoison } from './poison.js';
 import { assertCompilerSecurityIntrinsics } from '@kovojs/compiler/internal';
-import { createApp, route } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 try {

@@ -863,6 +863,7 @@ describe('server app-shell public API barrels', () => {
     expect(viteApi.kovo({ app: './src/app.tsx' }).name).toBe('kovo');
     expect(serverPackage.exports as Record<string, string>).toMatchObject({
       './generated/db-capabilities': './src/generated-db-capabilities.ts',
+      './internal/fixture-app': './src/internal/fixture-app.ts',
       './internal/testing': './src/internal/testing.ts',
       './runtime-bootstrap': './src/runtime-bootstrap.ts',
       './vite': './src/vite-source.ts',

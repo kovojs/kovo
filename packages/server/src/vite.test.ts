@@ -12,18 +12,13 @@ import { kovoVitePlugin as compilerKovoVitePlugin } from '@kovojs/compiler/vite'
 import { createKovoVitePlugin } from '../../compiler/src/vite.js';
 
 import { createApp, createRequestHandler } from './app.js';
-import {
-  assignDerivedMutationKey,
-  assignDerivedQueryKey,
-  assignDerivedWebhookName,
-} from './internal/wire.js';
+import { assignDerivedMutationKey, assignDerivedQueryKey } from './internal/wire.js';
 import { mutation } from './mutation.js';
 import { query } from './query.js';
 import { route } from './route.js';
 import { s } from './schema.js';
 import { kovo } from './vite.js';
 import type { KovoAppShellViteMiddleware } from './vite-dev.js';
-import { webhook } from './webhook.js';
 
 interface KovoViteConfigureServer {
   buildStart?(): void | Promise<void>;
@@ -115,8 +110,9 @@ export const CartButton = component({
   it('passes the compiler exact final client-module snapshot to Vite dev dispatch', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-public-vite-client-snapshot-'));
     const appSource = `
-import { createApp } from '@kovojs/server';
-export default createApp();
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({});
+export default app.assemble({});
 `;
     const componentSource = `
 import { component } from '@kovojs/core';
@@ -463,13 +459,14 @@ export const account = query({
     }
   });
 
-  it('assigns source-derived registry identities before createApp consumes app modules', async () => {
+  it('assigns source-derived registry identities before app.assemble consumes app modules', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-public-vite-derived-registry-'));
     const source = `
-import { createApp, mutation, query, s } from '@kovojs/server'
-import { webhook } from '@kovojs/server/webhooks';
+import { defineKovo, s } from '@kovojs/server';
 
-export const addToCart = mutation({
+const app = defineKovo({});
+
+export const addToCart = app.mutation({
   csrf: false,
   csrfJustification: 'fixture-only non-browser mutation identity test',
   input: s.object({ productId: s.string() }),
@@ -478,20 +475,13 @@ export const addToCart = mutation({
   },
 });
 
-export const cartQuery = query({
+export const cartQuery = app.query({
+  access: app.publicAccess('fixture-only public query'),
   load: () => ({ count: 1 }),
   reads: [],
 });
 
-export const orderPaid = webhook('/webhooks/order-paid', {
-  handler: () => undefined,
-  input: s.object({ id: s.string() }),
-  verify: 'none',
-  verifyJustification: 'fixture-only app shell test',
-});
-
-export default createApp({
-  endpoints: [orderPaid],
+export default app.assemble({
   mutations: [addToCart],
   queries: [cartQuery],
 });
@@ -505,37 +495,25 @@ export default createApp({
 
       expect(transformed).toMatchObject({ map: null });
       expect(transformed?.code).toContain(
-        "import { assignDerivedMutationKey as __kovoAssignDerivedMutationKey, assignDerivedQueryKey as __kovoAssignDerivedQueryKey, assignDerivedWebhookName as __kovoAssignDerivedWebhookName } from '@kovojs/server/internal/wire';",
+        "import { assignDerivedMutationKey as __kovoAssignDerivedMutationKey, assignDerivedQueryKey as __kovoAssignDerivedQueryKey } from '@kovojs/server/internal/wire';",
       );
       expect(transformed?.code).toContain(
-        'export const addToCart = __kovoAssignDerivedMutationKey(mutation({',
+        'export const addToCart = __kovoAssignDerivedMutationKey(app.mutation({',
       );
       expect(transformed?.code).toContain('"app-shell/add-to-cart"');
       expect(transformed?.code).toContain(
-        'export const cartQuery = __kovoAssignDerivedQueryKey(query({',
+        'export const cartQuery = __kovoAssignDerivedQueryKey(app.query({',
       );
       expect(transformed?.code).toContain('"app-shell/cart-query"');
-      expect(transformed?.code).toContain(
-        "export const orderPaid = __kovoAssignDerivedWebhookName(webhook('/webhooks/order-paid', {",
-      );
-      expect(transformed?.code).toContain('"app-shell/order-paid"');
-      expect(transformed?.code).toContain('export default createApp({');
+      expect(transformed?.code).toContain('export default app.assemble({');
       const lowered = evaluateLoweredAppShell(transformed?.code ?? '');
       expect(lowered.addToCart.key).toBe('app-shell/add-to-cart');
       expect(lowered.cartQuery.key).toBe('app-shell/cart-query');
-      expect(lowered.orderPaid).toMatchObject({
-        name: 'app-shell/order-paid',
-        path: '/webhooks/order-paid',
-        reason: 'webhook:app-shell/order-paid',
-      });
       expect(lowered.app.mutations.map((candidate) => candidate.key)).toEqual([
         'app-shell/add-to-cart',
       ]);
       expect(lowered.app.queries.map((candidate) => candidate.key)).toEqual([
         'app-shell/cart-query',
-      ]);
-      expect(lowered.app.endpoints.map((candidate) => candidate.name)).toEqual([
-        'app-shell/order-paid',
       ]);
     } finally {
       await rm(root, { force: true, recursive: true });
@@ -648,19 +626,17 @@ export default createApp({
   it('threads compiler route CSS chunks into the app-shell dev handler', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-public-vite-css-'));
     const appSource = `
-import { createApp, route } from '@kovojs/server';
+import { defineKovo } from '@kovojs/server';
 import * as style from '@kovojs/style';
 import { HomeCard } from './components/home-card.js';
 import { LoginCard } from './components/login-card.js';
 
 const shellStyles = style.create({ root: { backgroundColor: 'linen' } });
+const app = defineKovo({});
+const home = app.route('/', { page: () => <div style={shellStyles.root}><HomeCard /></div> });
+const login = app.route('/login', { page: () => <div style={shellStyles.root}><LoginCard /></div> });
 
-export default createApp({
-  routes: [
-    route('/', { page: () => <div style={shellStyles.root}><HomeCard /></div> }),
-    route('/login', { page: () => <div style={shellStyles.root}><LoginCard /></div> }),
-  ],
-});
+export default app.assemble({ routes: [home, login] });
 `;
     const homeSource = `
 import { component } from '@kovojs/core';
@@ -801,30 +777,30 @@ function runMiddlewareChain(
 function evaluateLoweredAppShell(source: string): {
   addToCart: { key: string };
   app: {
-    endpoints: Array<{ name?: string }>;
     mutations: Array<{ key: string }>;
     queries: Array<{ key: string }>;
   };
   cartQuery: { key: string };
-  orderPaid: { name: string; path: string; reason: string };
 } {
   const executable = source
     .replace(/^import .*;\n/gm, '')
     .replace('export const addToCart =', 'const addToCart =')
     .replace('export const cartQuery =', 'const cartQuery =')
-    .replace('export const orderPaid =', 'const orderPaid =')
-    .replace('export default createApp(', 'const app = createApp(');
+    .replace('export default app.assemble(', 'const assembled = app.assemble(');
   return runInNewContext(
-    `${executable}\n;({ app, addToCart, cartQuery, orderPaid });`,
+    `${executable}\n;({ app: assembled, addToCart, cartQuery });`,
     {
       __kovoAssignDerivedMutationKey: assignDerivedMutationKey,
       __kovoAssignDerivedQueryKey: assignDerivedQueryKey,
-      __kovoAssignDerivedWebhookName: assignDerivedWebhookName,
-      createApp,
-      mutation,
-      query,
+      defineKovo() {
+        return {
+          assemble: createApp,
+          mutation,
+          publicAccess: () => ({ kind: 'public' }),
+          query,
+        };
+      },
       s,
-      webhook,
     },
     { timeout: 1000 },
   );

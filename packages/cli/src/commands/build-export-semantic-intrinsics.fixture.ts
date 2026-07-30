@@ -141,7 +141,8 @@ function writeApp(root: string, source: string, fileName = 'app.mjs'): void {
 function appSource(imports: string, statement: string, declarations = ''): string {
   return `/** @jsxImportSource @kovojs/server */
 ${imports}
-import { createApp, publicAccess, route } from '@kovojs/server';
+import { createApp } from '@kovojs/server/internal/fixture-app';
+import { publicAccess, route } from '@kovojs/server';
 ${declarations}
 const semanticRoute = route('/', {
   access: publicAccess('semantic intrinsic security corpus'),

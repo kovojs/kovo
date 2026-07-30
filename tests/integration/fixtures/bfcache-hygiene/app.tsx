@@ -1,5 +1,5 @@
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
 import {
-  createApp,
   domain,
   mutation,
   query,

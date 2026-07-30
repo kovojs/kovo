@@ -1,19 +1,18 @@
 /** @jsxImportSource @kovojs/server */
-import { createApp, publicAccess, route } from '@kovojs/server';
-
 import { benchmarkQuery, CounterIsland } from './components/counter-island.js';
+import { app } from './kovo.js';
 
-export default createApp({
+const home = app.route('/', {
+  access: app.publicAccess('DevEx packed reference app'),
+  page: () => (
+    <main>
+      <h1>Kovo packed reference app</h1>
+      <CounterIsland />
+    </main>
+  ),
+});
+
+export default app.assemble({
   queries: [benchmarkQuery],
-  routes: [
-    route('/', {
-      access: publicAccess('DevEx packed reference app'),
-      page: () => (
-        <main>
-          <h1>Kovo packed reference app</h1>
-          <CounterIsland />
-        </main>
-      ),
-    }),
-  ],
+  routes: [home],
 });

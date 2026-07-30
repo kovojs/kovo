@@ -1,7 +1,8 @@
 /** @jsxImportSource @kovojs/server */
 // SPEC.md §9.1: mutation handlers may attach narrow transport headers.
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { HeaderStatus } from './header-status';

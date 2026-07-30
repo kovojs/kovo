@@ -44,7 +44,8 @@ export default defineConfig({ preset: node({ retention: {
       writeFileSync(
         appPath,
         `
-import { createApp, publicAccess, respond as response, route } from '@kovojs/server';
+import { createApp } from '@kovojs/server/internal/fixture-app';
+import { publicAccess, respond as response, route } from '@kovojs/server';
 
 export default createApp({
   routes: [
@@ -140,8 +141,8 @@ export default defineConfig({ preset: node({ retention: {
       writeFileSync(
         appPath,
         `
-import { createApp, publicAccess, route } from '@kovojs/server'
-import { rootedFiles as openRootedFiles } from '@kovojs/server/files';
+import { createApp } from '@kovojs/server/internal/fixture-app';
+import { publicAccess, route } from '@kovojs/server';import { rootedFiles as openRootedFiles } from '@kovojs/server/files';
 
 const docs = await openRootedFiles(${JSON.stringify(docsRoot)});
 

@@ -2,7 +2,8 @@
 // SPEC.md §4.4/§4.7: fragment morphs that remove islands abort their ctx.signal
 // and leave patched/replacement islands inert until a declared trigger or interaction.
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { MorphAbortShell } from './morph-abort-shell';

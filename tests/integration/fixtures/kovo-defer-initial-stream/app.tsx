@@ -1,4 +1,5 @@
-import { createApp, endpoint, type ResponseHeaders } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { endpoint, type ResponseHeaders } from '@kovojs/server';
 import { renderDeferredDocument } from '@kovojs/test/internal/integration/fixture-abi';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 

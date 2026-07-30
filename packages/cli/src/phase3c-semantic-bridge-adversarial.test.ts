@@ -153,7 +153,7 @@ describe('Phase 3C semantic carrier integrity', () => {
       {
         fileName: 'app.ts',
         source: `
-          import { createApp } from '@kovojs/server';
+          import { createApp } from '@kovojs/server/internal/fixture-app';
           import { contactsQuery } from './queries.js';
           export default createApp({ queries: [contactsQuery], routes: [] });
         `,

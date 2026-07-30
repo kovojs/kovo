@@ -26,7 +26,7 @@ const repoRoot = process.cwd();
 function appSource(refs: { click: string; href: string }): string {
   return [
     '/** @jsxImportSource @kovojs/server */',
-    "import { createApp, publicAccess, route } from '@kovojs/server'\nimport { trustedHtml } from '@kovojs/browser';",
+    "import { createApp } from '@kovojs/server/internal/fixture-app';\nimport { publicAccess, route } from '@kovojs/server';\nimport { trustedHtml } from '@kovojs/browser';",
     "import { CounterIsland } from './components/counter-island.tsx';",
     '',
     'void CounterIsland;',
@@ -276,7 +276,8 @@ describe('kovo build — browser drive (S1)', () => {
         appPath,
         [
           '/** @jsxImportSource @kovojs/server */',
-          "import { createApp, publicAccess, route } from '@kovojs/server';",
+          "import { createApp } from '@kovojs/server/internal/fixture-app';",
+          "import { publicAccess, route } from '@kovojs/server';",
           "import { trustedHtml } from '@kovojs/browser';",
           "import { StateTextIsland } from './components/state-text-island.tsx';",
           '',
@@ -398,7 +399,8 @@ describe('kovo build — browser drive (S1)', () => {
         appPath,
         [
           '/** @jsxImportSource @kovojs/server */',
-          "import { createApp, publicAccess, route } from '@kovojs/server';",
+          "import { createApp } from '@kovojs/server/internal/fixture-app';",
+          "import { publicAccess, route } from '@kovojs/server';",
           "import { trustedHtml } from '@kovojs/browser';",
           "import { CounterIsland } from './components/counter-island.tsx';",
           '',

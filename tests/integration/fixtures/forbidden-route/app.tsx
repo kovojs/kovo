@@ -1,7 +1,8 @@
 // SPEC §6.5: authenticated-but-unauthorized route access receives a 403 instead
 // of redirecting or leaking protected page content.
 import { trustedHtml } from '@kovojs/browser';
-import { createApp, guards, route } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { guards, route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 interface AuthSession {

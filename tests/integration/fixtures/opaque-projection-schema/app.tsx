@@ -1,4 +1,5 @@
-import { createApp, domain, query, route, s, type Schema } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { domain, query, route, s, type Schema } from '@kovojs/server';
 import { renderQueryScript } from '@kovojs/test/internal/integration/fixture-abi';
 import { runQuery } from '@kovojs/test/internal/integration/fixture-abi';
 import {

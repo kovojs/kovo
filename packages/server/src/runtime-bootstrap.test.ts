@@ -73,7 +73,9 @@ describe('custom runtime bootstrap entries', () => {
     );
     // SPEC §6.6 rule 6: the refusal is its own entry and is the first dependency of every
     // executable Better Auth surface. It must not share a chunk with any environment reader.
-    expect(betterAuthRootSource).toMatch(/^import\b[^\n]*from "\.\/internal\/runtime-lock\.mjs";/u);
+    expect(betterAuthRootSource).toMatch(
+      /^import (?:[^\n]* from )?"\.\/internal\/runtime-lock\.mjs";/u,
+    );
     expect(betterAuthInternalSource).toMatch(/^import "\.\/internal\/runtime-lock\.mjs";/u);
     expect(betterAuthMountAdapterSource).toMatch(/^import "\.\/runtime-lock\.mjs";/u);
     expect(betterAuthRuntimeLockSource.match(/^import\b/gmu) ?? []).toHaveLength(1);
@@ -183,15 +185,15 @@ describe('custom runtime bootstrap entries', () => {
   }, 120_000);
 
   it('refuses the public request-handler chokepoint when bootstrap is absent', () => {
-    const appPath = fileURLToPath(new URL('./app.ts', import.meta.url));
+    const fixtureAppPath = fileURLToPath(new URL('./internal/fixture-app.ts', import.meta.url));
     const handlerPath = fileURLToPath(new URL('./request-handler.ts', import.meta.url));
     const source = `
 import { createServer } from ${JSON.stringify(viteEntryUrl)};
 const output = process.stdout;
 const server = await createServer({ configFile: false, logLevel: 'silent', server: { middlewareMode: true } });
-const appModule = await server.ssrLoadModule(${JSON.stringify(appPath)});
+const fixtureApp = await server.ssrLoadModule(${JSON.stringify(fixtureAppPath)});
 const handlerModule = await server.ssrLoadModule(${JSON.stringify(handlerPath)});
-const app = appModule.createApp({});
+const app = fixtureApp.createApp({});
 let refusal = '';
 try { handlerModule.createRequestHandler(app); } catch (error) { refusal = String(error?.message ?? error); }
 output.write(JSON.stringify({ refusal }));
@@ -207,7 +209,7 @@ process.exit(0);
   });
 
   it('accepts the public chokepoint after a first-import bootstrap and duplicate relock', () => {
-    const appPath = fileURLToPath(new URL('./app.ts', import.meta.url));
+    const fixtureAppPath = fileURLToPath(new URL('./internal/fixture-app.ts', import.meta.url));
     const handlerPath = fileURLToPath(new URL('./request-handler.ts', import.meta.url));
     const bootstrapPath = fileURLToPath(new URL('./runtime-bootstrap.ts', import.meta.url));
     const source = `
@@ -216,9 +218,9 @@ const output = process.stdout;
 const server = await createServer({ configFile: false, logLevel: 'silent', server: { middlewareMode: true } });
 await server.ssrLoadModule(${JSON.stringify(bootstrapPath)});
 await server.ssrLoadModule(${JSON.stringify(`${bootstrapPath}?duplicate-copy`)});
-const appModule = await server.ssrLoadModule(${JSON.stringify(appPath)});
+const fixtureApp = await server.ssrLoadModule(${JSON.stringify(fixtureAppPath)});
 const handlerModule = await server.ssrLoadModule(${JSON.stringify(handlerPath)});
-const handler = handlerModule.createRequestHandler(appModule.createApp({}));
+const handler = handlerModule.createRequestHandler(fixtureApp.createApp({}));
 output.write(JSON.stringify({ callable: typeof handler }));
 process.exit(0);
 `;
@@ -231,22 +233,28 @@ process.exit(0);
 
   it('refuses public static export and renderTree callback dispatch when bootstrap is absent', () => {
     const serverPath = fileURLToPath(new URL('./index.ts', import.meta.url));
+    const fixtureAppPath = fileURLToPath(new URL('./internal/fixture-app.ts', import.meta.url));
+    const renderTreePath = fileURLToPath(new URL('./public-render-tree.ts', import.meta.url));
+    const staticExportPath = fileURLToPath(new URL('./public-static-export.ts', import.meta.url));
     const corePath = requireFromServerTest.resolve('@kovojs/core');
     const source = `
 import { createServer } from ${JSON.stringify(viteEntryUrl)};
 const output = process.stdout;
 const server = await createServer({ configFile: false, logLevel: 'silent', server: { middlewareMode: true }, ssr: { noExternal: [/^@kovojs\\//] } });
 const api = await server.ssrLoadModule(${JSON.stringify(serverPath)});
+const fixtureApp = await server.ssrLoadModule(${JSON.stringify(fixtureAppPath)});
+const renderTreeApi = await server.ssrLoadModule(${JSON.stringify(renderTreePath)});
+const staticExportApi = await server.ssrLoadModule(${JSON.stringify(staticExportPath)});
 const core = await server.ssrLoadModule(${JSON.stringify(corePath)});
 let exportHits = 0;
 let renderHits = 0;
-const app = api.createApp({ routes: [api.route('/', { page: () => { exportHits += 1; return api.trustedHtml('<main>unsafe</main>', { reason: 'runtime bootstrap fixture' }); } })] });
-const Component = core.component({ render: () => { renderHits += 1; return api.trustedHtml('<span>unsafe</span>', { reason: 'runtime bootstrap fixture' }); } });
-const registry = api.renderRegistry({ 'kovo-proof': Component });
+const app = fixtureApp.createApp({ routes: [api.route('/', { page: () => { exportHits += 1; return '<main>unsafe</main>'; } })] });
+const Component = core.component({ render: () => { renderHits += 1; return '<span>unsafe</span>'; } });
+const registry = renderTreeApi.renderRegistry({ 'kovo-proof': Component });
 let exportRefusal = '';
 let renderRefusal = '';
-try { await api.exportStaticApp(app); } catch (error) { exportRefusal = String(error?.message ?? error); }
-try { await api.renderTree(registry, api.parseComponentXml('<kovo-proof/>')); } catch (error) { renderRefusal = String(error?.message ?? error); }
+try { await staticExportApi.exportStaticApp(app); } catch (error) { exportRefusal = String(error?.message ?? error); }
+try { await renderTreeApi.renderTree(registry, renderTreeApi.parseComponentXml('<kovo-proof/>')); } catch (error) { renderRefusal = String(error?.message ?? error); }
 output.write(JSON.stringify({ exportHits, exportRefusal, renderHits, renderRefusal }));
 process.exit(0);
 `;
@@ -264,7 +272,10 @@ process.exit(0);
 
   it('runs public static export and renderTree behind bootstrap without mutable JSON dispatch', () => {
     const serverPath = fileURLToPath(new URL('./index.ts', import.meta.url));
+    const fixtureAppPath = fileURLToPath(new URL('./internal/fixture-app.ts', import.meta.url));
     const bootstrapPath = fileURLToPath(new URL('./runtime-bootstrap.ts', import.meta.url));
+    const renderTreePath = fileURLToPath(new URL('./public-render-tree.ts', import.meta.url));
+    const staticExportPath = fileURLToPath(new URL('./public-static-export.ts', import.meta.url));
     const corePath = requireFromServerTest.resolve('@kovojs/core');
     const source = `
 import { createServer } from ${JSON.stringify(viteEntryUrl)};
@@ -272,15 +283,18 @@ const output = process.stdout;
 const server = await createServer({ configFile: false, logLevel: 'silent', server: { middlewareMode: true }, ssr: { noExternal: [/^@kovojs\\//] } });
 await server.ssrLoadModule(${JSON.stringify(bootstrapPath)});
 const api = await server.ssrLoadModule(${JSON.stringify(serverPath)});
+const fixtureApp = await server.ssrLoadModule(${JSON.stringify(fixtureAppPath)});
+const renderTreeApi = await server.ssrLoadModule(${JSON.stringify(renderTreePath)});
+const staticExportApi = await server.ssrLoadModule(${JSON.stringify(staticExportPath)});
 const core = await server.ssrLoadModule(${JSON.stringify(corePath)});
 let exportHits = 0;
 let renderHits = 0;
 const poisonAttempts = [];
-const app = api.createApp({ routes: [api.route('/', { page: () => { exportHits += 1; poisonAttempts.push(Reflect.set(JSON, 'stringify', () => 'poison')); return api.trustedHtml('<main>safe</main>', { reason: 'runtime bootstrap fixture' }); } })] });
-const Component = core.component({ render: () => { renderHits += 1; poisonAttempts.push(Reflect.set(JSON, 'stringify', () => 'poison')); return api.trustedHtml('<span>safe</span>', { reason: 'runtime bootstrap fixture' }); } });
-const registry = api.renderRegistry({ 'kovo-proof': Component });
-const exported = await api.exportStaticApp(app);
-const rendered = await api.renderTree(registry, api.parseComponentXml('<kovo-proof/>'));
+const app = fixtureApp.createApp({ routes: [api.route('/', { page: () => { exportHits += 1; poisonAttempts.push(Reflect.set(JSON, 'stringify', () => 'poison')); return '<main>safe</main>'; } })] });
+const Component = core.component({ render: () => { renderHits += 1; poisonAttempts.push(Reflect.set(JSON, 'stringify', () => 'poison')); return '<span>safe</span>'; } });
+const registry = renderTreeApi.renderRegistry({ 'kovo-proof': Component });
+const exported = await staticExportApi.exportStaticApp(app);
+const rendered = await renderTreeApi.renderTree(registry, renderTreeApi.parseComponentXml('<kovo-proof/>'));
 output.write(JSON.stringify({ exportHits, exported: exported.artifacts.length, poisonAttempts, renderHits, rendered }));
 process.exit(0);
 `;
@@ -530,7 +544,8 @@ process.exit(0);
 }
 
 function runPackedServerChild(distRoot: string, withBootstrap: boolean) {
-  const rootEntry = pathToFileURL(join(distRoot, 'index.mjs')).href;
+  const customAdaptersEntry = pathToFileURL(join(distRoot, 'public-custom-adapters.mjs')).href;
+  const fixtureAppEntry = pathToFileURL(join(distRoot, 'internal/fixture-app.mjs')).href;
   const bootstrapEntry = pathToFileURL(join(distRoot, 'runtime-bootstrap.mjs')).href;
   const source = `
 import { existsSync } from 'node:fs';
@@ -545,13 +560,14 @@ registerHooks({
   },
 });
 ${withBootstrap ? `await import(${JSON.stringify(bootstrapEntry)});` : ''}
-const api = await import(${JSON.stringify(rootEntry)});
+const customAdapters = await import(${JSON.stringify(customAdaptersEntry)});
 if (${JSON.stringify(withBootstrap)}) {
-  const handler = api.createRequestHandler(api.createApp({ egress: { allowInternal: [] } }));
+  const fixtureApp = await import(${JSON.stringify(fixtureAppEntry)});
+  const handler = customAdapters.createRequestHandler(fixtureApp.createApp({ egress: { allowInternal: [] } }));
   process.stdout.write(JSON.stringify({ callable: typeof handler }));
 } else {
   let refusal = '';
-  try { api.createRequestHandler({}); } catch (error) { refusal = String(error?.message ?? error); }
+  try { customAdapters.createRequestHandler({}); } catch (error) { refusal = String(error?.message ?? error); }
   process.stdout.write(JSON.stringify({ refusal }));
 }
 `;
@@ -670,11 +686,16 @@ function runPackedSqliteBoundaryChild(
       requireFromServerTest.resolve('drizzle-orm/sqlite-core'),
     ).href,
     '@kovojs/server': pathToFileURL(join(distRoot, 'index.mjs')).href,
+    '@kovojs/server/custom-adapters': pathToFileURL(join(distRoot, 'public-custom-adapters.mjs'))
+      .href,
     '@kovojs/server/generated/db-capabilities': pathToFileURL(
       join(distRoot, 'generated-db-capabilities.mjs'),
     ).href,
     '@kovojs/server/internal/better-auth': pathToFileURL(join(distRoot, 'internal/better-auth.mjs'))
       .href,
+    '@kovojs/server/internal/build-context': pathToFileURL(
+      join(distRoot, 'internal/build-context.mjs'),
+    ).href,
     '@kovojs/server/internal/csrf': pathToFileURL(join(distRoot, 'internal/csrf.mjs')).href,
     '@kovojs/server/internal/execution': pathToFileURL(join(distRoot, 'internal/execution.mjs'))
       .href,
@@ -682,12 +703,25 @@ function runPackedSqliteBoundaryChild(
       join(distRoot, 'internal/runtime-environment.mjs'),
     ).href,
     '@kovojs/server/internal/keyring': pathToFileURL(join(distRoot, 'internal/keyring.mjs')).href,
+    '@kovojs/server/internal/postgres-capability': pathToFileURL(
+      join(distRoot, 'internal/postgres-capability.mjs'),
+    ).href,
     '@kovojs/server/internal/sqlite': pathToFileURL(join(distRoot, 'internal/sqlite.mjs')).href,
     '@kovojs/server/internal/sqlite-capability': pathToFileURL(
       join(distRoot, 'internal/sqlite-capability.mjs'),
     ).href,
+    '@kovojs/server/internal/fixture-app': pathToFileURL(join(distRoot, 'internal/fixture-app.mjs'))
+      .href,
+    '@kovojs/server/password': pathToFileURL(join(distRoot, 'public-password.mjs')).href,
+    '@kovojs/server/postgres': pathToFileURL(join(distRoot, 'public-postgres.mjs')).href,
+    '@kovojs/server/principal-epochs': pathToFileURL(join(distRoot, 'public-principal-epochs.mjs'))
+      .href,
+    '@kovojs/server/signing': pathToFileURL(join(distRoot, 'public-signing.mjs')).href,
     '@kovojs/server/sqlite': pathToFileURL(join(distRoot, 'sqlite.mjs')).href,
   };
+  const sqlParserBootstrapEntry = pathToFileURL(
+    join(distRoot, 'sql-parser-authority-bootstrap.mjs'),
+  ).href;
   const bootstrapEntry = pathToFileURL(join(distRoot, 'runtime-bootstrap.mjs')).href;
   const betterAuthRootUrl = pathToFileURL(betterAuthRootEntry).href;
   const betterAuthSqliteUrl = pathToFileURL(betterAuthSqliteEntry).href;
@@ -705,8 +739,11 @@ registerHooks({
     return nextResolve(specifier, context);
   },
 });
+await import(${JSON.stringify(sqlParserBootstrapEntry)});
 await import(${JSON.stringify(bootstrapEntry)});
 const server = await import(${JSON.stringify(entries['@kovojs/server'])});
+const customAdapters = await import(${JSON.stringify(entries['@kovojs/server/custom-adapters'])});
+const fixtureApp = await import(${JSON.stringify(entries['@kovojs/server/internal/fixture-app'])});
 const dbCapabilities = await import(${JSON.stringify(entries['@kovojs/server/generated/db-capabilities'])});
 const csrf = await import(${JSON.stringify(entries['@kovojs/server/internal/csrf'])});
 const execution = await import(${JSON.stringify(entries['@kovojs/server/internal/execution'])});
@@ -755,12 +792,12 @@ try {
     }),
     reads: [],
   });
-  const app = server.createApp({
+  const app = fixtureApp.createApp({
     db: runtime.db,
     egress: { enabled: false, justification: 'isolated packed provider proof' },
     queries: [packedQuery],
   });
-  const handler = server.createRequestHandler(app);
+  const handler = customAdapters.createRequestHandler(app);
   const response = await handler(new Request('http://localhost/_q/packed-provider-proof'));
   const body = await response.text();
   process.stdout.write(JSON.stringify({
@@ -925,6 +962,9 @@ function runPackedPostgresBoundaryChild(distRoot: string, betterAuthEntry: strin
     ).href,
     '@kovojs/server/internal/better-auth': pathToFileURL(join(distRoot, 'internal/better-auth.mjs'))
       .href,
+    '@kovojs/server/internal/build-context': pathToFileURL(
+      join(distRoot, 'internal/build-context.mjs'),
+    ).href,
     '@kovojs/server/internal/csrf': pathToFileURL(join(distRoot, 'internal/csrf.mjs')).href,
     '@kovojs/server/internal/keyring': pathToFileURL(join(distRoot, 'internal/keyring.mjs')).href,
     '@kovojs/server/internal/postgres-capability': pathToFileURL(
@@ -933,7 +973,15 @@ function runPackedPostgresBoundaryChild(distRoot: string, betterAuthEntry: strin
     '@kovojs/server/internal/runtime-environment': pathToFileURL(
       join(distRoot, 'internal/runtime-environment.mjs'),
     ).href,
+    '@kovojs/server/password': pathToFileURL(join(distRoot, 'public-password.mjs')).href,
+    '@kovojs/server/postgres': pathToFileURL(join(distRoot, 'public-postgres.mjs')).href,
+    '@kovojs/server/principal-epochs': pathToFileURL(join(distRoot, 'public-principal-epochs.mjs'))
+      .href,
+    '@kovojs/server/signing': pathToFileURL(join(distRoot, 'public-signing.mjs')).href,
   };
+  const sqlParserBootstrapEntry = pathToFileURL(
+    join(distRoot, 'sql-parser-authority-bootstrap.mjs'),
+  ).href;
   const bootstrapEntry = pathToFileURL(join(distRoot, 'runtime-bootstrap.mjs')).href;
   const betterAuthUrl = pathToFileURL(betterAuthEntry).href;
   const source = `
@@ -952,8 +1000,10 @@ registerHooks({
     return nextResolve(specifier, context);
   },
 });
+await import(${JSON.stringify(sqlParserBootstrapEntry)});
 await import(${JSON.stringify(bootstrapEntry)});
 const server = await import(${JSON.stringify(entries['@kovojs/server'])});
+const postgres = await import(${JSON.stringify(entries['@kovojs/server/postgres'])});
 const dbCapabilities = await import(${JSON.stringify(entries['@kovojs/server/generated/db-capabilities'])});
 const betterAuth = await import(${JSON.stringify(betterAuthUrl)});
 const { bigint, integer, pgTable, text } = await import('drizzle-orm/pg-core');
@@ -967,7 +1017,7 @@ const rateLimit = pgTable('rateLimit', {
   lastRequest: bigint('last_request', { mode: 'number' }).notNull(),
 });
 const dataDir = mkdtempSync(join(tmpdir(), 'kovo-packed-postgres-capability-'));
-const runtime = server.createPostgresAppRuntimeDb({
+const runtime = postgres.createPostgresAppRuntimeDb({
   dataDir,
   driver: 'pglite',
   schema: { proof, rateLimit },

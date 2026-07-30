@@ -434,7 +434,8 @@ describe('@kovojs/drizzle trust-escape collector (KV426, audit-only)', () => {
 describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () => {
   // @kovo-security-certifies KV424 task-b-layered-closure-routing
   it('binds every TASK B root to the same-snapshot capability and package-root census', () => {
-    const source = "import { createApp } from '@kovojs/server';\nexport const app = createApp({});";
+    const source =
+      "import { createApp } from '@kovojs/server/internal/fixture-app';\nexport const app = createApp({});";
     const files = [{ fileName: 'app.ts', source }] as const;
     const parsed = ts.createSourceFile(
       'app.ts',
@@ -2506,7 +2507,7 @@ export const report = query('report', {
     const local = sinksFor(`
       /** @jsxImportSource @kovojs/server */
       import { execFileSync } from 'node:child_process';
-      import { createApp } from '@kovojs/server';
+      import { createApp } from '@kovojs/server/internal/fixture-app';
       function DocumentBody() {
         execFileSync('retained-jsx-component');
         return <main>document</main>;
@@ -2524,7 +2525,7 @@ export const report = query('report', {
 
     const unresolved = sinksFor(`
       /** @jsxImportSource @kovojs/server */
-      import { createApp } from '@kovojs/server';
+      import { createApp } from '@kovojs/server/internal/fixture-app';
       import { ExternalDocument } from 'external-components';
       createApp({ document: <ExternalDocument /> });
     `);
@@ -3030,7 +3031,8 @@ export const report = query('report', {
 
   it('accepts only a pristine module-scope rootedFiles handle as a direct route outcome', () => {
     const safe = sinksFor(`
-      import { createApp, publicAccess, route } from '@kovojs/server'; import { rootedFiles } from '@kovojs/server/files';
+      import { createApp } from '@kovojs/server/internal/fixture-app';
+import { publicAccess, route } from '@kovojs/server'; import { rootedFiles } from '@kovojs/server/files';
       const docs = await rootedFiles('/srv/kovo/docs');
       export default createApp({ routes: [route('/docs', {
         access: publicAccess('public docs'),
@@ -3046,7 +3048,8 @@ export const report = query('report', {
       `Object.defineProperty(docs, 'serve', { value: () => new Response('forged') });`,
     ]) {
       const facts = sinksFor(`
-        import { createApp, publicAccess, route } from '@kovojs/server'; import { rootedFiles } from '@kovojs/server/files';
+        import { createApp } from '@kovojs/server/internal/fixture-app';
+import { publicAccess, route } from '@kovojs/server'; import { rootedFiles } from '@kovojs/server/files';
         const docs = await rootedFiles('/srv/kovo/docs');
         ${source}
         export default createApp({ routes: [route('/docs', {
@@ -5789,7 +5792,7 @@ export const report = query('report', {
     const safe = () =>
       sinksFor(`
         import { betterAuthCsrfFromEnvironment } from '@kovojs/better-auth';
-        import { createApp } from '@kovojs/server';
+        import { createApp } from '@kovojs/server/internal/fixture-app';
         const appCsrf = betterAuthCsrfFromEnvironment({ field: 'csrf' });
         export default createApp({ csrf: appCsrf, routes: [] });
       `);
@@ -5980,7 +5983,7 @@ export const report = query('report', {
   it('closes createApp renderRoute and preserves error-shell request-header provenance', () => {
     const facts = sinksFor(`
       import { execFileSync } from 'node:child_process';
-      import { createApp } from '@kovojs/server';
+      import { createApp } from '@kovojs/server/internal/fixture-app';
       createApp({
         renderRoute(_value, { request }) {
           execFileSync('render-route');
@@ -6269,7 +6272,8 @@ export const report = query('report', {
   it('orders config mutations by reachable helper invocation rather than helper source text', () => {
     const facts = sinksFor(`
       import { execFileSync } from 'node:child_process';
-      import { createApp, publicAccess, route } from '@kovojs/server';
+      import { createApp } from '@kovojs/server/internal/fixture-app';
+import { publicAccess, route } from '@kovojs/server';
       const before = { access: publicAccess('before'), page() { return 'safe'; } };
       poisonBefore();
       const unsafe = route('/before', before);
@@ -6357,7 +6361,7 @@ export const report = query('report', {
 
   it('keeps session values server-only while scanning setCookies and db-provider authority', () => {
     const facts = sinksFor(`
-      import { createApp } from '@kovojs/server';
+      import { createApp } from '@kovojs/server/internal/fixture-app';
       createApp({
         db(request) { request.headers.get('cookie'); return {}; },
         sessionProvider(request) {
@@ -7053,7 +7057,8 @@ export const report = query('report', {
   it('keeps exact component-input JSON array callbacks off the public wire', () => {
     const facts = sinksFor(`
       import { component } from '@kovojs/core';
-      import { createApp, route } from '@kovojs/server';
+      import { createApp } from '@kovojs/server/internal/fixture-app';
+import { route } from '@kovojs/server';
       const ContactList = component({
         render: ({ items }) => <ul>{items.map(() => <li>contact</li>)}</ul>,
       });
@@ -7362,7 +7367,8 @@ export const report = query('report', {
       /** @jsxImportSource @kovojs/server */
       import { trustedHtml, trustedUrl } from '@kovojs/browser';
       import { component } from '@kovojs/core';
-      import { createApp, publicAccess, query, route } from '@kovojs/server';
+      import { createApp } from '@kovojs/server/internal/fixture-app';
+import { publicAccess, query, route } from '@kovojs/server';
       const contactsQuery = query({ load() { return { items: [] }; } });
       const defaultSlots = { forms: { add: { submitted: null } } };
       function submittedFieldValue(value) { return typeof value === 'string' ? value : ''; }
@@ -7412,7 +7418,8 @@ export const report = query('report', {
         fileName: 'app.tsx',
         source: `
           /** @jsxImportSource @kovojs/server */
-          import { createApp, publicAccess, route } from '@kovojs/server';
+          import { createApp } from '@kovojs/server/internal/fixture-app';
+import { publicAccess, route } from '@kovojs/server';
           import { contactsQuery, Proof } from './component.js';
           export default createApp({
             queries: [contactsQuery],
@@ -7669,7 +7676,8 @@ export const report = query('report', {
       /** @jsxImportSource @kovojs/server */
       import * as browserTrust from '@kovojs/browser';
       import { component } from '@kovojs/core';
-      import { createApp, publicAccess, query, route } from '@kovojs/server';
+      import { createApp } from '@kovojs/server/internal/fixture-app';
+import { publicAccess, query, route } from '@kovojs/server';
       const contactsQuery = query({ load() { return { items: [] }; } });
       export const Proof = component({
         queries: { contacts: contactsQuery },
@@ -7686,7 +7694,8 @@ export const report = query('report', {
       const hostileSlots = sinksFor(`
         /** @jsxImportSource @kovojs/server */
         import { component } from '@kovojs/core';
-        import { createApp, publicAccess, route } from '@kovojs/server';
+        import { createApp } from '@kovojs/server/internal/fixture-app';
+import { publicAccess, route } from '@kovojs/server';
         const Proof = component({
           render(data, _state, slots) {
             ${invoke}
@@ -7708,7 +7717,8 @@ export const report = query('report', {
         /** @jsxImportSource @kovojs/server */
         import { execFileSync } from 'node:child_process';
         import { component } from '@kovojs/core';
-        import { createApp, publicAccess, query, route } from '@kovojs/server';
+        import { createApp } from '@kovojs/server/internal/fixture-app';
+import { publicAccess, query, route } from '@kovojs/server';
         const contactsQuery = query({ load() { return { items: [] }; } });
         const Proof = component({
           queries: { contacts: contactsQuery },
@@ -7730,7 +7740,7 @@ export const report = query('report', {
   it('accepts only the exact pristine Better Auth CSRF environment derivation grammar', () => {
     const exact = sinksFor(`
       import { betterAuthCsrfFromEnvironment } from '@kovojs/better-auth';
-      import { createApp } from '@kovojs/server';
+      import { createApp } from '@kovojs/server/internal/fixture-app';
       const appCsrf = betterAuthCsrfFromEnvironment({
         field: 'csrf',
       });
@@ -7768,7 +7778,7 @@ export const report = query('report', {
     ];
     for (const source of variants) {
       const facts = sinksFor(
-        `import { createApp } from '@kovojs/server';\n${source}\nexport default createApp({ csrf: appCsrf, routes: [] });`,
+        `import { createApp } from '@kovojs/server/internal/fixture-app';\n${source}\nexport default createApp({ csrf: appCsrf, routes: [] });`,
       );
       expect(facts.length, source).toBeGreaterThan(0);
     }
@@ -7779,7 +7789,7 @@ export const report = query('report', {
     ]) {
       const facts = sinksFor(`
         import { betterAuthCsrfFromEnvironment } from '@kovojs/better-auth';
-        import { createApp } from '@kovojs/server';
+        import { createApp } from '@kovojs/server/internal/fixture-app';
         const appCsrf = betterAuthCsrfFromEnvironment({ field: 'csrf', ${sessionId} });
         export default createApp({ csrf: appCsrf, routes: [] });
       `);
@@ -8546,7 +8556,7 @@ export const report = query('report', {
     ]) {
       const facts = sinksFor(`
         ${setup}
-        import { createApp } from '@kovojs/server';
+        import { createApp } from '@kovojs/server/internal/fixture-app';
         const bindings = construct({
           csrf: {}, mapSession: value => value, schema: {},
           signInAccess: {}, signOutAccess: {}, systemDb: {},
@@ -9421,7 +9431,7 @@ export const report = query('report', {
 
     const helperWrappedRuntime = sinksFor(`
       import { execFileSync } from 'node:child_process';
-      import { createApp } from '@kovojs/server';
+      import { createApp } from '@kovojs/server/internal/fixture-app';
       import { createSqliteAppRuntime } from '@kovojs/server/sqlite';
       import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
       const contacts = sqliteTable('contacts', { id: text('id').primaryKey() });
@@ -9674,7 +9684,7 @@ export const report = query('report', {
       {
         fileName: 'app.ts',
         source: `
-          import { createApp } from '@kovojs/server';
+          import { createApp } from '@kovojs/server/internal/fixture-app';
           import { appRuntimeDbProvider } from './_kovo/app-runtime-db.js';
           import { contactsEndpoint } from './queries.js';
           export default createApp({
@@ -9692,7 +9702,7 @@ export const report = query('report', {
         {
           fileName: 'app.tsx',
           source: `
-            import { createApp } from '@kovojs/server';
+            import { createApp } from '@kovojs/server/internal/fixture-app';
             import { contactCount } from './queries.js';
             export default createApp({ queries: [contactCount], routes: [] });
           `,
@@ -10973,7 +10983,8 @@ export const report = query('report', {
     ],
   ])('fails closed for generated client-module registry derived through %s', (_label, setup) => {
     const facts = sinksFor(`
-      import { createApp, route } from '@kovojs/server'; import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules';
+      import { createApp } from '@kovojs/server/internal/fixture-app';
+import { route } from '@kovojs/server'; import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules';
       ${setup}
       export default createApp({ clientModules, routes: [] });
     `);
@@ -10985,7 +10996,7 @@ export const report = query('report', {
 
   it('does not whitelist a local stylesheet lookalike in retained app config', () => {
     const facts = sinksFor(`
-      import { createApp } from '@kovojs/server';
+      import { createApp } from '@kovojs/server/internal/fixture-app';
       const stylesheet = (source) => ({ href: source });
       export default createApp({ routes: [], stylesheets: [stylesheet('./local.css')] });
     `);
@@ -11187,7 +11198,8 @@ export const report = query('report', {
   it('traverses inherited schema, replay, store, and mutation-replay adapter methods', () => {
     const facts = sinksFor(`
       import { execFileSync } from 'node:child_process';
-      import { createApp, query } from '@kovojs/server'; import { webhook } from '@kovojs/server/webhooks';
+      import { createApp } from '@kovojs/server/internal/fixture-app';
+import { query } from '@kovojs/server'; import { webhook } from '@kovojs/server/webhooks';
       class BaseSchema {
         parse(value) { execFileSync('schema-parse'); return value; }
         parseAsync(value) { execFileSync('schema-parse-async'); return value; }
@@ -11482,7 +11494,8 @@ export const report = query('report', {
   it('fails closed for unresolved createApp declaration collections while following local factories', () => {
     const facts = sinksFor(`
       import { execFileSync } from 'node:child_process';
-      import { createApp, route } from '@kovojs/server';
+      import { createApp } from '@kovojs/server/internal/fixture-app';
+import { route } from '@kovojs/server';
       import { externalRoutes, makeRoutes } from 'external-routes';
       createApp({ routes: externalRoutes });
       createApp({ routes: [...externalRoutes] });
@@ -11551,7 +11564,8 @@ export const report = query('report', {
   it('classifies static app/route wire hints but not currently non-emitted layout hints', () => {
     const facts = sinksFor(
       `
-        import { createApp, route } from '@kovojs/server';
+        import { createApp } from '@kovojs/server/internal/fixture-app';
+import { route } from '@kovojs/server';
         const appStyle = process.env.APP_STYLE;
         const page = route('/', {
           bootstrapScript: import.meta.env.BOOTSTRAP,
@@ -13720,7 +13734,7 @@ export const report = query('report', {
         await storage.put('receipts/proof.txt', 'proof');
       `,
       `
-        import { createApp } from '@kovojs/server'; import { createMemoryStorage } from '@kovojs/core/storage'; import { createSigningKeyRing } from '@kovojs/server/signing'; import { createStorageDownloadEndpoint } from '@kovojs/server/storage-downloads';
+        import { createApp } from '@kovojs/server/internal/fixture-app'; import { createMemoryStorage } from '@kovojs/core/storage'; import { createSigningKeyRing } from '@kovojs/server/signing'; import { createStorageDownloadEndpoint } from '@kovojs/server/storage-downloads';
         const signingKeys = createSigningKeyRing({
           keys: [{ id: 'download-2026', secret: 'download-test-signing-material-2026', state: 'active' }],
         });
@@ -13730,7 +13744,7 @@ export const report = query('report', {
         export default createApp({ endpoints: [download] });
       `,
       `
-        import { createApp } from '@kovojs/server'; import { createMemoryStorage } from '@kovojs/core/storage'; import { createSigningKeyRing } from '@kovojs/server/signing'; import { createStorageDownloadEndpoint } from '@kovojs/server/storage-downloads';
+        import { createApp } from '@kovojs/server/internal/fixture-app'; import { createMemoryStorage } from '@kovojs/core/storage'; import { createSigningKeyRing } from '@kovojs/server/signing'; import { createStorageDownloadEndpoint } from '@kovojs/server/storage-downloads';
         const signingKeys = createSigningKeyRing({
           keys: [{ id: 'download-2026', secret: 'download-test-signing-material-2026', state: 'active' }],
         });
@@ -14771,7 +14785,8 @@ export const report = query('report', {
   it('scans direct, spread, and getter-backed FormError callbacks', () => {
     const facts = sinksFor(`
       import { component, FormError } from '@kovojs/core';
-      import { createApp, route } from '@kovojs/server';
+      import { createApp } from '@kovojs/server/internal/fixture-app';
+import { route } from '@kovojs/server';
       import { execFileSync } from 'node:child_process';
       const spread = {
         message: () => execFileSync('form-error-spread-callback'),
@@ -14807,7 +14822,8 @@ export const report = query('report', {
   it('does not exempt a callable forwarded into a compiler-owned intrinsic event slot', () => {
     const facts = sinksFor(`
       import { component } from '@kovojs/core';
-      import { createApp, route } from '@kovojs/server';
+      import { createApp } from '@kovojs/server/internal/fixture-app';
+import { route } from '@kovojs/server';
       import { execFileSync } from 'node:child_process';
       const Child = component({
         render: (props) => <button onClick={props.onClick}>Run</button>,
@@ -14982,7 +14998,8 @@ export const report = query('report', {
       {
         fileName: 'app.tsx',
         source: `
-          import { createApp, route } from '@kovojs/server';
+          import { createApp } from '@kovojs/server/internal/fixture-app';
+import { route } from '@kovojs/server';
           import { Card } from './components/card.js';
           export default createApp({
             routes: [route('/', { page: () => <main><Card /></main> })],
@@ -15013,7 +15030,8 @@ export const report = query('report', {
     const safeFacts = sinksFor(`
       /** @jsxImportSource @kovojs/server */
       import { component } from '@kovojs/core';
-      import { createApp, route } from '@kovojs/server';
+      import { createApp } from '@kovojs/server/internal/fixture-app';
+import { route } from '@kovojs/server';
       const Island = component({
         state: () => ({ cards: [{ label: 'first' }], groups: [[{ label: 'nested' }]] }),
         render: (_queries, state) => <section>
@@ -15029,7 +15047,8 @@ export const report = query('report', {
     const capabilityFacts = sinksFor(`
       /** @jsxImportSource @kovojs/server */
       import { component } from '@kovojs/core';
-      import { createApp, route } from '@kovojs/server';
+      import { createApp } from '@kovojs/server/internal/fixture-app';
+import { route } from '@kovojs/server';
       const Island = component({
         render: (_queries, _state, slots) =>
           <main>{(() => slots.pwn())()}</main>,
@@ -15049,7 +15068,8 @@ export const report = query('report', {
       const invocationRoleFacts = sinksFor(`
         /** @jsxImportSource @kovojs/server */
         import { component } from '@kovojs/core';
-        import { createApp, route } from '@kovojs/server';
+        import { createApp } from '@kovojs/server/internal/fixture-app';
+import { route } from '@kovojs/server';
         const Island = component({
           render(_queries, _state, slots) {
             function pass(value) {
@@ -15115,7 +15135,8 @@ export const report = query('report', {
   it('scans endpoint and webhook descriptors in the shared app endpoint collection', () => {
     const facts = sinksFor(`
       import { execFileSync } from 'node:child_process';
-      import { createApp, endpoint } from '@kovojs/server'; import { webhook } from '@kovojs/server/webhooks';
+      import { createApp } from '@kovojs/server/internal/fixture-app';
+import { endpoint } from '@kovojs/server'; import { webhook } from '@kovojs/server/webhooks';
       const plain = endpoint('/plain', { handler() {
         execFileSync('plain-handler');
         return new Response('plain');
@@ -15141,7 +15162,8 @@ export const report = query('report', {
   it('keeps compiler-lowered component event handlers off the public wire', () => {
     const facts = sinksFor(`
       import { component } from '@kovojs/core';
-      import { createApp, route } from '@kovojs/server';
+      import { createApp } from '@kovojs/server/internal/fixture-app';
+import { route } from '@kovojs/server';
       const Interactive = component({
         state: () => ({ count: 0 }),
         render: (_props, state) => (
@@ -15161,7 +15183,8 @@ export const report = query('report', {
 
     const lowercaseFacts = sinksFor(`
       import { component } from '@kovojs/core';
-      import { createApp, route } from '@kovojs/server';
+      import { createApp } from '@kovojs/server/internal/fixture-app';
+import { route } from '@kovojs/server';
       const NotLowered = component({
         render: () => <button onclick={() => 'not compiler owned'}>go</button>,
       });
@@ -15193,7 +15216,7 @@ export const report = query('report', {
       {
         fileName: 'app.ts',
         source: `
-          import { createApp } from '@kovojs/server';
+          import { createApp } from '@kovojs/server/internal/fixture-app';
           import { contactsQuery } from './queries/contacts.js';
           createApp({ queries: [contactsQuery] });
         `,

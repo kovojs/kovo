@@ -2,7 +2,8 @@
 // Morph application fixture: an island patched in by a fragment is discovered by
 // delegated future events, but its handler module is not imported eagerly (SPEC §4.4, §9.1).
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { PatchZone } from './patch-zone';

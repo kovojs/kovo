@@ -1,5 +1,6 @@
 /** @jsxImportSource @kovojs/server */
-import { BodyStart, Document, Head, HtmlAttrs, Meta, createApp, route } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { BodyStart, Document, Head, HtmlAttrs, Meta, route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 const homeRoute = route('/', {

@@ -4,7 +4,8 @@
 // <details> by user action, then triggers an UNRELATED morph of the enclosing
 // fragment (an incremented counter) and asserts the open state survives.
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { Panel } from './panel';

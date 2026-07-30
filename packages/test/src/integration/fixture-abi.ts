@@ -5,6 +5,11 @@ import { stampStaticSql } from '@kovojs/core/internal/sql-safety';
 import { verifierDenseArraySnapshot, verifierTypeError } from '../verifier-security-intrinsics.js';
 
 export { createMemoryStorage } from '@kovojs/core/internal/storage';
+/**
+ * @internal Framework-owned integration fixtures still exercise the normalized runtime aggregate
+ * while public application source uses `defineKovo()` and `app.assemble()` (SPEC §6.2.1/§9.5).
+ */
+export { createApp } from '@kovojs/server/internal/fixture-app';
 export type {
   WebhookReplayIdentity,
   WebhookReplayReservation,

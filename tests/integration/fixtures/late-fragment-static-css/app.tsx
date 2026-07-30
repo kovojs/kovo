@@ -1,7 +1,8 @@
 /** @jsxImportSource @kovojs/server */
 // SPEC §13.1: late mutation fragments may request stylesheet assets needed only by
 // fragment-rendered static CSS classes.
-import { createApp, mutation, route, s, stream } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { mutation, route, s, stream } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 export const revealRecommendation = mutation('late-fragment-static-css/reveal', {

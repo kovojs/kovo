@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 // SPEC.md §6.6/§9.1: mutation POSTs validate CSRF before parsing or guards.
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { CsrfTotal } from './csrf-total';

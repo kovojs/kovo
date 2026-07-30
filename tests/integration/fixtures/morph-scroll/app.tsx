@@ -2,7 +2,8 @@
 // scrollTop while server-truth content is reconciled (SPEC §9.1).
 /** @jsxImportSource @kovojs/server */
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, Document, Head, InlineStyle, mutation, route, s } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { Document, Head, InlineStyle, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { ScrollPanel } from './scroll-panel';

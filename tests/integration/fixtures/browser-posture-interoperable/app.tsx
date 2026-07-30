@@ -1,5 +1,6 @@
 /** @jsxImportSource @kovojs/server */
-import { createApp, route } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { route } from '@kovojs/server';
 import { trustedHtml } from '@kovojs/browser';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 

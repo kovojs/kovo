@@ -80,6 +80,19 @@ function serverApp(exportName: string): FrameworkIdentityCatalogEntry {
   };
 }
 
+function serverFixtureApp(exportName: string): FrameworkIdentityCatalogEntry {
+  return {
+    exportName,
+    module: '@kovojs/server',
+    packageSourceFiles: ['app', 'internal/fixture-app'],
+    scopes: ['authoring', 'data-plane', 'routing'],
+    specifiers: [
+      '@kovojs/server/internal/fixture-app',
+      '@kovojs/test/internal/integration/fixture-abi',
+    ],
+  };
+}
+
 function serverRouting(exportName: string): FrameworkIdentityCatalogEntry {
   return {
     exportName,
@@ -264,6 +277,9 @@ function drizzleOrmSchema(
 const catalogEntries: FrameworkIdentityCatalogEntry[] = [];
 
 appendCatalogEntry(catalogEntries, serverApp('defineKovo'));
+// Framework-owned legacy fixtures retain exact createApp callback provenance without restoring
+// the removed app-public root. Both specifiers are manifest-declared internal test surfaces.
+appendCatalogEntry(catalogEntries, serverFixtureApp('createApp'));
 
 appendCatalogFactories(
   catalogEntries,

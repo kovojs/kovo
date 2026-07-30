@@ -16,7 +16,10 @@ import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
-import { createApp, domain, query, route, s } from '@kovojs/server';
+import '@kovojs/server/internal/sql-parser-authority-bootstrap';
+
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { domain, query, route, s } from '@kovojs/server';
 import { jsx } from '@kovojs/server/jsx-runtime';
 import {
   createKovoAppShellDevDiagnosticLedger,
@@ -837,7 +840,8 @@ function hmrSourceAppShell(options: {
 }): string {
   const routeVersion = options.routeVersion ?? '';
   return `
-import { createApp, route } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { route } from '@kovojs/server';
 import { jsx } from '@kovojs/server/jsx-runtime';
 
 import { HmrSourceCard } from './hmr-card';

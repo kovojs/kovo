@@ -1,7 +1,8 @@
 /** @jsxImportSource @kovojs/server */
 // Mutation wire fixture for SPEC.md §6.3 and §9.2: schema validation failures
 // return HTTP 422 with field-scoped error anchors and leave server truth alone.
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { ReservationForm } from './reservation-form';

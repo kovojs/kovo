@@ -2,7 +2,8 @@
 // SPEC.md §9.1/§9.2: the success response is generated from a changed
 // domain and an attested live component; a post-commit component render failure
 // returns the stable framework-owned render-error fragment.
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { ReceiptStatus } from './receipt-status';

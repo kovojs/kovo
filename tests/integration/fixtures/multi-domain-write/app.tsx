@@ -3,7 +3,8 @@
 // handler writing TWO domains. The runtime cross-check must pass when both are
 // declared and fail loudly naming the MISSING domain when one is omitted.
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
+import { mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { CartCount } from './cart-count';

@@ -14830,7 +14830,8 @@ function taskBSourceOperationsForGraph(graph) {
 }
 
 async function assertTaskBCapabilityRootCorrespondenceIsEnforced(moduleUnderTest) {
-  const source = "import { createApp } from '@kovojs/server';\nexport const app = createApp({});";
+  const source =
+    "import { createApp } from '@kovojs/server/internal/fixture-app';\nexport const app = createApp({});";
   const files = [{ fileName: 'app.ts', source }];
   const semanticSources = [{ fileName: 'app.ts', graphs: [], operations: [], source }];
   const sinks = moduleUnderTest.collectUnregisteredSinksFromProject({
@@ -14856,7 +14857,8 @@ async function assertTaskBCapabilityRootCorrespondenceIsEnforced(moduleUnderTest
 }
 
 async function assertTaskBPackageRootCorrespondenceIsEnforced(moduleUnderTest) {
-  const source = "import { createApp } from '@kovojs/server';\nexport const app = createApp({});";
+  const source =
+    "import { createApp } from '@kovojs/server/internal/fixture-app';\nexport const app = createApp({});";
   const files = [{ fileName: 'app.ts', source }];
   const offset = source.indexOf('createApp({})');
   const prefix = source.slice(0, offset);
