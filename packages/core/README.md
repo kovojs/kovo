@@ -1,7 +1,8 @@
 # @kovojs/core
 
-Kovo's task-shaped core API. The root contains component, form, navigation, and
-query authoring primitives. Security, storage, webhook, and diagnostic contracts
+Kovo's task-shaped core API. The root contains component, form, and typed
+navigation contracts. App-owned route and query declarations come from the
+server contract; security, storage, webhook, and diagnostic contracts
 live at explicit subpaths so an import states which boundary it crosses.
 
 ```sh
@@ -9,13 +10,10 @@ pnpm add @kovojs/core
 ```
 
 ```ts
-import { component, queryRef, routeRef } from '@kovojs/core';
+import { component, href } from '@kovojs/core';
 
-export const contactRoute = routeRef('/contacts/:id', {
-  params: { id: '' },
-});
-
-export const contactQuery = queryRef('contact');
+export const contactHref = (id: string) =>
+  href('/contacts/:id', { params: { id } });
 
 export const ContactName = component({
   render({ contact }: { contact: { name: string } }) {
@@ -27,7 +25,9 @@ export const ContactName = component({
 ## Security
 
 Use the security entrypoint for classified values and explicit declassification.
-Door-specific policy constructors make a policy for one reveal operation only.
+Door-specific policy constructors make an opaque policy for one reveal operation
+only. Door, purpose, and owner-scope state is framework-private, and reveal audit
+drains are available only to framework internals.
 
 ```ts
 import {
@@ -88,6 +88,8 @@ import type {
   DiagnosticSeverity,
   RegisteredDiagnostic,
 } from '@kovojs/core/diagnostics';
+
+type HmacInput = Parameters<typeof hmacSignature>[0];
 ```
 
 ## Reference

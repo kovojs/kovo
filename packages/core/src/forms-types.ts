@@ -36,7 +36,7 @@ export type FormFailure<Definition> = Definition extends {
             }[Extract<keyof NonNullable<Errors>, string>]
           : never)
       | FormValidationFailure
-  : Definition extends Form<string, any, infer Failure>
+  : Definition extends Form<string, infer _Input, infer Failure>
     ? Failure | FormValidationFailure
     : FormValidationFailure;
 

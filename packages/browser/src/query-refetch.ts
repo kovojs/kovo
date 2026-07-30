@@ -57,8 +57,7 @@ function queryRefetchSecurityControls(): QueryRefetchSecurity {
 
 /**
  * @internal A declared query whose refetch-on-focus opt-out drives the runtime exclusion set
- * (SPEC §9.3/§9.4). Mirrors the `@kovojs/core` `Query` handle shape produced by
- * `queryRef(key, { refetchOnFocus: false })`.
+ * (SPEC §9.3/§9.4). Mirrors the relevant fields of an app-owned query declaration.
  */
 export interface RefetchOnFocusDeclaration {
   key: string;
@@ -68,7 +67,7 @@ export interface RefetchOnFocusDeclaration {
 /**
  * @internal Derive the refetch-on-focus opt-out NAME set from declared queries (SPEC §9.3/§9.4).
  *
- * A query whose declaration sets `refetchOnFocus: false` (the `@kovojs/core` `queryRef()` config) is
+ * A query whose app-owned declaration sets `refetchOnFocus: false` is
  * excluded from the visible-return/focus typed-read refetch (§9.4). This maps that per-query
  * declaration into the `refetchOnFocusOptOut` set the loader runtime consumes, so the declared
  * value actually drives behavior instead of being dead metadata. Matching is by query NAME

@@ -178,6 +178,15 @@ describe('runtime Secret non-coercible wrapper (SPEC §10.2/§11.2)', () => {
     };
     expect(() => value.reveal(structuralForgery as never)).toThrow(/validated DeclassifyPolicy/u);
     expect(() => value.reveal(REVEAL_SECRET_POLICY as never)).toThrow(/exact door/u);
+    expect(() => value.reveal({ ...SECRET_REVEAL_POLICY } as never)).toThrow(
+      /validated DeclassifyPolicy/u,
+    );
+    expect(() =>
+      value.reveal(Object.create(Object.getPrototypeOf(SECRET_REVEAL_POLICY)) as never),
+    ).toThrow(/validated DeclassifyPolicy/u);
+
+    const PolicySubclass = class extends (DeclassifyPolicy as unknown as new () => DeclassifyPolicy) {};
+    expect(() => new PolicySubclass()).toThrow(/exact door-specific constructor/u);
 
     let reads = 0;
     const options = Object.defineProperty({}, 'ownerScope', {
@@ -201,12 +210,12 @@ describe('runtime Secret non-coercible wrapper (SPEC §10.2/§11.2)', () => {
       ownerScope: 'current-tenant',
       purpose: 'credential-use',
     });
-    expect(policy).toMatchObject({
-      door: 'revealSecret',
-      ownerScope: 'current-tenant',
-      purpose: 'credential-use',
-    });
+    expect(Object.keys(policy)).toEqual([]);
+    expect(policy).not.toHaveProperty('door');
+    expect(policy).not.toHaveProperty('ownerScope');
+    expect(policy).not.toHaveProperty('purpose');
     expect(Object.isFrozen(policy)).toBe(true);
+    expect(revealSecret(secret('tenant-key'), policy)).toBe('tenant-key');
 
     for (const options of [
       { ownerScope: 'application', purpose: 'public-projection' },
@@ -241,20 +250,20 @@ describe('runtime Secret non-coercible wrapper (SPEC §10.2/§11.2)', () => {
       trustedReveal(value, 'some string');
       // @ts-expect-error SPEC §6.6: request validation uses a closed policy, not a reason string.
       revealUntrusted(requestValue, 'some string');
-      // @ts-expect-error SPEC §6.6: a structural object is not a nominal DeclassifyPolicy.
       value.reveal({
+        // @ts-expect-error SPEC §6.6: a structural object is not a nominal DeclassifyPolicy.
         door: 'secret.reveal',
         ownerScope: 'application',
         purpose: 'server-computation',
       });
-      // @ts-expect-error fixed-purpose doors do not accept caller-authored purposes.
       DeclassifyPolicy.forTrustedReveal({
         ownerScope: 'application',
+        // @ts-expect-error fixed-purpose doors do not accept caller-authored purposes.
         purpose: 'public-projection',
       });
-      // @ts-expect-error one door's policy cannot authorize another reveal API.
       revealSecret(
         value,
+        // @ts-expect-error one door's policy cannot authorize another reveal API.
         DeclassifyPolicy.forSecretValue({
           ownerScope: 'application',
           purpose: 'server-computation',

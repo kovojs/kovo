@@ -1,10 +1,9 @@
 import { createHmac } from 'node:crypto';
-import { inspectFrameworkHmacSignatureVerifier } from '@kovojs/core/internal/verifier';
 import {
-  hmacSignature,
+  inspectFrameworkHmacSignatureVerifier,
   type HmacSignatureOptions,
-  type HmacSignatureVerifier,
-} from '@kovojs/core/webhooks';
+} from '@kovojs/core/internal/verifier';
+import { hmacSignature, type HmacSignatureVerifier } from '@kovojs/core/webhooks';
 import { describe, expect, it } from 'vitest';
 
 import {

@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
-import { hmacSignature, type HmacSecret, type HmacSignatureVerifier } from '@kovojs/core/webhooks';
+import { hmacSignature } from '@kovojs/core/webhooks';
 import {
   createMemoryWebhookReplayStore,
   webhookReplayIdentity,
@@ -9,6 +9,8 @@ import {
 } from '@kovojs/server/webhooks';
 import { replayMutationWireBody } from '@kovojs/server/replay';
 import type { MutationWireResponse } from '@kovojs/server/internal/wire';
+
+type HmacSignatureInput = Parameters<typeof hmacSignature>[0];
 
 const stripeTimestamp = Math.floor(Date.now() / 1_000);
 const stripePayload = JSON.stringify({
@@ -266,8 +268,8 @@ function parseStripeFixtureEvent(rawBody: Uint8Array): StripeFixtureEvent {
 }
 
 function stripeFixtureSignature(options: {
-  secret: HmacSecret | readonly HmacSecret[];
-}): HmacSignatureVerifier {
+  secret: HmacSignatureInput['secret'];
+}): ReturnType<typeof hmacSignature> {
   return hmacSignature({
     encoding: 'hex',
     header: 'stripe-signature',

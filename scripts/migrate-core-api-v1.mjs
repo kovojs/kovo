@@ -37,20 +37,11 @@ registerMoved('@kovojs/core/diagnostics', [
   'RegisteredDiagnostic',
 ]);
 registerMoved('@kovojs/core/security', [
-  'DeclassifyDoorId',
-  'DeclassifyOwnerScope',
   'DeclassifyPolicy',
-  'DeclassifyPolicyOptions',
-  'DeclassifyPurpose',
-  'DeclassifyPurposeFor',
-  'DeclareOffWireOptions',
-  'PublishToClientOptions',
   'Redacted',
-  'RedactedOptions',
   'RedactedValue',
   'Secret',
   'SecretValue',
-  'TrustedRevealValue',
   'Untrusted',
   'UntrustedValue',
   'declareOffWire',
@@ -87,15 +78,7 @@ registerMoved('@kovojs/core/storage', [
 ]);
 registerMoved('@kovojs/core/webhooks', [
   'CustomWebhookVerifier',
-  'HmacMultiSignature',
-  'HmacSecret',
-  'HmacSignatureEncoding',
-  'HmacSignatureOptions',
-  'HmacSignaturePayload',
-  'HmacSignaturePayloadContext',
-  'HmacSignatureTolerance',
   'HmacSignatureVerifier',
-  'StandardWebhooksOptions',
   'WebhookHeaderValue',
   'WebhookHeaders',
   'WebhookPayload',
@@ -104,6 +87,63 @@ registerMoved('@kovojs/core/webhooks', [
   'customVerifier',
   'hmacSignature',
   'standardWebhooks',
+]);
+
+const RETIRED_SYMBOLS_BY_SPECIFIER = new Map([
+  [
+    '@kovojs/core/security',
+    new Set([
+      'DeclassifyDoorId',
+      'DeclassifyOwnerScope',
+      'DeclassifyPolicyOptions',
+      'DeclassifyPurpose',
+      'DeclassifyPurposeFor',
+      'DeclareOffWireOptions',
+      'PublishToClientOptions',
+      'RedactedOptions',
+      'TrustedRevealValue',
+    ]),
+  ],
+  ['@kovojs/core/storage', new Set(['S3CompatibleObjectOperations'])],
+  [
+    '@kovojs/core/webhooks',
+    new Set([
+      'HmacMultiSignature',
+      'HmacSecret',
+      'HmacSignatureEncoding',
+      'HmacSignatureOptions',
+      'HmacSignaturePayload',
+      'HmacSignaturePayloadContext',
+      'HmacSignatureTolerance',
+      'StandardWebhooksOptions',
+    ]),
+  ],
+]);
+const TRACKED_SPECIFIERS = new Set([CORE_ROOT, ...RETIRED_SYMBOLS_BY_SPECIFIER.keys()]);
+const RETIRED_ROOT_SYMBOLS = new Set([
+  'DeclassifyDoorId',
+  'DeclassifyOwnerScope',
+  'DeclassifyPolicyOptions',
+  'DeclassifyPurpose',
+  'DeclassifyPurposeFor',
+  'DeclareOffWireOptions',
+  'HmacMultiSignature',
+  'HmacSecret',
+  'HmacSignatureEncoding',
+  'HmacSignatureOptions',
+  'HmacSignaturePayload',
+  'HmacSignaturePayloadContext',
+  'HmacSignatureTolerance',
+  'PublishToClientOptions',
+  'QueryConfig',
+  'queryRef',
+  'RedactedOptions',
+  'RegistryKey',
+  'RouteOptions',
+  'routeRef',
+  'S3CompatibleObjectOperations',
+  'StandardWebhooksOptions',
+  'TrustedRevealValue',
 ]);
 
 const INTERNALIZED_SYMBOLS = new Set([
@@ -186,21 +226,26 @@ export function analyzeCoreApiV1Migration({ fileName, source }) {
   }
 
   for (const statement of sourceFile.statements) {
-    if (
-      ts.isImportDeclaration(statement) &&
-      ts.isStringLiteral(statement.moduleSpecifier) &&
-      statement.moduleSpecifier.text === CORE_ROOT
-    ) {
-      analyzeImportDeclaration(statement, sourceFile, source, edits, refusals);
+    if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
+      const specifier = statement.moduleSpecifier.text;
+      if (specifier === CORE_ROOT) {
+        analyzeImportDeclaration(statement, sourceFile, source, edits, refusals);
+      } else if (RETIRED_SYMBOLS_BY_SPECIFIER.has(specifier)) {
+        analyzeTaskImportDeclaration(statement, specifier, sourceFile, refusals);
+      }
       continue;
     }
     if (
       ts.isExportDeclaration(statement) &&
       statement.moduleSpecifier &&
-      ts.isStringLiteral(statement.moduleSpecifier) &&
-      statement.moduleSpecifier.text === CORE_ROOT
+      ts.isStringLiteral(statement.moduleSpecifier)
     ) {
-      analyzeExportDeclaration(statement, sourceFile, source, edits, refusals);
+      const specifier = statement.moduleSpecifier.text;
+      if (specifier === CORE_ROOT) {
+        analyzeExportDeclaration(statement, sourceFile, source, edits, refusals);
+      } else if (RETIRED_SYMBOLS_BY_SPECIFIER.has(specifier)) {
+        analyzeTaskExportDeclaration(statement, specifier, sourceFile, refusals);
+      }
       continue;
     }
     if (
@@ -208,7 +253,7 @@ export function analyzeCoreApiV1Migration({ fileName, source }) {
       ts.isExternalModuleReference(statement.moduleReference) &&
       statement.moduleReference.expression &&
       ts.isStringLiteral(statement.moduleReference.expression) &&
-      statement.moduleReference.expression.text === CORE_ROOT
+      TRACKED_SPECIFIERS.has(statement.moduleReference.expression.text)
     ) {
       refusals.push(dynamicRefusal(statement, sourceFile, 'CommonJS-style import'));
     }
@@ -218,7 +263,9 @@ export function analyzeCoreApiV1Migration({ fileName, source }) {
     if (
       ts.isCallExpression(node) &&
       node.expression.kind === ts.SyntaxKind.ImportKeyword &&
-      node.arguments.some((argument) => ts.isStringLiteral(argument) && argument.text === CORE_ROOT)
+      node.arguments.some(
+        (argument) => ts.isStringLiteral(argument) && TRACKED_SPECIFIERS.has(argument.text),
+      )
     ) {
       refusals.push(dynamicRefusal(node, sourceFile, 'dynamic import'));
     }
@@ -226,7 +273,9 @@ export function analyzeCoreApiV1Migration({ fileName, source }) {
       ts.isCallExpression(node) &&
       ts.isIdentifier(node.expression) &&
       node.expression.text === 'require' &&
-      node.arguments.some((argument) => ts.isStringLiteral(argument) && argument.text === CORE_ROOT)
+      node.arguments.some(
+        (argument) => ts.isStringLiteral(argument) && TRACKED_SPECIFIERS.has(argument.text),
+      )
     ) {
       refusals.push(dynamicRefusal(node, sourceFile, 'CommonJS require'));
     }
@@ -234,7 +283,7 @@ export function analyzeCoreApiV1Migration({ fileName, source }) {
       ts.isImportTypeNode(node) &&
       ts.isLiteralTypeNode(node.argument) &&
       ts.isStringLiteral(node.argument.literal) &&
-      node.argument.literal.text === CORE_ROOT
+      TRACKED_SPECIFIERS.has(node.argument.literal.text)
     ) {
       refusals.push(dynamicRefusal(node, sourceFile, 'import type query'));
     }
@@ -256,6 +305,51 @@ export function analyzeCoreApiV1Migration({ fileName, source }) {
     source: applyEdits(source, stableEdits),
     status: 'rewritten',
   };
+}
+
+function analyzeTaskImportDeclaration(node, specifier, sourceFile, refusals) {
+  const clause = node.importClause;
+  if (!clause) return;
+  if (clause.name || (clause.namedBindings && ts.isNamespaceImport(clause.namedBindings))) {
+    const binding = clause.name ?? clause.namedBindings;
+    refusals.push({
+      category: 'ambiguous-binding',
+      end: binding.getEnd(),
+      reason: `A ${specifier} default or namespace import may read retired members and cannot be proven safe mechanically.`,
+      start: binding.getStart(sourceFile),
+    });
+    return;
+  }
+  if (!clause.namedBindings || !ts.isNamedImports(clause.namedBindings)) return;
+  refuseRetiredTaskMembers(clause.namedBindings.elements, specifier, sourceFile, refusals);
+}
+
+function analyzeTaskExportDeclaration(node, specifier, sourceFile, refusals) {
+  if (!node.exportClause || !ts.isNamedExports(node.exportClause)) {
+    refusals.push({
+      category: 'ambiguous-binding',
+      end: node.getEnd(),
+      reason: `A ${specifier} wildcard or namespace re-export may include retired members and cannot be proven safe mechanically.`,
+      start: node.getStart(sourceFile),
+    });
+    return;
+  }
+  refuseRetiredTaskMembers(node.exportClause.elements, specifier, sourceFile, refusals);
+}
+
+function refuseRetiredTaskMembers(elements, specifier, sourceFile, refusals) {
+  const retired = RETIRED_SYMBOLS_BY_SPECIFIER.get(specifier);
+  if (!retired) return;
+  for (const element of elements) {
+    const exported = element.propertyName?.text ?? element.name.text;
+    if (!retired.has(exported)) continue;
+    refusals.push({
+      category: 'app-context',
+      end: element.getEnd(),
+      reason: retiredSymbolReason(specifier, exported),
+      start: element.getStart(sourceFile),
+    });
+  }
 }
 
 function analyzeImportDeclaration(node, sourceFile, source, edits, refusals) {
@@ -342,6 +436,15 @@ function groupNamedSpecifiers(elements, sourceFile, source, refusals) {
   let changed = false;
   for (const element of elements) {
     const exported = element.propertyName?.text ?? element.name.text;
+    if (RETIRED_ROOT_SYMBOLS.has(exported)) {
+      refusals.push({
+        category: 'app-context',
+        end: element.getEnd(),
+        reason: retiredSymbolReason(CORE_ROOT, exported),
+        start: element.getStart(sourceFile),
+      });
+      continue;
+    }
     if (INTERNALIZED_SYMBOLS.has(exported)) {
       refusals.push({
         category: 'app-context',
@@ -361,6 +464,22 @@ function groupNamedSpecifiers(elements, sourceFile, source, refusals) {
     members.push(source.slice(element.getStart(sourceFile), element.getEnd()));
   }
   return { byModule, changed };
+}
+
+function retiredSymbolReason(specifier, symbol) {
+  if (symbol === 'queryRef' || symbol === 'QueryConfig') {
+    return `${symbol} was removed; declare the query through the app-owned query factory.`;
+  }
+  if (symbol === 'routeRef' || symbol === 'RouteOptions' || symbol === 'RegistryKey') {
+    return `${symbol} was removed; use the app-owned route declaration and inferred navigation contract.`;
+  }
+  if (symbol === 'S3CompatibleObjectOperations') {
+    return `${symbol} is inferred from Parameters<typeof S3CompatibleObjectClient.create>[0] and has no parallel named contract.`;
+  }
+  if (specifier === '@kovojs/core/webhooks' || symbol.startsWith('Hmac')) {
+    return `${symbol} is inferred from the verifier constructor and has no parallel named contract.`;
+  }
+  return `${symbol} is inferred from its door-specific security constructor or operation and has no parallel named contract.`;
 }
 
 function dynamicRefusal(node, sourceFile, spelling) {

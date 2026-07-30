@@ -41,6 +41,24 @@
       "state": "removed",
       "owner": "core-api",
       "decisions": [
+        "@kovojs/core/security#DeclareOffWireOptions",
+        "@kovojs/core/security#DeclassifyDoorId",
+        "@kovojs/core/security#DeclassifyOwnerScope",
+        "@kovojs/core/security#DeclassifyPolicyOptions",
+        "@kovojs/core/security#DeclassifyPurpose",
+        "@kovojs/core/security#DeclassifyPurposeFor",
+        "@kovojs/core/security#PublishToClientOptions",
+        "@kovojs/core/security#RedactedOptions",
+        "@kovojs/core/security#TrustedRevealValue",
+        "@kovojs/core/storage#S3CompatibleObjectOperations",
+        "@kovojs/core/webhooks#HmacMultiSignature",
+        "@kovojs/core/webhooks#HmacSecret",
+        "@kovojs/core/webhooks#HmacSignatureEncoding",
+        "@kovojs/core/webhooks#HmacSignatureOptions",
+        "@kovojs/core/webhooks#HmacSignaturePayload",
+        "@kovojs/core/webhooks#HmacSignaturePayloadContext",
+        "@kovojs/core/webhooks#HmacSignatureTolerance",
+        "@kovojs/core/webhooks#StandardWebhooksOptions",
         "@kovojs/core#AnyFunction",
         "@kovojs/core#CheckedComponentDefinition",
         "@kovojs/core#CheckedComponentPropsMetadata",
@@ -102,17 +120,22 @@
         "@kovojs/core#publishToClient",
         "@kovojs/core#PublishToClientOptions",
         "@kovojs/core#QueryArgsBinding",
+        "@kovojs/core#QueryConfig",
+        "@kovojs/core#queryRef",
         "@kovojs/core#QueryRegistry",
         "@kovojs/core#redacted",
         "@kovojs/core#Redacted",
         "@kovojs/core#RedactedOptions",
         "@kovojs/core#RedactedValue",
         "@kovojs/core#RegisteredDiagnostic",
+        "@kovojs/core#RegistryKey",
         "@kovojs/core#RequiredKeys",
         "@kovojs/core#ResolvedHmacSignatureConfig",
         "@kovojs/core#revealRedacted",
         "@kovojs/core#revealSecret",
         "@kovojs/core#revealUntrusted",
+        "@kovojs/core#RouteOptions",
+        "@kovojs/core#routeRef",
         "@kovojs/core#RouteRegistry",
         "@kovojs/core#S3CompatibleDeleteObjectInput",
         "@kovojs/core#S3CompatibleGetObjectInput",
@@ -385,40 +408,34 @@
           }
         },
         {
-          "id": "move-declare-off-wire-options",
-          "action": "rewrite",
+          "id": "internalize-declare-off-wire-options",
+          "action": "refuse",
           "from": {
             "specifier": "@kovojs/core",
             "symbol": "DeclareOffWireOptions"
           },
-          "to": {
-            "specifier": "@kovojs/core/security",
-            "symbol": "DeclareOffWireOptions"
-          }
+          "category": "app-context",
+          "reason": "DeclareOffWireOptions is inferred from declareOffWire() and has no parallel named contract."
         },
         {
-          "id": "move-declassify-door-id",
-          "action": "rewrite",
+          "id": "internalize-declassify-door-id",
+          "action": "refuse",
           "from": {
             "specifier": "@kovojs/core",
             "symbol": "DeclassifyDoorId"
           },
-          "to": {
-            "specifier": "@kovojs/core/security",
-            "symbol": "DeclassifyDoorId"
-          }
+          "category": "app-context",
+          "reason": "DeclassifyDoorId is closed inside the door-specific policy constructors and has no parallel named contract."
         },
         {
-          "id": "move-declassify-owner-scope",
-          "action": "rewrite",
+          "id": "internalize-declassify-owner-scope",
+          "action": "refuse",
           "from": {
             "specifier": "@kovojs/core",
             "symbol": "DeclassifyOwnerScope"
           },
-          "to": {
-            "specifier": "@kovojs/core/security",
-            "symbol": "DeclassifyOwnerScope"
-          }
+          "category": "app-context",
+          "reason": "DeclassifyOwnerScope is inferred from door-specific policy constructors and has no parallel named contract."
         },
         {
           "id": "move-declassify-policy",
@@ -433,40 +450,34 @@
           }
         },
         {
-          "id": "move-declassify-policy-options",
-          "action": "rewrite",
+          "id": "internalize-declassify-policy-options",
+          "action": "refuse",
           "from": {
             "specifier": "@kovojs/core",
             "symbol": "DeclassifyPolicyOptions"
           },
-          "to": {
-            "specifier": "@kovojs/core/security",
-            "symbol": "DeclassifyPolicyOptions"
-          }
+          "category": "app-context",
+          "reason": "DeclassifyPolicyOptions is inferred from the exact door-specific constructor and has no parallel named contract."
         },
         {
-          "id": "move-declassify-purpose",
-          "action": "rewrite",
+          "id": "internalize-declassify-purpose",
+          "action": "refuse",
           "from": {
             "specifier": "@kovojs/core",
             "symbol": "DeclassifyPurpose"
           },
-          "to": {
-            "specifier": "@kovojs/core/security",
-            "symbol": "DeclassifyPurpose"
-          }
+          "category": "app-context",
+          "reason": "DeclassifyPurpose is closed inside the door-specific policy constructors and has no parallel named contract."
         },
         {
-          "id": "move-declassify-purpose-for",
-          "action": "rewrite",
+          "id": "internalize-declassify-purpose-for",
+          "action": "refuse",
           "from": {
             "specifier": "@kovojs/core",
             "symbol": "DeclassifyPurposeFor"
           },
-          "to": {
-            "specifier": "@kovojs/core/security",
-            "symbol": "DeclassifyPurposeFor"
-          }
+          "category": "app-context",
+          "reason": "DeclassifyPurposeFor is inferred from the exact door-specific constructor and has no parallel named contract."
         },
         {
           "id": "move-diagnostic-code",
@@ -585,28 +596,24 @@
           }
         },
         {
-          "id": "move-hmac-multi-signature",
-          "action": "rewrite",
+          "id": "internalize-hmac-multi-signature",
+          "action": "refuse",
           "from": {
             "specifier": "@kovojs/core",
             "symbol": "HmacMultiSignature"
           },
-          "to": {
-            "specifier": "@kovojs/core/webhooks",
-            "symbol": "HmacMultiSignature"
-          }
+          "category": "app-context",
+          "reason": "HmacMultiSignature is inferred from hmacSignature() and has no parallel named contract."
         },
         {
-          "id": "move-hmac-secret",
-          "action": "rewrite",
+          "id": "internalize-hmac-secret",
+          "action": "refuse",
           "from": {
             "specifier": "@kovojs/core",
             "symbol": "HmacSecret"
           },
-          "to": {
-            "specifier": "@kovojs/core/webhooks",
-            "symbol": "HmacSecret"
-          }
+          "category": "app-context",
+          "reason": "HmacSecret is inferred from verifier constructors and has no parallel named contract."
         },
         {
           "id": "move-hmac-signature",
@@ -621,16 +628,14 @@
           }
         },
         {
-          "id": "move-hmac-signature-encoding",
-          "action": "rewrite",
+          "id": "internalize-hmac-signature-encoding",
+          "action": "refuse",
           "from": {
             "specifier": "@kovojs/core",
             "symbol": "HmacSignatureEncoding"
           },
-          "to": {
-            "specifier": "@kovojs/core/webhooks",
-            "symbol": "HmacSignatureEncoding"
-          }
+          "category": "app-context",
+          "reason": "HmacSignatureEncoding is inferred from hmacSignature() and has no parallel named contract."
         },
         {
           "id": "internalize-hmac-signature-inspection-config",
@@ -643,52 +648,44 @@
           "reason": "HmacSignatureInspectionConfig was an inferred or implementation-inspection carrier with no supported public replacement."
         },
         {
-          "id": "move-hmac-signature-options",
-          "action": "rewrite",
+          "id": "internalize-hmac-signature-options",
+          "action": "refuse",
           "from": {
             "specifier": "@kovojs/core",
             "symbol": "HmacSignatureOptions"
           },
-          "to": {
-            "specifier": "@kovojs/core/webhooks",
-            "symbol": "HmacSignatureOptions"
-          }
+          "category": "app-context",
+          "reason": "HmacSignatureOptions is inferred from Parameters<typeof hmacSignature>[0] and has no parallel named contract."
         },
         {
-          "id": "move-hmac-signature-payload",
-          "action": "rewrite",
+          "id": "internalize-hmac-signature-payload",
+          "action": "refuse",
           "from": {
             "specifier": "@kovojs/core",
             "symbol": "HmacSignaturePayload"
           },
-          "to": {
-            "specifier": "@kovojs/core/webhooks",
-            "symbol": "HmacSignaturePayload"
-          }
+          "category": "app-context",
+          "reason": "HmacSignaturePayload is inferred from hmacSignature() and has no parallel named contract."
         },
         {
-          "id": "move-hmac-signature-payload-context",
-          "action": "rewrite",
+          "id": "internalize-hmac-signature-payload-context",
+          "action": "refuse",
           "from": {
             "specifier": "@kovojs/core",
             "symbol": "HmacSignaturePayloadContext"
           },
-          "to": {
-            "specifier": "@kovojs/core/webhooks",
-            "symbol": "HmacSignaturePayloadContext"
-          }
+          "category": "app-context",
+          "reason": "HmacSignaturePayloadContext is contextually typed by hmacSignature() and has no parallel named contract."
         },
         {
-          "id": "move-hmac-signature-tolerance",
-          "action": "rewrite",
+          "id": "internalize-hmac-signature-tolerance",
+          "action": "refuse",
           "from": {
             "specifier": "@kovojs/core",
             "symbol": "HmacSignatureTolerance"
           },
-          "to": {
-            "specifier": "@kovojs/core/webhooks",
-            "symbol": "HmacSignatureTolerance"
-          }
+          "category": "app-context",
+          "reason": "HmacSignatureTolerance is inferred from hmacSignature() and has no parallel named contract."
         },
         {
           "id": "move-hmac-signature-verifier",
@@ -813,16 +810,14 @@
           }
         },
         {
-          "id": "move-publish-to-client-options",
-          "action": "rewrite",
+          "id": "internalize-publish-to-client-options",
+          "action": "refuse",
           "from": {
             "specifier": "@kovojs/core",
             "symbol": "PublishToClientOptions"
           },
-          "to": {
-            "specifier": "@kovojs/core/security",
-            "symbol": "PublishToClientOptions"
-          }
+          "category": "app-context",
+          "reason": "PublishToClientOptions is inferred from publishToClient() and has no parallel named contract."
         },
         {
           "id": "internalize-query-args-binding",
@@ -869,16 +864,14 @@
           }
         },
         {
-          "id": "move-redacted-options",
-          "action": "rewrite",
+          "id": "internalize-redacted-options",
+          "action": "refuse",
           "from": {
             "specifier": "@kovojs/core",
             "symbol": "RedactedOptions"
           },
-          "to": {
-            "specifier": "@kovojs/core/security",
-            "symbol": "RedactedOptions"
-          }
+          "category": "app-context",
+          "reason": "RedactedOptions is inferred from redacted() and has no parallel named contract."
         },
         {
           "id": "move-redacted-value",
@@ -1153,16 +1146,14 @@
           }
         },
         {
-          "id": "move-standard-webhooks-options",
-          "action": "rewrite",
+          "id": "internalize-standard-webhooks-options",
+          "action": "refuse",
           "from": {
             "specifier": "@kovojs/core",
             "symbol": "StandardWebhooksOptions"
           },
-          "to": {
-            "specifier": "@kovojs/core/webhooks",
-            "symbol": "StandardWebhooksOptions"
-          }
+          "category": "app-context",
+          "reason": "StandardWebhooksOptions is inferred from Parameters<typeof standardWebhooks>[0] and has no parallel named contract."
         },
         {
           "id": "move-storage-body",
@@ -1297,16 +1288,14 @@
           }
         },
         {
-          "id": "move-trusted-reveal-value",
-          "action": "rewrite",
+          "id": "internalize-trusted-reveal-value",
+          "action": "refuse",
           "from": {
             "specifier": "@kovojs/core",
             "symbol": "TrustedRevealValue"
           },
-          "to": {
-            "specifier": "@kovojs/core/security",
-            "symbol": "TrustedRevealValue"
-          }
+          "category": "app-context",
+          "reason": "TrustedRevealValue is inferred from trustedReveal() and has no parallel named contract."
         },
         {
           "id": "move-untrusted",
@@ -1403,11 +1392,244 @@
             "specifier": "@kovojs/core/webhooks",
             "symbol": "WebhookVerifier"
           }
+        },
+        {
+          "id": "internalize-security-declare-off-wire-options",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "DeclareOffWireOptions"
+          },
+          "category": "app-context",
+          "reason": "DeclareOffWireOptions is inferred from declareOffWire() and has no parallel named contract."
+        },
+        {
+          "id": "internalize-security-declassify-door-id",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "DeclassifyDoorId"
+          },
+          "category": "app-context",
+          "reason": "DeclassifyDoorId is closed inside the door-specific policy constructors and has no parallel named contract."
+        },
+        {
+          "id": "internalize-security-declassify-owner-scope",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "DeclassifyOwnerScope"
+          },
+          "category": "app-context",
+          "reason": "DeclassifyOwnerScope is inferred from door-specific policy constructors and has no parallel named contract."
+        },
+        {
+          "id": "internalize-security-declassify-policy-options",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "DeclassifyPolicyOptions"
+          },
+          "category": "app-context",
+          "reason": "DeclassifyPolicyOptions is inferred from the exact door-specific constructor and has no parallel named contract."
+        },
+        {
+          "id": "internalize-security-declassify-purpose",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "DeclassifyPurpose"
+          },
+          "category": "app-context",
+          "reason": "DeclassifyPurpose is closed inside the door-specific policy constructors and has no parallel named contract."
+        },
+        {
+          "id": "internalize-security-declassify-purpose-for",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "DeclassifyPurposeFor"
+          },
+          "category": "app-context",
+          "reason": "DeclassifyPurposeFor is inferred from the exact door-specific constructor and has no parallel named contract."
+        },
+        {
+          "id": "internalize-security-publish-to-client-options",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "PublishToClientOptions"
+          },
+          "category": "app-context",
+          "reason": "PublishToClientOptions is inferred from publishToClient() and has no parallel named contract."
+        },
+        {
+          "id": "internalize-security-redacted-options",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "RedactedOptions"
+          },
+          "category": "app-context",
+          "reason": "RedactedOptions is inferred from redacted() and has no parallel named contract."
+        },
+        {
+          "id": "internalize-security-trusted-reveal-value",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "TrustedRevealValue"
+          },
+          "category": "app-context",
+          "reason": "TrustedRevealValue is inferred from trustedReveal() and has no parallel named contract."
+        },
+        {
+          "id": "internalize-storage-s3-compatible-object-operations",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "S3CompatibleObjectOperations"
+          },
+          "category": "app-context",
+          "reason": "S3CompatibleObjectOperations is inferred from Parameters<typeof S3CompatibleObjectClient.create>[0]."
+        },
+        {
+          "id": "internalize-webhooks-hmac-multi-signature",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "HmacMultiSignature"
+          },
+          "category": "app-context",
+          "reason": "HmacMultiSignature is inferred from hmacSignature() and has no parallel named contract."
+        },
+        {
+          "id": "internalize-webhooks-hmac-secret",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "HmacSecret"
+          },
+          "category": "app-context",
+          "reason": "HmacSecret is inferred from verifier constructors and has no parallel named contract."
+        },
+        {
+          "id": "internalize-webhooks-hmac-signature-encoding",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "HmacSignatureEncoding"
+          },
+          "category": "app-context",
+          "reason": "HmacSignatureEncoding is inferred from hmacSignature() and has no parallel named contract."
+        },
+        {
+          "id": "internalize-webhooks-hmac-signature-options",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "HmacSignatureOptions"
+          },
+          "category": "app-context",
+          "reason": "HmacSignatureOptions is inferred from Parameters<typeof hmacSignature>[0] and has no parallel named contract."
+        },
+        {
+          "id": "internalize-webhooks-hmac-signature-payload",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "HmacSignaturePayload"
+          },
+          "category": "app-context",
+          "reason": "HmacSignaturePayload is inferred from hmacSignature() and has no parallel named contract."
+        },
+        {
+          "id": "internalize-webhooks-hmac-signature-payload-context",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "HmacSignaturePayloadContext"
+          },
+          "category": "app-context",
+          "reason": "HmacSignaturePayloadContext is contextually typed by hmacSignature() and has no parallel named contract."
+        },
+        {
+          "id": "internalize-webhooks-hmac-signature-tolerance",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "HmacSignatureTolerance"
+          },
+          "category": "app-context",
+          "reason": "HmacSignatureTolerance is inferred from hmacSignature() and has no parallel named contract."
+        },
+        {
+          "id": "internalize-webhooks-standard-webhooks-options",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "StandardWebhooksOptions"
+          },
+          "category": "app-context",
+          "reason": "StandardWebhooksOptions is inferred from Parameters<typeof standardWebhooks>[0]."
+        },
+        {
+          "id": "internalize-query-config",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "QueryConfig"
+          },
+          "category": "app-context",
+          "reason": "QueryConfig was removed with queryRef; declare queries through the app-owned query factory."
+        },
+        {
+          "id": "remove-query-ref",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "queryRef"
+          },
+          "category": "app-context",
+          "reason": "queryRef had no rename-safe library-only story; declare the query through the app-owned query factory."
+        },
+        {
+          "id": "internalize-registry-key",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "RegistryKey"
+          },
+          "category": "app-context",
+          "reason": "RegistryKey belonged to human registry augmentation; app registries are compiler-generated."
+        },
+        {
+          "id": "internalize-route-options",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "RouteOptions"
+          },
+          "category": "app-context",
+          "reason": "RouteOptions was removed with routeRef; use the app-owned route declaration and inferred navigation contract."
+        },
+        {
+          "id": "remove-route-ref",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "routeRef"
+          },
+          "category": "app-context",
+          "reason": "routeRef had no rename-safe library-only story; declare the route through the app-owned route factory."
         }
       ],
       "fixtures": {
         "rewrites": ["scripts/fixtures/api-migrations/core-task-topology-v1/task-imports.input.ts"],
-        "refusals": ["scripts/fixtures/api-migrations/core-task-topology-v1/registry.refusal.ts"]
+        "refusals": [
+          "scripts/fixtures/api-migrations/core-task-topology-v1/registry.refusal.ts",
+          "scripts/fixtures/api-migrations/core-task-topology-v1/retired-support.refusal.ts"
+        ]
       },
       "exercised": {
         "resultSchema": "kovo-api-migration-result/v1",

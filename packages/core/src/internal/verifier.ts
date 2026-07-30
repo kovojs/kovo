@@ -9,4 +9,9 @@ export {
   inspectFrameworkHmacSignatureVerifier,
   isFrameworkHmacSignatureVerifier,
 } from '../verifier.js';
-export type { HmacSignatureInspectionConfig, ResolvedHmacSignatureConfig } from '../verifier.js';
+export type {
+  HmacSecret,
+  HmacSignatureInspectionConfig,
+  HmacSignatureOptions,
+  ResolvedHmacSignatureConfig,
+} from '../verifier.js';

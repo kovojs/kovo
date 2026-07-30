@@ -7,15 +7,7 @@
 export { customVerifier, hmacSignature, standardWebhooks } from './verifier.js';
 export type {
   CustomWebhookVerifier,
-  HmacMultiSignature,
-  HmacSecret,
-  HmacSignatureEncoding,
-  HmacSignatureOptions,
-  HmacSignaturePayload,
-  HmacSignaturePayloadContext,
-  HmacSignatureTolerance,
   HmacSignatureVerifier,
-  StandardWebhooksOptions,
   WebhookHeaders,
   WebhookHeaderValue,
   WebhookPayload,

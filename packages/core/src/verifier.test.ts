@@ -5,14 +5,14 @@ import {
   customVerifier,
   hmacSignature,
   standardWebhooks,
-  type HmacSecret,
-  type HmacSignatureOptions,
   type HmacSignatureVerifier,
   type WebhookVerificationRequest,
 } from '@kovojs/core/webhooks';
 import {
   inspectFrameworkHmacSignatureVerifier,
   isFrameworkHmacSignatureVerifier,
+  type HmacSecret,
+  type HmacSignatureOptions,
 } from './internal/verifier.js';
 
 const providerPayload = '{"id":"evt_test_webhook","object":"event"}';
@@ -117,7 +117,7 @@ describe('webhook verifier kit', () => {
           encoding: 'hex',
           header: 'x-signature',
           payload: (request) => request.payload,
-        } as HmacSignatureOptions),
+        } as unknown as HmacSignatureOptions),
       ).toThrow('secret must be an own-data property');
     } finally {
       delete (Object.prototype as { secret?: unknown }).secret;
@@ -139,7 +139,7 @@ describe('webhook verifier kit', () => {
         },
       },
     );
-    expect(() => hmacSignature(options as HmacSignatureOptions)).toThrow(
+    expect(() => hmacSignature(options as unknown as HmacSignatureOptions)).toThrow(
       'secret must be an own-data property',
     );
     expect(secretReads).toBe(0);

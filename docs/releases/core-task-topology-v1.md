@@ -15,6 +15,13 @@ implementation contracts with no public replacement. `component()` now returns t
 `Component<Props>` handle; component definition, mutation-slot, GET-form, and link descriptor
 support types are inferred and cannot be imported as parallel authoring contracts.
 
+`queryRef`, `routeRef`, `QueryConfig`, `RouteOptions`, and `RegistryKey` are removed. Queries and
+routes belong to the app-owned declaration contract, which is the only source that can make their
+generated identities rename-safe. S3 operation types are inferred from
+`Parameters<typeof S3CompatibleObjectClient.create>[0]`; HMAC constructor inputs are inferred from
+`Parameters<typeof hmacSignature>[0]`. The security option/policy vocabulary is likewise inferred
+from the exact function or door-specific constructor rather than imported as parallel named types.
+
 Run the migration in check mode first:
 
 ```sh

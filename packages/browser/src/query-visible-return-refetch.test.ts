@@ -1,4 +1,3 @@
-import { queryRef } from '@kovojs/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { DelegatedEvent } from './events.js';
@@ -51,7 +50,7 @@ function visibleReturnEvent(): DelegatedEvent {
 // callback failures through the one runtime apply/error path, and goes inert on
 // disposal. The pure eligibility-ledger seam lives in the sibling
 // query-visible-return-ledger.test.ts file.
-describe('queryRef visible-return refetch', () => {
+describe('query visible-return refetch', () => {
   it('hydrates initial scripts without installing a visible-return listener when refetch is disabled', () => {
     const root = new FakeRoot();
     const store = createQueryStore();
@@ -68,9 +67,9 @@ describe('queryRef visible-return refetch', () => {
       root,
     });
 
-    // SPEC.md §4.4/§9.4: queryRef script hydration is loader lifecycle work even
+    // SPEC.md §4.4/§9.4: query-script hydration is loader lifecycle work even
     // when visible-return typed reads are not configured, and hydration uses
-    // the same compiled queryRef update plan path as mutation/queryRef refetch.
+    // the same compiled query update-plan path as mutation/query refetch.
     expect(store.get('cart')).toEqual({ count: 1 });
     expect(binding.textContent).toBe('1');
     expect(plan).toHaveBeenCalledWith({ count: 1 });
@@ -84,7 +83,7 @@ describe('queryRef visible-return refetch', () => {
     expect(root.listeners.has('pageshow')).toBe(false);
   });
 
-  it('hydrates new queryRef scripts before visible-return refetch and dedupes in-flight work', async () => {
+  it('hydrates new query scripts before visible-return refetch and dedupes in-flight work', async () => {
     const root = new FakeRoot();
     const store = createQueryStore();
     const refetchOnFocus = vi.fn();
@@ -122,7 +121,7 @@ describe('queryRef visible-return refetch', () => {
     const second = root.listeners.get('visibilitychange')?.(visibleReturnEvent());
     await Promise.resolve();
 
-    // SPEC.md section 4.4: visible-return refetch follows queryRef data discovered after install.
+    // SPEC.md section 4.4: visible-return refetch follows query data discovered after install.
     expect(refetchOnFocus).toHaveBeenCalledWith([{ name: 'cart' }, { name: 'reviews' }]);
     expect(fetch).toHaveBeenCalledTimes(1);
 
@@ -282,7 +281,7 @@ describe('queryRef visible-return refetch', () => {
     }
   });
 
-  it('makes newly hydrated keyed queryRefs eligible after an earlier typed-read pass', async () => {
+  it('makes newly hydrated keyed query references eligible after an earlier typed-read pass', async () => {
     const root = new FakeRoot();
     const store = createQueryStore();
     const refetchOnFocus = vi.fn();
@@ -323,7 +322,7 @@ describe('queryRef visible-return refetch', () => {
 
     await root.listeners.get('visibilitychange')?.(visibleReturnEvent());
 
-    // SPEC.md §4.4/§9.4: later server-rendered queryRefs join the same visible-return
+    // SPEC.md §4.4/§9.4: later server-rendered query references join the same visible-return
     // ledger after the first typed-read pass, including their exact retained href and key.
     expect(refetchOnFocus).toHaveBeenNthCalledWith(2, [
       { name: 'cart' },
@@ -428,7 +427,7 @@ describe('queryRef visible-return refetch', () => {
     refetch.rememberAppliedQueries(['reviews']);
     await staleListener?.(visibleReturnEvent());
 
-    // SPEC.md §4.4: disposed visible-return refetch must not keep observing queryRef data.
+    // SPEC.md §4.4: disposed visible-return refetch must not keep observing query data.
     expect(refetchOnFocus).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
     expect(store.get('cart')).toEqual({ count: 1 });
@@ -472,7 +471,7 @@ describe('queryRef visible-return refetch', () => {
     expect(store.get('cart')).toEqual({ count: 1 });
   });
 
-  it('excludes a declared refetchOnFocus:false queryRef from focus refetch while others still refetch (SPEC §9.3/§9.4)', async () => {
+  it('excludes an app-declared refetchOnFocus:false query from focus refetch while others still refetch (SPEC §9.3/§9.4)', async () => {
     const root = new FakeRoot();
     const store = createQueryStore();
     const refetchOnFocus = vi.fn();
@@ -490,11 +489,11 @@ describe('queryRef visible-return refetch', () => {
     ];
     root.bindings = [cartBinding];
 
-    // SPEC §9.3/§9.4: the declarative opt-out lives on the `@kovojs/core` queryRef handle, and the
-    // runtime derives its focus-refetch exclusion from those declarations — a `queryRef(key,
-    // { refetchOnFocus: false })` declaration drives the runtime, an unmarked queryRef still refetches.
+    // SPEC §9.3/§9.4: the declarative opt-out lives on the app-owned query declaration. The
+    // runtime derives its focus-refetch exclusion from that declaration while unmarked queries
+    // continue to refetch.
     installQueryVisibleReturnRefetch({
-      declaredQueries: [queryRef('productGrid', { refetchOnFocus: false }), queryRef('cart')],
+      declaredQueries: [{ key: 'productGrid', refetchOnFocus: false }, { key: 'cart' }],
       queryPlans: { cart: { bindings: true } },
       queryRefetch: testQueryRefetch(fetch),
       queryStore: store,
@@ -509,7 +508,7 @@ describe('queryRef visible-return refetch', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(fetch).toHaveBeenCalledWith(typedReadUrl('/_q/cart'), typedReadRequest);
     expect(store.get('cart')).toEqual({ count: 2 });
-    // The opted-out queryRef keeps its hydrated value and is never re-read on focus.
+    // The opted-out query keeps its hydrated value and is never re-read on focus.
     expect(store.get('productGrid')).toEqual({ products: [] });
   });
 });

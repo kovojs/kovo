@@ -246,6 +246,12 @@ The replay store receives the canonical `{ key, occurredAtMs, expiresAtMs }` fac
 
 The verifier kit is part of the normative surface for `webhook()`: `hmacSignature({ header, payload, encoding, tolerance, multiSig })` is the generic form, and `standardWebhooks({ secret })` is the shared non-vendor preset that resolves to printed generic HMAC configuration. Provider-specific HMAC recipes live in app/example code on top of `hmacSignature`, not in framework package exports. Verification is over raw bytes, uses constant-time comparison, enforces timestamp tolerance, and supports rotated secrets/multiple signatures. Non-HMAC providers use a custom `verify(request)` escape that appears as custom auth in the audit; `verify: 'none'` requires a named justification and appears as unauthenticated machine ingress.
 
+The public webhook task path exports the constructors plus verifier/request contracts. Constructor
+input vocabulary is contextually typed and may be named by inference
+(`Parameters<typeof hmacSignature>[0]`), not by parallel exported HMAC option, secret, payload,
+tolerance, or resolved-inspection records. Provider signing material and inspection snapshots remain
+framework-internal.
+
 ### 9.2 Errors
 
 #### Rejection equivalence and observation policy (normative)

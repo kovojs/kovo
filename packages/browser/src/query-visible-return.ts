@@ -53,9 +53,8 @@ export interface QueryVisibleReturnRefetchOptions {
   /**
    * SPEC §9.3/§9.4: declared queries whose `refetchOnFocus: false` opt-out drives the runtime
    * exclusion set. The declared opt-out (derived via {@link deriveRefetchOnFocusOptOut}) is unioned
-   * with any explicit {@link refetchOnFocusOptOut}, so an app author opting a query out at the
-   * `@kovojs/core` `queryRef(key, { refetchOnFocus: false })` declaration site actually excludes it
-   * from focus refetch.
+   * with any explicit {@link refetchOnFocusOptOut}, so an app-owned query declaration with
+   * `refetchOnFocus: false` excludes that query from focus refetch.
    */
   declaredQueries?: readonly RefetchOnFocusDeclaration[];
   onError?: (error: unknown) => void;
@@ -161,7 +160,7 @@ export function installQueryVisibleReturnRefetch(
 
   // SPEC §9.3/§9.4: the runtime opt-out is the union of any explicit `refetchOnFocusOptOut` and
   // the set derived from declared `refetchOnFocus: false` queries, so the declarative opt-out at
-  // the `queryRef(key, { refetchOnFocus: false })` site actually drives focus-refetch behavior.
+  // the app-owned `refetchOnFocus: false` declaration actually drives focus-refetch behavior.
   const refetchOnFocusOptOut: string[] = [];
   appendDenseStrings(
     refetchOnFocusOptOut,

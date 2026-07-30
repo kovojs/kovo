@@ -290,8 +290,50 @@ export function inspectFrameworkHmacSignatureVerifier(value: HmacSignatureVerifi
  *   secret,
  * });
  */
-export function hmacSignature(options: HmacSignatureOptions): HmacSignatureVerifier {
-  return createHmacSignature(options);
+export function hmacSignature(options: {
+  encoding: 'base64' | 'base64url' | 'hex';
+  header: string;
+  multiSig?: boolean | ((signatureHeader: string) => readonly string[]);
+  name?: string;
+  payload:
+    | WebhookPayload
+    | ((
+        request: WebhookVerificationRequest,
+        context: {
+          header(name: string): string | undefined;
+          signatureHeader: string;
+        },
+      ) => Promise<WebhookPayload> | WebhookPayload);
+  scheme?: string;
+  secret:
+    | string
+    | Uint8Array
+    | {
+        encoding?: 'base64' | 'base64url' | 'utf8';
+        value: string | Uint8Array;
+      }
+    | readonly (
+        | string
+        | Uint8Array
+        | {
+            encoding?: 'base64' | 'base64url' | 'utf8';
+            value: string | Uint8Array;
+          }
+      )[];
+  tolerance?: {
+    header?: string;
+    seconds: number;
+    timestamp?: (
+      request: WebhookVerificationRequest,
+      context: {
+        header(name: string): string | undefined;
+        signatureHeader: string;
+      },
+    ) => number | string | undefined;
+  };
+}): HmacSignatureVerifier;
+export function hmacSignature(options: unknown): HmacSignatureVerifier {
+  return createHmacSignature(options as HmacSignatureOptions);
 }
 
 function createHmacSignature(
@@ -651,9 +693,27 @@ export function customVerifier(
  *   secret,
  * });
  */
-export function standardWebhooks(options: StandardWebhooksOptions): HmacSignatureVerifier {
+export function standardWebhooks(options: {
+  secret:
+    | string
+    | Uint8Array
+    | {
+        encoding?: 'base64' | 'base64url' | 'utf8';
+        value: string | Uint8Array;
+      }
+    | readonly (
+        | string
+        | Uint8Array
+        | {
+            encoding?: 'base64' | 'base64url' | 'utf8';
+            value: string | Uint8Array;
+          }
+      )[];
+}): HmacSignatureVerifier;
+export function standardWebhooks(options: unknown): HmacSignatureVerifier {
+  const validatedOptions = options as StandardWebhooksOptions;
   const secret = ownHmacOption<StandardWebhooksOptions['secret']>(
-    options,
+    validatedOptions,
     'secret',
     'Standard Webhooks secret',
     true,

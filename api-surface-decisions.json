@@ -2020,45 +2020,36 @@
       "package": "@kovojs/core",
       "specifier": "@kovojs/core/security",
       "symbol": "DeclareOffWireOptions",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/core/security",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-security",
       "evidence": "core-security-contract",
-      "introduced": {
-        "releaseNote": "docs/releases/core-task-topology-v1.md",
-        "contractTest": "packages/core/src/secret.test.ts"
-      }
+      "migrationBatch": "core-task-topology-v1"
     },
     {
       "id": "@kovojs/core/security#DeclassifyDoorId",
       "package": "@kovojs/core",
       "specifier": "@kovojs/core/security",
       "symbol": "DeclassifyDoorId",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/core/security",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-security",
       "evidence": "core-security-contract",
-      "introduced": {
-        "releaseNote": "docs/releases/core-task-topology-v1.md",
-        "contractTest": "packages/core/src/secret.test.ts"
-      }
+      "migrationBatch": "core-task-topology-v1"
     },
     {
       "id": "@kovojs/core/security#DeclassifyOwnerScope",
       "package": "@kovojs/core",
       "specifier": "@kovojs/core/security",
       "symbol": "DeclassifyOwnerScope",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/core/security",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-security",
       "evidence": "core-security-contract",
-      "introduced": {
-        "releaseNote": "docs/releases/core-task-topology-v1.md",
-        "contractTest": "packages/core/src/secret.test.ts"
-      }
+      "migrationBatch": "core-task-topology-v1"
     },
     {
       "id": "@kovojs/core/security#DeclassifyPolicy",
@@ -2081,45 +2072,36 @@
       "package": "@kovojs/core",
       "specifier": "@kovojs/core/security",
       "symbol": "DeclassifyPolicyOptions",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/core/security",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-security",
       "evidence": "core-security-contract",
-      "introduced": {
-        "releaseNote": "docs/releases/core-task-topology-v1.md",
-        "contractTest": "packages/core/src/secret.test.ts"
-      }
+      "migrationBatch": "core-task-topology-v1"
     },
     {
       "id": "@kovojs/core/security#DeclassifyPurpose",
       "package": "@kovojs/core",
       "specifier": "@kovojs/core/security",
       "symbol": "DeclassifyPurpose",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/core/security",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-security",
       "evidence": "core-security-contract",
-      "introduced": {
-        "releaseNote": "docs/releases/core-task-topology-v1.md",
-        "contractTest": "packages/core/src/secret.test.ts"
-      }
+      "migrationBatch": "core-task-topology-v1"
     },
     {
       "id": "@kovojs/core/security#DeclassifyPurposeFor",
       "package": "@kovojs/core",
       "specifier": "@kovojs/core/security",
       "symbol": "DeclassifyPurposeFor",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/core/security",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-security",
       "evidence": "core-security-contract",
-      "introduced": {
-        "releaseNote": "docs/releases/core-task-topology-v1.md",
-        "contractTest": "packages/core/src/secret.test.ts"
-      }
+      "migrationBatch": "core-task-topology-v1"
     },
     {
       "id": "@kovojs/core/security#isRedacted",
@@ -2190,15 +2172,12 @@
       "package": "@kovojs/core",
       "specifier": "@kovojs/core/security",
       "symbol": "PublishToClientOptions",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/core/security",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-security",
       "evidence": "core-security-contract",
-      "introduced": {
-        "releaseNote": "docs/releases/core-task-topology-v1.md",
-        "contractTest": "packages/core/src/secret.test.ts"
-      }
+      "migrationBatch": "core-task-topology-v1"
     },
     {
       "id": "@kovojs/core/security#redacted",
@@ -2236,15 +2215,12 @@
       "package": "@kovojs/core",
       "specifier": "@kovojs/core/security",
       "symbol": "RedactedOptions",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/core/security",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-security",
       "evidence": "core-security-contract",
-      "introduced": {
-        "releaseNote": "docs/releases/core-task-topology-v1.md",
-        "contractTest": "packages/core/src/secret.test.ts"
-      }
+      "migrationBatch": "core-task-topology-v1"
     },
     {
       "id": "@kovojs/core/security#RedactedValue",
@@ -2376,15 +2352,12 @@
       "package": "@kovojs/core",
       "specifier": "@kovojs/core/security",
       "symbol": "TrustedRevealValue",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/core/security",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-security",
       "evidence": "core-security-contract",
-      "introduced": {
-        "releaseNote": "docs/releases/core-task-topology-v1.md",
-        "contractTest": "packages/core/src/secret.test.ts"
-      }
+      "migrationBatch": "core-task-topology-v1"
     },
     {
       "id": "@kovojs/core/security#untrusted",
@@ -2531,15 +2504,12 @@
       "package": "@kovojs/core",
       "specifier": "@kovojs/core/storage",
       "symbol": "S3CompatibleObjectOperations",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/core/storage",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-storage",
       "evidence": "core-storage-contract",
-      "introduced": {
-        "releaseNote": "docs/releases/core-task-topology-v1.md",
-        "contractTest": "packages/core/src/storage-public.test.ts"
-      }
+      "migrationBatch": "core-task-topology-v1"
     },
     {
       "id": "@kovojs/core/storage#S3CompatibleStorageOptions",
@@ -2742,30 +2712,24 @@
       "package": "@kovojs/core",
       "specifier": "@kovojs/core/webhooks",
       "symbol": "HmacMultiSignature",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/core/webhooks",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-webhooks",
       "evidence": "core-webhook-contract",
-      "introduced": {
-        "releaseNote": "docs/releases/core-task-topology-v1.md",
-        "contractTest": "packages/core/src/verifier.test.ts"
-      }
+      "migrationBatch": "core-task-topology-v1"
     },
     {
       "id": "@kovojs/core/webhooks#HmacSecret",
       "package": "@kovojs/core",
       "specifier": "@kovojs/core/webhooks",
       "symbol": "HmacSecret",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/core/webhooks",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-webhooks",
       "evidence": "core-webhook-contract",
-      "introduced": {
-        "releaseNote": "docs/releases/core-task-topology-v1.md",
-        "contractTest": "packages/core/src/verifier.test.ts"
-      }
+      "migrationBatch": "core-task-topology-v1"
     },
     {
       "id": "@kovojs/core/webhooks#hmacSignature",
@@ -2788,75 +2752,60 @@
       "package": "@kovojs/core",
       "specifier": "@kovojs/core/webhooks",
       "symbol": "HmacSignatureEncoding",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/core/webhooks",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-webhooks",
       "evidence": "core-webhook-contract",
-      "introduced": {
-        "releaseNote": "docs/releases/core-task-topology-v1.md",
-        "contractTest": "packages/core/src/verifier.test.ts"
-      }
+      "migrationBatch": "core-task-topology-v1"
     },
     {
       "id": "@kovojs/core/webhooks#HmacSignatureOptions",
       "package": "@kovojs/core",
       "specifier": "@kovojs/core/webhooks",
       "symbol": "HmacSignatureOptions",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/core/webhooks",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-webhooks",
       "evidence": "core-webhook-contract",
-      "introduced": {
-        "releaseNote": "docs/releases/core-task-topology-v1.md",
-        "contractTest": "packages/core/src/verifier.test.ts"
-      }
+      "migrationBatch": "core-task-topology-v1"
     },
     {
       "id": "@kovojs/core/webhooks#HmacSignaturePayload",
       "package": "@kovojs/core",
       "specifier": "@kovojs/core/webhooks",
       "symbol": "HmacSignaturePayload",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/core/webhooks",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-webhooks",
       "evidence": "core-webhook-contract",
-      "introduced": {
-        "releaseNote": "docs/releases/core-task-topology-v1.md",
-        "contractTest": "packages/core/src/verifier.test.ts"
-      }
+      "migrationBatch": "core-task-topology-v1"
     },
     {
       "id": "@kovojs/core/webhooks#HmacSignaturePayloadContext",
       "package": "@kovojs/core",
       "specifier": "@kovojs/core/webhooks",
       "symbol": "HmacSignaturePayloadContext",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/core/webhooks",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-webhooks",
       "evidence": "core-webhook-contract",
-      "introduced": {
-        "releaseNote": "docs/releases/core-task-topology-v1.md",
-        "contractTest": "packages/core/src/verifier.test.ts"
-      }
+      "migrationBatch": "core-task-topology-v1"
     },
     {
       "id": "@kovojs/core/webhooks#HmacSignatureTolerance",
       "package": "@kovojs/core",
       "specifier": "@kovojs/core/webhooks",
       "symbol": "HmacSignatureTolerance",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/core/webhooks",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-webhooks",
       "evidence": "core-webhook-contract",
-      "introduced": {
-        "releaseNote": "docs/releases/core-task-topology-v1.md",
-        "contractTest": "packages/core/src/verifier.test.ts"
-      }
+      "migrationBatch": "core-task-topology-v1"
     },
     {
       "id": "@kovojs/core/webhooks#HmacSignatureVerifier",
@@ -2894,15 +2843,12 @@
       "package": "@kovojs/core",
       "specifier": "@kovojs/core/webhooks",
       "symbol": "StandardWebhooksOptions",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/core/webhooks",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-webhooks",
       "evidence": "core-webhook-contract",
-      "introduced": {
-        "releaseNote": "docs/releases/core-task-topology-v1.md",
-        "contractTest": "packages/core/src/verifier.test.ts"
-      }
+      "migrationBatch": "core-task-topology-v1"
     },
     {
       "id": "@kovojs/core/webhooks#WebhookHeaders",
@@ -3303,8 +3249,8 @@
       "specifier": "@kovojs/core",
       "symbol": "DeclareOffWireOptions",
       "state": "removed",
-      "decision": "move",
-      "canonicalHome": "@kovojs/core/security",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-security",
       "evidence": "core-security-contract",
       "migrationBatch": "core-task-topology-v1"
@@ -3315,8 +3261,8 @@
       "specifier": "@kovojs/core",
       "symbol": "DeclassifyDoorId",
       "state": "removed",
-      "decision": "move",
-      "canonicalHome": "@kovojs/core/security",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-security",
       "evidence": "core-security-contract",
       "migrationBatch": "core-task-topology-v1"
@@ -3327,8 +3273,8 @@
       "specifier": "@kovojs/core",
       "symbol": "DeclassifyOwnerScope",
       "state": "removed",
-      "decision": "move",
-      "canonicalHome": "@kovojs/core/security",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-security",
       "evidence": "core-security-contract",
       "migrationBatch": "core-task-topology-v1"
@@ -3351,8 +3297,8 @@
       "specifier": "@kovojs/core",
       "symbol": "DeclassifyPolicyOptions",
       "state": "removed",
-      "decision": "move",
-      "canonicalHome": "@kovojs/core/security",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-security",
       "evidence": "core-security-contract",
       "migrationBatch": "core-task-topology-v1"
@@ -3363,8 +3309,8 @@
       "specifier": "@kovojs/core",
       "symbol": "DeclassifyPurpose",
       "state": "removed",
-      "decision": "move",
-      "canonicalHome": "@kovojs/core/security",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-security",
       "evidence": "core-security-contract",
       "migrationBatch": "core-task-topology-v1"
@@ -3375,8 +3321,8 @@
       "specifier": "@kovojs/core",
       "symbol": "DeclassifyPurposeFor",
       "state": "removed",
-      "decision": "move",
-      "canonicalHome": "@kovojs/core/security",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-security",
       "evidence": "core-security-contract",
       "migrationBatch": "core-task-topology-v1"
@@ -3640,8 +3586,8 @@
       "specifier": "@kovojs/core",
       "symbol": "HmacMultiSignature",
       "state": "removed",
-      "decision": "move",
-      "canonicalHome": "@kovojs/core/webhooks",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-webhooks",
       "evidence": "core-webhook-contract",
       "migrationBatch": "core-task-topology-v1"
@@ -3652,8 +3598,8 @@
       "specifier": "@kovojs/core",
       "symbol": "HmacSecret",
       "state": "removed",
-      "decision": "move",
-      "canonicalHome": "@kovojs/core/webhooks",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-webhooks",
       "evidence": "core-webhook-contract",
       "migrationBatch": "core-task-topology-v1"
@@ -3676,8 +3622,8 @@
       "specifier": "@kovojs/core",
       "symbol": "HmacSignatureEncoding",
       "state": "removed",
-      "decision": "move",
-      "canonicalHome": "@kovojs/core/webhooks",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-webhooks",
       "evidence": "core-webhook-contract",
       "migrationBatch": "core-task-topology-v1"
@@ -3700,8 +3646,8 @@
       "specifier": "@kovojs/core",
       "symbol": "HmacSignatureOptions",
       "state": "removed",
-      "decision": "move",
-      "canonicalHome": "@kovojs/core/webhooks",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-webhooks",
       "evidence": "core-webhook-contract",
       "migrationBatch": "core-task-topology-v1"
@@ -3712,8 +3658,8 @@
       "specifier": "@kovojs/core",
       "symbol": "HmacSignaturePayload",
       "state": "removed",
-      "decision": "move",
-      "canonicalHome": "@kovojs/core/webhooks",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-webhooks",
       "evidence": "core-webhook-contract",
       "migrationBatch": "core-task-topology-v1"
@@ -3724,8 +3670,8 @@
       "specifier": "@kovojs/core",
       "symbol": "HmacSignaturePayloadContext",
       "state": "removed",
-      "decision": "move",
-      "canonicalHome": "@kovojs/core/webhooks",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-webhooks",
       "evidence": "core-webhook-contract",
       "migrationBatch": "core-task-topology-v1"
@@ -3736,8 +3682,8 @@
       "specifier": "@kovojs/core",
       "symbol": "HmacSignatureTolerance",
       "state": "removed",
-      "decision": "move",
-      "canonicalHome": "@kovojs/core/webhooks",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-webhooks",
       "evidence": "core-webhook-contract",
       "migrationBatch": "core-task-topology-v1"
@@ -3957,8 +3903,8 @@
       "specifier": "@kovojs/core",
       "symbol": "PublishToClientOptions",
       "state": "removed",
-      "decision": "move",
-      "canonicalHome": "@kovojs/core/security",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-security",
       "evidence": "core-security-contract",
       "migrationBatch": "core-task-topology-v1"
@@ -3991,22 +3937,24 @@
       "package": "@kovojs/core",
       "specifier": "@kovojs/core",
       "symbol": "QueryConfig",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/core",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-authoring",
-      "evidence": "core-authoring-contract"
+      "evidence": "core-authoring-contract",
+      "migrationBatch": "core-task-topology-v1"
     },
     {
       "id": "@kovojs/core#queryRef",
       "package": "@kovojs/core",
       "specifier": "@kovojs/core",
       "symbol": "queryRef",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/core",
+      "state": "removed",
+      "decision": "remove",
+      "canonicalHome": "none",
       "story": "core-authoring",
-      "evidence": "core-authoring-contract"
+      "evidence": "core-authoring-contract",
+      "migrationBatch": "core-task-topology-v1"
     },
     {
       "id": "@kovojs/core#QueryRefreshBinding",
@@ -4072,8 +4020,8 @@
       "specifier": "@kovojs/core",
       "symbol": "RedactedOptions",
       "state": "removed",
-      "decision": "move",
-      "canonicalHome": "@kovojs/core/security",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-security",
       "evidence": "core-security-contract",
       "migrationBatch": "core-task-topology-v1"
@@ -4129,11 +4077,12 @@
       "package": "@kovojs/core",
       "specifier": "@kovojs/core",
       "symbol": "RegistryKey",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/core",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-authoring",
-      "evidence": "core-authoring-contract"
+      "evidence": "core-authoring-contract",
+      "migrationBatch": "core-task-topology-v1"
     },
     {
       "id": "@kovojs/core#RequiredKeys",
@@ -4211,22 +4160,24 @@
       "package": "@kovojs/core",
       "specifier": "@kovojs/core",
       "symbol": "RouteOptions",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/core",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-authoring",
-      "evidence": "core-authoring-contract"
+      "evidence": "core-authoring-contract",
+      "migrationBatch": "core-task-topology-v1"
     },
     {
       "id": "@kovojs/core#routeRef",
       "package": "@kovojs/core",
       "specifier": "@kovojs/core",
       "symbol": "routeRef",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/core",
+      "state": "removed",
+      "decision": "remove",
+      "canonicalHome": "none",
       "story": "core-authoring",
-      "evidence": "core-authoring-contract"
+      "evidence": "core-authoring-contract",
+      "migrationBatch": "core-task-topology-v1"
     },
     {
       "id": "@kovojs/core#RouteRegistry",
@@ -4483,8 +4434,8 @@
       "specifier": "@kovojs/core",
       "symbol": "StandardWebhooksOptions",
       "state": "removed",
-      "decision": "move",
-      "canonicalHome": "@kovojs/core/webhooks",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-webhooks",
       "evidence": "core-webhook-contract",
       "migrationBatch": "core-task-topology-v1"
@@ -4627,8 +4578,8 @@
       "specifier": "@kovojs/core",
       "symbol": "TrustedRevealValue",
       "state": "removed",
-      "decision": "move",
-      "canonicalHome": "@kovojs/core/security",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/core",
       "story": "core-security",
       "evidence": "core-security-contract",
       "migrationBatch": "core-task-topology-v1"

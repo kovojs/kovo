@@ -6,11 +6,12 @@ import {
   createMemoryStorage,
   createS3CompatibleStorage,
   S3CompatibleObjectClient,
-  type S3CompatibleObjectOperations,
   type StorageBody,
   type StoragePutOptions,
   type StoragePutResult,
 } from '@kovojs/core/storage';
+
+type S3CompatibleObjectOperations = Parameters<typeof S3CompatibleObjectClient.create>[0];
 
 interface StoredObject {
   body: Uint8Array;

@@ -49,7 +49,7 @@ export type {
  * The shape speaks only Kovo's stable storage vocabulary; AWS/R2/MinIO request and response
  * records remain inside the adapter module.
  */
-export type S3CompatibleObjectOperations = {
+type S3CompatibleObjectOperations = {
   delete(bucket: string, key: string): Promise<void>;
   get(bucket: string, key: string): Promise<StorageGetResult | StorageStreamResult | undefined>;
   list(
@@ -98,21 +98,44 @@ export class S3CompatibleObjectClient {
    * The operation methods use positional bucket/key arguments and Kovo storage
    * results, so provider-specific request and metadata carriers stay local.
    */
-  static create(operations: S3CompatibleObjectOperations): S3CompatibleObjectClient {
-    if (typeof operations !== 'object' || operations === null || securityIsArray(operations)) {
-      throw new TypeError('S3-compatible operations must be an object.');
-    }
-    const snapshot: S3CompatibleObjectOperations = freezeSecurityValue({
-      delete: stableOperation(operations, 'delete'),
-      get: stableOperation(operations, 'get'),
-      list: stableOperation(operations, 'list'),
-      put: stableOperation(operations, 'put'),
-      stat: stableOperation(operations, 'stat'),
-    });
+  static create(operations: {
+    delete(bucket: string, key: string): Promise<void>;
+    get(bucket: string, key: string): Promise<StorageGetResult | StorageStreamResult | undefined>;
+    list(
+      bucket: string,
+      prefix: string,
+      cursor?: string,
+    ): Promise<{ cursor?: string; keys: readonly string[] }>;
+    put(
+      bucket: string,
+      key: string,
+      body: StorageBody,
+      options?: StoragePutOptions,
+    ): Promise<StoragePutResult>;
+    stat(bucket: string, key: string): Promise<StorageObjectInfo | undefined>;
+  }): S3CompatibleObjectClient {
     const client = new S3CompatibleObjectClient(s3CompatibleClientConstructorToken);
-    securityWeakMapSet(s3CompatibleClientImplementations, client, implementationClient(snapshot));
-    return client;
+    return registerS3CompatibleClient(client, operations);
   }
+}
+
+function registerS3CompatibleClient(
+  client: S3CompatibleObjectClient,
+  operations: unknown,
+): S3CompatibleObjectClient {
+  if (typeof operations !== 'object' || operations === null || securityIsArray(operations)) {
+    throw new TypeError('S3-compatible operations must be an object.');
+  }
+  const validatedOperations = operations as S3CompatibleObjectOperations;
+  const snapshot: S3CompatibleObjectOperations = freezeSecurityValue({
+    delete: stableOperation(validatedOperations, 'delete'),
+    get: stableOperation(validatedOperations, 'get'),
+    list: stableOperation(validatedOperations, 'list'),
+    put: stableOperation(validatedOperations, 'put'),
+    stat: stableOperation(validatedOperations, 'stat'),
+  });
+  securityWeakMapSet(s3CompatibleClientImplementations, client, implementationClient(snapshot));
+  return client;
 }
 
 /** App wiring for one S3-compatible bucket and optional physical-key prefix. */

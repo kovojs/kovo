@@ -10,7 +10,7 @@ describe('core API v1 migration executable', () => {
   it('splits aliased value/type imports and named re-exports by canonical task', () => {
     const source = [
       "import { component, secret as classify, type Secret, hmacSignature, createMemoryStorage, type DiagnosticCode } from '@kovojs/core';",
-      "export { routeRef, trustedReveal, type WebhookVerifier } from '@kovojs/core';",
+      "export { redirect, trustedReveal, type WebhookVerifier } from '@kovojs/core';",
       '',
     ].join('\n');
 
@@ -25,7 +25,7 @@ describe('core API v1 migration executable', () => {
         "import { hmacSignature } from '@kovojs/core/webhooks';",
         "import { createMemoryStorage } from '@kovojs/core/storage';",
         "import { type DiagnosticCode } from '@kovojs/core/diagnostics';",
-        "export { routeRef } from '@kovojs/core';",
+        "export { redirect } from '@kovojs/core';",
         "export { trustedReveal } from '@kovojs/core/security';",
         "export { type WebhookVerifier } from '@kovojs/core/webhooks';",
         '',
@@ -129,6 +129,37 @@ describe('core API v1 migration executable', () => {
       refusals: [{ category: 'app-context' }],
       status: 'refused',
     });
+  });
+
+  it.each([
+    ['@kovojs/core', 'queryRef'],
+    ['@kovojs/core', 'routeRef'],
+    ['@kovojs/core', 'QueryConfig'],
+    ['@kovojs/core/security', 'DeclassifyDoorId'],
+    ['@kovojs/core/security', 'TrustedRevealValue'],
+    ['@kovojs/core/storage', 'S3CompatibleObjectOperations'],
+    ['@kovojs/core/webhooks', 'HmacSignatureOptions'],
+    ['@kovojs/core/webhooks', 'StandardWebhooksOptions'],
+  ])('refuses retired %s#%s instead of rewriting to another dead name', (specifier, symbol) => {
+    const result = analyzeCoreApiV1Migration({
+      fileName: 'retired-contract.ts',
+      source: `import type { ${symbol} as Retired } from '${specifier}';\n`,
+    });
+
+    expect(result).toMatchObject({
+      refusals: [{ category: 'app-context' }],
+      status: 'refused',
+    });
+  });
+
+  it.each([
+    "import * as security from '@kovojs/core/security';",
+    "export * from '@kovojs/core/webhooks';",
+    "const storage = await import('@kovojs/core/storage');",
+  ])('refuses namespace access that could conceal a retired task member: %s', (source) => {
+    const result = analyzeCoreApiV1Migration({ fileName: 'ambiguous-task.ts', source });
+
+    expect(result.status).toBe('refused');
   });
 
   it('serializes refusal anchors as UTF-8 byte ranges', () => {

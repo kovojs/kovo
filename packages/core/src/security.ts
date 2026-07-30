@@ -20,19 +20,10 @@ export {
   untrusted,
 } from './secret.js';
 export type {
-  DeclassifyDoorId,
-  DeclassifyOwnerScope,
-  DeclassifyPolicyOptions,
-  DeclassifyPurpose,
-  DeclassifyPurposeFor,
-  DeclareOffWireOptions,
-  PublishToClientOptions,
   Redacted,
-  RedactedOptions,
   RedactedValue,
   Secret,
   SecretValue,
-  TrustedRevealValue,
   Untrusted,
   UntrustedValue,
 } from './secret.js';

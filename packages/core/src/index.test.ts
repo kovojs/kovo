@@ -7,24 +7,18 @@ import {
   FormError,
   href,
   Link,
-  queryRef,
   redirect,
-  routeRef,
   type Component as KovoComponent,
   type FormFailure,
   type FormInput,
   type FormValidationFailure,
   type JsonValue,
+  type Query,
+  type QueryRefreshSpec,
   type RouteSearchValue,
   type Serializable,
 } from './index.js';
-import {
-  DeclassifyPolicy,
-  declareOffWire,
-  type Secret,
-  trustedReveal,
-  type TrustedRevealValue,
-} from './security.js';
+import { DeclassifyPolicy, declareOffWire, type Secret, trustedReveal } from './security.js';
 import {
   createFileSystemStorage,
   createMemoryStorage,
@@ -41,6 +35,82 @@ import * as internalQueryDelta from './internal/query-delta.js';
 
 interface TestSchema<Value> {
   parse(input: unknown): Value;
+}
+
+function testQueryHandle<const Key extends string, Result>(
+  key: Key,
+  options: { refetchOnFocus?: false } = {},
+): Query<Key, Result> {
+  const handle = testQueryBinding<Key, Result>(key);
+  return options.refetchOnFocus === false ? { ...handle, refetchOnFocus: false } : handle;
+}
+
+function testQueryBinding<Key extends string, Result>(key: Key): Query<Key, Result>;
+function testQueryBinding<Key extends string, Result, Spec extends QueryRefreshSpec<Result>>(
+  key: Key,
+  refreshSpec: Spec,
+): Query<Key, Result, never, never, Spec>;
+function testQueryBinding<Key extends string, Result>(
+  key: Key,
+  refreshSpec?: QueryRefreshSpec<Result>,
+): Query<Key, Result> | Query<Key, Result, never, never, QueryRefreshSpec<Result>> {
+  const args = <Props extends Record<string, JsonValue>, Args extends Record<string, JsonValue>>(
+    mapper: (props: Props) => Args,
+  ) =>
+    refreshSpec === undefined
+      ? testQueryArgsBinding<Key, Result, Props, Args>(key, mapper)
+      : testQueryArgsBinding<Key, Result, Props, Args, QueryRefreshSpec<Result>>(
+          key,
+          mapper,
+          refreshSpec,
+        );
+  const refresh = <Spec extends QueryRefreshSpec<Result>>(nextSpec: Spec) =>
+    testQueryBinding<Key, Result, Spec>(key, nextSpec);
+  return {
+    args,
+    key,
+    ...(refreshSpec === undefined ? {} : { refreshSpec }),
+    refresh,
+  } as unknown as Query<Key, Result> | Query<Key, Result, never, never, QueryRefreshSpec<Result>>;
+}
+
+function testQueryArgsBinding<
+  Key extends string,
+  Result,
+  Props extends Record<string, JsonValue>,
+  Args extends Record<string, JsonValue>,
+>(key: Key, mapper: (props: Props) => Args): Query<Key, Result, Props, Args>;
+function testQueryArgsBinding<
+  Key extends string,
+  Result,
+  Props extends Record<string, JsonValue>,
+  Args extends Record<string, JsonValue>,
+  Spec extends QueryRefreshSpec<Result>,
+>(
+  key: Key,
+  mapper: (props: Props) => Args,
+  refreshSpec: Spec,
+): Query<Key, Result, Props, Args, Spec>;
+function testQueryArgsBinding<
+  Key extends string,
+  Result,
+  Props extends Record<string, JsonValue>,
+  Args extends Record<string, JsonValue>,
+>(
+  key: Key,
+  mapper: (props: Props) => Args,
+  refreshSpec?: QueryRefreshSpec<Result>,
+): Query<Key, Result, Props, Args> | Query<Key, Result, Props, Args, QueryRefreshSpec<Result>> {
+  const refresh = <Spec extends QueryRefreshSpec<Result>>(nextSpec: Spec) =>
+    testQueryArgsBinding<Key, Result, Props, Args, Spec>(key, mapper, nextSpec);
+  return {
+    args: mapper,
+    key,
+    ...(refreshSpec === undefined ? {} : { refreshSpec }),
+    refresh,
+  } as unknown as
+    | Query<Key, Result, Props, Args>
+    | Query<Key, Result, Props, Args, QueryRefreshSpec<Result>>;
 }
 
 // eslint-disable-next-line no-unused-vars -- compile-time public import assertion only.
@@ -112,11 +182,14 @@ describe('core authoring APIs', () => {
   });
 
   it('preserves component definitions for compiler analysis', () => {
-    const cart = queryRef<'cart', { count: number }>('cart');
+    const cart = testQueryHandle<'cart', { count: number }>('cart');
     const CartBadge = component({
       queries: { cart },
       state: () => ({ bouncing: false }) satisfies JsonValue,
-      render: ({ cart: cartQuery }, state) => ({ cartQuery, state }),
+      render: ({ cart: cartQuery }: { cart: { count: number } }, state) => ({
+        cartQuery,
+        state,
+      }),
     });
 
     expect(CartBadge.name).toBeUndefined();
@@ -139,7 +212,7 @@ describe('core authoring APIs', () => {
   });
 
   it('preserves disableServerRefresh and rejects removed fragmentTarget authoring', () => {
-    const cart = queryRef<'cart', { count: number }>('cart');
+    const cart = testQueryHandle<'cart', { count: number }>('cart');
     const LocalOnlyCartBadge = component({
       disableServerRefresh: true,
       queries: { cart },
@@ -150,7 +223,7 @@ describe('core authoring APIs', () => {
 
     const assertRemovedFragmentTargetOption = () => {
       component({
-        // @ts-expect-error fragmentTarget was removed; queryRef-backed targets are inferred.
+        // @ts-expect-error fragmentTarget was removed; query-backed targets are inferred.
         fragmentTarget: true,
         queries: { cart },
         render: () => null,
@@ -160,7 +233,7 @@ describe('core authoring APIs', () => {
   });
 
   it('derives component call-site props from the annotated render input', () => {
-    const product = queryRef<'product', { name: string }>('product');
+    const product = testQueryHandle<'product', { name: string }>('product');
     const ProductCard = component({
       props: { productId: String },
       queries: {
@@ -180,7 +253,7 @@ describe('core authoring APIs', () => {
     ProductCard({ productId: 'p1' });
     ProductCard({ productId: 'p1', selected: true, 'kovo-key': 'p1', style: {} });
 
-    // @ts-expect-error SPEC §4.1/§6.2: queryRef result keys are server-owned, not call-site props.
+    // @ts-expect-error SPEC §4.1/§6.2: query result keys are server-owned, not call-site props.
     ProductCard({ product: { name: 'Desk' }, productId: 'p1' });
     // @ts-expect-error SPEC §4.1/§6.2: required render-derived props must be supplied.
     ProductCard();
@@ -198,8 +271,8 @@ describe('core authoring APIs', () => {
     Unannotated({ label: 'hidden' });
   });
 
-  it('checks queryRef args and props metadata against render-derived props', () => {
-    const product = queryRef<'product', { name: string }>('product');
+  it('checks query args and props metadata against render-derived props', () => {
+    const product = testQueryHandle<'product', { name: string }>('product');
 
     component({
       props: { productId: String, count: Number },
@@ -219,7 +292,7 @@ describe('core authoring APIs', () => {
 
     component({
       queries: {
-        // @ts-expect-error SPEC §4.1/§6.2: queryRef args cannot invent props absent from render input.
+        // @ts-expect-error SPEC §4.1/§6.2: query args cannot invent props absent from render input.
         product: product.args((props: { invented: string }) => ({ id: props.invented })),
       },
       render: ({ productId }: { product: { name: string }; productId: string }) => ({
@@ -321,7 +394,7 @@ describe('core authoring APIs', () => {
       ownerScope: 'current-principal',
     });
     const revealed = trustedReveal('hash-1' as unknown as Secret<string>, policy);
-    const assertRevealedString = (value: TrustedRevealValue<Secret<string>>) => value;
+    const assertRevealedString = (value: string) => value;
     const jsonValue: JsonValue = revealed;
 
     expect(assertRevealedString(revealed)).toBe('hash-1');
@@ -331,8 +404,8 @@ describe('core authoring APIs', () => {
     );
   });
 
-  it('preserves library-owned queryRef and form keys without ambient registry augmentation', () => {
-    const cart = queryRef<'cart', { count: number }>('cart');
+  it('preserves typed query and form keys without ambient registry augmentation', () => {
+    const cart = testQueryHandle<'cart', { count: number }>('cart');
     const cartForProduct = cart.args((props: { productId: string }) => ({
       id: props.productId,
     }));
@@ -346,23 +419,23 @@ describe('core authoring APIs', () => {
     expect(cartForProduct.args({ productId: 'p1' })).toEqual({ id: 'p1' });
     expect(staleCart).not.toBe(cart);
     expect(staleCart.key).toBe('cart');
-    expect(staleCart.refreshSpec.every).toBe('30s');
+    expect(staleCart.refreshSpec?.every).toBe('30s');
     expect(
       staleCart.args((props: { productId: string }) => ({ id: props.productId })).refreshSpec,
     ).toBe(staleCart.refreshSpec);
-    expect(cartUntil.refreshSpec.until({ count: 11 })).toBe(true);
-    expect(cartProductUntil.refreshSpec.at({ count: 3 })).toBe(3);
+    expect(cartUntil.refreshSpec?.until?.({ count: 11 })).toBe(true);
+    expect(cartProductUntil.refreshSpec?.at?.({ count: 3 })).toBe(3);
     expect(cartProductUntil.args({ productId: 'p1' })).toEqual({ id: 'p1' });
     expect(form('cart/add').key).toBe('cart/add');
-    expect(queryRef('library/cart').key).toBe('library/cart');
+    expect(testQueryHandle('library/cart').key).toBe('library/cart');
     expect(form('library/cart/update').key).toBe('library/cart/update');
   });
 
-  it('declares per-queryRef refetch-on-focus opt-out on the queryRef handle (SPEC §9.3/§9.4)', () => {
-    // SPEC §9.3/§9.4: refetch-on-focus is a per-queryRef loader behavior with a per-queryRef opt-out.
-    // The opt-out is declarable at the queryRef site; refetch-on-focus is on by default otherwise.
-    const ticker = queryRef<'ticker', { price: number }>('ticker', { refetchOnFocus: false });
-    const cart = queryRef<'cart', { count: number }>('cart');
+  it('types the app-owned per-query refetch-on-focus opt-out (SPEC §9.3/§9.4)', () => {
+    const ticker = testQueryHandle<'ticker', { price: number }>('ticker', {
+      refetchOnFocus: false,
+    });
+    const cart = testQueryHandle<'cart', { count: number }>('cart');
 
     expect(ticker.refetchOnFocus).toBe(false);
     expect(ticker.key).toBe('ticker');
@@ -371,7 +444,7 @@ describe('core authoring APIs', () => {
     const assertNoOptInField = () => {
       // @ts-expect-error SPEC §9.3/§9.4: refetch-on-focus is on by default, so `true` would be a
       // no-op field; only `refetchOnFocus: false` (the opt-out) is accepted.
-      queryRef<'cart', { count: number }>('cart', { refetchOnFocus: true });
+      testQueryHandle<'cart', { count: number }>('cart', { refetchOnFocus: true });
     };
     expect(assertNoOptInField).toBeTypeOf('function');
   });
@@ -532,7 +605,7 @@ describe('core authoring APIs', () => {
           return failure.payload.availableQuantity;
         }
         if (failure?.code === 'VALIDATION') {
-          return failure.fieldErrors.quantity;
+          return { fieldError: failure.fieldErrors.quantity };
         }
         return null;
       },
@@ -615,15 +688,7 @@ describe('core authoring APIs', () => {
     expect(assertUnknownProp).toBeTypeOf('function');
   });
 
-  it('builds typed routeRef hrefs, links, and redirects from path literals', () => {
-    const productRoute = routeRef<'/products/:id', { id: string }, { max: number; sort: string }>(
-      '/products/:id',
-      {
-        prefetch: 'conservative',
-      },
-    );
-
-    expect(productRoute.path).toBe('/products/:id');
+  it('builds typed hrefs, links, and redirects from app route path literals', () => {
     expect(href('/products/:id', { params: { id: 'p 1' }, search: { max: 500 } })).toBe(
       '/products/p%201?max=500',
     );
@@ -652,29 +717,15 @@ describe('core authoring APIs', () => {
     );
 
     const assertMissingParam = () => {
-      // @ts-expect-error id is required by the routeRef path.
+      // @ts-expect-error id is required by the route path.
       href('/products/:id', { search: { max: 500 } });
     };
     const assertImperativeLinkRemoved = () => {
       // @ts-expect-error Link is JSX-only; imperative code uses href().
       Link('/products/:id', { params: { id: 'p1' } });
     };
-    const assertUnknownRoute = () => {
-      // @ts-expect-error routeRef hrefs are checked against generated RouteRegistry facts.
-      href('/missing', {});
-    };
-    const assertUnknownSearch = () => {
-      href('/products/:id', {
-        params: { id: 'p1' },
-        // @ts-expect-error sku is not part of the routeRef search schema.
-        search: { sku: 'sku-1' },
-      });
-    };
-
     expect(assertMissingParam).toBeTypeOf('function');
     expect(assertImperativeLinkRemoved).toBeTypeOf('function');
-    expect(assertUnknownRoute).toBeTypeOf('function');
-    expect(assertUnknownSearch).toBeTypeOf('function');
   });
 
   it('types GET form fields from an explicit library route contract', () => {
@@ -700,11 +751,11 @@ describe('core authoring APIs', () => {
     ).toEqual({ name: 'next' });
 
     const assertUnknownSearchField = () => {
-      // @ts-expect-error sku is not part of the routeRef search schema.
+      // @ts-expect-error sku is not part of the explicit route search schema.
       productFilter.input('sku');
     };
     const assertUnknownSearchFieldComponent = () => {
-      // @ts-expect-error sku is not part of the routeRef search schema.
+      // @ts-expect-error sku is not part of the explicit route search schema.
       productFilter.input({ name: 'sku' });
     };
     const assertMissingRouteParam = () => {

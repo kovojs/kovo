@@ -225,8 +225,8 @@ export function component<
     value?: unknown;
   }
 >;
-export function component(definition: any): Component<any> {
-  assertKnownComponentDefinitionKeys(definition as unknown as Record<PropertyKey, unknown>);
+export function component(definition: unknown): Component<Record<string, unknown>> {
+  assertKnownComponentDefinitionKeys(definition as Record<PropertyKey, unknown>);
   const descriptor = () => undefined;
   securityDefineProperty(descriptor, componentHandleWitness, {
     configurable: false,
@@ -240,8 +240,11 @@ export function component(definition: any): Component<any> {
     value: undefined,
     writable: true,
   });
-  registerComponentDefinition(descriptor, snapshotComponentDefinition(definition));
-  return descriptor as Component<any>;
+  registerComponentDefinition(
+    descriptor,
+    snapshotComponentDefinition(definition as ComponentRuntimeDefinition),
+  );
+  return descriptor as Component<Record<string, unknown>>;
 }
 
 const componentDescriptorVerifierKey = '__kovoIsComponentDescriptor';
@@ -340,10 +343,9 @@ export interface Query<
   key: Key;
   /**
    * Declarative per-query opt-out from refetch-on-focus (SPEC §9.3/§9.4). Refetch-on-focus
-   * is on by default; set `refetchOnFocus: false` on the {@link queryRef} handle to exclude this
-   * query from the visible-return/bfcache typed-read refetch (§9.4). Only `false` is accepted:
-   * `true` would be the default and a no-op field, so it is not part of the type. Present only
-   * when the query was declared with `queryRef(key, { refetchOnFocus: false })`.
+   * is on by default; an app-owned query declaration may set `refetchOnFocus: false` to exclude
+   * this query from the visible-return/bfcache typed-read refetch (§9.4). Only `false` is accepted:
+   * `true` would be the default and a no-op field.
    */
   refetchOnFocus?: false;
   refresh<NextSpec extends QueryRefreshSpec<Result>>(
@@ -352,36 +354,6 @@ export interface Query<
   refreshSpec?: Spec;
   result?: Result;
 }
-
-/**
- * Declaration-site config for {@link queryRef} (SPEC §9.3/§9.4).
- *
- * `refetchOnFocus: false` opts the query out of refetch-on-focus — the per-query loader
- * behavior that re-runs queries over the typed read endpoint (`/_q/`, §9.4) when a stale tab
- * returns. Refetch-on-focus is on by default, so this is an opt-out, not an opt-in; `true` is
- * not accepted because it would be a no-op field.
- *
- * Note: `live: true` (SPEC §9.3:905/§9.4) is intentionally NOT part of this config. The
- * `<kovo-live>` SSE subscriber is unimplemented (roadmap; no `text/event-stream` transport
- * ships today), and a field that silently does nothing would violate the no-op-field contract.
- * It can be added once the SSE transport lands and a declared `live: true` has an observable effect.
- */
-export interface QueryConfig {
-  refetchOnFocus?: false;
-}
-
-/**
- * Augmentable registry mapping query keys to result types (declaration-merged by apps).
- *
- * @augmented The canonical entries are emitted by the compiler via
- * `declare module '@kovojs/core'` (compiler/src/emit/registry.ts); hand-augmentation is
- * the SPEC §5.2/KV235-discouraged exception. Mirrors the `@generated` registries in
- * `core/src/generated.ts`, but stays here because `form`/`queryRef`/`href` typing resolves it.
- */
-/** Registry key helper that falls back to `string` until compiler-emitted registry facts exist. */
-export type RegistryKey<Registry> = keyof Registry extends never
-  ? string
-  : Extract<keyof Registry, string>;
 
 // Public signatures cannot reference internal subpath types. Keep this type-level
 // mirror local while runtime href/matching consumes `internal/route-pattern`.
@@ -413,41 +385,6 @@ export interface Route<
   params?: Params;
   prefetch?: 'conservative' | 'moderate' | false;
   search?: Search;
-}
-
-/** Options accepted by `routeRef()`: param/search shapes and prefetch policy. */
-export interface RouteOptions<
-  Params extends Record<string, string> = Record<string, never>,
-  Search extends Record<string, RouteSearchValue> = Record<string, JsonValue>,
-> {
-  params?: Params;
-  prefetch?: 'conservative' | 'moderate' | false;
-  search?: Search;
-}
-
-/**
- * Declare a route descriptor: a typed path plus its param/search shapes. This
- * is the registry-level seed used for typed links (`href`, `Link`, `redirect`);
- * to also attach a server page handler, use `route` from `@kovojs/server`, which
- * extends this with `page`, guards, and meta (SPEC §6.4).
- *
- * @param path - URL pattern; `:name` segments become typed params.
- * @param options - Optional `params`/`search` shapes and `prefetch` policy.
- * @returns A `Route` descriptor keyed by `path`.
- * @example
- * import { routeRef } from '@kovojs/core';
- *
- * export const productRoute = routeRef('/products/:id', {
- *   params: { id: '' },
- *   prefetch: 'conservative',
- * });
- */
-export function routeRef<
-  const Path extends string,
-  Params extends Record<string, string> = PathParams<Path>,
-  Search extends Record<string, RouteSearchValue> = Record<string, JsonValue>,
->(path: Path, options: RouteOptions<Params, Search> = {}): Route<Path, Params, Search> {
-  return { ...options, path };
 }
 
 /**
@@ -564,101 +501,6 @@ function buildHref(
   return buildRoutePatternHref(path, options);
 }
 
-/**
- * Reference a registered query by key for component bindings. This is the
- * client-facing query handle (just `{ key }`); the server-side query with a
- * loader and read set is `query` from `@kovojs/server` (SPEC §10.2).
- *
- * @param key - A registered query key.
- * @param config - Optional declaration-site config (SPEC §9.3/§9.4); e.g.
- *   `{ refetchOnFocus: false }` to opt this query out of refetch-on-focus.
- * @returns A typed `Query` handle whose `result` reflects the registry entry.
- * @example
- * import { queryRef } from '@kovojs/core';
- *
- * export const cart = queryRef('cart');
- * // SPEC §9.3/§9.4: opt a query out of refetch-on-focus at the declaration site.
- * export const ticker = queryRef('ticker', { refetchOnFocus: false });
- */
-export function queryRef<const Key extends string, Result = unknown>(
-  key: Key,
-  config?: QueryConfig,
-): Query<Key, Result> {
-  const handle = queryBinding<Key, Result>(key);
-  // SPEC §9.3/§9.4: record the declared refetch-on-focus opt-out on the handle so the runtime
-  // refetch machinery can derive its opt-out set from declarations instead of an install-only
-  // option. Default (no field) keeps refetch-on-focus on; only `false` is meaningful.
-  return config?.refetchOnFocus === false ? { ...handle, refetchOnFocus: false } : handle;
-}
-
-function queryBinding<Key extends string, Result>(key: Key): Query<Key, Result>;
-function queryBinding<Key extends string, Result, Spec extends QueryRefreshSpec<Result>>(
-  key: Key,
-  refreshSpec: Spec,
-): QueryRefreshBinding<Key, Result, Spec>;
-function queryBinding<Key extends string, Result>(
-  key: Key,
-  refreshSpec?: QueryRefreshSpec<Result>,
-): Query<Key, Result> | QueryRefreshBinding<Key, Result, QueryRefreshSpec<Result>> {
-  const args = <Props extends Record<string, JsonValue>, Args extends Record<string, JsonValue>>(
-    mapper: (props: Props) => Args,
-  ) =>
-    refreshSpec === undefined
-      ? queryArgsBinding<Key, Result, Props, Args>(key, mapper)
-      : queryArgsBinding<Key, Result, Props, Args, QueryRefreshSpec<Result>>(
-          key,
-          mapper,
-          refreshSpec,
-        );
-  const refresh = <Spec extends QueryRefreshSpec<Result>>(nextSpec: Spec) =>
-    queryBinding<Key, Result, Spec>(key, nextSpec);
-  return {
-    args,
-    key,
-    ...(refreshSpec === undefined ? {} : { refreshSpec }),
-    refresh,
-  } as unknown as Query<Key, Result> | QueryRefreshBinding<Key, Result, QueryRefreshSpec<Result>>;
-}
-
-function queryArgsBinding<
-  Key extends string,
-  Result,
-  Props extends Record<string, JsonValue>,
-  Args extends Record<string, JsonValue>,
->(key: Key, mapper: (props: Props) => Args): Query<Key, Result, Props, Args>;
-function queryArgsBinding<
-  Key extends string,
-  Result,
-  Props extends Record<string, JsonValue>,
-  Args extends Record<string, JsonValue>,
-  Spec extends QueryRefreshSpec<Result>,
->(
-  key: Key,
-  mapper: (props: Props) => Args,
-  refreshSpec: Spec,
-): Query<Key, Result, Props, Args, Spec>;
-function queryArgsBinding<
-  Key extends string,
-  Result,
-  Props extends Record<string, JsonValue>,
-  Args extends Record<string, JsonValue>,
->(
-  key: Key,
-  mapper: (props: Props) => Args,
-  refreshSpec?: QueryRefreshSpec<Result>,
-): Query<Key, Result, Props, Args> | Query<Key, Result, Props, Args, QueryRefreshSpec<Result>> {
-  const refresh = <Spec extends QueryRefreshSpec<Result>>(nextSpec: Spec) =>
-    queryArgsBinding<Key, Result, Props, Args, Spec>(key, mapper, nextSpec);
-  return {
-    args: mapper,
-    key,
-    ...(refreshSpec === undefined ? {} : { refreshSpec }),
-    refresh,
-  } as unknown as
-    | Query<Key, Result, Props, Args>
-    | Query<Key, Result, Props, Args, QueryRefreshSpec<Result>>;
-}
-
 /** A typed accessor for one search field of a GET form (`form.get(...).input(name)`). */
 interface GetFormInput<Name extends string> {
   name: Name;
@@ -710,7 +552,7 @@ export interface FieldErrorProps<Failure = unknown> {
   code?: string | readonly string[];
   failure?: Failure | null;
   id?: string;
-  message?: ComponentTextResult | ((failure: any) => ComponentTextResult);
+  message?: ComponentTextResult | ((failure: Failure) => ComponentTextResult);
   name: string;
   role?: string;
   [attribute: string]: unknown;
@@ -723,7 +565,7 @@ export interface FormErrorProps<Failure = unknown> {
   code?: string | readonly string[];
   failure?: Failure | null;
   id?: string;
-  message?: ComponentTextResult | ((failure: any) => ComponentTextResult);
+  message?: ComponentTextResult | ((failure: Failure) => ComponentTextResult);
   role?: string;
   [attribute: string]: unknown;
 }

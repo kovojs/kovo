@@ -9,7 +9,7 @@ import {
   type Secret,
 } from '@kovojs/core';
 
-export { routeRef, trustedReveal, type WebhookVerifier } from '@kovojs/core';
+export { redirect, trustedReveal, type WebhookVerifier } from '@kovojs/core';
 
 void component;
 void createMemoryStorage;

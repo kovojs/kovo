@@ -37,6 +37,12 @@ describe('exported-symbols script', () => {
     expect(coreRoot?.symbols).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: 'component' }),
+        expect.objectContaining({ name: 'href' }),
+      ]),
+    );
+    expect(coreRoot?.symbols).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'queryRef' }),
         expect.objectContaining({ name: 'routeRef' }),
       ]),
     );

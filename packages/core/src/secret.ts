@@ -111,7 +111,7 @@ export interface SecretValue<T> extends Secret<T> {
 }
 
 /** Closed declassification doors. A policy is valid for exactly one door (SPEC §6.6). */
-export type DeclassifyDoorId =
+type DeclassifyDoorId =
   | 'revealSecret'
   | 'revealUntrusted'
   | 'secret.reveal'
@@ -119,21 +119,17 @@ export type DeclassifyDoorId =
   | 'untrusted.reveal';
 
 /** Closed semantic purposes for intentionally releasing a protected value (SPEC §6.6). */
-export type DeclassifyPurpose =
+type DeclassifyPurpose =
   | 'credential-use'
   | 'public-projection'
   | 'request-validation'
   | 'server-computation';
 
 /** Closed owner scopes for a declassification decision (SPEC §6.6). */
-export type DeclassifyOwnerScope =
-  | 'application'
-  | 'current-principal'
-  | 'current-tenant'
-  | 'framework';
+type DeclassifyOwnerScope = 'application' | 'current-principal' | 'current-tenant' | 'framework';
 
 /** Purpose vocabulary admitted by one exact declassification door. */
-export type DeclassifyPurposeFor<Door extends DeclassifyDoorId> = Door extends
+type DeclassifyPurposeFor<Door extends DeclassifyDoorId> = Door extends
   | 'revealUntrusted'
   | 'untrusted.reveal'
   ? 'request-validation'
@@ -142,7 +138,7 @@ export type DeclassifyPurposeFor<Door extends DeclassifyDoorId> = Door extends
     : 'credential-use' | 'server-computation';
 
 /** Closed input vocabulary used by framework-owned declassification constructors. */
-export interface DeclassifyPolicyOptions<Door extends DeclassifyDoorId> {
+interface DeclassifyPolicyOptions<Door extends DeclassifyDoorId> {
   /** Exact API door this policy may open. */
   door: Door;
   /** Closed semantic purpose compatible with {@link DeclassifyPolicyOptions.door}. */
@@ -155,6 +151,14 @@ const declassifyPolicyConstructorToken = freezeSecurityValue({
   kind: 'kovo-declassify-policy-constructor',
 });
 const declassifyPolicies = securityWeakSet<object>();
+const declassifyPolicyRecords = securityWeakMap<
+  object,
+  Readonly<{
+    door: DeclassifyDoorId;
+    ownerScope: DeclassifyOwnerScope;
+    purpose: DeclassifyPurpose;
+  }>
+>();
 
 /**
  * Nominal, runtime-validated declassification policy. Use the exact static constructor for the
@@ -177,57 +181,55 @@ export class DeclassifyPolicy<
     | 'trustedReveal'
     | 'untrusted.reveal',
 > {
-  readonly #kovoDeclassifyPolicy: true;
-  /** Exact reveal API this policy may open. */
-  readonly door: Door;
-  /** Closed authority scope that owns this release. */
-  readonly ownerScope: DeclassifyOwnerScope;
-  /** Closed semantic purpose for the release. */
-  readonly purpose: DeclassifyPurposeFor<Door>;
+  readonly #kovoDeclassifyPolicy: Door;
 
   private constructor(
     token: typeof declassifyPolicyConstructorToken,
     door: Door,
-    purpose: DeclassifyPurposeFor<Door>,
-    ownerScope: DeclassifyOwnerScope,
+    options: unknown,
+    fixedPurpose?: 'public-projection' | 'request-validation',
   ) {
     if (token !== declassifyPolicyConstructorToken) {
       throw new TypeError(
         'DeclassifyPolicy must be created by its exact door-specific constructor.',
       );
     }
-    this.#kovoDeclassifyPolicy = true;
-    if (this.#kovoDeclassifyPolicy !== true) {
+    const { ownerScope, purpose } = validateDeclassifyPolicyOptions(door, options, fixedPurpose);
+    this.#kovoDeclassifyPolicy = door;
+    if (this.#kovoDeclassifyPolicy !== door) {
       throw new TypeError('DeclassifyPolicy nominal initialization failed.');
     }
-    this.door = door;
-    this.purpose = purpose;
-    this.ownerScope = ownerScope;
     securityWeakSetAdd(declassifyPolicies, this);
+    securityWeakMapSet(
+      declassifyPolicyRecords,
+      this,
+      freezeSecurityValue({ door, ownerScope, purpose }),
+    );
     freezeSecurityValue(this);
   }
 
   /** Construct a policy accepted only by the standalone {@link revealSecret} door. */
   static forRevealSecret(options: {
-    ownerScope: DeclassifyOwnerScope;
+    ownerScope: 'application' | 'current-principal' | 'current-tenant' | 'framework';
     purpose: 'credential-use' | 'server-computation';
   }): DeclassifyPolicy<'revealSecret'> {
-    return DeclassifyPolicy.createDoorPolicy('revealSecret', options);
+    return new DeclassifyPolicy(declassifyPolicyConstructorToken, 'revealSecret', options);
   }
 
   /** Construct a policy accepted only by {@link SecretValue.reveal}. */
   static forSecretValue(options: {
-    ownerScope: DeclassifyOwnerScope;
+    ownerScope: 'application' | 'current-principal' | 'current-tenant' | 'framework';
     purpose: 'credential-use' | 'server-computation';
   }): DeclassifyPolicy<'secret.reveal'> {
-    return DeclassifyPolicy.createDoorPolicy('secret.reveal', options);
+    return new DeclassifyPolicy(declassifyPolicyConstructorToken, 'secret.reveal', options);
   }
 
   /** Construct a policy accepted only by the audited {@link trustedReveal} projection door. */
   static forTrustedReveal(options: {
-    ownerScope: DeclassifyOwnerScope;
+    ownerScope: 'application' | 'current-principal' | 'current-tenant' | 'framework';
   }): DeclassifyPolicy<'trustedReveal'> {
-    return DeclassifyPolicy.createFixedPurposeDoorPolicy(
+    return new DeclassifyPolicy(
+      declassifyPolicyConstructorToken,
       'trustedReveal',
       options,
       'public-projection',
@@ -236,9 +238,10 @@ export class DeclassifyPolicy<
 
   /** Construct a policy accepted only by the standalone {@link revealUntrusted} door. */
   static forRevealUntrusted(options: {
-    ownerScope: DeclassifyOwnerScope;
+    ownerScope: 'application' | 'current-principal' | 'current-tenant' | 'framework';
   }): DeclassifyPolicy<'revealUntrusted'> {
-    return DeclassifyPolicy.createFixedPurposeDoorPolicy(
+    return new DeclassifyPolicy(
+      declassifyPolicyConstructorToken,
       'revealUntrusted',
       options,
       'request-validation',
@@ -247,59 +250,14 @@ export class DeclassifyPolicy<
 
   /** Construct a policy accepted only by {@link UntrustedValue.reveal}. */
   static forUntrustedValue(options: {
-    ownerScope: DeclassifyOwnerScope;
+    ownerScope: 'application' | 'current-principal' | 'current-tenant' | 'framework';
   }): DeclassifyPolicy<'untrusted.reveal'> {
-    return DeclassifyPolicy.createFixedPurposeDoorPolicy(
+    return new DeclassifyPolicy(
+      declassifyPolicyConstructorToken,
       'untrusted.reveal',
       options,
       'request-validation',
     );
-  }
-
-  private static createDoorPolicy<Door extends DeclassifyDoorId>(
-    door: Door,
-    options: Omit<DeclassifyPolicyOptions<Door>, 'door'>,
-  ): DeclassifyPolicy<Door> {
-    const keys = securityObjectKeys(options);
-    if (
-      keys.length !== 2 ||
-      !securityArrayIncludesExact(keys, 'ownerScope') ||
-      !securityArrayIncludesExact(keys, 'purpose')
-    ) {
-      throw new TypeError('DeclassifyPolicy options must contain exactly purpose and ownerScope.');
-    }
-    const purpose = ownSecretOption(options, 'purpose', 'DeclassifyPolicy purpose');
-    const ownerScope = ownSecretOption(options, 'ownerScope', 'DeclassifyPolicy ownerScope');
-    if (!isDeclassifyOwnerScope(ownerScope)) {
-      throw new TypeError('Unknown declassification owner scope.');
-    }
-    if (!declassifyPurposeMatchesDoor(door, purpose)) {
-      throw new TypeError(`Declassification purpose is not valid for ${door}.`);
-    }
-    return new DeclassifyPolicy(
-      declassifyPolicyConstructorToken,
-      door,
-      purpose as DeclassifyPurposeFor<Door>,
-      ownerScope,
-    );
-  }
-
-  private static createFixedPurposeDoorPolicy<
-    Door extends 'revealUntrusted' | 'trustedReveal' | 'untrusted.reveal',
-  >(
-    door: Door,
-    options: { ownerScope: DeclassifyOwnerScope },
-    purpose: DeclassifyPurposeFor<Door>,
-  ): DeclassifyPolicy<Door> {
-    const keys = securityObjectKeys(options);
-    if (keys.length !== 1 || !securityArrayIncludesExact(keys, 'ownerScope')) {
-      throw new TypeError('DeclassifyPolicy options must contain exactly ownerScope.');
-    }
-    const ownerScope = ownSecretOption(options, 'ownerScope', 'DeclassifyPolicy ownerScope');
-    if (!isDeclassifyOwnerScope(ownerScope)) {
-      throw new TypeError('Unknown declassification owner scope.');
-    }
-    return new DeclassifyPolicy(declassifyPolicyConstructorToken, door, purpose, ownerScope);
   }
 }
 
@@ -311,12 +269,9 @@ export class DeclassifyPolicy<
  */
 export interface SecretRevealAuditFact {
   kind: 'secret-reveal';
-  door: Extract<DeclassifyDoorId, 'revealSecret' | 'secret.reveal' | 'trustedReveal'>;
-  ownerScope: DeclassifyOwnerScope;
-  purpose: Extract<
-    DeclassifyPurpose,
-    'credential-use' | 'public-projection' | 'server-computation'
-  >;
+  door: 'revealSecret' | 'secret.reveal' | 'trustedReveal';
+  ownerScope: 'application' | 'current-principal' | 'current-tenant' | 'framework';
+  purpose: 'credential-use' | 'public-projection' | 'server-computation';
   /** Canonical compatibility label derived from the closed policy; never caller prose. */
   reason: string;
   revealedAt: string;
@@ -732,20 +687,10 @@ export interface RedactedValue<T> extends Redacted<T> {
   equals(other: T | Redacted<T> | Secret<T>): boolean;
 }
 
-/** Options for {@link redacted}. */
-export interface RedactedOptions {
-  /**
-   * The safe-to-display mask rendered on every accidental-egress path. Defaults to
-   * `"[redacted]"`. Provide a partial reveal (e.g. last 4 digits, a masked email) that
-   * is genuinely safe to log and show.
-   */
-  mask?: string;
-}
-
 /**
  * Wraps a PII / sensitive value that legitimately travels to the database, client, or
  * UI but must never be logged or surfaced in an error verbatim. The box renders its
- * {@link RedactedOptions.mask} (default `"[redacted]"`) on every accidental coercion;
+ * the optional `mask` (default `"[redacted]"`) on every accidental coercion;
  * call `.reveal()` at the DB/render sink that needs the real value. Idempotent.
  *
  * Sibling of {@link secret}: `secret` is for values that must never leave the server
@@ -753,7 +698,7 @@ export interface RedactedOptions {
  * logs (emails, names, card suffixes). Both are defense-in-depth (SPEC §6.6), not the
  * by-construction confidentiality proof (KV435).
  */
-export function redacted<T>(value: T, options: RedactedOptions = {}): RedactedValue<T> {
+export function redacted<T>(value: T, options: { mask?: string } = {}): RedactedValue<T> {
   if (isRedacted(value)) return value as unknown as RedactedValue<T>;
   const mask = ownSecretOption(options, 'mask', 'Redacted mask');
   if (mask !== undefined && typeof mask !== 'string') {
@@ -773,15 +718,58 @@ export function isRedacted(value: unknown): value is RedactedValue<unknown> {
   return poisonBoxKind(value) === 'redacted';
 }
 
+function validateDeclassifyPolicyOptions<Door extends DeclassifyDoorId>(
+  door: Door,
+  options: unknown,
+  fixedPurpose?: 'public-projection' | 'request-validation',
+): Readonly<{
+  ownerScope: DeclassifyOwnerScope;
+  purpose: DeclassifyPurposeFor<Door>;
+}> {
+  if (typeof options !== 'object' || options === null) {
+    throw new TypeError('DeclassifyPolicy options must be an object.');
+  }
+  const keys = securityObjectKeys(options);
+  const expectedKeys = fixedPurpose === undefined ? 2 : 1;
+  if (
+    keys.length !== expectedKeys ||
+    !securityArrayIncludesExact(keys, 'ownerScope') ||
+    (fixedPurpose === undefined) !== securityArrayIncludesExact(keys, 'purpose')
+  ) {
+    throw new TypeError(
+      fixedPurpose === undefined
+        ? 'DeclassifyPolicy options must contain exactly purpose and ownerScope.'
+        : 'DeclassifyPolicy options must contain exactly ownerScope.',
+    );
+  }
+
+  const ownerScope = ownSecretOption(options, 'ownerScope', 'DeclassifyPolicy ownerScope');
+  if (!isDeclassifyOwnerScope(ownerScope)) {
+    throw new TypeError('Unknown declassification owner scope.');
+  }
+  const purpose = fixedPurpose ?? ownSecretOption(options, 'purpose', 'DeclassifyPolicy purpose');
+  if (!declassifyPurposeMatchesDoor(door, purpose)) {
+    throw new TypeError(`Declassification purpose is not valid for ${door}.`);
+  }
+  return freezeSecurityValue({
+    ownerScope,
+    purpose: purpose as DeclassifyPurposeFor<Door>,
+  });
+}
+
 function validateDeclassifyPolicy(
   policy: DeclassifyPolicy | undefined,
   door: DeclassifyDoorId,
 ): DeclassifyPolicy {
+  const record =
+    policy === undefined || typeof policy !== 'object'
+      ? undefined
+      : securityWeakMapGet(declassifyPolicyRecords, policy);
   const admitted =
     policy !== undefined &&
     typeof policy === 'object' &&
     securityWeakSetHas(declassifyPolicies, policy) &&
-    policy.door === door;
+    record?.door === door;
   // @kovo-security-decision declassification policy-admission
   emitCoreSecurityDecision({
     decisionSite: 'framework:declassification:policy-admission',
@@ -804,8 +792,11 @@ function validateDeclassifyPolicy(
 }
 
 function recordSecretReveal(policy: DeclassifyPolicy): void {
-  const door = policy.door;
-  const purpose = policy.purpose;
+  const record = securityWeakMapGet(declassifyPolicyRecords, policy);
+  if (record === undefined) {
+    throw new TypeError('A declassification policy must come from this installed Kovo copy.');
+  }
+  const { door, purpose } = record;
   if (door !== 'revealSecret' && door !== 'secret.reveal' && door !== 'trustedReveal') {
     throw new TypeError('A non-secret declassification policy cannot record a secret release.');
   }
@@ -819,7 +810,7 @@ function recordSecretReveal(policy: DeclassifyPolicy): void {
   secretRevealAuditFacts.record({
     door,
     kind: 'secret-reveal',
-    ownerScope: policy.ownerScope,
+    ownerScope: record.ownerScope,
     purpose,
     reason: declassifyPolicyLabel(policy),
     revealedAt: securityApply<string>(intrinsicDateToISOString, new IntrinsicDate(), []),
@@ -827,7 +818,11 @@ function recordSecretReveal(policy: DeclassifyPolicy): void {
 }
 
 function declassifyPolicyLabel(policy: DeclassifyPolicy): string {
-  return `${policy.purpose}:${policy.door}:${policy.ownerScope}`;
+  const record = securityWeakMapGet(declassifyPolicyRecords, policy);
+  if (record === undefined) {
+    throw new TypeError('A declassification policy must come from this installed Kovo copy.');
+  }
+  return `${record.purpose}:${record.door}:${record.ownerScope}`;
 }
 
 function isDeclassifyOwnerScope(value: unknown): value is DeclassifyOwnerScope {
@@ -862,25 +857,6 @@ export function revealRedacted<T>(value: Redacted<T>): T {
   return isRedacted(value) ? (value as RedactedValue<T>).reveal() : (value as unknown as T);
 }
 
-/** Options for {@link publishToClient}. */
-export interface PublishToClientOptions {
-  /**
-   * Why this captured cross-module value is safe to ship into the client bundle. Keep the text
-   * reviewable and non-sensitive; the compiler records it (with the capture site) for
-   * `kovo explain capabilities`.
-   */
-  reason: string;
-}
-
-/**
- * Options for {@link declareOffWire}. The justification is emitted into source review and must
- * explain why the wrapped server-only computation cannot affect the client wire.
- */
-export interface DeclareOffWireOptions {
-  /** Reviewable, non-sensitive reason this block is intentionally server-only/off-wire. */
-  justification: string;
-}
-
 /**
  * Audited escape for the client-handler secret-emit gate (SPEC §6.6/§6.2; secure-framework Phase 4 /
  * Tier 0 item 3, KV437).
@@ -903,7 +879,7 @@ export interface DeclareOffWireOptions {
  */
 export function publishToClient<T extends string | number | boolean | null>(
   value: T,
-  options: PublishToClientOptions,
+  options: { reason: string },
 ): T {
   if (
     value !== null &&
@@ -930,7 +906,7 @@ export function publishToClient<T extends string | number | boolean | null>(
  * reviewable escape for helper calls that touch secret projections but do not affect the query or
  * mutation response.
  */
-export function declareOffWire(run: () => void, options: DeclareOffWireOptions): void {
+export function declareOffWire(run: () => void, options: { justification: string }): void {
   const justification = ownSecretOption(options, 'justification', 'declareOffWire justification');
   if (typeof justification !== 'string' || !securityStringTrim(justification)) {
     throw new Error('declareOffWire requires a non-empty justification.');
@@ -1040,9 +1016,6 @@ function verifyComparableByteControls(): boolean {
   }
 }
 
-/** The JSON-visible value type exposed after an explicit confidentiality reveal. */
-export type TrustedRevealValue<T> = T extends Secret<infer Value> ? Value : T;
-
 /**
  * Audited confidentiality escape hatch for query projections that intentionally
  * expose a redacted or otherwise safe representation of a secret-classified value.
@@ -1056,18 +1029,17 @@ export type TrustedRevealValue<T> = T extends Secret<infer Value> ? Value : T;
 export function trustedReveal<T>(
   value: T,
   policy: DeclassifyPolicy<'trustedReveal'>,
-): TrustedRevealValue<T> {
+): T extends Secret<infer Value> ? Value : T {
   const validated = validateDeclassifyPolicy(policy, 'trustedReveal');
   // Unwrap a runtime secret box so the reveal yields the value, not the poisoned
   // wrapper; a non-box value (e.g. a Drizzle column typed Secret) passes through.
   return (
     isSecret(value)
-      ? (value as unknown as KovoPoisonBox<TrustedRevealValue<T>>).revealThrough(
-          validated,
-          'trustedReveal',
-        )
+      ? (
+          value as unknown as KovoPoisonBox<T extends Secret<infer Value> ? Value : T>
+        ).revealThrough(validated, 'trustedReveal')
       : value
-  ) as TrustedRevealValue<T>;
+  ) as T extends Secret<infer Value> ? Value : T;
 }
 
 function ownSecretOption(value: object, key: PropertyKey, label: string): unknown {

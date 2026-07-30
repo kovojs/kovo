@@ -222,6 +222,12 @@ author-maintained slot registry is not part of the public contract. Public handl
 conditional machinery behind named interfaces and errors must anchor on the offending definition
 property rather than expand private witness types.
 
+The ordinary route/query handles come only from the app-scoped factories. The Core root does not
+offer parallel `routeRef`/`queryRef` constructors, declaration option records, writable registry
+keys, or a human registry-augmentation path: none of those can prove app ownership or rename-safe
+assembly identity. Typed navigation consumes the compiler-generated facts from the app-owned route
+declarations.
+
 The compiler recognizes an app-scoped declaration only when the call receiver is proven by exact
 TypeScript symbol identity to originate from one direct `defineKovo` result under the receiver
 provenance rules in §5.2. A same-named local, cast, wrapper, destructured method, computed property,
@@ -918,6 +924,11 @@ subclasses, surplus fields, an unknown tuple, or a policy created for another do
 authorize release. TypeScript's nominal shape is an author-time guardrail; the module-private
 constructor token, exact runtime registry membership, closed option validation, and exact-door
 check own the runtime floor.
+
+A policy exposes no public `door`, `purpose`, or `ownerScope` data fields; those facts live only in
+the module-private record used for admission and audit. The bounded destructive reveal-audit drain
+is framework-internal. Public callers observe only the exact door-specific constructor and the
+reveal result inferred from the reveal operation.
 
 The finite compiler IR admits `trustedReveal` as `server.data.declassify` only for exact direct
 named imports of `trustedReveal` and `DeclassifyPolicy` from `@kovojs/core/security` and the inline

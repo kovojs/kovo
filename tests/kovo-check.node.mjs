@@ -202,7 +202,7 @@ import {
   renderQueryEndpointResponse,
   renderQueryRegistryEndpointResponse,
 } from '../dist/server/src/internal/wire.mjs';
-import { href, Link, redirect, routeRef } from '../dist/core/src/index.mjs';
+import { href, Link, redirect } from '../dist/core/src/index.mjs';
 import { fragmentTarget } from '../dist/core/src/internal/fragment-target.mjs';
 
 const readProjectFile = async (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
@@ -1410,7 +1410,6 @@ void test('P3 typed routes validate navigation targets', async () => {
       href,
       Link,
       redirect,
-      routeRef,
       serverRoute,
     }),
     {
@@ -1418,7 +1417,6 @@ void test('P3 typed routes validate navigation targets', async () => {
         href: '/products/p%201?max=10',
         link: { href: '/products/p1' },
         redirect: { location: '/products/p1', status: 303 },
-        route: { path: '/products/:id' },
         serverRoute: { loadType: 'function', path: '/products/:id' },
       },
       generated: {

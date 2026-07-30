@@ -35,8 +35,9 @@ describe('server JSX runtime types', () => {
         `
 /** @jsxImportSource @kovojs/server */
 import { trustedHtml, trustedUrl } from '@kovojs/browser';
-import { component, Link, queryRef } from '@kovojs/core';
+import { component, Link } from '@kovojs/core';
 import type { TrustedUrl } from '@kovojs/browser';
+import type { Query } from '@kovojs/core';
 import { mutation, s } from '@kovojs/server';
 import type { MutationFormDefinition } from '@kovojs/server';
 import type { JsxChild } from '@kovojs/server/jsx-runtime';
@@ -48,7 +49,7 @@ const Panel = ({ title, children }: PanelProps) => (
   </section>
 );
 const TextOnly = ({ children }: { children: string }) => <span>{children}</span>;
-const product = queryRef<'product', { name: string }>('product');
+declare const product: Query<'product', { name: string }>;
 const ProductCard = component({
   props: { productId: String },
   queries: {
@@ -135,7 +136,7 @@ const descriptorMissingRequiredProp = <ProductCard />;
 const descriptorWrongPropName = <ProductCard productID="p1" />;
 // @ts-expect-error SPEC §4.1/§6.2: descriptor component prop values follow render annotations.
 const descriptorWrongValue = <ProductCard productId={1} />;
-// @ts-expect-error SPEC §4.1/§6.2: descriptor component queryRef keys are not call-site props.
+// @ts-expect-error SPEC §4.1/§6.2: descriptor component query keys are not call-site props.
 const descriptorQueryProp = <ProductCard productId="p1" product={{ name: 'Desk' }} />;
 
 // @ts-expect-error SPEC §4.1: declared component children are enforced at JSX call sites.

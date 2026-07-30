@@ -705,6 +705,11 @@ constructors retain an internal enumerable authority without adding list methods
 `ScopedKey` whose digest matches the physical object identity; S3 listing MUST be bounded, dense,
 duplicate-free, and completely paginated.
 
+The public S3-compatible client accepts only Kovo's stable positional operation vocabulary. The
+operation object is contextually typed by `S3CompatibleObjectClient.create` (and may be named by
+`Parameters<typeof S3CompatibleObjectClient.create>[0]`); provider request, response, metadata, and
+parallel named operation records are framework-internal.
+
 The credential-door census is exact: principal-scoped capability URL mint/verify plus mutation
 replay-receipt reservation, response release, handler admission, in-transaction completion, and
 settlement are applicable, while the exactly-once adapter continuation is inapplicable because it
