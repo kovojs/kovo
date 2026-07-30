@@ -805,18 +805,21 @@ and budget both type correctness and compiler performance. Seeds child ledger `a
   - Current proof: `pnpm run check:app-contract-g23` reports no findings across the 14-file starter,
     16-file advanced CRM, and 3-file release CRM source corpora; fresh tarball-backed typechecks
     remain required.
-- [ ] (S) Set TypeScript cold/warm check and language-service completion budgets **with numbers**
+- [x] (S) Set TypeScript cold/warm check and language-service completion budgets **with numbers**
       derived from the D1 baseline (including an extended-diagnostics instantiation ceiling);
       reject a cleaner surface if it breaches them or produces unreadable error expansions.
-  - Current proof: cold/warm TypeScript and completion ceilings plus declaration/diagnostic limits
-    are ratified in `type-budgets-v1.json`; `instantiationsMaximum` is still unratified.
+  - Evidence: `pnpm run check:app-contract-type-budgets` binds the tracked fixture/config and
+    TypeScript 6.0.3 by digest/version, measures 112,514 instantiations under
+    `--extendedDiagnostics`, enforces the derived 136,000 ceiling on every runner, and passes four
+    policy/adversarial tests alongside the ratified timing, completion, declaration, and
+    diagnostic limits.
 
 - [ ] **Track 4 exit:** the starter and one advanced example use the app contract without manual
       `AppRequest`, explicit app generics, duplicated auth generics, registry augmentation, or
       casts; emitted artifacts and `kovo explain` remain equivalent to the pre-facade proof model
       (G23).
   - Blockers: production CRM optimism, fresh packed starter/CRM typechecks, current emitted/explain
-    parity, the instantiation ceiling, and a current-source D1 artifact reseal.
+    parity, and a current-source D1 artifact reseal.
 
 ### Track 5 — Cut the public surface by task
 

@@ -121,9 +121,11 @@ product implementation; the smallest owning normative modules change before or w
   - Current proof: `pnpm run check:app-contract-g23` is source-clean for the 14-file starter,
     16-file advanced CRM, and 3-file release CRM corpora; a fresh tarball-backed typecheck has not
     yet proved the word “packed.”
-- [ ] Ratify TypeScript and language-service budgets from the D1 baseline.
-  - Current proof: timing/completion/declaration budgets are numeric and ratified; the
-    extended-diagnostics instantiation ceiling remains `pending-measurement`.
+- [x] Ratify TypeScript and language-service budgets from the D1 baseline.
+  - Evidence: `pnpm run check:app-contract-type-budgets` binds TypeScript 6.0.3 plus the tracked
+    fixture/config, measures 112,514 instantiations, enforces the derived 136,000 ceiling on every
+    runner, and passes four policy/adversarial tests with the existing timing, completion,
+    declaration, and diagnostic limits.
 - [ ] Track 4 exit: G23 green with emitted proof artifacts and `kovo explain` equivalent to the
       pre-facade model.
   - Blockers: fresh packed G23, production optimism, current emitted/explain parity, and a
@@ -134,7 +136,7 @@ product implementation; the smallest owning normative modules change before or w
 - `pnpm exec vitest --run <12 focused Track 4 files> --reporter=dot`: 12 files / 118 tests pass.
 - `pnpm run check:api-surface`: zero public/recursive leaks; 34 tests pass.
 - `pnpm run check:app-contract-g23`: all three source corpora clean; 2 tests pass.
-- Type-budget policy: 3 tests pass; timings are ratified and instantiations are pending.
+- Type-budget gate: 112,514/136,000 instantiations; four policy/adversarial tests pass.
 - D1 evaluator: 40/42 tests pass; the two artifact-authentication assertions correctly fail because
   23 framework source subjects changed after the last v6 seal. Do not treat the committed seal as
   current release evidence until the integration freeze reseals it.
