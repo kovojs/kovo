@@ -22,6 +22,7 @@ import {
   buildReusableProductionArtifact,
   elementOpeningTagByAttribute,
   fieldValue,
+  formatGeneratedProjectSources,
   formHtmlByAction,
   PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS,
   signInDemoUser,
@@ -512,6 +513,11 @@ function addMultiComponentLiveTargetProof(root: string): void {
     ),
     'utf8',
   );
+  formatGeneratedProjectSources(root, [
+    'kovo.config.ts',
+    'src/app.tsx',
+    'src/components/interaction-lab.tsx',
+  ]);
 }
 
 function liveTargetDescriptor(openingTag: string): LiveTargetDescriptor {

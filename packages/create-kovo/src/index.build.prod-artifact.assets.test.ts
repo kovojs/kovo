@@ -17,6 +17,7 @@ import {
 } from './index.test-support.js';
 import {
   buildReusableProductionArtifact,
+  formatGeneratedProjectSources,
   PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS,
   signInDemoUser,
 } from './index.build.test-support.js';
@@ -53,6 +54,7 @@ describe('create-kovo starter (build integration: production asset artifacts)', 
           ),
           'utf8',
         );
+        formatGeneratedProjectSources(root, ['src/app.tsx']);
 
         buildReusableProductionArtifact(root);
 

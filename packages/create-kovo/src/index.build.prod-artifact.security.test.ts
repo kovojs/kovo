@@ -886,7 +886,10 @@ describe('create-kovo starter (build integration: production security artifacts)
       writeKovoProject(unsafeRoot, { name: 'Prod Trusted Output Proof' });
       linkStarterBuildDependencies(unsafeRoot);
       addTrustedOutputProvenanceBuildProof(unsafeRoot);
-      const proofSource = readFileSync(join(unsafeRoot, 'src/app.tsx'), 'utf8');
+      const proofSource = readFileSync(
+        join(unsafeRoot, 'src/trusted-output-provenance-proof.tsx'),
+        'utf8',
+      );
       expect(proofSource).toContain(
         'href={trustedUrl(data.contacts.items.map((contact) => contact.email).join(""))}',
       );

@@ -14,6 +14,7 @@ import {
   resolveStarterBin,
   withStarterBinOnPath,
 } from './index.test-support.js';
+import { resolveVitePlusBin } from '../../cli/src/commands/vite-plus-bin.js';
 
 // Production artifact proofs compile an entire generated application. Shared GitHub runners can
 // be several times slower under the full matrix, so keep the semantic test deadline distinct from
@@ -174,6 +175,21 @@ export function buildProductionArtifact(
 export function buildReusableProductionArtifact(root: string): void {
   declareProductionArtifactRetention(root);
   execKovoCli(root, ['build', './src/app.tsx'], nonParanoidStarterEnv(root));
+}
+
+/**
+ * Bring intentionally modified generated fixtures back through the same project formatter that
+ * `kovo build` enforces. Call only after starter dependencies are linked so Vite Plus can evaluate
+ * the generated configuration without weakening the production PROJECT-QUALITY gate.
+ */
+export function formatGeneratedProjectSources(
+  root: string,
+  relativePaths: readonly string[],
+): void {
+  execFileSync(process.execPath, [resolveVitePlusBin(), 'fmt', ...relativePaths], {
+    cwd: root,
+    stdio: 'pipe',
+  });
 }
 
 export function buildParanoidProductionArtifact(root: string): void {
@@ -1540,35 +1556,26 @@ export function addTrustedOutputProvenanceBuildProof(
   options: { unsafe?: boolean } = {},
 ): void {
   const unsafe = options.unsafe ?? true;
-  const appPath = join(root, 'src/app.tsx');
-  let app = readFileSync(appPath, 'utf8');
-  app = replaceRequired(
-    app,
-    '/** @jsxImportSource @kovojs/server */\nimport {',
+  writeFileSync(
+    join(root, 'src/trusted-output-provenance-proof.tsx'),
     [
       '/** @jsxImportSource @kovojs/server */',
       "import { trustedHtml, trustedUrl } from '@kovojs/browser';",
       "import { component } from '@kovojs/core';",
-      'import {',
-    ].join('\n'),
-    'trusted output proof imports',
-  );
-  app = replaceRequired(
-    app,
-    "import { contactsQuery } from './queries.js';",
-    "import { contactsQuery, type ContactListResult } from './queries.js';",
-    'trusted output proof query type import',
-  );
-  app = replaceRequired(
-    app,
-    ['function HomePage({ userName }: { userName: string }): string {', '  return ('].join('\n'),
-    [
-      'const TrustedOutputProvenanceProof = component({',
+      '',
+      "import { app } from './kovo.js';",
+      "import { contactsQuery, type ContactListResult } from './queries.js';",
+      '',
+      'interface TrustedOutputProofSlots {',
+      '  request?: { headers: Headers };',
+      '}',
+      '',
+      'export const TrustedOutputProvenanceProof = component({',
       '  queries: { contacts: contactsQuery },',
       '  render: (',
       '    data: { contacts: ContactListResult },',
       '    _state,',
-      '    slots: { request?: AppRequest },',
+      '    slots: TrustedOutputProofSlots,',
       '  ) => (',
       '    <main data-proof="trusted-output-provenance">',
       unsafe
@@ -1584,67 +1591,65 @@ export function addTrustedOutputProvenanceBuildProof(
       '  ),',
       '});',
       '',
-      'function HomePage({ userName }: { userName: string }): string {',
-      '  return (',
+      "export const trustedOutputProvenanceRoute = app.route('/trusted-output-provenance-proof', {",
+      "  access: app.publicAccess('public trusted output provenance build proof'),",
+      "  meta: { title: 'Trusted output provenance proof' },",
+      '  page() {',
+      '    return <TrustedOutputProvenanceProof />;',
+      '  },',
+      '});',
+      '',
     ].join('\n'),
-    'trusted output proof component',
+    'utf8',
   );
-  app = replaceRequired(
-    app,
-    "  routes: [\n    route('/', {",
-    [
-      '  routes: [',
-      "    route('/trusted-output-provenance-proof', {",
-      "      access: publicAccess('public trusted output provenance build proof'),",
-      "      meta: { title: 'Trusted output provenance proof' },",
-      '      layout: AppLayout,',
-      '      stylesheets,',
-      '      page() {',
-      '        return <TrustedOutputProvenanceProof />;',
-      '      },',
-      '    }),',
-      "    route('/', {",
-    ].join('\n'),
-    'trusted output proof route',
-  );
-  writeFileSync(appPath, app, 'utf8');
-}
 
-export function addOpaqueTrustedOutputAuthorityProof(root: string): void {
   const appPath = join(root, 'src/app.tsx');
   let app = readFileSync(appPath, 'utf8');
   app = replaceRequired(
     app,
-    '/** @jsxImportSource @kovojs/server */\nimport {',
+    "import { ContactsRegion } from './components/contacts.js';",
+    [
+      "import { ContactsRegion } from './components/contacts.js';",
+      "import { trustedOutputProvenanceRoute } from './trusted-output-provenance-proof.js';",
+    ].join('\n'),
+    'trusted output proof import',
+  );
+  app = replaceRequired(
+    app,
+    '  routes: [homeRoute, loginRoute],',
+    '  routes: [homeRoute, loginRoute, trustedOutputProvenanceRoute],',
+    'trusted output proof route assembly',
+  );
+  writeFileSync(appPath, app, 'utf8');
+  formatGeneratedProjectSources(root, ['src/app.tsx', 'src/trusted-output-provenance-proof.tsx']);
+}
+
+export function addOpaqueTrustedOutputAuthorityProof(root: string): void {
+  writeFileSync(
+    join(root, 'src/opaque-trusted-output-authority-proof.tsx'),
     [
       '/** @jsxImportSource @kovojs/server */',
       "import * as browserTrust from '@kovojs/browser';",
       "import { trustedHtml } from '@kovojs/browser';",
       "import { component } from '@kovojs/core';",
-      'import {',
-    ].join('\n'),
-    'opaque trusted output proof imports',
-  );
-  app = replaceRequired(
-    app,
-    "import { contactsQuery } from './queries.js';",
-    "import { contactsQuery, type ContactListResult } from './queries.js';",
-    'opaque trusted output proof query type import',
-  );
-  app = replaceRequired(
-    app,
-    ['function HomePage({ userName }: { userName: string }): string {', '  return ('].join('\n'),
-    [
+      '',
+      "import { app } from './kovo.js';",
+      "import { contactsQuery, type ContactListResult } from './queries.js';",
+      '',
       "const dynamicTrustedUrlKey: 'trustedUrl' = 'trustedUrl';",
       "const dynamicTrustedHtmlKey: 'trustedHtml' = 'trustedHtml';",
       'const trustedOutputAlias = { html: trustedHtml };',
       '',
-      'const OpaqueTrustedOutputAuthorityProof = component({',
+      'interface OpaqueTrustedOutputProofSlots {',
+      '  request?: { headers: Headers };',
+      '}',
+      '',
+      'export const OpaqueTrustedOutputAuthorityProof = component({',
       '  queries: { contacts: contactsQuery },',
       '  render: (',
       '    data: { contacts: ContactListResult },',
       '    _state,',
-      '    slots: { request?: AppRequest },',
+      '    slots: OpaqueTrustedOutputProofSlots,',
       '  ) => (',
       '    <main data-proof="opaque-trusted-output-authority">',
       '      <a href={browserTrust[dynamicTrustedUrlKey](data.contacts.items[0]?.email ?? "")}>',
@@ -1656,30 +1661,40 @@ export function addOpaqueTrustedOutputAuthorityProof(root: string): void {
       '  ),',
       '});',
       '',
-      'function HomePage({ userName }: { userName: string }): string {',
-      '  return (',
+      "export const opaqueTrustedOutputAuthorityRoute = app.route('/opaque-trusted-output-authority-proof', {",
+      "  access: app.publicAccess('public opaque trusted output authority proof'),",
+      "  meta: { title: 'Opaque trusted output authority proof' },",
+      '  page() {',
+      '    return <OpaqueTrustedOutputAuthorityProof />;',
+      '  },',
+      '});',
+      '',
     ].join('\n'),
-    'opaque trusted output proof component',
+    'utf8',
+  );
+
+  const appPath = join(root, 'src/app.tsx');
+  let app = readFileSync(appPath, 'utf8');
+  app = replaceRequired(
+    app,
+    "import { ContactsRegion } from './components/contacts.js';",
+    [
+      "import { ContactsRegion } from './components/contacts.js';",
+      "import { opaqueTrustedOutputAuthorityRoute } from './opaque-trusted-output-authority-proof.js';",
+    ].join('\n'),
+    'opaque trusted output proof import',
   );
   app = replaceRequired(
     app,
-    "  routes: [\n    route('/', {",
-    [
-      '  routes: [',
-      "    route('/opaque-trusted-output-authority-proof', {",
-      "      access: publicAccess('public opaque trusted output authority proof'),",
-      "      meta: { title: 'Opaque trusted output authority proof' },",
-      '      layout: AppLayout,',
-      '      stylesheets,',
-      '      page() {',
-      '        return <OpaqueTrustedOutputAuthorityProof />;',
-      '      },',
-      '    }),',
-      "    route('/', {",
-    ].join('\n'),
-    'opaque trusted output proof route',
+    '  routes: [homeRoute, loginRoute],',
+    '  routes: [homeRoute, loginRoute, opaqueTrustedOutputAuthorityRoute],',
+    'opaque trusted output proof route assembly',
   );
   writeFileSync(appPath, app, 'utf8');
+  formatGeneratedProjectSources(root, [
+    'src/app.tsx',
+    'src/opaque-trusted-output-authority-proof.tsx',
+  ]);
 }
 
 export function addTrustedUrlAttributeTypeGateProof(root: string): void {
