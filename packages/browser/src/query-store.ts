@@ -124,7 +124,7 @@ export function createQueryStore(): QueryStore {
       for (let index = 0; index < names.length; index += 1) {
         const nameEntry = securityOwnArrayEntry(names, index);
         if (!nameEntry.ok || typeof nameEntry.value !== 'string') {
-          throw new TypeError('Kovo query snapshot names must be a dense string array.');
+          throw new TypeError('Invalid Kovo query snapshot names.');
         }
         const name = nameEntry.value;
         const keyDescriptor = securityGetOwnPropertyDescriptor(keys, name);
@@ -164,29 +164,11 @@ export function createQueryStore(): QueryStore {
       key?: string,
     ): () => void {
       const storeKey = queryStoreKey(name, key);
-      const existing = securityMapGet(plans, storeKey) ?? securitySet<QueryUpdatePlan>();
-      securitySetAdd(existing, plan as QueryUpdatePlan);
-      securityMapSet(plans, storeKey, existing);
-
-      if (securityMapHas(values, storeKey)) {
-        plan(securityMapGet(values, storeKey) as Value);
-      }
-
-      return () => {
-        securitySetDelete(existing, plan as QueryUpdatePlan);
-        // L7-1 / SPEC §9.4: prune the now-empty subscriber Set so the `plans` map
-        // does not leak one empty Set per distinct `(name, key)` over the session.
-        // Re-resolve the current Set first: a later subscribe() may have replaced
-        // the captured `existing` with a fresh Set for the same key, which must not
-        // be deleted.
-        let hasLivePlan = false;
-        securitySetForEach(existing, () => {
-          hasLivePlan = true;
-        });
-        if (!hasLivePlan && securityMapGet(plans, storeKey) === existing) {
-          securityMapDelete(plans, storeKey);
+      return enrollQueryPlan(plans, storeKey, plan as QueryUpdatePlan, () => {
+        if (securityMapHas(values, storeKey)) {
+          plan(securityMapGet(values, storeKey) as Value);
         }
-      };
+      });
     },
   };
   securityWeakMapSet(queryStorePresence, store, (storeKey) => securityMapHas(values, storeKey));
@@ -221,24 +203,44 @@ export function subscribeQueryFamily<Value = unknown>(
 ): () => void {
   const familyState = securityWeakMapGet(queryStoreFamilySubscriptions, store);
   if (familyState === undefined) {
-    throw new TypeError('Kovo query-family subscriptions require a framework-created query store.');
+    throw new TypeError('Kovo query-family store is not framework-owned.');
   }
   const families = familyState.plans;
-  const existing = securityMapGet(families, name) ?? securitySet<QueryFamilyUpdatePlan>();
-  securitySetAdd(existing, plan as QueryFamilyUpdatePlan);
-  securityMapSet(families, name, existing);
-  familyState.replay(name, plan as QueryFamilyUpdatePlan);
+  return enrollQueryPlan(families, name, plan as QueryFamilyUpdatePlan, () => {
+    familyState.replay(name, plan as QueryFamilyUpdatePlan);
+  });
+}
 
-  return () => {
-    securitySetDelete(existing, plan as QueryFamilyUpdatePlan);
-    let hasLivePlan = false;
-    securitySetForEach(existing, () => {
-      hasLivePlan = true;
-    });
-    if (!hasLivePlan && securityMapGet(families, name) === existing) {
-      securityMapDelete(families, name);
-    }
-  };
+function enrollQueryPlan<Plan>(
+  plans: Map<string, Set<Plan>>,
+  key: string,
+  plan: Plan,
+  replay: () => void,
+): () => void {
+  const subscribers = securityMapGet(plans, key) ?? securitySet<Plan>();
+  securitySetAdd(subscribers, plan);
+  securityMapSet(plans, key, subscribers);
+  try {
+    replay();
+  } catch (error) {
+    removeQueryPlan(plans, key, subscribers, plan);
+    throw error;
+  }
+  return () => removeQueryPlan(plans, key, subscribers, plan);
+}
+
+function removeQueryPlan<Plan>(
+  plans: Map<string, Set<Plan>>,
+  key: string,
+  subscribers: Set<Plan>,
+  plan: Plan,
+): void {
+  securitySetDelete(subscribers, plan);
+  let live = false;
+  securitySetForEach(subscribers, () => {
+    live = true;
+  });
+  if (!live && securityMapGet(plans, key) === subscribers) securityMapDelete(plans, key);
 }
 
 /**

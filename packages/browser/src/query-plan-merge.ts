@@ -39,14 +39,14 @@ export function mergeCompiledQueryUpdatePlans(
   sources: readonly CompiledQueryUpdatePlanSource[],
 ): CompiledQueryUpdatePlans {
   if (!securityArrayIsArray(sources)) {
-    throw new TypeError('Kovo query-plan sources must be arrays.');
+    invalidQueryPlan('sources type');
   }
 
   const merged = securityNullRecord<CompiledQueryUpdatePlanEntry>();
   for (let sourceIndex = 0; sourceIndex < sources.length; sourceIndex += 1) {
     const sourceEntry = securityOwnArrayEntry(sources, sourceIndex);
     if (!sourceEntry.ok || typeof sourceEntry.value !== 'object' || sourceEntry.value === null) {
-      throw new TypeError('Kovo query-plan sources must be dense.');
+      invalidQueryPlan('sources dense');
     }
     const plans = requiredOwnRecord(sourceEntry.value, 'plans') as CompiledQueryUpdatePlans;
     const queryNames = optionalOwnRecord(sourceEntry.value, 'queryNames');
@@ -55,12 +55,12 @@ export function mergeCompiledQueryUpdatePlans(
     for (let planIndex = 0; planIndex < localNames.length; planIndex += 1) {
       const localNameEntry = securityOwnArrayEntry(localNames, planIndex);
       if (!localNameEntry.ok || localNameEntry.value.length === 0) {
-        throw new TypeError('Kovo query-plan names are invalid.');
+        invalidQueryPlan('name');
       }
       const localName = localNameEntry.value;
       const planDescriptor = securityGetOwnPropertyDescriptor(plans, localName);
       if (!planDescriptor || !('value' in planDescriptor)) {
-        throw new TypeError('Kovo query plans require own data.');
+        invalidQueryPlan('entry ownership');
       }
       if (planDescriptor.value === undefined) continue;
       const plan = requirePlanEntry(planDescriptor.value);
@@ -111,10 +111,10 @@ function contextOptions(context: CompiledQueryUpdateContext): ApplyCompiledQuery
   const queryIdentity = securityGetOwnPropertyDescriptor(context, 'queryIdentity');
   const queryStore = securityGetOwnPropertyDescriptor(context, 'queryStore');
   if (queryIdentity && !('value' in queryIdentity)) {
-    throw new TypeError('Kovo generated query-plan context.queryIdentity must be own data.');
+    invalidQueryPlan('queryIdentity ownership');
   }
   if (queryStore && !('value' in queryStore)) {
-    throw new TypeError('Kovo generated query-plan context.queryStore must be own data.');
+    invalidQueryPlan('queryStore ownership');
   }
   return {
     ...(queryIdentity && queryIdentity.value !== undefined
@@ -138,7 +138,7 @@ function mappedRuntimeQueryName(
   const descriptor = securityGetOwnPropertyDescriptor(queryNames, localName);
   if (descriptor === undefined) return localName;
   if (!('value' in descriptor) || typeof descriptor.value !== 'string') {
-    throw new TypeError('Kovo query-name mappings require strings.');
+    invalidQueryPlan('query-name mapping type');
   }
   return descriptor.value;
 }
@@ -148,7 +148,7 @@ function requirePlanEntry(value: unknown): CompiledQueryUpdatePlanEntry {
   if (typeof value === 'object' && value !== null && !securityArrayIsArray(value)) {
     return value as CompiledQueryUpdatePlanEntry;
   }
-  throw new TypeError('Kovo query-plan entry is invalid.');
+  invalidQueryPlan('entry');
 }
 
 function requiredOwnRecord(value: object, key: string): object {
@@ -160,7 +160,7 @@ function requiredOwnRecord(value: object, key: string): object {
     descriptor.value === null ||
     securityArrayIsArray(descriptor.value)
   ) {
-    throw new TypeError(`Kovo generated query-plan ${key} must be an own record.`);
+    invalidQueryPlan(`${key} record`);
   }
   return descriptor.value;
 }
@@ -179,7 +179,11 @@ function optionalOwnRecord(
     descriptor.value === null ||
     securityArrayIsArray(descriptor.value)
   ) {
-    throw new TypeError(`Kovo generated query-plan ${key} must be an own record.`);
+    invalidQueryPlan(`${key} record`);
   }
   return descriptor.value as Readonly<Record<string, unknown>>;
+}
+
+function invalidQueryPlan(detail: string): never {
+  throw new TypeError(`Kovo query plan: ${detail}.`);
 }

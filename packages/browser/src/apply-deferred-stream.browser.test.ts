@@ -13,7 +13,7 @@ afterEach(() => {
 });
 
 describe('browser deferred stream response apply', () => {
-  it('applies CRLF deferred stream query truth before browser fragment morphs', () => {
+  it('morphs CRLF deferred fragments before replaying their query truth', () => {
     const root = document.createElement('main');
     root.innerHTML = [
       '<section kovo-c="cart-badge"><output data-bind="cart.count">0</output></section>',
@@ -26,7 +26,7 @@ describe('browser deferred stream response apply', () => {
     if (!badge) throw new Error('missing cart badge fixture');
 
     // SPEC.md §4.4/§9.1: deferred stream chunks reuse mutation query/fragment
-    // apply, so browser morphs observe the query-store truth from the same part.
+    // apply, but the fragment must exist before its co-located query replay.
     const applied = applyDeferredStreamResponseToRuntime({
       body: [
         '--kovo-boundary\r\n',
@@ -51,10 +51,38 @@ describe('browser deferred stream response apply', () => {
     expect(applied.queries).toEqual([{ name: 'cart' }]);
     expect(applied.appliedFragments).toEqual(['cart-badge']);
     expect(store.get('cart')).toEqual({ count: 4 });
-    expect(observed).toEqual(['4']);
+    expect(observed).toEqual(['0']);
     expect(root.querySelector('[kovo-c="cart-badge"]')).toBe(badge);
-    expect(root.querySelector('[kovo-c="cart-badge"] output')?.textContent).toBe('server');
+    expect(root.querySelector('[kovo-c="cart-badge"] output')?.textContent).toBe('4');
     expect(root.querySelector('p')?.textContent).toBe('4');
+  });
+
+  it('replays co-located truth into a live-property binding introduced by the fragment', () => {
+    const root = document.createElement('main');
+    root.innerHTML =
+      '<section kovo-c="profile"><input data-current="old" value="old"></section>';
+    document.body.append(root);
+    const store = createQueryStore();
+
+    applyDeferredStreamResponseToRuntime({
+      body: [
+        '--kovo-boundary',
+        '<kovo-query name="profile">{"name":"Ada"}</kovo-query>',
+        '<kovo-fragment target="profile">',
+        '<section kovo-c="profile"><input data-bind-prop:value="profile.name" value="stale"></section>',
+        '</kovo-fragment>',
+        '--kovo-boundary--',
+      ].join('\n'),
+      queryPlans: { profile: { bindings: true } },
+      queryRoot: document,
+      root: new DomMorphRoot(root),
+      store,
+    });
+
+    const input = root.querySelector('input');
+    expect(input?.getAttribute('value')).toBe('stale');
+    expect(input?.value).toBe('Ada');
+    expect(store.get('profile')).toEqual({ name: 'Ada' });
   });
 
   it('waits to apply visible stream chunks until the placeholder intersects', () => {

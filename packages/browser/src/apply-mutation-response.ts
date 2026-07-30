@@ -89,6 +89,11 @@ export interface ApplyMutationResponseChunksToRuntimeOptions {
   /** The page-level build token, read once from `<meta name="kovo-build">`. */
   expectedBuildToken?: string;
   root?: MorphRoot | undefined;
+  /**
+   * @internal Deferred response parts insert their consuming fragment before replaying co-located
+   * query truth, so bindings introduced by that fragment receive the same part's value.
+   */
+  fragmentFirst?: boolean;
   store: QueryStore;
   streamText?: RuntimeStreamTextOptions;
 }
@@ -138,6 +143,15 @@ export function applyMutationResponseChunksToRuntime(
   }
 
   const effectiveChunks = chunks;
+  const earlyAppliedFragments =
+    options.root && options.fragmentFirst === true
+      ? applyFragments(
+          options.root,
+          effectiveChunks.fragments,
+          options.morph,
+          options.islandSignalScope,
+        )
+      : undefined;
 
   options.beforeApplyQueries?.(effectiveChunks.queries);
   const appliedQueries = applyQueryChunksToRuntime(options.store, effectiveChunks.queries, {
@@ -168,12 +182,9 @@ export function applyMutationResponseChunksToRuntime(
 
   return {
     ...applied,
-    appliedFragments: applyFragments(
-      options.root,
-      applied.fragments,
-      options.morph,
-      options.islandSignalScope,
-    ),
+    appliedFragments:
+      earlyAppliedFragments ??
+      applyFragments(options.root, applied.fragments, options.morph, options.islandSignalScope),
   };
 }
 

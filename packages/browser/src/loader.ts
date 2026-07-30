@@ -174,6 +174,16 @@ export function installGeneratedKovoLoader(
     definedProps({ allowedModuleUrls: allowedClientModuleUrls }),
   );
   const disposers: Array<() => void> = [];
+  if (
+    (options.queryStore !== undefined &&
+      options.enhancedMutations?.store !== undefined &&
+      options.queryStore !== options.enhancedMutations.store) ||
+    (options.queryPlans !== undefined &&
+      options.enhancedMutations?.queryPlans !== undefined &&
+      options.queryPlans !== options.enhancedMutations.queryPlans)
+  ) {
+    throw new TypeError('Kovo loader query mismatch.');
+  }
   const queryStore = options.queryStore ?? options.enhancedMutations?.store;
   const queryPlans = options.queryPlans ?? options.enhancedMutations?.queryPlans;
   const queryPlanSubscriptionsOwnApply =

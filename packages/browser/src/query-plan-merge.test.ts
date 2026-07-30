@@ -96,4 +96,29 @@ describe('generated query-plan registry', () => {
 
     expect(Object.keys(plans!)).toEqual(['queries/deal-by-id-query']);
   });
+
+  it('disposes earlier subscriptions when a later initial replay fails', () => {
+    const root = new FakeMorphRoot();
+    const store = createQueryStore();
+    const first = vi.fn();
+    const broken = vi.fn(() => {
+      throw new Error('broken plan replay');
+    });
+    store.set('first', { value: 1 });
+    store.set('second', { value: 2 });
+
+    expect(() =>
+      installCompiledQueryUpdatePlanSubscriptions(store, root, {
+        first,
+        second: broken,
+      }),
+    ).toThrow('broken plan replay');
+    first.mockClear();
+    broken.mockImplementation(() => undefined);
+
+    store.set('first', { value: 3 });
+    store.set('second', { value: 4 });
+    expect(first).not.toHaveBeenCalled();
+    expect(broken).toHaveBeenCalledTimes(1);
+  });
 });

@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createQueryIdentity, createQueryStore, queryIdentityDisplay } from './query-store.js';
+import {
+  createQueryIdentity,
+  createQueryStore,
+  queryIdentityDisplay,
+  subscribeQueryFamily,
+} from './query-store.js';
 
 // SPEC §9.4/§10.2: query names may contain `:`, so a display wire key has no sound inverse.
 // Callers retain structured `{ name, key }` facts and use this helper only to render them.
@@ -43,6 +48,34 @@ describe('query store', () => {
 
     expect(plan).toHaveBeenCalledTimes(1);
     expect(plan).toHaveBeenCalledWith({ count: 1 });
+  });
+
+  it('rolls back an exact subscription whose initial replay throws', () => {
+    const store = createQueryStore();
+    const plan = vi.fn(() => {
+      throw new Error('broken replay');
+    });
+    store.set('cart', { count: 1 });
+
+    expect(() => store.subscribe('cart', plan)).toThrow('broken replay');
+    expect(plan).toHaveBeenCalledTimes(1);
+    plan.mockImplementation(() => undefined);
+    store.set('cart', { count: 2 });
+    expect(plan).toHaveBeenCalledTimes(1);
+  });
+
+  it('rolls back a family subscription whose keyed replay throws', () => {
+    const store = createQueryStore();
+    const plan = vi.fn(() => {
+      throw new Error('broken family replay');
+    });
+    store.set('product', { stock: 1 }, 'product:p1');
+
+    expect(() => subscribeQueryFamily(store, 'product', plan)).toThrow('broken family replay');
+    expect(plan).toHaveBeenCalledTimes(1);
+    plan.mockImplementation(() => undefined);
+    store.set('product', { stock: 2 }, 'product:p2');
+    expect(plan).toHaveBeenCalledTimes(1);
   });
 
   // L7-1 / SPEC §9.4: unsubscribe must prune the now-empty subscriber Set so the

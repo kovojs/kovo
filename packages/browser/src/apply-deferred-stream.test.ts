@@ -94,7 +94,7 @@ describe('deferred stream response apply', () => {
     expect(root.targets.get('cart-badge')?.html).toBe('<span>2</span>');
   });
 
-  it('applies deferred stream response query truth before fragment morphs', () => {
+  it('inserts each deferred fragment before replaying its co-located query truth', () => {
     const store = createQueryStore();
     const root = new FakeMorphRoot();
     root.targets.set('reviews:p1', new FakeMorphTarget());
@@ -167,7 +167,7 @@ describe('deferred stream response apply', () => {
     // SPEC §5.2/§9.1: a keyed query instance cannot update an unscoped name-level binding. The
     // exact keyed value is retained in the store, while the visible name-level binding keeps the
     // last unkeyed query truth instead of collapsing the two identities.
-    expect(observed).toEqual(['11', '11']);
+    expect(observed).toEqual(['0', '11']);
     expect(store.get('cart')).toEqual({ count: 11 });
     expect(store.get('cart', 'cart:primary')).toEqual({ count: 12 });
     expect(beforeApplyQueries).toHaveBeenNthCalledWith(1, [{ name: 'cart', value: { count: 1 } }]);
@@ -239,10 +239,10 @@ describe('deferred stream response apply', () => {
     });
 
     expect(observed).toEqual([
+      'morph:<section>Reviews ready</section>:null:null:{}',
       'reviews-plan:{"items":[{"id":"r1"}]}',
-      'morph:<section>Reviews ready</section>:1 review:null:{"reviews":{"items":[{"id":"r1"}]}}',
+      'morph:<section>Recommendations ready</section>:1 review:null:{"reviews":{"items":[{"id":"r1"}]}}',
       'recommendations-plan:{"items":[{"id":"p2"}]}',
-      'morph:<section>Recommendations ready</section>:1 review:1:{"recommendations":{"items":[{"id":"p2"}]},"reviews":{"items":[{"id":"r1"}]}}',
     ]);
     expect(deferredSnapshot(result)).toEqual({
       appliedFragments: ['reviews:p1', 'recommendations:p1'],

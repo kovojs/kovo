@@ -38,9 +38,12 @@ import {
 
 /**
  * An app hook that interposes on each incoming query chunk before the runtime
- * writes it to the store: return `{ value }` to override the applied value, or
- * nothing to apply the wire value unchanged (SPEC §9.4). Named by
- * `KovoLoaderOptions.applyQuery`.
+ * writes it to the store: return `{ value }` to override the value that the
+ * runtime commits. If the hook already committed that exact value through the
+ * authoritative store, the runtime observes the same reference and avoids a
+ * duplicate notification. Return nothing to apply the wire value unchanged
+ * (SPEC §9.4). Named by
+ * `KovoGeneratedLoaderOptions.applyQuery`.
  */
 export type QueryApplyInterposition = (query: QueryChunk) => { value: unknown } | void;
 
@@ -122,7 +125,12 @@ function applyQueryChunk(
   onDeltaMiss?: OnDeltaMiss,
 ): unknown {
   const interposed = interpose?.(query);
-  if (interposed) return interposed.value;
+  if (interposed) {
+    if (store.get(query.name, query.key) !== interposed.value) {
+      store.set(query.name, interposed.value, query.key);
+    }
+    return interposed.value;
+  }
 
   // SPEC §9.1.1: when the chunk carries delta=true the body is a QueryDelta
   // envelope; merge it against the held base instead of overwriting.
@@ -157,7 +165,7 @@ function applyQueryChunks(
   for (let index = 0; index < queries.length; index += 1) {
     const queryEntry = securityOwnArrayEntry(queries, index);
     if (!queryEntry.ok) {
-      throw new TypeError('Kovo decoded query chunks must be a dense array.');
+      throw new TypeError('Invalid Kovo query chunks.');
     }
     const query = queryEntry.value;
     try {
@@ -274,15 +282,15 @@ export function installCompiledQueryUpdatePlanSubscriptions(
   const keys = securityObjectKeys(plans);
   for (let index = 0; index < keys.length; index += 1) {
     const keyEntry = securityOwnArrayEntry(keys, index);
-    if (!keyEntry.ok) throw new TypeError('Kovo query plan names must be a dense array.');
+    if (!keyEntry.ok) throw new TypeError('Invalid Kovo query-plan name list.');
     const descriptor = securityGetOwnPropertyDescriptor(plans, keyEntry.value);
     if (!descriptor || !('value' in descriptor)) {
-      throw new TypeError('Kovo query plans must be own-data properties.');
+      throw new TypeError('Invalid Kovo query-plan property.');
     }
     const plan = descriptor.value;
     if (plan === undefined) continue;
     if ((typeof plan !== 'object' || plan === null) && typeof plan !== 'function') {
-      throw new TypeError('Kovo query plan entries must be plan objects or generated appliers.');
+      throw new TypeError('Invalid Kovo query-plan entry.');
     }
     const identity = queryPlanIdentityFromStoreKey(keyEntry.value);
     securityMapSet(snapshot, queryStoreKey(identity.name, identity.key), plan);
@@ -290,54 +298,59 @@ export function installCompiledQueryUpdatePlanSubscriptions(
   }
 
   const disposers: Array<() => void> = [];
-  for (let index = 0; index < keys.length; index += 1) {
-    const keyEntry = securityOwnArrayEntry(keys, index);
-    if (!keyEntry.ok) throw new TypeError('Kovo query plan names must be a dense array.');
-    const identity = queryPlanIdentityFromStoreKey(keyEntry.value);
-    const plan = securityMapGet(snapshot, queryStoreKey(identity.name, identity.key));
-    if (plan === undefined) continue;
+  try {
+    for (let index = 0; index < keys.length; index += 1) {
+      const keyEntry = securityOwnArrayEntry(keys, index);
+      if (!keyEntry.ok) throw new TypeError('Invalid Kovo query-plan name list.');
+      const identity = queryPlanIdentityFromStoreKey(keyEntry.value);
+      const plan = securityMapGet(snapshot, queryStoreKey(identity.name, identity.key));
+      if (plan === undefined) continue;
 
-    if (identity.key === undefined) {
-      appendDisposer(
-        disposers,
-        subscribeQueryFamily(store, identity.name, (value, key) => {
-          const exact = securityMapGet(snapshot, queryStoreKey(identity.name, key));
-          applyCompiledQueryUpdatePlanEntryIfSupported(
-            root,
-            identity.name,
-            value,
-            exact ?? plan,
-            undefined,
-            createQueryIdentity(identity.name, key),
-            store,
-          );
-        }),
-      );
-      continue;
-    }
-
-    // When a family plan exists its subscriber selects this exact override. An exact-only plan
-    // needs its own keyed subscription so it preserves the previous plan-map contract.
-    if (!securityMapHas(familyNames, identity.name)) {
-      appendDisposer(
-        disposers,
-        store.subscribe(
-          identity.name,
-          (value) => {
+      if (identity.key === undefined) {
+        appendDisposer(
+          disposers,
+          subscribeQueryFamily(store, identity.name, (value, key) => {
+            const exact = securityMapGet(snapshot, queryStoreKey(identity.name, key));
             applyCompiledQueryUpdatePlanEntryIfSupported(
               root,
               identity.name,
               value,
-              plan,
+              exact ?? plan,
               undefined,
-              identity,
+              createQueryIdentity(identity.name, key),
               store,
             );
-          },
-          identity.key,
-        ),
-      );
+          }),
+        );
+        continue;
+      }
+
+      // When a family plan exists its subscriber selects this exact override. An exact-only plan
+      // needs its own keyed subscription so it preserves the previous plan-map contract.
+      if (!securityMapHas(familyNames, identity.name)) {
+        appendDisposer(
+          disposers,
+          store.subscribe(
+            identity.name,
+            (value) => {
+              applyCompiledQueryUpdatePlanEntryIfSupported(
+                root,
+                identity.name,
+                value,
+                plan,
+                undefined,
+                identity,
+                store,
+              );
+            },
+            identity.key,
+          ),
+        );
+      }
     }
+  } catch (error) {
+    drainDisposers(disposers);
+    throw error;
   }
 
   return () => {
@@ -351,7 +364,7 @@ function queryPlanIdentityFromStoreKey(storeKey: string): QueryIdentity {
   const name = securityStringSlice(storeKey, 0, separator);
   const key = securityStringSlice(storeKey, separator + 1);
   if (securityStringIndexOf(key, '\0') >= 0) {
-    throw new TypeError('Kovo exact query plan keys must contain one store-key separator.');
+    throw new TypeError('Invalid Kovo exact query-plan key.');
   }
   return createQueryIdentity(name, key);
 }

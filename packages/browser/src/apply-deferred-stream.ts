@@ -59,7 +59,7 @@ export function applyDeferredStreamResponseToRuntime(
   const bodies = deferredStreamChunks(options.body, options.boundary ?? 'kovo-boundary');
   for (let index = 0; index < bodies.length; index += 1) {
     const body = securityOwnArrayEntry(bodies, index);
-    if (!body.ok) throw new TypeError('Kovo deferred stream chunks must be dense.');
+    if (!body.ok) throw new TypeError('Invalid Kovo deferred chunk list.');
     securityArrayAppend(
       chunks,
       applyMutationResponseBodyToRuntime({
@@ -67,6 +67,9 @@ export function applyDeferredStreamResponseToRuntime(
           applyQuery: options.applyQuery,
           beforeApplyQueries: options.beforeApplyQueries,
           islandSignalScope: options.islandSignalScope,
+          // SPEC §4.4/§9.1: a deferred part may introduce the first live-property or template
+          // consumer for its co-located query truth. Insert that fragment before store replay.
+          fragmentFirst: true,
           morph: options.morph,
           onError: options.onError,
           queryRoot: options.queryRoot,
@@ -84,7 +87,7 @@ export function applyDeferredStreamResponseToRuntime(
   const queries: QueryIdentity[] = [];
   for (let index = 0; index < chunks.length; index += 1) {
     const chunk = securityOwnArrayEntry(chunks, index);
-    if (!chunk.ok) throw new TypeError('Kovo applied deferred stream chunks must be dense.');
+    if (!chunk.ok) throw new TypeError('Invalid Kovo applied deferred chunks.');
     appendDenseValues(fragments, chunk.value.fragments, 'Browser deferred stream fragments');
     appendDenseValues(queries, chunk.value.queries, 'Browser deferred stream query keys');
   }
@@ -98,7 +101,7 @@ export function applyDeferredStreamResponseToRuntime(
   const appliedFragments: string[] = [];
   for (let index = 0; index < chunks.length; index += 1) {
     const chunk = securityOwnArrayEntry(chunks, index);
-    if (!chunk.ok) throw new TypeError('Kovo applied deferred stream chunks must be dense.');
+    if (!chunk.ok) throw new TypeError('Invalid Kovo applied deferred chunks.');
     const descriptor = securityGetOwnPropertyDescriptor(chunk.value, 'appliedFragments');
     if (
       !descriptor ||
@@ -106,7 +109,7 @@ export function applyDeferredStreamResponseToRuntime(
       descriptor.value === null ||
       typeof descriptor.value !== 'object'
     ) {
-      throw new TypeError('Kovo rooted deferred stream result is invalid.');
+      throw new TypeError('Invalid Kovo rooted deferred result.');
     }
     appendDenseValues(
       appliedFragments,

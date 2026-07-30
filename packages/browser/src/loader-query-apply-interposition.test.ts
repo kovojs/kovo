@@ -38,10 +38,11 @@ describe('loader query apply interposition', () => {
     installKovoLoader({ applyQuery, importModule: vi.fn(), queryStore: store, root });
 
     // SPEC.md §9.1/§9.4: loader script hydration must enter the same decoded
-    // query apply path as mutation responses, typed reads, and inline events.
+    // query apply path as mutation responses, typed reads, and inline events. An
+    // override-only hook delegates the authoritative store commit to the runtime.
     expect(applyQuery).toHaveBeenCalledWith({ name: 'cart', value: { count: 2 } });
-    expect(store.get('cart')).toBeUndefined();
-    expect(plan).not.toHaveBeenCalled();
+    expect(store.get('cart')).toEqual({ count: 3 });
+    expect(plan).toHaveBeenCalledWith({ count: 3 });
   });
 
   it('passes the loader apply hook to inline query events and typed-read visible returns', async () => {
@@ -288,5 +289,48 @@ describe('loader query apply interposition', () => {
     } finally {
       globalThis.BroadcastChannel = originalBroadcastChannel;
     }
+  });
+
+  it('rejects split-brain query stores before installing loader resources', () => {
+    const root = new FakeRoot();
+    const mutationRoot = new FakeMorphRoot();
+    const queryStore = createQueryStore();
+    const mutationStore = createQueryStore();
+
+    expect(() =>
+      installKovoLoader({
+        enhancedMutations: {
+          fetch: vi.fn(),
+          root: mutationRoot,
+          store: mutationStore,
+        },
+        importModule: vi.fn(),
+        queryStore,
+        root,
+      }),
+    ).toThrow(/loader query mismatch/u);
+    expect(root.listeners.size).toBe(0);
+  });
+
+  it('rejects split-brain query plan registries before installing loader resources', () => {
+    const root = new FakeRoot();
+    const mutationRoot = new FakeMorphRoot();
+    const store = createQueryStore();
+
+    expect(() =>
+      installKovoLoader({
+        enhancedMutations: {
+          fetch: vi.fn(),
+          queryPlans: { cart: vi.fn() },
+          root: mutationRoot,
+          store,
+        },
+        importModule: vi.fn(),
+        queryPlans: { cart: vi.fn() },
+        queryStore: store,
+        root,
+      }),
+    ).toThrow(/loader query mismatch/u);
+    expect(root.listeners.size).toBe(0);
   });
 });
