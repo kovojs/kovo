@@ -3,27 +3,20 @@ import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
 import { route } from '@kovojs/server';
 import { trustedHtml } from '@kovojs/browser';
-import { renderQueryScript } from '@kovojs/test/internal/integration/fixture-abi';
-import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
+import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 import { RefetchCard } from './refetch-card';
-import { readRefetch, refetchQuery } from './shared';
+import { refetchQuery } from './shared';
 
 const homeRoute = route('/', {
-  page: async (_context, request: KovoFixtureRequest) => {
-    const refetch = await readRefetch(request.db);
-    return (
-      <main>
-        {trustedHtml(renderQueryScript({ href: '/_q/refetch', name: 'refetch', value: refetch }), {
-          reason: 'framework integration fixture markup',
-        })}
-        {trustedHtml('<script type="module" src="/client.ts"></script>', {
-          reason: 'framework integration fixture markup',
-        })}
-        <RefetchCard />
-      </main>
-    );
-  },
+  page: () => (
+    <main>
+      {trustedHtml('<script type="module" src="/client.ts"></script>', {
+        reason: 'framework integration fixture markup',
+      })}
+      <RefetchCard />
+    </main>
+  ),
 });
 
 const app = createApp({

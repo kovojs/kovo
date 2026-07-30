@@ -1,13 +1,12 @@
 /** @jsxImportSource @kovojs/server */
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { renderQueryScript } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
 import { mutation, route, s } from '@kovojs/server';
 import { trustedHtml } from '@kovojs/browser';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { DealCard } from './deal-card';
-import { dealDomain, dealQuery, readDeal } from './shared';
+import { dealDomain, dealQuery } from './shared';
 
 export const fillDeal = mutation('nullable-binding/fill', {
   csrf: false,
@@ -44,27 +43,21 @@ export const clearDeal = mutation('nullable-binding/clear', {
 });
 
 const homeRoute = route('/', {
-  page: async (_context, request: KovoFixtureRequest) => {
-    const deal = await readDeal(request.db);
-    return (
-      <main>
-        {trustedHtml(renderQueryScript({ href: '/_q/deal', name: 'deal', value: deal }), {
-          reason: 'framework integration fixture markup',
-        })}
-        <DealCard />
-        {trustedHtml(
-          '<nullable-state kovo-state=\'{"contact":null}\'><output data-bind="state.contact?.name"></output><a data-bind:href="state.contact?.name" data-bind:aria-label="state.contact?.name">State contact</a><button type="button" on:click="/state-actions.ts#fillContact">Fill state contact</button><button type="button" on:click="/state-actions.ts#clearContact">Clear state contact</button></nullable-state>',
-          { reason: 'framework integration fixture markup' },
-        )}
-        <form mutation={fillDeal} enhance>
-          <button type="submit">Fill server contact</button>
-        </form>
-        <form mutation={clearDeal} enhance>
-          <button type="submit">Clear server contact</button>
-        </form>
-      </main>
-    );
-  },
+  page: () => (
+    <main>
+      <DealCard />
+      {trustedHtml(
+        '<nullable-state kovo-state=\'{"contact":null}\'><output data-bind="state.contact?.name"></output><a data-bind:href="state.contact?.name" data-bind:aria-label="state.contact?.name">State contact</a><button type="button" on:click="/state-actions.ts#fillContact">Fill state contact</button><button type="button" on:click="/state-actions.ts#clearContact">Clear state contact</button></nullable-state>',
+        { reason: 'framework integration fixture markup' },
+      )}
+      <form mutation={fillDeal} enhance>
+        <button type="submit">Fill server contact</button>
+      </form>
+      <form mutation={clearDeal} enhance>
+        <button type="submit">Clear server contact</button>
+      </form>
+    </main>
+  ),
 });
 
 const app = createApp({

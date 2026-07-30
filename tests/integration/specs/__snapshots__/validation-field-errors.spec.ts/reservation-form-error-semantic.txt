@@ -1,4 +1,4 @@
-<form action="/_m/validation/reserve" kovo-c="reservation-form" kovo-deps="reservationForm" kovo-fragment-target="reservation-form" method="post">
+<form action="/_m/validation/reserve" kovo-c="reservation-form" kovo-deps="reservationForm" kovo-fragment-target="reservation-form" kovo-plan-owner="reservation-form/reservation-form" method="post">
   <label>
     "Quantity"
     <input name="quantity" type="number" value="0">

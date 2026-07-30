@@ -1,4 +1,4 @@
-<board-list kovo-c="board-list" kovo-deps="board" kovo-fragment-target="board-list">
+<board-list kovo-c="board-list" kovo-deps="board" kovo-fragment-target="board-list" kovo-plan-owner="board-list/board-list">
   <ol aria-label="Board order">
     <li data-row="b" kovo-key="b">
       <span>

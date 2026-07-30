@@ -1,4 +1,4 @@
-<section kovo-c="profile-editor" kovo-deps="profile" kovo-fragment-target="profile-editor" kovo-key="profile-editor">
+<section kovo-c="profile-editor" kovo-deps="profile" kovo-fragment-target="profile-editor" kovo-key="profile-editor" kovo-plan-owner="profile-editor/profile-editor">
   <form action="/_m/profile/save-draft" kovo-fragment-target="save-draft:draft-form" kovo-key="draft-form" method="post">
     <label>
       "Draft"

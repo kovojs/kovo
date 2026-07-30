@@ -25,7 +25,7 @@ test('updates compiler-authored query bindings when the query changes', async ({
 
   await expect(page.locator('[data-bind="inventory.count"]')).toHaveText('0');
   await expect(page.locator('[data-bind="inventory.label"]')).toHaveText('Sold out');
-  await expect(action).not.toBeDisabled();
+  await expect(action).toBeDisabled();
 
   const rows = await kovoApp.db.query('select count, label from inventory_state where id = 1');
   expect(rows[0]).toEqual({ count: 0, label: 'Sold out' });

@@ -3,10 +3,9 @@ import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
 import { mutation, route, s } from '@kovojs/server';
 import { trustedHtml } from '@kovojs/browser';
-import { renderQueryScript } from '@kovojs/test/internal/integration/fixture-abi';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
-import { payloadQuery, readPayload, xssDomain } from './shared';
+import { payloadQuery, xssDomain } from './shared';
 import { XssCard, XssResponseAuthority } from './xss-card';
 
 // Values the mutation writes — exercise the CLIENT update plan (textContent text
@@ -34,24 +33,18 @@ export const updatePayload = mutation('xss/update', {
 });
 
 const homeRoute = route('/', {
-  page: async (_context, request: KovoFixtureRequest) => {
-    const payload = await readPayload(request.db);
-    return (
-      <main>
-        {trustedHtml(renderQueryScript({ href: '/_q/payload', name: 'payload', value: payload }), {
-          reason: 'framework integration fixture markup',
-        })}
-        {trustedHtml('<script type="module" src="/client.ts"></script>', {
-          reason: 'framework integration fixture markup',
-        })}
-        <XssCard />
-        <XssResponseAuthority />
-        <form mutation={updatePayload} enhance>
-          <button type="submit">Inject</button>
-        </form>
-      </main>
-    );
-  },
+  page: () => (
+    <main>
+      {trustedHtml('<script type="module" src="/client.ts"></script>', {
+        reason: 'framework integration fixture markup',
+      })}
+      <XssCard />
+      <XssResponseAuthority />
+      <form mutation={updatePayload} enhance>
+        <button type="submit">Inject</button>
+      </form>
+    </main>
+  ),
 });
 
 const app = createApp({

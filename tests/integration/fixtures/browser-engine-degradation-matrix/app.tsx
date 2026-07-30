@@ -5,11 +5,10 @@ import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
 import { mutation, route, s } from '@kovojs/server';
 import { trustedHtml } from '@kovojs/browser';
-import { renderQueryScript } from '@kovojs/test/internal/integration/fixture-abi';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { EngineMatrixCard } from './engine-card';
-import { engineQuery, readEngineState } from './shared';
+import { engineQuery } from './shared';
 
 async function renderInitialReport(db: KovoFixtureRequest['db']): Promise<string> {
   const rows = await db.query<{ include_gift: number; quantity: number }>(
@@ -52,14 +51,10 @@ export const submitMatrixForm = mutation('engine-matrix/submit', {
 
 const homeRoute = route('/', {
   page: async (_context, request: KovoFixtureRequest) => {
-    const engine = await readEngineState(request.db);
     // This is the suite's deliberate L1 native-form control: the cross-engine spec asserts the
     // browser observes the 303 PRG instead of Kovo's enhanced 200 response.
     return (
       <main>
-        {trustedHtml(renderQueryScript({ href: '/_q/engine', name: 'engine', value: engine }), {
-          reason: 'framework integration fixture markup',
-        })}
         {trustedHtml('<script type="module" src="/client.ts"></script>', {
           reason: 'framework integration fixture markup',
         })}

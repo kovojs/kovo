@@ -1,4 +1,4 @@
-<deal-card kovo-c="deal-card" kovo-deps="deal" kovo-fragment-target="deal-card">
+<deal-card kovo-c="deal-card" kovo-deps="deal" kovo-fragment-target="deal-card" kovo-plan-owner="deal-card/deal-card">
   <output data-bind="deal.contact?.name">
   <a>
     "Contact"

@@ -1,12 +1,12 @@
 /** @jsxImportSource @kovojs/server */
-import { renderQueryScript, staticSql } from '@kovojs/test/internal/integration/fixture-abi';
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
 import { mutation, route, s } from '@kovojs/server';
 import { trustedHtml } from '@kovojs/browser';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { BindingCard } from './binding-card';
-import { cardDomain, cardQuery, readCard } from './shared';
+import { cardDomain, cardQuery } from './shared';
 
 function renderStateIsland(): string {
   return `<state-binding-panel kovo-state='{"text":"Client initial","label":"Client initial card","status":"idle"}'>
@@ -35,21 +35,15 @@ export const updateCard = mutation('binding-text-attr/update', {
 });
 
 const homeRoute = route('/', {
-  page: async (_context, request: KovoFixtureRequest) => {
-    const card = await readCard(request.db);
-    return (
-      <main>
-        {trustedHtml(renderQueryScript({ href: '/_q/card', name: 'card', value: card }), {
-          reason: 'framework integration fixture markup',
-        })}
-        {trustedHtml('<script type="module" src="/client.ts"></script>', {
-          reason: 'framework integration fixture markup',
-        })}
-        <BindingCard />
-        {trustedHtml(renderStateIsland(), { reason: 'framework integration fixture markup' })}
-      </main>
-    );
-  },
+  page: () => (
+    <main>
+      {trustedHtml('<script type="module" src="/client.ts"></script>', {
+        reason: 'framework integration fixture markup',
+      })}
+      <BindingCard />
+      {trustedHtml(renderStateIsland(), { reason: 'framework integration fixture markup' })}
+    </main>
+  ),
 });
 
 const app = createApp({

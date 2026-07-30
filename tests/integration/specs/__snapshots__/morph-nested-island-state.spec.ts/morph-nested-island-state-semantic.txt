@@ -1,4 +1,4 @@
-<section kovo-c="parent-panel" kovo-deps="parent" kovo-fragment-target="parent-panel">
+<section kovo-c="parent-panel" kovo-deps="parent" kovo-fragment-target="parent-panel" kovo-plan-owner="parent-panel/parent-panel">
   <p>
     "Parent version"
     <output data-bind="parent.version">

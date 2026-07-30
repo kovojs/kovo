@@ -16,8 +16,8 @@ describe('runtime barrel loader smoke', () => {
     });
     await client.ready;
 
-    // SPEC.md §4.4: delegate every on:* event, plus pointerover/pointerout to synthesize
-    // pointerenter/pointerleave.
+    // SPEC.md §4.4/§10.4: delegate every on:* event, synthesize pointerenter/pointerleave,
+    // and register the bfcache-safe pagehide optimism cleanup.
     expect([...root.listeners.keys()]).toEqual([
       'click',
       'submit',
@@ -39,6 +39,7 @@ describe('runtime barrel loader smoke', () => {
       'pointerover',
       'pointerout',
       'kovo:query',
+      'pagehide',
     ]);
     expect(importModule).not.toHaveBeenCalled();
 

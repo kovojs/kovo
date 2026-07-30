@@ -1,14 +1,12 @@
 /** @jsxImportSource @kovojs/server */
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { renderQueryScript } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
 import { mutation, route, s } from '@kovojs/server';
-import { trustedHtml } from '@kovojs/browser';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { ProfileStatus } from './profile-status';
 import { ProfileSummary } from './profile-summary';
-import { profileDomain, profileQuery, readProfile } from './shared';
+import { profileDomain, profileQuery } from './shared';
 
 export const publishProfile = mutation('shared-query-consumers/publish', {
   csrf: false,
@@ -30,21 +28,15 @@ export const publishProfile = mutation('shared-query-consumers/publish', {
 });
 
 const homeRoute = route('/', {
-  page: async (_context, request: KovoFixtureRequest) => {
-    const profile = await readProfile(request.db);
-    return (
-      <main>
-        {trustedHtml(renderQueryScript({ href: '/_q/profile', name: 'profile', value: profile }), {
-          reason: 'framework integration fixture markup',
-        })}
-        <ProfileSummary />
-        <ProfileStatus />
-        <form mutation={publishProfile} enhance>
-          <button type="submit">Publish profile</button>
-        </form>
-      </main>
-    );
-  },
+  page: () => (
+    <main>
+      <ProfileSummary />
+      <ProfileStatus />
+      <form mutation={publishProfile} enhance>
+        <button type="submit">Publish profile</button>
+      </form>
+    </main>
+  ),
 });
 
 const app = createApp({
