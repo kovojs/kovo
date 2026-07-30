@@ -822,6 +822,79 @@ export const orderPaid = webhook('/webhooks/order-paid', {
     }
   });
 
+  it('carries authenticated app-scoped query keys through component transforms and hot updates', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-vite-app-contract-component-'));
+    const src = join(root, 'src');
+    const serverScope = join(root, 'node_modules/@kovojs');
+    mkdirSync(src, { recursive: true });
+    mkdirSync(serverScope, { recursive: true });
+    symlinkSync(join(process.cwd(), 'packages/server'), join(serverScope, 'server'), 'dir');
+    writeFileSync(
+      join(src, 'kovo.ts'),
+      [
+        "import { defineKovo } from '@kovojs/server';",
+        'export const app = defineKovo({',
+        "  appId: '00000000-0000-4000-8000-000000000001',",
+        '});',
+        '',
+      ].join('\n'),
+    );
+    const entry = join(src, 'counter.tsx');
+    const source = (revision: string) =>
+      [
+        '/** @jsxImportSource @kovojs/server */',
+        "import { component } from '@kovojs/core';",
+        "import { task } from '@kovojs/server/tasks';",
+        "import { app } from './kovo.js';",
+        'export const counterQuery = app.query({ load() { return { count: 1 }; } });',
+        'export const cleanup = task({ input: {}, run() {} });',
+        'export const Counter = component({',
+        '  queries: { counter: counterQuery },',
+        `  render: ({ counter }) => <span data-revision="${revision}">{counter.count}</span>,`,
+        '});',
+        '',
+      ].join('\n');
+    writeFileSync(entry, source('zero'));
+    const plugin = kovoVitePlugin({ include: ['src'] });
+    const ws = { send: vi.fn() };
+    const server = {
+      config: { root },
+      middlewares: { use() {} },
+      ws,
+    };
+    plugin.configureServer?.(server);
+
+    try {
+      const transformed = await plugin.transform(source('zero'), entry);
+      expect(transformed).toMatchObject({ map: null });
+      expect(transformed?.code).toContain(
+        '__kovoAssignDerivedQueryKey(app.query({ load() { return { count: 1 }; } }), "counter/counter-query")',
+      );
+      expect(transformed?.code).toContain(
+        '__kovoAssignDerivedTaskKey(task({ input: {}, run() {} }), "counter/cleanup")',
+      );
+
+      writeFileSync(entry, source('one'));
+      await expect(
+        plugin.handleHotUpdate?.({
+          file: entry,
+          modules: ['vite-module'],
+          read: async () => source('one'),
+          server,
+        }),
+      ).resolves.toEqual([]);
+      expect(plugin.getClientModules?.()).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: expect.stringContaining('/counter.client.js'),
+          }),
+        ]),
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('blocks non-public Kovo subpath imports in non-component authored modules', async () => {
     const compileComponentModule = vi.fn(() => ({ files: [] }));
     const plugin = createKovoVitePlugin(compileComponentModule, {

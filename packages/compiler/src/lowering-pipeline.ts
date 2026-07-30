@@ -1,5 +1,6 @@
 import { navigationStandaloneHrefLowering } from './lower/navigation.js';
 import { lowerStructuralJsx } from './lower/structural-jsx.js';
+import { componentSourceDerivedRegistryReplacements } from './source-derived-lowering.js';
 import {
   createCompileFactLedger,
   type CompileFactLedger,
@@ -84,6 +85,20 @@ function parseComponentProjectOptions(options: CompileComponentOptions) {
  * position rather than hand-wired into the orchestrator.
  */
 export const LOWERING_PASSES: readonly LoweringPass[] = [
+  {
+    name: 'component-source-derived-registry',
+    kind: 'lower',
+    run(ctx) {
+      addPendingReplacements(
+        ctx,
+        'component-source-derived-registry',
+        componentSourceDerivedRegistryReplacements({
+          fileName: ctx.fileName,
+          source: ctx.state.source,
+        }),
+      );
+    },
+  },
   // Probe StyleX spans up front so structural lowering can skip inline attribute derives the
   // style pass will own (the probe reads the still-original model).
   {

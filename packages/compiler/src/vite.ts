@@ -930,9 +930,10 @@ function createBoundKovoVitePlugin(
           finish();
           return null;
         }
-        const standaloneRegistrySource = isAuthoredSource
-          ? lowerViteSourceDerivedRegistryDeclarations(transformRoot, fileName, source)
-          : null;
+        const standaloneRegistrySource =
+          isAuthoredSource && !isComponentSource
+            ? lowerViteSourceDerivedRegistryDeclarations(transformRoot, fileName, source)
+            : null;
         const optimisticModule = isAuthoredSource
           ? viteOptimisticModuleForFile(resolveViteRegistryFacts(options, fileName), fileName)
           : undefined;
@@ -1500,7 +1501,54 @@ function matchesViteFilter(
   return fileName === normalized || compilerStringStartsWith(fileName, `${normalized}/`);
 }
 
-async function compileViteComponentModule(
+function compileViteComponentModule(
+  compileComponentModule: ViteCompileComponentModule,
+  options: KovoVitePluginOptions,
+  root: string,
+  sourceFileSystems: readonly CompilerSourceFileSystem[],
+  fileName: string,
+  source: string,
+): Promise<ViteCompileResult> {
+  // App-scoped factories need the same compiler-owned Program proof while component lowering
+  // classifies them. Running only the standalone pre-pass is insufficient for a TSX module that
+  // declares both `app.query(...)` and `component(...)`: the pre-pass result is not the component
+  // compiler's input, so createApp() would observe an unkeyed query at runtime (SPEC §4.1/§5.2).
+  //
+  // Keep the resolution session synchronous and invocation-local. The real framework compiler
+  // consumes it before returning. A substituted asynchronous test compiler receives no ambient
+  // authority after its synchronous call returns.
+  if (compilerRegExpTest(/\.\s*(?:mutation|query|task)\s*\(/u, source)) {
+    const project = createCompilerOwnedAppContractProject({
+      rootDirectory: root,
+      rootNames: [fileName],
+    });
+    return project.withEntryResolutions(fileName, (programSource) => {
+      if (programSource !== source) {
+        throw new TypeError(
+          `Kovo Vite app-contract compiler refused a stale source snapshot for ${fileName}.`,
+        );
+      }
+      return compileViteComponentModuleWithResolvedFactories(
+        compileComponentModule,
+        options,
+        root,
+        sourceFileSystems,
+        fileName,
+        source,
+      );
+    });
+  }
+  return compileViteComponentModuleWithResolvedFactories(
+    compileComponentModule,
+    options,
+    root,
+    sourceFileSystems,
+    fileName,
+    source,
+  );
+}
+
+async function compileViteComponentModuleWithResolvedFactories(
   compileComponentModule: ViteCompileComponentModule,
   options: KovoVitePluginOptions,
   root: string,

@@ -222,6 +222,62 @@ export function lowerStandaloneSourceDerivedRegistryDeclarations(options: {
   );
 }
 
+/**
+ * @internal Lower non-component registry factories as part of the component source-patch
+ * pipeline. Free factories retain their canonical import proof; app-contract member factories
+ * additionally require the caller's compiler-owned resolution session. Component naming stays
+ * with the component compiler to avoid overlapping the structural JSX patch. Returning
+ * replacements (rather than pre-patched source) lets the compiler compose authored diagnostic
+ * offsets with the rest of structural lowering (SPEC §4.1/§5.2).
+ */
+export function componentSourceDerivedRegistryReplacements(options: {
+  fileName: string;
+  source: string;
+}): readonly SourceReplacement[] {
+  const model = parseComponentModule(options.fileName, options.source);
+  const sourceFile = model.sourceFile;
+  const allAssignments = exportedRegistryAssignments(sourceFile);
+  const assignments: SourceDerivedRegistryAssignment[] = [];
+  for (let index = 0; index < allAssignments.length; index += 1) {
+    const assignment = allAssignments[index]!;
+    if (assignment.primitive !== 'component') {
+      compilerArrayAppend(assignments, assignment, 'Component source-derived registry assignments');
+    }
+  }
+  if (assignments.length === 0) return [];
+
+  const replacements = registryAssignmentReplacements(
+    assignments,
+    options.fileName,
+    options.source,
+    sourceFile,
+  );
+  const primitives = requiredPrimitives(assignments);
+  const imported: string[] = [];
+  compilerSetForEach(primitives, (primitive) => {
+    const helper = registryAssignmentTable[primitive].helper;
+    compilerArrayAppend(
+      imported,
+      `${helper.imported} as ${helper.local}`,
+      'Component source-derived helper imports',
+    );
+  });
+  const importLine = `import { ${compilerArrayJoin(imported, ', ')} } from '${helperModule}';\n`;
+  const importDeclarationEnd = lastImportDeclarationEnd(sourceFile);
+  const insertionOffset =
+    importDeclarationEnd > 0 ? importDeclarationEnd : model.moduleImportInsertionOffset;
+  compilerArrayAppend(
+    replacements,
+    {
+      end: insertionOffset,
+      replacement: importDeclarationEnd > 0 ? `\n${importLine}` : importLine,
+      start: insertionOffset,
+    },
+    'Component source-derived replacements',
+  );
+  return replacements;
+}
+
 /** @internal Compatibility name for the complete standalone server lowering pass. */
 export function lowerStandaloneServerSource(source: string, fileName: string): string {
   return lowerStandaloneSourceDerivedRegistryDeclarations({ fileName, source }) ?? source;
@@ -305,6 +361,7 @@ function compilerSnapshotStatements(sourceFile: ts.SourceFile): readonly ts.Stat
 
 function exportedRegistryAssignments(
   sourceFile: ts.SourceFile,
+  appContractOnly = false,
 ): readonly SourceDerivedRegistryAssignment[] {
   const assignments: SourceDerivedRegistryAssignment[] = [];
   const statementCount = compilerArrayLength(
@@ -335,7 +392,7 @@ function exportedRegistryAssignments(
       const call = declaration.initializer;
       if (!call || !ts.isCallExpression(call)) continue;
 
-      const primitive = sourceDerivedPrimitive(sourceFile, call);
+      const primitive = sourceDerivedPrimitive(sourceFile, call, appContractOnly);
       if (primitive === null) continue;
       if (registryAssignmentTable[primitive].requiresExport && !exported) continue;
       compilerArrayAppend(
@@ -351,6 +408,7 @@ function exportedRegistryAssignments(
 function sourceDerivedPrimitive(
   sourceFile: ts.SourceFile,
   call: ts.CallExpression,
+  appContractOnly: boolean,
 ): SourceDerivedPrimitive | null {
   const primitiveCount = compilerArrayLength(
     SOURCE_DERIVED_PRIMITIVES,
@@ -371,7 +429,16 @@ function sourceDerivedPrimitive(
         identityIndex,
         'Source-derived identities',
       ) as FrameworkExportIdentity;
-      if (resolvesTo(sourceFile, call.expression, identity)) {
+      if (
+        appContractOnly
+          ? compilerOwnedAppContractFactoryEquals(
+              ts as FrameworkIdentityTypeScript,
+              sourceFile,
+              call.expression,
+              identity,
+            )
+          : resolvesTo(sourceFile, call.expression, identity)
+      ) {
         identityMatches = true;
         break;
       }
@@ -447,19 +514,7 @@ function insertHelperImport(
     );
   }
   const importLine = `import { ${compilerArrayJoin(imported, ', ')} } from '${helperModule}';\n`;
-  const statements = originalSourceFile.statements;
-  const statementCount = compilerArrayLength(statements, 'Source-derived source statements');
-  let importDeclarationEnd = 0;
-  for (let index = statementCount - 1; index >= 0; index -= 1) {
-    const statement = compilerOwnDataValue(
-      statements,
-      index,
-      'Source-derived source statements',
-    ) as ts.Statement;
-    if (!ts.isImportDeclaration(statement)) continue;
-    importDeclarationEnd = statement.end;
-    break;
-  }
+  const importDeclarationEnd = lastImportDeclarationEnd(originalSourceFile);
 
   if (importDeclarationEnd > 0) {
     return `${compilerStringSlice(source, 0, importDeclarationEnd)}\n${importLine}${compilerStringSlice(
@@ -468,6 +523,52 @@ function insertHelperImport(
     )}`;
   }
   return `${compilerStringSlice(source, 0, moduleImportInsertionOffset)}${importLine}${compilerStringSlice(source, moduleImportInsertionOffset)}`;
+}
+
+function lastImportDeclarationEnd(sourceFile: ts.SourceFile): number {
+  const statements = sourceFile.statements;
+  const statementCount = compilerArrayLength(statements, 'Source-derived source statements');
+  for (let index = statementCount - 1; index >= 0; index -= 1) {
+    const statement = compilerOwnDataValue(
+      statements,
+      index,
+      'Source-derived source statements',
+    ) as ts.Statement;
+    if (ts.isImportDeclaration(statement)) return statement.end;
+  }
+  return 0;
+}
+
+function registryAssignmentReplacements(
+  assignments: readonly SourceDerivedRegistryAssignment[],
+  fileName: string,
+  source: string,
+  sourceFile: ts.SourceFile,
+): SourceReplacement[] {
+  const replacements: SourceReplacement[] = [];
+  const assignmentCount = compilerArrayLength(assignments, 'Source-derived assignments');
+  for (let index = 0; index < assignmentCount; index += 1) {
+    const assignment = compilerOwnDataValue(
+      assignments,
+      index,
+      'Source-derived assignments',
+    ) as SourceDerivedRegistryAssignment;
+    const helper = registryAssignmentTable[assignment.primitive].helper.local;
+    const key = derivedAssignmentKey(fileName, assignment);
+    const encodedKey = compilerJsonStringify(key);
+    if (encodedKey === undefined) throw new TypeError('Source-derived key could not be encoded.');
+    const start = assignment.call.getStart(sourceFile);
+    compilerArrayAppend(
+      replacements,
+      {
+        end: assignment.call.end,
+        replacement: `${helper}(${compilerStringSlice(source, start, assignment.call.end)}, ${encodedKey})`,
+        start,
+      },
+      'Source-derived replacements',
+    );
+  }
+  return replacements;
 }
 
 function requiredPrimitives(
