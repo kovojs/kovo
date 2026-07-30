@@ -1,13 +1,13 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { parseKovoCommandInvocation } from '../commands-manifest.js';
 import type { KovoCommandSecurityDisposition } from './security-disposition.js';
 import {
-  createKovoBuildOneShotHandoffDirectory,
-  parseKovoBuildOneShotProducerControl,
+  inspectKovoBuildOneShotHandoff,
+  KOVO_BUILD_ONE_SHOT_MAX_WIRE_BYTES,
 } from './build-one-shot-handoff.js';
 
 /** Run packed/source one-shot source checking or build phases without retaining phase heaps. */
@@ -29,40 +29,49 @@ export function runKovoIsolatedOneShotInvocation(
     args[0] === 'build' ? parseKovoCommandInvocation('build', args.slice(1)) : undefined;
   if (!build?.ok) return undefined;
 
-  let directory: string | undefined;
   try {
-    directory = createKovoBuildOneShotHandoffDirectory(security.invocationCwd);
-    const analysis = runWorker(binPath, ['analyze', directory, ...args.slice(1)], security, [
+    const analysis = runWorker(binPath, ['analyze', ...args.slice(1)], security, [
       'inherit',
       'inherit',
       'inherit',
       'pipe',
     ]);
     if (analysis.status !== 0) return analysis.status;
-    const control = parseKovoBuildOneShotProducerControl(
-      Buffer.isBuffer(analysis.control)
-        ? analysis.control.toString('utf8')
-        : String(analysis.control ?? ''),
-    );
+    if (!Buffer.isBuffer(analysis.control)) {
+      throw new TypeError('Kovo build analysis worker omitted its private handoff.');
+    }
+    const inspection = inspectKovoBuildOneShotHandoff(analysis.control);
+    let wire = analysis.control;
+    for (const phase of ['client', 'server'] as const) {
+      const result = runWorker(
+        binPath,
+        [phase, JSON.stringify(inspection.identity), ...args.slice(1)],
+        security,
+        ['pipe', 'inherit', 'inherit', 'pipe'],
+        wire,
+      );
+      if (result.status !== 0) return result.status;
+      if (!Buffer.isBuffer(result.control)) {
+        throw new TypeError(`Kovo build ${phase} worker omitted its private handoff.`);
+      }
+      const nextInspection = inspectKovoBuildOneShotHandoff(result.control);
+      if (JSON.stringify(nextInspection.identity) !== JSON.stringify(inspection.identity)) {
+        throw new TypeError(`Kovo build ${phase} worker changed the invocation identity.`);
+      }
+      wire = result.control;
+    }
     return runWorker(
       binPath,
-      [
-        'emit',
-        control.reference.file,
-        control.reference.digest,
-        JSON.stringify(control.identity),
-        ...args.slice(1),
-      ],
+      ['final', JSON.stringify(inspection.identity), ...args.slice(1)],
       security,
-      ['inherit', 'inherit', 'inherit'],
+      ['pipe', 'inherit', 'inherit'],
+      wire,
     ).status;
   } catch (error) {
     process.stderr.write(
       `kovo build isolation failed: ${error instanceof Error ? error.message : String(error)}\n`,
     );
     return 1;
-  } finally {
-    if (directory !== undefined) rmSync(directory, { force: true, recursive: true });
   }
 }
 
@@ -76,6 +85,7 @@ function runWorker(
   args: readonly string[],
   security: KovoCommandSecurityDisposition,
   stdio: ('inherit' | 'pipe')[],
+  input?: Buffer,
 ): OneShotWorkerResult {
   const sourceMode = binPath.endsWith('.ts');
   const worker = sourceMode
@@ -99,6 +109,8 @@ function runWorker(
     {
       cwd: security.invocationCwd,
       env: security.invocationEnv,
+      ...(input === undefined ? {} : { input }),
+      maxBuffer: KOVO_BUILD_ONE_SHOT_MAX_WIRE_BYTES,
       stdio,
     },
   );

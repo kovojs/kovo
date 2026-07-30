@@ -1,45 +1,51 @@
-import { readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
-  createKovoBuildOneShotHandoffDirectory,
+  encodeKovoBuildOneShotHandoff,
+  inspectKovoBuildOneShotHandoff,
   kovoBuildOneShotDigest,
-  parseKovoBuildOneShotProducerControl,
+  KOVO_BUILD_ONE_SHOT_MAX_WIRE_BYTES,
   readKovoBuildOneShotHandoff,
-  writeKovoBuildOneShotHandoff,
   type KovoBuildOneShotIdentity,
 } from './build-one-shot-handoff.js';
 
-function identity(root: string): KovoBuildOneShotIdentity {
+function identity(): KovoBuildOneShotIdentity {
   return {
     appModulePath: 'src/app.tsx',
     compilerProvenanceDigest: kovoBuildOneShotDigest({ compiler: '0.3.0' }),
     configSourceDigest: kovoBuildOneShotDigest({ config: 'node' }),
-    invocationRoot: root,
+    invocationRoot: process.cwd(),
     optionsDigest: kovoBuildOneShotDigest({ cache: true, preset: 'node' }),
     sourceSetDigest: kovoBuildOneShotDigest([{ fileName: 'src/app.tsx', source: 'safe' }]),
   };
 }
 
-describe('one-shot build handoff', () => {
-  it('round-trips one exact project-confined content-addressed payload', () => {
-    const root = process.cwd();
-    const directory = createKovoBuildOneShotHandoffDirectory(root);
-    try {
-      const expectedIdentity = identity(root);
-      const payload = {
-        analysis: { checkGraph: { routes: [] } },
-        identity: expectedIdentity,
-        schema: 'kovo-build-one-shot-analysis/v1' as const,
-      };
-      const reference = writeKovoBuildOneShotHandoff(directory, payload);
+function wire() {
+  const expectedIdentity = identity();
+  return {
+    bytes: encodeKovoBuildOneShotHandoff({
+      analysis: { checkGraph: { routes: [] } },
+      identity: expectedIdentity,
+      schema: 'kovo-build-one-shot-analysis/v1',
+    }),
+    expectedIdentity,
+  };
+}
 
-      expect(basename(reference.file)).toBe(`${reference.digest.slice('sha256:'.length)}.json`);
-      expect(readKovoBuildOneShotHandoff(reference, expectedIdentity)).toEqual(payload);
-    } finally {
-      rmSync(directory, { force: true, recursive: true });
-    }
+describe('one-shot build private handoff', () => {
+  it('round-trips one exact, authenticated, deeply frozen payload', () => {
+    const handoff = wire();
+    expect(inspectKovoBuildOneShotHandoff(handoff.bytes)).toEqual({
+      identity: handoff.expectedIdentity,
+    });
+    const payload = readKovoBuildOneShotHandoff(handoff.bytes, handoff.expectedIdentity);
+    expect(payload).toEqual({
+      analysis: { checkGraph: { routes: [] } },
+      identity: handoff.expectedIdentity,
+      schema: 'kovo-build-one-shot-analysis/v1',
+    });
+    expect(Object.isFrozen(payload)).toBe(true);
+    expect(Object.isFrozen(payload.analysis)).toBe(true);
   });
 
   it.each([
@@ -49,114 +55,77 @@ describe('one-shot build handoff', () => {
     ['source set', { sourceSetDigest: kovoBuildOneShotDigest([{ source: 'changed' }]) }],
     ['options', { optionsDigest: kovoBuildOneShotDigest({ cache: false }) }],
   ])('rejects a stale or wrong %s identity', (_label, changed) => {
-    const root = process.cwd();
-    const directory = createKovoBuildOneShotHandoffDirectory(root);
-    try {
-      const producedIdentity = identity(root);
-      const reference = writeKovoBuildOneShotHandoff(directory, {
-        analysis: {},
-        identity: producedIdentity,
-        schema: 'kovo-build-one-shot-analysis/v1',
-      });
-      expect(() =>
-        readKovoBuildOneShotHandoff(reference, { ...producedIdentity, ...changed }),
-      ).toThrow(/stale or belongs to another invocation/u);
-    } finally {
-      rmSync(directory, { force: true, recursive: true });
-    }
-  });
-
-  it('rejects incomplete, tampered, and renamed envelopes', () => {
-    const root = process.cwd();
-    const directory = createKovoBuildOneShotHandoffDirectory(root);
-    try {
-      const expectedIdentity = identity(root);
-      const reference = writeKovoBuildOneShotHandoff(directory, {
-        analysis: {},
-        identity: expectedIdentity,
-        schema: 'kovo-build-one-shot-analysis/v1',
-      });
-      const original = readFileSync(reference.file, 'utf8');
-
-      writeFileSync(reference.file, '{"schema":"kovo-build-one-shot-handoff/v1"}\n');
-      expect(() => readKovoBuildOneShotHandoff(reference, expectedIdentity)).toThrow(/incomplete/u);
-
-      const tampered = JSON.parse(original) as { payload: string };
-      tampered.payload = tampered.payload.replace('"analysis":{}', '"analysis":{"forged":true}');
-      writeFileSync(reference.file, `${JSON.stringify(tampered)}\n`);
-      expect(() => readKovoBuildOneShotHandoff(reference, expectedIdentity)).toThrow(
-        /unauthenticated/u,
-      );
-
-      writeFileSync(reference.file, original);
-      expect(() =>
-        readKovoBuildOneShotHandoff(
-          { ...reference, file: join(dirname(reference.file), 'renamed.json') },
-          expectedIdentity,
-        ),
-      ).toThrow(/filename is not content-addressed/u);
-    } finally {
-      rmSync(directory, { force: true, recursive: true });
-    }
-  });
-
-  it('rejects symlinked files and handoff roots', () => {
-    const root = process.cwd();
-    const directory = createKovoBuildOneShotHandoffDirectory(root);
-    const secondDirectory = createKovoBuildOneShotHandoffDirectory(root);
-    try {
-      const expectedIdentity = identity(root);
-      const reference = writeKovoBuildOneShotHandoff(directory, {
-        analysis: {},
-        identity: expectedIdentity,
-        schema: 'kovo-build-one-shot-analysis/v1',
-      });
-      const alias = join(secondDirectory, basename(reference.file));
-      symlinkSync(reference.file, alias, 'file');
-      expect(() =>
-        readKovoBuildOneShotHandoff({ ...reference, file: alias }, expectedIdentity),
-      ).toThrow(/regular non-symlink file/u);
-
-      const linkedRoot = join(root, `.kovo-one-shot-linked-${process.pid}`);
-      symlinkSync(directory, linkedRoot, 'dir');
-      expect(() =>
-        writeKovoBuildOneShotHandoff(linkedRoot, {
-          analysis: {},
-          identity: expectedIdentity,
-          schema: 'kovo-build-one-shot-analysis/v1',
-        }),
-      ).toThrow(/non-symlink directory/u);
-      rmSync(linkedRoot, { force: true });
-    } finally {
-      rmSync(directory, { force: true, recursive: true });
-      rmSync(secondDirectory, { force: true, recursive: true });
-    }
-  });
-
-  it('accepts only exact, authenticated producer control output', () => {
-    const root = process.cwd();
-    const expectedIdentity = identity(root);
-    const control = {
-      identity: expectedIdentity,
-      reference: {
-        digest: kovoBuildOneShotDigest({ payload: 'one-shot' }),
-        file: join(root, '.kovo-one-shot-test', 'handoff.json'),
-      },
-      schema: 'kovo-build-one-shot-producer/v1',
-    };
-
-    expect(parseKovoBuildOneShotProducerControl(JSON.stringify(control))).toEqual(control);
-    expect(() => parseKovoBuildOneShotProducerControl('{')).toThrow(/malformed control/u);
+    const handoff = wire();
     expect(() =>
-      parseKovoBuildOneShotProducerControl(JSON.stringify({ ...control, reference: undefined })),
-    ).toThrow(/incomplete control/u);
+      readKovoBuildOneShotHandoff(handoff.bytes, {
+        ...handoff.expectedIdentity,
+        ...changed,
+      }),
+    ).toThrow(/stale or belongs to another invocation/u);
+  });
+
+  it('rejects truncated, extended, malformed, and tampered wire envelopes', () => {
+    const handoff = wire();
     expect(() =>
-      parseKovoBuildOneShotProducerControl(
-        JSON.stringify({
-          ...control,
-          reference: { ...control.reference, digest: 'sha256:wrong' },
-        }),
+      readKovoBuildOneShotHandoff(handoff.bytes.subarray(0, 12), handoff.expectedIdentity),
+    ).toThrow(/prelude/u);
+    expect(() =>
+      readKovoBuildOneShotHandoff(
+        Buffer.concat([handoff.bytes, Buffer.from('extra')]),
+        handoff.expectedIdentity,
       ),
-    ).toThrow(/digest is invalid/u);
+    ).toThrow(/payload length/u);
+
+    const malformed = Buffer.from(handoff.bytes);
+    malformed.fill(0x7a, 0, 4);
+    expect(() => inspectKovoBuildOneShotHandoff(malformed)).toThrow(/prelude/u);
+
+    const tampered = Buffer.from(handoff.bytes);
+    tampered[tampered.length - 2] ^= 1;
+    expect(() => readKovoBuildOneShotHandoff(tampered, handoff.expectedIdentity)).toThrow(
+      /unauthenticated/u,
+    );
+  });
+
+  it('rejects incomplete payloads and over-limit input before parsing', () => {
+    const expectedIdentity = identity();
+    const incomplete = encodeKovoBuildOneShotHandoff({
+      identity: expectedIdentity,
+      schema: 'kovo-build-one-shot-analysis/v1',
+    } as never);
+    expect(() => readKovoBuildOneShotHandoff(incomplete, expectedIdentity)).toThrow(/incomplete/u);
+
+    expect(() =>
+      inspectKovoBuildOneShotHandoff(new Uint8Array(KOVO_BUILD_ONE_SHOT_MAX_WIRE_BYTES + 1)),
+    ).toThrow(/byte limit/u);
+  });
+
+  it('rejects values whose private, accessor, symbol, or prototype state JSON would lose', () => {
+    const expectedIdentity = identity();
+    const accessor = {};
+    Object.defineProperty(accessor, 'hidden', { enumerable: true, get: () => 'lost' });
+    expect(() =>
+      encodeKovoBuildOneShotHandoff({
+        analysis: accessor,
+        identity: expectedIdentity,
+        schema: 'kovo-build-one-shot-analysis/v1',
+      }),
+    ).toThrow(/hidden or accessor state/u);
+
+    expect(() =>
+      encodeKovoBuildOneShotHandoff({
+        analysis: { [Symbol('private')]: true },
+        identity: expectedIdentity,
+        schema: 'kovo-build-one-shot-analysis/v1',
+      }),
+    ).toThrow(/private symbol state/u);
+
+    expect(() =>
+      encodeKovoBuildOneShotHandoff({
+        analysis: new Date(),
+        identity: expectedIdentity,
+        schema: 'kovo-build-one-shot-analysis/v1',
+      }),
+    ).toThrow(/private prototype state/u);
   });
 });

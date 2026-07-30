@@ -3,15 +3,22 @@ import { writeFileSync } from 'node:fs';
 import { lockCompilerSecurityRealm } from '@kovojs/compiler/internal/security-bootstrap';
 
 import {
+  abortKovoBuildOutputTransaction,
+  finishKovoBuildOneShot,
   kovoBuildOneShotIdentity,
   parseBuildArgs,
+  produceKovoBuildOneShotClientPhase,
   produceKovoBuildOneShotAnalysis,
-  runBuildCommandFromOneShotAnalysis,
+  produceKovoBuildOneShotServerPhase,
   runSourceCheckCommand,
+  type KovoBuildOneShotAnalysis,
+  type KovoBuildOneShotClientPhase,
+  type KovoBuildOneShotServerPhase,
 } from './build-export.js';
 import {
+  encodeKovoBuildOneShotHandoff,
   readKovoBuildOneShotHandoff,
-  writeKovoBuildOneShotHandoff,
+  readKovoBuildOneShotWireFromFd,
   type KovoBuildOneShotIdentity,
 } from './build-one-shot-handoff.js';
 import { parseCheckArgs } from '../graph-args.js';
@@ -22,7 +29,7 @@ const mode = process.argv[2];
 const security = captureKovoCommandSecurityDisposition();
 lockCompilerSecurityRealm();
 
-let exitCode: 0 | 1 | 2;
+let exitCode: 0 | 1 | 2 = 2;
 if (mode === 'check') {
   const parsed = parseCheckArgs(process.argv.slice(3));
   if (!parsed.ok || !('source' in parsed)) {
@@ -42,66 +49,94 @@ if (mode === 'check') {
     );
   }
 } else if (mode === 'analyze') {
-  const handoffDirectory = process.argv[3];
-  const parsed = parseBuildArgs(process.argv.slice(4));
-  if (typeof handoffDirectory !== 'string' || !parsed.ok) {
-    exitCode = writeUsageError(
-      parsed.ok ? 'kovo: isolated build analysis requires a handoff directory.\n' : parsed.message,
-      'build',
-    );
+  const parsed = parseBuildArgs(process.argv.slice(3));
+  if (!parsed.ok) {
+    exitCode = writeUsageError(parsed.message, 'build');
   } else {
     const outcome = await produceKovoBuildOneShotAnalysis(parsed.options, security);
     if ('exitCode' in outcome) {
       exitCode = writeFormattedCommandResult(outcome, parsed.format, 'build', 'build');
     } else {
       const identity = kovoBuildOneShotIdentity(parsed.options, outcome, security);
-      const reference = writeKovoBuildOneShotHandoff(handoffDirectory, {
+      const wire = encodeKovoBuildOneShotHandoff({
         analysis: outcome,
         identity,
         schema: 'kovo-build-one-shot-analysis/v1',
       });
-      writeFileSync(
-        3,
-        JSON.stringify({
-          identity,
-          reference,
-          schema: 'kovo-build-one-shot-producer/v1',
-        }),
-      );
-      exitCode = 0;
+      await flushCommandStreams();
+      writeFileSync(3, wire);
+      process.exit(0);
     }
   }
-} else if (mode === 'emit') {
-  const file = process.argv[3];
-  const digest = process.argv[4];
-  const identityText = process.argv[5];
-  const parsed = parseBuildArgs(process.argv.slice(6));
-  if (
-    typeof file !== 'string' ||
-    typeof digest !== 'string' ||
-    typeof identityText !== 'string' ||
-    !parsed.ok
-  ) {
+} else if (mode === 'client' || mode === 'server' || mode === 'final') {
+  const identityText = process.argv[3];
+  const parsed = parseBuildArgs(process.argv.slice(4));
+  if (typeof identityText !== 'string' || !parsed.ok) {
     exitCode = writeUsageError(
-      parsed.ok ? 'kovo: isolated build emission requires one handoff.\n' : parsed.message,
+      parsed.ok
+        ? `kovo: isolated build ${mode} phase requires one private handoff.\n`
+        : parsed.message,
       'build',
     );
   } else {
     let identity: KovoBuildOneShotIdentity;
     try {
       identity = JSON.parse(identityText) as KovoBuildOneShotIdentity;
-      const payload = readKovoBuildOneShotHandoff({ digest, file }, identity);
-      exitCode = writeFormattedCommandResult(
-        await runBuildCommandFromOneShotAnalysis(
+      const payload = readKovoBuildOneShotHandoff(readKovoBuildOneShotWireFromFd(0), identity);
+      const phase = oneShotPhasePayload(payload.analysis);
+      if (mode === 'client') {
+        const outcome = await produceKovoBuildOneShotClientPhase(
           parsed.options,
-          payload.analysis,
+          phase.analysis,
           identity,
           security,
-        ),
-        parsed.format,
-        'build',
-        'build',
-      );
+        );
+        if ('exitCode' in outcome) {
+          exitCode = writeFormattedCommandResult(outcome, parsed.format, 'build', 'build');
+        } else {
+          await writePhaseHandoff(identity, {
+            analysis: phase.analysis,
+            clientPhase: outcome,
+          });
+        }
+      } else if (mode === 'server') {
+        if (phase.clientPhase === undefined) {
+          throw new TypeError('Kovo build server phase omitted the client phase.');
+        }
+        const outcome = await produceKovoBuildOneShotServerPhase(
+          parsed.options,
+          phase.analysis,
+          phase.clientPhase,
+          identity,
+          security,
+        );
+        if ('exitCode' in outcome) {
+          exitCode = writeFormattedCommandResult(outcome, parsed.format, 'build', 'build');
+        } else {
+          await writePhaseHandoff(identity, {
+            analysis: phase.analysis,
+            clientPhase: phase.clientPhase,
+            serverPhase: outcome,
+          });
+        }
+      } else {
+        if (phase.clientPhase === undefined || phase.serverPhase === undefined) {
+          throw new TypeError('Kovo build final phase omitted a prior phase.');
+        }
+        exitCode = writeFormattedCommandResult(
+          await finishKovoBuildOneShot(
+            parsed.options,
+            phase.analysis,
+            phase.clientPhase,
+            phase.serverPhase,
+            identity,
+            security,
+          ),
+          parsed.format,
+          'build',
+          'build',
+        );
+      }
     } catch (error) {
       exitCode = writeFormattedCommandResult(
         {
@@ -115,13 +150,54 @@ if (mode === 'check') {
     }
   }
 } else {
-  process.stderr.write('Kovo one-shot worker requires check, analyze, or emit mode.\n');
+  process.stderr.write(
+    'Kovo one-shot worker requires check, analyze, client, server, or final mode.\n',
+  );
   exitCode = 2;
 }
 
-await Promise.all(
-  [process.stdout, process.stderr].map(
-    (stream) => new Promise<void>((resolve) => stream.write('', () => resolve())),
-  ),
-);
+await flushCommandStreams();
 process.exit(exitCode);
+
+async function flushCommandStreams(): Promise<void> {
+  await Promise.all(
+    [process.stdout, process.stderr].map(
+      (stream) => new Promise<void>((resolve) => stream.write('', () => resolve())),
+    ),
+  );
+}
+
+interface OneShotPhasePayload {
+  readonly analysis: KovoBuildOneShotAnalysis;
+  readonly clientPhase?: KovoBuildOneShotClientPhase;
+  readonly serverPhase?: KovoBuildOneShotServerPhase;
+}
+
+function oneShotPhasePayload(value: unknown): OneShotPhasePayload {
+  if (value === null || typeof value !== 'object' || !('analysis' in value)) {
+    throw new TypeError('Kovo build phase handoff is incomplete.');
+  }
+  return value as OneShotPhasePayload;
+}
+
+async function writePhaseHandoff(
+  identity: KovoBuildOneShotIdentity,
+  analysis: OneShotPhasePayload,
+): Promise<never> {
+  let wire: Buffer;
+  try {
+    wire = encodeKovoBuildOneShotHandoff({
+      analysis,
+      identity,
+      schema: 'kovo-build-one-shot-analysis/v1',
+    });
+  } catch (error) {
+    if (analysis.clientPhase !== undefined) {
+      abortKovoBuildOutputTransaction({ ...analysis.clientPhase.transaction });
+    }
+    throw error;
+  }
+  await flushCommandStreams();
+  writeFileSync(3, wire);
+  process.exit(0);
+}
