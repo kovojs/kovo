@@ -2566,8 +2566,10 @@ function localQueryPlanRuntimeNames(
   fileName: string,
 ): Readonly<Record<string, string>> {
   const result = compilerCreateNullRecord<string>();
+  const component = firstComponentModel(model);
+  if (component === null) return compilerFreeze(result);
   const entries = compilerSnapshotDenseArray(
-    componentOptionObjectEntriesFor(firstComponentModel(model), 'queries'),
+    componentOptionObjectEntriesFor(component, 'queries'),
     'Component query runtime-name entries',
   );
   const calls = compilerSnapshotDenseArray(model.calls, 'Component query runtime-name calls');
