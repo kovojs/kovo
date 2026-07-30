@@ -12,7 +12,7 @@ import {
   compilerStringStartsWith,
 } from '../compiler-security-intrinsics.js';
 import type { CompilerDiagnostic } from '../diagnostics.js';
-import type { CompileComponentOptions, CompileResult } from '../types.js';
+import type { CompileComponentOptions, CompileResult, ComponentGraphFact } from '../types.js';
 import { parseSourceFile } from './parse.js';
 
 /** @internal Diagnostic codes with a closed, compiler-proven source rewrite recipe. */
@@ -323,7 +323,7 @@ export function compileBehaviorFingerprint(result: CompileResult): string {
     browserPostureManifest: result.browserPostureManifest,
     clientExports: result.clientExports,
     clientModuleImportManifest: result.clientModuleImportManifest,
-    componentGraphFacts: result.componentGraphFacts,
+    componentGraphFacts: withoutComponentGraphSourceLocations(result.componentGraphFacts),
     cssAssets: result.cssAssets,
     endpointGraphFacts: result.endpointGraphFacts,
     handlerExports: result.handlerExports,
@@ -573,6 +573,20 @@ function withoutSourceLocations<Value extends { readonly site?: string; readonly
   for (let index = 0; index < values.length; index += 1) {
     const { site: _site, start: _start, ...value } = values[index]!;
     compilerArrayAppend(result, value, 'Safe-fix location-free facts');
+  }
+  return result;
+}
+
+function withoutComponentGraphSourceLocations(
+  values: readonly ComponentGraphFact[],
+): readonly Omit<ComponentGraphFact, 'source'>[] {
+  const result: Omit<ComponentGraphFact, 'source'>[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    // SPEC §5.2: source anchors explain authored provenance, but byte offsets are not emitted
+    // behavior. Removing one approved JSX attribute may shift this span without changing any
+    // runtime, graph, security, or render fact.
+    const { source: _source, ...value } = values[index]!;
+    compilerArrayAppend(result, value, 'Safe-fix location-free component graph facts');
   }
   return result;
 }
