@@ -39,6 +39,15 @@ Unfinished surface that ships before it is frozen is marked: a `experimental_` n
 prefix or an `@experimental` JSDoc tag means "public, but exempt from the SemVer
 guarantee until the marker is removed."
 
+## Kovo 0.3 API cut
+
+The 0.3 line is Kovo's cumulative technical-preview API v1 cut. Before changing package
+versions, run `kovo fix api-v1 --check`, review every refusal, then run
+`kovo fix api-v1 --write`. The cut removes the replaced roots, aliases, overloads, and
+generated assembly shapes instead of retaining compatibility barrels. The task-organized
+before/after guide and rollback boundary are in
+[`docs/releases/api-v1.md`](docs/releases/api-v1.md).
+
 ## Security Support Window
 
 Kovo is in technical preview. Only the latest published `0.x` minor receives security fixes. The

@@ -1,6 +1,6 @@
 # App-scoped test harness v2
 
-Status: technical-preview breaking batch for `@kovojs/test` 0.2.
+Status: technical-preview breaking batch for `@kovojs/test` 0.3.
 
 ## What changed
 
