@@ -3568,6 +3568,7 @@ async function sessionAuthorityFactsFromEntry(
     else reachable[existingIndex] = file;
   }
 
+  const appContractProject = compilerOwnedAppContractProjectForBuild(reachable, root);
   const result: CoreGraph.SessionAuthorityFact[] = [];
   for (let index = 0; index < reachable.length; index += 1) {
     const file = reachable[index]!;
@@ -3575,15 +3576,21 @@ async function sessionAuthorityFactsFromEntry(
       viteFrameworkIdentityFiles(root, file.fileName, file.source),
       `Framework-identity files for ${file.fileName}`,
     );
-    const facts = buildSnapshotDenseArray(
-      mutationSessionAuthorityFacts(
-        parseComponentModule(
-          file.fileName,
-          file.source,
-          extraFiles.length === 0 ? {} : { frameworkIdentityFiles: extraFiles },
+    const facts = withBuildAppContractResolutions(
+      appContractProject,
+      file.fileName,
+      file.source,
+      () =>
+        buildSnapshotDenseArray(
+          mutationSessionAuthorityFacts(
+            parseComponentModule(
+              file.fileName,
+              file.source,
+              extraFiles.length === 0 ? {} : { frameworkIdentityFiles: extraFiles },
+            ),
+          ),
+          `Session-authority facts for ${file.fileName}`,
         ),
-      ),
-      `Session-authority facts for ${file.fileName}`,
     );
     for (let factIndex = 0; factIndex < facts.length; factIndex += 1) {
       buildSecurityArrayAppend(

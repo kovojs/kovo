@@ -13,7 +13,7 @@ import {
 } from './app-contract-project.js';
 import { compileComponentModule } from './compile.js';
 import { componentTaskBSourceOperationFacts } from './security-operation-facts.js';
-import { parseComponentModule } from './scan/parse.js';
+import { mutationSessionAuthorityFacts, parseComponentModule } from './scan/parse.js';
 
 const temporaryDirectories: string[] = [];
 
@@ -223,6 +223,9 @@ describe('D1 compiler-owned exact project resolver', () => {
 
     const result = project.compileEntry(entry);
     const staticFacts = project.staticFacts().filter((fact) => fact.fileName === entry);
+    const sessionAuthority = project.withEntryResolutions(entry, (source) =>
+      mutationSessionAuthorityFacts(parseComponentModule(entry, source)),
+    );
 
     expect(result.diagnostics).toEqual([]);
     expect(
@@ -258,6 +261,12 @@ describe('D1 compiler-owned exact project resolver', () => {
       expect.objectContaining({ name: '/private' }),
     ]);
     expect(staticFacts.every((fact) => fact.source === result.source)).toBe(true);
+    expect(sessionAuthority.map((fact) => [fact.name, fact.referencesSession])).toEqual([
+      ['app-surfaces/captured', true],
+      ['app-surfaces/destructured', false],
+      ['app-surfaces/managed', false],
+      ['app-surfaces/shadowed', true],
+    ]);
   });
 
   it('binds integrated adapter mutations to their exact literal key and call span', async () => {
