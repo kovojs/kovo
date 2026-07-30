@@ -4199,7 +4199,9 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
           root,
           ssr: { noExternal: true },
         }),
-      ).rejects.toThrow(/KV448.*supported build-server artifact.*non-literal module edge/u);
+      ).rejects.toThrow(
+        /KV448.*supported build-server artifact.*non-literal module edge \(ImportExpression\) at generated offset/u,
+      );
       expect(() => readFileSync(join(outDir, 'entry.mjs'), 'utf8')).toThrow();
     } finally {
       rmSync(root, { force: true, recursive: true });

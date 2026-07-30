@@ -645,9 +645,14 @@ export function dependencyCapabilityLoaderVitePlugin(
           );
         }
         const artifactModuleEdges = parsedModuleEdges(outputAst);
-        if (artifactModuleEdges.some((edge) => edge.specifier === undefined)) {
+        const opaqueArtifactEdge = artifactModuleEdges.find((edge) => edge.specifier === undefined);
+        if (opaqueArtifactEdge !== undefined) {
+          const offset =
+            opaqueArtifactEdge.start === undefined
+              ? ''
+              : ` at generated offset ${opaqueArtifactEdge.start}`;
           throw dependencyCapabilityError(
-            `supported ${lane} artifact ${output.fileName} retains a non-literal module edge outside the immutable dependency closure`,
+            `supported ${lane} artifact ${output.fileName} retains a non-literal module edge (${opaqueArtifactEdge.kind})${offset} outside the immutable dependency closure`,
           );
         }
         const retainedSpecifiers = new Set([
@@ -1345,7 +1350,9 @@ function literalRequireSpecifiers(source: string): string[] {
 }
 
 interface ParsedModuleEdge {
+  readonly kind: string;
   readonly specifier?: string;
+  readonly start?: number;
 }
 
 type ReviewedExecutableAssetCarrier =
@@ -5881,13 +5888,13 @@ function parsedModuleEdges(ast: unknown): ParsedModuleEdge[] {
       type === 'ExportNamedDeclaration'
     ) {
       if (record.source !== null && record.source !== undefined) {
-        edges.push(parsedModuleEdge(record.source));
+        edges.push(parsedModuleEdge(record.source, type));
       }
     } else if (type === 'ImportExpression') {
-      edges.push(parsedModuleEdge(record.source));
+      edges.push(parsedModuleEdge(record.source, type));
     } else if (type === 'CallExpression' && isModuleLoaderCall(record.callee)) {
       const args = Array.isArray(record.arguments) ? record.arguments : [];
-      edges.push(parsedModuleEdge(args.length === 1 ? args[0] : undefined));
+      edges.push(parsedModuleEdge(args.length === 1 ? args[0] : undefined, 'module-loader call'));
     }
 
     for (const [key, child] of Object.entries(record)) {
@@ -5907,9 +5914,16 @@ function parsedModuleEdges(ast: unknown): ParsedModuleEdge[] {
   return edges;
 }
 
-function parsedModuleEdge(value: unknown): ParsedModuleEdge {
+function parsedModuleEdge(value: unknown, kind: string): ParsedModuleEdge {
   const specifier = literalAstString(value);
-  return specifier === undefined ? {} : { specifier };
+  const node =
+    typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined;
+  const start = typeof node?.start === 'number' ? node.start : undefined;
+  return {
+    kind,
+    ...(specifier === undefined ? {} : { specifier }),
+    ...(start === undefined ? {} : { start }),
+  };
 }
 
 interface ArtifactModuleEdgeReplacement {
