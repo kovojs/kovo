@@ -1067,33 +1067,24 @@ export async function runBuildCommand(
           ? {}
           : { tableSecurity: staticRuntimeRegistry.tableSecurity }),
       };
-      const discoveryGraph: CoreGraph.KovoCheckInput = {
-        ...graphWithProvenance,
-        // The first bundle is temporary discovery output, but the serializer must remain
-        // fail-closed for every server bundle. Give it the pre-proof posture that production
-        // builds used before the completed-build stamp existed; the final pass below replaces
-        // this with the graph-and-build-token-bound posture before anything is promoted.
-        runtimePosture: createKovoRuntimePostureManifest(graphWithProvenance),
-      };
-      // The server compiler contributes client modules, while the final runtime-posture registry
-      // embeds the completed graph. Run one non-emitted discovery pass to close that dependency,
-      // then prove the final pass retained the exact client-module set before any artifact write.
-      const discoveredServerHandlerBuild = await bundleKovoServerHandler(resolvedAppModulePath, {
-        approvedSourceFiles,
-        buildRoot: invocationRoot,
-        dependencyCapabilities,
-        projectMutationFacts: serverProjectMutationFacts,
-        queryShapeFacts,
-        runtimeTarget: selectedPreset.name,
-        runtimeRegistry: {
-          ...runtimeRegistryWireFactsFromGraph(discoveryGraph),
-          ...commonRuntimeRegistry,
+      // SPEC §5.2 rules 1/6/9: replay only the immutable approved sources that the already-required
+      // app component scan actually reached. The former discovery server bundle rebuilt the entire
+      // SSR graph only to read this compiler-owned result, retaining another Vite/Rollup graph
+      // beside the final bundle and pushing valid copy-in catalogs over the 2 GiB ceiling. The
+      // final runtime-posture bundle below remains an independent compilation and must retain exact
+      // path/representation/fingerprint/role equality before any artifact is promoted.
+      const discoveredServerClientModules = await compilerClientModulesFromApprovedSources(
+        resolvedAppModulePath,
+        {
+          approvedSourceFiles: clientBuild.appCompilerSourceFiles,
+          buildRoot: invocationRoot,
+          projectMutationFacts: serverProjectMutationFacts,
+          queryShapeFacts,
         },
-        stylesheetAssets: buildCssAssets,
-      });
+      );
       const discoveredClientModules = uniqueKovoCompiledClientModules([
         ...clientBuild.clientModules,
-        ...discoveredServerHandlerBuild.clientModules,
+        ...discoveredServerClientModules,
       ]);
       const discoveredClientModuleCensus = compilerClientModuleCensus(
         discoveredClientModules,
@@ -5808,6 +5799,7 @@ function kovoBuildModuleDefaultExport(module: object, configPath: string): unkno
 }
 
 interface KovoClientManifestBuild {
+  appCompilerSourceFiles: readonly BuildCheckSourceFile[];
   assets: KovoBuildStylesheetAssets;
   clientModules: readonly KovoAppShellCompiledClientModule[];
   manifestFile: string;
@@ -5924,7 +5916,7 @@ async function buildKovoClientManifest(
   const cssAssetManifests = buildFilterDense(
     [
       viteAssetPlugin.getCssAssetManifest?.(cssAssetManifestOptions),
-      componentBuild.getCssAssetManifest?.(cssAssetManifestOptions),
+      componentBuild.plugin.getCssAssetManifest?.(cssAssetManifestOptions),
     ],
     'Client CSS asset manifests',
     (manifest) => manifest !== undefined,
@@ -5956,12 +5948,13 @@ async function buildKovoClientManifest(
     : appCss;
 
   return {
+    appCompilerSourceFiles: componentBuild.sourceFiles,
     assets: splitStylesheetAssets,
     // The inert CSS-enrollment transform must not discard compiler-emitted handlers for a
     // component reached through the client entry. Merge its metadata with the app-graph pass.
     clientModules: uniqueKovoCompiledClientModules([
       ...(viteAssetPlugin.getClientModules?.() ?? []),
-      ...(componentBuild.getClientModules?.() ?? []),
+      ...(componentBuild.plugin.getClientModules?.() ?? []),
     ]),
     manifestFile: join(outDir, '.vite/manifest.json'),
     stylesheetCss: [
@@ -5983,10 +5976,8 @@ async function buildKovoComponentClientModules(
     sourceIdentityRoot: string;
   },
 ): Promise<{
-  getClientModules?: () => readonly KovoAppShellCompiledClientModule[];
-  getCssAssetManifest?: ReturnType<
-    typeof import('@kovojs/compiler').kovoVitePlugin
-  >['getCssAssetManifest'];
+  plugin: ReturnType<typeof import('@kovojs/compiler').kovoVitePlugin>;
+  sourceFiles: readonly BuildCheckSourceFile[];
 }> {
   const kovoPlugin = kovoVitePlugin({
     include: [
@@ -6003,6 +5994,10 @@ async function buildKovoComponentClientModules(
   const tempDir = mkdtempSync(join(tmpdir(), 'kovo-client-modules-'));
   const entryPath = join(tempDir, 'entry.ts');
   const outDir = join(tempDir, 'out');
+  const sourceCensus = compilerApprovedSourceCensusVitePlugin(
+    options.approvedSourceFiles,
+    options.sourceIdentityRoot,
+  );
 
   try {
     writeFileSync(
@@ -6051,6 +6046,7 @@ async function buildKovoComponentClientModules(
           undefined,
           options.sourceIdentityRoot,
         ),
+        sourceCensus.plugin,
         dependencyCapabilityLoaderVitePlugin(
           appModulePath,
           options.approvedSourceFiles,
@@ -6090,7 +6086,7 @@ async function buildKovoComponentClientModules(
       },
     });
 
-    return kovoPlugin;
+    return { plugin: kovoPlugin, sourceFiles: sourceCensus.snapshot() };
   } finally {
     rmSync(tempDir, { force: true, recursive: true });
   }
@@ -6707,6 +6703,74 @@ function approvedBuildSourcesVitePlugin(
         );
       }
       return null;
+    },
+  };
+}
+
+function compilerApprovedSourceCensusVitePlugin(
+  sourceFiles: readonly BuildCheckSourceFile[],
+  sourceIdentityRoot: string,
+): {
+  plugin: Plugin;
+  snapshot(): readonly BuildCheckSourceFile[];
+} {
+  const approvedFiles = buildSnapshotDenseArray(
+    sourceFiles,
+    'Compiler source-census approved files',
+  );
+  const approvedByPath = buildCreateMap<string, BuildCheckSourceFile>();
+  for (let index = 0; index < approvedFiles.length; index += 1) {
+    const file = approvedFiles[index];
+    if (!file || typeof file !== 'object') {
+      throw new TypeError(`Compiler source-census approved file[${index}] must be an own record.`);
+    }
+    const fileName = buildOwnDataValue(
+      file,
+      'fileName',
+      `Compiler source-census approved file[${index}]`,
+    );
+    const source = buildOwnDataValue(
+      file,
+      'source',
+      `Compiler source-census approved file[${index}]`,
+    );
+    if (typeof fileName !== 'string' || typeof source !== 'string') {
+      throw new TypeError(
+        `Compiler source-census approved file[${index}] must contain own string fileName/source values.`,
+      );
+    }
+    const absoluteFileName = resolve(sourceIdentityRoot, fileName);
+    if (buildMapHas(approvedByPath, absoluteFileName)) {
+      throw new TypeError(`Compiler source-census approved files repeat ${fileName}.`);
+    }
+    buildMapSet(approvedByPath, absoluteFileName, { fileName, source });
+  }
+
+  const reachedPaths = buildCreateSet<string>();
+  const reachedFiles: BuildCheckSourceFile[] = [];
+  return {
+    plugin: {
+      enforce: 'pre',
+      name: 'kovo-compiler-approved-source-census',
+      transform(code, id) {
+        const fileName = viteBuildSourceFileName(id);
+        if (fileName === undefined || !isBuildSourceModulePath(fileName)) return null;
+        const approved = buildMapGet(approvedByPath, fileName);
+        if (approved === undefined) return null;
+        if (code !== approved.source) {
+          throw new TypeError(
+            `Compiler source census refused changed approved source ${approved.fileName}.`,
+          );
+        }
+        if (!buildSetHas(reachedPaths, fileName)) {
+          buildSetAdd(reachedPaths, fileName);
+          buildSecurityArrayAppend(reachedFiles, approved, 'Compiler app source census');
+        }
+        return null;
+      },
+    },
+    snapshot() {
+      return buildSnapshotDenseArray(reachedFiles, 'Compiler app source census');
     },
   };
 }
@@ -7356,6 +7420,114 @@ async function bundleKovoServerHandler(
   } finally {
     rmSync(tempDir, { force: true, recursive: true });
   }
+}
+
+async function compilerClientModulesFromApprovedSources(
+  appModulePath: string,
+  options: {
+    approvedSourceFiles: readonly BuildCheckSourceFile[];
+    buildRoot: string;
+    projectMutationFacts: ProjectMutationRegistryFacts;
+    queryShapeFacts: readonly QueryShapeFact[];
+  },
+): Promise<readonly KovoAppShellCompiledClientModule[]> {
+  const approvedSourceFiles = buildSnapshotDenseArray(
+    options.approvedSourceFiles,
+    'Compiler client-module census approved sources',
+  );
+  const approvedIdentities = buildCreateSet<string>();
+  const approvedSourceFilter = kovoBuildApprovedSourceFilter(
+    appModulePath,
+    options.buildRoot,
+    approvedSourceFiles,
+  );
+  const kovoPlugin = kovoVitePlugin({
+    include: [approvedSourceFilter],
+    queryShapeFacts: options.queryShapeFacts,
+    registryFacts: options.projectMutationFacts,
+  });
+  kovoPlugin.configResolved?.({
+    command: 'build',
+    root: options.buildRoot,
+    server: { fs: { allow: [options.buildRoot] } },
+  });
+
+  const expectedAppIdentity = kovoBuildFilterFileName(appModulePath, options.buildRoot);
+  let sawAppModule = false;
+  for (let index = 0; index < approvedSourceFiles.length; index += 1) {
+    const file = approvedSourceFiles[index];
+    if (!file || typeof file !== 'object') {
+      throw new TypeError(
+        `Compiler client-module census approved source[${index}] must be an own record.`,
+      );
+    }
+    const fileName = buildOwnDataValue(
+      file,
+      'fileName',
+      `Compiler client-module census approved source[${index}]`,
+    );
+    const source = buildOwnDataValue(
+      file,
+      'source',
+      `Compiler client-module census approved source[${index}]`,
+    );
+    if (typeof fileName !== 'string' || typeof source !== 'string') {
+      throw new TypeError(
+        `Compiler client-module census approved source[${index}] must contain own string fileName/source values.`,
+      );
+    }
+    const absoluteFileName = resolve(options.buildRoot, fileName);
+    if (!isBuildPathWithinRoot(options.buildRoot, absoluteFileName)) {
+      throw new TypeError(
+        `Compiler client-module census approved source escapes the build root: ${fileName}.`,
+      );
+    }
+    const identity = kovoBuildFilterFileName(absoluteFileName, options.buildRoot);
+    if (buildSetHas(approvedIdentities, identity)) {
+      throw new TypeError(
+        `Compiler client-module census approved sources repeat module identity ${identity}.`,
+      );
+    }
+    buildSetAdd(approvedIdentities, identity);
+    if (identity === expectedAppIdentity) sawAppModule = true;
+    if (!approvedSourceFilter(absoluteFileName)) {
+      throw new TypeError(
+        `Compiler client-module census refused unauthenticated approved source ${identity}.`,
+      );
+    }
+    await kovoPlugin.transform(source, absoluteFileName);
+  }
+  if (!sawAppModule) {
+    throw new TypeError(
+      'Compiler client-module census approved sources omitted the selected app module.',
+    );
+  }
+  return kovoPlugin.getClientModules?.() ?? [];
+}
+
+/** @internal Regression seam for the authenticated source-to-client-module build census. */
+export async function compilerClientModulesFromApprovedSourcesForTests(
+  appModulePath: string,
+  buildRoot: string,
+  approvedSourceFiles: readonly BuildCheckSourceFile[],
+): Promise<readonly KovoAppShellCompiledClientModule[]> {
+  return compilerClientModulesFromApprovedSources(appModulePath, {
+    approvedSourceFiles,
+    buildRoot,
+    projectMutationFacts: { mutationBindings: [], mutationInputs: {} },
+    queryShapeFacts: [],
+  });
+}
+
+/** @internal Regression seam for final-bundle exact census and provenance enforcement. */
+export function assertCompilerClientModuleParityForTests(
+  discovered: readonly KovoAppShellCompiledClientModule[],
+  final: readonly KovoAppShellCompiledClientModule[],
+): void {
+  assertCompilerClientModuleCensus(
+    compilerClientModuleCensus(discovered, 'discovered compiler client modules'),
+    compilerClientModuleCensus(final, 'final compiler client modules'),
+  );
 }
 
 function stableKovoServerHandlerSource(source: string): string {
