@@ -579,6 +579,18 @@ granularity).
       (or a lower ratified value in `devex-budgets.json`) even when copied components are not
       imported. (Track 2 keeps only the reproducer + failing test; the register lists the OOM as
       expected-failing until this lands.)
+  - Partial evidence (2026-07-29; checkbox intentionally open): direct oxlint now prunes root and
+    nested `node_modules` before enumeration, and the focused real-tool test passes with all 44
+    unimported catalog components plus a dependency poison file and no `.gitignore`.
+  - Two authenticated packed attempts kept every measured phase below the hard 2,048 MiB ceiling:
+    attempt 1 typecheck 1.456s/566.2 MiB, check 33.242s/1,272.5 MiB, build
+    35.133s/1,749.8 MiB; attempt 2 typecheck 1.532s/558.8 MiB, check
+    33.968s/1,524.1 MiB, build 33.366s/1,796.6 MiB. Both check/build attempts exited 1 before
+    functional completion because the external packed-release materializer selected this
+    worktree's package-local `better-sqlite3` from an `--ignore-scripts` install, so
+    `better_sqlite3.node` was absent even after the subject root was repointed to the packed-golden
+    frozen install. Retirement still requires a lifecycle-complete packed run that typechecks,
+    checks, and builds successfully.
 - [ ] (M) Meet G4 by adopting `plans/fast-kovo-check3.md`'s remaining work, after publishing an
       instrumented phase-by-phase decomposition of the starter's 64.01s cold check as the budget
       justification; add the phase-census test so speed cannot come from silently dropping a
