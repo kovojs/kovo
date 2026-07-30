@@ -723,7 +723,7 @@ package copies can split private witnesses, and complex conditional types can sl
 TypeScript inference. Prove the lowering first, keep runtime/provenance enforcement authoritative,
 and budget both type correctness and compiler performance. Seeds child ledger `app-contract.md`.
 
-- [ ] (M) Write and approve the authoring contract in the owning SPEC modules before
+- [x] (M) Write and approve the authoring contract in the owning SPEC modules before
       implementation — enumerated: §9.1 (appId contract), §9.5 (closed `createApp` aggregate),
       §6.6 (config-secret door, egress floor install point, capability-closure census,
       factory-root rule), §5.2 rules 6 and 12 (registry regenerators, `server.handler.root`
@@ -737,27 +737,38 @@ and budget both type correctness and compiler performance. Seeds child ledger `a
     optimism, named handles/error localization).
   - Define deterministic membership and HMR teardown: no ambient registry, import-order
     dependence, process-global accumulation, or second app assembly call.
+  - Evidence: `spec/06-type-system.md` §6.1/§6.2.1/§6.6,
+    `spec/09-wire-protocol.md` §9.1/§9.5, `spec/10-data-plane.md` §10.2-§10.4, and
+    `spec/12-testing.md` now own the enumerated contract.
 - [x] (L) Run the D1 spike (both arms, shared fixture matrix) and record the decision with its
       measured criteria in the D1 checkbox.
   - Evidence: the D1 checkbox records the Arm A decision, measured thresholds, authenticated
     artifacts, adversarial mutation coverage, and clean-rerun commands.
-- [ ] (M) Make public `KovoApp` an opaque minimal token and move normalized options, providers,
+- [x] (M) Make public `KovoApp` an opaque minimal token and move normalized options, providers,
       registries, runtime authorities, route arrays, and framework DB carriers into private state
       accessed by framework-owned functions.
   - Redesign or remove raw `CreateAppOptions`; moving its recursively named support types to
     another subpath does not make the root signature public-safe.
-- [ ] (L) Implement the app-scoped declaration factories per the D1 decision, with module-private
+  - Evidence: `packages/server/src/api/app.test.ts` proves a frozen zero-key WeakMap-backed token,
+    root `CreateAppOptions`/`createApp` removal, and structural-copy/proxy refusal; the API gate has
+    zero recursive leaks.
+- [x] (L) Implement the app-scoped declaration factories per the D1 decision, with module-private
       `unique symbol` witnesses or WeakMap ownership, runtime validation, and explicit diagnostics
       for mixed Kovo package instances.
   - `app.authenticated` is a real executable, self-naming guard bound to the configured
     auth/session provider, not a type marker; the full access algebra follows the SPEC decision.
-- [ ] (L) Infer read-only DB, request/session/env, mutation error codes and payloads, query
+  - Evidence: the focused Track 4 suite proves exact handle ownership, executable access
+    composition, compiler receiver provenance, and D1X001 across four duplicate-package paths.
+- [x] (L) Infer read-only DB, request/session/env, mutation error codes and payloads, query
       input/result, route params/search, task input, and endpoint request/result types from the
       app contract.
   - Endpoint method, access, auth, CSRF, body, cache, and response posture remain explicitly
     authored/default-deny. Negative fixtures prove no type inference can omit them.
   - Define context-typed advanced bridges for webhooks and agents without moving their full
     capability families back to the root.
+  - Evidence: `packages/server/src/app-authoring-context.test.ts`,
+    `app-authoring-type-fixtures.test.ts`, and `app-contract.test.ts` prove the inferred ordinary
+    declarations plus exact endpoint/agent adoption.
 - [ ] (L) Replace string-key/module-augmentation optimism with query-handle binding such as
       `contacts.optimistic(...)`; compiler-derived read/write edges remain the invalidation proof.
   - Preserve `SPEC.md` §10.4's pure transform contract unless a prior normative change proves
@@ -767,27 +778,45 @@ and budget both type correctness and compiler performance. Seeds child ledger `a
     missing/duplicate/unrelated handles.
   - Prove compiler/runtime loader consumption and a real CRM browser optimistic round trip with no
     standalone adapter before removing the old plan.
-- [ ] (M) Infer component mutation slots and form error bindings from declaration handles so
+  - Current proof: query-handle lowering, keyed policies, exact status coverage, and browser
+    consumption units pass. The CRM test still reflects private mutation state and supplies a
+    test-only virtual adapter, so production-loader acceptance remains open.
+- [x] (M) Infer component mutation slots and form error bindings from declaration handles so
       ordinary components do not name `ComponentRenderSlots` or hand-maintain a parallel registry.
-- [ ] (M) Replace public component inference plumbing with a small opaque `Component<Props>`
+  - Evidence: the type fixture derives submitted fields and error unions from `createContact` and
+    rejects renamed fields/codes without a slot alias.
+- [x] (M) Replace public component inference plumbing with a small opaque `Component<Props>`
       contract; remove app-public `AnyFunction`, `IsAny`, `Checked*`, `ComponentCall*`, and
       internal prop/query metadata families.
-- [ ] (S) Make `Link` JSX-only and keep `href` as the imperative URL constructor; infer GET-form
+  - Evidence: `packages/core/src/index.test.ts` proves exact derived call-site props; the API gate
+    confirms the helper families are removed.
+- [x] (S) Make `Link` JSX-only and keep `href` as the imperative URL constructor; infer GET-form
       helper records rather than exporting six support types.
-- [ ] (M) Add positive and `@ts-expect-error` fixtures for prop, query-result, route-param,
+  - Evidence: `packages/core/src/index.test.ts` rejects imperative `Link(...)`, exercises `href`,
+    and type-checks GET fields while the support records remain private.
+- [x] (M) Add positive and `@ts-expect-error` fixtures for prop, query-result, route-param,
       form-error, DB-readonly, auth, access, CSRF, endpoint posture, optimistic-result/status, and
       mutation-error renames, plus the error-localization fixtures (single-property mistakes
       anchor on that property with bounded message length).
+  - Evidence: `packages/server/src/app-authoring-type-fixtures.test.ts` passes both the full compile
+    corpus and the three-character/240-character-ceiling query diagnostic assertion.
 - [ ] (M) Migrate the packed starter and one advanced example to the app contract; grep-clean
       plus typecheck of both is G23's proof.
+  - Current proof: `pnpm run check:app-contract-g23` reports no findings across the 14-file starter,
+    16-file advanced CRM, and 3-file release CRM source corpora; fresh tarball-backed typechecks
+    remain required.
 - [ ] (S) Set TypeScript cold/warm check and language-service completion budgets **with numbers**
       derived from the D1 baseline (including an extended-diagnostics instantiation ceiling);
       reject a cleaner surface if it breaches them or produces unreadable error expansions.
+  - Current proof: cold/warm TypeScript and completion ceilings plus declaration/diagnostic limits
+    are ratified in `type-budgets-v1.json`; `instantiationsMaximum` is still unratified.
 
 - [ ] **Track 4 exit:** the starter and one advanced example use the app contract without manual
       `AppRequest`, explicit app generics, duplicated auth generics, registry augmentation, or
       casts; emitted artifacts and `kovo explain` remain equivalent to the pre-facade proof model
       (G23).
+  - Blockers: production CRM optimism, fresh packed starter/CRM typechecks, current emitted/explain
+    parity, the instantiation ceiling, and a current-source D1 artifact reseal.
 
 ### Track 5 — Cut the public surface by task
 
