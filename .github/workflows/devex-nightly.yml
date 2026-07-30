@@ -132,6 +132,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/kovo-setup
+        with:
+          rebuild-better-sqlite3: 'true'
       - name: Identify the accepted hosted runner
         run: |
           runner_digest="$(
