@@ -1,0 +1,5 @@
+// Intentionally unsafe output consumed only by the declaration auditor's negative test.
+export declare const leakedQuery: import("../../src/managed-db.js").Reader<any>;
+export declare const leakedApp: {
+  readonly readerDbBrand: unique symbol;
+};

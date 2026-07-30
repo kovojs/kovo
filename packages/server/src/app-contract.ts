@@ -31,7 +31,8 @@ import type {
 import { resolveRequestClientIp } from './app-load-shed.js';
 import { isAppMutationAdapter, type AppMutationAdapter } from './app-mutation-adapter.js';
 import { createApp } from './app.js';
-import { createKovoAppToken, type KovoApp } from './app-token.js';
+import { createKovoAppToken } from './app-token.js';
+import type { KovoApp } from './public-custom-adapters.js';
 import type {
   VersionedClientModuleRegistry,
   VersionedClientModuleStore,
@@ -137,7 +138,6 @@ type InternalAppAgentFactory<
 /** Named app-scoped route handle. */
 export interface RouteHandle<
   Path extends string = string,
-  Request = unknown,
   Owner extends string | undefined = string | undefined,
 > {
   readonly [appDeclarationHandleBrand]: {
@@ -145,19 +145,14 @@ export interface RouteHandle<
     readonly owner: Owner;
   };
   readonly path: Path;
-  readonly __kovoRouteRequest?: (request: Request) => Request;
 }
 
 /** Named app-scoped layout handle. */
-export interface LayoutHandle<
-  Request = unknown,
-  Owner extends string | undefined = string | undefined,
-> {
+export interface LayoutHandle<Owner extends string | undefined = string | undefined> {
   readonly [appDeclarationHandleBrand]: {
     readonly kind: 'layout';
     readonly owner: Owner;
   };
-  readonly __kovoLayoutRequest?: (request: Request) => Request;
 }
 
 /** Named app-scoped endpoint handle. */
@@ -224,12 +219,10 @@ export interface QueryHandle<
   QueryInput = undefined,
   Value = JsonValue,
   Owner extends string | undefined = string | undefined,
-  Request = unknown,
 > {
   readonly [appDeclarationHandleBrand]: {
     readonly kind: 'query';
     readonly owner: Owner;
-    readonly request: Request;
   };
   readonly args: [QueryInput] extends [undefined]
     ? undefined
@@ -272,23 +265,15 @@ export interface MutationHandle<
   Input = unknown,
   Value = unknown,
   Errors extends Record<string, Schema<unknown>> = Record<string, Schema<unknown>>,
-  Request = unknown,
   Owner extends string | undefined = string | undefined,
-> extends MutationFormDefinition<string, Request> {
+> extends MutationFormDefinition<string, unknown> {
   readonly [appDeclarationHandleBrand]: {
     readonly kind: 'mutation';
     readonly owner: Owner;
   };
   readonly errors?: Errors;
-  readonly handler: (
-    input: Input,
-    request: Request,
-    context: Parameters<
-      MutationDefinition<string, Schema<Input>, Errors, Request, Value, Request>['handler']
-    >[2],
-  ) => Promise<Value | MutationFail> | Value | MutationFail;
   readonly input: Schema<Input>;
-  readonly __kovoMutationTypes?: (input: Input, request: Request, errors: Errors) => Value;
+  readonly __kovoMutationTypes?: (input: Input, errors: Errors) => Value;
 }
 
 /**
@@ -305,7 +290,14 @@ export type AppRequestForAccess<Base, Access> = Access extends readonly (infer I
     : Base
   : Base;
 
-/** Query factory bound to one app request/session/DB/env contract. */
+/**
+ * Query factory bound to one app request/session/DB/env contract.
+ *
+ * SPEC §6.2.1: callback parameters retain the complete provider-derived request, while the returned
+ * declaration handle projects only its public authoring facts. Threading the callback request into
+ * the exported handle would make downstream declaration emit expand private read-DB or task
+ * witnesses instead of naming the public handle interface.
+ */
 export interface AppQueryFactory<Request, Owner extends string | undefined> {
   <
     const InputSchema extends Schema<unknown> | undefined = undefined,
@@ -359,12 +351,7 @@ export interface AppQueryFactory<Request, Owner extends string | undefined> {
         | 'version'
       >]: never;
     },
-  ): QueryHandle<
-    InputSchema extends Schema<infer Input> ? Input : undefined,
-    Value,
-    Owner,
-    AppRequestForAccess<Request, Access>
-  >;
+  ): QueryHandle<InputSchema extends Schema<infer Input> ? Input : undefined, Value, Owner>;
 }
 
 /** Mutation factory bound to one app request/session/DB/env contract. */
@@ -426,13 +413,7 @@ export interface AppMutationFactory<Request, Owner extends string | undefined> {
           ) => string;
         }
     ),
-  ): MutationHandle<
-    InferSchema<InputSchema>,
-    Value,
-    Errors,
-    MutationHandlerRequest<AppRequestForAccess<Request, Access>>,
-    Owner
-  >;
+  ): MutationHandle<InferSchema<InputSchema>, Value, Errors, Owner>;
 }
 
 /** Endpoint factory with its managed DB context inferred from `defineKovo({ db })`. */
@@ -528,7 +509,7 @@ export interface AppRouteFactory<Request, Owner extends string | undefined> {
       staticPaths?: readonly string[];
       stylesheets?: readonly (string | StylesheetAsset)[];
     },
-  ): RouteHandle<Path, AppRequestForAccess<Request, Access>, Owner>;
+  ): RouteHandle<Path, Owner>;
 }
 
 /** Layout factory bound to the app read request. */
@@ -572,8 +553,7 @@ export interface AppLayoutFactory<Request, Owner extends string | undefined> {
         [Name in keyof Queries]: Queries[Name] extends QueryHandle<
           infer _Input,
           infer Value,
-          infer _Owner,
-          infer _Request
+          infer _Owner
         >
           ? Awaited<Value>
           : unknown;
@@ -588,12 +568,7 @@ export interface AppLayoutFactory<Request, Owner extends string | undefined> {
       },
     ) => Page | Promise<Page>;
     stylesheets?: readonly (string | StylesheetAsset)[];
-  }): LayoutHandle<
-    [Access] extends [undefined]
-      ? Request
-      : AppRequestForAccess<Request, Extract<Access, AccessDecision>>,
-    Owner
-  >;
+  }): LayoutHandle<Owner>;
 }
 
 /** Durable-task factory returning an app-owned named handle. */
@@ -1189,7 +1164,10 @@ function createAppMutationFactory<Request, Owner extends AppId>(
       registerAppDeclarationMetadata(declaration, witnessFreeze(bindings));
     }
     return declaration;
-  }) as AppMutationFactory<Request, Owner>;
+    // The declaration's exact contract/identity witness was installed above. This cast projects
+    // the runtime definition to the deliberately smaller public handle; the private owner map,
+    // not structural TypeScript compatibility, remains the assembly proof (SPEC §6.2.1).
+  }) as unknown as AppMutationFactory<Request, Owner>;
 }
 
 function createAppRouteFactory<Request, Owner extends AppId>(

@@ -85,44 +85,26 @@ export type KovoTestRouteKey<App extends KovoApp> =
   InferKovoAppTypes<App> extends {
     readonly declarations: { readonly route: infer Route };
   }
-    ? Route extends RouteHandle<infer Path, infer _Params, infer _Request>
+    ? Route extends RouteHandle<infer Path, infer _Owner>
       ? Path
       : never
     : never;
 
 /** Input inferred from one app-scoped mutation handle. */
 export type KovoTestMutationInput<Mutation> =
-  Mutation extends MutationHandle<
-    infer Input,
-    infer _Value,
-    infer _Errors,
-    infer _Request,
-    infer _Optimistic
-  >
+  Mutation extends MutationHandle<infer Input, infer _Value, infer _Errors, infer _Owner>
     ? Input
     : never;
 
 /** Successful value inferred from one app-scoped mutation handle. */
 export type KovoTestMutationValue<Mutation> =
-  Mutation extends MutationHandle<
-    infer _Input,
-    infer Value,
-    infer _Errors,
-    infer _Request,
-    infer _Optimistic
-  >
+  Mutation extends MutationHandle<infer _Input, infer Value, infer _Errors, infer _Owner>
     ? Value
     : never;
 
 /** Declared application-error union inferred from one app-scoped mutation handle. */
 export type KovoTestMutationError<Mutation> =
-  Mutation extends MutationHandle<
-    infer _Input,
-    infer _Value,
-    infer Errors,
-    infer _Request,
-    infer _Optimistic
-  >
+  Mutation extends MutationHandle<infer _Input, infer _Value, infer Errors, infer _Owner>
     ? {
         [Code in Extract<keyof Errors, string>]: MutationFail<Code, InferSchema<Errors[Code]>>;
       }[Extract<keyof Errors, string>]
@@ -144,15 +126,11 @@ export type KovoTestMutationResult<Mutation> =
 
 /** Input inferred from one app-scoped query handle. */
 export type KovoTestQueryInput<Query> =
-  Query extends QueryHandle<infer Input, infer _Value, infer _Request, infer _Delta>
-    ? Input
-    : never;
+  Query extends QueryHandle<infer Input, infer _Value, infer _Owner> ? Input : never;
 
 /** Result inferred from one app-scoped query handle. */
 export type KovoTestQueryResult<Query> =
-  Query extends QueryHandle<infer _Input, infer Value, infer _Request, infer _Delta>
-    ? Awaited<Value>
-    : never;
+  Query extends QueryHandle<infer _Input, infer Value, infer _Owner> ? Awaited<Value> : never;
 
 /** Runtime SQL-observation config; static graph facts always come from the verified artifact. */
 export interface KovoTestVerificationConfig {
