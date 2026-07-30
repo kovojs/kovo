@@ -1391,7 +1391,7 @@ export const CartBadge = component({
 
     expect(bootstrap.fileName).toBe('generated/app.client.js');
     expect(bootstrap.source).toContain(
-      "import { applyDeferredStreamResponseToRuntime, createBrowserKovoRoot, createQueryStore, defaultEnhancedFetch, installKovoLoader } from '@kovojs/browser/generated';",
+      "import { applyDeferredStreamResponseToRuntime, createBrowserKovoRoot, createQueryStore, defaultEnhancedFetch, installInlineKovoLoader, installKovoLoader } from '@kovojs/browser/generated';",
     );
     // B2 (SPEC §5.2): each compiled-plan import is aliased to a per-input-unique local so two
     // same-named components never collide into a duplicate lexical binding. The alias is derived

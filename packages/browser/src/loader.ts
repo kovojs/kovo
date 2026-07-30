@@ -78,9 +78,11 @@ export interface KovoLoaderOptions {
  */
 export interface KovoGeneratedLoaderOptions {
   allowedClientModuleUrls?: readonly string[];
+  delegatedHandlers?: boolean;
   discardPendingOptimism?: () => readonly string[] | void;
   enhancedMutations?: KovoGeneratedEnhancedMutationOptions;
   events?: readonly string[];
+  executionTriggers?: boolean;
   focusTarget?: LoaderLifecycleTarget;
   importModule: ImportHandlerModule;
   onError?: (error: unknown, context: RuntimeErrorContext) => void;
@@ -195,8 +197,9 @@ export function installGeneratedKovoLoader(
   // direct mutation apply and BroadcastChannel publish/receive.
   const pageBuildToken = readPageBuildToken();
   const optimisticRebaser = options.enhancedMutations
-    ? new OptimisticRebaser(options.enhancedMutations.store, {
-        ...(options.onError
+    ? new OptimisticRebaser(
+        options.enhancedMutations.store,
+        options.onError
           ? {
               onError(error: unknown) {
                 reportRuntimeContextError(options.onError, error, {
@@ -204,8 +207,8 @@ export function installGeneratedKovoLoader(
                 });
               },
             }
-          : {}),
-      })
+          : {},
+      )
     : undefined;
   const optimisticQueue = optimisticRebaser ? new MutationQueue() : undefined;
   const enhancedMutationSetup = options.enhancedMutations
@@ -245,6 +248,7 @@ export function installGeneratedKovoLoader(
     disposers,
     installDelegatedEventLifecycle({
       ...definedProps({
+        delegatedHandlers: options.delegatedHandlers,
         enhancedMutations,
         onError: options.onError,
       }),
@@ -277,9 +281,7 @@ export function installGeneratedKovoLoader(
 
   const discardPendingOptimism =
     options.discardPendingOptimism ??
-    (optimisticRebaser
-      ? () => optimisticRebaser.discardPendingOptimism()
-      : undefined);
+    (optimisticRebaser ? () => optimisticRebaser.discardPendingOptimism() : undefined);
   if (discardPendingOptimism) {
     appendDisposer(
       disposers,
@@ -293,10 +295,12 @@ export function installGeneratedKovoLoader(
   // SPEC §4.7/§4.8: startup triggers cross the same exact compiler-manifest gate as
   // delegated handlers. Passing the original importer here would make the trigger-level fallback
   // perform a second empty-manifest check and reject legitimate generated on:load/idle/visible refs.
-  appendDisposer(
-    disposers,
-    installExecutionTriggers({ ...options, importModule }, islandSignalScope),
-  );
+  if (options.executionTriggers !== false) {
+    appendDisposer(
+      disposers,
+      installExecutionTriggers({ ...options, importModule }, islandSignalScope),
+    );
+  }
   if (enhancedMutationSetup?.dispose) {
     appendDisposer(disposers, enhancedMutationSetup.dispose);
   }

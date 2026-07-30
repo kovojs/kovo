@@ -7,6 +7,11 @@ import {
 import { URL as BuiltinURL } from 'node:url';
 import { runInNewContext as builtinRunInNewContext } from 'node:vm';
 
+import { kovoDeferredAppRuntimeModuleSource } from '@kovojs/browser/internal/deferred-app-runtime';
+import {
+  kovoDeferredAppRuntimeModuleHref,
+  kovoDeferredAppRuntimeModulePath,
+} from '@kovojs/browser/internal/deferred-app-runtime-identity';
 import {
   clientModuleHrefForSourceFile,
   clientModuleRepresentationDigest,
@@ -18,6 +23,7 @@ import {
   deriveRegisteredDiagnostic,
   isDiagnosticCode,
 } from '@kovojs/core/internal/diagnostics';
+import { computeRenderPlanFingerprint } from '@kovojs/core/internal/render-plan-token';
 
 import { snapshotCompileComponentOptions } from './compile-options.js';
 import { canonicalJson } from './canonical-json.js';
@@ -39,6 +45,7 @@ import {
   compilerOwnDataValue,
   compilerPromiseIsPromise,
   compilerPromiseThen,
+  compilerRegExpExec,
   compilerRegExpReplace,
   compilerRegExpTest,
   compilerSnapshotDenseArray,
@@ -71,6 +78,7 @@ import {
 } from './scan/parse.js';
 import { deriveRegistryIdentity } from './registry-identities.js';
 import { rewriteClientModuleRuntimeImportsForBrowser } from './emit/client.js';
+import { emitQueryPlanBootstrapModule, type QueryPlanBootstrapInput } from './emit/bootstrap.js';
 import { lowerStandaloneSourceDerivedRegistryDeclarations } from './source-derived-lowering.js';
 import {
   createCompilerSourceFileSystem,
@@ -314,8 +322,10 @@ interface ViteDevFileState {
   clientHistory?: ViteClientModuleHistory;
   compiledClientModule?: KovoViteCompiledClientModule;
   cssAssets?: readonly ComponentCssAsset[];
+  hasOptimisticModule?: true;
   hmrImpact?: HmrImpactMetadata;
   lastTouched: number;
+  queryPlanBootstrapInput?: QueryPlanBootstrapInput;
   sourceUnits: number;
 }
 
@@ -597,23 +607,57 @@ function createBoundKovoVitePlugin(
     },
     getClientModules() {
       const modules: KovoViteCompiledClientModule[] = [];
+      const queryPlanInputs: QueryPlanBootstrapInput[] = [];
+      let hasOptimisticModule = false;
       compilerMapForEach(devState.files, (state) => {
+        if (state.hasOptimisticModule === true) hasOptimisticModule = true;
+        if (state.queryPlanBootstrapInput !== undefined) {
+          insertQueryPlanBootstrapInput(queryPlanInputs, state.queryPlanBootstrapInput);
+        }
         const module = state.compiledClientModule;
         if (module === undefined) return;
-        let insertAt = compilerArrayLength(modules, 'Vite compiled client modules');
-        while (insertAt > 0) {
-          const previous = compilerOwnDataValue(
+        insertViteCompiledClientModule(modules, module);
+      });
+      const renderPlanFingerprint = coherentViteRenderPlanFingerprint(modules);
+      if (
+        hasOptimisticModule ||
+        compilerArrayLength(queryPlanInputs, 'Vite query-plan bootstrap inputs') > 0
+      ) {
+        const bootstrap = emitQueryPlanBootstrapModule(queryPlanInputs, {
+          runtimeImportPath: kovoDeferredAppRuntimeModuleHref,
+        });
+        const bootstrapPath = `/c/${bootstrap.fileName}`;
+        const moduleCount = compilerArrayLength(modules, 'Vite compiled client modules');
+        for (let index = 0; index < moduleCount; index += 1) {
+          const module = compilerOwnDataValue(
             modules,
-            insertAt - 1,
+            index,
             'Vite compiled client modules',
           ) as KovoViteCompiledClientModule;
-          if (module.path >= previous.path) break;
-          compilerSetOwnDataProperty(modules, insertAt, previous);
-          insertAt -= 1;
+          if (module.path === bootstrapPath || module.path === kovoDeferredAppRuntimeModulePath) {
+            throw new TypeError(
+              `Kovo compiler-generated app runtime path is reserved: ${module.path}.`,
+            );
+          }
         }
-        compilerSetOwnDataProperty(modules, insertAt, module);
-      });
-      return compilerFreeze(modules);
+        insertViteCompiledClientModule(
+          modules,
+          compilerFreeze({
+            path: kovoDeferredAppRuntimeModulePath,
+            renderPlanFingerprint,
+            source: kovoDeferredAppRuntimeModuleSource,
+          }),
+        );
+        insertViteCompiledClientModule(
+          modules,
+          compilerFreeze({
+            path: bootstrapPath,
+            renderPlanFingerprint,
+            source: bootstrap.source,
+          }),
+        );
+      }
+      return compilerFreeze(compilerMapDenseViteClientModules(modules, renderPlanFingerprint));
     },
     name: 'kovo',
     resolveId(source: string, importer?: string): null | string {
@@ -855,13 +899,7 @@ function createBoundKovoVitePlugin(
               optimisticModule,
             );
             const classification = viteFullReload('topology');
-            sendKovoHmrEvent(
-              context.server,
-              'kovo:full-reload',
-              previous,
-              null,
-              classification,
-            );
+            sendKovoHmrEvent(context.server, 'kovo:full-reload', previous, null, classification);
             context.server.ws?.send({ type: 'full-reload' });
           } else if (previousState !== undefined) {
             removeViteDevFileState(hotUpdateDevState, fileName, previousState);
@@ -972,6 +1010,99 @@ function normalizeFrameworkViteSourceRoot(value: string): string | null {
     return null;
   }
   return normalized;
+}
+
+function insertViteCompiledClientModule(
+  modules: KovoViteCompiledClientModule[],
+  module: KovoViteCompiledClientModule,
+): void {
+  let insertAt = compilerArrayLength(modules, 'Vite compiled client modules');
+  while (insertAt > 0) {
+    const previous = compilerOwnDataValue(
+      modules,
+      insertAt - 1,
+      'Vite compiled client modules',
+    ) as KovoViteCompiledClientModule;
+    if (module.path >= previous.path) break;
+    compilerSetOwnDataProperty(modules, insertAt, previous);
+    insertAt -= 1;
+  }
+  compilerSetOwnDataProperty(modules, insertAt, module);
+}
+
+function coherentViteRenderPlanFingerprint(
+  modules: readonly KovoViteCompiledClientModule[],
+): string {
+  let fingerprint: string | undefined;
+  for (
+    let index = 0;
+    index < compilerArrayLength(modules, 'Vite compiled client modules');
+    index += 1
+  ) {
+    const module = compilerOwnDataValue(
+      modules,
+      index,
+      'Vite compiled client modules',
+    ) as KovoViteCompiledClientModule;
+    if (module.renderPlanFingerprint === undefined) continue;
+    if (fingerprint !== undefined && module.renderPlanFingerprint !== fingerprint) {
+      throw new TypeError('Kovo Vite client modules carry incoherent render-plan fingerprints.');
+    }
+    fingerprint = module.renderPlanFingerprint;
+  }
+  return fingerprint ?? computeRenderPlanFingerprint({});
+}
+
+function compilerMapDenseViteClientModules(
+  modules: readonly KovoViteCompiledClientModule[],
+  renderPlanFingerprint: string,
+): KovoViteCompiledClientModule[] {
+  const result: KovoViteCompiledClientModule[] = [];
+  for (
+    let index = 0;
+    index < compilerArrayLength(modules, 'Vite compiled client modules');
+    index += 1
+  ) {
+    const module = compilerOwnDataValue(
+      modules,
+      index,
+      'Vite compiled client modules',
+    ) as KovoViteCompiledClientModule;
+    if (
+      module.renderPlanFingerprint !== undefined &&
+      module.renderPlanFingerprint !== renderPlanFingerprint
+    ) {
+      throw new TypeError('Kovo Vite client modules carry incoherent render-plan fingerprints.');
+    }
+    compilerArrayAppend(
+      result,
+      compilerFreeze({
+        path: module.path,
+        renderPlanFingerprint,
+        source: module.source,
+      }),
+      'Compiler packages/compiler/src/vite.ts collection',
+    );
+  }
+  return result;
+}
+
+function insertQueryPlanBootstrapInput(
+  inputs: QueryPlanBootstrapInput[],
+  input: QueryPlanBootstrapInput,
+): void {
+  let insertAt = compilerArrayLength(inputs, 'Vite query-plan bootstrap inputs');
+  while (insertAt > 0) {
+    const previous = compilerOwnDataValue(
+      inputs,
+      insertAt - 1,
+      'Vite query-plan bootstrap inputs',
+    ) as QueryPlanBootstrapInput;
+    if (input.importPath >= previous.importPath) break;
+    compilerSetOwnDataProperty(inputs, insertAt, previous);
+    insertAt -= 1;
+  }
+  compilerSetOwnDataProperty(inputs, insertAt, input);
 }
 
 function transformViteCompileResult(
@@ -2225,12 +2356,14 @@ function recordViteCompileResult(
   const existing = compilerMapGet(store.files, fileName);
   let clientHistory: ViteClientModuleHistory | undefined;
   let compiledClientModule: KovoViteCompiledClientModule | undefined;
+  let queryPlanBootstrapInput: QueryPlanBootstrapInput | undefined;
   if (clientSource !== undefined) {
     const finalSource = rewriteClientModuleRuntimeImportsForBrowser(clientSource);
     const href = clientModuleHrefForSourceFile(
       fileName,
       clientModuleRepresentationDigest(finalSource),
     );
+    queryPlanBootstrapInput = queryPlanBootstrapInputFromClientSource(finalSource, href);
     clientHistory = nextViteClientModuleHistory(existing?.clientHistory, href, finalSource);
     const target = parseVersionedClientModuleTarget(href);
     if (
@@ -2246,6 +2379,7 @@ function recordViteCompileResult(
     }
     if (
       optimisticModule !== undefined ||
+      queryPlanBootstrapInput !== undefined ||
       (metadata.hmrImpact?.clientHref !== null &&
         metadata.hmrImpact?.clientHref !== undefined &&
         metadata.clientExports.length + metadata.handlerExports.length > 0)
@@ -2268,6 +2402,8 @@ function recordViteCompileResult(
     compiledClientModule,
     cssAssets,
     hmrImpact,
+    optimisticModule !== undefined,
+    queryPlanBootstrapInput,
   );
   if (
     sourceUnits > KOVO_DEV_CLIENT_MODULE_SOURCE_UNIT_LIMIT &&
@@ -2280,6 +2416,8 @@ function recordViteCompileResult(
       compiledClientModule,
       cssAssets,
       hmrImpact,
+      optimisticModule !== undefined,
+      queryPlanBootstrapInput,
     );
   }
   if (sourceUnits > KOVO_DEV_CLIENT_MODULE_SOURCE_UNIT_LIMIT) {
@@ -2314,8 +2452,10 @@ function recordViteCompileResult(
     ...(clientHistory === undefined ? {} : { clientHistory }),
     ...(compiledClientModule === undefined ? {} : { compiledClientModule }),
     ...(cssAssets === undefined ? {} : { cssAssets }),
+    ...(optimisticModule === undefined ? {} : { hasOptimisticModule: true as const }),
     ...(hmrImpact === undefined ? {} : { hmrImpact }),
     lastTouched: store.touch,
+    ...(queryPlanBootstrapInput === undefined ? {} : { queryPlanBootstrapInput }),
     sourceUnits,
   };
   compilerMapSet(store.files, fileName, state);
@@ -2325,6 +2465,37 @@ function recordViteCompileResult(
   addViteClientModuleVersion(store, fileName, clientHistory?.current);
 
   if (!store.buildMode) evictViteDevState(store, fileName);
+}
+
+function queryPlanBootstrapInputFromClientSource(
+  source: string,
+  importPath: string,
+): QueryPlanBootstrapInput | undefined {
+  const queryMatch = compilerRegExpExec(
+    /\bexport const ([A-Za-z_$][A-Za-z0-9_$]*\$queryUpdatePlans) = \{/u,
+    source,
+  );
+  if (queryMatch === null) return undefined;
+  const exportName = compilerOwnDataValue(queryMatch, 1, 'Vite query-plan export match');
+  if (typeof exportName !== 'string') {
+    throw new TypeError('Kovo Vite query-plan export match must contain an own string name.');
+  }
+  const clockMatch = compilerRegExpExec(
+    /\bexport const ([A-Za-z_$][A-Za-z0-9_$]*\$clockUpdatePlans) = \[/u,
+    source,
+  );
+  const clockExportName =
+    clockMatch === null
+      ? undefined
+      : compilerOwnDataValue(clockMatch, 1, 'Vite clock-plan export match');
+  if (clockExportName !== undefined && typeof clockExportName !== 'string') {
+    throw new TypeError('Kovo Vite clock-plan export match must contain an own string name.');
+  }
+  return compilerFreeze({
+    ...(clockExportName === undefined ? {} : { clockExportName }),
+    exportName,
+    importPath,
+  });
 }
 
 function emptyViteCompileMetadata(): ViteCompileMetadata {
@@ -2422,6 +2593,8 @@ function viteDevFileSourceUnits(
   compiledClientModule: KovoViteCompiledClientModule | undefined,
   cssAssets: readonly ComponentCssAsset[] | undefined,
   hmrImpact: HmrImpactMetadata | undefined,
+  hasOptimisticModule: boolean,
+  queryPlanBootstrapInput: QueryPlanBootstrapInput | undefined,
 ): number {
   return (
     fileName.length +
@@ -2429,7 +2602,9 @@ function viteDevFileSourceUnits(
       ...(history === undefined ? {} : { clientHistory: history }),
       ...(compiledClientModule === undefined ? {} : { compiledClientModule }),
       ...(cssAssets === undefined ? {} : { cssAssets }),
+      ...(hasOptimisticModule ? { hasOptimisticModule: true } : {}),
       ...(hmrImpact === undefined ? {} : { hmrImpact }),
+      ...(queryPlanBootstrapInput === undefined ? {} : { queryPlanBootstrapInput }),
     }).length
   );
 }

@@ -29,6 +29,8 @@ export interface QueryPlanBootstrapInput {
  */
 export interface QueryPlanBootstrapOptions {
   fileName?: string;
+  /** @internal Exact immutable generated-runtime module URL used by framework build integration. */
+  runtimeImportPath?: string;
 }
 
 export interface BootstrapEmittedFile {
@@ -74,6 +76,11 @@ export function emitQueryPlanBootstrapModule(
 ): BootstrapEmittedFile {
   const inputSnapshot = compilerSnapshotDenseArray(inputs, 'Query plan bootstrap inputs');
   const fileName = options.fileName ?? 'generated/app.client.js';
+  const runtimeImportPath = options.runtimeImportPath ?? RUNTIME_GENERATED_IMPORT;
+  const runtimeImportSource =
+    runtimeImportPath === RUNTIME_GENERATED_IMPORT
+      ? `'${RUNTIME_GENERATED_IMPORT}'`
+      : bootstrapJsonSource(runtimeImportPath, 'Bootstrap runtime import path');
   // Per-input UNIQUE local aliases (SPEC.md §5.2): two components with the same inferred name
   // produce the same `exportName` (`scan/parse.ts` inferComponentName has no path/hash
   // uniqueness). Without an alias the bootstrap would emit two `import { Demo$queryUpdatePlans }
@@ -165,7 +172,7 @@ export function emitQueryPlanBootstrapModule(
     kind: 'client',
     source: `${compilerIrHeader}
 // @kovojs-generated-app-runtime/v1
-import { applyDeferredStreamResponseToRuntime, createBrowserKovoRoot, createQueryStore, defaultEnhancedFetch, installKovoLoader } from '${RUNTIME_GENERATED_IMPORT}';
+import { applyDeferredStreamResponseToRuntime, createBrowserKovoRoot, createQueryStore, defaultEnhancedFetch, installInlineKovoLoader, installKovoLoader } from ${runtimeImportSource};
 ${imports ? `${imports}\n` : ''}
 // SPEC.md §4.8: merge same-query-name appliers so a query bound by multiple components keeps
 // every component's update plan instead of clobbering all but the last.
@@ -205,6 +212,9 @@ export function installKovoDeferredRuntime() {
   const nextStore = createQueryStore();
   const runtimeRoot = createBrowserKovoRoot({ documentRoot: document });
   const nextLoader = installKovoLoader({
+    delegatedHandlers: false,
+    events: ['submit'],
+    executionTriggers: false,
     importModule: (specifier) => import(specifier),
     root: document,
     clockUpdatePlans,
@@ -218,6 +228,17 @@ export function installKovoDeferredRuntime() {
       store: nextStore,
     },
   });
+  try {
+    // The generated loader owns enhanced mutation/query/optimism submit handling. The inline
+    // runtime retains enhanced navigation, authored handlers, and startup lifecycle without
+    // enrolling a second mutation transport for the same form.
+    installInlineKovoLoader((specifier) => import(specifier), {
+      enhancedMutations: false,
+    });
+  } catch (error) {
+    nextLoader.dispose();
+    throw error;
+  }
   store = nextStore;
   loader = nextLoader;
   return nextLoader;

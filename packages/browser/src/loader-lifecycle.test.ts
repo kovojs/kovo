@@ -64,6 +64,28 @@ describe('loader lifecycle', () => {
     expect(root.listeners.has('click')).toBe(false);
   });
 
+  it('lets a generated mutation-only lifecycle decline authored handlers and pointer synthesis', async () => {
+    const root = new FakeRoot();
+    const element = new FakeElement({ 'on:submit': '/c/cart.js#submit' });
+    const importModule = vi.fn(async () => ({ submit: vi.fn() }));
+
+    const dispose = installDelegatedEventLifecycle({
+      delegatedHandlers: false,
+      events: ['submit'],
+      importModule,
+      islandSignalScope: createIslandSignalScope(),
+      root,
+    });
+
+    await root.listeners.get('submit')?.({ target: element, type: 'submit' });
+
+    expect(importModule).not.toHaveBeenCalled();
+    expect([...root.listeners.keys()]).toEqual(['submit']);
+
+    dispose();
+    expect(root.listeners.size).toBe(0);
+  });
+
   it('retires delegated authority after late Array.splice replacement', () => {
     const root = new FakeRoot();
     const dispose = installDelegatedEventLifecycle({

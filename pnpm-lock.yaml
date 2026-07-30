@@ -497,6 +497,9 @@ importers:
 
   packages/compiler:
     dependencies:
+      '@kovojs/browser':
+        specifier: workspace:*
+        version: link:../browser
       '@kovojs/core':
         specifier: workspace:*
         version: link:../core
@@ -507,9 +510,6 @@ importers:
         specifier: 6.0.3
         version: 6.0.3
     devDependencies:
-      '@kovojs/browser':
-        specifier: workspace:*
-        version: link:../browser
       '@kovojs/headless-ui':
         specifier: workspace:*
         version: link:../headless-ui

@@ -2101,6 +2101,8 @@
         "generated": ["./generated"],
         "internal": [
           "./internal/delegation",
+          "./internal/deferred-app-runtime",
+          "./internal/deferred-app-runtime-identity",
           "./internal/hmr-target-snapshot",
           "./internal/inline-loader",
           "./internal/morph",

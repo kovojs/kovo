@@ -28,6 +28,7 @@ describe('runtime generated exports', () => {
       /minted by derive/u,
     );
     expect(generated.handler).toBe(handler);
+    expect(generated.installInlineKovoLoader).toEqual(expect.any(Function));
     expect(generated.installKovoLoader).toBe(installGeneratedKovoLoader);
     expect(generated.kovoEscapeHtml).toBe(kovoEscapeHtml);
     expect(generated.kovoStyleProperty).toBe(kovoStyleProperty);

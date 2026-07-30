@@ -213,7 +213,8 @@ export function buildInlineKovoLoaderInstallerReadableSource(
 ): string {
   return String.raw`
 /* SPEC.md §4.4: this is the always-loaded bootstrap source. */
-function installInlineKovoLoader(im) {
+function installInlineKovoLoader(im, options = {}) {
+  const enhancedMutations = options.enhancedMutations !== false;
   // SPEC.md §4.4: delegate (capture phase) every on:* event the document uses.
   // focus/blur have no bubble phase but DO run a capture phase at ancestors, so
   // capture-phase delegation reaches them; pointerenter/pointerleave never run a
@@ -2203,6 +2204,7 @@ function installInlineKovoLoader(im) {
         'form[enhance],form[data-enhance],form[data-mutation]',
       );
       if (form) {
+        if (!enhancedMutations) return;
         if (bns.readAttribute(form, 'data-kovo-native-fallback') !== null) {
           bns.removeElementAttribute(form, 'data-kovo-native-fallback');
           return;
@@ -3219,11 +3221,20 @@ function buildInlineKovoLoaderModuleLines({
     `  ${installerSource}`,
     ') as (',
     '    importModule: ImportHandlerModule,',
+    '    options?: InlineKovoLoaderOptions,',
     '  ) => void;',
     '',
+    '/** @internal Framework composition controls for generated deferred runtimes. */',
+    'export interface InlineKovoLoaderOptions {',
+    '  enhancedMutations?: boolean;',
+    '}',
+    '',
     '/** Runtime API used by Kovo applications and generated runtime integration. */',
-    'export function installInlineKovoLoader(importModule: ImportHandlerModule): void {',
-    '  inlineKovoLoaderInstaller(importModule);',
+    'export function installInlineKovoLoader(',
+    '  importModule: ImportHandlerModule,',
+    '  options: InlineKovoLoaderOptions = {},',
+    '): void {',
+    '  inlineKovoLoaderInstaller(importModule, options);',
     '}',
     '',
   ];

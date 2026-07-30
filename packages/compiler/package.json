@@ -61,12 +61,12 @@
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {
+    "@kovojs/browser": "workspace:*",
     "@kovojs/core": "workspace:*",
     "@kovojs/verify": "workspace:*",
     "typescript": "6.0.3"
   },
   "devDependencies": {
-    "@kovojs/browser": "workspace:*",
     "@kovojs/headless-ui": "workspace:*",
     "@kovojs/server": "workspace:*",
     "@kovojs/style": "workspace:*",

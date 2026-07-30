@@ -9,6 +9,7 @@ export const GENERATED_ARTIFACT_CATEGORIES = Object.freeze({
 });
 
 export const GENERATED_ARTIFACT_GENERATORS = Object.freeze({
+  browserDeferredAppRuntime: 'browser-deferred-app-runtime',
   cliSemanticCommandRequest: 'cli-semantic-command-request',
   diagnosticRegistry: 'diagnostic-registry',
   frameworkExportPosture: 'framework-export-posture',
@@ -19,6 +20,40 @@ export const GENERATED_ARTIFACT_GENERATORS = Object.freeze({
 });
 
 export const generatedArtifactInventory = Object.freeze([
+  {
+    id: 'browser-deferred-app-runtime-generated-source',
+    categories: Object.freeze([
+      GENERATED_ARTIFACT_CATEGORIES.frameworkGeneratedSource,
+      GENERATED_ARTIFACT_CATEGORIES.mustMatchGenerator,
+    ]),
+    generatorId: GENERATED_ARTIFACT_GENERATORS.browserDeferredAppRuntime,
+    generatorCheckCommand: Object.freeze([
+      'pnpm',
+      '--filter',
+      '@kovojs/browser',
+      'run',
+      'check:app-runtime',
+    ]),
+    pathPatterns: Object.freeze([/^packages\/browser\/src\/deferred-app-runtime-module\.ts$/]),
+    spec: 'SPEC.md §4.4/§5.2/§9.1 generated deferred browser runtime',
+  },
+  {
+    id: 'browser-deferred-app-runtime-generated-identity',
+    categories: Object.freeze([
+      GENERATED_ARTIFACT_CATEGORIES.frameworkGeneratedSource,
+      GENERATED_ARTIFACT_CATEGORIES.mustMatchGenerator,
+    ]),
+    generatorId: GENERATED_ARTIFACT_GENERATORS.browserDeferredAppRuntime,
+    generatorCheckCommand: Object.freeze([
+      'pnpm',
+      '--filter',
+      '@kovojs/browser',
+      'run',
+      'check:app-runtime',
+    ]),
+    pathPatterns: Object.freeze([/^packages\/browser\/src\/deferred-app-runtime-identity\.ts$/]),
+    spec: 'SPEC.md §5.2.1/§14 immutable generated deferred runtime identity',
+  },
   {
     id: 'combined-component-icon-catalog',
     categories: Object.freeze([

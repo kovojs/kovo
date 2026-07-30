@@ -67,6 +67,7 @@ export interface ExecutionTriggerOptions {
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface DelegatedEventLifecycleOptions {
+  delegatedHandlers?: boolean;
   enhancedMutations?: EnhancedMutationLoaderOptions;
   events: readonly string[];
   importModule: ImportHandlerModule;
@@ -119,6 +120,7 @@ export function installDelegatedEventLifecycle(
           ) {
             return;
           }
+          if (options.delegatedHandlers === false) return;
           await dispatchDelegatedEvent(event, options.importModule, options.islandSignalScope);
         } catch (error) {
           reportRuntimeContextError(options.onError, error, {
@@ -135,33 +137,35 @@ export function installDelegatedEventLifecycle(
   // SPEC.md §4.4: pointerenter/pointerleave have no capture phase at ancestors, so
   // delegation synthesizes them from the bubbling pointerover/pointerout pair, firing
   // only when the pointer crosses the on:* element's boundary (relatedTarget outside it).
-  for (const [overType, enterType] of [
-    ['pointerover', 'pointerenter'],
-    ['pointerout', 'pointerleave'],
-  ] as const) {
-    addLoaderListener(
-      options.root,
-      overType,
-      (event) => {
-        const eventFacts = snapshotRuntimeDelegatedEvent(event);
-        if (!eventFacts) return;
-        const element = closestRuntimeElement<PointerCrossingNode>(
-          eventFacts.target,
-          `[on\\:${enterType}]`,
-        );
-        if (!element || runtimeElementContains(element, eventFacts.relatedTarget)) return;
-        dispatchLifecycleEvent(
-          { relatedTarget: eventFacts.relatedTarget, target: element, type: enterType },
-          options.importModule,
-          options.islandSignalScope,
-          options.onError,
-          event,
-          'delegated-event',
-        );
-      },
-      disposers,
-      { capture: true },
-    );
+  if (options.delegatedHandlers !== false) {
+    for (const [overType, enterType] of [
+      ['pointerover', 'pointerenter'],
+      ['pointerout', 'pointerleave'],
+    ] as const) {
+      addLoaderListener(
+        options.root,
+        overType,
+        (event) => {
+          const eventFacts = snapshotRuntimeDelegatedEvent(event);
+          if (!eventFacts) return;
+          const element = closestRuntimeElement<PointerCrossingNode>(
+            eventFacts.target,
+            `[on\\:${enterType}]`,
+          );
+          if (!element || runtimeElementContains(element, eventFacts.relatedTarget)) return;
+          dispatchLifecycleEvent(
+            { relatedTarget: eventFacts.relatedTarget, target: element, type: enterType },
+            options.importModule,
+            options.islandSignalScope,
+            options.onError,
+            event,
+            'delegated-event',
+          );
+        },
+        disposers,
+        { capture: true },
+      );
+    }
   }
 
   return () => {

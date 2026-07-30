@@ -2,6 +2,11 @@ import {
   kovoDeferredRuntimeModulePath,
   kovoDeferredRuntimeModuleSource,
 } from '@kovojs/browser/internal/inline-loader';
+import { kovoDeferredAppRuntimeModuleSource } from '@kovojs/browser/internal/deferred-app-runtime';
+import {
+  kovoDeferredAppRuntimeModuleHref,
+  kovoDeferredAppRuntimeModulePath,
+} from '@kovojs/browser/internal/deferred-app-runtime-identity';
 import {
   clientModulePath,
   clientModuleRepresentationDigest,
@@ -39,6 +44,7 @@ export function ensureKovoLoaderRuntimeClientModule(
 ): string {
   const entries = registry.entries();
   const appRuntimes: VersionedClientModuleInput[] = [];
+  const generatedRuntimes: VersionedClientModuleInput[] = [];
   let hasOptimisticPlans = false;
   for (let index = 0; index < entries.length; index += 1) {
     const module = entries[index]!;
@@ -50,6 +56,9 @@ export function ensureKovoLoaderRuntimeClientModule(
     }
     if (clientModulePath(module.path) === GENERATED_APP_RUNTIME_PATH) {
       witnessArrayAppend(appRuntimes, module, 'Kovo generated app runtimes');
+    }
+    if (clientModulePath(module.path) === kovoDeferredAppRuntimeModulePath) {
+      witnessArrayAppend(generatedRuntimes, module, 'Kovo generated deferred app runtimes');
     }
   }
 
@@ -66,6 +75,29 @@ export function ensureKovoLoaderRuntimeClientModule(
     ) {
       throw new Error(
         'Kovo refused a malformed compiler-generated app runtime at /c/generated/app.client.js.',
+      );
+    }
+    if (!securityStringIncludes(appRuntime.source, kovoDeferredAppRuntimeModuleHref)) {
+      throw new Error(
+        'Kovo refused a malformed compiler-generated app runtime without its exact deferred-runtime import.',
+      );
+    }
+    if (generatedRuntimes.length !== 1) {
+      throw new Error(
+        'Kovo refused a compiler-generated app runtime without exactly one active generated deferred runtime.',
+      );
+    }
+    const generatedRuntime = generatedRuntimes[0]!;
+    const generatedRuntimeHref = versionedClientModuleHref(
+      generatedRuntime.path,
+      clientModuleRepresentationDigest(generatedRuntime.source),
+    );
+    if (
+      generatedRuntime.source !== kovoDeferredAppRuntimeModuleSource ||
+      generatedRuntimeHref !== kovoDeferredAppRuntimeModuleHref
+    ) {
+      throw new TypeError(
+        'Kovo generated app runtime identity does not match its active compiler snapshot.',
       );
     }
     return versionedClientModuleHref(

@@ -9,6 +9,7 @@ import { inlineKovoLoaderInstallerSource, installInlineKovoLoader } from './inli
 export type InlineSourceInstall = (
   importModule: (url: string) => Promise<Record<string, unknown>>,
   globalRecord: Record<string, unknown>,
+  options?: { enhancedMutations?: boolean },
 ) => void;
 
 let freshlyMinifiedInstallerSource: string | undefined;
@@ -23,35 +24,39 @@ function getFreshlyMinifiedInstallerSource(): string {
 export const inlineSourceInstallCases: readonly [string, InlineSourceInstall][] = [
   [
     'readable build source',
-    (importModule, globalRecord) => {
+    (importModule, globalRecord, options = {}) => {
       installDefaultLocation(globalRecord);
       globalRecord.__kovoInlineImport = importModule;
       runInThisContext(
-        `(${inlineKovoLoaderInstallerReadableSource})(globalThis.__kovoInlineImport);`,
+        `(${inlineKovoLoaderInstallerReadableSource})(globalThis.__kovoInlineImport, ${JSON.stringify(options)});`,
       );
     },
   ],
   [
     'freshly minified build source',
-    (importModule, globalRecord) => {
+    (importModule, globalRecord, options = {}) => {
       installDefaultLocation(globalRecord);
       globalRecord.__kovoInlineImport = importModule;
-      runInThisContext(`(${getFreshlyMinifiedInstallerSource()})(globalThis.__kovoInlineImport);`);
+      runInThisContext(
+        `(${getFreshlyMinifiedInstallerSource()})(globalThis.__kovoInlineImport, ${JSON.stringify(options)});`,
+      );
     },
   ],
   [
     'generated installer source',
-    (importModule, globalRecord) => {
+    (importModule, globalRecord, options = {}) => {
       installDefaultLocation(globalRecord);
       globalRecord.__kovoInlineImport = importModule;
-      runInThisContext(`(${inlineKovoLoaderInstallerSource})(globalThis.__kovoInlineImport);`);
+      runInThisContext(
+        `(${inlineKovoLoaderInstallerSource})(globalThis.__kovoInlineImport, ${JSON.stringify(options)});`,
+      );
     },
   ],
   [
     'extracted installer source',
-    (importModule, globalRecord) => {
+    (importModule, globalRecord, options = {}) => {
       installDefaultLocation(globalRecord);
-      installInlineKovoLoader(importModule);
+      installInlineKovoLoader(importModule, options);
     },
   ],
 ] as const;

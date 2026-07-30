@@ -153,6 +153,89 @@ describe('inline loader enhanced submit source', () => {
     globalRecord.BroadcastChannel = InertBroadcastChannel;
   });
 
+  it.each(inlineSourceInstallCases)(
+    'keeps inline navigation/handler listeners but declines enhanced transport through %s',
+    async (_name, installSource) => {
+      const originals = {
+        addEventListener: globalRecord.addEventListener,
+        document: globalRecord.document,
+        fetch: globalRecord.fetch,
+        importModule: globalRecord.__kovoInlineImport,
+        location: globalRecord.location,
+        setTimeout: globalRecord.setTimeout,
+      };
+      const listeners = new Map<string, (event: unknown) => void | Promise<void>>();
+      const fetch = vi.fn();
+      const importModule = vi.fn(async () => ({}));
+      const preventDefault = vi.fn();
+      const form = {
+        getAttribute(name: string) {
+          return mutationFormAttribute('cart/add', name);
+        },
+      };
+
+      try {
+        globalRecord.addEventListener = (
+          type: string,
+          listener: (event: unknown) => void | Promise<void>,
+        ) => {
+          listeners.set(type, listener);
+        };
+        globalRecord.document = {
+          querySelector() {
+            return null;
+          },
+          querySelectorAll() {
+            return [];
+          },
+        };
+        globalRecord.fetch = fetch;
+        globalRecord.location = {
+          hash: '',
+          href: 'https://kovo.test/deals',
+          origin: 'https://kovo.test',
+          pathname: '/deals',
+          protocol: 'https:',
+          search: '',
+        };
+        globalRecord.setTimeout = vi.fn();
+
+        installSource(importModule, globalRecord, { enhancedMutations: false });
+        await listeners.get('submit')?.({
+          preventDefault,
+          target: {
+            closest(selector: string) {
+              return selector === 'form[enhance],form[data-enhance],form[data-mutation]'
+                ? form
+                : null;
+            },
+          },
+          type: 'submit',
+        });
+
+        expect(listeners.has('click')).toBe(true);
+        expect(listeners.has('submit')).toBe(true);
+        expect(listeners.has('pointerover')).toBe(true);
+        expect(fetch).not.toHaveBeenCalled();
+        expect(importModule).not.toHaveBeenCalled();
+        expect(preventDefault).not.toHaveBeenCalled();
+      } finally {
+        Object.assign(globalRecord, {
+          addEventListener: originals.addEventListener,
+          document: originals.document,
+          fetch: originals.fetch,
+          location: originals.location,
+          setTimeout: originals.setTimeout,
+        });
+        if (originals.importModule === undefined) {
+          delete globalRecord.__kovoInlineImport;
+        } else {
+          globalRecord.__kovoInlineImport = originals.importModule;
+        }
+      }
+    },
+  );
+
   it.each(buildBoundInlineSourceInstallCases)(
     'retires the inline channel before applying a no-navigation session transition through %s',
     async (_name, installSource) => {

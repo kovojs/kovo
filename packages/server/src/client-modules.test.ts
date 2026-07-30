@@ -1,5 +1,10 @@
 import { createHash } from 'node:crypto';
 
+import { kovoDeferredAppRuntimeModuleSource } from '@kovojs/browser/internal/deferred-app-runtime';
+import {
+  kovoDeferredAppRuntimeModuleHref,
+  kovoDeferredAppRuntimeModulePath,
+} from '@kovojs/browser/internal/deferred-app-runtime-identity';
 import {
   clientModuleHrefForSourceFile,
   clientModuleRepresentationDigest,
@@ -213,7 +218,12 @@ describe('render-plan and app-build identities', () => {
       path: '/c/generated/app.client.js',
       source:
         '// @kovojs-ir\n// @kovojs-generated-app-runtime/v1\n' +
+        `import ${JSON.stringify(kovoDeferredAppRuntimeModuleHref)};\n` +
         'export function installKovoDeferredRuntime() {}\n',
+    };
+    const generatedRuntime = {
+      path: kovoDeferredAppRuntimeModulePath,
+      source: kovoDeferredAppRuntimeModuleSource,
     };
     const optimism = {
       path: '/c/src/mutations.client.js',
@@ -222,12 +232,77 @@ describe('render-plan and app-build identities', () => {
         'export const kovoOptimisticMutationPlans = Object.freeze({ close: true });\n',
     };
     replaceVersionedClientModuleBuildSnapshot(registry, {
-      modules: [optimism, runtime],
+      modules: [optimism, runtime, generatedRuntime],
       renderPlanFingerprint: computeRenderPlanFingerprint({ deal: 'field:id,stage' }),
     });
 
     expect(ensureKovoLoaderRuntimeClientModule(registry)).toBe(clientHref(runtime));
-    expect(registry.entries()).toEqual([runtime, optimism]);
+    expect(registry.entries()).toHaveLength(3);
+    expect(new Set(registry.entries().map(clientHref))).toEqual(
+      new Set([clientHref(runtime), clientHref(generatedRuntime), clientHref(optimism)]),
+    );
+  });
+
+  it('refuses a generated app bootstrap whose exact deferred runtime is missing', () => {
+    const registry = createRegistry();
+    const runtime = {
+      path: '/c/generated/app.client.js',
+      source:
+        '// @kovojs-ir\n// @kovojs-generated-app-runtime/v1\n' +
+        `import ${JSON.stringify(kovoDeferredAppRuntimeModuleHref)};\n` +
+        'export function installKovoDeferredRuntime() {}\n',
+    };
+    replaceVersionedClientModuleBuildSnapshot(registry, {
+      modules: [runtime],
+      renderPlanFingerprint: computeRenderPlanFingerprint({ deal: 'field:id,stage' }),
+    });
+
+    expect(() => ensureKovoLoaderRuntimeClientModule(registry)).toThrow(
+      /without exactly one active generated deferred runtime/u,
+    );
+  });
+
+  it('refuses malformed or ambiguous active generated deferred runtimes', () => {
+    const appRuntime = {
+      path: '/c/generated/app.client.js',
+      source:
+        '// @kovojs-ir\n// @kovojs-generated-app-runtime/v1\n' +
+        `import ${JSON.stringify(kovoDeferredAppRuntimeModuleHref)};\n` +
+        'export function installKovoDeferredRuntime() {}\n',
+    };
+    const malformedRegistry = createRegistry();
+    replaceVersionedClientModuleBuildSnapshot(malformedRegistry, {
+      modules: [
+        appRuntime,
+        {
+          path: kovoDeferredAppRuntimeModulePath,
+          source: `${kovoDeferredAppRuntimeModuleSource}\n`,
+        },
+      ],
+      renderPlanFingerprint: computeRenderPlanFingerprint({ deal: 'field:id,stage' }),
+    });
+    expect(() => ensureKovoLoaderRuntimeClientModule(malformedRegistry)).toThrow(
+      /identity does not match its active compiler snapshot/u,
+    );
+
+    const ambiguousRegistry = createRegistry();
+    replaceVersionedClientModuleBuildSnapshot(ambiguousRegistry, {
+      modules: [
+        appRuntime,
+        {
+          path: kovoDeferredAppRuntimeModulePath,
+          source: kovoDeferredAppRuntimeModuleSource,
+        },
+        {
+          path: kovoDeferredAppRuntimeModulePath,
+          source: `${kovoDeferredAppRuntimeModuleSource}\n`,
+        },
+      ],
+      renderPlanFingerprint: computeRenderPlanFingerprint({ deal: 'field:id,stage' }),
+    });
+    expect(() => ensureKovoLoaderRuntimeClientModule(ambiguousRegistry)).toThrow(
+      /without exactly one active generated deferred runtime/u,
+    );
   });
 
   it('refuses active compiler optimism without its generated app runtime', () => {

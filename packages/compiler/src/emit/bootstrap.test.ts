@@ -1,6 +1,6 @@
 import { runInNewContext } from 'node:vm';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { emitQueryPlanBootstrapModule } from './bootstrap.js';
 
@@ -19,10 +19,13 @@ import { emitQueryPlanBootstrapModule } from './bootstrap.js';
  */
 
 interface InstalledLoader {
+  delegatedHandlers: boolean;
   enhancedMutations: {
     fetch: (url: string, options: unknown) => unknown;
     queryPlans: Record<string, KovoApplier>;
   };
+  events: readonly string[];
+  executionTriggers: boolean;
 }
 
 type KovoApplier = (root: unknown, value: unknown, context?: unknown) => unknown;
@@ -36,8 +39,10 @@ type KovoApplier = (root: unknown, value: unknown, context?: unknown) => unknown
 function runBootstrap(
   source: string,
   planModules: Record<string, Record<string, unknown>>,
+  runOptions: { inlineInstallError?: Error; onLoaderDispose?: () => void } = {},
 ): InstalledLoader {
   const calls: InstalledLoader[] = [];
+  let inlineInstallCalls = 0;
   // Rewrite both single- and multi-specifier, aliased imports into destructuring consts.
   const rewritten = source
     .replace(
@@ -74,9 +79,19 @@ function runBootstrap(
     }),
     createQueryStore: () => ({ kind: 'store' }),
     defaultEnhancedFetch: () => 'boot-pinned-fetch',
+    installInlineKovoLoader: (
+      _importModule: unknown,
+      inlineOptions: { enhancedMutations?: boolean },
+    ) => {
+      inlineInstallCalls += 1;
+      if (runOptions.inlineInstallError) throw runOptions.inlineInstallError;
+      if (inlineOptions.enhancedMutations !== false) {
+        throw new Error('bootstrap did not delegate enhanced mutations exclusively');
+      }
+    },
     installKovoLoader: (options: InstalledLoader) => {
       calls.push(options);
-      return { islandSignalScope: {} };
+      return { dispose: () => runOptions.onLoaderDispose?.(), islandSignalScope: {} };
     },
   };
   const exports: {
@@ -98,6 +113,9 @@ function runBootstrap(
   const installed = calls[0];
   if (!installed) throw new Error('bootstrap did not install the loader');
   if (calls.length !== 1) throw new Error('bootstrap installed the loader more than once');
+  if (inlineInstallCalls !== 1) {
+    throw new Error('bootstrap installed the inline lifecycle runtime more than once');
+  }
   return installed;
 }
 
@@ -186,12 +204,15 @@ describe('emitQueryPlanBootstrapModule — same-name export collision (B2, SPEC 
   it('wires the boot-pinned framework mutation transport instead of a late global fetch lookup', () => {
     const bootstrap = emitQueryPlanBootstrapModule([]);
     expect(bootstrap.source).toContain(
-      "import { applyDeferredStreamResponseToRuntime, createBrowserKovoRoot, createQueryStore, defaultEnhancedFetch, installKovoLoader } from '@kovojs/browser/generated';",
+      "import { applyDeferredStreamResponseToRuntime, createBrowserKovoRoot, createQueryStore, defaultEnhancedFetch, installInlineKovoLoader, installKovoLoader } from '@kovojs/browser/generated';",
     );
     expect(bootstrap.source).toContain('fetch: defaultEnhancedFetch,');
     expect(bootstrap.source).not.toContain('=> fetch(');
 
     const installed = runBootstrap(bootstrap.source, {});
+    expect(installed.delegatedHandlers).toBe(false);
+    expect(installed.events).toEqual(['submit']);
+    expect(installed.executionTriggers).toBe(false);
     expect(installed.enhancedMutations.fetch('/_m/cart/add', {})).toBe('boot-pinned-fetch');
   });
 
@@ -200,5 +221,16 @@ describe('emitQueryPlanBootstrapModule — same-name export collision (B2, SPEC 
     expect(bootstrap.source).toContain('// @kovojs-generated-app-runtime/v1');
     expect(bootstrap.source).toContain('export function installKovoDeferredRuntime()');
     expect(bootstrap.source).toContain('if (loader !== undefined) return loader;');
+  });
+
+  it('disposes the mutation/query loader when inline lifecycle installation fails', () => {
+    const inlineInstallError = new Error('inline lifecycle unavailable');
+    const onLoaderDispose = vi.fn();
+    const bootstrap = emitQueryPlanBootstrapModule([]);
+
+    expect(() =>
+      runBootstrap(bootstrap.source, {}, { inlineInstallError, onLoaderDispose }),
+    ).toThrow(inlineInstallError);
+    expect(onLoaderDispose).toHaveBeenCalledOnce();
   });
 });

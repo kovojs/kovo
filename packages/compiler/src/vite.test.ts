@@ -2,6 +2,11 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { kovoDeferredAppRuntimeModuleSource } from '@kovojs/browser/internal/deferred-app-runtime';
+import {
+  kovoDeferredAppRuntimeModuleHref,
+  kovoDeferredAppRuntimeModulePath,
+} from '@kovojs/browser/internal/deferred-app-runtime-identity';
 import {
   clientModuleHrefForSourceFile,
   clientModuleRepresentationDigest,
@@ -529,18 +534,77 @@ export const orderPaid = webhook('/webhooks/order-paid', {
     expect(plugin.transform("export const marker = 'server-only';\n", fileName)).toBeNull();
 
     expect(compileComponentModule).not.toHaveBeenCalled();
-    expect(plugin.getClientModules?.()).toEqual([
-      {
+    const clientModules = plugin.getClientModules?.() ?? [];
+    expect(clientModules).toEqual([
+      expect.objectContaining({
+        path: '/c/generated/app.client.js',
+        source: expect.stringMatching(
+          /@kovojs-generated-app-runtime\/v1[\s\S]+export function installKovoDeferredRuntime/u,
+        ),
+      }),
+      expect.objectContaining({
+        path: kovoDeferredAppRuntimeModulePath,
+        source: kovoDeferredAppRuntimeModuleSource,
+      }),
+      expect.objectContaining({
         path: target!.path,
         source: optimisticSource,
-      },
+      }),
     ]);
+    expect(clientModules[0]?.source).toContain(kovoDeferredAppRuntimeModuleHref);
+    expect(new Set(clientModules.map((module) => module.renderPlanFingerprint)).size).toBe(1);
     const response = createMiddlewareResponse();
     const next = vi.fn();
     middlewares[0]?.({ url: href }, response, next);
     expect(next).not.toHaveBeenCalled();
     expect(response.body).toBe(optimisticSource);
     expect(response.headers['Content-Type']).toBe('text/javascript; charset=utf-8');
+  });
+
+  it('synthesizes one immutable app bootstrap for compiler-emitted query and clock plans', async () => {
+    const fileName = 'src/deal-card.tsx';
+    const clientSource = [
+      '// @kovojs-ir',
+      'export const DealCard$queryUpdatePlans = { deals() {} };',
+      'export const DealCard$clockUpdatePlans = [];',
+      '',
+    ].join('\n');
+    const clientHref = clientModuleHrefForSourceFile(
+      fileName,
+      clientModuleRepresentationDigest(clientSource),
+    );
+    const plugin = createKovoVitePlugin(() => ({
+      files: [
+        { kind: 'server', source: 'export const server = true;' },
+        { kind: 'client', source: clientSource },
+      ],
+    }));
+
+    await plugin.transform('component(', fileName);
+
+    const modules = plugin.getClientModules?.() ?? [];
+    expect(modules).toHaveLength(3);
+    expect(modules[0]).toEqual(
+      expect.objectContaining({
+        path: '/c/generated/app.client.js',
+        source: expect.stringContaining(clientHref),
+      }),
+    );
+    expect(modules[0]?.source).toContain('DealCard$queryUpdatePlans as kovoQueryPlans_');
+    expect(modules[0]?.source).toContain('DealCard$clockUpdatePlans as kovoClockPlans_');
+    expect(modules[1]).toEqual(
+      expect.objectContaining({
+        path: kovoDeferredAppRuntimeModulePath,
+        source: kovoDeferredAppRuntimeModuleSource,
+      }),
+    );
+    expect(modules[2]).toEqual(
+      expect.objectContaining({
+        path: '/c/src/deal-card.client.js',
+        source: clientSource,
+      }),
+    );
+    expect(new Set(modules.map((module) => module.renderPlanFingerprint)).size).toBe(1);
   });
 
   it('lowers app-scoped declarations only after proving the exact receiver in a Program', async () => {

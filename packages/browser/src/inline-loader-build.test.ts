@@ -105,7 +105,8 @@ export function createDocumentLifecycleRecovery() {
     expect(() => assertInlineKovoLoaderModuleArtifactParity(moduleSource)).not.toThrow();
     expect(moduleSource).toBe(readFileSync(new URL('./inline-loader.ts', import.meta.url), 'utf8'));
     expect(moduleSource).toContain('const inlineKovoLoaderInstaller = (');
-    expect(moduleSource).toContain('inlineKovoLoaderInstaller(importModule);');
+    expect(moduleSource).toContain('inlineKovoLoaderInstaller(importModule, options);');
+    expect(moduleSource).toContain('enhancedMutations?: boolean;');
     expect(moduleSource).toContain('const inlineKovoLoaderBootstrapInstaller = (');
     expect(moduleSource).toContain('installInlineKovoBootstrap(');
     expect(moduleSource).toContain('kovoDeferredRuntimeModuleSource');
@@ -294,8 +295,18 @@ export function createDocumentLifecycleRecovery() {
       readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'),
     ) as { scripts?: Record<string, string> };
 
-    expect(manifest.scripts?.build).toBe('pnpm run build:inline-loader');
-    expect(manifest.scripts?.check).toBe('pnpm run check:inline-loader');
+    expect(manifest.scripts?.build).toBe(
+      'pnpm run build:inline-loader && pnpm run build:app-runtime',
+    );
+    expect(manifest.scripts?.check).toBe(
+      'pnpm run check:inline-loader && pnpm run check:app-runtime',
+    );
+    expect(manifest.scripts?.['build:app-runtime']).toBe(
+      'node ../../scripts/generate-browser-deferred-app-runtime.mjs',
+    );
+    expect(manifest.scripts?.['check:app-runtime']).toBe(
+      'node ../../scripts/generate-browser-deferred-app-runtime.mjs --check',
+    );
     expect(manifest.scripts?.['build:inline-loader']).toBe(
       'node --experimental-strip-types src/inline-loader-build.ts',
     );

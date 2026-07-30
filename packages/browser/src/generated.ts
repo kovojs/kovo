@@ -1,4 +1,6 @@
 import { generatedDerive } from './derive.js';
+import type { ImportHandlerModule } from './handlers.js';
+import { installInlineKovoLoader as installInlineKovoLoaderRuntime } from './inline-loader.js';
 
 export { applyDeferredStreamResponseToRuntime } from './apply-deferred-stream.js';
 export type {
@@ -99,6 +101,20 @@ export type {
 } from './mutation-submit.js';
 export type { EnhancedFormElementLike } from './mutation-form.js';
 export type { MutationBroadcast } from './broadcast.js';
+
+/**
+ * Install the compiler-emitted app bootstrap's inline navigation, handler, and startup lifecycle
+ * runtime while allowing the generated enhanced-mutation loader to remain the sole submit owner.
+ *
+ * @generated Compiler-emitted runtime composition ABI (SPEC §4.4, §5.2, §9.1).
+ */
+export function installInlineKovoLoader(
+  importModule: ImportHandlerModule,
+  options: { enhancedMutations?: boolean } = {},
+): void {
+  installInlineKovoLoaderRuntime(importModule, options);
+}
+
 export { now, tempId } from './optimism.js';
 export type { OptimisticFor } from './optimism.js';
 export type { PendingElementLike, PendingRoot } from './pending.js';
