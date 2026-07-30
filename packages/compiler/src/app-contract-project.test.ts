@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 
+import { parseVersionedClientModuleTarget } from '@kovojs/core/internal/client-module-url';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
@@ -395,6 +396,232 @@ describe('D1 compiler-owned exact project resolver', () => {
         source: mutationSource,
       }),
     );
+  });
+
+  it('emits exact query-handle optimism as one immutable browser module', async () => {
+    const fixture = await createFixture();
+    const sourceRoot = join(fixture.root, 'app/src');
+    const contract = join(sourceRoot, 'kovo.ts');
+    const queries = join(sourceRoot, 'queries.ts');
+    const mutations = join(sourceRoot, 'mutations.ts');
+    const form = join(sourceRoot, 'form.tsx');
+    const contractSource = [
+      "import { defineKovo } from '@kovojs/server';",
+      'export const app = defineKovo({',
+      "  appId: '00000000-0000-4000-8000-000000000002',",
+      '});',
+      '',
+    ].join('\n');
+    const querySource = [
+      "import type { MutationMarker } from './mutations.js';",
+      "import { app } from './kovo.js';",
+      'export const cartQuery = app.query({ load() { return { count: 0 }; } });',
+      'export const productQuery = app.query({ load() { return { stock: 3 }; } });',
+      'export type QueryMarker = MutationMarker;',
+      '',
+    ].join('\n');
+    const mutationSource = [
+      "import { s } from '@kovojs/server';",
+      "import { app } from './kovo.js';",
+      "import { cartQuery, productQuery } from './queries.js';",
+      'export type MutationMarker = { readonly mutation: true };',
+      'const addToCartInput = s.object({',
+      '  productId: s.string(),',
+      '  quantity: s.number().int().min(1).default(1),',
+      '});',
+      'function predictCart(data, input) {',
+      '  return { ...data, count: data.count + input.quantity };',
+      '}',
+      'export const addToCart = app.mutation({',
+      '  input: addToCartInput,',
+      "  queue: 'cart',",
+      '  optimistic: [',
+      '    cartQuery.optimistic(addToCartInput, predictCart),',
+      '    productQuery.optimistic(addToCartInput, {',
+      '      keys: (input) => [{ id: input.productId }, { id: `${input.productId}-related` }],',
+      '      apply: (product, input) => ({ ...product, stock: product.stock - input.quantity }),',
+      '    }),',
+      '  ],',
+      '  handler() { return { ok: true }; },',
+      '});',
+      '',
+    ].join('\n');
+    const formSource = [
+      "import { addToCart } from './mutations.js';",
+      'export const mutationBinding = addToCart;',
+      '',
+    ].join('\n');
+    await writeSource(contract, contractSource);
+    await writeSource(queries, querySource);
+    await writeSource(mutations, mutationSource);
+    await writeSource(form, formSource);
+
+    const facts = compilerOwnedProjectMutationRegistryFactsFromFiles(
+      [
+        { fileName: 'kovo.ts', source: contractSource },
+        { fileName: 'queries.ts', source: querySource },
+        { fileName: 'mutations.ts', source: mutationSource },
+        { fileName: 'form.tsx', source: formSource },
+      ],
+      sourceRoot,
+    );
+
+    const mutationKey = Object.keys(facts.mutationOptimism ?? {})[0];
+    expect(mutationKey).toMatch(/mutations\/add-to-cart$/u);
+    const optimism = mutationKey ? facts.mutationOptimism?.[mutationKey] : undefined;
+    const queryKeys = Object.keys(optimism?.statuses ?? {});
+    expect(queryKeys).toEqual([
+      expect.stringMatching(/queries\/cart-query$/u),
+      expect.stringMatching(/queries\/product-query$/u),
+    ]);
+    expect(optimism).toMatchObject({
+      inputFields: [
+        expect.objectContaining({
+          coercion: 'string',
+          defaulted: false,
+          name: 'productId',
+          required: true,
+        }),
+        expect.objectContaining({
+          coercion: 'number',
+          defaulted: true,
+          name: 'quantity',
+          required: false,
+        }),
+      ],
+      invalidations: queryKeys,
+      mutation: mutationKey,
+      queue: 'cart',
+      statuses: Object.fromEntries(queryKeys.map((key) => [key, 'hand-written'])),
+    });
+    expect(facts.optimisticModules).toEqual([
+      expect.objectContaining({
+        fileName: 'mutations.ts',
+        href: optimism?.moduleHref,
+        mutationKeys: [mutationKey],
+        path: parseVersionedClientModuleTarget(optimism!.moduleHref)?.path,
+        source: expect.stringContaining('export const kovoOptimisticMutationPlans'),
+      }),
+    ]);
+    expect(facts.optimisticModules?.[0]?.source).toContain(
+      "schema: \"kovo.optimistic-plan/v1\"",
+    );
+    expect(facts.optimisticModules?.[0]?.source).toContain('const predictCart = function');
+    expect(facts.optimisticModules?.[0]?.source).toContain('keys: Object.freeze');
+  });
+
+  it('fails closed on copied, duplicate, schema-drifted, and cyclic optimistic handles', async () => {
+    const fixture = await createFixture();
+    const sourceRoot = join(fixture.root, 'app/src/optimism-negative');
+    const contractSource = [
+      "import { defineKovo } from '@kovojs/server';",
+      'export const app = defineKovo({',
+      "  appId: '00000000-0000-4000-8000-000000000002',",
+      '});',
+      '',
+    ].join('\n');
+    const ordinaryQuerySource = [
+      "import { app } from './kovo.js';",
+      'export const cartQuery = app.query({ load() { return { count: 0 }; } });',
+      '',
+    ].join('\n');
+    const formSource = [
+      "import { addToCart } from './mutations.js';",
+      'export const mutationBinding = addToCart;',
+      '',
+    ].join('\n');
+    const cases = [
+      {
+        name: 'copied',
+        optimistic: [
+          'const copiedQuery = cartQuery;',
+          'export const addToCart = app.mutation({',
+          '  input: addToCartInput,',
+          '  optimistic: [copiedQuery.optimistic(addToCartInput, (data) => data)],',
+          '  handler() {},',
+          '});',
+        ],
+        pattern: /KOVO_OPTIMISTIC_QUERY_IDENTITY/u,
+        querySource: ordinaryQuerySource,
+      },
+      {
+        name: 'duplicate',
+        optimistic: [
+          'export const addToCart = app.mutation({',
+          '  input: addToCartInput,',
+          '  optimistic: [',
+          '    cartQuery.optimistic(addToCartInput, (data) => data),',
+          '    cartQuery.optimistic(addToCartInput, (data) => data),',
+          '  ],',
+          '  handler() {},',
+          '});',
+        ],
+        pattern: /KOVO_OPTIMISTIC_DUPLICATE/u,
+        querySource: ordinaryQuerySource,
+      },
+      {
+        name: 'schema drift',
+        optimistic: [
+          'const otherInput = s.object({ quantity: s.number() });',
+          'export const addToCart = app.mutation({',
+          '  input: addToCartInput,',
+          '  optimistic: [cartQuery.optimistic(otherInput, (data) => data)],',
+          '  handler() {},',
+          '});',
+        ],
+        pattern: /KOVO_OPTIMISTIC_INPUT_IDENTITY/u,
+        querySource: ordinaryQuerySource,
+      },
+      {
+        name: 'runtime import cycle',
+        optimistic: [
+          'export const runtimeMarker = 1;',
+          'export const addToCart = app.mutation({',
+          '  input: addToCartInput,',
+          '  optimistic: [cartQuery.optimistic(addToCartInput, (data) => data)],',
+          '  handler() {},',
+          '});',
+        ],
+        pattern: /KOVO_OPTIMISTIC_IMPORT_CYCLE/u,
+        querySource: [
+          "import { runtimeMarker } from './mutations.js';",
+          "import { app } from './kovo.js';",
+          'export const cartQuery = app.query({',
+          '  load() { return { count: runtimeMarker }; },',
+          '});',
+          '',
+        ].join('\n'),
+      },
+    ] as const;
+
+    await writeSource(join(sourceRoot, 'kovo.ts'), contractSource);
+    await writeSource(join(sourceRoot, 'form.tsx'), formSource);
+    for (const testCase of cases) {
+      const mutationSource = [
+        "import { s } from '@kovojs/server';",
+        "import { app } from './kovo.js';",
+        "import { cartQuery } from './queries.js';",
+        'const addToCartInput = s.object({ quantity: s.number() });',
+        ...testCase.optimistic,
+        '',
+      ].join('\n');
+      await writeSource(join(sourceRoot, 'queries.ts'), testCase.querySource);
+      await writeSource(join(sourceRoot, 'mutations.ts'), mutationSource);
+
+      expect(
+        () =>
+          compilerOwnedProjectMutationRegistryFactsFromFiles(
+            [
+              { fileName: 'kovo.ts', source: contractSource },
+              { fileName: 'queries.ts', source: testCase.querySource },
+              { fileName: 'mutations.ts', source: mutationSource },
+              { fileName: 'form.tsx', source: formSource },
+            ],
+            sourceRoot,
+          ),
+        testCase.name,
+      ).toThrow(testCase.pattern);
+    }
   });
 
   it('keeps finite app-contract facts when build roots are workspace-relative', async () => {

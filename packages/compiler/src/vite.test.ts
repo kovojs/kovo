@@ -477,6 +477,72 @@ export const orderPaid = webhook('/webhooks/order-paid', {
     expect(transformed?.code).toContain('"app-shell/order-paid"');
   });
 
+  it('registers and serves the exact compiler-authenticated standalone optimism module', async () => {
+    const fileName = 'src/mutations.ts';
+    const optimisticSource = [
+      '// @kovojs-ir',
+      'export const kovoOptimisticMutationPlans = Object.freeze({',
+      "  'cart/add': Object.freeze({ schema: 'kovo.optimistic-plan/v1' }),",
+      '});',
+      '',
+    ].join('\n');
+    const href = clientModuleHrefForSourceFile(
+      fileName,
+      clientModuleRepresentationDigest(optimisticSource),
+    );
+    const target = parseVersionedClientModuleTarget(href);
+    expect(target).not.toBeNull();
+
+    const compileComponentModule = vi.fn(() => ({ files: [] }));
+    const plugin = createKovoVitePlugin(compileComponentModule, {
+      include: ['src'],
+      registryFacts: {
+        mutationOptimism: {
+          'cart/add': {
+            inputFields: [],
+            invalidations: ['cart'],
+            moduleHref: href,
+            mutation: 'cart/add',
+            statuses: { cart: 'hand-written' },
+          },
+        },
+        optimisticModules: [
+          {
+            fileName,
+            href,
+            mutationKeys: ['cart/add'],
+            path: target!.path,
+            source: optimisticSource,
+          },
+        ],
+      },
+    });
+    const middlewares: KovoViteMiddleware[] = [];
+    plugin.configureServer?.({
+      middlewares: {
+        use(handler) {
+          middlewares.push(handler);
+        },
+      },
+    });
+
+    expect(plugin.transform("export const marker = 'server-only';\n", fileName)).toBeNull();
+
+    expect(compileComponentModule).not.toHaveBeenCalled();
+    expect(plugin.getClientModules?.()).toEqual([
+      {
+        path: target!.path,
+        source: optimisticSource,
+      },
+    ]);
+    const response = createMiddlewareResponse();
+    const next = vi.fn();
+    middlewares[0]?.({ url: href }, response, next);
+    expect(next).not.toHaveBeenCalled();
+    expect(response.body).toBe(optimisticSource);
+    expect(response.headers['Content-Type']).toBe('text/javascript; charset=utf-8');
+  });
+
   it('lowers app-scoped declarations only after proving the exact receiver in a Program', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-vite-app-contract-'));
     const src = join(root, 'src');

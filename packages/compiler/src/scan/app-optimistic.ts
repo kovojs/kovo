@@ -28,8 +28,10 @@ export interface AppOptimisticProjectFacts {
 }
 
 interface QueryDeclaration {
+  readonly fileName: string;
   readonly key: string;
   readonly ownerKey: string;
+  readonly start: number;
   readonly symbol: ts.Symbol;
 }
 
@@ -82,6 +84,11 @@ export function appOptimisticProjectFacts(options: {
   );
   const queryBySymbol = new Map<ts.Symbol, QueryDeclaration>();
   const mutations: MutationDeclaration[] = [];
+  const projectDependencies = appOptimisticProjectDependencies(
+    options.checker,
+    options.program,
+    sourceFileNames,
+  );
 
   for (const member of options.members) {
     const call = member.node.parent;
@@ -93,7 +100,13 @@ export function appOptimisticProjectFacts(options: {
 
     if (member.memberName === 'query') {
       const key = declarationKey(member.sourceFile, variable.name.text, call, 'query');
-      queryBySymbol.set(symbol, { key, ownerKey: member.ownerKey, symbol });
+      queryBySymbol.set(symbol, {
+        fileName: normalizeSourceFileName(member.sourceFile.fileName),
+        key,
+        ownerKey: member.ownerKey,
+        start: call.getStart(member.sourceFile),
+        symbol,
+      });
       continue;
     }
     if (member.memberName !== 'mutation') continue;
@@ -173,6 +186,17 @@ export function appOptimisticProjectFacts(options: {
           'KOVO_OPTIMISTIC_FOREIGN_QUERY',
           mutation,
           `optimistic[${index}] binds foreign-app query ${query.key}.`,
+        );
+      }
+      const mutationFileName = normalizeSourceFileName(mutation.fileName);
+      if (
+        (query.fileName === mutationFileName && query.start > mutation.call.getStart()) ||
+        projectDependencyReaches(projectDependencies, query.fileName, mutationFileName)
+      ) {
+        throw optimisticError(
+          'KOVO_OPTIMISTIC_IMPORT_CYCLE',
+          mutation,
+          `${query.key} strongly depends back on its declaring mutation module. Extract the query and mutation into acyclic modules.`,
         );
       }
       if (seenQueries.has(query.key)) {
@@ -372,8 +396,9 @@ invalidations: Object.freeze(${JSON.stringify(
   )}),
 statuses: Object.freeze(${JSON.stringify(statuses)}),
 inputFields: Object.freeze(${JSON.stringify(
-    mutation.inputFields.map(({ coercion, name, optional, required }) => ({
+    mutation.inputFields.map(({ coercion, defaulted, name, optional, required }) => ({
       coercion,
+      defaulted,
       name,
       optional,
       required,
@@ -444,6 +469,90 @@ function collectRuntimeDependencies(
     }
   }
   return ordered;
+}
+
+function appOptimisticProjectDependencies(
+  checker: ts.TypeChecker,
+  program: ts.Program,
+  sourceFileNames: ReadonlySet<string>,
+): ReadonlyMap<string, ReadonlySet<string>> {
+  const dependencies = new Map<string, ReadonlySet<string>>();
+  for (const sourceFile of program.getSourceFiles()) {
+    const fileName = normalizeSourceFileName(sourceFile.fileName);
+    if (!sourceFileNames.has(fileName)) continue;
+    const targets = new Set<string>();
+    for (const statement of sourceFile.statements) {
+      const moduleSpecifier = runtimeModuleSpecifier(statement);
+      if (!moduleSpecifier) continue;
+      const symbol = checker.getSymbolAtLocation(moduleSpecifier);
+      const declarations = symbol?.declarations ?? [];
+      for (const declaration of declarations) {
+        const target = normalizeSourceFileName(declaration.getSourceFile().fileName);
+        if (sourceFileNames.has(target) && target !== fileName) targets.add(target);
+      }
+    }
+    dependencies.set(fileName, targets);
+  }
+  return dependencies;
+}
+
+function runtimeModuleSpecifier(statement: ts.Statement): ts.StringLiteralLike | undefined {
+  if (ts.isImportDeclaration(statement)) {
+    if (!statement.moduleSpecifier || !ts.isStringLiteralLike(statement.moduleSpecifier)) {
+      return undefined;
+    }
+    const clause = statement.importClause;
+    if (clause?.isTypeOnly) return undefined;
+    if (
+      clause?.name === undefined &&
+      clause?.namedBindings &&
+      ts.isNamedImports(clause.namedBindings) &&
+      clause.namedBindings.elements.length > 0 &&
+      clause.namedBindings.elements.every((element) => element.isTypeOnly)
+    ) {
+      return undefined;
+    }
+    return statement.moduleSpecifier;
+  }
+  if (
+    !ts.isExportDeclaration(statement) ||
+    statement.isTypeOnly ||
+    !statement.moduleSpecifier ||
+    !ts.isStringLiteralLike(statement.moduleSpecifier)
+  ) {
+    return undefined;
+  }
+  if (
+    statement.exportClause &&
+    ts.isNamedExports(statement.exportClause) &&
+    statement.exportClause.elements.length > 0 &&
+    statement.exportClause.elements.every((element) => element.isTypeOnly)
+  ) {
+    return undefined;
+  }
+  return statement.moduleSpecifier;
+}
+
+function projectDependencyReaches(
+  dependencies: ReadonlyMap<string, ReadonlySet<string>>,
+  from: string,
+  target: string,
+): boolean {
+  if (from === target) return false;
+  const visited = new Set<string>();
+  const pending = [from];
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (current === undefined || visited.has(current)) continue;
+    visited.add(current);
+    const next = dependencies.get(current);
+    if (!next) continue;
+    for (const dependency of next) {
+      if (dependency === target) return true;
+      if (!visited.has(dependency)) pending.push(dependency);
+    }
+  }
+  return false;
 }
 
 function emitRuntimeDependency(dependency: RuntimeDependency): string {

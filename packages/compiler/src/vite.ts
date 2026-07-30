@@ -81,6 +81,7 @@ import type {
   HmrImpactMetadata,
   HmrImpactReason,
   CompileDependencyFootprint,
+  OptimisticModuleFact,
   PackageComponentPrefixFact,
   QueryShapeFact,
   RegistryFacts,
@@ -723,13 +724,30 @@ function createBoundKovoVitePlugin(
         const standaloneRegistrySource = isAuthoredSource
           ? lowerViteSourceDerivedRegistryDeclarations(transformRoot, fileName, source)
           : null;
+        const optimisticModule = isAuthoredSource
+          ? viteOptimisticModuleForFile(resolveViteRegistryFacts(options, fileName), fileName)
+          : undefined;
         if (!isCurrent()) {
           finish();
           return null;
         }
+        if (isComponentSource && optimisticModule !== undefined) {
+          throw new TypeError(
+            `Kovo Vite cannot emit both a component client module and optimistic plans from ${fileName}. ` +
+              'Move app.mutation declarations into a standalone .ts module to preserve SPEC §5.2 one-to-one client-module identity.',
+          );
+        }
         if (!isComponentSource) {
           const existing = compilerMapGet(transformDevState.files, fileName);
-          if (existing !== undefined && isCurrent()) {
+          if (optimisticModule !== undefined && isCurrent()) {
+            recordViteCompileResult(
+              transformDevState,
+              fileName,
+              emptyViteCompileMetadata(),
+              [{ kind: 'client', source: optimisticModule.source }],
+              optimisticModule,
+            );
+          } else if (existing !== undefined && isCurrent()) {
             removeViteDevFileState(transformDevState, fileName, existing);
           }
           finish();
@@ -817,8 +835,35 @@ function createBoundKovoVitePlugin(
           validateViteStandaloneAuthoringSurface(options, fileName, source);
         }
         if (!isCurrent()) return [];
+        const optimisticModule = isAuthoredSource
+          ? viteOptimisticModuleForFile(resolveViteRegistryFacts(options, fileName), fileName)
+          : undefined;
+        if (!isCurrent()) return [];
+        if (isComponentSource && optimisticModule !== undefined) {
+          throw new TypeError(
+            `Kovo Vite cannot emit both a component client module and optimistic plans from ${fileName}. ` +
+              'Move app.mutation declarations into a standalone .ts module to preserve SPEC §5.2 one-to-one client-module identity.',
+          );
+        }
         if (!isComponentSource) {
-          if (previousState !== undefined) {
+          if (optimisticModule !== undefined && isCurrent()) {
+            recordViteCompileResult(
+              hotUpdateDevState,
+              fileName,
+              emptyViteCompileMetadata(),
+              [{ kind: 'client', source: optimisticModule.source }],
+              optimisticModule,
+            );
+            const classification = viteFullReload('topology');
+            sendKovoHmrEvent(
+              context.server,
+              'kovo:full-reload',
+              previous,
+              null,
+              classification,
+            );
+            context.server.ws?.send({ type: 'full-reload' });
+          } else if (previousState !== undefined) {
             removeViteDevFileState(hotUpdateDevState, fileName, previousState);
             const classification = viteFullReload('topology');
             sendKovoHmrEvent(
@@ -2033,11 +2078,139 @@ function snapshotViteStringList(value: unknown, name: string): string[] {
   return result;
 }
 
+function viteOptimisticModuleForFile(
+  registryFacts: RegistryFacts | undefined,
+  fileName: string,
+): OptimisticModuleFact | undefined {
+  const rawModules = registryFacts?.optimisticModules;
+  const mutationOptimism = registryFacts?.mutationOptimism;
+  if (rawModules === undefined) return undefined;
+  const modules = compilerSnapshotDenseArray(rawModules, 'Vite optimistic client modules');
+  let selected: OptimisticModuleFact | undefined;
+  for (let index = 0; index < modules.length; index += 1) {
+    const candidate = compilerOwnDataValue(
+      modules,
+      index,
+      'Vite optimistic client modules',
+    ) as unknown;
+    if (typeof candidate !== 'object' || candidate === null || compilerArrayIsArray(candidate)) {
+      throw new TypeError(`Vite optimistic client modules[${index}] must be an own object.`);
+    }
+    const candidateFileName = compilerOwnDataValue(
+      candidate,
+      'fileName',
+      `Vite optimistic client modules[${index}]`,
+    );
+    if (candidateFileName !== fileName) continue;
+    if (selected !== undefined) {
+      throw new TypeError(`Kovo Vite refused duplicate optimistic modules for ${fileName}.`);
+    }
+    const href = compilerOwnDataValue(
+      candidate,
+      'href',
+      `Vite optimistic client modules[${index}]`,
+    );
+    const path = compilerOwnDataValue(
+      candidate,
+      'path',
+      `Vite optimistic client modules[${index}]`,
+    );
+    const source = compilerOwnDataValue(
+      candidate,
+      'source',
+      `Vite optimistic client modules[${index}]`,
+    );
+    const rawMutationKeys = compilerOwnDataValue(
+      candidate,
+      'mutationKeys',
+      `Vite optimistic client modules[${index}]`,
+    );
+    if (
+      typeof href !== 'string' ||
+      typeof path !== 'string' ||
+      typeof source !== 'string' ||
+      !compilerArrayIsArray(rawMutationKeys)
+    ) {
+      throw new TypeError(
+        `Kovo Vite optimistic module for ${fileName} requires string href/path/source and a dense mutation-key array.`,
+      );
+    }
+    const mutationKeys = snapshotViteStringList(rawMutationKeys, 'optimistic mutationKeys');
+    if (mutationKeys.length === 0 || mutationKeys.length > KOVO_DEV_CLIENT_MODULE_FILE_LIMIT) {
+      throw new TypeError(
+        `Kovo Vite optimistic module for ${fileName} requires a bounded unique mutation-key array.`,
+      );
+    }
+    const uniqueMutationKeys = compilerCreateSet<string>();
+    for (let keyIndex = 0; keyIndex < mutationKeys.length; keyIndex += 1) {
+      const mutationKey = mutationKeys[keyIndex]!;
+      if (compilerSetHas(uniqueMutationKeys, mutationKey)) {
+        throw new TypeError(
+          `Kovo Vite optimistic module for ${fileName} requires a bounded unique mutation-key array.`,
+        );
+      }
+      compilerSetAdd(uniqueMutationKeys, mutationKey);
+    }
+    const expectedHref = clientModuleHrefForSourceFile(
+      fileName,
+      clientModuleRepresentationDigest(rewriteClientModuleRuntimeImportsForBrowser(source)),
+    );
+    const target = parseVersionedClientModuleTarget(expectedHref);
+    if (href !== expectedHref || path !== target?.path) {
+      throw new TypeError(
+        `Kovo Vite optimistic module for ${fileName} does not match its immutable source representation.`,
+      );
+    }
+    if (mutationOptimism === undefined) {
+      throw new TypeError(
+        `Kovo Vite optimistic module for ${fileName} has no authenticated mutation facts.`,
+      );
+    }
+    for (let keyIndex = 0; keyIndex < mutationKeys.length; keyIndex += 1) {
+      const mutationKey = mutationKeys[keyIndex]!;
+      const mutationFact = compilerOwnDataValue(
+        mutationOptimism,
+        mutationKey,
+        'Vite optimistic mutation facts',
+      );
+      if (typeof mutationFact !== 'object' || mutationFact === null) {
+        throw new TypeError(
+          `Kovo Vite optimistic module for ${fileName} has no fact for ${mutationKey}.`,
+        );
+      }
+      const declaredMutation = compilerOwnDataValue(
+        mutationFact,
+        'mutation',
+        `Vite optimistic mutation fact ${mutationKey}`,
+      );
+      const moduleHref = compilerOwnDataValue(
+        mutationFact,
+        'moduleHref',
+        `Vite optimistic mutation fact ${mutationKey}`,
+      );
+      if (declaredMutation !== mutationKey || moduleHref !== href) {
+        throw new TypeError(
+          `Kovo Vite optimistic mutation fact ${mutationKey} does not match ${fileName}.`,
+        );
+      }
+    }
+    selected = compilerFreeze({
+      fileName,
+      href,
+      mutationKeys: compilerFreeze(mutationKeys),
+      path,
+      source,
+    });
+  }
+  return selected;
+}
+
 function recordViteCompileResult(
   store: ViteDevStateStore,
   fileName: string,
   metadata: ViteCompileMetadata,
   files: readonly { kind: string; source: string }[],
+  optimisticModule?: OptimisticModuleFact,
 ): void {
   let clientSource: string | undefined;
   for (let index = 0; index < files.length; index += 1) {
@@ -2061,9 +2234,21 @@ function recordViteCompileResult(
     clientHistory = nextViteClientModuleHistory(existing?.clientHistory, href, finalSource);
     const target = parseVersionedClientModuleTarget(href);
     if (
-      metadata.hmrImpact?.clientHref !== null &&
-      metadata.hmrImpact?.clientHref !== undefined &&
-      metadata.clientExports.length + metadata.handlerExports.length > 0
+      optimisticModule !== undefined &&
+      (optimisticModule.fileName !== fileName ||
+        optimisticModule.href !== href ||
+        optimisticModule.path !== target?.path ||
+        optimisticModule.source !== clientSource)
+    ) {
+      throw new TypeError(
+        `Kovo Vite refused an optimistic client module whose immutable identity does not match ${fileName}.`,
+      );
+    }
+    if (
+      optimisticModule !== undefined ||
+      (metadata.hmrImpact?.clientHref !== null &&
+        metadata.hmrImpact?.clientHref !== undefined &&
+        metadata.clientExports.length + metadata.handlerExports.length > 0)
     ) {
       compiledClientModule = compilerFreeze({
         path: target?.path ?? new URL(href, 'https://kovo.local').pathname,
@@ -2140,6 +2325,16 @@ function recordViteCompileResult(
   addViteClientModuleVersion(store, fileName, clientHistory?.current);
 
   if (!store.buildMode) evictViteDevState(store, fileName);
+}
+
+function emptyViteCompileMetadata(): ViteCompileMetadata {
+  return {
+    clientExports: [],
+    cssAssets: [],
+    handlerExports: [],
+    hmrImpact: null,
+    renderPlanFingerprint: null,
+  };
 }
 
 function nextViteClientModuleHistory(

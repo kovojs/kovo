@@ -18,9 +18,10 @@ import type {
 import { installLoaderQueryRuntime } from './loader-query.js';
 import type { InstalledLoaderQueryRuntime } from './loader-query.js';
 import type { EnhancedMutationFetch, UploadProgress } from './mutation-fetch.js';
+import { MutationQueue } from './mutation-queue.js';
 import type { EnhancedMutationLoaderOptions } from './mutation-submit.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
-import { installPagehideOptimismCleanup } from './optimism.js';
+import { installPagehideOptimismCleanup, OptimisticRebaser } from './optimism.js';
 import type { QueryEventHydrationTarget } from './query-events.js';
 import type { QueryApplyInterposition } from './query-apply.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
@@ -193,6 +194,20 @@ export function installGeneratedKovoLoader(
   // SPEC §6.6/§9.1.1: generated loader authority uses one construction-time page build proof for
   // direct mutation apply and BroadcastChannel publish/receive.
   const pageBuildToken = readPageBuildToken();
+  const optimisticRebaser = options.enhancedMutations
+    ? new OptimisticRebaser(options.enhancedMutations.store, {
+        ...(options.onError
+          ? {
+              onError(error: unknown) {
+                reportRuntimeContextError(options.onError, error, {
+                  phase: 'enhanced-mutation',
+                });
+              },
+            }
+          : {}),
+      })
+    : undefined;
+  const optimisticQueue = optimisticRebaser ? new MutationQueue() : undefined;
   const enhancedMutationSetup = options.enhancedMutations
     ? withDefaultMutationBroadcast({
         ...options.enhancedMutations,
@@ -214,6 +229,8 @@ export function installGeneratedKovoLoader(
           // so a broadcast morph that removes an island correctly aborts its ctx.signal.
           islandSignalScope,
           expectedBuildToken: pageBuildToken,
+          optimisticQueue,
+          optimisticRebaser,
           principal: sessionFingerprint,
           sessionDependent,
         }),
@@ -258,11 +275,16 @@ export function installGeneratedKovoLoader(
     queryRuntime?.dispose();
   });
 
-  if (options.discardPendingOptimism) {
+  const discardPendingOptimism =
+    options.discardPendingOptimism ??
+    (optimisticRebaser
+      ? () => optimisticRebaser.discardPendingOptimism()
+      : undefined);
+  if (discardPendingOptimism) {
     appendDisposer(
       disposers,
       installPagehideOptimismCleanup({
-        discardPendingOptimism: options.discardPendingOptimism,
+        discardPendingOptimism,
         root: options.root,
       }),
     );

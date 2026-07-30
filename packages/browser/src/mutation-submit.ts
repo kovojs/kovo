@@ -1,5 +1,9 @@
 import type { FrameworkTargetRequestHeaderPlan } from '@kovojs/core/internal/wire-input-grammar';
 
+import {
+  loadCompiledOptimisticSubmission,
+  type CompiledOptimisticSubmission,
+} from './compiled-optimism.js';
 import { definedProps } from './defined-props.js';
 import type { DelegatedEvent } from './events.js';
 import { reportRuntimeError, reportRuntimeTargetError } from './error-policy.js';
@@ -43,6 +47,9 @@ import type { QueryIdentity, QueryStore } from './query-store.js';
 import { readDeps, stampPendingQueries } from './pending.js';
 import type { PendingQuerySelector, PendingRoot } from './pending.js';
 import type { ImportHandlerModule } from './handlers.js';
+import { submitOptimisticEnhancedMutation } from './mutation-optimistic.js';
+import type { MutationQueue } from './mutation-queue.js';
+import type { OptimisticRebaser } from './optimism.js';
 import {
   captureSessionTransitionPrincipalRetirement,
   reloadSessionTransitionDocument,
@@ -83,6 +90,8 @@ export interface EnhancedMutationLoaderOptions {
   /** @internal Dispose document-scoped client state before mandatory transition recovery. */
   onSessionTransition?: () => void;
   onUploadProgress?: (progress: UploadProgress, form: EnhancedFormElementLike) => void;
+  optimisticQueue?: MutationQueue;
+  optimisticRebaser?: OptimisticRebaser;
   pendingRoot?: PendingRoot;
   queryPlans?: CompiledQueryUpdatePlans;
   root: MorphRoot & TargetCollectorRoot;
@@ -149,7 +158,7 @@ export async function dispatchEnhancedFormSubmit(
   if (requestPlan === undefined) return false;
   if (!preventRuntimeDelegatedEventDefault(event)) return false;
   try {
-    const applied = await submitEnhancedMutation({
+    const submitOptions: EnhancedMutationSubmitOptions = {
       expectedBuildToken,
       fetch: options.fetch,
       form,
@@ -181,7 +190,37 @@ export async function dispatchEnhancedFormSubmit(
       store: options.store,
       islandSignalScope,
       transport,
-    });
+    };
+    let compiledOptimism: CompiledOptimisticSubmission | undefined;
+    if (transport.optimisticModule !== undefined) {
+      try {
+        if (!options.importModule || !options.optimisticRebaser || !transport.mutation) {
+          throw new TypeError(
+            'Kovo optimistic mutation form requires the generated loader optimism runtime.',
+          );
+        }
+        compiledOptimism = await loadCompiledOptimisticSubmission({
+          formData,
+          importModule: options.importModule,
+          moduleHref: transport.optimisticModule,
+          mutation: transport.mutation,
+        });
+      } catch (error) {
+        reportRuntimeTargetError(options.onError, error, form);
+      }
+    }
+    const applied =
+      compiledOptimism === undefined || options.optimisticRebaser === undefined
+        ? await submitEnhancedMutation(submitOptions)
+        : await submitOptimisticEnhancedMutation({
+            ...submitOptions,
+            input: compiledOptimism.input,
+            optimistic: compiledOptimism.optimistic,
+            ...definedProps({
+              queue: options.optimisticQueue,
+            }),
+            rebaser: options.optimisticRebaser,
+          });
     hooks.onAppliedQueries?.(applied.queries);
   } catch (error) {
     // The request may have committed before a network, response-proof, media-type, or apply

@@ -36,6 +36,8 @@ export interface EnhancedFormElementLike extends EventElementLike {
 export interface EnhancedMutationTransport {
   readonly action: string;
   readonly method: 'POST';
+  readonly mutation?: string;
+  readonly optimisticModule?: string;
   readonly origin: string;
   /** Canonical source document URL: origin + pathname + search, never the fragment. */
   readonly sourceUrl: string;
@@ -163,10 +165,17 @@ export function readEligibleEnhancedMutationTransport(
   ) {
     return undefined;
   }
+  const optimisticModule = browserFormSecurity.readAttribute(
+    form,
+    'data-kovo-optimistic-module',
+  );
+  if (optimisticModule !== null && optimisticModule.length === 0) return undefined;
 
   return {
     action: action.pathname,
     method: 'POST',
+    mutation: mutationKey,
+    ...(optimisticModule === null ? {} : { optimisticModule }),
     origin: current.origin,
     sourceUrl: current.origin + current.pathname + current.search,
   };

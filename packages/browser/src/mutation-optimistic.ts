@@ -14,12 +14,13 @@ import {
 } from './mutation-fetch.js';
 import type { MutationQueue } from './mutation-queue.js';
 import type { EnhancedMutationSubmitOptions } from './mutation-submit.js';
-import { optimisticChangeFromInput, resolveOptimisticKeys } from './optimism.js';
+import { optimisticChangeFromInput, resolveOptimisticTargets } from './optimism.js';
 import type {
   MutationChangeRecord,
   OptimisticEntry,
   OptimisticChange,
   OptimisticPlan,
+  OptimisticQueryTarget,
   OptimisticRebaser,
 } from './optimism.js';
 import {
@@ -90,7 +91,7 @@ export async function submitOptimisticEnhancedMutation<Input>(
     );
   }
   const optimisticChange = optimisticChangeFromInput(options.input, options.change);
-  const optimisticKeys = resolveOptimisticKeys(options.optimistic, optimisticChange);
+  const optimisticTargets = resolveOptimisticTargets(options.optimistic, optimisticChange);
   const queueName = options.optimistic.queue;
 
   if (options.queue) {
@@ -114,7 +115,7 @@ export async function submitOptimisticEnhancedMutation<Input>(
 
   const context: OptimisticSubmitContext = {
     idem,
-    optimisticKeys,
+    optimisticTargets,
     pendingSelectors,
     queryNames,
     retirePrincipal,
@@ -130,7 +131,7 @@ export async function submitOptimisticEnhancedMutation<Input>(
       {
         onTimeout(error) {
           queueState.timedOut = true;
-          discardFailedOptimism(options.rebaser, idem, queryNames, optimisticKeys);
+          discardFailedOptimism(options.rebaser, idem, optimisticTargets);
           if (options.pendingRoot) {
             stampPendingQueries(options.pendingRoot, pendingSelectors, false);
           }
@@ -145,7 +146,7 @@ export async function submitOptimisticEnhancedMutation<Input>(
 
 interface OptimisticSubmitContext {
   idem: string;
-  optimisticKeys: Readonly<Record<string, string | undefined>>;
+  optimisticTargets: OptimisticQueryTarget[];
   pendingSelectors: PendingQuerySelector[];
   queryNames: string[];
   retirePrincipal: () => void;
@@ -161,7 +162,7 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
   signal?: AbortSignal,
   queueState?: OptimisticQueueState,
 ): Promise<EnhancedMutationAppliedResult> {
-  const { idem, optimisticKeys, pendingSelectors, queryNames, retirePrincipal } = context;
+  const { idem, optimisticTargets, pendingSelectors, queryNames, retirePrincipal } = context;
 
   try {
     const fetched = await fetchEnhancedMutation(
@@ -176,7 +177,7 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
     if (queueState?.timedOut) throw lateQueueSettlementAfterTimeoutError();
     if (fetched.sessionTransition) return retiredSessionTransitionResult(fetched);
     if (isFailedMutationResponse(fetched.response)) {
-      discardFailedOptimism(options.rebaser, idem, queryNames, optimisticKeys);
+      discardFailedOptimism(options.rebaser, idem, optimisticTargets);
       if (options.pendingRoot) {
         stampPendingQueries(options.pendingRoot, pendingSelectors, false);
       }
@@ -187,17 +188,18 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
     const applied = applyFetchedEnhancedMutationResponseToRuntime(
       options,
       fetched,
-      optimisticMutationRuntimeApplyHooks(options, idem, queryNames, optimisticKeys),
+      optimisticMutationRuntimeApplyHooks(options, idem, optimisticTargets),
     );
     const settledQueries: string[] = [];
     for (let index = 0; index < queryNames.length; index += 1) {
       const queryName = securityOwnArrayEntry(queryNames, index);
       if (!queryName.ok) throw new TypeError('Kovo optimistic query names must be dense.');
       if (
-        options.rebaser.pendingCount(
+        optimisticQueryFamilyIsSettled(
+          options.rebaser,
           queryName.value,
-          optimisticKeyValue(optimisticKeys, queryName.value),
-        ) === 0
+          optimisticTargets,
+        )
       ) {
         securityArrayAppend(settledQueries, queryName.value, 'Browser settled optimistic queries');
       }
@@ -221,7 +223,7 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
     };
   } catch (error) {
     if (queueState?.timedOut) throw error;
-    discardFailedOptimism(options.rebaser, idem, queryNames, optimisticKeys);
+    discardFailedOptimism(options.rebaser, idem, optimisticTargets);
     if (options.pendingRoot) {
       stampPendingQueries(options.pendingRoot, pendingSelectors, false);
     }
@@ -248,18 +250,17 @@ function lateQueueSettlementAfterTimeoutError(): Error {
 function discardFailedOptimism(
   rebaser: OptimisticRebaser,
   idem: string,
-  queryNames: readonly string[],
-  optimisticKeys: Readonly<Record<string, string | undefined>>,
+  optimisticTargets: readonly OptimisticQueryTarget[],
 ): void {
-  for (let index = 0; index < queryNames.length; index += 1) {
-    const queryName = securityOwnArrayEntry(queryNames, index);
-    if (!queryName.ok || typeof queryName.value !== 'string') {
-      throw new TypeError('Kovo optimistic rollback query names must be dense strings.');
+  for (let index = 0; index < optimisticTargets.length; index += 1) {
+    const target = securityOwnArrayEntry(optimisticTargets, index);
+    if (!target.ok) {
+      throw new TypeError('Kovo optimistic rollback targets must be dense.');
     }
     rebaser.settleWithoutServerTruth(
       idem,
-      queryName.value,
-      optimisticKeyValue(optimisticKeys, queryName.value),
+      target.value.queryName,
+      target.value.key,
     );
   }
 }
@@ -267,8 +268,7 @@ function discardFailedOptimism(
 function optimisticMutationRuntimeApplyHooks<Input>(
   options: OptimisticEnhancedMutationSubmitOptions<Input>,
   idem: string,
-  queryNames: readonly string[],
-  optimisticKeys: Readonly<Record<string, string | undefined>>,
+  optimisticTargets: readonly OptimisticQueryTarget[],
 ): MutationRuntimeApplyHooks {
   return {
     // SPEC §9.1.1 (F1) + §10.4: route each chunk through the rebaser as server truth. A
@@ -282,24 +282,20 @@ function optimisticMutationRuntimeApplyHooks<Input>(
       const uncoveredQueries = uncoveredOptimisticQueries(
         queryChunks,
         options.optimistic.transforms,
-        optimisticKeys,
+        optimisticTargets,
       );
       for (let index = 0; index < uncoveredQueries.length; index += 1) {
         const uncovered = securityOwnArrayEntry(uncoveredQueries, index);
         if (!uncovered.ok) {
           throw new TypeError('Kovo uncovered optimistic queries must be dense.');
         }
-        const { queryName, status } = uncovered.value;
-        options.rebaser.settleWithoutServerTruth(
-          idem,
-          queryName,
-          optimisticKeyValue(optimisticKeys, queryName),
-        );
+        const { key, queryName, status } = uncovered.value;
+        options.rebaser.settleWithoutServerTruth(idem, queryName, key);
         reportRuntimeError(
           options.onError,
           uncoveredOptimisticQueryError(
             queryName,
-            optimisticKeyValue(optimisticKeys, queryName),
+            key,
             status,
           ),
         );
@@ -310,6 +306,7 @@ function optimisticMutationRuntimeApplyHooks<Input>(
 }
 
 interface UncoveredOptimisticQuery {
+  key?: string;
   queryName: string;
   status: 'await-fragment' | 'transform';
 }
@@ -317,7 +314,7 @@ interface UncoveredOptimisticQuery {
 function uncoveredOptimisticQueries<Input>(
   queryChunks: readonly QueryChunk[],
   transforms: Readonly<Record<string, OptimisticEntry<Input>>>,
-  optimisticKeys: Readonly<Record<string, string | undefined>>,
+  optimisticTargets: readonly OptimisticQueryTarget[],
 ): UncoveredOptimisticQuery[] {
   const covered = securitySet<string>();
   for (let index = 0; index < queryChunks.length; index += 1) {
@@ -327,20 +324,16 @@ function uncoveredOptimisticQueries<Input>(
   }
   const uncovered: UncoveredOptimisticQuery[] = [];
 
-  const queryNames = securityObjectKeys(transforms);
-  for (let index = 0; index < queryNames.length; index += 1) {
-    const queryNameEntry = securityOwnArrayEntry(queryNames, index);
-    if (!queryNameEntry.ok) throw new TypeError('Kovo optimistic transform names must be dense.');
-    const queryName = queryNameEntry.value;
+  for (let index = 0; index < optimisticTargets.length; index += 1) {
+    const targetEntry = securityOwnArrayEntry(optimisticTargets, index);
+    if (!targetEntry.ok) throw new TypeError('Kovo optimistic targets must be dense.');
+    const { key, queryName } = targetEntry.value;
     const transform = securityGetOwnPropertyDescriptor(transforms, queryName);
     if (!transform || !('value' in transform)) {
       throw new TypeError('Kovo optimistic transforms must be own-data properties.');
     }
     if (
-      securitySetHas(
-        covered,
-        queryStoreKey(queryName, optimisticKeyValue(optimisticKeys, queryName)),
-      )
+      securitySetHas(covered, queryStoreKey(queryName, key))
     ) {
       continue;
     }
@@ -348,6 +341,7 @@ function uncoveredOptimisticQueries<Input>(
     securityArrayAppend(
       uncovered,
       {
+        ...(key === undefined ? {} : { key }),
         queryName,
         status: transform.value === 'await-fragment' ? 'await-fragment' : 'transform',
       },
@@ -358,14 +352,22 @@ function uncoveredOptimisticQueries<Input>(
   return uncovered;
 }
 
-function optimisticKeyValue(
-  optimisticKeys: Readonly<Record<string, string | undefined>>,
+function optimisticQueryFamilyIsSettled(
+  rebaser: OptimisticRebaser,
   queryName: string,
-): string | undefined {
-  const descriptor = securityGetOwnPropertyDescriptor(optimisticKeys, queryName);
-  return descriptor && 'value' in descriptor && typeof descriptor.value === 'string'
-    ? descriptor.value
-    : undefined;
+  optimisticTargets: readonly OptimisticQueryTarget[],
+): boolean {
+  for (let index = 0; index < optimisticTargets.length; index += 1) {
+    const target = securityOwnArrayEntry(optimisticTargets, index);
+    if (!target.ok) throw new TypeError('Kovo optimistic targets must be dense.');
+    if (
+      target.value.queryName === queryName &&
+      rebaser.pendingCount(queryName, target.value.key) > 0
+    ) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function uncoveredOptimisticQueryError(

@@ -8,6 +8,7 @@ import { addRuntimeEventListener, removeRuntimeEventListener } from './runtime-d
 import {
   defineSecurityProperties,
   securityArrayAppend,
+  securityArrayIsArray,
   securityGetOwnPropertyDescriptor,
   securityMap,
   securityMapDelete,
@@ -67,9 +68,21 @@ function reportOptimisticTransformDiagnostic(
 
 /** How to derive the query-instance key an optimistic change applies to. */
 export type OptimisticQueryKey<Input = unknown> =
-  | ((change: OptimisticChange<Input>) => string | undefined)
+  | ((change: OptimisticChange<Input>) => string | readonly string[] | undefined)
+  | readonly string[]
   | string
   | undefined;
+
+/** @internal One exact query instance selected by an optimistic plan. */
+export interface OptimisticQueryTarget {
+  readonly key?: string;
+  readonly queryName: string;
+}
+
+/** @internal Resolved instance-key carrier for each query in an optimistic plan. */
+export type ResolvedOptimisticKeys = Readonly<
+  Record<string, readonly string[] | string | undefined>
+>;
 
 /** An optimistic plan: per-query transforms, an optional `queue`, and instance-key derivation. */
 export interface OptimisticPlan<Input = unknown> {
@@ -215,31 +228,36 @@ export class OptimisticRebaser {
         );
       }
 
-      const key = optimisticQueryKey(plan, queryName, change);
-      const storeKey = queryStoreKey(queryName, key);
-      const previous = this.#store.get(queryName, key);
+      const keys = optimisticQueryKeys(plan, queryName, change);
+      for (let keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
+        const keyEntry = securityOwnArrayEntry(keys, keyIndex);
+        if (!keyEntry.ok) throw new TypeError('Kovo optimistic query keys must be dense.');
+        const key = keyEntry.value;
+        const storeKey = queryStoreKey(queryName, key);
+        const previous = this.#store.get(queryName, key);
 
-      let predicted: unknown;
-      try {
-        predicted = applyOptimisticTransform(previous, change.input, transform);
-      } catch (error) {
-        // Phase-1 failure: nothing committed yet, so there is nothing to roll back.
-        reportOptimisticTransformDiagnostic(this.#onError, error, 'enqueue');
-        return;
+        let predicted: unknown;
+        try {
+          predicted = applyOptimisticTransform(previous, change.input, transform);
+        } catch (error) {
+          // Phase-1 failure: nothing committed yet, so there is nothing to roll back.
+          reportOptimisticTransformDiagnostic(this.#onError, error, 'enqueue');
+          return;
+        }
+
+        securityArrayAppend(
+          staged,
+          {
+            ...(key === undefined ? {} : { key }),
+            predicted,
+            previous,
+            queryName,
+            storeKey,
+            transform: transform as OptimisticTransform,
+          },
+          'Browser optimistic staged transforms',
+        );
       }
-
-      securityArrayAppend(
-        staged,
-        {
-          ...(key === undefined ? {} : { key }),
-          predicted,
-          previous,
-          queryName,
-          storeKey,
-          transform: transform as OptimisticTransform,
-        },
-        'Browser optimistic staged transforms',
-      );
     }
 
     // Phase 2: all transforms predicted cleanly — commit pending + store writes.
@@ -499,20 +517,19 @@ export function applyOptimisticTransforms<Input>(
   plan: OptimisticPlan<Input>,
   change: OptimisticChange<Input> = optimisticChangeFromInput(input),
 ): PendingOptimism {
-  const queryNames = securityObjectKeys(plan.transforms);
-  const keys = resolveOptimisticKeys(plan, change);
-  const snapshot = store.snapshot(queryNames, keys);
+  const targets = resolveOptimisticTargets(plan, change);
+  const snapshot = securityMap<string, unknown>();
 
-  for (let index = 0; index < queryNames.length; index += 1) {
-    const queryNameEntry = securityOwnArrayEntry(queryNames, index);
-    if (!queryNameEntry.ok) throw new TypeError('Kovo optimistic query names must be dense.');
-    const queryName = queryNameEntry.value;
+  for (let index = 0; index < targets.length; index += 1) {
+    const targetEntry = securityOwnArrayEntry(targets, index);
+    if (!targetEntry.ok) throw new TypeError('Kovo optimistic query targets must be dense.');
+    const { key, queryName } = targetEntry.value;
+    const storeKey = queryStoreKey(queryName, key);
+    securityMapSet(snapshot, storeKey, store.get(queryName, key));
     const transformDescriptor = securityGetOwnPropertyDescriptor(plan.transforms, queryName);
     const transform =
       transformDescriptor && 'value' in transformDescriptor ? transformDescriptor.value : undefined;
     if (!transform || transform === 'await-fragment') continue;
-    const key = optimisticKeyRecordValue(keys, queryName);
-
     store.set(
       queryName,
       applyOptimisticTransform(store.get(queryName, key), change.input, transform),
@@ -676,8 +693,8 @@ export function now(): number {
 export function resolveOptimisticKeys<Input>(
   plan: OptimisticPlan<Input>,
   change: OptimisticChange<Input>,
-): Record<string, string | undefined> {
-  const resolved: Record<string, string | undefined> = {};
+): Record<string, readonly string[] | string | undefined> {
+  const resolved: Record<string, readonly string[] | string | undefined> = {};
   const queryNames = securityObjectKeys(plan.transforms);
   for (let index = 0; index < queryNames.length; index += 1) {
     const queryName = securityOwnArrayEntry(queryNames, index);
@@ -694,25 +711,70 @@ export function resolveOptimisticKeys<Input>(
   return resolved;
 }
 
+/** @internal Resolve a plan to its exact bounded query-instance set. */
+export function resolveOptimisticTargets<Input>(
+  plan: OptimisticPlan<Input>,
+  change: OptimisticChange<Input>,
+): OptimisticQueryTarget[] {
+  const targets: OptimisticQueryTarget[] = [];
+  const queryNames = securityObjectKeys(plan.transforms);
+  for (let index = 0; index < queryNames.length; index += 1) {
+    const queryNameEntry = securityOwnArrayEntry(queryNames, index);
+    if (!queryNameEntry.ok) throw new TypeError('Kovo optimistic query names must be dense.');
+    const queryName = queryNameEntry.value;
+    const keys = optimisticQueryKeys(plan, queryName, change);
+    for (let keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
+      const keyEntry = securityOwnArrayEntry(keys, keyIndex);
+      if (!keyEntry.ok) throw new TypeError('Kovo optimistic query keys must be dense.');
+      securityArrayAppend(
+        targets,
+        keyEntry.value === undefined
+          ? { queryName }
+          : { key: keyEntry.value, queryName },
+        'Browser optimistic query targets',
+      );
+    }
+  }
+  return targets;
+}
+
 function optimisticQueryKey<Input>(
   plan: OptimisticPlan<Input>,
   queryName: string,
   change: OptimisticChange<Input>,
-): string | undefined {
+): readonly string[] | string | undefined {
   const keys = plan.keys;
   const descriptor = keys ? securityGetOwnPropertyDescriptor(keys, queryName) : undefined;
   const key = descriptor && 'value' in descriptor ? descriptor.value : undefined;
   return typeof key === 'function' ? key(change) : key;
 }
 
-function optimisticKeyRecordValue(
-  keys: Readonly<Record<string, string | undefined>>,
+function optimisticQueryKeys<Input>(
+  plan: OptimisticPlan<Input>,
   queryName: string,
-): string | undefined {
-  const descriptor = securityGetOwnPropertyDescriptor(keys, queryName);
-  return descriptor && 'value' in descriptor && typeof descriptor.value === 'string'
-    ? descriptor.value
-    : undefined;
+  change: OptimisticChange<Input>,
+): readonly (string | undefined)[] {
+  const resolved = optimisticQueryKey(plan, queryName, change);
+  if (typeof resolved === 'string' || resolved === undefined) return [resolved];
+  if (!securityArrayIsArray(resolved) || resolved.length === 0 || resolved.length > 1_024) {
+    throw new TypeError(
+      'Kovo optimistic keyed transforms require a bounded non-empty dense key array.',
+    );
+  }
+  const keys: string[] = [];
+  const seen = securitySet<string>();
+  for (let index = 0; index < resolved.length; index += 1) {
+    const entry = securityOwnArrayEntry(resolved, index);
+    if (!entry.ok || typeof entry.value !== 'string' || entry.value.length === 0) {
+      throw new TypeError('Kovo optimistic query keys must be dense non-empty strings.');
+    }
+    if (securitySetHas(seen, entry.value)) {
+      throw new TypeError('Kovo optimistic query keys must not contain duplicates.');
+    }
+    securitySetAdd(seen, entry.value);
+    securityArrayAppend(keys, entry.value, 'Browser optimistic query keys');
+  }
+  return keys;
 }
 
 /**
