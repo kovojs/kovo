@@ -135,15 +135,20 @@ async function main() {
     );
   }
 
-  // Drizzle is not symlinked under site/node_modules; map it to its source so
-  // `@kovojs/drizzle` examples resolve like the others (the rest resolve via the
-  // workspace node_modules). Reuse the tutorial step compiler options verbatim.
+  // Drizzle and its peer are not symlinked under site/node_modules. Resolve both from the
+  // workspace package so copyable schema examples typecheck against the real peer declarations
+  // instead of requiring a docs-only stub.
   const tsconfig = {
     compilerOptions: {
       jsxImportSource: '@kovojs/server',
       paths: {
         '@kovojs/drizzle': ['../../../packages/drizzle/src/runtime.ts'],
         '@kovojs/verify': ['../../../packages/verify/src/index.ts'],
+        'drizzle-orm': ['../../../packages/drizzle/node_modules/drizzle-orm/index.d.ts'],
+        'drizzle-orm/pg-core': [
+          '../../../packages/drizzle/node_modules/drizzle-orm/pg-core/index.d.ts',
+        ],
+        'drizzle-orm/*': ['../../../packages/drizzle/node_modules/drizzle-orm/*'],
       },
     },
     extends: path.relative(scratchDir, stepsTsconfig),

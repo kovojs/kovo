@@ -219,11 +219,13 @@ export type KovoViewExtraConfig<
  * @returns A Drizzle extra-config callback carrying the Kovo annotation.
  * @example
  * import { kovo } from '@kovojs/drizzle';
+ * import { pgTable, text } from 'drizzle-orm/pg-core';
  *
- * export const cartConfig = () => kovo((columns) => ({
- *   domain: 'cart',
- *   key: columns.id,
- * }));
+ * export const carts = pgTable(
+ *   'carts',
+ *   { id: text('id').primaryKey() },
+ *   kovo((columns) => ({ domain: 'cart', key: columns.id })),
+ * );
  */
 export function kovo<
   Columns extends Readonly<Record<string, AnyColumn>>,
