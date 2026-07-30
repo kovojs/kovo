@@ -98,6 +98,22 @@ export function checkPublish({ exec = execFileSync } = {}) {
       stdio: 'inherit',
     },
   );
+  exec(
+    process.execPath,
+    [
+      path.join(repoRoot, 'scripts', 'egress-floor.mjs'),
+      '--policy',
+      'install',
+      '--',
+      process.execPath,
+      path.join(repoRoot, 'scripts', 'app-contract-g23-packed.mjs'),
+    ],
+    {
+      cwd: repoRoot,
+      env: deterministicPackEnvironment(process.env),
+      stdio: 'inherit',
+    },
+  );
   console.log('Publish artifacts built, packed, consumer-checked, inspected, and attested.');
 }
 
