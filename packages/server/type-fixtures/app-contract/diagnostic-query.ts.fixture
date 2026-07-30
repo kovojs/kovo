@@ -1,0 +1,14 @@
+// Intentionally invalid source materialized as TypeScript by the diagnostic test.
+import { defineKovo } from '@kovojs/server';
+
+const app = defineKovo({
+  appId: '803028f5-39e4-482b-bbcc-8e90ee7e7d46',
+  egress: { enabled: false, justification: 'isolated Track 4 diagnostic fixture' },
+});
+
+app.query({
+  access: app.publicAccess('Track 4 diagnostic fixture'),
+  lod() {
+    return { ok: true };
+  },
+});

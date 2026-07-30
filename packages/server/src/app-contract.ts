@@ -307,44 +307,64 @@ export type AppRequestForAccess<Base, Access> = Access extends readonly (infer I
 
 /** Query factory bound to one app request/session/DB/env contract. */
 export interface AppQueryFactory<Request, Owner extends string | undefined> {
-  <const Access extends AccessDecision, Value extends JsonValue = JsonValue>(definition: {
-    access: Access;
-    args?: never;
-    delta?: readonly { domain: string; key: string; path: string }[];
-    guard?: never;
-    instanceKey?: string;
-    load?: (
-      input: undefined,
-      context: Parameters<
-        NonNullable<
-          QueryDefinition<string, Value, undefined, AppRequestForAccess<Request, Access>>['load']
-        >
-      >[1],
-    ) => Promise<Value> | Value;
-    output?: Schema<Value>;
-    read?: QueryReadConfig;
-    reads?: readonly Domain[];
-    version?: ((input: undefined, value: Value) => number | string | undefined) | number | string;
-  }): QueryHandle<undefined, Value, Owner, AppRequestForAccess<Request, Access>>;
-  <Input, const Access extends AccessDecision, Value extends JsonValue = JsonValue>(definition: {
-    access: Access;
-    args: Schema<Input>;
-    delta?: readonly { domain: string; key: string; path: string }[];
-    guard?: never;
-    instanceKey?: ((input: Input) => string | undefined) | string;
-    load?: (
-      input: Input,
-      context: Parameters<
-        NonNullable<
-          QueryDefinition<string, Value, Input, AppRequestForAccess<Request, Access>>['load']
-        >
-      >[1],
-    ) => Promise<Value> | Value;
-    output?: Schema<Value>;
-    read?: QueryReadConfig;
-    reads?: readonly Domain[];
-    version?: ((input: Input, value: Value) => number | string | undefined) | number | string;
-  }): QueryHandle<Input, Value, Owner, AppRequestForAccess<Request, Access>>;
+  <
+    const InputSchema extends Schema<unknown> | undefined = undefined,
+    const Access extends AccessDecision = AccessDecision,
+    Value extends JsonValue = JsonValue,
+    const Definition extends object = object,
+  >(
+    definition: Definition & {
+      access: Access;
+      args?: InputSchema;
+      delta?: readonly { domain: string; key: string; path: string }[];
+      guard?: never;
+      instanceKey?:
+        | string
+        | (InputSchema extends Schema<infer Input> ? (input: Input) => string | undefined : never);
+      load?: (
+        input: InputSchema extends Schema<infer Input> ? Input : undefined,
+        context: Parameters<
+          NonNullable<
+            QueryDefinition<
+              string,
+              Value,
+              InputSchema extends Schema<infer Input> ? Input : undefined,
+              AppRequestForAccess<Request, Access>
+            >['load']
+          >
+        >[1],
+      ) => Promise<Value> | Value;
+      output?: Schema<Value>;
+      read?: QueryReadConfig;
+      reads?: readonly Domain[];
+      version?:
+        | ((
+            input: InputSchema extends Schema<infer Input> ? Input : undefined,
+            value: Value,
+          ) => number | string | undefined)
+        | number
+        | string;
+    } & {
+      [Field in Exclude<
+        keyof Definition,
+        | 'access'
+        | 'args'
+        | 'delta'
+        | 'guard'
+        | 'instanceKey'
+        | 'load'
+        | 'output'
+        | 'read'
+        | 'reads'
+        | 'version'
+      >]: never;
+    },
+  ): QueryHandle<
+    InputSchema extends Schema<infer Input> ? Input : undefined,
+    Value,
+    Owner,
+    AppRequestForAccess<Request, Access>
+  >;
 }
 
 /** Mutation factory bound to one app request/session/DB/env contract. */
