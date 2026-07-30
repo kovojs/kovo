@@ -1,3 +1,7 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import * as agentApi from '@kovojs/server/agent';
 import * as clientModulesApi from '@kovojs/server/client-modules';
 import * as commandApi from '@kovojs/server/command';
@@ -35,6 +39,55 @@ import type { MutationReplayBody } from '@kovojs/server/replay';
 import type { EndpointDefinition } from '@kovojs/server/routing';
 import type { FileLike, FileSchema, StoredFileSchema, StoredFileUpload } from '@kovojs/server';
 import { describe, expect, expectTypeOf, it } from 'vitest';
+
+import publicPackages from '../../../public-packages.json' with { type: 'json' };
+import serverPackage from '../package.json' with { type: 'json' };
+
+// SPEC §6.6/§9.1/§10.3: these are implementation facts, generated protocol shapes, or framework
+// authorities. Their old root declarations must stay absent; the checked decision ledger also
+// prevents them from reappearing through a different manifest-public Server subpath.
+type RemovedIsKovoApp =
+  // @ts-expect-error `isKovoApp` is private runtime token inspection.
+  typeof import('@kovojs/server').isKovoApp;
+type RemovedCommittedSecretWaiver =
+  // @ts-expect-error no generic committed-secret waiver survived the task-topology cut.
+  typeof import('@kovojs/server').committedSecretWaiver;
+type RemovedFrameworkManagedDbProvider =
+  // @ts-expect-error framework database providers are internal carriers.
+  import('@kovojs/server').FrameworkManagedDbProvider<unknown>;
+type RemovedGeneratedFragmentRenderable =
+  // @ts-expect-error generated fragment protocol shapes are internal.
+  import('@kovojs/server').GeneratedFragmentRenderable;
+type RemovedAwaitableGeneratedFragmentRenderable =
+  // @ts-expect-error generated fragment protocol shapes are internal.
+  import('@kovojs/server').AwaitableGeneratedFragmentRenderable;
+type RemovedKovoPostgresResolvedRuntimeDriver =
+  // @ts-expect-error resolved Postgres driver state is internal.
+  import('@kovojs/server').KovoPostgresResolvedRuntimeDriver;
+type RemovedLiveTargetAttestationAuthority =
+  // @ts-expect-error live-target attestation authority is framework-owned.
+  import('@kovojs/server').LiveTargetAttestationAuthority;
+type RemovedResolvedAppRateLimitOptions =
+  // @ts-expect-error resolved app request limits are internal.
+  import('@kovojs/server').ResolvedAppRateLimitOptions;
+type RemovedResolvedAppRequestLimitOptions =
+  // @ts-expect-error resolved app request limits are internal.
+  import('@kovojs/server').ResolvedAppRequestLimitOptions;
+type RemovedResolvedAppRequestRateLimitOptions =
+  // @ts-expect-error resolved app request limits are internal.
+  import('@kovojs/server').ResolvedAppRequestRateLimitOptions;
+
+function readProductionServerSource(directory: string): string {
+  return readdirSync(directory, { withFileTypes: true })
+    .flatMap((entry) => {
+      const absolute = join(directory, entry.name);
+      if (entry.isDirectory()) return readProductionServerSource(absolute);
+      if (!entry.isFile() || !entry.name.endsWith('.ts') || entry.name.includes('.test.'))
+        return [];
+      return [readFileSync(absolute, 'utf8')];
+    })
+    .join('\n');
+}
 
 const taskValues = [
   agentApi.agent,
@@ -203,5 +256,25 @@ describe('@kovojs/server public topology', () => {
     ]) {
       expect(name in serverRoot, name).toBe(false);
     }
+  });
+
+  it('keeps removed waivers deleted and runtime bootstrap explicit', () => {
+    const source = readProductionServerSource(fileURLToPath(new URL('.', import.meta.url)));
+    expect(source).not.toMatch(/\bcommittedSecretWaiver\b/u);
+
+    const packageClassification = publicPackages.packages.find(
+      (entry) => entry.name === '@kovojs/server',
+    );
+    expect(packageClassification?.apiBoundary.public).toContain('./runtime-bootstrap');
+    expect(packageClassification?.apiRef?.entries).toContainEqual({
+      path: './runtime-bootstrap',
+      slug: 'server-runtime-bootstrap',
+      description: 'First-import runtime lockdown for custom server entries.',
+    });
+    expect(serverPackage.exports['./runtime-bootstrap']).toBe('./src/runtime-bootstrap.ts');
+    expect(serverPackage.publishConfig.exports['./runtime-bootstrap']).toEqual({
+      types: './dist/runtime-bootstrap.d.mts',
+      default: './dist/runtime-bootstrap.mjs',
+    });
   });
 });

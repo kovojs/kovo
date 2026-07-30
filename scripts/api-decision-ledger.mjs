@@ -316,6 +316,21 @@ export function validateApiDecisionLedger({ inventory, ledger, repoRoot = defaul
       );
     }
   }
+  for (const row of symbolRows) {
+    if (
+      !isRecord(row) ||
+      row.state !== 'removed' ||
+      (row.decision !== 'internalize' && row.decision !== 'remove')
+    ) {
+      continue;
+    }
+    const publicHomes = publicHomesByPackageSymbol.get(`${row.package}#${row.symbol}`);
+    if (publicHomes && publicHomes.size > 0) {
+      findings.push(
+        `${row.id}: ${row.decision} symbol remains public at ${[...publicHomes].sort().join(', ')}`,
+      );
+    }
+  }
   for (const [id, declaration] of currentDeclarations) {
     const exact = symbolById.get(id);
     const families = familyRules.filter((rule) => familyMatchesDeclaration(rule, declaration));

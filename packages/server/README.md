@@ -29,25 +29,28 @@ mutations, responses, invalidation domains/tags, and document primitives. The co
 exported `cartItem` tag's stable identity; pass an explicit name only for shared external
 vocabulary. Advanced work has one semantic home:
 
-| Task                                | Import path                                                                                        |
-| ----------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Agents and tools                    | `@kovojs/server/agent`                                                                             |
-| Commands and process allowlists     | `@kovojs/server/command`                                                                           |
-| Confidential-at-rest encryption     | `@kovojs/server/confidential`                                                                      |
-| Custom request adapters             | `@kovojs/server/custom-adapters`                                                                   |
-| Managed reads and cache influence   | `@kovojs/server/data`                                                                              |
-| Delegation and principal lifecycle  | `@kovojs/server/delegation`, `@kovojs/server/principal-epochs`, `@kovojs/server/principal-erasure` |
-| Derived datasets and replay         | `@kovojs/server/derived-data`, `@kovojs/server/replay`                                             |
-| Diagnostics and routing contracts   | `@kovojs/server/diagnostics`, `@kovojs/server/routing`                                             |
-| Egress, rooted files, and downloads | `@kovojs/server/egress`, `@kovojs/server/files`, `@kovojs/server/storage-downloads`                |
-| Node integration                    | `@kovojs/server/node`                                                                              |
-| Passwords and signing keys          | `@kovojs/server/password`, `@kovojs/server/signing`                                                |
-| Postgres lifecycle                  | `@kovojs/server/postgres`                                                                          |
-| Rendering and component trees       | `@kovojs/server/rendering`, `@kovojs/server/render-tree`                                           |
-| Secret-read and security boundaries | `@kovojs/server/secret-reading`, `@kovojs/server/security`                                         |
-| Static export                       | `@kovojs/server/static-export`                                                                     |
-| Durable tasks and webhooks          | `@kovojs/server/tasks`, `@kovojs/server/webhooks`                                                  |
-| Write-safety evidence               | `@kovojs/server/write-safety`                                                                      |
+| Task                                | Import path                                                                                                        |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Agents and tools                    | `@kovojs/server/agent`                                                                                             |
+| Build presets and Vite integration  | `@kovojs/server/build`, `@kovojs/server/vite`                                                                      |
+| Versioned client-module registries  | `@kovojs/server/client-modules`                                                                                    |
+| Commands and process allowlists     | `@kovojs/server/command`                                                                                           |
+| Confidential-at-rest encryption     | `@kovojs/server/confidential`                                                                                      |
+| Custom request adapters             | `@kovojs/server/custom-adapters`                                                                                   |
+| Managed reads and cache influence   | `@kovojs/server/data`                                                                                              |
+| Delegation and principal lifecycle  | `@kovojs/server/delegation`, `@kovojs/server/principal-epochs`, `@kovojs/server/principal-erasure`                 |
+| Derived datasets and replay         | `@kovojs/server/derived-data`, `@kovojs/server/replay`                                                             |
+| Diagnostics and routing contracts   | `@kovojs/server/diagnostics`, `@kovojs/server/routing`                                                             |
+| Egress, files, downloads, and keys  | `@kovojs/server/egress`, `@kovojs/server/files`, `@kovojs/server/storage-downloads`, `@kovojs/server/storage-keys` |
+| Node integration                    | `@kovojs/server/node`                                                                                              |
+| Passwords and signing keys          | `@kovojs/server/password`, `@kovojs/server/signing`                                                                |
+| Postgres lifecycle                  | `@kovojs/server/postgres`                                                                                          |
+| SQLite app runtime                  | `@kovojs/server/sqlite`                                                                                            |
+| Rendering and component trees       | `@kovojs/server/rendering`, `@kovojs/server/render-tree`                                                           |
+| Secret-read and security boundaries | `@kovojs/server/secret-reading`, `@kovojs/server/security`                                                         |
+| Static export                       | `@kovojs/server/static-export`                                                                                     |
+| Durable tasks and webhooks          | `@kovojs/server/tasks`, `@kovojs/server/webhooks`                                                                  |
+| Write-safety evidence               | `@kovojs/server/write-safety`                                                                                      |
 
 ## Custom adapters
 
@@ -78,6 +81,7 @@ home searchable without widening the daily root:
 
 ```ts
 import { agent, agentContent, createAgentSession, runAgentTurn, tool } from '@kovojs/server/agent';
+import { cloudflare, defineConfig, node as nodePreset, vercel } from '@kovojs/server/build';
 import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules';
 import { cmd, commandAllowlist, runCommand } from '@kovojs/server/command';
 import {
@@ -152,6 +156,7 @@ import {
   unsafeRegex,
 } from '@kovojs/server/security';
 import { createSigningKeyRing } from '@kovojs/server/signing';
+import { createSqliteAppRuntime } from '@kovojs/server/sqlite';
 import { StaticExportError, exportStaticApp } from '@kovojs/server/static-export';
 import {
   DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH,
@@ -159,6 +164,7 @@ import {
 } from '@kovojs/server/storage-downloads';
 import { scopedKey } from '@kovojs/server/storage-keys';
 import { createDurableTaskStatus, task } from '@kovojs/server/tasks';
+import { kovo } from '@kovojs/server/vite';
 import {
   createMemoryWebhookReplayStore,
   webhook,

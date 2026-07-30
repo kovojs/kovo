@@ -62,3 +62,8 @@ The discarded `committedSecretWaiver` export has no replacement. Use the specifi
 declassification constructor for the security door being crossed; framework-resolved options,
 generated wire/fragment shapes, framework database carriers, live-target authority, and
 `isKovoApp` are no longer public.
+
+The checked API ledger caps the daily Server root at 116 declarations. It rejects a second public
+home for the same Server symbol and rejects any later public reintroduction of an `internalize` or
+`remove` decision, even through a different subpath. `@kovojs/server/runtime-bootstrap` remains the
+intentional side-effect-only exception: it is the literal-first bootstrap task, not a root export.

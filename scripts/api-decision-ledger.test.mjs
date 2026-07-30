@@ -27,6 +27,55 @@ describe('public API decision ledger', () => {
     expect(result.report.subpaths).toBe(inventory.manifestPublicSubpaths.length);
   });
 
+  it('proves the Server root cut, internalization, and runtime bootstrap task', () => {
+    const serverRoot = inventory.exportedDeclarations.filter(
+      (declaration) => declaration.package === '@kovojs/server' && declaration.subpath === '.',
+    );
+    expect(serverRoot).toHaveLength(116);
+    expect(serverRoot.length).toBeLessThanOrEqual(
+      ledger.healthTargets.rootDeclarations['@kovojs/server'],
+    );
+    for (const declaration of serverRoot) {
+      expect(
+        ledger.symbols.find((row) => row.id === `${declaration.specifier}#${declaration.symbol}`),
+      ).toMatchObject({
+        canonicalHome: '@kovojs/server',
+        decision: 'keep',
+        state: 'public',
+      });
+    }
+
+    const serverPublicSymbols = new Set(
+      inventory.exportedDeclarations
+        .filter((declaration) => declaration.package === '@kovojs/server')
+        .map((declaration) => declaration.symbol),
+    );
+    const retiredCarriers = ledger.symbols.filter(
+      (row) =>
+        row.package === '@kovojs/server' &&
+        row.state === 'removed' &&
+        (row.decision === 'internalize' || row.decision === 'remove'),
+    );
+    expect(retiredCarriers.length).toBeGreaterThan(0);
+    expect(retiredCarriers.filter((row) => serverPublicSymbols.has(row.symbol))).toEqual([]);
+
+    expect(
+      inventory.manifestPublicSubpaths.find(
+        (unit) => unit.specifier === '@kovojs/server/runtime-bootstrap',
+      ),
+    ).toMatchObject({
+      source: 'packages/server/src/runtime-bootstrap.ts',
+      subpath: './runtime-bootstrap',
+    });
+    expect(
+      ledger.subpaths.find((row) => row.specifier === '@kovojs/server/runtime-bootstrap'),
+    ).toMatchObject({
+      owner: 'server-runtime',
+      state: 'public',
+      story: 'server-runtime-bootstrap',
+    });
+  });
+
   it('fails when a non-generated declaration loses its symbol-level decision', () => {
     const candidate = ledger.symbols.find((row) => row.state === 'public');
     const mutated = clone(ledger);
@@ -125,6 +174,32 @@ describe('public API decision ledger', () => {
     );
   });
 
+  it.each([
+    ['internalize', 'isKovoApp', '@kovojs/server/command'],
+    ['remove', 'committedSecretWaiver', '@kovojs/server/security'],
+  ])(
+    'prevents a %s decision from returning through another public home',
+    (decision, symbol, specifier) => {
+      const sourceDeclaration = inventory.exportedDeclarations.find(
+        (candidate) => candidate.package === '@kovojs/server' && candidate.specifier === specifier,
+      );
+      const mutatedInventory = clone(inventory);
+      mutatedInventory.exportedDeclarations.push({
+        ...clone(sourceDeclaration),
+        symbol,
+      });
+
+      const result = validateApiDecisionLedger({
+        inventory: mutatedInventory,
+        ledger,
+        repoRoot,
+      });
+      expect(result.findings).toContain(
+        `@kovojs/server#${symbol}: ${decision} symbol remains public at ${specifier}`,
+      );
+    },
+  );
+
   it('requires a documented task row for every new subpath', () => {
     const row = ledger.subpaths[0];
     const mutated = clone(ledger);
@@ -160,8 +235,7 @@ describe('public API decision ledger', () => {
   it('enforces root declaration health targets as upper bounds', () => {
     const mutated = clone(ledger);
     const serverRootCount = inventory.exportedDeclarations.filter(
-      (declaration) =>
-        declaration.package === '@kovojs/server' && declaration.subpath === '.',
+      (declaration) => declaration.package === '@kovojs/server' && declaration.subpath === '.',
     ).length;
     mutated.healthTargets.rootDeclarations['@kovojs/server'] = serverRootCount - 1;
 

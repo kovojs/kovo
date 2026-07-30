@@ -4,17 +4,6 @@ import { describe, expect, it } from 'vitest';
 // before the ordinary root seals late authority mutation.
 import '../sql-parser-authority-bootstrap.js';
 import { trustedHtml, trustedUrl } from '@kovojs/browser';
-import {
-  createFileSystemStorage as coreCreateFileSystemStorage,
-  createMemoryStorage as coreCreateMemoryStorage,
-  createS3CompatibleStorage as coreCreateS3CompatibleStorage,
-} from '@kovojs/core/storage';
-import {
-  customVerifier as coreCustomVerifier,
-  hmacSignature as coreHmacSignature,
-  standardWebhooks as coreStandardWebhooks,
-} from '@kovojs/core/webhooks';
-import { type SecretValue } from '@kovojs/core/security';
 
 import * as packageRootApi from '@kovojs/server';
 import * as packageViteApi from '@kovojs/server/vite';
@@ -101,8 +90,8 @@ import * as liveTargetAppAttestationApi from '../live-target-app-attestation.js'
 import * as mutationWireApi from '../mutation-wire.js';
 import * as wireHtmlApi from '../wire-html.js';
 
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootAppDocumentOptions = import('../index.js').AppDocumentOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time task-boundary assertion only.
+type RenderingAppDocumentOptions = import('@kovojs/server/rendering').AppDocumentOptions;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootAppResponseHeaderName = import('@kovojs/server').AppResponseHeaderName;
 const rootAppResponseHeaders: import('@kovojs/server').AppResponseHeaders = {
@@ -143,13 +132,12 @@ type RemovedPublishedBetterAuthEndpointWitness =
 // eslint-disable-next-line no-unused-vars -- compile-time narrow bridge assertion only.
 type InternalBetterAuthMountEndpoint =
   typeof import('@kovojs/server/internal/better-auth').createBetterAuthMountEndpoint;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootAppErrorShellOptions = import('../index.js').AppErrorShellOptions;
-const removedRootLiveTargetRendererOption: import('../index.js').CreateAppOptions = {
-  // @ts-expect-error SPEC §9.1/§9.5 makes live-target registry assembly compiler-owned.
-  liveTargetRenderers: [],
-};
-void removedRootLiveTargetRendererOption;
+// eslint-disable-next-line no-unused-vars -- compile-time task-boundary assertion only.
+type RenderingAppErrorShellOptions = import('@kovojs/server/rendering').AppErrorShellOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootCreateAppOptions =
+  // @ts-expect-error SPEC §9.1/§9.5 keeps resolved app assembly state internal.
+  import('@kovojs/server').CreateAppOptions;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedRootAppMutationResponseContext =
   // @ts-expect-error SPEC §9.1 forbids an app-authored mutation response switch.
@@ -162,36 +150,37 @@ type RemovedRootAppMutationResponseOptions =
 type RemovedRootAppMutationResponseResolver =
   // @ts-expect-error SPEC §9.1 forbids arbitrary app-authored response callbacks.
   import('../index.js').AppMutationResponseResolver;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootAppRouteRenderContext = import('../index.js').AppRouteRenderContext;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootErrorShellRenderer = import('../index.js').ErrorShellRenderer;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootRequestHandler = import('../index.js').RequestHandler;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootNodeHandlerOptions = import('../index.js').NodeHandlerOptions;
-const fixedNodeOrigin: RootNodeHandlerOptions = { origin: 'https://app.example' };
+// eslint-disable-next-line no-unused-vars -- compile-time task-boundary assertion only.
+type RenderingAppRouteRenderContext = import('@kovojs/server/rendering').AppRouteRenderContext;
+// eslint-disable-next-line no-unused-vars -- compile-time task-boundary assertion only.
+type DiagnosticsErrorShellRenderer = import('@kovojs/server/diagnostics').ErrorShellRenderer;
+// eslint-disable-next-line no-unused-vars -- compile-time task-boundary assertion only.
+type CustomAdapterRequestHandler = import('@kovojs/server/custom-adapters').RequestHandler;
+// eslint-disable-next-line no-unused-vars -- compile-time task-boundary assertion only.
+type NodeTaskHandlerOptions = import('@kovojs/server/node').NodeHandlerOptions;
+const fixedNodeOrigin: NodeTaskHandlerOptions = { origin: 'https://app.example' };
 void fixedNodeOrigin;
-const removedDynamicNodeOrigin: RootNodeHandlerOptions = {
+const removedDynamicNodeOrigin: NodeTaskHandlerOptions = {
   // @ts-expect-error SPEC §9.5: request-derived origin selection is not an adapter authority door.
   origin: (_request: unknown) => 'https://attacker.example',
 };
 void removedDynamicNodeOrigin;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootNodeRequestHandler = import('../index.js').NodeRequestHandler;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootStaticExportOptions = import('../index.js').StaticExportOptions;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootStaticExportResult = import('../index.js').StaticExportResult;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootStaticExportDiagnostic = import('../index.js').StaticExportDiagnostic;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootStaticExportDiagnosticSeverity = import('../index.js').StaticExportDiagnosticSeverity;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootEncryptedAtRest = import('../index.js').EncryptedAtRest;
-type RootSigningKeyRing = import('../index.js').SigningKeyRing;
+// eslint-disable-next-line no-unused-vars -- compile-time task-boundary assertion only.
+type NodeTaskRequestHandler = import('@kovojs/server/node').NodeRequestHandler;
+// eslint-disable-next-line no-unused-vars -- compile-time task-boundary assertion only.
+type StaticExportTaskOptions = import('@kovojs/server/static-export').StaticExportOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time task-boundary assertion only.
+type StaticExportTaskResult = import('@kovojs/server/static-export').StaticExportResult;
+// eslint-disable-next-line no-unused-vars -- compile-time task-boundary assertion only.
+type StaticExportTaskDiagnostic = import('@kovojs/server/static-export').StaticExportDiagnostic;
+// eslint-disable-next-line no-unused-vars -- compile-time task-boundary assertion only.
+type StaticExportTaskDiagnosticSeverity =
+  import('@kovojs/server/static-export').StaticExportDiagnosticSeverity;
+// eslint-disable-next-line no-unused-vars -- compile-time task-boundary assertion only.
+type ConfidentialTaskEncryptedAtRest = import('@kovojs/server/confidential').EncryptedAtRest;
+type SigningTaskKeyRing = import('@kovojs/server/signing').SigningKeyRing;
 
-function assertOpaqueSigningRingSurface(opaqueSigningRing: RootSigningKeyRing): void {
+function assertOpaqueSigningRingSurface(opaqueSigningRing: SigningTaskKeyRing): void {
   // @ts-expect-error SPEC §6.6: public rings configure roots; they never expose generic signing.
   opaqueSigningRing.sign({ audience: 'attacker', payload: 'payload', purpose: 'attacker' });
   // @ts-expect-error SPEC §6.6: public rings never expose generic verification.
@@ -203,8 +192,9 @@ function assertOpaqueSigningRingSurface(opaqueSigningRing: RootSigningKeyRing): 
   });
 }
 void assertOpaqueSigningRingSurface;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootEncryptAtRestOptions = import('../index.js').EncryptAtRestOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time task-boundary assertion only.
+type ConfidentialTaskEncryptAtRestOptions =
+  import('@kovojs/server/confidential').EncryptAtRestOptions;
 // eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
 type InternalKovoAppShellViteDevPluginFactory =
   typeof import('@kovojs/server/internal/app-shell-vite').kovoAppShellViteDevPlugin;
@@ -235,96 +225,50 @@ type InternalVersionedClientModuleStoreType =
 // eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
 type InternalVersionedClientModuleInputType =
   import('@kovojs/server/internal/client-modules').VersionedClientModuleInput;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootIsKovoApp = typeof import('@kovojs/server').isKovoApp;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootIsKovoApp =
+  // @ts-expect-error SPEC §6.6 keeps runtime token inspection private.
+  typeof import('@kovojs/server').isKovoApp;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootStylesheet = typeof import('@kovojs/server').stylesheet;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootDefer = typeof import('@kovojs/server').Defer;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootDeferProps = import('@kovojs/server').DeferProps;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootRegionPriority = import('@kovojs/server').RegionPriority;
+// eslint-disable-next-line no-unused-vars -- compile-time task-boundary assertion only.
+type RenderingTaskRegionPriority = import('@kovojs/server/rendering').RegionPriority;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootServerRenderable = import('@kovojs/server').ServerRenderable;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootDocumentConfig = import('@kovojs/server').DocumentConfig;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootDocumentDeclaration = import('@kovojs/server').DocumentDeclaration;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootDocumentAuthoringContext = import('@kovojs/server').DocumentAuthoringContext;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootDocumentShellAttributes = import('@kovojs/server').DocumentShellAttributes;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootDocumentShellAttributeValue = import('@kovojs/server').DocumentShellAttributeValue;
-if (false) {
-  // @ts-expect-error - SPEC.md §9.5 document customization uses structured primitives, not string templates.
-  publicApi.createApp({ document: { template: () => '<html></html>' } });
-
-  // SPEC §5.2.1: the public helper returns a framework-owned registry whose private witness lets
-  // createApp safely reuse its closed store; a structurally forged facade still fails at runtime.
-  publicApi.createApp({
-    clientModules: publicApi.createMemoryVersionedClientModuleRegistry(),
-  });
-
-  const closedApp = publicApi.createApp();
-  // @ts-expect-error - SPEC.md §9.5 closes the app aggregate after construction.
-  closedApp.routes = [];
-  // @ts-expect-error - SPEC.md §9.5 closes the app aggregate after construction.
-  closedApp.clientModules = publicApi.createMemoryVersionedClientModuleRegistry();
-  // @ts-expect-error SPEC §6.6/§9.5: no-schema apps expose no ambient environment keys.
-  void closedApp.env.UNDECLARED_OPERATOR_SECRET;
-
-  const appWithEnv = publicApi.createApp({
-    env: publicApi.s.object({
-      API_TOKEN: publicApi.s.secret(publicApi.s.string()),
-      PUBLIC_ORIGIN: publicApi.s.string(),
-    }),
-    envSource: {
-      API_TOKEN: 'sk_live_type_fixture',
-      PUBLIC_ORIGIN: 'https://example.test',
-      UNDECLARED_OPERATOR_SECRET: 'absent from app.env',
-    },
-  });
-  const configSecret: SecretValue<string> = appWithEnv.env.API_TOKEN;
-  const publicOrigin: string = appWithEnv.env.PUBLIC_ORIGIN;
-  void configSecret;
-  void publicOrigin;
-
-  const appWithSessionAndEnv = publicApi.createApp<
-    { userId: string },
-    never,
-    Request,
-    Request & { session: { userId: string } | null },
-    { API_TOKEN: SecretValue<string> }
-  >({
-    env: publicApi.s.object({ API_TOKEN: publicApi.s.secret(publicApi.s.string()) }),
-    envSource: { API_TOKEN: 'sk_live_explicit_session_fixture' },
-  });
-  const sessionAppConfigSecret: SecretValue<string> = appWithSessionAndEnv.env.API_TOKEN;
-  void sessionAppConfigSecret;
-
-  // @ts-expect-error SPEC §6.6/§9.5: app.env is a frozen read-only projection.
-  appWithEnv.env.PUBLIC_ORIGIN = 'https://attacker.test';
-  // @ts-expect-error SPEC §6.6/§9.5: undeclared raw environment keys are absent.
-  void appWithEnv.env.UNDECLARED_OPERATOR_SECRET;
-}
+// eslint-disable-next-line no-unused-vars -- compile-time task-boundary assertion only.
+type RenderingTaskDocumentAuthoringContext =
+  import('@kovojs/server/rendering').DocumentAuthoringContext;
+// eslint-disable-next-line no-unused-vars -- compile-time task-boundary assertion only.
+type RenderingTaskDocumentShellAttributes =
+  import('@kovojs/server/rendering').DocumentShellAttributes;
+// eslint-disable-next-line no-unused-vars -- compile-time task-boundary assertion only.
+type RenderingTaskDocumentShellAttributeValue =
+  import('@kovojs/server/rendering').DocumentShellAttributeValue;
 // SPEC.md §9.5: client-module storage input and the framework-owned registry facade are distinct.
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootCreateMemoryVersionedClientModuleRegistry =
-  typeof import('@kovojs/server').createMemoryVersionedClientModuleRegistry;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootMemoryVersionedClientModuleRegistryOptions =
-  import('@kovojs/server').MemoryVersionedClientModuleRegistryOptions;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootVersionedClientModuleActiveSnapshot =
-  import('@kovojs/server').VersionedClientModuleActiveSnapshot;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootVersionedClientModuleRegistry = import('@kovojs/server').VersionedClientModuleRegistry;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootVersionedClientModuleStore = import('@kovojs/server').VersionedClientModuleStore;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootVersionedClientModuleInput = import('@kovojs/server').VersionedClientModuleInput;
+// eslint-disable-next-line no-unused-vars -- compile-time task-boundary assertion only.
+type ClientModulesTaskCreateMemoryRegistry =
+  typeof import('@kovojs/server/client-modules').createMemoryVersionedClientModuleRegistry;
+// eslint-disable-next-line no-unused-vars -- compile-time task-boundary assertion only.
+type ClientModulesTaskMemoryRegistryOptions =
+  import('@kovojs/server/client-modules').MemoryVersionedClientModuleRegistryOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time task-boundary assertion only.
+type ClientModulesTaskActiveSnapshot =
+  import('@kovojs/server/client-modules').VersionedClientModuleActiveSnapshot;
+// eslint-disable-next-line no-unused-vars -- compile-time task-boundary assertion only.
+type ClientModulesTaskRegistry =
+  import('@kovojs/server/client-modules').VersionedClientModuleRegistry;
+// eslint-disable-next-line no-unused-vars -- compile-time task-boundary assertion only.
+type ClientModulesTaskStore = import('@kovojs/server/client-modules').VersionedClientModuleStore;
+// eslint-disable-next-line no-unused-vars -- compile-time task-boundary assertion only.
+type ClientModulesTaskInput = import('@kovojs/server/client-modules').VersionedClientModuleInput;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedRootCreateElement =
   // @ts-expect-error SPEC §5.2/§9.5: classic JSX ABI stays on @kovojs/server/jsx-runtime, not the root.
@@ -393,8 +337,9 @@ type RemovedRootEgressFloorInstall =
 type RemovedRootCredentialProvider =
   // @ts-expect-error SPEC §6.6: cloud metadata credential frames live on the internal egress subpath.
   import('@kovojs/server').CredentialProvider;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootDeclaredSecretReadCapability = import('@kovojs/server').DeclaredSecretReadCapability;
+// eslint-disable-next-line no-unused-vars -- compile-time task-boundary assertion only.
+type SecretReadingTaskCapability =
+  import('@kovojs/server/secret-reading').DeclaredSecretReadCapability;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedRootPostgresRlsSilentDenyDiagnostic =
   // @ts-expect-error SPEC §10.3: Postgres runtime diagnostic facts are internal adapter plumbing.
@@ -405,12 +350,14 @@ type RemovedRootPostgresPostureCheckOptOutFact =
   import('@kovojs/server').PostgresPostureCheckOptOutFact;
 // eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
 type InternalCapabilityClaims = import('@kovojs/server/internal/capabilities').CapabilityClaims;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootCapabilityMethod = import('@kovojs/server').CapabilityMethod;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootCapabilityReplayStore = import('@kovojs/server').CapabilityReplayStore;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootCspInlineMetadata = import('@kovojs/server').CspInlineMetadata;
+// eslint-disable-next-line no-unused-vars -- compile-time task-boundary assertion only.
+type StorageDownloadsTaskCapabilityMethod =
+  import('@kovojs/server/storage-downloads').CapabilityMethod;
+// eslint-disable-next-line no-unused-vars -- compile-time task-boundary assertion only.
+type StorageDownloadsTaskReplayStore =
+  import('@kovojs/server/storage-downloads').CapabilityReplayStore;
+// eslint-disable-next-line no-unused-vars -- compile-time task-boundary assertion only.
+type SecurityTaskCspInlineMetadata = import('@kovojs/server/security').CspInlineMetadata;
 // eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
 type InternalTrustedAssignFact = import('@kovojs/server/internal/audit-facts').TrustedAssignFact;
 // eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
@@ -424,18 +371,15 @@ type InternalDeclaredSecretReadCapability =
 
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedCreateApp =
-  // @ts-expect-error SPEC.md §9.5: createApp now has the root @kovojs/server
-  // canonical home, not the app-shell/core subpath.
+  // @ts-expect-error SPEC §6.6/§9.5: assembled app construction is framework-internal.
   typeof import('./app-shell/core.js').createApp;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedCreateRequestHandler =
-  // @ts-expect-error SPEC.md §9.5: createRequestHandler now has the root
-  // @kovojs/server canonical home, not the app-shell/core subpath.
+  // @ts-expect-error SPEC §9.5: custom adapters use @kovojs/server/custom-adapters.
   typeof import('./app-shell/core.js').createRequestHandler;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedIsKovoApp =
-  // @ts-expect-error SPEC.md §9.5: the dynamic app guard now has the root
-  // @kovojs/server canonical home, not the app-shell/core subpath.
+  // @ts-expect-error SPEC §6.6: runtime token inspection is private.
   typeof import('./app-shell/core.js').isKovoApp;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedLayout =
@@ -454,74 +398,60 @@ type RemovedFocusedRoute =
   typeof import('./app-shell/core.js').route;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedCreateMemoryVersionedClientModuleRegistry =
-  // @ts-expect-error SPEC.md §9.5: memory client-module registry construction now
-  // has the root @kovojs/server canonical home.
+  // @ts-expect-error SPEC §5.2.1: client registries use @kovojs/server/client-modules.
   typeof import('./app-shell/client-modules.js').createMemoryVersionedClientModuleRegistry;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedToNodeHandler =
-  // @ts-expect-error SPEC.md §9.5: toNodeHandler now has the root
-  // @kovojs/server canonical home.
+  // @ts-expect-error SPEC §9.5: Node adapters use @kovojs/server/node.
   typeof import('./app-shell/node.js').toNodeHandler;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedExportStaticApp =
-  // @ts-expect-error SPEC.md §9.5: exportStaticApp now has the root
-  // @kovojs/server canonical home.
+  // @ts-expect-error SPEC §9.5: export orchestration uses @kovojs/server/static-export.
   typeof import('./app-shell/static-export.js').exportStaticApp;
 
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedAppDocumentOptions =
-  // @ts-expect-error SPEC.md §9.5: app document options now have the root
-  // @kovojs/server canonical home, not the app-shell/core subpath.
+  // @ts-expect-error SPEC §9.5: advanced document options use @kovojs/server/rendering.
   import('./app-shell/core.js').AppDocumentOptions;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedAppErrorShellOptions =
-  // @ts-expect-error SPEC.md §9.5: app error shell options now have the root
-  // @kovojs/server canonical home, not the app-shell/core subpath.
+  // @ts-expect-error SPEC §9.5: advanced error-shell options use @kovojs/server/rendering.
   import('./app-shell/core.js').AppErrorShellOptions;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedAppMutationResponseContext =
-  // @ts-expect-error SPEC.md §9.5: mutation response context now has the root
-  // @kovojs/server canonical home, not the app-shell/core subpath.
+  // @ts-expect-error SPEC §9.1: generated mutation response selection stays internal.
   import('./app-shell/core.js').AppMutationResponseContext;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedAppMutationResponseOptions =
-  // @ts-expect-error SPEC.md §9.5: mutation response options now have the root
-  // @kovojs/server canonical home, not the app-shell/core subpath.
+  // @ts-expect-error SPEC §9.1: generated mutation response selection stays internal.
   import('./app-shell/core.js').AppMutationResponseOptions;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedAppMutationResponseResolver =
-  // @ts-expect-error SPEC.md §9.5: mutation response resolvers now have the root
-  // @kovojs/server canonical home, not the app-shell/core subpath.
+  // @ts-expect-error SPEC §9.1: generated mutation response selection stays internal.
   import('./app-shell/core.js').AppMutationResponseResolver;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedAppRouteRenderContext =
-  // @ts-expect-error SPEC.md §9.5: route render context now has the root
-  // @kovojs/server canonical home, not the app-shell/core subpath.
+  // @ts-expect-error SPEC §9.5: route render context uses @kovojs/server/rendering.
   import('./app-shell/core.js').AppRouteRenderContext;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedErrorShellRenderer =
-  // @ts-expect-error SPEC.md §9.5: error shell renderers now have the root
-  // @kovojs/server canonical home, not the app-shell/core subpath.
+  // @ts-expect-error SPEC §11.3: error renderers use @kovojs/server/diagnostics.
   import('./app-shell/core.js').ErrorShellRenderer;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedRequestHandler =
-  // @ts-expect-error SPEC.md §9.5: request-handler types now have the root
-  // @kovojs/server canonical home, not the app-shell/core subpath.
+  // @ts-expect-error SPEC §9.5: request handlers use @kovojs/server/custom-adapters.
   import('./app-shell/core.js').RequestHandler;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedMemoryRegistryOptions =
-  // @ts-expect-error SPEC.md §9.5: versioned client-module registry option types
-  // now have the root @kovojs/server canonical home.
+  // @ts-expect-error SPEC §5.2.1: registry options use @kovojs/server/client-modules.
   import('./app-shell/client-modules.js').MemoryVersionedClientModuleRegistryOptions;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedVersionedClientModuleRegistry =
-  // @ts-expect-error SPEC.md §9.5: versioned client-module registry types now have
-  // the root @kovojs/server canonical home.
+  // @ts-expect-error SPEC §5.2.1: registry types use @kovojs/server/client-modules.
   import('./app-shell/client-modules.js').VersionedClientModuleRegistry;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedVersionedClientModuleInput =
-  // @ts-expect-error SPEC.md §9.5: versioned client-module input types now have
-  // the root @kovojs/server canonical home.
+  // @ts-expect-error SPEC §5.2.1: registry input uses @kovojs/server/client-modules.
   import('./app-shell/client-modules.js').VersionedClientModuleInput;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedVersionedClientModuleRequest =
@@ -554,33 +484,27 @@ type InternalFrameworkCsrfRequestSnapshot =
   typeof import('@kovojs/server/internal/csrf').frameworkCsrfRequestSnapshot;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedNodeHandlerOptions =
-  // @ts-expect-error SPEC.md §9.5: Node adapter companion types now have the root
-  // @kovojs/server canonical home.
+  // @ts-expect-error SPEC §9.5: Node adapter types use @kovojs/server/node.
   import('./app-shell/node.js').NodeHandlerOptions;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedNodeRequestHandler =
-  // @ts-expect-error SPEC.md §9.5: Node request handler types now have the root
-  // @kovojs/server canonical home.
+  // @ts-expect-error SPEC §9.5: Node request handlers use @kovojs/server/node.
   import('./app-shell/node.js').NodeRequestHandler;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedStaticExportOptions =
-  // @ts-expect-error SPEC.md §9.5: static-export result/config types now have the
-  // root @kovojs/server canonical home.
+  // @ts-expect-error SPEC §9.5: export options use @kovojs/server/static-export.
   import('./app-shell/static-export.js').StaticExportOptions;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedStaticExportResult =
-  // @ts-expect-error SPEC.md §9.5: static-export result/config types now have the
-  // root @kovojs/server canonical home.
+  // @ts-expect-error SPEC §9.5: export results use @kovojs/server/static-export.
   import('./app-shell/static-export.js').StaticExportResult;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedStaticExportDiagnostic =
-  // @ts-expect-error SPEC.md §9.5: static-export diagnostics now have the root
-  // @kovojs/server canonical home.
+  // @ts-expect-error SPEC §9.5: export diagnostics use @kovojs/server/static-export.
   import('./app-shell/static-export.js').StaticExportDiagnostic;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedStaticExportDiagnosticSeverity =
-  // @ts-expect-error SPEC.md §9.5: static-export diagnostics now have the root
-  // @kovojs/server canonical home.
+  // @ts-expect-error SPEC §9.5: export diagnostics use @kovojs/server/static-export.
   import('./app-shell/static-export.js').StaticExportDiagnosticSeverity;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedStaticExportManifestHelper =
@@ -925,8 +849,8 @@ describe('server app-shell public API barrels', () => {
         subpath.startsWith('./app-shell'),
       ),
     );
-    // Phase 9A removed the redundant `./app-shell/static-export` subpath; its 5 types
-    // stay public via the root barrel through StaticExportResult/StaticExportOptions.
+    // The redundant `./app-shell/static-export` subpath stays removed; authored export
+    // orchestration and its result types have one home at `@kovojs/server/static-export`.
     expect(appShellPackageExports).toEqual({});
     expect(serverPackage.exports as Record<string, string>).not.toHaveProperty(
       './app-shell/static-export',
