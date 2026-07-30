@@ -356,23 +356,22 @@ export async function exportSiteStaticApp({
   let examplesModule;
   let staticExportResult;
   try {
-    const [appModule, serverModule, loadedAuxModule, loadedExamplesModule] = await Promise.all([
-      viteServer.ssrLoadModule('/src/app.tsx'),
-      viteServer.ssrLoadModule('@kovojs/server'),
-      viteServer.ssrLoadModule('/src/aux.ts'),
-      viteServer.ssrLoadModule('/src/examples.ts'),
-    ]);
+    await viteServer.ssrLoadModule('@kovojs/server/runtime-bootstrap');
+    const [appModule, staticExportModule, loadedAuxModule, loadedExamplesModule] =
+      await Promise.all([
+        viteServer.ssrLoadModule('/src/app.tsx'),
+        viteServer.ssrLoadModule('@kovojs/server/static-export'),
+        viteServer.ssrLoadModule('/src/aux.ts'),
+        viteServer.ssrLoadModule('/src/examples.ts'),
+      ]);
     auxModule = loadedAuxModule;
     examplesModule = loadedExamplesModule;
     await auxModule.stageMarkdownMirrorPublicAssets(cssDistDir);
     const app = appModule.default ?? appModule.siteStaticExportApp;
-    if (!isKovoApp(app)) {
-      throw new Error('site/src/app.tsx must export the Kovo site app.');
+    if (typeof staticExportModule.exportStaticApp !== 'function') {
+      throw new Error('@kovojs/server/static-export must export exportStaticApp.');
     }
-    if (typeof serverModule.exportStaticApp !== 'function') {
-      throw new Error('@kovojs/server must export exportStaticApp.');
-    }
-    staticExportResult = await serverModule.exportStaticApp(app, {
+    staticExportResult = await staticExportModule.exportStaticApp(app, {
       assets: [
         {
           contentType: 'text/css; charset=utf-8',
@@ -406,15 +405,6 @@ export async function exportSiteStaticApp({
   await examplesModule.exportExampleApps(outDir);
 
   return staticExportResult;
-}
-
-function isKovoApp(value) {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    Array.isArray(value.routes) &&
-    typeof value.clientModules?.resolve === 'function'
-  );
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

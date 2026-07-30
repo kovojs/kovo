@@ -226,18 +226,25 @@ export async function captureLoaderBudget() {
   });
   let kovoLoaderSource;
   try {
-    const [{ trustedHtml }, { createApp, createRequestHandler, route }] = await Promise.all([
+    await viteServer.ssrLoadModule('@kovojs/server/runtime-bootstrap');
+    const [{ trustedHtml }, { defineKovo }, { createRequestHandler }] = await Promise.all([
       viteServer.ssrLoadModule('@kovojs/browser'),
       viteServer.ssrLoadModule('@kovojs/server'),
+      viteServer.ssrLoadModule('@kovojs/server/custom-adapters'),
     ]);
-    const app = createApp({
-      routes: [
-        route('/', {
-          page: () =>
-            trustedHtml('<main>loader budget</main>', { reason: 'site capture renderer output' }),
-        }),
-      ],
+    const contract = defineKovo({
+      appId: '48d7ea30-2b7a-4da6-88c6-92ec859a78ea',
+      egress: {
+        enabled: false,
+        justification: 'site loader-budget capture has no outbound traffic',
+      },
     });
+    const home = contract.route('/', {
+      access: contract.publicAccess('public loader-budget capture route'),
+      page: () =>
+        trustedHtml('<main>loader budget</main>', { reason: 'site capture renderer output' }),
+    });
+    const app = contract.assemble({ routes: [home] });
     const response = await createRequestHandler(app)(new Request('https://kovo.test/'));
     kovoLoaderSource = inlineLoaderSourceFromDocument(await response.text());
   } finally {
