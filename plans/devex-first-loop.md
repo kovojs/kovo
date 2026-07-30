@@ -105,8 +105,11 @@ proof; shared root verification belongs in the latest-verification block.
       scaffold.
   - Evidence: the creator contract suite proves installed, skipped-install, and partial-install
     output, including exact lifecycle, dev, and check commands without a false success claim.
-- [ ] Refuse unacknowledged experimental SQLite with zero filesystem writes and show the
+- [x] Refuse unacknowledged experimental SQLite with zero filesystem writes and show the
       single-principal/KV447 posture on accepted SQLite journeys.
+  - Evidence: the focused creator suite passes 56 tests for zero-write refusal and accepted
+    single-principal output; the CLI/server KV447 slice passes 135 tests across check, build, and
+    the non-blocking dev ledger.
 - [ ] Render the packed starter through public UI/style APIs and pass the named WCAG check.
 
 ## Diagnostics, doctor, add, deploy, and speed

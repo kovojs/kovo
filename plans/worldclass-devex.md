@@ -541,15 +541,15 @@ granularity).
   - Evidence: the 46-test creator contract suite proves one schema owns prompts, flags, choices,
     defaults, help, and interactive projection; it also pins pnpm-only technical-preview policy,
     Linux/macOS support, and explicit native Windows/WSL non-support.
-- [ ] (S) Make creator success output conditional and exact: enter directory, install if
+- [x] (S) Make creator success output conditional and exact: enter directory, install if
       `--no-install` was used, run dev, run check.
   - Include the experimental SQLite single-principal/no-authorization disclaimer and surface KV447
     visibly in dev/check/build for every owner-annotated SQLite table.
   - Refusing SQLite without its explicit experimental flag must create no directory and exit
     non-zero with the limitation and correct invocation.
-  - Evidence: the 46-test creator contract suite proves installed, skipped-install, and
-    partial-install instructions. SQLite pre-write refusal and accepted experimental posture remain
-    tracked by the child ledger until their packed journey closes.
+  - Evidence: the focused creator suite passes 56 tests for installed/skipped/partial-install
+    instructions plus zero-write SQLite refusal and accepted experimental posture; the CLI/server
+    KV447 slice passes 135 tests and retains every owner warning in check, build, and dev.
 - [ ] (S) Make the packed starter render a styled, WCAG-checked UI via the public
       component/style API — the implementation owner of G10; Track 2's journey runner owns the
       screenshot + a11y capture.
