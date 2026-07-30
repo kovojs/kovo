@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, rmSync, statSync } from 'node:fs';
-import { cp, mkdir, readdir, rm, writeFile } from 'node:fs/promises';
+import { existsSync, readFileSync, realpathSync, rmSync, statSync } from 'node:fs';
+import { cp, mkdir, mkdtemp, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import ts from 'typescript';
@@ -148,7 +148,7 @@ export async function checkAuthoredCodeSnippets({
   await rm(outDir, { force: true, recursive: true });
   await mkdir(outDir, { recursive: true });
 
-  await writeSupportFiles(outDir);
+  await writeSupportFiles(outDir, snippets);
   const policyIssues = [];
   for (const snippet of snippets) {
     policyIssues.push(...checkSnippetPolicy(snippet));
@@ -187,6 +187,10 @@ export async function checkAuthoredCodeSnippets({
     `${JSON.stringify(tsconfig, null, 2)}\n`,
     'utf8',
   );
+
+  if (useBuiltPackageDeclarations) {
+    assertBuiltKovoDeclarationsStayInScratch(outDir, path.join(outDir, 'tsconfig.json'));
+  }
 
   try {
     execFileSync(
@@ -553,55 +557,64 @@ export async function writeAuthoredSnippetSupportFiles(
   await writeFile(path.join(outDir, 'components/ui/button.ts'), `${LOCAL_APP_STUBS}\n`, 'utf8');
 }
 
-async function writeSupportFiles(outDir) {
-  await writeAuthoredSnippetSupportFiles(outDir);
+async function writeSupportFiles(outDir, snippets) {
+  await writeAuthoredSnippetSupportFiles(outDir, { includeNodeModuleStubs: false });
+  await writeNodeModuleStubs(outDir, snippets);
 }
 
-async function writeNodeModuleStubs(outDir) {
-  await writePackageWithDistFallback(outDir, '@kovojs/better-auth', { '.': EXTERNAL_DTS });
-  await writePackageWithDistFallback(outDir, '@kovojs/core', {
-    '.': KOVO_DTS,
-    './security': KOVO_SECURITY_DTS,
-  });
-  await writePackageWithDistFallback(outDir, '@kovojs/server', {
-    '.': KOVO_DTS,
-    './build': KOVO_DTS,
-    './jsx-dev-runtime': JSX_RUNTIME_DTS,
-    './jsx-runtime': JSX_RUNTIME_DTS,
-    './node': KOVO_DTS,
-    './runtime-bootstrap': KOVO_DTS,
-  });
-  await writePackageWithDistFallback(outDir, '@kovojs/style', { '.': KOVO_DTS });
-  await writePackageWithDistFallback(outDir, '@kovojs/browser', {
-    '.': KOVO_DTS,
-    './client': KOVO_DTS,
-  });
-  await writePackageWithDistFallback(outDir, '@kovojs/headless-ui', {
-    './dialog': KOVO_DTS,
-    './select': KOVO_DTS,
-  });
-  await writePackageWithDistFallback(outDir, '@kovojs/icons', {
-    '.': KOVO_DTS,
-    './search': KOVO_DTS,
-  });
-  await writePackageWithDistFallback(outDir, '@kovojs/ui', {
-    './button': KOVO_DTS,
-    './select': KOVO_DTS,
-  });
-  await writePackage(outDir, '@kovojs/test', {
-    './assertions': EXTERNAL_DTS,
-    './csrf': EXTERNAL_DTS,
-    './harness': EXTERNAL_DTS,
-    './pglite': EXTERNAL_DTS,
-    './postgres': EXTERNAL_DTS,
-    './sqlite': EXTERNAL_DTS,
-  });
-  await writePackage(outDir, '@kovojs/drizzle', { '.': EXTERNAL_DTS });
-  await writePackage(outDir, '@kovojs/devtool', {
-    '.': EXTERNAL_DTS,
-    './app': EXTERNAL_DTS,
-    './vite': EXTERNAL_DTS,
-  });
+async function writeNodeModuleStubs(outDir, snippets = []) {
+  if (useBuiltPackageDeclarations) {
+    const rootPackageNames = collectBuiltKovoDeclarationRoots(snippets);
+    await writeBuiltKovoDeclarationGraph(outDir, rootPackageNames);
+  } else {
+    // Keep the default authored-doc pass cheap. These intentionally broad stubs let each guide
+    // teach one local idea; the separate dist pass below owns exact public declaration identity.
+    await writePackage(outDir, '@kovojs/better-auth', { '.': EXTERNAL_DTS });
+    await writePackage(outDir, '@kovojs/core', {
+      '.': KOVO_DTS,
+      './security': KOVO_SECURITY_DTS,
+    });
+    await writePackage(outDir, '@kovojs/server', {
+      '.': KOVO_DTS,
+      './build': KOVO_DTS,
+      './jsx-dev-runtime': JSX_RUNTIME_DTS,
+      './jsx-runtime': JSX_RUNTIME_DTS,
+      './node': KOVO_DTS,
+      './runtime-bootstrap': KOVO_DTS,
+    });
+    await writePackage(outDir, '@kovojs/style', { '.': KOVO_DTS });
+    await writePackage(outDir, '@kovojs/browser', {
+      '.': KOVO_DTS,
+      './client': KOVO_DTS,
+    });
+    await writePackage(outDir, '@kovojs/headless-ui', {
+      './dialog': KOVO_DTS,
+      './select': KOVO_DTS,
+    });
+    await writePackage(outDir, '@kovojs/icons', {
+      '.': KOVO_DTS,
+      './search': KOVO_DTS,
+    });
+    await writePackage(outDir, '@kovojs/ui', {
+      './button': KOVO_DTS,
+      './select': KOVO_DTS,
+    });
+    await writePackage(outDir, '@kovojs/test', {
+      './assertions': EXTERNAL_DTS,
+      './csrf': EXTERNAL_DTS,
+      './harness': EXTERNAL_DTS,
+      './pglite': EXTERNAL_DTS,
+      './postgres': EXTERNAL_DTS,
+      './sqlite': EXTERNAL_DTS,
+    });
+    await writePackage(outDir, '@kovojs/drizzle', { '.': EXTERNAL_DTS });
+    await writePackage(outDir, '@kovojs/devtool', {
+      '.': EXTERNAL_DTS,
+      './app': EXTERNAL_DTS,
+      './vite': EXTERNAL_DTS,
+    });
+  }
+
   await writePackage(outDir, '@electric-sql/pglite', { '.': EXTERNAL_DTS });
   await writePackage(outDir, 'better-sqlite3', { '.': EXTERNAL_DTS });
   await writePackage(outDir, 'drizzle-orm', {
@@ -612,78 +625,458 @@ async function writeNodeModuleStubs(outDir) {
   });
 }
 
-async function writePackageWithDistFallback(outDir, packageName, fallbackEntries) {
-  if (
-    useBuiltPackageDeclarations &&
-    (await writeBuiltPackageDeclarations(outDir, packageName, Object.keys(fallbackEntries)))
-  ) {
-    return;
+export function collectBuiltKovoDeclarationRoots(snippets) {
+  const packageNames = new Set();
+  for (const snippet of snippets) {
+    if (snippet.mode !== 'standalone') continue;
+    const sourceFile = ts.createSourceFile(
+      `${snippet.id}.${snippet.lang}`,
+      snippet.code,
+      ts.ScriptTarget.Latest,
+      true,
+      snippet.lang === 'tsx' ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+    );
+
+    const addSpecifier = (specifier) => {
+      const packageName = kovoPackageName(specifier);
+      if (packageName) packageNames.add(packageName);
+    };
+    const visit = (node) => {
+      if (
+        (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+        node.moduleSpecifier &&
+        ts.isStringLiteralLike(node.moduleSpecifier)
+      ) {
+        addSpecifier(node.moduleSpecifier.text);
+      } else if (
+        ts.isImportEqualsDeclaration(node) &&
+        ts.isExternalModuleReference(node.moduleReference) &&
+        node.moduleReference.expression &&
+        ts.isStringLiteralLike(node.moduleReference.expression)
+      ) {
+        addSpecifier(node.moduleReference.expression.text);
+      } else if (
+        ts.isImportTypeNode(node) &&
+        ts.isLiteralTypeNode(node.argument) &&
+        ts.isStringLiteralLike(node.argument.literal)
+      ) {
+        addSpecifier(node.argument.literal.text);
+      } else if (
+        ts.isCallExpression(node) &&
+        node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+        node.arguments.length === 1 &&
+        ts.isStringLiteralLike(node.arguments[0])
+      ) {
+        addSpecifier(node.arguments[0].text);
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
+
+    for (const match of snippet.code.matchAll(/@jsxImportSource\s+(@kovojs\/[a-z0-9-]+)/gi)) {
+      addSpecifier(match[1]);
+    }
   }
-  await writePackage(outDir, packageName, fallbackEntries);
+  return [...packageNames].sort((a, b) => a.localeCompare(b));
 }
 
-export async function writeBuiltPackageDeclarations(outDir, packageName, subpaths) {
-  const workspacePackage = workspacePackagePath(packageName);
-  if (!workspacePackage) return false;
+function kovoPackageName(specifier) {
+  const match = /^(@kovojs\/[a-z0-9][a-z0-9-]*)(?:\/|$)/i.exec(specifier);
+  return match?.[1];
+}
 
-  const packageJsonPath = path.join(workspacePackage, 'package.json');
-  if (!existsSync(packageJsonPath)) return false;
+/**
+ * Copy one closed, finite declaration graph into the snippet project. Every Kovo package is
+ * resolved from its publish manifest and every Kovo dependency/peer is traversed before any file
+ * is written. This prevents a missing subpath from falling through to the workspace source graph
+ * and splitting module-private type identities (worldclass DevEx Track 3/6, G13).
+ */
+export async function writeBuiltKovoDeclarationGraph(
+  outDir,
+  rootPackageNames,
+  { workspaceRoot = repoRoot } = {},
+) {
+  const roots = [...new Set(rootPackageNames)].sort((a, b) => a.localeCompare(b));
+  if (roots.length === 0) return { packages: [] };
 
-  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
-  const publishExports = packageJson.publishConfig?.exports;
-  if (!publishExports || typeof publishExports !== 'object') return false;
-
-  const resolvedEntries = {};
-  for (const subpath of subpaths) {
-    const types = resolvePublishedTypes(publishExports, subpath);
-    if (!types) return false;
-    const source = path.join(workspacePackage, types);
-    if (!existsSync(source)) return false;
-    resolvedEntries[subpath] = source;
+  const descriptors = new Map();
+  const queue = [...roots];
+  while (queue.length > 0) {
+    const packageName = queue.shift();
+    if (descriptors.has(packageName)) continue;
+    const descriptor = await readBuiltKovoPackageDescriptor(packageName, workspaceRoot);
+    descriptors.set(packageName, descriptor);
+    for (const dependencyName of descriptor.kovoDependencies) {
+      if (!descriptors.has(dependencyName) && !queue.includes(dependencyName)) {
+        queue.push(dependencyName);
+      }
+    }
+    queue.sort((a, b) => a.localeCompare(b));
   }
 
-  const packageDir = path.join(outDir, 'node_modules', packageName);
-  await mkdir(packageDir, { recursive: true });
-  const sourceDistDir = path.join(workspacePackage, 'dist');
-  await cp(sourceDistDir, path.join(packageDir, 'dist'), { recursive: true });
-
-  const exports = {};
-  for (const [subpath, source] of Object.entries(resolvedEntries)) {
-    const copiedTypes = `./${toPackageRelative(path.relative(sourceDistDir, source), 'dist')}`;
-    exports[subpath] = { types: copiedTypes, default: copiedTypes };
+  const nodeModulesDir = path.join(outDir, 'node_modules');
+  const scopeDir = path.join(nodeModulesDir, '@kovojs');
+  if (existsSync(scopeDir)) {
+    throw new Error(
+      `code-snippets: built declaration graph refuses pre-existing Kovo packages at ${scopeDir}; mixed source/stub/dist identities are not allowed`,
+    );
   }
 
-  await writeFile(
-    path.join(packageDir, 'package.json'),
-    `${JSON.stringify({ name: packageName, type: 'module', exports }, null, 2)}\n`,
-    'utf8',
-  );
+  await mkdir(nodeModulesDir, { recursive: true });
+  const stagingScopeDir = await mkdtemp(path.join(nodeModulesDir, '.kovojs-declarations-'));
+  try {
+    for (const descriptor of [...descriptors.values()].sort((a, b) =>
+      a.packageName.localeCompare(b.packageName),
+    )) {
+      const packageDir = path.join(
+        stagingScopeDir,
+        descriptor.packageName.slice('@kovojs/'.length),
+      );
+      await mkdir(packageDir, { recursive: true });
+      await cp(descriptor.sourceDistDir, path.join(packageDir, 'dist'), { recursive: true });
+      await writeFile(
+        path.join(packageDir, 'package.json'),
+        `${JSON.stringify(
+          {
+            name: descriptor.packageName,
+            version: descriptor.version,
+            type: 'module',
+            exports: descriptor.exports,
+          },
+          null,
+          2,
+        )}\n`,
+        'utf8',
+      );
+    }
+    if (existsSync(scopeDir)) {
+      throw new Error(
+        `code-snippets: Kovo declaration scope appeared during materialization at ${scopeDir}`,
+      );
+    }
+    await rename(stagingScopeDir, scopeDir);
+  } catch (error) {
+    await rm(stagingScopeDir, { force: true, recursive: true });
+    throw error;
+  }
+
+  return { packages: [...descriptors.keys()].sort((a, b) => a.localeCompare(b)) };
+}
+
+export async function writeBuiltPackageDeclarations(outDir, packageName, _subpaths, options = {}) {
+  await writeBuiltKovoDeclarationGraph(outDir, [packageName], options);
   return true;
 }
 
-function workspacePackagePath(packageName) {
-  if (!packageName.startsWith('@kovojs/')) return undefined;
-  return path.join(repoRoot, 'packages', packageName.slice('@kovojs/'.length));
-}
-
-function resolvePublishedTypes(exports, subpath) {
-  const exact = exports[subpath];
-  if (exact && typeof exact === 'object' && typeof exact.types === 'string') return exact.types;
-
-  for (const [pattern, target] of Object.entries(exports)) {
-    if (!pattern.includes('*') || !target || typeof target !== 'object') continue;
-    if (typeof target.types !== 'string') continue;
-    const [prefix, suffix] = pattern.split('*');
-    if (!subpath.startsWith(prefix) || !subpath.endsWith(suffix)) continue;
-    const match = subpath.slice(prefix.length, subpath.length - suffix.length);
-    return target.types.replace('*', match);
+async function readBuiltKovoPackageDescriptor(packageName, workspaceRoot) {
+  if (!/^@kovojs\/[a-z0-9][a-z0-9-]*$/i.test(packageName)) {
+    throw new Error(
+      `code-snippets: invalid Kovo declaration package name ${JSON.stringify(packageName)}`,
+    );
+  }
+  const workspacePackage = workspacePackagePath(packageName, workspaceRoot);
+  const packageJsonPath = path.join(workspacePackage, 'package.json');
+  if (!existsSync(packageJsonPath)) {
+    throw new Error(
+      `code-snippets: ${packageName} is required by the built declaration graph but its workspace manifest is missing`,
+    );
   }
 
-  return undefined;
+  let packageJson;
+  try {
+    packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+  } catch (error) {
+    throw new Error(`code-snippets: ${packageName} workspace manifest is invalid JSON`, {
+      cause: error,
+    });
+  }
+  if (packageJson.name !== packageName) {
+    throw new Error(
+      `code-snippets: expected ${packageJsonPath} to declare ${packageName}, received ${JSON.stringify(
+        packageJson.name,
+      )}`,
+    );
+  }
+  const publishExports = packageJson.publishConfig?.exports;
+  if (
+    !publishExports ||
+    typeof publishExports !== 'object' ||
+    Array.isArray(publishExports) ||
+    Object.keys(publishExports).length === 0
+  ) {
+    throw new Error(
+      `code-snippets: ${packageName} has no finite publishConfig.exports declaration surface`,
+    );
+  }
+  const sourceDistDir = path.join(workspacePackage, 'dist');
+  if (!existsSync(sourceDistDir) || !statSync(sourceDistDir).isDirectory()) {
+    throw new Error(
+      `code-snippets: ${packageName} is required by the built declaration graph but ${path.relative(
+        workspaceRoot,
+        sourceDistDir,
+      )} is missing; run its build:dist command`,
+    );
+  }
+
+  const kovoDependencies = [];
+  for (const field of ['dependencies', 'peerDependencies', 'optionalDependencies']) {
+    const dependencies = packageJson[field];
+    if (!dependencies || typeof dependencies !== 'object' || Array.isArray(dependencies)) continue;
+    for (const dependencyName of Object.keys(dependencies)) {
+      if (kovoPackageName(dependencyName) === dependencyName) {
+        kovoDependencies.push(dependencyName);
+      }
+    }
+  }
+
+  return {
+    exports: await finitePublishedDeclarationExports(
+      packageName,
+      workspacePackage,
+      sourceDistDir,
+      publishExports,
+    ),
+    kovoDependencies: [...new Set(kovoDependencies)].sort((a, b) => a.localeCompare(b)),
+    packageName,
+    sourceDistDir,
+    version: typeof packageJson.version === 'string' ? packageJson.version : '0.0.0',
+  };
 }
 
-function toPackageRelative(relativeFile, prefix = '.') {
-  return path.posix.join(prefix, ...relativeFile.split(path.sep));
+async function finitePublishedDeclarationExports(
+  packageName,
+  workspacePackage,
+  sourceDistDir,
+  publishExports,
+) {
+  const exactKeys = new Set(
+    Object.keys(publishExports).filter((subpath) => !subpath.includes('*')),
+  );
+  const finiteExports = new Map();
+  const declarationTargets = await listDeclarationTargets(sourceDistDir);
+
+  for (const [subpath, target] of Object.entries(publishExports)) {
+    if (subpath.includes('*')) continue;
+    if (target === null) {
+      finiteExports.set(subpath, null);
+      continue;
+    }
+    const types = publishedTypesTarget(packageName, subpath, target);
+    assertDeclarationTarget(packageName, subpath, workspacePackage, sourceDistDir, types);
+    finiteExports.set(subpath, { types, default: types });
+  }
+
+  for (const [subpathPattern, target] of Object.entries(publishExports)) {
+    if (!subpathPattern.includes('*')) continue;
+    const typesPattern = publishedTypesTarget(packageName, subpathPattern, target);
+    if (starCount(subpathPattern) !== 1 || starCount(typesPattern) !== 1) {
+      throw new Error(
+        `code-snippets: ${packageName} export ${JSON.stringify(
+          subpathPattern,
+        )} must use one matching declaration wildcard`,
+      );
+    }
+    assertDeclarationTarget(
+      packageName,
+      subpathPattern,
+      workspacePackage,
+      sourceDistDir,
+      typesPattern,
+      { allowWildcard: true },
+    );
+    const [targetPrefix, targetSuffix] = typesPattern.split('*');
+    let matches = 0;
+    for (const declarationTarget of declarationTargets) {
+      if (
+        !declarationTarget.startsWith(targetPrefix) ||
+        !declarationTarget.endsWith(targetSuffix)
+      ) {
+        continue;
+      }
+      const capture = declarationTarget.slice(
+        targetPrefix.length,
+        declarationTarget.length - targetSuffix.length,
+      );
+      const subpath = subpathPattern.replace('*', capture);
+      if (exactKeys.has(subpath)) continue;
+      const prior = finiteExports.get(subpath);
+      const next = { types: declarationTarget, default: declarationTarget };
+      if (prior && JSON.stringify(prior) !== JSON.stringify(next)) {
+        throw new Error(
+          `code-snippets: ${packageName} declaration wildcard collision at ${subpath}`,
+        );
+      }
+      finiteExports.set(subpath, next);
+      matches += 1;
+    }
+    if (matches === 0) {
+      throw new Error(
+        `code-snippets: ${packageName} export ${JSON.stringify(
+          subpathPattern,
+        )} has no built declaration matches; dist is missing or stale`,
+      );
+    }
+  }
+
+  return Object.fromEntries([...finiteExports.entries()].sort(([a], [b]) => a.localeCompare(b)));
+}
+
+function publishedTypesTarget(packageName, subpath, target) {
+  if (!target || typeof target !== 'object' || Array.isArray(target)) {
+    throw new Error(
+      `code-snippets: ${packageName} export ${JSON.stringify(
+        subpath,
+      )} must declare an object types target`,
+    );
+  }
+  if (typeof target.types !== 'string') {
+    throw new Error(
+      `code-snippets: ${packageName} export ${JSON.stringify(subpath)} has no declaration target`,
+    );
+  }
+  return target.types;
+}
+
+function assertDeclarationTarget(
+  packageName,
+  subpath,
+  workspacePackage,
+  sourceDistDir,
+  types,
+  { allowWildcard = false } = {},
+) {
+  if (!types.startsWith('./dist/') || (!allowWildcard && types.includes('*'))) {
+    throw new Error(
+      `code-snippets: ${packageName} export ${JSON.stringify(
+        subpath,
+      )} declaration target ${JSON.stringify(types)} must point to one built file inside ./dist`,
+    );
+  }
+  const targetWithoutWildcard = types.replace('*', '__kovo_wildcard__');
+  const absoluteTarget = path.resolve(workspacePackage, targetWithoutWildcard);
+  if (!isPathWithin(sourceDistDir, absoluteTarget)) {
+    throw new Error(
+      `code-snippets: ${packageName} export ${JSON.stringify(
+        subpath,
+      )} declaration target escapes ./dist`,
+    );
+  }
+  if (!/\.d\.[cm]?ts$/.test(types)) {
+    throw new Error(
+      `code-snippets: ${packageName} export ${JSON.stringify(
+        subpath,
+      )} declaration target must be a .d.ts/.d.mts/.d.cts file`,
+    );
+  }
+  if (!allowWildcard) {
+    const source = path.resolve(workspacePackage, types);
+    if (!existsSync(source) || !statSync(source).isFile()) {
+      throw new Error(
+        `code-snippets: ${packageName} export ${JSON.stringify(
+          subpath,
+        )} declaration ${types} is missing; dist is missing or stale`,
+      );
+    }
+  }
+}
+
+async function listDeclarationTargets(sourceDistDir, relativeDir = '') {
+  const dir = path.join(sourceDistDir, relativeDir);
+  const targets = [];
+  for (const entry of (await readdir(dir, { withFileTypes: true })).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  )) {
+    const relative = path.join(relativeDir, entry.name);
+    if (entry.isDirectory()) {
+      targets.push(...(await listDeclarationTargets(sourceDistDir, relative)));
+    } else if (entry.isFile() && /\.d\.[cm]?ts$/.test(entry.name)) {
+      targets.push(`./dist/${relative.split(path.sep).join('/')}`);
+    }
+  }
+  return targets;
+}
+
+function starCount(value) {
+  return [...value].filter((character) => character === '*').length;
+}
+
+function workspacePackagePath(packageName, workspaceRoot = repoRoot) {
+  return path.join(workspaceRoot, 'packages', packageName.slice('@kovojs/'.length));
+}
+
+function isPathWithin(parent, candidate) {
+  const relative = path.relative(path.resolve(parent), path.resolve(candidate));
+  return (
+    relative === '' ||
+    (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative))
+  );
+}
+
+export function assertBuiltKovoDeclarationsStayInScratch(
+  outDir,
+  tsconfigPath,
+  { workspaceRoot = repoRoot } = {},
+) {
+  const configFile = ts.readConfigFile(tsconfigPath, (fileName) => ts.sys.readFile(fileName));
+  if (configFile.error) {
+    throw new Error(
+      `code-snippets: could not read declaration-resolution tsconfig: ${ts.flattenDiagnosticMessageText(
+        configFile.error.messageText,
+        '\n',
+      )}`,
+    );
+  }
+  const parsed = ts.parseJsonConfigFileContent(
+    configFile.config,
+    ts.sys,
+    path.dirname(tsconfigPath),
+    undefined,
+    tsconfigPath,
+  );
+  if (parsed.errors.length > 0) {
+    throw new Error(
+      `code-snippets: declaration-resolution tsconfig is invalid: ${parsed.errors
+        .map((error) => ts.flattenDiagnosticMessageText(error.messageText, '\n'))
+        .join('; ')}`,
+    );
+  }
+
+  const program = ts.createProgram({ rootNames: parsed.fileNames, options: parsed.options });
+  const materializedScope = path.resolve(outDir, 'node_modules/@kovojs');
+  const resolvedMaterializedScope = existsSync(materializedScope)
+    ? realpathSync(materializedScope)
+    : materializedScope;
+  const workspacePackages = path.resolve(workspaceRoot, 'packages');
+  const resolvedWorkspacePackages = existsSync(workspacePackages)
+    ? realpathSync(workspacePackages)
+    : workspacePackages;
+  const offenders = new Set();
+  for (const sourceFile of program.getSourceFiles()) {
+    const absolute = path.resolve(sourceFile.fileName);
+    const resolved = existsSync(absolute) ? realpathSync(absolute) : absolute;
+    const escapedWorkspace =
+      isPathWithin(workspacePackages, absolute) ||
+      isPathWithin(resolvedWorkspacePackages, resolved);
+    const escapedNodeModules =
+      (absolute.split(path.sep).join('/').includes('/node_modules/@kovojs/') ||
+        resolved.split(path.sep).join('/').includes('/node_modules/@kovojs/')) &&
+      !(
+        isPathWithin(materializedScope, absolute) ||
+        isPathWithin(resolvedMaterializedScope, resolved)
+      );
+    if (escapedWorkspace || escapedNodeModules) offenders.add(resolved);
+  }
+  if (offenders.size > 0) {
+    throw new Error(
+      `code-snippets: built declaration resolution escaped the materialized dist graph:\n${[
+        ...offenders,
+      ]
+        .sort((a, b) => a.localeCompare(b))
+        .map((file) => `- ${file}`)
+        .join('\n')}`,
+    );
+  }
+  return { sourceFiles: program.getSourceFiles().length };
 }
 
 async function writePackage(outDir, packageName, entries) {

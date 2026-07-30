@@ -1,14 +1,16 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
 import {
+  assertBuiltKovoDeclarationsStayInScratch,
   checkAuthoredDocStyle,
   checkAuthoredCodeSnippets,
   collectCodeSnippets,
   extractCodeSnippets,
+  writeBuiltKovoDeclarationGraph,
 } from './code-snippets-check.mjs';
 
 describe('authored code snippet extractor', () => {
@@ -401,3 +403,222 @@ describe('authored code snippet extractor', () => {
     }
   });
 });
+
+describe('built authored-snippet declaration graph', () => {
+  it('materializes full finite exports and rejects a transitive workspace-source escape', async () => {
+    const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'kovo-doc-dist-workspace-'));
+    const outDir = path.join(workspaceRoot, 'scratch');
+    try {
+      await writeFixtureKovoPackage(workspaceRoot, {
+        distFiles: {
+          'index.d.mts': 'export interface Component<Props> { readonly props: Props };\n',
+          'storage.d.mts': 'export interface StorageKey { readonly key: string };\n',
+        },
+        name: '@kovojs/core',
+        publishExports: {
+          '.': { types: './dist/index.d.mts', default: './dist/index.mjs' },
+          './storage': { types: './dist/storage.d.mts', default: './dist/storage.mjs' },
+        },
+        sourceExports: {
+          '.': './src/index.ts',
+          './storage': './src/storage.ts',
+        },
+        sourceFiles: {
+          'index.ts': 'export interface Component<Props> { readonly props: Props };\n',
+          'storage.ts': 'export interface StorageKey { readonly key: string };\n',
+        },
+      });
+      await writeFixtureKovoPackage(workspaceRoot, {
+        dependencies: { '@kovojs/core': 'workspace:*' },
+        distFiles: {
+          'arrow-right.d.mts':
+            "import type { Component } from '@kovojs/core';\nexport declare const ArrowRight: Component<never>;\n",
+          'index.d.mts': 'export {};\n',
+        },
+        name: '@kovojs/icons',
+        publishExports: {
+          '.': { types: './dist/index.d.mts', default: './dist/index.mjs' },
+          './index': null,
+          './*': { types: './dist/*.d.mts', default: './dist/*.mjs' },
+        },
+        sourceExports: {
+          '.': './src/index.ts',
+          './index': null,
+          './*': './src/*.ts',
+        },
+        sourceFiles: {
+          'arrow-right.ts':
+            "import type { Component } from '@kovojs/core';\nexport declare const ArrowRight: Component<never>;\n",
+          'index.ts': 'export {};\n',
+        },
+      });
+
+      const result = await writeBuiltKovoDeclarationGraph(outDir, ['@kovojs/icons'], {
+        workspaceRoot,
+      });
+      expect(result.packages).toEqual(['@kovojs/core', '@kovojs/icons']);
+
+      const iconsManifest = JSON.parse(
+        await readFile(path.join(outDir, 'node_modules/@kovojs/icons/package.json'), 'utf8'),
+      );
+      expect(iconsManifest.exports).toMatchObject({
+        '.': { types: './dist/index.d.mts' },
+        './arrow-right': { types: './dist/arrow-right.d.mts' },
+        './index': null,
+      });
+      expect(iconsManifest.exports).not.toHaveProperty('./*');
+
+      await writeFile(
+        path.join(outDir, 'sample.ts'),
+        "import { ArrowRight } from '@kovojs/icons/arrow-right';\nvoid ArrowRight;\n",
+        'utf8',
+      );
+      const tsconfigPath = path.join(outDir, 'tsconfig.json');
+      await writeFile(
+        tsconfigPath,
+        `${JSON.stringify(
+          {
+            compilerOptions: {
+              module: 'NodeNext',
+              moduleResolution: 'NodeNext',
+              noEmit: true,
+              skipLibCheck: true,
+              strict: true,
+              target: 'ES2024',
+            },
+            include: ['sample.ts'],
+          },
+          null,
+          2,
+        )}\n`,
+        'utf8',
+      );
+      expect(() =>
+        assertBuiltKovoDeclarationsStayInScratch(outDir, tsconfigPath, { workspaceRoot }),
+      ).not.toThrow();
+
+      await rm(path.join(outDir, 'node_modules/@kovojs/core'), {
+        force: true,
+        recursive: true,
+      });
+      await mkdir(path.join(workspaceRoot, 'node_modules/@kovojs'), { recursive: true });
+      await symlink(
+        path.join(workspaceRoot, 'packages/core'),
+        path.join(workspaceRoot, 'node_modules/@kovojs/core'),
+        'dir',
+      );
+      expect(() =>
+        assertBuiltKovoDeclarationsStayInScratch(outDir, tsconfigPath, { workspaceRoot }),
+      ).toThrow('escaped the materialized dist graph');
+    } finally {
+      await rm(workspaceRoot, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects a missing transitive package dist instead of falling back to source', async () => {
+    const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'kovo-doc-dist-workspace-'));
+    const outDir = path.join(workspaceRoot, 'scratch');
+    try {
+      await writeFixtureKovoPackage(workspaceRoot, {
+        createDist: false,
+        name: '@kovojs/core',
+        publishExports: {
+          '.': { types: './dist/index.d.mts', default: './dist/index.mjs' },
+        },
+        sourceExports: { '.': './src/index.ts' },
+        sourceFiles: { 'index.ts': 'export interface SourceOnlyCore {};\n' },
+      });
+      await writeFixtureKovoPackage(workspaceRoot, {
+        dependencies: { '@kovojs/core': 'workspace:*' },
+        distFiles: { 'index.d.mts': 'export {};\n' },
+        name: '@kovojs/ui',
+        publishExports: {
+          '.': { types: './dist/index.d.mts', default: './dist/index.mjs' },
+        },
+      });
+
+      await expect(
+        writeBuiltKovoDeclarationGraph(outDir, ['@kovojs/ui'], { workspaceRoot }),
+      ).rejects.toThrow('@kovojs/core is required by the built declaration graph');
+    } finally {
+      await rm(workspaceRoot, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects a stale transitive dist missing a manifest-declared public subpath', async () => {
+    const workspaceRoot = await mkdtemp(path.join(tmpdir(), 'kovo-doc-dist-workspace-'));
+    const outDir = path.join(workspaceRoot, 'scratch');
+    try {
+      await writeFixtureKovoPackage(workspaceRoot, {
+        distFiles: { 'index.d.mts': 'export {};\n' },
+        name: '@kovojs/core',
+        publishExports: {
+          '.': { types: './dist/index.d.mts', default: './dist/index.mjs' },
+          './storage': { types: './dist/storage.d.mts', default: './dist/storage.mjs' },
+        },
+      });
+      await writeFixtureKovoPackage(workspaceRoot, {
+        dependencies: { '@kovojs/core': 'workspace:*' },
+        distFiles: {
+          'index.d.mts': "export type { StorageKey } from '@kovojs/core/storage';\n",
+        },
+        name: '@kovojs/ui',
+        publishExports: {
+          '.': { types: './dist/index.d.mts', default: './dist/index.mjs' },
+        },
+      });
+
+      await expect(
+        writeBuiltKovoDeclarationGraph(outDir, ['@kovojs/ui'], { workspaceRoot }),
+      ).rejects.toThrow(
+        '@kovojs/core export "./storage" declaration ./dist/storage.d.mts is missing',
+      );
+    } finally {
+      await rm(workspaceRoot, { force: true, recursive: true });
+    }
+  });
+});
+
+async function writeFixtureKovoPackage(
+  workspaceRoot,
+  {
+    createDist = true,
+    dependencies = {},
+    distFiles = {},
+    name,
+    publishExports,
+    sourceExports = { '.': './src/index.ts' },
+    sourceFiles = { 'index.ts': 'export {};\n' },
+  },
+) {
+  const packageDir = path.join(workspaceRoot, 'packages', name.slice('@kovojs/'.length));
+  await mkdir(packageDir, { recursive: true });
+  await writeFile(
+    path.join(packageDir, 'package.json'),
+    `${JSON.stringify(
+      {
+        name,
+        version: '0.0.0-test',
+        type: 'module',
+        exports: sourceExports,
+        dependencies,
+        publishConfig: { exports: publishExports },
+      },
+      null,
+      2,
+    )}\n`,
+    'utf8',
+  );
+  for (const [relative, source] of Object.entries(sourceFiles)) {
+    const file = path.join(packageDir, 'src', relative);
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, source, 'utf8');
+  }
+  if (!createDist) return;
+  await mkdir(path.join(packageDir, 'dist'), { recursive: true });
+  for (const [relative, source] of Object.entries(distFiles)) {
+    const file = path.join(packageDir, 'dist', relative);
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, source, 'utf8');
+  }
+}
