@@ -3,7 +3,13 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { compareSemver, discoverPackageJsonPaths, packageRows, parseSemver } from './bump.mjs';
+import {
+  compareSemver,
+  discoverPackageJsonPaths,
+  normalizeBumpArgs,
+  packageRows,
+  parseSemver,
+} from './bump.mjs';
 
 const tempDirs = [];
 
@@ -63,6 +69,11 @@ describe('bump semver helpers', () => {
     expect(compareSemver('1.0.0-alpha.10', '1.0.0-alpha.2')).toBeGreaterThan(0);
     expect(compareSemver('1.0.0', '1.0.0-rc.1')).toBeGreaterThan(0);
     expect(compareSemver('1.0.0+build.2', '1.0.0+build.1')).toBe(0);
+  });
+
+  it('accepts the argument separator forwarded by pnpm', () => {
+    expect(normalizeBumpArgs(['--', '0.3.0'])).toEqual(['0.3.0']);
+    expect(normalizeBumpArgs(['0.3.0'])).toEqual(['0.3.0']);
   });
 });
 

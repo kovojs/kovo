@@ -65,6 +65,10 @@ export function compareSemver(left, right) {
   return 0;
 }
 
+export function normalizeBumpArgs(args) {
+  return args[0] === '--' ? args.slice(1) : args;
+}
+
 function readPackageJson(packagePath) {
   return JSON.parse(readFileSync(packagePath, 'utf8'));
 }
@@ -217,14 +221,15 @@ function commitPackageChanges(packagePaths, nextVersion, { cwd = repoRoot } = {}
 }
 
 async function requestedVersion(args) {
-  if (args.includes('--help') || args.includes('-h')) {
+  const normalizedArgs = normalizeBumpArgs(args);
+  if (normalizedArgs.includes('--help') || normalizedArgs.includes('-h')) {
     return { help: true };
   }
-  if (args.length > 1) {
-    throw new Error('Usage: npm run bump -- <version>');
+  if (normalizedArgs.length > 1) {
+    throw new Error('Usage: pnpm run bump -- <version>');
   }
-  if (args[0]) {
-    return { version: args[0] };
+  if (normalizedArgs[0]) {
+    return { version: normalizedArgs[0] };
   }
 
   const rl = createInterface({ input, output });
@@ -242,7 +247,7 @@ export async function runBump({ cwd = repoRoot, args = process.argv.slice(2) } =
 
   const request = await requestedVersion(args);
   if (request.help) {
-    process.stdout.write('Usage: npm run bump -- <version>\n');
+    process.stdout.write('Usage: pnpm run bump -- <version>\n');
     return 0;
   }
 
