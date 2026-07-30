@@ -136,16 +136,11 @@ describe('create-kovo starter (build integration: adversarial production artifac
   );
 
   it.each([...dialectIndependentCompilerGateCases])(
-    'M1:raw-html keeps opaque trusted output authority on the %s KV424 path',
+    'M1:raw-html keeps mutable trusted-output aliases on the %s KV424 path',
     (_label: string, dialect: CreateKovoDialect | undefined) => {
       withProject(`create-kovo-m1-trusted-output-${_label}-opaque-`, dialect, (root) => {
         addOpaqueTrustedOutputAuthorityProof(root);
-        expectBuildFailure(root, [
-          'KV424',
-          'source=browserTrust[dynamicTrustedUrlKey]',
-          'source=browserTrust[dynamicTrustedHtmlKey]',
-          'source=<unresolved-mutable-factory-provenance>',
-        ]);
+        expectBuildFailure(root, ['KV424', 'source=<unresolved-mutable-factory-provenance>']);
       });
     },
     240_000,

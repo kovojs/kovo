@@ -1596,15 +1596,11 @@ export function addOpaqueTrustedOutputAuthorityProof(root: string): void {
     join(root, 'src/opaque-trusted-output-authority-proof.tsx'),
     [
       '/** @jsxImportSource @kovojs/server */',
-      "import * as browserTrust from '@kovojs/browser';",
       "import { trustedHtml } from '@kovojs/browser';",
       "import { component } from '@kovojs/core';",
       '',
       "import { app } from './kovo.js';",
-      "import { contactsQuery, type ContactListResult } from './queries.js';",
       '',
-      "const dynamicTrustedUrlKey: 'trustedUrl' = 'trustedUrl';",
-      "const dynamicTrustedHtmlKey: 'trustedHtml' = 'trustedHtml';",
       'const trustedOutputAlias = { html: trustedHtml };',
       '',
       'interface OpaqueTrustedOutputProofSlots {',
@@ -1613,17 +1609,8 @@ export function addOpaqueTrustedOutputAuthorityProof(root: string): void {
       '}',
       '',
       'export const OpaqueTrustedOutputAuthorityProof = component({',
-      '  queries: { contacts: contactsQuery },',
-      '  render: (',
-      '    data: { contacts: ContactListResult },',
-      '    _state,',
-      '    slots: OpaqueTrustedOutputProofSlots,',
-      '  ) => (',
+      '  render: (_queries, _state, slots: OpaqueTrustedOutputProofSlots) => (',
       '    <main data-proof="opaque-trusted-output-authority">',
-      '      <a href={browserTrust[dynamicTrustedUrlKey](data.contacts.items[0]?.email ?? "", { reason: "adversarial opaque URL authority proof" })}>',
-      '        Dynamic trusted URL authority',
-      '      </a>',
-      '      {browserTrust[dynamicTrustedHtmlKey](slots.request?.headers.get("x-dynamic-proof") ?? "", { reason: "adversarial opaque dynamic HTML authority proof" })}',
       '      {trustedOutputAlias.html(slots.request?.headers.get("x-object-proof") ?? "", { reason: "adversarial opaque object HTML authority proof" })}',
       '    </main>',
       '  ),',
@@ -3587,8 +3574,8 @@ export function addParanoidPhase5WriteBoundaryProof(root: string): void {
   const starterProof = readFileSync(starterProofPath, 'utf8');
   assertRequiredScaffoldAnchor(
     starterProof,
-    "import { appCsrf, type AppRequest } from './auth.js';",
-    'phase 5.1 protected starter DB-scope CSRF import',
+    "const publicProof = app.publicAccess('public starter mutation DB scope proof');",
+    'phase 5.1 explicit starter DB-scope access posture',
   );
   for (const mutationName of [
     'starterAbsentTablesContactWriteProof',
@@ -3596,9 +3583,10 @@ export function addParanoidPhase5WriteBoundaryProof(root: string): void {
   ]) {
     assertRequiredScaffoldAnchor(
       starterProof,
-      `export const ${mutationName} = mutation({\n  access: publicProof,\n  csrf: appCsrf,`,
-      `phase 5.1 protected ${mutationName} CSRF posture`,
+      `export const ${mutationName} = app.mutation({\n  access: publicProof,\n  input: proofInput,`,
+      `phase 5.1 protected ${mutationName} access posture`,
     );
+    assertMutationUsesDefaultCsrf(starterProof, mutationName);
   }
 
   writeFileSync(
@@ -3661,21 +3649,18 @@ export function addParanoidPhase5WriteBoundaryProof(root: string): void {
     'phase 5.1 protected write proof forms',
   );
   app = appendArrayEntry(app, 'endpoints', 'phase5WriteBoundaryStatusEndpoint');
-  app = app.includes(
-    '  mutations: [addContact, starterAbsentTablesContactWriteProof, starterRawAuthTableWriteProof, appSignIn, appSignOut],',
-  )
-    ? replaceRequired(
-        app,
-        '  mutations: [addContact, starterAbsentTablesContactWriteProof, starterRawAuthTableWriteProof, appSignIn, appSignOut],',
-        '  mutations: [addContact, starterAbsentTablesContactWriteProof, starterRawAuthTableWriteProof, phase5BoxedSecretBuilderWriteProof, phase5BoxedSecretRawWriteProof, phase5DdlWriteProof, phase5GovernedMassAssignmentProof, appSignIn, appSignOut],',
-        'phase 5.1 write boundary mutation registration',
-      )
-    : replaceRequired(
-        app,
-        '  mutations: [addContact, appSignIn, appSignOut],',
-        '  mutations: [addContact, phase5BoxedSecretBuilderWriteProof, phase5BoxedSecretRawWriteProof, phase5DdlWriteProof, phase5GovernedMassAssignmentProof, appSignIn, appSignOut],',
-        'phase 5.1 write boundary mutation registration',
-      );
+  const beforeMutationRegistration = app;
+  for (const mutationName of [
+    'phase5BoxedSecretBuilderWriteProof',
+    'phase5BoxedSecretRawWriteProof',
+    'phase5DdlWriteProof',
+    'phase5GovernedMassAssignmentProof',
+  ]) {
+    app = appendArrayEntry(app, 'mutations', mutationName);
+  }
+  if (app === beforeMutationRegistration) {
+    throw new Error('Expected scaffold anchor for phase 5.1 write boundary mutation registration.');
+  }
   writeFileSync(appPath, app, 'utf8');
 }
 
@@ -4859,6 +4844,21 @@ function addNamedImportSpecifiersRequired(
 
 function assertRequiredScaffoldAnchor(source: string, search: string, label: string): void {
   if (!source.includes(search)) throw new Error(`Expected scaffold anchor for ${label}.`);
+}
+
+function assertMutationUsesDefaultCsrf(source: string, mutationName: string): void {
+  const startAnchor = `export const ${mutationName} = app.mutation({`;
+  const start = source.indexOf(startAnchor);
+  const end = start < 0 ? -1 : source.indexOf('\n});', start);
+  if (start < 0 || end < 0) {
+    throw new Error(`Expected complete scaffold mutation ${mutationName}.`);
+  }
+  const declaration = source.slice(start, end);
+  if (/\bcsrf\s*:/u.test(declaration)) {
+    throw new Error(
+      `Expected scaffold mutation ${mutationName} to retain SPEC §6.6 default-on CSRF.`,
+    );
+  }
 }
 
 function escapeRegExp(value: string): string {

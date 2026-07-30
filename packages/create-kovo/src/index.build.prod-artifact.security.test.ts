@@ -28,6 +28,7 @@ import {
   addEscapedAttackerTextProof,
   addInternalHtmlImportProof,
   addNoJsFailureProof,
+  addParanoidPhase5WriteBoundaryProof,
   addRequestClosedDeclassificationProof,
   addRuntimeSecretBoundaryProof,
   addSecretViewEgressProof,
@@ -647,6 +648,20 @@ describe('create-kovo starter (build integration: production security artifacts)
     }
   }, 240_000);
 
+  it('augments the current app-scoped starter mutation shape without disabling CSRF', () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-kovo-paranoid-proof-source-contract-'));
+
+    try {
+      writeKovoProject(root, { name: 'Paranoid Proof Source Contract' });
+      linkStarterBuildDependencies(root);
+      addStarterMutationDbScopeProof(root, { mode: 'runtime-table-choke' });
+
+      expect(() => addParanoidPhase5WriteBoundaryProof(root)).not.toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 240_000);
+
   // @kovo-security-certifies KV406 starter-mutation-db-scope-prod-artifact
   it('enforces starter mutation DB table scope in paranoid production artifacts', async () => {
     const tempParent = tmpdir();
@@ -947,9 +962,7 @@ describe('create-kovo starter (build integration: production security artifacts)
         'href={trustedUrl(data.contacts.items.map((contact) => contact.email).join(',
       );
       expect(proofSource).toContain("reason: 'adversarial query-derived URL proof'");
-      expect(proofSource).toContain(
-        "(slots.request as { headers: Headers } | undefined)?.headers.get('x-proof')",
-      );
+      expect(proofSource).toContain('slots.request?.headers.get("x-proof")');
 
       const output = captureBuildFailure(() => buildProductionArtifact(unsafeRoot));
       expect(output).toContain('KV426');

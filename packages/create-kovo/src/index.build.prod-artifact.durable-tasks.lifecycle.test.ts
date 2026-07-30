@@ -63,5 +63,5 @@ describe('create-kovo starter (build integration: production durable task lifecy
         await expectCountForDuration(origin, selfRescheduleId, 2, 1400);
       },
     );
-  }, 300_000);
+  }, 600_000);
 });

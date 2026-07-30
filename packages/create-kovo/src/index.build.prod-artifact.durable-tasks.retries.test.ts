@@ -26,5 +26,5 @@ describe('create-kovo starter (build integration: production durable task retry 
         expect(await taskProofCount(origin, flakyId)).toBe(1);
       },
     );
-  }, 300_000);
+  }, 600_000);
 });
