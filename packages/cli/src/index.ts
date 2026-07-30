@@ -10,6 +10,7 @@ import {
   runExportCommand,
   runSourceCheckCommand,
 } from './commands/build-export.js';
+import { runKovoSourceCheckWatchCommand } from './commands/source-check-watch.js';
 import { parseDbArgs, runDbCommand } from './commands/db.js';
 import { parseAttestArgs, runAttestCommand } from './commands/attest.js';
 import { parseIncidentArgs, runIncidentScopeCommand } from './commands/incident-scope.js';
@@ -411,7 +412,9 @@ export async function mainAsync(
   }
   if (
     invocation.command === 'check' &&
-    (invocation.form === 'source-default' || invocation.form === 'source')
+    (invocation.form === 'source-default' ||
+      invocation.form === 'source' ||
+      invocation.form === 'source-watch')
   ) {
     const parsed = parseCheckArgs(args.slice(1));
     if (!parsed.ok || !('source' in parsed)) {
@@ -420,6 +423,15 @@ export async function mainAsync(
           ? 'kovo: source-backed check selected an incompatible command form.\n'
           : parsed.message,
         'check',
+      );
+    }
+    if (invocation.form === 'source-watch') {
+      return runKovoSourceCheckWatchCommand(
+        {
+          appModulePath: parsed.appModulePath,
+          cache: parsed.cache,
+        },
+        security,
       );
     }
     return writeFormattedCommandResult(

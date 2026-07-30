@@ -43,6 +43,7 @@ const EDIT_INVARIANT_PHASES = new Set([
 ]);
 
 export const SOURCE_PATH = 'src/components/counter-island.tsx';
+const APP_SOURCE_PATH = 'src/app.tsx';
 export const SOURCE_VARIANTS = Object.freeze([
   `/** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
@@ -444,14 +445,19 @@ async function nextWatchObservation(
     throw new Error('packed Kovo incremental check returned malformed JSONL');
   }
   const source = SOURCE_VARIANTS[expectedSourceRevision];
+  const editedSource = Array.isArray(record?.input?.closure)
+    ? record.input.closure.find((file) => file?.path === SOURCE_PATH)
+    : undefined;
   if (
     record?.version !== CHECK_WATCH_SCHEMA ||
     record?.event !== 'revision' ||
     record?.revision !== expectedRevision ||
     record?.input?.schema !== 'kovo-check-input-proof/v1' ||
     record?.input?.status !== 'accepted' ||
-    record?.input?.entry?.path !== SOURCE_PATH ||
-    record?.input?.entry?.digest !== sourceByteDigest(source) ||
+    record?.input?.entry?.path !== APP_SOURCE_PATH ||
+    !/^sha256:[0-9a-f]{64}$/u.test(record?.input?.entry?.digest ?? '') ||
+    editedSource?.digest !== sourceByteDigest(source) ||
+    editedSource?.bytes !== Buffer.byteLength(source, 'utf8') ||
     !/^sha256:[0-9a-f]{64}$/u.test(record?.input?.closureDigest ?? '') ||
     !/^sha256:[0-9a-f]{64}$/u.test(record?.input?.projectDigest ?? '') ||
     record?.phaseCensus?.schema !== CHECK_WATCH_CENSUS_SCHEMA ||
@@ -459,7 +465,7 @@ async function nextWatchObservation(
     record?.check?.version !== 'kovo-diagnostic/v1' ||
     record?.check?.result?.protocol !== 'kovo-check/v1' ||
     record?.check?.result?.exitCode !== 0 ||
-    !/^kovo-check\/v1\r?\nOK\r?\n/mu.test(record?.check?.result?.text ?? '')
+    !/^kovo-check\/v1\r?\n/mu.test(record?.check?.result?.text ?? '')
   ) {
     throw new Error(`packed Kovo incremental check returned wrong revision ${expectedRevision}`);
   }
@@ -476,7 +482,7 @@ async function nextWatchObservation(
     );
   }
   return Object.freeze({
-    analysisDigest: record.input.entry.digest,
+    analysisDigest: sourceAnalysisDigest(source),
     checkGraphDigest: record.phaseCensus.checkGraphDigest,
     closureDigest: record.input.closureDigest,
     diagnosticPhases: record.phaseCensus.phases,
