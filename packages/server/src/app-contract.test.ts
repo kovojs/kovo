@@ -131,6 +131,21 @@ describe('defineKovo app contract', () => {
     expect(secondQuery.key).toBe('test/second');
   });
 
+  it('keeps direct declaration factories closed after assembly', () => {
+    const contract = defineKovo({
+      appId: APP_ID,
+      egress: { enabled: false, justification: 'isolated app-contract unit test' },
+    });
+    contract.assemble({});
+
+    expect(() =>
+      contract.query({
+        access: publicAccess('closed contract negative control'),
+        load: () => null,
+      }),
+    ).toThrow(/app\.query\(\) cannot run after assembly has closed/u);
+  });
+
   it('binds optimistic policies to exact query handles and survives derived mutation identity', () => {
     const contract = defineKovo({
       appId: APP_ID,

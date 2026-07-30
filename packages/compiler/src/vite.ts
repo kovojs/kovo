@@ -265,6 +265,9 @@ export interface KovoViteDevServer {
   middlewares: {
     use(handler: KovoViteMiddleware): void;
   };
+  moduleGraph?: {
+    invalidateAll(): void;
+  };
   ssrLoadModule?: (id: string) => Promise<Record<string, unknown>>;
   ws?: KovoViteWebSocket;
 }
@@ -1087,6 +1090,7 @@ function createBoundKovoVitePlugin(
           return context.modules ?? [];
         }
 
+        let requiresFreshAppContractAssembly = false;
         const result = await compileViteComponentModule(
           compileComponentModule,
           options,
@@ -1094,6 +1098,9 @@ function createBoundKovoVitePlugin(
           hotUpdateSourceFileSystems,
           fileName,
           source,
+          () => {
+            requiresFreshAppContractAssembly = true;
+          },
         );
         if (!isCurrent()) return [];
         const emittedFiles = snapshotViteEmittedFiles(result);
@@ -1116,6 +1123,13 @@ function createBoundKovoVitePlugin(
           return [];
         }
 
+        if (requiresFreshAppContractAssembly) {
+          // SPEC §6.2.1: a changed component module may be re-evaluated while its imported
+          // defineKovo() provider remains cached. Invalidate both Vite module environments so
+          // the next SSR request evaluates a fresh contract and assembly; never reopen a closed
+          // contract or return stale query/task/mutation handles.
+          context.server.moduleGraph?.invalidateAll();
+        }
         recordViteCompileResult(hotUpdateDevState, fileName, metadata, emittedFiles);
         const classification = classifyViteHmrImpact(previous, next);
         const event = eventForHmrClassification(classification);
@@ -1508,6 +1522,7 @@ function compileViteComponentModule(
   sourceFileSystems: readonly CompilerSourceFileSystem[],
   fileName: string,
   source: string,
+  onAppContractDeclaration?: () => void,
 ): Promise<ViteCompileResult> {
   // App-scoped factories need the same compiler-owned Program proof while component lowering
   // classifies them. Running only the standalone pre-pass is insufficient for a TSX module that
@@ -1522,6 +1537,9 @@ function compileViteComponentModule(
       rootDirectory: root,
       rootNames: [fileName],
     });
+    if (viteProjectHasAppContractDeclaration(project, fileName, source)) {
+      onAppContractDeclaration?.();
+    }
     return project.withEntryResolutions(fileName, (programSource) => {
       if (programSource !== source) {
         throw new TypeError(
@@ -1546,6 +1564,37 @@ function compileViteComponentModule(
     fileName,
     source,
   );
+}
+
+function viteProjectHasAppContractDeclaration(
+  project: ReturnType<typeof createCompilerOwnedAppContractProject>,
+  fileName: string,
+  source: string,
+): boolean {
+  const facts = project.staticFacts([{ fileName, source }]);
+  const length = compilerArrayLength(facts, 'Vite app-contract declaration facts');
+  for (let index = 0; index < length; index += 1) {
+    const fact = compilerOwnDataValue(facts, index, 'Vite app-contract declaration facts');
+    if (typeof fact !== 'object' || fact === null || compilerArrayIsArray(fact)) {
+      throw new TypeError(`Vite app-contract declaration facts[${index}] must be an object.`);
+    }
+    const memberName = compilerOwnDataValue(
+      fact,
+      'memberName',
+      `Vite app-contract declaration facts[${index}]`,
+    );
+    if (
+      memberName === 'endpoint' ||
+      memberName === 'layout' ||
+      memberName === 'mutation' ||
+      memberName === 'query' ||
+      memberName === 'route' ||
+      memberName === 'task'
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 async function compileViteComponentModuleWithResolvedFactories(

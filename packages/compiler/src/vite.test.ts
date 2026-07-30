@@ -857,9 +857,11 @@ export const orderPaid = webhook('/webhooks/order-paid', {
     writeFileSync(entry, source('zero'));
     const plugin = kovoVitePlugin({ include: ['src'] });
     const ws = { send: vi.fn() };
+    const moduleGraph = { invalidateAll: vi.fn() };
     const server = {
       config: { root },
       middlewares: { use() {} },
+      moduleGraph,
       ws,
     };
     plugin.configureServer?.(server);
@@ -883,6 +885,7 @@ export const orderPaid = webhook('/webhooks/order-paid', {
           server,
         }),
       ).resolves.toEqual([]);
+      expect(moduleGraph.invalidateAll).toHaveBeenCalledOnce();
       expect(plugin.getClientModules?.()).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
