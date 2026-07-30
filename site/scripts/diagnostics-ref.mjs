@@ -48,6 +48,12 @@ const INTENTIONAL_NON_FRAMEWORK_PLACEHOLDERS = [
     pathPattern: /packages\/core\/src\/diagnostic-registry\.test\.ts$/u,
     reason: 'the runtime registry conformance test proves an unregistered code is rejected',
   },
+  {
+    code: 'KV999',
+    pathPattern: /packages\/server\/src\/vite-dev\.test\.ts$/u,
+    reason:
+      'the authenticated Vite diagnostic handoff test proves an unknown registry code is rejected',
+  },
 ];
 
 /** Read the diagnostics registry from core's internal source so the catalog

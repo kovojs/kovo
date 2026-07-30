@@ -75,7 +75,8 @@ kovo build ./src/app.ts
 kovo explain page /account/settings --layouts dist/.kovo/graph.json
 ```
 
-If you want the CLI's path-discovery rules, see [Build the graph artifact first](/guides/cli/#build-the-graph-artifact-first).
+If you want the CLI's path-discovery rules, see
+[Check current source and inspect artifacts explicitly](/guides/cli/#check-current-source-inspect-artifacts-explicitly).
 
 ## Render segment failures
 

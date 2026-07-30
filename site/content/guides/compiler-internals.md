@@ -101,7 +101,7 @@ functions that render full pages without diverging from them.
 - `kovo explain component <Name> dist/.kovo/graph.json` shows the compiler's view of any component — queries
   consumed, fragments targeted, handlers exported — without reading the emitted files at all. See
   [Reading kovo check & kovo explain](/guides/kovo-explain/) and
-  [Build the graph artifact first](/guides/cli/#build-the-graph-artifact-first).
+  [Check current source and inspect artifacts explicitly](/guides/cli/#check-current-source-inspect-artifacts-explicitly).
 
 <details>
 <summary>Spec & diagnostics</summary>

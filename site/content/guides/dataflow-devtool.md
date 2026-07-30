@@ -26,7 +26,7 @@ pnpm --filter @kovojs/example-stackoverflow test -- src/interactive-app.test.ts
 
 For a visual devtool host, pass the graph object or a build-produced graph file into
 `buildBundle()`. The CLI writes that file at `dist/.kovo/graph.json`; the discovery rules are in
-[Build the graph artifact first](/guides/cli/#build-the-graph-artifact-first).
+[Check current source and inspect artifacts explicitly](/guides/cli/#check-current-source-inspect-artifacts-explicitly).
 
 ## Mount it under a repo dev server
 
