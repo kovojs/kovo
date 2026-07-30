@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 import { kovoVitePlugin as compilerKovoVitePlugin } from '@kovojs/compiler/vite';
 import { isRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
@@ -19,7 +19,10 @@ import { query } from './query.js';
 import { route } from './route.js';
 import { s } from './schema.js';
 import { kovo } from './vite.js';
-import type { KovoAppShellViteMiddleware } from './vite-dev.js';
+import {
+  createKovoAppShellViteDevIntegration,
+  type KovoAppShellViteMiddleware,
+} from './vite-dev.js';
 
 interface KovoViteConfigureServer {
   buildStart?(): void | Promise<void>;
@@ -215,6 +218,58 @@ export const SnapshotButton = component({
           source: expect.stringContaining('SnapshotButton$button_click'),
         }),
       ]);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('emits one full reload when the compiler and app shell observe the same app edit', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-public-vite-single-app-reload-'));
+    const appSource = `
+import { defineKovo } from '@kovojs/server';
+const app = defineKovo({});
+export default app.assemble({});
+`;
+    const middlewares = { use() {} };
+    const ws = { send: vi.fn() };
+
+    try {
+      await mkdir(join(root, 'src'), { recursive: true });
+      await writeFile(join(root, 'src/app-shell.ts'), appSource, 'utf8');
+      const plugin = kovo({ app: '/src/app-shell.ts' }) as unknown as KovoViteConfigureServer;
+      await plugin.configResolved?.({ command: 'serve', plugins: [plugin], root });
+      const server = withViteRunner({
+        config: { root },
+        middlewares,
+        async ssrLoadModule(id: string) {
+          expect(id).toBe('@kovojs/server/internal/app-shell-vite');
+          return { createKovoAppShellViteDevIntegration };
+        },
+        ws,
+      });
+      await plugin.configureServer(server);
+
+      await expect(
+        plugin.handleHotUpdate?.({
+          file: join(root, 'src/app-shell.ts'),
+          modules: ['vite-module'],
+          read: async () => appSource,
+          server,
+        }),
+      ).resolves.toEqual([]);
+
+      expect(ws.send).toHaveBeenCalledWith({
+        data: {
+          impact: 'routeRefresh',
+          reasons: ['route-shell'],
+          sourceFile: 'src/app-shell.ts',
+        },
+        event: 'kovo:route-shell',
+        type: 'custom',
+      });
+      expect(ws.send.mock.calls.filter(([payload]) => payload.type === 'full-reload')).toHaveLength(
+        1,
+      );
     } finally {
       await rm(root, { force: true, recursive: true });
     }

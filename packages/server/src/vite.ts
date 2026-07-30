@@ -16,6 +16,7 @@ import {
   extractPackageComponentCss,
 } from '@kovojs/compiler/package-styles';
 import {
+  bindFrameworkKovoViteDevGenerationStage,
   compilerOwnedProjectMutationRegistryFactsFromFiles,
   collectCssAssetManifest,
   type ComponentCssAsset,
@@ -59,9 +60,14 @@ import {
   trustedViteSecurityProfileIntegrationSentinel,
   trustedViteSecurityProfileParanoidSentinel,
   trustedViteSecurityProfileResponseCookiesSentinel,
+  trustedViteSecurityProfileRunnerGenerationsSentinel,
   trustedViteSecurityProfileSentinel,
 } from './internal/vite-security-sentinel.ts';
-import type { KovoAppShellViteCompilerModuleDiagnosticReport } from './vite-dev.js';
+import type {
+  KovoAppShellViteCompilerModuleDiagnosticReport,
+  KovoViteDevRunnerGenerationBroker,
+  KovoViteDevRunnerGenerationModules,
+} from './vite-dev.js';
 import {
   compilerDiagnosticBelongsToViteHandoff,
   createCompilerClientModuleViteHandoff,
@@ -235,6 +241,10 @@ interface CssSplitChunks {
   routes: Readonly<Record<string, readonly CssSplitChunk[]>>;
 }
 
+interface TrustedViteRunnerGenerationIntegration extends KovoViteDevRunnerGenerationModules {
+  readonly runnerGenerations: KovoViteDevRunnerGenerationBroker;
+}
+
 /**
  * Public Vite integration for authored Kovo apps (SPEC.md §9.5). The app entry
  * must default-export a KovoApp; generated route artifacts stay compiler-owned.
@@ -247,6 +257,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
     [trustedViteSecurityProfileIntegrationSentinel]?: unknown;
     [trustedViteSecurityProfileParanoidSentinel]?: unknown;
     [trustedViteSecurityProfileResponseCookiesSentinel]?: unknown;
+    [trustedViteSecurityProfileRunnerGenerationsSentinel]?: unknown;
     [trustedViteSecurityProfileSentinel]?: unknown;
   };
   const trustedProfile = buildOwnDataProperty(
@@ -269,6 +280,11 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
     trustedViteSecurityProfileResponseCookiesSentinel,
     'trusted Vite response cookies',
   );
+  const trustedRunnerGenerations = buildOwnDataProperty(
+    trustedOptions,
+    trustedViteSecurityProfileRunnerGenerationsSentinel,
+    'trusted Vite runner generations',
+  );
   const hasTrustedSecurityProfile =
     trustedProfile.present && trustedProfile.value === trustedViteSecurityProfileSentinel;
   const trustedCreateDevIntegration =
@@ -286,6 +302,33 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
     typeof trustedResponseCookies.value === 'function'
       ? (trustedResponseCookies.value as (response: ServerResponse) => readonly string[])
       : undefined;
+  const runnerGenerationIntegration =
+    hasTrustedSecurityProfile && trustedRunnerGenerations.present
+      ? trustedViteRunnerGenerationIntegration(trustedRunnerGenerations.value)
+      : undefined;
+  const runnerGenerationStage =
+    runnerGenerationIntegration === undefined
+      ? undefined
+      : buildOwnDataProperty(
+          runnerGenerationIntegration.runnerGenerations,
+          'stage',
+          'trusted Vite runner generation stage',
+        );
+  if (
+    runnerGenerationStage !== undefined &&
+    (!runnerGenerationStage.present || typeof runnerGenerationStage.value !== 'function')
+  ) {
+    throw new TypeError('Trusted Vite runner generation broker must expose stage().');
+  }
+  const stageCompilerGeneration =
+    runnerGenerationStage === undefined
+      ? undefined
+      : (token: object): Promise<void> =>
+          viteReflectApply(
+            runnerGenerationStage.value as (...args: never[]) => Promise<void>,
+            runnerGenerationIntegration!.runnerGenerations,
+            [token],
+          ) as Promise<void>;
   const appProperty = buildOwnDataProperty(options, 'app', 'kovo({ app })');
   const app = authoredAppEntry(appProperty.present ? appProperty.value : undefined);
   const runtimeRegistryPublicId = `virtual:kovo-runtime-registry:${app}`;
@@ -359,18 +402,24 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
 
   const compilerPlugin = async (): Promise<KovoCompilerVitePlugin> => {
     if (externalCompilerPlugin !== undefined) return externalCompilerPlugin;
-    compilerPluginValue ??= createCompilerVitePlugin({
-      include: [(fileName: string) => isAuthoredAppSourceFile(fileName, app, root)],
-      onModuleDiagnostics(report: unknown) {
-        onModuleDiagnostics?.(report);
-      },
-      queryShapeFacts() {
-        return compilerQueryShapeFacts;
-      },
-      registryFacts() {
-        return compilerProjectMutationFacts;
-      },
-    }) as KovoCompilerVitePlugin;
+    if (compilerPluginValue === undefined) {
+      const created = createCompilerVitePlugin({
+        include: [(fileName: string) => isAuthoredAppSourceFile(fileName, app, root)],
+        onModuleDiagnostics(report: unknown) {
+          onModuleDiagnostics?.(report);
+        },
+        queryShapeFacts() {
+          return compilerQueryShapeFacts;
+        },
+        registryFacts() {
+          return compilerProjectMutationFacts;
+        },
+      }) as KovoCompilerVitePlugin;
+      if (stageCompilerGeneration !== undefined) {
+        bindFrameworkKovoViteDevGenerationStage(created, stageCompilerGeneration);
+      }
+      compilerPluginValue = created;
+    }
     return compilerPluginValue;
   };
 
@@ -414,6 +463,9 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
         compilerProjectMutationFacts,
       );
       externalCompilerPlugin = configuredCompiler;
+      if (externalCompilerPlugin !== undefined && stageCompilerGeneration !== undefined) {
+        bindFrameworkKovoViteDevGenerationStage(externalCompilerPlugin, stageCompilerGeneration);
+      }
       const compiler = await compilerPlugin();
       if (externalCompilerPlugin === undefined) await compiler.configResolved?.(config);
     },
@@ -499,6 +551,12 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
         moduleId: app,
         prepareCompilerClientModules,
         ...(responseSetCookieValues === undefined ? {} : { responseSetCookieValues }),
+        ...(runnerGenerationIntegration === undefined
+          ? {}
+          : {
+              runnerGenerationModules: runnerGenerationIntegration,
+              runnerGenerations: runnerGenerationIntegration.runnerGenerations,
+            }),
         stylesheetSourceRoot: buildSecurityPathDirname(appEntryFileName(app, root)),
         stylesheetAssets: () =>
           stylesheetAssetsFromCssSplitChunks(
@@ -593,8 +651,8 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
         );
       }
 
-      // App-shell HMR owns route-shell event selection, but it must not consume the update before
-      // the compiler clears a closed app contract's exact SSR runner (SPEC §6.2.1/§9.5.1).
+      // App-shell HMR owns route-shell event selection, but it must not publish the update before
+      // the compiler has staged the fresh, fully assembled runner generation (SPEC §6.2.1/§9.5.1).
       const errorRevisionBeforeCompile = compilerErrorDiagnosticRevision;
       const compilerResult =
         externalCompilerPlugin === undefined
@@ -609,6 +667,44 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
     name: 'kovo',
   };
   return plugin;
+}
+
+function trustedViteRunnerGenerationIntegration(
+  value: unknown,
+): TrustedViteRunnerGenerationIntegration {
+  if (typeof value !== 'object' || value === null || securityArrayIsArray(value)) {
+    throw new TypeError('Trusted Vite runner generation integration must be an object.');
+  }
+  const read = (key: keyof TrustedViteRunnerGenerationIntegration): unknown => {
+    const property = buildOwnDataProperty(value, key, `trusted Vite runner generation ${key}`);
+    if (!property.present) {
+      throw new TypeError(`Trusted Vite runner generation ${key} is required.`);
+    }
+    return property.value;
+  };
+  const runnerGenerations = read('runnerGenerations');
+  if (typeof runnerGenerations !== 'object' || runnerGenerations === null) {
+    throw new TypeError('Trusted Vite runner generation broker must be an object.');
+  }
+  const appShellModuleId = read('appShellModuleId');
+  const nodeDataPlaneBootstrapModuleId = read('nodeDataPlaneBootstrapModuleId');
+  const securityProfileModuleId = read('securityProfileModuleId');
+  const serverRootModuleId = read('serverRootModuleId');
+  if (
+    typeof appShellModuleId !== 'string' ||
+    typeof nodeDataPlaneBootstrapModuleId !== 'string' ||
+    typeof securityProfileModuleId !== 'string' ||
+    typeof serverRootModuleId !== 'string'
+  ) {
+    throw new TypeError('Trusted Vite runner generation module ids must be strings.');
+  }
+  return {
+    appShellModuleId,
+    nodeDataPlaneBootstrapModuleId,
+    runnerGenerations: runnerGenerations as KovoViteDevRunnerGenerationBroker,
+    securityProfileModuleId,
+    serverRootModuleId,
+  };
 }
 
 /**

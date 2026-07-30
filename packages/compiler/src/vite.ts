@@ -44,8 +44,6 @@ import {
   compilerNumberIsSafeInteger,
   compilerObjectKeys,
   compilerOwnDataValue,
-  compilerPinnedStableMethod,
-  compilerPinnedStableProperty,
   compilerPromiseIsPromise,
   compilerPromiseThen,
   compilerRegExpReplace,
@@ -271,6 +269,7 @@ interface KovoViteRunnableDevEnvironment {
   };
 }
 
+/** @internal Structural Vite dev-server hook carrier used only by framework integrations/tests. */
 export interface KovoViteDevServer {
   config?: {
     root?: string;
@@ -411,6 +410,12 @@ interface ViteDevFileState {
   sourceUnits: number;
 }
 
+interface ViteActiveHmrFileState {
+  readonly hasAppContractOperation: boolean;
+  readonly hasCompilerState: boolean;
+  readonly hmrImpact: HmrImpactMetadata | undefined;
+}
+
 interface ViteDevStateStore {
   buildMode: boolean;
   compilerOwnedProvenance: object | undefined;
@@ -472,6 +477,13 @@ interface FrameworkVitePluginAuthority {
   readonly purpose: ViteTransformPurpose;
   readonly sourceRootCoverage: '*' | string | null;
 }
+
+type FrameworkViteDevGenerationStage = (token: object) => Promise<void>;
+
+const frameworkViteDevGenerationStages = compilerCreateWeakMap<
+  KovoVitePlugin,
+  FrameworkViteDevGenerationStage
+>();
 
 type ViteTransformPurpose = 'css-collector' | 'server';
 
@@ -665,6 +677,30 @@ export function compilerOwnedViteDiagnosticForPlugin(plugin: unknown, value: unk
   );
 }
 
+/**
+ * Bind the genuine framework compiler's successful HMR commits to one trusted fresh-runner stage.
+ *
+ * @internal The server bootstrap calls this before authored config evaluation. Structural plugins,
+ * CSS collectors, and repeat binding fail closed (SPEC §6.2.1 / §6.6 rule 6).
+ */
+export function bindFrameworkKovoViteDevGenerationStage(
+  plugin: unknown,
+  stage: FrameworkViteDevGenerationStage,
+): void {
+  if (typeof plugin !== 'object' || plugin === null || typeof stage !== 'function') {
+    throw new TypeError('Kovo Vite dev generation binding requires a genuine plugin and stage.');
+  }
+  const typedPlugin = plugin as KovoVitePlugin;
+  const authority = compilerWeakMapGet(frameworkVitePluginAuthorities, typedPlugin);
+  if (authority?.purpose !== 'server') {
+    throw new TypeError('Kovo Vite dev generation binding requires a genuine server compiler.');
+  }
+  if (compilerWeakMapGet(frameworkViteDevGenerationStages, typedPlugin) !== undefined) {
+    throw new Error('Kovo Vite dev generation stage was already bound.');
+  }
+  compilerWeakMapSet(frameworkViteDevGenerationStages, typedPlugin, stage);
+}
+
 function createBoundKovoVitePlugin(
   compileComponentModule: ViteCompileComponentModule,
   options: KovoVitePluginOptions,
@@ -682,13 +718,34 @@ function createBoundKovoVitePlugin(
   let configurationEpoch = 0;
   let compileIssue = 0;
   let latestCompileIssueByFile = compilerCreateMap<string, number>();
+  let latestHotUpdateIssueByFile = compilerCreateMap<string, number>();
   let appContractOperationsByFile = compilerCreateMap<string, boolean>();
-  let appContractRefreshAuthority: ViteAppContractRefreshAuthority | undefined;
+  let activeHmrStateByFile = compilerCreateMap<string, ViteActiveHmrFileState>();
+  let stagedAppContractOperationsByFile: Map<string, boolean> | undefined;
+  let stagedDevState: ViteDevStateStore | undefined;
+  let viteDevMutationTail = compilerPromiseThen(undefined, () => undefined);
+  let pluginIdentity: KovoVitePlugin | undefined;
+  const currentAppContractOperations = (): Map<string, boolean> =>
+    stagedAppContractOperationsByFile ?? appContractOperationsByFile;
+  const currentDevState = (): ViteDevStateStore => stagedDevState ?? devState;
+  const enqueueViteDevMutation = <Result>(operation: () => Promise<Result>): Promise<Result> => {
+    const pending = compilerPromiseThen(
+      viteDevMutationTail,
+      () => operation(),
+      () => operation(),
+    );
+    viteDevMutationTail = compilerPromiseThen(
+      pending,
+      () => undefined,
+      () => undefined,
+    );
+    return pending;
+  };
   // SPEC §5.2's one-to-one client module mapping does not authorize Kovo to widen Vite's
   // configured source boundary. Pin the same roots before any remote dev-module request is served.
   let clientSourceFileSystems = viteClientSourceFileSystems(root);
 
-  return {
+  const plugin: KovoVitePlugin = {
     config() {
       return {
         oxc: {
@@ -709,8 +766,11 @@ function createBoundKovoVitePlugin(
     configResolved(config) {
       configurationEpoch += 1;
       latestCompileIssueByFile = compilerCreateMap<string, number>();
+      latestHotUpdateIssueByFile = compilerCreateMap<string, number>();
       appContractOperationsByFile = compilerCreateMap<string, boolean>();
-      appContractRefreshAuthority = undefined;
+      activeHmrStateByFile = compilerCreateMap<string, ViteActiveHmrFileState>();
+      stagedAppContractOperationsByFile = undefined;
+      stagedDevState = undefined;
       const buildMode =
         config.command === undefined ? devState.buildMode : config.command === 'build';
       devState = createViteDevStateStore(buildMode, compilerOwnedProvenance);
@@ -718,12 +778,13 @@ function createBoundKovoVitePlugin(
       clientSourceFileSystems = viteClientSourceFileSystems(root, config.server?.fs?.allow);
     },
     configureServer(server) {
-      // Pin Vite's public SSR runner before middleware registration or any authored callbacks.
-      // App-contract refresh must clear the same module runner used by request dispatch.
-      appContractRefreshAuthority = captureViteAppContractRefreshAuthority(server);
       configurationEpoch += 1;
       latestCompileIssueByFile = compilerCreateMap<string, number>();
+      latestHotUpdateIssueByFile = compilerCreateMap<string, number>();
       appContractOperationsByFile = compilerCreateMap<string, boolean>();
+      activeHmrStateByFile = compilerCreateMap<string, ViteActiveHmrFileState>();
+      stagedAppContractOperationsByFile = undefined;
+      stagedDevState = undefined;
       devState = createViteDevStateStore(false, compilerOwnedProvenance);
       root = server.config?.root ?? root;
       clientSourceFileSystems = viteClientSourceFileSystems(root, server.config?.server?.fs?.allow);
@@ -758,10 +819,10 @@ function createBoundKovoVitePlugin(
     },
     getCssAssetManifest(manifestOptions = {}) {
       const manifestConfigurationEpoch = configurationEpoch;
-      const manifestDevState = devState;
+      const manifestDevState = currentDevState();
       const optionsSnapshot = snapshotCssAssetManifestOptions(manifestOptions);
       const isCurrent = () =>
-        manifestConfigurationEpoch === configurationEpoch && manifestDevState === devState;
+        manifestConfigurationEpoch === configurationEpoch && manifestDevState === currentDevState();
       if (!isCurrent()) {
         throw new Error('Kovo Vite configuration changed while CSS manifest options were read.');
       }
@@ -781,10 +842,11 @@ function createBoundKovoVitePlugin(
       return manifest;
     },
     getClientModules() {
+      const clientDevState = currentDevState();
       const modules: KovoViteCompiledClientModule[] = [];
       const queryPlanInputs: QueryPlanBootstrapInput[] = [];
       let hasOptimisticModule = false;
-      compilerMapForEach(devState.files, (state) => {
+      compilerMapForEach(clientDevState.files, (state) => {
         if (state.hasOptimisticModule === true) hasOptimisticModule = true;
         if (state.queryPlanBootstrapInput !== undefined) {
           insertQueryPlanBootstrapInput(queryPlanInputs, state.queryPlanBootstrapInput);
@@ -793,7 +855,7 @@ function createBoundKovoVitePlugin(
         if (module === undefined) return;
         insertViteCompiledClientModule(modules, module);
       });
-      const renderPlanFingerprint = viteAppRenderPlanFingerprint(devState);
+      const renderPlanFingerprint = viteAppRenderPlanFingerprint(clientDevState);
       if (
         hasOptimisticModule ||
         compilerArrayLength(queryPlanInputs, 'Vite query-plan bootstrap inputs') > 0
@@ -824,7 +886,7 @@ function createBoundKovoVitePlugin(
               source: kovoDeferredAppRuntimeModuleSource,
             }),
             'deferred-app-runtime',
-            devState.compilerOwnedProvenance,
+            clientDevState.compilerOwnedProvenance,
           ),
         );
         insertViteCompiledClientModule(
@@ -836,7 +898,7 @@ function createBoundKovoVitePlugin(
               source: bootstrap.source,
             }),
             'app-bootstrap',
-            devState.compilerOwnedProvenance,
+            clientDevState.compilerOwnedProvenance,
           ),
         );
       }
@@ -844,7 +906,7 @@ function createBoundKovoVitePlugin(
         compilerMapDenseViteClientModules(
           modules,
           renderPlanFingerprint,
-          devState.compilerOwnedProvenance,
+          clientDevState.compilerOwnedProvenance,
         ),
       );
     },
@@ -861,7 +923,7 @@ function createBoundKovoVitePlugin(
       const loadRoot = root;
       const loadSourceFileSystems = clientSourceFileSystems;
       const loadConfigurationEpoch = configurationEpoch;
-      const loadDevState = devState;
+      const loadDevState = currentDevState();
       const clientFilePath = viteRequestFileName(id);
       if (!compilerStringEndsWith(clientFilePath, '.client.js')) return null;
       const loadFileName = viteComponentFileName(
@@ -873,7 +935,7 @@ function createBoundKovoVitePlugin(
       compilerMapSet(latestCompileIssueByFile, loadFileName, loadCompileIssue);
       const isCurrent = () =>
         loadConfigurationEpoch === configurationEpoch &&
-        loadDevState === devState &&
+        loadDevState === currentDevState() &&
         compilerMapGet(latestCompileIssueByFile, loadFileName) === loadCompileIssue;
       const finish = () => {
         if (compilerMapGet(latestCompileIssueByFile, loadFileName) === loadCompileIssue) {
@@ -917,14 +979,16 @@ function createBoundKovoVitePlugin(
       const transformRoot = root;
       const transformSourceFileSystems = clientSourceFileSystems;
       const transformConfigurationEpoch = configurationEpoch;
-      const transformDevState = devState;
+      const transformDevState = currentDevState();
+      const transformAppContractOperations = currentAppContractOperations();
       const fileName = viteComponentFileName(id, transformRoot);
       compileIssue += 1;
       const transformCompileIssue = compileIssue;
       compilerMapSet(latestCompileIssueByFile, fileName, transformCompileIssue);
       const isCurrent = () =>
         transformConfigurationEpoch === configurationEpoch &&
-        transformDevState === devState &&
+        transformDevState === currentDevState() &&
+        transformAppContractOperations === currentAppContractOperations() &&
         compilerMapGet(latestCompileIssueByFile, fileName) === transformCompileIssue;
       const finish = () => {
         if (compilerMapGet(latestCompileIssueByFile, fileName) === transformCompileIssue) {
@@ -995,7 +1059,7 @@ function createBoundKovoVitePlugin(
           }
           if (isAuthoredSource && isCurrent()) {
             recordViteAppContractOperations(
-              appContractOperationsByFile,
+              transformAppContractOperations,
               fileName,
               hasAppContractOperation,
             );
@@ -1036,7 +1100,7 @@ function createBoundKovoVitePlugin(
               );
               if (transformed !== null && isCurrent()) {
                 recordViteAppContractOperations(
-                  appContractOperationsByFile,
+                  transformAppContractOperations,
                   fileName,
                   hasAppContractOperation,
                 );
@@ -1065,7 +1129,7 @@ function createBoundKovoVitePlugin(
         );
         if (transformed !== null && isCurrent()) {
           recordViteAppContractOperations(
-            appContractOperationsByFile,
+            transformAppContractOperations,
             fileName,
             hasAppContractOperation,
           );
@@ -1075,175 +1139,301 @@ function createBoundKovoVitePlugin(
         finish();
       }
     },
-    async handleHotUpdate(context) {
-      // Capture before context.read(): the read itself is attacker/re-entry capable async code.
-      const hotUpdateRoot = root;
-      const hotUpdateSourceFileSystems = clientSourceFileSystems;
-      const hotUpdateConfigurationEpoch = configurationEpoch;
-      const hotUpdateDevState = devState;
-      const hotUpdateRefreshAuthority = appContractRefreshAuthority;
-      const fileName = viteComponentFileName(context.file, hotUpdateRoot);
-      compileIssue += 1;
-      const hotUpdateCompileIssue = compileIssue;
-      compilerMapSet(latestCompileIssueByFile, fileName, hotUpdateCompileIssue);
-      const isCurrent = () =>
-        hotUpdateConfigurationEpoch === configurationEpoch &&
-        hotUpdateDevState === devState &&
-        compilerMapGet(latestCompileIssueByFile, fileName) === hotUpdateCompileIssue;
-      try {
-        const previousState = compilerMapGet(hotUpdateDevState.files, fileName);
-        const previous = previousState?.hmrImpact ?? null;
-        const previousHadAppContractOperation =
-          compilerMapGet(appContractOperationsByFile, fileName) === true;
-        const source = await context.read();
-        if (!isCurrent()) return [];
-        const isAuthoredSource = shouldTransformViteAuthoredSource(fileName, source, options);
-        if (!isCurrent()) return [];
-        if (isAuthoredSource) assertKovoViteJsxPragmas(fileName, source);
-        if (!isCurrent()) return [];
-        const isComponentSource = shouldTransformViteComponentSource(fileName, source, options);
-        if (!isCurrent()) return [];
-        if (isAuthoredSource && !isComponentSource) {
-          validateViteStandaloneAuthoringSurface(
+    handleHotUpdate(context) {
+      return enqueueViteDevMutation(async () => {
+        // Capture before context.read(): the read itself is attacker/re-entry capable async code.
+        const hotUpdateRoot = root;
+        const hotUpdateSourceFileSystems = clientSourceFileSystems;
+        const hotUpdateConfigurationEpoch = configurationEpoch;
+        const activeDevState = devState;
+        const hotUpdateDevState = cloneViteDevStateStore(activeDevState);
+        const hotUpdateAppContractOperations = cloneViteDevMap(appContractOperationsByFile);
+        if (stagedDevState !== undefined || stagedAppContractOperationsByFile !== undefined) {
+          throw new Error('Kovo Vite runner generation staging overlapped unexpectedly.');
+        }
+        stagedDevState = hotUpdateDevState;
+        stagedAppContractOperationsByFile = hotUpdateAppContractOperations;
+        const hotUpdateGenerationStage =
+          pluginIdentity === undefined
+            ? undefined
+            : compilerWeakMapGet(frameworkViteDevGenerationStages, pluginIdentity);
+        const fileName = viteComponentFileName(context.file, hotUpdateRoot);
+        compileIssue += 1;
+        const hotUpdateCompileIssue = compileIssue;
+        compilerMapSet(latestHotUpdateIssueByFile, fileName, hotUpdateCompileIssue);
+        const isCurrent = () =>
+          hotUpdateConfigurationEpoch === configurationEpoch &&
+          activeDevState === devState &&
+          hotUpdateDevState === stagedDevState &&
+          hotUpdateAppContractOperations === stagedAppContractOperationsByFile &&
+          compilerMapGet(latestHotUpdateIssueByFile, fileName) === hotUpdateCompileIssue;
+        const commitCandidate = (): void => {
+          if (!isCurrent()) {
+            throw new Error('Kovo Vite runner generation changed before compiler commit.');
+          }
+          commitViteDevStateStore(activeDevState, hotUpdateDevState);
+          appContractOperationsByFile = hotUpdateAppContractOperations;
+          stagedDevState = undefined;
+          stagedAppContractOperationsByFile = undefined;
+        };
+        try {
+          const previousState = compilerMapGet(hotUpdateDevState.files, fileName);
+          let activeHmrState = compilerMapGet(activeHmrStateByFile, fileName);
+          if (activeHmrState === undefined) {
+            activeHmrState = compilerFreeze({
+              hasAppContractOperation:
+                compilerMapGet(appContractOperationsByFile, fileName) === true,
+              hasCompilerState: previousState !== undefined,
+              hmrImpact: previousState?.hmrImpact,
+            });
+            compilerMapSet(activeHmrStateByFile, fileName, activeHmrState);
+          }
+          const previous = activeHmrState.hmrImpact ?? null;
+          const previousHadAppContractOperation = activeHmrState.hasAppContractOperation;
+          const source = await context.read();
+          if (!isCurrent()) return [];
+          const isAuthoredSource = shouldTransformViteAuthoredSource(fileName, source, options);
+          if (!isCurrent()) return [];
+          if (isAuthoredSource) assertKovoViteJsxPragmas(fileName, source);
+          if (!isCurrent()) return [];
+          const isComponentSource = shouldTransformViteComponentSource(fileName, source, options);
+          if (!isCurrent()) return [];
+          if (isAuthoredSource && !isComponentSource) {
+            validateViteStandaloneAuthoringSurface(
+              options,
+              fileName,
+              source,
+              hotUpdateDevState.compilerOwnedProvenance,
+            );
+          }
+          if (!isCurrent()) return [];
+          let hasAppContractOperation = false;
+          if (isAuthoredSource && !isComponentSource) {
+            lowerViteSourceDerivedRegistryDeclarations(hotUpdateRoot, fileName, source, () => {
+              hasAppContractOperation = true;
+            });
+          }
+          const optimisticModule = isAuthoredSource
+            ? viteOptimisticModuleForFile(resolveViteRegistryFacts(options, fileName), fileName)
+            : undefined;
+          if (!isCurrent()) return [];
+          if (isComponentSource && optimisticModule !== undefined) {
+            throw new TypeError(
+              `Kovo Vite cannot emit both a component client module and optimistic plans from ${fileName}. ` +
+                'Move app.mutation declarations into a standalone .ts module to preserve SPEC §5.2 one-to-one client-module identity.',
+            );
+          }
+          if (!isComponentSource) {
+            let classification: ReturnType<typeof viteFullReload> | undefined;
+            if (optimisticModule !== undefined && isCurrent()) {
+              recordViteCompileResult(
+                hotUpdateDevState,
+                fileName,
+                emptyViteCompileMetadata(),
+                [{ kind: 'client', source: optimisticModule.source }],
+                optimisticModule,
+              );
+              classification = viteFullReload('topology');
+            } else if (activeHmrState.hasCompilerState) {
+              if (previousState !== undefined) {
+                removeViteDevFileState(hotUpdateDevState, fileName, previousState);
+              }
+              classification = viteFullReload('topology');
+            }
+            recordViteAppContractOperations(
+              hotUpdateAppContractOperations,
+              fileName,
+              hasAppContractOperation,
+            );
+            if (
+              hotUpdateGenerationStage !== undefined &&
+              (isAuthoredSource || previousState !== undefined || previousHadAppContractOperation)
+            ) {
+              await hotUpdateGenerationStage(context);
+            }
+            if (!isCurrent()) return [];
+            commitCandidate();
+            compilerMapSet(
+              activeHmrStateByFile,
+              fileName,
+              compilerFreeze({
+                hasAppContractOperation,
+                hasCompilerState: compilerMapGet(hotUpdateDevState.files, fileName) !== undefined,
+                hmrImpact: compilerMapGet(hotUpdateDevState.files, fileName)?.hmrImpact,
+              }),
+            );
+            if (classification !== undefined) {
+              sendKovoHmrEvent(
+                context.server,
+                eventForHmrClassification(classification),
+                previous,
+                null,
+                classification,
+              );
+              context.server.ws?.send({ type: 'full-reload' });
+            }
+            return context.modules ?? [];
+          }
+
+          const result = await compileViteComponentModule(
+            compileComponentModule,
+            options,
+            hotUpdateRoot,
+            hotUpdateSourceFileSystems,
+            fileName,
+            source,
+            () => {
+              hasAppContractOperation = true;
+            },
+          );
+          if (!isCurrent()) return [];
+          const emittedFiles = snapshotViteEmittedFiles(result);
+          const errorDiagnostics = reportViteDiagnostics(
+            result,
             options,
             fileName,
             source,
             hotUpdateDevState.compilerOwnedProvenance,
           );
-        }
-        if (!isCurrent()) return [];
-        let hasAppContractOperation = false;
-        if (isAuthoredSource && !isComponentSource) {
-          lowerViteSourceDerivedRegistryDeclarations(hotUpdateRoot, fileName, source, () => {
-            hasAppContractOperation = true;
-          });
-        }
-        const optimisticModule = isAuthoredSource
-          ? viteOptimisticModuleForFile(resolveViteRegistryFacts(options, fileName), fileName)
-          : undefined;
-        if (!isCurrent()) return [];
-        if (isComponentSource && optimisticModule !== undefined) {
-          throw new TypeError(
-            `Kovo Vite cannot emit both a component client module and optimistic plans from ${fileName}. ` +
-              'Move app.mutation declarations into a standalone .ts module to preserve SPEC §5.2 one-to-one client-module identity.',
-          );
-        }
-        if (!isComponentSource) {
-          if (optimisticModule !== undefined && isCurrent()) {
-            recordViteCompileResult(
-              hotUpdateDevState,
-              fileName,
-              emptyViteCompileMetadata(),
-              [{ kind: 'client', source: optimisticModule.source }],
-              optimisticModule,
-            );
-            const classification = viteFullReload('topology');
-            sendKovoHmrEvent(context.server, 'kovo:full-reload', previous, null, classification);
-            context.server.ws?.send({ type: 'full-reload' });
-          } else if (previousState !== undefined) {
-            removeViteDevFileState(hotUpdateDevState, fileName, previousState);
-            const classification = viteFullReload('topology');
-            sendKovoHmrEvent(
-              context.server,
-              eventForHmrClassification(classification),
-              previous,
-              null,
-              classification,
-            );
-            context.server.ws?.send({ type: 'full-reload' });
+          const metadata = snapshotViteCompileMetadata(result);
+          const next = metadata.hmrImpact;
+          if (!isCurrent()) return [];
+
+          if (errorDiagnostics.length > 0) {
+            sendKovoHmrEvent(context.server, 'kovo:diagnostics', previous, next, {
+              impact: 'diagnosticError',
+              reasons: ['diagnostics'],
+            });
+            return [];
           }
-          if (previousHadAppContractOperation || hasAppContractOperation) {
-            refreshViteAppContractAssembly(hotUpdateRefreshAuthority, context.server);
-          }
+
           recordViteAppContractOperations(
-            appContractOperationsByFile,
+            hotUpdateAppContractOperations,
             fileName,
             hasAppContractOperation,
           );
-          return context.modules ?? [];
-        }
+          recordViteCompileResult(hotUpdateDevState, fileName, metadata, emittedFiles);
+          // SPEC §6.2.1: compile output becomes observable only after a fresh evaluated cache has
+          // imported and assembled the entire closed app. A failed candidate leaves the broker's
+          // prior generation active and emits no success/reload event.
+          await hotUpdateGenerationStage?.(context);
+          if (!isCurrent()) return [];
+          commitCandidate();
+          const activeCompilerState = compilerMapGet(hotUpdateDevState.files, fileName);
+          compilerMapSet(
+            activeHmrStateByFile,
+            fileName,
+            compilerFreeze({
+              hasAppContractOperation,
+              hasCompilerState: activeCompilerState !== undefined,
+              hmrImpact: activeCompilerState?.hmrImpact,
+            }),
+          );
+          const classification = classifyViteHmrImpact(previous, next);
+          const event = eventForHmrClassification(classification);
+          sendKovoHmrEvent(context.server, event, previous, next, classification);
+          if (classification.impact !== 'componentRefresh') {
+            context.server.ws?.send({ type: 'full-reload' });
+          }
 
-        const result = await compileViteComponentModule(
-          compileComponentModule,
-          options,
-          hotUpdateRoot,
-          hotUpdateSourceFileSystems,
-          fileName,
-          source,
-          () => {
-            hasAppContractOperation = true;
-          },
-        );
-        if (!isCurrent()) return [];
-        const emittedFiles = snapshotViteEmittedFiles(result);
-        const errorDiagnostics = reportViteDiagnostics(
-          result,
-          options,
-          fileName,
-          source,
-          hotUpdateDevState.compilerOwnedProvenance,
-        );
-        const metadata = snapshotViteCompileMetadata(result);
-        const next = metadata.hmrImpact;
-        if (!isCurrent()) return [];
-
-        if (errorDiagnostics.length > 0) {
-          sendKovoHmrEvent(context.server, 'kovo:diagnostics', previous, next, {
-            impact: 'diagnosticError',
-            reasons: ['diagnostics'],
-          });
           return [];
+        } finally {
+          if (stagedDevState === hotUpdateDevState) stagedDevState = undefined;
+          if (stagedAppContractOperationsByFile === hotUpdateAppContractOperations) {
+            stagedAppContractOperationsByFile = undefined;
+          }
+          if (compilerMapGet(latestHotUpdateIssueByFile, fileName) === hotUpdateCompileIssue) {
+            compilerMapDelete(latestHotUpdateIssueByFile, fileName);
+          }
         }
-
-        if (previousHadAppContractOperation || hasAppContractOperation) {
-          // SPEC §6.2.1: a changed component module may be re-evaluated while its imported
-          // defineKovo() provider remains cached. Invalidate both Vite module environments so
-          // the next SSR request evaluates a fresh contract and assembly; never reopen a closed
-          // contract or return stale query/task/mutation handles.
-          refreshViteAppContractAssembly(hotUpdateRefreshAuthority, context.server);
-        }
-        recordViteAppContractOperations(
-          appContractOperationsByFile,
-          fileName,
-          hasAppContractOperation,
-        );
-        recordViteCompileResult(hotUpdateDevState, fileName, metadata, emittedFiles);
-        const classification = classifyViteHmrImpact(previous, next);
-        const event = eventForHmrClassification(classification);
-        sendKovoHmrEvent(context.server, event, previous, next, classification);
-        if (classification.impact !== 'componentRefresh') {
-          context.server.ws?.send({ type: 'full-reload' });
-        }
-
-        return [];
-      } finally {
-        if (compilerMapGet(latestCompileIssueByFile, fileName) === hotUpdateCompileIssue) {
-          compilerMapDelete(latestCompileIssueByFile, fileName);
-        }
-      }
+      });
     },
     watchChange(id, change) {
-      const event = compilerOwnDataValue(change, 'event', 'Vite watch change');
-      if (event !== 'create' && event !== 'delete' && event !== 'update') {
-        throw new TypeError('Vite watch change event must be create, delete, or update.');
-      }
-      const fileName = viteComponentFileName(id, root);
-      // Every watch event advances the source revision. Only deletion removes retained output,
-      // but create/update must still retire older transform/load/HMR settlements for this file.
-      compileIssue += 1;
-      compilerMapSet(latestCompileIssueByFile, fileName, compileIssue);
-      if (event === 'delete') {
-        if (compilerMapGet(appContractOperationsByFile, fileName) === true) {
-          const authority = appContractRefreshAuthority;
-          refreshViteAppContractAssembly(authority, authority?.server);
-          compilerMapDelete(appContractOperationsByFile, fileName);
+      return enqueueViteDevMutation(async () => {
+        const event = compilerOwnDataValue(change, 'event', 'Vite watch change');
+        if (event !== 'create' && event !== 'delete' && event !== 'update') {
+          throw new TypeError('Vite watch change event must be create, delete, or update.');
         }
-        const existing = compilerMapGet(devState.files, fileName);
-        if (existing !== undefined) removeViteDevFileState(devState, fileName, existing);
-      }
-      compilerMapDelete(latestCompileIssueByFile, fileName);
+        const fileName = viteComponentFileName(id, root);
+        // Every watch event advances the source revision. Only deletion removes retained output,
+        // but create/update must still retire older transform/load/HMR settlements for this file.
+        compileIssue += 1;
+        const watchCompileIssue = compileIssue;
+        compilerMapSet(latestCompileIssueByFile, fileName, watchCompileIssue);
+        try {
+          if (event !== 'delete') return;
+          const activeDevState = devState;
+          const candidateDevState = cloneViteDevStateStore(activeDevState);
+          const candidateAppContractOperations = cloneViteDevMap(appContractOperationsByFile);
+          if (stagedDevState !== undefined || stagedAppContractOperationsByFile !== undefined) {
+            throw new Error('Kovo Vite runner generation staging overlapped unexpectedly.');
+          }
+          stagedDevState = candidateDevState;
+          stagedAppContractOperationsByFile = candidateAppContractOperations;
+          try {
+            const existing = compilerMapGet(candidateDevState.files, fileName);
+            const activeHmrState =
+              compilerMapGet(activeHmrStateByFile, fileName) ??
+              compilerFreeze({
+                hasAppContractOperation:
+                  compilerMapGet(appContractOperationsByFile, fileName) === true,
+                hasCompilerState: existing !== undefined,
+                hmrImpact: existing?.hmrImpact,
+              });
+            compilerMapSet(activeHmrStateByFile, fileName, activeHmrState);
+            if (existing !== undefined) {
+              removeViteDevFileState(candidateDevState, fileName, existing);
+            }
+            compilerMapDelete(candidateAppContractOperations, fileName);
+            const generationStage =
+              pluginIdentity === undefined
+                ? undefined
+                : compilerWeakMapGet(frameworkViteDevGenerationStages, pluginIdentity);
+            if (
+              generationStage !== undefined &&
+              (activeHmrState.hasAppContractOperation || activeHmrState.hasCompilerState)
+            ) {
+              // Deletion normally makes candidate import/assembly fail. Awaiting the stage
+              // guarantees that failure discards only the fresh runner; the active closed graph
+              // and compiler representation set stay leaseable.
+              await generationStage(change);
+            }
+            if (
+              activeDevState !== devState ||
+              stagedDevState !== candidateDevState ||
+              stagedAppContractOperationsByFile !== candidateAppContractOperations
+            ) {
+              return;
+            }
+            commitViteDevStateStore(activeDevState, candidateDevState);
+            appContractOperationsByFile = candidateAppContractOperations;
+            stagedDevState = undefined;
+            stagedAppContractOperationsByFile = undefined;
+            compilerMapSet(
+              activeHmrStateByFile,
+              fileName,
+              compilerFreeze({
+                hasAppContractOperation: false,
+                hasCompilerState: false,
+                hmrImpact: undefined,
+              }),
+            );
+          } finally {
+            if (stagedDevState === candidateDevState) stagedDevState = undefined;
+            if (stagedAppContractOperationsByFile === candidateAppContractOperations) {
+              stagedAppContractOperationsByFile = undefined;
+            }
+          }
+        } finally {
+          if (compilerMapGet(latestCompileIssueByFile, fileName) === watchCompileIssue) {
+            compilerMapDelete(latestCompileIssueByFile, fileName);
+          }
+        }
+      });
     },
   };
+  pluginIdentity = plugin;
+  return plugin;
 }
 
 function frameworkVitePluginSourceRootCoverage(
@@ -1489,6 +1679,36 @@ function createViteDevStateStore(
   };
 }
 
+function cloneViteDevStateStore(store: ViteDevStateStore): ViteDevStateStore {
+  return {
+    buildMode: store.buildMode,
+    compilerOwnedProvenance: store.compilerOwnedProvenance,
+    fileCount: store.fileCount,
+    files: cloneViteDevMap(store.files),
+    modules: cloneViteDevMap(store.modules),
+    owners: cloneViteDevMap(store.owners),
+    sourceUnits: store.sourceUnits,
+    touch: store.touch,
+  };
+}
+
+function cloneViteDevMap<Key, Value>(source: Map<Key, Value>): Map<Key, Value> {
+  const clone = compilerCreateMap<Key, Value>();
+  compilerMapForEach(source, (value, key) => {
+    compilerMapSet(clone, key, value);
+  });
+  return clone;
+}
+
+function commitViteDevStateStore(active: ViteDevStateStore, candidate: ViteDevStateStore): void {
+  active.fileCount = candidate.fileCount;
+  active.files = candidate.files;
+  active.modules = candidate.modules;
+  active.owners = candidate.owners;
+  active.sourceUnits = candidate.sourceUnits;
+  active.touch = candidate.touch;
+}
+
 function executableViteServerSource(serverSource: string | undefined): string | undefined {
   if (serverSource === undefined) return undefined;
   const executableWrapper = compilerRegExpReplace(
@@ -1685,95 +1905,6 @@ function viteProjectHasAppContractDeclaration(
     }
   }
   return false;
-}
-
-interface ViteAppContractRefreshAuthority {
-  readonly environments: KovoViteDevServer['environments'];
-  readonly assertRunnerCurrent: (() => void) | undefined;
-  readonly runnerClearCache: (() => unknown) | undefined;
-  readonly server: KovoViteDevServer;
-  readonly ssrEnvironment: KovoViteRunnableDevEnvironment | undefined;
-  readonly ssrInvalidateAll: (() => unknown) | undefined;
-}
-
-function captureViteAppContractRefreshAuthority(
-  server: KovoViteDevServer,
-): ViteAppContractRefreshAuthority {
-  const environments = compilerOwnDataValue(
-    server,
-    'environments',
-    'Vite dev server',
-  ) as KovoViteDevServer['environments'];
-  const ssrEnvironment =
-    environments === undefined
-      ? undefined
-      : (compilerOwnDataValue(environments, 'ssr', 'Vite dev server environments') as
-          | KovoViteRunnableDevEnvironment
-          | undefined);
-  const runnerProperty =
-    ssrEnvironment === undefined
-      ? undefined
-      : compilerPinnedStableProperty(ssrEnvironment, 'runner', 'Vite SSR environment runner');
-  const runner = runnerProperty?.value as KovoViteRunnableDevEnvironment['runner'];
-  const ssrModuleGraph =
-    ssrEnvironment === undefined
-      ? undefined
-      : (compilerOwnDataValue(
-          ssrEnvironment,
-          'moduleGraph',
-          'Vite SSR environment',
-        ) as KovoViteRunnableDevEnvironment['moduleGraph']);
-  return {
-    assertRunnerCurrent:
-      runnerProperty === undefined ? undefined : () => runnerProperty.assertCurrent(),
-    environments,
-    runnerClearCache:
-      runner === undefined
-        ? undefined
-        : (compilerPinnedStableMethod(
-            runner,
-            'clearCache',
-            'Vite SSR module runner clearCache',
-          ) as () => unknown),
-    server,
-    ssrEnvironment,
-    ssrInvalidateAll:
-      ssrModuleGraph === undefined
-        ? undefined
-        : (compilerPinnedStableMethod(
-            ssrModuleGraph,
-            'invalidateAll',
-            'Vite SSR module graph invalidateAll',
-          ) as () => unknown),
-  };
-}
-
-function refreshViteAppContractAssembly(
-  authority: ViteAppContractRefreshAuthority | undefined,
-  server: KovoViteDevServer | undefined,
-): void {
-  if (
-    authority === undefined ||
-    authority.server !== server ||
-    compilerOwnDataValue(server, 'environments', 'Vite dev server') !== authority.environments ||
-    (authority.environments !== undefined &&
-      compilerOwnDataValue(authority.environments, 'ssr', 'Vite dev server environments') !==
-        authority.ssrEnvironment) ||
-    typeof authority.runnerClearCache !== 'function' ||
-    typeof authority.assertRunnerCurrent !== 'function' ||
-    typeof authority.ssrInvalidateAll !== 'function'
-  ) {
-    throw new TypeError(
-      'Kovo Vite cannot refresh an app-contract declaration without its exact configure-time public Vite SSR runner and module graph.',
-    );
-  }
-  // SPEC §6.2.1: transform invalidation alone leaves evaluated provider exports in the public Vite
-  // module runner. Clear that exact configure-time SSR authority so the next request evaluates one
-  // fresh defineKovo() generation; the SSR graph invalidation keeps transforms coherent. Client
-  // event selection remains with the ordinary HMR classifier, avoiding duplicate reload messages.
-  authority.assertRunnerCurrent();
-  authority.runnerClearCache();
-  authority.ssrInvalidateAll();
 }
 
 function recordViteAppContractOperations(

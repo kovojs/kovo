@@ -19,6 +19,7 @@ export {
   createKovoAppShellViteDevIntegration,
   dispatchKovoAppShellViteDevRequest,
   kovoAppShellViteDevPlugin,
+  prepareKovoAppShellViteDevGeneration,
   renderKovoAppShellViteDevDiagnosticResponse,
   shouldHandleKovoAppShellViteRequest,
   type KovoAppShellDevDiagnosticLedger,

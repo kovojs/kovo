@@ -11,12 +11,30 @@ import {
   trustedViteSecurityProfileIntegrationSentinel,
   trustedViteSecurityProfileParanoidSentinel,
   trustedViteSecurityProfileResponseCookiesSentinel,
+  trustedViteSecurityProfileRunnerGenerationsSentinel,
   trustedViteSecurityProfileSentinel,
 } from './vite-security-sentinel.js';
 
+interface TrustedKovoViteRunnerGenerationBroker {
+  activateInitial(): Promise<void>;
+  bindOrigin(origin: string): void;
+  close(): Promise<void>;
+  configure(server: unknown, hooks: object): void;
+  prepareInitial(): Promise<void>;
+  stage(token?: object): Promise<void>;
+  withLease<T>(
+    operation: (server: { ssrLoadModule<TModule>(id: string): Promise<TModule> }) => Promise<T>,
+  ): Promise<T>;
+}
+
 interface TrustedKovoVitePluginOptions extends KovoVitePluginOptions {
+  appShellModuleId?: string;
+  nodeDataPlaneBootstrapModuleId?: string;
   paranoidStaticAdvisory: boolean;
   responseSetCookieValues?(response: ServerResponse): readonly string[];
+  runnerGenerations?: TrustedKovoViteRunnerGenerationBroker;
+  securityProfileModuleId?: string;
+  serverRootModuleId?: string;
 }
 
 /**
@@ -57,6 +75,17 @@ export function trustedKovoVitePlugin(options: TrustedKovoVitePluginOptions): Ko
       : {
           // oxlint-disable-next-line typescript/unbound-method -- This callback is transported as a value and invoked without a receiver.
           [trustedViteSecurityProfileResponseCookiesSentinel]: options.responseSetCookieValues,
+        }),
+    ...(options.runnerGenerations === undefined
+      ? {}
+      : {
+          [trustedViteSecurityProfileRunnerGenerationsSentinel]: Object.freeze({
+            appShellModuleId: options.appShellModuleId,
+            nodeDataPlaneBootstrapModuleId: options.nodeDataPlaneBootstrapModuleId,
+            runnerGenerations: options.runnerGenerations,
+            securityProfileModuleId: options.securityProfileModuleId,
+            serverRootModuleId: options.serverRootModuleId,
+          }),
         }),
   } as KovoVitePluginOptions);
 }

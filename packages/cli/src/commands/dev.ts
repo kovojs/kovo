@@ -41,6 +41,10 @@ import {
   type KovoDevNodeIngressProfile,
 } from './dev-host-door.js';
 import {
+  captureKovoDevRunnerBootstrapAuthority,
+  type KovoDevRunnerGenerationBroker,
+} from './dev-runner-generation.js';
+import {
   createKovoDevtoolPlugin,
   inspectKovoDevDatabasePosture,
   type KovoDevtoolPluginOptions,
@@ -137,7 +141,8 @@ export async function startKovoDevServer(
   security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
 ): Promise<KovoDevServerHandle> {
   const startedAt = performance.now();
-  const { createServer } = await import('vite-plus');
+  const viteModule = await import('vite-plus');
+  const createServer = viteModule.createServer;
   const root = resolve(security.invocationCwd, options.root);
   const configFile = resolveDevConfigFile(root, options.configFile);
   const bootstrapServer = await createServer({
@@ -150,14 +155,24 @@ export async function startKovoDevServer(
   });
 
   let liveServer: ViteDevServer | undefined;
+  let runnerGenerations: KovoDevRunnerGenerationBroker | undefined;
   try {
+    // SPEC §6.6 rule 6: Vite's authority is first observed through this config-free bootstrap
+    // server. Authored config has not been imported and therefore cannot forge these identities.
+    const runnerAuthority = captureKovoDevRunnerBootstrapAuthority(viteModule, bootstrapServer);
     const profile = await preloadDevSecurityProfile(bootstrapServer, options.appModulePath, root);
+    runnerGenerations = runnerAuthority.createBroker();
     // Construct and freeze the framework plugin before authored config/plugin evaluation. Authored
     // hooks may mutate their own config, but cannot replace the proof plugin or its hook table.
     const createdPlugin = profile.trustedKovoVitePlugin({
       app: viteAppModuleId(options.appModulePath, root),
+      appShellModuleId: profile.appShellModuleId,
+      nodeDataPlaneBootstrapModuleId: profile.nodeDataPlaneBootstrapModuleId,
       paranoidStaticAdvisory: security.paranoidStaticAdvisory,
       responseSetCookieValues: kovoDevResponseSetCookieValues,
+      runnerGenerations,
+      securityProfileModuleId: profile.securityProfileModuleId,
+      serverRootModuleId: profile.serverRootModuleId,
     });
     if (!isRecord(createdPlugin)) {
       throw new TypeError('@kovojs/server/vite kovo() must return a plugin object.');
@@ -168,6 +183,7 @@ export async function startKovoDevServer(
       appModuleId: viteAppModuleId(options.appModulePath, root),
       appModulePath: options.appModulePath,
       debug: options.debug === true,
+      runnerGenerations,
       securityProfileModuleId: profile.securityProfileModuleId,
       serverBuildModuleId: profile.serverBuildModuleId,
     });
@@ -194,13 +210,8 @@ export async function startKovoDevServer(
 
     liveServer = await createServer(liveConfig);
     const activeLiveServer = liveServer;
-    const liveSsrLoadModule = captureLiveSsrModuleImporter(liveServer);
     lockLiveDevEnvironmentPluginLists(liveServer.config);
-    // The live Vite runner owns a distinct SSR module graph. Install and seal the managed SQL
-    // parser in that graph before loading the runtime-neutral server root, which deliberately
-    // closes any still-open parser install window (SPEC §6.6 rule 6).
-    await liveSsrLoadModule(profile.nodeDataPlaneBootstrapModuleId);
-    const bindDevelopmentOrigin = await loadKovoDevLoopbackOriginBinder(liveSsrLoadModule, profile);
+    await runnerGenerations.prepareInitial();
     const liveHttpServer = liveServer.httpServer;
     if (liveHttpServer === null) {
       throw new TypeError('Kovo dev requires one owned HTTP server for its development origin.');
@@ -213,7 +224,7 @@ export async function startKovoDevServer(
     liveHttpServer.prependOnceListener('listening', () => {
       try {
         const origin = boundDevServerOrigin(activeLiveServer);
-        nativeApply(bindDevelopmentOrigin, undefined, [origin]);
+        runnerGenerations!.bindOrigin(origin);
         localOrigin = origin;
       } catch (error) {
         originBindingError = error;
@@ -224,12 +235,12 @@ export async function startKovoDevServer(
     if (localOrigin === undefined) {
       throw new Error('kovo dev did not bind its loopback development origin before app loading.');
     }
+    await runnerGenerations.activateInitial();
     if (options.debug === true) liveServer.printUrls();
     const readyReport = formatKovoDevReadyReport({
       appModulePath: options.appModulePath,
-      database: await inspectKovoDevDatabasePosture(
-        { ssrLoadModule: liveSsrLoadModule },
-        devtoolOptions,
+      database: await runnerGenerations.withLease((moduleServer) =>
+        inspectKovoDevDatabasePosture(moduleServer, devtoolOptions),
       ),
       durationMs: nativeApply<number>(nativeMathRound, NativeMath, [performance.now() - startedAt]),
       localUrl: `${localOrigin}/`,
@@ -244,9 +255,13 @@ export async function startKovoDevServer(
       process.removeListener('SIGINT', onSignal);
       process.removeListener('SIGTERM', onSignal);
       try {
-        await liveServer!.close();
+        await runnerGenerations!.close();
       } finally {
-        await bootstrapServer.close();
+        try {
+          await liveServer!.close();
+        } finally {
+          await bootstrapServer.close();
+        }
       }
     };
     const onSignal = (): void => {
@@ -261,9 +276,13 @@ export async function startKovoDevServer(
     return { close, readyReport, server: liveServer };
   } catch (error) {
     try {
-      await liveServer?.close();
+      await runnerGenerations?.close();
     } finally {
-      await bootstrapServer.close();
+      try {
+        await liveServer?.close();
+      } finally {
+        await bootstrapServer.close();
+      }
     }
     throw error;
   }
@@ -400,54 +419,18 @@ interface DevSecurityProfileModule extends KovoDevNodeIngressProfile {
   appShellModuleId: string;
   nodeDataPlaneBootstrapModuleId: string;
   securityProfileModuleId: string;
+  serverRootModuleId: string;
   serverBuildModuleId: string;
   trustedKovoVitePlugin(options: {
     app: string;
+    appShellModuleId: string;
+    nodeDataPlaneBootstrapModuleId: string;
     paranoidStaticAdvisory: boolean;
     responseSetCookieValues: typeof kovoDevResponseSetCookieValues;
+    runnerGenerations: KovoDevRunnerGenerationBroker;
+    securityProfileModuleId: string;
+    serverRootModuleId: string;
   }): Exclude<PluginOption, false | null | undefined>;
-}
-
-async function loadKovoDevLoopbackOriginBinder(
-  importModule: (id: string) => Promise<Record<string, unknown>>,
-  profile: DevSecurityProfileModule,
-): Promise<(origin: string) => void> {
-  const module = await importModule(profile.securityProfileModuleId);
-  const bind = module.bindKovoDevLoopbackOrigin;
-  if (typeof bind !== 'function') {
-    throw new TypeError(
-      '@kovojs/server/internal/vite-security-profile must export bindKovoDevLoopbackOrigin.',
-    );
-  }
-  return (origin: string): void => {
-    nativeApply(bind, undefined, [origin]);
-  };
-}
-
-function captureLiveSsrModuleImporter(
-  server: ViteDevServer,
-): (id: string) => Promise<Record<string, unknown>> {
-  const ssrEnvironment = server.environments.ssr;
-  if (ssrEnvironment === undefined) {
-    throw new TypeError('Kovo dev requires Vite public SSR environment.');
-  }
-  const runner = (
-    ssrEnvironment as unknown as {
-      readonly runner: {
-        import(id: string): Promise<Record<string, unknown>>;
-      };
-    }
-  ).runner;
-  const importModule = runner.import;
-  if (typeof importModule !== 'function') {
-    throw new TypeError('Kovo dev requires Vite public SSR module runner import().');
-  }
-  return (id: string): Promise<Record<string, unknown>> => {
-    if (runner.import !== importModule) {
-      throw new TypeError('Kovo dev SSR module runner changed after live-server creation.');
-    }
-    return nativeReflectApply(importModule, runner, [id]);
-  };
 }
 
 interface CompilerSecurityBootstrapModule {
@@ -551,6 +534,7 @@ async function preloadDevSecurityProfile(
     rejectNodeRequestPreloadIngress:
       rejectNodeRequestPreloadIngress as DevSecurityProfileModule['rejectNodeRequestPreloadIngress'],
     securityProfileModuleId,
+    serverRootModuleId: serverModuleId,
     serverBuildModuleId,
     trustedKovoVitePlugin:
       trustedKovoVitePlugin as DevSecurityProfileModule['trustedKovoVitePlugin'],

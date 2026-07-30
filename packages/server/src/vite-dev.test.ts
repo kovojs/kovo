@@ -6,6 +6,10 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 import { kovoVitePlugin } from '@kovojs/compiler';
+import {
+  compilerOwnedViteClientModuleRoleForPlugin,
+  compilerOwnedViteDiagnosticForPlugin,
+} from '@kovojs/compiler/vite';
 import { component } from '@kovojs/core';
 import { clientModuleRepresentationDigest } from '@kovojs/core/internal/client-module-url';
 import { createRegisteredDiagnostic, type DiagnosticCode } from '@kovojs/core/internal/diagnostics';
@@ -39,6 +43,7 @@ import {
   createKovoAppShellViteDevIntegration,
   dispatchKovoAppShellViteDevRequest,
   kovoAppShellViteDevPlugin as createRawKovoAppShellViteDevPlugin,
+  prepareKovoAppShellViteDevGeneration,
   renderKovoAppShellViteDevDiagnosticResponse,
   type KovoAppShellViteDevModuleServer,
   type KovoAppShellViteMiddleware,
@@ -47,6 +52,12 @@ import {
 } from './vite-dev.js';
 import { renderedHtml } from './html.js';
 import { createLiveTargetAttestation } from './mutation-wire.js';
+import {
+  claimCompilerClientModuleViteInstaller,
+  compilerClientModuleViteEpoch,
+  createCompilerClientModuleViteHandoff,
+  createCompilerClientModuleViteSnapshotPreparer,
+} from './compiler-client-module-provenance-vite.js';
 
 function devDiagnostic(code: DiagnosticCode, fileName: string, message: string) {
   return createRegisteredDiagnostic(code, { fileName }, { message });
@@ -618,11 +629,64 @@ describe('server app shell Vite dev seam', () => {
     expect(app.clientModules.buildToken()).toMatch(/^[0-9a-f]{64}$/u);
   });
 
-  it('accepts exact compiler records in dev and refuses lookalike generated records', async () => {
-    const compilerModules = await genuineViteDevCompilerClientModules();
+  it('keeps prepared compiler and stylesheet facts generation-local during an old lease', async () => {
     const app = createApp();
+    const fingerprint = computeRenderPlanFingerprint({});
+    let compilerSource = 'export const generation = "old";';
+    let stylesheetHref = '/assets/old.css';
+    const clientModules = vi.fn(() => [
+      {
+        path: '/c/manual.client.js',
+        renderPlanFingerprint: fingerprint,
+        source: compilerSource,
+      },
+    ]);
+    const stylesheetAssets = vi.fn(() => ({
+      app: [{ href: stylesheetHref }],
+    }));
+    const options = {
+      clientModules,
+      moduleId: '/src/prepared-old-lease.ts',
+      stylesheetAssets,
+    };
+    const moduleServer = {
+      ssrLoadModule: viteDevSsrLoadModule(() => ({ default: app })),
+    };
 
-    await dispatchViteDevSnapshot(app, () => compilerModules);
+    await prepareKovoAppShellViteDevGeneration(moduleServer, options);
+    compilerSource = 'export const generation = "new";';
+    stylesheetHref = '/assets/new.css';
+
+    await dispatchKovoAppShellViteDevRequest(
+      { middlewares: { use() {} }, ...moduleServer },
+      options,
+      request('/c/unversioned.client.js'),
+      {} as Parameters<typeof dispatchKovoAppShellViteDevRequest>[3],
+      vi.fn(),
+    );
+
+    expect(clientModules).toHaveBeenCalledOnce();
+    expect(stylesheetAssets).toHaveBeenCalledOnce();
+    expect(app.clientModules.entries()).toContainEqual({
+      path: '/c/manual.client.js',
+      source: 'export const generation = "old";',
+    });
+  });
+
+  it('accepts exact compiler records in dev and refuses lookalike generated records', async () => {
+    const { compilerModules, plugin } = await genuineViteDevCompilerClientModules();
+    const app = createApp();
+    const handoff = createCompilerClientModuleViteHandoff(
+      (value) => compilerOwnedViteClientModuleRoleForPlugin(plugin, value),
+      (value) => compilerOwnedViteDiagnosticForPlugin(plugin, value),
+    );
+    const prepare = createCompilerClientModuleViteSnapshotPreparer(handoff, () => compilerModules);
+    const pinnedCompilerModules = prepare({
+      claimCompilerClientModuleViteInstaller,
+      compilerClientModuleViteEpoch,
+    });
+
+    await dispatchViteDevSnapshot(app, pinnedCompilerModules);
 
     expect(
       app.clientModules.entries().some((module) => module.path === '/c/generated/app.client.js'),
@@ -2356,7 +2420,7 @@ export const DevCard = component({
 `,
     'src/dev-card.tsx',
   );
-  return plugin.getClientModules?.() ?? [];
+  return { compilerModules: plugin.getClientModules?.() ?? [], plugin };
 }
 
 function viteDevClientHref(module: VersionedClientModuleInput): string {

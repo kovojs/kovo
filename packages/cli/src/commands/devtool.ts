@@ -14,6 +14,10 @@ import {
   buildOwnDataValue,
   buildSecurityArrayAppend,
 } from './build-security-intrinsics.js';
+import type {
+  KovoDevRunnerGenerationBroker,
+  KovoDevRunnerModuleServer,
+} from './dev-runner-generation.js';
 
 const NativeAbortController = globalThis.AbortController;
 const NativeConsole = globalThis.console;
@@ -21,6 +25,7 @@ const NativeFunction = globalThis.Function;
 const NativeObject = globalThis.Object;
 const NativeReflect = globalThis.Reflect;
 const NativeSet = globalThis.Set;
+const NativeWeakMap = globalThis.WeakMap;
 const nativeFunctionToString = NativeFunction.prototype.toString;
 const nativeConsoleError = NativeConsole.error;
 const nativeObjectCreate = NativeObject.create;
@@ -31,6 +36,9 @@ const nativeReflectGet = NativeReflect.get;
 const nativeSetAdd = NativeSet.prototype.add;
 const nativeSetHas = NativeSet.prototype.has;
 const nativeStringSlice = globalThis.String.prototype.slice;
+const nativeWeakMapDelete = NativeWeakMap.prototype.delete;
+const nativeWeakMapGet = NativeWeakMap.prototype.get;
+const nativeWeakMapSet = NativeWeakMap.prototype.set;
 
 const DEVTOOL_PATH = '/__kovo';
 const DEVTOOL_CLIENT_PATH = '/__kovo/client.js';
@@ -69,21 +77,27 @@ export interface KovoDevtoolPluginOptions {
   appModuleId: string;
   appModulePath: string;
   debug: boolean;
+  runnerGenerations?: KovoDevRunnerGenerationBroker;
   securityProfileModuleId: string;
   serverBuildModuleId: string;
 }
 
 /** @internal Framework-owned, Vite-dev-only mount for the reusable Kovo dataflow renderer. */
 export function createKovoDevtoolPlugin(options: KovoDevtoolPluginOptions): Plugin {
-  let cachedBundle: Promise<ReturnType<typeof buildBundle>> | undefined;
+  let cachedBundles = new NativeWeakMap<object, Promise<ReturnType<typeof buildBundle>>>();
   const loadBundle = (
     server: Pick<ViteDevServer, 'ssrLoadModule'>,
   ): Promise<ReturnType<typeof buildBundle>> => {
+    const cachedBundle = nativeReflectApply(nativeWeakMapGet, cachedBundles, [server]) as
+      | Promise<ReturnType<typeof buildBundle>>
+      | undefined;
     if (cachedBundle !== undefined) return cachedBundle;
     const pending = buildKovoDevtoolBundle(server, options);
-    cachedBundle = pending;
+    nativeReflectApply(nativeWeakMapSet, cachedBundles, [server, pending]);
     void pending.catch(() => {
-      if (cachedBundle === pending) cachedBundle = undefined;
+      if (nativeReflectApply(nativeWeakMapGet, cachedBundles, [server]) === pending) {
+        nativeReflectApply(nativeWeakMapDelete, cachedBundles, [server]);
+      }
     });
     return pending;
   };
@@ -92,11 +106,35 @@ export function createKovoDevtoolPlugin(options: KovoDevtoolPluginOptions): Plug
     enforce: 'pre',
     name: 'kovo-devtool',
     configureServer(server) {
-      const moduleServer = captureDevtoolSsrModuleServer(server);
+      const runnerGenerations = buildOwnDataValue(
+        options,
+        'runnerGenerations',
+        'CLI devtool runner generations',
+      ) as KovoDevRunnerGenerationBroker | undefined;
+      const moduleServer =
+        runnerGenerations === undefined ? captureDevtoolSsrModuleServer(server) : undefined;
+      let loadGenerationBundle: () => Promise<ReturnType<typeof buildBundle>>;
+      if (runnerGenerations === undefined) {
+        loadGenerationBundle = () => loadBundle(moduleServer!);
+      } else {
+        const withLease = buildOwnDataValue(
+          runnerGenerations,
+          'withLease',
+          'CLI devtool runner generation lease',
+        );
+        if (typeof withLease !== 'function') {
+          throw new TypeError('Kovo devtool runner generation broker requires withLease().');
+        }
+        loadGenerationBundle = () =>
+          nativeReflectApply(withLease, runnerGenerations, [
+            (leasedServer: KovoDevRunnerModuleServer) =>
+              loadBundle(leasedServer as Pick<ViteDevServer, 'ssrLoadModule'>),
+          ]) as Promise<ReturnType<typeof buildBundle>>;
+      }
       // Source slicing recursively indexes the app tree. Build it once, then invalidate alongside
       // Vite's own watcher instead of repeating synchronous filesystem work on every page refresh.
       server.watcher.on('all', () => {
-        cachedBundle = undefined;
+        cachedBundles = new NativeWeakMap();
       });
       server.middlewares.use((request, response, next) => {
         const path = requestPath(request);
@@ -122,7 +160,7 @@ export function createKovoDevtoolPlugin(options: KovoDevtoolPluginOptions): Plug
           return;
         }
 
-        void renderDevtoolDocument(() => loadBundle(moduleServer), request)
+        void renderDevtoolDocument(loadGenerationBundle, request)
           .then((document) => writeHtmlResponse(response, 200, document))
           .catch((error: unknown) => {
             if (response.headersSent || response.writableEnded) {

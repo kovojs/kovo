@@ -26,6 +26,7 @@ import { kovoVitePlugin } from './index.js';
 import { lowerStandaloneSourceDerivedRegistryDeclarations } from './source-derived-lowering.js';
 import { rewriteClientModuleRuntimeImportsForBrowser } from './emit/client.js';
 import {
+  bindFrameworkKovoViteDevGenerationStage,
   compilerOwnedViteClientModuleRoleForPlugin,
   compilerOwnedViteDiagnosticForPlugin,
   createFrameworkKovoCssCollectorVitePlugin,
@@ -850,12 +851,14 @@ export const orderPaid = webhook('/webhooks/order-paid', {
         'export const cleanup = task({ input: {}, run() {} });',
         'export const Counter = component({',
         '  queries: { counter: counterQuery },',
-        `  render: ({ counter }) => <span data-revision="${revision}">{counter.count}</span>,`,
+        `  render: ({ counter }) => <button onClick={() => "${revision}"}>{counter.count}</button>,`,
         '});',
         '',
       ].join('\n');
     writeFileSync(entry, source('zero'));
     const plugin = kovoVitePlugin({ include: ['src'] });
+    const stageGeneration = vi.fn(async () => undefined);
+    bindFrameworkKovoViteDevGenerationStage(plugin, stageGeneration);
     const ws = { send: vi.fn() };
     const moduleGraph = { invalidateAll: vi.fn() };
     const ssrHot = { send: vi.fn() };
@@ -891,23 +894,51 @@ export const orderPaid = webhook('/webhooks/order-paid', {
           server,
         }),
       ).resolves.toEqual([]);
-      expect(ssrRunner.clearCache).toHaveBeenCalledOnce();
+      expect(stageGeneration).toHaveBeenCalledOnce();
       expect(moduleGraph.invalidateAll).not.toHaveBeenCalled();
-      expect(ssrModuleGraph.invalidateAll).toHaveBeenCalledOnce();
+      expect(ssrModuleGraph.invalidateAll).not.toHaveBeenCalled();
+      expect(ssrRunner.clearCache).not.toHaveBeenCalled();
       expect(ssrHot.send).not.toHaveBeenCalled();
-      expect(plugin.getClientModules?.()).toEqual(
+      const activeClientModules = plugin.getClientModules?.();
+      expect(activeClientModules).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             path: expect.stringContaining('/counter.client.js'),
           }),
         ]),
       );
+
+      let rejectedCandidateModules: ReturnType<NonNullable<typeof plugin.getClientModules>>;
+      stageGeneration.mockImplementationOnce(async () => {
+        rejectedCandidateModules = plugin.getClientModules?.() ?? [];
+        throw new Error('candidate assembly failed');
+      });
+      ws.send.mockClear();
+      writeFileSync(entry, source('two'));
+      await expect(
+        plugin.handleHotUpdate?.({
+          file: entry,
+          modules: ['vite-module'],
+          read: async () => source('two'),
+          server,
+        }),
+      ).rejects.toThrow('candidate assembly failed');
+      expect(ws.send).not.toHaveBeenCalled();
+      expect(
+        rejectedCandidateModules!.find((module) => module.path.includes('/counter.client.js'))
+          ?.source,
+      ).toMatch(/["']two["']/u);
+      expect(plugin.getClientModules?.()).toEqual(activeClientModules);
+      expect(
+        plugin.getClientModules?.().find((module) => module.path.includes('/counter.client.js'))
+          ?.source,
+      ).toMatch(/["']one["']/u);
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
   });
 
-  it('refreshes SSR assembly for every authenticated closed-contract operation only after clean compiles', async () => {
+  it('never destructively clears the active runner for closed-contract updates', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-vite-app-contract-hmr-coverage-'));
     const src = join(root, 'src');
     const serverScope = join(root, 'node_modules/@kovojs');
@@ -978,9 +1009,9 @@ export const orderPaid = webhook('/webhooks/order-paid', {
             server,
           }),
         ).resolves.toEqual([]);
-        expect(ssrRunner.clearCache, operationCall).toHaveBeenCalledOnce();
+        expect(ssrRunner.clearCache, operationCall).not.toHaveBeenCalled();
         expect(moduleGraph.invalidateAll, operationCall).not.toHaveBeenCalled();
-        expect(ssrModuleGraph.invalidateAll, operationCall).toHaveBeenCalledOnce();
+        expect(ssrModuleGraph.invalidateAll, operationCall).not.toHaveBeenCalled();
         expect(ssrHot.send, operationCall).not.toHaveBeenCalled();
       }
 
@@ -1003,9 +1034,9 @@ export const orderPaid = webhook('/webhooks/order-paid', {
         read: async () => removedOperationSource,
         server,
       });
-      expect(ssrRunner.clearCache).toHaveBeenCalledOnce();
+      expect(ssrRunner.clearCache).not.toHaveBeenCalled();
       expect(moduleGraph.invalidateAll).not.toHaveBeenCalled();
-      expect(ssrModuleGraph.invalidateAll).toHaveBeenCalledOnce();
+      expect(ssrModuleGraph.invalidateAll).not.toHaveBeenCalled();
       expect(ssrHot.send).not.toHaveBeenCalled();
 
       ssrRunner.clearCache.mockClear();
@@ -1022,21 +1053,6 @@ export const orderPaid = webhook('/webhooks/order-paid', {
       expect(moduleGraph.invalidateAll).not.toHaveBeenCalled();
       expect(ssrModuleGraph.invalidateAll).not.toHaveBeenCalled();
       expect(ssrHot.send).not.toHaveBeenCalled();
-
-      const tamperedSource = componentSource('app.query({} as never)');
-      const replacementRunner = { clearCache: vi.fn(), import: vi.fn() };
-      server.environments.ssr.runner = replacementRunner;
-      writeFileSync(entry, tamperedSource);
-      await expect(
-        plugin.handleHotUpdate?.({
-          file: entry,
-          modules: ['vite-module'],
-          read: async () => tamperedSource,
-          server,
-        }),
-      ).rejects.toThrow(/Vite SSR environment runner changed after it was captured/u);
-      expect(replacementRunner.clearCache).not.toHaveBeenCalled();
-      server.environments.ssr.runner = ssrRunner;
 
       const standaloneEntry = join(src, 'contract.ts');
       const standaloneSource = [
@@ -1058,16 +1074,16 @@ export const orderPaid = webhook('/webhooks/order-paid', {
         read: async () => renamedStandaloneSource,
         server,
       });
-      expect(ssrRunner.clearCache).toHaveBeenCalledOnce();
+      expect(ssrRunner.clearCache).not.toHaveBeenCalled();
       expect(moduleGraph.invalidateAll).not.toHaveBeenCalled();
-      expect(ssrModuleGraph.invalidateAll).toHaveBeenCalledOnce();
+      expect(ssrModuleGraph.invalidateAll).not.toHaveBeenCalled();
       expect(ssrHot.send).not.toHaveBeenCalled();
 
       ssrRunner.clearCache.mockClear();
       ssrModuleGraph.invalidateAll.mockClear();
       await plugin.watchChange?.(standaloneEntry, { event: 'delete' });
-      expect(ssrRunner.clearCache).toHaveBeenCalledOnce();
-      expect(ssrModuleGraph.invalidateAll).toHaveBeenCalledOnce();
+      expect(ssrRunner.clearCache).not.toHaveBeenCalled();
+      expect(ssrModuleGraph.invalidateAll).not.toHaveBeenCalled();
 
       const diagnostic = compilerDiagnostic('KV201', {
         fileName: 'src/contract-component.tsx',

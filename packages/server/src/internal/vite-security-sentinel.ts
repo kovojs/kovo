@@ -17,3 +17,8 @@ export const trustedViteSecurityProfileParanoidSentinel: unique symbol = Symbol(
 export const trustedViteSecurityProfileResponseCookiesSentinel: unique symbol = Symbol(
   'Kovo trusted Vite security profile response cookies',
 );
+
+/** @internal Module-private slot carrying the bootstrap-attested dev runner generation broker. */
+export const trustedViteSecurityProfileRunnerGenerationsSentinel: unique symbol = Symbol(
+  'Kovo trusted Vite runner generations',
+);

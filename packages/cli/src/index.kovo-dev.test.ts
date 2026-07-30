@@ -1,5 +1,13 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { request as nodeHttpRequest } from 'node:http';
 import { createConnection, createServer as createNetServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -747,6 +755,49 @@ export default app.assemble({
     expect(tokens).toHaveLength(2);
     expect(tokens[0]).not.toBe(tokens[1]);
   }, 60_000);
+
+  it('atomically swaps a real app edit and keeps the last-good graph through failed evaluation', async () => {
+    const root = devFixture('atomic-runner-hmr');
+    const appFile = join(root, 'src/app.ts');
+    const initialSource = readFileSync(appFile, 'utf8');
+    const secondSource = initialSource.replace('Bootstrap safe', 'Atomic generation two');
+    const recoveredSource = initialSource.replace('Bootstrap safe', 'Atomic generation three');
+    const port = await reservePort();
+    const child = spawnKovoDev(root, port);
+    const output = collectChildOutput(child);
+    const url = `http://127.0.0.1:${port}/`;
+
+    try {
+      await expect(fetchBodyContaining(url, 'Bootstrap safe', output, 30_000)).resolves.toContain(
+        'Bootstrap safe',
+      );
+
+      writeFileSync(appFile, secondSource, 'utf8');
+      await expect(
+        fetchBodyContaining(url, 'Atomic generation two', output, 15_000),
+      ).resolves.toContain('Atomic generation two');
+
+      writeFileSync(appFile, `${secondSource}\nthrow new Error('candidate evaluation failed');\n`);
+      const failedCandidateDeadline = Date.now() + 2_000;
+      let lastGoodResponses = 0;
+      while (Date.now() < failedCandidateDeadline) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        const response = await fetch(url);
+        const body = await response.text();
+        expect(response.status, `${body}\n${output.combined()}`).toBe(200);
+        expect(body, output.combined()).toContain('Atomic generation two');
+        lastGoodResponses += 1;
+      }
+      expect(lastGoodResponses).toBeGreaterThan(1);
+
+      writeFileSync(appFile, recoveredSource, 'utf8');
+      await expect(
+        fetchBodyContaining(url, 'Atomic generation three', output, 15_000),
+      ).resolves.toContain('Atomic generation three');
+    } finally {
+      await stopChild(child);
+    }
+  }, 60_000);
 });
 
 function devFixture(name: string, richGraph = false): string {
@@ -1060,6 +1111,29 @@ async function fetchWhenReady(
     }
   }
   throw new Error(`Timed out waiting for ${url}.\n${output.combined()}`);
+}
+
+async function fetchBodyContaining(
+  url: string,
+  expected: string,
+  output: { combined(): string },
+  timeoutMs: number,
+): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+  let latest = '';
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(url);
+      latest = await response.text();
+      if (response.status === 200 && latest.includes(expected)) return latest;
+    } catch {
+      // Startup and an in-progress watcher settlement are ordinary retry states.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(
+    `Timed out waiting for ${url} to contain ${JSON.stringify(expected)}.\n${latest}\n${output.combined()}`,
+  );
 }
 
 async function waitForOutput(

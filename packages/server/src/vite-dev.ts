@@ -195,6 +195,32 @@ export interface KovoAppShellViteDevModuleServer extends KovoAppShellViteDevServ
   ws?: KovoAppShellViteWebSocket;
 }
 
+/** @internal Exact factory-created Vite runner carrier owned by the supported CLI broker. */
+export interface KovoViteDevRunnerModuleServer {
+  ssrLoadModule<T = Record<string, unknown>>(id: string): Promise<T>;
+}
+
+/** @internal Resolved framework module ids that authored Vite hooks cannot redirect. */
+export interface KovoViteDevRunnerGenerationModules {
+  readonly appShellModuleId: string;
+  readonly nodeDataPlaneBootstrapModuleId: string;
+  readonly securityProfileModuleId: string;
+  readonly serverRootModuleId: string;
+}
+
+/** @internal Bootstrap-attested active-runner lease and atomic generation swap capability. */
+export interface KovoViteDevRunnerGenerationBroker {
+  configure(
+    server: unknown,
+    hooks: {
+      prepare(server: KovoViteDevRunnerModuleServer): Promise<(origin: string) => void>;
+      validate(server: KovoViteDevRunnerModuleServer): Promise<void>;
+    },
+  ): void;
+  stage(token?: object): Promise<void>;
+  withLease<T>(operation: (server: KovoViteDevRunnerModuleServer) => Promise<T>): Promise<T>;
+}
+
 /** @internal Minimal Vite websocket surface used for app-shell route HMR events. */
 export interface KovoAppShellViteWebSocket {
   send(payload: KovoAppShellViteWebSocketPayload): void;
@@ -293,6 +319,10 @@ export interface KovoAppShellViteDevPluginOptions {
    * @internal Supported-runner bridge for cookies owned by the outer dev transport.
    */
   responseSetCookieValues?: (response: ServerResponse) => readonly string[];
+  /** @internal Bootstrap-attested runner broker used only by the supported `kovo dev` command. */
+  runnerGenerations?: KovoViteDevRunnerGenerationBroker;
+  /** @internal Resolver-pinned framework ids loaded before each authored app generation. */
+  runnerGenerationModules?: KovoViteDevRunnerGenerationModules;
   shouldHandleRequest?: (request: IncomingMessage, app: KovoApp) => boolean;
   /**
    * Build-owned stylesheet assets supplied by the compiler Vite plugin during dev.
@@ -371,11 +401,27 @@ interface KovoAppShellViteDevLiveTargetInventory {
   renderers: readonly LiveTargetRenderer<unknown>[];
 }
 
+interface PreparedKovoAppShellViteDevGeneration {
+  readonly app: KovoApp;
+  readonly compilerSnapshotPublished: boolean;
+  readonly declaredStylesheetAssets: KovoAppShellViteDevStylesheetAssets | undefined;
+  readonly module: Record<string, unknown>;
+  readonly stylesheetAssets: KovoAppShellViteDevStylesheetAssets | undefined;
+}
+
+const preparedViteDevGenerationsByModule = createSecurityMap<
+  string,
+  PreparedKovoAppShellViteDevGeneration
+>();
 const publishedViteDevClientModuleSnapshots = createWitnessWeakMap<
   KovoApp,
   KovoAppShellViteDevClientModuleSnapshot
 >();
 const failedViteDevClientModulePublications = createWitnessWeakMap<KovoApp, Error>();
+const preparedViteDevGenerations = createWitnessWeakMap<
+  KovoApp,
+  PreparedKovoAppShellViteDevGeneration
+>();
 const retainedViteDevLiveTargetInventories = createWitnessWeakMap<
   KovoAppShellViteDevModuleServer,
   Map<string, Map<string, KovoAppShellViteDevLiveTargetInventory>>
@@ -539,13 +585,24 @@ export async function dispatchKovoAppShellViteDevRequest(
   // graph. Runtime-specific controls such as command execution remain tree-shakeable in production
   // bundles, but an authored dependency cannot run first and influence their dev-time capture.
   await server.ssrLoadModule(kovoServerRootModuleId);
-  const module = await runWithGeneratedLiveTargetRegistry(() => server.ssrLoadModule(moduleId));
-  const loadedApp = readKovoAppShellViteDevApp(module, appExportName, moduleId);
-  const compilerSnapshotPublished = publishKovoAppShellViteDevClientModuleSnapshot(
-    loadedApp,
-    options,
-    compilerClientModules,
+  const preparedGeneration = securityMapGet(
+    preparedViteDevGenerationsByModule,
+    preparedViteDevGenerationModuleKey(moduleId, appExportName),
   );
+  // A draining generation must never re-import an invalidated authored module. Its eager
+  // preparation already authenticated and assembled the exact closed app; retain that object for
+  // every lease in this runner-local app-shell module instance.
+  const module =
+    preparedGeneration?.module ??
+    (await runWithGeneratedLiveTargetRegistry(() => server.ssrLoadModule(moduleId)));
+  const loadedApp =
+    preparedGeneration === undefined
+      ? readKovoAppShellViteDevApp(module, appExportName, moduleId)
+      : preparedGeneration.app;
+  const compilerSnapshotPublished =
+    preparedGeneration === undefined
+      ? publishKovoAppShellViteDevClientModuleSnapshot(loadedApp, options, compilerClientModules)
+      : preparedGeneration.compilerSnapshotPublished;
   const baseApp = appWithRetainedKovoAppShellViteDevLiveTargets(
     server,
     moduleId,
@@ -553,11 +610,14 @@ export async function dispatchKovoAppShellViteDevRequest(
     loadedApp,
     compilerSnapshotPublished,
   );
-  const stylesheetAssets = readKovoAppShellViteDevStylesheetAssets(options.stylesheetAssets);
-  const declaredStylesheetAssets = await materializeKovoAppShellViteDevStylesheets(
-    baseApp,
-    options.stylesheetSourceRoot,
-  );
+  const stylesheetAssets =
+    preparedGeneration === undefined
+      ? readKovoAppShellViteDevStylesheetAssets(options.stylesheetAssets)
+      : preparedGeneration.stylesheetAssets;
+  const declaredStylesheetAssets =
+    preparedGeneration === undefined
+      ? await materializeKovoAppShellViteDevStylesheets(baseApp, options.stylesheetSourceRoot)
+      : preparedGeneration.declaredStylesheetAssets;
   const stylesheetResponse =
     renderKovoAppShellViteDevStylesheetAsset(request, declaredStylesheetAssets) ??
     renderKovoAppShellViteDevStylesheetAsset(request, stylesheetAssets);
@@ -623,6 +683,52 @@ export async function dispatchKovoAppShellViteDevRequest(
     moduleId,
     additionalSetCookies,
   )(request, devResponse, next);
+}
+
+/**
+ * Eagerly prove one fresh runner generation before the broker can make it active.
+ *
+ * @internal SPEC §6.2.1: app import, single assembly, exact opaque-token adoption, and compiler
+ * client-module publication all finish in the candidate evaluated cache before atomic swap.
+ */
+export async function prepareKovoAppShellViteDevGeneration(
+  server: KovoViteDevRunnerModuleServer,
+  options: KovoAppShellViteDevPluginOptions,
+  compilerClientModules?: () => readonly object[],
+): Promise<void> {
+  const moduleId = options.moduleId ?? '/src/app-shell.ts';
+  const appExportName = options.appExportName ?? 'default';
+  const module = await runWithGeneratedLiveTargetRegistry(() =>
+    server.ssrLoadModule<Record<string, unknown>>(moduleId),
+  );
+  const app = readKovoAppShellViteDevApp(module, appExportName, moduleId);
+  const compilerSnapshotPublished = publishKovoAppShellViteDevClientModuleSnapshot(
+    app,
+    options,
+    compilerClientModules,
+  );
+  const stylesheetAssets = readKovoAppShellViteDevStylesheetAssets(options.stylesheetAssets);
+  const declaredStylesheetAssets = await materializeKovoAppShellViteDevStylesheets(
+    app,
+    options.stylesheetSourceRoot,
+  );
+  const preparedGeneration = witnessFreeze({
+    app,
+    compilerSnapshotPublished,
+    declaredStylesheetAssets,
+    module,
+    stylesheetAssets,
+  });
+  const generationKey = preparedViteDevGenerationModuleKey(moduleId, appExportName);
+  if (securityMapHas(preparedViteDevGenerationsByModule, generationKey)) {
+    throw new Error('Kovo Vite dev runner generation was already prepared.');
+  }
+  witnessWeakMapSet(preparedViteDevGenerations, app, preparedGeneration);
+  securityMapSet(preparedViteDevGenerationsByModule, generationKey, preparedGeneration);
+}
+
+function preparedViteDevGenerationModuleKey(moduleId: string, appExportName: string): string {
+  return `${moduleId}\u0000${appExportName}`;
 }
 
 /**
@@ -900,43 +1006,10 @@ export function kovoAppShellViteDevPlugin(
 ): KovoAppShellViteDevPlugin {
   const moduleId = options.moduleId ?? '/src/app-shell.ts';
   let root = process.cwd();
+  let stageRunnerGeneration: ((token: object) => Promise<void>) | undefined;
 
   const install = (server: KovoAppShellViteDevModuleServer) => {
     root = server.config?.root ?? root;
-    // The supported CLI installs this middleware before authored configureServer hooks. Pin the
-    // exact public RunnableDevEnvironment runner and expose only that fixed carrier to per-request
-    // dispatch. Compiler HMR clears this same runner, so a changed closed contract cannot be
-    // re-imported through a second, stale compatibility graph (SPEC §6.2.1/§6.6 rule 6).
-    const environments = viteDevOwnDataValue(
-      server,
-      'environments',
-      'Vite dev server.environments',
-    );
-    const ssrEnvironment = viteDevOwnDataValue(
-      environments,
-      'ssr',
-      'Vite dev server.environments.ssr',
-    );
-    const runner = viteDevStableGetterValue(
-      ssrEnvironment,
-      'runner',
-      'Vite dev server.environments.ssr.runner',
-    );
-    const runnerImport = viteDevStableMethod(
-      runner,
-      'import',
-      'Vite dev server.environments.ssr.runner.import',
-    );
-    const ssrLoadModule = (id: string): Promise<Record<string, unknown>> => {
-      if (
-        server.environments !== environments ||
-        (environments as { ssr?: unknown }).ssr !== ssrEnvironment ||
-        (runner as { import?: unknown }).import !== runnerImport
-      ) {
-        throw new TypeError('Vite dev SSR runner changed after Kovo configuration.');
-      }
-      return witnessReflectApply(runnerImport, runner, [id]);
-    };
     const prepareCompilerClientModules = viteDevOwnDataValue(
       options,
       'prepareCompilerClientModules',
@@ -948,44 +1021,211 @@ export function kovoAppShellViteDevPlugin(
     ) {
       throw new TypeError('Vite dev compiler client-module bootstrap must be a function.');
     }
-    const dispatchServer: KovoAppShellViteDevModuleServer = witnessFreeze({
-      ...(server.config === undefined ? {} : { config: server.config }),
-      middlewares: server.middlewares,
-      ssrLoadModule,
-      ...(server.ws === undefined ? {} : { ws: server.ws }),
-    });
+    const runnerGenerations = viteDevOwnDataValue(
+      options,
+      'runnerGenerations',
+      'Vite dev runner generation broker',
+    ) as KovoViteDevRunnerGenerationBroker | undefined;
+    const runnerGenerationModules = viteDevOwnDataValue(
+      options,
+      'runnerGenerationModules',
+      'Vite dev runner generation modules',
+    ) as KovoViteDevRunnerGenerationModules | undefined;
+    let fixedModuleServer: KovoViteDevRunnerModuleServer | undefined;
+    let withRunnerGenerationLease:
+      | (<T>(operation: (server: KovoViteDevRunnerModuleServer) => Promise<T>) => Promise<T>)
+      | undefined;
+    if (runnerGenerations === undefined) {
+      // Direct public-plugin wiring retains one configure-time runner. The supported CLI takes the
+      // broker branch below, whose factory/getter/prototype identities were captured pre-config.
+      const environments = viteDevOwnDataValue(
+        server,
+        'environments',
+        'Vite dev server.environments',
+      );
+      const ssrEnvironment = viteDevOwnDataValue(
+        environments,
+        'ssr',
+        'Vite dev server.environments.ssr',
+      );
+      const runner = viteDevStableGetterValue(
+        ssrEnvironment,
+        'runner',
+        'Vite dev server.environments.ssr.runner',
+      );
+      const runnerImport = viteDevStableMethod(
+        runner,
+        'import',
+        'Vite dev server.environments.ssr.runner.import',
+      );
+      fixedModuleServer = witnessFreeze({
+        ssrLoadModule<T = Record<string, unknown>>(id: string): Promise<T> {
+          if (
+            server.environments !== environments ||
+            (environments as { ssr?: unknown }).ssr !== ssrEnvironment ||
+            (runner as { import?: unknown }).import !== runnerImport
+          ) {
+            throw new TypeError('Vite dev SSR runner changed after Kovo configuration.');
+          }
+          return witnessReflectApply(runnerImport, runner, [id]) as Promise<T>;
+        },
+      });
+    } else {
+      if (
+        typeof runnerGenerations !== 'object' ||
+        runnerGenerations === null ||
+        runnerGenerationModules === undefined
+      ) {
+        throw new TypeError('Vite dev runner generation integration is incomplete.');
+      }
+      const configure = viteDevStableMethod(
+        runnerGenerations,
+        'configure',
+        'Vite dev runner generation broker.configure',
+      );
+      const stage = viteDevStableMethod(
+        runnerGenerations,
+        'stage',
+        'Vite dev runner generation broker.stage',
+      );
+      const withLease = viteDevStableMethod(
+        runnerGenerations,
+        'withLease',
+        'Vite dev runner generation broker.withLease',
+      );
+      stageRunnerGeneration = (token: object): Promise<void> =>
+        witnessReflectApply(stage, runnerGenerations, [token]);
+      withRunnerGenerationLease = <T>(
+        operation: (moduleServer: KovoViteDevRunnerModuleServer) => Promise<T>,
+      ): Promise<T> => witnessReflectApply(withLease, runnerGenerations, [operation]);
+      const nodeDataPlaneBootstrapModuleId = requiredViteDevRunnerModuleId(
+        runnerGenerationModules,
+        'nodeDataPlaneBootstrapModuleId',
+      );
+      const serverRootModuleId = requiredViteDevRunnerModuleId(
+        runnerGenerationModules,
+        'serverRootModuleId',
+      );
+      const securityProfileModuleId = requiredViteDevRunnerModuleId(
+        runnerGenerationModules,
+        'securityProfileModuleId',
+      );
+      const appShellModuleId = requiredViteDevRunnerModuleId(
+        runnerGenerationModules,
+        'appShellModuleId',
+      );
+      const hooks = witnessFreeze({
+        async prepare(
+          moduleServer: KovoViteDevRunnerModuleServer,
+        ): Promise<(origin: string) => void> {
+          await moduleServer.ssrLoadModule(nodeDataPlaneBootstrapModuleId);
+          await moduleServer.ssrLoadModule(serverRootModuleId);
+          const profileModule =
+            await moduleServer.ssrLoadModule<Record<string, unknown>>(securityProfileModuleId);
+          const bind = viteDevModuleExportValue(
+            profileModule,
+            'bindKovoDevLoopbackOrigin',
+            `${securityProfileModuleId} origin binder`,
+          );
+          if (typeof bind !== 'function') {
+            throw new TypeError(`${securityProfileModuleId} must export its origin binder.`);
+          }
+          return (origin: string): void => {
+            witnessReflectApply(bind, undefined, [origin]);
+          };
+        },
+        async validate(moduleServer: KovoViteDevRunnerModuleServer): Promise<void> {
+          const serverModule =
+            await moduleServer.ssrLoadModule<Record<string, unknown>>(appShellModuleId);
+          const prepareGeneration = viteDevModuleExportValue(
+            serverModule,
+            'prepareKovoAppShellViteDevGeneration',
+            `${appShellModuleId} generation preparer`,
+          );
+          if (typeof prepareGeneration !== 'function') {
+            throw new TypeError(`${appShellModuleId} must export its generation preparer.`);
+          }
+          const compilerClientModules =
+            prepareCompilerClientModules === undefined
+              ? undefined
+              : witnessReflectApply<unknown>(prepareCompilerClientModules, undefined, [
+                  serverModule,
+                ]);
+          if (compilerClientModules !== undefined && typeof compilerClientModules !== 'function') {
+            throw new TypeError('Vite dev compiler client-module bound getter must be a function.');
+          }
+          await witnessReflectApply<Promise<void>>(prepareGeneration, undefined, [
+            moduleServer,
+            options,
+            compilerClientModules,
+          ]);
+        },
+      });
+      witnessReflectApply(configure, runnerGenerations, [server, hooks]);
+    }
+
+    const dispatchServers = createWitnessWeakMap<
+      KovoViteDevRunnerModuleServer,
+      KovoAppShellViteDevModuleServer
+    >();
+    const dispatchWithModuleServer = async (
+      moduleServer: KovoViteDevRunnerModuleServer,
+      request: IncomingMessage,
+      response: ServerResponse,
+      next: (error?: unknown) => void,
+    ): Promise<void> => {
+      const appShellModuleId =
+        runnerGenerationModules === undefined
+          ? kovoAppShellViteDevModuleId
+          : requiredViteDevRunnerModuleId(runnerGenerationModules, 'appShellModuleId');
+      let dispatchServer = witnessWeakMapGet(dispatchServers, moduleServer);
+      if (dispatchServer === undefined) {
+        dispatchServer = witnessFreeze({
+          ...(server.config === undefined ? {} : { config: server.config }),
+          middlewares: server.middlewares,
+          ssrLoadModule: (id: string) => moduleServer.ssrLoadModule(id),
+          ...(server.ws === undefined ? {} : { ws: server.ws }),
+        });
+        witnessWeakMapSet(dispatchServers, moduleServer, dispatchServer);
+      }
+      const serverModule =
+        await moduleServer.ssrLoadModule<Record<string, unknown>>(appShellModuleId);
+      const dispatch = viteDevModuleExportValue(
+        serverModule,
+        'dispatchKovoAppShellViteDevRequest',
+        `${appShellModuleId} dispatch export`,
+      );
+      if (typeof dispatch !== 'function') {
+        throw new TypeError(
+          `${appShellModuleId} must export dispatchKovoAppShellViteDevRequest().`,
+        );
+      }
+      const compilerClientModules =
+        runnerGenerations !== undefined || prepareCompilerClientModules === undefined
+          ? undefined
+          : witnessReflectApply<unknown>(prepareCompilerClientModules, undefined, [serverModule]);
+      if (compilerClientModules !== undefined && typeof compilerClientModules !== 'function') {
+        throw new TypeError('Vite dev compiler client-module bound getter must be a function.');
+      }
+      await witnessReflectApply<Promise<void>>(dispatch, undefined, [
+        dispatchServer,
+        options,
+        request,
+        response,
+        next,
+        compilerClientModules,
+      ]);
+    };
     server.middlewares.use((request, response, next) => {
       // SPEC §9.5: apply the complete direct-Node ingress verdict before loading the app graph.
       // The graph-local dispatcher repeats this internal callable gate.
       if (rejectNodeRequestPreloadIngress(request, response)) return;
-      const loaded = securityPromiseResolve(ssrLoadModule(kovoAppShellViteDevModuleId));
-      const dispatched = securityPromiseThen(loaded, (serverModule) => {
-        const dispatch = viteDevModuleExportValue(
-          serverModule,
-          'dispatchKovoAppShellViteDevRequest',
-          `${kovoAppShellViteDevModuleId} dispatch export`,
-        );
-        if (typeof dispatch !== 'function') {
-          throw new TypeError(
-            `${kovoAppShellViteDevModuleId} must export dispatchKovoAppShellViteDevRequest().`,
-          );
-        }
-        const compilerClientModules =
-          prepareCompilerClientModules === undefined
-            ? undefined
-            : witnessReflectApply<unknown>(prepareCompilerClientModules, undefined, [serverModule]);
-        if (compilerClientModules !== undefined && typeof compilerClientModules !== 'function') {
-          throw new TypeError('Vite dev compiler client-module bound getter must be a function.');
-        }
-        return witnessReflectApply(dispatch, undefined, [
-          dispatchServer,
-          options,
-          request,
-          response,
-          next,
-          compilerClientModules,
-        ]);
-      });
+      const dispatched =
+        runnerGenerations === undefined
+          ? dispatchWithModuleServer(fixedModuleServer!, request, response, next)
+          : withRunnerGenerationLease!((moduleServer) =>
+              dispatchWithModuleServer(moduleServer, request, response, next),
+            );
       void securityPromiseThen(dispatched, () => undefined, next);
     });
   };
@@ -999,6 +1239,9 @@ export function kovoAppShellViteDevPlugin(
     async handleHotUpdate(context) {
       const sourceFile = viteDevSourceFileName(context.file, root);
       if (sourceFile !== viteDevSourceFileName(moduleId, '')) return undefined;
+      // The same context token is also presented by the compiler plugin. The broker deduplicates
+      // the stage so route-shell events follow exactly one successful atomic generation swap.
+      await stageRunnerGeneration?.(context);
       context.server.ws?.send({
         data: {
           impact: 'routeRefresh',
@@ -1013,6 +1256,17 @@ export function kovoAppShellViteDevPlugin(
     },
     name: options.name ?? 'kovo-app-shell-dev',
   };
+}
+
+function requiredViteDevRunnerModuleId(
+  modules: KovoViteDevRunnerGenerationModules,
+  key: keyof KovoViteDevRunnerGenerationModules,
+): string {
+  const value = viteDevOwnDataValue(modules, key, `Vite dev runner generation ${key}`);
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new TypeError(`Vite dev runner generation ${key} must be a non-empty string.`);
+  }
+  return value;
 }
 
 function viteDevSourceFileName(file: string, root: string): string {
