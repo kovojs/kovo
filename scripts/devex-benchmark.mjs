@@ -82,6 +82,26 @@ const KOVO_PACKED_CHECK_PHASES = Object.freeze([
   Object.freeze({ name: 'build-check-graph', status: 'executed' }),
   Object.freeze({ name: 'graph-diagnostics', status: 'executed' }),
 ]);
+const KOVO_INCREMENTAL_ALWAYS_EXECUTED_PHASES = new Set([
+  'app-evaluation',
+  'build-check-graph',
+  'graph-diagnostics',
+]);
+const KOVO_INCREMENTAL_EDIT_DEPENDENT_PHASES = new Set([
+  'session-authority',
+  'app-source-trust',
+  'stylesheet',
+  'app-evaluation',
+  'build-check-graph',
+  'graph-diagnostics',
+]);
+const KOVO_INCREMENTAL_EDIT_INVARIANT_PHASES = new Set([
+  'lifecycle-policy',
+  'config-trust',
+  'typescript',
+  'project-quality',
+  'sound-subset',
+]);
 const KOVO_PACKED_DOCS_EVIDENCE_SCHEMA = 'kovo-devex-packed-docs-evidence/v1';
 const KOVO_PACKED_ARTIFACT_BINDING_SCHEMA = 'kovo-devex-packed-artifact-binding/v2';
 const KOVO_WORKLOAD_CONTRACT_SCHEMA = 'kovo-devex-workload-contract/v1';
@@ -1780,6 +1800,7 @@ function assertIncrementalSessionInvocation(result, samples) {
   ) {
     throw new Error('incremental benchmark returned invalid live-session evidence');
   }
+  const digestEvidence = incrementalPhaseDigestEvidence();
   for (let index = 0; index < evidence.observations.length; index += 1) {
     const observation = evidence.observations[index];
     if (
@@ -1790,7 +1811,9 @@ function assertIncrementalSessionInvocation(result, samples) {
       !validDigest(observation?.closureDigest) ||
       !validDigest(observation?.projectDigest) ||
       !finiteNonNegative(observation?.durationMs) ||
-      (observation?.peakRssBytes !== null && !finiteNonNegative(observation?.peakRssBytes))
+      !finiteNonNegative(observation?.peakRssBytes) ||
+      !Number.isSafeInteger(observation?.processTreeSamples) ||
+      observation.processTreeSamples < 1
     ) {
       throw new Error(`incremental benchmark returned invalid revision ${index}`);
     }
@@ -1800,6 +1823,18 @@ function assertIncrementalSessionInvocation(result, samples) {
       true,
     );
     if (phaseFindings.length > 0) throw new Error(phaseFindings.join('\n'));
+    observeIncrementalPhaseDigests(
+      digestEvidence,
+      observation.diagnosticPhases,
+      index,
+      observation.sourceRevision,
+      `incremental session revision ${index}`,
+    );
+  }
+  assertCompleteIncrementalPhaseDigests(digestEvidence, 'incremental session');
+  const expectedSessionDigest = sha256(Buffer.from(JSON.stringify(evidence.observations), 'utf8'));
+  if (evidence.sessionDigest !== expectedSessionDigest) {
+    throw new Error('incremental benchmark session digest does not match its observations');
   }
   return evidence;
 }
@@ -1834,7 +1869,9 @@ function packedCheckPhaseFindings(phases, label, incremental = false) {
     const expected = KOVO_PACKED_CHECK_PHASES[index];
     const observed = phases[index];
     const expectedStatus =
-      incremental && expected.status === 'executed'
+      incremental &&
+      expected.status === 'executed' &&
+      !KOVO_INCREMENTAL_ALWAYS_EXECUTED_PHASES.has(expected.name)
         ? ['executed', 'reused-authenticated']
         : [expected.status];
     if (
@@ -1842,6 +1879,7 @@ function packedCheckPhaseFindings(phases, label, incremental = false) {
       !expectedStatus.includes(observed?.status) ||
       !finiteNonNegative(observed?.durationMs) ||
       (expected.status === 'not-applicable' && observed.durationMs !== 0) ||
+      (observed?.status === 'reused-authenticated' && observed.durationMs !== 0) ||
       (incremental && !validDigest(observed?.inputDigest))
     ) {
       findings.push(
@@ -1850,6 +1888,66 @@ function packedCheckPhaseFindings(phases, label, incremental = false) {
     }
   }
   return findings;
+}
+
+function incrementalPhaseDigestEvidence() {
+  return {
+    digestsBySourceRevision: new Map(),
+    invariantDigests: new Map(),
+    previousDigests: new Map(),
+  };
+}
+
+function observeIncrementalPhaseDigests(evidence, phases, revision, sourceRevision, label) {
+  for (let index = 0; index < KOVO_PACKED_CHECK_PHASES.length; index += 1) {
+    const expected = KOVO_PACKED_CHECK_PHASES[index];
+    const observed = phases[index];
+    if (revision === 0 && observed.status === 'reused-authenticated') {
+      throw new Error(`${label}.${expected.name} cannot reuse an empty session cache`);
+    }
+    const previousDigest = evidence.previousDigests.get(expected.name);
+    if (observed.status === 'reused-authenticated' && previousDigest !== observed.inputDigest) {
+      throw new Error(`${label}.${expected.name} reused facts for a changed input digest`);
+    }
+    if (
+      expected.status === 'executed' &&
+      previousDigest !== undefined &&
+      previousDigest !== observed.inputDigest &&
+      observed.status !== 'executed'
+    ) {
+      throw new Error(`${label}.${expected.name} did not execute for its changed input digest`);
+    }
+    evidence.previousDigests.set(expected.name, observed.inputDigest);
+
+    const sourceKey = `${expected.name}\0${String(sourceRevision)}`;
+    const sourceDigest = evidence.digestsBySourceRevision.get(sourceKey);
+    if (sourceDigest !== undefined && sourceDigest !== observed.inputDigest) {
+      throw new Error(
+        `${label}.${expected.name} maps source revision ${String(
+          sourceRevision,
+        )} to inconsistent input digests`,
+      );
+    }
+    evidence.digestsBySourceRevision.set(sourceKey, observed.inputDigest);
+
+    if (KOVO_INCREMENTAL_EDIT_INVARIANT_PHASES.has(expected.name)) {
+      const invariantDigest = evidence.invariantDigests.get(expected.name);
+      if (invariantDigest !== undefined && invariantDigest !== observed.inputDigest) {
+        throw new Error(`${label}.${expected.name} changed despite an unrelated source edit`);
+      }
+      evidence.invariantDigests.set(expected.name, observed.inputDigest);
+    }
+  }
+}
+
+function assertCompleteIncrementalPhaseDigests(evidence, label) {
+  for (const name of KOVO_INCREMENTAL_EDIT_DEPENDENT_PHASES) {
+    const first = evidence.digestsBySourceRevision.get(`${name}\0${String(0)}`);
+    const second = evidence.digestsBySourceRevision.get(`${name}\0${String(1)}`);
+    if (first === undefined || second === undefined || first === second) {
+      throw new Error(`${label}.${name} did not bind both distinct edited source revisions`);
+    }
+  }
 }
 
 function fixturePackedCheckPhases() {
@@ -2057,6 +2155,8 @@ function validatePhaseCensus(census, sampleCount, label) {
   } else {
     const digestByRevision = new Map();
     const graphDigestByRevision = new Map();
+    const incrementalDigestEvidence = incrementalPhaseDigestEvidence();
+    const incrementalPhasesBySessionRevision = new Map();
     const incrementalSessionPids = new Set();
     for (let index = 0; index < expectedObservations.length; index += 1) {
       const expected = expectedObservations[index];
@@ -2092,13 +2192,49 @@ function validatePhaseCensus(census, sampleCount, label) {
       if (!/^sha256:[0-9a-f]{64}$/u.test(observed.checkGraphDigest ?? '')) {
         findings.push(`${label}.analysisInputs[${index}].checkGraphDigest is invalid`);
       }
-      findings.push(
-        ...packedCheckPhaseFindings(
-          observed.diagnosticPhases,
-          `${label}.analysisInputs[${String(index)}]`,
-          expected.phase === 'oneFileIncremental',
-        ),
+      const phaseLabel = `${label}.analysisInputs[${String(index)}]`;
+      const phaseFindings = packedCheckPhaseFindings(
+        observed.diagnosticPhases,
+        phaseLabel,
+        expected.phase === 'oneFileIncremental',
       );
+      findings.push(...phaseFindings);
+      if (
+        expected.phase === 'oneFileIncremental' &&
+        phaseFindings.length === 0 &&
+        Number.isSafeInteger(observed.sessionRevision) &&
+        observed.sessionRevision >= 0
+      ) {
+        const prior = incrementalPhasesBySessionRevision.get(observed.sessionRevision);
+        if (prior === undefined) {
+          try {
+            observeIncrementalPhaseDigests(
+              incrementalDigestEvidence,
+              observed.diagnosticPhases,
+              observed.sessionRevision,
+              observed.revision,
+              phaseLabel,
+            );
+            incrementalPhasesBySessionRevision.set(observed.sessionRevision, {
+              phases: observed.diagnosticPhases,
+              sourceRevision: observed.revision,
+            });
+          } catch (error) {
+            findings.push(
+              error instanceof Error
+                ? error.message
+                : `${phaseLabel} has invalid incremental phase digest evidence`,
+            );
+          }
+        } else if (
+          prior.sourceRevision !== observed.revision ||
+          !sameJson(prior.phases, observed.diagnosticPhases)
+        ) {
+          findings.push(
+            `${phaseLabel} disagrees with its repeated live incremental session revision`,
+          );
+        }
+      }
       if (!finiteNonNegative(observed.durationMs)) {
         findings.push(`${label}.analysisInputs[${index}].durationMs is invalid`);
       }
@@ -2127,6 +2263,15 @@ function validatePhaseCensus(census, sampleCount, label) {
       graphDigestByRevision.get(0) === graphDigestByRevision.get(1)
     ) {
       findings.push(`${label}.analysisInputs must prove two distinct current-source check graphs`);
+    }
+    try {
+      assertCompleteIncrementalPhaseDigests(incrementalDigestEvidence, `${label}.analysisInputs`);
+    } catch (error) {
+      findings.push(
+        error instanceof Error
+          ? error.message
+          : `${label}.analysisInputs has incomplete incremental phase digest evidence`,
+      );
     }
   }
   return findings;

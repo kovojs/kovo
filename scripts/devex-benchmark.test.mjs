@@ -34,6 +34,7 @@ import {
   validateKovoBrowserWorkload,
   validateIncrementalSessionMarkerForTesting,
 } from './devex-benchmark.mjs';
+import { processTreeRssBytesForTesting } from './devex-workloads/kovo-packed-check/package/workload.mjs';
 import { validatedPackageTarballEntries } from './lib/deterministic-tarball.mjs';
 import { packWithoutLifecycleScripts } from './lib/pack-without-lifecycle.mjs';
 
@@ -180,7 +181,7 @@ describe('DevEx benchmark foundation', () => {
         oneFileIncremental: { prime: 5, timed: 5 },
       },
       incrementalRevisions: [1, 0, 1, 0, 1],
-      analysisInputs: fixtureAnalysisInputs(5),
+      analysisInputs: fixtureAnalysisInputs(5, {}, false),
     });
     expect(report.devPhaseCensus).toEqual({
       schema: 'kovo-devex-dev-phase-census/v1',
@@ -516,6 +517,10 @@ describe('DevEx benchmark foundation', () => {
     expect(kovoPackedWorkloadSource).toContain("'--watch', '--format', 'json'");
     expect(kovoPackedWorkloadSource).toContain('kovo-check-watch/v1');
     expect(kovoPackedWorkloadSource).toContain('kovo-check-phase-census/v2');
+    expect(kovoPackedWorkloadSource).toContain("'ps', ['-axo', 'pid=,ppid=,rss=']");
+    expect(kovoPackedWorkloadSource).toContain('processTreeSamples');
+    expect(kovoPackedWorkloadSource).toContain('setInterval(sample');
+    expect(kovoPackedWorkloadSource).not.toContain("['-o', 'rss=', '-p'");
     expect(kovoPackedWorkloadSource).toContain('KOVO_DEVEX_CHECK_PHASE_CENSUS_SOURCE');
     expect(kovoPackedWorkloadSource).toContain('kovo-check-phase-census/v1');
     expect(kovoPackedWorkloadSource).toContain("import { app } from '../kovo.js'");
@@ -553,17 +558,17 @@ describe('DevEx benchmark foundation', () => {
       diagnosticPhases: fixturePackedCheckPhases(true, revision % 2),
       durationMs: revision === 0 ? 100 : revision,
       peakRssBytes: 1024,
+      processTreeSamples: 2,
       projectDigest: `sha256:${revision % 2 === 0 ? 'e'.repeat(64) : 'f'.repeat(64)}`,
       revision,
       sourceRevision: revision % 2,
     }));
-    const evidence = {
+    const evidence = withIncrementalSessionDigest({
       observations,
       pid: 4242,
       samples: 5,
       schema: 'kovo-incremental-check-session/v1',
-      sessionDigest: `sha256:${'9'.repeat(64)}`,
-    };
+    });
     expect(validateIncrementalSessionMarkerForTesting(evidence, 5)).toEqual(evidence);
 
     expect(() =>
@@ -591,6 +596,38 @@ describe('DevEx benchmark foundation', () => {
         5,
       ),
     ).toThrow(/must contain all 11/u);
+
+    expect(() =>
+      validateIncrementalSessionMarkerForTesting(
+        { ...evidence, sessionDigest: `sha256:${'9'.repeat(64)}` },
+        5,
+      ),
+    ).toThrow(/session digest/u);
+
+    const reusedGraph = structuredClone(evidence);
+    reusedGraph.observations[1].diagnosticPhases[9].status = 'reused-authenticated';
+    reusedGraph.observations[1].diagnosticPhases[9].durationMs = 0;
+    expect(() =>
+      validateIncrementalSessionMarkerForTesting(withIncrementalSessionDigest(reusedGraph), 5),
+    ).toThrow(/build-check-graph=executed/u);
+
+    const changedReuse = structuredClone(evidence);
+    changedReuse.observations[1].diagnosticPhases[1].status = 'reused-authenticated';
+    changedReuse.observations[1].diagnosticPhases[1].durationMs = 0;
+    changedReuse.observations[1].diagnosticPhases[1].inputDigest = `sha256:${'8'.repeat(64)}`;
+    expect(() =>
+      validateIncrementalSessionMarkerForTesting(withIncrementalSessionDigest(changedReuse), 5),
+    ).toThrow(/reused facts for a changed input digest|unrelated source edit/u);
+  });
+
+  it('sums one sampled process tree without counting an unrelated sibling', () => {
+    expect(
+      processTreeRssBytesForTesting(
+        ['12 11 300', '99 1 9000', '10 1 100', '11 10 200'].join('\n'),
+        10,
+      ),
+    ).toBe(600 * 1024);
+    expect(processTreeRssBytesForTesting('99 1 9000\n', 10)).toBeNull();
   });
 
   it('keeps runner-bound provisional budgets non-binding before runner ratification', () => {
@@ -1267,6 +1304,17 @@ describe('DevEx benchmark foundation', () => {
     expect(() => evaluateBudgets(ratified, forgedCheckGraph, validationOptions)).toThrow(
       'maps one revision to multiple check-graph digests',
     );
+    const forgedIncrementalPhase = benchmarkReport({
+      'check.cold.durationMs': [90, 91, 92, 93, 94],
+    });
+    const repeatedRevision = forgedIncrementalPhase.phaseCensus.analysisInputs.filter(
+      (observation) =>
+        observation.phase === 'oneFileIncremental' && observation.sessionRevision === 1,
+    );
+    repeatedRevision[1].diagnosticPhases[8].inputDigest = `sha256:${'9'.repeat(64)}`;
+    expect(() => evaluateBudgets(ratified, forgedIncrementalPhase, validationOptions)).toThrow(
+      'disagrees with its repeated live incremental session revision',
+    );
 
     const forgedPhaseMetric = benchmarkReport({
       'check.cold.durationMs': [90, 91, 92, 93, 94],
@@ -1366,7 +1414,11 @@ describe('DevEx benchmark foundation', () => {
   });
 });
 
-function fixtureAnalysisInputs(sampleCount, metricSamples = {}) {
+function fixtureAnalysisInputs(
+  sampleCount,
+  metricSamples = {},
+  invariantIncrementalDigests = true,
+) {
   const phaseValues = {
     cold: { durationMs: 30, peakRssBytes: 3000 },
     warm: { durationMs: 10, peakRssBytes: 2000 },
@@ -1385,7 +1437,11 @@ function fixtureAnalysisInputs(sampleCount, metricSamples = {}) {
           revision,
           analysisDigest: `sha256:${String(revision).repeat(64)}`,
           checkGraphDigest: `sha256:${revision === 0 ? 'a'.repeat(64) : 'b'.repeat(64)}`,
-          diagnosticPhases: fixturePackedCheckPhases(phase === 'oneFileIncremental', revision),
+          diagnosticPhases: fixturePackedCheckPhases(
+            phase === 'oneFileIncremental',
+            revision,
+            invariantIncrementalDigests,
+          ),
           durationMs: phaseValues[phase].durationMs + sampleIndex,
           peakRssBytes: phaseValues[phase].peakRssBytes + sampleIndex,
           ...(phase === 'oneFileIncremental'
@@ -1407,7 +1463,11 @@ function fixtureAnalysisInputs(sampleCount, metricSamples = {}) {
         revision,
         analysisDigest: `sha256:${String(revision).repeat(64)}`,
         checkGraphDigest: `sha256:${revision === 0 ? 'a'.repeat(64) : 'b'.repeat(64)}`,
-        diagnosticPhases: fixturePackedCheckPhases(phase === 'oneFileIncremental', revision),
+        diagnosticPhases: fixturePackedCheckPhases(
+          phase === 'oneFileIncremental',
+          revision,
+          invariantIncrementalDigests,
+        ),
         durationMs: duration,
         peakRssBytes: peakRss,
         ...(phase === 'oneFileIncremental'
@@ -1419,7 +1479,18 @@ function fixtureAnalysisInputs(sampleCount, metricSamples = {}) {
   return inputs;
 }
 
-function fixturePackedCheckPhases(incremental = false, revision = 0) {
+function fixturePackedCheckPhases(
+  incremental = false,
+  revision = 0,
+  invariantIncrementalDigests = true,
+) {
+  const invariant = new Set([
+    'lifecycle-policy',
+    'config-trust',
+    'typescript',
+    'project-quality',
+    'sound-subset',
+  ]);
   return [
     ['lifecycle-policy', 'not-applicable'],
     ['config-trust', 'executed'],
@@ -1434,10 +1505,27 @@ function fixturePackedCheckPhases(incremental = false, revision = 0) {
     ['graph-diagnostics', 'executed'],
   ].map(([name, status]) => ({
     durationMs: 0,
-    ...(incremental ? { inputDigest: `sha256:${String(revision).repeat(64)}` } : {}),
+    ...(incremental
+      ? {
+          inputDigest: `sha256:${
+            invariantIncrementalDigests && invariant.has(name)
+              ? '7'.repeat(64)
+              : String(revision).repeat(64)
+          }`,
+        }
+      : {}),
     name,
     status,
   }));
+}
+
+function withIncrementalSessionDigest(evidence) {
+  return {
+    ...evidence,
+    sessionDigest: `sha256:${createHash('sha256')
+      .update(JSON.stringify(evidence.observations))
+      .digest('hex')}`,
+  };
 }
 
 function fixtureDevEvidence(sampleIndex) {

@@ -7,6 +7,7 @@ import { createInterface } from 'node:readline';
 const CHECK_PHASE_CENSUS_SCHEMA = 'kovo-check-phase-census/v1';
 const CHECK_WATCH_SCHEMA = 'kovo-check-watch/v1';
 const CHECK_WATCH_CENSUS_SCHEMA = 'kovo-check-phase-census/v2';
+const PROCESS_TREE_SAMPLE_INTERVAL_MS = 20;
 const CHECK_PHASES = Object.freeze([
   ['lifecycle-policy', 'not-applicable'],
   ['config-trust', 'executed'],
@@ -19,6 +20,26 @@ const CHECK_PHASES = Object.freeze([
   ['app-evaluation', 'executed'],
   ['build-check-graph', 'executed'],
   ['graph-diagnostics', 'executed'],
+]);
+const ALWAYS_EXECUTED_INCREMENTAL_PHASES = new Set([
+  'app-evaluation',
+  'build-check-graph',
+  'graph-diagnostics',
+]);
+const EDIT_DEPENDENT_PHASES = new Set([
+  'session-authority',
+  'app-source-trust',
+  'stylesheet',
+  'app-evaluation',
+  'build-check-graph',
+  'graph-diagnostics',
+]);
+const EDIT_INVARIANT_PHASES = new Set([
+  'lifecycle-policy',
+  'config-trust',
+  'typescript',
+  'project-quality',
+  'sound-subset',
 ]);
 
 export const SOURCE_PATH = 'src/components/counter-island.tsx';
@@ -326,31 +347,56 @@ export async function runVerifiedIncrementalCheckSession(samples) {
     Symbol.asyncIterator
   ]();
   const observations = [];
+  const phaseEvidence = incrementalPhaseEvidence();
+  const processTree = createRevisionProcessTreeSampler(child.pid);
   let sourceRevision = SOURCE_VARIANTS.indexOf(readFileSync(SOURCE_PATH, 'utf8'));
   if (sourceRevision === -1) {
+    processTree.stop();
     child.kill('SIGINT');
     throw new Error('incremental check session source does not match a reviewed revision');
   }
+  processTree.beginRevision();
   let started = process.hrtime.bigint();
 
   try {
-    observations.push(await nextWatchObservation(lines, child, stderr, 0, sourceRevision, started));
+    observations.push(
+      await nextWatchObservation(
+        lines,
+        () => stderr,
+        processTree,
+        phaseEvidence,
+        0,
+        sourceRevision,
+        started,
+      ),
+    );
     for (let sampleIndex = 0; sampleIndex < samples; sampleIndex += 1) {
       sourceRevision = sourceRevision === 0 ? 1 : 0;
+      processTree.beginRevision();
       started = process.hrtime.bigint();
       writeFileSync(SOURCE_PATH, SOURCE_VARIANTS[sourceRevision]);
       observations.push(
-        await nextWatchObservation(lines, child, stderr, sampleIndex + 1, sourceRevision, started),
+        await nextWatchObservation(
+          lines,
+          () => stderr,
+          processTree,
+          phaseEvidence,
+          sampleIndex + 1,
+          sourceRevision,
+          started,
+        ),
       );
     }
+    validateCompleteIncrementalPhaseEvidence(phaseEvidence);
   } finally {
+    processTree.stop();
     child.kill('SIGINT');
     await Promise.race([
       new Promise((resolveExit) => child.once('exit', resolveExit)),
       new Promise((resolveTimeout) => setTimeout(resolveTimeout, 5_000)),
     ]);
     if (child.exitCode === null) child.kill('SIGKILL');
-    lines.return?.();
+    await lines.return?.();
   }
   return Object.freeze({
     observations: Object.freeze(observations),
@@ -363,31 +409,34 @@ export async function runVerifiedIncrementalCheckSession(samples) {
 
 async function nextWatchObservation(
   lines,
-  child,
   stderr,
+  processTree,
+  phaseEvidence,
   expectedRevision,
   expectedSourceRevision,
   started,
 ) {
+  let timeout;
   const next = await Promise.race([
     lines.next(),
-    new Promise((_, reject) =>
-      setTimeout(
+    new Promise((_, reject) => {
+      timeout = setTimeout(
         () =>
           reject(
             new Error(
-              `packed Kovo incremental check timed out at revision ${expectedRevision}: ${stderr}`,
+              `packed Kovo incremental check timed out at revision ${expectedRevision}: ${stderr()}`,
             ),
           ),
         120_000,
-      ),
-    ),
-  ]);
+      );
+    }),
+  ]).finally(() => clearTimeout(timeout));
   if (next.done || typeof next.value !== 'string') {
     throw new Error(
-      `packed Kovo incremental check exited before revision ${expectedRevision}: ${stderr}`,
+      `packed Kovo incremental check exited before revision ${expectedRevision}: ${stderr()}`,
     );
   }
+  const durationMs = Number(process.hrtime.bigint() - started) / 1e6;
   let record;
   try {
     record = JSON.parse(next.value);
@@ -414,42 +463,177 @@ async function nextWatchObservation(
   ) {
     throw new Error(`packed Kovo incremental check returned wrong revision ${expectedRevision}`);
   }
-  validateWatchPhases(record.phaseCensus.phases);
+  validateWatchPhases(
+    record.phaseCensus.phases,
+    phaseEvidence,
+    expectedRevision,
+    expectedSourceRevision,
+  );
+  const rss = processTree.finishRevision();
+  if (rss.peakRssBytes === null || rss.sampleCount < 1) {
+    throw new Error(
+      `packed Kovo incremental check could not measure process-tree RSS for revision ${expectedRevision}`,
+    );
+  }
   return Object.freeze({
     analysisDigest: record.input.entry.digest,
     checkGraphDigest: record.phaseCensus.checkGraphDigest,
     closureDigest: record.input.closureDigest,
     diagnosticPhases: record.phaseCensus.phases,
-    durationMs: Number(process.hrtime.bigint() - started) / 1e6,
-    peakRssBytes: processRssBytes(child.pid),
+    durationMs,
+    peakRssBytes: rss.peakRssBytes,
+    processTreeSamples: rss.sampleCount,
     projectDigest: record.input.projectDigest,
     revision: expectedRevision,
     sourceRevision: expectedSourceRevision,
   });
 }
 
-function validateWatchPhases(phases) {
+function validateWatchPhases(phases, evidence, revision, sourceRevision) {
   if (!Array.isArray(phases) || phases.length !== CHECK_PHASES.length) {
     throw new Error('packed Kovo incremental check omitted diagnostic phases');
   }
   for (let index = 0; index < CHECK_PHASES.length; index += 1) {
-    const [name] = CHECK_PHASES[index];
+    const [name, expectedStatus] = CHECK_PHASES[index];
     const phase = phases[index];
+    const allowedStatuses =
+      expectedStatus === 'not-applicable'
+        ? ['not-applicable']
+        : ALWAYS_EXECUTED_INCREMENTAL_PHASES.has(name)
+          ? ['executed']
+          : ['executed', 'reused-authenticated'];
     if (
       phase?.name !== name ||
-      !['executed', 'not-applicable', 'reused-authenticated'].includes(phase?.status) ||
+      !allowedStatuses.includes(phase?.status) ||
       !Number.isFinite(phase?.durationMs) ||
       phase.durationMs < 0 ||
+      ((phase.status === 'not-applicable' || phase.status === 'reused-authenticated') &&
+        phase.durationMs !== 0) ||
       !/^sha256:[0-9a-f]{64}$/u.test(phase?.inputDigest ?? '')
     ) {
       throw new Error(`packed Kovo incremental check did not prove diagnostic phase ${name}`);
     }
+    if (revision === 0 && phase.status === 'reused-authenticated') {
+      throw new Error(`packed Kovo incremental check reused empty-session phase ${name}`);
+    }
+    const previousDigest = evidence.previousDigests.get(name);
+    if (phase.status === 'reused-authenticated' && previousDigest !== phase.inputDigest) {
+      throw new Error(`packed Kovo incremental check reused changed-input phase ${name}`);
+    }
+    if (
+      expectedStatus === 'executed' &&
+      previousDigest !== undefined &&
+      previousDigest !== phase.inputDigest &&
+      phase.status !== 'executed'
+    ) {
+      throw new Error(`packed Kovo incremental check skipped changed-input phase ${name}`);
+    }
+    evidence.previousDigests.set(name, phase.inputDigest);
+    const sourceKey = `${name}\0${sourceRevision}`;
+    const sourceDigest = evidence.digestsBySourceRevision.get(sourceKey);
+    if (sourceDigest !== undefined && sourceDigest !== phase.inputDigest) {
+      throw new Error(
+        `packed Kovo incremental check mapped ${name} source revision ${sourceRevision} to inconsistent input digests`,
+      );
+    }
+    evidence.digestsBySourceRevision.set(sourceKey, phase.inputDigest);
+    if (EDIT_INVARIANT_PHASES.has(name)) {
+      const invariant = evidence.invariantDigests.get(name);
+      if (invariant !== undefined && invariant !== phase.inputDigest) {
+        throw new Error(`packed Kovo incremental check changed invariant phase digest ${name}`);
+      }
+      evidence.invariantDigests.set(name, phase.inputDigest);
+    }
   }
 }
 
-function processRssBytes(pid) {
-  const result = spawnSync('ps', ['-o', 'rss=', '-p', String(pid)], { encoding: 'utf8' });
-  if (result.status !== 0) return null;
-  const kibibytes = Number.parseInt(result.stdout.trim(), 10);
-  return Number.isSafeInteger(kibibytes) && kibibytes >= 0 ? kibibytes * 1024 : null;
+function incrementalPhaseEvidence() {
+  return {
+    digestsBySourceRevision: new Map(),
+    invariantDigests: new Map(),
+    previousDigests: new Map(),
+  };
+}
+
+function validateCompleteIncrementalPhaseEvidence(evidence) {
+  for (const name of EDIT_DEPENDENT_PHASES) {
+    const first = evidence.digestsBySourceRevision.get(`${name}\0${0}`);
+    const second = evidence.digestsBySourceRevision.get(`${name}\0${1}`);
+    if (first === undefined || second === undefined || first === second) {
+      throw new Error(
+        `packed Kovo incremental check did not bind edited source into phase ${name}`,
+      );
+    }
+  }
+}
+
+function createRevisionProcessTreeSampler(rootPid) {
+  let peakRssBytes = null;
+  let sampleCount = 0;
+  const sample = () => {
+    const result = spawnSync('ps', ['-axo', 'pid=,ppid=,rss='], {
+      encoding: 'utf8',
+      maxBuffer: 16 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    if (result.status !== 0 || result.signal || result.error) return;
+    const observed = processTreeRssBytesForTesting(result.stdout, rootPid);
+    if (observed === null) return;
+    peakRssBytes = peakRssBytes === null ? observed : Math.max(peakRssBytes, observed);
+    sampleCount += 1;
+  };
+  sample();
+  const timer = setInterval(sample, PROCESS_TREE_SAMPLE_INTERVAL_MS);
+  return {
+    beginRevision() {
+      peakRssBytes = null;
+      sampleCount = 0;
+      sample();
+    },
+    finishRevision() {
+      sample();
+      return { peakRssBytes, sampleCount };
+    },
+    stop() {
+      clearInterval(timer);
+    },
+  };
+}
+
+/** Parse one process table and sum the live root plus all descendants, excluding siblings. */
+export function processTreeRssBytesForTesting(output, rootPid) {
+  if (!Number.isSafeInteger(rootPid) || rootPid <= 0) {
+    throw new TypeError('process-tree root PID must be a positive integer');
+  }
+  const rows = [];
+  for (const line of String(output).split(/\r?\n/u)) {
+    const match = /^\s*(\d+)\s+(\d+)\s+(\d+)\s*$/u.exec(line);
+    if (match === null) continue;
+    const pid = Number(match[1]);
+    const parentPid = Number(match[2]);
+    const rssKiB = Number(match[3]);
+    if (
+      !Number.isSafeInteger(pid) ||
+      !Number.isSafeInteger(parentPid) ||
+      !Number.isSafeInteger(rssKiB)
+    ) {
+      continue;
+    }
+    rows.push({ parentPid, pid, rssKiB });
+  }
+  if (!rows.some((row) => row.pid === rootPid)) return null;
+  const descendants = new Set([rootPid]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const row of rows) {
+      if (descendants.has(row.pid) || !descendants.has(row.parentPid)) continue;
+      descendants.add(row.pid);
+      changed = true;
+    }
+  }
+  return (
+    rows.filter((row) => descendants.has(row.pid)).reduce((total, row) => total + row.rssKiB, 0) *
+    1024
+  );
 }

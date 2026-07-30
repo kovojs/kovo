@@ -252,6 +252,7 @@ export interface KovoDiagnosticCommandResult {
 export type KovoDiagnosticFormat = 'github' | 'human' | 'json';
 
 const nativeArrayIsArray = Array.isArray;
+const nativeArrayMap = Array.prototype.map;
 const nativeObjectFreeze = Object.freeze;
 const nativeObjectGetOwnPropertyDescriptors = Object.getOwnPropertyDescriptors;
 const nativeObjectGetOwnPropertySymbols = Object.getOwnPropertySymbols;
@@ -321,9 +322,10 @@ export function createKovoDiagnosticEnvelope(
   if (!nativeReflectApply(nativeArrayIsArray, Array, [diagnostics])) {
     throw new TypeError('Kovo diagnostic envelope requires an array.');
   }
-  const records = diagnostics.map((diagnostic, index) =>
-    assertKovoDiagnosticRecord(diagnostic, `diagnostics[${index}]`),
-  );
+  const records = nativeReflectApply(nativeArrayMap, diagnostics, [
+    (diagnostic: KovoDiagnosticRecord, index: number) =>
+      assertKovoDiagnosticRecord(diagnostic, `diagnostics[${index}]`),
+  ]) as KovoDiagnosticRecord[];
   const envelope = nativeObjectFreeze({
     diagnostics: nativeObjectFreeze(records),
     version: KOVO_DIAGNOSTIC_VERSION,

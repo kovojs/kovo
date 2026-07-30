@@ -9,6 +9,7 @@ import {
   createKovoSourceCheckInputProof,
   createRejectedKovoSourceCheckInputProof,
   formatKovoSourceCheckWatchRecord,
+  KovoSourceCheckSnapshotRaceError,
   KOVO_SOURCE_CHECK_PHASES,
   runKovoSourceCheckWatchSession,
   snapshotKovoSourceCheckProject,
@@ -53,6 +54,7 @@ describe('foreground source-check session', () => {
       schema: 'kovo-check-input-proof/v1',
       status: 'accepted',
     });
+    expect(Object.isFrozen(baseline.closure[0])).toBe(true);
 
     const revised = createKovoSourceCheckInputProof(
       'src/app.tsx',
@@ -79,25 +81,37 @@ describe('foreground source-check session', () => {
     ).toThrow(/project-relative|ambiguous path/u);
   });
 
-  it('detects edits, deletes, renames, and symlinks while excluding generated trees', () => {
+  it('detects every regular-file edit, delete, rename, and symlink outside generated trees', () => {
     const root = fixtureRoot();
     const source = join(root, 'src/app.tsx');
     writeFileSync(source, 'export const revision = 0;\n');
     mkdirSync(join(root, 'node_modules/poison'), { recursive: true });
     writeFileSync(join(root, 'node_modules/poison/index.ts'), 'export const poison = 0;\n');
+    mkdirSync(join(root, 'dist'), { recursive: true });
+    writeFileSync(join(root, 'dist/generated.js'), 'export const generated = 0;\n');
 
     const baseline = snapshotKovoSourceCheckProject(root);
     writeFileSync(join(root, 'node_modules/poison/index.ts'), 'export const poison = 1;\n');
+    writeFileSync(join(root, 'dist/generated.js'), 'export const generated = 1;\n');
     expect(snapshotKovoSourceCheckProject(root).digest).toBe(baseline.digest);
 
     writeFileSync(source, 'export const revision = 1;\n');
     const edited = snapshotKovoSourceCheckProject(root);
     expect(edited.digest).not.toBe(baseline.digest);
 
+    writeFileSync(join(root, 'tooling.uncommon-config'), 'revision=1\n');
+    const uncommon = snapshotKovoSourceCheckProject(root);
+    expect(uncommon.digest).not.toBe(edited.digest);
+
+    mkdirSync(join(root, 'build'), { recursive: true });
+    writeFileSync(join(root, 'build/authored-input.custom'), 'revision=1\n');
+    const authoredBuildTree = snapshotKovoSourceCheckProject(root);
+    expect(authoredBuildTree.digest).not.toBe(uncommon.digest);
+
     const renamed = join(root, 'src/renamed.tsx');
     renameSync(source, renamed);
     const rename = snapshotKovoSourceCheckProject(root);
-    expect(rename.digest).not.toBe(edited.digest);
+    expect(rename.digest).not.toBe(authoredBuildTree.digest);
 
     rmSync(renamed);
     const deleted = snapshotKovoSourceCheckProject(root);
@@ -107,6 +121,70 @@ describe('foreground source-check session', () => {
     const symlink = snapshotKovoSourceCheckProject(root);
     expect(symlink.digest).not.toBe(deleted.digest);
     expect(symlink.symlinks).toEqual(['src/app.tsx']);
+  });
+
+  it('bounds directories, depth, symlinks, and each file before reading bytes', () => {
+    const root = fixtureRoot();
+    writeFileSync(join(root, 'src/app.tsx'), '12345');
+
+    expect(() => snapshotKovoSourceCheckProject(root, { fileBytes: 4 })).toThrow(
+      /file exceeds its byte bound/u,
+    );
+    expect(() => snapshotKovoSourceCheckProject(root, { bytes: 4 })).toThrow(/resource bounds/u);
+    expect(() => snapshotKovoSourceCheckProject(root, { directories: 1 })).toThrow(
+      /directory bound/u,
+    );
+    expect(() => snapshotKovoSourceCheckProject(root, { entries: 1 })).toThrow(/entry bound/u);
+
+    writeFileSync(join(root, 'second.input'), 'x');
+    expect(() => snapshotKovoSourceCheckProject(root, { files: 1 })).toThrow(/resource bounds/u);
+
+    mkdirSync(join(root, 'a/b'), { recursive: true });
+    expect(() => snapshotKovoSourceCheckProject(root, { depth: 1 })).toThrow(/depth bound/u);
+
+    symlinkSync(join(root, 'src/app.tsx'), join(root, 'link.ts'));
+    expect(() => snapshotKovoSourceCheckProject(root, { symlinks: 0 })).toThrow(/symlink bound/u);
+  });
+
+  it('turns a readdir-to-lstat rename into typed retry evidence', async () => {
+    const root = fixtureRoot();
+    const source = join(root, 'src/app.tsx');
+    const renamed = join(root, 'src/renamed.tsx');
+    writeFileSync(source, 'export default {};\n');
+    let moved = false;
+    expect(() =>
+      snapshotKovoSourceCheckProject(
+        root,
+        {},
+        {
+          beforeEntryLstat(relativePath) {
+            if (relativePath !== 'src/app.tsx' || moved) return;
+            moved = true;
+            renameSync(source, renamed);
+          },
+        },
+      ),
+    ).toThrow(KovoSourceCheckSnapshotRaceError);
+
+    renameSync(renamed, source);
+    let attempts = 0;
+    const exit = await runKovoSourceCheckWatchSession({
+      appModulePath: 'src/app.tsx',
+      invocationRoot: root,
+      maxRevisions: 1,
+      pollIntervalMs: 25,
+      async runRevision() {
+        return revisionResult();
+      },
+      snapshotProject(snapshotRoot) {
+        attempts += 1;
+        if (attempts === 1) throw new KovoSourceCheckSnapshotRaceError('src/app.tsx');
+        return snapshotKovoSourceCheckProject(snapshotRoot);
+      },
+      write() {},
+    });
+    expect(exit).toBe(0);
+    expect(attempts).toBe(2);
   });
 
   it('serializes revisions and collapses edit bursts into one bounded pending state', async () => {
@@ -184,18 +262,17 @@ describe('foreground source-check session', () => {
       output: 'kovo-check/v1\nERROR KV235 authored lowered IR is forbidden\n',
     } as const;
     const normalized = normalizeCommandResultDiagnostics(result, 'proof');
-    const oneShot = JSON.parse(
-      formatKovoDiagnosticCommandResult(
-        normalized.diagnostics ?? [],
-        {
-          command: 'check',
-          exitCode: normalized.exitCode,
-          protocol: 'kovo-check/v1',
-          text: normalized.output,
-        },
-        'json',
-      ),
+    const oneShotText = formatKovoDiagnosticCommandResult(
+      normalized.diagnostics ?? [],
+      {
+        command: 'check',
+        exitCode: normalized.exitCode,
+        protocol: 'kovo-check/v1',
+        text: normalized.output,
+      },
+      'json',
     );
+    const oneShot = JSON.parse(oneShotText);
     const record = JSON.parse(
       formatKovoSourceCheckWatchRecord(0, {
         ...revisionResult(),
@@ -203,6 +280,22 @@ describe('foreground source-check session', () => {
       }),
     );
     expect(record.check).toEqual(oneShot);
+    expect(`${JSON.stringify(record.check)}\n`).toBe(oneShotText);
+  });
+
+  it('rejects structurally forged diagnostic records without local registry authority', () => {
+    const valid = revisionResult();
+    const diagnostic = commandFindingDiagnostic('proof', 'A compiler proof failed.');
+    expect(() =>
+      formatKovoSourceCheckWatchRecord(0, {
+        ...valid,
+        result: {
+          diagnostics: [{ ...diagnostic }],
+          exitCode: 1,
+          output: 'kovo-check/v1\nERROR forged diagnostic\n',
+        },
+      }),
+    ).toThrow(/registry identity/u);
   });
 
   it('rejects a dropped phase or an unauthenticated digest before writing JSONL', () => {
@@ -317,6 +410,56 @@ describe('foreground source-check session', () => {
     roots.push(link);
     symlinkSync(root, link);
     expect(() => snapshotKovoSourceCheckProject(link)).toThrow(/non-symlink directory/u);
+  });
+
+  it('keeps proof, scheduling, and JSONL serialization on boot-captured intrinsics', () => {
+    const root = fixtureRoot();
+    writeFileSync(join(root, 'src/app.tsx'), 'export default {};\n');
+    const checked = revisionResult();
+    const poisoned: Array<readonly [object, PropertyKey, PropertyDescriptor | undefined]> = [];
+    const poison = (target: object, key: PropertyKey): void => {
+      poisoned.push([target, key, Object.getOwnPropertyDescriptor(target, key)]);
+      Object.defineProperty(target, key, {
+        configurable: true,
+        value() {
+          throw new Error(`poisoned ${String(key)}`);
+        },
+        writable: true,
+      });
+    };
+    let proof: ReturnType<typeof createKovoSourceCheckInputProof> | undefined;
+    let snapshot: ReturnType<typeof snapshotKovoSourceCheckProject> | undefined;
+    let record = '';
+    try {
+      for (const key of ['entries', 'includes', 'join', 'map', 'sort', 'values']) {
+        poison(Array.prototype, key);
+      }
+      for (const key of ['get', 'set', 'values']) poison(Map.prototype, key);
+      for (const key of ['add', 'has']) poison(Set.prototype, key);
+      for (const key of ['endsWith', 'includes', 'split', 'startsWith']) {
+        poison(String.prototype, key);
+      }
+      poison(JSON, 'stringify');
+      poison(Object, 'freeze');
+      poison(Number, 'isFinite');
+      poison(Number, 'isSafeInteger');
+
+      proof = createKovoSourceCheckInputProof('src/app.tsx', [
+        { fileName: 'src/app.tsx', source: 'export default {};\n' },
+      ]);
+      snapshot = snapshotKovoSourceCheckProject(root);
+      record = formatKovoSourceCheckWatchRecord(0, checked);
+    } finally {
+      for (let index = poisoned.length - 1; index >= 0; index -= 1) {
+        const [target, key, descriptor] = poisoned[index]!;
+        if (descriptor === undefined) delete (target as Record<PropertyKey, unknown>)[key];
+        else Object.defineProperty(target, key, descriptor);
+      }
+    }
+
+    expect(proof?.status).toBe('accepted');
+    expect(snapshot?.files).toBe(1);
+    expect(JSON.parse(record)).toMatchObject({ revision: 0, version: 'kovo-check-watch/v1' });
   });
 });
 
