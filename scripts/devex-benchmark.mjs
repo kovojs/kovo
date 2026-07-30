@@ -2,6 +2,7 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
+  chmodSync,
   copyFileSync,
   existsSync,
   lstatSync,
@@ -10,6 +11,7 @@ import {
   readFileSync,
   readdirSync,
   realpathSync,
+  renameSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -300,6 +302,45 @@ function writeJson(filePath, value) {
   const absolute = path.resolve(filePath);
   mkdirSync(path.dirname(absolute), { recursive: true });
   writeFileSync(absolute, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function writeJsonAtomically(filePath, value) {
+  const absolute = path.resolve(filePath);
+  const directory = path.dirname(absolute);
+  mkdirSync(directory, { recursive: true });
+  const existing =
+    existsSync(absolute) && lstatSync(absolute).isFile() && !lstatSync(absolute).isSymbolicLink()
+      ? statSync(absolute)
+      : null;
+  if (existsSync(absolute) && existing === null) {
+    throw new Error('DevEx budgets output must be a regular non-symlink file');
+  }
+  const mode = existing === null ? 0o600 : existing.mode & 0o777;
+  const bytes = `${JSON.stringify(value, null, 2)}\n`;
+  let temporary = null;
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const candidate = path.join(
+      directory,
+      `.${path.basename(absolute)}.${String(process.pid)}.${String(attempt)}.tmp`,
+    );
+    try {
+      writeFileSync(candidate, bytes, { flag: 'wx', mode });
+      temporary = candidate;
+      break;
+    } catch (error) {
+      if (error?.code !== 'EEXIST') throw error;
+    }
+  }
+  if (temporary === null) {
+    throw new Error('could not allocate a transactional DevEx budgets output');
+  }
+  try {
+    if (existing !== null) chmodSync(temporary, mode);
+    renameSync(temporary, absolute);
+    temporary = null;
+  } finally {
+    if (temporary !== null) rmSync(temporary, { force: true });
+  }
 }
 
 function finiteNonNegative(value) {
@@ -3369,14 +3410,287 @@ export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
       threshold: budget + noiseMultiplier * noise,
     };
   }
+  const baselineReports = new Map(options.baselineReports ?? []);
+  baselineReports.set(baselineReportSource.path, options.baselineReportBytes);
   const validation = validateBudgets(updated, {
-    baselineReports: new Map([[baselineReportSource.path, options.baselineReportBytes]]),
+    baselineReports,
     repoRoot: options.repoRoot,
   });
   if (validation.length > 0) {
     throw new Error(`Ratified DevEx budgets are invalid:\n- ${validation.join('\n- ')}`);
   }
   return updated;
+}
+
+const HOSTED_RATIFICATION_SOURCES = Object.freeze(['benchmark', 'full-catalog', 'golden-journey']);
+
+function ratificationReportSourceIdentity(report, reportSource) {
+  return reportSource === 'full-catalog'
+    ? { commit: report?.source?.commit, tree: report?.source?.tree }
+    : { commit: report?.provenance?.sourceCommit, tree: report?.provenance?.sourceTree };
+}
+
+function cleanRepositorySourceIdentity(repositoryRoot) {
+  const root = path.resolve(repositoryRoot);
+  const commit = checkedCommandOutput('git', ['rev-parse', 'HEAD'], root);
+  const dirtyPaths = checkedCommandOutput(
+    'git',
+    ['status', '--porcelain=v1', '--untracked-files=all'],
+    root,
+  );
+  if (dirtyPaths !== '') {
+    throw new Error('hosted DevEx ratification requires a clean source revision');
+  }
+  return { commit, tree: 'clean' };
+}
+
+function authenticateBenchmarkRatificationReport(report, options) {
+  const productionScenarioFindings =
+    report?.scenario?.name === 'kovo-packed-check'
+      ? validateKovoProductionScenario(report.scenario.definition, 'baselineReport.scenario')
+      : ['baselineReport.scenario.name must be kovo-packed-check'];
+  if (productionScenarioFindings.length > 0) {
+    throw new Error(
+      `production ratification accepts only the authenticated code-owned Kovo producer:\n- ${productionScenarioFindings.join('\n- ')}`,
+    );
+  }
+  const baselineEnvironment = {
+    ...report.scenario.definition.environment,
+    sourceCommit: report.scenario.definition.provenance.sourceCommit,
+    sourceTree: report.scenario.definition.provenance.sourceTree,
+  };
+  const acquire = options.acquireFreshKovoScenario ?? acquireFreshKovoScenario;
+  const authenticated = acquire(baselineEnvironment, {
+    repositoryRoot: options.repositoryRoot,
+  });
+  try {
+    validateFreshKovoScenario(authenticated, baselineEnvironment);
+    if (!sameJson(authenticated.scenario, report.scenario.definition)) {
+      throw new Error(
+        'baseline scenario does not match the exact scenario reproduced by the fresh code-owned pack producer',
+      );
+    }
+    authenticatedProductionScenarios.add(authenticated.scenario);
+    if (authenticated.packedDocsEvidence !== undefined) {
+      authenticatedProductionDocsEvidence.set(
+        authenticated.scenario,
+        authenticated.packedDocsEvidence,
+      );
+    }
+    return {
+      ratificationOptions: {
+        authenticatedProductionScenario: authenticated.scenario,
+      },
+      dispose: authenticated.dispose,
+    };
+  } catch (error) {
+    authenticated?.dispose?.();
+    throw error;
+  }
+}
+
+function authenticateRatificationReport(record, options) {
+  if (record.reportSource === 'benchmark') {
+    return authenticateBenchmarkRatificationReport(record.baselineReport, options);
+  }
+  if (record.reportSource === 'full-catalog') {
+    authenticateFullCatalogBaselineReport(record.baselineReport, {
+      repositoryRoot: options.repositoryRoot,
+      ...(options.reproduceFullCatalogEvidence === undefined
+        ? {}
+        : { reproduceEvidence: options.reproduceFullCatalogEvidence }),
+    });
+  }
+  return { ratificationOptions: {}, dispose: null };
+}
+
+/**
+ * Authenticate one hosted N=5 benchmark, golden-journey, and full-catalog report from the same
+ * clean revision, then merge every proposal in memory. No caller-visible mutation occurs until
+ * the returned object is explicitly persisted.
+ */
+export function ratifyDevexBudgetReports(budgets, records, options = {}) {
+  if (!Array.isArray(records) || records.length !== HOSTED_RATIFICATION_SOURCES.length) {
+    throw new Error(
+      'hosted DevEx ratification requires exactly one benchmark, golden-journey, and full-catalog report',
+    );
+  }
+  const repositoryRoot = path.resolve(options.repositoryRoot ?? defaultRepoRoot);
+  const findings = [];
+  const prepared = [];
+  const baselineReports = new Map();
+  const observedSources = new Set();
+  for (const [index, record] of records.entries()) {
+    const label = `ratificationReports[${String(index)}]`;
+    if (!record || typeof record !== 'object' || Array.isArray(record)) {
+      findings.push(`${label} must be a report, proposal, path, and byte record`);
+      continue;
+    }
+    const baselineReport = record.baselineReport;
+    const reportSource = reportEvidenceSource(baselineReport);
+    if (
+      ![
+        DEVEX_BENCHMARK_REPORT_SCHEMA,
+        DEVEX_GOLDEN_RELEASE_REPORT_SCHEMA,
+        DEVEX_FULL_CATALOG_REPORT_SCHEMA,
+      ].includes(baselineReport?.schema)
+    ) {
+      findings.push(`${label}.baselineReport has an unsupported hosted evidence schema`);
+      continue;
+    }
+    if (observedSources.has(reportSource)) {
+      findings.push(`${label}.baselineReport duplicates ${reportSource} evidence`);
+    }
+    observedSources.add(reportSource);
+    findings.push(
+      ...validateEvidenceReport(baselineReport, reportSource, `${label}.baselineReport`, {
+        ratification: true,
+        requireAcceptedRunner: reportSource === 'full-catalog',
+        requireSuccessfulSamples: reportSource === 'full-catalog',
+      }),
+    );
+    if (!Number.isSafeInteger(baselineReport?.sampleCount) || baselineReport.sampleCount < 5) {
+      findings.push(`${label}.baselineReport must contain at least five hosted samples`);
+    }
+    const proposalMetricIds =
+      record.proposal?.metrics &&
+      typeof record.proposal.metrics === 'object' &&
+      !Array.isArray(record.proposal.metrics)
+        ? Object.keys(record.proposal.metrics)
+        : [];
+    const runnerBoundProposal = proposalMetricIds.some(
+      (metricId) => metricBinding(metricId) === 'runner',
+    );
+    findings.push(
+      ...validateProposal(record.proposal, { requiresRunner: runnerBoundProposal }).map(
+        (finding) => `${label}.${finding}`,
+      ),
+    );
+    const baselineReportPath = record.baselineReportPath;
+    if (!safeRepositoryRelativePath(baselineReportPath)) {
+      findings.push(`${label}.baselineReportPath must be a canonical repository-relative path`);
+    }
+    if (!Buffer.isBuffer(record.baselineReportBytes)) {
+      findings.push(`${label}.baselineReportBytes must contain the exact recorded report`);
+    } else {
+      try {
+        if (
+          !sameJson(JSON.parse(record.baselineReportBytes.toString('utf8')), record.baselineReport)
+        ) {
+          findings.push(`${label}.baselineReportBytes do not contain baselineReport`);
+        }
+      } catch {
+        findings.push(`${label}.baselineReportBytes are not valid JSON`);
+      }
+    }
+    if (safeRepositoryRelativePath(baselineReportPath)) {
+      if (baselineReports.has(baselineReportPath)) {
+        findings.push(`${label}.baselineReportPath duplicates ${baselineReportPath}`);
+      } else if (Buffer.isBuffer(record.baselineReportBytes)) {
+        baselineReports.set(baselineReportPath, record.baselineReportBytes);
+      }
+    }
+    prepared.push({
+      baselineReport,
+      baselineReportBytes: record.baselineReportBytes,
+      baselineReportPath,
+      proposal: record.proposal,
+      reportSource,
+      runner: baselineReport?.runner,
+      source: ratificationReportSourceIdentity(baselineReport, reportSource),
+    });
+  }
+  const actualSources = [...observedSources].sort(compareStrings);
+  if (!sameJson(actualSources, HOSTED_RATIFICATION_SOURCES)) {
+    findings.push(
+      'hosted DevEx ratification must contain exactly benchmark, golden-journey, and full-catalog evidence',
+    );
+  }
+  if (prepared.length === records.length) {
+    const golden = prepared.find((record) => record.reportSource === 'golden-journey');
+    const fullCatalog = prepared.find((record) => record.reportSource === 'full-catalog');
+    if (
+      golden !== undefined &&
+      fullCatalog !== undefined &&
+      (golden.baselineReport?.provenance?.packedManifestSha256 !==
+        fullCatalog.baselineReport?.packedRelease?.manifestSha256 ||
+        !sameJson(golden.baselineReport?.packageSet, fullCatalog.baselineReport?.packageSet))
+    ) {
+      findings.push(
+        'golden-journey evidence must bind the full-catalog report authenticated packed release',
+      );
+    }
+    const expectedSource = prepared[0]?.source;
+    const expectedRunner = prepared[0]?.runner;
+    for (const record of prepared.slice(1)) {
+      if (!sameJson(record.source, expectedSource)) {
+        findings.push('hosted DevEx reports must bind one exact clean source revision');
+        break;
+      }
+    }
+    for (const record of prepared.slice(1)) {
+      if (!sameJson(record.runner, expectedRunner)) {
+        findings.push('hosted DevEx reports must bind one exact runner fingerprint');
+        break;
+      }
+    }
+    const cleanSource =
+      typeof options.cleanSourceIdentity === 'function'
+        ? options.cleanSourceIdentity(repositoryRoot)
+        : (options.cleanSourceIdentity ?? cleanRepositorySourceIdentity(repositoryRoot));
+    if (
+      cleanSource?.tree !== 'clean' ||
+      !validGitObjectId(cleanSource?.commit) ||
+      !sameJson(expectedSource, cleanSource)
+    ) {
+      findings.push('hosted DevEx reports must bind the current exact clean source revision');
+    }
+  }
+  findings.push(
+    ...validateBudgets(budgets, {
+      baselineReports,
+      repoRoot: repositoryRoot,
+    }).map((finding) => `budgets.${finding}`),
+  );
+  if (findings.length > 0) {
+    throw new Error(`Cannot ratify hosted DevEx reports:\n- ${findings.join('\n- ')}`);
+  }
+
+  const authenticate = options.authenticateReport ?? authenticateRatificationReport;
+  const authentications = [];
+  try {
+    for (const record of prepared) {
+      authentications.push(
+        authenticate(record, {
+          acquireFreshKovoScenario: options.acquireFreshKovoScenario,
+          reproduceFullCatalogEvidence: options.reproduceFullCatalogEvidence,
+          repositoryRoot,
+        }),
+      );
+    }
+    const ratify = options.ratifyReport ?? ratifyBudgets;
+    let updated = structuredClone(budgets);
+    for (const [index, record] of prepared.entries()) {
+      updated = ratify(updated, record.baselineReport, record.proposal, {
+        ...authentications[index]?.ratificationOptions,
+        baselineReportBytes: record.baselineReportBytes,
+        baselineReportPath: record.baselineReportPath,
+        baselineReports,
+        repoRoot: repositoryRoot,
+      });
+    }
+    const validate = options.validateBudgets ?? validateBudgets;
+    const validation = validate(updated, {
+      baselineReports,
+      repoRoot: repositoryRoot,
+    });
+    if (validation.length > 0) {
+      throw new Error(`Ratified hosted DevEx budgets are invalid:\n- ${validation.join('\n- ')}`);
+    }
+    return updated;
+  } finally {
+    for (const authenticated of authentications.reverse()) authenticated?.dispose?.();
+  }
 }
 
 export function evaluateBudgets(budgets, report, options = {}) {
@@ -3965,7 +4279,10 @@ export function prepareKovoPackedScenario(options = {}) {
 
 function parseArgs(argv) {
   const args = {
+    baselineRecordPaths: [],
+    baselines: [],
     budgets: path.join(defaultRepoRoot, 'devex-budgets.json'),
+    proposals: [],
     samples: 5,
   };
   for (let index = 0; index < argv.length; index += 1) {
@@ -3978,9 +4295,9 @@ function parseArgs(argv) {
     else if (arg === '--require-ratified') args.requireRatified = true;
     else if (arg === '--deterministic-artifacts') args.deterministicArtifacts = true;
     else if (arg === '--ratify') args.ratify = true;
-    else if (arg === '--baseline') args.baseline = argv[++index];
-    else if (arg === '--baseline-record-path') args.baselineRecordPath = argv[++index];
-    else if (arg === '--proposal') args.proposal = argv[++index];
+    else if (arg === '--baseline') args.baselines.push(argv[++index]);
+    else if (arg === '--baseline-record-path') args.baselineRecordPaths.push(argv[++index]);
+    else if (arg === '--proposal') args.proposals.push(argv[++index]);
     else if (arg === '--write') args.write = true;
     else if (arg === '--check-budgets') args.checkBudgets = true;
     else if (arg === '--prepare-kovo-scenario') args.prepareKovoScenario = true;
@@ -3996,6 +4313,7 @@ function usage() {
     '  node scripts/devex-benchmark.mjs --scenario <file> [--samples N] [--output <file>] [--evaluate] [--require-ratified]',
     '  node scripts/devex-benchmark.mjs --scenario <file> --deterministic-artifacts [--output <file>]',
     '  node scripts/devex-benchmark.mjs --ratify --baseline <report> [--baseline-record-path <path>] --proposal <file> [--write]',
+    '  node scripts/devex-benchmark.mjs --ratify --baseline <benchmark> --proposal <file> --baseline <golden> --proposal <file> --baseline <full-catalog> --proposal <file> [--baseline-record-path <path> ...] [--write]',
     '  node scripts/devex-benchmark.mjs --check-budgets',
     '  node scripts/devex-benchmark.mjs --prepare-kovo-scenario',
     '',
@@ -4038,26 +4356,73 @@ export function runDevexBenchmark(argv = process.argv.slice(2), runtime = {}) {
     return 0;
   }
   if (args.ratify) {
-    if (!args.baseline || !args.proposal) {
+    if (
+      args.baselines.length === 0 ||
+      args.proposals.length === 0 ||
+      args.baselines.length !== args.proposals.length
+    ) {
       throw new Error('--ratify requires --baseline and --proposal');
     }
+    if (
+      args.baselineRecordPaths.length !== 0 &&
+      args.baselineRecordPaths.length !== args.baselines.length
+    ) {
+      throw new Error(
+        '--ratify requires either no --baseline-record-path values or one for every baseline',
+      );
+    }
     const budgetsRoot = path.dirname(path.resolve(args.budgets));
-    const baselinePath = path.resolve(args.baseline);
+    if (args.baselines.length > 1) {
+      const records = args.baselines.map((baseline, index) => {
+        const baselinePath = path.resolve(baseline);
+        const baselineBytes = readFileSync(baselinePath);
+        return {
+          baselineReport: JSON.parse(baselineBytes.toString('utf8')),
+          baselineReportBytes: baselineBytes,
+          baselineReportPath:
+            args.baselineRecordPaths[index] ?? path.relative(budgetsRoot, baselinePath),
+          proposal: readJson(path.resolve(args.proposals[index])),
+        };
+      });
+      const updated = ratifyDevexBudgetReports(budgets, records, {
+        repositoryRoot: budgetsRoot,
+        ...(runtime.acquireFreshKovoScenario === undefined
+          ? {}
+          : { acquireFreshKovoScenario: runtime.acquireFreshKovoScenario }),
+        ...(runtime.authenticateRatificationReport === undefined
+          ? {}
+          : { authenticateReport: runtime.authenticateRatificationReport }),
+        ...(runtime.cleanSourceIdentity === undefined
+          ? {}
+          : { cleanSourceIdentity: runtime.cleanSourceIdentity }),
+        ...(runtime.ratifyReport === undefined ? {} : { ratifyReport: runtime.ratifyReport }),
+        ...(runtime.reproduceFullCatalogEvidence === undefined
+          ? {}
+          : { reproduceFullCatalogEvidence: runtime.reproduceFullCatalogEvidence }),
+        ...(runtime.validateRatifiedBudgets === undefined
+          ? {}
+          : { validateBudgets: runtime.validateRatifiedBudgets }),
+      });
+      if (args.write) {
+        const persist = runtime.writeRatifiedBudgets ?? writeJsonAtomically;
+        persist(args.budgets, updated);
+      } else {
+        process.stdout.write(`${JSON.stringify(updated, null, 2)}\n`);
+      }
+      return 0;
+    }
+    const baselinePath = path.resolve(args.baselines[0]);
     const relativeBaselinePath =
-      args.baselineRecordPath ?? path.relative(budgetsRoot, baselinePath);
+      args.baselineRecordPaths[0] ?? path.relative(budgetsRoot, baselinePath);
     const baselineBytes = readFileSync(baselinePath);
     const baselineReport = JSON.parse(baselineBytes.toString('utf8'));
+    const proposalPath = path.resolve(args.proposals[0]);
     if (baselineReport?.schema === DEVEX_GOLDEN_RELEASE_REPORT_SCHEMA) {
-      const updated = ratifyBudgets(
-        budgets,
-        baselineReport,
-        readJson(path.resolve(args.proposal)),
-        {
-          baselineReportPath: relativeBaselinePath,
-          baselineReportBytes: baselineBytes,
-          repoRoot: budgetsRoot,
-        },
-      );
+      const updated = ratifyBudgets(budgets, baselineReport, readJson(proposalPath), {
+        baselineReportPath: relativeBaselinePath,
+        baselineReportBytes: baselineBytes,
+        repoRoot: budgetsRoot,
+      });
       if (args.write) writeJson(args.budgets, updated);
       else process.stdout.write(`${JSON.stringify(updated, null, 2)}\n`);
       return 0;
@@ -4069,16 +4434,11 @@ export function runDevexBenchmark(argv = process.argv.slice(2), runtime = {}) {
           ? {}
           : { reproduceEvidence: runtime.reproduceFullCatalogEvidence }),
       });
-      const updated = ratifyBudgets(
-        budgets,
-        baselineReport,
-        readJson(path.resolve(args.proposal)),
-        {
-          baselineReportPath: relativeBaselinePath,
-          baselineReportBytes: baselineBytes,
-          repoRoot: budgetsRoot,
-        },
-      );
+      const updated = ratifyBudgets(budgets, baselineReport, readJson(proposalPath), {
+        baselineReportPath: relativeBaselinePath,
+        baselineReportBytes: baselineBytes,
+        repoRoot: budgetsRoot,
+      });
       if (args.write) writeJson(args.budgets, updated);
       else process.stdout.write(`${JSON.stringify(updated, null, 2)}\n`);
       return 0;
@@ -4110,17 +4470,12 @@ export function runDevexBenchmark(argv = process.argv.slice(2), runtime = {}) {
           'baseline scenario does not match the exact scenario reproduced by the fresh code-owned pack producer',
         );
       }
-      const updated = ratifyBudgets(
-        budgets,
-        baselineReport,
-        readJson(path.resolve(args.proposal)),
-        {
-          authenticatedProductionScenario: authenticated.scenario,
-          baselineReportPath: relativeBaselinePath,
-          baselineReportBytes: baselineBytes,
-          repoRoot: budgetsRoot,
-        },
-      );
+      const updated = ratifyBudgets(budgets, baselineReport, readJson(proposalPath), {
+        authenticatedProductionScenario: authenticated.scenario,
+        baselineReportPath: relativeBaselinePath,
+        baselineReportBytes: baselineBytes,
+        repoRoot: budgetsRoot,
+      });
       if (args.write) writeJson(args.budgets, updated);
       else process.stdout.write(`${JSON.stringify(updated, null, 2)}\n`);
       return 0;
