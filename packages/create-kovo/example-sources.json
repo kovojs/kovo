@@ -90,6 +90,10 @@
           "reason": "Imports the repository-only generated-graph test seam."
         },
         {
+          "path": "src/optimistic-browser-roundtrip.test.ts",
+          "reason": "Repository-only Chromium, HTTP, and database integration proof."
+        },
+        {
           "path": "src/queries.ts",
           "reason": "Non-shipped architecture demo queries require the PGlite reference graph."
         },
