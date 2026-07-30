@@ -91,6 +91,24 @@ describe('external evaluator release evidence', () => {
     expect(findings(replaced)).toContain('evaluator policy changed after preregistration');
   });
 
+  it('rejects a forged signature even when its declared payload digest is current', () => {
+    const forged = validFixture();
+    const transcript = forged.evidence.transcripts[0];
+    const unsigned = structuredClone(transcript);
+    delete unsigned.signature;
+    const payload = externalEvaluatorTranscriptPayload(unsigned);
+    transcript.signature.payloadSha256 = digest(payload);
+    transcript.signature.value = createCryptographicSignature(
+      null,
+      payload,
+      evaluatorKey().privateKey,
+    ).toString('base64');
+
+    expect(findings(forged)).toContain(
+      'evidence.transcripts[0].signature failed Ed25519 verification',
+    );
+  });
+
   it('rejects stale, future-dated, and pre-registration journeys even when re-signed', () => {
     const stale = validFixture();
     resignTranscript(stale, 0, (transcript) => {
@@ -147,6 +165,35 @@ describe('external evaluator release evidence', () => {
     expect(findings(mixedPackageSet)).toContain(
       'evidence.subject does not match the current authenticated release HEAD',
     );
+  });
+
+  it('rejects non-object Git IDs and non-SHA-512 package integrities', () => {
+    const malformedCommit = validFixture();
+    bindFixtureSubject(
+      malformedCommit,
+      buildExternalEvaluatorArtifactSubject({
+        packageSet: malformedCommit.actualSubject.packageSet,
+        packedManifestSha256: malformedCommit.actualSubject.packedManifestSha256,
+        sourceCommit: 'a'.repeat(41),
+      }),
+    );
+    malformedCommit.history.currentCommit = 'a'.repeat(41);
+    expect(findings(malformedCommit)).toContain(
+      'actualSubject must be an exact authenticated packed artifact subject',
+    );
+
+    const malformedIntegrity = validFixture();
+    const packageSet = structuredClone(malformedIntegrity.actualSubject.packageSet);
+    packageSet[0].sha512 = `sha512-${Buffer.from('not a SHA-512 digest').toString('base64')}`;
+    bindFixtureSubject(
+      malformedIntegrity,
+      buildExternalEvaluatorArtifactSubject({
+        packageSet,
+        packedManifestSha256: malformedIntegrity.actualSubject.packedManifestSha256,
+        sourceCommit: RELEASE_COMMIT,
+      }),
+    );
+    expect(findings(malformedIntegrity)).toContain('actualSubject.packageSet[0] is invalid');
   });
 
   it('requires signed independence from authors, implementation, harness, and intervention', () => {
@@ -480,6 +527,17 @@ function resignTranscript(fixture, index, mutate) {
     evaluator.publicKey,
     fixture.keys[index],
   );
+}
+
+function bindFixtureSubject(fixture, subject) {
+  fixture.actualSubject = subject;
+  fixture.evidence.subject = structuredClone(subject);
+  fixture.evidence.artifactSubjectSha256 = externalEvaluatorArtifactSubjectDigest(subject);
+  for (let index = 0; index < fixture.evidence.transcripts.length; index += 1) {
+    resignTranscript(fixture, index, (transcript) => {
+      transcript.artifactSubjectSha256 = fixture.evidence.artifactSubjectSha256;
+    });
+  }
 }
 
 function minorFinding() {

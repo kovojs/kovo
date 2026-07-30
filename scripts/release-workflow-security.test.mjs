@@ -28,6 +28,7 @@ const releasePnpmAction = readFileSync(
 );
 const DOWNLOAD_ARTIFACT_ACTION =
   'actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093';
+const UPLOAD_ARTIFACT_ACTION = 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02';
 const ATTEST_ACTION = 'actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6';
 const CHECKOUT_ACTION = 'actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5';
 const RELEASE_ARTIFACT_NAME = 'kovo-release-${{ github.sha }}';
@@ -49,6 +50,18 @@ const ATTESTATION_JOB_PERMISSIONS = Object.freeze([
 const ATTESTATION_DOWNLOAD_INPUTS = `artifact-ids=${RELEASE_ARTIFACT_ID}\0path=${ATTESTATION_DOWNLOAD_DIRECTORY}`;
 const ATTESTATION_SUBJECT_INPUTS = `subject-name=${RELEASE_ARCHIVE_NAME}\0subject-path=${ATTESTATION_ARCHIVE_PATH}`;
 const PUBLISH_RELEASE_DOWNLOAD_INPUTS = `artifact-ids=${RELEASE_ARTIFACT_ID}\0path=${PUBLISH_RELEASE_DOWNLOAD_DIRECTORY}`;
+const EXTERNAL_EVALUATOR_GATE_NAME = 'Require preregistered external evaluator evidence';
+const EXTERNAL_EVALUATOR_ARCHIVE_NAME = 'Archive verified external evaluator evidence';
+const EXTERNAL_EVALUATOR_GATE_ENVIRONMENT =
+  'COREPACK_HOME=${{ runner.temp }}/kovo-corepack-pnpm-10.12.1\0' +
+  'KOVO_EXTERNAL_EVALUATOR_EVIDENCE_BASE64=${{ inputs.external_evaluator_evidence_base64 }}\0' +
+  'PATH=${{ runner.temp }}/node-v24.18.0-linux-x64/bin:/usr/bin:/bin';
+const EXTERNAL_EVALUATOR_ARCHIVE_INPUTS =
+  'if-no-files-found=error\0' +
+  'include-hidden-files=true\0' +
+  'name=kovo-external-evaluator-evidence-${{ github.sha }}\0' +
+  'path=.release/devex/external-evaluators/transcripts.json\0' +
+  'retention-days=90';
 const COMMITTED_EVIDENCE_CHECKOUT_INPUTS =
   'fetch-depth=1\0persist-credentials=false\0ref=${{ github.sha }}';
 const COMMITTED_EVIDENCE_SUBJECT_INPUTS = Object.freeze([
@@ -69,6 +82,12 @@ function sealReleaseJob(source) {
   return start < 0 || end < 0 ? '' : source.slice(start, end);
 }
 
+function prepareJob(source) {
+  const start = source.indexOf('  prepare:');
+  const end = source.indexOf('  seal-release:', start);
+  return start < 0 || end < 0 ? '' : source.slice(start, end);
+}
+
 function committedEvidenceAttestationJob(source) {
   const start = source.indexOf('  attest-committed-evidence:');
   const end = source.indexOf('  publish:', start);
@@ -78,6 +97,55 @@ function committedEvidenceAttestationJob(source) {
 function publishJob(source) {
   const start = source.indexOf('  publish:');
   return start < 0 ? '' : source.slice(start);
+}
+
+function namedStep(job, name) {
+  const marker = `      - name: ${name}\n`;
+  const start = job.indexOf(marker);
+  if (start < 0 || job.indexOf(marker, start + marker.length) >= 0) return '';
+  const next = job.slice(start + marker.length).search(/^      - /mu);
+  return next < 0 ? job.slice(start) : job.slice(start, start + marker.length + next);
+}
+
+function stepKeys(step) {
+  return [...step.matchAll(/^        ([a-z][a-z-]*):(?:[ \t]|$)/gmu)].map((match) => match[1]);
+}
+
+function stepEnvironmentSignature(step) {
+  const environment = step.match(
+    /^        env:\n((?:^          [A-Z][A-Z0-9_]*:[^\r\n]*\n?)*)/mu,
+  )?.[1];
+  if (environment === undefined) return '';
+  return [...environment.matchAll(/^          ([A-Z][A-Z0-9_]*):[ \t]+([^\r\n]+?)\s*$/gmu)]
+    .map((match) => `${match[1]}=${match[2]}`)
+    .join('\0');
+}
+
+function externalEvaluatorStepsMatchTrustBoundary(source) {
+  const prepare = prepareJob(source);
+  const gate = namedStep(prepare, EXTERNAL_EVALUATOR_GATE_NAME);
+  const archive = namedStep(prepare, EXTERNAL_EVALUATOR_ARCHIVE_NAME);
+  const gateCommand =
+    '        run: >-\n' +
+    '          "$RUNNER_TEMP/node-v24.18.0-linux-x64/bin/node"\n' +
+    '          "$KOVO_RELEASE_PNPM_CLI" run check:external-evaluator-evidence\n';
+  const inputReferences =
+    source.match(/\$\{\{ inputs\.external_evaluator_evidence_base64 \}\}/gu) ?? [];
+  return (
+    gate !== '' &&
+    archive !== '' &&
+    stepKeys(gate).join('\0') === 'run\0env' &&
+    gate.includes(gateCommand) &&
+    stepEnvironmentSignature(gate) === EXTERNAL_EVALUATOR_GATE_ENVIRONMENT &&
+    jobActions(gate).length === 0 &&
+    stepKeys(archive).join('\0') === 'uses\0with' &&
+    jobActions(archive).length === 1 &&
+    jobActions(archive)[0] === UPLOAD_ARTIFACT_ACTION &&
+    actionInputSignatures(archive, UPLOAD_ARTIFACT_ACTION)[0] ===
+      EXTERNAL_EVALUATOR_ARCHIVE_INPUTS &&
+    inputReferences.length === 1 &&
+    prepare.indexOf(gate) < prepare.indexOf(archive)
+  );
 }
 
 function jobActions(job) {
@@ -248,6 +316,7 @@ describe('release workflow authority', () => {
       prepare.indexOf('name: Upload bounded untrusted release producer files'),
     );
     expect(prepare).not.toContain('skip-external-evaluator');
+    expect(externalEvaluatorStepsMatchTrustBoundary(releaseWorkflow)).toBe(true);
     expect(prepare).toContain('name: Upload bounded untrusted release producer files');
     expect(prepare).toContain(
       'unverified-artifact-id: ${{ steps.upload-unverified-release.outputs.artifact-id }}',
@@ -403,6 +472,30 @@ describe('release workflow authority', () => {
     );
     expect(mutated).not.toBe(releaseWorkflow);
     expect(archiveAttestationJobMatchesStepAllowlist(mutated)).toBe(false);
+  });
+
+  it('rejects a conditional, advisory, substituted, or unarchived evaluator gate', () => {
+    const advisory = releaseWorkflow.replace(
+      `      - name: ${EXTERNAL_EVALUATOR_GATE_NAME}\n`,
+      `      - name: ${EXTERNAL_EVALUATOR_GATE_NAME}\n        continue-on-error: true\n`,
+    );
+    const conditional = releaseWorkflow.replace(
+      `      - name: ${EXTERNAL_EVALUATOR_GATE_NAME}\n`,
+      `      - name: ${EXTERNAL_EVALUATOR_GATE_NAME}\n        if: false\n`,
+    );
+    const substituted = releaseWorkflow.replace(
+      '          "$KOVO_RELEASE_PNPM_CLI" run check:external-evaluator-evidence',
+      '          echo "external evaluator evidence accepted"',
+    );
+    const unarchived = releaseWorkflow.replace(
+      `      - name: ${EXTERNAL_EVALUATOR_ARCHIVE_NAME}\n`,
+      `      - name: ${EXTERNAL_EVALUATOR_ARCHIVE_NAME}\n        if: false\n`,
+    );
+
+    for (const mutated of [advisory, conditional, substituted, unarchived]) {
+      expect(mutated).not.toBe(releaseWorkflow);
+      expect(externalEvaluatorStepsMatchTrustBoundary(mutated)).toBe(false);
+    }
   });
 
   it('keeps shell and Node startup injection disabled in isolated release jobs', () => {
