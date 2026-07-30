@@ -783,7 +783,7 @@
           "reason": "The diagnostic schema constant belongs to the build-time CLI package and is not request-handler authority."
         }
       ],
-      "sourceTreeSha256": "19930f8fb84aef9cbf8aaf2fd9a0f5e414c9cb37e17a279e1fd5641389b334ab"
+      "sourceTreeSha256": "314b76c3934c2a56380e8b653ec34e4868f8f2c07982ed858cbb0ae59a095c18"
     },
     {
       "manifestVariants": [
@@ -1882,7 +1882,7 @@
           "securityRole": "trust-escape"
         }
       ],
-      "sourceTreeSha256": "7760a7dbf74f25788cb96e167c7665347797a493d08df9462fd32b69468e1da8"
+      "sourceTreeSha256": "5dd1c516fd581957316a8aa3cdd0ea87911a3fbbda7820af84929c6132ab34c4"
     },
     {
       "manifestVariants": [
@@ -9876,7 +9876,7 @@
           "reason": "derived binds a reviewed adapter to the current request principal through the canonical ScopedKey containment door."
         }
       ],
-      "sourceTreeSha256": "6d0596b558ef14e5921fd8304365ba122966a94dc6ac44cf1e65e5a5a2ed42bf"
+      "sourceTreeSha256": "9aeef85c362d401405a05dddb7b7670e30b9595951c043a109b925563a46fb0a"
     },
     {
       "manifestVariants": [

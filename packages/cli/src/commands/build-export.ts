@@ -20,6 +20,7 @@ import {
   renameSync as builtinRenameSync,
   rmSync as builtinRmSync,
   statSync as builtinStatSync,
+  symlinkSync as builtinSymlinkSync,
   writeFileSync as builtinWriteFileSync,
 } from 'node:fs';
 import { readFile as builtinReadFile } from 'node:fs/promises';
@@ -3231,6 +3232,11 @@ function runPreEvaluationStaticTrustPreflight(
           unregisteredSinks: [],
         }
       : requiredBuildStaticAnalysisRuntime().collectStaticBuildTrustFactsFromProject({
+          // SPEC §6.6 TASK B: the residual parser receives the compiler-owned exact app-contract
+          // resolution, not a structural `.task`/`.mutation` spelling. Drizzle independently
+          // validates every file/source/span/member/owner row before using it to reconstruct the
+          // same enrolled root and compare the semantic and capability carriers below.
+          appContractStaticFacts: sourceGraphFacts.appContractStaticFacts,
           compilerSecuritySemanticSources: sourceGraphFacts.compilerSecuritySemanticSources,
           compilerTaskBClosure: {
             capabilityFacts: capabilityClosure.facts,
@@ -6767,6 +6773,92 @@ export async function snapshotBuildCompilerDiagnosticsForTests(
 }
 
 /**
+ * Internal regression seam for the complete authenticated pre-evaluation source closure.
+ *
+ * This executes the same compiler semantic projection, capability closure, and KV424 trust pass as
+ * build/check, while stopping before authored module evaluation.
+ */
+export async function snapshotBuildPreEvaluationTrustForTests(
+  entryFileName: string,
+  files: readonly { readonly fileName: string; readonly source: string }[],
+): Promise<{
+  readonly files: readonly string[];
+  readonly unregisteredSinks: ReturnType<
+    typeof collectStaticBuildTrustFactsFromProject
+  >['unregisteredSinks'];
+}> {
+  await installBuildStaticAnalysisRuntime();
+  return withMaterializedBuildCompilerSourcesForTests(files, (materializedFiles, projectRoot) => {
+    const entryPath = resolve(projectRoot, entryFileName);
+    const trust = runPreEvaluationStaticTrustPreflight(entryPath, projectRoot, false);
+    return {
+      files: buildMapDense(trust.files, 'Pre-evaluation trust test source closure', (file) =>
+        slashPath(isAbsolute(file.fileName) ? relative(projectRoot, file.fileName) : file.fileName),
+      ),
+      unregisteredSinks: trust.facts.unregisteredSinks,
+    };
+  });
+}
+
+/**
+ * Internal adversarial seam proving TASK B does not confuse exact app declaration provenance with
+ * runtime assembly membership. It removes one authenticated task root row from the otherwise exact
+ * carrier; the independent residual parser must close that transport omission (SPEC §6.6).
+ */
+export async function snapshotBuildOmittedTaskBCapabilityRootForTests(
+  entryFileName: string,
+  files: readonly { readonly fileName: string; readonly source: string }[],
+): Promise<ReturnType<typeof collectStaticBuildTrustFactsFromProject>['unregisteredSinks']> {
+  await installBuildStaticAnalysisRuntime();
+  return withMaterializedBuildCompilerSourcesForTests(files, (materializedFiles, projectRoot) => {
+    const entryPath = resolve(projectRoot, entryFileName);
+    const sourceFiles = preEvaluationAppSourceFiles(entryPath, projectRoot);
+    const sourceGraphFacts = sourceGraphFactsFromFiles(sourceFiles, projectRoot);
+    const packageRequests = collectCapabilityPackageRequests(
+      sourceFiles,
+      sourceGraphFacts.compilerDependencies,
+    );
+    const capabilityClosure = analyzeCapabilityClosure({
+      compilerDependencies: sourceGraphFacts.compilerDependencies,
+      files: sourceFiles,
+      packageSummaries: readCapabilityPackageSummaries(projectRoot),
+      packages: resolveCapabilityPackages(packageRequests, entryPath),
+    });
+    let omitted = false;
+    const capabilityFacts = buildFilterDense(
+      capabilityClosure.facts,
+      'TASK B omitted task-root adversarial carrier',
+      (fact) => {
+        if (
+          !omitted &&
+          fact.kind === 'root' &&
+          (fact.rootKind === 'durable-task' || fact.rootKind === 'scheduled-task')
+        ) {
+          omitted = true;
+          return false;
+        }
+        return true;
+      },
+    );
+    if (!omitted) {
+      throw new TypeError('TASK B omitted-root test seam requires one authenticated task root.');
+    }
+    return requiredBuildStaticAnalysisRuntime().collectStaticBuildTrustFactsFromProject({
+      appContractStaticFacts: sourceGraphFacts.appContractStaticFacts,
+      compilerSecuritySemanticSources: sourceGraphFacts.compilerSecuritySemanticSources,
+      compilerTaskBClosure: {
+        capabilityFacts,
+        dependencyManifest: capabilityClosure.dependencyManifest,
+        finiteVerdict: sourceGraphFacts.compilerTaskBFiniteVerdict,
+        files: sourceFiles,
+        schema: 'kovo-task-b-closure/v2',
+      },
+      files: sourceFiles,
+    }).unregisteredSinks;
+  });
+}
+
+/**
  * Give test-supplied source the same exact Program ownership as a real build.
  *
  * The production path receives source files that already exist beneath the approved build root.
@@ -6776,12 +6868,22 @@ export async function snapshotBuildCompilerDiagnosticsForTests(
  */
 function withMaterializedBuildCompilerSourcesForTests<Value>(
   files: readonly { readonly fileName: string; readonly source: string }[],
-  operation: (files: readonly { readonly fileName: string; readonly source: string }[]) => Value,
+  operation: (
+    files: readonly { readonly fileName: string; readonly source: string }[],
+    projectRoot: string,
+  ) => Value,
 ): Value {
   const projectRoot = builtinMkdtempSync(
     builtinJoin(process.cwd(), '.kovo-task-b-compiler-project-'),
   );
   try {
+    const serverEntryPath = requireFromCli.resolve('@kovojs/server');
+    const serverPackageRoot = builtinRealpathSync(
+      builtinJoin(builtinDirname(serverEntryPath), '..'),
+    );
+    const packageScopeRoot = builtinJoin(projectRoot, 'node_modules', '@kovojs');
+    builtinMkdirSync(packageScopeRoot, { recursive: true });
+    builtinSymlinkSync(serverPackageRoot, builtinJoin(packageScopeRoot, 'server'), 'dir');
     const sources = buildSnapshotDenseArray(files, 'TASK B virtual compiler source files');
     const materialized: { fileName: string; source: string }[] = [];
     const seen = buildCreateSet<string>();
@@ -6835,7 +6937,7 @@ function withMaterializedBuildCompilerSourcesForTests<Value>(
         'TASK B materialized compiler source files',
       );
     }
-    return operation(materialized);
+    return operation(materialized, projectRoot);
   } finally {
     try {
       builtinRmSync(projectRoot, { force: true, recursive: true });
@@ -7795,9 +7897,11 @@ async function preloadKovoSsrSecurityProfile(
   const serverRootPath = requireFromApp.resolve('@kovojs/server');
   const requireFromServer = createRequire(pathToFileURL(serverRootPath));
 
-  // Install and seal the Node data-plane parser before the compiler/static-analysis preload can
-  // read a classifier and close its one-shot registry. This load occurs inside the exact SSR graph
-  // that evaluates the app, not only in the native CLI graph (SPEC §6.6 rule 6).
+  // Install and seal the Node data-plane parser before the compiler and server bootstraps capture
+  // their runtime controls. The server bootstrap owns the lightweight data-plane intrinsic
+  // membrane in this exact SSR realm. Source/AST analysis itself already ran in the disposable
+  // authenticated worker; loading its Drizzle/ts-morph implementation here would retain a second
+  // analyzer heap while app/config code executes without strengthening the proof.
   await server.ssrLoadModule(
     viteSsrModuleId(
       requireFromApp.resolve('@kovojs/server/internal/sql-parser-authority-bootstrap'),
@@ -7811,12 +7915,6 @@ async function preloadKovoSsrSecurityProfile(
     ),
   );
   await server.ssrLoadModule(viteSsrModuleId(requireFromServer.resolve('@kovojs/compiler'), root));
-  await server.ssrLoadModule(
-    viteSsrModuleId(
-      requireFromApp.resolve('@kovojs/server/internal/data-plane-static-analysis'),
-      root,
-    ),
-  );
   await server.ssrLoadModule(viteSsrModuleId(serverRootPath, root));
 }
 

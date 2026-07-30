@@ -50,6 +50,11 @@ import {
   moduleSpecifierResolvesToFrameworkExport,
 } from './static/framework-identity.js';
 import {
+  compilerOwnedAppContractMemberEquals,
+  registerCompilerOwnedAppContractStaticFacts,
+  type CompilerOwnedAppContractStaticFact,
+} from './static/app-contract-static-facts.js';
+import {
   runtimeArrayLength,
   runtimeArrayValue,
   runtimeFreeze,
@@ -155,6 +160,11 @@ export function snapshotCompilerTaskBFiniteVerdict(options: {
 
 /** @internal */
 export interface TrustEscapeProjectOptions {
+  /**
+   * Exact compiler-owned app-contract resolutions. The independent residual parser validates
+   * every file/source/span/member/owner row before using one as declaration provenance.
+   */
+  appContractStaticFacts?: readonly CompilerOwnedAppContractStaticFact[];
   /** Exact authored build-config entry whose deferred preset authority must use built-in witnesses. */
   buildConfigEntryFileName?: string;
   /** Same-snapshot compiler verdicts; never an app-authored assertion. */
@@ -183,7 +193,10 @@ function isStringLiteralLike(node: Node | undefined): node is Node & { getLitera
   return !!node && (Node.isStringLiteral(node) || Node.isNoSubstitutionTemplateLiteral(node));
 }
 
-function createSyntacticProject(files: readonly TrustEscapeSourceFileInput[]): {
+function createSyntacticProject(
+  files: readonly TrustEscapeSourceFileInput[],
+  appContractStaticFacts?: readonly CompilerOwnedAppContractStaticFact[],
+): {
   project: Project;
   sourceFiles: SourceFile[];
   dispose: () => void;
@@ -205,10 +218,16 @@ function createSyntacticProject(files: readonly TrustEscapeSourceFileInput[]): {
   const sourceFiles = files.map((file) =>
     project.createSourceFile(syntacticFileName(file.fileName), file.source, { overwrite: true }),
   );
+  const disposeAppContractStaticFacts = registerCompilerOwnedAppContractStaticFacts(
+    appContractStaticFacts,
+    files,
+    sourceFiles,
+  );
   return {
     project,
     sourceFiles,
     dispose: () => {
+      disposeAppContractStaticFacts();
       for (const sourceFile of sourceFiles) sourceFile.forget();
       // `forget()` detaches wrappers but ts-morph's compiler language service otherwise retains
       // its program caches until GC. Build test processes create many short-lived projects; dispose
@@ -716,7 +735,10 @@ function sourceRootIdentity(
 export function collectUnregisteredSinksFromProject(
   options: TrustEscapeProjectOptions,
 ): UnregisteredSinkFact[] {
-  const { sourceFiles, dispose } = createSyntacticProject(options.files);
+  const { sourceFiles, dispose } = createSyntacticProject(
+    options.files,
+    options.appContractStaticFacts,
+  );
   try {
     const facts = requestProcessSinksForProject(
       options.files,
@@ -750,7 +772,10 @@ export function collectStaticBuildTrustFactsFromProject(options: TrustEscapeProj
   trustEscapes: TrustEscapeExplain[];
   unregisteredSinks: UnregisteredSinkFact[];
 } {
-  const { sourceFiles, dispose } = createSyntacticProject(options.files);
+  const { sourceFiles, dispose } = createSyntacticProject(
+    options.files,
+    options.appContractStaticFacts,
+  );
   try {
     const capabilities: CapabilityExplain[] = [];
     const cookieDowngrades: CookieDowngradeExplain[] = [];
@@ -5265,6 +5290,9 @@ function requestAppAuthoringFactoryForExpression(
     if (!member || !REQUEST_APP_AUTHORING_FACTORIES.has(member as RequestHandlerFactoryName)) {
       return undefined;
     }
+    if (compilerOwnedAppContractMemberEquals(node, member)) {
+      return member as RequestHandlerFactoryName;
+    }
     const receiver = unwrapStaticExpression(node.getExpression());
     const context = requestExpressionIsKovoAppAuthoringContext(receiver, new Set(), session);
     return context ? (member as RequestHandlerFactoryName) : undefined;
@@ -5388,7 +5416,8 @@ function requestDefinedKovoMemberForExpression(
   if (
     !member ||
     !REQUEST_DEFINED_KOVO_MEMBERS.has(member) ||
-    !requestExpressionIsDefinedKovoContract(node.getExpression(), new Set(), session)
+    (!compilerOwnedAppContractMemberEquals(node, member) &&
+      !requestExpressionIsDefinedKovoContract(node.getExpression(), new Set(), session))
   ) {
     return undefined;
   }
@@ -7033,11 +7062,18 @@ function requestExpressionIsExactLocalFrameworkDeclaration(
   if (
     !declarationCall ||
     !Node.isCallExpression(declarationCall) ||
-    !requestExactPristineDirectImport(declarationCall.getExpression(), '@kovojs/server', factory) ||
-    !requestExactImportedCarrierIsPristine(
-      declarationCall.getExpression(),
-      '@kovojs/server',
-      factory,
+    !(
+      compilerOwnedAppContractMemberEquals(declarationCall.getExpression(), factory) ||
+      (requestExactPristineDirectImport(
+        declarationCall.getExpression(),
+        '@kovojs/server',
+        factory,
+      ) &&
+        requestExactImportedCarrierIsPristine(
+          declarationCall.getExpression(),
+          '@kovojs/server',
+          factory,
+        ))
     )
   ) {
     return false;
@@ -7350,6 +7386,7 @@ function requestCallIsExactTaskComposition(
   }
   const [definition, input, ...extra] = call.getArguments();
   if (!definition || !input || extra.length !== 0) return false;
+  const factory = method === 'runMutation' ? 'mutation' : 'query';
   const root = requestCompositionRootForExactCapabilityCall(call, session);
   if (
     !root ||
@@ -7358,7 +7395,6 @@ function requestCallIsExactTaskComposition(
   ) {
     return false;
   }
-  const factory = method === 'runMutation' ? 'mutation' : 'query';
   return !!(
     requestExpressionIsExactLocalFrameworkDeclaration(definition, factory, session) &&
     requestExactMutationTaskScheduleInputIsPlain(input, root, session, new Set())
@@ -7477,8 +7513,11 @@ function requestExpressionIsExactLocalTaskDeclaration(
   if (
     !taskCall ||
     !Node.isCallExpression(taskCall) ||
-    !requestExactPristineDirectImport(taskCall.getExpression(), '@kovojs/server', 'task') ||
-    !requestExactImportedCarrierIsPristine(taskCall.getExpression(), '@kovojs/server', 'task')
+    !(
+      compilerOwnedAppContractMemberEquals(taskCall.getExpression(), 'task') ||
+      (requestExactPristineDirectImport(taskCall.getExpression(), '@kovojs/server', 'task') &&
+        requestExactImportedCarrierIsPristine(taskCall.getExpression(), '@kovojs/server', 'task'))
+    )
   ) {
     return false;
   }
@@ -7518,10 +7557,13 @@ function requestExpressionIsExactLocalTaskDeclaration(
       }
     }
   }
-  const [key, definition, ...extra] = taskCall.getArguments();
+  const argumentsList = taskCall.getArguments();
+  const appContractTask = compilerOwnedAppContractMemberEquals(taskCall.getExpression(), 'task');
+  const key = appContractTask ? undefined : argumentsList[0];
+  const definition = appContractTask ? argumentsList[0] : argumentsList[1];
+  const extra = appContractTask ? argumentsList.slice(1) : argumentsList.slice(2);
   return !!(
-    key &&
-    isStringLiteralLike(unwrapStaticExpression(key)) &&
+    (appContractTask || (key && isStringLiteralLike(unwrapStaticExpression(key)))) &&
     definition &&
     Node.isObjectLiteralExpression(unwrapStaticExpression(definition)) &&
     extra.length === 0 &&
