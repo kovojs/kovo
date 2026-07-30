@@ -1,4 +1,5 @@
-import * as ts from 'typescript';
+import type * as TS from 'typescript';
+import { typescriptRuntime as ts } from './ts-api.js';
 
 /** @internal One source edit proven mechanical for the style API v1 cut. */
 export interface StyleApiV1MigrationEdit {
@@ -85,7 +86,7 @@ export function analyzeStyleApiV1Migration(options: {
   const styleNamespaces = new Set<string>();
 
   const parseDiagnostics = (
-    sourceFile as ts.SourceFile & { readonly parseDiagnostics?: readonly ts.Diagnostic[] }
+    sourceFile as TS.SourceFile & { readonly parseDiagnostics?: readonly TS.Diagnostic[] }
   ).parseDiagnostics;
   for (const diagnostic of parseDiagnostics ?? []) {
     const start = diagnostic.start ?? 0;
@@ -173,7 +174,7 @@ export function analyzeStyleApiV1Migration(options: {
     }
   }
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (
       ts.isCallExpression(node) &&
       node.expression.kind === ts.SyntaxKind.ImportKeyword &&
@@ -301,7 +302,7 @@ export function analyzeStyleApiV1Migration(options: {
   };
 }
 
-function isShadowingDeclaration(node: ts.Identifier): boolean {
+function isShadowingDeclaration(node: TS.Identifier): boolean {
   const parent = node.parent;
   if (ts.isImportSpecifier(parent) && parent.name === node && !parent.propertyName) return false;
   return (
@@ -325,7 +326,7 @@ function isShadowingDeclaration(node: ts.Identifier): boolean {
   );
 }
 
-function isDirectStyleRecordTypeReference(node: ts.Identifier): boolean {
+function isDirectStyleRecordTypeReference(node: TS.Identifier): boolean {
   const parent = node.parent;
   return (
     (ts.isTypeReferenceNode(parent) && parent.typeName === node) ||
@@ -335,8 +336,8 @@ function isDirectStyleRecordTypeReference(node: ts.Identifier): boolean {
 }
 
 function appContextRefusal(
-  node: ts.Node,
-  sourceFile: ts.SourceFile,
+  node: TS.Node,
+  sourceFile: TS.SourceFile,
   symbol: string,
 ): StyleApiV1MigrationRefusal {
   return {
@@ -348,9 +349,9 @@ function appContextRefusal(
 }
 
 function replaceIdentifier(
-  node: ts.Node,
+  node: TS.Node,
   replacement: string,
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
 ): StyleApiV1MigrationEdit {
   return {
     end: node.getEnd(),
@@ -390,7 +391,7 @@ function applyEdits(source: string, edits: readonly StyleApiV1MigrationEdit[]): 
   return result;
 }
 
-function scriptKind(fileName: string): ts.ScriptKind {
+function scriptKind(fileName: string): TS.ScriptKind {
   if (fileName.endsWith('.tsx')) return ts.ScriptKind.TSX;
   if (fileName.endsWith('.jsx')) return ts.ScriptKind.JSX;
   if (fileName.endsWith('.js') || fileName.endsWith('.mjs') || fileName.endsWith('.cjs')) {

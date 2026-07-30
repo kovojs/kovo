@@ -1,4 +1,4 @@
-import * as ts from 'typescript';
+import type * as TS from 'typescript';
 
 import type {
   CacheInfluenceAuditedEscape,
@@ -69,7 +69,7 @@ import { mutationFormProvenanceAttributeName } from '../mutation-form-provenance
 import { deriveRegistryIdentity } from '../registry-identities.js';
 import { isCompilerAuditText } from '../security/audit-text.js';
 import { normalizeComponentFileName } from '../shared.js';
-import { ensureTypescriptRuntime, hasModifier } from '../ts-api.js';
+import { hasModifier, typescriptRuntime as ts } from '../ts-api.js';
 import {
   resolveSameFileSecurityIrCallable,
   scanBrowserSecurityOperations,
@@ -142,8 +142,6 @@ import type {
 
 export type * from './model.js';
 
-ensureTypescriptRuntime(ts);
-
 const frameworkTrustedUrlFacts = compilerCreateWeakMap<object, true>();
 const frameworkTrustedUrlReasonFacts = compilerCreateWeakMap<object, string>();
 const frameworkTrustedUrlValueFacts = compilerCreateWeakMap<object, string>();
@@ -164,11 +162,11 @@ export function parserFactFrameworkTrustedUrlValue(fact: object): string | undef
 }
 
 interface ComponentFactoryBindings {
-  readonly sourceFile: ts.SourceFile;
+  readonly sourceFile: TS.SourceFile;
 }
 
 interface ModuleScopeStaticStringBinding {
-  readonly identifier: ts.Identifier;
+  readonly identifier: TS.Identifier;
   readonly value: string;
 }
 
@@ -268,7 +266,7 @@ function denseStringArrayIncludes(
  * its imported static-value modules) so the `ts.createSourceFile` boundary lives only in scan/
  * (SPEC.md §5.2 rule 9).
  */
-export function parseSourceFile(fileName: string, source: string): ts.SourceFile {
+export function parseSourceFile(fileName: string, source: string): TS.SourceFile {
   return ts.createSourceFile(
     normalizeComponentFileName(fileName),
     source,
@@ -288,18 +286,18 @@ export interface ParseComponentModuleOptions {
 }
 
 export function parseDiagnosticsForSourceFile(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
 ): CompilerDiagnostic[] {
   const parseDiagnostics =
-    (sourceFile as ts.SourceFile & { parseDiagnostics?: readonly ts.Diagnostic[] })
+    (sourceFile as TS.SourceFile & { parseDiagnostics?: readonly TS.Diagnostic[] })
       .parseDiagnostics ?? [];
 
   const result: CompilerDiagnostic[] = [];
   const diagnosticLength = compilerArrayLength(parseDiagnostics, 'Parse diagnostics');
   for (let index = 0; index < diagnosticLength; index += 1) {
     const diagnostic = compilerOwnDataValue(parseDiagnostics, index, 'Parse diagnostics') as
-      | ts.Diagnostic
+      | TS.Diagnostic
       | undefined;
     if (!diagnostic) throw new TypeError(`Parse diagnostics[${index}] must be own data.`);
     const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
@@ -345,7 +343,7 @@ export function parseComponentModule(
 ): ComponentModuleModel {
   const sourceFile = parseSourceFile(fileName, source);
   if (options.frameworkIdentityFiles?.length) {
-    const identityFiles: ts.SourceFile[] = [];
+    const identityFiles: TS.SourceFile[] = [];
     const identityFileLength = compilerArrayLength(
       options.frameworkIdentityFiles,
       'Framework identity files',
@@ -389,7 +387,7 @@ export function parseComponentModule(
       sourceFile.statements,
       index,
       'Source file statements',
-    ) as ts.Statement | undefined;
+    ) as TS.Statement | undefined;
     if (!statement) throw new TypeError(`Source file statements[${index}] must be own data.`);
     appendDenseValues(namedImports, namedImportModels(statement), 'Named import models');
   }
@@ -403,7 +401,7 @@ export function parseComponentModule(
   const moduleImportInsertionOffset = generatedImportInsertionOffset(sourceFile, source);
   const domainBindings = domainBindingKeys(sourceFile);
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (ts.isIdentifier(node)) {
       compilerArrayAppend(sourceIdentifierNames, node.text, 'Source identifier name parser facts');
     }
@@ -619,12 +617,12 @@ export function parseComponentModule(
   return model;
 }
 
-function generatedImportInsertionOffset(sourceFile: ts.SourceFile, source: string): number {
+function generatedImportInsertionOffset(sourceFile: TS.SourceFile, source: string): number {
   const firstStatement = compilerOwnDataValue(
     sourceFile.statements,
     0,
     'Generated import first statement',
-  ) as ts.Statement | undefined;
+  ) as TS.Statement | undefined;
   const ranges = ts.getLeadingCommentRanges(source, firstStatement?.getFullStart() ?? 0) ?? [];
   // TypeScript parses a shebang as source-file trivia rather than a statement/comment range. Keep
   // a generated value import after it; inserting at byte zero would invalidate the module.
@@ -632,7 +630,7 @@ function generatedImportInsertionOffset(sourceFile: ts.SourceFile, source: strin
   const rangeLength = compilerArrayLength(ranges, 'Generated import leading comment ranges');
   for (let index = 0; index < rangeLength; index += 1) {
     const range = compilerOwnDataValue(ranges, index, 'Generated import leading comment ranges') as
-      | ts.CommentRange
+      | TS.CommentRange
       | undefined;
     if (!range) throw new TypeError(`Generated import leading comment ranges[${index}] missing.`);
     if (
@@ -672,7 +670,7 @@ function generatedImportStatementEnd(source: string, statementEnd: number): numb
       ranges,
       index,
       'Generated import trailing comment ranges',
-    ) as ts.CommentRange | undefined;
+    ) as TS.CommentRange | undefined;
     if (!range) throw new TypeError(`Generated import trailing comment ranges[${index}] missing.`);
     if (!isHorizontalTrivia(source, insertionOffset, range.pos)) break;
     insertionOffset = range.end;
@@ -703,16 +701,16 @@ function generatedImportLineEnd(source: string, insertionOffset: number): number
   return lineEnd;
 }
 
-function jsxPragmaModels(sourceFile: ts.SourceFile, source: string): JsxPragmaModel[] {
-  const ranges: ts.CommentRange[] = [];
+function jsxPragmaModels(sourceFile: TS.SourceFile, source: string): JsxPragmaModel[] {
+  const ranges: TS.CommentRange[] = [];
   const seen = compilerCreateSet<string>();
 
-  const appendRanges = (candidates: readonly ts.CommentRange[] | undefined): void => {
+  const appendRanges = (candidates: readonly TS.CommentRange[] | undefined): void => {
     if (candidates === undefined) return;
     const length = compilerArrayLength(candidates, 'JSX pragma comment ranges');
     for (let index = 0; index < length; index += 1) {
       const range = compilerOwnDataValue(candidates, index, 'JSX pragma comment ranges') as
-        | ts.CommentRange
+        | TS.CommentRange
         | undefined;
       if (!range) throw new TypeError(`JSX pragma comment ranges[${index}] must be own data.`);
       const key = `${range.pos}:${range.end}`;
@@ -722,7 +720,7 @@ function jsxPragmaModels(sourceFile: ts.SourceFile, source: string): JsxPragmaMo
     }
   };
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     appendRanges(ts.getLeadingCommentRanges(source, node.getFullStart()));
     appendRanges(ts.getTrailingCommentRanges(source, node.getEnd()));
     const children = node.getChildren(sourceFile);
@@ -730,7 +728,7 @@ function jsxPragmaModels(sourceFile: ts.SourceFile, source: string): JsxPragmaMo
     for (let index = 0; index < length; index += 1) {
       const child = compilerOwnDataValue(children, index, 'JSX pragma AST children');
       if (!child) throw new TypeError(`JSX pragma AST children[${index}] must be own data.`);
-      visit(child as ts.Node);
+      visit(child as TS.Node);
     }
   };
   visit(sourceFile);
@@ -739,7 +737,7 @@ function jsxPragmaModels(sourceFile: ts.SourceFile, source: string): JsxPragmaMo
   const rangeLength = compilerArrayLength(ranges, 'Distinct JSX pragma comment ranges');
   for (let rangeIndex = 0; rangeIndex < rangeLength; rangeIndex += 1) {
     const range = compilerOwnDataValue(ranges, rangeIndex, 'Distinct JSX pragma comment ranges') as
-      | ts.CommentRange
+      | TS.CommentRange
       | undefined;
     if (!range) {
       throw new TypeError(`Distinct JSX pragma comment ranges[${rangeIndex}] must be own data.`);
@@ -799,8 +797,8 @@ function jsxPragmaKind(value: string): JsxPragmaModel['kind'] {
 }
 
 function componentIdentityAssignmentModel(
-  sourceFile: ts.SourceFile,
-  node: ts.Node,
+  sourceFile: TS.SourceFile,
+  node: TS.Node,
 ): ComponentIdentityAssignmentModel | null {
   if (!ts.isExpressionStatement(node) || !ts.isBinaryExpression(node.expression)) return null;
   const assignment = node.expression;
@@ -821,7 +819,7 @@ function componentIdentityAssignmentModel(
   };
 }
 
-function moduleSpecifierModel(node: ts.Node): ModuleSpecifierModel | null {
+function moduleSpecifierModel(node: TS.Node): ModuleSpecifierModel | null {
   if (
     (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
     node.moduleSpecifier &&
@@ -849,8 +847,8 @@ function moduleSpecifierModel(node: ts.Node): ModuleSpecifierModel | null {
 }
 
 function compilerJsxRuntimeImportModels(
-  sourceFile: ts.SourceFile,
-  node: ts.Node,
+  sourceFile: TS.SourceFile,
+  node: TS.Node,
 ): CompilerJsxRuntimeImportModel[] {
   if (ts.isImportDeclaration(node) && ts.isStringLiteralLike(node.moduleSpecifier)) {
     const clause = node.importClause;
@@ -869,7 +867,7 @@ function compilerJsxRuntimeImportModels(
           elements,
           index,
           'Compiler JSX-runtime named imports',
-        ) as ts.ImportSpecifier | undefined;
+        ) as TS.ImportSpecifier | undefined;
         if (!element || element.isTypeOnly) continue;
         const factory = jsxRuntimeFactoryNameForSpecifier(
           specifier,
@@ -914,7 +912,7 @@ function compilerJsxRuntimeImportModels(
           elements,
           index,
           'Compiler JSX-runtime named re-exports',
-        ) as ts.ExportSpecifier | undefined;
+        ) as TS.ExportSpecifier | undefined;
         if (!element || element.isTypeOnly) continue;
         const factory = jsxRuntimeFactoryNameForSpecifier(
           specifier,
@@ -947,7 +945,7 @@ function compilerJsxRuntimeImportModels(
 }
 
 function jsxRuntimeImportFact(
-  moduleSpecifier: ts.StringLiteralLike,
+  moduleSpecifier: TS.StringLiteralLike,
   specifier: CompilerJsxRuntimeImportModel['specifier'],
   factories: readonly CompilerJsxRuntimeImportModel['factories'][number][],
 ): CompilerJsxRuntimeImportModel[] {
@@ -990,7 +988,7 @@ function jsxRuntimeFactoryName(
   return undefined;
 }
 
-function namedImportModels(node: ts.Node): NamedImportModel[] {
+function namedImportModels(node: TS.Node): NamedImportModel[] {
   if (
     !ts.isImportDeclaration(node) ||
     !node.moduleSpecifier ||
@@ -1008,7 +1006,7 @@ function namedImportModels(node: ts.Node): NamedImportModel[] {
   const elementLength = compilerArrayLength(bindings.elements, 'Named import elements');
   for (let index = 0; index < elementLength; index += 1) {
     const element = compilerOwnDataValue(bindings.elements, index, 'Named import elements') as
-      | ts.ImportSpecifier
+      | TS.ImportSpecifier
       | undefined;
     if (!element) throw new TypeError(`Named import elements[${index}] must be own data.`);
     if (element.isTypeOnly) continue;
@@ -1026,9 +1024,9 @@ function namedImportModels(node: ts.Node): NamedImportModel[] {
 }
 
 function moduleScopeBindingModels(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  node: ts.Node,
+  node: TS.Node,
 ): ModuleScopeBindingModel[] {
   if (!ts.isVariableStatement(node) || node.parent !== sourceFile) return [];
   const result: ModuleScopeBindingModel[] = [];
@@ -1041,7 +1039,7 @@ function moduleScopeBindingModels(
       node.declarationList.declarations,
       index,
       'Module-scope declarations',
-    ) as ts.VariableDeclaration | undefined;
+    ) as TS.VariableDeclaration | undefined;
     if (!declaration) throw new TypeError(`Module-scope declarations[${index}] must be own data.`);
     if (!ts.isIdentifier(declaration.name) || declaration.initializer === undefined) continue;
     const value = staticLiteralValue(declaration.initializer);
@@ -1064,7 +1062,7 @@ function moduleScopeBindingModels(
 }
 
 function moduleScopeObjectEntryModels(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
 ): ReadonlyMap<string, readonly ObjectLiteralEntry[]> {
   const stringBindings = moduleScopeStaticStringValues(sourceFile);
@@ -1075,7 +1073,7 @@ function moduleScopeObjectEntryModels(
       sourceFile.statements,
       statementIndex,
       'Source file statements',
-    ) as ts.Statement | undefined;
+    ) as TS.Statement | undefined;
     if (!statement)
       throw new TypeError(`Source file statements[${statementIndex}] must be own data.`);
     if (!ts.isVariableStatement(statement)) continue;
@@ -1088,7 +1086,7 @@ function moduleScopeObjectEntryModels(
         statement.declarationList.declarations,
         declarationIndex,
         'Module-scope object declarations',
-      ) as ts.VariableDeclaration | undefined;
+      ) as TS.VariableDeclaration | undefined;
       if (!declaration) {
         throw new TypeError(
           `Module-scope object declarations[${declarationIndex}] must be own data.`,
@@ -1112,7 +1110,7 @@ function moduleScopeObjectEntryModels(
 }
 
 function moduleScopeMutationFormControlNameModels(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
 ): ReadonlyMap<string, readonly string[]> {
   const staticStringValues = moduleScopeStaticStringValues(sourceFile);
   const controlsByBinding = compilerCreateMap<string, readonly string[]>();
@@ -1125,7 +1123,7 @@ function moduleScopeMutationFormControlNameModels(
       sourceFile.statements,
       statementIndex,
       'Module-scope mutation form control declarations',
-    ) as ts.Statement | undefined;
+    ) as TS.Statement | undefined;
     if (!statement) {
       throw new TypeError(
         `Module-scope mutation form control declarations[${statementIndex}] must be own data.`,
@@ -1141,7 +1139,7 @@ function moduleScopeMutationFormControlNameModels(
         statement.declarationList.declarations,
         declarationIndex,
         'Module-scope mutation form control bindings',
-      ) as ts.VariableDeclaration | undefined;
+      ) as TS.VariableDeclaration | undefined;
       if (!declaration) {
         throw new TypeError(
           `Module-scope mutation form control bindings[${declarationIndex}] must be own data.`,
@@ -1160,7 +1158,7 @@ function moduleScopeMutationFormControlNameModels(
 }
 
 function mutationFormControlNamesFromExpression(
-  expression: ts.Expression,
+  expression: TS.Expression,
   staticStringValues: ReadonlyMap<string, string>,
   controlsByBinding: ReadonlyMap<string, readonly string[]>,
 ): string[] {
@@ -1184,7 +1182,7 @@ function mutationFormControlNamesFromExpression(
       unwrapped.properties,
       propertyIndex,
       'Mutation form control object properties',
-    ) as ts.ObjectLiteralElementLike | undefined;
+    ) as TS.ObjectLiteralElementLike | undefined;
     if (!property) {
       throw new TypeError(
         `Mutation form control object properties[${propertyIndex}] must be own data.`,
@@ -1227,7 +1225,7 @@ function appendUniqueMutationFormControlNames(
   }
 }
 
-function moduleScopeStaticStringValues(sourceFile: ts.SourceFile): ReadonlyMap<string, string> {
+function moduleScopeStaticStringValues(sourceFile: TS.SourceFile): ReadonlyMap<string, string> {
   const strings = compilerCreateMap<string, string>();
   const statementLength = compilerArrayLength(sourceFile.statements, 'Source file statements');
   for (let statementIndex = 0; statementIndex < statementLength; statementIndex += 1) {
@@ -1235,7 +1233,7 @@ function moduleScopeStaticStringValues(sourceFile: ts.SourceFile): ReadonlyMap<s
       sourceFile.statements,
       statementIndex,
       'Source file statements',
-    ) as ts.Statement | undefined;
+    ) as TS.Statement | undefined;
     if (!statement)
       throw new TypeError(`Source file statements[${statementIndex}] must be own data.`);
     if (!ts.isVariableStatement(statement)) continue;
@@ -1248,7 +1246,7 @@ function moduleScopeStaticStringValues(sourceFile: ts.SourceFile): ReadonlyMap<s
         statement.declarationList.declarations,
         declarationIndex,
         'Module-scope string declarations',
-      ) as ts.VariableDeclaration | undefined;
+      ) as TS.VariableDeclaration | undefined;
       if (!declaration) {
         throw new TypeError(
           `Module-scope string declarations[${declarationIndex}] must be own data.`,
@@ -1270,7 +1268,7 @@ function moduleScopeStaticStringValues(sourceFile: ts.SourceFile): ReadonlyMap<s
  * static key (SPEC §5.2 rule 10).
  */
 function moduleScopeConstStaticStringBindings(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
 ): ReadonlyMap<string, ModuleScopeStaticStringBinding> {
   const strings = compilerCreateMap<string, ModuleScopeStaticStringBinding>();
   const statementLength = compilerArrayLength(
@@ -1282,7 +1280,7 @@ function moduleScopeConstStaticStringBindings(
       sourceFile.statements,
       statementIndex,
       'Module-scope const string statements',
-    ) as ts.Statement | undefined;
+    ) as TS.Statement | undefined;
     if (!statement) {
       throw new TypeError(
         `Module-scope const string statements[${statementIndex}] must be own data.`,
@@ -1299,7 +1297,7 @@ function moduleScopeConstStaticStringBindings(
         declarations,
         declarationIndex,
         'Module-scope const string declarations',
-      ) as ts.VariableDeclaration | undefined;
+      ) as TS.VariableDeclaration | undefined;
       if (!declaration) {
         throw new TypeError(
           `Module-scope const string declarations[${declarationIndex}] must be own data.`,
@@ -1323,7 +1321,7 @@ function moduleScopeConstStaticStringBindings(
   return strings;
 }
 
-function domainBindingKeys(sourceFile: ts.SourceFile): ReadonlyMap<string, string> {
+function domainBindingKeys(sourceFile: TS.SourceFile): ReadonlyMap<string, string> {
   const domains = compilerCreateMap<string, string>();
   const statementLength = compilerArrayLength(sourceFile.statements, 'Source file statements');
   for (let statementIndex = 0; statementIndex < statementLength; statementIndex += 1) {
@@ -1331,7 +1329,7 @@ function domainBindingKeys(sourceFile: ts.SourceFile): ReadonlyMap<string, strin
       sourceFile.statements,
       statementIndex,
       'Source file statements',
-    ) as ts.Statement | undefined;
+    ) as TS.Statement | undefined;
     if (!statement)
       throw new TypeError(`Source file statements[${statementIndex}] must be own data.`);
     if (!ts.isVariableStatement(statement)) continue;
@@ -1344,7 +1342,7 @@ function domainBindingKeys(sourceFile: ts.SourceFile): ReadonlyMap<string, strin
         statement.declarationList.declarations,
         declarationIndex,
         'Domain binding declarations',
-      ) as ts.VariableDeclaration | undefined;
+      ) as TS.VariableDeclaration | undefined;
       if (!declaration) {
         throw new TypeError(`Domain binding declarations[${declarationIndex}] must be own data.`);
       }
@@ -1359,29 +1357,29 @@ function domainBindingKeys(sourceFile: ts.SourceFile): ReadonlyMap<string, strin
   return domains;
 }
 
-function isExportedVariable(node: ts.VariableDeclaration): boolean {
+function isExportedVariable(node: TS.VariableDeclaration): boolean {
   const statement = node.parent.parent;
   return ts.isVariableStatement(statement) && hasExportModifier(statement);
 }
 
-function hasExportModifier(node: ts.FunctionDeclaration | ts.VariableStatement): boolean {
+function hasExportModifier(node: TS.FunctionDeclaration | TS.VariableStatement): boolean {
   return hasModifier(node, ts.SyntaxKind.ExportKeyword);
 }
 
-function componentFactoryBindings(sourceFile: ts.SourceFile): ComponentFactoryBindings {
+function componentFactoryBindings(sourceFile: TS.SourceFile): ComponentFactoryBindings {
   return { sourceFile };
 }
 
 function isComponentFactoryReference(
-  expression: ts.Expression,
+  expression: TS.Expression,
   bindings: ComponentFactoryBindings,
 ): boolean {
   return isFrameworkExpression(bindings.sourceFile, expression, COMPONENT_FACTORY_IDENTITY);
 }
 
 function isFrameworkExpression(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
   identity: FrameworkExportIdentity,
 ): boolean {
   return expressionResolvesToFrameworkExport(
@@ -1393,7 +1391,7 @@ function isFrameworkExpression(
   );
 }
 
-function isExportedRenderSourceFunction(node: ts.Node): node is ts.FunctionDeclaration {
+function isExportedRenderSourceFunction(node: TS.Node): node is TS.FunctionDeclaration {
   return (
     ts.isFunctionDeclaration(node) && node.name?.text === 'renderSource' && hasExportModifier(node)
   );
@@ -1804,7 +1802,7 @@ export function mutationSessionAuthorityFacts(model: ComponentModuleModel): Sess
     );
   }
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (
       ts.isCallExpression(node) &&
       (ts.isIdentifier(node.expression) || ts.isPropertyAccessExpression(node.expression)) &&
@@ -1847,9 +1845,9 @@ export function mutationHandlerFingerprintFromRuntimeSource(source: string): str
 }
 
 function mutationHandlerFingerprint(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  handler: ts.ArrowFunction | ts.FunctionDeclaration | ts.FunctionExpression | ts.MethodDeclaration,
+  handler: TS.ArrowFunction | TS.FunctionDeclaration | TS.FunctionExpression | TS.MethodDeclaration,
 ): string | undefined {
   return mutationHandlerSourceFingerprint(
     compilerStringSlice(source, handler.getStart(sourceFile), handler.getEnd()),
@@ -1879,7 +1877,7 @@ function mutationHandlerSourceFingerprint(
   const diagnosticLength = compilerArrayLength(diagnostics, 'Handler transpile diagnostics');
   for (let index = 0; index < diagnosticLength; index += 1) {
     const diagnostic = compilerOwnDataValue(diagnostics, index, 'Handler transpile diagnostics') as
-      | ts.Diagnostic
+      | TS.Diagnostic
       | undefined;
     if (diagnostic === undefined) return undefined;
     if (
@@ -1896,12 +1894,12 @@ function mutationHandlerSourceFingerprint(
     true,
     ts.ScriptKind.TSX,
   );
-  let statement: ts.VariableStatement | undefined;
+  let statement: TS.VariableStatement | undefined;
   const statementLength = compilerArrayLength(canonicalFile.statements, 'Canonical statements');
   for (let index = 0; index < statementLength; index += 1) {
     const candidate = compilerOwnDataValue(canonicalFile.statements, index, 'Canonical statements');
-    if (candidate !== undefined && ts.isVariableStatement(candidate as ts.Node)) {
-      statement = candidate as ts.VariableStatement;
+    if (candidate !== undefined && ts.isVariableStatement(candidate as TS.Node)) {
+      statement = candidate as TS.VariableStatement;
       break;
     }
   }
@@ -1910,11 +1908,11 @@ function mutationHandlerSourceFingerprint(
         statement.declarationList.declarations,
         0,
         'Canonical handler declarations',
-      ) as ts.VariableDeclaration | undefined)
+      ) as TS.VariableDeclaration | undefined)
     : undefined;
   const initializer = declaration?.initializer;
   if (!initializer) return undefined;
-  let handler: ts.Expression | ts.MethodDeclaration | undefined = initializer;
+  let handler: TS.Expression | TS.MethodDeclaration | undefined = initializer;
   if (kind === 'method' && ts.isObjectLiteralExpression(initializer)) {
     handler = undefined;
     const propertyLength = compilerArrayLength(
@@ -1927,8 +1925,8 @@ function mutationHandlerSourceFingerprint(
         index,
         'Canonical handler properties',
       );
-      if (candidate !== undefined && ts.isMethodDeclaration(candidate as ts.Node)) {
-        handler = candidate as ts.MethodDeclaration;
+      if (candidate !== undefined && ts.isMethodDeclaration(candidate as TS.Node)) {
+        handler = candidate as TS.MethodDeclaration;
         break;
       }
     }
@@ -1938,9 +1936,9 @@ function mutationHandlerSourceFingerprint(
   return compilerSha256Hex(canonicalHandlerAst(handler, canonicalFile));
 }
 
-function canonicalHandlerAst(node: ts.Node, sourceFile: ts.SourceFile): string {
+function canonicalHandlerAst(node: TS.Node, sourceFile: TS.SourceFile): string {
   let output = '';
-  const visit = (current: ts.Node): void => {
+  const visit = (current: TS.Node): void => {
     output += `${current.kind}:`;
     if (ts.isIdentifier(current)) output += `id=${current.text};`;
     else if (ts.isStringLiteralLike(current)) {
@@ -1968,7 +1966,7 @@ function canonicalHandlerAst(node: ts.Node, sourceFile: ts.SourceFile): string {
       if (child === undefined) {
         throw new TypeError(`Canonical handler AST children[${index}] must be dense.`);
       }
-      visit(child as ts.Node);
+      visit(child as TS.Node);
     }
     output += ';';
   };
@@ -1976,12 +1974,12 @@ function canonicalHandlerAst(node: ts.Node, sourceFile: ts.SourceFile): string {
   return output;
 }
 
-function mutationHandlerAuthorityIsStaticallyInspectable(call: ts.CallExpression): boolean {
-  let options: ts.ObjectLiteralExpression | undefined;
+function mutationHandlerAuthorityIsStaticallyInspectable(call: TS.CallExpression): boolean {
+  let options: TS.ObjectLiteralExpression | undefined;
   const argumentLength = compilerArrayLength(call.arguments, 'Mutation arguments');
   for (let index = 0; index < argumentLength; index += 1) {
     const argument = compilerOwnDataValue(call.arguments, index, 'Mutation arguments') as
-      | ts.Expression
+      | TS.Expression
       | undefined;
     if (!argument) throw new TypeError(`Mutation arguments[${index}] must be own data.`);
     if (ts.isObjectLiteralExpression(argument)) {
@@ -1998,7 +1996,7 @@ function mutationHandlerAuthorityIsStaticallyInspectable(call: ts.CallExpression
       options.properties,
       index,
       'Mutation option properties',
-    ) as ts.ObjectLiteralElementLike | undefined;
+    ) as TS.ObjectLiteralElementLike | undefined;
     if (!property) throw new TypeError(`Mutation option properties[${index}] must be own data.`);
     if (ts.isSpreadAssignment(property) || propertyNameText(property.name) === null) return false;
     if (propertyNameText(property.name) !== 'handler') continue;
@@ -2066,7 +2064,7 @@ function appendHandlerWriteSinks<Handler extends MutationHandlerModel>(
   }
 }
 
-function stringLiteralArrayValuesFromExpression(expression: ts.Expression): string[] | null {
+function stringLiteralArrayValuesFromExpression(expression: TS.Expression): string[] | null {
   if (!ts.isArrayLiteralExpression(expression)) return null;
 
   const values: string[] = [];
@@ -2076,7 +2074,7 @@ function stringLiteralArrayValuesFromExpression(expression: ts.Expression): stri
       expression.elements,
       index,
       'String literal array elements',
-    ) as ts.Expression | ts.SpreadElement | undefined;
+    ) as TS.Expression | TS.SpreadElement | undefined;
     if (!element) throw new TypeError(`String literal array elements[${index}] must be own data.`);
     if (!ts.isStringLiteralLike(element)) return null;
     compilerArrayAppend(values, element.text, 'String literal array values');
@@ -2085,15 +2083,15 @@ function stringLiteralArrayValuesFromExpression(expression: ts.Expression): stri
   return values;
 }
 
-function deriveInputsFromExpression(expression: ts.Expression): DeriveInputsModel | null {
+function deriveInputsFromExpression(expression: TS.Expression): DeriveInputsModel | null {
   const value = unwrapExpression(expression);
   if (ts.isArrayLiteralExpression(value)) {
     const entries: DeriveInputEntryModel[] = [];
     const length = compilerArrayLength(value.elements, 'Derive tuple inputs');
     for (let index = 0; index < length; index += 1) {
       const element = compilerOwnDataValue(value.elements, index, 'Derive tuple inputs') as
-        | ts.Expression
-        | ts.SpreadElement
+        | TS.Expression
+        | TS.SpreadElement
         | undefined;
       if (!element || ts.isSpreadElement(element)) return null;
       const entry = deriveInputEntry(element);
@@ -2108,7 +2106,7 @@ function deriveInputsFromExpression(expression: ts.Expression): DeriveInputsMode
   const length = compilerArrayLength(value.properties, 'Derive object-map inputs');
   for (let index = 0; index < length; index += 1) {
     const property = compilerOwnDataValue(value.properties, index, 'Derive object-map inputs') as
-      | ts.ObjectLiteralElementLike
+      | TS.ObjectLiteralElementLike
       | undefined;
     if (!property || !ts.isPropertyAssignment(property)) return null;
     const alias = propertyNameText(property.name);
@@ -2120,7 +2118,7 @@ function deriveInputsFromExpression(expression: ts.Expression): DeriveInputsMode
   return { entries, form: 'object' };
 }
 
-function deriveInputEntry(expression: ts.Expression): DeriveInputEntryModel | null {
+function deriveInputEntry(expression: TS.Expression): DeriveInputEntryModel | null {
   const value = unwrapExpression(expression);
   if (ts.isStringLiteralLike(value) && value.text.length > 0) {
     return { input: value.text, kind: 'generated' };
@@ -2130,7 +2128,7 @@ function deriveInputEntry(expression: ts.Expression): DeriveInputEntryModel | nu
   if (
     !ts.isPropertyAccessExpression(callee) ||
     !ts.isIdentifier(unwrapExpression(callee.expression)) ||
-    (unwrapExpression(callee.expression) as ts.Identifier).text !== 'derive'
+    (unwrapExpression(callee.expression) as TS.Identifier).text !== 'derive'
   ) {
     return null;
   }
@@ -2143,14 +2141,14 @@ function deriveInputEntry(expression: ts.Expression): DeriveInputEntryModel | nu
   }
   if (callee.name.text !== 'query' || argumentLength !== 1) return null;
   const handle = compilerOwnDataValue(value.arguments, 0, 'Derive query input') as
-    | ts.Expression
+    | TS.Expression
     | undefined;
   if (!handle) return null;
   const input = deriveQueryHandleName(unwrapExpression(handle));
   return input === null ? null : { input, kind: 'query' };
 }
 
-function deriveQueryHandleName(expression: ts.Expression): string | null {
+function deriveQueryHandleName(expression: TS.Expression): string | null {
   if (ts.isIdentifier(expression)) return expression.text;
   if (ts.isPropertyAccessExpression(expression)) return expression.name.text;
   if (ts.isElementAccessExpression(expression)) {
@@ -2161,8 +2159,8 @@ function deriveQueryHandleName(expression: ts.Expression): string | null {
 }
 
 function arrowFunctionPartsFromExpression(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): ArrowFunctionPartsModel | null {
   if (!ts.isArrowFunction(expression)) return null;
 
@@ -2171,7 +2169,7 @@ function arrowFunctionPartsFromExpression(
   if (parameterLength === 0) return null;
   for (let index = 0; index < parameterLength; index += 1) {
     const parameter = compilerOwnDataValue(expression.parameters, index, 'Arrow parameters') as
-      | ts.ParameterDeclaration
+      | TS.ParameterDeclaration
       | undefined;
     if (!parameter) throw new TypeError(`Arrow parameters[${index}] must be own data.`);
     if (!ts.isIdentifier(parameter.name)) return null;
@@ -2193,8 +2191,8 @@ function arrowFunctionPartsFromExpression(
 }
 
 function documentElementActionFromExpression(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): DocumentElementActionModel | null {
   const body = unwrapExpression(expression);
   const methodAction = documentElementMethodAction(sourceFile, body);
@@ -2214,8 +2212,8 @@ function documentElementActionFromExpression(
  * is not statically rooted at an identifier (e.g. `getRows()[0]`), so a non-trackable read does
  * not masquerade as a tracked path.
  */
-function elementAccessRootPath(node: ts.Expression): string | null {
-  let current: ts.Expression = node;
+function elementAccessRootPath(node: TS.Expression): string | null {
+  let current: TS.Expression = node;
   while (ts.isPropertyAccessExpression(current)) {
     current = current.expression;
   }
@@ -2233,7 +2231,7 @@ function elementAccessRootPath(node: ts.Expression): string | null {
   return null;
 }
 
-function objectLiteralPaths(expression: ts.ObjectLiteralExpression, prefix = ''): string[] {
+function objectLiteralPaths(expression: TS.ObjectLiteralExpression, prefix = ''): string[] {
   const result: string[] = [];
   const propertyLength = compilerArrayLength(
     expression.properties,
@@ -2244,7 +2242,7 @@ function objectLiteralPaths(expression: ts.ObjectLiteralExpression, prefix = '')
       expression.properties,
       index,
       'Object-literal path properties',
-    ) as ts.ObjectLiteralElementLike | undefined;
+    ) as TS.ObjectLiteralElementLike | undefined;
     if (!property)
       throw new TypeError(`Object-literal path properties[${index}] must be own data.`);
     if (ts.isShorthandPropertyAssignment(property)) {
@@ -2280,8 +2278,8 @@ function pathWithPrefix(prefix: string, key: string): string {
 }
 
 function documentElementMethodAction(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): DocumentElementActionModel | null {
   if (!ts.isCallExpression(expression) || expression.arguments.length > 0) return null;
 
@@ -2293,8 +2291,8 @@ function documentElementMethodAction(
 }
 
 function documentElementToggleOpenAction(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): DocumentElementActionModel | null {
   if (
     !ts.isBinaryExpression(expression) ||
@@ -2316,8 +2314,8 @@ function documentElementToggleOpenAction(
 }
 
 function documentElementOpenTarget(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): string | null {
   const property = unwrapExpression(expression);
   if (!ts.isPropertyAccessExpression(property) || property.name.text !== 'open') return null;
@@ -2325,8 +2323,8 @@ function documentElementOpenTarget(
 }
 
 function documentGetElementByIdTarget(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): string | null {
   const call = unwrapExpression(expression);
   if (!ts.isCallExpression(call) || call.arguments.length !== 1) return null;
@@ -2351,7 +2349,7 @@ function documentGetElementByIdTarget(
   return ts.isStringLiteralLike(target) ? target.text : null;
 }
 
-function isDeclaredIdentifier(node: ts.Identifier): boolean {
+function isDeclaredIdentifier(node: TS.Identifier): boolean {
   const parent = node.parent;
   return (
     (ts.isVariableDeclaration(parent) && parent.name === node) ||
@@ -2364,7 +2362,7 @@ function isDeclaredIdentifier(node: ts.Identifier): boolean {
   );
 }
 
-function isReferenceIdentifier(node: ts.Identifier): boolean {
+function isReferenceIdentifier(node: TS.Identifier): boolean {
   const parent = node.parent;
   if (isDeclaredIdentifier(node)) return false;
   if (ts.isPropertyAccessExpression(parent) && parent.name === node) return false;
@@ -2376,8 +2374,8 @@ function isReferenceIdentifier(node: ts.Identifier): boolean {
 }
 
 function identifierResolvesToUnshadowedGlobal(
-  sourceFile: ts.SourceFile,
-  identifier: ts.Identifier,
+  sourceFile: TS.SourceFile,
+  identifier: TS.Identifier,
   globalName: string,
 ): boolean {
   return (
@@ -2388,11 +2386,11 @@ function identifierResolvesToUnshadowedGlobal(
 }
 
 export function identifierIsShadowedBeforeScope(
-  identifier: ts.Identifier,
-  binding: ts.Identifier | undefined,
-  boundary: ts.Node,
+  identifier: TS.Identifier,
+  binding: TS.Identifier | undefined,
+  boundary: TS.Node,
 ): boolean {
-  let current: ts.Node | undefined = identifier.parent;
+  let current: TS.Node | undefined = identifier.parent;
   while (current && current !== boundary) {
     if (
       isLexicalScopeNode(current) &&
@@ -2408,11 +2406,11 @@ export function identifierIsShadowedBeforeScope(
 }
 
 function functionParameterScopeDeclaresIdentifierNamed(
-  scope: ts.FunctionLikeDeclaration,
+  scope: TS.FunctionLikeDeclaration,
   name: string,
-  excluded: ts.Identifier | undefined,
+  excluded: TS.Identifier | undefined,
 ): boolean {
-  const bindingNameMatches = (bindingName: ts.BindingName): boolean => {
+  const bindingNameMatches = (bindingName: TS.BindingName): boolean => {
     if (ts.isIdentifier(bindingName)) return bindingName !== excluded && bindingName.text === name;
     const elements = compilerSnapshotDenseArray(
       bindingName.elements,
@@ -2441,13 +2439,13 @@ function functionParameterScopeDeclaresIdentifierNamed(
 }
 
 function scopeDeclaresIdentifierNamed(
-  scope: ts.Node,
+  scope: TS.Node,
   name: string,
-  excluded: ts.Identifier | undefined,
+  excluded: TS.Identifier | undefined,
 ): boolean {
   let found = false;
 
-  const visitBindingName = (bindingName: ts.BindingName): void => {
+  const visitBindingName = (bindingName: TS.BindingName): void => {
     if (ts.isIdentifier(bindingName)) {
       if (bindingName !== excluded && bindingName.text === name) found = true;
       return;
@@ -2458,12 +2456,12 @@ function scopeDeclaresIdentifierNamed(
         bindingName.elements,
         index,
         'Scope binding elements',
-      ) as ts.ArrayBindingElement | undefined;
+      ) as TS.ArrayBindingElement | undefined;
       if (element && ts.isBindingElement(element)) visitBindingName(element.name);
     }
   };
 
-  const visit = (node: ts.Node, insideNestedLexicalBlock: boolean): void => {
+  const visit = (node: TS.Node, insideNestedLexicalBlock: boolean): void => {
     if (found) return;
     if (node !== scope && isFunctionScopeNode(node)) {
       if (ts.isFunctionDeclaration(node) && node.name && !insideNestedLexicalBlock) {
@@ -2502,7 +2500,7 @@ function scopeDeclaresIdentifierNamed(
   return found;
 }
 
-function isLexicalScopeNode(node: ts.Node): boolean {
+function isLexicalScopeNode(node: TS.Node): boolean {
   return (
     ts.isSourceFile(node) ||
     ts.isBlock(node) ||
@@ -2516,7 +2514,7 @@ function isLexicalScopeNode(node: ts.Node): boolean {
   );
 }
 
-function isFunctionScopeNode(node: ts.Node): node is ts.FunctionLikeDeclaration {
+function isFunctionScopeNode(node: TS.Node): node is TS.FunctionLikeDeclaration {
   return (
     ts.isFunctionDeclaration(node) ||
     ts.isFunctionExpression(node) ||
@@ -2529,12 +2527,12 @@ function isFunctionScopeNode(node: ts.Node): node is ts.FunctionLikeDeclaration 
 }
 
 function componentModelFromInitializer(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
   localName: string,
   localNameSpan: SourceSpan,
   declarationEnd: number,
-  initializer: ts.Expression | undefined,
+  initializer: TS.Expression | undefined,
   componentFactories: ComponentFactoryBindings,
 ): ComponentModel | null {
   if (!initializer || !ts.isCallExpression(initializer)) return null;
@@ -2567,9 +2565,9 @@ function componentModelFromInitializer(
 }
 
 function componentPropertyInitializer(
-  optionsObject: ts.Expression | undefined,
+  optionsObject: TS.Expression | undefined,
   propertyName: string,
-): ts.Expression | null {
+): TS.Expression | null {
   if (!optionsObject || !ts.isObjectLiteralExpression(optionsObject)) return null;
 
   const propertyLength = compilerArrayLength(optionsObject.properties, 'Component properties');
@@ -2578,7 +2576,7 @@ function componentPropertyInitializer(
       optionsObject.properties,
       index,
       'Component properties',
-    ) as ts.ObjectLiteralElementLike | undefined;
+    ) as TS.ObjectLiteralElementLike | undefined;
     if (!property) throw new TypeError(`Component properties[${index}] must be own data.`);
     if (!ts.isPropertyAssignment(property)) continue;
     if (propertyNameText(property.name) === propertyName) return property.initializer;
@@ -2588,9 +2586,9 @@ function componentPropertyInitializer(
 }
 
 function componentOptions(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  optionsObject: ts.ObjectLiteralExpression,
+  optionsObject: TS.ObjectLiteralExpression,
 ): ComponentOptionEntry[] {
   const result: ComponentOptionEntry[] = [];
   const propertyLength = compilerArrayLength(
@@ -2602,7 +2600,7 @@ function componentOptions(
       optionsObject.properties,
       index,
       'Component option properties',
-    ) as ts.ObjectLiteralElementLike | undefined;
+    ) as TS.ObjectLiteralElementLike | undefined;
     if (!property) throw new TypeError(`Component option properties[${index}] must be own data.`);
     if (!ts.isPropertyAssignment(property)) continue;
 
@@ -2630,7 +2628,7 @@ function componentOptions(
 
 function leadingJustifiedDiagnostics(
   source: string,
-  node: ts.Node,
+  node: TS.Node,
 ): { justifiedDiagnostics: readonly string[] } | {} {
   const ranges = ts.getLeadingCommentRanges(source, node.getFullStart()) ?? [];
   const seen = compilerCreateSet<string>();
@@ -2638,7 +2636,7 @@ function leadingJustifiedDiagnostics(
   const rangeLength = compilerArrayLength(ranges, 'Leading comment ranges');
   for (let rangeIndex = 0; rangeIndex < rangeLength; rangeIndex += 1) {
     const range = compilerOwnDataValue(ranges, rangeIndex, 'Leading comment ranges') as
-      | ts.CommentRange
+      | TS.CommentRange
       | undefined;
     if (!range) throw new TypeError(`Leading comment ranges[${rangeIndex}] must be own data.`);
     if (range.end > node.getStart(node.getSourceFile())) continue;
@@ -2736,16 +2734,16 @@ function renderOnceStateKeysInSpan(
 }
 
 function componentOptionStaticValueEntry(
-  expression: ts.Expression,
+  expression: TS.Expression,
 ): { staticValue: StaticLiteralValue } | {} {
   const value = staticLiteralValue(expression);
   return value === undefined ? {} : { staticValue: value };
 }
 
 function componentOptionStaticTemplateValueEntry(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  expression: ts.Expression,
+  expression: TS.Expression,
 ): { staticTemplateValue: string } | {} {
   const unwrapped = unwrapExpression(expression);
   if (!ts.isNoSubstitutionTemplateLiteral(unwrapped)) return {};
@@ -2760,9 +2758,9 @@ function componentOptionStaticTemplateValueEntry(
 }
 
 function stringRenderReturns(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  render: ts.Expression,
+  render: TS.Expression,
 ): StringRenderModel[] {
   if (!ts.isArrowFunction(render) && !ts.isFunctionExpression(render)) return [];
 
@@ -2774,16 +2772,16 @@ function stringRenderReturns(
 }
 
 function stringRenderReturnsFromFunctionBody(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  body: ts.Block | undefined,
+  body: TS.Block | undefined,
 ): StringRenderModel[] {
   if (!body) return [];
   const result: StringRenderModel[] = [];
   const statementLength = compilerArrayLength(body.statements, 'String-render statements');
   for (let index = 0; index < statementLength; index += 1) {
     const statement = compilerOwnDataValue(body.statements, index, 'String-render statements') as
-      | ts.Statement
+      | TS.Statement
       | undefined;
     if (!statement) throw new TypeError(`String-render statements[${index}] must be own data.`);
     if (!ts.isReturnStatement(statement) || !statement.expression) continue;
@@ -2797,9 +2795,9 @@ function stringRenderReturnsFromFunctionBody(
 }
 
 function stringRenderModel(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  expression: ts.Expression,
+  expression: TS.Expression,
 ): StringRenderModel[] {
   const unwrapped = unwrapParentheses(expression);
   if (
@@ -2821,21 +2819,21 @@ function stringRenderModel(
 }
 
 function optionalFirstHtmlTagName(
-  expression: ts.StringLiteralLike | ts.NoSubstitutionTemplateLiteral | ts.TemplateExpression,
+  expression: TS.StringLiteralLike | TS.NoSubstitutionTemplateLiteral | TS.TemplateExpression,
 ): { firstHtmlTagName: string } | {} {
   const tagName = firstHtmlTagNameFromLiteralText(stringRenderLiteralText(expression));
   return tagName ? { firstHtmlTagName: tagName } : {};
 }
 
 function stringRenderLiteralText(
-  expression: ts.StringLiteralLike | ts.NoSubstitutionTemplateLiteral | ts.TemplateExpression,
+  expression: TS.StringLiteralLike | TS.NoSubstitutionTemplateLiteral | TS.TemplateExpression,
 ): string {
   if (ts.isTemplateExpression(expression)) {
     let result = expression.head.text;
     const spanLength = compilerArrayLength(expression.templateSpans, 'Template spans');
     for (let index = 0; index < spanLength; index += 1) {
       const span = compilerOwnDataValue(expression.templateSpans, index, 'Template spans') as
-        | ts.TemplateSpan
+        | TS.TemplateSpan
         | undefined;
       if (!span) throw new TypeError(`Template spans[${index}] must be own data.`);
       result += `{}` + span.literal.text;
@@ -2852,16 +2850,16 @@ function firstHtmlTagNameFromLiteralText(source: string): string | null {
   return typeof tagName === 'string' ? tagName : null;
 }
 
-function unwrapParentheses(expression: ts.Expression): ts.Expression {
+function unwrapParentheses(expression: TS.Expression): TS.Expression {
   let current = expression;
   while (ts.isParenthesizedExpression(current)) current = current.expression;
   return current;
 }
 
 function mutationHandlerModels(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  call: ts.CallExpression,
+  call: TS.CallExpression,
   appContractMutation: boolean,
 ): MutationHandlerModel[] {
   const owner = mutationOwner(sourceFile, call);
@@ -2915,7 +2913,7 @@ function mutationHandlerModels(
   return result;
 }
 
-function agentToolModel(sourceFile: ts.SourceFile, call: ts.CallExpression): AgentToolModel {
+function agentToolModel(sourceFile: TS.SourceFile, call: TS.CallExpression): AgentToolModel {
   const violations: SecurityOperationViolationModel[] = [];
   const binding = localConstInitializerName(call) ?? `UNRESOLVED@${call.getStart(sourceFile)}`;
   const nameArgument = callArgument(call, 0);
@@ -3055,9 +3053,9 @@ function agentToolModel(sourceFile: ts.SourceFile, call: ts.CallExpression): Age
 }
 
 function agentDefinitionModel(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  call: ts.CallExpression,
+  call: TS.CallExpression,
 ): AgentDefinitionModel {
   const violations: SecurityOperationViolationModel[] = [];
   const binding = localConstInitializerName(call);
@@ -3079,7 +3077,7 @@ function agentDefinitionModel(
   }
   const optionsArgument = callArgument(call, 1);
   const options = optionsArgument && unwrapExpression(optionsArgument);
-  let model: ts.ArrowFunction | ts.FunctionExpression | ts.MethodDeclaration | undefined;
+  let model: TS.ArrowFunction | TS.FunctionExpression | TS.MethodDeclaration | undefined;
   const toolBindings: AgentDefinitionModel['toolBindings'][number][] = [];
   if (!options || !ts.isObjectLiteralExpression(options)) {
     compilerArrayAppend(
@@ -3167,7 +3165,7 @@ function agentDefinitionModel(
             'Agent tool references',
           );
           for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
-            const element = unwrapExpression(elements[elementIndex]! as ts.Expression);
+            const element = unwrapExpression(elements[elementIndex]! as TS.Expression);
             if (ts.isIdentifier(element)) {
               compilerArrayAppend(
                 toolBindings,
@@ -3255,8 +3253,8 @@ function agentDefinitionModel(
 }
 
 function agentConfigurationViolation(
-  sourceFile: ts.SourceFile,
-  node: ts.Node,
+  sourceFile: TS.SourceFile,
+  node: TS.Node,
   detail: string,
 ): SecurityOperationViolationModel {
   return {
@@ -3271,7 +3269,7 @@ function isStaticAgentName(value: string): boolean {
   return compilerRegExpTest(/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/u, value);
 }
 
-function localConstInitializerName(call: ts.CallExpression): string | undefined {
+function localConstInitializerName(call: TS.CallExpression): string | undefined {
   const declaration = call.parent;
   return ts.isVariableDeclaration(declaration) &&
     declaration.initializer === call &&
@@ -3287,11 +3285,11 @@ function localConstInitializerName(call: ts.CallExpression): string | undefined 
  * while a statically non-Cookie `headers.get("x-signature")` stays green.
  */
 function handlerReadsAmbientCookie(
-  body: ts.ConciseBody,
-  parameters: ts.NodeArray<ts.ParameterDeclaration>,
+  body: TS.ConciseBody,
+  parameters: TS.NodeArray<TS.ParameterDeclaration>,
 ): boolean {
   const parameterSnapshot = compilerSnapshotDenseArray(parameters, 'Mutation handler parameters');
-  const runtimeParameters: ts.ParameterDeclaration[] = [];
+  const runtimeParameters: TS.ParameterDeclaration[] = [];
   const runtimeParameterStart =
     parameterSnapshot[0] &&
     ts.isIdentifier(parameterSnapshot[0].name) &&
@@ -3326,7 +3324,7 @@ function handlerReadsAmbientCookie(
   let changed = true;
   while (changed) {
     changed = false;
-    const visitAliases = (node: ts.Node): void => {
+    const visitAliases = (node: TS.Node): void => {
       if (ts.isVariableDeclaration(node) && node.initializer) {
         changed =
           collectAuthorityAlias(node.name, node.initializer, requestNames, headersNames) || changed;
@@ -3352,7 +3350,7 @@ function handlerReadsAmbientCookie(
   }
 
   let readsCookie = false;
-  const visitReads = (node: ts.Node): void => {
+  const visitReads = (node: TS.Node): void => {
     if (readsCookie) return;
     if (isDynamicHandlerCodeExecution(node)) {
       readsCookie = true;
@@ -3397,8 +3395,8 @@ const BROWSER_STATE_MUTATION_SINKS = new Set([
 const SAFE_MUTATION_CONTEXT_MEMBERS = new Set(['fail', 'invalidate']);
 
 function handlerMutatesBrowserState(
-  body: ts.ConciseBody,
-  contextParameter: ts.ParameterDeclaration | undefined,
+  body: TS.ConciseBody,
+  contextParameter: TS.ParameterDeclaration | undefined,
 ): boolean {
   if (!contextParameter) return false;
   if (contextParameter.dotDotDotToken) return true;
@@ -3429,7 +3427,7 @@ function handlerMutatesBrowserState(
   }
 
   let unsafe = false;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (unsafe) return;
     if (ts.isIdentifier(node) && compilerSetHas(sinkNames, node.text)) {
       if (ts.isBindingElement(node.parent) && node.parent.name === node) return;
@@ -3486,7 +3484,7 @@ function isProvablyNonAmbientMutationHeader(value: string): boolean {
   );
 }
 
-function isDynamicHandlerCodeExecution(node: ts.Node): boolean {
+function isDynamicHandlerCodeExecution(node: TS.Node): boolean {
   if (!ts.isCallExpression(node) && !ts.isNewExpression(node)) return false;
   const callee = unwrapExpression(node.expression);
   if (ts.isIdentifier(callee)) return callee.text === 'eval' || callee.text === 'Function';
@@ -3500,9 +3498,9 @@ function isDynamicHandlerCodeExecution(node: ts.Node): boolean {
   );
 }
 
-function handlerBodyReferencesArguments(body: ts.ConciseBody): boolean {
+function handlerBodyReferencesArguments(body: TS.ConciseBody): boolean {
   let found = false;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (found) return;
     if (node !== body && ts.isFunctionLike(node) && !ts.isArrowFunction(node)) return;
     if (ts.isIdentifier(node) && node.text === 'arguments') {
@@ -3517,8 +3515,8 @@ function handlerBodyReferencesArguments(body: ts.ConciseBody): boolean {
 
 interface HandlerLocalBinding {
   readonly name: string;
-  readonly unavailableInParameterInitializersOf?: ts.FunctionLikeDeclaration;
-  readonly scope: ts.Node;
+  readonly unavailableInParameterInitializersOf?: TS.FunctionLikeDeclaration;
+  readonly scope: TS.Node;
 }
 
 const INERT_FREE_HANDLER_IDENTIFIERS = new Set(['Infinity', 'NaN', 'undefined']);
@@ -3531,8 +3529,8 @@ const INERT_FREE_HANDLER_IDENTIFIERS = new Set(['Infinity', 'NaN', 'undefined'])
  * remain inspectable by the existing request/header provenance pass.
  */
 function handlerReferencesUnprovenFreeAuthority(
-  body: ts.ConciseBody,
-  parameters: ts.NodeArray<ts.ParameterDeclaration>,
+  body: TS.ConciseBody,
+  parameters: TS.NodeArray<TS.ParameterDeclaration>,
 ): boolean {
   const handler = body.parent;
   const root = ts.isFunctionLike(handler) ? handler : body;
@@ -3540,7 +3538,7 @@ function handlerReferencesUnprovenFreeAuthority(
   const bindings = collectHandlerLocalBindings(root, body, parameterSnapshot);
 
   let unsafe = false;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (unsafe) return;
     if (node.kind === ts.SyntaxKind.ThisKeyword || node.kind === ts.SyntaxKind.SuperKeyword) {
       unsafe = true;
@@ -3566,9 +3564,9 @@ function handlerReferencesUnprovenFreeAuthority(
 }
 
 function collectHandlerLocalBindings(
-  root: ts.Node,
-  body: ts.Node,
-  parameters: readonly ts.ParameterDeclaration[],
+  root: TS.Node,
+  body: TS.Node,
+  parameters: readonly TS.ParameterDeclaration[],
 ): HandlerLocalBinding[] {
   const bindings: HandlerLocalBinding[] = [];
   const parameterSnapshot = compilerSnapshotDenseArray(parameters, 'Handler authority parameters');
@@ -3584,7 +3582,7 @@ function collectHandlerLocalBindings(
     );
   }
 
-  const collectBindings = (node: ts.Node): void => {
+  const collectBindings = (node: TS.Node): void => {
     if (ts.isVariableDeclaration(node)) {
       const scope = handlerVariableBindingScope(node, root);
       recordHandlerBindingName(
@@ -3640,8 +3638,8 @@ function collectHandlerLocalBindings(
 }
 
 function handlerParameterIsDeclared(
-  parameters: readonly ts.ParameterDeclaration[],
-  candidate: ts.ParameterDeclaration,
+  parameters: readonly TS.ParameterDeclaration[],
+  candidate: TS.ParameterDeclaration,
 ): boolean {
   for (let index = 0; index < parameters.length; index += 1) {
     if (parameters[index] === candidate) return true;
@@ -3651,7 +3649,7 @@ function handlerParameterIsDeclared(
 
 function handlerBindingCoversIdentifier(
   bindings: readonly HandlerLocalBinding[],
-  identifier: ts.Identifier,
+  identifier: TS.Identifier,
 ): boolean {
   const snapshot = compilerSnapshotDenseArray(bindings, 'Handler-local authority bindings');
   for (let index = 0; index < snapshot.length; index += 1) {
@@ -3673,9 +3671,9 @@ function handlerBindingCoversIdentifier(
 
 function recordHandlerBindingName(
   bindings: HandlerLocalBinding[],
-  name: ts.BindingName,
-  scope: ts.Node,
-  unavailableInParameterInitializersOf?: ts.FunctionLikeDeclaration,
+  name: TS.BindingName,
+  scope: TS.Node,
+  unavailableInParameterInitializersOf?: TS.FunctionLikeDeclaration,
 ): void {
   if (ts.isIdentifier(name)) {
     compilerArrayAppend(
@@ -3700,15 +3698,15 @@ function recordHandlerBindingName(
 }
 
 function handlerNodeIsWithinParameterInitializer(
-  node: ts.Node,
-  owner: ts.FunctionLikeDeclaration,
+  node: TS.Node,
+  owner: TS.FunctionLikeDeclaration,
 ): boolean {
   return nodeIsWithinFunctionParameterInitializer(node, owner);
 }
 
 function nodeIsWithinFunctionParameterInitializer(
-  node: ts.Node,
-  owner: ts.FunctionLikeDeclaration,
+  node: TS.Node,
+  owner: TS.FunctionLikeDeclaration,
 ): boolean {
   const parameters = compilerSnapshotDenseArray(owner.parameters, 'Handler function parameters');
   for (let index = 0; index < parameters.length; index += 1) {
@@ -3723,10 +3721,10 @@ function nodeIsWithinFunctionParameterInitializer(
   return false;
 }
 
-function handlerVariableBindingScope(node: ts.VariableDeclaration, root: ts.Node): ts.Node {
+function handlerVariableBindingScope(node: TS.VariableDeclaration, root: TS.Node): TS.Node {
   const list = ts.isVariableDeclarationList(node.parent) ? node.parent : undefined;
   if (list && (ts.getCombinedNodeFlags(list) & ts.NodeFlags.BlockScoped) === 0) {
-    let current: ts.Node | undefined = node.parent;
+    let current: TS.Node | undefined = node.parent;
     while (current && current !== root) {
       if (ts.isFunctionLike(current) || ts.isClassStaticBlockDeclaration(current)) return current;
       current = current.parent;
@@ -3734,7 +3732,7 @@ function handlerVariableBindingScope(node: ts.VariableDeclaration, root: ts.Node
     return root;
   }
 
-  let current: ts.Node | undefined = node.parent;
+  let current: TS.Node | undefined = node.parent;
   while (current && current !== root) {
     if (
       ts.isForStatement(current) ||
@@ -3751,8 +3749,8 @@ function handlerVariableBindingScope(node: ts.VariableDeclaration, root: ts.Node
   return root;
 }
 
-function handlerLexicalBindingScope(node: ts.Node, root: ts.Node): ts.Node {
-  let current: ts.Node | undefined = node.parent;
+function handlerLexicalBindingScope(node: TS.Node, root: TS.Node): TS.Node {
+  let current: TS.Node | undefined = node.parent;
   while (current && current !== root) {
     if (
       ts.isBlock(current) ||
@@ -3769,8 +3767,8 @@ function handlerLexicalBindingScope(node: ts.Node, root: ts.Node): ts.Node {
   return root;
 }
 
-function handlerNodeIsWithin(node: ts.Node, scope: ts.Node): boolean {
-  let current: ts.Node | undefined = node;
+function handlerNodeIsWithin(node: TS.Node, scope: TS.Node): boolean {
+  let current: TS.Node | undefined = node;
   while (current !== undefined) {
     if (current === scope) return true;
     current = current.parent;
@@ -3778,8 +3776,8 @@ function handlerNodeIsWithin(node: ts.Node, scope: ts.Node): boolean {
   return false;
 }
 
-function isRuntimeIdentifierReference(node: ts.Identifier, root: ts.Node): boolean {
-  let current: ts.Node | undefined = node.parent;
+function isRuntimeIdentifierReference(node: TS.Identifier, root: TS.Node): boolean {
+  let current: TS.Node | undefined = node.parent;
   while (current && current !== root) {
     if (
       ts.isTypeNode(current) &&
@@ -3829,7 +3827,7 @@ function isRuntimeIdentifierReference(node: ts.Identifier, root: ts.Node): boole
   return true;
 }
 
-function expressionWithTypeArgumentsIsRuntime(node: ts.ExpressionWithTypeArguments): boolean {
+function expressionWithTypeArgumentsIsRuntime(node: TS.ExpressionWithTypeArguments): boolean {
   const heritage = node.parent;
   if (!ts.isHeritageClause(heritage)) return true;
   return (
@@ -3838,8 +3836,8 @@ function expressionWithTypeArgumentsIsRuntime(node: ts.ExpressionWithTypeArgumen
   );
 }
 
-function identifierBelongsToBindingName(node: ts.Identifier): boolean {
-  let current: ts.Node = node;
+function identifierBelongsToBindingName(node: TS.Identifier): boolean {
+  let current: TS.Node = node;
   while (true) {
     const parent = current.parent;
     if (ts.isBindingElement(parent)) {
@@ -3858,7 +3856,7 @@ function identifierBelongsToBindingName(node: ts.Identifier): boolean {
 
 type RequestAuthorityExpressionKind = 'headers' | 'request' | undefined;
 
-function requestBindingMayExposeAmbientAuthority(name: ts.BindingName): boolean {
+function requestBindingMayExposeAmbientAuthority(name: TS.BindingName): boolean {
   if (ts.isIdentifier(name)) return false;
   if (!ts.isObjectBindingPattern(name)) return true;
 
@@ -3881,7 +3879,7 @@ function requestBindingMayExposeAmbientAuthority(name: ts.BindingName): boolean 
 }
 
 function collectRequestParameterAuthority(
-  name: ts.BindingName,
+  name: TS.BindingName,
   requestNames: Set<string>,
   headersNames: Set<string>,
 ): void {
@@ -3907,8 +3905,8 @@ function collectRequestParameterAuthority(
 }
 
 function collectAuthorityAlias(
-  name: ts.BindingName,
-  initializer: ts.Expression,
+  name: TS.BindingName,
+  initializer: TS.Expression,
   requestNames: Set<string>,
   headersNames: Set<string>,
 ): boolean {
@@ -3944,7 +3942,7 @@ function collectAuthorityAlias(
 }
 
 function requestAuthorityExpressionKind(
-  expression: ts.Expression,
+  expression: TS.Expression,
   requestNames: ReadonlySet<string>,
   headersNames: ReadonlySet<string>,
 ): RequestAuthorityExpressionKind {
@@ -3981,8 +3979,8 @@ function requestAuthorityExpressionKind(
 }
 
 function requestAuthorityMember(
-  expression: ts.Expression,
-): { name: string; receiver: ts.Expression } | undefined {
+  expression: TS.Expression,
+): { name: string; receiver: TS.Expression } | undefined {
   if (ts.isPropertyAccessExpression(expression)) {
     return { name: expression.name.text, receiver: expression.expression };
   }
@@ -3996,7 +3994,7 @@ function requestAuthorityMember(
 }
 
 function headerMethodReceiver(
-  expression: ts.Expression,
+  expression: TS.Expression,
   requestNames: ReadonlySet<string>,
   headersNames: ReadonlySet<string>,
 ): { method: string } | undefined {
@@ -4008,10 +4006,10 @@ function headerMethodReceiver(
 }
 
 function isHeaderCarrierExpression(
-  node: ts.Node,
+  node: TS.Node,
   requestNames: ReadonlySet<string>,
   headersNames: ReadonlySet<string>,
-): node is ts.Expression {
+): node is TS.Expression {
   return (
     ts.isExpression(node) &&
     requestAuthorityExpressionKind(node, requestNames, headersNames) === 'headers'
@@ -4019,10 +4017,10 @@ function isHeaderCarrierExpression(
 }
 
 function isRequestCarrierExpression(
-  node: ts.Node,
+  node: TS.Node,
   requestNames: ReadonlySet<string>,
   headersNames: ReadonlySet<string>,
-): node is ts.Expression {
+): node is TS.Expression {
   return (
     ts.isExpression(node) &&
     requestAuthorityExpressionKind(node, requestNames, headersNames) === 'request'
@@ -4057,7 +4055,7 @@ const NON_AMBIENT_REQUEST_MEMBERS = new Set([
 ]);
 
 function isSafeRequestCarrierUse(
-  node: ts.Expression,
+  node: TS.Expression,
   requestNames: ReadonlySet<string>,
   headersNames: ReadonlySet<string>,
 ): boolean {
@@ -4107,7 +4105,7 @@ function isSafeRequestCarrierUse(
 }
 
 function isSafeHeaderCarrierUse(
-  node: ts.Expression,
+  node: TS.Expression,
   requestNames: ReadonlySet<string>,
   headersNames: ReadonlySet<string>,
 ): boolean {
@@ -4161,10 +4159,10 @@ function isSafeHeaderCarrierUse(
   );
 }
 
-function handlerStaticStrings(body: ts.ConciseBody): ReadonlyMap<string, string> {
-  const candidates = compilerCreateMap<string, ts.Expression>();
+function handlerStaticStrings(body: TS.ConciseBody): ReadonlyMap<string, string> {
+  const candidates = compilerCreateMap<string, TS.Expression>();
   const invalid = compilerCreateSet<string>();
-  const invalidateBindings = (name: ts.BindingName): void => {
+  const invalidateBindings = (name: TS.BindingName): void => {
     const names: string[] = [];
     collectBindingNames(name, names);
     const snapshot = compilerSnapshotDenseArray(names, 'Invalidated handler bindings');
@@ -4173,7 +4171,7 @@ function handlerStaticStrings(body: ts.ConciseBody): ReadonlyMap<string, string>
     }
   };
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (ts.isVariableDeclaration(node)) {
       if (
         ts.isIdentifier(node.name) &&
@@ -4253,7 +4251,7 @@ function handlerStaticStrings(body: ts.ConciseBody): ReadonlyMap<string, string>
 }
 
 function staticHeaderName(
-  expression: ts.Expression | undefined,
+  expression: TS.Expression | undefined,
   values: ReadonlyMap<string, string>,
 ): string | undefined {
   if (!expression) return undefined;
@@ -4291,10 +4289,10 @@ interface CacheInfluenceDeclarationModel {
  * scanner: later compiler phases consume typed facts and never re-parse source (SPEC §5.2 rule 10).
  */
 function handlerCacheInfluenceModel(
-  sourceFile: ts.SourceFile,
-  call: ts.CallExpression,
-  body: ts.ConciseBody,
-  parameters: ts.NodeArray<ts.ParameterDeclaration>,
+  sourceFile: TS.SourceFile,
+  call: TS.CallExpression,
+  body: TS.ConciseBody,
+  parameters: TS.NodeArray<TS.ParameterDeclaration>,
   root: string,
   surface: CacheInfluenceHandlerSurface,
 ): CacheInfluenceDerivationInput {
@@ -4314,8 +4312,8 @@ function handlerCacheInfluenceModel(
 }
 
 function opaqueCacheInfluenceModel(
-  sourceFile: ts.SourceFile,
-  call: ts.CallExpression,
+  sourceFile: TS.SourceFile,
+  call: TS.CallExpression,
   root: string,
   surface: CacheInfluenceHandlerSurface,
 ): CacheInfluenceDerivationInput {
@@ -4341,8 +4339,8 @@ function opaqueCacheInfluenceModel(
 }
 
 function cacheInfluenceDeclarationModel(
-  sourceFile: ts.SourceFile,
-  call: ts.CallExpression,
+  sourceFile: TS.SourceFile,
+  call: TS.CallExpression,
   surface: CacheInfluenceHandlerSurface,
 ): CacheInfluenceDeclarationModel {
   const unclassified: string[] = [];
@@ -4362,7 +4360,7 @@ function cacheInfluenceDeclarationModel(
   const postureObject =
     postureObjectExpression &&
     ts.isObjectLiteralExpression(unwrapExpression(postureObjectExpression))
-      ? (unwrapExpression(postureObjectExpression) as ts.ObjectLiteralExpression)
+      ? (unwrapExpression(postureObjectExpression) as TS.ObjectLiteralExpression)
       : undefined;
   if (postureObjectExpression && !postureObject) {
     compilerArrayAppend(
@@ -4375,7 +4373,7 @@ function cacheInfluenceDeclarationModel(
   const cacheExpression = componentPropertyInitializer(postureObject, cacheProperty);
   const cacheControl =
     cacheExpression && ts.isStringLiteralLike(unwrapExpression(cacheExpression))
-      ? (unwrapExpression(cacheExpression) as ts.StringLiteralLike).text
+      ? (unwrapExpression(cacheExpression) as TS.StringLiteralLike).text
       : undefined;
   if (cacheExpression && cacheControl === undefined) {
     compilerArrayAppend(
@@ -4388,7 +4386,7 @@ function cacheInfluenceDeclarationModel(
   const cacheInfluence =
     cacheInfluenceExpression &&
     ts.isObjectLiteralExpression(unwrapExpression(cacheInfluenceExpression))
-      ? (unwrapExpression(cacheInfluenceExpression) as ts.ObjectLiteralExpression)
+      ? (unwrapExpression(cacheInfluenceExpression) as TS.ObjectLiteralExpression)
       : undefined;
   if (cacheInfluenceExpression && !cacheInfluence) {
     compilerArrayAppend(
@@ -4434,8 +4432,8 @@ function cacheInfluenceDeclarationModel(
 }
 
 function cacheAccessInfluence(
-  sourceFile: ts.SourceFile,
-  definition: ts.ObjectLiteralExpression,
+  sourceFile: TS.SourceFile,
+  definition: TS.ObjectLiteralExpression,
 ): 'authorization' | 'none' | 'principal' | 'unclassified' {
   const expression = componentPropertyInitializer(definition, 'access');
   if (!expression) return 'none';
@@ -4478,7 +4476,7 @@ function cacheAccessInfluence(
   const kindExpression = componentPropertyInitializer(access, 'kind');
   const kind =
     kindExpression && ts.isStringLiteralLike(unwrapExpression(kindExpression))
-      ? (unwrapExpression(kindExpression) as ts.StringLiteralLike).text
+      ? (unwrapExpression(kindExpression) as TS.StringLiteralLike).text
       : undefined;
   if (kind === 'public') return 'none';
   if (kind === 'verified-machine-auth') return 'authorization';
@@ -4487,7 +4485,7 @@ function cacheAccessInfluence(
 }
 
 function appendExternalDataVersionDeclarations(
-  cacheInfluence: ts.ObjectLiteralExpression,
+  cacheInfluence: TS.ObjectLiteralExpression,
   target: CacheInfluenceExternalDataVersionInput[],
   unclassified: string[],
 ): void {
@@ -4516,7 +4514,7 @@ function appendExternalDataVersionDeclarations(
     const nameExpression = componentPropertyInitializer(element, 'name');
     const name =
       nameExpression && ts.isStringLiteralLike(unwrapExpression(nameExpression))
-        ? (unwrapExpression(nameExpression) as ts.StringLiteralLike).text
+        ? (unwrapExpression(nameExpression) as TS.StringLiteralLike).text
         : undefined;
     if (!name) {
       compilerArrayAppend(
@@ -4544,27 +4542,27 @@ function appendExternalDataVersionDeclarations(
 }
 
 function cacheInfluenceKeyContribution(
-  expression: ts.Expression,
+  expression: TS.Expression,
 ): CacheInfluenceExternalDataVersionInput['key'] | undefined {
   const object = unwrapExpression(expression);
   if (!ts.isObjectLiteralExpression(object)) return undefined;
   const axisExpression = componentPropertyInitializer(object, 'axis');
   const axis =
     axisExpression && ts.isStringLiteralLike(unwrapExpression(axisExpression))
-      ? (unwrapExpression(axisExpression) as ts.StringLiteralLike).text
+      ? (unwrapExpression(axisExpression) as TS.StringLiteralLike).text
       : undefined;
   if (axis === 'url-path') return { axis };
   if (axis !== 'url-search' && axis !== 'request-header') return undefined;
   const nameExpression = componentPropertyInitializer(object, 'name');
   const name =
     nameExpression && ts.isStringLiteralLike(unwrapExpression(nameExpression))
-      ? (unwrapExpression(nameExpression) as ts.StringLiteralLike).text
+      ? (unwrapExpression(nameExpression) as TS.StringLiteralLike).text
       : undefined;
   return name ? { axis, name } : undefined;
 }
 
 function cacheInfluenceAuditedEscape(
-  cacheInfluence: ts.ObjectLiteralExpression,
+  cacheInfluence: TS.ObjectLiteralExpression,
   unclassified: string[],
 ): CacheInfluenceAuditedEscape | undefined {
   const expression = componentPropertyInitializer(cacheInfluence, 'auditedEscape');
@@ -4582,11 +4580,11 @@ function cacheInfluenceAuditedEscape(
   const obligationExpression = componentPropertyInitializer(object, 'retainedObligation');
   const name =
     nameExpression && ts.isStringLiteralLike(unwrapExpression(nameExpression))
-      ? (unwrapExpression(nameExpression) as ts.StringLiteralLike).text
+      ? (unwrapExpression(nameExpression) as TS.StringLiteralLike).text
       : undefined;
   const retainedObligation =
     obligationExpression && ts.isStringLiteralLike(unwrapExpression(obligationExpression))
-      ? (unwrapExpression(obligationExpression) as ts.StringLiteralLike).text
+      ? (unwrapExpression(obligationExpression) as TS.StringLiteralLike).text
       : undefined;
   if (!name || !retainedObligation) {
     compilerArrayAppend(
@@ -4600,9 +4598,9 @@ function cacheInfluenceAuditedEscape(
 }
 
 function collectHandlerCacheInfluences(
-  sourceFile: ts.SourceFile,
-  body: ts.ConciseBody,
-  parameters: ts.NodeArray<ts.ParameterDeclaration>,
+  sourceFile: TS.SourceFile,
+  body: TS.ConciseBody,
+  parameters: TS.NodeArray<TS.ParameterDeclaration>,
   surface: CacheInfluenceHandlerSurface,
   influences: MutableCacheInfluences,
 ): void {
@@ -4623,7 +4621,7 @@ function collectHandlerCacheInfluences(
   let changed = true;
   while (changed) {
     changed = false;
-    const visitAliases = (node: ts.Node): void => {
+    const visitAliases = (node: TS.Node): void => {
       if (ts.isVariableDeclaration(node) && node.initializer) {
         const kind = cacheCarrierKind(
           node.initializer,
@@ -4690,7 +4688,7 @@ function collectHandlerCacheInfluences(
     appendUnclassified('handler captures authority outside the finite cache-influence language');
   }
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     // Ambient runtime environment bags are secret-bearing framework-external state even when an
     // author aliases the global before reading `.env`. Treat the whole carrier as influence; the
     // cache proof does not attempt value-sensitive recovery from one execution.
@@ -4867,7 +4865,7 @@ function collectHandlerCacheInfluences(
 type CacheCarrierKind = 'context' | 'db' | 'headers' | 'input' | 'request';
 
 function cacheCarrierKind(
-  expression: ts.Expression,
+  expression: TS.Expression,
   requestNames: ReadonlySet<string>,
   contextNames: ReadonlySet<string>,
   headerNames: ReadonlySet<string>,
@@ -4915,7 +4913,7 @@ function cacheCarrierKind(
   return undefined;
 }
 
-function collectCacheBindingNames(name: ts.BindingName | undefined, target: Set<string>): void {
+function collectCacheBindingNames(name: TS.BindingName | undefined, target: Set<string>): void {
   if (!name) return;
   if (ts.isIdentifier(name)) {
     compilerSetAdd(target, name.text);
@@ -4925,7 +4923,7 @@ function collectCacheBindingNames(name: ts.BindingName | undefined, target: Set<
 }
 
 function collectCacheContextBindings(
-  name: ts.BindingName | undefined,
+  name: TS.BindingName | undefined,
   contextNames: Set<string>,
   requestNames: Set<string>,
   dbNames: Set<string>,
@@ -4950,7 +4948,7 @@ function collectCacheContextBindings(
 }
 
 function collectCacheAliasBinding(
-  name: ts.BindingName,
+  name: TS.BindingName,
   kind: CacheCarrierKind,
   requestNames: Set<string>,
   contextNames: Set<string>,
@@ -4982,13 +4980,13 @@ function compilerSetCount(values: ReadonlySet<string>): number {
 }
 
 function cacheExpressionContainsAuthorityCarrier(
-  expression: ts.Expression,
+  expression: TS.Expression,
   requestNames: ReadonlySet<string>,
   contextNames: ReadonlySet<string>,
   headerNames: ReadonlySet<string>,
 ): boolean {
   let found = false;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (found) return;
     if (
       ts.isIdentifier(node) &&
@@ -5005,7 +5003,7 @@ function cacheExpressionContainsAuthorityCarrier(
   return found;
 }
 
-function isSafeCacheContextCarrierUse(node: ts.Expression): boolean {
+function isSafeCacheContextCarrierUse(node: TS.Expression): boolean {
   const parent = node.parent;
   if (ts.isIdentifier(node) && ts.isPropertyAccessExpression(parent) && parent.name === node) {
     return true;
@@ -5065,9 +5063,9 @@ function compilerArrayIncludes(values: readonly string[], expected: string): boo
 }
 
 function endpointHandlerModels(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  call: ts.CallExpression,
+  call: TS.CallExpression,
 ): MutationHandlerModel[] {
   const owner = endpointOwner(call);
   const root = `endpoint:${owner.value}`;
@@ -5122,10 +5120,10 @@ function endpointHandlerModels(
 }
 
 interface HandlerPropertyEntry {
-  body: ts.ConciseBody;
-  handler: ts.ArrowFunction | ts.FunctionDeclaration | ts.FunctionExpression | ts.MethodDeclaration;
+  body: TS.ConciseBody;
+  handler: TS.ArrowFunction | TS.FunctionDeclaration | TS.FunctionExpression | TS.MethodDeclaration;
   model: MutationHandlerModel;
-  parameters: ts.NodeArray<ts.ParameterDeclaration>;
+  parameters: TS.NodeArray<TS.ParameterDeclaration>;
 }
 
 interface HandlerPropertyInspection {
@@ -5134,14 +5132,14 @@ interface HandlerPropertyInspection {
 }
 
 function inspectHandlerProperty(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  call: ts.CallExpression,
+  call: TS.CallExpression,
   propertyName: string,
   surface: SecurityOperationSurface,
 ): HandlerPropertyInspection {
   const violations: SecurityOperationViolationModel[] = [];
-  const appendViolation = (node: ts.Node, detail: string): void => {
+  const appendViolation = (node: TS.Node, detail: string): void => {
     compilerArrayAppend(
       violations,
       {
@@ -5154,7 +5152,7 @@ function inspectHandlerProperty(
     );
   };
 
-  let optionsArgument: ts.Expression | undefined;
+  let optionsArgument: TS.Expression | undefined;
   const argumentLength = compilerArrayLength(call.arguments, 'Handler factory arguments');
   const optionsIndex = argumentLength >= 2 ? 1 : 0;
   if (optionsIndex < argumentLength) {
@@ -5162,7 +5160,7 @@ function inspectHandlerProperty(
       call.arguments,
       optionsIndex,
       'Handler factory arguments',
-    ) as ts.Expression | undefined;
+    ) as TS.Expression | undefined;
   }
   if (!optionsArgument) {
     appendViolation(call, `${surface} must declare one finite ${propertyName} root`);
@@ -5185,7 +5183,7 @@ function inspectHandlerProperty(
       options.properties,
       index,
       'Handler factory properties',
-    ) as ts.ObjectLiteralElementLike | undefined;
+    ) as TS.ObjectLiteralElementLike | undefined;
     if (!property) throw new TypeError(`Handler factory properties[${index}] must be own data.`);
     if (ts.isSpreadAssignment(property)) {
       appendViolation(
@@ -5223,7 +5221,7 @@ function inspectHandlerProperty(
       continue;
     }
 
-    let initializer: ts.Expression | undefined;
+    let initializer: TS.Expression | undefined;
     if (ts.isPropertyAssignment(property) && propertyNameText(property.name) === propertyName) {
       matchingPropertyCount += 1;
       initializer = unwrapExpression(property.initializer);
@@ -5280,9 +5278,9 @@ function inspectHandlerProperty(
 
 function appendOpaqueHandlerRootModel(
   target: MutationHandlerModel[],
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  call: ts.CallExpression,
+  call: TS.CallExpression,
   root: string,
   violations: readonly SecurityOperationViolationModel[],
   cacheInfluence?: MutationHandlerModel['cacheInfluence'],
@@ -5310,9 +5308,9 @@ function appendOpaqueHandlerRootModel(
 }
 
 function queryLoadHandlerModels(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  call: ts.CallExpression,
+  call: TS.CallExpression,
 ): MutationHandlerModel[] {
   const key = taskKey(sourceFile, call);
   const root = `query:${key}`;
@@ -5362,9 +5360,9 @@ function queryLoadHandlerModels(
 }
 
 function webhookHandlerModels(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  call: ts.CallExpression,
+  call: TS.CallExpression,
   domainBindings: ReadonlyMap<string, string>,
 ): WebhookHandlerModel[] {
   const owner = webhookOwner(sourceFile, call);
@@ -5398,7 +5396,7 @@ function webhookHandlerModels(
       entry.parameters,
       1,
       'Webhook handler parameters',
-    ) as ts.ParameterDeclaration | undefined;
+    ) as TS.ParameterDeclaration | undefined;
     compilerArrayAppend(
       result,
       {
@@ -5462,9 +5460,9 @@ function webhookHandlerModels(
 }
 
 function taskRunHandlerModels(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  call: ts.CallExpression,
+  call: TS.CallExpression,
 ): TaskRunHandlerModel[] {
   const definition = taskDefinitionObject(call);
   const key = taskKey(sourceFile, call);
@@ -5545,23 +5543,23 @@ function taskRunHandlerModels(
   return result;
 }
 
-function taskDefinitionObject(call: ts.CallExpression): ts.ObjectLiteralExpression | null {
+function taskDefinitionObject(call: TS.CallExpression): TS.ObjectLiteralExpression | null {
   const argumentLength = compilerArrayLength(call.arguments, 'Handler factory arguments');
   const definition = callArgument(call, argumentLength >= 2 ? 1 : 0);
   return definition && ts.isObjectLiteralExpression(definition) ? definition : null;
 }
 
-function callArgument(call: ts.CallExpression, index: number): ts.Expression | undefined {
+function callArgument(call: TS.CallExpression, index: number): TS.Expression | undefined {
   const length = compilerArrayLength(call.arguments, 'Handler factory arguments');
   if (index < 0 || index >= length) return undefined;
   const argument = compilerOwnDataValue(call.arguments, index, 'Handler factory arguments') as
-    | ts.Expression
+    | TS.Expression
     | undefined;
   if (!argument) throw new TypeError(`Handler factory arguments[${index}] must be own data.`);
   return argument;
 }
 
-function taskKey(sourceFile: ts.SourceFile, call: ts.CallExpression): string {
+function taskKey(sourceFile: TS.SourceFile, call: TS.CallExpression): string {
   const first = callArgument(call, 0);
   if (first && ts.isStringLiteralLike(first)) return first.text;
 
@@ -5572,7 +5570,7 @@ function taskKey(sourceFile: ts.SourceFile, call: ts.CallExpression): string {
   return sourceFile.fileName;
 }
 
-function mutationOwner(sourceFile: ts.SourceFile, call: ts.CallExpression): HandlerWriteSinkOwner {
+function mutationOwner(sourceFile: TS.SourceFile, call: TS.CallExpression): HandlerWriteSinkOwner {
   const first = callArgument(call, 0);
   const firstValue = first ? unwrapExpression(first) : undefined;
   if (firstValue && ts.isStringLiteralLike(firstValue)) {
@@ -5597,9 +5595,9 @@ function mutationOwner(sourceFile: ts.SourceFile, call: ts.CallExpression): Hand
 }
 
 function mutationDirectDbTargetIdentities(
-  sourceFile: ts.SourceFile,
-  body: ts.ConciseBody,
-  parameters: ts.NodeArray<ts.ParameterDeclaration>,
+  sourceFile: TS.SourceFile,
+  body: TS.ConciseBody,
+  parameters: TS.NodeArray<TS.ParameterDeclaration>,
 ): ReadonlySet<string> {
   const requestParamNames = compilerCreateSet<string>();
   const targets = compilerCreateSet<string>();
@@ -5607,7 +5605,7 @@ function mutationDirectDbTargetIdentities(
   const parameterLength = compilerArrayLength(parameters, 'Mutation handler parameters');
   for (let index = 0; index < parameterLength; index += 1) {
     const parameter = compilerOwnDataValue(parameters, index, 'Mutation handler parameters') as
-      | ts.ParameterDeclaration
+      | TS.ParameterDeclaration
       | undefined;
     if (!parameter) throw new TypeError(`Mutation handler parameters[${index}] must be own data.`);
     collectDirectDbBindingNames(parameter.name, targets);
@@ -5617,7 +5615,7 @@ function mutationDirectDbTargetIdentities(
     }
   }
 
-  const addAlias = (name: ts.BindingName, initializer: ts.Expression | undefined): void => {
+  const addAlias = (name: TS.BindingName, initializer: TS.Expression | undefined): void => {
     if (!initializer) return;
     const target = mutationDirectDbTargetIdentityFromExpression(initializer, targets);
     const unwrappedInitializer = unwrapExpression(initializer);
@@ -5635,7 +5633,7 @@ function mutationDirectDbTargetIdentities(
     collectDirectDbBindingNames(name, targets);
   };
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (ts.isVariableDeclaration(node)) addAlias(node.name, node.initializer);
     ts.forEachChild(node, visit);
   };
@@ -5644,7 +5642,7 @@ function mutationDirectDbTargetIdentities(
   return targets;
 }
 
-function collectDirectDbBindingNames(name: ts.BindingName, targets: Set<string>): void {
+function collectDirectDbBindingNames(name: TS.BindingName, targets: Set<string>): void {
   if (ts.isIdentifier(name)) {
     if (name.text === 'db' || looksLikeDbTargetIdentity(name.text)) {
       compilerSetAdd(targets, name.text);
@@ -5660,7 +5658,7 @@ function collectDirectDbBindingNames(name: ts.BindingName, targets: Set<string>)
       name.elements,
       index,
       'Direct-db object binding elements',
-    ) as ts.BindingElement | undefined;
+    ) as TS.BindingElement | undefined;
     if (!element) {
       throw new TypeError(`Direct-db object binding elements[${index}] must be own data.`);
     }
@@ -5674,7 +5672,7 @@ function collectDirectDbBindingNames(name: ts.BindingName, targets: Set<string>)
   }
 }
 
-function collectBindingIdentifiers(name: ts.BindingName, targets: Set<string>): void {
+function collectBindingIdentifiers(name: TS.BindingName, targets: Set<string>): void {
   if (ts.isIdentifier(name)) {
     compilerSetAdd(targets, name.text);
     return;
@@ -5684,7 +5682,7 @@ function collectBindingIdentifiers(name: ts.BindingName, targets: Set<string>): 
     const elementLength = compilerArrayLength(name.elements, 'Object binding elements');
     for (let index = 0; index < elementLength; index += 1) {
       const element = compilerOwnDataValue(name.elements, index, 'Object binding elements') as
-        | ts.BindingElement
+        | TS.BindingElement
         | undefined;
       if (!element) throw new TypeError(`Object binding elements[${index}] must be own data.`);
       collectBindingIdentifiers(element.name, targets);
@@ -5695,13 +5693,13 @@ function collectBindingIdentifiers(name: ts.BindingName, targets: Set<string>): 
   const elementLength = compilerArrayLength(name.elements, 'Array binding elements');
   for (let index = 0; index < elementLength; index += 1) {
     const element = compilerOwnDataValue(name.elements, index, 'Array binding elements') as
-      | ts.ArrayBindingElement
+      | TS.ArrayBindingElement
       | undefined;
     if (element && ts.isBindingElement(element)) collectBindingIdentifiers(element.name, targets);
   }
 }
 
-function bindingPropertyNameText(name: ts.PropertyName): string | undefined {
+function bindingPropertyNameText(name: TS.PropertyName): string | undefined {
   if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
     return name.text;
   }
@@ -5709,7 +5707,7 @@ function bindingPropertyNameText(name: ts.PropertyName): string | undefined {
 }
 
 function mutationDirectDbTargetIdentityFromExpression(
-  expression: ts.Expression,
+  expression: TS.Expression,
   targets: ReadonlySet<string>,
 ): string | undefined {
   const unwrapped = unwrapExpression(expression);
@@ -5720,7 +5718,7 @@ function mutationDirectDbTargetIdentityFromExpression(
   return undefined;
 }
 
-function expressionTargetIdentity(expression: ts.Expression): string | undefined {
+function expressionTargetIdentity(expression: TS.Expression): string | undefined {
   if (ts.isIdentifier(expression)) return expression.text;
   if (ts.isPropertyAccessExpression(expression)) return propertyAccessPath(expression) ?? undefined;
   const receiver = callExpressionReceiverSegments(expression);
@@ -5752,19 +5750,19 @@ export function handlerWriteSinkUsesManagedAppTransaction(sink: HandlerWriteSink
 }
 
 function markManagedAppMutationWriteSinks(
-  sourceFile: ts.SourceFile,
-  body: ts.ConciseBody,
-  parameters: ts.NodeArray<ts.ParameterDeclaration>,
+  sourceFile: TS.SourceFile,
+  body: TS.ConciseBody,
+  parameters: TS.NodeArray<TS.ParameterDeclaration>,
   sinks: readonly HandlerWriteSinkFact[],
 ): void {
   const secondParameter = compilerOwnDataValue(parameters, 1, 'App mutation handler parameters') as
-    | ts.ParameterDeclaration
+    | TS.ParameterDeclaration
     | undefined;
   if (!secondParameter) return;
 
   const proof = managedAppMutationDbProof(body, parameters, secondParameter);
   const sinkLength = compilerArrayLength(sinks, 'App mutation handler write sinks');
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (ts.isCallExpression(node)) {
       const callee = unwrapExpression(node.expression);
       if (
@@ -5804,16 +5802,16 @@ interface ManagedAppMutationDbProof {
 }
 
 function managedAppMutationDbProof(
-  body: ts.ConciseBody,
-  parameters: ts.NodeArray<ts.ParameterDeclaration>,
-  secondParameter: ts.ParameterDeclaration,
+  body: TS.ConciseBody,
+  parameters: TS.NodeArray<TS.ParameterDeclaration>,
+  secondParameter: TS.ParameterDeclaration,
 ): ManagedAppMutationDbProof {
   const bindingCounts = compilerCreateMap<string, number>();
-  const candidates: ts.VariableDeclaration[] = [];
+  const candidates: TS.VariableDeclaration[] = [];
   const recordName = (name: string): void => {
     compilerMapSet(bindingCounts, name, (compilerMapGet(bindingCounts, name) ?? 0) + 1);
   };
-  const recordBinding = (name: ts.BindingName): void => {
+  const recordBinding = (name: TS.BindingName): void => {
     if (ts.isIdentifier(name)) {
       recordName(name.text);
       return;
@@ -5821,8 +5819,8 @@ function managedAppMutationDbProof(
     const elementLength = compilerArrayLength(name.elements, 'Managed-db binding elements');
     for (let index = 0; index < elementLength; index += 1) {
       const element = compilerOwnDataValue(name.elements, index, 'Managed-db binding elements') as
-        | ts.ArrayBindingElement
-        | ts.BindingElement
+        | TS.ArrayBindingElement
+        | TS.BindingElement
         | undefined;
       if (element && ts.isBindingElement(element)) recordBinding(element.name);
     }
@@ -5830,11 +5828,11 @@ function managedAppMutationDbProof(
   const parameterLength = compilerArrayLength(parameters, 'Managed-db handler parameters');
   for (let index = 0; index < parameterLength; index += 1) {
     const parameter = compilerOwnDataValue(parameters, index, 'Managed-db handler parameters') as
-      | ts.ParameterDeclaration
+      | TS.ParameterDeclaration
       | undefined;
     if (parameter) recordBinding(parameter.name);
   }
-  const collect = (node: ts.Node): void => {
+  const collect = (node: TS.Node): void => {
     if (ts.isVariableDeclaration(node)) {
       recordBinding(node.name);
       if ((node.parent.flags & ts.NodeFlags.Const) !== 0) {
@@ -5847,7 +5845,7 @@ function managedAppMutationDbProof(
           node.parameters,
           index,
           'Nested managed-db parameters',
-        ) as ts.ParameterDeclaration | undefined;
+        ) as TS.ParameterDeclaration | undefined;
         if (parameter) recordBinding(parameter.name);
       }
     } else if (ts.isCatchClause(node) && node.variableDeclaration) {
@@ -5873,7 +5871,7 @@ function managedAppMutationDbProof(
     const candidateLength = compilerArrayLength(candidates, 'Managed-db alias candidates');
     for (let index = 0; index < candidateLength; index += 1) {
       const candidate = compilerOwnDataValue(candidates, index, 'Managed-db alias candidates') as
-        | ts.VariableDeclaration
+        | TS.VariableDeclaration
         | undefined;
       if (!candidate?.initializer) continue;
       if (
@@ -5920,7 +5918,7 @@ function managedAppMutationDbProof(
 }
 
 function collectManagedDbDestructureNames(
-  pattern: ts.ObjectBindingPattern,
+  pattern: TS.ObjectBindingPattern,
   target: Set<string>,
 ): void {
   const elementLength = compilerArrayLength(pattern.elements, 'Managed-db destructure elements');
@@ -5929,7 +5927,7 @@ function collectManagedDbDestructureNames(
       pattern.elements,
       index,
       'Managed-db destructure elements',
-    ) as ts.BindingElement | undefined;
+    ) as TS.BindingElement | undefined;
     if (!element) continue;
     const property = element.propertyName;
     const propertyName =
@@ -5944,7 +5942,7 @@ function collectManagedDbDestructureNames(
 }
 
 function stableManagedBindingNames(
-  body: ts.ConciseBody,
+  body: TS.ConciseBody,
   bindingCounts: ReadonlyMap<string, number>,
   requestCarrierNames: ReadonlySet<string>,
   dbHandleNames: ReadonlySet<string>,
@@ -5960,9 +5958,9 @@ function stableManagedBindingNames(
   return stable;
 }
 
-function managedBindingNameIsMutated(body: ts.ConciseBody, name: string): boolean {
+function managedBindingNameIsMutated(body: TS.ConciseBody, name: string): boolean {
   let mutated = false;
-  const contains = (node: ts.Node): boolean => {
+  const contains = (node: TS.Node): boolean => {
     if (ts.isIdentifier(node) && node.text === name) return true;
     let found = false;
     ts.forEachChild(node, (child) => {
@@ -5970,7 +5968,7 @@ function managedBindingNameIsMutated(body: ts.ConciseBody, name: string): boolea
     });
     return found;
   };
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (mutated) return;
     if (
       ts.isBinaryExpression(node) &&
@@ -6013,7 +6011,7 @@ function managedBindingNameIsMutated(body: ts.ConciseBody, name: string): boolea
 }
 
 function managedAppMutationRequestCarrierIsProven(
-  expression: ts.Expression,
+  expression: TS.Expression,
   requestCarrierNames: ReadonlySet<string>,
   stableBindingNames: ReadonlySet<string>,
 ): boolean {
@@ -6026,7 +6024,7 @@ function managedAppMutationRequestCarrierIsProven(
 }
 
 function managedAppMutationDbExpressionIsProven(
-  expression: ts.Expression,
+  expression: TS.Expression,
   proof: ManagedAppMutationDbProof,
 ): boolean {
   const unwrapped = unwrapExpression(expression);
@@ -6067,7 +6065,7 @@ function isRequestLikeParamName(param: string): boolean {
   return compilerStringEndsWith(compilerStringToLowerCase(param), 'request');
 }
 
-function webhookOwner(sourceFile: ts.SourceFile, call: ts.CallExpression): HandlerWriteSinkOwner {
+function webhookOwner(sourceFile: TS.SourceFile, call: TS.CallExpression): HandlerWriteSinkOwner {
   const first = callArgument(call, 0);
   if (first && ts.isStringLiteralLike(first)) return { kind: 'path', value: first.text };
 
@@ -6080,7 +6078,7 @@ function webhookOwner(sourceFile: ts.SourceFile, call: ts.CallExpression): Handl
   return { kind: 'path', value: 'UNRESOLVED' };
 }
 
-function endpointOwner(call: ts.CallExpression): HandlerWriteSinkOwner {
+function endpointOwner(call: TS.CallExpression): HandlerWriteSinkOwner {
   const first = callArgument(call, 0);
   if (first && ts.isStringLiteralLike(first)) return { kind: 'path', value: first.text };
 
@@ -6088,11 +6086,11 @@ function endpointOwner(call: ts.CallExpression): HandlerWriteSinkOwner {
 }
 
 function webhookDeclaredWriteKeys(
-  sourceFile: ts.SourceFile,
-  definition: ts.ObjectLiteralExpression,
+  sourceFile: TS.SourceFile,
+  definition: TS.ObjectLiteralExpression,
   domainBindings: ReadonlyMap<string, string>,
 ): string[] {
-  let writes: ts.PropertyAssignment | undefined;
+  let writes: TS.PropertyAssignment | undefined;
   const propertyLength = compilerArrayLength(
     definition.properties,
     'Webhook definition properties',
@@ -6102,7 +6100,7 @@ function webhookDeclaredWriteKeys(
       definition.properties,
       index,
       'Webhook definition properties',
-    ) as ts.ObjectLiteralElementLike | undefined;
+    ) as TS.ObjectLiteralElementLike | undefined;
     if (!property) throw new TypeError(`Webhook definition properties[${index}] must be own data.`);
     if (ts.isPropertyAssignment(property) && propertyNameText(property.name) === 'writes') {
       writes = property;
@@ -6118,8 +6116,8 @@ function webhookDeclaredWriteKeys(
   const elementLength = compilerArrayLength(initializer.elements, 'Webhook writes elements');
   for (let index = 0; index < elementLength; index += 1) {
     const element = compilerOwnDataValue(initializer.elements, index, 'Webhook writes elements') as
-      | ts.Expression
-      | ts.SpreadElement
+      | TS.Expression
+      | TS.SpreadElement
       | undefined;
     if (!element) throw new TypeError(`Webhook writes elements[${index}] must be own data.`);
     const expression = ts.isSpreadElement(element) ? element.expression : element;
@@ -6133,8 +6131,8 @@ function webhookDeclaredWriteKeys(
 }
 
 function webhookTransactionRawDriverEscapeFacts(
-  sourceFile: ts.SourceFile,
-  body: ts.ConciseBody,
+  sourceFile: TS.SourceFile,
+  body: TS.ConciseBody,
   options: {
     readonly contextParamName: string | undefined;
     readonly owner: HandlerWriteSinkOwner;
@@ -6146,7 +6144,7 @@ function webhookTransactionRawDriverEscapeFacts(
   compilerSetAdd(txTargets, `${options.contextParamName}.tx`);
   const facts = compilerCreateMap<string, HandlerWriteSinkFact>();
 
-  const addTxAlias = (name: ts.BindingName, initializer: ts.Expression | undefined): void => {
+  const addTxAlias = (name: TS.BindingName, initializer: TS.Expression | undefined): void => {
     if (!initializer) return;
     const identity = expressionTargetIdentity(unwrapExpression(initializer));
     if (identity !== `${options.contextParamName}.tx`) return;
@@ -6159,7 +6157,7 @@ function webhookTransactionRawDriverEscapeFacts(
     collectBindingIdentifiers(name, txTargets);
   };
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (ts.isVariableDeclaration(node)) addTxAlias(node.name, node.initializer);
 
     if (ts.isPropertyAccessExpression(node)) {
@@ -6192,8 +6190,8 @@ function webhookTransactionRawDriverEscapeFacts(
 }
 
 function webhookRecordChangeFacts(
-  sourceFile: ts.SourceFile,
-  body: ts.ConciseBody,
+  sourceFile: TS.SourceFile,
+  body: TS.ConciseBody,
   options: {
     readonly contextParamName: string | undefined;
     readonly declaredWriteKeys: readonly string[];
@@ -6212,7 +6210,7 @@ function webhookRecordChangeFacts(
   }
 
   const facts: WebhookRecordChangeFact[] = [];
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (ts.isCallExpression(node)) {
       const fact = webhookRecordChangeFact(sourceFile, node, options);
       if (fact) compilerArrayAppend(facts, fact, 'Webhook record-change facts');
@@ -6260,8 +6258,8 @@ function sortWebhookRecordChangeFacts(
 }
 
 function webhookRecordChangeFact(
-  sourceFile: ts.SourceFile,
-  call: ts.CallExpression,
+  sourceFile: TS.SourceFile,
+  call: TS.CallExpression,
   options: {
     readonly contextParamName: string | undefined;
     readonly declaredWriteKeys: readonly string[];
@@ -6310,7 +6308,7 @@ function webhookRecordChangeFact(
   };
 }
 
-function webhookRecordChangeParamNames(name: ts.BindingName | undefined): string[] {
+function webhookRecordChangeParamNames(name: TS.BindingName | undefined): string[] {
   if (!name || !ts.isObjectBindingPattern(name)) return [];
 
   const result: string[] = [];
@@ -6320,7 +6318,7 @@ function webhookRecordChangeParamNames(name: ts.BindingName | undefined): string
       name.elements,
       index,
       'Webhook context binding elements',
-    ) as ts.BindingElement | undefined;
+    ) as TS.BindingElement | undefined;
     if (!element)
       throw new TypeError(`Webhook context binding elements[${index}] must be own data.`);
     const propertyName = element.propertyName;
@@ -6339,8 +6337,8 @@ function webhookRecordChangeParamNames(name: ts.BindingName | undefined): string
 }
 
 function domainKeyFromExpression(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
   domainBindings: ReadonlyMap<string, string>,
 ): string | undefined {
   const unwrapped = unwrapExpression(expression);
@@ -6356,10 +6354,10 @@ function domainKeyFromExpression(
 }
 
 function functionBodyModel(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  body: ts.ConciseBody,
-  parameters: ts.NodeArray<ts.ParameterDeclaration>,
+  body: TS.ConciseBody,
+  parameters: TS.NodeArray<TS.ParameterDeclaration>,
 ): MutationHandlerModel {
   const paramNames: (string | undefined)[] = [];
   const params: string[] = [];
@@ -6367,7 +6365,7 @@ function functionBodyModel(
   const parameterLength = compilerArrayLength(parameters, 'Handler parameters');
   for (let index = 0; index < parameterLength; index += 1) {
     const parameter = compilerOwnDataValue(parameters, index, 'Handler parameters') as
-      | ts.ParameterDeclaration
+      | TS.ParameterDeclaration
       | undefined;
     if (!parameter) throw new TypeError(`Handler parameters[${index}] must be own data.`);
     compilerArrayAppend(paramNames, parameterName(parameter.name), 'Handler parameter names');
@@ -6394,13 +6392,13 @@ function functionBodyModel(
 }
 
 function serverSecurityOperationModel(
-  sourceFile: ts.SourceFile,
-  body: ts.ConciseBody,
+  sourceFile: TS.SourceFile,
+  body: TS.ConciseBody,
   surface: SecurityOperationSurface,
-  parameters: readonly ts.ParameterDeclaration[],
+  parameters: readonly TS.ParameterDeclaration[],
   root: string,
   handler: HandlerPropertyEntry['handler'],
-  factoryCall: ts.CallExpression,
+  factoryCall: TS.CallExpression,
 ): Pick<
   MutationHandlerModel,
   'securityOperations' | 'securityOperationViolations' | 'securitySemanticRoot'
@@ -6449,7 +6447,7 @@ function serverSecurityOperationModel(
 }
 
 function staticStringObjectProperty(
-  object: ts.ObjectLiteralExpression,
+  object: TS.ObjectLiteralExpression,
   propertyName: string,
 ): string | undefined {
   const initializer = componentPropertyInitializer(object, propertyName);
@@ -6463,9 +6461,9 @@ interface HandlerWriteSinkFactOptions {
 }
 
 function handlerWriteSinkFacts(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  body: ts.ConciseBody,
+  body: TS.ConciseBody,
   options: HandlerWriteSinkFactOptions,
 ): HandlerWriteSinkFact[] {
   const facts = compilerCreateMap<string, HandlerWriteSinkFact>();
@@ -6495,7 +6493,7 @@ function handlerWriteSinkFacts(
     compilerMapSet(facts, handlerWriteSinkFactKey(fact), fact);
   }
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (ts.isCallExpression(node)) {
       const unresolved = unresolvedHandlerWriteSinkFact(sourceFile, source, node, options);
       if (unresolved) compilerMapSet(facts, handlerWriteSinkFactKey(unresolved), unresolved);
@@ -6579,9 +6577,9 @@ function resolvedHandlerWriteSinkFact(
 }
 
 function unresolvedHandlerWriteSinkFact(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  node: ts.CallExpression,
+  node: TS.CallExpression,
   options: HandlerWriteSinkFactOptions,
 ): HandlerWriteSinkFact | null {
   const callee = unwrapParentheses(node.expression);
@@ -6640,15 +6638,15 @@ function handlerWriteSinkFactKey(fact: HandlerWriteSinkFact): string {
 }
 
 function taskCompositionEdges(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  body: ts.ConciseBody,
+  body: TS.ConciseBody,
   ctxParam: string | undefined,
   method: 'runMutation' | 'runQuery' | 'schedule',
 ): TaskCompositionEdgeModel[] {
   const edges: TaskCompositionEdgeModel[] = [];
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
       const receiver = node.expression.expression;
       const receiverText = compilerStringTrim(
@@ -6705,9 +6703,9 @@ function insertSortedString(values: string[], value: string): void {
 }
 
 function taskCompositionTarget(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  expression: ts.Expression | undefined,
+  expression: TS.Expression | undefined,
 ): string | undefined {
   if (!expression) return undefined;
   if (ts.isStringLiteralLike(expression)) return expression.text;
@@ -6720,11 +6718,11 @@ function taskCompositionTarget(
   );
 }
 
-function parameterName(name: ts.BindingName): string | undefined {
+function parameterName(name: TS.BindingName): string | undefined {
   if (ts.isIdentifier(name)) return name.text;
   if (!ts.isObjectBindingPattern(name)) return undefined;
   const element = compilerOwnDataValue(name.elements, 0, 'Parameter binding elements') as
-    | ts.BindingElement
+    | TS.BindingElement
     | undefined;
   if (
     element &&
@@ -6738,11 +6736,11 @@ function parameterName(name: ts.BindingName): string | undefined {
 }
 
 export function propertyAccessPathModels(
-  sourceFile: ts.SourceFile,
-  root: ts.Node,
+  sourceFile: TS.SourceFile,
+  root: TS.Node,
   excludedSpans: readonly SourceSpan[] = [],
   classifyElementParamEligibility = false,
-  handlerRoot: ts.Node = root,
+  handlerRoot: TS.Node = root,
   securityOperations: readonly BrowserSecurityOperationModel[] = [],
 ): PropertyAccessPathModel[] {
   const paths: PropertyAccessPathModel[] = [];
@@ -6750,7 +6748,7 @@ export function propertyAccessPathModels(
     ? handlerElementParamClassificationContext(sourceFile, handlerRoot, securityOperations)
     : undefined;
 
-  const pushElementAccessRoot = (node: ts.Expression, elementParamEligible: boolean): void => {
+  const pushElementAccessRoot = (node: TS.Expression, elementParamEligible: boolean): void => {
     const rootPath = elementAccessRootPath(node);
     if (!rootPath) return;
     const segments = compilerStringSplit(rootPath, '.');
@@ -6776,7 +6774,7 @@ export function propertyAccessPathModels(
     );
   };
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (node !== root && nodeIsWithinSourceSpans(sourceFile, node, excludedSpans)) return;
     const elementParamEligible =
       elementParamContext === undefined ||
@@ -6823,14 +6821,14 @@ export function propertyAccessPathModels(
 
 interface HandlerElementParamClassificationContext {
   readonly bindings: readonly HandlerLocalBinding[];
-  readonly root: ts.Node;
+  readonly root: TS.Node;
   readonly securityOperations: readonly BrowserSecurityOperationModel[];
-  readonly sourceFile: ts.SourceFile;
+  readonly sourceFile: TS.SourceFile;
 }
 
 function handlerElementParamClassificationContext(
-  sourceFile: ts.SourceFile,
-  root: ts.Node,
+  sourceFile: TS.SourceFile,
+  root: TS.Node,
   securityOperations: readonly BrowserSecurityOperationModel[],
 ): HandlerElementParamClassificationContext {
   return {
@@ -6847,7 +6845,7 @@ function handlerElementParamClassificationContext(
  * language until it reaches a reviewed sink. Everything not named here is closed by default.
  */
 function handlerElementParamUseIsEligible(
-  node: ts.Node,
+  node: TS.Node,
   context: HandlerElementParamClassificationContext,
 ): boolean {
   if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
@@ -6965,14 +6963,14 @@ function handlerElementParamUseIsEligible(
 }
 
 function handlerReferenceElementParamUseIsEligible(
-  node: ts.Identifier,
+  node: TS.Identifier,
   context: HandlerElementParamClassificationContext,
 ): boolean {
   if (handlerIdentifierIsMemberReceiver(node)) return false;
   return handlerElementParamUseIsEligible(node, context);
 }
 
-function handlerTransparentExpressionContains(parent: ts.Node, child: ts.Node): boolean {
+function handlerTransparentExpressionContains(parent: TS.Node, child: TS.Node): boolean {
   return (
     (ts.isParenthesizedExpression(parent) ||
       ts.isAsExpression(parent) ||
@@ -6984,8 +6982,8 @@ function handlerTransparentExpressionContains(parent: ts.Node, child: ts.Node): 
   );
 }
 
-function handlerIdentifierIsMemberReceiver(node: ts.Identifier): boolean {
-  let current: ts.Node = node;
+function handlerIdentifierIsMemberReceiver(node: TS.Identifier): boolean {
+  let current: TS.Node = node;
   while (handlerTransparentExpressionContains(current.parent, current)) current = current.parent;
   const parent = current.parent;
   return (
@@ -6994,9 +6992,9 @@ function handlerIdentifierIsMemberReceiver(node: ts.Identifier): boolean {
   );
 }
 
-function handlerElementParamAccessIsUnsafe(node: ts.Node): boolean {
+function handlerElementParamAccessIsUnsafe(node: TS.Node): boolean {
   if (!ts.isPropertyAccessExpression(node) && !ts.isElementAccessExpression(node)) return false;
-  let current: ts.Expression = node;
+  let current: TS.Expression = node;
   while (ts.isPropertyAccessExpression(current)) {
     if (handlerElementParamSegmentIsUnsafe(current.name.text)) return true;
     current = unwrapExpression(current.expression);
@@ -7009,11 +7007,11 @@ function handlerElementParamSegmentIsUnsafe(segment: string): boolean {
   return segment === '__proto__' || segment === 'constructor' || segment === 'prototype';
 }
 
-function handlerIsAssignmentOperator(kind: ts.SyntaxKind): boolean {
+function handlerIsAssignmentOperator(kind: TS.SyntaxKind): boolean {
   return kind >= ts.SyntaxKind.FirstAssignment && kind <= ts.SyntaxKind.LastAssignment;
 }
 
-function handlerIsScalarBinaryOperator(kind: ts.SyntaxKind): boolean {
+function handlerIsScalarBinaryOperator(kind: TS.SyntaxKind): boolean {
   return (
     isEqualityOperator(kind) ||
     isOrderingOperator(kind) ||
@@ -7036,7 +7034,7 @@ function handlerIsScalarBinaryOperator(kind: ts.SyntaxKind): boolean {
 }
 
 function handlerAssignmentTargetIsReviewedState(
-  node: ts.Expression,
+  node: TS.Expression,
   context: HandlerElementParamClassificationContext,
 ): boolean {
   const current = unwrapExpression(node);
@@ -7066,7 +7064,7 @@ function handlerAssignmentTargetIsReviewedState(
   return false;
 }
 
-function handlerCallHasDirectArgument(call: ts.CallExpression, node: ts.Node): boolean {
+function handlerCallHasDirectArgument(call: TS.CallExpression, node: TS.Node): boolean {
   const argumentsSnapshot = compilerSnapshotDenseArray(
     call.arguments,
     'Handler scalar call arguments',
@@ -7078,7 +7076,7 @@ function handlerCallHasDirectArgument(call: ts.CallExpression, node: ts.Node): b
 }
 
 function handlerCallRequiresScalarCapture(
-  call: ts.CallExpression,
+  call: TS.CallExpression,
   context: HandlerElementParamClassificationContext,
 ): boolean {
   const callee = unwrapExpression(call.expression);
@@ -7104,7 +7102,7 @@ function handlerCallRequiresScalarCapture(
   );
 }
 
-function handlerCallIsPureScalar(sourceFile: ts.SourceFile, call: ts.CallExpression): boolean {
+function handlerCallIsPureScalar(sourceFile: TS.SourceFile, call: TS.CallExpression): boolean {
   const callee = unwrapExpression(call.expression);
   if (ts.isIdentifier(callee)) {
     return (
@@ -7142,8 +7140,8 @@ function handlerCallIsPureScalar(sourceFile: ts.SourceFile, call: ts.CallExpress
 }
 
 function handlerElementParamUnsafeRoots(
-  sourceFile: ts.SourceFile,
-  root: ts.Node,
+  sourceFile: TS.SourceFile,
+  root: TS.Node,
   excludedSpans: readonly SourceSpan[],
   securityOperations: readonly BrowserSecurityOperationModel[],
 ): string[] {
@@ -7162,7 +7160,7 @@ function handlerElementParamUnsafeRoots(
     compilerSetAdd(eligible ? safe : unsafe, name);
   };
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (node !== root && nodeIsWithinSourceSpans(sourceFile, node, excludedSpans)) return;
     if (
       (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) &&
@@ -7215,7 +7213,7 @@ function handlerElementParamUnsafeRoots(
   return result;
 }
 
-function handlerElementParamRootIdentifier(node: ts.Expression): ts.Identifier | undefined {
+function handlerElementParamRootIdentifier(node: TS.Expression): TS.Identifier | undefined {
   let current = unwrapExpression(node);
   while (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current)) {
     current = unwrapExpression(current.expression);
@@ -7224,8 +7222,8 @@ function handlerElementParamRootIdentifier(node: ts.Expression): ts.Identifier |
 }
 
 function nodeIsWithinSourceSpans(
-  sourceFile: ts.SourceFile,
-  node: ts.Node,
+  sourceFile: TS.SourceFile,
+  node: TS.Node,
   spans: readonly SourceSpan[],
 ): boolean {
   const start = node.getStart(sourceFile);
@@ -7243,7 +7241,7 @@ function nodeIsWithinSourceSpans(
 // SPEC §4.8/§4.9 (A1): a node is the receiver of an outer access (`X.foo` / `X[i]`) when its
 // parent is a property/element access reading through it. The outermost access of a chain emits
 // the modeled path, so inner receivers are skipped to avoid duplicate roots.
-function isReceiverOfOuterAccess(node: ts.Node): boolean {
+function isReceiverOfOuterAccess(node: TS.Node): boolean {
   const parent = node.parent;
   return (
     (ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent)) &&
@@ -7252,8 +7250,8 @@ function isReceiverOfOuterAccess(node: ts.Node): boolean {
 }
 
 function propertyAccessInferredType(
-  sourceFile: ts.SourceFile,
-  node: ts.PropertyAccessExpression,
+  sourceFile: TS.SourceFile,
+  node: TS.PropertyAccessExpression,
 ): { inferredType: 'boolean' | 'number' } | {} {
   const inferredType = expressionUsageType(sourceFile, node);
   if (inferredType) return { inferredType };
@@ -7262,15 +7260,15 @@ function propertyAccessInferredType(
 }
 
 export function expressionUsageType(
-  sourceFile: ts.SourceFile,
-  node: ts.Node,
+  sourceFile: TS.SourceFile,
+  node: TS.Node,
 ): 'boolean' | 'number' | undefined {
   if (isBooleanUsage(sourceFile, node)) return 'boolean';
   if (isNumberUsage(sourceFile, node)) return 'number';
   return undefined;
 }
 
-function isBooleanUsage(sourceFile: ts.SourceFile, node: ts.Node): boolean {
+function isBooleanUsage(sourceFile: TS.SourceFile, node: TS.Node): boolean {
   const parent = node.parent;
 
   if (ts.isPrefixUnaryExpression(parent) && parent.operator === ts.SyntaxKind.ExclamationToken) {
@@ -7298,7 +7296,7 @@ function isBooleanUsage(sourceFile: ts.SourceFile, node: ts.Node): boolean {
   );
 }
 
-function isNumberUsage(sourceFile: ts.SourceFile, node: ts.Node): boolean {
+function isNumberUsage(sourceFile: TS.SourceFile, node: TS.Node): boolean {
   const parent = node.parent;
   if (!ts.isBinaryExpression(parent)) return false;
 
@@ -7317,7 +7315,7 @@ function isNumberUsage(sourceFile: ts.SourceFile, node: ts.Node): boolean {
   );
 }
 
-function isEqualityOperator(kind: ts.SyntaxKind): boolean {
+function isEqualityOperator(kind: TS.SyntaxKind): boolean {
   return (
     kind === ts.SyntaxKind.EqualsEqualsEqualsToken ||
     kind === ts.SyntaxKind.ExclamationEqualsEqualsToken ||
@@ -7326,7 +7324,7 @@ function isEqualityOperator(kind: ts.SyntaxKind): boolean {
   );
 }
 
-function isOrderingOperator(kind: ts.SyntaxKind): boolean {
+function isOrderingOperator(kind: TS.SyntaxKind): boolean {
   return (
     kind === ts.SyntaxKind.LessThanToken ||
     kind === ts.SyntaxKind.LessThanEqualsToken ||
@@ -7335,7 +7333,7 @@ function isOrderingOperator(kind: ts.SyntaxKind): boolean {
   );
 }
 
-function isArithmeticOperator(kind: ts.SyntaxKind): boolean {
+function isArithmeticOperator(kind: TS.SyntaxKind): boolean {
   return (
     kind === ts.SyntaxKind.MinusToken ||
     kind === ts.SyntaxKind.AsteriskToken ||
@@ -7344,7 +7342,7 @@ function isArithmeticOperator(kind: ts.SyntaxKind): boolean {
   );
 }
 
-function isArithmeticAssignmentOperator(kind: ts.SyntaxKind): boolean {
+function isArithmeticAssignmentOperator(kind: TS.SyntaxKind): boolean {
   return (
     kind === ts.SyntaxKind.PlusEqualsToken ||
     kind === ts.SyntaxKind.MinusEqualsToken ||
@@ -7354,18 +7352,18 @@ function isArithmeticAssignmentOperator(kind: ts.SyntaxKind): boolean {
   );
 }
 
-function isBooleanLiteral(sourceFile: ts.SourceFile, node: ts.Node): boolean {
+function isBooleanLiteral(sourceFile: TS.SourceFile, node: TS.Node): boolean {
   const text = node.getText(sourceFile);
   return text === 'true' || text === 'false';
 }
 
-function isNumericLiteral(sourceFile: ts.SourceFile, node: ts.Node): boolean {
+function isNumericLiteral(sourceFile: TS.SourceFile, node: TS.Node): boolean {
   return compilerRegExpTest(/^-?\d(?:\d|\.)*$/, node.getText(sourceFile));
 }
 
 function staticConstructorTypeEntry(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): { staticConstructorType: NonNullable<ObjectLiteralEntry['staticConstructorType']> } | {} {
   if (!ts.isIdentifier(expression)) return {};
   // Component prop constructor shorthand uses platform globals. Local aliases named String/Number/
@@ -7383,9 +7381,9 @@ function staticConstructorTypeEntry(
 }
 
 function objectLiteralEntries(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  expression: ts.ObjectLiteralExpression,
+  expression: TS.ObjectLiteralExpression,
   staticStringValues: ReadonlyMap<string, string> = compilerCreateMap<string, string>(),
 ): ObjectLiteralEntry[] {
   const result: ObjectLiteralEntry[] = [];
@@ -7395,7 +7393,7 @@ function objectLiteralEntries(
       expression.properties,
       index,
       'Object literal properties',
-    ) as ts.ObjectLiteralElementLike | undefined;
+    ) as TS.ObjectLiteralElementLike | undefined;
     if (!property) throw new TypeError(`Object literal properties[${index}] must be own data.`);
     if (ts.isPropertyAssignment(property)) {
       const key = propertyNameText(property.name, { staticStringValues });
@@ -7469,9 +7467,9 @@ function objectLiteralEntries(
  * also stay on the runtime path rather than being invented as an HTML attribute.
  */
 function completeJsxSpreadObjectLiteralEntries(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  expression: ts.ObjectLiteralExpression,
+  expression: TS.ObjectLiteralExpression,
   staticStringValues: ReadonlyMap<string, string> = compilerCreateMap<string, string>(),
 ): ObjectLiteralEntry[] | undefined {
   const propertyLength = compilerArrayLength(expression.properties, 'JSX spread object properties');
@@ -7480,7 +7478,7 @@ function completeJsxSpreadObjectLiteralEntries(
       expression.properties,
       index,
       'JSX spread object properties',
-    ) as ts.ObjectLiteralElementLike | undefined;
+    ) as TS.ObjectLiteralElementLike | undefined;
     if (!property) throw new TypeError(`JSX spread object properties[${index}] must be own data.`);
     if (ts.isShorthandPropertyAssignment(property)) continue;
     if (!ts.isPropertyAssignment(property)) return undefined;
@@ -7492,17 +7490,17 @@ function completeJsxSpreadObjectLiteralEntries(
 }
 
 function objectLiteralEntryPropertyAccesses(
-  sourceFile: ts.SourceFile,
-  initializer: ts.Expression,
+  sourceFile: TS.SourceFile,
+  initializer: TS.Expression,
 ): { valuePropertyAccesses: readonly PropertyAccessPathModel[] } | {} {
   const valuePropertyAccesses = propertyAccessPathModels(sourceFile, initializer);
   return valuePropertyAccesses.length > 0 ? { valuePropertyAccesses } : {};
 }
 
 function jsxElementModel(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  node: ts.JsxElement | ts.JsxSelfClosingElement,
+  node: TS.JsxElement | TS.JsxSelfClosingElement,
   moduleScopeObjectEntries: ReadonlyMap<string, readonly ObjectLiteralEntry[]>,
   moduleScopeMutationFormControlNames: ReadonlyMap<string, readonly string[]>,
   moduleScopeStaticStringBindings: ReadonlyMap<string, ModuleScopeStaticStringBinding>,
@@ -7561,9 +7559,9 @@ function jsxElementModel(
 }
 
 function jsxAttributeModels(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  openingElement: ts.JsxOpeningElement | ts.JsxSelfClosingElement,
+  openingElement: TS.JsxOpeningElement | TS.JsxSelfClosingElement,
   unreviewedComponentTag: boolean,
 ): JsxElementModel['attributes'][number][] {
   const result: JsxElementModel['attributes'][number][] = [];
@@ -7571,8 +7569,8 @@ function jsxAttributeModels(
   const propertyLength = compilerArrayLength(properties, 'JSX attributes');
   for (let index = 0; index < propertyLength; index += 1) {
     const property = compilerOwnDataValue(properties, index, 'JSX attributes') as
-      | ts.JsxAttribute
-      | ts.JsxSpreadAttribute
+      | TS.JsxAttribute
+      | TS.JsxSpreadAttribute
       | undefined;
     if (!property) throw new TypeError(`JSX attributes[${index}] must be own data.`);
     if (!ts.isJsxAttribute(property)) continue;
@@ -7602,7 +7600,7 @@ function jsxAttributeModels(
   return result;
 }
 
-function jsxTagIsComponent(tagName: ts.JsxTagNameExpression, tag: string): boolean {
+function jsxTagIsComponent(tagName: TS.JsxTagNameExpression, tag: string): boolean {
   // TypeScript's JSX runtime treats namespaced and dashed names as intrinsic strings. A plain
   // identifier is intrinsic only when it starts with ASCII lowercase; `_`, `$`, and every
   // non-ASCII identifier are lexical component references even when they are not PascalCase.
@@ -7619,8 +7617,8 @@ function jsxTagIsComponent(tagName: ts.JsxTagNameExpression, tag: string): boole
  * The decision is parser-owned and import-identity based so post-parse phases consume only facts.
  */
 function jsxTagHasReviewedKovoUiEventBoundary(
-  sourceFile: ts.SourceFile,
-  tagName: ts.JsxTagNameExpression,
+  sourceFile: TS.SourceFile,
+  tagName: TS.JsxTagNameExpression,
   tag: string,
   namedImports: readonly NamedImportModel[],
 ): boolean {
@@ -7657,8 +7655,8 @@ function jsxTagHasReviewedKovoUiEventBoundary(
  * pinned to this source snapshot.
  */
 function jsxTagIsReviewedMutationSubmitter(
-  sourceFile: ts.SourceFile,
-  tagName: ts.JsxTagNameExpression,
+  sourceFile: TS.SourceFile,
+  tagName: TS.JsxTagNameExpression,
 ): boolean {
   if (!ts.isIdentifier(tagName)) return false;
   const binding = reviewedMutationSubmitterImportBinding(sourceFile, tagName.text);
@@ -7670,10 +7668,10 @@ function jsxTagIsReviewedMutationSubmitter(
 }
 
 function reviewedMutationSubmitterImportBinding(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   localName: string,
-): ts.Identifier | null {
-  let binding: ts.Identifier | null = null;
+): TS.Identifier | null {
+  let binding: TS.Identifier | null = null;
   const statements = compilerSnapshotDenseArray(
     sourceFile.statements,
     'Reviewed mutation submitter module statements',
@@ -7721,7 +7719,7 @@ function reviewedMutationSubmitterImportBinding(
 }
 
 function moduleStatementDeclaresReviewedMutationSubmitterName(
-  statement: ts.Statement,
+  statement: TS.Statement,
   localName: string,
 ): boolean {
   if (ts.isVariableStatement(statement)) {
@@ -7748,7 +7746,7 @@ function moduleStatementDeclaresReviewedMutationSubmitterName(
 }
 
 function bindingNameContainsReviewedMutationSubmitterName(
-  bindingName: ts.BindingName,
+  bindingName: TS.BindingName,
   localName: string,
 ): boolean {
   if (ts.isIdentifier(bindingName)) return bindingName.text === localName;
@@ -7769,11 +7767,11 @@ function bindingNameContainsReviewedMutationSubmitterName(
 }
 
 function reviewedMutationSubmitterBindingHasVisibleMutation(
-  sourceFile: ts.SourceFile,
-  binding: ts.Identifier,
+  sourceFile: TS.SourceFile,
+  binding: TS.Identifier,
 ): boolean {
   let mutated = false;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (mutated) return;
     if (
       ts.isBinaryExpression(node) &&
@@ -7814,9 +7812,9 @@ function reviewedMutationSubmitterBindingHasVisibleMutation(
 }
 
 function reviewedMutationSubmitterAssignmentTargetMutatesBinding(
-  target: ts.Expression,
-  sourceFile: ts.SourceFile,
-  binding: ts.Identifier,
+  target: TS.Expression,
+  sourceFile: TS.SourceFile,
+  binding: TS.Identifier,
 ): boolean {
   const expression = unwrapExpression(target, { await: false });
   if (reviewedMutationSubmitterExpressionRootsAtBinding(expression, sourceFile, binding)) {
@@ -7880,9 +7878,9 @@ function reviewedMutationSubmitterAssignmentTargetMutatesBinding(
 }
 
 function reviewedMutationSubmitterExpressionRootsAtBinding(
-  expression: ts.Expression,
-  sourceFile: ts.SourceFile,
-  binding: ts.Identifier,
+  expression: TS.Expression,
+  sourceFile: TS.SourceFile,
+  binding: TS.Identifier,
 ): boolean {
   const current = unwrapExpression(expression, { await: false });
   if (ts.isIdentifier(current)) {
@@ -7899,9 +7897,9 @@ function reviewedMutationSubmitterExpressionRootsAtBinding(
 }
 
 function reviewedMutationSubmitterIdentifierIsBinding(
-  identifier: ts.Identifier,
-  sourceFile: ts.SourceFile,
-  binding: ts.Identifier,
+  identifier: TS.Identifier,
+  sourceFile: TS.SourceFile,
+  binding: TS.Identifier,
 ): boolean {
   return (
     identifier.text === binding.text &&
@@ -7910,9 +7908,9 @@ function reviewedMutationSubmitterIdentifierIsBinding(
 }
 
 function reviewedMutationSubmitterKnownMutatorTargetsBinding(
-  call: ts.CallExpression,
-  sourceFile: ts.SourceFile,
-  binding: ts.Identifier,
+  call: TS.CallExpression,
+  sourceFile: TS.SourceFile,
+  binding: TS.Identifier,
 ): boolean {
   const target = call.arguments[0];
   if (!target || !reviewedMutationSubmitterExpressionRootsAtBinding(target, sourceFile, binding)) {
@@ -7951,9 +7949,9 @@ function reviewedMutationSubmitterKnownMutatorTargetsBinding(
 }
 
 function jsxSpreadAttributeModels(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  openingElement: ts.JsxOpeningElement | ts.JsxSelfClosingElement,
+  openingElement: TS.JsxOpeningElement | TS.JsxSelfClosingElement,
   moduleScopeObjectEntries: ReadonlyMap<string, readonly ObjectLiteralEntry[]>,
   moduleScopeMutationFormControlNames: ReadonlyMap<string, readonly string[]>,
   moduleScopeStaticStringBindings: ReadonlyMap<string, ModuleScopeStaticStringBinding>,
@@ -7965,8 +7963,8 @@ function jsxSpreadAttributeModels(
   const propertyLength = compilerArrayLength(properties, 'JSX spread attributes');
   for (let index = 0; index < propertyLength; index += 1) {
     const property = compilerOwnDataValue(properties, index, 'JSX spread attributes') as
-      | ts.JsxAttribute
-      | ts.JsxSpreadAttribute
+      | TS.JsxAttribute
+      | TS.JsxSpreadAttribute
       | undefined;
     if (!property) throw new TypeError(`JSX spread attributes[${index}] must be own data.`);
     if (!ts.isJsxSpreadAttribute(property)) continue;
@@ -8073,8 +8071,8 @@ function jsxSpreadAttributeModels(
  * keeps the whole fact unknown so the emitted runtime sink remains authoritative.
  */
 function completeStaticJsxWireAttributeEntries(
-  sourceFile: ts.SourceFile,
-  expression: ts.ObjectLiteralExpression,
+  sourceFile: TS.SourceFile,
+  expression: TS.ObjectLiteralExpression,
   moduleScopeStaticStringBindings: ReadonlyMap<string, ModuleScopeStaticStringBinding>,
 ): StaticJsxWireAttributeEntry[] | undefined {
   const entries: StaticJsxWireAttributeEntry[] = [];
@@ -8085,7 +8083,7 @@ function completeStaticJsxWireAttributeEntries(
       properties,
       index,
       'Static JSX wire spread properties',
-    ) as ts.ObjectLiteralElementLike | undefined;
+    ) as TS.ObjectLiteralElementLike | undefined;
     if (!property) {
       throw new TypeError(`Static JSX wire spread properties[${index}] must be own data.`);
     }
@@ -8131,8 +8129,8 @@ function completeStaticJsxWireAttributeEntries(
 }
 
 function staticJsxWireAttributeValue(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): StaticJsxWireAttributeValue {
   const unwrapped = unwrapExpression(expression);
   if (
@@ -8147,8 +8145,8 @@ function staticJsxWireAttributeValue(
 }
 
 function staticJsxWireSpreadHasNoEnumerableKeys(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): boolean {
   return (
     expression.kind === ts.SyntaxKind.NullKeyword ||
@@ -8160,8 +8158,8 @@ function staticJsxWireSpreadHasNoEnumerableKeys(
 }
 
 function staticJsxWireAttributeKey(
-  sourceFile: ts.SourceFile,
-  name: ts.PropertyName,
+  sourceFile: TS.SourceFile,
+  name: TS.PropertyName,
   moduleScopeStaticStringBindings: ReadonlyMap<string, ModuleScopeStaticStringBinding>,
 ): string | null {
   if (!ts.isComputedPropertyName(name) || !ts.isIdentifier(name.expression)) {
@@ -8265,8 +8263,8 @@ function jsxChildBody(
 
 function selfClosingSlashHasLeadingWhitespace(
   source: string,
-  openingElement: ts.JsxOpeningElement | ts.JsxSelfClosingElement,
-  node: ts.JsxElement | ts.JsxSelfClosingElement,
+  openingElement: TS.JsxOpeningElement | TS.JsxSelfClosingElement,
+  node: TS.JsxElement | TS.JsxSelfClosingElement,
 ): boolean {
   if (ts.isJsxElement(node)) return false;
 
@@ -8274,8 +8272,8 @@ function selfClosingSlashHasLeadingWhitespace(
 }
 
 function jsxChildFacts(
-  node: ts.JsxElement | ts.JsxSelfClosingElement,
-  sourceFile: ts.SourceFile,
+  node: TS.JsxElement | TS.JsxSelfClosingElement,
+  sourceFile: TS.SourceFile,
 ): Pick<JsxElementModel, 'childExpressionContainers' | 'childNonWhitespaceCount'> {
   if (!ts.isJsxElement(node)) {
     return {
@@ -8290,7 +8288,7 @@ function jsxChildFacts(
   const childLength = compilerArrayLength(node.children, 'JSX children');
   for (let index = 0; index < childLength; index += 1) {
     const child = compilerOwnDataValue(node.children, index, 'JSX children') as
-      | ts.JsxChild
+      | TS.JsxChild
       | undefined;
     if (!child) throw new TypeError(`JSX children[${index}] must be own data.`);
     if (ts.isJsxText(child)) {
@@ -8330,7 +8328,7 @@ function attributeLeadingStart(source: string, start: number): number {
   return leadingStart;
 }
 
-function jsxAncestorTags(sourceFile: ts.SourceFile, node: ts.Node): string[] {
+function jsxAncestorTags(sourceFile: TS.SourceFile, node: TS.Node): string[] {
   const tags: string[] = [];
   let current = node.parent;
 
@@ -8348,7 +8346,7 @@ function jsxAncestorTags(sourceFile: ts.SourceFile, node: ts.Node): string[] {
   return tags;
 }
 
-function isInsideStaticRepeatCallback(node: ts.Node): boolean {
+function isInsideStaticRepeatCallback(node: TS.Node): boolean {
   let current = node.parent;
 
   while (current) {
@@ -8365,7 +8363,7 @@ function isInsideStaticRepeatCallback(node: ts.Node): boolean {
   return false;
 }
 
-function isStaticRepeatCallback(call: ts.CallExpression, callback: ts.Expression): boolean {
+function isStaticRepeatCallback(call: TS.CallExpression, callback: TS.Expression): boolean {
   if (callArgument(call, 0) === callback && ts.isPropertyAccessExpression(call.expression)) {
     // `.map` / `.flatMap` are structural array-iteration recognizers for JSX repeatability.
     return call.expression.name.text === 'map' || call.expression.name.text === 'flatMap';
@@ -8382,15 +8380,15 @@ function isStaticRepeatCallback(call: ts.CallExpression, callback: ts.Expression
   );
 }
 
-function staticJsxAttributeValue(attribute: ts.JsxAttribute): string | undefined {
+function staticJsxAttributeValue(attribute: TS.JsxAttribute): string | undefined {
   const initializer = attribute.initializer;
   return initializer && ts.isStringLiteral(initializer) ? initializer.text : undefined;
 }
 
 function callExpressionModel(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  node: ts.CallExpression,
+  node: TS.CallExpression,
   frameworkFactory: CallExpressionModel['frameworkFactory'],
   frameworkSecurityOperation: CallExpressionModel['frameworkSecurityOperation'],
   frameworkJsxRuntimeFactory: CallExpressionModel['frameworkJsxRuntimeFactory'],
@@ -8406,7 +8404,7 @@ function callExpressionModel(
   const argumentLength = compilerArrayLength(node.arguments, 'Call expression arguments');
   for (let index = 0; index < argumentLength; index += 1) {
     const argument = compilerOwnDataValue(node.arguments, index, 'Call expression arguments') as
-      | ts.Expression
+      | TS.Expression
       | undefined;
     if (!argument) throw new TypeError(`Call expression arguments[${index}] must be own data.`);
     compilerArrayAppend(
@@ -8454,11 +8452,11 @@ function callExpressionModel(
     argumentLength === 0
       ? undefined
       : (compilerOwnDataValue(node.arguments, 0, 'Call expression arguments') as
-          | ts.Expression
+          | TS.Expression
           | undefined);
   const deriveInputs =
     ts.isIdentifier(unwrapExpression(node.expression)) &&
-    (unwrapExpression(node.expression) as ts.Identifier).text === 'derive' &&
+    (unwrapExpression(node.expression) as TS.Identifier).text === 'derive' &&
     firstArgument !== undefined
       ? deriveInputsFromExpression(firstArgument)
       : null;
@@ -8498,7 +8496,7 @@ function frameworkIdentityIn(
   return false;
 }
 
-function exportedConstInitializerName(node: ts.CallExpression): { exportedConstName: string } | {} {
+function exportedConstInitializerName(node: TS.CallExpression): { exportedConstName: string } | {} {
   const declaration = node.parent;
   if (
     !ts.isVariableDeclaration(declaration) ||
@@ -8513,9 +8511,9 @@ function exportedConstInitializerName(node: ts.CallExpression): { exportedConstN
 }
 
 function jsxExpressionModel(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  node: ts.JsxExpression,
+  node: TS.JsxExpression,
 ): JsxExpressionModel {
   const expression = node.expression;
   if (!expression) throw new Error('jsxExpressionModel requires an expression');
@@ -8558,9 +8556,9 @@ function appendUniqueStrings(target: string[], values: readonly string[], label:
 }
 
 function localConstAliasModels(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  expression: ts.Expression,
+  expression: TS.Expression,
   expressionStart: number,
 ): readonly LocalConstAliasModel[] {
   const references = compilerCreateSet<string>();
@@ -8575,7 +8573,7 @@ function localConstAliasModels(
 
   const aliases: LocalConstAliasModel[] = [];
   const seen = compilerCreateSet<string>();
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (node.getStart(sourceFile) >= expressionStart) return;
     if (node !== body && isFunctionOrClassLike(node)) return;
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
@@ -8607,11 +8605,11 @@ function localConstAliasModels(
 }
 
 function smallestFunctionBlockContaining(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   position: number,
-): ts.Block | null {
-  let best: ts.Block | null = null;
-  const visit = (node: ts.Node): void => {
+): TS.Block | null {
+  let best: TS.Block | null = null;
+  const visit = (node: TS.Node): void => {
     if (position < node.getStart(sourceFile) || position > node.getEnd()) return;
     best = functionBlockBody(node) ?? best;
     ts.forEachChild(node, visit);
@@ -8620,7 +8618,7 @@ function smallestFunctionBlockContaining(
   return best;
 }
 
-function functionBlockBody(node: ts.Node): ts.Block | null {
+function functionBlockBody(node: TS.Node): TS.Block | null {
   if (
     !(
       ts.isArrowFunction(node) ||
@@ -8637,7 +8635,7 @@ function functionBlockBody(node: ts.Node): ts.Block | null {
   return node.body && ts.isBlock(node.body) ? node.body : null;
 }
 
-function isFunctionOrClassLike(node: ts.Node): boolean {
+function isFunctionOrClassLike(node: TS.Node): boolean {
   return (
     ts.isArrowFunction(node) ||
     ts.isClassDeclaration(node) ||
@@ -8648,15 +8646,15 @@ function isFunctionOrClassLike(node: ts.Node): boolean {
   );
 }
 
-function isConstVariableDeclaration(node: ts.VariableDeclaration): boolean {
+function isConstVariableDeclaration(node: TS.VariableDeclaration): boolean {
   const list = node.parent;
   return ts.isVariableDeclarationList(list) && (list.flags & ts.NodeFlags.Const) !== 0;
 }
 
 function jsxCommentModel(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  node: ts.JsxExpression,
+  node: TS.JsxExpression,
 ): JsxCommentModel | null {
   const start = node.getStart(sourceFile);
   const end = node.getEnd();
@@ -8696,8 +8694,8 @@ function parseJustifiedDiagnostics(commentText: string): string[] {
 }
 
 function directlyFollowingJsxElementAttributeStart(
-  sourceFile: ts.SourceFile,
-  node: ts.JsxExpression,
+  sourceFile: TS.SourceFile,
+  node: TS.JsxExpression,
 ): { attachedAttributeStart: number } | {} {
   const parent = node.parent;
   if (!ts.isJsxElement(parent)) return {};
@@ -8714,7 +8712,7 @@ function directlyFollowingJsxElementAttributeStart(
 
   for (let index = childIndex + 1; index < childLength; index += 1) {
     const sibling = compilerOwnDataValue(parent.children, index, 'JSX sibling children') as
-      | ts.JsxChild
+      | TS.JsxChild
       | undefined;
     if (!sibling) throw new TypeError(`JSX sibling children[${index}] must be own data.`);
     if (ts.isJsxText(sibling) && sibling.containsOnlyTriviaWhiteSpaces) continue;
@@ -8724,7 +8722,7 @@ function directlyFollowingJsxElementAttributeStart(
         openingElement.attributes.properties,
         0,
         'Following JSX element attributes',
-      ) as ts.JsxAttribute | ts.JsxSpreadAttribute | undefined;
+      ) as TS.JsxAttribute | TS.JsxSpreadAttribute | undefined;
       return attribute && ts.isJsxAttribute(attribute)
         ? { attachedAttributeStart: attribute.getStart(sourceFile) }
         : {};
@@ -8737,9 +8735,9 @@ function directlyFollowingJsxElementAttributeStart(
 }
 
 function jsxAttributeExpression(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  attribute: ts.JsxAttribute,
+  attribute: TS.JsxAttribute,
 ): {
   expression: string;
   expressionEnd: number;
@@ -8788,8 +8786,8 @@ function jsxAttributeExpression(
 
 function recordFrameworkTrustedUrlFact(
   fact: object,
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): void {
   const candidate = unwrapExpression(expression);
   if (!ts.isCallExpression(candidate)) return;
@@ -8825,7 +8823,7 @@ function recordFrameworkTrustedUrlFact(
 
 /** @internal Exact static `{ reason, source? }` metadata accepted by trusted-output constructors. */
 export function parserStaticTrustedOutputMetadataReason(
-  expression: ts.Expression,
+  expression: TS.Expression,
 ): string | undefined {
   const metadata = unwrapExpression(expression);
   if (!ts.isObjectLiteralExpression(metadata)) return undefined;
@@ -8841,7 +8839,7 @@ export function parserStaticTrustedOutputMetadataReason(
       metadata.properties,
       index,
       'Trusted output metadata properties',
-    ) as ts.ObjectLiteralElementLike | undefined;
+    ) as TS.ObjectLiteralElementLike | undefined;
     if (!property || !ts.isPropertyAssignment(property)) return undefined;
     const name = propertyNameText(property.name);
     if (name !== 'reason' && name !== 'source') return undefined;
@@ -8867,20 +8865,20 @@ export function parserStaticTrustedOutputMetadataReason(
 }
 
 function jsxAttributeExpressionStaticValue(
-  expression: ts.Expression,
+  expression: TS.Expression,
 ): { expressionStaticValue: StaticLiteralValue } | {} {
   const value = staticLiteralValue(expression);
   return value === undefined ? {} : { expressionStaticValue: value };
 }
 
 function conditionalExpressionModels(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  node: ts.Node,
+  node: TS.Node,
 ): ConditionalExpressionModel[] {
   const facts: ConditionalExpressionModel[] = [];
 
-  const visit = (current: ts.Node): void => {
+  const visit = (current: TS.Node): void => {
     if (ts.isConditionalExpression(current)) {
       const conditionStart = current.condition.getStart(sourceFile);
       const conditionEnd = current.condition.getEnd();
@@ -8904,15 +8902,15 @@ function conditionalExpressionModels(
   return facts;
 }
 
-function solePropertyAccessPathFromExpression(expression: ts.Expression): string | null {
+function solePropertyAccessPathFromExpression(expression: TS.Expression): string | null {
   const unwrapped = unwrapExpression(expression);
   return ts.isPropertyAccessExpression(unwrapped) ? propertyAccessPath(unwrapped) : null;
 }
 
-function temporalReadModels(sourceFile: ts.SourceFile, node: ts.Node): TemporalReadModel[] {
+function temporalReadModels(sourceFile: TS.SourceFile, node: TS.Node): TemporalReadModel[] {
   const reads: TemporalReadModel[] = [];
 
-  const visit = (current: ts.Node): void => {
+  const visit = (current: TS.Node): void => {
     if (isDateNowCall(sourceFile, current)) {
       compilerArrayAppend(
         reads,
@@ -8942,7 +8940,7 @@ function temporalReadModels(sourceFile: ts.SourceFile, node: ts.Node): TemporalR
   return reads;
 }
 
-function isDateNowCall(sourceFile: ts.SourceFile, node: ts.Node): node is ts.CallExpression {
+function isDateNowCall(sourceFile: TS.SourceFile, node: TS.Node): node is TS.CallExpression {
   return (
     ts.isCallExpression(node) &&
     node.arguments.length === 0 &&
@@ -8953,7 +8951,7 @@ function isDateNowCall(sourceFile: ts.SourceFile, node: ts.Node): node is ts.Cal
   );
 }
 
-function isZeroArgNewDate(sourceFile: ts.SourceFile, node: ts.Node): node is ts.NewExpression {
+function isZeroArgNewDate(sourceFile: TS.SourceFile, node: TS.Node): node is TS.NewExpression {
   return (
     ts.isNewExpression(node) &&
     node.arguments !== undefined &&
@@ -8964,9 +8962,9 @@ function isZeroArgNewDate(sourceFile: ts.SourceFile, node: ts.Node): node is ts.
 }
 
 function zeroArgArrowModel(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  expression: ts.Expression,
+  expression: TS.Expression,
 ): { zeroArgArrow: ZeroArgArrowModel } | {} {
   if (!ts.isArrowFunction(expression) || expression.parameters.length > 0) return {};
 
@@ -9024,7 +9022,7 @@ function zeroArgArrowModel(
         body.arguments,
         index,
         'Zero-arg arrow call arguments',
-      ) as ts.Expression | undefined;
+      ) as TS.Expression | undefined;
       if (!argument)
         throw new TypeError(`Zero-arg arrow call arguments[${index}] must be own data.`);
       compilerArrayAppend(
@@ -9104,9 +9102,9 @@ function zeroArgArrowModel(
   };
 }
 
-function browserHandlerBodyRequiresRuntimeOmission(body: ts.ConciseBody): boolean {
+function browserHandlerBodyRequiresRuntimeOmission(body: TS.ConciseBody): boolean {
   let found = false;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (found) return;
     if (node !== body && isFunctionScopeNode(node)) return;
     if (ts.isAwaitExpression(node) || ts.isYieldExpression(node)) {
@@ -9125,8 +9123,8 @@ function browserHandlerBodyRequiresRuntimeOmission(body: ts.ConciseBody): boolea
 // example enums and parameter properties) become explicit unsupported facts and fail before
 // emission; the independent JavaScript translation gate remains the final backstop.
 function handlerBodyTypeScriptFacts(
-  sourceFile: ts.SourceFile,
-  body: ts.ConciseBody,
+  sourceFile: TS.SourceFile,
+  body: TS.ConciseBody,
 ): {
   erasures: HandlerBodyTypeScriptErasureModel[];
   unsupported: UnsupportedHandlerBodyTypeScriptModel[];
@@ -9141,22 +9139,22 @@ function handlerBodyTypeScriptFacts(
 
   const appendTypeList = (
     kind: 'type-arguments' | 'type-parameters',
-    nodes: ts.NodeArray<ts.TypeNode | ts.TypeParameterDeclaration> | undefined,
-    owner: ts.Node,
+    nodes: TS.NodeArray<TS.TypeNode | TS.TypeParameterDeclaration> | undefined,
+    owner: TS.Node,
   ): void => {
     if (!nodes || compilerArrayLength(nodes, 'Handler TypeScript type list') === 0) return;
     // NodeArray.end stops before trailing trivia. Take the parser-owned delimiter tokens from the
     // owning expression/declaration so comments before `>` are erased with the type list.
     const children = owner.getChildren(sourceFile);
     const childLength = compilerArrayLength(children, 'Handler TypeScript type-list children');
-    let opening: ts.Node | undefined;
-    let closing: ts.Node | undefined;
+    let opening: TS.Node | undefined;
+    let closing: TS.Node | undefined;
     for (let index = 0; index < childLength; index += 1) {
       const child = compilerOwnDataValue(
         children,
         index,
         'Handler TypeScript type-list children',
-      ) as ts.Node | undefined;
+      ) as TS.Node | undefined;
       if (!child) continue;
       if (child.kind === ts.SyntaxKind.LessThanToken && child.getEnd() <= nodes.pos) {
         opening = child;
@@ -9177,7 +9175,7 @@ function handlerBodyTypeScriptFacts(
     append(kind, opening.getStart(sourceFile), closing.getEnd());
   };
 
-  const appendUnsupported = (kind: UnsupportedHandlerBodyTypeScriptKind, node: ts.Node): void => {
+  const appendUnsupported = (kind: UnsupportedHandlerBodyTypeScriptKind, node: TS.Node): void => {
     compilerArrayAppend(
       unsupported,
       { end: node.getEnd(), kind, start: node.getStart(sourceFile) },
@@ -9185,16 +9183,16 @@ function handlerBodyTypeScriptFacts(
     );
   };
 
-  const firstDecorator = (node: ts.Node): ts.Decorator | undefined => {
+  const firstDecorator = (node: TS.Node): TS.Decorator | undefined => {
     if (!ts.canHaveDecorators(node)) return undefined;
     const decorators = ts.getDecorators(node);
     if (!decorators || compilerArrayLength(decorators, 'Handler decorators') === 0) {
       return undefined;
     }
-    return compilerOwnDataValue(decorators, 0, 'Handler decorators') as ts.Decorator | undefined;
+    return compilerOwnDataValue(decorators, 0, 'Handler decorators') as TS.Decorator | undefined;
   };
 
-  const erasureContains = (node: ts.Node): boolean => {
+  const erasureContains = (node: TS.Node): boolean => {
     const start = node.getStart(sourceFile);
     const end = node.getEnd();
     const length = compilerArrayLength(erasures, 'Handler TypeScript erasure facts');
@@ -9208,7 +9206,7 @@ function handlerBodyTypeScriptFacts(
     return false;
   };
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     const decorator = firstDecorator(node);
     if (decorator) {
       appendUnsupported('decorator', decorator);
@@ -9302,7 +9300,7 @@ function handlerBodyTypeScriptFacts(
                 parent.parameters,
                 parameterIndex + 1,
                 'Handler function parameters',
-              ) as ts.ParameterDeclaration | undefined)
+              ) as TS.ParameterDeclaration | undefined)
             : undefined;
         if (next) {
           append('this-parameter', node.getStart(sourceFile), next.getStart(sourceFile));
@@ -9311,7 +9309,7 @@ function handlerBodyTypeScriptFacts(
             parent.parameters,
             parameterIndex - 1,
             'Handler function parameters',
-          ) as ts.ParameterDeclaration | undefined;
+          ) as TS.ParameterDeclaration | undefined;
           if (!previous) {
             appendUnsupported('unclassified-typescript', node);
             return;
@@ -9435,7 +9433,7 @@ function handlerBodyTypeScriptFacts(
 
 // SPEC §5.2: classify a zero-arg-arrow call argument from its ts node so handler lowering can
 // decide element-param eligibility from a typed kind instead of comparing the raw argument source.
-function zeroArgArrowCallArgumentKind(argument: ts.Expression): ZeroArgArrowCallArgumentKind {
+function zeroArgArrowCallArgumentKind(argument: TS.Expression): ZeroArgArrowCallArgumentKind {
   if (staticLiteralValue(argument) !== undefined) return 'static';
 
   const unwrapped = unwrapExpression(argument);
@@ -9447,10 +9445,10 @@ function zeroArgArrowCallArgumentKind(argument: ts.Expression): ZeroArgArrowCall
   return 'other';
 }
 
-function localDeclarationNames(node: ts.Node): string[] {
+function localDeclarationNames(node: TS.Node): string[] {
   const names: string[] = [];
 
-  const visit = (child: ts.Node): void => {
+  const visit = (child: TS.Node): void => {
     if (ts.isVariableDeclaration(child)) {
       collectBindingNames(child.name, names);
     }
@@ -9470,7 +9468,7 @@ function localDeclarationNames(node: ts.Node): string[] {
   return unique;
 }
 
-function collectBindingNames(name: ts.BindingName, names: string[]): void {
+function collectBindingNames(name: TS.BindingName, names: string[]): void {
   if (ts.isIdentifier(name)) {
     compilerArrayAppend(names, name.text, 'Binding names');
     return;
@@ -9479,15 +9477,15 @@ function collectBindingNames(name: ts.BindingName, names: string[]): void {
   const elementLength = compilerArrayLength(name.elements, 'Binding elements');
   for (let index = 0; index < elementLength; index += 1) {
     const element = compilerOwnDataValue(name.elements, index, 'Binding elements') as
-      | ts.ArrayBindingElement
+      | TS.ArrayBindingElement
       | undefined;
     if (element && ts.isBindingElement(element)) collectBindingNames(element.name, names);
   }
 }
 
 function documentElementActionModel(
-  sourceFile: ts.SourceFile,
-  body: ts.ConciseBody,
+  sourceFile: TS.SourceFile,
+  body: TS.ConciseBody,
 ): { documentElementAction: DocumentElementActionModel } | {} {
   if (ts.isBlock(body)) return {};
 
@@ -9496,7 +9494,7 @@ function documentElementActionModel(
 }
 
 function referenceIdentifiers(
-  root: ts.Node,
+  root: TS.Node,
   runtimeOnly = false,
   excludedSpans: readonly SourceSpan[] = [],
 ): string[] {
@@ -9514,11 +9512,11 @@ function referenceIdentifiers(
 }
 
 function referenceIdentifierModels(
-  sourceFile: ts.SourceFile,
-  root: ts.Node,
+  sourceFile: TS.SourceFile,
+  root: TS.Node,
   runtimeOnly = false,
   excludedSpans: readonly SourceSpan[] = [],
-  handlerRoot: ts.Node = root,
+  handlerRoot: TS.Node = root,
   securityOperations: readonly BrowserSecurityOperationModel[] = [],
 ): IdentifierReferenceModel[] {
   const declared = compilerCreateSet<string>();
@@ -9528,7 +9526,7 @@ function referenceIdentifierModels(
     : undefined;
   const runtimeBindings = elementParamContext?.bindings;
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (runtimeOnly) {
       if (node !== root && nodeIsWithinSourceSpans(sourceFile, node, excludedSpans)) return;
       // Inline-handler type names are erased, not runtime captures. ExpressionWithTypeArguments
@@ -9602,13 +9600,13 @@ function referenceIdentifierModels(
 }
 
 function arrowObjectPatternKeys(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): RenderInputModel[] {
   if (!ts.isArrowFunction(expression)) return [];
 
   const firstParam = compilerOwnDataValue(expression.parameters, 0, 'Render parameters') as
-    | ts.ParameterDeclaration
+    | TS.ParameterDeclaration
     | undefined;
   if (!firstParam || !ts.isObjectBindingPattern(firstParam.name)) return [];
   const result: RenderInputModel[] = [];
@@ -9618,7 +9616,7 @@ function arrowObjectPatternKeys(
       firstParam.name.elements,
       index,
       'Render input elements',
-    ) as ts.BindingElement | undefined;
+    ) as TS.BindingElement | undefined;
     if (!element) throw new TypeError(`Render input elements[${index}] must be own data.`);
     if (!ts.isIdentifier(element.name)) continue;
     compilerArrayAppend(
@@ -9635,7 +9633,7 @@ function arrowObjectPatternKeys(
   return result;
 }
 
-function bindingElementSourceKey(element: ts.BindingElement): { sourceKey: string } | {} {
+function bindingElementSourceKey(element: TS.BindingElement): { sourceKey: string } | {} {
   const propertyName = element.propertyName;
   if (!propertyName) return {};
   if (ts.isIdentifier(propertyName) || ts.isStringLiteralLike(propertyName)) {
@@ -9644,15 +9642,15 @@ function bindingElementSourceKey(element: ts.BindingElement): { sourceKey: strin
   return {};
 }
 
-function renderLocalDeclarationNames(expression: ts.Expression): string[] {
+function renderLocalDeclarationNames(expression: TS.Expression): string[] {
   if (!ts.isArrowFunction(expression)) return [];
   return localDeclarationNames(expression.body);
 }
 
-function localIdentifierNames(node: ts.Node): string[] {
+function localIdentifierNames(node: TS.Node): string[] {
   const names: string[] = [];
 
-  const visit = (child: ts.Node): void => {
+  const visit = (child: TS.Node): void => {
     if (ts.isIdentifier(child) && isDeclaredIdentifier(child)) {
       compilerArrayAppend(names, child.text, 'Local identifier names');
     }
@@ -9665,9 +9663,9 @@ function localIdentifierNames(node: ts.Node): string[] {
   return unique;
 }
 
-function enclosingLocalNames(node: ts.Node): string[] {
+function enclosingLocalNames(node: TS.Node): string[] {
   const names: string[] = [];
-  let current: ts.Node | undefined = node.parent;
+  let current: TS.Node | undefined = node.parent;
 
   while (current !== undefined) {
     if (
@@ -9677,7 +9675,7 @@ function enclosingLocalNames(node: ts.Node): string[] {
       const parameterLength = compilerArrayLength(current.parameters, 'Enclosing parameters');
       for (let index = 0; index < parameterLength; index += 1) {
         const param = compilerOwnDataValue(current.parameters, index, 'Enclosing parameters') as
-          | ts.ParameterDeclaration
+          | TS.ParameterDeclaration
           | undefined;
         if (!param) throw new TypeError(`Enclosing parameters[${index}] must be own data.`);
         collectBindingNames(param.name, names);
@@ -9692,7 +9690,7 @@ function enclosingLocalNames(node: ts.Node): string[] {
   return unique;
 }
 
-function isRenderPropertyInitializer(node: ts.Node): boolean {
+function isRenderPropertyInitializer(node: TS.Node): boolean {
   const parent = node.parent;
   return (
     parent !== undefined &&
@@ -9703,13 +9701,13 @@ function isRenderPropertyInitializer(node: ts.Node): boolean {
 }
 
 function renderSlotsParam(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): { renderSlotsParam: RenderInputModel } | {} {
   if (!ts.isArrowFunction(expression)) return {};
 
   const thirdParam = compilerOwnDataValue(expression.parameters, 2, 'Render parameters') as
-    | ts.ParameterDeclaration
+    | TS.ParameterDeclaration
     | undefined;
   if (!thirdParam || !ts.isIdentifier(thirdParam.name)) return {};
 
@@ -9727,13 +9725,13 @@ function renderSlotsParam(
 // (`slots`) and an object binding pattern (`{ children, footer }`) — so KV316 can flag a
 // children/slot-accepting isomorphic island whose self-render has no slot arguments.
 function renderSlots(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): { renderSlots: RenderSlotsModel } | {} {
   if (!ts.isArrowFunction(expression)) return {};
 
   const thirdParam = compilerOwnDataValue(expression.parameters, 2, 'Render parameters') as
-    | ts.ParameterDeclaration
+    | TS.ParameterDeclaration
     | undefined;
   if (!thirdParam) return {};
 
@@ -9745,7 +9743,7 @@ function renderSlots(
         thirdParam.name.elements,
         index,
         'Render slot elements',
-      ) as ts.BindingElement | undefined;
+      ) as TS.BindingElement | undefined;
       if (!element) throw new TypeError(`Render slot elements[${index}] must be own data.`);
       if (ts.isIdentifier(element.name)) {
         compilerArrayAppend(names, element.name.text, 'Render slot names');
@@ -9765,8 +9763,8 @@ function renderSlots(
 }
 
 function renderHostModel(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): { renderHost: RenderHostModel } | null {
   if (!ts.isArrowFunction(expression)) return null;
 
@@ -9795,12 +9793,12 @@ function renderHostModel(
   return null;
 }
 
-function renderReturnExpression(body: ts.ConciseBody): ts.Expression | null {
+function renderReturnExpression(body: TS.ConciseBody): TS.Expression | null {
   if (ts.isBlock(body)) {
     const statementLength = compilerArrayLength(body.statements, 'Render body statements');
     for (let index = 0; index < statementLength; index += 1) {
       const statement = compilerOwnDataValue(body.statements, index, 'Render body statements') as
-        | ts.Statement
+        | TS.Statement
         | undefined;
       if (!statement) throw new TypeError(`Render body statements[${index}] must be own data.`);
       if (ts.isReturnStatement(statement) && statement.expression) return statement.expression;
@@ -9811,16 +9809,16 @@ function renderReturnExpression(body: ts.ConciseBody): ts.Expression | null {
   return body;
 }
 
-function unwrapParenthesizedExpression(expression: ts.Expression): ts.Expression {
+function unwrapParenthesizedExpression(expression: TS.Expression): TS.Expression {
   let current = expression;
   while (ts.isParenthesizedExpression(current)) current = current.expression;
   return current;
 }
 
 function arrowReturnObjectSource(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   source: string,
-  expression: ts.Expression,
+  expression: TS.Expression,
 ): StateReturnObjectModel | null {
   if (!ts.isArrowFunction(expression)) return null;
 
@@ -9845,8 +9843,8 @@ function arrowReturnObjectSource(
 }
 
 function stateReturnNonJsonValueSpan(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
   active: Set<string> = compilerCreateSet<string>(),
 ): SourceSpan | undefined {
   const current = unwrapExpression(expression);
@@ -9959,7 +9957,7 @@ function stateReturnNonJsonValueSpan(
   }
 }
 
-function unwrapStateReturnExpression(expression: ts.Expression): ts.Expression {
+function unwrapStateReturnExpression(expression: TS.Expression): TS.Expression {
   let current = expression;
   let changed = true;
   while (changed) {
@@ -9981,14 +9979,14 @@ function unwrapStateReturnExpression(expression: ts.Expression): ts.Expression {
 }
 
 function stateReturnStaticValue(
-  expression: ts.ObjectLiteralExpression,
+  expression: TS.ObjectLiteralExpression,
 ): { staticValue: Record<string, StaticLiteralValue> } | {} {
   const value = staticObjectLiteralValue(expression);
   return value === undefined ? {} : { staticValue: value };
 }
 
 function staticObjectLiteralValue(
-  expression: ts.ObjectLiteralExpression,
+  expression: TS.ObjectLiteralExpression,
 ): Record<string, StaticLiteralValue> | undefined {
   const value = compilerCreateNullRecord<StaticLiteralValue>();
   const propertyLength = compilerArrayLength(
@@ -10000,7 +9998,7 @@ function staticObjectLiteralValue(
       expression.properties,
       index,
       'Static object-literal properties',
-    ) as ts.ObjectLiteralElementLike | undefined;
+    ) as TS.ObjectLiteralElementLike | undefined;
     if (!property) {
       throw new TypeError(`Static object-literal properties[${index}] must be own data.`);
     }
@@ -10017,7 +10015,7 @@ function staticObjectLiteralValue(
   return value;
 }
 
-function staticLiteralValue(expression: ts.Expression): StaticLiteralValue | undefined {
+function staticLiteralValue(expression: TS.Expression): StaticLiteralValue | undefined {
   const unwrapped = unwrapExpression(expression);
 
   if (ts.isStringLiteralLike(unwrapped) || ts.isNoSubstitutionTemplateLiteral(unwrapped)) {
@@ -10042,9 +10040,9 @@ function staticLiteralValue(expression: ts.Expression): StaticLiteralValue | und
     const elementLength = compilerArrayLength(unwrapped.elements, 'Static array elements');
     for (let index = 0; index < elementLength; index += 1) {
       const element = compilerOwnDataValue(unwrapped.elements, index, 'Static array elements') as
-        | ts.Expression
-        | ts.SpreadElement
-        | ts.OmittedExpression
+        | TS.Expression
+        | TS.SpreadElement
+        | TS.OmittedExpression
         | undefined;
       if (!element) throw new TypeError(`Static array elements[${index}] must be own data.`);
       if (ts.isSpreadElement(element) || ts.isOmittedExpression(element)) return undefined;

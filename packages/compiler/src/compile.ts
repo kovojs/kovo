@@ -1,4 +1,4 @@
-import * as ts from 'typescript';
+import type * as TS from 'typescript';
 
 import {
   computeRenderPlanFingerprint,
@@ -151,7 +151,7 @@ import {
   serverSecurityOperationFacts,
 } from './security-operation-facts.js';
 import { compilerEmittedSourceProvenanceToken } from './source-provenance.js';
-import { ensureTypescriptRuntime } from './ts-api.js';
+import { typescriptRuntime as ts } from './ts-api.js';
 import type {
   CompileComponentOptions,
   CompileResult,
@@ -178,8 +178,6 @@ import {
   emittedFileKind,
   queryShapesFromFacts,
 } from './types.js';
-
-ensureTypescriptRuntime(ts);
 
 function compilerMapDense<Value, Result>(
   values: readonly Value[],
@@ -1110,7 +1108,7 @@ function lowerComponentPhase(parsed: ParsedComponentPhaseResult): LowerComponent
 }
 
 function registerFrameworkIdentityProjectForOptions(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   options: CompileComponentProjectOptions,
 ): void {
   if (!options.extraFiles?.length) return;
@@ -2621,7 +2619,7 @@ function isKovoMutationCall(model: ComponentModuleModel, call: CallExpressionMod
     : false;
 }
 
-function isKovoQueryCallee(sourceFile: ts.SourceFile, expression: ts.Expression): boolean {
+function isKovoQueryCallee(sourceFile: TS.SourceFile, expression: TS.Expression): boolean {
   return (
     compilerOwnedAppContractFactoryEquals(
       ts as FrameworkIdentityTypeScript,

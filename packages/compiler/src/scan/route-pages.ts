@@ -1,5 +1,5 @@
 import { dirname, relative, resolve } from 'node:path';
-import * as ts from 'typescript';
+import type * as TS from 'typescript';
 
 import {
   assertRegisteredDiagnostic,
@@ -46,7 +46,7 @@ import {
   uniqueSorted,
   type SourceReplacement,
 } from '../shared.js';
-import { ensureTypescriptRuntime } from '../ts-api.js';
+import { typescriptRuntime as ts } from '../ts-api.js';
 import { compileArtifactFileNames } from '../types.js';
 import { isCompilerAuditText } from '../security/audit-text.js';
 import {
@@ -73,15 +73,13 @@ import {
   compilerStringStartsWith,
 } from '../compiler-security-intrinsics.js';
 
-ensureTypescriptRuntime(ts);
-
 interface CompiledRoutePage {
   fact: RoutePageFact;
   pageReplacement: SourceReplacement;
 }
 
 interface RoutePageHandler {
-  node: ts.Node;
+  node: TS.Node;
   replacementEnd: number;
   replacementPrefix: string;
   replacementStart: number;
@@ -106,7 +104,7 @@ interface RouteComponentImportModel {
 
 interface RouteFrameworkBindings {
   readonly rootedFileHandleNames: ReadonlySet<string>;
-  readonly sourceFile: ts.SourceFile;
+  readonly sourceFile: TS.SourceFile;
 }
 
 const LAYOUT_IDENTITY = frameworkExport('@kovojs/server', 'layout');
@@ -146,7 +144,7 @@ export function compileRouteModule(options: CompileRouteModuleOptions): CompileR
   const componentImports = componentImportModels(stableOptions.fileName, sourceFile);
   const diagnostics: CompilerDiagnostic[] = [];
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     const routePage = routePageFromCall(
       stableOptions.fileName,
       stableOptions.source,
@@ -227,8 +225,8 @@ export function compileRouteModule(options: CompileRouteModuleOptions): CompileR
 function routePageFromCall(
   fileName: string,
   source: string,
-  sourceFile: ts.SourceFile,
-  node: ts.Node,
+  sourceFile: TS.SourceFile,
+  node: TS.Node,
   layouts: ReadonlyMap<string, RouteLayoutModel>,
   frameworkBindings: RouteFrameworkBindings,
   componentImports: ReadonlyMap<string, RouteComponentImportModel>,
@@ -238,10 +236,10 @@ function routePageFromCall(
   if (!isFrameworkRouteCall(node, frameworkBindings)) return null;
 
   const pathArg = compilerOwnDataValue(node.arguments, 0, 'Compiler route call arguments') as
-    | ts.Expression
+    | TS.Expression
     | undefined;
   const definitionArg = compilerOwnDataValue(node.arguments, 1, 'Compiler route call arguments') as
-    | ts.Expression
+    | TS.Expression
     | undefined;
   if (!pathArg || !ts.isStringLiteralLike(pathArg)) return null;
   if (!definitionArg || !ts.isObjectLiteralExpression(definitionArg)) return null;
@@ -350,7 +348,7 @@ function routePageFromCall(
 function appendRouteScopedKeyDiagnostics(
   fileName: string,
   source: string,
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   handler: RoutePageHandler,
   diagnostics: CompilerDiagnostic[],
 ): void {
@@ -366,7 +364,7 @@ function appendRouteScopedKeyDiagnostics(
     );
     return;
   }
-  const callable = unwrapExpression(handler.node as ts.Expression);
+  const callable = unwrapExpression(handler.node as TS.Expression);
   if (!ts.isArrowFunction(callable) && !ts.isFunctionExpression(callable)) return;
   appendRouteScopedKeyViolationDiagnostics(
     fileName,
@@ -381,9 +379,9 @@ function appendRouteScopedKeyDiagnostics(
 function appendRouteScopedKeyViolationDiagnostics(
   fileName: string,
   source: string,
-  sourceFile: ts.SourceFile,
-  body: ts.ConciseBody,
-  parameters: readonly ts.ParameterDeclaration[],
+  sourceFile: TS.SourceFile,
+  body: TS.ConciseBody,
+  parameters: readonly TS.ParameterDeclaration[],
   diagnostics: CompilerDiagnostic[],
 ): void {
   const violations = scanServerScopedKeySinkViolations(sourceFile, body, parameters);
@@ -540,8 +538,8 @@ function routeComponentLocalNames(components: readonly RoutePageComponentFact[])
 function routeRegionFacts(
   fileName: string,
   source: string,
-  sourceFile: ts.SourceFile,
-  routeDefinition: ts.ObjectLiteralExpression,
+  sourceFile: TS.SourceFile,
+  routeDefinition: TS.ObjectLiteralExpression,
   componentImports: ReadonlyMap<string, RouteComponentImportModel>,
   diagnostics: CompilerDiagnostic[],
 ): RouteRegionFact[] {
@@ -555,7 +553,7 @@ function routeRegionFacts(
       regions.properties,
       index,
       'Compiler route region properties',
-    ) as ts.ObjectLiteralElementLike;
+    ) as TS.ObjectLiteralElementLike;
     if (!ts.isPropertyAssignment(property) && !ts.isMethodDeclaration(property)) continue;
     const name = propertyNameText(property.name);
     if (!name) continue;
@@ -581,7 +579,7 @@ function routeRegionFacts(
 
 function componentImportModels(
   routeFileName: string,
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
 ): ReadonlyMap<string, RouteComponentImportModel> {
   const imports = compilerCreateMap<string, RouteComponentImportModel>();
 
@@ -591,7 +589,7 @@ function componentImportModels(
       sourceFile.statements,
       statementIndex,
       'Compiler route statements',
-    ) as ts.Statement;
+    ) as TS.Statement;
     if (!ts.isImportDeclaration(statement)) continue;
     if (!statement.moduleSpecifier || !ts.isStringLiteralLike(statement.moduleSpecifier)) continue;
     const sourceFileName = componentImportSourceFileName(
@@ -611,7 +609,7 @@ function componentImportModels(
         namedBindings.elements,
         elementIndex,
         'Compiler route imports',
-      ) as ts.ImportSpecifier;
+      ) as TS.ImportSpecifier;
       const exportName = element.propertyName?.text;
       compilerMapSet(imports, element.name.text, {
         ...(exportName && exportName !== element.name.text ? { exportName } : {}),
@@ -641,12 +639,12 @@ function normalizeRouteFileName(fileName: string): string {
 }
 
 function routeLayoutModels(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   frameworkBindings: RouteFrameworkBindings,
 ): ReadonlyMap<string, RouteLayoutModel> {
   const layouts = compilerCreateMap<string, RouteLayoutModel>();
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (
       ts.isVariableDeclaration(node) &&
       ts.isIdentifier(node.name) &&
@@ -658,7 +656,7 @@ function routeLayoutModels(
         node.initializer.arguments,
         0,
         'Compiler layout call arguments',
-      ) as ts.Expression | undefined;
+      ) as TS.Expression | undefined;
       if (definition && ts.isObjectLiteralExpression(definition)) {
         const parent = layoutParentName(definition);
         const access = accessDecisionFact(definition, sourceFile);
@@ -683,11 +681,11 @@ function routeLayoutModels(
   return layouts;
 }
 
-function routeFrameworkBindings(sourceFile: ts.SourceFile): RouteFrameworkBindings {
+function routeFrameworkBindings(sourceFile: TS.SourceFile): RouteFrameworkBindings {
   const rootedFileHandleNames = compilerCreateSet<string>();
   const bindings = { rootedFileHandleNames, sourceFile };
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
       const initializer = unwrapExpression(node.initializer);
       if (ts.isCallExpression(initializer) && isFrameworkRootedFilesCall(initializer, bindings)) {
@@ -703,17 +701,17 @@ function routeFrameworkBindings(sourceFile: ts.SourceFile): RouteFrameworkBindin
   return bindings;
 }
 
-function isFrameworkRouteCall(call: ts.CallExpression, bindings: RouteFrameworkBindings): boolean {
+function isFrameworkRouteCall(call: TS.CallExpression, bindings: RouteFrameworkBindings): boolean {
   return isFrameworkExpression(bindings, call.expression, ROUTE_IDENTITY);
 }
 
-function isFrameworkLayoutCall(call: ts.CallExpression, bindings: RouteFrameworkBindings): boolean {
+function isFrameworkLayoutCall(call: TS.CallExpression, bindings: RouteFrameworkBindings): boolean {
   return isFrameworkExpression(bindings, call.expression, LAYOUT_IDENTITY);
 }
 
 function isFrameworkExpression(
   bindings: RouteFrameworkBindings,
-  expression: ts.Expression,
+  expression: TS.Expression,
   identity: FrameworkExportIdentity,
 ): boolean {
   return (
@@ -733,13 +731,13 @@ function isFrameworkExpression(
 }
 
 function routeOutcomeFact(
-  pageHandler: ts.Node | undefined,
+  pageHandler: TS.Node | undefined,
   frameworkBindings: RouteFrameworkBindings,
 ): RoutePageOutcomeFact | undefined {
   if (!pageHandler) return undefined;
 
   let outcome: RoutePageOutcomeFact['kind'] | undefined;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (outcome === 'stream') return;
     if (ts.isCallExpression(node)) {
       const kind = routeOutcomeKindFromCall(node, frameworkBindings);
@@ -757,7 +755,7 @@ function routeOutcomeFact(
 }
 
 function routeOutcomeKindFromCall(
-  call: ts.CallExpression,
+  call: TS.CallExpression,
   frameworkBindings: RouteFrameworkBindings,
 ): RoutePageOutcomeFact['kind'] | undefined {
   const expression = call.expression;
@@ -783,7 +781,7 @@ function routeOutcomeKindFromCall(
 }
 
 function isRootedFilesServeReceiver(
-  expression: ts.Expression,
+  expression: TS.Expression,
   frameworkBindings: RouteFrameworkBindings,
 ): boolean {
   const unwrapped = unwrapExpression(expression);
@@ -797,24 +795,24 @@ function isRootedFilesServeReceiver(
 }
 
 function isFrameworkRespondReference(
-  expression: ts.Expression,
+  expression: TS.Expression,
   bindings: RouteFrameworkBindings,
 ): boolean {
   return isFrameworkExpression(bindings, expression, RESPOND_IDENTITY);
 }
 
 function isFrameworkRootedFilesCall(
-  call: ts.CallExpression,
+  call: TS.CallExpression,
   bindings: RouteFrameworkBindings,
 ): boolean {
   return isFrameworkExpression(bindings, call.expression, ROOTED_FILES_IDENTITY);
 }
 
 function routeAccessFact(
-  routeDefinition: ts.ObjectLiteralExpression,
+  routeDefinition: TS.ObjectLiteralExpression,
   routeLayouts: readonly RoutePageLayoutFact[],
   layouts: ReadonlyMap<string, RouteLayoutModel>,
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
 ): AccessDecisionFact | undefined {
   const routeAccess = accessDecisionFact(routeDefinition, sourceFile);
   if (routeAccess) return routeAccess;
@@ -833,10 +831,10 @@ function routeAccessFact(
 }
 
 function routeGuardFacts(
-  routeDefinition: ts.ObjectLiteralExpression,
+  routeDefinition: TS.ObjectLiteralExpression,
   routeLayouts: readonly RoutePageLayoutFact[],
   layouts: ReadonlyMap<string, RouteLayoutModel>,
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
 ): string[] {
   const guards: string[] = [];
   const routeGuard = namedInitializer(routeDefinition, 'guard', sourceFile)?.name;
@@ -858,8 +856,8 @@ function routeGuardFacts(
 }
 
 function accessDecisionFact(
-  object: ts.ObjectLiteralExpression,
-  sourceFile: ts.SourceFile,
+  object: TS.ObjectLiteralExpression,
+  sourceFile: TS.SourceFile,
 ): AccessDecisionFact | undefined {
   const access = objectPropertyInitializer(object, 'access');
   if (!access) return undefined;
@@ -873,7 +871,7 @@ function accessDecisionFact(
     isFrameworkAccessExpression(sourceFile, access.expression, PUBLIC_ACCESS_IDENTITY)
   ) {
     const reason = compilerOwnDataValue(access.arguments, 0, 'Compiler public access arguments') as
-      | ts.Expression
+      | TS.Expression
       | undefined;
     if (reason && ts.isStringLiteralLike(reason) && isCompilerAuditText(reason.text)) {
       return { kind: 'public', reason: reason.text };
@@ -900,8 +898,8 @@ function accessDecisionFact(
 }
 
 function isFrameworkAccessExpression(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
   identity: FrameworkExportIdentity,
 ): boolean {
   if (
@@ -923,7 +921,7 @@ function isFrameworkAccessExpression(
   );
 }
 
-function accessGuardNames(access: ts.ArrayLiteralExpression, sourceFile: ts.SourceFile): string[] {
+function accessGuardNames(access: TS.ArrayLiteralExpression, sourceFile: TS.SourceFile): string[] {
   const names: string[] = [];
   const elementCount = compilerArrayLength(access.elements, 'Compiler access guard elements');
   for (let index = 0; index < elementCount; index += 1) {
@@ -931,7 +929,7 @@ function accessGuardNames(access: ts.ArrayLiteralExpression, sourceFile: ts.Sour
       access.elements,
       index,
       'Compiler access guard elements',
-    ) as ts.Expression;
+    ) as TS.Expression;
     const facts = staticAccessGuardAuditFacts(element, sourceFile, [], 0);
     const name = facts === undefined ? undefined : staticAccessGuardAuditName(facts);
     // SPEC §6.2.1/§6.6/§10.2: the static ledger names the exact executable chain. A
@@ -944,9 +942,9 @@ function accessGuardNames(access: ts.ArrayLiteralExpression, sourceFile: ts.Sour
 }
 
 function staticAccessGuardAuditFacts(
-  expression: ts.Expression,
-  sourceFile: ts.SourceFile,
-  aliasPath: readonly ts.VariableDeclaration[],
+  expression: TS.Expression,
+  sourceFile: TS.SourceFile,
+  aliasPath: readonly TS.VariableDeclaration[],
   depth: number,
 ): readonly StaticAccessGuardAuditFact[] | undefined {
   if (depth > 32) return undefined;
@@ -970,7 +968,7 @@ function staticAccessGuardAuditFacts(
     ) {
       return undefined;
     }
-    const nextPath: ts.VariableDeclaration[] = [];
+    const nextPath: TS.VariableDeclaration[] = [];
     const pathLength = compilerArrayLength(aliasPath, 'Compiler access guard alias path');
     for (let index = 0; index < pathLength; index += 1) {
       compilerArrayAppend(
@@ -979,7 +977,7 @@ function staticAccessGuardAuditFacts(
           aliasPath,
           index,
           'Compiler access guard alias path',
-        ) as ts.VariableDeclaration,
+        ) as TS.VariableDeclaration,
         'Compiler access guard alias path',
       );
     }
@@ -994,12 +992,12 @@ function staticAccessGuardAuditFacts(
       expression.arguments,
       0,
       'Compiler named access guard arguments',
-    ) as ts.Expression | undefined;
+    ) as TS.Expression | undefined;
     const implementation = compilerOwnDataValue(
       expression.arguments,
       1,
       'Compiler named access guard arguments',
-    ) as ts.Expression | undefined;
+    ) as TS.Expression | undefined;
     if (
       compilerArrayLength(expression.arguments, 'Compiler named access guard arguments') !== 2 ||
       name === undefined ||
@@ -1036,7 +1034,7 @@ function staticAccessGuardAuditFacts(
       expression.arguments,
       0,
       'Compiler app role guard arguments',
-    ) as ts.Expression | undefined;
+    ) as TS.Expression | undefined;
     const auditName =
       role !== undefined && ts.isStringLiteralLike(role) ? `role:${role.text}` : undefined;
     if (
@@ -1068,7 +1066,7 @@ function staticAccessGuardAuditFacts(
       expression.arguments,
       index,
       'Compiler app all guard arguments',
-    ) as ts.Expression;
+    ) as TS.Expression;
     if (ts.isSpreadElement(item)) return undefined;
     const itemFacts = staticAccessGuardAuditFacts(item, sourceFile, aliasPath, depth + 1);
     if (itemFacts === undefined) return undefined;
@@ -1130,13 +1128,13 @@ function reservedOwnershipGuardName(name: string): boolean {
 }
 
 function topLevelConstGuardAlias(
-  identifier: ts.Identifier,
-  sourceFile: ts.SourceFile,
-): ts.VariableDeclaration | undefined {
+  identifier: TS.Identifier,
+  sourceFile: TS.SourceFile,
+): TS.VariableDeclaration | undefined {
   // The app-contract resolver accepts declaration roots only outside callable bodies. Keep guard
   // aliases equally bounded: one direct source-file `const` binding, not block/function capture,
   // destructuring, property containers, assignments, or import indirection.
-  let ancestor: ts.Node | undefined = identifier.parent;
+  let ancestor: TS.Node | undefined = identifier.parent;
   while (ancestor !== undefined && ancestor !== sourceFile) {
     if (ts.isFunctionLike(ancestor) || ts.isBlock(ancestor) || ts.isCaseBlock(ancestor)) {
       return undefined;
@@ -1145,7 +1143,7 @@ function topLevelConstGuardAlias(
   }
   if (ancestor !== sourceFile) return undefined;
 
-  let match: ts.VariableDeclaration | undefined;
+  let match: TS.VariableDeclaration | undefined;
   const statementCount = compilerArrayLength(
     sourceFile.statements,
     'Compiler access guard alias statements',
@@ -1155,7 +1153,7 @@ function topLevelConstGuardAlias(
       sourceFile.statements,
       statementIndex,
       'Compiler access guard alias statements',
-    ) as ts.Statement;
+    ) as TS.Statement;
     if (!ts.isVariableStatement(statement)) continue;
     const declarationCount = compilerArrayLength(
       statement.declarationList.declarations,
@@ -1166,7 +1164,7 @@ function topLevelConstGuardAlias(
         statement.declarationList.declarations,
         declarationIndex,
         'Compiler access guard alias declarations',
-      ) as ts.VariableDeclaration;
+      ) as TS.VariableDeclaration;
       if (!ts.isIdentifier(declaration.name) || declaration.name.text !== identifier.text) continue;
       if (
         match !== undefined ||
@@ -1183,8 +1181,8 @@ function topLevelConstGuardAlias(
 }
 
 function guardAliasPathIncludes(
-  path: readonly ts.VariableDeclaration[],
-  declaration: ts.VariableDeclaration,
+  path: readonly TS.VariableDeclaration[],
+  declaration: TS.VariableDeclaration,
 ): boolean {
   const pathLength = compilerArrayLength(path, 'Compiler access guard alias path');
   for (let index = 0; index < pathLength; index += 1) {
@@ -1196,9 +1194,9 @@ function guardAliasPathIncludes(
 }
 
 function staticStringProperty(
-  object: ts.ObjectLiteralExpression,
+  object: TS.ObjectLiteralExpression,
   name: string,
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
 ): string | undefined {
   const value = objectPropertyInitializer(object, name);
   if (!value) return undefined;
@@ -1208,9 +1206,9 @@ function staticStringProperty(
 }
 
 function namedInitializer(
-  object: ts.ObjectLiteralExpression,
+  object: TS.ObjectLiteralExpression,
   name: string,
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
 ): { name: string } | undefined {
   const value = objectPropertyInitializer(object, name);
   return value && ts.isIdentifier(value) ? { name: value.getText(sourceFile) } : undefined;
@@ -1219,8 +1217,8 @@ function namedInitializer(
 function routeLayoutFacts(
   fileName: string,
   source: string,
-  sourceFile: ts.SourceFile,
-  routeDefinition: ts.ObjectLiteralExpression,
+  sourceFile: TS.SourceFile,
+  routeDefinition: TS.ObjectLiteralExpression,
   layouts: ReadonlyMap<string, RouteLayoutModel>,
   diagnostics: CompilerDiagnostic[],
 ): RoutePageLayoutFact[] {
@@ -1294,8 +1292,8 @@ function routeLayoutFacts(
 }
 
 function routeLayoutName(
-  routeDefinition: ts.ObjectLiteralExpression,
-  sourceFile: ts.SourceFile,
+  routeDefinition: TS.ObjectLiteralExpression,
+  sourceFile: TS.SourceFile,
 ): { length: number; name: string; start: number } | null {
   const value = objectPropertyInitializer(routeDefinition, 'layout');
   return value && ts.isIdentifier(value)
@@ -1304,7 +1302,7 @@ function routeLayoutName(
 }
 
 function layoutParentName(
-  layoutDefinition: ts.ObjectLiteralExpression,
+  layoutDefinition: TS.ObjectLiteralExpression,
 ): { length: number; name: string; start: number } | null {
   const value = objectPropertyInitializer(layoutDefinition, 'parent');
   return value && ts.isIdentifier(value)
@@ -1331,7 +1329,7 @@ function layoutChainDiagnostic(
   });
 }
 
-function layoutQueryNames(layoutDefinition: ts.ObjectLiteralExpression): string[] {
+function layoutQueryNames(layoutDefinition: TS.ObjectLiteralExpression): string[] {
   const value = objectPropertyInitializer(layoutDefinition, 'queries');
   if (!value || !ts.isObjectLiteralExpression(value)) return [];
   const names: string[] = [];
@@ -1341,7 +1339,7 @@ function layoutQueryNames(layoutDefinition: ts.ObjectLiteralExpression): string[
       value.properties,
       index,
       'Compiler layout query properties',
-    ) as ts.ObjectLiteralElementLike;
+    ) as TS.ObjectLiteralElementLike;
     if (!ts.isPropertyAssignment(property)) continue;
     const name = propertyNameText(property.name);
     if (name) compilerArrayAppend(names, name, 'Compiler layout query names');
@@ -1350,16 +1348,16 @@ function layoutQueryNames(layoutDefinition: ts.ObjectLiteralExpression): string[
 }
 
 function objectPropertyInitializer(
-  object: ts.ObjectLiteralExpression,
+  object: TS.ObjectLiteralExpression,
   name: string,
-): ts.Expression | null {
+): TS.Expression | null {
   const propertyCount = compilerArrayLength(object.properties, 'Compiler route object properties');
   for (let index = 0; index < propertyCount; index += 1) {
     const property = compilerOwnDataValue(
       object.properties,
       index,
       'Compiler route object properties',
-    ) as ts.ObjectLiteralElementLike;
+    ) as TS.ObjectLiteralElementLike;
     if (ts.isPropertyAssignment(property) && propertyNameText(property.name) === name) {
       return property.initializer;
     }
@@ -1368,9 +1366,9 @@ function objectPropertyInitializer(
 }
 
 function objectPageHandler(
-  object: ts.ObjectLiteralExpression,
+  object: TS.ObjectLiteralExpression,
   name: string,
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
 ): RoutePageHandler | null {
   const propertyCount = compilerArrayLength(object.properties, 'Compiler route page properties');
   for (let index = 0; index < propertyCount; index += 1) {
@@ -1378,7 +1376,7 @@ function objectPageHandler(
       object.properties,
       index,
       'Compiler route page properties',
-    ) as ts.ObjectLiteralElementLike;
+    ) as TS.ObjectLiteralElementLike;
     if (ts.isPropertyAssignment(property) && propertyNameText(property.name) === name) {
       const start = property.initializer.getStart(sourceFile);
       return {
@@ -1408,8 +1406,8 @@ function objectPageHandler(
 }
 
 function methodDeclarationFunctionExpression(
-  method: ts.MethodDeclaration,
-  sourceFile: ts.SourceFile,
+  method: TS.MethodDeclaration,
+  sourceFile: TS.SourceFile,
 ): string {
   let asyncKeyword = '';
   if (method.modifiers !== undefined) {
@@ -1419,7 +1417,7 @@ function methodDeclarationFunctionExpression(
         method.modifiers,
         index,
         'Compiler route method modifiers',
-      ) as ts.Modifier;
+      ) as TS.Modifier;
       if (modifier.kind === ts.SyntaxKind.AsyncKeyword) {
         asyncKeyword = 'async ';
         break;
@@ -1442,23 +1440,23 @@ function methodDeclarationFunctionExpression(
 }
 
 function routeNodeTexts(
-  nodes: readonly ts.Node[],
-  sourceFile: ts.SourceFile,
+  nodes: readonly TS.Node[],
+  sourceFile: TS.SourceFile,
   label: string,
 ): string {
   const texts: string[] = [];
   const count = compilerArrayLength(nodes, label);
   for (let index = 0; index < count; index += 1) {
-    const node = compilerOwnDataValue(nodes, index, label) as ts.Node;
+    const node = compilerOwnDataValue(nodes, index, label) as TS.Node;
     compilerArrayAppend(texts, node.getText(sourceFile), `${label} texts`);
   }
   return compilerArrayJoin(texts, ', ');
 }
 
-function containsJsx(root: ts.Node): boolean {
+function containsJsx(root: TS.Node): boolean {
   let found = false;
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (found) return;
     if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node) || ts.isJsxFragment(node)) {
       found = true;
@@ -1474,14 +1472,14 @@ function containsJsx(root: ts.Node): boolean {
 function routePageComponentFacts(
   fileName: string,
   source: string,
-  sourceFile: ts.SourceFile,
-  root: ts.Node,
+  sourceFile: TS.SourceFile,
+  root: TS.Node,
   componentImports: ReadonlyMap<string, RouteComponentImportModel>,
   diagnostics: CompilerDiagnostic[],
 ): RoutePageComponentFact[] {
   const facts: RoutePageComponentFact[] = [];
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (ts.isJsxElement(node)) {
       const tag = jsxTagName(node.openingElement.tagName);
       if (tag && componentTagName(tag)) {
@@ -1528,9 +1526,9 @@ function routePageComponentFacts(
 function routePageComponentSpreadDiagnostics(
   fileName: string,
   source: string,
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   localName: string,
-  attributes: ts.JsxAttributes,
+  attributes: TS.JsxAttributes,
 ): CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
   const propertyCount = compilerArrayLength(
@@ -1542,7 +1540,7 @@ function routePageComponentSpreadDiagnostics(
       attributes.properties,
       index,
       'Compiler route component attributes',
-    ) as ts.JsxAttributeLike;
+    ) as TS.JsxAttributeLike;
     if (!ts.isJsxSpreadAttribute(attribute)) continue;
     compilerArrayAppend(
       diagnostics,
@@ -1573,9 +1571,9 @@ function routePageComponentSpreadDiagnostics(
 }
 
 function routePageComponentFact(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   localName: string,
-  attributes: ts.JsxAttributes,
+  attributes: TS.JsxAttributes,
   componentImports: ReadonlyMap<string, RouteComponentImportModel>,
 ): RoutePageComponentFact {
   const allProps = routePageComponentProps(sourceFile, attributes);
@@ -1605,8 +1603,8 @@ function routePageComponentFact(
 }
 
 function routePageComponentProps(
-  sourceFile: ts.SourceFile,
-  attributes: ts.JsxAttributes,
+  sourceFile: TS.SourceFile,
+  attributes: TS.JsxAttributes,
 ): RoutePageComponentPropFact[] {
   const props: RoutePageComponentPropFact[] = [];
   const propertyCount = compilerArrayLength(
@@ -1618,7 +1616,7 @@ function routePageComponentProps(
       attributes.properties,
       index,
       'Compiler route component attributes',
-    ) as ts.JsxAttributeLike;
+    ) as TS.JsxAttributeLike;
     if (!ts.isJsxAttribute(attribute)) continue;
     if (!ts.isIdentifier(attribute.name)) continue;
     const name = attribute.name.text;
@@ -1689,13 +1687,13 @@ function componentTagName(tag: string): boolean {
   return compilerRegExpTest(/^[A-Z]/, tag);
 }
 
-function jsxTagName(name: ts.JsxTagNameExpression): string | null {
+function jsxTagName(name: TS.JsxTagNameExpression): string | null {
   if (ts.isIdentifier(name)) return name.text;
   if (ts.isPropertyAccessExpression(name)) return name.getText();
   return null;
 }
 
-function staticLiteralValue(expression: ts.Expression): StaticLiteralValue | undefined {
+function staticLiteralValue(expression: TS.Expression): StaticLiteralValue | undefined {
   const unwrapped = unwrapExpression(expression);
   if (ts.isStringLiteralLike(unwrapped)) return unwrapped.text;
   if (unwrapped.kind === ts.SyntaxKind.TrueKeyword) return true;
@@ -1713,11 +1711,11 @@ function staticLiteralValue(expression: ts.Expression): StaticLiteralValue | und
   return undefined;
 }
 
-function propertyAccessPaths(expression: ts.Expression): string[] {
+function propertyAccessPaths(expression: TS.Expression): string[] {
   const paths: string[] = [];
   const seen = compilerCreateSet<string>();
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (ts.isPropertyAccessExpression(node)) {
       const path = propertyAccessPath(node);
       if (path && !compilerSetHas(seen, path)) {
@@ -1737,7 +1735,7 @@ function emitCompiledRouteModule(options: {
   componentImportRewrites: readonly { localName: string; specifier: string }[];
   routePages: readonly CompiledRoutePage[];
   source: string;
-  sourceFile: ts.SourceFile;
+  sourceFile: TS.SourceFile;
 }): string {
   const replacements: SourceReplacement[] = [];
   const routePageCount = compilerArrayLength(options.routePages, 'Compiler emitted route pages');
@@ -1798,11 +1796,11 @@ function routeModuleImportInsertionIndex(source: string): number {
 function routeAuthoringSurfaceDiagnostics(
   fileName: string,
   source: string,
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
 ): CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (
       ts.isImportDeclaration(node) &&
       node.moduleSpecifier &&
@@ -1884,8 +1882,8 @@ function routeAuthoringSurfaceDiagnostics(
   return diagnostics;
 }
 
-function isDeferCallJsxChild(node: ts.Node): node is ts.JsxExpression & {
-  expression: ts.CallExpression & { expression: ts.Identifier };
+function isDeferCallJsxChild(node: TS.Node): node is TS.JsxExpression & {
+  expression: TS.CallExpression & { expression: TS.Identifier };
 } {
   if (!ts.isJsxExpression(node) || !node.expression) return false;
   if (!ts.isJsxElement(node.parent) && !ts.isJsxFragment(node.parent)) return false;
@@ -1908,7 +1906,7 @@ function routeArtifactFileName(fileName: string): string {
 }
 
 function routeImportReplacements(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   artifactFileName: string,
   componentImportRewrites: readonly { localName: string; specifier: string }[],
 ): SourceReplacement[] {
@@ -1927,7 +1925,7 @@ function routeImportReplacements(
     compilerMapSet(rewriteByLocalName, rewrite.localName, rewrite.specifier);
   }
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (
       (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
       node.moduleSpecifier &&
@@ -1959,7 +1957,7 @@ function routeImportReplacements(
 }
 
 function componentImportRewriteSpecifier(
-  node: ts.ImportDeclaration,
+  node: TS.ImportDeclaration,
   rewriteByLocalName: ReadonlyMap<string, string>,
 ): string | null {
   const namedBindings = node.importClause?.namedBindings;
@@ -1975,7 +1973,7 @@ function componentImportRewriteSpecifier(
       namedBindings.elements,
       index,
       'Compiler route rewritten imports',
-    ) as ts.ImportSpecifier;
+    ) as TS.ImportSpecifier;
     const localName = element.name.text;
     const specifier = compilerMapGet(rewriteByLocalName, localName);
     if (specifier) compilerArrayAppend(matches, specifier, 'Compiler route rewrite matches');

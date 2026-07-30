@@ -1,4 +1,4 @@
-import * as ts from 'typescript';
+import type * as TS from 'typescript';
 
 import {
   expressionResolvesToFrameworkExport,
@@ -24,10 +24,8 @@ import {
   diagnosticFor,
   type CompilerDiagnostic,
 } from '../diagnostics.js';
-import { ensureTypescriptRuntime } from '../ts-api.js';
+import { typescriptRuntime as ts } from '../ts-api.js';
 import { propertyNameText, unwrapExpression } from './ast.js';
-
-ensureTypescriptRuntime(ts);
 
 const ENDPOINT_IDENTITY = frameworkExport('@kovojs/server', 'endpoint');
 const LAYOUT_IDENTITY = frameworkExport('@kovojs/server', 'layout');
@@ -55,12 +53,12 @@ const LEGACY_GLOBALS = [
 ] as const;
 
 interface AccessGuardPropertyFacts {
-  access?: ts.ObjectLiteralElementLike;
-  guard?: ts.ObjectLiteralElementLike;
+  access?: TS.ObjectLiteralElementLike;
+  guard?: TS.ObjectLiteralElementLike;
 }
 
 interface ModuleStaticBindings {
-  readonly objects: ReadonlyMap<string, ts.Expression>;
+  readonly objects: ReadonlyMap<string, TS.Expression>;
   readonly strings: ReadonlyMap<string, string>;
 }
 
@@ -73,12 +71,12 @@ interface ModuleStaticBindings {
 export function accessGuardExclusivityDiagnostics(
   fileName: string,
   source: string,
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
 ): readonly CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
   const bindings = moduleStaticBindings(sourceFile);
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (ts.isCallExpression(node)) {
       const surface = requestSurfaceForCall(sourceFile, node);
       if (surface !== undefined) {
@@ -123,8 +121,8 @@ export function accessGuardExclusivityDiagnostics(
 }
 
 function requestSurfaceForCall(
-  sourceFile: ts.SourceFile,
-  call: ts.CallExpression,
+  sourceFile: TS.SourceFile,
+  call: TS.CallExpression,
 ): (typeof SURFACES)[number] | undefined {
   const count = compilerArrayLength(SURFACES, 'Compiler request-surface identities');
   for (let index = 0; index < count; index += 1) {
@@ -157,8 +155,8 @@ function unsupportedGuardHelp(surface: 'endpoint' | 'webhook'): string {
 }
 
 function resolvesTo(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
   identity: FrameworkExportIdentity,
 ): boolean {
   return expressionResolvesToFrameworkExport(
@@ -171,24 +169,24 @@ function resolvesTo(
 }
 
 function requestSurfaceDefinition(
-  call: ts.CallExpression,
-  objectBindings: ReadonlyMap<string, ts.Expression>,
-): ts.ObjectLiteralExpression | undefined {
+  call: TS.CallExpression,
+  objectBindings: ReadonlyMap<string, TS.Expression>,
+): TS.ObjectLiteralExpression | undefined {
   const count = compilerArrayLength(call.arguments, 'Compiler request-surface arguments');
   if (count === 0) return undefined;
   const candidate = compilerOwnDataValue(
     call.arguments,
     count - 1,
     'Compiler request-surface arguments',
-  ) as ts.Expression;
+  ) as TS.Expression;
   return resolveStaticObject(candidate, objectBindings, compilerCreateSet());
 }
 
 function resolveStaticObject(
-  expression: ts.Expression,
-  objectBindings: ReadonlyMap<string, ts.Expression>,
-  seen: Set<ts.Expression>,
-): ts.ObjectLiteralExpression | undefined {
+  expression: TS.Expression,
+  objectBindings: ReadonlyMap<string, TS.Expression>,
+  seen: Set<TS.Expression>,
+): TS.ObjectLiteralExpression | undefined {
   const unwrapped = unwrapExpression(expression);
   if (compilerSetHas(seen, unwrapped)) return undefined;
   compilerSetAdd(seen, unwrapped);
@@ -199,9 +197,9 @@ function resolveStaticObject(
 }
 
 function accessGuardProperties(
-  object: ts.ObjectLiteralExpression,
+  object: TS.ObjectLiteralExpression,
   bindings: ModuleStaticBindings,
-  seen: Set<ts.ObjectLiteralExpression>,
+  seen: Set<TS.ObjectLiteralExpression>,
 ): AccessGuardPropertyFacts {
   if (compilerSetHas(seen, object)) return {};
   compilerSetAdd(seen, object);
@@ -212,7 +210,7 @@ function accessGuardProperties(
       object.properties,
       index,
       'Compiler request-surface properties',
-    ) as ts.ObjectLiteralElementLike;
+    ) as TS.ObjectLiteralElementLike;
     if (ts.isSpreadAssignment(property)) {
       const spread = resolveStaticObject(
         property.expression,
@@ -237,8 +235,8 @@ function accessGuardProperties(
   return result;
 }
 
-function moduleStaticBindings(sourceFile: ts.SourceFile): ModuleStaticBindings {
-  const objects = compilerCreateMap<string, ts.Expression>();
+function moduleStaticBindings(sourceFile: TS.SourceFile): ModuleStaticBindings {
+  const objects = compilerCreateMap<string, TS.Expression>();
   const strings = compilerCreateMap<string, string>();
   const statements = sourceFile.statements;
   const statementCount = compilerArrayLength(statements, 'Compiler module statements');
@@ -247,7 +245,7 @@ function moduleStaticBindings(sourceFile: ts.SourceFile): ModuleStaticBindings {
       statements,
       statementIndex,
       'Compiler module statements',
-    ) as ts.Statement;
+    ) as TS.Statement;
     if (!ts.isVariableStatement(statement)) continue;
     if ((statement.declarationList.flags & ts.NodeFlags.Const) === 0) continue;
     const declarations = statement.declarationList.declarations;
@@ -257,7 +255,7 @@ function moduleStaticBindings(sourceFile: ts.SourceFile): ModuleStaticBindings {
         declarations,
         declarationIndex,
         'Compiler module declarations',
-      ) as ts.VariableDeclaration;
+      ) as TS.VariableDeclaration;
       if (!ts.isIdentifier(declaration.name) || declaration.initializer === undefined) continue;
       const initializer = unwrapExpression(declaration.initializer);
       compilerMapSet(objects, declaration.name.text, initializer);
@@ -271,9 +269,9 @@ function moduleStaticBindings(sourceFile: ts.SourceFile): ModuleStaticBindings {
 }
 
 function resolveStaticString(
-  expression: ts.Expression,
-  bindings: ReadonlyMap<string, ts.Expression>,
-  seen: Set<ts.Expression>,
+  expression: TS.Expression,
+  bindings: ReadonlyMap<string, TS.Expression>,
+  seen: Set<TS.Expression>,
 ): string | undefined {
   const unwrapped = unwrapExpression(expression);
   if (compilerSetHas(seen, unwrapped)) return undefined;

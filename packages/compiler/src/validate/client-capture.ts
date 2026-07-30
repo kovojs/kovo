@@ -1,4 +1,5 @@
-import * as ts from 'typescript';
+import type * as TS from 'typescript';
+import { typescriptRuntime as ts } from '../ts-api.js';
 
 import {
   canonicalFrameworkExportForExpression,
@@ -143,7 +144,7 @@ export interface ClientCaptureAnalysis {
  * specifier, so a barrel/re-export cannot bypass the gate: re-exporting a secret through `index.ts`
  * still produces a captured local binding here.
  */
-function importBindings(sourceFile: ts.SourceFile): ImportBinding[] {
+function importBindings(sourceFile: TS.SourceFile): ImportBinding[] {
   const bindings: ImportBinding[] = [];
 
   const statementLength = compilerArrayLength(sourceFile.statements, 'Client-capture statements');
@@ -152,7 +153,7 @@ function importBindings(sourceFile: ts.SourceFile): ImportBinding[] {
       sourceFile.statements,
       statementIndex,
       'Client-capture statements',
-    ) as ts.Statement | undefined;
+    ) as TS.Statement | undefined;
     if (!statement)
       throw new TypeError(`Client-capture statements[${statementIndex}] must be dense.`);
     if (ts.isImportEqualsDeclaration(statement)) {
@@ -207,7 +208,7 @@ function importBindings(sourceFile: ts.SourceFile): ImportBinding[] {
           named.elements,
           elementIndex,
           'Client-capture named imports',
-        ) as ts.ImportSpecifier | undefined;
+        ) as TS.ImportSpecifier | undefined;
         if (!element) {
           throw new TypeError(`Client-capture named imports[${elementIndex}] must be dense.`);
         }
@@ -229,7 +230,7 @@ function appendImportBinding(bindings: ImportBinding[], binding: ImportBinding):
   compilerArrayAppend(bindings, binding, 'Client-capture import bindings');
 }
 
-function appendCommonJsBindings(bindings: ImportBinding[], statement: ts.Statement): void {
+function appendCommonJsBindings(bindings: ImportBinding[], statement: TS.Statement): void {
   if (!ts.isVariableStatement(statement)) return;
   const declarationLength = compilerArrayLength(
     statement.declarationList.declarations,
@@ -240,7 +241,7 @@ function appendCommonJsBindings(bindings: ImportBinding[], statement: ts.Stateme
       statement.declarationList.declarations,
       declarationIndex,
       'Client-capture CommonJS declarations',
-    ) as ts.VariableDeclaration | undefined;
+    ) as TS.VariableDeclaration | undefined;
     if (!declaration?.initializer) continue;
     const required = commonJsRequirement(declaration.initializer);
     if (!required) continue;
@@ -264,7 +265,7 @@ function appendCommonJsBindings(bindings: ImportBinding[], statement: ts.Stateme
         declaration.name.elements,
         elementIndex,
         'Client-capture CommonJS binding elements',
-      ) as ts.BindingElement | undefined;
+      ) as TS.BindingElement | undefined;
       if (!element || !ts.isIdentifier(element.name)) continue;
       appendImportBinding(bindings, {
         importedName:
@@ -281,7 +282,7 @@ function appendCommonJsBindings(bindings: ImportBinding[], statement: ts.Stateme
 }
 
 function commonJsRequirement(
-  expression: ts.Expression,
+  expression: TS.Expression,
 ): { importedName: string; moduleSpecifier: string } | undefined {
   let current = unwrapClientCaptureExpression(expression);
   let importedName = '*';
@@ -303,7 +304,7 @@ function commonJsRequirement(
   };
 }
 
-function unwrapClientCaptureExpression(expression: ts.Expression): ts.Expression {
+function unwrapClientCaptureExpression(expression: TS.Expression): TS.Expression {
   let current = expression;
   while (
     ts.isParenthesizedExpression(current) ||
@@ -318,16 +319,16 @@ function unwrapClientCaptureExpression(expression: ts.Expression): ts.Expression
 }
 
 /** Parser-owned semantic identifier fact; post-parse policy never compares raw source slices. */
-function clientCaptureIdentifierName(identifier: ts.Identifier): string {
+function clientCaptureIdentifierName(identifier: TS.Identifier): string {
   return ts.idText(identifier);
 }
 
 function moduleConstantBindings(model: ComponentModuleModel): ModuleConstantBinding[] {
   const bindingCounts = compilerCreateMap<string, number>();
-  const declarations = compilerCreateMap<string, ts.VariableDeclaration>();
+  const declarations = compilerCreateMap<string, TS.VariableDeclaration>();
   const variableNames: string[] = [];
   const seenVariables = compilerCreateSet<string>();
-  const recordBinding = (name: string, declaration?: ts.VariableDeclaration): void => {
+  const recordBinding = (name: string, declaration?: TS.VariableDeclaration): void => {
     compilerMapSet(bindingCounts, name, (compilerMapGet(bindingCounts, name) ?? 0) + 1);
     if (!declaration) return;
     compilerMapSet(declarations, name, declaration);
@@ -340,7 +341,7 @@ function moduleConstantBindings(model: ComponentModuleModel): ModuleConstantBind
   const length = compilerArrayLength(statements, 'Module-scope capture statements');
   for (let index = 0; index < length; index += 1) {
     const statement = compilerOwnDataValue(statements, index, 'Module-scope capture statements') as
-      | ts.Statement
+      | TS.Statement
       | undefined;
     if (!statement) {
       compilerFailClosed(`Module-scope capture statements[${index}] must be own data.`);
@@ -355,7 +356,7 @@ function moduleConstantBindings(model: ComponentModuleModel): ModuleConstantBind
           statement.declarationList.declarations,
           declarationIndex,
           'Module-scope capture declarations',
-        ) as ts.VariableDeclaration | undefined;
+        ) as TS.VariableDeclaration | undefined;
         if (declaration) {
           markBindingName(declaration.name, (name) => recordBinding(name, declaration));
         }
@@ -392,7 +393,7 @@ function moduleConstantBindings(model: ComponentModuleModel): ModuleConstantBind
           named.elements,
           elementIndex,
           'Published primitive import elements',
-        ) as ts.ImportSpecifier | undefined;
+        ) as TS.ImportSpecifier | undefined;
         if (element && !element.isTypeOnly) recordBinding(element.name.text);
       }
     }
@@ -420,7 +421,7 @@ function moduleConstantBindings(model: ComponentModuleModel): ModuleConstantBind
   return bindings;
 }
 
-function markBindingName(name: ts.BindingName, mark: (name: string) => void): void {
+function markBindingName(name: TS.BindingName, mark: (name: string) => void): void {
   if (ts.isIdentifier(name)) {
     mark(name.text);
     return;
@@ -431,12 +432,12 @@ function markBindingName(name: ts.BindingName, mark: (name: string) => void): vo
       name.elements,
       index,
       'Published primitive binding elements',
-    ) as ts.ArrayBindingElement | undefined;
+    ) as TS.ArrayBindingElement | undefined;
     if (element && ts.isBindingElement(element)) markBindingName(element.name, mark);
   }
 }
 
-function expressionIsStaticPublishablePrimitive(expression: ts.Expression): boolean {
+function expressionIsStaticPublishablePrimitive(expression: TS.Expression): boolean {
   const node = unwrapClientCaptureExpression(expression);
   return (
     ts.isStringLiteralLike(node) ||
@@ -454,8 +455,8 @@ function expressionIsStaticPublishablePrimitive(expression: ts.Expression): bool
 interface HandlerCaptureRoot {
   attributeStart: number;
   directCallable: boolean;
-  root: ts.Node;
-  scopeBoundary: ts.Node;
+  root: TS.Node;
+  scopeBoundary: TS.Node;
 }
 
 /** Every parser-proven host/reviewed-UI event expression that lowering can emit. */
@@ -492,7 +493,7 @@ function handlerCaptureRoots(model: ComponentModuleModel): HandlerCaptureRoot[] 
 
   const roots: HandlerCaptureRoot[] = [];
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (
       ts.isJsxAttribute(node) &&
       compilerSetHas(handlerAttributeStarts, node.getStart(sourceFile)) &&
@@ -560,7 +561,7 @@ function handlerExecutionPolicyUses(root: HandlerCaptureRoot): HandlerExecutionP
   let nodeCount = 0;
   let foundDynamicCode = false;
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     nodeCount += 1;
     if (nodeCount > MAX_HANDLER_EXECUTION_POLICY_NODES) {
       compilerFailClosed(
@@ -587,7 +588,7 @@ function handlerExecutionPolicyUses(root: HandlerCaptureRoot): HandlerExecutionP
   return foundDynamicCode ? uses : [];
 }
 
-function nodeUsesDynamicCode(node: ts.Node, scopeBoundary: ts.Node): boolean {
+function nodeUsesDynamicCode(node: TS.Node, scopeBoundary: TS.Node): boolean {
   if (ts.isIdentifier(node) && isValueReferenceIdentifier(node)) {
     if (
       handlerIdentifierIsUnshadowedGlobal(node, 'eval', scopeBoundary) ||
@@ -672,7 +673,7 @@ function nodeUsesDynamicCode(node: ts.Node, scopeBoundary: ts.Node): boolean {
   return false;
 }
 
-function handlerDynamicCodeCallee(callee: ts.Expression, scopeBoundary: ts.Node): boolean {
+function handlerDynamicCodeCallee(callee: TS.Expression, scopeBoundary: TS.Node): boolean {
   if (ts.isIdentifier(callee)) {
     return (
       handlerIdentifierIsUnshadowedGlobal(callee, 'eval', scopeBoundary) ||
@@ -698,9 +699,9 @@ function handlerDynamicCodeCallee(callee: ts.Expression, scopeBoundary: ts.Node)
 }
 
 function handlerGlobalMemberName(
-  receiver: ts.Expression,
+  receiver: TS.Expression,
   name: string,
-  scopeBoundary: ts.Node,
+  scopeBoundary: TS.Node,
 ): string | undefined {
   let object = unwrapClientCaptureExpression(receiver);
   while (ts.isPropertyAccessExpression(object) || ts.isElementAccessExpression(object)) {
@@ -714,8 +715,8 @@ function handlerGlobalMemberName(
 }
 
 function handlerTimerCalleeName(
-  callee: ts.Expression,
-  scopeBoundary: ts.Node,
+  callee: TS.Expression,
+  scopeBoundary: TS.Node,
 ): 'setInterval' | 'setTimeout' | undefined {
   if (ts.isIdentifier(callee)) {
     if (handlerIdentifierIsUnshadowedGlobal(callee, 'setInterval', scopeBoundary)) {
@@ -742,13 +743,13 @@ function handlerTimerCalleeName(
   return undefined;
 }
 
-function handlerTimerCallCanExecuteCode(call: ts.CallExpression): boolean {
+function handlerTimerCallCanExecuteCode(call: TS.CallExpression): boolean {
   const callback = call.arguments[0];
   return !callback || (!ts.isArrowFunction(callback) && !ts.isFunctionExpression(callback));
 }
 
-function handlerOwningDirectCall(callee: ts.Expression): ts.CallExpression | undefined {
-  let current: ts.Expression = callee;
+function handlerOwningDirectCall(callee: TS.Expression): TS.CallExpression | undefined {
+  let current: TS.Expression = callee;
   let parent = current.parent;
   while (
     parent &&
@@ -766,14 +767,14 @@ function handlerOwningDirectCall(callee: ts.Expression): ts.CallExpression | und
     : undefined;
 }
 
-function handlerIdentifierNamesGlobalObject(identifier: ts.Identifier): boolean {
+function handlerIdentifierNamesGlobalObject(identifier: TS.Identifier): boolean {
   return compilerSetHas(GLOBAL_OBJECT_IDENTIFIERS, clientCaptureIdentifierName(identifier));
 }
 
 function handlerIdentifierIsUnshadowedGlobal(
-  identifier: ts.Identifier,
+  identifier: TS.Identifier,
   name: string,
-  scopeBoundary: ts.Node,
+  scopeBoundary: TS.Node,
 ): boolean {
   return (
     identifier.text === name &&
@@ -781,14 +782,14 @@ function handlerIdentifierIsUnshadowedGlobal(
   );
 }
 
-function handlerPropertyName(name: ts.PropertyName): string | undefined {
+function handlerPropertyName(name: TS.PropertyName): string | undefined {
   if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
     return name.text;
   }
   return ts.isComputedPropertyName(name) ? staticHandlerString(name.expression) : undefined;
 }
 
-function staticHandlerString(expression: ts.Expression): string | undefined {
+function staticHandlerString(expression: TS.Expression): string | undefined {
   const node = unwrapClientCaptureExpression(expression);
   if (ts.isStringLiteralLike(node)) return node.text;
   if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
@@ -812,7 +813,7 @@ function classifyCaptures(
 ): void {
   const { attributeStart, directCallable, root, scopeBoundary } = captureRoot;
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     const loaderBinding = moduleLoaderBinding(node);
     if (loaderBinding) {
       compilerArrayAppend(
@@ -836,7 +837,7 @@ function classifyCaptures(
           isDirectCalleeReferenceIdentifier(node) ||
           (directCallable && isDirectHandlerCallableReference(node, root));
         const publishReason = isPublishToClientArgument(node, parent)
-          ? publishToClientReason(parent as ts.CallExpression)
+          ? publishToClientReason(parent as TS.CallExpression)
           : null;
         // SPEC §6.6: the exact recorded reason must remain unambiguous in source,
         // `kovo explain`, CI logs, and review tooling.
@@ -893,7 +894,7 @@ function classifyCaptures(
   visit(root);
 }
 
-function moduleLoaderBinding(node: ts.Node): ImportBinding | undefined {
+function moduleLoaderBinding(node: TS.Node): ImportBinding | undefined {
   if (
     ts.isMetaProperty(node) &&
     node.keywordToken === ts.SyntaxKind.ImportKeyword &&
@@ -934,8 +935,8 @@ function moduleLoaderBinding(node: ts.Node): ImportBinding | undefined {
   return undefined;
 }
 
-function isDirectCalleeReferenceIdentifier(node: ts.Identifier): boolean {
-  let current: ts.Node = node;
+function isDirectCalleeReferenceIdentifier(node: TS.Identifier): boolean {
+  let current: TS.Node = node;
   let parent = current.parent;
   while (
     parent &&
@@ -951,8 +952,8 @@ function isDirectCalleeReferenceIdentifier(node: ts.Identifier): boolean {
   return !!parent && ts.isCallExpression(parent) && parent.expression === current;
 }
 
-function isDirectHandlerCallableReference(node: ts.Identifier, root: ts.Node): boolean {
-  let current: ts.Node = node;
+function isDirectHandlerCallableReference(node: TS.Identifier, root: TS.Node): boolean {
+  let current: TS.Node = node;
   let parent = current.parent;
   while (
     parent &&
@@ -971,7 +972,7 @@ function isDirectHandlerCallableReference(node: ts.Identifier, root: ts.Node): b
 }
 
 /** True when `node` is the first argument of a `publishToClient(value, …)` call. */
-function isPublishToClientArgument(node: ts.Identifier, parent: ts.Node): boolean {
+function isPublishToClientArgument(node: TS.Identifier, parent: TS.Node): boolean {
   if (!ts.isCallExpression(parent)) return false;
   if (parent.arguments[0] !== node) return false;
   return expressionResolvesToFrameworkExport(
@@ -983,7 +984,7 @@ function isPublishToClientArgument(node: ts.Identifier, parent: ts.Node): boolea
 }
 
 /** Extract the `reason` string from `publishToClient(value, { reason: '…' })` for the audit ledger. */
-function publishToClientReason(call: ts.CallExpression): string {
+function publishToClientReason(call: TS.CallExpression): string {
   const options = call.arguments[1];
   if (!options || !ts.isObjectLiteralExpression(options)) return '';
   const propertyLength = compilerArrayLength(
@@ -995,7 +996,7 @@ function publishToClientReason(call: ts.CallExpression): string {
       options.properties,
       index,
       'publishToClient reason properties',
-    ) as ts.ObjectLiteralElementLike | undefined;
+    ) as TS.ObjectLiteralElementLike | undefined;
     if (!property)
       throw new TypeError(`publishToClient reason properties[${index}] must be dense.`);
     if (
@@ -1010,7 +1011,7 @@ function publishToClientReason(call: ts.CallExpression): string {
   return '';
 }
 
-function sourceSite(fileName: string, sourceFile: ts.SourceFile, position: number): string {
+function sourceSite(fileName: string, sourceFile: TS.SourceFile, position: number): string {
   const { line } = sourceFile.getLineAndCharacterOfPosition(position);
   return `${fileName}:${line + 1}`;
 }
@@ -1018,7 +1019,7 @@ function sourceSite(fileName: string, sourceFile: ts.SourceFile, position: numbe
 // A value reference (not a declaration site, property name, or import binding name). Reused from the
 // scanner's own `isReferenceIdentifier` discipline: a callee identifier IS a value reference (we
 // then separate callee vs non-callee by parent shape, not by excluding it here).
-function isValueReferenceIdentifier(node: ts.Identifier): boolean {
+function isValueReferenceIdentifier(node: TS.Identifier): boolean {
   const parent = node.parent;
   if (ts.isPropertyAccessExpression(parent) && parent.name === node) return false;
   if (ts.isPropertyAssignment(parent) && parent.name === node) return false;
@@ -1034,11 +1035,11 @@ function isValueReferenceIdentifier(node: ts.Identifier): boolean {
 
 interface ModuleBindingDeclaration {
   localName: string;
-  node: ts.Node;
+  node: TS.Node;
 }
 
 function appendTaintedModuleBindings(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   bindingByName: Map<string, CaptureBinding>,
 ): void {
   const declarations = moduleBindingDeclarations(sourceFile);
@@ -1062,7 +1063,7 @@ function appendTaintedModuleBindings(
   }
 }
 
-function moduleBindingDeclarations(sourceFile: ts.SourceFile): ModuleBindingDeclaration[] {
+function moduleBindingDeclarations(sourceFile: TS.SourceFile): ModuleBindingDeclaration[] {
   const declarations: ModuleBindingDeclaration[] = [];
   const statementLength = compilerArrayLength(
     sourceFile.statements,
@@ -1073,7 +1074,7 @@ function moduleBindingDeclarations(sourceFile: ts.SourceFile): ModuleBindingDecl
       sourceFile.statements,
       statementIndex,
       'Client-capture module declarations',
-    ) as ts.Statement | undefined;
+    ) as TS.Statement | undefined;
     if (!statement) continue;
     if (ts.isFunctionDeclaration(statement) && statement.name && statement.body) {
       compilerArrayAppend(
@@ -1093,7 +1094,7 @@ function moduleBindingDeclarations(sourceFile: ts.SourceFile): ModuleBindingDecl
         statement.declarationList.declarations,
         declarationIndex,
         'Client-capture module variable declarations',
-      ) as ts.VariableDeclaration | undefined;
+      ) as TS.VariableDeclaration | undefined;
       if (!declaration?.initializer || !ts.isIdentifier(declaration.name)) continue;
       compilerArrayAppend(
         declarations,
@@ -1106,11 +1107,11 @@ function moduleBindingDeclarations(sourceFile: ts.SourceFile): ModuleBindingDecl
 }
 
 function closedModuleDependency(
-  root: ts.Node,
+  root: TS.Node,
   bindingByName: ReadonlyMap<string, CaptureBinding>,
 ): ImportBinding | undefined {
   let found: ImportBinding | undefined;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (found) return;
     const loader = moduleLoaderBinding(node);
     if (loader) {

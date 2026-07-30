@@ -3,11 +3,25 @@ import { describe, expect, it } from 'vitest';
 
 import {
   createTypescriptApi,
+  ensureTypescriptRuntime,
   getEffectiveConstraintOfTypeParameter,
   hasModifier,
+  typescriptRuntime,
 } from './ts-api.js';
 
 describe('TypeScript compiler API compatibility adapter', () => {
+  it('exposes one complete canonical runtime without mutating frozen wrappers', () => {
+    const nestedWrapper = Object.freeze({ default: typescriptRuntime });
+    const invalidWrapper = Object.freeze({});
+
+    expect(ensureTypescriptRuntime(typescriptRuntime)).toBe(typescriptRuntime);
+    expect(ensureTypescriptRuntime(nestedWrapper)).toBe(typescriptRuntime);
+    expect(ensureTypescriptRuntime(invalidWrapper)).toBe(typescriptRuntime);
+    expect(typescriptRuntime.ScriptTarget).toBeDefined();
+    expect(nestedWrapper).toEqual({ default: typescriptRuntime });
+    expect(invalidWrapper).toEqual({});
+  });
+
   it('reads modifiers and type-parameter constraints through the installed compiler API', () => {
     const { statement, typeParameter } = exportedFunctionFixture();
 

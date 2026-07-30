@@ -1,4 +1,4 @@
-import * as ts from 'typescript';
+import type * as TS from 'typescript';
 
 import {
   expressionResolvesToFrameworkExport,
@@ -8,10 +8,8 @@ import {
 
 import { deriveMutationKey } from '../mutation-names.js';
 import { deriveRegistryIdentity } from '../registry-identities.js';
-import { ensureTypescriptRuntime } from '../ts-api.js';
+import { typescriptRuntime as ts } from '../ts-api.js';
 import { propertyNameText } from './ast.js';
-
-ensureTypescriptRuntime(ts);
 
 const QUERY_IDENTITY = frameworkExport('@kovojs/server', 'query');
 const MUTATION_IDENTITY = frameworkExport('@kovojs/server', 'mutation');
@@ -69,7 +67,7 @@ export function inlineOptimisticPlansFromSource(
   const localQueryKeys = collectQueryKeys(sourceFile, options);
   const localQueueNames = collectLocalQueueNames(sourceFile);
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     const fact = optimisticPlanFromVariable(sourceFile, localQueryKeys, localQueueNames, node);
     if (fact) facts.push(fact);
     ts.forEachChild(node, visit);
@@ -95,10 +93,10 @@ export function serializeInlineOptimisticPlanIr(plan: InlineOptimisticPlanFact):
 }
 
 function optimisticPlanFromVariable(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   localQueryKeys: ReadonlyMap<string, string>,
   localQueueNames: ReadonlyMap<string, string>,
-  node: ts.Node,
+  node: TS.Node,
 ): InlineOptimisticPlanFact | null {
   if (!ts.isVariableDeclaration(node)) return null;
   if (!ts.isIdentifier(node.name)) return null;
@@ -116,11 +114,11 @@ function optimisticPlanFromVariable(
 }
 
 function inlineMutationOptimisticPlan(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   localQueryKeys: ReadonlyMap<string, string>,
   localQueueNames: ReadonlyMap<string, string>,
   localName: string,
-  initializer: ts.Expression,
+  initializer: TS.Expression,
 ): InlineOptimisticPlanFact | null {
   if (!ts.isCallExpression(initializer)) return null;
   if (!isKovoMutationCallee(sourceFile, initializer.expression)) return null;
@@ -154,7 +152,7 @@ function inlineMutationOptimisticPlan(
   };
 }
 
-function isKovoMutationCallee(sourceFile: ts.SourceFile, expression: ts.Expression): boolean {
+function isKovoMutationCallee(sourceFile: TS.SourceFile, expression: TS.Expression): boolean {
   return expressionResolvesToFrameworkExport(
     ts as FrameworkIdentityTypeScript,
     sourceFile,
@@ -165,7 +163,7 @@ function isKovoMutationCallee(sourceFile: ts.SourceFile, expression: ts.Expressi
 }
 
 function mutationQueuePropertyValue(
-  object: ts.ObjectLiteralExpression,
+  object: TS.ObjectLiteralExpression,
   mutationKey: string,
   localQueueNames: ReadonlyMap<string, string>,
 ): string | undefined {
@@ -176,9 +174,9 @@ function mutationQueuePropertyValue(
 }
 
 function optimisticTransformsFromObject(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   localQueryKeys: ReadonlyMap<string, string>,
-  object: ts.ObjectLiteralExpression,
+  object: TS.ObjectLiteralExpression,
 ): InlineOptimisticTransformFact[] {
   return object.properties.flatMap<InlineOptimisticTransformFact>((property) => {
     const query = queryNameFromPropertyName(property.name, localQueryKeys);
@@ -208,9 +206,9 @@ function optimisticTransformsFromObject(
 }
 
 function keyedEntryFromObject(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   query: string,
-  object: ts.ObjectLiteralExpression,
+  object: TS.ObjectLiteralExpression,
 ): InlineOptimisticTransformFact | null {
   const keys = objectMemberValueNode(findObjectMember(object, 'keys'));
   const transform = objectMemberValueNode(findObjectMember(object, 'transform'));
@@ -224,9 +222,9 @@ function keyedEntryFromObject(
 }
 
 function findObjectMember(
-  object: ts.ObjectLiteralExpression,
+  object: TS.ObjectLiteralExpression,
   name: string,
-): ts.ObjectLiteralElementLike | undefined {
+): TS.ObjectLiteralElementLike | undefined {
   return object.properties.find((property) => propertyNameText(property.name) === name);
 }
 
@@ -235,8 +233,8 @@ function findObjectMember(
  * or the whole member for a method shorthand (`transform(draft, input) { … }`).
  */
 function objectMemberValueNode(
-  member: ts.ObjectLiteralElementLike | undefined,
-): ts.Node | undefined {
+  member: TS.ObjectLiteralElementLike | undefined,
+): TS.Node | undefined {
   if (!member) return undefined;
   if (ts.isPropertyAssignment(member)) return member.initializer;
   if (ts.isMethodDeclaration(member)) return member;
@@ -244,9 +242,9 @@ function objectMemberValueNode(
 }
 
 function objectPropertyExpression(
-  object: ts.ObjectLiteralExpression,
+  object: TS.ObjectLiteralExpression,
   propertyName: string,
-): ts.Expression | null {
+): TS.Expression | null {
   for (const property of object.properties) {
     if (!ts.isPropertyAssignment(property)) continue;
     if (propertyNameText(property.name) === propertyName) return property.initializer;
@@ -255,14 +253,14 @@ function objectPropertyExpression(
 }
 
 function queueNameFromExpression(
-  expression: ts.Expression | null | undefined,
+  expression: TS.Expression | null | undefined,
   localQueueNames: ReadonlyMap<string, string>,
 ): string | undefined {
   if (expression && ts.isIdentifier(expression)) return localQueueNames.get(expression.text);
   return undefined;
 }
 
-function collectLocalQueueNames(sourceFile: ts.SourceFile): ReadonlyMap<string, string> {
+function collectLocalQueueNames(sourceFile: TS.SourceFile): ReadonlyMap<string, string> {
   const bindings = new Map<string, string>();
   for (const statement of sourceFile.statements) {
     if (!ts.isVariableStatement(statement)) continue;
@@ -292,7 +290,7 @@ function collectLocalQueueNames(sourceFile: ts.SourceFile): ReadonlyMap<string, 
 }
 
 function collectQueryKeys(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   options: InlineOptimisticScanOptions,
 ): ReadonlyMap<string, string> {
   const bindings = new Map<string, string>();
@@ -319,7 +317,7 @@ function collectQueryKeys(
 }
 
 function collectImportedQueryKeys(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   options: InlineOptimisticScanOptions,
 ): ReadonlyMap<string, string> {
   const resolveStaticImport = options.resolveStaticImport;
@@ -351,7 +349,7 @@ function collectImportedQueryKeys(
   return bindings;
 }
 
-function collectExportedQueryKeys(sourceFile: ts.SourceFile): ReadonlyMap<string, string> {
+function collectExportedQueryKeys(sourceFile: TS.SourceFile): ReadonlyMap<string, string> {
   const bindings = new Map<string, string>();
   for (const statement of sourceFile.statements) {
     if (!ts.isVariableStatement(statement)) continue;
@@ -368,10 +366,10 @@ function collectExportedQueryKeys(sourceFile: ts.SourceFile): ReadonlyMap<string
 }
 
 function queryKeyFromCall(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   localName: string,
-  statement: ts.VariableStatement,
-  call: ts.CallExpression,
+  statement: TS.VariableStatement,
+  call: TS.CallExpression,
 ): string | null {
   if (!isQueryCallExpression(sourceFile, call.expression)) return null;
   const [firstArg] = call.arguments;
@@ -382,7 +380,7 @@ function queryKeyFromCall(
   return null;
 }
 
-function isQueryCallExpression(sourceFile: ts.SourceFile, expression: ts.Expression): boolean {
+function isQueryCallExpression(sourceFile: TS.SourceFile, expression: TS.Expression): boolean {
   return expressionResolvesToFrameworkExport(
     ts as FrameworkIdentityTypeScript,
     sourceFile,
@@ -392,14 +390,14 @@ function isQueryCallExpression(sourceFile: ts.SourceFile, expression: ts.Express
   );
 }
 
-function isExportedStatement(statement: ts.VariableStatement): boolean {
+function isExportedStatement(statement: TS.VariableStatement): boolean {
   return (
     statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) === true
   );
 }
 
 function queryNameFromPropertyName(
-  name: ts.PropertyName | undefined,
+  name: TS.PropertyName | undefined,
   localQueryKeys: ReadonlyMap<string, string>,
 ): string | null {
   if (!name) return null;
@@ -409,7 +407,7 @@ function queryNameFromPropertyName(
 }
 
 function queryNameFromComputedExpression(
-  expression: ts.Expression,
+  expression: TS.Expression,
   localQueryKeys: ReadonlyMap<string, string>,
 ): string | null {
   const unwrapped = unwrapTsExpression(expression);
@@ -428,12 +426,12 @@ function queryNameFromComputedExpression(
   return null;
 }
 
-function isAwaitFragmentLiteral(expression: ts.Expression): boolean {
+function isAwaitFragmentLiteral(expression: TS.Expression): boolean {
   // `await-fragment` is declarative optimistic-plan metadata, not a trusted-code marker.
   return ts.isStringLiteralLike(expression) && expression.text === 'await-fragment';
 }
 
-function unwrapTsExpression(expression: ts.Expression | null | undefined): ts.Expression | null {
+function unwrapTsExpression(expression: TS.Expression | null | undefined): TS.Expression | null {
   let current = expression;
   while (
     current &&

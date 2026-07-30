@@ -6,14 +6,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const diagnosticsProbe = vi.hoisted(() => ({ calls: 0 }));
 
-vi.mock('typescript', async (importOriginal) => {
-  const original = await importOriginal<typeof import('typescript')>();
+vi.mock('./ts-api.js', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./ts-api.js')>();
+  const runtime = original.typescriptRuntime;
   return {
     ...original,
-    getPreEmitDiagnostics(...args: Parameters<typeof original.getPreEmitDiagnostics>) {
-      diagnosticsProbe.calls += 1;
-      return original.getPreEmitDiagnostics(...args);
-    },
+    typescriptRuntime: Object.freeze({
+      ...runtime,
+      getPreEmitDiagnostics(...args: Parameters<typeof runtime.getPreEmitDiagnostics>) {
+        diagnosticsProbe.calls += 1;
+        return runtime.getPreEmitDiagnostics(...args);
+      },
+    }),
   };
 });
 

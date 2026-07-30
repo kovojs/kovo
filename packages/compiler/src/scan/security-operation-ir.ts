@@ -1,4 +1,5 @@
-import * as ts from 'typescript';
+import type * as TS from 'typescript';
+import { typescriptRuntime as ts } from '../ts-api.js';
 
 import {
   canonicalFrameworkExportForExpression,
@@ -87,14 +88,14 @@ interface SecurityOperationScanResult<Operation> {
 
 /** Parser/scanner-shared exact same-file root or helper callable. */
 export interface ResolvedSecurityIrCallable {
-  readonly body: ts.ConciseBody;
+  readonly body: TS.ConciseBody;
   readonly declaration:
-    | ts.ArrowFunction
-    | ts.FunctionDeclaration
-    | ts.FunctionExpression
-    | ts.MethodDeclaration;
+    | TS.ArrowFunction
+    | TS.FunctionDeclaration
+    | TS.FunctionExpression
+    | TS.MethodDeclaration;
   readonly name: string;
-  readonly parameters: ts.NodeArray<ts.ParameterDeclaration>;
+  readonly parameters: TS.NodeArray<TS.ParameterDeclaration>;
 }
 
 type ServerSecurityScanSurface = SecurityOperationSurface | 'route';
@@ -233,12 +234,12 @@ const serverReviewedDatabaseBuilderMethods = finiteStringSet([
   'values',
   'where',
 ]);
-const serverReviewedDatabaseSchemaValueCache = compilerCreateWeakMap<ts.Expression, boolean>();
+const serverReviewedDatabaseSchemaValueCache = compilerCreateWeakMap<TS.Expression, boolean>();
 
 interface SecurityIrIndexedDeclarationFact {
   callable?: ResolvedSecurityIrCallable;
   callableStart?: number;
-  immutableInitializer?: ts.Expression;
+  immutableInitializer?: TS.Expression;
   immutableStart?: number;
   matches: number;
 }
@@ -246,16 +247,16 @@ interface SecurityIrIndexedDeclarationFact {
 interface SecurityIrSourceIndex {
   readonly assignedNames: ReadonlySet<string>;
   readonly declarationsByContainer: WeakMap<
-    ts.Block | ts.SourceFile,
+    TS.Block | TS.SourceFile,
     ReadonlyMap<string, SecurityIrIndexedDeclarationFact>
   >;
   readonly foreignImportNames: ReadonlySet<string>;
-  readonly moduleConstDeclarations: readonly ts.VariableDeclaration[];
+  readonly moduleConstDeclarations: readonly TS.VariableDeclaration[];
 }
 
-const securityIrSourceIndexCache = compilerCreateWeakMap<ts.SourceFile, SecurityIrSourceIndex>();
+const securityIrSourceIndexCache = compilerCreateWeakMap<TS.SourceFile, SecurityIrSourceIndex>();
 const browserStateDerivedBindingNamesCache = compilerCreateWeakMap<
-  ts.ConciseBody,
+  TS.ConciseBody,
   ReadonlySet<string>
 >();
 
@@ -264,19 +265,19 @@ const browserStateDerivedBindingNamesCache = compilerCreateWeakMap<
  * spelling-based pass can retain the exact old assignment and declaration answers without
  * rescanning the entire source for every helper edge.
  */
-function securityIrSourceIndex(sourceFile: ts.SourceFile): SecurityIrSourceIndex {
+function securityIrSourceIndex(sourceFile: TS.SourceFile): SecurityIrSourceIndex {
   const cached = compilerWeakMapGet(securityIrSourceIndexCache, sourceFile);
   if (cached) return cached;
 
   const assignedNames = compilerCreateSet<string>();
   const declarationsByContainer = compilerCreateWeakMap<
-    ts.Block | ts.SourceFile,
+    TS.Block | TS.SourceFile,
     ReadonlyMap<string, SecurityIrIndexedDeclarationFact>
   >();
   const foreignImportNames = compilerCreateSet<string>();
-  const moduleConstDeclarations: ts.VariableDeclaration[] = [];
+  const moduleConstDeclarations: TS.VariableDeclaration[] = [];
 
-  const indexContainer = (container: ts.Block | ts.SourceFile): void => {
+  const indexContainer = (container: TS.Block | TS.SourceFile): void => {
     const declarations = compilerCreateMap<string, SecurityIrIndexedDeclarationFact>();
     const statements = compilerSnapshotDenseArray(
       container.statements,
@@ -367,7 +368,7 @@ function securityIrSourceIndex(sourceFile: ts.SourceFile): SecurityIrSourceIndex
     compilerWeakMapSet(declarationsByContainer, container, declarations);
   };
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (ts.isSourceFile(node) || ts.isBlock(node)) indexContainer(node);
     if (ts.isBinaryExpression(node) && isAssignmentOperator(node.operatorToken.kind)) {
       collectSecurityIrAssignmentTargetNames(node.left, assignedNames);
@@ -410,7 +411,7 @@ function securityIrIndexDeclaration(
   compilerMapSet(declarations, name, fact);
 }
 
-function securityIrImportBindingNames(statement: ts.ImportDeclaration): Set<string> {
+function securityIrImportBindingNames(statement: TS.ImportDeclaration): Set<string> {
   const names = compilerCreateSet<string>();
   const clause = statement.importClause;
   if (!clause) return names;
@@ -429,8 +430,8 @@ function securityIrImportBindingNames(statement: ts.ImportDeclaration): Set<stri
 }
 
 function securityIrDeclarationFact(
-  sourceFile: ts.SourceFile,
-  container: ts.Block | ts.SourceFile,
+  sourceFile: TS.SourceFile,
+  container: TS.Block | TS.SourceFile,
   name: string,
 ): SecurityIrIndexedDeclarationFact | undefined {
   const declarations = compilerWeakMapGet(
@@ -443,7 +444,7 @@ function securityIrDeclarationFact(
   return compilerMapGet(declarations, name);
 }
 
-function collectSecurityIrAssignmentTargetNames(node: ts.Node, names: Set<string>): void {
+function collectSecurityIrAssignmentTargetNames(node: TS.Node, names: Set<string>): void {
   const current =
     ts.isExpression(node) &&
     (ts.isParenthesizedExpression(node) ||
@@ -605,8 +606,8 @@ const rawBrowserGlobalNames = finiteStringSet([
  * not resolve here; Phase 2C may later discharge them through an explicit semantic summary.
  */
 export function resolveSameFileSecurityIrCallable(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): ResolvedSecurityIrCallable | undefined {
   const current = unwrapExpression(expression);
   if (!ts.isIdentifier(current)) {
@@ -620,7 +621,7 @@ export function resolveSameFileSecurityIrCallable(
   // that declares the name owns identity; an ineligible declaration stops resolution instead of
   // falling through to a same-named outer helper. This admits nested handler helpers without a
   // checker or general module evaluation while preserving the single immutable declaration rule.
-  let cursor: ts.Node | undefined = current.parent;
+  let cursor: TS.Node | undefined = current.parent;
   while (cursor) {
     if (ts.isBlock(cursor) || ts.isSourceFile(cursor)) {
       const resolved = securityIrCallableDeclaredInStatements(sourceFile, current, cursor);
@@ -653,8 +654,8 @@ export function resolveSameFileSecurityIrCallable(
 }
 
 function resolveSameFileSecurityIrMemberCallable(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): ResolvedSecurityIrCallable | undefined {
   const properties: string[] = [];
   let root = unwrapExpression(expression);
@@ -675,8 +676,8 @@ function resolveSameFileSecurityIrMemberCallable(
 }
 
 function resolveSecurityIrCallableValue(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
   properties: readonly string[],
   active: Set<string>,
   depth: number,
@@ -738,7 +739,7 @@ function resolveSecurityIrCallableValue(
   if (!ts.isObjectLiteralExpression(current)) return undefined;
   const propertyName = properties[0]!;
   const remaining = properties.slice(1);
-  let match: ts.ObjectLiteralElementLike | undefined;
+  let match: TS.ObjectLiteralElementLike | undefined;
   const members = compilerSnapshotDenseArray(
     current.properties,
     'Finite security-IR callable containers',
@@ -776,11 +777,11 @@ function resolveSecurityIrCallableValue(
 }
 
 function securityIrImmutableBindingInitializer(
-  sourceFile: ts.SourceFile,
-  use: ts.Identifier,
-): ts.Expression | undefined {
+  sourceFile: TS.SourceFile,
+  use: TS.Identifier,
+): TS.Expression | undefined {
   if (moduleBindingIsAssigned(sourceFile, use.text)) return undefined;
-  let cursor: ts.Node | undefined = use.parent;
+  let cursor: TS.Node | undefined = use.parent;
   while (cursor) {
     if (ts.isBlock(cursor) || ts.isSourceFile(cursor)) {
       const resolved = securityIrImmutableBindingDeclaredInStatements(sourceFile, use, cursor);
@@ -811,10 +812,10 @@ function securityIrImmutableBindingInitializer(
 }
 
 function securityIrImmutableBindingDeclaredInStatements(
-  sourceFile: ts.SourceFile,
-  use: ts.Identifier,
-  container: ts.Block | ts.SourceFile,
-): { initializer?: ts.Expression; matched: boolean } {
+  sourceFile: TS.SourceFile,
+  use: TS.Identifier,
+  container: TS.Block | TS.SourceFile,
+): { initializer?: TS.Expression; matched: boolean } {
   const fact = securityIrDeclarationFact(sourceFile, container, use.text);
   if (!fact) return { matched: false };
   const initializer =
@@ -828,9 +829,9 @@ function securityIrImmutableBindingDeclaredInStatements(
 }
 
 function securityIrCallableDeclaredInStatements(
-  sourceFile: ts.SourceFile,
-  use: ts.Identifier,
-  container: ts.Block | ts.SourceFile,
+  sourceFile: TS.SourceFile,
+  use: TS.Identifier,
+  container: TS.Block | TS.SourceFile,
 ): { callable?: ResolvedSecurityIrCallable; matched: boolean } {
   const fact = securityIrDeclarationFact(sourceFile, container, use.text);
   if (!fact) return { matched: false };
@@ -843,12 +844,12 @@ function securityIrCallableDeclaredInStatements(
   return { ...(callable ? { callable } : {}), matched: true };
 }
 
-function moduleBindingIsAssigned(sourceFile: ts.SourceFile, name: string): boolean {
+function moduleBindingIsAssigned(sourceFile: TS.SourceFile, name: string): boolean {
   return compilerSetHas(securityIrSourceIndex(sourceFile).assignedNames, name);
 }
 
-function securityIrControlScopeDeclaresName(node: ts.Node, name: string): boolean {
-  let declaration: ts.VariableDeclarationList | ts.VariableDeclaration | undefined;
+function securityIrControlScopeDeclaresName(node: TS.Node, name: string): boolean {
+  let declaration: TS.VariableDeclarationList | TS.VariableDeclaration | undefined;
   if (ts.isForInStatement(node) || ts.isForOfStatement(node) || ts.isForStatement(node)) {
     const initializer = node.initializer;
     if (initializer && ts.isVariableDeclarationList(initializer)) declaration = initializer;
@@ -871,7 +872,7 @@ function securityIrControlScopeDeclaresName(node: ts.Node, name: string): boolea
   return compilerSetHas(names, name);
 }
 
-function securityIrImportDeclaresName(statement: ts.ImportDeclaration, name: string): boolean {
+function securityIrImportDeclaresName(statement: TS.ImportDeclaration, name: string): boolean {
   const clause = statement.importClause;
   if (!clause) return false;
   if (clause.name?.text === name) return true;
@@ -886,15 +887,15 @@ function securityIrImportDeclaresName(statement: ts.ImportDeclaration, name: str
 }
 
 function securityIrExpressionUsesDirectImportBinding(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): boolean {
   const current = unwrapExpression(expression);
   const member = staticMember(current);
   const directName = ts.isIdentifier(current) ? current.text : undefined;
   const namespaceName =
     member && ts.isIdentifier(unwrapExpression(member.receiver))
-      ? (unwrapExpression(member.receiver) as ts.Identifier).text
+      ? (unwrapExpression(member.receiver) as TS.Identifier).text
       : undefined;
   if (directName === undefined && namespaceName === undefined) return false;
 
@@ -932,7 +933,7 @@ function securityIrExpressionUsesDirectImportBinding(
   return false;
 }
 
-function securityIrLeftmostExecutableRoot(expression: ts.Expression): ts.Identifier | undefined {
+function securityIrLeftmostExecutableRoot(expression: TS.Expression): TS.Identifier | undefined {
   const current = unwrapExpression(expression);
   if (ts.isIdentifier(current)) return current;
   const member = staticMember(current);
@@ -944,10 +945,10 @@ function securityIrLeftmostExecutableRoot(expression: ts.Expression): ts.Identif
 }
 
 function securityIrIdentifierBindingScope(
-  sourceFile: ts.SourceFile,
-  use: ts.Identifier,
+  sourceFile: TS.SourceFile,
+  use: TS.Identifier,
 ): 'local' | 'module' | 'unresolved' {
-  let cursor: ts.Node | undefined = use.parent;
+  let cursor: TS.Node | undefined = use.parent;
   while (cursor) {
     if (ts.isBlock(cursor) || ts.isSourceFile(cursor)) {
       if (securityIrDeclarationFact(sourceFile, cursor, use.text)) {
@@ -979,9 +980,9 @@ function securityIrIdentifierBindingScope(
 }
 
 function securityIrMemberCallableIsStable(
-  sourceFile: ts.SourceFile,
-  callee: ts.Expression,
-  call: ts.CallExpression | ts.NewExpression,
+  sourceFile: TS.SourceFile,
+  callee: TS.Expression,
+  call: TS.CallExpression | TS.NewExpression,
 ): boolean {
   const root = securityIrLeftmostExecutableRoot(callee);
   if (!root) return true;
@@ -990,7 +991,7 @@ function securityIrMemberCallableIsStable(
       ? securityIrEnclosingFunctionBody(call)
       : sourceFile;
   let stable = true;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (!stable || node === call) return;
     if (
       ts.isBinaryExpression(node) &&
@@ -1040,8 +1041,8 @@ function securityIrMemberCallableIsStable(
   return stable;
 }
 
-function securityIrEnclosingFunctionBody(node: ts.Node): ts.ConciseBody | ts.SourceFile {
-  let cursor: ts.Node | undefined = node.parent;
+function securityIrEnclosingFunctionBody(node: TS.Node): TS.ConciseBody | TS.SourceFile {
+  let cursor: TS.Node | undefined = node.parent;
   while (cursor) {
     if (isSecurityIrFunctionScope(cursor) && cursor.body) return cursor.body;
     cursor = cursor.parent;
@@ -1050,12 +1051,12 @@ function securityIrEnclosingFunctionBody(node: ts.Node): ts.ConciseBody | ts.Sou
 }
 
 function securityIrNodeContainsValueIdentifier(
-  node: ts.Node,
+  node: TS.Node,
   name: string,
-  ignored: ts.Node,
+  ignored: TS.Node,
 ): boolean {
   let found = false;
-  const visit = (current: ts.Node): void => {
+  const visit = (current: TS.Node): void => {
     if (found || current === ignored) return;
     if (ts.isCallExpression(current) || ts.isNewExpression(current)) {
       const argumentsList = compilerSnapshotDenseArray(
@@ -1087,8 +1088,8 @@ function securityIrNodeContainsValueIdentifier(
 
 /** Scanner/source-text boundary for SPEC §4.3/§5.2 finite browser effects. */
 export function scanBrowserSecurityOperations(
-  sourceFile: ts.SourceFile,
-  body: ts.ConciseBody,
+  sourceFile: TS.SourceFile,
+  body: TS.ConciseBody,
 ): SecurityOperationScanResult<BrowserSecurityOperationModel> {
   const operations: BrowserSecurityOperationModel[] = [];
   const violations: SecurityOperationViolationModel[] = [];
@@ -1096,7 +1097,7 @@ export function scanBrowserSecurityOperations(
   const locals = localBindingNames(body);
   const aliases = browserAliasProvenance(body);
 
-  const appendOperation = (kind: BrowserSecurityOperationKind, node: ts.Node, target?: string) => {
+  const appendOperation = (kind: BrowserSecurityOperationKind, node: TS.Node, target?: string) => {
     if (
       kind === 'browser.timer.schedule' &&
       ts.isCallExpression(node) &&
@@ -1121,7 +1122,7 @@ export function scanBrowserSecurityOperations(
     );
   };
   const appendViolation = (
-    node: ts.Node,
+    node: TS.Node,
     kind: SecurityOperationViolationModel['kind'],
     detail: string,
   ) => {
@@ -1136,7 +1137,7 @@ export function scanBrowserSecurityOperations(
       'Browser security-operation violations',
     );
   };
-  const appendStateWriteValue = (node: ts.Expression, detail: string) => {
+  const appendStateWriteValue = (node: TS.Expression, detail: string) => {
     compilerArrayAppend(stateWriteValues, { detail, node }, 'Browser state-write JSON values');
   };
 
@@ -1156,7 +1157,7 @@ export function scanBrowserSecurityOperations(
     );
   }
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (
       node !== handlerOwner &&
       isSecurityIrFunctionScope(node) &&
@@ -1697,7 +1698,7 @@ export function scanBrowserSecurityOperations(
   return { operations: dedupedOperations, violations: dedupeViolations(violations) };
 }
 
-function browserFunctionIsAsyncOrGenerator(node: ts.FunctionLikeDeclaration): boolean {
+function browserFunctionIsAsyncOrGenerator(node: TS.FunctionLikeDeclaration): boolean {
   const modifiers = compilerSnapshotDenseArray(
     ts.canHaveModifiers(node) ? (ts.getModifiers(node) ?? []) : [],
     'Finite browser-handler modifiers',
@@ -1713,7 +1714,7 @@ function browserFunctionIsAsyncOrGenerator(node: ts.FunctionLikeDeclaration): bo
   );
 }
 
-function browserExpressionIsVoidOutcome(expression: ts.Expression, boundary: ts.Node): boolean {
+function browserExpressionIsVoidOutcome(expression: TS.Expression, boundary: TS.Node): boolean {
   const current = unwrapExpression(expression);
   return (
     ts.isVoidExpression(current) ||
@@ -1724,9 +1725,9 @@ function browserExpressionIsVoidOutcome(expression: ts.Expression, boundary: ts.
 }
 
 function browserHandlerOutcomeIsReviewed(
-  sourceFile: ts.SourceFile,
-  boundary: ts.ConciseBody,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  boundary: TS.ConciseBody,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
 ): boolean {
   if (browserExpressionIsVoidOutcome(expression, boundary)) return true;
@@ -1774,8 +1775,8 @@ function browserHandlerOutcomeIsReviewed(
   );
 }
 
-function browserReturnBelongsToHandler(node: ts.ReturnStatement, body: ts.ConciseBody): boolean {
-  let cursor: ts.Node | undefined = node.parent;
+function browserReturnBelongsToHandler(node: TS.ReturnStatement, body: TS.ConciseBody): boolean {
+  let cursor: TS.Node | undefined = node.parent;
   while (cursor && cursor !== body) {
     if (isSecurityIrFunctionScope(cursor)) return false;
     cursor = cursor.parent;
@@ -1784,9 +1785,9 @@ function browserReturnBelongsToHandler(node: ts.ReturnStatement, body: ts.Concis
 }
 
 function appendBrowserSpreadArgumentViolations(
-  argumentsList: readonly ts.Expression[],
+  argumentsList: readonly TS.Expression[],
   appendViolation: (
-    node: ts.Node,
+    node: TS.Node,
     kind: SecurityOperationViolationModel['kind'],
     detail: string,
   ) => void,
@@ -1809,9 +1810,9 @@ function appendBrowserSpreadArgumentViolations(
 type BrowserStateMutationTargetKind = 'computed' | 'none' | 'static';
 
 function browserStateMutationTargetKind(
-  expression: ts.Expression,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
-  boundary: ts.ConciseBody,
+  boundary: TS.ConciseBody,
 ): BrowserStateMutationTargetKind {
   let current = unwrapExpression(expression);
   let computed = false;
@@ -1828,16 +1829,16 @@ function browserStateMutationTargetKind(
     : 'none';
 }
 
-function browserMutationTargetReceiver(expression: ts.Expression): ts.Expression | undefined {
+function browserMutationTargetReceiver(expression: TS.Expression): TS.Expression | undefined {
   const current = unwrapExpression(expression);
   return ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current)
     ? current.expression
     : undefined;
 }
 
-function browserBinaryExpressionIsAssignmentPatternDefault(node: ts.BinaryExpression): boolean {
+function browserBinaryExpressionIsAssignmentPatternDefault(node: TS.BinaryExpression): boolean {
   if (node.operatorToken.kind !== ts.SyntaxKind.EqualsToken) return false;
-  let current: ts.Node = node;
+  let current: TS.Node = node;
   let parent = current.parent;
   while (
     ts.isArrayLiteralExpression(parent) ||
@@ -1856,9 +1857,9 @@ function browserBinaryExpressionIsAssignmentPatternDefault(node: ts.BinaryExpres
 }
 
 function browserAssignmentPatternContainsStateTarget(
-  expression: ts.Expression,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
-  boundary: ts.ConciseBody,
+  boundary: TS.ConciseBody,
 ): boolean {
   const current = unwrapExpression(expression);
   if (browserStateMutationTargetKind(current, aliases, boundary) !== 'none') return true;
@@ -1904,12 +1905,12 @@ function browserAssignmentPatternContainsStateTarget(
 
 interface BrowserExecutableStateUse {
   readonly detail: string;
-  readonly node: ts.Node;
+  readonly node: TS.Node;
 }
 
 interface BrowserStateWriteValueCandidate {
   readonly detail: string;
-  readonly node: ts.Expression;
+  readonly node: TS.Expression;
 }
 
 /**
@@ -1919,15 +1920,15 @@ interface BrowserStateWriteValueCandidate {
  * a state write before reaching one of these positions.
  */
 function browserExecutableStateUse(
-  sourceFile: ts.SourceFile,
-  boundary: ts.ConciseBody,
-  node: ts.Node,
+  sourceFile: TS.SourceFile,
+  boundary: TS.ConciseBody,
+  node: TS.Node,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
   locals: ReadonlySet<string>,
 ): BrowserExecutableStateUse | undefined {
-  const executable = (expression: ts.Expression): boolean =>
+  const executable = (expression: TS.Expression): boolean =>
     browserExpressionMayCarryState(expression, aliases, boundary);
-  const result = (target: ts.Node, detail: string): BrowserExecutableStateUse => ({
+  const result = (target: TS.Node, detail: string): BrowserExecutableStateUse => ({
     detail,
     node: target,
   });
@@ -2024,12 +2025,12 @@ function browserExecutableStateUse(
 }
 
 function browserExpressionMayCarryState(
-  expression: ts.Expression,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
-  boundary: ts.ConciseBody,
+  boundary: TS.ConciseBody,
 ): boolean {
   const active = compilerCreateSet<string>();
-  const visitExpression = (candidate: ts.Expression): boolean => {
+  const visitExpression = (candidate: TS.Expression): boolean => {
     const current = unwrapExpression(candidate);
     const sourceFile = current.getSourceFile();
     const key = `${current.getStart(sourceFile)}:${current.getEnd()}`;
@@ -2042,7 +2043,7 @@ function browserExpressionMayCarryState(
         if (initializer !== undefined && visitExpression(initializer)) return true;
       }
       let found = false;
-      const visitChild = (child: ts.Node): void => {
+      const visitChild = (child: TS.Node): void => {
         if (found) return;
         if (ts.isExpression(child)) {
           if (visitExpression(child)) found = true;
@@ -2069,7 +2070,7 @@ function browserExpressionMayCarryState(
  * destructuring cannot erase that temporal provenance (SPEC §4.3/§5.2).
  */
 function browserStateDerivedBindingNames(
-  boundary: ts.ConciseBody,
+  boundary: TS.ConciseBody,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
 ): ReadonlySet<string> {
   const cached = compilerWeakMapGet(browserStateDerivedBindingNamesCache, boundary);
@@ -2085,7 +2086,7 @@ function browserStateDerivedBindingNames(
         changed = true;
       });
     };
-    const markTarget = (target: ts.Node): void => {
+    const markTarget = (target: TS.Node): void => {
       const names = compilerCreateSet<string>();
       const expression = ts.isExpression(target) ? unwrapExpression(target) : undefined;
       const member = expression === undefined ? undefined : staticMember(expression);
@@ -2094,7 +2095,7 @@ function browserStateDerivedBindingNames(
       else collectSecurityIrAssignmentTargetNames(target, names);
       mark(names);
     };
-    const visit = (node: ts.Node): void => {
+    const visit = (node: TS.Node): void => {
       if (
         ts.isVariableDeclaration(node) &&
         node.initializer !== undefined &&
@@ -2191,8 +2192,8 @@ interface BrowserObjectAssignDestination {
 }
 
 function browserObjectAssignDestination(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): BrowserObjectAssignDestination | undefined {
   const current = unwrapExpression(expression);
   if (ts.isObjectLiteralExpression(current) || ts.isArrayLiteralExpression(current)) {
@@ -2212,14 +2213,14 @@ function browserObjectAssignDestination(
 }
 
 function browserExpressionMayCarryStateOrDerived(
-  expression: ts.Expression,
+  expression: TS.Expression,
   derived: ReadonlySet<string>,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
-  boundary: ts.ConciseBody,
+  boundary: TS.ConciseBody,
 ): boolean {
   if (browserExpressionMayCarryState(expression, aliases, boundary)) return true;
   let found = false;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (found) return;
     if (
       ts.isIdentifier(node) &&
@@ -2236,9 +2237,9 @@ function browserExpressionMayCarryStateOrDerived(
 }
 
 function browserReviewedStateMethodCall(
-  callee: ts.Expression,
+  callee: TS.Expression,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
-  boundary: ts.ConciseBody,
+  boundary: TS.ConciseBody,
 ): string | undefined {
   const member = staticMember(callee);
   if (!member || !browserExpressionIsReviewedStateData(member.receiver, aliases, boundary)) {
@@ -2254,9 +2255,9 @@ function browserReviewedStateMethodCall(
 }
 
 function browserReviewedLocalArrayMethodCall(
-  sourceFile: ts.SourceFile,
-  callee: ts.Expression,
-  boundary: ts.ConciseBody,
+  sourceFile: TS.SourceFile,
+  callee: TS.Expression,
+  boundary: TS.ConciseBody,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
 ): string | undefined {
   const member = staticMember(callee);
@@ -2276,9 +2277,9 @@ function browserReviewedLocalArrayMethodCall(
 }
 
 function browserExpressionIsReviewedLocalArrayData(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
-  boundary: ts.ConciseBody,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
+  boundary: TS.ConciseBody,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
   active: Set<string>,
 ): boolean {
@@ -2338,9 +2339,9 @@ function browserExpressionIsReviewedLocalArrayData(
 }
 
 function browserExpressionIsReviewedStateData(
-  expression: ts.Expression,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
-  boundary: ts.ConciseBody,
+  boundary: TS.ConciseBody,
 ): boolean {
   const current = unwrapExpression(expression);
   if (browserExpressionProvenance(current, aliases, boundary) === 'state') {
@@ -2379,9 +2380,9 @@ function browserStateMethodExecutableArgumentKind(
 }
 
 function browserStateExecutableArgumentIsReviewed(
-  sourceFile: ts.SourceFile,
-  boundary: ts.ConciseBody,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  boundary: TS.ConciseBody,
+  expression: TS.Expression,
   kind: BrowserStateExecutableArgumentKind,
   locals: ReadonlySet<string>,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
@@ -2408,9 +2409,9 @@ function browserStateExecutableArgumentIsReviewed(
 }
 
 function browserStateMethodScalarArgumentIsReviewed(
-  sourceFile: ts.SourceFile,
-  boundary: ts.ConciseBody,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  boundary: TS.ConciseBody,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
   active: Set<string>,
 ): boolean {
@@ -2456,15 +2457,15 @@ function browserStateMethodScalarArgumentIsReviewed(
 }
 
 function browserStateMethodStoredArguments(
-  call: ts.CallExpression,
+  call: TS.CallExpression,
   method: string,
-): readonly ts.Expression[] {
+): readonly TS.Expression[] {
   if (method === 'push' || method === 'unshift') {
     return compilerSnapshotDenseArray(call.arguments, `State ${method} insertions`);
   }
   if (method === 'splice') {
     const argumentsSnapshot = compilerSnapshotDenseArray(call.arguments, 'State splice insertions');
-    const values: ts.Expression[] = [];
+    const values: TS.Expression[] = [];
     for (let index = 2; index < argumentsSnapshot.length; index += 1) {
       compilerArrayAppend(values, argumentsSnapshot[index]!, 'State splice insertions');
     }
@@ -2480,13 +2481,13 @@ function browserStateMethodStoredArguments(
  * direct fresh literal from the same literal reached through a local binding or property.
  */
 function browserStateWriteRetainedIdentityNode(
-  sourceFile: ts.SourceFile,
-  boundary: ts.ConciseBody,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  boundary: TS.ConciseBody,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
   active: Set<string>,
   aliased = false,
-): ts.Node | undefined {
+): TS.Node | undefined {
   const current = unwrapExpression(expression);
   const key = `${current.getStart(sourceFile)}:${current.getEnd()}:${aliased ? 1 : 0}`;
   if (compilerSetHas(active, key)) return current;
@@ -2649,12 +2650,12 @@ function browserStateWriteRetainedIdentityNode(
  * complete recursive JsonValue invariant after every handler.
  */
 function browserStateWriteExecutableEscapeNode(
-  sourceFile: ts.SourceFile,
-  boundary: ts.ConciseBody,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  boundary: TS.ConciseBody,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
   active: Set<string>,
-): ts.Node | undefined {
+): TS.Node | undefined {
   const current = unwrapExpression(expression);
   const key = `${current.getStart(sourceFile)}:${current.getEnd()}`;
   if (compilerSetHas(active, key)) return current;
@@ -2809,7 +2810,7 @@ function browserStateWriteExecutableEscapeNode(
           browserCallHasValidReviewedFrameworkSummary(
             sourceFile,
             boundary,
-            unwrapExpression(initializer) as ts.CallExpression,
+            unwrapExpression(initializer) as TS.CallExpression,
             aliases,
           )
         ) {
@@ -2974,9 +2975,9 @@ function browserStateWriteExecutableEscapeNode(
 }
 
 function browserExpressionIsReviewedFrameworkData(
-  sourceFile: ts.SourceFile,
-  boundary: ts.ConciseBody,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  boundary: TS.ConciseBody,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
   active: Set<string>,
 ): boolean {
@@ -3031,16 +3032,16 @@ function browserExpressionIsReviewedFrameworkData(
 }
 
 function browserStaticObjectPropertyValue(
-  expression: ts.Expression,
+  expression: TS.Expression,
   name: string,
-): ts.Expression | undefined {
+): TS.Expression | undefined {
   const current = unwrapExpression(expression);
   if (!ts.isObjectLiteralExpression(current)) return undefined;
   const properties = compilerSnapshotDenseArray(
     current.properties,
     'State JSON static object properties',
   );
-  let value: ts.Expression | undefined;
+  let value: TS.Expression | undefined;
   for (let index = 0; index < properties.length; index += 1) {
     const property = properties[index]!;
     if (staticPropertyName(property.name) !== name) continue;
@@ -3055,12 +3056,12 @@ function browserStaticObjectPropertyValue(
 }
 
 function browserScalarizationInputEscapeNode(
-  sourceFile: ts.SourceFile,
-  boundary: ts.ConciseBody,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  boundary: TS.ConciseBody,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
   active: Set<string>,
-): ts.Node | undefined {
+): TS.Node | undefined {
   const current = unwrapExpression(expression);
   if (
     browserExpressionIsReviewedFrameworkData(
@@ -3132,9 +3133,9 @@ function browserScalarizationInputEscapeNode(
 }
 
 function browserScalarCallResultIsReviewed(
-  sourceFile: ts.SourceFile,
-  boundary: ts.ConciseBody,
-  call: ts.CallExpression,
+  sourceFile: TS.SourceFile,
+  boundary: TS.ConciseBody,
+  call: TS.CallExpression,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
   active: Set<string>,
 ): boolean {
@@ -3187,8 +3188,8 @@ function browserScalarCallResultIsReviewed(
 }
 
 function browserExpressionUsesDirectModuleImport(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): boolean {
   if (!securityIrExpressionUsesDirectImportBinding(sourceFile, expression)) return false;
   const root = securityIrLeftmostExecutableRoot(expression);
@@ -3196,8 +3197,8 @@ function browserExpressionUsesDirectModuleImport(
 }
 
 function browserCallbackIsReviewedExecutable(
-  boundary: ts.ConciseBody,
-  expression: ts.Expression,
+  boundary: TS.ConciseBody,
+  expression: TS.Expression,
   locals: ReadonlySet<string>,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
 ): boolean {
@@ -3218,7 +3219,7 @@ function browserCallbackIsReviewedExecutable(
 }
 
 function browserMemberUseIsOwnedByParent(
-  node: ts.PropertyAccessExpression | ts.ElementAccessExpression,
+  node: TS.PropertyAccessExpression | TS.ElementAccessExpression,
 ): boolean {
   const parent = node.parent;
   return (
@@ -3236,7 +3237,7 @@ function browserMemberUseIsOwnedByParent(
   );
 }
 
-function browserTimerCallbackIsSourceText(expression: ts.Expression | undefined): boolean {
+function browserTimerCallbackIsSourceText(expression: TS.Expression | undefined): boolean {
   if (expression === undefined) return false;
   const current = unwrapExpression(expression);
   return (
@@ -3247,9 +3248,9 @@ function browserTimerCallbackIsSourceText(expression: ts.Expression | undefined)
 }
 
 function browserTimerCallbackIsReviewed(
-  sourceFile: ts.SourceFile,
-  body: ts.ConciseBody,
-  expression: ts.Expression | undefined,
+  sourceFile: TS.SourceFile,
+  body: TS.ConciseBody,
+  expression: TS.Expression | undefined,
   locals: ReadonlySet<string>,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
 ): boolean {
@@ -3269,11 +3270,11 @@ function browserTimerCallbackIsReviewed(
 }
 
 function browserTimerCallbackStateCaptureNode(
-  sourceFile: ts.SourceFile,
-  body: ts.ConciseBody,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  body: TS.ConciseBody,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
-): ts.Node | undefined {
+): TS.Node | undefined {
   const current = unwrapExpression(expression);
   const callable =
     ts.isArrowFunction(current) || ts.isFunctionExpression(current)
@@ -3281,8 +3282,8 @@ function browserTimerCallbackStateCaptureNode(
       : resolveSameFileSecurityIrCallable(sourceFile, current);
   if (!callable) return expression;
   const stateDerivedBindings = browserStateDerivedBindingNames(body, aliases);
-  let captured: ts.Node | undefined;
-  const visit = (node: ts.Node): void => {
+  let captured: TS.Node | undefined;
+  const visit = (node: TS.Node): void => {
     if (captured !== undefined) return;
     if (
       ts.isIdentifier(node) &&
@@ -3300,7 +3301,7 @@ function browserTimerCallbackStateCaptureNode(
   return captured;
 }
 
-function browserIdentifierIsValueReference(identifier: ts.Identifier): boolean {
+function browserIdentifierIsValueReference(identifier: TS.Identifier): boolean {
   const parent = identifier.parent;
   if (
     (ts.isPropertyAccessExpression(parent) && parent.name === identifier) ||
@@ -3330,16 +3331,16 @@ function browserIdentifierIsValueReference(identifier: ts.Identifier): boolean {
 }
 
 function browserTimerCallViolation(
-  sourceFile: ts.SourceFile,
-  body: ts.ConciseBody,
-  call: ts.CallExpression,
+  sourceFile: TS.SourceFile,
+  body: TS.ConciseBody,
+  call: TS.CallExpression,
   locals: ReadonlySet<string>,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
 ):
   | {
       readonly detail: string;
       readonly kind: SecurityOperationViolationModel['kind'];
-      readonly node: ts.Node;
+      readonly node: TS.Node;
     }
   | undefined {
   const callback = call.arguments[0];
@@ -3394,15 +3395,15 @@ function browserTimerCallViolation(
 }
 
 function browserTimerCancelCallViolation(
-  sourceFile: ts.SourceFile,
-  body: ts.ConciseBody,
-  call: ts.CallExpression,
+  sourceFile: TS.SourceFile,
+  body: TS.ConciseBody,
+  call: TS.CallExpression,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
 ):
   | {
       readonly detail: string;
       readonly kind: SecurityOperationViolationModel['kind'];
-      readonly node: ts.Node;
+      readonly node: TS.Node;
     }
   | undefined {
   if (call.arguments.length !== 1) {
@@ -3427,9 +3428,9 @@ function browserTimerCancelCallViolation(
 }
 
 function browserTimerHandleIsReviewed(
-  sourceFile: ts.SourceFile,
-  body: ts.ConciseBody,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  body: TS.ConciseBody,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
   active: Set<string>,
 ): boolean {
@@ -3469,11 +3470,11 @@ function browserTimerHandleIsReviewed(
 }
 
 function browserPureCallUnsafeArgument(
-  sourceFile: ts.SourceFile,
-  body: ts.ConciseBody,
-  call: ts.CallExpression,
+  sourceFile: TS.SourceFile,
+  body: TS.ConciseBody,
+  call: TS.CallExpression,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
-): ts.Expression | undefined {
+): TS.Expression | undefined {
   const argumentsSnapshot = compilerSnapshotDenseArray(
     call.arguments,
     'Finite browser intrinsic arguments',
@@ -3497,8 +3498,8 @@ function browserPureCallUnsafeArgument(
 }
 
 function browserExpressionIsReviewedFrameworkCall(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): boolean {
   const identity = canonicalFrameworkExportForExpression(
     ts as FrameworkIdentityTypeScript,
@@ -3513,13 +3514,13 @@ function browserExpressionIsReviewedFrameworkCall(
 
 interface BrowserPublishToClientSummary {
   readonly matched: true;
-  readonly returnValue?: ts.Expression;
-  readonly violation?: { readonly detail: string; readonly node: ts.Node };
+  readonly returnValue?: TS.Expression;
+  readonly violation?: { readonly detail: string; readonly node: TS.Node };
 }
 
 interface BrowserReviewedFrameworkCallSummary {
   readonly matched: true;
-  readonly violation?: { readonly detail: string; readonly node: ts.Node };
+  readonly violation?: { readonly detail: string; readonly node: TS.Node };
 }
 
 /**
@@ -3528,9 +3529,9 @@ interface BrowserReviewedFrameworkCallSummary {
  * closed JSON/scalar data, and the generated table pins arity plus the plain-data return posture.
  */
 function browserReviewedFrameworkCallSummary(
-  sourceFile: ts.SourceFile,
-  boundary: ts.ConciseBody,
-  call: ts.CallExpression,
+  sourceFile: TS.SourceFile,
+  boundary: TS.ConciseBody,
+  call: TS.CallExpression,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
 ): BrowserReviewedFrameworkCallSummary | undefined {
   const identity = canonicalFrameworkExportForExpression(
@@ -3603,9 +3604,9 @@ function browserReviewedFrameworkCallSummary(
 }
 
 function browserCallHasValidReviewedFrameworkSummary(
-  sourceFile: ts.SourceFile,
-  boundary: ts.ConciseBody,
-  call: ts.CallExpression,
+  sourceFile: TS.SourceFile,
+  boundary: TS.ConciseBody,
+  call: TS.CallExpression,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
 ): boolean {
   const summary = browserReviewedFrameworkCallSummary(sourceFile, boundary, call, aliases);
@@ -3613,12 +3614,12 @@ function browserCallHasValidReviewedFrameworkSummary(
 }
 
 function browserFrameworkDataArgumentEscapeNode(
-  sourceFile: ts.SourceFile,
-  boundary: ts.ConciseBody,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  boundary: TS.ConciseBody,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
   active: Set<string>,
-): ts.Node | undefined {
+): TS.Node | undefined {
   const current = unwrapExpression(expression);
   const key = `${current.getStart(sourceFile)}:${current.getEnd()}`;
   if (compilerSetHas(active, key)) return current;
@@ -3736,10 +3737,10 @@ function browserFrameworkDataArgumentEscapeNode(
 }
 
 function browserFrameworkCallbackContainerEscapeNode(
-  expression: ts.Expression,
-): ts.Node | undefined {
-  let unsafe: ts.Node | undefined;
-  const visit = (node: ts.Node): void => {
+  expression: TS.Expression,
+): TS.Node | undefined {
+  let unsafe: TS.Node | undefined;
+  const visit = (node: TS.Node): void => {
     if (unsafe !== undefined) return;
     if (
       ts.isArrowFunction(node) ||
@@ -3770,9 +3771,9 @@ function browserFrameworkCallbackContainerEscapeNode(
  * container, and return transfer are all pinned here and independently enforced at runtime.
  */
 function browserPublishToClientSummary(
-  sourceFile: ts.SourceFile,
-  boundary: ts.ConciseBody,
-  call: ts.CallExpression,
+  sourceFile: TS.SourceFile,
+  boundary: TS.ConciseBody,
+  call: TS.CallExpression,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
 ): BrowserPublishToClientSummary | undefined {
   const identity = canonicalFrameworkExportForExpression(
@@ -3840,12 +3841,12 @@ function browserPublishToClientSummary(
 }
 
 function browserPublishedPrimitiveEscapeNode(
-  sourceFile: ts.SourceFile,
-  boundary: ts.ConciseBody,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  boundary: TS.ConciseBody,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
   active: Set<string>,
-): ts.Node | undefined {
+): TS.Node | undefined {
   const current = unwrapExpression(expression);
   const key = `${current.getStart(sourceFile)}:${current.getEnd()}`;
   if (compilerSetHas(active, key)) return current;
@@ -3886,18 +3887,18 @@ function browserPublishedPrimitiveEscapeNode(
 }
 
 function classifyBrowserCall(
-  sourceFile: ts.SourceFile,
-  body: ts.ConciseBody,
-  call: ts.CallExpression,
+  sourceFile: TS.SourceFile,
+  body: TS.ConciseBody,
+  call: TS.CallExpression,
   locals: ReadonlySet<string>,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
-  appendOperation: (kind: BrowserSecurityOperationKind, node: ts.Node, target?: string) => void,
+  appendOperation: (kind: BrowserSecurityOperationKind, node: TS.Node, target?: string) => void,
   appendViolation: (
-    node: ts.Node,
+    node: TS.Node,
     kind: SecurityOperationViolationModel['kind'],
     detail: string,
   ) => void,
-  appendStateWriteValue: (node: ts.Expression, detail: string) => void,
+  appendStateWriteValue: (node: TS.Expression, detail: string) => void,
 ): void {
   const callee = unwrapExpression(call.expression);
   const reviewedFrameworkSummary = browserReviewedFrameworkCallSummary(
@@ -4299,7 +4300,7 @@ function classifyBrowserCall(
 }
 
 function browserLocalCallableAliasIsOpaque(
-  body: ts.ConciseBody,
+  body: TS.ConciseBody,
   name: string,
   seen: Set<string>,
 ): boolean {
@@ -4308,7 +4309,7 @@ function browserLocalCallableAliasIsOpaque(
   compilerSetAdd(seen, name);
   let foundBinding = false;
   let opaque = false;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (opaque) return;
     if (ts.isFunctionDeclaration(node) && node.name?.text === name) {
       foundBinding = true;
@@ -4370,18 +4371,18 @@ interface SecuritySemanticInvocationResult {
 }
 
 interface ServerModuleAliasEnvironment {
-  readonly sourceFile: ts.SourceFile;
+  readonly sourceFile: TS.SourceFile;
   readonly values: ReadonlyMap<string, ServerValueProvenance>;
 }
 
 interface ServerAliasEnvironment {
   readonly module: ServerModuleAliasEnvironment;
-  readonly sourceFile: ts.SourceFile;
+  readonly sourceFile: TS.SourceFile;
   readonly values: ReadonlyMap<string, ServerValueProvenance>;
 }
 
 const serverRootModuleAliasEnvironmentCache = compilerCreateWeakMap<
-  ts.SourceFile,
+  TS.SourceFile,
   ServerModuleAliasEnvironment
 >();
 const serverInheritedModuleAliasEnvironmentCache = compilerCreateWeakMap<
@@ -4391,7 +4392,7 @@ const serverInheritedModuleAliasEnvironmentCache = compilerCreateWeakMap<
 
 interface SecuritySemanticHelperInvocation {
   readonly authorityInputs: readonly string[];
-  readonly call: ts.CallExpression;
+  readonly call: TS.CallExpression;
   readonly callable: ResolvedSecurityIrCallable;
   readonly inheritedEnvironment: ServerAliasEnvironment;
   readonly parameterProvenances: readonly ServerValueProvenance[];
@@ -4407,10 +4408,10 @@ interface SecuritySemanticHelperInvocation {
  * bottom-up summaries. It deliberately does not execute or otherwise model general JavaScript.
  */
 export function scanServerSecurityOperations(
-  sourceFile: ts.SourceFile,
-  body: ts.ConciseBody,
+  sourceFile: TS.SourceFile,
+  body: TS.ConciseBody,
   surface: SecurityOperationSurface,
-  parameters: readonly ts.ParameterDeclaration[],
+  parameters: readonly TS.ParameterDeclaration[],
   root: string,
   binding: SecuritySemanticRootBinding,
 ): SecurityOperationScanResult<ServerSecurityOperationModel> {
@@ -4453,9 +4454,9 @@ export function scanServerSecurityOperations(
  * closures until route pages are enrolled as first-class finite-IR roots.
  */
 export function scanServerScopedKeySinkViolations(
-  sourceFile: ts.SourceFile,
-  body: ts.ConciseBody,
-  parameters: readonly ts.ParameterDeclaration[],
+  sourceFile: TS.SourceFile,
+  body: TS.ConciseBody,
+  parameters: readonly TS.ParameterDeclaration[],
 ): readonly SecurityOperationViolationModel[] {
   const facts = scanServerSecurityOperationsDirect(sourceFile, body, 'route', parameters);
   const violations: SecurityOperationViolationModel[] = [];
@@ -4470,14 +4471,14 @@ export function scanServerScopedKeySinkViolations(
 }
 
 function analyzeServerSecurityCallable(options: {
-  body: ts.ConciseBody;
+  body: TS.ConciseBody;
   callable: ResolvedSecurityIrCallable | undefined;
   depth: number;
   inheritedEnvironment: ServerAliasEnvironment | undefined;
   parameterProvenances: readonly ServerValueProvenance[] | undefined;
-  parameters: readonly ts.ParameterDeclaration[];
+  parameters: readonly TS.ParameterDeclaration[];
   root: string;
-  sourceFile: ts.SourceFile;
+  sourceFile: TS.SourceFile;
   state: SecuritySemanticState;
   surface: SecurityOperationSurface;
   transfers: readonly string[];
@@ -4865,12 +4866,12 @@ function analyzeServerSecurityCallable(options: {
 }
 
 function securityIrCallableRegions(
-  body: ts.ConciseBody,
-  parameters: readonly ts.ParameterDeclaration[],
-): ts.ConciseBody[] {
-  const regions: ts.ConciseBody[] = [body];
+  body: TS.ConciseBody,
+  parameters: readonly TS.ParameterDeclaration[],
+): TS.ConciseBody[] {
+  const regions: TS.ConciseBody[] = [body];
   const parameterSnapshot = compilerSnapshotDenseArray(parameters, 'Semantic callable parameters');
-  const appendBindingInitializers = (name: ts.BindingName): void => {
+  const appendBindingInitializers = (name: TS.BindingName): void => {
     if (ts.isIdentifier(name)) return;
     const elements = compilerSnapshotDenseArray(
       name.elements,
@@ -4896,8 +4897,8 @@ function securityIrCallableRegions(
 }
 
 function semanticHelperInvocations(
-  sourceFile: ts.SourceFile,
-  body: ts.ConciseBody,
+  sourceFile: TS.SourceFile,
+  body: TS.ConciseBody,
   operations: readonly ServerSecurityOperationModel[],
   environment: ServerAliasEnvironment,
 ): SecuritySemanticHelperInvocation[] {
@@ -4916,7 +4917,7 @@ function semanticHelperInvocations(
   }
 
   const helpers: SecuritySemanticHelperInvocation[] = [];
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (ts.isCallExpression(node)) {
       const callee = unwrapExpression(node.expression);
       const callable = resolveSameFileSecurityIrCallable(sourceFile, callee);
@@ -4938,8 +4939,8 @@ function semanticHelperInvocations(
 }
 
 function semanticHelperInvocation(
-  sourceFile: ts.SourceFile,
-  call: ts.CallExpression,
+  sourceFile: TS.SourceFile,
+  call: TS.CallExpression,
   callable: ResolvedSecurityIrCallable,
   environment: ServerAliasEnvironment,
 ): SecuritySemanticHelperInvocation {
@@ -5015,7 +5016,7 @@ function semanticHelperInvocation(
 }
 
 function semanticHelperInvocationFact(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   helper: SecuritySemanticHelperInvocation,
   transfers: readonly string[],
   operationKinds: readonly ServerSecurityOperationKind[],
@@ -5060,9 +5061,9 @@ function semanticHelperInvocationFact(
   };
 }
 
-function semanticBodyUsesArguments(body: ts.ConciseBody): boolean {
+function semanticBodyUsesArguments(body: TS.ConciseBody): boolean {
   let found = false;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (found) return;
     if (ts.isIdentifier(node) && node.text === 'arguments') {
       found = true;
@@ -5074,9 +5075,9 @@ function semanticBodyUsesArguments(body: ts.ConciseBody): boolean {
   return found;
 }
 
-function semanticNodeCount(node: ts.Node): number {
+function semanticNodeCount(node: TS.Node): number {
   let count = 0;
-  const visit = (current: ts.Node): void => {
+  const visit = (current: TS.Node): void => {
     count += 1;
     ts.forEachChild(current, visit);
   };
@@ -5138,8 +5139,8 @@ function semanticReasonForViolation(
 }
 
 function appendSemanticClosure(
-  sourceFile: ts.SourceFile,
-  node: ts.Node,
+  sourceFile: TS.SourceFile,
+  node: TS.Node,
   root: string,
   transfers: readonly string[],
   surface: SecurityOperationSurface,
@@ -5291,10 +5292,10 @@ export function serverSecuritySemanticBudgets(): SecuritySemanticBudgets {
 }
 
 function scanServerSecurityOperationsDirect(
-  sourceFile: ts.SourceFile,
-  body: ts.ConciseBody,
+  sourceFile: TS.SourceFile,
+  body: TS.ConciseBody,
   surface: ServerSecurityScanSurface,
-  parameters: readonly ts.ParameterDeclaration[] = [],
+  parameters: readonly TS.ParameterDeclaration[] = [],
   parameterProvenances?: readonly ServerValueProvenance[],
   inheritedEnvironment?: ServerAliasEnvironment,
   precomputedEnvironment?: ServerAliasEnvironment,
@@ -5317,7 +5318,7 @@ function scanServerSecurityOperationsDirect(
   const aliases = environment.values;
   const appendOperation = (
     kind: ServerSecurityOperationKind,
-    node: ts.Node,
+    node: TS.Node,
     target?: string,
     justification?: string,
   ) => {
@@ -5334,7 +5335,7 @@ function scanServerSecurityOperationsDirect(
     );
   };
   const appendViolation = (
-    node: ts.Node,
+    node: TS.Node,
     kind: SecurityOperationViolationModel['kind'],
     detail: string,
   ) => {
@@ -5365,7 +5366,7 @@ function scanServerSecurityOperationsDirect(
     }
   }
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (isSecurityIrFunctionScope(node)) {
       if (nestedServerFunctionCapturesAuthority(node, aliases)) {
         appendViolation(
@@ -5762,10 +5763,10 @@ function scanServerSecurityOperationsDirect(
 }
 
 function securityIrFunctionIsImmediateCallback(
-  node: ts.FunctionLikeDeclaration,
-): node is ts.ArrowFunction | ts.FunctionExpression {
+  node: TS.FunctionLikeDeclaration,
+): node is TS.ArrowFunction | TS.FunctionExpression {
   if (!ts.isArrowFunction(node) && !ts.isFunctionExpression(node)) return false;
-  let expression: ts.Expression = node;
+  let expression: TS.Expression = node;
   let parent = expression.parent;
   while (
     parent &&
@@ -5790,11 +5791,11 @@ function securityIrFunctionIsImmediateCallback(
 }
 
 function nestedServerFunctionCapturesAuthority(
-  functionNode: ts.Node,
+  functionNode: TS.Node,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
 ): boolean {
   let found = false;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (found) return;
     if (node !== functionNode && isSecurityIrFunctionScope(node)) return;
     if (ts.isIdentifier(node)) {
@@ -5818,16 +5819,16 @@ function nestedServerFunctionCapturesAuthority(
 }
 
 interface ServerScopedKeySink {
-  readonly closedOptions?: ts.Node;
+  readonly closedOptions?: TS.Node;
   readonly exactRespond?: boolean;
-  readonly key?: ts.Node;
+  readonly key?: TS.Node;
   readonly proven: boolean;
   readonly target: string;
 }
 
 interface ServerDerivedDatasetCall {
   readonly kind: 'query' | 'upsert';
-  readonly request: ts.Node;
+  readonly request: TS.Node;
   readonly requestScoped: boolean;
   readonly target: string;
 }
@@ -5837,7 +5838,7 @@ interface ServerDerivedDatasetCall {
  * `derived()` constructor. Structural lookalikes never acquire `derived-dataset` provenance.
  */
 function serverDerivedDatasetCall(
-  call: ts.CallExpression,
+  call: TS.CallExpression,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
 ): ServerDerivedDatasetCall | undefined {
   const callee = unwrapExpression(call.expression);
@@ -5868,9 +5869,9 @@ function serverDerivedDatasetCall(
  * classify arbitrary JavaScript effects.
  */
 function serverPersistentNonEngineSink(
-  call: ts.CallExpression,
+  call: TS.CallExpression,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
-): ts.Expression | undefined {
+): TS.Expression | undefined {
   const member = staticMember(unwrapExpression(call.expression));
   if (!member) return undefined;
   const receiver = serverExpressionProvenance(member.receiver, aliases);
@@ -5898,12 +5899,12 @@ function serverPersistentNonEngineSink(
 
 type ServerExactObjectProperty =
   | { readonly kind: 'absent' }
-  | { readonly kind: 'present'; readonly values: readonly ts.Expression[] }
+  | { readonly kind: 'present'; readonly values: readonly TS.Expression[] }
   | { readonly kind: 'unknown' };
 
 function serverScopedKeySink(
-  sourceFile: ts.SourceFile,
-  call: ts.CallExpression,
+  sourceFile: TS.SourceFile,
+  call: TS.CallExpression,
   surface: ServerSecurityScanSurface,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
 ): ServerScopedKeySink | undefined {
@@ -5999,8 +6000,8 @@ function serverScopedKeySink(
 }
 
 function serverEveryExpressionIsExactScopedKey(
-  sourceFile: ts.SourceFile,
-  values: readonly ts.Expression[],
+  sourceFile: TS.SourceFile,
+  values: readonly TS.Expression[],
   surface: ServerSecurityScanSurface,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
 ): boolean {
@@ -6024,8 +6025,8 @@ function serverEveryExpressionIsExactScopedKey(
 }
 
 function serverExpressionIsExactScopedKey(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
   surface: ServerSecurityScanSurface,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
   active: Set<number>,
@@ -6079,8 +6080,8 @@ function serverExpressionIsExactScopedKey(
 }
 
 function serverCallIsExactScopedKeyConstructor(
-  sourceFile: ts.SourceFile,
-  call: ts.CallExpression,
+  sourceFile: TS.SourceFile,
+  call: TS.CallExpression,
   surface: ServerSecurityScanSurface,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
 ): boolean {
@@ -6142,8 +6143,8 @@ function serverCallIsExactScopedKeyConstructor(
 }
 
 function serverExpressionIsExactTaskScope(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
   active: Set<number>,
   depth: number,
@@ -6179,8 +6180,8 @@ function serverExpressionIsExactTaskScope(
 }
 
 function serverExactOwnObjectProperty(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
   propertyName: string,
   active: Set<number>,
   depth: number,
@@ -6216,7 +6217,7 @@ function serverExactOwnObjectProperty(
     );
     if (whenTrue.kind === 'absent' && whenFalse.kind === 'absent') return { kind: 'absent' };
     if (whenTrue.kind !== 'present' || whenFalse.kind !== 'present') return { kind: 'unknown' };
-    const values: ts.Expression[] = [];
+    const values: TS.Expression[] = [];
     const trueValues = compilerSnapshotDenseArray(
       whenTrue.values,
       'Finite conditional object property values',
@@ -6234,7 +6235,7 @@ function serverExactOwnObjectProperty(
     return { kind: 'present', values };
   }
   if (!ts.isObjectLiteralExpression(current)) return { kind: 'unknown' };
-  let value: ts.Expression | undefined;
+  let value: TS.Expression | undefined;
   const properties = compilerSnapshotDenseArray(
     current.properties,
     'Finite scoped-key sink options',
@@ -6258,9 +6259,9 @@ function serverExactOwnObjectProperty(
 }
 
 function serverCallUsesExactRespondNamespace(
-  sourceFile: ts.SourceFile,
-  call: ts.CallExpression,
-  receiver: ts.Expression,
+  sourceFile: TS.SourceFile,
+  call: TS.CallExpression,
+  receiver: TS.Expression,
 ): boolean {
   const current = unwrapExpression(receiver);
   return !!(
@@ -6276,18 +6277,18 @@ function serverCallUsesExactRespondNamespace(
 }
 
 function classifyServerCall(
-  sourceFile: ts.SourceFile,
-  call: ts.CallExpression,
+  sourceFile: TS.SourceFile,
+  call: TS.CallExpression,
   surface: ServerSecurityScanSurface,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
   appendOperation: (
     kind: ServerSecurityOperationKind,
-    node: ts.Node,
+    node: TS.Node,
     target?: string,
     justification?: string,
   ) => void,
   appendViolation: (
-    node: ts.Node,
+    node: TS.Node,
     kind: SecurityOperationViolationModel['kind'],
     detail: string,
   ) => void,
@@ -6715,8 +6716,8 @@ function classifyServerCall(
 }
 
 function serverCallIsExactTrustedSqlRaw(
-  sourceFile: ts.SourceFile,
-  call: ts.CallExpression,
+  sourceFile: TS.SourceFile,
+  call: TS.CallExpression,
 ): boolean {
   const callee = unwrapExpression(call.expression);
   const member = staticMember(callee);
@@ -6765,8 +6766,8 @@ function serverCallIsExactTrustedSqlRaw(
 }
 
 function serverCallIsExactDeclaredSecretReadCapability(
-  sourceFile: ts.SourceFile,
-  call: ts.CallExpression,
+  sourceFile: TS.SourceFile,
+  call: TS.CallExpression,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
 ): boolean {
   const callee = unwrapExpression(call.expression);
@@ -6820,8 +6821,8 @@ interface ServerExactDeclassifyPolicy {
 }
 
 function serverExactTrustedRevealPolicy(
-  sourceFile: ts.SourceFile,
-  call: ts.CallExpression,
+  sourceFile: TS.SourceFile,
+  call: TS.CallExpression,
 ): ServerExactDeclassifyPolicy | undefined {
   if (call.arguments.length !== 2) return undefined;
   const policyExpression = unwrapExpression(call.arguments[1]!);
@@ -6830,15 +6831,15 @@ function serverExactTrustedRevealPolicy(
 }
 
 function serverCallIsExactDeclassifyPolicyConstructor(
-  sourceFile: ts.SourceFile,
-  call: ts.CallExpression,
+  sourceFile: TS.SourceFile,
+  call: TS.CallExpression,
 ): boolean {
   return serverExactDeclassifyPolicy(sourceFile, call, 'trustedReveal') !== undefined;
 }
 
 function serverExactDeclassifyPolicy(
-  sourceFile: ts.SourceFile,
-  call: ts.CallExpression,
+  sourceFile: TS.SourceFile,
+  call: TS.CallExpression,
   expectedDoor: 'trustedReveal',
 ): ServerExactDeclassifyPolicy | undefined {
   const callee = unwrapExpression(call.expression);
@@ -6908,8 +6909,8 @@ function serverExactDeclassifyPolicy(
 }
 
 function serverDeclassifyExpressionProvenance(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
 ): ServerValueProvenance {
   const current = unwrapExpression(expression);
@@ -6937,18 +6938,18 @@ function serverDeclassifyProvenanceIsRobust(provenance: ServerValueProvenance): 
 }
 
 interface ServerDeclassifyClosedCondition {
-  readonly node: ts.Node;
+  readonly node: TS.Node;
   readonly provenance: ServerValueProvenance;
 }
 
 function serverDeclassifyEnablingCondition(
-  call: ts.CallExpression,
+  call: TS.CallExpression,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
 ): ServerDeclassifyClosedCondition | undefined {
-  let child: ts.Node = call;
+  let child: TS.Node = call;
   for (let parent = call.parent; parent; child = parent, parent = parent.parent) {
     if (isSecurityIrFunctionScope(parent)) return undefined;
-    let condition: ts.Expression | undefined;
+    let condition: TS.Expression | undefined;
     if (ts.isIfStatement(parent) && !serverNodeContains(parent.expression, child)) {
       condition = parent.expression;
     } else if (ts.isConditionalExpression(parent) && !serverNodeContains(parent.condition, child)) {
@@ -6986,7 +6987,7 @@ function serverDeclassifyEnablingCondition(
   return undefined;
 }
 
-function serverNodeContains(container: ts.Node, candidate: ts.Node): boolean {
+function serverNodeContains(container: TS.Node, candidate: TS.Node): boolean {
   return (
     candidate.getStart(container.getSourceFile()) >=
       container.getStart(container.getSourceFile()) && candidate.getEnd() <= container.getEnd()
@@ -6994,8 +6995,8 @@ function serverNodeContains(container: ts.Node, candidate: ts.Node): boolean {
 }
 
 function serverCallIsExactSecretBox(
-  sourceFile: ts.SourceFile,
-  call: ts.CallExpression,
+  sourceFile: TS.SourceFile,
+  call: TS.CallExpression,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
 ): boolean {
   const callee = unwrapExpression(call.expression);
@@ -7008,8 +7009,8 @@ function serverCallIsExactSecretBox(
 }
 
 function serverCallIsExactDrizzleTableAlias(
-  sourceFile: ts.SourceFile,
-  call: ts.CallExpression,
+  sourceFile: TS.SourceFile,
+  call: TS.CallExpression,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
 ): boolean {
   const callee = unwrapExpression(call.expression);
@@ -7029,8 +7030,8 @@ function serverCallIsExactDrizzleTableAlias(
 }
 
 function serverCallIsExactDeclaredSecretReadExecution(
-  sourceFile: ts.SourceFile,
-  call: ts.CallExpression,
+  sourceFile: TS.SourceFile,
+  call: TS.CallExpression,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
 ): boolean {
   const callee = unwrapExpression(call.expression);
@@ -7069,9 +7070,9 @@ function serverCallIsExactDeclaredSecretReadExecution(
     return false;
   }
 
-  let capabilityDeclaration: ts.CallExpression | undefined;
+  let capabilityDeclaration: TS.CallExpression | undefined;
   let capabilityDeclarationCount = 0;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (node !== executionLocation.block && isSecurityIrFunctionScope(node)) return;
     if (ts.isCallExpression(node)) {
       const argument = node.arguments.length > 0 ? unwrapExpression(node.arguments[0]!) : undefined;
@@ -7102,12 +7103,12 @@ function serverCallIsExactDeclaredSecretReadExecution(
 
   const declarationArgument = unwrapExpression(capabilityDeclaration.arguments[0]!);
   if (!ts.isIdentifier(declarationArgument)) return false;
-  const allowedReferences = compilerCreateSet<ts.Identifier>();
-  compilerSetAdd(allowedReferences, declaration.name as ts.Identifier);
+  const allowedReferences = compilerCreateSet<TS.Identifier>();
+  compilerSetAdd(allowedReferences, declaration.name as TS.Identifier);
   compilerSetAdd(allowedReferences, declarationArgument);
   compilerSetAdd(allowedReferences, statementUse);
   let escaped = false;
-  const findEscape = (node: ts.Node): void => {
+  const findEscape = (node: TS.Node): void => {
     if (escaped) return;
     if (
       ts.isIdentifier(node) &&
@@ -7124,10 +7125,10 @@ function serverCallIsExactDeclaredSecretReadExecution(
 }
 
 function serverExactVariableDeclarationForInitializer(
-  initializer: ts.Expression,
+  initializer: TS.Expression,
   name: string,
-): ts.VariableDeclaration | undefined {
-  let cursor: ts.Node = initializer;
+): TS.VariableDeclaration | undefined {
+  let cursor: TS.Node = initializer;
   while (cursor.parent && !ts.isVariableDeclaration(cursor.parent)) {
     if (ts.isStatement(cursor.parent) || isSecurityIrFunctionScope(cursor.parent)) return undefined;
     cursor = cursor.parent;
@@ -7143,12 +7144,12 @@ function serverExactVariableDeclarationForInitializer(
 }
 
 interface ServerDirectStatementLocation {
-  readonly block: ts.Block;
+  readonly block: TS.Block;
   readonly index: number;
 }
 
-function serverDirectStatementLocation(node: ts.Node): ServerDirectStatementLocation | undefined {
-  let cursor: ts.Node = node;
+function serverDirectStatementLocation(node: TS.Node): ServerDirectStatementLocation | undefined {
+  let cursor: TS.Node = node;
   while (cursor.parent) {
     const parent = cursor.parent;
     if (ts.isBlock(parent) && ts.isStatement(cursor)) {
@@ -7166,9 +7167,9 @@ function serverDirectStatementLocation(node: ts.Node): ServerDirectStatementLoca
 }
 
 function serverCallUsesExactNamedFrameworkImport(
-  sourceFile: ts.SourceFile,
-  call: ts.CallExpression,
-  callee: ts.Expression,
+  sourceFile: TS.SourceFile,
+  call: TS.CallExpression,
+  callee: TS.Expression,
   exportName: string,
   identity: FrameworkExportIdentity,
 ): boolean {
@@ -7184,7 +7185,7 @@ function serverCallUsesExactNamedFrameworkImport(
   );
 }
 
-function serverExpressionIsExactJustificationOptions(expression: ts.Expression): boolean {
+function serverExpressionIsExactJustificationOptions(expression: TS.Expression): boolean {
   const options = unwrapExpression(expression);
   if (!ts.isObjectLiteralExpression(options) || options.properties.length !== 1) return false;
   const property = options.properties[0]!;
@@ -7196,7 +7197,7 @@ function serverExpressionIsExactJustificationOptions(expression: ts.Expression):
   );
 }
 
-function serverExpressionIsExactSecretReadDeclaration(expression: ts.Expression): boolean {
+function serverExpressionIsExactSecretReadDeclaration(expression: TS.Expression): boolean {
   const options = unwrapExpression(expression);
   if (!ts.isObjectLiteralExpression(options) || options.properties.length !== 4) return false;
   const expected = finiteStringSet(['columns', 'justification', 'source', 'table']);
@@ -7220,7 +7221,7 @@ function serverExpressionIsExactSecretReadDeclaration(expression: ts.Expression)
         const element = elements[elementIndex]!;
         if (
           ts.isSpreadElement(element) ||
-          !serverExpressionIsNonEmptyStaticString(element as ts.Expression)
+          !serverExpressionIsNonEmptyStaticString(element as TS.Expression)
         ) {
           return false;
         }
@@ -7232,13 +7233,13 @@ function serverExpressionIsExactSecretReadDeclaration(expression: ts.Expression)
   return true;
 }
 
-function serverExpressionIsNonEmptyStaticString(expression: ts.Expression): boolean {
+function serverExpressionIsNonEmptyStaticString(expression: TS.Expression): boolean {
   const value = unwrapExpression(expression);
   return ts.isStringLiteralLike(value) && compilerStringTrim(value.text).length > 0;
 }
 
 function serverCallDescendsFromReviewedDatabaseOperation(
-  expression: ts.Expression,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
 ): boolean {
   const current = unwrapExpression(expression);
@@ -7257,8 +7258,8 @@ function serverCallDescendsFromReviewedDatabaseOperation(
 }
 
 function serverCallIsExactGeneratedReadonlyAppDbRead(
-  sourceFile: ts.SourceFile,
-  call: ts.CallExpression,
+  sourceFile: TS.SourceFile,
+  call: TS.CallExpression,
 ): boolean {
   const callee = unwrapExpression(call.expression);
   if (!ts.isPropertyAccessExpression(callee) || callee.questionDotToken) return false;
@@ -7277,8 +7278,8 @@ function serverCallIsExactGeneratedReadonlyAppDbRead(
 }
 
 function serverCallDescendsFromExactGeneratedReadonlyAppDbRead(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
 ): boolean {
   const current = unwrapExpression(expression);
@@ -7316,8 +7317,8 @@ interface ServerImportedProjectValue {
 }
 
 function serverArgumentsContainUnreviewedForeignExecutable(
-  sourceFile: ts.SourceFile,
-  argumentsList: readonly ts.Expression[],
+  sourceFile: TS.SourceFile,
+  argumentsList: readonly TS.Expression[],
   aliases: ReadonlyMap<string, ServerValueProvenance>,
 ): boolean {
   const snapshot = compilerSnapshotDenseArray(
@@ -7343,8 +7344,8 @@ function serverArgumentsContainUnreviewedForeignExecutable(
 }
 
 function serverExpressionIsReviewedDatabaseSchemaValue(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): boolean {
   const current = unwrapExpression(expression);
   const cached = compilerWeakMapGet(serverReviewedDatabaseSchemaValueCache, current);
@@ -7358,15 +7359,15 @@ function serverExpressionIsReviewedDatabaseSchemaValue(
 }
 
 function serverExpressionIsReviewedDatabaseTable(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): boolean {
   const imported = serverImportedProjectValue(sourceFile, expression);
   if (!imported) return false;
   const target = resolveFrameworkIdentityProjectSourceFile(sourceFile, imported.specifier);
   if (!target) return false;
 
-  let declaration: ts.VariableDeclaration | undefined;
+  let declaration: TS.VariableDeclaration | undefined;
   const statements = compilerSnapshotDenseArray(
     target.statements,
     'Finite database schema source statements',
@@ -7405,8 +7406,8 @@ function serverExpressionIsReviewedDatabaseTable(
 }
 
 function serverExpressionIsExactGeneratedReadonlyAppDb(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): boolean {
   const current = unwrapExpression(expression);
   if (
@@ -7483,8 +7484,8 @@ function serverExpressionIsExactGeneratedReadonlyAppDb(
 }
 
 function serverExpressionIsExactGeneratedAppDatabaseFactory(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): boolean {
   const current = unwrapExpression(expression);
   if (!ts.isIdentifier(current)) return false;
@@ -7525,11 +7526,11 @@ function serverExpressionIsExactGeneratedAppDatabaseFactory(
 }
 
 function serverExactModuleConstDeclaration(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   name: string,
   exported: boolean,
-): ts.VariableDeclaration | undefined {
-  let found: ts.VariableDeclaration | undefined;
+): TS.VariableDeclaration | undefined {
+  let found: TS.VariableDeclaration | undefined;
   const statements = compilerSnapshotDenseArray(
     sourceFile.statements,
     'Finite generated app database statements',
@@ -7561,15 +7562,15 @@ function serverExactModuleConstDeclaration(
 }
 
 function serverBindingHasOnlyExactValueUses(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   name: string,
-  allowedUses: readonly ts.Identifier[],
+  allowedUses: readonly TS.Identifier[],
 ): boolean {
-  const allowed = compilerCreateSet<ts.Identifier>();
+  const allowed = compilerCreateSet<TS.Identifier>();
   const uses = compilerSnapshotDenseArray(allowedUses, 'Finite generated DB allowed uses');
   for (let index = 0; index < uses.length; index += 1) compilerSetAdd(allowed, uses[index]!);
   let exact = true;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (!exact) return;
     if (ts.isImportDeclaration(node)) return;
     if (ts.isIdentifier(node) && node.text === name) {
@@ -7591,9 +7592,9 @@ function serverBindingHasOnlyExactValueUses(
   return exact;
 }
 
-function serverGeneratedAppDatabaseUsesAreExact(sourceFile: ts.SourceFile, name: string): boolean {
+function serverGeneratedAppDatabaseUsesAreExact(sourceFile: TS.SourceFile, name: string): boolean {
   let exact = true;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (!exact) return;
     if (ts.isIdentifier(node) && node.text === name) {
       const parent = node.parent;
@@ -7635,15 +7636,15 @@ function serverGeneratedAppDatabaseUsesAreExact(sourceFile: ts.SourceFile, name:
 }
 
 function serverImportedProjectValue(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): ServerImportedProjectValue | undefined {
   const current = unwrapExpression(expression);
   const member = staticMember(current);
   const identifier = ts.isIdentifier(current)
     ? current
     : member && ts.isIdentifier(unwrapExpression(member.receiver))
-      ? (unwrapExpression(member.receiver) as ts.Identifier)
+      ? (unwrapExpression(member.receiver) as TS.Identifier)
       : undefined;
   if (!identifier) return undefined;
 
@@ -7684,7 +7685,7 @@ function serverImportedProjectValue(
 }
 
 function securityIrNodeHasExportModifier(
-  node: ts.Node & { readonly modifiers?: ts.NodeArray<ts.ModifierLike> },
+  node: TS.Node & { readonly modifiers?: TS.NodeArray<TS.ModifierLike> },
 ): boolean {
   const modifiers = node.modifiers;
   if (!modifiers) return false;
@@ -7695,9 +7696,9 @@ function securityIrNodeHasExportModifier(
   return false;
 }
 
-function serverBindingOrMemberIsAssigned(sourceFile: ts.SourceFile, name: string): boolean {
+function serverBindingOrMemberIsAssigned(sourceFile: TS.SourceFile, name: string): boolean {
   let assigned = false;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (assigned) return;
     if (
       ts.isBinaryExpression(node) &&
@@ -7725,9 +7726,9 @@ function serverBindingOrMemberIsAssigned(sourceFile: ts.SourceFile, name: string
 }
 
 function serverUnreviewedCallbackArgument(
-  sourceFile: ts.SourceFile,
-  call: ts.CallExpression | ts.NewExpression,
-): ts.Expression | undefined {
+  sourceFile: TS.SourceFile,
+  call: TS.CallExpression | TS.NewExpression,
+): TS.Expression | undefined {
   const callee = unwrapExpression(call.expression);
   let callbackIndex: number | undefined;
   if (ts.isNewExpression(call)) {
@@ -7769,20 +7770,20 @@ function serverUnreviewedCallbackArgument(
 }
 
 function classifyServerProvenanceCall(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   provenance: ServerValueProvenance,
-  call: ts.CallExpression,
+  call: TS.CallExpression,
   target: string,
   surface: ServerSecurityScanSurface,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
   appendOperation: (
     kind: ServerSecurityOperationKind,
-    node: ts.Node,
+    node: TS.Node,
     target?: string,
     justification?: string,
   ) => void,
   appendViolation: (
-    node: ts.Node,
+    node: TS.Node,
     kind: SecurityOperationViolationModel['kind'],
     detail: string,
   ) => void,
@@ -7875,11 +7876,11 @@ function classifyServerProvenanceCall(
 }
 
 function appendUnsafeWireBodyViolation(
-  body: ts.Expression | undefined,
+  body: TS.Expression | undefined,
   target: string,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
   appendViolation: (
-    node: ts.Node,
+    node: TS.Node,
     kind: SecurityOperationViolationModel['kind'],
     detail: string,
   ) => void,
@@ -7895,11 +7896,11 @@ function appendUnsafeWireBodyViolation(
 }
 
 function appendForbiddenResponseInitHeaderViolation(
-  sourceFile: ts.SourceFile,
-  init: ts.Expression | undefined,
+  sourceFile: TS.SourceFile,
+  init: TS.Expression | undefined,
   target: string,
   appendViolation: (
-    node: ts.Node,
+    node: TS.Node,
     kind: SecurityOperationViolationModel['kind'],
     detail: string,
   ) => void,
@@ -7915,23 +7916,23 @@ function appendForbiddenResponseInitHeaderViolation(
 }
 
 function responseInitRefreshHeader(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
   active: Set<number>,
   depth: number,
-): ts.Node | undefined {
+): TS.Node | undefined {
   const resolution = responseInitHeadersResolution(sourceFile, expression, active, depth);
   return resolution.kind === 'present' ? resolution.refreshHeader : undefined;
 }
 
 type ResponseInitHeadersResolution =
   | { readonly kind: 'absent' }
-  | { readonly kind: 'present'; readonly refreshHeader: ts.Node | undefined }
+  | { readonly kind: 'present'; readonly refreshHeader: TS.Node | undefined }
   | { readonly kind: 'unknown' };
 
 function responseInitHeadersResolution(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
   active: Set<number>,
   depth: number,
 ): ResponseInitHeadersResolution {
@@ -8015,11 +8016,11 @@ function responseInitHeadersResolution(
 }
 
 function responseHeaderCollectionRefreshHeader(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
   active: Set<number>,
   depth: number,
-): ts.Node | undefined {
+): TS.Node | undefined {
   if (depth > SECURITY_SEMANTIC_CALL_DEPTH_BUDGET) return undefined;
   const current = unwrapExpression(expression);
   if (ts.isIdentifier(current)) {
@@ -8109,17 +8110,17 @@ function responseHeaderCollectionRefreshHeader(
 }
 
 function withResponseInitExpression(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
   active: Set<number>,
   depth: number,
   inspect: (
-    sourceFile: ts.SourceFile,
-    expression: ts.Expression,
+    sourceFile: TS.SourceFile,
+    expression: TS.Expression,
     active: Set<number>,
     depth: number,
-  ) => ts.Node | undefined,
-): ts.Node | undefined {
+  ) => TS.Node | undefined,
+): TS.Node | undefined {
   const key = expression.getStart(sourceFile);
   if (compilerSetHas(active, key)) return undefined;
   compilerSetAdd(active, key);
@@ -8131,9 +8132,9 @@ function withResponseInitExpression(
 }
 
 function responseInitObjectWrapper(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
-): expression is ts.CallExpression {
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
+): expression is TS.CallExpression {
   if (!ts.isCallExpression(expression) || expression.arguments.length !== 1) return false;
   const member = staticMember(unwrapExpression(expression.expression));
   const root = member === undefined ? undefined : unwrapExpression(member.receiver);
@@ -8148,8 +8149,8 @@ function responseInitObjectWrapper(
 }
 
 function responseInitUsesAmbientHeaders(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): boolean {
   const current = unwrapExpression(expression);
   if (ts.isIdentifier(current)) {
@@ -8166,21 +8167,21 @@ function responseInitUsesAmbientHeaders(
   );
 }
 
-function responseInitPropertyName(name: ts.PropertyName | undefined): string | undefined {
+function responseInitPropertyName(name: TS.PropertyName | undefined): string | undefined {
   if (name === undefined) return undefined;
   if (ts.isComputedPropertyName(name)) return responseInitHeaderNameExpression(name.expression);
   return staticPropertyName(name);
 }
 
-function responseInitHeaderNameExpression(expression: ts.Expression): string | undefined {
+function responseInitHeaderNameExpression(expression: TS.Expression): string | undefined {
   const current = unwrapExpression(expression);
   return ts.isStringLiteralLike(current) ? current.text : undefined;
 }
 
 function serverAliasProvenance(
-  sourceFile: ts.SourceFile,
-  body: ts.ConciseBody,
-  parameters: readonly ts.ParameterDeclaration[],
+  sourceFile: TS.SourceFile,
+  body: TS.ConciseBody,
+  parameters: readonly TS.ParameterDeclaration[],
   surface: ServerSecurityScanSurface,
   parameterProvenances?: readonly ServerValueProvenance[],
   inheritedEnvironment?: ServerAliasEnvironment,
@@ -8217,7 +8218,7 @@ function serverAliasProvenance(
   // SPEC §9.2: catch-bound internals and remotely influenced request values share one
   // non-authority provenance state. That state is inert during ordinary computation and closes
   // only when an unaudited raw response body attempts to consume it.
-  const seedCatchBindings = (node: ts.Node): void => {
+  const seedCatchBindings = (node: TS.Node): void => {
     if (node !== body && isSecurityIrFunctionScope(node)) return;
     if (ts.isCatchClause(node) && node.variableDeclaration) {
       setServerAliasPattern(node.variableDeclaration.name, 'unsafe-wire-data', aliases);
@@ -8230,7 +8231,7 @@ function serverAliasProvenance(
   let changed = true;
   while (changed) {
     changed = false;
-    const visit = (node: ts.Node): void => {
+    const visit = (node: TS.Node): void => {
       if (ts.isVariableDeclaration(node)) {
         const initializer = node.initializer;
         let provenance: ServerValueProvenance = 'local';
@@ -8249,7 +8250,7 @@ function serverAliasProvenance(
 }
 
 function serverModuleAliasEnvironment(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   inheritedEnvironment?: ServerAliasEnvironment,
 ): ServerModuleAliasEnvironment {
   if (inheritedEnvironment) {
@@ -8340,8 +8341,8 @@ function serverModuleAliasEnvironment(
 }
 
 function serverModuleFrameworkCapabilityFactoryProvenance(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
 ): ServerValueProvenance | undefined {
   const current = unwrapExpression(expression);
@@ -8380,7 +8381,7 @@ function serverModuleFrameworkCapabilityFactoryProvenance(
   return 'storage';
 }
 
-function serverCallHasExactDerivedOptions(call: ts.CallExpression): boolean {
+function serverCallHasExactDerivedOptions(call: TS.CallExpression): boolean {
   const argumentsList = compilerSnapshotDenseArray(
     call.arguments,
     'Finite derived dataset constructor arguments',
@@ -8419,8 +8420,8 @@ function serverCallHasExactDerivedOptions(call: ts.CallExpression): boolean {
 }
 
 function serverModuleInitializerReturnsAuthority(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
   active: Set<string>,
   depth: number,
@@ -8458,7 +8459,7 @@ function serverModuleInitializerReturnsAuthority(
     let changed = true;
     while (changed) {
       changed = false;
-      const visitBindings = (node: ts.Node): void => {
+      const visitBindings = (node: TS.Node): void => {
         if (node !== callable.body && isSecurityIrFunctionScope(node)) return;
         if (ts.isVariableDeclaration(node)) {
           const provenance = node.initializer
@@ -8471,11 +8472,11 @@ function serverModuleInitializerReturnsAuthority(
       visitBindings(callable.body);
     }
 
-    const returnExpressions: ts.Expression[] = [];
+    const returnExpressions: TS.Expression[] = [];
     if (!ts.isBlock(callable.body)) {
       compilerArrayAppend(returnExpressions, callable.body, 'Security-IR module helper returns');
     } else {
-      const visitReturns = (node: ts.Node): void => {
+      const visitReturns = (node: TS.Node): void => {
         if (node !== callable.body && isSecurityIrFunctionScope(node)) return;
         if (ts.isReturnStatement(node) && node.expression) {
           compilerArrayAppend(
@@ -8515,7 +8516,7 @@ function serverModuleInitializerReturnsAuthority(
 }
 
 function bindServerAliasPattern(
-  name: ts.BindingName,
+  name: TS.BindingName,
   provenance: ServerValueProvenance,
   aliases: Map<string, ServerValueProvenance>,
 ): boolean {
@@ -8547,7 +8548,7 @@ function bindServerAliasPattern(
 }
 
 function setServerAliasPattern(
-  name: ts.BindingName,
+  name: TS.BindingName,
   provenance: ServerValueProvenance,
   aliases: Map<string, ServerValueProvenance>,
 ): void {
@@ -8579,7 +8580,7 @@ function setServerAliasPattern(
 
 function serverProvenanceWithBindingDefault(
   projected: ServerValueProvenance,
-  initializer: ts.Expression | undefined,
+  initializer: TS.Expression | undefined,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
 ): ServerValueProvenance {
   if (!initializer) return projected;
@@ -8600,7 +8601,7 @@ function joinServerAlias(
 }
 
 function serverExpressionProvenance(
-  expression: ts.Expression,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
 ): ServerValueProvenance {
   const current = unwrapExpression(expression);
@@ -8721,18 +8722,18 @@ function serverExpressionProvenance(
 }
 
 function serverCallReadsDerivedDataset(
-  call: ts.CallExpression,
+  call: TS.CallExpression,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
 ): boolean {
   return serverExpressionProvenance(call.expression, aliases) === 'derived-query-call';
 }
 
 function expressionContainsServerGovernedData(
-  expression: ts.Expression,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
 ): boolean {
   let found = false;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (found) return;
     if (node !== expression && isSecurityIrFunctionScope(node)) return;
     if (ts.isIdentifier(node) && compilerMapGet(aliases, node.text) === 'governed-data') {
@@ -8754,11 +8755,11 @@ function expressionContainsServerGovernedData(
 }
 
 function expressionContainsServerUnsafeWireData(
-  expression: ts.Expression,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
 ): boolean {
   let found = false;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (found) return;
     if (node !== expression && isSecurityIrFunctionScope(node)) return;
     if (ts.isIdentifier(node) && compilerMapGet(aliases, node.text) === 'unsafe-wire-data') {
@@ -8779,7 +8780,7 @@ function expressionContainsServerUnsafeWireData(
   return found;
 }
 
-function serverObjectLiteralHasImplicitCallable(object: ts.ObjectLiteralExpression): boolean {
+function serverObjectLiteralHasImplicitCallable(object: TS.ObjectLiteralExpression): boolean {
   const properties = compilerSnapshotDenseArray(
     object.properties,
     'Finite server object properties',
@@ -8799,7 +8800,7 @@ function serverObjectLiteralHasImplicitCallable(object: ts.ObjectLiteralExpressi
   return false;
 }
 
-function serverObjectPropertyIsImplicitProtocol(name: ts.PropertyName): boolean {
+function serverObjectPropertyIsImplicitProtocol(name: TS.PropertyName): boolean {
   const direct = staticPropertyName(name);
   if (direct && compilerSetHas(serverImplicitObjectProtocolMembers, direct)) return true;
   if (!ts.isComputedPropertyName(name)) return false;
@@ -8810,11 +8811,11 @@ function serverObjectPropertyIsImplicitProtocol(name: ts.PropertyName): boolean 
 }
 
 function expressionContainsServerForeignExecutable(
-  expression: ts.Expression,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
 ): boolean {
   let found = false;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (found) return;
     if (node !== expression && isSecurityIrFunctionScope(node)) return;
     if (node !== expression && (ts.isCallExpression(node) || ts.isNewExpression(node))) return;
@@ -8849,12 +8850,12 @@ function serverProvenanceCarriesAuthority(provenance: ServerValueProvenance | un
 }
 
 function expressionContainsServerAuthority(
-  expression: ts.Expression,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
 ): boolean {
   securityAbstractTransfer('expression.fallthrough-authority');
   let found = false;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (found) return;
     if (ts.isCallExpression(node)) {
       const result = serverExpressionProvenance(node, aliases);
@@ -8883,14 +8884,14 @@ function expressionContainsServerAuthority(
 }
 
 function serverExpressionCarriesAuthority(
-  expression: ts.Expression,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, ServerValueProvenance>,
 ): boolean {
   return serverProvenanceCarriesAuthority(serverExpressionProvenance(expression, aliases));
 }
 
 function serverArgumentsContainAuthority(
-  argumentsList: readonly ts.Expression[],
+  argumentsList: readonly TS.Expression[],
   aliases: ReadonlyMap<string, ServerValueProvenance>,
 ): boolean {
   const snapshot = compilerSnapshotDenseArray(
@@ -8904,7 +8905,7 @@ function serverArgumentsContainAuthority(
 }
 
 function serverArgumentsContainGovernedData(
-  argumentsList: readonly ts.Expression[],
+  argumentsList: readonly TS.Expression[],
   aliases: ReadonlyMap<string, ServerValueProvenance>,
 ): boolean {
   const snapshot = compilerSnapshotDenseArray(argumentsList, 'Server governed-data call arguments');
@@ -8917,7 +8918,7 @@ function serverArgumentsContainGovernedData(
 }
 
 function serverArgumentsContainUnsafeWireData(
-  argumentsList: readonly ts.Expression[],
+  argumentsList: readonly TS.Expression[],
   aliases: ReadonlyMap<string, ServerValueProvenance>,
 ): boolean {
   const snapshot = compilerSnapshotDenseArray(
@@ -8933,7 +8934,7 @@ function serverArgumentsContainUnsafeWireData(
 }
 
 function serverArgumentsContainForeignExecutable(
-  argumentsList: readonly ts.Expression[],
+  argumentsList: readonly TS.Expression[],
   aliases: ReadonlyMap<string, ServerValueProvenance>,
 ): boolean {
   const snapshot = compilerSnapshotDenseArray(
@@ -8948,7 +8949,7 @@ function serverArgumentsContainForeignExecutable(
   return false;
 }
 
-function isConstVariableDeclaration(declaration: ts.VariableDeclaration): boolean {
+function isConstVariableDeclaration(declaration: TS.VariableDeclaration): boolean {
   const list = declaration.parent;
   return ts.isVariableDeclarationList(list) && (list.flags & ts.NodeFlags.Const) !== 0;
 }
@@ -8967,7 +8968,7 @@ function isStructuredServerReceiver(root: string): boolean {
   );
 }
 
-function justificationFromCall(call: ts.CallExpression): string | undefined {
+function justificationFromCall(call: TS.CallExpression): string | undefined {
   const argumentsSnapshot = compilerSnapshotDenseArray(call.arguments, 'Security escape arguments');
   // Argument zero is the trusted value itself; only trailing metadata can justify the escape.
   for (let index = argumentsSnapshot.length - 1; index >= 1; index -= 1) {
@@ -9012,14 +9013,14 @@ function frameworkIdentityIn(
   return false;
 }
 
-function browserAliasProvenance(body: ts.ConciseBody): ReadonlyMap<string, BrowserValueProvenance> {
+function browserAliasProvenance(body: TS.ConciseBody): ReadonlyMap<string, BrowserValueProvenance> {
   const aliases = compilerCreateMap<string, BrowserValueProvenance>();
   compilerMapSet(aliases, 'state', 'state');
   compilerMapSet(aliases, 'event', 'event');
   let changed = true;
   while (changed) {
     changed = false;
-    const visit = (node: ts.Node): void => {
+    const visit = (node: TS.Node): void => {
       if (ts.isVariableDeclaration(node)) {
         const initializer = node.initializer;
         const derived = initializer
@@ -9106,8 +9107,8 @@ function browserAliasProvenance(body: ts.ConciseBody): ReadonlyMap<string, Brows
 }
 
 function browserDirectImportedCallResultIsData(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): boolean {
   const current = unwrapExpression(expression);
   return (
@@ -9117,9 +9118,9 @@ function browserDirectImportedCallResultIsData(
 }
 
 function browserExpressionProvenance(
-  expression: ts.Expression,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
-  boundary: ts.ConciseBody,
+  boundary: TS.ConciseBody,
 ): BrowserValueProvenance {
   const current = unwrapExpression(expression);
   if (
@@ -9246,9 +9247,9 @@ function browserExpressionProvenance(
 }
 
 function browserMutationTargetProvenance(
-  expression: ts.Expression,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
-  boundary: ts.ConciseBody,
+  boundary: TS.ConciseBody,
 ): BrowserValueProvenance {
   const current = unwrapExpression(expression);
   const member = staticMember(current);
@@ -9258,7 +9259,7 @@ function browserMutationTargetProvenance(
 }
 
 function bindBrowserAliasPattern(
-  name: ts.BindingName,
+  name: TS.BindingName,
   provenance: BrowserValueProvenance,
   aliases: Map<string, BrowserValueProvenance>,
 ): boolean {
@@ -9319,12 +9320,12 @@ function browserOperationProvenanceKind(
 }
 
 function expressionContainsBrowserAuthority(
-  expression: ts.Expression,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
-  boundary: ts.ConciseBody,
+  boundary: TS.ConciseBody,
 ): boolean {
   let found = false;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (found) return;
     if (
       ts.isExpression(node) &&
@@ -9383,7 +9384,7 @@ function expressionContainsBrowserAuthority(
   return found;
 }
 
-function browserStateValueIsConsumedAsScalar(expression: ts.Expression): boolean {
+function browserStateValueIsConsumedAsScalar(expression: TS.Expression): boolean {
   const parent = expression.parent;
   return (
     ts.isBinaryExpression(parent) ||
@@ -9396,17 +9397,17 @@ function browserStateValueIsConsumedAsScalar(expression: ts.Expression): boolean
 }
 
 function callArgumentsContainBrowserAuthority(
-  call: ts.CallExpression,
+  call: TS.CallExpression,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
-  boundary: ts.ConciseBody,
+  boundary: TS.ConciseBody,
 ): boolean {
   return browserArgumentsContainAuthority(call.arguments, aliases, boundary);
 }
 
 function browserArgumentsContainAuthority(
-  argumentsList: readonly ts.Expression[],
+  argumentsList: readonly TS.Expression[],
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
-  boundary: ts.ConciseBody,
+  boundary: TS.ConciseBody,
 ): boolean {
   const argumentsSnapshot = compilerSnapshotDenseArray(
     argumentsList,
@@ -9428,9 +9429,9 @@ function isDomProvenance(value: BrowserValueProvenance): boolean {
   return value === 'dom' || value === 'form';
 }
 
-function localBindingNames(node: ts.Node): ReadonlySet<string> {
+function localBindingNames(node: TS.Node): ReadonlySet<string> {
   const names = compilerCreateSet<string>();
-  const visit = (current: ts.Node): void => {
+  const visit = (current: TS.Node): void => {
     if (ts.isVariableDeclaration(current) || ts.isParameter(current)) {
       collectBindingNames(current.name, names);
     } else if (
@@ -9451,8 +9452,8 @@ function localBindingNames(node: ts.Node): ReadonlySet<string> {
  * a sibling shadow must not launder ambient authority. This mirrors the parser's symbol-identity
  * rule without requiring a TypeScript type checker.
  */
-function identifierIsShadowedWithinBoundary(identifier: ts.Identifier, boundary: ts.Node): boolean {
-  let current: ts.Node | undefined = identifier.parent;
+function identifierIsShadowedWithinBoundary(identifier: TS.Identifier, boundary: TS.Node): boolean {
+  let current: TS.Node | undefined = identifier.parent;
   while (current && current !== boundary) {
     if (
       isSecurityIrLexicalScope(current) &&
@@ -9465,10 +9466,10 @@ function identifierIsShadowedWithinBoundary(identifier: ts.Identifier, boundary:
   return securityIrScopeDeclaresName(boundary, identifier.text);
 }
 
-function securityIrScopeDeclaresName(scope: ts.Node, name: string): boolean {
+function securityIrScopeDeclaresName(scope: TS.Node, name: string): boolean {
   let found = false;
 
-  const visitBindingName = (bindingName: ts.BindingName): void => {
+  const visitBindingName = (bindingName: TS.BindingName): void => {
     if (ts.isIdentifier(bindingName)) {
       if (bindingName.text === name) found = true;
       return;
@@ -9483,7 +9484,7 @@ function securityIrScopeDeclaresName(scope: ts.Node, name: string): boolean {
     }
   };
 
-  const visit = (node: ts.Node, insideNestedLexicalBlock: boolean): void => {
+  const visit = (node: TS.Node, insideNestedLexicalBlock: boolean): void => {
     if (found) return;
     if (node !== scope && isSecurityIrFunctionScope(node)) {
       if (ts.isFunctionDeclaration(node) && node.name && !insideNestedLexicalBlock) {
@@ -9525,7 +9526,7 @@ function securityIrScopeDeclaresName(scope: ts.Node, name: string): boolean {
   return found;
 }
 
-function isSecurityIrLexicalScope(node: ts.Node): boolean {
+function isSecurityIrLexicalScope(node: TS.Node): boolean {
   return (
     ts.isSourceFile(node) ||
     ts.isBlock(node) ||
@@ -9534,7 +9535,7 @@ function isSecurityIrLexicalScope(node: ts.Node): boolean {
   );
 }
 
-function isSecurityIrFunctionScope(node: ts.Node): node is ts.FunctionLikeDeclaration {
+function isSecurityIrFunctionScope(node: TS.Node): node is TS.FunctionLikeDeclaration {
   return (
     ts.isFunctionDeclaration(node) ||
     ts.isFunctionExpression(node) ||
@@ -9546,7 +9547,7 @@ function isSecurityIrFunctionScope(node: ts.Node): node is ts.FunctionLikeDeclar
   );
 }
 
-function collectBindingNames(name: ts.BindingName, target: Set<string>): void {
+function collectBindingNames(name: TS.BindingName, target: Set<string>): void {
   if (ts.isIdentifier(name)) {
     compilerSetAdd(target, name.text);
     return;
@@ -9559,8 +9560,8 @@ function collectBindingNames(name: ts.BindingName, target: Set<string>): void {
 }
 
 function staticMember(
-  expression: ts.Expression,
-): { name: string; receiver: ts.Expression } | undefined {
+  expression: TS.Expression,
+): { name: string; receiver: TS.Expression } | undefined {
   const current = unwrapExpression(expression);
   if (ts.isPropertyAccessExpression(current)) {
     return { name: current.name.text, receiver: current.expression };
@@ -9572,11 +9573,11 @@ function staticMember(
   return undefined;
 }
 
-function rootIdentifier(expression: ts.Expression): string | undefined {
+function rootIdentifier(expression: TS.Expression): string | undefined {
   return rootIdentifierNode(expression)?.text;
 }
 
-function rootIdentifierNode(expression: ts.Expression): ts.Identifier | undefined {
+function rootIdentifierNode(expression: TS.Expression): TS.Identifier | undefined {
   let current = unwrapExpression(expression);
   while (true) {
     if (ts.isIdentifier(current)) return current;
@@ -9595,7 +9596,7 @@ function rootIdentifierNode(expression: ts.Expression): ts.Identifier | undefine
   }
 }
 
-function expressionPath(expression: ts.Expression): string | undefined {
+function expressionPath(expression: TS.Expression): string | undefined {
   const current = unwrapExpression(expression);
   if (ts.isIdentifier(current)) return current.text;
   const member = staticMember(current);
@@ -9604,15 +9605,15 @@ function expressionPath(expression: ts.Expression): string | undefined {
   return receiver ? `${receiver}.${member.name}` : undefined;
 }
 
-function browserExpressionTarget(expression: ts.Expression): string | undefined {
+function browserExpressionTarget(expression: TS.Expression): string | undefined {
   return expressionPath(expression);
 }
 
 function browserCanonicalStateTarget(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
-  boundary: ts.ConciseBody,
+  boundary: TS.ConciseBody,
   active: Set<string> = compilerCreateSet<string>(),
 ): string | undefined {
   const current = unwrapExpression(expression);
@@ -9667,13 +9668,13 @@ function browserCanonicalStateTarget(
   }
 }
 
-function nodeName(node: ts.Node): string {
+function nodeName(node: TS.Node): string {
   if (ts.isIdentifier(node)) return node.text;
   const member = ts.isExpression(node) ? staticMember(node) : undefined;
   return member?.name ?? 'computed';
 }
 
-function staticPropertyName(name: ts.PropertyName | undefined): string | undefined {
+function staticPropertyName(name: TS.PropertyName | undefined): string | undefined {
   if (name === undefined) return undefined;
   if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
     return name.text;
@@ -9681,7 +9682,7 @@ function staticPropertyName(name: ts.PropertyName | undefined): string | undefin
   return undefined;
 }
 
-function unwrapExpression(expression: ts.Expression): ts.Expression {
+function unwrapExpression(expression: TS.Expression): TS.Expression {
   let current = expression;
   while (
     ts.isParenthesizedExpression(current) ||
@@ -9696,11 +9697,11 @@ function unwrapExpression(expression: ts.Expression): ts.Expression {
   return current;
 }
 
-function isAssignmentOperator(kind: ts.SyntaxKind): boolean {
+function isAssignmentOperator(kind: TS.SyntaxKind): boolean {
   return kind >= ts.SyntaxKind.FirstAssignment && kind <= ts.SyntaxKind.LastAssignment;
 }
 
-function serverBinaryOperatorExecutesCoercion(kind: ts.SyntaxKind): boolean {
+function serverBinaryOperatorExecutesCoercion(kind: TS.SyntaxKind): boolean {
   switch (kind) {
     case ts.SyntaxKind.AsteriskToken:
     case ts.SyntaxKind.AsteriskAsteriskToken:

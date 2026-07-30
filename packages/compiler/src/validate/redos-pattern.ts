@@ -1,4 +1,5 @@
-import * as ts from 'typescript';
+import type * as TS from 'typescript';
+import { typescriptRuntime as ts } from '../ts-api.js';
 
 import {
   compilerArrayAppend,
@@ -30,7 +31,7 @@ export function validateNonLiteralPattern(
 ): CompilerDiagnostic[] {
   const found: CompilerDiagnostic[] = [];
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     const flagged = unsupportedPatternCall(node);
     if (flagged) {
       compilerArrayAppend(
@@ -52,7 +53,7 @@ export function validateNonLiteralPattern(
 }
 
 function unsupportedPatternCall(
-  node: ts.Node,
+  node: TS.Node,
 ): { end: number; reason: string; start: number } | null {
   if (!ts.isCallExpression(node)) return null;
   const callee = node.expression;
@@ -66,7 +67,7 @@ function unsupportedPatternCall(
     argumentLength === 0
       ? undefined
       : (compilerOwnDataValue(node.arguments, 0, 'Pattern call arguments') as
-          | ts.Expression
+          | TS.Expression
           | undefined);
   if (!arg) return null;
   const literal = compileVisiblePatternLiteral(arg);
@@ -91,7 +92,7 @@ function unsupportedPatternCall(
 }
 
 function compileVisiblePatternLiteral(
-  expression: ts.Expression,
+  expression: TS.Expression,
 ): { flags: string; source: string } | null {
   const node = unwrapExpression(expression);
 
@@ -109,7 +110,7 @@ function compileVisiblePatternLiteral(
   return null;
 }
 
-function regexLiteral(node: ts.RegularExpressionLiteral): { flags: string; source: string } {
+function regexLiteral(node: TS.RegularExpressionLiteral): { flags: string; source: string } {
   const text = node.text;
   const lastSlash = lastSlashIndex(text);
   return lastSlash > 0
@@ -127,8 +128,8 @@ function lastSlashIndex(value: string): number {
   return -1;
 }
 
-function receiverRootsAtStringSchema(receiver: ts.Expression): boolean {
-  let current: ts.Expression = receiver;
+function receiverRootsAtStringSchema(receiver: TS.Expression): boolean {
+  let current: TS.Expression = receiver;
 
   for (;;) {
     const unwrapped = unwrapExpression(current);
@@ -238,7 +239,7 @@ function containsNonAscii(value: string): boolean {
   return false;
 }
 
-function identifierName(name: ts.MemberName): string | null {
+function identifierName(name: TS.MemberName): string | null {
   if (!ts.isIdentifier(name)) return null;
   return typeof name.escapedText === 'string' ? name.escapedText : null;
 }

@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto';
 import { realpathSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 
-import * as ts from 'typescript';
+import type * as TS from 'typescript';
+import { typescriptRuntime as ts } from './ts-api.js';
 
 import {
   clientModuleHrefForSourceFile,
@@ -292,9 +293,9 @@ interface EntryAnalysis {
 }
 
 interface ProvenanceContext {
-  readonly checker: ts.TypeChecker;
-  readonly options: ts.CompilerOptions;
-  readonly program: ts.Program;
+  readonly checker: TS.TypeChecker;
+  readonly options: TS.CompilerOptions;
+  readonly program: TS.Program;
 }
 
 interface DerivedAppContractIdentity {
@@ -309,10 +310,10 @@ interface DerivedAppContractIdentity {
 }
 
 type AnalyzableFunctionLike =
-  | ts.ArrowFunction
-  | ts.FunctionDeclaration
-  | ts.FunctionExpression
-  | ts.MethodDeclaration;
+  | TS.ArrowFunction
+  | TS.FunctionDeclaration
+  | TS.FunctionExpression
+  | TS.MethodDeclaration;
 
 /**
  * Build the Arm A project from filesystem roots. Identity is derived from compiler-owned AST and
@@ -328,8 +329,8 @@ export function createCompilerOwnedAppContractProject(
   const program = ts.createProgram({ options, rootNames });
   const checker = program.getTypeChecker();
   const context: ProvenanceContext = { checker, options, program };
-  let semanticDiagnostics: readonly ts.Diagnostic[] | undefined;
-  const semanticDiagnosticsForProject = (): readonly ts.Diagnostic[] => {
+  let semanticDiagnostics: readonly TS.Diagnostic[] | undefined;
+  const semanticDiagnosticsForProject = (): readonly TS.Diagnostic[] => {
     // Most build/check consumers need exact receiver/type identity but never ask this project to
     // reproduce TypeScript's ordinary diagnostic census. Computing that census eagerly retains a
     // second whole-project diagnostic graph throughout the Vite build. Keep the same immutable
@@ -338,7 +339,7 @@ export function createCompilerOwnedAppContractProject(
     return semanticDiagnostics;
   };
 
-  const sourceFileFor = (fileName: string): ts.SourceFile => {
+  const sourceFileFor = (fileName: string): TS.SourceFile => {
     const exact = programSourceFile(program, resolve(rootDirectory, fileName));
     if (!exact) throw new TypeError(`App-contract project does not contain ${fileName}.`);
     return exact;
@@ -360,7 +361,7 @@ export function createCompilerOwnedAppContractProject(
         ),
       );
     }
-    const visit = (node: ts.Node): void => {
+    const visit = (node: TS.Node): void => {
       if (diagnostics.length > 0) return;
       if (
         node !== sourceFile &&
@@ -755,7 +756,7 @@ export function createCompilerOwnedAppContractProject(
 
 function appContractMemberDeclaration(
   member: CompilerOwnedAppContractMemberResolution,
-  checker: ts.TypeChecker,
+  checker: TS.TypeChecker,
 ): CompilerOwnedAppContractStaticFact['declaration'] {
   const call = member.node.parent;
   if (!ts.isCallExpression(call) || call.expression !== member.node) return undefined;
@@ -787,8 +788,8 @@ function appContractMemberDeclaration(
 }
 
 function exactStringLiteralTypeValue(
-  value: ts.Type,
-  checker: ts.TypeChecker,
+  value: TS.Type,
+  checker: TS.TypeChecker,
   propertyName: string,
 ): string | undefined {
   const property = checker.getPropertyOfType(value, propertyName);
@@ -807,7 +808,7 @@ function exactStringLiteralTypeValue(
 }
 
 function rejectedEntry(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   analysis: EntryAnalysis,
 ): CompilerOwnedAppContractEntry {
   return {
@@ -827,8 +828,8 @@ function rejectedEntry(
 }
 
 function proveFactoryCall(
-  sourceFile: ts.SourceFile,
-  call: ts.CallExpression,
+  sourceFile: TS.SourceFile,
+  call: TS.CallExpression,
   context: ProvenanceContext,
 ): FactoryProof {
   const expression = call.expression;
@@ -1068,10 +1069,10 @@ function proveFactoryCall(
 }
 
 function proveReceiver(
-  diagnosticSourceFile: ts.SourceFile,
-  rawExpression: ts.Expression,
+  diagnosticSourceFile: TS.SourceFile,
+  rawExpression: TS.Expression,
   context: ProvenanceContext,
-  seen: Set<ts.Declaration>,
+  seen: Set<TS.Declaration>,
   depth: number,
 ): ReceiverProof {
   if (depth > 48) {
@@ -1160,11 +1161,11 @@ function proveReceiver(
 }
 
 function proveVariableReceiver(
-  diagnosticSourceFile: ts.SourceFile,
-  expression: ts.Identifier,
-  declaration: ts.VariableDeclaration,
+  diagnosticSourceFile: TS.SourceFile,
+  expression: TS.Identifier,
+  declaration: TS.VariableDeclaration,
   context: ProvenanceContext,
-  seen: Set<ts.Declaration>,
+  seen: Set<TS.Declaration>,
   depth: number,
 ): ReceiverProof {
   if (seen.has(declaration)) {
@@ -1252,8 +1253,8 @@ function proveVariableReceiver(
 }
 
 function proveDirectDefineKovo(
-  declaration: ts.VariableDeclaration,
-  initializer: ts.Expression,
+  declaration: TS.VariableDeclaration,
+  initializer: TS.Expression,
   context: ProvenanceContext,
 ): Extract<ReceiverProof, { kind: 'app' }> | undefined {
   if (
@@ -1341,7 +1342,7 @@ function proveDirectDefineKovo(
 }
 
 function importedProviderIdentity(
-  options: ts.ObjectLiteralExpression,
+  options: TS.ObjectLiteralExpression,
   providerKey: string | undefined,
   context: ProvenanceContext,
 ):
@@ -1353,7 +1354,7 @@ function importedProviderIdentity(
   | undefined {
   if (!providerKey) return undefined;
   const providerProperty = options.properties.find(
-    (property): property is ts.PropertyAssignment =>
+    (property): property is TS.PropertyAssignment =>
       ts.isPropertyAssignment(property) &&
       ((ts.isIdentifier(property.name) && property.name.text === 'provider') ||
         (ts.isStringLiteralLike(property.name) && property.name.text === 'provider')),
@@ -1379,7 +1380,7 @@ function importedProviderIdentity(
   }
   const providerDefinition = unwrapExpression(
     resolvedDeclaration.initializer,
-  ) as ts.ObjectLiteralExpression;
+  ) as TS.ObjectLiteralExpression;
   if (stringProperty(providerDefinition, 'key') !== providerKey) return undefined;
   return {
     definitionFileName: resolvedDeclaration.getSourceFile().fileName,
@@ -1389,9 +1390,9 @@ function importedProviderIdentity(
 }
 
 function expressionDerivesFromApp(
-  rawExpression: ts.Expression,
+  rawExpression: TS.Expression,
   context: ProvenanceContext,
-  seen: Set<ts.Declaration>,
+  seen: Set<TS.Declaration>,
   depth: number,
 ): boolean {
   if (depth > 48) return true;
@@ -1440,7 +1441,7 @@ function expressionDerivesFromApp(
   }
 
   let derives = false;
-  const visitChild = (child: ts.Node): void => {
+  const visitChild = (child: TS.Node): void => {
     if (derives || ts.isFunctionLike(child)) return;
     if (ts.isExpression(child) && expressionDerivesFromApp(child, context, seen, depth + 1)) {
       derives = true;
@@ -1453,9 +1454,9 @@ function expressionDerivesFromApp(
 }
 
 function declarationDerivesFromApp(
-  declaration: ts.Declaration,
+  declaration: TS.Declaration,
   context: ProvenanceContext,
-  seen: Set<ts.Declaration>,
+  seen: Set<TS.Declaration>,
   depth: number,
 ): boolean {
   if (depth > 48 || seen.has(declaration)) return depth > 48;
@@ -1482,7 +1483,7 @@ function declarationDerivesFromApp(
 function functionReturnsApp(
   declaration: AnalyzableFunctionLike,
   context: ProvenanceContext,
-  seen: Set<ts.Declaration>,
+  seen: Set<TS.Declaration>,
   depth: number,
 ): boolean {
   if (!declaration.body) return false;
@@ -1490,7 +1491,7 @@ function functionReturnsApp(
     return expressionDerivesFromApp(declaration.body, context, seen, depth + 1);
   }
   let derives = false;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (derives) return;
     if (node !== declaration.body && ts.isFunctionLike(node)) return;
     if (
@@ -1517,10 +1518,10 @@ function functionContainsAppDeclarationFactory(
 function firstAppDeclarationFactoryCall(
   declaration: AnalyzableFunctionLike,
   context: ProvenanceContext,
-): ts.CallExpression | undefined {
+): TS.CallExpression | undefined {
   if (!declaration.body) return undefined;
-  let found: ts.CallExpression | undefined;
-  const visit = (node: ts.Node): void => {
+  let found: TS.CallExpression | undefined;
+  const visit = (node: TS.Node): void => {
     if (found) return;
     if (node !== declaration.body && ts.isFunctionLike(node)) return;
     if (ts.isCallExpression(node)) {
@@ -1541,23 +1542,23 @@ function firstAppDeclarationFactoryCall(
 }
 
 function firstHiddenAppContractCall(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   context: ProvenanceContext,
 ):
   | {
-      readonly call: ts.CallExpression;
+      readonly call: TS.CallExpression;
       readonly proof: Exclude<FactoryProof, { kind: 'none' }>;
     }
   | undefined {
   let found:
     | {
-        readonly call: ts.CallExpression;
+        readonly call: TS.CallExpression;
         readonly proof: Exclude<FactoryProof, { kind: 'none' }>;
       }
     | undefined;
   const inspectBody = (declaration: AnalyzableFunctionLike): void => {
     if (!declaration.body || found) return;
-    const inspect = (node: ts.Node): void => {
+    const inspect = (node: TS.Node): void => {
       if (found || (node !== declaration.body && ts.isFunctionLike(node))) return;
       if (ts.isCallExpression(node)) {
         const proof = proveFactoryCall(sourceFile, node, context);
@@ -1570,7 +1571,7 @@ function firstHiddenAppContractCall(
     };
     inspect(declaration.body);
   };
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (found) return;
     if (isAnalyzableFunctionLike(node)) {
       inspectBody(node);
@@ -1606,7 +1607,7 @@ function functionHasGeneratedFactoryDerivedParameterInitializer(
 
 function functionInvokesParameter(
   declaration: AnalyzableFunctionLike,
-  checker: ts.TypeChecker,
+  checker: TS.TypeChecker,
 ): boolean {
   if (!declaration.body) return false;
   const parameters = new Set(
@@ -1618,7 +1619,7 @@ function functionInvokesParameter(
   );
   if (parameters.size === 0) return false;
   let found = false;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (found) return;
     if (node !== declaration.body && ts.isFunctionLike(node)) return;
     if (
@@ -1636,8 +1637,8 @@ function functionInvokesParameter(
 }
 
 function proveGeneratedAppFactory(
-  callSourceFile: ts.SourceFile,
-  expression: ts.Identifier,
+  callSourceFile: TS.SourceFile,
+  expression: TS.Identifier,
   context: ProvenanceContext,
 ): Exclude<FactoryProof, { kind: 'none' }> | undefined {
   const declaration = symbolDeclaration(context.checker, expression);
@@ -1740,8 +1741,8 @@ function proveGeneratedAppFactory(
 }
 
 function proveUnsafeGeneratedFactoryCall(
-  sourceFile: ts.SourceFile,
-  call: ts.CallExpression,
+  sourceFile: TS.SourceFile,
+  call: TS.CallExpression,
   context: ProvenanceContext,
 ): Extract<FactoryProof, { kind: 'diagnostic' }> | undefined {
   const expression = unwrapExpression(call.expression);
@@ -1759,7 +1760,7 @@ function proveUnsafeGeneratedFactoryCall(
     isDeclarationFamily(staticMemberName(expression.argumentExpression)) &&
     ts.isIdentifier(unwrapExpression(expression.expression)) &&
     namespaceResolvesToGeneratedApp(
-      unwrapExpression(expression.expression) as ts.Identifier,
+      unwrapExpression(expression.expression) as TS.Identifier,
       context,
     )
   ) {
@@ -1794,7 +1795,7 @@ function proveUnsafeGeneratedFactoryCall(
       variable?.initializer &&
       ts.isIdentifier(unwrapExpression(variable.initializer)) &&
       namespaceResolvesToGeneratedApp(
-        unwrapExpression(variable.initializer) as ts.Identifier,
+        unwrapExpression(variable.initializer) as TS.Identifier,
         context,
       )
     ) {
@@ -1878,8 +1879,8 @@ function proveUnsafeGeneratedFactoryCall(
 }
 
 function generatedDiagnostic(
-  sourceFile: ts.SourceFile,
-  node: ts.Node,
+  sourceFile: TS.SourceFile,
+  node: TS.Node,
   code: 'D1B001' | 'D1B002' | 'D1B003' | 'D1B004' | 'D1B005' | 'D1B006' | 'D1B007' | 'D1B008',
   detail: string,
 ): Extract<FactoryProof, { kind: 'diagnostic' }> {
@@ -1895,9 +1896,9 @@ function generatedDiagnostic(
 }
 
 function expressionDerivesFromGeneratedFactory(
-  rawExpression: ts.Expression,
+  rawExpression: TS.Expression,
   context: ProvenanceContext,
-  seen: Set<ts.Declaration>,
+  seen: Set<TS.Declaration>,
   depth: number,
 ): boolean {
   if (depth > 48) return true;
@@ -1938,7 +1939,7 @@ function expressionDerivesFromGeneratedFactory(
     }
   }
   let derives = false;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (derives || ts.isFunctionLike(node)) return;
     if (
       ts.isExpression(node) &&
@@ -1957,7 +1958,7 @@ function expressionDerivesFromGeneratedFactory(
 function functionReturnsGeneratedFactory(
   declaration: AnalyzableFunctionLike,
   context: ProvenanceContext,
-  seen: Set<ts.Declaration>,
+  seen: Set<TS.Declaration>,
   depth: number,
 ): boolean {
   if (!declaration.body) return false;
@@ -1965,7 +1966,7 @@ function functionReturnsGeneratedFactory(
     return expressionDerivesFromGeneratedFactory(declaration.body, context, seen, depth + 1);
   }
   let found = false;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (found) return;
     if (node !== declaration.body && ts.isFunctionLike(node)) return;
     if (
@@ -1988,7 +1989,7 @@ function functionContainsGeneratedFactoryCall(
 ): boolean {
   if (!declaration.body) return false;
   let found = false;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (found) return;
     if (node !== declaration.body && ts.isFunctionLike(node)) return;
     if (
@@ -2006,7 +2007,7 @@ function functionContainsGeneratedFactoryCall(
 }
 
 function namespaceResolvesToGeneratedApp(
-  expression: ts.Identifier,
+  expression: TS.Identifier,
   context: ProvenanceContext,
 ): boolean {
   const declaration = localSymbolDeclaration(context.checker, expression);
@@ -2041,8 +2042,8 @@ function namespaceResolvesToGeneratedApp(
 }
 
 function sourceReachesGeneratedModuleThroughKovoAlias(
-  sourceFile: ts.SourceFile,
-  generatedSourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
+  generatedSourceFile: TS.SourceFile,
   context: ProvenanceContext,
   seen: Set<string>,
   aliasObserved: boolean,
@@ -2089,7 +2090,7 @@ function sourceReachesGeneratedModuleThroughKovoAlias(
   return false;
 }
 
-function generatedModuleHasMatchingSelfDigest(sourceFile: ts.SourceFile): boolean {
+function generatedModuleHasMatchingSelfDigest(sourceFile: TS.SourceFile): boolean {
   try {
     const manifest = JSON.parse(
       readFileSync(join(dirname(sourceFile.fileName), 'app.manifest.json'), 'utf8'),
@@ -2107,7 +2108,7 @@ function generatedModuleHasMatchingSelfDigest(sourceFile: ts.SourceFile): boolea
 }
 
 function generatedModuleMatchesManifest(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   identity: DerivedAppContractIdentity,
   serverPackageRoot: string,
   context: ProvenanceContext,
@@ -2190,7 +2191,7 @@ function generatedModuleMatchesManifest(
 }
 
 function configSourceMatchesIdentity(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   identity: DerivedAppContractIdentity,
 ): boolean {
   const assignment = sourceFile.statements.find(ts.isExportAssignment);
@@ -2230,8 +2231,8 @@ function configSourceMatchesIdentity(
 }
 
 function objectLiteralFromFreeze(
-  expression: ts.Expression,
-): ts.ObjectLiteralExpression | undefined {
+  expression: TS.Expression,
+): TS.ObjectLiteralExpression | undefined {
   const unwrapped = unwrapExpression(expression);
   if (
     !ts.isCallExpression(unwrapped) ||
@@ -2301,7 +2302,7 @@ function exactObjectKeys(value: Record<string, unknown>, expected: readonly stri
 }
 
 function exactPropertyNames(
-  object: ts.ObjectLiteralExpression,
+  object: TS.ObjectLiteralExpression,
   expected: readonly string[],
 ): boolean {
   const actual = object.properties.flatMap((property) => {
@@ -2320,7 +2321,7 @@ function exactPropertyNames(
 }
 
 function identifierPropertyValue(
-  object: ts.ObjectLiteralExpression,
+  object: TS.ObjectLiteralExpression,
   name: string,
 ): string | undefined {
   for (const property of object.properties) {
@@ -2347,7 +2348,7 @@ function sha256Text(value: string): string {
 function functionContainsDeclarationFactoryAccess(declaration: AnalyzableFunctionLike): boolean {
   if (!declaration.body) return false;
   let found = false;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (found) return;
     if (node !== declaration.body && ts.isFunctionLike(node)) return;
     if (
@@ -2368,7 +2369,7 @@ function functionContainsDeclarationFactoryAccess(declaration: AnalyzableFunctio
 }
 
 function expressionIsBoundAppFactory(
-  rawExpression: ts.Expression,
+  rawExpression: TS.Expression,
   context: ProvenanceContext,
 ): boolean {
   const expression = unwrapExpression(rawExpression);
@@ -2388,8 +2389,8 @@ function expressionIsBoundAppFactory(
 }
 
 function isTransferredAppFactoryInvocation(
-  rawExpression: ts.Expression,
-  arguments_: readonly ts.Expression[],
+  rawExpression: TS.Expression,
+  arguments_: readonly TS.Expression[],
   context: ProvenanceContext,
 ): boolean {
   const expression = unwrapExpression(rawExpression);
@@ -2422,8 +2423,8 @@ function isTransferredAppFactoryInvocation(
 }
 
 function isTransferredGeneratedFactoryInvocation(
-  rawExpression: ts.Expression,
-  arguments_: readonly ts.Expression[],
+  rawExpression: TS.Expression,
+  arguments_: readonly TS.Expression[],
   context: ProvenanceContext,
 ): boolean {
   const expression = unwrapExpression(rawExpression);
@@ -2448,11 +2449,11 @@ function isTransferredGeneratedFactoryInvocation(
 }
 
 function firstAppProviderDynamicImport(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   context: ProvenanceContext,
-): ts.CallExpression | undefined {
-  let found: ts.CallExpression | undefined;
-  const visit = (node: ts.Node): void => {
+): TS.CallExpression | undefined {
+  let found: TS.CallExpression | undefined;
+  const visit = (node: TS.Node): void => {
     if (found) return;
     if (
       ts.isCallExpression(node) &&
@@ -2493,7 +2494,7 @@ function dynamicImportTargetContainsApp(
       .find((candidate) => normalizeFileName(candidate.fileName) === normalized);
   if (!target) return false;
   let direct = false;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (direct) return;
     if (
       ts.isVariableDeclaration(node) &&
@@ -2553,11 +2554,11 @@ function dynamicImportTargetContainsApp(
 }
 
 function serverPackageRootForDefineKovo(
-  expression: ts.Identifier,
-  checker: ts.TypeChecker,
+  expression: TS.Identifier,
+  checker: TS.TypeChecker,
 ): string | undefined {
   let symbol = checker.getSymbolAtLocation(expression);
-  const seen = new Set<ts.Symbol>();
+  const seen = new Set<TS.Symbol>();
   while (symbol && (symbol.flags & ts.SymbolFlags.Alias) !== 0 && !seen.has(symbol)) {
     seen.add(symbol);
     symbol = checker.getAliasedSymbol(symbol);
@@ -2571,9 +2572,9 @@ function serverPackageRootForDefineKovo(
 }
 
 function variableIsReassigned(
-  declaration: ts.VariableDeclaration,
-  checker: ts.TypeChecker,
-  program: ts.Program,
+  declaration: TS.VariableDeclaration,
+  checker: TS.TypeChecker,
+  program: TS.Program,
 ): boolean {
   if (!ts.isIdentifier(declaration.name)) return true;
   const symbol = checker.getSymbolAtLocation(declaration.name);
@@ -2582,7 +2583,7 @@ function variableIsReassigned(
   for (const sourceFile of program.getSourceFiles()) {
     if (!roots.has(normalizeFileName(sourceFile.fileName))) continue;
     let reassigned = false;
-    const visit = (node: ts.Node): void => {
+    const visit = (node: TS.Node): void => {
       if (reassigned) return;
       if (
         ts.isBinaryExpression(node) &&
@@ -2612,17 +2613,17 @@ function variableIsReassigned(
 }
 
 function firstAppDerivedAssignment(
-  declaration: ts.VariableDeclaration,
+  declaration: TS.VariableDeclaration,
   context: ProvenanceContext,
-): { readonly destructured: boolean; readonly node: ts.BinaryExpression } | undefined {
+): { readonly destructured: boolean; readonly node: TS.BinaryExpression } | undefined {
   if (!ts.isIdentifier(declaration.name)) return undefined;
   const symbol = context.checker.getSymbolAtLocation(declaration.name);
   if (!symbol) return undefined;
   const roots = new Set(context.program.getRootFileNames().map(normalizeFileName));
   for (const sourceFile of context.program.getSourceFiles()) {
     if (!roots.has(normalizeFileName(sourceFile.fileName))) continue;
-    let found: { readonly destructured: boolean; readonly node: ts.BinaryExpression } | undefined;
-    const visit = (node: ts.Node): void => {
+    let found: { readonly destructured: boolean; readonly node: TS.BinaryExpression } | undefined;
+    const visit = (node: TS.Node): void => {
       if (found) return;
       if (
         ts.isBinaryExpression(node) &&
@@ -2645,17 +2646,17 @@ function firstAppDerivedAssignment(
 }
 
 function firstGeneratedFactoryDerivedAssignment(
-  declaration: ts.VariableDeclaration,
+  declaration: TS.VariableDeclaration,
   context: ProvenanceContext,
-): { readonly destructured: boolean; readonly node: ts.BinaryExpression } | undefined {
+): { readonly destructured: boolean; readonly node: TS.BinaryExpression } | undefined {
   if (!ts.isIdentifier(declaration.name)) return undefined;
   const symbol = context.checker.getSymbolAtLocation(declaration.name);
   if (!symbol) return undefined;
   const roots = new Set(context.program.getRootFileNames().map(normalizeFileName));
   for (const sourceFile of context.program.getSourceFiles()) {
     if (!roots.has(normalizeFileName(sourceFile.fileName))) continue;
-    let found: { readonly destructured: boolean; readonly node: ts.BinaryExpression } | undefined;
-    const visit = (node: ts.Node): void => {
+    let found: { readonly destructured: boolean; readonly node: TS.BinaryExpression } | undefined;
+    const visit = (node: TS.Node): void => {
       if (found) return;
       if (
         ts.isBinaryExpression(node) &&
@@ -2678,12 +2679,12 @@ function firstGeneratedFactoryDerivedAssignment(
 }
 
 function assignmentTargetContainsSymbol(
-  expression: ts.Expression,
-  symbol: ts.Symbol,
-  checker: ts.TypeChecker,
+  expression: TS.Expression,
+  symbol: TS.Symbol,
+  checker: TS.TypeChecker,
 ): boolean {
   let found = false;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (found) return;
     if (
       ts.isShorthandPropertyAssignment(node) &&
@@ -2702,10 +2703,10 @@ function assignmentTargetContainsSymbol(
   return found;
 }
 
-function reachableServerPackageRoots(entry: ts.SourceFile, context: ProvenanceContext): string[] {
+function reachableServerPackageRoots(entry: TS.SourceFile, context: ProvenanceContext): string[] {
   const roots: string[] = [];
   const visited = new Set<string>();
-  const visit = (sourceFile: ts.SourceFile): void => {
+  const visit = (sourceFile: TS.SourceFile): void => {
     const normalized = normalizeFileName(sourceFile.fileName);
     if (visited.has(normalized)) return;
     visited.add(normalized);
@@ -2749,8 +2750,8 @@ function reachableServerPackageRoots(entry: ts.SourceFile, context: ProvenanceCo
 function resolveModule(
   specifier: string,
   importer: string,
-  options: ts.CompilerOptions,
-): ts.ResolvedModuleFull | undefined {
+  options: TS.CompilerOptions,
+): TS.ResolvedModuleFull | undefined {
   return ts.resolveModuleName(specifier, importer, options, ts.sys).resolvedModule;
 }
 
@@ -2805,7 +2806,7 @@ function snapshotRootNames(
   return Object.freeze([...new Set(names)].sort());
 }
 
-function appContractCompilerOptions(): ts.CompilerOptions {
+function appContractCompilerOptions(): TS.CompilerOptions {
   return {
     allowJs: true,
     allowImportingTsExtensions: true,
@@ -2824,9 +2825,9 @@ function appContractCompilerOptions(): ts.CompilerOptions {
   };
 }
 
-function expressionContainsDeclarationFactoryAccess(expression: ts.Expression): boolean {
+function expressionContainsDeclarationFactoryAccess(expression: TS.Expression): boolean {
   let found = false;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (found) return;
     if (
       (ts.isPropertyAccessExpression(node) && isDeclarationFamily(node.name.text)) ||
@@ -2843,9 +2844,9 @@ function expressionContainsDeclarationFactoryAccess(expression: ts.Expression): 
   return found;
 }
 
-function firstTopLevelCall(sourceFile: ts.SourceFile): ts.CallExpression | undefined {
-  let found: ts.CallExpression | undefined;
-  const visit = (node: ts.Node): void => {
+function firstTopLevelCall(sourceFile: TS.SourceFile): TS.CallExpression | undefined {
+  let found: TS.CallExpression | undefined;
+  const visit = (node: TS.Node): void => {
     if (found) return;
     if (node !== sourceFile && ts.isFunctionLike(node)) return;
     if (ts.isCallExpression(node)) {
@@ -2859,11 +2860,11 @@ function firstTopLevelCall(sourceFile: ts.SourceFile): ts.CallExpression | undef
 }
 
 function symbolDeclaration(
-  checker: ts.TypeChecker,
-  identifier: ts.Identifier,
-): ts.Declaration | undefined {
+  checker: TS.TypeChecker,
+  identifier: TS.Identifier,
+): TS.Declaration | undefined {
   let symbol = checker.getSymbolAtLocation(identifier);
-  const seen = new Set<ts.Symbol>();
+  const seen = new Set<TS.Symbol>();
   while (symbol && (symbol.flags & ts.SymbolFlags.Alias) !== 0 && !seen.has(symbol)) {
     seen.add(symbol);
     symbol = checker.getAliasedSymbol(symbol);
@@ -2872,14 +2873,14 @@ function symbolDeclaration(
 }
 
 function localSymbolDeclaration(
-  checker: ts.TypeChecker,
-  identifier: ts.Identifier,
-): ts.Declaration | undefined {
+  checker: TS.TypeChecker,
+  identifier: TS.Identifier,
+): TS.Declaration | undefined {
   const symbol = checker.getSymbolAtLocation(identifier);
   return symbol?.valueDeclaration ?? symbol?.declarations?.[0];
 }
 
-function functionLikeDeclaration(declaration: ts.Declaration): AnalyzableFunctionLike | undefined {
+function functionLikeDeclaration(declaration: TS.Declaration): AnalyzableFunctionLike | undefined {
   if (ts.isFunctionDeclaration(declaration)) return declaration;
   if (ts.isMethodDeclaration(declaration)) return declaration;
   if (
@@ -2894,8 +2895,8 @@ function functionLikeDeclaration(declaration: ts.Declaration): AnalyzableFunctio
 }
 
 function functionLikeForExpression(
-  rawExpression: ts.Expression,
-  checker: ts.TypeChecker,
+  rawExpression: TS.Expression,
+  checker: TS.TypeChecker,
 ): AnalyzableFunctionLike | undefined {
   const expression = unwrapExpression(rawExpression);
   if (ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)) return expression;
@@ -2916,7 +2917,7 @@ function functionLikeForExpression(
   return undefined;
 }
 
-function isAnalyzableFunctionLike(node: ts.Node): node is AnalyzableFunctionLike {
+function isAnalyzableFunctionLike(node: TS.Node): node is AnalyzableFunctionLike {
   return (
     ts.isArrowFunction(node) ||
     ts.isFunctionDeclaration(node) ||
@@ -2925,8 +2926,8 @@ function isAnalyzableFunctionLike(node: ts.Node): node is AnalyzableFunctionLike
   );
 }
 
-function enclosingVariableDeclaration(node: ts.Node): ts.VariableDeclaration | undefined {
-  let cursor: ts.Node | undefined = node.parent;
+function enclosingVariableDeclaration(node: TS.Node): TS.VariableDeclaration | undefined {
+  let cursor: TS.Node | undefined = node.parent;
   while (cursor) {
     if (ts.isVariableDeclaration(cursor)) return cursor;
     cursor = cursor.parent;
@@ -2934,12 +2935,12 @@ function enclosingVariableDeclaration(node: ts.Node): ts.VariableDeclaration | u
   return undefined;
 }
 
-function bindingMemberName(binding: ts.BindingElement): string | undefined {
+function bindingMemberName(binding: TS.BindingElement): string | undefined {
   const property = binding.propertyName ?? binding.name;
   return ts.isIdentifier(property) || ts.isStringLiteralLike(property) ? property.text : undefined;
 }
 
-function stringProperty(object: ts.ObjectLiteralExpression, name: string): string | undefined {
+function stringProperty(object: TS.ObjectLiteralExpression, name: string): string | undefined {
   for (const property of object.properties) {
     if (
       ts.isPropertyAssignment(property) &&
@@ -2952,7 +2953,7 @@ function stringProperty(object: ts.ObjectLiteralExpression, name: string): strin
   return undefined;
 }
 
-function hasStaticProperty(object: ts.ObjectLiteralExpression, name: string): boolean {
+function hasStaticProperty(object: TS.ObjectLiteralExpression, name: string): boolean {
   return object.properties.some(
     (property) =>
       (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) &&
@@ -2961,19 +2962,19 @@ function hasStaticProperty(object: ts.ObjectLiteralExpression, name: string): bo
   );
 }
 
-function staticMemberName(expression: ts.Expression): string | undefined {
+function staticMemberName(expression: TS.Expression): string | undefined {
   const unwrapped = unwrapExpression(expression);
   return ts.isStringLiteralLike(unwrapped) ? unwrapped.text : undefined;
 }
 
-function variableDeclarationIsConst(declaration: ts.VariableDeclaration): boolean {
+function variableDeclarationIsConst(declaration: TS.VariableDeclaration): boolean {
   return (
     ts.isVariableDeclarationList(declaration.parent) &&
     (declaration.parent.flags & ts.NodeFlags.Const) !== 0
   );
 }
 
-function unwrapExpression(expression: ts.Expression): ts.Expression {
+function unwrapExpression(expression: TS.Expression): TS.Expression {
   let current = expression;
   while (
     ts.isParenthesizedExpression(current) ||
@@ -2987,7 +2988,7 @@ function unwrapExpression(expression: ts.Expression): ts.Expression {
   return current;
 }
 
-function isJoiningBinaryExpression(expression: ts.Expression): expression is ts.BinaryExpression {
+function isJoiningBinaryExpression(expression: TS.Expression): expression is TS.BinaryExpression {
   return (
     ts.isBinaryExpression(expression) &&
     (expression.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
@@ -2996,13 +2997,13 @@ function isJoiningBinaryExpression(expression: ts.Expression): expression is ts.
   );
 }
 
-function isAssignmentOperator(kind: ts.SyntaxKind): boolean {
+function isAssignmentOperator(kind: TS.SyntaxKind): boolean {
   return kind >= ts.SyntaxKind.FirstAssignment && kind <= ts.SyntaxKind.LastAssignment;
 }
 
 function appContractExperimentDiagnostic(
-  sourceFile: ts.SourceFile,
-  node: ts.Node,
+  sourceFile: TS.SourceFile,
+  node: TS.Node,
   code: CompilerOwnedAppContractDiagnostic['code'],
   message: string,
 ): CompilerOwnedAppContractDiagnostic {
@@ -3054,16 +3055,16 @@ function isAppContractMemberName(value: string): value is AppContractMemberName 
  * checks.
  */
 function receiverTypeCouldBeAppContract(
-  expression: ts.Expression,
-  checker: ts.TypeChecker,
+  expression: TS.Expression,
+  checker: TS.TypeChecker,
 ): boolean {
   return typeCouldBeAppContract(checker.getTypeAtLocation(expression), checker, new Set(), 0);
 }
 
 function typeCouldBeAppContract(
-  type: ts.Type,
-  checker: ts.TypeChecker,
-  seen: Set<ts.Type>,
+  type: TS.Type,
+  checker: TS.TypeChecker,
+  seen: Set<TS.Type>,
   depth: number,
 ): boolean {
   if (depth > 16 || seen.has(type)) return true;
@@ -3095,7 +3096,7 @@ function normalizeFileName(fileName: string): string {
   return fileName.replaceAll('\\', '/');
 }
 
-function programSourceFile(program: ts.Program, fileName: string): ts.SourceFile | undefined {
+function programSourceFile(program: TS.Program, fileName: string): TS.SourceFile | undefined {
   const normalized = normalizeFileName(fileName);
   const absolute = normalizeFileName(resolve(fileName));
   return (

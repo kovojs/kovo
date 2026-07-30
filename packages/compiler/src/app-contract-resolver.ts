@@ -1,4 +1,5 @@
-import * as ts from 'typescript';
+import type * as TS from 'typescript';
+import { typescriptRuntime as ts } from './ts-api.js';
 
 import {
   frameworkExport,
@@ -62,10 +63,10 @@ export interface CompilerOwnedAppContractResolution {
   readonly consumerFileName?: string;
   readonly end: number;
   readonly exportName: AppContractDeclarationFamily;
-  readonly node: ts.Node;
+  readonly node: TS.Node;
   readonly ownerKey: string;
   readonly serverPackageRoot: string;
-  readonly sourceFile: ts.SourceFile;
+  readonly sourceFile: TS.SourceFile;
   readonly sourceSnapshot: string;
   readonly start: number;
 }
@@ -81,10 +82,10 @@ export interface CompilerOwnedAppContractMemberResolution {
   readonly consumerFileName?: string;
   readonly end: number;
   readonly memberName: AppContractMemberName;
-  readonly node: ts.PropertyAccessExpression;
+  readonly node: TS.PropertyAccessExpression;
   readonly ownerKey: string;
   readonly serverPackageRoot: string;
-  readonly sourceFile: ts.SourceFile;
+  readonly sourceFile: TS.SourceFile;
   readonly sourceSnapshot: string;
   readonly start: number;
 }
@@ -330,8 +331,8 @@ export function withCompilerOwnedAppContractResolutions<Value>(
  */
 export function compilerOwnedAppContractFactoryIdentity(
   typescript: FrameworkIdentityTypeScript,
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): FrameworkExportIdentity | undefined {
   const session = activeResolutionSessions[activeResolutionSessions.length - 1];
   if (
@@ -374,8 +375,8 @@ export function compilerOwnedAppContractFactoryIdentity(
 
 export function compilerOwnedAppContractFactoryEquals(
   typescript: FrameworkIdentityTypeScript,
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
   identity: FrameworkExportIdentity,
 ): boolean {
   const resolved = compilerOwnedAppContractFactoryIdentity(typescript, sourceFile, expression);
@@ -389,8 +390,8 @@ export function compilerOwnedAppContractFactoryEquals(
 
 export function compilerOwnedAppContractMemberName(
   typescript: FrameworkIdentityTypeScript,
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): AppContractMemberName | undefined {
   const session = activeResolutionSessions[activeResolutionSessions.length - 1];
   if (!session || !typescript.isPropertyAccessExpression(expression)) return undefined;
@@ -420,8 +421,8 @@ export function compilerOwnedAppContractMemberName(
 
 export function compilerOwnedAppContractMemberEquals(
   typescript: FrameworkIdentityTypeScript,
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
   memberName: AppContractMemberName,
 ): boolean {
   return compilerOwnedAppContractMemberName(typescript, sourceFile, expression) === memberName;
@@ -436,8 +437,8 @@ export function compilerOwnedAppContractMemberEquals(
  */
 export function compilerOwnedAppContractAccessGuardMemberName(
   typescript: FrameworkIdentityTypeScript,
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): AppContractAccessGuardMemberName | undefined {
   const memberName = compilerOwnedAppContractMemberName(typescript, sourceFile, expression);
   switch (memberName) {

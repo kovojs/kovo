@@ -1,4 +1,4 @@
-import * as ts from 'typescript';
+import type * as TS from 'typescript';
 
 import { compilerOwnedAppContractFactoryEquals } from '../app-contract-resolver.js';
 import {
@@ -27,7 +27,7 @@ import {
   compilerStringStartsWith,
 } from '../compiler-security-intrinsics.js';
 import { deriveMutationKey } from '../mutation-names.js';
-import { ensureTypescriptRuntime } from '../ts-api.js';
+import { typescriptRuntime as ts } from '../ts-api.js';
 import type {
   MutationInputFieldFact,
   OptimisticModuleFact,
@@ -36,8 +36,6 @@ import type {
   RegistryMutationInputFacts,
 } from '../types.js';
 import { mutationInputFactsFromSource } from './mutation-inputs.js';
-
-ensureTypescriptRuntime(ts);
 
 /** Immutable source carrier accepted by the project mutation-provenance scanner. */
 export interface ProjectMutationSourceFile {
@@ -57,7 +55,7 @@ interface ProjectModule {
   readonly canonicalFileName: string;
   readonly fileName: string;
   readonly source: string;
-  readonly sourceFile: ts.SourceFile;
+  readonly sourceFile: TS.SourceFile;
   readonly valid: boolean;
 }
 
@@ -217,7 +215,9 @@ function indexProjectModules(
       sourceScriptKind(fileName),
     );
     const parseDiagnostics = (
-      sourceFile as ts.SourceFile & { readonly parseDiagnostics?: readonly ts.Diagnostic[] }
+      sourceFile as TS.SourceFile & {
+        readonly parseDiagnostics?: readonly TS.Diagnostic[];
+      }
     ).parseDiagnostics;
     compilerMapSet(modules, canonicalFileName, {
       canonicalFileName,
@@ -257,7 +257,7 @@ function exactRelativeNamedImports(module: ProjectModule): ExactNamedImport[] {
   return result;
 }
 
-function exactNamedImport(sourceFile: ts.SourceFile, localName: string): ExactNamedImport | null {
+function exactNamedImport(sourceFile: TS.SourceFile, localName: string): ExactNamedImport | null {
   let match: ExactNamedImport | null = null;
   let count = 0;
   const statements = sourceFile.statements;
@@ -360,7 +360,7 @@ function directKovoMutationProof(module: ProjectModule, localName: string): Muta
   }
 
   let key: string;
-  let definition: ts.Expression | undefined;
+  let definition: TS.Expression | undefined;
   if (initializer.arguments.length === 1) {
     key = deriveMutationKey(module.fileName, localName);
     definition = initializer.arguments[0];
@@ -538,7 +538,7 @@ function hasExactPackageImport(
   );
 }
 
-function exportRoutes(sourceFile: ts.SourceFile, exportName: string): ExportRoute[] {
+function exportRoutes(sourceFile: TS.SourceFile, exportName: string): ExportRoute[] {
   const routes: ExportRoute[] = [];
   const statements = sourceFile.statements;
   for (let statementIndex = 0; statementIndex < statements.length; statementIndex += 1) {
@@ -592,10 +592,10 @@ function exportRoutes(sourceFile: ts.SourceFile, exportName: string): ExportRout
 }
 
 function uniqueTopLevelVariable(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   name: string,
-): ts.VariableDeclaration | null {
-  let match: ts.VariableDeclaration | null = null;
+): TS.VariableDeclaration | null {
+  let match: TS.VariableDeclaration | null = null;
   let count = 0;
   const statements = sourceFile.statements;
   for (let statementIndex = 0; statementIndex < statements.length; statementIndex += 1) {
@@ -613,10 +613,10 @@ function uniqueTopLevelVariable(
 }
 
 function uniqueTopLevelFunction(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   name: string,
-): ts.FunctionDeclaration | null {
-  let match: ts.FunctionDeclaration | null = null;
+): TS.FunctionDeclaration | null {
+  let match: TS.FunctionDeclaration | null = null;
   let count = 0;
   const statements = sourceFile.statements;
   for (let index = 0; index < statements.length; index += 1) {
@@ -628,7 +628,7 @@ function uniqueTopLevelFunction(
   return count === 1 ? match : null;
 }
 
-function topLevelValueBindingCount(sourceFile: ts.SourceFile, name: string): number {
+function topLevelValueBindingCount(sourceFile: TS.SourceFile, name: string): number {
   let count = 0;
   const statements = sourceFile.statements;
   for (let statementIndex = 0; statementIndex < statements.length; statementIndex += 1) {
@@ -666,7 +666,7 @@ function topLevelValueBindingCount(sourceFile: ts.SourceFile, name: string): num
   return count;
 }
 
-function bindingNameContains(binding: ts.BindingName, name: string): boolean {
+function bindingNameContains(binding: TS.BindingName, name: string): boolean {
   if (ts.isIdentifier(binding)) return binding.text === name;
   const elements = binding.elements;
   for (let index = 0; index < elements.length; index += 1) {
@@ -677,7 +677,7 @@ function bindingNameContains(binding: ts.BindingName, name: string): boolean {
   return false;
 }
 
-function variableDeclarationIsConst(declaration: ts.VariableDeclaration): boolean {
+function variableDeclarationIsConst(declaration: TS.VariableDeclaration): boolean {
   return (
     ts.isVariableDeclarationList(declaration.parent) &&
     (declaration.parent.flags & ts.NodeFlags.Const) !== 0
@@ -685,7 +685,7 @@ function variableDeclarationIsConst(declaration: ts.VariableDeclaration): boolea
 }
 
 function hasExportModifier(
-  node: ts.Node & { readonly modifiers?: ts.NodeArray<ts.ModifierLike> },
+  node: TS.Node & { readonly modifiers?: TS.NodeArray<TS.ModifierLike> },
 ): boolean {
   const modifiers = node.modifiers;
   if (!modifiers) return false;
@@ -695,9 +695,9 @@ function hasExportModifier(
   return false;
 }
 
-function bindingHasVisibleMutation(sourceFile: ts.SourceFile, bindingName: string): boolean {
+function bindingHasVisibleMutation(sourceFile: TS.SourceFile, bindingName: string): boolean {
   let mutated = false;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (mutated) return;
     if (
       ts.isBinaryExpression(node) &&
@@ -730,11 +730,11 @@ function bindingHasVisibleMutation(sourceFile: ts.SourceFile, bindingName: strin
   return mutated;
 }
 
-function assignmentOperator(kind: ts.SyntaxKind): boolean {
+function assignmentOperator(kind: TS.SyntaxKind): boolean {
   return kind >= ts.SyntaxKind.FirstAssignment && kind <= ts.SyntaxKind.LastAssignment;
 }
 
-function assignmentTargetContainsBinding(target: ts.Expression, bindingName: string): boolean {
+function assignmentTargetContainsBinding(target: TS.Expression, bindingName: string): boolean {
   const expression = unwrapExpression(target);
   if (!expression) return false;
   if (expressionRootIsBinding(expression, bindingName)) return true;
@@ -766,7 +766,7 @@ function assignmentTargetContainsBinding(target: ts.Expression, bindingName: str
   return false;
 }
 
-function expressionRootIsBinding(expression: ts.Expression, bindingName: string): boolean {
+function expressionRootIsBinding(expression: TS.Expression, bindingName: string): boolean {
   const unwrapped = unwrapExpression(expression);
   if (!unwrapped) return false;
   if (ts.isIdentifier(unwrapped)) return unwrapped.text === bindingName;
@@ -776,7 +776,7 @@ function expressionRootIsBinding(expression: ts.Expression, bindingName: string)
   return false;
 }
 
-function knownMutatorTargetsBinding(call: ts.CallExpression, bindingName: string): boolean {
+function knownMutatorTargetsBinding(call: TS.CallExpression, bindingName: string): boolean {
   const first = call.arguments[0];
   if (!first || !expressionRootIsBinding(first, bindingName)) return false;
   const callee = unwrapExpression(call.expression);
@@ -801,7 +801,7 @@ function knownMutatorTargetsBinding(call: ts.CallExpression, bindingName: string
 }
 
 function staticMemberAccess(
-  expression: ts.Expression,
+  expression: TS.Expression,
 ): { readonly name: string; readonly owner: string } | null {
   if (ts.isPropertyAccessExpression(expression) && ts.isIdentifier(expression.expression)) {
     return { name: expression.name.text, owner: expression.expression.text };
@@ -939,14 +939,14 @@ function isRelativeModuleSpecifier(value: string): boolean {
   );
 }
 
-function sourceScriptKind(fileName: string): ts.ScriptKind {
+function sourceScriptKind(fileName: string): TS.ScriptKind {
   if (compilerStringEndsWith(fileName, '.tsx') || compilerStringEndsWith(fileName, '.jsx')) {
     return ts.ScriptKind.TSX;
   }
   return ts.ScriptKind.TS;
 }
 
-function unwrapExpression(expression: ts.Expression | undefined): ts.Expression | null {
+function unwrapExpression(expression: TS.Expression | undefined): TS.Expression | null {
   let current = expression;
   while (
     current &&

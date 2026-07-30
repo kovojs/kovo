@@ -1,4 +1,4 @@
-import * as ts from 'typescript';
+import type * as TS from 'typescript';
 
 import {
   expressionResolvesToFrameworkExport,
@@ -8,11 +8,9 @@ import {
 
 import { compilerOwnedAppContractFactoryEquals } from '../app-contract-resolver.js';
 import { deriveMutationKey } from '../mutation-names.js';
-import { ensureTypescriptRuntime } from '../ts-api.js';
+import { typescriptRuntime as ts } from '../ts-api.js';
 import type { MutationInputFieldCoercion, MutationInputFieldFact } from '../types.js';
 import { propertyNameText } from './ast.js';
-
-ensureTypescriptRuntime(ts);
 
 const MUTATION_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'mutation');
 const SCHEMA_IDENTITY = frameworkExport('@kovojs/server', 's');
@@ -44,7 +42,7 @@ export function mutationInputFactsFromSource(
   );
   const facts = new Map<string, LocalMutationInputFact>();
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     const fact = mutationInputFactFromVariable(sourceFile, node);
     if (fact) facts.set(fact.localName, fact);
     ts.forEachChild(node, visit);
@@ -55,8 +53,8 @@ export function mutationInputFactsFromSource(
 }
 
 function mutationInputFactFromVariable(
-  sourceFile: ts.SourceFile,
-  node: ts.Node,
+  sourceFile: TS.SourceFile,
+  node: TS.Node,
 ): LocalMutationInputFact | null {
   if (!ts.isVariableDeclaration(node)) return null;
   if (!ts.isIdentifier(node.name)) return null;
@@ -81,7 +79,7 @@ function mutationInputFactFromVariable(
   };
 }
 
-function isKovoMutationCallee(sourceFile: ts.SourceFile, expression: ts.Expression): boolean {
+function isKovoMutationCallee(sourceFile: TS.SourceFile, expression: TS.Expression): boolean {
   return (
     compilerOwnedAppContractFactoryEquals(
       ts as FrameworkIdentityTypeScript,
@@ -100,8 +98,8 @@ function isKovoMutationCallee(sourceFile: ts.SourceFile, expression: ts.Expressi
 }
 
 function mutationInputFields(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): MutationInputFieldFact[] {
   const input = resolveMutationInputSchema(sourceFile, expression);
   if (!input || !ts.isCallExpression(input)) return [];
@@ -135,13 +133,13 @@ function mutationInputFields(
 }
 
 function resolveMutationInputSchema(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
-): ts.Expression | null {
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
+): TS.Expression | null {
   const input = unwrapTsExpression(expression);
   if (!input || !ts.isIdentifier(input)) return input;
 
-  let declaration: ts.VariableDeclaration | undefined;
+  let declaration: TS.VariableDeclaration | undefined;
   for (const statement of sourceFile.statements) {
     if (!ts.isVariableStatement(statement)) continue;
     for (const candidate of statement.declarationList.declarations) {
@@ -162,11 +160,11 @@ function resolveMutationInputSchema(
 }
 
 function mutationInputTopLevelValueBindingCount(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   bindingName: string,
 ): number {
   let count = 0;
-  const countBindingName = (name: ts.BindingName): void => {
+  const countBindingName = (name: TS.BindingName): void => {
     if (ts.isIdentifier(name)) {
       if (name.text === bindingName) count += 1;
       return;
@@ -208,11 +206,11 @@ function mutationInputTopLevelValueBindingCount(
 }
 
 function mutationInputSchemaBindingIsMutated(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   bindingName: string,
 ): boolean {
   let mutated = false;
-  const containsBinding = (node: ts.Node): boolean => {
+  const containsBinding = (node: TS.Node): boolean => {
     if (ts.isIdentifier(node) && node.text === bindingName) return true;
     let found = false;
     ts.forEachChild(node, (child) => {
@@ -220,7 +218,7 @@ function mutationInputSchemaBindingIsMutated(
     });
     return found;
   };
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (mutated) return;
     if (ts.isVariableDeclaration(node) && node.initializer) {
       const aliasInitializer = unwrapTsExpression(node.initializer);
@@ -279,9 +277,9 @@ function mutationInputSchemaBindingIsMutated(
 }
 
 function objectPropertyExpression(
-  object: ts.ObjectLiteralExpression,
+  object: TS.ObjectLiteralExpression,
   propertyName: string,
-): ts.Expression | null {
+): TS.Expression | null {
   for (const property of object.properties) {
     if (!ts.isPropertyAssignment(property)) continue;
     if (propertyNameText(property.name) === propertyName) return property.initializer;
@@ -289,9 +287,9 @@ function objectPropertyExpression(
   return null;
 }
 
-function schemaExpressionHasCall(expression: ts.Expression, methodName: string): boolean {
+function schemaExpressionHasCall(expression: TS.Expression, methodName: string): boolean {
   let found = false;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (ts.isCallExpression(node) && schemaMethodName(node.getSourceFile(), node) === methodName) {
       found = true;
       return;
@@ -302,10 +300,10 @@ function schemaExpressionHasCall(expression: ts.Expression, methodName: string):
   return found;
 }
 
-function schemaExpressionCoercion(expression: ts.Expression): MutationInputFieldCoercion {
+function schemaExpressionCoercion(expression: TS.Expression): MutationInputFieldCoercion {
   let coercion: MutationInputFieldCoercion = 'unknown';
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (coercion !== 'unknown') return;
     if (ts.isCallExpression(node)) {
       const name = schemaMethodName(node.getSourceFile(), node);
@@ -329,7 +327,7 @@ function schemaExpressionCoercion(expression: ts.Expression): MutationInputField
   return coercion;
 }
 
-function schemaMethodName(sourceFile: ts.SourceFile, call: ts.CallExpression): string | null {
+function schemaMethodName(sourceFile: TS.SourceFile, call: TS.CallExpression): string | null {
   const callee = unwrapTsExpression(call.expression);
   if (!callee || !ts.isPropertyAccessExpression(callee)) return null;
   if (
@@ -341,7 +339,7 @@ function schemaMethodName(sourceFile: ts.SourceFile, call: ts.CallExpression): s
   return null;
 }
 
-function isKovoSchemaExpression(sourceFile: ts.SourceFile, expression: ts.Expression): boolean {
+function isKovoSchemaExpression(sourceFile: TS.SourceFile, expression: TS.Expression): boolean {
   const current = unwrapTsExpression(expression);
   if (!current) return false;
   if (ts.isCallExpression(current)) return schemaMethodName(sourceFile, current) !== null;
@@ -354,7 +352,7 @@ function isKovoSchemaExpression(sourceFile: ts.SourceFile, expression: ts.Expres
   return isKovoSchemaReceiver(sourceFile, current);
 }
 
-function isKovoSchemaReceiver(sourceFile: ts.SourceFile, expression: ts.Expression): boolean {
+function isKovoSchemaReceiver(sourceFile: TS.SourceFile, expression: TS.Expression): boolean {
   return expressionResolvesToFrameworkExport(
     ts as FrameworkIdentityTypeScript,
     sourceFile,
@@ -364,7 +362,7 @@ function isKovoSchemaReceiver(sourceFile: ts.SourceFile, expression: ts.Expressi
   );
 }
 
-function unwrapTsExpression(expression: ts.Expression | undefined): ts.Expression | null {
+function unwrapTsExpression(expression: TS.Expression | undefined): TS.Expression | null {
   let current = expression;
   while (
     current &&

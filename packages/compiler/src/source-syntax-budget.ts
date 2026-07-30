@@ -1,4 +1,5 @@
-import typescript from 'typescript';
+import type * as TS from 'typescript';
+import { typescriptRuntime as typescript } from './ts-api.js';
 
 const nativeCreateSourceFile = typescript.createSourceFile;
 const nativeForEachChild = typescript.forEachChild;
@@ -32,7 +33,7 @@ export function compilerSourceSyntaxBudget(
   ) {
     throw new TypeError('Compiler source syntax limits must be positive safe integers.');
   }
-  let sourceFile: typescript.SourceFile;
+  let sourceFile: TS.SourceFile;
   try {
     sourceFile = nativeCreateSourceFile(
       fileName,
@@ -46,7 +47,7 @@ export function compilerSourceSyntaxBudget(
     // Keep that implementation detail inside the compiler and return one closed finite verdict.
     return { maxDepth: 0, nodeCount: 0, ok: false, reason: 'parser' };
   }
-  const pending: Array<{ depth: number; node: typescript.Node }> = [{ depth: 0, node: sourceFile }];
+  const pending: Array<{ depth: number; node: TS.Node }> = [{ depth: 0, node: sourceFile }];
   let maxDepth = 0;
   let nodeCount = 0;
 

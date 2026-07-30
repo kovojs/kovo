@@ -1,4 +1,4 @@
-import * as ts from 'typescript';
+import type * as TS from 'typescript';
 
 import {
   attrs,
@@ -69,15 +69,13 @@ import type { ComponentModuleModel, JsxAttributeModel, SourceSpan } from './scan
 import { parseSourceFile } from './scan/parse.js';
 import { knownQueryNames, queryNameFromPath } from './analyze/query-shapes.js';
 import { withGeneratedFromSpan, withSourceSpan } from './analyze/query-internal.js';
-import { ensureTypescriptRuntime } from './ts-api.js';
+import { typescriptRuntime as ts } from './ts-api.js';
 import type {
   CompileComponentOptions,
   QueryUpdateCoverageFact,
   QueryUpdatePlanFact,
   StateDeriveFact,
 } from './types.js';
-
-ensureTypescriptRuntime(ts);
 
 const styleModuleSpecifier = '@kovojs/style';
 const styleTokensExportName = 'tokens';
@@ -171,8 +169,8 @@ interface ImportedStaticValue {
 }
 
 interface ParsedExpression {
-  readonly expression: ts.Expression;
-  readonly sourceFile: ts.SourceFile;
+  readonly expression: TS.Expression;
+  readonly sourceFile: TS.SourceFile;
 }
 
 interface DynamicStyleLowering {
@@ -393,7 +391,7 @@ interface StyleImports {
   readonly publicTokenNames: ReadonlySet<string>;
 }
 
-function styleImportsFromSourceFile(sourceFile: ts.SourceFile): StyleImports {
+function styleImportsFromSourceFile(sourceFile: TS.SourceFile): StyleImports {
   const namespaces = compilerCreateSet<string>();
   const publicTokenNames = compilerCreateSet<string>();
 
@@ -403,7 +401,7 @@ function styleImportsFromSourceFile(sourceFile: ts.SourceFile): StyleImports {
       sourceFile.statements,
       statementIndex,
       'Style source statements',
-    ) as ts.Statement;
+    ) as TS.Statement;
     if (!ts.isImportDeclaration(statement)) continue;
     if (!ts.isStringLiteral(statement.moduleSpecifier)) continue;
     if (statement.moduleSpecifier.text !== styleModuleSpecifier) continue;
@@ -417,7 +415,7 @@ function styleImportsFromSourceFile(sourceFile: ts.SourceFile): StyleImports {
           namedBindings.elements,
           elementIndex,
           'Style named imports',
-        ) as ts.ImportSpecifier;
+        ) as TS.ImportSpecifier;
         if ((element.propertyName ?? element.name).text === styleTokensExportName) {
           compilerSetAdd(publicTokenNames, element.name.text);
         }
@@ -431,7 +429,7 @@ function styleImportsFromSourceFile(sourceFile: ts.SourceFile): StyleImports {
 function collectStyleEnvironment(
   fileName: string,
   source: string,
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   styleImports: StyleImports,
   importedStaticValues: ReadonlyMap<string, unknown> = compilerCreateMap(),
   defaultStyleIdentity: StyleIdentityDefaults = {},
@@ -459,7 +457,7 @@ function collectStyleEnvironment(
       sourceFile.statements,
       statementIndex,
       'Style source statements',
-    ) as ts.Statement;
+    ) as TS.Statement;
     if (!ts.isVariableStatement(statement)) continue;
     const declarationCount = compilerArrayLength(
       statement.declarationList.declarations,
@@ -470,7 +468,7 @@ function collectStyleEnvironment(
         statement.declarationList.declarations,
         declarationIndex,
         'Style variable declarations',
-      ) as ts.VariableDeclaration;
+      ) as TS.VariableDeclaration;
       if (!ts.isIdentifier(node.name)) continue;
 
       // `const pulse = style.keyframes({ … }, identity?)`: resolve the frames into
@@ -609,7 +607,7 @@ function collectStyleEnvironment(
 
 function collectImportedStaticValues(
   fileName: string,
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   options: { readonly resolveStaticImport?: StyleStaticImportResolver },
 ): ReadonlyMap<string, unknown> {
   const resolveStaticImport = compilerOwnDataValue(
@@ -691,7 +689,7 @@ function derivedStyleNamespace(fileName: string, bindingName: string): string {
   return binding;
 }
 
-function importedStaticValueRequests(sourceFile: ts.SourceFile): ImportedStaticValue[] {
+function importedStaticValueRequests(sourceFile: TS.SourceFile): ImportedStaticValue[] {
   const imports: ImportedStaticValue[] = [];
   const statementCount = compilerArrayLength(sourceFile.statements, 'Style import statements');
   for (let statementIndex = 0; statementIndex < statementCount; statementIndex += 1) {
@@ -699,7 +697,7 @@ function importedStaticValueRequests(sourceFile: ts.SourceFile): ImportedStaticV
       sourceFile.statements,
       statementIndex,
       'Style import statements',
-    ) as ts.Statement;
+    ) as TS.Statement;
     if (!ts.isImportDeclaration(statement)) continue;
     if (!ts.isStringLiteral(statement.moduleSpecifier)) continue;
     const moduleSpecifier = statement.moduleSpecifier.text;
@@ -712,7 +710,7 @@ function importedStaticValueRequests(sourceFile: ts.SourceFile): ImportedStaticV
         namedBindings.elements,
         elementIndex,
         'Style imported values',
-      ) as ts.ImportSpecifier;
+      ) as TS.ImportSpecifier;
       compilerArrayAppend(
         imports,
         {
@@ -741,7 +739,7 @@ function evaluateExportedStaticValues(
       sourceFile.statements,
       statementIndex,
       'Style exported statements',
-    ) as ts.Statement;
+    ) as TS.Statement;
     if (!ts.isVariableStatement(statement)) continue;
     let exported = false;
     if (statement.modifiers !== undefined) {
@@ -751,7 +749,7 @@ function evaluateExportedStaticValues(
           statement.modifiers,
           modifierIndex,
           'Style export modifiers',
-        ) as ts.Modifier;
+        ) as TS.Modifier;
         if (modifier.kind === ts.SyntaxKind.ExportKeyword) {
           exported = true;
           break;
@@ -767,7 +765,7 @@ function evaluateExportedStaticValues(
         statement.declarationList.declarations,
         declarationIndex,
         'Style exported declarations',
-      ) as ts.VariableDeclaration;
+      ) as TS.VariableDeclaration;
       if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
       const value = staticValueFromExpression(declaration.initializer, staticValues, styleImports);
       if (value === undefined) continue;
@@ -783,7 +781,7 @@ function evaluateExportedStaticValues(
 }
 
 function staticValueFromExpression(
-  node: ts.Expression,
+  node: TS.Expression,
   staticValues: ReadonlyMap<string, unknown>,
   styleImports: StyleImports,
 ): unknown {
@@ -813,7 +811,7 @@ function staticValueFromExpression(
         expression.properties,
         index,
         'Style static object properties',
-      ) as ts.ObjectLiteralElementLike;
+      ) as TS.ObjectLiteralElementLike;
       if (!ts.isPropertyAssignment(property)) return undefined;
       const key = propertyNameText(property.name);
       if (!key) return undefined;
@@ -826,7 +824,7 @@ function staticValueFromExpression(
 
   if (isObjectFreezeCall(expression)) {
     const value = compilerOwnDataValue(expression.arguments, 0, 'Style Object.freeze arguments') as
-      | ts.Expression
+      | TS.Expression
       | undefined;
     return value ? staticValueFromExpression(value, staticValues, styleImports) : undefined;
   }
@@ -834,7 +832,7 @@ function staticValueFromExpression(
   return undefined;
 }
 
-function unwrapStaticExpression(node: ts.Expression): ts.Expression {
+function unwrapStaticExpression(node: TS.Expression): TS.Expression {
   let current = node;
   while (
     ts.isAsExpression(current) ||
@@ -846,7 +844,7 @@ function unwrapStaticExpression(node: ts.Expression): ts.Expression {
   return current;
 }
 
-function isObjectFreezeCall(node: ts.Expression): node is ts.CallExpression {
+function isObjectFreezeCall(node: TS.Expression): node is TS.CallExpression {
   return (
     ts.isCallExpression(node) &&
     ts.isPropertyAccessExpression(node.expression) &&
@@ -857,12 +855,12 @@ function isObjectFreezeCall(node: ts.Expression): node is ts.CallExpression {
 }
 
 function styleCreateCall(
-  initializer: ts.Expression | undefined,
+  initializer: TS.Expression | undefined,
   styleImports: StyleImports,
   localObjects: LocalObjectLiterals,
   staticValues: ReadonlyMap<string, unknown>,
 ): {
-  readonly call: ts.CallExpression;
+  readonly call: TS.CallExpression;
   readonly options: StyleIdentityOptions;
   readonly styles: Record<string, StyleObject>;
 } | null {
@@ -872,12 +870,12 @@ function styleCreateCall(
     initializer.arguments,
     0,
     'Style create arguments',
-  ) as ts.Expression | undefined;
+  ) as TS.Expression | undefined;
   const optionsArgument = compilerOwnDataValue(
     initializer.arguments,
     1,
     'Style create arguments',
-  ) as ts.Expression | undefined;
+  ) as TS.Expression | undefined;
   if (!stylesArgument || !ts.isObjectLiteralExpression(stylesArgument)) return null;
 
   const styles = styleNamespacesFromObject(
@@ -896,9 +894,9 @@ function styleCreateCall(
 }
 
 function isStyleCreateCall(
-  initializer: ts.Expression | undefined,
+  initializer: TS.Expression | undefined,
   styleNamespaces: ReadonlySet<string>,
-): initializer is ts.CallExpression {
+): initializer is TS.CallExpression {
   if (!initializer || !ts.isCallExpression(initializer)) return false;
   if (!ts.isPropertyAccessExpression(initializer.expression)) return false;
   if (initializer.expression.name.text !== styleCreateMemberName) return false;
@@ -907,11 +905,11 @@ function isStyleCreateCall(
 }
 
 function styleDefineVarsCall(
-  initializer: ts.Expression | undefined,
+  initializer: TS.Expression | undefined,
   styleNamespaces: ReadonlySet<string>,
 ): {
   readonly options: StyleIdentityOptions;
-  readonly tokens: ts.ObjectLiteralExpression;
+  readonly tokens: TS.ObjectLiteralExpression;
 } | null {
   if (!initializer || !ts.isCallExpression(initializer)) return null;
   if (!ts.isPropertyAccessExpression(initializer.expression)) return null;
@@ -922,18 +920,18 @@ function styleDefineVarsCall(
     initializer.arguments,
     0,
     'Style defineVars arguments',
-  ) as ts.Expression | undefined;
+  ) as TS.Expression | undefined;
   const optionsArgument = compilerOwnDataValue(
     initializer.arguments,
     1,
     'Style defineVars arguments',
-  ) as ts.Expression | undefined;
+  ) as TS.Expression | undefined;
   if (!tokensArgument || !ts.isObjectLiteralExpression(tokensArgument)) return null;
   return { options: styleIdentityOptionsFromObject(optionsArgument), tokens: tokensArgument };
 }
 
 function styleKeyframesCall(
-  initializer: ts.Expression | undefined,
+  initializer: TS.Expression | undefined,
   styleImports: StyleImports,
   localObjects: LocalObjectLiterals,
   staticValues: ReadonlyMap<string, unknown>,
@@ -947,12 +945,12 @@ function styleKeyframesCall(
     initializer.arguments,
     0,
     'Style keyframes arguments',
-  ) as ts.Expression | undefined;
+  ) as TS.Expression | undefined;
   const optionsArgument = compilerOwnDataValue(
     initializer.arguments,
     1,
     'Style keyframes arguments',
-  ) as ts.Expression | undefined;
+  ) as TS.Expression | undefined;
   if (!framesArgument || !ts.isObjectLiteralExpression(framesArgument)) return null;
 
   // A keyframes object is `{ '<step>': { <declarations> } }` — the same
@@ -970,9 +968,9 @@ function styleKeyframesCall(
 }
 
 function isStyleKeyframesCall(
-  initializer: ts.Expression | undefined,
+  initializer: TS.Expression | undefined,
   styleNamespaces: ReadonlySet<string>,
-): initializer is ts.CallExpression {
+): initializer is TS.CallExpression {
   if (!initializer || !ts.isCallExpression(initializer)) return false;
   if (!ts.isPropertyAccessExpression(initializer.expression)) return false;
   if (initializer.expression.name.text !== styleKeyframesMemberName) return false;
@@ -981,7 +979,7 @@ function isStyleKeyframesCall(
 }
 
 function styleNamespacesFromObject(
-  node: ts.ObjectLiteralExpression,
+  node: TS.ObjectLiteralExpression,
   localObjects: LocalObjectLiterals,
   staticValues: ReadonlyMap<string, unknown>,
   styleImports: StyleImports,
@@ -994,7 +992,7 @@ function styleNamespacesFromObject(
       node.properties,
       index,
       'Style namespace properties',
-    ) as ts.ObjectLiteralElementLike;
+    ) as TS.ObjectLiteralElementLike;
     if (!ts.isPropertyAssignment(property)) return null;
     const key = propertyNameText(property.name);
     if (!key || !ts.isObjectLiteralExpression(property.initializer)) return null;
@@ -1012,7 +1010,7 @@ function styleNamespacesFromObject(
 }
 
 function styleObjectFromObject(
-  node: ts.ObjectLiteralExpression,
+  node: TS.ObjectLiteralExpression,
   localObjects: LocalObjectLiterals,
   staticValues: ReadonlyMap<string, unknown>,
   styleImports: StyleImports,
@@ -1025,7 +1023,7 @@ function styleObjectFromObject(
       node.properties,
       index,
       'Style object properties',
-    ) as ts.ObjectLiteralElementLike;
+    ) as TS.ObjectLiteralElementLike;
     // `{ ...sharedStyle, ... }`: inline a module-local const object literal so a
     // styled component that composes shared fragments still extracts statically.
     if (ts.isSpreadAssignment(property)) {
@@ -1061,7 +1059,7 @@ function styleObjectFromObject(
 }
 
 function tokenValuesFromObject(
-  node: ts.ObjectLiteralExpression,
+  node: TS.ObjectLiteralExpression,
   staticValues: ReadonlyMap<string, unknown>,
   styleImports: StyleImports,
 ): Record<string, CssValue> | null {
@@ -1072,7 +1070,7 @@ function tokenValuesFromObject(
       node.properties,
       index,
       'Style token properties',
-    ) as ts.ObjectLiteralElementLike;
+    ) as TS.ObjectLiteralElementLike;
     if (!ts.isPropertyAssignment(property)) return null;
     const key = propertyNameText(property.name);
     if (!key) return null;
@@ -1083,22 +1081,22 @@ function tokenValuesFromObject(
   return result;
 }
 
-type LocalObjectLiterals = ReadonlyMap<string, ts.ObjectLiteralExpression>;
+type LocalObjectLiterals = ReadonlyMap<string, TS.ObjectLiteralExpression>;
 
 /**
  * Index module-scope `const name = { ... }` object literals (unwrapping a
  * trailing `as const` / parentheses) so static `{ ...name }` spreads inside a
  * `style.create(...)` argument can be resolved and inlined.
  */
-function collectLocalObjectLiterals(sourceFile: ts.SourceFile): LocalObjectLiterals {
-  const objects = compilerCreateMap<string, ts.ObjectLiteralExpression>();
+function collectLocalObjectLiterals(sourceFile: TS.SourceFile): LocalObjectLiterals {
+  const objects = compilerCreateMap<string, TS.ObjectLiteralExpression>();
   const statementCount = compilerArrayLength(sourceFile.statements, 'Style local statements');
   for (let statementIndex = 0; statementIndex < statementCount; statementIndex += 1) {
     const statement = compilerOwnDataValue(
       sourceFile.statements,
       statementIndex,
       'Style local statements',
-    ) as ts.Statement;
+    ) as TS.Statement;
     if (!ts.isVariableStatement(statement)) continue;
     const declarationCount = compilerArrayLength(
       statement.declarationList.declarations,
@@ -1109,7 +1107,7 @@ function collectLocalObjectLiterals(sourceFile: ts.SourceFile): LocalObjectLiter
         statement.declarationList.declarations,
         declarationIndex,
         'Style local declarations',
-      ) as ts.VariableDeclaration;
+      ) as TS.VariableDeclaration;
       if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
       const literal = unwrapObjectLiteral(declaration.initializer);
       if (literal) compilerMapSet(objects, declaration.name.text, literal);
@@ -1119,7 +1117,7 @@ function collectLocalObjectLiterals(sourceFile: ts.SourceFile): LocalObjectLiter
 }
 
 function collectLocalStaticValues(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   styleImports: StyleImports,
 ): ReadonlyMap<string, unknown> {
   const staticValues = compilerCreateMap<string, unknown>();
@@ -1130,7 +1128,7 @@ function collectLocalStaticValues(
       sourceFile.statements,
       statementIndex,
       'Style local statements',
-    ) as ts.Statement;
+    ) as TS.Statement;
     if (!ts.isVariableStatement(statement)) continue;
     const declarationCount = compilerArrayLength(
       statement.declarationList.declarations,
@@ -1141,7 +1139,7 @@ function collectLocalStaticValues(
         statement.declarationList.declarations,
         declarationIndex,
         'Style local declarations',
-      ) as ts.VariableDeclaration;
+      ) as TS.VariableDeclaration;
       if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
       const value = staticValueFromExpression(declaration.initializer, staticValues, styleImports);
       if (value !== undefined) compilerMapSet(staticValues, declaration.name.text, value);
@@ -1151,15 +1149,15 @@ function collectLocalStaticValues(
   return staticValues;
 }
 
-function unwrapObjectLiteral(node: ts.Expression): ts.ObjectLiteralExpression | null {
-  let current: ts.Expression = node;
+function unwrapObjectLiteral(node: TS.Expression): TS.ObjectLiteralExpression | null {
+  let current: TS.Expression = node;
   while (ts.isAsExpression(current) || ts.isParenthesizedExpression(current)) {
     current = current.expression;
   }
   return ts.isObjectLiteralExpression(current) ? current : null;
 }
 
-function styleIdentityOptionsFromObject(node: ts.Expression | undefined): StyleIdentityOptions {
+function styleIdentityOptionsFromObject(node: TS.Expression | undefined): StyleIdentityOptions {
   if (!node || !ts.isObjectLiteralExpression(node)) return {};
   const options = compilerCreateNullRecord<string>() as { namespace?: string; source?: string };
 
@@ -1169,7 +1167,7 @@ function styleIdentityOptionsFromObject(node: ts.Expression | undefined): StyleI
       node.properties,
       index,
       'Style identity properties',
-    ) as ts.ObjectLiteralElementLike;
+    ) as TS.ObjectLiteralElementLike;
     if (!ts.isPropertyAssignment(property)) continue;
     const key = propertyNameText(property.name);
     const value = primitiveValue(property.initializer);
@@ -1185,7 +1183,7 @@ function styleIdentityOptionsFromObject(node: ts.Expression | undefined): StyleI
 }
 
 function styleCreateProvenanceReplacement(
-  call: ts.CallExpression,
+  call: TS.CallExpression,
   existingOptions: StyleIdentityOptions,
   identity: Required<StyleIdentityOptions>,
 ): SourceReplacement | null {
@@ -1210,14 +1208,14 @@ function styleCreateProvenanceReplacement(
     call.arguments,
     1,
     'Style create provenance arguments',
-  ) as ts.Expression | undefined;
+  ) as TS.Expression | undefined;
 
   if (!optionsArgument) {
     const stylesArgument = compilerOwnDataValue(
       call.arguments,
       0,
       'Style create provenance arguments',
-    ) as ts.Expression | undefined;
+    ) as TS.Expression | undefined;
     if (!stylesArgument) return null;
     const position = stylesArgument.getEnd();
     return {
@@ -1365,7 +1363,7 @@ function staticInlineStyleAttributeReplacement(
 }
 
 function inlineStyleObjectFromObject(
-  node: ts.ObjectLiteralExpression,
+  node: TS.ObjectLiteralExpression,
 ): Record<string, string | number> | null {
   const style = compilerCreateNullRecord<string | number>();
 
@@ -1375,7 +1373,7 @@ function inlineStyleObjectFromObject(
       node.properties,
       index,
       'Inline style properties',
-    ) as ts.ObjectLiteralElementLike;
+    ) as TS.ObjectLiteralElementLike;
     if (!ts.isPropertyAssignment(property)) return null;
     const key = propertyNameText(property.name);
     if (!key) return null;
@@ -1575,7 +1573,7 @@ function styleWriterConflictDiagnostic(
 }
 
 function resolveStyleBindings(
-  expression: ts.Expression,
+  expression: TS.Expression,
   bindings: ReadonlyMap<string, StyleBinding>,
 ): StyleBinding[] | null {
   if (ts.isPropertyAccessExpression(expression) && ts.isIdentifier(expression.expression)) {
@@ -1594,7 +1592,7 @@ function resolveStyleBindings(
         expression.elements,
         elementIndex,
         'Style array expression',
-      ) as ts.Expression;
+      ) as TS.Expression;
       if (
         element.kind === ts.SyntaxKind.FalseKeyword ||
         element.kind === ts.SyntaxKind.NullKeyword
@@ -1613,7 +1611,7 @@ function resolveStyleBindings(
 
 function dynamicStyleAttributeLowering(
   attribute: JsxAttributeModel,
-  expression: ts.Expression,
+  expression: TS.Expression,
   bindings: ReadonlyMap<string, StyleBinding>,
   componentName: string,
   knownQueries: ReadonlySet<string>,
@@ -1761,7 +1759,7 @@ function dynamicStyleAttributeLowering(
 }
 
 function styleClassVariants(
-  expression: ts.Expression,
+  expression: TS.Expression,
   bindings: ReadonlyMap<string, StyleBinding>,
   conditionFacts: StyleConditionFactCursor,
 ): StyleClassVariant[] | null {
@@ -1813,7 +1811,7 @@ function styleClassVariants(
         expression.elements,
         elementIndex,
         'Dynamic style array elements',
-      ) as ts.Expression;
+      ) as TS.Expression;
       const itemVariants = styleClassVariants(element, bindings, conditionFacts);
       if (!itemVariants) return null;
       const combined: StyleClassVariant[] = [];
@@ -1994,13 +1992,13 @@ function parseExpression(source: string): ParsedExpression | null {
     sourceFile.statements,
     0,
     'Style expression statements',
-  ) as ts.Statement | undefined;
+  ) as TS.Statement | undefined;
   if (!statement || !ts.isVariableStatement(statement)) return null;
   const declaration = compilerOwnDataValue(
     statement.declarationList.declarations,
     0,
     'Style expression declarations',
-  ) as ts.VariableDeclaration | undefined;
+  ) as TS.VariableDeclaration | undefined;
   if (!declaration?.initializer) return null;
   return { expression: declaration.initializer, sourceFile };
 }
@@ -2016,7 +2014,7 @@ function pushRuleUsages(
   fileName: string,
   styleRefRoot: string,
   rules: readonly AtomicRule[],
-  declaration: ts.Node,
+  declaration: TS.Node,
 ): void {
   const ruleCount = compilerArrayLength(rules, 'Style rule usages');
   for (let index = 0; index < ruleCount; index += 1) {
@@ -2042,7 +2040,7 @@ function pushRuleUsages(
 function staticStyleDiagnostic(
   fileName: string,
   source: string,
-  node: ts.Node,
+  node: TS.Node,
   api: string,
 ): CompilerDiagnostic {
   return contextualizeCompilerDiagnostic(
@@ -2063,7 +2061,7 @@ function staticStyleDiagnostic(
 }
 
 function staticCssValue(
-  node: ts.Expression,
+  node: TS.Expression,
   staticValues: ReadonlyMap<string, unknown>,
   styleImports: StyleImports,
 ): CssValue | undefined {
@@ -2073,7 +2071,7 @@ function staticCssValue(
 }
 
 function staticPrimitiveValue(
-  node: ts.Expression,
+  node: TS.Expression,
   staticValues: ReadonlyMap<string, unknown>,
   styleImports: StyleImports,
 ): string | number | undefined {
@@ -2090,7 +2088,7 @@ function staticPrimitiveValue(
 }
 
 function staticPropertyAccessValue(
-  node: ts.Expression,
+  node: TS.Expression,
   staticValues: ReadonlyMap<string, unknown>,
   styleImports: StyleImports,
 ): unknown {
@@ -2120,7 +2118,7 @@ function staticPropertyAccessValue(
 }
 
 function publicThemeTokenAccessSegments(
-  node: ts.Expression,
+  node: TS.Expression,
   styleImports: StyleImports,
 ): string[] | null {
   const path = publicThemeTokenAccessPath(node);
@@ -2138,7 +2136,7 @@ function publicThemeTokenAccessSegments(
   return null;
 }
 
-function publicThemeTokenAccessPath(node: ts.Expression): string[] | null {
+function publicThemeTokenAccessPath(node: TS.Expression): string[] | null {
   if (ts.isIdentifier(node)) return [node.text];
   if (ts.isPropertyAccessExpression(node)) {
     const prefix = publicThemeTokenAccessPath(node.expression);
@@ -2153,7 +2151,7 @@ function publicThemeTokenAccessPath(node: ts.Expression): string[] | null {
       node.arguments,
       0,
       'Public theme token call arguments',
-    ) as ts.Expression | undefined;
+    ) as TS.Expression | undefined;
     if (!prefix || argumentCount !== 1 || !argument) return null;
     const prefixCount = compilerArrayLength(prefix, 'Public theme token call path');
     if (
@@ -2191,7 +2189,7 @@ function publicThemeTokenValue(segments: readonly string[]): unknown {
   return valueAtPath(publicThemeTokens, segments);
 }
 
-function propertyAccessPath(node: ts.Expression): string[] | null {
+function propertyAccessPath(node: TS.Expression): string[] | null {
   if (ts.isIdentifier(node)) return [node.text];
   if (ts.isPropertyAccessExpression(node)) {
     const prefix = propertyAccessPath(node.expression);
@@ -2222,7 +2220,7 @@ function valueAtPath(value: unknown, segments: readonly string[]): unknown {
   return current;
 }
 
-function primitiveValue(node: ts.Expression): string | number | undefined {
+function primitiveValue(node: TS.Expression): string | number | undefined {
   if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
   if (ts.isNumericLiteral(node)) return compilerNumberValue(node.text);
   if (ts.isPrefixUnaryExpression(node) && ts.isNumericLiteral(node.operand)) {

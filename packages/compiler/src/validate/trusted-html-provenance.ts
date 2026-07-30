@@ -6,7 +6,8 @@ import {
   unproven,
 } from '@kovojs/core/internal/classifier-verdict';
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
-import * as ts from 'typescript';
+import type * as TS from 'typescript';
+import { typescriptRuntime as ts } from '../ts-api.js';
 
 import {
   contextualizeCompilerDiagnostic,
@@ -83,7 +84,7 @@ export const validateTrustedHtmlProvenance = securityClassifier(
     const bindingsByRender = renderProvenanceBindings(sourceFile);
 
     const found: CompilerDiagnostic[] = [];
-    const visit = (node: ts.Node): void => {
+    const visit = (node: TS.Node): void => {
       if (ts.isCallExpression(node)) {
         const sink = rawTrustSinkForCall(sourceFile, node);
         const value = node.arguments[0];
@@ -95,7 +96,7 @@ export const validateTrustedHtmlProvenance = securityClassifier(
             depth: 0,
             trustedTypeNames: trustedTypeLocalNames(sourceFile),
             usePosition: value.getStart(sourceFile),
-            visited: compilerCreateSet<ts.Node>(),
+            visited: compilerCreateSet<TS.Node>(),
           });
           if (provenance === null) {
             // Proven local/static-clean value.
@@ -156,7 +157,7 @@ interface ClassifyContext {
   readonly trustedTypeNames: TrustedTypeLocalNames;
   /** Original sink-value position; alias/initializer recursion must still see writes before use. */
   readonly usePosition?: number;
-  readonly visited: Set<ts.Node>;
+  readonly visited: Set<TS.Node>;
 }
 
 interface RenderProvenanceBindings {
@@ -167,7 +168,7 @@ interface RenderProvenanceBindings {
   readonly requestSlotRoots: ReadonlySet<string>;
 }
 
-type RenderFunction = ts.ArrowFunction | ts.FunctionExpression;
+type RenderFunction = TS.ArrowFunction | TS.FunctionExpression;
 
 const MAX_ALIAS_DEPTH = 6;
 
@@ -184,7 +185,7 @@ const TRUSTED_URL_TYPE_EXPORT = 'TrustedUrl';
 
 const rawTrustSinkForCall = securityClassifier(
   'compiler.trusted-html.raw-trust-call',
-  function (sourceFile: ts.SourceFile, call: ts.CallExpression): RawTrustSink | null {
+  function (sourceFile: TS.SourceFile, call: TS.CallExpression): RawTrustSink | null {
     const direct = rawTrustSinkForExpression(sourceFile, call.expression);
     if (direct !== null) return direct;
     return wrapperHelperRawTrustSink(sourceFile, call);
@@ -193,7 +194,7 @@ const rawTrustSinkForCall = securityClassifier(
 
 const rawTrustSinkForExpression = securityClassifier(
   'compiler.trusted-html.raw-trust-expression',
-  function (sourceFile: ts.SourceFile, expression: ts.Expression): RawTrustSink | null {
+  function (sourceFile: TS.SourceFile, expression: TS.Expression): RawTrustSink | null {
     if (expressionResolvesToTrustedHtmlPureBrand(sourceFile, expression)) {
       return {
         auditedReasonAllowed: true,
@@ -227,9 +228,9 @@ const rawTrustSinkForExpression = securityClassifier(
 
 function validateJsxAttributeTrustedProvenance(
   diagnostics: DiagnosticFactory,
-  sourceFile: ts.SourceFile,
-  attribute: ts.JsxAttribute,
-  bindingsByRender: ReadonlyMap<ts.Node, RenderProvenanceBindings>,
+  sourceFile: TS.SourceFile,
+  attribute: TS.JsxAttribute,
+  bindingsByRender: ReadonlyMap<TS.Node, RenderProvenanceBindings>,
 ): CompilerDiagnostic[] {
   const target = rawTrustSinkForJsxAttribute(sourceFile, attribute);
   const value = jsxAttributeExpression(attribute);
@@ -241,7 +242,7 @@ function validateJsxAttributeTrustedProvenance(
     depth: 0,
     trustedTypeNames: trustedTypeLocalNames(sourceFile),
     usePosition: value.getStart(sourceFile),
-    visited: compilerCreateSet<ts.Node>(),
+    visited: compilerCreateSet<TS.Node>(),
   });
   if (verdict.kind === 'proven-safe') return [];
   const provenance = verdict.kind === 'proven-unsafe' ? verdict.detail : 'unprovable';
@@ -254,8 +255,8 @@ type TrustNamespaceModule =
   | typeof SERVER_INTERNAL_HTML_MODULE_SPECIFIER;
 
 function dynamicNamespaceRawTrustSink(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): RawTrustSink | null {
   const expr = unwrap(expression);
   if (!ts.isElementAccessExpression(expr)) return null;
@@ -335,15 +336,15 @@ function unknownTrustNamespaceMemberSink(moduleSpecifier: TrustNamespaceModule):
 }
 
 function trustNamespaceImportModule(
-  sourceFile: ts.SourceFile,
-  namespace: ts.Identifier,
+  sourceFile: TS.SourceFile,
+  namespace: TS.Identifier,
 ): TrustNamespaceModule | null {
   const name = identifierName(namespace);
   let moduleSpecifier: TrustNamespaceModule | null = null;
   const statementLength = compilerArrayLength(sourceFile.statements, 'Source statements');
   for (let index = 0; index < statementLength; index += 1) {
     const statement = compilerOwnDataValue(sourceFile.statements, index, 'Source statements') as
-      | ts.Statement
+      | TS.Statement
       | undefined;
     if (!statement) throw new TypeError(`Source statements[${index}] must be dense own data.`);
     if (!ts.isImportDeclaration(statement)) continue;
@@ -370,10 +371,10 @@ function trustNamespaceModule(specifier: string): TrustNamespaceModule | null {
   return null;
 }
 
-function namespaceImportIsShadowed(node: ts.Node, name: string): boolean {
+function namespaceImportIsShadowed(node: TS.Node, name: string): boolean {
   const sourceFile = node.getSourceFile();
   const position = node.getStart(sourceFile);
-  let cursor: ts.Node | undefined = node.parent;
+  let cursor: TS.Node | undefined = node.parent;
   while (cursor) {
     if (isFunctionLikeWithParameters(cursor) && cursor.getStart(sourceFile) < position) {
       if (
@@ -388,7 +389,7 @@ function namespaceImportIsShadowed(node: ts.Node, name: string): boolean {
       const statementLength = compilerArrayLength(cursor.statements, 'Scope statements');
       for (let index = 0; index < statementLength; index += 1) {
         const statement = compilerOwnDataValue(cursor.statements, index, 'Scope statements') as
-          | ts.Statement
+          | TS.Statement
           | undefined;
         if (!statement) throw new TypeError(`Scope statements[${index}] must be dense own data.`);
         if (statement.getStart(sourceFile) >= position) continue;
@@ -408,7 +409,7 @@ function namespaceImportIsShadowed(node: ts.Node, name: string): boolean {
               statement.declarationList.declarations,
               declarationIndex,
               'Scope declarations',
-            ) as ts.VariableDeclaration | undefined;
+            ) as TS.VariableDeclaration | undefined;
             if (!declaration) {
               throw new TypeError(
                 `Scope declarations[${declarationIndex}] must be dense own data.`,
@@ -437,8 +438,8 @@ function namespaceImportIsShadowed(node: ts.Node, name: string): boolean {
  * request/query provenance per SPEC §6.6; the helper return type or brand annotation is not proof.
  */
 function wrapperHelperRawTrustSink(
-  sourceFile: ts.SourceFile,
-  call: ts.CallExpression,
+  sourceFile: TS.SourceFile,
+  call: TS.CallExpression,
 ): RawTrustSink | null {
   const callee = unwrap(call.expression);
   if (!ts.isIdentifier(callee)) return null;
@@ -468,8 +469,8 @@ function wrapperHelperRawTrustSink(
 }
 
 function rawTrustSinkForJsxAttribute(
-  sourceFile: ts.SourceFile,
-  attribute: ts.JsxAttribute,
+  sourceFile: TS.SourceFile,
+  attribute: TS.JsxAttribute,
 ): RawTrustSink | null {
   const name = jsxAttributeName(attribute);
   if (name === null) return null;
@@ -501,8 +502,8 @@ function rawTrustSinkForJsxAttribute(
 }
 
 function classifyTrustedSinkValue(
-  sourceFile: ts.SourceFile,
-  node: ts.Expression,
+  sourceFile: TS.SourceFile,
+  node: TS.Expression,
   sink: RawTrustSink,
   ctx: ClassifyContext,
 ): TrustedSinkVerdict {
@@ -557,9 +558,9 @@ function classifyTrustedSinkValue(
 }
 
 function mayBeTrustedUrlSinkValue(
-  sourceFile: ts.SourceFile,
-  node: ts.Expression,
-  visited = compilerCreateSet<ts.Node>(),
+  sourceFile: TS.SourceFile,
+  node: TS.Expression,
+  visited = compilerCreateSet<TS.Node>(),
 ): boolean {
   const expr = unwrap(node);
   if (ts.isCallExpression(expr)) {
@@ -582,7 +583,7 @@ function mayBeTrustedUrlSinkValue(
  */
 const classifyExpression = securityClassifier(
   'compiler.trusted-html.classify-expression',
-  function (node: ts.Expression | ts.SpreadElement, ctx: ClassifyContext): Provenance | null {
+  function (node: TS.Expression | TS.SpreadElement, ctx: ClassifyContext): Provenance | null {
     if (ts.isSpreadElement(node)) return classifyExpression(node.expression, ctx) ?? 'unprovable';
     const expr = unwrap(node);
 
@@ -728,7 +729,7 @@ function classifierMapHasValues<Key, Value>(source: ReadonlyMap<Key, Value>): bo
 }
 
 function classifyObjectLiteralProperty(
-  property: ts.ObjectLiteralElementLike,
+  property: TS.ObjectLiteralElementLike,
   ctx: ClassifyContext,
 ): Provenance | null {
   if (ts.isSpreadAssignment(property)) {
@@ -770,7 +771,7 @@ function firstProvenance(values: readonly (Provenance | null)[]): Provenance | n
   return unprovable ? 'unprovable' : null;
 }
 
-function isStaticLiteral(expr: ts.Expression): boolean {
+function isStaticLiteral(expr: TS.Expression): boolean {
   return (
     ts.isStringLiteralLike(expr) ||
     ts.isNumericLiteral(expr) ||
@@ -781,21 +782,21 @@ function isStaticLiteral(expr: ts.Expression): boolean {
 }
 
 function computedPropertyNameProvenance(
-  name: ts.PropertyName,
+  name: TS.PropertyName,
   ctx: ClassifyContext,
 ): Provenance | null {
   if (!ts.isComputedPropertyName(name)) return null;
-  const visited = compilerCreateSet<ts.Node>();
+  const visited = compilerCreateSet<TS.Node>();
   compilerSetForEach(ctx.visited, (node) => compilerSetAdd(visited, node));
   return classifyExpression(name.expression, { ...ctx, visited });
 }
 
 /** Classify a member-access chain (`a.b.c`, `req.params.id`) by its leftmost root and first member. */
 function classifyMemberRoot(
-  expr: ts.PropertyAccessExpression | ts.ElementAccessExpression,
+  expr: TS.PropertyAccessExpression | TS.ElementAccessExpression,
   ctx: ClassifyContext,
 ): Provenance | null {
-  let cursor: ts.Expression = expr;
+  let cursor: TS.Expression = expr;
   let firstMember: string | undefined;
   while (
     ts.isPropertyAccessExpression(cursor) ||
@@ -846,7 +847,7 @@ function classifyMemberRoot(
 }
 
 /** Classify a bare identifier: same-scope alias/derive first (it shadows), then query/request roots. */
-function classifyIdentifier(id: ts.Identifier, ctx: ClassifyContext): Provenance | null {
+function classifyIdentifier(id: TS.Identifier, ctx: ClassifyContext): Provenance | null {
   // A same-scope `const name = <expr>` shadows any param/query binding: follow the alias/derive.
   const local = localBinding(id, id.text);
   if (local !== undefined && !bindingIsRenderParameter(local.binding, ctx.render)) {
@@ -870,7 +871,7 @@ function classifyIdentifier(id: ts.Identifier, ctx: ClassifyContext): Provenance
 }
 
 interface CarrierMemberTarget {
-  readonly computedKey?: ts.Expression;
+  readonly computedKey?: TS.Expression;
   readonly key: string | null;
 }
 
@@ -881,8 +882,8 @@ interface CarrierMemberTarget {
  * the carrier escapes to code whose mutation behavior is not locally provable.
  */
 function localCarrierMutationProvenance(
-  root: ts.Identifier,
-  binding: ts.Node,
+  root: TS.Identifier,
+  binding: TS.Node,
   targetMember: string | undefined,
   ctx: ClassifyContext,
 ): Provenance | undefined {
@@ -918,7 +919,7 @@ function localCarrierMutationProvenance(
         ts.isIdentifier(unwrap(node.left)) &&
         expressionIsCarrierAlias(node.right, aliases)
       ) {
-        const name = identifierName(unwrap(node.left) as ts.Identifier);
+        const name = identifierName(unwrap(node.left) as TS.Identifier);
         if (!compilerSetHas(aliases, name)) {
           compilerSetAdd(aliases, name);
           changed = true;
@@ -962,7 +963,7 @@ function localCarrierMutationProvenance(
         ts.isElementAccessExpression(unwrap(node.operand)))
     ) {
       const target = carrierMemberTarget(
-        unwrap(node.operand) as ts.PropertyAccessExpression | ts.ElementAccessExpression,
+        unwrap(node.operand) as TS.PropertyAccessExpression | TS.ElementAccessExpression,
         aliases,
       );
       if (target && carrierMutationTargetsMember(target, targetMember)) record('unprovable');
@@ -987,7 +988,7 @@ function localCarrierMutationProvenance(
               node.arguments,
               index,
               'Object.assign arguments',
-            ) as ts.Expression | undefined;
+            ) as TS.Expression | undefined;
             if (!source) {
               throw new TypeError(`Object.assign arguments[${index}] must be dense own data.`);
             }
@@ -1055,7 +1056,7 @@ function localCarrierMutationProvenance(
         ts.isPropertyAccessExpression(unwrap(node.expression)) ||
         ts.isElementAccessExpression(unwrap(node.expression))
           ? carrierMemberTarget(
-              unwrap(node.expression) as ts.PropertyAccessExpression | ts.ElementAccessExpression,
+              unwrap(node.expression) as TS.PropertyAccessExpression | TS.ElementAccessExpression,
               aliases,
             )
           : undefined;
@@ -1088,7 +1089,7 @@ function mutationClassifyContext(ctx: ClassifyContext): ClassifyContext {
   };
 }
 
-function carrierMutationScope(binding: ts.Node, ctx: ClassifyContext): ts.Node {
+function carrierMutationScope(binding: TS.Node, ctx: ClassifyContext): TS.Node {
   if (
     ctx.render !== undefined &&
     (ctx.usePosition ?? -1) >= ctx.render.getStart() &&
@@ -1096,7 +1097,7 @@ function carrierMutationScope(binding: ts.Node, ctx: ClassifyContext): ts.Node {
   ) {
     return ctx.render;
   }
-  let cursor: ts.Node | undefined = binding.parent;
+  let cursor: TS.Node | undefined = binding.parent;
   while (cursor) {
     if (isFunctionLikeWithParameters(cursor) || ts.isSourceFile(cursor)) return cursor;
     cursor = cursor.parent;
@@ -1105,13 +1106,13 @@ function carrierMutationScope(binding: ts.Node, ctx: ClassifyContext): ts.Node {
 }
 
 function visitCarrierRange(
-  scope: ts.Node,
-  sourceFile: ts.SourceFile,
+  scope: TS.Node,
+  sourceFile: TS.SourceFile,
   start: number,
   end: number,
-  visitor: (node: ts.Node) => void,
+  visitor: (node: TS.Node) => void,
 ): void {
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (node !== scope && isFunctionLikeWithParameters(node)) return;
     if (node.end <= start || node.getStart(sourceFile) >= end) return;
     visitor(node);
@@ -1121,7 +1122,7 @@ function visitCarrierRange(
 }
 
 function expressionIsCarrierAlias(
-  expression: ts.Expression,
+  expression: TS.Expression,
   aliases: ReadonlySet<string>,
 ): boolean {
   const value = unwrap(expression);
@@ -1129,12 +1130,12 @@ function expressionIsCarrierAlias(
 }
 
 function carrierMemberTarget(
-  expression: ts.PropertyAccessExpression | ts.ElementAccessExpression,
+  expression: TS.PropertyAccessExpression | TS.ElementAccessExpression,
   aliases: ReadonlySet<string>,
 ): CarrierMemberTarget | undefined {
-  let cursor: ts.Expression = expression;
+  let cursor: TS.Expression = expression;
   let firstMember: string | null = null;
-  let computedKey: ts.Expression | undefined;
+  let computedKey: TS.Expression | undefined;
   while (ts.isPropertyAccessExpression(cursor) || ts.isElementAccessExpression(cursor)) {
     if (ts.isPropertyAccessExpression(cursor)) {
       firstMember = cursor.name.text;
@@ -1160,22 +1161,22 @@ function carrierMutationTargetsMember(
   return member === undefined || target.key === null || target.key === member;
 }
 
-function isAssignmentOperatorKind(kind: ts.SyntaxKind): boolean {
+function isAssignmentOperatorKind(kind: TS.SyntaxKind): boolean {
   return kind >= ts.SyntaxKind.FirstAssignment && kind <= ts.SyntaxKind.LastAssignment;
 }
 
-function isStaticMethodCall(call: ts.CallExpression, receiver: string, method: string): boolean {
+function isStaticMethodCall(call: TS.CallExpression, receiver: string, method: string): boolean {
   const callee = unwrap(call.expression);
   return (
     ts.isPropertyAccessExpression(callee) &&
     ts.isIdentifier(unwrap(callee.expression)) &&
-    identifierName(unwrap(callee.expression) as ts.Identifier) === receiver &&
+    identifierName(unwrap(callee.expression) as TS.Identifier) === receiver &&
     callee.name.text === method
   );
 }
 
 function objectAssignmentProvenance(
-  expression: ts.Expression,
+  expression: TS.Expression,
   targetMember: string | undefined,
   ctx: ClassifyContext,
 ): Provenance | null {
@@ -1194,7 +1195,7 @@ function objectAssignmentProvenance(
       value.properties,
       index,
       'Object assignment properties',
-    ) as ts.ObjectLiteralElementLike | undefined;
+    ) as TS.ObjectLiteralElementLike | undefined;
     if (!property) {
       throw new TypeError(`Object assignment properties[${index}] must be dense own data.`);
     }
@@ -1232,7 +1233,7 @@ function objectAssignmentProvenance(
 }
 
 function propertyDescriptorProvenance(
-  expression: ts.Expression,
+  expression: TS.Expression,
   ctx: ClassifyContext,
 ): Provenance | null {
   const value = unwrap(expression);
@@ -1244,7 +1245,7 @@ function propertyDescriptorProvenance(
       value.properties,
       index,
       'Property descriptor properties',
-    ) as ts.ObjectLiteralElementLike | undefined;
+    ) as TS.ObjectLiteralElementLike | undefined;
     if (!property) {
       throw new TypeError(`Property descriptor properties[${index}] must be dense own data.`);
     }
@@ -1277,7 +1278,7 @@ function propertyDescriptorProvenance(
 }
 
 function objectDescriptorMapProvenance(
-  expression: ts.Expression,
+  expression: TS.Expression,
   targetMember: string | undefined,
   ctx: ClassifyContext,
 ): Provenance | null {
@@ -1287,7 +1288,7 @@ function objectDescriptorMapProvenance(
   const propertyLength = compilerArrayLength(value.properties, 'Descriptor map properties');
   for (let index = 0; index < propertyLength; index += 1) {
     const property = compilerOwnDataValue(value.properties, index, 'Descriptor map properties') as
-      | ts.ObjectLiteralElementLike
+      | TS.ObjectLiteralElementLike
       | undefined;
     if (!property) {
       throw new TypeError(`Descriptor map properties[${index}] must be dense own data.`);
@@ -1319,17 +1320,17 @@ function objectDescriptorMapProvenance(
  * The initializer of the nearest enclosing `const <name> = <init>` or
  * `const { <name> } = <init>` visible at `node`, if any.
  */
-function localConstInitializer(node: ts.Node, name: string): ts.Expression | undefined {
+function localConstInitializer(node: TS.Node, name: string): TS.Expression | undefined {
   return localBinding(node, name)?.initializer;
 }
 
 function localBinding(
-  node: ts.Node,
+  node: TS.Node,
   name: string,
-): { readonly binding: ts.Node; readonly initializer?: ts.Expression } | undefined {
+): { readonly binding: TS.Node; readonly initializer?: TS.Expression } | undefined {
   const sourceFile = node.getSourceFile();
   const position = node.getStart(sourceFile);
-  let cursor: ts.Node | undefined = node.parent;
+  let cursor: TS.Node | undefined = node.parent;
   while (cursor) {
     if (isFunctionLikeWithParameters(cursor) && cursor.getStart(sourceFile) < position) {
       const parameter = classifierArrayFind(cursor.parameters, 'Callable parameters', (candidate) =>
@@ -1346,7 +1347,7 @@ function localBinding(
           cursor.statements,
           index,
           'Local scope statements',
-        ) as ts.Statement | undefined;
+        ) as TS.Statement | undefined;
         if (!statement) {
           throw new TypeError(`Local scope statements[${index}] must be dense own data.`);
         }
@@ -1368,7 +1369,7 @@ function localBinding(
             statement.declarationList.declarations,
             declarationIndex,
             'Local variable declarations',
-          ) as ts.VariableDeclaration | undefined;
+          ) as TS.VariableDeclaration | undefined;
           if (!declaration) {
             throw new TypeError(
               `Local variable declarations[${declarationIndex}] must be dense own data.`,
@@ -1400,7 +1401,7 @@ function localBinding(
   return undefined;
 }
 
-function bindingIsRenderParameter(binding: ts.Node, render: RenderFunction | undefined): boolean {
+function bindingIsRenderParameter(binding: TS.Node, render: RenderFunction | undefined): boolean {
   return (
     render !== undefined &&
     ts.isParameter(binding) &&
@@ -1409,14 +1410,14 @@ function bindingIsRenderParameter(binding: ts.Node, render: RenderFunction | und
   );
 }
 
-function statementBindsName(statement: ts.Statement, name: string): boolean {
+function statementBindsName(statement: TS.Statement, name: string): boolean {
   if (ts.isImportDeclaration(statement)) return importDeclarationBindsName(statement, name);
   if (ts.isFunctionDeclaration(statement) && statement.name?.text === name) return true;
   if (ts.isClassDeclaration(statement) && statement.name?.text === name) return true;
   return false;
 }
 
-function importDeclarationBindsName(statement: ts.ImportDeclaration, name: string): boolean {
+function importDeclarationBindsName(statement: TS.ImportDeclaration, name: string): boolean {
   const clause = statement.importClause;
   if (!clause) return false;
   if (clause.name?.text === name) return true;
@@ -1431,7 +1432,7 @@ function importDeclarationBindsName(statement: ts.ImportDeclaration, name: strin
   );
 }
 
-function isConstVariableDeclaration(node: ts.VariableDeclaration): boolean {
+function isConstVariableDeclaration(node: TS.VariableDeclaration): boolean {
   return (
     ts.isVariableDeclarationList(node.parent) &&
     (node.parent.flags & ts.NodeFlags.Const) === ts.NodeFlags.Const
@@ -1439,11 +1440,11 @@ function isConstVariableDeclaration(node: ts.VariableDeclaration): boolean {
 }
 
 function localCallableDeclaration(
-  node: ts.Node,
+  node: TS.Node,
   name: string,
-): ts.VariableDeclaration | ts.FunctionDeclaration | undefined {
+): TS.VariableDeclaration | TS.FunctionDeclaration | undefined {
   const position = node.getStart();
-  let cursor: ts.Node | undefined = node.parent;
+  let cursor: TS.Node | undefined = node.parent;
   while (cursor) {
     if (isFunctionLikeWithParameters(cursor) && cursor.getStart() < position) {
       if (
@@ -1461,7 +1462,7 @@ function localCallableDeclaration(
           cursor.statements,
           index,
           'Callable scope statements',
-        ) as ts.Statement | undefined;
+        ) as TS.Statement | undefined;
         if (!statement) {
           throw new TypeError(`Callable scope statements[${index}] must be dense own data.`);
         }
@@ -1482,7 +1483,7 @@ function localCallableDeclaration(
             statement.declarationList.declarations,
             declarationIndex,
             'Callable variable declarations',
-          ) as ts.VariableDeclaration | undefined;
+          ) as TS.VariableDeclaration | undefined;
           if (!declaration) {
             throw new TypeError(
               `Callable variable declarations[${declarationIndex}] must be dense own data.`,
@@ -1503,14 +1504,14 @@ function localCallableDeclaration(
   return undefined;
 }
 
-function callableBody(initializer: ts.Expression): ts.ConciseBody | undefined {
+function callableBody(initializer: TS.Expression): TS.ConciseBody | undefined {
   const value = unwrap(initializer);
   if (ts.isArrowFunction(value) || ts.isFunctionExpression(value)) return value.body;
   return undefined;
 }
 
 function callableFirstParameterName(
-  declaration: ts.VariableDeclaration | ts.FunctionDeclaration,
+  declaration: TS.VariableDeclaration | TS.FunctionDeclaration,
 ): string | undefined {
   const parameters = ts.isVariableDeclaration(declaration)
     ? callableParameters(declaration.initializer)
@@ -1520,20 +1521,20 @@ function callableFirstParameterName(
 }
 
 function callableParameters(
-  initializer: ts.Expression | undefined,
-): ts.NodeArray<ts.ParameterDeclaration> | undefined {
+  initializer: TS.Expression | undefined,
+): TS.NodeArray<TS.ParameterDeclaration> | undefined {
   if (initializer === undefined) return undefined;
   const value = unwrap(initializer);
   if (ts.isArrowFunction(value) || ts.isFunctionExpression(value)) return value.parameters;
   return undefined;
 }
 
-function directReturnExpression(body: ts.ConciseBody): ts.Expression | undefined {
+function directReturnExpression(body: TS.ConciseBody): TS.Expression | undefined {
   if (ts.isExpression(body)) return body;
   const statementLength = compilerArrayLength(body.statements, 'Callable body statements');
   for (let index = 0; index < statementLength; index += 1) {
     const statement = compilerOwnDataValue(body.statements, index, 'Callable body statements') as
-      | ts.Statement
+      | TS.Statement
       | undefined;
     if (!statement) {
       throw new TypeError(`Callable body statements[${index}] must be dense own data.`);
@@ -1544,14 +1545,14 @@ function directReturnExpression(body: ts.ConciseBody): ts.Expression | undefined
 }
 
 function isFunctionLikeWithParameters(
-  node: ts.Node,
-): node is ts.ArrowFunction | ts.FunctionDeclaration | ts.FunctionExpression {
+  node: TS.Node,
+): node is TS.ArrowFunction | TS.FunctionDeclaration | TS.FunctionExpression {
   return (
     ts.isArrowFunction(node) || ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node)
   );
 }
 
-function bindingNameBinds(name: ts.BindingName, target: string): boolean {
+function bindingNameBinds(name: TS.BindingName, target: string): boolean {
   if (ts.isIdentifier(name)) return name.text === target;
   return classifierArraySome(
     name.elements,
@@ -1560,11 +1561,11 @@ function bindingNameBinds(name: ts.BindingName, target: string): boolean {
   );
 }
 
-function objectBindingPatternBindsName(pattern: ts.ObjectBindingPattern, name: string): boolean {
+function objectBindingPatternBindsName(pattern: TS.ObjectBindingPattern, name: string): boolean {
   const elementLength = compilerArrayLength(pattern.elements, 'Object binding elements');
   for (let index = 0; index < elementLength; index += 1) {
     const element = compilerOwnDataValue(pattern.elements, index, 'Object binding elements') as
-      | ts.BindingElement
+      | TS.BindingElement
       | undefined;
     if (!element) throw new TypeError(`Object binding elements[${index}] must be dense own data.`);
     if (ts.isIdentifier(element.name) && identifierName(element.name) === name) return true;
@@ -1578,7 +1579,7 @@ function objectBindingPatternBindsName(pattern: ts.ObjectBindingPattern, name: s
   return false;
 }
 
-function elementAccessName(argument: ts.Expression | undefined): string | null {
+function elementAccessName(argument: TS.Expression | undefined): string | null {
   if (argument === undefined) return null;
   const expr = unwrap(argument);
   if (ts.isStringLiteralLike(expr)) return literalText(expr);
@@ -1586,11 +1587,11 @@ function elementAccessName(argument: ts.Expression | undefined): string | null {
   return null;
 }
 
-function jsxAttributeName(attribute: ts.JsxAttribute): string | null {
+function jsxAttributeName(attribute: TS.JsxAttribute): string | null {
   return ts.isIdentifier(attribute.name) ? identifierName(attribute.name) : null;
 }
 
-function jsxAttributeExpression(attribute: ts.JsxAttribute): ts.Expression | undefined {
+function jsxAttributeExpression(attribute: TS.JsxAttribute): TS.Expression | undefined {
   const initializer = attribute.initializer;
   if (initializer === undefined || !ts.isJsxExpression(initializer)) return undefined;
   return initializer.expression;
@@ -1605,7 +1606,7 @@ function isRawHtmlAttributeName(name: string): name is RawTrustSink['label'] {
   );
 }
 
-function trustedTypeLocalNames(sourceFile: ts.SourceFile): TrustedTypeLocalNames {
+function trustedTypeLocalNames(sourceFile: TS.SourceFile): TrustedTypeLocalNames {
   const trustedHtml = compilerCreateSet<string>();
   const trustedUrl = compilerCreateSet<string>();
   const statementLength = compilerArrayLength(sourceFile.statements, 'Trusted type statements');
@@ -1614,7 +1615,7 @@ function trustedTypeLocalNames(sourceFile: ts.SourceFile): TrustedTypeLocalNames
       sourceFile.statements,
       index,
       'Trusted type statements',
-    ) as ts.Statement | undefined;
+    ) as TS.Statement | undefined;
     if (!statement)
       throw new TypeError(`Trusted type statements[${index}] must be dense own data.`);
     if (!ts.isImportDeclaration(statement)) continue;
@@ -1628,7 +1629,7 @@ function trustedTypeLocalNames(sourceFile: ts.SourceFile): TrustedTypeLocalNames
         bindings.elements,
         elementIndex,
         'Trusted type imports',
-      ) as ts.ImportSpecifier | undefined;
+      ) as TS.ImportSpecifier | undefined;
       if (!element) {
         throw new TypeError(`Trusted type imports[${elementIndex}] must be dense own data.`);
       }
@@ -1647,7 +1648,7 @@ function trustedTypeLocalNames(sourceFile: ts.SourceFile): TrustedTypeLocalNames
 }
 
 function bindingHasTrustedType(
-  binding: ts.Node,
+  binding: TS.Node,
   sink: RawTrustSink,
   ctx: ClassifyContext,
 ): boolean {
@@ -1657,11 +1658,11 @@ function bindingHasTrustedType(
 }
 
 function expressionHasTrustedType(
-  expression: ts.Expression,
+  expression: TS.Expression,
   sink: RawTrustSink,
   ctx: ClassifyContext,
 ): boolean {
-  let cursor: ts.Expression = expression;
+  let cursor: TS.Expression = expression;
   while (ts.isParenthesizedExpression(cursor) || ts.isNonNullExpression(cursor)) {
     cursor = cursor.expression;
   }
@@ -1675,8 +1676,8 @@ function expressionHasTrustedType(
 }
 
 function expressionHasTrustedUrlType(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): boolean {
   const sink: RawTrustSink = {
     auditedReasonAllowed: true,
@@ -1690,12 +1691,12 @@ function expressionHasTrustedUrlType(
     depth: 0,
     trustedTypeNames: trustedTypeLocalNames(sourceFile),
     usePosition: expression.getStart(sourceFile),
-    visited: compilerCreateSet<ts.Node>(),
+    visited: compilerCreateSet<TS.Node>(),
   };
   return expressionHasTrustedType(expression, sink, ctx);
 }
 
-function bindingHasTrustedUrlType(sourceFile: ts.SourceFile, binding: ts.Node): boolean {
+function bindingHasTrustedUrlType(sourceFile: TS.SourceFile, binding: TS.Node): boolean {
   const sink: RawTrustSink = {
     auditedReasonAllowed: true,
     expectedBrand: 'trustedUrl',
@@ -1708,13 +1709,13 @@ function bindingHasTrustedUrlType(sourceFile: ts.SourceFile, binding: ts.Node): 
     depth: 0,
     trustedTypeNames: trustedTypeLocalNames(sourceFile),
     usePosition: binding.getStart(sourceFile),
-    visited: compilerCreateSet<ts.Node>(),
+    visited: compilerCreateSet<TS.Node>(),
   };
   return bindingHasTrustedType(binding, sink, ctx);
 }
 
 function typeNodeHasTrustedBrand(
-  typeNode: ts.TypeNode,
+  typeNode: TS.TypeNode,
   expectedBrand: TrustedSinkExpectedBrand,
   ctx: ClassifyContext,
 ): boolean {
@@ -1723,7 +1724,7 @@ function typeNodeHasTrustedBrand(
       ? ctx.trustedTypeNames.trustedHtml
       : ctx.trustedTypeNames.trustedUrl;
   let found = false;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (found) return;
     if (ts.isIdentifier(node) && compilerSetHas(expectedNames, identifierName(node))) {
       found = true;
@@ -1736,8 +1737,8 @@ function typeNodeHasTrustedBrand(
 }
 
 function staticStringValue(
-  argument: ts.Expression | undefined,
-  visited = compilerCreateSet<ts.Node>(),
+  argument: TS.Expression | undefined,
+  visited = compilerCreateSet<TS.Node>(),
 ): string | null {
   if (argument === undefined) return null;
   const expr = unwrap(argument);
@@ -1750,7 +1751,7 @@ function staticStringValue(
 }
 
 /** Discharge: a non-empty static reason in the required structured second argument. */
-function hasAuditedReason(call: ts.CallExpression): boolean {
+function hasAuditedReason(call: TS.CallExpression): boolean {
   const metadata = call.arguments[1];
   if (metadata === undefined) return false;
   if (ts.isObjectLiteralExpression(metadata)) {
@@ -1760,7 +1761,7 @@ function hasAuditedReason(call: ts.CallExpression): boolean {
         metadata.properties,
         index,
         'Trust metadata properties',
-      ) as ts.ObjectLiteralElementLike | undefined;
+      ) as TS.ObjectLiteralElementLike | undefined;
       if (!property) {
         throw new TypeError(`Trust metadata properties[${index}] must be dense own data.`);
       }
@@ -1780,7 +1781,7 @@ function hasAuditedReason(call: ts.CallExpression): boolean {
   return false;
 }
 
-function unwrap(node: ts.Expression): ts.Expression {
+function unwrap(node: TS.Expression): TS.Expression {
   let expr = node;
   while (
     ts.isParenthesizedExpression(expr) ||
@@ -1800,12 +1801,12 @@ function unwrap(node: ts.Expression): ts.Expression {
  * render: ({ question }, …) => … })` makes `question` a query-derived binding inside that render.
  */
 function renderProvenanceBindings(
-  sourceFile: ts.SourceFile,
-): Map<ts.Node, RenderProvenanceBindings> {
-  const byRender = compilerCreateMap<ts.Node, RenderProvenanceBindings>();
+  sourceFile: TS.SourceFile,
+): Map<TS.Node, RenderProvenanceBindings> {
+  const byRender = compilerCreateMap<TS.Node, RenderProvenanceBindings>();
   const componentNames = componentFactoryLocalNames(sourceFile);
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (
       ts.isCallExpression(node) &&
       ts.isIdentifier(node.expression) &&
@@ -1814,7 +1815,7 @@ function renderProvenanceBindings(
       node.arguments[0] !== undefined &&
       ts.isObjectLiteralExpression(node.arguments[0])
     ) {
-      collectRenderProvenanceBindings(node.arguments[0] as ts.ObjectLiteralExpression, byRender);
+      collectRenderProvenanceBindings(node.arguments[0] as TS.ObjectLiteralExpression, byRender);
     }
     ts.forEachChild(node, visit);
   };
@@ -1823,8 +1824,8 @@ function renderProvenanceBindings(
 }
 
 function collectRenderProvenanceBindings(
-  options: ts.ObjectLiteralExpression,
-  byRender: Map<ts.Node, RenderProvenanceBindings>,
+  options: TS.ObjectLiteralExpression,
+  byRender: Map<TS.Node, RenderProvenanceBindings>,
 ): void {
   const queryKeys = compilerCreateSet<string>();
   let render: RenderFunction | undefined;
@@ -1835,7 +1836,7 @@ function collectRenderProvenanceBindings(
       options.properties,
       index,
       'Component option properties',
-    ) as ts.ObjectLiteralElementLike | undefined;
+    ) as TS.ObjectLiteralElementLike | undefined;
     if (!property) {
       throw new TypeError(`Component option properties[${index}] must be dense own data.`);
     }
@@ -1853,7 +1854,7 @@ function collectRenderProvenanceBindings(
           property.initializer.properties,
           entryIndex,
           'Component query properties',
-        ) as ts.ObjectLiteralElementLike | undefined;
+        ) as TS.ObjectLiteralElementLike | undefined;
         if (!entry) {
           throw new TypeError(`Component query properties[${entryIndex}] must be dense own data.`);
         }
@@ -1885,7 +1886,7 @@ function collectRenderProvenanceBindings(
           dataParam.name.elements,
           index,
           'Render data bindings',
-        ) as ts.BindingElement | undefined;
+        ) as TS.BindingElement | undefined;
         if (!element) {
           throw new TypeError(`Render data bindings[${index}] must be dense own data.`);
         }
@@ -1922,7 +1923,7 @@ function collectRenderProvenanceBindings(
 }
 
 function collectRenderRequestBindings(
-  slotsParam: ts.ParameterDeclaration | undefined,
+  slotsParam: TS.ParameterDeclaration | undefined,
   bindings: Set<string>,
   slotRoots: Set<string>,
 ): void {
@@ -1939,7 +1940,7 @@ function collectRenderRequestBindings(
       slotsParam.name.elements,
       index,
       'Render slot bindings',
-    ) as ts.BindingElement | undefined;
+    ) as TS.BindingElement | undefined;
     if (!element) throw new TypeError(`Render slot bindings[${index}] must be dense own data.`);
     const sourceName =
       element.propertyName !== undefined
@@ -1958,7 +1959,7 @@ function collectRenderRequestBindings(
           element.name.elements,
           nestedIndex,
           'Nested request bindings',
-        ) as ts.BindingElement | undefined;
+        ) as TS.BindingElement | undefined;
         if (!nested) {
           throw new TypeError(`Nested request bindings[${nestedIndex}] must be dense own data.`);
         }
@@ -1974,7 +1975,7 @@ function collectRenderRequestBindings(
  * without requiring an import; SPEC §4.1/§5.2), so the canonical name is always recognized; any
  * `@kovojs/core` alias (`import { component as c }`) is additionally resolved by symbol identity.
  */
-function componentFactoryLocalNames(sourceFile: ts.SourceFile): ReadonlySet<string> {
+function componentFactoryLocalNames(sourceFile: TS.SourceFile): ReadonlySet<string> {
   const names = compilerCreateSet<string>();
   compilerSetAdd(names, COMPONENT_FACTORY_NAME);
   const statementLength = compilerArrayLength(
@@ -1986,7 +1987,7 @@ function componentFactoryLocalNames(sourceFile: ts.SourceFile): ReadonlySet<stri
       sourceFile.statements,
       index,
       'Component factory statements',
-    ) as ts.Statement | undefined;
+    ) as TS.Statement | undefined;
     if (!statement) {
       throw new TypeError(`Component factory statements[${index}] must be dense own data.`);
     }
@@ -2001,7 +2002,7 @@ function componentFactoryLocalNames(sourceFile: ts.SourceFile): ReadonlySet<stri
           named.elements,
           elementIndex,
           'Component factory imports',
-        ) as ts.ImportSpecifier | undefined;
+        ) as TS.ImportSpecifier | undefined;
         if (!element) {
           throw new TypeError(`Component factory imports[${elementIndex}] must be dense own data.`);
         }
@@ -2017,24 +2018,24 @@ function componentFactoryLocalNames(sourceFile: ts.SourceFile): ReadonlySet<stri
   return names;
 }
 
-function identifierName(name: ts.Identifier): string {
+function identifierName(name: TS.Identifier): string {
   return String(name.escapedText);
 }
 
-function literalText(node: ts.StringLiteralLike): string {
+function literalText(node: TS.StringLiteralLike): string {
   return node.text;
 }
 
-function moduleExportNameText(name: ts.ModuleExportName): string {
+function moduleExportNameText(name: TS.ModuleExportName): string {
   if (ts.isIdentifier(name)) return identifierName(name);
   return literalText(name);
 }
 
 function enclosingRenderProvenanceBindings(
-  node: ts.Node,
-  byRender: ReadonlyMap<ts.Node, RenderProvenanceBindings>,
+  node: TS.Node,
+  byRender: ReadonlyMap<TS.Node, RenderProvenanceBindings>,
 ): RenderProvenanceBindings {
-  let cursor: ts.Node | undefined = node;
+  let cursor: TS.Node | undefined = node;
   while (cursor) {
     const bindings = compilerMapGet(byRender, cursor);
     if (bindings !== undefined) return bindings;
@@ -2055,7 +2056,7 @@ const EMPTY_RENDER_BINDINGS: RenderProvenanceBindings = {
 
 function rawTrustProvenanceDiagnostic(
   diagnostics: DiagnosticFactory,
-  value: ts.Expression | ts.SpreadElement,
+  value: TS.Expression | TS.SpreadElement,
   provenance: Provenance,
   sink: RawTrustSink,
 ): CompilerDiagnostic {

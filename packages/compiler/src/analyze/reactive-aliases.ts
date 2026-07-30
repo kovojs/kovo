@@ -5,7 +5,8 @@ import {
   propertyAccessPathModels,
 } from '../scan/parse.js';
 import { unwrapExpression } from '../scan/ast.js';
-import * as ts from 'typescript';
+import type * as TS from 'typescript';
+import { typescriptRuntime as ts } from '../ts-api.js';
 import {
   compilerArrayAppend,
   compilerArrayJoin,
@@ -137,9 +138,9 @@ function localAliasesForExpression(
 }
 
 function identifierConstReadAliasesBefore(
-  sourceFile: ts.SourceFile,
-  declarations: ReadonlyMap<string, ts.VariableDeclaration>,
-  functions: ReadonlyMap<string, ts.FunctionDeclaration>,
+  sourceFile: TS.SourceFile,
+  declarations: ReadonlyMap<string, TS.VariableDeclaration>,
+  functions: ReadonlyMap<string, TS.FunctionDeclaration>,
   destructuredAliases: ReadonlyMap<string, readonly ReactiveAliasModel[]>,
 ): readonly ReactiveAliasModel[] {
   const aliases: ReactiveAliasModel[] = [];
@@ -171,8 +172,8 @@ function identifierConstReadAliasesBefore(
 }
 
 function functionDeclarationReadAliasesBefore(
-  sourceFile: ts.SourceFile,
-  declarations: ReadonlyMap<string, ts.FunctionDeclaration>,
+  sourceFile: TS.SourceFile,
+  declarations: ReadonlyMap<string, TS.FunctionDeclaration>,
 ): readonly ReactiveAliasModel[] {
   const aliases: ReactiveAliasModel[] = [];
   compilerMapForEach(declarations, (declaration, name) => {
@@ -193,13 +194,13 @@ function functionDeclarationReadAliasesBefore(
 }
 
 function destructuredAliasDeclarationsBefore(
-  sourceFile: ts.SourceFile,
-  body: ts.Block,
+  sourceFile: TS.SourceFile,
+  body: TS.Block,
   expressionStart: number,
   references?: ReadonlySet<string>,
 ): readonly ReactiveAliasModel[] {
   const aliases: ReactiveAliasModel[] = [];
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (node.getStart(sourceFile) >= expressionStart) return;
     if (node !== body && isFunctionOrClassLike(node)) return;
     if (
@@ -222,12 +223,12 @@ function destructuredAliasDeclarationsBefore(
 }
 
 function identifierConstDeclarationsBefore(
-  sourceFile: ts.SourceFile,
-  body: ts.Block,
+  sourceFile: TS.SourceFile,
+  body: TS.Block,
   expressionStart: number,
-): ReadonlyMap<string, ts.VariableDeclaration> {
-  const declarations = compilerCreateMap<string, ts.VariableDeclaration>();
-  const visit = (node: ts.Node): void => {
+): ReadonlyMap<string, TS.VariableDeclaration> {
+  const declarations = compilerCreateMap<string, TS.VariableDeclaration>();
+  const visit = (node: TS.Node): void => {
     if (node.getStart(sourceFile) >= expressionStart) return;
     if (node !== body && isFunctionOrClassLike(node)) return;
     if (
@@ -245,12 +246,12 @@ function identifierConstDeclarationsBefore(
 }
 
 function functionDeclarationsBefore(
-  sourceFile: ts.SourceFile,
-  body: ts.Block,
+  sourceFile: TS.SourceFile,
+  body: TS.Block,
   expressionStart: number,
-): ReadonlyMap<string, ts.FunctionDeclaration> {
-  const declarations = compilerCreateMap<string, ts.FunctionDeclaration>();
-  const visit = (node: ts.Node): void => {
+): ReadonlyMap<string, TS.FunctionDeclaration> {
+  const declarations = compilerCreateMap<string, TS.FunctionDeclaration>();
+  const visit = (node: TS.Node): void => {
     if (node.getStart(sourceFile) >= expressionStart) return;
     if (ts.isFunctionDeclaration(node) && node.name && node.body) {
       compilerMapSet(declarations, node.name.text, node);
@@ -264,10 +265,10 @@ function functionDeclarationsBefore(
 }
 
 function resolvedInitializerAccesses(
-  sourceFile: ts.SourceFile,
-  initializer: ts.Expression,
-  declarations: ReadonlyMap<string, ts.VariableDeclaration>,
-  functions: ReadonlyMap<string, ts.FunctionDeclaration>,
+  sourceFile: TS.SourceFile,
+  initializer: TS.Expression,
+  declarations: ReadonlyMap<string, TS.VariableDeclaration>,
+  functions: ReadonlyMap<string, TS.FunctionDeclaration>,
   destructuredAliases?: ReadonlyMap<string, readonly ReactiveAliasModel[]>,
   seen?: ReadonlySet<string>,
 ): readonly PropertyAccessPathModel[] {
@@ -344,9 +345,9 @@ function resolvedInitializerAccesses(
 }
 
 function bindingPatternAliases(
-  sourceFile: ts.SourceFile,
-  pattern: ts.BindingPattern,
-  initializer: ts.Expression,
+  sourceFile: TS.SourceFile,
+  pattern: TS.BindingPattern,
+  initializer: TS.Expression,
   references: ReadonlySet<string>,
   prefix: readonly BindingPathSegment[],
 ): readonly ReactiveAliasModel[] {
@@ -454,12 +455,12 @@ interface InitializerExpression {
 type BindingPathSegment = { kind: 'index'; value: string } | { kind: 'property'; value: string };
 
 function initializerExpressionFromExpression(
-  initializer: ts.Expression,
+  initializer: TS.Expression,
 ): InitializerExpression | null {
   return accessExpressionFromExpression(initializer);
 }
 
-function accessExpressionFromExpression(expression: ts.Expression): InitializerExpression | null {
+function accessExpressionFromExpression(expression: TS.Expression): InitializerExpression | null {
   const unwrapped = unwrapExpression(expression);
   if (ts.isIdentifier(unwrapped)) {
     return { accessPath: unwrapped.text, expression: unwrapped.text };
@@ -490,7 +491,7 @@ function accessExpressionFromExpression(expression: ts.Expression): InitializerE
 }
 
 function elementAccessMember(
-  expression: ts.ElementAccessExpression,
+  expression: TS.ElementAccessExpression,
 ): { expression: string; path: string } | null {
   const argument = expression.argumentExpression;
   if (ts.isStringLiteralLike(argument)) {
@@ -514,8 +515,8 @@ function markLastAccessPathSegmentOptional(path: string): string {
 }
 
 function unresolvedInitializerAccessPaths(
-  sourceFile: ts.SourceFile,
-  initializer: ts.Expression,
+  sourceFile: TS.SourceFile,
+  initializer: TS.Expression,
 ): readonly string[] {
   const paths: string[] = [];
   const seen = compilerCreateSet<string>();
@@ -531,8 +532,8 @@ function unresolvedInitializerAccessPaths(
 }
 
 function unresolvedBindingAliases(
-  sourceFile: ts.SourceFile,
-  name: ts.BindingName,
+  sourceFile: TS.SourceFile,
+  name: TS.BindingName,
   references: ReadonlySet<string>,
   accessPaths: readonly string[],
 ): readonly ReactiveAliasModel[] {
@@ -566,9 +567,9 @@ function unresolvedBindingAliases(
   return aliases;
 }
 
-function bindingIdentifiers(name: ts.BindingName): readonly ts.Identifier[] {
+function bindingIdentifiers(name: TS.BindingName): readonly TS.Identifier[] {
   if (ts.isIdentifier(name)) return [name];
-  const identifiers: ts.Identifier[] = [];
+  const identifiers: TS.Identifier[] = [];
   const elementLength = compilerArrayLength(name.elements, 'Binding name elements');
   for (let index = 0; index < elementLength; index += 1) {
     const element = ownArrayEntry(name.elements, index, 'Binding name elements');
@@ -578,9 +579,9 @@ function bindingIdentifiers(name: ts.BindingName): readonly ts.Identifier[] {
   return identifiers;
 }
 
-function identifierReferences(root: ts.Node): readonly string[] {
+function identifierReferences(root: TS.Node): readonly string[] {
   const names: string[] = [];
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (isDeclarationName(node)) return;
     if (ts.isIdentifier(node) && !isPropertyAccessName(node)) {
       compilerArrayAppend(names, node.text, 'Identifier references');
@@ -591,7 +592,7 @@ function identifierReferences(root: ts.Node): readonly string[] {
   return uniqueStrings(names, 'Identifier references');
 }
 
-function isDeclarationName(node: ts.Node): boolean {
+function isDeclarationName(node: TS.Node): boolean {
   const parent = node.parent;
   return (
     parent !== undefined &&
@@ -601,11 +602,11 @@ function isDeclarationName(node: ts.Node): boolean {
   );
 }
 
-function isPropertyAccessName(node: ts.Node): boolean {
+function isPropertyAccessName(node: TS.Node): boolean {
   return ts.isPropertyAccessExpression(node.parent) && node.parent.name === node;
 }
 
-function bindingPropertyName(element: ts.BindingElement): string | null {
+function bindingPropertyName(element: TS.BindingElement): string | null {
   const propertyName = element.propertyName;
   if (!propertyName && ts.isIdentifier(element.name)) return element.name.text;
   if (!propertyName) return null;
@@ -887,11 +888,11 @@ const safeGlobalIdentifiers = [
 ] as const;
 
 function smallestFunctionBlockContaining(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   position: number,
-): ts.Block | null {
-  let best: ts.Block | null = null;
-  const visit = (node: ts.Node): void => {
+): TS.Block | null {
+  let best: TS.Block | null = null;
+  const visit = (node: TS.Node): void => {
     if (position < node.getStart(sourceFile) || position > node.getEnd()) return;
     const body = functionBlockBody(node);
     if (body) best = body;
@@ -901,7 +902,7 @@ function smallestFunctionBlockContaining(
   return best;
 }
 
-function functionBlockBody(node: ts.Node): ts.Block | null {
+function functionBlockBody(node: TS.Node): TS.Block | null {
   if (
     (ts.isArrowFunction(node) || ts.isFunctionExpression(node) || ts.isFunctionDeclaration(node)) &&
     node.body &&
@@ -912,14 +913,14 @@ function functionBlockBody(node: ts.Node): ts.Block | null {
   return null;
 }
 
-function isConstVariableDeclaration(node: ts.VariableDeclaration): boolean {
+function isConstVariableDeclaration(node: TS.VariableDeclaration): boolean {
   return (
     ts.isVariableDeclarationList(node.parent) &&
     (node.parent.flags & ts.NodeFlags.Const) === ts.NodeFlags.Const
   );
 }
 
-function isFunctionOrClassLike(node: ts.Node): boolean {
+function isFunctionOrClassLike(node: TS.Node): boolean {
   return (
     ts.isArrowFunction(node) ||
     ts.isClassDeclaration(node) ||
@@ -985,7 +986,7 @@ function dedupeAccesses(
   return deduped;
 }
 
-function identifierNameSet(identifiers: readonly ts.Identifier[]): Set<string> {
+function identifierNameSet(identifiers: readonly TS.Identifier[]): Set<string> {
   const names = compilerCreateSet<string>();
   const identifierLength = compilerArrayLength(identifiers, 'Binding identifiers');
   for (let index = 0; index < identifierLength; index += 1) {

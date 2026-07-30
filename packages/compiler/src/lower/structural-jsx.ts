@@ -1,4 +1,5 @@
-import ts from 'typescript';
+import type * as TS from 'typescript';
+import { typescriptRuntime as ts } from '../ts-api.js';
 
 import {
   knownQueryNames,
@@ -871,7 +872,7 @@ interface MutationComponentProject {
 }
 
 interface MutationComponentImplementation {
-  readonly body: ts.ConciseBody;
+  readonly body: TS.ConciseBody;
   readonly source: MutationComponentSource;
 }
 
@@ -1332,7 +1333,7 @@ function appendMutationDocumentRouteRoots(
   roots: MutationComponentImplementation[],
   identities: Set<string>,
 ): void {
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (
       ts.isCallExpression(node) &&
       expressionResolvesToFrameworkExport(
@@ -1385,7 +1386,7 @@ function appendMutationDocumentRouteRoots(
   visit(source.model.sourceFile);
 }
 
-function mutationDocumentPropertyName(name: ts.PropertyName): string | null {
+function mutationDocumentPropertyName(name: TS.PropertyName): string | null {
   if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
     return name.text;
   }
@@ -1448,11 +1449,11 @@ interface MutationDocumentElementNode {
   readonly element: JsxElementModel;
   readonly implementation: MutationComponentImplementation;
   readonly kind: 'element';
-  readonly node: ts.JsxElement | ts.JsxSelfClosingElement;
+  readonly node: TS.JsxElement | TS.JsxSelfClosingElement;
 }
 
 interface MutationDocumentExpressionNode {
-  readonly expression: ts.Expression;
+  readonly expression: TS.Expression;
   readonly implementation: MutationComponentImplementation;
   readonly kind: 'expression';
   readonly span: SourceSpan;
@@ -1467,7 +1468,7 @@ function mutationImplementationOutputTree(
     return roots;
   }
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (node !== implementation.body && ts.isFunctionLike(node)) return;
     if (ts.isReturnStatement(node)) {
       if (node.expression !== undefined) {
@@ -1482,7 +1483,7 @@ function mutationImplementationOutputTree(
 }
 
 function appendMutationDocumentExpressionOutput(
-  expression: ts.Expression,
+  expression: TS.Expression,
   implementation: MutationComponentImplementation,
   output: MutationDocumentOutputNode[],
 ): void {
@@ -1597,7 +1598,7 @@ function appendMutationDocumentExpressionOutput(
 
 function mutationDocumentElementModelForNode(
   source: MutationComponentSource,
-  node: ts.JsxElement | ts.JsxSelfClosingElement,
+  node: TS.JsxElement | TS.JsxSelfClosingElement,
 ): JsxElementModel | null {
   const start = node.getStart(source.model.sourceFile);
   const end = node.getEnd();
@@ -1612,7 +1613,7 @@ function mutationDocumentElementModelForNode(
   return null;
 }
 
-function mutationDocumentNodeSpan(source: MutationComponentSource, node: ts.Node): SourceSpan {
+function mutationDocumentNodeSpan(source: MutationComponentSource, node: TS.Node): SourceSpan {
   return { end: node.getEnd(), start: node.getStart(source.model.sourceFile) };
 }
 
@@ -1899,7 +1900,7 @@ function mutationDocumentComponentProjections(
 
 function mutationDocumentImplementationParameters(
   implementation: MutationComponentImplementation,
-): readonly ts.ParameterDeclaration[] {
+): readonly TS.ParameterDeclaration[] {
   const parent = implementation.body.parent;
   return ts.isFunctionLike(parent) ? parent.parameters : [];
 }
@@ -2058,7 +2059,7 @@ function mutationDocumentExpressionReferencesParameter(
 
 function mutationDocumentHelperProjections(
   caller: MutationDocumentExpressionNode,
-  call: ts.CallExpression,
+  call: TS.CallExpression,
   implementation: MutationComponentImplementation,
   callerContext: MutationDocumentProjectionContext,
 ): MutationDocumentProjectionContext {
@@ -2113,7 +2114,7 @@ function mutationDocumentExpressionIsCompilerEscapedText(
   return false;
 }
 
-function mutationDocumentExpressionIsSyntacticPrimitive(expression: ts.Expression): boolean {
+function mutationDocumentExpressionIsSyntacticPrimitive(expression: TS.Expression): boolean {
   if (
     ts.isIdentifier(expression) ||
     ts.isPropertyAccessExpression(expression) ||
@@ -2552,8 +2553,8 @@ function localMutationComponentImplementation(
 
 function mutationComponentBodyFromInitializer(
   source: MutationComponentSource,
-  initializer: ts.Expression | undefined,
-): ts.ConciseBody | null {
+  initializer: TS.Expression | undefined,
+): TS.ConciseBody | null {
   if (initializer === undefined) return null;
   const expression = unwrapMutationComponentExpression(initializer);
   if (ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)) return expression.body;
@@ -2586,7 +2587,7 @@ function mutationComponentBodyFromInitializer(
   return null;
 }
 
-function unwrapMutationComponentExpression(expression: ts.Expression): ts.Expression {
+function unwrapMutationComponentExpression(expression: TS.Expression): TS.Expression {
   let current = expression;
   while (
     ts.isParenthesizedExpression(current) ||
@@ -2600,10 +2601,10 @@ function unwrapMutationComponentExpression(expression: ts.Expression): ts.Expres
   return current;
 }
 
-function componentBodyHasClosedJsxReturns(body: ts.ConciseBody): boolean {
+function componentBodyHasClosedJsxReturns(body: TS.ConciseBody): boolean {
   if (!ts.isBlock(body)) return componentReturnExpressionIsClosed(body);
   let closed = true;
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (!closed) return;
     if (node !== body && ts.isFunctionLike(node)) return;
     if (ts.isReturnStatement(node)) {
@@ -2618,7 +2619,7 @@ function componentBodyHasClosedJsxReturns(body: ts.ConciseBody): boolean {
   return closed;
 }
 
-function componentReturnExpressionIsClosed(expression: ts.Expression): boolean {
+function componentReturnExpressionIsClosed(expression: TS.Expression): boolean {
   const value = unwrapMutationComponentExpression(expression);
   if (
     ts.isJsxElement(value) ||
@@ -2702,12 +2703,12 @@ function exportedMutationComponentLocalName(
   return null;
 }
 
-function mutationComponentHasExportModifier(node: ts.Node): boolean {
+function mutationComponentHasExportModifier(node: TS.Node): boolean {
   return mutationComponentHasModifier(node, ts.SyntaxKind.ExportKeyword);
 }
 
-function mutationComponentHasModifier(node: ts.Node, kind: ts.SyntaxKind): boolean {
-  const modifiers = (node as { readonly modifiers?: readonly ts.Modifier[] }).modifiers;
+function mutationComponentHasModifier(node: TS.Node, kind: TS.SyntaxKind): boolean {
+  const modifiers = (node as { readonly modifiers?: readonly TS.Modifier[] }).modifiers;
   if (modifiers === undefined) return false;
   const snapshot = compilerSnapshotDenseArray(modifiers, 'Mutation component modifiers');
   for (let index = 0; index < snapshot.length; index += 1) {

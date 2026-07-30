@@ -20,7 +20,7 @@ import {
   sep as pathSeparator,
 } from 'node:path';
 
-import typescript from 'typescript';
+import { typescriptRuntime as typescript } from './ts-api.js';
 
 import {
   compilerArrayAppend,

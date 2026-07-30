@@ -1,10 +1,8 @@
-import * as ts from 'typescript';
+import type * as TS from 'typescript';
 
 import { propertyAccessPath } from './ast.js';
-import { ensureTypescriptRuntime } from '../ts-api.js';
+import { typescriptRuntime as ts } from '../ts-api.js';
 import type { QueryBindingModel } from './model.js';
-
-ensureTypescriptRuntime(ts);
 
 /**
  * @internal FN7 (plans/compiler-refactoring.md): the query-binding expression parser, relocated
@@ -17,8 +15,8 @@ ensureTypescriptRuntime(ts);
 
 /** @internal Build query-binding facts from the scanner's one authoritative AST. */
 export function queryBindingFromParsedExpression(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): QueryBindingModel {
   // Query binding strings are compiler-authored structural grammar. `.refresh()` and `.args()`
   // are chain modifiers on the serialized binding expression, not framework API authority checks.
@@ -68,12 +66,12 @@ export function queryBindingFromParsedExpression(
   };
 }
 
-function isRuntimeQueryReference(expression: ts.Expression): boolean {
+function isRuntimeQueryReference(expression: TS.Expression): boolean {
   if (ts.isIdentifier(expression) || ts.isPropertyAccessExpression(expression)) return true;
   return ts.isCallExpression(expression) && isRuntimeQueryReference(expression.expression);
 }
 
-function unwrapQueryRefreshExpression(expression: ts.Expression): ts.Expression {
+function unwrapQueryRefreshExpression(expression: TS.Expression): TS.Expression {
   if (
     ts.isCallExpression(expression) &&
     ts.isPropertyAccessExpression(expression.expression) &&
@@ -84,7 +82,7 @@ function unwrapQueryRefreshExpression(expression: ts.Expression): ts.Expression 
   return expression;
 }
 
-function expressionHasQueryRefresh(expression: ts.Expression): boolean {
+function expressionHasQueryRefresh(expression: TS.Expression): boolean {
   if (ts.isCallExpression(expression) && ts.isPropertyAccessExpression(expression.expression)) {
     if (expression.expression.name.text === 'refresh') return true;
     return expressionHasQueryRefresh(expression.expression.expression);
@@ -93,8 +91,8 @@ function expressionHasQueryRefresh(expression: ts.Expression): boolean {
 }
 
 function queryArgsArrowFacts(
-  sourceFile: ts.SourceFile,
-  arrow: ts.ArrowFunction,
+  sourceFile: TS.SourceFile,
+  arrow: TS.ArrowFunction,
 ): Pick<QueryBindingModel, 'argsExpression' | 'argsParam' | 'argsPropertyAccesses'> {
   const param = arrow.parameters[0];
   const argsParam = param && ts.isIdentifier(param.name) ? param.name.text : undefined;
@@ -109,9 +107,9 @@ function queryArgsArrowFacts(
   };
 }
 
-function propertyAccessPaths(node: ts.Node): string[] {
+function propertyAccessPaths(node: TS.Node): string[] {
   const paths: string[] = [];
-  const visit = (current: ts.Node): void => {
+  const visit = (current: TS.Node): void => {
     if (ts.isPropertyAccessExpression(current)) {
       const path = propertyAccessPath(current);
       if (path) paths.push(path);
@@ -124,8 +122,8 @@ function propertyAccessPaths(node: ts.Node): string[] {
 }
 
 function queryKeyReadableExpression(
-  expression: ts.Expression,
-  sourceFile: ts.SourceFile,
+  expression: TS.Expression,
+  sourceFile: TS.SourceFile,
 ): string | null {
   if (ts.isObjectLiteralExpression(expression)) return null;
   return expression.getText(sourceFile);

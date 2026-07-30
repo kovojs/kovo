@@ -21,7 +21,7 @@ import {
   isGeneratedOnlySemanticAttribute,
   type HtmlWireValuePosture,
 } from '@kovojs/core/internal/semantic-attributes';
-import * as ts from 'typescript';
+import { typescriptRuntime as ts } from '../ts-api.js';
 
 import {
   contextualizeCompilerDiagnostic,

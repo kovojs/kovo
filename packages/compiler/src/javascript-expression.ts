@@ -1,9 +1,10 @@
-import * as ts from 'typescript';
+import type * as TS from 'typescript';
+import { typescriptRuntime as ts } from './ts-api.js';
 
 const expressionBinding = '__kovoDeriveExpression';
 const expressionPrefix = `const ${expressionBinding} = `;
 
-const expressionCompilerOptions: ts.CompilerOptions = {
+const expressionCompilerOptions: TS.CompilerOptions = {
   jsx: ts.JsxEmit.Preserve,
   module: ts.ModuleKind.ESNext,
   target: ts.ScriptTarget.ES2022,

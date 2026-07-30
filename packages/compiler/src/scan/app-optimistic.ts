@@ -9,7 +9,8 @@ import {
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
 import { canonicalQueryInstanceKeyCodecFactorySource } from '@kovojs/core/internal/wire-input-grammar';
-import * as ts from 'typescript';
+import type * as TS from 'typescript';
+import { typescriptRuntime as ts } from '../ts-api.js';
 
 import type { CompilerOwnedAppContractMemberResolution } from '../app-contract-resolver.js';
 import { compilerIrHeader } from '../ir.js';
@@ -42,14 +43,14 @@ interface QueryDeclaration {
   readonly key: string;
   readonly ownerKey: string;
   readonly start: number;
-  readonly symbol: ts.Symbol;
+  readonly symbol: TS.Symbol;
 }
 
 interface MutationDeclaration {
-  readonly call: ts.CallExpression;
-  readonly definition: ts.ObjectLiteralExpression;
+  readonly call: TS.CallExpression;
+  readonly definition: TS.ObjectLiteralExpression;
   readonly fileName: string;
-  readonly input: ts.Expression | null;
+  readonly input: TS.Expression | null;
   readonly key: string;
   readonly localName: string;
   readonly ownerKey: string;
@@ -58,10 +59,10 @@ interface MutationDeclaration {
 
 interface OptimisticTransform {
   readonly apply?: string;
-  readonly applyNode?: ts.Node;
+  readonly applyNode?: TS.Node;
   readonly keys?: string;
   readonly keyFields?: readonly string[];
-  readonly keysNode?: ts.Node;
+  readonly keysNode?: TS.Node;
   readonly query: string;
   readonly status: OptimisticTransformStatus;
 }
@@ -74,8 +75,8 @@ interface LoweredMutation {
 
 interface RuntimeDependency {
   readonly aliases: Set<string>;
-  readonly declaration: ts.FunctionDeclaration | ts.VariableDeclaration;
-  readonly symbol: ts.Symbol;
+  readonly declaration: TS.FunctionDeclaration | TS.VariableDeclaration;
+  readonly symbol: TS.Symbol;
 }
 
 /**
@@ -84,16 +85,16 @@ interface RuntimeDependency {
  * spelling can mint app/query authority after this boundary (SPEC §5.2 rules 2, 9, and 10).
  */
 export function appOptimisticProjectFacts(options: {
-  readonly checker: ts.TypeChecker;
+  readonly checker: TS.TypeChecker;
   readonly files: readonly ProjectMutationSourceFile[];
   readonly members: readonly CompilerOwnedAppContractMemberResolution[];
   readonly mutationInputs: Readonly<Record<string, readonly MutationInputFieldFact[]>>;
-  readonly program: ts.Program;
+  readonly program: TS.Program;
 }): AppOptimisticProjectFacts {
   const sourceFileNames = new Set(
     options.files.map((file) => normalizeFileName(options.program, file.fileName)),
   );
-  const queryBySymbol = new Map<ts.Symbol, QueryDeclaration>();
+  const queryBySymbol = new Map<TS.Symbol, QueryDeclaration>();
   const mutations: MutationDeclaration[] = [];
   const projectDependencies = appOptimisticProjectDependencies(
     options.checker,
@@ -374,7 +375,7 @@ export function appOptimisticProjectFacts(options: {
 function emitOptimisticModule(
   fileName: string,
   mutations: readonly LoweredMutation[],
-  checker: ts.TypeChecker,
+  checker: TS.TypeChecker,
   sourceFileNames: ReadonlySet<string>,
 ): string {
   const dependencies = collectRuntimeDependencies(mutations, checker, sourceFileNames);
@@ -473,15 +474,15 @@ transforms: Object.freeze({${transforms}})${keys}${
 
 function collectRuntimeDependencies(
   mutations: readonly LoweredMutation[],
-  checker: ts.TypeChecker,
+  checker: TS.TypeChecker,
   sourceFileNames: ReadonlySet<string>,
 ): RuntimeDependency[] {
-  const bySymbol = new Map<ts.Symbol, RuntimeDependency>();
+  const bySymbol = new Map<TS.Symbol, RuntimeDependency>();
   const ordered: RuntimeDependency[] = [];
-  const visiting = new Set<ts.Symbol>();
+  const visiting = new Set<TS.Symbol>();
 
-  const collectNode = (node: ts.Node): void => {
-    const visit = (child: ts.Node): void => {
+  const collectNode = (node: TS.Node): void => {
+    const visit = (child: TS.Node): void => {
       if (ts.isIdentifier(child) && identifierIsRuntimeReference(child)) {
         const symbol = canonicalSymbol(checker, child);
         const declaration = symbol ? topLevelRuntimeDeclaration(symbol) : undefined;
@@ -499,8 +500,8 @@ function collectRuntimeDependencies(
   };
 
   const collectDeclaration = (
-    symbol: ts.Symbol,
-    declaration: ts.FunctionDeclaration | ts.VariableDeclaration,
+    symbol: TS.Symbol,
+    declaration: TS.FunctionDeclaration | TS.VariableDeclaration,
     alias: string,
   ): void => {
     const existing = bySymbol.get(symbol);
@@ -531,8 +532,8 @@ function collectRuntimeDependencies(
 }
 
 function appOptimisticProjectDependencies(
-  checker: ts.TypeChecker,
-  program: ts.Program,
+  checker: TS.TypeChecker,
+  program: TS.Program,
   sourceFileNames: ReadonlySet<string>,
 ): ReadonlyMap<string, ReadonlySet<string>> {
   const dependencies = new Map<string, ReadonlySet<string>>();
@@ -555,7 +556,7 @@ function appOptimisticProjectDependencies(
   return dependencies;
 }
 
-function runtimeModuleSpecifier(statement: ts.Statement): ts.StringLiteralLike | undefined {
+function runtimeModuleSpecifier(statement: TS.Statement): TS.StringLiteralLike | undefined {
   if (ts.isImportDeclaration(statement)) {
     if (!statement.moduleSpecifier || !ts.isStringLiteralLike(statement.moduleSpecifier)) {
       return undefined;
@@ -649,12 +650,12 @@ function emitRuntimeDependency(dependency: RuntimeDependency): string {
 }
 
 function topLevelRuntimeDeclaration(
-  symbol: ts.Symbol,
-): ts.FunctionDeclaration | ts.VariableDeclaration | undefined {
+  symbol: TS.Symbol,
+): TS.FunctionDeclaration | TS.VariableDeclaration | undefined {
   const declaration = symbol.valueDeclaration ?? symbol.declarations?.[0];
   if (declaration && ts.isFunctionDeclaration(declaration) && declaration.name) return declaration;
   if (declaration && ts.isVariableDeclaration(declaration) && ts.isIdentifier(declaration.name)) {
-    let current: ts.Node | undefined = declaration.parent;
+    let current: TS.Node | undefined = declaration.parent;
     while (current && !ts.isSourceFile(current)) {
       if (
         ts.isFunctionLike(current) ||
@@ -671,7 +672,7 @@ function topLevelRuntimeDeclaration(
   return undefined;
 }
 
-function identifierIsRuntimeReference(identifier: ts.Identifier): boolean {
+function identifierIsRuntimeReference(identifier: TS.Identifier): boolean {
   const parent = identifier.parent;
   if (
     (ts.isPropertyAccessExpression(parent) && parent.name === identifier) ||
@@ -686,8 +687,8 @@ function identifierIsRuntimeReference(identifier: ts.Identifier): boolean {
   return !isInsideTypeNode(identifier);
 }
 
-function isInsideTypeNode(node: ts.Node): boolean {
-  let current: ts.Node | undefined = node;
+function isInsideTypeNode(node: TS.Node): boolean {
+  let current: TS.Node | undefined = node;
   while (current) {
     if (ts.isTypeNode(current)) return true;
     if (ts.isExpression(current) || ts.isStatement(current) || ts.isSourceFile(current))
@@ -697,7 +698,7 @@ function isInsideTypeNode(node: ts.Node): boolean {
   return false;
 }
 
-function executableFunctionExpression(node: ts.Node, sourceFile: ts.SourceFile): string {
+function executableFunctionExpression(node: TS.Node, sourceFile: TS.SourceFile): string {
   const value = unwrapNode(node);
   if (ts.isArrowFunction(value) || ts.isFunctionExpression(value)) return value.getText(sourceFile);
   if (ts.isIdentifier(value)) return value.text;
@@ -713,7 +714,7 @@ function executableFunctionExpression(node: ts.Node, sourceFile: ts.SourceFile):
   );
 }
 
-function declarationDefinition(call: ts.CallExpression): ts.ObjectLiteralExpression | null {
+function declarationDefinition(call: TS.CallExpression): TS.ObjectLiteralExpression | null {
   const [first, second] = call.arguments;
   const candidate =
     first && ts.isStringLiteralLike(unwrapNode(first))
@@ -723,8 +724,8 @@ function declarationDefinition(call: ts.CallExpression): ts.ObjectLiteralExpress
 }
 
 function queryArgsFieldNames(
-  expression: ts.Expression,
-  checker: ts.TypeChecker,
+  expression: TS.Expression,
+  checker: TS.TypeChecker,
 ): readonly string[] | undefined {
   const schema = resolveImmutableExpression(expression, checker);
   if (!schema || !ts.isCallExpression(schema)) return undefined;
@@ -761,11 +762,11 @@ function queryArgsFieldNames(
 }
 
 function resolveImmutableExpression(
-  expression: ts.Expression | undefined,
-  checker: ts.TypeChecker,
-): ts.Expression | null {
+  expression: TS.Expression | undefined,
+  checker: TS.TypeChecker,
+): TS.Expression | null {
   let current = unwrapExpression(expression);
-  const seen = new Set<ts.Symbol>();
+  const seen = new Set<TS.Symbol>();
   for (let depth = 0; current && depth < 16; depth += 1) {
     if (!ts.isIdentifier(current)) return current;
     const symbol = canonicalSymbol(checker, current);
@@ -787,9 +788,9 @@ function resolveImmutableExpression(
 }
 
 function declarationKey(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   localName: string,
-  call: ts.CallExpression,
+  call: TS.CallExpression,
   kind: 'mutation' | 'query',
 ): string {
   const first = unwrapExpression(call.arguments[0]);
@@ -800,8 +801,8 @@ function declarationKey(
 }
 
 function queueFact(
-  definition: ts.ObjectLiteralExpression,
-  checker: ts.TypeChecker,
+  definition: TS.ObjectLiteralExpression,
+  checker: TS.TypeChecker,
 ): { queue?: string } {
   const queue = unwrapExpression(objectPropertyExpression(definition, 'queue'));
   if (!queue) return {};
@@ -819,9 +820,9 @@ function queueFact(
 }
 
 function sameExpressionIdentity(
-  checker: ts.TypeChecker,
-  left: ts.Expression | null,
-  right: ts.Expression,
+  checker: TS.TypeChecker,
+  left: TS.Expression | null,
+  right: TS.Expression,
 ): boolean {
   const leftValue = unwrapExpression(left);
   const rightValue = unwrapExpression(right);
@@ -832,7 +833,7 @@ function sameExpressionIdentity(
   return leftSymbol !== undefined && leftSymbol === rightSymbol;
 }
 
-function canonicalSymbol(checker: ts.TypeChecker, node: ts.Node): ts.Symbol | undefined {
+function canonicalSymbol(checker: TS.TypeChecker, node: TS.Node): TS.Symbol | undefined {
   let symbol = checker.getSymbolAtLocation(node);
   if (!symbol) return undefined;
   if ((symbol.flags & ts.SymbolFlags.Alias) !== 0) {
@@ -845,8 +846,8 @@ function canonicalSymbol(checker: ts.TypeChecker, node: ts.Node): ts.Symbol | un
   return symbol;
 }
 
-function enclosingVariableDeclaration(node: ts.Node): ts.VariableDeclaration | null {
-  let current: ts.Node | undefined = node;
+function enclosingVariableDeclaration(node: TS.Node): TS.VariableDeclaration | null {
+  let current: TS.Node | undefined = node;
   while (current && !ts.isSourceFile(current)) {
     if (ts.isVariableDeclaration(current)) return current;
     if (
@@ -862,35 +863,35 @@ function enclosingVariableDeclaration(node: ts.Node): ts.VariableDeclaration | n
 }
 
 function objectPropertyExpression(
-  object: ts.ObjectLiteralExpression,
+  object: TS.ObjectLiteralExpression,
   name: string,
-): ts.Expression | null {
+): TS.Expression | null {
   const member = findObjectMember(object, name);
   return member && ts.isPropertyAssignment(member) ? member.initializer : null;
 }
 
 function findObjectMember(
-  object: ts.ObjectLiteralExpression,
+  object: TS.ObjectLiteralExpression,
   name: string,
-): ts.ObjectLiteralElementLike | undefined {
+): TS.ObjectLiteralElementLike | undefined {
   return object.properties.find((property) => propertyNameText(property.name) === name);
 }
 
 function objectMemberValueNode(
-  member: ts.ObjectLiteralElementLike | undefined,
-): ts.Node | undefined {
+  member: TS.ObjectLiteralElementLike | undefined,
+): TS.Node | undefined {
   if (!member) return undefined;
   if (ts.isPropertyAssignment(member)) return member.initializer;
   if (ts.isMethodDeclaration(member)) return member;
   return undefined;
 }
 
-function unwrapExpression(node: ts.Expression | undefined | null): ts.Expression | null {
-  return node ? (unwrapNode(node) as ts.Expression) : null;
+function unwrapExpression(node: TS.Expression | undefined | null): TS.Expression | null {
+  return node ? (unwrapNode(node) as TS.Expression) : null;
 }
 
-function unwrapNode<Node extends ts.Node>(node: Node): Node {
-  let current: ts.Node = node;
+function unwrapNode<Node extends TS.Node>(node: Node): Node {
+  let current: TS.Node = node;
   while (
     ts.isParenthesizedExpression(current) ||
     ts.isAsExpression(current) ||
@@ -910,7 +911,7 @@ function optimisticError(code: string, mutation: MutationDeclaration, detail: st
   );
 }
 
-function normalizeFileName(program: ts.Program, fileName: string): string {
+function normalizeFileName(program: TS.Program, fileName: string): string {
   const sourceFile = program.getSourceFile(fileName);
   return normalizeSourceFileName(sourceFile?.fileName ?? fileName);
 }

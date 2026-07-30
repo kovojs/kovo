@@ -16,7 +16,7 @@ import builtinFsPromises from 'node:fs/promises';
 import builtinPath from 'node:path';
 import builtinUrl from 'node:url';
 
-import typescript from 'typescript';
+import { typescriptRuntime as typescript } from './ts-api.js';
 
 import { lockRequestSafeRuntimeRealm } from '@kovojs/core/internal/classifier-verdict';
 import { translationClaimCompilerLockTransition } from '@kovojs/verify/internal/translation';

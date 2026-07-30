@@ -1,6 +1,6 @@
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
-import * as ts from 'typescript';
+import type * as TS from 'typescript';
 
 import {
   callExpressionAtSpan,
@@ -10,15 +10,13 @@ import {
 
 import { compilerOwnedAppContractFactoryEquals } from '../app-contract-resolver.js';
 import { deriveRegistryIdentity } from '../registry-identities.js';
-import { ensureTypescriptRuntime } from '../ts-api.js';
+import { typescriptRuntime as ts } from '../ts-api.js';
 import {
   allComponentOptionObjectEntries,
   parseComponentModule,
   type CallExpressionModel,
   type ObjectLiteralEntry,
 } from './parse.js';
-
-ensureTypescriptRuntime(ts);
 
 const KOVO_QUERY_IDENTITY = frameworkExport('@kovojs/server', 'query');
 
@@ -88,8 +86,8 @@ export function resolveComponentQueryRuntimeNames(
 
 function runtimeNameForQueryEntry(
   entry: ObjectLiteralEntry,
-  sourceFile: ts.SourceFile,
-  checker: ts.TypeChecker,
+  sourceFile: TS.SourceFile,
+  checker: TS.TypeChecker,
   models: Map<string, ReturnType<typeof parseComponentModule>>,
 ): string {
   const binding = entry.queryBinding;
@@ -100,7 +98,7 @@ function runtimeNameForQueryEntry(
   }
   const node = exactNodeAtSpan(sourceFile, span.start, span.end);
   const identity = node
-    ? runtimeNameForExpression(node, checker, models, new Set<ts.Node>(), 0)
+    ? runtimeNameForExpression(node, checker, models, new Set<TS.Node>(), 0)
     : undefined;
   if (identity === undefined) {
     throw unresolvedQueryIdentity(entry.key, binding.queryKeyExpression);
@@ -109,10 +107,10 @@ function runtimeNameForQueryEntry(
 }
 
 function runtimeNameForExpression(
-  rawNode: ts.Node,
-  checker: ts.TypeChecker,
+  rawNode: TS.Node,
+  checker: TS.TypeChecker,
   models: Map<string, ReturnType<typeof parseComponentModule>>,
-  seen: Set<ts.Node>,
+  seen: Set<TS.Node>,
   depth: number,
 ): string | undefined {
   if (depth > 32 || seen.has(rawNode)) return undefined;
@@ -154,10 +152,10 @@ function runtimeNameForExpression(
 }
 
 function runtimeNameForDeclaration(
-  declaration: ts.Declaration | undefined,
-  checker: ts.TypeChecker,
+  declaration: TS.Declaration | undefined,
+  checker: TS.TypeChecker,
   models: Map<string, ReturnType<typeof parseComponentModule>>,
-  seen: Set<ts.Node>,
+  seen: Set<TS.Node>,
   depth: number,
 ): string | undefined {
   if (!declaration || seen.has(declaration)) return undefined;
@@ -186,7 +184,7 @@ function runtimeNameForDeclaration(
 }
 
 function directQueryDeclarationIdentity(
-  declaration: ts.VariableDeclaration,
+  declaration: TS.VariableDeclaration,
   models: Map<string, ReturnType<typeof parseComponentModule>>,
 ): string | undefined {
   if (!declaration.initializer || !ts.isIdentifier(declaration.name)) return undefined;
@@ -199,7 +197,7 @@ function directQueryDeclarationIdentity(
 }
 
 function queryDeclarationCall(
-  declaration: ts.VariableDeclaration,
+  declaration: TS.VariableDeclaration,
   models: Map<string, ReturnType<typeof parseComponentModule>>,
 ): CallExpressionModel | undefined {
   const sourceFile = declaration.getSourceFile();
@@ -226,9 +224,9 @@ function queryDeclarationCall(
   });
 }
 
-function resolvedDeclaration(checker: ts.TypeChecker, node: ts.Node): ts.Declaration | undefined {
+function resolvedDeclaration(checker: TS.TypeChecker, node: TS.Node): TS.Declaration | undefined {
   let symbol = checker.getSymbolAtLocation(node);
-  const seen = new Set<ts.Symbol>();
+  const seen = new Set<TS.Symbol>();
   while (symbol && (symbol.flags & ts.SymbolFlags.Alias) !== 0 && !seen.has(symbol)) {
     seen.add(symbol);
     symbol = checker.getAliasedSymbol(symbol);
@@ -237,12 +235,12 @@ function resolvedDeclaration(checker: ts.TypeChecker, node: ts.Node): ts.Declara
 }
 
 function exactNodeAtSpan(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   start: number,
   end: number,
-): ts.Node | undefined {
-  let found: ts.Node | undefined;
-  const visit = (node: ts.Node): void => {
+): TS.Node | undefined {
+  let found: TS.Node | undefined;
+  const visit = (node: TS.Node): void => {
     if (found || node.end < end || node.getStart(sourceFile) > start) return;
     if (node.getStart(sourceFile) === start && node.end === end) {
       found = node;
@@ -254,7 +252,7 @@ function exactNodeAtSpan(
   return found;
 }
 
-function unwrapExpression(node: ts.Node): ts.Node {
+function unwrapExpression(node: TS.Node): TS.Node {
   let current = node;
   while (
     ts.isParenthesizedExpression(current) ||
@@ -270,10 +268,10 @@ function unwrapExpression(node: ts.Node): ts.Node {
 }
 
 function exactEntryCompilerHost(
-  options: ts.CompilerOptions,
+  options: TS.CompilerOptions,
   fileName: string,
   source: string,
-): ts.CompilerHost {
+): TS.CompilerHost {
   const host = ts.createCompilerHost(options);
   const getSourceFile = host.getSourceFile.bind(host);
   const readFile = host.readFile.bind(host);
@@ -293,9 +291,9 @@ function exactEntryCompilerHost(
   return host;
 }
 
-function queryIdentityCompilerOptions(rootDirectory: string, fileName: string): ts.CompilerOptions {
+function queryIdentityCompilerOptions(rootDirectory: string, fileName: string): TS.CompilerOptions {
   const configFile = boundedTsConfig(rootDirectory, dirname(fileName));
-  let configured: ts.CompilerOptions = {};
+  let configured: TS.CompilerOptions = {};
   if (configFile !== undefined) {
     const read = ts.readConfigFile(configFile, ts.sys.readFile);
     if (read.error) {
@@ -335,7 +333,7 @@ function withinDirectory(parent: string, child: string): boolean {
   return path === '' || (!path.startsWith('..') && !isAbsolute(path));
 }
 
-function exactProgramSourceFile(program: ts.Program, fileName: string): ts.SourceFile {
+function exactProgramSourceFile(program: TS.Program, fileName: string): TS.SourceFile {
   const exact =
     program.getSourceFile(fileName) ??
     program.getSourceFiles().find((sourceFile) => sameFile(sourceFile.fileName, fileName));
@@ -345,7 +343,7 @@ function exactProgramSourceFile(program: ts.Program, fileName: string): ts.Sourc
   return exact;
 }
 
-function scriptKindForFileName(fileName: string): ts.ScriptKind {
+function scriptKindForFileName(fileName: string): TS.ScriptKind {
   if (/\.tsx$/iu.test(fileName)) return ts.ScriptKind.TSX;
   if (/\.jsx$/iu.test(fileName)) return ts.ScriptKind.JSX;
   if (/\.[cm]?js$/iu.test(fileName)) return ts.ScriptKind.JS;

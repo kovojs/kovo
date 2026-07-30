@@ -1,9 +1,10 @@
-import ts from 'typescript';
+import type * as TS from 'typescript';
+import { typescriptRuntime as ts } from '../ts-api.js';
 
 // TypeScript lowers intrinsic JSX names to string tags when the first character is ASCII
 // lowercase or the name contains a hyphen. Keep every scanner on that exact grammar so unusual
 // JavaScript identifiers cannot bypass component invocation analysis (SPEC §5.2, §6.6).
-export function isIntrinsicJsxTagName(tag: ts.JsxTagNameExpression): boolean {
+export function isIntrinsicJsxTagName(tag: TS.JsxTagNameExpression): boolean {
   if (ts.isJsxNamespacedName(tag)) return true;
   if (!ts.isIdentifier(tag)) return false;
   const first = tag.text.charCodeAt(0);

@@ -5,7 +5,8 @@ import {
   frameworkExportForModuleSpecifier,
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
-import * as ts from 'typescript';
+import type * as TS from 'typescript';
+import { typescriptRuntime as ts } from './ts-api.js';
 
 import {
   compilerArrayLength,
@@ -92,8 +93,8 @@ export function trustedHtmlBrandLocalNames(model: ComponentModuleModel): Readonl
 
 /** @internal Whether an AST expression resolves to a trusted HTML brand helper. */
 export function expressionResolvesToTrustedHtmlBrand(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): boolean {
   return expressionResolvesToAnyFrameworkExport(
     ts as FrameworkIdentityTypeScript,
@@ -105,8 +106,8 @@ export function expressionResolvesToTrustedHtmlBrand(
 
 /** @internal Whether an AST expression resolves to the pure trustedHtml brand. */
 export function expressionResolvesToTrustedHtmlPureBrand(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): boolean {
   return expressionResolvesToAnyFrameworkExport(
     ts as FrameworkIdentityTypeScript,
@@ -118,8 +119,8 @@ export function expressionResolvesToTrustedHtmlPureBrand(
 
 /** @internal Whether an AST expression resolves to the pure trustedUrl brand. */
 export function expressionResolvesToTrustedUrlPureBrand(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): boolean {
   return expressionResolvesToAnyFrameworkExport(
     ts as FrameworkIdentityTypeScript,
@@ -131,8 +132,8 @@ export function expressionResolvesToTrustedUrlPureBrand(
 
 /** @internal Whether an AST expression resolves to the internal renderedHtml raw-HTML sink. */
 export function expressionResolvesToRenderedHtmlRawSink(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
 ): boolean {
   return expressionResolvesToAnyFrameworkExport(
     ts as FrameworkIdentityTypeScript,

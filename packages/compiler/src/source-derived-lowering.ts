@@ -1,4 +1,5 @@
-import ts from 'typescript';
+import type * as TS from 'typescript';
+import { typescriptRuntime as ts } from './ts-api.js';
 
 import {
   expressionResolvesToFrameworkExport,
@@ -60,7 +61,7 @@ const registryAssignmentTable = {
     key(fileName: string, binding: string) {
       return deriveComponentNames(fileName, { localName: binding }).registryKey;
     },
-    matches(_sourceFile: ts.SourceFile, call: ts.CallExpression) {
+    matches(_sourceFile: TS.SourceFile, call: TS.CallExpression) {
       return isSingleObjectArgument(call);
     },
     requiresExport: false,
@@ -72,7 +73,7 @@ const registryAssignmentTable = {
     },
     identities: [DOMAIN_IDENTITY, TAG_IDENTITY],
     key: registryIdentityKey,
-    matches(_sourceFile: ts.SourceFile, call: ts.CallExpression) {
+    matches(_sourceFile: TS.SourceFile, call: TS.CallExpression) {
       return call.arguments.length === 0;
     },
     requiresExport: true,
@@ -84,7 +85,7 @@ const registryAssignmentTable = {
     },
     identities: [MUTATION_IDENTITY],
     key: registryIdentityKey,
-    matches(_sourceFile: ts.SourceFile, call: ts.CallExpression) {
+    matches(_sourceFile: TS.SourceFile, call: TS.CallExpression) {
       return isSingleObjectArgument(call);
     },
     requiresExport: true,
@@ -96,7 +97,7 @@ const registryAssignmentTable = {
     },
     identities: [QUERY_IDENTITY],
     key: registryIdentityKey,
-    matches(_sourceFile: ts.SourceFile, call: ts.CallExpression) {
+    matches(_sourceFile: TS.SourceFile, call: TS.CallExpression) {
       return isSingleObjectArgument(call);
     },
     requiresExport: true,
@@ -108,7 +109,7 @@ const registryAssignmentTable = {
     },
     identities: [TASK_IDENTITY],
     key: registryIdentityKey,
-    matches(_sourceFile: ts.SourceFile, call: ts.CallExpression) {
+    matches(_sourceFile: TS.SourceFile, call: TS.CallExpression) {
       return isSingleObjectArgument(call);
     },
     requiresExport: true,
@@ -120,7 +121,7 @@ const registryAssignmentTable = {
     },
     identities: [WEBHOOK_IDENTITY],
     key: registryIdentityKey,
-    matches(_sourceFile: ts.SourceFile, call: ts.CallExpression) {
+    matches(_sourceFile: TS.SourceFile, call: TS.CallExpression) {
       return isPathFirstWebhookCall(call);
     },
     requiresExport: true,
@@ -139,7 +140,7 @@ const SOURCE_DERIVED_PRIMITIVES: readonly SourceDerivedPrimitive[] = [
 
 interface SourceDerivedRegistryAssignment {
   binding: string;
-  call: ts.CallExpression;
+  call: TS.CallExpression;
   primitive: SourceDerivedPrimitive;
 }
 
@@ -288,13 +289,13 @@ export function lowerStandaloneServerSource(source: string, fileName: string): s
 }
 
 interface AgentWitnessAssignment {
-  call: ts.CallExpression;
+  call: TS.CallExpression;
   helper: '__kovoAssignDerivedAgentModelOperations' | '__kovoAssignDerivedAgentToolOperations';
   operations: readonly unknown[];
 }
 
 function agentWitnessAssignments(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   model: ComponentModuleModel,
 ): readonly AgentWitnessAssignment[] {
   const assignments: AgentWitnessAssignment[] = [];
@@ -309,7 +310,7 @@ function agentWitnessAssignments(
         declarations,
         declarationIndex,
         'Agent witness declarations',
-      ) as ts.VariableDeclaration;
+      ) as TS.VariableDeclaration;
       if (!ts.isIdentifier(declaration.name)) continue;
       const call = declaration.initializer;
       if (!call || !ts.isCallExpression(call)) continue;
@@ -346,8 +347,8 @@ function agentWitnessAssignments(
   return assignments;
 }
 
-function compilerSnapshotStatements(sourceFile: ts.SourceFile): readonly ts.Statement[] {
-  const result: ts.Statement[] = [];
+function compilerSnapshotStatements(sourceFile: TS.SourceFile): readonly TS.Statement[] {
+  const result: TS.Statement[] = [];
   const length = compilerArrayLength(sourceFile.statements, 'Agent witness statements');
   for (let index = 0; index < length; index += 1) {
     compilerArrayAppend(
@@ -356,7 +357,7 @@ function compilerSnapshotStatements(sourceFile: ts.SourceFile): readonly ts.Stat
         sourceFile.statements,
         index,
         'Agent witness statements',
-      ) as ts.Statement,
+      ) as TS.Statement,
       'Agent witness statements',
     );
   }
@@ -364,7 +365,7 @@ function compilerSnapshotStatements(sourceFile: ts.SourceFile): readonly ts.Stat
 }
 
 function exportedRegistryAssignments(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   appContractOnly = false,
 ): readonly SourceDerivedRegistryAssignment[] {
   const assignments: SourceDerivedRegistryAssignment[] = [];
@@ -377,7 +378,7 @@ function exportedRegistryAssignments(
       sourceFile.statements,
       statementIndex,
       'Source-derived source statements',
-    ) as ts.Statement;
+    ) as TS.Statement;
     if (!ts.isVariableStatement(statement)) continue;
     const exported = hasExportModifier(statement);
 
@@ -391,7 +392,7 @@ function exportedRegistryAssignments(
         declarations,
         declarationIndex,
         'Source-derived variable declarations',
-      ) as ts.VariableDeclaration;
+      ) as TS.VariableDeclaration;
       if (!ts.isIdentifier(declaration.name)) continue;
       const call = declaration.initializer;
       if (!call || !ts.isCallExpression(call)) continue;
@@ -410,8 +411,8 @@ function exportedRegistryAssignments(
 }
 
 function sourceDerivedPrimitive(
-  sourceFile: ts.SourceFile,
-  call: ts.CallExpression,
+  sourceFile: TS.SourceFile,
+  call: TS.CallExpression,
   appContractOnly: boolean,
 ): SourceDerivedPrimitive | null {
   const primitiveCount = compilerArrayLength(
@@ -456,8 +457,8 @@ function sourceDerivedPrimitive(
 }
 
 function resolvesTo(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
   identity: FrameworkExportIdentity,
 ): boolean {
   return (
@@ -477,11 +478,11 @@ function resolvesTo(
   );
 }
 
-function isSingleObjectArgument(call: ts.CallExpression): boolean {
+function isSingleObjectArgument(call: TS.CallExpression): boolean {
   return call.arguments.length === 1 && ts.isObjectLiteralExpression(call.arguments[0]!);
 }
 
-function isPathFirstWebhookCall(call: ts.CallExpression): boolean {
+function isPathFirstWebhookCall(call: TS.CallExpression): boolean {
   return (
     call.arguments.length === 2 &&
     ts.isStringLiteralLike(call.arguments[0]!) &&
@@ -491,7 +492,7 @@ function isPathFirstWebhookCall(call: ts.CallExpression): boolean {
 
 function insertHelperImport(
   source: string,
-  originalSourceFile: ts.SourceFile,
+  originalSourceFile: TS.SourceFile,
   moduleImportInsertionOffset: number,
   primitives: ReadonlySet<SourceDerivedPrimitive>,
   extraImports: readonly string[] = [],
@@ -529,7 +530,7 @@ function insertHelperImport(
   return `${compilerStringSlice(source, 0, moduleImportInsertionOffset)}${importLine}${compilerStringSlice(source, moduleImportInsertionOffset)}`;
 }
 
-function lastImportDeclarationEnd(sourceFile: ts.SourceFile): number {
+function lastImportDeclarationEnd(sourceFile: TS.SourceFile): number {
   const statements = sourceFile.statements;
   const statementCount = compilerArrayLength(statements, 'Source-derived source statements');
   for (let index = statementCount - 1; index >= 0; index -= 1) {
@@ -537,7 +538,7 @@ function lastImportDeclarationEnd(sourceFile: ts.SourceFile): number {
       statements,
       index,
       'Source-derived source statements',
-    ) as ts.Statement;
+    ) as TS.Statement;
     if (ts.isImportDeclaration(statement)) return statement.end;
   }
   return 0;
@@ -547,7 +548,7 @@ function registryAssignmentReplacements(
   assignments: readonly SourceDerivedRegistryAssignment[],
   fileName: string,
   source: string,
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
 ): SourceReplacement[] {
   const replacements: SourceReplacement[] = [];
   const assignmentCount = compilerArrayLength(assignments, 'Source-derived assignments');
@@ -602,7 +603,7 @@ function registryIdentityKey(fileName: string, binding: string): string {
   return deriveRegistryIdentity(fileName, binding).key;
 }
 
-function hasExportModifier(statement: ts.VariableStatement): boolean {
+function hasExportModifier(statement: TS.VariableStatement): boolean {
   const modifiers = statement.modifiers;
   if (modifiers === undefined) return false;
   const count = compilerArrayLength(modifiers, 'Source-derived declaration modifiers');
@@ -611,7 +612,7 @@ function hasExportModifier(statement: ts.VariableStatement): boolean {
       modifiers,
       index,
       'Source-derived declaration modifiers',
-    ) as ts.ModifierLike;
+    ) as TS.ModifierLike;
     if (modifier.kind === ts.SyntaxKind.ExportKeyword) return true;
   }
   return false;

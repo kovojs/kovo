@@ -1,4 +1,5 @@
-import * as ts from 'typescript';
+import type * as TS from 'typescript';
+import { typescriptRuntime as ts } from '../ts-api.js';
 
 export interface PropertyNameTextOptions {
   readonly staticStringValues?: ReadonlyMap<string, string>;
@@ -10,9 +11,9 @@ export interface UnwrapExpressionOptions {
 
 /** @internal Normalize authored AST wrappers while preserving decisions on typed nodes. */
 export function unwrapExpression(
-  expression: ts.Expression,
+  expression: TS.Expression,
   options: UnwrapExpressionOptions = {},
-): ts.Expression {
+): TS.Expression {
   const unwrapAwait = options.await ?? true;
   let current = expression;
   while (
@@ -29,7 +30,7 @@ export function unwrapExpression(
 }
 
 export function propertyNameText(
-  name: ts.PropertyName | undefined,
+  name: TS.PropertyName | undefined,
   options: PropertyNameTextOptions = {},
 ): string | null {
   if (!name) return null;
@@ -49,7 +50,7 @@ export function propertyNameText(
   return null;
 }
 
-export function propertyAccessPath(expression: ts.PropertyAccessExpression): string | null {
+export function propertyAccessPath(expression: TS.PropertyAccessExpression): string | null {
   const receiver = propertyAccessReceiverSegments(expression.expression);
   if (!receiver) return null;
 
@@ -58,7 +59,7 @@ export function propertyAccessPath(expression: ts.PropertyAccessExpression): str
   return segments.join('.');
 }
 
-function propertyAccessReceiverSegments(expression: ts.Expression): string[] | null {
+function propertyAccessReceiverSegments(expression: TS.Expression): string[] | null {
   if (ts.isIdentifier(expression)) return [expression.text];
   const callReceiver = callExpressionReceiverSegments(expression);
   if (callReceiver) return callReceiver;
@@ -73,7 +74,7 @@ function propertyAccessReceiverSegments(expression: ts.Expression): string[] | n
   return propertyAccessPath(expression)?.split('.') ?? null;
 }
 
-export function callExpressionReceiverSegments(expression: ts.Expression): string[] | null {
+export function callExpressionReceiverSegments(expression: TS.Expression): string[] | null {
   const unwrapped = unwrapExpression(expression);
   if (!ts.isCallExpression(unwrapped) || unwrapped.arguments.length !== 0) return null;
   if (ts.isIdentifier(unwrapped.expression)) return [`${unwrapped.expression.text}()`];
@@ -88,7 +89,7 @@ export function callExpressionReceiverSegments(expression: ts.Expression): strin
   return null;
 }
 
-function literalElementAccessPath(expression: ts.ElementAccessExpression): string | null {
+function literalElementAccessPath(expression: TS.ElementAccessExpression): string | null {
   const member = literalElementAccessMember(expression);
   if (!member) return null;
   const receiver = propertyAccessReceiverSegments(expression.expression);
@@ -96,7 +97,7 @@ function literalElementAccessPath(expression: ts.ElementAccessExpression): strin
   return [...receiver, member].join('.');
 }
 
-function literalElementAccessMember(expression: ts.ElementAccessExpression): string | undefined {
+function literalElementAccessMember(expression: TS.ElementAccessExpression): string | undefined {
   return ts.isStringLiteralLike(expression.argumentExpression)
     ? expression.argumentExpression.text
     : undefined;

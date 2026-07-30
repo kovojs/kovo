@@ -1,4 +1,5 @@
-import ts from 'typescript';
+import type * as TS from 'typescript';
+import { typescriptRuntime as ts } from '../ts-api.js';
 
 import type {
   ScannedBindingCandidate,
@@ -51,12 +52,12 @@ interface AnalysisState {
   budgetExhausted: boolean;
   readonly callables: Map<
     string,
-    { readonly node: ts.FunctionLikeDeclaration; readonly parent: Scope }
+    { readonly node: TS.FunctionLikeDeclaration; readonly parent: Scope }
   >;
   readonly calls: Map<string, { callee: Value; firstArgument?: Value }>;
   readonly history: Map<string, Value>;
   loopReanalysesRemaining: number;
-  readonly sourceFile: ts.SourceFile;
+  readonly sourceFile: TS.SourceFile;
 }
 
 const abstractWorkBudget = 16_384;
@@ -176,7 +177,7 @@ const reviewedSchemaModifierMethods = new Set([
 
 /** Syntax-only lexical + flow abstraction for exact per-use capability provenance (SPEC §6.6). */
 export function scanLexicalProvenance(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   imports: readonly ScannedImportBindingFact[],
 ): ScannedLexicalProvenance {
   const root = createScope(sourceFile);
@@ -216,7 +217,7 @@ export function scanLexicalProvenance(
   return { budgetExhausted: state.budgetExhausted, calls: callFacts };
 }
 
-function createScope(node: ts.Node, parent?: Scope): Scope {
+function createScope(node: TS.Node, parent?: Scope): Scope {
   const functionLike = ts.isFunctionLike(node);
   const id = `${ts.SyntaxKind[node.kind]}@${node.getStart()}`;
   const scope: Scope = {
@@ -239,7 +240,7 @@ function createScope(node: ts.Node, parent?: Scope): Scope {
     if (ts.isFunctionExpression(node) && node.name) declare(node.name.text, false);
     for (const parameter of node.parameters)
       collectNames(parameter.name, (name) => declare(name, true));
-    const body = (node as ts.FunctionLikeDeclaration).body;
+    const body = (node as TS.FunctionLikeDeclaration).body;
     if (body) collectVarNames(body, declare);
   } else if (ts.isCatchClause(node) && node.variableDeclaration) {
     collectNames(node.variableDeclaration.name, (name) => declare(name, true));
@@ -258,7 +259,7 @@ function createScope(node: ts.Node, parent?: Scope): Scope {
 }
 
 function declareStatement(
-  statement: ts.Statement,
+  statement: TS.Statement,
   declare: (name: string, mutable: boolean) => void,
   source: boolean,
 ): void {
@@ -295,8 +296,8 @@ function declareStatement(
   }
 }
 
-function collectVarNames(node: ts.Node, declare: (name: string, mutable: boolean) => void): void {
-  const visit = (child: ts.Node): void => {
+function collectVarNames(node: TS.Node, declare: (name: string, mutable: boolean) => void): void {
+  const visit = (child: TS.Node): void => {
     if (child !== node && ts.isFunctionLike(child)) return;
     if (ts.isVariableDeclarationList(child) && (child.flags & ts.NodeFlags.BlockScoped) === 0) {
       for (const item of child.declarations) collectNames(item.name, (name) => declare(name, true));
@@ -306,7 +307,7 @@ function collectVarNames(node: ts.Node, declare: (name: string, mutable: boolean
   visit(node);
 }
 
-function collectNames(name: ts.BindingName, collect: (name: string) => void): void {
+function collectNames(name: TS.BindingName, collect: (name: string) => void): void {
   if (ts.isIdentifier(name)) collect(name.text);
   else
     for (const item of name.elements)
@@ -314,13 +315,13 @@ function collectNames(name: ts.BindingName, collect: (name: string) => void): vo
 }
 
 function runStatements(
-  statements: readonly ts.Statement[],
+  statements: readonly TS.Statement[],
   input: Environment,
   scope: Scope,
   state: AnalysisState,
 ): Environment {
   let environment = input;
-  const functions: ts.FunctionDeclaration[] = [];
+  const functions: TS.FunctionDeclaration[] = [];
   for (const statement of statements) {
     if (ts.isFunctionDeclaration(statement)) {
       functions.push(statement);
@@ -344,7 +345,7 @@ function runStatements(
 }
 
 function runStatement(
-  node: ts.Statement,
+  node: TS.Statement,
   env: Environment,
   scope: Scope,
   state: AnalysisState,
@@ -490,7 +491,7 @@ function runStatement(
 }
 
 function runVariableList(
-  list: ts.VariableDeclarationList,
+  list: TS.VariableDeclarationList,
   env: Environment,
   scope: Scope,
   state: AnalysisState,
@@ -519,7 +520,7 @@ function runVariableList(
 }
 
 function runFunction(
-  node: ts.FunctionLikeDeclaration,
+  node: TS.FunctionLikeDeclaration,
   outer: Environment,
   parent: Scope,
   state: AnalysisState,
@@ -543,7 +544,7 @@ function runFunction(
 }
 
 function runExpression(
-  node: ts.Expression,
+  node: TS.Expression,
   env: Environment,
   scope: Scope,
   state: AnalysisState,
@@ -722,7 +723,7 @@ function runExpression(
 // nested call into absent lexical provenance and make capability-root synthesis depend on an
 // unrelated transitive import.
 function runJsxExpression(
-  expression: ts.JsxElement | ts.JsxSelfClosingElement | ts.JsxFragment,
+  expression: TS.JsxElement | TS.JsxSelfClosingElement | TS.JsxFragment,
   env: Environment,
   scope: Scope,
   state: AnalysisState,
@@ -732,7 +733,7 @@ function runJsxExpression(
     : ts.isJsxSelfClosingElement(expression)
       ? expression
       : undefined;
-  let invocation: { readonly callee: Value; readonly node: ts.JsxOpeningLikeElement } | undefined;
+  let invocation: { readonly callee: Value; readonly node: TS.JsxOpeningLikeElement } | undefined;
   if (opening !== undefined) {
     const callee = jsxTagExpression(opening.tagName);
     // Intrinsic JSX tags lower to string names; there is no ambient component getter or invocation
@@ -782,7 +783,7 @@ function runJsxExpression(
   return env;
 }
 
-function hasImplicitExecution(expression: ts.Expression): boolean {
+function hasImplicitExecution(expression: TS.Expression): boolean {
   return (
     ts.isAwaitExpression(expression) ||
     ts.isYieldExpression(expression) ||
@@ -800,9 +801,9 @@ function hasImplicitExecution(expression: ts.Expression): boolean {
 }
 
 function runInvocation(
-  node: ts.CallExpression | ts.NewExpression | ts.TaggedTemplateExpression,
-  calleeExpression: ts.Expression,
-  arguments_: readonly ts.Expression[],
+  node: TS.CallExpression | TS.NewExpression | TS.TaggedTemplateExpression,
+  calleeExpression: TS.Expression,
+  arguments_: readonly TS.Expression[],
   env: Environment,
   scope: Scope,
   state: AnalysisState,
@@ -839,7 +840,7 @@ function runInvocation(
 }
 
 function invokeTransferredCallables(
-  arguments_: readonly ts.Expression[],
+  arguments_: readonly TS.Expression[],
   env: Environment,
   scope: Scope,
   state: AnalysisState,
@@ -854,8 +855,8 @@ function invokeTransferredCallables(
 }
 
 function runImplicitInvocation(
-  node: ts.Decorator | ts.JsxOpeningLikeElement,
-  calleeExpression: ts.Expression,
+  node: TS.Decorator | TS.JsxOpeningLikeElement,
+  calleeExpression: TS.Expression,
   env: Environment,
   scope: Scope,
   state: AnalysisState,
@@ -865,8 +866,8 @@ function runImplicitInvocation(
 }
 
 function beginImplicitInvocation(
-  node: ts.Decorator | ts.JsxOpeningLikeElement,
-  calleeExpression: ts.Expression,
+  node: TS.Decorator | TS.JsxOpeningLikeElement,
+  calleeExpression: TS.Expression,
   env: Environment,
   scope: Scope,
   state: AnalysisState,
@@ -884,7 +885,7 @@ function beginImplicitInvocation(
 }
 
 function finishImplicitInvocation(
-  node: ts.Decorator | ts.JsxOpeningLikeElement,
+  node: TS.Decorator | TS.JsxOpeningLikeElement,
   callee: Value,
   env: Environment,
   scope: Scope,
@@ -897,17 +898,17 @@ function finishImplicitInvocation(
   return env;
 }
 
-function jsxTagExpression(tag: ts.JsxTagNameExpression): ts.Expression | undefined {
+function jsxTagExpression(tag: TS.JsxTagNameExpression): TS.Expression | undefined {
   return ts.isIdentifier(tag) ||
     ts.isPropertyAccessExpression(tag) ||
     tag.kind === ts.SyntaxKind.ThisKeyword
-    ? (tag as ts.Expression)
+    ? (tag as TS.Expression)
     : undefined;
 }
 
 function runBindingPatternEffects(
-  name: ts.BindingName,
-  initializer: ts.Expression,
+  name: TS.BindingName,
+  initializer: TS.Expression,
   env: Environment,
   scope: Scope,
   state: AnalysisState,
@@ -939,7 +940,7 @@ function runBindingPatternEffects(
 }
 
 function widenPassedObjectMembers(
-  arguments_: readonly ts.Expression[],
+  arguments_: readonly TS.Expression[],
   env: Environment,
   scope: Scope,
 ): Environment {
@@ -957,7 +958,7 @@ function widenPassedObjectMembers(
 }
 
 function runClassMembers(
-  members: ts.NodeArray<ts.ClassElement>,
+  members: TS.NodeArray<TS.ClassElement>,
   env: Environment,
   scope: Scope,
   state: AnalysisState,
@@ -984,7 +985,7 @@ function runClassMembers(
 }
 
 function bindName(
-  name: ts.BindingName,
+  name: TS.BindingName,
   value: Value,
   env: Environment,
   scope: Scope,
@@ -1017,7 +1018,7 @@ function bindName(
 }
 
 function assignTarget(
-  target: ts.Expression,
+  target: TS.Expression,
   value: Value,
   env: Environment,
   scope: Scope,
@@ -1092,8 +1093,8 @@ function assignTarget(
 }
 
 function bindObjectMembers(
-  name: ts.Identifier,
-  object: ts.ObjectLiteralExpression,
+  name: TS.Identifier,
+  object: TS.ObjectLiteralExpression,
   env: Environment,
   scope: Scope,
   state: AnalysisState,
@@ -1143,7 +1144,7 @@ function bindObjectMembers(
 }
 
 function readExpression(
-  node: ts.Expression,
+  node: TS.Expression,
   env: Environment,
   scope: Scope,
   state: AnalysisState,
@@ -1298,7 +1299,7 @@ function readExpression(
 }
 
 function readEntityName(
-  name: ts.EntityName,
+  name: TS.EntityName,
   env: Environment,
   scope: Scope,
   state: AnalysisState,
@@ -1309,7 +1310,7 @@ function readEntityName(
 }
 
 function expressionReference(
-  node: ts.Expression,
+  node: TS.Expression,
   scope: Scope,
 ): { binding: Binding; path: string } | undefined {
   const expression = unwrap(node);
@@ -1494,7 +1495,7 @@ function joinValues(state: AnalysisState, ...values: Value[]): Value {
 }
 
 function callableValue(
-  node: ts.FunctionLikeDeclaration,
+  node: TS.FunctionLikeDeclaration,
   parent: Scope,
   state: AnalysisState,
   name: string,
@@ -1507,7 +1508,7 @@ function callableValue(
   };
 }
 
-function classValue(node: ts.ClassDeclaration | ts.ClassExpression, name: string): Value {
+function classValue(node: TS.ClassDeclaration | TS.ClassExpression, name: string): Value {
   const hasImplicitMembers = node.members.some(
     (member) =>
       ts.isGetAccessorDeclaration(member) ||
@@ -1521,7 +1522,7 @@ function classValue(node: ts.ClassDeclaration | ts.ClassExpression, name: string
 }
 
 function registerCallable(
-  node: ts.FunctionLikeDeclaration,
+  node: TS.FunctionLikeDeclaration,
   parent: Scope,
   state: AnalysisState,
 ): string {
@@ -1824,11 +1825,11 @@ function consumeAbstractWork(state: AnalysisState): boolean {
   return true;
 }
 
-export function lexicalCallKey(node: ts.Node, sourceFile: ts.SourceFile): string {
+export function lexicalCallKey(node: TS.Node, sourceFile: TS.SourceFile): string {
   return lexicalNodeKey(node, sourceFile);
 }
 
-function lexicalNodeKey(node: ts.Node, sourceFile: ts.SourceFile): string {
+function lexicalNodeKey(node: TS.Node, sourceFile: TS.SourceFile): string {
   return `${node.getStart(sourceFile)}:${node.end}`;
 }
 
@@ -1846,15 +1847,15 @@ function stateKey(binding: Binding, path = ''): string {
 function appendMember(path: string, member: string): string {
   return path ? `${path}.${member}` : member;
 }
-function isAssignment(kind: ts.SyntaxKind): boolean {
+function isAssignment(kind: TS.SyntaxKind): boolean {
   return kind >= ts.SyntaxKind.FirstAssignment && kind <= ts.SyntaxKind.LastAssignment;
 }
-function propertyText(name: ts.PropertyName): string | undefined {
+function propertyText(name: TS.PropertyName): string | undefined {
   return ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)
     ? name.text
     : undefined;
 }
-function unwrap(node: ts.Expression): ts.Expression {
+function unwrap(node: TS.Expression): TS.Expression {
   let value = node;
   while (
     ts.isParenthesizedExpression(value) ||

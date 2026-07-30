@@ -1,4 +1,4 @@
-import * as ts from 'typescript';
+import { typescriptRuntime as ts } from '../ts-api.js';
 
 import {
   mergeQueryShapeFactSets as mergeQueryShapeFactSetsCore,

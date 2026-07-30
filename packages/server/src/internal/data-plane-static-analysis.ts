@@ -1,6 +1,6 @@
 import { existsSync as builtinExistsSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { extractStaticBuildAnalysisFactsFromProject } from '@kovojs/drizzle/internal/static';
-import * as TypeScript from 'typescript';
 import {
   dirname as builtinDirname,
   relative as builtinRelative,
@@ -165,7 +165,8 @@ const relative = builtinRelative;
 const resolve = builtinResolve;
 type TypeScriptModule = typeof import('typescript');
 
-const loadedTypeScript: TypeScriptModule = TypeScript;
+const requireTypeScript = createRequire(import.meta.url);
+const loadedTypeScript = requireTypeScript('typescript') as TypeScriptModule;
 let dataPlaneAnalysisCacheEntry:
   | {
       identity: string;

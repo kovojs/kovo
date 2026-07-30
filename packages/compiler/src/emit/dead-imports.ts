@@ -1,4 +1,5 @@
-import * as ts from 'typescript';
+import type * as TS from 'typescript';
+import { typescriptRuntime as ts } from '../ts-api.js';
 
 import {
   compilerArrayAppend,
@@ -28,7 +29,7 @@ export function removeUnreferencedNamedImports(source: string): string {
   );
   const referenced = compilerCreateSet<string>();
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (ts.isImportDeclaration(node)) return;
     if (ts.isIdentifier(node) && isReferenceIdentifier(node)) compilerSetAdd(referenced, node.text);
     ts.forEachChild(node, visit);
@@ -45,21 +46,21 @@ export function removeUnreferencedNamedImports(source: string): string {
       sourceFile.statements,
       statementIndex,
       'Dead-import source statements',
-    ) as ts.Statement;
+    ) as TS.Statement;
     if (!ts.isImportDeclaration(statement)) continue;
 
     const importClause = statement.importClause;
     const namedBindings = importClause?.namedBindings;
     if (!namedBindings || !ts.isNamedImports(namedBindings)) continue;
 
-    const unused: ts.ImportSpecifier[] = [];
+    const unused: TS.ImportSpecifier[] = [];
     const elementLength = compilerArrayLength(namedBindings.elements, 'Dead-import named bindings');
     for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
       const element = compilerOwnDataValue(
         namedBindings.elements,
         elementIndex,
         'Dead-import named bindings',
-      ) as ts.ImportSpecifier;
+      ) as TS.ImportSpecifier;
       if (!compilerSetHas(referenced, element.name.text)) {
         compilerArrayAppend(unused, element, 'Dead-import unused bindings');
       }
@@ -83,7 +84,7 @@ export function removeUnreferencedNamedImports(source: string): string {
       compilerArrayAppend(
         replacements,
         removeNamedImportRunReplacement(
-          compilerOwnDataValue(runs, runIndex, 'Dead-import binding runs') as ts.ImportSpecifier[],
+          compilerOwnDataValue(runs, runIndex, 'Dead-import binding runs') as TS.ImportSpecifier[],
           namedBindings.elements,
           sourceFile,
         ),
@@ -95,7 +96,7 @@ export function removeUnreferencedNamedImports(source: string): string {
   return replacements.length === 0 ? source : applySourceReplacements(source, replacements);
 }
 
-function isReferenceIdentifier(node: ts.Identifier): boolean {
+function isReferenceIdentifier(node: TS.Identifier): boolean {
   const parent = node.parent;
   if (!parent) return true;
 
@@ -119,8 +120,8 @@ function isReferenceIdentifier(node: ts.Identifier): boolean {
 
 function removeStatementReplacement(
   source: string,
-  statement: ts.Statement,
-  sourceFile: ts.SourceFile,
+  statement: TS.Statement,
+  sourceFile: TS.SourceFile,
 ): SourceReplacement {
   let end = statement.getEnd();
   if (compilerStringCharCodeAt(source, end) === 13) end += 1;
@@ -134,8 +135,8 @@ function removeStatementReplacement(
 }
 
 function removeNamedBindingsReplacement(
-  defaultImport: ts.Identifier,
-  namedBindings: ts.NamedImports,
+  defaultImport: TS.Identifier,
+  namedBindings: TS.NamedImports,
 ): SourceReplacement {
   return {
     end: namedBindings.getEnd(),
@@ -145,11 +146,11 @@ function removeNamedBindingsReplacement(
 }
 
 function contiguousImportSpecifierRuns(
-  elements: readonly ts.ImportSpecifier[],
-  allElements: ts.NodeArray<ts.ImportSpecifier>,
-): ts.ImportSpecifier[][] {
-  const runs: ts.ImportSpecifier[][] = [];
-  let current: ts.ImportSpecifier[] = [];
+  elements: readonly TS.ImportSpecifier[],
+  allElements: TS.NodeArray<TS.ImportSpecifier>,
+): TS.ImportSpecifier[][] {
+  const runs: TS.ImportSpecifier[][] = [];
+  let current: TS.ImportSpecifier[] = [];
   let previousIndex = -2;
 
   const elementLength = compilerArrayLength(elements, 'Dead-import unused bindings');
@@ -158,7 +159,7 @@ function contiguousImportSpecifierRuns(
       elements,
       elementIndex,
       'Dead-import unused bindings',
-    ) as ts.ImportSpecifier;
+    ) as TS.ImportSpecifier;
     const index = indexOfImportSpecifier(allElements, element);
     if (current.length > 0 && index !== previousIndex + 1) {
       compilerArrayAppend(runs, current, 'Dead-import binding runs');
@@ -174,8 +175,8 @@ function contiguousImportSpecifierRuns(
 }
 
 function indexOfImportSpecifier(
-  elements: readonly ts.ImportSpecifier[],
-  expected: ts.ImportSpecifier,
+  elements: readonly TS.ImportSpecifier[],
+  expected: TS.ImportSpecifier,
 ): number {
   const length = compilerArrayLength(elements, 'Dead-import named bindings');
   for (let index = 0; index < length; index += 1) {
@@ -187,17 +188,17 @@ function indexOfImportSpecifier(
 }
 
 function removeNamedImportRunReplacement(
-  run: readonly ts.ImportSpecifier[],
-  elements: ts.NodeArray<ts.ImportSpecifier>,
-  sourceFile: ts.SourceFile,
+  run: readonly TS.ImportSpecifier[],
+  elements: TS.NodeArray<TS.ImportSpecifier>,
+  sourceFile: TS.SourceFile,
 ): SourceReplacement {
   const runLength = compilerArrayLength(run, 'Dead-import binding run');
-  const first = compilerOwnDataValue(run, 0, 'Dead-import binding run') as ts.ImportSpecifier;
+  const first = compilerOwnDataValue(run, 0, 'Dead-import binding run') as TS.ImportSpecifier;
   const last = compilerOwnDataValue(
     run,
     runLength - 1,
     'Dead-import binding run',
-  ) as ts.ImportSpecifier;
+  ) as TS.ImportSpecifier;
   const firstIndex = indexOfImportSpecifier(elements, first);
   const lastIndex = indexOfImportSpecifier(elements, last);
   const start = first.getStart(sourceFile);
@@ -210,7 +211,7 @@ function removeNamedImportRunReplacement(
           elements,
           lastIndex + 1,
           'Dead-import named bindings',
-        ) as ts.ImportSpecifier
+        ) as TS.ImportSpecifier
       ).getStart(sourceFile),
       replacement: '',
       start,
@@ -225,7 +226,7 @@ function removeNamedImportRunReplacement(
         elements,
         firstIndex - 1,
         'Dead-import named bindings',
-      ) as ts.ImportSpecifier
+      ) as TS.ImportSpecifier
     ).getEnd(),
   };
 }

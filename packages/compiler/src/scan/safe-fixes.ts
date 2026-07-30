@@ -1,4 +1,5 @@
-import * as ts from 'typescript';
+import type * as TS from 'typescript';
+import { typescriptRuntime as ts } from '../ts-api.js';
 
 import type { DiagnosticCode } from '@kovojs/core/diagnostics';
 import { assertRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
@@ -350,8 +351,8 @@ export function compileBehaviorFingerprint(result: CompileResult): string {
 }
 
 function editForDiagnostic(
-  sourceFile: ts.SourceFile,
-  nodes: readonly ts.Node[],
+  sourceFile: TS.SourceFile,
+  nodes: readonly TS.Node[],
   diagnostic: CompilerDiagnostic,
 ): SafeComponentFixEdit | undefined {
   if (diagnostic.code !== 'KV223' && diagnostic.code !== 'KV232') return undefined;
@@ -389,7 +390,7 @@ function editForDiagnostic(
 }
 
 function diagnosticStartOffset(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   diagnostic: CompilerDiagnostic,
 ): number | undefined {
   if (diagnostic.start === undefined) return undefined;
@@ -403,9 +404,9 @@ function diagnosticStartOffset(
   return lineStart + columnIndex;
 }
 
-function sourceNodes(sourceFile: ts.SourceFile): ts.Node[] {
-  const nodes: ts.Node[] = [];
-  const visit = (node: ts.Node): void => {
+function sourceNodes(sourceFile: TS.SourceFile): TS.Node[] {
+  const nodes: TS.Node[] = [];
+  const visit = (node: TS.Node): void => {
     compilerArrayAppend(nodes, node, 'Safe-fix source nodes');
     ts.forEachChild(node, visit);
   };
@@ -414,12 +415,12 @@ function sourceNodes(sourceFile: ts.SourceFile): ts.Node[] {
 }
 
 function exactNodeAtSpan(
-  sourceFile: ts.SourceFile,
-  nodes: readonly ts.Node[],
+  sourceFile: TS.SourceFile,
+  nodes: readonly TS.Node[],
   start: number,
   end: number,
-): ts.Node | undefined {
-  let fallback: ts.Node | undefined;
+): TS.Node | undefined {
+  let fallback: TS.Node | undefined;
   for (let index = 0; index < nodes.length; index += 1) {
     const node = nodes[index]!;
     if (node.getStart(sourceFile, false) !== start || node.end !== end) continue;
@@ -429,7 +430,7 @@ function exactNodeAtSpan(
   return fallback;
 }
 
-function jsxAttributeName(name: ts.JsxAttributeName): string {
+function jsxAttributeName(name: TS.JsxAttributeName): string {
   return ts.isIdentifier(name) ? name.text : `${name.namespace.text}:${name.name.text}`;
 }
 
@@ -529,7 +530,7 @@ function sourceRewriteMatches(
   );
 }
 
-function editMatchesNode(edit: SafeComponentFixEdit, node: ts.JsxAttribute): boolean {
+function editMatchesNode(edit: SafeComponentFixEdit, node: TS.JsxAttribute): boolean {
   const name = jsxAttributeName(node.name);
   if (edit.code === 'KV223') {
     return edit.recipe === 'remove-derived-stamp' && name === 'data-bind';

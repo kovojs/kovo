@@ -1,4 +1,5 @@
-import ts from 'typescript';
+import type * as TS from 'typescript';
+import { typescriptRuntime as ts } from '../ts-api.js';
 
 import type {
   CapabilityClosureSourceFile,
@@ -210,7 +211,7 @@ function scanCapabilityClosureModule(file: CapabilityClosureSourceFile): Scanned
       const tag = node.tagName;
       if (!isIntrinsicJsxTagName(tag)) {
         collectImplicitInvocation(
-          tag as ts.Expression,
+          tag as TS.Expression,
           node,
           sourceFile,
           lexicalProvenance.calls.get(lexicalCallKey(node, sourceFile)),
@@ -277,9 +278,9 @@ function scanCapabilityClosureModule(file: CapabilityClosureSourceFile): Scanned
 }
 
 function collectImplicitInvocation(
-  expression: ts.Expression,
-  node: ts.Node,
-  sourceFile: ts.SourceFile,
+  expression: TS.Expression,
+  node: TS.Node,
+  sourceFile: TS.SourceFile,
   implicit: ScannedCallProvenance | undefined,
   calls: ScannedCallFact[],
 ): void {
@@ -304,7 +305,7 @@ function collectImplicitInvocation(
 }
 
 function collectStaticImportsAndExports(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   imports: ScannedImportFact[],
   bindings: ScannedImportBindingFact[],
   exports: ScannedExportBindingFact[],
@@ -434,7 +435,7 @@ function collectStaticImportsAndExports(
 }
 
 function collectBindingAliases(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   aliases: ScannedBindingAliasFact[],
 ): void {
   visitWithScopes(sourceFile, [], (node, scopes) => {
@@ -528,7 +529,7 @@ function collectBindingAliases(
 }
 
 function collectAliasFromBindingName(
-  name: ts.BindingName,
+  name: TS.BindingName,
   source: string | undefined,
   site: string,
   sourceStartsAtUnshadowedGlobalNamespace: boolean,
@@ -546,8 +547,8 @@ function collectAliasFromBindingName(
 }
 
 function collectCall(
-  node: ts.CallExpression | ts.NewExpression | ts.TaggedTemplateExpression,
-  sourceFile: ts.SourceFile,
+  node: TS.CallExpression | TS.NewExpression | TS.TaggedTemplateExpression,
+  sourceFile: TS.SourceFile,
   callbackCarriers: ReadonlySet<string>,
   scopes: readonly Set<string>[],
   provenance: ScannedCallProvenance | undefined,
@@ -633,8 +634,8 @@ function collectCall(
 }
 
 function collectGlobalCapability(
-  node: ts.Node,
-  sourceFile: ts.SourceFile,
+  node: TS.Node,
+  sourceFile: TS.SourceFile,
   scopes: readonly Set<string>[],
   globalAliases: ReadonlySet<string>,
   globals: ScannedGlobalCapabilityFact[],
@@ -805,7 +806,7 @@ function collectGlobalCapability(
 }
 
 function expressionIsGlobalNamespace(
-  expression: ts.Expression,
+  expression: TS.Expression,
   scopes: readonly Set<string>[],
   globalAliases: ReadonlySet<string>,
 ): boolean {
@@ -819,7 +820,7 @@ function expressionIsGlobalNamespace(
   return direct ? !scopeBinds(scopes, unwrapped.text) : globalAliases.has(unwrapped.text);
 }
 
-function globalNamespaceEscapes(identifier: ts.Identifier): boolean {
+function globalNamespaceEscapes(identifier: TS.Identifier): boolean {
   const parent = identifier.parent;
   if (
     (ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent)) &&
@@ -860,9 +861,9 @@ function appendUnknownGlobalCapabilities(
 }
 
 function visitWithScopes(
-  node: ts.Node,
+  node: TS.Node,
   scopes: readonly Set<string>[],
-  callback: (node: ts.Node, scopes: readonly Set<string>[]) => void,
+  callback: (node: TS.Node, scopes: readonly Set<string>[]) => void,
 ): void {
   const bindings = lexicalBindings(node);
   const activeScopes = bindings === undefined ? scopes : [...scopes, bindings];
@@ -870,7 +871,7 @@ function visitWithScopes(
   ts.forEachChild(node, (child) => visitWithScopes(child, activeScopes, callback));
 }
 
-function lexicalBindings(node: ts.Node): Set<string> | undefined {
+function lexicalBindings(node: TS.Node): Set<string> | undefined {
   const names = new Set<string>();
   if (ts.isSourceFile(node) || ts.isBlock(node) || ts.isModuleBlock(node)) {
     for (const statement of node.statements) {
@@ -907,7 +908,7 @@ function lexicalBindings(node: ts.Node): Set<string> | undefined {
   return names;
 }
 
-function declaredStatementNames(statement: ts.Statement): string[] {
+function declaredStatementNames(statement: TS.Statement): string[] {
   const names = new Set<string>();
   if (ts.isVariableStatement(statement)) {
     for (const declaration of statement.declarationList.declarations) {
@@ -928,12 +929,12 @@ function declaredStatementNames(statement: ts.Statement): string[] {
   return [...names];
 }
 
-function entityNameBindingKey(name: ts.EntityName): string {
+function entityNameBindingKey(name: TS.EntityName): string {
   if (ts.isIdentifier(name)) return name.text;
   return `${entityNameBindingKey(name.left)}.${name.right.text}`;
 }
 
-function collectBindingNames(name: ts.BindingName, names: Set<string>): void {
+function collectBindingNames(name: TS.BindingName, names: Set<string>): void {
   if (ts.isIdentifier(name)) {
     names.add(name.text);
     return;
@@ -944,7 +945,7 @@ function collectBindingNames(name: ts.BindingName, names: Set<string>): void {
 }
 
 function callbackCarrierNames(
-  sourceFile: ts.SourceFile,
+  sourceFile: TS.SourceFile,
   importBindings: readonly ScannedImportBindingFact[],
 ): ReadonlySet<string> {
   // Imported runtime values are opaque at this syntax boundary. Treat them as potential callbacks
@@ -954,7 +955,7 @@ function callbackCarrierNames(
   let changed = true;
   while (changed) {
     changed = false;
-    const visit = (node: ts.Node): void => {
+    const visit = (node: TS.Node): void => {
       if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
         if (
           expressionCarriesCallback(node.initializer, carriers) &&
@@ -987,7 +988,7 @@ function callbackCarrierNames(
 }
 
 function expressionCarriesCallback(
-  expression: ts.Expression,
+  expression: TS.Expression,
   carriers: ReadonlySet<string>,
 ): boolean {
   if (ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)) return true;
@@ -1029,7 +1030,7 @@ function expressionCarriesCallback(
   return false;
 }
 
-function argumentHasCron(expression: ts.Expression): boolean {
+function argumentHasCron(expression: TS.Expression): boolean {
   if (!ts.isObjectLiteralExpression(expression)) return false;
   return expression.properties.some((property) => {
     if (!ts.isPropertyAssignment(property) && !ts.isShorthandPropertyAssignment(property)) {
@@ -1039,7 +1040,7 @@ function argumentHasCron(expression: ts.Expression): boolean {
   });
 }
 
-function jsxAttributeIsHandler(attribute: ts.JsxAttribute): boolean {
+function jsxAttributeIsHandler(attribute: TS.JsxAttribute): boolean {
   const name = attribute.name.getText();
   return name.startsWith('on') || name.startsWith('on:');
 }
@@ -1090,7 +1091,7 @@ function collectAliasGlobalCapabilities(
 }
 
 function expressionStartsAtUnshadowedGlobalNamespace(
-  expression: ts.Expression,
+  expression: TS.Expression,
   scopes: readonly Set<string>[],
 ): boolean {
   let current = unwrapExpression(expression);
@@ -1107,7 +1108,7 @@ function expressionStartsAtUnshadowedGlobalNamespace(
   );
 }
 
-function expressionBindingKey(expression: ts.Expression): string | undefined {
+function expressionBindingKey(expression: TS.Expression): string | undefined {
   const unwrapped = unwrapExpression(expression);
   if (ts.isIdentifier(unwrapped)) return unwrapped.text;
   if (ts.isPropertyAccessExpression(unwrapped)) {
@@ -1125,7 +1126,7 @@ function expressionBindingKey(expression: ts.Expression): string | undefined {
   return undefined;
 }
 
-function unwrapExpression(expression: ts.Expression): ts.Expression {
+function unwrapExpression(expression: TS.Expression): TS.Expression {
   let current = expression;
   while (
     ts.isParenthesizedExpression(current) ||
@@ -1140,7 +1141,7 @@ function unwrapExpression(expression: ts.Expression): ts.Expression {
 }
 
 function assignedCallName(
-  call: ts.CallExpression | ts.NewExpression | ts.TaggedTemplateExpression,
+  call: TS.CallExpression | TS.NewExpression | TS.TaggedTemplateExpression,
 ): string | undefined {
   const parent = call.parent;
   if (ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) return parent.name.text;
@@ -1155,7 +1156,7 @@ function assignedCallName(
 }
 
 function callIsDirectTopLevelConstInitializer(
-  call: ts.CallExpression | ts.NewExpression | ts.TaggedTemplateExpression,
+  call: TS.CallExpression | TS.NewExpression | TS.TaggedTemplateExpression,
 ): boolean {
   const declaration = call.parent;
   if (
@@ -1175,7 +1176,7 @@ function callIsDirectTopLevelConstInitializer(
   );
 }
 
-function identifierIsValueReference(identifier: ts.Identifier): boolean {
+function identifierIsValueReference(identifier: TS.Identifier): boolean {
   const parent = identifier.parent;
   if (
     (ts.isPropertyAccessExpression(parent) && parent.name === identifier) ||
@@ -1209,44 +1210,44 @@ function scopeBinds(scopes: readonly Set<string>[], name: string): boolean {
   return false;
 }
 
-function sourceSite(sourceFile: ts.SourceFile, start: number): string {
+function sourceSite(sourceFile: TS.SourceFile, start: number): string {
   const position = sourceFile.getLineAndCharacterOfPosition(start);
   return `${sourceFile.fileName}:${position.line + 1}:${position.character + 1}`;
 }
 
-function propertyNameText(name: ts.PropertyName): string | undefined {
+function propertyNameText(name: TS.PropertyName): string | undefined {
   if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
     return name.text;
   }
   return undefined;
 }
 
-function bindingNameSingleIdentifier(name: ts.BindingName): string | undefined {
+function bindingNameSingleIdentifier(name: TS.BindingName): string | undefined {
   return ts.isIdentifier(name) ? name.text : undefined;
 }
 
-function hasExportModifier(node: ts.Node): boolean {
+function hasExportModifier(node: TS.Node): boolean {
   return ts.canHaveModifiers(node)
     ? (ts.getModifiers(node)?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ??
         false)
     : false;
 }
 
-function hasDefaultModifier(node: ts.Node): boolean {
+function hasDefaultModifier(node: TS.Node): boolean {
   return ts.canHaveModifiers(node)
     ? (ts.getModifiers(node)?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword) ??
         false)
     : false;
 }
 
-function declarationName(node: ts.Node): string | undefined {
+function declarationName(node: TS.Node): string | undefined {
   if ((ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) && node.name) {
     return node.name.text;
   }
   return undefined;
 }
 
-function scriptKindForFile(fileName: string): ts.ScriptKind {
+function scriptKindForFile(fileName: string): TS.ScriptKind {
   const normalized = fileName.toLowerCase();
   if (normalized.endsWith('.tsx')) return ts.ScriptKind.TSX;
   if (normalized.endsWith('.jsx')) return ts.ScriptKind.JSX;

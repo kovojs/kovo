@@ -1,7 +1,5 @@
 import { createRequire } from 'node:module';
-import * as ts from 'typescript';
-
-type MutableTypescriptNamespace = typeof ts & Record<string, unknown>;
+import type * as ts from 'typescript';
 
 interface TypescriptCompatibilityApi {
   canHaveModifiers?: (node: ts.Node) => boolean;
@@ -19,17 +17,27 @@ interface TypescriptApiAdapter {
 }
 
 const requireTypescript = createRequire(import.meta.url);
-const defaultTsApi = createTypescriptApi(ts);
+export const typescriptRuntime = requireTypescript('typescript') as typeof ts;
+const defaultTsApi = createTypescriptApi(typescriptRuntime);
 
-export function ensureTypescriptRuntime(typescript: typeof ts = ts): typeof ts {
-  const mutableTs = typescript as MutableTypescriptNamespace;
-  if (!('ScriptTarget' in mutableTs)) {
-    Object.assign(mutableTs, requireTypescript('typescript') as typeof ts);
+export function ensureTypescriptRuntime(typescript: unknown = typescriptRuntime): typeof ts {
+  if (typescript && typeof typescript === 'object') {
+    if ('ScriptTarget' in typescript) return typescript as typeof ts;
+    const nestedDefault = (typescript as unknown as { readonly default?: unknown }).default;
+    if (
+      nestedDefault !== null &&
+      typeof nestedDefault === 'object' &&
+      'ScriptTarget' in nestedDefault
+    ) {
+      return nestedDefault as typeof ts;
+    }
   }
-  return typescript;
+  return typescriptRuntime;
 }
 
-export function createTypescriptApi(typescript: typeof ts = ts): TypescriptApiAdapter {
+export function createTypescriptApi(
+  typescript: typeof ts = typescriptRuntime,
+): TypescriptApiAdapter {
   const runtime = ensureTypescriptRuntime(typescript);
   const compatibility = runtime as typeof ts & TypescriptCompatibilityApi;
 
