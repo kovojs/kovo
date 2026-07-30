@@ -247,9 +247,10 @@ export const SnapshotButton = component({
   it('threads project-proven stock Better Auth mutation forms through dev transforms', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-public-vite-dev-auth-forms-'));
     const runtimeSource = `
-import { createBetterAuthPostgresBindingsFromEnvironment } from '@kovojs/better-auth/generated/postgres';
+import { createBetterAuthPostgresAppBindings } from '@kovojs/better-auth/postgres';
+const appDatabase = {};
 export function createAppAuthBindings(options) {
-  return createBetterAuthPostgresBindingsFromEnvironment({ ...options });
+  return createBetterAuthPostgresAppBindings(appDatabase, { ...options });
 }
 `;
     const authSource = `
@@ -541,7 +542,7 @@ export const account = query({
     const source = `
 import { defineKovo, s } from '@kovojs/server';
 
-const app = defineKovo({});
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000032' });
 
 export const addToCart = app.mutation({
   csrf: false,
@@ -565,6 +566,17 @@ export default app.assemble({
 `;
 
     try {
+      await mkdir(join(root, 'src'), { recursive: true });
+      await mkdir(join(root, 'node_modules/@kovojs'), { recursive: true });
+      // Source-derived app registry identities are accepted only through the exact physical server
+      // package resolved by TypeScript. Model a real installed app and keep the authored source on
+      // disk before Vite takes its project census (SPEC §5.2 / §6.2.1).
+      await symlink(
+        fileURLToPath(new URL('..', import.meta.url)),
+        join(root, 'node_modules/@kovojs/server'),
+        'dir',
+      );
+      await writeFile(join(root, 'src/app-shell.ts'), source, 'utf8');
       const plugin = kovo({ app: '/src/app-shell.ts' }) as unknown as KovoViteConfigureServer;
 
       await plugin.configResolved?.({ root });
