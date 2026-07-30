@@ -1,5 +1,5 @@
 {
-  "schema": "kovo-devex-baseline-policy/v4",
+  "schema": "kovo-devex-baseline-policy/v5",
   "status": "unratified",
   "referenceRunner": {
     "kind": "github-hosted-accepted",
@@ -52,10 +52,63 @@
     "retirementCondition": "The packed all-44-component fixture typechecks, checks, and builds with unimported copies under the ratified peak-RSS budget."
   },
   "ratification": {
-    "command": "vp exec node scripts/devex-benchmark.mjs --ratify --baseline <report> --proposal <reviewed-proposal> --write",
+    "workflow": ".github/workflows/devex-nightly.yml",
+    "gateId": "manual-hosted-ratification",
+    "dispatchInput": "ratify_hosted_budgets",
+    "sampleCount": 5,
+    "reportSources": ["benchmark", "golden-journey", "full-catalog"],
+    "baselineRecordPaths": {
+      "benchmark": "baselines/devex-hosted-benchmark-v1.json",
+      "golden-journey": "baselines/devex-hosted-golden-journey-v1.json",
+      "full-catalog": "baselines/devex-hosted-full-catalog-v1.json"
+    },
+    "command": "vp exec node scripts/devex-benchmark.mjs --ratify --budgets devex-budgets.json --baseline \"$RUNNER_TEMP/kovo-devex-ratification/benchmark.json\" --proposal \"$RUNNER_TEMP/kovo-devex-ratification/proposals/benchmark.json\" --baseline-record-path baselines/devex-hosted-benchmark-v1.json --baseline \"$RUNNER_TEMP/kovo-devex-ratification/golden/report.json\" --proposal \"$RUNNER_TEMP/kovo-devex-ratification/proposals/golden-journey.json\" --baseline-record-path baselines/devex-hosted-golden-journey-v1.json --baseline \"$RUNNER_TEMP/kovo-devex-ratification/full-catalog/report.json\" --proposal \"$RUNNER_TEMP/kovo-devex-ratification/proposals/full-catalog.json\" --baseline-record-path baselines/devex-hosted-full-catalog-v1.json --write",
     "proposalSchema": "kovo-devex-budget-proposal/v7",
     "requiresExactRunnerFingerprint": true,
+    "requiresExactCleanSourceRevision": true,
     "requiresHumanTargetRationale": true,
+    "atomicBudgetWrite": true,
+    "candidateArtifact": "kovo-devex-ratification-audit",
+    "targetProposals": {
+      "benchmark": {
+        "check.cold.durationMs": {
+          "budget": 30000,
+          "targetRationale": "Keep the authenticated packed cold check within the thirty-second release scorecard target."
+        },
+        "check.warm.durationMs": {
+          "budget": 10000,
+          "targetRationale": "Keep the authenticated packed warm check within the ten-second release scorecard target."
+        },
+        "check.oneFileIncremental.durationMs": {
+          "budget": 2000,
+          "targetRationale": "Keep one-file incremental proof inside the two-second ordinary edit-loop target."
+        },
+        "dev.editToDiagnostic.durationMs": {
+          "budget": 1000,
+          "targetRationale": "Keep edit-to-diagnostic p95 inside the one-second daily authoring-loop target."
+        },
+        "dev.editToServedResult.durationMs": {
+          "budget": 500,
+          "targetRationale": "Keep edit-to-served-result p95 inside the half-second interactive feedback target."
+        }
+      },
+      "golden-journey": {
+        "dev.ready.cold.durationMs": {
+          "budget": 15000,
+          "targetRationale": "Keep packed cold readiness inside the fifteen-second first-run evaluator target."
+        },
+        "dev.ready.warm.durationMs": {
+          "budget": 5000,
+          "targetRationale": "Keep packed warm readiness inside the five-second ordinary restart target."
+        }
+      },
+      "full-catalog": {
+        "ui.fullCatalog.peakRssBytes": {
+          "budget": 2147483648,
+          "targetRationale": "Keep the copied all-component catalog below the reviewed two-GiB process-tree RSS target."
+        }
+      }
+    },
     "noiseMultipliers": {
       "deterministic": 0,
       "statistical": 3
@@ -63,8 +116,8 @@
     "thresholdFormula": "budget + noiseMultiplier * noise"
   },
   "blockers": [
-    "Run the accepted GitHub-hosted ubuntu-24.04 collectors and commit their authenticated five-sample benchmark and dual-dialect journey reports before binding runner-scoped budgets.",
-    "Review product targets against that measured baseline; the schema applies the fixed 3x median-absolute-deviation statistical noise allowance.",
-    "Collect and review the authenticated five-sample full-catalog report, then ratify only its peak-RSS metric with a target proposal bound to the exact report and runner."
+    "Dispatch the guarded hosted-ratification audit and review its authenticated same-runner five-sample reports and candidate budget diff before committing evidence.",
+    "Review every proposed product target against the measured baseline; the schema applies the fixed 3x median-absolute-deviation statistical noise allowance.",
+    "Commit the three digest-bound baseline reports, ratified budgets, and reconciled baseline-policy status together only after the candidate audit is accepted."
   ]
 }

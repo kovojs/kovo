@@ -21,6 +21,7 @@ describe('DevEx CI and baseline policy', () => {
     expect(validateDevexCiPolicy(ci, { workflowSources })).toEqual([]);
     expect(runnerMinutes(ci.gates, 'per-pr')).toBe(65);
     expect(runnerMinutes(ci.gates, 'nightly')).toBe(290);
+    expect(runnerMinutes(ci.gates, 'manual')).toBe(240);
   });
 
   it('rejects unbudgeted jobs, drifted commands, and browser use before installation', () => {
@@ -119,6 +120,38 @@ describe('DevEx CI and baseline policy', () => {
     expect(validateDevexCiPolicy(discardedCatalogReport, { workflowSources })).toContain(
       'gates[5] must retain five authenticated all-44 RSS samples and redacted failures',
     );
+
+    const partialTransaction = structuredClone(ci);
+    partialTransaction.gates.find((gate) => gate.id === 'manual-hosted-ratification').commands[4] =
+      partialTransaction.gates
+        .find((gate) => gate.id === 'manual-hosted-ratification')
+        .commands[4].replace(
+          ' --baseline-record-path baselines/devex-hosted-full-catalog-v1.json',
+          '',
+        );
+    expect(validateDevexCiPolicy(partialTransaction, { workflowSources })).toContain(
+      'gates[6] must collect one-runner N=5 benchmark, golden, and full-catalog evidence before one clean transactional budget write',
+    );
+
+    const dirtyAudit = new Map(workflowSources);
+    dirtyAudit.set(
+      '.github/workflows/devex-nightly.yml',
+      dirtyAudit
+        .get('.github/workflows/devex-nightly.yml')
+        .replace('      - run: test -z "$(git status --porcelain=v1 --untracked-files=all)"\n', ''),
+    );
+    expect(validateDevexCiPolicy(ci, { workflowSources: dirtyAudit })).toContain(
+      'gates[6] must collect one-runner N=5 benchmark, golden, and full-catalog evidence before one clean transactional budget write',
+    );
+
+    const tooFewAuditSamples = structuredClone(ci);
+    tooFewAuditSamples.gates.find((gate) => gate.id === 'manual-hosted-ratification').commands[1] =
+      tooFewAuditSamples.gates
+        .find((gate) => gate.id === 'manual-hosted-ratification')
+        .commands[1].replace('--samples 5', '--samples 4');
+    expect(validateDevexCiPolicy(tooFewAuditSamples, { workflowSources })).toContain(
+      'gates[6] must collect one-runner N=5 benchmark, golden, and full-catalog evidence before one clean transactional budget write',
+    );
   });
 
   it('requires N>=5, exact statistics, reviewed targets, and an exact accepted runner', () => {
@@ -143,6 +176,13 @@ describe('DevEx CI and baseline policy', () => {
     expect(baseline.ratification.noiseMultipliers).toEqual({
       deterministic: 0,
       statistical: 3,
+    });
+    expect(baseline.ratification).toMatchObject({
+      atomicBudgetWrite: true,
+      dispatchInput: 'ratify_hosted_budgets',
+      requiresExactCleanSourceRevision: true,
+      requiresExactRunnerFingerprint: true,
+      sampleCount: 5,
     });
 
     const tooSmall = structuredClone(baseline);
@@ -202,6 +242,28 @@ describe('DevEx CI and baseline policy', () => {
     expect(validateDevexBaselinePolicy(driftedNoise, budgets, ci)).toContain(
       'ratification must preserve the fail-closed reviewed v7 procedure',
     );
+
+    const nonAtomic = structuredClone(baseline);
+    nonAtomic.ratification.atomicBudgetWrite = false;
+    nonAtomic.ratification.command = nonAtomic.ratification.command.replace(' --write', '');
+    expect(validateDevexBaselinePolicy(nonAtomic, budgets, ci)).toContain(
+      'ratification must preserve the fail-closed reviewed v7 procedure',
+    );
+
+    const droppedPair = structuredClone(baseline);
+    droppedPair.ratification.command = droppedPair.ratification.command.replace(
+      ' --baseline-record-path baselines/devex-hosted-full-catalog-v1.json',
+      '',
+    );
+    expect(validateDevexBaselinePolicy(droppedPair, budgets, ci)).toContain(
+      'ratification must preserve the fail-closed reviewed v7 procedure',
+    );
+
+    const inventedTarget = structuredClone(baseline);
+    inventedTarget.ratification.targetProposals.benchmark['check.cold.durationMs'].budget = 1;
+    expect(validateDevexBaselinePolicy(inventedTarget, budgets, ci)).toContain(
+      'ratification must preserve the fail-closed reviewed v7 procedure',
+    );
   });
 });
 
@@ -220,6 +282,9 @@ function policyWorkflowSources(policy) {
     const lines = [
       `  ${gate.job}:`,
       `    # devex-gate: ${gate.id}`,
+      ...(gate.id === 'manual-hosted-ratification'
+        ? ['    if: ${{ inputs.ratify_hosted_budgets }}']
+        : []),
       ...(gate.runWhenDependenciesFail ? ['    if: ${{ always() }}'] : []),
       '    runs-on: ubuntu-24.04',
       ...(gate.scope === 'job' ? [`    timeout-minutes: ${String(gate.timeoutMinutes)}`] : []),
@@ -233,6 +298,7 @@ function policyWorkflowSources(policy) {
         'nightly-benchmark',
         'nightly-full-catalog',
         'nightly-packed-journeys',
+        'manual-hosted-ratification',
         'pr-scorecard',
       ].includes(gate.id)
     ) {
@@ -244,6 +310,9 @@ function policyWorkflowSources(policy) {
       );
     }
     for (const command of gate.commands) lines.push(`      - run: ${command}`);
+    if (gate.id === 'manual-hosted-ratification') {
+      lines.push('      - run: test -z "$(git status --porcelain=v1 --untracked-files=all)"');
+    }
     if (gate.preserveReportOnFailure) {
       lines.push(
         '      - if: always()',
@@ -253,7 +322,9 @@ function policyWorkflowSources(policy) {
             ? 'kovo-devex-golden-journey'
             : gate.id === 'nightly-full-catalog'
               ? 'kovo-devex-full-catalog'
-              : 'kovo-devex-baseline'
+              : gate.id === 'manual-hosted-ratification'
+                ? 'kovo-devex-ratification-audit'
+                : 'kovo-devex-baseline'
         }`,
         ...(gate.id === 'nightly-packed-journeys'
           ? [
@@ -265,7 +336,12 @@ function policyWorkflowSources(policy) {
                 '          path: ${{ runner.temp }}/kovo-devex-full-catalog',
                 '          include-hidden-files: true',
               ]
-            : []),
+            : gate.id === 'manual-hosted-ratification'
+              ? [
+                  '          path: ${{ runner.temp }}/kovo-devex-ratification',
+                  '          include-hidden-files: true',
+                ]
+              : []),
       );
     }
     if (gate.prVisible) {

@@ -6,7 +6,7 @@ import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { repoRoot } from './release-packages.mjs';
 
 export const DEVEX_CI_POLICY_SCHEMA = 'kovo-devex-ci-policy/v2';
-export const DEVEX_BASELINE_POLICY_SCHEMA = 'kovo-devex-baseline-policy/v4';
+export const DEVEX_BASELINE_POLICY_SCHEMA = 'kovo-devex-baseline-policy/v5';
 
 const CADENCES = new Set(['per-pr', 'nightly', 'manual']);
 const GATE_SCOPES = new Set(['job', 'step']);
@@ -17,6 +17,7 @@ const REQUIRED_GATE_IDS = Object.freeze([
   'nightly-benchmark',
   'nightly-packed-journeys',
   'nightly-full-catalog',
+  'manual-hosted-ratification',
 ]);
 const HOSTED_RUNNER_FINGERPRINT_INPUTS = Object.freeze([
   'ImageOS',
@@ -178,7 +179,9 @@ export function validateDevexCiPolicy(policy, options = {}) {
             ? 'name: kovo-devex-golden-journey'
             : gate.id === 'nightly-full-catalog'
               ? 'name: kovo-devex-full-catalog'
-              : 'name: kovo-devex-baseline',
+              : gate.id === 'manual-hosted-ratification'
+                ? 'name: kovo-devex-ratification-audit'
+                : 'name: kovo-devex-baseline',
         ))
     ) {
       findings.push(`${label} must preserve its report after a budget breach`);
@@ -188,6 +191,7 @@ export function validateDevexCiPolicy(policy, options = {}) {
         'nightly-benchmark',
         'nightly-full-catalog',
         'nightly-packed-journeys',
+        'manual-hosted-ratification',
         'pr-scorecard',
       ].includes(gate.id) &&
       (!segment.includes('${ImageOS:-unknown}') ||
@@ -240,6 +244,52 @@ export function validateDevexCiPolicy(policy, options = {}) {
       findings.push(
         `${label} must retain five authenticated all-44 RSS samples and redacted failures`,
       );
+    }
+    if (gate.id === 'manual-hosted-ratification') {
+      const transaction = gate.commands?.find((command) => command.includes(' --ratify '));
+      const benchmark = gate.commands?.find(
+        (command) =>
+          command.includes('scripts/devex-benchmark.mjs --scenario ') &&
+          command.includes('--samples 5') &&
+          command.includes('/kovo-devex-ratification/benchmark.json'),
+      );
+      const golden = gate.commands?.find(
+        (command) =>
+          command.includes('scripts/golden-journey.mjs --scenario release-scorecard') &&
+          command.includes('--samples 5') &&
+          command.includes('/kovo-devex-ratification/golden/report.json'),
+      );
+      const fullCatalog = gate.commands?.find(
+        (command) =>
+          command.includes('scripts/full-catalog-reproducer.mjs') &&
+          command.includes('--samples 5') &&
+          command.includes('/kovo-devex-ratification/full-catalog/report.json'),
+      );
+      if (
+        gate.cadence !== 'manual' ||
+        gate.preserveReportOnFailure !== true ||
+        gate.requiresBrowser !== true ||
+        !segment.includes('if: ${{ inputs.ratify_hosted_budgets }}') ||
+        !segment.includes('test -z "$(git status --porcelain=v1 --untracked-files=all)"') ||
+        !segment.includes('path: ${{ runner.temp }}/kovo-devex-ratification') ||
+        !segment.includes('include-hidden-files: true') ||
+        benchmark === undefined ||
+        golden === undefined ||
+        fullCatalog === undefined ||
+        transaction === undefined ||
+        countOccurrences(transaction, ' --baseline "') !== 3 ||
+        countOccurrences(transaction, ' --proposal "') !== 3 ||
+        countOccurrences(transaction, ' --baseline-record-path ') !== 3 ||
+        countOccurrences(transaction, ' --write') !== 1 ||
+        !transaction.includes('--budgets devex-budgets.json') ||
+        !transaction.includes('baselines/devex-hosted-benchmark-v1.json') ||
+        !transaction.includes('baselines/devex-hosted-golden-journey-v1.json') ||
+        !transaction.includes('baselines/devex-hosted-full-catalog-v1.json')
+      ) {
+        findings.push(
+          `${label} must collect one-runner N=5 benchmark, golden, and full-catalog evidence before one clean transactional budget write`,
+        );
+      }
     }
     if (gate.requiresBrowser) {
       const browserAction = segment.indexOf('./.github/actions/playwright-install');
@@ -390,15 +440,44 @@ export function validateDevexBaselinePolicy(policy, budgets, ciPolicy) {
       'fullCatalogCollection must bind N>=5 authenticated retained evidence to KF-DEVEX-007 retirement',
     );
   }
+  const ratification = policy?.ratification;
+  const ratificationGate = ciPolicy?.gates?.find(
+    (candidate) => candidate.id === ratification?.gateId,
+  );
+  const ratificationCommand = String(ratification?.command ?? '');
+  const expectedSources = ['benchmark', 'golden-journey', 'full-catalog'];
+  const expectedBaselinePaths = {
+    benchmark: 'baselines/devex-hosted-benchmark-v1.json',
+    'golden-journey': 'baselines/devex-hosted-golden-journey-v1.json',
+    'full-catalog': 'baselines/devex-hosted-full-catalog-v1.json',
+  };
   if (
-    policy?.ratification?.proposalSchema !== 'kovo-devex-budget-proposal/v7' ||
-    policy?.ratification?.requiresExactRunnerFingerprint !== true ||
-    policy?.ratification?.requiresHumanTargetRationale !== true ||
-    JSON.stringify(policy?.ratification?.noiseMultipliers) !==
+    ratification?.workflow !== '.github/workflows/devex-nightly.yml' ||
+    ratification?.dispatchInput !== 'ratify_hosted_budgets' ||
+    !Number.isSafeInteger(ratification?.sampleCount) ||
+    ratification.sampleCount < requiredBaselineSamples ||
+    JSON.stringify(ratification?.reportSources) !== JSON.stringify(expectedSources) ||
+    JSON.stringify(ratification?.baselineRecordPaths) !== JSON.stringify(expectedBaselinePaths) ||
+    ratification?.proposalSchema !== 'kovo-devex-budget-proposal/v7' ||
+    ratification?.requiresExactRunnerFingerprint !== true ||
+    ratification?.requiresExactCleanSourceRevision !== true ||
+    ratification?.requiresHumanTargetRationale !== true ||
+    ratification?.atomicBudgetWrite !== true ||
+    ratification?.candidateArtifact !== 'kovo-devex-ratification-audit' ||
+    JSON.stringify(ratification?.noiseMultipliers) !==
       JSON.stringify(budgets?.procedure?.noiseMultipliers) ||
-    policy?.ratification?.thresholdFormula !== budgets?.procedure?.thresholdFormula ||
-    !String(policy?.ratification?.command ?? '').includes('--ratify') ||
-    !String(policy?.ratification?.command ?? '').includes('--proposal')
+    ratification?.thresholdFormula !== budgets?.procedure?.thresholdFormula ||
+    countOccurrences(ratificationCommand, ' --baseline "') !== 3 ||
+    countOccurrences(ratificationCommand, ' --proposal "') !== 3 ||
+    countOccurrences(ratificationCommand, ' --baseline-record-path ') !== 3 ||
+    countOccurrences(ratificationCommand, ' --write') !== 1 ||
+    !ratificationCommand.includes('--budgets devex-budgets.json') ||
+    Object.values(expectedBaselinePaths).some((value) => !ratificationCommand.includes(value)) ||
+    validateTargetProposals(ratification?.targetProposals, budgets).length > 0 ||
+    !ratificationGate ||
+    ratificationGate.cadence !== 'manual' ||
+    ratificationGate.workflow !== ratification?.workflow ||
+    !ratificationGate.commands.includes(ratificationCommand)
   ) {
     findings.push('ratification must preserve the fail-closed reviewed v7 procedure');
   }
@@ -427,10 +506,61 @@ export function validateDevexBaselinePolicy(policy, budgets, ciPolicy) {
   return findings;
 }
 
+function validateTargetProposals(proposals, budgets) {
+  const findings = [];
+  const expectedSources = ['benchmark', 'golden-journey', 'full-catalog'];
+  if (
+    !proposals ||
+    typeof proposals !== 'object' ||
+    Array.isArray(proposals) ||
+    JSON.stringify(Object.keys(proposals)) !== JSON.stringify(expectedSources)
+  ) {
+    return ['targetProposals must contain the exact hosted evidence sources'];
+  }
+  for (const [source, metrics] of Object.entries(proposals)) {
+    const expectedMetricIds = Object.entries(budgets?.metrics ?? {})
+      .filter(
+        ([, metric]) => metric?.source === source && Number.isFinite(metric.provisionalTarget),
+      )
+      .map(([metricId]) => metricId);
+    if (
+      !metrics ||
+      typeof metrics !== 'object' ||
+      Array.isArray(metrics) ||
+      JSON.stringify(Object.keys(metrics)) !== JSON.stringify(expectedMetricIds)
+    ) {
+      findings.push(`targetProposals.${source} must contain every provisional product target`);
+      continue;
+    }
+    for (const [metricId, proposal] of Object.entries(metrics)) {
+      const metric = budgets?.metrics?.[metricId];
+      if (
+        metric?.source !== source ||
+        !Number.isFinite(metric?.provisionalTarget) ||
+        proposal?.budget !== metric.provisionalTarget ||
+        Object.keys(proposal ?? {})
+          .sort()
+          .join(',') !== 'budget,targetRationale' ||
+        typeof proposal?.targetRationale !== 'string' ||
+        proposal.targetRationale.trim().length < 40
+      ) {
+        findings.push(
+          `targetProposals.${source}.${metricId} must preserve its provisional product target and substantive rationale`,
+        );
+      }
+    }
+  }
+  return findings;
+}
+
 export function runnerMinutes(gates, cadence) {
   return gates
     .filter((gate) => gate.cadence === cadence)
     .reduce((total, gate) => total + gate.budgetMinutes * gate.runnerCount, 0);
+}
+
+function countOccurrences(value, fragment) {
+  return typeof value === 'string' ? value.split(fragment).length - 1 : 0;
 }
 
 function validatePullRequestDelivery(policy, workflowSources) {
@@ -596,7 +726,7 @@ async function main() {
     return 1;
   }
   process.stdout.write(
-    `${DEVEX_CI_POLICY_SCHEMA} per-pr=${String(runnerMinutes(ci.gates, 'per-pr'))}/${String(ci.budgets.perPullRequestRunnerMinutes)} nightly=${String(runnerMinutes(ci.gates, 'nightly'))}/${String(ci.budgets.nightlyRunnerMinutes)} baseline=${baseline.status} baseline-samples=${String(baseline.collection.baselineSampleCount)} evaluation-samples=${String(baseline.collection.evaluationSampleCount)}\n`,
+    `${DEVEX_CI_POLICY_SCHEMA} per-pr=${String(runnerMinutes(ci.gates, 'per-pr'))}/${String(ci.budgets.perPullRequestRunnerMinutes)} nightly=${String(runnerMinutes(ci.gates, 'nightly'))}/${String(ci.budgets.nightlyRunnerMinutes)} manual=${String(runnerMinutes(ci.gates, 'manual'))} baseline=${baseline.status} baseline-samples=${String(baseline.collection.baselineSampleCount)} evaluation-samples=${String(baseline.collection.evaluationSampleCount)}\n`,
   );
   return 0;
 }

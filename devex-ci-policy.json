@@ -108,6 +108,27 @@
       "prVisible": false,
       "preserveReportOnFailure": true,
       "releaseRequired": true
+    },
+    {
+      "id": "manual-hosted-ratification",
+      "cadence": "manual",
+      "scope": "job",
+      "workflow": ".github/workflows/devex-nightly.yml",
+      "job": "hosted-ratification",
+      "budgetMinutes": 240,
+      "timeoutMinutes": 240,
+      "runnerCount": 1,
+      "commands": [
+        "vp exec node scripts/devex-benchmark.mjs --prepare-kovo-scenario",
+        "vp exec node scripts/devex-benchmark.mjs --scenario .release/devex/kovo-packed-scenario.json --samples 5 --output \"$RUNNER_TEMP/kovo-devex-ratification/benchmark.json\" --evaluate",
+        "vp exec node scripts/golden-journey.mjs --scenario release-scorecard --samples 5 --report \"$RUNNER_TEMP/kovo-devex-ratification/golden/report.json\" --artifacts \"$RUNNER_TEMP/kovo-devex-ratification/golden/failures\" --budgets devex-budgets.json --evaluate",
+        "vp exec node scripts/full-catalog-reproducer.mjs --samples 5 --output \"$RUNNER_TEMP/kovo-devex-ratification/full-catalog/report.json\" --artifacts \"$RUNNER_TEMP/kovo-devex-ratification/full-catalog/failures\"",
+        "vp exec node scripts/devex-benchmark.mjs --ratify --budgets devex-budgets.json --baseline \"$RUNNER_TEMP/kovo-devex-ratification/benchmark.json\" --proposal \"$RUNNER_TEMP/kovo-devex-ratification/proposals/benchmark.json\" --baseline-record-path baselines/devex-hosted-benchmark-v1.json --baseline \"$RUNNER_TEMP/kovo-devex-ratification/golden/report.json\" --proposal \"$RUNNER_TEMP/kovo-devex-ratification/proposals/golden-journey.json\" --baseline-record-path baselines/devex-hosted-golden-journey-v1.json --baseline \"$RUNNER_TEMP/kovo-devex-ratification/full-catalog/report.json\" --proposal \"$RUNNER_TEMP/kovo-devex-ratification/proposals/full-catalog.json\" --baseline-record-path baselines/devex-hosted-full-catalog-v1.json --write",
+        "vp exec node scripts/devex-benchmark.mjs --check-budgets"
+      ],
+      "prVisible": false,
+      "preserveReportOnFailure": true,
+      "requiresBrowser": true
     }
   ]
 }
