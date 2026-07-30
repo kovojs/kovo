@@ -14,7 +14,8 @@ one batch.
 Use one batch for a coherent user task and one migration executable.
 
 1. **`preparing`** — choose the non-`keep` decision rows, implement the tool,
-   and add rewrite and refusal fixtures. The old exports remain public.
+   and add refusal fixtures plus rewrite fixtures for every mechanical rewrite
+   the batch can honestly perform. The old exports remain public.
 2. **`ready`** — both modes, release note, rollback instructions, rules,
    fixtures, and an exercised `--check` result exist. Run the tool across the
    repository, inspect refusals, and migrate authored consumers. The old
@@ -116,8 +117,11 @@ A ready or removed batch records:
 
 - sorted decision IDs and a stable owner;
 - the executable path, result schema, and exact mode arguments;
-- at least one rewrite rule and at least one fail-closed refusal rule;
-- non-empty rewrite and refusal fixture lists;
+- at least one fail-closed refusal rule, plus a rewrite rule for every
+  mechanical rewrite the batch claims;
+- a non-empty refusal fixture list, plus rewrite fixtures when rewrite rules
+  exist; a removal that cannot infer an app-local replacement may be
+  refusal-only rather than inventing a dishonest rewrite;
 - a release note organized around the user task;
 - clean-worktree rollback instructions;
 - the command and result schema from an exercised `--check` run.

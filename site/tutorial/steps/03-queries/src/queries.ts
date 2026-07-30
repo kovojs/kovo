@@ -1,4 +1,4 @@
-import { publicAccess, query, type QueryLoadContext } from '@kovojs/server';
+import { publicAccess, query } from '@kovojs/server';
 
 import { createShopDb, type ShopDb, type ShopProduct, type ShopRequest } from './db.js';
 import { cart, product } from './domains.js';
@@ -28,20 +28,24 @@ export function loadProducts(db: ShopDb): ProductsResult {
 }
 // /snippet
 
-function dbFrom(context?: QueryLoadContext<ShopRequest>): ShopDb {
+type ShopQueryLoadContext = {
+  readonly request: ShopRequest;
+};
+
+function dbFrom(context?: ShopQueryLoadContext): ShopDb {
   return context?.request?.db ?? createShopDb();
 }
 
 // snippet:queries
 export const cartQuery = query({
   access: publicAccess('tutorial single-cart storefront read'),
-  load: (_input: unknown, context?: QueryLoadContext<ShopRequest>) => loadCart(dbFrom(context)),
+  load: (_input: unknown, context?: ShopQueryLoadContext) => loadCart(dbFrom(context)),
   reads: [cart],
 });
 
 export const productsQuery = query({
   access: publicAccess('tutorial public product catalog'),
-  load: (_input: unknown, context?: QueryLoadContext<ShopRequest>) => loadProducts(dbFrom(context)),
+  load: (_input: unknown, context?: ShopQueryLoadContext) => loadProducts(dbFrom(context)),
   reads: [product],
 });
 // /snippet

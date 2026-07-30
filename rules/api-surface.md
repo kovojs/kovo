@@ -131,7 +131,10 @@ declaration wildcards must narrow the symbol or member (the generated UI
 contract. Before an old export disappears, its batch must:
 
 1. expose exact `--check` and `--write` modes;
-2. ship mechanical rewrite rules plus fail-closed refusal rules and fixtures;
+2. ship fail-closed refusal rules and fixtures, plus mechanical rewrite rules
+   and fixtures whenever the replacement can be selected without guessing
+   application intent; an honestly refusal-only batch must not invent rewrite
+   evidence;
 3. emit the versioned structured result with source-anchored refusals;
 4. record an exercised check run, a release note, and concrete rollback;
 5. reach `removed` state and cover the exact decision row.
