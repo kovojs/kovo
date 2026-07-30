@@ -1,3 +1,4 @@
+/** @jsxImportSource @kovojs/server */
 import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
 import { endpoint, route, type ResponseHeaders } from '@kovojs/server';
 import { renderDeferredDocument } from '@kovojs/test/internal/integration/fixture-abi';
@@ -33,14 +34,16 @@ const deferredWire = endpoint('/deferred-wire', {
   method: 'GET',
   reason: 'read-only deferred fragment style stream fixture',
   response: { appOwnedSafety: false, body: 'html', cache: 'no-store' },
-  handler: () => {
+  handler: async () => {
     const response = renderDeferredDocument({
       body: '<section kovo-fragment-target="deferred-review">Loading reviews</section>',
       chunks: [
         {
           fragments: [
             {
-              html: DeferredReview.definition.render() as string,
+              // SPEC §5.2: authored components stay TSX; the JSX runtime carries the
+              // framework-rendered value into this framework-owned deferred sink.
+              html: await (<DeferredReview />),
               mode: 'append',
               stylesheets: reviewStylesheets,
               target: 'deferred-review',

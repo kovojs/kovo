@@ -58,6 +58,11 @@ export const Root = component({
       domName: 'root',
       exportName: 'Root',
       name: 'components/accordion/root',
+      source: {
+        end: 145,
+        file: 'components/accordion.tsx',
+        start: 14,
+      },
     },
   ]);
   expect(composedTabs.componentGraphFacts).toEqual([
@@ -66,6 +71,11 @@ export const Root = component({
       domName: 'root',
       exportName: 'Root',
       name: 'components/tabs/root',
+      source: {
+        end: 142,
+        file: 'components/tabs.tsx',
+        start: 14,
+      },
     },
   ]);
 

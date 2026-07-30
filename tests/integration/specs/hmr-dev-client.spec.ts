@@ -29,6 +29,7 @@ import {
   runWithGeneratedLiveTargetRegistry,
   type KovoAppShellViteMiddleware,
 } from '@kovojs/server/internal/app-shell-vite';
+import { resolveFixtureAppToken } from '@kovojs/server/internal/fixture-app';
 import {
   componentLiveTargetRenderer,
   createLiveTargetAttestation as createAppLiveTargetAttestation,
@@ -47,13 +48,17 @@ type ViteMiddleware = (
 type OnModuleDiagnostics = Exclude<KovoVitePluginOptions['onModuleDiagnostics'], undefined>;
 
 function liveTargetToken(
-  app: Parameters<typeof createAppLiveTargetAttestation>[0],
+  app: ReturnType<typeof createApp>,
   request: Request,
   target: string,
   component: string,
   props: Record<string, unknown> = {},
 ): string {
-  return createAppLiveTargetAttestation(app, { component, props, target }, request);
+  return createAppLiveTargetAttestation(
+    resolveFixtureAppToken(app),
+    { component, props, target },
+    request,
+  );
 }
 
 test('dev HMR client applies server-rendered live-target fragments without reloading', async ({
