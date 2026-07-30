@@ -37,8 +37,14 @@ Public packages follow [SemVer](https://semver.org). On the current `0.x` line t
 is stabilizing: **minor** bumps may break, **patch** bumps never do, and every breaking
 change is in the release notes. At `1.0.0` the standard guarantee applies. Surface that
 ships before it's frozen is marked `experimental_` / `@experimental` and is exempt until
-the marker is removed. A public symbol is removed only after a deprecation cycle
-(`@deprecated` for at least one minor on `0.x`, naming its replacement).
+the marker is removed.
+
+The 0.3 line is the cumulative API v1 cut. Run `kovo fix api-v1 --check` before changing
+package versions, resolve every refusal, then run `kovo fix api-v1 --write`. Kovo does not
+retain preview-era compatibility barrels for the replaced API. The
+[CLI guide](/guides/cli/#migrate-across-the-api-v1-cut) shows the migration and links the
+task-by-task release notes. After `1.0.0`, removal requires a deprecation cycle that names
+the replacement.
 
 ## Distribution
 

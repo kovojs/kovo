@@ -30,7 +30,9 @@ runner implements a phase.
 files and runs `tsc`, so route renames, missing form fields, and dead links all surface as type
 errors (this is the propagation property from [routing](/guides/routing/)).
 
-For the 0.2 preview API cut, classify the whole app before changing package versions:
+## Migrate across the API v1 cut
+
+For the 0.3 preview API cut, classify the whole app before changing package versions:
 
 ```sh
 kovo fix api-v1 --check
