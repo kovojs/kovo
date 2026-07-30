@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { loadCompiledOptimisticSubmission } from './compiled-optimism.js';
 import { guardKovoDynamicImportModule } from './dynamic-import-url.js';
-import { optimisticChangeFromInput, resolveOptimisticTargets } from './optimism.js';
+import {
+  canonicalInstanceKeyValue,
+  optimisticChangeFromInput,
+  resolveOptimisticTargets,
+} from './optimism.js';
 
 const moduleHref = `/c/__v/${'a'.repeat(64)}/src/mutations.client.js`;
 
@@ -12,8 +16,8 @@ describe('compiler-emitted optimistic plans', () => {
       count: value.count + input.quantity,
     }));
     const deriveKeys = vi.fn((input: { first: string; second: string }) => [
-      { id: input.first },
-      { id: input.second },
+      `product:${canonicalInstanceKeyValue({ id: input.first, org: 'acme' }, ['org', 'id'])}`,
+      `product:${canonicalInstanceKeyValue({ id: input.second, org: 'acme' }, ['org', 'id'])}`,
     ]);
     const importModule = guardKovoDynamicImportModule(
       vi.fn(async () => ({
@@ -53,7 +57,7 @@ describe('compiler-emitted optimistic plans', () => {
             keys: { product: deriveKeys },
             mutation: 'cart/add',
             queue: 'cart',
-            schema: 'kovo.optimistic-plan/v1',
+            schema: 'kovo.optimistic-plan/v2',
             statuses: { cart: 'hand-written', product: 'hand-written' },
             transforms: { cart: predict, product: predict },
           },
@@ -85,8 +89,14 @@ describe('compiler-emitted optimistic plans', () => {
       resolveOptimisticTargets(submission.optimistic, optimisticChangeFromInput(submission.input)),
     ).toEqual([
       { queryName: 'cart' },
-      { key: 'product:p1', queryName: 'product' },
-      { key: 'product:p2', queryName: 'product' },
+      {
+        key: `product:${canonicalInstanceKeyValue({ id: 'p1', org: 'acme' }, ['org', 'id'])}`,
+        queryName: 'product',
+      },
+      {
+        key: `product:${canonicalInstanceKeyValue({ id: 'p2', org: 'acme' }, ['org', 'id'])}`,
+        queryName: 'product',
+      },
     ]);
     expect(deriveKeys).toHaveBeenCalledWith(submission.input);
   });
@@ -100,7 +110,7 @@ describe('compiler-emitted optimistic plans', () => {
             inputFields: [],
             invalidations: ['cart'],
             mutation: 'cart/add',
-            schema: 'kovo.optimistic-plan/v1',
+            schema: 'kovo.optimistic-plan/v2',
             statuses: { cart: 'await-fragment' },
             transforms: { cart: predictor },
           },

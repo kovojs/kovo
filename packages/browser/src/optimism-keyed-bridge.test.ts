@@ -29,15 +29,19 @@ describe('instance-keyed optimistic bridge', () => {
       if (draft) draft.score += 1;
     },
   };
+  const detailKey = (id: string) => `questionDetail:${canonicalInstanceKeyValue({ id }, ['id'])}`;
 
   it('reduces a §10.2 key derivation to the canonical key VALUE (the keyValue half only)', () => {
     // `canonicalInstanceKeyValue` is the `keyValue` HALF of `name:keyValue` (SPEC §10.2:1040):
-    // a single-arg `{ id }` yields just the value, and composite args join in declared order. The
+    // a single-arg `{ id }` yields one typed, length-framed field, and composite args follow the
+    // supplied declared order. The
     // FULL instance key the store/wire share is assembled by `optimisticPlanFromAuthoredMap` (which
     // prefixes the query name); this helper alone does NOT produce a store slot.
-    expect(canonicalInstanceKeyValue({ id: 'q3' })).toBe('q3');
+    expect(canonicalInstanceKeyValue({ id: 'q3' })).toBe('f10:k2:ids2:q3');
     expect(canonicalInstanceKeyValue('q7')).toBe('q7');
-    expect(canonicalInstanceKeyValue({ org: 'o1', id: 'q3' })).toBe('o1:q3');
+    expect(canonicalInstanceKeyValue({ id: 'q3', org: 'o1' }, ['org', 'id'])).toBe(
+      'f11:k3:orgs2:o1f10:k2:ids2:q3',
+    );
   });
 
   it('lowers a keyed entry into OptimisticPlan.keys and leaves unkeyed entries flat', () => {
@@ -69,7 +73,7 @@ describe('instance-keyed optimistic bridge', () => {
       typeof derive === 'function'
         ? derive({ domain: 'mutation', input: { id: 'v1', targetId: 'q3' } })
         : derive,
-    ).toBe('questionDetail:q3');
+    ).toBe(detailKey('q3'));
   });
 
   it('prefixes object keys with the full colon-bearing name and preserves string domains', () => {
@@ -91,7 +95,7 @@ describe('instance-keyed optimistic bridge', () => {
         domain: 'mutation',
         input: { id: 'p1' },
       }),
-    ).toBe('catalog:product:p1');
+    ).toBe(`catalog:product:${canonicalInstanceKeyValue({ id: 'p1' })}`);
     expect(stringPlan.keys?.productDetail?.({ domain: 'mutation', input: { id: 'p1' } })).toBe(
       'inventory:p1',
     );
@@ -101,40 +105,40 @@ describe('instance-keyed optimistic bridge', () => {
     const store = createQueryStore();
     // Two instances of the SAME keyed query coexist on the page, slotted by the canonical
     // `name:keyValue` instance key the server/hydration emit (SPEC §10.2:1040).
-    store.set('questionDetail', { id: 'q3', score: 5 }, 'questionDetail:q3');
-    store.set('questionDetail', { id: 'q7', score: 9 }, 'questionDetail:q7');
+    store.set('questionDetail', { id: 'q3', score: 5 }, detailKey('q3'));
+    store.set('questionDetail', { id: 'q7', score: 9 }, detailKey('q7'));
 
     const plan = optimisticPlanFromAuthoredMap<VoteInput>({ questionDetail: detailEntry });
     const pending = applyOptimisticTransforms(store, { id: 'v1', targetId: 'q3' }, plan);
 
     // Instant prediction lands on the q3 instance; q7 is untouched.
-    expect(store.get('questionDetail', 'questionDetail:q3')).toEqual({ id: 'q3', score: 6 });
-    expect(store.get('questionDetail', 'questionDetail:q7')).toEqual({ id: 'q7', score: 9 });
+    expect(store.get('questionDetail', detailKey('q3'))).toEqual({ id: 'q3', score: 6 });
+    expect(store.get('questionDetail', detailKey('q7'))).toEqual({ id: 'q7', score: 9 });
     // Rolls back to the pre-transform snapshot of the right instance on error.
     pending.restore();
-    expect(store.get('questionDetail', 'questionDetail:q3')).toEqual({ id: 'q3', score: 5 });
+    expect(store.get('questionDetail', detailKey('q3'))).toEqual({ id: 'q3', score: 5 });
   });
 
   it('rebases the keyed prediction over arriving server truth by key (§10.4 settle-before-rebase)', () => {
     const store = createQueryStore();
     const rebaser = new OptimisticRebaser(store);
-    store.set('questionDetail', { id: 'q3', score: 5 }, 'questionDetail:q3');
+    store.set('questionDetail', { id: 'q3', score: 5 }, detailKey('q3'));
 
     const plan = optimisticPlanFromAuthoredMap<VoteInput>({ questionDetail: detailEntry });
     rebaser.add('vote-1', { id: 'v1', targetId: 'q3' }, plan);
 
-    expect(store.get('questionDetail', 'questionDetail:q3')).toEqual({ id: 'q3', score: 6 });
-    expect(rebaser.pendingCount('questionDetail', 'questionDetail:q3')).toBe(1);
+    expect(store.get('questionDetail', detailKey('q3'))).toEqual({ id: 'q3', score: 6 });
+    expect(rebaser.pendingCount('questionDetail', detailKey('q3'))).toBe(1);
 
     // Server truth for the q3 instance arrives (score already 5 server-side; the +1 rebases on top).
-    rebaser.applyServerTruth('questionDetail', { id: 'q3', score: 5 }, 'questionDetail:q3');
-    expect(store.get('questionDetail', 'questionDetail:q3')).toEqual({ id: 'q3', score: 6 });
+    rebaser.applyServerTruth('questionDetail', { id: 'q3', score: 5 }, detailKey('q3'));
+    expect(store.get('questionDetail', detailKey('q3'))).toEqual({ id: 'q3', score: 6 });
 
     // Its own response settles the pending transform; truth then wins outright (score 6 server-side).
     rebaser.settle('vote-1');
-    rebaser.applyServerTruth('questionDetail', { id: 'q3', score: 6 }, 'questionDetail:q3');
-    expect(store.get('questionDetail', 'questionDetail:q3')).toEqual({ id: 'q3', score: 6 });
-    expect(rebaser.pendingCount('questionDetail', 'questionDetail:q3')).toBe(0);
+    rebaser.applyServerTruth('questionDetail', { id: 'q3', score: 6 }, detailKey('q3'));
+    expect(store.get('questionDetail', detailKey('q3'))).toEqual({ id: 'q3', score: 6 });
+    expect(rebaser.pendingCount('questionDetail', detailKey('q3'))).toBe(0);
   });
 
   // L13 (SPEC §10.2:1040, KV313) regression: an args-object key derivation on a SPEC-canonically
@@ -149,17 +153,20 @@ describe('instance-keyed optimistic bridge', () => {
     const store = createQueryStore();
 
     // Server-truth: the canonical typed-read/hydration chunk the server emits for a query whose
-    // `instanceKey: (input) => 'product:' + input.id` resolves to `product:p1` (query.ts:857-864 →
-    // renderQueryWireHtml emits `<kovo-query name="product" key="product:p1">`). Decode it with the
+    // default `s.object({ id })` key resolves through the same typed framing used by optimism.
+    // Decode it with the
     // shipped browser wire-parser and apply it the way hydration does.
     const serverChunks = readQueryChunks(
-      '<kovo-query name="product" key="product:p1">{"stock":4}</kovo-query>',
+      `<kovo-query name="product" key="product:${canonicalInstanceKeyValue({ id: 'p1' }, [
+        'id',
+      ])}">{"stock":4}</kovo-query>`,
     );
     applyQueryChunksToRuntime(store, serverChunks);
 
     // The wire-parser/store currency is the FULL `product:p1` instance key (§10.2:1040).
-    expect(serverChunks).toEqual([{ key: 'product:p1', name: 'product', value: { stock: 4 } }]);
-    expect(store.get<Product>('product', 'product:p1')).toEqual({ stock: 4 });
+    const productKey = `product:${canonicalInstanceKeyValue({ id: 'p1' }, ['id'])}`;
+    expect(serverChunks).toEqual([{ key: productKey, name: 'product', value: { stock: 4 } }]);
+    expect(store.get<Product>('product', productKey)).toEqual({ stock: 4 });
 
     // An authored keyed-optimism entry deriving the instance from the mutation args (the §10.2
     // `{ id }` form), predicting an `addToCart` that decrements available stock.
@@ -175,17 +182,17 @@ describe('instance-keyed optimistic bridge', () => {
     const derive = plan.keys?.product;
     expect(
       typeof derive === 'function' && derive({ domain: 'mutation', input: { id: 'p1', qty: 1 } }),
-    ).toBe('product:p1');
+    ).toBe(productKey);
 
     const pending = applyOptimisticTransforms(store, { id: 'p1', qty: 1 }, plan);
 
     // The optimistic value is VISIBLE in the server-truth slot (not orphaned): stock 4 -> 3.
-    expect(store.get<Product>('product', 'product:p1')).toEqual({ stock: 3 });
+    expect(store.get<Product>('product', productKey)).toEqual({ stock: 3 });
     // No orphan was created at the bare-value slot the old code would have targeted.
     expect(store.get('product', 'p1')).toBeUndefined();
 
     // And it rolls back into the same canonical slot on server rejection.
     pending.restore();
-    expect(store.get<Product>('product', 'product:p1')).toEqual({ stock: 4 });
+    expect(store.get<Product>('product', productKey)).toEqual({ stock: 4 });
   });
 });

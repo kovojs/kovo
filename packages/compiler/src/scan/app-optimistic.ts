@@ -3,6 +3,12 @@ import {
   clientModuleRepresentationDigest,
   parseVersionedClientModuleTarget,
 } from '@kovojs/core/internal/client-module-url';
+import {
+  expressionResolvesToFrameworkExport,
+  frameworkExport,
+  type FrameworkIdentityTypeScript,
+} from '@kovojs/core/internal/framework-identity';
+import { canonicalQueryInstanceKeyCodecFactorySource } from '@kovojs/core/internal/wire-input-grammar';
 import * as ts from 'typescript';
 
 import type { CompilerOwnedAppContractMemberResolution } from '../app-contract-resolver.js';
@@ -18,8 +24,9 @@ import type {
 import { propertyNameText } from './ast.js';
 import type { ProjectMutationSourceFile } from './project-mutation-bindings.js';
 
-const OPTIMISTIC_PLAN_SCHEMA = 'kovo.optimistic-plan/v1' as const;
+const OPTIMISTIC_PLAN_SCHEMA = 'kovo.optimistic-plan/v2' as const;
 const MAX_OPTIMISTIC_BINDINGS = 1_024;
+const SCHEMA_IDENTITY = frameworkExport('@kovojs/server', 's');
 
 /** Project facts added to the ordinary mutation registry census. */
 export interface AppOptimisticProjectFacts {
@@ -28,7 +35,10 @@ export interface AppOptimisticProjectFacts {
 }
 
 interface QueryDeclaration {
+  readonly argsFields?: readonly string[];
   readonly fileName: string;
+  readonly hasArgs: boolean;
+  readonly hasCustomInstanceKey: boolean;
   readonly key: string;
   readonly ownerKey: string;
   readonly start: number;
@@ -50,6 +60,7 @@ interface OptimisticTransform {
   readonly apply?: string;
   readonly applyNode?: ts.Node;
   readonly keys?: string;
+  readonly keyFields?: readonly string[];
   readonly keysNode?: ts.Node;
   readonly query: string;
   readonly status: OptimisticTransformStatus;
@@ -100,8 +111,17 @@ export function appOptimisticProjectFacts(options: {
 
     if (member.memberName === 'query') {
       const key = declarationKey(member.sourceFile, variable.name.text, call, 'query');
+      const definition = declarationDefinition(call);
+      const argsExpression =
+        definition === null ? null : objectPropertyExpression(definition, 'args');
+      const argsFields =
+        argsExpression === null ? undefined : queryArgsFieldNames(argsExpression, options.checker);
       queryBySymbol.set(symbol, {
+        ...(argsFields === undefined ? {} : { argsFields }),
         fileName: normalizeSourceFileName(member.sourceFile.fileName),
+        hasArgs: argsExpression !== null,
+        hasCustomInstanceKey:
+          definition !== null && objectPropertyExpression(definition, 'instanceKey') !== null,
         key,
         ownerKey: member.ownerKey,
         start: call.getStart(member.sourceFile),
@@ -260,10 +280,32 @@ export function appOptimisticProjectFacts(options: {
             `${query.key} keyed optimism requires both keys(input) and apply(value, input).`,
           );
         }
+        if (!query.hasArgs) {
+          throw optimisticError(
+            'KOVO_OPTIMISTIC_KEYED_UNPARAMETERIZED',
+            mutation,
+            `${query.key} cannot declare keyed optimism because the query has no args schema.`,
+          );
+        }
+        if (query.argsFields === undefined) {
+          throw optimisticError(
+            'KOVO_OPTIMISTIC_KEY_FIELDS',
+            mutation,
+            `${query.key} keyed optimism requires compiler-resolvable s.object(...) args so browser and server use one declared field order.`,
+          );
+        }
+        if (query.hasCustomInstanceKey) {
+          throw optimisticError(
+            'KOVO_OPTIMISTIC_CUSTOM_INSTANCE_KEY',
+            mutation,
+            `${query.key} keyed optimism cannot mirror an authored instanceKey. Remove instanceKey to use Kovo's canonical args codec or use await-fragment.`,
+          );
+        }
         transforms.push({
           apply: executableFunctionExpression(applyNode, element.getSourceFile()),
           applyNode,
           keys: executableFunctionExpression(keysNode, element.getSourceFile()),
+          keyFields: query.argsFields,
           keysNode,
           query: query.key,
           status: 'hand-written',
@@ -337,6 +379,11 @@ function emitOptimisticModule(
 ): string {
   const dependencies = collectRuntimeDependencies(mutations, checker, sourceFileNames);
   const dependencySource = dependencies.map((entry) => emitRuntimeDependency(entry)).join('\n');
+  const queryKeyCodecSource = mutations.some((mutation) =>
+    mutation.transforms.some((transform) => transform.keys !== undefined),
+  )
+    ? `const __kovoQueryInstanceKeyCodec = (${canonicalQueryInstanceKeyCodecFactorySource()})();\n`
+    : '';
   const planEntries = mutations
     .slice()
     .sort((left, right) => left.declaration.key.localeCompare(right.declaration.key))
@@ -344,6 +391,7 @@ function emitOptimisticModule(
     .join(',\n');
   const typescriptSource = `${compilerIrHeader}
 ${dependencySource}
+${queryKeyCodecSource}
 export const kovoOptimisticMutationPlans = Object.freeze({
 ${planEntries}
 });
@@ -385,7 +433,16 @@ function emitMutationPlanEntry(mutation: LoweredMutation): string {
     keyed.length === 0
       ? ''
       : `,\nkeys: Object.freeze({${keyed
-          .map((transform) => `${JSON.stringify(transform.query)}: ${transform.keys}`)
+          .map(
+            (transform) =>
+              `${JSON.stringify(
+                transform.query,
+              )}: (input) => __kovoQueryInstanceKeyCodec.identities(${JSON.stringify(
+                transform.query,
+              )}, Object.freeze(${JSON.stringify(transform.keyFields)}), (${
+                transform.keys
+              })(input))`,
+          )
           .join(',\n')}})`;
   const statuses = Object.fromEntries(
     mutation.transforms.map((transform) => [transform.query, transform.status]),
@@ -663,6 +720,70 @@ function declarationDefinition(call: ts.CallExpression): ts.ObjectLiteralExpress
       ? unwrapExpression(second)
       : unwrapExpression(first);
   return candidate && ts.isObjectLiteralExpression(candidate) ? candidate : null;
+}
+
+function queryArgsFieldNames(
+  expression: ts.Expression,
+  checker: ts.TypeChecker,
+): readonly string[] | undefined {
+  const schema = resolveImmutableExpression(expression, checker);
+  if (!schema || !ts.isCallExpression(schema)) return undefined;
+  const callee = unwrapExpression(schema.expression);
+  if (
+    !callee ||
+    !ts.isPropertyAccessExpression(callee) ||
+    callee.name.text !== 'object' ||
+    !expressionResolvesToFrameworkExport(
+      ts as FrameworkIdentityTypeScript,
+      schema.getSourceFile(),
+      callee.expression,
+      SCHEMA_IDENTITY,
+      { legacyGlobals: [SCHEMA_IDENTITY] },
+    )
+  ) {
+    return undefined;
+  }
+  const shape = resolveImmutableExpression(schema.arguments[0], checker);
+  if (!shape || !ts.isObjectLiteralExpression(shape)) return undefined;
+  const fields: string[] = [];
+  const seen = new Set<string>();
+  for (let index = 0; index < shape.properties.length; index += 1) {
+    const property = shape.properties[index]!;
+    if (!ts.isPropertyAssignment(property)) return undefined;
+    const name = propertyNameText(property.name);
+    if (name === null || name === '' || name.length > 256 || seen.has(name)) {
+      return undefined;
+    }
+    seen.add(name);
+    fields.push(name);
+  }
+  return Object.freeze(fields);
+}
+
+function resolveImmutableExpression(
+  expression: ts.Expression | undefined,
+  checker: ts.TypeChecker,
+): ts.Expression | null {
+  let current = unwrapExpression(expression);
+  const seen = new Set<ts.Symbol>();
+  for (let depth = 0; current && depth < 16; depth += 1) {
+    if (!ts.isIdentifier(current)) return current;
+    const symbol = canonicalSymbol(checker, current);
+    if (!symbol || seen.has(symbol)) return null;
+    seen.add(symbol);
+    const declaration = symbol.valueDeclaration ?? symbol.declarations?.[0];
+    if (
+      !declaration ||
+      !ts.isVariableDeclaration(declaration) ||
+      !declaration.initializer ||
+      !ts.isVariableDeclarationList(declaration.parent) ||
+      (declaration.parent.flags & ts.NodeFlags.Const) === 0
+    ) {
+      return null;
+    }
+    current = unwrapExpression(declaration.initializer);
+  }
+  return null;
 }
 
 function declarationKey(

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 
 import { parseVersionedClientModuleTarget } from '@kovojs/core/internal/client-module-url';
+import { canonicalQueryInstanceKeyValue } from '@kovojs/core/internal/wire-input-grammar';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
@@ -596,10 +597,14 @@ describe('D1 compiler-owned exact project resolver', () => {
       '',
     ].join('\n');
     const querySource = [
+      "import { s } from '@kovojs/server';",
       "import type { MutationMarker } from './mutations.js';",
       "import { app } from './kovo.js';",
       'export const cartQuery = app.query({ load() { return { count: 0 }; } });',
-      'export const productQuery = app.query({ load() { return { stock: 3 }; } });',
+      'export const productQuery = app.query({',
+      '  args: s.object({ org: s.string(), id: s.string() }),',
+      '  load() { return { stock: 3 }; },',
+      '});',
       'export type QueryMarker = MutationMarker;',
       '',
     ].join('\n');
@@ -621,7 +626,7 @@ describe('D1 compiler-owned exact project resolver', () => {
       '  optimistic: [',
       '    cartQuery.optimistic(addToCartInput, predictCart),',
       '    productQuery.optimistic(addToCartInput, {',
-      '      keys: (input) => [{ id: input.productId }, { id: `${input.productId}-related` }],',
+      "      keys: (input) => [{ id: input.productId, org: 'acme' }, { id: `${input.productId}-related`, org: 'acme' }],",
       '      apply: (product, input) => ({ ...product, stock: product.stock - input.quantity }),',
       '    }),',
       '  ],',
@@ -686,9 +691,43 @@ describe('D1 compiler-owned exact project resolver', () => {
         source: expect.stringContaining('export const kovoOptimisticMutationPlans'),
       }),
     ]);
-    expect(facts.optimisticModules?.[0]?.source).toContain('schema: "kovo.optimistic-plan/v1"');
+    expect(facts.optimisticModules?.[0]?.source).toContain('schema: "kovo.optimistic-plan/v2"');
     expect(facts.optimisticModules?.[0]?.source).toContain('const predictCart = function');
+    expect(facts.optimisticModules?.[0]?.source).toContain(
+      'const __kovoQueryInstanceKeyCodec = (function createCanonicalQueryInstanceKeyCodec()',
+    );
+    expect(facts.optimisticModules?.[0]?.source).toContain(
+      `__kovoQueryInstanceKeyCodec.identities(${JSON.stringify(
+        queryKeys[1],
+      )}, Object.freeze(["org", "id"])`,
+    );
     expect(facts.optimisticModules?.[0]?.source).toContain('keys: Object.freeze');
+    const generatedSource = facts.optimisticModules?.[0]?.source;
+    expect(generatedSource).toBeDefined();
+    const generated = (await import(
+      `data:text/javascript;base64,${Buffer.from(generatedSource!).toString('base64')}`
+    )) as {
+      kovoOptimisticMutationPlans: Record<
+        string,
+        {
+          keys: Record<string, (input: { productId: string }) => readonly string[]>;
+        }
+      >;
+    };
+    expect(
+      generated.kovoOptimisticMutationPlans[mutationKey!]!.keys[queryKeys[1]!]!({
+        productId: 'p1',
+      }),
+    ).toEqual([
+      `${queryKeys[1]}:${canonicalQueryInstanceKeyValue(['org', 'id'], {
+        id: 'p1',
+        org: 'acme',
+      })}`,
+      `${queryKeys[1]}:${canonicalQueryInstanceKeyValue(['org', 'id'], {
+        id: 'p1-related',
+        org: 'acme',
+      })}`,
+    ]);
   });
 
   it('fails closed on copied, duplicate, schema-drifted, and cyclic optimistic handles', async () => {
@@ -769,6 +808,68 @@ describe('D1 compiler-owned exact project resolver', () => {
           "import { app } from './kovo.js';",
           'export const cartQuery = app.query({',
           '  load() { return { count: runtimeMarker }; },',
+          '});',
+          '',
+        ].join('\n'),
+      },
+      {
+        name: 'keyed unparameterized query',
+        optimistic: [
+          'export const addToCart = app.mutation({',
+          '  input: addToCartInput,',
+          '  optimistic: [cartQuery.optimistic(addToCartInput, {',
+          '    keys: () => [{}],',
+          '    apply: (data) => data,',
+          '  })],',
+          '  handler() {},',
+          '});',
+        ],
+        pattern: /KOVO_OPTIMISTIC_KEYED_UNPARAMETERIZED/u,
+        querySource: ordinaryQuerySource,
+      },
+      {
+        name: 'keyed custom schema query',
+        optimistic: [
+          'export const addToCart = app.mutation({',
+          '  input: addToCartInput,',
+          '  optimistic: [cartQuery.optimistic(addToCartInput, {',
+          '    keys: () => [{ id: "p1" }],',
+          '    apply: (data) => data,',
+          '  })],',
+          '  handler() {},',
+          '});',
+        ],
+        pattern: /KOVO_OPTIMISTIC_KEY_FIELDS/u,
+        querySource: [
+          "import { app } from './kovo.js';",
+          'const customArgs = { parse(input: unknown) { return input as { id: string }; } };',
+          'export const cartQuery = app.query({',
+          '  args: customArgs,',
+          '  load() { return { count: 0 }; },',
+          '});',
+          '',
+        ].join('\n'),
+      },
+      {
+        name: 'keyed custom instance key',
+        optimistic: [
+          'export const addToCart = app.mutation({',
+          '  input: addToCartInput,',
+          '  optimistic: [cartQuery.optimistic(addToCartInput, {',
+          '    keys: () => [{ id: "p1" }],',
+          '    apply: (data) => data,',
+          '  })],',
+          '  handler() {},',
+          '});',
+        ],
+        pattern: /KOVO_OPTIMISTIC_CUSTOM_INSTANCE_KEY/u,
+        querySource: [
+          "import { s } from '@kovojs/server';",
+          "import { app } from './kovo.js';",
+          'export const cartQuery = app.query({',
+          '  args: s.object({ id: s.string() }),',
+          '  instanceKey: ({ id }) => `custom:${id}`,',
+          '  load() { return { count: 0 }; },',
           '});',
           '',
         ].join('\n'),

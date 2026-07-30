@@ -1,5 +1,9 @@
 import type { Form, FormInput, JsonValue } from '@kovojs/core';
 import { diagnosticConstructors } from '@kovojs/core/internal/diagnostics';
+import {
+  canonicalQueryInstanceKeyValue,
+  type CanonicalQueryInstanceScalar,
+} from '@kovojs/core/internal/wire-input-grammar';
 import { reportRuntimeError } from './error-policy.js';
 import type { RuntimeErrorReporter } from './error-policy.js';
 import { queryIdentityFromStoreKey, queryStoreHasValue, queryStoreKey } from './query-store.js';
@@ -21,7 +25,6 @@ import {
   securitySet,
   securitySetAdd,
   securitySetHas,
-  securityString,
 } from './security-witness-intrinsics.js';
 
 /** A pure optimistic predictor: mutate the cloned query draft for the mutation input. */
@@ -97,12 +100,18 @@ export interface OptimisticPlan<Input = unknown> {
  * query's own `instanceKey` resolves against (§10.2 WHERE eq-predicate → `args.*`). A STRING result
  * IS the full canonical `name:keyValue` instance key (symmetric with the query's own
  * `instanceKey: (input) => string`, e.g. `product:p1`); an args OBJECT supplies only the `keyValue`
- * half (its values joined in declared order), which {@link optimisticPlanFromAuthoredMap} prefixes
- * with the query name to form the canonical instance key.
+ * half (typed and length-framed in declared order), which
+ * {@link optimisticPlanFromAuthoredMap} prefixes with the query name to form the canonical
+ * instance key.
  */
 export type AuthoredOptimisticKeyDerivation<Input = unknown> = (
   input: Input,
-) => string | Record<string, string | number | boolean>;
+) =>
+  | string
+  | Record<
+      string,
+      CanonicalQueryInstanceScalar | readonly CanonicalQueryInstanceScalar[] | undefined
+    >;
 
 /**
  * @internal An authored keyed optimistic entry — the runtime mirror of the server
@@ -885,34 +894,24 @@ function optimisticQueryKeys<Input>(
 /**
  * Reduce an authored §10.2 instance-key derivation result to the canonical key VALUE — the
  * `keyValue` HALF of the `name:keyValue` encoding (SPEC §10.2:1040). An args object is reduced to
- * its values joined in declared (insertion) order, so a composite `{ org, id }` key yields
- * `o1:q3`. This returns ONLY the `keyValue`: it does NOT by itself land on a store slot, because
- * the store/wire/optimism share the FULL `name:keyValue` instance key (§10.2:1040 — "this one
- * string keys the client store, the `<kovo-query name key>` wire chunk, kovo-deps, and live-push
- * routing"). {@link optimisticPlanFromAuthoredMap} assembles that full key by prefixing the query
- * name; keying a prediction by this bare `keyValue` alone would target an empty `name␞keyValue`
- * slot while server-truth/hydration land in `name␞name:keyValue`, silently no-op'ing (KV313).
+ * typed and length-framed fields. Generated plans always supply the authenticated `s.object`
+ * declaration order; the legacy internal authored-map bridge falls back to the object's own key
+ * order. This returns ONLY the `keyValue`: it does NOT by itself land on a store slot, because the
+ * store/wire/optimism share the FULL `name:keyValue` instance key (§10.2:1040). Keying a prediction
+ * by this bare `keyValue` alone would target an empty `name␞keyValue` slot while server truth lands
+ * in `name␞name:keyValue`, silently no-op'ing (KV313).
  */
 export function canonicalInstanceKeyValue(
-  derived: string | Record<string, string | number | boolean>,
+  derived:
+    | string
+    | Record<
+        string,
+        CanonicalQueryInstanceScalar | readonly CanonicalQueryInstanceScalar[] | undefined
+      >,
+  declaredFields?: readonly string[],
 ): string {
   if (typeof derived === 'string') return derived;
-  const names = securityObjectKeys(derived);
-  let result = '';
-  for (let index = 0; index < names.length; index += 1) {
-    const name = securityOwnArrayEntry(names, index);
-    if (!name.ok) throw new TypeError('Kovo optimistic key fields must be dense.');
-    const descriptor = securityGetOwnPropertyDescriptor(derived, name.value);
-    if (!descriptor || !('value' in descriptor)) {
-      throw new TypeError('Kovo optimistic key fields must be own-data properties.');
-    }
-    const value = descriptor.value;
-    if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') {
-      throw new TypeError('Kovo optimistic key fields must be string, number, or boolean values.');
-    }
-    result += `${index === 0 ? '' : ':'}${securityString(value)}`;
-  }
-  return result;
+  return canonicalQueryInstanceKeyValue(declaredFields ?? securityObjectKeys(derived), derived);
 }
 
 /**

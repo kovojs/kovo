@@ -2,7 +2,6 @@ import { assertAllowedKovoDynamicImportUrlForModule } from './dynamic-import-url
 import type { ImportHandlerModule } from './handlers.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 import {
-  canonicalInstanceKeyValue,
   type OptimisticChange,
   type OptimisticEntry,
   type OptimisticPlan,
@@ -22,10 +21,11 @@ import {
   securitySetAdd,
   securitySetHas,
   securityString,
+  securityStringStartsWith,
   securityStringToLowerCase,
 } from './security-witness-intrinsics.js';
 
-const COMPILED_OPTIMISTIC_PLAN_SCHEMA = 'kovo.optimistic-plan/v1';
+const COMPILED_OPTIMISTIC_PLAN_SCHEMA = 'kovo.optimistic-plan/v2';
 const COMPILED_OPTIMISTIC_PLAN_EXPORT = 'kovoOptimisticMutationPlans';
 const MAX_COMPILED_OPTIMISTIC_ENTRIES = 1_024;
 const compiledOptimismBrowserSecurity = createBrowserNavigationSecurityControls();
@@ -224,28 +224,23 @@ function compiledOptimisticKeys(
         derived.length > MAX_COMPILED_OPTIMISTIC_ENTRIES
       ) {
         throw new TypeError(
-          `Kovo optimistic plan ${mutation} keys(${queryName}) must return a bounded non-empty dense args array.`,
+          `Kovo optimistic plan ${mutation} keys(${queryName}) must return a bounded non-empty dense identity array.`,
         );
       }
       const identities: string[] = [];
       const seen = securitySet<string>();
       for (let keyIndex = 0; keyIndex < derived.length; keyIndex += 1) {
-        const argsEntry = securityOwnArrayEntry(derived, keyIndex);
-        if (!argsEntry.ok || !isRecord(argsEntry.value)) {
+        const identityEntry = securityOwnArrayEntry(derived, keyIndex);
+        if (
+          !identityEntry.ok ||
+          typeof identityEntry.value !== 'string' ||
+          !securityStringStartsWith(identityEntry.value, `${queryName}:`)
+        ) {
           throw new TypeError(
-            `Kovo optimistic plan ${mutation} keys(${queryName}) must return exact args objects.`,
+            `Kovo optimistic plan ${mutation} keys(${queryName}) must return full canonical ${queryName} identities.`,
           );
         }
-        const argNames = securityObjectKeys(argsEntry.value);
-        if (argNames.length === 0 || argNames.length > 64) {
-          throw new TypeError(
-            `Kovo optimistic plan ${mutation} keys(${queryName}) returned malformed query args.`,
-          );
-        }
-        const keyValue = canonicalInstanceKeyValue(
-          argsEntry.value as Record<string, string | number | boolean>,
-        );
-        const identity = `${queryName}:${keyValue}`;
+        const identity = identityEntry.value;
         queryStoreKey(queryName, identity);
         if (securitySetHas(seen, identity)) {
           throw new TypeError(
