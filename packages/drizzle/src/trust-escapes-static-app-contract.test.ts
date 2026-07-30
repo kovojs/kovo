@@ -154,6 +154,159 @@ describe('defineKovo request-authority provenance', () => {
     expect(facts, JSON.stringify(facts)).toEqual([]);
   });
 
+  it('accepts the exact app-scoped access algebra through immutable guard aliases', () => {
+    const facts = sinksForFiles([
+      {
+        fileName: 'kovo.ts',
+        source: `
+          import { defineKovo } from '@kovojs/server';
+          export const app = defineKovo({
+            appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e',
+          });
+        `,
+      },
+      {
+        fileName: 'schema.ts',
+        source: `
+          import { pgTable, text } from 'drizzle-orm/pg-core';
+          export const records = pgTable('records', {
+            id: text('id').primaryKey(),
+            ownerId: text('owner_id').notNull(),
+          });
+        `,
+      },
+      {
+        fileName: 'declarations.ts',
+        source: `
+          import { guard } from '@kovojs/server';
+          import { app } from './kovo.js';
+          import { records } from './schema.js';
+
+          const rateLimited = app.rateLimit({
+            key: (request) => request.url,
+            max: 100,
+            per: 'global',
+          });
+          const owned = app.owns((request) => request.session.user.id, records.ownerId);
+          const local = guard('local access proof', () => true);
+          const allow = app.all(app.authenticated, app.role('admin'), rateLimited, owned, local);
+
+          export const record = app.query({
+            access: [allow],
+            load() { return { id: 'record-1' }; },
+          });
+          export const machineRecord = app.query({
+            access: app.verifiedAccess,
+            load() { return { id: 'machine-record-1' }; },
+          });
+        `,
+      },
+    ]);
+
+    expect(facts, JSON.stringify(facts)).toEqual([]);
+  });
+
+  it('scans authored callbacks nested in the exact app-scoped access algebra', () => {
+    const facts = sinksForFiles([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { execFileSync } from 'node:child_process';
+          import { defineKovo, guard } from '@kovojs/server';
+          import { pgTable, text } from 'drizzle-orm/pg-core';
+
+          const app = defineKovo({
+            appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e',
+          });
+          const records = pgTable('records', {
+            id: text('id').primaryKey(),
+            ownerId: text('owner_id').notNull(),
+          });
+          const owned = app.owns(
+            (request) => {
+              execFileSync(request.url);
+              return request.session.user.id;
+            },
+            records.ownerId,
+          );
+          const local = guard('local access proof', (request) => {
+            execFileSync(request.url);
+            return true;
+          });
+          const rateLimited = app.rateLimit({
+            key: (request) => {
+              execFileSync(request.url);
+              return request.url;
+            },
+            max: 100,
+          });
+          const allow = app.all(owned, local, rateLimited);
+
+          export const record = app.query({
+            access: [allow],
+            load() { return { id: 'record-1' }; },
+          });
+        `,
+      },
+    ]);
+
+    expect(
+      facts.filter((fact) => fact.sink === 'child_process.execFileSync'),
+      JSON.stringify(facts),
+    ).toHaveLength(3);
+  });
+
+  it('keeps lookalike, mutable, computed, and dynamic app guard values closed', () => {
+    const variants = [
+      `
+        import { defineKovo } from '@kovojs/server';
+        const app = defineKovo({ appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e' });
+        const defaults = { max: 100 };
+        const allow = app.rateLimit({ ...defaults });
+        export const record = app.query({
+          access: [allow],
+          load() { return true; },
+        });
+      `,
+      `
+        import { defineKovo } from '@kovojs/server';
+        const app = defineKovo({ appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e' });
+        let allow = app.rateLimit({ max: 100 });
+        export const record = app.query({
+          access: [allow],
+          load() { return true; },
+        });
+      `,
+      `
+        import { defineKovo } from '@kovojs/server';
+        const app = defineKovo({ appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e' });
+        const allow = app['rateLimit']({ max: 100 });
+        export const record = app.query({
+          access: [allow],
+          load() { return true; },
+        });
+      `,
+      `
+        import { query } from '@kovojs/server';
+        const app = {
+          rateLimit() {
+            return () => true;
+          },
+        };
+        const allow = app.rateLimit({ max: 100 });
+        export const record = query({
+          access: [allow],
+          load() { return true; },
+        });
+      `,
+    ];
+
+    for (const [index, source] of variants.entries()) {
+      const facts = sinksForFiles([{ fileName: `variant-${index}.ts`, source }]);
+      expect(facts, `${index}: ${JSON.stringify(facts)}`).not.toEqual([]);
+    }
+  });
+
   it('scans defineKovo auth providers and app-scoped request roots', () => {
     const facts = sinksForFiles([
       {

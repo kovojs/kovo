@@ -108,4 +108,66 @@ describe('escape-census trust facts (C13 anchor)', () => {
         .map((fact) => fact.kind),
     ).toEqual(['allowControlChars', 'csrfFalse', 'kovoAnalyzerSummary']);
   });
+
+  it('binds app-scoped mutation and endpoint escapes to the exact defineKovo receiver', () => {
+    const facts = collectTrustEscapesFromProject({
+      files: [
+        {
+          fileName: 'kovo.ts',
+          source: [
+            "import { defineKovo } from '@kovojs/server';",
+            "export const app = defineKovo({ appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e' });",
+          ].join('\n'),
+        },
+        {
+          fileName: 'app.ts',
+          source: [
+            "import { app } from './kovo.js';",
+            'export const machineWrite = app.mutation({',
+            '  csrf: false,',
+            "  csrfJustification: 'signed machine request',",
+            '  handler() { return { ok: true }; },',
+            '});',
+            "export const rawHealth = app.endpoint('/healthz', {",
+            "  reason: 'read-only health probe',",
+            "  handler() { return new Response('ok'); },",
+            "  method: 'GET',",
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(
+      facts.map((fact) => ({
+        kind: fact.kind,
+        root: fact.root,
+        source: fact.source,
+      })),
+    ).toEqual([
+      { kind: 'csrfFalse', root: 'mutation:machineWrite', source: 'machineWrite' },
+      {
+        kind: 'rawEndpoint',
+        root: expect.stringMatching(/^app\.ts:/u),
+        source: '/healthz',
+      },
+    ]);
+
+    const lookalike = collectTrustEscapesFromProject({
+      files: [
+        {
+          fileName: 'lookalike.ts',
+          source: `
+            const app = {
+              mutation() {},
+              endpoint() {},
+            };
+            app.mutation({ csrf: false });
+            app.endpoint('/raw', { reason: 'not framework-owned' });
+          `,
+        },
+      ],
+    });
+    expect(lookalike).toEqual([]);
+  });
 });

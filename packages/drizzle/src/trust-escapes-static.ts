@@ -355,10 +355,11 @@ export function collectTrustEscapesFromProject(
   const { sourceFiles, dispose } = createSyntacticProject(options.files);
   try {
     const escapes: TrustEscapeExplain[] = [];
+    const provenance = createRequestProvenanceSession();
     for (const [index, sourceFile] of sourceFiles.entries()) {
       const file = options.files[index];
       if (!file) continue;
-      escapes.push(...trustEscapesForSourceFile(file, sourceFile));
+      escapes.push(...trustEscapesForSourceFile(file, sourceFile, provenance));
     }
     return escapes.sort(
       (left, right) => left.kind.localeCompare(right.kind) || left.site.localeCompare(right.site),
@@ -371,6 +372,7 @@ export function collectTrustEscapesFromProject(
 function trustEscapesForSourceFile(
   file: TrustEscapeSourceFileInput,
   sourceFile: SourceFile,
+  provenance: RequestProvenanceSession,
 ): TrustEscapeExplain[] {
   const escapes: TrustEscapeExplain[] = [];
 
@@ -394,13 +396,18 @@ function trustEscapesForSourceFile(
       continue;
     }
 
-    if (isKovoServerTrustCallee(callee, 'mutation')) {
+    const appMember = requestStaticCallMember(unwrapStaticExpression(callee));
+    const appFactory =
+      appMember === 'endpoint' || appMember === 'mutation'
+        ? requestAppAuthoringFactoryForExpression(callee, provenance)
+        : undefined;
+    if (isKovoServerTrustCallee(callee, 'mutation') || appFactory === 'mutation') {
       const escape = buildCsrfFalseEscape(file, call);
       if (escape) escapes.push(escape);
       continue;
     }
 
-    if (isKovoServerTrustCallee(callee, 'endpoint')) {
+    if (isKovoServerTrustCallee(callee, 'endpoint') || appFactory === 'endpoint') {
       escapes.push(buildRawEndpointEscape(file, call));
       continue;
     }
@@ -751,11 +758,12 @@ export function collectStaticBuildTrustFactsFromProject(options: TrustEscapeProj
     const revealed: RevealExplainFact[] = [];
     const trustEscapes: TrustEscapeExplain[] = [];
     const unregisteredSinks: UnregisteredSinkFact[] = [];
+    const provenance = createRequestProvenanceSession();
     for (const [index, sourceFile] of sourceFiles.entries()) {
       const file = options.files[index];
       if (!file) continue;
       capabilities.push(...capabilityEscapesForSourceFile(file, sourceFile));
-      trustEscapes.push(...trustEscapesForSourceFile(file, sourceFile));
+      trustEscapes.push(...trustEscapesForSourceFile(file, sourceFile, provenance));
       for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
         const downgrade = cookieDowngradeForCall(file, call);
         if (downgrade) cookieDowngrades.push(downgrade);
@@ -5934,6 +5942,9 @@ function requestRetainedConfigOpaqueDerivation(
     if (requestDefinedKovoMemberForExpression(node, session)) {
       return close(undefined);
     }
+    if (requestExpressionIsExactReviewedDrizzleColumnReference(node)) {
+      return close(undefined);
+    }
     const member = Node.isPropertyAccessExpression(node)
       ? staticMemberName(node.getNameNode())
       : staticMemberName(node.getArgumentExpression());
@@ -7727,6 +7738,7 @@ function requestRetainedConfigCallIsReviewed(
   if (requestCallIsExactClosedStylesheet(call)) return true;
   if (requestBuildConfigConstructorCallIsClosed(call)) return true;
   if (requestCallIsExactClosedRedirect(call)) return true;
+  if (requestCallIsExactGuardConstructor(call)) return true;
   if (requestCallIsExactPostgresSchemaModule(call)) return true;
   if (
     requestCallIsExactDefineKovo(call) ||
@@ -13764,6 +13776,38 @@ function scanRequestRootCallbackCandidate(
   spec: RequestRootCallbackSpec,
   context: RequestProcessScanContext,
 ): void {
+  const appAccess =
+    spec.staticValue === 'access' || spec.staticValue === 'guard'
+      ? requestExactAppAccessValue(expression, spec.staticValue, context.provenance, new Set(), 0)
+      : undefined;
+  if (appAccess) {
+    for (const callable of appAccess.callables) {
+      scanRequestCallable(
+        {
+          ...callable,
+          ...(spec.publicWire ? { publicWire: true } : {}),
+          ...(spec.publicWireMethods ? { publicWireMethods: spec.publicWireMethods } : {}),
+          ...(spec.publicWirePaths ? { publicWirePaths: spec.publicWirePaths } : {}),
+          rootCallback: callback,
+          ...(spec.carriers ? { rootCarriers: spec.carriers } : {}),
+          rootFactory: factory,
+          ...(spec.roles ? { rootParameterRoles: spec.roles } : {}),
+        },
+        context,
+      );
+    }
+    for (const selector of appAccess.selectors) {
+      scanRequestCallable(
+        {
+          ...selector,
+          rootCallback: `${callback}.selector`,
+          rootParameterRoles: ['request'],
+        },
+        context,
+      );
+    }
+    return;
+  }
   const guardComposition = requestExactGuardsAllComposition(expression, context.provenance);
   if (guardComposition) {
     // SPEC §6.6 / §10.3: `guards.all(...)` itself is framework-owned, but each local guard
@@ -13883,6 +13927,243 @@ function scanRequestRootCallbackCandidate(
       context,
     );
   }
+}
+
+interface RequestExactAppAccessValue {
+  readonly callables: readonly RequestCallable[];
+  readonly selectors: readonly RequestCallable[];
+}
+
+/**
+ * SPEC §6.2.1/§6.6/§10.2: the app-scoped access algebra returns the exact executable guards that
+ * runtime dispatch consumes. Resolve only an exact `defineKovo()` receiver and preserve every
+ * authored callback as an ordinary request root; treating the aggregate as inert would launder
+ * `guard(...)`, `rateLimit({ key })`, or `owns(keyOf, column)` code through `app.all(...)`.
+ */
+function requestExactAppAccessValue(
+  expression: Node,
+  kind: 'access' | 'guard',
+  session: RequestProvenanceSession,
+  seen: Set<string>,
+  depth: number,
+): RequestExactAppAccessValue | undefined {
+  if (depth > 64) return undefined;
+  const node = unwrapStaticExpression(expression);
+  const key = requestNodeIdentity(node);
+  if (seen.has(key) || !requestProvenanceStep(session, node)) return undefined;
+  seen.add(key);
+
+  if (requestExactDefinedKovoValueMember(node, 'authenticated', session)) {
+    return { callables: [], selectors: [] };
+  }
+  if (kind === 'access' && requestExactDefinedKovoValueMember(node, 'verifiedAccess', session)) {
+    return { callables: [], selectors: [] };
+  }
+
+  if (Node.isCallExpression(node) && !node.getQuestionDotTokenNode()) {
+    const member = requestExactDefinedKovoCallMember(node, session);
+    if (kind === 'access' && member === 'publicAccess') {
+      const [reason, ...extra] = node.getArguments();
+      return reason &&
+        extra.length === 0 &&
+        requestStaticCallbackValueIsClosed(reason, 'scalar', new Set(), session)
+        ? { callables: [], selectors: [] }
+        : undefined;
+    }
+    if (member === 'role') {
+      const [role, ...extra] = node.getArguments();
+      return role &&
+        extra.length === 0 &&
+        requestStaticCallbackValueIsClosed(role, 'scalar', new Set(), session)
+        ? { callables: [], selectors: [] }
+        : undefined;
+    }
+    if (member === 'rateLimit') {
+      const [options, ...extra] = node.getArguments();
+      const callables =
+        options && extra.length === 0
+          ? requestExactRateLimitOptionCallables(options, session)
+          : undefined;
+      return callables ? { callables: [], selectors: callables } : undefined;
+    }
+    if (member === 'owns') {
+      const [keyOf, keyColumn, ...extra] = node.getArguments();
+      const callables =
+        keyOf && keyColumn && extra.length === 0
+          ? requestExactGuardCallables(keyOf, session)
+          : undefined;
+      return callables && requestExpressionIsExactReviewedDrizzleColumnReference(keyColumn!)
+        ? { callables: [], selectors: callables }
+        : undefined;
+    }
+    if (member === 'all') {
+      const args = node.getArguments();
+      if (args.length === 0 || args.some(Node.isSpreadElement)) return undefined;
+      const callables: RequestCallable[] = [];
+      const selectors: RequestCallable[] = [];
+      for (const argument of args) {
+        const resolved = requestExactAppAccessValue(
+          argument,
+          'guard',
+          session,
+          new Set(seen),
+          depth + 1,
+        );
+        if (!resolved) return undefined;
+        callables.push(...resolved.callables);
+        selectors.push(...resolved.selectors);
+      }
+      return {
+        callables: dedupeRequestCallables(callables),
+        selectors: dedupeRequestCallables(selectors),
+      };
+    }
+    if (requestCallIsExactGuardConstructor(node)) {
+      const [name, callback, ...extra] = node.getArguments();
+      const callables =
+        name &&
+        callback &&
+        extra.length === 0 &&
+        requestStaticCallbackValueIsClosed(name, 'scalar', new Set(), session)
+          ? requestExactGuardCallables(callback, session)
+          : undefined;
+      return callables ? { callables, selectors: [] } : undefined;
+    }
+    if (requestStaticFrameworkGuardIsClosed(node)) return { callables: [], selectors: [] };
+  }
+
+  const direct = requestCallableForFunctionNode(node);
+  if (direct) return { callables: [direct], selectors: [] };
+
+  if (!Node.isIdentifier(node)) return undefined;
+  const symbol = requestIdentifierValueSymbol(node) ?? node.getSymbol();
+  if (!symbol || requestAssignedBindingProjections(symbol, session).length !== 0) return undefined;
+  const symbolKey = requestSymbolKey(symbol);
+  if (seen.has(symbolKey)) return undefined;
+  seen.add(symbolKey);
+  const declarations = symbol.getDeclarations();
+  if (declarations.length === 0) return undefined;
+  const callables: RequestCallable[] = [];
+  const selectors: RequestCallable[] = [];
+  for (const declaration of declarations) {
+    if (
+      Node.isVariableDeclaration(declaration) &&
+      declaration.getVariableStatement()?.getDeclarationKind() !== VariableDeclarationKind.Const
+    ) {
+      return undefined;
+    }
+    const initializer = valueDeclarationInitializer(declaration);
+    if (!initializer) return undefined;
+    const resolved = requestExactAppAccessValue(
+      initializer,
+      kind,
+      session,
+      new Set(seen),
+      depth + 1,
+    );
+    if (!resolved) return undefined;
+    callables.push(...resolved.callables);
+    selectors.push(...resolved.selectors);
+  }
+  return {
+    callables: dedupeRequestCallables(callables),
+    selectors: dedupeRequestCallables(selectors),
+  };
+}
+
+function requestExactDefinedKovoValueMember(
+  expression: Node,
+  member: 'authenticated' | 'verifiedAccess',
+  session: RequestProvenanceSession,
+): boolean {
+  const node = unwrapStaticExpression(expression);
+  return !!(
+    Node.isPropertyAccessExpression(node) &&
+    !node.getQuestionDotTokenNode() &&
+    node.getName() === member &&
+    requestDefinedKovoMemberForExpression(node, session) === member
+  );
+}
+
+function requestExactDefinedKovoCallMember(
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): string | undefined {
+  const callee = unwrapStaticExpression(call.getExpression());
+  if (
+    call.getQuestionDotTokenNode() ||
+    !Node.isPropertyAccessExpression(callee) ||
+    callee.getQuestionDotTokenNode()
+  ) {
+    return undefined;
+  }
+  return requestDefinedKovoMemberForExpression(callee, session);
+}
+
+function requestCallIsExactGuardConstructor(call: import('ts-morph').CallExpression): boolean {
+  return !!(
+    !call.getQuestionDotTokenNode() &&
+    requestExactPristineDirectImport(call.getExpression(), '@kovojs/server', 'guard')
+  );
+}
+
+function requestExactGuardCallables(
+  expression: Node,
+  session: RequestProvenanceSession,
+): readonly RequestCallable[] | undefined {
+  const direct = requestCallableForFunctionNode(unwrapStaticExpression(expression));
+  const resolution = direct
+    ? { callables: [direct] }
+    : resolveRequestCallable(expression, new Set(), 0, session);
+  return resolution.callables.length > 0 && !resolution.opaqueModule
+    ? dedupeRequestCallables(resolution.callables)
+    : undefined;
+}
+
+function requestExactRateLimitOptionCallables(
+  expression: Node,
+  session: RequestProvenanceSession,
+): readonly RequestCallable[] | undefined {
+  const record = resolveStaticObjectLiteral(expression, new Set(), 0);
+  if (!record) return undefined;
+  const seen = new Set<string>();
+  let hasMax = false;
+  let callables: readonly RequestCallable[] = [];
+  for (const property of record.getProperties()) {
+    if (!Node.isPropertyAssignment(property)) return undefined;
+    const name = staticMemberName(property.getNameNode());
+    const value = property.getInitializer();
+    if (
+      !name ||
+      !value ||
+      seen.has(name) ||
+      !['key', 'max', 'maxKeys', 'per', 'windowMs'].includes(name)
+    ) {
+      return undefined;
+    }
+    seen.add(name);
+    if (name === 'max') hasMax = true;
+    if (name === 'key') {
+      const resolved = requestExactGuardCallables(value, session);
+      if (!resolved) return undefined;
+      callables = resolved;
+    } else if (!requestExpressionIsClosedStaticData(value)) {
+      return undefined;
+    }
+  }
+  return hasMax ? callables : undefined;
+}
+
+function requestExpressionIsExactReviewedDrizzleColumnReference(expression: Node): boolean {
+  const node = unwrapStaticExpression(expression);
+  if (!Node.isPropertyAccessExpression(node) && !Node.isElementAccessExpression(node)) return false;
+  const member = Node.isPropertyAccessExpression(node)
+    ? staticMemberName(node.getNameNode())
+    : staticMemberName(node.getArgumentExpression());
+  const table = member
+    ? requestReviewedDrizzleTableForDirectReference(node.getExpression())
+    : undefined;
+  return !!member && !!table && requestReviewedDrizzleTableHasColumn(table, member);
 }
 
 function requestStaticCallbackValueIsClosed(
@@ -14024,7 +14305,7 @@ function requestExactGuardsAllComposition(
     if (!callable) return undefined;
     callbacks.push(callable);
   }
-  return callbacks.length > 0 ? callbacks : undefined;
+  return callbacks;
 }
 
 function requestCallUsesExactGuardsAllCallee(call: import('ts-morph').CallExpression): boolean {
