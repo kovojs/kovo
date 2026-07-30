@@ -692,8 +692,10 @@ export default app.assemble({
       join(root, 'app.mjs'),
       `import { and, eq, isNotNull } from 'drizzle-orm';
 import { defineKovo } from '@kovojs/server';
-const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { publicAccess, query, route } from '@kovojs/server';
+const app = defineKovo({
+  appId: '00000000-0000-4000-8000-000000000001',
+  egress: { allowDestinations: ['https://api.example.test'] },
+});
 const fields = { id: {}, name: {} };
 export const safeQuery = app.query({
   access: app.publicAccess('governed fetch and Drizzle expression audit'),
@@ -706,7 +708,6 @@ export const safeQuery = app.query({
   },
 });
 export default app.assemble({
-  egress: { allowDestinations: ['https://api.example.test'] },
   queries: [safeQuery],
   routes: [app.route('/', { access: app.publicAccess('authority audit'), page: () => 'safe' })],
 });
@@ -724,8 +725,10 @@ export default app.assemble({
     writeFileSync(
       join(root, 'app.mjs'),
       `import { defineKovo } from '@kovojs/server';
-const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { publicAccess, query, route } from '@kovojs/server';
+const app = defineKovo({
+  appId: '00000000-0000-4000-8000-000000000001',
+  egress: { allowDestinations: ['https://api.example.test'] },
+});
 export const unsafeQuery = app.query({
   access: app.publicAccess('outbound credential audit'),
   async load(_input, context) {
@@ -737,7 +740,6 @@ export const unsafeQuery = app.query({
   },
 });
 export default app.assemble({
-  egress: { allowDestinations: ['https://api.example.test'] },
   queries: [unsafeQuery],
   routes: [app.route('/', { access: app.publicAccess('authority audit'), page: () => 'safe' })],
 });
@@ -756,8 +758,10 @@ export default app.assemble({
     writeFileSync(
       join(root, 'app.mjs'),
       `import { defineKovo } from '@kovojs/server';
-const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { publicAccess, query, route } from '@kovojs/server';
+const app = defineKovo({
+  appId: '00000000-0000-4000-8000-000000000001',
+  egress: { allowDestinations: ['https://api.example.test'] },
+});
 export const unsafeQuery = app.query({
   access: app.publicAccess('raw outbound network audit'),
   async load() {
@@ -766,7 +770,6 @@ export const unsafeQuery = app.query({
   },
 });
 export default app.assemble({
-  egress: { allowDestinations: ['https://api.example.test'] },
   queries: [unsafeQuery],
   routes: [app.route('/', { access: app.publicAccess('authority audit'), page: () => 'safe' })],
 });
