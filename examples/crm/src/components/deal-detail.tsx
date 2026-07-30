@@ -1,16 +1,15 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { mutationFormAttributes } from '@kovojs/server';
 import * as style from '@kovojs/style';
 
 import { closeDeal, moveDeal } from '../mutations.js';
 import {
   activityListQuery,
   contactListQuery,
-  dealListQuery,
+  dealByIdQuery,
   type ActivityListResult,
   type ContactListResult,
-  type DealListResult,
+  type DealDetailResult,
 } from '../queries.js';
 import { money, stageBadge } from '../components/chrome.js';
 
@@ -131,20 +130,19 @@ export const DealDetailRegion = component({
   queries: {
     activityList: activityListQuery,
     contactList: contactListQuery,
-    dealList: dealListQuery,
+    deal: dealByIdQuery.args((props: { dealId: string }) => ({ id: props.dealId })),
   },
   render: ({
     activityList,
     contactList,
+    deal,
     dealId,
-    dealList,
   }: {
     activityList: ActivityListResult;
     contactList: ContactListResult;
+    deal: DealDetailResult;
     dealId: string;
-    dealList: DealListResult;
   }) => {
-    const deal = dealList.items.find((item) => item.id === dealId);
     const contact = contactList.items.find((item) => item.id === deal?.contactId);
     const activities = activityList.items.filter((item) => item.dealId === dealId);
     const closed = deal?.stage === 'won' || deal?.stage === 'lost';
@@ -198,7 +196,7 @@ export const DealDetailRegion = component({
           <h2 style={dealDetailStyles.sectionLabel}>Move stage</h2>
           <div style={dealDetailStyles.stageWrap}>
             {MOVE_STAGES.map((stage) => (
-              <form key={`${deal.id}:${stage}`} {...mutationFormAttributes(moveDeal)}>
+              <form enhance mutation={moveDeal} key={stage}>
                 <input type="hidden" name="dealId" value={deal.id} />
                 <input type="hidden" name="stage" value={stage} />
                 {deal.stage === stage ? (
@@ -223,7 +221,7 @@ export const DealDetailRegion = component({
                 This deal is closed ({deal.stage}). Commission is final.
               </p>
             ) : (
-              <form key={`${deal.id}:close`} {...mutationFormAttributes(closeDeal)}>
+              <form enhance mutation={closeDeal}>
                 <input type="hidden" name="dealId" value={deal.id} />
                 <button
                   type="submit"

@@ -39,7 +39,7 @@ export interface OptimisticFixtureSubmitOptions<Input> {
 
 /** @internal Framework-owned optimistic integration fixture client. */
 export interface OptimisticFixtureClient {
-  pendingCount(queryName: string): number;
+  pendingCount(queryName: string, key?: string): number;
   store: QueryStore;
   submitForm<Input>(
     form: HTMLFormElement,
@@ -93,8 +93,8 @@ export function installOptimisticFixtureClient(
   }
 
   return {
-    pendingCount(queryName) {
-      return rebaser.pendingCount(queryName);
+    pendingCount(queryName, key) {
+      return rebaser.pendingCount(queryName, key);
     },
     store,
     submitForm<Input>(form: HTMLFormElement, submitOptions: OptimisticFixtureSubmitOptions<Input>) {

@@ -391,7 +391,9 @@ describe('crm interactive app', () => {
     );
 
     expect(status).toBe(200);
-    expect(html).toContain('<kovo-query name="queries/deal-list-query"');
+    expect(html).toContain(
+      '<kovo-query name="queries/deal-by-id-query" key="queries/deal-by-id-query:d1"',
+    );
 
     const [after] = await db.select().from(deals).where(eq(deals.id, 'd1')).limit(1);
     expect(after?.stage).toBe('proposal');
@@ -429,7 +431,9 @@ describe('crm interactive app', () => {
     );
 
     expect(status).toBe(200);
-    expect(html).toContain('<kovo-query name="queries/deal-list-query"');
+    expect(html).toContain(
+      '<kovo-query name="queries/deal-by-id-query" key="queries/deal-by-id-query:d1"',
+    );
 
     const [after] = await db.select().from(deals).where(eq(deals.id, 'd1')).limit(1);
     expect(after?.stage).toBe('won');

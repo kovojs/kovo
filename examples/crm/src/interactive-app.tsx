@@ -11,6 +11,7 @@ import {
   activityListQuery,
   contactDealCountQuery,
   contactListQuery,
+  dealByIdQuery,
   dealListQuery,
   openDealsQuery,
   pipelineByStageQuery,
@@ -88,6 +89,7 @@ export const crmApp = app.assemble({
   mutations: [addContact, createDeal, moveDeal, closeDeal],
   queries: [
     contactListQuery,
+    dealByIdQuery,
     dealListQuery,
     contactDealCountQuery,
     openDealsQuery,

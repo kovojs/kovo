@@ -19,6 +19,7 @@ import {
   activityListQuery as crmActivityListQuery,
   contactDealCountQuery as crmContactDealCountQuery,
   contactListQuery as crmContactListQuery,
+  dealByIdQuery as crmDealByIdQuery,
   dealListQuery as crmDealListQuery,
   openDealsQuery as crmOpenDealsQuery,
   pipelineByStageQuery as crmPipelineByStageQuery,
@@ -48,6 +49,24 @@ if (!setupState[setupKey]) {
 
   assignDerivedQueryKey(crmContactListQuery, 'queries/contact-list-query');
   assignDerivedQueryKey(crmContactDealCountQuery, 'queries/contact-deal-count-query');
+  assignDerivedQueryKey(crmDealByIdQuery, 'queries/deal-by-id-query');
+  // Compiler-owned instance-key fixture for SPEC §10.2. Production extraction derives this from
+  // the `deals.id = args.id` predicate; source tests replay the same generated fact explicitly.
+  Object.defineProperty(crmDealByIdQuery, 'instanceKey', {
+    configurable: true,
+    enumerable: true,
+    value(input: unknown) {
+      if (typeof input !== 'object' || input === null) {
+        throw new TypeError('CRM deal detail query requires an object input.');
+      }
+      const id = Reflect.get(input, 'id');
+      if (typeof id !== 'string') {
+        throw new TypeError('CRM deal detail query requires a string id.');
+      }
+      return `${crmDealByIdQuery.key}:${id}`;
+    },
+    writable: true,
+  });
   assignDerivedQueryKey(crmDealListQuery, 'queries/deal-list-query');
   assignDerivedQueryKey(crmOpenDealsQuery, 'queries/open-deals-query');
   assignDerivedQueryKey(crmPipelineByStageQuery, 'queries/pipeline-by-stage-query');
@@ -70,6 +89,7 @@ if (!setupState[setupKey]) {
 
     { query: 'queries/contact-list-query', domains: ['model/contact'] },
     { query: 'queries/contact-deal-count-query', domains: ['model/deal'] },
+    { query: 'queries/deal-by-id-query', domains: ['model/deal'] },
     { query: 'queries/deal-list-query', domains: ['model/deal'] },
     { query: 'queries/open-deals-query', domains: ['model/deal'] },
     { query: 'queries/pipeline-by-stage-query', domains: ['model/deal'] },

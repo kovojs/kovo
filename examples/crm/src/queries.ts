@@ -1,6 +1,6 @@
 import type { JsonValue } from '@kovojs/core';
 import { s } from '@kovojs/server';
-import { count, eq, sql } from 'drizzle-orm';
+import { and, count, eq, sql } from 'drizzle-orm';
 
 import { app } from './kovo.js';
 import { deal } from './model.js';
@@ -46,6 +46,8 @@ export type DealListResult = {
   readonly [key: string]: JsonValue;
   items: DealRow[];
 };
+
+export type DealDetailResult = DealRow | null;
 
 export type ContactDealCountResult = {
   readonly [key: string]: JsonValue;
@@ -116,6 +118,31 @@ export const dealListQuery = app.query({
       .from(deals)
       .orderBy(deals.id);
     return { items: items };
+  },
+});
+
+/**
+ * One owner-scoped deal instance. The exact `{ id }` argument becomes the canonical browser
+ * instance key used by query hydration, keyed optimism, and mutation settlement (SPEC §10.2).
+ */
+export const dealByIdQuery = app.query({
+  access: [app.authenticated],
+  args: s.object({ id: s.string() }),
+  load: async (input, context): Promise<DealDetailResult> => {
+    const db = context.db;
+    const ownerId = context.request.session.user.id;
+    const [item] = await db
+      .select({
+        id: deals.id,
+        contactId: deals.contactId,
+        stage: deals.stage,
+        amount: deals.amount,
+        ownerId: deals.ownerId,
+      })
+      .from(deals)
+      .where(and(eq(deals.id, input.id), eq(deals.ownerId, ownerId)))
+      .limit(1);
+    return item ?? null;
   },
 });
 
@@ -191,6 +218,7 @@ export const activityListQuery = app.query({
 
 export const crmQueries = [
   contactListQuery,
+  dealByIdQuery,
   dealListQuery,
   contactDealCountQuery,
   openDealsQuery,

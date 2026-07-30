@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { analyzeAppContractCorpus, analyzeAppContractG23 } from './app-contract-g23-gate.mjs';
 
 describe('app-contract G23 gate', () => {
-  it('keeps the packed starter and CRM on one inferred app contract', () => {
+  it('keeps each packed, advanced, and release CRM corpus on one inferred app contract', () => {
     const report = analyzeAppContractG23();
 
     expect(report).toMatchObject({
@@ -13,6 +13,7 @@ describe('app-contract G23 gate', () => {
     expect(report.corpora.map((corpus) => corpus.name)).toEqual([
       'packed-starter',
       'crm-advanced-example',
+      'crm-release-example',
     ]);
     for (const corpus of report.corpora) {
       expect(corpus.digest).toMatch(/^sha256:[a-f0-9]{64}$/u);
@@ -23,9 +24,27 @@ describe('app-contract G23 gate', () => {
         defineKovo: 1,
       });
       expect(corpus.calls.mutation).toBeGreaterThan(0);
-      expect(corpus.calls.query).toBeGreaterThan(0);
       expect(corpus.calls.route).toBeGreaterThan(0);
+      if (corpus.requiredFactories.includes('query')) {
+        expect(corpus.calls.query).toBeGreaterThan(0);
+      }
     }
+
+    const advanced = report.corpora.find((corpus) => corpus.name === 'crm-advanced-example');
+    const release = report.corpora.find((corpus) => corpus.name === 'crm-release-example');
+    expect(advanced.sourcePaths).not.toEqual(
+      expect.arrayContaining([
+        'examples/crm/src/scaffold-app.tsx',
+        'examples/crm/src/scaffold-kovo.ts',
+        'examples/crm/src/scaffold-mutations.ts',
+      ]),
+    );
+    expect(release.sourcePaths).toEqual([
+      'examples/crm/src/scaffold-app.tsx',
+      'examples/crm/src/scaffold-kovo.ts',
+      'examples/crm/src/scaffold-mutations.ts',
+    ]);
+    expect(release.calls.query).toBe(0);
   });
 
   it('fails closed on repeated context, manual types, free factories, casts, and registries', () => {

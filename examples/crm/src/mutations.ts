@@ -15,6 +15,7 @@ import {
 import {
   contactDealCountQuery,
   contactListQuery,
+  dealByIdQuery,
   dealListQuery,
   openDealsQuery,
   pipelineByStageQuery,
@@ -94,6 +95,18 @@ export const createDeal = app.mutation({
       count: value.count + 1,
     })),
     contactListQuery.optimistic(createDealInput, predictCreateDealContacts),
+    dealByIdQuery.optimistic(createDealInput, {
+      keys: (input) => [{ id: input.id }],
+      apply(_value, input) {
+        return {
+          amount: input.amount,
+          contactId: input.contactId,
+          id: input.id,
+          ownerId: CRM_DEMO_USER_ID,
+          stage: input.stage,
+        };
+      },
+    }),
     dealListQuery.optimistic(createDealInput, (value, input) => ({
       ...value,
       items: [
@@ -160,6 +173,12 @@ export const moveDeal = app.mutation({
   input: moveDealInput,
   optimistic: [
     contactDealCountQuery.optimistic(moveDealInput, (value) => value),
+    dealByIdQuery.optimistic(moveDealInput, {
+      keys: (input) => [{ id: input.dealId }],
+      apply(value, input) {
+        return value ? { ...value, stage: input.stage } : null;
+      },
+    }),
     dealListQuery.optimistic(moveDealInput, (value, input) => ({
       ...value,
       items: value.items.map((item) =>
@@ -224,6 +243,14 @@ export const closeDeal = app.mutation({
   input: closeDealInput,
   optimistic: [
     contactDealCountQuery.optimistic(closeDealInput, (value) => value),
+    // The commission is server-computed, but the detail instance can still predict its terminal
+    // status immediately; the returned keyed query chunk replaces the amount with server truth.
+    dealByIdQuery.optimistic(closeDealInput, {
+      keys: (input) => [{ id: input.dealId }],
+      apply(value) {
+        return value ? { ...value, stage: 'won' } : null;
+      },
+    }),
     openDealsQuery.optimistic(closeDealInput, predictCloseDealOpenList),
     // Views that include the server-computed commission retain their current value until the
     // returned fragment supplies authoritative truth.

@@ -21,31 +21,20 @@ const registryNames = new Set([
   'RouteRegistry',
 ]);
 
-const defaultCorpora = Object.freeze([
-  {
-    exclude: (path) => path.includes('/_kovo/') || path.includes('.test.'),
-    name: 'packed-starter',
-    root: 'packages/create-kovo/templates/src',
-  },
-  {
-    exclude: (path) => path.includes('.test.'),
-    name: 'crm-advanced-example',
-    root: 'examples/crm/src',
-  },
-]);
-
 export function analyzeAppContractG23(
   workspaceRoot = resolve(fileURLToPath(new URL('..', import.meta.url))),
 ) {
-  const corpora = defaultCorpora.map((corpus) => {
+  const corpora = defaultCorpora(workspaceRoot).map((corpus) => {
     const root = resolve(workspaceRoot, corpus.root);
     const files = sourceFiles(root)
       .map((fileName) => {
         const path = normalizePath(relative(workspaceRoot, fileName));
         return { path, source: readFileSync(fileName, 'utf8') };
       })
-      .filter((file) => !corpus.exclude(`/${file.path}`));
-    return analyzeAppContractCorpus(corpus.name, files);
+      .filter((file) => corpus.include(file.path));
+    return analyzeAppContractCorpus(corpus.name, files, {
+      requiredFactories: corpus.requiredFactories,
+    });
   });
   return Object.freeze({
     corpora,
@@ -54,7 +43,11 @@ export function analyzeAppContractG23(
   });
 }
 
-export function analyzeAppContractCorpus(name, files) {
+export function analyzeAppContractCorpus(
+  name,
+  files,
+  { requiredFactories = ['mutation', 'query', 'route'] } = {},
+) {
   const calls = {
     assemble: 0,
     defineKovo: 0,
@@ -152,7 +145,7 @@ export function analyzeAppContractCorpus(name, files) {
       message: `expected exactly one app.assemble() call; found ${calls.assemble}`,
     });
   }
-  for (const required of ['mutation', 'query', 'route']) {
+  for (const required of requiredFactories) {
     if (calls[required] === 0) {
       findings.push({
         column: 1,
@@ -177,7 +170,67 @@ export function analyzeAppContractCorpus(name, files) {
       ),
     ),
     name,
+    requiredFactories: Object.freeze([...requiredFactories]),
+    sourcePaths: Object.freeze(
+      files.map((file) => file.path).sort((left, right) => left.localeCompare(right)),
+    ),
   });
+}
+
+function defaultCorpora(workspaceRoot) {
+  const catalogPath = resolve(workspaceRoot, 'packages/create-kovo/example-sources.json');
+  const catalog = JSON.parse(readFileSync(catalogPath, 'utf8'));
+  const releaseSources = crmReleaseSourcePaths(catalog);
+  const ordinarySource = (path) => !path.includes('/_kovo/') && !path.includes('.test.');
+
+  return Object.freeze([
+    {
+      include: ordinarySource,
+      name: 'packed-starter',
+      requiredFactories: Object.freeze(['mutation', 'query', 'route']),
+      root: 'packages/create-kovo/templates/src',
+    },
+    {
+      include: (path) => ordinarySource(path) && !releaseSources.has(path),
+      name: 'crm-advanced-example',
+      requiredFactories: Object.freeze(['mutation', 'query', 'route']),
+      root: 'examples/crm/src',
+    },
+    {
+      include: (path) => ordinarySource(path) && releaseSources.has(path),
+      name: 'crm-release-example',
+      // The catalog-authenticated release example is intentionally stateless; unlike the
+      // advanced PGlite corpus it has no query declaration to prove.
+      requiredFactories: Object.freeze(['mutation', 'route']),
+      root: 'examples/crm/src',
+    },
+  ]);
+}
+
+function crmReleaseSourcePaths(catalog) {
+  const crm = catalog?.examples?.crm;
+  if (
+    catalog?.schema !== 'create-kovo-example-sources/v1' ||
+    typeof crm !== 'object' ||
+    crm === null ||
+    !Array.isArray(crm.sources)
+  ) {
+    throw new TypeError('G23 requires the authenticated create-kovo CRM source catalog.');
+  }
+
+  const paths = new Set();
+  for (const source of crm.sources) {
+    if (
+      typeof source !== 'string' ||
+      !source.startsWith('src/') ||
+      source.includes('..') ||
+      paths.has(`examples/crm/${source}`)
+    ) {
+      throw new TypeError('G23 found an invalid create-kovo CRM source catalog path.');
+    }
+    paths.add(`examples/crm/${source}`);
+  }
+  return paths;
 }
 
 function sourceFiles(root) {
@@ -190,7 +243,7 @@ function sourceFiles(root) {
     }
   };
   visit(root);
-  return files.sort();
+  return files.sort((left, right) => left.localeCompare(right));
 }
 
 function addFinding(findings, sourceFile, node, message) {
