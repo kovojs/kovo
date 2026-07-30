@@ -558,18 +558,11 @@ export interface FieldErrorProps<Failure = unknown> {
   [attribute: string]: unknown;
 }
 
-type FormErrorCode = string | readonly string[] | undefined;
-type FormErrorFailureForCode<
-  Failure,
-  Code extends FormErrorCode,
-> = Code extends readonly (infer Item extends string)[]
-  ? Extract<Failure, { code: Item }>
-  : Code extends string
-    ? Extract<Failure, { code: Code }>
-    : Failure;
-
 /** Props accepted by the compiler-bound `<FormError />` mutation failure helper. */
-export interface FormErrorProps<Failure = unknown, Code extends FormErrorCode = FormErrorCode> {
+export interface FormErrorProps<
+  Failure = unknown,
+  Code extends string | readonly string[] | undefined = string | readonly string[] | undefined,
+> {
   children?: unknown;
   class?: string;
   code?: Code;
@@ -577,7 +570,13 @@ export interface FormErrorProps<Failure = unknown, Code extends FormErrorCode = 
   id?: string;
   message?:
     | ComponentTextResult
-    | ((failure: FormErrorFailureForCode<NoInfer<Failure>, Code>) => ComponentTextResult);
+    | ((
+        failure: Code extends readonly (infer Item extends string)[]
+          ? Extract<NoInfer<Failure>, { code: Item }>
+          : Code extends string
+            ? Extract<NoInfer<Failure>, { code: Code }>
+            : NoInfer<Failure>,
+      ) => ComponentTextResult);
   role?: string;
   [attribute: string]: unknown;
 }
@@ -744,7 +743,10 @@ export function FieldError<Failure = unknown>(props: FieldErrorProps<Failure>): 
  * Render a form-scoped mutation failure message. Validation failures stay
  * field-scoped; declared coded failures render here by default (SPEC §9.2).
  */
-export function FormError<Failure = unknown, const Code extends FormErrorCode = undefined>(
+export function FormError<
+  Failure = unknown,
+  const Code extends string | readonly string[] | undefined = undefined,
+>(
   props: FormErrorProps<Failure, Code>,
 ): string {
   if (props.failure === undefined) {
@@ -802,7 +804,9 @@ function failureCodeMatches(
 
 function renderFailureOutput<Failure>(
   kind: MutationFormHelperKind,
-  props: FieldErrorProps<Failure> | FormErrorProps<Failure, FormErrorCode>,
+  props:
+    | FieldErrorProps<Failure>
+    | FormErrorProps<Failure, string | readonly string[] | undefined>,
   failure: Record<string, unknown>,
   message: unknown,
 ): string {
@@ -815,7 +819,9 @@ function renderFailureOutput<Failure>(
 }
 
 function failureOutputAttributes<Failure>(
-  props: FieldErrorProps<Failure> | FormErrorProps<Failure, FormErrorCode>,
+  props:
+    | FieldErrorProps<Failure>
+    | FormErrorProps<Failure, string | readonly string[] | undefined>,
   failure: Record<string, unknown>,
 ): string {
   const role = failureOutputOwnString(props, 'role') ?? 'alert';
