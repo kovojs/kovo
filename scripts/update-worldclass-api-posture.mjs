@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
+import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import {
   computeFrameworkRuntimeSurface,
@@ -13,6 +16,7 @@ const SUMMARY_VERSION = 'kovo-framework-public-runtime-export-posture/2026-07-29
 const SERVER = '@kovojs/server';
 const TEST = '@kovojs/test';
 const UI = '@kovojs/ui';
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const ledger = JSON.parse(readFileSync(FRAMEWORK_EXPORT_POSTURE_LEDGER, 'utf8'));
 const actual = computeFrameworkRuntimeSurface();
@@ -47,7 +51,11 @@ if (findings.length > 0) {
 }
 
 if (process.argv.includes('--write')) {
-  writeFileSync(FRAMEWORK_EXPORT_POSTURE_LEDGER, `${JSON.stringify(ledger, null, 2)}\n`, 'utf8');
+  writeFileSync(
+    FRAMEWORK_EXPORT_POSTURE_LEDGER,
+    formatGeneratedLedger(`${JSON.stringify(ledger, null, 2)}\n`),
+    'utf8',
+  );
 }
 
 const rows = expandFrameworkExportPostureLedger(ledger);
@@ -72,6 +80,33 @@ function reconcileEmptyPackages() {
     reviewedPackage.packageVersion = actualPackage.packageVersion;
     reviewedPackage.sourceTreeSha256 = actualPackage.sourceTreeSha256;
   }
+}
+
+function formatGeneratedLedger(candidate) {
+  const formatted = spawnSync(
+    process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm',
+    ['exec', 'vp', 'fmt', `--stdin-filepath=${FRAMEWORK_EXPORT_POSTURE_LEDGER}`],
+    {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+      input: candidate,
+      maxBuffer: 8 * 1024 * 1024,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    },
+  );
+  if (
+    formatted.error ||
+    formatted.signal ||
+    formatted.status !== 0 ||
+    formatted.stdout.length === 0
+  ) {
+    throw new Error(
+      `Unable to format framework export posture ledger: ${
+        formatted.stderr.trim() || formatted.error?.message || formatted.signal || formatted.status
+      }`,
+    );
+  }
+  return formatted.stdout;
 }
 
 function retainActualMembers(reviewedPackage, actualPackage) {
