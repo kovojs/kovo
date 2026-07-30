@@ -26,7 +26,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createApp } from '@kovojs/server/internal/fixture-app';
 import { route } from '@kovojs/server';
-import { clientModuleRepresentationDigest } from '@kovojs/core/internal/client-module-url';
+import {
+  clientModuleRepresentationDigest,
+  parseVersionedClientModuleTarget,
+} from '@kovojs/core/internal/client-module-url';
 import type { AppDependencyCapabilityManifest } from '@kovojs/core/internal/graph';
 import { canonicalJsonStringify } from '@kovojs/core/internal/json';
 import {
@@ -763,6 +766,19 @@ export default app.assemble({
       expect(exitCode, errorOutput).toBe(0);
       expect(stderr).not.toHaveBeenCalled();
       expect(existsSync(join(outDir, '.kovo/server/handler.mjs'))).toBe(true);
+      const neutralManifest = readBuildJson(join(outDir, '.kovo/manifest.json')) as {
+        clientModules: readonly { path: string }[];
+      };
+      expect(
+        neutralManifest.clientModules.map(
+          (module) => parseVersionedClientModuleTarget(module.path)?.path ?? module.path,
+        ),
+      ).toEqual(
+        expect.arrayContaining([
+          '/c/generated/app.client.js',
+          '/c/kovo-generated-app-runtime.client.js',
+        ]),
+      );
 
       const server = builtServerProcess(join(outDir, 'server/server.mjs'));
       const origin = await listen(server);

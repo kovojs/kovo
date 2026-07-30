@@ -9,7 +9,11 @@ import {
   kovoDeferredRuntimeModulePath,
   kovoDeferredRuntimeModuleSource,
 } from '@kovojs/browser/internal/inline-loader';
-import { compileComponentModule, type CompileResult } from '../../compiler/src/index.js';
+import {
+  compileComponentModule,
+  kovoVitePlugin,
+  type CompileResult,
+} from '../../compiler/src/index.js';
 import { clientModuleRepresentationDigest } from '@kovojs/core/internal/client-module-url';
 
 import { createApp, createRequestHandler } from './app.js';
@@ -1049,6 +1053,51 @@ export const CartButton = component({
         rm(distDir, { force: true, recursive: true }),
         rm(outDir, { force: true, recursive: true }),
       ]);
+    }
+  });
+
+  it('carries exact compiler roles through both manifest-backed defensive snapshots', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-compiler-roles-'));
+    try {
+      await mkdir(join(distDir, '.vite'), { recursive: true });
+      const manifestFile = join(distDir, '.vite/manifest.json');
+      await writeFile(manifestFile, '{}');
+      const plugin = kovoVitePlugin();
+      await plugin.transform?.(
+        `
+import { component } from '@kovojs/core';
+export const ManifestCard = component({
+  queries: { deals: {} },
+  state: () => ({ count: 0 }),
+  render: ({ deals }) => (
+    <button onClick={() => { state.count += 1; }}>{deals.length}</button>
+  ),
+});
+`,
+        'src/manifest-card.tsx',
+      );
+      const compilerModules = plugin.getClientModules?.() ?? [];
+      const build = await createKovoAppShellViteBuildFromManifestFile({
+        app: createApp(),
+        clientModules: compilerModules,
+        manifestFile,
+      });
+
+      const registeredPaths = new Set(
+        build.app.clientModules.entries().map((module) => module.path),
+      );
+      for (const module of compilerModules) {
+        expect(registeredPaths).toContain(module.path);
+      }
+      await expect(
+        createKovoAppShellViteBuildFromManifestFile({
+          app: createApp(),
+          clientModules: compilerModules.map((module) => ({ ...module })),
+          manifestFile,
+        }),
+      ).rejects.toThrow(/unproven compiler-generated client-module path/u);
+    } finally {
+      await rm(distDir, { force: true, recursive: true });
     }
   });
 

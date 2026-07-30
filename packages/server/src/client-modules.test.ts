@@ -7,11 +7,17 @@ import {
   versionedClientModuleRequestKey,
 } from '@kovojs/core/internal/client-module-url';
 import { kovoVitePlugin } from '@kovojs/compiler';
-import { compilerOwnedViteClientModuleRole } from '@kovojs/compiler/internal';
+import {
+  compilerOwnedViteClientModuleRole,
+  compilerViteClientModuleRoleProtocol,
+} from '@kovojs/compiler/internal';
 import { describe, expect, it, vi } from 'vitest';
 
 import { clientModuleBuildTokenHash } from './client-module-registry-intrinsics.js';
-import { pinCompilerOwnedClientModule } from './compiler-client-module-provenance-build.js';
+import {
+  claimCompilerClientModuleBuildInstaller,
+  pinCompilerOwnedClientModule,
+} from './compiler-client-module-provenance-build.js';
 import { compilerOwnedClientModuleRole } from './compiler-client-module-provenance.js';
 import {
   computeRenderPlanFingerprint,
@@ -315,6 +321,15 @@ describe('render-plan and app-build identities', () => {
     expect(role).toBe('app-bootstrap');
     expect(compilerOwnedClientModuleRole(runtime)).toBeUndefined();
     expect(compilerOwnedClientModuleRole(pinned)).toBe(role);
+    const repinned = pinCompilerOwnedClientModule(
+      pinned,
+      Object.freeze({
+        path: pinned.path,
+        renderPlanFingerprint: pinned.renderPlanFingerprint,
+        source: pinned.source,
+      }),
+    );
+    expect(compilerOwnedClientModuleRole(repinned)).toBe(role);
 
     const sourceForgeries = [
       { ...runtime },
@@ -331,6 +346,34 @@ describe('render-plan and app-build identities', () => {
       expect(pinCompilerOwnedClientModule(source, candidate)).toBe(candidate);
       expect(compilerOwnedClientModuleRole(candidate)).toBeUndefined();
     }
+  });
+
+  it('keeps the isolated-build role installer one-shot, role-specific, and exact', () => {
+    expect(() => claimCompilerClientModuleBuildInstaller('kovo.invalid/v0')).toThrow(
+      /protocol must be kovo\.compiler-client-module-role\/v1/u,
+    );
+    const installer = claimCompilerClientModuleBuildInstaller(compilerViteClientModuleRoleProtocol);
+    const crossGraphCarrier = Object.freeze({
+      path: '/c/generated/app.client.js',
+      renderPlanFingerprint: computeRenderPlanFingerprint({}),
+      source: 'export const generated = true;',
+    });
+    const adopted = installer.adoptAppBootstrap(crossGraphCarrier);
+
+    expect(adopted).not.toBe(crossGraphCarrier);
+    expect(Object.isFrozen(adopted)).toBe(true);
+    expect(compilerOwnedClientModuleRole(adopted)).toBe('app-bootstrap');
+    expect(compilerOwnedClientModuleRole(crossGraphCarrier)).toBeUndefined();
+    expect(compilerOwnedClientModuleRole({ ...adopted })).toBeUndefined();
+    expect(() => installer.adoptComponentClient(crossGraphCarrier)).toThrow(/conflicting roles/u);
+    expect(() => installer.adoptAppBootstrap(Object.freeze({ ...crossGraphCarrier }))).toThrow(
+      /permanently closed/u,
+    );
+
+    expect(() => installer.seal()).toThrow(/permanently closed/u);
+    expect(() =>
+      claimCompilerClientModuleBuildInstaller(compilerViteClientModuleRoleProtocol),
+    ).toThrow(/already claimed/u);
   });
 
   it('refuses a generated app bootstrap whose exact deferred runtime is missing', async () => {

@@ -28,6 +28,8 @@ export type { BrowserPostureSourceFile } from './browser-posture-project.js';
 export { factHash } from './fact-hash.js';
 export {
   compilerOwnedViteClientModuleRole,
+  compilerViteClientModuleRoleProtocol,
+  compilerViteClientModuleRoleVocabulary,
   type CompilerOwnedViteClientModuleRole,
 } from './vite.js';
 export {

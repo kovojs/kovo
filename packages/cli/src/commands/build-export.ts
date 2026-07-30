@@ -72,6 +72,7 @@ import {
   componentTaskBSourceOperationFacts,
   compilerGeneratedCapabilityDependencies,
   compilerOwnedViteClientModuleRole,
+  compilerViteClientModuleRoleProtocol,
   createCompilerOwnedAppContractProject,
   createFrameworkKovoCssCollectorVitePlugin,
   cssRouteDeliveryGate,
@@ -85,6 +86,7 @@ import {
   projectMutationRegistryFactsFromFiles,
   type AppDependencyCapabilityManifest,
   type CompilerGeneratedCapabilityDependency,
+  type CompilerOwnedViteClientModuleRole,
   type CompilerOwnedAppContractProject,
   type CompilerOwnedAppContractStaticFact,
   type ProjectMutationRegistryFacts,
@@ -106,7 +108,11 @@ import type {
   StaticExportCompileDiagnostic,
   StaticExportResult,
 } from '@kovojs/server/static-export';
-import type { KovoApp, KovoNeutralBuild } from '@kovojs/server/internal/build';
+import type {
+  CompilerClientModuleBuildInstaller,
+  KovoApp,
+  KovoNeutralBuild,
+} from '@kovojs/server/internal/build';
 import type {
   KovoBuildPreset,
   KovoBuildPresetContext,
@@ -597,6 +603,7 @@ interface KovoSourceCheckOptions {
 
 interface LoadedBuildAppModule {
   appModule: unknown;
+  compilerClientModuleBuildInstaller: CompilerClientModuleBuildInstaller;
   serverBuildModule: typeof import('@kovojs/server/build');
   serverBuildPresetModule: typeof import('@kovojs/server/internal/build-preset');
   serverExecutionModule: typeof import('@kovojs/server/internal/execution');
@@ -979,6 +986,7 @@ export async function runBuildCommand(
       buildStylesheetCss,
       checkGraph,
       cloudflare,
+      compilerClientModuleBuildInstaller,
       dependencyCapabilities,
       declaredKovoAppId,
       deriveClosedKovoApp,
@@ -1080,6 +1088,10 @@ export async function runBuildCommand(
       ...clientBuild.clientModules,
       ...discoveredServerHandlerBuild.clientModules,
     ]);
+    const discoveredClientModuleCensus = compilerClientModuleCensus(
+      discoveredClientModules,
+      'discovered compiler client modules',
+    );
     const appClientModuleStaging = snapshotVersionedClientModuleStaging(buildApp.clientModules);
     const hasGeneratedAppBootstrap = buildSomeDense(
       discoveredClientModules,
@@ -1125,15 +1137,23 @@ export async function runBuildCommand(
       ...clientBuild.clientModules,
       ...serverHandlerBuild.clientModules,
     ]);
+    assertCompilerClientModuleCensus(
+      discoveredClientModuleCensus,
+      compilerClientModuleCensus(clientModules, 'final compiler client modules'),
+    );
     if (deriveKovoAppBuildToken(clientModules, nonCompilerClientModules) !== appBuildToken) {
       throw new TypeError(
         'Kovo final runtime-posture bundle changed the discovered client-module identity.',
       );
     }
+    const neutralBuildClientModules = adoptCompilerClientModulesForNeutralBuild(
+      clientModules,
+      compilerClientModuleBuildInstaller,
+    );
     const neutralBuild = await writeKovoNeutralBuild({
       app: buildApp,
       buildStylesheetCss: [...buildStylesheetCss.stylesheetCss, ...clientBuild.stylesheetCss],
-      clientModules,
+      clientModules: neutralBuildClientModules,
       manifestFile: clientBuild.manifestFile,
       outDir: join(stagedOutDir, '.kovo'),
       serverHandlerSource: serverHandlerBuild.source,
@@ -1296,6 +1316,7 @@ async function loadAndCheckBuildApp(
     buildStylesheetCss,
     checkGraph: buildCheck.graph,
     cloudflare,
+    compilerClientModuleBuildInstaller: loadedBuildApp.compilerClientModuleBuildInstaller,
     dependencyCapabilities: preEvaluationStaticTrust.capabilityClosure.dependencyManifest,
     declaredKovoAppId,
     deriveClosedKovoApp,
@@ -5223,11 +5244,16 @@ async function loadBuildAppModule(
     );
     const trustedInternalBuild =
       serverInternalBuildModule as LoadedBuildAppModule['serverInternalBuildModule'];
+    const compilerClientModuleBuildInstaller =
+      trustedInternalBuild.claimCompilerClientModuleBuildInstaller(
+        compilerViteClientModuleRoleProtocol,
+      );
     const appModule = await trustedInternalBuild.runWithUnavailableBuildAppEnvironment(() =>
       server.ssrLoadModule(viteSsrModuleId(appModulePath, root)),
     );
     return {
       appModule,
+      compilerClientModuleBuildInstaller,
       serverBuildModule: serverBuildModule as LoadedBuildAppModule['serverBuildModule'],
       serverBuildPresetModule:
         serverBuildPresetModule as LoadedBuildAppModule['serverBuildPresetModule'],
@@ -7135,16 +7161,159 @@ function assertNoUnloweredKovoClientIslandHooks(source: string): void {
 function uniqueKovoCompiledClientModules(
   modules: readonly KovoAppShellCompiledClientModule[],
 ): KovoAppShellCompiledClientModule[] {
-  const byPath = new Map<string, Map<string, KovoAppShellCompiledClientModule>>();
-  for (const module of modules) {
-    let byDigest = byPath.get(module.path);
+  const snapshot = buildSnapshotDenseArray(modules, 'compiler client modules to deduplicate');
+  const byPath = buildCreateMap<string, Map<string, KovoAppShellCompiledClientModule>>();
+  const unique: KovoAppShellCompiledClientModule[] = [];
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const module = snapshot[index]!;
+    const facts = exactCompilerClientModuleFacts(
+      module,
+      index,
+      'compiler client modules to deduplicate',
+    );
+    let byDigest = buildMapGet(byPath, facts.path);
     if (byDigest === undefined) {
-      byDigest = new Map();
-      byPath.set(module.path, byDigest);
+      byDigest = buildCreateMap<string, KovoAppShellCompiledClientModule>();
+      buildMapSet(byPath, facts.path, byDigest);
     }
-    byDigest.set(clientModuleRepresentationDigest(module.source), module);
+    const digest = clientModuleRepresentationDigest(facts.source);
+    const existing = buildMapGet(byDigest, digest);
+    if (existing !== undefined) {
+      const existingFacts = exactCompilerClientModuleFacts(
+        existing,
+        index,
+        'deduplicated compiler client module',
+      );
+      if (
+        existingFacts.renderPlanFingerprint !== facts.renderPlanFingerprint ||
+        existingFacts.role !== facts.role
+      ) {
+        throw new TypeError(
+          `Kovo compiler client module ${facts.path} has conflicting fingerprint or role provenance.`,
+        );
+      }
+      continue;
+    }
+    buildMapSet(byDigest, digest, module);
+    buildSecurityArrayAppend(unique, module, 'Unique compiler client modules');
   }
-  return [...byPath.values()].flatMap((byDigest) => [...byDigest.values()]);
+  return unique;
+}
+
+function adoptCompilerClientModulesForNeutralBuild(
+  modules: readonly KovoAppShellCompiledClientModule[],
+  installer: CompilerClientModuleBuildInstaller,
+): KovoAppShellCompiledClientModule[] {
+  const snapshot = buildSnapshotDenseArray(modules, 'neutral-build compiler client modules');
+  const roles: CompilerOwnedViteClientModuleRole[] = [];
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const role = exactCompilerClientModuleFacts(
+      snapshot[index]!,
+      index,
+      'neutral-build compiler client modules',
+    ).role;
+    buildSecurityArrayAppend(roles, role, 'Neutral-build compiler client-module provenance');
+  }
+  const adopted: KovoAppShellCompiledClientModule[] = [];
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const module = snapshot[index]!;
+    const role = roles[index]!;
+    let pinned: KovoAppShellCompiledClientModule;
+    switch (role) {
+      case 'app-bootstrap':
+        pinned = installer.adoptAppBootstrap(module);
+        break;
+      case 'component-client':
+        pinned = installer.adoptComponentClient(module);
+        break;
+      case 'deferred-app-runtime':
+        pinned = installer.adoptDeferredAppRuntime(module);
+        break;
+      case 'optimistic-plan':
+        pinned = installer.adoptOptimisticPlan(module);
+        break;
+      default:
+        throw unknownCompilerClientModuleRole(role);
+    }
+    buildSecurityArrayAppend(adopted, pinned, 'SSR-adopted neutral-build compiler client modules');
+  }
+  installer.seal();
+  return adopted;
+}
+
+function compilerClientModuleCensus(
+  modules: readonly KovoAppShellCompiledClientModule[],
+  label: string,
+): string[] {
+  const snapshot = buildSnapshotDenseArray(modules, label);
+  const seen = buildCreateSet<string>();
+  const census: string[] = [];
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const facts = exactCompilerClientModuleFacts(snapshot[index]!, index, label);
+    const identity = `${facts.path}\u0000${clientModuleRepresentationDigest(facts.source)}\u0000${facts.renderPlanFingerprint}\u0000${facts.role}`;
+    if (buildSetHas(seen, identity)) {
+      throw new TypeError(`Kovo ${label} repeats one compiler client-module census identity.`);
+    }
+    buildSetAdd(seen, identity);
+    buildSecurityArrayAppend(census, identity, 'Compiler client-module census');
+  }
+  return uniqueSorted(census);
+}
+
+function assertCompilerClientModuleCensus(
+  discovered: readonly string[],
+  final: readonly string[],
+): void {
+  if (discovered.length !== final.length) {
+    throw new TypeError(
+      'Kovo final runtime-posture bundle changed the discovered client-module role census.',
+    );
+  }
+  for (let index = 0; index < discovered.length; index += 1) {
+    if (discovered[index] !== final[index]) {
+      throw new TypeError(
+        'Kovo final runtime-posture bundle changed the discovered client-module role census.',
+      );
+    }
+  }
+}
+
+function exactCompilerClientModuleFacts(
+  module: KovoAppShellCompiledClientModule,
+  index: number,
+  label: string,
+): {
+  path: string;
+  renderPlanFingerprint: string;
+  role: CompilerOwnedViteClientModuleRole;
+  source: string;
+} {
+  const role = compilerOwnedViteClientModuleRole(module);
+  if (role === undefined) {
+    throw new TypeError(`Kovo refused unproven ${label}[${index}].`);
+  }
+  const path = buildOwnDataValue(module, 'path', `${label}[${index}]`);
+  const renderPlanFingerprint = buildOwnDataValue(
+    module,
+    'renderPlanFingerprint',
+    `${label}[${index}]`,
+  );
+  const source = buildOwnDataValue(module, 'source', `${label}[${index}]`);
+  if (
+    typeof path !== 'string' ||
+    typeof source !== 'string' ||
+    typeof renderPlanFingerprint !== 'string' ||
+    buildRegExpExec(/^[0-9a-f]{64}$/u, renderPlanFingerprint) === null
+  ) {
+    throw new TypeError(
+      `Kovo ${label}[${index}] must carry exact path/source/fingerprint strings.`,
+    );
+  }
+  return { path, renderPlanFingerprint, role, source };
+}
+
+function unknownCompilerClientModuleRole(_role: never): TypeError {
+  return new TypeError('Kovo refused an unknown compiler client-module role.');
 }
 
 function kovoBuildApprovedSourceFilter(
@@ -8094,6 +8263,11 @@ async function loadExportAppModule(
     const serverInternalBuildModule = (await server.ssrLoadModule(
       viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/build'), root),
     )) as typeof import('@kovojs/server/internal/build');
+    const compilerClientModuleBuildInstaller =
+      serverInternalBuildModule.claimCompilerClientModuleBuildInstaller(
+        compilerViteClientModuleRoleProtocol,
+      );
+    compilerClientModuleBuildInstaller.seal();
     const appModule = await serverInternalBuildModule.runWithGeneratedLiveTargetRegistry(() =>
       server.ssrLoadModule(resolvedAppModulePath),
     );

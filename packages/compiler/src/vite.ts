@@ -149,12 +149,20 @@ export interface KovoViteCompiledClientModule {
   source: string;
 }
 
+/** @internal Exact protocol version for cross-graph client-module role adoption. */
+export const compilerViteClientModuleRoleProtocol = 'kovo.compiler-client-module-role/v1' as const;
+
+/** @internal Finite role vocabulary; adding a role requires a protocol and bridge update. */
+export const compilerViteClientModuleRoleVocabulary = compilerFreeze([
+  'app-bootstrap',
+  'component-client',
+  'deferred-app-runtime',
+  'optimistic-plan',
+] as const);
+
 /** @internal Unforgeable role carried out-of-band on exact genuine compiler records. */
 export type CompilerOwnedViteClientModuleRole =
-  | 'app-bootstrap'
-  | 'component-client'
-  | 'deferred-app-runtime'
-  | 'optimistic-plan';
+  (typeof compilerViteClientModuleRoleVocabulary)[number];
 
 const compilerOwnedViteClientModuleRoles = compilerCreateWeakMap<
   object,

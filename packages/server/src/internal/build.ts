@@ -4,6 +4,10 @@ import {
   runWithGeneratedLiveTargetRegistry,
   runWithGeneratedLiveTargetRegistryInCurrentContext,
 } from '../live-target-registry.js';
+import {
+  claimCompilerClientModuleBuildInstaller,
+  type CompilerClientModuleBuildInstaller,
+} from '../compiler-client-module-provenance-build.js';
 import { withKovoBuildContext } from './build-context.js';
 
 export { deriveClosedKovoApp } from '../app-snapshot.js';
@@ -15,6 +19,7 @@ export {
   type VersionedClientModuleStagingSnapshot,
 } from '../client-modules.js';
 export { runWithGeneratedLiveTargetRegistry };
+export { claimCompilerClientModuleBuildInstaller, type CompilerClientModuleBuildInstaller };
 export {
   writeKovoNeutralBuild,
   type KovoNeutralBuild,
