@@ -4,17 +4,12 @@ import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
 import { domain, guards, query, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
+import { readInvoice } from './shared';
+
 interface OwnerSession {
   user: { id: string; roles: readonly string[] };
 }
 type OwnerRequest = KovoFixtureRequest & { session?: OwnerSession | null };
-
-interface InvoiceRow {
-  [key: string]: unknown;
-  id: string;
-  owner_id: string;
-  total: number;
-}
 
 const COOKIE = 'owner_user';
 const invoiceDomain = domain('invoice');
@@ -29,18 +24,6 @@ function readSessionCookie(request: Request): OwnerSession | null {
 
   const id = decodeURIComponent(entry.slice(COOKIE.length + 1));
   return id ? { user: { id, roles: [] } } : null;
-}
-
-async function readInvoice(
-  db: KovoFixtureRequest['db'],
-  invoiceId: string,
-  ownerId: string,
-): Promise<InvoiceRow | null> {
-  const [row] = await db.query<InvoiceRow>({
-    text: 'select id, owner_id, total from invoices where id = $1 and owner_id = $2',
-    values: [invoiceId, ownerId],
-  });
-  return row ?? null;
 }
 
 export const ownerInvoiceQuery = query('owner-invoice', {
