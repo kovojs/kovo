@@ -858,8 +858,14 @@ export const orderPaid = webhook('/webhooks/order-paid', {
     const plugin = kovoVitePlugin({ include: ['src'] });
     const ws = { send: vi.fn() };
     const moduleGraph = { invalidateAll: vi.fn() };
+    const ssrHot = { send: vi.fn() };
+    const ssrModuleGraph = { invalidateAll: vi.fn() };
+    const ssrRunner = { clearCache: vi.fn(), import: vi.fn() };
     const server = {
       config: { root },
+      environments: {
+        ssr: { hot: ssrHot, moduleGraph: ssrModuleGraph, runner: ssrRunner },
+      },
       middlewares: { use() {} },
       moduleGraph,
       ws,
@@ -885,7 +891,10 @@ export const orderPaid = webhook('/webhooks/order-paid', {
           server,
         }),
       ).resolves.toEqual([]);
-      expect(moduleGraph.invalidateAll).toHaveBeenCalledOnce();
+      expect(ssrRunner.clearCache).toHaveBeenCalledOnce();
+      expect(moduleGraph.invalidateAll).not.toHaveBeenCalled();
+      expect(ssrModuleGraph.invalidateAll).toHaveBeenCalledOnce();
+      expect(ssrHot.send).not.toHaveBeenCalled();
       expect(plugin.getClientModules?.()).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -894,6 +903,216 @@ export const orderPaid = webhook('/webhooks/order-paid', {
         ]),
       );
     } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('refreshes SSR assembly for every authenticated closed-contract operation only after clean compiles', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-vite-app-contract-hmr-coverage-'));
+    const src = join(root, 'src');
+    const serverScope = join(root, 'node_modules/@kovojs');
+    mkdirSync(src, { recursive: true });
+    mkdirSync(serverScope, { recursive: true });
+    symlinkSync(join(process.cwd(), 'packages/server'), join(serverScope, 'server'), 'dir');
+    writeFileSync(
+      join(src, 'kovo.ts'),
+      [
+        "import { defineKovo } from '@kovojs/server';",
+        "export const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });",
+        '',
+      ].join('\n'),
+    );
+    const entry = join(src, 'contract-component.tsx');
+    const compileComponentModule = vi.fn(() => ({ diagnostics: [], files: [] }));
+    const plugin = createKovoVitePlugin(compileComponentModule, { include: ['src'] });
+    const ws = { send: vi.fn() };
+    const moduleGraph = { invalidateAll: vi.fn() };
+    const ssrHot = { send: vi.fn() };
+    const ssrModuleGraph = { invalidateAll: vi.fn() };
+    const ssrRunner = { clearCache: vi.fn(), import: vi.fn() };
+    const server = {
+      config: { root },
+      environments: {
+        ssr: { hot: ssrHot, moduleGraph: ssrModuleGraph, runner: ssrRunner },
+      },
+      middlewares: { use() {} },
+      moduleGraph,
+      ws,
+    };
+    plugin.configureServer?.(server);
+    const operationCalls = [
+      'app.agent({} as never)',
+      'app.assemble({})',
+      "app.endpoint('/probe', {} as never)",
+      'app.integrateMutation({} as never)',
+      'app.layout({} as never)',
+      'app.mutation({} as never)',
+      'app.query({} as never)',
+      "app.route('/probe', {} as never)",
+      'app.task({} as never)',
+    ];
+    const componentSource = (operationCall: string) =>
+      [
+        '/** @jsxImportSource @kovojs/server */',
+        "import { component } from '@kovojs/core';",
+        "import { app } from './kovo.js';",
+        `${operationCall};`,
+        'export const Probe = component({ render: () => null });',
+        '',
+      ].join('\n');
+
+    try {
+      for (const operationCall of operationCalls) {
+        const source = componentSource(operationCall);
+        writeFileSync(entry, source);
+        moduleGraph.invalidateAll.mockClear();
+        ssrModuleGraph.invalidateAll.mockClear();
+        ssrHot.send.mockClear();
+        ssrRunner.clearCache.mockClear();
+
+        await expect(
+          plugin.handleHotUpdate?.({
+            file: entry,
+            modules: ['vite-module'],
+            read: async () => source,
+            server,
+          }),
+        ).resolves.toEqual([]);
+        expect(ssrRunner.clearCache, operationCall).toHaveBeenCalledOnce();
+        expect(moduleGraph.invalidateAll, operationCall).not.toHaveBeenCalled();
+        expect(ssrModuleGraph.invalidateAll, operationCall).toHaveBeenCalledOnce();
+        expect(ssrHot.send, operationCall).not.toHaveBeenCalled();
+      }
+
+      const removedOperationSource = [
+        '/** @jsxImportSource @kovojs/server */',
+        "import { component } from '@kovojs/core';",
+        'const app = { query() { return null; } };',
+        'app.query();',
+        'export const Probe = component({ render: () => null });',
+        '',
+      ].join('\n');
+      writeFileSync(entry, removedOperationSource);
+      moduleGraph.invalidateAll.mockClear();
+      ssrModuleGraph.invalidateAll.mockClear();
+      ssrHot.send.mockClear();
+      ssrRunner.clearCache.mockClear();
+      await plugin.handleHotUpdate?.({
+        file: entry,
+        modules: ['vite-module'],
+        read: async () => removedOperationSource,
+        server,
+      });
+      expect(ssrRunner.clearCache).toHaveBeenCalledOnce();
+      expect(moduleGraph.invalidateAll).not.toHaveBeenCalled();
+      expect(ssrModuleGraph.invalidateAll).toHaveBeenCalledOnce();
+      expect(ssrHot.send).not.toHaveBeenCalled();
+
+      ssrRunner.clearCache.mockClear();
+      moduleGraph.invalidateAll.mockClear();
+      ssrModuleGraph.invalidateAll.mockClear();
+      ssrHot.send.mockClear();
+      await plugin.handleHotUpdate?.({
+        file: entry,
+        modules: ['vite-module'],
+        read: async () => removedOperationSource,
+        server,
+      });
+      expect(ssrRunner.clearCache).not.toHaveBeenCalled();
+      expect(moduleGraph.invalidateAll).not.toHaveBeenCalled();
+      expect(ssrModuleGraph.invalidateAll).not.toHaveBeenCalled();
+      expect(ssrHot.send).not.toHaveBeenCalled();
+
+      const tamperedSource = componentSource('app.query({} as never)');
+      const replacementRunner = { clearCache: vi.fn(), import: vi.fn() };
+      server.environments.ssr.runner = replacementRunner;
+      writeFileSync(entry, tamperedSource);
+      await expect(
+        plugin.handleHotUpdate?.({
+          file: entry,
+          modules: ['vite-module'],
+          read: async () => tamperedSource,
+          server,
+        }),
+      ).rejects.toThrow(/Vite SSR environment runner changed after it was captured/u);
+      expect(replacementRunner.clearCache).not.toHaveBeenCalled();
+      server.environments.ssr.runner = ssrRunner;
+
+      const standaloneEntry = join(src, 'contract.ts');
+      const standaloneSource = [
+        "import { app } from './kovo.js';",
+        'export const probe = app.query({ load() { return null; } });',
+        '',
+      ].join('\n');
+      writeFileSync(standaloneEntry, standaloneSource);
+      await plugin.transform(standaloneSource, standaloneEntry);
+      ssrRunner.clearCache.mockClear();
+      moduleGraph.invalidateAll.mockClear();
+      ssrModuleGraph.invalidateAll.mockClear();
+      ssrHot.send.mockClear();
+      const renamedStandaloneSource = standaloneSource.replace('probe', 'renamedProbe');
+      writeFileSync(standaloneEntry, renamedStandaloneSource);
+      await plugin.handleHotUpdate?.({
+        file: standaloneEntry,
+        modules: ['vite-module'],
+        read: async () => renamedStandaloneSource,
+        server,
+      });
+      expect(ssrRunner.clearCache).toHaveBeenCalledOnce();
+      expect(moduleGraph.invalidateAll).not.toHaveBeenCalled();
+      expect(ssrModuleGraph.invalidateAll).toHaveBeenCalledOnce();
+      expect(ssrHot.send).not.toHaveBeenCalled();
+
+      ssrRunner.clearCache.mockClear();
+      ssrModuleGraph.invalidateAll.mockClear();
+      await plugin.watchChange?.(standaloneEntry, { event: 'delete' });
+      expect(ssrRunner.clearCache).toHaveBeenCalledOnce();
+      expect(ssrModuleGraph.invalidateAll).toHaveBeenCalledOnce();
+
+      const diagnostic = compilerDiagnostic('KV201', {
+        fileName: 'src/contract-component.tsx',
+        message: kv201.message,
+      });
+      const diagnosticPlugin = createKovoVitePlugin(
+        vi.fn(() => ({ diagnostics: [diagnostic], files: [] })),
+        { include: ['src'] },
+      );
+      diagnosticPlugin.configureServer?.(server);
+      const diagnosticSource = componentSource('app.query({} as never)');
+      writeFileSync(entry, diagnosticSource);
+      ssrRunner.clearCache.mockClear();
+      moduleGraph.invalidateAll.mockClear();
+      ssrModuleGraph.invalidateAll.mockClear();
+      ssrHot.send.mockClear();
+      await diagnosticPlugin.handleHotUpdate?.({
+        file: entry,
+        modules: ['vite-module'],
+        read: async () => diagnosticSource,
+        server,
+      });
+      expect(ssrRunner.clearCache).not.toHaveBeenCalled();
+      expect(moduleGraph.invalidateAll).not.toHaveBeenCalled();
+      expect(ssrModuleGraph.invalidateAll).not.toHaveBeenCalled();
+      expect(ssrHot.send).not.toHaveBeenCalled();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('pins the public SSR runner from a real Vite 8 dev server', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-vite-real-runner-'));
+    const { createServer } = await import('vite-plus');
+    const server = await createServer({
+      configFile: false,
+      root,
+      server: { middlewareMode: true },
+    });
+    const plugin = createKovoVitePlugin(() => ({ diagnostics: [], files: [] }));
+
+    try {
+      expect(() => plugin.configureServer?.(server)).not.toThrow();
+    } finally {
+      await server.close();
       rmSync(root, { force: true, recursive: true });
     }
   });

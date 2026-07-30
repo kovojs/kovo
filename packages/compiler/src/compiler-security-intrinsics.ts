@@ -344,6 +344,132 @@ export function compilerOwnDataValue(
   return before.value;
 }
 
+/**
+ * Read one stable data property or prototype accessor and pin the getter result.
+ *
+ * The getter descriptor is rechecked after invocation because host accessors can re-enter compiler
+ * code. Callers retain the returned carrier and never need to invoke the accessor again.
+ */
+export function compilerPinnedStableProperty(
+  source: unknown,
+  property: PropertyKey,
+  label: string,
+): { assertCurrent(): void; value: unknown } {
+  assertCompilerSecurityIntrinsics();
+  if ((typeof source !== 'object' && typeof source !== 'function') || source === null) {
+    throw new NativeTypeError(`${label} owner must be an object.`);
+  }
+  let owner: object | null = source;
+  for (let depth = 0; owner !== null && depth < 16; depth += 1) {
+    const before = getOwnPropertyDescriptor(owner, property);
+    const after = getOwnPropertyDescriptor(owner, property);
+    if (before === undefined && after === undefined) {
+      owner = apply(nativeObjectGetPrototypeOf, NativeObject, [owner]);
+      continue;
+    }
+    if (sameDataDescriptor(before, after) && before !== undefined && 'value' in before) {
+      const descriptor = before;
+      return {
+        assertCurrent() {
+          if (!sameDataDescriptor(descriptor, getOwnPropertyDescriptor(owner!, property))) {
+            throw new NativeTypeError(`${label} changed after it was captured.`);
+          }
+        },
+        value: before.value,
+      };
+    }
+    if (
+      before === undefined ||
+      after === undefined ||
+      !('get' in before) ||
+      !('get' in after) ||
+      typeof before.get !== 'function' ||
+      !apply<boolean>(nativeObjectIs, NativeObject, [before.get, after.get]) ||
+      !apply<boolean>(nativeObjectIs, NativeObject, [before.set, after.set])
+    ) {
+      throw new NativeTypeError(`${label} must be a stable data property or accessor.`);
+    }
+    const value = apply(before.get, source, []);
+    const settled = getOwnPropertyDescriptor(owner, property);
+    if (
+      settled === undefined ||
+      !('get' in settled) ||
+      !apply<boolean>(nativeObjectIs, NativeObject, [before.get, settled.get]) ||
+      !apply<boolean>(nativeObjectIs, NativeObject, [before.set, settled.set])
+    ) {
+      throw new NativeTypeError(`${label} changed while its getter ran.`);
+    }
+    return {
+      assertCurrent() {
+        const current = getOwnPropertyDescriptor(owner!, property);
+        if (
+          current === undefined ||
+          !('get' in current) ||
+          !apply<boolean>(nativeObjectIs, NativeObject, [before.get, current.get]) ||
+          !apply<boolean>(nativeObjectIs, NativeObject, [before.set, current.set])
+        ) {
+          throw new NativeTypeError(`${label} changed after it was captured.`);
+        }
+      },
+      value,
+    };
+  }
+  throw new NativeTypeError(`${label} must be available.`);
+}
+
+export function compilerStableGetterValue(
+  source: unknown,
+  property: PropertyKey,
+  label: string,
+): unknown {
+  return compilerPinnedStableProperty(source, property, label).value;
+}
+
+/**
+ * Capture a stable own/prototype data method and return an invocation that rechecks its descriptor.
+ */
+export function compilerPinnedStableMethod(
+  source: unknown,
+  property: PropertyKey,
+  label: string,
+): (...args: readonly unknown[]) => unknown {
+  assertCompilerSecurityIntrinsics();
+  if ((typeof source !== 'object' && typeof source !== 'function') || source === null) {
+    throw new NativeTypeError(`${label} owner must be an object.`);
+  }
+  let owner: object | null = source;
+  for (let depth = 0; owner !== null && depth < 16; depth += 1) {
+    const before = getOwnPropertyDescriptor(owner, property);
+    const after = getOwnPropertyDescriptor(owner, property);
+    if (before === undefined && after === undefined) {
+      owner = apply(nativeObjectGetPrototypeOf, NativeObject, [owner]);
+      continue;
+    }
+    if (
+      !sameDataDescriptor(before, after) ||
+      before === undefined ||
+      !('value' in before) ||
+      typeof before.value !== 'function'
+    ) {
+      throw new NativeTypeError(`${label} must be a stable data method.`);
+    }
+    const methodOwner = owner;
+    const method = before.value;
+    return (...args: readonly unknown[]): unknown => {
+      const current = getOwnPropertyDescriptor(methodOwner, property);
+      if (
+        current === undefined ||
+        !('value' in current) ||
+        !apply<boolean>(nativeObjectIs, NativeObject, [current.value, method])
+      ) {
+        throw new NativeTypeError(`${label} changed after it was captured.`);
+      }
+      return apply(method, source, args);
+    };
+  }
+  throw new NativeTypeError(`${label} must be a function.`);
+}
+
 export function compilerObjectKeys(value: object): string[] {
   assertCompilerSecurityIntrinsics();
   return apply(nativeObjectKeys, NativeObject, [value]);

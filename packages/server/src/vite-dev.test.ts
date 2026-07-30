@@ -38,8 +38,9 @@ import {
   createKovoAppShellDevDiagnosticLedger,
   createKovoAppShellViteDevIntegration,
   dispatchKovoAppShellViteDevRequest,
-  kovoAppShellViteDevPlugin,
+  kovoAppShellViteDevPlugin as createRawKovoAppShellViteDevPlugin,
   renderKovoAppShellViteDevDiagnosticResponse,
+  type KovoAppShellViteDevModuleServer,
   type KovoAppShellViteMiddleware,
   type KovoAppShellViteDevPluginOptions,
   shouldHandleKovoAppShellViteRequest,
@@ -49,6 +50,36 @@ import { createLiveTargetAttestation } from './mutation-wire.js';
 
 function devDiagnostic(code: DiagnosticCode, fileName: string, message: string) {
   return createRegisteredDiagnostic(code, { fileName }, { message });
+}
+
+function withViteDevRunner<Server extends KovoAppShellViteDevModuleServer>(server: Server): Server {
+  const loadModule = server.ssrLoadModule;
+  return {
+    ...server,
+    environments: {
+      ssr: {
+        runner: {
+          clearCache() {},
+          import(id: string) {
+            return loadModule.call(server, id);
+          },
+        },
+      },
+    },
+  };
+}
+
+function kovoAppShellViteDevPlugin(
+  options: KovoAppShellViteDevPluginOptions = {},
+): ReturnType<typeof createRawKovoAppShellViteDevPlugin> {
+  const plugin = createRawKovoAppShellViteDevPlugin(options);
+  const configureServer = plugin.configureServer;
+  return {
+    ...plugin,
+    configureServer(server) {
+      return configureServer(withViteDevRunner(server));
+    },
+  };
 }
 
 function withCompilerLiveTargetRenderers<Result>(
@@ -319,29 +350,31 @@ describe('server app shell Vite dev seam', () => {
     });
 
     const middlewares: KovoAppShellViteMiddleware[] = [];
-    await integration.plugin.configureServer({
-      middlewares: {
-        use(handler) {
-          middlewares.push(handler);
+    await integration.plugin.configureServer(
+      withViteDevRunner({
+        middlewares: {
+          use(handler) {
+            middlewares.push(handler);
+          },
         },
-      },
-      ssrLoadModule: viteDevSsrLoadModule(async (id) => {
-        expect(id).toBe('/src/app-shell.ts');
-        return {
-          shopApp: createApp({
-            routes: [
-              route('/cart', {
-                modulepreloads: ['/c/src/components/cart.client.js?v=failed'],
-                page: () =>
-                  trustedHtml('<main>Cart</main>', {
-                    reason: 'framework server rendering test fixture',
-                  }),
-              }),
-            ],
-          }),
-        };
+        ssrLoadModule: viteDevSsrLoadModule(async (id) => {
+          expect(id).toBe('/src/app-shell.ts');
+          return {
+            shopApp: createApp({
+              routes: [
+                route('/cart', {
+                  modulepreloads: ['/c/src/components/cart.client.js?v=failed'],
+                  page: () =>
+                    trustedHtml('<main>Cart</main>', {
+                      reason: 'framework server rendering test fixture',
+                    }),
+                }),
+              ],
+            }),
+          };
+        }),
       }),
-    });
+    );
 
     const server = createHttpServer((request, response) => {
       middlewares[0]?.(request, response, (error) => {
@@ -395,7 +428,7 @@ describe('server app shell Vite dev seam', () => {
       ws: { send: vi.fn() },
     };
 
-    integration.plugin.configureServer(server);
+    integration.plugin.configureServer(withViteDevRunner(server));
     const invoke = () =>
       new Promise<void>((resolve, reject) => {
         middleware?.(request('/'), {} as Parameters<KovoAppShellViteMiddleware>[1], (error) =>
@@ -728,6 +761,68 @@ describe('server app shell Vite dev seam', () => {
       type: 'custom',
     });
     expect(ws.send).toHaveBeenCalledWith({ type: 'full-reload' });
+
+    ws.send.mockClear();
+    await expect(
+      plugin.handleHotUpdate?.({
+        file: '/workspace/app/src/other.ts',
+        modules: ['vite-module'],
+        read: async () => 'export {};',
+        server,
+      }),
+    ).resolves.toBeUndefined();
+    expect(ws.send).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-callable and re-entrant public SSR runner carriers', () => {
+    const middlewares = { use: vi.fn() };
+    const invalidMethodPlugin = createRawKovoAppShellViteDevPlugin();
+    expect(() =>
+      invalidMethodPlugin.configureServer({
+        environments: {
+          ssr: {
+            runner: {
+              clearCache() {},
+              import: 'not callable',
+            } as never,
+          },
+        },
+        middlewares,
+        async ssrLoadModule() {
+          return {};
+        },
+      }),
+    ).toThrow(/runner\.import must be a stable data method/u);
+
+    const runner = {
+      clearCache() {},
+      async import() {
+        return {};
+      },
+    };
+    const environmentPrototype = {};
+    const changedGetter = () => runner;
+    Object.defineProperty(environmentPrototype, 'runner', {
+      configurable: true,
+      get() {
+        Object.defineProperty(environmentPrototype, 'runner', {
+          configurable: true,
+          get: changedGetter,
+        });
+        return runner;
+      },
+    });
+    const reentrantGetterPlugin = createRawKovoAppShellViteDevPlugin();
+    expect(() =>
+      reentrantGetterPlugin.configureServer({
+        environments: { ssr: Object.create(environmentPrototype) },
+        middlewares,
+        async ssrLoadModule() {
+          return {};
+        },
+      }),
+    ).toThrow(/runner changed while its getter ran/u);
+    expect(middlewares.use).not.toHaveBeenCalled();
   });
 
   it('keeps non-error module diagnostics observable without making them blocking', () => {

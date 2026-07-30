@@ -11,10 +11,14 @@ import { route } from './route.js';
 import {
   createKovoAppShellDevDiagnosticLedger,
   dispatchKovoAppShellViteDevRequest,
-  kovoAppShellViteDevPlugin,
+  kovoAppShellViteDevPlugin as createRawKovoAppShellViteDevPlugin,
   kovoAppShellVitePlugin,
   type KovoAppShellViteMiddleware,
 } from './internal/app-shell-vite.js';
+import type {
+  KovoAppShellViteDevModuleServer,
+  KovoAppShellViteDevPluginOptions,
+} from './vite-dev.js';
 import { nodeFetch } from './vite-test-http.js';
 import { renderedHtml } from './html.js';
 import { MAX_REQUEST_QUERY_ENTRIES } from './request-url-limits.js';
@@ -24,6 +28,36 @@ interface RejectedVitePreAppIngress {
   readonly label: string;
   readonly request: IncomingMessage;
   readonly status: 400 | 413 | 414;
+}
+
+function withViteDevRunner<Server extends KovoAppShellViteDevModuleServer>(server: Server): Server {
+  const loadModule = server.ssrLoadModule;
+  return {
+    ...server,
+    environments: {
+      ssr: {
+        runner: {
+          clearCache() {},
+          import(id: string) {
+            return loadModule.call(server, id);
+          },
+        },
+      },
+    },
+  };
+}
+
+function kovoAppShellViteDevPlugin(
+  options: KovoAppShellViteDevPluginOptions = {},
+): ReturnType<typeof createRawKovoAppShellViteDevPlugin> {
+  const plugin = createRawKovoAppShellViteDevPlugin(options);
+  const configureServer = plugin.configureServer;
+  return {
+    ...plugin,
+    configureServer(server) {
+      return configureServer(withViteDevRunner(server));
+    },
+  };
 }
 
 function rejectedVitePreAppIngress(): readonly RejectedVitePreAppIngress[] {

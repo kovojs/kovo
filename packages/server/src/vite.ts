@@ -113,6 +113,14 @@ interface KovoViteDevServer {
   config?: {
     root?: string;
   };
+  environments?: Readonly<{
+    ssr?: {
+      runner?: {
+        clearCache(): void;
+        import<T = Record<string, unknown>>(id: string): Promise<T>;
+      };
+    };
+  }>;
   /** Connect-compatible middleware stack owned by Vite. */
   middlewares: {
     use(handler: KovoViteMiddleware): void;
@@ -151,7 +159,7 @@ interface KovoViteRuntimePlugin extends KovoVitePlugin {
     source: string,
     id: string,
   ): null | Promise<null | { code: string; map: null }> | { code: string; map: null };
-  handleHotUpdate?(context: KovoViteHotUpdateContext): Promise<readonly unknown[]>;
+  handleHotUpdate?(context: KovoViteHotUpdateContext): Promise<readonly unknown[] | undefined>;
 }
 
 interface KovoViteBuildPluginContext {
@@ -179,7 +187,7 @@ interface KovoCompilerVitePlugin {
     source: string;
   }[];
   getCssAssetManifest?(options?: CssAssetManifestOptions): CssAssetManifest;
-  handleHotUpdate?(context: KovoViteHotUpdateContext): Promise<readonly unknown[]>;
+  handleHotUpdate?(context: KovoViteHotUpdateContext): Promise<readonly unknown[] | undefined>;
   load?(id: string): null | Promise<null | string> | string;
   resolveId?(source: string, importer?: string): null | Promise<null | string> | string;
   transform?(
@@ -195,7 +203,7 @@ interface KovoAppShellViteDevIntegration {
 
 interface KovoAppShellDevPlugin {
   configureServer(server: KovoViteDevServer): void | KovoVitePostHook;
-  handleHotUpdate?(context: KovoViteHotUpdateContext): Promise<readonly unknown[]>;
+  handleHotUpdate?(context: KovoViteHotUpdateContext): Promise<readonly unknown[] | undefined>;
 }
 
 interface CssAssetManifestOptions {
@@ -290,6 +298,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   let appShellPlugin: KovoAppShellDevPlugin | undefined;
   let onModuleDiagnostics: ((report: unknown) => void) | undefined;
   let onServerModuleDiagnostics: ((report: unknown) => void) | undefined;
+  let compilerErrorDiagnosticRevision = 0;
   // SPEC.md §9.5: `serve` is the dev disposition (teaching, never fail-closed); any other
   // command is the fail-closed build path. Default to build so an unset command stays safe.
   let viteCommand: 'build' | 'serve' = 'build';
@@ -508,10 +517,18 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       onModuleDiagnostics =
         serverModuleDiagnosticSink === undefined
           ? undefined
-          : (report: unknown) =>
-              serverModuleDiagnosticSink(
-                adoptCompilerViteModuleDiagnosticReport(report, compilerProvenanceHandoff),
+          : (report: unknown) => {
+              const adopted = adoptCompilerViteModuleDiagnosticReport(
+                report,
+                compilerProvenanceHandoff,
               );
+              for (let index = 0; index < adopted.diagnostics.length; index += 1) {
+                if (adopted.diagnostics[index]?.severity !== 'error') continue;
+                compilerErrorDiagnosticRevision += 1;
+                break;
+              }
+              serverModuleDiagnosticSink(adopted);
+            };
       appShellPlugin = integration.plugin;
 
       return integration.plugin.configureServer(server);
@@ -576,11 +593,18 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
         );
       }
 
+      // App-shell HMR owns route-shell event selection, but it must not consume the update before
+      // the compiler clears a closed app contract's exact SSR runner (SPEC §6.2.1/§9.5.1).
+      const errorRevisionBeforeCompile = compilerErrorDiagnosticRevision;
+      const compilerResult =
+        externalCompilerPlugin === undefined
+          ? await (await compilerPlugin()).handleHotUpdate?.(context)
+          : undefined;
+      if (compilerErrorDiagnosticRevision !== errorRevisionBeforeCompile) {
+        return compilerResult ?? [];
+      }
       const appShellResult = await appShellPlugin?.handleHotUpdate?.(context);
-      if (appShellResult !== undefined) return appShellResult;
-
-      if (externalCompilerPlugin !== undefined) return context.modules ?? [];
-      return (await compilerPlugin()).handleHotUpdate?.(context) ?? context.modules ?? [];
+      return appShellResult ?? compilerResult ?? context.modules ?? [];
     },
     name: 'kovo',
   };

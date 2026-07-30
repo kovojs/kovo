@@ -194,12 +194,13 @@ export async function startKovoDevServer(
 
     liveServer = await createServer(liveConfig);
     const activeLiveServer = liveServer;
+    const liveSsrLoadModule = captureLiveSsrModuleImporter(liveServer);
     lockLiveDevEnvironmentPluginLists(liveServer.config);
     // The live Vite runner owns a distinct SSR module graph. Install and seal the managed SQL
     // parser in that graph before loading the runtime-neutral server root, which deliberately
     // closes any still-open parser install window (SPEC §6.6 rule 6).
-    await liveServer.ssrLoadModule(profile.nodeDataPlaneBootstrapModuleId);
-    const bindDevelopmentOrigin = await loadKovoDevLoopbackOriginBinder(liveServer, profile);
+    await liveSsrLoadModule(profile.nodeDataPlaneBootstrapModuleId);
+    const bindDevelopmentOrigin = await loadKovoDevLoopbackOriginBinder(liveSsrLoadModule, profile);
     const liveHttpServer = liveServer.httpServer;
     if (liveHttpServer === null) {
       throw new TypeError('Kovo dev requires one owned HTTP server for its development origin.');
@@ -226,7 +227,10 @@ export async function startKovoDevServer(
     if (options.debug === true) liveServer.printUrls();
     const readyReport = formatKovoDevReadyReport({
       appModulePath: options.appModulePath,
-      database: await inspectKovoDevDatabasePosture(liveServer, devtoolOptions),
+      database: await inspectKovoDevDatabasePosture(
+        { ssrLoadModule: liveSsrLoadModule },
+        devtoolOptions,
+      ),
       durationMs: nativeApply<number>(nativeMathRound, NativeMath, [performance.now() - startedAt]),
       localUrl: `${localOrigin}/`,
       mode: options.mode,
@@ -405,10 +409,10 @@ interface DevSecurityProfileModule extends KovoDevNodeIngressProfile {
 }
 
 async function loadKovoDevLoopbackOriginBinder(
-  server: Pick<ViteDevServer, 'ssrLoadModule'>,
+  importModule: (id: string) => Promise<Record<string, unknown>>,
   profile: DevSecurityProfileModule,
 ): Promise<(origin: string) => void> {
-  const module = await server.ssrLoadModule(profile.securityProfileModuleId);
+  const module = await importModule(profile.securityProfileModuleId);
   const bind = module.bindKovoDevLoopbackOrigin;
   if (typeof bind !== 'function') {
     throw new TypeError(
@@ -417,6 +421,32 @@ async function loadKovoDevLoopbackOriginBinder(
   }
   return (origin: string): void => {
     nativeApply(bind, undefined, [origin]);
+  };
+}
+
+function captureLiveSsrModuleImporter(
+  server: ViteDevServer,
+): (id: string) => Promise<Record<string, unknown>> {
+  const ssrEnvironment = server.environments.ssr;
+  if (ssrEnvironment === undefined) {
+    throw new TypeError('Kovo dev requires Vite public SSR environment.');
+  }
+  const runner = (
+    ssrEnvironment as unknown as {
+      readonly runner: {
+        import(id: string): Promise<Record<string, unknown>>;
+      };
+    }
+  ).runner;
+  const importModule = runner.import;
+  if (typeof importModule !== 'function') {
+    throw new TypeError('Kovo dev requires Vite public SSR module runner import().');
+  }
+  return (id: string): Promise<Record<string, unknown>> => {
+    if (runner.import !== importModule) {
+      throw new TypeError('Kovo dev SSR module runner changed after live-server creation.');
+    }
+    return nativeReflectApply(importModule, runner, [id]);
   };
 }
 

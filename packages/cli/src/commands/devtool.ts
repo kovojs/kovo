@@ -92,6 +92,7 @@ export function createKovoDevtoolPlugin(options: KovoDevtoolPluginOptions): Plug
     enforce: 'pre',
     name: 'kovo-devtool',
     configureServer(server) {
+      const moduleServer = captureDevtoolSsrModuleServer(server);
       // Source slicing recursively indexes the app tree. Build it once, then invalidate alongside
       // Vite's own watcher instead of repeating synchronous filesystem work on every page refresh.
       server.watcher.on('all', () => {
@@ -121,7 +122,7 @@ export function createKovoDevtoolPlugin(options: KovoDevtoolPluginOptions): Plug
           return;
         }
 
-        void renderDevtoolDocument(() => loadBundle(server), request)
+        void renderDevtoolDocument(() => loadBundle(moduleServer), request)
           .then((document) => writeHtmlResponse(response, 200, document))
           .catch((error: unknown) => {
             if (response.headersSent || response.writableEnded) {
@@ -138,6 +139,34 @@ export function createKovoDevtoolPlugin(options: KovoDevtoolPluginOptions): Plug
             );
           });
       });
+    },
+  };
+}
+
+function captureDevtoolSsrModuleServer(
+  server: ViteDevServer,
+): Pick<ViteDevServer, 'ssrLoadModule'> {
+  const ssrEnvironment = server.environments.ssr;
+  if (ssrEnvironment === undefined) {
+    throw new TypeError('Kovo devtool requires Vite public SSR environment.');
+  }
+  const runner = (
+    ssrEnvironment as unknown as {
+      readonly runner: {
+        import(id: string): Promise<Record<string, unknown>>;
+      };
+    }
+  ).runner;
+  const importModule = runner.import;
+  if (typeof importModule !== 'function') {
+    throw new TypeError('Kovo devtool requires Vite public SSR module runner import().');
+  }
+  return {
+    ssrLoadModule(id) {
+      if (runner.import !== importModule) {
+        throw new TypeError('Kovo devtool SSR module runner changed after configuration.');
+      }
+      return nativeReflectApply(importModule, runner, [id]);
     },
   };
 }

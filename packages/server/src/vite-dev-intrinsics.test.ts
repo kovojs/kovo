@@ -13,11 +13,42 @@ import { route } from './route.js';
 import {
   createKovoAppShellDevDiagnosticLedger,
   dispatchKovoAppShellViteDevRequest,
-  kovoAppShellViteDevPlugin,
+  kovoAppShellViteDevPlugin as createRawKovoAppShellViteDevPlugin,
   renderKovoAppShellViteDevDiagnosticResponse,
   type KovoAppShellViteDevPluginOptions,
+  type KovoAppShellViteDevModuleServer,
   type KovoAppShellViteMiddleware,
 } from './vite-dev.js';
+
+function withViteDevRunner<Server extends KovoAppShellViteDevModuleServer>(server: Server): Server {
+  const loadModule = server.ssrLoadModule;
+  return {
+    ...server,
+    environments: {
+      ssr: {
+        runner: {
+          clearCache() {},
+          import(id: string) {
+            return loadModule.call(server, id);
+          },
+        },
+      },
+    },
+  };
+}
+
+function kovoAppShellViteDevPlugin(
+  options: KovoAppShellViteDevPluginOptions = {},
+): ReturnType<typeof createRawKovoAppShellViteDevPlugin> {
+  const plugin = createRawKovoAppShellViteDevPlugin(options);
+  const configureServer = plugin.configureServer;
+  return {
+    ...plugin,
+    configureServer(server) {
+      return configureServer(withViteDevRunner(server));
+    },
+  };
+}
 
 describe('Vite-dev intrinsic closure', () => {
   it('keeps compiler errors blocking after late Array.some replacement', () => {

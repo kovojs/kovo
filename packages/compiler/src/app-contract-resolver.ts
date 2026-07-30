@@ -21,6 +21,7 @@ export type AppContractDeclarationFamily = (typeof appContractDeclarationFamilie
 
 export const appContractMemberNames = [
   ...appContractDeclarationFamilies,
+  'agent',
   'all',
   'assemble',
   'authenticated',

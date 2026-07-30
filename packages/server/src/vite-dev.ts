@@ -183,6 +183,14 @@ export interface KovoAppShellViteDevModuleServer extends KovoAppShellViteDevServ
   config?: {
     root?: string;
   };
+  environments?: Readonly<{
+    ssr?: {
+      runner?: {
+        clearCache(): void;
+        import<T = Record<string, unknown>>(id: string): Promise<T>;
+      };
+    };
+  }>;
   ssrLoadModule(id: string): Promise<Record<string, unknown>>;
   ws?: KovoAppShellViteWebSocket;
 }
@@ -226,7 +234,9 @@ export type KovoAppShellViteMiddleware = (
  */
 export interface KovoAppShellViteDevPlugin {
   configureServer(server: KovoAppShellViteDevModuleServer): void | (() => void);
-  handleHotUpdate?(context: KovoAppShellViteHotUpdateContext): Promise<readonly unknown[]>;
+  handleHotUpdate?(
+    context: KovoAppShellViteHotUpdateContext,
+  ): Promise<readonly unknown[] | undefined>;
   name: string;
 }
 
@@ -894,16 +904,39 @@ export function kovoAppShellViteDevPlugin(
   const install = (server: KovoAppShellViteDevModuleServer) => {
     root = server.config?.root ?? root;
     // The supported CLI installs this middleware before authored configureServer hooks. Pin the
-    // exact SSR loader and expose only that fixed carrier to per-request dispatch: a later caller
-    // hook may decorate its own server view, but cannot redirect framework/app loads to a second
-    // module graph after the trust profile was established (SPEC §6.6 rule 6).
-    const ssrLoadModuleSource = viteDevStableCallable(
+    // exact public RunnableDevEnvironment runner and expose only that fixed carrier to per-request
+    // dispatch. Compiler HMR clears this same runner, so a changed closed contract cannot be
+    // re-imported through a second, stale compatibility graph (SPEC §6.2.1/§6.6 rule 6).
+    const environments = viteDevOwnDataValue(
       server,
-      'ssrLoadModule',
-      'Vite dev server.ssrLoadModule',
+      'environments',
+      'Vite dev server.environments',
     );
-    const ssrLoadModule = (id: string): Promise<Record<string, unknown>> =>
-      witnessReflectApply(ssrLoadModuleSource, server, [id]);
+    const ssrEnvironment = viteDevOwnDataValue(
+      environments,
+      'ssr',
+      'Vite dev server.environments.ssr',
+    );
+    const runner = viteDevStableGetterValue(
+      ssrEnvironment,
+      'runner',
+      'Vite dev server.environments.ssr.runner',
+    );
+    const runnerImport = viteDevStableMethod(
+      runner,
+      'import',
+      'Vite dev server.environments.ssr.runner.import',
+    );
+    const ssrLoadModule = (id: string): Promise<Record<string, unknown>> => {
+      if (
+        server.environments !== environments ||
+        (environments as { ssr?: unknown }).ssr !== ssrEnvironment ||
+        (runner as { import?: unknown }).import !== runnerImport
+      ) {
+        throw new TypeError('Vite dev SSR runner changed after Kovo configuration.');
+      }
+      return witnessReflectApply(runnerImport, runner, [id]);
+    };
     const prepareCompilerClientModules = viteDevOwnDataValue(
       options,
       'prepareCompilerClientModules',
@@ -965,7 +998,7 @@ export function kovoAppShellViteDevPlugin(
     },
     async handleHotUpdate(context) {
       const sourceFile = viteDevSourceFileName(context.file, root);
-      if (sourceFile !== viteDevSourceFileName(moduleId, '')) return context.modules ?? [];
+      if (sourceFile !== viteDevSourceFileName(moduleId, '')) return undefined;
       context.server.ws?.send({
         data: {
           impact: 'routeRefresh',
@@ -2590,11 +2623,91 @@ function viteDevModuleExportValue(source: unknown, property: PropertyKey, label:
   return witnessReflectGet(source, property);
 }
 
-function viteDevStableCallable(source: unknown, property: PropertyKey, label: string): Function {
-  const value = viteDevOwnDataValue(source, property, label);
-  if (typeof value !== 'function') throw new TypeError(`${label} must be a function.`);
-  return value;
+function viteDevStableMethod(source: unknown, property: PropertyKey, label: string): Function {
+  if ((typeof source !== 'object' && typeof source !== 'function') || source === null) {
+    throw new TypeError(`${label} owner must be an object.`);
+  }
+  let owner: object | null = source;
+  for (let depth = 0; owner !== null && depth < 16; depth += 1) {
+    const before = witnessGetOwnPropertyDescriptor(owner, property);
+    const after = witnessGetOwnPropertyDescriptor(owner, property);
+    if (before === undefined && after === undefined) {
+      owner = witnessGetPrototypeOf(owner);
+      continue;
+    }
+    if (
+      before !== undefined &&
+      after !== undefined &&
+      'value' in before &&
+      'value' in after &&
+      typeof before.value === 'function' &&
+      witnessObjectIs(before.value, after.value)
+    ) {
+      return before.value;
+    }
+    if (
+      before === undefined ||
+      after === undefined ||
+      !('value' in before) ||
+      !('value' in after) ||
+      typeof before.value !== 'function' ||
+      !witnessObjectIs(before.value, after.value)
+    ) {
+      throw new TypeError(`${label} must be a stable data method.`);
+    }
+    return before.value;
+  }
+  throw new TypeError(`${label} must be a function.`);
 }
+
+/* oxlint-disable typescript/unbound-method -- Descriptor callables are compared and invoked through captured witness intrinsics. */
+function viteDevStableGetterValue(source: unknown, property: PropertyKey, label: string): unknown {
+  if ((typeof source !== 'object' && typeof source !== 'function') || source === null) {
+    throw new TypeError(`${label} owner must be an object.`);
+  }
+  let owner: object | null = source;
+  for (let depth = 0; owner !== null && depth < 16; depth += 1) {
+    const before = witnessGetOwnPropertyDescriptor(owner, property);
+    const after = witnessGetOwnPropertyDescriptor(owner, property);
+    if (before === undefined && after === undefined) {
+      owner = witnessGetPrototypeOf(owner);
+      continue;
+    }
+    if (
+      before !== undefined &&
+      after !== undefined &&
+      'value' in before &&
+      'value' in after &&
+      witnessObjectIs(before.value, after.value)
+    ) {
+      return before.value;
+    }
+    if (
+      before === undefined ||
+      after === undefined ||
+      !('get' in before) ||
+      !('get' in after) ||
+      typeof before.get !== 'function' ||
+      !witnessObjectIs(before.get, after.get) ||
+      !witnessObjectIs(before.set, after.set)
+    ) {
+      throw new TypeError(`${label} must be a stable accessor.`);
+    }
+    const value = witnessReflectApply(before.get, source, []);
+    const settled = witnessGetOwnPropertyDescriptor(owner, property);
+    if (
+      settled === undefined ||
+      !('get' in settled) ||
+      !witnessObjectIs(before.get, settled.get) ||
+      !witnessObjectIs(before.set, settled.set)
+    ) {
+      throw new TypeError(`${label} changed while its getter ran.`);
+    }
+    return value;
+  }
+  throw new TypeError(`${label} must be available.`);
+}
+/* oxlint-enable typescript/unbound-method */
 
 function captureViteDevNodeResponseMethod(property: PropertyKey): Function {
   let owner: object | null = NativeServerResponse.prototype;

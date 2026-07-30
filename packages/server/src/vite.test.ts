@@ -70,6 +70,24 @@ export const ContactForm = component({
 });
 `;
 
+function withViteRunner<
+  Server extends { ssrLoadModule(id: string): Promise<Record<string, unknown>> },
+>(server: Server): Server {
+  return {
+    ...server,
+    environments: {
+      ssr: {
+        runner: {
+          clearCache() {},
+          import(id: string) {
+            return server.ssrLoadModule(id);
+          },
+        },
+      },
+    },
+  };
+}
+
 async function writeImportedMutationProject(root: string): Promise<void> {
   await mkdir(join(root, 'src/components'), { recursive: true });
   await Promise.all([
@@ -134,24 +152,26 @@ export const SnapshotButton = component({
       await writeFile(join(root, 'src/app-shell.tsx'), appSource, 'utf8');
       const plugin = kovo({ app: '/src/app-shell.tsx' }) as unknown as KovoViteConfigureServer;
       await plugin.configResolved?.({ command: 'serve', root });
-      await plugin.configureServer({
-        config: { root },
-        middlewares: { use() {} },
-        async ssrLoadModule(id) {
-          expect(id).toBe('@kovojs/server/internal/app-shell-vite');
-          return {
-            createKovoAppShellViteDevIntegration(options: {
-              prepareCompilerClientModules?: typeof prepareCompilerClientModules;
-            }) {
-              prepareCompilerClientModules = options.prepareCompilerClientModules;
-              return {
-                onModuleDiagnostics() {},
-                plugin: { configureServer() {} },
-              };
-            },
-          };
-        },
-      });
+      await plugin.configureServer(
+        withViteRunner({
+          config: { root },
+          middlewares: { use() {} },
+          async ssrLoadModule(id) {
+            expect(id).toBe('@kovojs/server/internal/app-shell-vite');
+            return {
+              createKovoAppShellViteDevIntegration(options: {
+                prepareCompilerClientModules?: typeof prepareCompilerClientModules;
+              }) {
+                prepareCompilerClientModules = options.prepareCompilerClientModules;
+                return {
+                  onModuleDiagnostics() {},
+                  plugin: { configureServer() {} },
+                };
+              },
+            };
+          },
+        }),
+      );
 
       expect(prepareCompilerClientModules).toBeTypeOf('function');
       await plugin.transform?.(componentSource, join(root, 'src/snapshot-button.tsx'));
@@ -765,47 +785,50 @@ export const LoginCard = component({
       const plugin = kovo({ app: '/src/app-shell.tsx' }) as unknown as KovoViteConfigureServer;
       const middlewares: KovoAppShellViteMiddleware[] = [];
       await plugin.configResolved?.({ root });
-      await plugin.configureServer({
-        config: { root },
-        middlewares: {
-          use(handler) {
-            middlewares.push(handler);
+      await plugin.configureServer(
+        withViteRunner({
+          config: { root },
+          middlewares: {
+            use(handler) {
+              middlewares.push(handler);
+            },
           },
-        },
-        async ssrLoadModule(id) {
-          if (id === '@kovojs/server') {
-            return await import('@kovojs/server');
-          }
-          if (id === '@kovojs/server/internal/app-shell-vite') {
-            const module = await import('@kovojs/server/internal/app-shell-vite');
+          async ssrLoadModule(id) {
+            if (id === '@kovojs/server') {
+              return await import('@kovojs/server');
+            }
+            if (id === '@kovojs/server/internal/app-shell-vite') {
+              const module = await import('@kovojs/server/internal/app-shell-vite');
+              return {
+                claimCompilerClientModuleViteInstaller:
+                  module.claimCompilerClientModuleViteInstaller,
+                compilerClientModuleViteEpoch: module.compilerClientModuleViteEpoch,
+                createKovoAppShellViteDevIntegration: module.createKovoAppShellViteDevIntegration,
+                dispatchKovoAppShellViteDevRequest: module.dispatchKovoAppShellViteDevRequest,
+              };
+            }
+            expect(id).toBe('/src/app-shell.tsx');
             return {
-              claimCompilerClientModuleViteInstaller: module.claimCompilerClientModuleViteInstaller,
-              compilerClientModuleViteEpoch: module.compilerClientModuleViteEpoch,
-              createKovoAppShellViteDevIntegration: module.createKovoAppShellViteDevIntegration,
-              dispatchKovoAppShellViteDevRequest: module.dispatchKovoAppShellViteDevRequest,
+              default: createApp({
+                routes: [
+                  route('/', {
+                    page: () =>
+                      trustedHtml('<main>Home</main>', {
+                        reason: 'framework server rendering test fixture',
+                      }),
+                  }),
+                  route('/login', {
+                    page: () =>
+                      trustedHtml('<main>Login</main>', {
+                        reason: 'framework server rendering test fixture',
+                      }),
+                  }),
+                ],
+              }),
             };
-          }
-          expect(id).toBe('/src/app-shell.tsx');
-          return {
-            default: createApp({
-              routes: [
-                route('/', {
-                  page: () =>
-                    trustedHtml('<main>Home</main>', {
-                      reason: 'framework server rendering test fixture',
-                    }),
-                }),
-                route('/login', {
-                  page: () =>
-                    trustedHtml('<main>Login</main>', {
-                      reason: 'framework server rendering test fixture',
-                    }),
-                }),
-              ],
-            }),
-          };
-        },
-      });
+          },
+        }),
+      );
       // Vite's configureServer hook establishes the dev-state epoch before on-demand transforms
       // populate it. Exercise that lifecycle order so this fixture cannot rely on retired
       // cross-configuration compiler caches (SPEC §5.2, §9.5.1).

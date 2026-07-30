@@ -44,6 +44,8 @@ import {
   compilerNumberIsSafeInteger,
   compilerObjectKeys,
   compilerOwnDataValue,
+  compilerPinnedStableMethod,
+  compilerPinnedStableProperty,
   compilerPromiseIsPromise,
   compilerPromiseThen,
   compilerRegExpReplace,
@@ -128,7 +130,10 @@ export interface KovoVitePlugin {
   load?: (id: string) => null | Promise<null | string> | string;
   name: 'kovo';
   resolveId?: (source: string, importer?: string) => null | Promise<null | string> | string;
-  watchChange?: (id: string, change: { event: 'create' | 'delete' | 'update' }) => void;
+  watchChange?: (
+    id: string,
+    change: { event: 'create' | 'delete' | 'update' },
+  ) => Promise<void> | void;
   transform: (
     source: string,
     id: string,
@@ -253,6 +258,19 @@ export interface KovoVitePluginOptions {
  * @internal Minimal structural view of the Vite dev server the plugin's `configureServer`
  * hook needs (root config + middleware registration). Plugin-internal wiring type.
  */
+interface KovoViteRunnableDevEnvironment {
+  hot?: {
+    send(payload: { type: 'full-reload' }): Promise<void> | void;
+  };
+  moduleGraph?: {
+    invalidateAll(): void;
+  };
+  runner?: {
+    clearCache(): void;
+    import<T = Record<string, unknown>>(id: string): Promise<T>;
+  };
+}
+
 export interface KovoViteDevServer {
   config?: {
     root?: string;
@@ -265,6 +283,7 @@ export interface KovoViteDevServer {
   middlewares: {
     use(handler: KovoViteMiddleware): void;
   };
+  environments?: Readonly<Record<string, KovoViteRunnableDevEnvironment>>;
   moduleGraph?: {
     invalidateAll(): void;
   };
@@ -663,6 +682,8 @@ function createBoundKovoVitePlugin(
   let configurationEpoch = 0;
   let compileIssue = 0;
   let latestCompileIssueByFile = compilerCreateMap<string, number>();
+  let appContractOperationsByFile = compilerCreateMap<string, boolean>();
+  let appContractRefreshAuthority: ViteAppContractRefreshAuthority | undefined;
   // SPEC §5.2's one-to-one client module mapping does not authorize Kovo to widen Vite's
   // configured source boundary. Pin the same roots before any remote dev-module request is served.
   let clientSourceFileSystems = viteClientSourceFileSystems(root);
@@ -688,6 +709,8 @@ function createBoundKovoVitePlugin(
     configResolved(config) {
       configurationEpoch += 1;
       latestCompileIssueByFile = compilerCreateMap<string, number>();
+      appContractOperationsByFile = compilerCreateMap<string, boolean>();
+      appContractRefreshAuthority = undefined;
       const buildMode =
         config.command === undefined ? devState.buildMode : config.command === 'build';
       devState = createViteDevStateStore(buildMode, compilerOwnedProvenance);
@@ -695,8 +718,12 @@ function createBoundKovoVitePlugin(
       clientSourceFileSystems = viteClientSourceFileSystems(root, config.server?.fs?.allow);
     },
     configureServer(server) {
+      // Pin Vite's public SSR runner before middleware registration or any authored callbacks.
+      // App-contract refresh must clear the same module runner used by request dispatch.
+      appContractRefreshAuthority = captureViteAppContractRefreshAuthority(server);
       configurationEpoch += 1;
       latestCompileIssueByFile = compilerCreateMap<string, number>();
+      appContractOperationsByFile = compilerCreateMap<string, boolean>();
       devState = createViteDevStateStore(false, compilerOwnedProvenance);
       root = server.config?.root ?? root;
       clientSourceFileSystems = viteClientSourceFileSystems(root, server.config?.server?.fs?.allow);
@@ -905,6 +932,7 @@ function createBoundKovoVitePlugin(
         }
       };
       let result: MaybePromise<ViteCompileResult>;
+      let hasAppContractOperation = false;
       try {
         const isAuthoredSource = shouldTransformViteAuthoredSource(fileName, source, options);
         if (!isCurrent()) {
@@ -935,7 +963,9 @@ function createBoundKovoVitePlugin(
         }
         const standaloneRegistrySource =
           isAuthoredSource && !isComponentSource
-            ? lowerViteSourceDerivedRegistryDeclarations(transformRoot, fileName, source)
+            ? lowerViteSourceDerivedRegistryDeclarations(transformRoot, fileName, source, () => {
+                hasAppContractOperation = true;
+              })
             : null;
         const optimisticModule = isAuthoredSource
           ? viteOptimisticModuleForFile(resolveViteRegistryFacts(options, fileName), fileName)
@@ -963,6 +993,13 @@ function createBoundKovoVitePlugin(
           } else if (existing !== undefined && isCurrent()) {
             removeViteDevFileState(transformDevState, fileName, existing);
           }
+          if (isAuthoredSource && isCurrent()) {
+            recordViteAppContractOperations(
+              appContractOperationsByFile,
+              fileName,
+              hasAppContractOperation,
+            );
+          }
           finish();
           return standaloneRegistrySource === null
             ? null
@@ -975,6 +1012,9 @@ function createBoundKovoVitePlugin(
           transformSourceFileSystems,
           fileName,
           source,
+          () => {
+            hasAppContractOperation = true;
+          },
         );
       } catch (error) {
         finish();
@@ -985,7 +1025,7 @@ function createBoundKovoVitePlugin(
           result,
           (resolvedResult) => {
             try {
-              return transformViteCompileResult(
+              const transformed = transformViteCompileResult(
                 transformDevState,
                 options,
                 fileName,
@@ -994,6 +1034,14 @@ function createBoundKovoVitePlugin(
                 isCurrent,
                 purpose,
               );
+              if (transformed !== null && isCurrent()) {
+                recordViteAppContractOperations(
+                  appContractOperationsByFile,
+                  fileName,
+                  hasAppContractOperation,
+                );
+              }
+              return transformed;
             } finally {
               finish();
             }
@@ -1006,7 +1054,7 @@ function createBoundKovoVitePlugin(
       }
 
       try {
-        return transformViteCompileResult(
+        const transformed = transformViteCompileResult(
           transformDevState,
           options,
           fileName,
@@ -1015,6 +1063,14 @@ function createBoundKovoVitePlugin(
           isCurrent,
           purpose,
         );
+        if (transformed !== null && isCurrent()) {
+          recordViteAppContractOperations(
+            appContractOperationsByFile,
+            fileName,
+            hasAppContractOperation,
+          );
+        }
+        return transformed;
       } finally {
         finish();
       }
@@ -1025,6 +1081,7 @@ function createBoundKovoVitePlugin(
       const hotUpdateSourceFileSystems = clientSourceFileSystems;
       const hotUpdateConfigurationEpoch = configurationEpoch;
       const hotUpdateDevState = devState;
+      const hotUpdateRefreshAuthority = appContractRefreshAuthority;
       const fileName = viteComponentFileName(context.file, hotUpdateRoot);
       compileIssue += 1;
       const hotUpdateCompileIssue = compileIssue;
@@ -1036,6 +1093,8 @@ function createBoundKovoVitePlugin(
       try {
         const previousState = compilerMapGet(hotUpdateDevState.files, fileName);
         const previous = previousState?.hmrImpact ?? null;
+        const previousHadAppContractOperation =
+          compilerMapGet(appContractOperationsByFile, fileName) === true;
         const source = await context.read();
         if (!isCurrent()) return [];
         const isAuthoredSource = shouldTransformViteAuthoredSource(fileName, source, options);
@@ -1053,6 +1112,12 @@ function createBoundKovoVitePlugin(
           );
         }
         if (!isCurrent()) return [];
+        let hasAppContractOperation = false;
+        if (isAuthoredSource && !isComponentSource) {
+          lowerViteSourceDerivedRegistryDeclarations(hotUpdateRoot, fileName, source, () => {
+            hasAppContractOperation = true;
+          });
+        }
         const optimisticModule = isAuthoredSource
           ? viteOptimisticModuleForFile(resolveViteRegistryFacts(options, fileName), fileName)
           : undefined;
@@ -1087,10 +1152,17 @@ function createBoundKovoVitePlugin(
             );
             context.server.ws?.send({ type: 'full-reload' });
           }
+          if (previousHadAppContractOperation || hasAppContractOperation) {
+            refreshViteAppContractAssembly(hotUpdateRefreshAuthority, context.server);
+          }
+          recordViteAppContractOperations(
+            appContractOperationsByFile,
+            fileName,
+            hasAppContractOperation,
+          );
           return context.modules ?? [];
         }
 
-        let requiresFreshAppContractAssembly = false;
         const result = await compileViteComponentModule(
           compileComponentModule,
           options,
@@ -1099,7 +1171,7 @@ function createBoundKovoVitePlugin(
           fileName,
           source,
           () => {
-            requiresFreshAppContractAssembly = true;
+            hasAppContractOperation = true;
           },
         );
         if (!isCurrent()) return [];
@@ -1123,13 +1195,18 @@ function createBoundKovoVitePlugin(
           return [];
         }
 
-        if (requiresFreshAppContractAssembly) {
+        if (previousHadAppContractOperation || hasAppContractOperation) {
           // SPEC §6.2.1: a changed component module may be re-evaluated while its imported
           // defineKovo() provider remains cached. Invalidate both Vite module environments so
           // the next SSR request evaluates a fresh contract and assembly; never reopen a closed
           // contract or return stale query/task/mutation handles.
-          context.server.moduleGraph?.invalidateAll();
+          refreshViteAppContractAssembly(hotUpdateRefreshAuthority, context.server);
         }
+        recordViteAppContractOperations(
+          appContractOperationsByFile,
+          fileName,
+          hasAppContractOperation,
+        );
         recordViteCompileResult(hotUpdateDevState, fileName, metadata, emittedFiles);
         const classification = classifyViteHmrImpact(previous, next);
         const event = eventForHmrClassification(classification);
@@ -1156,6 +1233,11 @@ function createBoundKovoVitePlugin(
       compileIssue += 1;
       compilerMapSet(latestCompileIssueByFile, fileName, compileIssue);
       if (event === 'delete') {
+        if (compilerMapGet(appContractOperationsByFile, fileName) === true) {
+          const authority = appContractRefreshAuthority;
+          refreshViteAppContractAssembly(authority, authority?.server);
+          compilerMapDelete(appContractOperationsByFile, fileName);
+        }
         const existing = compilerMapGet(devState.files, fileName);
         if (existing !== undefined) removeViteDevFileState(devState, fileName, existing);
       }
@@ -1532,7 +1614,12 @@ function compileViteComponentModule(
   // Keep the resolution session synchronous and invocation-local. The real framework compiler
   // consumes it before returning. A substituted asynchronous test compiler receives no ambient
   // authority after its synchronous call returns.
-  if (compilerRegExpTest(/\.\s*(?:mutation|query|task)\s*\(/u, source)) {
+  if (
+    compilerRegExpTest(
+      /\.\s*(?:agent|assemble|endpoint|integrateMutation|layout|mutation|query|route|task)\s*\(/u,
+      source,
+    )
+  ) {
     const project = createCompilerOwnedAppContractProject({
       rootDirectory: root,
       rootNames: [fileName],
@@ -1584,7 +1671,10 @@ function viteProjectHasAppContractDeclaration(
       `Vite app-contract declaration facts[${index}]`,
     );
     if (
+      memberName === 'agent' ||
+      memberName === 'assemble' ||
       memberName === 'endpoint' ||
+      memberName === 'integrateMutation' ||
       memberName === 'layout' ||
       memberName === 'mutation' ||
       memberName === 'query' ||
@@ -1595,6 +1685,107 @@ function viteProjectHasAppContractDeclaration(
     }
   }
   return false;
+}
+
+interface ViteAppContractRefreshAuthority {
+  readonly environments: KovoViteDevServer['environments'];
+  readonly assertRunnerCurrent: (() => void) | undefined;
+  readonly runnerClearCache: (() => unknown) | undefined;
+  readonly server: KovoViteDevServer;
+  readonly ssrEnvironment: KovoViteRunnableDevEnvironment | undefined;
+  readonly ssrInvalidateAll: (() => unknown) | undefined;
+}
+
+function captureViteAppContractRefreshAuthority(
+  server: KovoViteDevServer,
+): ViteAppContractRefreshAuthority {
+  const environments = compilerOwnDataValue(
+    server,
+    'environments',
+    'Vite dev server',
+  ) as KovoViteDevServer['environments'];
+  const ssrEnvironment =
+    environments === undefined
+      ? undefined
+      : (compilerOwnDataValue(environments, 'ssr', 'Vite dev server environments') as
+          | KovoViteRunnableDevEnvironment
+          | undefined);
+  const runnerProperty =
+    ssrEnvironment === undefined
+      ? undefined
+      : compilerPinnedStableProperty(ssrEnvironment, 'runner', 'Vite SSR environment runner');
+  const runner = runnerProperty?.value as KovoViteRunnableDevEnvironment['runner'];
+  const ssrModuleGraph =
+    ssrEnvironment === undefined
+      ? undefined
+      : (compilerOwnDataValue(
+          ssrEnvironment,
+          'moduleGraph',
+          'Vite SSR environment',
+        ) as KovoViteRunnableDevEnvironment['moduleGraph']);
+  return {
+    assertRunnerCurrent:
+      runnerProperty === undefined ? undefined : () => runnerProperty.assertCurrent(),
+    environments,
+    runnerClearCache:
+      runner === undefined
+        ? undefined
+        : (compilerPinnedStableMethod(
+            runner,
+            'clearCache',
+            'Vite SSR module runner clearCache',
+          ) as () => unknown),
+    server,
+    ssrEnvironment,
+    ssrInvalidateAll:
+      ssrModuleGraph === undefined
+        ? undefined
+        : (compilerPinnedStableMethod(
+            ssrModuleGraph,
+            'invalidateAll',
+            'Vite SSR module graph invalidateAll',
+          ) as () => unknown),
+  };
+}
+
+function refreshViteAppContractAssembly(
+  authority: ViteAppContractRefreshAuthority | undefined,
+  server: KovoViteDevServer | undefined,
+): void {
+  if (
+    authority === undefined ||
+    authority.server !== server ||
+    compilerOwnDataValue(server, 'environments', 'Vite dev server') !== authority.environments ||
+    (authority.environments !== undefined &&
+      compilerOwnDataValue(authority.environments, 'ssr', 'Vite dev server environments') !==
+        authority.ssrEnvironment) ||
+    typeof authority.runnerClearCache !== 'function' ||
+    typeof authority.assertRunnerCurrent !== 'function' ||
+    typeof authority.ssrInvalidateAll !== 'function'
+  ) {
+    throw new TypeError(
+      'Kovo Vite cannot refresh an app-contract declaration without its exact configure-time public Vite SSR runner and module graph.',
+    );
+  }
+  // SPEC §6.2.1: transform invalidation alone leaves evaluated provider exports in the public Vite
+  // module runner. Clear that exact configure-time SSR authority so the next request evaluates one
+  // fresh defineKovo() generation; the SSR graph invalidation keeps transforms coherent. Client
+  // event selection remains with the ordinary HMR classifier, avoiding duplicate reload messages.
+  authority.assertRunnerCurrent();
+  authority.runnerClearCache();
+  authority.ssrInvalidateAll();
+}
+
+function recordViteAppContractOperations(
+  operationsByFile: Map<string, boolean>,
+  fileName: string,
+  hasOperation: boolean,
+): void {
+  if (hasOperation) {
+    compilerMapSet(operationsByFile, fileName, true);
+  } else {
+    compilerMapDelete(operationsByFile, fileName);
+  }
 }
 
 async function compileViteComponentModuleWithResolvedFactories(
@@ -3183,17 +3374,26 @@ function lowerViteSourceDerivedRegistryDeclarations(
   root: string,
   fileName: string,
   source: string,
+  onAppContractOperation?: () => void,
 ): string | null {
   // Legacy free factories have no receiver to prove. App-scoped factories do: run their lowering
   // inside a fresh compiler-owned Program so Vite cannot turn spelling such as `app.query(...)`
   // into framework authority. The Program is deliberately invocation-local because HMR may replace
   // the same file between transforms.
-  if (!compilerRegExpTest(/\.\s*(?:mutation|query|task)\s*\(/u, source)) {
+  if (
+    !compilerRegExpTest(
+      /\.\s*(?:agent|assemble|endpoint|integrateMutation|layout|mutation|query|route|task)\s*\(/u,
+      source,
+    )
+  ) {
     return lowerStandaloneSourceDerivedRegistryDeclarations({ fileName, source });
   }
 
   const programFileName = isAbsolute(fileName) ? fileName : resolve(root, fileName);
   const project = createCompilerOwnedAppContractProject({ rootNames: [programFileName] });
+  if (viteProjectHasAppContractDeclaration(project, programFileName, source)) {
+    onAppContractOperation?.();
+  }
   return project.withEntryResolutions(programFileName, (programSource) => {
     if (programSource !== source) {
       throw new TypeError(
