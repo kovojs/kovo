@@ -14,5 +14,5 @@
     "types": ["node"],
     "verbatimModuleSyntax": true
   },
-  "include": ["declaration-nameability-providers.ts", "declaration-nameability.ts", "positive.ts"]
+  "include": ["positive.ts"]
 }
