@@ -147,7 +147,7 @@ void reserveInventory;
     );
   });
 
-  it('associates integrated adapter mutation keys with their exact authored calls', () => {
+  it('associates integrated adapter mutation keys with their exact authored calls', async () => {
     const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-adapter-source-anchor-'));
     try {
       const serverRoot = join(root, 'node_modules/@kovojs/server');
@@ -223,7 +223,7 @@ void reserveInventory;
         },
       ];
 
-      const [signIn, signOut] = snapshotBuildAppContractSourceAnchorsForTests(files, [
+      const [signIn, signOut] = await snapshotBuildAppContractSourceAnchorsForTests(files, [
         { kind: 'mutation', name: 'auth/sign-in' },
         { kind: 'mutation', name: 'auth/sign-out' },
       ]);

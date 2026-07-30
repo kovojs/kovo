@@ -683,7 +683,7 @@
           "reason": "The custom-shell browser installer captures framework-bounded network and dynamic-loader authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "70f6157a28b94ffb2a9e257c4da23ffc2c330de8a09cc2e07c2a0cdd0ade4823"
+      "sourceTreeSha256": "9466612cd4b4024566f4d908d13845aaf9a518e7d1bbf86f4597285df14c9817"
     },
     {
       "manifestVariants": [
@@ -783,7 +783,7 @@
           "reason": "The diagnostic schema constant belongs to the build-time CLI package and is not request-handler authority."
         }
       ],
-      "sourceTreeSha256": "3d04f01e6e266da2ef5f12253a17eacf71e1caeea9c58774be427e464c6b6c5f"
+      "sourceTreeSha256": "72d28731e14cbe72c36cdc335debfe37a970060d68c73f4172a69382dd28a770"
     },
     {
       "manifestVariants": [
@@ -1882,7 +1882,7 @@
           "securityRole": "trust-escape"
         }
       ],
-      "sourceTreeSha256": "7760a7dbf74f25788cb96e167c7665347797a493d08df9462fd32b69468e1da8"
+      "sourceTreeSha256": "5dd1c516fd581957316a8aa3cdd0ea87911a3fbbda7820af84929c6132ab34c4"
     },
     {
       "manifestVariants": [
@@ -9876,7 +9876,7 @@
           "reason": "derived binds a reviewed adapter to the current request principal through the canonical ScopedKey containment door."
         }
       ],
-      "sourceTreeSha256": "ed827603cbcf9258aac7366231c3110560647fcfd07320caf91c0a3de1f68a73"
+      "sourceTreeSha256": "08a2ad53afbc9e97be60a9c2b3e9256e201370b2442bb376457a99d19d845778"
     },
     {
       "manifestVariants": [

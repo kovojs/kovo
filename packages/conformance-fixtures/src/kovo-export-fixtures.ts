@@ -241,7 +241,10 @@ import { defineKovo } from ${JSON.stringify(appCoreModuleUrl)};
 
 export const diagnostics = ${JSON.stringify(diagnostics, null, 2)};
 
-const app = defineKovo({ appId: 'd10d10d1-0000-4000-8000-000000000001' });
+const app = defineKovo({
+  appId: 'd10d10d1-0000-4000-8000-000000000001',
+  egress: { allowInternal: [] },
+});
 const homeRoute = app.route('/', {
   access: app.publicAccess('D10 static export conformance fixture'),
   page: () => <main ${markerAttribute}="${cliMarker}"></main>,

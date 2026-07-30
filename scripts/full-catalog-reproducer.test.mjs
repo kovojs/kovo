@@ -154,9 +154,40 @@ describe('packed full-catalog reproducer', () => {
         durationMs: 600_002,
         name: 'check',
         peakProcessTreeRssBytes: 3_000_000_000,
+        signal: 'SIGKILL',
         status: null,
       },
       phase: 'check',
+    });
+  });
+
+  it('accepts bounded signal termination with unavailable measurement evidence', () => {
+    const report = validReport();
+    const sample = report.samples[0];
+    sample.phases = sample.phases.slice(0, 4);
+    sample.phases[3] = {
+      durationMs: null,
+      name: 'typecheck',
+      peakProcessTreeRssBytes: null,
+      signal: 'SIGTERM',
+      status: null,
+    };
+    sample.functionalPass = false;
+    sample.pass = false;
+    sample.failure = {
+      artifact: {
+        directory: 'failed/full-catalog-1',
+        sha256: `sha256:${'3'.repeat(64)}`,
+      },
+      message: 'typecheck exceeded its bounded supervisor deadline',
+      phase: 'typecheck',
+    };
+    report.pass = false;
+
+    expect(validateFullCatalogReport(report)).toEqual([]);
+    expect(sample.failure.artifact).toEqual({
+      directory: 'failed/full-catalog-1',
+      sha256: `sha256:${'3'.repeat(64)}`,
     });
   });
 
@@ -519,6 +550,7 @@ function validReport(sampleCount = 1) {
       durationMs: 1,
       name,
       peakProcessTreeRssBytes,
+      signal: null,
       status: 0,
     }));
     return {

@@ -8,5 +8,5 @@ if (process.argv.length !== 3 || typeof request !== 'string') {
   process.exit(2);
 }
 
-const output = runPreEvaluationStaticTrustWorkerRequest(request);
+const output = await runPreEvaluationStaticTrustWorkerRequest(request);
 process.stdout.write(output);

@@ -664,19 +664,31 @@ export function validateFullCatalogReportIdentity(report, label = 'report', opti
     } else {
       for (const [phaseIndex, phase] of sample.phases.entries()) {
         if (
-          !exactOwnKeys(phase, ['durationMs', 'name', 'peakProcessTreeRssBytes', 'status']) ||
+          !exactOwnKeys(phase, [
+            'durationMs',
+            'name',
+            'peakProcessTreeRssBytes',
+            'signal',
+            'status',
+          ]) ||
           typeof phase?.name !== 'string' ||
-          !Number.isFinite(phase?.durationMs) ||
-          phase.durationMs < 0 ||
+          (phase.durationMs !== null &&
+            (!Number.isFinite(phase.durationMs) || phase.durationMs < 0)) ||
           (phase.status !== null && !Number.isInteger(phase.status)) ||
-          !Number.isFinite(phase?.peakProcessTreeRssBytes) ||
-          phase.peakProcessTreeRssBytes < 0
+          (phase.signal !== null && typeof phase.signal !== 'string') ||
+          (phase.peakProcessTreeRssBytes !== null &&
+            (!Number.isFinite(phase.peakProcessTreeRssBytes) ||
+              phase.peakProcessTreeRssBytes < 0)) ||
+          ((phase.durationMs === null || phase.peakProcessTreeRssBytes === null) &&
+            (sample.functionalPass || (phase.status === null && phase.signal === null)))
         ) {
           findings.push(`${sampleLabel}.phases[${String(phaseIndex)}] has invalid phase evidence`);
           continue;
         }
         phaseNames.push(phase.name);
-        phasePeaks.push(phase.peakProcessTreeRssBytes);
+        if (Number.isFinite(phase.peakProcessTreeRssBytes)) {
+          phasePeaks.push(phase.peakProcessTreeRssBytes);
+        }
       }
     }
     const expectedPhaseNames = KOVO_FULL_CATALOG_PHASES.map((phase) => phase.name);
@@ -714,7 +726,7 @@ export function validateFullCatalogReportIdentity(report, label = 'report', opti
         sample.copiedSourceFiles < KOVO_FULL_CATALOG_COMPONENT_COUNT ||
         sample.unimportedDuringProof !== true ||
         !sameJson(phaseNames, expectedPhaseNames) ||
-        sample.phases.some((phase) => phase.status !== 0)
+        sample.phases.some((phase) => phase.status !== 0 || phase.signal !== null)
       ) {
         findings.push(`${sampleLabel} did not prove every successful workload phase`);
       }

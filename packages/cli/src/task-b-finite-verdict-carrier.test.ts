@@ -99,8 +99,8 @@ function expectRoutePageRejected(value: {
 }
 
 describe('TASK B compiler finite-verdict caller carriers', () => {
-  it('executes the build caller with the complete finite diagnostic census', () => {
-    expectCompleteRejectedVerdict(snapshotBuildCompilerTaskBFiniteVerdictForTests(files));
+  it('executes the build caller with the complete finite diagnostic census', async () => {
+    expectCompleteRejectedVerdict(await snapshotBuildCompilerTaskBFiniteVerdictForTests(files));
   });
 
   it('executes the compile caller with the complete finite diagnostic census', async () => {
@@ -113,9 +113,9 @@ describe('TASK B compiler finite-verdict caller carriers', () => {
     );
   });
 
-  it('retains route-page finite diagnostics in the build verdict and ordinary preflight', () => {
-    expectRoutePageRejected(snapshotBuildCompilerTaskBFiniteVerdictForTests(routePageFiles));
-    const diagnostics = snapshotBuildCompilerDiagnosticsForTests(routePageFiles);
+  it('retains route-page finite diagnostics in the build verdict and ordinary preflight', async () => {
+    expectRoutePageRejected(await snapshotBuildCompilerTaskBFiniteVerdictForTests(routePageFiles));
+    const diagnostics = await snapshotBuildCompilerDiagnosticsForTests(routePageFiles);
     expectRoutePageRejected({ blockingDiagnostics: diagnostics, status: 'rejected' });
   });
 
@@ -129,17 +129,17 @@ describe('TASK B compiler finite-verdict caller carriers', () => {
     );
   });
 
-  it('refuses virtual build roots that escape or alias the compiler-owned project', () => {
-    expect(() =>
+  it('refuses virtual build roots that escape or alias the compiler-owned project', async () => {
+    await expect(
       snapshotBuildCompilerTaskBFiniteVerdictForTests([
         { fileName: '../outside.ts', source: 'export const escaped = true;' },
       ]),
-    ).toThrow('escapes its compiler-owned project');
-    expect(() =>
+    ).rejects.toThrow('escapes its compiler-owned project');
+    await expect(
       snapshotBuildCompilerTaskBFiniteVerdictForTests([
         { fileName: 'src/first.ts', source: 'export const first = true;' },
         { fileName: 'src/../src/first.ts', source: 'export const second = true;' },
       ]),
-    ).toThrow('duplicates src/first.ts');
+    ).rejects.toThrow('duplicates src/first.ts');
   });
 });

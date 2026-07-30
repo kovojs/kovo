@@ -2,9 +2,9 @@
 
 import { lstatSync, readFileSync, readdirSync } from 'node:fs';
 import { extname, isAbsolute, relative, resolve, sep } from 'node:path';
-import { pathToFileURL } from 'node:url';
 
 import ts from 'typescript';
+import { isDirectScriptInvocation } from './is-direct-script-invocation.mjs';
 
 const RESULT_SCHEMA = 'kovo-api-migration-result/v1';
 const BATCH = 'test-harness-v2';
@@ -366,6 +366,6 @@ function main(args) {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isDirectScriptInvocation(import.meta.url, process.argv[1], 'migrate-test-harness-v2.mjs')) {
   process.exitCode = main(process.argv.slice(2));
 }

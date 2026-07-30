@@ -13,8 +13,8 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from 'node:path';
-import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
+import { isDirectScriptInvocation } from './is-direct-script-invocation.mjs';
 
 const RESULT_SCHEMA = 'kovo-api-migration-result/v1';
 const BATCH = 'browser-client-installer-v1';
@@ -387,6 +387,12 @@ function main(args) {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (
+  isDirectScriptInvocation(
+    import.meta.url,
+    process.argv[1],
+    'migrate-browser-client-installer-v1.mjs',
+  )
+) {
   process.exitCode = main(process.argv.slice(2));
 }

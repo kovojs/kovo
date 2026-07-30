@@ -25,6 +25,18 @@ describe('server security bootstrap census', () => {
     }
   });
 
+  it('captures the data-plane intrinsic membrane without enrolling its AST analyzer', () => {
+    const source = readFileSync(new URL('./security-bootstrap.ts', import.meta.url), 'utf8');
+    const dataPlaneImport = source.indexOf(
+      "from './internal/data-plane-static-analysis-intrinsics.js';",
+    );
+    const dataPlaneAssertion = source.indexOf('assertDataPlaneStaticAnalysisIntrinsics();');
+
+    expect(dataPlaneImport).toBeGreaterThan(0);
+    expect(dataPlaneAssertion).toBeGreaterThan(dataPlaneImport);
+    expect(source).not.toContain("from './internal/data-plane-static-analysis.js'");
+  });
+
   it('is the first dependency of every supported server entry', () => {
     const entries = [
       ['build.ts', "import './security-bootstrap.js';"],
@@ -72,5 +84,29 @@ describe('server security bootstrap census', () => {
 
     expect(rootLoad).toBeGreaterThan(0);
     expect(appLoad).toBeGreaterThan(rootLoad);
+  });
+
+  it('keeps build/check SSR preload ordered and omits the post-proof AST analyzer', () => {
+    const source = readFileSync(
+      new URL('../../cli/src/commands/build-export.ts', import.meta.url),
+      'utf8',
+    );
+    const preloadStart = source.indexOf('async function preloadKovoSsrSecurityProfile(');
+    const preloadEnd = source.indexOf('\nfunction viteSsrModuleId(', preloadStart);
+    const preload = source.slice(preloadStart, preloadEnd);
+    const parserBootstrap = preload.indexOf(
+      "'@kovojs/server/internal/sql-parser-authority-bootstrap'",
+    );
+    const compilerBootstrap = preload.indexOf("'@kovojs/compiler/internal/security-bootstrap'");
+    const compilerRoot = preload.indexOf("requireFromServer.resolve('@kovojs/compiler')");
+    const serverRoot = preload.lastIndexOf('viteSsrModuleId(serverRootPath, root)');
+
+    expect(preloadStart).toBeGreaterThan(0);
+    expect(preloadEnd).toBeGreaterThan(preloadStart);
+    expect(parserBootstrap).toBeGreaterThan(0);
+    expect(compilerBootstrap).toBeGreaterThan(parserBootstrap);
+    expect(compilerRoot).toBeGreaterThan(compilerBootstrap);
+    expect(serverRoot).toBeGreaterThan(compilerRoot);
+    expect(preload).not.toContain("'@kovojs/server/internal/data-plane-static-analysis'");
   });
 });

@@ -466,6 +466,7 @@ export function requireCatalogPhaseSuccess(phase, observation) {
     durationMs: observation.durationMs,
     name: phase,
     peakProcessTreeRssBytes: observation.peakRssBytes,
+    signal: observation.signal,
     status: observation.exitCode,
   };
   if (observation.exitCode !== 0 || observation.signal || observation.error) {

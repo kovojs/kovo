@@ -1,23 +1,71 @@
-import { createHash } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 
 import { isRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import { describe, expect, it } from 'vitest';
 
-import { staticTrustFromWorkerEnvelopeForTesting } from './build-export.js';
+import {
+  staticConfigTrustFromWorkerEnvelopeForTesting,
+  staticTrustFromWorkerEnvelopeForTesting,
+  type StaticTrustWorkerRequest,
+} from './build-export.js';
 
 const schema = 'kovo-static-trust-worker/v1';
+const request: StaticTrustWorkerRequest = {
+  authenticationKey: '11'.repeat(32),
+  cache: null,
+  challenge: '22'.repeat(32),
+  command: null,
+  kind: 'app',
+  modulePath: '/app/app.ts',
+  paranoidStaticAdvisory: false,
+  root: '/app',
+};
 
-function envelope(payloadValue: unknown, overrides: Record<string, unknown> = {}): string {
+function requestDigest(expected: StaticTrustWorkerRequest): string {
+  const identity = JSON.stringify({
+    cache: expected.cache,
+    challenge: expected.challenge,
+    command: expected.command,
+    kind: expected.kind,
+    modulePath: expected.modulePath,
+    paranoidStaticAdvisory: expected.paranoidStaticAdvisory,
+    root: expected.root,
+  });
+  return `sha256:${createHash('sha256').update(identity, 'utf8').digest('hex')}`;
+}
+
+function envelopeFor(
+  expected: StaticTrustWorkerRequest,
+  payloadValue: unknown,
+  overrides: Record<string, unknown> = {},
+): string {
   const payload = JSON.stringify(payloadValue);
+  const boundRequestDigest = requestDigest(expected);
   return JSON.stringify({
+    authentication: `hmac-sha256:${createHmac(
+      'sha256',
+      Buffer.from(expected.authenticationKey, 'hex'),
+    )
+      .update(boundRequestDigest, 'utf8')
+      .update('\0', 'utf8')
+      .update(payload, 'utf8')
+      .digest('hex')}`,
     digest: `sha256:${createHash('sha256').update(payload, 'utf8').digest('hex')}`,
     payload,
+    requestDigest: boundRequestDigest,
     schema,
     ...overrides,
   });
 }
 
-function successfulEnvelope(components: readonly unknown[]): string {
+function envelope(payloadValue: unknown, overrides: Record<string, unknown> = {}): string {
+  return envelopeFor(request, payloadValue, overrides);
+}
+
+function successfulTrust(
+  components: readonly unknown[],
+  expected: StaticTrustWorkerRequest = request,
+): Record<string, unknown> {
   const facts = {
     capabilities: [],
     cookieDowngrades: [],
@@ -27,43 +75,136 @@ function successfulEnvelope(components: readonly unknown[]): string {
     unregisteredSinks: [],
   };
   const approvedSourceFiles = [{ fileName: 'app.ts', source: 'export default {};' }];
-  const sourceFrame = `${Buffer.byteLength('app.ts')}:app.ts${Buffer.byteLength(
-    'export default {};',
-  )}:export default {};`;
-  return envelope(
-    {
-      status: 'ok',
-      trust: {
-        approvedSourceFiles,
-        capabilityClosure: {
-          dependencyManifest: {},
-          diagnostics: [],
-          facts: [],
-          packageRequests: [],
-        },
-        facts,
-        files: approvedSourceFiles,
-        sourceGraphFacts: {
-          appContractStaticFacts: [],
-          compilerDependencies: [],
-          compilerSecuritySemanticSources: [],
-          compilerTaskBFiniteVerdict: {},
-          components,
-          domainDeclarationNames: [],
-          registryDeclarationAnchors: [],
-          routeOutcomes: [],
-          routePages: [],
-          sourceDerivedRegistryTransforms: [
-            { code: null, fileName: 'app.ts', source: 'export default {};' },
-          ],
-        },
-      },
+  return {
+    approvedSourceFiles,
+    capabilityClosure: {
+      dependencyManifest: {},
+      diagnostics: [],
+      facts: [],
+      packageRequests: [],
     },
+    ...(expected.cache === null
+      ? {}
+      : {
+          derivedProof: {
+            browserPosture: {},
+            dataPlaneFacts: {
+              grants: [],
+              massAssignmentFacts: [],
+              ownerDomains: [],
+              queries: [],
+              queryWriteReachability: [],
+              scopeAudits: [],
+              sqlSafetyDiagnostics: [],
+              toctouFacts: [],
+            },
+            queryShapeFacts: [],
+          },
+        }),
+    facts,
+    files: approvedSourceFiles,
+    sourceGraphFacts: {
+      components,
+      domainDeclarationNames: [],
+      registryDeclarationAnchors: [],
+      routeOutcomes: [],
+      routePages: [],
+      sourceDerivedRegistryTransforms: [
+        { code: null, fileName: 'app.ts', source: 'export default {};' },
+      ],
+    },
+  };
+}
+
+function successfulEnvelopeForTrust(
+  expected: StaticTrustWorkerRequest,
+  trust: Record<string, unknown>,
+  overrides: Record<string, unknown> = {},
+): string {
+  const facts = trust.facts!;
+  const approvedSourceFiles = trust.approvedSourceFiles as readonly {
+    fileName: string;
+    source: string;
+  }[];
+  const clientEntry = trust.clientEntry as
+    | { readonly fileName: string; readonly source: string }
+    | undefined;
+  const sourceFiles =
+    clientEntry === undefined ? approvedSourceFiles : [...approvedSourceFiles, clientEntry];
+  const sourceFrame = sourceFiles
+    .map(
+      (file) =>
+        `${Buffer.byteLength(file.fileName)}:${file.fileName}${Buffer.byteLength(file.source)}:${file.source}`,
+    )
+    .join('');
+  return envelopeFor(
+    expected,
+    { kind: expected.kind, status: 'ok', trust },
     {
       factsDigest: `sha256:${createHash('sha256')
         .update(JSON.stringify(facts), 'utf8')
         .digest('hex')}`,
       sourceDigest: `sha256:${createHash('sha256').update(sourceFrame, 'utf8').digest('hex')}`,
+      ...overrides,
+    },
+  );
+}
+
+function successfulEnvelope(
+  components: readonly unknown[],
+  expected: StaticTrustWorkerRequest = request,
+): string {
+  const trust = successfulTrust(components, expected);
+  return successfulEnvelopeForTrust(expected, trust);
+}
+
+const configRequest: StaticTrustWorkerRequest = {
+  ...request,
+  cache: null,
+  challenge: '55'.repeat(32),
+  command: 'build',
+  kind: 'config',
+  modulePath: '/app/kovo.config.ts',
+};
+
+function successfulConfigTrust(): Record<string, unknown> {
+  return {
+    facts: {
+      capabilities: [],
+      cookieDowngrades: [],
+      diagnostics: [],
+      revealed: [],
+      trustEscapes: [],
+      unregisteredSinks: [],
+    },
+    files: [{ fileName: 'kovo.config.ts', source: 'export default {};' }],
+    path: configRequest.modulePath,
+  };
+}
+
+function successfulConfigEnvelope(
+  trust: Record<string, unknown> = successfulConfigTrust(),
+  overrides: Record<string, unknown> = {},
+): string {
+  const facts = trust.facts!;
+  const files = Array.isArray(trust.files)
+    ? (trust.files as readonly { readonly fileName: string; readonly source: string }[])
+    : [];
+  const sourceFrame = files
+    .map(
+      (file) =>
+        `${Buffer.byteLength(file.fileName)}:${file.fileName}${Buffer.byteLength(file.source)}:${file.source}`,
+    )
+    .join('');
+  return envelopeFor(
+    configRequest,
+    { kind: 'config', status: 'ok', trust },
+    {
+      factsDigest: `sha256:${createHash('sha256')
+        .update(JSON.stringify(facts), 'utf8')
+        .digest('hex')}`,
+      sourceDigest: `sha256:${createHash('sha256').update(sourceFrame, 'utf8').digest('hex')}`,
+      ...overrides,
     },
   );
 }
@@ -87,6 +228,7 @@ describe('static-trust worker protocol', () => {
           },
           status: 'error',
         }),
+        request,
       ),
     ).toThrow('kovo build check preflight failed:\\nERROR KV235');
   });
@@ -97,7 +239,149 @@ describe('static-trust worker protocol', () => {
     ['truncated JSON', '{"schema":'],
     ['multiple documents', `${envelope({ status: 'error' })}${envelope({ status: 'error' })}`],
   ])('rejects %s output before trusting facts', (_label, output) => {
-    expect(() => staticTrustFromWorkerEnvelopeForTesting(output)).toThrow();
+    expect(() => staticTrustFromWorkerEnvelopeForTesting(output, request)).toThrow();
+  });
+
+  it('rejects a signed envelope replayed into a different request challenge', () => {
+    const replayed = successfulEnvelope([]);
+    expect(() =>
+      staticTrustFromWorkerEnvelopeForTesting(replayed, {
+        ...request,
+        challenge: '33'.repeat(32),
+      }),
+    ).toThrow('unauthenticated envelope');
+  });
+
+  it('authenticates config trust and rejects replay, tamper, omission, and stale source', () => {
+    expect(
+      staticConfigTrustFromWorkerEnvelopeForTesting(successfulConfigEnvelope(), configRequest).path,
+    ).toBe(configRequest.modulePath);
+
+    expect(() =>
+      staticConfigTrustFromWorkerEnvelopeForTesting(successfulConfigEnvelope(), {
+        ...configRequest,
+        challenge: '66'.repeat(32),
+      }),
+    ).toThrow('unauthenticated envelope');
+
+    const tampered = JSON.parse(successfulConfigEnvelope()) as Record<string, unknown>;
+    const tamperedPayload = JSON.parse(tampered.payload as string) as {
+      trust: { facts: { capabilities: unknown[] } };
+    };
+    tamperedPayload.trust.facts.capabilities.push({ forged: true });
+    tampered.payload = JSON.stringify(tamperedPayload);
+    tampered.digest = `sha256:${createHash('sha256')
+      .update(tampered.payload as string, 'utf8')
+      .digest('hex')}`;
+    expect(() =>
+      staticConfigTrustFromWorkerEnvelopeForTesting(JSON.stringify(tampered), configRequest),
+    ).toThrow('unauthenticated envelope');
+
+    const omitted = successfulConfigTrust();
+    delete omitted.files;
+    expect(() =>
+      staticConfigTrustFromWorkerEnvelopeForTesting(
+        successfulConfigEnvelope(omitted),
+        configRequest,
+      ),
+    ).toThrow();
+
+    const original = JSON.parse(successfulConfigEnvelope()) as { sourceDigest: string };
+    const stale = successfulConfigTrust();
+    (stale.files as { fileName: string; source: string }[])[0]!.source =
+      'export default { changed: true };';
+    expect(() =>
+      staticConfigTrustFromWorkerEnvelopeForTesting(
+        successfulConfigEnvelope(stale, { sourceDigest: original.sourceDigest }),
+        configRequest,
+      ),
+    ).toThrow('stale config source digest');
+  });
+
+  it('rejects nested payload tampering even when the plain digest is recomputed', () => {
+    const outer = JSON.parse(successfulEnvelope([])) as Record<string, unknown>;
+    const payload = JSON.parse(outer.payload as string) as {
+      trust: { capabilityClosure: { dependencyManifest: Record<string, unknown> } };
+    };
+    payload.trust.capabilityClosure.dependencyManifest = { forged: true };
+    outer.payload = JSON.stringify(payload);
+    outer.digest = `sha256:${createHash('sha256')
+      .update(outer.payload as string, 'utf8')
+      .digest('hex')}`;
+    expect(() => staticTrustFromWorkerEnvelopeForTesting(JSON.stringify(outer), request)).toThrow(
+      'unauthenticated envelope',
+    );
+  });
+
+  it.each(['browserPosture', 'dataPlaneFacts', 'queryShapeFacts'] as const)(
+    'rejects an authenticated derived proof that omits %s',
+    (field) => {
+      const proofRequest: StaticTrustWorkerRequest = {
+        ...request,
+        cache: false,
+        challenge: '44'.repeat(32),
+      };
+      const trust = successfulTrust([], proofRequest);
+      const proof = trust.derivedProof as Record<string, unknown>;
+      delete proof[field];
+      expect(() =>
+        staticTrustFromWorkerEnvelopeForTesting(
+          successfulEnvelopeForTrust(proofRequest, trust),
+          proofRequest,
+        ),
+      ).toThrow('derived proof');
+    },
+  );
+
+  it('rejects re-signed facts whose source bytes do not match the source digest', () => {
+    const original = JSON.parse(successfulEnvelope([])) as { sourceDigest: string };
+    const trust = successfulTrust([]);
+    const changedSource = 'export default { changed: true };';
+    const approvedSourceFiles = trust.approvedSourceFiles as {
+      fileName: string;
+      source: string;
+    }[];
+    approvedSourceFiles[0]!.source = changedSource;
+    const sourceGraphFacts = trust.sourceGraphFacts as {
+      sourceDerivedRegistryTransforms: { code: null; fileName: string; source: string }[];
+    };
+    sourceGraphFacts.sourceDerivedRegistryTransforms[0]!.source = changedSource;
+    expect(() =>
+      staticTrustFromWorkerEnvelopeForTesting(
+        successfulEnvelopeForTrust(request, trust, {
+          sourceDigest: original.sourceDigest,
+        }),
+        request,
+      ),
+    ).toThrow('stale source digest');
+  });
+
+  it.each([
+    ['unknown file', { end: 1, file: 'copy.ts', start: 0 }],
+    ['out-of-range end', { end: 19, file: 'app.ts', start: 0 }],
+    ['surplus field', { copied: true, end: 1, file: 'app.ts', start: 0 }],
+  ])('rejects an authenticated registry anchor with an %s', (_label, anchor) => {
+    const trust = successfulTrust([]);
+    const sourceGraphFacts = trust.sourceGraphFacts as {
+      registryDeclarationAnchors: (readonly [string, unknown])[];
+    };
+    sourceGraphFacts.registryDeclarationAnchors = [[`page\0/`, anchor]];
+    expect(() =>
+      staticTrustFromWorkerEnvelopeForTesting(successfulEnvelopeForTrust(request, trust), request),
+    ).toThrow('registry declaration anchors contains an invalid entry');
+  });
+
+  it('rejects an authenticated registry anchor with an unrecognized declaration key', () => {
+    const trust = successfulTrust([]);
+    const sourceGraphFacts = trust.sourceGraphFacts as {
+      registryDeclarationAnchors: (readonly [string, unknown])[];
+    };
+    sourceGraphFacts.registryDeclarationAnchors = [
+      [`copied\0/`, { end: 1, file: 'app.ts', start: 0 }],
+    ];
+    expect(() =>
+      staticTrustFromWorkerEnvelopeForTesting(successfulEnvelopeForTrust(request, trust), request),
+    ).toThrow('registry declaration anchors contains an invalid entry');
   });
 
   it('rehydrates exact compiler diagnostics into the parent registry', () => {
@@ -124,6 +408,7 @@ describe('static-trust worker protocol', () => {
           updateCoverage: [],
         },
       ]),
+      request,
     );
 
     const diagnostic = trust.sourceGraphFacts.components[0]!.diagnostics[0];
@@ -153,14 +438,14 @@ describe('static-trust worker protocol', () => {
       updateCoverage: [],
     };
 
-    expect(() => staticTrustFromWorkerEnvelopeForTesting(successfulEnvelope([component]))).toThrow(
-      /severity does not match/u,
-    );
+    expect(() =>
+      staticTrustFromWorkerEnvelopeForTesting(successfulEnvelope([component]), request),
+    ).toThrow(/severity does not match/u);
     component.diagnostics[0]!.severity = 'lint';
     Object.assign(component.diagnostics[0]!, { forgedAuthority: true });
-    expect(() => staticTrustFromWorkerEnvelopeForTesting(successfulEnvelope([component]))).toThrow(
-      /not a compiler diagnostic field/u,
-    );
+    expect(() =>
+      staticTrustFromWorkerEnvelopeForTesting(successfulEnvelope([component]), request),
+    ).toThrow(/not a compiler diagnostic field/u);
   });
 
   it('rejects duplicate map keys even when the envelope digest is valid', () => {
@@ -181,6 +466,7 @@ describe('static-trust worker protocol', () => {
         envelope(
           {
             status: 'ok',
+            kind: 'app',
             trust: {
               approvedSourceFiles,
               capabilityClosure: {
@@ -192,10 +478,6 @@ describe('static-trust worker protocol', () => {
               facts,
               files: approvedSourceFiles,
               sourceGraphFacts: {
-                appContractStaticFacts: [],
-                compilerDependencies: [],
-                compilerSecuritySemanticSources: [],
-                compilerTaskBFiniteVerdict: {},
                 components: [],
                 domainDeclarationNames: [],
                 registryDeclarationAnchors: [
@@ -217,6 +499,7 @@ describe('static-trust worker protocol', () => {
               .digest('hex')}`,
           },
         ),
+        request,
       ),
     ).toThrow('invalid entry');
   });

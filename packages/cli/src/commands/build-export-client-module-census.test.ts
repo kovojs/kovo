@@ -1,10 +1,15 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { compilerOwnedViteClientModuleRole } from '@kovojs/compiler/internal';
+import {
+  compilerOwnedViteClientModuleRole,
+  type CompilerClientModuleHandoffInstaller,
+} from '@kovojs/compiler/internal';
+import type { KovoAppShellCompiledClientModule } from '@kovojs/server/internal/app-shell-vite';
 import { describe, expect, it } from 'vitest';
 
 import {
+  adoptCompilerClientModuleHandoffCollectionsForTests,
   assertCompilerClientModuleParityForTests,
   compilerClientModulesFromApprovedSourcesForTests,
   finalCompilerClientModulesFromBuildPassesForTests,
@@ -22,6 +27,55 @@ export const Counter = component({
 `;
 
 describe('build compiler client-module census', () => {
+  it('adopts an exact identity once when browser and server discovery overlap', () => {
+    const module: KovoAppShellCompiledClientModule = {
+      path: '/c/src/app.client.js',
+      renderPlanFingerprint: 'a'.repeat(64),
+      source: 'export const client = true;\n',
+    };
+    let adoptions = 0;
+    const adopt = (value: object): KovoAppShellCompiledClientModule => {
+      adoptions += 1;
+      return value as KovoAppShellCompiledClientModule;
+    };
+    const installer: CompilerClientModuleHandoffInstaller = {
+      adoptAppBootstrap: adopt,
+      adoptComponentClient: adopt,
+      adoptDeferredAppRuntime: adopt,
+      adoptOptimisticPlan: adopt,
+      seal() {},
+    };
+
+    const adopted = adoptCompilerClientModuleHandoffCollectionsForTests(
+      [module],
+      ['component-client'],
+      [{ ...module }],
+      ['component-client'],
+      installer,
+    );
+
+    expect(adoptions).toBe(1);
+    expect(adopted.first[0]).toBe(adopted.second[0]);
+    expect(() =>
+      adoptCompilerClientModuleHandoffCollectionsForTests(
+        [module],
+        ['component-client'],
+        [{ ...module }],
+        ['optimistic-plan'],
+        installer,
+      ),
+    ).toThrow(/conflicting collection provenance/u);
+    expect(() =>
+      adoptCompilerClientModuleHandoffCollectionsForTests(
+        [],
+        [],
+        [module, { ...module }],
+        ['component-client', 'component-client'],
+        installer,
+      ),
+    ).toThrow(/collection repeats an identity/u);
+  });
+
   it('derives genuine build-mode modules from the authenticated in-memory source snapshot', async () => {
     const fixture = createFixture('snapshot');
     try {
