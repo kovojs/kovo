@@ -101,6 +101,30 @@ describe('public API decision ledger', () => {
     );
   });
 
+  it('rejects duplicate public homes for one package symbol', () => {
+    const declaration = inventory.exportedDeclarations.find(
+      (candidate) =>
+        candidate.package === '@kovojs/server' &&
+        candidate.specifier === '@kovojs/server' &&
+        candidate.symbol === 'defineKovo',
+    );
+    const mutatedInventory = clone(inventory);
+    mutatedInventory.exportedDeclarations.push({
+      ...clone(declaration),
+      subpath: './command',
+      specifier: '@kovojs/server/command',
+    });
+
+    const result = validateApiDecisionLedger({
+      inventory: mutatedInventory,
+      ledger,
+      repoRoot,
+    });
+    expect(result.findings).toContain(
+      '@kovojs/server#defineKovo: public declaration has multiple homes: @kovojs/server, @kovojs/server/command',
+    );
+  });
+
   it('requires a documented task row for every new subpath', () => {
     const row = ledger.subpaths[0];
     const mutated = clone(ledger);
@@ -130,6 +154,20 @@ describe('public API decision ledger', () => {
     ).toBe(true);
     expect(result.findings).toContain(
       'healthTargets.rootDeclarations.@kovojs/core must be a positive integer',
+    );
+  });
+
+  it('enforces root declaration health targets as upper bounds', () => {
+    const mutated = clone(ledger);
+    const serverRootCount = inventory.exportedDeclarations.filter(
+      (declaration) =>
+        declaration.package === '@kovojs/server' && declaration.subpath === '.',
+    ).length;
+    mutated.healthTargets.rootDeclarations['@kovojs/server'] = serverRootCount - 1;
+
+    const result = validateApiDecisionLedger({ inventory, ledger: mutated, repoRoot });
+    expect(result.findings).toContain(
+      `healthTargets.rootDeclarations.@kovojs/server=${serverRootCount - 1} is exceeded by ${serverRootCount} declarations`,
     );
   });
 });

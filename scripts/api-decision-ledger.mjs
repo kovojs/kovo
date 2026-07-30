@@ -302,6 +302,20 @@ export function validateApiDecisionLedger({ inventory, ledger, repoRoot = defaul
   const currentDeclarations = new Map(
     inventory.exportedDeclarations.map((declaration) => [declarationId(declaration), declaration]),
   );
+  const publicHomesByPackageSymbol = new Map();
+  for (const declaration of inventory.exportedDeclarations) {
+    const key = `${declaration.package}#${declaration.symbol}`;
+    const homes = publicHomesByPackageSymbol.get(key) ?? new Set();
+    homes.add(declaration.specifier);
+    publicHomesByPackageSymbol.set(key, homes);
+  }
+  for (const [key, homes] of publicHomesByPackageSymbol) {
+    if (homes.size > 1) {
+      findings.push(
+        `${key}: public declaration has multiple homes: ${[...homes].sort().join(', ')}`,
+      );
+    }
+  }
   for (const [id, declaration] of currentDeclarations) {
     const exact = symbolById.get(id);
     const families = familyRules.filter((rule) => familyMatchesDeclaration(rule, declaration));
@@ -418,6 +432,13 @@ export function validateApiDecisionLedger({ inventory, ledger, repoRoot = defaul
     for (const packageName of Object.keys(rootTargets)) {
       if (!Object.hasOwn(rootCounts, packageName)) {
         findings.push(`healthTargets.rootDeclarations names unknown root ${packageName}`);
+        continue;
+      }
+      const target = rootTargets[packageName];
+      if (Number.isInteger(target) && target > 0 && rootCounts[packageName] > target) {
+        findings.push(
+          `healthTargets.rootDeclarations.${packageName}=${target} is exceeded by ${rootCounts[packageName]} declarations`,
+        );
       }
     }
   }
