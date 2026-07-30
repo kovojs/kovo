@@ -100,13 +100,16 @@ import {
   type AnalyzeCapabilityClosureResult,
   viteFrameworkIdentityFiles,
 } from '@kovojs/compiler/internal';
-import { createCompilerSourceFileSystem } from '@kovojs/compiler/internal/source-filesystem';
-import { extractAppRouteCssTargets } from '@kovojs/compiler/package-styles';
 import {
+  compilerSourceModuleSpecifiers,
+  createCompilerSourceFileSystem,
+  type CompilerSourceFileSystem,
+} from '@kovojs/compiler/internal/source-filesystem';
+import { extractAppRouteCssTargets } from '@kovojs/compiler/package-styles';
+import type {
   collectStaticBuildTrustFactsFromProject,
-  snapshotCompilerTaskBFiniteVerdict,
-  type CompilerSecuritySemanticSource,
-  type CompilerTaskBFiniteVerdict,
+  CompilerSecuritySemanticSource,
+  CompilerTaskBFiniteVerdict,
 } from '@kovojs/drizzle/internal/static';
 import type { AccessDecision, Guard, StylesheetAsset } from '@kovojs/server';
 import type { AppEgressOptions } from '@kovojs/server/egress';
@@ -128,13 +131,10 @@ import { type EscapeObligationReviewSubject } from '@kovojs/server/internal/exec
 import { withKovoBuildContext } from '@kovojs/server/internal/build-context';
 import { assertDocumentCspConfigMatchesBrowserPosture } from '@kovojs/server/internal/csp';
 import type { KovoAppShellCompiledClientModule } from '@kovojs/server/internal/app-shell-vite';
-import {
-  buildCheckSourceGraphFiles,
-  buildCompilerQueryShapeFacts,
-  type DataPlaneSourceFile as BuildCheckSourceFile,
-  type QueryReadFactLike,
-  staticDataPlaneBuildFacts,
-  type StaticDataPlaneBuildFacts,
+import type {
+  DataPlaneSourceFile as BuildCheckSourceFile,
+  QueryReadFactLike,
+  StaticDataPlaneBuildFacts,
 } from '@kovojs/server/internal/data-plane-static-analysis';
 import {
   runtimeRegistryWireFactsFromGraph,
@@ -270,6 +270,22 @@ const collectBuildGarbage =
 const staticTrustWorkerSchema = 'kovo-static-trust-worker/v1';
 const staticTrustWorkerMaxOutputBytes = 256 * 1024 * 1024;
 const staticTrustWorkerTimeoutMs = 120_000;
+
+type BuildStaticAnalysisRuntime = typeof import('./build-static-analysis-runtime.js');
+let buildStaticAnalysisRuntime: BuildStaticAnalysisRuntime | undefined;
+
+async function installBuildStaticAnalysisRuntime(): Promise<void> {
+  buildStaticAnalysisRuntime ??= await import('./build-static-analysis-runtime.js');
+}
+
+function requiredBuildStaticAnalysisRuntime(): BuildStaticAnalysisRuntime {
+  if (buildStaticAnalysisRuntime === undefined) {
+    throw new TypeError(
+      'Kovo static analysis runtime is unavailable outside the disposable trust worker.',
+    );
+  }
+  return buildStaticAnalysisRuntime;
+}
 
 const requireFromCli = createRequire(new URL('../index.ts', import.meta.url));
 
@@ -816,11 +832,12 @@ export async function produceKovoSourceCheckOneShotAnalysis(
     let approvedConfig: PreEvaluationBuildConfigTrust | undefined;
     if (configPath !== undefined) {
       const startedAt = startSourceCheckPhase(phaseCensus);
-      approvedConfig = runPreEvaluationBuildConfigTrustPreflight(
+      approvedConfig = await runPreEvaluationBuildConfigTrustPreflightInWorker(
         configPath,
         invocationRoot,
         security.paranoidStaticAdvisory,
         'check',
+        security.invocationEnv,
       );
       recordSourceCheckPhase(phaseCensus, 'config-trust', 'executed', startedAt);
     } else {
@@ -956,11 +973,12 @@ export async function finishKovoSourceCheckOneShot(
     const currentConfig =
       configPath === undefined
         ? undefined
-        : runPreEvaluationBuildConfigTrustPreflight(
+        : await runPreEvaluationBuildConfigTrustPreflightInWorker(
             configPath,
             invocationRoot,
             security.paranoidStaticAdvisory,
             'check',
+            security.invocationEnv,
           );
     const currentConfigDigest =
       currentConfig === undefined
@@ -1136,11 +1154,12 @@ export async function produceKovoBuildOneShotAnalysis(
     const approvedConfig =
       configPath === undefined
         ? undefined
-        : runPreEvaluationBuildConfigTrustPreflight(
+        : await runPreEvaluationBuildConfigTrustPreflightInWorker(
             configPath,
             invocationRoot,
             security.paranoidStaticAdvisory,
             'build',
+            security.invocationEnv,
           );
     await runTypeScriptBuildPreflight(
       resolvedAppModulePath,
@@ -1264,11 +1283,12 @@ export async function runBuildCommand(
     const approvedConfig =
       configPath === undefined
         ? undefined
-        : runPreEvaluationBuildConfigTrustPreflight(
+        : await runPreEvaluationBuildConfigTrustPreflightInWorker(
             configPath,
             invocationRoot,
             security.paranoidStaticAdvisory,
             'build',
+            security.invocationEnv,
           );
     // Run independent whole-project analyzers before allocating the entry-reachable compiler graph
     // or evaluating approved config. Copy-in source still participates in TypeScript, formatting,
@@ -2319,11 +2339,12 @@ async function revalidateKovoBuildOneShotAnalysis(
   const currentConfig =
     configPath === undefined
       ? undefined
-      : runPreEvaluationBuildConfigTrustPreflight(
+      : await runPreEvaluationBuildConfigTrustPreflightInWorker(
           configPath,
           invocationRoot,
           security.paranoidStaticAdvisory,
           'build',
+          security.invocationEnv,
         );
   const currentConfigDigest =
     currentConfig === undefined
@@ -3128,7 +3149,7 @@ function runPreEvaluationBuildConfigTrustPreflight(
     }),
   );
   const entryFileName = relative(root, configPath) || basename(configPath);
-  const facts = collectStaticBuildTrustFactsFromProject({
+  const facts = requiredBuildStaticAnalysisRuntime().collectStaticBuildTrustFactsFromProject({
     buildConfigEntryFileName: slashPath(entryFileName),
     files,
   });
@@ -3209,7 +3230,7 @@ function runPreEvaluationStaticTrustPreflight(
           trustEscapes: [],
           unregisteredSinks: [],
         }
-      : collectStaticBuildTrustFactsFromProject({
+      : requiredBuildStaticAnalysisRuntime().collectStaticBuildTrustFactsFromProject({
           compilerSecuritySemanticSources: sourceGraphFacts.compilerSecuritySemanticSources,
           compilerTaskBClosure: {
             capabilityFacts: capabilityClosure.facts,
@@ -3303,11 +3324,11 @@ async function derivePreEvaluationStaticProof(
   const dataPlaneFacts =
     trust.files.length === 0
       ? emptyStaticDataPlaneBuildFacts()
-      : await staticDataPlaneBuildFacts(trust.files, {
+      : await requiredBuildStaticAnalysisRuntime().staticDataPlaneBuildFacts(trust.files, {
           appContractStaticFacts: trust.sourceGraphFacts.appContractStaticFacts,
           cache,
         });
-  const queryShapeFacts = buildCompilerQueryShapeFacts(
+  const queryShapeFacts = requiredBuildStaticAnalysisRuntime().buildCompilerQueryShapeFacts(
     trust.files,
     dataPlaneFacts,
     trust.sourceGraphFacts.appContractStaticFacts,
@@ -3350,10 +3371,12 @@ interface StaticTrustWorkerEnvelope {
 }
 
 export interface StaticTrustWorkerRequest {
-  readonly appModulePath: string;
   readonly authenticationKey: string;
   readonly cache: boolean | null;
   readonly challenge: string;
+  readonly command: 'build' | 'check' | null;
+  readonly kind: 'app' | 'config';
+  readonly modulePath: string;
   readonly paranoidStaticAdvisory: boolean;
   readonly root: string;
 }
@@ -3365,9 +3388,11 @@ function staticTrustDigest(value: string): string {
 function staticTrustRequestDigest(request: StaticTrustWorkerRequest): string {
   return staticTrustDigest(
     stringifyBuildValue({
-      appModulePath: request.appModulePath,
       cache: request.cache,
       challenge: request.challenge,
+      command: request.command,
+      kind: request.kind,
+      modulePath: request.modulePath,
       paranoidStaticAdvisory: request.paranoidStaticAdvisory,
       root: request.root,
     }),
@@ -3471,25 +3496,47 @@ export async function runPreEvaluationStaticTrustWorkerRequest(
   const request = parseStaticTrustWorkerRequest(requestJson);
   const requestDigest = staticTrustRequestDigest(request);
   try {
-    const trust = runPreEvaluationStaticTrustPreflight(
-      request.appModulePath,
-      request.root,
-      request.paranoidStaticAdvisory,
-    );
-    const derivedProof =
-      request.cache === null
-        ? undefined
-        : await derivePreEvaluationStaticProof(trust, request.cache);
-    const success = staticTrustSuccessPayload(trust, derivedProof);
-    const payload = stringifyBuildValue({ status: 'ok', trust: success });
+    await installBuildStaticAnalysisRuntime();
+    let payload: string;
+    let factsDigest: string;
+    let sourceDigest: string;
+    if (request.kind === 'app') {
+      const trust = runPreEvaluationStaticTrustPreflight(
+        request.modulePath,
+        request.root,
+        request.paranoidStaticAdvisory,
+      );
+      const success = staticTrustSuccessPayload(
+        trust,
+        request.cache === null
+          ? undefined
+          : await derivePreEvaluationStaticProof(trust, request.cache),
+      );
+      payload = stringifyBuildValue({ kind: 'app', status: 'ok', trust: success });
+      factsDigest = staticTrustDigest(stringifyBuildValue(success.facts));
+      sourceDigest = staticTrustSourceDigest(success.approvedSourceFiles, success.clientEntry);
+    } else {
+      if (request.command === null) {
+        throw new TypeError('Kovo config static-trust request omitted its command.');
+      }
+      const success = runPreEvaluationBuildConfigTrustPreflight(
+        request.modulePath,
+        request.root,
+        request.paranoidStaticAdvisory,
+        request.command,
+      );
+      payload = stringifyBuildValue({ kind: 'config', status: 'ok', trust: success });
+      factsDigest = staticTrustDigest(stringifyBuildValue(success.facts));
+      sourceDigest = staticTrustSourceDigest(success.files);
+    }
     return stringifyBuildValue({
       authentication: staticTrustAuthentication(request.authenticationKey, requestDigest, payload),
       digest: staticTrustDigest(payload),
-      factsDigest: staticTrustDigest(stringifyBuildValue(success.facts)),
+      factsDigest,
       payload,
       requestDigest,
       schema: staticTrustWorkerSchema,
-      sourceDigest: staticTrustSourceDigest(success.approvedSourceFiles, success.clientEntry),
+      sourceDigest,
     } satisfies StaticTrustWorkerEnvelope);
   } catch (error) {
     const diagnosticError = error instanceof KovoBuildCheckDiagnosticError;
@@ -3520,10 +3567,18 @@ function parseStaticTrustWorkerRequest(requestJson: string): StaticTrustWorkerRe
   }
   assertStaticTrustExactKeys(
     request,
-    ['appModulePath', 'authenticationKey', 'cache', 'challenge', 'paranoidStaticAdvisory', 'root'],
+    [
+      'authenticationKey',
+      'cache',
+      'challenge',
+      'command',
+      'kind',
+      'modulePath',
+      'paranoidStaticAdvisory',
+      'root',
+    ],
     'request',
   );
-  const appModulePath = buildOwnDataValue(request, 'appModulePath', 'Static-trust worker request');
   const authenticationKey = buildOwnDataValue(
     request,
     'authenticationKey',
@@ -3531,6 +3586,9 @@ function parseStaticTrustWorkerRequest(requestJson: string): StaticTrustWorkerRe
   );
   const cache = buildOwnDataValue(request, 'cache', 'Static-trust worker request');
   const challenge = buildOwnDataValue(request, 'challenge', 'Static-trust worker request');
+  const command = buildOwnDataValue(request, 'command', 'Static-trust worker request');
+  const kind = buildOwnDataValue(request, 'kind', 'Static-trust worker request');
+  const modulePath = buildOwnDataValue(request, 'modulePath', 'Static-trust worker request');
   const paranoidStaticAdvisory = buildOwnDataValue(
     request,
     'paranoidStaticAdvisory',
@@ -3538,22 +3596,28 @@ function parseStaticTrustWorkerRequest(requestJson: string): StaticTrustWorkerRe
   );
   const root = buildOwnDataValue(request, 'root', 'Static-trust worker request');
   if (
-    typeof appModulePath !== 'string' ||
     typeof authenticationKey !== 'string' ||
     !/^[0-9a-f]{64}$/u.test(authenticationKey) ||
     (typeof cache !== 'boolean' && cache !== null) ||
     typeof challenge !== 'string' ||
     !/^[0-9a-f]{64}$/u.test(challenge) ||
+    (command !== 'build' && command !== 'check' && command !== null) ||
+    (kind !== 'app' && kind !== 'config') ||
+    typeof modulePath !== 'string' ||
     typeof paranoidStaticAdvisory !== 'boolean' ||
-    typeof root !== 'string'
+    typeof root !== 'string' ||
+    (kind === 'app' && command !== null) ||
+    (kind === 'config' && (command === null || cache !== null))
   ) {
     throw new TypeError('Kovo static-trust worker received an invalid request.');
   }
   return {
-    appModulePath,
     authenticationKey,
     cache,
     challenge,
+    command,
+    kind,
+    modulePath,
     paranoidStaticAdvisory,
     root,
   };
@@ -3566,6 +3630,49 @@ async function runPreEvaluationStaticTrustPreflightInWorker(
   invocationEnv: NodeJS.ProcessEnv,
   cache: boolean | null,
 ): Promise<PreEvaluationStaticTrust> {
+  const workerRequest: StaticTrustWorkerRequest = {
+    authenticationKey: randomBytes(32).toString('hex'),
+    cache,
+    challenge: randomBytes(32).toString('hex'),
+    command: null,
+    kind: 'app',
+    modulePath: appModulePath,
+    paranoidStaticAdvisory,
+    root,
+  };
+  return staticTrustFromWorkerEnvelopeForTesting(
+    await executeStaticTrustWorker(workerRequest, invocationEnv),
+    workerRequest,
+  );
+}
+
+async function runPreEvaluationBuildConfigTrustPreflightInWorker(
+  configPath: string,
+  root: string,
+  paranoidStaticAdvisory: boolean,
+  command: 'build' | 'check',
+  invocationEnv: NodeJS.ProcessEnv,
+): Promise<PreEvaluationBuildConfigTrust> {
+  const workerRequest: StaticTrustWorkerRequest = {
+    authenticationKey: randomBytes(32).toString('hex'),
+    cache: null,
+    challenge: randomBytes(32).toString('hex'),
+    command,
+    kind: 'config',
+    modulePath: configPath,
+    paranoidStaticAdvisory,
+    root,
+  };
+  return staticConfigTrustFromWorkerEnvelopeForTesting(
+    await executeStaticTrustWorker(workerRequest, invocationEnv),
+    workerRequest,
+  );
+}
+
+async function executeStaticTrustWorker(
+  workerRequest: StaticTrustWorkerRequest,
+  invocationEnv: NodeJS.ProcessEnv,
+): Promise<string> {
   const currentModulePath = fileURLToPath(import.meta.url);
   const sourceMode = buildStringEndsWith(currentModulePath, '.ts');
   const packagedWorkerPath = resolve(
@@ -3584,16 +3691,7 @@ async function runPreEvaluationStaticTrustPreflightInWorker(
     : existsSync(packagedWorkerPath)
       ? packagedWorkerPath
       : rootAcceptanceWorkerPath;
-  const workerRequest: StaticTrustWorkerRequest = {
-    appModulePath,
-    authenticationKey: randomBytes(32).toString('hex'),
-    cache,
-    challenge: randomBytes(32).toString('hex'),
-    paranoidStaticAdvisory,
-    root,
-  };
   const request = stringifyBuildValue(workerRequest);
-  let stdout: string;
   try {
     const result = await execFileAsync(
       process.execPath,
@@ -3618,11 +3716,10 @@ async function runPreEvaluationStaticTrustPreflightInWorker(
         timeout: staticTrustWorkerTimeoutMs,
       },
     );
-    stdout = result.stdout;
+    return result.stdout;
   } catch (error) {
     throw new Error(`Kovo static-trust worker failed: ${execFileErrorOutput(error)}`);
   }
-  return staticTrustFromWorkerEnvelopeForTesting(stdout, workerRequest);
 }
 
 /** @internal Adversarial protocol seam; production callers consume the same fail-closed parser. */
@@ -3630,6 +3727,29 @@ export function staticTrustFromWorkerEnvelopeForTesting(
   output: string,
   expectedRequest: StaticTrustWorkerRequest,
 ): PreEvaluationStaticTrust {
+  if (expectedRequest.kind !== 'app') {
+    throw new TypeError('Kovo app static-trust parser received a config request.');
+  }
+  const success = authenticatedStaticTrustWorkerSuccess(output, expectedRequest);
+  return validateStaticTrustSuccess(success.envelope, success.trust, expectedRequest);
+}
+
+/** @internal Adversarial config protocol seam; production consumes the same fail-closed parser. */
+export function staticConfigTrustFromWorkerEnvelopeForTesting(
+  output: string,
+  expectedRequest: StaticTrustWorkerRequest,
+): PreEvaluationBuildConfigTrust {
+  if (expectedRequest.kind !== 'config') {
+    throw new TypeError('Kovo config static-trust parser received an app request.');
+  }
+  const success = authenticatedStaticTrustWorkerSuccess(output, expectedRequest);
+  return validateStaticConfigTrustSuccess(success.envelope, success.trust, expectedRequest);
+}
+
+function authenticatedStaticTrustWorkerSuccess(
+  output: string,
+  expectedRequest: StaticTrustWorkerRequest,
+): { readonly envelope: object; readonly trust: unknown } {
   if (buildByteLength(output) > staticTrustWorkerMaxOutputBytes) {
     throw new TypeError('Kovo static-trust worker output exceeded its byte limit.');
   }
@@ -3713,6 +3833,12 @@ export function staticTrustFromWorkerEnvelopeForTesting(
   if (status !== 'ok') {
     throw new TypeError('Kovo static-trust worker returned an unknown payload status.');
   }
+  assertStaticTrustExactKeys(payloadValue, ['kind', 'status', 'trust'], 'success payload');
+  if (
+    buildOwnDataValue(payloadValue, 'kind', 'Static-trust worker payload') !== expectedRequest.kind
+  ) {
+    throw new TypeError('Kovo static-trust worker returned the wrong proof kind.');
+  }
   assertStaticTrustExactKeys(
     envelopeValue,
     [
@@ -3727,7 +3853,7 @@ export function staticTrustFromWorkerEnvelopeForTesting(
     'success envelope',
   );
   const trustValue = buildOwnDataValue(payloadValue, 'trust', 'Static-trust worker payload');
-  return validateStaticTrustSuccess(envelopeValue, trustValue, expectedRequest);
+  return { envelope: envelopeValue, trust: trustValue };
 }
 
 function throwStaticTrustDiagnostic(message: string, diagnostics: unknown): never {
@@ -3969,6 +4095,54 @@ function validateStaticTrustSuccess(
       >,
       routeOutcomes: routeOutcomes as Map<string, 'file' | 'stream'>,
     },
+  };
+}
+
+function validateStaticConfigTrustSuccess(
+  envelope: object,
+  value: unknown,
+  expectedRequest: StaticTrustWorkerRequest,
+): PreEvaluationBuildConfigTrust {
+  if (value === null || typeof value !== 'object' || buildArrayIsArray(value)) {
+    throw new TypeError('Kovo static-trust worker returned invalid config trust facts.');
+  }
+  assertStaticTrustExactKeys(value, ['facts', 'files', 'path'], 'config trust facts');
+  const path = buildOwnDataValue(value, 'path', 'Static-trust config facts');
+  if (path !== expectedRequest.modulePath) {
+    throw new TypeError('Kovo static-trust worker returned config facts for the wrong path.');
+  }
+  const files = validateStaticTrustSourceFiles(
+    buildOwnDataValue(value, 'files', 'Static-trust config facts'),
+    'config source files',
+  );
+  const facts = buildOwnDataValue(value, 'facts', 'Static-trust config facts');
+  if (facts === null || typeof facts !== 'object' || buildArrayIsArray(facts)) {
+    throw new TypeError('Kovo static-trust worker returned invalid config build facts.');
+  }
+  const buildFactKeys = [
+    'capabilities',
+    'cookieDowngrades',
+    'diagnostics',
+    'revealed',
+    'trustEscapes',
+    'unregisteredSinks',
+  ] as const;
+  assertStaticTrustExactKeys(facts, buildFactKeys, 'config build facts');
+  for (let index = 0; index < buildFactKeys.length; index += 1) {
+    staticTrustArrayProperty(facts, buildFactKeys[index]!, 'config build facts');
+  }
+  const factsDigest = buildOwnDataValue(envelope, 'factsDigest', 'Static-trust worker envelope');
+  if (factsDigest !== staticTrustDigest(stringifyBuildValue(facts))) {
+    throw new TypeError('Kovo static-trust worker returned a stale config facts digest.');
+  }
+  const sourceDigest = buildOwnDataValue(envelope, 'sourceDigest', 'Static-trust worker envelope');
+  if (sourceDigest !== staticTrustSourceDigest(files)) {
+    throw new TypeError('Kovo static-trust worker returned a stale config source digest.');
+  }
+  return {
+    facts: facts as ReturnType<typeof collectStaticBuildTrustFactsFromProject>,
+    files,
+    path,
   };
 }
 
@@ -4430,6 +4604,178 @@ function preEvaluationClientEntryFile(
     throw new TypeError(`Kovo client entry is unavailable or unstable: ${entryPath}`);
   }
   return { fileName: slashPath(relative(root, entryPath)), source };
+}
+
+const buildCheckSourceModuleExtensions = [
+  '.ts',
+  '.tsx',
+  '.mts',
+  '.cts',
+  '.js',
+  '.jsx',
+  '.mjs',
+  '.cjs',
+] as const;
+
+/**
+ * Snapshot one authored entry and its relative-import closure without enrolling the server's
+ * Drizzle/ts-morph static-analysis runtime in the long-lived build process.
+ */
+function buildCheckSourceGraphFiles(
+  entryModulePath: string,
+  sourceBoundaryRoot: string = dirname(entryModulePath),
+): BuildCheckSourceFile[] {
+  const entryPath = resolve(entryModulePath);
+  const boundaryRoot = resolve(sourceBoundaryRoot);
+  if (!existsSync(boundaryRoot)) return [];
+  if (!buildCheckPathWithinBoundary(boundaryRoot, entryPath)) {
+    throw new TypeError(`Kovo source entry escapes the project root: ${entryModulePath}`);
+  }
+  const fileSystem = createCompilerSourceFileSystem(boundaryRoot);
+  if (fileSystem === null) {
+    throw new TypeError(`Kovo source root is unavailable or unstable: ${boundaryRoot}`);
+  }
+  const kind = fileSystem.kind(entryPath);
+  if (kind !== 'file') {
+    throw new TypeError(
+      kind === 'other'
+        ? `Kovo source entry resolves through a symbolic link or special entry: ${entryPath}`
+        : `Kovo source entry is unavailable: ${entryPath}`,
+    );
+  }
+  if (!buildCheckSourceModulePath(entryPath)) {
+    throw new TypeError(`Kovo source entry is not a supported source module: ${entryPath}`);
+  }
+  const source = fileSystem.readFile(entryPath);
+  if (source === null) {
+    throw new TypeError(`Kovo source entry is unavailable or unstable: ${entryPath}`);
+  }
+  const fileNameRoot = dirname(entryPath);
+  const files: BuildCheckSourceFile[] = [
+    { fileName: slashPath(relative(fileNameRoot, entryPath)), source },
+  ];
+  collectBuildCheckImportedSourceFiles(fileNameRoot, boundaryRoot, fileSystem, files);
+  return files;
+}
+
+function collectBuildCheckImportedSourceFiles(
+  fileNameRoot: string,
+  boundaryRoot: string,
+  fileSystem: CompilerSourceFileSystem,
+  files: BuildCheckSourceFile[],
+): void {
+  const knownPaths = buildCreateSet<string>();
+  for (let index = 0; index < files.length; index += 1) {
+    buildSetAdd(knownPaths, resolve(fileNameRoot, files[index]!.fileName));
+  }
+  for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
+    const file = files[fileIndex]!;
+    const importerPath = resolve(fileNameRoot, file.fileName);
+    const specifiers = buildSnapshotDenseArray(
+      compilerSourceModuleSpecifiers(file.source),
+      `Build-check imports for ${file.fileName}`,
+    );
+    for (let specifierIndex = 0; specifierIndex < specifiers.length; specifierIndex += 1) {
+      const specifier = specifiers[specifierIndex]!;
+      if (!specifier.startsWith('./') && !specifier.startsWith('../')) continue;
+      const candidates = buildCheckRelativeSourceCandidates(importerPath, specifier, boundaryRoot);
+      for (let candidateIndex = 0; candidateIndex < candidates.length; candidateIndex += 1) {
+        const candidate = candidates[candidateIndex]!;
+        const kind = fileSystem.kind(candidate);
+        if (kind === 'directory') continue;
+        if (kind === 'other') {
+          if (existsSync(candidate)) {
+            throw new TypeError(
+              `Kovo source import resolves through a symbolic link or special entry: ${candidate}`,
+            );
+          }
+          continue;
+        }
+        if (buildSetHas(knownPaths, candidate)) break;
+        if (!buildCheckSourceModulePath(candidate)) break;
+        const source = fileSystem.readFile(candidate);
+        if (source === null) {
+          throw new TypeError(`Kovo imported source is unavailable: ${candidate}`);
+        }
+        buildSetAdd(knownPaths, candidate);
+        buildSecurityArrayAppend(
+          files,
+          { fileName: slashPath(relative(fileNameRoot, candidate)), source },
+          'Build-check imported source closure',
+        );
+        break;
+      }
+    }
+  }
+}
+
+function buildCheckRelativeSourceCandidates(
+  importerPath: string,
+  specifier: string,
+  boundaryRoot: string,
+): string[] {
+  const queryIndex = specifier.indexOf('?');
+  const fragmentIndex = specifier.indexOf('#');
+  let end = specifier.length;
+  if (queryIndex >= 0) end = Math.min(end, queryIndex);
+  if (fragmentIndex >= 0) end = Math.min(end, fragmentIndex);
+  const pathSpecifier = specifier.slice(0, end);
+  if (pathSpecifier.includes('%')) {
+    throw new TypeError(`Kovo relative imports cannot use URL escapes: ${specifier}`);
+  }
+  const base = resolve(dirname(importerPath), pathSpecifier);
+  if (!buildCheckPathWithinBoundary(boundaryRoot, base)) {
+    throw new TypeError(`Kovo relative import escapes the app root: ${specifier}`);
+  }
+  const candidates: string[] = [];
+  if (base.endsWith('.mjs')) {
+    buildSecurityArrayAppend(candidates, `${base.slice(0, -4)}.mts`, 'Build-check candidates');
+  } else if (base.endsWith('.cjs')) {
+    buildSecurityArrayAppend(candidates, `${base.slice(0, -4)}.cts`, 'Build-check candidates');
+  } else if (base.endsWith('.jsx')) {
+    buildSecurityArrayAppend(candidates, `${base.slice(0, -4)}.tsx`, 'Build-check candidates');
+  } else if (base.endsWith('.js')) {
+    const stem = base.slice(0, -3);
+    buildSecurityArrayAppend(candidates, `${stem}.ts`, 'Build-check candidates');
+    buildSecurityArrayAppend(candidates, `${stem}.tsx`, 'Build-check candidates');
+  }
+  if (candidates.length > 0) {
+    buildSecurityArrayAppend(candidates, base, 'Build-check candidates');
+    return candidates;
+  }
+  for (let index = 0; index < buildCheckSourceModuleExtensions.length; index += 1) {
+    if (base.endsWith(buildCheckSourceModuleExtensions[index]!)) {
+      return [base];
+    }
+  }
+  if (/\.[^/\\]+$/u.test(pathSpecifier)) return candidates;
+  buildSecurityArrayAppend(candidates, base, 'Build-check candidates');
+  for (let index = 0; index < buildCheckSourceModuleExtensions.length; index += 1) {
+    buildSecurityArrayAppend(
+      candidates,
+      `${base}${buildCheckSourceModuleExtensions[index]}`,
+      'Build-check candidates',
+    );
+  }
+  for (let index = 0; index < buildCheckSourceModuleExtensions.length; index += 1) {
+    buildSecurityArrayAppend(
+      candidates,
+      resolve(base, `index${buildCheckSourceModuleExtensions[index]}`),
+      'Build-check candidates',
+    );
+  }
+  return candidates;
+}
+
+function buildCheckPathWithinBoundary(root: string, target: string): boolean {
+  const relativePath = relative(root, target);
+  return relativePath === '' || !/^(?:\.\.(?:[/\\]|$)|[/\\]|[A-Za-z]:)/u.test(relativePath);
+}
+
+function buildCheckSourceModulePath(filePath: string): boolean {
+  const normalized = slashPath(filePath.split(/[?#]/u, 1)[0]!).toLowerCase();
+  const baseName = normalized.slice(normalized.lastIndexOf('/') + 1);
+  return !baseName.endsWith('.d.ts') && /\.(?:[cm]?[jt]sx?)$/u.test(baseName);
 }
 
 function preEvaluationAppSourceFiles(
@@ -6189,10 +6535,11 @@ function sourceGraphFactsFromFiles(
     appContractStaticFacts,
     compilerDependencies,
     compilerSecuritySemanticSources,
-    compilerTaskBFiniteVerdict: snapshotCompilerTaskBFiniteVerdict({
-      blockingDiagnostics: compilerTaskBBlockingDiagnostics,
-      semanticSources: compilerSecuritySemanticSources,
-    }),
+    compilerTaskBFiniteVerdict:
+      requiredBuildStaticAnalysisRuntime().snapshotCompilerTaskBFiniteVerdict({
+        blockingDiagnostics: compilerTaskBBlockingDiagnostics,
+        semanticSources: compilerSecuritySemanticSources,
+      }),
     components,
     domainDeclarationNames,
     registryDeclarationAnchors,
@@ -6395,9 +6742,10 @@ function queryDiagnosticSourceFacts(
 }
 
 /** Internal executable seam for the TASK B caller-carrier mutation gate (SPEC §6.6). */
-export function snapshotBuildCompilerTaskBFiniteVerdictForTests(
+export async function snapshotBuildCompilerTaskBFiniteVerdictForTests(
   files: readonly { readonly fileName: string; readonly source: string }[],
-): CompilerTaskBFiniteVerdict {
+): Promise<CompilerTaskBFiniteVerdict> {
+  await installBuildStaticAnalysisRuntime();
   return withMaterializedBuildCompilerSourcesForTests(
     files,
     (materializedFiles) => sourceGraphFactsFromFiles(materializedFiles).compilerTaskBFiniteVerdict,
@@ -6405,9 +6753,10 @@ export function snapshotBuildCompilerTaskBFiniteVerdictForTests(
 }
 
 /** Internal executable seam proving ordinary build diagnostics retain the route compiler census. */
-export function snapshotBuildCompilerDiagnosticsForTests(
+export async function snapshotBuildCompilerDiagnosticsForTests(
   files: readonly { readonly fileName: string; readonly source: string }[],
-): CoreGraph.StaticDiagnosticFact[] {
+): Promise<CoreGraph.StaticDiagnosticFact[]> {
+  await installBuildStaticAnalysisRuntime();
   return withMaterializedBuildCompilerSourcesForTests(files, (materializedFiles) =>
     buildMapDense(
       buildPreflightComponentDiagnostics(sourceGraphFactsFromFiles(materializedFiles).components),
@@ -6587,13 +6936,14 @@ export function snapshotBuildCompilerSourceAnchorsForTests(
  * Internal regression seam for declaration provenance that requires the exact TypeScript project
  * used by build/check (for example, adapter mutations whose public key is carried by a type).
  */
-export function snapshotBuildAppContractSourceAnchorsForTests(
+export async function snapshotBuildAppContractSourceAnchorsForTests(
   files: readonly { readonly fileName: string; readonly source: string }[],
   declarations: readonly {
     readonly kind: 'mutation' | 'page';
     readonly name: string;
   }[],
-): readonly (CoreGraph.SourceAnchor | undefined)[] {
+): Promise<readonly (CoreGraph.SourceAnchor | undefined)[]> {
+  await installBuildStaticAnalysisRuntime();
   const anchors = sourceGraphFactsFromFiles(files).registryDeclarationAnchors;
   return buildMapDense(
     declarations,
@@ -9594,12 +9944,9 @@ export function adoptKovoBuildOneShotClientPhaseCompilerModules(
     clientPhase.discoveredServerClientModules,
     'Client-phase discovered server compiler modules',
   );
-  const adoptedClientBuildModules = adoptCompilerClientModuleHandoffRecords(
+  const adoptedCollections = adoptCompilerClientModuleHandoffCollections(
     clientBuildModules,
     clientPhase.clientBuildClientModuleRoles,
-    installer,
-  );
-  const adoptedDiscoveredServerClientModules = adoptCompilerClientModuleHandoffRecords(
     discoveredServerClientModules,
     clientPhase.discoveredServerClientModuleRoles,
     installer,
@@ -9609,9 +9956,9 @@ export function adoptKovoBuildOneShotClientPhaseCompilerModules(
     ...clientPhase,
     clientBuild: {
       ...clientPhase.clientBuild,
-      clientModules: adoptedClientBuildModules,
+      clientModules: adoptedCollections.first,
     },
-    discoveredServerClientModules: adoptedDiscoveredServerClientModules,
+    discoveredServerClientModules: adoptedCollections.second,
   };
 }
 
@@ -9634,25 +9981,131 @@ function adoptCompilerClientModuleHandoffRecords(
   modules: readonly KovoAppShellCompiledClientModule[],
   roles: readonly CompilerOwnedViteClientModuleRole[],
   installer: CompilerClientModuleHandoffInstaller,
+  adoptedByIdentity?: Map<
+    string,
+    {
+      readonly module: KovoAppShellCompiledClientModule;
+      readonly role: CompilerOwnedViteClientModuleRole;
+    }
+  >,
+  reusePriorCollection = false,
 ): KovoAppShellCompiledClientModule[] {
   if (modules.length !== roles.length) {
     throw new TypeError('Kovo compiler client-module handoff role census is incomplete.');
   }
+  const collectionIdentities = buildCreateSet<string>();
   return buildMapDense(modules, 'Compiler client-module handoff records', (module, index) => {
     const role = roles[index]!;
+    const identity = compilerClientModuleHandoffWireIdentity(module);
+    if (buildSetHas(collectionIdentities, identity)) {
+      throw new TypeError('Kovo compiler client-module handoff collection repeats an identity.');
+    }
+    buildSetAdd(collectionIdentities, identity);
+    const existing =
+      adoptedByIdentity === undefined ? undefined : buildMapGet(adoptedByIdentity, identity);
+    if (existing !== undefined) {
+      if (!reusePriorCollection || existing.role !== role) {
+        throw new TypeError(
+          'Kovo compiler client-module handoff identity has conflicting collection provenance.',
+        );
+      }
+      return existing.module;
+    }
+    let adopted: KovoAppShellCompiledClientModule;
     switch (role) {
       case 'app-bootstrap':
-        return installer.adoptAppBootstrap(module);
+        adopted = installer.adoptAppBootstrap(module);
+        break;
       case 'component-client':
-        return installer.adoptComponentClient(module);
+        adopted = installer.adoptComponentClient(module);
+        break;
       case 'deferred-app-runtime':
-        return installer.adoptDeferredAppRuntime(module);
+        adopted = installer.adoptDeferredAppRuntime(module);
+        break;
       case 'optimistic-plan':
-        return installer.adoptOptimisticPlan(module);
+        adopted = installer.adoptOptimisticPlan(module);
+        break;
       default:
         throw unknownCompilerClientModuleRole(role);
     }
+    if (adoptedByIdentity !== undefined) {
+      buildMapSet(adoptedByIdentity, identity, { module: adopted, role });
+    }
+    return adopted;
   });
+}
+
+function adoptCompilerClientModuleHandoffCollections(
+  first: readonly KovoAppShellCompiledClientModule[],
+  firstRoles: readonly CompilerOwnedViteClientModuleRole[],
+  second: readonly KovoAppShellCompiledClientModule[],
+  secondRoles: readonly CompilerOwnedViteClientModuleRole[],
+  installer: CompilerClientModuleHandoffInstaller,
+): {
+  readonly first: readonly KovoAppShellCompiledClientModule[];
+  readonly second: readonly KovoAppShellCompiledClientModule[];
+} {
+  const adoptedByIdentity = buildCreateMap<
+    string,
+    {
+      readonly module: KovoAppShellCompiledClientModule;
+      readonly role: CompilerOwnedViteClientModuleRole;
+    }
+  >();
+  const adoptedFirst = adoptCompilerClientModuleHandoffRecords(
+    first,
+    firstRoles,
+    installer,
+    adoptedByIdentity,
+  );
+  const adoptedSecond = adoptCompilerClientModuleHandoffRecords(
+    second,
+    secondRoles,
+    installer,
+    adoptedByIdentity,
+    true,
+  );
+  return { first: adoptedFirst, second: adoptedSecond };
+}
+
+/** @internal Regression seam for authenticated cross-pass client-module handoff joins. */
+export function adoptCompilerClientModuleHandoffCollectionsForTests(
+  first: readonly KovoAppShellCompiledClientModule[],
+  firstRoles: readonly CompilerOwnedViteClientModuleRole[],
+  second: readonly KovoAppShellCompiledClientModule[],
+  secondRoles: readonly CompilerOwnedViteClientModuleRole[],
+  installer: CompilerClientModuleHandoffInstaller,
+): {
+  readonly first: readonly KovoAppShellCompiledClientModule[];
+  readonly second: readonly KovoAppShellCompiledClientModule[];
+} {
+  return adoptCompilerClientModuleHandoffCollections(
+    first,
+    firstRoles,
+    second,
+    secondRoles,
+    installer,
+  );
+}
+
+function compilerClientModuleHandoffWireIdentity(module: KovoAppShellCompiledClientModule): string {
+  const path = buildOwnDataValue(module, 'path', 'Compiler client-module handoff record');
+  const renderPlanFingerprint = buildOwnDataValue(
+    module,
+    'renderPlanFingerprint',
+    'Compiler client-module handoff record',
+  );
+  const source = buildOwnDataValue(module, 'source', 'Compiler client-module handoff record');
+  if (
+    typeof path !== 'string' ||
+    path.length === 0 ||
+    typeof renderPlanFingerprint !== 'string' ||
+    buildRegExpExec(/^[0-9a-f]{64}$/u, renderPlanFingerprint) === null ||
+    typeof source !== 'string'
+  ) {
+    throw new TypeError('Kovo compiler client-module handoff record is malformed.');
+  }
+  return `${path}\u0000${clientModuleRepresentationDigest(source)}\u0000${renderPlanFingerprint}`;
 }
 
 function adoptCompilerClientModulesForNeutralBuild(

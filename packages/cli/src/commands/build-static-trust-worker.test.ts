@@ -4,25 +4,30 @@ import { isRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import { describe, expect, it } from 'vitest';
 
 import {
+  staticConfigTrustFromWorkerEnvelopeForTesting,
   staticTrustFromWorkerEnvelopeForTesting,
   type StaticTrustWorkerRequest,
 } from './build-export.js';
 
 const schema = 'kovo-static-trust-worker/v1';
 const request: StaticTrustWorkerRequest = {
-  appModulePath: '/app/app.ts',
   authenticationKey: '11'.repeat(32),
   cache: null,
   challenge: '22'.repeat(32),
+  command: null,
+  kind: 'app',
+  modulePath: '/app/app.ts',
   paranoidStaticAdvisory: false,
   root: '/app',
 };
 
 function requestDigest(expected: StaticTrustWorkerRequest): string {
   const identity = JSON.stringify({
-    appModulePath: expected.appModulePath,
     cache: expected.cache,
     challenge: expected.challenge,
+    command: expected.command,
+    kind: expected.kind,
+    modulePath: expected.modulePath,
     paranoidStaticAdvisory: expected.paranoidStaticAdvisory,
     root: expected.root,
   });
@@ -134,7 +139,7 @@ function successfulEnvelopeForTrust(
     .join('');
   return envelopeFor(
     expected,
-    { status: 'ok', trust },
+    { kind: expected.kind, status: 'ok', trust },
     {
       factsDigest: `sha256:${createHash('sha256')
         .update(JSON.stringify(facts), 'utf8')
@@ -151,6 +156,57 @@ function successfulEnvelope(
 ): string {
   const trust = successfulTrust(components, expected);
   return successfulEnvelopeForTrust(expected, trust);
+}
+
+const configRequest: StaticTrustWorkerRequest = {
+  ...request,
+  cache: null,
+  challenge: '55'.repeat(32),
+  command: 'build',
+  kind: 'config',
+  modulePath: '/app/kovo.config.ts',
+};
+
+function successfulConfigTrust(): Record<string, unknown> {
+  return {
+    facts: {
+      capabilities: [],
+      cookieDowngrades: [],
+      diagnostics: [],
+      revealed: [],
+      trustEscapes: [],
+      unregisteredSinks: [],
+    },
+    files: [{ fileName: 'kovo.config.ts', source: 'export default {};' }],
+    path: configRequest.modulePath,
+  };
+}
+
+function successfulConfigEnvelope(
+  trust: Record<string, unknown> = successfulConfigTrust(),
+  overrides: Record<string, unknown> = {},
+): string {
+  const facts = trust.facts!;
+  const files = Array.isArray(trust.files)
+    ? (trust.files as readonly { readonly fileName: string; readonly source: string }[])
+    : [];
+  const sourceFrame = files
+    .map(
+      (file) =>
+        `${Buffer.byteLength(file.fileName)}:${file.fileName}${Buffer.byteLength(file.source)}:${file.source}`,
+    )
+    .join('');
+  return envelopeFor(
+    configRequest,
+    { kind: 'config', status: 'ok', trust },
+    {
+      factsDigest: `sha256:${createHash('sha256')
+        .update(JSON.stringify(facts), 'utf8')
+        .digest('hex')}`,
+      sourceDigest: `sha256:${createHash('sha256').update(sourceFrame, 'utf8').digest('hex')}`,
+      ...overrides,
+    },
+  );
 }
 
 describe('static-trust worker protocol', () => {
@@ -194,6 +250,52 @@ describe('static-trust worker protocol', () => {
         challenge: '33'.repeat(32),
       }),
     ).toThrow('unauthenticated envelope');
+  });
+
+  it('authenticates config trust and rejects replay, tamper, omission, and stale source', () => {
+    expect(
+      staticConfigTrustFromWorkerEnvelopeForTesting(successfulConfigEnvelope(), configRequest).path,
+    ).toBe(configRequest.modulePath);
+
+    expect(() =>
+      staticConfigTrustFromWorkerEnvelopeForTesting(successfulConfigEnvelope(), {
+        ...configRequest,
+        challenge: '66'.repeat(32),
+      }),
+    ).toThrow('unauthenticated envelope');
+
+    const tampered = JSON.parse(successfulConfigEnvelope()) as Record<string, unknown>;
+    const tamperedPayload = JSON.parse(tampered.payload as string) as {
+      trust: { facts: { capabilities: unknown[] } };
+    };
+    tamperedPayload.trust.facts.capabilities.push({ forged: true });
+    tampered.payload = JSON.stringify(tamperedPayload);
+    tampered.digest = `sha256:${createHash('sha256')
+      .update(tampered.payload as string, 'utf8')
+      .digest('hex')}`;
+    expect(() =>
+      staticConfigTrustFromWorkerEnvelopeForTesting(JSON.stringify(tampered), configRequest),
+    ).toThrow('unauthenticated envelope');
+
+    const omitted = successfulConfigTrust();
+    delete omitted.files;
+    expect(() =>
+      staticConfigTrustFromWorkerEnvelopeForTesting(
+        successfulConfigEnvelope(omitted),
+        configRequest,
+      ),
+    ).toThrow();
+
+    const original = JSON.parse(successfulConfigEnvelope()) as { sourceDigest: string };
+    const stale = successfulConfigTrust();
+    (stale.files as { fileName: string; source: string }[])[0]!.source =
+      'export default { changed: true };';
+    expect(() =>
+      staticConfigTrustFromWorkerEnvelopeForTesting(
+        successfulConfigEnvelope(stale, { sourceDigest: original.sourceDigest }),
+        configRequest,
+      ),
+    ).toThrow('stale config source digest');
   });
 
   it('rejects nested payload tampering even when the plain digest is recomputed', () => {
@@ -364,6 +466,7 @@ describe('static-trust worker protocol', () => {
         envelope(
           {
             status: 'ok',
+            kind: 'app',
             trust: {
               approvedSourceFiles,
               capabilityClosure: {
