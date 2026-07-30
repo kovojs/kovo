@@ -536,6 +536,15 @@ describe('durable task runtime (SPEC §9.6)', () => {
         message: expect.stringContaining('Postgres-compatible db client'),
       }),
       {
+        failure: {
+          code: 'KTB007',
+          correlationId: expect.stringMatching(/^ktb_[0-9a-f]{32}$/u),
+          operation: 'task-runtime-startup',
+          remediation:
+            'Verify the task runtime configuration and queue dependencies before accepting more jobs.',
+          safeCause: 'runtime-startup-failed',
+          schema: 'kovo.trusted-boundary-failure/v1',
+        },
         operation: 'task-runtime-startup',
         request: expect.objectContaining({ url: 'https://kovo.invalid/_kovo/task' }),
         url: '/_kovo/task',

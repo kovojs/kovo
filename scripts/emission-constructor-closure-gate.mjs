@@ -34,11 +34,8 @@ const requiredConstructorCalls = Object.freeze({
     'jsIdentifier(options.formImport.name)',
     'jsStringLiteral(name)',
     'jsStringLiteral(options.queue)',
-    'jsStringLiteral(query)',
     'tsPropertyKey(column)',
-    'tsPropertyKey(entry.name)',
     'tsPropertyKey(entry.query)',
-    'tsPropertyKey(key)',
     'tsPropertyKey(query)',
   ]),
 });

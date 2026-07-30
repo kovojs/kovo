@@ -1,4 +1,4 @@
-import './security-bootstrap.js';
+import './security-bootstrap-command.js';
 
 export { cmd, commandAllowlist, runCommand } from './command.js';
 export type {

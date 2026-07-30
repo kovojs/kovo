@@ -6,8 +6,9 @@
  * capture order a construction property of the runner instead of trying to authenticate mutable
  * JavaScript functions from their source text or a finite probe corpus. Supported runners also
  * preload their profile entry before the app graph: server/build entries capture build controls,
- * while the root server barrel captures tree-shakeable Node-only command controls. That split keeps
- * unused `node:child_process` out of Cloudflare Workers without permitting app-first evaluation.
+ * while the named command entry captures tree-shakeable Node-only command controls. That split
+ * keeps unused `node:child_process` out of Cloudflare Workers without permitting app-first
+ * evaluation.
  *
  * This is deliberately private. Code that executes in the process before a supported Kovo entry
  * can replace host controls before this module runs and is therefore privileged host compromise,

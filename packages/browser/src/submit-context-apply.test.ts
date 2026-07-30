@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { form, href, Link, redirect, type Route } from '@kovojs/core';
+import { form, href, redirect, type Route } from '@kovojs/core';
 
 import { createQueryStore, type EnhancedMutationFetchOptions } from './generated.js';
 import { createSubmitContext } from './submit-context.js';
@@ -118,9 +118,9 @@ describe('submit context apply', () => {
     expect(href('/catalog/:id', { params: { id: 'p 1' }, search: { max: 500 } })).toBe(
       '/catalog/p%201?max=500',
     );
-    expect(Link('/catalog/:id', { params: { id: 'p1' }, search: { sort: 'price' } })).toEqual({
-      href: '/catalog/p1?sort=price',
-    });
+    expect(href('/catalog/:id', { params: { id: 'p1' }, search: { sort: 'price' } })).toBe(
+      '/catalog/p1?sort=price',
+    );
     expect(redirect('/cart', {})).toEqual({ location: '/cart', status: 303 });
     expect(catalogFilter.input('max')).toEqual({ name: 'max' });
 
@@ -135,10 +135,6 @@ describe('submit context apply', () => {
     const assertLegacyHrefRejected = () => {
       // @ts-expect-error SPEC.md §6.4 and rules/v1-acceptance.md: route path renames make old href consumers red.
       href('/legacy-catalog/:id', { params: { id: 'p1' } });
-    };
-    const assertLegacyLinkRejected = () => {
-      // @ts-expect-error SPEC.md §6.4 and rules/v1-acceptance.md: route path renames make old Link consumers red.
-      Link('/legacy-catalog/:id', { params: { id: 'p1' } });
     };
     const assertLegacyRedirectRejected = () => {
       // @ts-expect-error SPEC.md §6.4 and rules/v1-acceptance.md: route path renames make old redirect consumers red.
@@ -156,7 +152,6 @@ describe('submit context apply', () => {
     expect(submitRenamedShape).toBeTypeOf('function');
     expect(assertLegacySubmitInputRejected).toBeTypeOf('function');
     expect(assertLegacyHrefRejected).toBeTypeOf('function');
-    expect(assertLegacyLinkRejected).toBeTypeOf('function');
     expect(assertLegacyRedirectRejected).toBeTypeOf('function');
     expect(assertLegacyGetFormRejected).toBeTypeOf('function');
     expect(assertLegacySearchFieldRejected).toBeTypeOf('function');

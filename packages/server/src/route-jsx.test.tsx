@@ -834,6 +834,15 @@ describe('route JSX pages', () => {
       status: 500,
     });
     expect(onError).toHaveBeenCalledWith(renderError, {
+      failure: {
+        code: 'KTB003',
+        correlationId: expect.stringMatching(/^ktb_[0-9a-f]{32}$/u),
+        operation: 'route-page',
+        remediation:
+          'Inspect the named handler or loader at the source anchor and retry with a non-secret reproduction.',
+        safeCause: 'handler-execution-failed',
+        schema: 'kovo.trusted-boundary-failure/v1',
+      },
       operation: 'route-page',
       request: {},
       routePath: '/admin',

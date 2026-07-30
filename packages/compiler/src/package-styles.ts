@@ -17,12 +17,16 @@ import {
 } from './css.js';
 import { deriveComponentNames } from './component-names.js';
 import { findFragmentTargetFacts } from './app-graph.js';
+import { createCompilerOwnedAppContractProject } from './app-contract-project.js';
 import { cssIrHeader } from './ir.js';
 import {
   compilerArrayAppend,
+  compilerArrayLength,
   compilerCreateMap,
   compilerCreateSet,
+  compilerFreeze,
   compilerJsonParse,
+  compilerMapDelete,
   compilerMapGet,
   compilerMapSet,
   compilerObjectKeys,
@@ -35,6 +39,7 @@ import {
   compilerStringEndsWith,
   compilerStringIncludes,
   compilerStringSlice,
+  compilerStringSplit,
   compilerStringStartsWith,
 } from './compiler-security-intrinsics.js';
 import {
@@ -42,14 +47,16 @@ import {
   type PackageComponentPrefixDiscoveryOptions,
 } from './package-prefixes.js';
 import { firstComponentModel, parseComponentModule } from './scan/parse.js';
+import type { ProjectMutationSourceFile } from './scan/project-mutation-bindings.js';
 import { compileRouteModule } from './scan/route-pages.js';
 import { uniqueSorted } from './shared.js';
 import {
+  compilerSourceModuleSpecifiers,
   createCompilerSourceFileSystem,
   type CompilerSourceFileSystem,
 } from './source-filesystem.js';
 import { extractKovoStyles } from './style.js';
-import type { RoutePageFact } from './types.js';
+import { compileArtifactFileNames, type RoutePageFact } from './types.js';
 
 const nativePathDirname = builtinPathDirname;
 const nativePathExtname = builtinPathExtname;
@@ -139,10 +146,9 @@ export function extractPackageComponentCss(
 }
 
 /**
- * Extract the StyleX CSS for authored app source files under the app entry's
- * directory. This covers app/layout modules that use `style.create(...)` but are
- * not themselves compiled component modules, so build-owned CSS does not depend
- * on hand-authored rule-metadata exports.
+ * Extract the StyleX CSS for authored files in the app entry's exact relative-import closure.
+ * This covers reachable app/layout modules that use `style.create(...)` but are not themselves
+ * compiled component modules, without turning unimported copy-in catalogs into build inputs.
  */
 export function extractAppComponentCss(
   options: PackageComponentPrefixDiscoveryOptions,
@@ -152,7 +158,9 @@ export function extractAppComponentCss(
   if (fileSystem === null) {
     return { css: null, cssAssets: [], diagnostics: [], sourceFiles: [] };
   }
-  return extractComponentCssFromFiles(appComponentSourceFiles(rootDir, fileSystem), {
+  const appSources = compilerOwnedAppSources(options.fileName, rootDir, fileSystem);
+  const sourceSnapshots = appSourceSnapshotMap(appSources.files);
+  return extractComponentCssFromFiles(appSources.fileNames, {
     defaultStyleIdentity: {
       keyframes: 'keyframes',
       styles: 'style',
@@ -160,7 +168,8 @@ export function extractAppComponentCss(
     },
     fileSystem,
     rootDir,
-    resolveStaticImport: resolveLocalStaticImport(fileSystem),
+    resolveStaticImport: resolveSnapshotStaticImport(sourceSnapshots),
+    sourceSnapshots,
   });
 }
 
@@ -171,7 +180,15 @@ export function extractAppRouteCssTargets(
   const rootDir = nativePathDirname(nativePathResolve(options.fileName));
   const fileSystem = createCompilerSourceFileSystem(rootDir);
   if (fileSystem === null) return { routePageFacts: [], routeTargets: [], sourceFiles: [] };
-  const sourceFiles = appComponentSourceFiles(rootDir, fileSystem);
+  const appSources = compilerOwnedAppSources(options.fileName, rootDir, fileSystem);
+  const sourceFiles = appSources.fileNames;
+  if (sourceFiles.length === 0) {
+    return { routePageFacts: [], routeTargets: [], sourceFiles };
+  }
+  const appContractProject = createCompilerOwnedAppContractProject({
+    rootNames: sourceFiles,
+  });
+  const sourceSnapshots = appSourceSnapshotMap(appSources.files);
   const routePageFacts: RoutePageFact[] = [];
 
   const sourceFileSnapshot = compilerSnapshotDenseArray(
@@ -180,20 +197,30 @@ export function extractAppRouteCssTargets(
   );
   for (let index = 0; index < sourceFileSnapshot.length; index += 1) {
     const fileName = sourceFileSnapshot[index]!;
-    const source = fileSystem.readFile(fileName);
-    if (source === null) continue;
-    if (
-      !compilerStringIncludes(source, 'route(') &&
-      !compilerStringIncludes(source, '@kovojs/server')
-    ) {
-      continue;
-    }
-
     const compiledFacts = compilerSnapshotDenseArray(
-      compileRouteModule({
-        fileName: relativeToRoot(rootDir, fileName),
-        source,
-      }).routePageFacts,
+      appContractProject.withEntryResolutions(fileName, (authenticatedSource) => {
+        if (authenticatedSource !== compilerMapGet(sourceSnapshots, fileName)) {
+          throw new TypeError(
+            `Compiler app source changed after descriptor-bound snapshot: ${fileName}.`,
+          );
+        }
+        const absoluteFacts = compileRouteModule({
+          fileName,
+          source: authenticatedSource,
+        }).routePageFacts;
+        if (absoluteFacts.length === 0) return [];
+        return appRelativeRoutePageFacts(
+          absoluteFacts,
+          rootDir,
+          fileName,
+          authenticatedRouteCssSourceFileNames(
+            fileName,
+            authenticatedSource,
+            rootDir,
+            sourceSnapshots,
+          ),
+        );
+      }),
       'Compiler app route CSS facts',
     );
     for (let factIndex = 0; factIndex < compiledFacts.length; factIndex += 1) {
@@ -207,13 +234,91 @@ export function extractAppRouteCssTargets(
 
   const enrichedRoutePageFacts = routePageFactsWithFragmentTargets(
     routePageFacts,
-    appFragmentTargetsByCssSourceFileName(sourceFiles, rootDir, fileSystem),
+    appFragmentTargetsByCssSourceFileName(sourceFiles, rootDir, sourceSnapshots),
   );
 
   return {
     routePageFacts: enrichedRoutePageFacts,
     routeTargets: cssRouteSplitTargetsFromRouteFacts(enrichedRoutePageFacts),
     sourceFiles,
+  };
+}
+
+function appRelativeRoutePageFacts(
+  facts: readonly RoutePageFact[],
+  rootDir: string,
+  routeFileName: string,
+  relativeCssSourceFileNames: ReadonlyMap<string, string>,
+): RoutePageFact[] {
+  const normalized: RoutePageFact[] = [];
+  const factCount = compilerArrayLength(facts, 'Compiler absolute route-page facts');
+  for (let index = 0; index < factCount; index += 1) {
+    compilerArrayAppend(
+      normalized,
+      appRelativeRoutePageFact(
+        compilerOwnDataValue(facts, index, 'Compiler absolute route-page facts') as RoutePageFact,
+        rootDir,
+        routeFileName,
+        relativeCssSourceFileNames,
+      ),
+      'Compiler relative route-page facts',
+    );
+  }
+  return normalized;
+}
+
+function appRelativeRoutePageFact(
+  fact: RoutePageFact,
+  rootDir: string,
+  routeFileName: string,
+  relativeCssSourceFileNames: ReadonlyMap<string, string>,
+): RoutePageFact {
+  const sourceFileNames: string[] = [];
+  const absoluteSourceFileNames = fact.css?.sourceFileNames ?? [];
+  const sourceFileNameCount = compilerArrayLength(
+    absoluteSourceFileNames,
+    'Compiler absolute route CSS source files',
+  );
+  for (let index = 0; index < sourceFileNameCount; index += 1) {
+    const absoluteSourceFileName = compilerOwnDataValue(
+      absoluteSourceFileNames,
+      index,
+      'Compiler absolute route CSS source files',
+    ) as string;
+    const relativeSourceFileName = compilerMapGet(
+      relativeCssSourceFileNames,
+      absoluteSourceFileName,
+    );
+    if (relativeSourceFileName === undefined) {
+      throw new TypeError(
+        `Compiler route CSS fact references source outside the authenticated app closure: ${absoluteSourceFileName}.`,
+      );
+    }
+    compilerArrayAppend(
+      sourceFileNames,
+      relativeSourceFileName,
+      'Compiler relative route CSS source files',
+    );
+  }
+  return {
+    ...fact,
+    ...(fact.css === undefined
+      ? {}
+      : {
+          css: {
+            ...fact.css,
+            ...(fact.css.sourceFileNames === undefined ? {} : { sourceFileNames }),
+          },
+        }),
+    fileName: relativeToRoot(rootDir, routeFileName),
+    ...(fact.source === undefined
+      ? {}
+      : {
+          source: {
+            ...fact.source,
+            file: relativeToRoot(rootDir, routeFileName),
+          },
+        }),
   };
 }
 
@@ -226,6 +331,7 @@ interface ExtractComponentCssFromFilesOptions {
   readonly fileSystem: CompilerSourceFileSystem;
   readonly resolveStaticImport: (fromFileName: string, specifier: string) => string | null;
   readonly rootDir: string;
+  readonly sourceSnapshots?: ReadonlyMap<string, string>;
 }
 
 function extractComponentCssFromFiles(
@@ -242,8 +348,11 @@ function extractComponentCssFromFiles(
   );
   for (let index = 0; index < sourceFileSnapshot.length; index += 1) {
     const fileName = sourceFileSnapshot[index]!;
-    const source = options.fileSystem.readFile(fileName);
-    if (source === null) continue;
+    const source =
+      options.sourceSnapshots === undefined
+        ? options.fileSystem.readFile(fileName)
+        : compilerMapGet(options.sourceSnapshots, fileName);
+    if (source === null || source === undefined) continue;
     // Cheap pre-filter so non-styled entries (behavior-only re-exports) are skipped.
     if (
       !compilerStringIncludes(source, '@kovojs/style') ||
@@ -411,7 +520,7 @@ function routePageFactsWithFragmentTargets(
 function appFragmentTargetsByCssSourceFileName(
   sourceFiles: readonly string[],
   rootDir: string,
-  fileSystem: CompilerSourceFileSystem,
+  sourceSnapshots: ReadonlyMap<string, string>,
 ): ReadonlyMap<string, readonly string[]> {
   const fragmentTargetsBySourceFileName = compilerCreateMap<string, readonly string[]>();
 
@@ -421,8 +530,8 @@ function appFragmentTargetsByCssSourceFileName(
   );
   for (let index = 0; index < sourceFileSnapshot.length; index += 1) {
     const fileName = sourceFileSnapshot[index]!;
-    const source = fileSystem.readFile(fileName);
-    if (source === null || !compilerStringIncludes(source, 'component(')) continue;
+    const source = compilerMapGet(sourceSnapshots, fileName);
+    if (source === undefined || !compilerStringIncludes(source, 'component(')) continue;
 
     const relativeFileName = relativeToRoot(rootDir, fileName);
     const fragmentTargets = fragmentTargetsForSource(
@@ -462,15 +571,38 @@ function resolveLocalStaticImport(
 }
 
 function staticImportCandidates(absoluteSpecifier: string): string[] {
-  const withoutJs = compilerStringEndsWith(absoluteSpecifier, '.js')
-    ? compilerStringSlice(absoluteSpecifier, 0, -'.js'.length)
-    : absoluteSpecifier;
+  const extension = nativePathExtname(absoluteSpecifier);
+  if (extension === '.js' || extension === '.jsx') {
+    const stem = compilerStringSlice(absoluteSpecifier, 0, -extension.length);
+    return extension === '.js'
+      ? [`${stem}.ts`, `${stem}.tsx`, absoluteSpecifier, `${stem}.jsx`]
+      : [`${stem}.tsx`, `${stem}.ts`, absoluteSpecifier, `${stem}.js`];
+  }
+  if (extension === '.mjs' || extension === '.cjs') {
+    const stem = compilerStringSlice(absoluteSpecifier, 0, -extension.length);
+    return extension === '.mjs'
+      ? [`${stem}.mts`, absoluteSpecifier]
+      : [`${stem}.cts`, absoluteSpecifier];
+  }
+  if (extension !== '') return [absoluteSpecifier];
   return [
+    `${absoluteSpecifier}.ts`,
+    `${absoluteSpecifier}.tsx`,
+    `${absoluteSpecifier}.mts`,
+    `${absoluteSpecifier}.cts`,
+    `${absoluteSpecifier}.js`,
+    `${absoluteSpecifier}.jsx`,
+    `${absoluteSpecifier}.mjs`,
+    `${absoluteSpecifier}.cjs`,
     absoluteSpecifier,
-    `${withoutJs}.ts`,
-    `${withoutJs}.tsx`,
-    nativePathResolve(withoutJs, 'index.ts'),
-    nativePathResolve(withoutJs, 'index.tsx'),
+    nativePathResolve(absoluteSpecifier, 'index.ts'),
+    nativePathResolve(absoluteSpecifier, 'index.tsx'),
+    nativePathResolve(absoluteSpecifier, 'index.mts'),
+    nativePathResolve(absoluteSpecifier, 'index.cts'),
+    nativePathResolve(absoluteSpecifier, 'index.js'),
+    nativePathResolve(absoluteSpecifier, 'index.jsx'),
+    nativePathResolve(absoluteSpecifier, 'index.mjs'),
+    nativePathResolve(absoluteSpecifier, 'index.cjs'),
   ];
 }
 
@@ -615,47 +747,252 @@ function packageComponentSourceFiles(resolved: ResolvedPackage): string[] {
   return uniqueSorted(files);
 }
 
-function appComponentSourceFiles(rootDir: string, fileSystem: CompilerSourceFileSystem): string[] {
-  const files: string[] = [];
-  collectAppComponentSourceFiles(rootDir, fileSystem, files);
-  return uniqueSorted(files);
+interface CompilerOwnedAppSources {
+  readonly fileNames: readonly string[];
+  readonly files: readonly ProjectMutationSourceFile[];
 }
 
-function collectAppComponentSourceFiles(
-  dir: string,
+function compilerOwnedAppSources(
+  entryFileName: string,
+  rootDir: string,
   fileSystem: CompilerSourceFileSystem,
-  files: string[],
-): void {
-  const entries = compilerSnapshotDenseArray(
-    fileSystem.entries(dir),
-    'Compiler app source directory entries',
+): CompilerOwnedAppSources {
+  const discovered = compilerCreateSet<string>();
+  const pending: ProjectMutationSourceFile[] = [];
+  const snapshotsByFileName = compilerCreateMap<string, ProjectMutationSourceFile>();
+  const snapshotNames: string[] = [];
+
+  enqueueAppSourceSnapshot(
+    nativePathResolve(entryFileName),
+    rootDir,
+    fileSystem,
+    discovered,
+    pending,
   );
-  for (let index = 0; index < entries.length; index += 1) {
-    const entry = entries[index]!;
-    const absolute = nativePathResolve(dir, entry);
-    const kind = fileSystem.kind(absolute);
-    if (kind === 'directory') {
-      if (ignoredAppSourceDirectory(entry)) continue;
-      collectAppComponentSourceFiles(absolute, fileSystem, files);
-      continue;
+  for (
+    let index = 0;
+    index < compilerArrayLength(pending, 'Compiler app source queue');
+    index += 1
+  ) {
+    const sourceFile = compilerOwnDataValue(
+      pending,
+      index,
+      'Compiler app source queue',
+    ) as ProjectMutationSourceFile;
+    compilerMapSet(snapshotsByFileName, sourceFile.fileName, sourceFile);
+    compilerArrayAppend(snapshotNames, sourceFile.fileName, 'Compiler app source snapshot names');
+    const specifiers = compilerSnapshotDenseArray(
+      compilerSourceModuleSpecifiers(sourceFile.source),
+      'Compiler app source module specifiers',
+    );
+    for (let specifierIndex = 0; specifierIndex < specifiers.length; specifierIndex += 1) {
+      const specifier = specifiers[specifierIndex]!;
+      if (!compilerStringStartsWith(specifier, '.')) continue;
+      enqueueResolvedAppSourceSnapshot(
+        sourceFile.fileName,
+        specifier,
+        rootDir,
+        fileSystem,
+        discovered,
+        pending,
+      );
     }
-    if (kind !== 'file' || !appSourceExtension(absolute)) continue;
-    compilerArrayAppend(files, absolute, 'Compiler app component source files');
+  }
+  const fileNames = uniqueSorted(snapshotNames);
+  const snapshots: ProjectMutationSourceFile[] = [];
+  for (let index = 0; index < fileNames.length; index += 1) {
+    const snapshot = compilerMapGet(snapshotsByFileName, fileNames[index]!);
+    if (snapshot === undefined) {
+      throw new TypeError(`Compiler app source snapshot disappeared for ${fileNames[index]}.`);
+    }
+    compilerArrayAppend(snapshots, snapshot, 'Compiler authored app source snapshots');
+  }
+  return {
+    fileNames,
+    files: snapshots,
+  };
+}
+
+function enqueueResolvedAppSourceSnapshot(
+  fromFileName: string,
+  specifier: string,
+  rootDir: string,
+  fileSystem: CompilerSourceFileSystem,
+  discovered: Set<string>,
+  pending: ProjectMutationSourceFile[],
+): void {
+  const absolute = nativePathResolve(nativePathDirname(fromFileName), specifier);
+  const candidates = compilerSnapshotDenseArray(
+    staticImportCandidates(absolute),
+    'Compiler app source import candidates',
+  );
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = candidates[index]!;
+    if (enqueueAppSourceSnapshot(candidate, rootDir, fileSystem, discovered, pending)) {
+      return;
+    }
   }
 }
 
-function ignoredAppSourceDirectory(name: string): boolean {
-  return (
-    name === 'generated' ||
-    name === 'node_modules' ||
-    name === 'dist' ||
-    compilerStringStartsWith(name, '.')
+function enqueueAppSourceSnapshot(
+  fileName: string,
+  rootDir: string,
+  fileSystem: CompilerSourceFileSystem,
+  discovered: Set<string>,
+  pending: ProjectMutationSourceFile[],
+): boolean {
+  const absoluteFileName = nativePathResolve(fileName);
+  if (compilerSetHas(discovered, absoluteFileName)) return true;
+  if (!appSourceFileIsAuthored(rootDir, absoluteFileName)) return false;
+  const source = fileSystem.readFile(absoluteFileName);
+  if (source === null) return false;
+  compilerSetAdd(discovered, absoluteFileName);
+  compilerArrayAppend(
+    pending,
+    compilerFreeze({ fileName: absoluteFileName, source }),
+    'Compiler app source queue',
   );
+  return true;
+}
+
+function appSourceFileIsAuthored(rootDir: string, fileName: string): boolean {
+  if (!isInsideDirectory(rootDir, fileName) || !appSourceExtension(fileName)) return false;
+  const relativeFileName = nativePathRelative(rootDir, fileName);
+  const segments = compilerStringSplit(relativeFileName, pathSeparator);
+  const segmentCount = compilerArrayLength(segments, 'Compiler app source path segments');
+  for (let index = 0; index < segmentCount - 1; index += 1) {
+    const segment = compilerOwnDataValue(
+      segments,
+      index,
+      'Compiler app source path segments',
+    ) as string;
+    if (
+      segment === 'generated' ||
+      segment === 'dist' ||
+      segment === 'node_modules' ||
+      compilerStringStartsWith(segment, '.')
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function appSourceSnapshotMap(
+  sourceFiles: readonly ProjectMutationSourceFile[],
+): ReadonlyMap<string, string> {
+  const sources = compilerCreateMap<string, string>();
+  const sourceFileCount = compilerArrayLength(sourceFiles, 'Compiler app CSS source snapshots');
+  for (let index = 0; index < sourceFileCount; index += 1) {
+    const sourceFile = compilerOwnDataValue(
+      sourceFiles,
+      index,
+      'Compiler app CSS source snapshots',
+    ) as ProjectMutationSourceFile;
+    compilerMapSet(sources, sourceFile.fileName, sourceFile.source);
+  }
+  return sources;
+}
+
+function authenticatedRouteCssSourceFileNames(
+  routeFileName: string,
+  routeSource: string,
+  rootDir: string,
+  sourceSnapshots: ReadonlyMap<string, string>,
+): ReadonlyMap<string, string> {
+  const names = compilerCreateMap<string, string>();
+  const invalidNames = compilerCreateSet<string>();
+  const moduleSpecifiers = compilerSnapshotDenseArray(
+    parseComponentModule(routeFileName, routeSource).moduleSpecifiers,
+    'Compiler route module specifiers',
+  );
+  for (let index = 0; index < moduleSpecifiers.length; index += 1) {
+    const moduleSpecifier = compilerOwnDataValue(
+      moduleSpecifiers,
+      index,
+      'Compiler route module specifiers',
+    ) as { readonly specifier: string };
+    if (!compilerStringStartsWith(moduleSpecifier.specifier, '.')) continue;
+    const compilerFileName = routeCompilerCssSourceFileName(
+      routeFileName,
+      moduleSpecifier.specifier,
+    );
+    const sourceFileName = resolveSnapshotStaticImportFileName(
+      sourceSnapshots,
+      routeFileName,
+      moduleSpecifier.specifier,
+    );
+    if (sourceFileName === null) {
+      compilerSetAdd(invalidNames, compilerFileName);
+      compilerMapDelete(names, compilerFileName);
+      continue;
+    }
+    const relativeSourceFileName = compileArtifactFileNames(
+      relativeToRoot(rootDir, sourceFileName),
+    ).css;
+    const previous = compilerMapGet(names, compilerFileName);
+    if (
+      compilerSetHas(invalidNames, compilerFileName) ||
+      (previous !== undefined && previous !== relativeSourceFileName)
+    ) {
+      compilerSetAdd(invalidNames, compilerFileName);
+      compilerMapDelete(names, compilerFileName);
+      continue;
+    }
+    compilerMapSet(names, compilerFileName, relativeSourceFileName);
+  }
+  return names;
+}
+
+function routeCompilerCssSourceFileName(routeFileName: string, specifier: string): string {
+  const absolute = nativePathResolve(nativePathDirname(routeFileName), specifier);
+  const extension = nativePathExtname(absolute);
+  const sourceFileName =
+    extension === '.js' || extension === '.jsx'
+      ? `${compilerStringSlice(absolute, 0, -extension.length)}.tsx`
+      : absolute;
+  return compileArtifactFileNames(nativePathRelative('', sourceFileName)).css;
+}
+
+function resolveSnapshotStaticImportFileName(
+  sourceSnapshots: ReadonlyMap<string, string>,
+  fromFileName: string,
+  specifier: string,
+): string | null {
+  if (!compilerStringStartsWith(specifier, '.')) return null;
+  const absolute = nativePathResolve(nativePathDirname(fromFileName), specifier);
+  const candidates = compilerSnapshotDenseArray(
+    staticImportCandidates(absolute),
+    'Compiler snapshot static import candidates',
+  );
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = candidates[index]!;
+    if (compilerMapGet(sourceSnapshots, candidate) !== undefined) return candidate;
+  }
+  return null;
+}
+
+function resolveSnapshotStaticImport(
+  sourceSnapshots: ReadonlyMap<string, string>,
+): (fromFileName: string, specifier: string) => string | null {
+  return (fromFileName, specifier) => {
+    const fileName = resolveSnapshotStaticImportFileName(sourceSnapshots, fromFileName, specifier);
+    return fileName === null ? null : (compilerMapGet(sourceSnapshots, fileName) ?? null);
+  };
 }
 
 function appSourceExtension(fileName: string): boolean {
   const extension = nativePathExtname(fileName);
-  return extension === '.js' || extension === '.jsx' || extension === '.ts' || extension === '.tsx';
+  return (
+    extension === '.js' ||
+    extension === '.jsx' ||
+    extension === '.mjs' ||
+    extension === '.cjs' ||
+    extension === '.ts' ||
+    extension === '.tsx' ||
+    extension === '.mts' ||
+    extension === '.cts'
+  );
 }
 
 function replaceSourceExtension(fileName: string, extension: string): string {

@@ -174,6 +174,7 @@ describe('extractAppComponentCss', () => {
         `
 import { tokens } from '@kovojs/style';
 import * as style from '@kovojs/style';
+import './generated/ignored.js';
 
 const palette = { accent: 'teal' } as const;
 const appStyles = style.create({
@@ -198,6 +199,17 @@ const generatedStyles = style.create({ root: { color: 'red' } });
 `,
         'utf8',
       );
+      writeFileSync(
+        join(root, 'unimported.tsx'),
+        `
+import * as style from '@kovojs/style';
+const unimportedStyles = style.create({ root: { color: 'unimported-sentinel' } });
+export function Unimported() {
+  return <main {...style.attrs(unimportedStyles.root)}>Unimported</main>;
+}
+`,
+        'utf8',
+      );
 
       const result = extractAppComponentCss({
         fileName: join(root, 'app.tsx'),
@@ -213,6 +225,7 @@ const generatedStyles = style.create({ root: { color: 'red' } });
       expect(result.css).toContain('.kv-style-bg-');
       expect(result.css).not.toContain('.kv-app-bg-');
       expect(result.css).not.toContain('red');
+      expect(result.css).not.toContain('unimported-sentinel');
       expect(result.cssAssets).toEqual([
         expect.objectContaining({
           criticalCss: expect.stringContaining('padding:8px'),
@@ -268,6 +281,110 @@ export function App() {
     } finally {
       rmSync(root, { force: true, recursive: true });
       rmSync(outside, { force: true, recursive: true });
+    }
+  });
+
+  it('keeps in-root source aliases lexical while reading their descriptor-bound target', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-app-css-alias-'));
+
+    try {
+      writeFileSync(
+        join(root, 'app.tsx'),
+        `
+import * as style from '@kovojs/style';
+import { palette } from './alias.js';
+const styles = style.create({ root: { color: palette.accent } });
+export function App() {
+  return <main {...style.attrs(styles.root)}>App</main>;
+}
+`,
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'palette.ts'),
+        `export const palette = { accent: 'teal' } as const;`,
+        'utf8',
+      );
+      symlinkSync(join(root, 'palette.ts'), join(root, 'alias.ts'), 'file');
+
+      const result = extractAppComponentCss({
+        fileName: join(root, 'app.tsx'),
+        packagePrefixDiscoveryRoot: root,
+        source: '',
+      });
+
+      expect(result.sourceFiles).toEqual([join(root, 'alias.ts'), join(root, 'app.tsx')]);
+      expect(result.css).toContain('color:teal');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('preserves a symlinked app-root spelling in the authenticated source closure', () => {
+    const container = mkdtempSync(join(tmpdir(), 'kovo-app-css-linked-root-'));
+    const physicalRoot = join(container, 'physical');
+    const linkedRoot = join(container, 'linked');
+
+    try {
+      mkdirSync(physicalRoot);
+      writeFileSync(
+        join(physicalRoot, 'app.tsx'),
+        `
+import * as style from '@kovojs/style';
+const styles = style.create({ root: { color: 'teal' } });
+export function App() {
+  return <main {...style.attrs(styles.root)}>App</main>;
+}
+`,
+        'utf8',
+      );
+      symlinkSync(physicalRoot, linkedRoot, 'dir');
+
+      const result = extractAppComponentCss({
+        fileName: join(linkedRoot, 'app.tsx'),
+        packagePrefixDiscoveryRoot: linkedRoot,
+        source: '',
+      });
+
+      expect(result.sourceFiles).toEqual([join(linkedRoot, 'app.tsx')]);
+      expect(result.css).toContain('color:teal');
+    } finally {
+      rmSync(container, { force: true, recursive: true });
+    }
+  });
+
+  it('uses TypeScript extension substitution once when shadow artifacts collide', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-app-css-extension-collision-'));
+
+    try {
+      writeFileSync(
+        join(root, 'app.tsx'),
+        `
+import './first.js';
+import './second.js';
+`,
+        'utf8',
+      );
+      writeFileSync(join(root, 'first.ts'), `import './palette.js';`, 'utf8');
+      writeFileSync(join(root, 'second.ts'), `import './palette.js';`, 'utf8');
+      writeFileSync(join(root, 'palette.ts'), `export const selected = 'typescript';`, 'utf8');
+      writeFileSync(join(root, 'palette.tsx'), `export const selected = 'tsx-shadow';`, 'utf8');
+      writeFileSync(join(root, 'palette.js'), `export const selected = 'js-shadow';`, 'utf8');
+
+      const result = extractAppComponentCss({
+        fileName: join(root, 'app.tsx'),
+        packagePrefixDiscoveryRoot: root,
+        source: '',
+      });
+
+      expect(result.sourceFiles).toEqual([
+        join(root, 'app.tsx'),
+        join(root, 'first.ts'),
+        join(root, 'palette.ts'),
+        join(root, 'second.ts'),
+      ]);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
     }
   });
 
@@ -411,6 +528,59 @@ export const CartBadge = component({
         fragmentTargets: ['components/cart-badge/cart-badge'],
         sourceFileNames: ['components/cart-badge.css'],
       });
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('refuses route CSS facts whose relative import resolves outside the source closure', () => {
+    const container = mkdtempSync(join(tmpdir(), 'kovo-app-route-css-outside-'));
+    const root = join(container, 'app');
+    const outside = join(container, 'outside');
+
+    try {
+      mkdirSync(root);
+      mkdirSync(outside);
+      writeFileSync(
+        join(root, 'routes.tsx'),
+        `
+import { route } from '@kovojs/server';
+import { OutsideBadge } from '../outside/outside-badge.js';
+export const outside = route('/outside', {
+  page: () => <OutsideBadge />,
+});
+`,
+        'utf8',
+      );
+      writeFileSync(
+        join(outside, 'outside-badge.tsx'),
+        `export function OutsideBadge() { return <outside-badge>Outside</outside-badge>; }`,
+        'utf8',
+      );
+
+      expect(() =>
+        extractAppRouteCssTargets({
+          fileName: join(root, 'routes.tsx'),
+          packagePrefixDiscoveryRoot: root,
+          source: '',
+        }),
+      ).toThrow(/outside the authenticated app closure/u);
+    } finally {
+      rmSync(container, { force: true, recursive: true });
+    }
+  });
+
+  it('returns an empty route split for an empty app source directory', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-empty-route-css-'));
+
+    try {
+      expect(
+        extractAppRouteCssTargets({
+          fileName: join(root, 'app.tsx'),
+          packagePrefixDiscoveryRoot: root,
+          source: '',
+        }),
+      ).toEqual({ routePageFacts: [], routeTargets: [], sourceFiles: [] });
     } finally {
       rmSync(root, { force: true, recursive: true });
     }

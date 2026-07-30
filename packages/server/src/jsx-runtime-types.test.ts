@@ -91,12 +91,12 @@ const interactive = (
   </form>
 );
 
-const raw = <section html={trustedHtml('<em>safe</em>')} />;
-const trustedHref = <a href={trustedUrl('/safe')}>Safe</a>;
-const typedTrustedHref: TrustedUrl = trustedUrl('/typed-safe');
+const raw = <section html={trustedHtml('<em>safe</em>', { reason: 'JSX type proof' })} />;
+const trustedHref = <a href={trustedUrl('/safe', { reason: 'JSX type proof' })}>Safe</a>;
+const typedTrustedHref: TrustedUrl = trustedUrl('/typed-safe', { reason: 'JSX type proof' });
 const trustedTypedHref = <a href={typedTrustedHref}>Typed safe</a>;
-const trustedFormAction = <button formaction={trustedUrl('javascript:reviewed()')}>Go</button>;
-const trustedPoster = <video poster={trustedUrl('data:image/png;base64,AAAA')} />;
+const trustedFormAction = <button formaction={trustedUrl('javascript:reviewed()', { reason: 'JSX type proof' })}>Go</button>;
+const trustedPoster = <video poster={trustedUrl('data:image/png;base64,AAAA', { reason: 'JSX type proof' })} />;
 const sendMessage = mutation({
   input: s.object({}),
   handler() { return null; },

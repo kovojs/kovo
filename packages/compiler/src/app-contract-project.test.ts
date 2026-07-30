@@ -156,7 +156,7 @@ describe('D1 compiler-owned exact project resolver', () => {
         "  access: app.publicAccess('public fixture page'),",
         '  page: () => <main>Public</main>,',
         '});',
-        "export const privatePage = app.route('/private', {",
+        "export const privatePage = app.route /* parsed facts, not raw text */ ('/private', {",
         '  access: [app.authenticated],',
         '  page: () => <main>Private</main>,',
         '});',

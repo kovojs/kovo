@@ -7,12 +7,10 @@ import { kovo } from '@kovojs/drizzle';
 import { pgTable, text } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
 
-import type {
-  CapabilityReplayStore,
-  KovoPostgresAppRuntimeDb,
-  MutationReplayStore,
-  WebhookReplayStore,
-} from './index.js';
+import type { KovoPostgresAppRuntimeDb } from './public-postgres.js';
+import type { MutationReplayStore } from './public-replay.js';
+import type { CapabilityReplayStore } from './public-storage-downloads.js';
+import type { WebhookReplayStore } from './public-webhooks.js';
 
 const serverPackageRoot = resolve(process.cwd(), 'packages/server');
 const vpBin = resolve(process.cwd(), 'node_modules/.bin/vp');
@@ -35,13 +33,13 @@ describe('built-bundle durable replay receipts (SPEC §10.3)', () => {
       packServerBundle(bundleAPath);
       packServerBundle(bundleBPath);
 
-      const bundleA = (await import(
-        pathToFileURL(join(bundleAPath, 'index.mjs')).href
-      )) as typeof import('./index.js');
-      runtimeA = bundleA.createPostgresAppRuntimeDb({
+      const bundleAPostgres = (await import(
+        pathToFileURL(join(bundleAPath, 'public-postgres.mjs')).href
+      )) as typeof import('./public-postgres.js');
+      runtimeA = bundleAPostgres.createPostgresAppRuntimeDb({
         dataDir: join(root, 'runtime-a'),
         driver: 'pglite',
-        schema: bundleA.postgresSchemaModule({ bundleReplayOwners }),
+        schema: bundleAPostgres.postgresSchemaModule({ bundleReplayOwners }),
       });
       await runtimeA.ready;
       const mutationStoreFromA = runtimeA.mutationReplayStore;
@@ -51,31 +49,29 @@ describe('built-bundle durable replay receipts (SPEC §10.3)', () => {
       const bundleB = (await import(
         pathToFileURL(join(bundleBPath, 'index.mjs')).href
       )) as typeof import('./index.js');
-      const mutationFromB = bundleB.mutation('receipt/cross-bundle', {
-        csrf: false,
-        csrfJustification: 'test fixture uses a non-browser caller',
-        handler(input) {
-          return input;
+      const bundleBStorageDownloads = (await import(
+        pathToFileURL(join(bundleBPath, 'public-storage-downloads.mjs')).href
+      )) as typeof import('./public-storage-downloads.js');
+      const bundleBWebhooks = (await import(
+        pathToFileURL(join(bundleBPath, 'public-webhooks.mjs')).href
+      )) as typeof import('./public-webhooks.js');
+      const contractB = bundleB.defineKovo({
+        appId: '00000000-0000-4000-8000-0000000000b2',
+        egress: {
+          enabled: false,
+          justification: 'cross-bundle receipt test performs no outbound I/O',
         },
-        input: bundleB.s.object({ value: bundleB.s.string() }),
+        mutationReplayStore: mutationStoreFromA,
       });
 
-      expect(() =>
-        bundleB.createApp({
-          egress: {
-            enabled: false,
-            justification: 'cross-bundle receipt test performs no outbound I/O',
-          },
-          mutationReplayStore: mutationStoreFromA,
-          mutations: [mutationFromB],
-        }),
-      ).not.toThrow();
+      expect(() => contractB.assemble({})).not.toThrow();
 
       const records = bundleB.domain('receipt-cross-bundle-records');
       expect(() =>
-        bundleB.webhook('/webhooks/cross-bundle', {
+        bundleBWebhooks.webhook('/webhooks/cross-bundle', {
           handler() {},
-          idempotency: (input) => bundleB.webhookReplayIdentity(input.id, input.occurredAtMs),
+          idempotency: (input) =>
+            bundleBWebhooks.webhookReplayIdentity(input.id, input.occurredAtMs),
           input: bundleB.s.object({
             id: bundleB.s.string(),
             occurredAtMs: bundleB.s.number().int(),
@@ -99,27 +95,27 @@ describe('built-bundle durable replay receipts (SPEC §10.3)', () => {
         },
       };
       expect(() =>
-        bundleB.createStorageDownloadEndpoint({
+        bundleBStorageDownloads.createStorageDownloadEndpoint({
           replayStore: capabilityStoreFromA,
           secret: 'cross-bundle-capability-secret-at-least-32-bytes',
           storage,
         }),
       ).not.toThrow();
 
+      const forgedContract = bundleB.defineKovo({
+        appId: '00000000-0000-4000-8000-0000000000f2',
+        egress: {
+          enabled: false,
+          justification: 'cross-bundle receipt test performs no outbound I/O',
+        },
+        mutationReplayStore: forgedMutationStore(),
+      });
+      expect(() => forgedContract.assemble({})).toThrow(/KV436.*mutationReplayStore/);
       expect(() =>
-        bundleB.createApp({
-          egress: {
-            enabled: false,
-            justification: 'cross-bundle receipt test performs no outbound I/O',
-          },
-          mutationReplayStore: forgedMutationStore(),
-          mutations: [mutationFromB],
-        }),
-      ).toThrow(/KV436.*mutationReplayStore/);
-      expect(() =>
-        bundleB.webhook('/webhooks/cross-bundle-forged', {
+        bundleBWebhooks.webhook('/webhooks/cross-bundle-forged', {
           handler() {},
-          idempotency: (input) => bundleB.webhookReplayIdentity(input.id, input.occurredAtMs),
+          idempotency: (input) =>
+            bundleBWebhooks.webhookReplayIdentity(input.id, input.occurredAtMs),
           input: bundleB.s.object({
             id: bundleB.s.string(),
             occurredAtMs: bundleB.s.number().int(),
@@ -131,7 +127,7 @@ describe('built-bundle durable replay receipts (SPEC §10.3)', () => {
         }),
       ).toThrow(/KV436.*webhookReplayStore/);
       expect(() =>
-        bundleB.createStorageDownloadEndpoint({
+        bundleBStorageDownloads.createStorageDownloadEndpoint({
           replayStore: forgedCapabilityStore(),
           secret: 'cross-bundle-capability-secret-at-least-32-bytes',
           storage,
@@ -147,10 +143,25 @@ describe('built-bundle durable replay receipts (SPEC §10.3)', () => {
 });
 
 function packServerBundle(outDir: string): void {
-  execFileSync(vpBin, ['pack', 'src/index.ts', '-d', outDir, '--no-dts', '--logLevel', 'silent'], {
-    cwd: serverPackageRoot,
-    stdio: 'pipe',
-  });
+  execFileSync(
+    vpBin,
+    [
+      'pack',
+      'src/index.ts',
+      'src/public-postgres.ts',
+      'src/public-storage-downloads.ts',
+      'src/public-webhooks.ts',
+      '-d',
+      outDir,
+      '--no-dts',
+      '--logLevel',
+      'silent',
+    ],
+    {
+      cwd: serverPackageRoot,
+      stdio: 'pipe',
+    },
+  );
 }
 
 function forgedMutationStore(): MutationReplayStore {

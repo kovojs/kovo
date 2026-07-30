@@ -133,9 +133,10 @@ describe('framework-owned security bootstrap', () => {
 
   it('selective Function-source mimicry cannot replace reviewed command execution', async () => {
     vi.resetModules();
-    // The supported runner preloads the root barrel before the app graph. Command remains outside
-    // the neutral bootstrap so unused node:child_process code can be tree-shaken from Workers.
-    await import('./index.ts?root-bootstrap-command');
+    // A command-capable app imports the named command profile before its authored module body.
+    // Command remains outside the neutral/root profile so unused node:child_process code can be
+    // tree-shaken from Workers.
+    const commandApi = await import('./public-command.ts?named-bootstrap-command');
 
     mutableChildProcess.execFile = function execFile(file, args, options, callback) {
       // normalizeExecFileArgs
@@ -147,9 +148,8 @@ describe('framework-owned security bootstrap', () => {
       return originalExecFile(file, exactArgs, options, callback);
     } as typeof execFile;
     syncBuiltinESMExports();
-    const commandApi = await import('./command.ts?root-selective-exec-file');
     const allow = commandApi.commandAllowlist([process.execPath], {
-      justification: 'root selective command proof',
+      justification: 'named command profile selective proof',
     });
     const command = commandApi.cmd(process.execPath, ['-e', 'process.stdout.write("SAFE")'], {
       allow,

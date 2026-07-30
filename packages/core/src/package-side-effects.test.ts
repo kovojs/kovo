@@ -54,6 +54,11 @@ import * as core from '@kovojs/core';
 globalThis.__kovoTreeShakeAll = core;
 `;
 
+const storageNamespaceConsumer = `
+import * as storage from '@kovojs/core/storage';
+globalThis.__kovoTreeShakeStorage = storage;
+`;
+
 const bootstrapConsumer = `
 import { clientModuleRepresentationDigest } from '@kovojs/core/internal/client-module-url';
 import '@kovojs/core/internal/filesystem';
@@ -62,7 +67,7 @@ globalThis.__kovoBootstrapProbe = 'KOVO_BOOTSTRAP_RETAINED';
 `;
 
 const guardConsumer = `
-import { secret } from '@kovojs/core';
+import { secret } from '@kovojs/core/security';
 let outcome = 'OPEN';
 try {
   structuredClone({ value: secret('victim-secret') });
@@ -127,17 +132,26 @@ describe('core package selective side effects (SPEC §6.6)', () => {
   it('tree-shakes an ordinary source consumer while retaining used initialization and guards', () => {
     const componentBundle = bundleConsumer(corePackageRoot, componentConsumer, 'source-component');
     const namespaceBundle = bundleConsumer(corePackageRoot, namespaceConsumer, 'source-namespace');
+    const storageNamespaceBundle = bundleConsumer(
+      corePackageRoot,
+      storageNamespaceConsumer,
+      'source-storage-namespace',
+    );
 
     expect(componentBundle.source).toContain('KOVO_USED_COMPONENT_INITIALIZER');
     expect(componentBundle.source).toContain('__kovoIsComponentDescriptor');
-    expect(componentBundle.source).toContain('structuredClone input exceeds');
+    expect(componentBundle.source).not.toContain('structuredClone input exceeds');
     expect(componentBundle.source).not.toContain('Kovo storage refused an unbounded byte stream.');
     expect(componentBundle.source).not.toContain('createS3CompatibleStorage');
     expect(componentBundle.source).not.toContain('node:fs');
     expect(componentBundle.source).not.toContain('node:buffer');
     expect(namespaceBundle.source).not.toContain('node:buffer');
-    expect(namespaceBundle.source).toContain('Kovo storage refused an unbounded byte stream.');
-    expect(namespaceBundle.source).toContain('createS3CompatibleStorage');
+    expect(namespaceBundle.source).not.toContain('Kovo storage refused an unbounded byte stream.');
+    expect(namespaceBundle.source).not.toContain('createS3CompatibleStorage');
+    expect(storageNamespaceBundle.source).toContain(
+      'Kovo storage refused an unbounded byte stream.',
+    );
+    expect(storageNamespaceBundle.source).toContain('createS3CompatibleStorage');
     expect(componentBundle.source.length * 2).toBeLessThan(namespaceBundle.source.length);
 
     expectBootstrapCaptures(
@@ -189,8 +203,13 @@ describe('core package selective side effects (SPEC §6.6)', () => {
         namespaceConsumer,
         'published-namespace',
       );
+      const storageNamespaceBundle = bundleConsumer(
+        publishedRoot,
+        storageNamespaceConsumer,
+        'published-storage-namespace',
+      );
       expect(componentBundle.source).toContain('KOVO_USED_COMPONENT_INITIALIZER');
-      expect(componentBundle.source).toContain('structuredClone input exceeds');
+      expect(componentBundle.source).not.toContain('structuredClone input exceeds');
       expect(componentBundle.source).not.toContain(
         'Kovo storage refused an unbounded byte stream.',
       );
@@ -198,8 +217,14 @@ describe('core package selective side effects (SPEC §6.6)', () => {
       expect(componentBundle.source).not.toContain('node:fs');
       expect(componentBundle.source).not.toContain('node:buffer');
       expect(namespaceBundle.source).not.toContain('node:buffer');
-      expect(namespaceBundle.source).toContain('Kovo storage refused an unbounded byte stream.');
-      expect(namespaceBundle.source).toContain('createS3CompatibleStorage');
+      expect(namespaceBundle.source).not.toContain(
+        'Kovo storage refused an unbounded byte stream.',
+      );
+      expect(namespaceBundle.source).not.toContain('createS3CompatibleStorage');
+      expect(storageNamespaceBundle.source).toContain(
+        'Kovo storage refused an unbounded byte stream.',
+      );
+      expect(storageNamespaceBundle.source).toContain('createS3CompatibleStorage');
       expect(componentBundle.source.length * 2).toBeLessThan(namespaceBundle.source.length);
 
       expectBootstrapCaptures(
@@ -291,6 +316,8 @@ function buildPublishedCorePackage(): string {
       [
         'pack',
         'src/index.ts',
+        'src/security.ts',
+        'src/storage-public.ts',
         'src/internal/wire-json.ts',
         'src/internal/storage.ts',
         'src/internal/client-module-url.ts',
@@ -317,6 +344,8 @@ function buildPublishedCorePackage(): string {
         {
           exports: {
             '.': './dist/index.mjs',
+            './security': './dist/security.mjs',
+            './storage': './dist/storage-public.mjs',
             './internal/client-module-url': './dist/internal/client-module-url.mjs',
             './internal/filesystem': './dist/internal/filesystem.mjs',
             './internal/render-plan-token': './dist/internal/render-plan-token.mjs',

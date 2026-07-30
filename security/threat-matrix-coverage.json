@@ -281,8 +281,8 @@
     },
     {
       "ids": [
-        "generated-postgres-readonly-db",
         "generated-postgres-request-db-provider",
+        "generated-sqlite-request-db-provider",
         "server-system-db-capability",
         "managed-sql-statement-identity",
         "postgres-role-topology"

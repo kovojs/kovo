@@ -27,16 +27,25 @@ const postgresRuntime = postgresRuntimeApi.createPostgresAppRuntimeDb({
 await postgresRuntime.ready;
 process.env.NODE_ENV = 'production';
 
-const [{ createApp }, { domain }, { mutation }, replayApi, serverPublicApi, webhookApi, { s }] =
-  await Promise.all([
-    import('./app.js?volatile-replay-production'),
-    import('./domain.js?volatile-replay-production'),
-    import('./mutation.js?volatile-replay-production'),
-    import('./replay.js'),
-    import('./index.js?volatile-replay-production'),
-    import('./webhook.js?volatile-replay-production'),
-    import('./schema.js?volatile-replay-production'),
-  ]);
+const [
+  { createApp },
+  { domain },
+  { mutation },
+  principalEpochApi,
+  replayApi,
+  serverPublicApi,
+  webhookApi,
+  { s },
+] = await Promise.all([
+  import('./app.js?volatile-replay-production'),
+  import('./domain.js?volatile-replay-production'),
+  import('./mutation.js?volatile-replay-production'),
+  import('./public-principal-epochs.js?volatile-replay-production'),
+  import('./replay.js'),
+  import('./index.js?volatile-replay-production'),
+  import('./webhook.js?volatile-replay-production'),
+  import('./schema.js?volatile-replay-production'),
+]);
 
 const egressDisabled = {
   enabled: false as const,
@@ -160,7 +169,7 @@ describe('production replay truth posture', () => {
     expect(() =>
       createApp({
         ...common,
-        principalEpochStore: serverPublicApi.createMemoryPrincipalEpochStore(),
+        principalEpochStore: principalEpochApi.createMemoryPrincipalEpochStore(),
       }),
     ).toThrow(/KV436.*principalEpochStore.*Postgres/u);
     expect(() =>

@@ -126,7 +126,6 @@ describe('SPEC §6.6 JSX lexical provenance', () => {
         {
           exportName: 'Badge',
           kind: 'import',
-          members: [],
           specifier: '@kovojs/ui/badge',
         },
       ],
@@ -138,7 +137,6 @@ describe('SPEC §6.6 JSX lexical provenance', () => {
         {
           exportName: 'Button',
           kind: 'import',
-          members: [],
           specifier: '@kovojs/ui/button',
         },
       ],

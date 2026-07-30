@@ -36,9 +36,57 @@ const ALLOWED_INTERNAL_IMPORTS: Record<string, Record<string, string>> = {
     '@kovojs/browser/generated':
       'Engine matrix fixture exercises generated query refetch hooks across browser engines, not app-authored public client APIs.',
   },
+  'tests/integration/fixtures/binding-text-attr/client.ts': {
+    '@kovojs/browser/generated':
+      'Binding fixture executes compiler-generated DOM binding plans through the integration ABI.',
+  },
+  'tests/integration/fixtures/broadcast-channel-sync/client.ts': {
+    '@kovojs/browser/generated':
+      'Broadcast synchronization fixture drives generated query-plan reconciliation across tabs.',
+  },
+  'tests/integration/fixtures/deferred-fragment-styles/client.ts': {
+    '@kovojs/browser/generated':
+      'Deferred-style fixture applies compiler-generated fragment updates and their stylesheet metadata.',
+  },
+  'tests/integration/fixtures/morph-nested-island-state/client.ts': {
+    '@kovojs/browser/generated':
+      'Nested-island fixture exercises the generated morph ABI while preserving browser-owned state.',
+  },
+  'tests/integration/fixtures/multi-instance-query/client.ts': {
+    '@kovojs/browser/generated':
+      'Multi-instance fixture executes compiler-generated keyed query plans through the integration ABI.',
+  },
+  'tests/integration/fixtures/optimistic-rebase/client.ts': {
+    '@kovojs/browser/generated':
+      'Optimistic rebase fixture directly drives generated query-plan reconciliation for an integration proof.',
+  },
+  'tests/integration/fixtures/optimistic-rollback/client.ts': {
+    '@kovojs/browser/generated':
+      'Optimistic rollback fixture directly drives generated query-plan rollback for an integration proof.',
+  },
+  'tests/integration/fixtures/optimistic-success/client.ts': {
+    '@kovojs/browser/generated':
+      'Optimistic success fixture directly drives generated query-plan settlement for an integration proof.',
+  },
   'tests/integration/fixtures/query-refetch/client.ts': {
     '@kovojs/browser/generated':
       'Query refetch fixture exercises generated loader hooks intentionally hidden from the app-facing client entrypoint.',
+  },
+  'tests/integration/fixtures/scale-keyed-list/client.ts': {
+    '@kovojs/browser/generated':
+      'Scale fixture executes generated keyed-list plans to measure integration behavior under load.',
+  },
+  'tests/integration/fixtures/stamp-list-insert-remove/client.ts': {
+    '@kovojs/browser/generated':
+      'List insertion/removal fixture exercises compiler-generated stamp operations through the integration ABI.',
+  },
+  'tests/integration/fixtures/stamp-list-reorder/client.ts': {
+    '@kovojs/browser/generated':
+      'List reorder fixture exercises compiler-generated keyed stamp moves through the integration ABI.',
+  },
+  'tests/integration/fixtures/xss-escaping/client.ts': {
+    '@kovojs/browser/generated':
+      'XSS fixture adversarially executes generated binding plans to prove escaping at the browser sink.',
   },
   'tests/integration/specs/diagnostic-dev-document.spec.ts': {
     '@kovojs/core/internal/diagnostics':

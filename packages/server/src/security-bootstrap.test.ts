@@ -11,7 +11,7 @@ describe('server security bootstrap census', () => {
     const intrinsicModules = readdirSync(sourceDirectory)
       .filter((fileName) => fileName.endsWith('-intrinsics.ts'))
       // Build-only controls are captured by the build/static-export entries; command controls are
-      // captured by preloading the root server barrel before the app graph. Keeping both out of the
+      // captured by the named command profile before its public API. Keeping both out of the
       // neutral bootstrap lets tree shaking omit unsupported node:child_process from Workers.
       .filter(
         (fileName) =>
@@ -30,6 +30,7 @@ describe('server security bootstrap census', () => {
       ['build.ts', "import './security-bootstrap.js';"],
       ['index.ts', "import './security-bootstrap.js';"],
       ['jsx-runtime.ts', "import './security-bootstrap.js';"],
+      ['public-command.ts', "import './security-bootstrap-command.js';"],
       ['testing.ts', "import './security-bootstrap.js';"],
       ['internal/app-shell-vite.ts', "import '../security-bootstrap.js';"],
       ['internal/build.ts', "import '../security-bootstrap.js';"],
