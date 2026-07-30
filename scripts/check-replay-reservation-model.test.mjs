@@ -93,12 +93,14 @@ describe('ReplayReservation bounded-model faithfulness gate (Plan 3 §6)', () =>
     const candidate = inputs();
     candidate.toolchain.tlc.sha256 = 'unpinned';
     candidate.toolchain.java.version = '21';
+    candidate.toolchain.java.ciVersion = '21';
     candidate.ciText = candidate.ciText.replace("KOVO_TLA_OFFLINE: '1'", '');
 
     expect(validateReplayModelContract(candidate).findings).toEqual(
       expect.arrayContaining([
         expect.stringContaining('exact sha256'),
         expect.stringContaining('exact-pinned including its build number'),
+        expect.stringContaining('CI selector'),
         expect.stringContaining('tool download disabled'),
       ]),
     );

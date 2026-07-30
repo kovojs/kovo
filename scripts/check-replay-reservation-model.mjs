@@ -198,6 +198,12 @@ export function validateReplayModelContract(inputs) {
   if (!/^\d+\.\d+\.\d+\+\d+$/u.test(toolchain?.java?.version ?? '')) {
     findings.push('Java runtime must be exact-pinned including its build number');
   }
+  if (
+    !/^\d+\.\d+\.\d+\+\d+\.0\.LTS$/u.test(toolchain?.java?.ciVersion ?? '') ||
+    toolchain.java.ciVersion !== `${toolchain.java.version}.0.LTS`
+  ) {
+    findings.push('Java CI selector must exactly encode the pinned Temurin build');
+  }
   if (!/^actions\/setup-java@[a-f0-9]{40}$/u.test(toolchain?.java?.ciAction ?? '')) {
     findings.push('Java CI action must be pinned to a full commit SHA');
   }
@@ -371,7 +377,7 @@ export function validateReplayModelContract(inputs) {
   if (!ciText.includes(`distribution: ${toolchain?.java?.distribution}`)) {
     findings.push('CI must select the pinned Java distribution');
   }
-  if (!ciText.includes(`java-version: '${toolchain?.java?.version}'`)) {
+  if (!ciText.includes(`java-version: '${toolchain?.java?.ciVersion}'`)) {
     findings.push('CI must select the exact-pinned Java runtime build');
   }
   if (!ciText.includes("KOVO_TLA_OFFLINE: '1'")) {
