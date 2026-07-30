@@ -163,6 +163,21 @@ the same single-assembly completeness checks. Passing the raw standalone declara
 `assemble`, adopting it into two contracts, adopting it twice, or assembling a structural copy MUST
 fail the private runtime ownership check.
 
+Capability-bounded `agent()` and `tool()` declarations remain on
+`@kovojs/server/agent`; their constructors, model callback, mutation capability, and session runner
+MUST NOT move to the ordinary server root. One exact `AgentDefinition` joins an app through
+`app.agent(declaration)`, which returns only a named opaque bridge. Its `session(rawRequest)` method
+is unavailable until `app.assemble()` has validated and closed the app, then inherits that app's
+session provider, managed DB provider, validated env projection, error handler, and trusted
+client-IP policy without asking the author to repeat their types or callbacks. The bridge may expose
+an explicit response-owned `Set-Cookie` sink because an agent invocation has no ambient HTTP
+response; it accepts no alternate provider, DB, env, principal, client-IP, or egress authority.
+Agent adoption is exact-identity and one-owner like advanced endpoint adoption: a copy, cast,
+duplicate adoption, second app, or duplicate package instance fails the private runtime check.
+Adopted agents are not HTTP declaration-inventory members and create no ambient registry; the
+compiler still derives their finite model/tool operation witnesses from the original task-subpath
+declarations under the §6.6 agent mediation contract.
+
 `defineKovo` snapshots provider descriptors and callbacks but MUST NOT invoke a DB, session/auth,
 environment, CSRF, replay, client-module, or other live provider. Provider evaluation and
 environment parsing begin only when `app.assemble({...})` closes the graph (or when an explicitly
