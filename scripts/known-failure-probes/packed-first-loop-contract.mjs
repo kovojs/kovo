@@ -29,17 +29,21 @@ const MODES = new Set([
 const mode = process.argv[2];
 const idArgument = process.argv.indexOf('--id');
 const manifestArgument = process.argv.indexOf('--packed-manifest');
+const evidenceArgument = process.argv.indexOf('--evidence');
 const id = process.argv[idArgument + 1];
 const packedManifest = process.argv[manifestArgument + 1];
+const evidencePath = evidenceArgument === -1 ? null : process.argv[evidenceArgument + 1];
 if (
   !MODES.has(mode) ||
   idArgument === -1 ||
   manifestArgument === -1 ||
   !/^KF-DEVEX-\d{3}$/u.test(id ?? '') ||
-  !packedManifest
+  !packedManifest ||
+  (evidenceArgument !== -1 &&
+    (mode !== 'full-catalog' || typeof evidencePath !== 'string' || !path.isAbsolute(evidencePath)))
 ) {
   process.stderr.write(
-    'Usage: node packed-first-loop-contract.mjs <dev-ready|fresh-check|full-catalog|opaque-boundary|sqlite-login|transactional-build> --id <KF-DEVEX-NNN> --packed-manifest <path>\n',
+    'Usage: node packed-first-loop-contract.mjs <dev-ready|fresh-check|full-catalog|opaque-boundary|sqlite-login|transactional-build> --id <KF-DEVEX-NNN> --packed-manifest <path> [--evidence <absolute-path>]\n',
   );
   process.exit(2);
 }
@@ -59,6 +63,7 @@ try {
             : mode === 'full-catalog'
               ? await fullCatalogObservation(release)
               : await opaqueBoundaryObservation(release);
+  if (evidencePath !== null) writeFullCatalogEvidence(evidencePath, observation);
   const outcome = packedFirstLoopContractOutcome(mode, observation);
   if (outcome === null) {
     throw new Error(
@@ -284,15 +289,18 @@ async function fullCatalogObservation(packedRelease) {
   requireBoundedPhase(build, 'full-catalog build');
   return {
     buildExit: normalizedExit(build),
+    buildDurationMs: build.durationMs,
     buildMemoryExceeded: build.memoryExceeded,
     buildOutput: combinedOutput(build),
     buildPeakRssMiB: build.peakRssMiB,
     checkExit: normalizedExit(check),
+    checkDurationMs: check.durationMs,
     checkMemoryExceeded: check.memoryExceeded,
     checkOutput: combinedOutput(check),
     checkPeakRssMiB: check.peakRssMiB,
     componentCount: copied.length,
     typecheckExit: normalizedExit(typecheck),
+    typecheckDurationMs: typecheck.durationMs,
     typecheckMemoryExceeded: typecheck.memoryExceeded,
     typecheckOutput: combinedOutput(typecheck),
     typecheckPeakRssMiB: typecheck.peakRssMiB,
@@ -554,6 +562,7 @@ function runCommand(executable, args, cwd, env, timeoutMs) {
 }
 
 async function runBoundedCommand(executable, args, cwd, env, timeoutMs, memoryCeilingMiB) {
+  const startedAt = process.hrtime.bigint();
   const child = spawn(executable, args, {
     cwd,
     detached: process.platform !== 'win32',
@@ -613,6 +622,7 @@ async function runBoundedCommand(executable, args, cwd, env, timeoutMs, memoryCe
       child.once('close', (status, signal) => resolve({ signal, status }));
     });
     return {
+      durationMs: Number(process.hrtime.bigint() - startedAt) / 1e6,
       error: null,
       memoryExceeded,
       outputExceeded,
@@ -632,6 +642,46 @@ async function runBoundedCommand(executable, args, cwd, env, timeoutMs, memoryCe
       signalChildTree(child, 'SIGKILL');
     }
   }
+}
+
+function writeFullCatalogEvidence(file, observation) {
+  const phases = ['typecheck', 'check', 'build'].map((name) => ({
+    durationMs: observation[`${name}DurationMs`],
+    exit: observation[`${name}Exit`],
+    memoryExceeded: observation[`${name}MemoryExceeded`],
+    name,
+    peakRssMiB: observation[`${name}PeakRssMiB`],
+  }));
+  if (
+    observation.componentCount !== 44 ||
+    observation.unimported !== true ||
+    phases.some(
+      (phase) =>
+        !Number.isFinite(phase.durationMs) ||
+        phase.durationMs < 0 ||
+        !Number.isFinite(phase.peakRssMiB) ||
+        phase.peakRssMiB < 0 ||
+        !Number.isInteger(phase.exit) ||
+        typeof phase.memoryExceeded !== 'boolean',
+    )
+  ) {
+    throw new TypeError('full-catalog bounded evidence is incomplete');
+  }
+  writeFileSync(
+    file,
+    `${JSON.stringify(
+      {
+        schema: 'kovo-full-catalog-bounded-evidence/v1',
+        componentCount: observation.componentCount,
+        memoryCeilingMiB: 2_048,
+        phases,
+        unimported: observation.unimported,
+      },
+      null,
+      2,
+    )}\n`,
+    { encoding: 'utf8', flag: 'wx', mode: 0o600 },
+  );
 }
 
 function requireBoundedPhase(result, label) {
