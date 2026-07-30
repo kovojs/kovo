@@ -811,6 +811,7 @@ export function renderSource() {
 
   it('projects generated bootstrap deferred application into structured facts', () => {
     const store = {};
+    const inlineLoaderOptions: unknown[] = [];
     const bootstrapRuntime = {
       applyDeferredStreamResponseToRuntime(options: unknown) {
         const { body, root } = options as {
@@ -838,32 +839,45 @@ export function renderSource() {
       installKovoLoader() {
         return { dispose() {}, events: ['click'] };
       },
+      installInlineKovoLoader(_importModule: unknown, options: unknown) {
+        inlineLoaderOptions.push(options);
+      },
     };
 
-    expect(
-      generatedBootstrapDeferredBehaviorFact(
-        [{ kind: 'client', source: '' }],
-        {
-          emitQueryPlanBootstrapModule: () => ({
-            source: `
-import { installKovoLoader, createQueryStore, applyDeferredStreamResponseToRuntime } from '@kovojs/browser/generated';
+    const fact = generatedBootstrapDeferredBehaviorFact(
+      [{ kind: 'client', source: '' }],
+      {
+        emitQueryPlanBootstrapModule: () => ({
+          source: `
+import { installInlineKovoLoader, installKovoLoader, createQueryStore, applyDeferredStreamResponseToRuntime } from '@kovojs/browser/generated';
 import { CartBadge$queryUpdatePlans } from '../components/cart-badge.client.js';
-const queryStore = createQueryStore();
-installKovoLoader({ queryStore, enhancedMutations: { queryPlans: CartBadge$queryUpdatePlans, store: queryStore } });
+let loader;
+let queryStore;
+export function installKovoDeferredRuntime() {
+  if (loader !== undefined) return loader;
+  const nextStore = createQueryStore();
+  const nextLoader = installKovoLoader({ queryStore: nextStore, enhancedMutations: { queryPlans: CartBadge$queryUpdatePlans, store: nextStore } });
+  installInlineKovoLoader((specifier) => Promise.resolve(specifier), { enhancedMutations: false });
+  queryStore = nextStore;
+  loader = nextLoader;
+  return loader;
+}
 export function applyKovoDeferredStreamResponse(body, options) {
+  installKovoDeferredRuntime();
   return applyDeferredStreamResponseToRuntime({ body, root: options.root });
 }
 `,
-          }),
-          executeBootstrapModule: executeGeneratedBootstrapModule,
-          executeClientArtifact: () => ({
-            CartBadge$queryUpdatePlans: { cart: () => ({ bindings: ['cart.count'] }) },
-          }),
-          runtime: {},
-        },
-        bootstrapRuntime as never,
-      ),
-    ).toEqual({
+        }),
+        executeBootstrapModule: executeGeneratedBootstrapModule,
+        executeClientArtifact: () => ({
+          CartBadge$queryUpdatePlans: { cart: () => ({ bindings: ['cart.count'] }) },
+        }),
+        runtime: {},
+      },
+      bootstrapRuntime as never,
+    );
+
+    expect(fact).toEqual({
       appliedFragments: ['cart-badge'],
       bootstrapCallCount: 1,
       deferredApplicationCount: 0,
@@ -874,6 +888,10 @@ export function applyKovoDeferredStreamResponse(body, options) {
       queryPlanStoreMatches: true,
       updatedBindings: { 'cart.count': '9' },
     });
+    expect(inlineLoaderOptions).toEqual([
+      { enhancedMutations: false },
+      { enhancedMutations: false },
+    ]);
   });
 
   it('projects server deferred stream application into structured facts', () => {
@@ -1050,9 +1068,16 @@ export function applyKovoDeferredStreamResponse(body, options) {
       applyDeferredStreamResponseToRuntime(options: unknown) {
         return { applied: options };
       },
+      createBrowserKovoRoot(options: { documentRoot: unknown }) {
+        return options.documentRoot;
+      },
       createQueryStore() {
         return { kind: 'store' };
       },
+      defaultEnhancedFetch() {
+        return { ok: true };
+      },
+      installInlineKovoLoader() {},
       installKovoLoader(options: unknown) {
         return { installed: options };
       },

@@ -28,8 +28,13 @@ import {
   queryShapesFromFacts,
 } from '../dist/compiler/src/internal.mjs';
 import { diagnosticDefinitions } from '../dist/core/src/internal/diagnostics.mjs';
-import { createQueryStore, installKovoLoader } from '../dist/browser/src/generated.mjs';
-import { derive } from '../dist/browser/src/index.mjs';
+import {
+  createBrowserKovoRoot,
+  createQueryStore,
+  defaultEnhancedFetch,
+  derive,
+  installKovoLoader,
+} from '../dist/browser/src/generated.mjs';
 import {
   applyDeferredStreamResponseToRuntime,
   kovoEscapeHtml,
@@ -46,7 +51,7 @@ import {
   submitOptimisticEnhancedMutation,
 } from '../dist/browser/src/internal/mutation.mjs';
 import { readElementParams } from '../dist/browser/src/internal/delegation.mjs';
-import { createKovoTestHarness } from '../dist/test/src/harness.mjs';
+import { createLegacyKovoTestHarness } from '../dist/test/src/legacy-harness.mjs';
 import { createDbVerifier } from '../dist/test/src/verifier.mjs';
 import {
   browserSuiteAcceptanceProjectFact,
@@ -229,7 +234,9 @@ const runBootstrappedExportStaticBehaviorFact = async (options) => {
 const generatedModuleRuntime = {
   applyCompiledQueryUpdatePlan,
   applyDeferredStreamResponseToRuntime,
+  createBrowserKovoRoot,
   createQueryStore,
+  defaultEnhancedFetch,
   derive,
   DomMorphTarget,
   handler: (callback) => (event, ctx) => callback(event, ctx),
@@ -261,6 +268,7 @@ const delegatedLifecycleEvents = [...defaultDelegatedEvents, 'pointerover', 'poi
 
 const generatedBootstrapRuntime = {
   ...generatedModuleRuntime,
+  installInlineKovoLoader() {},
   installKovoLoader() {
     return { dispose() {}, events: [], islandSignalScope: {} };
   },
@@ -717,6 +725,11 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
       fragments: ['cart-badge/cart-badge'],
       name: 'cart-badge/cart-badge',
       queries: ['cart', 'cartQuery'],
+      source: nullPrototypeRecord({
+        end: 172,
+        file: 'cart-badge.tsx',
+        start: 14,
+      }),
     }),
   ]);
   assert.deepEqual(
@@ -746,6 +759,10 @@ void test('P10 starter template stays wired to the current app-shell contract', 
     new URL('../packages/create-kovo/templates/src/app.tsx', import.meta.url),
     'utf8',
   );
+  const kovoSource = await readFile(
+    new URL('../packages/create-kovo/templates/src/kovo.ts', import.meta.url),
+    'utf8',
+  );
   const stylesSource = await readFile(
     new URL('../packages/create-kovo/templates/src/styles.css', import.meta.url),
     'utf8',
@@ -762,9 +779,6 @@ void test('P10 starter template stays wired to the current app-shell contract', 
     'build:prod',
     'check',
     'check:endpoint-posture',
-    'check:lifecycle-policy',
-    'check:sound-subset',
-    'check:source',
     'dev',
     'serve',
     'start',
@@ -780,13 +794,13 @@ void test('P10 starter template stays wired to the current app-shell contract', 
     '@kovojs/style',
     '@kovojs/ui',
     '@node-rs/argon2',
-    'better-auth',
     'drizzle-orm',
     'pg',
     'pgsql-ast-parser',
   ]);
   assert.deepEqual(Object.keys(packageJson.devDependencies).sort(), [
     '@kovojs/cli',
+    '@kovojs/test',
     '@types/node',
     '@typescript/native-preview',
     'typescript',
@@ -796,7 +810,7 @@ void test('P10 starter template stays wired to the current app-shell contract', 
   ]);
   assert.match(viteConfigSource, /kovo\(\{ app: '\/src\/app\.tsx' \}\)/);
   assert.doesNotMatch(viteConfigSource, /\brun\s*:/);
-  assert.match(appSource, /createMemoryVersionedClientModuleRegistry/);
+  assert.match(kovoSource, /createMemoryVersionedClientModuleRegistry/);
   // SPEC.md §6.6 keeps request-handler construction in the framework-owned runner.
   assert.doesNotMatch(appSource, /createRequestHandler/);
   assert.match(appSource, /route\('\/login'/);
@@ -813,7 +827,7 @@ void test('P10 starter template stays wired to the current app-shell contract', 
 void test('P9 verification layer evidence remains represented', async () => {
   const verificationLayerFact = await verificationLayerBehaviorFact({
     createDbVerifier,
-    createKovoTestHarness,
+    createLegacyKovoTestHarness,
     csrfField,
     csrfToken,
     diagnosticDefinitions,

@@ -341,6 +341,7 @@ export default defineConfig({
   pack: {
     entry: [
       'packages/*/src/index.ts',
+      'packages/cli/src/commands/build-static-trust-worker.ts',
       'packages/compiler/src/internal.ts',
       'packages/compiler/src/vite-config.ts',
       'packages/core/src/diagnostics-public.ts',
@@ -390,7 +391,9 @@ export default defineConfig({
       'packages/browser/src/internal/morph.ts',
       'packages/browser/src/internal/mutation.ts',
       'packages/server/src/runtime-bootstrap.ts',
+      'packages/server/src/public-client-modules.ts',
       'packages/server/src/public-custom-adapters.ts',
+      'packages/server/src/public-node.ts',
       'packages/server/src/public-routing.ts',
       'packages/server/src/public-security.ts',
       'packages/server/src/sqlite.ts',
@@ -405,6 +408,7 @@ export default defineConfig({
       'packages/server/src/jsx-runtime.ts',
       'packages/server/src/public-static-export.ts',
       'packages/test/src/harness.ts',
+      'packages/test/src/legacy-harness.ts',
       'packages/test/src/verifier.ts',
     ],
     dts: true,

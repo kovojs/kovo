@@ -4,13 +4,12 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { Worker } from 'node:worker_threads';
 
-const {
-  createApp,
-  createMemoryVersionedClientModuleRegistry,
-  createRequestHandler,
-  endpoint,
-  toNodeHandler,
-} = await import('../dist/server/src/index.mjs');
+const { endpoint } = await import('../dist/server/src/index.mjs');
+const { createApp } = await import('../dist/server/src/internal/fixture-app.mjs');
+const { createMemoryVersionedClientModuleRegistry } =
+  await import('../dist/server/src/public-client-modules.mjs');
+const { createRequestHandler } = await import('../dist/server/src/public-custom-adapters.mjs');
+const { toNodeHandler } = await import('../dist/server/src/public-node.mjs');
 const { renderPageHints } = await import('../dist/server/src/internal/html.mjs');
 const {
   createInlineKovoLoaderSource,

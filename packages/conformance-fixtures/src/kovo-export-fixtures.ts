@@ -101,7 +101,6 @@ export interface KovoExportStaticBehaviorOptions {
   lintDiagnostic: KovoExportStaticDiagnosticLike;
   markerAttribute?: string;
   runCliCommand: (args: string[]) => Promise<KovoExportCliResultLike>;
-  serverModuleUrl: string;
   serverRoute: (path: string, options: { page: () => string }) => unknown;
 }
 
@@ -183,7 +182,6 @@ export async function kovoExportStaticBehaviorFact({
   lintDiagnostic,
   markerAttribute = 'data-kovo-check-export',
   runCliCommand,
-  serverModuleUrl,
   serverRoute,
 }: KovoExportStaticBehaviorOptions): Promise<KovoExportStaticBehaviorFact> {
   const apiOutDir = await mkdtemp(join(tmpdir(), `${fixturePrefix}api-`));
@@ -235,24 +233,21 @@ export async function kovoExportStaticBehaviorFact({
       const cliGreenOutDir = join(cliFixtureRoot, 'green-out');
       // Exercise the ordinary app path: TypeScript entries are loaded through Kovo's Vite SSR
       // security profile, which owns workspace package resolution and source-to-source ESM mapping.
-      const cliRedModule = join(cliFixtureRoot, 'red-app.ts');
-      const cliGreenModule = join(cliFixtureRoot, 'green-app.ts');
+      const cliRedModule = join(cliFixtureRoot, 'red-app.tsx');
+      const cliGreenModule = join(cliFixtureRoot, 'green-app.tsx');
       const cliAppModuleSource = (diagnostics: KovoExportStaticDiagnosticLike[]) => `
-import { route as serverRoute } from ${JSON.stringify(serverModuleUrl)};
-import { createApp } from ${JSON.stringify(appCoreModuleUrl)};
+/** @jsxImportSource @kovojs/server */
+import { defineKovo } from ${JSON.stringify(appCoreModuleUrl)};
 
 export const diagnostics = ${JSON.stringify(diagnostics, null, 2)};
 
-export default createApp({
-  egress: { allowInternal: [] },
-  renderRoute: (value) => String(value ?? ''),
-  routes: [
-    serverRoute('/', {
-      access: { kind: 'public', reason: 'D10 static export conformance fixture' },
-      page: () => '<main ${markerAttribute}="${cliMarker}"></main>',
-    }),
-  ],
+const app = defineKovo({ appId: 'd10d10d1-0000-4000-8000-000000000001' });
+const homeRoute = app.route('/', {
+  access: app.publicAccess('D10 static export conformance fixture'),
+  page: () => <main ${markerAttribute}="${cliMarker}"></main>,
 });
+
+export default app.assemble({ routes: [homeRoute] });
 `;
 
       await writeFile(cliRedModule, cliAppModuleSource([errorDiagnostic]), 'utf8');

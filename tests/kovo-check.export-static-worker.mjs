@@ -73,7 +73,6 @@ const result = await kovoExportStaticBehaviorFact({
   exportStaticApp,
   fixturePrefix: 'kovo-d10-kovo-export-',
   runCliCommand,
-  serverModuleUrl: '@kovojs/server',
   serverRoute,
   lintDiagnostic: registeredDiagnostic(options.lintDiagnostic),
 });

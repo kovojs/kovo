@@ -327,6 +327,10 @@ export interface GeneratedRuntimeModule {
   defaultEnhancedFetch?: (url: string, options: Record<string, unknown>) => unknown;
   derive?: unknown;
   handler?: unknown;
+  installInlineKovoLoader?: (
+    importModule: (specifier: string) => Promise<unknown>,
+    options?: { enhancedMutations?: boolean },
+  ) => unknown;
   installKovoLoader?: (options: unknown) => unknown;
   runQueryUpdatePlan?: unknown;
   [name: string]: unknown;
@@ -655,6 +659,7 @@ const rewriteGeneratedRuntimeImports = (
           imported === 'derive' ||
           imported === 'DomMorphTarget' ||
           imported === 'handler' ||
+          imported === 'installInlineKovoLoader' ||
           imported === 'installKovoLoader' ||
           imported === 'kovoEscapeHtml' ||
           imported === 'securityHandler' ||
@@ -1145,6 +1150,7 @@ export function generatedBootstrapDeferredBehaviorFact(
       | 'createBrowserKovoRoot'
       | 'createQueryStore'
       | 'defaultEnhancedFetch'
+      | 'installInlineKovoLoader'
       | 'installKovoLoader'
     >
   >,
@@ -1170,6 +1176,9 @@ export function generatedBootstrapDeferredBehaviorFact(
     },
     bootstrapRuntime,
   );
+  const installDeferredRuntime = installed.exports.installKovoDeferredRuntime as () => unknown;
+  installDeferredRuntime();
+  installDeferredRuntime();
   const installCall = installed.calls[0] as {
     enhancedMutations?: { queryPlans?: Record<string, unknown>; store?: unknown };
     queryStore?: unknown;
@@ -1413,7 +1422,12 @@ export function executeGeneratedBootstrapModule(
   runtime: Required<
     Pick<
       GeneratedRuntimeModule,
-      'applyDeferredStreamResponseToRuntime' | 'createQueryStore' | 'installKovoLoader'
+      | 'applyDeferredStreamResponseToRuntime'
+      | 'createBrowserKovoRoot'
+      | 'createQueryStore'
+      | 'defaultEnhancedFetch'
+      | 'installInlineKovoLoader'
+      | 'installKovoLoader'
     >
   >,
 ): ExecuteGeneratedBootstrapModuleResult {
@@ -1442,7 +1456,7 @@ export function executeGeneratedBootstrapModule(
         return `const { ${bindings} } = planModules[${JSON.stringify(importPath)}];\n`;
       },
     )
-    .replace(/export function ([A-Za-z_$][\w$]*)/g, 'exports.$1 = function $1');
+    .replace(/export function ([A-Za-z_$][\w$]*)/g, 'const $1 = exports.$1 = function $1');
 
   runInNewContext(moduleSource, {
     document: documentRoot,

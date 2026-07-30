@@ -187,7 +187,6 @@ describe('@kovojs/test kovo export fixture seam', () => {
         fixturePrefix: 'kovo-kovo-export-test-',
         lintDiagnostic,
         runCliCommand,
-        serverModuleUrl: 'file:///tmp/server.mjs',
         serverRoute,
       }),
     ).resolves.toEqual({

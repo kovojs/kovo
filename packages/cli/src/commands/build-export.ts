@@ -1831,9 +1831,22 @@ async function runPreEvaluationStaticTrustPreflightInWorker(
 ): Promise<PreEvaluationStaticTrust> {
   const currentModulePath = fileURLToPath(import.meta.url);
   const sourceMode = buildStringEndsWith(currentModulePath, '.ts');
+  const packagedWorkerPath = resolve(
+    dirname(currentModulePath),
+    'commands/build-static-trust-worker.mjs',
+  );
+  // Package builds place the worker at dist/commands beside shared chunks. The repository root
+  // acceptance bundle preserves entry source paths under dist/cli/src while sharing chunks at
+  // dist/. Resolve that finite, framework-owned layout without falling back to authored paths.
+  const rootAcceptanceWorkerPath = resolve(
+    dirname(currentModulePath),
+    'cli/src/commands/build-static-trust-worker.mjs',
+  );
   const workerPath = sourceMode
     ? resolve(dirname(currentModulePath), 'build-static-trust-worker.ts')
-    : resolve(dirname(currentModulePath), 'commands/build-static-trust-worker.mjs');
+    : existsSync(packagedWorkerPath)
+      ? packagedWorkerPath
+      : rootAcceptanceWorkerPath;
   const request = stringifyBuildValue({ appModulePath, paranoidStaticAdvisory, root });
   let stdout: string;
   try {

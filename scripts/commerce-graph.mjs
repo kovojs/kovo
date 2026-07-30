@@ -89,20 +89,20 @@ const commerceGraph = {
         {
           domain: 'cart',
           keys: null,
-          site: 'examples/commerce/src/domain.ts:109',
+          site: 'examples/commerce/src/domain.ts:140',
           via: 'cart_items',
         },
         {
           domain: 'order',
           keys: null,
-          site: 'examples/commerce/src/domain.ts:114',
+          site: 'examples/commerce/src/domain.ts:145',
           via: 'orders',
         },
         {
           domain: 'product',
           keys: 'arg:productId',
           predicate: 'eq',
-          site: 'examples/commerce/src/domain.ts:125',
+          site: 'examples/commerce/src/domain.ts:156',
           via: 'products',
         },
       ],

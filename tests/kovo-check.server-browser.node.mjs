@@ -29,11 +29,12 @@ import {
 } from '../dist/compiler/src/internal.mjs';
 import { diagnosticDefinitions } from '../dist/core/src/internal/diagnostics.mjs';
 import {
+  createBrowserKovoRoot,
   createQueryStore,
   defaultEnhancedFetch,
+  derive,
   installKovoLoader,
 } from '../dist/browser/src/generated.mjs';
-import { derive } from '../dist/browser/src/index.mjs';
 import {
   applyDeferredStreamResponseToRuntime,
   kovoEscapeHtml,
@@ -221,6 +222,7 @@ const runCliCommand = (args) => runCapturedCliCommand(mainAsync, args);
 const generatedModuleRuntime = {
   applyCompiledQueryUpdatePlan,
   applyDeferredStreamResponseToRuntime,
+  createBrowserKovoRoot,
   createQueryStore,
   defaultEnhancedFetch,
   derive,
@@ -257,6 +259,7 @@ const delegatedLifecycleEvents = [...defaultDelegatedEvents, 'pointerover', 'poi
 
 const generatedBootstrapRuntime = {
   ...generatedModuleRuntime,
+  installInlineKovoLoader() {},
   installKovoLoader() {
     return { dispose() {}, events: [], islandSignalScope: {} };
   },
@@ -513,6 +516,11 @@ export const CartRow = component({
       fragments: ['cart-row/cart-row'],
       name: 'cart-row/cart-row',
       queries: ['cart'],
+      source: nullPrototypeRecord({
+        end: 155,
+        file: 'cart-row.tsx',
+        start: 14,
+      }),
     }),
   ]);
   await assertGeneratedRegistryConsumerTypes(

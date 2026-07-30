@@ -249,19 +249,21 @@ describe('server build-time deployment API', () => {
       // Materialize minimal published-package-shaped siblings beside this packed entry so the
       // generated runtimes exercise real Node package resolution instead of Vitest's TS loader.
       const workspaceSpecifiers = new Map<string, Set<string>>();
-      const workspaceImportPattern =
-        /from\s+["'](@kovojs\/(core|browser|drizzle|style)(?:\/[^"']+)?)['"]/gu;
-      for (const source of packedSources) {
-        for (const match of source.matchAll(workspaceImportPattern)) {
-          const specifier = match[1];
-          const packageDirectory = match[2];
-          if (specifier === undefined || packageDirectory === undefined) continue;
-          const packageName = `@kovojs/${packageDirectory}`;
-          const specifiers = workspaceSpecifiers.get(packageName) ?? new Set<string>();
-          specifiers.add(specifier);
-          workspaceSpecifiers.set(packageName, specifiers);
+      const workspaceImportPattern = /from\s+["'](@kovojs\/([^/"']+)(?:\/[^"']+)?)['"]/gu;
+      const recordWorkspaceSpecifiers = (sources: readonly string[]) => {
+        for (const source of sources) {
+          for (const match of source.matchAll(workspaceImportPattern)) {
+            const specifier = match[1];
+            const packageDirectory = match[2];
+            if (specifier === undefined || packageDirectory === undefined) continue;
+            const packageName = `@kovojs/${packageDirectory}`;
+            const specifiers = workspaceSpecifiers.get(packageName) ?? new Set<string>();
+            specifiers.add(specifier);
+            workspaceSpecifiers.set(packageName, specifiers);
+          }
         }
-      }
+      };
+      recordWorkspaceSpecifiers(packedSources);
       for (const packageName of workspaceSpecifiers.keys()) {
         const packageDirectory = packageName.slice('@kovojs/'.length);
         const workspacePackageRoot = fileURLToPath(
@@ -307,6 +309,16 @@ describe('server build-time deployment API', () => {
             name: packageName,
             type: 'module',
           })}\n`,
+        );
+        const packedPackageFiles = (
+          await readdir(join(packedPackageRoot, 'dist'), { recursive: true })
+        ).filter((file) => file.endsWith('.mjs'));
+        recordWorkspaceSpecifiers(
+          await Promise.all(
+            packedPackageFiles.map((file) =>
+              readFile(join(packedPackageRoot, 'dist', file), 'utf8'),
+            ),
+          ),
         );
       }
       const materialScope = join(packedOut, 'node_modules/@material');
