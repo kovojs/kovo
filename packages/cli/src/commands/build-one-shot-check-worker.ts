@@ -11,6 +11,10 @@ import { parseCheckArgs } from '../graph-args.js';
 import { captureKovoCommandSecurityDisposition } from './security-disposition.js';
 import { writeFormattedCommandResult, writeUsageError } from '../shared.js';
 
+const collectGarbage = globalThis.gc;
+if (typeof collectGarbage !== 'function') {
+  throw new TypeError('Kovo isolated source analysis requires an exposed garbage collector.');
+}
 const security = captureKovoCommandSecurityDisposition();
 lockCompilerSecurityRealm();
 const parsed = parseCheckArgs(process.argv.slice(2));
@@ -26,6 +30,7 @@ if (!parsed.ok || !('source' in parsed)) {
   if ('exitCode' in outcome) {
     exitCode = writeFormattedCommandResult(outcome, parsed.format, 'proof', 'check');
   } else {
+    collectGarbage();
     const identity = kovoSourceCheckOneShotIdentity(options, outcome, security);
     const wire = encodeKovoBuildOneShotHandoff({
       analysis: outcome,

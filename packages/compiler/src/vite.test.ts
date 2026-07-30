@@ -20,7 +20,11 @@ import {
 import { computeRenderPlanFingerprint } from '@kovojs/core/internal/render-plan-token';
 import { describe, expect, it, vi } from 'vitest';
 
-import { compilerOwnedViteClientModuleRole } from './internal.js';
+import {
+  claimCompilerClientModuleHandoffInstaller,
+  compilerOwnedViteClientModuleRole,
+  compilerViteClientModuleRoleProtocol,
+} from './internal.js';
 import type { KovoViteMiddleware } from './internal.js';
 import { kovoVitePlugin } from './index.js';
 import { lowerStandaloneSourceDerivedRegistryDeclarations } from './source-derived-lowering.js';
@@ -669,6 +673,30 @@ export const orderPaid = webhook('/webhooks/order-paid', {
         (module) => compilerOwnedViteClientModuleRole(module) === undefined,
       ),
     ).toBe(true);
+  });
+
+  it('re-mints authenticated handoff records only through one claimed role capability', () => {
+    const installer = claimCompilerClientModuleHandoffInstaller(
+      compilerViteClientModuleRoleProtocol,
+    );
+    const adopted = installer.adoptComponentClient({
+      path: '/c/generated/component.client.js',
+      renderPlanFingerprint: 'a'.repeat(64),
+      source: 'export const component = true;\n',
+    });
+    expect(compilerOwnedViteClientModuleRole(adopted)).toBe('component-client');
+    expect(compilerOwnedViteClientModuleRole({ ...adopted })).toBeUndefined();
+    installer.seal();
+    expect(() =>
+      installer.adoptComponentClient({
+        path: '/c/generated/late.client.js',
+        renderPlanFingerprint: 'b'.repeat(64),
+        source: 'export const late = true;\n',
+      }),
+    ).toThrow(/already sealed/u);
+    expect(() =>
+      claimCompilerClientModuleHandoffInstaller(compilerViteClientModuleRoleProtocol),
+    ).toThrow(/already claimed/u);
   });
 
   it('binds exact client-module role proofs to the genuine plugin that minted the record', async () => {

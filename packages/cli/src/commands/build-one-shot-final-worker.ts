@@ -1,6 +1,11 @@
+import {
+  claimCompilerClientModuleHandoffInstaller,
+  compilerViteClientModuleRoleProtocol,
+} from '@kovojs/compiler/internal';
 import { lockCompilerSecurityRealm } from '@kovojs/compiler/internal/security-bootstrap';
 
 import {
+  adoptKovoBuildOneShotServerPhaseCompilerModules,
   finishKovoBuildOneShot,
   parseBuildArgs,
   requireKovoBuildOneShotPhasePayload,
@@ -13,6 +18,9 @@ import {
 import { captureKovoCommandSecurityDisposition } from './security-disposition.js';
 import { writeFormattedCommandResult, writeUsageError } from '../shared.js';
 
+const compilerClientModuleInstaller = claimCompilerClientModuleHandoffInstaller(
+  compilerViteClientModuleRoleProtocol,
+);
 const identityText = process.argv[2];
 const parsed = parseBuildArgs(process.argv.slice(3));
 const security = captureKovoCommandSecurityDisposition();
@@ -28,12 +36,16 @@ if (identityText === undefined || !parsed.ok) {
     const identity = parseKovoBuildOneShotIdentity(identityText);
     const payload = readKovoBuildOneShotHandoff(readKovoBuildOneShotWireFromFd(3), identity);
     const phase = requireKovoBuildOneShotPhasePayload(payload.analysis, 'server');
+    const serverPhase = adoptKovoBuildOneShotServerPhaseCompilerModules(
+      phase.serverPhase,
+      compilerClientModuleInstaller,
+    );
     exitCode = writeFormattedCommandResult(
       await finishKovoBuildOneShot(
         parsed.options,
         phase.analysis,
         phase.clientPhase,
-        phase.serverPhase,
+        serverPhase,
         identity,
         security,
       ),

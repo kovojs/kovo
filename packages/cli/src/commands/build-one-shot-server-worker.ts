@@ -1,9 +1,14 @@
 import { writeFileSync } from 'node:fs';
 
+import {
+  claimCompilerClientModuleHandoffInstaller,
+  compilerViteClientModuleRoleProtocol,
+} from '@kovojs/compiler/internal';
 import { lockCompilerSecurityRealm } from '@kovojs/compiler/internal/security-bootstrap';
 
 import {
   abortKovoBuildOutputTransaction,
+  adoptKovoBuildOneShotClientPhaseCompilerModules,
   parseBuildArgs,
   produceKovoBuildOneShotServerPhase,
   requireKovoBuildOneShotPhasePayload,
@@ -17,6 +22,13 @@ import {
 import { captureKovoCommandSecurityDisposition } from './security-disposition.js';
 import { writeFormattedCommandResult, writeUsageError } from '../shared.js';
 
+const collectGarbage = globalThis.gc;
+if (typeof collectGarbage !== 'function') {
+  throw new TypeError('Kovo isolated server emission requires an exposed garbage collector.');
+}
+const compilerClientModuleInstaller = claimCompilerClientModuleHandoffInstaller(
+  compilerViteClientModuleRoleProtocol,
+);
 const identityText = process.argv[2];
 const parsed = parseBuildArgs(process.argv.slice(3));
 const security = captureKovoCommandSecurityDisposition();
@@ -34,16 +46,21 @@ if (identityText === undefined || !parsed.ok) {
     const identity = parseKovoBuildOneShotIdentity(identityText);
     const payload = readKovoBuildOneShotHandoff(readKovoBuildOneShotWireFromFd(3), identity);
     const phase = requireKovoBuildOneShotPhasePayload(payload.analysis, 'client');
+    const clientPhase = adoptKovoBuildOneShotClientPhaseCompilerModules(
+      phase.clientPhase,
+      compilerClientModuleInstaller,
+    );
     const outcome = await produceKovoBuildOneShotServerPhase(
       parsed.options,
       phase.analysis,
-      phase.clientPhase,
+      clientPhase,
       identity,
       security,
     );
     if ('exitCode' in outcome) {
       exitCode = writeFormattedCommandResult(outcome, parsed.format, 'build', 'build');
     } else {
+      collectGarbage();
       try {
         const wire = encodeKovoBuildOneShotHandoff({
           analysis: {
@@ -58,7 +75,7 @@ if (identityText === undefined || !parsed.ok) {
         writeFileSync(4, wire);
         process.exit(0);
       } catch (error) {
-        abortKovoBuildOutputTransaction({ ...phase.clientPhase.transaction });
+        abortKovoBuildOutputTransaction({ ...clientPhase.transaction });
         throw error;
       }
     }

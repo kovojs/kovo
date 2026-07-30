@@ -11,6 +11,10 @@ import { encodeKovoBuildOneShotHandoff } from './build-one-shot-handoff.js';
 import { captureKovoCommandSecurityDisposition } from './security-disposition.js';
 import { writeFormattedCommandResult, writeUsageError } from '../shared.js';
 
+const collectGarbage = globalThis.gc;
+if (typeof collectGarbage !== 'function') {
+  throw new TypeError('Kovo isolated build analysis requires an exposed garbage collector.');
+}
 const security = captureKovoCommandSecurityDisposition();
 lockCompilerSecurityRealm();
 const parsed = parseBuildArgs(process.argv.slice(2));
@@ -22,6 +26,7 @@ if (!parsed.ok) {
   if ('exitCode' in outcome) {
     exitCode = writeFormattedCommandResult(outcome, parsed.format, 'build', 'build');
   } else {
+    collectGarbage();
     const identity = kovoBuildOneShotIdentity(parsed.options, outcome, security);
     const wire = encodeKovoBuildOneShotHandoff({
       analysis: { analysis: outcome },

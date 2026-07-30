@@ -28,9 +28,11 @@ export type { BrowserPostureSourceFile } from './browser-posture-project.js';
 export { factHash } from './fact-hash.js';
 export {
   bindFrameworkKovoViteDevGenerationStage,
+  claimCompilerClientModuleHandoffInstaller,
   compilerOwnedViteClientModuleRole,
   compilerViteClientModuleRoleProtocol,
   compilerViteClientModuleRoleVocabulary,
+  type CompilerClientModuleHandoffInstaller,
   type CompilerOwnedViteClientModuleRole,
 } from './vite.js';
 export {

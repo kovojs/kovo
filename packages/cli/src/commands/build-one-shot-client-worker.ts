@@ -17,6 +17,10 @@ import {
 import { captureKovoCommandSecurityDisposition } from './security-disposition.js';
 import { writeFormattedCommandResult, writeUsageError } from '../shared.js';
 
+const collectGarbage = globalThis.gc;
+if (typeof collectGarbage !== 'function') {
+  throw new TypeError('Kovo isolated client emission requires an exposed garbage collector.');
+}
 const identityText = process.argv[2];
 const parsed = parseBuildArgs(process.argv.slice(3));
 const security = captureKovoCommandSecurityDisposition();
@@ -43,6 +47,7 @@ if (identityText === undefined || !parsed.ok) {
     if ('exitCode' in outcome) {
       exitCode = writeFormattedCommandResult(outcome, parsed.format, 'build', 'build');
     } else {
+      collectGarbage();
       await writePhaseHandoff(identity, phase.analysis, outcome);
     }
   } catch (error) {

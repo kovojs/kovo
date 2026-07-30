@@ -30,7 +30,6 @@ const capturedObjectGetOwnPropertyDescriptors = Object.getOwnPropertyDescriptors
 const capturedObjectGetPrototypeOf = Object.getPrototypeOf;
 const capturedObjectKeys = Object.keys;
 const capturedObjectPrototype = Object.prototype;
-const capturedObjectSetPrototypeOf = Object.setPrototypeOf;
 const capturedReflectApply = Reflect.apply;
 const capturedReflectOwnKeys = Reflect.ownKeys;
 const capturedRegExpTest = RegExp.prototype.test;
@@ -99,7 +98,10 @@ export function readKovoBuildOneShotHandoff(
   expectedIdentity: KovoBuildOneShotIdentity,
 ): KovoBuildOneShotPayload {
   const parsed = parseWire(wire);
-  if (capturedJSONStringify(parsed.header.identity) !== capturedJSONStringify(expectedIdentity)) {
+  if (
+    !validIdentity(expectedIdentity) ||
+    !identitiesEqual(parsed.header.identity, expectedIdentity)
+  ) {
     throw new NativeTypeError(
       'Kovo build handoff identity is stale or belongs to another invocation.',
     );
@@ -116,7 +118,7 @@ export function readKovoBuildOneShotHandoff(
   if (
     payload.schema !== 'kovo-build-one-shot-analysis/v1' ||
     !validIdentity(payload.identity) ||
-    capturedJSONStringify(payload.identity) !== capturedJSONStringify(expectedIdentity)
+    !identitiesEqual(payload.identity, expectedIdentity)
   ) {
     throw new NativeTypeError(
       'Kovo build handoff identity is stale or belongs to another invocation.',
@@ -141,7 +143,10 @@ export function readKovoBuildOneShotWireFromFd(fd: number): Buffer {
 }
 
 export function kovoBuildOneShotDigest(value: unknown): string {
-  return sha256(capturedBufferFrom(strictJsonStringify(value, 'digest input'), 'utf8'));
+  assertStrictJsonData(value, 'digest input', 0);
+  const digest = createHash('sha256');
+  updateJsonDigest(digest, value);
+  return `sha256:${capturedReflectApply(capturedHashDigest, digest, ['hex']) as string}`;
 }
 
 /** Parse the small parent-authored identity argument without allowing a structural cast as proof. */
@@ -222,7 +227,58 @@ function parseWire(wireInput: Uint8Array): {
 }
 
 function strictJsonStringify(value: unknown, label: string): string {
-  return capturedJSONStringify(immutableJsonData(value, 0, label, false, true));
+  assertStrictJsonData(value, label, 0);
+  return stringifyValidatedJsonData(value);
+}
+
+function stringifyValidatedJsonData(value: unknown): string {
+  if (value === null || typeof value !== 'object') return capturedJSONStringify(value);
+  if (capturedArrayIsArray(value)) {
+    let output = '[';
+    const descriptors = capturedObjectGetOwnPropertyDescriptors(value);
+    for (let index = 0; index < value.length; index += 1) {
+      if (index > 0) output += ',';
+      output += stringifyValidatedJsonData(descriptors[String(index)]!.value);
+    }
+    return `${output}]`;
+  }
+  let output = '{';
+  const descriptors = capturedObjectGetOwnPropertyDescriptors(value);
+  const keys = capturedObjectKeys(value);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    if (index > 0) output += ',';
+    output += `${capturedJSONStringify(key)}:${stringifyValidatedJsonData(
+      descriptors[key]!.value,
+    )}`;
+  }
+  return `${output}}`;
+}
+
+function updateJsonDigest(digest: ReturnType<typeof createHash>, value: unknown): void {
+  if (value === null || typeof value !== 'object') {
+    capturedReflectApply(capturedHashUpdate, digest, [capturedJSONStringify(value)]);
+    return;
+  }
+  const descriptors = capturedObjectGetOwnPropertyDescriptors(value);
+  if (capturedArrayIsArray(value)) {
+    capturedReflectApply(capturedHashUpdate, digest, ['[']);
+    for (let index = 0; index < value.length; index += 1) {
+      if (index > 0) capturedReflectApply(capturedHashUpdate, digest, [',']);
+      updateJsonDigest(digest, descriptors[String(index)]!.value);
+    }
+    capturedReflectApply(capturedHashUpdate, digest, [']']);
+    return;
+  }
+  capturedReflectApply(capturedHashUpdate, digest, ['{']);
+  const keys = capturedObjectKeys(value);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    if (index > 0) capturedReflectApply(capturedHashUpdate, digest, [',']);
+    capturedReflectApply(capturedHashUpdate, digest, [capturedJSONStringify(key), ':']);
+    updateJsonDigest(digest, descriptors[key]!.value);
+  }
+  capturedReflectApply(capturedHashUpdate, digest, ['}']);
 }
 
 function assertStrictJsonData(value: unknown, label: string, depth: number): void {
@@ -283,27 +339,19 @@ function immutableJsonData(
   depth: number,
   label = 'decoded payload',
   validated = false,
-  nullArrayPrototype = false,
 ): unknown {
   if (!validated) assertStrictJsonData(value, label, depth);
   if (value === null || typeof value !== 'object') return value;
   if (capturedArrayIsArray(value)) {
     const copy: unknown[] = [];
     for (let index = 0; index < value.length; index += 1) {
-      copy[index] = immutableJsonData(value[index], depth + 1, label, true, nullArrayPrototype);
+      copy[index] = immutableJsonData(value[index], depth + 1, label, true);
     }
-    if (nullArrayPrototype) capturedObjectSetPrototypeOf(copy, null);
     return capturedObjectFreeze(copy);
   }
   const copy = capturedObjectCreate(null) as Record<string, unknown>;
   for (const key of capturedObjectKeys(value)) {
-    copy[key] = immutableJsonData(
-      (value as Record<string, unknown>)[key],
-      depth + 1,
-      label,
-      true,
-      nullArrayPrototype,
-    );
+    copy[key] = immutableJsonData((value as Record<string, unknown>)[key], depth + 1, label, true);
   }
   return capturedObjectFreeze(copy);
 }
@@ -333,6 +381,17 @@ function validIdentity(value: unknown): value is KovoBuildOneShotIdentity {
     regExpTest(digestPattern, value.optionsDigest) &&
     typeof value.sourceSetDigest === 'string' &&
     regExpTest(digestPattern, value.sourceSetDigest)
+  );
+}
+
+function identitiesEqual(left: KovoBuildOneShotIdentity, right: KovoBuildOneShotIdentity): boolean {
+  return (
+    left.appModulePath === right.appModulePath &&
+    left.compilerProvenanceDigest === right.compilerProvenanceDigest &&
+    left.configSourceDigest === right.configSourceDigest &&
+    left.invocationRoot === right.invocationRoot &&
+    left.optionsDigest === right.optionsDigest &&
+    left.sourceSetDigest === right.sourceSetDigest
   );
 }
 

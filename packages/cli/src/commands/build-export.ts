@@ -70,6 +70,7 @@ import {
   collectCapabilityPackageRequests,
   compilerOwnedProjectMutationRegistryFactsFromFiles,
   componentTaskBSourceOperationFacts,
+  type CompilerClientModuleHandoffInstaller,
   compilerGeneratedCapabilityDependencies,
   compilerOwnedViteClientModuleRole,
   compilerViteClientModuleRoleProtocol,
@@ -256,6 +257,8 @@ const fileURLToPath = builtinFileURLToPath;
 const pathToFileURL = builtinPathToFileURL;
 const promisify = builtinPromisify;
 const performanceNow = builtinPerformance.now.bind(builtinPerformance);
+const collectBuildGarbage =
+  typeof globalThis.gc === 'function' ? globalThis.gc.bind(globalThis) : undefined;
 const staticTrustWorkerSchema = 'kovo-static-trust-worker/v1';
 const staticTrustWorkerMaxOutputBytes = 256 * 1024 * 1024;
 const staticTrustWorkerTimeoutMs = 120_000;
@@ -636,9 +639,11 @@ export interface KovoBuildOneShotClientPhase {
   readonly appBuildToken: string;
   readonly buildCssAssets: KovoBuildStylesheetAssets;
   readonly clientBuild: KovoClientManifestBuild;
+  readonly clientBuildClientModuleRoles: readonly CompilerOwnedViteClientModuleRole[];
   readonly commonRuntimeRegistry: Partial<RuntimeRegistryWireFacts>;
   readonly completedCheckGraph: CoreGraph.KovoCheckInput;
   readonly discoveredServerClientModules: readonly KovoAppShellCompiledClientModule[];
+  readonly discoveredServerClientModuleRoles: readonly CompilerOwnedViteClientModuleRole[];
   readonly manualClientModules: readonly { readonly path: string; readonly source: string }[];
   readonly nonCompilerClientModules: readonly { readonly path: string; readonly source: string }[];
   readonly selectedPresetName: KovoBuildPresetName;
@@ -648,6 +653,7 @@ export interface KovoBuildOneShotClientPhase {
 
 export interface KovoBuildOneShotServerPhase {
   readonly clientModules: readonly KovoAppShellCompiledClientModule[];
+  readonly clientModuleRoles: readonly CompilerOwnedViteClientModuleRole[];
   readonly serverHandlerSource: string;
 }
 
@@ -1741,9 +1747,17 @@ export async function produceKovoBuildOneShotClientPhase(
       appBuildToken,
       buildCssAssets,
       clientBuild,
+      clientBuildClientModuleRoles: compilerClientModuleRoles(
+        clientBuild.clientModules,
+        'client-build compiler client modules',
+      ),
       commonRuntimeRegistry,
       completedCheckGraph,
       discoveredServerClientModules,
+      discoveredServerClientModuleRoles: compilerClientModuleRoles(
+        discoveredServerClientModules,
+        'discovered server compiler client modules',
+      ),
       manualClientModules: appClientModuleStaging.stable,
       nonCompilerClientModules,
       selectedPresetName: selectedPreset.name,
@@ -1811,7 +1825,14 @@ export async function produceKovoBuildOneShotServerPhase(
         'Kovo final runtime-posture bundle changed the discovered client-module identity.',
       );
     }
-    return { clientModules, serverHandlerSource: serverHandlerBuild.source };
+    return {
+      clientModuleRoles: compilerClientModuleRoles(
+        clientModules,
+        'server-phase compiler client modules',
+      ),
+      clientModules,
+      serverHandlerSource: serverHandlerBuild.source,
+    };
   } catch (error) {
     try {
       abortKovoBuildOutputTransaction({ ...clientPhase.transaction });
@@ -2570,9 +2591,11 @@ function requireKovoBuildOneShotClientPhase(value: unknown): KovoBuildOneShotCli
     'appBuildToken',
     'buildCssAssets',
     'clientBuild',
+    'clientBuildClientModuleRoles',
     'commonRuntimeRegistry',
     'completedCheckGraph',
     'discoveredServerClientModules',
+    'discoveredServerClientModuleRoles',
     'manualClientModules',
     'nonCompilerClientModules',
     'selectedPresetName',
@@ -2590,7 +2613,9 @@ function requireKovoBuildOneShotClientPhase(value: unknown): KovoBuildOneShotCli
     throw new TypeError('Kovo build handoff client phase has invalid scalar fields.');
   }
   for (const key of [
+    'clientBuildClientModuleRoles',
     'discoveredServerClientModules',
+    'discoveredServerClientModuleRoles',
     'manualClientModules',
     'nonCompilerClientModules',
   ]) {
@@ -2598,6 +2623,45 @@ function requireKovoBuildOneShotClientPhase(value: unknown): KovoBuildOneShotCli
       throw new TypeError(`Kovo build handoff client phase has invalid ${key}.`);
     }
   }
+  const clientBuild = buildOwnDataValue(value, 'clientBuild', 'Kovo build handoff client phase');
+  if (!isRecord(clientBuild)) {
+    throw new TypeError('Kovo build handoff client phase has an invalid client build.');
+  }
+  const clientBuildModules = buildOwnDataValue(
+    clientBuild,
+    'clientModules',
+    'Kovo build handoff client build',
+  );
+  if (!buildArrayIsArray(clientBuildModules)) {
+    throw new TypeError('Kovo build handoff client build has invalid client modules.');
+  }
+  const discoveredServerClientModules = buildOwnDataValue(
+    value,
+    'discoveredServerClientModules',
+    'Kovo build handoff client phase',
+  ) as readonly unknown[];
+  validateCompilerClientModuleHandoffRecords(
+    clientBuildModules,
+    'Kovo build handoff client-build modules',
+  );
+  validateCompilerClientModuleHandoffRecords(
+    discoveredServerClientModules,
+    'Kovo build handoff discovered server modules',
+  );
+  requireCompilerClientModuleRoleCensus(
+    buildOwnDataValue(value, 'clientBuildClientModuleRoles', 'Kovo build handoff client phase'),
+    clientBuildModules.length,
+    'Kovo build handoff client-build roles',
+  );
+  requireCompilerClientModuleRoleCensus(
+    buildOwnDataValue(
+      value,
+      'discoveredServerClientModuleRoles',
+      'Kovo build handoff client phase',
+    ),
+    discoveredServerClientModules.length,
+    'Kovo build handoff discovered server roles',
+  );
   const graphErrors = validateKovoExplainInput(
     buildOwnDataValue(value, 'completedCheckGraph', 'Kovo build handoff client phase'),
   );
@@ -2611,17 +2675,85 @@ function requireKovoBuildOneShotClientPhase(value: unknown): KovoBuildOneShotCli
 }
 
 function requireKovoBuildOneShotServerPhase(value: unknown): KovoBuildOneShotServerPhase {
-  requireKovoBuildOneShotExactKeys(value, ['clientModules', 'serverHandlerSource'], 'server phase');
+  requireKovoBuildOneShotExactKeys(
+    value,
+    ['clientModuleRoles', 'clientModules', 'serverHandlerSource'],
+    'server phase',
+  );
+  const clientModules = buildOwnDataValue(
+    value,
+    'clientModules',
+    'Kovo build handoff server phase',
+  );
   if (
-    !buildArrayIsArray(
-      buildOwnDataValue(value, 'clientModules', 'Kovo build handoff server phase'),
-    ) ||
+    !buildArrayIsArray(clientModules) ||
     typeof buildOwnDataValue(value, 'serverHandlerSource', 'Kovo build handoff server phase') !==
       'string'
   ) {
     throw new TypeError('Kovo build handoff server phase is invalid.');
   }
+  validateCompilerClientModuleHandoffRecords(
+    clientModules,
+    'Kovo build handoff server compiler modules',
+  );
+  requireCompilerClientModuleRoleCensus(
+    buildOwnDataValue(value, 'clientModuleRoles', 'Kovo build handoff server phase'),
+    clientModules.length,
+    'Kovo build handoff server compiler roles',
+  );
   return value as KovoBuildOneShotServerPhase;
+}
+
+function validateCompilerClientModuleHandoffRecords(
+  value: readonly unknown[],
+  label: string,
+): void {
+  const modules = buildSnapshotDenseArray(value, label);
+  for (let index = 0; index < modules.length; index += 1) {
+    const module = modules[index];
+    requireKovoBuildOneShotExactKeys(
+      module,
+      ['path', 'renderPlanFingerprint', 'source'],
+      `${label}[${index}]`,
+    );
+    const path = buildOwnDataValue(module, 'path', `${label}[${index}]`);
+    const renderPlanFingerprint = buildOwnDataValue(
+      module,
+      'renderPlanFingerprint',
+      `${label}[${index}]`,
+    );
+    const source = buildOwnDataValue(module, 'source', `${label}[${index}]`);
+    if (
+      typeof path !== 'string' ||
+      path.length === 0 ||
+      typeof source !== 'string' ||
+      typeof renderPlanFingerprint !== 'string' ||
+      buildRegExpExec(/^[0-9a-f]{64}$/u, renderPlanFingerprint) === null
+    ) {
+      throw new TypeError(`${label}[${index}] is malformed.`);
+    }
+  }
+}
+
+function requireCompilerClientModuleRoleCensus(
+  value: unknown,
+  expectedLength: number,
+  label: string,
+): asserts value is readonly CompilerOwnedViteClientModuleRole[] {
+  if (!buildArrayIsArray(value) || value.length !== expectedLength) {
+    throw new TypeError(`${label} is incomplete.`);
+  }
+  for (let index = 0; index < value.length; index += 1) {
+    const role = value[index];
+    if (
+      role !== 'app-bootstrap' &&
+      role !== 'component-client' &&
+      role !== 'deferred-app-runtime' &&
+      role !== 'optimistic-plan'
+    ) {
+      throw new TypeError(`${label}[${index}] is invalid.`);
+    }
+  }
 }
 
 function requireKovoBuildOneShotTransaction(value: unknown): KovoBuildOutputTransaction {
@@ -2785,6 +2917,7 @@ async function deriveCurrentSourceCheckArtifacts(
   // compiler heaps cannot overlap on valid copied-catalog projects (SPEC §5.2 rules 6/9; §11.4).
   const stylesheetStartedAt = startSourceCheckPhase(phaseCensus);
   await withBuildGraphDerivationContext(() => kovoBuildStylesheetCss(resolvedAppModulePath));
+  collectBuildGarbage?.();
   recordSourceCheckPhase(phaseCensus, 'stylesheet', 'executed', stylesheetStartedAt);
   const appEvaluationStartedAt = startSourceCheckPhase(phaseCensus);
   const loadedBuildApp = await withBuildGraphDerivationContext(() =>
@@ -2796,6 +2929,7 @@ async function deriveCurrentSourceCheckArtifacts(
       preEvaluationStaticTrust.sourceGraphFacts.sourceDerivedRegistryTransforms,
     ),
   );
+  collectBuildGarbage?.();
   recordSourceCheckPhase(phaseCensus, 'app-evaluation', 'executed', appEvaluationStartedAt);
   const app = appFromModule(
     loadedBuildApp.appModule,
@@ -4468,7 +4602,7 @@ async function buildCheckGraph(
           diagnostics,
         };
   const devexCheckGraphDigest = options.includeDevexCheckGraphDigest
-    ? `sha256:${hash('sha256', bufferFrom(stringifyBuildValue(finalGraph), 'utf8'), 'hex')}`
+    ? kovoBuildOneShotDigest(finalGraph)
     : undefined;
   return {
     ...(devexCheckGraphDigest === undefined ? {} : { devexCheckGraphDigest }),
@@ -9039,6 +9173,91 @@ function uniqueKovoCompiledClientModules(
     buildSecurityArrayAppend(unique, module, 'Unique compiler client modules');
   }
   return unique;
+}
+
+function compilerClientModuleRoles(
+  modules: readonly KovoAppShellCompiledClientModule[],
+  label: string,
+): CompilerOwnedViteClientModuleRole[] {
+  const snapshot = buildSnapshotDenseArray(modules, label);
+  return buildMapDense(snapshot, label, (module, index) => {
+    return exactCompilerClientModuleFacts(module, index, label).role;
+  });
+}
+
+/** @internal Re-mint only a private, authenticated client-phase handoff in a fresh worker. */
+export function adoptKovoBuildOneShotClientPhaseCompilerModules(
+  input: KovoBuildOneShotClientPhase,
+  installer: CompilerClientModuleHandoffInstaller,
+): KovoBuildOneShotClientPhase {
+  const clientPhase = requireKovoBuildOneShotClientPhase(input);
+  const clientBuildModules = buildSnapshotDenseArray(
+    clientPhase.clientBuild.clientModules,
+    'Client-phase client-build compiler modules',
+  );
+  const discoveredServerClientModules = buildSnapshotDenseArray(
+    clientPhase.discoveredServerClientModules,
+    'Client-phase discovered server compiler modules',
+  );
+  const adoptedClientBuildModules = adoptCompilerClientModuleHandoffRecords(
+    clientBuildModules,
+    clientPhase.clientBuildClientModuleRoles,
+    installer,
+  );
+  const adoptedDiscoveredServerClientModules = adoptCompilerClientModuleHandoffRecords(
+    discoveredServerClientModules,
+    clientPhase.discoveredServerClientModuleRoles,
+    installer,
+  );
+  installer.seal();
+  return {
+    ...clientPhase,
+    clientBuild: {
+      ...clientPhase.clientBuild,
+      clientModules: adoptedClientBuildModules,
+    },
+    discoveredServerClientModules: adoptedDiscoveredServerClientModules,
+  };
+}
+
+/** @internal Re-mint only a private, authenticated server-phase handoff in a fresh worker. */
+export function adoptKovoBuildOneShotServerPhaseCompilerModules(
+  input: KovoBuildOneShotServerPhase,
+  installer: CompilerClientModuleHandoffInstaller,
+): KovoBuildOneShotServerPhase {
+  const serverPhase = requireKovoBuildOneShotServerPhase(input);
+  const clientModules = adoptCompilerClientModuleHandoffRecords(
+    serverPhase.clientModules,
+    serverPhase.clientModuleRoles,
+    installer,
+  );
+  installer.seal();
+  return { ...serverPhase, clientModules };
+}
+
+function adoptCompilerClientModuleHandoffRecords(
+  modules: readonly KovoAppShellCompiledClientModule[],
+  roles: readonly CompilerOwnedViteClientModuleRole[],
+  installer: CompilerClientModuleHandoffInstaller,
+): KovoAppShellCompiledClientModule[] {
+  if (modules.length !== roles.length) {
+    throw new TypeError('Kovo compiler client-module handoff role census is incomplete.');
+  }
+  return buildMapDense(modules, 'Compiler client-module handoff records', (module, index) => {
+    const role = roles[index]!;
+    switch (role) {
+      case 'app-bootstrap':
+        return installer.adoptAppBootstrap(module);
+      case 'component-client':
+        return installer.adoptComponentClient(module);
+      case 'deferred-app-runtime':
+        return installer.adoptDeferredAppRuntime(module);
+      case 'optimistic-plan':
+        return installer.adoptOptimisticPlan(module);
+      default:
+        throw unknownCompilerClientModuleRole(role);
+    }
+  });
 }
 
 function adoptCompilerClientModulesForNeutralBuild(

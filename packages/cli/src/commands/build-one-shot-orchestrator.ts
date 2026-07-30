@@ -119,6 +119,10 @@ function runWorker(
   const child = spawn(
     process.execPath,
     [
+      '--expose-gc',
+      '--max-old-space-size=1600',
+      '--max-semi-space-size=1',
+      '--optimize-for-size',
       ...(sourceMode
         ? [
             '--disable-warning=ExperimentalWarning',

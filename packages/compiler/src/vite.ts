@@ -176,6 +176,7 @@ const compilerOwnedViteClientModuleAuthorities = compilerCreateWeakMap<
   CompilerOwnedViteClientModuleAuthority
 >();
 const compilerOwnedViteDiagnosticOwners = compilerCreateWeakMap<object, object>();
+let compilerClientModuleHandoffInstallerClaimed = false;
 
 /**
  * @internal Verify the exact frozen record returned by the genuine framework compiler plugin.
@@ -187,6 +188,113 @@ export function compilerOwnedViteClientModuleRole(
 ): CompilerOwnedViteClientModuleRole | undefined {
   if (typeof value !== 'object' || value === null) return undefined;
   return compilerWeakMapGet(compilerOwnedViteClientModuleAuthorities, value)?.role;
+}
+
+/** @internal One-shot capability for re-minting authenticated isolated-worker handoffs. */
+export interface CompilerClientModuleHandoffInstaller {
+  adoptAppBootstrap(module: object): KovoViteCompiledClientModule;
+  adoptComponentClient(module: object): KovoViteCompiledClientModule;
+  adoptDeferredAppRuntime(module: object): KovoViteCompiledClientModule;
+  adoptOptimisticPlan(module: object): KovoViteCompiledClientModule;
+  seal(): void;
+}
+
+/**
+ * @internal Claim before authored evaluation. The finite role-specific methods make the
+ * authenticated worker choose a role explicitly; the serialized record cannot mint itself.
+ */
+export function claimCompilerClientModuleHandoffInstaller(
+  protocol: string,
+): CompilerClientModuleHandoffInstaller {
+  if (protocol !== compilerViteClientModuleRoleProtocol) {
+    throw new TypeError(
+      `Kovo compiler client-module handoff protocol must be ${compilerViteClientModuleRoleProtocol}.`,
+    );
+  }
+  if (compilerClientModuleHandoffInstallerClaimed) {
+    throw new Error('Kovo compiler client-module handoff installer was already claimed.');
+  }
+  compilerClientModuleHandoffInstallerClaimed = true;
+  const owner = compilerFreeze({});
+  const roleByIdentity = compilerCreateMap<string, CompilerOwnedViteClientModuleRole>();
+  let failed = false;
+  let sealed = false;
+  const adopt = (
+    module: object,
+    role: CompilerOwnedViteClientModuleRole,
+  ): KovoViteCompiledClientModule => {
+    if (failed) {
+      throw new Error('Kovo compiler client-module handoff installation is permanently closed.');
+    }
+    if (sealed) {
+      throw new Error('Kovo compiler client-module handoff installation is already sealed.');
+    }
+    try {
+      const keys = compilerObjectKeys(module);
+      const firstKey = keys[0];
+      const secondKey = keys[1];
+      const thirdKey = keys[2];
+      if (
+        keys.length !== 3 ||
+        (firstKey !== 'path' && secondKey !== 'path' && thirdKey !== 'path') ||
+        (firstKey !== 'renderPlanFingerprint' &&
+          secondKey !== 'renderPlanFingerprint' &&
+          thirdKey !== 'renderPlanFingerprint') ||
+        (firstKey !== 'source' && secondKey !== 'source' && thirdKey !== 'source')
+      ) {
+        throw new TypeError('Kovo compiler client-module handoff record has invalid fields.');
+      }
+      const path = compilerOwnDataValue(module, 'path', 'Compiler client-module handoff');
+      const renderPlanFingerprint = compilerOwnDataValue(
+        module,
+        'renderPlanFingerprint',
+        'Compiler client-module handoff',
+      );
+      const source = compilerOwnDataValue(module, 'source', 'Compiler client-module handoff');
+      if (
+        typeof path !== 'string' ||
+        path.length === 0 ||
+        typeof source !== 'string' ||
+        typeof renderPlanFingerprint !== 'string' ||
+        !compilerRegExpTest(/^[0-9a-f]{64}$/u, renderPlanFingerprint)
+      ) {
+        throw new TypeError('Kovo compiler client-module handoff record is malformed.');
+      }
+      const identity = `${path}\u0000${clientModuleRepresentationDigest(source)}\u0000${renderPlanFingerprint}`;
+      if (compilerMapGet(roleByIdentity, identity) !== undefined) {
+        throw new TypeError('Kovo compiler client-module handoff identity was installed twice.');
+      }
+      const adopted = compilerFreeze({ path, renderPlanFingerprint, source });
+      compilerMapSet(roleByIdentity, identity, role);
+      return markCompilerOwnedViteClientModule(adopted, role, owner);
+    } catch (cause) {
+      failed = true;
+      throw cause;
+    }
+  };
+  return compilerFreeze({
+    adoptAppBootstrap(module: object) {
+      return adopt(module, 'app-bootstrap');
+    },
+    adoptComponentClient(module: object) {
+      return adopt(module, 'component-client');
+    },
+    adoptDeferredAppRuntime(module: object) {
+      return adopt(module, 'deferred-app-runtime');
+    },
+    adoptOptimisticPlan(module: object) {
+      return adopt(module, 'optimistic-plan');
+    },
+    seal() {
+      if (failed) {
+        throw new Error('Kovo compiler client-module handoff installation is permanently closed.');
+      }
+      if (sealed) {
+        throw new Error('Kovo compiler client-module handoff installation is already sealed.');
+      }
+      sealed = true;
+    },
+  });
 }
 
 function markCompilerOwnedViteClientModule(

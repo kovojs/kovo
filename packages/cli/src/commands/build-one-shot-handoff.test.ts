@@ -202,5 +202,24 @@ describe('one-shot build private handoff', () => {
     }
     expect(result?.schema).toBe('kovo-build-one-shot-analysis/v1');
   });
+
+  it('does not invoke an authored inherited toJSON hook', () => {
+    const original = Object.getOwnPropertyDescriptor(Object.prototype, 'toJSON');
+    let result: ReturnType<typeof readKovoBuildOneShotHandoff> | undefined;
+    try {
+      Object.defineProperty(Object.prototype, 'toJSON', {
+        configurable: true,
+        value: () => {
+          throw new Error('authored toJSON reached private handoff');
+        },
+      });
+      const handoff = wire();
+      result = readKovoBuildOneShotHandoff(handoff.bytes, handoff.expectedIdentity);
+    } finally {
+      if (original === undefined) delete (Object.prototype as { toJSON?: unknown }).toJSON;
+      else Object.defineProperty(Object.prototype, 'toJSON', original);
+    }
+    expect(result?.schema).toBe('kovo-build-one-shot-analysis/v1');
+  });
 });
 import { createHash } from 'node:crypto';
