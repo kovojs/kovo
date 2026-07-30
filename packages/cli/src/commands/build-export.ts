@@ -305,8 +305,8 @@ const KOVO_SOURCE_CHECK_PHASES = [
   'sound-subset',
   'session-authority',
   'app-source-trust',
-  'app-evaluation',
   'stylesheet',
+  'app-evaluation',
   'build-check-graph',
   'graph-diagnostics',
 ] as const;
@@ -1296,9 +1296,15 @@ async function loadAndCheckBuildApp(
     security.paranoidStaticAdvisory,
     security.invocationEnv,
   );
+  // Stylesheet compilation is source proof, so keep it post-trust, but finish it before app/Vite
+  // evaluation allocates the authenticated runtime graph. The packed full-catalog workload proved
+  // that overlapping those independent heaps can exceed the reviewed 2 GiB first-loop ceiling.
+  const buildStylesheetCss = await withBuildGraphDerivationContext(() =>
+    kovoBuildStylesheetCss(resolvedAppModulePath),
+  );
   // SPEC §6.6 rule 6: the exact app-resolved SSR graph must finish its trust-root transition
   // before any other build lane is allowed to evaluate authored modules. In particular, do not
-  // race CSS discovery against the server/compiler/data-plane preload.
+  // race any authored module evaluation against the server/compiler/data-plane preload.
   const loadedBuildApp = await withBuildGraphDerivationContext(() =>
     loadBuildAppModule(
       resolvedAppModulePath,
@@ -1307,9 +1313,6 @@ async function loadAndCheckBuildApp(
       preEvaluationStaticTrust.capabilityClosure.dependencyManifest,
       preEvaluationStaticTrust.sourceGraphFacts.sourceDerivedRegistryTransforms,
     ),
-  );
-  const buildStylesheetCss = await withBuildGraphDerivationContext(() =>
-    kovoBuildStylesheetCss(resolvedAppModulePath),
   );
   const { cloudflare, node, vercel } = loadedBuildApp.serverBuildModule;
   const { resolveKovoBuildPreset } = loadedBuildApp.serverBuildPresetModule;
@@ -1371,6 +1374,12 @@ async function deriveCurrentSourceCheck(
     security.invocationEnv,
   );
   recordSourceCheckPhase(phaseCensus, 'app-source-trust', 'executed', appSourceTrustStartedAt);
+  // Stylesheet compilation is source proof even though asset placement is deployment proof. Keep
+  // it after authenticated source trust but before app/Vite evaluation so their independent
+  // compiler heaps cannot overlap on valid copied-catalog projects (SPEC §5.2 rules 6/9; §11.4).
+  const stylesheetStartedAt = startSourceCheckPhase(phaseCensus);
+  await withBuildGraphDerivationContext(() => kovoBuildStylesheetCss(resolvedAppModulePath));
+  recordSourceCheckPhase(phaseCensus, 'stylesheet', 'executed', stylesheetStartedAt);
   const appEvaluationStartedAt = startSourceCheckPhase(phaseCensus);
   const loadedBuildApp = await withBuildGraphDerivationContext(() =>
     loadBuildAppModule(
@@ -1382,10 +1391,6 @@ async function deriveCurrentSourceCheck(
     ),
   );
   recordSourceCheckPhase(phaseCensus, 'app-evaluation', 'executed', appEvaluationStartedAt);
-  // Stylesheet compilation is source proof even though asset placement is deployment proof.
-  const stylesheetStartedAt = startSourceCheckPhase(phaseCensus);
-  await withBuildGraphDerivationContext(() => kovoBuildStylesheetCss(resolvedAppModulePath));
-  recordSourceCheckPhase(phaseCensus, 'stylesheet', 'executed', stylesheetStartedAt);
   const app = appFromModule(
     loadedBuildApp.appModule,
     resolvedAppModulePath,
