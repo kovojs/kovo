@@ -1,9 +1,12 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { createInterface } from 'node:readline';
 
 const CHECK_PHASE_CENSUS_SCHEMA = 'kovo-check-phase-census/v1';
+const CHECK_WATCH_SCHEMA = 'kovo-check-watch/v1';
+const CHECK_WATCH_CENSUS_SCHEMA = 'kovo-check-phase-census/v2';
 const CHECK_PHASES = Object.freeze([
   ['lifecycle-policy', 'not-applicable'],
   ['config-trust', 'executed'],
@@ -127,6 +130,10 @@ function peakRssBytes(stderr) {
 
 function sourceAnalysisDigest(source) {
   return sha256(Buffer.from(source, 'utf16le'));
+}
+
+function sourceByteDigest(source) {
+  return sha256(Buffer.from(source, 'utf8'));
 }
 
 function failBuild(result) {
@@ -290,4 +297,159 @@ export function runVerifiedCheck() {
     durationMs,
     peakRssBytes: invocation === null ? null : peakRssBytes(result.stderr ?? ''),
   };
+}
+
+export async function runVerifiedIncrementalCheckSession(samples) {
+  if (!Number.isSafeInteger(samples) || samples < 1) {
+    throw new TypeError('incremental check session requires a positive sample count');
+  }
+  materializeAuthenticatedLockfile();
+  const cli = path.resolve('node_modules/@kovojs/cli/dist/bin.mjs');
+  const child = spawn(
+    process.execPath,
+    [cli, 'check', 'source', './src/app.tsx', '--watch', '--format', 'json'],
+    {
+      cwd: process.cwd(),
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  );
+  if (child.pid === undefined || child.stdout === null || child.stderr === null) {
+    throw new Error('packed Kovo incremental check session did not start');
+  }
+  let stderr = '';
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data', (chunk) => {
+    stderr = `${stderr}${String(chunk)}`.slice(-64 * 1024 * 1024);
+  });
+  const lines = createInterface({ input: child.stdout, crlfDelay: Infinity })[
+    Symbol.asyncIterator
+  ]();
+  const observations = [];
+  let sourceRevision = SOURCE_VARIANTS.indexOf(readFileSync(SOURCE_PATH, 'utf8'));
+  if (sourceRevision === -1) {
+    child.kill('SIGINT');
+    throw new Error('incremental check session source does not match a reviewed revision');
+  }
+  let started = process.hrtime.bigint();
+
+  try {
+    observations.push(await nextWatchObservation(lines, child, stderr, 0, sourceRevision, started));
+    for (let sampleIndex = 0; sampleIndex < samples; sampleIndex += 1) {
+      sourceRevision = sourceRevision === 0 ? 1 : 0;
+      started = process.hrtime.bigint();
+      writeFileSync(SOURCE_PATH, SOURCE_VARIANTS[sourceRevision]);
+      observations.push(
+        await nextWatchObservation(lines, child, stderr, sampleIndex + 1, sourceRevision, started),
+      );
+    }
+  } finally {
+    child.kill('SIGINT');
+    await Promise.race([
+      new Promise((resolveExit) => child.once('exit', resolveExit)),
+      new Promise((resolveTimeout) => setTimeout(resolveTimeout, 5_000)),
+    ]);
+    if (child.exitCode === null) child.kill('SIGKILL');
+    lines.return?.();
+  }
+  return Object.freeze({
+    observations: Object.freeze(observations),
+    pid: child.pid,
+    samples,
+    schema: 'kovo-incremental-check-session/v1',
+    sessionDigest: sha256(Buffer.from(JSON.stringify(observations), 'utf8')),
+  });
+}
+
+async function nextWatchObservation(
+  lines,
+  child,
+  stderr,
+  expectedRevision,
+  expectedSourceRevision,
+  started,
+) {
+  const next = await Promise.race([
+    lines.next(),
+    new Promise((_, reject) =>
+      setTimeout(
+        () =>
+          reject(
+            new Error(
+              `packed Kovo incremental check timed out at revision ${expectedRevision}: ${stderr}`,
+            ),
+          ),
+        120_000,
+      ),
+    ),
+  ]);
+  if (next.done || typeof next.value !== 'string') {
+    throw new Error(
+      `packed Kovo incremental check exited before revision ${expectedRevision}: ${stderr}`,
+    );
+  }
+  let record;
+  try {
+    record = JSON.parse(next.value);
+  } catch {
+    throw new Error('packed Kovo incremental check returned malformed JSONL');
+  }
+  const source = SOURCE_VARIANTS[expectedSourceRevision];
+  if (
+    record?.version !== CHECK_WATCH_SCHEMA ||
+    record?.event !== 'revision' ||
+    record?.revision !== expectedRevision ||
+    record?.input?.schema !== 'kovo-check-input-proof/v1' ||
+    record?.input?.status !== 'accepted' ||
+    record?.input?.entry?.path !== SOURCE_PATH ||
+    record?.input?.entry?.digest !== sourceByteDigest(source) ||
+    !/^sha256:[0-9a-f]{64}$/u.test(record?.input?.closureDigest ?? '') ||
+    !/^sha256:[0-9a-f]{64}$/u.test(record?.input?.projectDigest ?? '') ||
+    record?.phaseCensus?.schema !== CHECK_WATCH_CENSUS_SCHEMA ||
+    !/^sha256:[0-9a-f]{64}$/u.test(record?.phaseCensus?.checkGraphDigest ?? '') ||
+    record?.check?.version !== 'kovo-diagnostic/v1' ||
+    record?.check?.result?.protocol !== 'kovo-check/v1' ||
+    record?.check?.result?.exitCode !== 0 ||
+    !/^kovo-check\/v1\r?\nOK\r?\n/mu.test(record?.check?.result?.text ?? '')
+  ) {
+    throw new Error(`packed Kovo incremental check returned wrong revision ${expectedRevision}`);
+  }
+  validateWatchPhases(record.phaseCensus.phases);
+  return Object.freeze({
+    analysisDigest: record.input.entry.digest,
+    checkGraphDigest: record.phaseCensus.checkGraphDigest,
+    closureDigest: record.input.closureDigest,
+    diagnosticPhases: record.phaseCensus.phases,
+    durationMs: Number(process.hrtime.bigint() - started) / 1e6,
+    peakRssBytes: processRssBytes(child.pid),
+    projectDigest: record.input.projectDigest,
+    revision: expectedRevision,
+    sourceRevision: expectedSourceRevision,
+  });
+}
+
+function validateWatchPhases(phases) {
+  if (!Array.isArray(phases) || phases.length !== CHECK_PHASES.length) {
+    throw new Error('packed Kovo incremental check omitted diagnostic phases');
+  }
+  for (let index = 0; index < CHECK_PHASES.length; index += 1) {
+    const [name] = CHECK_PHASES[index];
+    const phase = phases[index];
+    if (
+      phase?.name !== name ||
+      !['executed', 'not-applicable', 'reused-authenticated'].includes(phase?.status) ||
+      !Number.isFinite(phase?.durationMs) ||
+      phase.durationMs < 0 ||
+      !/^sha256:[0-9a-f]{64}$/u.test(phase?.inputDigest ?? '')
+    ) {
+      throw new Error(`packed Kovo incremental check did not prove diagnostic phase ${name}`);
+    }
+  }
+}
+
+function processRssBytes(pid) {
+  const result = spawnSync('ps', ['-o', 'rss=', '-p', String(pid)], { encoding: 'utf8' });
+  if (result.status !== 0) return null;
+  const kibibytes = Number.parseInt(result.stdout.trim(), 10);
+  return Number.isSafeInteger(kibibytes) && kibibytes >= 0 ? kibibytes * 1024 : null;
 }

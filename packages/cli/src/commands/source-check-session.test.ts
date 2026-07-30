@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   createKovoSourceCheckInputProof,
+  createRejectedKovoSourceCheckInputProof,
   formatKovoSourceCheckWatchRecord,
   KOVO_SOURCE_CHECK_PHASES,
   runKovoSourceCheckWatchSession,
@@ -48,6 +49,7 @@ describe('foreground source-check session', () => {
       },
       projectDigest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
       schema: 'kovo-check-input-proof/v1',
+      status: 'accepted',
     });
 
     const revised = createKovoSourceCheckInputProof(
@@ -186,6 +188,43 @@ describe('foreground source-check session', () => {
         census: { ...valid.census, checkGraphDigest: 'sha256:forged' },
       }),
     ).toThrow(/invalid phase census/u);
+  });
+
+  it('represents a rejected symlink state without fabricating unavailable byte digests', () => {
+    const rejected = createRejectedKovoSourceCheckInputProof('src/app.tsx', digest, 'symlink');
+    const valid = revisionResult();
+    const line = formatKovoSourceCheckWatchRecord(1, {
+      ...valid,
+      census: {
+        ...valid.census,
+        checkGraphDigest: null,
+        phases: KOVO_SOURCE_CHECK_PHASES.map((name, index) => ({
+          durationMs: index === 0 ? 1 : 0,
+          inputDigest: rejected.projectDigest,
+          name,
+          status: index === 0 ? 'executed' : 'not-reached',
+        })),
+      },
+      input: rejected,
+      result: { error: 'kovo-check/v1\nERROR source symlink refused\n', exitCode: 1 },
+    });
+    const record = JSON.parse(line);
+    expect(record.input).toEqual({
+      closure: null,
+      closureDigest: null,
+      configClosureDigest: null,
+      entry: { bytes: null, digest: null, path: 'src/app.tsx' },
+      projectDigest: digest,
+      reason: 'symlink',
+      schema: 'kovo-check-input-proof/v1',
+      status: 'rejected',
+    });
+    expect(record.phaseCensus.checkGraphDigest).toBeNull();
+    expect(
+      record.phaseCensus.phases
+        .slice(1)
+        .every((phase: { status: string }) => phase.status === 'not-reached'),
+    ).toBe(true);
   });
 });
 

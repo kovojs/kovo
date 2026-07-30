@@ -1,6 +1,11 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
-import { SOURCE_PATH, SOURCE_VARIANTS, runVerifiedCheck } from './workload.mjs';
+import {
+  SOURCE_PATH,
+  SOURCE_VARIANTS,
+  runVerifiedCheck,
+  runVerifiedIncrementalCheckSession,
+} from './workload.mjs';
 
 const phase = process.argv[2];
 if (!['cold', 'warm', 'oneFileIncremental'].includes(phase)) {
@@ -23,7 +28,26 @@ if (revision === -1) {
   process.stderr.write('Kovo benchmark source does not match a reviewed edit variant\n');
   process.exit(2);
 }
-if (phase === 'oneFileIncremental') {
+if (phase === 'oneFileIncremental' && process.env.KOVO_DEVEX_INCREMENTAL_SAMPLES !== undefined) {
+  const samples = Number(process.env.KOVO_DEVEX_INCREMENTAL_SAMPLES);
+  if (!Number.isSafeInteger(samples) || samples < 1) {
+    process.stderr.write('invalid Kovo incremental session sample count\n');
+    process.exit(2);
+  }
+  writeFileSync(SOURCE_PATH, SOURCE_VARIANTS[0]);
+  try {
+    const session = await runVerifiedIncrementalCheckSession(samples);
+    process.stdout.write(
+      `kovo-benchmark-incremental-session/v1 ${Buffer.from(JSON.stringify(session)).toString(
+        'base64url',
+      )}\n`,
+    );
+    process.exit(0);
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    process.exit(1);
+  }
+} else if (phase === 'oneFileIncremental') {
   revision = revision === 0 ? 1 : 0;
   writeFileSync(SOURCE_PATH, SOURCE_VARIANTS[revision]);
 }

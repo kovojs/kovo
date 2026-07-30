@@ -225,6 +225,25 @@ Those deployment obligations remain fail-closed, including KV417 under §14. A p
 therefore means “current authored source satisfies the source verifier,” not “this deployment is
 ready.”
 
+**Foreground incremental source proof (normative).** `kovo check source [app-module] --watch
+--format json` keeps one project-confined foreground process open and emits one versioned JSONL
+record for each serialized source revision. It is not a global daemon. Its queue is bounded to the
+currently executing revision plus the latest pending filesystem state; intermediate edit bursts may
+coalesce, but checked revisions never overlap or publish out of order. Delete, rename, symlink, or
+import/config-closure ambiguity fails closed instead of retaining the previous passing result.
+
+One-shot and watch forms MUST execute the same ordered source-proof pipeline. A watch revision still
+performs fresh command-owned app evaluation, recomputes the security graph, verifier fixpoint,
+render-equivalence proof, and diagnostics, and emits the exact `kovo-diagnostic/v1` command result a
+fresh one-shot invocation would emit for the same bytes. Reuse is limited to compiler-owned facts
+whose authenticated cache key binds every source, config, package-closure, and external-version
+input; app objects, runtime authority, diagnostics, and partially assembled graphs are never cached.
+The JSONL record binds exact source/config/closure digests and carries the complete ordered phase
+census. Census v2 distinguishes `executed` from `reused-authenticated`, names the input digest for
+every phase, and retains every phase after a finding as `not-reached`; it may not omit a phase to
+claim a latency win. Rejected filesystem states carry an explicit rejected proof record and never
+invent a digest for missing or ambiguous bytes.
+
 **Command result and diagnostic protocol (normative).** `kovo check`, `kovo build`,
 `kovo explain`, `kovo doctor`, and `kovo verify` accept exactly
 `--format human | json | github` and retain the exit classes declared by the semantic command AST:

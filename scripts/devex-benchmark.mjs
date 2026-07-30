@@ -1749,7 +1749,79 @@ function assertProfileInvocation(result, context, requireMarker) {
   };
 }
 
-function packedCheckPhaseFindings(phases, label) {
+function assertIncrementalSessionInvocation(result, samples) {
+  if (result.exitCode !== 0 || result.signal || result.error) {
+    throw new Error(
+      `incremental session failed: exit=${String(result.exitCode)} signal=${String(
+        result.signal,
+      )} ${result.error ?? result.stderr ?? ''}`.trim(),
+    );
+  }
+  const marker = /^kovo-benchmark-incremental-session\/v1 ([A-Za-z0-9_-]+)\r?\n?$/u.exec(
+    result.stdout ?? '',
+  );
+  if (!marker) {
+    throw new Error('incremental benchmark did not return its live-session marker');
+  }
+  let evidence;
+  try {
+    evidence = JSON.parse(Buffer.from(marker[1], 'base64url').toString('utf8'));
+  } catch {
+    throw new Error('incremental benchmark returned malformed live-session evidence');
+  }
+  if (
+    evidence?.schema !== 'kovo-incremental-check-session/v1' ||
+    evidence?.samples !== samples ||
+    !Number.isSafeInteger(evidence?.pid) ||
+    evidence.pid <= 0 ||
+    !validDigest(evidence?.sessionDigest) ||
+    !Array.isArray(evidence?.observations) ||
+    evidence.observations.length !== samples + 1
+  ) {
+    throw new Error('incremental benchmark returned invalid live-session evidence');
+  }
+  for (let index = 0; index < evidence.observations.length; index += 1) {
+    const observation = evidence.observations[index];
+    if (
+      observation?.revision !== index ||
+      observation?.sourceRevision !== index % 2 ||
+      !validDigest(observation?.analysisDigest) ||
+      !validDigest(observation?.checkGraphDigest) ||
+      !validDigest(observation?.closureDigest) ||
+      !validDigest(observation?.projectDigest) ||
+      !finiteNonNegative(observation?.durationMs) ||
+      (observation?.peakRssBytes !== null && !finiteNonNegative(observation?.peakRssBytes))
+    ) {
+      throw new Error(`incremental benchmark returned invalid revision ${index}`);
+    }
+    const phaseFindings = packedCheckPhaseFindings(
+      observation.diagnosticPhases,
+      `incremental session revision ${index}`,
+      true,
+    );
+    if (phaseFindings.length > 0) throw new Error(phaseFindings.join('\n'));
+  }
+  return evidence;
+}
+
+/** Test seam for the exact production live-session marker validator. */
+export function validateIncrementalSessionMarkerForTesting(evidence, samples) {
+  const stdout = `kovo-benchmark-incremental-session/v1 ${Buffer.from(
+    JSON.stringify(evidence),
+  ).toString('base64url')}\n`;
+  return assertIncrementalSessionInvocation(
+    {
+      error: null,
+      exitCode: 0,
+      signal: null,
+      stderr: '',
+      stdout,
+    },
+    samples,
+  );
+}
+
+function packedCheckPhaseFindings(phases, label, incremental = false) {
   const findings = [];
   if (!Array.isArray(phases) || phases.length !== KOVO_PACKED_CHECK_PHASES.length) {
     return [
@@ -1761,11 +1833,16 @@ function packedCheckPhaseFindings(phases, label) {
   for (let index = 0; index < KOVO_PACKED_CHECK_PHASES.length; index += 1) {
     const expected = KOVO_PACKED_CHECK_PHASES[index];
     const observed = phases[index];
+    const expectedStatus =
+      incremental && expected.status === 'executed'
+        ? ['executed', 'reused-authenticated']
+        : [expected.status];
     if (
       observed?.name !== expected.name ||
-      observed?.status !== expected.status ||
+      !expectedStatus.includes(observed?.status) ||
       !finiteNonNegative(observed?.durationMs) ||
-      (expected.status === 'not-applicable' && observed.durationMs !== 0)
+      (expected.status === 'not-applicable' && observed.durationMs !== 0) ||
+      (incremental && !validDigest(observed?.inputDigest))
     ) {
       findings.push(
         `${label}.diagnosticPhases[${String(index)}] must prove ${expected.name}=${expected.status}`,
@@ -1905,9 +1982,25 @@ function phaseCensus(observations, samples) {
       revision: observation.revision,
       analysisDigest: observation.analysisDigest,
       checkGraphDigest: observation.checkGraphDigest,
-      diagnosticPhases: observation.diagnosticPhases,
+      diagnosticPhases:
+        observation.phase !== 'oneFileIncremental'
+          ? observation.diagnosticPhases
+          : observation.diagnosticPhases.map((phase) => ({
+              ...phase,
+              inputDigest: phase.inputDigest ?? observation.analysisDigest,
+            })),
       durationMs: observation.durationMs,
       peakRssBytes: observation.peakRssBytes,
+      ...(observation.phase !== 'oneFileIncremental'
+        ? {}
+        : {
+            sessionPid: observation.sessionPid ?? 1,
+            sessionRevision:
+              observation.sessionRevision ??
+              (observation.role === 'prime'
+                ? observation.sampleIndex
+                : observation.sampleIndex + 1),
+          }),
     })),
   };
 }
@@ -1964,6 +2057,7 @@ function validatePhaseCensus(census, sampleCount, label) {
   } else {
     const digestByRevision = new Map();
     const graphDigestByRevision = new Map();
+    const incrementalSessionPids = new Set();
     for (let index = 0; index < expectedObservations.length; index += 1) {
       const expected = expectedObservations[index];
       const observed = census.analysisInputs[index];
@@ -1976,6 +2070,22 @@ function validatePhaseCensus(census, sampleCount, label) {
         findings.push(`${label}.analysisInputs[${index}] does not match the phase census`);
         continue;
       }
+      if (expected.phase === 'oneFileIncremental') {
+        const expectedSessionRevision =
+          expected.role === 'prime' ? expected.sampleIndex : expected.sampleIndex + 1;
+        if (
+          !Number.isSafeInteger(observed.sessionPid) ||
+          observed.sessionPid <= 0 ||
+          observed.sessionRevision !== expectedSessionRevision
+        ) {
+          findings.push(
+            `${label}.analysisInputs[${index}] must bind one live incremental session revision`,
+          );
+        }
+        incrementalSessionPids.add(observed.sessionPid);
+      } else if (observed.sessionPid !== undefined || observed.sessionRevision !== undefined) {
+        findings.push(`${label}.analysisInputs[${index}] has unexpected session identity`);
+      }
       if (!/^sha256:[0-9a-f]{64}$/u.test(observed.analysisDigest ?? '')) {
         findings.push(`${label}.analysisInputs[${index}].analysisDigest is invalid`);
       }
@@ -1986,6 +2096,7 @@ function validatePhaseCensus(census, sampleCount, label) {
         ...packedCheckPhaseFindings(
           observed.diagnosticPhases,
           `${label}.analysisInputs[${String(index)}]`,
+          expected.phase === 'oneFileIncremental',
         ),
       );
       if (!finiteNonNegative(observed.durationMs)) {
@@ -2004,6 +2115,9 @@ function validatePhaseCensus(census, sampleCount, label) {
         findings.push(`${label}.analysisInputs maps one revision to multiple check-graph digests`);
       }
       graphDigestByRevision.set(observed.revision, observed.checkGraphDigest);
+    }
+    if (incrementalSessionPids.size !== 1) {
+      findings.push(`${label}.analysisInputs must use one live incremental session PID`);
     }
     if (digestByRevision.size !== 2 || digestByRevision.get(0) === digestByRevision.get(1)) {
       findings.push(`${label}.analysisInputs must prove two distinct analyzed source revisions`);
@@ -2211,89 +2325,144 @@ export function runBenchmarkScenario(scenario, options = {}) {
       const phaseConfig = commands[phase];
       const durationSamples = [];
       const rssSamples = [];
-      for (let index = 0; index < samples; index += 1) {
+      if (phase === 'oneFileIncremental' && requireMarker) {
         const staged = stagePackedWorkload(
           executionScenario,
           executionRoot,
           executionRepositoryRoot,
         );
         try {
-          const cwd = commandCwdInsideStage(staged.stageRoot, phaseConfig.cwd);
-          const baseline = index % 2;
-          const invocationEnv =
-            phase === 'oneFileIncremental'
-              ? { KOVO_DEVEX_EDIT_BASELINE: String(baseline) }
-              : undefined;
-          if (phase !== 'cold') {
-            const primeContext = {
-              cwd,
-              env: invocationEnv,
-              executionPhase: 'warm',
-              expectedRevision: phase === 'oneFileIncremental' ? baseline : 0,
-              phase,
-              role: 'prime',
-              sampleIndex: index,
-              stageRoot: staged.stageRoot,
-            };
-            const prime = measure(commands.warm.command, primeContext);
-            const evidence = assertProfileInvocation(prime, primeContext, requireMarker);
-            const revision = evidence?.revision ?? primeContext.expectedRevision;
-            const analysisDigest =
-              evidence?.analysisDigest ?? `sha256:${String(revision).repeat(64)}`;
+          const context = {
+            cwd: commandCwdInsideStage(staged.stageRoot, phaseConfig.cwd),
+            env: { KOVO_DEVEX_INCREMENTAL_SAMPLES: String(samples) },
+            executionPhase: phase,
+            phase,
+            role: 'session',
+            sampleIndex: 0,
+            stageRoot: staged.stageRoot,
+          };
+          const result = measure(phaseConfig.command, context);
+          const session = assertIncrementalSessionInvocation(result, samples);
+          for (let index = 0; index < samples; index += 1) {
+            const prime = session.observations[index];
+            const timed = session.observations[index + 1];
             observations.push({
               phase,
               role: 'prime',
+              revision: prime.sourceRevision,
+              analysisDigest: prime.analysisDigest,
+              checkGraphDigest: prime.checkGraphDigest,
+              diagnosticPhases: prime.diagnosticPhases,
+              durationMs: prime.durationMs,
+              peakRssBytes: prime.peakRssBytes,
+              sampleIndex: index,
+              sessionPid: session.pid,
+              sessionRevision: prime.revision,
+            });
+            observations.push({
+              phase,
+              role: 'timed',
+              revision: timed.sourceRevision,
+              analysisDigest: timed.analysisDigest,
+              checkGraphDigest: timed.checkGraphDigest,
+              diagnosticPhases: timed.diagnosticPhases,
+              durationMs: timed.durationMs,
+              peakRssBytes: timed.peakRssBytes,
+              sampleIndex: index,
+              sessionPid: session.pid,
+              sessionRevision: timed.revision,
+            });
+            durationSamples.push(timed.durationMs);
+            if (timed.peakRssBytes !== null) rssSamples.push(timed.peakRssBytes);
+          }
+        } finally {
+          rmSync(staged.stageRoot, { recursive: true, force: true });
+        }
+      } else {
+        for (let index = 0; index < samples; index += 1) {
+          const staged = stagePackedWorkload(
+            executionScenario,
+            executionRoot,
+            executionRepositoryRoot,
+          );
+          try {
+            const cwd = commandCwdInsideStage(staged.stageRoot, phaseConfig.cwd);
+            const baseline = index % 2;
+            const invocationEnv =
+              phase === 'oneFileIncremental'
+                ? { KOVO_DEVEX_EDIT_BASELINE: String(baseline) }
+                : undefined;
+            if (phase !== 'cold') {
+              const primeContext = {
+                cwd,
+                env: invocationEnv,
+                executionPhase: 'warm',
+                expectedRevision: phase === 'oneFileIncremental' ? baseline : 0,
+                phase,
+                role: 'prime',
+                sampleIndex: index,
+                stageRoot: staged.stageRoot,
+              };
+              const prime = measure(commands.warm.command, primeContext);
+              const evidence = assertProfileInvocation(prime, primeContext, requireMarker);
+              const revision = evidence?.revision ?? primeContext.expectedRevision;
+              const analysisDigest =
+                evidence?.analysisDigest ?? `sha256:${String(revision).repeat(64)}`;
+              observations.push({
+                phase,
+                role: 'prime',
+                revision,
+                analysisDigest,
+                checkGraphDigest:
+                  evidence?.checkGraphDigest ??
+                  `sha256:${revision === 0 ? 'a'.repeat(64) : 'b'.repeat(64)}`,
+                diagnosticPhases: evidence?.diagnosticPhases ?? fixturePackedCheckPhases(),
+                durationMs: evidence?.durationMs ?? prime.durationMs,
+                peakRssBytes: prime.peakRssBytes ?? evidence?.peakRssBytes ?? null,
+                sampleIndex: index,
+              });
+            }
+            const timedContext = {
+              cwd,
+              env: invocationEnv,
+              executionPhase: phase,
+              expectedRevision: phase === 'oneFileIncremental' ? (baseline === 0 ? 1 : 0) : 0,
+              phase,
+              role: 'timed',
+              sampleIndex: index,
+              stageRoot: staged.stageRoot,
+            };
+            const result = measure(phaseConfig.command, timedContext);
+            const evidence = assertProfileInvocation(result, timedContext, requireMarker);
+            const revision = evidence?.revision ?? timedContext.expectedRevision;
+            observations.push({
+              phase,
+              role: 'timed',
               revision,
-              analysisDigest,
+              analysisDigest: evidence?.analysisDigest ?? `sha256:${String(revision).repeat(64)}`,
               checkGraphDigest:
                 evidence?.checkGraphDigest ??
                 `sha256:${revision === 0 ? 'a'.repeat(64) : 'b'.repeat(64)}`,
               diagnosticPhases: evidence?.diagnosticPhases ?? fixturePackedCheckPhases(),
-              durationMs: evidence?.durationMs ?? prime.durationMs,
-              peakRssBytes: prime.peakRssBytes ?? evidence?.peakRssBytes ?? null,
+              durationMs: evidence?.durationMs ?? result.durationMs,
+              peakRssBytes: result.peakRssBytes ?? evidence?.peakRssBytes ?? null,
               sampleIndex: index,
             });
-          }
-          const timedContext = {
-            cwd,
-            env: invocationEnv,
-            executionPhase: phase,
-            expectedRevision: phase === 'oneFileIncremental' ? (baseline === 0 ? 1 : 0) : 0,
-            phase,
-            role: 'timed',
-            sampleIndex: index,
-            stageRoot: staged.stageRoot,
-          };
-          const result = measure(phaseConfig.command, timedContext);
-          const evidence = assertProfileInvocation(result, timedContext, requireMarker);
-          const revision = evidence?.revision ?? timedContext.expectedRevision;
-          observations.push({
-            phase,
-            role: 'timed',
-            revision,
-            analysisDigest: evidence?.analysisDigest ?? `sha256:${String(revision).repeat(64)}`,
-            checkGraphDigest:
-              evidence?.checkGraphDigest ??
-              `sha256:${revision === 0 ? 'a'.repeat(64) : 'b'.repeat(64)}`,
-            diagnosticPhases: evidence?.diagnosticPhases ?? fixturePackedCheckPhases(),
-            durationMs: evidence?.durationMs ?? result.durationMs,
-            peakRssBytes: result.peakRssBytes ?? evidence?.peakRssBytes ?? null,
-            sampleIndex: index,
-          });
-          const measuredDuration = evidence?.durationMs ?? result.durationMs;
-          const measuredPeakRss = result.peakRssBytes ?? evidence?.peakRssBytes;
-          if (!finiteNonNegative(measuredDuration)) {
-            throw new Error(`${phase} sample ${index + 1} returned an invalid duration`);
-          }
-          durationSamples.push(measuredDuration);
-          if (measuredPeakRss !== null && measuredPeakRss !== undefined) {
-            if (!finiteNonNegative(measuredPeakRss)) {
-              throw new Error(`${phase} sample ${index + 1} returned invalid peak RSS`);
+            const measuredDuration = evidence?.durationMs ?? result.durationMs;
+            const measuredPeakRss = result.peakRssBytes ?? evidence?.peakRssBytes;
+            if (!finiteNonNegative(measuredDuration)) {
+              throw new Error(`${phase} sample ${index + 1} returned an invalid duration`);
             }
-            rssSamples.push(measuredPeakRss);
+            durationSamples.push(measuredDuration);
+            if (measuredPeakRss !== null && measuredPeakRss !== undefined) {
+              if (!finiteNonNegative(measuredPeakRss)) {
+                throw new Error(`${phase} sample ${index + 1} returned invalid peak RSS`);
+              }
+              rssSamples.push(measuredPeakRss);
+            }
+          } finally {
+            rmSync(staged.stageRoot, { recursive: true, force: true });
           }
-        } finally {
-          rmSync(staged.stageRoot, { recursive: true, force: true });
         }
       }
       metrics[`check.${phase}.durationMs`] = {

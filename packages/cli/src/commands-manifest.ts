@@ -268,7 +268,9 @@ export type DerivedKovoSemanticCommandRequest = KovoCommandEntry extends infer E
   ? Entry extends KovoCommandEntry
     ? Entry extends { readonly processLifecycle: 'one-shot' }
       ? CommandForm<Entry> extends infer Form
-        ? SemanticRequestFor<Entry, Form>
+        ? Form extends { readonly processLifecycle: 'long-lived' }
+          ? never
+          : SemanticRequestFor<Entry, Form>
         : never
       : never
     : never
@@ -1409,7 +1411,7 @@ function renderFormUsageLine(
   form: KovoCommandUsageForm,
   prefix = '',
 ): string {
-  const tokens = form.tokens.map((token) => renderUsageToken(entry, token));
+  const tokens = form.tokens.map((token) => renderUsageToken(entry, form, token));
   return `${prefix}${KOVO_CLI_SCHEMA.name} ${entry.name}${
     tokens.length === 0 ? '' : ` ${tokens.join(' ')}`
   }`;
@@ -1417,10 +1419,11 @@ function renderFormUsageLine(
 
 function renderUsageToken(
   entry: KovoRenderableCommandSchema,
+  form: KovoCommandUsageForm,
   token: KovoCommandUsageToken,
 ): string {
   if (token.kind === 'group') {
-    const syntax = token.tokens.map((item) => renderUsageToken(entry, item)).join(' ');
+    const syntax = token.tokens.map((item) => renderUsageToken(entry, form, item)).join(' ');
     return token.required ? syntax : `[${syntax}]`;
   }
   if (token.kind === 'literal') return token.value;
@@ -1442,7 +1445,13 @@ function renderUsageToken(
   const syntax =
     schema.value === undefined
       ? schema.flags[0]
-      : `${schema.flags[0]} <${token.valueLabel ?? schema.value.label}>`;
+      : `${schema.flags[0]} <${
+          token.valueLabel ??
+          form.optionValues
+            ?.find((constraint) => constraint.option === token.option)
+            ?.values.join('|') ??
+          schema.value.label
+        }>`;
   return token.required ? syntax : `[${syntax}]`;
 }
 

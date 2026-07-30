@@ -71,8 +71,8 @@ export interface KovoSourceCheckInputFile {
   readonly source: string;
 }
 
-/** @internal Exact digest evidence for one source-check revision. */
-export interface KovoSourceCheckInputProof {
+/** @internal Exact digest evidence for one accepted source-check revision. */
+export interface KovoAcceptedSourceCheckInputProof {
   readonly closure: readonly {
     readonly bytes: number;
     readonly digest: string;
@@ -87,10 +87,36 @@ export interface KovoSourceCheckInputProof {
   };
   readonly projectDigest: string;
   readonly schema: typeof inputProofProtocol;
+  readonly status: 'accepted';
 }
 
+/** @internal Fail-closed evidence for an input whose bytes cannot truthfully be digested. */
+export interface KovoRejectedSourceCheckInputProof {
+  readonly closure: null;
+  readonly closureDigest: null;
+  readonly configClosureDigest: null;
+  readonly entry: {
+    readonly bytes: null;
+    readonly digest: null;
+    readonly path: string;
+  };
+  readonly projectDigest: string;
+  readonly reason: 'ambiguous-closure' | 'missing' | 'renamed' | 'symlink';
+  readonly schema: typeof inputProofProtocol;
+  readonly status: 'rejected';
+}
+
+/** @internal Exact accepted bytes or an explicit refusal to invent unavailable digests. */
+export type KovoSourceCheckInputProof =
+  | KovoAcceptedSourceCheckInputProof
+  | KovoRejectedSourceCheckInputProof;
+
 /** @internal Status vocabulary for the complete diagnostic-producing phase census. */
-export type KovoSourceCheckPhaseStatus = 'executed' | 'not-applicable' | 'reused-authenticated';
+export type KovoSourceCheckPhaseStatus =
+  | 'executed'
+  | 'not-applicable'
+  | 'not-reached'
+  | 'reused-authenticated';
 
 /** @internal One phase observation bound to the exact facts it consumed. */
 export interface KovoSourceCheckPhaseObservation {
@@ -102,7 +128,7 @@ export interface KovoSourceCheckPhaseObservation {
 
 /** @internal Complete source-check phase evidence for one foreground revision. */
 export interface KovoSourceCheckPhaseCensusV2 {
-  readonly checkGraphDigest: string;
+  readonly checkGraphDigest: string | null;
   readonly phases: readonly KovoSourceCheckPhaseObservation[];
   readonly schema: typeof phaseCensusProtocol;
 }
@@ -146,7 +172,7 @@ export function createKovoSourceCheckInputProof(
   entryPath: string,
   appFiles: readonly KovoSourceCheckInputFile[],
   configFiles: readonly KovoSourceCheckInputFile[] = [],
-): KovoSourceCheckInputProof {
+): KovoAcceptedSourceCheckInputProof {
   const entry = exactRelativePath(entryPath, 'source-check entry');
   const app = canonicalInputFiles(appFiles, 'source-check app closure');
   const config = canonicalInputFiles(configFiles, 'source-check config closure');
@@ -178,6 +204,33 @@ export function createKovoSourceCheckInputProof(
     entry: Object.freeze(fileDigestRow(entryFile)),
     projectDigest: digestText(`${entry}\0${closureDigest}\0${configClosureDigest ?? 'none'}`),
     schema: inputProofProtocol,
+    status: 'accepted',
+  });
+}
+
+/**
+ * Represent a missing or ambiguous revision without assigning a digest to bytes that were never
+ * admitted. The bounded project snapshot identifies the rejected filesystem state but is not
+ * mislabeled as a source or closure digest.
+ */
+export function createRejectedKovoSourceCheckInputProof(
+  entryPath: string,
+  projectSnapshotDigest: string,
+  reason: KovoRejectedSourceCheckInputProof['reason'],
+): KovoRejectedSourceCheckInputProof {
+  const entry = exactRelativePath(entryPath, 'rejected source-check entry');
+  if (!digestPattern.test(projectSnapshotDigest)) {
+    throw new TypeError('Rejected source-check input requires an exact project snapshot digest.');
+  }
+  return Object.freeze({
+    closure: null,
+    closureDigest: null,
+    configClosureDigest: null,
+    entry: Object.freeze({ bytes: null, digest: null, path: entry }),
+    projectDigest: projectSnapshotDigest,
+    reason,
+    schema: inputProofProtocol,
+    status: 'rejected',
   });
 }
 
@@ -428,19 +481,32 @@ function validateRevisionResult(checked: KovoSourceCheckRevisionResult): void {
   }
   if (
     checked.census.schema !== phaseCensusProtocol ||
-    !digestPattern.test(checked.census.checkGraphDigest) ||
+    (checked.census.checkGraphDigest !== null &&
+      !digestPattern.test(checked.census.checkGraphDigest)) ||
     checked.census.phases.length !== KOVO_SOURCE_CHECK_PHASES.length
   ) {
     throw new TypeError('Source-check revision returned an invalid phase census.');
   }
-  if (
-    !digestPattern.test(checked.input.closureDigest) ||
-    !digestPattern.test(checked.input.entry.digest) ||
-    !digestPattern.test(checked.input.projectDigest) ||
-    (checked.input.configClosureDigest !== null &&
-      !digestPattern.test(checked.input.configClosureDigest))
-  ) {
+  if (!digestPattern.test(checked.input.projectDigest)) {
     throw new TypeError('Source-check revision returned invalid input digests.');
+  }
+  if (checked.input.status === 'accepted') {
+    if (
+      !digestPattern.test(checked.input.closureDigest) ||
+      !digestPattern.test(checked.input.entry.digest) ||
+      (checked.input.configClosureDigest !== null &&
+        !digestPattern.test(checked.input.configClosureDigest))
+    ) {
+      throw new TypeError('Source-check revision returned invalid input digests.');
+    }
+  } else if (
+    checked.input.closure !== null ||
+    checked.input.closureDigest !== null ||
+    checked.input.configClosureDigest !== null ||
+    checked.input.entry.bytes !== null ||
+    checked.input.entry.digest !== null
+  ) {
+    throw new TypeError('Rejected source-check input fabricated unavailable byte digests.');
   }
   for (const [index, phase] of checked.census.phases.entries()) {
     if (
@@ -448,7 +514,7 @@ function validateRevisionResult(checked: KovoSourceCheckRevisionResult): void {
       !Number.isFinite(phase.durationMs) ||
       phase.durationMs < 0 ||
       !digestPattern.test(phase.inputDigest) ||
-      !['executed', 'not-applicable', 'reused-authenticated'].includes(phase.status)
+      !['executed', 'not-applicable', 'not-reached', 'reused-authenticated'].includes(phase.status)
     ) {
       throw new TypeError(`Source-check revision returned invalid phase ${phase.name}.`);
     }
