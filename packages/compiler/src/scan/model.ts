@@ -404,6 +404,12 @@ export interface JsxElementModel {
   openingEnd: number;
   openingTagNameEnd: number;
   openingTagNameStart: number;
+  /**
+   * Parser-owned proof that this tag is an exact, unshadowed, unmutated value import of the
+   * reviewed `@kovojs/ui/button` Button. Mutation-form lowering consumes this closed verdict
+   * instead of rediscovering import or binding provenance from the source AST (SPEC §5.2 rule 10).
+   */
+  reviewedMutationSubmitter?: true;
   repeatable: boolean;
   selfClosing: boolean;
   selfClosingSlashHasLeadingWhitespace: boolean;

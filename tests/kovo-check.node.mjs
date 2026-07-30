@@ -581,9 +581,12 @@ void test('P10 normative docs cover the constitution and compiler hard rules', a
   ]);
   assert.deepEqual(fact.hardRuleTitlesCovered, [
     'Source-derived names and content-addressed modules',
-    ...fact.compilerRuleTitles.slice(1),
+    ...fact.compilerRuleTitles.slice(1, 5),
+    'Registry and app-membership atomicity',
+    ...fact.compilerRuleTitles.slice(6),
     'Output safety is contextual and default-on',
     'Security-critical effects lower to a finite compiler-owned IR',
+    'Authored-source provenance stays compiler-owned',
     'Client representation digest',
     'Render-plan fingerprint',
     'App build token',
@@ -760,7 +763,7 @@ void test('pre-launch checklist is tracked explicitly', async () => {
     },
   );
   assert.equal(fact.auditStatuses.Codex, 'pending');
-  assert.deepEqual(fact.runnableStatuses, ['pending', 'pending', 'pending', 'pending']);
+  assert.deepEqual(fact.runnableStatuses, ['pending', 'pending', 'pending', 'pending', 'pending']);
   assert.deepEqual(fact.evidenceStatuses, ['pending', 'pending', 'pending', 'pending', 'pending']);
   assert.equal(
     fact.auditReadyCount,
@@ -824,6 +827,7 @@ void test('P2 loader smoke evidence is asserted through runtime behavior', async
       calls: [
         ['load', true],
         ['idle', true],
+        ['visible', true],
       ],
       disposedListenerEvents: [],
       initialImportCount: 1,
@@ -831,7 +835,7 @@ void test('P2 loader smoke evidence is asserted through runtime behavior', async
       listenerOptions: Object.fromEntries(
         delegatedLifecycleEvents.map((event) => [event, { capture: true }]),
       ),
-      observer: { observedCount: 0, unobservedCount: 0 },
+      observer: { observedCount: 1, unobservedCount: 2 },
       reconciledItems: [
         {
           html: '<li>p1:2</li>',
@@ -1415,7 +1419,6 @@ void test('P3 typed routes validate navigation targets', async () => {
     {
       core: {
         href: '/products/p%201?max=10',
-        link: { href: '/products/p1' },
         redirect: { location: '/products/p1', status: 303 },
         serverRoute: { loadType: 'function', path: '/products/:id' },
       },

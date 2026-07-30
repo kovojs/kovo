@@ -208,11 +208,12 @@ describe('kovo export', () => {
         [
           '/** @jsxImportSource @kovojs/server */',
           "import { component } from '@kovojs/core';",
-          "import { createApp } from '@kovojs/server/internal/fixture-app';",
-          "import { publicAccess, query, route } from '@kovojs/server';",
+          "import { defineKovo } from '@kovojs/server';",
           '',
-          "const greetingQuery = query('greeting', {",
-          "  access: publicAccess('static export component query'),",
+          "const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000032' });",
+          '',
+          'const greetingQuery = app.query({',
+          "  access: app.publicAccess('static export component query'),",
           "  load: () => ({ message: 'Hello from query' }),",
           '});',
           '',
@@ -223,21 +224,22 @@ describe('kovo export', () => {
           '  },',
           '});',
           '',
-          'export default createApp({',
+          'const greetingRoute = app.route("/", {',
+          "  access: app.publicAccess('static export route'),",
+          '  page: () => <Greeting />,',
+          '});',
+          '',
+          'export default app.assemble({',
           '  queries: [greetingQuery],',
-          '  routes: [',
-          '    route("/", {',
-          "      access: publicAccess('static export route'),",
-          '      page: () => <Greeting />,',
-          '    }),',
-          '  ],',
+          '  routes: [greetingRoute],',
           '});',
           '',
         ].join('\n'),
         'utf8',
       );
 
-      await expect(mainAsync(['export', appPath, '--out', outDir])).resolves.toBe(0);
+      const exitCode = await mainAsync(['export', appPath, '--out', outDir]);
+      expect(exitCode, stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toBe(0);
 
       expect(stderr).not.toHaveBeenCalled();
       const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');

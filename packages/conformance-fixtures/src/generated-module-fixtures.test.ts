@@ -643,7 +643,7 @@ export function renderSource() {
       generatedTypedRouteNavigationBehaviorFact({
         async assertRegistryConsumerTypes(files, consumerSource) {
           registryConsumerAssertions.push(
-            `${files.map((file) => file.kind).join(',')}:${consumerSource.includes("href('/checkout', {})")}`,
+            `${files.map((file) => file.kind).join(',')}:${consumerSource.includes("href('/products/:id', {})")}`,
           );
         },
         compileComponentModule({ source }) {

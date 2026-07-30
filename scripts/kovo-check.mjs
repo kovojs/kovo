@@ -11,7 +11,7 @@ const suiteCommands = new Map([
 const defaultSuites = [...suiteCommands.keys()];
 
 export function missingBuildMessage(entry = cliEntry) {
-  return `kovo-check requires ${entry}. Run \`pnpm run build\` first.`;
+  return `kovo-check requires ${entry}. Run \`vp run build\` first.`;
 }
 
 function selectedSuitesFromArgs(args) {

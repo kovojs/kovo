@@ -7521,6 +7521,10 @@ function jsxElementModel(
   const unreviewedComponentTag =
     componentTag &&
     !jsxTagHasReviewedKovoUiEventBoundary(sourceFile, openingElement.tagName, tag, namedImports);
+  const reviewedMutationSubmitter = jsxTagIsReviewedMutationSubmitter(
+    sourceFile,
+    openingElement.tagName,
+  );
 
   return {
     ancestorTags: jsxAncestorTags(sourceFile, node),
@@ -7533,6 +7537,7 @@ function jsxElementModel(
     openingEnd: openingElement.getEnd(),
     openingTagNameEnd: openingElement.tagName.getEnd(),
     openingTagNameStart: openingElement.tagName.getStart(sourceFile),
+    ...(reviewedMutationSubmitter ? { reviewedMutationSubmitter: true as const } : {}),
     repeatable: isInsideStaticRepeatCallback(node),
     selfClosing,
     selfClosingSlashHasLeadingWhitespace: selfClosingSlashHasLeadingWhitespace(
@@ -7644,6 +7649,305 @@ function jsxTagHasReviewedKovoUiEventBoundary(
     }
   }
   return false;
+}
+
+/**
+ * SPEC §5.2 rule 10: resolve the one reviewed mutation submitter at the parser boundary. Lowering
+ * may inspect only the resulting boolean fact; import text, shadowing, and visible mutation stay
+ * pinned to this source snapshot.
+ */
+function jsxTagIsReviewedMutationSubmitter(
+  sourceFile: ts.SourceFile,
+  tagName: ts.JsxTagNameExpression,
+): boolean {
+  if (!ts.isIdentifier(tagName)) return false;
+  const binding = reviewedMutationSubmitterImportBinding(sourceFile, tagName.text);
+  return (
+    binding !== null &&
+    !identifierIsShadowedBeforeScope(tagName, binding, sourceFile) &&
+    !reviewedMutationSubmitterBindingHasVisibleMutation(sourceFile, binding)
+  );
+}
+
+function reviewedMutationSubmitterImportBinding(
+  sourceFile: ts.SourceFile,
+  localName: string,
+): ts.Identifier | null {
+  let binding: ts.Identifier | null = null;
+  const statements = compilerSnapshotDenseArray(
+    sourceFile.statements,
+    'Reviewed mutation submitter module statements',
+  );
+  for (let index = 0; index < statements.length; index += 1) {
+    const statement = statements[index]!;
+    if (ts.isImportDeclaration(statement)) {
+      const clause = statement.importClause;
+      if (!clause) continue;
+      if (clause.name?.text === localName) return null;
+      const namedBindings = clause.namedBindings;
+      if (namedBindings && ts.isNamespaceImport(namedBindings)) {
+        if (namedBindings.name.text === localName) return null;
+        continue;
+      }
+      if (!namedBindings || !ts.isNamedImports(namedBindings)) continue;
+      const elements = compilerSnapshotDenseArray(
+        namedBindings.elements,
+        'Reviewed mutation submitter import specifiers',
+      );
+      for (let specifierIndex = 0; specifierIndex < elements.length; specifierIndex += 1) {
+        const specifier = elements[specifierIndex]!;
+        if (specifier.name.text !== localName) continue;
+        const exact =
+          !clause.isTypeOnly &&
+          !specifier.isTypeOnly &&
+          ts.isStringLiteralLike(statement.moduleSpecifier) &&
+          statement.moduleSpecifier.text === '@kovojs/ui/button' &&
+          (specifier.propertyName === undefined
+            ? specifier.name.text === 'Button'
+            : ts.isIdentifier(specifier.propertyName) && specifier.propertyName.text === 'Button');
+        if (!exact || binding !== null) return null;
+        binding = specifier.name;
+      }
+      continue;
+    }
+    if (
+      (ts.isImportEqualsDeclaration(statement) && statement.name.text === localName) ||
+      moduleStatementDeclaresReviewedMutationSubmitterName(statement, localName)
+    ) {
+      return null;
+    }
+  }
+  return binding;
+}
+
+function moduleStatementDeclaresReviewedMutationSubmitterName(
+  statement: ts.Statement,
+  localName: string,
+): boolean {
+  if (ts.isVariableStatement(statement)) {
+    const declarations = compilerSnapshotDenseArray(
+      statement.declarationList.declarations,
+      'Reviewed mutation submitter module declarations',
+    );
+    for (let index = 0; index < declarations.length; index += 1) {
+      if (bindingNameContainsReviewedMutationSubmitterName(declarations[index]!.name, localName)) {
+        return true;
+      }
+    }
+    return false;
+  }
+  if (
+    ts.isFunctionDeclaration(statement) ||
+    ts.isClassDeclaration(statement) ||
+    ts.isEnumDeclaration(statement) ||
+    ts.isModuleDeclaration(statement)
+  ) {
+    return statement.name !== undefined && statement.name.text === localName;
+  }
+  return false;
+}
+
+function bindingNameContainsReviewedMutationSubmitterName(
+  bindingName: ts.BindingName,
+  localName: string,
+): boolean {
+  if (ts.isIdentifier(bindingName)) return bindingName.text === localName;
+  const elements = compilerSnapshotDenseArray(
+    bindingName.elements,
+    'Reviewed mutation submitter binding elements',
+  );
+  for (let index = 0; index < elements.length; index += 1) {
+    const element = elements[index]!;
+    if (
+      !ts.isOmittedExpression(element) &&
+      bindingNameContainsReviewedMutationSubmitterName(element.name, localName)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function reviewedMutationSubmitterBindingHasVisibleMutation(
+  sourceFile: ts.SourceFile,
+  binding: ts.Identifier,
+): boolean {
+  let mutated = false;
+  const visit = (node: ts.Node): void => {
+    if (mutated) return;
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
+      reviewedMutationSubmitterAssignmentTargetMutatesBinding(node.left, sourceFile, binding)
+    ) {
+      mutated = true;
+      return;
+    }
+    if (
+      (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+      (node.operator === ts.SyntaxKind.PlusPlusToken ||
+        node.operator === ts.SyntaxKind.MinusMinusToken) &&
+      reviewedMutationSubmitterExpressionRootsAtBinding(node.operand, sourceFile, binding)
+    ) {
+      mutated = true;
+      return;
+    }
+    if (
+      ts.isDeleteExpression(node) &&
+      reviewedMutationSubmitterExpressionRootsAtBinding(node.expression, sourceFile, binding)
+    ) {
+      mutated = true;
+      return;
+    }
+    if (
+      ts.isCallExpression(node) &&
+      reviewedMutationSubmitterKnownMutatorTargetsBinding(node, sourceFile, binding)
+    ) {
+      mutated = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return mutated;
+}
+
+function reviewedMutationSubmitterAssignmentTargetMutatesBinding(
+  target: ts.Expression,
+  sourceFile: ts.SourceFile,
+  binding: ts.Identifier,
+): boolean {
+  const expression = unwrapExpression(target, { await: false });
+  if (reviewedMutationSubmitterExpressionRootsAtBinding(expression, sourceFile, binding)) {
+    return true;
+  }
+  if (ts.isArrayLiteralExpression(expression)) {
+    const elements = compilerSnapshotDenseArray(
+      expression.elements,
+      'Reviewed mutation submitter assignment array',
+    );
+    for (let index = 0; index < elements.length; index += 1) {
+      const element = elements[index]!;
+      if (ts.isOmittedExpression(element)) continue;
+      if (
+        reviewedMutationSubmitterAssignmentTargetMutatesBinding(
+          ts.isSpreadElement(element) ? element.expression : element,
+          sourceFile,
+          binding,
+        )
+      ) {
+        return true;
+      }
+    }
+  }
+  if (ts.isObjectLiteralExpression(expression)) {
+    const properties = compilerSnapshotDenseArray(
+      expression.properties,
+      'Reviewed mutation submitter assignment object',
+    );
+    for (let index = 0; index < properties.length; index += 1) {
+      const property = properties[index]!;
+      if (
+        ts.isShorthandPropertyAssignment(property) &&
+        reviewedMutationSubmitterIdentifierIsBinding(property.name, sourceFile, binding)
+      ) {
+        return true;
+      }
+      if (
+        ts.isPropertyAssignment(property) &&
+        reviewedMutationSubmitterAssignmentTargetMutatesBinding(
+          property.initializer,
+          sourceFile,
+          binding,
+        )
+      ) {
+        return true;
+      }
+      if (
+        ts.isSpreadAssignment(property) &&
+        reviewedMutationSubmitterAssignmentTargetMutatesBinding(
+          property.expression,
+          sourceFile,
+          binding,
+        )
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function reviewedMutationSubmitterExpressionRootsAtBinding(
+  expression: ts.Expression,
+  sourceFile: ts.SourceFile,
+  binding: ts.Identifier,
+): boolean {
+  const current = unwrapExpression(expression, { await: false });
+  if (ts.isIdentifier(current)) {
+    return reviewedMutationSubmitterIdentifierIsBinding(current, sourceFile, binding);
+  }
+  if (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current)) {
+    return reviewedMutationSubmitterExpressionRootsAtBinding(
+      current.expression,
+      sourceFile,
+      binding,
+    );
+  }
+  return false;
+}
+
+function reviewedMutationSubmitterIdentifierIsBinding(
+  identifier: ts.Identifier,
+  sourceFile: ts.SourceFile,
+  binding: ts.Identifier,
+): boolean {
+  return (
+    identifier.text === binding.text &&
+    !identifierIsShadowedBeforeScope(identifier, binding, sourceFile)
+  );
+}
+
+function reviewedMutationSubmitterKnownMutatorTargetsBinding(
+  call: ts.CallExpression,
+  sourceFile: ts.SourceFile,
+  binding: ts.Identifier,
+): boolean {
+  const target = call.arguments[0];
+  if (!target || !reviewedMutationSubmitterExpressionRootsAtBinding(target, sourceFile, binding)) {
+    return false;
+  }
+  const callee = unwrapExpression(call.expression, { await: false });
+  let owner: string | null = null;
+  let name: string | null = null;
+  if (ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression)) {
+    owner = callee.expression.text;
+    name = callee.name.text;
+  } else if (
+    ts.isElementAccessExpression(callee) &&
+    ts.isIdentifier(callee.expression) &&
+    callee.argumentExpression &&
+    ts.isStringLiteralLike(callee.argumentExpression)
+  ) {
+    owner = callee.expression.text;
+    name = callee.argumentExpression.text;
+  }
+  if (owner === 'Object') {
+    return (
+      name === 'assign' ||
+      name === 'defineProperties' ||
+      name === 'defineProperty' ||
+      name === 'setPrototypeOf'
+    );
+  }
+  return (
+    owner === 'Reflect' &&
+    (name === 'defineProperty' ||
+      name === 'deleteProperty' ||
+      name === 'set' ||
+      name === 'setPrototypeOf')
+  );
 }
 
 function jsxSpreadAttributeModels(

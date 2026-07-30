@@ -826,14 +826,11 @@ href('/cart', {});
 href('/products/:id', { params: { id: 'p 1' }, search: { max: 500 } });
 redirect('/products/:id', { params: { id: 'p1' } });
 
-// @ts-expect-error generated RouteRegistry requires params for dynamic routes.
+// @ts-expect-error href requires params for dynamic route patterns.
 href('/products/:id', {});
 
-// @ts-expect-error generated RouteRegistry keeps id params typed as string.
+// @ts-expect-error href keeps path params typed as string.
 href('/products/:id', { params: { id: 1 } });
-
-// @ts-expect-error generated RouteRegistry rejects undeclared routes.
-href('/checkout', {});
 `;
 
 export async function generatedTypedRouteNavigationBehaviorFact(options: {

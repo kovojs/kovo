@@ -1,6 +1,6 @@
 import { createServer as createHttpServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -632,7 +632,7 @@ import { HomeCard } from './components/home-card.js';
 import { LoginCard } from './components/login-card.js';
 
 const shellStyles = style.create({ root: { backgroundColor: 'linen' } });
-const app = defineKovo({});
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000031' });
 const home = app.route('/', { page: () => <div style={shellStyles.root}><HomeCard /></div> });
 const login = app.route('/login', { page: () => <div style={shellStyles.root}><LoginCard /></div> });
 
@@ -659,6 +659,16 @@ export const LoginCard = component({
 
     try {
       await mkdir(join(root, 'src/components'), { recursive: true });
+      await mkdir(join(root, 'node_modules/@kovojs'), { recursive: true });
+      // The receiver-bound app contract is authenticated through TypeScript's physical package
+      // resolution. Keep this throwaway Vite root equivalent to a real installed app so
+      // `app.route(...)` can produce route-level CSS facts instead of silently collapsing to base
+      // CSS (SPEC §5.2 rule 6 / §6.2.1).
+      await symlink(
+        fileURLToPath(new URL('..', import.meta.url)),
+        join(root, 'node_modules/@kovojs/server'),
+        'dir',
+      );
       await writeFile(join(root, 'src/app-shell.tsx'), appSource, 'utf8');
       await writeFile(join(root, 'src/components/home-card.tsx'), homeSource, 'utf8');
       await writeFile(join(root, 'src/components/login-card.tsx'), loginSource, 'utf8');
