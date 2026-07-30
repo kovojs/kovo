@@ -542,6 +542,8 @@ jobs:
       - uses: ./.github/actions/kovo-setup
       - name: App contract spike conformance
         run: vp exec pnpm --filter @kovojs/conformance-app-contract-spike test
+      - name: App contract type budgets
+        run: vp exec pnpm run check:app-contract-type-budgets
       - name: Drizzle pinned conformance
         run: vp exec pnpm --filter @kovojs/conformance-drizzle-pin test
       - name: Better Auth pinned conformance
