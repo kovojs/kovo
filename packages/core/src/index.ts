@@ -746,9 +746,7 @@ export function FieldError<Failure = unknown>(props: FieldErrorProps<Failure>): 
 export function FormError<
   Failure = unknown,
   const Code extends string | readonly string[] | undefined = undefined,
->(
-  props: FormErrorProps<Failure, Code>,
-): string {
+>(props: FormErrorProps<Failure, Code>): string {
   if (props.failure === undefined) {
     return deferMutationFormHelper('form', props as Record<string, unknown>);
   }
@@ -804,9 +802,7 @@ function failureCodeMatches(
 
 function renderFailureOutput<Failure>(
   kind: MutationFormHelperKind,
-  props:
-    | FieldErrorProps<Failure>
-    | FormErrorProps<Failure, string | readonly string[] | undefined>,
+  props: FieldErrorProps<Failure> | FormErrorProps<Failure, string | readonly string[] | undefined>,
   failure: Record<string, unknown>,
   message: unknown,
 ): string {
@@ -819,9 +815,7 @@ function renderFailureOutput<Failure>(
 }
 
 function failureOutputAttributes<Failure>(
-  props:
-    | FieldErrorProps<Failure>
-    | FormErrorProps<Failure, string | readonly string[] | undefined>,
+  props: FieldErrorProps<Failure> | FormErrorProps<Failure, string | readonly string[] | undefined>,
   failure: Record<string, unknown>,
 ): string {
   const role = failureOutputOwnString(props, 'role') ?? 'alert';
