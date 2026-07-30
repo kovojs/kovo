@@ -34,6 +34,16 @@ export const appContractMemberNames = [
 
 export type AppContractMemberName = (typeof appContractMemberNames)[number];
 
+export const appContractAccessGuardMemberNames = [
+  'all',
+  'authenticated',
+  'owns',
+  'rateLimit',
+  'role',
+] as const;
+
+export type AppContractAccessGuardMemberName = (typeof appContractAccessGuardMemberNames)[number];
+
 /**
  * Compiler-owned proof for one exact declaration-factory property access.
  *
@@ -414,6 +424,31 @@ export function compilerOwnedAppContractMemberEquals(
   memberName: AppContractMemberName,
 ): boolean {
   return compilerOwnedAppContractMemberName(typescript, sourceFile, expression) === memberName;
+}
+
+/**
+ * Resolve one exact access-algebra member on a compiler-authenticated app contract.
+ *
+ * This finite projection does not classify a call result by spelling. Consumers must still
+ * validate the member's exact call shape and arguments before emitting an access fact
+ * (SPEC §6.2.1/§6.6/§10.2).
+ */
+export function compilerOwnedAppContractAccessGuardMemberName(
+  typescript: FrameworkIdentityTypeScript,
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): AppContractAccessGuardMemberName | undefined {
+  const memberName = compilerOwnedAppContractMemberName(typescript, sourceFile, expression);
+  switch (memberName) {
+    case 'all':
+    case 'authenticated':
+    case 'owns':
+    case 'rateLimit':
+    case 'role':
+      return memberName;
+    default:
+      return undefined;
+  }
 }
 
 function isDeclarationFamily(value: string): value is AppContractDeclarationFamily {

@@ -269,6 +269,180 @@ describe('D1 compiler-owned exact project resolver', () => {
     ]);
   });
 
+  it('projects exact app access algebra and immutable guard aliases into runtime-parity names', async () => {
+    const fixture = await createFixture();
+    const contract = join(fixture.root, 'app/src/kovo.ts');
+    const entry = join(fixture.root, 'app/src/access-algebra.tsx');
+    await writeSource(
+      contract,
+      [
+        "import { defineKovo } from '@kovojs/server';",
+        'export const app = defineKovo({',
+        "  appId: '00000000-0000-4000-8000-000000000002',",
+        '});',
+        '',
+      ].join('\n'),
+    );
+    await writeSource(
+      entry,
+      [
+        "import { app } from './kovo.js';",
+        'declare const ownerColumn: unknown;',
+        "const admin = app.role('admin');",
+        'const adminAlias = admin;',
+        "const rate = app.rateLimit({ max: 10, per: 'global' });",
+        'const rateAlias = rate;',
+        'const owns = app.owns((request) => request.params.id, ownerColumn);',
+        'const rateFirst = app.all(rateAlias, adminAlias);',
+        'const authenticatedFirst = app.all(app.authenticated, adminAlias);',
+        'const ownershipFirst = app.all(app.authenticated, owns);',
+        'const twoOwners = app.all(owns, app.owns((request) => request.params.id, ownerColumn));',
+        "export const rolePage = app.route('/role', {",
+        "  access: [app.role('admin')],",
+        '  page: () => <main>Role</main>,',
+        '});',
+        "export const roleAliasPage = app.route('/role-alias', {",
+        '  access: [adminAlias],',
+        '  page: () => <main>Role alias</main>,',
+        '});',
+        "export const ratePage = app.route('/rate', {",
+        '  access: [rateAlias],',
+        '  page: () => <main>Rate</main>,',
+        '});',
+        "export const ownsPage = app.route('/owns', {",
+        '  access: [owns],',
+        '  page: () => <main>Owns</main>,',
+        '});',
+        "export const rateFirstPage = app.route('/rate-first', {",
+        '  access: [rateFirst],',
+        '  page: () => <main>Rate first</main>,',
+        '});',
+        "export const authenticatedFirstPage = app.route('/authenticated-first', {",
+        '  access: [authenticatedFirst],',
+        '  page: () => <main>Authenticated first</main>,',
+        '});',
+        "export const ownershipFirstPage = app.route('/ownership-first', {",
+        '  access: [ownershipFirst],',
+        '  page: () => <main>Ownership first</main>,',
+        '});',
+        "export const twoOwnersPage = app.route('/two-owners', {",
+        '  access: [twoOwners],',
+        '  page: () => <main>Two owners</main>,',
+        '});',
+        '',
+      ].join('\n'),
+    );
+    const project = createCompilerOwnedAppContractProject({ rootNames: [contract, entry] });
+
+    const result = project.compileEntry(entry);
+
+    expect(result.diagnostics).toEqual([]);
+    expect(
+      result.route?.routePageFacts.map((fact) => ({
+        access: fact.access,
+        route: fact.route,
+      })),
+    ).toEqual([
+      { access: { guards: ['role:admin'], kind: 'guard-chain' }, route: '/role' },
+      { access: { guards: ['role:admin'], kind: 'guard-chain' }, route: '/role-alias' },
+      { access: { guards: ['rateLimit'], kind: 'guard-chain' }, route: '/rate' },
+      { access: { guards: ['owns'], kind: 'guard-chain' }, route: '/owns' },
+      { access: { guards: ['rateLimit'], kind: 'guard-chain' }, route: '/rate-first' },
+      {
+        access: { guards: ['authed'], kind: 'guard-chain' },
+        route: '/authenticated-first',
+      },
+      { access: { guards: ['owns'], kind: 'guard-chain' }, route: '/ownership-first' },
+      { access: { guards: ['opaque'], kind: 'guard-chain' }, route: '/two-owners' },
+    ]);
+  });
+
+  it('refuses lookalike, mutable, computed, joined, cast, and wrapped access guards', async () => {
+    const fixture = await createFixture();
+    const contract = join(fixture.root, 'app/src/kovo.ts');
+    const entry = join(fixture.root, 'app/src/access-algebra-adversarial.tsx');
+    await writeSource(
+      contract,
+      [
+        "import { defineKovo } from '@kovojs/server';",
+        'export const app = defineKovo({',
+        "  appId: '00000000-0000-4000-8000-000000000002',",
+        '});',
+        '',
+      ].join('\n'),
+    );
+    await writeSource(
+      entry,
+      [
+        "import { app } from './kovo.js';",
+        'const lookalike = { role: (_role: string) => () => true };',
+        "let mutable = app.role('admin');",
+        "const computed = app['role']('admin');",
+        "const joined = true ? app.role('admin') : app.role('member');",
+        "const cast = app.role('admin') as unknown;",
+        "const parenthesized = (app.role('admin'));",
+        "const wrapped = { guard: app.role('admin') }.guard;",
+        'const roleFactory = app.role;',
+        "const transferred = roleFactory('admin');",
+        "const dynamicRoleName = 'admin';",
+        'const dynamicRole = app.role(dynamicRoleName);',
+        "const partialAll = app.all(app.authenticated, lookalike.role('admin'));",
+        "export const lookalikePage = app.route('/lookalike', {",
+        "  access: [lookalike.role('admin')],",
+        '  page: () => <main>Lookalike</main>,',
+        '});',
+        "export const mutablePage = app.route('/mutable', {",
+        '  access: [mutable],',
+        '  page: () => <main>Mutable</main>,',
+        '});',
+        "export const computedPage = app.route('/computed', {",
+        '  access: [computed],',
+        '  page: () => <main>Computed</main>,',
+        '});',
+        "export const joinedPage = app.route('/joined', {",
+        '  access: [joined],',
+        '  page: () => <main>Joined</main>,',
+        '});',
+        "export const castPage = app.route('/cast', {",
+        '  access: [cast],',
+        '  page: () => <main>Cast</main>,',
+        '});',
+        "export const parenthesizedPage = app.route('/parenthesized', {",
+        '  access: [parenthesized],',
+        '  page: () => <main>Parenthesized</main>,',
+        '});',
+        "export const wrappedPage = app.route('/wrapped', {",
+        '  access: [wrapped],',
+        '  page: () => <main>Wrapped</main>,',
+        '});',
+        "export const transferredPage = app.route('/transferred', {",
+        '  access: [transferred],',
+        '  page: () => <main>Transferred</main>,',
+        '});',
+        "export const dynamicRolePage = app.route('/dynamic-role', {",
+        '  access: [dynamicRole],',
+        '  page: () => <main>Dynamic role</main>,',
+        '});',
+        "export const partialAllPage = app.route('/partial-all', {",
+        '  access: [partialAll],',
+        '  page: () => <main>Partial all</main>,',
+        '});',
+        '',
+      ].join('\n'),
+    );
+    const project = createCompilerOwnedAppContractProject({ rootNames: [contract, entry] });
+
+    const result = project.compileEntry(entry);
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.route?.routePageFacts).toHaveLength(10);
+    expect(
+      result.route?.routePageFacts.every(
+        (fact) => fact.access?.kind === 'guard-chain' && fact.access.guards.length === 0,
+      ),
+    ).toBe(true);
+  });
+
   it('binds integrated adapter mutations to their exact literal key and call span', async () => {
     const fixture = await createFixture();
     const contract = join(fixture.root, 'app/src/kovo.ts');

@@ -14,6 +14,7 @@ import {
 import type { AccessDecisionFact } from '@kovojs/core/internal/graph';
 
 import {
+  compilerOwnedAppContractAccessGuardMemberName,
   compilerOwnedAppContractFactoryEquals,
   compilerOwnedAppContractMemberEquals,
 } from '../app-contract-resolver.js';
@@ -115,6 +116,11 @@ const RESPOND_IDENTITY = frameworkExport('@kovojs/server', 'respond');
 const ROOTED_FILES_IDENTITY = frameworkExport('@kovojs/server', 'rootedFiles');
 const ROUTE_IDENTITY = frameworkExport('@kovojs/server', 'route');
 const VERIFIED_ACCESS_IDENTITY = frameworkExport('@kovojs/server', 'verifiedAccess');
+
+interface StaticAccessGuardAuditFact {
+  readonly kind: 'named' | 'ordinary' | 'owns';
+  readonly name: string;
+}
 
 const navigationSegmentStampAttributes = new Set([
   'kovo-nav-components',
@@ -926,31 +932,267 @@ function accessGuardNames(access: ts.ArrayLiteralExpression, sourceFile: ts.Sour
       index,
       'Compiler access guard elements',
     ) as ts.Expression;
-    if (
-      compilerOwnedAppContractMemberEquals(
-        ts as FrameworkIdentityTypeScript,
-        sourceFile,
-        element,
-        'authenticated',
-      )
-    ) {
-      compilerArrayAppend(names, 'authed', 'Compiler access guard names');
-      continue;
-    }
-    if (
-      !ts.isCallExpression(element) ||
-      !isFrameworkAccessExpression(sourceFile, element.expression, GUARD_IDENTITY)
-    ) {
-      continue;
-    }
-    const name = compilerOwnDataValue(element.arguments, 0, 'Compiler access guard arguments') as
-      | ts.Expression
-      | undefined;
-    if (name && ts.isStringLiteralLike(name)) {
-      compilerArrayAppend(names, name.text, 'Compiler access guard names');
-    }
+    const facts = staticAccessGuardAuditFacts(element, sourceFile, [], 0);
+    const name = facts === undefined ? undefined : staticAccessGuardAuditName(facts);
+    // SPEC §6.2.1/§6.6/§10.2: the static ledger names the exact executable chain. A
+    // partial list would make an unresolved guard disappear from explain output while it still
+    // runs, so one unresolved element closes the complete chain fact.
+    if (name === undefined) return [];
+    compilerArrayAppend(names, name, 'Compiler access guard names');
   }
   return names;
+}
+
+function staticAccessGuardAuditFacts(
+  expression: ts.Expression,
+  sourceFile: ts.SourceFile,
+  aliasPath: readonly ts.VariableDeclaration[],
+  depth: number,
+): readonly StaticAccessGuardAuditFact[] | undefined {
+  if (depth > 32) return undefined;
+
+  if (
+    compilerOwnedAppContractAccessGuardMemberName(
+      ts as FrameworkIdentityTypeScript,
+      sourceFile,
+      expression,
+    ) === 'authenticated'
+  ) {
+    return [{ kind: 'ordinary', name: 'authed' }];
+  }
+
+  if (ts.isIdentifier(expression)) {
+    const alias = topLevelConstGuardAlias(expression, sourceFile);
+    if (
+      alias === undefined ||
+      guardAliasPathIncludes(aliasPath, alias) ||
+      alias.initializer === undefined
+    ) {
+      return undefined;
+    }
+    const nextPath: ts.VariableDeclaration[] = [];
+    const pathLength = compilerArrayLength(aliasPath, 'Compiler access guard alias path');
+    for (let index = 0; index < pathLength; index += 1) {
+      compilerArrayAppend(
+        nextPath,
+        compilerOwnDataValue(
+          aliasPath,
+          index,
+          'Compiler access guard alias path',
+        ) as ts.VariableDeclaration,
+        'Compiler access guard alias path',
+      );
+    }
+    compilerArrayAppend(nextPath, alias, 'Compiler access guard alias path');
+    return staticAccessGuardAuditFacts(alias.initializer, sourceFile, nextPath, depth + 1);
+  }
+
+  if (!ts.isCallExpression(expression)) return undefined;
+
+  if (isFrameworkAccessExpression(sourceFile, expression.expression, GUARD_IDENTITY)) {
+    const name = compilerOwnDataValue(
+      expression.arguments,
+      0,
+      'Compiler named access guard arguments',
+    ) as ts.Expression | undefined;
+    const implementation = compilerOwnDataValue(
+      expression.arguments,
+      1,
+      'Compiler named access guard arguments',
+    ) as ts.Expression | undefined;
+    if (
+      compilerArrayLength(expression.arguments, 'Compiler named access guard arguments') !== 2 ||
+      name === undefined ||
+      !ts.isStringLiteralLike(name) ||
+      !isCompilerAuditText(name.text) ||
+      implementation === undefined
+    ) {
+      return undefined;
+    }
+    const facts: StaticAccessGuardAuditFact[] = [{ kind: 'named', name: name.text }];
+    const implementationFacts = staticAccessGuardAuditFacts(
+      implementation,
+      sourceFile,
+      aliasPath,
+      depth + 1,
+    );
+    if (implementationFacts !== undefined) {
+      appendStaticAccessGuardAuditFacts(facts, implementationFacts);
+    }
+    return facts;
+  }
+
+  const memberName = compilerOwnedAppContractAccessGuardMemberName(
+    ts as FrameworkIdentityTypeScript,
+    sourceFile,
+    expression.expression,
+  );
+  const argumentCount = compilerArrayLength(
+    expression.arguments,
+    'Compiler app access guard arguments',
+  );
+  if (memberName === 'role') {
+    const role = compilerOwnDataValue(
+      expression.arguments,
+      0,
+      'Compiler app role guard arguments',
+    ) as ts.Expression | undefined;
+    const auditName =
+      role !== undefined && ts.isStringLiteralLike(role) ? `role:${role.text}` : undefined;
+    if (
+      argumentCount !== 1 ||
+      role === undefined ||
+      !ts.isStringLiteralLike(role) ||
+      !isCompilerAuditText(role.text) ||
+      auditName === undefined ||
+      !isCompilerAuditText(auditName)
+    ) {
+      return undefined;
+    }
+    return [{ kind: 'ordinary', name: auditName }];
+  }
+  if (memberName === 'rateLimit') {
+    return argumentCount === 1 ? [{ kind: 'ordinary', name: 'rateLimit' }] : undefined;
+  }
+  if (memberName === 'owns') {
+    // Runtime enriches this family to owns#<domain>#<key>#<owner> after authenticating the
+    // generated Postgres manifest. Source scanning cannot mint those policy bytes. `owns` is the
+    // graph's conservative, session-authority-only family name and does not discharge KV414.
+    return argumentCount === 2 ? [{ kind: 'owns', name: 'owns' }] : undefined;
+  }
+  if (memberName !== 'all' || argumentCount === 0) return undefined;
+
+  const facts: StaticAccessGuardAuditFact[] = [];
+  for (let index = 0; index < argumentCount; index += 1) {
+    const item = compilerOwnDataValue(
+      expression.arguments,
+      index,
+      'Compiler app all guard arguments',
+    ) as ts.Expression;
+    if (ts.isSpreadElement(item)) return undefined;
+    const itemFacts = staticAccessGuardAuditFacts(item, sourceFile, aliasPath, depth + 1);
+    if (itemFacts === undefined) return undefined;
+    appendStaticAccessGuardAuditFacts(facts, itemFacts);
+  }
+  return facts;
+}
+
+function appendStaticAccessGuardAuditFacts(
+  target: StaticAccessGuardAuditFact[],
+  source: readonly StaticAccessGuardAuditFact[],
+): void {
+  const sourceLength = compilerArrayLength(source, 'Compiler static access guard audit facts');
+  for (let index = 0; index < sourceLength; index += 1) {
+    compilerArrayAppend(
+      target,
+      compilerOwnDataValue(
+        source,
+        index,
+        'Compiler static access guard audit facts',
+      ) as StaticAccessGuardAuditFact,
+      'Compiler static access guard audit facts',
+    );
+  }
+}
+
+function staticAccessGuardAuditName(
+  facts: readonly StaticAccessGuardAuditFact[],
+): string | undefined {
+  let firstName: string | undefined;
+  let namedName: string | undefined;
+  let ownsCount = 0;
+  const factCount = compilerArrayLength(facts, 'Compiler static access guard audit facts');
+  for (let index = 0; index < factCount; index += 1) {
+    const fact = compilerOwnDataValue(
+      facts,
+      index,
+      'Compiler static access guard audit facts',
+    ) as StaticAccessGuardAuditFact;
+    firstName ??= fact.name;
+    if (fact.kind === 'named' && namedName === undefined) namedName = fact.name;
+    if (fact.kind === 'owns') ownsCount += 1;
+  }
+  if (ownsCount === 1) return 'owns';
+  if (ownsCount > 1) return 'opaque';
+  if (namedName !== undefined) {
+    return reservedOwnershipGuardName(namedName) ? 'opaque' : namedName;
+  }
+  return firstName;
+}
+
+function reservedOwnershipGuardName(name: string): boolean {
+  return (
+    name === 'owns' ||
+    compilerStringStartsWith(name, 'owns#') ||
+    compilerStringStartsWith(name, 'owns:') ||
+    compilerStringStartsWith(name, 'owns(')
+  );
+}
+
+function topLevelConstGuardAlias(
+  identifier: ts.Identifier,
+  sourceFile: ts.SourceFile,
+): ts.VariableDeclaration | undefined {
+  // The app-contract resolver accepts declaration roots only outside callable bodies. Keep guard
+  // aliases equally bounded: one direct source-file `const` binding, not block/function capture,
+  // destructuring, property containers, assignments, or import indirection.
+  let ancestor: ts.Node | undefined = identifier.parent;
+  while (ancestor !== undefined && ancestor !== sourceFile) {
+    if (ts.isFunctionLike(ancestor) || ts.isBlock(ancestor) || ts.isCaseBlock(ancestor)) {
+      return undefined;
+    }
+    ancestor = ancestor.parent;
+  }
+  if (ancestor !== sourceFile) return undefined;
+
+  let match: ts.VariableDeclaration | undefined;
+  const statementCount = compilerArrayLength(
+    sourceFile.statements,
+    'Compiler access guard alias statements',
+  );
+  for (let statementIndex = 0; statementIndex < statementCount; statementIndex += 1) {
+    const statement = compilerOwnDataValue(
+      sourceFile.statements,
+      statementIndex,
+      'Compiler access guard alias statements',
+    ) as ts.Statement;
+    if (!ts.isVariableStatement(statement)) continue;
+    const declarationCount = compilerArrayLength(
+      statement.declarationList.declarations,
+      'Compiler access guard alias declarations',
+    );
+    for (let declarationIndex = 0; declarationIndex < declarationCount; declarationIndex += 1) {
+      const declaration = compilerOwnDataValue(
+        statement.declarationList.declarations,
+        declarationIndex,
+        'Compiler access guard alias declarations',
+      ) as ts.VariableDeclaration;
+      if (!ts.isIdentifier(declaration.name) || declaration.name.text !== identifier.text) continue;
+      if (
+        match !== undefined ||
+        (statement.declarationList.flags & ts.NodeFlags.Const) === 0 ||
+        declaration.initializer === undefined ||
+        declaration.getStart(sourceFile) >= identifier.getStart(sourceFile)
+      ) {
+        return undefined;
+      }
+      match = declaration;
+    }
+  }
+  return match;
+}
+
+function guardAliasPathIncludes(
+  path: readonly ts.VariableDeclaration[],
+  declaration: ts.VariableDeclaration,
+): boolean {
+  const pathLength = compilerArrayLength(path, 'Compiler access guard alias path');
+  for (let index = 0; index < pathLength; index += 1) {
+    if (compilerOwnDataValue(path, index, 'Compiler access guard alias path') === declaration) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function staticStringProperty(
