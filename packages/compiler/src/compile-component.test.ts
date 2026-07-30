@@ -156,9 +156,9 @@ export const StatusCard = component({
     expect(loweredSource).toContain(
       'export const StatusCard$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({',
     );
-    expect(derivedKeyImport).toBeGreaterThan(authorQueryImport);
-    expect(escapeImport).toBeGreaterThan(derivedKeyImport);
-    expect(liveTargetImport).toBeGreaterThan(escapeImport);
+    expect(escapeImport).toBeGreaterThan(authorQueryImport);
+    expect(derivedKeyImport).toBeGreaterThan(escapeImport);
+    expect(liveTargetImport).toBeGreaterThan(derivedKeyImport);
   });
 
   it('selects collision-free live-target helper aliases from parser-owned identifiers', () => {

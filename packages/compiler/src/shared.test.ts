@@ -10,6 +10,7 @@ import {
   escapeCssString,
   generatedOffsetToOriginal,
   looseKebabCase,
+  originalOffsetToGenerated,
   outputWriteFact,
   sanitizeIdentifier,
   sourceReplacementOffsetMap,
@@ -183,6 +184,18 @@ describe('compiler shared source replacements', () => {
     ]);
 
     expect(generatedOffsetToOriginal(map, map.generatedLength)).toBe(original.length);
+  });
+
+  it('maps original unchanged spans into generated source without claiming replacements', () => {
+    const original = 'alpha beta gamma';
+    const replacement = 'BETA-BETA';
+    const map = sourceReplacementOffsetMap(original.length, [{ end: 10, replacement, start: 6 }]);
+    const generatedTailStart = original.indexOf('beta') + replacement.length;
+
+    expect(originalOffsetToGenerated(map, original.indexOf('alpha'))).toBe(0);
+    expect(originalOffsetToGenerated(map, original.indexOf('beta'))).toBeUndefined();
+    expect(originalOffsetToGenerated(map, original.indexOf('gamma'))).toBe(generatedTailStart + 1);
+    expect(originalOffsetToGenerated(map, original.length)).toBe(map.generatedLength);
   });
 
   it('composes two patch offset maps back to the original source', () => {

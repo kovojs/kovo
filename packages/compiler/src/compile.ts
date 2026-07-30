@@ -135,6 +135,7 @@ import { collectCompilerDiagnostics } from './validate/pipeline.js';
 import {
   escapeAttribute,
   generatedOffsetToOriginal,
+  originalOffsetToGenerated,
   type SourceOffsetMap,
   type SourceReplacement,
 } from './shared.js';
@@ -1452,12 +1453,22 @@ function emitServerPhase(
   );
   serverRenderReplacements = compilerAppendDense(
     serverRenderReplacements,
-    derivedMutationKeyAssignments(lowered.model, parsed.options.fileName, lowered.source),
+    derivedMutationKeyAssignments(
+      parsed.originalModel,
+      parsed.options.fileName,
+      lowered.source,
+      lowered.lowering.validationOffsetMap,
+    ),
     'Derived mutation-key replacements',
   );
   serverRenderReplacements = compilerAppendDense(
     serverRenderReplacements,
-    derivedQueryKeyAssignments(lowered.model, parsed.options.fileName, lowered.source),
+    derivedQueryKeyAssignments(
+      parsed.originalModel,
+      parsed.options.fileName,
+      lowered.source,
+      lowered.lowering.validationOffsetMap,
+    ),
     'Derived query-key replacements',
   );
   serverRenderReplacements = compilerAppendDense(
@@ -1479,6 +1490,7 @@ function emitServerPhase(
   );
   const derivedWireKeySource = insertDerivedWireKeyImports(
     patchedServerSource,
+    parsed.originalModel,
     lowered.model,
     terminalImportInsertionOffset,
   );
@@ -2384,17 +2396,20 @@ function componentDescriptorNameAssignments(
 function derivedMutationKeyAssignments(
   model: ComponentModuleModel,
   fileName: string,
-  source: string,
+  loweredSource: string,
+  sourceOffsetMap: SourceOffsetMap,
 ): SourceReplacement[] {
   return compilerFlatMapDense(model.calls, 'Derived mutation-key calls', (call) => {
     if (!isExportedObjectFormMutationCall(model, call)) return [];
 
     const derivedKey = canonicalJson(deriveMutationKey(fileName, call.exportedConstName));
+    const span = loweredSpanForOriginalCall(call, sourceOffsetMap);
+    if (span === undefined) return [];
     return [
       {
-        end: call.end,
-        replacement: `${derivedMutationKeyHelper}(${compilerStringSlice(source, call.start, call.end)}, ${derivedKey})`,
-        start: call.start,
+        end: span.end,
+        replacement: `${derivedMutationKeyHelper}(${compilerStringSlice(loweredSource, span.start, span.end)}, ${derivedKey})`,
+        start: span.start,
       },
     ];
   });
@@ -2420,20 +2435,38 @@ const derivedWireKeyModule = '@kovojs/server/internal/wire';
 function derivedQueryKeyAssignments(
   model: ComponentModuleModel,
   fileName: string,
-  source: string,
+  loweredSource: string,
+  sourceOffsetMap: SourceOffsetMap,
 ): SourceReplacement[] {
-  return compilerMapDense(
+  return compilerFlatMapDense(
     exportedObjectFirstQueryCalls(model),
     'Derived query-key calls',
     (call) => {
       const key = deriveRegistryIdentity(fileName, call.exportedConstName!).key;
-      return {
-        end: call.end,
-        replacement: `${derivedQueryKeyHelper}(${compilerStringSlice(source, call.start, call.end)}, ${canonicalJson(key)})`,
-        start: call.start,
-      };
+      const span = loweredSpanForOriginalCall(call, sourceOffsetMap);
+      if (span === undefined) return [];
+      return [
+        {
+          end: span.end,
+          replacement: `${derivedQueryKeyHelper}(${compilerStringSlice(loweredSource, span.start, span.end)}, ${canonicalJson(key)})`,
+          start: span.start,
+        },
+      ];
     },
   );
+}
+
+function loweredSpanForOriginalCall(
+  call: Pick<CallExpressionModel, 'end' | 'start'>,
+  sourceOffsetMap: SourceOffsetMap,
+): { end: number; start: number } | undefined {
+  const start = originalOffsetToGenerated(sourceOffsetMap, call.start);
+  const mappedEnd =
+    call.end === call.start
+      ? start
+      : originalOffsetToGenerated(sourceOffsetMap, Math.max(call.start, call.end - 1));
+  if (start === undefined || mappedEnd === undefined) return undefined;
+  return { end: call.end === call.start ? mappedEnd : mappedEnd + 1, start };
 }
 
 interface GeneratedImportInsertion {
@@ -2443,15 +2476,16 @@ interface GeneratedImportInsertion {
 
 function insertDerivedWireKeyImports(
   source: string,
-  model: ComponentModuleModel,
+  originalModel: ComponentModuleModel,
+  loweredModel: ComponentModuleModel,
   importInsertionOffset: number,
 ): GeneratedImportInsertion {
   const imports: string[] = [];
   if (
-    compilerSomeDense(model.calls, 'Derived mutation-key calls', (call) =>
-      isExportedObjectFormMutationCall(model, call),
+    compilerSomeDense(originalModel.calls, 'Derived mutation-key calls', (call) =>
+      isExportedObjectFormMutationCall(originalModel, call),
     ) &&
-    !hasDerivedWireImport(model, derivedMutationKeyHelper)
+    !hasDerivedWireImport(loweredModel, derivedMutationKeyHelper)
   ) {
     compilerArrayAppend(
       imports,
@@ -2460,8 +2494,8 @@ function insertDerivedWireKeyImports(
     );
   }
   if (
-    exportedObjectFirstQueryCalls(model).length > 0 &&
-    !hasDerivedWireImport(model, derivedQueryKeyHelper)
+    exportedObjectFirstQueryCalls(originalModel).length > 0 &&
+    !hasDerivedWireImport(loweredModel, derivedQueryKeyHelper)
   ) {
     compilerArrayAppend(
       imports,

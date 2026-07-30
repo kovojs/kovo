@@ -352,6 +352,27 @@ export function generatedOffsetToOriginal(
   return undefined;
 }
 
+export function originalOffsetToGenerated(
+  map: SourceOffsetMap,
+  originalOffset: number | undefined,
+): number | undefined {
+  if (originalOffset === undefined) return undefined;
+  if (originalOffset === map.originalLength) return map.generatedLength;
+
+  const segments = compilerSnapshotDenseArray(map.segments, 'Compiler source offset segments');
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index]!;
+    if (
+      originalOffset >= segment.originalStart &&
+      originalOffset < segment.originalStart + segment.length
+    ) {
+      return segment.generatedStart + originalOffset - segment.originalStart;
+    }
+  }
+
+  return undefined;
+}
+
 export function composeSourceOffsetMaps(
   originalToIntermediate: SourceOffsetMap,
   intermediateToGenerated: SourceOffsetMap,

@@ -240,7 +240,11 @@ export function componentSourceDerivedRegistryReplacements(options: {
   const assignments: SourceDerivedRegistryAssignment[] = [];
   for (let index = 0; index < allAssignments.length; index += 1) {
     const assignment = allAssignments[index]!;
-    if (assignment.primitive !== 'component') {
+    if (
+      assignment.primitive !== 'component' &&
+      assignment.primitive !== 'mutation' &&
+      assignment.primitive !== 'query'
+    ) {
       compilerArrayAppend(assignments, assignment, 'Component source-derived registry assignments');
     }
   }
