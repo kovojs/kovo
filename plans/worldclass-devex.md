@@ -811,9 +811,12 @@ Opening items (before the first breaking batch):
       gate.
   - Evidence: `node scripts/api-decision-ledger.mjs` validates 1,640 declarations across 1,873
     subpaths with current root budgets of Core 33/60 and Server 116/116.
-- [ ] (S) Change recursive-publicness from a 532-entry accepted baseline to a descending ratchet
+- [x] (S) Change recursive-publicness from a 532-entry accepted baseline to a descending ratchet
       with no additions; publish per-package counts in CI and reach zero by the end of this track
       (G17). Review fixes for anti-gaming: exporting the leaked internal type is not a fix.
+  - Evidence: `pnpm run check:api-surface` reports `recursive-publicness-v2 total=0`; the exact
+    baseline and per-package maxima are zero, and the decision-ledger gate independently rejects
+    promoting an implementation type as a public-surface repair.
 - [x] (S) Add the AST-based packed-declaration gate for app-public `any` (G18): a small reviewed
       exception file with owner, reason, and expiry; no text grep; no hiding `any` behind an
       alias.
