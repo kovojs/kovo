@@ -260,7 +260,7 @@ export function runVerifiedBuild() {
 export function runVerifiedCheck() {
   materializeAuthenticatedLockfile();
   const cli = path.resolve('node_modules/@kovojs/cli/dist/bin.mjs');
-  const command = [process.execPath, cli, 'check', './src/app.tsx'];
+  const command = [process.execPath, cli, 'check', 'source', './src/app.tsx'];
   const invocation = timeInvocation(command);
   const executable = invocation?.[0] ?? command[0];
   const args = invocation?.[1] ?? command.slice(1);

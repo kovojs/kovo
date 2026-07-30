@@ -504,7 +504,7 @@ describe('DevEx benchmark foundation', () => {
     expect(kovoPackedProfileSource).toContain('kovo-benchmark-phase/v4');
     expect(kovoPackedProfileSource).toContain('runVerifiedCheck');
     expect(kovoPackedProfileSource).toContain('graph=${evidence.checkGraphDigest}');
-    expect(kovoPackedWorkloadSource).toContain("'check', './src/app.tsx'");
+    expect(kovoPackedWorkloadSource).toContain("'check', 'source', './src/app.tsx'");
     expect(kovoPackedWorkloadSource).toContain('KOVO_DEVEX_CHECK_PHASE_CENSUS_SOURCE');
     expect(kovoPackedWorkloadSource).toContain('kovo-check-phase-census/v1');
     expect(kovoPackedWorkloadSource).toContain("import { app } from '../kovo.js'");
