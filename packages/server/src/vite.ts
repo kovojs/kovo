@@ -84,6 +84,12 @@ import {
   snapshotBuildArray,
 } from './build-security-intrinsics.ts';
 import {
+  createWitnessWeakSet,
+  witnessFreeze,
+  witnessWeakSetAdd,
+  witnessWeakSetDelete,
+} from './security-witness-intrinsics.ts';
+import {
   securityArrayIsArray,
   securityArrayJoin,
   securityRegExpExec,
@@ -260,6 +266,11 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
     [trustedViteSecurityProfileRunnerGenerationsSentinel]?: unknown;
     [trustedViteSecurityProfileSentinel]?: unknown;
   };
+  const authenticatedServerModuleDiagnosticReports = createWitnessWeakSet<object>();
+  const authenticateServerModuleDiagnosticReport = (value: unknown): boolean =>
+    typeof value === 'object' &&
+    value !== null &&
+    witnessWeakSetDelete(authenticatedServerModuleDiagnosticReports, value);
   const trustedProfile = buildOwnDataProperty(
     trustedOptions,
     trustedViteSecurityProfileSentinel,
@@ -549,6 +560,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       const integration = createDevIntegration({
         earlyHints: false,
         moduleId: app,
+        moduleDiagnosticReportVerifier: authenticateServerModuleDiagnosticReport,
         prepareCompilerClientModules,
         ...(responseSetCookieValues === undefined ? {} : { responseSetCookieValues }),
         ...(runnerGenerationIntegration === undefined
@@ -569,8 +581,15 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       const serverModuleDiagnosticSink =
         typeof integrationOnModuleDiagnostics !== 'function'
           ? undefined
-          : (report: unknown) =>
-              viteReflectApply(integrationOnModuleDiagnostics, integration, [report]);
+          : (report: unknown) => {
+              const authenticated = authenticatedServerModuleDiagnosticReport(report);
+              witnessWeakSetAdd(authenticatedServerModuleDiagnosticReports, authenticated);
+              try {
+                viteReflectApply(integrationOnModuleDiagnostics, integration, [authenticated]);
+              } finally {
+                witnessWeakSetDelete(authenticatedServerModuleDiagnosticReports, authenticated);
+              }
+            };
       onServerModuleDiagnostics = serverModuleDiagnosticSink;
       onModuleDiagnostics =
         serverModuleDiagnosticSink === undefined
@@ -1184,6 +1203,149 @@ function logDevDataPlaneWarnings(diagnostics: readonly DataPlaneDiagnostic[]): v
 
 function dataPlaneWarningLine(diagnostic: DataPlaneDiagnostic): string {
   return `${diagnostic.severity.toUpperCase()} ${diagnostic.code} ${diagnostic.site} ${diagnostic.message}`;
+}
+
+interface KovoViteModuleDiagnosticWireRecord {
+  readonly code: DiagnosticDocumentDiagnostic['code'];
+  readonly fileName?: string;
+  readonly help?: string;
+  readonly length?: number;
+  readonly message: string;
+  readonly severity: DiagnosticDocumentDiagnostic['severity'];
+  readonly start?: Readonly<{ column: number; line: number }>;
+}
+
+interface KovoViteModuleDiagnosticWireReport {
+  readonly diagnostics: readonly KovoViteModuleDiagnosticWireRecord[];
+  readonly fileName: string;
+  readonly source: string;
+}
+
+/**
+ * Verify config-graph registry identities, then project one bounded plain wire envelope for the
+ * live SSR graph. Private brands and source objects never cross the module-graph boundary
+ * (SPEC.md §2/§9.5.1 and spec/11-diagnostics.md §11.3).
+ */
+function authenticatedServerModuleDiagnosticReport(
+  value: unknown,
+): KovoViteModuleDiagnosticWireReport {
+  if (typeof value !== 'object' || value === null || securityArrayIsArray(value)) {
+    throw new TypeError('Kovo Vite server module diagnostics must be an own-data object.');
+  }
+  const diagnosticsProperty = buildOwnDataProperty(
+    value,
+    'diagnostics',
+    'Kovo Vite server module diagnostics',
+  );
+  const fileNameProperty = buildOwnDataProperty(
+    value,
+    'fileName',
+    'Kovo Vite server module diagnostics',
+  );
+  const sourceProperty = buildOwnDataProperty(
+    value,
+    'source',
+    'Kovo Vite server module diagnostics',
+  );
+  if (
+    !diagnosticsProperty.present ||
+    !fileNameProperty.present ||
+    typeof fileNameProperty.value !== 'string' ||
+    !sourceProperty.present ||
+    typeof sourceProperty.value !== 'string'
+  ) {
+    throw new TypeError(
+      'Kovo Vite server module diagnostics require own diagnostics/fileName/source fields.',
+    );
+  }
+  const diagnostics = snapshotBuildArray(
+    diagnosticsProperty.value as readonly unknown[],
+    'Kovo Vite server module diagnostics',
+  );
+  const wireDiagnostics: KovoViteModuleDiagnosticWireRecord[] = [];
+  for (let index = 0; index < diagnostics.length; index += 1) {
+    commitBuildArrayValue(
+      wireDiagnostics,
+      serverModuleDiagnosticWireRecord(diagnostics[index], index),
+      'Kovo Vite server module diagnostic wire records',
+    );
+  }
+  return witnessFreeze({
+    diagnostics: witnessFreeze(wireDiagnostics),
+    fileName: fileNameProperty.value,
+    source: sourceProperty.value,
+  });
+}
+
+function serverModuleDiagnosticWireRecord(
+  value: unknown,
+  index: number,
+): KovoViteModuleDiagnosticWireRecord {
+  const label = `Kovo Vite server module diagnostics[${index}]`;
+  assertRegisteredDiagnostic(value, label);
+  const code = buildOwnDataProperty(value, 'code', label);
+  const fileName = buildOwnDataProperty(value, 'fileName', label);
+  const help = buildOwnDataProperty(value, 'help', label);
+  const length = buildOwnDataProperty(value, 'length', label);
+  const message = buildOwnDataProperty(value, 'message', label);
+  const severity = buildOwnDataProperty(value, 'severity', label);
+  const start = buildOwnDataProperty(value, 'start', label);
+  if (
+    !code.present ||
+    !isDiagnosticCode(code.value) ||
+    (fileName.present && typeof fileName.value !== 'string') ||
+    (help.present && typeof help.value !== 'string') ||
+    (length.present &&
+      (!securityNumberIsInteger(length.value) ||
+        (length.value as number) < 0 ||
+        (length.value as number) > viteMaximumSafeInteger)) ||
+    !message.present ||
+    typeof message.value !== 'string' ||
+    !severity.present ||
+    (severity.value !== 'error' &&
+      severity.value !== 'warn' &&
+      severity.value !== 'lint' &&
+      severity.value !== 'notice')
+  ) {
+    throw new TypeError(`${label} has malformed wire fields.`);
+  }
+  let startValue: Readonly<{ column: number; line: number }> | undefined;
+  if (start.present) {
+    if (
+      typeof start.value !== 'object' ||
+      start.value === null ||
+      securityArrayIsArray(start.value)
+    ) {
+      throw new TypeError(`${label}.start must be an own-data object.`);
+    }
+    const column = buildOwnDataProperty(start.value, 'column', `${label}.start`);
+    const line = buildOwnDataProperty(start.value, 'line', `${label}.start`);
+    if (
+      !column.present ||
+      !line.present ||
+      !securityNumberIsInteger(column.value) ||
+      !securityNumberIsInteger(line.value) ||
+      (column.value as number) < 0 ||
+      (line.value as number) < 0 ||
+      (column.value as number) > viteMaximumSafeInteger ||
+      (line.value as number) > viteMaximumSafeInteger
+    ) {
+      throw new TypeError(`${label}.start has malformed line/column fields.`);
+    }
+    startValue = witnessFreeze({
+      column: column.value as number,
+      line: line.value as number,
+    });
+  }
+  return witnessFreeze({
+    code: code.value,
+    ...(fileName.present ? { fileName: fileName.value as string } : {}),
+    ...(help.present ? { help: help.value as string } : {}),
+    ...(length.present ? { length: length.value as number } : {}),
+    message: message.value,
+    severity: severity.value,
+    ...(startValue === undefined ? {} : { start: startValue }),
+  });
 }
 
 /**

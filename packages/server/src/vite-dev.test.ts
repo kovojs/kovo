@@ -343,6 +343,90 @@ describe('server app shell Vite dev seam', () => {
     }
   });
 
+  it('remints one-shot authenticated diagnostic wire reports in the live Vite graph', () => {
+    const sourceDiagnostic = Object.freeze({
+      code: 'KV225',
+      fileName: 'src/components/cart.tsx',
+      message: 'JSX nesting violates the HTML content model.',
+      severity: 'error',
+      start: Object.freeze({ column: 4, line: 7 }),
+    });
+    let authorizedReport: unknown;
+    const integration = createKovoAppShellViteDevIntegration({
+      moduleDiagnosticReportVerifier(value) {
+        if (value !== authorizedReport) return false;
+        authorizedReport = undefined;
+        return true;
+      },
+    });
+    const deliver = (report: unknown): void => {
+      Reflect.apply(integration.onModuleDiagnostics, integration, [report]);
+    };
+    const sourceReport = Object.freeze({
+      diagnostics: Object.freeze([sourceDiagnostic]),
+      fileName: sourceDiagnostic.fileName,
+      source: '<p><div /></p>',
+    });
+    authorizedReport = sourceReport;
+    deliver(sourceReport);
+
+    expect(integration.diagnostics.allDiagnosticsForFile(sourceDiagnostic.fileName)).toMatchObject({
+      diagnostics: [
+        {
+          code: 'KV225',
+          message: sourceDiagnostic.message,
+          severity: 'error',
+          start: { column: 4, line: 7 },
+        },
+      ],
+    });
+    expect(() => deliver(sourceReport)).toThrow(/report is not authenticated/u);
+
+    authorizedReport = sourceReport;
+    expect(() => deliver({ ...sourceReport })).toThrow(/report is not authenticated/u);
+
+    const severityDrift = Object.freeze({
+      ...sourceReport,
+      diagnostics: Object.freeze([Object.freeze({ ...sourceDiagnostic, severity: 'warn' })]),
+    });
+    authorizedReport = severityDrift;
+    expect(() => deliver(severityDrift)).toThrow(
+      /disagrees with the registered diagnostic severity/u,
+    );
+
+    const unknownCode = Object.freeze({
+      ...sourceReport,
+      diagnostics: Object.freeze([Object.freeze({ ...sourceDiagnostic, code: 'KV999' })]),
+    });
+    authorizedReport = unknownCode;
+    expect(() => deliver(unknownCode)).toThrow(/malformed authority fields/u);
+
+    const malformedPosition = Object.freeze({
+      ...sourceReport,
+      diagnostics: Object.freeze([
+        Object.freeze({ ...sourceDiagnostic, start: Object.freeze({ column: -1, line: 7 }) }),
+      ]),
+    });
+    authorizedReport = malformedPosition;
+    expect(() => deliver(malformedPosition)).toThrow(/malformed line\/column fields/u);
+
+    const emptyReport = Object.freeze({
+      diagnostics: Object.freeze([]),
+      fileName: sourceDiagnostic.fileName,
+      source: '<p>fixed</p>',
+    });
+    expect(() => deliver(emptyReport)).toThrow(/report is not authenticated/u);
+    expect(
+      integration.diagnostics.allDiagnosticsForFile(sourceDiagnostic.fileName)?.diagnostics,
+    ).toHaveLength(1);
+
+    authorizedReport = emptyReport;
+    deliver(emptyReport);
+    expect(
+      integration.diagnostics.allDiagnosticsForFile(sourceDiagnostic.fileName)?.diagnostics,
+    ).toEqual([]);
+  });
+
   it('wires compiler module diagnostics into app-shell dev middleware', async () => {
     const integration = createKovoAppShellViteDevIntegration({
       appExportName: 'shopApp',

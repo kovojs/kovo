@@ -7,6 +7,7 @@ import {
   assertRegisteredDiagnostic,
   createRegisteredDiagnostic,
   diagnosticDefinitions,
+  isDiagnosticCode,
 } from '@kovojs/core/internal/diagnostics';
 import { canonicalJsonStringify } from '@kovojs/core/internal/json';
 import {
@@ -162,6 +163,7 @@ const viteDevNodeResponseRemoveHeader = captureViteDevNodeResponseMethod('remove
 const viteDevNodeResponseSetHeader = captureViteDevNodeResponseMethod('setHeader');
 const viteDevNodeResponseWrite = captureViteDevNodeResponseMethod('write');
 const viteDevNodeResponseWriteHead = captureViteDevNodeResponseMethod('writeHead');
+const viteDevMaximumSafeInteger = Number.MAX_SAFE_INTEGER;
 
 /**
  * @internal App-shell Vite dev/host internal (SPEC.md §9.5). Minimal Vite dev-server
@@ -302,6 +304,13 @@ export interface KovoAppShellViteDevPluginOptions {
    * diagnostic document as direct dev diagnostic requests (SPEC.md §9.5.1).
    */
   devDiagnostics?: KovoAppShellDevDiagnosticLedger;
+  /**
+   * @internal Exact wire-envelope verifier owned by the outer Kovo Vite plugin. Vite can evaluate
+   * the config and live SSR graphs as distinct module instances, so diagnostics are reminted
+   * through this graph's registry only after the outer graph verifies their source registry
+   * identities and authorizes one bounded report.
+   */
+  moduleDiagnosticReportVerifier?: (value: unknown) => boolean;
   /**
    * Defaults to true. Set to false when a dev middleware stack cannot safely
    * relay 103 Early Hints but should still keep the final Link header.
@@ -529,6 +538,22 @@ export function createKovoAppShellViteDevIntegration(
   options: KovoAppShellViteDevPluginOptions = {},
 ): KovoAppShellViteDevIntegration {
   const diagnostics = options.devDiagnostics ?? createKovoAppShellDevDiagnosticLedger();
+  const moduleDiagnosticReportVerifierValue = viteDevOwnDataValue(
+    options,
+    'moduleDiagnosticReportVerifier',
+    'Kovo Vite module diagnostic report verifier',
+  );
+  if (
+    moduleDiagnosticReportVerifierValue !== undefined &&
+    typeof moduleDiagnosticReportVerifierValue !== 'function'
+  ) {
+    throw new TypeError('Kovo Vite module diagnostic report verifier must be a function.');
+  }
+  const moduleDiagnosticReportVerifier =
+    moduleDiagnosticReportVerifierValue === undefined
+      ? undefined
+      : (value: unknown): boolean =>
+          witnessReflectApply(moduleDiagnosticReportVerifierValue, undefined, [value]) === true;
   // A caller may have created this structural ledger in the Vite-config module instance. Register
   // it in every server module instance that consumes it so request-local diagnostics remain owned
   // by the same graph-local middleware as app validation.
@@ -537,14 +562,122 @@ export function createKovoAppShellViteDevIntegration(
     ...options,
     devDiagnostics: diagnostics,
   };
+  // The verifier is a narrow config-to-live-graph transfer capability. Keep it only in the
+  // callback closure; the long-lived plugin/dispatch options carrier must not retain it.
+  witnessDefineProperty(pluginOptions, 'moduleDiagnosticReportVerifier', {
+    configurable: false,
+    enumerable: false,
+    value: undefined,
+    writable: false,
+  });
 
   return {
     diagnostics,
     onModuleDiagnostics(report) {
-      diagnostics.recordModuleDiagnostics(report);
+      diagnostics.recordModuleDiagnostics(
+        moduleDiagnosticReportVerifier === undefined
+          ? report
+          : adoptViteDevModuleDiagnostics(report, moduleDiagnosticReportVerifier),
+      );
     },
     plugin: kovoAppShellViteDevPlugin(pluginOptions),
   };
+}
+
+/**
+ * Reconstruct authenticated config-graph diagnostics through the live graph's private registry.
+ * Structural values alone have no authority: the outer verifier must recognize the exact bounded
+ * wire envelope before registry-owned code/severity and presentation fields are reconstructed.
+ */
+function adoptViteDevModuleDiagnostics(
+  report: unknown,
+  verify: (value: unknown) => boolean,
+): KovoAppShellViteCompilerModuleDiagnosticReport {
+  const label = 'Kovo Vite authenticated module diagnostics';
+  if (witnessReflectApply(verify, undefined, [report]) !== true) {
+    throw new TypeError(`${label} report is not authenticated by the outer Vite graph.`);
+  }
+  const fileName = viteDevOwnDataValue(report, 'fileName', `${label}.fileName`);
+  const source = viteDevOwnDataValue(report, 'source', `${label}.source`);
+  if (typeof fileName !== 'string' || typeof source !== 'string') {
+    throw new TypeError(`${label} require own string fileName/source fields.`);
+  }
+  const sourceDiagnostics = viteDevDenseArrayValues<unknown>(
+    viteDevOwnDataValue(report, 'diagnostics', `${label}.diagnostics`),
+    label,
+  );
+  const adopted: DiagnosticDocumentDiagnostic[] = [];
+  for (let index = 0; index < sourceDiagnostics.length; index += 1) {
+    const diagnostic = sourceDiagnostics[index];
+    securityArrayPush(adopted, adoptViteDevModuleDiagnostic(diagnostic, index));
+  }
+  return {
+    diagnostics: witnessFreeze(adopted),
+    fileName,
+    source,
+  };
+}
+
+function adoptViteDevModuleDiagnostic(
+  source: unknown,
+  index: number,
+): DiagnosticDocumentDiagnostic {
+  const label = `Kovo Vite authenticated module diagnostics[${index}]`;
+  const code = viteDevOwnDataValue(source, 'code', `${label}.code`);
+  const fileName = viteDevOwnDataValue(source, 'fileName', `${label}.fileName`);
+  const help = viteDevOwnDataValue(source, 'help', `${label}.help`);
+  const length = viteDevOwnDataValue(source, 'length', `${label}.length`);
+  const message = viteDevOwnDataValue(source, 'message', `${label}.message`);
+  const severity = viteDevOwnDataValue(source, 'severity', `${label}.severity`);
+  const start = viteDevOwnDataValue(source, 'start', `${label}.start`);
+  if (
+    !isDiagnosticCode(code) ||
+    (fileName !== undefined && typeof fileName !== 'string') ||
+    (help !== undefined && typeof help !== 'string') ||
+    (length !== undefined &&
+      (typeof length !== 'number' ||
+        !securityNumberIsInteger(length) ||
+        length < 0 ||
+        length > viteDevMaximumSafeInteger)) ||
+    typeof message !== 'string' ||
+    typeof severity !== 'string'
+  ) {
+    throw new TypeError(`${label} has malformed authority fields.`);
+  }
+  let startValue: { column: number; line: number } | undefined;
+  if (start !== undefined) {
+    const column = viteDevOwnDataValue(start, 'column', `${label}.start.column`);
+    const line = viteDevOwnDataValue(start, 'line', `${label}.start.line`);
+    if (
+      typeof column !== 'number' ||
+      typeof line !== 'number' ||
+      !securityNumberIsInteger(column) ||
+      !securityNumberIsInteger(line) ||
+      column < 0 ||
+      line < 0 ||
+      column > viteDevMaximumSafeInteger ||
+      line > viteDevMaximumSafeInteger
+    ) {
+      throw new TypeError(`${label}.start has malformed line/column fields.`);
+    }
+    startValue = { column, line };
+  }
+  const adopted = createRegisteredDiagnostic(
+    code,
+    {
+      ...(fileName === undefined ? {} : { fileName }),
+      ...(length === undefined ? {} : { length }),
+      ...(startValue === undefined ? {} : { start: startValue }),
+    },
+    {
+      ...(help === undefined ? {} : { help }),
+      message,
+    },
+  );
+  if (adopted.severity !== severity) {
+    throw new TypeError(`${label} disagrees with the registered diagnostic severity.`);
+  }
+  return adopted;
 }
 
 function registerRequestDiagnosticStore(

@@ -275,9 +275,10 @@ export default app.assemble({});
     }
   });
 
-  it('re-enrolls exact standalone compiler diagnostics in the server dev graph', async () => {
+  it('projects compiler diagnostics into a one-shot authenticated Vite wire report', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-public-vite-diagnostic-handoff-'));
     let received: { diagnostics: readonly object[] } | undefined;
+    let reportVerifier: ((value: unknown) => boolean) | undefined;
     try {
       await mkdir(join(root, 'src'), { recursive: true });
       await writeFile(join(root, 'src/app-shell.ts'), 'export default {};\n', 'utf8');
@@ -288,9 +289,13 @@ export default app.assemble({});
         middlewares: { use() {} },
         async ssrLoadModule() {
           return {
-            createKovoAppShellViteDevIntegration() {
+            createKovoAppShellViteDevIntegration(options: {
+              moduleDiagnosticReportVerifier(value: unknown): boolean;
+            }) {
+              reportVerifier = options.moduleDiagnosticReportVerifier;
               return {
                 onModuleDiagnostics(report: { diagnostics: readonly object[] }) {
+                  expect(reportVerifier?.(report)).toBe(true);
                   received = report;
                 },
                 plugin: { configureServer() {} },
@@ -312,8 +317,12 @@ export default app.assemble({});
       expect(thrown).toBeInstanceOf(Error);
       expect((thrown as Error).message).toMatch(/KV235/u);
       expect(received?.diagnostics).toHaveLength(1);
-      expect(isRegisteredDiagnostic(received?.diagnostics[0])).toBe(true);
+      expect(reportVerifier?.(received)).toBe(false);
+      expect(isRegisteredDiagnostic(received?.diagnostics[0])).toBe(false);
       expect(isRegisteredDiagnostic({ ...received?.diagnostics[0] })).toBe(false);
+      expect(
+        Reflect.ownKeys(received?.diagnostics[0] ?? {}).every((key) => typeof key === 'string'),
+      ).toBe(true);
     } finally {
       await rm(root, { force: true, recursive: true });
     }
