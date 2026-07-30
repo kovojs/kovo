@@ -5,6 +5,7 @@ import {
   outputSchemaQueryShapeFactsFromProject as outputSchemaQueryShapeFactsFromProjectCore,
   outputSchemaQueryShapeFactsFromSource as outputSchemaQueryShapeFactsFromSourceCore,
 } from '@kovojs/core/internal/query-shape-source';
+import type { QueryShapeAppMemberFact } from '@kovojs/core/internal/query-shape-source';
 
 import type { QueryShapeFact } from '../types.js';
 
@@ -34,10 +35,12 @@ export function outputSchemaQueryShapeFactsFromSource(
 export function outputSchemaQueryShapeFactsFromProject(
   files: readonly { fileName: string; source: string }[],
   scanFiles: readonly { fileName: string; source: string }[] = files,
+  appMembers: readonly QueryShapeAppMemberFact[] = [],
 ): readonly QueryShapeFact[] {
   return outputSchemaQueryShapeFactsFromProjectCore(
     ts,
     files,
     scanFiles,
+    appMembers,
   ) as readonly QueryShapeFact[];
 }

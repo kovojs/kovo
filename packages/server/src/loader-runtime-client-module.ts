@@ -13,11 +13,11 @@ import {
   versionedClientModuleHref,
 } from '@kovojs/core/internal/client-module-url';
 import {
+  compilerOwnedVersionedClientModuleRole,
   registerMandatoryVersionedClientModule,
   type VersionedClientModuleInput,
   type VersionedClientModuleRegistry,
 } from './client-modules.js';
-import { securityStringIncludes } from './response-security-intrinsics.js';
 import {
   witnessArrayAppend,
   createWitnessWeakMap,
@@ -27,9 +27,6 @@ import {
 
 const registeredRuntimeHrefs = createWitnessWeakMap<VersionedClientModuleRegistry, string>();
 const GENERATED_APP_RUNTIME_PATH = '/c/generated/app.client.js';
-const GENERATED_APP_RUNTIME_MARKER = '// @kovojs-generated-app-runtime/v1';
-const GENERATED_APP_RUNTIME_INSTALLER = 'export function installKovoDeferredRuntime()';
-const OPTIMISTIC_PLAN_EXPORT = 'export const kovoOptimisticMutationPlans = Object.freeze({';
 
 /**
  * @internal Select the compiler-generated deferred app runtime when the active immutable registry
@@ -48,16 +45,21 @@ export function ensureKovoLoaderRuntimeClientModule(
   let hasOptimisticPlans = false;
   for (let index = 0; index < entries.length; index += 1) {
     const module = entries[index]!;
-    if (
-      securityStringIncludes(module.source, OPTIMISTIC_PLAN_EXPORT) &&
-      securityStringIncludes(module.source, '// @kovojs-ir')
-    ) {
-      hasOptimisticPlans = true;
+    const role = compilerOwnedVersionedClientModuleRole(registry, module);
+    const path = clientModulePath(module.path);
+    if (role === 'optimistic-plan') hasOptimisticPlans = true;
+    if (path === GENERATED_APP_RUNTIME_PATH && role !== 'app-bootstrap') {
+      throw new Error(
+        'Kovo refused an unproven compiler-generated app runtime at /c/generated/app.client.js.',
+      );
     }
-    if (clientModulePath(module.path) === GENERATED_APP_RUNTIME_PATH) {
+    if (path === kovoDeferredAppRuntimeModulePath && role !== 'deferred-app-runtime') {
+      throw new Error('Kovo refused an unproven generated deferred app runtime.');
+    }
+    if (role === 'app-bootstrap') {
       witnessArrayAppend(appRuntimes, module, 'Kovo generated app runtimes');
     }
-    if (clientModulePath(module.path) === kovoDeferredAppRuntimeModulePath) {
+    if (role === 'deferred-app-runtime') {
       witnessArrayAppend(generatedRuntimes, module, 'Kovo generated deferred app runtimes');
     }
   }
@@ -69,19 +71,6 @@ export function ensureKovoLoaderRuntimeClientModule(
   }
   const appRuntime = appRuntimes[0];
   if (appRuntime !== undefined) {
-    if (
-      !securityStringIncludes(appRuntime.source, GENERATED_APP_RUNTIME_MARKER) ||
-      !securityStringIncludes(appRuntime.source, GENERATED_APP_RUNTIME_INSTALLER)
-    ) {
-      throw new Error(
-        'Kovo refused a malformed compiler-generated app runtime at /c/generated/app.client.js.',
-      );
-    }
-    if (!securityStringIncludes(appRuntime.source, kovoDeferredAppRuntimeModuleHref)) {
-      throw new Error(
-        'Kovo refused a malformed compiler-generated app runtime without its exact deferred-runtime import.',
-      );
-    }
     if (generatedRuntimes.length !== 1) {
       throw new Error(
         'Kovo refused a compiler-generated app runtime without exactly one active generated deferred runtime.',

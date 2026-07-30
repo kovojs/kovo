@@ -2,7 +2,7 @@ import type { Form, FormInput, JsonValue } from '@kovojs/core';
 import { diagnosticConstructors } from '@kovojs/core/internal/diagnostics';
 import { reportRuntimeError } from './error-policy.js';
 import type { RuntimeErrorReporter } from './error-policy.js';
-import { queryIdentityFromStoreKey, queryStoreKey } from './query-store.js';
+import { queryIdentityFromStoreKey, queryStoreHasValue, queryStoreKey } from './query-store.js';
 import type { QuerySnapshot, QueryStore } from './query-store.js';
 import { addRuntimeEventListener, removeRuntimeEventListener } from './runtime-dom-security.js';
 import {
@@ -183,6 +183,14 @@ export interface OptimisticRebaserOptions {
   onError?: RuntimeErrorReporter;
 }
 
+/** @internal One response-local optimistic server-truth journal. */
+export interface OptimisticRebaseTransaction {
+  applyServerTruth(name: string, value: unknown, key?: string, settles?: readonly string[]): void;
+  capture(name: string, key?: string): void;
+  commit(): void;
+  restore(): void;
+}
+
 /** @internal Tracks pending optimistic transforms and rebases them against server truth (SPEC §10.5). */
 export class OptimisticRebaser {
   #pendingByQuery = securityMap<string, PendingTransform[]>();
@@ -193,6 +201,103 @@ export class OptimisticRebaser {
   constructor(store: QueryStore, options: OptimisticRebaserOptions = {}) {
     this.#store = store;
     this.#onError = options.onError;
+  }
+
+  /**
+   * Journal progressively applied server truth until a streaming response is confirmed.
+   *
+   * A failed stream restores only identities the stream touched, including their pending logs and
+   * server baselines, so co-pending siblings return to their pre-stream prediction.
+   */
+  beginServerTruthTransaction(): OptimisticRebaseTransaction {
+    const journal = securityMap<
+      string,
+      {
+        hadPending: boolean;
+        hadServerTruth: boolean;
+        hadStoreValue: boolean;
+        key?: string;
+        pending: PendingTransform[];
+        queryName: string;
+        serverTruth: unknown;
+        storeValue: unknown;
+      }
+    >();
+    let closed = false;
+    const capture = (queryName: string, key?: string): void => {
+      const storeKey = queryStoreKey(queryName, key);
+      if (securityMapHas(journal, storeKey)) return;
+      const pending = securityMapGet(this.#pendingByQuery, storeKey);
+      const pendingSnapshot: PendingTransform[] = [];
+      if (pending !== undefined) {
+        for (let index = 0; index < pending.length; index += 1) {
+          const entry = securityOwnArrayEntry(pending, index);
+          if (!entry.ok) {
+            throw new TypeError('Kovo optimistic transaction pending log must be dense.');
+          }
+          securityArrayAppend(
+            pendingSnapshot,
+            entry.value,
+            'Browser optimistic transaction pending log',
+          );
+        }
+      }
+      const hadStoreValue = queryStoreHasValue(this.#store, queryName, key);
+      const storeValue = this.#store.get(queryName, key);
+      securityMapSet(journal, storeKey, {
+        hadPending: pending !== undefined,
+        hadServerTruth: securityMapHas(this.#serverTruthByQuery, storeKey),
+        hadStoreValue,
+        ...(key === undefined ? {} : { key }),
+        pending: pendingSnapshot,
+        queryName,
+        serverTruth: securityMapGet(this.#serverTruthByQuery, storeKey),
+        storeValue,
+      });
+    };
+    return {
+      applyServerTruth: (queryName, value, key, settles) => {
+        if (closed) {
+          throw new Error('Kovo optimistic server-truth transaction is already closed.');
+        }
+        capture(queryName, key);
+        this.applyServerTruth(queryName, value, key, settles);
+      },
+      capture: (queryName, key) => {
+        if (closed) {
+          throw new Error('Kovo optimistic server-truth transaction is already closed.');
+        }
+        capture(queryName, key);
+      },
+      commit() {
+        if (closed) return;
+        closed = true;
+        securityMapForEach(journal, (_entry, storeKey) => {
+          securityMapDelete(journal, storeKey);
+        });
+      },
+      restore: () => {
+        if (closed) return;
+        closed = true;
+        securityMapForEach(journal, (entry, storeKey) => {
+          if (entry.hadPending) {
+            securityMapSet(this.#pendingByQuery, storeKey, entry.pending);
+          } else {
+            securityMapDelete(this.#pendingByQuery, storeKey);
+          }
+          if (entry.hadServerTruth) {
+            securityMapSet(this.#serverTruthByQuery, storeKey, entry.serverTruth);
+          } else {
+            securityMapDelete(this.#serverTruthByQuery, storeKey);
+          }
+          if (entry.hadStoreValue) {
+            this.#store.set(entry.queryName, entry.storeValue, entry.key);
+          } else {
+            this.#store.delete(entry.queryName, entry.key);
+          }
+        });
+      },
+    };
   }
 
   add<Input>(id: string, input: Input, plan: OptimisticPlan<Input>): void {
@@ -728,9 +833,7 @@ export function resolveOptimisticTargets<Input>(
       if (!keyEntry.ok) throw new TypeError('Kovo optimistic query keys must be dense.');
       securityArrayAppend(
         targets,
-        keyEntry.value === undefined
-          ? { queryName }
-          : { key: keyEntry.value, queryName },
+        keyEntry.value === undefined ? { queryName } : { key: keyEntry.value, queryName },
         'Browser optimistic query targets',
       );
     }

@@ -27,6 +27,10 @@ export {
 export type { BrowserPostureSourceFile } from './browser-posture-project.js';
 export { factHash } from './fact-hash.js';
 export {
+  compilerOwnedViteClientModuleRole,
+  type CompilerOwnedViteClientModuleRole,
+} from './vite.js';
+export {
   compilerSourceSyntaxBudget,
   type CompilerSourceSyntaxBudgetResult,
 } from './source-syntax-budget.js';

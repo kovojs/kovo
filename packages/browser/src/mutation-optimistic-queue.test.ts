@@ -373,6 +373,122 @@ describe('optimistic enhanced mutation queueing', () => {
     expect(queue.pending('cart')).toBe(false);
   });
 
+  it('cancels a partially applied streaming head before advancing the optimistic tail', async () => {
+    vi.useFakeTimers();
+    const store = createQueryStore();
+    const onError = vi.fn();
+    const rebaser = new OptimisticRebaser(store, { onError });
+    const queue = new MutationQueue({ timeoutMs: 10 });
+    const root = new FakeMorphRoot();
+    const encoder = new TextEncoder();
+    let firstStreamController!: ReadableStreamDefaultController<Uint8Array>;
+    const firstBody = new ReadableStream<Uint8Array>({
+      start(controller) {
+        firstStreamController = controller;
+      },
+    });
+    const firstIdem = 'v1_1750000000000_00000000000000000000000000000033';
+    const secondIdem = 'v1_1750000000000_00000000000000000000000000000034';
+    store.set('cart', { count: 0 });
+    const optimistic = {
+      queue: 'cart',
+      transforms: {
+        cart(current: unknown, input: { quantity: number }) {
+          return { count: (current as { count: number }).count + input.quantity };
+        },
+      },
+    };
+    const fetch = vi.fn(async (_url: string, options: EnhancedMutationFetchOptions) => {
+      const quantity = (options.body as FormData).get('quantity');
+      if (quantity === '1') {
+        return mutationTestResponse('/_m/cart/add', {
+          body: firstBody,
+          async text() {
+            throw new Error('streaming queue head must not buffer text()');
+          },
+        });
+      }
+      return mutationTestResponse('/_m/cart/add', {
+        async text() {
+          return '<kovo-query name="cart">{"count":2}</kovo-query>';
+        },
+      });
+    });
+    const form = {
+      action: '/_m/cart/add',
+      getAttribute(name: string) {
+        return name === 'data-mutation-stream' ? '' : null;
+      },
+      method: 'post',
+    };
+    const firstData = new FormData();
+    firstData.set('quantity', '1');
+    const secondData = new FormData();
+    secondData.set('quantity', '2');
+    const locationDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'location');
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: { reload: vi.fn() },
+    });
+
+    try {
+      const first = submitOptimisticEnhancedMutation({
+        fetch,
+        form,
+        formData: firstData,
+        idem: firstIdem,
+        input: { quantity: 1 },
+        onError,
+        optimistic,
+        queue,
+        rebaser,
+        root,
+        store,
+      });
+      const firstSettled = first.catch((error: unknown) => error);
+      const second = submitOptimisticEnhancedMutation({
+        fetch,
+        form,
+        formData: secondData,
+        idem: secondIdem,
+        input: { quantity: 2 },
+        onError,
+        optimistic,
+        queue,
+        rebaser,
+        root,
+        store,
+      });
+
+      await vi.advanceTimersByTimeAsync(0);
+      expect(store.get('cart')).toEqual({ count: 3 });
+      firstStreamController.enqueue(
+        encoder.encode(`<kovo-query name="cart" settles="${firstIdem}">{"count":10}</kovo-query>`),
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      expect(store.get('cart')).toEqual({ count: 12 });
+
+      await vi.advanceTimersByTimeAsync(10);
+      await expect(firstSettled).resolves.toMatchObject({ name: 'AbortError' });
+      await expect(second).resolves.toMatchObject({
+        idem: secondIdem,
+        queries: [{ name: 'cart' }],
+      });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(store.get('cart')).toEqual({ count: 2 });
+      expect(rebaser.pendingCount('cart')).toBe(0);
+      expect(queue.pending('cart')).toBe(false);
+    } finally {
+      if (locationDescriptor) {
+        Object.defineProperty(globalThis, 'location', locationDescriptor);
+      } else {
+        delete (globalThis as { location?: unknown }).location;
+      }
+    }
+  });
+
   it('refuses queue overflow before applying an optimistic prediction', async () => {
     const store = createQueryStore();
     const onError = vi.fn();

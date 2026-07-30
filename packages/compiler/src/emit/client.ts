@@ -117,6 +117,29 @@ ${importLine}${dependencyImportLines}${dependencyConstantLines}${exports || '// 
 `;
 }
 
+/** @internal Exact plan-export ABI emitted by {@link emitClientModule}. */
+export function emittedClientPlanExportMetadata(
+  componentName: string,
+  queryUpdatePlans: readonly QueryUpdatePlanFact[],
+  clockUpdatePlans: readonly ClockUpdatePlanFact[] = [],
+): { readonly clockExportName?: string; readonly exportName: string } | undefined {
+  if (compilerArrayLength(queryUpdatePlans, 'Client query update plans') === 0) return undefined;
+  return {
+    ...(compilerArrayLength(clockUpdatePlans, 'Client clock update plans') === 0
+      ? {}
+      : { clockExportName: clientClockPlanExportName(componentName) }),
+    exportName: clientQueryPlanExportName(componentName),
+  };
+}
+
+function clientQueryPlanExportName(componentName: string): string {
+  return `${componentName}$queryUpdatePlans`;
+}
+
+function clientClockPlanExportName(componentName: string): string {
+  return `${componentName}$clockUpdatePlans`;
+}
+
 function clientHandlerImports(handlers: readonly HandlerLowering[]): ClientImportDependency[] {
   const imports: ClientImportDependency[] = [];
   for (let handlerIndex = 0; handlerIndex < handlers.length; handlerIndex += 1) {
@@ -572,15 +595,17 @@ function emitClockUpdatePlanExport(
   }
   const clocks = compilerArrayJoin(clockParts, ', ');
 
-  return `export const ${componentName}$clockUpdatePlans = [{
+  const clockExportName = clientClockPlanExportName(componentName);
+  const queryExportName = clientQueryPlanExportName(componentName);
+  return `export const ${clockExportName} = [{
   clocks: { ${clocks} },
   update(root, now, context) {
-    return ${componentName}$queryUpdatePlans.now(root, now, context);
+    return ${queryExportName}.now(root, now, context);
   },
 }];
 
 export function install${componentName}ClockUpdates(root) {
-  return installClockUpdatePlans(root, ${componentName}$clockUpdatePlans);
+  return installClockUpdatePlans(root, ${clockExportName});
 }`;
 }
 
@@ -1188,7 +1213,7 @@ function emitQueryUpdatePlanExport(
   }
   const entries = compilerArrayJoin(entryParts, '\n');
 
-  return `${deriveExports}${helper}${deriveExports || helper ? '\n\n' : ''}export const ${componentName}$queryUpdatePlans = {\n${entries}\n};`;
+  return `${deriveExports}${helper}${deriveExports || helper ? '\n\n' : ''}export const ${clientQueryPlanExportName(componentName)} = {\n${entries}\n};`;
 }
 
 function emitClientFactList<Value>(

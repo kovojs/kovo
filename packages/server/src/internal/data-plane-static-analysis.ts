@@ -264,9 +264,16 @@ export async function collectDataPlaneAnalysis(options: {
 }): Promise<DataPlaneAnalysis> {
   const files = dataPlaneSourceFiles(options.appSourceDir, options.root);
   if (options.skipStaticFacts) {
+    // Graph derivation may skip the expensive Drizzle/static-facts pass, but component lowering
+    // still needs exact app.query output shapes. Authenticate those receiver spans through the
+    // same compiler-owned app-contract resolver; never infer them from a runtime app value.
+    const appContractStaticFacts = compilerOwnedAppContractStaticFactsFromFiles(
+      files,
+      options.root,
+    );
     return {
       files,
-      outputQueryShapeFacts: await outputSchemaQueryShapeFactsAsync(files),
+      outputQueryShapeFacts: await outputSchemaQueryShapeFactsAsync(files, appContractStaticFacts),
       staticFacts: emptyStaticBuildAnalysisFactsLike(),
     };
   }
@@ -432,10 +439,11 @@ export async function staticDataPlaneBuildFacts(
 export function buildCompilerQueryShapeFacts(
   files: readonly DataPlaneSourceFile[],
   facts: StaticDataPlaneBuildFacts,
+  appContractStaticFacts: readonly CompilerOwnedAppContractStaticFact[] = [],
 ): readonly QueryShapeFact[] {
   return mergeQueryShapeFactSets(
     facts.queryShapeFacts,
-    outputSchemaQueryShapeFacts(files, { worker: false }),
+    outputSchemaQueryShapeFacts(files, { appContractStaticFacts, worker: false }),
   );
 }
 
@@ -568,7 +576,10 @@ async function createDataPlaneAnalysis(
   const staticFacts = await runStaticBuildAnalysisFacts(sourceFiles, appContractStaticFacts);
   return {
     files: sourceFiles,
-    outputQueryShapeFacts: await outputSchemaQueryShapeFactsAsync(sourceFiles),
+    outputQueryShapeFacts: await outputSchemaQueryShapeFactsAsync(
+      sourceFiles,
+      appContractStaticFacts,
+    ),
     staticFacts,
   };
 }
@@ -1012,25 +1023,35 @@ function mergeCompilerQueryShapes(
 
 function outputSchemaQueryShapeFacts(
   files: readonly DataPlaneSourceFile[],
-  options: { worker?: boolean } = {},
+  options: {
+    appContractStaticFacts?: readonly CompilerOwnedAppContractStaticFact[];
+    worker?: boolean;
+  } = {},
 ): readonly QueryShapeFact[] {
   if (options.worker !== false) {
     throw new Error('Internal error: async output-schema query-shape extraction is required.');
   }
-  return outputSchemaQueryShapeFactsSerial(files);
+  return outputSchemaQueryShapeFactsSerial(files, files, options.appContractStaticFacts);
 }
 
 async function outputSchemaQueryShapeFactsAsync(
   files: readonly DataPlaneSourceFile[],
+  appContractStaticFacts: readonly CompilerOwnedAppContractStaticFact[] = [],
 ): Promise<readonly QueryShapeFact[]> {
-  return outputSchemaQueryShapeFactsSerial(files);
+  return outputSchemaQueryShapeFactsSerial(files, files, appContractStaticFacts);
 }
 
 function outputSchemaQueryShapeFactsSerial(
   files: readonly DataPlaneSourceFile[],
   projectFiles: readonly DataPlaneSourceFile[] = files,
+  appContractStaticFacts: readonly CompilerOwnedAppContractStaticFact[] = [],
 ): readonly QueryShapeFact[] {
-  return outputSchemaQueryShapeFactsFromProject(typeScript(), projectFiles, files);
+  return outputSchemaQueryShapeFactsFromProject(
+    typeScript(),
+    projectFiles,
+    files,
+    appContractStaticFacts,
+  );
 }
 
 function isCompilerQueryShape(shape: unknown): shape is QueryShapeFact['shape'] {

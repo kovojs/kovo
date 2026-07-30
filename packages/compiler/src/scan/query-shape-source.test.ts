@@ -1,5 +1,9 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
+import { compilerOwnedAppContractStaticFactsFromFiles } from '../app-contract-project.js';
 import {
   mergeQueryShapeFactSets,
   outputSchemaQueryShapeFactsFromProject,
@@ -123,6 +127,96 @@ export const audit = data.query({
     );
   });
 
+  it('extracts first-class nullable output schemas from the framework namespace', () => {
+    const facts = outputSchemaQueryShapeFactsFromSource(
+      'queries.ts',
+      `
+import { query, s } from '@kovojs/server';
+
+export const maybeProduct = query({
+  output: s.nullable(s.object({ id: s.string(), price: s.number() })),
+  load: () => null,
+});
+`,
+    );
+
+    expect(facts).toEqual([
+      expect.objectContaining({
+        query: 'maybeProduct',
+        shape: {
+          kind: 'nullable',
+          shape: { id: 'string', price: 'number' },
+        },
+      }),
+    ]);
+  });
+
+  it('extracts nullable output schemas only at compiler-authenticated app query spans', () => {
+    const files = [
+      {
+        fileName: 'kovo.ts',
+        source: `
+import { defineKovo } from '@kovojs/server';
+export const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
+`,
+      },
+      {
+        fileName: 'queries.ts',
+        source: `
+import { s } from '@kovojs/server';
+import { app } from './kovo.js';
+
+export const maybeProduct = app.query({
+  output: s.nullable(s.object({ id: s.string(), price: s.number() })),
+  load: () => null,
+});
+`,
+      },
+    ];
+    const querySource = files[1]!.source;
+    const start = querySource.indexOf('app.query');
+    const facts = outputSchemaQueryShapeFactsFromProject(files, files, [
+      {
+        end: start + 'app.query'.length,
+        fileName: 'queries.ts',
+        memberName: 'query',
+        start,
+      },
+    ]);
+
+    expect(facts).toEqual([
+      expect.objectContaining({
+        query: 'maybeProduct',
+        shape: {
+          kind: 'nullable',
+          shape: { id: 'string', price: 'number' },
+        },
+      }),
+    ]);
+    expect(outputSchemaQueryShapeFactsFromProject(files)).toEqual([]);
+  });
+
+  it('consumes the compiler-owned app resolver facts for a real app query', () => {
+    const root = resolve('examples/crm');
+    const fileNames = ['src/kovo.ts', 'src/queries.ts'];
+    const files = fileNames.map((fileName) => ({
+      fileName,
+      source: readFileSync(resolve(root, fileName), 'utf8'),
+    }));
+    const appMembers = compilerOwnedAppContractStaticFactsFromFiles(files, root);
+
+    expect(appMembers.some((fact) => fact.memberName === 'query')).toBe(true);
+    expect(
+      outputSchemaQueryShapeFactsFromProject(files, files, appMembers).find(
+        (fact) => fact.query === 'dealByIdQuery',
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        shape: expect.objectContaining({ kind: 'nullable' }),
+      }),
+    );
+  });
+
   it('extracts output schemas through distinct root aliases from the shared catalog', () => {
     const facts = outputSchemaQueryShapeFactsFromSource(
       'queries.ts',
@@ -178,6 +272,27 @@ import { query } from '@kovojs/server';
 
 const s = { object: (value) => value, string: () => 'string' };
 export const product = query({ output: s.object({ name: s.string() }) });
+`,
+      ),
+    ).toEqual([]);
+  });
+
+  it('does not extract nullable schemas from local namespace lookalikes', () => {
+    expect(
+      outputSchemaQueryShapeFactsFromSource(
+        'queries.ts',
+        `
+import { query } from '@kovojs/server';
+
+const s = {
+  nullable: (value) => value,
+  object: (value) => value,
+  string: () => 'string',
+};
+export const product = query({
+  output: s.nullable(s.object({ name: s.string() })),
+  load: () => null,
+});
 `,
       ),
     ).toEqual([]);

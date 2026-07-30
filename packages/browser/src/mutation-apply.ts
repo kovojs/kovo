@@ -41,6 +41,8 @@ export interface EnhancedMutationRuntimeApplyOptions {
   queryPlans?: CompiledQueryUpdatePlans;
   root: MorphRoot;
   store: QueryStore;
+  /** @internal Abort progressively consumed response bytes with the owning queued submission. */
+  streamSignal?: AbortSignal;
 }
 
 /** @internal Result of applying an enhanced mutation response: applied fragments, changes, idem, targets (SPEC §9.1). */
@@ -133,6 +135,7 @@ export async function applyStreamingFetchedEnhancedMutationResponseToRuntime(
       onError: options.onError,
       queryPlans: options.queryPlans,
       responseBuildToken: fetched.buildToken,
+      streamText: options.streamSignal === undefined ? undefined : { signal: options.streamSignal },
     }),
     body: fetched.streamBody,
     root: options.root,

@@ -484,7 +484,14 @@ export interface CompileResult {
   platformSubstitutions: readonly PlatformSubstitution[];
   publishToClientFacts: readonly PublishToClientFact[];
   queryUpdatePlans: readonly QueryUpdatePlanFact[];
+  /** @internal Exact emitted plan export names carried to Vite without source-text rediscovery. */
+  queryPlanBootstrapMetadata?: {
+    readonly clockExportName?: string;
+    readonly exportName: string;
+  };
   renderPlanFingerprint?: string | null;
+  /** @internal Exact projected-shape input used to compose one app-wide render-plan token. */
+  renderPlanFingerprintInput?: Readonly<Record<string, string>>;
   renderEquivalenceChecks: readonly RenderEquivalenceCheck[];
   taskGraphFacts: readonly TaskGraphFact[];
   updateCoverage: readonly QueryUpdateCoverageFact[];
@@ -750,6 +757,7 @@ export function createEmptyCompileResult(): CompileResult {
     publishToClientFacts: [],
     queryUpdatePlans: [],
     renderPlanFingerprint: null,
+    renderPlanFingerprintInput: {},
     renderEquivalenceChecks: [],
     taskGraphFacts: [],
     updateCoverage: [],

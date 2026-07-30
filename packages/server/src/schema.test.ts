@@ -91,6 +91,7 @@ describe('server schemas', () => {
       s.file().maxBytes(1_024),
       s.file().store({ storage }),
       s.json(),
+      s.nullable(s.object({ id: s.string() })),
       s.number(),
       s.number().int().min(0).max(10).default(1),
       s.number().optional(),
@@ -136,6 +137,7 @@ describe('server schemas', () => {
     const shape = { accountId: child };
     const objectSchema = s.object(shape);
     const arraySchema = s.array(child);
+    const nullableSchema = s.nullable(child);
     const recordSchema = s.record(child);
 
     shape.accountId = { parse: () => 'shape-replaced' };
@@ -143,8 +145,37 @@ describe('server schemas', () => {
 
     expect(objectSchema.parse({ accountId: 'a1' })).toEqual({ accountId: 'original:a1' });
     expect(arraySchema.parse(['a1'])).toEqual(['original:a1']);
+    expect(nullableSchema.parse(null)).toBeNull();
+    expect(nullableSchema.parse('a1')).toBe('original:a1');
     expect(recordSchema.parse({ accountId: 'a1' })).toEqual({ accountId: 'original:a1' });
     expect(Object.isFrozen(objectSchema)).toBe(true);
+  });
+
+  it('validates nullable values without weakening the inner schema contract', async () => {
+    let asyncCalls = 0;
+    const inner: Schema<{ id: string }> & {
+      parseAsync(input: unknown): Promise<{ id: string }>;
+    } = {
+      parse(input) {
+        return s.object({ id: s.string() }).parse(input);
+      },
+      async parseAsync(input) {
+        asyncCalls += 1;
+        return this.parse(input);
+      },
+    };
+    const nullable = s.nullable(inner);
+
+    expect(nullable.parse(null)).toBeNull();
+    expect(nullable.parse({ id: 'd1' })).toEqual({ id: 'd1' });
+    expect(() => nullable.parse({ id: 1 })).toThrow('Expected string');
+    expect(await parseSchemaAsync(nullable, null, true)).toBeNull();
+    expect(await parseSchemaAsync(nullable, { id: 'd2' }, true)).toEqual({ id: 'd2' });
+    expect(asyncCalls).toBe(1);
+
+    type Parsed = ReturnType<typeof nullable.parse>;
+    const typeProof: Parsed = Math.random() > 0.5 ? { id: 'd3' } : null;
+    expect(typeProof === null || typeProof.id === 'd3').toBe(true);
   });
 
   it('uses captured array and Object traversal controls after app prototype poisoning', () => {

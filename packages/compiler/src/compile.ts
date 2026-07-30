@@ -68,6 +68,7 @@ import { deriveComponentNames } from './component-names.js';
 import { deriveMutationKey } from './mutation-names.js';
 import { deriveRegistryIdentity } from './registry-identities.js';
 import {
+  emittedClientPlanExportMetadata,
   emitClientModule,
   emitClientModuleImportManifest,
   rewriteClientModuleRuntimeImportsForBrowser,
@@ -1747,8 +1748,14 @@ function assembleCompileResult(
     platformSubstitutions: facts.platformSubstitutions,
     publishToClientFacts: facts.publishToClientFacts,
     queryUpdatePlans: facts.queryUpdatePlans,
+    queryPlanBootstrapMetadata: emittedClientPlanExportMetadata(
+      parsed.componentName,
+      validated.queryUpdatePlans,
+      validated.clockUpdatePlans,
+    ),
     renderEquivalenceChecks: verified.renderEquivalenceChecks,
     renderPlanFingerprint: client.renderPlanFingerprint,
+    renderPlanFingerprintInput: client.renderPlanFingerprintInput,
     taskGraphFacts: facts.taskGraphFacts,
     updateCoverage: facts.queryUpdateCoverage,
     viewTransitions: facts.viewTransitions,

@@ -28,6 +28,7 @@ import { reportRuntimeError } from './error-policy.js';
 import { readAttribute } from './wire-html.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 import { reloadSessionTransitionDocument } from './session-transition.js';
+import { addRuntimeEventListener, removeRuntimeEventListener } from './runtime-dom-security.js';
 import {
   securityArrayAppend,
   securityArrayIsArray,
@@ -297,6 +298,19 @@ export async function applyStreamingMutationResponseBodyToRuntime(
   // the reader is never cancelled. We watch the caller's `streamText.signal` (the internal
   // controller, created only when the caller passed none, is OUR abort source, not a watch).
   const abortSignal = options.streamText?.signal;
+  let queryRollbackComplete = false;
+  const rollbackQueries = (): void => {
+    if (queryRollbackComplete) return;
+    queryRollbackComplete = true;
+    revertAppliedQueries(options.store, queryRevertLog);
+  };
+  const abortRollback = (): void => {
+    rollbackQueries();
+  };
+  const observesAbort =
+    abortSignal === undefined
+      ? false
+      : addRuntimeEventListener(abortSignal, 'abort', abortRollback, { once: true });
 
   try {
     while (true) {
@@ -360,7 +374,7 @@ export async function applyStreamingMutationResponseBodyToRuntime(
     // buffer (marks the stream-text targets failed), report once, hard-reload authoritative server
     // truth, and re-throw. Never return the partial as a success result.
     streamAbortController?.abort();
-    revertAppliedQueries(options.store, queryRevertLog);
+    rollbackQueries();
     try {
       if (streamTextBuffer) {
         // The buffer's `fail` marks stream-text targets failed AND reports via its onError
@@ -380,6 +394,9 @@ export async function applyStreamingMutationResponseBodyToRuntime(
     }
     throw error;
   } finally {
+    if (observesAbort) {
+      removeRuntimeEventListener(abortSignal, 'abort', abortRollback);
+    }
     mutationResponseSecurity.releaseStreamReader(readerPlan);
   }
 }

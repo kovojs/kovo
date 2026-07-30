@@ -30,6 +30,7 @@ import {
   readEligibleEnhancedMutationTransport,
   recoverEnhancedMutationDocument,
   updateUploadProgressElements,
+  isStreamingEnhancedMutationForm,
   type EnhancedFormElementLike,
   type EnhancedMutationTransport,
 } from './mutation-form.js';
@@ -185,6 +186,7 @@ export async function dispatchEnhancedFormSubmit(
         pendingRoot: options.pendingRoot,
         queryPlans: options.queryPlans,
         requestPlan,
+        streaming,
       }),
       root: options.root,
       store: options.store,
@@ -307,6 +309,8 @@ export interface EnhancedMutationSubmitOptions {
   requestPlan?: FrameworkTargetRequestHeaderPlan;
   root: MorphRoot & TargetCollectorRoot;
   store: QueryStore;
+  /** @internal Stream posture pinned by delegated preflight; direct callers derive it from `form`. */
+  streaming?: boolean;
   /** Effective submitter transport snapshotted before preventDefault (SPEC §§6.3, 7, 9.1). */
   transport?: EnhancedMutationTransport;
 }
@@ -321,7 +325,8 @@ export async function submitEnhancedMutation(
     (options.onBuildSkew ?? defaultBuildSkewReload)();
     throw new TypeError('Kovo refused an enhanced mutation without a document build proof.');
   }
-  options = { ...options, expectedBuildToken };
+  const streaming = options.streaming ?? isStreamingEnhancedMutationForm(options.form);
+  options = { ...options, expectedBuildToken, streaming };
   const retirePrincipal = captureSessionTransitionPrincipalRetirement(options);
   const retireTransitionRuntime = (): void => {
     retirePrincipal();
@@ -334,7 +339,7 @@ export async function submitEnhancedMutation(
       ...options,
       onSessionTransition: retireTransitionRuntime,
       onSessionTransitionReload: reloadSessionTransitionDocument,
-      streaming: isStreamingEnhancedMutationForm(options.form),
+      streaming,
     });
     if (fetched.sessionTransition) return retiredSessionTransitionResult(fetched);
     // SPEC §9.1.1: the build proof was captured before transport. Default the refetch-full handler
@@ -364,18 +369,6 @@ export async function submitEnhancedMutation(
   } finally {
     stampEnhancedMutationPending(options, false);
   }
-}
-
-export function isStreamingEnhancedMutationForm(form: EnhancedFormLike): boolean {
-  const getAttribute = form.getAttribute?.bind(form);
-  if (!getAttribute) return false;
-
-  return (
-    getAttribute('stream') !== null ||
-    getAttribute('data-mutation-stream') !== null ||
-    getAttribute('data-stream') !== null ||
-    getAttribute('data-kovo-stream') !== null
-  );
 }
 
 function defaultDeltaMissRefetcher(options: EnhancedMutationSubmitOptions): OnDeltaMiss {

@@ -109,6 +109,7 @@ interface AsyncSchema<T> extends Schema<T> {
 type SchemaMetadata =
   | { kind: 'array'; item: Schema<unknown> }
   | { kind: 'file'; maxBytes?: number }
+  | { kind: 'nullable'; item: Schema<unknown> }
   | { kind: 'object'; shape: Readonly<Record<string, Schema<unknown>>> }
   | { kind: 'record'; value: Schema<unknown> }
   | { kind: 'stored-file'; maxBytes?: number };
@@ -401,7 +402,8 @@ function firstValidationIssueMessage(issues: readonly ValidationIssue[]): string
 
 /**
  * The schema builder. Compose validators with `s.object`, `s.string`,
- * `s.number`, `s.decimal`, `s.date`, `s.datetime`, `s.json`, `s.boolean`, `s.array`, and `s.file`;
+ * `s.number`, `s.decimal`, `s.date`, `s.datetime`, `s.json`, `s.boolean`, `s.array`,
+ * `s.nullable`, and `s.file`;
  * each returns a `Schema`
  * whose `parse` coerces and validates `FormData`-shaped input, so the same
  * schema validates JSON and form submissions (SPEC §6.3).
@@ -521,6 +523,24 @@ export const s = witnessFreeze({
   },
   number(): NumberSchema {
     return new NumberSchemaImpl();
+  },
+  nullable<Value>(item: Schema<Value>): Schema<Value | null> {
+    const closedItem = snapshotSchemaForRuntime(item, 's.nullable(item)');
+    const schema: AsyncSchema<Value | null> = {
+      parse(input: unknown): Value | null {
+        input = revealSchemaInput(input);
+        return input === null ? null : closedItem.parse(input);
+      },
+      async parseAsync(input: unknown): Promise<Value | null> {
+        input = revealSchemaInput(input);
+        return input === null ? null : await parseSchemaAsync(closedItem, input, true);
+      },
+    };
+    witnessWeakMapSet(schemaMetadata, schema, {
+      item: closedItem as Schema<unknown>,
+      kind: 'nullable',
+    });
+    return witnessFreeze(schema);
   },
   secret<Value>(schema: Schema<Value>): Schema<SecretValue<Value>> {
     const closedSchema = snapshotSchemaForRuntime(schema, 's.secret(schema)');
@@ -665,7 +685,8 @@ function schemaContainsFile(schema: Schema<unknown>): boolean {
   const metadata = witnessWeakMapGet(schemaMetadata, schema);
   if (!metadata) return false;
   if (metadata.kind === 'file' || metadata.kind === 'stored-file') return true;
-  if (metadata.kind === 'array') return schemaContainsFile(metadata.item);
+  if (metadata.kind === 'array' || metadata.kind === 'nullable')
+    return schemaContainsFile(metadata.item);
   if (metadata.kind === 'object') {
     const keys = witnessObjectKeys(metadata.shape);
     for (let index = 0; index < keys.length; index += 1) {

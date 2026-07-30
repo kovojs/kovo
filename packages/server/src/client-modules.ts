@@ -10,9 +10,14 @@ import {
   type RenderPlanFingerprintInput,
   RENDER_PLAN_GRAMMAR_VERSION,
 } from '@kovojs/core/internal/render-plan-token';
+import { kovoDeferredAppRuntimeModulePath } from '@kovojs/browser/internal/deferred-app-runtime-identity';
 import { types as nodeUtilTypes } from 'node:util';
 
 import { clientModuleBuildTokenHash } from './client-module-registry-intrinsics.js';
+import {
+  compilerOwnedClientModuleRole,
+  type CompilerOwnedViteClientModuleRole,
+} from './compiler-client-module-provenance.js';
 import { reportServerError, type ServerErrorHandler } from './diagnostics.js';
 import {
   securityStringCharCodeAt,
@@ -45,6 +50,7 @@ export {
 
 const CLIENT_MODULE_CONTENT_TYPE = 'text/javascript; charset=utf-8';
 const DEFAULT_RENDER_PLAN_FINGERPRINT = computeRenderPlanFingerprint({});
+const GENERATED_APP_BOOTSTRAP_PATH = '/c/generated/app.client.js';
 const nativeArrayIsArray = Array.isArray;
 const nativeIsProxy = nodeUtilTypes.isProxy;
 
@@ -88,6 +94,12 @@ export interface VersionedClientModuleRegistry {
   resolve(href: string): ServerResponseBase<string, Record<string, string>, 200 | 404>;
 }
 
+/** @internal Current-process app-authored and framework-mandatory staging, excluding durable active history. */
+export interface VersionedClientModuleStagingSnapshot {
+  mandatory: readonly VersionedClientModuleInput[];
+  stable: readonly VersionedClientModuleInput[];
+}
+
 /** @internal Response envelope produced by the server-owned client-module request path. */
 export interface VersionedClientModuleResponse extends ServerResponseBase<
   string,
@@ -110,6 +122,7 @@ export interface MemoryVersionedClientModuleRegistryOptions {
 interface RegistryControl {
   activeByHref: Map<string, Readonly<VersionedClientModuleInput>>;
   buildToken: string;
+  compilerRoleByHref: Map<string, CompilerOwnedViteClientModuleRole>;
   dirty: boolean;
   mandatoryByHref: Map<string, Readonly<VersionedClientModuleInput>>;
   poisoned: Error | undefined;
@@ -166,6 +179,9 @@ export function snapshotVersionedClientModuleRegistry(
   const control: RegistryControl = {
     activeByHref,
     buildToken: '',
+    // Durable source/manifest records deliberately do not authenticate compiler authority. A
+    // genuine compiler snapshot must be republished in this process before generated roles exist.
+    compilerRoleByHref: createWitnessMap<string, CompilerOwnedViteClientModuleRole>(),
     dirty: false,
     mandatoryByHref: createWitnessMap<string, Readonly<VersionedClientModuleInput>>(),
     poisoned: undefined,
@@ -193,6 +209,7 @@ export function snapshotVersionedClientModuleRegistry(
         );
       }
       const snapshot = snapshotClientModuleInput(module);
+      assertManualClientModulePath(snapshot.path);
       const href = moduleHref(snapshot);
       witnessReflectApply<void>(control.store.retain, control.store.receiver, [snapshot]);
       rememberActive(control.stableByHref, href, snapshot);
@@ -220,6 +237,7 @@ export function replaceVersionedClientModuleBuildSnapshot(
     modules: readonly VersionedClientModuleInput[];
     renderPlanFingerprint: string;
   },
+  compilerModules?: readonly unknown[],
 ): string {
   const control = registryControl(registry);
   if (control.sealed) {
@@ -228,6 +246,7 @@ export function replaceVersionedClientModuleBuildSnapshot(
   const fingerprint = renderPlanFingerprint(input.renderPlanFingerprint);
   const next = createWitnessMap<string, Readonly<VersionedClientModuleInput>>();
   const modules = snapshotInputArray(input.modules, 'client-module build snapshot');
+  const compilerRoleByHref = compilerClientModuleRoles(modules, compilerModules);
   for (let index = 0; index < modules.length; index += 1) {
     const module = snapshotClientModuleInput(modules[index]!);
     const href = moduleHref(module);
@@ -235,7 +254,7 @@ export function replaceVersionedClientModuleBuildSnapshot(
   }
   copyModuleMap(control.stableByHref, next);
   copyModuleMap(control.mandatoryByHref, next);
-  publishActiveSnapshot(control, next, fingerprint);
+  publishActiveSnapshot(control, next, fingerprint, compilerRoleByHref);
   return control.buildToken;
 }
 
@@ -272,6 +291,33 @@ export function isVersionedClientModuleBuildSealed(
   registry: VersionedClientModuleRegistry,
 ): boolean {
   return registryControl(registry).sealed;
+}
+
+/**
+ * @internal Snapshot only modules republished by this process.
+ *
+ * Durable `activeByHref` may describe a previous deployment and cannot distinguish old compiler
+ * output from manual modules after restart. Build orchestration uses this staging-only view to
+ * construct the next exact active set without carrying stale deployment records forward.
+ */
+export function snapshotVersionedClientModuleStaging(
+  registry: VersionedClientModuleRegistry,
+): Readonly<VersionedClientModuleStagingSnapshot> {
+  const control = registryControl(registry);
+  return witnessFreeze({
+    mandatory: sortedEntries(control.mandatoryByHref),
+    stable: sortedEntries(control.stableByHref),
+  });
+}
+
+/** @internal Return the server-private role proven for one exact active module representation. */
+export function compilerOwnedVersionedClientModuleRole(
+  registry: VersionedClientModuleRegistry,
+  module: VersionedClientModuleInput,
+): CompilerOwnedViteClientModuleRole | undefined {
+  const control = registryControl(registry);
+  const snapshot = snapshotClientModuleInput(module);
+  return witnessMapGet(control.compilerRoleByHref, moduleHref(snapshot));
 }
 
 /**
@@ -539,6 +585,76 @@ function snapshotClientModuleInput(
   return witnessFreeze({ path: normalizedPath, source });
 }
 
+function assertManualClientModulePath(path: string): void {
+  if (isCompilerReservedClientModulePath(path)) {
+    throw new TypeError(`Kovo compiler-generated client-module path is reserved: ${path}.`);
+  }
+}
+
+function isCompilerReservedClientModulePath(path: string): boolean {
+  return (
+    path === GENERATED_APP_BOOTSTRAP_PATH ||
+    path === clientModulePath(kovoDeferredAppRuntimeModulePath)
+  );
+}
+
+function compilerClientModuleRoles(
+  modules: readonly VersionedClientModuleInput[],
+  compilerModules: readonly unknown[] | undefined,
+): Map<string, CompilerOwnedViteClientModuleRole> {
+  const roles = createWitnessMap<string, CompilerOwnedViteClientModuleRole>();
+  const proofs =
+    compilerModules === undefined
+      ? []
+      : snapshotInputArray(
+          compilerModules as readonly VersionedClientModuleInput[],
+          'compiler client-module provenance',
+        );
+  if (compilerModules !== undefined && proofs.length !== modules.length) {
+    throw new TypeError('Compiler client-module provenance must cover the exact build snapshot.');
+  }
+  for (let index = 0; index < modules.length; index += 1) {
+    const module = snapshotClientModuleInput(modules[index]!);
+    const proof = proofs[index];
+    const role = proof === undefined ? undefined : compilerOwnedClientModuleRole(proof);
+    if (role !== undefined) {
+      const proven = snapshotClientModuleInput(proof);
+      if (proven.path !== module.path || proven.source !== module.source) {
+        throw new TypeError(
+          'Compiler client-module provenance does not match the published representation.',
+        );
+      }
+      assertCompilerClientModuleRolePath(role, module.path);
+      witnessMapSet(roles, moduleHref(module), role);
+      continue;
+    }
+    if (isCompilerReservedClientModulePath(module.path)) {
+      throw new TypeError(
+        `Kovo refused unproven compiler-generated client-module path: ${module.path}.`,
+      );
+    }
+  }
+  return roles;
+}
+
+function assertCompilerClientModuleRolePath(
+  role: CompilerOwnedViteClientModuleRole,
+  path: string,
+): void {
+  const expected =
+    role === 'app-bootstrap'
+      ? GENERATED_APP_BOOTSTRAP_PATH
+      : role === 'deferred-app-runtime'
+        ? clientModulePath(kovoDeferredAppRuntimeModulePath)
+        : undefined;
+  if (
+    (expected !== undefined && path !== expected) ||
+    (expected === undefined && isCompilerReservedClientModulePath(path))
+  ) {
+    throw new TypeError(`Compiler client-module role ${role} cannot publish ${path}.`);
+  }
+}
+
 function ownString(value: object, property: 'path' | 'source'): string {
   const descriptor = witnessGetOwnPropertyDescriptor(value, property);
   if (
@@ -596,6 +712,7 @@ function publishActiveSnapshot(
   control: RegistryControl,
   next: Map<string, Readonly<VersionedClientModuleInput>>,
   fingerprint: string,
+  compilerRoleByHref = retainedCompilerRoles(control, next),
 ): void {
   const modules = sortedEntries(next);
   // Retention can grow before publication, but no active set/token changes unless every retain and
@@ -637,9 +754,21 @@ function publishActiveSnapshot(
     throw failure;
   }
   control.activeByHref = next;
+  control.compilerRoleByHref = compilerRoleByHref;
   control.renderPlanFingerprint = fingerprint;
   control.dirty = false;
   refreshBuildToken(control);
+}
+
+function retainedCompilerRoles(
+  control: RegistryControl,
+  next: Map<string, Readonly<VersionedClientModuleInput>>,
+): Map<string, CompilerOwnedViteClientModuleRole> {
+  const retained = createWitnessMap<string, CompilerOwnedViteClientModuleRole>();
+  witnessMapForEach(control.compilerRoleByHref, (role, href) => {
+    if (witnessMapGet(next, href) !== undefined) witnessMapSet(retained, href, role);
+  });
+  return retained;
 }
 
 function sameModuleMap(

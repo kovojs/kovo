@@ -342,6 +342,7 @@ interface KovoAppShellDevRequestDiagnosticStore {
 }
 
 interface KovoAppShellViteDevClientModuleSnapshot {
+  compilerModules: readonly unknown[];
   modules: readonly Readonly<VersionedClientModuleInput>[];
   renderPlanFingerprint: string;
 }
@@ -635,7 +636,11 @@ function publishKovoAppShellViteDevClientModuleSnapshot(
   }
 
   try {
-    replaceVersionedClientModuleBuildSnapshot(app.clientModules, snapshot);
+    replaceVersionedClientModuleBuildSnapshot(
+      app.clientModules,
+      snapshot,
+      snapshot.compilerModules,
+    );
   } catch (cause) {
     const failure = new Error(
       'KV417: Vite dev client-module snapshot publication failed; this app graph is permanently closed.',
@@ -833,6 +838,7 @@ function snapshotKovoAppShellViteDevClientModules(
   }
 
   return witnessFreeze({
+    compilerModules: witnessFreeze(values),
     modules: witnessFreeze(modules),
     renderPlanFingerprint: renderPlanFingerprint ?? viteDevDefaultRenderPlanFingerprint,
   });

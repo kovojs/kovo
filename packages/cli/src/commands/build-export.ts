@@ -48,6 +48,7 @@ import {
   clientModuleRepresentationDigest,
   parseVersionedClientModuleTarget,
 } from '@kovojs/core/internal/client-module-url';
+import { computeRenderPlanFingerprint } from '@kovojs/core/internal/render-plan-token';
 import { ESCAPE_CENSUS_DOORS } from '@kovojs/core/internal/graph';
 import {
   snapshotCacheInfluenceManifest,
@@ -70,6 +71,7 @@ import {
   compilerOwnedProjectMutationRegistryFactsFromFiles,
   componentTaskBSourceOperationFacts,
   compilerGeneratedCapabilityDependencies,
+  compilerOwnedViteClientModuleRole,
   createCompilerOwnedAppContractProject,
   createFrameworkKovoCssCollectorVitePlugin,
   cssRouteDeliveryGate,
@@ -983,6 +985,7 @@ export async function runBuildCommand(
       node,
       queryShapeFacts,
       resolveKovoBuildPreset,
+      snapshotVersionedClientModuleStaging,
       vercel,
       writeKovoNeutralBuild,
     } = loadAndCheck;
@@ -1077,9 +1080,22 @@ export async function runBuildCommand(
       ...clientBuild.clientModules,
       ...discoveredServerHandlerBuild.clientModules,
     ]);
+    const appClientModuleStaging = snapshotVersionedClientModuleStaging(buildApp.clientModules);
+    const hasGeneratedAppBootstrap = buildSomeDense(
+      discoveredClientModules,
+      'discovered compiler client modules',
+      (module) => compilerOwnedViteClientModuleRole(module) === 'app-bootstrap',
+    );
+    const nonCompilerClientModules = hasGeneratedAppBootstrap
+      ? appClientModuleStaging.stable
+      : appendDense(
+          appClientModuleStaging.stable,
+          appClientModuleStaging.mandatory,
+          'build app stable and mandatory client modules',
+        );
     const appBuildToken = deriveKovoAppBuildToken(
       discoveredClientModules,
-      buildApp.clientModules.entries(),
+      nonCompilerClientModules,
     );
     const graphWithProof: CoreGraph.KovoCheckInput = {
       ...graphWithProvenance,
@@ -1101,15 +1117,15 @@ export async function runBuildCommand(
         ...runtimeRegistryWireFactsFromGraph(completedCheckGraph),
         ...commonRuntimeRegistry,
       },
+      generatedClientModules: discoveredClientModules,
+      manualClientModules: appClientModuleStaging.stable,
       stylesheetAssets: buildCssAssets,
     });
     const clientModules = uniqueKovoCompiledClientModules([
       ...clientBuild.clientModules,
       ...serverHandlerBuild.clientModules,
     ]);
-    if (
-      deriveKovoAppBuildToken(clientModules, buildApp.clientModules.entries()) !== appBuildToken
-    ) {
+    if (deriveKovoAppBuildToken(clientModules, nonCompilerClientModules) !== appBuildToken) {
       throw new TypeError(
         'Kovo final runtime-posture bundle changed the discovered client-module identity.',
       );
@@ -1253,8 +1269,12 @@ async function loadAndCheckBuildApp(
   const { cloudflare, node, vercel } = loadedBuildApp.serverBuildModule;
   const { resolveKovoBuildPreset } = loadedBuildApp.serverBuildPresetModule;
   const execution = loadedBuildApp.serverExecutionModule;
-  const { declaredKovoAppId, deriveClosedKovoApp, writeKovoNeutralBuild } =
-    loadedBuildApp.serverInternalBuildModule;
+  const {
+    declaredKovoAppId,
+    deriveClosedKovoApp,
+    snapshotVersionedClientModuleStaging,
+    writeKovoNeutralBuild,
+  } = loadedBuildApp.serverInternalBuildModule;
   const appModule = loadedBuildApp.appModule;
   const app = appFromModule(
     appModule,
@@ -1283,6 +1303,7 @@ async function loadAndCheckBuildApp(
     queryShapeFacts: buildCheck.queryShapeFacts,
     runtimeRegistry: buildCheck.runtimeRegistry,
     resolveKovoBuildPreset,
+    snapshotVersionedClientModuleStaging,
     vercel,
     writeKovoNeutralBuild,
   };
@@ -3176,6 +3197,7 @@ async function staticBuildCheckGraph(
   const queryShapeFacts = buildCompilerQueryShapeFacts(
     files,
     drizzleFacts,
+    sourceGraphFacts.appContractStaticFacts,
   ) as readonly QueryShapeFact[];
   const revealed = mergeBuildRevealFacts(drizzleFacts.revealed ?? [], runtimeReveals);
   const queryReadSets = buildMapDense(app.queries, 'Build app queries', (query) =>
@@ -6912,6 +6934,8 @@ async function bundleKovoServerHandler(
     dependencyCapabilities: AppDependencyCapabilityManifest;
     projectMutationFacts: ProjectMutationRegistryFacts;
     queryShapeFacts: readonly QueryShapeFact[];
+    generatedClientModules?: readonly KovoAppShellCompiledClientModule[];
+    manualClientModules?: readonly { path: string; source: string }[];
     runtimeTarget: KovoBuildPresetName;
     runtimeRegistry: RuntimeRegistryWireFacts;
     stylesheetAssets?: KovoBuildStylesheetAssets;
@@ -6941,7 +6965,13 @@ async function bundleKovoServerHandler(
     );
     writeFileSync(
       entryPath,
-      kovoServerHandlerEntrySource(appModulePath, stylesheetAssets, options.runtimeTarget),
+      kovoServerHandlerEntrySource(
+        appModulePath,
+        stylesheetAssets,
+        options.runtimeTarget,
+        options.generatedClientModules,
+        options.manualClientModules,
+      ),
       'utf8',
     );
     await viteBuild({
@@ -7191,8 +7221,9 @@ export function projectMutationRegistryFactsForBuild(
       exactFacts.optimisticModules,
       'Project optimistic build modules',
     );
-    const projectedModules: NonNullable<ProjectMutationRegistryFacts['optimisticModules']>[number][] =
-      [];
+    const projectedModules: NonNullable<
+      ProjectMutationRegistryFacts['optimisticModules']
+    >[number][] = [];
     for (let index = 0; index < exactModules.length; index += 1) {
       const module = exactModules[index]!;
       const fileName = projectFileName(module.fileName);
@@ -7229,10 +7260,7 @@ export function projectMutationRegistryFactsForBuild(
   if (exactFacts.mutationOptimism !== undefined) {
     const projectedOptimism = buildCreateNullRecord<
       NonNullable<ProjectMutationRegistryFacts['mutationOptimism']>[string]
-    >() as Record<
-      string,
-      NonNullable<ProjectMutationRegistryFacts['mutationOptimism']>[string]
-    >;
+    >() as Record<string, NonNullable<ProjectMutationRegistryFacts['mutationOptimism']>[string]>;
     const mutationKeys = buildSnapshotDenseArray(
       buildObjectKeys(exactFacts.mutationOptimism),
       'Project optimistic build mutation keys',
@@ -7403,16 +7431,39 @@ export function kovoServerHandlerEntrySource(
   appModulePath: string,
   stylesheetAssets: KovoBuildStylesheetAssets,
   runtimeTarget: KovoBuildPresetName,
+  generatedClientModules?: readonly KovoAppShellCompiledClientModule[],
+  manualClientModules?: readonly { path: string; source: string }[],
 ): string {
+  const generatedClientModuleEntry =
+    generatedClientModules === undefined && manualClientModules === undefined
+      ? undefined
+      : generatedBuildClientModuleEntry(generatedClientModules ?? [], manualClientModules ?? []);
   return buildJoinStrings(
     [
       runtimeTarget === 'cloudflare'
         ? ''
         : "import '@kovojs/server/internal/sql-parser-authority-bootstrap';",
       "import { createRequestHandler, deriveClosedKovoApp, runWithGeneratedLiveTargetRegistry } from '@kovojs/server/internal/app-shell-vite';",
+      generatedClientModuleEntry === undefined
+        ? ''
+        : `import { claimGeneratedBuildClientModuleInstaller } from ${stringifyBuildValue(
+            generatedBuildClientModuleBootstrapHref(),
+          )};`,
       "import './runtime-registry.mjs';",
       "import { appendFrameworkRuntimeArrayValue } from '@kovojs/server/internal/execution';",
-      `const appModule = await runWithGeneratedLiveTargetRegistry(() => import(${stringifyBuildValue(pathToFileURL(appModulePath).href)}));`,
+      ...(generatedClientModuleEntry === undefined
+        ? []
+        : [
+            'const generatedClientModuleInstaller = claimGeneratedBuildClientModuleInstaller();',
+            ...generatedClientModuleEntry.registrationLines,
+          ]),
+      generatedClientModuleEntry === undefined
+        ? `const appModule = await runWithGeneratedLiveTargetRegistry(() => import(${stringifyBuildValue(pathToFileURL(appModulePath).href)}));`
+        : `const appModule = await generatedClientModuleInstaller.load(${stringifyBuildValue(
+            generatedClientModuleEntry.renderPlanFingerprint,
+          )}, () => runWithGeneratedLiveTargetRegistry(() => import(${stringifyBuildValue(
+            pathToFileURL(appModulePath).href,
+          )})));`,
       'const app = appModule.default ?? appModule.app;',
       `const stylesheetAssets = ${stringifyBuildValue(stylesheetAssets)};`,
       'export default createRequestHandler(appWithBuildStylesheetAssets(app, stylesheetAssets));',
@@ -7483,6 +7534,147 @@ export function kovoServerHandlerEntrySource(
     '\n',
     'Generated server-handler entry lines',
   );
+}
+
+function generatedBuildClientModuleEntry(
+  modules: readonly KovoAppShellCompiledClientModule[],
+  manualModules: readonly { path: string; source: string }[],
+): {
+  registrationLines: readonly string[];
+  renderPlanFingerprint: string;
+} {
+  const snapshot = buildSnapshotDenseArray(modules, 'generated build client modules');
+  const manualSnapshot = buildSnapshotDenseArray(
+    manualModules,
+    'generated build manual client modules',
+  );
+  const registrationLines: string[] = [];
+  const roleByIdentity = buildCreateMap<string, string>();
+  let appBootstrapCount = 0;
+  let deferredAppRuntimeCount = 0;
+  let optimisticPlanCount = 0;
+  let renderPlanFingerprint: string | undefined;
+
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const module = snapshot[index]!;
+    const role = compilerOwnedViteClientModuleRole(module);
+    if (role === undefined) {
+      throw new TypeError(
+        `Kovo refused unproven compiler client module ${index} before generated-handler emission.`,
+      );
+    }
+    const path = buildOwnDataValue(module, 'path', `generated build client module ${index}`);
+    const source = buildOwnDataValue(module, 'source', `generated build client module ${index}`);
+    const fingerprint = buildOwnDataValue(
+      module,
+      'renderPlanFingerprint',
+      `generated build client module ${index}`,
+    );
+    if (typeof path !== 'string' || typeof source !== 'string' || typeof fingerprint !== 'string') {
+      throw new TypeError(
+        `Kovo compiler client module ${index} must carry exact path/source/fingerprint strings.`,
+      );
+    }
+    if (renderPlanFingerprint !== undefined && renderPlanFingerprint !== fingerprint) {
+      throw new TypeError('Kovo generated-handler client modules carry incoherent fingerprints.');
+    }
+    if (buildRegExpExec(/^[0-9a-f]{64}$/u, fingerprint) === null) {
+      throw new TypeError(
+        `Kovo compiler client module ${index} carries an invalid render-plan fingerprint.`,
+      );
+    }
+    renderPlanFingerprint = fingerprint;
+    const identity = `${path}\u0000${clientModuleRepresentationDigest(source)}`;
+    const previousRole = buildMapGet(roleByIdentity, identity);
+    if (previousRole !== undefined) {
+      throw new TypeError(
+        previousRole === role
+          ? `Kovo compiler client module ${path} was registered twice.`
+          : `Kovo compiler client module ${path} has conflicting generated roles.`,
+      );
+    }
+    buildMapSet(roleByIdentity, identity, role);
+    const method =
+      role === 'app-bootstrap'
+        ? 'appBootstrap'
+        : role === 'component-client'
+          ? 'componentClient'
+          : role === 'deferred-app-runtime'
+            ? 'deferredAppRuntime'
+            : 'optimisticPlan';
+    if (role === 'app-bootstrap') appBootstrapCount += 1;
+    if (role === 'deferred-app-runtime') deferredAppRuntimeCount += 1;
+    if (role === 'optimistic-plan') optimisticPlanCount += 1;
+    buildSecurityArrayAppend(
+      registrationLines,
+      `generatedClientModuleInstaller.${method}(Object.freeze(${stringifyBuildValue({
+        path,
+        source,
+      })}));`,
+      'Generated build client-module registrations',
+    );
+  }
+
+  for (let index = 0; index < manualSnapshot.length; index += 1) {
+    const module = manualSnapshot[index]!;
+    const path = buildOwnDataValue(module, 'path', `generated build manual client module ${index}`);
+    const source = buildOwnDataValue(
+      module,
+      'source',
+      `generated build manual client module ${index}`,
+    );
+    if (typeof path !== 'string' || typeof source !== 'string') {
+      throw new TypeError(
+        `Kovo manual client module ${index} must carry exact path/source strings.`,
+      );
+    }
+    if (
+      path === '/c/generated/app.client.js' ||
+      path === '/c/kovo-generated-app-runtime.client.js'
+    ) {
+      throw new TypeError(`Kovo compiler-generated client-module path is reserved: ${path}.`);
+    }
+    const identity = `${path}\u0000${clientModuleRepresentationDigest(source)}`;
+    if (buildMapHas(roleByIdentity, identity)) {
+      throw new TypeError(`Kovo manual client module ${path} conflicts with a generated module.`);
+    }
+    buildMapSet(roleByIdentity, identity, 'manual');
+    buildSecurityArrayAppend(
+      registrationLines,
+      `generatedClientModuleInstaller.manual(Object.freeze(${stringifyBuildValue({
+        path,
+        source,
+      })}));`,
+      'Generated build manual client-module registrations',
+    );
+  }
+
+  if (
+    appBootstrapCount > 1 ||
+    deferredAppRuntimeCount > 1 ||
+    appBootstrapCount !== deferredAppRuntimeCount ||
+    (optimisticPlanCount > 0 && appBootstrapCount !== 1)
+  ) {
+    throw new TypeError(
+      'Kovo generated-handler client modules require exactly one coherent app-bootstrap/deferred-runtime pair.',
+    );
+  }
+
+  return {
+    registrationLines,
+    renderPlanFingerprint: renderPlanFingerprint ?? computeRenderPlanFingerprint({}),
+  };
+}
+
+function generatedBuildClientModuleBootstrapHref(): string {
+  const appShellEntry = requireFromCli.resolve('@kovojs/server/internal/app-shell-vite');
+  const extension = buildStringEndsWith(appShellEntry, '.ts')
+    ? '.ts'
+    : buildStringEndsWith(appShellEntry, '.mjs')
+      ? '.mjs'
+      : '.js';
+  return pathToFileURL(join(dirname(appShellEntry), `generated-build-client-modules${extension}`))
+    .href;
 }
 
 /** @internal Serialize the production registry entry with the CLI's boot-captured JSON control. */

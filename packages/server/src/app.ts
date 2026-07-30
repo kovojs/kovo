@@ -2,8 +2,10 @@ import {
   commitVersionedClientModuleStaging,
   createMemoryVersionedClientModuleRegistry,
   finalizeVersionedClientModuleBuild,
+  replaceVersionedClientModuleBuildSnapshot,
   snapshotVersionedClientModuleRegistry,
 } from './client-modules.js';
+import { takeGeneratedBuildClientModuleSnapshot } from './compiler-client-module-provenance.js';
 import { assertRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import { snapshotAuditJustification } from './audit-justification.js';
 import {
@@ -186,6 +188,20 @@ export function createApp<
   const clientModules = snapshotVersionedClientModuleRegistry(
     configuredClientModules ?? createMemoryVersionedClientModuleRegistry(),
   );
+  const generatedClientModules = takeGeneratedBuildClientModuleSnapshot();
+  if (generatedClientModules !== undefined) {
+    replaceVersionedClientModuleBuildSnapshot(
+      clientModules,
+      {
+        modules: generatedClientModules.modules as readonly {
+          path: string;
+          source: string;
+        }[],
+        renderPlanFingerprint: generatedClientModules.renderPlanFingerprint,
+      },
+      generatedClientModules.modules,
+    );
+  }
   const csrfSource = appOptionOwnDataValue(options, 'csrf') as AppOptions['csrf'];
   const db = appOptionOwnDataValue(options, 'db') as KovoApp['db'];
   const documentSource = appOptionOwnDataValue(options, 'document') as AppOptions['document'];

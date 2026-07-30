@@ -11,6 +11,7 @@ import { isKovoApp } from './app-guards.js';
 import { deriveClosedKovoApp } from './app-snapshot.js';
 import type { AppRouteDeclaration, KovoApp } from './app-types.js';
 import { buildOwnDataProperty, snapshotBuildArray } from './build-security-intrinsics.js';
+import { pinCompilerOwnedClientModule } from './compiler-client-module-provenance.js';
 import {
   computeRenderPlanFingerprint,
   finalizeVersionedClientModuleBuild,
@@ -480,10 +481,14 @@ function registerCompiledClientModules(
   const fingerprint = renderPlanFingerprint ?? computeRenderPlanFingerprint({});
   // Publish one complete compiler + mandatory-loader + stable/manual snapshot. Retention happens
   // before the store's single atomic active-snapshot replacement (SPEC §5.2.1/§14).
-  replaceVersionedClientModuleBuildSnapshot(app.clientModules, {
-    modules: stagedModules,
-    renderPlanFingerprint: fingerprint,
-  });
+  replaceVersionedClientModuleBuildSnapshot(
+    app.clientModules,
+    {
+      modules: stagedModules,
+      renderPlanFingerprint: fingerprint,
+    },
+    pinnedModules,
+  );
   finalizeVersionedClientModuleBuild(app.clientModules, fingerprint);
 
   return builtModules;
@@ -508,11 +513,11 @@ function snapshotCompiledClientModules(
     );
     witnessArrayAppend(
       pinned,
-      {
+      pinCompilerOwnedClientModule(raw, {
         path,
         source,
         ...(renderPlanFingerprint === undefined ? {} : { renderPlanFingerprint }),
-      },
+      }),
       'Server packages/server/src/vite-build.ts collection',
     );
   }

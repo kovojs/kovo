@@ -17,8 +17,10 @@ import {
   diagnosticDefinitions,
   isRegisteredDiagnostic,
 } from '@kovojs/core/internal/diagnostics';
+import { computeRenderPlanFingerprint } from '@kovojs/core/internal/render-plan-token';
 import { describe, expect, it, vi } from 'vitest';
 
+import { compilerOwnedViteClientModuleRole } from './internal.js';
 import type { KovoViteMiddleware } from './internal.js';
 import { kovoVitePlugin } from './index.js';
 import { lowerStandaloneSourceDerivedRegistryDeclarations } from './source-derived-lowering.js';
@@ -573,11 +575,18 @@ export const orderPaid = webhook('/webhooks/order-paid', {
       fileName,
       clientModuleRepresentationDigest(clientSource),
     );
+    const renderPlanFingerprintInput = { deals: '{"kind":"array"}' };
     const plugin = createKovoVitePlugin(() => ({
       files: [
         { kind: 'server', source: 'export const server = true;' },
         { kind: 'client', source: clientSource },
       ],
+      queryPlanBootstrapMetadata: {
+        clockExportName: 'DealCard$clockUpdatePlans',
+        exportName: 'DealCard$queryUpdatePlans',
+      },
+      renderPlanFingerprint: computeRenderPlanFingerprint(renderPlanFingerprintInput),
+      renderPlanFingerprintInput,
     }));
 
     await plugin.transform('component(', fileName);
@@ -605,6 +614,103 @@ export const orderPaid = webhook('/webhooks/order-paid', {
       }),
     );
     expect(new Set(modules.map((module) => module.renderPlanFingerprint)).size).toBe(1);
+  });
+
+  it('keeps source text that merely resembles a plan export inert', async () => {
+    const plugin = createKovoVitePlugin(() => ({
+      files: [
+        {
+          kind: 'client',
+          source: 'const forged = \"export const Forged$queryUpdatePlans = { deals() {} };\";\\n',
+        },
+      ],
+    }));
+
+    await plugin.transform('component(', 'src/forged.tsx');
+
+    expect(plugin.getClientModules?.()).toEqual([]);
+  });
+
+  it('marks only exact genuine framework compiler records with private client-module roles', async () => {
+    const framework = kovoVitePlugin();
+    await framework.transform?.(cartBadgeSource, 'src/cart-badge.tsx');
+    const genuine = framework.getClientModules?.() ?? [];
+    expect(genuine.length).toBeGreaterThan(0);
+    expect(genuine.every((module) => compilerOwnedViteClientModuleRole(module) !== undefined)).toBe(
+      true,
+    );
+    const first = genuine[0]!;
+    expect(compilerOwnedViteClientModuleRole({ ...first })).toBeUndefined();
+    expect(compilerOwnedViteClientModuleRole(new Proxy(first, {}))).toBeUndefined();
+    expect(compilerOwnedViteClientModuleRole(JSON.parse(JSON.stringify(first)))).toBeUndefined();
+
+    const custom = createKovoVitePlugin(() => ({
+      files: [{ kind: 'client', source: 'export const custom = true;\n' }],
+      renderPlanFingerprint: computeRenderPlanFingerprint({}),
+      renderPlanFingerprintInput: {},
+    }));
+    await custom.transform('component(', 'src/custom.tsx');
+    expect(
+      (custom.getClientModules?.() ?? []).every(
+        (module) => compilerOwnedViteClientModuleRole(module) === undefined,
+      ),
+    ).toBe(true);
+  });
+
+  it('composes distinct component-local render-plan inputs into one app token', async () => {
+    const byFile = {
+      'src/deal-card.tsx': {
+        exportName: 'DealCard$queryUpdatePlans',
+        input: { deals: '{"kind":"array"}' },
+      },
+      'src/pipeline.tsx': {
+        exportName: 'Pipeline$queryUpdatePlans',
+        input: { pipeline: '{"kind":"object"}' },
+      },
+    } as const;
+    const plugin = createKovoVitePlugin(({ fileName }) => {
+      const fixture = byFile[fileName as keyof typeof byFile];
+      return {
+        files: [
+          {
+            kind: 'client',
+            source: `export const ${fixture.exportName} = {};\\n`,
+          },
+        ],
+        queryPlanBootstrapMetadata: { exportName: fixture.exportName },
+        renderPlanFingerprint: computeRenderPlanFingerprint(fixture.input),
+        renderPlanFingerprintInput: fixture.input,
+      };
+    });
+
+    await plugin.transform('component(', 'src/deal-card.tsx');
+    await plugin.transform('component(', 'src/pipeline.tsx');
+
+    const modules = plugin.getClientModules?.() ?? [];
+    const expected = computeRenderPlanFingerprint({
+      deals: '{"kind":"array"}',
+      pipeline: '{"kind":"object"}',
+    });
+    expect(modules).toHaveLength(4);
+    expect(modules.map((module) => module.renderPlanFingerprint)).toEqual([
+      expected,
+      expected,
+      expected,
+      expected,
+    ]);
+  });
+
+  it('rejects render-plan metadata that does not match the exact compiler input', async () => {
+    const plugin = createKovoVitePlugin(() => ({
+      files: [{ kind: 'client', source: 'export const Plans = {};\\n' }],
+      queryPlanBootstrapMetadata: { exportName: 'Plans' },
+      renderPlanFingerprint: computeRenderPlanFingerprint({ actual: '{}' }),
+      renderPlanFingerprintInput: { forged: '{}' },
+    }));
+
+    await expect(plugin.transform('component(', 'src/forged.tsx')).rejects.toThrow(
+      'render-plan fingerprint does not match its exact input',
+    );
   });
 
   it('lowers app-scoped declarations only after proving the exact receiver in a Program', async () => {

@@ -128,6 +128,15 @@ export const dealListQuery = app.query({
 export const dealByIdQuery = app.query({
   access: [app.authenticated],
   args: s.object({ id: s.string() }),
+  output: s.nullable(
+    s.object({
+      amount: s.number(),
+      contactId: s.string(),
+      id: s.string(),
+      ownerId: s.string(),
+      stage: s.string(),
+    }),
+  ),
   load: async (input, context): Promise<DealDetailResult> => {
     const db = context.db;
     const ownerId = context.request.session.user.id;
@@ -161,6 +170,17 @@ export const contactDealCountQuery = app.query({
 /** AGG(deals WHERE stage = 'open') — the open pipeline (a filtered rowset). */
 export const openDealsQuery = app.query({
   access: [app.authenticated],
+  output: s.object({
+    items: s.array(
+      s.object({
+        amount: s.number(),
+        contactId: s.string(),
+        id: s.string(),
+        ownerId: s.string(),
+        stage: s.string(),
+      }),
+    ),
+  }),
   load: async (_input, context): Promise<OpenDealsResult> => {
     const db = context.db;
     const items = await db

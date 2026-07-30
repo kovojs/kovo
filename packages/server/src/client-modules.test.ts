@@ -1,16 +1,13 @@
 import { createHash } from 'node:crypto';
 
-import { kovoDeferredAppRuntimeModuleSource } from '@kovojs/browser/internal/deferred-app-runtime';
-import {
-  kovoDeferredAppRuntimeModuleHref,
-  kovoDeferredAppRuntimeModulePath,
-} from '@kovojs/browser/internal/deferred-app-runtime-identity';
 import {
   clientModuleHrefForSourceFile,
   clientModuleRepresentationDigest,
   parseVersionedClientModuleTarget,
   versionedClientModuleRequestKey,
 } from '@kovojs/core/internal/client-module-url';
+import { kovoVitePlugin } from '@kovojs/compiler';
+import { compilerOwnedViteClientModuleRole } from '@kovojs/compiler/internal';
 import { describe, expect, it, vi } from 'vitest';
 
 import { clientModuleBuildTokenHash } from './client-module-registry-intrinsics.js';
@@ -23,6 +20,7 @@ import {
   renderVersionedClientModuleResponse,
   replaceVersionedClientModuleBuildSnapshot,
   snapshotVersionedClientModuleRegistry,
+  snapshotVersionedClientModuleStaging,
   versionedClientModuleHref,
   type VersionedClientModuleInput,
   type VersionedClientModuleActiveSnapshot,
@@ -46,6 +44,32 @@ function createRegistry(
     | VersionedClientModuleRegistry = createMemoryVersionedClientModuleRegistry(),
 ): VersionedClientModuleRegistry {
   return snapshotVersionedClientModuleRegistry(store);
+}
+
+async function genuineCompilerRuntimeModules(componentName = 'DealCard') {
+  const plugin = kovoVitePlugin();
+  const source = `
+import { component } from '@kovojs/core';
+
+export const ${componentName} = component({
+  queries: { deals: {} },
+  state: () => ({ count: 0 }),
+  render: ({ deals }) => (
+    <button onClick={() => { state.count += 1; }}>
+      {deals.length}
+    </button>
+  ),
+});
+`;
+  await plugin.transform?.(source, `src/${componentName.toLowerCase()}.tsx`);
+  const modules = plugin.getClientModules?.() ?? [];
+  if (
+    !modules.some((module) => compilerOwnedViteClientModuleRole(module) === 'app-bootstrap') ||
+    !modules.some((module) => compilerOwnedViteClientModuleRole(module) === 'deferred-app-runtime')
+  ) {
+    throw new Error('Test compiler did not emit the generated runtime pair.');
+  }
+  return modules;
 }
 
 describe('render-plan and app-build identities', () => {
@@ -191,6 +215,29 @@ describe('render-plan and app-build identities', () => {
     });
   });
 
+  it('separates current-process stable staging from stale durable compiler history', () => {
+    const store = createMemoryVersionedClientModuleStore();
+    store.replaceActiveSnapshot({
+      modules: [
+        { path: '/c/generated/app.client.js', source: 'export const stale = true;' },
+        { path: '/c/old-component.client.js', source: 'export const old = true;' },
+        { path: '/c/durable-manual.client.js', source: 'export const durable = true;' },
+      ],
+      renderPlanFingerprint: computeRenderPlanFingerprint({ stale: '{}' }),
+    });
+    const registry = snapshotVersionedClientModuleRegistry(store);
+    const currentManual = {
+      path: '/c/current-manual.client.js',
+      source: 'export const current = true;',
+    };
+    registry.put(currentManual);
+
+    expect(snapshotVersionedClientModuleStaging(registry)).toEqual({
+      mandatory: [],
+      stable: [currentManual],
+    });
+  });
+
   it('unions framework-mandatory and stable/manual modules into a complete replacement', () => {
     const registry = createRegistry();
     const tokenBeforeStaging = registry.buildToken();
@@ -212,100 +259,72 @@ describe('render-plan and app-build identities', () => {
     );
   });
 
-  it('selects one immutable compiler-generated app runtime without staging the static fallback', () => {
+  it('selects one immutable compiler-generated app runtime without staging the static fallback', async () => {
     const registry = createRegistry();
-    const runtime = {
-      path: '/c/generated/app.client.js',
-      source:
-        '// @kovojs-ir\n// @kovojs-generated-app-runtime/v1\n' +
-        `import ${JSON.stringify(kovoDeferredAppRuntimeModuleHref)};\n` +
-        'export function installKovoDeferredRuntime() {}\n',
-    };
-    const generatedRuntime = {
-      path: kovoDeferredAppRuntimeModulePath,
-      source: kovoDeferredAppRuntimeModuleSource,
-    };
-    const optimism = {
-      path: '/c/src/mutations.client.js',
-      source:
-        '// @kovojs-ir\n' +
-        'export const kovoOptimisticMutationPlans = Object.freeze({ close: true });\n',
-    };
-    replaceVersionedClientModuleBuildSnapshot(registry, {
-      modules: [optimism, runtime, generatedRuntime],
-      renderPlanFingerprint: computeRenderPlanFingerprint({ deal: 'field:id,stage' }),
-    });
+    const modules = await genuineCompilerRuntimeModules();
+    replaceVersionedClientModuleBuildSnapshot(
+      registry,
+      {
+        modules,
+        renderPlanFingerprint: modules[0]!.renderPlanFingerprint!,
+      },
+      modules,
+    );
+    const runtime = modules.find(
+      (module) => compilerOwnedViteClientModuleRole(module) === 'app-bootstrap',
+    )!;
 
     expect(ensureKovoLoaderRuntimeClientModule(registry)).toBe(clientHref(runtime));
-    expect(registry.entries()).toHaveLength(3);
-    expect(new Set(registry.entries().map(clientHref))).toEqual(
-      new Set([clientHref(runtime), clientHref(generatedRuntime), clientHref(optimism)]),
-    );
+    expect(registry.entries()).toHaveLength(modules.length);
+    expect(new Set(registry.entries().map(clientHref))).toEqual(new Set(modules.map(clientHref)));
   });
 
-  it('refuses a generated app bootstrap whose exact deferred runtime is missing', () => {
+  it('refuses a generated app bootstrap whose exact deferred runtime is missing', async () => {
     const registry = createRegistry();
-    const runtime = {
-      path: '/c/generated/app.client.js',
-      source:
-        '// @kovojs-ir\n// @kovojs-generated-app-runtime/v1\n' +
-        `import ${JSON.stringify(kovoDeferredAppRuntimeModuleHref)};\n` +
-        'export function installKovoDeferredRuntime() {}\n',
-    };
-    replaceVersionedClientModuleBuildSnapshot(registry, {
-      modules: [runtime],
-      renderPlanFingerprint: computeRenderPlanFingerprint({ deal: 'field:id,stage' }),
-    });
+    const modules = await genuineCompilerRuntimeModules();
+    const runtime = modules.find(
+      (module) => compilerOwnedViteClientModuleRole(module) === 'app-bootstrap',
+    )!;
+    replaceVersionedClientModuleBuildSnapshot(
+      registry,
+      {
+        modules: [runtime],
+        renderPlanFingerprint: runtime.renderPlanFingerprint!,
+      },
+      [runtime],
+    );
 
     expect(() => ensureKovoLoaderRuntimeClientModule(registry)).toThrow(
       /without exactly one active generated deferred runtime/u,
     );
   });
 
-  it('refuses malformed or ambiguous active generated deferred runtimes', () => {
-    const appRuntime = {
-      path: '/c/generated/app.client.js',
-      source:
-        '// @kovojs-ir\n// @kovojs-generated-app-runtime/v1\n' +
-        `import ${JSON.stringify(kovoDeferredAppRuntimeModuleHref)};\n` +
-        'export function installKovoDeferredRuntime() {}\n',
-    };
-    const malformedRegistry = createRegistry();
-    replaceVersionedClientModuleBuildSnapshot(malformedRegistry, {
-      modules: [
-        appRuntime,
-        {
-          path: kovoDeferredAppRuntimeModulePath,
-          source: `${kovoDeferredAppRuntimeModuleSource}\n`,
-        },
-      ],
-      renderPlanFingerprint: computeRenderPlanFingerprint({ deal: 'field:id,stage' }),
-    });
-    expect(() => ensureKovoLoaderRuntimeClientModule(malformedRegistry)).toThrow(
-      /identity does not match its active compiler snapshot/u,
-    );
-
-    const ambiguousRegistry = createRegistry();
-    replaceVersionedClientModuleBuildSnapshot(ambiguousRegistry, {
-      modules: [
-        appRuntime,
-        {
-          path: kovoDeferredAppRuntimeModulePath,
-          source: kovoDeferredAppRuntimeModuleSource,
-        },
-        {
-          path: kovoDeferredAppRuntimeModulePath,
-          source: `${kovoDeferredAppRuntimeModuleSource}\n`,
-        },
-      ],
-      renderPlanFingerprint: computeRenderPlanFingerprint({ deal: 'field:id,stage' }),
-    });
-    expect(() => ensureKovoLoaderRuntimeClientModule(ambiguousRegistry)).toThrow(
-      /without exactly one active generated deferred runtime/u,
-    );
+  it('refuses copied, proxied, serialized, and malformed generated runtime records', async () => {
+    const modules = await genuineCompilerRuntimeModules();
+    const runtime = modules.find(
+      (module) => compilerOwnedViteClientModuleRole(module) === 'app-bootstrap',
+    )!;
+    const forgeries = [
+      { ...runtime },
+      new Proxy(runtime, {}),
+      JSON.parse(JSON.stringify(runtime)) as typeof runtime,
+      { path: runtime.path, source: `${runtime.source}\n` },
+    ];
+    for (const forgery of forgeries) {
+      expect(() =>
+        replaceVersionedClientModuleBuildSnapshot(
+          createRegistry(),
+          {
+            modules: [forgery],
+            renderPlanFingerprint: runtime.renderPlanFingerprint!,
+          },
+          [forgery],
+        ),
+      ).toThrow(/unproven compiler-generated client-module path|non-Proxy object/u);
+    }
   });
 
-  it('refuses active compiler optimism without its generated app runtime', () => {
+  it('keeps optimistic-looking source text inert without compiler provenance', () => {
     const registry = createRegistry();
     replaceVersionedClientModuleBuildSnapshot(registry, {
       modules: [
@@ -319,30 +338,29 @@ describe('render-plan and app-build identities', () => {
       renderPlanFingerprint: computeRenderPlanFingerprint({ deal: 'field:id,stage' }),
     });
 
-    expect(() => ensureKovoLoaderRuntimeClientModule(registry)).toThrow(
-      /optimistic plans without \/c\/generated\/app\.client\.js/u,
-    );
+    const fallback = ensureKovoLoaderRuntimeClientModule(registry);
+    expect(fallback).not.toContain('generated/app.client.js');
   });
 
-  it('refuses ambiguous active generated app runtimes', () => {
+  it('refuses ambiguous active generated app runtimes', async () => {
     const registry = createRegistry();
-    replaceVersionedClientModuleBuildSnapshot(registry, {
-      modules: [
-        {
-          path: '/c/generated/app.client.js',
-          source:
-            '// @kovojs-ir\n// @kovojs-generated-app-runtime/v1\n' +
-            'export function installKovoDeferredRuntime() { return 1; }\n',
-        },
-        {
-          path: '/c/generated/app.client.js',
-          source:
-            '// @kovojs-ir\n// @kovojs-generated-app-runtime/v1\n' +
-            'export function installKovoDeferredRuntime() { return 2; }\n',
-        },
-      ],
-      renderPlanFingerprint: computeRenderPlanFingerprint({ deal: 'field:id,stage' }),
-    });
+    const first = await genuineCompilerRuntimeModules('DealCard');
+    const second = await genuineCompilerRuntimeModules('Pipeline');
+    const appRuntimes = [
+      first.find((module) => compilerOwnedViteClientModuleRole(module) === 'app-bootstrap')!,
+      second.find((module) => compilerOwnedViteClientModuleRole(module) === 'app-bootstrap')!,
+    ];
+    const deferredRuntime = first.find(
+      (module) => compilerOwnedViteClientModuleRole(module) === 'deferred-app-runtime',
+    )!;
+    replaceVersionedClientModuleBuildSnapshot(
+      registry,
+      {
+        modules: [...appRuntimes, deferredRuntime],
+        renderPlanFingerprint: appRuntimes[0]!.renderPlanFingerprint!,
+      },
+      [...appRuntimes, deferredRuntime],
+    );
 
     expect(() => ensureKovoLoaderRuntimeClientModule(registry)).toThrow(
       /multiple active compiler-generated app runtimes/u,
@@ -351,14 +369,12 @@ describe('render-plan and app-build identities', () => {
 
   it('refuses a malformed module occupying the generated app runtime path', () => {
     const registry = createRegistry();
-    replaceVersionedClientModuleBuildSnapshot(registry, {
-      modules: [{ path: '/c/generated/app.client.js', source: 'export const forged = true;' }],
-      renderPlanFingerprint: computeRenderPlanFingerprint({ deal: 'field:id,stage' }),
-    });
-
-    expect(() => ensureKovoLoaderRuntimeClientModule(registry)).toThrow(
-      /malformed compiler-generated app runtime/u,
-    );
+    expect(() =>
+      replaceVersionedClientModuleBuildSnapshot(registry, {
+        modules: [{ path: '/c/generated/app.client.js', source: 'export const forged = true;' }],
+        renderPlanFingerprint: computeRenderPlanFingerprint({ deal: 'field:id,stage' }),
+      }),
+    ).toThrow(/unproven compiler-generated client-module path/u);
   });
 
   it('does not publish an active snapshot or token when a late retain fails', () => {

@@ -69,6 +69,17 @@ export interface QueryShapeSourceFile {
 const QUERY_IDENTITY = frameworkExport('@kovojs/server', 'query');
 const SCHEMA_IDENTITY = frameworkExport('@kovojs/server', 's');
 
+/**
+ * @internal Exact app-member span authenticated by the compiler-owned app-contract resolver.
+ * Callers must not derive or accept these records from app runtime values.
+ */
+export interface QueryShapeAppMemberFact {
+  readonly end: number;
+  readonly fileName: string;
+  readonly memberName: string;
+  readonly start: number;
+}
+
 /** @internal Extract declared non-Drizzle query output schemas from one source file. */
 export function outputSchemaQueryShapeFactsFromSource(
   ts: TypeScriptModule,
@@ -83,6 +94,7 @@ export function outputSchemaQueryShapeFactsFromProject(
   ts: TypeScriptModule,
   files: readonly QueryShapeSourceFile[],
   scanFiles: readonly QueryShapeSourceFile[] = files,
+  appMembers: readonly QueryShapeAppMemberFact[] = [],
 ): readonly QueryShapeFact[] {
   const fileInputs = snapshotQueryShapeArray(files, 'query-shape project files');
   const scanInputs =
@@ -117,12 +129,13 @@ export function outputSchemaQueryShapeFactsFromProject(
     securitySetAdd(scanFileNames, file.fileName);
   }
   const facts: QueryShapeFact[] = [];
+  const appQueryMembers = authenticatedAppQueryMemberKeys(appMembers);
   for (let index = 0; index < sourceFiles.length; index += 1) {
     const sourceFile = sourceFiles[index]!;
     if (!securitySetHas(scanFileNames, sourceFile.fileName)) continue;
     appendQueryShapeFacts(
       facts,
-      outputSchemaQueryShapeFactsFromSourceFile(ts, sourceFile),
+      outputSchemaQueryShapeFactsFromSourceFile(ts, sourceFile, appQueryMembers),
       `query-shape facts for ${sourceFile.fileName}`,
     );
   }
@@ -167,11 +180,12 @@ export function mergeQueryShapeFactSets(
 function outputSchemaQueryShapeFactsFromSourceFile(
   ts: TypeScriptModule,
   sourceFile: TypeScript.SourceFile,
+  appQueryMembers: ReadonlySet<string>,
 ): readonly QueryShapeFact[] {
   const facts: QueryShapeFact[] = [];
   const visit = (node: TypeScript.Node): void => {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
-      const fact = outputSchemaQueryShapeFactFromVariable(ts, sourceFile, node);
+      const fact = outputSchemaQueryShapeFactFromVariable(ts, sourceFile, node, appQueryMembers);
       if (fact) securityArrayAppend(facts, fact);
     }
     ts.forEachChild(node, visit);
@@ -184,10 +198,11 @@ function outputSchemaQueryShapeFactFromVariable(
   ts: TypeScriptModule,
   sourceFile: TypeScript.SourceFile,
   node: TypeScript.VariableDeclaration,
+  appQueryMembers: ReadonlySet<string>,
 ): QueryShapeFact | null {
   const initializer = unwrapTsExpression(ts, node.initializer);
   if (!initializer || !ts.isCallExpression(initializer)) return null;
-  if (!isQueryCallee(ts, sourceFile, initializer.expression)) return null;
+  if (!isQueryCallee(ts, sourceFile, initializer.expression, appQueryMembers)) return null;
 
   const declaration = staticQueryDeclaration(ts, node, initializer);
   if (!declaration) return null;
@@ -277,6 +292,11 @@ function compilerQueryShapeFromSchemaCall(
       return 'boolean';
     case 'number':
       return 'number';
+    case 'nullable': {
+      const item = call.arguments[0];
+      const itemShape = item ? compilerQueryShapeFromSchemaExpression(ts, sourceFile, item) : null;
+      return itemShape ? { kind: 'nullable', shape: itemShape } : null;
+    }
     case 'object': {
       const shapeArg = call.arguments[0];
       if (!shapeArg) return {};
@@ -347,14 +367,69 @@ function isQueryCallee(
   ts: TypeScriptModule,
   sourceFile: TypeScript.SourceFile,
   expression: TypeScript.Expression,
+  appQueryMembers: ReadonlySet<string>,
 ): boolean {
-  return expressionResolvesToFrameworkExport(
-    ts as FrameworkIdentityTypeScript,
-    sourceFile,
-    expression,
-    QUERY_IDENTITY,
-    { legacyGlobals: [QUERY_IDENTITY] },
+  if (
+    expressionResolvesToFrameworkExport(
+      ts as FrameworkIdentityTypeScript,
+      sourceFile,
+      expression,
+      QUERY_IDENTITY,
+      {
+        legacyGlobals: [QUERY_IDENTITY],
+      },
+    )
+  ) {
+    return true;
+  }
+  const current = unwrapTsExpression(ts, expression);
+  return (
+    current !== null &&
+    ts.isPropertyAccessExpression(current) &&
+    current.name.text === 'query' &&
+    securitySetHas(
+      appQueryMembers,
+      appQueryMemberKey(sourceFile.fileName, current.getStart(sourceFile), current.getEnd()),
+    )
   );
+}
+
+function authenticatedAppQueryMemberKeys(
+  facts: readonly QueryShapeAppMemberFact[],
+): ReadonlySet<string> {
+  const input = snapshotQueryShapeArray(facts, 'app query-shape member facts');
+  const keys = securitySet<string>();
+  for (let index = 0; index < input.length; index += 1) {
+    const fact = input[index]!;
+    if (typeof fact !== 'object' || fact === null) {
+      throw new TypeError(`app query-shape member fact[${index}] must be a record.`);
+    }
+    const fileName = queryShapeOwnDataValue(fact, 'fileName', `app member fact[${index}]`);
+    const memberName = queryShapeOwnDataValue(fact, 'memberName', `app member fact[${index}]`);
+    const start = queryShapeOwnDataValue(fact, 'start', `app member fact[${index}]`);
+    const end = queryShapeOwnDataValue(fact, 'end', `app member fact[${index}]`);
+    if (
+      typeof fileName !== 'string' ||
+      typeof memberName !== 'string' ||
+      typeof start !== 'number' ||
+      typeof end !== 'number' ||
+      start % 1 !== 0 ||
+      end % 1 !== 0 ||
+      start < 0 ||
+      end > 1_000_000_000 ||
+      end <= start
+    ) {
+      throw new TypeError(`app query-shape member fact[${index}] has invalid identity fields.`);
+    }
+    if (memberName === 'query') {
+      securitySetAdd(keys, appQueryMemberKey(fileName, start, end));
+    }
+  }
+  return keys;
+}
+
+function appQueryMemberKey(fileName: string, start: number, end: number): string {
+  return `${fileName}\u0000${start}:${end}`;
 }
 
 function isExportedVariableDeclaration(

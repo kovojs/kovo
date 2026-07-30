@@ -344,6 +344,92 @@ describe('optimistic enhanced mutation failure handling', () => {
     expect(rebaser.pendingCount('cart')).toBe(1);
   });
 
+  it('restores co-pending optimism and true absence after an interrupted progressive stream', async () => {
+    const store = createQueryStore();
+    const rebaser = new OptimisticRebaser(store);
+    const root = new FakeMorphRoot();
+    const encoder = new TextEncoder();
+    let streamController!: ReadableStreamDefaultController<Uint8Array>;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        streamController = controller;
+      },
+    });
+    const text = vi.fn(async () => {
+      throw new Error('interrupted streaming submit must not buffer text()');
+    });
+    const reload = vi.fn();
+    const locationDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'location');
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: { reload },
+    });
+    const idem = 'v1_1750000000000_00000000000000000000000000000032';
+    const optimistic = {
+      transforms: {
+        cart(current: unknown, input: { quantity: number }) {
+          return { count: (current as { count: number }).count + input.quantity };
+        },
+      },
+    };
+    store.set('cart', { count: 0 });
+    rebaser.add('co-pending', { quantity: 1 }, optimistic);
+
+    try {
+      const submission = submitOptimisticEnhancedMutation({
+        fetch: vi.fn(async () =>
+          mutationTestResponse('/_m/cart/add', {
+            body,
+            text,
+          }),
+        ),
+        form: {
+          action: '/_m/cart/add',
+          getAttribute(name: string) {
+            return name === 'stream' ? '' : null;
+          },
+          method: 'post',
+        },
+        formData: new FormData(),
+        idem,
+        input: { quantity: 5 },
+        optimistic,
+        rebaser,
+        root,
+        store,
+      });
+
+      expect(store.get('cart')).toEqual({ count: 6 });
+      streamController.enqueue(
+        encoder.encode(
+          `<kovo-query name="cart" settles="${idem}">{"count":100}</kovo-query>` +
+            '<kovo-query name="audit">{"seen":true}</kovo-query>',
+        ),
+      );
+      await vi.waitFor(() => {
+        expect(store.get('cart')).toEqual({ count: 101 });
+        expect(store.get('audit')).toEqual({ seen: true });
+      });
+      streamController.close();
+
+      await expect(submission).rejects.toThrow(/without a <kovo-done> terminator/u);
+      expect(text).not.toHaveBeenCalled();
+      expect(reload).toHaveBeenCalledOnce();
+      expect(store.get('cart')).toEqual({ count: 1 });
+      expect(rebaser.pendingCount('cart')).toBe(1);
+      expect(store.get('audit')).toBeUndefined();
+      const auditObserver = vi.fn();
+      store.subscribe('audit', auditObserver);
+      expect(auditObserver).not.toHaveBeenCalled();
+    } finally {
+      if (locationDescriptor) {
+        Object.defineProperty(globalThis, 'location', locationDescriptor);
+      } else {
+        delete (globalThis as { location?: unknown }).location;
+      }
+    }
+  });
+
   it('discards optimistic state on enhanced mutation errors and applies the error fragment', async () => {
     const store = createQueryStore();
     const rebaser = new OptimisticRebaser(store);
@@ -355,19 +441,27 @@ describe('optimistic enhanced mutation failure handling', () => {
     root.deps = [{ id: 'cart-form' }];
     root.targets.set('cart-form', new FakeMorphTarget());
     store.set('cart', { count: 1 });
+    const text = vi.fn(
+      async () => '<kovo-fragment target="cart-form"><form>Out of stock</form></kovo-fragment>',
+    );
     const fetch = vi.fn(async () =>
       mutationTestResponse('/_m/cart/add', {
+        body: new ReadableStream<Uint8Array>(),
         ok: false,
         status: 422,
-        async text() {
-          return '<kovo-fragment target="cart-form"><form>Out of stock</form></kovo-fragment>';
-        },
+        text,
       }),
     );
 
     const result = await submitOptimisticEnhancedMutation({
       fetch,
-      form: { action: '/_m/cart/add', method: 'post' },
+      form: {
+        action: '/_m/cart/add',
+        getAttribute(name: string) {
+          return name === 'data-stream' ? '' : null;
+        },
+        method: 'post',
+      },
       formData: new FormData(),
       broadcast,
       input: { quantity: 2 },
@@ -386,6 +480,7 @@ describe('optimistic enhanced mutation failure handling', () => {
     });
 
     expect(result.appliedFragments).toEqual(['cart-form']);
+    expect(text).toHaveBeenCalledOnce();
     expect(store.get('cart')).toEqual({ count: 1 });
     expect(rebaser.pendingCount('cart')).toBe(0);
     expect(channel.messages).toEqual([]);

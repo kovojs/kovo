@@ -3,6 +3,7 @@ import { definedProps } from './defined-props.js';
 import { reportRuntimeError } from './error-policy.js';
 import {
   applyFetchedEnhancedMutationResponseToRuntime,
+  applyStreamingFetchedEnhancedMutationResponseToRuntime,
   retiredSessionTransitionResult,
   type EnhancedMutationAppliedResult,
   type MutationRuntimeApplyHooks,
@@ -14,6 +15,7 @@ import {
 } from './mutation-fetch.js';
 import type { MutationQueue } from './mutation-queue.js';
 import type { EnhancedMutationSubmitOptions } from './mutation-submit.js';
+import { isStreamingEnhancedMutationForm } from './mutation-form.js';
 import { optimisticChangeFromInput, resolveOptimisticTargets } from './optimism.js';
 import type {
   MutationChangeRecord,
@@ -22,6 +24,7 @@ import type {
   OptimisticPlan,
   OptimisticQueryTarget,
   OptimisticRebaser,
+  OptimisticRebaseTransaction,
 } from './optimism.js';
 import {
   familyPendingQuerySelector,
@@ -76,7 +79,8 @@ export async function submitOptimisticEnhancedMutation<Input>(
       'Kovo refused an optimistic enhanced mutation without a document build proof.',
     );
   }
-  options = { ...options, expectedBuildToken };
+  const streaming = options.streaming ?? isStreamingEnhancedMutationForm(options.form);
+  options = { ...options, expectedBuildToken, streaming };
   const retirePrincipal = captureSessionTransitionPrincipalRetirement(options);
   const idem = options.idem ?? createEnhancedMutationIdem(options.formData, false);
   const queryNames = securityObjectKeys(options.optimistic.transforms);
@@ -131,6 +135,7 @@ export async function submitOptimisticEnhancedMutation<Input>(
       {
         onTimeout(error) {
           queueState.timedOut = true;
+          queueState.streamingTransaction?.restore();
           discardFailedOptimism(options.rebaser, idem, optimisticTargets);
           if (options.pendingRoot) {
             stampPendingQueries(options.pendingRoot, pendingSelectors, false);
@@ -153,6 +158,7 @@ interface OptimisticSubmitContext {
 }
 
 interface OptimisticQueueState {
+  streamingTransaction?: OptimisticRebaseTransaction;
   timedOut: boolean;
 }
 
@@ -163,6 +169,7 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
   queueState?: OptimisticQueueState,
 ): Promise<EnhancedMutationAppliedResult> {
   const { idem, optimisticTargets, pendingSelectors, queryNames, retirePrincipal } = context;
+  let streamingTransaction: OptimisticRebaseTransaction | undefined;
 
   try {
     const fetched = await fetchEnhancedMutation(
@@ -185,22 +192,39 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
       return applyFetchedEnhancedMutationResponseToRuntime(options, fetched);
     }
 
-    const applied = applyFetchedEnhancedMutationResponseToRuntime(
-      options,
-      fetched,
-      optimisticMutationRuntimeApplyHooks(options, idem, optimisticTargets),
-    );
+    let applied: EnhancedMutationAppliedResult;
+    if (fetched.streamBody !== undefined) {
+      streamingTransaction = options.rebaser.beginServerTruthTransaction();
+      if (queueState !== undefined) queueState.streamingTransaction = streamingTransaction;
+      applied = await applyStreamingFetchedEnhancedMutationResponseToRuntime(
+        {
+          ...options,
+          ...definedProps({ streamSignal: signal }),
+        },
+        { ...fetched, streamBody: fetched.streamBody },
+        {
+          applyQuery: rebaserApplyQueryInterposition(
+            options.store,
+            streamingTransaction,
+            options.onDeltaMiss,
+          ),
+        },
+      );
+      if (queueState?.timedOut) throw lateQueueSettlementAfterTimeoutError();
+      captureOptimisticTargets(streamingTransaction, optimisticTargets);
+      settleOptimisticResponseCoverage(options, idem, optimisticTargets, applied.queries);
+    } else {
+      applied = applyFetchedEnhancedMutationResponseToRuntime(
+        options,
+        fetched,
+        optimisticMutationRuntimeApplyHooks(options, idem, optimisticTargets),
+      );
+    }
     const settledQueries: string[] = [];
     for (let index = 0; index < queryNames.length; index += 1) {
       const queryName = securityOwnArrayEntry(queryNames, index);
       if (!queryName.ok) throw new TypeError('Kovo optimistic query names must be dense.');
-      if (
-        optimisticQueryFamilyIsSettled(
-          options.rebaser,
-          queryName.value,
-          optimisticTargets,
-        )
-      ) {
+      if (optimisticQueryFamilyIsSettled(options.rebaser, queryName.value, optimisticTargets)) {
         securityArrayAppend(settledQueries, queryName.value, 'Browser settled optimistic queries');
       }
     }
@@ -217,12 +241,17 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
       }
       stampPendingQueries(options.pendingRoot, settledSelectors, false);
     }
+    streamingTransaction?.commit();
 
     return {
       ...applied,
     };
   } catch (error) {
-    if (queueState?.timedOut) throw error;
+    streamingTransaction?.restore();
+    if (queueState?.timedOut) {
+      discardFailedOptimism(options.rebaser, idem, optimisticTargets);
+      throw error;
+    }
     discardFailedOptimism(options.rebaser, idem, optimisticTargets);
     if (options.pendingRoot) {
       stampPendingQueries(options.pendingRoot, pendingSelectors, false);
@@ -231,6 +260,19 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
       reportRuntimeError(options.onError, error);
     }
     throw error;
+  }
+}
+
+function captureOptimisticTargets(
+  transaction: OptimisticRebaseTransaction,
+  optimisticTargets: readonly OptimisticQueryTarget[],
+): void {
+  for (let index = 0; index < optimisticTargets.length; index += 1) {
+    const target = securityOwnArrayEntry(optimisticTargets, index);
+    if (!target.ok) {
+      throw new TypeError('Kovo optimistic transaction targets must be dense.');
+    }
+    transaction.capture(target.value.queryName, target.value.key);
   }
 }
 
@@ -257,11 +299,7 @@ function discardFailedOptimism(
     if (!target.ok) {
       throw new TypeError('Kovo optimistic rollback targets must be dense.');
     }
-    rebaser.settleWithoutServerTruth(
-      idem,
-      target.value.queryName,
-      target.value.key,
-    );
+    rebaser.settleWithoutServerTruth(idem, target.value.queryName, target.value.key);
   }
 }
 
@@ -279,30 +317,32 @@ function optimisticMutationRuntimeApplyHooks<Input>(
     // rest, so a sibling mutation's committed effect folded into this re-run is not re-applied.
     applyQuery: rebaserApplyQueryInterposition(options.store, options.rebaser, options.onDeltaMiss),
     beforeApplyQueries(queryChunks) {
-      const uncoveredQueries = uncoveredOptimisticQueries(
-        queryChunks,
-        options.optimistic.transforms,
-        optimisticTargets,
-      );
-      for (let index = 0; index < uncoveredQueries.length; index += 1) {
-        const uncovered = securityOwnArrayEntry(uncoveredQueries, index);
-        if (!uncovered.ok) {
-          throw new TypeError('Kovo uncovered optimistic queries must be dense.');
-        }
-        const { key, queryName, status } = uncovered.value;
-        options.rebaser.settleWithoutServerTruth(idem, queryName, key);
-        reportRuntimeError(
-          options.onError,
-          uncoveredOptimisticQueryError(
-            queryName,
-            key,
-            status,
-          ),
-        );
-      }
-      options.rebaser.settle(idem);
+      settleOptimisticResponseCoverage(options, idem, optimisticTargets, queryChunks);
     },
   };
+}
+
+function settleOptimisticResponseCoverage<Input>(
+  options: OptimisticEnhancedMutationSubmitOptions<Input>,
+  idem: string,
+  optimisticTargets: readonly OptimisticQueryTarget[],
+  queryChunks: readonly Pick<QueryChunk, 'key' | 'name'>[],
+): void {
+  const uncoveredQueries = uncoveredOptimisticQueries(
+    queryChunks,
+    options.optimistic.transforms,
+    optimisticTargets,
+  );
+  for (let index = 0; index < uncoveredQueries.length; index += 1) {
+    const uncovered = securityOwnArrayEntry(uncoveredQueries, index);
+    if (!uncovered.ok) {
+      throw new TypeError('Kovo uncovered optimistic queries must be dense.');
+    }
+    const { key, queryName, status } = uncovered.value;
+    options.rebaser.settleWithoutServerTruth(idem, queryName, key);
+    reportRuntimeError(options.onError, uncoveredOptimisticQueryError(queryName, key, status));
+  }
+  options.rebaser.settle(idem);
 }
 
 interface UncoveredOptimisticQuery {
@@ -312,7 +352,7 @@ interface UncoveredOptimisticQuery {
 }
 
 function uncoveredOptimisticQueries<Input>(
-  queryChunks: readonly QueryChunk[],
+  queryChunks: readonly Pick<QueryChunk, 'key' | 'name'>[],
   transforms: Readonly<Record<string, OptimisticEntry<Input>>>,
   optimisticTargets: readonly OptimisticQueryTarget[],
 ): UncoveredOptimisticQuery[] {
@@ -332,9 +372,7 @@ function uncoveredOptimisticQueries<Input>(
     if (!transform || !('value' in transform)) {
       throw new TypeError('Kovo optimistic transforms must be own-data properties.');
     }
-    if (
-      securitySetHas(covered, queryStoreKey(queryName, key))
-    ) {
+    if (securitySetHas(covered, queryStoreKey(queryName, key))) {
       continue;
     }
 

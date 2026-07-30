@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { installMutationBroadcast } from './broadcast.js';
+import type { EnhancedMutationFetchOptions } from './mutation-fetch.js';
 import {
   submitOptimisticEnhancedMutation as submitOptimisticEnhancedMutationWithBuild,
   type OptimisticEnhancedMutationSubmitOptions,
@@ -356,5 +357,90 @@ describe('optimistic enhanced mutation submission', () => {
       'aria-busy': 'true',
       'kovo-pending': '',
     });
+  });
+
+  it('progressively rebases a direct streaming submit and settles coverage only at completion', async () => {
+    const store = createQueryStore();
+    const rebaser = new OptimisticRebaser(store);
+    const root = new FakeMorphRoot();
+    const encoder = new TextEncoder();
+    let streamController!: ReadableStreamDefaultController<Uint8Array>;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        streamController = controller;
+      },
+    });
+    const text = vi.fn(async () => {
+      throw new Error('optimistic streaming submit must not buffer text()');
+    });
+    const idem = 'v1_1750000000000_00000000000000000000000000000031';
+    store.set('cart', { count: 0 });
+    store.set('inventory', { count: 0 });
+
+    const fetch = vi.fn(async (_url: string, request: EnhancedMutationFetchOptions) => {
+      expect(request).toMatchObject({
+        headers: expect.objectContaining({
+          Accept: 'text/vnd.kovo.fragment+html; stream=1',
+          'Kovo-Stream': 'true',
+        }),
+        keepalive: false,
+      });
+      return mutationTestResponse('/_m/cart/add', { body, text });
+    });
+    const submission = submitOptimisticEnhancedMutation({
+      fetch,
+      form: {
+        action: '/_m/cart/add',
+        getAttribute(name: string) {
+          return name === 'data-mutation-stream' ? '' : null;
+        },
+        method: 'post',
+      },
+      formData: new FormData(),
+      idem,
+      input: { quantity: 2 },
+      optimistic: {
+        transforms: {
+          cart(current, input) {
+            return { count: (current as { count: number }).count + input.quantity };
+          },
+          inventory(current, input) {
+            return { count: (current as { count: number }).count + input.quantity };
+          },
+        },
+      },
+      rebaser,
+      root,
+      store,
+    });
+
+    expect(store.get('cart')).toEqual({ count: 2 });
+    expect(store.get('inventory')).toEqual({ count: 2 });
+    streamController.enqueue(
+      encoder.encode(`<kovo-query name="cart" settles="${idem}">{"count":10}</kovo-query>`),
+    );
+    await vi.waitFor(() => {
+      expect(store.get('cart')).toEqual({ count: 10 });
+    });
+    expect(store.get('inventory')).toEqual({ count: 2 });
+    expect(rebaser.pendingCount('cart')).toBe(0);
+    expect(rebaser.pendingCount('inventory')).toBe(1);
+
+    streamController.enqueue(
+      encoder.encode(
+        `<kovo-query name="inventory" settles="${idem}">{"count":20}</kovo-query>` +
+          '<kovo-done reason="complete"></kovo-done>',
+      ),
+    );
+    streamController.close();
+
+    await expect(submission).resolves.toMatchObject({
+      queries: [{ name: 'cart' }, { name: 'inventory' }],
+    });
+    expect(text).not.toHaveBeenCalled();
+    expect(store.get('cart')).toEqual({ count: 10 });
+    expect(store.get('inventory')).toEqual({ count: 20 });
+    expect(rebaser.pendingCount('cart')).toBe(0);
+    expect(rebaser.pendingCount('inventory')).toBe(0);
   });
 });

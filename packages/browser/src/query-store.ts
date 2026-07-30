@@ -16,6 +16,9 @@ import {
   securitySetForEach,
   securityStringIndexOf,
   securityStringSlice,
+  securityWeakMap,
+  securityWeakMapGet,
+  securityWeakMapSet,
 } from './security-witness-intrinsics.js';
 
 /**
@@ -54,6 +57,8 @@ export interface QueryStore {
  */
 export type QuerySnapshot = Map<string, unknown>;
 
+const queryStorePresence = securityWeakMap<QueryStore, (storeKey: string) => boolean>();
+
 /** Exact query identity; `key` is separate because query names may contain `:`. */
 export interface QueryIdentity {
   readonly key?: string;
@@ -77,7 +82,7 @@ export function createQueryStore(): QueryStore {
   const values = securityMap<string, unknown>();
   const plans = securityMap<string, Set<QueryUpdatePlan>>();
 
-  return {
+  const store: QueryStore = {
     // L7-2 / SPEC §9.4: the `values` map is otherwise never evicted and its keys
     // flow from server-authored `<kovo-query key>`, so rotating keys (search,
     // pagination, per-row) grow the session heap without bound. `clear`/`delete`
@@ -160,6 +165,21 @@ export function createQueryStore(): QueryStore {
       };
     },
   };
+  securityWeakMapSet(queryStorePresence, store, (storeKey) => securityMapHas(values, storeKey));
+  return store;
+}
+
+/**
+ * @internal Exact presence check for framework-created stores.
+ *
+ * Structural custom stores predate an explicit presence API. Their only observable distinction is
+ * `get() !== undefined`, while the framework store retains exact membership out of band so stream
+ * rollback never fabricates an explicit `undefined` entry.
+ */
+export function queryStoreHasValue(store: QueryStore, name: string, key?: string): boolean {
+  const storeKey = queryStoreKey(name, key);
+  const has = securityWeakMapGet(queryStorePresence, store);
+  return has === undefined ? store.get(name, key) !== undefined : has(storeKey);
 }
 
 /** Runtime API used by Kovo applications and generated runtime integration. */

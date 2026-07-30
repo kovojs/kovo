@@ -89,6 +89,16 @@ export function isEnhancedForm(form: EnhancedMutationFormLike | EventElementLike
   );
 }
 
+/** @internal Read the rendered progressive-response posture before submit suppression. */
+export function isStreamingEnhancedMutationForm(form: EnhancedMutationFormLike): boolean {
+  return (
+    browserFormSecurity.readAttribute(form, 'stream') !== null ||
+    browserFormSecurity.readAttribute(form, 'data-mutation-stream') !== null ||
+    browserFormSecurity.readAttribute(form, 'data-stream') !== null ||
+    browserFormSecurity.readAttribute(form, 'data-kovo-stream') !== null
+  );
+}
+
 /** @internal True only for a compiler-owned typed mutation form identity. */
 export function hasTypedMutationIdentity(
   form: EnhancedMutationFormLike | EventElementLike,
@@ -165,10 +175,7 @@ export function readEligibleEnhancedMutationTransport(
   ) {
     return undefined;
   }
-  const optimisticModule = browserFormSecurity.readAttribute(
-    form,
-    'data-kovo-optimistic-module',
-  );
+  const optimisticModule = browserFormSecurity.readAttribute(form, 'data-kovo-optimistic-module');
   if (optimisticModule !== null && optimisticModule.length === 0) return undefined;
 
   return {

@@ -169,7 +169,12 @@ export const DealDetailRegion = component({
           &larr; Pipeline
         </a>
 
-        <div style={dealDetailStyles.card}>
+        <div
+          data-crm-amount={deal?.amount}
+          data-crm-deal=""
+          data-crm-stage={deal?.stage}
+          style={dealDetailStyles.card}
+        >
           <div style={dealDetailStyles.rowBetween}>
             <div>
               <h1 style={dealDetailStyles.heading}>Deal {deal.id.toUpperCase()}</h1>
@@ -197,7 +202,7 @@ export const DealDetailRegion = component({
           <div style={dealDetailStyles.stageWrap}>
             {MOVE_STAGES.map((stage) => (
               <form enhance mutation={moveDeal} key={stage}>
-                <input type="hidden" name="dealId" value={deal.id} />
+                <input type="hidden" name="dealId" value={deal?.id} />
                 <input type="hidden" name="stage" value={stage} />
                 {deal.stage === stage ? (
                   <button
@@ -222,7 +227,7 @@ export const DealDetailRegion = component({
               </p>
             ) : (
               <form enhance mutation={closeDeal}>
-                <input type="hidden" name="dealId" value={deal.id} />
+                <input type="hidden" name="dealId" value={deal?.id} />
                 <button
                   type="submit"
                   style={[dealDetailStyles.stageButton, dealDetailStyles.stageButtonActive]}

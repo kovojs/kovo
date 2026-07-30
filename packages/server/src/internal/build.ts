@@ -10,6 +10,10 @@ export { deriveClosedKovoApp } from '../app-snapshot.js';
 export { declaredKovoAppId } from '../live-target-app-identity.js';
 export { resolveKovoAppToken } from '../app-token.js';
 export type { KovoApp } from '../app-types.js';
+export {
+  snapshotVersionedClientModuleStaging,
+  type VersionedClientModuleStagingSnapshot,
+} from '../client-modules.js';
 export { runWithGeneratedLiveTargetRegistry };
 export {
   writeKovoNeutralBuild,
