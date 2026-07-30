@@ -194,6 +194,7 @@ import {
 import { declaresKovoLifecyclePolicy, runLifecyclePolicyCheck } from './lifecycle-policy.js';
 import { runProjectQualityCheck } from './project-quality.js';
 import { runSoundSubsetCheck } from './sound-subset.js';
+import { kovoBuildOneShotDigest, type KovoBuildOneShotIdentity } from './build-one-shot-handoff.js';
 import {
   buildByteLength,
   buildSecurityArrayAppend,
@@ -588,7 +589,7 @@ type ExportArgParseResult =
 type KovoBuildPresetName = 'cloudflare' | 'node' | 'vercel';
 type ExportStaticApp = (typeof import('@kovojs/server/internal/static-export'))['exportStaticApp'];
 
-interface KovoBuildOptions {
+export interface KovoBuildOptions {
   appModulePath: string;
   cache: boolean;
   check: boolean;
@@ -596,9 +597,29 @@ interface KovoBuildOptions {
   preset?: KovoBuildPresetName;
 }
 
-interface KovoSourceCheckOptions {
+export interface KovoSourceCheckOptions {
   appModulePath: string;
   cache: boolean;
+}
+
+interface KovoBuildOneShotApprovedConfig {
+  readonly files: readonly BuildCheckSourceFile[];
+  readonly path: string;
+}
+
+/** Serializable proof output from the fresh one-shot analysis process. */
+export interface KovoBuildOneShotAnalysis {
+  readonly approvedConfig?: KovoBuildOneShotApprovedConfig;
+  readonly approvedSourceFiles: readonly BuildCheckSourceFile[];
+  readonly artifactProvenance: ReturnType<typeof resolveKovoArtifactProvenance>;
+  readonly buildStylesheetCss: Awaited<ReturnType<typeof kovoBuildStylesheetCss>>;
+  readonly checkGraph: CoreGraph.KovoCheckInput;
+  readonly clientEntry?: BuildCheckSourceFile;
+  readonly dependencyCapabilities: AppDependencyCapabilityManifest;
+  readonly queryShapeFacts: readonly QueryShapeFact[];
+  readonly runtimeRegistry: KovoBuildCheckArtifacts['runtimeRegistry'];
+  readonly selectedPresetName: KovoBuildPresetName;
+  readonly sourceDerivedRegistryTransforms: readonly SourceDerivedRegistryTransform[];
 }
 
 interface LoadedBuildAppModule {
@@ -893,6 +914,135 @@ export function writeKovoBuildDebugEvidence(
     )}\n`,
     'utf8',
   );
+}
+
+/**
+ * Run every diagnostic-producing source phase in a disposable process and return only immutable
+ * data required by deployment compilation. Authored app/config objects and their Vite graph never
+ * cross this boundary.
+ */
+export async function produceKovoBuildOneShotAnalysis(
+  inputOptions: KovoBuildOptions,
+  security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
+): Promise<KovoBuildOneShotAnalysis | CliCommandResult> {
+  try {
+    const options = configurationBoundary(() => snapshotKovoBuildOptions(inputOptions));
+    const invocationRoot = security.invocationCwd;
+    const resolvedAppModulePath = resolve(invocationRoot, options.appModulePath);
+    assertReadableKovoInputFile(resolvedAppModulePath, 'kovo build app module');
+    const strictLifecyclePolicy = declaresKovoLifecyclePolicy(invocationRoot);
+    if (strictLifecyclePolicy) {
+      const lifecyclePolicy = runLifecyclePolicyCheck(invocationRoot, 'kovo-build/v1');
+      if (lifecyclePolicy.exitCode !== 0) return lifecyclePolicy;
+    }
+    const outDir = resolve(invocationRoot, options.outDir);
+    assertKovoOutputDirectoryTarget(outDir, 'kovo build --out');
+    const configPath = findKovoBuildConfig(invocationRoot);
+    if (configPath !== undefined) {
+      assertReadableKovoInputFile(configPath, 'kovo build config');
+    }
+    const artifactProvenance = resolveKovoArtifactProvenance({
+      appModulePath: resolvedAppModulePath,
+    });
+    const approvedConfig =
+      configPath === undefined
+        ? undefined
+        : runPreEvaluationBuildConfigTrustPreflight(
+            configPath,
+            invocationRoot,
+            security.paranoidStaticAdvisory,
+            'build',
+          );
+    await runTypeScriptBuildPreflight(
+      resolvedAppModulePath,
+      invocationRoot,
+      security.invocationEnv,
+    );
+    if (strictLifecyclePolicy) {
+      const projectQuality = await runProjectQualityCheck(
+        invocationRoot,
+        security.invocationEnv,
+        'kovo-build/v1',
+      );
+      if (projectQuality.exitCode !== 0) return projectQuality;
+      const soundSubset = await runSoundSubsetCheck(
+        invocationRoot,
+        security.invocationEnv,
+        'kovo-build/v1',
+      );
+      if (soundSubset.exitCode !== 0) return soundSubset;
+    }
+
+    const reachableSessionAuthorityFacts =
+      await sessionAuthorityFactsFromEntry(resolvedAppModulePath);
+    const loadedConfig = await configurationBoundaryAsync(() =>
+      loadKovoBuildConfig(invocationRoot, resolvedAppModulePath, approvedConfig),
+    );
+    const selectedPreset = configurationBoundary(() =>
+      selectedKovoBuildPreset(options, loadedConfig.preset, security.invocationEnv),
+    );
+    const loadAndCheck = await loadAndCheckBuildApp(
+      resolvedAppModulePath,
+      options,
+      reachableSessionAuthorityFacts,
+      security,
+      invocationRoot,
+    );
+    return {
+      ...(approvedConfig === undefined
+        ? {}
+        : {
+            approvedConfig: {
+              files: approvedConfig.files,
+              path: approvedConfig.path,
+            },
+          }),
+      approvedSourceFiles: loadAndCheck.approvedSourceFiles,
+      artifactProvenance,
+      buildStylesheetCss: loadAndCheck.buildStylesheetCss,
+      checkGraph: loadAndCheck.checkGraph,
+      ...(loadAndCheck.approvedClientEntry === undefined
+        ? {}
+        : { clientEntry: loadAndCheck.approvedClientEntry }),
+      dependencyCapabilities: loadAndCheck.dependencyCapabilities,
+      queryShapeFacts: loadAndCheck.queryShapeFacts,
+      runtimeRegistry: loadAndCheck.runtimeRegistry,
+      selectedPresetName: selectedPreset.name,
+      sourceDerivedRegistryTransforms: loadAndCheck.sourceDerivedRegistryTransforms,
+    };
+  } catch (error) {
+    return buildErrorResult(error);
+  }
+}
+
+/** Derive the invocation identity sent over the producer's private control pipe. */
+export function kovoBuildOneShotIdentity(
+  inputOptions: KovoBuildOptions,
+  analysis: KovoBuildOneShotAnalysis,
+  security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
+): KovoBuildOneShotIdentity {
+  const options = configurationBoundary(() => snapshotKovoBuildOptions(inputOptions));
+  const invocationRoot = realpathSync(security.invocationCwd);
+  const appModulePath = slashPath(
+    relative(invocationRoot, resolve(invocationRoot, options.appModulePath)),
+  );
+  return {
+    appModulePath,
+    compilerProvenanceDigest: kovoBuildOneShotDigest(analysis.artifactProvenance),
+    configSourceDigest:
+      analysis.approvedConfig === undefined
+        ? null
+        : kovoBuildOneShotDigest({
+            files: analysis.approvedConfig.files,
+            path: slashPath(relative(invocationRoot, analysis.approvedConfig.path)),
+          }),
+    invocationRoot,
+    optionsDigest: kovoBuildOneShotDigest(options),
+    sourceSetDigest: kovoBuildOneShotDigest({
+      clientEntry: analysis.clientEntry ?? null,
+      files: analysis.approvedSourceFiles,
+    }),
+  };
 }
 
 export async function runBuildCommand(
@@ -1267,6 +1417,419 @@ export async function runBuildCommand(
   }
 }
 
+/**
+ * Consume an authenticated analysis handoff in a fresh process.
+ *
+ * Source/config/compiler identity is reconstructed before authored evaluation. The consumer then
+ * evaluates the app again, but it never recreates the producer's TypeScript/static-analysis graph.
+ */
+export async function runBuildCommandFromOneShotAnalysis(
+  inputOptions: KovoBuildOptions,
+  inputAnalysis: unknown,
+  expectedIdentity: KovoBuildOneShotIdentity,
+  security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
+): Promise<CliCommandResult> {
+  let transaction: KovoBuildOutputTransaction | undefined;
+  try {
+    const options = configurationBoundary(() => snapshotKovoBuildOptions(inputOptions));
+    const analysis = requireKovoBuildOneShotAnalysis(inputAnalysis);
+    const invocationRoot = security.invocationCwd;
+    const resolvedAppModulePath = resolve(invocationRoot, options.appModulePath);
+    assertReadableKovoInputFile(resolvedAppModulePath, 'kovo build app module');
+    const strictLifecyclePolicy = declaresKovoLifecyclePolicy(invocationRoot);
+    if (strictLifecyclePolicy) {
+      const lifecyclePolicy = runLifecyclePolicyCheck(invocationRoot, 'kovo-build/v1');
+      if (lifecyclePolicy.exitCode !== 0) return lifecyclePolicy;
+    }
+    const outDir = resolve(invocationRoot, options.outDir);
+    assertKovoOutputDirectoryTarget(outDir, 'kovo build --out');
+
+    const currentConfig = await revalidateKovoBuildOneShotAnalysis(
+      options,
+      analysis,
+      expectedIdentity,
+      security,
+      resolvedAppModulePath,
+    );
+    const loadedConfig = await configurationBoundaryAsync(() =>
+      loadKovoBuildConfig(invocationRoot, resolvedAppModulePath, currentConfig),
+    );
+    const selectedPreset = configurationBoundary(() =>
+      selectedKovoBuildPreset(options, loadedConfig.preset, security.invocationEnv),
+    );
+    if (selectedPreset.name !== analysis.selectedPresetName) {
+      throw new TypeError('Kovo build handoff preset selection is stale.');
+    }
+
+    transaction = createKovoBuildOutputTransaction(outDir);
+    const stagedOutDir = transaction.stagedOutDir;
+    const loadedBuildApp = await withBuildGraphDerivationContext(() =>
+      loadBuildAppModule(
+        resolvedAppModulePath,
+        invocationRoot,
+        analysis.approvedSourceFiles,
+        analysis.dependencyCapabilities,
+        analysis.sourceDerivedRegistryTransforms,
+      ),
+    );
+    const { cloudflare, node, vercel } = loadedBuildApp.serverBuildModule;
+    const { resolveKovoBuildPreset } = loadedBuildApp.serverBuildPresetModule;
+    const {
+      declaredKovoAppId,
+      deriveClosedKovoApp,
+      snapshotVersionedClientModuleStaging,
+      writeKovoNeutralBuild,
+    } = loadedBuildApp.serverInternalBuildModule;
+    const compilerClientModuleBuildInstaller = loadedBuildApp.compilerClientModuleBuildInstaller;
+    const app = appFromModule(
+      loadedBuildApp.appModule,
+      resolvedAppModulePath,
+      loadedBuildApp.serverInternalBuildModule.resolveKovoAppToken,
+    );
+    const approvedClientEntry = analysis.clientEntry;
+    const approvedSourceFiles = analysis.approvedSourceFiles;
+    const buildStylesheetCss = analysis.buildStylesheetCss;
+    const dependencyCapabilities = analysis.dependencyCapabilities;
+    const queryShapeFacts = analysis.queryShapeFacts;
+    const graphWithProvenance: CoreGraph.KovoCheckInput = {
+      ...analysis.checkGraph,
+      analysisInputs: buildAnalysisInputs({
+        appSources: approvedSourceFiles,
+        clientEntrySources: approvedClientEntry === undefined ? [] : [approvedClientEntry],
+        configSources: currentConfig?.files ?? [],
+        runtimeTarget: selectedPreset.name,
+      }),
+      provenance: analysis.artifactProvenance,
+    };
+    const clientRoot = kovoClientBuildRoot(resolvedAppModulePath, invocationRoot);
+    const clientProjectMutationFacts = projectMutationRegistryFactsForBuild(
+      resolvedAppModulePath,
+      clientRoot,
+      approvedSourceFiles,
+      invocationRoot,
+    );
+    const serverProjectMutationFacts = projectMutationRegistryFactsForBuild(
+      resolvedAppModulePath,
+      invocationRoot,
+      approvedSourceFiles,
+    );
+    const staticRuntimeRegistry = analysis.runtimeRegistry;
+    if (app.document.csp !== undefined) {
+      assertDocumentCspConfigMatchesBrowserPosture(
+        app.document.csp,
+        staticRuntimeRegistry.browserPosture,
+      );
+    }
+    const clientBuild = await buildKovoClientManifest(
+      join(stagedOutDir, '.kovo-client'),
+      clientRoot,
+      resolvedAppModulePath,
+      {
+        ...(approvedClientEntry === undefined ? {} : { approvedClientEntry }),
+        approvedSourceFiles,
+        cache: options.cache,
+        dependencyCapabilities,
+        projectMutationFacts: clientProjectMutationFacts,
+        queryShapeFacts,
+        sourceIdentityRoot: invocationRoot,
+      },
+    );
+    const buildCssAssets = mergeKovoBuildStylesheetAssets([
+      buildStylesheetCss.assets,
+      clientBuild.assets,
+    ]);
+    const buildApp = appWithBuildStylesheetAssets(app, buildCssAssets, deriveClosedKovoApp);
+    const commonRuntimeRegistry = {
+      ...(staticRuntimeRegistry.browserPosture === undefined
+        ? {}
+        : { browserPosture: staticRuntimeRegistry.browserPosture }),
+      ...(staticRuntimeRegistry.tableSecurity === undefined
+        ? {}
+        : { tableSecurity: staticRuntimeRegistry.tableSecurity }),
+    };
+    const discoveredServerClientModules = await compilerClientModulesFromApprovedSources(
+      resolvedAppModulePath,
+      {
+        approvedSourceFiles: clientBuild.appCompilerSourceFiles,
+        buildRoot: invocationRoot,
+        projectMutationFacts: serverProjectMutationFacts,
+        queryShapeFacts,
+      },
+    );
+    const discoveredClientModules = uniqueKovoCompiledClientModules([
+      ...clientBuild.clientModules,
+      ...discoveredServerClientModules,
+    ]);
+    const appClientModuleStaging = snapshotVersionedClientModuleStaging(buildApp.clientModules);
+    const hasGeneratedAppBootstrap = buildSomeDense(
+      discoveredClientModules,
+      'discovered compiler client modules',
+      (module) => compilerOwnedViteClientModuleRole(module) === 'app-bootstrap',
+    );
+    const nonCompilerClientModules = hasGeneratedAppBootstrap
+      ? appClientModuleStaging.stable
+      : appendDense(
+          appClientModuleStaging.stable,
+          appClientModuleStaging.mandatory,
+          'build app stable and mandatory client modules',
+        );
+    const appBuildToken = deriveKovoAppBuildToken(
+      discoveredClientModules,
+      nonCompilerClientModules,
+    );
+    const graphWithProof: CoreGraph.KovoCheckInput = {
+      ...graphWithProvenance,
+      proof: createKovoGraphProof(graphWithProvenance, appBuildToken, declaredKovoAppId(app)),
+    };
+    const runtimePosture = createKovoRuntimePostureManifest(graphWithProof);
+    const completedCheckGraph: CoreGraph.KovoCheckInput = {
+      ...graphWithProof,
+      runtimePosture,
+    };
+    const serverHandlerBuild = await bundleKovoServerHandler(resolvedAppModulePath, {
+      approvedSourceFiles,
+      buildRoot: invocationRoot,
+      dependencyCapabilities,
+      projectMutationFacts: serverProjectMutationFacts,
+      queryShapeFacts,
+      runtimeTarget: selectedPreset.name,
+      runtimeRegistry: {
+        ...runtimeRegistryWireFactsFromGraph(completedCheckGraph),
+        ...commonRuntimeRegistry,
+      },
+      generatedClientModules: discoveredClientModules,
+      manualClientModules: appClientModuleStaging.stable,
+      stylesheetAssets: buildCssAssets,
+    });
+    const clientModules = finalCompilerClientModulesFromBuildPasses(
+      clientBuild.clientModules,
+      discoveredServerClientModules,
+      serverHandlerBuild.clientModules,
+    );
+    if (deriveKovoAppBuildToken(clientModules, nonCompilerClientModules) !== appBuildToken) {
+      throw new TypeError(
+        'Kovo final runtime-posture bundle changed the discovered client-module identity.',
+      );
+    }
+    const neutralBuildClientModules = adoptCompilerClientModulesForNeutralBuild(
+      clientModules,
+      compilerClientModuleBuildInstaller,
+    );
+    const neutralBuild = await writeKovoNeutralBuild({
+      app: buildApp,
+      buildStylesheetCss: [...buildStylesheetCss.stylesheetCss, ...clientBuild.stylesheetCss],
+      clientModules: neutralBuildClientModules,
+      manifestFile: clientBuild.manifestFile,
+      outDir: join(stagedOutDir, '.kovo'),
+      serverHandlerSource: serverHandlerBuild.source,
+      stylesheetSourceRoot: dirname(resolvedAppModulePath),
+    });
+    const escapeObligationManifest = escapeObligationManifestForBuild(completedCheckGraph);
+    const escapeCensusReviewManifest = escapeCensusReviewManifestForBuild(completedCheckGraph);
+    writeKovoBuildGraphArtifact(
+      neutralBuild,
+      completedCheckGraph,
+      escapeObligationManifest,
+      escapeCensusReviewManifest,
+    );
+    const presetToken =
+      selectedPreset.name === 'cloudflare'
+        ? cloudflare()
+        : selectedPreset.name === 'vercel'
+          ? vercel()
+          : node();
+    const preset = selectedPreset.preset ?? resolveKovoBuildPreset(presetToken);
+    if (preset === undefined) {
+      throw new Error(
+        `kovo build could not resolve framework-owned preset ${selectedPreset.name}.`,
+      );
+    }
+    const presetOutDir = buildPresetOutDir(stagedOutDir, selectedPreset.name);
+    const presetLogs: string[] = [];
+    const serverHandlerSource = serverHandlerBuild.source;
+    const declaredEnv = inferredKovoBuildDeclaredEnv(serverHandlerSource);
+    const presetContext: KovoBuildPresetContext = {
+      declaredEnv,
+      log(message) {
+        presetLogs.push(message);
+      },
+      outDir: presetOutDir,
+      projectRoot: invocationRoot,
+      readServerHandlerSource() {
+        return serverHandlerSource;
+      },
+      readNeutral() {
+        return neutralBuild;
+      },
+    };
+    const presetDiagnostics = await inspectKovoBuildPreset(preset, neutralBuild, presetContext);
+    const blockingDiagnostics = buildFilterDense(
+      presetDiagnostics,
+      'Build preset diagnostics',
+      (diagnostic) => diagnostic.severity === 'error',
+    );
+    if (blockingDiagnostics.length > 0) {
+      throw new KovoBuildPresetDiagnosticError(blockingDiagnostics);
+    }
+
+    if (options.check) {
+      abortKovoBuildOutputTransaction(transaction);
+      transaction = undefined;
+      return kovoBuildCheckResult({
+        appModulePath: resolvedAppModulePath,
+        neutralOutDir: join(outDir, '.kovo'),
+        preset: selectedPreset.name,
+        presetDiagnostics,
+        presetLogs,
+      });
+    }
+    await preset.emit(neutralBuild, presetContext);
+    promoteKovoBuildOutputTransaction(transaction);
+    transaction = undefined;
+    return kovoBuildResult({
+      appModulePath: resolvedAppModulePath,
+      neutralOutDir: join(outDir, '.kovo'),
+      outDir,
+      preset: selectedPreset.name,
+      presetDiagnostics,
+      presetLogs,
+      serverOutDir: buildPresetOutDir(outDir, selectedPreset.name),
+    });
+  } catch (error) {
+    if (transaction !== undefined) {
+      try {
+        writeKovoBuildDebugEvidence(transaction, error, security);
+      } catch {
+        // Debug evidence is secondary to the producer-owned failure.
+      }
+      try {
+        abortKovoBuildOutputTransaction(transaction);
+      } catch {
+        // The unique sibling staging path remains safe to remove manually.
+      }
+    }
+    return buildErrorResult(error);
+  }
+}
+
+async function revalidateKovoBuildOneShotAnalysis(
+  options: KovoBuildOptions,
+  analysis: KovoBuildOneShotAnalysis,
+  expectedIdentity: KovoBuildOneShotIdentity,
+  security: KovoCommandSecurityDisposition,
+  resolvedAppModulePath: string,
+): Promise<PreEvaluationBuildConfigTrust | undefined> {
+  const invocationRoot = security.invocationCwd;
+  const currentProvenance = resolveKovoArtifactProvenance({
+    appModulePath: resolvedAppModulePath,
+  });
+  if (
+    kovoBuildOneShotDigest(currentProvenance) !==
+    kovoBuildOneShotDigest(analysis.artifactProvenance)
+  ) {
+    throw new TypeError('Kovo build handoff compiler provenance is stale.');
+  }
+  const configPath = findKovoBuildConfig(invocationRoot);
+  const currentConfig =
+    configPath === undefined
+      ? undefined
+      : runPreEvaluationBuildConfigTrustPreflight(
+          configPath,
+          invocationRoot,
+          security.paranoidStaticAdvisory,
+          'build',
+        );
+  const currentConfigDigest =
+    currentConfig === undefined
+      ? null
+      : kovoBuildOneShotDigest({
+          files: currentConfig.files,
+          path: slashPath(relative(realpathSync(invocationRoot), currentConfig.path)),
+        });
+  const recordedConfigDigest =
+    analysis.approvedConfig === undefined
+      ? null
+      : kovoBuildOneShotDigest({
+          files: analysis.approvedConfig.files,
+          path: slashPath(relative(realpathSync(invocationRoot), analysis.approvedConfig.path)),
+        });
+  if (currentConfigDigest !== recordedConfigDigest) {
+    throw new TypeError('Kovo build handoff config source is stale.');
+  }
+
+  const currentClientEntry = preEvaluationClientEntryFile(resolvedAppModulePath, invocationRoot);
+  const currentFiles = preEvaluationAppSourceFiles(
+    resolvedAppModulePath,
+    invocationRoot,
+    currentClientEntry,
+  );
+  const currentApprovedSourceFiles = preEvaluationApprovedBuildFiles(
+    resolvedAppModulePath,
+    invocationRoot,
+    currentFiles,
+  );
+  const currentSourceDigest = kovoBuildOneShotDigest({
+    clientEntry: currentClientEntry ?? null,
+    files: currentApprovedSourceFiles,
+  });
+  const recordedSourceDigest = kovoBuildOneShotDigest({
+    clientEntry: analysis.clientEntry ?? null,
+    files: analysis.approvedSourceFiles,
+  });
+  if (currentSourceDigest !== recordedSourceDigest) {
+    throw new TypeError('Kovo build handoff app source set is stale.');
+  }
+  const currentIdentity = kovoBuildOneShotIdentity(options, analysis, security);
+  if (JSON.stringify(currentIdentity) !== JSON.stringify(expectedIdentity)) {
+    throw new TypeError('Kovo build handoff invocation identity changed before consumption.');
+  }
+  return currentConfig;
+}
+
+function requireKovoBuildOneShotAnalysis(value: unknown): KovoBuildOneShotAnalysis {
+  if (value === null || typeof value !== 'object' || buildArrayIsArray(value)) {
+    throw new TypeError('Kovo build handoff analysis is invalid.');
+  }
+  const required = [
+    'approvedSourceFiles',
+    'artifactProvenance',
+    'buildStylesheetCss',
+    'checkGraph',
+    'dependencyCapabilities',
+    'queryShapeFacts',
+    'runtimeRegistry',
+    'selectedPresetName',
+    'sourceDerivedRegistryTransforms',
+  ];
+  for (let index = 0; index < required.length; index += 1) {
+    if (!buildOwnDataProperty(value, required[index]!, 'Kovo build handoff analysis').present) {
+      throw new TypeError(`Kovo build handoff analysis omitted ${required[index]}.`);
+    }
+  }
+  const selectedPresetName = buildOwnDataValue(
+    value,
+    'selectedPresetName',
+    'Kovo build handoff analysis',
+  );
+  if (parseKovoBuildPresetName(String(selectedPresetName)) === undefined) {
+    throw new TypeError('Kovo build handoff analysis has an invalid preset.');
+  }
+  if (
+    !buildArrayIsArray(
+      buildOwnDataValue(value, 'approvedSourceFiles', 'Kovo build handoff analysis'),
+    ) ||
+    !buildArrayIsArray(
+      buildOwnDataValue(value, 'queryShapeFacts', 'Kovo build handoff analysis'),
+    ) ||
+    !buildArrayIsArray(
+      buildOwnDataValue(value, 'sourceDerivedRegistryTransforms', 'Kovo build handoff analysis'),
+    )
+  ) {
+    throw new TypeError('Kovo build handoff analysis has invalid collection fields.');
+  }
+  return value as KovoBuildOneShotAnalysis;
+}
+
 async function loadAndCheckBuildApp(
   resolvedAppModulePath: string,
   options: KovoBuildOptions,
@@ -1337,6 +1900,8 @@ async function loadAndCheckBuildApp(
     runtimeRegistry: buildCheck.runtimeRegistry,
     resolveKovoBuildPreset,
     snapshotVersionedClientModuleStaging,
+    sourceDerivedRegistryTransforms:
+      preEvaluationStaticTrust.sourceGraphFacts.sourceDerivedRegistryTransforms,
     vercel,
     writeKovoNeutralBuild,
   };
@@ -5354,7 +5919,7 @@ function selectedConfiguredKovoBuildPreset(preset: KovoBuildPreset): SelectedKov
 async function loadKovoBuildConfig(
   root: string,
   appModulePath: string,
-  approvedConfig: PreEvaluationBuildConfigTrust | undefined,
+  approvedConfig: KovoBuildOneShotApprovedConfig | undefined,
 ): Promise<LoadedKovoBuildConfig> {
   if (approvedConfig === undefined) return {};
   const configPath = approvedConfig.path;
