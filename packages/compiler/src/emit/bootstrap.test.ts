@@ -79,16 +79,25 @@ function runBootstrap(
       return { islandSignalScope: {} };
     },
   };
+  const exports: {
+    installKovoDeferredRuntime?: () => unknown;
+  } = {};
   runInNewContext(rewritten, {
     document: {},
-    exports: {},
+    exports,
     fetch: () => {},
     planModules,
     runtime,
   });
+  if (typeof exports.installKovoDeferredRuntime !== 'function') {
+    throw new Error('bootstrap omitted installKovoDeferredRuntime');
+  }
+  exports.installKovoDeferredRuntime();
+  exports.installKovoDeferredRuntime();
 
   const installed = calls[0];
   if (!installed) throw new Error('bootstrap did not install the loader');
+  if (calls.length !== 1) throw new Error('bootstrap installed the loader more than once');
   return installed;
 }
 
@@ -184,5 +193,12 @@ describe('emitQueryPlanBootstrapModule — same-name export collision (B2, SPEC 
 
     const installed = runBootstrap(bootstrap.source, {});
     expect(installed.enhancedMutations.fetch('/_m/cart/add', {})).toBe('boot-pinned-fetch');
+  });
+
+  it('exports one idempotent paint-first deferred-runtime installer', () => {
+    const bootstrap = emitQueryPlanBootstrapModule([]);
+    expect(bootstrap.source).toContain('// @kovojs-generated-app-runtime/v1');
+    expect(bootstrap.source).toContain('export function installKovoDeferredRuntime()');
+    expect(bootstrap.source).toContain('if (loader !== undefined) return loader;');
   });
 });

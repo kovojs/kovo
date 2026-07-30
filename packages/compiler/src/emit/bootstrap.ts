@@ -164,10 +164,9 @@ export function emitQueryPlanBootstrapModule(
     fileName,
     kind: 'client',
     source: `${compilerIrHeader}
+// @kovojs-generated-app-runtime/v1
 import { applyDeferredStreamResponseToRuntime, createBrowserKovoRoot, createQueryStore, defaultEnhancedFetch, installKovoLoader } from '${RUNTIME_GENERATED_IMPORT}';
 ${imports ? `${imports}\n` : ''}
-const store = createQueryStore();
-const runtimeRoot = createBrowserKovoRoot({ documentRoot: document });
 // SPEC.md §4.8: merge same-query-name appliers so a query bound by multiple components keeps
 // every component's update plan instead of clobbering all but the last.
 function mergeKovoQueryPlans(plans) {
@@ -194,28 +193,44 @@ const clockUpdatePlans = [
 ${clockSpreads || '  // no compiled clock update plans'}
 ];
 
-const loader = installKovoLoader({
-  importModule: (specifier) => import(specifier),
-  root: document,
-  clockUpdatePlans,
-  queryStore: store,
-  enhancedMutations: {
-    // SPEC §6.6/§9.1: this transport was captured while the framework client runtime loaded;
-    // authored component modules cannot replace globalThis.fetch before a later form submit.
-    fetch: defaultEnhancedFetch,
-    queryPlans,
-    root: runtimeRoot,
-    store,
-  },
-});
+let loader;
+let store;
+
+// SPEC §4.4/§5.2/§9.1: the paint-first document stub imports exactly one immutable deferred
+// runtime and calls this installer before replaying the captured interaction. Keep installation
+// idempotent so eager loading, a captured event, and a direct app call cannot enroll duplicate
+// submit listeners or dispatch one mutation twice.
+export function installKovoDeferredRuntime() {
+  if (loader !== undefined) return loader;
+  const nextStore = createQueryStore();
+  const runtimeRoot = createBrowserKovoRoot({ documentRoot: document });
+  const nextLoader = installKovoLoader({
+    importModule: (specifier) => import(specifier),
+    root: document,
+    clockUpdatePlans,
+    queryStore: nextStore,
+    enhancedMutations: {
+      // SPEC §6.6/§9.1: this transport was captured while the framework client runtime loaded;
+      // authored component modules cannot replace globalThis.fetch before a later form submit.
+      fetch: defaultEnhancedFetch,
+      queryPlans,
+      root: runtimeRoot,
+      store: nextStore,
+    },
+  });
+  store = nextStore;
+  loader = nextLoader;
+  return nextLoader;
+}
 
 export function applyKovoDeferredStreamResponse(body, options = {}) {
+  const activeLoader = installKovoDeferredRuntime();
   return applyDeferredStreamResponseToRuntime({
     body,
     ...(options.boundary ? { boundary: options.boundary } : {}),
     // K4 / SPEC §4.7: thread the loader's islandSignalScope so a deferred-stream
     // morph that removes an island correctly aborts its ctx.signal.
-    islandSignalScope: loader.islandSignalScope,
+    islandSignalScope: activeLoader.islandSignalScope,
     ...(options.morph ? { morph: options.morph } : {}),
     queryPlans,
     root: options.root ?? document,

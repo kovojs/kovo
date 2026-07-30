@@ -207,6 +207,85 @@ describe('render-plan and app-build identities', () => {
     );
   });
 
+  it('selects one immutable compiler-generated app runtime without staging the static fallback', () => {
+    const registry = createRegistry();
+    const runtime = {
+      path: '/c/generated/app.client.js',
+      source:
+        '// @kovojs-ir\n// @kovojs-generated-app-runtime/v1\n' +
+        'export function installKovoDeferredRuntime() {}\n',
+    };
+    const optimism = {
+      path: '/c/src/mutations.client.js',
+      source:
+        '// @kovojs-ir\n' +
+        'export const kovoOptimisticMutationPlans = Object.freeze({ close: true });\n',
+    };
+    replaceVersionedClientModuleBuildSnapshot(registry, {
+      modules: [optimism, runtime],
+      renderPlanFingerprint: computeRenderPlanFingerprint({ deal: 'field:id,stage' }),
+    });
+
+    expect(ensureKovoLoaderRuntimeClientModule(registry)).toBe(clientHref(runtime));
+    expect(registry.entries()).toEqual([runtime, optimism]);
+  });
+
+  it('refuses active compiler optimism without its generated app runtime', () => {
+    const registry = createRegistry();
+    replaceVersionedClientModuleBuildSnapshot(registry, {
+      modules: [
+        {
+          path: '/c/src/mutations.client.js',
+          source:
+            '// @kovojs-ir\n' +
+            'export const kovoOptimisticMutationPlans = Object.freeze({ close: true });\n',
+        },
+      ],
+      renderPlanFingerprint: computeRenderPlanFingerprint({ deal: 'field:id,stage' }),
+    });
+
+    expect(() => ensureKovoLoaderRuntimeClientModule(registry)).toThrow(
+      /optimistic plans without \/c\/generated\/app\.client\.js/u,
+    );
+  });
+
+  it('refuses ambiguous active generated app runtimes', () => {
+    const registry = createRegistry();
+    replaceVersionedClientModuleBuildSnapshot(registry, {
+      modules: [
+        {
+          path: '/c/generated/app.client.js',
+          source:
+            '// @kovojs-ir\n// @kovojs-generated-app-runtime/v1\n' +
+            'export function installKovoDeferredRuntime() { return 1; }\n',
+        },
+        {
+          path: '/c/generated/app.client.js',
+          source:
+            '// @kovojs-ir\n// @kovojs-generated-app-runtime/v1\n' +
+            'export function installKovoDeferredRuntime() { return 2; }\n',
+        },
+      ],
+      renderPlanFingerprint: computeRenderPlanFingerprint({ deal: 'field:id,stage' }),
+    });
+
+    expect(() => ensureKovoLoaderRuntimeClientModule(registry)).toThrow(
+      /multiple active compiler-generated app runtimes/u,
+    );
+  });
+
+  it('refuses a malformed module occupying the generated app runtime path', () => {
+    const registry = createRegistry();
+    replaceVersionedClientModuleBuildSnapshot(registry, {
+      modules: [{ path: '/c/generated/app.client.js', source: 'export const forged = true;' }],
+      renderPlanFingerprint: computeRenderPlanFingerprint({ deal: 'field:id,stage' }),
+    });
+
+    expect(() => ensureKovoLoaderRuntimeClientModule(registry)).toThrow(
+      /malformed compiler-generated app runtime/u,
+    );
+  });
+
   it('does not publish an active snapshot or token when a late retain fails', () => {
     const backing = createMemoryVersionedClientModuleStore();
     let rejectSource: string | undefined;

@@ -1419,10 +1419,11 @@ export const CartBadge = component({
     expect(bootstrap.source).toContain(`  ...${badgeClockLocal},`);
     expect(bootstrap.source).toContain('installKovoLoader({');
     expect(bootstrap.source).toContain('clockUpdatePlans,');
-    expect(bootstrap.source).toContain('queryStore: store');
+    expect(bootstrap.source).toContain('queryStore: nextStore');
     expect(bootstrap.source).toContain('enhancedMutations: {');
     expect(bootstrap.source).toContain('fetch: defaultEnhancedFetch,');
     expect(bootstrap.source).toContain('queryPlans,');
+    expect(bootstrap.source).toContain('export function installKovoDeferredRuntime');
     expect(bootstrap.source).toContain('export function applyKovoDeferredStreamResponse');
     expect(bootstrap.source).toContain('return applyDeferredStreamResponseToRuntime({');
     expect(bootstrap.source).toContain('queryPlans,');
