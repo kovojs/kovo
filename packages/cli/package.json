@@ -32,7 +32,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/api.ts src/bin.ts src/index.ts src/test-runner-config.ts src/test-runtime-bootstrap.ts src/commands/build-static-trust-worker.ts src/commands/build-one-shot-worker.ts src/commands/sound-subset.mjs --dts && node ../../scripts/agent-docs-snapshot.mjs",
+    "build:dist": "vp pack src/api.ts src/bin.ts src/index.ts src/test-runner-config.ts src/test-runtime-bootstrap.ts src/commands/build-static-trust-worker.ts src/commands/build-one-shot-analyze-worker.ts src/commands/build-one-shot-check-worker.ts src/commands/build-one-shot-check-final-worker.ts src/commands/build-one-shot-client-worker.ts src/commands/build-one-shot-server-worker.ts src/commands/build-one-shot-final-worker.ts src/commands/sound-subset.mjs --dts && node ../../scripts/agent-docs-snapshot.mjs",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {

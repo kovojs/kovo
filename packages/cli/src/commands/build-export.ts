@@ -49,7 +49,7 @@ import {
   parseVersionedClientModuleTarget,
 } from '@kovojs/core/internal/client-module-url';
 import { computeRenderPlanFingerprint } from '@kovojs/core/internal/render-plan-token';
-import { ESCAPE_CENSUS_DOORS } from '@kovojs/core/internal/graph';
+import { ESCAPE_CENSUS_DOORS, validateKovoExplainInput } from '@kovojs/core/internal/graph';
 import {
   snapshotCacheInfluenceManifest,
   type CacheInfluenceManifestEntry,
@@ -312,10 +312,10 @@ const KOVO_SOURCE_CHECK_PHASES = [
   'graph-diagnostics',
 ] as const;
 
-type KovoSourceCheckPhase = (typeof KOVO_SOURCE_CHECK_PHASES)[number];
-type KovoSourceCheckPhaseStatus = 'executed' | 'not-applicable';
+export type KovoSourceCheckPhase = (typeof KOVO_SOURCE_CHECK_PHASES)[number];
+export type KovoSourceCheckPhaseStatus = 'executed' | 'not-applicable';
 
-interface KovoSourceCheckPhaseCensus {
+export interface KovoSourceCheckPhaseCensus {
   readonly phases: {
     readonly durationMs: number;
     readonly name: KovoSourceCheckPhase;
@@ -602,7 +602,17 @@ export interface KovoSourceCheckOptions {
   cache: boolean;
 }
 
-interface KovoBuildOneShotApprovedConfig {
+export interface KovoSourceCheckOneShotAnalysis {
+  readonly approvedConfig?: KovoBuildOneShotApprovedConfig;
+  readonly artifactProvenance: ReturnType<typeof resolveKovoArtifactProvenance>;
+  readonly devexCheckGraphDigest?: string;
+  readonly diagnosticSourceFacts: readonly KovoCheckDiagnosticSourceFact[];
+  readonly graph: CoreGraph.KovoCheckInput;
+  readonly phaseCensus?: KovoSourceCheckPhaseCensus;
+  readonly sourceFiles: readonly BuildCheckSourceFile[];
+}
+
+export interface KovoBuildOneShotApprovedConfig {
   readonly files: readonly BuildCheckSourceFile[];
   readonly path: string;
 }
@@ -755,6 +765,20 @@ export async function runSourceCheckCommand(
   options: KovoSourceCheckOptions,
   security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
 ): Promise<CliCommandResult> {
+  const analysis = await produceKovoSourceCheckOneShotAnalysis(options, security);
+  if ('exitCode' in analysis) return analysis;
+  return finishKovoSourceCheckOneShot(
+    options,
+    analysis,
+    kovoSourceCheckOneShotIdentity(options, analysis, security),
+    security,
+  );
+}
+
+export async function produceKovoSourceCheckOneShotAnalysis(
+  options: KovoSourceCheckOptions,
+  security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
+): Promise<KovoSourceCheckOneShotAnalysis | CliCommandResult> {
   try {
     options = configurationBoundary(() => snapshotKovoSourceCheckOptions(options));
     const invocationRoot = security.invocationCwd;
@@ -775,9 +799,10 @@ export async function runSourceCheckCommand(
       assertReadableKovoInputFile(configPath, 'kovo check config');
     }
 
+    let approvedConfig: PreEvaluationBuildConfigTrust | undefined;
     if (configPath !== undefined) {
       const startedAt = startSourceCheckPhase(phaseCensus);
-      runPreEvaluationBuildConfigTrustPreflight(
+      approvedConfig = runPreEvaluationBuildConfigTrustPreflight(
         configPath,
         invocationRoot,
         security.paranoidStaticAdvisory,
@@ -835,7 +860,7 @@ export async function runSourceCheckCommand(
       await sessionAuthorityFactsFromEntry(resolvedAppModulePath);
     recordSourceCheckPhase(phaseCensus, 'session-authority', 'executed', sessionAuthorityStartedAt);
 
-    return await deriveCurrentSourceCheck(
+    const artifacts = await deriveCurrentSourceCheckArtifacts(
       resolvedAppModulePath,
       options.cache,
       reachableSessionAuthorityFacts,
@@ -843,6 +868,127 @@ export async function runSourceCheckCommand(
       invocationRoot,
       phaseCensus,
     );
+    return {
+      ...(approvedConfig === undefined
+        ? {}
+        : {
+            approvedConfig: {
+              files: approvedConfig.files,
+              path: approvedConfig.path,
+            },
+          }),
+      artifactProvenance: resolveKovoArtifactProvenance({
+        appModulePath: resolvedAppModulePath,
+      }),
+      ...(artifacts.devexCheckGraphDigest === undefined
+        ? {}
+        : { devexCheckGraphDigest: artifacts.devexCheckGraphDigest }),
+      diagnosticSourceFacts: artifacts.diagnosticSourceFacts,
+      graph: artifacts.graph,
+      ...(phaseCensus === undefined ? {} : { phaseCensus }),
+      sourceFiles: artifacts.sourceFiles,
+    };
+  } catch (error) {
+    return sourceCheckErrorResult(error);
+  }
+}
+
+export function kovoSourceCheckOneShotIdentity(
+  inputOptions: KovoSourceCheckOptions,
+  analysis: KovoSourceCheckOneShotAnalysis,
+  security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
+): KovoBuildOneShotIdentity {
+  const options = configurationBoundary(() => snapshotKovoSourceCheckOptions(inputOptions));
+  const invocationRoot = realpathSync(security.invocationCwd);
+  return {
+    appModulePath: slashPath(
+      relative(invocationRoot, resolve(invocationRoot, options.appModulePath)),
+    ),
+    compilerProvenanceDigest: kovoBuildOneShotDigest(analysis.artifactProvenance),
+    configSourceDigest:
+      analysis.approvedConfig === undefined
+        ? null
+        : kovoBuildOneShotDigest({
+            files: analysis.approvedConfig.files,
+            path: slashPath(relative(invocationRoot, analysis.approvedConfig.path)),
+          }),
+    invocationRoot,
+    optionsDigest: kovoBuildOneShotDigest(options),
+    sourceSetDigest: kovoBuildOneShotDigest(analysis.sourceFiles),
+  };
+}
+
+export async function finishKovoSourceCheckOneShot(
+  inputOptions: KovoSourceCheckOptions,
+  inputAnalysis: unknown,
+  expectedIdentity: KovoBuildOneShotIdentity,
+  security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
+): Promise<CliCommandResult> {
+  try {
+    const options = configurationBoundary(() => snapshotKovoSourceCheckOptions(inputOptions));
+    const analysis = requireKovoSourceCheckOneShotAnalysis(inputAnalysis);
+    const invocationRoot = realpathSync(security.invocationCwd);
+    const resolvedAppModulePath = resolve(invocationRoot, options.appModulePath);
+    const currentProvenance = resolveKovoArtifactProvenance({
+      appModulePath: resolvedAppModulePath,
+    });
+    if (
+      kovoBuildOneShotDigest(currentProvenance) !==
+      kovoBuildOneShotDigest(analysis.artifactProvenance)
+    ) {
+      throw new TypeError('Kovo check handoff compiler provenance is stale.');
+    }
+    const configPath = findKovoBuildConfig(invocationRoot);
+    const currentConfig =
+      configPath === undefined
+        ? undefined
+        : runPreEvaluationBuildConfigTrustPreflight(
+            configPath,
+            invocationRoot,
+            security.paranoidStaticAdvisory,
+            'check',
+          );
+    const currentConfigDigest =
+      currentConfig === undefined
+        ? null
+        : kovoBuildOneShotDigest({
+            files: currentConfig.files,
+            path: slashPath(relative(invocationRoot, currentConfig.path)),
+          });
+    const recordedConfigDigest =
+      analysis.approvedConfig === undefined
+        ? null
+        : kovoBuildOneShotDigest({
+            files: analysis.approvedConfig.files,
+            path: slashPath(relative(invocationRoot, analysis.approvedConfig.path)),
+          });
+    if (currentConfigDigest !== recordedConfigDigest) {
+      throw new TypeError('Kovo check handoff config source is stale.');
+    }
+    for (let index = 0; index < analysis.sourceFiles.length; index += 1) {
+      const file = analysis.sourceFiles[index]!;
+      if (readFileSync(resolve(invocationRoot, file.fileName), 'utf8') !== file.source) {
+        throw new TypeError(`Kovo check handoff source ${file.fileName} is stale.`);
+      }
+    }
+    const currentIdentity = kovoSourceCheckOneShotIdentity(options, analysis, security);
+    if (buildJsonStringify(currentIdentity) !== buildJsonStringify(expectedIdentity)) {
+      throw new TypeError('Kovo check handoff invocation identity changed before consumption.');
+    }
+    const phaseCensus = analysis.phaseCensus;
+    const graphDiagnosticsStartedAt = startSourceCheckPhase(phaseCensus);
+    const result = kovoCheckWithDiagnosticSourceCatalog(
+      analysis.graph,
+      { paranoidStaticAdvisory: security.paranoidStaticAdvisory },
+      createKovoCheckDiagnosticSourceCatalog(analysis.diagnosticSourceFacts),
+    );
+    recordSourceCheckPhase(phaseCensus, 'graph-diagnostics', 'executed', graphDiagnosticsStartedAt);
+    return appendSourceCheckPhaseCensus(result, phaseCensus, {
+      ...(analysis.devexCheckGraphDigest === undefined
+        ? {}
+        : { devexCheckGraphDigest: analysis.devexCheckGraphDigest }),
+      sourceFiles: analysis.sourceFiles,
+    });
   } catch (error) {
     return sourceCheckErrorResult(error);
   }
@@ -2187,6 +2333,173 @@ async function revalidateKovoBuildOneShotAnalysis(
   return currentConfig;
 }
 
+interface KovoBuildOneShotAnalysisPhasePayload {
+  readonly analysis: KovoBuildOneShotAnalysis;
+}
+
+interface KovoBuildOneShotClientPhasePayload extends KovoBuildOneShotAnalysisPhasePayload {
+  readonly clientPhase: KovoBuildOneShotClientPhase;
+}
+
+interface KovoBuildOneShotServerPhasePayload extends KovoBuildOneShotClientPhasePayload {
+  readonly serverPhase: KovoBuildOneShotServerPhase;
+}
+
+function requireKovoSourceCheckOneShotAnalysis(value: unknown): KovoSourceCheckOneShotAnalysis {
+  const required = ['artifactProvenance', 'diagnosticSourceFacts', 'graph', 'sourceFiles'];
+  requireKovoBuildOneShotExactKeys(
+    value,
+    [...required, 'approvedConfig', 'devexCheckGraphDigest', 'phaseCensus'],
+    'source-check analysis',
+    required,
+  );
+  const sourceFiles = validateStaticTrustSourceFiles(
+    buildOwnDataValue(value, 'sourceFiles', 'Kovo check handoff analysis'),
+    'Kovo check handoff source files',
+  );
+  const graph = buildOwnDataValue(value, 'graph', 'Kovo check handoff analysis');
+  if (validateKovoExplainInput(graph).length > 0) {
+    throw new TypeError('Kovo check handoff analysis contains an invalid graph.');
+  }
+  const diagnosticSourceFacts = buildOwnDataValue(
+    value,
+    'diagnosticSourceFacts',
+    'Kovo check handoff analysis',
+  );
+  if (!buildArrayIsArray(diagnosticSourceFacts)) {
+    throw new TypeError('Kovo check handoff analysis contains invalid diagnostic source facts.');
+  }
+  createKovoCheckDiagnosticSourceCatalog(
+    diagnosticSourceFacts as readonly KovoCheckDiagnosticSourceFact[],
+  );
+  const approvedConfig = buildOwnDataProperty(
+    value,
+    'approvedConfig',
+    'Kovo check handoff analysis',
+  );
+  if (approvedConfig.present) {
+    requireKovoBuildOneShotExactKeys(
+      approvedConfig.value,
+      ['files', 'path'],
+      'source-check approved config',
+    );
+    validateStaticTrustSourceFiles(
+      buildOwnDataValue(approvedConfig.value, 'files', 'Kovo check handoff approved config'),
+      'Kovo check handoff approved config files',
+    );
+    if (
+      typeof buildOwnDataValue(
+        approvedConfig.value,
+        'path',
+        'Kovo check handoff approved config',
+      ) !== 'string'
+    ) {
+      throw new TypeError('Kovo check handoff approved config path is invalid.');
+    }
+  }
+  const phaseCensus = buildOwnDataProperty(value, 'phaseCensus', 'Kovo check handoff analysis');
+  if (phaseCensus.present) requireKovoSourceCheckPhaseCensus(phaseCensus.value);
+  const digest = buildOwnDataProperty(
+    value,
+    'devexCheckGraphDigest',
+    'Kovo check handoff analysis',
+  );
+  if (digest.present && typeof digest.value !== 'string') {
+    throw new TypeError('Kovo check handoff graph digest is invalid.');
+  }
+  return {
+    ...(approvedConfig.present
+      ? { approvedConfig: approvedConfig.value as KovoBuildOneShotApprovedConfig }
+      : {}),
+    artifactProvenance: buildOwnDataValue(
+      value,
+      'artifactProvenance',
+      'Kovo check handoff analysis',
+    ) as KovoSourceCheckOneShotAnalysis['artifactProvenance'],
+    ...(digest.present ? { devexCheckGraphDigest: digest.value as string } : {}),
+    diagnosticSourceFacts: diagnosticSourceFacts as readonly KovoCheckDiagnosticSourceFact[],
+    graph: graph as CoreGraph.KovoCheckInput,
+    ...(phaseCensus.present
+      ? { phaseCensus: phaseCensus.value as KovoSourceCheckPhaseCensus }
+      : {}),
+    sourceFiles,
+  };
+}
+
+function requireKovoSourceCheckPhaseCensus(value: unknown): void {
+  requireKovoBuildOneShotExactKeys(value, ['phases', 'sourcePath'], 'source-check phase census');
+  const sourcePath = buildOwnDataValue(value, 'sourcePath', 'Kovo check handoff phase census');
+  const phases = buildOwnDataValue(value, 'phases', 'Kovo check handoff phase census');
+  if (typeof sourcePath !== 'string' || !buildArrayIsArray(phases)) {
+    throw new TypeError('Kovo check handoff phase census is invalid.');
+  }
+  if (phases.length !== KOVO_SOURCE_CHECK_PHASES.length - 1) {
+    throw new TypeError('Kovo check handoff phase census is incomplete.');
+  }
+  for (let index = 0; index < phases.length; index += 1) {
+    const phase = phases[index];
+    requireKovoBuildOneShotExactKeys(
+      phase,
+      ['durationMs', 'name', 'status'],
+      'source-check phase census entry',
+    );
+    const durationMs = buildOwnDataValue(phase, 'durationMs', 'Kovo check handoff phase census');
+    const name = buildOwnDataValue(phase, 'name', 'Kovo check handoff phase census');
+    const status = buildOwnDataValue(phase, 'status', 'Kovo check handoff phase census');
+    if (
+      typeof durationMs !== 'number' ||
+      !(durationMs >= 0 && durationMs < Infinity) ||
+      name !== KOVO_SOURCE_CHECK_PHASES[index] ||
+      (status !== 'executed' && status !== 'not-applicable')
+    ) {
+      throw new TypeError('Kovo check handoff phase census entry is invalid.');
+    }
+  }
+}
+
+export function requireKovoBuildOneShotPhasePayload(
+  value: unknown,
+  phase: 'analysis',
+): KovoBuildOneShotAnalysisPhasePayload;
+export function requireKovoBuildOneShotPhasePayload(
+  value: unknown,
+  phase: 'client',
+): KovoBuildOneShotClientPhasePayload;
+export function requireKovoBuildOneShotPhasePayload(
+  value: unknown,
+  phase: 'server',
+): KovoBuildOneShotServerPhasePayload;
+export function requireKovoBuildOneShotPhasePayload(
+  value: unknown,
+  phase: 'analysis' | 'client' | 'server',
+):
+  | KovoBuildOneShotAnalysisPhasePayload
+  | KovoBuildOneShotClientPhasePayload
+  | KovoBuildOneShotServerPhasePayload {
+  const expectedKeys =
+    phase === 'analysis'
+      ? ['analysis']
+      : phase === 'client'
+        ? ['analysis', 'clientPhase']
+        : ['analysis', 'clientPhase', 'serverPhase'];
+  requireKovoBuildOneShotExactKeys(value, expectedKeys, `${phase} phase handoff`);
+  const analysis = requireKovoBuildOneShotAnalysis(
+    buildOwnDataValue(value, 'analysis', `${phase} phase handoff`),
+  );
+  if (phase === 'analysis') return { analysis };
+  const clientPhase = requireKovoBuildOneShotClientPhase(
+    buildOwnDataValue(value, 'clientPhase', `${phase} phase handoff`),
+  );
+  if (phase === 'client') return { analysis, clientPhase };
+  return {
+    analysis,
+    clientPhase,
+    serverPhase: requireKovoBuildOneShotServerPhase(
+      buildOwnDataValue(value, 'serverPhase', `${phase} phase handoff`),
+    ),
+  };
+}
+
 function requireKovoBuildOneShotAnalysis(value: unknown): KovoBuildOneShotAnalysis {
   if (value === null || typeof value !== 'object' || buildArrayIsArray(value)) {
     throw new TypeError('Kovo build handoff analysis is invalid.');
@@ -2202,11 +2515,8 @@ function requireKovoBuildOneShotAnalysis(value: unknown): KovoBuildOneShotAnalys
     'selectedPresetName',
     'sourceDerivedRegistryTransforms',
   ];
-  for (let index = 0; index < required.length; index += 1) {
-    if (!buildOwnDataProperty(value, required[index]!, 'Kovo build handoff analysis').present) {
-      throw new TypeError(`Kovo build handoff analysis omitted ${required[index]}.`);
-    }
-  }
+  const allowed = [...required, 'approvedConfig', 'clientEntry'];
+  requireKovoBuildOneShotExactKeys(value, allowed, 'analysis', required);
   const selectedPresetName = buildOwnDataValue(
     value,
     'selectedPresetName',
@@ -2228,7 +2538,143 @@ function requireKovoBuildOneShotAnalysis(value: unknown): KovoBuildOneShotAnalys
   ) {
     throw new TypeError('Kovo build handoff analysis has invalid collection fields.');
   }
+  validateStaticTrustSourceFiles(
+    buildOwnDataValue(value, 'approvedSourceFiles', 'Kovo build handoff analysis'),
+    'Kovo build handoff approved source files',
+  );
+  const clientEntry = buildOwnDataProperty(value, 'clientEntry', 'Kovo build handoff analysis');
+  if (clientEntry.present) {
+    validateStaticTrustSourceFiles([clientEntry.value], 'Kovo build handoff approved client entry');
+  }
+  const graphErrors = validateKovoExplainInput(
+    buildOwnDataValue(value, 'checkGraph', 'Kovo build handoff analysis'),
+  );
+  if (graphErrors.length > 0) {
+    throw new TypeError('Kovo build handoff analysis contains an invalid check graph.');
+  }
   return value as KovoBuildOneShotAnalysis;
+}
+
+function requireKovoBuildOneShotClientPhase(value: unknown): KovoBuildOneShotClientPhase {
+  const fields = [
+    'appBuildToken',
+    'buildCssAssets',
+    'clientBuild',
+    'commonRuntimeRegistry',
+    'completedCheckGraph',
+    'discoveredServerClientModules',
+    'manualClientModules',
+    'nonCompilerClientModules',
+    'selectedPresetName',
+    'serverProjectMutationFacts',
+    'transaction',
+  ];
+  requireKovoBuildOneShotExactKeys(value, fields, 'client phase');
+  if (
+    typeof buildOwnDataValue(value, 'appBuildToken', 'Kovo build handoff client phase') !==
+      'string' ||
+    parseKovoBuildPresetName(
+      String(buildOwnDataValue(value, 'selectedPresetName', 'Kovo build handoff client phase')),
+    ) === undefined
+  ) {
+    throw new TypeError('Kovo build handoff client phase has invalid scalar fields.');
+  }
+  for (const key of [
+    'discoveredServerClientModules',
+    'manualClientModules',
+    'nonCompilerClientModules',
+  ]) {
+    if (!buildArrayIsArray(buildOwnDataValue(value, key, 'Kovo build handoff client phase'))) {
+      throw new TypeError(`Kovo build handoff client phase has invalid ${key}.`);
+    }
+  }
+  const graphErrors = validateKovoExplainInput(
+    buildOwnDataValue(value, 'completedCheckGraph', 'Kovo build handoff client phase'),
+  );
+  if (graphErrors.length > 0) {
+    throw new TypeError('Kovo build handoff client phase contains an invalid completed graph.');
+  }
+  requireKovoBuildOneShotTransaction(
+    buildOwnDataValue(value, 'transaction', 'Kovo build handoff client phase'),
+  );
+  return value as KovoBuildOneShotClientPhase;
+}
+
+function requireKovoBuildOneShotServerPhase(value: unknown): KovoBuildOneShotServerPhase {
+  requireKovoBuildOneShotExactKeys(value, ['clientModules', 'serverHandlerSource'], 'server phase');
+  if (
+    !buildArrayIsArray(
+      buildOwnDataValue(value, 'clientModules', 'Kovo build handoff server phase'),
+    ) ||
+    typeof buildOwnDataValue(value, 'serverHandlerSource', 'Kovo build handoff server phase') !==
+      'string'
+  ) {
+    throw new TypeError('Kovo build handoff server phase is invalid.');
+  }
+  return value as KovoBuildOneShotServerPhase;
+}
+
+function requireKovoBuildOneShotTransaction(value: unknown): KovoBuildOutputTransaction {
+  requireKovoBuildOneShotExactKeys(
+    value,
+    ['buildId', 'finalOutDir', 'promoted', 'stagedOutDir'],
+    'output transaction',
+  );
+  const buildId = buildOwnDataValue(value, 'buildId', 'Kovo build handoff output transaction');
+  const finalOutDir = buildOwnDataValue(
+    value,
+    'finalOutDir',
+    'Kovo build handoff output transaction',
+  );
+  const promoted = buildOwnDataValue(value, 'promoted', 'Kovo build handoff output transaction');
+  const stagedOutDir = buildOwnDataValue(
+    value,
+    'stagedOutDir',
+    'Kovo build handoff output transaction',
+  );
+  if (
+    typeof buildId !== 'string' ||
+    typeof finalOutDir !== 'string' ||
+    promoted !== false ||
+    typeof stagedOutDir !== 'string' ||
+    basename(stagedOutDir) !== buildId ||
+    dirname(stagedOutDir) !== dirname(finalOutDir) ||
+    !buildStringStartsWith(buildId, '.kovo-build-stage-')
+  ) {
+    throw new TypeError('Kovo build handoff output transaction is invalid.');
+  }
+  const stat = lstatSync(stagedOutDir);
+  if (!stat.isDirectory() || stat.isSymbolicLink()) {
+    throw new TypeError('Kovo build handoff output transaction staging path is invalid.');
+  }
+  return { buildId, finalOutDir, promoted, stagedOutDir };
+}
+
+function requireKovoBuildOneShotExactKeys(
+  value: unknown,
+  allowedKeys: readonly string[],
+  label: string,
+  requiredKeys: readonly string[] = allowedKeys,
+): asserts value is object {
+  if (value === null || typeof value !== 'object' || buildArrayIsArray(value)) {
+    throw new TypeError(`Kovo build handoff ${label} is invalid.`);
+  }
+  const keys = buildObjectKeys(value);
+  for (let index = 0; index < keys.length; index += 1) {
+    let allowed = false;
+    for (let allowedIndex = 0; allowedIndex < allowedKeys.length; allowedIndex += 1) {
+      if (keys[index] === allowedKeys[allowedIndex]) {
+        allowed = true;
+        break;
+      }
+    }
+    if (!allowed) throw new TypeError(`Kovo build handoff ${label} has an unsupported field.`);
+  }
+  for (let index = 0; index < requiredKeys.length; index += 1) {
+    if (!buildOwnDataProperty(value, requiredKeys[index]!, `Kovo build handoff ${label}`).present) {
+      throw new TypeError(`Kovo build handoff ${label} omitted ${requiredKeys[index]}.`);
+    }
+  }
 }
 
 async function loadAndCheckBuildApp(
@@ -2308,14 +2754,14 @@ async function loadAndCheckBuildApp(
   };
 }
 
-async function deriveCurrentSourceCheck(
+async function deriveCurrentSourceCheckArtifacts(
   resolvedAppModulePath: string,
   cache: boolean,
   reachableSessionAuthorityFacts: readonly CoreGraph.SessionAuthorityFact[],
   security: KovoCommandSecurityDisposition,
   invocationRoot: string,
   phaseCensus: KovoSourceCheckPhaseCensus | undefined,
-): Promise<KovoCheckResult> {
+): Promise<KovoBuildCheckArtifacts> {
   const appSourceTrustStartedAt = startSourceCheckPhase(phaseCensus);
   const preEvaluationStaticTrust = await runPreEvaluationStaticTrustPreflightInWorker(
     resolvedAppModulePath,
@@ -2356,14 +2802,7 @@ async function deriveCurrentSourceCheck(
     root: invocationRoot,
   });
   recordSourceCheckPhase(phaseCensus, 'build-check-graph', 'executed', buildCheckGraphStartedAt);
-  const graphDiagnosticsStartedAt = startSourceCheckPhase(phaseCensus);
-  const result = kovoCheckWithDiagnosticSourceCatalog(
-    artifacts.graph,
-    { paranoidStaticAdvisory: security.paranoidStaticAdvisory },
-    artifacts.diagnosticSourceCatalog,
-  );
-  recordSourceCheckPhase(phaseCensus, 'graph-diagnostics', 'executed', graphDiagnosticsStartedAt);
-  return appendSourceCheckPhaseCensus(result, phaseCensus, artifacts);
+  return artifacts;
 }
 
 function sourceCheckPhaseCensus(
@@ -2419,7 +2858,7 @@ function startSourceCheckPhase(census: KovoSourceCheckPhaseCensus | undefined): 
 function appendSourceCheckPhaseCensus(
   result: KovoCheckResult,
   census: KovoSourceCheckPhaseCensus | undefined,
-  artifacts: KovoBuildCheckArtifacts,
+  artifacts: Pick<KovoBuildCheckArtifacts, 'devexCheckGraphDigest' | 'sourceFiles'>,
 ): KovoCheckResult {
   if (census === undefined) return result;
   if (census.phases.length !== KOVO_SOURCE_CHECK_PHASES.length) {
@@ -3722,6 +4161,7 @@ interface KovoBuildCheckArtifacts {
   components?: readonly SourceComponentGraphFacts[];
   devexCheckGraphDigest?: string;
   diagnosticSourceCatalog: KovoCheckDiagnosticSourceCatalog;
+  diagnosticSourceFacts: readonly KovoCheckDiagnosticSourceFact[];
   graph: CoreGraph.KovoCheckInput;
   queryShapeFacts: readonly QueryShapeFact[];
   runtimeRegistry: RuntimeRegistryWireFacts;
@@ -4023,6 +4463,7 @@ async function buildCheckGraph(
   return {
     ...(devexCheckGraphDigest === undefined ? {} : { devexCheckGraphDigest }),
     diagnosticSourceCatalog: staticArtifacts.diagnosticSourceCatalog,
+    diagnosticSourceFacts: staticArtifacts.diagnosticSourceFacts,
     graph: finalGraph,
     queryShapeFacts: staticArtifacts.queryShapeFacts,
     runtimeRegistry,
@@ -4423,10 +4864,11 @@ async function staticBuildCheckGraph(
       ),
     ),
   );
-  const diagnosticSourceCatalog = queryDiagnosticSourceCatalog(
+  const diagnosticSourceFacts = queryDiagnosticSourceFacts(
     app.queries,
     sourceGraphFacts.registryDeclarationAnchors,
   );
+  const diagnosticSourceCatalog = createKovoCheckDiagnosticSourceCatalog(diagnosticSourceFacts);
   const routeOutcomeFacts = routeFileStreamEndpointFacts(
     app.routes,
     sourceGraphFacts.routeOutcomes,
@@ -4520,6 +4962,7 @@ async function staticBuildCheckGraph(
   return {
     components: sourceGraphFacts.components,
     diagnosticSourceCatalog,
+    diagnosticSourceFacts,
     graph: {
       ...(drizzleFacts.grants.length === 0 ? {} : { grants: drizzleFacts.grants }),
       ...(drizzleFacts.touchGraph === undefined ? {} : { touchGraph: drizzleFacts.touchGraph }),
@@ -5396,11 +5839,11 @@ function requiredEndpointDeclarationSource(
   );
 }
 
-function queryDiagnosticSourceCatalog(
+function queryDiagnosticSourceFacts(
   queries: readonly KovoApp['queries'][number][],
   anchors: ReadonlyMap<string, KovoDiagnosticSourceAnchor | null>,
-): KovoCheckDiagnosticSourceCatalog {
-  const facts = buildFlatMapDense(
+): readonly KovoCheckDiagnosticSourceFact[] {
+  return buildFlatMapDense(
     queries,
     'Build query diagnostic source facts',
     (query): KovoCheckDiagnosticSourceFact[] => {
@@ -5410,7 +5853,6 @@ function queryDiagnosticSourceCatalog(
         : [{ kind: 'query', name: query.key, source }];
     },
   );
-  return createKovoCheckDiagnosticSourceCatalog(facts);
 }
 
 /** Internal executable seam for the TASK B caller-carrier mutation gate (SPEC §6.6). */

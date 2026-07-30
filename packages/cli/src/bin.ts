@@ -52,26 +52,27 @@ const commandSecurityDisposition = Object.freeze({
 });
 
 const commandArgs = process.argv.slice(2);
-const { resolveKovoBinInvocationPosture } = await import('./commands-manifest.js');
-const invocationPosture = resolveKovoBinInvocationPosture(commandArgs);
 
 // Source check/build are heavy one-shot proof pipelines. Route them before importing the complete
 // dispatcher so a thin parent can run each authenticated phase in a fresh process and let the
 // previous compiler/Vite heap exit. Every worker performs its own compiler lockdown before any
 // authored evaluation.
-const { runKovoIsolatedOneShotInvocation } =
-  await import('./commands/build-one-shot-orchestrator.js');
-const isolatedExitCode = runKovoIsolatedOneShotInvocation(
-  commandArgs,
-  currentBinPath,
-  commandSecurityDisposition,
-);
-if (isolatedExitCode !== undefined) process.exit(isolatedExitCode);
+if (commandArgs[0] === 'check' || commandArgs[0] === 'build') {
+  const { runKovoIsolatedOneShotInvocation } =
+    await import('./commands/build-one-shot-orchestrator.js');
+  const isolatedExitCode = await runKovoIsolatedOneShotInvocation(
+    commandArgs,
+    currentBinPath,
+    commandSecurityDisposition,
+  );
+  if (isolatedExitCode !== undefined) process.exit(isolatedExitCode);
+}
 
 // Import the complete trusted dispatcher graph before lockdown so framework modules that capture
 // Web/Node controls from data descriptors see the host-native descriptors. No authored module is
 // evaluated by this import; command dispatch below is the first authored-evaluation boundary.
-const { mainAsync } = await import('./index.js');
+const { mainAsync, resolveKovoBinInvocationPosture } = await import('./index.js');
+const invocationPosture = resolveKovoBinInvocationPosture(commandArgs);
 
 // SPEC §5.2 / §6.6 rule 6: supported commands that evaluate authored modules lock the shared
 // compiler realm at the last trusted boundary, before invoking the dispatcher. The lock also

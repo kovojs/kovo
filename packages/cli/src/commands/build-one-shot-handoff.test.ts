@@ -128,4 +128,76 @@ describe('one-shot build private handoff', () => {
       }),
     ).toThrow(/private prototype state/u);
   });
+
+  it('uses only boot-captured wire controls after authored prototype mutation', () => {
+    const hashProbe = createHash('sha256');
+    const hashPrototype = Object.getPrototypeOf(hashProbe) as {
+      digest: typeof hashProbe.digest;
+      update: typeof hashProbe.update;
+    };
+    const originals = {
+      arrayEvery: Array.prototype.every,
+      arrayMap: Array.prototype.map,
+      arrayPush: Array.prototype.push,
+      arraySome: Array.prototype.some,
+      arraySort: Array.prototype.sort,
+      bufferAllocUnsafe: Buffer.allocUnsafe,
+      bufferConcat: Buffer.concat,
+      bufferFrom: Buffer.from,
+      bufferSubarray: Buffer.prototype.subarray,
+      bufferToString: Buffer.prototype.toString,
+      hashDigest: hashPrototype.digest,
+      hashUpdate: hashPrototype.update,
+      mathFloor: Math.floor,
+      regexpTest: RegExp.prototype.test,
+      stringCharCodeAt: String.prototype.charCodeAt,
+      stringPadStart: String.prototype.padStart,
+      stringToString: String.prototype.toString,
+    };
+    const poisoned = () => {
+      throw new Error('authored prototype mutation reached private handoff');
+    };
+    let result: ReturnType<typeof readKovoBuildOneShotHandoff> | undefined;
+    try {
+      Array.prototype.every = poisoned as never;
+      Array.prototype.map = poisoned as never;
+      Array.prototype.push = poisoned as never;
+      Array.prototype.some = poisoned as never;
+      Array.prototype.sort = poisoned as never;
+      Buffer.allocUnsafe = poisoned as never;
+      Buffer.concat = poisoned as never;
+      Buffer.from = poisoned as never;
+      Buffer.prototype.subarray = poisoned as never;
+      Buffer.prototype.toString = poisoned as never;
+      hashPrototype.digest = poisoned as never;
+      hashPrototype.update = poisoned as never;
+      Math.floor = poisoned;
+      RegExp.prototype.test = poisoned;
+      String.prototype.charCodeAt = poisoned as never;
+      String.prototype.padStart = poisoned;
+      String.prototype.toString = poisoned;
+      const handoff = wire();
+      result = readKovoBuildOneShotHandoff(handoff.bytes, handoff.expectedIdentity);
+    } finally {
+      Array.prototype.every = originals.arrayEvery;
+      Array.prototype.map = originals.arrayMap;
+      Array.prototype.push = originals.arrayPush;
+      Array.prototype.some = originals.arraySome;
+      Array.prototype.sort = originals.arraySort;
+      Buffer.allocUnsafe = originals.bufferAllocUnsafe;
+      Buffer.concat = originals.bufferConcat;
+      Buffer.from = originals.bufferFrom;
+      Buffer.prototype.subarray = originals.bufferSubarray;
+      Buffer.prototype.toString = originals.bufferToString;
+      hashPrototype.digest = originals.hashDigest;
+      hashPrototype.update = originals.hashUpdate;
+      Math.floor = originals.mathFloor;
+      RegExp.prototype.test = originals.regexpTest;
+      String.prototype.charCodeAt = originals.stringCharCodeAt;
+      String.prototype.padStart = originals.stringPadStart;
+      String.prototype.toString = originals.stringToString;
+    }
+    expect(result?.schema).toBe('kovo-build-one-shot-analysis/v1');
+  });
 });
+import { createHash } from 'node:crypto';
