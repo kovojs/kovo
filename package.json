@@ -16,6 +16,7 @@
     "check:api-surface": "node scripts/api-surface-gate.mjs && node scripts/api-decision-ledger.mjs && node scripts/api-migration-protocol.mjs && vitest --run scripts/api-surface-gate.test.mjs scripts/api-decision-ledger.test.mjs scripts/api-migration-protocol.test.mjs --reporter=dot",
     "check:api-surface:packed": "node scripts/packed-public-any-gate.mjs --tarball-dir .release/tarballs && vitest --run scripts/packed-public-any-gate.test.mjs --reporter=dot",
     "check:app-contract-g23": "node scripts/app-contract-g23-gate.mjs && vitest --run scripts/app-contract-g23-gate.test.mjs --reporter=dot",
+    "check:app-contract-type-budgets": "node scripts/app-contract-type-budget-gate.mjs && vitest --run scripts/app-contract-type-budget-gate.test.mjs --reporter=dot",
     "check:auth-provider-pin": "node scripts/security-cost-budget-runner.mjs --gate auth-provider-pin",
     "check:analysis-time-closure": "node scripts/check-analysis-time-closure.mjs && vitest --run scripts/check-analysis-time-closure.test.mjs scripts/lib/pnpm-lock-packages.test.mjs scripts/lib/deterministic-tarball.test.mjs scripts/reproducible-pack.test.mjs --reporter=dot",
     "check:advisory-feed": "node scripts/security-cost-budget-runner.mjs --gate advisory-feed",

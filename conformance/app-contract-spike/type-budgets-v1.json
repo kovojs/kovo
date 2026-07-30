@@ -3,7 +3,7 @@
   "budgetVersion": "2026-07-29.1",
   "ratification": {
     "timings": "ratified",
-    "instantiations": "pending-measurement"
+    "instantiations": "ratified"
   },
   "baseline": {
     "criteriaSubject": {
@@ -13,6 +13,18 @@
     "evidenceSubject": {
       "path": "conformance/app-contract-spike/raw-evidence-v6.json",
       "sha256": "1f9b8d1e9db96c15b642242c2ecc40ac9b127b262dbb0c87299f8189407a7726"
+    },
+    "instantiationMeasurement": {
+      "command": "pnpm exec tsc -p packages/server/type-fixtures/app-contract/tsconfig.json --extendedDiagnostics --incremental false",
+      "fixture": {
+        "path": "packages/server/type-fixtures/app-contract/positive.ts",
+        "sha256": "998f50789b009d53e5ce7a8ff4d0e5a76650f91c7ad8f984349c7e0537ea7c0a"
+      },
+      "tsconfig": {
+        "path": "packages/server/type-fixtures/app-contract/tsconfig.json",
+        "sha256": "abdfd2f36a50885ac65d148f9af59da06d842507369f120361928e185a20192d"
+      },
+      "typescriptVersion": "6.0.3"
     },
     "variant": "arm-a",
     "runner": {
@@ -33,7 +45,7 @@
       "completionCandidateDigest": "7a3824b477b68558af819b2d70b9af1fb4940c43e814dd1fcbc55420d71b9958",
       "diagnosticMessageCharactersMaximum": 240,
       "diagnosticSpanCharacters": 3,
-      "instantiations": null
+      "instantiations": 112514
     }
   },
   "derivation": {
@@ -55,7 +67,7 @@
     "completionCandidateDigest": "7a3824b477b68558af819b2d70b9af1fb4940c43e814dd1fcbc55420d71b9958",
     "diagnosticMessageCharactersMaximum": 240,
     "diagnosticSpanCharacters": 3,
-    "instantiationsMaximum": null
+    "instantiationsMaximum": 136000
   },
   "measurement": {
     "coldTscRepeats": 12,

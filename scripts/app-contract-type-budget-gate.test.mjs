@@ -5,6 +5,7 @@ import {
   evaluateAppContractTypeBudgets,
   exactRatifiedRunnerMatches,
   loadAppContractTypeBudgetManifest,
+  measureAppContractTypeInstantiations,
   validateAppContractTypeBudgetManifest,
 } from './app-contract-type-budget-gate.mjs';
 
@@ -19,7 +20,7 @@ describe('app-contract TypeScript budget policy', () => {
       declarationBytesMaximum: 17_500,
       diagnosticMessageCharactersMaximum: 240,
       diagnosticSpanCharacters: 3,
-      instantiationsMaximum: null,
+      instantiationsMaximum: 136_000,
       warmCompletionP95Ms: 5,
       warmTscP50Ms: 300,
     });
@@ -47,7 +48,7 @@ describe('app-contract TypeScript budget policy', () => {
     );
 
     const falseRatification = structuredClone(manifest);
-    falseRatification.ratification.instantiations = 'ratified';
+    falseRatification.baseline.measurements.instantiations = null;
     expect(validateAppContractTypeBudgetManifest(falseRatification).join('\n')).toContain(
       'ratified baseline instantiations must be a safe integer',
     );
@@ -72,16 +73,14 @@ describe('app-contract TypeScript budget policy', () => {
       declarationBytes: 17_500,
       diagnosticMessageCharacters: 240,
       diagnosticSpanCharacters: 3,
-      instantiations: 1,
+      instantiations: 136_001,
       warmCompletionP95Ms: 6,
       warmTscP50Ms: 301,
     };
     const nonRatifiedRunner = evaluateAppContractTypeBudgets(manifest, measurement, {
       enforceTimings: false,
     });
-    expect(nonRatifiedRunner.findings).toEqual([
-      'extendedDiagnostics instantiation ceiling is not ratified',
-    ]);
+    expect(nonRatifiedRunner.findings).toEqual(['instantiations 136001 exceeds 136000']);
 
     const exactRunnerVerdict = evaluateAppContractTypeBudgets(manifest, measurement, {
       enforceTimings: true,
@@ -91,7 +90,22 @@ describe('app-contract TypeScript budget policy', () => {
       'warmTscP50Ms 301 exceeds 300',
       'coldCompletionP50Ms 151 exceeds 150',
       'warmCompletionP95Ms 6 exceeds 5',
-      'extendedDiagnostics instantiation ceiling is not ratified',
+      'instantiations 136001 exceeds 136000',
     ]);
+  });
+
+  it('parses one positive extended-diagnostics instantiation count', () => {
+    const spawn = () => ({
+      status: 0,
+      stderr: '',
+      stdout: 'Files: 786\nInstantiations: 112514\nTotal time: 2.16s\n',
+    });
+    expect(measureAppContractTypeInstantiations({ spawn, tscPath: '/fixture/tsc' })).toBe(112_514);
+    expect(() =>
+      measureAppContractTypeInstantiations({
+        spawn: () => ({ status: 0, stderr: '', stdout: 'Files: 786\n' }),
+        tscPath: '/fixture/tsc',
+      }),
+    ).toThrow(/exactly one Instantiations count/u);
   });
 });

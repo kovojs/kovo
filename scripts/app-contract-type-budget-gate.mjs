@@ -1,6 +1,8 @@
 #!/usr/bin/env node
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
@@ -11,6 +13,8 @@ export const DEFAULT_APP_CONTRACT_TYPE_BUDGET_FILE =
   'conformance/app-contract-spike/type-budgets-v1.json';
 
 const TIMING_FIELDS = Object.freeze(['coldTscP50Ms', 'warmTscP50Ms', 'coldCompletionP50Ms']);
+const require = createRequire(import.meta.url);
+const defaultTscPath = require.resolve('typescript/bin/tsc');
 
 export function loadAppContractTypeBudgetManifest(options = {}) {
   const root = options.repoRoot ?? repoRoot();
@@ -39,6 +43,35 @@ export function validateAppContractTypeBudgetManifest(manifest) {
   validateBudgets(manifest, findings);
   validateMeasurement(manifest.measurement, findings);
   return findings;
+}
+
+export function measureAppContractTypeInstantiations(options = {}) {
+  const root = options.repoRoot ?? repoRoot();
+  const tscPath = options.tscPath ?? defaultTscPath;
+  const run = options.spawn ?? spawnSync;
+  const configPath =
+    options.configPath ??
+    path.join(root, 'packages/server/type-fixtures/app-contract/tsconfig.json');
+  const result = run(
+    process.execPath,
+    [tscPath, '-p', configPath, '--extendedDiagnostics', '--incremental', 'false'],
+    { cwd: root, encoding: 'utf8' },
+  );
+  const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
+  if (result.status !== 0) {
+    throw new Error(`App-contract extended-diagnostics fixture failed:\n${output}`);
+  }
+  const matches = [...output.matchAll(/^Instantiations:\s+(\d+)\s*$/gmu)];
+  if (matches.length !== 1) {
+    throw new Error(
+      `App-contract extended-diagnostics fixture must report exactly one Instantiations count; received ${String(matches.length)}.`,
+    );
+  }
+  const instantiations = Number(matches[0]?.[1]);
+  if (!Number.isSafeInteger(instantiations) || instantiations <= 0) {
+    throw new Error('App-contract extended-diagnostics fixture reported an invalid count.');
+  }
+  return instantiations;
 }
 
 export function deriveRatifiedTypeBudgets(manifest) {
@@ -211,6 +244,41 @@ function validateBaseline(value, ratification, findings) {
   ) {
     findings.push('ratified baseline instantiations must be a safe integer');
   }
+  validateInstantiationMeasurement(value.instantiationMeasurement, ratification, findings);
+}
+
+function validateInstantiationMeasurement(value, ratification, findings) {
+  if (!isRecord(value)) {
+    findings.push('baseline.instantiationMeasurement must be an object');
+    return;
+  }
+  const expected = {
+    command:
+      'pnpm exec tsc -p packages/server/type-fixtures/app-contract/tsconfig.json --extendedDiagnostics --incremental false',
+    typescriptVersion: '6.0.3',
+  };
+  for (const [field, expectedValue] of Object.entries(expected)) {
+    if (value[field] !== expectedValue) {
+      findings.push(`baseline.instantiationMeasurement.${field} must equal ${expectedValue}`);
+    }
+  }
+  for (const [label, subject, expectedPath] of [
+    ['fixture', value.fixture, 'packages/server/type-fixtures/app-contract/positive.ts'],
+    ['tsconfig', value.tsconfig, 'packages/server/type-fixtures/app-contract/tsconfig.json'],
+  ]) {
+    if (
+      !isRecord(subject) ||
+      subject.path !== expectedPath ||
+      !/^[a-f0-9]{64}$/u.test(subject.sha256 ?? '')
+    ) {
+      findings.push(
+        `baseline.instantiationMeasurement.${label} must bind ${expectedPath} by SHA-256`,
+      );
+    }
+  }
+  if (ratification?.instantiations !== 'ratified') {
+    findings.push('extendedDiagnostics instantiation ceiling must be ratified');
+  }
 }
 
 function validateDerivation(value, findings) {
@@ -293,11 +361,36 @@ async function main() {
   if (criteriaDigest !== manifest.baseline.criteriaSubject.sha256) {
     throw new Error('D1 v6 preregistered criteria digest differs from the ratification subject.');
   }
+  const typescriptVersion = JSON.parse(
+    readFileSync(require.resolve('typescript/package.json'), 'utf8'),
+  ).version;
+  if (typescriptVersion !== manifest.baseline.instantiationMeasurement.typescriptVersion) {
+    throw new Error(
+      `App-contract instantiation baseline requires TypeScript ${manifest.baseline.instantiationMeasurement.typescriptVersion}; received ${String(typescriptVersion)}.`,
+    );
+  }
+  for (const subject of [
+    manifest.baseline.instantiationMeasurement.fixture,
+    manifest.baseline.instantiationMeasurement.tsconfig,
+  ]) {
+    const digest = createHash('sha256')
+      .update(readFileSync(path.join(repoRoot(), subject.path)))
+      .digest('hex');
+    if (digest !== subject.sha256) {
+      throw new Error(`App-contract type-budget subject drifted: ${subject.path}.`);
+    }
+  }
+  const instantiations = measureAppContractTypeInstantiations();
+  if (instantiations > manifest.budgets.instantiationsMaximum) {
+    throw new Error(
+      `App-contract type instantiations ${String(instantiations)} exceed ${String(manifest.budgets.instantiationsMaximum)}.`,
+    );
+  }
   process.stdout.write(
     [
       `app-contract-type-budget/${manifest.schema.split('/').at(-1)}`,
       `timings=${manifest.ratification.timings}`,
-      `instantiations=${manifest.ratification.instantiations}`,
+      `instantiations=${String(instantiations)}/${String(manifest.budgets.instantiationsMaximum)}`,
       `cold-tsc-p50<=${manifest.budgets.coldTscP50Ms}ms`,
       `warm-tsc-p50<=${manifest.budgets.warmTscP50Ms}ms`,
       `cold-completion-p50<=${manifest.budgets.coldCompletionP50Ms}ms`,
