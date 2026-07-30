@@ -14,7 +14,7 @@ import { frameworkExportPosturePackages } from './security/framework-public-runt
 import { canonicalFrameworkImplementationDigest } from './security/framework-implementation-digest.js';
 import { scanCapabilityClosureModules } from './scan/capability-closure.js';
 
-const FRAMEWORK_VERSION = '0.2.0';
+const FRAMEWORK_VERSION = '0.3.0';
 
 function resolved(
   specifier: string,

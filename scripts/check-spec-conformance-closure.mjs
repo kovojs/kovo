@@ -53,7 +53,7 @@ const transferredSqlSafetyDiagnosticRegistrarDoor =
 const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#diagnosticAt`;
 const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
 const expectedDiagnosticEmissionSiteDigest =
-  '77299cd2302fba4d1074d5e25187d45c93aacd5e4673e4849355c5f6da2da7c1';
+  'e4a3a478ce260c0f18f1d8d53c947f2aecbfcdffdf7e9cc62e8ac30f62962309';
 const expectedRootDiagnosticDoorDigest =
   '1660c7877e7a533c282cf38c291a10181bc2e7484d76f479f1d1f41cd51dac77';
 const expectedRegisteredDiagnosticGuardDigest =
@@ -85,7 +85,7 @@ const expectedDiagnosticFactorySinkDigest =
 const expectedDiagnosticEvidenceWitnessDigest =
   '23014067df10912624d8419128d1362787bb212e84ef0aac772d78ad26156aa3';
 const expectedDiagnosticActualLayerReviewDigest =
-  '23a8ba5c8b976acc45a20f9d3cef5e0db9c7ecea137eb55c5c072c4064b46273';
+  'bab592c6e53f5a8b78b2f076b531a5600fe75ef4d8af1c1f39e3795fbf0a9770';
 const expectedBlockingStaticExportCollectionDigest =
   '3541644c641aec62abd0743093c653abd953e634f6042b941877b699666c4fdd';
 const expectedCompilerValidatorPipelineDigest =
@@ -102,7 +102,7 @@ const expectedCoreBuildDistCommand =
 // JavaScript flow interpreter (plans/10x-better-security.md, layered-closure decision).
 const reviewedUnresolvedDynamicModuleAcquisitions = new Set([
   'packages/browser/src/client-installer.ts#2c7b7a1aae697bd8d488d7459007da844cddb796d21fb790fe0fffb74ab46bcb#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
-  'packages/browser/src/inline-loader.ts#20f1d4a5dfc82c788169bbbf007314ede0a76e284689ff210367268bf10bcd01#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
+  'packages/browser/src/inline-loader.ts#3bd68914ebc31433aa89b5c79e96e303985a5986ef2dc3645f6e66084d5992c1#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
   'packages/cli/src/commands/db.ts#71f2e25eedf60743b28fb20ffadac69b9a2d9f342be7b5361e2133f0830fbfdf#88ff0d5b98c41aa906dd00878fccf940791c27dc1e087908d6efa85c9d56af3f',
   'packages/compiler/src/security-analyzer-soundness-oracle.ts#b20cbdba721c81ed1668a40d1f0d0d4ad96d7304e3483a8669fa4c282e07432c#4597d4868f6caa7d49aa7fd626313ad01af41164f801c7ee52a9395287151099',
   'packages/compiler/src/security-analyzer-soundness-oracle.ts#b20cbdba721c81ed1668a40d1f0d0d4ad96d7304e3483a8669fa4c282e07432c#7c8fe398cd82d5ea80560281e00f6154b09b15615233da0a8b56ac03f861e51b',
@@ -128,7 +128,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ['packages/cli/src/bin.ts', 'c25df08ae63082fc227c0c8cd6e4c71cf68e44a05d238a5890cb4f17d7fcd07b'],
   [
     'packages/cli/src/commands/build-export.ts',
-    '30bc886c53cb2a1600ac0cca3191965a3aa6c2ccbbfe34b71777657fb59c7ea4',
+    '7031f99d5127f75f65a23a054a339354940b25c98efe446081a21afd0add098e',
   ],
   [
     'packages/cli/src/commands/build-static-trust-source-hook.mjs',
@@ -172,7 +172,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/drizzle/src/trust-escapes-static.ts',
-    '2383192ada935a727959f0c7872498ddf674cf30fa671f509927bb9384428fbb',
+    '6e8f9ae558a8434a42a1241e9b6016b39b7a2478c9bf4591036bd04cb6dfc8ae',
   ],
   [
     'packages/icons/scripts/icon-plan.mjs',
