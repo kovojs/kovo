@@ -27,8 +27,12 @@ export const diagnosticEnvelopeVersion = 'kovo-diagnostic/v1';
 export const docsResultVersion = 'kovo-docs/v1';
 
 const SOURCE_PATH = 'src/queries.ts';
-const ACCESS_LINE = '  access: [appAuthed],\n';
-const QUERY_OPEN = 'export const contactsQuery = query({\n';
+const ACCESS_LINE = '  access: [app.authenticated],\n';
+const QUERY_OPEN = 'export const contactsQuery = app.query({\n';
+const EDITED_QUERY_OPEN =
+  'export const contactsQuery = app.query<typeof app.authenticated, ContactListResult>({\n';
+const TYPECHECK_EXPECTATION_LINE =
+  '// @ts-expect-error -- compiler proof must independently reject missing access\n';
 const COMMAND_TIMEOUT_MS = 240_000;
 const COMMAND_MAX_BUFFER = 128 * 1024 * 1024;
 const DIAGNOSTIC_CATEGORIES = new Set(['build', 'config', 'proof', 'runtime', 'usage']);
@@ -308,9 +312,26 @@ export function parseDiagnosticObservation(observation, { expectedExitCode, sour
     throw new Error('Diagnostic command emitted a non-JSON side-channel on the inactive stream.');
   }
   const envelope = parseJsonObject(output, 'diagnostic command output');
-  assertExactKeys(envelope, ['diagnostics', 'version'], 'diagnostic envelope');
+  assertExactKeys(envelope, ['diagnostics', 'result', 'version'], 'diagnostic envelope');
   if (envelope.version !== diagnosticEnvelopeVersion || !Array.isArray(envelope.diagnostics)) {
     throw new Error(`Diagnostic command must emit ${diagnosticEnvelopeVersion}.`);
+  }
+  if (!isRecord(envelope.result)) {
+    throw new Error('Diagnostic command result must be an object.');
+  }
+  assertExactKeys(
+    envelope.result,
+    ['command', 'exitCode', 'protocol', 'text'],
+    'diagnostic command result',
+  );
+  if (
+    envelope.result.command !== 'check' ||
+    envelope.result.exitCode !== expectedExitCode ||
+    envelope.result.protocol !== 'kovo-check/v1' ||
+    typeof envelope.result.text !== 'string' ||
+    !envelope.result.text.startsWith('kovo-check/v1\n')
+  ) {
+    throw new Error('Diagnostic command result contradicts the check invocation.');
   }
   const diagnostics = envelope.diagnostics.map((record, index) =>
     validateDiagnosticRecord(record, `diagnostics[${index}]`, sourceRoot),
@@ -393,12 +414,22 @@ export function validateInstalledDocsObservation(observation, { appRoot }) {
 
 export function introduceMissingAccess(source) {
   if (typeof source !== 'string') throw new TypeError('Offline agent source must be a string.');
-  if (occurrences(source, ACCESS_LINE) !== 1 || occurrences(source, QUERY_OPEN) !== 1) {
+  if (
+    occurrences(source, ACCESS_LINE) !== 1 ||
+    occurrences(source, QUERY_OPEN) !== 1 ||
+    source.includes(EDITED_QUERY_OPEN) ||
+    source.includes(TYPECHECK_EXPECTATION_LINE)
+  ) {
     throw new Error(
       'Packed starter query fixture does not contain one expected access declaration.',
     );
   }
-  return source.replace(ACCESS_LINE, '');
+  // Removing `access` is intentionally a type error. Keep the query's original value type explicit
+  // so the one reviewed expectation suppresses only that call-site error; otherwise downstream
+  // optimism inference also fails and masks the independent KV436 compiler proof.
+  return source
+    .replace(ACCESS_LINE, '')
+    .replace(QUERY_OPEN, `${TYPECHECK_EXPECTATION_LINE}${EDITED_QUERY_OPEN}`);
 }
 
 /**
@@ -431,14 +462,20 @@ export function repairMissingAccess({ diagnostic, docs, source }) {
   }
   if (
     typeof source !== 'string' ||
-    !source.includes("import { appAuthed } from './auth.js';") ||
+    !source.includes("import { app } from './kovo.js';") ||
     !source.includes('KV436 access decision is the session-presence guard') ||
-    occurrences(source, QUERY_OPEN) !== 1 ||
+    !source.includes('export interface ContactListResult') ||
+    occurrences(source, EDITED_QUERY_OPEN) !== 1 ||
+    source.includes(QUERY_OPEN) ||
+    occurrences(source, TYPECHECK_EXPECTATION_LINE) !== 1 ||
     source.includes(ACCESS_LINE)
   ) {
     throw new Error('Edited source lacks the scaffold-owned guard context for a safe repair.');
   }
-  return source.replace(QUERY_OPEN, `${QUERY_OPEN}${ACCESS_LINE}`);
+  return source.replace(
+    `${TYPECHECK_EXPECTATION_LINE}${EDITED_QUERY_OPEN}`,
+    `${QUERY_OPEN}${ACCESS_LINE}`,
+  );
 }
 
 export function rewriteScaffoldDependenciesToPackedTarballs(appRoot, packedPackages) {

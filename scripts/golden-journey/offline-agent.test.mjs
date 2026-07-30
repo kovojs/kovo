@@ -73,17 +73,25 @@ describe('offline agent diagnostic boundary', () => {
       ),
     ).toThrow(/contain exactly/);
     expect(() =>
-      parseDiagnosticObservation(observation({ status: 0, stdout: diagnosticJson([valid]) }), {
+      parseDiagnosticObservation(observation({ status: 0, stdout: diagnosticJson([valid], 0) }), {
         expectedExitCode: 0,
         sourceRoot,
       }),
     ).toThrow(/empty diagnostics array/);
     expect(() =>
-      parseDiagnosticObservation(observation({ status: 1, stderr: diagnosticJson([]) }), {
+      parseDiagnosticObservation(observation({ status: 1, stderr: diagnosticJson([], 1) }), {
         expectedExitCode: 1,
         sourceRoot,
       }),
     ).toThrow(/at least one diagnostic/);
+    const contradictoryResult = JSON.parse(diagnosticJson([valid]));
+    contradictoryResult.result.command = 'build';
+    expect(() =>
+      parseDiagnosticObservation(
+        observation({ status: 1, stderr: `${JSON.stringify(contradictoryResult)}\n` }),
+        { expectedExitCode: 1, sourceRoot },
+      ),
+    ).toThrow(/contradicts the check invocation/);
     expect(() =>
       parseDiagnosticObservation(observation({ status: 1, stderr: diagnosticJson([valid]) }), {
         expectedExitCode: 0,
@@ -166,11 +174,13 @@ describe('offline agent local-doc boundary', () => {
 
 describe('offline agent edit and repair', () => {
   const original = [
-    "import { appAuthed } from './auth.js';",
+    "import { app } from './kovo.js';",
+    '',
+    'export interface ContactListResult { items: never[]; }',
     '',
     '// Its KV436 access decision is the session-presence guard.',
-    'export const contactsQuery = query({',
-    '  access: [appAuthed],',
+    'export const contactsQuery = app.query({',
+    '  access: [app.authenticated],',
     '  async load() { return { items: [] }; },',
     '});',
     '',
@@ -185,6 +195,10 @@ describe('offline agent edit and repair', () => {
       },
     ];
 
+    expect(edited).toContain('app.query<typeof app.authenticated, ContactListResult>({');
+    expect(edited).toContain(
+      '@ts-expect-error -- compiler proof must independently reject missing access',
+    );
     expect(
       repairMissingAccess({
         diagnostic: diagnosticRecord(),
@@ -192,6 +206,27 @@ describe('offline agent edit and repair', () => {
         source: edited,
       }),
     ).toBe(original);
+  });
+
+  it('stays bound to the current create-kovo query template', () => {
+    const starter = readFileSync(
+      new URL('../../packages/create-kovo/templates/src/queries.ts', import.meta.url),
+      'utf8',
+    );
+    const edited = introduceMissingAccess(starter);
+
+    expect(
+      repairMissingAccess({
+        diagnostic: diagnosticRecord(),
+        docs: [
+          {
+            excerpt:
+              'KV436 requires an explicit access decision. Use access: [guard] or publicAccess(...).',
+          },
+        ],
+        source: edited,
+      }),
+    ).toBe(starter);
   });
 
   it('does not repair from a wrong code, unauthenticated prose, or ambiguous source shape', () => {
@@ -220,7 +255,7 @@ describe('offline agent edit and repair', () => {
       repairMissingAccess({
         diagnostic: diagnosticRecord(),
         docs,
-        source: `${edited}\nexport const contactsQuery = query({\n`,
+        source: `${edited}\nexport const contactsQuery = app.query({\n`,
       }),
     ).toThrow(/guard context/);
   });
@@ -231,11 +266,13 @@ describe('offline agent process and package posture', () => {
     const parent = temporaryRoot('journey');
     const packages = packedPackageFixtures(parent);
     const source = [
-      "import { appAuthed } from './auth.js';",
+      "import { app } from './kovo.js';",
+      '',
+      'export interface ContactListResult { items: never[]; }',
       '',
       '// Its KV436 access decision is the session-presence guard.',
-      'export const contactsQuery = query({',
-      '  access: [appAuthed],',
+      'export const contactsQuery = app.query({',
+      '  access: [app.authenticated],',
       '  async load() { return { items: [] }; },',
       '});',
       '',
@@ -498,8 +535,17 @@ function diagnosticRecord(overrides = {}) {
   };
 }
 
-function diagnosticJson(diagnostics) {
-  return `${JSON.stringify({ diagnostics, version: diagnosticEnvelopeVersion })}\n`;
+function diagnosticJson(diagnostics, exitCode = diagnostics.length === 0 ? 0 : 1) {
+  return `${JSON.stringify({
+    diagnostics,
+    result: {
+      command: 'check',
+      exitCode,
+      protocol: 'kovo-check/v1',
+      text: 'kovo-check/v1\n',
+    },
+    version: diagnosticEnvelopeVersion,
+  })}\n`;
 }
 
 function observation({ status, stderr = '', stdout = '' }) {
