@@ -153,8 +153,8 @@
       "sha512": "sha512-w4rYH4YbzDl2NJ8skmeN5KDEfBOGIPC98g9cL3QjpvVbtmFjYICvB4CONL/rBECluA4crZnrjxvPHga7FuV3zw=="
     },
     {
-      "path": "@kovojs/compiler/dist/app-contract-project-CEn0Fbj0.mjs",
-      "sha512": "sha512-Q38CpvRX+o0L09Ir/loi5y7qR4xg0sJYLyf/U4uItGZjeZ6GiCD3zrilSURXFTaQzAugmPWye+UAL4s6oqiF7g=="
+      "path": "@kovojs/compiler/dist/app-contract-project-D-vX9I7k.mjs",
+      "sha512": "sha512-N7vUHLHiOjGaISqCVBqbx8Y+6JV157LwTuh1HQf1kRXWEOkfh0jjYyd9kYjQjoPs42blyig2+hiXaPfag0sxkw=="
     },
     {
       "path": "@kovojs/compiler/dist/app-graph-CChVPhv9.mjs",
@@ -178,11 +178,11 @@
     },
     {
       "path": "@kovojs/compiler/dist/index.mjs",
-      "sha512": "sha512-dl2W1jlzrsdk9LjAlB5/YqvpJGlL6gAcv7Vdh4zr2EPVvCjfHpXgRP3T3rbaJZXyCbL5OFVJd4/DlTmpRhNn9Q=="
+      "sha512": "sha512-IfwPxJcAbMpRuhQTywrW7diNBB1YkfPYueC4hTQ9+EN91tXXHxL8UIU/8kAVpbmCAT4pFxoi2yaoChkSXaAS8g=="
     },
     {
       "path": "@kovojs/compiler/dist/internal.mjs",
-      "sha512": "sha512-UbfWQFjr7xu7vdUCApIoXjwjCWLUmQwz+oHiLeQELPW1vmhXN4PJ+nhot9rEfUyC4PE1Eey0k6BdwpuOW4wiCg=="
+      "sha512": "sha512-tE8l0HNbdRlkB9sK8V9YHp9Pwe8FtbdPYYqeptoUPDRdYoLdQMgt7T2tyaOoZEoGLepHdU65TxgqTRfXj0Rl5A=="
     },
     {
       "path": "@kovojs/compiler/dist/internal/graph.mjs",
@@ -190,7 +190,7 @@
     },
     {
       "path": "@kovojs/compiler/dist/package-styles.mjs",
-      "sha512": "sha512-YWCyP/khPvKJIEd3lOROTXAKJDPst5qaOdmx/Yt5OEY3vYkKHtvIvxkQgwtyS2sZTAU4vbD4NGpzscytl0LxEg=="
+      "sha512": "sha512-9tLSwgIpWFhkt0/4o/RnL4NCTUarKMObzP9q652vCpR/W6AUooR5oIqRqqKaFX2hh2S6HfyFueti5NEQXe67vw=="
     },
     {
       "path": "@kovojs/compiler/dist/security-bootstrap.mjs",
@@ -201,12 +201,12 @@
       "sha512": "sha512-BFX10CjIFBUkRVPDwsxYUYoJp7ZiPW9D2/APEW/Jv/a0S7RKh0lOw7Fdc0TR6Jm+xguzvQCIOVeReP13crHhFw=="
     },
     {
-      "path": "@kovojs/compiler/dist/vite-D3Zn5aIw.mjs",
-      "sha512": "sha512-KMs1oii07WWzbaZXpZKpP487nu55vwXf/I4fOriNZ7PQhP46dplmlSb6ncVtI/OH3yrZLcxZNm00MljzoRy4BA=="
+      "path": "@kovojs/compiler/dist/vite-Dv7EjIZC.mjs",
+      "sha512": "sha512-ivWovz+rheLlyr5TJSdfCgYnXJ7Bp5zu8vANbB3lBOlTHrtcDMjtZXyr4w262sDH6GcBH2VSVYN/3HkDirWTbA=="
     },
     {
       "path": "@kovojs/compiler/dist/vite-config.mjs",
-      "sha512": "sha512-Gc7w2IyLqEmTuF7LrSNuCwy7Jfyo0ytVISwBmO9oTeMyxxzwogEWGmcInycQRQEPRNfFGSN9F46u8SLLkrd1Bw=="
+      "sha512": "sha512-Dmli+gZ4euOZGP7vLTnP3X93Zj2+fNLLW3gI+8DlgIxtHOJ8G4/0AqmUSimraRunIZ8lewxgrgl136X7Xj7q4w=="
     },
     {
       "path": "@kovojs/core/dist/audit-text-CmsLNB8H.mjs",
@@ -590,7 +590,7 @@
     },
     {
       "path": "@kovojs/server/dist/index.mjs",
-      "sha512": "sha512-gg8aTWrH4i2p2YQhkiLIpfczhT0JW7WA7Yi/B2Gk/UkM+AG9wZZj7Azeg5P59anchAzVzh4rQOZIFcghquF1YA=="
+      "sha512": "sha512-rQUKShQLcEU8HgriFiRx1p7IxuhGB7DRife2BrzBere6th+kF12NfAcLh5ErZUfUt5cCzIZEOEEJH7uyE4taZA=="
     },
     {
       "path": "@kovojs/server/dist/internal/app-shell-vite.mjs",
@@ -2026,11 +2026,11 @@
       "reason": "contains computed dynamic import; runtime-selected dependency loads require §4.6 lexical authority coverage"
     },
     {
-      "module": "@kovojs/compiler/dist/app-contract-project-CEn0Fbj0.mjs",
+      "module": "@kovojs/compiler/dist/app-contract-project-D-vX9I7k.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/app-contract-project-CEn0Fbj0.mjs",
+      "module": "@kovojs/compiler/dist/app-contract-project-D-vX9I7k.mjs",
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
@@ -2098,11 +2098,11 @@
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/vite-D3Zn5aIw.mjs",
+      "module": "@kovojs/compiler/dist/vite-Dv7EjIZC.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/vite-D3Zn5aIw.mjs",
+      "module": "@kovojs/compiler/dist/vite-Dv7EjIZC.mjs",
       "reason": "imports external module \"node:url\" outside the nine-kind lexical capability domain"
     },
     {

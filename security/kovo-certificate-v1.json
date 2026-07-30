@@ -38,7 +38,7 @@
     "@kovojs/browser/dist/query-refetch-C3RVoCVq.mjs",
     "@kovojs/browser/dist/security-output-Dhq3kcsB.mjs",
     "@kovojs/browser/dist/trusted-types-DC9Dy6Pd.mjs",
-    "@kovojs/compiler/dist/app-contract-project-CEn0Fbj0.mjs",
+    "@kovojs/compiler/dist/app-contract-project-D-vX9I7k.mjs",
     "@kovojs/compiler/dist/app-graph-CChVPhv9.mjs",
     "@kovojs/compiler/dist/compile-CLrz_FKj.mjs",
     "@kovojs/compiler/dist/compile.mjs",
@@ -50,7 +50,7 @@
     "@kovojs/compiler/dist/package-styles.mjs",
     "@kovojs/compiler/dist/security-bootstrap.mjs",
     "@kovojs/compiler/dist/source-filesystem.mjs",
-    "@kovojs/compiler/dist/vite-D3Zn5aIw.mjs",
+    "@kovojs/compiler/dist/vite-Dv7EjIZC.mjs",
     "@kovojs/compiler/dist/vite-config.mjs",
     "@kovojs/core/dist/audit-text-CmsLNB8H.mjs",
     "@kovojs/core/dist/diagnostics-C41SD9e0.mjs",
@@ -389,7 +389,7 @@
     "@kovojs/browser/dist/query-refetch-C3RVoCVq.mjs": [],
     "@kovojs/browser/dist/security-output-Dhq3kcsB.mjs": [],
     "@kovojs/browser/dist/trusted-types-DC9Dy6Pd.mjs": [],
-    "@kovojs/compiler/dist/app-contract-project-CEn0Fbj0.mjs": [
+    "@kovojs/compiler/dist/app-contract-project-D-vX9I7k.mjs": [
       "crypto-acquisition",
       "digest",
       "dynamic-loader",
@@ -454,7 +454,7 @@
       "crypto-acquisition",
       "filesystem"
     ],
-    "@kovojs/compiler/dist/vite-D3Zn5aIw.mjs": [
+    "@kovojs/compiler/dist/vite-Dv7EjIZC.mjs": [
       "crypto-acquisition",
       "digest",
       "dynamic-loader",
@@ -2769,27 +2769,27 @@
       "@kovojs/core/dist/internal/sink-policy.mjs"
     ],
     [
-      "@kovojs/compiler/dist/app-contract-project-CEn0Fbj0.mjs",
+      "@kovojs/compiler/dist/app-contract-project-D-vX9I7k.mjs",
       "@kovojs/compiler/dist/app-graph-CChVPhv9.mjs"
     ],
     [
-      "@kovojs/compiler/dist/app-contract-project-CEn0Fbj0.mjs",
+      "@kovojs/compiler/dist/app-contract-project-D-vX9I7k.mjs",
       "@kovojs/compiler/dist/compile-CLrz_FKj.mjs"
     ],
     [
-      "@kovojs/compiler/dist/app-contract-project-CEn0Fbj0.mjs",
+      "@kovojs/compiler/dist/app-contract-project-D-vX9I7k.mjs",
       "@kovojs/compiler/dist/compiler-security-intrinsics-C3ijR_YZ.mjs"
     ],
     [
-      "@kovojs/compiler/dist/app-contract-project-CEn0Fbj0.mjs",
+      "@kovojs/compiler/dist/app-contract-project-D-vX9I7k.mjs",
       "@kovojs/compiler/dist/graph.mjs"
     ],
     [
-      "@kovojs/compiler/dist/app-contract-project-CEn0Fbj0.mjs",
+      "@kovojs/compiler/dist/app-contract-project-D-vX9I7k.mjs",
       "@kovojs/core/dist/internal/diagnostics.mjs"
     ],
     [
-      "@kovojs/compiler/dist/app-contract-project-CEn0Fbj0.mjs",
+      "@kovojs/compiler/dist/app-contract-project-D-vX9I7k.mjs",
       "@kovojs/core/dist/internal/framework-identity.mjs"
     ],
     [
@@ -2922,7 +2922,7 @@
     ],
     [
       "@kovojs/compiler/dist/index.mjs",
-      "@kovojs/compiler/dist/app-contract-project-CEn0Fbj0.mjs"
+      "@kovojs/compiler/dist/app-contract-project-D-vX9I7k.mjs"
     ],
     [
       "@kovojs/compiler/dist/index.mjs",
@@ -2946,11 +2946,11 @@
     ],
     [
       "@kovojs/compiler/dist/index.mjs",
-      "@kovojs/compiler/dist/vite-D3Zn5aIw.mjs"
+      "@kovojs/compiler/dist/vite-Dv7EjIZC.mjs"
     ],
     [
       "@kovojs/compiler/dist/internal.mjs",
-      "@kovojs/compiler/dist/app-contract-project-CEn0Fbj0.mjs"
+      "@kovojs/compiler/dist/app-contract-project-D-vX9I7k.mjs"
     ],
     [
       "@kovojs/compiler/dist/internal.mjs",
@@ -2970,7 +2970,7 @@
     ],
     [
       "@kovojs/compiler/dist/internal.mjs",
-      "@kovojs/compiler/dist/vite-D3Zn5aIw.mjs"
+      "@kovojs/compiler/dist/vite-Dv7EjIZC.mjs"
     ],
     [
       "@kovojs/compiler/dist/internal.mjs",
@@ -2994,7 +2994,7 @@
     ],
     [
       "@kovojs/compiler/dist/package-styles.mjs",
-      "@kovojs/compiler/dist/app-contract-project-CEn0Fbj0.mjs"
+      "@kovojs/compiler/dist/app-contract-project-D-vX9I7k.mjs"
     ],
     [
       "@kovojs/compiler/dist/package-styles.mjs",
@@ -3033,31 +3033,31 @@
       "@kovojs/compiler/dist/compiler-security-intrinsics-C3ijR_YZ.mjs"
     ],
     [
-      "@kovojs/compiler/dist/vite-D3Zn5aIw.mjs",
-      "@kovojs/compiler/dist/app-contract-project-CEn0Fbj0.mjs"
+      "@kovojs/compiler/dist/vite-Dv7EjIZC.mjs",
+      "@kovojs/compiler/dist/app-contract-project-D-vX9I7k.mjs"
     ],
     [
-      "@kovojs/compiler/dist/vite-D3Zn5aIw.mjs",
+      "@kovojs/compiler/dist/vite-Dv7EjIZC.mjs",
       "@kovojs/compiler/dist/app-graph-CChVPhv9.mjs"
     ],
     [
-      "@kovojs/compiler/dist/vite-D3Zn5aIw.mjs",
+      "@kovojs/compiler/dist/vite-Dv7EjIZC.mjs",
       "@kovojs/compiler/dist/compile-CLrz_FKj.mjs"
     ],
     [
-      "@kovojs/compiler/dist/vite-D3Zn5aIw.mjs",
+      "@kovojs/compiler/dist/vite-Dv7EjIZC.mjs",
       "@kovojs/compiler/dist/compiler-security-intrinsics-C3ijR_YZ.mjs"
     ],
     [
-      "@kovojs/compiler/dist/vite-D3Zn5aIw.mjs",
+      "@kovojs/compiler/dist/vite-Dv7EjIZC.mjs",
       "@kovojs/compiler/dist/source-filesystem.mjs"
     ],
     [
-      "@kovojs/compiler/dist/vite-D3Zn5aIw.mjs",
+      "@kovojs/compiler/dist/vite-Dv7EjIZC.mjs",
       "@kovojs/core/dist/internal/client-module-url.mjs"
     ],
     [
-      "@kovojs/compiler/dist/vite-D3Zn5aIw.mjs",
+      "@kovojs/compiler/dist/vite-Dv7EjIZC.mjs",
       "@kovojs/core/dist/internal/diagnostics.mjs"
     ],
     [
@@ -6731,11 +6731,11 @@
       "reason": "contains computed dynamic import; runtime-selected dependency loads require §4.6 lexical authority coverage"
     },
     {
-      "module": "@kovojs/compiler/dist/app-contract-project-CEn0Fbj0.mjs",
+      "module": "@kovojs/compiler/dist/app-contract-project-D-vX9I7k.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/app-contract-project-CEn0Fbj0.mjs",
+      "module": "@kovojs/compiler/dist/app-contract-project-D-vX9I7k.mjs",
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
@@ -6803,11 +6803,11 @@
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/vite-D3Zn5aIw.mjs",
+      "module": "@kovojs/compiler/dist/vite-Dv7EjIZC.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/vite-D3Zn5aIw.mjs",
+      "module": "@kovojs/compiler/dist/vite-Dv7EjIZC.mjs",
       "reason": "imports external module \"node:url\" outside the nine-kind lexical capability domain"
     },
     {
@@ -7047,7 +7047,7 @@
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     }
   ],
-  "policySha512": "sha512-/Xm0EdCQzBVyiQgW/Vm1fz1TTRP4kqJqo/SqGYRKMfhYy14Q+Y0wIaOX6/CqApckUEhjHuZtE5CBr6CsUozDug==",
+  "policySha512": "sha512-SCTIh9w8yisWNMRosNR/YMgNXfPub4e1XMT/aBGc/9zuI145NCH8lLMHyWJQqIEFzlpi/AM2AlA6dgl1IXKsPw==",
   "roots": [
     {
       "module": "@kovojs/better-auth/dist/index.mjs",
