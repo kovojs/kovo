@@ -56,6 +56,14 @@ describe('generated-artifacts policy manifest', () => {
         categories: [C.frameworkGeneratedSource, C.mustMatchGenerator],
       },
       {
+        path: 'packages/browser/src/inline-loader.ts',
+        categories: [C.frameworkGeneratedSource, C.mustMatchGenerator],
+      },
+      {
+        path: 'packages/browser/src/inline-loader-runtime.ts',
+        categories: [C.frameworkGeneratedSource, C.mustMatchGenerator],
+      },
+      {
         path: 'packages/compiler/src/security/framework-public-runtime-export-posture.generated.ts',
         categories: [C.frameworkGeneratedSource, C.mustMatchGenerator],
       },
@@ -132,6 +140,18 @@ describe('generated-artifacts policy manifest', () => {
     expect(
       generatedArtifactGeneratorCheckCommand(GENERATED_ARTIFACT_GENERATORS.componentCatalog),
     ).toEqual(['node', 'scripts/build-component-catalog.mjs']);
+
+    expect(
+      generatedArtifactPoliciesForGenerator(GENERATED_ARTIFACT_GENERATORS.browserInlineLoader).map(
+        (entry) => entry.id,
+      ),
+    ).toEqual([
+      'browser-inline-loader-generated-source',
+      'browser-inline-loader-generated-runtime',
+    ]);
+    expect(
+      generatedArtifactGeneratorCheckCommand(GENERATED_ARTIFACT_GENERATORS.browserInlineLoader),
+    ).toEqual(['pnpm', '--filter', '@kovojs/browser', 'run', 'check:inline-loader']);
 
     expect(
       generatedArtifactPoliciesForGenerator(

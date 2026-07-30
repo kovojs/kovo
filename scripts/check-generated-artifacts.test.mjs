@@ -20,6 +20,14 @@ describe('committed generated artifact freshness gate', () => {
     ).toBe(0);
     expect(commands).toHaveLength(committedGeneratedArtifactGenerators().length);
     expect(committedGeneratedArtifactGenerators()).toContain('cli-semantic-command-request');
+    expect(committedGeneratedArtifactGenerators()).toContain('browser-inline-loader');
+    expect(commands).toContainEqual([
+      'pnpm',
+      '--filter',
+      '@kovojs/browser',
+      'run',
+      'check:inline-loader',
+    ]);
   });
 
   it('fails when any registered generator check fails', () => {

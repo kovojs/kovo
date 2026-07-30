@@ -10,6 +10,7 @@ export const GENERATED_ARTIFACT_CATEGORIES = Object.freeze({
 
 export const GENERATED_ARTIFACT_GENERATORS = Object.freeze({
   browserDeferredAppRuntime: 'browser-deferred-app-runtime',
+  browserInlineLoader: 'browser-inline-loader',
   cliSemanticCommandRequest: 'cli-semantic-command-request',
   diagnosticRegistry: 'diagnostic-registry',
   frameworkExportPosture: 'framework-export-posture',
@@ -20,6 +21,40 @@ export const GENERATED_ARTIFACT_GENERATORS = Object.freeze({
 });
 
 export const generatedArtifactInventory = Object.freeze([
+  {
+    id: 'browser-inline-loader-generated-source',
+    categories: Object.freeze([
+      GENERATED_ARTIFACT_CATEGORIES.frameworkGeneratedSource,
+      GENERATED_ARTIFACT_CATEGORIES.mustMatchGenerator,
+    ]),
+    generatorId: GENERATED_ARTIFACT_GENERATORS.browserInlineLoader,
+    generatorCheckCommand: Object.freeze([
+      'pnpm',
+      '--filter',
+      '@kovojs/browser',
+      'run',
+      'check:inline-loader',
+    ]),
+    pathPatterns: Object.freeze([/^packages\/browser\/src\/inline-loader\.ts$/]),
+    spec: 'SPEC.md §4.4/§5.2 generated inline bootstrap source',
+  },
+  {
+    id: 'browser-inline-loader-generated-runtime',
+    categories: Object.freeze([
+      GENERATED_ARTIFACT_CATEGORIES.frameworkGeneratedSource,
+      GENERATED_ARTIFACT_CATEGORIES.mustMatchGenerator,
+    ]),
+    generatorId: GENERATED_ARTIFACT_GENERATORS.browserInlineLoader,
+    generatorCheckCommand: Object.freeze([
+      'pnpm',
+      '--filter',
+      '@kovojs/browser',
+      'run',
+      'check:inline-loader',
+    ]),
+    pathPatterns: Object.freeze([/^packages\/browser\/src\/inline-loader-runtime\.ts$/]),
+    spec: 'SPEC.md §4.4/§5.2 generated inline runtime installer',
+  },
   {
     id: 'browser-deferred-app-runtime-generated-source',
     categories: Object.freeze([

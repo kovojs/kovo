@@ -129,4 +129,18 @@ describe('inline JavaScript minifier', () => {
     expect(minified(undefined)).toBe(readable(undefined));
     expect(minifiedSource).not.toContain('ASI and comments');
   });
+
+  it('emits identical installer bytes from LF and CRLF source checkouts', () => {
+    // SPEC.md §4.4/§5.2: checked-in generated loader bytes must not depend on the
+    // host checkout's line-ending convention.
+    const lfSource = [
+      'function lineEndingParity(input) {',
+      '  const values = [input, "ready"];',
+      '  return values.join(":");',
+      '}',
+    ].join('\n');
+    const crlfSource = lfSource.replaceAll('\n', '\r\n');
+
+    expect(minifyInlineJavaScriptSource(crlfSource)).toBe(minifyInlineJavaScriptSource(lfSource));
+  });
 });
