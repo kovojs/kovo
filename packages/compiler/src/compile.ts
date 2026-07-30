@@ -366,6 +366,7 @@ interface LowerComponentPhaseResult {
 }
 
 interface ValidateComponentPhaseResult {
+  readonly authoredSourceAnchors: AuthoredSourceAnchorIndex;
   readonly clientCaptureAnalysis: ClientCaptureAnalysis;
   readonly clockUpdatePlans: readonly ClockUpdatePlanFact[];
   readonly handlers: readonly HandlerLowering[];
@@ -433,6 +434,7 @@ function authoredComponentSourceAnchor(
 }
 
 interface ComponentFeedbackExplainInput {
+  readonly authoredSourceAnchors: AuthoredSourceAnchorIndex;
   readonly clientHref: string;
   readonly component: ComponentModel;
   readonly fileName: string;
@@ -586,11 +588,7 @@ function componentDeriveExplainFacts(
       continue;
     }
     const source =
-      authoredSourceAnchorForReactivePaths(
-        input.originalModel,
-        input.fileName,
-        derive.sourcePaths ?? [],
-      ) ??
+      authoredSourceAnchorForReactivePaths(input.authoredSourceAnchors, derive.sourcePaths ?? []) ??
       (generatedSpan === undefined
         ? undefined
         : authoredSourceAnchorForGeneratedSpan(
@@ -794,7 +792,7 @@ function sourceAnchoredUpdateCoverage(
   originalModel: ComponentModuleModel,
   fileName: string,
   sourceOffsetMap: SourceOffsetMap,
-  stateDerives: readonly StateDeriveFact[],
+  authoredSourceAnchors: AuthoredSourceAnchorIndex,
 ): import('./types.js').QueryUpdateCoverageFact[] {
   return compilerMapDense(coverage, 'Source-anchored update coverage', (fact) => {
     const generatedSpan =
@@ -808,7 +806,7 @@ function sourceAnchoredUpdateCoverage(
       (generatedSpan === undefined
         ? undefined
         : authoredSourceAnchorForGeneratedSpan(fileName, generatedSpan, sourceOffsetMap)) ??
-      authoredCoverageSourceAnchor(fact, originalModel, fileName, stateDerives) ??
+      authoredCoverageSourceAnchor(fact, authoredSourceAnchors) ??
       authoredComponentSourceAnchor(originalModel, fileName, fact.componentName) ??
       authoredComponentSourceAnchor(originalModel, fileName, undefined);
     const output: import('./types.js').QueryUpdateCoverageFact = {
@@ -831,30 +829,38 @@ function sourceAnchoredUpdateCoverage(
 
 function authoredCoverageSourceAnchor(
   fact: import('./types.js').QueryUpdateCoverageFact,
-  originalModel: ComponentModuleModel,
-  fileName: string,
-  stateDerives: readonly StateDeriveFact[],
+  authoredSourceAnchors: AuthoredSourceAnchorIndex,
 ): SourceAnchor | undefined {
-  const direct = authoredSourceAnchorForReactivePaths(originalModel, fileName, [fact.query]);
+  const direct = authoredSourceAnchorForReactivePath(authoredSourceAnchors, fact.query);
   if (direct !== undefined || !compilerStringStartsWith(fact.query, 'state.')) return direct;
 
   const deriveExportName = compilerStringSlice(fact.query, 'state.'.length);
-  const derives = compilerSnapshotDenseArray(stateDerives, 'Coverage state derive provenance');
-  for (let index = 0; index < derives.length; index += 1) {
-    const derive = derives[index]!;
-    if (derive.exportName !== deriveExportName) continue;
-    return authoredSourceAnchorForReactivePaths(originalModel, fileName, derive.sourcePaths ?? []);
-  }
-  return undefined;
+  const sourcePaths = compilerMapGet(
+    authoredSourceAnchors.stateDeriveSourcePaths,
+    deriveExportName,
+  );
+  return sourcePaths === undefined
+    ? undefined
+    : authoredSourceAnchorForReactivePaths(authoredSourceAnchors, sourcePaths);
 }
 
-function authoredSourceAnchorForReactivePaths(
+interface AuthoredReactiveSourceAnchor {
+  readonly anchor: SourceAnchor;
+  readonly order: number;
+}
+
+interface AuthoredSourceAnchorIndex {
+  readonly reactiveByPath: Map<string, AuthoredReactiveSourceAnchor>;
+  readonly stateDeriveSourcePaths: Map<string, readonly string[]>;
+}
+
+function createAuthoredSourceAnchorIndex(
   model: ComponentModuleModel,
   fileName: string,
-  paths: readonly string[],
-): SourceAnchor | undefined {
-  if (paths.length === 0) return undefined;
-
+  stateDerives: readonly StateDeriveFact[],
+): AuthoredSourceAnchorIndex {
+  const reactiveByPath = compilerCreateMap<string, AuthoredReactiveSourceAnchor>();
+  let order = 0;
   const attributes = compilerSnapshotDenseArray(
     jsxAttributes(model),
     'Authored reactive JSX attributes',
@@ -863,17 +869,23 @@ function authoredSourceAnchorForReactivePaths(
     const attribute = attributes[index]!;
     if (
       attribute.value !== undefined &&
-      containsCompilerString(paths, attribute.value) &&
       (attribute.name === 'data-bind' ||
         attribute.name === 'data-bind-list' ||
         compilerStringStartsWith(attribute.name, 'data-bind:'))
     ) {
-      return { end: attribute.end, file: fileName, start: attribute.start };
+      order = indexAuthoredReactivePath(
+        reactiveByPath,
+        attribute.value,
+        { end: attribute.end, file: fileName, start: attribute.start },
+        order,
+      );
     }
-    const access = reactiveAccessForPaths(attribute.expressionPropertyAccesses ?? [], paths);
-    if (access !== undefined) {
-      return { end: access.end, file: fileName, start: access.start };
-    }
+    order = indexAuthoredReactiveAccesses(
+      reactiveByPath,
+      attribute.expressionPropertyAccesses ?? [],
+      fileName,
+      order,
+    );
   }
 
   const expressions = compilerSnapshotDenseArray(
@@ -881,10 +893,12 @@ function authoredSourceAnchorForReactivePaths(
     'Authored reactive JSX expressions',
   );
   for (let index = 0; index < expressions.length; index += 1) {
-    const access = reactiveAccessForPaths(expressions[index]!.propertyAccesses, paths);
-    if (access !== undefined) {
-      return { end: access.end, file: fileName, start: access.start };
-    }
+    order = indexAuthoredReactiveAccesses(
+      reactiveByPath,
+      expressions[index]!.propertyAccesses,
+      fileName,
+      order,
+    );
   }
 
   const calls = compilerSnapshotDenseArray(callExpressions(model), 'Authored reactive calls');
@@ -894,24 +908,77 @@ function authoredSourceAnchorForReactivePaths(
       'Authored reactive call arguments',
     );
     for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
-      const access = reactiveAccessForPaths(groups[groupIndex]!, paths);
-      if (access !== undefined) {
-        return { end: access.end, file: fileName, start: access.start };
-      }
+      order = indexAuthoredReactiveAccesses(reactiveByPath, groups[groupIndex]!, fileName, order);
     }
   }
-  return undefined;
+
+  const stateDeriveSourcePaths = compilerCreateMap<string, readonly string[]>();
+  const derives = compilerSnapshotDenseArray(stateDerives, 'Coverage state derive provenance');
+  for (let index = 0; index < derives.length; index += 1) {
+    const derive = derives[index]!;
+    if (compilerMapGet(stateDeriveSourcePaths, derive.exportName) !== undefined) continue;
+    compilerMapSet(
+      stateDeriveSourcePaths,
+      derive.exportName,
+      compilerSnapshotDenseArray(derive.sourcePaths ?? [], 'Coverage state derive source paths'),
+    );
+  }
+
+  return { reactiveByPath, stateDeriveSourcePaths };
 }
 
-function reactiveAccessForPaths(
+function indexAuthoredReactiveAccesses(
+  target: Map<string, AuthoredReactiveSourceAnchor>,
   accesses: readonly { readonly end: number; readonly path: string; readonly start: number }[],
-  paths: readonly string[],
-): { readonly end: number; readonly path: string; readonly start: number } | undefined {
+  fileName: string,
+  initialOrder: number,
+): number {
   const source = compilerSnapshotDenseArray(accesses, 'Authored reactive property accesses');
+  let order = initialOrder;
   for (let index = 0; index < source.length; index += 1) {
-    if (containsCompilerString(paths, source[index]!.path)) return source[index]!;
+    const access = source[index]!;
+    order = indexAuthoredReactivePath(
+      target,
+      access.path,
+      { end: access.end, file: fileName, start: access.start },
+      order,
+    );
   }
-  return undefined;
+  return order;
+}
+
+function indexAuthoredReactivePath(
+  target: Map<string, AuthoredReactiveSourceAnchor>,
+  path: string,
+  anchor: SourceAnchor,
+  order: number,
+): number {
+  if (compilerMapGet(target, path) === undefined) {
+    compilerMapSet(target, path, { anchor, order });
+  }
+  return order + 1;
+}
+
+function authoredSourceAnchorForReactivePath(
+  index: AuthoredSourceAnchorIndex,
+  path: string,
+): SourceAnchor | undefined {
+  return compilerMapGet(index.reactiveByPath, path)?.anchor;
+}
+
+function authoredSourceAnchorForReactivePaths(
+  index: AuthoredSourceAnchorIndex,
+  paths: readonly string[],
+): SourceAnchor | undefined {
+  const source = compilerSnapshotDenseArray(paths, 'Authored reactive source paths');
+  let earliest: AuthoredReactiveSourceAnchor | undefined;
+  for (let pathIndex = 0; pathIndex < source.length; pathIndex += 1) {
+    const candidate = compilerMapGet(index.reactiveByPath, source[pathIndex]!);
+    if (candidate !== undefined && (earliest === undefined || candidate.order < earliest.order)) {
+      earliest = candidate;
+    }
+  }
+  return earliest?.anchor;
 }
 
 function authoredStyleRuleUsages(
@@ -1074,6 +1141,11 @@ function validateComponentPhase(
     ...lowered.lowering.structuralLowering.stateDerives,
     ...styleExtraction.stateDerives,
   ];
+  const authoredSourceAnchors = createAuthoredSourceAnchorIndex(
+    parsed.originalModel,
+    parsed.options.fileName,
+    stateDerives,
+  );
   const clockUpdatePlans = collectClockUpdatePlans(
     lowered.model,
     parsed.componentName,
@@ -1094,10 +1166,11 @@ function validateComponentPhase(
     parsed.originalModel,
     parsed.options.fileName,
     lowered.lowering.validationOffsetMap,
-    stateDerives,
+    authoredSourceAnchors,
   );
 
   return {
+    authoredSourceAnchors,
     clientCaptureAnalysis,
     clockUpdatePlans,
     handlers,
@@ -1262,6 +1335,7 @@ function emitRegistryCssPhase(
           fact.component?.localName,
         ),
         componentFeedbackExplainFacts({
+          authoredSourceAnchors: validated.authoredSourceAnchors,
           clientHref: client.clientHref,
           component: fact.component,
           fileName: parsed.options.fileName,
