@@ -5,8 +5,8 @@
  * `pnpm generate:cli-command-request` after changing the semantic command AST.
  * Forms, arguments, options, enum literals, repeats, and boolean polarity are
  * schema-owned. Argv flag spellings are deliberately absent. Long-lived
- * `dev` and `mcp` processes stay executable-only until they have an explicit
- * abort/disposal contract.
+ * Long-lived command forms stay executable-only until they have an explicit
+ * programmatic abort/disposal contract.
  */
 export type KovoSemanticCommandRequest =
   | {
