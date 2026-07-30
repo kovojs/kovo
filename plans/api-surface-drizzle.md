@@ -43,7 +43,7 @@ Types remain defense-in-depth; AST/runtime proof remains authoritative.
 - `pnpm exec vitest --run <focused typed/runtime/static Drizzle files> --reporter=dot` — 7 files,
   53 tests, including packed-consumer and migration-tool unit contracts.
 - `pnpm exec vitest --run scripts/check-packed-drizzle-consumer.test.mjs --reporter=dot` — 5 tests.
-- `pnpm run check:api-surface` — all three gates and 35 tests pass with zero boundary or recursive
+- `pnpm run check:api-surface` — all three gates and 34 tests pass with zero boundary or recursive
   publicness findings.
 - `pnpm exec vitest --run scripts/migrate-drizzle-api-v1.test.mjs --reporter=dot` — 5 tests.
 - `pnpm --filter @kovojs/drizzle run build:dist` — clean.
