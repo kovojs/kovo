@@ -43,6 +43,11 @@ const auditedPublishExtraEntries = [
   './src/internal/security-witness-intrinsics.ts',
 ] as const;
 
+// The root public surface is intentionally narrow, so its namespace bundle is no longer a useful
+// relative yardstick. Keep the ordinary component path on a fixed reviewable source-unit budget
+// while the structural assertions below continue to prove that storage and Node authority stay out.
+const maxComponentBundleSourceUnits = 32 * 1024;
+
 const componentConsumer = `
 import { component } from '@kovojs/core';
 const UsedComponent = component({ render() { return 'KOVO_USED_COMPONENT_INITIALIZER'; } });
@@ -152,7 +157,7 @@ describe('core package selective side effects (SPEC §6.6)', () => {
       'Kovo storage refused an unbounded byte stream.',
     );
     expect(storageNamespaceBundle.source).toContain('createS3CompatibleStorage');
-    expect(componentBundle.source.length * 2).toBeLessThan(namespaceBundle.source.length);
+    expect(componentBundle.source.length).toBeLessThan(maxComponentBundleSourceUnits);
 
     expectBootstrapCaptures(
       bundleConsumer(corePackageRoot, bootstrapConsumer, 'source-bootstrap').source,
@@ -225,7 +230,7 @@ describe('core package selective side effects (SPEC §6.6)', () => {
         'Kovo storage refused an unbounded byte stream.',
       );
       expect(storageNamespaceBundle.source).toContain('createS3CompatibleStorage');
-      expect(componentBundle.source.length * 2).toBeLessThan(namespaceBundle.source.length);
+      expect(componentBundle.source.length).toBeLessThan(maxComponentBundleSourceUnits);
 
       expectBootstrapCaptures(
         bundleConsumer(publishedRoot, bootstrapConsumer, 'published-bootstrap').source,

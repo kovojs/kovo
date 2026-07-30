@@ -164,7 +164,7 @@ export const CartBadge = component({
     expect(clientSource).toContain('kovoEscapeHtml(read(["name"]))');
     expect(clientSource).not.toContain('html.replace');
     expect(clientSource).toContain(
-      'return runQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [], templateStamps: [] }, { queryStore: context.queryStore });',
+      'return runQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [], templateStamps: [] }, { queryIdentity: context.queryIdentity, queryStore: context.queryStore });',
     );
     expect(registrySource).toContain(`export interface QueryUpdatePlans {
   'CartBadge:cart': readonly ['cart.count', 'cart.empty', 'cart.items', 'cart.total'];

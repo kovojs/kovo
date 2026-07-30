@@ -3679,7 +3679,7 @@ describe('server createApp request shell', () => {
     const queryResponse = await handler(new Request('https://example.test/_q/cart?id=c1'));
     expect(queryResponse.status).toBe(200);
     await expect(queryResponse.text()).resolves.toContain(
-      '<kovo-query name="cart" href="/_q/cart?id=c1">{"id":"c1","total":42}</kovo-query>',
+      '<kovo-query name="cart" key="cart:f10:k2:ids2:c1" href="/_q/cart?id=c1">{"id":"c1","total":42}</kovo-query>',
     );
 
     const moduleResponse = await handler(new Request(`https://example.test${href}`));

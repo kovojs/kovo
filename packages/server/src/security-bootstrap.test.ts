@@ -68,9 +68,7 @@ describe('server security bootstrap census', () => {
   it('preloads the complete server profile before the authored Vite app graph', () => {
     const source = readFileSync(new URL('./vite-dev.ts', import.meta.url), 'utf8');
     const rootLoad = source.indexOf('await server.ssrLoadModule(kovoServerRootModuleId);');
-    const appLoad = source.indexOf(
-      'const module = await runWithGeneratedLiveTargetRegistry(() => server.ssrLoadModule(moduleId));',
-    );
+    const appLoad = source.indexOf('server.ssrLoadModule(moduleId)', rootLoad);
 
     expect(rootLoad).toBeGreaterThan(0);
     expect(appLoad).toBeGreaterThan(rootLoad);

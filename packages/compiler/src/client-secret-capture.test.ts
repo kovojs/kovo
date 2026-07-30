@@ -172,7 +172,8 @@ export const Badge = component({
 
     it('allows a publishToClient-wrapped pristine same-file const primitive', () => {
       const source = `
-import { component, publishToClient } from '@kovojs/core';
+import { component } from '@kovojs/core';
+import { publishToClient } from '@kovojs/core/security';
 
 const LABEL = 'cart';
 
@@ -184,7 +185,7 @@ export const Badge = component({
 `;
       expect(codes(source)).not.toContain('KV437');
       const client = clientSource(source);
-      expect(client).toContain('import { publishToClient } from "@kovojs/core";');
+      expect(client).toContain('import { publishToClient } from "@kovojs/core/security";');
       expect(clientSource(source)).toContain("const LABEL = 'cart';");
 
       const analysis = analyzeClientCaptures(parseComponentModule('pay-button.tsx', source));
@@ -215,7 +216,8 @@ export const Badge = component({
 
     it('refuses a publishToClient-wrapped import before its module can execute', () => {
       const source = `
-import { component, publishToClient } from '@kovojs/core';
+import { component } from '@kovojs/core';
+import { publishToClient } from '@kovojs/core/security';
 import { STRIPE_PUBLISHABLE_KEY } from './config';
 
 export const PayButton = component({
@@ -237,7 +239,8 @@ export const PayButton = component({
 
     it('recognizes publishToClient aliases without granting import evaluation authority', () => {
       const source = `
-import { component, publishToClient as publish } from '@kovojs/core';
+import { component } from '@kovojs/core';
+import { publishToClient as publish } from '@kovojs/core/security';
 import { STRIPE_PUBLISHABLE_KEY } from './config';
 
 export const PayButton = component({
@@ -257,12 +260,12 @@ export const PayButton = component({
     it('refuses namespace publishToClient calls because namespace authority is not exact', () => {
       const source = `
 import { component } from '@kovojs/core';
-import * as core from '@kovojs/core';
+import * as security from '@kovojs/core/security';
 import { STRIPE_PUBLISHABLE_KEY } from './config';
 
 export const PayButton = component({
   render: () => (
-    <button onClick={() => core.publishToClient(STRIPE_PUBLISHABLE_KEY, { reason: 'publishable key is public' })}>Pay</button>
+    <button onClick={() => security.publishToClient(STRIPE_PUBLISHABLE_KEY, { reason: 'publishable key is public' })}>Pay</button>
   ),
 });
 `;
@@ -276,7 +279,7 @@ export const PayButton = component({
       const extraFiles = [
         {
           fileName: 'client-framework.ts',
-          source: `export { publishToClient as publish } from '@kovojs/core';`,
+          source: `export { publishToClient as publish } from '@kovojs/core/security';`,
         },
       ];
       const source = `
@@ -298,7 +301,8 @@ export const PayButton = component({
 
     it('rejects a local publishToClient shadow even when the real import is present', () => {
       const source = `
-import { component, publishToClient as realPublishToClient } from '@kovojs/core';
+import { component } from '@kovojs/core';
+import { publishToClient as realPublishToClient } from '@kovojs/core/security';
 import { STRIPE_PUBLISHABLE_KEY } from './config';
 
 function publishToClient<T>(value: T): T {
@@ -325,7 +329,8 @@ export const AuditButton = component({
 
     it('rejects publishToClient escapes with a missing reason', () => {
       const source = `
-import { component, publishToClient } from '@kovojs/core';
+import { component } from '@kovojs/core';
+import { publishToClient } from '@kovojs/core/security';
 import { STRIPE_PUBLISHABLE_KEY } from './config';
 
 export const PayButton = component({
@@ -344,7 +349,8 @@ export const PayButton = component({
 
     it('rejects publishToClient escapes with an empty reason', () => {
       const source = `
-import { component, publishToClient } from '@kovojs/core';
+import { component } from '@kovojs/core';
+import { publishToClient } from '@kovojs/core/security';
 import { STRIPE_PUBLISHABLE_KEY } from './config';
 
 export const PayButton = component({
@@ -369,7 +375,8 @@ export const PayButton = component({
       ['unbounded text', 'x'.repeat(4_097)],
     ])('rejects publishToClient escapes with %s in the audit reason', (_label, reason) => {
       const source = `
-import { component, publishToClient } from '@kovojs/core';
+import { component } from '@kovojs/core';
+import { publishToClient } from '@kovojs/core/security';
 import { STRIPE_PUBLISHABLE_KEY } from './config';
 
 export const PayButton = component({

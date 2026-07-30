@@ -16,7 +16,6 @@ import {
   extractPackageComponentCss,
 } from '@kovojs/compiler/package-styles';
 import {
-  bindFrameworkKovoViteDevGenerationStage,
   compilerOwnedProjectMutationRegistryFactsFromFiles,
   collectCssAssetManifest,
   type ComponentCssAsset,
@@ -24,6 +23,7 @@ import {
   type QueryShapeFact as CompilerViteQueryShapeFact,
 } from '@kovojs/compiler/internal';
 import {
+  bindFrameworkKovoViteDevGenerationStage,
   compilerOwnedViteClientModuleRoleForPlugin,
   compilerOwnedViteDiagnosticForPlugin,
   isFrameworkKovoVitePluginOwnerForSourceRoot,

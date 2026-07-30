@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createPgliteTestDb } from '@kovojs/test/pglite';
 import { createSqliteTestDb } from '@kovojs/test/sqlite';
+import './sql-parser-authority-bootstrap.js';
 import { parseSqlWriteTables } from './sql-write-allowlist.js';
 import { sqlWriteOracle, type SqlWriteOracleExecutor } from './sql-write-oracle.js';
 

@@ -1,4 +1,5 @@
 import {
+  bindFrameworkKovoViteDevGenerationStage,
   compilerOwnedViteDiagnosticForPlugin,
   compilerOwnedViteClientModuleRoleForPlugin,
   createFrameworkKovoVitePlugin,
@@ -22,6 +23,7 @@ export function kovoVitePlugin(options: KovoVitePluginOptions = {}): KovoVitePlu
  * from an earlier, immutable, full-source framework compiler owner (SPEC.md §5.2 / §6.6).
  */
 export {
+  bindFrameworkKovoViteDevGenerationStage,
   compilerOwnedViteDiagnosticForPlugin,
   compilerOwnedViteClientModuleRoleForPlugin,
   isFrameworkKovoVitePluginOwnerForSourceRoot,

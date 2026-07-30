@@ -34,8 +34,18 @@ const reviewedCanonicalClientHandlerCallSummaries = compilerCreateMap<
   ReviewedClientHandlerCallSummary
 >();
 
-registerReviewedClientHandlerImport('@kovojs/core', 'publishToClient', '@kovojs/core');
-registerReviewedCanonicalClientHandlerImport('@kovojs/core', 'publishToClient', '@kovojs/core');
+registerReviewedClientHandlerImport(
+  '@kovojs/core/security',
+  'publishToClient',
+  '@kovojs/core/security',
+);
+registerReviewedCanonicalClientHandlerImport(
+  // The shared framework-identity catalog canonicalizes public subpaths to their package
+  // identity. The surface registry above still admits only the exact /security specifier.
+  '@kovojs/core',
+  'publishToClient',
+  '@kovojs/core/security',
+);
 
 const headlessEntryLength = compilerArrayLength(
   headlessUiClientExecutableImports,

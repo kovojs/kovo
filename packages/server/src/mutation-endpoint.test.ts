@@ -349,8 +349,8 @@ describe('server mutation endpoint routing', () => {
 
       expect(response.status).toBe(500);
       expect(errorSpy).toHaveBeenCalledWith(
-        expect.stringContaining(
-          '[kovo] no-js-mutation-handler failed mutation=lifecycle/handler-throw-default-log',
+        expect.stringMatching(
+          /^\[kovo\] KTB003 no-js-mutation-handler failed cause=handler-execution-failed correlation=ktb_[0-9a-f]{32} mutation=lifecycle\/handler-throw-default-log$/u,
         ),
         'Error: handler failed:default',
       );

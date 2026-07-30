@@ -569,7 +569,7 @@ export const compilerSpecCoverageMap = [
       },
       {
         file: 'examples/reference/src/app.test.ts',
-        testName: 'renders authed and role guards through the reference app flow',
+        testName: 'keeps the app session schema explicit and role-bearing',
       },
     ],
   },

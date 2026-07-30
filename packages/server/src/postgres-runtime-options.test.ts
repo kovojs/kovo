@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import * as serverRoot from '@kovojs/server';
+import * as serverPostgres from '@kovojs/server/postgres';
 import { pgTable, text } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
 
@@ -34,7 +34,7 @@ describe('postgresAppRuntimeOptions', () => {
     };
     const carrier = postgresAppRuntimeOptions(source);
 
-    expect(serverRoot.postgresAppRuntimeOptions).toBe(postgresAppRuntimeOptions);
+    expect(serverPostgres.postgresAppRuntimeOptions).toBe(postgresAppRuntimeOptions);
     expect(Object.getPrototypeOf(carrier)).toBe(null);
     expect(Object.isFrozen(carrier)).toBe(true);
     expect(Object.getPrototypeOf(carrier.schema)).toBe(null);
@@ -227,11 +227,13 @@ Object.freeze = (value) => {
 };
 `,
     );
-    const indexUrl = pathToFileURL(fileURLToPath(new URL('./index.ts', import.meta.url))).href;
+    const postgresUrl = pathToFileURL(
+      fileURLToPath(new URL('./public-postgres.ts', import.meta.url)),
+    ).href;
     writeFileSync(
       entryPath,
       `
-import { postgresAppRuntimeOptions } from ${JSON.stringify(indexUrl)};
+import { postgresAppRuntimeOptions } from ${JSON.stringify(postgresUrl)};
 import './poison.mjs';
 
 const schema = { proof: { pinned: true } };
