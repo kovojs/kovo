@@ -205,6 +205,7 @@ import {
   buildSetHas,
   buildSnapshotDenseArray,
   buildStringIncludes,
+  buildStringEndsWith,
   buildStringSplit,
   buildStringStartsWith,
   buildStringTrim,
@@ -214,6 +215,7 @@ import {
 const execFile = builtinExecFile;
 const bufferFrom = builtinBuffer.from;
 const hash = builtinHash;
+const jsonParse = JSON.parse;
 const accessSync = builtinAccessSync;
 const fsWriteOk = builtinFsConstants.W_OK;
 const existsSync = builtinExistsSync;
@@ -241,6 +243,9 @@ const fileURLToPath = builtinFileURLToPath;
 const pathToFileURL = builtinPathToFileURL;
 const promisify = builtinPromisify;
 const performanceNow = builtinPerformance.now.bind(builtinPerformance);
+const staticTrustWorkerSchema = 'kovo-static-trust-worker/v1';
+const staticTrustWorkerMaxOutputBytes = 256 * 1024 * 1024;
+const staticTrustWorkerTimeoutMs = 120_000;
 
 const requireFromCli = createRequire(new URL('../index.ts', import.meta.url));
 
@@ -1220,10 +1225,11 @@ async function loadAndCheckBuildApp(
   security: KovoCommandSecurityDisposition,
   invocationRoot: string,
 ) {
-  const preEvaluationStaticTrust = runPreEvaluationStaticTrustPreflight(
+  const preEvaluationStaticTrust = await runPreEvaluationStaticTrustPreflightInWorker(
     resolvedAppModulePath,
     invocationRoot,
     security.paranoidStaticAdvisory,
+    security.invocationEnv,
   );
   // SPEC §6.6 rule 6: the exact app-resolved SSR graph must finish its trust-root transition
   // before any other build lane is allowed to evaluate authored modules. In particular, do not
@@ -1287,10 +1293,11 @@ async function deriveCurrentSourceCheck(
   phaseCensus: KovoSourceCheckPhaseCensus | undefined,
 ): Promise<KovoCheckResult> {
   const appSourceTrustStartedAt = startSourceCheckPhase(phaseCensus);
-  const preEvaluationStaticTrust = runPreEvaluationStaticTrustPreflight(
+  const preEvaluationStaticTrust = await runPreEvaluationStaticTrustPreflightInWorker(
     resolvedAppModulePath,
     invocationRoot,
     security.paranoidStaticAdvisory,
+    security.invocationEnv,
   );
   recordSourceCheckPhase(phaseCensus, 'app-source-trust', 'executed', appSourceTrustStartedAt);
   const appEvaluationStartedAt = startSourceCheckPhase(phaseCensus);
@@ -1644,6 +1651,537 @@ function runPreEvaluationStaticTrustPreflight(
     `kovo build check preflight failed:\n${buildCheckFailureOutput(result.output)}`,
     result.diagnostics,
   );
+}
+
+interface StaticTrustWorkerSuccessPayload {
+  readonly approvedSourceFiles: readonly BuildCheckSourceFile[];
+  readonly capabilityClosure: AnalyzeCapabilityClosureResult;
+  readonly clientEntry?: BuildCheckSourceFile;
+  readonly facts: ReturnType<typeof collectStaticBuildTrustFactsFromProject>;
+  readonly files: readonly BuildCheckSourceFile[];
+  readonly sourceGraphFacts: Omit<
+    SourceGraphFacts,
+    'registryDeclarationAnchors' | 'routeOutcomes'
+  > & {
+    readonly registryDeclarationAnchors: readonly (readonly [
+      string,
+      KovoDiagnosticSourceAnchor | null,
+    ])[];
+    readonly routeOutcomes: readonly (readonly [string, 'file' | 'stream'])[];
+  };
+}
+
+interface StaticTrustWorkerEnvelope {
+  readonly digest: string;
+  readonly factsDigest?: string;
+  readonly payload: string;
+  readonly schema: typeof staticTrustWorkerSchema;
+  readonly sourceDigest?: string;
+}
+
+function staticTrustDigest(value: string): string {
+  return `sha256:${hash('sha256', bufferFrom(value, 'utf8'), 'hex')}`;
+}
+
+function staticTrustSourceDigest(
+  files: readonly BuildCheckSourceFile[],
+  clientEntry?: BuildCheckSourceFile,
+): string {
+  const framed: string[] = [];
+  const snapshot = appendDense(
+    files,
+    clientEntry === undefined ? [] : [clientEntry],
+    'Static-trust digest source files',
+  );
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const file = snapshot[index]!;
+    const fileNameBytes = bufferFrom(file.fileName, 'utf8');
+    const sourceBytes = bufferFrom(file.source, 'utf8');
+    buildSecurityArrayAppend(
+      framed,
+      `${fileNameBytes.length}:${file.fileName}${sourceBytes.length}:${file.source}`,
+      'Static-trust source digest frames',
+    );
+  }
+  return staticTrustDigest(buildJoinStrings(framed, '', 'Static-trust source digest frames'));
+}
+
+function staticTrustSuccessPayload(
+  trust: PreEvaluationStaticTrust,
+): StaticTrustWorkerSuccessPayload {
+  return {
+    approvedSourceFiles: trust.approvedSourceFiles,
+    capabilityClosure: trust.capabilityClosure,
+    ...(trust.clientEntry === undefined ? {} : { clientEntry: trust.clientEntry }),
+    facts: trust.facts,
+    files: trust.files,
+    sourceGraphFacts: {
+      ...trust.sourceGraphFacts,
+      registryDeclarationAnchors: sortedStaticTrustMapEntries(
+        trust.sourceGraphFacts.registryDeclarationAnchors,
+      ),
+      routeOutcomes: sortedStaticTrustMapEntries(trust.sourceGraphFacts.routeOutcomes),
+    },
+  };
+}
+
+function sortedStaticTrustMapEntries<Value>(
+  values: ReadonlyMap<string, Value>,
+): (readonly [string, Value])[] {
+  const result: (readonly [string, Value])[] = [];
+  for (const entry of values.entries()) {
+    buildSecurityArrayAppend(result, entry, 'Static-trust sorted map entries');
+    let insertAt = result.length - 1;
+    while (insertAt > 0 && result[insertAt - 1]![0] > entry[0]) {
+      result[insertAt] = result[insertAt - 1]!;
+      insertAt -= 1;
+    }
+    result[insertAt] = entry;
+  }
+  return result;
+}
+
+/**
+ * Internal subprocess entry. The child owns the complete compiler/static-analysis lifetime and
+ * returns inert JSON only; authored modules are not evaluated in this process.
+ */
+export function runPreEvaluationStaticTrustWorkerRequest(requestJson: string): string {
+  try {
+    const request = jsonParse(requestJson) as unknown;
+    if (
+      request === null ||
+      typeof request !== 'object' ||
+      buildArrayIsArray(request) ||
+      typeof buildOwnDataValue(request, 'appModulePath', 'Static-trust worker request') !==
+        'string' ||
+      typeof buildOwnDataValue(request, 'root', 'Static-trust worker request') !== 'string' ||
+      typeof buildOwnDataValue(request, 'paranoidStaticAdvisory', 'Static-trust worker request') !==
+        'boolean'
+    ) {
+      throw new TypeError('Kovo static-trust worker received an invalid request.');
+    }
+    const trust = runPreEvaluationStaticTrustPreflight(
+      buildOwnDataValue(request, 'appModulePath', 'Static-trust worker request') as string,
+      buildOwnDataValue(request, 'root', 'Static-trust worker request') as string,
+      buildOwnDataValue(
+        request,
+        'paranoidStaticAdvisory',
+        'Static-trust worker request',
+      ) as boolean,
+    );
+    const success = staticTrustSuccessPayload(trust);
+    const payload = stringifyBuildValue({ status: 'ok', trust: success });
+    return stringifyBuildValue({
+      digest: staticTrustDigest(payload),
+      factsDigest: staticTrustDigest(stringifyBuildValue(success.facts)),
+      payload,
+      schema: staticTrustWorkerSchema,
+      sourceDigest: staticTrustSourceDigest(success.approvedSourceFiles, success.clientEntry),
+    } satisfies StaticTrustWorkerEnvelope);
+  } catch (error) {
+    const diagnosticError = error instanceof KovoBuildCheckDiagnosticError;
+    const payload = stringifyBuildValue({
+      error: {
+        ...(diagnosticError && error.diagnostics !== undefined
+          ? { diagnostics: error.diagnostics }
+          : {}),
+        kind: diagnosticError ? 'diagnostic' : error instanceof TypeError ? 'type' : 'error',
+        message: error instanceof Error ? error.message : String(error),
+      },
+      status: 'error',
+    });
+    return stringifyBuildValue({
+      digest: staticTrustDigest(payload),
+      payload,
+      schema: staticTrustWorkerSchema,
+    } satisfies StaticTrustWorkerEnvelope);
+  }
+}
+
+async function runPreEvaluationStaticTrustPreflightInWorker(
+  appModulePath: string,
+  root: string,
+  paranoidStaticAdvisory: boolean,
+  invocationEnv: NodeJS.ProcessEnv,
+): Promise<PreEvaluationStaticTrust> {
+  const currentModulePath = fileURLToPath(import.meta.url);
+  const sourceMode = buildStringEndsWith(currentModulePath, '.ts');
+  const workerPath = sourceMode
+    ? resolve(dirname(currentModulePath), 'build-static-trust-worker.ts')
+    : resolve(dirname(currentModulePath), 'commands/build-static-trust-worker.mjs');
+  const request = stringifyBuildValue({ appModulePath, paranoidStaticAdvisory, root });
+  let stdout: string;
+  try {
+    const result = await execFileAsync(
+      process.execPath,
+      [
+        ...(sourceMode
+          ? ['--disable-warning=ExperimentalWarning', '--experimental-transform-types']
+          : []),
+        workerPath,
+        request,
+      ],
+      {
+        encoding: 'utf8',
+        env: invocationEnv,
+        maxBuffer: staticTrustWorkerMaxOutputBytes,
+        timeout: staticTrustWorkerTimeoutMs,
+      },
+    );
+    stdout = result.stdout;
+  } catch (error) {
+    throw new Error(`Kovo static-trust worker failed: ${execFileErrorOutput(error)}`);
+  }
+  return staticTrustFromWorkerEnvelopeForTesting(stdout);
+}
+
+/** @internal Adversarial protocol seam; production callers consume the same fail-closed parser. */
+export function staticTrustFromWorkerEnvelopeForTesting(output: string): PreEvaluationStaticTrust {
+  if (buildByteLength(output) > staticTrustWorkerMaxOutputBytes) {
+    throw new TypeError('Kovo static-trust worker output exceeded its byte limit.');
+  }
+  let envelopeValue: unknown;
+  try {
+    envelopeValue = jsonParse(output);
+  } catch {
+    throw new TypeError('Kovo static-trust worker returned malformed output.');
+  }
+  if (
+    envelopeValue === null ||
+    typeof envelopeValue !== 'object' ||
+    buildArrayIsArray(envelopeValue)
+  ) {
+    throw new TypeError('Kovo static-trust worker returned an invalid envelope.');
+  }
+  const schema = buildOwnDataValue(envelopeValue, 'schema', 'Static-trust worker envelope');
+  const digest = buildOwnDataValue(envelopeValue, 'digest', 'Static-trust worker envelope');
+  const payload = buildOwnDataValue(envelopeValue, 'payload', 'Static-trust worker envelope');
+  if (
+    schema !== staticTrustWorkerSchema ||
+    typeof digest !== 'string' ||
+    typeof payload !== 'string' ||
+    digest !== staticTrustDigest(payload)
+  ) {
+    throw new TypeError('Kovo static-trust worker returned an unauthenticated envelope.');
+  }
+  let payloadValue: unknown;
+  try {
+    payloadValue = jsonParse(payload);
+  } catch {
+    throw new TypeError('Kovo static-trust worker returned a malformed payload.');
+  }
+  if (
+    payloadValue === null ||
+    typeof payloadValue !== 'object' ||
+    buildArrayIsArray(payloadValue)
+  ) {
+    throw new TypeError('Kovo static-trust worker returned an invalid payload.');
+  }
+  const status = buildOwnDataValue(payloadValue, 'status', 'Static-trust worker payload');
+  if (status === 'error') {
+    const error = buildOwnDataValue(payloadValue, 'error', 'Static-trust worker payload');
+    if (error === null || typeof error !== 'object' || buildArrayIsArray(error)) {
+      throw new TypeError('Kovo static-trust worker returned an invalid error.');
+    }
+    const message = buildOwnDataValue(error, 'message', 'Static-trust worker error');
+    const kind = buildOwnDataValue(error, 'kind', 'Static-trust worker error');
+    if (typeof message !== 'string') {
+      throw new TypeError('Kovo static-trust worker returned an invalid error message.');
+    }
+    if (kind === 'diagnostic') {
+      const diagnostics = buildOwnDataValue(error, 'diagnostics', 'Static-trust worker error');
+      return throwStaticTrustDiagnostic(message, diagnostics);
+    }
+    if (kind === 'type') throw new TypeError(message);
+    throw new Error(message);
+  }
+  if (status !== 'ok') {
+    throw new TypeError('Kovo static-trust worker returned an unknown payload status.');
+  }
+  const trustValue = buildOwnDataValue(payloadValue, 'trust', 'Static-trust worker payload');
+  return validateStaticTrustSuccess(envelopeValue, trustValue);
+}
+
+function throwStaticTrustDiagnostic(message: string, diagnostics: unknown): never {
+  if (diagnostics !== undefined && !buildArrayIsArray(diagnostics)) {
+    throw new TypeError('Kovo static-trust worker returned invalid diagnostics.');
+  }
+  throw new KovoBuildCheckDiagnosticError(
+    message,
+    diagnostics as readonly KovoDiagnosticRecord[] | undefined,
+  );
+}
+
+function validateStaticTrustSuccess(envelope: object, value: unknown): PreEvaluationStaticTrust {
+  if (value === null || typeof value !== 'object' || buildArrayIsArray(value)) {
+    throw new TypeError('Kovo static-trust worker returned invalid trust facts.');
+  }
+  const approvedSourceFiles = validateStaticTrustSourceFiles(
+    buildOwnDataValue(value, 'approvedSourceFiles', 'Static-trust worker facts'),
+    'approved source files',
+  );
+  const files = validateStaticTrustSourceFiles(
+    buildOwnDataValue(value, 'files', 'Static-trust worker facts'),
+    'source files',
+  );
+  assertStaticTrustSourceSubset(files, approvedSourceFiles);
+  const facts = buildOwnDataValue(value, 'facts', 'Static-trust worker facts');
+  if (facts === null || typeof facts !== 'object' || buildArrayIsArray(facts)) {
+    throw new TypeError('Kovo static-trust worker returned invalid build facts.');
+  }
+  const buildFactKeys = [
+    'capabilities',
+    'cookieDowngrades',
+    'diagnostics',
+    'revealed',
+    'trustEscapes',
+    'unregisteredSinks',
+  ] as const;
+  for (let index = 0; index < buildFactKeys.length; index += 1) {
+    staticTrustArrayProperty(facts, buildFactKeys[index]!, 'build facts');
+  }
+  const factsDigest = buildOwnDataValue(envelope, 'factsDigest', 'Static-trust worker envelope');
+  if (factsDigest !== staticTrustDigest(stringifyBuildValue(facts))) {
+    throw new TypeError('Kovo static-trust worker returned a stale facts digest.');
+  }
+  const sourceGraphValue = buildOwnDataValue(
+    value,
+    'sourceGraphFacts',
+    'Static-trust worker facts',
+  );
+  if (
+    sourceGraphValue === null ||
+    typeof sourceGraphValue !== 'object' ||
+    buildArrayIsArray(sourceGraphValue)
+  ) {
+    throw new TypeError('Kovo static-trust worker returned invalid source-graph facts.');
+  }
+  const registryDeclarationAnchors = staticTrustMap(
+    buildOwnDataValue(
+      sourceGraphValue,
+      'registryDeclarationAnchors',
+      'Static-trust source-graph facts',
+    ),
+    'registry declaration anchors',
+    (entry) => entry === null || (typeof entry === 'object' && !buildArrayIsArray(entry)),
+  );
+  const routeOutcomes = staticTrustMap(
+    buildOwnDataValue(sourceGraphValue, 'routeOutcomes', 'Static-trust source-graph facts'),
+    'route outcomes',
+    (entry) => entry === 'file' || entry === 'stream',
+  );
+  const sourceGraphArrayKeys = [
+    'appContractStaticFacts',
+    'compilerDependencies',
+    'compilerSecuritySemanticSources',
+    'components',
+    'domainDeclarationNames',
+    'routePages',
+    'sourceDerivedRegistryTransforms',
+  ] as const;
+  for (let index = 0; index < sourceGraphArrayKeys.length; index += 1) {
+    staticTrustArrayProperty(sourceGraphValue, sourceGraphArrayKeys[index]!, 'source-graph facts');
+  }
+  const compilerTaskBFiniteVerdict = buildOwnDataValue(
+    sourceGraphValue,
+    'compilerTaskBFiniteVerdict',
+    'Static-trust source-graph facts',
+  );
+  if (
+    compilerTaskBFiniteVerdict === null ||
+    typeof compilerTaskBFiniteVerdict !== 'object' ||
+    buildArrayIsArray(compilerTaskBFiniteVerdict)
+  ) {
+    throw new TypeError('Kovo static-trust worker returned invalid TASK B facts.');
+  }
+  const sourceDerivedRegistryTransforms = buildOwnDataValue(
+    sourceGraphValue,
+    'sourceDerivedRegistryTransforms',
+    'Static-trust source-graph facts',
+  );
+  if (!buildArrayIsArray(sourceDerivedRegistryTransforms)) {
+    throw new TypeError('Kovo static-trust worker returned invalid registry transforms.');
+  }
+  assertStaticTrustTransforms(sourceDerivedRegistryTransforms, files);
+  const clientEntryValue = buildOwnDataValue(value, 'clientEntry', 'Static-trust worker facts');
+  const clientEntry =
+    clientEntryValue === undefined
+      ? undefined
+      : validateStaticTrustSourceFiles([clientEntryValue], 'client entry')[0]!;
+  const sourceDigest = buildOwnDataValue(envelope, 'sourceDigest', 'Static-trust worker envelope');
+  if (sourceDigest !== staticTrustSourceDigest(approvedSourceFiles, clientEntry)) {
+    throw new TypeError('Kovo static-trust worker returned a stale source digest.');
+  }
+  const capabilityClosure = buildOwnDataValue(
+    value,
+    'capabilityClosure',
+    'Static-trust worker facts',
+  );
+  if (capabilityClosure === null || typeof capabilityClosure !== 'object') {
+    throw new TypeError('Kovo static-trust worker returned invalid capability facts.');
+  }
+  if (
+    buildOwnDataValue(capabilityClosure, 'dependencyManifest', 'Static-trust capability facts') ===
+      null ||
+    typeof buildOwnDataValue(
+      capabilityClosure,
+      'dependencyManifest',
+      'Static-trust capability facts',
+    ) !== 'object'
+  ) {
+    throw new TypeError('Kovo static-trust worker returned invalid capability manifest.');
+  }
+  const capabilityArrayKeys = ['diagnostics', 'facts', 'packageRequests'] as const;
+  for (let index = 0; index < capabilityArrayKeys.length; index += 1) {
+    staticTrustArrayProperty(capabilityClosure, capabilityArrayKeys[index]!, 'capability facts');
+  }
+  const {
+    registryDeclarationAnchors: _registryDeclarationAnchors,
+    routeOutcomes: _routeOutcomes,
+    ...sourceGraphFacts
+  } = sourceGraphValue as StaticTrustWorkerSuccessPayload['sourceGraphFacts'];
+  return {
+    approvedSourceFiles,
+    capabilityClosure: capabilityClosure as AnalyzeCapabilityClosureResult,
+    ...(clientEntry === undefined ? {} : { clientEntry }),
+    facts: facts as ReturnType<typeof collectStaticBuildTrustFactsFromProject>,
+    files,
+    sourceGraphFacts: {
+      ...sourceGraphFacts,
+      registryDeclarationAnchors: registryDeclarationAnchors as Map<
+        string,
+        KovoDiagnosticSourceAnchor | null
+      >,
+      routeOutcomes: routeOutcomes as Map<string, 'file' | 'stream'>,
+    },
+  };
+}
+
+function validateStaticTrustSourceFiles(value: unknown, label: string): BuildCheckSourceFile[] {
+  const files = buildSnapshotDenseArray(
+    value as readonly BuildCheckSourceFile[],
+    `Static-trust ${label}`,
+  );
+  if (files.length > 100_000) throw new TypeError(`Kovo static-trust ${label} is too large.`);
+  const seen = buildCreateSet<string>();
+  let totalBytes = 0;
+  for (let index = 0; index < files.length; index += 1) {
+    const file = files[index] as unknown;
+    if (file === null || typeof file !== 'object' || buildArrayIsArray(file)) {
+      throw new TypeError(`Kovo static-trust ${label} contains an invalid file.`);
+    }
+    const fileName = buildOwnDataValue(file, 'fileName', `Static-trust ${label}`);
+    const source = buildOwnDataValue(file, 'source', `Static-trust ${label}`);
+    if (
+      typeof fileName !== 'string' ||
+      typeof source !== 'string' ||
+      fileName.length === 0 ||
+      buildStringIncludes(fileName, '\0') ||
+      isAbsolute(fileName) ||
+      slashPath(fileName) !== fileName ||
+      buildSomeDense(
+        buildStringSplit(fileName, '/'),
+        'Static-trust source path segments',
+        (segment) => segment === '..',
+      ) ||
+      buildSetHas(seen, fileName)
+    ) {
+      throw new TypeError(`Kovo static-trust ${label} contains an invalid path.`);
+    }
+    buildSetAdd(seen, fileName);
+    totalBytes += buildByteLength(fileName) + buildByteLength(source);
+    if (totalBytes > staticTrustWorkerMaxOutputBytes) {
+      throw new TypeError(`Kovo static-trust ${label} exceeded its byte limit.`);
+    }
+  }
+  return files;
+}
+
+function assertStaticTrustSourceSubset(
+  subset: readonly BuildCheckSourceFile[],
+  superset: readonly BuildCheckSourceFile[],
+): void {
+  const approved = buildCreateMap<string, string>();
+  for (let index = 0; index < superset.length; index += 1) {
+    buildMapSet(approved, superset[index]!.fileName, superset[index]!.source);
+  }
+  for (let index = 0; index < subset.length; index += 1) {
+    const file = subset[index]!;
+    if (
+      !buildMapHas(approved, file.fileName) ||
+      buildMapGet(approved, file.fileName) !== file.source
+    ) {
+      throw new TypeError(`Kovo static-trust source ${file.fileName} is outside approval.`);
+    }
+  }
+}
+
+function staticTrustMap(
+  value: unknown,
+  label: string,
+  validateValue: (value: unknown) => boolean,
+): Map<string, unknown> {
+  const entries = buildSnapshotDenseArray(
+    value as readonly (readonly [string, unknown])[],
+    `Static-trust ${label}`,
+  );
+  if (entries.length > 1_000_000) throw new TypeError(`Kovo static-trust ${label} is too large.`);
+  const result = buildCreateMap<string, unknown>();
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = buildSnapshotDenseArray(entries[index]!, `Static-trust ${label} entry`);
+    if (
+      entry.length !== 2 ||
+      typeof entry[0] !== 'string' ||
+      buildMapHas(result, entry[0]) ||
+      !validateValue(entry[1])
+    ) {
+      throw new TypeError(`Kovo static-trust ${label} contains an invalid entry.`);
+    }
+    buildMapSet(result, entry[0], entry[1]);
+  }
+  return result;
+}
+
+function assertStaticTrustTransforms(
+  transforms: readonly unknown[],
+  files: readonly BuildCheckSourceFile[],
+): void {
+  const approved = buildCreateMap<string, string>();
+  const seen = buildCreateSet<string>();
+  for (let index = 0; index < files.length; index += 1) {
+    buildMapSet(approved, files[index]!.fileName, files[index]!.source);
+  }
+  for (let index = 0; index < transforms.length; index += 1) {
+    const transform = transforms[index];
+    if (transform === null || typeof transform !== 'object' || buildArrayIsArray(transform)) {
+      throw new TypeError('Kovo static-trust worker returned an invalid registry transform.');
+    }
+    const fileName = buildOwnDataValue(transform, 'fileName', 'Static-trust registry transform');
+    const source = buildOwnDataValue(transform, 'source', 'Static-trust registry transform');
+    const code = buildOwnDataValue(transform, 'code', 'Static-trust registry transform');
+    if (
+      typeof fileName !== 'string' ||
+      typeof source !== 'string' ||
+      (typeof code !== 'string' && code !== null) ||
+      !buildMapHas(approved, fileName) ||
+      buildMapGet(approved, fileName) !== source ||
+      buildSetHas(seen, fileName)
+    ) {
+      throw new TypeError('Kovo static-trust worker returned a stale registry transform.');
+    }
+    buildSetAdd(seen, fileName);
+  }
+  if (transforms.length !== files.length) {
+    throw new TypeError('Kovo static-trust worker omitted a registry transform.');
+  }
+}
+
+function staticTrustArrayProperty(source: object, key: string, label: string): readonly unknown[] {
+  const value = buildOwnDataValue(source, key, `Static-trust ${label}`);
+  if (!buildArrayIsArray(value)) {
+    throw new TypeError(`Kovo static-trust worker returned invalid ${label}.${key}.`);
+  }
+  return buildSnapshotDenseArray(value, `Static-trust ${label}.${key}`);
 }
 
 function preEvaluationClientEntryFile(
@@ -6903,10 +7441,11 @@ export async function runExportCommandStructured(
     );
     assertKovoExportInputPaths(resolvedOptions);
     const exportRoot = resolvedOptions.root ?? dirname(resolvedOptions.appModulePath);
-    const preEvaluationStaticTrust = runPreEvaluationStaticTrustPreflight(
+    const preEvaluationStaticTrust = await runPreEvaluationStaticTrustPreflightInWorker(
       resolvedOptions.appModulePath,
       exportRoot,
       security.paranoidStaticAdvisory,
+      security.invocationEnv,
     );
     const currentManifestPlan = await configurationBoundaryAsync(() =>
       staticExportManifestPlan(resolvedOptions),
