@@ -526,9 +526,9 @@ export const C = component({
   render: ({ post }) => (
     <main>
       <article rawHtml={trustedHtml('<b>safe</b>', { reason: 'static reviewed markup' })} />
-      <section innerHTML={trustedHtml(post.body, { reason: 'admin-curated body sanitized upstream' })} />
+      <section innerHTML={trustedHtml('<p>reviewed body</p>', { reason: 'admin-curated body sanitized upstream' })} />
       <a href={trustedUrl('/docs', { reason: 'static docs path' })}>docs</a>
-      <a href={trustedUrl(post.href, { reason: 'admin-curated redirect' })}>read</a>
+      <a href={trustedUrl('/reviewed', { reason: 'admin-curated redirect' })}>read</a>
     </main>
   ),
 });
@@ -596,14 +596,37 @@ export const C = component({
     ).toHaveLength(1);
   });
 
-  it('discharges with the audited escape trustedHtml(value, { reason })', () => {
+  it('does not let audited metadata relabel proven request/query data', () => {
+    const messages = kv426(`
+import { trustedHtml, trustedUrl } from '@kovojs/browser';
+export const C = component({
+  queries: { contacts: contactsQuery },
+  render: (data, _state, slots) => (
+    <main>
+      <a href={trustedUrl(data.contacts.href, { reason: 'reviewed redirect' })}>read</a>
+      {trustedHtml(slots.request?.headers.get('x-proof') ?? '', { reason: 'reviewed markup' })}
+    </main>
+  ),
+});
+`);
+
+    expect(messages).toHaveLength(2);
+    expect(messages.some((message) => message.includes('query-derived data'))).toBe(true);
+    expect(messages.some((message) => message.includes('request-derived data'))).toBe(true);
+  });
+
+  it('keeps audited metadata as the explicit escape for locally unprovable values', () => {
     expect(
       kv426(`
-import { trustedHtml } from '@kovojs/browser';
+import { trustedHtml, trustedUrl } from '@kovojs/browser';
+declare const reviewedHtml: string;
+declare const reviewedUrl: string;
 export const C = component({
-  queries: { post: postQuery },
-  render: ({ post }) => (
-    <article>{trustedHtml(post.body, { reason: 'server-rendered markup' })}</article>
+  render: () => (
+    <main>
+      <a href={trustedUrl(reviewedUrl, { reason: 'externally reviewed redirect' })}>read</a>
+      {trustedHtml(reviewedHtml, { reason: 'externally reviewed markup' })}
+    </main>
   ),
 });
 `),
@@ -1022,7 +1045,7 @@ export const C = component({
     ).toHaveLength(2);
   });
 
-  it('flags trustedUrl over request/query-derived data and supports audited reasons', () => {
+  it('flags trustedUrl over request/query-derived data even with an audited reason', () => {
     expect(
       kv426(`
 import { trustedUrl } from '@kovojs/browser';
@@ -1050,7 +1073,7 @@ export const C = component({
   render: ({ post }) => <a href={trustedUrl(post.href, { reason: 'admin-curated redirect' })}>read</a>,
 });
 `),
-    ).toHaveLength(0);
+    ).toHaveLength(1);
   });
 
   it.each([

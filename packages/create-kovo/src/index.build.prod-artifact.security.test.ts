@@ -962,7 +962,7 @@ describe('create-kovo starter (build integration: production security artifacts)
         'href={trustedUrl(data.contacts.items.map((contact) => contact.email).join(',
       );
       expect(proofSource).toContain("reason: 'adversarial query-derived URL proof'");
-      expect(proofSource).toContain('slots.request?.headers.get("x-proof")');
+      expect(proofSource).toContain("slots.request?.headers.get('x-proof')");
 
       const output = captureBuildFailure(() => buildProductionArtifact(unsafeRoot));
       expect(output).toContain('KV426');
@@ -1557,7 +1557,7 @@ function addEnhancedMutationWireProof(root: string): void {
       'export const EnhancedMutationWireProof = component({',
       '  mutations: { refreshEnhancedMutationWireProof },',
       '  queries: { proof: enhancedMutationWireProofQuery },',
-      '  render: ({ proof }) => (',
+      '  render: ({ proof }: { proof: { note: string } }) => (',
       '    <main data-proof="enhanced-wire">',
       '      <p data-proof-note>{proof.note}</p>',
       '      <form {...mutationFormAttributes(refreshEnhancedMutationWireProof)}>',

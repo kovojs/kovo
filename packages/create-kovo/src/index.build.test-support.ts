@@ -1542,13 +1542,13 @@ export function addTrustedOutputProvenanceBuildProof(
       '    <main data-proof="trusted-output-provenance">',
       unsafe
         ? '      <a href={trustedUrl(data.contacts.items.map((contact) => contact.email).join(""), { reason: "adversarial query-derived URL proof" })}>'
-        : '      <a href={trustedUrl(data.contacts.items.map((contact) => contact.email).join(""), { reason: "server-reviewed contact mailto route" })}>',
+        : '      <a href={trustedUrl("/contacts", { reason: "server-reviewed contact route" })}>',
       '        Unsafe URL',
       '      </a>',
       '      <section>static trusted output proof</section>',
       unsafe
         ? '      {trustedHtml(slots.request?.headers.get("x-proof") ?? "", { reason: "adversarial request-derived HTML proof" })}'
-        : '      {trustedHtml(slots.request?.headers.get("x-proof") ?? "", { reason: "reviewed trusted output request header" })}',
+        : '      {trustedHtml("<strong>reviewed static output</strong>", { reason: "reviewed static trusted output" })}',
       '    </main>',
       '  ),',
       '});',

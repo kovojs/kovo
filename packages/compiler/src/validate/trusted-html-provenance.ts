@@ -64,7 +64,8 @@ import { isCompilerAuditText } from '../security/audit-text.js';
  *     composition (`question.body ?? ''`, `` `${question.body}` ``), or via a same-scope
  *     alias/destructure/derive (`const { body } = question; trustedHtml(body)`).
  * Function calls, spreads, unbound identifiers, and unhandled expression forms are unprovable, not
- * clean. They fail closed unless the public trustedHtml/trustedUrl call carries an audited reason.
+ * clean. An audited reason may discharge that locally unprovable residue, but it never relabels a
+ * value that the compiler has already proved request- or query-derived.
  * Non-literal namespace calls through Kovo trust modules (`browser[key](value)`) are also treated
  * as unproven trust sinks when the member cannot be resolved to a safe non-sink export.
  *
@@ -72,7 +73,8 @@ import { isCompilerAuditText } from '../security/audit-text.js';
  * serverValue/trustedAssign):
  *   - render user/CMS content through `safeRichHtml(value)` — the sanitizing rich-HTML floor; it is
  *     a different callee, so it is never flagged here;
- *   - for a value the author asserts is safe, take the audited escape
+ *   - for a locally unprovable value the author asserts is not request/query data, take the audited
+ *     escape
  *     `trustedHtml(value, { reason: "<justification>" })` /
  *     `trustedUrl(value, { reason: "<justification>" })`, which discharges the public
  *     trust-brand gate but stays recorded.
@@ -90,7 +92,7 @@ export const validateTrustedHtmlProvenance = securityClassifier(
         const value = node.arguments[0];
         if (sink === null) {
           // Not a raw/trusted sink call; ordinary calls are outside KV426.
-        } else if (value !== undefined && !(sink.auditedReasonAllowed && hasAuditedReason(node))) {
+        } else if (value !== undefined) {
           const provenance = classifyExpression(value, {
             ...enclosingRenderProvenanceBindings(node, bindingsByRender),
             depth: 0,
@@ -98,8 +100,12 @@ export const validateTrustedHtmlProvenance = securityClassifier(
             usePosition: value.getStart(sourceFile),
             visited: compilerCreateSet<TS.Node>(),
           });
-          if (provenance === null) {
-            // Proven local/static-clean value.
+          if (
+            provenance === null ||
+            (provenance === 'unprovable' && sink.auditedReasonAllowed && hasAuditedReason(node))
+          ) {
+            // Proven local/static-clean, or explicitly reviewed local-analysis residue. A reason
+            // cannot relabel a source already proved request/query-derived (SPEC §6.6 / §4.8).
           } else {
             compilerArrayAppend(
               found,
