@@ -93,6 +93,8 @@ describe('kovo check current-source proof', () => {
     }
   }, 120_000);
 
+  // CI run 30605601333 measured this multi-process source proof at 227.710s on ubuntu-24.04.
+  // Keep 1.5x headroom, rounded up to the next whole minute, for hosted-runner variance.
   it('re-derives warm source proof, catches type/compiler changes, and leaves KV417 to build', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-source-check-'));
     const appPath = join(root, 'src/app.tsx');
@@ -144,7 +146,7 @@ describe('kovo check current-source proof', () => {
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
-  }, 120_000);
+  }, 360_000);
 });
 
 async function runCli(

@@ -336,6 +336,9 @@ describe('ci-shards', () => {
       includeVitest('packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts'),
     ).toBe(false);
     expect(
+      includeVitest('packages/create-kovo/src/index.build.prod-artifact.postgres-external.test.ts'),
+    ).toBe(false);
+    expect(
       includeVitest(
         'packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts',
       ),
@@ -374,6 +377,36 @@ describe('ci-shards', () => {
       includeVitest('packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts'),
     ).toBe(false);
     expect(includeVitest('packages/server/src/guards.test.ts')).toBe(false);
+  });
+
+  it('routes the measured Postgres artifact proof exactly once through the heavyweight starter lane', () => {
+    const file = 'packages/create-kovo/src/index.build.prod-artifact.postgres-external.test.ts';
+    expect(includeVitest(file)).toBe(false);
+    expect(starterEntries().filter((entry) => entry.file === file)).toEqual([
+      {
+        file,
+        id: 'postgres-external-artifact',
+        seconds: 372,
+      },
+    ]);
+  });
+
+  it('retains measured hosted-runner deadline headroom on the three timed-out proofs', async () => {
+    const [asyncContextSource, sourceCheckSource, postgresSource] = await Promise.all([
+      readFile(new URL('./check-async-context-confinement.test.mjs', import.meta.url), 'utf8'),
+      readFile(new URL('../packages/cli/src/index.source-check.test.ts', import.meta.url), 'utf8'),
+      readFile(
+        new URL(
+          '../packages/create-kovo/src/index.build.prod-artifact.postgres-external.test.ts',
+          import.meta.url,
+        ),
+        'utf8',
+      ),
+    ]);
+
+    expect(asyncContextSource).toContain('}, 60_000);');
+    expect(sourceCheckSource).toContain('}, 360_000);');
+    expect(postgresSource.match(/\}, 600_000\);/gu)).toHaveLength(2);
   });
 
   it('keeps every C13-owned classifier file out of duplicate root Vitest shards', () => {
@@ -422,7 +455,7 @@ describe('ci-shards', () => {
       entries.map((entry) => entry.id).toSorted(compareStrings),
     );
     expect(shards.map((shard) => shard.seconds)).toEqual([
-      1_200, 466, 474, 437, 473, 464, 455, 437, 430, 430,
+      1_200, 486, 482, 506, 456, 504, 499, 508, 508, 489,
     ]);
   });
 
@@ -467,7 +500,7 @@ describe('ci-shards', () => {
       }))
       .filter((shard) => shard.entries.length > 0);
 
-    expect(browserShards).toEqual([{ index: 10, entries: ['island-derive-artifacts'] }]);
+    expect(browserShards).toEqual([{ index: 9, entries: ['island-derive-artifacts'] }]);
   });
 
   it('marks only packed starter shards as needing the packed package artifact', async () => {

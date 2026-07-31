@@ -38,6 +38,8 @@ const require = createRequire(import.meta.url);
 const { Pool } = require(resolveDependencyRoot('pg')) as {
   Pool: new (options: { connectionString: string; max: number }) => PgPool;
 };
+// CI run 30605601333 measured the production PGlite refusal at 371.701s on ubuntu-24.04.
+// Each Postgres artifact proof keeps 1.5x headroom, rounded up to the next whole minute.
 
 describe('create-kovo starter (build integration: production Postgres driver floor)', () => {
   it('refuses a production artifact that resolves to in-process PGlite', async () => {
@@ -77,7 +79,7 @@ describe('create-kovo starter (build integration: production Postgres driver flo
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
     }
-  }, 300_000);
+  }, 600_000);
 });
 
 describeIfPostgres(
@@ -335,7 +337,7 @@ describeIfPostgres(
       } finally {
         await stopProcess(server);
       }
-    }, 300_000);
+    }, 600_000);
   },
 );
 

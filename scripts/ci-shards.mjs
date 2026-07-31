@@ -54,6 +54,7 @@ const CONSOLIDATED_VITEST_FILES = new Set([
   'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts',
   'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',
   'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
+  'packages/create-kovo/src/index.build.prod-artifact.postgres-external.test.ts',
   'packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts',
   'packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts',
   'packages/create-kovo/src/index.build.prod-artifact.runtime-contracts.test.ts',
@@ -202,6 +203,13 @@ const STARTER_ENTRIES = [
     id: 'runtime-dev-server',
     file: 'packages/create-kovo/src/index.build.runtime.test.ts',
     seconds: 262,
+  },
+  {
+    id: 'postgres-external-artifact',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.postgres-external.test.ts',
+    // CI run 30605601333 measured the file at 371.702s before this heavyweight proof moved out of
+    // the generic root shard. Round up to a whole second for timing-weighted starter assignment.
+    seconds: 372,
   },
   {
     id: 'starter-sqlite',

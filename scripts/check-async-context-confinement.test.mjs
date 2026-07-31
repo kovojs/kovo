@@ -55,6 +55,8 @@ describe('async-context confinement census gate', () => {
     );
   });
 
+  // CI run 30605601333 measured this census mutation at 32.644s on ubuntu-24.04.
+  // Keep 1.5x headroom, rounded up to the next whole minute, for hosted-runner variance.
   it('rejects census deletion, contract aliases, and cell escape', () => {
     const deleted = loadAsyncContextConfinementInput();
     deleted.document = structuredClone(deleted.document);
@@ -92,7 +94,7 @@ describe('async-context confinement census gate', () => {
     expect(validateAsyncContextConfinement(escaped).findings).toEqual(
       expect.arrayContaining([expect.stringContaining('jsxRequestContext escapes')]),
     );
-  });
+  }, 60_000);
 
   it('rejects lifecycle weakening and a request root that inherits ambient authority', () => {
     const weakened = loadAsyncContextConfinementInput();
@@ -129,9 +131,7 @@ describe('async-context confinement census gate', () => {
     );
 
     const collectorBypassed = loadAsyncContextConfinementInput();
-    const collectorDeferred = collectorBypassed.files.get(
-      'packages/server/src/deferred-region.ts',
-    );
+    const collectorDeferred = collectorBypassed.files.get('packages/server/src/deferred-region.ts');
     collectorBypassed.files.set(
       'packages/server/src/deferred-region.ts',
       collectorDeferred.replace(
