@@ -191,14 +191,30 @@ describe('create-kovo starter (build integration: adversarial production artifac
     withProject('create-kovo-m1-secret-value-flow-drift-', undefined, (root) => {
       const queriesPath = join(root, 'src/queries.ts');
       const queries = readFileSync(queriesPath, 'utf8').replace(
-        'export const contactsQuery = query({',
-        'export const renamedContactsQuery = query({',
+        'export const contactsQuery = app.query({',
+        'export const renamedContactsQuery = app.query({',
       );
       writeFileSync(queriesPath, queries, 'utf8');
 
       expect(() => addAuthSecretLeakProof(root)).toThrowError(
         'Expected scaffold anchor for auth secret proof query insertion.',
       );
+    });
+  });
+
+  it('M1:secret-wire opaque fixture uses the current app-scoped declaration contract', () => {
+    withProject('create-kovo-m1-secret-value-flow-current-api-', undefined, (root) => {
+      addOpaqueAuthSecretLeakProof(root);
+
+      const queries = readFileSync(join(root, 'src/queries.ts'), 'utf8');
+      const app = readFileSync(join(root, 'src/app.tsx'), 'utf8');
+      expect(queries).toContain('export const authSecretDirectLeakQuery = app.query({');
+      expect(queries).toContain('export const contactsQuery = app.query({');
+      expect(queries).not.toMatch(/(?:^|[^\w.])query\(\{/mu);
+      expect(app).toContain('export const authTouchMutation = app.mutation({');
+      expect(app).toContain("const authSecretRoute = app.route('/', {");
+      expect(app).toContain('mutations: [authTouchMutation]');
+      expect(app).not.toMatch(/(?:^|[^\w.])(?:mutation|route)\(\{/mu);
     });
   });
 

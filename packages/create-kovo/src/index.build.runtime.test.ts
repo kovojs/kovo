@@ -2,6 +2,7 @@ import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:c
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
@@ -14,6 +15,7 @@ import {
   mergeCookies,
   reservePort,
   resolveBin,
+  resolveDependencyRoot,
   stopProcess,
   withRepoBinOnPath,
 } from './index.test-support.js';
@@ -189,12 +191,12 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
     }
   }, 180_000);
 
-  it('boots Postgres starter DDL with serial columns, reordered foreign keys, and additive drift', () => {
+  it('boots Postgres starter DDL with serial columns, reordered foreign keys, and additive drift', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-pg-ddl-'));
 
-    const runDdlProof = (probeNickname = false): void => {
+    const runDdlProof = async (probeNickname = false): Promise<void> => {
       writeFileSync(
         join(root, 'ddl-proof.mjs'),
         [
@@ -216,22 +218,7 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
           "    '/src/_kovo/app-runtime-db.ts',",
           '  );',
           '  await appRuntimeDbReady;',
-          !probeNickname
-            ? "  process.stdout.write('starter-ddl-proof/v1 OK\\n');"
-            : [
-                "  const { readonlyAppDb } = await vite.ssrLoadModule('/src/db.ts');",
-                "  const { contacts } = await vite.ssrLoadModule('/src/schema.ts');",
-                '  // SPEC §10.3/KV433: schema probes stay on the read-only Drizzle surface.',
-                '  const rows = await readonlyAppDb',
-                '    .select({ nickname: contacts.nickname })',
-                '    .from(contacts)',
-                '    .limit(1);',
-                '  // FORCE RLS hides protected seed rows from this unprincipaled schema probe.',
-                '  if (!Array.isArray(rows) || rows.length !== 0) {',
-                '    throw new Error(`Expected no visible rows, received ${JSON.stringify(rows)}.`);',
-                '  }',
-                "  process.stdout.write('starter-ddl-proof/v1 OK\\n');",
-              ].join('\n'),
+          "  process.stdout.write('starter-ddl-proof/v1 OK\\n');",
           '} finally {',
           '  await vite.close();',
           '}',
@@ -248,6 +235,28 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
         encoding: 'utf8',
       });
       expect(stdout).toBe('starter-ddl-proof/v1 OK\n');
+
+      if (probeNickname) {
+        const pgliteModule = (await import(
+          pathToFileURL(join(resolveDependencyRoot('@electric-sql/pglite'), 'dist/index.js')).href
+        )) as {
+          PGlite: new (dataDir: string) => {
+            close(): Promise<void>;
+            query(statement: string): Promise<{ rows: unknown[] }>;
+            waitReady: Promise<void>;
+          };
+        };
+        const raw = new pgliteModule.PGlite(join(root, '.kovo/pglite'));
+        try {
+          await raw.waitReady;
+          // SPEC §10.3/KV433: inspect the persisted test database only after the
+          // generated runtime exits; app source receives no raw database handle.
+          const rows = await raw.query('select nickname from contacts where false');
+          expect(rows.rows).toEqual([]);
+        } finally {
+          await raw.close();
+        }
+      }
     };
 
     try {
@@ -257,14 +266,14 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
       const schemaPath = join(root, 'src/schema.ts');
       const originalSchema = readFileSync(schemaPath, 'utf8');
 
-      runDdlProof();
+      await runDdlProof();
 
       const schemaWithDrift = originalSchema.replace(
         "    company: text('company').notNull().default(''),",
         "    company: text('company').notNull().default(''),\n    nickname: text('nickname'),",
       );
       writeFileSync(schemaPath, schemaWithDrift, 'utf8');
-      runDdlProof(true);
+      await runDdlProof(true);
 
       const schemaWithSerialAndOwnerFk = originalSchema
         .replace(
@@ -284,7 +293,7 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
         );
       writeFileSync(schemaPath, schemaWithSerialAndOwnerFk, 'utf8');
       rmSync(join(root, '.kovo/pglite'), { force: true, recursive: true });
-      runDdlProof();
+      await runDdlProof();
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
