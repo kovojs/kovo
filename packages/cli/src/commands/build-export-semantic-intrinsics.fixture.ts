@@ -141,17 +141,17 @@ function writeApp(root: string, source: string, fileName = 'app.mjs'): void {
 function appSource(imports: string, statement: string, declarations = ''): string {
   return `/** @jsxImportSource @kovojs/server */
 ${imports}
-import { createApp } from '@kovojs/server/internal/fixture-app';
-import { publicAccess, route } from '@kovojs/server';
+import { defineKovo } from '@kovojs/server';
 ${declarations}
-const semanticRoute = route('/', {
-  access: publicAccess('semantic intrinsic security corpus'),
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000044' });
+const semanticRoute = app.route('/', {
+  access: app.publicAccess('semantic intrinsic security corpus'),
   page() {
     ${statement}
     return 'safe';
   },
 });
-export default createApp({ routes: [semanticRoute] });
+export default app.assemble({ routes: [semanticRoute] });
 `;
 }
 
