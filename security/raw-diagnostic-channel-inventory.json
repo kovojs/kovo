@@ -388,6 +388,17 @@
       "expressionSha256": "eea78765bb5003a27f94764acd1a90a99b667ba597d74bed736bb6fff4231502"
     },
     {
+      "id": "packages/browser/src/deferred-app-runtime-module.ts#generated-runtime#KV449#f3ddc904fc14a263886065da78ed773ab75b7abf56f6bc4a60f7cd17b62992fb#0",
+      "code": "KV449",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "generated-runtime",
+      "channel": "generated-runtime",
+      "file": "packages/browser/src/deferred-app-runtime-module.ts",
+      "owner": "<module>",
+      "expressionSha256": "f3ddc904fc14a263886065da78ed773ab75b7abf56f6bc4a60f7cd17b62992fb"
+    },
+    {
       "id": "packages/browser/src/events.ts#throw#KV320#323f005daf7debbbac1871c0f25f359064cac125e157d28ed47ec9cd28de52a8#0",
       "code": "KV320",
       "enforcementClass": "audited-escape",
@@ -487,6 +498,28 @@
       "expressionSha256": "c644ed8a96dffa8d12439f4ada50eb5482d84210bde1c5331e1a0557318e73d7"
     },
     {
+      "id": "packages/browser/src/inline-loader-runtime.ts#throw#KV449#6bb97bd6f4c768858540f2ec6b18b767b8988c846cfce7238f82e0ce1f791d28#0",
+      "code": "KV449",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/browser/src/inline-loader-runtime.ts",
+      "owner": "fail",
+      "expressionSha256": "6bb97bd6f4c768858540f2ec6b18b767b8988c846cfce7238f82e0ce1f791d28"
+    },
+    {
+      "id": "packages/browser/src/inline-loader-runtime.ts#throw#KV449#e3c149f45de799fd93656b692618bc3d1326b0cd577b21c0d79a1a58925f1f46#0",
+      "code": "KV449",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/browser/src/inline-loader-runtime.ts",
+      "owner": "nr",
+      "expressionSha256": "e3c149f45de799fd93656b692618bc3d1326b0cd577b21c0d79a1a58925f1f46"
+    },
+    {
       "id": "packages/browser/src/inline-loader.ts#generated-runtime#KV449#6bb97bd6f4c768858540f2ec6b18b767b8988c846cfce7238f82e0ce1f791d28#0",
       "code": "KV449",
       "enforcementClass": "compile-error",
@@ -528,28 +561,6 @@
       "channel": "generated-runtime",
       "file": "packages/browser/src/inline-loader.ts",
       "owner": "<module>",
-      "expressionSha256": "e3c149f45de799fd93656b692618bc3d1326b0cd577b21c0d79a1a58925f1f46"
-    },
-    {
-      "id": "packages/browser/src/inline-loader.ts#throw#KV449#6bb97bd6f4c768858540f2ec6b18b767b8988c846cfce7238f82e0ce1f791d28#0",
-      "code": "KV449",
-      "enforcementClass": "compile-error",
-      "severity": "error",
-      "layer": "runtime",
-      "channel": "throw",
-      "file": "packages/browser/src/inline-loader.ts",
-      "owner": "fail",
-      "expressionSha256": "6bb97bd6f4c768858540f2ec6b18b767b8988c846cfce7238f82e0ce1f791d28"
-    },
-    {
-      "id": "packages/browser/src/inline-loader.ts#throw#KV449#e3c149f45de799fd93656b692618bc3d1326b0cd577b21c0d79a1a58925f1f46#0",
-      "code": "KV449",
-      "enforcementClass": "compile-error",
-      "severity": "error",
-      "layer": "runtime",
-      "channel": "throw",
-      "file": "packages/browser/src/inline-loader.ts",
-      "owner": "nr",
       "expressionSha256": "e3c149f45de799fd93656b692618bc3d1326b0cd577b21c0d79a1a58925f1f46"
     },
     {
@@ -870,6 +881,17 @@
       "file": "packages/core/src/storage.ts",
       "owner": "denyWrite",
       "expressionSha256": "9431626f0bd5e62293c46cc646a489b29aadcecc624c2c8348edbf4fc80a127a"
+    },
+    {
+      "id": "packages/create-kovo/src/cli-schema.ts#throw#KV447#ac56be477248043692f52a09bf96d17f6cbe1bdba72eecdff7a643f24b78b054#0",
+      "code": "KV447",
+      "enforcementClass": "audited-escape",
+      "severity": "warn",
+      "layer": "analysis",
+      "channel": "throw",
+      "file": "packages/create-kovo/src/cli-schema.ts",
+      "owner": "assertCreateKovoSqliteScaffoldAllowed",
+      "expressionSha256": "ac56be477248043692f52a09bf96d17f6cbe1bdba72eecdff7a643f24b78b054"
     },
     {
       "id": "packages/create-kovo/src/index.build.prod-artifact.sink-census.ts#throw#KV406#31059afffa489b6033acc3fe5647d4eaa5c6a6509c55c9ae3f78feba2aecffaf#0",
@@ -1587,6 +1609,17 @@
       "expressionSha256": "06f6e8e4b5df1792e6dc8a8f3988d0b6d2dd99e3842104bd46e9ee0e2217c51c"
     },
     {
+      "id": "packages/server/src/internal/postgres-capability.ts#throw#KV414#798daa9e386f55078cd3314ba59d8e89f4b2b8bdf9653f06981336891b1a1ed5#0",
+      "code": "KV414",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/internal/postgres-capability.ts",
+      "owner": "usePostgresSystemDb",
+      "expressionSha256": "798daa9e386f55078cd3314ba59d8e89f4b2b8bdf9653f06981336891b1a1ed5"
+    },
+    {
       "id": "packages/server/src/internal/postgres-capability.ts#throw#KV414#7a947c427afdd821a0b5e5d1182ee0ca724ae55e48a2b5e50a38f6e0aca4044f#0",
       "code": "KV414",
       "enforcementClass": "compile-error",
@@ -1598,18 +1631,7 @@
       "expressionSha256": "7a947c427afdd821a0b5e5d1182ee0ca724ae55e48a2b5e50a38f6e0aca4044f"
     },
     {
-      "id": "packages/server/src/internal/postgres-capability.ts#throw#KV414#ceba17013b74ecd39ff72b6d6424b2f402d6fece9dafd2809e6515e22bdf47d9#0",
-      "code": "KV414",
-      "enforcementClass": "compile-error",
-      "severity": "error",
-      "layer": "runtime",
-      "channel": "throw",
-      "file": "packages/server/src/internal/postgres-capability.ts",
-      "owner": "usePostgresSystemDb",
-      "expressionSha256": "ceba17013b74ecd39ff72b6d6424b2f402d6fece9dafd2809e6515e22bdf47d9"
-    },
-    {
-      "id": "packages/server/src/internal/sqlite-capability.ts#throw#KV414#f07f3d6f3254395ce5fd38a19ae5969c990652e93ae679c7a8e99bfb15984de3#0",
+      "id": "packages/server/src/internal/sqlite-capability.ts#throw#KV414#5f78a2532d2aa62277f79a76472d0b05ff07ef243edfd78a0fd79cb6e0d65bc6#0",
       "code": "KV414",
       "enforcementClass": "compile-error",
       "severity": "error",
@@ -1617,7 +1639,18 @@
       "channel": "throw",
       "file": "packages/server/src/internal/sqlite-capability.ts",
       "owner": "useSqliteSystemDb",
-      "expressionSha256": "f07f3d6f3254395ce5fd38a19ae5969c990652e93ae679c7a8e99bfb15984de3"
+      "expressionSha256": "5f78a2532d2aa62277f79a76472d0b05ff07ef243edfd78a0fd79cb6e0d65bc6"
+    },
+    {
+      "id": "packages/server/src/internal/sqlite-capability.ts#throw#KV414#d2b7f2e494ddf284680ad3cf8c66a6daa3765e4e66f882bef8b9b5b596182542#0",
+      "code": "KV414",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/internal/sqlite-capability.ts",
+      "owner": "sqliteSystemDbForAppRuntime",
+      "expressionSha256": "d2b7f2e494ddf284680ad3cf8c66a6daa3765e4e66f882bef8b9b5b596182542"
     },
     {
       "id": "packages/server/src/jsx-runtime.ts#throw#KV236#248045e79b6c2e4bc35365caf2f0fcd89e158c8b6212ffda2f01f132d4d55478#0",
