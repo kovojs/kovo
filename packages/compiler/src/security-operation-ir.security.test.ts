@@ -3370,6 +3370,63 @@ export const root = query('catalog/read', {
     );
   });
 
+  it('rejects closure-owned storage writes from enrolled query roots', () => {
+    const result = compile(`
+import { publicScopedKey } from '@kovojs/core';
+import { createMemoryStorage } from '@kovojs/core/storage';
+import { publicAccess, query } from '@kovojs/server';
+
+const storage = createMemoryStorage();
+const storageUpload = {
+  upload(key: string, body: string) {
+    return storage.put(publicScopedKey(key), body);
+  },
+};
+
+export const storagePutWriteQuery = query({
+  access: publicAccess('storage put write query proof'),
+  reads: [],
+  async load() {
+    await storage.put(publicScopedKey('receipts/query-write-proof.txt'), 'bad');
+    return { ok: true };
+  },
+});
+export const storageDeleteWriteQuery = query({
+  access: publicAccess('storage delete write query proof'),
+  reads: [],
+  async load() {
+    await storage.delete(publicScopedKey('receipts/query-delete-proof.txt'));
+    return { ok: true };
+  },
+});
+export const storageUploadWriteQuery = query({
+  access: publicAccess('storage upload write query proof'),
+  reads: [],
+  async load() {
+    await storageUpload.upload('receipts/query-upload-proof.txt', 'bad');
+    return { ok: true };
+  },
+});
+`);
+    const diagnostics = result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449');
+    const messages = diagnostics.map((diagnostic) => diagnostic.message);
+
+    expect(diagnostics).toHaveLength(3);
+    expect(messages).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining(
+          'root=query:finite-security-ir/storage-put-write-query; transfers=<direct>; sink=unresolved, imported, aliased, or foreign server helper storage.put',
+        ),
+        expect.stringContaining(
+          'root=query:finite-security-ir/storage-delete-write-query; transfers=<direct>; sink=unresolved, imported, aliased, or foreign server helper storage.delete',
+        ),
+        expect.stringContaining(
+          'root=query:finite-security-ir/storage-upload-write-query; transfers=local:upload[]; sink=unresolved, imported, aliased, or foreign server helper storage.put',
+        ),
+      ]),
+    );
+  });
+
   it('keeps reviewed operation results as plain helper data rather than capabilities', () => {
     expect(
       kv449(`
