@@ -1,4 +1,5 @@
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 
 export const DEFAULT_TEST_PROCESS_MAX_OUTPUT_BYTES = 64 * 1024;
@@ -8,17 +9,53 @@ export const DEFAULT_TEST_PROCESS_ROOT_EXIT_TIMEOUT_MS = 5_000;
 export const DEFAULT_TEST_PROCESS_STREAM_CLOSE_TIMEOUT_MS = 5_000;
 
 const DEFAULT_CENSUS_INTERVAL_MS = 100;
-const DEFAULT_CENSUS_TIMEOUT_MS = 1_000;
-const PROCESS_TABLE_MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
+const DEFAULT_CENSUS_TIMEOUT_MS = 5_000;
+const PROCESS_CENSUS_MAX_BYTES = 32 * 1024 * 1024;
+const PROCESS_CENSUS_MAX_LINE_BYTES = 2 * 1024 * 1024;
+const PROCESS_MARKER_PREFIX = 'KOVO_TEST_PROCESS_MARKER_';
 
 /**
- * Run one test-owned command under a hard parent deadline. The supervisor continuously records the
- * recursive descendant closure because a child can create a detached process group that no longer
- * belongs to the root group by cleanup time.
+ * Run one test-owned command under a hard parent deadline. Each run adds a unique inherited
+ * environment-variable name. Cleanup finds that marker globally instead of relying on ancestry,
+ * which survives setsid/detach, intermediate-parent exit, and reparenting.
  */
 export async function runBoundedTestProcess(invocation) {
+  assertSupportedTestProcessPlatform();
+  return runBoundedTestProcessWithDependencies(invocation, defaultSupervisorDependencies());
+}
+
+/** Test-only dependency seam for deterministic census/reuse/deadline regression coverage. */
+export async function runBoundedTestProcessForTest(invocation, overrides = {}) {
+  assertSupportedTestProcessPlatform();
+  return runBoundedTestProcessWithDependencies(invocation, {
+    ...defaultSupervisorDependencies(),
+    ...overrides,
+  });
+}
+
+export function assertSupportedTestProcessPlatform(platform = process.platform) {
+  if (platform === 'linux' || platform === 'darwin') return;
+  throw new Error(
+    `bounded test process supervision supports only the repository's Linux and macOS test hosts; received ${platform}`,
+  );
+}
+
+function markedChildEnvironment(requestedEnvironment, markerName) {
+  const environment = { ...(requestedEnvironment ?? process.env) };
+  for (const name of Object.keys(environment)) {
+    if (name.startsWith(PROCESS_MARKER_PREFIX)) delete environment[name];
+  }
+  for (const [name, value] of Object.entries(process.env)) {
+    if (name.startsWith(PROCESS_MARKER_PREFIX) && value === '1') environment[name] = value;
+  }
+  environment[markerName] = '1';
+  return environment;
+}
+
+async function runBoundedTestProcessWithDependencies(invocation, dependencies) {
   const limits = validateInvocation(invocation);
   const started = process.hrtime.bigint();
+  const markerName = `${PROCESS_MARKER_PREFIX}${randomBytes(24).toString('hex').toUpperCase()}`;
   const output = combinedOutput(limits.maxOutputBytes);
   let resolveOverflow;
   const overflow = new Promise((resolve) => {
@@ -27,51 +64,46 @@ export async function runBoundedTestProcess(invocation) {
 
   const child = spawn(invocation.command, [...invocation.args], {
     cwd: invocation.cwd,
-    detached: process.platform !== 'win32',
-    env: invocation.env,
+    detached: true,
+    env: markedChildEnvironment(invocation.env, markerName),
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-  child.stdout.on('data', (chunk) => {
+  const onStdout = (chunk) => {
     if (output.push('stdout', chunk)) resolveOverflow('output-overflow');
-  });
-  child.stderr.on('data', (chunk) => {
+  };
+  const onStderr = (chunk) => {
     if (output.push('stderr', chunk)) resolveOverflow('output-overflow');
-  });
+  };
+  child.stdout.on('data', onStdout);
+  child.stderr.on('data', onStderr);
 
   let exitSettled = false;
+  let settleExit;
   const exited = new Promise((resolveExit) => {
-    const settle = (result) => {
+    settleExit = (result) => {
       if (exitSettled) return;
       exitSettled = true;
       resolveExit(result);
     };
-    child.once('error', (error) => settle({ error: error.message, exitCode: null, signal: null }));
-    child.once('exit', (exitCode, signal) => settle({ error: null, exitCode, signal }));
   });
+  const onChildError = (error) =>
+    settleExit({ error: error.message, exitCode: null, signal: null });
+  const onChildExit = (exitCode, signal) => settleExit({ error: null, exitCode, signal });
+  child.once('error', onChildError);
+  child.once('exit', onChildExit);
+  let closeSettled = false;
+  let settleClose;
   const closed = new Promise((resolveClose) => {
-    child.once('close', () => resolveClose(true));
-    child.once('error', () => resolveClose(true));
+    settleClose = () => {
+      if (closeSettled) return;
+      closeSettled = true;
+      resolveClose(true);
+    };
   });
-
-  const knownDescendants = new Map();
-  let stopCensus = false;
-  let censusFailureMessage = null;
-  let resolveCensusFailure;
-  const censusFailure = new Promise((resolve) => {
-    resolveCensusFailure = resolve;
-  });
-  const censusLoop = superviseDescendantCensus({
-    censusIntervalMs: limits.censusIntervalMs,
-    censusTimeoutMs: limits.censusTimeoutMs,
-    knownDescendants,
-    onFailure(message) {
-      if (censusFailureMessage !== null) return;
-      censusFailureMessage = message;
-      resolveCensusFailure('census-failure');
-    },
-    rootPid: child.pid,
-    shouldStop: () => stopCensus,
-  });
+  const onChildClose = () => settleClose();
+  const onChildErrorClose = () => settleClose();
+  child.once('close', onChildClose);
+  child.once('error', onChildErrorClose);
 
   let deadlineTimer;
   const deadline = new Promise((resolveDeadline) => {
@@ -83,47 +115,62 @@ export async function runBoundedTestProcess(invocation) {
       exited.then((result) => ({ kind: 'exit', result })),
       deadline.then((kind) => ({ kind })),
       overflow.then((kind) => ({ kind })),
-      censusFailure.then((kind) => ({ kind })),
     ]);
   } finally {
     if (deadlineTimer !== undefined) clearTimeout(deadlineTimer);
   }
 
   const cleanupProblems = [];
-  if (censusFailureMessage !== null) cleanupProblems.push(censusFailureMessage);
-  if (child.pid !== undefined) {
-    try {
-      await terminateObservedProcessTree(child.pid, knownDescendants, limits);
-    } catch (error) {
-      cleanupProblems.push(errorMessage(error));
-      try {
-        fallbackForceKillObservedGroups(child.pid, knownDescendants, limits);
-      } catch (fallbackError) {
-        cleanupProblems.push(
-          `forced observed-group fallback failed: ${errorMessage(fallbackError)}`,
-        );
-      }
-    }
+  const cleanupDeadlineAtMs = safeDeadline(
+    dependencies.now(),
+    boundedTestProcessCleanupBudgetMs(limits),
+  );
+  try {
+    await terminateMarkedProcessTree(markerName, limits, cleanupDeadlineAtMs, dependencies);
+  } catch (error) {
+    cleanupProblems.push(errorMessage(error));
+    disposeChildStreams(child, onStdout, onStderr);
   }
 
   const firstExit = first.kind === 'exit' ? first.result : undefined;
-  const exit = firstExit ?? (await promiseWithin(exited, limits.rootExitTimeoutMs));
+  const rootExitDeadlineAtMs = phaseDeadline(
+    dependencies.now(),
+    limits.rootExitTimeoutMs,
+    cleanupDeadlineAtMs,
+  );
+  const exit =
+    firstExit ??
+    (await promiseBefore(exited, rootExitDeadlineAtMs, dependencies.now, dependencies.delay));
   if (exit === undefined) {
     cleanupProblems.push(
-      `root process did not exit within ${String(limits.rootExitTimeoutMs)}ms after tree cleanup`,
+      `root process did not exit before the cleanup deadline (${String(limits.rootExitTimeoutMs)}ms root-exit allowance)`,
     );
-  }
-  if ((await promiseWithin(closed, limits.streamCloseTimeoutMs)) === undefined) {
-    cleanupProblems.push(
-      `root process streams did not close within ${String(limits.streamCloseTimeoutMs)}ms after tree cleanup`,
-    );
+    disposeChildStreams(child, onStdout, onStderr);
   }
 
-  stopCensus = true;
-  await censusLoop;
-  if (censusFailureMessage !== null && !cleanupProblems.includes(censusFailureMessage)) {
-    cleanupProblems.push(censusFailureMessage);
+  const streamCloseDeadlineAtMs = phaseDeadline(
+    dependencies.now(),
+    limits.streamCloseTimeoutMs,
+    cleanupDeadlineAtMs,
+  );
+  if (
+    !closeSettled &&
+    (await promiseBefore(closed, streamCloseDeadlineAtMs, dependencies.now, dependencies.delay)) ===
+      undefined
+  ) {
+    cleanupProblems.push(
+      `root process streams did not close before the cleanup deadline (${String(limits.streamCloseTimeoutMs)}ms stream-close allowance)`,
+    );
+    disposeChildStreams(child, onStdout, onStderr);
   }
+
+  child.stdout.off('data', onStdout);
+  child.stderr.off('data', onStderr);
+  child.off('error', onChildError);
+  child.off('error', onChildErrorClose);
+  child.off('exit', onChildExit);
+  child.off('close', onChildClose);
+  if (cleanupProblems.length > 0) disposeChildStreams(child, onStdout, onStderr);
   const captured = output.read();
   return {
     cleanupError: cleanupProblems.length === 0 ? null : cleanupProblems.join('; '),
@@ -139,12 +186,17 @@ export async function runBoundedTestProcess(invocation) {
 }
 
 export function boundedTestProcessCleanupBudgetMs(options = {}) {
-  return (
-    (options.terminationGraceMs ?? DEFAULT_TEST_PROCESS_TERMINATION_GRACE_MS) +
-    (options.killGraceMs ?? DEFAULT_TEST_PROCESS_KILL_GRACE_MS) +
-    (options.rootExitTimeoutMs ?? DEFAULT_TEST_PROCESS_ROOT_EXIT_TIMEOUT_MS) +
-    (options.streamCloseTimeoutMs ?? DEFAULT_TEST_PROCESS_STREAM_CLOSE_TIMEOUT_MS)
-  );
+  const values = [
+    options.terminationGraceMs ?? DEFAULT_TEST_PROCESS_TERMINATION_GRACE_MS,
+    options.killGraceMs ?? DEFAULT_TEST_PROCESS_KILL_GRACE_MS,
+    options.rootExitTimeoutMs ?? DEFAULT_TEST_PROCESS_ROOT_EXIT_TIMEOUT_MS,
+    options.streamCloseTimeoutMs ?? DEFAULT_TEST_PROCESS_STREAM_CLOSE_TIMEOUT_MS,
+  ];
+  const total = values.reduce((sum, value) => sum + value, 0);
+  if (!Number.isSafeInteger(total) || total <= 0) {
+    throw new TypeError('bounded test process cleanup budget must be a positive safe integer');
+  }
+  return total;
 }
 
 function validateInvocation(invocation) {
@@ -175,275 +227,304 @@ function validateInvocation(invocation) {
   for (const [label, value] of Object.entries(limits)) {
     positiveInteger(value, `bounded test process ${label}`);
   }
+  boundedTestProcessCleanupBudgetMs(limits);
   return limits;
 }
 
-async function superviseDescendantCensus({
-  censusIntervalMs,
-  censusTimeoutMs,
-  knownDescendants,
-  onFailure,
-  rootPid,
-  shouldStop,
-}) {
-  if (!Number.isSafeInteger(rootPid) || rootPid <= 0) return;
-  while (!shouldStop()) {
-    try {
-      const table = snapshotProcessTable(censusTimeoutMs);
-      mergeRecursiveDescendants(rootPid, knownDescendants, table);
-    } catch (error) {
-      onFailure(`recursive descendant census failed: ${errorMessage(error)}`);
-      return;
-    }
-    await delay(censusIntervalMs);
-  }
-}
-
-async function terminateObservedProcessTree(rootPid, knownDescendants, limits) {
-  if (process.platform === 'win32') {
-    const termStopped = await signalObservedWindowsTreeWithin(
-      rootPid,
-      knownDescendants,
-      false,
-      limits.terminationGraceMs,
-      limits,
-    );
-    if (termStopped) return;
-    const killStopped = await signalObservedWindowsTreeWithin(
-      rootPid,
-      knownDescendants,
-      true,
-      limits.killGraceMs,
-      limits,
-    );
-    if (killStopped) return;
-  } else {
-    const termStopped = await signalObservedPosixTreeWithin(
-      rootPid,
-      knownDescendants,
-      'SIGTERM',
-      limits.terminationGraceMs,
-      limits,
-    );
-    if (termStopped) return;
-    const killStopped = await signalObservedPosixTreeWithin(
-      rootPid,
-      knownDescendants,
-      'SIGKILL',
-      limits.killGraceMs,
-      limits,
-    );
-    if (killStopped) return;
-  }
-
-  const table = snapshotProcessTable(limits.censusTimeoutMs);
-  mergeRecursiveDescendants(rootPid, knownDescendants, table);
-  const survivors = observedSurvivors(rootPid, knownDescendants, table);
-  throw new Error(
-    `process-tree cleanup could not verify exit after SIGTERM and SIGKILL; survivors: ${formatSurvivors(survivors)}`,
+async function terminateMarkedProcessTree(markerName, limits, cleanupDeadlineAtMs, dependencies) {
+  const termDeadlineAtMs = phaseDeadline(
+    dependencies.now(),
+    limits.terminationGraceMs,
+    cleanupDeadlineAtMs,
   );
-}
-
-async function signalObservedPosixTreeWithin(rootPid, knownDescendants, signal, timeoutMs, limits) {
-  const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    const table = snapshotProcessTable(limits.censusTimeoutMs);
-    mergeRecursiveDescendants(rootPid, knownDescendants, table);
-    const survivors = observedSurvivors(rootPid, knownDescendants, table);
-    if (survivors.length === 0) return true;
-    signalPosixSurvivors(rootPid, survivors, signal);
-    if (Date.now() >= deadline) return false;
-    await delay(Math.min(limits.censusIntervalMs, Math.max(1, deadline - Date.now())));
-  }
-}
-
-async function signalObservedWindowsTreeWithin(
-  rootPid,
-  knownDescendants,
-  force,
-  timeoutMs,
-  limits,
-) {
-  const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    const table = snapshotProcessTable(limits.censusTimeoutMs);
-    mergeRecursiveDescendants(rootPid, knownDescendants, table);
-    const survivors = observedSurvivors(rootPid, knownDescendants, table);
-    if (survivors.length === 0) return true;
-    for (const pid of [rootPid, ...survivors.map((record) => record.pid)].toSorted(
-      (left, right) => right - left,
-    )) {
-      const remainingMs = Math.max(1, deadline - Date.now());
-      const args = ['/pid', String(pid), '/t'];
-      if (force) args.push('/f');
-      spawnSync('taskkill.exe', args, {
-        stdio: 'ignore',
-        timeout: Math.min(limits.censusTimeoutMs, remainingMs),
-        windowsHide: true,
-      });
-    }
-    if (Date.now() >= deadline) return false;
-    await delay(Math.min(limits.censusIntervalMs, Math.max(1, deadline - Date.now())));
-  }
-}
-
-function signalPosixSurvivors(rootPid, survivors, signal) {
-  const processGroups = new Set(survivors.map((record) => record.pgid).filter((pgid) => pgid > 0));
-  if (survivors.some((record) => record.pid === rootPid || record.pgid === rootPid)) {
-    processGroups.add(rootPid);
-  }
-  for (const pgid of [...processGroups].toSorted((left, right) => {
-    if (left === rootPid) return 1;
-    if (right === rootPid) return -1;
-    return right - left;
-  })) {
-    try {
-      process.kill(-pgid, signal);
-    } catch (error) {
-      if (/** @type {NodeJS.ErrnoException} */ (error).code !== 'ESRCH') throw error;
-    }
-  }
-  for (const record of survivors) {
-    try {
-      process.kill(record.pid, signal);
-    } catch (error) {
-      if (/** @type {NodeJS.ErrnoException} */ (error).code !== 'ESRCH') throw error;
-    }
-  }
-}
-
-function fallbackForceKillObservedGroups(rootPid, knownDescendants, limits) {
-  if (process.platform === 'win32') {
-    for (const pid of [rootPid, ...knownDescendants.keys()]) {
-      spawnSync('taskkill.exe', ['/pid', String(pid), '/t', '/f'], {
-        stdio: 'ignore',
-        timeout: limits.killGraceMs,
-        windowsHide: true,
-      });
-    }
+  if (
+    await signalMarkedProcessesWithin(
+      markerName,
+      'SIGTERM',
+      termDeadlineAtMs,
+      cleanupDeadlineAtMs,
+      limits,
+      dependencies,
+    )
+  ) {
     return;
   }
-  const processGroups = new Set([rootPid]);
-  for (const descendant of knownDescendants.values()) {
-    if (descendant.pgid > 0) processGroups.add(descendant.pgid);
-  }
-  for (const pgid of processGroups) signalPosixProcessGroup(pgid, 'SIGKILL');
-}
 
-function snapshotProcessTable(timeoutMs) {
-  if (process.platform === 'win32') return snapshotWindowsProcessTable(timeoutMs);
-  const result = spawnSync('ps', ['-axo', 'pid=,ppid=,pgid=,stat=,lstart='], {
-    encoding: 'utf8',
-    maxBuffer: PROCESS_TABLE_MAX_OUTPUT_BYTES,
-    timeout: timeoutMs,
-  });
-  if (result.error !== undefined) throw result.error;
-  if (result.status !== 0) {
-    throw new Error(`ps exited with ${String(result.status)}: ${result.stderr.trim()}`);
-  }
-  const table = new Map();
-  for (const line of result.stdout.split('\n')) {
-    const match = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.+?)\s*$/u.exec(line);
-    if (match === null) continue;
-    const pid = Number(match[1]);
-    table.set(pid, {
-      pgid: Number(match[3]),
-      pid,
-      ppid: Number(match[2]),
-      started: match[5],
-      state: match[4],
-    });
-  }
-  return table;
-}
-
-function snapshotWindowsProcessTable(timeoutMs) {
-  const script = [
-    'Get-CimInstance Win32_Process',
-    '| Select-Object ProcessId,ParentProcessId,CreationDate',
-    '| ConvertTo-Json -Compress',
-  ].join(' ');
-  const result = spawnSync(
-    'powershell.exe',
-    ['-NoProfile', '-NonInteractive', '-Command', script],
-    {
-      encoding: 'utf8',
-      maxBuffer: PROCESS_TABLE_MAX_OUTPUT_BYTES,
-      timeout: timeoutMs,
-      windowsHide: true,
-    },
+  const killDeadlineAtMs = phaseDeadline(
+    dependencies.now(),
+    limits.killGraceMs,
+    cleanupDeadlineAtMs,
   );
-  if (result.error !== undefined) throw result.error;
-  if (result.status !== 0) {
-    throw new Error(`PowerShell process census exited with ${String(result.status)}`);
+  if (
+    await signalMarkedProcessesWithin(
+      markerName,
+      'SIGKILL',
+      killDeadlineAtMs,
+      cleanupDeadlineAtMs,
+      limits,
+      dependencies,
+    )
+  ) {
+    return;
   }
-  const source = result.stdout.trim();
-  const records = source === '' ? [] : JSON.parse(source);
-  const table = new Map();
-  for (const value of Array.isArray(records) ? records : [records]) {
-    const pid = Number(value.ProcessId);
-    const ppid = Number(value.ParentProcessId);
-    if (!Number.isSafeInteger(pid) || !Number.isSafeInteger(ppid)) continue;
-    table.set(pid, {
-      pgid: pid,
-      pid,
-      ppid,
-      started: String(value.CreationDate ?? ''),
-      state: '',
+
+  const table = await censusBefore(
+    markerName,
+    cleanupDeadlineAtMs,
+    limits.censusTimeoutMs,
+    dependencies,
+  );
+  const survivors = markedSurvivors(table);
+  throw new Error(
+    `marked process-tree cleanup reached its absolute deadline; survivors: ${formatSurvivors(survivors)}`,
+  );
+}
+
+async function signalMarkedProcessesWithin(
+  markerName,
+  signal,
+  phaseDeadlineAtMs,
+  cleanupDeadlineAtMs,
+  limits,
+  dependencies,
+) {
+  for (;;) {
+    if (dependencies.now() >= cleanupDeadlineAtMs) return false;
+    const table = await censusBefore(
+      markerName,
+      cleanupDeadlineAtMs,
+      limits.censusTimeoutMs,
+      dependencies,
+    );
+    const survivors = markedSurvivors(table);
+    if (survivors.length === 0) return true;
+    await signalIdentityCheckedSurvivors(
+      markerName,
+      survivors,
+      signal,
+      cleanupDeadlineAtMs,
+      limits,
+      dependencies,
+    );
+    if (dependencies.now() >= phaseDeadlineAtMs) return false;
+    await delayBefore(
+      Math.min(limits.censusIntervalMs, phaseDeadlineAtMs - dependencies.now()),
+      phaseDeadlineAtMs,
+      dependencies,
+    );
+  }
+}
+
+async function signalIdentityCheckedSurvivors(
+  markerName,
+  initialSurvivors,
+  signal,
+  deadlineAtMs,
+  limits,
+  dependencies,
+) {
+  const handledPids = new Set();
+  const candidateGroups = [...new Set(initialSurvivors.map((record) => record.pgid))]
+    .filter((pgid) => pgid > 0)
+    .toSorted((left, right) => right - left);
+
+  for (const pgid of candidateGroups) {
+    const table = await censusBefore(
+      markerName,
+      deadlineAtMs,
+      limits.censusTimeoutMs,
+      dependencies,
+    );
+    const members = liveGroupMembers(table, pgid);
+    if (members.length === 0 || members.some((record) => !record.marked)) continue;
+    try {
+      dependencies.signalProcessGroup(pgid, signal);
+    } catch (error) {
+      if (/** @type {NodeJS.ErrnoException} */ (error).code !== 'ESRCH') throw error;
+    }
+    for (const member of members) {
+      if (member.marked) handledPids.add(member.pid);
+    }
+  }
+
+  for (const survivor of initialSurvivors) {
+    if (handledPids.has(survivor.pid)) continue;
+    const table = await censusBefore(
+      markerName,
+      deadlineAtMs,
+      limits.censusTimeoutMs,
+      dependencies,
+    );
+    const current = table.get(survivor.pid);
+    if (current === undefined || !current.marked || isZombie(current)) continue;
+    try {
+      dependencies.signalProcess(current.pid, signal);
+    } catch (error) {
+      if (/** @type {NodeJS.ErrnoException} */ (error).code !== 'ESRCH') throw error;
+    }
+  }
+}
+
+async function censusBefore(markerName, deadlineAtMs, censusTimeoutMs, dependencies) {
+  const now = dependencies.now();
+  if (now >= deadlineAtMs)
+    throw new Error('process census could not start before cleanup deadline');
+  return dependencies.snapshotProcessTable(
+    markerName,
+    Math.min(deadlineAtMs, safeDeadline(now, censusTimeoutMs)),
+  );
+}
+
+function defaultSupervisorDependencies() {
+  return {
+    delay,
+    now: Date.now,
+    signalProcess(pid, signal) {
+      process.kill(pid, signal);
+    },
+    signalProcessGroup(pgid, signal) {
+      process.kill(-pgid, signal);
+    },
+    snapshotProcessTable,
+  };
+}
+
+async function snapshotProcessTable(markerName, deadlineAtMs) {
+  const remainingMs = deadlineAtMs - Date.now();
+  if (remainingMs <= 0) throw new Error('process census deadline exhausted');
+
+  return new Promise((resolve, reject) => {
+    const table = new Map();
+    const census = spawn('ps', ['eww', '-axo', 'pid=,ppid=,pgid=,stat=,command='], {
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
-  }
-  return table;
-}
+    census.stdout.setEncoding('utf8');
+    let settled = false;
+    let totalBytes = 0;
+    let remainder = '';
 
-function mergeRecursiveDescendants(rootPid, knownDescendants, table) {
-  const childrenByParent = new Map();
-  for (const record of table.values()) {
-    const children = childrenByParent.get(record.ppid) ?? [];
-    children.push(record);
-    childrenByParent.set(record.ppid, children);
-  }
-  const frontier = [rootPid];
-  for (const [pid, identity] of knownDescendants) {
-    const current = table.get(pid);
-    if (current !== undefined && sameProcessIdentity(current, identity)) {
-      knownDescendants.set(pid, current);
-      frontier.push(pid);
-    }
-  }
-  const visited = new Set(frontier);
-  for (let index = 0; index < frontier.length; index += 1) {
-    for (const child of childrenByParent.get(frontier[index]) ?? []) {
-      if (visited.has(child.pid) || child.pid === process.pid) continue;
-      visited.add(child.pid);
-      frontier.push(child.pid);
-      const previous = knownDescendants.get(child.pid);
-      if (previous === undefined || sameProcessIdentity(child, previous)) {
-        knownDescendants.set(child.pid, child);
+    const dispose = () => {
+      clearTimeout(timer);
+      census.stdout.removeAllListeners();
+      census.stderr.removeAllListeners();
+      census.stdout.destroy();
+      census.stderr.destroy();
+      census.unref();
+    };
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      try {
+        census.kill('SIGKILL');
+      } catch {
+        // The census may have exited between failure detection and the kill attempt.
       }
-    }
+      dispose();
+      reject(error);
+    };
+    const timer = setTimeout(
+      () => fail(new Error('process census exceeded its absolute deadline')),
+      remainingMs,
+    );
+
+    census.once('error', (error) =>
+      fail(new Error(`process census could not start: ${error.message}`)),
+    );
+    census.stdout.on('data', (chunk) => {
+      totalBytes += Buffer.byteLength(chunk);
+      if (totalBytes > PROCESS_CENSUS_MAX_BYTES) {
+        fail(new Error('process census exceeded its bounded read allowance'));
+        return;
+      }
+      remainder += chunk;
+      if (
+        Buffer.byteLength(remainder) > PROCESS_CENSUS_MAX_LINE_BYTES &&
+        !remainder.includes('\n')
+      ) {
+        fail(new Error('process census encountered an overlong process record'));
+        return;
+      }
+      for (;;) {
+        const newline = remainder.indexOf('\n');
+        if (newline < 0) break;
+        const line = remainder.slice(0, newline);
+        remainder = remainder.slice(newline + 1);
+        if (Buffer.byteLength(line) > PROCESS_CENSUS_MAX_LINE_BYTES) {
+          fail(new Error('process census encountered an overlong process record'));
+          return;
+        }
+        const record = parseProcessCensusLine(line, markerName);
+        if (record !== undefined) table.set(record.pid, record);
+      }
+      if (Buffer.byteLength(remainder) > PROCESS_CENSUS_MAX_LINE_BYTES) {
+        fail(new Error('process census encountered an overlong process record'));
+      }
+    });
+    census.stderr.on('data', (chunk) => {
+      totalBytes += Buffer.byteLength(chunk);
+      if (totalBytes > PROCESS_CENSUS_MAX_BYTES) {
+        fail(new Error('process census exceeded its bounded read allowance'));
+      }
+    });
+    census.once('close', (code, signal) => {
+      if (settled) return;
+      if (remainder !== '') {
+        const record = parseProcessCensusLine(remainder, markerName);
+        if (record !== undefined) table.set(record.pid, record);
+      }
+      if (code !== 0) {
+        fail(new Error(`process census exited unsuccessfully (${signal ?? code ?? 'unknown'})`));
+        return;
+      }
+      settled = true;
+      dispose();
+      resolve(table);
+    });
+  });
+}
+
+function parseProcessCensusLine(line, markerName) {
+  const match = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/u.exec(line);
+  if (match === null) return undefined;
+  const pid = Number(match[1]);
+  const ppid = Number(match[2]);
+  const pgid = Number(match[3]);
+  if (![pid, ppid, pgid].every((value) => Number.isSafeInteger(value) && value >= 0)) {
+    return undefined;
+  }
+  return {
+    marked: containsEnvironmentEntry(match[5], markerName, '1'),
+    pgid,
+    pid,
+    ppid,
+    state: match[4],
+  };
+}
+
+function containsEnvironmentEntry(commandAndEnvironment, name, value) {
+  const entry = `${name}=${value}`;
+  let offset = 0;
+  for (;;) {
+    const index = commandAndEnvironment.indexOf(entry, offset);
+    if (index < 0) return false;
+    const before = index === 0 ? ' ' : commandAndEnvironment[index - 1];
+    const afterIndex = index + entry.length;
+    const after =
+      afterIndex === commandAndEnvironment.length ? ' ' : commandAndEnvironment[afterIndex];
+    if (/\s/u.test(before) && /\s/u.test(after)) return true;
+    offset = index + entry.length;
   }
 }
 
-function observedSurvivors(rootPid, knownDescendants, table) {
-  const records = [];
-  const root = table.get(rootPid);
-  if (root !== undefined && !isZombie(root)) records.push(root);
-  for (const [pid, identity] of knownDescendants) {
-    const current = table.get(pid);
-    if (
-      current !== undefined &&
-      sameProcessIdentity(current, identity) &&
-      !isZombie(current) &&
-      !records.some((record) => record.pid === current.pid)
-    ) {
-      records.push(current);
-    }
-  }
-  return records.toSorted((left, right) => left.pid - right.pid);
+function markedSurvivors(table) {
+  return [...table.values()]
+    .filter((record) => record.marked && !isZombie(record))
+    .toSorted((left, right) => left.pid - right.pid);
 }
 
-function sameProcessIdentity(current, observed) {
-  return current.started === observed.started;
+function liveGroupMembers(table, pgid) {
+  return [...table.values()].filter((record) => record.pgid === pgid && !isZombie(record));
 }
 
 function isZombie(record) {
@@ -451,7 +532,7 @@ function isZombie(record) {
 }
 
 function formatSurvivors(survivors) {
-  if (survivors.length === 0) return 'unknown (census changed before verification)';
+  if (survivors.length === 0) return 'none observed at final census';
   return survivors
     .map(
       (record) => `${String(record.pid)}(ppid=${String(record.ppid)},pgid=${String(record.pgid)})`,
@@ -459,24 +540,35 @@ function formatSurvivors(survivors) {
     .join(', ');
 }
 
-function signalPosixProcessGroup(pid, signal) {
-  try {
-    process.kill(-pid, signal);
-  } catch (error) {
-    if (/** @type {NodeJS.ErrnoException} */ (error).code !== 'ESRCH') throw error;
-  }
+async function delayBefore(durationMs, deadlineAtMs, dependencies) {
+  const remainingMs = deadlineAtMs - dependencies.now();
+  if (remainingMs <= 0) return;
+  await dependencies.delay(Math.min(Math.max(1, durationMs), remainingMs));
 }
 
-async function promiseWithin(promise, timeoutMs) {
-  let timer;
-  const timeout = new Promise((resolveTimeout) => {
-    timer = setTimeout(() => resolveTimeout(undefined), timeoutMs);
-  });
-  try {
-    return await Promise.race([promise, timeout]);
-  } finally {
-    if (timer !== undefined) clearTimeout(timer);
-  }
+async function promiseBefore(promise, deadlineAtMs, now, delayFunction) {
+  const remainingMs = deadlineAtMs - now();
+  if (remainingMs <= 0) return undefined;
+  return Promise.race([promise, delayFunction(remainingMs).then(() => undefined)]);
+}
+
+function phaseDeadline(now, allowanceMs, cleanupDeadlineAtMs) {
+  return Math.min(cleanupDeadlineAtMs, safeDeadline(now, allowanceMs));
+}
+
+function safeDeadline(now, allowanceMs) {
+  const deadline = now + allowanceMs;
+  if (!Number.isSafeInteger(deadline))
+    throw new TypeError('process deadline must be a safe integer');
+  return deadline;
+}
+
+function disposeChildStreams(child, onStdout, onStderr) {
+  child.stdout.off('data', onStdout);
+  child.stderr.off('data', onStderr);
+  child.stdout.destroy();
+  child.stderr.destroy();
+  child.unref();
 }
 
 function combinedOutput(limit) {

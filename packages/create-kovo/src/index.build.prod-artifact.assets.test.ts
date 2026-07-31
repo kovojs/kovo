@@ -34,7 +34,7 @@ describe('create-kovo starter (build integration: production asset artifacts)', 
 
       try {
         writeKovoProject(root, { name: 'Prod Public Asset Proof' });
-        linkStarterBuildDependencies(root);
+        await linkStarterBuildDependencies(root);
 
         mkdirSync(join(root, 'public'), { recursive: true });
         writeFileSync(

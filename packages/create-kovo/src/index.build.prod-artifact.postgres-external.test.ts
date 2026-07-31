@@ -48,7 +48,7 @@ describe('create-kovo starter (build integration: production Postgres driver flo
 
     try {
       writeKovoProject(root, { dialect: 'postgres', name: 'Production PGlite Refusal Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       buildReusableProductionArtifact(root);
 
       const env = {
@@ -110,7 +110,7 @@ describeIfPostgres(
 
       try {
         writeKovoProject(root, { dialect: 'postgres', name: 'External Postgres Proof' });
-        linkStarterBuildDependencies(root);
+        await linkStarterBuildDependencies(root);
         writeProductionEquivalentSchemaModule(root);
         writeStarterPostgresMigration(root);
         allowExternalPostgresEgress(root, cluster.port);

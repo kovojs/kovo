@@ -18,7 +18,7 @@ describe('create-kovo starter (build integration: scaffold SQLite)', () => {
   it(
     'runs kovo check in the generated SQLite app',
     async () => {
-      const app = createStarterApp({
+      const app = await createStarterApp({
         dialect: 'sqlite',
         install: 'link-local',
         name: 'Sqlite Check Proof',
@@ -35,8 +35,8 @@ describe('create-kovo starter (build integration: scaffold SQLite)', () => {
     generatedStarterTestTimeout({ cliProcessCount: 1 }),
   );
 
-  it('declares pgsql-ast-parser in the generated SQLite app package', () => {
-    const app = createStarterApp({
+  it('declares pgsql-ast-parser in the generated SQLite app package', async () => {
+    const app = await createStarterApp({
       dialect: 'sqlite',
       install: 'link-local',
       name: 'Sqlite Parser Dependency Proof',
@@ -57,7 +57,7 @@ describe('create-kovo starter (build integration: scaffold SQLite)', () => {
   it(
     'fails production build when a SQLite app registers durable tasks',
     async () => {
-      const app = createStarterApp({
+      const app = await createStarterApp({
         dialect: 'sqlite',
         name: 'Sqlite Durable Task Proof',
         tempPrefix: 'create-kovo-sqlite-durable-task-build-',

@@ -1,4 +1,4 @@
-import { execFileSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
@@ -13,7 +13,7 @@ import {
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 
 import {
   writeKovoExampleProject,
@@ -25,7 +25,6 @@ import {
 import {
   boundedTestProcessCleanupBudgetMs,
   runBoundedTestProcess,
-  type BoundedTestProcessInvocation,
   type BoundedTestProcessOutcome,
 } from './index.test-process-supervisor.mjs';
 
@@ -149,7 +148,7 @@ let packedKovoPackageCache: PackedKovoPackages | undefined;
 const packedKovoPackageManifest = 'packed-kovo-packages.json';
 const packedStarterCiManifestProducer = 'scripts/ci-shards.mjs pack-starter';
 
-export function createStarterApp(options: StarterAppOptions): StarterTestApp {
+export async function createStarterApp(options: StarterAppOptions): Promise<StarterTestApp> {
   const setupDeadlineAtMs = fixtureSetupDeadlineAtMs();
   const tempParent = options.tempParent ?? tmpdir();
   mkdirSync(tempParent, { recursive: true });
@@ -161,10 +160,10 @@ export function createStarterApp(options: StarterAppOptions): StarterTestApp {
     const scaffold = options.scaffold ?? 'source';
     const installMode = options.install ?? 'symlink';
     const packedPackages =
-      scaffold === 'packed-bin' ? packKovoWorkspacePackages(setupDeadlineAtMs) : undefined;
+      scaffold === 'packed-bin' ? await packKovoWorkspacePackages(setupDeadlineAtMs) : undefined;
 
     if (scaffold === 'packed-bin') {
-      scaffoldWithPackedCreateKovo(root, options, packedPackages, setupDeadlineAtMs);
+      await scaffoldWithPackedCreateKovo(root, options, packedPackages, setupDeadlineAtMs);
     } else if (options.example !== undefined) {
       writeKovoExampleProject(root, {
         disableGit: true,
@@ -181,7 +180,7 @@ export function createStarterApp(options: StarterAppOptions): StarterTestApp {
       });
     }
 
-    const install = installStarterAppDependencies(
+    const install = await installStarterAppDependencies(
       root,
       installMode,
       packedPackages,
@@ -201,12 +200,12 @@ export function createStarterApp(options: StarterAppOptions): StarterTestApp {
   }
 }
 
-export function installStarterAppDependencies(
+export async function installStarterAppDependencies(
   root: string,
   mode: StarterInstallMode,
   packedPackages?: PackedKovoPackages,
   setupDeadlineAtMs = fixtureSetupDeadlineAtMs(),
-): StarterAppInstall {
+): Promise<StarterAppInstall> {
   const installMode = resolveStarterInstallMode(mode);
   if (installMode === 'symlink') {
     linkWorkspaceStarterBuildDependencies(root);
@@ -214,7 +213,7 @@ export function installStarterAppDependencies(
   }
 
   if (installMode === 'link-local') {
-    execStarterCommand(
+    await execStarterCommand(
       process.execPath,
       [join(process.cwd(), 'scripts/link-local-kovo.mjs'), root],
       {
@@ -222,7 +221,7 @@ export function installStarterAppDependencies(
         setupDeadlineAtMs,
       },
     );
-    execStarterCommand('pnpm', ['install', '--ignore-workspace'], {
+    await execStarterCommand('pnpm', ['install', '--ignore-workspace'], {
       cwd: root,
       env: starterInstallEnv(root),
       setupDeadlineAtMs,
@@ -230,9 +229,9 @@ export function installStarterAppDependencies(
     return { mode: installMode };
   }
 
-  const currentPackages = packedPackages ?? packKovoWorkspacePackages(setupDeadlineAtMs);
+  const currentPackages = packedPackages ?? (await packKovoWorkspacePackages(setupDeadlineAtMs));
   rewriteKovoDependenciesToTarballs(root, currentPackages);
-  execStarterCommand('pnpm', ['install', '--ignore-workspace'], {
+  await execStarterCommand('pnpm', ['install', '--ignore-workspace'], {
     cwd: root,
     env: starterInstallEnv(root),
     setupDeadlineAtMs,
@@ -439,9 +438,9 @@ export function withStarterBinOnPath(root: string): NodeJS.ProcessEnv {
   };
 }
 
-export function linkStarterBuildDependencies(root: string): void {
+export async function linkStarterBuildDependencies(root: string): Promise<void> {
   if (resolveStarterInstallMode('symlink') === 'packed') {
-    void installStarterAppDependencies(root, 'symlink');
+    await installStarterAppDependencies(root, 'symlink');
     return;
   }
   linkWorkspaceStarterBuildDependencies(root);
@@ -525,7 +524,7 @@ export function withRepoBinOnPath(): NodeJS.ProcessEnv {
   };
 }
 
-function packKovoWorkspacePackages(setupDeadlineAtMs: number): PackedKovoPackages {
+async function packKovoWorkspacePackages(setupDeadlineAtMs: number): Promise<PackedKovoPackages> {
   const envTarballDir = process.env.KOVO_PACKED_PACKAGES_DIR;
   const currentBuildMode = process.env.KOVO_STARTER_SOURCE_FIXTURE_DEPENDENCIES;
   if (currentBuildMode !== undefined && currentBuildMode !== 'packed-current') {
@@ -579,7 +578,7 @@ function packKovoWorkspacePackages(setupDeadlineAtMs: number): PackedKovoPackage
   for (const pkg of packedWorkspacePackages) {
     const packageRoot = join(process.cwd(), 'packages', pkg.dir);
     const before = new Set(readdirSync(tarballDir).filter((file) => file.endsWith('.tgz')));
-    execStarterCommand(
+    await execStarterCommand(
       'pnpm',
       ['--config.ignore-scripts=true', 'pack', '--pack-destination', tarballDir],
       {
@@ -594,7 +593,7 @@ function packKovoWorkspacePackages(setupDeadlineAtMs: number): PackedKovoPackage
       throw new Error(`Expected one tarball for ${pkg.name}; found ${created.length}.`);
     }
     const tarballPath = realpathSync(join(tarballDir, created[0] ?? ''));
-    canonicalizePackedTarball(tarballPath, setupDeadlineAtMs);
+    await canonicalizePackedTarball(tarballPath, setupDeadlineAtMs);
     tarballByName.set(pkg.name, tarballPath);
   }
 
@@ -610,11 +609,14 @@ function packKovoWorkspacePackages(setupDeadlineAtMs: number): PackedKovoPackage
   return packedKovoPackageCache;
 }
 
-function canonicalizePackedTarball(tarballPath: string, setupDeadlineAtMs: number): void {
+async function canonicalizePackedTarball(
+  tarballPath: string,
+  setupDeadlineAtMs: number,
+): Promise<void> {
   const moduleUrl = pathToFileURL(
     join(process.cwd(), 'scripts', 'lib', 'deterministic-tarball.mjs'),
   ).href;
-  execStarterCommand(
+  await execStarterCommand(
     process.execPath,
     [
       '--input-type=module',
@@ -629,15 +631,15 @@ function canonicalizePackedTarball(tarballPath: string, setupDeadlineAtMs: numbe
   );
 }
 
-function materializePackedPackage(
+async function materializePackedPackage(
   tarballPath: string,
   destination: string,
   setupDeadlineAtMs: number,
-): void {
+): Promise<void> {
   const moduleUrl = pathToFileURL(
     join(process.cwd(), 'scripts', 'lib', 'deterministic-tarball.mjs'),
   ).href;
-  execStarterCommand(
+  await execStarterCommand(
     process.execPath,
     [
       '--input-type=module',
@@ -708,12 +710,12 @@ function writePackedKovoPackageManifest(packages: PackedKovoPackages): void {
   );
 }
 
-function scaffoldWithPackedCreateKovo(
+async function scaffoldWithPackedCreateKovo(
   root: string,
   options: StarterAppOptions,
   packedPackages: PackedKovoPackages | undefined,
   setupDeadlineAtMs: number,
-): void {
+): Promise<void> {
   if (!packedPackages) {
     throw new Error('Packed create-kovo scaffold requires packed Kovo packages.');
   }
@@ -724,8 +726,8 @@ function scaffoldWithPackedCreateKovo(
   const coreTarball = packedPackages.tarballByName.get('@kovojs/core');
   if (!coreTarball) throw new Error('Missing packed @kovojs/core tarball.');
   const packedCreateKovoRoot = join(creatorRoot, 'node_modules/create-kovo');
-  materializePackedPackage(createKovoTarball, packedCreateKovoRoot, setupDeadlineAtMs);
-  materializePackedPackage(
+  await materializePackedPackage(createKovoTarball, packedCreateKovoRoot, setupDeadlineAtMs);
+  await materializePackedPackage(
     coreTarball,
     join(creatorRoot, 'node_modules/@kovojs/core'),
     setupDeadlineAtMs,
@@ -751,7 +753,7 @@ function scaffoldWithPackedCreateKovo(
   if (!existsSync(packedCreateKovoBin)) {
     throw new Error('Packed create-kovo install did not materialize dist/index.mjs.');
   }
-  execStarterCommand(process.execPath, [packedCreateKovoBin, ...args], {
+  await execStarterCommand(process.execPath, [packedCreateKovoBin, ...args], {
     cwd: dirname(root),
     env: withStarterBinOnPath(creatorRoot),
     setupDeadlineAtMs,
@@ -814,16 +816,11 @@ interface StarterSetupCommandOptions {
   setupDeadlineAtMs: number;
 }
 
-interface StarterSetupSupervisorResult {
-  outcome?: BoundedTestProcessOutcome;
-  supervisorError?: string;
-}
-
 function fixtureSetupDeadlineAtMs(): number {
   return Date.now() + GENERATED_STARTER_FIXTURE_SETUP_HEADROOM_MS;
 }
 
-export function runGeneratedStarterFixtureSetupCommandForTest(
+export async function runGeneratedStarterFixtureSetupCommandForTest(
   file: string,
   args: readonly string[],
   options: {
@@ -832,11 +829,11 @@ export function runGeneratedStarterFixtureSetupCommandForTest(
     signalGraceMs?: number;
     timeoutMs: number;
   },
-): void {
+): Promise<void> {
   if (!Number.isSafeInteger(options.timeoutMs) || options.timeoutMs <= 0) {
     throw new TypeError('Generated-starter fixture timeoutMs must be a positive safe integer.');
   }
-  execStarterCommand(file, args, {
+  await execStarterCommand(file, args, {
     cwd: options.cwd,
     ...(options.env === undefined ? {} : { env: options.env }),
     ...(options.signalGraceMs === undefined ? {} : { signalGraceMs: options.signalGraceMs }),
@@ -844,11 +841,11 @@ export function runGeneratedStarterFixtureSetupCommandForTest(
   });
 }
 
-function execStarterCommand(
+async function execStarterCommand(
   file: string,
   args: readonly string[],
   options: StarterSetupCommandOptions,
-): void {
+): Promise<void> {
   const signalGraceMs = options.signalGraceMs ?? GENERATED_STARTER_CLI_SIGNAL_GRACE_MS;
   if (!Number.isSafeInteger(signalGraceMs) || signalGraceMs <= 0) {
     throw new TypeError('Generated-starter fixture signalGraceMs must be a positive safe integer.');
@@ -860,15 +857,14 @@ function execStarterCommand(
     terminationGraceMs: signalGraceMs,
   });
   const remainingSetupMs = options.setupDeadlineAtMs - Date.now();
-  const runnerHeadroomMs = 1_000;
-  const supervisorTimeoutMs = remainingSetupMs - cleanupBudgetMs - runnerHeadroomMs;
+  const supervisorTimeoutMs = remainingSetupMs - cleanupBudgetMs;
   if (supervisorTimeoutMs <= 0) {
     throw new Error(
       `Generated-starter fixture setup exhausted its ${String(GENERATED_STARTER_FIXTURE_SETUP_HEADROOM_MS)}ms aggregate deadline before command: ${[file, ...args].join(' ')}`,
     );
   }
 
-  const invocation: BoundedTestProcessInvocation = {
+  const outcome = await runBoundedTestProcess({
     args,
     command: file,
     cwd: options.cwd,
@@ -879,60 +875,7 @@ function execStarterCommand(
     streamCloseTimeoutMs: signalGraceMs,
     supervisorTimeoutMs,
     terminationGraceMs: signalGraceMs,
-  };
-  const runnerRoot = mkdtempSync(join(tmpdir(), 'kovo-test-process-supervisor-'));
-  const invocationPath = join(runnerRoot, 'invocation.json');
-  const resultPath = join(runnerRoot, 'result.json');
-  writeFileSync(invocationPath, JSON.stringify(invocation), 'utf8');
-  const runnerPath = fileURLToPath(
-    new URL('./index.test-process-supervisor-cli.mjs', import.meta.url),
-  );
-  let runnerFailure: unknown;
-  try {
-    execFileSync(process.execPath, [runnerPath, invocationPath, resultPath], {
-      cwd: process.cwd(),
-      env: process.env,
-      killSignal: 'SIGKILL',
-      stdio: 'pipe',
-      timeout: remainingSetupMs,
-    });
-  } catch (error) {
-    runnerFailure = error;
-  }
-
-  let report: StarterSetupSupervisorResult | undefined;
-  try {
-    if (existsSync(resultPath)) {
-      report = JSON.parse(readFileSync(resultPath, 'utf8')) as StarterSetupSupervisorResult;
-    }
-  } finally {
-    rmSync(runnerRoot, { force: true, recursive: true });
-  }
-  if (report?.supervisorError !== undefined) {
-    throw new Error(
-      `Generated-starter fixture setup supervisor failed for ${[file, ...args].join(' ')}: ${report.supervisorError}`,
-    );
-  }
-  if (report?.outcome === undefined) {
-    throw new Error(
-      [
-        `Generated-starter fixture setup supervisor failed before reporting command outcome: ${[file, ...args].join(' ')}`,
-        runnerFailure === undefined
-          ? ''
-          : runnerFailure instanceof Error
-            ? runnerFailure.message
-            : typeof runnerFailure === 'string'
-              ? runnerFailure
-              : 'unknown runner failure',
-        formatCommandOutput(runnerFailure, 'stdout'),
-        formatCommandOutput(runnerFailure, 'stderr'),
-      ]
-        .filter(Boolean)
-        .join('\n'),
-    );
-  }
-
-  const outcome = report.outcome;
+  });
   const result = commandOutput(outcome);
   if (outcome.timedOut) {
     throw generatedStarterCommandError(
@@ -967,14 +910,6 @@ function execStarterCommand(
       result,
     );
   }
-}
-
-function formatCommandOutput(error: unknown, key: 'stderr' | 'stdout'): string {
-  if (typeof error !== 'object' || error === null || !(key in error)) return '';
-  const value = (error as Record<typeof key, unknown>)[key];
-  if (Buffer.isBuffer(value)) return value.toString('utf8').trim();
-  if (typeof value === 'string') return value.trim();
-  return '';
 }
 
 export async function reservePort(): Promise<number> {

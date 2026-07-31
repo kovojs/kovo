@@ -43,7 +43,7 @@ describe('create-kovo starter (build integration: production response header art
 
       try {
         writeKovoProject(root, { name: 'Prod Header Sink Proof' });
-        linkStarterBuildDependencies(root);
+        await linkStarterBuildDependencies(root);
         addHeaderSinkProofRoutes(root);
 
         buildReusableProductionArtifact(root);

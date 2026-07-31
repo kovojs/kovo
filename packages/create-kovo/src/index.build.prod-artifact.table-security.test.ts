@@ -12,13 +12,13 @@ import {
 import { linkStarterBuildDependencies } from './index.test-support.js';
 
 describe('create-kovo production table-security provenance', () => {
-  it('rejects an exact Drizzle annotation-slot replacement during paranoid preflight', () => {
+  it('rejects an exact Drizzle annotation-slot replacement during paranoid preflight', async () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-table-security-slot-'));
 
     try {
       mkdirSync(root, { recursive: true });
       writeKovoProject(root, { dialect: 'sqlite', name: 'Table Security Slot Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       const schemaPath = join(root, 'src/schema.ts');
       const schema = readFileSync(schemaPath, 'utf8');
       writeFileSync(

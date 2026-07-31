@@ -11,7 +11,7 @@ describe('create-kovo starter (build integration: packed Postgres scaffold)', ()
   it(
     'installs the packed postgres starter from published-shape tarballs',
     async () => {
-      const app = createStarterApp({
+      const app = await createStarterApp({
         dialect: 'postgres',
         install: 'packed',
         name: 'Packed postgres Shape Proof',

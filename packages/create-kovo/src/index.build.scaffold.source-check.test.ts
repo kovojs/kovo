@@ -9,8 +9,8 @@ import { createStarterApp, withStarterBinOnPath } from './index.test-support.js'
 describe('create-kovo starter (current-source quick check)', () => {
   it.each(['postgres', 'sqlite'] as const)(
     'passes the generated %s quick check without claiming deployment retention',
-    (dialect) => {
-      const app = createStarterApp({
+    async (dialect) => {
+      const app = await createStarterApp({
         dialect,
         name: `${dialect} Source Check Proof`,
         tempPrefix: `create-kovo-${dialect}-source-check-`,

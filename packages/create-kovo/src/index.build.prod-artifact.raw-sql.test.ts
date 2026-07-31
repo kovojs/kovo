@@ -23,14 +23,14 @@ function captureProductionBuildFailure(build: () => void): unknown {
 }
 
 describe('create-kovo starter (build integration: production raw-SQL artifacts)', () => {
-  it('patches raw owner-table proof into multiline mutation registries', () => {
+  it('patches raw owner-table proof into multiline mutation registries', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-prod-raw-sql-multiline-registry-'));
 
     try {
       writeKovoProject(root, { name: 'Prod Raw SQL Multiline Registry Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       const mutationsPath = join(root, 'src/mutations.ts');
       const mutations = readFileSync(mutationsPath, 'utf8');
       writeFileSync(
@@ -62,14 +62,14 @@ describe('create-kovo starter (build integration: production raw-SQL artifacts)'
   // @kovo-security-certifies KV414 raw-sql-owner-write-prod-artifact
   it(
     'blocks raw owner-table db.execute writes from the production build artifact',
-    () => {
+    async () => {
       const tempParent = tmpdir();
       mkdirSync(tempParent, { recursive: true });
       const root = mkdtempSync(join(tempParent, 'create-kovo-prod-raw-sql-write-'));
 
       try {
         writeKovoProject(root, { name: 'Prod Raw SQL Write Proof' });
-        linkStarterBuildDependencies(root);
+        await linkStarterBuildDependencies(root);
         addRawSqlOwnerWriteProof(root, { staticStatement: true });
 
         const output = execFileSyncErrorOutput(

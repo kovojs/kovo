@@ -37,7 +37,7 @@ describe('create-kovo starter (build integration: production runtime contract ar
 
       try {
         writeKovoProject(root, { name: 'Prod Runtime Contract Proof' });
-        linkStarterBuildDependencies(root);
+        await linkStarterBuildDependencies(root);
         addRuntimeContractProofs(root, { includeClosedSyncParseProof: false });
 
         buildReusableProductionArtifact(root);

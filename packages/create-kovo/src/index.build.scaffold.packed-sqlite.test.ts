@@ -15,7 +15,7 @@ describe('create-kovo starter (build integration: packed SQLite scaffold)', () =
   it(
     'installs the packed sqlite starter from published-shape tarballs',
     async () => {
-      const app = createStarterApp({
+      const app = await createStarterApp({
         dialect: 'sqlite',
         experimentalSqlite: true,
         install: 'packed',

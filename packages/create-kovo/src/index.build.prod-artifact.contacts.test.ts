@@ -40,7 +40,7 @@ describe('create-kovo starter (build integration: production contact artifacts)'
 
       try {
         writeKovoProject(root, { name: 'Prod Add Contact Proof' });
-        linkStarterBuildDependencies(root);
+        await linkStarterBuildDependencies(root);
 
         buildReusableProductionArtifact(root);
 
@@ -203,7 +203,7 @@ describe('create-kovo starter (build integration: production contact artifacts)'
 
       try {
         writeKovoProject(root, { dialect: 'sqlite', name: 'Prod SQLite Add Contact Proof' });
-        linkStarterBuildDependencies(root);
+        await linkStarterBuildDependencies(root);
 
         buildReusableProductionArtifact(root);
 
@@ -276,7 +276,7 @@ describe('create-kovo starter (build integration: production contact artifacts)'
 
       try {
         writeKovoProject(root, { name: 'Prod Multi Live Target Proof' });
-        linkStarterBuildDependencies(root);
+        await linkStarterBuildDependencies(root);
         addMultiComponentLiveTargetProof(root);
 
         buildReusableProductionArtifact(root);
@@ -378,7 +378,7 @@ describe('create-kovo starter (build integration: production contact artifacts)'
 
       try {
         writeKovoProject(root, { name: 'Prod NoJS Idem Proof' });
-        linkStarterBuildDependencies(root);
+        await linkStarterBuildDependencies(root);
 
         buildReusableProductionArtifact(root);
 

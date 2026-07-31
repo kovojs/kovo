@@ -108,6 +108,11 @@ const phase5WriteMarker = 'phase5-write-boundary-proof';
 
 const POSTGRES_BINARIES = ['initdb', 'postgres'] as const;
 const selectedWorkerCase = selectedParanoidRuntimeCaseId();
+if (process.env.KOVO_PARANOID === '1' && selectedWorkerCase === undefined) {
+  throw new Error(
+    'KOVO_PARANOID runtime proofs must run through the isolated supervisor with KOVO_PARANOID_RUNTIME_CASE selected.',
+  );
+}
 const phase5PostgresTestTimeoutMs = paranoidRuntimeTestTimeoutMs(
   'phase5-postgres-paranoid-dogfood',
 );
@@ -151,7 +156,7 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
           dialect: 'postgres',
           name: 'Phase 5 Postgres Paranoid Dogfood Proof',
         });
-        linkStarterBuildDependencies(root);
+        await linkStarterBuildDependencies(root);
         addPostgresParanoidPhase5DogfoodProof(root);
         addPostgresParanoidFollowup8Shapes(root);
         disableRuntimeSeedSql(root);
@@ -175,7 +180,7 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
   // @kovo-security-certifies KV449 phase-5-1-full-paranoid-finite-ir-closure
   phase5SqliteIt(
     'rejects the legacy Phase 5.1 SQLite sink fixture outside the finite IR',
-    () => {
+    async () => {
       const tempParent = tmpdir();
       mkdirSync(tempParent, { recursive: true });
       const root = mkdtempSync(join(tempParent, 'create-kovo-phase5-paranoid-dogfood-'));
@@ -185,7 +190,7 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
           dialect: 'sqlite',
           name: 'Phase 5.1 Full Paranoid Dogfood Proof',
         });
-        linkStarterBuildDependencies(root);
+        await linkStarterBuildDependencies(root);
         addSqliteRuntimeSecretProvenanceProof(root);
         pruneParanoidPhase5SqliteReadSet(root);
         addStarterMutationDbScopeProof(root, { mode: 'runtime-table-choke' });
@@ -234,7 +239,7 @@ describeIfPostgres(
 
         try {
           writeKovoProject(root, { dialect: 'postgres', name: 'Authz Paranoid External Proof' });
-          linkStarterBuildDependencies(root);
+          await linkStarterBuildDependencies(root);
           writeProductionEquivalentSchemaModule(root);
           writeStarterPostgresMigration(root);
           buildParanoidProductionArtifact(root);
@@ -319,7 +324,7 @@ describeIfPostgres(
         const runtimeRole = `kovo_authz_refusal_runtime_${Date.now()}`;
 
         writeKovoProject(root, { dialect: 'postgres', name: 'Authz Paranoid Refusal Proof' });
-        linkStarterBuildDependencies(root);
+        await linkStarterBuildDependencies(root);
         writeProductionEquivalentSchemaModule(root);
         writeStarterPostgresMigration(root);
         buildParanoidProductionArtifact(root);
@@ -394,9 +399,7 @@ afterAll(() => {
 });
 
 function itForWorkerCase(caseId: ParanoidRuntimeCaseId, implementation: typeof it): typeof it {
-  return selectedWorkerCase === undefined || selectedWorkerCase === caseId
-    ? implementation
-    : it.skip;
+  return selectedWorkerCase === caseId ? implementation : it.skip;
 }
 
 async function runAuthorizationMatrixCells(

@@ -31,7 +31,7 @@ describe('create-kovo starter (build integration: trusted client-IP artifacts)',
 
       try {
         writeKovoProject(root, { name: 'Prod Client IP Proof' });
-        linkStarterBuildDependencies(root);
+        await linkStarterBuildDependencies(root);
         const contractPath = join(root, 'src/kovo.ts');
         const contractSource = readFileSync(contractPath, 'utf8');
         const anchor = '  principalEpochStore: appRuntimePrincipalEpochStore,';

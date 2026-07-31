@@ -62,8 +62,8 @@ describe('create-kovo starter (build integration: adversarial production artifac
     ['sqlite', 'sqlite'],
   ] as const;
 
-  it('fails the diagnostic assertion when an unchanged production build succeeds', () => {
-    withProject('create-kovo-m1-build-failure-helper-green-', undefined, (root) => {
+  it('fails the diagnostic assertion when an unchanged production build succeeds', async () => {
+    await withProject('create-kovo-m1-build-failure-helper-green-', undefined, (root) => {
       expect(() => expectBuildFailure(root, ['KOVO_SENTINEL_MUST_NOT_SELF_SATISFY'])).toThrowError(
         'Expected production build to fail, but it succeeded.',
       );
@@ -72,13 +72,13 @@ describe('create-kovo starter (build integration: adversarial production artifac
 
   it.each([...dialectIndependentCompilerGateCases])(
     'M1:storage-write tracks storage write gates from current %s production source, not stale cache',
-    (_label: string, dialect: CreateKovoDialect | undefined) => {
-      withProject(`create-kovo-m1-storage-${_label}-red-`, dialect, (root) => {
+    async (_label: string, dialect: CreateKovoDialect | undefined) => {
+      await withProject(`create-kovo-m1-storage-${_label}-red-`, dialect, (root) => {
         addStorageQueryWriteProof(root);
         expectStorageWriteBuildFailure(root);
       });
 
-      withProject(`create-kovo-m1-storage-${_label}-flip-`, dialect, (root) => {
+      await withProject(`create-kovo-m1-storage-${_label}-flip-`, dialect, (root) => {
         buildProductionArtifact(root);
         addStorageQueryWriteProof(root);
         expectStorageWriteBuildFailure(root);
@@ -87,8 +87,8 @@ describe('create-kovo starter (build integration: adversarial production artifac
     multiBuildProofTimeout,
   );
 
-  it('M1:storage-write fixture uses the current app-scoped declaration contract', () => {
-    withProject('create-kovo-m1-storage-current-api-', undefined, (root) => {
+  it('M1:storage-write fixture uses the current app-scoped declaration contract', async () => {
+    await withProject('create-kovo-m1-storage-current-api-', undefined, (root) => {
       addStorageQueryWriteProof(root, { format: false });
 
       const proof = readFileSync(join(root, 'src/storage-query-write-proof.ts'), 'utf8');
@@ -107,8 +107,8 @@ describe('create-kovo starter (build integration: adversarial production artifac
 
   it.each([...dialectIndependentCompilerGateCases])(
     'M1:storage-write keeps opaque storage authority on the %s KV424 path',
-    (_label: string, dialect: CreateKovoDialect | undefined) => {
-      withProject(`create-kovo-m1-storage-${_label}-opaque-`, dialect, (root) => {
+    async (_label: string, dialect: CreateKovoDialect | undefined) => {
+      await withProject(`create-kovo-m1-storage-${_label}-opaque-`, dialect, (root) => {
         addOpaqueStorageQueryWriteProof(root);
         const output = expectBuildFailure(root, [
           'KV424',
@@ -126,8 +126,8 @@ describe('create-kovo starter (build integration: adversarial production artifac
 
   it.each([...dialectIndependentCompilerGateCases])(
     'M1:raw-html tracks trusted output provenance gates from current %s production source, not stale cache',
-    (_label: string, dialect: CreateKovoDialect | undefined) => {
-      withProject(`create-kovo-m1-trusted-output-${_label}-red-`, dialect, (root) => {
+    async (_label: string, dialect: CreateKovoDialect | undefined) => {
+      await withProject(`create-kovo-m1-trusted-output-${_label}-red-`, dialect, (root) => {
         addTrustedOutputProvenanceBuildProof(root);
         expectBuildFailure(root, [
           'KV426',
@@ -136,12 +136,12 @@ describe('create-kovo starter (build integration: adversarial production artifac
         ]);
       });
 
-      withProject(`create-kovo-m1-trusted-output-${_label}-green-`, dialect, (root) => {
+      await withProject(`create-kovo-m1-trusted-output-${_label}-green-`, dialect, (root) => {
         addEscapedAttackerTextProof(root);
         buildProductionArtifact(root);
       });
 
-      withProject(`create-kovo-m1-trusted-output-${_label}-flip-`, dialect, (root) => {
+      await withProject(`create-kovo-m1-trusted-output-${_label}-flip-`, dialect, (root) => {
         buildProductionArtifact(root);
         addTrustedOutputProvenanceBuildProof(root);
         expectBuildFailure(root, [
@@ -156,8 +156,8 @@ describe('create-kovo starter (build integration: adversarial production artifac
 
   it.each([...dialectIndependentCompilerGateCases])(
     'M1:raw-html keeps mutable trusted-output aliases on the %s KV424 path',
-    (_label: string, dialect: CreateKovoDialect | undefined) => {
-      withProject(`create-kovo-m1-trusted-output-${_label}-opaque-`, dialect, (root) => {
+    async (_label: string, dialect: CreateKovoDialect | undefined) => {
+      await withProject(`create-kovo-m1-trusted-output-${_label}-opaque-`, dialect, (root) => {
         addOpaqueTrustedOutputAuthorityProof(root);
         expectBuildFailure(root, ['KV424', 'source=<unresolved-mutable-factory-provenance>']);
       });
@@ -167,8 +167,8 @@ describe('create-kovo starter (build integration: adversarial production artifac
 
   it.each([...dialectIndependentCompilerGateCases])(
     'M1:secret-wire blocks secret-column-to-wire value-flow in the %s production artifact',
-    (_label: string, dialect: CreateKovoDialect | undefined) => {
-      withProject(`create-kovo-m1-secret-value-flow-${_label}-red-`, dialect, (root) => {
+    async (_label: string, dialect: CreateKovoDialect | undefined) => {
+      await withProject(`create-kovo-m1-secret-value-flow-${_label}-red-`, dialect, (root) => {
         addAuthSecretLeakProof(root);
         expectBuildFailure(root, [
           'KV435',
@@ -181,7 +181,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
         ]);
       });
 
-      withProject(`create-kovo-m1-secret-value-flow-${_label}-green-`, dialect, (root) => {
+      await withProject(`create-kovo-m1-secret-value-flow-${_label}-green-`, dialect, (root) => {
         addAuthSecretLeakProof(root, { leakToWire: false });
         buildProductionArtifact(root);
       });
@@ -191,8 +191,8 @@ describe('create-kovo starter (build integration: adversarial production artifac
 
   it.each([...dialectIndependentCompilerGateCases])(
     'M1:secret-wire keeps opaque credential laundering on the %s KV424 path',
-    (_label: string, dialect: CreateKovoDialect | undefined) => {
-      withProject(`create-kovo-m1-secret-value-flow-${_label}-opaque-`, dialect, (root) => {
+    async (_label: string, dialect: CreateKovoDialect | undefined) => {
+      await withProject(`create-kovo-m1-secret-value-flow-${_label}-opaque-`, dialect, (root) => {
         addOpaqueAuthSecretLeakProof(root);
         expectBuildFailure(root, [
           'KV424',
@@ -205,8 +205,8 @@ describe('create-kovo starter (build integration: adversarial production artifac
     240_000,
   );
 
-  it('M1:secret-wire fixture fails closed when the scaffold query insertion anchor drifts', () => {
-    withProject('create-kovo-m1-secret-value-flow-drift-', undefined, (root) => {
+  it('M1:secret-wire fixture fails closed when the scaffold query insertion anchor drifts', async () => {
+    await withProject('create-kovo-m1-secret-value-flow-drift-', undefined, (root) => {
       const queriesPath = join(root, 'src/queries.ts');
       const queries = readFileSync(queriesPath, 'utf8').replace(
         'export const contactsQuery = app.query({',
@@ -220,8 +220,8 @@ describe('create-kovo starter (build integration: adversarial production artifac
     });
   });
 
-  it('M1:secret-wire opaque fixture uses the current app-scoped declaration contract', () => {
-    withProject('create-kovo-m1-secret-value-flow-current-api-', undefined, (root) => {
+  it('M1:secret-wire opaque fixture uses the current app-scoped declaration contract', async () => {
+    await withProject('create-kovo-m1-secret-value-flow-current-api-', undefined, (root) => {
       addOpaqueAuthSecretLeakProof(root, { format: false });
 
       const queries = readFileSync(join(root, 'src/queries.ts'), 'utf8');
@@ -238,8 +238,8 @@ describe('create-kovo starter (build integration: adversarial production artifac
     });
   });
 
-  it('M1:output-wire fixtures use canonical safe authored shapes', () => {
-    withProject('create-kovo-m1-output-wire-authored-shapes-', undefined, (root) => {
+  it('M1:output-wire fixtures use canonical safe authored shapes', async () => {
+    await withProject('create-kovo-m1-output-wire-authored-shapes-', undefined, (root) => {
       addRuntimeContractProofs(root);
       addM1HeaderRedirectCapabilityProof(root);
       assertM1OutputWireFixtureUsesSafeAuthoredShapes(root);
@@ -248,13 +248,13 @@ describe('create-kovo starter (build integration: adversarial production artifac
 
   it.each([...dialectSpecificRuntimeCases])(
     'M1:raw-sql covers raw SQL owner-write unsafe and trusted %s production siblings',
-    (_label: string, dialect: CreateKovoDialect | undefined) => {
-      withProject(`create-kovo-m1-raw-sql-${_label}-red-`, dialect, (root) => {
+    async (_label: string, dialect: CreateKovoDialect | undefined) => {
+      await withProject(`create-kovo-m1-raw-sql-${_label}-red-`, dialect, (root) => {
         addRawSqlOwnerWriteProof(root, { staticStatement: true });
         expectBuildFailure(root, ['KV414', 'WRITE', 'domain=raw-owner']);
       });
 
-      withProject(`create-kovo-m1-raw-sql-${_label}-green-`, dialect, (root) => {
+      await withProject(`create-kovo-m1-raw-sql-${_label}-green-`, dialect, (root) => {
         addRawSqlOwnerWriteProof(root, { trusted: true });
         buildProductionArtifact(root);
       });
@@ -264,8 +264,8 @@ describe('create-kovo starter (build integration: adversarial production artifac
 
   it.each([...dialectIndependentCompilerGateCases])(
     'bugz-25: composed concurrency provenance fails closed in the %s production build',
-    (_label: string, dialect: CreateKovoDialect | undefined) => {
-      withProject(`create-kovo-bugz25-drizzle-${_label}-red-`, dialect, (root) => {
+    async (_label: string, dialect: CreateKovoDialect | undefined) => {
+      await withProject(`create-kovo-bugz25-drizzle-${_label}-red-`, dialect, (root) => {
         addBugz25ToctouProof(root);
         expectBuildFailure(root, ['KV424', 'src/schema.ts', 'source=<mutated-retained-config>']);
       });
@@ -277,8 +277,8 @@ describe('create-kovo starter (build integration: adversarial production artifac
   // @kovo-security-certifies KV424 exact-global-iterable-binding-family-prod-artifact
   it.each([...BUGZ31_GLOBAL_MEMBER_CARRIER_PROOFS])(
     'bugz-31: exact global member %s fail closed in a production artifact',
-    (proof: Bugz31GlobalMemberCarrierProof) => {
-      withProject(`create-kovo-bugz31-${proof}-red-`, undefined, (root) => {
+    async (proof: Bugz31GlobalMemberCarrierProof) => {
+      await withProject(`create-kovo-bugz31-${proof}-red-`, undefined, (root) => {
         addBugz31GlobalMemberCarrierProof(root, proof);
         expectBuildFailure(root, [
           'KV424',
@@ -293,8 +293,8 @@ describe('create-kovo starter (build integration: adversarial production artifac
   );
 
   // @kovo-security-certifies KV424 helper-assimilation-prod-artifact
-  it('bugz-31: helper, container, reflection, and Promise callback assimilation fail the production build', () => {
-    withProject('create-kovo-bugz31-assimilation-red-', undefined, (root) => {
+  it('bugz-31: helper, container, reflection, and Promise callback assimilation fail the production build', async () => {
+    await withProject('create-kovo-bugz31-assimilation-red-', undefined, (root) => {
       addBugz31AssimilationProof(root);
       expectBuildFailure(root, [
         'KV424',
@@ -311,8 +311,8 @@ describe('create-kovo starter (build integration: adversarial production artifac
 
   // @kovo-security-certifies KV424 trusted-input-provenance-prod-artifact
   // @kovo-security-certifies KV424 call-derived-reference-alias-prod-artifact
-  it('bugz-31: trusted input mutation and authored result laundering fail the production build', () => {
-    withProject('create-kovo-bugz31-root-provenance-red-', undefined, (root) => {
+  it('bugz-31: trusted input mutation and authored result laundering fail the production build', async () => {
+    await withProject('create-kovo-bugz31-root-provenance-red-', undefined, (root) => {
       addBugz31TrustedInputProvenanceProof(root);
       expectBuildFailure(root, [
         'KV424',
@@ -330,8 +330,8 @@ describe('create-kovo starter (build integration: adversarial production artifac
   // @kovo-security-certifies KV424 exact-global-namespace-member-lockdown-prod-artifact
   it.each([...dialectIndependentCompilerGateCases])(
     'bugz-31: exact global namespace-member replacements fail the %s production build',
-    (_label: string, dialect: CreateKovoDialect | undefined) => {
-      withProject(`create-kovo-bugz31-intrinsic-member-${_label}-red-`, dialect, (root) => {
+    async (_label: string, dialect: CreateKovoDialect | undefined) => {
+      await withProject(`create-kovo-bugz31-intrinsic-member-${_label}-red-`, dialect, (root) => {
         addBugz31GlobalMemberLockdownProof(root);
         expectBuildFailure(root, [
           'KV424',
@@ -580,11 +580,11 @@ describe('create-kovo starter (build integration: adversarial production artifac
   );
 });
 
-function withProject(
+async function withProject(
   prefix: string,
   dialect: CreateKovoDialect | undefined,
-  run: (root: string) => void,
-): void {
+  run: (root: string) => void | Promise<void>,
+): Promise<void> {
   const tempParent = tmpdir();
   mkdirSync(tempParent, { recursive: true });
   const root = mkdtempSync(join(tempParent, prefix));
@@ -594,8 +594,8 @@ function withProject(
       ...(dialect === undefined ? {} : { dialect }),
       name: 'M1 Adversarial Production Artifact Proof',
     });
-    linkStarterBuildDependencies(root);
-    run(root);
+    await linkStarterBuildDependencies(root);
+    await run(root);
   } finally {
     rmSync(root, { force: true, recursive: true });
   }
@@ -1188,7 +1188,7 @@ async function withRunningProject(
       ...(dialect === undefined ? {} : { dialect }),
       name: 'M1 Adversarial Output Wire Proof',
     });
-    linkStarterBuildDependencies(root);
+    await linkStarterBuildDependencies(root);
     prepare(root);
     server = spawn(process.execPath, ['dist/server/server.mjs'], {
       cwd: root,

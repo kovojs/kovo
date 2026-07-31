@@ -13,7 +13,7 @@ describe('create-kovo starter (build integration: scaffold typecheck)', () => {
   it(
     'typechecks the generated app with starter dependencies',
     async () => {
-      const app = createStarterApp({
+      const app = await createStarterApp({
         name: 'Tsc Proof',
         tempParent: join(process.cwd(), 'node_modules/.tmp'),
         tempPrefix: 'create-kovo-tsc-',
@@ -31,7 +31,7 @@ describe('create-kovo starter (build integration: scaffold typecheck)', () => {
   it(
     'typechecks the generated SQLite app variant',
     async () => {
-      const app = createStarterApp({
+      const app = await createStarterApp({
         dialect: 'sqlite',
         name: 'Sqlite Tsc Proof',
         tempParent: join(process.cwd(), 'node_modules/.tmp'),
@@ -50,7 +50,7 @@ describe('create-kovo starter (build integration: scaffold typecheck)', () => {
   it(
     'runs the generated public inferred harness against a verified build graph',
     async () => {
-      const app = createStarterApp({
+      const app = await createStarterApp({
         name: 'Vitest Proof',
         retention: 'retained-24h',
         tempPrefix: 'create-kovo-vitest-',

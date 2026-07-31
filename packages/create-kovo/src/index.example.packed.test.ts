@@ -13,8 +13,8 @@ describe('create-kovo examples (packed consumer)', () => {
   ] as const) {
     it(
       `installs, typechecks, tests, and builds the ${example} clone from packed Kovo packages`,
-      () => {
-        const app = createStarterApp({
+      async () => {
+        const app = await createStarterApp({
           example,
           install: 'packed',
           name: `packed-${example}`,

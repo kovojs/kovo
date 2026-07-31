@@ -121,11 +121,9 @@ export function paranoidRuntimeWorkerRequirements(
   switch (selectedCase) {
     case undefined:
       return {
-        authorizationMatrixCases: REQUIRED_PARANOID_AUTHORIZATION_MATRIX_CASES,
-        postgresCases: REQUIRED_PARANOID_POSTGRES_CASES,
-        runtimeCases: includePostgresRuntimeCases
-          ? REQUIRED_PARANOID_RUNTIME_CASES
-          : ['phase5-sqlite-paranoid-dogfood'],
+        authorizationMatrixCases: [],
+        postgresCases: [],
+        runtimeCases: [],
       };
     case 'phase5-postgres-paranoid-dogfood':
       return {

@@ -51,7 +51,7 @@ describe('create-kovo starter (build integration: redirect and capability URL ar
         },
       );
       addRedirectAndCapabilityProof(root);
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
 
       buildReusableProductionArtifact(root);
       const census = assertProdArtifactSinkCensus(root, [

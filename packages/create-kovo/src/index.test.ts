@@ -662,12 +662,12 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/auth.ts')).not.toContain('kovo-starter-anon');
   });
 
-  it('lets the framework sound-subset classifier ignore aliases and prose while flagging casts', () => {
+  it('lets the framework sound-subset classifier ignore aliases and prose while flagging casts', async () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-sound-subset-'));
 
     try {
       writeKovoProject(root, { name: 'Sound Subset Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       writeFileSync(join(root, 'src/source.ts'), 'export const sourceValue = 1;\n', 'utf8');
       writeFileSync(
         join(root, 'src/import-alias.ts'),
@@ -782,12 +782,12 @@ describe('create-kovo starter (metadata)', () => {
     }
   });
 
-  it('rejects app-authored value imports of the framework runtime DB module', () => {
+  it('rejects app-authored value imports of the framework runtime DB module', async () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-runtime-db-subset-'));
 
     try {
       writeKovoProject(root, { name: 'Runtime Db Subset Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       writeFileSync(
         join(root, 'src/unsafe-runtime-db.ts'),
         [
@@ -848,12 +848,12 @@ describe('create-kovo starter (metadata)', () => {
     }
   });
 
-  it('confines the generated Better Auth instance and adapter under KOVO_PARANOID', () => {
+  it('confines the generated Better Auth instance and adapter under KOVO_PARANOID', async () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-auth-capability-subset-'));
 
     try {
       writeKovoProject(root, { name: 'Auth Capability Subset Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       const authPath = join(root, 'src/auth.ts');
       writeFileSync(
         authPath,
@@ -888,12 +888,12 @@ describe('create-kovo starter (metadata)', () => {
     }
   });
 
-  it('rejects raw SQL in query loaders while preserving explicit trustedSql escapes', () => {
+  it('rejects raw SQL in query loaders while preserving explicit trustedSql escapes', async () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-raw-sql-waist-'));
 
     try {
       writeKovoProject(root, { name: 'Raw Sql Waist Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       writeFileSync(
         join(root, 'src/raw-sql-query.ts'),
         [
@@ -1008,12 +1008,12 @@ describe('create-kovo starter (metadata)', () => {
     }
   });
 
-  it('rejects dynamically computed framework trust-sink callees', () => {
+  it('rejects dynamically computed framework trust-sink callees', async () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-trust-waist-'));
 
     try {
       writeKovoProject(root, { name: 'Trust Waist Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       writeFileSync(
         join(root, 'src/dynamic-trust.ts'),
         [
@@ -1102,12 +1102,12 @@ describe('create-kovo starter (metadata)', () => {
 
   it.each(['src/app.test.ts', 'src/endpoint-posture.test.ts'])(
     'fails the framework sound-subset classifier when security surface %s is not fully enrolled',
-    (removedFile) => {
+    async (removedFile) => {
       const root = mkdtempSync(join(tmpdir(), 'create-kovo-security-surface-enrollment-'));
 
       try {
         writeKovoProject(root, { name: 'Security Surface Enrollment Proof' });
-        linkStarterBuildDependencies(root);
+        await linkStarterBuildDependencies(root);
         rmSync(join(root, removedFile), { force: true });
 
         expect(() =>
@@ -1130,38 +1130,41 @@ describe('create-kovo starter (metadata)', () => {
     ['missing declaration', undefined],
     ['traversal path', ['src/app.tsx', '../outside.ts']],
     ['duplicate path', ['src/app.tsx', 'src/app.tsx']],
-  ])('fails closed when a strict scaffold has a %s sound-subset manifest', (_label, surface) => {
-    const root = mkdtempSync(join(tmpdir(), 'create-kovo-security-surface-manifest-'));
+  ])(
+    'fails closed when a strict scaffold has a %s sound-subset manifest',
+    async (_label, surface) => {
+      const root = mkdtempSync(join(tmpdir(), 'create-kovo-security-surface-manifest-'));
 
-    try {
-      writeKovoProject(root, { name: 'Security Surface Manifest Proof' });
-      linkStarterBuildDependencies(root);
-      const manifestPath = join(root, 'package.json');
-      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
-      if (surface === undefined) {
-        delete manifest.kovo.soundSubset;
-      } else {
-        manifest.kovo.soundSubset.securitySurface = surface;
+      try {
+        writeKovoProject(root, { name: 'Security Surface Manifest Proof' });
+        await linkStarterBuildDependencies(root);
+        const manifestPath = join(root, 'package.json');
+        const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+        if (surface === undefined) {
+          delete manifest.kovo.soundSubset;
+        } else {
+          manifest.kovo.soundSubset.securitySurface = surface;
+        }
+        writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+
+        expect(() =>
+          execFileSync(process.execPath, [SOUND_SUBSET_SCRIPT], {
+            cwd: root,
+            stdio: 'pipe',
+          }),
+        ).toThrow(/declared project security surface/u);
+      } finally {
+        rmSync(root, { force: true, recursive: true });
       }
-      writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+    },
+  );
 
-      expect(() =>
-        execFileSync(process.execPath, [SOUND_SUBSET_SCRIPT], {
-          cwd: root,
-          stdio: 'pipe',
-        }),
-      ).toThrow(/declared project security surface/u);
-    } finally {
-      rmSync(root, { force: true, recursive: true });
-    }
-  });
-
-  it('retains the finite default inventory only for non-scaffold consumers', () => {
+  it('retains the finite default inventory only for non-scaffold consumers', async () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-security-surface-non-scaffold-'));
 
     try {
       writeKovoProject(root, { name: 'Non Scaffold Sound Subset Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       const manifestPath = join(root, 'package.json');
       const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
       delete manifest.kovo;

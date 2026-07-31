@@ -32,6 +32,25 @@ export interface BoundedTestProcessCleanupOptions {
   readonly terminationGraceMs?: number;
 }
 
+export interface BoundedTestProcessRecordForTest {
+  readonly marked: boolean;
+  readonly pgid: number;
+  readonly pid: number;
+  readonly ppid: number;
+  readonly state: string;
+}
+
+export interface BoundedTestProcessDependenciesForTest {
+  readonly delay?: (milliseconds: number) => Promise<unknown>;
+  readonly now?: () => number;
+  readonly signalProcess?: (pid: number, signal: NodeJS.Signals) => void;
+  readonly signalProcessGroup?: (pgid: number, signal: NodeJS.Signals) => void;
+  readonly snapshotProcessTable?: (
+    markerName: string,
+    deadlineAtMs: number,
+  ) => Promise<Map<number, BoundedTestProcessRecordForTest>>;
+}
+
 export const DEFAULT_TEST_PROCESS_MAX_OUTPUT_BYTES: number;
 export const DEFAULT_TEST_PROCESS_TERMINATION_GRACE_MS: number;
 export const DEFAULT_TEST_PROCESS_KILL_GRACE_MS: number;
@@ -45,3 +64,10 @@ export function boundedTestProcessCleanupBudgetMs(
 export function runBoundedTestProcess(
   invocation: BoundedTestProcessInvocation,
 ): Promise<BoundedTestProcessOutcome>;
+
+export function runBoundedTestProcessForTest(
+  invocation: BoundedTestProcessInvocation,
+  overrides?: BoundedTestProcessDependenciesForTest,
+): Promise<BoundedTestProcessOutcome>;
+
+export function assertSupportedTestProcessPlatform(platform?: NodeJS.Platform): void;

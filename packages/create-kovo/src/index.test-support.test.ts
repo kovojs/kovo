@@ -124,7 +124,7 @@ describe('create-kovo starter test support', () => {
       let descendantPid: number | undefined;
       const startedAt = Date.now();
       try {
-        runGeneratedStarterFixtureSetupCommandForTest(
+        await runGeneratedStarterFixtureSetupCommandForTest(
           process.execPath,
           [
             '-e',
@@ -195,7 +195,7 @@ describe('create-kovo starter test support', () => {
         tarballs: {},
       })}\n`,
     ],
-  ])('does not delete or repack a packed-current artifact with a %s', (_label, manifest) => {
+  ])('does not delete or repack a packed-current artifact with a %s', async (_label, manifest) => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-packed-current-failure-'));
     const artifact = join(root, 'artifact');
     mkdirSync(artifact);
@@ -210,7 +210,7 @@ describe('create-kovo starter test support', () => {
     process.env.KOVO_STARTER_SOURCE_FIXTURE_DEPENDENCIES = 'packed-current';
 
     try {
-      expect(() => installStarterAppDependencies(join(root, 'app'), 'symlink')).toThrow(
+      await expect(installStarterAppDependencies(join(root, 'app'), 'symlink')).rejects.toThrow(
         /require a valid packed-kovo-packages\.json.+refusing to modify or repack/u,
       );
       expect(readdirSync(artifact).toSorted()).toEqual(before);

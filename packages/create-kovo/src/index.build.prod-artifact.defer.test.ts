@@ -40,7 +40,7 @@ describe('create-kovo starter (build integration: production Defer artifacts)', 
           ...(dialect === undefined ? {} : { dialect }),
           name: 'Prod Nested Defer Proof',
         });
-        linkStarterBuildDependencies(root);
+        await linkStarterBuildDependencies(root);
         addDeferProofRoutes(root);
 
         buildReusableProductionArtifact(root);

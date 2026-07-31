@@ -21,7 +21,7 @@ describe('create-kovo starter (build integration: packed runtime scaffold)', () 
   it(
     'runs the source quick check from a packed starter install',
     async () => {
-      const app = createStarterApp({
+      const app = await createStarterApp({
         install: 'packed',
         name: 'Packed Source Check Proof',
         scaffold: 'packed-bin',
@@ -52,7 +52,7 @@ describe('create-kovo starter (build integration: packed runtime scaffold)', () 
   it(
     'runs and serves the production artifact from a packed starter install',
     async () => {
-      const app = createStarterApp({
+      const app = await createStarterApp({
         install: 'packed',
         name: 'Packed Build Run Proof',
         scaffold: 'packed-bin',

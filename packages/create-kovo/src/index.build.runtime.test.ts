@@ -41,7 +41,7 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
         disableGit: true,
         name: 'Production Demo Seed Proof',
       });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       buildReusableProductionArtifact(root);
 
       const generatedEnv = readFileSync(join(root, '.env'), 'utf8');
@@ -95,7 +95,7 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
 
     try {
       writeKovoProject(root, { name: 'Build Prod Cache Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
 
       buildReusableProductionArtifact(root);
       const productionArtifactText = readUtf8Tree(join(root, 'dist'));
@@ -264,7 +264,7 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
 
     try {
       writeKovoProject(root, { name: 'Postgres Ddl Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
 
       const schemaPath = join(root, 'src/schema.ts');
       const originalSchema = readFileSync(schemaPath, 'utf8');
@@ -302,12 +302,12 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
     }
   }, 180_000);
 
-  it('pins the generated Postgres ESM schema namespace for production consumers', () => {
+  it('pins the generated Postgres ESM schema namespace for production consumers', async () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-schema-namespace-'));
 
     try {
       writeKovoProject(root, { name: 'Schema Namespace Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       writeFileSync(
         join(root, 'src/schema-namespace-proof.test.ts'),
         [
@@ -379,7 +379,7 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
 
     try {
       writeKovoProject(root, { name: 'Dev Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       const origin = `http://127.0.0.1:${port}`;
       const devEnvironment = withRepoBinOnPath();
       delete devEnvironment.BETTER_AUTH_URL;
@@ -471,7 +471,7 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
 
     try {
       writeKovoProject(root, { name: 'Dev Env Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
 
       devServer = spawn(join(root, 'node_modules/.bin/kovo'), ['dev', './src/app.tsx'], {
         cwd: root,

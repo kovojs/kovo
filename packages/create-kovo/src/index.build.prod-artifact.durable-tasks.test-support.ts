@@ -43,7 +43,7 @@ export async function withDurableTaskArtifactServer(
 
   try {
     writeKovoProject(root, { name: options.name });
-    linkStarterBuildDependencies(root);
+    await linkStarterBuildDependencies(root);
     addDurableTaskProofs(root);
 
     buildReusableProductionArtifact(root);

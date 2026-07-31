@@ -73,7 +73,7 @@ describe('create-kovo starter (build integration: production transaction artifac
 
     try {
       writeKovoProject(root, { name: 'Prod Default Transaction Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       addRuntimeMutationSafetyProofs(root, {
         includeWebhookTransactionProof: true,
       });
@@ -187,14 +187,14 @@ describe('create-kovo starter (build integration: production transaction artifac
   });
 
   // @kovo-security-certifies KV449 finite-ir-query-write-prod-artifact
-  it('keeps query writes KV449-closed when the dedicated KV433 finding is advisory', () => {
+  it('keeps query writes KV449-closed when the dedicated KV433 finding is advisory', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-prod-readonly-runtime-floor-'));
 
     try {
       writeKovoProject(root, { name: 'Prod Readonly Runtime Floor Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       addRuntimeMutationSafetyProofs(root, { includeReadonlyRuntimeChokeProbe: true });
 
       // SPEC §6.6 keeps a directly reached managed query write KV449-closed. The runtime
@@ -221,7 +221,7 @@ describe('create-kovo starter (build integration: production transaction artifac
 
     try {
       writeKovoProject(root, { dialect: 'sqlite', name: 'Prod SQLite Readonly Handle Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       addRuntimeMutationSafetyProofs(root, {
         includeWebhookTransactionProof: true,
       });
@@ -312,7 +312,7 @@ describe('create-kovo starter (build integration: production transaction artifac
     { dialect: 'sqlite' as const, label: 'SQLite' },
   ])(
     'blocks $label readonly DB computed-method escapes before artifact emission',
-    ({ dialect }) => {
+    async ({ dialect }) => {
       const tempParent = tmpdir();
       mkdirSync(tempParent, { recursive: true });
       const root = mkdtempSync(join(tempParent, 'create-kovo-prod-readonly-method-escape-'));
@@ -322,7 +322,7 @@ describe('create-kovo starter (build integration: production transaction artifac
           ...(dialect === undefined ? {} : { dialect }),
           name: 'Prod Readonly Method Escape Proof',
         });
-        linkStarterBuildDependencies(root);
+        await linkStarterBuildDependencies(root);
         addRuntimeMutationSafetyProofs(root, { includeReadonlyMutationAttempt: true });
 
         const output = execFileSyncErrorOutput(
@@ -346,7 +346,7 @@ describe('create-kovo starter (build integration: production transaction artifac
     { dialect: 'sqlite' as const, label: 'SQLite' },
   ])(
     'blocks managed write raw-driver escapes before $label artifact emission',
-    ({ dialect }) => {
+    async ({ dialect }) => {
       const tempParent = tmpdir();
       mkdirSync(tempParent, { recursive: true });
       const root = mkdtempSync(join(tempParent, 'create-kovo-prod-managed-write-escape-'));
@@ -356,7 +356,7 @@ describe('create-kovo starter (build integration: production transaction artifac
           ...(dialect === undefined ? {} : { dialect }),
           name: 'Prod Managed Write Escape Proof',
         });
-        linkStarterBuildDependencies(root);
+        await linkStarterBuildDependencies(root);
         addRuntimeMutationSafetyProofs(root, { includeManagedWriteEscapeAttempt: true });
 
         const output = execFileSyncErrorOutput(
@@ -391,7 +391,7 @@ describe('create-kovo starter (build integration: production transaction artifac
           ...(dialect === undefined ? {} : { dialect }),
           name: 'Prod Webhook Tx Escape Proof',
         });
-        linkStarterBuildDependencies(root);
+        await linkStarterBuildDependencies(root);
         addRuntimeMutationSafetyProofs(root, { includeWebhookTxEscapeAttempt: true });
         const proofSource = readFileSync(join(root, 'src/runtime-safety-proofs.ts'), 'utf8');
         expect(proofSource).toContain("if ('$client' in context.tx) void context.tx.$client;");

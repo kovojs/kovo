@@ -90,12 +90,12 @@ async function waitForChildExit(
 
 describe('create-kovo starter (build integration: production security artifacts)', () => {
   // @kovo-security-certifies KV449 analyzer-summary-carrier-laundering
-  it('rejects summarized mutation input laundering through the real production build preflight', () => {
+  it('rejects summarized mutation input laundering through the real production build preflight', async () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-prod-summary-carrier-'));
 
     try {
       writeKovoProject(root, { name: 'Prod Summary Carrier Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       writeFileSync(
         join(root, 'src', 'summary-carrier-proof.ts'),
         [
@@ -167,12 +167,12 @@ describe('create-kovo starter (build integration: production security artifacts)
     }
   });
 
-  it('fails the production build for a request-reachable no-row side-effect mutation with no access guard', () => {
+  it('fails the production build for a request-reachable no-row side-effect mutation with no access guard', async () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-prod-missing-access-'));
 
     try {
       writeKovoProject(root, { name: 'Prod Missing Access Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       addNoAccessProvisionMutation(root);
 
       const output = captureBuildFailure(() => buildProductionArtifact(root));
@@ -190,7 +190,7 @@ describe('create-kovo starter (build integration: production security artifacts)
   // @kovo-security-certifies KV435 value-flow-sibling-laundering
   // CI run 30612746165 measured this helper-closure proof at 425.980s on ubuntu-24.04.
   // Keep 1.5x headroom, rounded up to the next whole minute.
-  it('blocks local-helper credential-shaped secret laundering from the production build artifact', () => {
+  it('blocks local-helper credential-shaped secret laundering from the production build artifact', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
     const unsafeRoot = mkdtempSync(join(tempParent, 'create-kovo-prod-auth-secret-unsafe-'));
@@ -198,7 +198,7 @@ describe('create-kovo starter (build integration: production security artifacts)
 
     try {
       writeKovoProject(unsafeRoot, { name: 'Prod Auth Secret Proof' });
-      linkStarterBuildDependencies(unsafeRoot);
+      await linkStarterBuildDependencies(unsafeRoot);
       addAuthSecretLeakProof(unsafeRoot);
 
       const output = captureBuildFailure(() => buildProductionArtifact(unsafeRoot));
@@ -214,7 +214,7 @@ describe('create-kovo starter (build integration: production security artifacts)
         /queries\/auth-secret-render-leak-query\.renderPassword|query="secrets2" path="secrets2\.renderPassword"/u,
       );
       writeKovoProject(safeRoot, { name: 'Prod Auth Secret Safe Sibling' });
-      linkStarterBuildDependencies(safeRoot);
+      await linkStarterBuildDependencies(safeRoot);
       addAuthSecretLeakProof(safeRoot, { leakToWire: false });
       buildReusableProductionArtifact(safeRoot);
     } finally {
@@ -223,12 +223,12 @@ describe('create-kovo starter (build integration: production security artifacts)
     }
   }, 660_000);
 
-  it('blocks request-authored runtime DB imports from the production build artifact', () => {
+  it('blocks request-authored runtime DB imports from the production build artifact', async () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-prod-runtime-db-import-'));
 
     try {
       writeKovoProject(root, { name: 'Prod Runtime Db Import Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       addRuntimeDbImportEndpointProof(root);
 
       const output = captureBuildFailure(() => buildProductionArtifact(root));
@@ -241,12 +241,12 @@ describe('create-kovo starter (build integration: production security artifacts)
   });
 
   // @kovo-security-certifies KV448 production-import-equals-capability-closure
-  it('blocks runtime TypeScript import-equals authority in production preflight', () => {
+  it('blocks runtime TypeScript import-equals authority in production preflight', async () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-prod-import-equals-'));
 
     try {
       writeKovoProject(root, { name: 'Prod Import Equals Capability Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       const appPath = join(root, 'src', 'app.tsx');
       writeFileSync(
         appPath,
@@ -263,12 +263,12 @@ describe('create-kovo starter (build integration: production security artifacts)
   });
 
   // @kovo-security-certifies KV448 production-import-equals-namespace-reexport-closure
-  it('blocks authority under a route reached through a re-exported import-equals namespace', () => {
+  it('blocks authority under a route reached through a re-exported import-equals namespace', async () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-prod-import-equals-namespace-'));
 
     try {
       writeKovoProject(root, { name: 'Prod Import Equals Namespace Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       writeFileSync(
         join(root, 'src', 'import-equals-bridge.ts'),
         "export import server = require('@kovojs/server');\n",
@@ -312,12 +312,12 @@ describe('create-kovo starter (build integration: production security artifacts)
   });
 
   // @kovo-security-certifies KV448 production-lexical-binding-provenance-closure
-  it('blocks authority when lexical shadows and mutable aliases obscure route factories', () => {
+  it('blocks authority when lexical shadows and mutable aliases obscure route factories', async () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-prod-lexical-provenance-'));
 
     try {
       writeKovoProject(root, { name: 'Prod Lexical Provenance Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       writeFileSync(
         join(root, 'src', 'lexical-provenance-route.tsx'),
         [
@@ -364,14 +364,14 @@ describe('create-kovo starter (build integration: production security artifacts)
   });
 
   // @kovo-security-certifies KV449 runtime-secret-view-egress
-  it('refuses a runtime Secret read through a Drizzle view before paranoid artifact emission', () => {
+  it('refuses a runtime Secret read through a Drizzle view before paranoid artifact emission', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-prod-secret-view-egress-'));
 
     try {
       writeKovoProject(root, { name: 'Prod Secret View Egress Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       addSecretViewEgressProof(root);
 
       const output = captureBuildFailure(() => buildParanoidProductionArtifact(root));
@@ -387,14 +387,14 @@ describe('create-kovo starter (build integration: production security artifacts)
   // @kovo-security-certifies KV448 runtime-secret-request-closed-reveal-denial
   it(
     'rejects request-reachable audited reveal imports before production artifact emission',
-    () => {
+    async () => {
       const tempParent = tmpdir();
       mkdirSync(tempParent, { recursive: true });
       const root = mkdtempSync(join(tempParent, 'create-kovo-request-closed-reveal-'));
 
       try {
         writeKovoProject(root, { name: 'Request Closed Reveal Proof' });
-        linkStarterBuildDependencies(root);
+        await linkStarterBuildDependencies(root);
         addRequestClosedDeclassificationProof(root);
 
         const proofQueries = readFileSync(join(root, 'src/queries.ts'), 'utf8');
@@ -431,7 +431,7 @@ describe('create-kovo starter (build integration: production security artifacts)
 
     try {
       writeKovoProject(root, { name: 'Prod Runtime Secret Boundary Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       addRuntimeSecretBoundaryProof(root);
       const proofQueries = readFileSync(join(root, 'src/queries.ts'), 'utf8');
       const proofApp = readFileSync(join(root, 'src/kovo.ts'), 'utf8');
@@ -630,12 +630,12 @@ describe('create-kovo starter (build integration: production security artifacts)
   });
 
   // @kovo-security-certifies KV414 starter-auth-table-scope-static-gate
-  it('rejects statically visible starter DB scope drift before artifact emission', () => {
+  it('rejects statically visible starter DB scope drift before artifact emission', async () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-prod-starter-db-scope-static-'));
 
     try {
       writeKovoProject(root, { name: 'Prod Starter Static DB Scope Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       addStarterMutationDbScopeProof(root, { mode: 'static-structured' });
 
       const output = captureBuildFailure(() => buildProductionArtifact(root));
@@ -654,12 +654,12 @@ describe('create-kovo starter (build integration: production security artifacts)
     }
   });
 
-  it('augments the current app-scoped starter mutation shape without disabling CSRF', () => {
+  it('augments the current app-scoped starter mutation shape without disabling CSRF', async () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-paranoid-proof-source-contract-'));
 
     try {
       writeKovoProject(root, { name: 'Paranoid Proof Source Contract' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       addStarterMutationDbScopeProof(root, { mode: 'runtime-table-choke' });
 
       expect(() => addParanoidPhase5WriteBoundaryProof(root)).not.toThrow();
@@ -679,7 +679,7 @@ describe('create-kovo starter (build integration: production security artifacts)
 
     try {
       writeKovoProject(root, { name: 'Prod Starter DB Scope Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       addStarterMutationDbScopeProof(root, { mode: 'runtime-table-choke' });
 
       buildParanoidProductionArtifact(root);
@@ -810,7 +810,7 @@ describe('create-kovo starter (build integration: production security artifacts)
         dialect: 'sqlite',
         name: 'Prod SQLite Runtime Secret Provenance Proof',
       });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       addSqliteRuntimeSecretProvenanceProof(root);
       const proofQueries = readFileSync(join(root, 'src/queries.ts'), 'utf8');
       expect(proofQueries).toContain('company: proof.classified');
@@ -878,14 +878,14 @@ describe('create-kovo starter (build integration: production security artifacts)
   // @kovo-security-certifies KV235 internal-raw-html-import
   it(
     'blocks internal raw-HTML helper imports from authored .ts modules in production build',
-    () => {
+    async () => {
       const tempParent = tmpdir();
       mkdirSync(tempParent, { recursive: true });
       const root = mkdtempSync(join(tempParent, 'create-kovo-prod-internal-html-import-'));
 
       try {
         writeKovoProject(root, { name: 'Prod Internal HTML Import Proof' });
-        linkStarterBuildDependencies(root);
+        await linkStarterBuildDependencies(root);
         addInternalHtmlImportProof(root);
 
         const output = captureBuildFailure(() => buildProductionArtifact(root));
@@ -904,14 +904,14 @@ describe('create-kovo starter (build integration: production security artifacts)
   // separately by the M1 adversarial KV424 fixture.
   it(
     'blocks storage writes from query loaders in the production build artifact',
-    () => {
+    async () => {
       const tempParent = tmpdir();
       mkdirSync(tempParent, { recursive: true });
       const root = mkdtempSync(join(tempParent, 'create-kovo-prod-storage-query-write-'));
 
       try {
         writeKovoProject(root, { name: 'Prod Storage Query Write Proof' });
-        linkStarterBuildDependencies(root);
+        await linkStarterBuildDependencies(root);
         addStorageQueryWriteProof(root);
 
         const output = captureBuildFailure(() => buildProductionArtifact(root));
@@ -932,14 +932,14 @@ describe('create-kovo starter (build integration: production security artifacts)
     PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS,
   );
 
-  it('blocks undeclared mutation storage writes before production artifact emission', () => {
+  it('blocks undeclared mutation storage writes before production artifact emission', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-prod-storage-mutation-write-'));
 
     try {
       writeKovoProject(root, { name: 'Prod Storage Mutation Write Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       addStorageMutationWriteProof(root);
 
       const output = captureBuildFailure(() => buildReusableProductionArtifact(root));
@@ -953,7 +953,7 @@ describe('create-kovo starter (build integration: production security artifacts)
   }, 180_000);
 
   // @kovo-security-certifies KV426 trusted-output-prod-artifact
-  it('blocks trusted output provenance leaks through the production build artifact', () => {
+  it('blocks trusted output provenance leaks through the production build artifact', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
     const unsafeRoot = mkdtempSync(join(tempParent, 'create-kovo-prod-trusted-output-unsafe-'));
@@ -961,7 +961,7 @@ describe('create-kovo starter (build integration: production security artifacts)
 
     try {
       writeKovoProject(unsafeRoot, { name: 'Prod Trusted Output Proof' });
-      linkStarterBuildDependencies(unsafeRoot);
+      await linkStarterBuildDependencies(unsafeRoot);
       addTrustedOutputProvenanceBuildProof(unsafeRoot);
       const proofSource = readFileSync(
         join(unsafeRoot, 'src/trusted-output-provenance-proof.tsx'),
@@ -979,7 +979,7 @@ describe('create-kovo starter (build integration: production security artifacts)
       expect(output).toContain('trustedHtml() sends request-derived data');
 
       writeKovoProject(safeRoot, { name: 'Prod Trusted Output Safe Sibling' });
-      linkStarterBuildDependencies(safeRoot);
+      await linkStarterBuildDependencies(safeRoot);
       addTrustedOutputProvenanceBuildProof(safeRoot, { unsafe: false });
       buildReusableProductionArtifact(safeRoot);
     } finally {
@@ -991,14 +991,14 @@ describe('create-kovo starter (build integration: production security artifacts)
   // @kovo-security-certifies KV426 trusted-url-attribute-type-gate
   it(
     'blocks TrustedUrl values in non-URL JSX attributes during production build',
-    () => {
+    async () => {
       const tempParent = tmpdir();
       mkdirSync(tempParent, { recursive: true });
       const root = mkdtempSync(join(tempParent, 'create-kovo-prod-trusted-url-attribute-'));
 
       try {
         writeKovoProject(root, { name: 'Prod TrustedUrl Attribute Proof' });
-        linkStarterBuildDependencies(root);
+        await linkStarterBuildDependencies(root);
         addTrustedUrlAttributeTypeGateProof(root);
 
         const output = captureBuildFailure(() => buildProductionArtifact(root));
@@ -1023,7 +1023,7 @@ describe('create-kovo starter (build integration: production security artifacts)
 
         try {
           writeKovoProject(root, { dialect, name: `Prod Runtime Security Proof ${dialect}` });
-          linkStarterBuildDependencies(root);
+          await linkStarterBuildDependencies(root);
           addEscapedAttackerTextProof(root);
           addQueryWireProof(root);
           addEnhancedMutationWireProof(root);
@@ -1068,7 +1068,7 @@ describe('create-kovo starter (build integration: production security artifacts)
 
     try {
       writeKovoProject(root, { name: 'Prod FormError Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       addNoJsFailureProof(root);
 
       buildReusableProductionArtifact(root);
@@ -1169,7 +1169,7 @@ describe('create-kovo starter (build integration: production security artifacts)
 
     try {
       writeKovoProject(root, { dialect: 'sqlite', name: 'Prod Control Provenance Proof' });
-      linkStarterBuildDependencies(root);
+      await linkStarterBuildDependencies(root);
       addControlProvenanceProof(root);
       buildProductionArtifact(root);
 

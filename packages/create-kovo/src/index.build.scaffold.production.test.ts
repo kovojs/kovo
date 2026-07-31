@@ -7,8 +7,8 @@ import { buildReusableProductionArtifact } from './index.build.test-support.js';
 import { createStarterApp } from './index.test-support.js';
 
 describe('create-kovo starter (build integration: scaffold production)', () => {
-  it('runs the generated production build graph gate', () => {
-    const app = createStarterApp({
+  it('runs the generated production build graph gate', async () => {
+    const app = await createStarterApp({
       name: 'Build Prod Proof',
       tempPrefix: 'create-kovo-build-prod-',
     });
@@ -20,8 +20,8 @@ describe('create-kovo starter (build integration: scaffold production)', () => {
     }
   }, 360_000);
 
-  it('rebuilds production artifacts from current source when cache is warm', () => {
-    const app = createStarterApp({
+  it('rebuilds production artifacts from current source when cache is warm', async () => {
+    const app = await createStarterApp({
       name: 'Build Source Proof',
       tempPrefix: 'create-kovo-build-source-proof-',
     });
