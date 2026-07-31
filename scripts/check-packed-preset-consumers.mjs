@@ -144,16 +144,6 @@ export function assertInstalledPackedSubject(appRoot, pkg) {
     throw new TypeError('Installed packed subject requires an authenticated package record.');
   }
   const nodeModules = realpathSync(path.join(appRoot, 'node_modules'));
-  const packageRoot = path.join(appRoot, 'node_modules', ...pkg.name.split('/'));
-  const resolvedPackageRoot = realpathSync(packageRoot);
-  if (
-    resolvedPackageRoot === nodeModules ||
-    !resolvedPackageRoot.startsWith(`${nodeModules}${path.sep}`) ||
-    !lstatSync(resolvedPackageRoot).isDirectory()
-  ) {
-    throw new Error(`Installed ${pkg.name} resolves outside the fresh packed app.`);
-  }
-
   const expected = new Map();
   for (const entry of pkg.entries) {
     if (!entry.name.startsWith('package/')) {
@@ -169,24 +159,60 @@ export function assertInstalledPackedSubject(appRoot, pkg) {
     expected.set(relative, Buffer.from(entry.data));
   }
 
-  const actual = [];
-  walkRegularFiles(resolvedPackageRoot, (file, relative, stat) => {
-    if (stat.size > MAX_ARTIFACT_FILE_BYTES) {
-      throw new Error(`Installed ${pkg.name} file exceeds the inspection bound: ${relative}.`);
+  const packageRoots = installedPackedSubjectRoots(appRoot, pkg.name);
+  for (const resolvedPackageRoot of packageRoots) {
+    if (
+      resolvedPackageRoot === nodeModules ||
+      !resolvedPackageRoot.startsWith(`${nodeModules}${path.sep}`) ||
+      !lstatSync(resolvedPackageRoot).isDirectory()
+    ) {
+      throw new Error(`Installed ${pkg.name} resolves outside the fresh packed app.`);
     }
-    actual.push(relative);
-    const expectedBytes = expected.get(relative);
-    if (expectedBytes === undefined || !expectedBytes.equals(readFileSync(file))) {
-      throw new Error(
-        `Installed ${pkg.name} file ${relative} differs from its authenticated tarball subject.`,
-      );
+    const actual = [];
+    walkRegularFiles(
+      resolvedPackageRoot,
+      (file, relative, stat) => {
+        if (stat.size > MAX_ARTIFACT_FILE_BYTES) {
+          throw new Error(`Installed ${pkg.name} file exceeds the inspection bound: ${relative}.`);
+        }
+        actual.push(relative);
+        const expectedBytes = expected.get(relative);
+        if (expectedBytes === undefined || !expectedBytes.equals(readFileSync(file))) {
+          throw new Error(
+            `Installed ${pkg.name} file ${relative} differs from its authenticated tarball subject.`,
+          );
+        }
+      },
+      '',
+      new Set(['node_modules']),
+    );
+    actual.sort(compareUtf8);
+    const expectedFiles = [...expected.keys()].sort(compareUtf8);
+    if (JSON.stringify(actual) !== JSON.stringify(expectedFiles)) {
+      throw new Error(`Installed ${pkg.name} file census differs from its authenticated tarball.`);
     }
-  });
-  actual.sort(compareUtf8);
-  const expectedFiles = [...expected.keys()].sort(compareUtf8);
-  if (JSON.stringify(actual) !== JSON.stringify(expectedFiles)) {
-    throw new Error(`Installed ${pkg.name} file census differs from its authenticated tarball.`);
   }
+}
+
+function installedPackedSubjectRoots(appRoot, packageName) {
+  const nodeModules = path.join(appRoot, 'node_modules');
+  const packageSegments = packageName.split('/');
+  const candidates = [path.join(nodeModules, ...packageSegments)];
+  const virtualStore = path.join(nodeModules, '.pnpm');
+  if (existsSync(virtualStore)) {
+    for (const entry of readdirSync(virtualStore, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
+      candidates.push(path.join(virtualStore, entry.name, 'node_modules', ...packageSegments));
+    }
+  }
+  const resolved = new Set();
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) resolved.add(realpathSync(candidate));
+  }
+  if (resolved.size === 0) {
+    throw new Error(`Fresh packed app did not install authenticated ${packageName}.`);
+  }
+  return [...resolved].sort(compareUtf8);
 }
 
 export function assertPackedPresetBuild({ outDir, packedPackages, preset, stdout }) {
@@ -267,6 +293,9 @@ export function checkPackedPresetConsumers(argv = process.argv.slice(2)) {
         preset,
         stdout: build.stdout,
       });
+      // Each preset must analyze the same fresh app source. A retained prior output would become
+      // unrelated project input for the next source-backed build instead of independent evidence.
+      rmSync(outDir, { force: true, recursive: true });
     }
 
     process.stdout.write(
@@ -585,7 +614,7 @@ function assertProductionArtifactCensus(root, preset) {
   if (files === 0) throw new Error(`Packed ${preset} output contains no deployable files.`);
 }
 
-function walkRegularFiles(root, visit, relativeRoot = '') {
+function walkRegularFiles(root, visit, relativeRoot = '', excludedTopLevelDirectories = new Set()) {
   for (const entry of readdirSync(root, { withFileTypes: true }).sort((left, right) =>
     compareUtf8(left.name, right.name),
   )) {
@@ -594,7 +623,8 @@ function walkRegularFiles(root, visit, relativeRoot = '') {
     const stat = lstatSync(file);
     if (stat.isSymbolicLink()) throw new Error(`Inspected tree contains symlink ${relative}.`);
     if (stat.isDirectory()) {
-      walkRegularFiles(file, visit, relative);
+      if (relativeRoot === '' && excludedTopLevelDirectories.has(entry.name)) continue;
+      walkRegularFiles(file, visit, relative, excludedTopLevelDirectories);
       continue;
     }
     if (!stat.isFile()) throw new Error(`Inspected tree contains non-regular entry ${relative}.`);

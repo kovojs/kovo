@@ -91,6 +91,26 @@ describe('packed deployment-preset consumers', () => {
     };
 
     expect(() => assertInstalledPackedSubject(appRoot, pkg)).not.toThrow();
+    const virtualAppRoot = fixtureRoot('kovo-packed-virtual-subject-');
+    const virtualPackageRoot = path.join(
+      virtualAppRoot,
+      'node_modules',
+      '.pnpm',
+      '@kovojs+core@file+packed-core',
+      'node_modules',
+      '@kovojs',
+      'core',
+    );
+    mkdirSync(path.join(virtualPackageRoot, 'dist'), { recursive: true });
+    mkdirSync(path.join(virtualPackageRoot, 'node_modules', '.bin'), { recursive: true });
+    writeFileSync(path.join(virtualPackageRoot, 'package.json'), manifest);
+    writeFileSync(path.join(virtualPackageRoot, 'dist', 'index.mjs'), runtime);
+    writeFileSync(
+      path.join(virtualPackageRoot, 'node_modules', '.bin', 'package-bin'),
+      '#!/bin/sh\n',
+    );
+    expect(() => assertInstalledPackedSubject(virtualAppRoot, pkg)).not.toThrow();
+
     writeFileSync(path.join(packageRoot, 'dist', 'index.mjs'), 'export const tampered = true;\n');
     expect(() => assertInstalledPackedSubject(appRoot, pkg)).toThrow(
       'differs from its authenticated tarball subject',
