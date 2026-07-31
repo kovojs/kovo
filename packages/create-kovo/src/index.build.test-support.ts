@@ -61,6 +61,11 @@ export function addNoJsFailureProof(root: string): void {
       '',
       'const blockedTitle = s.object({ title: s.string() });',
       '',
+      'interface BlockedTitleFailure {',
+      "  code: 'BLOCKED_TITLE';",
+      '  payload: { title: string };',
+      '}',
+      '',
       'export const blockTitle = app.mutation({',
       "  access: app.publicAccess('public production FormError regression proof'),",
       '  errors: { BLOCKED_TITLE: blockedTitle },',
@@ -90,10 +95,11 @@ export function addNoJsFailureProof(root: string): void {
       '          <input name="title" value={submittedTitle} />',
       '          <FormError',
       '            code="BLOCKED_TITLE"',
-      '            failure={slots.forms.blockTitle.failure}',
-      "            message={(failure) => failure.code === 'BLOCKED_TITLE'",
-      '              ? `Blocked title: ${failure.payload.title}`',
-      "              : ''}",
+      '            message={(failure: BlockedTitleFailure) =>',
+      "              failure.code === 'BLOCKED_TITLE'",
+      '                ? `Blocked title: ${failure.payload.title}`',
+      "                : ''",
+      '            }',
       '          />',
       '          <button type="submit">Save</button>',
       '        </form>',
@@ -163,6 +169,7 @@ export function addNoJsFailureProof(root: string): void {
       '  routes: [homeRoute, loginRoute, noJsFailureRoute, noJsErrorRoute],',
     );
   writeFileSync(appPath, app, 'utf8');
+  formatGeneratedProjectSources(root, ['src/app.tsx', 'src/no-js-failure-proof.tsx']);
 }
 
 export function buildProductionArtifact(
