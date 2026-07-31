@@ -12,12 +12,86 @@ import {
 } from './index.build.test-support.js';
 import { writeKovoProject } from './index.js';
 import {
+  GENERATED_STARTER_CLI_PROCESS_TIMEOUT_MS,
+  GENERATED_STARTER_CLI_SIGNAL_GRACE_MS,
+  generatedStarterTestTimeout,
   installStarterAppDependencies,
   resolveStarterInstallMode,
+  runGeneratedStarterCommand,
+  STARTER_SERVER_READY_TIMEOUT_MS,
   stopProcess,
 } from './index.test-support.js';
 
 describe('create-kovo starter test support', () => {
+  it('keeps Vitest outside every generated-starter child and cleanup deadline', () => {
+    const oneCli = generatedStarterTestTimeout({ cliProcessCount: 1 });
+    const twoCli = generatedStarterTestTimeout({ cliProcessCount: 2 });
+    const oneCliAndServer = generatedStarterTestTimeout({
+      cliProcessCount: 1,
+      serverProcessCount: 1,
+    });
+    const cleanupWindowMs = GENERATED_STARTER_CLI_SIGNAL_GRACE_MS * 2;
+
+    expect(oneCli).toBeGreaterThan(GENERATED_STARTER_CLI_PROCESS_TIMEOUT_MS + cleanupWindowMs);
+    expect(twoCli - oneCli).toBe(GENERATED_STARTER_CLI_PROCESS_TIMEOUT_MS + cleanupWindowMs);
+    expect(oneCliAndServer - oneCli).toBe(STARTER_SERVER_READY_TIMEOUT_MS + cleanupWindowMs);
+  });
+
+  it('preserves generated-starter command output on success and semantic failure', async () => {
+    const success = await runGeneratedStarterCommand(
+      process.execPath,
+      ['-e', "process.stdout.write('proof-ok')"],
+      { cwd: process.cwd(), timeoutMs: 5_000 },
+    );
+    expect(success).toEqual({ stderr: '', stdout: 'proof-ok' });
+
+    await expect(
+      runGeneratedStarterCommand(
+        process.execPath,
+        [
+          '-e',
+          "process.stdout.write('semantic-stdout'); process.stderr.write('semantic-stderr'); process.exit(7)",
+        ],
+        { cwd: process.cwd(), timeoutMs: 5_000 },
+      ),
+    ).rejects.toMatchObject({ stderr: 'semantic-stderr', stdout: 'semantic-stdout' });
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'kills a timed-out generated-starter command and its descendant before rejecting',
+    async () => {
+      let descendantPid: number | undefined;
+      try {
+        await runGeneratedStarterCommand(
+          process.execPath,
+          [
+            '-e',
+            [
+              "const { spawn } = require('node:child_process');",
+              "const descendant = spawn(process.execPath, ['-e', \"process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)\"], { stdio: 'ignore' });",
+              "process.on('SIGTERM', () => {});",
+              "process.stdout.write(String(descendant.pid) + '\\n');",
+              'setInterval(() => {}, 1000);',
+            ].join(''),
+          ],
+          { cwd: process.cwd(), signalGraceMs: 100, timeoutMs: 1_000 },
+        );
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).toContain('Command timed out after 1000ms');
+        const stdout = (error as { stdout?: unknown }).stdout;
+        expect(typeof stdout).toBe('string');
+        descendantPid = Number.parseInt(String(stdout).trim(), 10);
+      }
+
+      expect(descendantPid).toBeTypeOf('number');
+      expect(Number.isSafeInteger(descendantPid)).toBe(true);
+      expect(() => process.kill(descendantPid!, 0)).toThrow(
+        expect.objectContaining({ code: 'ESRCH' }),
+      );
+    },
+  );
+
   it('keeps local source fixtures linked unless CI supplies the same-run packed build', () => {
     expect(resolveStarterInstallMode('symlink', {})).toBe('symlink');
     expect(

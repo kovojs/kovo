@@ -1,4 +1,4 @@
-import { execFileSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
@@ -27,6 +27,48 @@ import {
 // contended machine. Keep local feedback bounded at ninety seconds while giving the two-core hosted
 // runner enough headroom to distinguish slow compilation from a server that never becomes ready.
 export const STARTER_SERVER_READY_TIMEOUT_MS = process.env.CI ? 180_000 : 90_000;
+
+// A valid production build reached roughly 5.5 minutes on a contended two-core hosted runner. The
+// seven-minute ceiling leaves scheduling headroom while still bounding deadlock. This is test
+// infrastructure, not a Kovo product-performance budget.
+export const GENERATED_STARTER_CLI_PROCESS_TIMEOUT_MS = process.env.CI ? 420_000 : 240_000;
+export const GENERATED_STARTER_CLI_SIGNAL_GRACE_MS = 5_000;
+const GENERATED_STARTER_FIXTURE_SETUP_HEADROOM_MS = process.env.CI ? 180_000 : 60_000;
+
+export interface GeneratedStarterCommandOptions {
+  cwd: string;
+  env?: NodeJS.ProcessEnv;
+  signalGraceMs?: number;
+  timeoutMs?: number;
+}
+
+export interface GeneratedStarterCommandResult {
+  stderr: string;
+  stdout: string;
+}
+
+/**
+ * Keep Vitest's outer watchdog beyond every child deadline, forced-cleanup window, and server-ready
+ * poll in a generated-starter proof. Synchronous fixture setup gets separate hosted-runner headroom.
+ */
+export function generatedStarterTestTimeout(options: {
+  cliProcessCount: number;
+  serverProcessCount?: number;
+}): number {
+  const serverProcessCount = options.serverProcessCount ?? 0;
+  if (!Number.isSafeInteger(options.cliProcessCount) || options.cliProcessCount < 0) {
+    throw new TypeError('cliProcessCount must be a non-negative safe integer.');
+  }
+  if (!Number.isSafeInteger(serverProcessCount) || serverProcessCount < 0) {
+    throw new TypeError('serverProcessCount must be a non-negative safe integer.');
+  }
+  const cleanupWindowMs = GENERATED_STARTER_CLI_SIGNAL_GRACE_MS * 2;
+  return (
+    GENERATED_STARTER_FIXTURE_SETUP_HEADROOM_MS +
+    options.cliProcessCount * (GENERATED_STARTER_CLI_PROCESS_TIMEOUT_MS + cleanupWindowMs) +
+    serverProcessCount * (STARTER_SERVER_READY_TIMEOUT_MS + cleanupWindowMs)
+  );
+}
 
 type StarterInstallMode = 'link-local' | 'packed' | 'symlink';
 type StarterScaffoldMode = 'packed-bin' | 'source';
@@ -259,12 +301,88 @@ export function runStarterAppHttpTest(root: string): void {
   });
 }
 
-export function runStarterCheck(root: string): void {
-  execFileSync(resolveStarterBin(root, 'kovo'), ['check'], {
+export async function runStarterCheck(root: string): Promise<void> {
+  await runGeneratedStarterCommand(resolveStarterBin(root, 'kovo'), ['check'], {
     cwd: root,
     env: withStarterBinOnPath(root),
-    stdio: 'inherit',
   });
+}
+
+/** Run a real generated-starter command with a fail-closed process-tree deadline. */
+export async function runGeneratedStarterCommand(
+  file: string,
+  args: readonly string[],
+  options: GeneratedStarterCommandOptions,
+): Promise<GeneratedStarterCommandResult> {
+  const timeoutMs = options.timeoutMs ?? GENERATED_STARTER_CLI_PROCESS_TIMEOUT_MS;
+  const signalGraceMs = options.signalGraceMs ?? GENERATED_STARTER_CLI_SIGNAL_GRACE_MS;
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
+    throw new TypeError('Generated-starter command timeoutMs must be a positive safe integer.');
+  }
+  if (!Number.isSafeInteger(signalGraceMs) || signalGraceMs <= 0) {
+    throw new TypeError('Generated-starter command signalGraceMs must be a positive safe integer.');
+  }
+
+  const child = spawn(file, [...args], {
+    cwd: options.cwd,
+    detached: process.platform !== 'win32',
+    env: options.env,
+    stdio: 'pipe',
+  });
+  const stdoutChunks: Buffer[] = [];
+  const stderrChunks: Buffer[] = [];
+  child.stdout.on('data', (chunk: Buffer) => stdoutChunks.push(chunk));
+  child.stderr.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
+
+  const completion = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
+    (resolve, reject) => {
+      child.once('error', reject);
+      child.once('close', (code, signal) => resolve({ code, signal }));
+    },
+  );
+  let deadlineTimer: NodeJS.Timeout | undefined;
+  const deadline = new Promise<'deadline'>((resolve) => {
+    deadlineTimer = setTimeout(() => resolve('deadline'), timeoutMs);
+  });
+  let outcome:
+    | { kind: 'completion'; result: { code: number | null; signal: NodeJS.Signals | null } }
+    | { kind: 'deadline' };
+  try {
+    outcome = await Promise.race([
+      completion.then((result) => ({ kind: 'completion' as const, result })),
+      deadline.then(() => ({ kind: 'deadline' as const })),
+    ]);
+  } finally {
+    if (deadlineTimer !== undefined) clearTimeout(deadlineTimer);
+  }
+
+  if (outcome.kind === 'deadline') {
+    let cleanupError: unknown;
+    try {
+      await terminateGeneratedStarterProcessTree(child, signalGraceMs);
+    } catch (error) {
+      cleanupError = error;
+    }
+    await completion.catch(() => undefined);
+    const result = commandOutput(stdoutChunks, stderrChunks);
+    throw generatedStarterCommandError(
+      `Command timed out after ${timeoutMs}ms: ${[file, ...args].join(' ')}`,
+      result,
+      cleanupError,
+    );
+  }
+
+  const result = commandOutput(stdoutChunks, stderrChunks);
+  if (outcome.result.code !== 0) {
+    throw generatedStarterCommandError(
+      `Command failed (${outcome.result.signal ?? outcome.result.code ?? 'unknown'}): ${[
+        file,
+        ...args,
+      ].join(' ')}`,
+      result,
+    );
+  }
+  return result;
 }
 
 export function installedPackageJson(root: string, packageName: string): Record<string, unknown> {
@@ -758,6 +876,107 @@ export async function stopProcess(
   if (await signalProcessTreeAndWait(childProcess, 'SIGTERM', 5_000)) return;
   if (await signalProcessTreeAndWait(childProcess, 'SIGKILL', 5_000)) return;
   throw new Error('Timed out stopping process after SIGTERM and SIGKILL.');
+}
+
+function commandOutput(
+  stdoutChunks: readonly Buffer[],
+  stderrChunks: readonly Buffer[],
+): GeneratedStarterCommandResult {
+  return {
+    stderr: Buffer.concat(stderrChunks).toString('utf8'),
+    stdout: Buffer.concat(stdoutChunks).toString('utf8'),
+  };
+}
+
+function generatedStarterCommandError(
+  message: string,
+  result: GeneratedStarterCommandResult,
+  cleanupError?: unknown,
+): Error & GeneratedStarterCommandResult {
+  const details = [message, result.stdout.trim(), result.stderr.trim()];
+  if (cleanupError !== undefined) {
+    details.push(
+      `Process-tree cleanup failed: ${
+        cleanupError instanceof Error
+          ? cleanupError.message
+          : typeof cleanupError === 'string'
+            ? cleanupError
+            : 'unknown cleanup error'
+      }`,
+    );
+  }
+  return Object.assign(new Error(details.filter(Boolean).join('\n')), result);
+}
+
+async function terminateGeneratedStarterProcessTree(
+  childProcess: ChildProcessWithoutNullStreams,
+  signalGraceMs: number,
+): Promise<void> {
+  const pid = childProcess.pid;
+  if (pid === undefined) return;
+
+  if (process.platform === 'win32') {
+    if (!childHasExited(childProcess)) await taskkillProcessTree(pid, signalGraceMs);
+    return;
+  }
+
+  signalPosixProcessGroup(pid, 'SIGTERM');
+  if (await waitForPosixProcessGroupExit(pid, signalGraceMs)) return;
+  signalPosixProcessGroup(pid, 'SIGKILL');
+  if (await waitForPosixProcessGroupExit(pid, signalGraceMs)) return;
+  throw new Error(`Process group ${pid} survived SIGTERM and SIGKILL.`);
+}
+
+function signalPosixProcessGroup(pid: number, signal: NodeJS.Signals): void {
+  try {
+    process.kill(-pid, signal);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
+  }
+}
+
+async function waitForPosixProcessGroupExit(pid: number, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (posixProcessGroupExists(pid)) {
+    if (Date.now() >= deadline) return false;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  return true;
+}
+
+function posixProcessGroupExists(pid: number): boolean {
+  try {
+    process.kill(-pid, 0);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ESRCH') return false;
+    throw error;
+  }
+}
+
+async function taskkillProcessTree(pid: number, signalGraceMs: number): Promise<void> {
+  const killer = spawn('taskkill.exe', ['/pid', String(pid), '/t', '/f'], {
+    stdio: 'ignore',
+    windowsHide: true,
+  });
+  let timer: NodeJS.Timeout | undefined;
+  let result: 'closed' | 'deadline';
+  try {
+    result = await Promise.race([
+      new Promise<'closed'>((resolve, reject) => {
+        killer.once('error', reject);
+        killer.once('close', () => resolve('closed'));
+      }),
+      new Promise<'deadline'>((resolve) => {
+        timer = setTimeout(() => resolve('deadline'), signalGraceMs);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+  if (result === 'closed') return;
+  killer.kill('SIGKILL');
+  throw new Error(`taskkill timed out while stopping process tree ${pid}.`);
 }
 
 function childHasExited(childProcess: ChildProcessWithoutNullStreams): boolean {

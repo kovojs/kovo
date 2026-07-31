@@ -12,6 +12,7 @@ import {
   fetchTextWhenReady,
   mergeCookies,
   resolveStarterBin,
+  runGeneratedStarterCommand,
   STARTER_SERVER_READY_TIMEOUT_MS,
   withStarterBinOnPath,
 } from './index.test-support.js';
@@ -189,9 +190,35 @@ export function buildProductionArtifact(
   execKovoCli(root, ['build', './src/app.tsx', '--no-cache'], env);
 }
 
+export async function buildProductionArtifactWithInfrastructureDeadline(
+  root: string,
+  options: { maxOldSpaceSizeMb?: number } = {},
+): Promise<void> {
+  declareProductionArtifactRetention(root);
+  rmSync(join(root, '.kovo/cache'), { force: true, recursive: true });
+  const env = nonParanoidStarterEnv(root);
+  if (options.maxOldSpaceSizeMb !== undefined) {
+    env.NODE_OPTIONS = [env.NODE_OPTIONS, `--max-old-space-size=${options.maxOldSpaceSizeMb}`]
+      .filter(Boolean)
+      .join(' ');
+  }
+  await runKovoCliWithInfrastructureDeadline(root, ['build', './src/app.tsx', '--no-cache'], env);
+}
+
 export function buildReusableProductionArtifact(root: string): void {
   declareProductionArtifactRetention(root);
   execKovoCli(root, ['build', './src/app.tsx'], nonParanoidStarterEnv(root));
+}
+
+export async function buildReusableProductionArtifactWithInfrastructureDeadline(
+  root: string,
+): Promise<void> {
+  declareProductionArtifactRetention(root);
+  await runKovoCliWithInfrastructureDeadline(
+    root,
+    ['build', './src/app.tsx'],
+    nonParanoidStarterEnv(root),
+  );
 }
 
 /**
@@ -294,6 +321,19 @@ function execKovoCli(root: string, args: readonly string[], env: NodeJS.ProcessE
     env,
     stdio: 'pipe',
   });
+}
+
+async function runKovoCliWithInfrastructureDeadline(
+  root: string,
+  args: readonly string[],
+  env: NodeJS.ProcessEnv,
+): Promise<void> {
+  const bin = resolveStarterBin(root, 'kovo');
+  const command = bin.endsWith('.ts') ? process.execPath : bin;
+  const commandArgs = bin.endsWith('.ts')
+    ? ['--disable-warning=ExperimentalWarning', '--experimental-transform-types', bin, ...args]
+    : args;
+  await runGeneratedStarterCommand(command, commandArgs, { cwd: root, env });
 }
 
 function nonParanoidStarterEnv(root: string): NodeJS.ProcessEnv {

@@ -10,6 +10,7 @@ import {
   collectOutput,
   cookieHeader,
   fetchTextWhenReady,
+  generatedStarterTestTimeout,
   linkStarterBuildDependencies,
   mergeCookies,
   reservePort,
@@ -20,6 +21,7 @@ import {
   addRuntimeMutationSafetyProofs,
   buildParanoidProductionArtifact,
   buildProductionArtifact,
+  buildProductionArtifactWithInfrastructureDeadline,
   buildReusableProductionArtifact,
   execFileSyncErrorOutput,
   fieldValue,
@@ -33,6 +35,17 @@ vi.setConfig({ testTimeout: PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS });
 function captureProductionBuildFailure(build: () => void): unknown {
   try {
     build();
+  } catch (error) {
+    return error;
+  }
+  throw new Error('Expected production build to fail.');
+}
+
+async function captureProductionBuildFailureWithInfrastructureDeadline(
+  build: () => Promise<void>,
+): Promise<unknown> {
+  try {
+    await build();
   } catch (error) {
     return error;
   }
@@ -368,7 +381,7 @@ describe('create-kovo starter (build integration: production transaction artifac
     { dialect: 'sqlite' as const, label: 'SQLite' },
   ])(
     'blocks $label webhook context.tx raw-driver escapes before artifact emission',
-    ({ dialect }) => {
+    async ({ dialect }) => {
       const tempParent = tmpdir();
       mkdirSync(tempParent, { recursive: true });
       const root = mkdtempSync(join(tempParent, 'create-kovo-prod-webhook-escape-'));
@@ -386,7 +399,9 @@ describe('create-kovo starter (build integration: production transaction artifac
         expect(proofSource).not.toContain('context.tx as unknown');
 
         const output = execFileSyncErrorOutput(
-          captureProductionBuildFailure(() => buildProductionArtifact(root)),
+          await captureProductionBuildFailureWithInfrastructureDeadline(() =>
+            buildProductionArtifactWithInfrastructureDeadline(root),
+          ),
         );
         expect(output).toContain('kovo build check preflight failed');
         expect(output).toContain('KV330');
@@ -396,6 +411,6 @@ describe('create-kovo starter (build integration: production transaction artifac
         rmSync(root, { force: true, recursive: true });
       }
     },
-    120_000,
+    generatedStarterTestTimeout({ cliProcessCount: 1 }),
   );
 });
