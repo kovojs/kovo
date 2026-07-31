@@ -1,9 +1,9 @@
 {
   "schema": "kovo-capability-surface-census/v2",
   "summary": {
-    "internalRegistries": 123,
+    "internalRegistries": 133,
     "mints": 3,
-    "sites": 126
+    "sites": 136
   },
   "rows": [
     {
@@ -272,6 +272,14 @@
     },
     {
       "api": "createWitnessWeakMap",
+      "file": "packages/server/src/agent-app-bridge.ts",
+      "id": "packages/server/src/agent-app-bridge.ts#registeredAgentSessions",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Binds each exact /agent declaration identity to its module-private session factory so the ordinary app bridge can reject structural copies and invoke only the registered closure; the registry itself is not returned and does not mint outward authority."
+    },
+    {
+      "api": "createWitnessWeakMap",
       "file": "packages/server/src/agent.ts",
       "id": "packages/server/src/agent.ts#toolRecords",
       "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
@@ -309,6 +317,14 @@
       "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
       "classification": "internal-registry",
       "reason": "Associates each opaque app contract token with its framework-private contract state; callers cannot inspect or forge the registry entry."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/app-contract.ts",
+      "id": "packages/server/src/app-contract.ts#agentDefinitionOwners",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Records the one exact app-contract owner of an adopted agent declaration to reject duplicate and cross-contract adoption; neither the map nor its owner witness escapes the app-contract module."
     },
     {
       "api": "createWitnessWeakMap",
@@ -461,6 +477,54 @@
       "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
       "classification": "internal-registry",
       "reason": "Allocates a framework-private identity registry through the canonical witness intrinsic; the registry is not an outward capability mint."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/compiler-client-module-provenance-build.ts",
+      "id": "packages/server/src/compiler-client-module-provenance-build.ts#roleBySource",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Tracks exact native-build source records and their authenticated compiler roles inside the one-shot adopter so duplicate or conflicting adoption fails closed before a pinned snapshot is returned; the map remains closure-private."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/compiler-client-module-provenance-vite.ts",
+      "id": "packages/server/src/compiler-client-module-provenance-vite.ts#compilerClientModuleViteHandoffs",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Authenticates an opaque Vite handoff identity against its bound compiler role and diagnostic verifiers; callers receive only the opaque identity while this verifier state stays module-private, so this allocation is the backing registry rather than an outward mint."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/compiler-client-module-provenance-vite.ts",
+      "id": "packages/server/src/compiler-client-module-provenance-vite.ts#claimCompilerClientModuleViteInstaller.roleBySource",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "The one-shot live-SSR installer records each exact adopted source record's compiler role to reject role drift across snapshot transactions; the state is private to the claimed installer and mints no separate capability."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/compiler-client-module-provenance-vite.ts",
+      "id": "packages/server/src/compiler-client-module-provenance-vite.ts#roleBySource",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "A single Vite handoff transaction records exact input records and verified roles to reject duplicate or conflicting representations before invoking the installer; the transaction-local registry does not escape."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/compiler-client-module-provenance-vite.ts",
+      "id": "packages/server/src/compiler-client-module-provenance-vite.ts#bindings",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Binds each exact live SSR module epoch to its observed installer claim and frozen snapshot getter so HMR reuse cannot substitute a different claim; the preparer closure alone retains this registry."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/compiler-client-module-provenance.ts",
+      "id": "packages/server/src/compiler-client-module-provenance.ts#pinnedCompilerClientModuleRoles",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Stores the out-of-band compiler role of each exact frozen server snapshot so copies, proxies, and reconstructed records lose provenance; only the private pin and verifier functions access the registry."
     },
     {
       "api": "createWitnessWeakMap",
@@ -1241,6 +1305,14 @@
     {
       "api": "createWitnessWeakMap",
       "file": "packages/server/src/vite-dev.ts",
+      "id": "packages/server/src/vite-dev.ts#preparedViteDevGenerations",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Records the exact closed app identity associated with an eagerly prepared Vite generation alongside the module-keyed generation store; this private bookkeeping map is not exposed or used to mint caller authority."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/vite-dev.ts",
       "id": "packages/server/src/vite-dev.ts#retainedViteDevLiveTargetInventories",
       "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
       "classification": "internal-registry",
@@ -1253,6 +1325,14 @@
       "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
       "classification": "internal-registry",
       "reason": "Allocates a framework-private identity registry through the canonical witness intrinsic; the registry is not an outward capability mint."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/vite-dev.ts",
+      "id": "packages/server/src/vite-dev.ts#dispatchServers",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Caches one frozen app-shell dispatch adapter per exact runner-generation module server inside the configured Vite plugin closure, preventing cross-generation adapter reuse without exposing the cache or minting a public capability."
     },
     {
       "api": "createWitnessWeakMap",
