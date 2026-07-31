@@ -190,7 +190,7 @@
     },
     {
       "path": "@kovojs/compiler/dist/internal.mjs",
-      "sha512": "sha512-Rkv0ktg7GFqqPIcOlaf/5/qQrvZdyjw7ya8LWNeLmLl9PKL2V8KbngaKUAx957zu6eJ80X/YOGQczlKdRQMRNA=="
+      "sha512": "sha512-6/9V2POFcRIgMw+EFVgLLfajVxZ3Eam8e9hZOr9IbB4L5SWGZ1XpUtd7z+Z9IkeP9ZRR9RgihukPuSqLO0Rmcg=="
     },
     {
       "path": "@kovojs/compiler/dist/internal/graph.mjs",
@@ -462,7 +462,7 @@
     },
     {
       "path": "@kovojs/drizzle/dist/static.mjs",
-      "sha512": "sha512-Bp6SgIbhDaF5d1gvB1MwWbob9UWQ7i3ONOB/BwcveFrBfl+4VPAaSlCOCDVEOdS0Z9b500qERO6k4I7clZkvmQ=="
+      "sha512": "sha512-siJ6n7dwKejyKUr33xklqO/VTGgGNhGCYzu/i5Cxfx80rizICVni+WF0qaTDhxzZRBtvnHx0NxTXfPoXcZbOlQ=="
     },
     {
       "path": "@kovojs/server/dist/access-graph.mjs",
