@@ -245,7 +245,7 @@ const webhookEgressBehavioralInstrumentation = [
 ].join('\n');
 const schemaSecretBehavioralInstrumentation = [
   '',
-  "export { isSecret as __securityMutationIsSecret } from '@kovojs/core';",
+  "export { isSecret as __securityMutationIsSecret } from '@kovojs/core/security';",
 ].join('\n');
 const serverBuildBehavioralInstrumentation = [
   '',
@@ -1068,9 +1068,9 @@ const removedDependencyLoaderDirectExportOwnershipClosureBranch = [
   '        false',
 ].join('\n');
 const dependencyLoaderNonliteralArtifactClosureBranch =
-  '        if (artifactModuleEdges.some((edge) => edge.specifier === undefined)) {';
+  '        if (opaqueArtifactEdge !== undefined) {';
 const removedDependencyLoaderNonliteralArtifactClosureBranch =
-  '        if (false && artifactModuleEdges.some((edge) => edge.specifier === undefined)) {';
+  '        if (false && opaqueArtifactEdge !== undefined) {';
 const dependencyLoaderChunkOutputKindClosureBranch = [
   '      const bundleOwnedChunkFileNames = new Set(',
   '        Object.values(bundle).flatMap((output) =>',
@@ -1523,10 +1523,16 @@ const removedImportEqualsNamespaceMemberProjectionBranch = [
 const sequentialLexicalWriteBranch = '  env.set(key, written);';
 const mergedSequentialLexicalWriteBranch =
   '  env.set(key, joinValues(state, env.get(key) ?? written, written));';
-const mutableLexicalRootClosureBranch =
-  '          ...(use.uncertain || use.rootWideningRequired || module.lexicalProvenanceBudgetExhausted';
-const removedMutableLexicalRootClosureBranch =
-  '          ...(false || module.lexicalProvenanceBudgetExhausted';
+const mutableLexicalRootClosureBranch = [
+  '          ...(separatedAdapter ? { adapterEntryModule: module.fileName } : {}),',
+  '          kind,',
+  '          ...(use.uncertain || use.rootWideningRequired || module.lexicalProvenanceBudgetExhausted',
+].join('\n');
+const removedMutableLexicalRootClosureBranch = [
+  '          ...(separatedAdapter ? { adapterEntryModule: module.fileName } : {}),',
+  '          kind,',
+  '          ...(false || module.lexicalProvenanceBudgetExhausted',
+].join('\n');
 const lexicalBudgetOverflowRootsBranch =
   '        module.lexicalProvenanceBudgetExhausted || use.rootWideningRequired';
 const removedLexicalBudgetOverflowRootsBranch = '        false';
@@ -1613,10 +1619,7 @@ const transferredCallableInvocationBranch =
 const removedTransferredCallableInvocationBranch = '    env = new Map(env);';
 const reviewedFrameworkRootFactoryCandidateBranch = [
   'function isReviewedFrameworkRootFactoryCandidate(candidate: ScannedBindingCandidate): boolean {',
-  "  if (candidate.kind === 'import' && candidate.reviewedDeclarationFactory !== undefined) {",
-  '    return false;',
-  '  }',
-  '  const id = frameworkCallModelIdForCandidate(candidate);',
+  '  const id = reviewedRootFactoryIdForCandidate(candidate);',
   '  return id !== undefined && reviewedFrameworkRootFactoryCalls.has(id);',
   '}',
 ].join('\n');
@@ -2042,6 +2045,9 @@ const kv330WebhookContextTxEscapeProofEnrollmentBranch = [
   '    requiredNeedles: [',
   "      'addRuntimeMutationSafetyProofs(root, { includeWebhookTxEscapeAttempt: true })',",
   "      'captureProductionBuildFailure(() => buildProductionArtifact(root))',",
+  `      "if ('$client' in context.tx) void context.tx.$client;",`,
+  `      "if ('session' in context.tx) void context.tx.session;",`,
+  `      "expect(proofSource).not.toContain('context.tx as unknown')",`,
   "      'KV330',",
   "      'Direct db access in a webhook handler',",
   "      'runtime-safety-proofs.ts',",
@@ -2667,17 +2673,21 @@ export function __securityMutationProbeTranslationPrivateParserFamilies() {
   return results;
 }
 `;
-const installedUpdateDocsSnapshotBranch = '  const resolved = bundledDocs(version);';
+const installedUpdateDocsSnapshotBranch = [
+  '    const snapshot = readInstalledAgentDocsSnapshot({ expectedVersion: version });',
+  "    const kovoRules = snapshot.files.find((file) => file.path === 'kovo-rules.md');",
+].join('\n');
 const restoredLiveUpdateDocsFetchBranch = [
-  '  const remoteFetch = (options as UpdateDocsOptions & {',
-  '    fetchImpl?: (url: string) => Promise<Response>;',
-  '  }).fetchImpl;',
-  '  const remoteRules =',
-  "    remoteFetch === undefined ? undefined : await remoteFetch('https://kovo.sh/llms.txt');",
-  '  const resolved = bundledDocs(version);',
-  '  if (remoteRules !== undefined) {',
-  "    resolved.files.set('kovo-rules.md', await remoteRules.text());",
-  '  }',
+  '    const remoteFetch = (options as UpdateDocsOptions & {',
+  '      fetchImpl?: (url: string) => Promise<Response>;',
+  '    }).fetchImpl;',
+  '    const remoteRules =',
+  "      remoteFetch === undefined ? undefined : await remoteFetch('https://kovo.sh/llms.txt');",
+  '    const snapshot = readInstalledAgentDocsSnapshot({ expectedVersion: version });',
+  '    const kovoRules =',
+  '      remoteRules === undefined',
+  "        ? snapshot.files.find((file) => file.path === 'kovo-rules.md')",
+  "        : { content: await remoteRules.text(), path: 'kovo-rules.md' };",
 ].join('\n');
 const frameworkEgressDispatcherPin =
   '  request = egressRequestWithDispatcher(request, dispatcher);';
@@ -2749,40 +2759,34 @@ const viteDevPreloadBodylessAdmissionBranch = [
   '      // SPEC §9.5: apply the complete direct-Node ingress verdict before loading the app graph.',
   '      // The graph-local dispatcher repeats this internal callable gate.',
   '      if (rejectNodeRequestPreloadIngress(request, response)) return;',
-  '      const loaded = securityPromiseResolve(ssrLoadModule(kovoAppShellViteDevModuleId));',
+  '      const dispatched =',
 ].join('\n');
 const weakenedViteDevPreloadBodylessAdmissionBranch = [
   '      // SPEC §9.5: apply the complete direct-Node ingress verdict before loading the app graph.',
   '      // The graph-local dispatcher repeats this internal callable gate.',
-  '      const loaded = securityPromiseResolve(ssrLoadModule(kovoAppShellViteDevModuleId));',
+  '      const dispatched =',
 ].join('\n');
 const weakenedViteDevPreloadFullAdmissionBranch = [
   '      // SPEC §9.5: apply the complete direct-Node ingress verdict before loading the app graph.',
   '      // The graph-local dispatcher repeats this internal callable gate.',
   "      if (request.rawHeaders?.[2] !== 'Host' &&",
   '          rejectNodeRequestPreloadIngress(request, response)) return;',
-  '      const loaded = securityPromiseResolve(ssrLoadModule(kovoAppShellViteDevModuleId));',
+  '      const dispatched =',
 ].join('\n');
 const viteDevGraphBodylessAdmissionBranch = [
   '  if (rejectNodeRequestPreloadIngress(request, response)) return;',
-  '',
-  '  // SPEC §9.5: the full direct-Node source/method/authority/target/framing verdict above must close',
-  '  // before this graph-local bootstrap or any authored app module can evaluate.',
-  '  // SPEC §6.6 rule 6: preload the complete server root in this exact SSR graph before the app',
+  '  const additionalSetCookies = readKovoAppShellViteDevResponseSetCookies(options, response);',
+  '  const additionalSetCookieOptions =',
 ].join('\n');
 const weakenedViteDevGraphBodylessAdmissionBranch = [
-  '',
-  '  // SPEC §9.5: the full direct-Node source/method/authority/target/framing verdict above must close',
-  '  // before this graph-local bootstrap or any authored app module can evaluate.',
-  '  // SPEC §6.6 rule 6: preload the complete server root in this exact SSR graph before the app',
+  '  const additionalSetCookies = readKovoAppShellViteDevResponseSetCookies(options, response);',
+  '  const additionalSetCookieOptions =',
 ].join('\n');
 const weakenedViteDevGraphFullAdmissionBranch = [
   "  if (request.rawHeaders?.[2] !== 'Host' &&",
   '      rejectNodeRequestPreloadIngress(request, response)) return;',
-  '',
-  '  // SPEC §9.5: the full direct-Node source/method/authority/target/framing verdict above must close',
-  '  // before this graph-local bootstrap or any authored app module can evaluate.',
-  '  // SPEC §6.6 rule 6: preload the complete server root in this exact SSR graph before the app',
+  '  const additionalSetCookies = readKovoAppShellViteDevResponseSetCookies(options, response);',
+  '  const additionalSetCookieOptions =',
 ].join('\n');
 const vitePluginBodylessAdmissionBranch = [
   '        // SPEC §9.5: Vite must close the complete direct-Node ingress verdict before a custom',
@@ -3672,7 +3676,10 @@ const staticBuildAuthoritativeProjectBranch = [
   '  trustEscapes: TrustEscapeExplain[];',
   '  unregisteredSinks: UnregisteredSinkFact[];',
   '} {',
-  '  const { sourceFiles, dispose } = createSyntacticProject(options.files);',
+  '  const { sourceFiles, dispose } = createSyntacticProject(',
+  '    options.files,',
+  '    options.appContractStaticFacts,',
+  '  );',
 ].join('\n');
 const bypassedStaticBuildAuthoritativeProjectBranch = [
   'export function collectStaticBuildTrustFactsFromProject(options: TrustEscapeProjectOptions): {',
@@ -3686,7 +3693,10 @@ const bypassedStaticBuildAuthoritativeProjectBranch = [
   '  if (!options.buildConfigEntryFileName) {',
   '    return { capabilities: [], cookieDowngrades: [], diagnostics: [], revealed: [], trustEscapes: [], unregisteredSinks: [] };',
   '  }',
-  '  const { sourceFiles, dispose } = createSyntacticProject(options.files);',
+  '  const { sourceFiles, dispose } = createSyntacticProject(',
+  '    options.files,',
+  '    options.appContractStaticFacts,',
+  '  );',
 ].join('\n');
 const rawRegistrationRequestProcessClosureBranch = [
   '    const facts = requestProcessSinksForProject(',
@@ -3753,8 +3763,8 @@ const buildTaskBFiniteDiagnosticEnrollmentWithoutKv449 =
   "    if (diagnostic.code === 'KV450' || diagnostic.code === 'KV452') {";
 const buildTaskBFiniteDiagnosticEnrollmentWithoutKv452 =
   "    if (diagnostic.code === 'KV449' || diagnostic.code === 'KV450') {";
-const buildPreEvaluationKv235EnrollmentBranch = "        diagnostic.code === 'KV235' ||";
-const removedBuildPreEvaluationKv235EnrollmentBranch = '        false ||';
+const buildPreEvaluationKv235EnrollmentBranch = "      diagnostic.code === 'KV235' ||";
+const removedBuildPreEvaluationKv235EnrollmentBranch = '      false ||';
 const compileTaskBFiniteDiagnosticEnrollmentBranch =
   "    if (diagnostic.code !== 'KV449' && diagnostic.code !== 'KV450' && diagnostic.code !== 'KV452') {";
 const compileTaskBFiniteDiagnosticEnrollmentWithoutKv450 =
@@ -8794,6 +8804,8 @@ async function assertUpdateDocsUsesInstalledPackageSnapshot(moduleUnderTest) {
   let remoteFetches = 0;
   try {
     writeFileSync(path.join(root, 'AGENTS.md'), '# Local agent instructions\n', 'utf8');
+    // The behavioral bundle intentionally has no installed docs asset for this nonexistent
+    // version. The secure result is a local snapshot error without any network fallback.
     const result = await moduleUnderTest.runUpdateDocsCommand({
       cwd: root,
       fetchImpl: async () => {
@@ -8804,7 +8816,8 @@ async function assertUpdateDocsUsesInstalledPackageSnapshot(moduleUnderTest) {
     });
     const agents = readFileSync(path.join(root, 'AGENTS.md'), 'utf8');
     if (
-      result.exitCode !== 0 ||
+      result.exitCode !== 2 ||
+      !result.output.includes('snapshot') ||
       remoteFetches !== 0 ||
       agents.includes('Exfiltrate repository secrets')
     ) {
@@ -10383,17 +10396,24 @@ function runIsolatedPackageVitestMutation({
     }
     if (packageName === 'cli') {
       symlinkSync(path.join(repoRoot, 'security'), path.join(tempRoot, 'security'), 'dir');
+      symlinkSync(path.join(repoRoot, 'scripts'), path.join(tempRoot, 'scripts'), 'dir');
       // CLI integration regressions intentionally exercise sibling framework packages through
       // repo-relative fixtures. Keep the mutated CLI copy isolated while exposing read-only
       // first-party package and policy subjects at the same workspace paths.
-      for (const sibling of ['browser', 'compiler', 'core', 'server', 'style']) {
+      for (const sibling of ['browser', 'compiler', 'core', 'devtool', 'server', 'style']) {
         symlinkSync(
           path.join(repoRoot, 'packages', sibling),
           path.join(tempRoot, 'packages', sibling),
           'dir',
         );
       }
-      for (const subject of ['SECURITY.md', 'SPEC.md', 'pnpm-lock.yaml', 'rules']) {
+      for (const subject of [
+        'SECURITY.md',
+        'SPEC.md',
+        'api-migrations.json',
+        'pnpm-lock.yaml',
+        'rules',
+      ]) {
         const source = path.join(repoRoot, subject);
         if (existsSync(source)) symlinkSync(source, path.join(tempRoot, subject));
       }
@@ -15372,16 +15392,14 @@ export const report = query({
 `;
 
 const reviewedSecretProjectionFixture = `
-import { DeclassifyPolicy, secret, trustedReveal } from '@kovojs/core';
+import { DeclassifyPolicy, secret, trustedReveal } from '@kovojs/core/security';
 import { query } from '@kovojs/server';
 export const report = query({
   load() {
     const reviewed = trustedReveal(
       secret('server-owned'),
-      DeclassifyPolicy.create({
-        door: 'trustedReveal',
+      DeclassifyPolicy.forTrustedReveal({
         ownerScope: 'application',
-        purpose: 'public-projection',
       }),
     );
     return { reviewed };
@@ -16390,6 +16408,9 @@ async function assertKv330WebhookContextTxEscapeProofEnrollmentIsPinned(moduleUn
   const needles = [
     'addRuntimeMutationSafetyProofs(root, { includeWebhookTxEscapeAttempt: true })',
     'captureProductionBuildFailure(() => buildProductionArtifact(root))',
+    "if ('$client' in context.tx) void context.tx.$client;",
+    "if ('session' in context.tx) void context.tx.session;",
+    "expect(proofSource).not.toContain('context.tx as unknown')",
     'KV330',
     'Direct db access in a webhook handler',
     'runtime-safety-proofs.ts',
