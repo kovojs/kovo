@@ -17,6 +17,7 @@ import { performance } from 'node:perf_hooks';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  createKovoDevReadyReportObserver,
   DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS,
   DEV_READY_POST_BIND_BUDGET_MS,
   DEV_READY_PROBE_PROCESS_TIMEOUT_MS,
@@ -25,6 +26,7 @@ import {
   waitForKovoDevReadiness,
 } from '../../../scripts/lib/dev-ready-probe-contract.mjs';
 import {
+  formatAuthenticatedKovoDevReadyReport,
   isolateAuthoredDevPluginOptions,
   parseDevArgs,
   type KovoDevOptions,
@@ -50,6 +52,21 @@ afterEach(() => {
 });
 
 describe('kovo dev', () => {
+  it('keeps official ready-report construction behind authenticated listening proof', () => {
+    expect(() =>
+      formatAuthenticatedKovoDevReadyReport(
+        { localOrigin: 'http://127.0.0.1:4173' },
+        {
+          appModulePath: '/fixture/src/app.ts',
+          database: 'none configured',
+          durationMs: 12,
+          mode: 'development',
+          root: '/fixture',
+        },
+      ),
+    ).toThrow(/requires authenticated listening proof/u);
+  });
+
   it('parses the app/root and bounded listen overrides', () => {
     const parsed = parseDevArgs([
       './src/app.ts',
@@ -179,7 +196,7 @@ throw new Error('undeclared Vite config executed');
 
       const port = await reservePort();
       const child = spawnKovoDev(root, port);
-      const output = collectChildOutput(child);
+      const output = collectKovoDevOutput(child, port);
       try {
         const ready = await waitForInitialKovoDevReady(port, child, output);
         const response = await fetchReadyKovoDev(ready.localUrl, child, output);
@@ -261,7 +278,7 @@ export default app.assemble({
 
       const port = await reservePort();
       const child = spawnKovoDev(root, port);
-      const output = collectChildOutput(child);
+      const output = collectKovoDevOutput(child, port);
       const readiness = waitForInitialKovoDevReady(port, child, output);
       void readiness.catch(() => undefined);
       try {
@@ -276,6 +293,10 @@ export default app.assemble({
 
         const ready = await readiness;
         expect(ready.readyReportElapsedMs).toBeLessThanOrEqual(DEV_READY_POST_BIND_BUDGET_MS);
+        expect(['exact', 'interval-censored']).toContain(ready.readyReportElapsedMsKind);
+        if (ready.readyReportElapsedMsKind === 'interval-censored') {
+          expect(ready.readyReportElapsedMs).toBe(0);
+        }
 
         const response = await fetchReadyKovoDev(ready.localUrl, child, output);
         expect(response.status, output.combined()).toBe(200);
@@ -333,7 +354,7 @@ export default app.assemble({
       );
       const port = await reservePort();
       const child = spawnKovoDev(root, port, false, true);
-      const output = collectChildOutput(child);
+      const output = collectKovoDevOutput(child, port);
       try {
         const ready = await waitForInitialKovoDevReady(port, child, output);
         const response = await fetchReadyKovoDev(ready.localUrl, child, output);
@@ -409,7 +430,7 @@ export default app.assemble({
 
       const port = await reservePort();
       const child = spawnKovoDev(root, port);
-      const output = collectChildOutput(child);
+      const output = collectKovoDevOutput(child, port);
       const authority = `127.0.0.1:${port}`;
       const origin = `http://${authority}`;
       try {
@@ -754,7 +775,7 @@ export default {
 
       const port = await reservePort();
       const child = spawnKovoDev(root, port, true);
-      const output = collectChildOutput(child);
+      const output = collectKovoDevOutput(child, port);
       try {
         const ready = await waitForInitialKovoDevReady(port, child, output);
         const response = await fetchReadyKovoDev(ready.localUrl, child, output);
@@ -845,7 +866,7 @@ export default app.assemble({
       for (let restart = 0; restart < 2; restart += 1) {
         const port = await reservePort();
         const child = spawnKovoDev(root, port);
-        const output = collectChildOutput(child);
+        const output = collectKovoDevOutput(child, port);
         try {
           const ready = await waitForInitialKovoDevReady(port, child, output);
           const response = await fetchReadyKovoDev(ready.localUrl, child, output);
@@ -876,7 +897,7 @@ export default app.assemble({
       const failedCandidateMarker = join(root, 'failed-candidate-entered.marker');
       const port = await reservePort();
       const child = spawnKovoDev(root, port);
-      const output = collectChildOutput(child);
+      const output = collectKovoDevOutput(child, port);
       const url = `http://127.0.0.1:${port}/`;
 
       try {
@@ -1183,6 +1204,22 @@ function collectChildOutput(child: ChildProcessWithoutNullStreams): {
   return output;
 }
 
+function collectKovoDevOutput(child: ChildProcessWithoutNullStreams, port: number) {
+  const startedAt = performance.now();
+  const readyExpected = {
+    appEntry: 'src/app.ts',
+    database: 'none configured',
+    localUrl: `http://127.0.0.1:${port}/`,
+    mode: 'development',
+  };
+  const readyReportObserver = createKovoDevReadyReportObserver(child.stdout, readyExpected);
+  return Object.assign(collectChildOutput(child), {
+    readyExpected,
+    readyReportObserver,
+    startedAt,
+  });
+}
+
 interface RawDevRequestOptions {
   authority: string;
   cookie?: string;
@@ -1280,25 +1317,27 @@ async function rawDevWebSocketHandshake(
 async function waitForInitialKovoDevReady(
   port: number,
   child: ChildProcessWithoutNullStreams,
-  output: { combined(): string; stderr: string; stdout: string },
-): Promise<{ localUrl: string; listenerElapsedMs: number; readyReportElapsedMs: number }> {
+  output: ReturnType<typeof collectKovoDevOutput>,
+): Promise<{
+  localUrl: string;
+  listenerElapsedMs: number;
+  readyReportElapsedMs: number;
+  readyReportElapsedMsKind: 'exact' | 'interval-censored';
+}> {
   const ready = await waitForKovoDevReadiness({
-    expected: {
-      appEntry: 'src/app.ts',
-      database: 'none configured',
-      localUrl: `http://127.0.0.1:${port}/`,
-      mode: 'development',
-    },
+    expected: output.readyExpected,
     label: 'Source kovo dev',
     port,
     readOutput: () => ({ stderr: output.stderr, stdout: output.stdout }),
     readStatus: () => ({ exitCode: child.exitCode, signalCode: child.signalCode }),
-    startedAt: performance.now(),
+    reportObserver: output.readyReportObserver,
+    startedAt: output.startedAt,
   });
   return {
     listenerElapsedMs: ready.listenerElapsedMs,
     localUrl: ready.localUrl,
     readyReportElapsedMs: ready.observedAfterMs,
+    readyReportElapsedMsKind: ready.observedAfterMsKind,
   };
 }
 

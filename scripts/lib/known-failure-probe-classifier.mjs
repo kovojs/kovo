@@ -101,6 +101,8 @@ export function packedFirstLoopContractOutcome(mode, observation) {
   if (mode === 'dev-ready') {
     if (
       observation.listened === true &&
+      (observation.readyDelayKind === 'exact' ||
+        observation.readyDelayKind === 'interval-censored') &&
       Number.isFinite(observation.readyDelayMs) &&
       observation.readyDelayMs >= 0 &&
       observation.readyDelayMs <= DEV_READY_POST_BIND_BUDGET_MS &&

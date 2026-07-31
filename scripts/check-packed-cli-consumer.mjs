@@ -10,6 +10,7 @@ import ts from 'typescript';
 
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import {
+  createKovoDevReadyReportObserver,
   DEV_READY_POST_BIND_BUDGET_MS,
   reserveKovoDevLoopbackPort,
   waitForKovoDevReadiness,
@@ -741,6 +742,12 @@ export default app.assemble({ routes: [home] });
 
   const port = await reserveKovoDevLoopbackPort();
   const localUrl = `http://127.0.0.1:${port}/`;
+  const expectedReadyReport = {
+    appEntry: 'src/app.ts',
+    database: 'none configured',
+    localUrl,
+    mode: 'development',
+  };
   const spawnedAt = performance.now();
   const child = spawn(
     process.execPath,
@@ -762,6 +769,7 @@ export default app.assemble({ routes: [home] });
       stdio: ['ignore', 'pipe', 'pipe'],
     },
   );
+  const reportObserver = createKovoDevReadyReportObserver(child.stdout, expectedReadyReport);
   let stdout = '';
   let stderr = '';
   child.stdout.on('data', (chunk) => {
@@ -773,20 +781,18 @@ export default app.assemble({ routes: [home] });
 
   try {
     const ready = await waitForKovoDevReadiness({
-      expected: {
-        appEntry: 'src/app.ts',
-        database: 'none configured',
-        localUrl,
-        mode: 'development',
-      },
+      expected: expectedReadyReport,
       label: 'Packed kovo dev',
       port,
       readOutput: () => ({ stderr, stdout }),
       readStatus: () => ({ exitCode: child.exitCode, signalCode: child.signalCode }),
+      reportObserver,
       startedAt: spawnedAt,
     });
     const phaseDiagnostics =
-      `listener=${ready.listenerElapsedMs}ms ` + `postBindReadyReport=${ready.observedAfterMs}ms`;
+      `listener=${ready.listenerElapsedMs}ms ` +
+      `postBindReadyReport=${ready.observedAfterMs}ms/${ready.observedAfterMsKind} ` +
+      `upperBound=${ready.observedAfterMsUpperBound}ms`;
     const page = await fetch(`${localUrl}__kovo`, {
       signal: AbortSignal.timeout(DEV_READY_POST_BIND_BUDGET_MS),
     });

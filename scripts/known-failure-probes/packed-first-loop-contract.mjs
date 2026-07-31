@@ -13,6 +13,7 @@ import {
   materializeKnownFailurePackedRelease,
 } from '../lib/known-failure-packed-release.mjs';
 import {
+  createKovoDevReadyReportObserver,
   isKovoDevReadyReportTimeout,
   waitForKovoDevReadiness,
 } from '../lib/dev-ready-probe-contract.mjs';
@@ -116,15 +117,16 @@ async function devReadyObservation(packedRelease) {
   });
   const entry = path.join(appRoot, 'src', 'ready.tsx');
   writeFileSync(entry, minimalAppSource('packed ready probe'), 'utf8');
-  const dev = startDevServer(packedRelease, appRoot, port, './src/ready.tsx');
+  const expectedReadyReport = {
+    appEntry: 'src/ready.tsx',
+    localUrl: `http://127.0.0.1:${port}/`,
+    mode: 'development',
+  };
+  const dev = startDevServer(packedRelease, appRoot, port, './src/ready.tsx', expectedReadyReport);
   try {
     try {
       const ready = await waitForKovoDevReadiness({
-        expected: {
-          appEntry: 'src/ready.tsx',
-          localUrl: `http://127.0.0.1:${port}/`,
-          mode: 'development',
-        },
+        expected: expectedReadyReport,
         label: 'Packed known-failure kovo dev',
         port,
         readOutput: () => ({ stderr: dev.stderr(), stdout: dev.stdout() }),
@@ -132,10 +134,12 @@ async function devReadyObservation(packedRelease) {
           exitCode: dev.child.exitCode,
           signalCode: dev.child.signalCode,
         }),
+        reportObserver: dev.readyReportObserver,
       });
       return {
         graceExpired: false,
         listened: true,
+        readyDelayKind: ready.observedAfterMsKind,
         readyDelayMs: ready.observedAfterMs,
         stdout: dev.stdout(),
       };
@@ -144,6 +148,7 @@ async function devReadyObservation(packedRelease) {
       return {
         graceExpired: true,
         listened: true,
+        readyDelayKind: null,
         readyDelayMs: null,
         stdout: dev.stdout(),
       };
@@ -347,7 +352,7 @@ async function opaqueBoundaryObservation(packedRelease) {
   }
 }
 
-function startDevServer(packedRelease, appRoot, port, entry) {
+function startDevServer(packedRelease, appRoot, port, entry, expectedReadyReport) {
   const cli = path.join(packedRelease.packageRoot('@kovojs/cli'), 'dist', 'bin.mjs');
   const child = spawn(
     process.execPath,
@@ -366,6 +371,10 @@ function startDevServer(packedRelease, appRoot, port, entry) {
       stdio: ['ignore', 'pipe', 'pipe'],
     },
   );
+  const readyReportObserver =
+    expectedReadyReport === undefined
+      ? undefined
+      : createKovoDevReadyReportObserver(child.stdout, expectedReadyReport);
   let stdout = '';
   let stderr = '';
   let outputExceeded = false;
@@ -382,6 +391,7 @@ function startDevServer(packedRelease, appRoot, port, entry) {
   return {
     child,
     output: () => bounded(`${stdout}\n${stderr}`),
+    readyReportObserver,
     stderr: () => bounded(stderr),
     stdout: () => bounded(stdout),
   };

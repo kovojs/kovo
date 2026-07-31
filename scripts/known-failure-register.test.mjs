@@ -134,6 +134,7 @@ describe('known-failure register', () => {
       'The packed dev journey emits the required structured ready report within five seconds after socket bind.',
     );
     expect(packedFirstLoopProbeSource).toContain('waitForKovoDevReadiness({');
+    expect(packedFirstLoopProbeSource).toContain('readyDelayKind: ready.observedAfterMsKind');
     expect(packedFirstLoopProbeSource).toContain('readyDelayMs: ready.observedAfterMs');
     expect(packedFirstLoopProbeSource).not.toContain('waitForTcpListener(');
     expect(packedFirstLoopProbeSource).not.toContain('Date.now() - listenedAt');
@@ -563,6 +564,7 @@ describe('known-failure register', () => {
       packedFirstLoopContractOutcome('dev-ready', {
         graceExpired: false,
         listened: true,
+        readyDelayKind: 'interval-censored',
         readyDelayMs: DEV_READY_POST_BIND_BUDGET_MS,
         stdout: report,
       }),
@@ -571,6 +573,7 @@ describe('known-failure register', () => {
       packedFirstLoopContractOutcome('dev-ready', {
         graceExpired: true,
         listened: true,
+        readyDelayKind: null,
         readyDelayMs: null,
         stdout: '',
       }),
@@ -579,6 +582,7 @@ describe('known-failure register', () => {
       packedFirstLoopContractOutcome('dev-ready', {
         graceExpired: false,
         listened: true,
+        readyDelayKind: 'exact',
         readyDelayMs: 12,
         stdout: 'Local: http://127.0.0.1:5173',
       }),
@@ -587,6 +591,7 @@ describe('known-failure register', () => {
       packedFirstLoopContractOutcome('dev-ready', {
         graceExpired: false,
         listened: true,
+        readyDelayKind: 'exact',
         readyDelayMs: DEV_READY_POST_BIND_BUDGET_MS + 1,
         stdout: report,
       }),

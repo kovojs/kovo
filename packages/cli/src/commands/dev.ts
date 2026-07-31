@@ -107,6 +107,20 @@ export interface KovoDevServerHandle {
   server: ViteDevServer;
 }
 
+class AuthenticatedKovoDevListener {
+  readonly #localOrigin: string;
+
+  constructor(localOrigin: string) {
+    this.#localOrigin = localOrigin;
+  }
+
+  readLocalOrigin(): string {
+    return this.#localOrigin;
+  }
+}
+
+const readAuthenticatedKovoDevLocalOrigin = AuthenticatedKovoDevListener.prototype.readLocalOrigin;
+
 type DevArgParseResult = { ok: true; options: KovoDevOptions } | { message: string; ok: false };
 
 /** @internal Parse `kovo dev` without delegating security-sensitive setup to Vite's CLI. */
@@ -217,7 +231,7 @@ export async function startKovoDevServer(
       throw new TypeError('Kovo dev requires one owned HTTP server for its development origin.');
     }
     const strictOrigin = configuredStrictDevServerOrigin(activeLiveServer);
-    let localOrigin: string | undefined;
+    let authenticatedListener: AuthenticatedKovoDevListener | undefined;
     let originBindingError: unknown;
     if (strictOrigin !== undefined) {
       // A fixed strict loopback authority cannot shift when Vite listens. Authenticate and fully
@@ -239,27 +253,26 @@ export async function startKovoDevServer(
             `kovo dev strict listener bound ${origin} instead of prepared origin ${strictOrigin}.`,
           );
         }
-        localOrigin = origin;
+        authenticatedListener = new AuthenticatedKovoDevListener(origin);
       } catch (error) {
         originBindingError = error;
       }
     });
     await liveServer.listen();
     if (originBindingError !== undefined) throw originBindingError;
-    if (localOrigin === undefined) {
+    if (authenticatedListener === undefined) {
       throw new Error('kovo dev could not authenticate its bound loopback development origin.');
     }
     if (strictOrigin === undefined) {
       await runnerGenerations.activateInitial();
     }
     if (options.debug === true) liveServer.printUrls();
-    const readyReport = formatKovoDevReadyReport({
+    const readyReport = formatAuthenticatedKovoDevReadyReport(authenticatedListener, {
       appModulePath: options.appModulePath,
       database: await runnerGenerations.withLease((moduleServer) =>
         inspectKovoDevDatabasePosture(moduleServer, devtoolOptions),
       ),
       durationMs: nativeApply<number>(nativeMathRound, NativeMath, [performance.now() - startedAt]),
-      localUrl: `${localOrigin}/`,
       mode: options.mode,
       root,
     });
@@ -342,8 +355,32 @@ interface KovoDevReadyReportOptions {
   root: string;
 }
 
+/**
+ * @internal Product seam: official readiness can only consume the module-private proof minted by
+ * the authenticated `listening` callback. A structurally identical object or forged report text
+ * cannot make `startKovoDevServer` return readiness before that callback has completed.
+ */
+export function formatAuthenticatedKovoDevReadyReport(
+  listener: unknown,
+  options: Omit<KovoDevReadyReportOptions, 'localUrl'>,
+): string {
+  if (
+    nativeApply<boolean>(nativeFunctionHasInstance, AuthenticatedKovoDevListener, [listener]) !==
+    true
+  ) {
+    throw new TypeError('Kovo dev ready reporting requires authenticated listening proof.');
+  }
+  let localOrigin: string;
+  try {
+    localOrigin = nativeApply<string>(readAuthenticatedKovoDevLocalOrigin, listener, []);
+  } catch {
+    throw new TypeError('Kovo dev ready reporting requires authenticated listening proof.');
+  }
+  return formatKovoDevReadyReport({ ...options, localUrl: `${localOrigin}/` });
+}
+
 /** @internal Stable framework-owned readiness output, independent of Vite's logger. */
-export function formatKovoDevReadyReport(options: KovoDevReadyReportOptions): string {
+function formatKovoDevReadyReport(options: KovoDevReadyReportOptions): string {
   const relativeEntry = relative(options.root, options.appModulePath);
   const appEntry = nativeApply<string>(nativeStringReplace, relativeEntry, [/\\/gu, '/']);
   return (

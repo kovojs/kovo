@@ -43,23 +43,80 @@ export async function reserveKovoDevLoopbackPort(host = '127.0.0.1') {
 
 /** Return whether the selected loopback listener currently accepts a TCP connection. */
 export async function kovoDevLoopbackTcpConnects(port, host = '127.0.0.1', options = {}) {
-  if (options.signal?.aborted) return false;
+  return (await observeKovoDevLoopbackTcpConnection(port, host, options)) !== null;
+}
+
+/**
+ * Attach this observer synchronously after spawning `kovo dev`, before yielding to the event loop.
+ * The data callback owns the report clock: delayed callers receive the original delivery timestamp,
+ * never a timestamp manufactured when they eventually inspect a cumulative buffer.
+ */
+export function createKovoDevReadyReportObserver(stdout, expected, options = {}) {
+  const now = options.monotonicNow ?? (() => performance.now());
+  let accumulated = '';
+  let disposed = false;
+  let report = null;
+  const subscribers = new Set();
+
+  const onData = (chunk) => {
+    if (disposed || report !== null) return;
+    const observedAt = now();
+    accumulated += String(chunk);
+    const value = parseKovoDevReadyReport(accumulated, expected);
+    if (value === null) return;
+
+    report = { observedAt, value };
+    stdout.removeListener('data', onData);
+    for (const subscriber of subscribers) subscriber(report);
+    subscribers.clear();
+  };
+
+  stdout.on('data', onData);
+  return {
+    current: () => report,
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      stdout.removeListener('data', onData);
+      subscribers.clear();
+    },
+    subscribe(subscriber) {
+      if (report !== null) {
+        subscriber(report);
+        return () => undefined;
+      }
+      if (disposed) {
+        throw new Error('Kovo dev ready report observer was already disposed.');
+      }
+      subscribers.add(subscriber);
+      return () => subscribers.delete(subscriber);
+    },
+  };
+}
+
+async function observeKovoDevLoopbackTcpConnection(port, host = '127.0.0.1', options = {}) {
+  if (options.signal?.aborted) return null;
+  const now = options.monotonicNow ?? (() => performance.now());
   return await new Promise((resolve) => {
     const socket = createConnection({ host, port });
     let settled = false;
-    const finish = (connected) => {
+    const finish = (observation) => {
       if (settled) return;
       settled = true;
       options.signal?.removeEventListener('abort', onAbort);
       socket.removeAllListeners();
       socket.destroy();
-      resolve(connected);
+      resolve(observation);
     };
-    const onAbort = () => finish(false);
+    const onAbort = () => finish(null);
     options.signal?.addEventListener('abort', onAbort, { once: true });
-    socket.setTimeout(DEV_READY_TCP_ATTEMPT_TIMEOUT_MS, () => finish(false));
-    socket.once('connect', () => finish(true));
-    socket.once('error', () => finish(false));
+    socket.setTimeout(DEV_READY_TCP_ATTEMPT_TIMEOUT_MS, () => finish(null));
+    socket.once('connect', () => {
+      const observation = { observedAt: now() };
+      options.onConnect?.(observation);
+      finish(observation);
+    });
+    socket.once('error', () => finish(null));
   });
 }
 
@@ -95,21 +152,26 @@ export function parseKovoDevReadyReport(stdout, expected) {
 }
 
 /**
- * Observe listener acquisition and the first complete seven-line report concurrently. Sequential
- * observation can accidentally accept a report that was already buffered before the harness first
- * proved the socket bound. Both timestamps come from one monotonic clock; ready-before-bind is a
- * contract failure, and the report budget begins at the listener observation rather than at a later
- * caller-controlled timestamp. A TCP poll proves bind only within its final refusal-to-success
- * interval, so a report inside that interval is ordered at zero post-bind delay; a report preceding
- * the final observed refusal is definitively ready-before-bind and is rejected.
+ * Observe listener acquisition and the first complete seven-line report concurrently. The report
+ * observer timestamps delivery in the stdout callback and the listener probe timestamps success in
+ * the socket connect callback. The common case is point-observed connect-before-report ordering.
+ * Kovo's internal ready-report seam separately proves that its authenticated strict-port report is
+ * constructed only after `listening`; when delivery falls inside the final refusal-to-immediate-
+ * success interval, this observer records a zero-millisecond interval-censored result. A failed
+ * immediate connection or a report before the last refusal remains a ready-before-bind failure.
  */
 export async function waitForKovoDevReadiness(options) {
+  if (options.reportObserver === undefined) {
+    throw new Error(
+      `${options.label} must attach a ready report observer before launching readiness observation.`,
+    );
+  }
   const now = options.monotonicNow ?? (() => performance.now());
   const startedAt = options.startedAt ?? now();
   const listenerTimeoutMs =
     options.listenerTimeoutMs ?? DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS;
   const reportTimeoutMs = options.reportTimeoutMs ?? DEV_READY_POST_BIND_BUDGET_MS;
-  const observations = { listener: null, report: null };
+  const observations = { lastNotListeningObservedAt: null, listener: null, report: null };
   const abortController = new AbortController();
   const context = {
     ...options,
@@ -120,23 +182,34 @@ export async function waitForKovoDevReadiness(options) {
     signal: abortController.signal,
     startedAt,
   };
+  context.reportDelivery = subscribeToFirstReadyReport(context);
 
   try {
-    const [listener, report] = await Promise.all([
-      observeKovoDevTcpListener(context),
+    assertReadyReportTargetsSelectedListener(context);
+    const [report, listener] = await Promise.all([
       observeFirstKovoDevReadyReport(context),
+      observeKovoDevTcpListener(context),
     ]);
     assertReadyReportAfterListener(context, listener, report);
     assertReadyReportWithinBudget(context, listener, report);
+    const intervalCensored = report.observationKind === 'interval-censored';
+    const observedAfterMs = intervalCensored
+      ? 0
+      : elapsedMilliseconds(listener.observedAt, report.observedAt);
     return {
       ...report.value,
       listenerElapsedMs: elapsedMilliseconds(startedAt, listener.observedAt),
       listenerObservedAt: listener.observedAt,
-      observedAfterMs: elapsedMilliseconds(listener.observedAt, report.observedAt),
+      observedAfterMs,
+      observedAfterMsKind: report.observationKind,
+      observedAfterMsUpperBound: intervalCensored
+        ? elapsedMilliseconds(report.lastNotListeningObservedAt, report.observedAt)
+        : observedAfterMs,
       readyReportObservedAt: report.observedAt,
     };
   } finally {
     abortController.abort(new Error(`${options.label} readiness observation settled.`));
+    options.reportObserver.dispose();
   }
 }
 
@@ -145,30 +218,66 @@ export function isKovoDevReadyReportTimeout(error) {
   return error instanceof Error && error.name === DEV_READY_REPORT_TIMEOUT_CODE;
 }
 
+function subscribeToFirstReadyReport(context) {
+  return new Promise((resolve) => {
+    let settled = false;
+    let unsubscribe = () => undefined;
+    const finish = (delivery) => {
+      if (settled) return;
+      settled = true;
+      context.signal.removeEventListener('abort', onAbort);
+      unsubscribe();
+      resolve(delivery);
+    };
+    const onAbort = () => finish(null);
+    context.signal.addEventListener('abort', onAbort, { once: true });
+    unsubscribe = context.reportObserver.subscribe((report) => {
+      finish({
+        lastNotListeningObservedAt: context.observations.lastNotListeningObservedAt,
+        listenerAtDelivery: context.observations.listener,
+        report,
+      });
+    });
+    if (settled) unsubscribe();
+  });
+}
+
 async function observeKovoDevTcpListener(context) {
   const deadline = context.startedAt + context.listenerTimeoutMs;
-  let lastNotListeningObservedAt = null;
   for (;;) {
     throwIfObservationAborted(context.signal);
+    if (context.observations.listener !== null) {
+      if (context.observations.listener.observedAt <= deadline) {
+        return context.observations.listener;
+      }
+      throw listenerTimeoutError(context, context.observations.listener.observedAt);
+    }
     assertObservedDevProcessRunning(context, 'TCP listener', context.startedAt, context.now);
-    const connected = await kovoDevLoopbackTcpConnects(context.port, context.host, {
+    const connection = await observeKovoDevLoopbackTcpConnection(context.port, context.host, {
+      monotonicNow: context.now,
+      onConnect: (observation) => {
+        recordKovoDevListenerObservation(context, observation);
+      },
       signal: context.signal,
     });
     throwIfObservationAborted(context.signal);
-    const observedAt = context.now();
-    if (connected) {
-      const listener = { lastNotListeningObservedAt, observedAt };
-      context.observations.listener = listener;
-      assertReadyReportAfterListener(context, listener, context.observations.report);
-      if (observedAt <= deadline) return listener;
-      throw listenerTimeoutError(context, observedAt);
+    if (connection !== null) {
+      const listener = context.observations.listener;
+      context.onTcpObservation?.({ connected: true, observedAt: listener.observedAt });
+      if (listener.observedAt <= deadline) return listener;
+      throw listenerTimeoutError(context, listener.observedAt);
     }
-    lastNotListeningObservedAt = observedAt;
+    if (context.observations.listener !== null) {
+      if (context.observations.listener.observedAt <= deadline) {
+        return context.observations.listener;
+      }
+      throw listenerTimeoutError(context, context.observations.listener.observedAt);
+    }
+    const observedAt = context.now();
+    context.observations.lastNotListeningObservedAt = observedAt;
+    context.onTcpObservation?.({ connected: false, observedAt });
     assertObservedDevProcessRunning(context, 'TCP listener', context.startedAt, context.now);
     if (observedAt >= deadline) {
-      if (context.observations.report !== null) {
-        throw readyBeforeListenerError(context, context.observations.report, null);
-      }
       throw listenerTimeoutError(context, observedAt);
     }
     await delay(
@@ -188,17 +297,7 @@ async function observeFirstKovoDevReadyReport(context) {
       context.startedAt,
       context.now,
     );
-    const output = context.readOutput();
-    const value = parseKovoDevReadyReport(output.stdout, context.expected);
     const observedAt = context.now();
-    if (value !== null) {
-      const report = { observedAt, value };
-      context.observations.report = report;
-      assertReadyReportAfterListener(context, context.observations.listener, report);
-      assertReadyReportWithinBudget(context, context.observations.listener, report);
-      return report;
-    }
-
     const deadline =
       context.observations.listener === null
         ? maximumDeadline
@@ -209,34 +308,92 @@ async function observeFirstKovoDevReadyReport(context) {
       }
       throw readyReportTimeoutError(context, observedAt);
     }
-    await delay(
-      Math.min(DEV_READY_POLL_INTERVAL_MS, Math.max(0, deadline - observedAt)),
-      context.signal,
+
+    const delivery = await Promise.race([
+      context.reportDelivery,
+      delay(
+        Math.min(DEV_READY_POLL_INTERVAL_MS, Math.max(0, deadline - observedAt)),
+        context.signal,
+      ).then(() => null),
+    ]);
+    if (delivery === null) continue;
+
+    const { lastNotListeningObservedAt, listenerAtDelivery, report } = delivery;
+    if (listenerAtDelivery !== null) {
+      const exactReport = { ...report, observationKind: 'exact' };
+      context.observations.report = exactReport;
+      assertReadyReportAfterListener(context, listenerAtDelivery, exactReport);
+      assertReadyReportWithinBudget(context, listenerAtDelivery, exactReport);
+      return exactReport;
+    }
+    if (lastNotListeningObservedAt === null || report.observedAt < lastNotListeningObservedAt) {
+      throw readyBeforeListenerError(context, report, null);
+    }
+
+    const immediateConnection = await observeKovoDevLoopbackTcpConnection(
+      context.port,
+      context.host,
+      {
+        monotonicNow: context.now,
+        onConnect: (observation) => {
+          recordKovoDevListenerObservation(context, observation);
+        },
+        signal: context.signal,
+      },
     );
+    throwIfObservationAborted(context.signal);
+    if (immediateConnection === null) {
+      throw readyBeforeListenerError(context, report, null);
+    }
+    const intervalReport = {
+      ...report,
+      lastNotListeningObservedAt,
+      observationKind: 'interval-censored',
+    };
+    context.observations.report = intervalReport;
+    assertReadyReportWithinBudget(context, context.observations.listener, intervalReport);
+    return intervalReport;
+  }
+}
+
+function recordKovoDevListenerObservation(context, observation) {
+  if (
+    context.observations.listener === null ||
+    observation.observedAt < context.observations.listener.observedAt
+  ) {
+    context.observations.listener = { observedAt: observation.observedAt };
   }
 }
 
 function assertReadyReportAfterListener(context, listener, report) {
-  if (
-    listener === null ||
-    report === null ||
-    listener.lastNotListeningObservedAt === null ||
-    report.observedAt >= listener.lastNotListeningObservedAt
-  ) {
-    return;
-  }
+  if (report === null) return;
+  if (report.observationKind === 'interval-censored' && listener !== null) return;
+  if (listener !== null && report.observedAt >= listener.observedAt) return;
   throw readyBeforeListenerError(context, report, listener);
 }
 
 function assertReadyReportWithinBudget(context, listener, report) {
-  if (
-    listener === null ||
-    report === null ||
-    report.observedAt - listener.observedAt <= context.reportTimeoutMs
-  ) {
+  const elapsed =
+    report?.observationKind === 'interval-censored'
+      ? report.observedAt - report.lastNotListeningObservedAt
+      : listener === null || report === null
+        ? 0
+        : report.observedAt - listener.observedAt;
+  if (listener === null || report === null || elapsed <= context.reportTimeoutMs) {
     return;
   }
   throw readyReportTimeoutError(context, report.observedAt);
+}
+
+function assertReadyReportTargetsSelectedListener(context) {
+  const host = context.host ?? '127.0.0.1';
+  const normalizedHost = host.startsWith('[') ? host : host.includes(':') ? `[${host}]` : host;
+  const selectedLocalUrl = `http://${normalizedHost}:${context.port}/`;
+  if (context.expected.localUrl === selectedLocalUrl) return;
+  throw new Error(
+    `${context.label} ready report expectation must target selected strict listener ` +
+      `${selectedLocalUrl}, received ${context.expected.localUrl}.`,
+  );
 }
 
 function readyBeforeListenerError(context, report, listener) {
@@ -263,10 +420,13 @@ function listenerTimeoutError(context, observedAt) {
 
 function readyReportTimeoutError(context, observedAt) {
   const listener = context.observations.listener;
+  const report = context.observations.report;
   const elapsedMs =
-    listener === null
-      ? elapsedMilliseconds(context.startedAt, observedAt)
-      : elapsedMilliseconds(listener.observedAt, observedAt);
+    report?.observationKind === 'interval-censored'
+      ? elapsedMilliseconds(report.lastNotListeningObservedAt, observedAt)
+      : listener === null
+        ? elapsedMilliseconds(context.startedAt, observedAt)
+        : elapsedMilliseconds(listener.observedAt, observedAt);
   const error = new Error(
     `${context.label} did not emit its complete structured ready report within the ` +
       `${context.reportTimeoutMs}ms post-bind budget (elapsed=${elapsedMs}ms, ` +
