@@ -4735,7 +4735,7 @@ export function addPostgresParanoidFollowup8Shapes(root: string): void {
   );
   proof = replaceRequired(
     proof,
-    "export const phase5PgWebhook = app.endpoint(webhook('/webhooks/phase5-pg-read', {",
+    'export const phase5PgWebhook = app.endpoint(',
     [
       "export const phase5PgReferenceMembershipEndpoint = app.endpoint('/api/phase5-pg-reference-memberships', {",
       '  access: publicProof, auth: { justification: "public phase 5 postgres reference-membership proof", kind: "none" }, csrf: false, csrfJustification: "read-only phase 5 postgres reference-membership proof", db: true,',
@@ -4752,7 +4752,7 @@ export function addPostgresParanoidFollowup8Shapes(root: string): void {
       "  method: 'GET', reason: 'phase 5 postgres reference-membership proof', response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },",
       '});',
       '',
-      "export const phase5PgWebhook = app.endpoint(webhook('/webhooks/phase5-pg-read', {",
+      'export const phase5PgWebhook = app.endpoint(',
     ].join('\n'),
     'phase 5 postgres followup 8 endpoint insertion',
   );

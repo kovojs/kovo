@@ -4,7 +4,12 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { formatGeneratedProjectSources } from './index.build.test-support.js';
+import {
+  addPostgresParanoidFollowup8Shapes,
+  addPostgresParanoidPhase5DogfoodProof,
+  formatGeneratedProjectSources,
+} from './index.build.test-support.js';
+import { writeKovoProject } from './index.js';
 import { installStarterAppDependencies, resolveStarterInstallMode } from './index.test-support.js';
 
 describe('create-kovo starter test support', () => {
@@ -102,6 +107,28 @@ describe('create-kovo starter test support', () => {
 
       expect(readFileSync(fixturePath, 'utf8')).toBe(
         "export const fixture = { label: 'value' };\n",
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('composes the formatted Postgres paranoid fixture with its followup shapes', () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-kovo-paranoid-followup-'));
+
+    try {
+      writeKovoProject(root, {
+        dialect: 'postgres',
+        name: 'Paranoid Followup Fixture',
+      });
+      addPostgresParanoidPhase5DogfoodProof(root);
+
+      expect(() => addPostgresParanoidFollowup8Shapes(root)).not.toThrow();
+      expect(readFileSync(join(root, 'src/paranoid-phase5-postgres-proof.ts'), 'utf8')).toContain(
+        'export const phase5PgReferenceMembershipEndpoint',
+      );
+      expect(readFileSync(join(root, 'src/app.tsx'), 'utf8')).toContain(
+        'phase5PgReferenceMembershipEndpoint',
       );
     } finally {
       rmSync(root, { force: true, recursive: true });
