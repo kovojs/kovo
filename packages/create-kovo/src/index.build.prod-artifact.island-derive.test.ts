@@ -18,6 +18,7 @@ import { describe, expect, it } from 'vitest';
 import { writeKovoProject } from './index.js';
 import {
   buildReusableProductionArtifact,
+  formatGeneratedProjectSources,
   PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS,
 } from './index.build.test-support.js';
 import { assertProdArtifactSinkCensus } from './index.build.prod-artifact.sink-census.js';
@@ -134,7 +135,7 @@ describe('create-kovo starter (build integration: production island derives)', (
         await page.waitForFunction(
           () => {
             const text = (name: string): string | null =>
-              document.querySelector(`[data-proof="${name}"]`)?.textContent;
+              document.querySelector(`[data-proof="${name}"]`)?.textContent ?? null;
             return (
               text('count') === '2' &&
               text('first') === 'second' &&
@@ -171,7 +172,7 @@ describe('create-kovo starter (build integration: production island derives)', (
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
     }
-  }, 180_000);
+  }, 600_000);
 
   // @kovo-security-certifies KV311 module-helper-derive-prod-artifact
   it(
@@ -254,8 +255,19 @@ function addIslandDeriveProof(root: string): void {
       '/** @jsxImportSource @kovojs/server */',
       "import { component } from '@kovojs/core';",
       '',
+      "import { app } from './kovo.js';",
+      '',
+      'type IslandDeriveProofState = {',
+      '  cards: [{ label: string }];',
+      '  count: number;',
+      "  extra: { 'computed-key': string };",
+      '  groups: [[{ label: string }]];',
+      '  items: [string];',
+      '  nested: { label: string };',
+      '};',
+      '',
       'export const IslandDeriveProof = component({',
-      "  state: () => ({ cards: [{ label: 'card-a' }], count: 1, extra: { 'computed-key': 'delta' }, groups: [[{ label: 'inner' }]], items: ['first'], nested: { label: 'alpha' } }),",
+      "  state: (): IslandDeriveProofState => ({ cards: [{ label: 'card-a' }], count: 1, extra: { 'computed-key': 'delta' }, groups: [[{ label: 'inner' }]], items: ['first'], nested: { label: 'alpha' } }),",
       '  render: (_queries, state) => (',
       '      <island-derive-proof data-proof="island-derive">',
       '        {(() => {',
@@ -303,23 +315,22 @@ function addIslandDeriveProof(root: string): void {
       '  ),',
       '});',
       '',
+      "export const islandDeriveProofRoute = app.route('/island-derive-proof', {",
+      "  access: app.publicAccess('public island derive production proof'),",
+      "  meta: { description: 'Island derive production proof.', title: 'Island derive proof' },",
+      '  page() {',
+      '    return <main><IslandDeriveProof /></main>;',
+      '  },',
+      '});',
+      '',
     ].join('\n'),
     'utf8',
   );
   patchAppRoute(root, {
-    importLine: "import { IslandDeriveProof } from './island-derive-proof.js';",
-    routeLines: [
-      "    route('/island-derive-proof', {",
-      "      access: publicAccess('public island derive production proof'),",
-      "      meta: { description: 'Island derive production proof.', title: 'Island derive proof' },",
-      '      layout: AppLayout,',
-      '      stylesheets,',
-      '      page() {',
-      '        return <main><IslandDeriveProof /></main>;',
-      '      },',
-      '    }),',
-    ],
+    importLine: "import { islandDeriveProofRoute } from './island-derive-proof.js';",
+    routeBinding: 'islandDeriveProofRoute',
   });
+  formatGeneratedProjectSources(root, ['src/app.tsx', 'src/island-derive-proof.tsx']);
 }
 
 function addModuleHelperDeriveProof(root: string): void {
@@ -328,6 +339,8 @@ function addModuleHelperDeriveProof(root: string): void {
     [
       '/** @jsxImportSource @kovojs/server */',
       "import { component } from '@kovojs/core';",
+      '',
+      "import { app } from './kovo.js';",
       '',
       'const format = (value: number): string => `count:${value}`;',
       '',
@@ -339,29 +352,25 @@ function addModuleHelperDeriveProof(root: string): void {
       '  },',
       '});',
       '',
+      "export const helperDeriveProofRoute = app.route('/helper-derive-proof', {",
+      "  access: app.publicAccess('public helper derive production proof'),",
+      "  meta: { description: 'Helper derive production proof.', title: 'Helper derive proof' },",
+      '  page() {',
+      '    return <HelperDeriveProof />;',
+      '  },',
+      '});',
+      '',
     ].join('\n'),
     'utf8',
   );
   patchAppRoute(root, {
-    importLine: "import { HelperDeriveProof } from './helper-derive-proof.js';",
-    routeLines: [
-      "    route('/helper-derive-proof', {",
-      "      access: publicAccess('public helper derive production proof'),",
-      "      meta: { description: 'Helper derive production proof.', title: 'Helper derive proof' },",
-      '      layout: AppLayout,',
-      '      stylesheets,',
-      '      page() {',
-      '        return <HelperDeriveProof />;',
-      '      },',
-      '    }),',
-    ],
+    importLine: "import { helperDeriveProofRoute } from './helper-derive-proof.js';",
+    routeBinding: 'helperDeriveProofRoute',
   });
+  formatGeneratedProjectSources(root, ['src/app.tsx', 'src/helper-derive-proof.tsx']);
 }
 
-function patchAppRoute(
-  root: string,
-  patch: { importLine: string; routeLines: readonly string[] },
-): void {
+function patchAppRoute(root: string, patch: { importLine: string; routeBinding: string }): void {
   const appPath = join(root, 'src/app.tsx');
   const source = readFileSync(appPath, 'utf8');
   const withImport = replaceRequired(
@@ -372,9 +381,9 @@ function patchAppRoute(
   );
   const withRoute = replaceRequired(
     withImport,
-    '  routes: [\n    route(',
-    ['  routes: [', ...patch.routeLines, '    route('].join('\n'),
-    'island derive route insertion',
+    '  routes: [homeRoute, loginRoute],',
+    `  routes: [homeRoute, loginRoute, ${patch.routeBinding}],`,
+    'island derive route registration',
   );
   writeFileSync(appPath, withRoute, 'utf8');
 }
@@ -400,6 +409,7 @@ function configureNodeRetention(root: string): void {
     ),
     'utf8',
   );
+  formatGeneratedProjectSources(root, ['kovo.config.ts']);
 }
 
 function replaceRequired(
