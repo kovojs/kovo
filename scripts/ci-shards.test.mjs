@@ -391,7 +391,7 @@ describe('ci-shards', () => {
     ]);
   });
 
-  it('retains measured hosted-runner deadline headroom on the eleven timed-out proofs', async () => {
+  it('retains measured hosted-runner deadline headroom on timed-out proofs', async () => {
     const [
       asyncContextSource,
       sourceCheckSource,
@@ -404,6 +404,13 @@ describe('ci-shards', () => {
       securitySource,
       deferSource,
       routeOutcomesSource,
+      runtimeSource,
+      transactionSource,
+      productionArtifactSupportSource,
+      starterTestSupportSource,
+      scaffoldTypecheckSource,
+      starterHarnessTemplateSource,
+      adversarialSource,
     ] = await Promise.all([
       readFile(new URL('./check-async-context-confinement.test.mjs', import.meta.url), 'utf8'),
       readFile(new URL('../packages/cli/src/index.source-check.test.ts', import.meta.url), 'utf8'),
@@ -452,6 +459,43 @@ describe('ci-shards', () => {
         new URL('../packages/cli/src/index.kovo-route-outcomes.test.ts', import.meta.url),
         'utf8',
       ),
+      readFile(
+        new URL('../packages/create-kovo/src/index.build.runtime.test.ts', import.meta.url),
+        'utf8',
+      ),
+      readFile(
+        new URL(
+          '../packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
+          import.meta.url,
+        ),
+        'utf8',
+      ),
+      readFile(
+        new URL('../packages/create-kovo/src/index.build.test-support.ts', import.meta.url),
+        'utf8',
+      ),
+      readFile(
+        new URL('../packages/create-kovo/src/index.test-support.ts', import.meta.url),
+        'utf8',
+      ),
+      readFile(
+        new URL(
+          '../packages/create-kovo/src/index.build.scaffold.typecheck.test.ts',
+          import.meta.url,
+        ),
+        'utf8',
+      ),
+      readFile(
+        new URL('../packages/create-kovo/templates/src/app.test.ts', import.meta.url),
+        'utf8',
+      ),
+      readFile(
+        new URL(
+          '../packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
+          import.meta.url,
+        ),
+        'utf8',
+      ),
     ]);
 
     expect(asyncContextSource).toContain('}, 60_000);');
@@ -493,6 +537,35 @@ describe('ci-shards', () => {
     expect(routeOutcomesSource).toContain(
       'const ROUTE_OUTCOME_TEST_TIMEOUT_MS = BUILD_DEADLINE_MS + EXPLAIN_DEADLINE_MS + 10_000;',
     );
+    expect(productionArtifactSupportSource).toContain(
+      'export const PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS = process.env.CI ? 600_000 : 240_000;',
+    );
+    expect(starterTestSupportSource).toContain(
+      'export const STARTER_SERVER_READY_TIMEOUT_MS = process.env.CI ? 180_000 : 90_000;',
+    );
+    expect(starterTestSupportSource).toContain(
+      'const deadline = Date.now() + STARTER_SERVER_READY_TIMEOUT_MS;',
+    );
+    expect(productionArtifactSupportSource).toContain(
+      'const deadline = Date.now() + STARTER_SERVER_READY_TIMEOUT_MS;',
+    );
+    expect(runtimeSource).toContain(
+      'vi.setConfig({ testTimeout: PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS });',
+    );
+    expect(transactionSource).toContain(
+      'vi.setConfig({ testTimeout: PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS });',
+    );
+    expect(runtimeSource.match(/\}, 180_000\);/gu)).toHaveLength(1);
+    expect(runtimeSource.match(/\}, 120_000\);/gu)).toHaveLength(1);
+    expect(transactionSource).not.toContain('}, 180_000);');
+    expect(scaffoldTypecheckSource).toContain(
+      'vi.setConfig({ testTimeout: process.env.CI ? 600_000 : 420_000 });',
+    );
+    expect(starterHarnessTemplateSource).toContain(
+      'const devServerReadyTimeoutMs = process.env.CI ? 180_000 : 90_000;',
+    );
+    expect(starterHarnessTemplateSource).toContain("detached: process.platform !== 'win32',");
+    expect(starterHarnessTemplateSource).toContain('process.kill(-server.pid, signal);');
     const securityAuthStart = securitySource.indexOf(
       "it('blocks local-helper credential-shaped secret laundering",
     );
@@ -500,6 +573,28 @@ describe('ci-shards', () => {
     expect(securityAuthStart).toBeGreaterThan(-1);
     expect(securityAuthEnd).toBeGreaterThan(securityAuthStart);
     expect(securitySource.slice(securityAuthStart, securityAuthEnd)).toContain('}, 660_000);');
+    const formErrorStart = securitySource.indexOf(
+      'serves component-scoped FormError as a real no-JS 422 output',
+    );
+    const formErrorEnd = securitySource.indexOf(
+      '\n\n  // @kovo-security-certifies M3',
+      formErrorStart,
+    );
+    expect(formErrorStart).toBeGreaterThan(-1);
+    expect(formErrorEnd).toBeGreaterThan(formErrorStart);
+    expect(securitySource).toContain(
+      'vi.setConfig({ testTimeout: PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS });',
+    );
+    expect(securitySource.slice(formErrorStart, formErrorEnd)).not.toContain('240_000');
+    const outputWireStart = adversarialSource.indexOf(
+      "it.each([...dialectSpecificRuntimeCases])(\n    'M1:output-wire",
+    );
+    const outputWireEnd = adversarialSource.indexOf('\n  );\n});', outputWireStart);
+    expect(outputWireStart).toBeGreaterThan(-1);
+    expect(outputWireEnd).toBeGreaterThan(outputWireStart);
+    expect(adversarialSource.slice(outputWireStart, outputWireEnd)).toContain(
+      'multiBuildProofTimeout',
+    );
   });
 
   it('assigns every newly measured starter proof its observed scheduling weight', () => {
@@ -507,8 +602,19 @@ describe('ci-shards', () => {
       'defer-artifacts',
       'durable-task-lifecycle',
       'durable-task-retries',
+      'contacts-idempotency-collisions',
+      'contacts-sqlite-add-contact',
+      'm1-output-wire',
+      'raw-sql-artifacts',
       'redirect-capability-artifacts',
+      'runtime-dev-server',
       'security-auth-helper',
+      'security-form-error',
+      'security-trusted-output-provenance',
+      'security-trusted-url-attributes',
+      'starter-typecheck',
+      'transaction-sqlite-served-artifact',
+      'transaction-webhook-escape-default',
     ]);
     expect(
       Object.fromEntries(
@@ -517,11 +623,22 @@ describe('ci-shards', () => {
           .map((entry) => [entry.id, entry.seconds]),
       ),
     ).toEqual({
+      'contacts-idempotency-collisions': 252,
+      'contacts-sqlite-add-contact': 269,
       'defer-artifacts': 576,
-      'durable-task-lifecycle': 381,
+      'durable-task-lifecycle': 563,
       'durable-task-retries': 381,
+      'm1-output-wire': 748,
+      'raw-sql-artifacts': 118,
       'redirect-capability-artifacts': 255,
+      'runtime-dev-server': 682,
       'security-auth-helper': 426,
+      'security-form-error': 280,
+      'security-trusted-output-provenance': 391,
+      'security-trusted-url-attributes': 11,
+      'starter-typecheck': 454,
+      'transaction-sqlite-served-artifact': 210,
+      'transaction-webhook-escape-default': 90,
     });
   });
 
@@ -571,7 +688,7 @@ describe('ci-shards', () => {
       entries.map((entry) => entry.id).toSorted(compareStrings),
     );
     expect(shards.map((shard) => shard.seconds)).toEqual([
-      1_200, 646, 644, 659, 686, 652, 643, 671, 647, 675,
+      1_200, 947, 958, 952, 951, 954, 965, 957, 949, 951,
     ]);
   });
 
@@ -616,7 +733,7 @@ describe('ci-shards', () => {
       }))
       .filter((shard) => shard.entries.length > 0);
 
-    expect(browserShards).toEqual([{ index: 6, entries: ['island-derive-artifacts'] }]);
+    expect(browserShards).toEqual([{ index: 7, entries: ['island-derive-artifacts'] }]);
   });
 
   it('marks only packed starter shards as needing the packed package artifact', async () => {

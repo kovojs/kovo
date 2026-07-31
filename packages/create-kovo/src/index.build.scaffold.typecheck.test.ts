@@ -1,12 +1,14 @@
 import { join } from 'node:path';
 
-import { describe, it } from 'vitest';
+import { describe, it, vi } from 'vitest';
 
 import {
   createStarterApp,
   runStarterAppHttpTest,
   runStarterTypecheck,
 } from './index.test-support.js';
+
+vi.setConfig({ testTimeout: process.env.CI ? 600_000 : 420_000 });
 
 describe('create-kovo starter (build integration: scaffold typecheck)', () => {
   it('typechecks the generated app with starter dependencies', () => {
@@ -50,5 +52,5 @@ describe('create-kovo starter (build integration: scaffold typecheck)', () => {
     } finally {
       app.cleanup();
     }
-  }, 420_000);
+  });
 });

@@ -457,6 +457,11 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/app.test.ts')).toContain("projectRoot: new URL('../', import.meta.url)");
     expect(files.get('src/app.test.ts')).toContain("harness.page('/login')");
     expect(files.get('src/app.test.ts')).toContain('harness.request(');
+    expect(files.get('src/app.test.ts')).toContain(
+      'const devServerReadyTimeoutMs = process.env.CI ? 180_000 : 90_000;',
+    );
+    expect(files.get('src/app.test.ts')).toContain("detached: process.platform !== 'win32'");
+    expect(files.get('src/app.test.ts')).toContain('process.kill(-server.pid, signal)');
     expect(files.get('src/app.test.ts')).not.toContain('isKovoApp');
     expect(files.get('src/app.test.ts')).not.toContain('/internal/');
     expect(files.get('vite.config.ts')).not.toContain('setupFiles');

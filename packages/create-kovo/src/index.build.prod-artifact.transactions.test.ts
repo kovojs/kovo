@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:f
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { writeKovoProject } from './index.js';
 import {
@@ -25,7 +25,10 @@ import {
   fieldValue,
   formHtmlByAction,
   freshProductionArtifactIdempotencyToken,
+  PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS,
 } from './index.build.test-support.js';
+
+vi.setConfig({ testTimeout: PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS });
 
 function captureProductionBuildFailure(build: () => void): unknown {
   try {
@@ -168,7 +171,7 @@ describe('create-kovo starter (build integration: production transaction artifac
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
     }
-  }, 180_000);
+  });
 
   // @kovo-security-certifies KV449 finite-ir-query-write-prod-artifact
   it('keeps query writes KV449-closed when the dedicated KV433 finding is advisory', () => {
@@ -194,7 +197,7 @@ describe('create-kovo starter (build integration: production transaction artifac
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
-  }, 180_000);
+  });
 
   it('serves SQLite readonly reads and executes webhook mutation composition in the production artifact', async () => {
     const tempParent = tmpdir();
@@ -289,7 +292,7 @@ describe('create-kovo starter (build integration: production transaction artifac
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
     }
-  }, 180_000);
+  });
 
   it.each([
     { dialect: undefined, label: 'default' },

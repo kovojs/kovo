@@ -56,6 +56,8 @@ import {
 const starterDbScopeContactEmail = 'starter-scope-proof-contact@example.com';
 const starterDbScopeMarker = 'starter-scope-proof-marker';
 
+vi.setConfig({ testTimeout: PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS });
+
 function captureBuildFailure(build: () => void): string {
   try {
     build();
@@ -161,7 +163,7 @@ describe('create-kovo starter (build integration: production security artifacts)
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
-  }, 240_000);
+  });
 
   it('fails the production build for a request-reachable no-row side-effect mutation with no access guard', () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-prod-missing-access-'));
@@ -177,7 +179,7 @@ describe('create-kovo starter (build integration: production security artifacts)
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
-  }, 240_000);
+  });
 
   // @kovo-security-certifies KV435 local-helper-credential-laundering
   // @kovo-security-certifies KV435 direct-secret-projection-to-query-wire
@@ -234,7 +236,7 @@ describe('create-kovo starter (build integration: production security artifacts)
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
-  }, 240_000);
+  });
 
   // @kovo-security-certifies KV448 production-import-equals-capability-closure
   it('blocks runtime TypeScript import-equals authority in production preflight', () => {
@@ -256,7 +258,7 @@ describe('create-kovo starter (build integration: production security artifacts)
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
-  }, 240_000);
+  });
 
   // @kovo-security-certifies KV448 production-import-equals-namespace-reexport-closure
   it('blocks authority under a route reached through a re-exported import-equals namespace', () => {
@@ -305,7 +307,7 @@ describe('create-kovo starter (build integration: production security artifacts)
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
-  }, 240_000);
+  });
 
   // @kovo-security-certifies KV448 production-lexical-binding-provenance-closure
   it('blocks authority when lexical shadows and mutable aliases obscure route factories', () => {
@@ -357,7 +359,7 @@ describe('create-kovo starter (build integration: production security artifacts)
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
-  }, 240_000);
+  });
 
   // @kovo-security-certifies KV449 runtime-secret-view-egress
   it('refuses a runtime Secret read through a Drizzle view before paranoid artifact emission', () => {
@@ -378,7 +380,7 @@ describe('create-kovo starter (build integration: production security artifacts)
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
-  }, 240_000);
+  });
 
   // @kovo-security-certifies KV448 runtime-secret-request-closed-reveal-denial
   it(
@@ -623,7 +625,7 @@ describe('create-kovo starter (build integration: production security artifacts)
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
     }
-  }, 240_000);
+  });
 
   // @kovo-security-certifies KV414 starter-auth-table-scope-static-gate
   it('rejects statically visible starter DB scope drift before artifact emission', () => {
@@ -648,7 +650,7 @@ describe('create-kovo starter (build integration: production security artifacts)
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
-  }, 240_000);
+  });
 
   it('augments the current app-scoped starter mutation shape without disabling CSRF', () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-paranoid-proof-source-contract-'));
@@ -662,7 +664,7 @@ describe('create-kovo starter (build integration: production security artifacts)
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
-  }, 240_000);
+  });
 
   // @kovo-security-certifies KV406 starter-mutation-db-scope-prod-artifact
   it('enforces starter mutation DB table scope in paranoid production artifacts', async () => {
@@ -789,7 +791,7 @@ describe('create-kovo starter (build integration: production security artifacts)
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
     }
-  }, 240_000);
+  });
 
   // @kovo-security-certifies KV435 sqlite-runtime-secret-source-provenance
   // @kovo-security-certifies KV435 sqlite-runtime-secret-expression-provenance
@@ -869,7 +871,7 @@ describe('create-kovo starter (build integration: production security artifacts)
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
     }
-  }, 240_000);
+  });
 
   // @kovo-security-certifies KV235 internal-raw-html-import
   it(
@@ -1149,7 +1151,7 @@ describe('create-kovo starter (build integration: production security artifacts)
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
     }
-  }, 240_000);
+  });
 
   // @kovo-security-certifies M3 dynamic-jsx-spread-control-provenance
   // @kovo-security-certifies M6 enhanced-mutation-session-transition
@@ -1258,7 +1260,7 @@ describe('create-kovo starter (build integration: production security artifacts)
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
     }
-  }, 240_000);
+  });
 });
 
 function assertEscapedAttackerTextCensus(root: string): void {

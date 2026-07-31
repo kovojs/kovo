@@ -23,6 +23,11 @@ import {
   type CreateKovoRetentionPosture,
 } from './index.js';
 
+// A generated application can spend over a minute compiling its initial development graph on a
+// contended machine. Keep local feedback bounded at ninety seconds while giving the two-core hosted
+// runner enough headroom to distinguish slow compilation from a server that never becomes ready.
+export const STARTER_SERVER_READY_TIMEOUT_MS = process.env.CI ? 180_000 : 90_000;
+
 type StarterInstallMode = 'link-local' | 'packed' | 'symlink';
 type StarterScaffoldMode = 'packed-bin' | 'source';
 
@@ -727,7 +732,7 @@ export async function fetchTextWhenReady(
   output: () => string,
   init?: RequestInit,
 ): Promise<string> {
-  const deadline = Date.now() + 60_000;
+  const deadline = Date.now() + STARTER_SERVER_READY_TIMEOUT_MS;
   let lastError: unknown;
 
   while (Date.now() < deadline) {
@@ -749,17 +754,48 @@ export async function fetchTextWhenReady(
 export async function stopProcess(
   childProcess: ChildProcessWithoutNullStreams | undefined,
 ): Promise<void> {
-  if (!childProcess || childProcess.exitCode !== null) return;
-  await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      killProcessTree(childProcess, 'SIGKILL');
-      reject(new Error('Timed out stopping process.'));
-    }, 5_000);
-    childProcess.once('exit', () => {
+  if (!childProcess || childHasExited(childProcess)) return;
+  if (await signalProcessTreeAndWait(childProcess, 'SIGTERM', 5_000)) return;
+  if (await signalProcessTreeAndWait(childProcess, 'SIGKILL', 5_000)) return;
+  throw new Error('Timed out stopping process after SIGTERM and SIGKILL.');
+}
+
+function childHasExited(childProcess: ChildProcessWithoutNullStreams): boolean {
+  return childProcess.exitCode !== null || childProcess.signalCode !== null;
+}
+
+async function signalProcessTreeAndWait(
+  childProcess: ChildProcessWithoutNullStreams,
+  signal: NodeJS.Signals,
+  timeoutMs: number,
+): Promise<boolean> {
+  if (childHasExited(childProcess)) return true;
+  return await new Promise<boolean>((resolve, reject) => {
+    let settled = false;
+    const settle = (exited: boolean): void => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
-      resolve();
-    });
-    killProcessTree(childProcess, 'SIGTERM');
+      childProcess.off('exit', onExit);
+      resolve(exited);
+    };
+    const onExit = (): void => settle(true);
+    const timer = setTimeout(() => settle(childHasExited(childProcess)), timeoutMs);
+    childProcess.once('exit', onExit);
+
+    if (childHasExited(childProcess)) {
+      settle(true);
+      return;
+    }
+    try {
+      killProcessTree(childProcess, signal);
+    } catch (error) {
+      clearTimeout(timer);
+      childProcess.off('exit', onExit);
+      reject(error);
+      return;
+    }
+    if (childHasExited(childProcess)) settle(true);
   });
 }
 

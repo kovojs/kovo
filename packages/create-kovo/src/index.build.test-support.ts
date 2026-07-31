@@ -12,6 +12,7 @@ import {
   fetchTextWhenReady,
   mergeCookies,
   resolveStarterBin,
+  STARTER_SERVER_READY_TIMEOUT_MS,
   withStarterBinOnPath,
 } from './index.test-support.js';
 import { resolveVitePlusQualityBin } from '../../cli/src/commands/vite-plus-bin.js';
@@ -19,7 +20,7 @@ import { resolveVitePlusQualityBin } from '../../cli/src/commands/vite-plus-bin.
 // Production artifact proofs compile an entire generated application. Shared GitHub runners can
 // be several times slower under the full matrix, so keep the semantic test deadline distinct from
 // local feedback while still bounding a genuinely stuck build.
-export const PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS = process.env.CI ? 600_000 : 180_000;
+export const PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS = process.env.CI ? 600_000 : 240_000;
 const generatedStarterFormatConfigAnchor = [
   '  fmt: {',
   '    semi: true,',
@@ -4853,7 +4854,7 @@ export async function waitForTcpPort(
   port: number,
   output: () => string,
 ): Promise<void> {
-  const deadline = Date.now() + 60_000;
+  const deadline = Date.now() + STARTER_SERVER_READY_TIMEOUT_MS;
   let lastError: unknown;
 
   while (Date.now() < deadline) {

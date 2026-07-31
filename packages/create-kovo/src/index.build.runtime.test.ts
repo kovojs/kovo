@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { demoPasswordEnvVar, writeKovoProject } from './index.js';
 import {
@@ -22,9 +22,12 @@ import {
 import {
   buildReusableProductionArtifact,
   fieldValue,
+  PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS,
   productionArtifactAttestationEnv,
   waitForTcpPort,
 } from './index.build.test-support.js';
+
+vi.setConfig({ testTimeout: PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS });
 
 describe('create-kovo starter (build integration: runtime and dev server)', () => {
   it('keeps generated credentials out of artifacts and refuses insecure production SQLite boot', async () => {
@@ -81,7 +84,7 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
       await stopProcess(prodServer);
       rmSync(root, { force: true, recursive: true });
     }
-  }, 180_000);
+  });
 
   it('serves production assets and replays anonymous enhanced sign-in by CSRF cookie', async () => {
     const tempParent = tmpdir();
@@ -189,7 +192,7 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
       await stopProcess(prodServer);
       rmSync(root, { force: true, recursive: true });
     }
-  }, 180_000);
+  });
 
   it('boots Postgres starter DDL with serial columns, reordered foreign keys, and additive drift', async () => {
     const tempParent = tmpdir();
@@ -457,7 +460,7 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
       await stopProcess(devServer);
       rmSync(root, { force: true, recursive: true });
     }
-  }, 120_000);
+  });
 
   it('honors HOST and PORT from the generated starter Vite config', async () => {
     const tempParent = join(process.cwd(), 'node_modules/.tmp');
@@ -485,7 +488,7 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
       await stopProcess(devServer);
       rmSync(root, { force: true, recursive: true });
     }
-  }, 120_000);
+  });
 });
 
 function readUtf8Tree(root: string): string {

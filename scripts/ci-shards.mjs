@@ -91,7 +91,8 @@ const STARTER_ENTRIES = [
     id: 'contacts-sqlite-add-contact',
     file: 'packages/create-kovo/src/index.build.prod-artifact.contacts.test.ts',
     testName: 'generated SQLite add-contact',
-    seconds: 67,
+    // CI run 30622986364 measured this focused case at 268.548s.
+    seconds: 269,
   },
   {
     id: 'contacts-multi-component-refresh',
@@ -103,7 +104,8 @@ const STARTER_ENTRIES = [
     id: 'contacts-idempotency-collisions',
     file: 'packages/create-kovo/src/index.build.prod-artifact.contacts.test.ts',
     testName: 'idempotency token collisions',
-    seconds: 70,
+    // CI run 30622986364 measured this focused case at 251.757s.
+    seconds: 252,
   },
   {
     id: 'security-auth-helper',
@@ -135,13 +137,15 @@ const STARTER_ENTRIES = [
     id: 'security-trusted-output-provenance',
     file: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     testName: 'trusted output provenance leaks',
-    seconds: 77,
+    // CI run 30622986364 measured this focused proof at 390.476s.
+    seconds: 391,
   },
   {
     id: 'security-trusted-url-attributes',
     file: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     testName: 'TrustedUrl values in non-URL JSX attributes',
-    seconds: 65,
+    // CI run 30622986364 measured this focused proof at 10.555s.
+    seconds: 11,
   },
   {
     id: 'security-runtime-wires',
@@ -153,7 +157,8 @@ const STARTER_ENTRIES = [
     id: 'security-form-error',
     file: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     testName: 'FormError',
-    seconds: 77,
+    // CI run 30622986364 reached 279.609s before the former 240s deadline was reported.
+    seconds: 280,
   },
   {
     id: 'm1-storage-write',
@@ -183,17 +188,21 @@ const STARTER_ENTRIES = [
     id: 'm1-output-wire',
     file: 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
     testName: 'M1:output-wire',
-    seconds: 148,
+    // CI run 30622986364 measured the filtered file at 747.315s across both dialects.
+    seconds: 748,
   },
   {
     id: 'raw-sql-artifacts',
     file: 'packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts',
-    seconds: 70,
+    // CI run 30622986364 measured this file at 117.067s.
+    seconds: 118,
   },
   {
     id: 'starter-typecheck',
     file: 'packages/create-kovo/src/index.build.scaffold.typecheck.test.ts',
-    seconds: 49,
+    // CI run 30622986364 measured this file at 453.798s when the generated harness exhausted its
+    // former fixed readiness budget after the verified build.
+    seconds: 454,
   },
   {
     id: 'asset-artifacts',
@@ -203,7 +212,9 @@ const STARTER_ENTRIES = [
   {
     id: 'runtime-dev-server',
     file: 'packages/create-kovo/src/index.build.runtime.test.ts',
-    seconds: 262,
+    // CI run 30622986364 measured the complete file at 681.475s while the two synchronous
+    // production builds crossed their former 180s deadlines.
+    seconds: 682,
   },
   {
     id: 'postgres-external-artifact',
@@ -282,13 +293,15 @@ const STARTER_ENTRIES = [
     file: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
     testName:
       'serves SQLite readonly reads and executes webhook mutation composition in the production artifact',
-    seconds: 71,
+    // CI run 30622986364 measured this focused served-artifact proof at 209.596s.
+    seconds: 210,
   },
   {
     id: 'transaction-webhook-escape-default',
     file: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
     testName: "blocks 'default' webhook context.tx raw-driver escapes before artifact emission",
-    seconds: 70,
+    // The sibling proof in the same hosted command completed in 89.489s.
+    seconds: 90,
   },
   {
     id: 'transaction-webhook-escape-sqlite',
@@ -318,9 +331,8 @@ const STARTER_ENTRIES = [
   {
     id: 'durable-task-lifecycle',
     file: 'packages/create-kovo/src/index.build.prod-artifact.durable-tasks.lifecycle.test.ts',
-    // CI run 30612746165 reached 163.902s before the old worker deadline aborted the same generated
-    // app built by the 380.663s retry proof. Use that complete sibling measurement.
-    seconds: 381,
+    // CI run 30622986364 measured this focused proof at 562.737s.
+    seconds: 563,
   },
   {
     id: 'defer-artifacts',

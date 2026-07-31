@@ -576,7 +576,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
         },
       );
     },
-    300_000,
+    multiBuildProofTimeout,
   );
 });
 

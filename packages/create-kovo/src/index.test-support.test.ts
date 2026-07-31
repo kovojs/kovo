@@ -1,3 +1,4 @@
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,7 +11,11 @@ import {
   formatGeneratedProjectSources,
 } from './index.build.test-support.js';
 import { writeKovoProject } from './index.js';
-import { installStarterAppDependencies, resolveStarterInstallMode } from './index.test-support.js';
+import {
+  installStarterAppDependencies,
+  resolveStarterInstallMode,
+  stopProcess,
+} from './index.test-support.js';
 
 describe('create-kovo starter test support', () => {
   it('keeps local source fixtures linked unless CI supplies the same-run packed build', () => {
@@ -134,9 +139,93 @@ describe('create-kovo starter test support', () => {
       rmSync(root, { force: true, recursive: true });
     }
   });
+
+  it.skipIf(process.platform === 'win32')(
+    'treats an already signaled process as terminal without waiting for a past exit event',
+    async () => {
+      const child = spawn(process.execPath, ['-e', "process.kill(process.pid, 'SIGTERM')"], {
+        detached: true,
+      });
+      await waitForChildExit(child);
+
+      expect(child.exitCode).toBeNull();
+      expect(child.signalCode).toBe('SIGTERM');
+      const startedAt = Date.now();
+      await stopProcess(child);
+      expect(Date.now() - startedAt).toBeLessThan(1_000);
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'waits for the process group to exit after escalating an ignored SIGTERM to SIGKILL',
+    async () => {
+      const child = spawn(
+        process.execPath,
+        [
+          '-e',
+          [
+            "process.on('SIGTERM', () => {});",
+            "process.stdout.write('ready\\n');",
+            'setInterval(() => {}, 1_000);',
+          ].join(''),
+        ],
+        { detached: true },
+      );
+
+      try {
+        await waitForChildOutput(child, 'ready\n');
+        await stopProcess(child);
+        expect(child.exitCode).toBeNull();
+        expect(child.signalCode).toBe('SIGKILL');
+      } finally {
+        if (child.exitCode === null && child.signalCode === null) {
+          process.kill(-child.pid!, 'SIGKILL');
+          await waitForChildExit(child);
+        }
+      }
+    },
+    15_000,
+  );
 });
 
 function restoreEnvironment(name: string, value: string | undefined): void {
   if (value === undefined) delete process.env[name];
   else process.env[name] = value;
+}
+
+async function waitForChildExit(child: ChildProcessWithoutNullStreams): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  await new Promise<void>((resolve, reject) => {
+    child.once('error', reject);
+    child.once('exit', () => resolve());
+  });
+}
+
+async function waitForChildOutput(
+  child: ChildProcessWithoutNullStreams,
+  expected: string,
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    let output = '';
+    const timer = setTimeout(() => reject(new Error(`Timed out waiting for ${expected}`)), 5_000);
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk: string) => {
+      output += chunk;
+      if (!output.includes(expected)) return;
+      clearTimeout(timer);
+      resolve();
+    });
+    child.once('error', (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.once('exit', (code, signal) => {
+      clearTimeout(timer);
+      reject(
+        new Error(
+          `Child exited before emitting ${expected}: code=${String(code)} signal=${String(signal)}`,
+        ),
+      );
+    });
+  });
 }

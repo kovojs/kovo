@@ -14,6 +14,8 @@ let appServer: ChildProcessWithoutNullStreams | undefined;
 let appServerError: Error | undefined;
 let appOrigin = '';
 let appServerOutput = '';
+const devServerReadyTimeoutMs = process.env.CI ? 180_000 : 90_000;
+const devServerHookTimeoutMs = devServerReadyTimeoutMs + 30_000;
 
 beforeAll(async () => {
   const port = await reservePort();
@@ -27,6 +29,7 @@ beforeAll(async () => {
   };
   delete environment.BETTER_AUTH_URL;
   appServer = spawn('kovo', ['dev', './src/app.tsx'], {
+    detached: process.platform !== 'win32',
     env: environment,
   });
   appServer.stdout.on('data', (chunk: Buffer) => {
@@ -46,7 +49,7 @@ beforeAll(async () => {
     baseUrl: appOrigin,
     projectRoot: new URL('../', import.meta.url),
   });
-}, 90_000);
+}, devServerHookTimeoutMs);
 
 afterAll(async () => {
   await stopProcess(appServer);
@@ -94,7 +97,7 @@ async function fetchWhenReady(
   url: string,
   server: ChildProcessWithoutNullStreams,
 ): Promise<Response> {
-  const deadline = Date.now() + 85_000;
+  const deadline = Date.now() + devServerReadyTimeoutMs;
   while (Date.now() < deadline) {
     if (appServerError !== undefined) {
       throw new Error(`Kovo dev could not start: ${appServerError.message}`);
@@ -113,15 +116,33 @@ async function fetchWhenReady(
 
 async function stopProcess(server: ChildProcessWithoutNullStreams | undefined): Promise<void> {
   if (server === undefined || hasExited(server)) return;
-  server.kill('SIGTERM');
+  signalProcessTree(server, 'SIGTERM');
   await waitForExit(server);
   if (hasExited(server)) return;
-  server.kill('SIGKILL');
+  signalProcessTree(server, 'SIGKILL');
   await waitForExit(server);
+  if (!hasExited(server)) throw new Error('Kovo dev did not exit after SIGTERM and SIGKILL.');
 }
 
 function hasExited(server: ChildProcessWithoutNullStreams): boolean {
   return server.exitCode !== null || server.signalCode !== null;
+}
+
+function signalProcessTree(server: ChildProcessWithoutNullStreams, signal: NodeJS.Signals): void {
+  if (hasExited(server)) return;
+  if (process.platform === 'win32' || server.pid === undefined) {
+    server.kill(signal);
+    return;
+  }
+  try {
+    process.kill(-server.pid, signal);
+    return;
+  } catch (error) {
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined;
+    if (code !== 'ESRCH' && !hasExited(server)) throw error;
+  }
+  server.kill(signal);
 }
 
 async function waitForExit(server: ChildProcessWithoutNullStreams): Promise<void> {
