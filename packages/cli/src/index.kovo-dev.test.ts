@@ -208,6 +208,53 @@ throw new Error('undeclared Vite config executed');
     await expect(waitForPortClosed(port, 5_000)).resolves.toBeUndefined();
   }, 40_000);
 
+  it('finishes fixed-port app activation before listen and reports within the post-bind budget', async () => {
+    const root = devFixture('fixed-port-ready-order');
+    const activationMarker = join(root, 'initial-activation.marker');
+    writeFileSync(
+      join(root, 'src/app.ts'),
+      `import { writeFileSync } from 'node:fs';
+
+import { defineKovo } from '@kovojs/server';
+
+writeFileSync(${JSON.stringify(activationMarker)}, 'activation entered', 'utf8');
+await new Promise<void>((resolve) => setTimeout(resolve, 2_000));
+
+const app = defineKovo({
+  appId: '22222222-2222-4222-8222-222222222222',
+});
+const homeRoute = app.route('/', {
+  access: app.publicAccess('fixed-port readiness ordering fixture'),
+  page: () => '<main>Activation complete</main>',
+});
+export default app.assemble({
+  routes: [homeRoute],
+});
+`,
+      'utf8',
+    );
+
+    const port = await reservePort();
+    const child = spawnKovoDev(root, port);
+    const output = collectChildOutput(child);
+    try {
+      await waitForFile(activationMarker, output, 30_000);
+      expect(output.stdout).not.toMatch(/Kovo dev ready in \d+ms/u);
+      await expect(tcpConnects(port)).resolves.toBe(false);
+
+      await waitForTcpListener(port, child, output, 30_000);
+      const listenedAt = Date.now();
+      await waitForOutput(output, /Kovo dev ready in \d+ms/u, 5_000);
+      expect(Date.now() - listenedAt).toBeLessThanOrEqual(5_000);
+
+      const response = await fetch(`http://127.0.0.1:${port}/`);
+      expect(response.status, output.combined()).toBe(200);
+      await expect(response.text()).resolves.toContain('Activation complete');
+    } finally {
+      await stopChild(child);
+    }
+  }, 50_000);
+
   it('honors boot-pinned HOST and PORT without evaluating undeclared config', async () => {
     const root = devFixture('pinned-listen-environment');
     const port = await reservePort();
@@ -1147,6 +1194,52 @@ async function waitForOutput(
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
   throw new Error(`Timed out waiting for output ${pattern}.\n${output.combined()}`);
+}
+
+async function waitForFile(
+  file: string,
+  output: { combined(): string },
+  timeoutMs: number,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (existsSync(file)) return;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error(`Timed out waiting for ${file}.\n${output.combined()}`);
+}
+
+async function waitForTcpListener(
+  port: number,
+  child: ChildProcessWithoutNullStreams,
+  output: { combined(): string },
+  timeoutMs: number,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (child.exitCode !== null) {
+      throw new Error(`kovo dev exited before listening.\n${output.combined()}`);
+    }
+    if (await tcpConnects(port)) return;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error(`Timed out waiting for kovo dev port ${port}.\n${output.combined()}`);
+}
+
+async function tcpConnects(port: number): Promise<boolean> {
+  return await new Promise<boolean>((resolve) => {
+    const socket = createConnection({ host: '127.0.0.1', port });
+    let settled = false;
+    const finish = (connected: boolean): void => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      resolve(connected);
+    };
+    socket.setTimeout(250, () => finish(false));
+    socket.once('connect', () => finish(true));
+    socket.once('error', () => finish(false));
+  });
 }
 
 async function waitForChildExit(

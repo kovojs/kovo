@@ -216,15 +216,29 @@ export async function startKovoDevServer(
     if (liveHttpServer === null) {
       throw new TypeError('Kovo dev requires one owned HTTP server for its development origin.');
     }
+    const strictOrigin = configuredStrictDevServerOrigin(activeLiveServer);
     let localOrigin: string | undefined;
     let originBindingError: unknown;
+    if (strictOrigin !== undefined) {
+      // A fixed strict loopback authority cannot shift when Vite listens. Authenticate and fully
+      // validate the initial generation before making its socket externally observable, then
+      // require the listening callback below to prove the OS-bound address is exactly that fact.
+      runnerGenerations.bindOrigin(strictOrigin);
+      await runnerGenerations.activateInitial();
+    }
     // Node emits `listening` before it can dispatch an accepted request. Prepending this synchronous
-    // binding closes the post-listen/pre-app race: even a local port probe cannot load the app graph
-    // before Better Auth can resolve the exact authority the socket actually owns (SPEC §9.5.1).
+    // callback either binds a dynamic/fallback authority before app activation or authenticates the
+    // strict prepared authority before any local port probe can load the app graph (SPEC §9.5.1).
     liveHttpServer.prependOnceListener('listening', () => {
       try {
         const origin = boundDevServerOrigin(activeLiveServer);
-        runnerGenerations!.bindOrigin(origin);
+        if (strictOrigin === undefined) {
+          runnerGenerations!.bindOrigin(origin);
+        } else if (origin !== strictOrigin) {
+          throw new Error(
+            `kovo dev strict listener bound ${origin} instead of prepared origin ${strictOrigin}.`,
+          );
+        }
         localOrigin = origin;
       } catch (error) {
         originBindingError = error;
@@ -233,9 +247,11 @@ export async function startKovoDevServer(
     await liveServer.listen();
     if (originBindingError !== undefined) throw originBindingError;
     if (localOrigin === undefined) {
-      throw new Error('kovo dev did not bind its loopback development origin before app loading.');
+      throw new Error('kovo dev could not authenticate its bound loopback development origin.');
     }
-    await runnerGenerations.activateInitial();
+    if (strictOrigin === undefined) {
+      await runnerGenerations.activateInitial();
+    }
     if (options.debug === true) liveServer.printUrls();
     const readyReport = formatKovoDevReadyReport({
       appModulePath: options.appModulePath,
@@ -361,6 +377,25 @@ function boundDevServerOrigin(server: ViteDevServer): string {
   // Preserve `localhost` when it resolves to ::1 so every printed URL remains usable.
   const host = configuredHost === '::1' || configuredHost === '[::1]' ? '[::1]' : configuredHost;
   return address.port === 80 ? `http://${host}` : `http://${host}:${address.port}`;
+}
+
+function configuredStrictDevServerOrigin(server: ViteDevServer): string | undefined {
+  const configuredPort = server.config.server.port;
+  if (
+    server.config.server.strictPort !== true ||
+    typeof configuredPort !== 'number' ||
+    !nativeApply(nativeNumberIsSafeInteger, NativeNumber, [configuredPort]) ||
+    configuredPort <= 0 ||
+    configuredPort > 65_535
+  ) {
+    return undefined;
+  }
+  const configuredHost = server.config.server.host;
+  if (typeof configuredHost !== 'string') {
+    throw new Error('kovo dev could not read its configured loopback host.');
+  }
+  const host = configuredHost === '::1' || configuredHost === '[::1]' ? '[::1]' : configuredHost;
+  return configuredPort === 80 ? `http://${host}` : `http://${host}:${configuredPort}`;
 }
 
 function devPortConfigurationAnchor(options: KovoDevOptions): KovoDiagnosticSourceAnchor {
