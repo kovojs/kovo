@@ -11,7 +11,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.3.0",
-      "sourceTreeSha256": "c3c4fedbb880f0b511aba7beb1ed2d6206668544309c468bfad9a4ee047c1b93",
+      "sourceTreeSha256": "46349aeb7f1fdcd9eb9e966ad6bd0f33fa3132df0e118e7c4dff72b0b2e5e341",
       "manifestVariants": [
         {
           "fingerprint": "sha256:80d390e85123b76e58a9270f45d1420deaefd869d361bf8181cfa3f310ae6c08"
@@ -683,7 +683,7 @@
           "reason": "The custom-shell browser installer captures framework-bounded network and dynamic-loader authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "caa129f12f48a12c5cc4b0cc2404b31de965d4305de61dbf6c0747cd08c69ccc"
+      "sourceTreeSha256": "8d87e139718f486379692a21bc5bce0357da594844d44bbc901be3aa8cf94ebe"
     },
     {
       "manifestVariants": [
@@ -9876,7 +9876,7 @@
           "reason": "derived binds a reviewed adapter to the current request principal through the canonical ScopedKey containment door."
         }
       ],
-      "sourceTreeSha256": "1a76003074527c68f3c139e095b4eb50adc0b1aa08ef5791116d45bb05656484"
+      "sourceTreeSha256": "071b4535e2532c42ab5772cd1b1cbec5be54c6a5e6f5f5c48150fda8a6eac073"
     },
     {
       "manifestVariants": [
