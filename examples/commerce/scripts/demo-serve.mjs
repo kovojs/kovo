@@ -16,10 +16,9 @@ export function createCommerceDemoServer(options = {}) {
     label: 'commerce-demo-serve',
     root: commerceRoot,
     configFile: fileURLToPath(new URL('../vite.config.ts', import.meta.url)),
-    async loadInstanceFactory(vite, { createRequestHandler }) {
+    async loadInstanceFactory(vite, { createRequestHandler, toNodeHandler }) {
       const appShell = await vite.ssrLoadModule('/src/app.tsx');
       const { createCommerceApplication } = appShell;
-      const { toNodeHandler } = await vite.ssrLoadModule('@kovojs/server');
       if (typeof createCommerceApplication !== 'function') {
         throw new Error('commerce /src/app.tsx must export createCommerceApplication.');
       }

@@ -12,9 +12,8 @@ export function createSoDemoServer(options = {}) {
     label: 'stackoverflow-demo-serve',
     root: soRoot,
     configFile: fileURLToPath(new URL('../vite.config.ts', import.meta.url)),
-    async loadInstanceFactory(vite, { createRequestHandler }) {
+    async loadInstanceFactory(vite, { createRequestHandler, toNodeHandler }) {
       const { buildSoInteractiveApp } = await vite.ssrLoadModule('/src/interactive-app.tsx');
-      const { toNodeHandler } = await vite.ssrLoadModule('@kovojs/server');
       if (typeof buildSoInteractiveApp !== 'function') {
         throw new Error(
           'stackoverflow /src/interactive-app.tsx must export buildSoInteractiveApp.',

@@ -78,7 +78,10 @@ const DEMO_FAVICON_ICO = Buffer.from([
  *   configFile: string,
  *   loadInstanceFactory: (
  *     vite: import('vite-plus').ViteDevServer,
- *     runtime: { createRequestHandler: (app: unknown) => unknown },
+ *     runtime: {
+ *       createRequestHandler: (app: unknown) => unknown,
+ *       toNodeHandler: (handler: unknown) => unknown,
+ *     },
  *   ) =>
  *     Promise<{
  *       referenceApp: unknown,
@@ -113,20 +116,30 @@ export async function createDemoServeServer({
   });
 
   try {
+    // Framework-owned demo runners establish the SPEC §6.6 request-runtime lock in the Vite SSR
+    // realm before loading either an authored example module or a public dispatch adapter.
+    await vite.ssrLoadModule('@kovojs/server/runtime-bootstrap');
     const serverModule = await vite.ssrLoadModule('@kovojs/server/internal/app-shell-vite');
     const shouldHandle = serverModule.shouldHandleKovoAppShellViteRequest;
-    const createRequestHandler = serverModule.createRequestHandler;
     if (typeof shouldHandle !== 'function') {
       throw new Error(
         '@kovojs/server/internal/app-shell-vite must export shouldHandleKovoAppShellViteRequest.',
       );
     }
+    const customAdapters = await vite.ssrLoadModule('@kovojs/server/custom-adapters');
+    const nodeAdapter = await vite.ssrLoadModule('@kovojs/server/node');
+    const createRequestHandler = customAdapters.createRequestHandler;
+    const toNodeHandler = nodeAdapter.toNodeHandler;
     if (typeof createRequestHandler !== 'function') {
-      throw new Error('@kovojs/server/internal/app-shell-vite must export createRequestHandler.');
+      throw new Error('@kovojs/server/custom-adapters must export createRequestHandler.');
+    }
+    if (typeof toNodeHandler !== 'function') {
+      throw new Error('@kovojs/server/node must export toNodeHandler.');
     }
 
     const { referenceApp, buildHandler, onEvict } = await loadInstanceFactory(vite, {
       createRequestHandler,
+      toNodeHandler,
     });
     const dispatcher = createPerSessionDispatcher({
       buildHandler,
