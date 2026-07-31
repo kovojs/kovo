@@ -86,6 +86,7 @@ const packedWorkspacePackages: readonly WorkspacePackage[] = [
 
 let packedKovoPackageCache: PackedKovoPackages | undefined;
 const packedKovoPackageManifest = 'packed-kovo-packages.json';
+const packedStarterCiManifestProducer = 'scripts/ci-shards.mjs pack-starter';
 
 export function createStarterApp(options: StarterAppOptions): StarterTestApp {
   const tempParent = options.tempParent ?? tmpdir();
@@ -135,14 +136,15 @@ export function createStarterApp(options: StarterAppOptions): StarterTestApp {
 export function installStarterAppDependencies(
   root: string,
   mode: StarterInstallMode,
-  packedPackages = mode === 'packed' ? packKovoWorkspacePackages() : undefined,
+  packedPackages?: PackedKovoPackages,
 ): StarterAppInstall {
-  if (mode === 'symlink') {
-    linkStarterBuildDependencies(root);
-    return { mode };
+  const installMode = resolveStarterInstallMode(mode);
+  if (installMode === 'symlink') {
+    linkWorkspaceStarterBuildDependencies(root);
+    return { mode: installMode };
   }
 
-  if (mode === 'link-local') {
+  if (installMode === 'link-local') {
     execStarterCommand(
       process.execPath,
       [join(process.cwd(), 'scripts/link-local-kovo.mjs'), root],
@@ -156,19 +158,41 @@ export function installStarterAppDependencies(
       env: starterInstallEnv(root),
       stdio: 'pipe',
     });
-    return { mode };
+    return { mode: installMode };
   }
 
-  if (!packedPackages) {
-    throw new Error('Packed starter install requires packed Kovo packages.');
-  }
-  rewriteKovoDependenciesToTarballs(root, packedPackages);
+  const currentPackages = packedPackages ?? packKovoWorkspacePackages();
+  rewriteKovoDependenciesToTarballs(root, currentPackages);
   execStarterCommand('pnpm', ['install', '--ignore-workspace'], {
     cwd: root,
     env: starterInstallEnv(root),
     stdio: 'pipe',
   });
-  return { mode, tarballDir: packedPackages.tarballDir };
+  return { mode: installMode, tarballDir: currentPackages.tarballDir };
+}
+
+/**
+ * Keep generated source fixtures on source-linked packages by default. Starter CI can opt into
+ * the same-run package artifact so repeated production builds exercise exact current dist bytes
+ * instead of paying the TypeScript source-loader cost in every isolated proof worker.
+ */
+export function resolveStarterInstallMode(
+  requested: StarterInstallMode,
+  environment: NodeJS.ProcessEnv = process.env,
+): StarterInstallMode {
+  const currentBuildMode = environment.KOVO_STARTER_SOURCE_FIXTURE_DEPENDENCIES;
+  if (currentBuildMode === undefined) return requested;
+  if (currentBuildMode !== 'packed-current') {
+    throw new TypeError(
+      'KOVO_STARTER_SOURCE_FIXTURE_DEPENDENCIES must be "packed-current" when set.',
+    );
+  }
+  if (!environment.KOVO_PACKED_PACKAGES_DIR) {
+    throw new TypeError(
+      'Packed-current source fixtures require KOVO_PACKED_PACKAGES_DIR from the same CI run.',
+    );
+  }
+  return 'packed';
 }
 
 export function runStarterTypecheck(root: string): void {
@@ -286,6 +310,14 @@ export function withStarterBinOnPath(root: string): NodeJS.ProcessEnv {
 }
 
 export function linkStarterBuildDependencies(root: string): void {
+  if (resolveStarterInstallMode('symlink') === 'packed') {
+    void installStarterAppDependencies(root, 'symlink');
+    return;
+  }
+  linkWorkspaceStarterBuildDependencies(root);
+}
+
+function linkWorkspaceStarterBuildDependencies(root: string): void {
   const nodeModules = join(root, 'node_modules');
   const nodeModulesBin = join(nodeModules, '.bin');
   mkdirSync(join(nodeModules, '@kovojs'), { recursive: true });
@@ -364,9 +396,41 @@ export function withRepoBinOnPath(): NodeJS.ProcessEnv {
 }
 
 function packKovoWorkspacePackages(): PackedKovoPackages {
+  const envTarballDir = process.env.KOVO_PACKED_PACKAGES_DIR;
+  const currentBuildMode = process.env.KOVO_STARTER_SOURCE_FIXTURE_DEPENDENCIES;
+  if (currentBuildMode !== undefined && currentBuildMode !== 'packed-current') {
+    throw new TypeError(
+      'KOVO_STARTER_SOURCE_FIXTURE_DEPENDENCIES must be "packed-current" when set.',
+    );
+  }
+  if (currentBuildMode === 'packed-current') {
+    if (!envTarballDir) {
+      throw new TypeError(
+        'Packed-current source fixtures require KOVO_PACKED_PACKAGES_DIR from the same CI run.',
+      );
+    }
+    let currentPackages: PackedKovoPackages | undefined;
+    try {
+      currentPackages = readPackedKovoPackageManifest(envTarballDir, {
+        generatedBy: packedStarterCiManifestProducer,
+      });
+    } catch (error) {
+      throw new TypeError(
+        `Packed-current source fixtures require a valid ${packedKovoPackageManifest} and every declared tarball; refusing to modify or repack the same-run artifact.`,
+        { cause: error },
+      );
+    }
+    if (!currentPackages) {
+      throw new TypeError(
+        `Packed-current source fixtures require a valid ${packedKovoPackageManifest} and every declared tarball; refusing to modify or repack the same-run artifact.`,
+      );
+    }
+    packedKovoPackageCache = currentPackages;
+    return currentPackages;
+  }
+
   if (packedKovoPackageCache) return packedKovoPackageCache;
 
-  const envTarballDir = process.env.KOVO_PACKED_PACKAGES_DIR;
   if (envTarballDir) {
     const cached = readPackedKovoPackageManifest(envTarballDir);
     if (cached) {
@@ -466,17 +530,24 @@ function materializePackedPackage(tarballPath: string, destination: string): voi
   );
 }
 
-function readPackedKovoPackageManifest(tarballDir: string): PackedKovoPackages | undefined {
+function readPackedKovoPackageManifest(
+  tarballDir: string,
+  options: { generatedBy?: string } = {},
+): PackedKovoPackages | undefined {
   const manifestPath = join(tarballDir, packedKovoPackageManifest);
   if (!existsSync(manifestPath)) return undefined;
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+    generatedBy?: string;
     tarballs?: Record<string, string>;
   };
+  if (options.generatedBy !== undefined && manifest.generatedBy !== options.generatedBy) {
+    return undefined;
+  }
   const tarballByName = new Map<string, string>();
   const overridesByName: Record<string, string> = {};
   for (const pkg of packedWorkspacePackages) {
     const file = manifest.tarballs?.[pkg.name];
-    if (!file) return undefined;
+    if (!file || basename(file) !== file || !file.endsWith('.tgz')) return undefined;
     const tarball = join(tarballDir, file);
     if (!existsSync(tarball)) return undefined;
     const real = realpathSync(tarball);

@@ -210,6 +210,40 @@ describe('ci-shards', () => {
     expect(extractStep).not.toContain('merge-vitest --previous');
   });
 
+  it('runs source-generated starter fixtures against the same-run current package build', async () => {
+    const workflow = await readFile(
+      new URL('../.github/workflows/ci.yml', import.meta.url),
+      'utf8',
+    );
+    const starterJob = workflow.slice(
+      workflow.indexOf('  starter:'),
+      workflow.indexOf('  starter-packed:'),
+    );
+    const producerJob = workflow.slice(
+      workflow.indexOf('  starter-packages:'),
+      workflow.indexOf('  starter:'),
+    );
+
+    expect(producerJob).toContain(
+      'node scripts/ci-shards.mjs pack-starter --outDir "$RUNNER_TEMP/kovo-packed-starter"',
+    );
+    expect(producerJob).toContain('name: kovo-packed-starter');
+    expect(starterJob).toContain('needs: starter-packages');
+    expect(starterJob).toContain(
+      'uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093',
+    );
+    expect(starterJob).toContain('name: kovo-packed-starter');
+    expect(starterJob).toContain(
+      'KOVO_PACKED_PACKAGES_DIR: ${{ runner.temp }}/kovo-packed-starter',
+    );
+    expect(starterJob).toContain('KOVO_STARTER_SOURCE_FIXTURE_DEPENDENCIES: packed-current');
+    expect(starterJob).toContain('generate-starter --mode unpacked');
+    expect(starterJob.indexOf('actions/download-artifact@')).toBeLessThan(
+      starterJob.indexOf('Generated starter proofs'),
+    );
+    expect(starterJob).not.toContain('PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS');
+  });
+
   it('extracts vitest per-file durations from tolerant JSON reporter shapes', () => {
     expect(
       extractVitestDurations({

@@ -16,16 +16,13 @@ import {
 } from './index.test-support.js';
 
 describe('create-kovo starter (build integration: packed runtime scaffold)', () => {
-  it('runs the source quick check and production artifact from a packed starter install', async () => {
+  it('runs the source quick check from a packed starter install', () => {
     const app = createStarterApp({
       install: 'packed',
-      name: 'Packed Build Run Proof',
+      name: 'Packed Source Check Proof',
       scaffold: 'packed-bin',
-      tempPrefix: 'create-kovo-packed-build-run-',
+      tempPrefix: 'create-kovo-packed-source-check-',
     });
-    const port = await reservePort();
-    const origin = `http://127.0.0.1:${port}`;
-    let server: ChildProcessWithoutNullStreams | undefined;
 
     try {
       expectPackedKovoPackageShape(app.root);
@@ -43,7 +40,24 @@ describe('create-kovo starter (build integration: packed runtime scaffold)', () 
         'COVERAGE component=ContactsRegion query=contacts.items position="expression" status=fragment',
       );
       expect(existsSync(join(app.root, 'dist'))).toBe(false);
+    } finally {
+      app.cleanup();
+    }
+  }, 240_000);
 
+  it('runs and serves the production artifact from a packed starter install', async () => {
+    const app = createStarterApp({
+      install: 'packed',
+      name: 'Packed Build Run Proof',
+      scaffold: 'packed-bin',
+      tempPrefix: 'create-kovo-packed-build-run-',
+    });
+    const port = await reservePort();
+    const origin = `http://127.0.0.1:${port}`;
+    let server: ChildProcessWithoutNullStreams | undefined;
+
+    try {
+      expectPackedKovoPackageShape(app.root);
       buildReusableProductionArtifact(app.root);
       expect(readFileSync(join(app.root, 'dist/server/server/handler.mjs'), 'utf8')).not.toMatch(
         /from\s+['"]\.\/assets\//,
