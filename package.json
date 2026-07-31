@@ -134,7 +134,7 @@
     "generate:wire-input-boundary": "node scripts/wire-input-boundary-gate.mjs --write",
     "perf:fcp": "node scripts/fcp-harness.mjs",
     "test": "vitest --run --maxWorkers=1",
-    "test:authz-paranoid": "KOVO_PARANOID=1 vitest --run --no-file-parallelism packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts packages/server/src/postgres-grant-shape-fuzzer.test.ts",
+    "test:authz-paranoid": "node --disable-warning=ExperimentalWarning --experimental-strip-types packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime-runner.ts",
     "test:browser": "vp run browser",
     "test:gallery-browser": "pnpm --filter @kovojs/example-gallery run test:browser",
     "test:examples-live": "pnpm --filter @kovojs/site run test:examples-live",

@@ -42,6 +42,13 @@ import {
   runParanoidAuthorizationMatrix,
   type ParanoidAuthorizationMatrixCase,
 } from './index.build.prod-artifact.paranoid-runtime-gate.js';
+import {
+  paranoidRuntimeTestTimeoutMs,
+  paranoidRuntimeWorkerRequirements,
+  selectedParanoidRuntimeCaseId,
+  type ParanoidRuntimeCaseId,
+  type RequiredParanoidPostgresCase,
+} from './index.build.prod-artifact.paranoid-runtime-runner.js';
 
 interface AuthorizationMatrixManifest {
   readonly cases: readonly ParanoidAuthorizationMatrixCase[];
@@ -99,28 +106,29 @@ const phase5WriteContactEmail = 'phase5-write-boundary-proof-contact@example.com
 const phase5WriteMarker = 'phase5-write-boundary-proof';
 
 const POSTGRES_BINARIES = ['initdb', 'postgres'] as const;
-const requiredPostgresCases = [
+const selectedWorkerCase = selectedParanoidRuntimeCaseId();
+const workerRequirements = paranoidRuntimeWorkerRequirements(selectedWorkerCase);
+const phase5PostgresTestTimeoutMs = paranoidRuntimeTestTimeoutMs(
   'phase5-postgres-paranoid-dogfood',
+);
+const phase5SqliteTestTimeoutMs = paranoidRuntimeTestTimeoutMs('phase5-sqlite-paranoid-dogfood');
+const provisionCheckBootTestTimeoutMs = paranoidRuntimeTestTimeoutMs(
   'paranoid-external-provision-check-boot',
-  'paranoid-external-leak-refusal',
-] as const;
-const requiredRuntimeAuthorizationMatrixCases = [
-  'closure-safe-boot',
-  'closure-cross-schema-definer-function-refusal',
-  'closure-definer-view-refusal',
-  'closure-matview-refusal',
-  'closure-public-table-refusal',
-] as const;
-type RequiredPostgresCase = (typeof requiredPostgresCases)[number];
+);
+const leakRefusalTestTimeoutMs = paranoidRuntimeTestTimeoutMs('paranoid-external-leak-refusal');
 const requirePostgresAcceptance = process.env.KOVO_PARANOID === '1';
 const postgresToolchain = localPostgresToolchain();
 const runPostgresCases = requireParanoidPostgresToolchain(
   postgresToolchain,
   requirePostgresAcceptance,
 );
-const executedPostgresCases = new Set<RequiredPostgresCase>();
+const executedPostgresCases = new Set<RequiredParanoidPostgresCase>();
 const describeIfPostgres = runPostgresCases ? describe : describe.skip;
 const itIfPostgres = runPostgresCases ? it : it.skip;
+const phase5PostgresIt = itForWorkerCase('phase5-postgres-paranoid-dogfood', itIfPostgres);
+const phase5SqliteIt = itForWorkerCase('phase5-sqlite-paranoid-dogfood', it);
+const provisionCheckBootIt = itForWorkerCase('paranoid-external-provision-check-boot', it);
+const leakRefusalIt = itForWorkerCase('paranoid-external-leak-refusal', it);
 const require = createRequire(import.meta.url);
 const { Pool } = require(resolveDependencyRoot('pg')) as {
   Pool: new (options: { connectionString: string; max: number }) => PgPool;
@@ -128,7 +136,7 @@ const { Pool } = require(resolveDependencyRoot('pg')) as {
 
 describe('create-kovo starter (build integration: paranoid runtime chokes)', () => {
   // @kovo-security-certifies KV448 phase-5-postgres-paranoid-dogfood-capability-closure
-  itIfPostgres(
+  phase5PostgresIt(
     'rejects the legacy Phase 5 Postgres paranoid dogfood fixture outside the finite IR',
     async () => {
       const tempParent = tmpdir();
@@ -156,35 +164,39 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
       }
       executedPostgresCases.add('phase5-postgres-paranoid-dogfood');
     },
-    360_000,
+    phase5PostgresTestTimeoutMs,
   );
 
   // @kovo-security-certifies KV448 phase-5-1-full-paranoid-capability-closure
   // @kovo-security-certifies KV449 phase-5-1-full-paranoid-finite-ir-closure
-  it('rejects the legacy Phase 5.1 SQLite sink fixture outside the finite IR', () => {
-    const tempParent = tmpdir();
-    mkdirSync(tempParent, { recursive: true });
-    const root = mkdtempSync(join(tempParent, 'create-kovo-phase5-paranoid-dogfood-'));
+  phase5SqliteIt(
+    'rejects the legacy Phase 5.1 SQLite sink fixture outside the finite IR',
+    () => {
+      const tempParent = tmpdir();
+      mkdirSync(tempParent, { recursive: true });
+      const root = mkdtempSync(join(tempParent, 'create-kovo-phase5-paranoid-dogfood-'));
 
-    try {
-      writeKovoProject(root, {
-        dialect: 'sqlite',
-        name: 'Phase 5.1 Full Paranoid Dogfood Proof',
-      });
-      linkStarterBuildDependencies(root);
-      addSqliteRuntimeSecretProvenanceProof(root);
-      pruneParanoidPhase5SqliteReadSet(root);
-      addStarterMutationDbScopeProof(root, { mode: 'runtime-table-choke' });
-      addParanoidPhase5WriteBoundaryProof(root);
-      addParanoidPhase5AuthorizationProof(root);
+      try {
+        writeKovoProject(root, {
+          dialect: 'sqlite',
+          name: 'Phase 5.1 Full Paranoid Dogfood Proof',
+        });
+        linkStarterBuildDependencies(root);
+        addSqliteRuntimeSecretProvenanceProof(root);
+        pruneParanoidPhase5SqliteReadSet(root);
+        addStarterMutationDbScopeProof(root, { mode: 'runtime-table-choke' });
+        addParanoidPhase5WriteBoundaryProof(root);
+        addParanoidPhase5AuthorizationProof(root);
 
-      expect(() => buildParanoidProductionArtifact(root)).toThrow(
-        /KV448[\s\S]*lexical-provenance:mutable-or-ambiguous[\s\S]*KV449[\s\S]*closed:opaque-transfer/u,
-      );
-    } finally {
-      rmSync(root, { force: true, recursive: true });
-    }
-  }, 900_000);
+        expect(() => buildParanoidProductionArtifact(root)).toThrow(
+          /KV448[\s\S]*lexical-provenance:mutable-or-ambiguous[\s\S]*KV449[\s\S]*closed:opaque-transfer/u,
+        );
+      } finally {
+        rmSync(root, { force: true, recursive: true });
+      }
+    },
+    phase5SqliteTestTimeoutMs,
+  );
 });
 
 describeIfPostgres(
@@ -198,23 +210,109 @@ describeIfPostgres(
       for (const root of roots.splice(0)) rmSync(root, { force: true, recursive: true });
     });
 
-    it('runs provision -> check -> boot for the paranoid served artifact without manual runtime grants', async () => {
-      const tempParent = tmpdir();
-      mkdirSync(tempParent, { recursive: true });
-      const root = mkdtempSync(join(tempParent, 'create-kovo-authz-paranoid-external-'));
-      const clusterRoot = mkdtempSync(join(tempParent, 'create-kovo-authz-paranoid-cluster-'));
-      roots.push(root, clusterRoot);
-      const cluster = await startLocalPostgres(clusterRoot);
-      clusters.push(cluster);
-      const port = await reservePort();
-      let server: ChildProcessWithoutNullStreams | undefined;
+    provisionCheckBootIt(
+      'runs provision -> check -> boot for the paranoid served artifact without manual runtime grants',
+      async () => {
+        const tempParent = tmpdir();
+        mkdirSync(tempParent, { recursive: true });
+        const root = mkdtempSync(join(tempParent, 'create-kovo-authz-paranoid-external-'));
+        const clusterRoot = mkdtempSync(join(tempParent, 'create-kovo-authz-paranoid-cluster-'));
+        roots.push(root, clusterRoot);
+        const cluster = await startLocalPostgres(clusterRoot);
+        clusters.push(cluster);
+        const port = await reservePort();
+        let server: ChildProcessWithoutNullStreams | undefined;
 
-      const database = `kovo_authz_paranoid_${Date.now()}`;
-      const adminRole = `kovo_authz_admin_${Date.now()}`;
-      const runtimeRole = `kovo_authz_runtime_${Date.now()}`;
+        const database = `kovo_authz_paranoid_${Date.now()}`;
+        const adminRole = `kovo_authz_admin_${Date.now()}`;
+        const runtimeRole = `kovo_authz_runtime_${Date.now()}`;
 
-      try {
-        writeKovoProject(root, { dialect: 'postgres', name: 'Authz Paranoid External Proof' });
+        try {
+          writeKovoProject(root, { dialect: 'postgres', name: 'Authz Paranoid External Proof' });
+          linkStarterBuildDependencies(root);
+          writeProductionEquivalentSchemaModule(root);
+          writeStarterPostgresMigration(root);
+          buildParanoidProductionArtifact(root);
+
+          await createExternalDatabase(cluster, { adminRole, database, runtimeRole });
+          const adminUrl = cluster.url(database, adminRole);
+          const runtimeUrl = cluster.url(database, runtimeRole);
+          const systemUrl = cluster.url(database, 'kovo_system');
+          const publicOrigin = `https://127.0.0.1:${port}`;
+
+          const provisionOutput = execKovo(root, [
+            'db',
+            'provision',
+            '--schema',
+            '.kovo/external-postgres-schema.mjs',
+            '--migrations',
+            'migrations',
+            '--admin-database-url',
+            adminUrl,
+            '--database-url',
+            runtimeUrl,
+          ]);
+          expect(provisionOutput).toContain('STATUS ok');
+
+          const runtimeCheckOutput = execKovo(root, [
+            'db',
+            'check',
+            '--schema',
+            '.kovo/external-postgres-schema.mjs',
+            '--admin-database-url',
+            adminUrl,
+            '--database-url',
+            runtimeUrl,
+          ]);
+          expect(runtimeCheckOutput).toContain('STATUS ok');
+
+          server = spawn(process.execPath, ['dist/server/server.mjs'], {
+            cwd: root,
+            detached: process.platform !== 'win32',
+            env: {
+              ...withRepoBinOnPath(),
+              ...productionArtifactAttestationEnv('paranoid-external-postgres'),
+              BETTER_AUTH_URL: publicOrigin,
+              HOST: '127.0.0.1',
+              KOVO_DATABASE_URL: runtimeUrl,
+              KOVO_DB_SYSTEM_URL: systemUrl,
+              KOVO_NODE_ORIGIN: publicOrigin,
+              KOVO_PARANOID: '1',
+              NODE_ENV: 'production',
+              PORT: String(port),
+            },
+          });
+          const output = collectOutput(server);
+          const loginHtml = await fetchTextWhenReady(`http://127.0.0.1:${port}/login`, output);
+          await runAuthorizationMatrixCells({
+            'closure-safe-boot': async () => {
+              expect(loginHtml).toContain('Sign in');
+            },
+          });
+        } finally {
+          await stopProcess(server);
+        }
+        executedPostgresCases.add('paranoid-external-provision-check-boot');
+      },
+      provisionCheckBootTestTimeoutMs,
+    );
+
+    leakRefusalIt(
+      'refuses a materialized-view leak and a PUBLIC-granted leak in the paranoid external Postgres check',
+      async () => {
+        const tempParent = tmpdir();
+        mkdirSync(tempParent, { recursive: true });
+        const root = mkdtempSync(join(tempParent, 'create-kovo-authz-refusal-external-'));
+        const clusterRoot = mkdtempSync(join(tempParent, 'create-kovo-authz-refusal-cluster-'));
+        roots.push(root, clusterRoot);
+        const cluster = await startLocalPostgres(clusterRoot);
+        clusters.push(cluster);
+
+        const database = `kovo_authz_refusal_${Date.now()}`;
+        const adminRole = `kovo_authz_refusal_admin_${Date.now()}`;
+        const runtimeRole = `kovo_authz_refusal_runtime_${Date.now()}`;
+
+        writeKovoProject(root, { dialect: 'postgres', name: 'Authz Paranoid Refusal Proof' });
         linkStarterBuildDependencies(root);
         writeProductionEquivalentSchemaModule(root);
         writeStarterPostgresMigration(root);
@@ -223,8 +321,7 @@ describeIfPostgres(
         await createExternalDatabase(cluster, { adminRole, database, runtimeRole });
         const adminUrl = cluster.url(database, adminRole);
         const runtimeUrl = cluster.url(database, runtimeRole);
-        const systemUrl = cluster.url(database, 'kovo_system');
-        const publicOrigin = `https://127.0.0.1:${port}`;
+        const postgresUrl = cluster.url(database, 'postgres');
 
         const provisionOutput = execKovo(root, [
           'db',
@@ -239,8 +336,11 @@ describeIfPostgres(
           runtimeUrl,
         ]);
         expect(provisionOutput).toContain('STATUS ok');
+        await installFixtureUsers(postgresUrl);
+        await createUnsafeReachableObjects(adminUrl);
+        const createdForeignLeak = await createUnsafeForeignTable(postgresUrl);
 
-        const runtimeCheckOutput = execKovo(root, [
+        const failure = execKovoFailure(root, [
           'db',
           'check',
           '--schema',
@@ -250,120 +350,46 @@ describeIfPostgres(
           '--database-url',
           runtimeUrl,
         ]);
-        expect(runtimeCheckOutput).toContain('STATUS ok');
-
-        server = spawn(process.execPath, ['dist/server/server.mjs'], {
-          cwd: root,
-          detached: process.platform !== 'win32',
-          env: {
-            ...withRepoBinOnPath(),
-            ...productionArtifactAttestationEnv('paranoid-external-postgres'),
-            BETTER_AUTH_URL: publicOrigin,
-            HOST: '127.0.0.1',
-            KOVO_DATABASE_URL: runtimeUrl,
-            KOVO_DB_SYSTEM_URL: systemUrl,
-            KOVO_NODE_ORIGIN: publicOrigin,
-            KOVO_PARANOID: '1',
-            NODE_ENV: 'production',
-            PORT: String(port),
-          },
-        });
-        const output = collectOutput(server);
-        const loginHtml = await fetchTextWhenReady(`http://127.0.0.1:${port}/login`, output);
         await runAuthorizationMatrixCells({
-          'closure-safe-boot': async () => {
-            expect(loginHtml).toContain('Sign in');
+          'closure-cross-schema-definer-function-refusal': async () => {
+            expect(failure).toMatch(/kovo_paranoid_extra\.kovo_paranoid_definer_function/u);
+          },
+          'closure-definer-view-refusal': async () => {
+            expect(failure).toMatch(/kovo_paranoid_definer_view/u);
+          },
+          'closure-matview-refusal': async () => {
+            expect(failure).toMatch(/kovo_paranoid_user_mv/u);
+          },
+          'closure-public-table-refusal': async () => {
+            expect(failure).toMatch(/kovo_public_leak/u);
           },
         });
-      } finally {
-        await stopProcess(server);
-      }
-      executedPostgresCases.add('paranoid-external-provision-check-boot');
-    }, 240_000);
-
-    it('refuses a materialized-view leak and a PUBLIC-granted leak in the paranoid external Postgres check', async () => {
-      const tempParent = tmpdir();
-      mkdirSync(tempParent, { recursive: true });
-      const root = mkdtempSync(join(tempParent, 'create-kovo-authz-refusal-external-'));
-      const clusterRoot = mkdtempSync(join(tempParent, 'create-kovo-authz-refusal-cluster-'));
-      roots.push(root, clusterRoot);
-      const cluster = await startLocalPostgres(clusterRoot);
-      clusters.push(cluster);
-
-      const database = `kovo_authz_refusal_${Date.now()}`;
-      const adminRole = `kovo_authz_refusal_admin_${Date.now()}`;
-      const runtimeRole = `kovo_authz_refusal_runtime_${Date.now()}`;
-
-      writeKovoProject(root, { dialect: 'postgres', name: 'Authz Paranoid Refusal Proof' });
-      linkStarterBuildDependencies(root);
-      writeProductionEquivalentSchemaModule(root);
-      writeStarterPostgresMigration(root);
-      buildParanoidProductionArtifact(root);
-
-      await createExternalDatabase(cluster, { adminRole, database, runtimeRole });
-      const adminUrl = cluster.url(database, adminRole);
-      const runtimeUrl = cluster.url(database, runtimeRole);
-      const postgresUrl = cluster.url(database, 'postgres');
-
-      const provisionOutput = execKovo(root, [
-        'db',
-        'provision',
-        '--schema',
-        '.kovo/external-postgres-schema.mjs',
-        '--migrations',
-        'migrations',
-        '--admin-database-url',
-        adminUrl,
-        '--database-url',
-        runtimeUrl,
-      ]);
-      expect(provisionOutput).toContain('STATUS ok');
-      await installFixtureUsers(postgresUrl);
-      await createUnsafeReachableObjects(adminUrl);
-      const createdForeignLeak = await createUnsafeForeignTable(postgresUrl);
-
-      const failure = execKovoFailure(root, [
-        'db',
-        'check',
-        '--schema',
-        '.kovo/external-postgres-schema.mjs',
-        '--admin-database-url',
-        adminUrl,
-        '--database-url',
-        runtimeUrl,
-      ]);
-      await runAuthorizationMatrixCells({
-        'closure-cross-schema-definer-function-refusal': async () => {
-          expect(failure).toMatch(/kovo_paranoid_extra\.kovo_paranoid_definer_function/u);
-        },
-        'closure-definer-view-refusal': async () => {
-          expect(failure).toMatch(/kovo_paranoid_definer_view/u);
-        },
-        'closure-matview-refusal': async () => {
-          expect(failure).toMatch(/kovo_paranoid_user_mv/u);
-        },
-        'closure-public-table-refusal': async () => {
-          expect(failure).toMatch(/kovo_public_leak/u);
-        },
-      });
-      if (createdForeignLeak) expect(failure).toMatch(/kovo_foreign_leak/u);
-      executedPostgresCases.add('paranoid-external-leak-refusal');
-    }, 240_000);
+        if (createdForeignLeak) expect(failure).toMatch(/kovo_foreign_leak/u);
+        executedPostgresCases.add('paranoid-external-leak-refusal');
+      },
+      leakRefusalTestTimeoutMs,
+    );
   },
 );
 
 afterAll(() => {
   assertParanoidPostgresCasesExecuted(
-    requiredPostgresCases,
+    workerRequirements.postgresCases,
     executedPostgresCases,
     requirePostgresAcceptance,
   );
   assertParanoidPostgresCasesExecuted(
-    requiredRuntimeAuthorizationMatrixCases,
+    workerRequirements.authorizationMatrixCases,
     executedAuthorizationMatrixCases,
     requirePostgresAcceptance,
   );
 });
+
+function itForWorkerCase(caseId: ParanoidRuntimeCaseId, implementation: typeof it): typeof it {
+  return selectedWorkerCase === undefined || selectedWorkerCase === caseId
+    ? implementation
+    : it.skip;
+}
 
 async function runAuthorizationMatrixCells(
   executors: Readonly<Record<string, () => Promise<void>>>,
