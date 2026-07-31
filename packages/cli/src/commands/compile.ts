@@ -460,7 +460,8 @@ async function ensureAddPackageDependencies(
       rolledBack: 'none',
     };
   }
-  const installCommand = `${packageManagerName(parsed)} install`;
+  const installInvocation = packageManagerInstallInvocation(parsed);
+  const installCommand = [installInvocation.command, ...installInvocation.args].join(' ');
 
   const missingByManifest = packageNames.filter(
     (packageName) => !packageJsonDeclaresPackage(parsed, packageName),
@@ -510,9 +511,8 @@ async function ensureAddPackageDependencies(
     `${JSON.stringify(nextManifest, null, 2)}\n`,
   );
 
-  const { args, command } = packageManagerInstallInvocation(parsed);
   try {
-    addCommandShell.execFileSync(command, args, {
+    addCommandShell.execFileSync(installInvocation.command, installInvocation.args, {
       cwd: dirname(packageJsonPath),
       stdio: 'pipe',
     });
@@ -771,7 +771,13 @@ function packageManagerInstallInvocation(manifest: Record<string, unknown>): {
   command: 'bun' | 'npm' | 'pnpm' | 'yarn';
 } {
   const command = packageManagerName(manifest);
-  return { args: ['install'], command };
+  // `kovo add` has just updated package.json, so pnpm's CI-default frozen lockfile necessarily
+  // describes the pre-add manifest. Permit this one intentional lockfile refresh while preserving
+  // pnpm's normal lifecycle/network policy and leaving every other package manager unchanged.
+  return {
+    args: command === 'pnpm' ? ['install', '--no-frozen-lockfile'] : ['install'],
+    command,
+  };
 }
 
 function packageManagerName(manifest: Record<string, unknown>): 'bun' | 'npm' | 'pnpm' | 'yarn' {

@@ -552,18 +552,25 @@ export function addRawSqlOwnerWriteProof(
 
   const mutationsPath = join(root, 'src/mutations.ts');
   let mutations = readFileSync(mutationsPath, 'utf8');
+  mutations = addNamedImportSpecifiersRequired(
+    mutations,
+    '@kovojs/server',
+    ['s'],
+    ['domain'],
+    'raw SQL proof server import',
+  );
   mutations = replaceRequired(
     mutations,
-    "import { mutation, s, type MutationContext } from '@kovojs/server'\nimport { trustedAssign } from '@kovojs/server/write-safety';",
+    "import { trustedAssign } from '@kovojs/server/write-safety';",
     [
       options.trusted
         ? "import { sql, trustedSql } from '@kovojs/drizzle';"
         : staticStatement
           ? "import { staticSql } from '@kovojs/drizzle';"
           : "import { sql } from '@kovojs/drizzle';",
-      "import { domain, mutation, s, type MutationContext } from '@kovojs/server'\nimport { trustedAssign } from '@kovojs/server/write-safety';",
+      "import { trustedAssign } from '@kovojs/server/write-safety';",
     ].join('\n'),
-    'raw SQL proof server import',
+    'raw SQL proof Drizzle import',
   );
   mutations = replaceRequired(
     mutations,
@@ -576,42 +583,42 @@ export function addRawSqlOwnerWriteProof(
   );
   mutations = patchRawSqlProofMutationRegistry(mutations, declareTables);
   const contactAssignment = [
-    '    id: trustedAssign(row.email, {',
-    '      evidence: {',
-    "        digest: 'sha256:18a30ad899a45b62f335cc711d04e66652b0d0edbe5bf7baeb7ccaa111d7808e',",
-    "        kind: 'test',",
-    "        reference: 'starter-tests/contact-email-primary-key',",
-    '      },',
-    "      invariant: 'governed-write.authorized-principal',",
-    "      why: { kind: 'policy', policy: 'starter.contact-email-primary-key/v1' },",
-    '    }),',
+    '      id: trustedAssign(email, {',
+    '        evidence: {',
+    "          digest: 'sha256:18a30ad899a45b62f335cc711d04e66652b0d0edbe5bf7baeb7ccaa111d7808e',",
+    "          kind: 'test',",
+    "          reference: 'starter-tests/contact-email-primary-key',",
+    '        },',
+    "        invariant: 'governed-write.authorized-principal',",
+    "        why: { kind: 'policy', policy: 'starter.contact-email-primary-key/v1' },",
+    '      }),',
   ];
   const inlineContactAssignment =
-    "trustedAssign(row.email, { evidence: { digest: 'sha256:18a30ad899a45b62f335cc711d04e66652b0d0edbe5bf7baeb7ccaa111d7808e', kind: 'test', reference: 'starter-tests/contact-email-primary-key' }, invariant: 'governed-write.authorized-principal', why: { kind: 'policy', policy: 'starter.contact-email-primary-key/v1' } })";
+    "trustedAssign(email, { evidence: { digest: 'sha256:18a30ad899a45b62f335cc711d04e66652b0d0edbe5bf7baeb7ccaa111d7808e', kind: 'test', reference: 'starter-tests/contact-email-primary-key' }, invariant: 'governed-write.authorized-principal', why: { kind: 'policy', policy: 'starter.contact-email-primary-key/v1' } })";
   mutations = replaceRequired(
     mutations,
     [
-      '  await db.insert(contacts).values({',
-      '    company: row.company,',
-      '    email: row.email,',
+      '    await request.db.insert(contacts).values({',
+      '      company,',
+      '      email,',
       ...contactAssignment,
-      '    name: row.name,',
-      '  });',
+      '      name,',
+      '    });',
     ].join('\n'),
     [
-      `  await db.${rawSqlMethod}(`,
+      `    await request.db.${rawSqlMethod}(`,
       options.trusted
-        ? `    trustedSql(sql\`update raw_owners set label = \${row.company} where id = \${${inlineContactAssignment}}\`, { justification: 'reviewed owner predicate' }),`
+        ? `      trustedSql(sql\`update raw_owners set label = \${company} where id = \${${inlineContactAssignment}}\`, { justification: 'reviewed owner predicate' }),`
         : staticStatement
-          ? "    staticSql`update raw_owners set label = 'fixture' where id = 'fixture'`,"
-          : `    sql\`update raw_owners set label = \${row.company} where id = \${${inlineContactAssignment}}\`,`,
-      '  );',
-      '  await db.insert(contacts).values({',
-      '    company: row.company,',
-      '    email: row.email,',
+          ? "      staticSql`update raw_owners set label = 'fixture' where id = 'fixture'`,"
+          : `      sql\`update raw_owners set label = \${company} where id = \${${inlineContactAssignment}}\`,`,
+      '    );',
+      '    await request.db.insert(contacts).values({',
+      '      company,',
+      '      email,',
       ...contactAssignment,
-      '    name: row.name,',
-      '  });',
+      '      name,',
+      '    });',
     ].join('\n'),
     'raw SQL proof contact insert anchor',
   );
@@ -3788,12 +3795,42 @@ export function addParanoidPhase5AuthorizationProof(root: string): void {
     ['phase5AuthzItems', 'phase5AuthzOrders'],
     'phase 5.1 authorization schema import',
   );
-  runtimeDb = replaceRequired(
-    runtimeDb,
-    'const APP_TABLES = [contacts, runtimeSecretProof, runtimeSecretJoinProof, user, session, account, verification, rateLimit] as const;',
-    'const APP_TABLES = [contacts, phase5AuthzOrders, phase5AuthzItems, runtimeSecretProof, runtimeSecretJoinProof, user, session, account, verification, rateLimit] as const;',
-    'phase 5.1 authorization table list',
-  );
+  const appTablesPattern = /const APP_TABLES = \[([\s\S]*?)\] as const;/gu;
+  const appTablesMatches = [...runtimeDb.matchAll(appTablesPattern)];
+  if (appTablesMatches.length !== 1 || appTablesMatches[0]?.index === undefined) {
+    throw new Error('Expected one scaffold anchor for phase 5.1 authorization table list.');
+  }
+  const appTablesMatch = appTablesMatches[0];
+  const appTables = (appTablesMatch[1] ?? '')
+    .split(',')
+    .map((table) => table.trim())
+    .filter((table) => table.length > 0);
+  const requiredAppTables = [
+    'contacts',
+    'runtimeSecretProof',
+    'runtimeSecretJoinProof',
+    'user',
+    'session',
+    'account',
+    'verification',
+    'rateLimit',
+  ];
+  if (
+    appTables.some((table) => !/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(table)) ||
+    requiredAppTables.some((table) => !appTables.includes(table)) ||
+    appTables.includes('phase5AuthzOrders') ||
+    appTables.includes('phase5AuthzItems')
+  ) {
+    throw new Error('Expected scaffold anchor for phase 5.1 authorization table list.');
+  }
+  const contactIndex = appTables.indexOf('contacts');
+  appTables.splice(contactIndex + 1, 0, 'phase5AuthzOrders', 'phase5AuthzItems');
+  const appTablesReplacement = `const APP_TABLES = [\n${appTables
+    .map((table) => `  ${table},`)
+    .join('\n')}\n] as const;`;
+  runtimeDb = `${runtimeDb.slice(0, appTablesMatch.index)}${appTablesReplacement}${runtimeDb.slice(
+    appTablesMatch.index + appTablesMatch[0].length,
+  )}`;
   runtimeDb = replaceRequired(
     runtimeDb,
     '  },\n] as const satisfies readonly KovoSqliteSeed[];',

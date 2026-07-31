@@ -165,7 +165,7 @@ describe('kovo add', () => {
       await expect(mainAsync(['add', 'toast', '--out', outDir])).resolves.toBe(0);
 
       expect(stderr).not.toHaveBeenCalled();
-      expect(install).toHaveBeenCalledWith('pnpm', ['install'], {
+      expect(install).toHaveBeenCalledWith('pnpm', ['install', '--no-frozen-lockfile'], {
         cwd: root,
         stdio: 'pipe',
       });
@@ -174,7 +174,7 @@ describe('kovo add', () => {
         `ADD toast path=${JSON.stringify(join(outDir, 'toast.tsx'))} source=tsx package=@kovojs/ui@`,
       );
       expect(output).toContain(
-        `DEPENDENCIES status=installed packages=@kovojs/headless-ui,@kovojs/icons install="pnpm install" manifest=${JSON.stringify(join(root, 'package.json'))}`,
+        `DEPENDENCIES status=installed packages=@kovojs/headless-ui,@kovojs/icons install="pnpm install --no-frozen-lockfile" manifest=${JSON.stringify(join(root, 'package.json'))}`,
       );
       expect(readFileSync(join(outDir, 'toast.tsx'), 'utf8')).toContain(
         "from '@kovojs/headless-ui/toast';",
@@ -195,6 +195,39 @@ describe('kovo add', () => {
       install.mockRestore();
       stdout.mockRestore();
       stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('keeps the stale-lockfile override specific to pnpm auto-installs', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-add-cli-npm-'));
+    const outDir = join(root, 'src/components/ui');
+    writeFileSync(
+      join(root, 'package.json'),
+      `${JSON.stringify({
+        dependencies: {
+          '@kovojs/core': '0.3.0',
+          '@kovojs/style': '0.3.0',
+          '@kovojs/ui': '0.3.0',
+        },
+        packageManager: 'npm@11.5.1',
+        type: 'module',
+      })}\n`,
+      'utf8',
+    );
+    const install = vi
+      .spyOn(addCommandShell, 'execFileSync')
+      .mockImplementation(() => Buffer.alloc(0));
+
+    try {
+      await expect(mainAsync(['add', 'toast', '--out', outDir])).resolves.toBe(0);
+
+      expect(install).toHaveBeenCalledWith('npm', ['install'], {
+        cwd: root,
+        stdio: 'pipe',
+      });
+    } finally {
+      install.mockRestore();
       rmSync(root, { force: true, recursive: true });
     }
   });
@@ -233,7 +266,7 @@ describe('kovo add', () => {
         'link:../kovo/packages/headless-ui',
       );
       expect(packageJson.dependencies['@kovojs/icons']).toBe('link:../kovo/packages/icons');
-      expect(install).toHaveBeenCalledWith('pnpm', ['install'], {
+      expect(install).toHaveBeenCalledWith('pnpm', ['install', '--no-frozen-lockfile'], {
         cwd: root,
         stdio: 'pipe',
       });
@@ -286,7 +319,7 @@ describe('kovo add', () => {
         'file:///release/kovojs-icons-0.3.0.tgz',
       );
       expect(packageJson.dependencies['@kovojs/headless-ui']).not.toContain('kovojs-core');
-      expect(install).toHaveBeenCalledWith('pnpm', ['install'], {
+      expect(install).toHaveBeenCalledWith('pnpm', ['install', '--no-frozen-lockfile'], {
         cwd: root,
         stdio: 'pipe',
       });
