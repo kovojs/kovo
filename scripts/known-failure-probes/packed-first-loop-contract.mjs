@@ -3,7 +3,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { request as nodeHttpRequest } from 'node:http';
-import { createConnection, createServer as createNetServer } from 'node:net';
+import { createServer as createNetServer } from 'node:net';
 import path from 'node:path';
 
 import { packedFirstLoopContractOutcome } from '../lib/known-failure-probe-classifier.mjs';
@@ -13,8 +13,8 @@ import {
   materializeKnownFailurePackedRelease,
 } from '../lib/known-failure-packed-release.mjs';
 import {
-  DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS,
-  DEV_READY_POST_BIND_BUDGET_MS,
+  isKovoDevReadyReportTimeout,
+  waitForKovoDevReadiness,
 } from '../lib/dev-ready-probe-contract.mjs';
 import { collectProcessTreeRssKiB } from '../security-cost-budget-runner.mjs';
 
@@ -118,27 +118,36 @@ async function devReadyObservation(packedRelease) {
   writeFileSync(entry, minimalAppSource('packed ready probe'), 'utf8');
   const dev = startDevServer(packedRelease, appRoot, port, './src/ready.tsx');
   try {
-    await waitForTcpListener(port, dev, DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS);
-    const listenedAt = Date.now();
-    const readyPattern = /Kovo dev ready in \d+ms/u;
-    while (Date.now() - listenedAt <= DEV_READY_POST_BIND_BUDGET_MS) {
-      if (readyPattern.test(dev.stdout())) {
-        return {
-          graceExpired: false,
-          listened: true,
-          readyDelayMs: Date.now() - listenedAt,
-          stdout: dev.stdout(),
-        };
-      }
-      assertChildRunning(dev, 'dev readiness report');
-      await delay(25);
+    try {
+      const ready = await waitForKovoDevReadiness({
+        expected: {
+          appEntry: 'src/ready.tsx',
+          localUrl: `http://127.0.0.1:${port}/`,
+          mode: 'development',
+        },
+        label: 'Packed known-failure kovo dev',
+        port,
+        readOutput: () => ({ stderr: dev.stderr(), stdout: dev.stdout() }),
+        readStatus: () => ({
+          exitCode: dev.child.exitCode,
+          signalCode: dev.child.signalCode,
+        }),
+      });
+      return {
+        graceExpired: false,
+        listened: true,
+        readyDelayMs: ready.observedAfterMs,
+        stdout: dev.stdout(),
+      };
+    } catch (error) {
+      if (!isKovoDevReadyReportTimeout(error)) throw error;
+      return {
+        graceExpired: true,
+        listened: true,
+        readyDelayMs: null,
+        stdout: dev.stdout(),
+      };
     }
-    return {
-      graceExpired: true,
-      listened: true,
-      readyDelayMs: null,
-      stdout: dev.stdout(),
-    };
   } finally {
     await stopChildProcess(dev.child);
   }
@@ -388,30 +397,6 @@ function appendBounded(current, chunk, alreadyExceeded) {
     };
   }
   return { outputExceeded: false, value: next };
-}
-
-async function waitForTcpListener(port, dev, timeoutMs) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    assertChildRunning(dev, 'TCP listen');
-    if (await tcpConnects(port)) return;
-    await delay(25);
-  }
-  throw new Error(`packed dev server did not listen within ${timeoutMs}ms`);
-}
-
-function tcpConnects(port) {
-  return new Promise((resolve) => {
-    const socket = createConnection({ host: '127.0.0.1', port });
-    const settle = (value) => {
-      socket.removeAllListeners();
-      socket.destroy();
-      resolve(value);
-    };
-    socket.setTimeout(250, () => settle(false));
-    socket.once('connect', () => settle(true));
-    socket.once('error', () => settle(false));
-  });
 }
 
 async function waitForHttpResponse(url, dev, timeoutMs, requiredStatus) {

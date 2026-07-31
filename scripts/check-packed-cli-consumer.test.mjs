@@ -1,3 +1,8 @@
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:net';
+import os from 'node:os';
+import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -14,12 +19,11 @@ import {
 import {
   DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS,
   DEV_READY_POST_BIND_BUDGET_MS,
+  isKovoDevReadyReportTimeout,
   parseKovoDevReadyReport,
-  waitForKovoDevReadyReport,
+  reserveKovoDevLoopbackPort,
+  waitForKovoDevReadiness,
 } from './lib/dev-ready-probe-contract.mjs';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 
 function lockfile(...packages) {
   return `lockfileVersion: '9.0'
@@ -42,8 +46,9 @@ describe('packed CLI consumer proof', () => {
     expect(DEV_READY_POST_BIND_BUDGET_MS).toBe(5_000);
     expect(budgets.metrics['dev.ready.cold.durationMs'].provisionalTarget).toBe(15_000);
     expect(source).toContain('const port = await reserveKovoDevLoopbackPort()');
-    expect(source).toContain('waitForKovoDevTcpListener({');
-    expect(source).toContain('waitForKovoDevReadyReport({');
+    expect(source).toContain('waitForKovoDevReadiness({');
+    expect(source).not.toContain('waitForKovoDevTcpListener({');
+    expect(source).not.toContain('waitForKovoDevReadyReport({');
     expect(source).not.toContain('PACKED_DEV_READY_HARNESS_TIMEOUT_MS');
   });
 
@@ -73,23 +78,113 @@ describe('packed CLI consumer proof', () => {
     });
     expect(parseKovoDevReadyReport(report.replace(/  Devtool.*\n/u, ''), expected)).toBeNull();
     await expect(
-      waitForKovoDevReadyReport({
+      waitForKovoDevReadiness({
         expected,
         label: 'Fixture kovo dev',
+        listenerTimeoutMs: 50,
+        port: 4173,
         readOutput: () => ({ stderr: 'activation failed', stdout: report.slice(0, 40) }),
         readStatus: () => ({ exitCode: 2, signalCode: null }),
       }),
-    ).rejects.toThrow(/exited before structured ready report \(exit=2, signal=null/u);
-    await expect(
-      waitForKovoDevReadyReport({
-        expected,
-        label: 'Late fixture kovo dev',
-        readOutput: () => ({ stderr: '', stdout: report }),
-        readStatus: () => ({ exitCode: null, signalCode: null }),
-        startedAt: Date.now() - 2,
-        timeoutMs: 0,
-      }),
-    ).rejects.toThrow(/did not emit its complete structured ready report within the 0ms/u);
+    ).rejects.toThrow(
+      /exited before (?:TCP listener|structured ready report) \(exit=2, signal=null/u,
+    );
+  });
+
+  it('rejects a complete ready report first observed before a later listener observation', async () => {
+    const host = '127.0.0.1';
+    const port = await reserveKovoDevLoopbackPort(host);
+    const localUrl = `http://${host}:${port}/`;
+    const expected = {
+      appEntry: 'src/app.ts',
+      database: 'none configured',
+      localUrl,
+      mode: 'development',
+    };
+    const report = [
+      'Kovo dev ready in 12ms',
+      `  Local URL    ${localUrl}`,
+      `  Network URL  ${localUrl} (loopback only)`,
+      '  Mode         development',
+      '  App          src/app.ts',
+      '  Database     none configured',
+      `  Devtool      ${localUrl}__kovo`,
+      '',
+    ].join('\n');
+    const server = createServer();
+    const listenTimer = setTimeout(() => server.listen({ host, port }), 50);
+
+    try {
+      await expect(
+        waitForKovoDevReadiness({
+          expected,
+          host,
+          label: 'Ready-first fixture kovo dev',
+          listenerTimeoutMs: 500,
+          port,
+          readOutput: () => ({ stderr: '', stdout: report }),
+          readStatus: () => ({ exitCode: null, signalCode: null }),
+          reportTimeoutMs: 100,
+        }),
+      ).rejects.toThrow(/ready-before-bind/u);
+    } finally {
+      clearTimeout(listenTimer);
+      if (server.listening) {
+        await new Promise((resolve, reject) => {
+          server.close((error) => (error ? reject(error) : resolve()));
+        });
+      }
+    }
+  });
+
+  it('starts the complete-report budget at listener observation', async () => {
+    const host = '127.0.0.1';
+    const port = await reserveKovoDevLoopbackPort(host);
+    const localUrl = `http://${host}:${port}/`;
+    const server = createServer();
+    let acceptedConnection = false;
+    server.on('connection', (socket) => {
+      acceptedConnection = true;
+      socket.destroy();
+    });
+    const listenTimer = setTimeout(() => server.listen({ host, port }), 50);
+
+    try {
+      let timeoutError;
+      try {
+        await waitForKovoDevReadiness({
+          expected: {
+            appEntry: 'src/app.ts',
+            database: 'none configured',
+            localUrl,
+            mode: 'development',
+          },
+          host,
+          label: 'Late-listener fixture kovo dev',
+          listenerTimeoutMs: 500,
+          port,
+          readOutput: () => ({ stderr: '', stdout: 'Kovo dev ready in 12ms\n' }),
+          readStatus: () => ({ exitCode: null, signalCode: null }),
+          reportTimeoutMs: 30,
+        });
+      } catch (error) {
+        timeoutError = error;
+      }
+      expect(isKovoDevReadyReportTimeout(timeoutError)).toBe(true);
+      expect(timeoutError).toEqual(
+        expect.objectContaining({
+          message: expect.stringMatching(/within the 30ms post-bind budget/u),
+        }),
+      );
+      expect(acceptedConnection).toBe(true);
+    } finally {
+      clearTimeout(listenTimer);
+      if (server.listening) {
+        await new Promise((resolve, reject) => {
+          server.close((error) => (error ? reject(error) : resolve()));
+        });
+      }
+    }
   });
 
   it('binds its authored app fixture to one literal receiver identity', () => {

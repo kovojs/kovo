@@ -12,6 +12,7 @@ import { request as nodeHttpRequest } from 'node:http';
 import { createConnection } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { performance } from 'node:perf_hooks';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -21,8 +22,7 @@ import {
   DEV_READY_PROBE_PROCESS_TIMEOUT_MS,
   kovoDevLoopbackTcpConnects as tcpConnects,
   reserveKovoDevLoopbackPort as reservePort,
-  waitForKovoDevReadyReport,
-  waitForKovoDevTcpListener,
+  waitForKovoDevReadiness,
 } from '../../../scripts/lib/dev-ready-probe-contract.mjs';
 import {
   isolateAuthoredDevPluginOptions,
@@ -262,7 +262,8 @@ export default app.assemble({
       const port = await reservePort();
       const child = spawnKovoDev(root, port);
       const output = collectChildOutput(child);
-      const infrastructureStartedAt = Date.now();
+      const readiness = waitForInitialKovoDevReady(port, child, output);
+      void readiness.catch(() => undefined);
       try {
         await waitForFile(
           activationMarker,
@@ -273,18 +274,10 @@ export default app.assemble({
         expect(output.stdout).not.toMatch(/Kovo dev ready in \d+ms/u);
         await expect(tcpConnects(port)).resolves.toBe(false);
 
-        await waitForKovoDevTcpListener({
-          label: 'Source kovo dev',
-          port,
-          readOutput: () => ({ stderr: output.stderr, stdout: output.stdout }),
-          readStatus: () => ({ exitCode: child.exitCode, signalCode: child.signalCode }),
-          startedAt: infrastructureStartedAt,
-        });
-        const listenedAt = Date.now();
-        const ready = await waitForStructuredKovoDevReport(port, child, output, listenedAt);
-        expect(ready.observedAfterMs).toBeLessThanOrEqual(DEV_READY_POST_BIND_BUDGET_MS);
+        const ready = await readiness;
+        expect(ready.readyReportElapsedMs).toBeLessThanOrEqual(DEV_READY_POST_BIND_BUDGET_MS);
 
-        const response = await fetchReadyKovoDev(`http://127.0.0.1:${port}/`, child, output);
+        const response = await fetchReadyKovoDev(ready.localUrl, child, output);
         expect(response.status, output.combined()).toBe(200);
         await expect(response.text()).resolves.toContain('Activation complete');
       } finally {
@@ -943,6 +936,53 @@ throw new Error('candidate evaluation failed');
     },
     DEV_READY_HMR_TEST_TIMEOUT_MS,
   );
+
+  it.each(['response acquisition', 'response body'] as const)(
+    'aborts a stalled HMR transition %s at the nominal deadline and releases it',
+    async (stage) => {
+      let abortedOperations = 0;
+      let activeOperations = 0;
+      const stalled = (signal: AbortSignal): Promise<never> =>
+        new Promise((_resolve, reject) => {
+          activeOperations += 1;
+          const onAbort = (): void => {
+            signal.removeEventListener('abort', onAbort);
+            activeOperations -= 1;
+            abortedOperations += 1;
+            reject(signal.reason);
+          };
+          signal.addEventListener('abort', onAbort, { once: true });
+        });
+      const request = (async (_url: string | URL | Request, init?: RequestInit) => {
+        const signal = init?.signal;
+        if (!(signal instanceof AbortSignal)) throw new Error('Expected a fetch abort signal.');
+        if (stage === 'response acquisition') return await stalled(signal);
+        return {
+          body: null,
+          bodyUsed: true,
+          status: 200,
+          text: async () => await stalled(signal),
+        } as Response;
+      }) as typeof fetch;
+      const child = {
+        exitCode: null,
+        signalCode: null,
+      } as ChildProcessWithoutNullStreams;
+
+      await expect(
+        fetchBodyContaining(
+          'http://127.0.0.1:1/',
+          'never returned',
+          child,
+          { combined: () => 'synthetic stalled fetch' },
+          25,
+          request,
+        ),
+      ).rejects.toThrow(/Timed out waiting for .* to contain "never returned"/u);
+      expect(abortedOperations).toBe(1);
+      expect(activeOperations).toBe(0);
+    },
+  );
 });
 
 function devFixture(name: string, richGraph = false): string {
@@ -1242,30 +1282,7 @@ async function waitForInitialKovoDevReady(
   child: ChildProcessWithoutNullStreams,
   output: { combined(): string; stderr: string; stdout: string },
 ): Promise<{ localUrl: string; listenerElapsedMs: number; readyReportElapsedMs: number }> {
-  const infrastructureStartedAt = Date.now();
-  const listener = await waitForKovoDevTcpListener({
-    label: 'Source kovo dev',
-    port,
-    readOutput: () => ({ stderr: output.stderr, stdout: output.stdout }),
-    readStatus: () => ({ exitCode: child.exitCode, signalCode: child.signalCode }),
-    startedAt: infrastructureStartedAt,
-  });
-  const listenedAt = Date.now();
-  const ready = await waitForStructuredKovoDevReport(port, child, output, listenedAt);
-  return {
-    listenerElapsedMs: listener.elapsedMs,
-    localUrl: ready.localUrl,
-    readyReportElapsedMs: ready.observedAfterMs,
-  };
-}
-
-async function waitForStructuredKovoDevReport(
-  port: number,
-  child: ChildProcessWithoutNullStreams,
-  output: { combined(): string; stderr: string; stdout: string },
-  listenedAt: number,
-): Promise<{ localUrl: string; observedAfterMs: number }> {
-  return await waitForKovoDevReadyReport({
+  const ready = await waitForKovoDevReadiness({
     expected: {
       appEntry: 'src/app.ts',
       database: 'none configured',
@@ -1273,10 +1290,16 @@ async function waitForStructuredKovoDevReport(
       mode: 'development',
     },
     label: 'Source kovo dev',
+    port,
     readOutput: () => ({ stderr: output.stderr, stdout: output.stdout }),
     readStatus: () => ({ exitCode: child.exitCode, signalCode: child.signalCode }),
-    startedAt: listenedAt,
+    startedAt: performance.now(),
   });
+  return {
+    listenerElapsedMs: ready.listenerElapsedMs,
+    localUrl: ready.localUrl,
+    readyReportElapsedMs: ready.observedAfterMs,
+  };
 }
 
 async function fetchReadyKovoDev(
@@ -1301,19 +1324,40 @@ async function fetchBodyContaining(
   child: ChildProcessWithoutNullStreams,
   output: { combined(): string },
   timeoutMs: number,
+  request: typeof fetch = fetch,
 ): Promise<string> {
-  const deadline = Date.now() + timeoutMs;
+  const deadline = performance.now() + timeoutMs;
   let latest = '';
-  while (Date.now() < deadline) {
+  while (performance.now() < deadline) {
     assertKovoDevChildRunning(child, output, `HTTP body containing ${JSON.stringify(expected)}`);
+    const remainingMs = deadline - performance.now();
+    if (remainingMs <= 0) break;
+    const abortController = new AbortController();
+    const abortTimer = setTimeout(
+      () =>
+        abortController.abort(
+          new Error(`HMR transition fetch exceeded its ${timeoutMs}ms deadline.`),
+        ),
+      Math.max(1, Math.ceil(remainingMs)),
+    );
+    let response: Response | undefined;
     try {
-      const response = await fetch(url);
+      response = await request(url, { signal: abortController.signal });
       latest = await response.text();
       if (response.status === 200 && latest.includes(expected)) return latest;
     } catch {
       // Startup and an in-progress watcher settlement are ordinary retry states.
+    } finally {
+      clearTimeout(abortTimer);
+      abortController.abort(new Error('HMR transition fetch attempt settled.'));
+      if (response?.body !== null && response?.body !== undefined && !response.bodyUsed) {
+        void response.body.cancel().catch(() => undefined);
+      }
     }
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    const retryDelayMs = Math.min(50, Math.max(0, deadline - performance.now()));
+    if (retryDelayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+    }
   }
   throw new Error(
     `Timed out waiting for ${url} to contain ${JSON.stringify(expected)}.\n${latest}\n${output.combined()}`,

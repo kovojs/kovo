@@ -133,12 +133,10 @@ describe('known-failure register', () => {
     expect(devReady.retirementCondition).toBe(
       'The packed dev journey emits the required structured ready report within five seconds after socket bind.',
     );
-    expect(packedFirstLoopProbeSource).toContain(
-      'waitForTcpListener(port, dev, DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS)',
-    );
-    expect(packedFirstLoopProbeSource).toContain(
-      'Date.now() - listenedAt <= DEV_READY_POST_BIND_BUDGET_MS',
-    );
+    expect(packedFirstLoopProbeSource).toContain('waitForKovoDevReadiness({');
+    expect(packedFirstLoopProbeSource).toContain('readyDelayMs: ready.observedAfterMs');
+    expect(packedFirstLoopProbeSource).not.toContain('waitForTcpListener(');
+    expect(packedFirstLoopProbeSource).not.toContain('Date.now() - listenedAt');
   });
 
   it('keeps the retired full-catalog regression nightly without weakening its result contract', () => {

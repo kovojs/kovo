@@ -3,6 +3,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 import { pathToFileURL } from 'node:url';
 
 import ts from 'typescript';
@@ -11,8 +12,7 @@ import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import {
   DEV_READY_POST_BIND_BUDGET_MS,
   reserveKovoDevLoopbackPort,
-  waitForKovoDevReadyReport,
-  waitForKovoDevTcpListener,
+  waitForKovoDevReadiness,
 } from './lib/dev-ready-probe-contract.mjs';
 import {
   packageSubjectFromSnapshotKey,
@@ -741,7 +741,7 @@ export default app.assemble({ routes: [home] });
 
   const port = await reserveKovoDevLoopbackPort();
   const localUrl = `http://127.0.0.1:${port}/`;
-  const spawnedAt = Date.now();
+  const spawnedAt = performance.now();
   const child = spawn(
     process.execPath,
     [
@@ -772,15 +772,7 @@ export default app.assemble({ routes: [home] });
   });
 
   try {
-    const listener = await waitForKovoDevTcpListener({
-      label: 'Packed kovo dev',
-      port,
-      readOutput: () => ({ stderr, stdout }),
-      readStatus: () => ({ exitCode: child.exitCode, signalCode: child.signalCode }),
-      startedAt: spawnedAt,
-    });
-    const listenedAt = Date.now();
-    const ready = await waitForKovoDevReadyReport({
+    const ready = await waitForKovoDevReadiness({
       expected: {
         appEntry: 'src/app.ts',
         database: 'none configured',
@@ -788,12 +780,13 @@ export default app.assemble({ routes: [home] });
         mode: 'development',
       },
       label: 'Packed kovo dev',
+      port,
       readOutput: () => ({ stderr, stdout }),
       readStatus: () => ({ exitCode: child.exitCode, signalCode: child.signalCode }),
-      startedAt: listenedAt,
+      startedAt: spawnedAt,
     });
     const phaseDiagnostics =
-      `listener=${listener.elapsedMs}ms ` + `postBindReadyReport=${ready.observedAfterMs}ms`;
+      `listener=${ready.listenerElapsedMs}ms ` + `postBindReadyReport=${ready.observedAfterMs}ms`;
     const page = await fetch(`${localUrl}__kovo`, {
       signal: AbortSignal.timeout(DEV_READY_POST_BIND_BUDGET_MS),
     });
