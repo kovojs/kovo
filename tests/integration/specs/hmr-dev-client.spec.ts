@@ -353,6 +353,14 @@ test('Vite source edits refresh rendered text and handler bodies through Kovo HM
     await page.locator('#hmr-source-input').focus();
     await page.locator('#hmr-source-input').fill('user draft');
 
+    // SPEC.md §9.5.1: observe the injected HMR client's single server-owned refresh. A second
+    // test-authored fetch would race the same invalidated Vite graph instead of testing this path.
+    const refreshRequest = page.waitForRequest((request) =>
+      request.url().includes('/@kovo/hmr/refresh/live-targets'),
+    );
+    const refreshResponse = page.waitForResponse((response) =>
+      response.url().includes('/@kovo/hmr/refresh/live-targets'),
+    );
     const events = await fixture.writeCard(
       hmrSourceCard({
         handlerText: 'handler after',
@@ -365,7 +373,17 @@ test('Vite source edits refresh rendered text and handler bodies through Kovo HM
     expect(event.oldClientHref).toBeTruthy();
     expect(event.newClientHref).toBeTruthy();
     expect(event.newClientHref).not.toBe(event.oldClientHref);
-    await refreshSourceEditLiveTarget(page);
+    const [request, response] = await Promise.all([refreshRequest, refreshResponse]);
+    const requestHeaders = request.headers();
+    expect(request.method()).toBe('POST');
+    expect(new URL(request.url()).searchParams.get('oldBuild')).toBe(requestHeaders['kovo-build']);
+    expect(response.status()).toBe(200);
+    expect(response.headers()['kovo-hmr-refresh']).toBe('live-targets');
+    expect(response.headers()['kovo-previous-build']).toBe(requestHeaders['kovo-build']);
+    expect(requestHeaders['kovo-live-targets']).toContain(
+      'hmr-source-card#hmr-card%2Fhmr-source-card@',
+    );
+    expect(requestHeaders['kovo-targets']).toContain('hmr-source-card=hmr');
 
     await expect(page.locator('#hmr-source-output')).toHaveText('Version after');
     await expect(page.locator('#hmr-source-input')).toHaveValue('user draft');
@@ -462,53 +480,6 @@ test('Vite route-shell source edits use full reload fallback with fresh server o
     await fixture.close();
   }
 });
-
-async function refreshSourceEditLiveTarget(page: Page): Promise<void> {
-  const body = await page.evaluate(async () => {
-    const sourceCard = document.querySelector('[kovo-fragment-target="hmr-source-card"]');
-    const target =
-      sourceCard?.getAttribute('kovo-fragment-target') ??
-      sourceCard?.getAttribute('id') ??
-      sourceCard?.getAttribute('kovo-c');
-    const component =
-      sourceCard?.getAttribute('kovo-live-component') ??
-      sourceCard?.getAttribute('kovo-c') ??
-      target;
-    const token = sourceCard?.getAttribute('kovo-live-token');
-    const props = sourceCard?.getAttribute('kovo-props') ?? '{}';
-    const buildToken = document.querySelector('meta[name="kovo-build"]')?.getAttribute('content');
-    if (!target || !component || !token || !buildToken) {
-      throw new Error('HMR source card is missing live-target attestation or build attributes.');
-    }
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5_000);
-    const refreshUrl = new URL('/@kovo/hmr/refresh/live-targets', location.origin);
-    refreshUrl.searchParams.set('url', '/');
-    refreshUrl.searchParams.set('oldBuild', buildToken);
-    const liveTargetHeader = `${encodeURIComponent(target)}#${encodeURIComponent(component)}@${token}:${props}`;
-    const response = await fetch(refreshUrl, {
-      headers: {
-        'Kovo-Current-Url': location.href,
-        'Kovo-Build': buildToken,
-        'Kovo-Fragment': 'true',
-        'Kovo-Live-Targets': liveTargetHeader,
-        'Kovo-Targets': 'hmr-source-card=hmr',
-      },
-      method: 'POST',
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-    if (!response.ok) {
-      throw new Error(`HMR refresh failed with ${response.status}: ${await response.text()}`);
-    }
-    return response.text();
-  });
-  await page.evaluate((fragmentBody) => {
-    const apply = (window as typeof window & { __kovo_a?: (body: string) => void }).__kovo_a;
-    if (typeof apply !== 'function') throw new Error('Kovo fragment apply hook is missing.');
-    apply(fragmentBody);
-  }, body);
-}
 
 function expectKovoSourceEditEvent(
   events: readonly { data: Record<string, unknown>; event: string }[],
