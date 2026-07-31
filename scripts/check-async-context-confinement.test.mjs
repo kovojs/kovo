@@ -11,7 +11,7 @@ describe('async-context confinement census gate', () => {
     const result = validateAsyncContextConfinement(input);
     expect(result).toMatchObject({
       ok: true,
-      summary: { cells: 11, reviewedNonRuntimeCarriers: 1, runtimeAuthorityCells: 10 },
+      summary: { cells: 12, reviewedNonRuntimeCarriers: 1, runtimeAuthorityCells: 11 },
     });
   });
 
@@ -63,6 +63,15 @@ describe('async-context confinement census gate', () => {
     );
     expect(validateAsyncContextConfinement(deleted).findings).toContain(
       'packages/server/src/jsx-context.ts#jsxRequestContext: uncensused async-context cell server.jsx-request',
+    );
+
+    const generatedBuildCellDeleted = loadAsyncContextConfinementInput();
+    generatedBuildCellDeleted.document = structuredClone(generatedBuildCellDeleted.document);
+    generatedBuildCellDeleted.document.cells = generatedBuildCellDeleted.document.cells.filter(
+      (row) => row.id !== 'server.generated-build-client-modules',
+    );
+    expect(validateAsyncContextConfinement(generatedBuildCellDeleted).findings).toContain(
+      'packages/server/src/compiler-client-module-provenance.ts#generatedBuildClientModuleContext: uncensused async-context cell server.generated-build-client-modules',
     );
 
     const aliased = loadAsyncContextConfinementInput();
@@ -119,18 +128,40 @@ describe('async-context confinement census gate', () => {
       'packages/server/src/jsx-context.ts: owned JSX re-entry lost isolated exact-cell binding',
     );
 
+    const collectorBypassed = loadAsyncContextConfinementInput();
+    const collectorDeferred = collectorBypassed.files.get(
+      'packages/server/src/deferred-region.ts',
+    );
+    collectorBypassed.files.set(
+      'packages/server/src/deferred-region.ts',
+      collectorDeferred.replace(
+        '() =>\n    runWithCurrentJsxQueryCollector(deferredQueries, renderRegion),',
+        '() => renderRegion(),',
+      ),
+    );
+    expect(validateAsyncContextConfinement(collectorBypassed).findings).toContain(
+      'packages/server/src/deferred-region.ts: owned JSX re-entry registrations must be the two direct lowerDeferredRegion const bindings',
+    );
+
     const hoistedReentry = loadAsyncContextConfinementInput();
     const deferred = hoistedReentry.files.get('packages/server/src/deferred-region.ts');
+    const reentryRegistrations = [
+      '  const deferredQueries = createQueryDocumentCollector();',
+      '  const startDeferredRegion = bindCurrentJsxRequestContext(() =>',
+      '    runWithCurrentJsxQueryCollector(deferredQueries, renderRegion),',
+      '  );',
+      '  const startErrorChunk = bindCurrentJsxRequestContext(() =>',
+      '    renderDeferredErrorChunk(options, priority, streamPriority),',
+      '  );',
+      '',
+    ].join('\n');
     hoistedReentry.files.set(
       'packages/server/src/deferred-region.ts',
       deferred
+        .replace(reentryRegistrations, '')
         .replace(
           '  const renderNow = () => rendered(renderRegion());',
-          '  const startDeferredRegion = bindCurrentJsxRequestContext(renderRegion);\n  const renderNow = () => rendered(renderRegion());',
-        )
-        .replace(
-          '  const startDeferredRegion = bindCurrentJsxRequestContext(renderRegion);\n  const startErrorChunk =',
-          '  const startErrorChunk =',
+          `${reentryRegistrations}  const renderNow = () => rendered(renderRegion());`,
         ),
     );
     expect(validateAsyncContextConfinement(hoistedReentry).findings).toContain(

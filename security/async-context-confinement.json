@@ -28,6 +28,13 @@
       "role": "request-authority"
     },
     {
+      "id": "server.generated-build-client-modules",
+      "path": "packages/server/src/compiler-client-module-provenance.ts",
+      "binding": "generatedBuildClientModuleContext",
+      "mode": "shared",
+      "role": "module-load-authority"
+    },
+    {
       "id": "server.jsx-request",
       "path": "packages/server/src/jsx-context.ts",
       "binding": "jsxRequestContext",
@@ -99,6 +106,6 @@
     "test": "keeps seeded concurrent principals disjoint through awaits, streams, and thenable traps",
     "seed": "0x4b564f56",
     "requests": 24,
-    "logicalCells": 11
+    "logicalCells": 12
   }
 }

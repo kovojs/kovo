@@ -172,7 +172,7 @@ function validateOwnedReentries(rows, sources, sourceFiles, cellsById, findings)
   const orderedTokens = [
     "if (priority === 'critical') return renderNow();",
     'if (!collector) return renderNow();',
-    `const startDeferredRegion = ${row.binding}(renderRegion);`,
+    `const startDeferredRegion = ${row.binding}(() =>`,
     `const startErrorChunk = ${row.binding}(() =>`,
   ];
   const orderedPositions = orderedTokens.map((token) => consumer.indexOf(token));
@@ -284,20 +284,33 @@ function validateOwnedReentryReferences(row, sourceFiles, findings) {
   }
 
   const expectedBindings = new Map([
-    ['startDeferredRegion', 'renderRegion'],
-    ['startErrorChunk', '<arrow>'],
+    [
+      'startDeferredRegion',
+      {
+        arguments: ['deferredQueries', 'renderRegion'],
+        callee: 'runWithCurrentJsxQueryCollector',
+      },
+    ],
+    [
+      'startErrorChunk',
+      {
+        arguments: ['options', 'priority', 'streamPriority'],
+        callee: 'renderDeferredErrorChunk',
+      },
+    ],
   ]);
   for (const { call, fileName } of calls) {
     const binding = directConstBindingForCall(call, 'lowerDeferredRegion');
     const expectedArgument = binding === undefined ? undefined : expectedBindings.get(binding);
     const argument = call.arguments[0];
     const argumentMatches =
-      expectedArgument === '<arrow>'
-        ? argument !== undefined && ts.isArrowFunction(argument)
-        : expectedArgument !== undefined &&
-          argument !== undefined &&
-          ts.isIdentifier(argument) &&
-          argument.text === expectedArgument;
+      expectedArgument !== undefined &&
+      argument !== undefined &&
+      isZeroArgumentArrowReturningCall(
+        argument,
+        expectedArgument.callee,
+        expectedArgument.arguments,
+      );
     if (fileName !== row.consumerPath || !argumentMatches) {
       findings.push(
         `${fileName}: owned JSX re-entry registrations must be the two direct lowerDeferredRegion const bindings`,
@@ -309,6 +322,23 @@ function validateOwnedReentryReferences(row, sourceFiles, findings) {
   if (expectedBindings.size !== 0) {
     findings.push(`${row.consumerPath}: owned JSX re-entry registration bindings are incomplete`);
   }
+}
+
+function isZeroArgumentArrowReturningCall(node, callee, argumentNames) {
+  if (
+    !ts.isArrowFunction(node) ||
+    node.parameters.length !== 0 ||
+    !ts.isCallExpression(node.body) ||
+    !ts.isIdentifier(node.body.expression) ||
+    node.body.expression.text !== callee ||
+    node.body.arguments.length !== argumentNames.length
+  ) {
+    return false;
+  }
+  return node.body.arguments.every(
+    (argument, index) =>
+      ts.isIdentifier(argument) && argument.text === argumentNames[index],
+  );
 }
 
 function directConstBindingForCall(call, ownerName) {
