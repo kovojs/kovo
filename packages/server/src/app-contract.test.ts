@@ -89,6 +89,28 @@ describe('defineKovo app contract', () => {
     expect(dbCalls).toBe(1);
   });
 
+  it('keeps request-shell limits on defineKovo config and out of the assembly inventory', () => {
+    const configured = defineKovo({
+      appId: APP_ID,
+      egress: { enabled: false, justification: 'isolated app-contract unit test' },
+      requestLimits: { maxQueryListItems: 2, trustedProxy: true },
+    });
+    const runtime = resolveKovoAppToken(configured.assemble({}), 'app-contract request-limit test');
+    expect(runtime.requestLimits.maxQueryListItems).toBe(2);
+    expect(runtime.requestLimits.trustedProxy).toBe(true);
+
+    const misplaced = defineKovo({
+      appId: '6db70aca-b359-4247-ae9f-d69d3f209c1a',
+      egress: { enabled: false, justification: 'isolated app-contract unit test' },
+    });
+    expect(() =>
+      misplaced.assemble({
+        // @ts-expect-error SPEC §6.2.1/§9.5: assemble accepts declaration inventories only.
+        requestLimits: { maxQueryListItems: 2 },
+      }),
+    ).toThrow('Unknown app.assemble() field requestLimits.');
+  });
+
   it('rejects orphan, duplicate, foreign, and repeated assembly handles', () => {
     const first = defineKovo({
       appId: APP_ID,

@@ -32,13 +32,15 @@ describe('create-kovo starter (build integration: trusted client-IP artifacts)',
       try {
         writeKovoProject(root, { name: 'Prod Client IP Proof' });
         linkStarterBuildDependencies(root);
-        const appPath = join(root, 'src/app.tsx');
-        const appSource = readFileSync(appPath, 'utf8');
-        const anchor = '  queries: [contactsQuery],';
-        if (!appSource.includes(anchor)) throw new TypeError('Missing starter query-list anchor.');
+        const contractPath = join(root, 'src/kovo.ts');
+        const contractSource = readFileSync(contractPath, 'utf8');
+        const anchor = '  principalEpochStore: appRuntimePrincipalEpochStore,';
+        if (!contractSource.includes(anchor)) {
+          throw new TypeError('Missing starter app-contract anchor.');
+        }
         writeFileSync(
-          appPath,
-          appSource.replace(
+          contractPath,
+          contractSource.replace(
             anchor,
             [
               anchor,

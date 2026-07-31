@@ -1740,14 +1740,18 @@ export function addRuntimeContractProofs(
   writeFileSync(
     join(root, 'src/runtime-contract-proofs.tsx'),
     [
-      '/** @jsxImportSource @kovojs/server */',
-      "import { component } from '@kovojs/core';",
-      "import { domain, mutation, publicAccess, query, s } from '@kovojs/server';",
+      "import { domain, s } from '@kovojs/server';",
       '',
-      "const publicProof = publicAccess('public runtime contract regression proof');",
+      "import { app } from './kovo.js';",
+      '',
+      "const publicProof = app.publicAccess('public runtime contract regression proof');",
       "const runtimeRows = domain('runtime-contract-proofs/rows');",
       '',
-      'export const warningItemsQuery = query({',
+      'export interface WarningItemsResult {',
+      '  rows: { id: number; label: string }[];',
+      '}',
+      '',
+      'export const warningItemsQuery = app.query({',
       '  access: publicProof,',
       '  load: () => ({',
       '    rows: [0, 1, 2, 3].map((id) => ({ id, label: `item-${id}` })),',
@@ -1755,7 +1759,7 @@ export function addRuntimeContractProofs(
       '  reads: [runtimeRows],',
       '});',
       '',
-      'export const refreshWarningItems = mutation({',
+      'export const refreshWarningItems = app.mutation({',
       '  access: publicProof,',
       '  csrf: false,',
       "  csrfJustification: 'public refresh proof changes no server or browser state',",
@@ -1765,13 +1769,13 @@ export function addRuntimeContractProofs(
       '    queries: [warningItemsQuery],',
       '    touches: [runtimeRows],',
       '  },',
-      "  optimistic: { [warningItemsQuery.key]: 'await-fragment' },",
+      "  optimistic: [warningItemsQuery.optimistic('await-fragment')],",
       '  handler(input: { reason: string }) {',
       '    return input;',
       '  },',
       '});',
       '',
-      'export const acceptPngUpload = mutation({',
+      'export const acceptPngUpload = app.mutation({',
       '  access: publicProof,',
       '  csrf: false,',
       "  csrfJustification: 'public MIME proof stores no state and uses no ambient authority',",
@@ -1785,7 +1789,7 @@ export function addRuntimeContractProofs(
       ...(options.includeClosedSyncParseProof === false
         ? []
         : [
-            'export const syncVerifiedFileParseQuery = query({',
+            'export const syncVerifiedFileParseQuery = app.query({',
             '  access: publicProof,',
             '  load: () => {',
             '    const file = {',
@@ -1809,10 +1813,22 @@ export function addRuntimeContractProofs(
             '});',
             '',
           ]),
+    ].join('\n'),
+    'utf8',
+  );
+  writeFileSync(
+    join(root, 'src/runtime-contract-component.tsx'),
+    [
+      '/** @jsxImportSource @kovojs/server */',
+      "import { component } from '@kovojs/core';",
+      '',
+      "import { app } from './kovo.js';",
+      "import { warningItemsQuery, type WarningItemsResult } from './runtime-contract-proofs.js';",
+      '',
       'export const RuntimeContractsProof = component({',
       '  queries: { warningItems: warningItemsQuery },',
-      '  render: ({ warningItems }) => {',
-      '    const rows = warningItems.rows as { id: number; label: string }[];',
+      '  render: ({ warningItems }: { warningItems: WarningItemsResult }) => {',
+      '    const rows = warningItems.rows;',
       '    return (',
       '      <main data-proof="runtime-contracts">',
       '        <p data-warning-count={String(rows.length)}>{rows.map((row) => row.label).join(",")}</p>',
@@ -1821,92 +1837,75 @@ export function addRuntimeContractProofs(
       '  },',
       '});',
       '',
-    ].join('\n'),
-    'utf8',
-  );
-  writeFileSync(
-    join(root, 'src/mutations.ts'),
-    [
-      "import { mutation, publicAccess, s } from '@kovojs/server';",
-      '',
-      "const publicProof = publicAccess('unused runtime contract fixture mutation');",
-      '',
-      'export interface AddContactInput {',
-      '  company: string;',
-      '  email: string;',
-      '  name: string;',
-      '}',
-      '',
-      'export const addContact = mutation({',
-      '  access: publicProof,',
-      '  csrf: false,',
-      "  csrfJustification: 'public contract fixture uses no session or cookie authority',",
-      "  machineReplayPrincipal: () => 'runtime-contract-unused-proof',",
-      '  input: s.object({',
-      '    name: s.string(),',
-      '    email: s.string(),',
-      '    company: s.string(),',
-      '  }),',
-      '  handler(input: AddContactInput) {',
-      '    return { id: input.email };',
+      "export const runtimeContractsProofRoute = app.route('/runtime-contracts-proof', {",
+      "  access: app.publicAccess('public runtime contract regression proof'),",
+      "  meta: { title: 'Runtime contract proof' },",
+      '  page() {',
+      '    return <RuntimeContractsProof />;',
       '  },',
       '});',
-      '',
-      'export const appMutations = [addContact];',
       '',
     ].join('\n'),
     'utf8',
   );
 
+  const contractPath = join(root, 'src/kovo.ts');
+  let contract = readFileSync(contractPath, 'utf8');
+  contract = replaceRequired(
+    contract,
+    '  principalEpochStore: appRuntimePrincipalEpochStore,',
+    [
+      '  principalEpochStore: appRuntimePrincipalEpochStore,',
+      '  requestLimits: { maxQueryListItems: 2 },',
+    ].join('\n'),
+    'runtime contract proof request limits',
+  );
+  writeFileSync(contractPath, contract, 'utf8');
+
   const appPath = join(root, 'src/app.tsx');
-  const app = readFileSync(appPath, 'utf8')
-    .replace("import { ContactsRegion } from './components/contacts.js';\n", '')
-    .replace("import { contactsQuery } from './queries.js';\n", '')
-    .replace(
+  let app = readFileSync(appPath, 'utf8');
+  app = replaceRequired(
+    app,
+    "import { addContact } from './mutations.js';",
+    [
       "import { addContact } from './mutations.js';",
-      [
-        "import { addContact } from './mutations.js';",
-        'import {',
-        '  acceptPngUpload,',
-        '  refreshWarningItems,',
-        '  RuntimeContractsProof,',
-        ...(options.includeClosedSyncParseProof === false ? [] : ['  syncVerifiedFileParseQuery,']),
-        '  warningItemsQuery,',
-        "} from './runtime-contract-proofs.js';",
-      ].join('\n'),
-    )
-    .replace(
-      '  mutationReplayStore,',
-      '  mutationReplayStore,\n  requestLimits: { maxQueryListItems: 2 },',
-    )
-    .replace(
-      '  mutations: [addContact, appSignIn, appSignOut],',
-      '  mutations: [addContact, acceptPngUpload, refreshWarningItems, appSignIn, appSignOut],',
-    )
-    .replace('      <ContactsRegion />', '      <main data-proof="runtime-contracts-home" />')
-    .replace(
-      '  queries: [contactsQuery],',
-      options.includeClosedSyncParseProof === false
-        ? '  queries: [warningItemsQuery],'
-        : '  queries: [syncVerifiedFileParseQuery, warningItemsQuery],',
-    )
-    .replace(
-      "  routes: [\n    route('/', {",
-      [
-        '  routes: [',
-        "    route('/runtime-contracts-proof', {",
-        "      access: publicAccess('public runtime contract regression proof'),",
-        "      meta: { title: 'Runtime contract proof' },",
-        '      layout: AppLayout,',
-        '      stylesheets,',
-        '      page() {',
-        '        return <RuntimeContractsProof />;',
-        '      },',
-        '    }),',
-        "    route('/', {",
-      ].join('\n'),
-    );
+      "import { runtimeContractsProofRoute } from './runtime-contract-component.js';",
+      'import {',
+      '  acceptPngUpload,',
+      '  refreshWarningItems,',
+      ...(options.includeClosedSyncParseProof === false ? [] : ['  syncVerifiedFileParseQuery,']),
+      '  warningItemsQuery,',
+      "} from './runtime-contract-proofs.js';",
+    ].join('\n'),
+    'runtime contract proof imports',
+  );
+  app = replaceRequired(
+    app,
+    '  mutations: [addContact, signInMutation, signOutMutation],',
+    '  mutations: [addContact, acceptPngUpload, refreshWarningItems, signInMutation, signOutMutation],',
+    'runtime contract proof mutation registration',
+  );
+  app = replaceRequired(
+    app,
+    '  queries: [contactsQuery],',
+    options.includeClosedSyncParseProof === false
+      ? '  queries: [contactsQuery, warningItemsQuery],'
+      : '  queries: [contactsQuery, syncVerifiedFileParseQuery, warningItemsQuery],',
+    'runtime contract proof query registration',
+  );
+  app = replaceRequired(
+    app,
+    '  routes: [homeRoute, loginRoute],',
+    '  routes: [homeRoute, loginRoute, runtimeContractsProofRoute],',
+    'runtime contract proof route registration',
+  );
   writeFileSync(appPath, app, 'utf8');
+  formatGeneratedProjectSources(root, [
+    'src/app.tsx',
+    'src/kovo.ts',
+    'src/runtime-contract-component.tsx',
+    'src/runtime-contract-proofs.tsx',
+  ]);
 }
 
 export function addAuthSecretLeakProof(root: string, options: { leakToWire?: boolean } = {}): void {
