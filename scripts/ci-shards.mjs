@@ -66,6 +66,7 @@ const CONSOLIDATED_VITEST_FILES = new Set([
   'packages/create-kovo/src/index.build.scaffold.production.test.ts',
   'packages/create-kovo/src/index.build.scaffold.sqlite.test.ts',
   'packages/create-kovo/src/index.build.scaffold.typecheck.test.ts',
+  'packages/create-kovo/src/index.example.packed.test.ts',
   'packages/drizzle/src/runtime-surface.test.ts',
   'packages/drizzle/src/sql-safety-static.test.ts',
   'packages/server/src/guards.test.ts',
@@ -289,6 +290,14 @@ const STARTER_ENTRIES = [
     file: 'packages/create-kovo/src/index.build.scaffold.packed-runtime.test.ts',
     needsPacked: true,
     seconds: 195,
+  },
+  {
+    id: 'starter-packed-examples',
+    file: 'packages/create-kovo/src/index.example.packed.test.ts',
+    needsPacked: true,
+    // Provisional upper bound: two independently capped 600s consumers. Replace this estimate
+    // with the first green same-manifest packed-artifact duration.
+    seconds: 1_200,
   },
   {
     id: 'runtime-contract-artifacts',
@@ -648,14 +657,31 @@ export async function starterShardNeedsPacked(file) {
 export async function runStarterShard(file, options = {}) {
   const manifest = await readStarterShardManifest(file);
   const spawn = options.spawnSync ?? spawnSync;
+  const environment = options.env ?? process.env;
   for (const group of groupStarterEntriesForExecution(manifest.entries)) {
-    const collectedTestNames = collectStarterGroupTestNames(group, spawn);
+    const needsPacked = group.some((entry) => entry.needsPacked);
+    const packedPackagesDir = environment.KOVO_PACKED_PACKAGES_DIR?.trim();
+    if (needsPacked && !packedPackagesDir) {
+      throw new Error(
+        'Packed starter entries require KOVO_PACKED_PACKAGES_DIR from scripts/ci-shards.mjs pack-starter.',
+      );
+    }
+    const groupEnvironment = needsPacked
+      ? {
+          ...environment,
+          KOVO_PACKED_PACKAGES_DIR: packedPackagesDir,
+          KOVO_STARTER_SOURCE_FIXTURE_DEPENDENCIES: 'packed-current',
+        }
+      : environment;
+    const collectedTestNames = collectStarterGroupTestNames(group, spawn, {
+      env: groupEnvironment,
+    });
     validateStarterGroupTestFilters(group, collectedTestNames);
     const args = starterGroupVitestArgs(group);
     process.stderr.write(
       `\n[starter:${group.map((entry) => entry.id).join(',')}] vp ${args.join(' ')}\n`,
     );
-    const result = spawn('vp', args, { stdio: 'inherit' });
+    const result = spawn('vp', args, { env: groupEnvironment, stdio: 'inherit' });
     if (result.error) {
       throw new Error(
         `Starter entries ${group.map((entry) => entry.id).join(', ')} could not start: ${result.error.message}`,
@@ -670,11 +696,12 @@ export async function runStarterShard(file, options = {}) {
   }
 }
 
-export function collectStarterGroupTestNames(group, spawn = spawnSync) {
+export function collectStarterGroupTestNames(group, spawn = spawnSync, options = {}) {
   if (group.length === 0) throw new Error('Starter execution group cannot be empty.');
   const file = group[0].file;
   const result = spawn('vp', ['exec', 'vitest', 'list', file, '--json'], {
     encoding: 'utf8',
+    env: options.env,
     maxBuffer: 16 * 1024 * 1024,
   });
   if (result.error) {

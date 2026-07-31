@@ -359,6 +359,7 @@ describe('ci-shards', () => {
     expect(
       includeVitest('packages/create-kovo/src/index.build.scaffold.packed-sqlite.test.ts'),
     ).toBe(false);
+    expect(includeVitest('packages/create-kovo/src/index.example.packed.test.ts')).toBe(false);
     expect(includeVitest('packages/create-kovo/src/index.build.scaffold.production.test.ts')).toBe(
       false,
     );
@@ -421,7 +422,7 @@ describe('ci-shards', () => {
       entries.map((entry) => entry.id).toSorted(compareStrings),
     );
     expect(shards.map((shard) => shard.seconds)).toEqual([
-      404, 406, 421, 414, 387, 417, 388, 391, 422, 416,
+      1_200, 466, 474, 437, 473, 464, 455, 437, 430, 430,
     ]);
   });
 
@@ -433,10 +434,14 @@ describe('ci-shards', () => {
     const unpackedIds = unpackedEntries.map((entry) => entry.id);
 
     expect(packedIds.toSorted(compareStrings)).toEqual([
+      'starter-packed-examples',
       'starter-packed-postgres',
       'starter-packed-runtime',
       'starter-packed-sqlite',
     ]);
+    expect(packedEntries.find((entry) => entry.id === 'starter-packed-examples')?.seconds).toBe(
+      1_200,
+    );
     expect(packedEntries.find((entry) => entry.id === 'starter-packed-runtime')?.seconds).toBe(195);
     expect(unpackedEntries.every((entry) => !entry.needsPacked)).toBe(true);
     expect([...packedIds, ...unpackedIds].toSorted(compareStrings)).toEqual(
@@ -445,7 +450,8 @@ describe('ci-shards', () => {
     expect(
       balanceStarterShards(10, unpackedEntries).flatMap((shard) => shard.entries),
     ).toHaveLength(unpackedEntries.length);
-    expect(balanceStarterShards(3, packedEntries).map((shard) => shard.entries)).toEqual([
+    expect(balanceStarterShards(4, packedEntries).map((shard) => shard.entries)).toEqual([
+      [{ ...packedEntries.find((entry) => entry.id === 'starter-packed-examples') }],
       [{ ...packedEntries.find((entry) => entry.id === 'starter-packed-runtime') }],
       [{ ...packedEntries.find((entry) => entry.id === 'starter-packed-postgres') }],
       [{ ...packedEntries.find((entry) => entry.id === 'starter-packed-sqlite') }],
@@ -484,7 +490,54 @@ describe('ci-shards', () => {
         .filter((entry) => entry.needsPacked)
         .map((entry) => entry.id)
         .toSorted(compareStrings),
-    ).toEqual(['starter-packed-postgres', 'starter-packed-runtime', 'starter-packed-sqlite']);
+    ).toEqual([
+      'starter-packed-examples',
+      'starter-packed-postgres',
+      'starter-packed-runtime',
+      'starter-packed-sqlite',
+    ]);
+  });
+
+  it('runs packed starter entries only against the declared same-run package artifact', async () => {
+    const manifest = await starterManifest([
+      { file: 'packed.test.ts', id: 'packed', needsPacked: true },
+    ]);
+    const calls = [];
+    const spawnSync = (command, args, options) => {
+      calls.push({ args, command, options });
+      if (args[2] === 'list') {
+        return {
+          status: 0,
+          stderr: '',
+          stdout: JSON.stringify([
+            { file: '/repo/packed.test.ts', name: 'packed consumer > proof' },
+          ]),
+        };
+      }
+      return { status: 0 };
+    };
+    const packedPackagesDir = '/tmp/kovo-same-run-packed-artifact';
+
+    await expect(
+      runStarterShard(manifest, {
+        env: {
+          KOVO_PACKED_PACKAGES_DIR: packedPackagesDir,
+        },
+        spawnSync,
+      }),
+    ).resolves.toBeUndefined();
+    expect(calls).toHaveLength(2);
+    for (const call of calls) {
+      expect(call.options.env).toMatchObject({
+        KOVO_PACKED_PACKAGES_DIR: packedPackagesDir,
+        KOVO_STARTER_SOURCE_FIXTURE_DEPENDENCIES: 'packed-current',
+      });
+    }
+
+    await expect(runStarterShard(manifest, { env: {}, spawnSync })).rejects.toThrow(
+      'Packed starter entries require KOVO_PACKED_PACKAGES_DIR from scripts/ci-shards.mjs pack-starter.',
+    );
+    expect(calls).toHaveLength(2);
   });
 
   it('groups starter execution by file while preserving assigned test filters', () => {

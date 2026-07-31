@@ -4,6 +4,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   truncateSync,
@@ -40,18 +41,21 @@ function appModuleSource(options: {
   const exportPrefix = options.exportKind === 'named' ? 'export const app = ' : 'export default ';
 
   return [
-    ...(closed ? ["import { createApp } from '@kovojs/server/internal/fixture-app';"] : []),
+    ...(closed ? ["import { defineKovo } from '@kovojs/server';"] : []),
     "import { trustedHtml } from '@kovojs/browser';",
     ...(options.prelude ?? []),
     ...(closed
-      ? []
+      ? [
+          '',
+          "const kovo = defineKovo({ appId: '00000000-0000-4000-8000-000000000033', egress: { allowInternal: [] } });",
+        ]
       : [
           'const modules = new Map();',
           'const versionedHref = (module) => `/c/__v/0000000000000000000000000000000000000000000000000000000000000000/${module.path.slice("/c/".length)}`;',
         ]),
-    `${exportPrefix}${closed ? 'createApp({' : '{'}`,
+    `${exportPrefix}${closed ? 'kovo.assemble({' : '{'}`,
     ...(closed
-      ? []
+      ? [`  routes: [${options.route}],`]
       : [
           '  clientModules: {',
           "    buildToken() { return '0000000000000000000000000000000000000000000000000000000000000000'; },",
@@ -62,18 +66,18 @@ function appModuleSource(options: {
           "      return module ? { body: module.source, headers: { 'Content-Type': 'text/javascript; charset=utf-8', 'X-Content-Type-Options': 'nosniff' }, status: 200 } : { body: 'Not Found', headers: { 'Content-Type': 'text/plain; charset=utf-8' }, status: 404 };",
           '    },',
           '  },',
+          '  diagnostics: [],',
+          '  document: {},',
+          '  endpoints: [],',
+          '  errorShells: {},',
+          // SPEC §9.1/§9.5: the deliberately open aggregate retains the compiler-owned field only
+          // to remain structurally shape-valid for its KV229 rejection proof.
+          '  liveTargetRenderers: [],',
+          '  mutations: [],',
+          '  queries: [],',
+          `  routes: [${options.route}],`,
+          '  stylesheets: [],',
         ]),
-    '  diagnostics: [],',
-    '  document: {},',
-    '  endpoints: [],',
-    '  errorShells: {},',
-    // SPEC §9.1/§9.5: createApp receives its live-target inventory only from the compiler-owned
-    // registry scope. The deliberately open aggregate keeps the field solely to remain shape-valid.
-    ...(closed ? [] : ['  liveTargetRenderers: [],']),
-    '  mutations: [],',
-    '  queries: [],',
-    `  routes: [${options.route}],`,
-    '  stylesheets: [],',
     closed ? '});' : '};',
     '',
   ].join('\n');
@@ -93,7 +97,7 @@ describe('kovo export', () => {
         appPath,
         appModuleSource({
           route:
-            "{ path: '/', page: () => trustedHtml('<main data-export-cli>CLI export</main>') }",
+            "kovo.route('/', { access: kovo.publicAccess('static export CLI fixture'), page: () => trustedHtml('<main data-export-cli>CLI export</main>', { reason: 'static export CLI fixture' }) })",
         }),
         'utf8',
       );
@@ -132,7 +136,7 @@ describe('kovo export', () => {
         appPath,
         appModuleSource({
           route:
-            "{ path: '/', page: () => trustedHtml('<main data-export-structured>Structured export</main>') }",
+            "kovo.route('/', { access: kovo.publicAccess('structured static export fixture'), page: () => trustedHtml('<main data-export-structured>Structured export</main>', { reason: 'structured static export fixture' }) })",
         }),
         'utf8',
       );
@@ -174,7 +178,7 @@ describe('kovo export', () => {
         appPath,
         appModuleSource({
           route:
-            "{ path: '/', page: () => trustedHtml('<main data-export-tsx>TSX export</main>') }",
+            "kovo.route('/', { access: kovo.publicAccess('TypeScript static export fixture'), page: () => trustedHtml('<main data-export-tsx>TSX export</main>', { reason: 'TypeScript static export fixture' }) })",
         }),
         'utf8',
       );
@@ -195,7 +199,9 @@ describe('kovo export', () => {
   });
 
   it('exports Vite-loaded TSX component queries with the same server runtime instance', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'kovo-export-cli-'));
+    // Vite canonicalizes /var to /private/var on macOS; make the authenticated source snapshot use
+    // that same stable path so the source-derived query transform exercises the intended graph.
+    const root = mkdtempSync(join(realpathSync(tmpdir()), 'kovo-export-cli-'));
     const appPath = join(root, 'app.tsx');
     const outDir = join(root, 'dist');
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
@@ -204,27 +210,46 @@ describe('kovo export', () => {
     try {
       symlinkServerPackage(root);
       writeFileSync(
-        appPath,
+        join(root, 'kovo.ts'),
+        [
+          "import { defineKovo } from '@kovojs/server';",
+          '',
+          "export const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000032', egress: { allowInternal: [] } });",
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'greeting.tsx'),
         [
           '/** @jsxImportSource @kovojs/server */',
           "import { component } from '@kovojs/core';",
-          "import { defineKovo } from '@kovojs/server';",
           '',
-          "const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000032' });",
+          "import { app } from './kovo.js';",
           '',
-          'const greetingQuery = app.query({',
+          'export const greetingQuery = app.query({',
           "  access: app.publicAccess('static export component query'),",
           "  load: () => ({ message: 'Hello from query' }),",
           '});',
           '',
-          'const Greeting = component({',
+          'export const Greeting = component({',
           '  queries: { greeting: greetingQuery },',
           '  render({ greeting }) {',
           '    return <main data-component-query>{greeting.message}</main>;',
           '  },',
           '});',
           '',
-          'const greetingRoute = app.route("/", {',
+        ].join('\n'),
+        'utf8',
+      );
+      writeFileSync(
+        appPath,
+        [
+          '/** @jsxImportSource @kovojs/server */',
+          "import { Greeting, greetingQuery } from './greeting.js';",
+          "import { app } from './kovo.js';",
+          '',
+          'export const greetingRoute = app.route("/", {',
           "  access: app.publicAccess('static export route'),",
           '  page: () => <Greeting />,',
           '});',
@@ -245,7 +270,8 @@ describe('kovo export', () => {
       const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(output).toContain('kovo-export/v1\nHTML /index.html status=200 bytes=');
       const html = readFileSync(join(outDir, 'index.html'), 'utf8');
-      expect(html).toContain('<main data-component-query>Hello from query</main>');
+      expect(html).toContain('<main data-component-query ');
+      expect(html).toContain('>Hello from query</main>');
       expect(html).not.toContain('Server Error');
     } finally {
       stdout.mockRestore();
@@ -267,7 +293,7 @@ describe('kovo export', () => {
         appPath,
         appModuleSource({
           route:
-            "{ path: '/docs/intro', page: () => trustedHtml('<main data-pretty-export>Intro</main>') }",
+            "kovo.route('/docs/intro', { access: kovo.publicAccess('nested static export fixture'), page: () => trustedHtml('<main data-pretty-export>Intro</main>', { reason: 'nested static export fixture' }) })",
         }),
         'utf8',
       );
@@ -342,7 +368,8 @@ describe('kovo export', () => {
             '  start: { line: 4, column: 12 },',
             '}];',
           ],
-          route: "{ path: '/', page: () => trustedHtml('<main>Home</main>') }",
+          route:
+            "kovo.route('/', { access: kovo.publicAccess('diagnostic provenance fixture'), page: () => trustedHtml('<main>Home</main>', { reason: 'diagnostic provenance fixture' }) })",
         }),
         'utf8',
       );
@@ -391,7 +418,7 @@ describe('kovo export', () => {
         appPath,
         appModuleSource({
           route:
-            '{ path: \'/\', page: () => trustedHtml(\'<main data-export-cli><img src="/kovo-static-mark.svg" alt=""><a href="/static-note.txt">note</a>CLI export</main>\') }',
+            "kovo.route('/', { access: kovo.publicAccess('manifest asset export fixture'), page: () => trustedHtml('<main data-export-cli><img src=\"/kovo-static-mark.svg\" alt=\"\"><a href=\"/static-note.txt\">note</a>CLI export</main>', { reason: 'manifest asset export fixture' }) })",
         }),
         'utf8',
       );
@@ -444,7 +471,7 @@ describe('kovo export', () => {
         appPath,
         appModuleSource({
           route:
-            "{ path: '/', stylesheets: ['/assets/styles.css'], page: () => trustedHtml('<main data-export-cli>CLI export</main>') }",
+            "kovo.route('/', { access: kovo.publicAccess('referenced asset export fixture'), stylesheets: ['/assets/styles.css'], page: () => trustedHtml('<main data-export-cli>CLI export</main>', { reason: 'referenced asset export fixture' }) })",
         }),
         'utf8',
       );
@@ -486,7 +513,7 @@ describe('kovo export', () => {
         appPath,
         appModuleSource({
           route:
-            '{ path: \'/\', page: () => trustedHtml(\'<main><a href="/node_modules/huge-secret.bin">secret</a><a href="/.git/config">git</a></main>\') }',
+            "kovo.route('/', { access: kovo.publicAccess('private tree export rejection fixture'), page: () => trustedHtml('<main><a href=\"/node_modules/huge-secret.bin\">secret</a><a href=\"/.git/config\">git</a></main>', { reason: 'private tree export rejection fixture' }) })",
         }),
         'utf8',
       );
@@ -520,7 +547,7 @@ describe('kovo export', () => {
         appPath,
         appModuleSource({
           route:
-            "{ path: '/', stylesheets: ['/assets/styles.css'], page: () => trustedHtml('<main data-export-cli>CLI export</main>') }",
+            "kovo.route('/', { access: kovo.publicAccess('missing asset export fixture'), stylesheets: ['/assets/styles.css'], page: () => trustedHtml('<main data-export-cli>CLI export</main>', { reason: 'missing asset export fixture' }) })",
         }),
         'utf8',
       );
@@ -567,7 +594,7 @@ describe('kovo export', () => {
         appPath,
         appModuleSource({
           route:
-            "{ path: '/', page: () => trustedHtml('<main data-export-cli>CLI export</main>') }",
+            "kovo.route('/', { access: kovo.publicAccess('dot-segment manifest fixture'), page: () => trustedHtml('<main data-export-cli>CLI export</main>', { reason: 'dot-segment manifest fixture' }) })",
         }),
         'utf8',
       );
@@ -620,7 +647,7 @@ describe('kovo export', () => {
         appPath,
         appModuleSource({
           route:
-            "{ path: '/', page: () => trustedHtml('<main data-export-cli>CLI export</main>') }",
+            "kovo.route('/', { access: kovo.publicAccess('symlinked dist fixture'), page: () => trustedHtml('<main data-export-cli>CLI export</main>', { reason: 'symlinked dist fixture' }) })",
         }),
         'utf8',
       );
@@ -679,7 +706,8 @@ describe('kovo export', () => {
             'renameSync(process.env.KOVO_TEST_EXPORT_DIST_ROOT, process.env.KOVO_TEST_EXPORT_DIST_PARKED);',
             'renameSync(process.env.KOVO_TEST_EXPORT_DIST_OUTSIDE, process.env.KOVO_TEST_EXPORT_DIST_ROOT);',
           ],
-          route: "{ path: '/', page: () => trustedHtml('<main><img src=\"/victim.txt\"></main>') }",
+          route:
+            "kovo.route('/', { access: kovo.publicAccess('Vite root mutation rejection fixture'), page: () => trustedHtml('<main><img src=\"/victim.txt\"></main>', { reason: 'Vite root mutation rejection fixture' }) })",
         }),
         'utf8',
       );
@@ -747,7 +775,8 @@ describe('kovo export', () => {
             'renameSync(process.env.KOVO_TEST_EXPORT_PUBLIC_ROOT, process.env.KOVO_TEST_EXPORT_PUBLIC_PARKED);',
             'renameSync(process.env.KOVO_TEST_EXPORT_PUBLIC_OUTSIDE, process.env.KOVO_TEST_EXPORT_PUBLIC_ROOT);',
           ],
-          route: "{ path: '/', page: () => trustedHtml('<main><img src=\"/victim.txt\"></main>') }",
+          route:
+            "kovo.route('/', { access: kovo.publicAccess('public root mutation rejection fixture'), page: () => trustedHtml('<main><img src=\"/victim.txt\"></main>', { reason: 'public root mutation rejection fixture' }) })",
         }),
         'utf8',
       );
@@ -791,8 +820,8 @@ describe('kovo export', () => {
         appPath,
         appModuleSource({
           route: [
-            "{ path: '/', page: () => trustedHtml('<main data-exported>Home</main>') }",
-            "{ path: '/products/:id', page: () => trustedHtml('<main>Product</main>') }",
+            "kovo.route('/', { access: kovo.publicAccess('selected static export fixture'), page: () => trustedHtml('<main data-exported>Home</main>', { reason: 'selected static export fixture' }) })",
+            "kovo.route('/products/:id', { access: kovo.publicAccess('non-exportable dynamic route fixture'), page: () => trustedHtml('<main>Product</main>', { reason: 'non-exportable dynamic route fixture' }) })",
           ].join(','),
         }),
         'utf8',
@@ -843,7 +872,7 @@ describe('kovo export', () => {
         appPath,
         appModuleSource({
           route:
-            '{ path: \'/\', page: () => trustedHtml(`<link href="${process.env.KOVO_TEST_STYLESHEET_HREF}"><main>Home</main>`) }',
+            "kovo.route('/', { access: kovo.publicAccess('removed stylesheet environment fixture'), page: () => trustedHtml(`<link href=\"${process.env.KOVO_TEST_STYLESHEET_HREF}\"><main>Home</main>`, { reason: 'removed stylesheet environment fixture' }) })",
         }),
         'utf8',
       );
@@ -916,7 +945,7 @@ describe('kovo export', () => {
           appModuleSource({
             prelude: ["import { value } from 'uncensused-initializer';"],
             route:
-              "{ path: '/', page: () => trustedHtml(`<main data-dependency>${value}</main>`) }",
+              "kovo.route('/', { access: kovo.publicAccess('uncensused dependency fixture'), page: () => trustedHtml(`<main data-dependency>${value}</main>`, { reason: 'uncensused dependency fixture' }) })",
           }),
           'utf8',
         );
