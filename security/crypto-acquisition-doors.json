@@ -9,7 +9,7 @@
       "kind": "crypto-acquisition",
       "operations": ["randomUUID"],
       "tier": "example-runtime",
-      "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
+      "review": "The loopback-only commerce auth fixture owns UUIDv4 minting for bounded in-memory session, fixture-binding, and application-context identities; these are local example credentials and identities, not production authentication or framework proof."
     },
     {
       "id": "crypto-door-002",
@@ -47,9 +47,17 @@
       "id": "crypto-door-008",
       "file": "packages/browser/src/inline-loader.ts",
       "kind": "crypto-acquisition",
-      "operations": ["*", "generated:scope.crypto"],
+      "operations": ["generated:scope.crypto"],
       "tier": "generated-artifact",
-      "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
+      "review": "Generated source literals carry the deferred browser runtime's Web Crypto acquisition for Kovo-Idem entropy and mutation-broadcast control witnesses; this row tracks executable projection held as data and is not an authenticity claim."
+    },
+    {
+      "id": "crypto-door-browser-inline-loader-runtime",
+      "file": "packages/browser/src/inline-loader-runtime.ts",
+      "kind": "crypto-acquisition",
+      "operations": ["*"],
+      "tier": "browser-runtime",
+      "review": "The generated deferred browser runtime boot-captures scope.crypto for 128-bit Kovo-Idem entropy and mutation-broadcast randomUUID control witnesses; it acquires no signing key and entropy is not treated as security proof."
     },
     {
       "id": "crypto-door-009",
@@ -118,10 +126,26 @@
     {
       "id": "crypto-door-014",
       "file": "packages/cli/src/commands/build-export.ts",
-      "kind": "digest",
-      "operations": ["hash"],
+      "kind": "crypto-acquisition",
+      "operations": ["createHmac", "hash", "randomBytes", "timingSafeEqual"],
       "tier": "build-tooling",
-      "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
+      "review": "The bootstrap-first CLI owns fresh 256-bit static-trust-worker keys and challenges, HMAC-SHA256 envelope authentication, fixed-width equality, and exact non-keyed source and artifact digests; these primitives stay private to the worker protocol and no generic crypto handle escapes."
+    },
+    {
+      "id": "crypto-door-cli-build-one-shot-handoff",
+      "file": "packages/cli/src/commands/build-one-shot-handoff.ts",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind the strict JSON one-shot handoff payload and its source identity; they acquire no entropy, key material, or keyed operation."
+    },
+    {
+      "id": "crypto-door-cli-source-check-session",
+      "file": "packages/cli/src/commands/source-check-session.ts",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind bounded source-check session inputs and results; they acquire no entropy, key material, or keyed operation."
     },
     {
       "id": "crypto-door-059",
@@ -185,7 +209,7 @@
       "kind": "crypto-acquisition",
       "operations": ["randomUUID"],
       "tier": "server-runtime",
-      "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
+      "review": "The boot-pinned filesystem membrane uses UUID entropy only for collision-resistant exclusive staging names beneath verified roots, including project-quality configuration; callers receive confined filesystem operations rather than a generic entropy primitive."
     },
     {
       "id": "crypto-door-020",
@@ -228,20 +252,28 @@
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
     {
+      "id": "crypto-door-create-kovo-example-assets-build",
+      "file": "packages/create-kovo/scripts/build-example-assets.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind embedded example-asset source bytes and their generated manifest; they acquire no entropy, key material, or keyed operation."
+    },
+    {
+      "id": "crypto-door-create-kovo-example-assets-runtime",
+      "file": "packages/create-kovo/src/example-assets.ts",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests re-verify embedded example-asset bytes before materialization; they acquire no entropy, key material, or keyed operation."
+    },
+    {
       "id": "crypto-door-verify-certificate",
       "file": "packages/verify/src/index.ts",
       "kind": "digest",
       "operations": ["createHash"],
       "tier": "build-tooling",
       "review": "Standalone certificate verification hashes artifact bytes only; it never acquires secret-key or random authority."
-    },
-    {
-      "id": "crypto-door-026",
-      "file": "packages/server/src/app-document.ts",
-      "kind": "crypto-acquisition",
-      "operations": ["randomBytes"],
-      "tier": "server-runtime",
-      "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
     {
       "id": "crypto-door-027",
@@ -285,7 +317,7 @@
         "verify"
       ],
       "tier": "server-runtime",
-      "review": "Boot-pinned, known-answer-tested primitive owner; only closed purpose-minimal handles leave this module."
+      "review": "Boot-pinned, known-answer-tested primitive owner; only closed handles or fixed-purpose outputs leave it, including session-fingerprint fallback and process-local live-target audience entropy."
     },
     {
       "id": "crypto-door-058",
@@ -300,14 +332,6 @@
       "file": "packages/server/src/internal/data-plane-static-analysis-intrinsics.ts",
       "kind": "crypto-acquisition",
       "operations": ["createHash", "createHmac", "randomUUID"],
-      "tier": "server-runtime",
-      "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
-    },
-    {
-      "id": "crypto-door-034",
-      "file": "packages/server/src/live-target-app-identity.ts",
-      "kind": "crypto-acquisition",
-      "operations": ["randomUUID"],
       "tier": "server-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
@@ -357,7 +381,7 @@
       "kind": "crypto-acquisition",
       "operations": ["createHash", "randomBytes"],
       "tier": "server-runtime",
-      "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
+      "review": "The boot-pinned response-security membrane owns bounded random bytes, UUIDs, and SHA-256 controls for response operations and non-authenticating diagnostic correlation IDs; these runtime controls are not provenance or security proof."
     },
     {
       "id": "crypto-door-041",
@@ -366,6 +390,118 @@
       "operations": ["randomBytes"],
       "tier": "server-runtime",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
+    },
+    {
+      "id": "crypto-door-test-harness-artifact",
+      "file": "packages/test/src/harness-artifact.ts",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind bounded test-harness artifact bytes and identities; they acquire no entropy, key material, or keyed operation."
+    },
+    {
+      "id": "crypto-door-app-contract-g23",
+      "file": "scripts/app-contract-g23-gate.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind the sorted app-contract consumer source corpus and its reported identity; they acquire no entropy, key material, or keyed operation."
+    },
+    {
+      "id": "crypto-door-app-contract-type-budget",
+      "file": "scripts/app-contract-type-budget-gate.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests verify bounded type-budget criteria, fixture, and compiler configuration bytes; they acquire no entropy, key material, or keyed operation."
+    },
+    {
+      "id": "crypto-door-pack-security",
+      "file": "scripts/check-pack-security.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests compare create-kovo example assets and their authenticated manifest; they acquire no entropy, key material, or keyed operation."
+    },
+    {
+      "id": "crypto-door-packed-create-kovo-examples",
+      "file": "scripts/check-packed-create-kovo-examples.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 and SHA-512 digests authenticate the pack manifest and recheck snapshot and materialized tarball bytes; they acquire no entropy, key material, or keyed operation."
+    },
+    {
+      "id": "crypto-door-packed-preset-consumers",
+      "file": "scripts/check-packed-preset-consumers.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests verify preset entry bytes against authenticated artifact integrity; they acquire no entropy, key material, or keyed operation."
+    },
+    {
+      "id": "crypto-door-devex-golden-contract",
+      "file": "scripts/devex-golden-contract.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind canonical commands, scenario contracts, and runner identities; they acquire no entropy, key material, or keyed operation."
+    },
+    {
+      "id": "crypto-door-external-evaluator-evidence",
+      "file": "scripts/external-evaluator-evidence.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind the evaluator contract, artifact, transcript, and public key; Ed25519 shape and signature checks route through the reviewed certificate-signature door."
+    },
+    {
+      "id": "crypto-door-full-catalog-reproducer",
+      "file": "scripts/full-catalog-reproducer.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind the authenticated packed manifest and full-catalog runner observation; they acquire no entropy, key material, or keyed operation."
+    },
+    {
+      "id": "crypto-door-g11-cloud-run-journey",
+      "file": "scripts/g11-cloud-run-journey.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind bounded Docker, configuration, public-response, and build-token evidence; they acquire no entropy, key material, or keyed operation."
+    },
+    {
+      "id": "crypto-door-generate-browser-deferred-app-runtime",
+      "file": "scripts/generate-browser-deferred-app-runtime.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Domain-separated non-keyed SHA-256 digests bind generated browser-runtime representation and module href identity; they acquire no entropy, key material, or keyed operation."
+    },
+    {
+      "id": "crypto-door-golden-journey",
+      "file": "scripts/golden-journey.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests authenticate and bind the packed-manifest inputs used by golden journeys; they acquire no entropy, key material, or keyed operation."
+    },
+    {
+      "id": "crypto-door-release-artifact-inspection",
+      "file": "scripts/release-artifact-inspection.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind inventory manifests, packages, authored and built bytes, commands, and runtime-wire evidence; they acquire no entropy, key material, or keyed operation."
+    },
+    {
+      "id": "crypto-door-site-content-api-reference",
+      "file": "site/src/content.ts",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests validate generated API references against source packages and the public manifest; they acquire no entropy, key material, or keyed operation."
     },
     {
       "id": "crypto-door-042",
@@ -509,7 +645,7 @@
       "kind": "crypto-acquisition",
       "operations": ["createHash", "createPrivateKey", "createPublicKey", "sign", "verify"],
       "tier": "build-tooling",
-      "review": "The sealed certificate signer accepts only caller-supplied PKCS8 Ed25519 key bytes, emits one fixed detached envelope, and keeps verification beside signing so the generator remains authority-free."
+      "review": "Script-side Ed25519 authority accepts caller-supplied PKCS8 bytes for the certificate-signature envelope and exposes boolean-only SPKI shape and detached-verification helpers to reviewed evidence gates; it generates no key material or entropy and returns no key objects."
     },
     {
       "id": "crypto-door-kovo-certificate-format",
