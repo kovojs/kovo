@@ -57,9 +57,9 @@ describe('known-failure register', () => {
     expect(validateRegister(register)).toEqual([]);
     expect(register.entries.map((entry) => entry.id)).toEqual(BASELINE_KNOWN_FAILURE_IDS);
     expect(knownFailureSummary(register)).toEqual({
-      executable: 1,
+      executable: 0,
       'pending-repro': 0,
-      retired: 9,
+      retired: 10,
     });
     expect(
       register.entries.every(
@@ -335,20 +335,21 @@ describe('known-failure register', () => {
   });
 
   it('accepts only a bounded row-authenticated result as expected failure or unexpected pass', () => {
-    const xfail = runKnownFailureProbes(register, {
+    const executableRegister = registerWithExecutableDevReady();
+    const xfail = runKnownFailureProbes(executableRegister, {
       repoRoot,
       packedManifest: ownershipLedgerPath,
       ledgerResolver,
       spawnSync: (_executable, args) => {
         const id = commandId(args);
-        const entry = register.entries.find((candidate) => candidate.id === id);
+        const entry = executableRegister.entries.find((candidate) => candidate.id === id);
         return processResult(
           id,
           entry?.state === 'retired' ? 'desired-behavior' : 'defect-reproduced',
         );
       },
     });
-    const xpass = runKnownFailureProbes(register, {
+    const xpass = runKnownFailureProbes(executableRegister, {
       repoRoot,
       packedManifest: ownershipLedgerPath,
       ledgerResolver,
@@ -433,6 +434,7 @@ describe('known-failure register', () => {
     expect(executed).toContain('KF-DEVEX-003');
     expect(passing.results.filter((result) => result.status === 'retired-pass')).toEqual([
       { id: 'KF-DEVEX-001', status: 'retired-pass' },
+      { id: 'KF-DEVEX-002', status: 'retired-pass' },
       { id: 'KF-DEVEX-003', status: 'retired-pass' },
       { id: 'KF-DEVEX-004', status: 'retired-pass' },
       { id: 'KF-DEVEX-005', status: 'retired-pass' },
@@ -455,6 +457,7 @@ describe('known-failure register', () => {
     expect(regression.pass).toBe(false);
     expect(regression.results.filter((result) => result.status === 'retired-regression')).toEqual([
       { id: 'KF-DEVEX-001', status: 'retired-regression' },
+      { id: 'KF-DEVEX-002', status: 'retired-regression' },
       { id: 'KF-DEVEX-003', status: 'retired-regression' },
       { id: 'KF-DEVEX-004', status: 'retired-regression' },
       { id: 'KF-DEVEX-005', status: 'retired-regression' },
@@ -782,6 +785,14 @@ describe('known-failure register', () => {
     ).toBeNull();
   });
 });
+
+function registerWithExecutableDevReady() {
+  const copy = JSON.parse(JSON.stringify(register));
+  const devReady = copy.entries.find((entry) => entry.id === 'KF-DEVEX-002');
+  devReady.state = 'executable';
+  delete devReady.retirement;
+  return copy;
+}
 
 function validateRegister(value) {
   return validateKnownFailureRegister(value, { repoRoot, ledgerResolver });

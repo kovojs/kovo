@@ -50,7 +50,7 @@
         "fixTrack": "Track 1",
         "scorecardGates": ["G2"]
       },
-      "state": "executable",
+      "state": "retired",
       "probe": {
         "path": "scripts/known-failure-probes/packed-first-loop-contract.mjs",
         "command": [
@@ -66,7 +66,11 @@
         "packedInput": true,
         "resultSchema": "kovo-known-failure-probe-result/v1"
       },
-      "desiredBehavior": "A packed scaffold prints its readiness URL and posture immediately after the server listens."
+      "desiredBehavior": "A packed scaffold prints its readiness URL and posture immediately after the server listens.",
+      "retirement": {
+        "evidence": "The authenticated packed strict-port dev probe completes initial app activation before exposing the listener, then emits the complete framework-owned readiness report inside the five-second post-bind contract.",
+        "verification": "node scripts/known-failure-probes/packed-first-loop-contract.mjs dev-ready --id KF-DEVEX-002 --packed-manifest .release/packed-packages.json"
+      }
     },
     {
       "id": "KF-DEVEX-003",
