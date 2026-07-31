@@ -17,6 +17,10 @@ export function createCommerceDemoServer(options = {}) {
     root: commerceRoot,
     configFile: fileURLToPath(new URL('../vite.config.ts', import.meta.url)),
     async loadInstanceFactory(vite, { createRequestHandler, toNodeHandler }) {
+      // The commerce domain pulls in the cold PGlite/WASM graph. Transform it through Vite's
+      // public environment API before module evaluation so a contended CI runner cannot spend
+      // Vite's entire per-fetch transport budget compiling this one dependency.
+      await vite.environments.ssr.transformRequest('/src/domain.ts');
       const appShell = await vite.ssrLoadModule('/src/app.tsx');
       const { createCommerceApplication } = appShell;
       if (typeof createCommerceApplication !== 'function') {
