@@ -142,14 +142,18 @@ function contextOptions(context: CompiledQueryUpdateContext): ApplyCompiledQuery
     invalidQueryPlan();
   }
   return {
-    queryIdentity:
-      queryIdentity && 'value' in queryIdentity
-        ? (queryIdentity.value as CompiledQueryUpdateContext['queryIdentity'])
-        : undefined,
-    queryStore:
-      queryStore && 'value' in queryStore
-        ? (queryStore.value as CompiledQueryUpdateContext['queryStore'])
-        : undefined,
+    ...(queryIdentity && 'value' in queryIdentity && queryIdentity.value !== undefined
+      ? {
+          queryIdentity: queryIdentity.value as NonNullable<
+            CompiledQueryUpdateContext['queryIdentity']
+          >,
+        }
+      : {}),
+    ...(queryStore && 'value' in queryStore && queryStore.value !== undefined
+      ? {
+          queryStore: queryStore.value as NonNullable<CompiledQueryUpdateContext['queryStore']>,
+        }
+      : {}),
   };
 }
 

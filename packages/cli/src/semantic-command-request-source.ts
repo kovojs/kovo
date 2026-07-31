@@ -17,7 +17,11 @@ export function renderSemanticCommandRequestSource(): string {
     (entry) => entry.processLifecycle === 'one-shot',
   ).flatMap((entry) =>
     entry.usage
-      .filter((form) => (form.processLifecycle ?? entry.processLifecycle) === 'one-shot')
+      .filter(
+        (form) =>
+          ('processLifecycle' in form ? form.processLifecycle : entry.processLifecycle) ===
+          'one-shot',
+      )
       .flatMap((form) =>
         constrainedArgumentSelections(entry, form).map((selection) =>
           renderRequestVariant(entry, form, selection),
