@@ -26,16 +26,15 @@ const repoRoot = process.cwd();
 function appSource(refs: { click: string; href: string }): string {
   return [
     '/** @jsxImportSource @kovojs/server */',
-    "import { createApp } from '@kovojs/server/internal/fixture-app';\nimport { publicAccess, route } from '@kovojs/server';\nimport { trustedHtml } from '@kovojs/browser';",
+    "import { defineKovo } from '@kovojs/server';\nimport { trustedHtml } from '@kovojs/browser';",
     "import { CounterIsland } from './components/counter-island.tsx';",
     '',
     'void CounterIsland;',
-    'export default createApp({',
-    '  routes: [',
-    "    route('/', {",
-    "      access: publicAccess('browser build fixture'),",
-    '      page: () => trustedHtml(',
-    '        ' +
+    "const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000041' });",
+    "const homeRoute = app.route('/', {",
+    "  access: app.publicAccess('browser build fixture'),",
+    '  page: () => trustedHtml(',
+    '    ' +
       JSON.stringify(
         `<main><section kovo-c="counter-island" kovo-state="{&quot;count&quot;:0,&quot;label&quot;:&quot;ready&quot;}">` +
           `<button data-testid="counter" type="button" on:click="${refs.click}" data-kovo-module-allowlist="${refs.href}">bump</button>` +
@@ -43,10 +42,10 @@ function appSource(refs: { click: string; href: string }): string {
           `</section></main>`,
       ) +
       ',',
-    '      ),',
-    '    }),',
-    '  ],',
+    "    { reason: 'browser build fixture exercises compiler-emitted handler references' },",
+    '  ),',
     '});',
+    'export default app.assemble({ routes: [homeRoute] });',
     '',
   ].join('\n');
 }
@@ -276,20 +275,18 @@ describe('kovo build — browser drive (S1)', () => {
         appPath,
         [
           '/** @jsxImportSource @kovojs/server */',
-          "import { createApp } from '@kovojs/server/internal/fixture-app';",
-          "import { publicAccess, route } from '@kovojs/server';",
+          "import { defineKovo } from '@kovojs/server';",
           "import { trustedHtml } from '@kovojs/browser';",
           "import { StateTextIsland } from './components/state-text-island.tsx';",
           '',
           'void StateTextIsland;',
           '',
-          'export default createApp({',
-          '  routes: [',
-          "    route('/', {",
-          "      access: publicAccess('browser state text fixture'),",
-          '      page: () =>',
-          '        trustedHtml(',
-          '          ' +
+          "const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000042' });",
+          "const homeRoute = app.route('/', {",
+          "  access: app.publicAccess('browser state text fixture'),",
+          '  page: () =>',
+          '    trustedHtml(',
+          '      ' +
             JSON.stringify(
               `<main><section kovo-c="state-text-island" kovo-state="{&quot;urgentOnly&quot;:false,&quot;clicks&quot;:0}">` +
                 `<button data-testid="priority" type="button" aria-pressed="false" data-state="all" on:click="${refs.click}" data-kovo-module-allowlist="${refs.href}" data-bind="${refs.text}" data-bind:aria-pressed="${refs.ariaPressed}" data-bind:data-state="${refs.dataState}">urgent</button>` +
@@ -297,10 +294,10 @@ describe('kovo build — browser drive (S1)', () => {
                 `</section></main>`,
             ) +
             ',',
-          '        ),',
-          '    }),',
-          '  ],',
+          "      { reason: 'browser state-text fixture exercises compiler-emitted bindings' },",
+          '    ),',
           '});',
+          'export default app.assemble({ routes: [homeRoute] });',
           '',
         ].join('\n'),
         'utf8',
@@ -399,20 +396,18 @@ describe('kovo build — browser drive (S1)', () => {
         appPath,
         [
           '/** @jsxImportSource @kovojs/server */',
-          "import { createApp } from '@kovojs/server/internal/fixture-app';",
-          "import { publicAccess, route } from '@kovojs/server';",
+          "import { defineKovo } from '@kovojs/server';",
           "import { trustedHtml } from '@kovojs/browser';",
           "import { CounterIsland } from './components/counter-island.tsx';",
           '',
           'void CounterIsland;',
           '',
-          'export default createApp({',
-          '  routes: [',
-          "    route('/', {",
-          "      access: publicAccess('browser authored island fixture'),",
-          '      page: () =>',
-          '        trustedHtml(',
-          '          ' +
+          "const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000043' });",
+          "const homeRoute = app.route('/', {",
+          "  access: app.publicAccess('browser authored island fixture'),",
+          '  page: () =>',
+          '    trustedHtml(',
+          '      ' +
             JSON.stringify(
               `<main><section kovo-c="counter-island" kovo-state="{&quot;count&quot;:0,&quot;label&quot;:&quot;ready&quot;}">` +
                 `<button data-testid="counter" type="button" on:click="${refs.click}" data-kovo-module-allowlist="${refs.href}">bump</button>` +
@@ -422,10 +417,10 @@ describe('kovo build — browser drive (S1)', () => {
                 `</section></main>`,
             ) +
             ',',
-          '        ),',
-          '    }),',
-          '  ],',
+          "      { reason: 'browser island fixture exercises compiler-emitted client modules' },",
+          '    ),',
           '});',
+          'export default app.assemble({ routes: [homeRoute] });',
           '',
         ].join('\n'),
         'utf8',
