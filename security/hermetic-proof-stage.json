@@ -14,7 +14,7 @@
     "orchestratorSha256": "23ee16bec40738a92b7de1f2170a3cc5adecf455098c808ec7240d9d1ec4dda9",
     "signing": {
       "implementation": "scripts/kovo-certificate-signature.mjs#signKovoCertificate",
-      "sourceTreeSha256": "0285a5e7c56150ae1b3ca702109ca66ccb2347442c86cb6f8a40ddaeb24c0107"
+      "sourceTreeSha256": "b6f7c2b972b0b68a756f7fe1c69e094872017a2b54eb8438b7f5dddab99bbb7c"
     }
   },
   "linuxRunner": {
