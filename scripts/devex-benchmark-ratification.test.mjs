@@ -288,7 +288,7 @@ function benchmarkReport() {
   };
   definition.provenance.sourceCommit = sourceCommit;
   definition.provenance.sourceTree = 'clean';
-  return runBenchmarkScenario(definition, {
+  const report = runBenchmarkScenario(definition, {
     allowFixtureScenario: true,
     observedEnvironment: {
       ...definition.environment,
@@ -341,6 +341,39 @@ function benchmarkReport() {
       };
     },
   });
+  for (const observation of report.phaseCensus.analysisInputs) {
+    if (observation.phase !== 'oneFileIncremental') continue;
+    observation.diagnosticPhases = ratifiableIncrementalPhases(observation.revision);
+  }
+  return report;
+}
+
+function ratifiableIncrementalPhases(revision) {
+  const invariant = new Set([
+    'lifecycle-policy',
+    'config-trust',
+    'typescript',
+    'project-quality',
+    'sound-subset',
+  ]);
+  return [
+    ['lifecycle-policy', 'not-applicable'],
+    ['config-trust', 'executed'],
+    ['typescript', 'not-applicable'],
+    ['project-quality', 'not-applicable'],
+    ['sound-subset', 'not-applicable'],
+    ['session-authority', 'executed'],
+    ['app-source-trust', 'executed'],
+    ['stylesheet', 'executed'],
+    ['app-evaluation', 'executed'],
+    ['build-check-graph', 'executed'],
+    ['graph-diagnostics', 'executed'],
+  ].map(([name, status]) => ({
+    durationMs: 0,
+    inputDigest: `sha256:${invariant.has(name) ? '7'.repeat(64) : String(revision).repeat(64)}`,
+    name,
+    status,
+  }));
 }
 
 function goldenReport() {
@@ -491,6 +524,7 @@ function fullCatalogReport() {
         durationMs: 1,
         name,
         peakProcessTreeRssBytes,
+        signal: null,
         status: 0,
       })),
       peakProcessTreeRssBytes,

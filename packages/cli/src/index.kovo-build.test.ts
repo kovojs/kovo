@@ -24,8 +24,7 @@ import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { createApp } from '@kovojs/server/internal/fixture-app';
-import { route } from '@kovojs/server';
+import { defineKovo } from '@kovojs/server';
 import {
   clientModuleRepresentationDigest,
   parseVersionedClientModuleTarget,
@@ -174,8 +173,8 @@ describe('kovo build', () => {
         await expect(document.text()).resolves.toContain('<main>Cart 0</main>');
         expect(document.status).toBe(200);
 
-        const mutationResponse = await fetch(`${origin}/_m/cart/add`, {
-          body: buildFixtureMutationBody('cart/add', { quantity: '2' }),
+        const mutationResponse = await fetch(`${origin}/_m/app/add-to-cart`, {
+          body: buildFixtureMutationBody('app/add-to-cart', { quantity: '2' }),
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
             Origin: origin,
@@ -185,9 +184,9 @@ describe('kovo build', () => {
         });
         expect(mutationResponse.status).toBe(303);
 
-        const queryResponse = await fetch(`${origin}/_q/cart`);
+        const queryResponse = await fetch(`${origin}/_q/app/cart-query`);
         await expect(queryResponse.text()).resolves.toBe(
-          '<kovo-query name="cart" href="/_q/cart">{"count":2}</kovo-query>',
+          '<kovo-query name="app/cart-query" href="/_q/app/cart-query">{"count":2}</kovo-query>',
         );
 
         const clientModuleResponse = await fetch(`${origin}${BUILD_FIXTURE_CLIENT_PATH}`);
@@ -401,7 +400,10 @@ export default app.assemble({
   routes: [
     app.route('/', {
       access: app.publicAccess('static asset fixture'),
-      page: () => trustedHtml('<main><img src="/logo.svg" alt="Logo"></main>'),
+      page: () =>
+        trustedHtml('<main><img src="/logo.svg" alt="Logo"></main>', {
+          reason: 'static asset fixture',
+        }),
     }),
   ],
 });
@@ -1007,7 +1009,7 @@ export default app.assemble({ queries: [contacts] });
         mainAsync(['build', appPath, '--out', outDir, '--format', 'json']),
       );
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
-      const callStart = querySource.indexOf('query({');
+      const callStart = querySource.indexOf('app.query({');
       const callEnd = querySource.indexOf(');', callStart) + 1;
 
       expect(exitCode).toBe(1);
@@ -1228,7 +1230,7 @@ import { defineKovo } from '@kovojs/server';
 const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { guards, s } from '@kovojs/server';
 
-const unsafe = app.mutation('auth/unsafe-cookie', {
+const unsafe = app.mutation({
   access: app.publicAccess('machine callback'),
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
@@ -1239,7 +1241,7 @@ const unsafe = app.mutation('auth/unsafe-cookie', {
     return { ok: true };
   },
 });
-const unsafeAuthorization = app.mutation('auth/unsafe-authorization', {
+const unsafeAuthorization = app.mutation({
   access: app.publicAccess('browser Authorization callback'),
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
@@ -1249,7 +1251,7 @@ const unsafeAuthorization = app.mutation('auth/unsafe-authorization', {
     return { ok: true };
   },
 });
-const unsafeProxyIdentity = app.mutation('auth/unsafe-proxy-identity', {
+const unsafeProxyIdentity = app.mutation({
   access: app.publicAccess('proxy identity callback'),
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
@@ -1259,7 +1261,7 @@ const unsafeProxyIdentity = app.mutation('auth/unsafe-proxy-identity', {
     return { ok: true };
   },
 });
-const unsafeCookieOutput = app.mutation('auth/unsafe-cookie-output', {
+const unsafeCookieOutput = app.mutation({
   access: app.publicAccess('cookie-minting callback'),
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
@@ -1268,7 +1270,7 @@ const unsafeCookieOutput = app.mutation('auth/unsafe-cookie-output', {
     context.setCookie('session', 'attacker');
   },
 });
-const unsafeFakeThis = app.mutation('auth/unsafe-fake-this', {
+const unsafeFakeThis = app.mutation({
   access: app.publicAccess('fake this callback'),
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
@@ -1278,7 +1280,7 @@ const unsafeFakeThis = app.mutation('auth/unsafe-fake-this', {
     return { ok: true };
   },
 });
-const safe = app.mutation('auth/signed-machine', {
+const safe = app.mutation({
   access: app.publicAccess('signed machine callback'),
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
@@ -1290,14 +1292,14 @@ const safe = app.mutation('auth/signed-machine', {
 const referencedHandler = (_input, request) => ({
   signature: request.headers.get('X-Machine-Signature'),
 });
-const unproven = app.mutation('auth/unproven-handler', {
+const unproven = app.mutation({
   access: app.publicAccess('referenced machine callback'),
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
   handler: referencedHandler,
 });
-const guarded = app.mutation('auth/session-guarded', {
+const guarded = app.mutation({
   access: [guards.authed()],
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
@@ -1307,7 +1309,7 @@ const guarded = app.mutation('auth/session-guarded', {
   },
 });
 const customGuard = () => true;
-const compositeGuarded = app.mutation('auth/composite-opaque-guard', {
+const compositeGuarded = app.mutation({
   access: [guards.all(customGuard, guards.rateLimit({ max: 10, per: 'ip' }))],
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
@@ -1316,7 +1318,7 @@ const compositeGuarded = app.mutation('auth/composite-opaque-guard', {
     return { signature: request.headers.get('X-Machine-Signature') };
   },
 });
-const globalRateGuarded = app.mutation('auth/global-rate-guard', {
+const globalRateGuarded = app.mutation({
   access: [guards.rateLimit({ max: 10, per: 'global' })],
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
@@ -1349,16 +1351,16 @@ export default app.assemble({
       expect(exitCode).toBe(1);
       expect(stdout).not.toHaveBeenCalled();
       expect(errorOutput).toContain('kovo build check preflight failed');
-      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/unsafe-cookie');
-      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/unsafe-authorization');
-      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/unsafe-proxy-identity');
-      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/unsafe-cookie-output');
-      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/unsafe-fake-this');
-      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/unproven-handler');
-      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/session-guarded');
-      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/composite-opaque-guard');
-      expect(errorOutput).not.toContain('ERROR KV418 MUTATION auth/signed-machine');
-      expect(errorOutput).not.toContain('ERROR KV418 MUTATION auth/global-rate-guard');
+      expect(errorOutput).toContain('ERROR KV418 MUTATION app/unsafe');
+      expect(errorOutput).toContain('ERROR KV418 MUTATION app/unsafe-authorization');
+      expect(errorOutput).toContain('ERROR KV418 MUTATION app/unsafe-proxy-identity');
+      expect(errorOutput).toContain('ERROR KV418 MUTATION app/unsafe-cookie-output');
+      expect(errorOutput).toContain('ERROR KV418 MUTATION app/unsafe-fake-this');
+      expect(errorOutput).toContain('ERROR KV418 MUTATION app/unproven');
+      expect(errorOutput).toContain('ERROR KV418 MUTATION app/guarded');
+      expect(errorOutput).toContain('ERROR KV418 MUTATION app/composite-guarded');
+      expect(errorOutput).not.toContain('ERROR KV418 MUTATION app/safe');
+      expect(errorOutput).not.toContain('ERROR KV418 MUTATION app/global-rate-guarded');
       expect(existsSync(outDir)).toBe(false);
     } finally {
       stdout.mockRestore();
@@ -1386,7 +1388,7 @@ import { defineKovo } from '@kovojs/server';
 const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { s } from '@kovojs/server';
 
-const unsafe = app.mutation('auth/map-poison', {
+const unsafe = app.mutation({
   access: app.publicAccess('machine callback'),
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
@@ -1445,7 +1447,7 @@ import { defineKovo } from '@kovojs/server';
 const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { s } from '@kovojs/server';
 
-const unsafe = app.mutation('auth/lowercase-poison', {
+const unsafe = app.mutation({
   access: app.publicAccess('machine callback'),
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
@@ -1483,7 +1485,7 @@ export default app.assemble({ mutations: [unsafe] });
     }
   }, 90_000);
 
-  it('raises KV418 for a csrf:false Cookie read whose runtime key is nonliteral', async () => {
+  it('rejects a nonliteral mutation identity before evaluating its csrf:false handler', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-dynamic-cookie-authority-'));
     const appPath = join(root, 'app.mjs');
     const outDir = join(root, 'dist');
@@ -1524,7 +1526,7 @@ export default app.assemble({ mutations: [dynamicKey] });
 
       expect(exitCode).toBe(1);
       expect(stdout).not.toHaveBeenCalled();
-      expect(errorOutput).toContain('ERROR KV235 app.mjs:5');
+      expect(errorOutput).toContain('ERROR KV235 app.mjs:7');
       expect(errorOutput).toContain(
         'App source hard-codes a mutation registry identity; use the source-derived object form.',
       );
@@ -1615,7 +1617,7 @@ export default app.assemble({ mutations: [outside, decoy] });
     }
   }, 90_000);
 
-  it('fails a colliding bare-package handler closed before the runtime fingerprint join', async () => {
+  it('fails a bare-package handler closed before the runtime fingerprint join despite a safe decoy', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-authority-fingerprint-'));
     const appPath = join(root, 'app.mjs');
     const packageRoot = join(root, 'node_modules/unsafe-authority-fixture');
@@ -1656,7 +1658,7 @@ export function unsafeHandler(_input, request) {
         `
 import { s } from '@kovojs/server';
 import { app } from './kovo.mjs';
-export const decoy = app.mutation('auth/colliding-handler', {
+export const decoy = app.mutation({
   access: app.publicAccess('reachable safe decoy'),
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
@@ -1682,7 +1684,7 @@ mutableCrypto.createHash = () => ({
   update() { return this; },
 });
 syncBuiltinESMExports();
-const actual = app.mutation('auth/colliding-handler', {
+const actual = app.mutation({
   access: app.publicAccess('bare-package callback'),
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
@@ -1739,7 +1741,7 @@ import { guards, s } from '@kovojs/server';import { trustedHtml } from '@kovojs/
 
 const allow = guards.rateLimit({ max: 100, per: 'global' });
 
-const adminQuery = app.query('adminOrders', {
+const adminQuery = app.query({
   args: s.object({ id: s.string() }),
   guard: allow,
   load(input) {
@@ -1747,7 +1749,7 @@ const adminQuery = app.query('adminOrders', {
   },
 });
 
-const adminMutation = app.mutation('admin/update', {
+const adminMutation = app.mutation({
   csrf: false,
   csrfJustification: 'non-browser regression fixture',
   guard: allow,
@@ -1782,7 +1784,7 @@ export default app.assemble({
     });
     const allowStart = appSource.indexOf('s.string().allowControlChars()');
     const allowEnd = allowStart + 's.string().allowControlChars()'.length;
-    const csrfStart = appSource.indexOf("mutation('admin/update'");
+    const csrfStart = appSource.indexOf('mutation({');
     const csrfEnd = appSource.indexOf('\n});', csrfStart) + '\n})'.length;
     const htmlStart = appSource.indexOf(
       "trustedHtml('<main>Admin</main>', { reason: 'build access fixture' })",
@@ -1844,7 +1846,7 @@ export default app.assemble({
         expect.objectContaining({
           csrf: 'exempt',
           csrfJustification: 'non-browser regression fixture',
-          key: 'admin/update',
+          key: 'app/admin-mutation',
         }),
       );
       expect(graph.trustEscapes).toEqual(
@@ -1855,7 +1857,7 @@ export default app.assemble({
           }),
           expect.objectContaining({
             kind: 'csrfFalse',
-            root: 'mutation:admin/update',
+            root: 'mutation:app/admin-mutation',
           }),
           expect.objectContaining({
             kind: 'trustedHtml',
@@ -1877,7 +1879,7 @@ export default app.assemble({
           expect.objectContaining({
             artifactSubject: graph.runtimePosture?.artifactSubject,
             door: 'csrf:false',
-            root: 'mutation:admin/update',
+            root: 'mutation:app/admin-mutation',
             schema: 'kovo.escape-census-review/v1',
             sites: [csrfSite],
           }),
@@ -2538,8 +2540,8 @@ import { domain, s } from '@kovojs/server';
 
 const contactDomain = domain();
 const contactsDb = { count: 0 };
-const contactsQuery = app.query('contacts', {
-  access: { kind: 'public', reason: 'fragment-only optimistic fixture' },
+const contactsQuery = app.query({
+  access: app.publicAccess('fragment-only optimistic fixture'),
   load: () => ({ count: contactsDb.count }),
   output: s.object({ count: s.number() }),
   reads: [contactDomain],
@@ -2552,10 +2554,11 @@ const ContactsRegion = component({
   ),
 });
 
-const addContact = app.mutation('contacts/add', {
-  access: { kind: 'public', reason: 'fragment-only optimistic fixture' },
-  input: s.object({}),
-  optimistic: { contacts: (draft) => draft },
+const addContactInput = s.object({});
+const addContact = app.mutation({
+  access: app.publicAccess('fragment-only optimistic fixture'),
+  input: addContactInput,
+  optimistic: [contactsQuery.optimistic(addContactInput, (draft) => draft)],
   registry: {
     queries: [contactsQuery],
     touches: [contactDomain],
@@ -2571,7 +2574,7 @@ export default app.assemble({
   queries: [contactsQuery],
   routes: [
     app.route('/', {
-      access: { kind: 'public', reason: 'fragment-only optimistic fixture' },
+      access: app.publicAccess('fragment-only optimistic fixture'),
       page: () => <main><ContactsRegion /></main>,
     }),
   ],
@@ -2585,8 +2588,10 @@ export default app.assemble({
       );
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(1);
-      expect(errorOutput).toContain('ERROR BUILD_FATAL KV310 contacts/add -> contacts');
-      expect(errorOutput).toContain('WARN KV310 contacts/add -> contacts');
+      expect(errorOutput).toContain(
+        'ERROR BUILD_FATAL KV310 app/add-contact -> app/contacts-query',
+      );
+      expect(errorOutput).toContain('WARN KV310 app/add-contact -> app/contacts-query');
       expect(existsSync(outDir)).toBe(false);
     } finally {
       stdout.mockRestore();
@@ -2617,12 +2622,13 @@ import { trustedHtml } from '@kovojs/browser';
 import { app, contactDomain } from './src/kovo.js';
 import { contactsQuery } from './src/queries.js';
 
-const addContact = app.mutation('mutations/add-contact', {
+const addContactInput = s.object({ name: s.string() });
+const addContact = app.mutation({
   access: app.publicAccess('source-derived consumer fixture'),
   csrf: false,
   csrfJustification: 'non-browser regression fixture',
-  input: s.object({ name: s.string() }),
-  optimistic: { 'queries/contacts-query': (draft) => draft },
+  input: addContactInput,
+  optimistic: [contactsQuery.optimistic(addContactInput, (draft) => draft)],
   registry: { touches: [contactDomain] },
   handler() {
     return { ok: true };
@@ -2709,7 +2715,7 @@ export const ContactsRegion = defineRegion({
       );
       expect(graph.tasks).toContainEqual({
         key: 'app/record-contact-task',
-        runMutations: ['addContact'],
+        runMutations: ['app/add-contact'],
       });
     } finally {
       stdout.mockRestore();
@@ -2741,7 +2747,7 @@ import { domain, s } from '@kovojs/server';import { trustedHtml } from '@kovojs/
 const contactDomain = domain('contact');
 const authDomain = domain('auth');
 
-const contactsQuery = app.query('queries/contacts-query', {
+const contactsQuery = app.query({
   access: app.publicAccess('derived invalidates fixture'),
   reads: [contactDomain],
   load() {
@@ -2749,7 +2755,7 @@ const contactsQuery = app.query('queries/contacts-query', {
   },
 });
 
-const contactDetailQuery = app.query('queries/contact-detail-query', {
+const contactDetailQuery = app.query({
   access: app.publicAccess('derived invalidates fixture'),
   reads: [contactDomain],
   load() {
@@ -2757,7 +2763,7 @@ const contactDetailQuery = app.query('queries/contact-detail-query', {
   },
 });
 
-const authQuery = app.query('queries/auth-session-query', {
+const authQuery = app.query({
   access: app.publicAccess('derived invalidates fixture'),
   reads: [authDomain],
   load() {
@@ -2765,15 +2771,15 @@ const authQuery = app.query('queries/auth-session-query', {
   },
 });
 
-const updateContact = app.mutation('mutations/update-contact', {
+const updateContact = app.mutation({
   access: app.publicAccess('derived invalidates fixture'),
   csrf: false,
   csrfJustification: 'non-browser regression fixture',
   input: s.object({ name: s.string() }),
-  optimistic: {
-    'queries/contacts-query': 'await-fragment',
-    'queries/contact-detail-query': 'await-fragment',
-  },
+  optimistic: [
+    contactsQuery.optimistic('await-fragment'),
+    contactDetailQuery.optimistic('await-fragment'),
+  ],
   registry: {
     queries: [contactsQuery],
     touches: [contactDomain],
@@ -2783,12 +2789,12 @@ const updateContact = app.mutation('mutations/update-contact', {
   },
 });
 
-const signIn = app.mutation('mutations/sign-in', {
+const signIn = app.mutation({
   access: app.publicAccess('derived invalidates fixture'),
   csrf: false,
   csrfJustification: 'non-browser regression fixture',
   input: s.object({ email: s.string() }),
-  optimistic: { 'queries/auth-session-query': 'await-fragment' },
+  optimistic: [authQuery.optimistic('await-fragment')],
   registry: {
     queries: [authQuery],
     touches: [authDomain],
@@ -2823,31 +2829,22 @@ export default app.assemble({
         mutations: { invalidates?: string[]; key: string }[];
       };
       expect(
-        graph.mutations.find((mutation) => mutation.key === 'mutations/update-contact')
-          ?.invalidates,
-      ).toEqual([
-        'queries/auth-session-query',
-        'queries/contact-detail-query',
-        'queries/contacts-query',
-      ]);
+        graph.mutations.find((mutation) => mutation.key === 'app/update-contact')?.invalidates,
+      ).toEqual(['app/auth-query', 'app/contact-detail-query', 'app/contacts-query']);
       expect(
-        graph.mutations.find((mutation) => mutation.key === 'mutations/sign-in')?.invalidates,
-      ).toEqual([
-        'queries/auth-session-query',
-        'queries/contact-detail-query',
-        'queries/contacts-query',
-      ]);
+        graph.mutations.find((mutation) => mutation.key === 'app/sign-in')?.invalidates,
+      ).toEqual(['app/auth-query', 'app/contact-detail-query', 'app/contacts-query']);
 
       stdout.mockClear();
-      expect(
-        main(['explain', 'mutation', 'mutations/update-contact', '--optimistic', graphPath]),
-      ).toBe(0);
+      expect(main(['explain', 'mutation', 'app/update-contact', '--optimistic', graphPath])).toBe(
+        0,
+      );
       const explainOutput = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(explainOutput).toContain(
-        'invalidates: queries/auth-session-query,queries/contact-detail-query,queries/contacts-query',
+        'invalidates: app/auth-query,app/contact-detail-query,app/contacts-query',
       );
-      expect(explainOutput).toContain('OPTIMISTIC queries/contact-detail-query await-fragment');
-      expect(explainOutput).not.toContain('OPTIMISTIC queries/auth-session-query');
+      expect(explainOutput).toContain('OPTIMISTIC app/contact-detail-query await-fragment');
+      expect(explainOutput).not.toContain('OPTIMISTIC app/auth-query');
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
@@ -3215,8 +3212,8 @@ export const memberships = pgTable('memberships', {
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode).toBe(1);
       expect(stdout).not.toHaveBeenCalled();
-      expect(errorOutput).toContain('ERROR BUILD_FATAL KV310 cart/add -> cart');
-      expect(errorOutput).toContain('WARN KV310 cart/add -> cart');
+      expect(errorOutput).toContain('ERROR BUILD_FATAL KV310 app/add-to-cart -> app/cart-query');
+      expect(errorOutput).toContain('WARN KV310 app/add-to-cart -> app/cart-query');
       expect(existsSync(outDir)).toBe(false);
     } finally {
       stdout.mockRestore();
@@ -3246,11 +3243,10 @@ const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });import
 import { createStorageDownloadEndpoint } from '@kovojs/server/storage-downloads';
 
 const storage = createMemoryStorage();
-const download = createStorageDownloadEndpoint({
+const downloadEndpoint = app.endpoint(createStorageDownloadEndpoint({
   secret: '0123456789abcdef0123456789abcdef',
   storage,
-});
-const downloadEndpoint = app.endpoint(download);
+}));
 
 export default app.assemble({ endpoints: [downloadEndpoint] });
 `,
@@ -3305,7 +3301,7 @@ import { hmacSignature } from '@kovojs/core/webhooks';
 const payment = domain('payment');
 const paymentWebhookReplayStore = createMemoryWebhookReplayStore();
 
-const paymentWebhook = webhook('/webhooks/payment', {
+const paymentWebhookEndpoint = app.endpoint(webhook('/webhooks/payment', {
   handler() {
     return { ok: true };
   },
@@ -3321,8 +3317,7 @@ const paymentWebhook = webhook('/webhooks/payment', {
     secret: '${BUILD_FIXTURE_WEBHOOK_HMAC_SECRET}',
   }),
   writes: [payment],
-});
-const paymentWebhookEndpoint = app.endpoint(paymentWebhook);
+}));
 
 export default app.assemble({
   endpoints: [paymentWebhookEndpoint],
@@ -3856,7 +3851,7 @@ export const homeQuery = {
             'home-panel',
             'home-panel/home-panel',
           );
-          const loginMutationResponse = await fetch(`${origin}/_m/home/touch`, {
+          const loginMutationResponse = await fetch(`${origin}/_m/app/touch-home`, {
             body: new URLSearchParams(),
             headers: {
               'Kovo-Current-Url': `${origin}/login`,
@@ -3877,7 +3872,7 @@ export const homeQuery = {
           // under /login cannot authorize either renderer reconstruction or CSS disclosure.
           expect(loginMutationBody).toBe('');
 
-          const homeMutationResponse = await fetch(`${origin}/_m/home/touch`, {
+          const homeMutationResponse = await fetch(`${origin}/_m/app/touch-home`, {
             body: new URLSearchParams(),
             headers: {
               'Kovo-Current-Url': `${origin}/`,
@@ -3951,8 +3946,8 @@ export const homeQuery = {
         await expect(document.text()).resolves.toContain('<main>Cart 0</main>');
         expect(document.status).toBe(200);
 
-        const mutationResponse = await fetch(`${origin}/_m/cart/add`, {
-          body: buildFixtureMutationBody('cart/add', { quantity: '3' }),
+        const mutationResponse = await fetch(`${origin}/_m/app/add-to-cart`, {
+          body: buildFixtureMutationBody('app/add-to-cart', { quantity: '3' }),
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
             Origin: origin,
@@ -4047,8 +4042,8 @@ export const homeQuery = {
         await expect(document.text()).resolves.toContain('<main>Cart 0</main>');
         expect(document.status).toBe(200);
 
-        const mutationResponse = await fetch(`${origin}/_m/cart/add`, {
-          body: buildFixtureMutationBody('cart/add', { quantity: '5' }),
+        const mutationResponse = await fetch(`${origin}/_m/app/add-to-cart`, {
+          body: buildFixtureMutationBody('app/add-to-cart', { quantity: '5' }),
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
             Origin: origin,
@@ -4566,6 +4561,7 @@ function assertCompilerAuthoredAppFixture(source: string, name: string): void {
   expect(source, name).not.toMatch(
     /(?:^|[^\w.])(?:endpoint|layout|mutation|query|route|task)\s*\(/mu,
   );
+  expect(source, name).not.toMatch(/\bapp\.(?:mutation|query)\(\s*['"]/u);
   expect(source, name).not.toMatch(/\bconst\s+\w+\s*=\s*webhook\s*\(/u);
   if (source.includes('defineKovo({')) {
     expect(source, name).toMatch(
@@ -4613,15 +4609,14 @@ const app = defineKovo({
     justification: 'test harness serves the emitted app on an ephemeral loopback port',
   },
 });
-const cartQuery = app.query('cart', {
-  access: { kind: 'public', reason: 'build fixture query' },
+const cartQuery = app.query({
+  access: app.publicAccess('build fixture query'),
   load: () => ({ count: db.count }),
   reads: [cart],
 });
-const addToCart = app.mutation('cart/add', {
-  access: { kind: 'public', reason: 'build fixture mutation' },
+const addToCart = app.mutation({
+  access: app.publicAccess('build fixture mutation'),
   input: s.object({ quantity: s.number().int().min(1).default(1) }),
-  optimistic: { cart: 'await-fragment' },
   registry: {
     queries: [cartQuery],
     touches: [cart],
@@ -4637,8 +4632,8 @@ export default app.assemble({
   queries: [cartQuery],
   routes: [
     app.route('/cart', {
-      access: { kind: 'public', reason: 'build fixture route' },
-      page: () => trustedHtml('<main>Cart ') + db.count + '</main>',
+      access: app.publicAccess('build fixture route'),
+      page: () => trustedHtml(\`<main>Cart \${db.count}</main>\`, { reason: 'build fixture HTML' }),
     }),
   ],
 });
@@ -4699,7 +4694,7 @@ export const contactsQuery = app.query({
 export const addContact = app.mutation({
   access: { kind: 'public', reason: 'build fixture mutation' },
   input: s.object({}),
-  optimistic: { [contactsQuery.key]: 'await-fragment' },
+  optimistic: [contactsQuery.optimistic('await-fragment')],
   registry: {
     queries: [contactsQuery],
     touches: [contactDomain],
@@ -4774,15 +4769,14 @@ const app = defineKovo({
     sessionId: () => ${JSON.stringify(BUILD_FIXTURE_CSRF_SESSION_ID)},
   },
 });
-const cartQuery = app.query('cart', {
-  access: { kind: 'public', reason: 'build fixture query' },
+const cartQuery = app.query({
+  access: app.publicAccess('build fixture query'),
   load: () => ({ count: db.count }),
   reads: [cart],
 });
-const addToCart = app.mutation('cart/add', {
-  access: { kind: 'public', reason: 'build fixture mutation' },
+const addToCart = app.mutation({
+  access: app.publicAccess('build fixture mutation'),
   input: s.object({ quantity: s.number().int().min(1).default(1) }),
-  optimistic: { cart: 'await-fragment' },
   registry: {
     queries: [cartQuery],
     touches: [cart],
@@ -4798,8 +4792,8 @@ export default app.assemble({
   queries: [cartQuery],
   routes: [
     app.route('/cart', {
-      access: { kind: 'public', reason: 'build fixture route' },
-      page: () => trustedHtml('<main>Cart ') + db.count + '</main>',
+      access: app.publicAccess('build fixture route'),
+      page: () => trustedHtml(\`<main>Cart \${db.count}</main>\`, { reason: 'build fixture HTML' }),
     }),
   ],
 });
@@ -4840,7 +4834,10 @@ export default app.assemble({
   routes: [
     app.route('/', {
       access: { kind: 'public', reason: 'build fixture route' },
-      page: () => trustedHtml('<main>Static Home</main>'),
+      page: () =>
+        trustedHtml('<main>Static Home</main>', {
+          reason: 'static build fixture',
+        }),
     }),
   ],
 });
@@ -4968,8 +4965,8 @@ const app = defineKovo({
   stylesheets: [stylesheet('./styles.css')],
 });
 
-const touchHome = app.mutation('home/touch', {
-  access: { kind: 'public', reason: 'build fixture mutation' },
+const touchHome = app.mutation({
+  access: app.publicAccess('build fixture mutation'),
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
   input: s.object({}),
@@ -5008,7 +5005,10 @@ export default app.assemble({
   routes: [
     app.route('/db', {
       access: { kind: 'public', reason: 'build fixture route' },
-      page: () => trustedHtml('<main data-env-name="DATABASE_URL">Database</main>'),
+      page: () =>
+        trustedHtml('<main data-env-name="DATABASE_URL">Database</main>', {
+          reason: 'database environment fixture',
+        }),
     }),
   ],
 });
@@ -5085,7 +5085,7 @@ const payments = {};
 const receipts = {};
 const carts = {};
 
-const saveCart = app.mutation('cart/save', {
+const saveCart = app.mutation({
   input: s.object({ id: s.string() }),
   handler(input, request: { db: typeof appDb }) {
     request.db.insert(carts).values({ id: input.id });
@@ -5240,7 +5240,7 @@ import { trustedHtml, trustedUrl } from '@kovojs/browser';
 const trust = { html: trustedHtml, url: trustedUrl };
 class R { html = trustedHtml; }
 
-export const postQuery = app.query('post', {
+export const postQuery = app.query({
   access: app.publicAccess('trustedHtml hidden callee build preflight fixture'),
   load: () => ({ body: '<img src=x onerror=alert(1)>', href: '/promo' }),
   output: s.object({ body: s.string(), href: s.string() }),
@@ -5268,14 +5268,14 @@ const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { domain, s } from '@kovojs/server';
 
 const cart = domain('cart');
-const cartQuery = app.query('cart', {
-  access: { kind: 'public', reason: 'fatal KV310 fixture' },
+const cartQuery = app.query({
+  access: app.publicAccess('fatal KV310 fixture'),
   load: () => ({ count: 0 }),
   reads: [cart],
 });
 
-const addToCart = app.mutation('cart/add', {
-  access: { kind: 'public', reason: 'fatal KV310 fixture' },
+const addToCart = app.mutation({
+  access: app.publicAccess('fatal KV310 fixture'),
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
   input: s.object({ quantity: s.number().default(1) }),
@@ -5288,7 +5288,7 @@ export default app.assemble({
   queries: [cartQuery],
   routes: [
     app.route('/', {
-      access: { kind: 'public', reason: 'fatal KV310 fixture' },
+      access: app.publicAccess('fatal KV310 fixture'),
       page: () => '<main>Cart</main>',
     }),
   ],
@@ -5326,14 +5326,14 @@ function writeSecurityPreflightStaticSources(root: string): void {
       'type AppDb = PgAsyncDatabase<any, any>;',
       'type AppQueryLoadContext = QueryLoadContext<unknown, AppDb>;',
       '',
-      'export const accountById = app.query("accountById", {',
+      'export const accountById = app.query({',
       '  output: s.object({ id: s.string() }),',
       '  async load(input: { id: string }, db: PgAsyncDatabase<any, any>) {',
       '    return db.select({ id: accounts.id }).from(accounts).where(eq(accounts.id, input.id));',
       '  },',
       '});',
       '',
-      'export const inlineContextAccountById = app.query("inlineContextAccountById", {',
+      'export const inlineContextAccountById = app.query({',
       '  output: s.object({ id: s.string() }),',
       '  async load(input: { id: string }, context?: AppQueryLoadContext) {',
       '    const db = context!.db!;',
@@ -5348,7 +5348,7 @@ function writeSecurityPreflightStaticSources(root: string): void {
       '  await db.update(accounts).set({ role: input.role }).where(eq(accounts.id, input.id));',
       '}',
       '',
-      'export const badRead = app.query("badRead", {',
+      'export const badRead = app.query({',
       '  output: s.object({ id: s.string() }),',
       '  async load(input: { id: string }, db: PgAsyncDatabase<any, any>) {',
       '    await db.update(accounts).set({ role: "admin" }).where(eq(accounts.id, input.id));',
@@ -5666,13 +5666,16 @@ async function devRouteDocument(root: string, appPath: string): Promise<string> 
         return (await import('@kovojs/server/internal/app-shell-vite')) as Record<string, unknown>;
       }
       expect(id).toBe(`/${appPath.slice(root.length + 1).replaceAll('\\', '/')}`);
+      const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000002' });
       return {
-        default: createApp({
+        default: app.assemble({
           routes: [
-            route('/', {
+            app.route('/', {
+              access: app.publicAccess('development stylesheet parity fixture'),
               page: () => renderedHtml('<main>Home</main>'),
             }),
-            route('/login', {
+            app.route('/login', {
+              access: app.publicAccess('development stylesheet parity fixture'),
               page: () => renderedHtml('<main>Login</main>'),
             }),
           ],
@@ -5811,12 +5814,12 @@ const app = defineKovo({
     justification: 'test harness serves the emitted app on an ephemeral loopback port',
   },
 });
-const typedQuery = app.query('typed', {
-  access: { kind: 'public', reason: 'build fixture query' },
+const typedQuery = app.query({
+  access: app.publicAccess('build fixture query'),
   load: () => ({ count: db.count }),
 });
 export const addToCart = app.mutation({
-  access: { kind: 'public', reason: 'build fixture mutation' },
+  access: app.publicAccess('build fixture mutation'),
   input: s.object({ quantity: s.number().int().min(1).default(1) }),
   handler(input) {
     db.count += input.quantity;
@@ -5829,8 +5832,11 @@ export default app.assemble({
   queries: [typedQuery],
   routes: [
     app.route('/typed', {
-      access: { kind: 'public', reason: 'build fixture route' },
-      page: () => trustedHtml('<main>Typed Cart ') + db.count + '</main>',
+      access: app.publicAccess('build fixture route'),
+      page: () =>
+        trustedHtml(\`<main>Typed Cart \${db.count}</main>\`, {
+          reason: 'build fixture HTML',
+        }),
     }),
   ],
 });
@@ -5854,7 +5860,7 @@ async function listen(server: Server | BuiltServerProcess): Promise<string> {
 
   const origin = `http://127.0.0.1:${address.port}`;
   // SPEC §6.6: keep one process-global development posture across this integration file. A
-  // per-port allowInternal policy changes after every listener and makes later createApp calls
+  // per-port allowInternal policy changes after every listener and makes later app assemblies
   // correctly refuse a same-process authority replacement.
   installEgressFloorSync(undefined, () => {}, { allowPrivateNetwork: true });
   return origin;

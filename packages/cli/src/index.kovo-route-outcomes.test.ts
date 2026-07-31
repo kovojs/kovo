@@ -44,26 +44,24 @@ export default defineConfig({ preset: node({ retention: {
       writeFileSync(
         appPath,
         `
-import { createApp } from '@kovojs/server/internal/fixture-app';
-import { publicAccess, respond as response, route } from '@kovojs/server';
+import { defineKovo, respond as response } from '@kovojs/server';
 
-export default createApp({
-  routes: [
-    route('/download/report.txt', {
-      access: publicAccess('public report download'),
-      page: () => response.file('report', {
-        contentType: 'text/plain; charset=utf-8',
-        filename: 'report.txt',
-      }),
-    }),
-    route('/stream/events.ndjson', {
-      access: publicAccess('public event stream'),
-      page: () => response.stream('event: ready\\n\\n', {
-        contentType: 'application/x-ndjson',
-      }),
-    }),
-  ],
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
+const downloadRoute = app.route('/download/report.txt', {
+  access: app.publicAccess('public report download'),
+  page: () => response.file('report', {
+    contentType: 'text/plain; charset=utf-8',
+    filename: 'report.txt',
+  }),
 });
+const streamRoute = app.route('/stream/events.ndjson', {
+  access: app.publicAccess('public event stream'),
+  page: () => response.stream('event: ready\\n\\n', {
+    contentType: 'application/x-ndjson',
+  }),
+});
+
+export default app.assemble({ routes: [downloadRoute, streamRoute] });
 `,
         'utf8',
       );
@@ -87,7 +85,10 @@ export default createApp({
       );
 
       stdout.mockClear();
-      expect(main(['explain', 'endpoints', graphPath])).toBe(0);
+      expect(
+        main(['explain', 'endpoints', '--artifact', graphPath]),
+        stderr.mock.calls.map(([chunk]) => String(chunk)).join(''),
+      ).toBe(0);
       const explainOutput = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(explainOutput).toContain(
         'ENDPOINT /download/report.txt surface=route-file method=GET path=/download/report.txt',
@@ -141,23 +142,21 @@ export default defineConfig({ preset: node({ retention: {
       writeFileSync(
         appPath,
         `
-import { createApp } from '@kovojs/server/internal/fixture-app';
-import { publicAccess, route } from '@kovojs/server';import { rootedFiles as openRootedFiles } from '@kovojs/server/files';
+import { defineKovo } from '@kovojs/server';
+import { rootedFiles as openRootedFiles } from '@kovojs/server/files';
 
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 const docs = await openRootedFiles(${JSON.stringify(docsRoot)});
-
-export default createApp({
-  routes: [
-    route('/docs/readme.txt', {
-      access: publicAccess('public rooted docs download'),
-      page: () =>
-        docs.serve('readme.txt', {
-          contentType: 'text/plain; charset=utf-8',
-          filename: 'readme.txt',
-        }),
+const docsRoute = app.route('/docs/readme.txt', {
+  access: app.publicAccess('public rooted docs download'),
+  page: () =>
+    docs.serve('readme.txt', {
+      contentType: 'text/plain; charset=utf-8',
+      filename: 'readme.txt',
     }),
-  ],
 });
+
+export default app.assemble({ routes: [docsRoute] });
 `,
         'utf8',
       );
@@ -178,7 +177,10 @@ export default createApp({
       );
 
       stdout.mockClear();
-      expect(main(['explain', 'endpoints', graphPath])).toBe(0);
+      expect(
+        main(['explain', 'endpoints', '--artifact', graphPath]),
+        stderr.mock.calls.map(([chunk]) => String(chunk)).join(''),
+      ).toBe(0);
       const explainOutput = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(explainOutput).toContain(
         'ENDPOINT /docs/readme.txt surface=route-stream method=GET path=/docs/readme.txt',

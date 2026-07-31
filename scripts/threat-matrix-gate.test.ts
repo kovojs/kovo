@@ -76,7 +76,7 @@ describe('threat-matrix liveness gate', () => {
     expect(AUDITED_TRUST_ESCAPE_KINDS).toHaveLength(10);
     expect(AUDITED_CAPABILITY_KINDS).toHaveLength(18);
     expect(publicSecuritySurfaceIds()).toHaveLength(11);
-    expect(frameworkExportPostures).toHaveLength(4_161);
+    expect(frameworkExportPostures).toHaveLength(4_159);
     expect(
       validateFrameworkExportPosture({
         actual: computeFrameworkRuntimeSurface(),

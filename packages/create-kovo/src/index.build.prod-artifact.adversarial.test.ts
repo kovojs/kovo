@@ -28,6 +28,7 @@ import {
   attributeValue,
   buildProductionArtifact,
   execFileSyncErrorOutput,
+  formatGeneratedProjectSources,
   freshProductionArtifactIdempotencyToken,
 } from './index.build.test-support.js';
 import { assertProdArtifactSinkCensus } from './index.build.prod-artifact.sink-census.js';
@@ -360,6 +361,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
           addM1ClientDeriveProof(root);
           assertM1OutputWireFixtureUsesSafeAuthoredShapes(root);
           configureNodeRetention(root);
+          formatM1OutputWireProof(root);
           expectBuildFailure(root, ['KV449', 'sync-verified-file-parse-query']);
           sourceFlipRejected = true;
           return;
@@ -1208,56 +1210,70 @@ async function withRunningProject(
 }
 
 function addM1DeferAndShellProof(root: string): void {
+  const kovoPath = join(root, 'src/kovo.ts');
+  const kovo = readFileSync(kovoPath, 'utf8').replace(
+    "  document: { lang: 'en' },",
+    [
+      "  document: { lang: 'en' },",
+      '  errorShells: {',
+      '    serverError({ request, status }) {',
+      '      const payload = new URL(request.url).searchParams.get("payload") ?? "";',
+      '      return {',
+      '        body: `<main data-shell="m1">${payload} Set-Cookie: m1=owned</main>`,',
+      '        status,',
+      '      };',
+      '    },',
+      '  },',
+    ].join('\n'),
+  );
+  writeFileSync(kovoPath, kovo, 'utf8');
+
   const appPath = join(root, 'src/app.tsx');
   const app = readFileSync(appPath, 'utf8')
-    .replace('  createApp,', '  createApp,\n  Defer,')
     .replace(
-      '  endpoints: [healthEndpoint],',
+      "import { redirect } from '@kovojs/core';",
+      ["import { redirect } from '@kovojs/core';", "import { Defer } from '@kovojs/server';"].join(
+        '\n',
+      ),
+    )
+    .replace(
+      'const assembledApp = app.assemble({',
       [
-        '  endpoints: [healthEndpoint],',
-        '  errorShells: {',
-        '    serverError({ request, status }) {',
-        '      const payload = new URL(request.url).searchParams.get("payload") ?? "";',
-        '      return {',
-        '        body: `<main data-shell="m1">${payload} Set-Cookie: m1=owned</main>`,',
-        '        status,',
-        '      };',
-        '    },',
+        "const m1DeferRoute = app.route('/m1/defer', {",
+        "  access: app.publicAccess('public M1 Defer sink proof'),",
+        '  layout: AppLayout,',
+        '  stylesheets: appStylesheets,',
+        '  page() {',
+        "    const unsafe = '<img src=x onerror=alert(1)>';",
+        '    return (',
+        '      <main>',
+        '        <Defer',
+        '          fallback={<section>Loading {unsafe}</section>}',
+        '          priority="after-paint"',
+        '          render={async () => {',
+        '            throw new Error(`private m1 defer detail ${unsafe}`);',
+        '          }}',
+        '          target="m1-defer-region"',
+        '        />',
+        '      </main>',
+        '    );',
         '  },',
+        '});',
+        '',
+        "const m1ErrorShellRoute = app.route('/m1/error-shell', {",
+        "  access: app.publicAccess('public M1 error shell proof'),",
+        '  layout: AppLayout,',
+        '  page() {',
+        "    throw new Error('private m1 route detail <script>boom</script>');",
+        '  },',
+        '});',
+        '',
+        'const assembledApp = app.assemble({',
       ].join('\n'),
     )
     .replace(
-      "    route('/', {",
-      [
-        "    route('/m1/defer', {",
-        "      access: publicAccess('public M1 Defer sink proof'),",
-        '      layout: AppLayout,',
-        '      stylesheets,',
-        '      page() {',
-        "        const unsafe = '<img src=x onerror=alert(1)>';",
-        '        return (',
-        '          <main>',
-        '            <Defer',
-        '              fallback={<section>Loading {unsafe}</section>}',
-        '              priority="after-paint"',
-        '              render={async () => {',
-        '                throw new Error(`private m1 defer detail ${unsafe}`);',
-        '              }}',
-        '              target="m1-defer-region"',
-        '            />',
-        '          </main>',
-        '        );',
-        '      },',
-        '    }),',
-        "    route('/m1/error-shell', {",
-        "      access: publicAccess('public M1 error shell proof'),",
-        '      layout: AppLayout,',
-        '      page() {',
-        "        throw new Error('private m1 route detail <script>boom</script>');",
-        '      },',
-        '    }),',
-        "    route('/', {",
-      ].join('\n'),
+      '  routes: [homeRoute, loginRoute',
+      '  routes: [homeRoute, loginRoute, m1DeferRoute, m1ErrorShellRoute',
     );
   writeFileSync(appPath, app, 'utf8');
 }
@@ -1267,10 +1283,12 @@ function addM1HeaderRedirectCapabilityProof(root: string): void {
     join(root, 'src/m1-header-proof.tsx'),
     [
       '/** @jsxImportSource @kovojs/server */',
-      "import { mutation, publicAccess, s } from '@kovojs/server';",
+      "import { s } from '@kovojs/server';",
       '',
-      'export const m1HeaderCookieProof = mutation({',
-      "  access: publicAccess('public M1 Set-Cookie proof'),",
+      "import { app } from './kovo.js';",
+      '',
+      'export const m1HeaderCookieProof = app.mutation({',
+      "  access: app.publicAccess('public M1 Set-Cookie proof'),",
       '  input: s.object({ mode: s.string() }),',
       '  handler(input, _request, context) {',
       "    const value = input.mode === 'unsafe' ? 'bad\\r\\nSet-Cookie: m1=owned' : 'safe';",
@@ -1286,16 +1304,15 @@ function addM1HeaderRedirectCapabilityProof(root: string): void {
   const appPath = join(root, 'src/app.tsx');
   const app = readFileSync(appPath, 'utf8')
     .replace(
-      '  createApp,',
+      "import { redirect } from '@kovojs/core';",
       [
-        '  createApp,',
-        '  createMemoryStorage,',
-        '  createSigningKeyRing,',
-        '  createStorageDownloadEndpoint,',
-        '  publicScopedKey,',
+        "import { publicScopedKey, redirect } from '@kovojs/core';",
+        "import { createMemoryStorage } from '@kovojs/core/storage';",
+        "import { respond } from '@kovojs/server';",
+        "import { createSigningKeyRing } from '@kovojs/server/signing';",
+        "import { createStorageDownloadEndpoint } from '@kovojs/server/storage-downloads';",
       ].join('\n'),
     )
-    .replace('  redirect,\n  route,', '  redirect,\n  respond,\n  route,')
     .replace(
       "import { addContact } from './mutations.js';",
       [
@@ -1304,9 +1321,13 @@ function addM1HeaderRedirectCapabilityProof(root: string): void {
       ].join('\n'),
     )
     .replace(
-      'const mutationReplayStore = appRuntimeMutationReplayStore;',
+      '  endpoints: [healthEndpoint],',
+      '  endpoints: [healthEndpoint, m1CapabilityEndpoint],',
+    )
+    .replace('  mutations: [addContact,', '  mutations: [addContact, m1HeaderCookieProof,')
+    .replace(
+      'const assembledApp = app.assemble({',
       [
-        'const mutationReplayStore = appRuntimeMutationReplayStore;',
         'const m1CapabilitySigningKeys = createSigningKeyRing({',
         '  keys: [',
         '    {',
@@ -1321,55 +1342,55 @@ function addM1HeaderRedirectCapabilityProof(root: string): void {
         "  contentType: 'text/plain',",
         "  metadata: { filename: 'm1.txt' },",
         '});',
-        'const m1CapabilityEndpoint = createStorageDownloadEndpoint({',
+        'const m1CapabilityEndpoint = app.endpoint(createStorageDownloadEndpoint({',
         "  basePath: '/m1-capability-download',",
         '  secret: m1CapabilitySigningKeys,',
         '  storage: m1CapabilityStorage,',
+        '}));',
+        '',
+        "const m1HeaderCookieFormRoute = app.route('/m1/header-cookie-form', {",
+        "  access: app.publicAccess('public M1 Set-Cookie proof form'),",
+        '  page() {',
+        '    return <form mutation={m1HeaderCookieProof}><input name="mode" value="safe" /><button type="submit">Submit</button></form>;',
+        '  },',
         '});',
+        '',
+        "const m1HeaderSafeRoute = app.route('/m1/header-safe.txt', {",
+        "  access: app.publicAccess('public M1 header sink proof'),",
+        '  page() {',
+        "    return respond.file('m1 safe\\n', { contentType: 'text/plain', headers: { 'Last-Modified': 'Wed, 21 Oct 2015 07:28:00 GMT' } });",
+        '  },',
+        '});',
+        '',
+        "const m1HeaderUnsafeRoute = app.route('/m1/header-unsafe.txt', {",
+        "  access: app.publicAccess('public M1 header sink proof'),",
+        '  page() {',
+        "    return respond.file('m1 unsafe\\n', { contentType: 'text/plain', headers: { Vary: 'm1-header-unsafe\\r\\nSet-Cookie: m1=owned' } });",
+        '  },',
+        '});',
+        '',
+        "const m1RedirectRoute = app.route('/m1/redirect', {",
+        "  access: app.publicAccess('public M1 redirect sink proof'),",
+        '  page() {',
+        "    return { location: 'https://evil.example/m1\\r\\nSet-Cookie: m1=owned', status: 303 };",
+        '  },',
+        '});',
+        '',
+        "const m1CapabilityUrlRoute = app.route('/m1/capability-url', {",
+        "  access: app.publicAccess('public M1 capability URL proof'),",
+        '  async page(context) {',
+        "    if (!context.signUrl) throw new Error('missing M1 signUrl');",
+        "    const signed = await context.signUrl({ key: publicScopedKey('receipts/m1.txt'), expiresIn: 60_000 });",
+        '    return <main><a id="m1-capability-link" href={signed.url}>M1 capability</a></main>;',
+        '  },',
+        '});',
+        '',
+        'const assembledApp = app.assemble({',
       ].join('\n'),
     )
     .replace(
-      '  endpoints: [healthEndpoint],',
-      '  endpoints: [healthEndpoint, m1CapabilityEndpoint],',
-    )
-    .replace('  mutations: [addContact,', '  mutations: [addContact, m1HeaderCookieProof,')
-    .replace(
-      "    route('/', {",
-      [
-        "    route('/m1/header-cookie-form', {",
-        "      access: publicAccess('public M1 Set-Cookie proof form'),",
-        '      page() {',
-        '        return <form mutation={m1HeaderCookieProof}><input name="mode" value="safe" /><button type="submit">Submit</button></form>;',
-        '      },',
-        '    }),',
-        "    route('/m1/header-safe.txt', {",
-        "      access: publicAccess('public M1 header sink proof'),",
-        '      page() {',
-        "        return respond.file('m1 safe\\n', { contentType: 'text/plain', headers: { 'Last-Modified': 'Wed, 21 Oct 2015 07:28:00 GMT' } });",
-        '      },',
-        '    }),',
-        "    route('/m1/header-unsafe.txt', {",
-        "      access: publicAccess('public M1 header sink proof'),",
-        '      page() {',
-        "        return respond.file('m1 unsafe\\n', { contentType: 'text/plain', headers: { Vary: 'm1-header-unsafe\\r\\nSet-Cookie: m1=owned' } });",
-        '      },',
-        '    }),',
-        "    route('/m1/redirect', {",
-        "      access: publicAccess('public M1 redirect sink proof'),",
-        '      page() {',
-        "        return { location: 'https://evil.example/m1\\r\\nSet-Cookie: m1=owned', status: 303 };",
-        '      },',
-        '    }),',
-        "    route('/m1/capability-url', {",
-        "      access: publicAccess('public M1 capability URL proof'),",
-        '      async page(context) {',
-        "        if (!context.signUrl) throw new Error('missing M1 signUrl');",
-        "        const signed = await context.signUrl({ key: publicScopedKey('receipts/m1.txt'), expiresIn: 60_000 });",
-        '        return <main><a id="m1-capability-link" href={signed.url}>M1 capability</a></main>;',
-        '      },',
-        '    }),',
-        "    route('/', {",
-      ].join('\n'),
+      '  routes: [homeRoute, loginRoute',
+      '  routes: [homeRoute, loginRoute, m1HeaderCookieFormRoute, m1HeaderSafeRoute, m1HeaderUnsafeRoute, m1RedirectRoute, m1CapabilityUrlRoute',
     );
   writeFileSync(appPath, app, 'utf8');
 }
@@ -1379,18 +1400,35 @@ function assertM1OutputWireFixtureUsesSafeAuthoredShapes(root: string): void {
   const headerProof = readFileSync(join(root, 'src/m1-header-proof.tsx'), 'utf8');
   const runtimeProofs = readFileSync(join(root, 'src/runtime-contract-proofs.tsx'), 'utf8');
 
-  expect(app).toMatch(
-    /import \{[\s\S]*?createMemoryStorage,[\s\S]*?createSigningKeyRing,[\s\S]*?createStorageDownloadEndpoint,[\s\S]*?\} from '@kovojs\/server';/u,
+  expect(app).toContain("import { createMemoryStorage } from '@kovojs/core/storage';");
+  expect(app).toContain("import { createSigningKeyRing } from '@kovojs/server/signing';");
+  expect(app).toContain(
+    "import { createStorageDownloadEndpoint } from '@kovojs/server/storage-downloads';",
   );
   expect(app).toContain('const m1CapabilitySigningKeys = createSigningKeyRing({');
   expect(app).toContain('secret: m1CapabilitySigningKeys,');
+  expect(app).toContain(
+    'const m1CapabilityEndpoint = app.endpoint(createStorageDownloadEndpoint({',
+  );
   expect(app).not.toContain('secret: appCsrf.secret,');
-  expect(headerProof).toContain('export const m1HeaderCookieProof = mutation({');
+  expect(headerProof).toContain('export const m1HeaderCookieProof = app.mutation({');
+  expect(headerProof).toContain("access: app.publicAccess('public M1 Set-Cookie proof')");
+  expect(headerProof).not.toMatch(/(?:^|[^\w.])mutation\(\{/mu);
   expect(headerProof).not.toContain('m1HeaderCookieProof.key =');
   expect(headerProof).not.toContain("'m1/header-cookie-proof'");
   expect(runtimeProofs).toContain('rows: [0, 1, 2, 3].map((id) => ({ id, label: `item-${id}` })),');
   expect(runtimeProofs).toContain('    } catch {');
   expect(runtimeProofs).not.toContain('error instanceof Error');
+}
+
+function formatM1OutputWireProof(root: string): void {
+  formatGeneratedProjectSources(root, [
+    'kovo.config.ts',
+    'src/app.tsx',
+    'src/kovo.ts',
+    'src/m1-client-derive-proof.tsx',
+    'src/m1-header-proof.tsx',
+  ]);
 }
 
 function addM1ClientDeriveProof(root: string): void {
@@ -1430,18 +1468,23 @@ function addM1ClientDeriveProof(root: string): void {
       ].join('\n'),
     )
     .replace(
-      "    route('/', {",
+      'const assembledApp = app.assemble({',
       [
-        "    route('/m1/client-derive', {",
-        "      access: publicAccess('public M1 client derive proof'),",
-        '      layout: AppLayout,',
-        '      stylesheets,',
-        '      page() {',
-        '        return <M1ClientDeriveProof />;',
-        '      },',
-        '    }),',
-        "    route('/', {",
+        "const m1ClientDeriveRoute = app.route('/m1/client-derive', {",
+        "  access: app.publicAccess('public M1 client derive proof'),",
+        '  layout: AppLayout,',
+        '  stylesheets: appStylesheets,',
+        '  page() {',
+        '    return <M1ClientDeriveProof />;',
+        '  },',
+        '});',
+        '',
+        'const assembledApp = app.assemble({',
       ].join('\n'),
+    )
+    .replace(
+      '  routes: [homeRoute, loginRoute',
+      '  routes: [homeRoute, loginRoute, m1ClientDeriveRoute',
     );
   writeFileSync(appPath, app, 'utf8');
 }

@@ -80,14 +80,11 @@ export const C = component({ render: () => <article>{trustedHtml('<p>reviewed</p
     family: 'taint-expression',
     id: 'audited-request-trusted-html',
     source: `
-import { trustedHtml } from '@kovojs/browser';
+import { safeRichHtml } from '@kovojs/browser';
 export const C = component({
   render: ({}, _state, { request }) => (
     <article>
-      {trustedHtml(request.headers.get('x-reviewed') ?? '', {
-        reason: 'reviewed upstream CMS',
-        source: 'adversarial-corpus.ts',
-      })}
+      {safeRichHtml(request.headers.get('x-reviewed') ?? '')}
     </article>
   ),
 });

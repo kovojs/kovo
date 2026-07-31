@@ -531,7 +531,31 @@ export const DynamicUrlPayloads = component({
           return runQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [{ attr: "href", selector: "[data-derive=\\"product.DynamicUrlPayloads$a_href_derive\\"]", select(value, root, context) { return DynamicUrlPayloads$a_href_derive.run(value); } }, { attr: "src", selector: "[data-derive=\\"product.DynamicUrlPayloads$img_src_derive\\"]", trustedUrl: true, select(value, root, context) { return DynamicUrlPayloads$img_src_derive.run(value); } }], templateStamps: [] }, { queryIdentity: context.queryIdentity, queryStore: context.queryStore });
         },
       };",
-        "diagnostics": [],
+        "diagnostics": [
+          {
+            "code": "KV426",
+            "fileName": "dynamic-url-payloads.tsx",
+            "help": "Blocked reason: trustedUrl() is a pure trusted URL escape that performs NO sanitization (SPEC §4.8); sending request/query-derived or unprovable data to it can emit attacker-controlled bytes verbatim.
+      Fixes: render user/CMS content through safeRichHtml(value) (the sanitizing rich-HTML floor, exported from @kovojs/browser and @kovojs/server); pass a server-computed safe value; or, for a value you assert is not request/query data, use the audited escape trustedUrl(value, { reason: "<justification>" }) so it is surfaced in kovo explain trust.
+      SPEC §9.1 (sink renderer), §5.2 #10 (output safety), §4.8 (trustedUrl); KV236/KV426 family. Provenance is decided by AST symbol-identity over the request/query source set, modeled on KV438 (SPEC §11.1).
+      Would lower to: a trust-audit row naming the escape hatch, source span, justification, and owning safe path or app review boundary.
+      Blocked reason: raw endpoint, trustedHtml/trustedUrl, custom/no verifier, static export path override, or future trustedSql use without provenance becomes invisible to kovo explain trust.
+      Fixes: add a named justification/source span, use a typed safe helper instead of the escape hatch, or remove the trust override.
+      SPEC §4.8/§9.1 and fundamental-fixes-followup-3 DEC-D/DEC-F: KV426 is an auditable static provenance signal; contextual renderer/header/URL runtime chokes and unforgeable trusted constructors remain the security boundary when static provenance is incomplete.",
+            "length": 13,
+            "message": "Trust escape hatch lacks auditable provenance. trustedUrl() sends query-derived data to a trusted URL sink without sanitization or an audited justification.",
+            "severity": "error",
+            "source": {
+              "end": 257,
+              "file": "dynamic-url-payloads.tsx",
+              "start": 243,
+            },
+            "start": {
+              "column": 28,
+              "line": 9,
+            },
+          },
+        ],
         "updatedAttributes": {
           "anchor": {
             "data-derive": "product.DynamicUrlPayloads$a_href_derive",
