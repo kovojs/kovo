@@ -88,7 +88,7 @@ describe('compile/v1 and kovo mcp', () => {
             "kind": "client",
           },
           {
-            "byteLength": 1214,
+            "byteLength": 1166,
             "fileName": "generated/registries.d.ts",
             "kind": "registry",
           },

@@ -34,6 +34,9 @@ const packedStarterWorkspacePackages = [
   { name: 'create-kovo', dir: 'create-kovo' },
 ];
 const CONSOLIDATED_VITEST_FILES = new Set([
+  // The G11 workflow owns this Node test directly through `node --test`; Vitest cannot collect its
+  // `node:test` suites and would otherwise report the file as an empty test module.
+  'scripts/g11-cloud-run-journey.test.mjs',
   // `static-core` owns the complete forcing mutation harness through
   // `check:security-gate-mutations`; a second full run in a generic root shard can exceed the
   // hosted-runner job budget without adding coverage.
