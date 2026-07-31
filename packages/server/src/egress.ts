@@ -191,7 +191,7 @@ export class EgressBlockedError extends Error {
     } else if (reason === 'unconnected-datagram') {
       remediation =
         'Connect the datagram socket before sending so Kovo can validate the kernel-pinned peer; ' +
-        'unconnected per-send DNS cannot be pinned through the public node:dgram API.';
+        'unconnected per-send DNS cannot be pinned through the public Node UDP socket API.';
     } else if (reason === 'destination-allowlist') {
       remediation = 'Add the exact origin to createApp({ egress: { allowDestinations: [...] } }).';
     } else if (args.metadata) {

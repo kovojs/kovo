@@ -57,6 +57,8 @@ export const defaultRootedFileServeRawSinkFiles = [
 ];
 
 export const sqlParserAuthorityFile = 'packages/server/src/sql-parser-authority.ts';
+export const sqlParserAuthoritySnapshotFile =
+  'packages/server/src/sql-parser-authority-snapshot.ts';
 export const defaultDynamicCodeExecutionSinkFiles = [sqlParserAuthorityFile];
 
 export const defaultDeserializationRoots = ['packages/server/src'];
@@ -359,7 +361,10 @@ export function checkSinkPolicyGate(options = {}) {
       }),
     );
     if (dynamicCodeExecutionSinkFileSet.has(filePath) && filePath === sqlParserAuthorityFile) {
-      findings.push(...sqlParserAuthorityInvariantFindings(filePath, text));
+      const snapshotText = readText(sqlParserAuthoritySnapshotFile);
+      findings.push(
+        ...sqlParserAuthorityInvariantFindings(filePath, `${text}\n${snapshotText}`),
+      );
     }
     findings.push(
       ...rootedFileServeRawSinkFindings(filePath, text, {

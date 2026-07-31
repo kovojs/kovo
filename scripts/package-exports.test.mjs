@@ -153,6 +153,26 @@ describe('package export resolver', () => {
     );
   });
 
+  it('builds every server runtime entry as one private fixed-name module graph', () => {
+    const server = JSON.parse(readFileSync('packages/server/package.json', 'utf8'));
+    const phases = server.scripts?.['build:dist']?.split(' && ') ?? [];
+    const buildArguments = phases[0]?.split(' ') ?? [];
+
+    expect(phases).toHaveLength(1);
+    expect(buildArguments).toContain('src/index.ts');
+    expect(buildArguments).toContain('src/internal/generated-handler-runtime.ts');
+    expect(buildArguments).toContain('src/sql-parser-authority-cloudflare.ts');
+    expect(buildArguments).toContain('src/sql-parser-authority-snapshot.ts');
+    expect(buildArguments).toContain('--dts');
+    expect(buildArguments).toContain('--unbundle');
+    expect(server.exports).not.toHaveProperty('./internal/generated-handler-runtime');
+    expect(server.publishConfig?.exports).not.toHaveProperty('./internal/generated-handler-runtime');
+    expect(server.exports).not.toHaveProperty('./internal/sql-parser-authority-cloudflare');
+    expect(server.publishConfig?.exports).not.toHaveProperty(
+      './internal/sql-parser-authority-cloudflare',
+    );
+  });
+
   it('keeps the workspace-only server Vite resolver out of published packages', () => {
     expect(
       derivePublishPlan({

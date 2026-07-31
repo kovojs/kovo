@@ -151,8 +151,9 @@ export const classifyStatement = securityClassifier(
     let parsedStatements: Statement[];
     try {
       // SPEC §6.6 rule 6: the parser decides whether raw SQL is a proven read or which exact
-      // tables it can write. Its full CommonJS dependency graph runs in a boot-created private VM
-      // realm, then crosses an own-data snapshot before these classifier walks consume it.
+      // tables it can write. Node runs its full CommonJS graph in a boot-created private VM;
+      // Workers captures the reviewed parser only after the request-safe realm lock. Both paths
+      // cross the same bounded own-data snapshot before these classifier walks consume the result.
       parsedStatements = parserAuthority(sql);
     } catch {
       return {

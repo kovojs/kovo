@@ -372,6 +372,10 @@ const trustedKovoFrameworkSourceRoots = resolveKovoFrameworkSourceRoots(
   fileURLToPath(new URL('../index.ts', import.meta.url)),
   requireFromCli,
 );
+const trustedKovoServerRuntimeEntry = resolveTrustedKovoServerRuntimeEntry();
+const trustedCloudflareSqlParserRuntimeSubject = resolveTrustedCloudflareSqlParserRuntimeSubject(
+  trustedKovoServerRuntimeEntry,
+);
 // Vite/OXC can present manifest main entries and its framework-configured automatic JSX runtime
 // as resolved absolute paths rather than authored bare specifiers. Keep the exception finite and
 // boot-pinned; arbitrary package internals are intentionally absent.
@@ -411,6 +415,21 @@ function isKovoServerHandlerExternalDependency(id: string): boolean {
   );
 }
 
+function isKovoServerHandlerExternalDependencyForTarget(
+  id: string,
+  runtimeTarget: KovoBuildPresetName,
+): boolean {
+  if (
+    runtimeTarget === 'cloudflare' &&
+    (id === '@electric-sql/pglite' || buildStringStartsWith(id, '@electric-sql/pglite/'))
+  ) {
+    // Let the exact framework-owned import reach the Cloudflare database plugin instead of being
+    // externalized before resolve hooks run. App-owned edges receive no framework substitution.
+    return false;
+  }
+  return isKovoServerHandlerExternalDependency(id);
+}
+
 function dependencyCapabilityCompleteBundleNoExternal(): true {
   // Every supported artifact and pre-evaluation SSR graph must traverse unknown package children;
   // the loader's source-level edge census closes builtins before Vite can externalize them.
@@ -443,14 +462,76 @@ function dependencyCapabilityCompleteSsrOptions(): {
 }
 
 function isKovoServerHandlerModuleSideEffectFree(id: string): boolean {
+  return isKovoServerHandlerModuleSideEffectFreeFromTrust(
+    trustedKovoFrameworkSourceRoots,
+    trustedKovoServerRuntimeEntry,
+    id,
+  );
+}
+
+function isKovoServerHandlerModuleSideEffectFreeFromTrust(
+  trust: readonly KovoFrameworkSourceRoot[],
+  serverRuntimeEntry: string | undefined,
+  id: string,
+): boolean {
   // These modules' top-level work only prepares their exported runtime primitives. Let Rollup
   // remove them when an app does not use those primitives, so an unused native Argon2 sink is not
   // loaded by Cloudflare/non-password handlers merely because the server barrel re-exports it.
   // The Node SQL parser bootstrap is retained through explicit readiness calls in the SQLite and
   // Postgres constructors; only a bundle that drops those constructors may drop node:fs/node:vm.
-  return /(?:^|[/\\])packages[/\\]server[/\\]src[/\\](?:managed-db-public|password|postgres-runtime|sqlite-runtime|sql-parser-authority|sql-parser-authority-bootstrap)\.ts$/.test(
-    id,
-  );
+  //
+  // SPEC §6.6 / §14: published server output preserves source module boundaries with fixed names.
+  // Apply the same reviewed side-effect posture only inside the exact server runtime root captured
+  // before app evaluation and only while its boot-time bytes still match. An app-owned lookalike
+  // therefore cannot turn itself, or an authored node:dgram edge, into framework-owned code.
+  const fileName = viteBuildSourceFileName(id);
+  if (serverRuntimeEntry === undefined || fileName === undefined) return false;
+  const runtimeRoot = dirname(serverRuntimeEntry);
+  const relativeFileName = slashPath(relative(runtimeRoot, fileName));
+  if (
+    buildRegExpExec(
+      /^(?:managed-db-public|password|postgres-runtime|sqlite-runtime|sql-parser-authority|sql-parser-authority-bootstrap)\.(?:js|mjs|ts)$/u,
+      relativeFileName,
+    ) === null
+  ) {
+    return false;
+  }
+  return kovoFrameworkSourcePathMatchesSnapshot(trust, fileName);
+}
+
+function resolveTrustedKovoServerRuntimeEntry(): string | undefined {
+  try {
+    return realpathSync(requireFromCli.resolve('@kovojs/server'));
+  } catch {
+    return undefined;
+  }
+}
+
+interface CloudflareSqlParserRuntimeSubject {
+  readonly entry: string;
+  readonly source: string;
+}
+
+function resolveTrustedCloudflareSqlParserRuntimeSubject(
+  serverRuntimeEntry: string | undefined,
+): CloudflareSqlParserRuntimeSubject | undefined {
+  if (serverRuntimeEntry === undefined) return undefined;
+  try {
+    const serverResolver = createRequire(pathToFileURL(serverRuntimeEntry));
+    const entry = realpathSync(serverResolver.resolve('pgsql-ast-parser'));
+    return { entry, source: readFileSync(entry, 'utf8') };
+  } catch {
+    return undefined;
+  }
+}
+
+/** @internal Regression seam for source/packed server module-side-effect authentication. */
+export function kovoServerHandlerModuleSideEffectFreeForTesting(
+  trust: readonly KovoFrameworkSourceRoot[],
+  serverRuntimeEntry: string | undefined,
+  id: string,
+): boolean {
+  return isKovoServerHandlerModuleSideEffectFreeFromTrust(trust, serverRuntimeEntry, id);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -10008,7 +10089,8 @@ async function bundleKovoServerHandler(
         rollupOptions: {
           // SPEC 6.6/§10.3 keeps native and Postgres drivers as runtime sinks; unused
           // @kovojs/server barrel re-exports must not make every app load those drivers.
-          external: isKovoServerHandlerExternalDependency,
+          external: (id) =>
+            isKovoServerHandlerExternalDependencyForTarget(id, options.runtimeTarget),
           input: entryPath,
           output: {
             entryFileNames: 'handler.mjs',
@@ -10041,7 +10123,7 @@ async function bundleKovoServerHandler(
       },
       plugins: [
         ...(options.runtimeTarget === 'cloudflare'
-          ? [cloudflareUnavailableDgramFloorVitePlugin()]
+          ? [cloudflareUnavailableDgramFloorVitePlugin(), cloudflareDatabaseRuntimeVitePlugin()]
           : []),
         approvedBuildSourcesVitePlugin(
           appModulePath,
@@ -10055,7 +10137,8 @@ async function bundleKovoServerHandler(
           'build-server',
           {
             allowNodeBuiltins: true,
-            allowRuntimeExternal: isKovoServerHandlerExternalDependency,
+            allowRuntimeExternal: (id) =>
+              isKovoServerHandlerExternalDependencyForTarget(id, options.runtimeTarget),
             sourceRoot: options.buildRoot,
           },
         ),
@@ -10094,6 +10177,10 @@ async function bundleKovoServerHandler(
       ssr: {
         external: ['@node-rs/argon2'],
         noExternal: dependencyCapabilityCompleteBundleNoExternal(),
+        // Resolve provider-neutral/browser package exports for Workers. In particular, Better
+        // Auth's default telemetry entry is portable while its `node` condition probes the host
+        // filesystem synchronously. Node/Vercel retain Vite's Node SSR condition set.
+        target: options.runtimeTarget === 'cloudflare' ? 'webworker' : 'node',
       },
     });
 
@@ -10829,6 +10916,246 @@ function kovoBuildFilterFileName(fileName: string, root: string): string {
 const bundledUndiciRuntimeModuleId = '\0kovo-bundled-undici-runtime';
 
 const cloudflareUnavailableDgramFloorModuleId = '\0kovo-cloudflare-unavailable-dgram-floor';
+const cloudflareUnavailablePgliteModuleId = '\0kovo-cloudflare-unavailable-pglite';
+const cloudflareUnavailableDrizzlePgliteModuleId = '\0kovo-cloudflare-unavailable-drizzle-pglite';
+const cloudflareUnavailablePgliteModuleSource = `const unavailable = () => {
+  throw new TypeError('Kovo Cloudflare builds require an external Postgres database; the embedded development database is unavailable.');
+};
+export class PGlite {
+  constructor() { return unavailable(); }
+  close() { return unavailable(); }
+  exec() { return unavailable(); }
+  query() { return unavailable(); }
+  transaction() { return unavailable(); }
+}
+`;
+
+/**
+ * Replace Node-only database implementation details only across exact, boot-authenticated Kovo
+ * server edges. External Postgres remains available through nodejs_compat, while the embedded
+ * PGlite development driver fails closed and managed SQL classification uses the parser captured
+ * after the generated Worker locks its request-safe realm (SPEC §6.6 rule 6, §10.3).
+ */
+function cloudflareDatabaseRuntimeVitePlugin(): {
+  enforce: 'pre';
+  load(id: string): null | string;
+  name: string;
+  resolveId(source: string, importer?: string): null | string;
+  transform(code: string, id: string): null | string;
+} {
+  return {
+    enforce: 'pre',
+    name: 'kovo-cloudflare-database-runtime',
+    resolveId(source, importer) {
+      if (isCloudflareUnavailablePgliteImport(trustedKovoFrameworkSourceRoots, source, importer)) {
+        return cloudflareUnavailablePgliteModuleId;
+      }
+      if (
+        isCloudflareUnavailableDrizzlePgliteImport(
+          trustedKovoFrameworkSourceRoots,
+          source,
+          importer,
+        )
+      ) {
+        return cloudflareUnavailableDrizzlePgliteModuleId;
+      }
+      return (
+        cloudflareSqlParserAuthorityReplacement(
+          trustedKovoFrameworkSourceRoots,
+          trustedKovoServerRuntimeEntry,
+          source,
+          importer,
+        ) ?? null
+      );
+    },
+    load(id) {
+      if (id === cloudflareUnavailablePgliteModuleId) {
+        return cloudflareUnavailablePgliteModuleSource;
+      }
+      if (id === cloudflareUnavailableDrizzlePgliteModuleId) {
+        return `export function drizzle() {
+  throw new TypeError('Kovo Cloudflare builds require an external Postgres database; the embedded development database is unavailable.');
+}
+`;
+      }
+      return null;
+    },
+    transform(code, id) {
+      return (
+        cloudflareManagedSqlParserSource(trustedCloudflareSqlParserRuntimeSubject, code, id) ?? null
+      );
+    },
+  };
+}
+
+const cloudflareSqlParserAmbiguousDiagnostic =
+  /throw new Error\(`💀 Ambiguous SQL syntax: Please file an issue stating the request that has failed at https:\/\/github\.com\/oguimbal\/pgsql-ast-parser:\s*\$\{sql\}\s*`\);/u;
+
+/**
+ * Normalize the one upstream parser diagnostic that embeds both the complete SQL text and its
+ * Node package identity. Kovo's authority always replaces dependency errors with a fixed
+ * host-owned rejection; stripping this unreachable payload before a Workers bundle avoids
+ * retaining attacker-controlled SQL in an intermediate Error and keeps the artifact free of a
+ * Node package implementation marker. Only the exact boot-captured parser entry and bytes qualify.
+ */
+function cloudflareManagedSqlParserSource(
+  subject: CloudflareSqlParserRuntimeSubject | undefined,
+  code: string,
+  id: string,
+): string | undefined {
+  if (subject === undefined) return undefined;
+  const fileName = viteBuildSourceFileName(id);
+  if (fileName === undefined) return undefined;
+  try {
+    if (realpathSync(fileName) !== subject.entry) return undefined;
+  } catch {
+    return undefined;
+  }
+  if (
+    code !== subject.source ||
+    buildRegExpExec(cloudflareSqlParserAmbiguousDiagnostic, code) === null
+  ) {
+    throw new TypeError(
+      'Kovo refused changed Workers SQL parser bytes or an unreviewed diagnostic shape.',
+    );
+  }
+  const normalized = buildRegExpReplace(
+    cloudflareSqlParserAmbiguousDiagnostic,
+    code,
+    'throw new Error("Ambiguous SQL syntax");',
+  );
+  if (
+    normalized === code ||
+    buildRegExpExec(cloudflareSqlParserAmbiguousDiagnostic, normalized) !== null
+  ) {
+    throw new TypeError('Kovo could not normalize the reviewed Workers SQL parser diagnostic.');
+  }
+  return normalized;
+}
+
+function isCloudflareUnavailablePgliteImport(
+  trust: readonly KovoFrameworkSourceRoot[],
+  source: string,
+  importer: string | undefined,
+): boolean {
+  if (source !== '@electric-sql/pglite' || importer === undefined) return false;
+  const importerFileName = viteBuildSourceFileName(importer);
+  return (
+    importerFileName !== undefined &&
+    buildRegExpExec(
+      /\/postgres-runtime(?:-[A-Za-z0-9_-]+)?\.(?:js|mjs|ts)$/u,
+      slashPath(importerFileName),
+    ) !== null &&
+    kovoFrameworkSourcePathMatchesSnapshot(trust, importerFileName)
+  );
+}
+
+function isCloudflareUnavailableDrizzlePgliteImport(
+  trust: readonly KovoFrameworkSourceRoot[],
+  source: string,
+  importer: string | undefined,
+): boolean {
+  if (source !== 'drizzle-orm/pglite' || importer === undefined) return false;
+  const importerFileName = viteBuildSourceFileName(importer);
+  return (
+    importerFileName !== undefined &&
+    buildRegExpExec(
+      /\/postgres-runtime(?:-[A-Za-z0-9_-]+)?\.(?:js|mjs|ts)$/u,
+      slashPath(importerFileName),
+    ) !== null &&
+    kovoFrameworkSourcePathMatchesSnapshot(trust, importerFileName)
+  );
+}
+
+function cloudflareSqlParserAuthorityReplacement(
+  trust: readonly KovoFrameworkSourceRoot[],
+  serverRuntimeEntry: string | undefined,
+  source: string,
+  importer: string | undefined,
+): string | undefined {
+  if (
+    serverRuntimeEntry === undefined ||
+    importer === undefined ||
+    buildRegExpExec(/^\.\/sql-parser-authority\.(?:js|mjs|ts)$/u, slashPath(source)) === null
+  ) {
+    return undefined;
+  }
+  const importerFileName = viteBuildSourceFileName(importer);
+  if (
+    importerFileName === undefined ||
+    buildRegExpExec(
+      /\/(?:postgres-runtime|sql-parser-authority-bootstrap)(?:-[A-Za-z0-9_-]+)?\.(?:js|mjs|ts)$/u,
+      slashPath(importerFileName),
+    ) === null ||
+    !kovoFrameworkSourcePathMatchesSnapshot(trust, importerFileName)
+  ) {
+    return undefined;
+  }
+  const replacement = serverRuntimeSiblingPath(
+    serverRuntimeEntry,
+    'sql-parser-authority-cloudflare',
+  );
+  return kovoFrameworkSourcePathMatchesSnapshot(trust, replacement) ? replacement : undefined;
+}
+
+function serverRuntimeSiblingPath(serverRuntimeEntry: string, stem: string): string {
+  const extension = buildStringEndsWith(serverRuntimeEntry, '.ts')
+    ? '.ts'
+    : buildStringEndsWith(serverRuntimeEntry, '.mjs')
+      ? '.mjs'
+      : '.js';
+  return join(dirname(serverRuntimeEntry), `${stem}${extension}`);
+}
+
+/** @internal Regression seam for source/packed Cloudflare PGlite substitution. */
+export function cloudflareUnavailablePgliteImportForTesting(
+  trust: readonly KovoFrameworkSourceRoot[],
+  source: string,
+  importer: string | undefined,
+): boolean {
+  return isCloudflareUnavailablePgliteImport(trust, source, importer);
+}
+
+/** @internal Regression seam for the fail-closed Workers PGlite substitute. */
+export function cloudflareUnavailablePgliteModuleSourceForTesting(): string {
+  return cloudflareUnavailablePgliteModuleSource;
+}
+
+/** @internal Regression seam for source/packed Cloudflare Drizzle-PGlite substitution. */
+export function cloudflareUnavailableDrizzlePgliteImportForTesting(
+  trust: readonly KovoFrameworkSourceRoot[],
+  source: string,
+  importer: string | undefined,
+): boolean {
+  return isCloudflareUnavailableDrizzlePgliteImport(trust, source, importer);
+}
+
+/** @internal Regression seam for provider-specific server-handler externalization. */
+export function kovoServerHandlerExternalDependencyForTesting(
+  id: string,
+  runtimeTarget: KovoBuildPresetName,
+): boolean {
+  return isKovoServerHandlerExternalDependencyForTarget(id, runtimeTarget);
+}
+
+/** @internal Regression seam for source/packed Cloudflare parser authority selection. */
+export function cloudflareSqlParserAuthorityReplacementForTesting(
+  trust: readonly KovoFrameworkSourceRoot[],
+  serverRuntimeEntry: string | undefined,
+  source: string,
+  importer: string | undefined,
+): string | undefined {
+  return cloudflareSqlParserAuthorityReplacement(trust, serverRuntimeEntry, source, importer);
+}
+
+/** @internal Regression seam for the authenticated Workers parser diagnostic normalization. */
+export function cloudflareManagedSqlParserSourceForTesting(
+  subject: CloudflareSqlParserRuntimeSubject | undefined,
+  code: string,
+  id: string,
+): string | undefined {
+  return cloudflareManagedSqlParserSource(subject, code, id);
+}
 
 /**
  * Cloudflare exposes node:dgram only as a non-functional compatibility stub. The framework's
@@ -11204,7 +11531,26 @@ function generatedBuildClientModuleBootstrapHref(): string {
 }
 
 function generatedHandlerRuntimeHref(): string {
-  return generatedServerInternalSiblingHref('generated-handler-runtime');
+  const appShellEntry = requireFromCli.resolve('@kovojs/server/internal/app-shell-vite');
+  // Published packages preserve the server source graph as fixed-name modules. The generated
+  // handler and public app imports therefore share one module identity graph, while the consuming
+  // app can still tree-shake unrelated Node-only database/static-analysis modules. The framework
+  // source loader authenticates every file before Vite consumes it (SPEC §5.2/§6.6 and §14).
+  return generatedHandlerRuntimeHrefFromAppShellEntry(appShellEntry);
+}
+
+function generatedHandlerRuntimeHrefFromAppShellEntry(appShellEntry: string): string {
+  const extension = buildStringEndsWith(appShellEntry, '.ts')
+    ? '.ts'
+    : buildStringEndsWith(appShellEntry, '.mjs')
+      ? '.mjs'
+      : '.js';
+  return pathToFileURL(join(dirname(appShellEntry), `generated-handler-runtime${extension}`)).href;
+}
+
+/** @internal Regression seam for source and packed generated-handler runtime resolution. */
+export function generatedHandlerRuntimeHrefForTesting(appShellEntry: string): string {
+  return generatedHandlerRuntimeHrefFromAppShellEntry(appShellEntry);
 }
 
 /** @internal Serialize the production registry entry with the CLI's boot-captured JSON control. */

@@ -14,18 +14,27 @@ import {
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 import { build as viteBuild, createServer as createViteServer, type Plugin } from 'vite-plus';
 
 import {
   approvedBuildSourcesVitePluginForTesting,
+  cloudflareManagedSqlParserSourceForTesting,
+  cloudflareSqlParserAuthorityReplacementForTesting,
   cloudflareUnavailableDgramFloorImportForTesting,
+  cloudflareUnavailableDrizzlePgliteImportForTesting,
+  cloudflareUnavailablePgliteImportForTesting,
+  cloudflareUnavailablePgliteModuleSourceForTesting,
+  generatedHandlerRuntimeHrefForTesting,
   kovoFrameworkSourcePathFromTrustForTesting,
   kovoFrameworkSourcePathForTesting,
   kovoFrameworkSourceRootsForTesting,
   kovoFrameworkSourceTrustForTesting,
   kovoFrameworkSourceVitePluginForTesting,
+  kovoServerHandlerExternalDependencyForTesting,
+  kovoServerHandlerModuleSideEffectFreeForTesting,
 } from './build-export.js';
 
 function declaredWorkspaceKovoDependencyEntries(entry: string, packageName: string): string[] {
@@ -533,6 +542,252 @@ describe('Kovo framework source roots', () => {
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
+  });
+
+  it('selects Workers database substitutes only across byte-authenticated server edges', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-cloudflare-database-runtime-')));
+    try {
+      for (const packed of [false, true]) {
+        const installRoot = join(root, packed ? 'packed' : 'source');
+        const cliRoot = packed
+          ? writePackedPackage(installRoot, '@kovojs/cli', { '@kovojs/server': '0.2.0' })
+          : undefined;
+        const sourceCliRoot = packed
+          ? undefined
+          : writePackage(installRoot, '@kovojs/cli', { '@kovojs/server': '0.2.0' });
+        const server = packed ? writePackedPackage(installRoot, '@kovojs/server') : undefined;
+        const sourceServerRoot = packed ? undefined : writePackage(installRoot, '@kovojs/server');
+        const cliEntry = packed ? cliRoot!.entry : join(sourceCliRoot!, 'index.js');
+        const serverEntry = packed ? server!.entry : join(sourceServerRoot!, 'index.js');
+        const runtimeRoot = dirname(serverEntry);
+        const extension = packed ? '.mjs' : '.js';
+        const parserSpecifier = packed ? './sql-parser-authority.mjs' : './sql-parser-authority.js';
+        const postgresRuntime = join(runtimeRoot, `postgres-runtime${extension}`);
+        const parserBootstrap = join(runtimeRoot, `sql-parser-authority-bootstrap${extension}`);
+        const parserAuthority = join(runtimeRoot, `sql-parser-authority-cloudflare${extension}`);
+        const appLookalike = join(installRoot, `postgres-runtime${extension}`);
+        writeFileSync(
+          postgresRuntime,
+          "import { PGlite } from '@electric-sql/pglite';\nimport './sql-parser-authority.js';\n",
+          'utf8',
+        );
+        writeFileSync(parserBootstrap, "import './sql-parser-authority.js';\n", 'utf8');
+        writeFileSync(parserAuthority, 'export const parse = true;\n', 'utf8');
+        writeFileSync(appLookalike, "import { PGlite } from '@electric-sql/pglite';\n", 'utf8');
+        const trust = kovoFrameworkSourceTrustForTesting(cliEntry);
+
+        expect(
+          cloudflareUnavailablePgliteImportForTesting(
+            trust,
+            '@electric-sql/pglite',
+            postgresRuntime,
+          ),
+        ).toBe(true);
+        expect(
+          cloudflareUnavailablePgliteImportForTesting(trust, '@electric-sql/pglite', appLookalike),
+        ).toBe(false);
+        expect(
+          cloudflareUnavailablePgliteImportForTesting(trust, 'node:dgram', postgresRuntime),
+        ).toBe(false);
+        expect(
+          cloudflareUnavailableDrizzlePgliteImportForTesting(
+            trust,
+            'drizzle-orm/pglite',
+            postgresRuntime,
+          ),
+        ).toBe(true);
+        expect(
+          cloudflareUnavailableDrizzlePgliteImportForTesting(
+            trust,
+            'drizzle-orm/pglite',
+            appLookalike,
+          ),
+        ).toBe(false);
+        expect(
+          cloudflareSqlParserAuthorityReplacementForTesting(
+            trust,
+            serverEntry,
+            parserSpecifier,
+            postgresRuntime,
+          ),
+        ).toBe(parserAuthority);
+        expect(
+          cloudflareSqlParserAuthorityReplacementForTesting(
+            trust,
+            serverEntry,
+            parserSpecifier,
+            parserBootstrap,
+          ),
+        ).toBe(parserAuthority);
+        expect(
+          cloudflareSqlParserAuthorityReplacementForTesting(
+            trust,
+            serverEntry,
+            parserSpecifier,
+            appLookalike,
+          ),
+        ).toBeUndefined();
+
+        writeFileSync(parserAuthority, 'export const parse = false;\n', 'utf8');
+        expect(
+          cloudflareSqlParserAuthorityReplacementForTesting(
+            trust,
+            serverEntry,
+            parserSpecifier,
+            postgresRuntime,
+          ),
+        ).toBeUndefined();
+      }
+      expect(
+        kovoServerHandlerExternalDependencyForTesting('@electric-sql/pglite', 'cloudflare'),
+      ).toBe(false);
+      expect(kovoServerHandlerExternalDependencyForTesting('@electric-sql/pglite', 'node')).toBe(
+        true,
+      );
+      expect(kovoServerHandlerExternalDependencyForTesting('@electric-sql/pglite', 'vercel')).toBe(
+        true,
+      );
+      expect(kovoServerHandlerExternalDependencyForTesting('pg', 'cloudflare')).toBe(true);
+      const pgliteSubstitute = (await import(
+        `data:text/javascript;charset=utf-8,${encodeURIComponent(
+          cloudflareUnavailablePgliteModuleSourceForTesting(),
+        )}`
+      )) as { PGlite: new () => unknown };
+      expect(() => new pgliteSubstitute.PGlite()).toThrowError(
+        'Kovo Cloudflare builds require an external Postgres database; the embedded development database is unavailable.',
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('normalizes only the boot-authenticated Workers parser diagnostic payload', () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-cloudflare-parser-payload-')));
+    const parserEntry = join(root, 'index.js');
+    const lookalike = join(root, 'lookalike.js');
+    const parserSource = `function parse(sql) {
+  throw new Error(\`💀 Ambiguous SQL syntax: Please file an issue stating the request that has failed at https://github.com/oguimbal/pgsql-ast-parser:
+
+        \${sql}
+
+        \`);
+}
+`;
+    try {
+      writeFileSync(parserEntry, parserSource, 'utf8');
+      writeFileSync(lookalike, parserSource, 'utf8');
+      const subject = { entry: realpathSync(parserEntry), source: parserSource };
+      const normalized = cloudflareManagedSqlParserSourceForTesting(
+        subject,
+        parserSource,
+        parserEntry,
+      );
+
+      expect(normalized).toContain('throw new Error("Ambiguous SQL syntax");');
+      expect(normalized).not.toContain('pgsql-ast-parser');
+      expect(normalized).not.toContain('${sql}');
+      expect(
+        cloudflareManagedSqlParserSourceForTesting(subject, parserSource, lookalike),
+      ).toBeUndefined();
+      expect(() =>
+        cloudflareManagedSqlParserSourceForTesting(
+          subject,
+          `${parserSource}\n// changed after bootstrap\n`,
+          parserEntry,
+        ),
+      ).toThrow(/changed Workers SQL parser bytes/u);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('normalizes the installed reviewed parser subject without retaining raw SQL diagnostics', () => {
+    const serverEntry = realpathSync(createRequire(import.meta.url).resolve('@kovojs/server'));
+    const parserEntry = realpathSync(
+      createRequire(pathToFileURL(serverEntry)).resolve('pgsql-ast-parser'),
+    );
+    const parserSource = readFileSync(parserEntry, 'utf8');
+    const normalized = cloudflareManagedSqlParserSourceForTesting(
+      { entry: parserEntry, source: parserSource },
+      parserSource,
+      parserEntry,
+    );
+
+    expect(normalized).toContain('throw new Error("Ambiguous SQL syntax");');
+    expect(normalized).not.toContain('request that has failed at');
+    expect(normalized).not.toContain('${sql}');
+  });
+
+  it('applies server tree-shaking posture only to byte-authenticated source and packed modules', () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-server-side-effects-')));
+    const stems = [
+      'managed-db-public',
+      'password',
+      'postgres-runtime',
+      'sqlite-runtime',
+      'sql-parser-authority',
+      'sql-parser-authority-bootstrap',
+    ];
+    try {
+      for (const packed of [false, true]) {
+        const installRoot = join(root, packed ? 'packed' : 'source');
+        const cliRoot = packed
+          ? writePackedPackage(installRoot, '@kovojs/cli', { '@kovojs/server': '0.2.0' })
+          : undefined;
+        const sourceCliRoot = packed
+          ? undefined
+          : writePackage(installRoot, '@kovojs/cli', { '@kovojs/server': '0.2.0' });
+        const server = packed ? writePackedPackage(installRoot, '@kovojs/server') : undefined;
+        const sourceServerRoot = packed ? undefined : writePackage(installRoot, '@kovojs/server');
+        const cliEntry = packed ? cliRoot!.entry : join(sourceCliRoot!, 'index.js');
+        const serverEntry = packed ? server!.entry : join(sourceServerRoot!, 'index.js');
+        const runtimeRoot = dirname(serverEntry);
+        const extension = packed ? '.mjs' : '.ts';
+        const modules = stems.map((stem) => join(runtimeRoot, `${stem}${extension}`));
+        for (const module of modules) {
+          writeFileSync(module, 'export const prepared = true;\n', 'utf8');
+        }
+        const appLookalike = join(installRoot, `password${extension}`);
+        writeFileSync(appLookalike, 'export const appOwned = true;\n', 'utf8');
+        const trust = kovoFrameworkSourceTrustForTesting(cliEntry);
+
+        for (const module of modules) {
+          expect(kovoServerHandlerModuleSideEffectFreeForTesting(trust, serverEntry, module)).toBe(
+            true,
+          );
+        }
+        expect(
+          kovoServerHandlerModuleSideEffectFreeForTesting(trust, serverEntry, appLookalike),
+        ).toBe(false);
+
+        writeFileSync(modules[0]!, 'export const prepared = false;\n', 'utf8');
+        expect(
+          kovoServerHandlerModuleSideEffectFreeForTesting(trust, serverEntry, modules[0]!),
+        ).toBe(false);
+      }
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('keeps source and packed handlers on one fixed-name internal runtime graph', () => {
+    const sourceAppShell = join(
+      tmpdir(),
+      'kovo-source',
+      'packages/server/src/internal/app-shell-vite.ts',
+    );
+    const packedAppShell = join(
+      tmpdir(),
+      'kovo-packed',
+      'node_modules/@kovojs/server/dist/internal/app-shell-vite.mjs',
+    );
+
+    expect(generatedHandlerRuntimeHrefForTesting(sourceAppShell)).toBe(
+      pathToFileURL(join(dirname(sourceAppShell), 'generated-handler-runtime.ts')).href,
+    );
+    expect(generatedHandlerRuntimeHrefForTesting(packedAppShell)).toBe(
+      pathToFileURL(join(dirname(packedAppShell), 'generated-handler-runtime.mjs')).href,
+    );
   });
 
   it('passes byte-exact packed chunks and text assets through the real Vite transform path', async () => {

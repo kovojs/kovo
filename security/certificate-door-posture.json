@@ -6,7 +6,7 @@
       "id": "isolated-managed-sql-parser",
       "packageName": "@kovojs/server",
       "source": "src/sql-parser-authority.ts",
-      "sourceSha512": "sha512-E5WPYm1djG4D9YwDIkHMNFWT3gdwiE6BqwasBQA6fccalV7wes9wCZ5sJSQjce5zoSxrVj7o6lEHh/4fYLln0A==",
+      "sourceSha512": "sha512-k7AwROwR2hOOuqtGlmf/JlQ3htpaUIHHz+BpQ+V9bMFVOS7kmy3S6xklahU96+K2CvtLD+7mclJK4ok32Y3SGg==",
       "capabilities": ["dynamic-loader", "filesystem", "vm"]
     },
     {
