@@ -907,7 +907,9 @@
       "digest",
       "filesystem"
     ],
-    "@kovojs/server/dist/diagnostics.mjs": [],
+    "@kovojs/server/dist/diagnostics.mjs": [
+      "crypto-acquisition"
+    ],
     "@kovojs/server/dist/document-core.mjs": [
       "crypto-acquisition",
       "digest",
@@ -1279,7 +1281,9 @@
       "digest",
       "filesystem"
     ],
-    "@kovojs/server/dist/mutation/replay-abort.mjs": [],
+    "@kovojs/server/dist/mutation/replay-abort.mjs": [
+      "crypto-acquisition"
+    ],
     "@kovojs/server/dist/mutation/replay-policy.mjs": [
       "crypto-acquisition",
       "digest",
@@ -5695,6 +5699,10 @@
     ],
     [
       "@kovojs/server/dist/diagnostics.mjs",
+      "@kovojs/server/dist/response-security-intrinsics.mjs"
+    ],
+    [
+      "@kovojs/server/dist/diagnostics.mjs",
       "@kovojs/server/dist/security-witness-intrinsics.mjs"
     ],
     [
@@ -7104,6 +7112,10 @@
     [
       "@kovojs/server/dist/live-target-app-attestation.mjs",
       "@kovojs/server/dist/live-target-app-identity.mjs"
+    ],
+    [
+      "@kovojs/server/dist/live-target-app-identity.mjs",
+      "@kovojs/server/dist/crypto-authority.mjs"
     ],
     [
       "@kovojs/server/dist/live-target-app-identity.mjs",
@@ -10816,7 +10828,7 @@
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     }
   ],
-  "policySha512": "sha512-OdAKzZccOjbhGJJzRbslyfF5jxbuvJ+yLwnuayDG5HrMDyCvQ8n4wDMWGJgA6Dqw2eWePPTFWGF3YP74HP/T8g==",
+  "policySha512": "sha512-nj7n0P81fPg3/yQAqFW9gHXrnWvizqoTkTFWHy0Nra9GIbcn1a8JHudzon3h64nz3NXBHQkKdvmRYA4rPYx8og==",
   "roots": [
     {
       "module": "@kovojs/better-auth/dist/index.mjs",
