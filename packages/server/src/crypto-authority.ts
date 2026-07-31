@@ -275,6 +275,9 @@ if (!cryptoAuthorityControlsSound) {
     'Kovo crypto authority is unavailable because crypto or realm intrinsics were modified before framework initialization.',
   );
 }
+// SPEC §6.6: the process-local fallback remains inside the primitive-owning authority. Consumers
+// receive only the registered session-fingerprint signing operation, never this root material.
+const fallbackSessionFingerprintRoot = nativeRandomBytes(32);
 
 /** @internal Bootstrap health assertion for the pinned server crypto authority. */
 export function assertCryptoAuthority(): void {
@@ -309,13 +312,24 @@ export function createPrincipalErasureCryptoHandle(secret: SigningSecret): Purpo
   return createPurposeHandle(secret, 'principal-erasure-receipt', 'principal-erasure-receipt');
 }
 
-export function createSessionFingerprintCryptoHandle(secret: SigningSecret): PurposeSignHandle {
+export function createSessionFingerprintCryptoHandle(
+  secret: SigningSecret = fallbackSessionFingerprintRoot,
+): PurposeSignHandle {
   const handle = createPurposeHandle(
     secret,
     'session-fingerprint',
     'broadcast-channel-session-fingerprint',
   );
   return witnessFreeze({ currentKeyId: handle.currentKeyId, sign: handle.sign });
+}
+
+/** @internal Mint the process-local audience nonce without exposing raw entropy or a selector. */
+export function mintLiveTargetLocalAudienceNonce(): string {
+  const nonce = securityBufferToString(nativeRandomBytes(32), 'base64url');
+  if (nonce.length !== 43 || !securityRegExpTest(/^[A-Za-z0-9_-]{43}$/u, nonce)) {
+    throw new TypeError('Kovo crypto authority returned an invalid live-target audience nonce.');
+  }
+  return nonce;
 }
 
 export function createRenderedHtmlCryptoHandle(secret: SigningSecret): PurposeCryptoHandle {

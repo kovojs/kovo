@@ -1,7 +1,6 @@
-import { randomUUID } from 'node:crypto';
-
 import type { KovoApp } from './app-types.js';
 import type { CsrfOptions } from './csrf.js';
+import { mintLiveTargetLocalAudienceNonce } from './crypto-authority.js';
 import { resolveBootMode } from './env.js';
 import {
   createLiveTargetAttestationForResponse,
@@ -51,7 +50,7 @@ const identities = createWitnessWeakMap<KovoApp, LiveTargetAppIdentity>();
 const authorityFacts = createWitnessWeakMap<object, LiveTargetAttestationAuthorityFacts>();
 // A missing appId is never distributed authority. This boot-local nonce keeps rendererless or dev
 // aggregates from accidentally sharing an audience with another process that ships the same build.
-const processLocalAudienceNonce = randomUUID();
+const processLocalAudienceNonce = mintLiveTargetLocalAudienceNonce();
 let nextLocalInstance = 0;
 
 /** @internal Attach the app-authored replica-stable identity before the aggregate escapes. */

@@ -19,6 +19,7 @@ import {
   loggingStringTrim,
 } from './logging-intrinsics.js';
 import { neutralizeLogValue, sanitizeDiagnosticText, sanitizeDiagnosticUrl } from './logging.js';
+import { securityRandomUuid } from './response-security-intrinsics.js';
 import {
   authorityNeutralAbortSignal,
   createNativeHeaders,
@@ -68,9 +69,6 @@ const NativeUint8Array = Uint8Array;
 const NativeURIError = URIError;
 const NativeURL = URL;
 const NativeURLSearchParams = URLSearchParams;
-const nativeCrypto = globalThis.crypto;
-const nativeCryptoGetRandomValues =
-  nativeCrypto === undefined ? undefined : witnessReflectGet(nativeCrypto, 'getRandomValues');
 const nativeFunctionHasInstance = Function.prototype[Symbol.hasInstance];
 const nativeErrorStackDescriptor = witnessGetOwnPropertyDescriptor(new NativeError(), 'stack');
 const nativeObjectCreate = NativeObject.create;
@@ -346,18 +344,10 @@ function trustedBoundaryOwnData(value: object, key: string): unknown {
 }
 
 function nextTrustedBoundaryCorrelationId(): string {
-  const bytes = new NativeUint8Array(16);
-  if (nativeCrypto !== undefined && typeof nativeCryptoGetRandomValues === 'function') {
-    try {
-      witnessReflectApply(nativeCryptoGetRandomValues, nativeCrypto, [bytes]);
-      // UUID-compatible variant/version bits make the random layout recognizable without making
-      // this incident key an authenticator.
-      bytes[6] = (bytes[6]! & 0x0f) | 0x40;
-      bytes[8] = (bytes[8]! & 0x3f) | 0x80;
-      return `ktb_${trustedBoundaryHex(bytes)}`;
-    } catch {
-      // Diagnostics must remain available when a host omits or breaks Web Crypto.
-    }
+  try {
+    return `ktb_${loggingReplaceAllLiteral(securityRandomUuid(), '-', '')}`;
+  } catch {
+    // Diagnostics must remain available when the boot-pinned entropy authority is unavailable.
   }
 
   fallbackCorrelationSequence += 1;
@@ -373,15 +363,6 @@ function nextTrustedBoundaryCorrelationId(): string {
     0,
     CORRELATION_ZEROES.length - suffix.length,
   )}${suffix}`;
-}
-
-function trustedBoundaryHex(bytes: Uint8Array): string {
-  let output = '';
-  for (let index = 0; index < bytes.length; index += 1) {
-    const value = bytes[index]!;
-    output += `${HEX_DIGITS[(value >>> 4) & 0x0f]}${HEX_DIGITS[value & 0x0f]}`;
-  }
-  return output;
 }
 
 function prepareServerErrorDiagnostic(

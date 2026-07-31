@@ -5,7 +5,9 @@ import {
   createCapabilityCryptoHandle,
   createCsrfCryptoHandle,
   createPrincipalErasureCryptoHandle,
+  createSessionFingerprintCryptoHandle,
   cryptoPurposeRegistry,
+  mintLiveTargetLocalAudienceNonce,
 } from './crypto-authority.js';
 import { createSigningKeyRing } from './keyring.js';
 
@@ -89,5 +91,28 @@ describe('SPEC §6.6 purpose-bound crypto authority', () => {
     expect(handle.mintDecoyToken()).not.toBe(token);
     expect(handle).not.toHaveProperty('randomBytes');
     expect(handle).not.toHaveProperty('sign');
+  });
+
+  it('keeps the process-local session-fingerprint root behind a sign-only handle', () => {
+    const first = createSessionFingerprintCryptoHandle();
+    const second = createSessionFingerprintCryptoHandle();
+    const fingerprint = first.sign('principal:user-1');
+
+    expect(Object.isFrozen(first)).toBe(true);
+    expect(Reflect.ownKeys(first).sort()).toEqual(['currentKeyId', 'sign']);
+    expect(second.sign('principal:user-1')).toEqual(fingerprint);
+    expect(first.sign('principal:user-2').signature).not.toBe(fingerprint.signature);
+    expect(first).not.toHaveProperty('secret');
+    expect(first).not.toHaveProperty('randomBytes');
+    expect(first).not.toHaveProperty('verify');
+  });
+
+  it('mints only a fixed-width opaque live-target local-audience nonce', () => {
+    const first = mintLiveTargetLocalAudienceNonce();
+    const second = mintLiveTargetLocalAudienceNonce();
+
+    expect(first).toMatch(/^[A-Za-z0-9_-]{43}$/u);
+    expect(second).toMatch(/^[A-Za-z0-9_-]{43}$/u);
+    expect(second).not.toBe(first);
   });
 });

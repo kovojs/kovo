@@ -1,5 +1,3 @@
-import { randomBytes } from 'node:crypto';
-
 import { acceptsEnhancedNavigationDocument } from '@kovojs/core/internal/document-protocol';
 
 import { principalPostureFromRequest } from './auth-principal.js';
@@ -97,7 +95,6 @@ import {
 } from './security-witness-intrinsics.js';
 
 type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
-const fallbackBroadcastFingerprintSecret = randomBytes(32);
 const classifyConfiguredErrorShellHeaders = createAppResponseHeaderClassifier({
   lowerCase: witnessStringToLowerCase,
 });
@@ -688,9 +685,7 @@ function createUnavailableSignUrl(message: string): ReturnType<typeof createSign
  * `principalPostureFromRequest`; unresolved session carriers intentionally do not reach this helper.
  */
 function hmacSessionFingerprint(input: string, secret: SigningSecret | undefined): string {
-  return createSessionFingerprintCryptoHandle(secret ?? fallbackBroadcastFingerprintSecret).sign(
-    input,
-  ).signature;
+  return createSessionFingerprintCryptoHandle(secret).sign(input).signature;
 }
 
 export async function renderAppErrorDocumentResponse(
