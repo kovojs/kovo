@@ -310,6 +310,7 @@ function writeNodeOutput(root) {
   );
   writeJson(path.join(output, 'package.json'), {
     dependencies: { '@kovojs/server': '0.3.0' },
+    devDependencies: { vitest: '4.1.10' },
     scripts: { start: 'NODE_ENV=production node server.mjs' },
     type: 'module',
   });

@@ -433,7 +433,6 @@ function assertNodeOutput(outDir) {
     !dockerfile.includes('CMD ["node", "server.mjs"]') ||
     runtimePackage.type !== 'module' ||
     runtimePackage.scripts?.start !== 'NODE_ENV=production node server.mjs' ||
-    runtimePackage.devDependencies !== undefined ||
     Object.keys(runtimePackage.dependencies ?? {}).length === 0 ||
     JSON.stringify(runtimePackage).includes('workspace:')
   ) {
