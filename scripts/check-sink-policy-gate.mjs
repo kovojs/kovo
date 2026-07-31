@@ -41,10 +41,20 @@ export const defaultCommandIntrinsicsPath = 'packages/server/src/command-intrins
 export const defaultCommandExecutionToolingRationales = {
   'packages/cli/src/bin.ts':
     'CLI bootstrap synchronously delegates to the real implementation before framework runtime boot.',
+  'packages/cli/src/commands/build-one-shot-orchestrator.ts':
+    'CLI build isolation launches package-owned phase workers with inherited stdio and a private control descriptor.',
   'packages/cli/src/commands/build-export.ts':
     'CLI build/export tooling invokes TypeScript/Vite subprocesses outside request/runtime paths.',
   'packages/cli/src/commands/compile.ts':
     'CLI compile tooling runs the TypeScript checker outside request/runtime paths.',
+  'packages/cli/src/commands/fix.ts':
+    'CLI fix tooling synchronously invokes the package-resolved formatter with inherited stdio outside request/runtime paths.',
+  'packages/cli/src/commands/project-quality.ts':
+    'CLI quality tooling invokes package-resolved formatter and linter binaries with bounded output and per-tool environments.',
+  'packages/cli/src/commands/sound-subset.ts':
+    'CLI sound-subset tooling invokes the package-owned classifier with bounded JSON output and its required format environment.',
+  'packages/cli/src/commands/test.ts':
+    'CLI test tooling synchronously invokes the package-resolved test runner with inherited stdio and a sanitized invocation environment.',
 };
 
 export const defaultRootedFileServeSinkFiles = ['packages/server/src/file.ts'];
@@ -108,6 +118,10 @@ const defaultSqlBlessedBrandStampFiles = [
   'packages/core/src/internal/sql-safety.ts',
   'packages/drizzle/src/runtime.ts',
 ];
+export const defaultSqlBlessedBrandAdapterRationales = {
+  'packages/drizzle/src/runtime.ts':
+    'The reviewed Drizzle adapter applies private author-only types directly to core stamp results after those constructors mint the runtime witness.',
+};
 const sqlBlessedBrandTypeNames = new Set([
   'KovoParameterizedSql',
   'KovoSqlIdentifier',
@@ -233,6 +247,9 @@ export function checkSinkPolicyGate(options = {}) {
   const sqlBlessedBrandStampFileSet = new Set(
     options.sqlBlessedBrandStampFiles ?? defaultSqlBlessedBrandStampFiles,
   );
+  const sqlBlessedBrandAdapterRationales =
+    options.sqlBlessedBrandAdapterRationales ?? defaultSqlBlessedBrandAdapterRationales;
+  const sqlBlessedBrandAdapterFileSet = new Set(Object.keys(sqlBlessedBrandAdapterRationales));
   const commandExecutionFiles =
     options.commandExecutionFiles ?? collectSourceFiles(root, commandExecutionRoots);
   const rootedFileServeSinkFiles =
@@ -248,6 +265,13 @@ export function checkSinkPolicyGate(options = {}) {
   const exists = options.exists ?? ((relativePath) => existsSync(path.join(root, relativePath)));
 
   const findings = [];
+  for (const [filePath, rationale] of Object.entries(sqlBlessedBrandAdapterRationales)) {
+    if (typeof rationale !== 'string' || rationale.trim().length < 20) {
+      findings.push(
+        `${filePath}: SQL blessed-brand adapter allowance must carry a narrow rationale`,
+      );
+    }
+  }
   const sinkPolicyText = readText(sinkPolicyPath);
   const registeredKinds = extractRegisteredBlessedSinkKinds(sinkPolicyText);
 
@@ -300,13 +324,15 @@ export function checkSinkPolicyGate(options = {}) {
       findings.push(`${filePath}: SQL blessed-brand laundering gate input is missing`);
       continue;
     }
+    const text = readText(filePath);
     findings.push(
-      ...sqlBlessedBrandLaunderingFindings(filePath, readText(filePath), {
+      ...sqlBlessedBrandLaunderingFindings(filePath, text, {
         allowedConstructorFile: sqlBlessedBrandConstructorFileSet.has(filePath),
+        allowedStampAdapterFile: sqlBlessedBrandAdapterFileSet.has(filePath),
       }),
     );
     findings.push(
-      ...sqlBlessedBrandStampFindings(filePath, readText(filePath), {
+      ...sqlBlessedBrandStampFindings(filePath, text, {
         allowedStampFile: sqlBlessedBrandStampFileSet.has(filePath),
       }),
     );
@@ -948,6 +974,10 @@ export function sqlBlessedBrandLaunderingFindings(filePath, text, options = {}) 
 
   const source = stripComments(text);
   const findings = [];
+  const reviewedAdapterAssertionRanges =
+    options.allowedStampAdapterFile === true
+      ? reviewedSqlStampAdapterAssertionRanges(filePath, source)
+      : [];
   const brandNames = [...sqlBlessedBrandTypeNames].join('|');
   const brandType = String.raw`(?:${brandNames})\b`;
   const anyOrUnknown = String.raw`(?:any|unknown)\b`;
@@ -1013,6 +1043,13 @@ export function sqlBlessedBrandLaunderingFindings(filePath, text, options = {}) 
   for (const { pattern, description } of patterns) {
     let match;
     while ((match = pattern.exec(source)) !== null) {
+      if (
+        reviewedAdapterAssertionRanges.some(
+          (range) => match.index >= range.start && match.index < range.end,
+        )
+      ) {
+        continue;
+      }
       const precedingText = source.slice(Math.max(0, match.index - 32), match.index);
       if (
         description === 'direct type assertion' &&
@@ -1074,6 +1111,79 @@ export function sqlBlessedBrandLaunderingFindings(filePath, text, options = {}) 
   }
 
   return dedupe(findings);
+}
+
+const reviewedSqlStampForAuthorBrand = new Map([
+  ['KovoParameterizedSql', 'stampParameterizedSql'],
+  ['KovoSqlIdentifier', 'stampSqlIdentifier'],
+  ['KovoSqlKeyword', 'stampSqlKeyword'],
+  ['KovoStaticSql', 'stampStaticSql'],
+  ['KovoTrustedSql', 'stampTrustedSql'],
+]);
+
+function reviewedSqlStampAdapterAssertionRanges(filePath, source) {
+  const sourceFile = ts.createSourceFile(
+    filePath,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    filePath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  const ranges = [];
+  const visit = (node) => {
+    if (ts.isAsExpression(node)) {
+      const authorBrand = reviewedSqlAuthorBrand(node.type);
+      const expectedStamp =
+        authorBrand === undefined ? undefined : reviewedSqlStampForAuthorBrand.get(authorBrand);
+      let expression = node.expression;
+      while (ts.isParenthesizedExpression(expression)) expression = expression.expression;
+      if (
+        expectedStamp !== undefined &&
+        ts.isCallExpression(expression) &&
+        ts.isIdentifier(expression.expression) &&
+        expression.expression.text === expectedStamp
+      ) {
+        ranges.push({ end: node.end, start: node.getStart(sourceFile) });
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return ranges;
+}
+
+function reviewedSqlAuthorBrand(typeNode) {
+  if (
+    ts.isTypeReferenceNode(typeNode) &&
+    ts.isIdentifier(typeNode.typeName) &&
+    reviewedSqlStampForAuthorBrand.has(typeNode.typeName.text)
+  ) {
+    return typeNode.typeName.text;
+  }
+  if (!ts.isIntersectionTypeNode(typeNode) || typeNode.types.length !== 2) return undefined;
+  let hasSourceType = false;
+  let authorBrand;
+  for (const member of typeNode.types) {
+    if (
+      ts.isTypeReferenceNode(member) &&
+      ts.isIdentifier(member.typeName) &&
+      member.typeName.text === 'T' &&
+      member.typeArguments === undefined
+    ) {
+      hasSourceType = true;
+      continue;
+    }
+    if (
+      ts.isTypeReferenceNode(member) &&
+      ts.isIdentifier(member.typeName) &&
+      member.typeName.text === 'KovoTrustedSql'
+    ) {
+      authorBrand = member.typeName.text;
+      continue;
+    }
+    return undefined;
+  }
+  return hasSourceType && authorBrand === 'KovoTrustedSql' ? authorBrand : undefined;
 }
 
 export function sqlBlessedBrandStampFindings(filePath, text, options = {}) {

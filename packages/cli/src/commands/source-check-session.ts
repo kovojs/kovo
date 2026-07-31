@@ -1,16 +1,6 @@
 /* oxlint-disable typescript/unbound-method -- Boot-captured controls use pinned Reflect.apply. */
 import { createHash } from 'node:crypto';
-import {
-  closeSync,
-  constants as fsConstants,
-  fstatSync,
-  lstatSync,
-  openSync,
-  readFileSync,
-  readdirSync,
-  readlinkSync,
-  realpathSync,
-} from 'node:fs';
+import { lstatSync, readdirSync, readlinkSync, realpathSync } from 'node:fs';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { clearTimeout as clearNodeTimeout, setTimeout as setNodeTimeout } from 'node:timers';
 
@@ -44,6 +34,7 @@ import {
   buildStringSplit,
   buildStringStartsWith,
 } from './build-security-intrinsics.js';
+import { readBoundedRegularFile } from './bounded-regular-file.js';
 
 const watchProtocol = 'kovo-check-watch/v1';
 const inputProofProtocol = 'kovo-check-input-proof/v1';
@@ -780,26 +771,19 @@ function readStableRegularFile(
   pathStat: ReturnType<typeof lstatSync>,
   maximumBytes: number,
 ): Uint8Array {
-  let descriptor: number | undefined;
   let bytes: Uint8Array;
   try {
-    descriptor = openSync(absolute, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
-    const opened = fstatSync(descriptor);
-    assertSameStat(pathStat, opened, path);
-    if (statKind(opened) !== 'file' || statNumber(opened, 'size', path) > maximumBytes) {
-      throw new NativeTypeError(`Source-check watched file exceeds its byte bound: ${path}.`);
-    }
-    bytes = readFileSync(descriptor);
-    const after = fstatSync(descriptor);
-    assertSameStat(opened, after, path);
-    if (buildByteLength(bytes) !== statNumber(after, 'size', path)) throw snapshotRace(path);
+    bytes = readBoundedRegularFile(absolute, {
+      label: `Source-check watched file ${path}`,
+      limitMessage: `Source-check watched file exceeds its byte bound: ${path}.`,
+      maxBytes: maximumBytes,
+    });
   } catch (error) {
     if (isSnapshotRace(error) || filesystemErrorCode(error) === undefined) throw error;
     throw snapshotFilesystemError(error, path);
-  } finally {
-    if (descriptor !== undefined) closeSync(descriptor);
   }
   assertSameStat(pathStat, stableLstat(absolute), path);
+  if (buildByteLength(bytes) !== statNumber(pathStat, 'size', path)) throw snapshotRace(path);
   return bytes;
 }
 

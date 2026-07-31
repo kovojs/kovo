@@ -2530,6 +2530,42 @@ describe('sink-policy gate', () => {
     ).toEqual([]);
   });
 
+  it('allows reviewed Drizzle author types only on the matching core stamp result', () => {
+    expect(
+      sqlBlessedBrandLaunderingFindings(
+        'packages/drizzle/src/runtime.ts',
+        `
+          stampParameterizedSql(value) as KovoParameterizedSql<T>;
+          stampSqlIdentifier(value) as KovoSqlIdentifier<T>;
+          stampSqlKeyword(value) as KovoSqlKeyword<T>;
+          stampStaticSql(value) as KovoStaticSql<T>;
+          stampTrustedSql(value, justification) as T & KovoTrustedSql<TResult>;
+        `,
+        { allowedStampAdapterFile: true },
+      ),
+    ).toEqual([]);
+
+    expect(
+      sqlBlessedBrandLaunderingFindings(
+        'packages/drizzle/src/runtime.ts',
+        'stampStaticSql(value) as KovoTrustedSql<T>;',
+        { allowedStampAdapterFile: true },
+      ),
+    ).toEqual([
+      'packages/drizzle/src/runtime.ts: KV440 SQL blessed-brand laundering via direct type assertion; use sql`...`, staticSql`...`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) so the runtime witness is minted by the owning constructor',
+    ]);
+
+    expect(
+      sqlBlessedBrandLaunderingFindings(
+        'packages/drizzle/src/runtime.ts',
+        'stampStaticSql(value) as unknown as KovoStaticSql<T>;',
+        { allowedStampAdapterFile: true },
+      ),
+    ).toEqual([
+      'packages/drizzle/src/runtime.ts: KV440 SQL blessed-brand laundering via any/unknown assertion chain; use sql`...`, staticSql`...`, sql.identifier(..., { allow }), sql.allow(...), or trustedSql(...) so the runtime witness is minted by the owning constructor',
+    ]);
+  });
+
   it('allows SQL stamp helpers only in owned constructor modules', () => {
     expect(
       sqlBlessedBrandStampFindings(

@@ -13,6 +13,7 @@ const fstatSync = builtinFstatSync;
 const lstatSync = builtinLstatSync;
 const openSync = builtinOpenSync;
 const readSync = builtinReadSync;
+const boundedNumberIsSafeInteger = Number.isSafeInteger;
 const boundedInputOpenFlags =
   builtinFileSystemConstants.O_RDONLY | builtinFileSystemConstants.O_NOFOLLOW;
 
@@ -25,7 +26,7 @@ export interface BoundedRegularFileOptions {
 
 /** @internal Read one regular non-symlink file through a fixed maximum-plus-one descriptor cap. */
 export function readBoundedRegularFile(path: string, options: BoundedRegularFileOptions): Buffer {
-  if (!Number.isSafeInteger(options.maxBytes) || options.maxBytes < 0) {
+  if (!boundedNumberIsSafeInteger(options.maxBytes) || options.maxBytes < 0) {
     throw new TypeError('bounded regular-file maximum must be a non-negative safe integer');
   }
   let lexical: BigIntStats;

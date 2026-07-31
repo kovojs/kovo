@@ -1,15 +1,12 @@
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { existsSync, lstatSync, realpathSync } from 'node:fs';
+import { relative, resolve, sep } from 'node:path';
+
 import {
-  closeSync,
-  existsSync,
-  lstatSync,
-  openSync,
-  realpathSync,
-  unlinkSync,
-  writeFileSync,
-} from 'node:fs';
-import { join, relative, resolve, sep } from 'node:path';
+  createFrameworkFileSystemBoundary,
+  type FrameworkFileSystemBoundary,
+} from '@kovojs/core/internal/filesystem';
 
 import {
   projectQualityDiagnostic,
@@ -97,10 +94,12 @@ export async function runProjectQualityCheck(
 ): Promise<CliCommandResult> {
   const root = realpathSync(resolve(rootValue));
   let formatter: VitePlusQualityBin;
+  let fileSystem: FrameworkFileSystemBoundary;
   let linter: VitePlusQualityBin;
   try {
     formatter = resolveVitePlusQualityBin('oxfmt');
     linter = resolveVitePlusQualityBin('oxlint');
+    fileSystem = await createFrameworkFileSystemBoundary(root);
   } catch (error) {
     return runnerFailure(protocol, error);
   }
@@ -119,6 +118,7 @@ export async function runProjectQualityCheck(
     ['--list-different', `--threads=${String(PROJECT_QUALITY_THREADS)}`],
     root,
     invocationEnv,
+    fileSystem,
   );
   if (format.error !== undefined) return runnerFailure(protocol, format.error);
   const lint = await executeQualityTool(
@@ -132,6 +132,7 @@ export async function runProjectQualityCheck(
     ],
     root,
     invocationEnv,
+    fileSystem,
   );
   if (lint.error !== undefined) return runnerFailure(protocol, lint.error);
 
@@ -222,12 +223,15 @@ async function executeQualityTool(
   args: readonly string[],
   root: string,
   invocationEnv: NodeJS.ProcessEnv,
+  fileSystem: FrameworkFileSystemBoundary,
 ): Promise<CommandExecution> {
   const configName = `.kovo-project-quality-${randomUUID()}.${configKind}.json`;
-  const configPath = join(root, configName);
-  let descriptor: number | undefined;
+  let execution: CommandExecution;
   try {
-    descriptor = openSync(configPath, 'wx', 0o600);
+    const configPath = fileSystem.confinedPath(configName);
+    if (configPath === undefined) {
+      throw new TypeError('formatter config path escaped the enrolled project root');
+    }
     const ignorePatterns = config.ignorePatterns;
     const enrolledIgnorePatterns =
       ignorePatterns === undefined
@@ -239,14 +243,11 @@ async function executeQualityTool(
     if (enrolledIgnorePatterns === undefined) {
       throw new TypeError('formatter ignorePatterns config is invalid');
     }
-    writeFileSync(
-      descriptor,
+    await fileSystem.writeFile(
+      configName,
       `${JSON.stringify({ ...config, ignorePatterns: enrolledIgnorePatterns })}\n`,
-      'utf8',
     );
-    closeSync(descriptor);
-    descriptor = undefined;
-    return await execute(tool.executable, ['--config', configPath, ...args], root, {
+    execution = await execute(tool.executable, ['--config', configPath, ...args], root, {
       ...invocationEnv,
       ...tool.environment,
       JS_RUNTIME_NAME: process.release.name,
@@ -254,11 +255,14 @@ async function executeQualityTool(
       NODE_PACKAGE_MANAGER: 'vite-plus',
     });
   } catch (error) {
-    return { error, status: null, stderr: '', stdout: '' };
-  } finally {
-    if (descriptor !== undefined) closeSync(descriptor);
-    if (existsSync(configPath)) unlinkSync(configPath);
+    execution = { error, status: null, stderr: '', stdout: '' };
   }
+  try {
+    await fileSystem.deleteFile(configName);
+  } catch (error) {
+    return { error, status: null, stderr: '', stdout: '' };
+  }
+  return execution;
 }
 
 async function execute(
