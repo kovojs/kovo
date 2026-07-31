@@ -112,7 +112,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
         const output = expectBuildFailure(root, [
           'KV424',
           'source=opaqueStorageWriteProbe.put.bind',
-          'source=storage[method]!',
+          'source=opaqueStorageWriteProbeByMethod[method]',
           'source=opaqueUploadStorageWriteProbe.upload',
         ]);
         expect(output).not.toContain('source=createMemoryStorage');
@@ -195,7 +195,6 @@ describe('create-kovo starter (build integration: adversarial production artifac
         addOpaqueAuthSecretLeakProof(root);
         expectBuildFailure(root, [
           'KV424',
-          'source=<property-setter:touchAuth>',
           'source=createRequestHandler',
           'source=secretById.set',
           'sink=client-wire.request.opaque-value',

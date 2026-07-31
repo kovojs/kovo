@@ -1520,12 +1520,12 @@ export const qResponseProofQuery = app.query({
 }
 
 function addEnhancedMutationWireProof(root: string): void {
+  // SPEC §5.2 requires optimistic plans and component client-module identity to have distinct
+  // authored owners. Keep the declarations separate while exercising the same production wire.
   writeFileSync(
-    join(root, 'src/enhanced-mutation-wire-proof.tsx'),
+    join(root, 'src/enhanced-mutation-wire-declarations.ts'),
     [
-      '/** @jsxImportSource @kovojs/server */',
-      "import { component } from '@kovojs/core';",
-      "import { domain, mutationFormAttributes, s } from '@kovojs/server';",
+      "import { domain, s } from '@kovojs/server';",
       '',
       "import { app } from './kovo.js';",
       '',
@@ -1557,6 +1557,22 @@ function addEnhancedMutationWireProof(root: string): void {
       '  },',
       '});',
       '',
+    ].join('\n'),
+    'utf8',
+  );
+
+  writeFileSync(
+    join(root, 'src/enhanced-mutation-wire-proof.tsx'),
+    [
+      '/** @jsxImportSource @kovojs/server */',
+      "import { component } from '@kovojs/core';",
+      "import { mutationFormAttributes } from '@kovojs/server';",
+      '',
+      'import {',
+      '  enhancedMutationWireProofQuery,',
+      '  refreshEnhancedMutationWireProof,',
+      "} from './enhanced-mutation-wire-declarations.js';",
+      '',
       'export const EnhancedMutationWireProof = component({',
       '  mutations: { refreshEnhancedMutationWireProof },',
       '  queries: { proof: enhancedMutationWireProofQuery },',
@@ -1581,11 +1597,11 @@ function addEnhancedMutationWireProof(root: string): void {
     "import { ContactsRegion } from './components/contacts.js';",
     [
       "import { ContactsRegion } from './components/contacts.js';",
+      "import { EnhancedMutationWireProof } from './enhanced-mutation-wire-proof.js';",
       'import {',
-      '  EnhancedMutationWireProof,',
       '  enhancedMutationWireProofQuery,',
       '  refreshEnhancedMutationWireProof,',
-      "} from './enhanced-mutation-wire-proof.js';",
+      "} from './enhanced-mutation-wire-declarations.js';",
     ].join('\n'),
     'enhanced mutation wire proof app import',
   );
@@ -1623,13 +1639,17 @@ function addEnhancedMutationWireProof(root: string): void {
     appPath,
     replaceRequired(
       app,
-      '  routes: [homeRoute, loginRoute],',
-      '  routes: [homeRoute, loginRoute, enhancedMutationWireProofRoute],',
+      '  routes: [homeRoute, loginRoute, xssEscapeProofRoute],',
+      '  routes: [homeRoute, loginRoute, xssEscapeProofRoute, enhancedMutationWireProofRoute],',
       'enhanced mutation wire proof route registration',
     ),
     'utf8',
   );
-  formatGeneratedProjectSources(root, ['src/app.tsx', 'src/enhanced-mutation-wire-proof.tsx']);
+  formatGeneratedProjectSources(root, [
+    'src/app.tsx',
+    'src/enhanced-mutation-wire-declarations.ts',
+    'src/enhanced-mutation-wire-proof.tsx',
+  ]);
 }
 
 function addNoAccessProvisionMutation(root: string): void {

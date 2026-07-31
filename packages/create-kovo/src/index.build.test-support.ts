@@ -355,29 +355,39 @@ export function addStorageQueryWriteProof(root: string, options: { format?: bool
 }
 
 export function addOpaqueStorageQueryWriteProof(root: string): void {
+  // Keep the adversarial carrier inside SPEC §6.6's authored sound subset so the proof reaches
+  // the conservative KV424 classifier instead of being rejected earlier for a cast/non-null escape.
   const queriesPath = join(root, 'src/queries.ts');
   let queries = readFileSync(queriesPath, 'utf8');
   queries = replaceRequired(
     queries,
     "import type { JsonValue } from '@kovojs/core';",
-    "import { publicScopedKey, type JsonValue, type ScopedKey } from '@kovojs/core';\nimport { createMemoryStorage } from '@kovojs/core/storage';\nimport { s } from '@kovojs/server';",
+    "import { publicScopedKey, type JsonValue } from '@kovojs/core';\nimport { createMemoryStorage } from '@kovojs/core/storage';\nimport { s } from '@kovojs/server';",
     'opaque storage query proof import',
   );
   queries += [
     '',
     'const canonicalFileStoreWriteProbe = createMemoryStorage();',
     'const opaqueStorageWriteProbe = createMemoryStorage();',
+    'const opaqueStorageWriteProbeByMethod = {',
+    '  put: opaqueStorageWriteProbe.put.bind(opaqueStorageWriteProbe),',
+    '};',
     'const opaqueUploadStorageWriteProbe = {',
     '  upload: opaqueStorageWriteProbe.put.bind(opaqueStorageWriteProbe),',
     '};',
+    'function selectOpaqueStorageMethod(',
+    '  value: string,',
+    '): keyof typeof opaqueStorageWriteProbeByMethod | undefined {',
+    "  return value === 'put' ? value : undefined;",
+    '}',
     '',
     'export const opaqueStorageComputedWriteQuery = app.query({',
     "  access: app.publicAccess('opaque storage computed write query proof'),",
     '  reads: [],',
     '  async load(): Promise<{ ok: true }> {',
-    "    const method = 'put' as string;",
-    '    const storage = opaqueStorageWriteProbe as unknown as Record<string, (key: ScopedKey, body: string) => Promise<unknown>>;',
-    "    await storage[method]!(publicScopedKey('receipts/query-computed-proof.txt'), 'bad');",
+    "    const method = selectOpaqueStorageMethod('put');",
+    "    if (method === undefined) throw new Error('opaque storage method proof unavailable');",
+    "    await opaqueStorageWriteProbeByMethod[method](publicScopedKey('receipts/query-computed-proof.txt'), 'bad');",
     '    return { ok: true };',
     '  },',
     '});',
@@ -1715,20 +1725,35 @@ export function addEscapedAttackerTextProof(root: string): void {
     importAnchor,
     [importAnchor, "import { attackerMarkup } from './raw-helper.js';"].join('\n'),
     'escaped attacker text proof import',
-  ).replace(
-    "    route('/', {",
+  );
+  app = replaceRequired(
+    app,
+    'const assembledApp = app.assemble({',
     [
-      "    route('/xss-escape-proof', {",
-      "      access: publicAccess('public output escaping regression proof'),",
-      "      meta: { title: 'Output escaping proof' },",
-      '      layout: AppLayout,',
-      '      stylesheets,',
-      '      page() {',
-      '        return <main data-proof="xss-escape">{attackerMarkup()}</main>;',
-      '      },',
-      '    }),',
-      "    route('/', {",
+      "const xssEscapeProofRoute = app.route('/xss-escape-proof', {",
+      "  access: app.publicAccess('public output escaping regression proof'),",
+      "  meta: { title: 'Output escaping proof' },",
+      '  layout: AppLayout,',
+      '  stylesheets: appStylesheets,',
+      '  page() {',
+      '    return <main data-proof="xss-escape">{attackerMarkup()}</main>;',
+      '  },',
+      '});',
+      '',
+      'const assembledApp = app.assemble({',
     ].join('\n'),
+    'escaped attacker text proof route declaration',
+  );
+  const routeRegistrationAnchor = app.includes(
+    '  routes: [homeRoute, loginRoute, runtimeContractsProofRoute],',
+  )
+    ? '  routes: [homeRoute, loginRoute, runtimeContractsProofRoute],'
+    : '  routes: [homeRoute, loginRoute],';
+  app = replaceRequired(
+    app,
+    routeRegistrationAnchor,
+    routeRegistrationAnchor.replace('],', ', xssEscapeProofRoute],'),
+    'escaped attacker text proof route registration',
   );
   writeFileSync(appPath, app, 'utf8');
 }
@@ -2339,19 +2364,39 @@ export function addOpaqueAuthSecretLeakProof(
   );
   writeFileSync(queriesPath, queries, 'utf8');
 
+  // SPEC §5.2 gives this component its own client-module identity; the optimistic mutation remains
+  // in the app module so this proof cannot accidentally test an invalid authored module shape.
+  writeFileSync(
+    join(root, 'src/auth-secret-leak-proof.tsx'),
+    [
+      '/** @jsxImportSource @kovojs/server */',
+      "import { component } from '@kovojs/core';",
+      '',
+      `import { ${appQueryNames.join(', ')} } from './queries.js';`,
+      '',
+      'export const AuthSecretLeakProof = component({',
+      `  queries: { ${appQueryNames.map((name, index) => `${appQueryProps[index]}: ${name}`).join(', ')} },`,
+      `  render(data: { ${appQueryProps.map((name) => `${name}: { items: { accessToken: string | null; id: string; password: string | null }[] }`).join('; ')} }) {`,
+      `    const renderValueFlowNeedle = data.${appQueryProps[Math.min(2, appQueryProps.length - 1)]}.items[0]?.password ?? 'redacted';`,
+      '    return <main>{renderValueFlowNeedle}</main>;',
+      '  },',
+      '});',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
   writeFileSync(
     join(root, 'src/app.tsx'),
     [
       '/** @jsxImportSource @kovojs/server */',
-      "import { component } from '@kovojs/core';",
       "import { domain, s } from '@kovojs/server';",
       "import { createRequestHandler, type RequestHandler } from '@kovojs/server/custom-adapters';",
       '',
-      "import { appRuntimeDbReady } from './_kovo/app-runtime-db.js';",
+      "import { AuthSecretLeakProof } from './auth-secret-leak-proof.js';",
       "import { app } from './kovo.js';",
       `import { ${appQueryNames.join(', ')} } from './queries.js';`,
       '',
-      'await appRuntimeDbReady;',
       "const authDomain = domain('auth');",
       'export const authTouchMutation = app.mutation({',
       "  access: app.publicAccess('build-only auth touch graph proof'),",
@@ -2364,18 +2409,6 @@ export function addOpaqueAuthSecretLeakProof(
       '  registry: { touches: [authDomain] },',
       '  handler() {',
       "    return { status: 'ok' };",
-      '  },',
-      '});',
-      'const touchAuth = {',
-      '  set key(_value: string) {},',
-      '};',
-      "touchAuth.key = 'auth/secret-touch';",
-      '',
-      'export const AuthSecretLeakProof = component({',
-      `  queries: { ${appQueryNames.map((name, index) => `${appQueryProps[index]}: ${name}`).join(', ')} },`,
-      `  render(data: { ${appQueryProps.map((name) => `${name}: { items: { accessToken: string | null; id: string; password: string | null }[] }`).join('; ')} }) {`,
-      `    const renderValueFlowNeedle = data.${appQueryProps[Math.min(2, appQueryProps.length - 1)]}.items[0]?.password ?? 'redacted';`,
-      '    return <main>{renderValueFlowNeedle}</main>;',
       '  },',
       '});',
       '',
@@ -2398,7 +2431,11 @@ export function addOpaqueAuthSecretLeakProof(
     'utf8',
   );
   if (options.format ?? true) {
-    formatGeneratedSources(root, ['src/app.tsx', 'src/queries.ts']);
+    formatGeneratedSources(root, [
+      'src/app.tsx',
+      'src/auth-secret-leak-proof.tsx',
+      'src/queries.ts',
+    ]);
   }
 }
 
