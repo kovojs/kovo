@@ -47,7 +47,7 @@
       "direction": "max",
       "sampling": "statistical",
       "statistic": "p95",
-      "provisionalTarget": null,
+      "provisionalTarget": 3221225472,
       "ratification": null
     },
     "check.warm.durationMs": {
@@ -65,7 +65,7 @@
       "direction": "max",
       "sampling": "statistical",
       "statistic": "p95",
-      "provisionalTarget": null,
+      "provisionalTarget": 3221225472,
       "ratification": null
     },
     "check.oneFileIncremental.durationMs": {
@@ -83,7 +83,7 @@
       "direction": "max",
       "sampling": "statistical",
       "statistic": "p95",
-      "provisionalTarget": null,
+      "provisionalTarget": 3221225472,
       "ratification": null
     },
     "create.install.cold.durationMs": {
@@ -92,7 +92,7 @@
       "direction": "max",
       "sampling": "statistical",
       "statistic": "median",
-      "provisionalTarget": null,
+      "provisionalTarget": 15000,
       "ratification": null
     },
     "create.install.installedBytes": {
@@ -101,7 +101,7 @@
       "direction": "max",
       "sampling": "deterministic",
       "statistic": "median",
-      "provisionalTarget": null,
+      "provisionalTarget": 536870912,
       "ratification": null
     },
     "dev.editToDiagnostic.durationMs": {
@@ -146,7 +146,7 @@
       "direction": "max",
       "sampling": "deterministic",
       "statistic": "median",
-      "provisionalTarget": null,
+      "provisionalTarget": 4096,
       "ratification": null
     },
     "docs.snapshot.compressedBytes": {

@@ -75,13 +75,25 @@
           "budget": 30000,
           "targetRationale": "Keep the authenticated packed cold check within the thirty-second release scorecard target."
         },
+        "check.cold.peakRssBytes": {
+          "budget": 3221225472,
+          "targetRationale": "Cap cold-check process-tree RSS at three GiB, leaving bounded headroom above the authenticated 2,173,337,600-byte N=1 driver smoke pending hosted ratification."
+        },
         "check.warm.durationMs": {
           "budget": 10000,
           "targetRationale": "Keep the authenticated packed warm check within the ten-second release scorecard target."
         },
+        "check.warm.peakRssBytes": {
+          "budget": 3221225472,
+          "targetRationale": "Cap warm-check process-tree RSS at three GiB, leaving bounded headroom above the authenticated 2,282,389,504-byte N=1 driver smoke pending hosted ratification."
+        },
         "check.oneFileIncremental.durationMs": {
           "budget": 2000,
           "targetRationale": "Keep one-file incremental proof inside the two-second ordinary edit-loop target."
+        },
+        "check.oneFileIncremental.peakRssBytes": {
+          "budget": 3221225472,
+          "targetRationale": "Cap incremental-check process-tree RSS at three GiB, leaving bounded headroom above the authenticated 2,275,278,848-byte N=1 driver smoke pending hosted ratification."
         },
         "dev.editToDiagnostic.durationMs": {
           "budget": 1000,
@@ -90,9 +102,21 @@
         "dev.editToServedResult.durationMs": {
           "budget": 500,
           "targetRationale": "Keep edit-to-served-result p95 inside the half-second interactive feedback target."
+        },
+        "browser.bootstrapBytes": {
+          "budget": 4096,
+          "targetRationale": "Cap the canonical emitted browser bootstrap at four KiB, preserving bounded growth headroom above the authenticated 2,173-byte N=1 driver smoke."
         }
       },
       "golden-journey": {
+        "create.install.cold.durationMs": {
+          "budget": 15000,
+          "targetRationale": "Keep a cold packed-tarball install within fifteen seconds, retaining about two-times headroom over authenticated 4.2-7.4-second local observations pending hosted ratification."
+        },
+        "create.install.installedBytes": {
+          "budget": 536870912,
+          "targetRationale": "Cap a packed starter's physical installed tree at 512 MiB, retaining reviewed growth headroom over the authenticated 367-388 MB packed-install observations."
+        },
         "dev.ready.cold.durationMs": {
           "budget": 15000,
           "targetRationale": "Keep packed cold readiness inside the fifteen-second first-run evaluator target."

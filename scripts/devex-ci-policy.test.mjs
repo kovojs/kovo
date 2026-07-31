@@ -184,6 +184,23 @@ describe('DevEx CI and baseline policy', () => {
       requiresExactRunnerFingerprint: true,
       sampleCount: 5,
     });
+    const runnerBoundMetricIds = Object.entries(budgets.metrics)
+      .filter(
+        ([, metric]) =>
+          ['benchmark', 'golden-journey', 'full-catalog'].includes(metric.source) &&
+          metric.binding !== 'packed-artifact',
+      )
+      .map(([metricId]) => metricId);
+    const proposedMetricIds = Object.values(baseline.ratification.targetProposals).flatMap(
+      (metrics) => Object.keys(metrics),
+    );
+    expect(runnerBoundMetricIds).toHaveLength(14);
+    expect(proposedMetricIds.toSorted()).toEqual(runnerBoundMetricIds.toSorted());
+    expect(
+      runnerBoundMetricIds.every((metricId) =>
+        Number.isFinite(budgets.metrics[metricId].provisionalTarget),
+      ),
+    ).toBe(true);
 
     const tooSmall = structuredClone(baseline);
     tooSmall.collection.baselineSampleCount = 4;
@@ -262,6 +279,14 @@ describe('DevEx CI and baseline policy', () => {
     const inventedTarget = structuredClone(baseline);
     inventedTarget.ratification.targetProposals.benchmark['check.cold.durationMs'].budget = 1;
     expect(validateDevexBaselinePolicy(inventedTarget, budgets, ci)).toContain(
+      'ratification must preserve the fail-closed reviewed v7 procedure',
+    );
+
+    const missingTargetBudget = structuredClone(budgets);
+    missingTargetBudget.metrics['check.cold.peakRssBytes'].provisionalTarget = null;
+    const missingTargetProposal = structuredClone(baseline);
+    delete missingTargetProposal.ratification.targetProposals.benchmark['check.cold.peakRssBytes'];
+    expect(validateDevexBaselinePolicy(missingTargetProposal, missingTargetBudget, ci)).toContain(
       'ratification must preserve the fail-closed reviewed v7 procedure',
     );
   });

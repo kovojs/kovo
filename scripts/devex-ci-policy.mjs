@@ -41,6 +41,8 @@ const HOSTED_RUNNER_MACHINE_CLASS = Object.freeze({
   specificationSource:
     'https://docs.github.com/en/actions/reference/runners/github-hosted-runners#standard-github-hosted-runners-for-public-repositories',
 });
+const HOSTED_EVIDENCE_SOURCES = Object.freeze(['benchmark', 'golden-journey', 'full-catalog']);
+const HOSTED_RUNNER_BOUND_METRIC_COUNT = 14;
 
 export function validateDevexCiPolicy(policy, options = {}) {
   const findings = [];
@@ -508,7 +510,7 @@ export function validateDevexBaselinePolicy(policy, budgets, ciPolicy) {
 
 function validateTargetProposals(proposals, budgets) {
   const findings = [];
-  const expectedSources = ['benchmark', 'golden-journey', 'full-catalog'];
+  const expectedSources = HOSTED_EVIDENCE_SOURCES;
   if (
     !proposals ||
     typeof proposals !== 'object' ||
@@ -517,12 +519,12 @@ function validateTargetProposals(proposals, budgets) {
   ) {
     return ['targetProposals must contain the exact hosted evidence sources'];
   }
+  let runnerBoundMetricCount = 0;
   for (const [source, metrics] of Object.entries(proposals)) {
     const expectedMetricIds = Object.entries(budgets?.metrics ?? {})
-      .filter(
-        ([, metric]) => metric?.source === source && Number.isFinite(metric.provisionalTarget),
-      )
+      .filter(([, metric]) => metric?.source === source && metric?.binding !== 'packed-artifact')
       .map(([metricId]) => metricId);
+    runnerBoundMetricCount += expectedMetricIds.length;
     if (
       !metrics ||
       typeof metrics !== 'object' ||
@@ -549,6 +551,11 @@ function validateTargetProposals(proposals, budgets) {
         );
       }
     }
+  }
+  if (runnerBoundMetricCount !== HOSTED_RUNNER_BOUND_METRIC_COUNT) {
+    findings.push(
+      `targetProposals must cover exactly ${String(HOSTED_RUNNER_BOUND_METRIC_COUNT)} runner-bound metrics`,
+    );
   }
   return findings;
 }
