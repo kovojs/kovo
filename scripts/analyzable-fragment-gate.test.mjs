@@ -15,7 +15,7 @@ describe('SPEC §6.6 analyzable-fragment generated ledger', () => {
         budgets: 4,
         closedReasons: 8,
         prohibitions: 9,
-        realRoots: 29,
+        realRoots: 30,
       },
     });
   });

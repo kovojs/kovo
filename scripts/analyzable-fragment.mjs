@@ -150,6 +150,7 @@ const budgetDefinitions = Object.freeze([
     reason: 'budget-summary-count',
   },
 ]);
+const observedRealRootCount = 30;
 
 function witnessPath(id) {
   return `packages/compiler/src/fixtures/analyzable-fragment/${id}.tsx.txt`;
@@ -169,7 +170,7 @@ export function generatedAnalyzableFragmentDocument() {
       budgets: budgetDefinitions.map((budget) => ({ ...budget, bindingRoots: [] })),
       corpus: {
         files: [...realRootCorpusFiles],
-        rootCount: 29,
+        rootCount: observedRealRootCount,
         selection:
           'Every tracked starter/example source file that declares a shipping query, mutation, endpoint, webhook, or task root at measurement time.',
       },
@@ -200,7 +201,7 @@ export function generatedAnalyzableFragmentDocument() {
       },
       closedReasons: 8,
       prohibitions: 9,
-      realRoots: 29,
+      realRoots: observedRealRootCount,
     },
   };
 }

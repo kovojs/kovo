@@ -45,7 +45,7 @@
         "examples/stackoverflow/src/mutations.ts",
         "examples/stackoverflow/src/queries.ts"
       ],
-      "rootCount": 29,
+      "rootCount": 30,
       "selection": "Every tracked starter/example source file that declares a shipping query, mutation, endpoint, webhook, or task root at measurement time."
     },
     "limits": "This is an observational regression measurement over the named repository corpus. It is not a claim that a downstream root cannot bind a budget.",
@@ -182,6 +182,6 @@
     },
     "closedReasons": 8,
     "prohibitions": 9,
-    "realRoots": 29
+    "realRoots": 30
   }
 }

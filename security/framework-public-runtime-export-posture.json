@@ -11,7 +11,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.3.0",
-      "sourceTreeSha256": "bf4ca2a38fa951edfade7ba5b0daaa5901a2fc7281e89a73bf618713f2874fd4",
+      "sourceTreeSha256": "c3c4fedbb880f0b511aba7beb1ed2d6206668544309c468bfad9a4ee047c1b93",
       "manifestVariants": [
         {
           "fingerprint": "sha256:80d390e85123b76e58a9270f45d1420deaefd869d361bf8181cfa3f310ae6c08"
@@ -783,7 +783,7 @@
           "reason": "The diagnostic schema constant belongs to the build-time CLI package and is not request-handler authority."
         }
       ],
-      "sourceTreeSha256": "6d875841dfdec9313159651476674b6bd9b37dbde618be885e6b1ee1783c6e67"
+      "sourceTreeSha256": "f001b41dad2322543ab2f16f40ce3b725ef5b61387dcc11318573b766f839bdc"
     },
     {
       "manifestVariants": [
@@ -1617,7 +1617,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "aa71ee51e133d9edb6d200df0604454c121d48e3646a40970a51f620a73223d4"
+      "sourceTreeSha256": "9b9b63601f2dfe272a00b5b1173e12f31c07a3db0613539facb2bc58c4c4cc6c"
     },
     {
       "manifestVariants": [
@@ -9876,7 +9876,7 @@
           "reason": "derived binds a reviewed adapter to the current request principal through the canonical ScopedKey containment door."
         }
       ],
-      "sourceTreeSha256": "521c15880bddaa4f5aa5114f9d594eae5b6855a865cc1a034f56d7c5be608565"
+      "sourceTreeSha256": "1a76003074527c68f3c139e095b4eb50adc0b1aa08ef5791116d45bb05656484"
     },
     {
       "manifestVariants": [
