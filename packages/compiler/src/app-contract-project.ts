@@ -25,6 +25,7 @@ import {
   withCompilerOwnedAppContractResolutions,
 } from './app-contract-resolver.js';
 import { deriveAppGraph } from './graph.js';
+import { deriveRegistryIdentity } from './registry-identities.js';
 import { compileRouteModule } from './scan/route-pages.js';
 import { parseComponentModule } from './scan/parse.js';
 import { appOptimisticProjectFacts } from './scan/app-optimistic.js';
@@ -90,7 +91,7 @@ export interface CompilerOwnedAppContractEntry {
 export interface CompilerOwnedAppContractStaticFact {
   readonly declaration?: {
     readonly end: number;
-    readonly kind: 'mutation' | 'page';
+    readonly kind: 'mutation' | 'page' | 'query' | 'task';
     readonly name: string;
     readonly start: number;
   };
@@ -668,7 +669,7 @@ export function createCompilerOwnedAppContractProject(
           );
         }
         for (const member of analysis.memberFacts) {
-          const declaration = appContractMemberDeclaration(member, checker);
+          const declaration = appContractMemberDeclaration(member, checker, fileName);
           facts.push({
             ...(declaration === undefined ? {} : { declaration }),
             end: member.end,
@@ -757,11 +758,12 @@ export function createCompilerOwnedAppContractProject(
 function appContractMemberDeclaration(
   member: CompilerOwnedAppContractMemberResolution,
   checker: TS.TypeChecker,
+  identityFileName: string,
 ): CompilerOwnedAppContractStaticFact['declaration'] {
   const call = member.node.parent;
   if (!ts.isCallExpression(call) || call.expression !== member.node) return undefined;
   const firstArgument = call.arguments[0];
-  let kind: 'mutation' | 'page';
+  let kind: 'mutation' | 'page' | 'query' | 'task';
   let name: string | undefined;
   if (member.memberName === 'route') {
     kind = 'page';
@@ -775,6 +777,30 @@ function appContractMemberDeclaration(
       firstArgument === undefined
         ? undefined
         : exactStringLiteralTypeValue(checker.getTypeAtLocation(firstArgument), checker, 'key');
+  } else if (
+    member.memberName === 'mutation' ||
+    member.memberName === 'query' ||
+    member.memberName === 'task'
+  ) {
+    const declaration = call.parent;
+    const declarationList = declaration.parent;
+    const statement = declarationList.parent;
+    if (
+      call.arguments.length !== 1 ||
+      firstArgument === undefined ||
+      !ts.isObjectLiteralExpression(unwrapExpression(firstArgument)) ||
+      !ts.isVariableDeclaration(declaration) ||
+      declaration.initializer !== call ||
+      !ts.isIdentifier(declaration.name) ||
+      !ts.isVariableDeclarationList(declarationList) ||
+      (declarationList.flags & ts.NodeFlags.Const) === 0 ||
+      !ts.isVariableStatement(statement) ||
+      statement.parent !== member.sourceFile
+    ) {
+      return undefined;
+    }
+    kind = member.memberName;
+    name = deriveRegistryIdentity(identityFileName, declaration.name.text).key;
   } else {
     return undefined;
   }

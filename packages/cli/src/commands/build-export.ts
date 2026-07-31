@@ -6859,7 +6859,11 @@ function collectAppContractDeclarationAnchors(
         ? 'page'
         : fact.memberName === 'integrateMutation'
           ? 'mutation'
-          : undefined;
+          : fact.memberName === 'mutation' ||
+              fact.memberName === 'query' ||
+              fact.memberName === 'task'
+            ? fact.memberName
+            : undefined;
     if (expectedKind !== declaration.kind) {
       throw new TypeError(
         `Compiler-owned app-contract ${fact.memberName} declaration has invalid ${declaration.kind} registry kind.`,
@@ -7334,7 +7338,7 @@ export function snapshotBuildCompilerSourceAnchorsForTests(
 export async function snapshotBuildAppContractSourceAnchorsForTests(
   files: readonly { readonly fileName: string; readonly source: string }[],
   declarations: readonly {
-    readonly kind: 'mutation' | 'page';
+    readonly kind: 'mutation' | 'page' | 'query' | 'task';
     readonly name: string;
   }[],
 ): Promise<readonly (CoreGraph.SourceAnchor | undefined)[]> {

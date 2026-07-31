@@ -206,6 +206,8 @@ void reserveInventory;
         'interface GeneratedMutation<Key extends string> { readonly key: Key }',
         "declare const signIn: GeneratedMutation<'auth/sign-in'>;",
         "declare const signOut: GeneratedMutation<'auth/sign-out'>;",
+        'const privateQuery = app.query({ load() { return null; } });',
+        'const privateMutation = app.mutation({ handler() { return null; } });',
         'export const integratedSignOut = app.integrateMutation(signOut);',
         'export const integratedSignIn = app.integrateMutation(signIn);',
         '',
@@ -223,10 +225,13 @@ void reserveInventory;
         },
       ];
 
-      const [signIn, signOut] = await snapshotBuildAppContractSourceAnchorsForTests(files, [
-        { kind: 'mutation', name: 'auth/sign-in' },
-        { kind: 'mutation', name: 'auth/sign-out' },
-      ]);
+      const [signIn, signOut, privateQuery, privateMutation] =
+        await snapshotBuildAppContractSourceAnchorsForTests(files, [
+          { kind: 'mutation', name: 'auth/sign-in' },
+          { kind: 'mutation', name: 'auth/sign-out' },
+          { kind: 'query', name: 'auth-integration/private-query' },
+          { kind: 'mutation', name: 'auth-integration/private-mutation' },
+        ]);
 
       expect(signIn?.file).toBe(relative(process.cwd(), integrationPath));
       expect(integrationSource.slice(signIn?.start, signIn?.end)).toBe(
@@ -235,6 +240,12 @@ void reserveInventory;
       expect(signOut?.file).toBe(relative(process.cwd(), integrationPath));
       expect(integrationSource.slice(signOut?.start, signOut?.end)).toBe(
         'app.integrateMutation(signOut)',
+      );
+      expect(integrationSource.slice(privateQuery?.start, privateQuery?.end)).toBe(
+        'app.query({ load() { return null; } })',
+      );
+      expect(integrationSource.slice(privateMutation?.start, privateMutation?.end)).toBe(
+        'app.mutation({ handler() { return null; } })',
       );
     } finally {
       rmSync(root, { force: true, recursive: true });

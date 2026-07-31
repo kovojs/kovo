@@ -1212,6 +1212,7 @@ export default {};
     }
   });
 
+  // @kovo-security-certifies C13 private-app-mutation-semantic-root-correspondence
   it('raises KV418 when a csrf:false mutation reads the raw Cookie header', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-cookie-authority-'));
     const appPath = join(root, 'app.ts');
@@ -2621,6 +2622,7 @@ import { s } from '@kovojs/server';
 import { trustedHtml } from '@kovojs/browser';
 import { app, contactDomain } from './src/kovo.js';
 import { contactsQuery } from './src/queries.js';
+import './src/components/contacts.js';
 
 const addContactInput = s.object({ name: s.string() });
 const addContact = app.mutation({
@@ -2713,10 +2715,14 @@ export const ContactsRegion = defineRegion({
       expect(graph.components?.flatMap((component) => component.queries ?? [])).toContain(
         'queries/contacts-query',
       );
-      expect(graph.tasks).toContainEqual({
-        key: 'app/record-contact-task',
-        runMutations: ['app/add-contact'],
-      });
+      expect(graph.tasks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            key: 'app/record-contact-task',
+            runMutations: ['app/add-contact'],
+          }),
+        ]),
+      );
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
@@ -2836,9 +2842,17 @@ export default app.assemble({
       ).toEqual(['app/auth-query', 'app/contact-detail-query', 'app/contacts-query']);
 
       stdout.mockClear();
-      expect(main(['explain', 'mutation', 'app/update-contact', '--optimistic', graphPath])).toBe(
-        0,
-      );
+      stderr.mockClear();
+      const explainExitCode = main([
+        'explain',
+        'mutation',
+        'app/update-contact',
+        '--optimistic',
+        '--artifact',
+        graphPath,
+      ]);
+      const explainErrorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(explainExitCode, explainErrorOutput).toBe(0);
       const explainOutput = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(explainOutput).toContain(
         'invalidates: app/auth-query,app/contact-detail-query,app/contacts-query',

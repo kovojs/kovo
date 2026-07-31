@@ -1062,6 +1062,30 @@ export const sendReceipt = task({
     });
   });
 
+  // @kovo-security-certifies C13 task-context-principal-composition
+  it('records only exact task-context principal-scope composition edges', () => {
+    const source = `
+export const sendReceipt = task('email/send-receipt', {
+  async run(args, ctx) {
+    await ctx.actAs(args.ownerId).runMutation(markSent, { id: args.id });
+    await ctx.declareSystemWrite('receipt repair').runMutation(repairReceipt, { id: args.id });
+    await ctx.declareSystemRead('receipt audit').runQuery(receiptAudit, { id: args.id });
+    await other.actAs(args.ownerId).runMutation(forged, { id: args.id });
+    await ((ctx) => ctx.actAs(args.ownerId).runMutation(shadowed, { id: args.id }))(other);
+  },
+});
+`;
+    const [handler] = taskRunHandlers(parseComponentModule('tasks.ts', source));
+
+    expect(handler).toMatchObject({
+      runMutationEdges: [
+        expect.objectContaining({ target: 'markSent' }),
+        expect.objectContaining({ target: 'repairReceipt' }),
+      ],
+      runQueryEdges: [expect.objectContaining({ target: 'receiptAudit' })],
+    });
+  });
+
   it('records task direct write sink facts separately from composition edges', () => {
     const source = `
 export const sendReceipt = task('email/send-receipt', {

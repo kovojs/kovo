@@ -3189,7 +3189,7 @@ function requestCompilerSemanticRootForFactoryCall(
   const literal = requestCompilerSemanticStaticString(first);
   if (literal !== undefined) return `${factory}:${literal}`;
 
-  const exported = requestCompilerSemanticExportedConstName(call);
+  const registryBinding = requestCompilerSemanticRegistryConstName(factory, call);
   switch (factory) {
     case 'agent':
       return 'agent:UNRESOLVED';
@@ -3202,11 +3202,11 @@ function requestCompilerSemanticRootForFactoryCall(
       if (firstValue && !Node.isObjectLiteralExpression(firstValue)) {
         return 'mutation:UNRESOLVED';
       }
-      return `mutation:${exported ? requestCompilerSemanticRegistryKey(fileName, exported) : 'UNRESOLVED'}`;
+      return `mutation:${registryBinding ? requestCompilerSemanticRegistryKey(fileName, registryBinding) : 'UNRESOLVED'}`;
     }
     case 'query':
     case 'task':
-      return `${factory}:${exported ? requestCompilerSemanticRegistryKey(fileName, exported) : fileName}`;
+      return `${factory}:${registryBinding ? requestCompilerSemanticRegistryKey(fileName, registryBinding) : fileName}`;
     case 'webhook': {
       const definitionSource = args.length >= 2 ? args[1] : first;
       const definition =
@@ -3216,7 +3216,7 @@ function requestCompilerSemanticRootForFactoryCall(
       const path = definition
         ? requestCompilerSemanticStaticObjectString(definition, 'path')
         : undefined;
-      return `webhook:${path ?? exported ?? 'UNRESOLVED'}`;
+      return `webhook:${path ?? registryBinding ?? 'UNRESOLVED'}`;
     }
   }
 }
@@ -3255,6 +3255,34 @@ function requestCompilerSemanticExportedConstName(
   return declaration &&
     statement?.isExported() &&
     statement.getDeclarationKind() === VariableDeclarationKind.Const &&
+    declaration.getInitializer() === call &&
+    name &&
+    Node.isIdentifier(name)
+    ? name.getText()
+    : undefined;
+}
+
+function requestCompilerSemanticRegistryConstName(
+  factory: SecuritySemanticRootBinding['factory'],
+  call: import('ts-morph').CallExpression,
+): string | undefined {
+  const exported = requestCompilerSemanticExportedConstName(call);
+  if (exported !== undefined) return exported;
+  if (
+    (factory !== 'mutation' && factory !== 'query' && factory !== 'task') ||
+    !compilerOwnedAppContractMemberEquals(call.getExpression(), factory)
+  ) {
+    return undefined;
+  }
+
+  // SPEC §5.2/§6.2.1: mirror the compiler's source-derived identity rule only after its exact
+  // app-receiver fact has been authenticated. Standalone factories still require an export.
+  const declaration = call.getParentIfKind(SyntaxKind.VariableDeclaration);
+  const statement = declaration?.getVariableStatement();
+  const name = declaration?.getNameNode();
+  return declaration &&
+    statement?.getDeclarationKind() === VariableDeclarationKind.Const &&
+    statement.getParent() === call.getSourceFile() &&
     declaration.getInitializer() === call &&
     name &&
     Node.isIdentifier(name)

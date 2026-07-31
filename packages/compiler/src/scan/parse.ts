@@ -6735,15 +6735,12 @@ function taskCompositionEdges(
   const visit = (node: TS.Node): void => {
     if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
       const receiver = node.expression.expression;
-      const receiverText = compilerStringTrim(
-        compilerStringSlice(source, receiver.getStart(sourceFile), receiver.getEnd()),
-      );
       if (
         node.expression.name.text === method &&
-        (ctxParam === undefined || receiverText === ctxParam)
+        taskCompositionReceiverMatchesContext(body, receiver, ctxParam, method)
       ) {
         const target =
-          taskCompositionTarget(sourceFile, source, callArgument(node, 0)) ?? `${method}:?`;
+          taskCompositionTarget(sourceFile, source, callArgument(node, 0), method) ?? `${method}:?`;
         const targetExpression = callArgument(node, 0) ?? node;
         const edge = {
           span: {
@@ -6760,6 +6757,56 @@ function taskCompositionEdges(
 
   visit(body);
   return edges;
+}
+
+function taskCompositionReceiverMatchesContext(
+  body: TS.ConciseBody,
+  rawReceiver: TS.Expression,
+  ctxParam: string | undefined,
+  method: 'runMutation' | 'runQuery' | 'schedule',
+): boolean {
+  // SPEC §5.2 rule 10 / §9.6: composition edges come from the exact handler parameter or one
+  // direct principal-posture constructor on it. Receiver text and shadowed lookalikes prove none.
+  const receiver = unwrapExpression(rawReceiver);
+  if (ts.isIdentifier(receiver)) {
+    return taskCompositionContextIdentifierMatches(body, receiver, ctxParam);
+  }
+  if (method === 'schedule' || !ts.isCallExpression(receiver) || receiver.arguments.length !== 1) {
+    return false;
+  }
+  const callee = unwrapExpression(receiver.expression);
+  if (!ts.isPropertyAccessExpression(callee)) return false;
+  const posture = callee.name.text;
+  if (
+    posture !== 'actAs' &&
+    (method === 'runMutation' ? posture !== 'declareSystemWrite' : posture !== 'declareSystemRead')
+  ) {
+    return false;
+  }
+  const context = unwrapExpression(callee.expression);
+  return (
+    ts.isIdentifier(context) && taskCompositionContextIdentifierMatches(body, context, ctxParam)
+  );
+}
+
+function taskCompositionContextIdentifierMatches(
+  body: TS.ConciseBody,
+  identifier: TS.Identifier,
+  ctxParam: string | undefined,
+): boolean {
+  if (ctxParam === undefined || identifier.text !== ctxParam) return false;
+  const handler = body.parent;
+  if (!ts.isFunctionLike(handler)) return false;
+  const parameters = compilerSnapshotDenseArray(handler.parameters, 'Task handler parameters');
+  let binding: TS.Identifier | undefined;
+  for (let index = 0; index < parameters.length; index += 1) {
+    const name = parameters[index]!.name;
+    if (ts.isIdentifier(name) && name.text === ctxParam) {
+      binding = name;
+      break;
+    }
+  }
+  return binding !== undefined && !identifierIsShadowedBeforeScope(identifier, binding, handler);
 }
 
 function taskCompositionTargets(edges: readonly TaskCompositionEdgeModel[]): string[] {
@@ -6792,9 +6839,13 @@ function taskCompositionTarget(
   sourceFile: TS.SourceFile,
   source: string,
   expression: TS.Expression | undefined,
+  method: 'runMutation' | 'runQuery' | 'schedule',
 ): string | undefined {
   if (!expression) return undefined;
-  if (ts.isStringLiteralLike(expression)) return expression.text;
+  const current = unwrapExpression(expression);
+  if (ts.isStringLiteralLike(current)) return current.text;
+  const appDeclaration = taskCompositionAppDeclarationTarget(sourceFile, current, method);
+  if (appDeclaration !== undefined) return appDeclaration;
   return compilerStringTrim(
     compilerRegExpReplace(
       /\s+/g,
@@ -6802,6 +6853,70 @@ function taskCompositionTarget(
       ' ',
     ),
   );
+}
+
+function taskCompositionAppDeclarationTarget(
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
+  method: 'runMutation' | 'runQuery' | 'schedule',
+): string | undefined {
+  // SPEC §5.2/§6.2.1: carry the same compiler-owned private app identity into task edges; a
+  // same-named local/free factory remains a plain unresolved source expression.
+  if (!ts.isIdentifier(expression)) return undefined;
+  const expected =
+    method === 'runMutation'
+      ? MUTATION_FACTORY_IDENTITY
+      : method === 'runQuery'
+        ? QUERY_FACTORY_IDENTITY
+        : TASK_FACTORY_IDENTITY;
+  const statements = compilerSnapshotDenseArray(
+    sourceFile.statements,
+    'Task composition module statements',
+  );
+  let call: TS.CallExpression | undefined;
+  for (let statementIndex = 0; statementIndex < statements.length; statementIndex += 1) {
+    const statement = statements[statementIndex]!;
+    if (!ts.isVariableStatement(statement)) continue;
+    const declarations = compilerSnapshotDenseArray(
+      statement.declarationList.declarations,
+      'Task composition module declarations',
+    );
+    for (let declarationIndex = 0; declarationIndex < declarations.length; declarationIndex += 1) {
+      const declaration = declarations[declarationIndex]!;
+      if (!ts.isIdentifier(declaration.name) || declaration.name.text !== expression.text) continue;
+      const initializer =
+        declaration.initializer === undefined
+          ? undefined
+          : unwrapExpression(declaration.initializer);
+      if (
+        call !== undefined ||
+        !initializer ||
+        !ts.isCallExpression(initializer) ||
+        moduleConstInitializerName(sourceFile, initializer) !== expression.text ||
+        !frameworkExportEquals(
+          compilerOwnedAppContractFactoryIdentity(
+            ts as FrameworkIdentityTypeScript,
+            sourceFile,
+            initializer.expression,
+          ),
+          expected,
+        )
+      ) {
+        return undefined;
+      }
+      call = initializer;
+    }
+  }
+  if (call === undefined) return undefined;
+  const first = callArgument(call, 0);
+  if (first && ts.isStringLiteralLike(unwrapExpression(first))) {
+    return (unwrapExpression(first) as TS.StringLiteralLike).text;
+  }
+  return call.arguments.length === 1 &&
+    first !== undefined &&
+    ts.isObjectLiteralExpression(unwrapExpression(first))
+    ? deriveRegistryIdentity(sourceFile.fileName, expression.text).key
+    : undefined;
 }
 
 function parameterName(name: TS.BindingName): string | undefined {
