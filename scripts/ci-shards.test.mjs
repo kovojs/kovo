@@ -538,7 +538,7 @@ describe('ci-shards', () => {
       'const ROUTE_OUTCOME_TEST_TIMEOUT_MS = BUILD_DEADLINE_MS + EXPLAIN_DEADLINE_MS + 10_000;',
     );
     expect(productionArtifactSupportSource).toContain(
-      'export const PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS = process.env.CI ? 600_000 : 240_000;',
+      'export const PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS = process.env.CI ? 600_000 : 420_000;',
     );
     expect(starterTestSupportSource).toContain(
       'export const STARTER_SERVER_READY_TIMEOUT_MS = process.env.CI ? 180_000 : 90_000;',

@@ -41,11 +41,15 @@ const authoritativeLocalDoors = Object.freeze({
     new Set(['serverValue', 'trustedAssign']),
   ),
 });
+const coreDoorExports = Object.freeze(
+  new Set(['publishToClient', 'revealSecret', 'revealUntrusted', 'trustedReveal']),
+);
+const serverDoorExports = Object.freeze(new Set(['serverValue', 'trustedAssign']));
 const packageDoorExports = Object.freeze({
-  '@kovojs/core': Object.freeze(
-    new Set(['publishToClient', 'revealSecret', 'revealUntrusted', 'trustedReveal']),
-  ),
-  '@kovojs/server': Object.freeze(new Set(['serverValue', 'trustedAssign'])),
+  '@kovojs/core': coreDoorExports,
+  '@kovojs/core/security': coreDoorExports,
+  '@kovojs/server': serverDoorExports,
+  '@kovojs/server/write-safety': serverDoorExports,
 });
 
 function asciiCompare(left, right) {

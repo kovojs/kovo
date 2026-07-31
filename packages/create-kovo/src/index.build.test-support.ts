@@ -18,9 +18,10 @@ import {
 import { resolveVitePlusQualityBin } from '../../cli/src/commands/vite-plus-bin.js';
 
 // Production artifact proofs compile an entire generated application. Shared GitHub runners can
-// be several times slower under the full matrix, so keep the semantic test deadline distinct from
-// local feedback while still bounding a genuinely stuck build.
-export const PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS = process.env.CI ? 600_000 : 240_000;
+// be several times slower under the full matrix, while loaded local acceptance/classifier runs can
+// serialize several cold builds. Keep both deadlines bounded without treating measured 4–5 minute
+// local proofs as hangs.
+export const PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS = process.env.CI ? 600_000 : 420_000;
 const generatedStarterFormatConfigAnchor = [
   '  fmt: {',
   '    semi: true,',

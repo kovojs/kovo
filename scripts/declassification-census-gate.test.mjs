@@ -58,6 +58,32 @@ describe('declassification census gate (C13 anchor)', () => {
     expect(new Set(sites.map((site) => site.site)).size).toBe(sites.length);
   });
 
+  it('recognizes the exact public security subpaths without accepting lookalikes', () => {
+    const sites = collect(`
+import * as security from '@kovojs/core/security';
+import { revealUntrusted as revealRequest } from '@kovojs/core/security';
+import { serverValue, trustedAssign as assignReviewed } from '@kovojs/server/write-safety';
+import { revealSecret as foreignReveal } from '@kovojs/core/security/internal';
+import { trustedAssign as foreignAssign } from '@kovojs/server/write-safety-extra';
+
+export function run(value) {
+  security.publishToClient(value, { reason: 'public projection' });
+  revealRequest(value, { justification: 'validated input' });
+  serverValue(value, 'server provenance');
+  assignReviewed(value, { reason: 'reviewed assignment' });
+  foreignReveal(value, 'lookalike subpath');
+  foreignAssign(value, { reason: 'lookalike subpath' });
+}
+`);
+
+    expect(sites.map(({ door, identity }) => [door, identity])).toEqual([
+      ['publishToClient', 'import:@kovojs/core/security#publishToClient'],
+      ['revealUntrusted', 'import:@kovojs/core/security#revealUntrusted'],
+      ['serverValue', 'import:@kovojs/server/write-safety#serverValue'],
+      ['trustedAssign', 'import:@kovojs/server/write-safety#trustedAssign'],
+    ]);
+  });
+
   it('follows an immutable one-hop alias and rejects comments, strings, and foreign same-name imports', () => {
     const sites = collect(`
 import { revealSecret } from '@kovojs/core';
