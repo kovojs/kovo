@@ -378,8 +378,9 @@ describe('create-kovo starter (build integration: production transaction artifac
         linkStarterBuildDependencies(root);
         addRuntimeMutationSafetyProofs(root, { includeWebhookTxEscapeAttempt: true });
         const proofSource = readFileSync(join(root, 'src/runtime-safety-proofs.ts'), 'utf8');
-        expect(proofSource).toContain('context.tx as unknown as { $client: unknown }');
-        expect(proofSource).toContain('context.tx as unknown as { session: unknown }');
+        expect(proofSource).toContain("if ('$client' in context.tx) void context.tx.$client;");
+        expect(proofSource).toContain("if ('session' in context.tx) void context.tx.session;");
+        expect(proofSource).not.toContain('context.tx as unknown');
 
         const output = execFileSyncErrorOutput(
           captureProductionBuildFailure(() => buildProductionArtifact(root)),
