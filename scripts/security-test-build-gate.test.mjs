@@ -833,12 +833,12 @@ describe('security-test-build-gate', () => {
       requiredNeedles: expect.arrayContaining([
         'addStorageQueryWriteProof(root)',
         'buildProductionArtifact(root)',
-        'computed server capability call storage.put',
-        'computed server capability call storage.delete',
-        'computed server capability call storageUpload.upload',
+        'storage-put-write-query; transfers=<direct>; sink=unresolved, imported, aliased, or foreign server helper storage.put',
+        'storage-delete-write-query; transfers=<direct>; sink=unresolved, imported, aliased, or foreign server helper storage.delete',
+        'storage-upload-write-query; transfers=local:upload[]; sink=unresolved, imported, aliased, or foreign server helper storage.put',
       ]),
     });
-    expect(proof?.requiredNeedles).not.toContain('computed server capability call storage.store');
+    expect(proof?.requiredNeedles).not.toContain('storage-store-write-query');
   });
 
   it('keeps the managed write raw-driver proof enrolled on its KV424 property-protocol path', () => {

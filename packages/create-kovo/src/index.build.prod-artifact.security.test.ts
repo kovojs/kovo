@@ -910,12 +910,15 @@ describe('create-kovo starter (build integration: production security artifacts)
 
         const output = captureBuildFailure(() => buildProductionArtifact(root));
         expect(output).toContain('KV449');
-        expect(output).toContain('storage-put-write-query');
-        expect(output).toContain('storage-delete-write-query');
-        expect(output).toContain('storage-upload-write-query');
-        expect(output).toContain('computed server capability call storage.put');
-        expect(output).toContain('computed server capability call storage.delete');
-        expect(output).toContain('computed server capability call storageUpload.upload');
+        expect(output).toContain(
+          'storage-put-write-query; transfers=<direct>; sink=unresolved, imported, aliased, or foreign server helper storage.put',
+        );
+        expect(output).toContain(
+          'storage-delete-write-query; transfers=<direct>; sink=unresolved, imported, aliased, or foreign server helper storage.delete',
+        );
+        expect(output).toContain(
+          'storage-upload-write-query; transfers=local:upload[]; sink=unresolved, imported, aliased, or foreign server helper storage.put',
+        );
       } finally {
         rmSync(root, { force: true, recursive: true });
       }
@@ -1547,7 +1550,7 @@ function addEnhancedMutationWireProof(root: string): void {
       '    queries: [enhancedMutationWireProofQuery],',
       '    touches: [proofDomain],',
       '  },',
-      '  optimistic: [enhancedMutationWireProofQuery.optimistic(proofInput, (value) => value)],',
+      "  optimistic: [enhancedMutationWireProofQuery.optimistic('await-fragment')],",
       '  handler(input, _request, context) {',
       '    context.invalidate(proofDomain);',
       '    return input;',

@@ -2031,7 +2031,7 @@ const kv426TrustedUrlAttributeProofNeedle = `      'addTrustedUrlAttributeTypeGa
 
 const weakenedKv426TrustedUrlAttributeProofNeedle = `      'TrustedUrl',`;
 
-const kv433StorageDeleteProofNeedle = `      'computed server capability call storage.delete',`;
+const kv449StorageDeleteProofNeedle = `      'storage-delete-write-query; transfers=<direct>; sink=unresolved, imported, aliased, or foreign server helper storage.delete',`;
 
 const weakenedKv433StorageDeleteProofNeedle = `      'storage-delete-write-query',`;
 
@@ -7378,7 +7378,7 @@ export const SECURITY_GATE_MUTANTS = [
       'KV449 storage-query proof enrollment must retain direct storage delete operation evidence',
     name: 'security-test-build-gate/weaken-kv433-storage-delete-proof-enrollment',
     replacement: weakenedKv433StorageDeleteProofNeedle,
-    search: kv433StorageDeleteProofNeedle,
+    search: kv449StorageDeleteProofNeedle,
     sourceFile: securityTestBuildGatePath,
     test: assertKv433StorageDeleteProofEnrollmentIsPinned,
   },
@@ -16366,9 +16366,9 @@ async function assertKv433StorageDeleteProofEnrollmentIsPinned(moduleUnderTest) 
   const needles = [
     'addStorageQueryWriteProof(root)',
     'buildProductionArtifact(root)',
-    'computed server capability call storage.put',
-    'computed server capability call storage.delete',
-    'computed server capability call storageUpload.upload',
+    'storage-put-write-query; transfers=<direct>; sink=unresolved, imported, aliased, or foreign server helper storage.put',
+    'storage-delete-write-query; transfers=<direct>; sink=unresolved, imported, aliased, or foreign server helper storage.delete',
+    'storage-upload-write-query; transfers=local:upload[]; sink=unresolved, imported, aliased, or foreign server helper storage.put',
   ];
   for (const needle of needles) {
     if (!proof.requiredNeedles?.includes(needle)) {

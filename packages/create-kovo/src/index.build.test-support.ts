@@ -285,44 +285,44 @@ function nonParanoidStarterEnv(root: string): NodeJS.ProcessEnv {
   return env;
 }
 
-export function addStorageQueryWriteProof(root: string): void {
+export function addStorageQueryWriteProof(root: string, options: { format?: boolean } = {}): void {
   writeFileSync(
     join(root, 'src/storage-query-write-proof.ts'),
     [
       "import { publicScopedKey } from '@kovojs/core';",
-      "import type { StorageCapability } from '@kovojs/core/storage';",
-      "import { publicAccess, query } from '@kovojs/server';",
+      "import { createMemoryStorage } from '@kovojs/core/storage';",
       '',
-      'type StorageWriteQueryContext = StorageCapability;',
-      'type StorageUploadQueryContext = {',
-      '  upload(key: string, body: string): Promise<unknown>;',
+      "import { app } from './kovo.js';",
+      '',
+      'const storage = createMemoryStorage();',
+      'const storageUpload = {',
+      '  upload(key: string, body: string) {',
+      '    return storage.put(publicScopedKey(key), body);',
+      '  },',
       '};',
       '',
-      'export const storagePutWriteQuery = query({',
-      "  access: publicAccess('storage put write query proof'),",
+      'export const storagePutWriteQuery = app.query({',
+      "  access: app.publicAccess('storage put write query proof'),",
       '  reads: [],',
-      '  async load(_input: unknown, storage?: StorageWriteQueryContext): Promise<{ ok: true }> {',
-      "    if (!storage) throw new Error('storage query proof requires loader context');",
+      '  async load(): Promise<{ ok: true }> {',
       "    await storage.put(publicScopedKey('receipts/query-write-proof.txt'), 'bad');",
       '    return { ok: true };',
       '  },',
       '});',
       '',
-      'export const storageDeleteWriteQuery = query({',
-      "  access: publicAccess('storage delete write query proof'),",
+      'export const storageDeleteWriteQuery = app.query({',
+      "  access: app.publicAccess('storage delete write query proof'),",
       '  reads: [],',
-      '  async load(_input: unknown, storage?: StorageWriteQueryContext): Promise<{ ok: true }> {',
-      "    if (!storage) throw new Error('storage query proof requires loader context');",
+      '  async load(): Promise<{ ok: true }> {',
       "    await storage.delete(publicScopedKey('receipts/query-delete-proof.txt'));",
       '    return { ok: true };',
       '  },',
       '});',
       '',
-      'export const storageUploadWriteQuery = query({',
-      "  access: publicAccess('storage upload write query proof'),",
+      'export const storageUploadWriteQuery = app.query({',
+      "  access: app.publicAccess('storage upload write query proof'),",
       '  reads: [],',
-      '  async load(_input: unknown, storageUpload?: StorageUploadQueryContext): Promise<{ ok: true }> {',
-      "    if (!storageUpload) throw new Error('storage upload proof requires loader context');",
+      '  async load(): Promise<{ ok: true }> {',
       "    await storageUpload.upload('receipts/query-upload-proof.txt', 'bad');",
       '    return { ok: true };',
       '  },',
@@ -331,7 +331,27 @@ export function addStorageQueryWriteProof(root: string): void {
     ].join('\n'),
     'utf8',
   );
-  formatGeneratedSources(root, ['src/storage-query-write-proof.ts']);
+  const appPath = join(root, 'src/app.tsx');
+  let app = readFileSync(appPath, 'utf8');
+  app = replaceRequired(
+    app,
+    "import { contactsQuery } from './queries.js';",
+    [
+      "import { contactsQuery } from './queries.js';",
+      "import { storageDeleteWriteQuery, storagePutWriteQuery, storageUploadWriteQuery } from './storage-query-write-proof.js';",
+    ].join('\n'),
+    'storage query proof app import',
+  );
+  app = replaceRequired(
+    app,
+    '  queries: [contactsQuery],',
+    '  queries: [contactsQuery, storageDeleteWriteQuery, storagePutWriteQuery, storageUploadWriteQuery],',
+    'storage query proof app registration',
+  );
+  writeFileSync(appPath, app, 'utf8');
+  if (options.format ?? true) {
+    formatGeneratedSources(root, ['src/app.tsx', 'src/storage-query-write-proof.ts']);
+  }
 }
 
 export function addOpaqueStorageQueryWriteProof(root: string): void {
@@ -399,6 +419,7 @@ export function addOpaqueStorageQueryWriteProof(root: string): void {
     'opaque storage query proof app registration',
   );
   writeFileSync(appPath, app, 'utf8');
+  formatGeneratedSources(root, ['src/app.tsx', 'src/queries.ts']);
 }
 
 export function addStorageMutationWriteProof(root: string): void {
@@ -2133,7 +2154,7 @@ export function addAuthSecretLeakProof(root: string, options: { leakToWire?: boo
 
 export function addOpaqueAuthSecretLeakProof(
   root: string,
-  options: { leakToWire?: boolean } = {},
+  options: { format?: boolean; leakToWire?: boolean } = {},
 ): void {
   const leakToWire = options.leakToWire ?? true;
   const unsafeQueryNames = [
@@ -2338,7 +2359,9 @@ export function addOpaqueAuthSecretLeakProof(
       '  csrf: false,',
       "  csrfJustification: 'public build-only proof uses no session or cookie authority',",
       '  input: s.object({}),',
-      `  optimistic: { ${appQueryNames.map((name) => `[${name}.key]: 'await-fragment'`).join(', ')} },`,
+      '  optimistic: [',
+      ...appQueryNames.map((name) => `    ${name}.optimistic('await-fragment'),`),
+      '  ],',
       '  registry: { touches: [authDomain] },',
       '  handler() {',
       "    return { status: 'ok' };",
@@ -2357,7 +2380,7 @@ export function addOpaqueAuthSecretLeakProof(
       '  },',
       '});',
       '',
-      "const authSecretRoute = app.route('/', {",
+      "const authSecretRoute = app.route('/login', {",
       "  access: app.publicAccess('public auth secret build proof'),",
       "  meta: { title: 'Auth secret proof' },",
       '  page: () => <AuthSecretLeakProof />,',
@@ -2375,6 +2398,9 @@ export function addOpaqueAuthSecretLeakProof(
     ].join('\n'),
     'utf8',
   );
+  if (options.format ?? true) {
+    formatGeneratedSources(root, ['src/app.tsx', 'src/queries.ts']);
+  }
 }
 
 export function addSecretViewEgressProof(root: string): void {
@@ -4790,13 +4816,12 @@ function replaceRequired(
 }
 
 function formatGeneratedSources(root: string, files: readonly string[]): void {
-  for (const file of files) {
-    execFileSync(resolveStarterBin(root, 'vp'), ['fmt', '--write', file], {
-      cwd: root,
-      env: withStarterBinOnPath(root),
-      stdio: 'pipe',
-    });
-  }
+  if (files.length === 0) return;
+  execFileSync(resolveStarterBin(root, 'vp'), ['fmt', '--write', ...files], {
+    cwd: root,
+    env: withStarterBinOnPath(root),
+    stdio: 'pipe',
+  });
 }
 
 function addNamedImportSpecifiersRequired(

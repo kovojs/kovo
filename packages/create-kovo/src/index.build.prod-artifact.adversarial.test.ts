@@ -86,6 +86,24 @@ describe('create-kovo starter (build integration: adversarial production artifac
     multiBuildProofTimeout,
   );
 
+  it('M1:storage-write fixture uses the current app-scoped declaration contract', () => {
+    withProject('create-kovo-m1-storage-current-api-', undefined, (root) => {
+      addStorageQueryWriteProof(root, { format: false });
+
+      const proof = readFileSync(join(root, 'src/storage-query-write-proof.ts'), 'utf8');
+      const app = readFileSync(join(root, 'src/app.tsx'), 'utf8');
+      expect(proof).toContain('export const storagePutWriteQuery = app.query({');
+      expect(proof).toContain('export const storageDeleteWriteQuery = app.query({');
+      expect(proof).toContain('export const storageUploadWriteQuery = app.query({');
+      expect(proof).toContain("access: app.publicAccess('storage put write query proof')");
+      expect(proof).not.toMatch(/(?:^|[^\w.])query\(\{/mu);
+      expect(proof).not.toMatch(/\bas\s+(?:unknown|Storage)/u);
+      expect(app).toContain(
+        'queries: [contactsQuery, storageDeleteWriteQuery, storagePutWriteQuery, storageUploadWriteQuery]',
+      );
+    });
+  });
+
   it.each([...dialectIndependentCompilerGateCases])(
     'M1:storage-write keeps opaque storage authority on the %s KV424 path',
     (_label: string, dialect: CreateKovoDialect | undefined) => {
@@ -204,7 +222,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
 
   it('M1:secret-wire opaque fixture uses the current app-scoped declaration contract', () => {
     withProject('create-kovo-m1-secret-value-flow-current-api-', undefined, (root) => {
-      addOpaqueAuthSecretLeakProof(root);
+      addOpaqueAuthSecretLeakProof(root, { format: false });
 
       const queries = readFileSync(join(root, 'src/queries.ts'), 'utf8');
       const app = readFileSync(join(root, 'src/app.tsx'), 'utf8');
@@ -212,8 +230,10 @@ describe('create-kovo starter (build integration: adversarial production artifac
       expect(queries).toContain('export const contactsQuery = app.query({');
       expect(queries).not.toMatch(/(?:^|[^\w.])query\(\{/mu);
       expect(app).toContain('export const authTouchMutation = app.mutation({');
-      expect(app).toContain("const authSecretRoute = app.route('/', {");
+      expect(app).toContain("authSecretDirectLeakQuery.optimistic('await-fragment')");
+      expect(app).toContain("const authSecretRoute = app.route('/login', {");
       expect(app).toContain('mutations: [authTouchMutation]');
+      expect(app).not.toContain('optimistic: {');
       expect(app).not.toMatch(/(?:^|[^\w.])(?:mutation|route)\(\{/mu);
     });
   });
@@ -599,12 +619,9 @@ function expectBuildFailure(root: string, expectedOutput: readonly string[]): st
 function expectStorageWriteBuildFailure(root: string): void {
   expectBuildFailure(root, [
     'KV449',
-    'storage-put-write-query',
-    'storage-delete-write-query',
-    'storage-upload-write-query',
-    'computed server capability call storage.put',
-    'computed server capability call storage.delete',
-    'computed server capability call storageUpload.upload',
+    'storage-put-write-query; transfers=<direct>; sink=unresolved, imported, aliased, or foreign server helper storage.put',
+    'storage-delete-write-query; transfers=<direct>; sink=unresolved, imported, aliased, or foreign server helper storage.delete',
+    'storage-upload-write-query; transfers=local:upload[]; sink=unresolved, imported, aliased, or foreign server helper storage.put',
   ]);
 }
 
