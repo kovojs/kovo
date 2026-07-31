@@ -809,6 +809,7 @@ export default app.assemble({
     const initialSource = readFileSync(appFile, 'utf8');
     const secondSource = initialSource.replace('Bootstrap safe', 'Atomic generation two');
     const recoveredSource = initialSource.replace('Bootstrap safe', 'Atomic generation three');
+    const failedCandidateMarker = join(root, 'failed-candidate-entered.marker');
     const port = await reservePort();
     const child = spawnKovoDev(root, port);
     const output = collectChildOutput(child);
@@ -824,18 +825,27 @@ export default app.assemble({
         fetchBodyContaining(url, 'Atomic generation two', output, 15_000),
       ).resolves.toContain('Atomic generation two');
 
-      writeFileSync(appFile, `${secondSource}\nthrow new Error('candidate evaluation failed');\n`);
-      const failedCandidateDeadline = Date.now() + 2_000;
-      let lastGoodResponses = 0;
-      while (Date.now() < failedCandidateDeadline) {
-        await new Promise((resolve) => setTimeout(resolve, 50));
-        const response = await fetch(url);
-        const body = await response.text();
-        expect(response.status, `${body}\n${output.combined()}`).toBe(200);
-        expect(body, output.combined()).toContain('Atomic generation two');
-        lastGoodResponses += 1;
+      writeFileSync(
+        appFile,
+        `${secondSource}
+import { writeFileSync as writeFailedCandidateMarker } from 'node:fs';
+writeFailedCandidateMarker(${JSON.stringify(failedCandidateMarker)}, 'entered', 'utf8');
+throw new Error('candidate evaluation failed');
+`,
+      );
+      // SPEC §9.5.1: synchronize on actual candidate evaluation, then prove concurrent request
+      // availability without turning Vite watcher settlement time into a throughput contract.
+      await waitForFile(failedCandidateMarker, output, 15_000);
+      const lastGoodResponses = await Promise.all(
+        [0, 1, 2].map(async () => {
+          const response = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+          return { body: await response.text(), status: response.status };
+        }),
+      );
+      for (const response of lastGoodResponses) {
+        expect(response.status, `${response.body}\n${output.combined()}`).toBe(200);
+        expect(response.body, output.combined()).toContain('Atomic generation two');
       }
-      expect(lastGoodResponses).toBeGreaterThan(1);
 
       writeFileSync(appFile, recoveredSource, 'utf8');
       await expect(
