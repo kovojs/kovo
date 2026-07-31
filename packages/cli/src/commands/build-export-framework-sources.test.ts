@@ -20,6 +20,7 @@ import { build as viteBuild, createServer as createViteServer, type Plugin } fro
 
 import {
   approvedBuildSourcesVitePluginForTesting,
+  cloudflareUnavailableDgramFloorImportForTesting,
   kovoFrameworkSourcePathFromTrustForTesting,
   kovoFrameworkSourcePathForTesting,
   kovoFrameworkSourceRootsForTesting,
@@ -482,6 +483,53 @@ describe('Kovo framework source roots', () => {
 
       expect(kovoFrameworkSourcePathFromTrustForTesting(trust, server.chunk)).toBe(false);
       expect(kovoFrameworkSourcePathFromTrustForTesting(trust, server.asset)).toBe(false);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('substitutes the dgram floor only across byte-authenticated source and packed framework edges', () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-cloudflare-dgram-floor-')));
+    try {
+      const cli = writePackedPackage(root, '@kovojs/cli', { '@kovojs/server': '0.2.0' });
+      const server = writePackedPackage(root, '@kovojs/server');
+      const packedBootstrap = join(server.root, 'dist/egress-bootstrap-R4ND0M.mjs');
+      const sourceBootstrap = join(server.root, 'dist/egress-bootstrap.ts');
+      const appBootstrap = join(root, 'egress-bootstrap-R4ND0M.mjs');
+      writeFileSync(packedBootstrap, "import './egress-dgram.mjs';\n", 'utf8');
+      writeFileSync(sourceBootstrap, "import './egress-dgram.js';\n", 'utf8');
+      writeFileSync(appBootstrap, "import './egress-dgram.mjs';\n", 'utf8');
+      const trust = kovoFrameworkSourceTrustForTesting(cli.entry);
+
+      expect(
+        cloudflareUnavailableDgramFloorImportForTesting(
+          trust,
+          './egress-dgram.mjs',
+          packedBootstrap,
+        ),
+      ).toBe(true);
+      expect(
+        cloudflareUnavailableDgramFloorImportForTesting(
+          trust,
+          './egress-dgram.js',
+          sourceBootstrap,
+        ),
+      ).toBe(true);
+      expect(
+        cloudflareUnavailableDgramFloorImportForTesting(trust, './egress-dgram.mjs', appBootstrap),
+      ).toBe(false);
+      expect(
+        cloudflareUnavailableDgramFloorImportForTesting(trust, 'node:dgram', packedBootstrap),
+      ).toBe(false);
+
+      writeFileSync(packedBootstrap, "import 'node:dgram';\n", 'utf8');
+      expect(
+        cloudflareUnavailableDgramFloorImportForTesting(
+          trust,
+          './egress-dgram.mjs',
+          packedBootstrap,
+        ),
+      ).toBe(false);
     } finally {
       rmSync(root, { force: true, recursive: true });
     }

@@ -4443,11 +4443,7 @@ export const homeQuery = {
         join(outDir, 'cloudflare/server/handler.mjs'),
         'utf8',
       );
-      expect(
-        /\b(?:from\s*['"]node:dgram['"]|import\s*['"]node:dgram['"]|import\s*\(\s*['"]node:dgram['"]\s*\)|require\s*\(\s*['"]node:dgram['"]\s*\))/u.exec(
-          cloudflareHandlerSource,
-        ),
-      ).toBeNull();
+      expect(cloudflareHandlerSource).not.toContain('node:dgram');
       expect(cloudflareHandlerSource).not.toContain('node:vm');
       expect(cloudflareHandlerSource).not.toContain('readFileSync');
       expect(cloudflareHandlerSource).not.toContain('pgsql-ast-parser');

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import { buildCommand, derivePublishPlan } from './build-publish.mjs';
@@ -136,6 +138,19 @@ describe('package export resolver', () => {
         },
       }),
     ).toThrow('kovoPublish.extraEntries target does not target ./src');
+  });
+
+  it('keeps the Cloudflare dgram floor behind a private stable server dist entry', () => {
+    const server = JSON.parse(readFileSync('packages/server/package.json', 'utf8'));
+    const plan = derivePublishPlan(server);
+
+    expect(server.kovoPublish?.extraEntries).toContain('./src/egress-dgram.ts');
+    expect(server.exports).not.toHaveProperty('./egress-dgram');
+    expect(server.publishConfig?.exports).not.toHaveProperty('./egress-dgram');
+    expect(plan.entries).toContain('src/egress-dgram.ts');
+    expect(plan.targetFiles).toEqual(
+      expect.arrayContaining(['dist/egress-dgram.d.mts', 'dist/egress-dgram.mjs']),
+    );
   });
 
   it('keeps the workspace-only server Vite resolver out of published packages', () => {

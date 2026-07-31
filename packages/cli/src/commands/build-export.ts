@@ -10674,9 +10674,11 @@ const cloudflareUnavailableDgramFloorModuleId = '\0kovo-cloudflare-unavailable-d
 /**
  * Cloudflare exposes node:dgram only as a non-functional compatibility stub. The framework's
  * Node process floor is therefore vacuously satisfied in that runtime and must not make every
- * Cloudflare build fail its own unsupported-API inspection. Restrict this substitution to the
- * framework-owned relative import from egress-bootstrap; an app-authored node:dgram import stays
- * external in the server bundle and remains a blocking cloudflare-unsupported-node-api finding.
+ * Cloudflare build fail its own unsupported-API inspection. The private egress-dgram dist entry
+ * preserves the same replacement seam in packed packages. Restrict this substitution to the
+ * byte-authenticated framework-owned import from egress-bootstrap; an app-authored node:dgram
+ * import stays external in the server bundle and remains a blocking
+ * cloudflare-unsupported-node-api finding.
  */
 function cloudflareUnavailableDgramFloorVitePlugin(): {
   enforce: 'pre';
@@ -10688,10 +10690,8 @@ function cloudflareUnavailableDgramFloorVitePlugin(): {
     enforce: 'pre',
     name: 'kovo-cloudflare-unavailable-dgram-floor',
     resolveId(source, importer) {
-      const normalizedImporter = importer ? slashPath(importer) : '';
       if (
-        source === './egress-dgram.js' &&
-        buildRegExpExec(/\/egress-bootstrap\.(?:js|ts)$/u, normalizedImporter) !== null
+        isCloudflareUnavailableDgramFloorImport(trustedKovoFrameworkSourceRoots, source, importer)
       ) {
         return cloudflareUnavailableDgramFloorModuleId;
       }
@@ -10707,6 +10707,37 @@ export function isDgramFloorInstalled() { return true; }
 `;
     },
   };
+}
+
+function isCloudflareUnavailableDgramFloorImport(
+  trust: readonly KovoFrameworkSourceRoot[],
+  source: string,
+  importer: string | undefined,
+): boolean {
+  if (buildRegExpExec(/^\.\/egress-dgram\.(?:js|mjs|ts)$/u, slashPath(source)) === null) {
+    return false;
+  }
+  if (importer === undefined) return false;
+  const importerFileName = viteBuildSourceFileName(importer);
+  if (
+    importerFileName === undefined ||
+    buildRegExpExec(
+      /\/egress-bootstrap(?:-[A-Za-z0-9_-]+)?\.(?:js|mjs|ts)$/u,
+      slashPath(importerFileName),
+    ) === null
+  ) {
+    return false;
+  }
+  return kovoFrameworkSourcePathMatchesSnapshot(trust, importerFileName);
+}
+
+/** @internal Regression seam for source and packed Cloudflare dgram-floor substitution. */
+export function cloudflareUnavailableDgramFloorImportForTesting(
+  trust: readonly KovoFrameworkSourceRoot[],
+  source: string,
+  importer: string | undefined,
+): boolean {
+  return isCloudflareUnavailableDgramFloorImport(trust, source, importer);
 }
 
 function bundledUndiciRuntimeVitePlugin(): {

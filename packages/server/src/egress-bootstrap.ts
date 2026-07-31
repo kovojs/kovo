@@ -129,7 +129,7 @@ export function installEgressFloorSync(
   installOptions: EgressFloorInstallOptions = {},
 ): EgressFloorInstall {
   // Resolve + validate synchronously: a bad config (metadata in allowInternal) throws now and
-  // refuses boot. Raw node:http and node:dgram are floored before app assembly returns.
+  // refuses boot. Raw node:http and datagram sockets are floored before app assembly returns.
   const policy = resolveEgressPolicy(options, warn, {
     ...installOptions,
     databaseEndpoints: registeredDatabaseEndpoints(),
@@ -243,7 +243,7 @@ export function selfProbe(
       `SELF-PROBE: the egress floor is only PARTIALLY installed (net.connect=${net}, ` +
         `dgram=${dgram}, undici=${undici}). One transport path is ungated — a single layer ` +
         'fails open (undici pooled reuse bypasses net.connect; raw node:http bypasses undici; ' +
-        'node:dgram bypasses both).',
+        'raw datagram sockets bypass both).',
     );
   }
   if (netStatus.tampered) {
