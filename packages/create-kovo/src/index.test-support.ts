@@ -1,4 +1,4 @@
-import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { execFileSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
@@ -13,7 +13,7 @@ import {
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
   writeKovoExampleProject,
@@ -22,6 +22,12 @@ import {
   type CreateKovoExampleName,
   type CreateKovoRetentionPosture,
 } from './index.js';
+import {
+  boundedTestProcessCleanupBudgetMs,
+  runBoundedTestProcess,
+  type BoundedTestProcessInvocation,
+  type BoundedTestProcessOutcome,
+} from './index.test-process-supervisor.mjs';
 
 // A generated application can spend over a minute compiling its initial development graph on a
 // contended machine. Keep local feedback bounded at ninety seconds while giving the two-core hosted
@@ -33,11 +39,13 @@ export const STARTER_SERVER_READY_TIMEOUT_MS = process.env.CI ? 180_000 : 90_000
 // infrastructure, not a Kovo product-performance budget.
 export const GENERATED_STARTER_CLI_PROCESS_TIMEOUT_MS = process.env.CI ? 420_000 : 240_000;
 export const GENERATED_STARTER_CLI_SIGNAL_GRACE_MS = 5_000;
+export const GENERATED_STARTER_CLI_MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
 const GENERATED_STARTER_FIXTURE_SETUP_HEADROOM_MS = process.env.CI ? 180_000 : 60_000;
 
 export interface GeneratedStarterCommandOptions {
   cwd: string;
   env?: NodeJS.ProcessEnv;
+  maxOutputBytes?: number;
   signalGraceMs?: number;
   timeoutMs?: number;
 }
@@ -49,7 +57,8 @@ export interface GeneratedStarterCommandResult {
 
 /**
  * Keep Vitest's outer watchdog beyond every child deadline, forced-cleanup window, and server-ready
- * poll in a generated-starter proof. Synchronous fixture setup gets separate hosted-runner headroom.
+ * poll in a generated-starter proof. Fixture setup gets one aggregate supervised deadline, so its
+ * hosted-runner headroom is enforceable even though the setup API remains synchronous.
  */
 export function generatedStarterTestTimeout(options: {
   cliProcessCount: number;
@@ -62,7 +71,12 @@ export function generatedStarterTestTimeout(options: {
   if (!Number.isSafeInteger(serverProcessCount) || serverProcessCount < 0) {
     throw new TypeError('serverProcessCount must be a non-negative safe integer.');
   }
-  const cleanupWindowMs = GENERATED_STARTER_CLI_SIGNAL_GRACE_MS * 2;
+  const cleanupWindowMs = boundedTestProcessCleanupBudgetMs({
+    killGraceMs: GENERATED_STARTER_CLI_SIGNAL_GRACE_MS,
+    rootExitTimeoutMs: GENERATED_STARTER_CLI_SIGNAL_GRACE_MS,
+    streamCloseTimeoutMs: GENERATED_STARTER_CLI_SIGNAL_GRACE_MS,
+    terminationGraceMs: GENERATED_STARTER_CLI_SIGNAL_GRACE_MS,
+  });
   return (
     GENERATED_STARTER_FIXTURE_SETUP_HEADROOM_MS +
     options.cliProcessCount * (GENERATED_STARTER_CLI_PROCESS_TIMEOUT_MS + cleanupWindowMs) +
@@ -136,6 +150,7 @@ const packedKovoPackageManifest = 'packed-kovo-packages.json';
 const packedStarterCiManifestProducer = 'scripts/ci-shards.mjs pack-starter';
 
 export function createStarterApp(options: StarterAppOptions): StarterTestApp {
+  const setupDeadlineAtMs = fixtureSetupDeadlineAtMs();
   const tempParent = options.tempParent ?? tmpdir();
   mkdirSync(tempParent, { recursive: true });
   const parent = mkdtempSync(join(tempParent, options.tempPrefix ?? 'create-kovo-app-'));
@@ -145,10 +160,11 @@ export function createStarterApp(options: StarterAppOptions): StarterTestApp {
   try {
     const scaffold = options.scaffold ?? 'source';
     const installMode = options.install ?? 'symlink';
-    const packedPackages = scaffold === 'packed-bin' ? packKovoWorkspacePackages() : undefined;
+    const packedPackages =
+      scaffold === 'packed-bin' ? packKovoWorkspacePackages(setupDeadlineAtMs) : undefined;
 
     if (scaffold === 'packed-bin') {
-      scaffoldWithPackedCreateKovo(root, options, packedPackages);
+      scaffoldWithPackedCreateKovo(root, options, packedPackages, setupDeadlineAtMs);
     } else if (options.example !== undefined) {
       writeKovoExampleProject(root, {
         disableGit: true,
@@ -165,7 +181,12 @@ export function createStarterApp(options: StarterAppOptions): StarterTestApp {
       });
     }
 
-    const install = installStarterAppDependencies(root, installMode, packedPackages);
+    const install = installStarterAppDependencies(
+      root,
+      installMode,
+      packedPackages,
+      setupDeadlineAtMs,
+    );
 
     return {
       cleanup() {
@@ -184,6 +205,7 @@ export function installStarterAppDependencies(
   root: string,
   mode: StarterInstallMode,
   packedPackages?: PackedKovoPackages,
+  setupDeadlineAtMs = fixtureSetupDeadlineAtMs(),
 ): StarterAppInstall {
   const installMode = resolveStarterInstallMode(mode);
   if (installMode === 'symlink') {
@@ -197,23 +219,23 @@ export function installStarterAppDependencies(
       [join(process.cwd(), 'scripts/link-local-kovo.mjs'), root],
       {
         cwd: process.cwd(),
-        stdio: 'pipe',
+        setupDeadlineAtMs,
       },
     );
     execStarterCommand('pnpm', ['install', '--ignore-workspace'], {
       cwd: root,
       env: starterInstallEnv(root),
-      stdio: 'pipe',
+      setupDeadlineAtMs,
     });
     return { mode: installMode };
   }
 
-  const currentPackages = packedPackages ?? packKovoWorkspacePackages();
+  const currentPackages = packedPackages ?? packKovoWorkspacePackages(setupDeadlineAtMs);
   rewriteKovoDependenciesToTarballs(root, currentPackages);
   execStarterCommand('pnpm', ['install', '--ignore-workspace'], {
     cwd: root,
     env: starterInstallEnv(root),
-    stdio: 'pipe',
+    setupDeadlineAtMs,
   });
   return { mode: installMode, tarballDir: currentPackages.tarballDir };
 }
@@ -242,14 +264,14 @@ export function resolveStarterInstallMode(
   return 'packed';
 }
 
-export function runStarterTypecheck(root: string): void {
+export async function runStarterTypecheck(root: string): Promise<void> {
   const generatedRuntimeFiles = [
     ...(existsSync(join(root, 'src/_kovo/app-runtime-db-options.ts'))
       ? ['src/_kovo/app-runtime-db-options.ts']
       : []),
     'src/_kovo/app-runtime-db.ts',
   ];
-  execStarterCommand(
+  await runGeneratedStarterCommand(
     resolveStarterBin(root, 'tsc'),
     [
       '--ignoreConfig',
@@ -282,22 +304,18 @@ export function runStarterTypecheck(root: string): void {
       'src/components/auth-forms.tsx',
       'src/app.tsx',
     ],
-    { cwd: root, env: withStarterBinOnPath(root), stdio: 'pipe' },
+    { cwd: root, env: withStarterBinOnPath(root) },
   );
 }
 
-export function runStarterAppHttpTest(root: string): void {
-  execFileSync(resolveStarterBin(root, 'kovo'), ['build', './src/app.tsx'], {
+export async function runStarterAppHttpTest(root: string): Promise<void> {
+  await runGeneratedStarterCommand(resolveStarterBin(root, 'kovo'), ['build', './src/app.tsx'], {
     cwd: root,
     env: withStarterBinOnPath(root),
-    maxBuffer: 128 * 1024 * 1024,
-    stdio: 'pipe',
   });
-  execFileSync(resolveStarterBin(root, 'kovo'), ['test', 'src/app.test.ts'], {
+  await runGeneratedStarterCommand(resolveStarterBin(root, 'kovo'), ['test', 'src/app.test.ts'], {
     cwd: root,
     env: withStarterBinOnPath(root),
-    maxBuffer: 128 * 1024 * 1024,
-    stdio: 'pipe',
   });
 }
 
@@ -323,62 +341,51 @@ export async function runGeneratedStarterCommand(
     throw new TypeError('Generated-starter command signalGraceMs must be a positive safe integer.');
   }
 
-  const child = spawn(file, [...args], {
+  const outcome = await runBoundedTestProcess({
+    args,
+    command: file,
     cwd: options.cwd,
-    detached: process.platform !== 'win32',
-    env: options.env,
-    stdio: 'pipe',
+    ...(options.env === undefined ? {} : { env: options.env }),
+    killGraceMs: signalGraceMs,
+    maxOutputBytes: options.maxOutputBytes ?? GENERATED_STARTER_CLI_MAX_OUTPUT_BYTES,
+    rootExitTimeoutMs: signalGraceMs,
+    streamCloseTimeoutMs: signalGraceMs,
+    supervisorTimeoutMs: timeoutMs,
+    terminationGraceMs: signalGraceMs,
   });
-  const stdoutChunks: Buffer[] = [];
-  const stderrChunks: Buffer[] = [];
-  child.stdout.on('data', (chunk: Buffer) => stdoutChunks.push(chunk));
-  child.stderr.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
-
-  const completion = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
-    (resolve, reject) => {
-      child.once('error', reject);
-      child.once('close', (code, signal) => resolve({ code, signal }));
-    },
-  );
-  let deadlineTimer: NodeJS.Timeout | undefined;
-  const deadline = new Promise<'deadline'>((resolve) => {
-    deadlineTimer = setTimeout(() => resolve('deadline'), timeoutMs);
-  });
-  let outcome:
-    | { kind: 'completion'; result: { code: number | null; signal: NodeJS.Signals | null } }
-    | { kind: 'deadline' };
-  try {
-    outcome = await Promise.race([
-      completion.then((result) => ({ kind: 'completion' as const, result })),
-      deadline.then(() => ({ kind: 'deadline' as const })),
-    ]);
-  } finally {
-    if (deadlineTimer !== undefined) clearTimeout(deadlineTimer);
-  }
-
-  if (outcome.kind === 'deadline') {
-    let cleanupError: unknown;
-    try {
-      await terminateGeneratedStarterProcessTree(child, signalGraceMs);
-    } catch (error) {
-      cleanupError = error;
-    }
-    await completion.catch(() => undefined);
-    const result = commandOutput(stdoutChunks, stderrChunks);
+  const result = commandOutput(outcome);
+  if (outcome.timedOut) {
     throw generatedStarterCommandError(
       `Command timed out after ${timeoutMs}ms: ${[file, ...args].join(' ')}`,
       result,
-      cleanupError,
+      outcome.cleanupError,
     );
   }
-
-  const result = commandOutput(stdoutChunks, stderrChunks);
-  if (outcome.result.code !== 0) {
+  if (outcome.outputOverflowed) {
     throw generatedStarterCommandError(
-      `Command failed (${outcome.result.signal ?? outcome.result.code ?? 'unknown'}): ${[
-        file,
-        ...args,
-      ].join(' ')}`,
+      `Command output exceeded the ${String(options.maxOutputBytes ?? GENERATED_STARTER_CLI_MAX_OUTPUT_BYTES)}-byte combined limit: ${[file, ...args].join(' ')}`,
+      result,
+      outcome.cleanupError,
+    );
+  }
+  if (outcome.cleanupError !== null) {
+    throw generatedStarterCommandError(
+      `Command process-tree cleanup failed: ${[file, ...args].join(' ')}`,
+      result,
+      outcome.cleanupError,
+    );
+  }
+  if (outcome.error !== null) {
+    throw generatedStarterCommandError(
+      `Command could not start: ${[file, ...args].join(' ')}: ${outcome.error}`,
+      result,
+    );
+  }
+  if (outcome.exitCode !== 0 || outcome.signal !== null) {
+    throw generatedStarterCommandError(
+      `Command failed (${outcome.signal ?? outcome.exitCode ?? 'unknown'}): ${[file, ...args].join(
+        ' ',
+      )}`,
       result,
     );
   }
@@ -518,7 +525,7 @@ export function withRepoBinOnPath(): NodeJS.ProcessEnv {
   };
 }
 
-function packKovoWorkspacePackages(): PackedKovoPackages {
+function packKovoWorkspacePackages(setupDeadlineAtMs: number): PackedKovoPackages {
   const envTarballDir = process.env.KOVO_PACKED_PACKAGES_DIR;
   const currentBuildMode = process.env.KOVO_STARTER_SOURCE_FIXTURE_DEPENDENCIES;
   if (currentBuildMode !== undefined && currentBuildMode !== 'packed-current') {
@@ -577,7 +584,7 @@ function packKovoWorkspacePackages(): PackedKovoPackages {
       ['--config.ignore-scripts=true', 'pack', '--pack-destination', tarballDir],
       {
         cwd: packageRoot,
-        stdio: 'pipe',
+        setupDeadlineAtMs,
       },
     );
     const created = readdirSync(tarballDir)
@@ -587,7 +594,7 @@ function packKovoWorkspacePackages(): PackedKovoPackages {
       throw new Error(`Expected one tarball for ${pkg.name}; found ${created.length}.`);
     }
     const tarballPath = realpathSync(join(tarballDir, created[0] ?? ''));
-    canonicalizePackedTarball(tarballPath);
+    canonicalizePackedTarball(tarballPath, setupDeadlineAtMs);
     tarballByName.set(pkg.name, tarballPath);
   }
 
@@ -603,7 +610,7 @@ function packKovoWorkspacePackages(): PackedKovoPackages {
   return packedKovoPackageCache;
 }
 
-function canonicalizePackedTarball(tarballPath: string): void {
+function canonicalizePackedTarball(tarballPath: string, setupDeadlineAtMs: number): void {
   const moduleUrl = pathToFileURL(
     join(process.cwd(), 'scripts', 'lib', 'deterministic-tarball.mjs'),
   ).href;
@@ -617,12 +624,16 @@ function canonicalizePackedTarball(tarballPath: string): void {
     ],
     {
       cwd: process.cwd(),
-      stdio: 'pipe',
+      setupDeadlineAtMs,
     },
   );
 }
 
-function materializePackedPackage(tarballPath: string, destination: string): void {
+function materializePackedPackage(
+  tarballPath: string,
+  destination: string,
+  setupDeadlineAtMs: number,
+): void {
   const moduleUrl = pathToFileURL(
     join(process.cwd(), 'scripts', 'lib', 'deterministic-tarball.mjs'),
   ).href;
@@ -648,7 +659,7 @@ function materializePackedPackage(tarballPath: string, destination: string): voi
     ],
     {
       cwd: process.cwd(),
-      stdio: 'pipe',
+      setupDeadlineAtMs,
     },
   );
 }
@@ -701,6 +712,7 @@ function scaffoldWithPackedCreateKovo(
   root: string,
   options: StarterAppOptions,
   packedPackages: PackedKovoPackages | undefined,
+  setupDeadlineAtMs: number,
 ): void {
   if (!packedPackages) {
     throw new Error('Packed create-kovo scaffold requires packed Kovo packages.');
@@ -712,8 +724,12 @@ function scaffoldWithPackedCreateKovo(
   const coreTarball = packedPackages.tarballByName.get('@kovojs/core');
   if (!coreTarball) throw new Error('Missing packed @kovojs/core tarball.');
   const packedCreateKovoRoot = join(creatorRoot, 'node_modules/create-kovo');
-  materializePackedPackage(createKovoTarball, packedCreateKovoRoot);
-  materializePackedPackage(coreTarball, join(creatorRoot, 'node_modules/@kovojs/core'));
+  materializePackedPackage(createKovoTarball, packedCreateKovoRoot, setupDeadlineAtMs);
+  materializePackedPackage(
+    coreTarball,
+    join(creatorRoot, 'node_modules/@kovojs/core'),
+    setupDeadlineAtMs,
+  );
 
   const args = [root, '--name', options.name, '--disable-git'];
   if (options.example !== undefined) {
@@ -738,7 +754,7 @@ function scaffoldWithPackedCreateKovo(
   execStarterCommand(process.execPath, [packedCreateKovoBin, ...args], {
     cwd: dirname(root),
     env: withStarterBinOnPath(creatorRoot),
-    stdio: 'pipe',
+    setupDeadlineAtMs,
   });
 }
 
@@ -791,22 +807,164 @@ function starterInstallEnv(root: string): NodeJS.ProcessEnv {
   };
 }
 
+interface StarterSetupCommandOptions {
+  cwd: string;
+  env?: NodeJS.ProcessEnv;
+  signalGraceMs?: number;
+  setupDeadlineAtMs: number;
+}
+
+interface StarterSetupSupervisorResult {
+  outcome?: BoundedTestProcessOutcome;
+  supervisorError?: string;
+}
+
+function fixtureSetupDeadlineAtMs(): number {
+  return Date.now() + GENERATED_STARTER_FIXTURE_SETUP_HEADROOM_MS;
+}
+
+export function runGeneratedStarterFixtureSetupCommandForTest(
+  file: string,
+  args: readonly string[],
+  options: {
+    cwd: string;
+    env?: NodeJS.ProcessEnv;
+    signalGraceMs?: number;
+    timeoutMs: number;
+  },
+): void {
+  if (!Number.isSafeInteger(options.timeoutMs) || options.timeoutMs <= 0) {
+    throw new TypeError('Generated-starter fixture timeoutMs must be a positive safe integer.');
+  }
+  execStarterCommand(file, args, {
+    cwd: options.cwd,
+    ...(options.env === undefined ? {} : { env: options.env }),
+    ...(options.signalGraceMs === undefined ? {} : { signalGraceMs: options.signalGraceMs }),
+    setupDeadlineAtMs: Date.now() + options.timeoutMs,
+  });
+}
+
 function execStarterCommand(
   file: string,
   args: readonly string[],
-  options: Parameters<typeof execFileSync>[2],
+  options: StarterSetupCommandOptions,
 ): void {
+  const signalGraceMs = options.signalGraceMs ?? GENERATED_STARTER_CLI_SIGNAL_GRACE_MS;
+  if (!Number.isSafeInteger(signalGraceMs) || signalGraceMs <= 0) {
+    throw new TypeError('Generated-starter fixture signalGraceMs must be a positive safe integer.');
+  }
+  const cleanupBudgetMs = boundedTestProcessCleanupBudgetMs({
+    killGraceMs: signalGraceMs,
+    rootExitTimeoutMs: signalGraceMs,
+    streamCloseTimeoutMs: signalGraceMs,
+    terminationGraceMs: signalGraceMs,
+  });
+  const remainingSetupMs = options.setupDeadlineAtMs - Date.now();
+  const runnerHeadroomMs = 1_000;
+  const supervisorTimeoutMs = remainingSetupMs - cleanupBudgetMs - runnerHeadroomMs;
+  if (supervisorTimeoutMs <= 0) {
+    throw new Error(
+      `Generated-starter fixture setup exhausted its ${String(GENERATED_STARTER_FIXTURE_SETUP_HEADROOM_MS)}ms aggregate deadline before command: ${[file, ...args].join(' ')}`,
+    );
+  }
+
+  const invocation: BoundedTestProcessInvocation = {
+    args,
+    command: file,
+    cwd: options.cwd,
+    ...(options.env === undefined ? {} : { env: options.env }),
+    killGraceMs: signalGraceMs,
+    maxOutputBytes: GENERATED_STARTER_CLI_MAX_OUTPUT_BYTES,
+    rootExitTimeoutMs: signalGraceMs,
+    streamCloseTimeoutMs: signalGraceMs,
+    supervisorTimeoutMs,
+    terminationGraceMs: signalGraceMs,
+  };
+  const runnerRoot = mkdtempSync(join(tmpdir(), 'kovo-test-process-supervisor-'));
+  const invocationPath = join(runnerRoot, 'invocation.json');
+  const resultPath = join(runnerRoot, 'result.json');
+  writeFileSync(invocationPath, JSON.stringify(invocation), 'utf8');
+  const runnerPath = fileURLToPath(
+    new URL('./index.test-process-supervisor-cli.mjs', import.meta.url),
+  );
+  let runnerFailure: unknown;
   try {
-    execFileSync(file, args, { maxBuffer: 128 * 1024 * 1024, ...options });
+    execFileSync(process.execPath, [runnerPath, invocationPath, resultPath], {
+      cwd: process.cwd(),
+      env: process.env,
+      killSignal: 'SIGKILL',
+      stdio: 'pipe',
+      timeout: remainingSetupMs,
+    });
   } catch (error) {
+    runnerFailure = error;
+  }
+
+  let report: StarterSetupSupervisorResult | undefined;
+  try {
+    if (existsSync(resultPath)) {
+      report = JSON.parse(readFileSync(resultPath, 'utf8')) as StarterSetupSupervisorResult;
+    }
+  } finally {
+    rmSync(runnerRoot, { force: true, recursive: true });
+  }
+  if (report?.supervisorError !== undefined) {
+    throw new Error(
+      `Generated-starter fixture setup supervisor failed for ${[file, ...args].join(' ')}: ${report.supervisorError}`,
+    );
+  }
+  if (report?.outcome === undefined) {
     throw new Error(
       [
-        `Command failed: ${[file, ...args].join(' ')}`,
-        formatCommandOutput(error, 'stdout'),
-        formatCommandOutput(error, 'stderr'),
+        `Generated-starter fixture setup supervisor failed before reporting command outcome: ${[file, ...args].join(' ')}`,
+        runnerFailure === undefined
+          ? ''
+          : runnerFailure instanceof Error
+            ? runnerFailure.message
+            : typeof runnerFailure === 'string'
+              ? runnerFailure
+              : 'unknown runner failure',
+        formatCommandOutput(runnerFailure, 'stdout'),
+        formatCommandOutput(runnerFailure, 'stderr'),
       ]
         .filter(Boolean)
         .join('\n'),
+    );
+  }
+
+  const outcome = report.outcome;
+  const result = commandOutput(outcome);
+  if (outcome.timedOut) {
+    throw generatedStarterCommandError(
+      `Generated-starter fixture setup command timed out after ${String(supervisorTimeoutMs)}ms inside its aggregate deadline: ${[file, ...args].join(' ')}`,
+      result,
+      outcome.cleanupError,
+    );
+  }
+  if (outcome.outputOverflowed) {
+    throw generatedStarterCommandError(
+      `Generated-starter fixture setup command output exceeded the ${String(GENERATED_STARTER_CLI_MAX_OUTPUT_BYTES)}-byte combined limit: ${[file, ...args].join(' ')}`,
+      result,
+      outcome.cleanupError,
+    );
+  }
+  if (outcome.cleanupError !== null) {
+    throw generatedStarterCommandError(
+      `Generated-starter fixture setup command cleanup failed: ${[file, ...args].join(' ')}`,
+      result,
+      outcome.cleanupError,
+    );
+  }
+  if (outcome.error !== null) {
+    throw generatedStarterCommandError(
+      `Generated-starter fixture setup command could not start: ${[file, ...args].join(' ')}: ${outcome.error}`,
+      result,
+    );
+  }
+  if (outcome.exitCode !== 0 || outcome.signal !== null) {
+    throw generatedStarterCommandError(
+      `Generated-starter fixture setup command failed (${outcome.signal ?? outcome.exitCode ?? 'unknown'}): ${[file, ...args].join(' ')}`,
+      result,
     );
   }
 }
@@ -878,14 +1036,8 @@ export async function stopProcess(
   throw new Error('Timed out stopping process after SIGTERM and SIGKILL.');
 }
 
-function commandOutput(
-  stdoutChunks: readonly Buffer[],
-  stderrChunks: readonly Buffer[],
-): GeneratedStarterCommandResult {
-  return {
-    stderr: Buffer.concat(stderrChunks).toString('utf8'),
-    stdout: Buffer.concat(stdoutChunks).toString('utf8'),
-  };
+function commandOutput(outcome: BoundedTestProcessOutcome): GeneratedStarterCommandResult {
+  return { stderr: outcome.stderr, stdout: outcome.stdout };
 }
 
 function generatedStarterCommandError(
@@ -894,7 +1046,7 @@ function generatedStarterCommandError(
   cleanupError?: unknown,
 ): Error & GeneratedStarterCommandResult {
   const details = [message, result.stdout.trim(), result.stderr.trim()];
-  if (cleanupError !== undefined) {
+  if (cleanupError !== undefined && cleanupError !== null) {
     details.push(
       `Process-tree cleanup failed: ${
         cleanupError instanceof Error
@@ -906,77 +1058,6 @@ function generatedStarterCommandError(
     );
   }
   return Object.assign(new Error(details.filter(Boolean).join('\n')), result);
-}
-
-async function terminateGeneratedStarterProcessTree(
-  childProcess: ChildProcessWithoutNullStreams,
-  signalGraceMs: number,
-): Promise<void> {
-  const pid = childProcess.pid;
-  if (pid === undefined) return;
-
-  if (process.platform === 'win32') {
-    if (!childHasExited(childProcess)) await taskkillProcessTree(pid, signalGraceMs);
-    return;
-  }
-
-  signalPosixProcessGroup(pid, 'SIGTERM');
-  if (await waitForPosixProcessGroupExit(pid, signalGraceMs)) return;
-  signalPosixProcessGroup(pid, 'SIGKILL');
-  if (await waitForPosixProcessGroupExit(pid, signalGraceMs)) return;
-  throw new Error(`Process group ${pid} survived SIGTERM and SIGKILL.`);
-}
-
-function signalPosixProcessGroup(pid: number, signal: NodeJS.Signals): void {
-  try {
-    process.kill(-pid, signal);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
-  }
-}
-
-async function waitForPosixProcessGroupExit(pid: number, timeoutMs: number): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
-  while (posixProcessGroupExists(pid)) {
-    if (Date.now() >= deadline) return false;
-    await new Promise((resolve) => setTimeout(resolve, 25));
-  }
-  return true;
-}
-
-function posixProcessGroupExists(pid: number): boolean {
-  try {
-    process.kill(-pid, 0);
-    return true;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ESRCH') return false;
-    throw error;
-  }
-}
-
-async function taskkillProcessTree(pid: number, signalGraceMs: number): Promise<void> {
-  const killer = spawn('taskkill.exe', ['/pid', String(pid), '/t', '/f'], {
-    stdio: 'ignore',
-    windowsHide: true,
-  });
-  let timer: NodeJS.Timeout | undefined;
-  let result: 'closed' | 'deadline';
-  try {
-    result = await Promise.race([
-      new Promise<'closed'>((resolve, reject) => {
-        killer.once('error', reject);
-        killer.once('close', () => resolve('closed'));
-      }),
-      new Promise<'deadline'>((resolve) => {
-        timer = setTimeout(() => resolve('deadline'), signalGraceMs);
-      }),
-    ]);
-  } finally {
-    if (timer !== undefined) clearTimeout(timer);
-  }
-  if (result === 'closed') return;
-  killer.kill('SIGKILL');
-  throw new Error(`taskkill timed out while stopping process tree ${pid}.`);
 }
 
 function childHasExited(childProcess: ChildProcessWithoutNullStreams): boolean {

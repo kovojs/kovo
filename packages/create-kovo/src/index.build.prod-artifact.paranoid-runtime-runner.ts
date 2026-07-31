@@ -1,7 +1,11 @@
-import { spawn, spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
-import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
+
+import {
+  runBoundedTestProcess,
+  type BoundedTestProcessInvocation,
+  type BoundedTestProcessOutcome,
+} from './index.test-process-supervisor.mjs';
 
 export const PARANOID_RUNTIME_WORKER_CASE_ENV = 'KOVO_PARANOID_RUNTIME_CASE';
 
@@ -38,9 +42,10 @@ const PARANOID_RUNTIME_TEST_FILE =
 
 /**
  * The static-trust worker owns a 300s production deadline. The external boot proof can then spend
- * up to 180s waiting for the served artifact. Its 600s Vitest bound contains those inner phases,
- * and the 660s supervisor bound contains Vitest cleanup without letting a timed-out callback leak
- * into the next proof.
+ * up to 180s waiting for the served artifact. Its 600s Vitest bound contains those inner phases.
+ * Some callbacks enter synchronous build code that Vitest cannot interrupt, so the descendant-aware
+ * process supervisor is the actual hard bound; 660s contains the callback and verified cleanup
+ * without letting a timed-out worker leak into the next proof.
  */
 export const PARANOID_RUNTIME_CASES = [
   {
@@ -75,6 +80,13 @@ export const PARANOID_RUNTIME_CASES = [
 
 export type ParanoidRuntimeCaseId = (typeof PARANOID_RUNTIME_CASES)[number]['id'];
 
+export const REQUIRED_PARANOID_RUNTIME_CASES = [
+  'phase5-postgres-paranoid-dogfood',
+  'phase5-sqlite-paranoid-dogfood',
+  'paranoid-external-provision-check-boot',
+  'paranoid-external-leak-refusal',
+] as const satisfies readonly ParanoidRuntimeCaseId[];
+
 export const PARANOID_GATE_CASES = [
   ...PARANOID_RUNTIME_CASES,
   {
@@ -89,6 +101,7 @@ export const PARANOID_GATE_CASES = [
 export interface ParanoidRuntimeWorkerRequirements {
   readonly authorizationMatrixCases: readonly RequiredParanoidAuthorizationMatrixCase[];
   readonly postgresCases: readonly RequiredParanoidPostgresCase[];
+  readonly runtimeCases: readonly ParanoidRuntimeCaseId[];
 }
 
 export function selectedParanoidRuntimeCaseId(
@@ -103,21 +116,30 @@ export function selectedParanoidRuntimeCaseId(
 
 export function paranoidRuntimeWorkerRequirements(
   selectedCase: ParanoidRuntimeCaseId | undefined,
+  includePostgresRuntimeCases: boolean,
 ): ParanoidRuntimeWorkerRequirements {
   switch (selectedCase) {
     case undefined:
       return {
         authorizationMatrixCases: REQUIRED_PARANOID_AUTHORIZATION_MATRIX_CASES,
         postgresCases: REQUIRED_PARANOID_POSTGRES_CASES,
+        runtimeCases: includePostgresRuntimeCases
+          ? REQUIRED_PARANOID_RUNTIME_CASES
+          : ['phase5-sqlite-paranoid-dogfood'],
       };
     case 'phase5-postgres-paranoid-dogfood':
-      return { authorizationMatrixCases: [], postgresCases: [selectedCase] };
+      return {
+        authorizationMatrixCases: [],
+        postgresCases: [selectedCase],
+        runtimeCases: [selectedCase],
+      };
     case 'phase5-sqlite-paranoid-dogfood':
-      return { authorizationMatrixCases: [], postgresCases: [] };
+      return { authorizationMatrixCases: [], postgresCases: [], runtimeCases: [selectedCase] };
     case 'paranoid-external-provision-check-boot':
       return {
         authorizationMatrixCases: ['closure-safe-boot'],
         postgresCases: [selectedCase],
+        runtimeCases: [selectedCase],
       };
     case 'paranoid-external-leak-refusal':
       return {
@@ -128,8 +150,20 @@ export function paranoidRuntimeWorkerRequirements(
           'closure-public-table-refusal',
         ],
         postgresCases: [selectedCase],
+        runtimeCases: [selectedCase],
       };
   }
+}
+
+export function assertParanoidRuntimeCasesExecuted(
+  requiredCases: readonly ParanoidRuntimeCaseId[],
+  executedCases: ReadonlySet<ParanoidRuntimeCaseId>,
+): void {
+  const missing = requiredCases.filter((caseId) => !executedCases.has(caseId));
+  if (missing.length === 0) return;
+  throw new Error(
+    `paranoid runtime worker did not execute every selected runtime case; missing: ${missing.join(', ')}`,
+  );
 }
 
 export function paranoidRuntimeTestTimeoutMs(id: ParanoidRuntimeCaseId): number {
@@ -138,27 +172,8 @@ export function paranoidRuntimeTestTimeoutMs(id: ParanoidRuntimeCaseId): number 
   return testCase.testTimeoutMs;
 }
 
-export interface IsolatedProcessInvocation {
-  readonly args: readonly string[];
-  readonly command: string;
-  readonly cwd: string;
-  readonly env: NodeJS.ProcessEnv;
-  readonly maxOutputBytes?: number;
-  readonly reapTimeoutMs?: number;
-  readonly supervisorTimeoutMs: number;
-  readonly terminationGraceMs?: number;
-}
-
-export interface IsolatedProcessOutcome {
-  readonly cleanupError: string | null;
-  readonly durationMs: number;
-  readonly error: string | null;
-  readonly exitCode: number | null;
-  readonly signal: NodeJS.Signals | null;
-  readonly stderr: string;
-  readonly stdout: string;
-  readonly timedOut: boolean;
-}
+export type IsolatedProcessInvocation = BoundedTestProcessInvocation;
+export type IsolatedProcessOutcome = BoundedTestProcessOutcome;
 
 export interface ParanoidGateCaseOutcome extends IsolatedProcessOutcome {
   readonly id: string;
@@ -176,10 +191,6 @@ interface RunParanoidGateOptions {
   readonly executeCase?: (testCase: ParanoidGateCaseDefinition) => Promise<IsolatedProcessOutcome>;
   readonly onProgress?: (message: string) => void;
 }
-
-const DEFAULT_MAX_OUTPUT_BYTES = 64 * 1024;
-const DEFAULT_TERMINATION_GRACE_MS = 2_000;
-const DEFAULT_REAP_TIMEOUT_MS = 5_000;
 
 export async function runParanoidRuntimeGate(
   options: RunParanoidGateOptions = {},
@@ -201,6 +212,7 @@ export async function runParanoidRuntimeGate(
         durationMs: 0,
         error: error instanceof Error ? error.message : String(error),
         exitCode: null,
+        outputOverflowed: false,
         signal: null,
         stderr: '',
         stdout: '',
@@ -239,80 +251,9 @@ export function formatParanoidGateFailures(run: ParanoidGateRun): string {
   return `${lines.join('\n')}\n`;
 }
 
-export async function runIsolatedProcess(
+export const runIsolatedProcess: (
   invocation: IsolatedProcessInvocation,
-): Promise<IsolatedProcessOutcome> {
-  validateInvocation(invocation);
-  const started = process.hrtime.bigint();
-  const stdout = boundedTail(invocation.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES);
-  const stderr = boundedTail(invocation.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES);
-  const child = spawn(invocation.command, [...invocation.args], {
-    cwd: invocation.cwd,
-    detached: process.platform !== 'win32',
-    env: invocation.env,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  child.stdout.on('data', (chunk: Buffer | string) => stdout.push(chunk));
-  child.stderr.on('data', (chunk: Buffer | string) => stderr.push(chunk));
-
-  let settled = false;
-  const exited = new Promise<{
-    error: string | null;
-    exitCode: number | null;
-    signal: NodeJS.Signals | null;
-  }>((resolveExit) => {
-    const settle = (outcome: {
-      error: string | null;
-      exitCode: number | null;
-      signal: NodeJS.Signals | null;
-    }) => {
-      if (settled) return;
-      settled = true;
-      resolveExit(outcome);
-    };
-    child.once('error', (error) => settle({ error: error.message, exitCode: null, signal: null }));
-    child.once('exit', (exitCode, signal) => settle({ error: null, exitCode, signal }));
-  });
-  const closed = new Promise<true>((resolveClose) => {
-    child.once('close', () => resolveClose(true));
-    child.once('error', () => resolveClose(true));
-  });
-
-  const firstExit = await promiseWithin(exited, invocation.supervisorTimeoutMs);
-  const timedOut = firstExit === undefined;
-  const terminationGraceMs = invocation.terminationGraceMs ?? DEFAULT_TERMINATION_GRACE_MS;
-  const reapTimeoutMs = invocation.reapTimeoutMs ?? DEFAULT_REAP_TIMEOUT_MS;
-  let cleanupError: string | null = null;
-
-  try {
-    if (timedOut) {
-      await terminateProcessTree(child.pid, terminationGraceMs, reapTimeoutMs);
-    } else {
-      await terminateResidualProcessTree(child.pid, terminationGraceMs, reapTimeoutMs);
-    }
-  } catch (error) {
-    cleanupError = error instanceof Error ? error.message : String(error);
-  }
-
-  const exit = firstExit ?? (await promiseWithin(exited, reapTimeoutMs));
-  if (exit === undefined) {
-    cleanupError ??= `child process did not exit within ${String(reapTimeoutMs)}ms after tree termination`;
-  }
-  if ((await promiseWithin(closed, reapTimeoutMs)) === undefined) {
-    cleanupError ??= `child process output did not close within ${String(reapTimeoutMs)}ms after tree termination`;
-  }
-
-  return {
-    cleanupError,
-    durationMs: Number(process.hrtime.bigint() - started) / 1e6,
-    error: exit?.error ?? null,
-    exitCode: exit?.exitCode ?? null,
-    signal: exit?.signal ?? null,
-    stderr: stderr.read(),
-    stdout: stdout.read(),
-    timedOut,
-  };
-}
+) => Promise<IsolatedProcessOutcome> = runBoundedTestProcess;
 
 async function executeParanoidGateCase(
   testCase: ParanoidGateCaseDefinition,
@@ -366,124 +307,10 @@ function validateParanoidGateCases(cases: readonly ParanoidGateCaseDefinition[])
   }
 }
 
-function validateInvocation(invocation: IsolatedProcessInvocation): void {
-  if (invocation.command === '') throw new TypeError('isolated process command must be non-empty');
-  positiveInteger(invocation.supervisorTimeoutMs, 'isolated process supervisor timeout');
-  if (invocation.maxOutputBytes !== undefined) {
-    positiveInteger(invocation.maxOutputBytes, 'isolated process output bound');
-  }
-  if (invocation.terminationGraceMs !== undefined) {
-    positiveInteger(invocation.terminationGraceMs, 'isolated process termination grace');
-  }
-  if (invocation.reapTimeoutMs !== undefined) {
-    positiveInteger(invocation.reapTimeoutMs, 'isolated process reap timeout');
-  }
-}
-
-async function terminateProcessTree(
-  pid: number | undefined,
-  terminationGraceMs: number,
-  reapTimeoutMs: number,
-): Promise<void> {
-  if (!Number.isSafeInteger(pid) || pid === undefined || pid <= 0) return;
-  if (process.platform === 'win32') {
-    taskkill(pid, false);
-    await delay(terminationGraceMs);
-    taskkill(pid, true);
-    return;
-  }
-  if (!processGroupExists(pid)) return;
-  signalProcessGroup(pid, 'SIGTERM');
-  if (await processGroupStopsWithin(pid, terminationGraceMs)) return;
-  signalProcessGroup(pid, 'SIGKILL');
-  if (await processGroupStopsWithin(pid, reapTimeoutMs)) return;
-  throw new Error(`process group ${String(pid)} survived SIGKILL`);
-}
-
-async function terminateResidualProcessTree(
-  pid: number | undefined,
-  terminationGraceMs: number,
-  reapTimeoutMs: number,
-): Promise<void> {
-  if (process.platform === 'win32') return;
-  await terminateProcessTree(pid, terminationGraceMs, reapTimeoutMs);
-}
-
-function taskkill(pid: number, force: boolean): void {
-  const args = ['/pid', String(pid), '/t'];
-  if (force) args.push('/f');
-  spawnSync('taskkill', args, { stdio: 'ignore' });
-}
-
-function signalProcessGroup(pid: number, signal: NodeJS.Signals): void {
-  try {
-    process.kill(-pid, signal);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
-  }
-}
-
-function processGroupExists(pid: number): boolean {
-  try {
-    process.kill(-pid, 0);
-    return true;
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === 'ESRCH') return false;
-    if (code === 'EPERM') return true;
-    throw error;
-  }
-}
-
-async function processGroupStopsWithin(pid: number, timeoutMs: number): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
-  while (processGroupExists(pid)) {
-    if (Date.now() >= deadline) return false;
-    await delay(Math.min(25, Math.max(1, deadline - Date.now())));
-  }
-  return true;
-}
-
-async function promiseWithin<Value>(
-  promise: Promise<Value>,
-  timeoutMs: number,
-): Promise<Value | undefined> {
-  let timer: NodeJS.Timeout | undefined;
-  const timeout = new Promise<undefined>((resolveTimeout) => {
-    timer = setTimeout(() => resolveTimeout(undefined), timeoutMs);
-  });
-  try {
-    return await Promise.race([promise, timeout]);
-  } finally {
-    if (timer !== undefined) clearTimeout(timer);
-  }
-}
-
-function boundedTail(limit: number): {
-  push(chunk: Buffer | string): void;
-  read(): string;
-} {
-  let tail = Buffer.alloc(0);
-  let totalBytes = 0;
-  return {
-    push(value) {
-      const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value);
-      totalBytes += chunk.byteLength;
-      const combined = Buffer.concat([tail, chunk]);
-      tail = Buffer.from(combined.subarray(Math.max(0, combined.byteLength - limit)));
-    },
-    read() {
-      const truncatedBytes = totalBytes - tail.byteLength;
-      const prefix =
-        truncatedBytes > 0 ? `[${String(truncatedBytes)} earlier output bytes truncated]\n` : '';
-      return `${prefix}${tail.toString('utf8')}`.trim();
-    },
-  };
-}
-
 function isPassingOutcome(outcome: IsolatedProcessOutcome): boolean {
   return (
     !outcome.timedOut &&
+    !outcome.outputOverflowed &&
     outcome.cleanupError === null &&
     outcome.error === null &&
     outcome.exitCode === 0 &&
@@ -497,6 +324,9 @@ function failureReason(outcome: ParanoidGateCaseOutcome): string {
     reasons.push(
       `supervisor deadline ${String(outcome.supervisorTimeoutMs)}ms exceeded; child process tree was terminated before the next case`,
     );
+  }
+  if (outcome.outputOverflowed) {
+    reasons.push('combined child output exceeded its bounded diagnostic allowance');
   }
   if (outcome.error !== null) reasons.push(`could not run child: ${outcome.error}`);
   if (outcome.exitCode !== null && outcome.exitCode !== 0) {

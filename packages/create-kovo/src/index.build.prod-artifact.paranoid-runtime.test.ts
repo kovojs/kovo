@@ -43,6 +43,7 @@ import {
   type ParanoidAuthorizationMatrixCase,
 } from './index.build.prod-artifact.paranoid-runtime-gate.js';
 import {
+  assertParanoidRuntimeCasesExecuted,
   paranoidRuntimeTestTimeoutMs,
   paranoidRuntimeWorkerRequirements,
   selectedParanoidRuntimeCaseId,
@@ -107,7 +108,6 @@ const phase5WriteMarker = 'phase5-write-boundary-proof';
 
 const POSTGRES_BINARIES = ['initdb', 'postgres'] as const;
 const selectedWorkerCase = selectedParanoidRuntimeCaseId();
-const workerRequirements = paranoidRuntimeWorkerRequirements(selectedWorkerCase);
 const phase5PostgresTestTimeoutMs = paranoidRuntimeTestTimeoutMs(
   'phase5-postgres-paranoid-dogfood',
 );
@@ -116,12 +116,15 @@ const provisionCheckBootTestTimeoutMs = paranoidRuntimeTestTimeoutMs(
   'paranoid-external-provision-check-boot',
 );
 const leakRefusalTestTimeoutMs = paranoidRuntimeTestTimeoutMs('paranoid-external-leak-refusal');
-const requirePostgresAcceptance = process.env.KOVO_PARANOID === '1';
+const requirePostgresAcceptance =
+  process.env.KOVO_PARANOID === '1' && selectedWorkerCase !== 'phase5-sqlite-paranoid-dogfood';
 const postgresToolchain = localPostgresToolchain();
 const runPostgresCases = requireParanoidPostgresToolchain(
   postgresToolchain,
   requirePostgresAcceptance,
 );
+const workerRequirements = paranoidRuntimeWorkerRequirements(selectedWorkerCase, runPostgresCases);
+const executedRuntimeCases = new Set<ParanoidRuntimeCaseId>();
 const executedPostgresCases = new Set<RequiredParanoidPostgresCase>();
 const describeIfPostgres = runPostgresCases ? describe : describe.skip;
 const itIfPostgres = runPostgresCases ? it : it.skip;
@@ -163,6 +166,7 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
         rmSync(root, { force: true, recursive: true });
       }
       executedPostgresCases.add('phase5-postgres-paranoid-dogfood');
+      executedRuntimeCases.add('phase5-postgres-paranoid-dogfood');
     },
     phase5PostgresTestTimeoutMs,
   );
@@ -194,6 +198,7 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
       } finally {
         rmSync(root, { force: true, recursive: true });
       }
+      executedRuntimeCases.add('phase5-sqlite-paranoid-dogfood');
     },
     phase5SqliteTestTimeoutMs,
   );
@@ -293,6 +298,7 @@ describeIfPostgres(
           await stopProcess(server);
         }
         executedPostgresCases.add('paranoid-external-provision-check-boot');
+        executedRuntimeCases.add('paranoid-external-provision-check-boot');
       },
       provisionCheckBootTestTimeoutMs,
     );
@@ -366,6 +372,7 @@ describeIfPostgres(
         });
         if (createdForeignLeak) expect(failure).toMatch(/kovo_foreign_leak/u);
         executedPostgresCases.add('paranoid-external-leak-refusal');
+        executedRuntimeCases.add('paranoid-external-leak-refusal');
       },
       leakRefusalTestTimeoutMs,
     );
@@ -373,6 +380,7 @@ describeIfPostgres(
 );
 
 afterAll(() => {
+  assertParanoidRuntimeCasesExecuted(workerRequirements.runtimeCases, executedRuntimeCases);
   assertParanoidPostgresCasesExecuted(
     workerRequirements.postgresCases,
     executedPostgresCases,

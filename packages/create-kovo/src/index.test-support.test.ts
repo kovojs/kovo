@@ -18,6 +18,7 @@ import {
   installStarterAppDependencies,
   resolveStarterInstallMode,
   runGeneratedStarterCommand,
+  runGeneratedStarterFixtureSetupCommandForTest,
   STARTER_SERVER_READY_TIMEOUT_MS,
   stopProcess,
 } from './index.test-support.js';
@@ -30,7 +31,7 @@ describe('create-kovo starter test support', () => {
       cliProcessCount: 1,
       serverProcessCount: 1,
     });
-    const cleanupWindowMs = GENERATED_STARTER_CLI_SIGNAL_GRACE_MS * 2;
+    const cleanupWindowMs = GENERATED_STARTER_CLI_SIGNAL_GRACE_MS * 4;
 
     expect(oneCli).toBeGreaterThan(GENERATED_STARTER_CLI_PROCESS_TIMEOUT_MS + cleanupWindowMs);
     expect(twoCli - oneCli).toBe(GENERATED_STARTER_CLI_PROCESS_TIMEOUT_MS + cleanupWindowMs);
@@ -68,7 +69,8 @@ describe('create-kovo starter test support', () => {
             '-e',
             [
               "const { spawn } = require('node:child_process');",
-              "const descendant = spawn(process.execPath, ['-e', \"process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)\"], { stdio: 'ignore' });",
+              "const descendant = spawn(process.execPath, ['-e', \"process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)\"], { detached: true, stdio: 'ignore' });",
+              'descendant.unref();',
               "process.on('SIGTERM', () => {});",
               "process.stdout.write(String(descendant.pid) + '\\n');",
               'setInterval(() => {}, 1000);',
@@ -86,9 +88,68 @@ describe('create-kovo starter test support', () => {
 
       expect(descendantPid).toBeTypeOf('number');
       expect(Number.isSafeInteger(descendantPid)).toBe(true);
-      expect(() => process.kill(descendantPid!, 0)).toThrow(
-        expect.objectContaining({ code: 'ESRCH' }),
-      );
+      expect(await processStopsWithin(descendantPid!, 1_000)).toBe(true);
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'fails deterministically when combined generated-starter output exceeds its cap',
+    async () => {
+      await expect(
+        runGeneratedStarterCommand(
+          process.execPath,
+          [
+            '-e',
+            [
+              "process.on('SIGTERM', () => {});",
+              "process.stdout.write('o'.repeat(800));",
+              "process.stderr.write('e'.repeat(800));",
+              'setInterval(() => {}, 1000);',
+            ].join(''),
+          ],
+          {
+            cwd: process.cwd(),
+            maxOutputBytes: 1_024,
+            signalGraceMs: 100,
+            timeoutMs: 5_000,
+          },
+        ),
+      ).rejects.toThrow(/Command output exceeded the 1024-byte combined limit/u);
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'enforces fixture setup headroom through the descendant-aware supervisor',
+    async () => {
+      let descendantPid: number | undefined;
+      const startedAt = Date.now();
+      try {
+        runGeneratedStarterFixtureSetupCommandForTest(
+          process.execPath,
+          [
+            '-e',
+            [
+              "const { spawn } = require('node:child_process');",
+              "const descendant = spawn(process.execPath, ['-e', \"process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)\"], { detached: true, stdio: 'ignore' });",
+              'descendant.unref();',
+              "process.stdout.write(String(descendant.pid) + '\\n');",
+              "process.on('SIGTERM', () => {});",
+              'setInterval(() => {}, 1000);',
+            ].join(''),
+          ],
+          { cwd: process.cwd(), signalGraceMs: 100, timeoutMs: 2_500 },
+        );
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).toMatch(
+          /fixture setup command timed out.+inside its aggregate deadline/u,
+        );
+        descendantPid = Number.parseInt(String((error as { stdout?: unknown }).stdout).trim(), 10);
+      }
+
+      expect(Date.now() - startedAt).toBeLessThan(2_500);
+      expect(Number.isSafeInteger(descendantPid)).toBe(true);
+      expect(await processStopsWithin(descendantPid!, 1_000)).toBe(true);
     },
   );
 
@@ -302,4 +363,18 @@ async function waitForChildOutput(
       );
     });
   });
+}
+
+async function processStopsWithin(pid: number, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    try {
+      process.kill(pid, 0);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ESRCH') return true;
+      throw error;
+    }
+    if (Date.now() >= deadline) return false;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
 }

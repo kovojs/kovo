@@ -1,56 +1,67 @@
 import { join } from 'node:path';
 
-import { describe, it, vi } from 'vitest';
+import { describe, it } from 'vitest';
 
 import {
   createStarterApp,
+  generatedStarterTestTimeout,
   runStarterAppHttpTest,
   runStarterTypecheck,
 } from './index.test-support.js';
 
-vi.setConfig({ testTimeout: process.env.CI ? 600_000 : 420_000 });
-
 describe('create-kovo starter (build integration: scaffold typecheck)', () => {
-  it('typechecks the generated app with starter dependencies', () => {
-    const app = createStarterApp({
-      name: 'Tsc Proof',
-      tempParent: join(process.cwd(), 'node_modules/.tmp'),
-      tempPrefix: 'create-kovo-tsc-',
-    });
+  it(
+    'typechecks the generated app with starter dependencies',
+    async () => {
+      const app = createStarterApp({
+        name: 'Tsc Proof',
+        tempParent: join(process.cwd(), 'node_modules/.tmp'),
+        tempPrefix: 'create-kovo-tsc-',
+      });
 
-    try {
-      runStarterTypecheck(app.root);
-    } finally {
-      app.cleanup();
-    }
-  });
+      try {
+        await runStarterTypecheck(app.root);
+      } finally {
+        app.cleanup();
+      }
+    },
+    generatedStarterTestTimeout({ cliProcessCount: 1 }),
+  );
 
-  it('typechecks the generated SQLite app variant', () => {
-    const app = createStarterApp({
-      dialect: 'sqlite',
-      name: 'Sqlite Tsc Proof',
-      tempParent: join(process.cwd(), 'node_modules/.tmp'),
-      tempPrefix: 'create-kovo-sqlite-tsc-',
-    });
+  it(
+    'typechecks the generated SQLite app variant',
+    async () => {
+      const app = createStarterApp({
+        dialect: 'sqlite',
+        name: 'Sqlite Tsc Proof',
+        tempParent: join(process.cwd(), 'node_modules/.tmp'),
+        tempPrefix: 'create-kovo-sqlite-tsc-',
+      });
 
-    try {
-      runStarterTypecheck(app.root);
-    } finally {
-      app.cleanup();
-    }
-  });
+      try {
+        await runStarterTypecheck(app.root);
+      } finally {
+        app.cleanup();
+      }
+    },
+    generatedStarterTestTimeout({ cliProcessCount: 1 }),
+  );
 
-  it('runs the generated public inferred harness against a verified build graph', () => {
-    const app = createStarterApp({
-      name: 'Vitest Proof',
-      retention: 'retained-24h',
-      tempPrefix: 'create-kovo-vitest-',
-    });
+  it(
+    'runs the generated public inferred harness against a verified build graph',
+    async () => {
+      const app = createStarterApp({
+        name: 'Vitest Proof',
+        retention: 'retained-24h',
+        tempPrefix: 'create-kovo-vitest-',
+      });
 
-    try {
-      runStarterAppHttpTest(app.root);
-    } finally {
-      app.cleanup();
-    }
-  });
+      try {
+        await runStarterAppHttpTest(app.root);
+      } finally {
+        app.cleanup();
+      }
+    },
+    generatedStarterTestTimeout({ cliProcessCount: 2 }),
+  );
 });

@@ -4,9 +4,11 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { describe, expect, it } from 'vitest';
 
 import {
+  assertParanoidRuntimeCasesExecuted,
   formatParanoidGateFailures,
   PARANOID_GATE_CASES,
   PARANOID_RUNTIME_CASES,
+  REQUIRED_PARANOID_RUNTIME_CASES,
   paranoidRuntimeWorkerRequirements,
   runIsolatedProcess,
   runParanoidRuntimeGate,
@@ -36,15 +38,19 @@ describe('paranoid runtime process isolation', () => {
     // server-readiness deadline. Vitest must be outside both before the process supervisor applies.
     expect(externalBoot?.testTimeoutMs).toBeGreaterThan(300_000 + 180_000);
 
-    expect(paranoidRuntimeWorkerRequirements('phase5-sqlite-paranoid-dogfood')).toEqual({
+    expect(paranoidRuntimeWorkerRequirements('phase5-sqlite-paranoid-dogfood', false)).toEqual({
       authorizationMatrixCases: [],
       postgresCases: [],
+      runtimeCases: ['phase5-sqlite-paranoid-dogfood'],
     });
-    expect(paranoidRuntimeWorkerRequirements('paranoid-external-provision-check-boot')).toEqual({
+    expect(
+      paranoidRuntimeWorkerRequirements('paranoid-external-provision-check-boot', true),
+    ).toEqual({
       authorizationMatrixCases: ['closure-safe-boot'],
       postgresCases: ['paranoid-external-provision-check-boot'],
+      runtimeCases: ['paranoid-external-provision-check-boot'],
     });
-    expect(paranoidRuntimeWorkerRequirements('paranoid-external-leak-refusal')).toEqual({
+    expect(paranoidRuntimeWorkerRequirements('paranoid-external-leak-refusal', true)).toEqual({
       authorizationMatrixCases: [
         'closure-cross-schema-definer-function-refusal',
         'closure-definer-view-refusal',
@@ -52,7 +58,33 @@ describe('paranoid runtime process isolation', () => {
         'closure-public-table-refusal',
       ],
       postgresCases: ['paranoid-external-leak-refusal'],
+      runtimeCases: ['paranoid-external-leak-refusal'],
     });
+    expect(paranoidRuntimeWorkerRequirements(undefined, false).runtimeCases).toEqual([
+      'phase5-sqlite-paranoid-dogfood',
+    ]);
+    expect(paranoidRuntimeWorkerRequirements(undefined, true).runtimeCases).toEqual(
+      REQUIRED_PARANOID_RUNTIME_CASES,
+    );
+    for (const testCase of PARANOID_RUNTIME_CASES) {
+      expect(paranoidRuntimeWorkerRequirements(testCase.id, true).runtimeCases).toEqual([
+        testCase.id,
+      ]);
+    }
+  });
+
+  it('fails closed when the selected SQLite runtime case has no executed marker', () => {
+    expect(() =>
+      assertParanoidRuntimeCasesExecuted(['phase5-sqlite-paranoid-dogfood'], new Set()),
+    ).toThrow(
+      /did not execute every selected runtime case; missing: phase5-sqlite-paranoid-dogfood/u,
+    );
+    expect(() =>
+      assertParanoidRuntimeCasesExecuted(
+        ['phase5-sqlite-paranoid-dogfood'],
+        new Set(['phase5-sqlite-paranoid-dogfood']),
+      ),
+    ).not.toThrow();
   });
 
   it('rejects an unknown worker selector before Vitest can silently filter the gate', () => {
@@ -121,10 +153,10 @@ describe('paranoid runtime process isolation', () => {
       ].join('');
       const supervisorSource = [
         "const { spawn } = require('node:child_process');",
-        `const descendant = spawn(process.execPath, ['-e', ${JSON.stringify(descendantSource)}], { stdio: 'ignore' });`,
+        `const descendant = spawn(process.execPath, ['-e', ${JSON.stringify(descendantSource)}], { detached: true, stdio: 'ignore' });`,
+        'descendant.unref();',
         'process.stderr.write(`descendant:${descendant.pid}\\n`);',
         "process.on('SIGTERM', () => undefined);",
-        "for (let index = 0; index < 256; index += 1) process.stdout.write('x'.repeat(1024));",
         'setInterval(() => undefined, 1_000);',
       ].join('');
 
@@ -133,23 +165,87 @@ describe('paranoid runtime process isolation', () => {
         command: process.execPath,
         cwd: resolve('.'),
         env: process.env,
+        killGraceMs: 2_000,
         maxOutputBytes: 1_024,
-        reapTimeoutMs: 2_000,
+        rootExitTimeoutMs: 2_000,
+        streamCloseTimeoutMs: 2_000,
         supervisorTimeoutMs: 500,
         terminationGraceMs: 50,
       });
 
       expect(outcome.timedOut).toBe(true);
+      expect(outcome.outputOverflowed).toBe(false);
       expect(outcome.cleanupError).toBeNull();
       expect(outcome.signal).toBe('SIGKILL');
-      expect(outcome.stdout).toMatch(/earlier output bytes truncated/u);
-      expect(Buffer.byteLength(outcome.stdout)).toBeLessThan(1_100);
       const match = /descendant:(\d+)/u.exec(outcome.stderr);
       expect(match).not.toBeNull();
       const descendantPid = Number(match?.[1]);
       expect(await processStopsWithin(descendantPid, 1_000)).toBe(true);
     },
   );
+
+  itIfPosix('reaps a detached residual after the root exits successfully', async () => {
+    const descendantSource = [
+      "process.on('SIGTERM', () => undefined);",
+      'setInterval(() => undefined, 1_000);',
+    ].join('');
+    const rootSource = [
+      "const { spawn } = require('node:child_process');",
+      `const descendant = spawn(process.execPath, ['-e', ${JSON.stringify(descendantSource)}], { detached: true, stdio: 'ignore' });`,
+      'descendant.unref();',
+      'process.stdout.write(String(descendant.pid));',
+      'setTimeout(() => undefined, 300);',
+    ].join('');
+
+    const outcome = await runIsolatedProcess({
+      args: ['-e', rootSource],
+      command: process.execPath,
+      cwd: resolve('.'),
+      env: process.env,
+      killGraceMs: 2_000,
+      rootExitTimeoutMs: 2_000,
+      streamCloseTimeoutMs: 2_000,
+      supervisorTimeoutMs: 5_000,
+      terminationGraceMs: 50,
+    });
+
+    expect(outcome).toMatchObject({
+      cleanupError: null,
+      exitCode: 0,
+      outputOverflowed: false,
+      signal: null,
+      timedOut: false,
+    });
+    expect(await processStopsWithin(Number(outcome.stdout), 1_000)).toBe(true);
+  });
+
+  itIfPosix('terminates on a deterministic combined-output overflow', async () => {
+    const source = [
+      "process.on('SIGTERM', () => undefined);",
+      "process.stdout.write('o'.repeat(800));",
+      "process.stderr.write('e'.repeat(800));",
+      'setInterval(() => undefined, 1_000);',
+    ].join('');
+    const outcome = await runIsolatedProcess({
+      args: ['-e', source],
+      command: process.execPath,
+      cwd: resolve('.'),
+      env: process.env,
+      killGraceMs: 2_000,
+      maxOutputBytes: 1_024,
+      rootExitTimeoutMs: 2_000,
+      streamCloseTimeoutMs: 2_000,
+      supervisorTimeoutMs: 5_000,
+      terminationGraceMs: 50,
+    });
+
+    expect(outcome.timedOut).toBe(false);
+    expect(outcome.outputOverflowed).toBe(true);
+    expect(outcome.cleanupError).toBeNull();
+    expect(
+      Buffer.byteLength(outcome.stdout) + Buffer.byteLength(outcome.stderr),
+    ).toBeLessThanOrEqual(1_024);
+  });
 });
 
 function isolatedOutcome(overrides: Partial<IsolatedProcessOutcome> = {}): IsolatedProcessOutcome {
@@ -158,6 +254,7 @@ function isolatedOutcome(overrides: Partial<IsolatedProcessOutcome> = {}): Isola
     durationMs: 1,
     error: null,
     exitCode: 0,
+    outputOverflowed: false,
     signal: null,
     stderr: '',
     stdout: '',
