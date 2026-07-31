@@ -83,6 +83,11 @@ export function createCommerceAuthFixture(): CommerceAuthFixture {
   };
 }
 
+/** Purpose-named acquisition door for routing requests to an enrolled commerce fixture. */
+export function mintCommerceApplicationContextId(): string {
+  return crypto.randomUUID();
+}
+
 const localCommerceSignInGuard = guard<CommerceAppRequest>(
   'local commerce auth fixture with app-owned rate limit',
   (request) => {

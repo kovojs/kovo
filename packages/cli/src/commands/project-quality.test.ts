@@ -97,6 +97,9 @@ describe('framework-owned project quality check', () => {
         }),
       ]);
       expect(result.output).toContain('ERROR PROJECT-QUALITY src/app.ts:15-18');
+      expect(readdirSync(root).some((name) => name.startsWith('.kovo-project-quality-'))).toBe(
+        false,
+      );
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -132,6 +135,51 @@ describe('framework-owned project quality check', () => {
         exitCode: 0,
         output: 'kovo-build/v1\nOK PROJECT-QUALITY format=clean lint=clean\n',
       });
+      expect(readdirSync(root).some((name) => name.startsWith('.kovo-project-quality-'))).toBe(
+        false,
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('cleans an exclusively reserved config when a quality process cannot start', async () => {
+    const root = fixtureRoot();
+    try {
+      const execute = vi.spyOn(projectQualityCommandShell, 'execFile').mockImplementation(((
+        _command,
+        args,
+        _options,
+        callback,
+      ) => {
+        const toolArgs = args as readonly string[];
+        if (toolArgs.includes('--eval')) {
+          callback(
+            null,
+            JSON.stringify({
+              fmt: {},
+              lint: {},
+              schema: 'kovo-project-quality-config/v1',
+            }),
+            '',
+          );
+        } else {
+          expect(
+            readdirSync(root).filter((name) => name.startsWith('.kovo-project-quality-')),
+          ).toHaveLength(1);
+          callback(Object.assign(new Error('spawn failed'), { code: 'ENOENT' }), '', '');
+        }
+        return {} as ReturnType<typeof projectQualityCommandShell.execFile>;
+      }) as typeof projectQualityCommandShell.execFile);
+
+      const result = await runProjectQualityCheck(root, {}, 'kovo-check/v1');
+
+      expect(execute).toHaveBeenCalledTimes(2);
+      expect(result).toMatchObject({ exitCode: 2 });
+      expect(result.error).toContain('spawn failed');
+      expect(readdirSync(root).some((name) => name.startsWith('.kovo-project-quality-'))).toBe(
+        false,
+      );
     } finally {
       rmSync(root, { force: true, recursive: true });
     }

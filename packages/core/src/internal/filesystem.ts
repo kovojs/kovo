@@ -84,6 +84,7 @@ const confinedFileSystemEntryBrand: unique symbol = Symbol('kovo.filesystem.conf
 const capturedFileReplacementBrand: unique symbol = Symbol(
   'kovo.filesystem.captured-file-replacement',
 );
+const frameworkTemporaryFileBrand: unique symbol = Symbol('kovo.filesystem.temporary-file');
 
 /** @internal Directory entry shape returned by the framework-owned filesystem boundary. */
 export interface ConfinedFileSystemEntry {
@@ -98,6 +99,21 @@ export interface CapturedFileReplacement {
   readonly [capturedFileReplacementBrand]: true;
   readonly body: Uint8Array;
   readonly relativePath: string;
+}
+
+/** @internal Inert path facts for a framework-owned, identity-bound temporary file. */
+export interface FrameworkTemporaryFile {
+  readonly [frameworkTemporaryFileBrand]: true;
+  readonly path: string;
+  readonly relativePath: string;
+}
+
+/** @internal Inputs for an exclusively-created temporary file beneath an enrolled root. */
+export interface FrameworkTemporaryFileOptions {
+  /** Synchronous body construction receives the exact reserved root-relative filename. */
+  readonly body: (relativePath: string) => string | Uint8Array;
+  readonly prefix: string;
+  readonly suffix: string;
 }
 
 /** @internal Synchronous decision made while the durable file's exclusive lock is held. */
@@ -119,6 +135,10 @@ export interface FrameworkFileSystemBoundary {
   replaceCapturedFile(snapshot: CapturedFileReplacement, body: string | Uint8Array): Promise<void>;
   statFile(relativePath: string): Promise<{ mtime: Date; size: number } | undefined>;
   updateDurableFile(relativePath: string, update: DurableFileUpdate): Promise<void>;
+  withTemporaryFile<Result>(
+    options: FrameworkTemporaryFileOptions,
+    use: (file: FrameworkTemporaryFile) => Promise<Result>,
+  ): Promise<Result>;
   writeFile(relativePath: string, body: string | Uint8Array): Promise<void>;
 }
 
@@ -197,6 +217,12 @@ interface CapturedFileReplacementProvenance {
   readonly rootState: FileSystemRootState;
 }
 
+interface PreparedFrameworkTemporaryFile {
+  readonly file: FrameworkTemporaryFile;
+  readonly identity: FileSystemIdentity;
+  readonly path: string;
+}
+
 const confinedFileSystemEntryProvenance = securityWeakMap<
   ConfinedFileSystemEntry,
   ConfinedFileSystemEntryProvenance
@@ -210,6 +236,8 @@ let fileSystemCommitLock: Promise<void> | undefined;
 const DURABLE_FILE_LOCK_RETRY_DELAY_MS = 25;
 const DURABLE_FILE_LOCK_RETRY_LIMIT = 200;
 const DURABLE_FILE_MAXIMUM_BYTES = 1_048_576;
+const FRAMEWORK_TEMPORARY_FILE_RETRY_LIMIT = 32;
+const FRAMEWORK_TEMPORARY_NAME_AFFIX_MAXIMUM_LENGTH = 180;
 const PRIVATE_FILE_MODE = 0o600;
 
 type FileSystemRootAccess = 'create' | 'observe' | 'required';
@@ -235,6 +263,7 @@ export async function createFrameworkFileSystemBoundary(
     statFile: (relativePath) => statConfinedFile(rootState, relativePath),
     updateDurableFile: (relativePath, update) =>
       updateDurableConfinedFile(rootState, relativePath, update),
+    withTemporaryFile: (options, use) => withConfinedTemporaryFile(rootState, options, use),
     writeFile: (relativePath, body) => writeConfinedFile(rootState, relativePath, body),
   };
   return blessSink(FILESYSTEM_BOUNDARY_SINK, fileSystemFreeze(boundary));
@@ -314,6 +343,186 @@ export function containsPath(root: string, targetPath: string): boolean {
     resolvedTarget === resolvedRoot ||
     fileSystemStringStartsWith(resolvedTarget, `${resolvedRoot}${fileSystemPathSeparator()}`)
   );
+}
+
+async function withConfinedTemporaryFile<Result>(
+  rootState: FileSystemRootState,
+  options: FrameworkTemporaryFileOptions,
+  use: (file: FrameworkTemporaryFile) => Promise<Result>,
+): Promise<Result> {
+  if (options === null || typeof options !== 'object') {
+    throw new TypeError('Framework temporary file options must be an object.');
+  }
+  const { body, prefix, suffix } = options;
+  if (typeof body !== 'function') {
+    throw new TypeError('Framework temporary file body must be a synchronous function.');
+  }
+  if (typeof use !== 'function') {
+    throw new TypeError('Framework temporary file use callback must be a function.');
+  }
+  assertFrameworkTemporaryFileAffix(prefix, 'prefix', false);
+  assertFrameworkTemporaryFileAffix(suffix, 'suffix', true);
+  if (prefix.length + suffix.length > FRAMEWORK_TEMPORARY_NAME_AFFIX_MAXIMUM_LENGTH) {
+    throw new TypeError('Framework temporary file name affixes are too long.');
+  }
+
+  const prepared = await createConfinedTemporaryFile(rootState, prefix, suffix, body);
+  try {
+    return await use(prepared.file);
+  } finally {
+    await removeConfinedTemporaryFile(rootState, prepared.path, prepared.identity);
+  }
+}
+
+async function createConfinedTemporaryFile(
+  rootState: FileSystemRootState,
+  prefix: string,
+  suffix: string,
+  body: (relativePath: string) => string | Uint8Array,
+): Promise<PreparedFrameworkTemporaryFile> {
+  await prepareFileSystemRoot(rootState, 'required');
+  const root = preparedRootPath(rootState);
+  for (let attempt = 0; attempt < FRAMEWORK_TEMPORARY_FILE_RETRY_LIMIT; attempt += 1) {
+    const relativePath = `${prefix}${fileSystemRandomUuid()}${suffix}`;
+    const path = confinedPath(root, relativePath);
+    if (path === undefined || fileSystemPathDirname(path) !== root) {
+      throw new TypeError('Framework temporary file name escaped its enrolled root.');
+    }
+    const source = frameworkTemporaryFileBody(body(relativePath));
+    try {
+      return await withFileSystemRootCommitLock(root, async () => {
+        await ensureParentsStayDirectories(root, path);
+        await revalidatePreparedRoot(rootState);
+        return await createConfinedTemporaryFileUnderLock(rootState, path, relativePath, source);
+      });
+    } catch (error) {
+      if (!isAlreadyExistsError(error)) throw error;
+    }
+  }
+  throw new TypeError('Framework temporary file could not reserve a unique filename.');
+}
+
+async function createConfinedTemporaryFileUnderLock(
+  rootState: FileSystemRootState,
+  path: string,
+  relativePath: string,
+  source: Uint8Array,
+): Promise<PreparedFrameworkTemporaryFile> {
+  let fileDescriptor: number | undefined;
+  let identity: FileSystemIdentity | undefined;
+  try {
+    fileDescriptor = await fileSystemCreateExclusiveFileDescriptor(path);
+    const openedStat = await fileSystemStatFileDescriptor(fileDescriptor);
+    if (!fileSystemStatsIsFile(openedStat) || openedStat.nlink !== 1) {
+      throw new Error(`Filesystem temporary '${path}' is not a private regular file.`);
+    }
+    identity = fileSystemIdentity(openedStat);
+    await fileSystemWriteFileDescriptor(fileDescriptor, source);
+
+    const completedStat = await fileSystemStatFileDescriptor(fileDescriptor);
+    const lexicalStat = await fileSystemLstat(path);
+    if (
+      !fileSystemStatsIsFile(completedStat) ||
+      completedStat.nlink !== 1 ||
+      fileSystemStatsIsSymbolicLink(lexicalStat) ||
+      !fileSystemStatsIsFile(lexicalStat) ||
+      lexicalStat.nlink !== 1 ||
+      !sameFileSystemIdentity(identity, fileSystemIdentity(completedStat)) ||
+      !sameFileSystemIdentity(identity, fileSystemIdentity(lexicalStat))
+    ) {
+      throw new Error(`Filesystem temporary '${path}' identity changed during creation.`);
+    }
+    await revalidatePreparedRoot(rootState);
+    const file: FrameworkTemporaryFile = fileSystemFreeze({
+      [frameworkTemporaryFileBrand]: true,
+      path,
+      relativePath,
+    });
+    return { file, identity, path };
+  } catch (error) {
+    if (fileDescriptor !== undefined) {
+      await fileSystemCloseFileDescriptor(fileDescriptor).catch(() => undefined);
+      fileDescriptor = undefined;
+    }
+    if (identity !== undefined) {
+      await removeIdentityBoundTemporaryFile(rootState, path, identity).catch(() => undefined);
+    }
+    throw error;
+  } finally {
+    if (fileDescriptor !== undefined) {
+      await fileSystemCloseFileDescriptor(fileDescriptor);
+    }
+  }
+}
+
+async function removeConfinedTemporaryFile(
+  rootState: FileSystemRootState,
+  path: string,
+  identity: FileSystemIdentity,
+): Promise<void> {
+  const root = preparedRootPath(rootState);
+  await withFileSystemRootCommitLock(root, async () => {
+    await ensureParentsStayDirectories(root, path);
+    await revalidatePreparedRoot(rootState);
+    let lexicalStat: Stats;
+    try {
+      lexicalStat = await fileSystemLstat(path);
+    } catch (error) {
+      if (isMissingPathError(error)) return;
+      throw error;
+    }
+    if (
+      fileSystemStatsIsSymbolicLink(lexicalStat) ||
+      !fileSystemStatsIsFile(lexicalStat) ||
+      lexicalStat.nlink !== 1 ||
+      !sameFileSystemIdentity(identity, fileSystemIdentity(lexicalStat))
+    ) {
+      throw confinedEntryIdentityChangedError(path, 'temporary file changed before cleanup');
+    }
+    await fileSystemUnlink(path);
+    await revalidatePreparedRoot(rootState);
+  });
+}
+
+function assertFrameworkTemporaryFileAffix(
+  value: string,
+  role: 'prefix' | 'suffix',
+  allowEmpty: boolean,
+): void {
+  if (
+    typeof value !== 'string' ||
+    (!allowEmpty && value === '') ||
+    fileSystemPathIsAbsolute(value) ||
+    fileSystemStringIncludes(value, '/') ||
+    fileSystemStringIncludes(value, '\\') ||
+    fileSystemStringIncludes(value, '\0')
+  ) {
+    throw new TypeError(
+      `Framework temporary file ${role} must be ${allowEmpty ? 'a' : 'a nonempty'} single filename affix.`,
+    );
+  }
+  for (let index = 0; index < value.length; index += 1) {
+    const codePoint = fileSystemStringCharCodeAt(value, index);
+    if (codePoint <= 0x1f || codePoint === 0x7f) {
+      throw new TypeError(`Framework temporary file ${role} must not contain control bytes.`);
+    }
+  }
+}
+
+function frameworkTemporaryFileBody(source: string | Uint8Array): Uint8Array {
+  const body =
+    typeof source === 'string'
+      ? fileSystemUtf8Encode(source)
+      : fileSystemIsUint8Array(source)
+        ? fileSystemCopyBytes(source)
+        : undefined;
+  if (body === undefined) {
+    throw new TypeError('Framework temporary file body must be a string or Uint8Array.');
+  }
+  if (fileSystemArrayBufferViewByteLength(body) > DURABLE_FILE_MAXIMUM_BYTES) {
+    throw new TypeError('Framework temporary file body exceeds the 1 MiB limit.');
+  }
+  return body;
 }
 
 /**

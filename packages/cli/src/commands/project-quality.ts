@@ -1,5 +1,4 @@
 import { execFile } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
 import { existsSync, lstatSync, realpathSync } from 'node:fs';
 import { relative, resolve, sep } from 'node:path';
 
@@ -225,44 +224,38 @@ async function executeQualityTool(
   invocationEnv: NodeJS.ProcessEnv,
   fileSystem: FrameworkFileSystemBoundary,
 ): Promise<CommandExecution> {
-  const configName = `.kovo-project-quality-${randomUUID()}.${configKind}.json`;
-  let execution: CommandExecution;
   try {
-    const configPath = fileSystem.confinedPath(configName);
-    if (configPath === undefined) {
-      throw new TypeError('formatter config path escaped the enrolled project root');
-    }
-    const ignorePatterns = config.ignorePatterns;
-    const enrolledIgnorePatterns =
-      ignorePatterns === undefined
-        ? [configName]
-        : Array.isArray(ignorePatterns) &&
-            ignorePatterns.every((value) => typeof value === 'string')
-          ? [...ignorePatterns, configName]
-          : undefined;
-    if (enrolledIgnorePatterns === undefined) {
-      throw new TypeError('formatter ignorePatterns config is invalid');
-    }
-    await fileSystem.writeFile(
-      configName,
-      `${JSON.stringify({ ...config, ignorePatterns: enrolledIgnorePatterns })}\n`,
+    return await fileSystem.withTemporaryFile(
+      {
+        body(configName) {
+          const ignorePatterns = config.ignorePatterns;
+          const enrolledIgnorePatterns =
+            ignorePatterns === undefined
+              ? [configName]
+              : Array.isArray(ignorePatterns) &&
+                  ignorePatterns.every((value) => typeof value === 'string')
+                ? [...ignorePatterns, configName]
+                : undefined;
+          if (enrolledIgnorePatterns === undefined) {
+            throw new TypeError('formatter ignorePatterns config is invalid');
+          }
+          return `${JSON.stringify({ ...config, ignorePatterns: enrolledIgnorePatterns })}\n`;
+        },
+        prefix: '.kovo-project-quality-',
+        suffix: `.${configKind}.json`,
+      },
+      async ({ path: configPath }) =>
+        await execute(tool.executable, ['--config', configPath, ...args], root, {
+          ...invocationEnv,
+          ...tool.environment,
+          JS_RUNTIME_NAME: process.release.name,
+          JS_RUNTIME_VERSION: process.versions.node,
+          NODE_PACKAGE_MANAGER: 'vite-plus',
+        }),
     );
-    execution = await execute(tool.executable, ['--config', configPath, ...args], root, {
-      ...invocationEnv,
-      ...tool.environment,
-      JS_RUNTIME_NAME: process.release.name,
-      JS_RUNTIME_VERSION: process.versions.node,
-      NODE_PACKAGE_MANAGER: 'vite-plus',
-    });
-  } catch (error) {
-    execution = { error, status: null, stderr: '', stdout: '' };
-  }
-  try {
-    await fileSystem.deleteFile(configName);
   } catch (error) {
     return { error, status: null, stderr: '', stdout: '' };
   }
-  return execution;
 }
 
 async function execute(

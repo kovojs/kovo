@@ -14,7 +14,13 @@ import {
   type CommerceDb,
   type CommerceSession,
 } from './domain.js';
-import { createCommerceAuth, signIn, signOut, type CommerceAuthBindings } from './auth.js';
+import {
+  createCommerceAuth,
+  mintCommerceApplicationContextId,
+  signIn,
+  signOut,
+  type CommerceAuthBindings,
+} from './auth.js';
 import * as style from '@kovojs/style';
 import { LoginForm, LogoutForm } from './components/auth-forms.js';
 import { CartBadge } from './components/cart-badge.js';
@@ -142,10 +148,13 @@ export const commerceLoginRoute = app.route('/login', {
 export function createCommerceApplication(options: CommerceAppOptions = {}): CommerceApplication {
   const auth = createCommerceAuth(options.db ?? createCommerceDb(), options.authFixture);
   const db = auth.db;
-  const appContextId = registerCommerceApplicationContext({
-    db,
-    sessionProvider: auth.sessionProvider,
-  });
+  const appContextId = registerCommerceApplicationContext(
+    {
+      db,
+      sessionProvider: auth.sessionProvider,
+    },
+    mintCommerceApplicationContextId,
+  );
   return { app: commerceRuntimeApp, appContextId, auth, db };
 }
 

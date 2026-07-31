@@ -20,6 +20,16 @@ import {
 } from './app-test-helpers.js';
 
 describe('commerce example', () => {
+  it('mints distinct application routing ids through the auth-owned acquisition door', () => {
+    const first = createCommerceTestApp();
+    const second = createCommerceTestApp();
+
+    expect(first.appContextId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
+    );
+    expect(second.appContextId).not.toBe(first.appContextId);
+  });
+
   it('uses only framework-resolved anonymous CSRF identities', () => {
     const db = createCommerceDb();
     const request = { db, headers: new Headers(), url: 'http://localhost/login' };

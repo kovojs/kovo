@@ -17,8 +17,11 @@ export interface CommerceContractRequest extends Request {
   clientIp?: string;
 }
 
-export function registerCommerceApplicationContext(context: CommerceApplicationContext): string {
-  const id = crypto.randomUUID();
+export function registerCommerceApplicationContext(
+  context: CommerceApplicationContext,
+  mintContextId: () => string,
+): string {
+  const id = mintContextId();
   commerceApplicationContexts.set(id, context);
   defaultCommerceContextId = id;
   return id;

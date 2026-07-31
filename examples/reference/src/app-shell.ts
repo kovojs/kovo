@@ -57,8 +57,8 @@ export function createReferenceAppShell(options: ReferenceAppShellOptions = {}) 
 
 export function createReferenceApplication(options: ReferenceAppShellOptions = {}) {
   const auth = options.auth ?? createReferenceAuth(createReferenceAuthFixture());
-  const appContextId = registerReferenceApplicationContext(auth);
-  return { app: referenceRuntimeApp, appContextId, auth };
+  registerReferenceApplicationContext(auth);
+  return { app: referenceRuntimeApp, auth };
 }
 
 export function routeValueToHtml(value: unknown): string {

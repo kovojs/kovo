@@ -7,9 +7,7 @@ import type {
   ReferenceSession,
 } from './auth.js';
 
-const referenceApplicationContextCapacity = 4_096;
-const referenceApplicationContexts = new Map<string, ReferenceApplicationContext>();
-let defaultReferenceContextId: string | undefined;
+let currentReferenceApplicationContext: ReferenceApplicationContext | undefined;
 
 interface ReferenceApplicationContext {
   auth: ReferenceAuthBindings;
@@ -20,14 +18,8 @@ export interface ReferenceContractRequest extends Request {
   clientIp?: string;
 }
 
-export function registerReferenceApplicationContext(auth: ReferenceAuthBindings): string {
-  if (referenceApplicationContexts.size >= referenceApplicationContextCapacity) {
-    throw new TypeError('Reference application context capacity exceeded.');
-  }
-  const id = crypto.randomUUID();
-  referenceApplicationContexts.set(id, { auth });
-  defaultReferenceContextId = id;
-  return id;
+export function registerReferenceApplicationContext(auth: ReferenceAuthBindings): void {
+  currentReferenceApplicationContext = { auth };
 }
 
 export function referenceContractDbProvider(request: ReferenceContractRequest): ReferenceAuthDb {
@@ -43,10 +35,7 @@ export const referenceContractSessionProvider: SessionProvider<
 };
 
 function referenceApplicationContext(_request: Request): ReferenceApplicationContext {
-  const context =
-    defaultReferenceContextId === undefined
-      ? undefined
-      : referenceApplicationContexts.get(defaultReferenceContextId);
+  const context = currentReferenceApplicationContext;
   if (context === undefined) {
     throw new TypeError('Reference application context is not registered.');
   }

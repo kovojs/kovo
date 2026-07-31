@@ -186,6 +186,60 @@ describe('framework filesystem pathname-race confinement (SPEC §10.6)', () => {
     }
   });
 
+  it('never overwrites a planted framework temporary filename', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'kovo-filesystem-reserved-temp-race-'));
+    const root = join(base, 'root');
+    const fixedUuid = '00000000-0000-4000-8000-000000000001';
+    const plantedPath = join(root, `.kovo-project-quality-${fixedUuid}.config.json`);
+    await mkdir(root);
+    await writeFile(plantedPath, 'PLANTED', 'utf8');
+
+    mockFileSystemIntrinsics(() => ({ fileSystemRandomUuid: () => fixedUuid }));
+    try {
+      const { createFrameworkFileSystemBoundary } = await freshFileSystemModule();
+      const boundary = await createFrameworkFileSystemBoundary(root);
+      await expect(
+        boundary.withTemporaryFile(
+          {
+            body: () => 'FRAMEWORK',
+            prefix: '.kovo-project-quality-',
+            suffix: '.config.json',
+          },
+          async () => undefined,
+        ),
+      ).rejects.toThrow('could not reserve a unique filename');
+      await expect(readFile(plantedPath, 'utf8')).resolves.toBe('PLANTED');
+    } finally {
+      await rm(base, { force: true, recursive: true });
+    }
+  });
+
+  it('never deletes a replacement planted before framework temporary cleanup', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'kovo-filesystem-temp-cleanup-race-'));
+    const root = join(base, 'root');
+    await mkdir(root);
+    let replacementPath: string | undefined;
+
+    try {
+      const { createFrameworkFileSystemBoundary } = await freshFileSystemModule();
+      const boundary = await createFrameworkFileSystemBoundary(root);
+      await expect(
+        boundary.withTemporaryFile(
+          { body: () => 'FRAMEWORK', prefix: '.kovo-cleanup-', suffix: '.json' },
+          async (temporary) => {
+            replacementPath = temporary.path;
+            await rename(temporary.path, `${temporary.path}.parked`);
+            await writeFile(temporary.path, 'REPLACEMENT', 'utf8');
+          },
+        ),
+      ).rejects.toThrow('temporary file changed before cleanup');
+      expect(replacementPath).toBeDefined();
+      await expect(readFile(replacementPath!, 'utf8')).resolves.toBe('REPLACEMENT');
+    } finally {
+      await rm(base, { force: true, recursive: true });
+    }
+  });
+
   it('rejects a captured-file target swap before the durable rename', async () => {
     const base = await mkdtemp(join(tmpdir(), 'kovo-filesystem-replace-race-'));
     const root = join(base, 'root');

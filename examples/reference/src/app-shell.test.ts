@@ -6,7 +6,8 @@ import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { routeValueToHtml } from './app-shell.js';
+import { createReferenceApplication, routeValueToHtml } from './app-shell.js';
+import { referenceContractDbProvider } from './reference-context.js';
 
 let referenceServeProcess: ChildProcess | undefined;
 
@@ -18,6 +19,17 @@ afterEach(async () => {
 });
 
 describe('reference app shell HTTP entry', () => {
+  it('keeps the current fixture context directly without exposing a dead routing id', () => {
+    const first = createReferenceApplication();
+    const second = createReferenceApplication();
+
+    expect(first).not.toHaveProperty('appContextId');
+    expect(second).not.toHaveProperty('appContextId');
+    expect(referenceContractDbProvider(new Request('http://localhost/account'))).toBe(
+      second.auth.db,
+    );
+  });
+
   it('escapes forged rendered/trusted HTML app-shell route values', () => {
     const payload = '<img src=x onerror=alert(1)>';
     const forgedRendered = {

@@ -6,6 +6,7 @@ import {
   mkdtemp,
   open,
   readFile,
+  readdir,
   realpath,
   rename,
   rm,
@@ -28,6 +29,42 @@ import {
 const require = createRequire(import.meta.url);
 
 describe('framework filesystem boundary', () => {
+  it('exclusively creates private temporary files and cleans both callback outcomes', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-filesystem-temporary-'));
+    try {
+      const fileSystem = await createFrameworkFileSystemBoundary(root);
+      const success = await fileSystem.withTemporaryFile(
+        {
+          body: (relativePath) => `config=${relativePath}\n`,
+          prefix: '.kovo-test-',
+          suffix: '.json',
+        },
+        async (temporary) => {
+          expect(temporary.relativePath).toMatch(/^\.kovo-test-[0-9a-f-]+\.json$/u);
+          await expect(readFile(temporary.path, 'utf8')).resolves.toBe(
+            `config=${temporary.relativePath}\n`,
+          );
+          expect((await stat(temporary.path)).mode & 0o777).toBe(0o600);
+          return 'used';
+        },
+      );
+      expect(success).toBe('used');
+      await expect(readdir(root)).resolves.toEqual([]);
+
+      await expect(
+        fileSystem.withTemporaryFile(
+          { body: () => 'failure-body', prefix: '.kovo-test-', suffix: '.json' },
+          async () => {
+            throw new Error('simulated tool failure');
+          },
+        ),
+      ).rejects.toThrow('simulated tool failure');
+      await expect(readdir(root)).resolves.toEqual([]);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('reads only files confined under the real root', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-filesystem-boundary-'));
     const outside = await mkdtemp(join(tmpdir(), 'kovo-filesystem-boundary-outside-'));
