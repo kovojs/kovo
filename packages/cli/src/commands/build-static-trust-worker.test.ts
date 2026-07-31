@@ -1,15 +1,20 @@
 import { createHash, createHmac } from 'node:crypto';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 
 import { isRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
+import { formatKovoDiagnostics } from '../diagnostic.js';
 import {
+  runPreEvaluationStaticTrustWorkerRequest,
   staticConfigTrustFromWorkerEnvelopeForTesting,
   staticTrustFromWorkerEnvelopeForTesting,
   type StaticTrustWorkerRequest,
 } from './build-export.js';
 
 const schema = 'kovo-static-trust-worker/v1';
+const temporaryRoots: string[] = [];
 const request: StaticTrustWorkerRequest = {
   authenticationKey: '11'.repeat(32),
   cache: null,
@@ -20,6 +25,12 @@ const request: StaticTrustWorkerRequest = {
   paranoidStaticAdvisory: false,
   root: '/app',
 };
+
+afterEach(() => {
+  for (const root of temporaryRoots.splice(0)) {
+    rmSync(root, { force: true, recursive: true });
+  }
+});
 
 function requestDigest(expected: StaticTrustWorkerRequest): string {
   const identity = JSON.stringify({
@@ -213,12 +224,17 @@ describe('static-trust worker protocol', () => {
   it('preserves a diagnostic failure without evaluating an authored module in the parent', () => {
     const diagnostics = [
       {
-        category: 'error',
+        category: 'proof',
         code: 'KV235',
-        message: 'Authored lowered IR is forbidden.',
+        help: 'Write TSX and let Kovo emit lowered IR. SPEC §5.2.',
+        message: 'App source hand-authors lowered IR.',
+        severity: 'error',
+        source: { end: 31, file: 'app.ts', start: 17 },
+        version: 'kovo-diagnostic/v1',
       },
     ];
-    expect(() =>
+    let thrown: unknown;
+    try {
       staticTrustFromWorkerEnvelopeForTesting(
         envelope({
           error: {
@@ -229,8 +245,137 @@ describe('static-trust worker protocol', () => {
           status: 'error',
         }),
         request,
+      );
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Error);
+    expect(thrown).toMatchObject({
+      diagnostics: [
+        {
+          category: 'proof',
+          code: 'KV235',
+          source: { end: 31, file: 'app.ts', start: 17 },
+          version: 'kovo-diagnostic/v1',
+        },
+      ],
+      message: 'kovo build check preflight failed:\\nERROR KV235',
+    });
+    const transferred = thrown as { diagnostics: Parameters<typeof formatKovoDiagnostics>[0] };
+    expect(JSON.parse(formatKovoDiagnostics(transferred.diagnostics, 'json'))).toMatchObject({
+      diagnostics: [
+        {
+          code: 'KV235',
+          source: { end: 31, file: 'app.ts', start: 17 },
+        },
+      ],
+      version: 'kovo-diagnostic/v1',
+    });
+  });
+
+  it.each([
+    ['unknown code', { code: 'KV999' }],
+    ['wrong severity', { severity: 'warning' }],
+    ['wrong category', { category: 'usage' }],
+    ['wrong version', { version: 'kovo-diagnostic/v0' }],
+    ['forged source field', { source: { copied: true, end: 31, file: 'app.ts', start: 17 } }],
+  ])('rejects authenticated worker diagnostics with %s', (_label, override) => {
+    expect(() =>
+      staticTrustFromWorkerEnvelopeForTesting(
+        envelope({
+          error: {
+            diagnostics: [
+              {
+                category: 'proof',
+                code: 'KV235',
+                help: 'Write TSX and let Kovo emit lowered IR. SPEC §5.2.',
+                message: 'App source hand-authors lowered IR.',
+                severity: 'error',
+                source: { end: 31, file: 'app.ts', start: 17 },
+                version: 'kovo-diagnostic/v1',
+                ...override,
+              },
+            ],
+            kind: 'diagnostic',
+            message: 'kovo build check preflight failed:\\nERROR KV235',
+          },
+          status: 'error',
+        }),
+        request,
       ),
-    ).toThrow('kovo build check preflight failed:\\nERROR KV235');
+    ).toThrow();
+  });
+
+  it('preserves a real KV235 code and source anchor through the authenticated worker', async () => {
+    const temporaryParent = path.join(process.cwd(), 'node_modules', '.tmp');
+    mkdirSync(temporaryParent, { recursive: true });
+    const root = mkdtempSync(path.join(temporaryParent, 'kovo-static-trust-kv235-'));
+    temporaryRoots.push(root);
+    const modulePath = path.join(root, 'app.tsx');
+    writeFileSync(
+      path.join(root, 'package.json'),
+      `${JSON.stringify({
+        dependencies: { '@kovojs/core': '0.3.0' },
+        name: 'kovo-static-trust-kv235',
+        private: true,
+        type: 'module',
+      })}\n`,
+      'utf8',
+    );
+    writeFileSync(modulePath, "export { AuthoredTsx } from './component.js';\n", 'utf8');
+    writeFileSync(
+      path.join(root, 'component.tsx'),
+      [
+        "import { component } from '@kovojs/core';",
+        "import { jsx as authoredJsxRuntime } from '@kovojs/server/jsx-runtime';",
+        'export const authoredLoweredIrProof = authoredJsxRuntime;',
+        'export const AuthoredTsx = component({ render() { return <div>safe</div>; } });',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    const expected: StaticTrustWorkerRequest = {
+      authenticationKey: '77'.repeat(32),
+      cache: null,
+      challenge: '88'.repeat(32),
+      command: null,
+      kind: 'app',
+      modulePath,
+      paranoidStaticAdvisory: false,
+      root,
+    };
+    const output = await runPreEvaluationStaticTrustWorkerRequest(JSON.stringify(expected));
+    const outer = JSON.parse(output) as { payload: string };
+    const payload = JSON.parse(outer.payload) as {
+      error: { diagnostics: { code: string; source: unknown }[] };
+      status: string;
+    };
+    expect(payload.status, outer.payload.slice(0, 8_000)).toBe('error');
+    const rawKv235 = payload.error.diagnostics?.find((diagnostic) => diagnostic.code === 'KV235');
+    expect(rawKv235, outer.payload.slice(0, 8_000)).toBeDefined();
+    expect(payload.error.diagnostics?.map((diagnostic) => diagnostic.code)).toEqual(
+      expect.arrayContaining(['KV235', 'KV424']),
+    );
+
+    let thrown: unknown;
+    try {
+      staticTrustFromWorkerEnvelopeForTesting(output, expected);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(Error);
+    const transferred = thrown as { diagnostics: Parameters<typeof formatKovoDiagnostics>[0] };
+    const transferredKv235 = transferred.diagnostics.find(
+      (diagnostic) => diagnostic.code === 'KV235',
+    );
+    expect(transferredKv235).toMatchObject({
+      category: 'proof',
+      code: 'KV235',
+      source: rawKv235?.source,
+      version: 'kovo-diagnostic/v1',
+    });
+    expect(() => formatKovoDiagnostics(transferred.diagnostics, 'json')).not.toThrow();
   });
 
   it.each([

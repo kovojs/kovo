@@ -156,6 +156,7 @@ import type {
   KovoDiagnosticRecord,
   KovoDiagnosticSourceAnchor,
 } from '../diagnostic.js';
+import { KOVO_DIAGNOSTIC_VERSION, projectKovoDiagnostic } from '../diagnostic.js';
 import {
   createKovoCheckDiagnosticSourceCatalog,
   kovoCheck,
@@ -3211,16 +3212,17 @@ function runPreEvaluationStaticTrustPreflight(
   // The same typed component/semantic facts are retained for graph assembly below; neither the
   // verdict nor framework identity is re-derived from disk.
   const compilerDiagnostics = buildPreflightComponentDiagnostics(sourceGraphFacts.components);
+  const compilerSecurityRegisteredDiagnostics = buildFilterDense(
+    compilerDiagnostics,
+    'Pre-evaluation registered compiler security diagnostics',
+    (diagnostic) =>
+      diagnostic.code === 'KV235' ||
+      diagnostic.code === 'KV449' ||
+      diagnostic.code === 'KV450' ||
+      diagnostic.code === 'KV452',
+  );
   const compilerSecurityDiagnostics = buildMapDense(
-    buildFilterDense(
-      compilerDiagnostics,
-      'Pre-evaluation compiler security diagnostics',
-      (diagnostic) =>
-        diagnostic.code === 'KV235' ||
-        diagnostic.code === 'KV449' ||
-        diagnostic.code === 'KV450' ||
-        diagnostic.code === 'KV452',
-    ),
+    compilerSecurityRegisteredDiagnostics,
     'Pre-evaluation compiler security diagnostic facts',
     staticDiagnosticFact,
   );
@@ -3253,17 +3255,22 @@ function runPreEvaluationStaticTrustPreflight(
           },
           files,
         });
+  const accessGuardRegisteredDiagnostics = buildFilterDense(
+    compilerDiagnostics,
+    'Pre-evaluation registered compiler access/guard diagnostics',
+    (diagnostic) => diagnostic.code === 'KV436',
+  );
   const accessGuardDiagnostics = buildMapDense(
-    buildFilterDense(
-      compilerDiagnostics,
-      'Pre-evaluation compiler access/guard diagnostics',
-      (diagnostic) => diagnostic.code === 'KV436',
-    ),
+    accessGuardRegisteredDiagnostics,
     'Pre-evaluation compiler access/guard diagnostic facts',
     staticDiagnosticFact,
   );
-  const capabilityClosureDiagnostics = buildMapDense(
+  const capabilityClosureRegisteredDiagnostics = buildSnapshotDenseArray(
     capabilityClosure.diagnostics,
+    'Pre-evaluation registered capability-closure diagnostics',
+  );
+  const capabilityClosureDiagnostics = buildMapDense(
+    capabilityClosureRegisteredDiagnostics,
     'Capability-closure diagnostics',
     staticDiagnosticFact,
   );
@@ -3323,9 +3330,41 @@ function runPreEvaluationStaticTrustPreflight(
     };
   }
 
+  const registeredPreEvaluationDiagnostics = buildConcatDense(
+    buildConcatDense(
+      accessGuardRegisteredDiagnostics,
+      capabilityClosureRegisteredDiagnostics,
+      'Registered pre-evaluation access/capability diagnostics',
+    ),
+    compilerSecurityRegisteredDiagnostics,
+    'Registered pre-evaluation compiler diagnostics',
+  );
+  const projectedPreEvaluationDiagnostics = buildConcatDense(
+    buildConcatDense(
+      buildMapDense(
+        registeredPreEvaluationDiagnostics,
+        'Projected registered pre-evaluation worker diagnostics',
+        (diagnostic) => projectKovoDiagnostic(diagnostic, 'proof'),
+      ),
+      buildMapDense(
+        revealDiagnostics,
+        'Projected static pre-evaluation worker diagnostics',
+        projectStaticTrustDiagnosticForWorker,
+      ),
+      'Projected pre-evaluation source diagnostics',
+    ),
+    buildMapDense(
+      unregisteredSinks,
+      'Projected pre-evaluation unregistered sinks',
+      projectStaticTrustUnregisteredSinkForWorker,
+    ),
+    'Complete projected pre-evaluation diagnostics',
+  );
   throw new KovoBuildCheckDiagnosticError(
     `kovo build check preflight failed:\n${buildCheckFailureOutput(result.output)}`,
-    result.diagnostics,
+    projectedPreEvaluationDiagnostics.length === 0
+      ? result.diagnostics
+      : projectedPreEvaluationDiagnostics,
   );
 }
 
@@ -3872,10 +3911,71 @@ function throwStaticTrustDiagnostic(message: string, diagnostics: unknown): neve
   if (diagnostics !== undefined && !buildArrayIsArray(diagnostics)) {
     throw new TypeError('Kovo static-trust worker returned invalid diagnostics.');
   }
-  throw new KovoBuildCheckDiagnosticError(
-    message,
-    diagnostics as readonly KovoDiagnosticRecord[] | undefined,
+  const rehydrated =
+    diagnostics === undefined
+      ? undefined
+      : buildMapDense(
+          buildSnapshotDenseArray(
+            diagnostics as readonly unknown[],
+            'Static-trust worker error diagnostics',
+          ),
+          'Rehydrated static-trust worker error diagnostics',
+          (diagnostic, index) =>
+            rehydrateStaticTrustWorkerDiagnostic(
+              diagnostic,
+              `Static-trust worker error diagnostics[${index}]`,
+            ),
+        );
+  throw new KovoBuildCheckDiagnosticError(message, rehydrated);
+}
+
+/**
+ * Re-enroll one authenticated worker diagnostic in this process's private CLI registry.
+ *
+ * The worker HMAC authenticates bytes, not WeakSet identity. Treating parsed JSON as a
+ * `KovoDiagnosticRecord` would make the later formatter discard real KV findings as an
+ * unauthenticated `KOVO_DIAGNOSTIC_CONTRACT` fallback. Validate the finite wire shape, remint the
+ * core diagnostic through its code registry, then project it into the exact original category.
+ */
+function rehydrateStaticTrustWorkerDiagnostic(value: unknown, label: string): KovoDiagnosticRecord {
+  if (value === null || typeof value !== 'object' || buildArrayIsArray(value)) {
+    throw new TypeError(`${label} must be an object.`);
+  }
+  assertStaticTrustAllowedKeys(
+    value,
+    ['category', 'code', 'help', 'message', 'severity', 'source', 'version'],
+    ['category', 'code', 'message', 'severity', 'version'],
+    label,
   );
+  const category = buildOwnDataValue(value, 'category', label);
+  const code = buildOwnDataValue(value, 'code', label);
+  const help = buildOwnDataValue(value, 'help', label);
+  const message = buildOwnDataValue(value, 'message', label);
+  const severity = buildOwnDataValue(value, 'severity', label);
+  const source = buildOwnDataValue(value, 'source', label);
+  const version = buildOwnDataValue(value, 'version', label);
+  if (
+    (category !== 'build' &&
+      category !== 'config' &&
+      category !== 'proof' &&
+      category !== 'runtime') ||
+    !isDiagnosticCode(code) ||
+    (help !== undefined && (typeof help !== 'string' || help.length === 0)) ||
+    typeof message !== 'string' ||
+    message.length === 0 ||
+    typeof severity !== 'string' ||
+    version !== KOVO_DIAGNOSTIC_VERSION
+  ) {
+    throw new TypeError(`${label} has an invalid diagnostic wire shape.`);
+  }
+  const registered = createRegisteredDiagnostic(code, source === undefined ? {} : { source }, {
+    ...(help === undefined ? {} : { help }),
+    message,
+  });
+  if (registered.severity !== severity) {
+    throw new TypeError(`${label}.severity does not match the registered diagnostic definition.`);
+  }
+  return projectKovoDiagnostic(registered, category);
 }
 
 function assertStaticTrustExactKeys(
@@ -5691,6 +5791,41 @@ function staticDiagnosticFact(
     ...(diagnostic.source === undefined ? {} : { source: diagnostic.source }),
     ...(diagnostic.start === undefined ? {} : { start: diagnostic.start }),
   };
+}
+
+function projectStaticTrustDiagnosticForWorker(
+  diagnostic: CoreGraph.StaticDiagnosticFact,
+): KovoDiagnosticRecord {
+  const registered = createRegisteredDiagnostic(
+    diagnostic.code,
+    diagnostic.source === undefined ? {} : { source: diagnostic.source },
+    {
+      includeHelp: true,
+      ...(diagnostic.message === undefined ? {} : { message: diagnostic.message }),
+    },
+  );
+  if (diagnostic.severity !== undefined && registered.severity !== diagnostic.severity) {
+    throw new TypeError(
+      `Static-trust diagnostic ${diagnostic.code} severity does not match its registry.`,
+    );
+  }
+  return projectKovoDiagnostic(registered, 'proof');
+}
+
+function projectStaticTrustUnregisteredSinkForWorker(
+  sink: CoreGraph.UnregisteredSinkFact,
+): KovoDiagnosticRecord {
+  return projectKovoDiagnostic(
+    createRegisteredDiagnostic(
+      'KV424',
+      {},
+      {
+        includeHelp: true,
+        message: `Unregistered app sink ${stringifyBuildValue(sink.sink)} at ${stringifyBuildValue(sink.site)}; ${sink.safePath}.`,
+      },
+    ),
+    'proof',
+  );
 }
 
 function appendBuildTaskBFiniteDiagnostics(

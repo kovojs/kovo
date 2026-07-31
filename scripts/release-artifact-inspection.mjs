@@ -244,19 +244,25 @@ function scaffoldAndBuildPackedApp({
 
   const hostileSourcePath = path.join(appRoot, 'src', 'components', 'contacts.tsx');
   const originalComponentSource = readFileSync(hostileSourcePath, 'utf8');
-  writeFileSync(
-    hostileSourcePath,
-    [
-      originalComponentSource,
-      'export const ReleaseInspectionLoweredIr = component({',
-      '  render() {',
-      '    return \'<div data-bind="contacts.items">hand-authored lowered IR</div>\';',
-      '  },',
-      '});',
-      '',
-    ].join('\n'),
-    'utf8',
-  );
+  const serverImport = "import { mutationFormAttributes } from '@kovojs/server';\n";
+  const localImports =
+    "import { contactsQuery, type ContactListResult, type ContactRow } from '../queries.js';\n";
+  if (
+    !originalComponentSource.includes(serverImport) ||
+    !originalComponentSource.includes(localImports)
+  ) {
+    throw new Error('packed starter contacts component no longer has the expected import anchors');
+  }
+  const hostileComponentSource = originalComponentSource
+    .replace(
+      serverImport,
+      `${serverImport}import { jsx as releaseInspectionLoweredIr } from '@kovojs/server/jsx-runtime';\n`,
+    )
+    .replace(
+      localImports,
+      `${localImports}\nexport const releaseInspectionLoweredIrProof = releaseInspectionLoweredIr;\n`,
+    );
+  writeFileSync(hostileSourcePath, hostileComponentSource, 'utf8');
   let kv235Check;
   try {
     kv235Check = runCommand(
