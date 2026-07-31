@@ -93,10 +93,11 @@ export function runtimeEnvironmentValue(name: string): string | undefined {
 /**
  * Bind the canonical origin selected by the supported loopback-only development runner.
  *
- * The runner calls this only after its owned HTTP server has bound, so an ephemeral or
- * conflict-shifted port cannot leave authentication pointed at a guessed default. The value is a
- * one-shot framework fact: it is neither inferred from request/forwarded headers nor mutable app
- * configuration (SPEC §9.5.1).
+ * For a strict nonzero loopback port, the runner may bind this immutable configured authority
+ * before listen so it can activate the initial app without exposing a half-ready socket; the
+ * listening callback must then prove the OS-bound address is identical. Dynamic or
+ * conflict-shiftable ports bind only after listen. The value is a one-shot framework fact: it is
+ * neither inferred from request/forwarded headers nor mutable app configuration (SPEC §9.5.1).
  *
  * @internal
  */
