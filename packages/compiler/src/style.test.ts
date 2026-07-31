@@ -64,6 +64,53 @@ export const Button = () => <button {...style.attrs(base.root)}>Button</button>;
     );
     expect(forged.css).toBeNull();
     expect(JSON.stringify(forged)).not.toContain('forged-local-source');
+
+    for (const typeOnlyImport of [
+      "import type { createWithSource } from '@kovojs/style/internal';",
+      "import { type createWithSource } from '@kovojs/style/internal';",
+    ]) {
+      const typeOnlyForgedSource = `
+${typeOnlyImport}
+
+function createWithSource(_source: string) {
+  return (styles: unknown) => styles;
+}
+const base = createWithSource('button.tsx')({
+  root: { color: 'forged-type-only-import' },
+});
+`;
+      const typeOnlyForged = extractKovoStyles(
+        'packages/ui/src/button.tsx',
+        typeOnlyForgedSource,
+        parseComponentModule('packages/ui/src/button.tsx', typeOnlyForgedSource),
+      );
+      expect(typeOnlyForged.css).toBeNull();
+      expect(JSON.stringify(typeOnlyForged)).not.toContain('forged-type-only-import');
+    }
+
+    const mixedImportSource = `
+import {
+  createWithSource as bindStyleSource,
+  type createWithSource as typeOnlyCreateWithSource,
+} from '@kovojs/style/internal';
+
+function typeOnlyCreateWithSource(_source: string) {
+  return (styles: unknown) => styles;
+}
+const trusted = bindStyleSource('button.tsx')({
+  root: { color: 'trusted-mixed-value-import' },
+});
+const forged = typeOnlyCreateWithSource('button.tsx')({
+  root: { color: 'forged-mixed-type-import' },
+});
+`;
+    const mixedImport = extractKovoStyles(
+      'packages/ui/src/button.tsx',
+      mixedImportSource,
+      parseComponentModule('packages/ui/src/button.tsx', mixedImportSource),
+    );
+    expect(mixedImport.css).toContain('color:trusted-mixed-value-import');
+    expect(mixedImport.css).not.toContain('forged-mixed-type-import');
   });
 
   it('lowers static style.create references to readable classes and atomic CSS', () => {

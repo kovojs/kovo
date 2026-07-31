@@ -415,7 +415,9 @@ function styleImportsFromSourceFile(sourceFile: TS.SourceFile): StyleImports {
     ) {
       continue;
     }
-    const namedBindings = statement.importClause?.namedBindings;
+    const importClause = statement.importClause;
+    if (importClause?.isTypeOnly === true) continue;
+    const namedBindings = importClause?.namedBindings;
     if (
       statement.moduleSpecifier.text === styleModuleSpecifier &&
       namedBindings &&
@@ -435,6 +437,7 @@ function styleImportsFromSourceFile(sourceFile: TS.SourceFile): StyleImports {
           elementIndex,
           'Style named imports',
         ) as TS.ImportSpecifier;
+        if (element.isTypeOnly) continue;
         if ((element.propertyName ?? element.name).text === styleTokensExportName) {
           compilerSetAdd(publicTokenNames, element.name.text);
         }
@@ -455,6 +458,7 @@ function styleImportsFromSourceFile(sourceFile: TS.SourceFile): StyleImports {
           elementIndex,
           'Internal style named imports',
         ) as TS.ImportSpecifier;
+        if (element.isTypeOnly) continue;
         if ((element.propertyName ?? element.name).text === styleCreateWithSourceExportName) {
           compilerSetAdd(sourceBoundCreateNames, element.name.text);
         }
