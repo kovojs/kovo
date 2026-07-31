@@ -29,7 +29,9 @@ async function withCwd<Value>(cwd: string, operation: () => Promise<Value>): Pro
   }
 }
 
-describe('build/export single Vite runnable environment', () => {
+// Run 30612746165 exhausted the 30s default after 30.55s; the same three-command proof takes
+// 21.79s locally. Keep roughly three hosted ceilings while retaining a finite regression bound.
+describe('build/export single Vite runnable environment', { timeout: 90_000 }, () => {
   it('evaluates a current app contract through the production transforms and exports HTML', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-runnable-export-'));
     const appPath = join(root, 'app.tsx');

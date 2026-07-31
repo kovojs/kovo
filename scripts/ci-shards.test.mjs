@@ -391,12 +391,15 @@ describe('ci-shards', () => {
     ]);
   });
 
-  it('retains measured hosted-runner deadline headroom on the eight timed-out proofs', async () => {
+  it('retains measured hosted-runner deadline headroom on the eleven timed-out proofs', async () => {
     const [
       asyncContextSource,
       sourceCheckSource,
       postgresSource,
       buildExportSource,
+      indexBuildSource,
+      runnableBuildSource,
+      securityOrderSource,
       redirectSource,
       securitySource,
       deferSource,
@@ -412,6 +415,18 @@ describe('ci-shards', () => {
         'utf8',
       ),
       readFile(new URL('../packages/cli/src/commands/build-export.ts', import.meta.url), 'utf8'),
+      readFile(new URL('../packages/cli/src/index.kovo-build.test.ts', import.meta.url), 'utf8'),
+      readFile(
+        new URL('../packages/cli/src/commands/build-export-runnable.test.ts', import.meta.url),
+        'utf8',
+      ),
+      readFile(
+        new URL(
+          '../packages/cli/src/commands/build-export-security-order.test.ts',
+          import.meta.url,
+        ),
+        'utf8',
+      ),
       readFile(
         new URL(
           '../packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts',
@@ -443,6 +458,35 @@ describe('ci-shards', () => {
     expect(sourceCheckSource).toContain('}, 360_000);');
     expect(postgresSource.match(/\}, 600_000\);/gu)).toHaveLength(2);
     expect(buildExportSource).toContain('const staticTrustWorkerTimeoutMs = 300_000;');
+    expect(indexBuildSource).toContain('const BUILD_INTEGRATION_TEST_TIMEOUT_MS = 90_000;');
+    expect(indexBuildSource).toContain(
+      "describe('kovo build', { concurrent: false, timeout: BUILD_INTEGRATION_TEST_TIMEOUT_MS }",
+    );
+    expect(indexBuildSource).toContain('afterEach(() => {');
+    expect(runnableBuildSource).toContain(
+      "describe('build/export single Vite runnable environment', { timeout: 90_000 }",
+    );
+    expect(securityOrderSource).toContain('const KOVO_CLI_PROCESS_TIMEOUT_MS = 120_000;');
+    expect(securityOrderSource).toContain(
+      "describe('build/export security bootstrap ordering', { concurrent: false }",
+    );
+    expect(securityOrderSource).toContain('timeout: KOVO_CLI_PROCESS_TIMEOUT_MS,');
+    const cacheSymlinkStart = securityOrderSource.indexOf(
+      "it('never follows an app-planted static-analysis cache symlink",
+    );
+    const cacheSymlinkEnd = securityOrderSource.indexOf('\n\n  it(', cacheSymlinkStart);
+    expect(cacheSymlinkStart).toBeGreaterThan(-1);
+    expect(cacheSymlinkEnd).toBeGreaterThan(cacheSymlinkStart);
+    expect(securityOrderSource.slice(cacheSymlinkStart, cacheSymlinkEnd)).toContain('}, 150_000);');
+    const undeclaredViteStart = securityOrderSource.indexOf(
+      "it('keeps real build and export outside undeclared authored Vite config hooks",
+    );
+    const undeclaredViteEnd = securityOrderSource.indexOf('\n\n  it(', undeclaredViteStart);
+    expect(undeclaredViteStart).toBeGreaterThan(-1);
+    expect(undeclaredViteEnd).toBeGreaterThan(undeclaredViteStart);
+    expect(securityOrderSource.slice(undeclaredViteStart, undeclaredViteEnd)).toContain(
+      '}, 270_000);',
+    );
     expect(redirectSource).toContain('}, 420_000);');
     expect(deferSource).toContain('    480_000,');
     expect(routeOutcomesSource).toContain('const BUILD_DEADLINE_MS = 90_000;');

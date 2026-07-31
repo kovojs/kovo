@@ -35,7 +35,12 @@ import {
   buildStringSplit,
 } from './build-security-intrinsics.js';
 
-describe('build/export security bootstrap ordering', () => {
+// Run 30612746165 killed two healthy CLI children at the old exact 55s ceiling. Locally those
+// proofs take 40.74s and 50.91s; 120s preserves more than two hosted ceilings without making a
+// stuck child unbounded.
+const KOVO_CLI_PROCESS_TIMEOUT_MS = 120_000;
+
+describe('build/export security bootstrap ordering', { concurrent: false }, () => {
   it('rejects evaluated public-cache declarations that drift from compiler evidence', () => {
     const manifest = createCacheInfluenceManifest([
       deriveCacheInfluenceManifestEntry({
@@ -807,7 +812,7 @@ export default app.assemble({
       rmSync(root, { force: true, recursive: true });
       rmSync(outside, { force: true, recursive: true });
     }
-  }, 60_000);
+  }, 150_000);
 
   it('rejects app-authored paranoid disposition mutation before app evaluation', () => {
     const root = cliFixtureRoot('paranoid-disposition');
@@ -1222,7 +1227,7 @@ export default app.assemble({
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
-  }, 120_000);
+  }, 270_000);
 
   it('rejects config and relative-config authority before either module can execute', () => {
     for (const variant of ['direct', 'relative'] as const) {
@@ -1316,7 +1321,7 @@ function runKovoCli(root: string, args: readonly string[], env: NodeJS.ProcessEn
     cwd: root,
     encoding: 'utf8',
     env,
-    timeout: 55_000,
+    timeout: KOVO_CLI_PROCESS_TIMEOUT_MS,
   });
 }
 

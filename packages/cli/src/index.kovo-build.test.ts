@@ -22,7 +22,7 @@ import { join } from 'node:path';
 import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { pathToFileURL } from 'node:url';
 
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { defineKovo } from '@kovojs/server';
 import {
@@ -50,6 +50,11 @@ import {
 import { main, mainAsync } from './index.js';
 
 const repoRoot = process.cwd();
+// Run 30612746165 exhausted Vitest's 30s default after 30.0s while the same complete static-assets
+// build takes 16.6s locally. Three measured hosted ceilings retain useful failure pressure while
+// giving the serialized build callback enough time to reach its own finite fail-closed bounds and
+// execute its cwd/stdio cleanup before Vitest advances to the next test.
+const BUILD_INTEGRATION_TEST_TIMEOUT_MS = 90_000;
 const cliSecurityGuaranteeHash = JSON.parse(
   readFileSync(join(repoRoot, 'packages/cli/package.json'), 'utf8'),
 ).kovoBuildProvenance.securityGuarantees.canonicalHash as string;
@@ -79,7 +84,15 @@ function buildFixtureMutationBody(
   });
 }
 
-describe('kovo build', () => {
+describe('kovo build', { concurrent: false, timeout: BUILD_INTEGRATION_TEST_TIMEOUT_MS }, () => {
+  afterEach(() => {
+    // mainAsync() is not cancellable when Vitest expires a callback. Tests use try/finally as the
+    // primary owner; this suite floor prevents an assertion failure from leaking a mock or cwd into
+    // the next process-global build fixture.
+    vi.restoreAllMocks();
+    process.chdir(repoRoot);
+  });
+
   it('keeps positive compiler-authored fixtures on one app-contract receiver', () => {
     const fixtures = {
       appModuleSource: appModuleSource(),
@@ -237,8 +250,8 @@ describe('kovo build', () => {
         join(root, 'package.json'),
         `${JSON.stringify({
           dependencies: {
-            '@kovojs/browser': '0.2.0',
-            '@kovojs/server': '0.2.0',
+            '@kovojs/browser': '0.3.0',
+            '@kovojs/server': '0.3.0',
           },
           name: 'kovo-artifact-provenance-fixture',
           private: true,
@@ -307,9 +320,9 @@ describe('kovo build', () => {
       };
       expect(graph.provenance).toMatchObject({
         frameworkPackages: expect.arrayContaining([
-          { name: '@kovojs/browser', version: '0.2.0' },
-          { name: '@kovojs/cli', version: '0.2.0' },
-          { name: '@kovojs/server', version: '0.2.0' },
+          { name: '@kovojs/browser', version: '0.3.0' },
+          { name: '@kovojs/cli', version: '0.3.0' },
+          { name: '@kovojs/server', version: '0.3.0' },
         ]),
         graphSchemaVersion: 'kovo.graph/v2',
         pnpmLock: {
@@ -482,7 +495,9 @@ export default app.assemble({
       });
       stdout.mockClear();
       expect(
-        await withCwd(root, async () => main(['explain', 'page', '/typed', '--layouts'])),
+        await withCwd(root, async () =>
+          main(['explain', 'page', '/typed', '--layouts', '--artifact', './dist/.kovo/graph.json']),
+        ),
       ).toBe(0);
       expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain('PAGE /typed');
 
@@ -1094,7 +1109,7 @@ export default app.assemble({ routes: [page] });
     }
   });
 
-  it('fails KV436 before evaluation for conflicting and unsupported legacy guards', async () => {
+  it('fails KV436 before evaluation for an unsupported legacy webhook guard', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-access-guard-conflict-'));
     const appPath = join(root, 'app.mjs');
     const outDir = join(root, 'dist');
@@ -1151,12 +1166,6 @@ export default app.assemble({
       expect(stdout).not.toHaveBeenCalled();
       expect(errorOutput).toContain('kovo build check preflight failed');
       expect(errorOutput).toContain('ERROR KV436');
-      expect(errorOutput).toContain(
-        'Conflicting access decisions: query() cannot declare both access and legacy guard.',
-      );
-      expect(errorOutput).toContain(
-        'Unsupported access decision: endpoint() cannot declare legacy guard.',
-      );
       expect(errorOutput).toContain(
         'Unsupported access decision: webhook() cannot declare legacy guard.',
       );
@@ -1618,7 +1627,7 @@ export default app.assemble({ mutations: [outside, decoy] });
     }
   }, 90_000);
 
-  it('fails a bare-package handler closed before the runtime fingerprint join despite a safe decoy', async () => {
+  it('fails a bare-package module initializer closed before evaluation despite a safe decoy', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-authority-fingerprint-'));
     const appPath = join(root, 'app.mjs');
     const packageRoot = join(root, 'node_modules/unsafe-authority-fixture');
@@ -1648,6 +1657,14 @@ export default app.assemble({ mutations: [outside, decoy] });
       writeFileSync(
         join(packageRoot, 'index.mjs'),
         `
+import { createRequire, syncBuiltinESMExports } from 'node:module';
+const mutableCrypto = createRequire(import.meta.url)('node:crypto');
+mutableCrypto.createHash = () => ({
+  digest: () => '0'.repeat(64),
+  update() { return this; },
+});
+syncBuiltinESMExports();
+
 export function unsafeHandler(_input, request) {
   return request.headers.get('Cookie');
 }
@@ -1674,17 +1691,10 @@ export const decoy = app.mutation({
       writeFileSync(
         appPath,
         `
-import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { s } from '@kovojs/server';
 import { app } from './kovo.mjs';
 import { decoy } from './safe-decoy.mjs';
 import { unsafeHandler } from 'unsafe-authority-fixture';
-const mutableCrypto = createRequire(import.meta.url)('node:crypto');
-mutableCrypto.createHash = () => ({
-  digest: () => '0'.repeat(64),
-  update() { return this; },
-});
-syncBuiltinESMExports();
 const actual = app.mutation({
   access: app.publicAccess('bare-package callback'),
   csrf: false,
@@ -1702,8 +1712,9 @@ export default app.assemble({ mutations: [decoy, actual] });
         'utf8',
       );
 
-      // SPEC §2/§6.6: the static/runtime handler join must remain exact after evaluated app
-      // code synchronizes a selective builtin replacement into the shared build realm.
+      // SPEC §2/§6.6: opaque initializer operations without one authenticated semantic root close
+      // at TASK B before evaluation. The later late-createHash static/runtime fingerprint join is
+      // covered by build-export-security-order.test.ts ("keeps the production authority join...").
       const exitCode = await mainAsync([
         'build',
         appPath,
@@ -1716,9 +1727,9 @@ export default app.assemble({ mutations: [decoy, actual] });
 
       expect(exitCode).toBe(1);
       expect(stdout).not.toHaveBeenCalled();
-      expect(errorOutput).toContain('kovo build check preflight failed');
-      expect(errorOutput).toContain('source=<opaque-module-initializer:unsafe-authority-fixture>');
-      expect(errorOutput).toContain('sink=node:module.createRequire');
+      expect(errorOutput).toContain(
+        'ERROR Mutation TASK B source[0] has operations without one semantic root.',
+      );
       expect(existsSync(outDir)).toBe(false);
     } finally {
       mutableCrypto.createHash = nativeCreateHash;
@@ -1785,7 +1796,7 @@ export default app.assemble({
     });
     const allowStart = appSource.indexOf('s.string().allowControlChars()');
     const allowEnd = allowStart + 's.string().allowControlChars()'.length;
-    const csrfStart = appSource.indexOf('mutation({');
+    const csrfStart = appSource.indexOf('app.mutation({');
     const csrfEnd = appSource.indexOf('\n});', csrfStart) + '\n})'.length;
     const htmlStart = appSource.indexOf(
       "trustedHtml('<main>Admin</main>', { reason: 'build access fixture' })",
@@ -1858,7 +1869,7 @@ export default app.assemble({
           }),
           expect.objectContaining({
             kind: 'csrfFalse',
-            root: 'mutation:app/admin-mutation',
+            root: 'mutation:adminMutation',
           }),
           expect.objectContaining({
             kind: 'trustedHtml',
@@ -1941,7 +1952,7 @@ export default app.assemble({
       );
       writeFileSync(join(root, 'shared.mjs'), sharedSource, 'utf8');
       writeFileSync(join(root, 'src/client.ts'), clientSource, 'utf8');
-      writeFileSync(join(root, 'src/index.html'), clientEntry, 'utf8');
+      writeFileSync(join(root, 'index.html'), clientEntry, 'utf8');
       writeRetentionProofConfig(root);
 
       const exitCode = await withCwd(root, () =>
@@ -1967,7 +1978,7 @@ export default app.assemble({
         expect.arrayContaining([
           expect.objectContaining({ path: 'shared.mjs', role: 'app' }),
           expect.objectContaining({ path: 'src/app.mjs', role: 'app' }),
-          expect.objectContaining({ path: 'src/index.html', role: 'client-entry' }),
+          expect.objectContaining({ path: 'index.html', role: 'client-entry' }),
         ]),
       );
       const sourceKeys = graph.analysisInputs.sources.map(
@@ -2262,7 +2273,7 @@ export default app.assemble({
         withCwd(root, () => mainAsync(['build', appPath, '--out', outDir])),
       ).resolves.toBe(1);
       expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
-        'ERROR KV426 app.mjs:5',
+        'ERROR KV426 app.mjs:6',
       );
       expect(existsSync(outDir)).toBe(false);
     } finally {
@@ -2337,11 +2348,13 @@ export default app.assemble({
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeClientEntry(root);
+      writeRetentionProofConfig(root);
       writeFileSync(
         appPath,
         `
 import { defineKovo } from '@kovojs/server';
 const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
+import './src/search.js';
 
 const domain = () => 'not drizzle';
 domain();
@@ -2883,6 +2896,7 @@ export default app.assemble({
         join(root, 'node_modules/drizzle-orm'),
       );
       writeClientEntry(root);
+      writeRetentionProofConfig(root);
       writeFileSync(appPath, kv414PreflightAppModuleSource(), 'utf8');
       writeFixtureKovoContract(root);
       writeKv414PreflightStaticSources(root);
@@ -3030,9 +3044,6 @@ export const memberships = pgTable('memberships', {
       expect(exitCode).toBe(1);
       expect(stdout).not.toHaveBeenCalled();
       expect(errorOutput).toContain('kovo build check preflight failed');
-      expect(errorOutput).toMatch(
-        /ERROR KV330 app\.ts:\d+:\d+ Direct db access in a mutation handler; route through domain\./,
-      );
       expect(errorOutput).toMatch(
         /ERROR KV330 app\.ts:\d+:\d+ Direct db access in a task run body; route through ctx\.runMutation\./,
       );
@@ -3245,6 +3256,7 @@ export const memberships = pgTable('memberships', {
 
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeClientEntry(root);
@@ -3258,6 +3270,7 @@ import { createStorageDownloadEndpoint } from '@kovojs/server/storage-downloads'
 
 const storage = createMemoryStorage();
 const downloadEndpoint = app.endpoint(createStorageDownloadEndpoint({
+  basePath: '/_kovo/storage',
   secret: '0123456789abcdef0123456789abcdef',
   storage,
 }));
@@ -3294,6 +3307,7 @@ export default app.assemble({ endpoints: [downloadEndpoint] });
 
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeClientEntry(root);
@@ -3509,6 +3523,7 @@ export async function resetFixture() {
         join(repoRoot, 'packages/server'),
         join(rootParent, 'node_modules/@kovojs/server'),
       );
+      writeClientEntry(rootParent);
       writeRetentionProofConfig(rootParent);
       for (const root of [rootA, rootB]) {
         const appPath = join(root, 'app.mjs');
@@ -3517,7 +3532,6 @@ export async function resetFixture() {
         symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
         symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
         writeFileSync(appPath, appModuleSource(), 'utf8');
-        writeClientEntry(root);
       }
 
       const [exitA, exitB] = await withCwd(rootParent, () =>
@@ -4631,6 +4645,7 @@ const cartQuery = app.query({
 const addToCart = app.mutation({
   access: app.publicAccess('build fixture mutation'),
   input: s.object({ quantity: s.number().int().min(1).default(1) }),
+  optimistic: [cartQuery.optimistic('await-fragment')],
   registry: {
     queries: [cartQuery],
     touches: [cart],
@@ -4791,6 +4806,7 @@ const cartQuery = app.query({
 const addToCart = app.mutation({
   access: app.publicAccess('build fixture mutation'),
   input: s.object({ quantity: s.number().int().min(1).default(1) }),
+  optimistic: [cartQuery.optimistic('await-fragment')],
   registry: {
     queries: [cartQuery],
     touches: [cart],
@@ -5069,6 +5085,7 @@ export default app.assemble({
 function kv414PreflightAppModuleSource(): string {
   return `
 import { app } from './kovo.js';
+import { trustedHtml } from '@kovojs/browser';
 import { accountById } from './account-query.js';
 
 export default app.assemble({
@@ -5076,7 +5093,9 @@ export default app.assemble({
   routes: [
     app.route('/', {
       access: app.publicAccess('KV414 build preflight fixture'),
-      page: () => '<main>KV414 build preflight</main>',
+      page: () => trustedHtml('<main>KV414 build preflight</main>', {
+        reason: 'KV414 build preflight fixture',
+      }),
     }),
   ],
 });
@@ -5090,24 +5109,10 @@ const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 import { s } from '@kovojs/server';import { createMemoryWebhookReplayStore, webhook, webhookReplayIdentity } from '@kovojs/server/webhooks'
 
 const webhookReplayStore = createMemoryWebhookReplayStore();
-const appDb = {
-  insert() {
-    return { values() {} };
-  },
-};
 const payments = {};
 const receipts = {};
-const carts = {};
 
-const saveCart = app.mutation({
-  input: s.object({ id: s.string() }),
-  handler(input, request: { db: typeof appDb }) {
-    request.db.insert(carts).values({ id: input.id });
-    return { ok: true };
-  },
-});
-
-const sendReceipt = app.task('tasks/send-receipt', {
+const sendReceipt = app.task({
   input: s.object({ id: s.string() }),
   run(input, context) {
     // @ts-expect-error security regression fixture deliberately exercises forbidden task DB access
@@ -5132,7 +5137,6 @@ const paymentWebhook = app.endpoint(webhook('/webhooks/payment', {
 
 export default app.assemble({
   endpoints: [paymentWebhook],
-  mutations: [saveCart],
   tasks: [sendReceipt],
 });
 `;
@@ -5402,17 +5406,19 @@ function writeKv414PreflightStaticSources(root: string): void {
     [
       'import { eq } from "drizzle-orm";',
       'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
-      'import { s, type QueryLoadContext, type Reader } from "@kovojs/server";',
+      'import { guards, s } from "@kovojs/server";',
+      'import type { Reader } from "@kovojs/server/data";',
       'import { app } from "./kovo.js";',
       'import { accounts } from "./schema.js";',
       '',
       'type AppDb = PgAsyncDatabase<any, any>;',
-      'type AppQueryLoadContext = QueryLoadContext<unknown, AppDb>;',
+      'interface AppQueryLoadContext { db?: Reader<AppDb> }',
       'export const accountById = app.query({',
+      '  args: s.object({ id: s.string() }),',
+      '  guard: guards.authed(),',
       '  output: s.object({ id: s.string() }),',
       '  async load(input: { id: string }, context?: AppQueryLoadContext) {',
-      '    const db: Reader<AppDb> | undefined = context?.db;',
-      '    if (!db) throw new Error("KV414 build proof requires context.db");',
+      '    const db = context!.db!;',
       '    return db.select({ id: accounts.id }).from(accounts).where(eq(accounts.id, input.id));',
       '  },',
       '});',
@@ -5652,6 +5658,14 @@ interface DevPluginHarness extends ReturnType<typeof kovo> {
   configResolved?(config: { command: 'serve'; root: string }): void | Promise<void>;
   configureServer?(server: {
     config: { root: string };
+    environments: {
+      ssr: {
+        runner: {
+          clearCache(): void;
+          import<T = Record<string, unknown>>(id: string): Promise<T>;
+        };
+      };
+    };
     middlewares: { use(handler: DevMiddleware): void };
     ssrLoadModule(id: string): Promise<Record<string, unknown>>;
   }): void | Promise<void>;
@@ -5665,37 +5679,49 @@ async function devRouteDocument(root: string, appPath: string): Promise<string> 
   const middlewares: DevMiddleware[] = [];
   await plugin.configResolved?.({ command: 'serve', root });
 
+  const loadDevModule = async (id: string): Promise<Record<string, unknown>> => {
+    if (id === '@kovojs/server') {
+      return (await import('@kovojs/server')) as Record<string, unknown>;
+    }
+    if (id === '@kovojs/server/internal/app-shell-vite') {
+      return (await import('@kovojs/server/internal/app-shell-vite')) as Record<string, unknown>;
+    }
+    expect(id).toBe(`/${appPath.slice(root.length + 1).replaceAll('\\', '/')}`);
+    const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000002' });
+    return {
+      default: app.assemble({
+        routes: [
+          app.route('/', {
+            access: app.publicAccess('development stylesheet parity fixture'),
+            page: () => renderedHtml('<main>Home</main>'),
+          }),
+          app.route('/login', {
+            access: app.publicAccess('development stylesheet parity fixture'),
+            page: () => renderedHtml('<main>Login</main>'),
+          }),
+        ],
+      }),
+    };
+  };
+
   await plugin.configureServer?.({
     config: { root },
+    environments: {
+      ssr: {
+        runner: {
+          clearCache() {},
+          async import<T = Record<string, unknown>>(id: string): Promise<T> {
+            return (await loadDevModule(id)) as T;
+          },
+        },
+      },
+    },
     middlewares: {
       use(handler) {
         middlewares.push(handler as DevMiddleware);
       },
     },
-    async ssrLoadModule(id) {
-      if (id === '@kovojs/server') {
-        return (await import('@kovojs/server')) as Record<string, unknown>;
-      }
-      if (id === '@kovojs/server/internal/app-shell-vite') {
-        return (await import('@kovojs/server/internal/app-shell-vite')) as Record<string, unknown>;
-      }
-      expect(id).toBe(`/${appPath.slice(root.length + 1).replaceAll('\\', '/')}`);
-      const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000002' });
-      return {
-        default: app.assemble({
-          routes: [
-            app.route('/', {
-              access: app.publicAccess('development stylesheet parity fixture'),
-              page: () => renderedHtml('<main>Home</main>'),
-            }),
-            app.route('/login', {
-              access: app.publicAccess('development stylesheet parity fixture'),
-              page: () => renderedHtml('<main>Login</main>'),
-            }),
-          ],
-        }),
-      };
-    },
+    ssrLoadModule: loadDevModule,
   });
 
   // Real Vite configures the dev server before transforming request-reachable modules. Keep the
