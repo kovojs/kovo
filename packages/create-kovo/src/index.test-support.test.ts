@@ -1,13 +1,15 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
 import {
   addPostgresParanoidFollowup8Shapes,
   addPostgresParanoidPhase5DogfoodProof,
+  addRuntimeMutationSafetyProofs,
   formatGeneratedProjectSources,
 } from './index.build.test-support.js';
 import { writeKovoProject } from './index.js';
@@ -22,6 +24,11 @@ import {
   STARTER_SERVER_READY_TIMEOUT_MS,
   stopProcess,
 } from './index.test-support.js';
+
+const soundSubsetScript = fileURLToPath(
+  new URL('../../cli/src/commands/sound-subset.mjs', import.meta.url),
+);
+const repoNodeModules = fileURLToPath(new URL('../../../node_modules', import.meta.url));
 
 describe('create-kovo starter test support', () => {
   it('keeps Vitest outside every generated-starter child and cleanup deadline', () => {
@@ -277,6 +284,47 @@ describe('create-kovo starter test support', () => {
       rmSync(root, { force: true, recursive: true });
     }
   });
+
+  it.each([
+    { dialect: undefined, label: 'default' },
+    { dialect: 'sqlite' as const, label: 'SQLite' },
+  ])(
+    'keeps the $label readonly-mutation proof inside the SPEC §6.6 sound subset',
+    ({ dialect }) => {
+      const root = mkdtempSync(join(tmpdir(), 'create-kovo-readonly-proof-sound-subset-'));
+
+      try {
+        writeKovoProject(root, {
+          ...(dialect === undefined ? {} : { dialect }),
+          name: 'Readonly Proof Sound Subset',
+        });
+        addRuntimeMutationSafetyProofs(root, { includeReadonlyMutationAttempt: true });
+
+        const classifier = spawnSync(process.execPath, [soundSubsetScript], {
+          cwd: root,
+          encoding: 'utf8',
+          env: {
+            ...process.env,
+            KOVO_SOUND_SUBSET_FORMAT: 'json',
+            NODE_PATH: repoNodeModules,
+          },
+        });
+        const report = JSON.parse(classifier.stdout) as {
+          readonly findings?: readonly unknown[];
+          readonly version?: string;
+        };
+        expect(report).toEqual({ findings: [], version: 'kovo-sound-subset/v1' });
+        expect(classifier.status, classifier.stderr).toBe(0);
+
+        const proofSource = readFileSync(join(root, 'src/runtime-safety-proofs.ts'), 'utf8');
+        expect(proofSource).toContain('const sqlMethod = readonlyProperty(readonlyDb, method);');
+        expect(proofSource).not.toContain('readonlyDb as Record');
+        expect(proofSource).not.toMatch(/\[method\]!/u);
+      } finally {
+        rmSync(root, { force: true, recursive: true });
+      }
+    },
+  );
 
   it.skipIf(process.platform === 'win32')(
     'treats an already signaled process as terminal without waiting for a past exit event',

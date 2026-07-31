@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import fs, {
   existsSync,
   mkdirSync,
@@ -116,6 +117,154 @@ describe('extractPackageComponentCss over @kovojs/ui', () => {
     expect(css).toMatch(/@keyframes kv-keyframes-[a-z0-9]+\{0%, 100%\{opacity:1\}/);
   });
 });
+
+describe('extractPackageComponentCss over published vendored UI source', () => {
+  it('recovers exact public src/<name>.tsx snapshots from dist-only exports', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-package-css-packed-vendored-'));
+    const packageDir = join(root, 'node_modules', '@fixture', 'ui');
+    const source = [
+      "import * as style from '@kovojs/style';",
+      "const base = style.create({ root: { color: 'packed-vendored-button' } });",
+      'export function Button() {',
+      '  return <button {...style.attrs(base.root)}>Button</button>;',
+      '}',
+      '',
+    ].join('\n');
+
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      mkdirSync(join(packageDir, 'src'), { recursive: true });
+      writeFileSync(join(root, 'src/app.tsx'), `import '@fixture/ui/button';`, 'utf8');
+      writeFileSync(join(packageDir, 'src/button.tsx'), source, 'utf8');
+      writeFileSync(
+        join(packageDir, 'package.json'),
+        JSON.stringify({
+          exports: {
+            './button': {
+              types: './dist/button.d.mts',
+              default: './dist/button.mjs',
+            },
+          },
+          kovo: {
+            vendoredSource: true,
+            vendoredSourceHashes: { button: vendoredSourceHash(source) },
+          },
+          name: '@fixture/ui',
+        }),
+        'utf8',
+      );
+
+      const result = extractPackageComponentCss('@fixture/ui', {
+        fileName: join(root, 'src/app.tsx'),
+        packagePrefixDiscoveryRoot: root,
+        source: `import '@fixture/ui/button';`,
+      });
+
+      expect(result.sourceFiles).toEqual([join(packageDir, 'src/button.tsx')]);
+      expect(result.diagnostics).toEqual([]);
+      expect(result.css).toContain('.kv-button-');
+      expect(result.css).toContain('color:packed-vendored-button');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('fails closed when the hash ledger drifts or names a non-public source', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-package-css-packed-untrusted-'));
+    const packageDir = join(root, 'node_modules', '@fixture', 'ui');
+    const manifestPath = join(packageDir, 'package.json');
+    const source = [
+      "import * as style from '@kovojs/style';",
+      "const base = style.create({ root: { color: 'must-not-ship' } });",
+      'export const Button = () => <button {...style.attrs(base.root)}>Button</button>;',
+      '',
+    ].join('\n');
+    const extract = () =>
+      extractPackageComponentCss('@fixture/ui', {
+        fileName: join(root, 'src/app.tsx'),
+        packagePrefixDiscoveryRoot: root,
+        source: `import '@fixture/ui/button';`,
+      });
+
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      mkdirSync(join(packageDir, 'src'), { recursive: true });
+      writeFileSync(join(root, 'src/app.tsx'), `import '@fixture/ui/button';`, 'utf8');
+      writeFileSync(join(packageDir, 'src/button.tsx'), source, 'utf8');
+      writeFileSync(
+        manifestPath,
+        JSON.stringify({
+          exports: { './button': { default: './dist/button.mjs' } },
+          kovo: {
+            vendoredSource: false,
+            vendoredSourceHashes: { button: vendoredSourceHash(source) },
+          },
+          name: '@fixture/ui',
+        }),
+        'utf8',
+      );
+
+      expect(extract()).toEqual({ css: null, cssAssets: [], diagnostics: [], sourceFiles: [] });
+
+      writeFileSync(
+        manifestPath,
+        JSON.stringify({
+          exports: { './button': { default: './dist/button.mjs' } },
+          kovo: {
+            vendoredSource: true,
+            vendoredSourceHashes: { button: `sha256-${'A'.repeat(43)}` },
+          },
+          name: '@fixture/ui',
+        }),
+        'utf8',
+      );
+
+      const mismatch = extract();
+      expect(mismatch.css).toBeNull();
+      expect(mismatch.sourceFiles).toEqual([]);
+      expect(mismatch.diagnostics).toEqual([
+        expect.objectContaining({
+          fileName: 'src/button.tsx',
+          message: expect.stringContaining('hash mismatch'),
+        }),
+      ]);
+
+      writeFileSync(
+        manifestPath,
+        JSON.stringify({
+          exports: { './button': { default: './dist/button.mjs' } },
+          kovo: {
+            vendoredSource: true,
+            vendoredSourceHashes: {
+              button: vendoredSourceHash(source),
+              'private-button': vendoredSourceHash(source),
+            },
+          },
+          name: '@fixture/ui',
+        }),
+        'utf8',
+      );
+
+      const surplus = extract();
+      expect(surplus.css).toBeNull();
+      expect(surplus.sourceFiles).toEqual([]);
+      expect(surplus.diagnostics).toEqual([
+        expect.objectContaining({
+          fileName: 'package.json',
+          message: expect.stringContaining('exactly cover'),
+        }),
+      ]);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+});
+
+function vendoredSourceHash(source: string): string {
+  return `sha256-${createHash('sha256')
+    .update(source.endsWith('\n') ? source : `${source}\n`)
+    .digest('base64url')}`;
+}
 
 describe('normalizeNumericLengths (K2: served-CSS length normalizer)', () => {
   it('never px-ifies numeric CSS custom-property (--var) token values (SPEC §13.1)', () => {

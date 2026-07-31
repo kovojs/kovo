@@ -31,9 +31,12 @@ import {
   compilerMapSet,
   compilerObjectKeys,
   compilerOwnDataValue,
+  compilerRegExpExec,
   compilerRegExpReplace,
+  compilerSecureStringEqual,
   compilerSetAdd,
   compilerSetHas,
+  compilerSha256Base64,
   compilerSnapshotDenseArray,
   compilerSnapshotJsonValue,
   compilerStringEndsWith,
@@ -76,7 +79,7 @@ const nativePathResolve = builtinPathResolve;
 
 /** Diagnostic emitted by the first-party package CSS extraction build helper. */
 export interface PackageComponentCssDiagnostic {
-  /** Package-relative source file whose `style.create(...)` produced no CSS. */
+  /** Package-relative source/manifest file that could not yield authenticated CSS. */
   readonly fileName: string;
   readonly message: string;
 }
@@ -118,9 +121,23 @@ export interface AppRouteCssTargetsResult {
 
 interface ResolvedPackage {
   readonly fileSystem: CompilerSourceFileSystem;
-  readonly manifest: { readonly exports?: unknown; readonly name?: string };
+  readonly manifest: {
+    readonly exports?: unknown;
+    readonly kovo?: unknown;
+    readonly name?: string;
+  };
   readonly packageDir: string;
 }
+
+interface PackageComponentSourceDiscovery {
+  readonly diagnostics: readonly PackageComponentCssDiagnostic[];
+  readonly sourceFiles: readonly string[];
+  readonly sourceSnapshots?: ReadonlyMap<string, string>;
+}
+
+const vendoredComponentNamePattern = /^[a-z][a-z0-9-]*$/;
+const vendoredSourceHashPattern = /^sha256-[A-Za-z0-9_-]{43}$/;
+const maximumVendoredComponentSourceBytes = 2 * 1024 * 1024;
 
 /**
  * Extract the StyleX CSS for every styled component file reachable through a
@@ -138,11 +155,20 @@ export function extractPackageComponentCss(
     return { css: null, cssAssets: [], diagnostics: [], sourceFiles: [] };
   }
 
-  return extractComponentCssFromFiles(packageComponentSourceFiles(resolved), {
+  const discovery = packageComponentSources(resolved);
+  const extracted = extractComponentCssFromFiles(discovery.sourceFiles, {
     fileSystem: resolved.fileSystem,
     rootDir: resolved.packageDir,
     resolveStaticImport: resolveLocalStaticImport(resolved.fileSystem),
+    ...(discovery.sourceSnapshots === undefined
+      ? {}
+      : { sourceSnapshots: discovery.sourceSnapshots }),
   });
+  if (discovery.diagnostics.length === 0) return extracted;
+  return {
+    ...extracted,
+    diagnostics: [...discovery.diagnostics, ...extracted.diagnostics],
+  };
 }
 
 /**
@@ -717,15 +743,19 @@ function resolvePackage(
 /**
  * Collect the `.tsx` files a package publishes through its `exports` map. We use
  * `exports` (not a glob) so only the package's public component surface is
- * scanned, matching how an app actually imports it (`@kovojs/ui/button`).
+ * scanned, matching how an app actually imports it (`@kovojs/ui/button`). A
+ * published Kovo UI manifest resolves those exports to `dist/*.mjs`; its explicit
+ * vendored-source ledger is the only fallback authority for the shipped TSX.
  */
-function packageComponentSourceFiles(resolved: ResolvedPackage): string[] {
+function packageComponentSources(resolved: ResolvedPackage): PackageComponentSourceDiscovery {
   const exportsMap = compilerOwnDataValue(
     resolved.manifest,
     'exports',
     'Compiler package manifest',
   );
-  if (!exportsMap || typeof exportsMap !== 'object') return [];
+  if (!exportsMap || typeof exportsMap !== 'object') {
+    return { diagnostics: [], sourceFiles: [] };
+  }
 
   const files: string[] = [];
   const keys = compilerSnapshotDenseArray(
@@ -744,7 +774,170 @@ function packageComponentSourceFiles(resolved: ResolvedPackage): string[] {
       compilerArrayAppend(files, absolute, 'Compiler package component source files');
     }
   }
-  return uniqueSorted(files);
+  const directSourceFiles = uniqueSorted(files);
+  const kovo = compilerOwnDataValue(resolved.manifest, 'kovo', 'Compiler package manifest');
+  if (
+    kovo &&
+    typeof kovo === 'object' &&
+    compilerOwnDataValue(kovo, 'vendoredSource', 'Compiler package kovo metadata') === true
+  ) {
+    return authenticatedVendoredPackageComponentSources(resolved, exportsMap);
+  }
+  if (directSourceFiles.length > 0) {
+    return { diagnostics: [], sourceFiles: directSourceFiles };
+  }
+  return { diagnostics: [], sourceFiles: [] };
+}
+
+function authenticatedVendoredPackageComponentSources(
+  resolved: ResolvedPackage,
+  exportsMap: object,
+): PackageComponentSourceDiscovery {
+  const kovo = compilerOwnDataValue(resolved.manifest, 'kovo', 'Compiler package manifest');
+  if (!kovo || typeof kovo !== 'object') return { diagnostics: [], sourceFiles: [] };
+  if (compilerOwnDataValue(kovo, 'vendoredSource', 'Compiler package kovo metadata') !== true) {
+    return { diagnostics: [], sourceFiles: [] };
+  }
+
+  const hashes = compilerOwnDataValue(
+    kovo,
+    'vendoredSourceHashes',
+    'Compiler package kovo metadata',
+  );
+  if (!hashes || typeof hashes !== 'object') {
+    return vendoredSourceDiscoveryFailure(
+      'package.json',
+      'kovo.vendoredSourceHashes must authenticate every public component source.',
+    );
+  }
+
+  const publicComponentNames = packagePublicComponentNames(exportsMap);
+  const hashKeys = compilerSnapshotDenseArray(
+    compilerObjectKeys(hashes),
+    'Compiler vendored source hash keys',
+  );
+  const authenticatedNames: string[] = [];
+  for (let index = 0; index < hashKeys.length; index += 1) {
+    const name = hashKeys[index]!;
+    const expectedHash = compilerOwnDataValue(hashes, name, 'Compiler vendored source hashes');
+    if (
+      compilerRegExpExec(vendoredComponentNamePattern, name) === null ||
+      typeof expectedHash !== 'string' ||
+      compilerRegExpExec(vendoredSourceHashPattern, expectedHash) === null
+    ) {
+      return vendoredSourceDiscoveryFailure(
+        'package.json',
+        'kovo.vendoredSourceHashes must contain only exact component-name/SHA-256 pairs.',
+      );
+    }
+    compilerArrayAppend(
+      authenticatedNames,
+      name,
+      'Compiler authenticated vendored component names',
+    );
+  }
+
+  const sortedAuthenticatedNames = uniqueSorted(authenticatedNames);
+  if (!sameStringList(publicComponentNames, sortedAuthenticatedNames)) {
+    return vendoredSourceDiscoveryFailure(
+      'package.json',
+      'kovo.vendoredSourceHashes must exactly cover the package public component subpaths.',
+    );
+  }
+
+  const sourceFiles: string[] = [];
+  const sourceSnapshots = compilerCreateMap<string, string>();
+  for (let index = 0; index < publicComponentNames.length; index += 1) {
+    const name = publicComponentNames[index]!;
+    const expectedHash = compilerOwnDataValue(hashes, name, 'Compiler vendored source hashes');
+    if (typeof expectedHash !== 'string') {
+      return vendoredSourceDiscoveryFailure(
+        'package.json',
+        `Missing authenticated vendored source hash for ${name}.`,
+      );
+    }
+
+    const relativeFileName = `src/${name}.tsx`;
+    const absoluteFileName = nativePathResolve(resolved.packageDir, 'src', `${name}.tsx`);
+    if (
+      !isInsideDirectory(resolved.packageDir, absoluteFileName) ||
+      resolved.fileSystem.kind(absoluteFileName) !== 'file'
+    ) {
+      return vendoredSourceDiscoveryFailure(
+        relativeFileName,
+        'Authenticated vendored component source must be a bounded regular src/<name>.tsx file.',
+      );
+    }
+    const source = resolved.fileSystem.readFileBounded(
+      absoluteFileName,
+      maximumVendoredComponentSourceBytes,
+    );
+    if (source === null) {
+      return vendoredSourceDiscoveryFailure(
+        relativeFileName,
+        'Authenticated vendored component source could not be read within the source-size bound.',
+      );
+    }
+    const observedHash = vendoredSourceHash(source);
+    if (!compilerSecureStringEqual(expectedHash, observedHash)) {
+      return vendoredSourceDiscoveryFailure(
+        relativeFileName,
+        `Authenticated vendored component source hash mismatch: expected ${expectedHash}, got ${observedHash}.`,
+      );
+    }
+    compilerArrayAppend(sourceFiles, absoluteFileName, 'Compiler vendored component source files');
+    compilerMapSet(sourceSnapshots, absoluteFileName, source);
+  }
+
+  return {
+    diagnostics: [],
+    sourceFiles: uniqueSorted(sourceFiles),
+    sourceSnapshots,
+  };
+}
+
+function packagePublicComponentNames(exportsMap: object): string[] {
+  const names: string[] = [];
+  const keys = compilerSnapshotDenseArray(
+    compilerObjectKeys(exportsMap),
+    'Compiler package export keys',
+  );
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    if (!compilerStringStartsWith(key, './')) continue;
+    const name = compilerStringSlice(key, 2);
+    if (compilerRegExpExec(vendoredComponentNamePattern, name) === null) continue;
+    const target = compilerOwnDataValue(exportsMap, key, 'Compiler package exports');
+    if (exportTargetPath(target, 0) === null) continue;
+    compilerArrayAppend(names, name, 'Compiler public component export names');
+  }
+  return uniqueSorted(names);
+}
+
+function vendoredSourceHash(source: string): string {
+  const normalized = compilerStringEndsWith(source, '\n') ? source : `${source}\n`;
+  const base64 = compilerSha256Base64(normalized);
+  const withoutPlus = compilerRegExpReplace(/\+/g, base64, '-');
+  const withoutSlash = compilerRegExpReplace(/\//g, withoutPlus, '_');
+  return `sha256-${compilerRegExpReplace(/=+$/, withoutSlash, '')}`;
+}
+
+function sameStringList(left: readonly string[], right: readonly string[]): boolean {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
+}
+
+function vendoredSourceDiscoveryFailure(
+  fileName: string,
+  message: string,
+): PackageComponentSourceDiscovery {
+  return {
+    diagnostics: [{ fileName, message }],
+    sourceFiles: [],
+  };
 }
 
 interface CompilerOwnedAppSources {

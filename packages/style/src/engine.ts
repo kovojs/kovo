@@ -139,10 +139,6 @@ export interface StyleIdentityOptions {
   readonly source?: string;
 }
 
-interface StyleCallSite {
-  readonly fileName: string;
-}
-
 /**
  * @internal Structured result for compiler callers that need both style records
  * and extracted CSS. The compiler ABI consumes this through `@kovojs/style/internal`.
@@ -320,28 +316,47 @@ function resolveStyleIdentity(
   identity: StyleIdentityOptions,
 ): StyleIdentityOptions {
   if (identity.namespace && identity.source) return identity;
-  const callSite = inferStyleCallSite();
+  const callSite = inferStyleCallSite(styles);
   if (!callSite) return identity;
 
   return {
-    namespace: identity.namespace ?? derivedRuntimeStyleNamespace(callSite.fileName, styles),
-    source: identity.source ?? callSite.fileName,
+    namespace: identity.namespace ?? callSite.namespace,
+    source: identity.source ?? callSite.source,
   };
 }
 
-function inferStyleCallSite(): StyleCallSite | null {
+function inferStyleCallSite(
+  styles: Record<string, StyleObject>,
+): { readonly namespace: string; readonly source: string } | null {
   const site = styleStackCallSite();
   if (!site) return null;
-  const filePath = slashPath(site.filePath);
+  return runtimeUiStyleIdentityForCallSite(site.filePath, styles);
+}
+
+/**
+ * Map a first-party UI source or published-dist callsite to the same stable
+ * provenance used by static CSS extraction (SPEC §13.1). Kept off every package
+ * entrypoint; the relative-module export exists so the exact path classifier can
+ * be regression-tested without forging an Error stack.
+ */
+export function runtimeUiStyleIdentityForCallSite(
+  callSiteFilePath: string,
+  styles: Record<string, StyleObject>,
+): { readonly namespace: string; readonly source: string } | null {
+  const filePath = slashPath(callSiteFilePath);
   if (
     !styleStringIncludes(filePath, '/packages/ui/src/') &&
-    !styleStringIncludes(filePath, '/node_modules/@kovojs/ui/src/')
+    !styleStringIncludes(filePath, '/packages/ui/dist/') &&
+    !styleStringIncludes(filePath, '/node_modules/@kovojs/ui/src/') &&
+    !styleStringIncludes(filePath, '/node_modules/@kovojs/ui/dist/')
   ) {
     return null;
   }
 
+  const source = styleSourceFileName(callSiteFilePath);
   return {
-    fileName: styleSourceFileName(site.filePath),
+    namespace: derivedRuntimeStyleNamespace(source, styles),
+    source,
   };
 }
 
@@ -363,12 +378,7 @@ function styleStackCallSite(): { column: number; filePath: string; line: number 
       styleRegExpExec(/\(?([A-Za-z]:\\[^():]+):(\d+):(\d+)\)?$/, frame);
     if (!match) continue;
     const rawFilePath = match[1] ?? '';
-    if (
-      styleStringEndsWith(rawFilePath, '/packages/style/src/engine.ts') ||
-      styleStringEndsWith(rawFilePath, '/packages/style/src/style-security-intrinsics.ts')
-    ) {
-      continue;
-    }
+    if (firstPartyStyleRuntimeFrame(rawFilePath)) continue;
     const filePath = styleStringStartsWith(rawFilePath, 'file://')
       ? new URL(rawFilePath).pathname
       : rawFilePath;
@@ -379,6 +389,16 @@ function styleStackCallSite(): { column: number; filePath: string; line: number 
     };
   }
   return null;
+}
+
+function firstPartyStyleRuntimeFrame(rawFilePath: string): boolean {
+  const filePath = slashPath(rawFilePath);
+  return (
+    styleStringEndsWith(filePath, '/packages/style/src/engine.ts') ||
+    styleStringEndsWith(filePath, '/packages/style/src/style-security-intrinsics.ts') ||
+    styleStringIncludes(filePath, '/packages/style/dist/') ||
+    styleStringIncludes(filePath, '/node_modules/@kovojs/style/dist/')
+  );
 }
 
 function styleSourceFileName(filePath: string): string {

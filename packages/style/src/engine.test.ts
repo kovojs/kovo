@@ -9,7 +9,44 @@ import {
   defineVarsWithCss,
   emitAtomicCss,
   raw,
+  runtimeUiStyleIdentityForCallSite,
 } from './engine.js';
+
+describe('first-party UI runtime style identity (SPEC.md §13.1)', () => {
+  it('keeps packed dist Button classes identical to source-extracted selectors', () => {
+    expect(
+      runtimeUiStyleIdentityForCallSite('/app/node_modules/@kovojs/ui/dist/button.mjs', {
+        root: { color: 'red' },
+      }),
+    ).toEqual({ namespace: 'button', source: 'button.tsx' });
+    expect(
+      runtimeUiStyleIdentityForCallSite('/app/node_modules/@kovojs/ui/dist/button.mjs', {
+        md: { height: 36 },
+        sm: { height: 32 },
+      }),
+    ).toEqual({ namespace: 'button-size', source: 'button.tsx' });
+    expect(
+      runtimeUiStyleIdentityForCallSite('/app/node_modules/@kovojs/ui/dist/button.mjs', {
+        destructive: { color: 'red' },
+        ghost: { color: 'gray' },
+        outline: { color: 'black' },
+        primary: { color: 'blue' },
+        secondary: { color: 'white' },
+      }),
+    ).toEqual({ namespace: 'button-variant', source: 'button.tsx' });
+
+    expect(
+      runtimeUiStyleIdentityForCallSite('/repo/packages/ui/src/button.tsx', {
+        root: { color: 'red' },
+      }),
+    ).toEqual({ namespace: 'button', source: 'button.tsx' });
+    expect(
+      runtimeUiStyleIdentityForCallSite('/app/node_modules/@kovojs/ui-dist/button.mjs', {
+        root: { color: 'red' },
+      }),
+    ).toBeNull();
+  });
+});
 
 // Regression coverage for bugz-3 L10 (SPEC.md §13.1): `defineVars` used to
 // interpolate `String(value)` verbatim into a CSS rule string, so a runtime
