@@ -5,16 +5,49 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  authenticatedPackedJourneyPackages,
   packedTarballPath,
   parseGoldenJourneyArgs,
   validateExternalPackedJourneyManifest,
 } from './golden-journey.mjs';
 import { DEVEX_GOLDEN_RELEASE_SCENARIO } from './devex-golden-contract.mjs';
 import { offlineAgentScenario } from './golden-journey/offline-agent.mjs';
-import { packedAppsScenario } from './golden-journey/packed-app.mjs';
+import {
+  packageSetIdentity as packedAppPackageSetIdentity,
+  packedAppsScenario,
+} from './golden-journey/packed-app.mjs';
+import {
+  authenticatedPackedJourneyPackages as directAuthenticatedPackedJourneyPackages,
+  packageSetIdentity,
+  packedTarballPath as directPackedTarballPath,
+  validateExternalPackedJourneyManifest as directValidateExternalPackedJourneyManifest,
+} from './golden-journey/packed-package-auth.mjs';
 import { manifestPath, repoRoot } from './release-packages.mjs';
 
 describe('golden journey command', () => {
+  it('preserves the established helper exports while narrowing evaluator imports', () => {
+    expect(authenticatedPackedJourneyPackages).toBe(directAuthenticatedPackedJourneyPackages);
+    expect(packedTarballPath).toBe(directPackedTarballPath);
+    expect(validateExternalPackedJourneyManifest).toBe(
+      directValidateExternalPackedJourneyManifest,
+    );
+    expect(packedAppPackageSetIdentity).toBe(packageSetIdentity);
+  });
+
+  it('preserves bytewise package identity ordering in the narrow authentication module', () => {
+    const packages = new Map([
+      ['unicode', { name: 'ä-package', sha512: 'sha512-unicode', version: '3.0.0' }],
+      ['last-ascii', { name: 'z-package', sha512: 'sha512-z', version: '2.0.0' }],
+      ['first-ascii', { name: 'a-package', sha512: 'sha512-a', version: '1.0.0' }],
+    ]);
+
+    expect(packageSetIdentity(packages)).toEqual([
+      { name: 'a-package', sha512: 'sha512-a', version: '1.0.0' },
+      { name: 'z-package', sha512: 'sha512-z', version: '2.0.0' },
+      { name: 'ä-package', sha512: 'sha512-unicode', version: '3.0.0' },
+    ]);
+  });
+
   it('selects the packed offline-agent scenario and repo-owned manifest by default', () => {
     expect(parseGoldenJourneyArgs(['--scenario', offlineAgentScenario])).toEqual({
       packedManifest: manifestPath,

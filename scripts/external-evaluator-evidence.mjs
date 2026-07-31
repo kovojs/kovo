@@ -4,8 +4,10 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { authenticatedPackedJourneyPackages } from './golden-journey.mjs';
-import { packageSetIdentity } from './golden-journey/packed-app.mjs';
+import {
+  authenticatedPackedJourneyPackages,
+  packageSetIdentity,
+} from './golden-journey/packed-package-auth.mjs';
 import { isEd25519Spki, verifyEd25519Spki } from './kovo-certificate-signature.mjs';
 import { validateKnownFailureRegister } from './known-failure-register.mjs';
 import { readBoundedRegularFile } from './lib/bounded-regular-file.mjs';

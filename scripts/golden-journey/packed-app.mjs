@@ -27,6 +27,9 @@ import {
   preserveRedactedFailureArtifact,
   redactSecrets,
 } from './artifacts.mjs';
+import { packageSetIdentity } from './packed-package-auth.mjs';
+
+export { packageSetIdentity };
 
 export const packedAppsScenario = 'packed-apps';
 export const PACKED_APPS_REPORT_SCHEMA = 'kovo.golden-journey/packed-apps/v1';
@@ -778,12 +781,6 @@ export function collectInstalledDependencyMetrics(appRoot, commandRunner = runMe
     installedBytes: installTree.bytes,
     installedFiles: installTree.files,
   };
-}
-
-export function packageSetIdentity(packedPackages) {
-  return [...packedPackages.values()]
-    .map((pkg) => ({ name: pkg.name, sha512: pkg.sha512, version: pkg.version }))
-    .sort((left, right) => compareUtf8(left.name, right.name));
 }
 
 function snapshotPreCrudState(appRoot, { creatorArgs, creatorOutput }) {

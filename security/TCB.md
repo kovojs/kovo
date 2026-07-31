@@ -272,6 +272,14 @@ reviewer honesty remain in the TCB or residual boundary described by SPEC §6.6 
       "reviewTrigger": "Any bump must re-run SQL parser isolation, write-classification, parser mutation, and reproducible-pack evidence."
     },
     {
+      "id": "analysis.oxlint-tsgolint",
+      "dependency": "oxlint-tsgolint",
+      "pinnedVersion": "0.23.0",
+      "integrity": "sha512-3mBv3CoPbh8dFbzfDGIWa2ytZjn2v+3EX4aKRXjIhsoGFzG8GCjfRirz3rwZf1wYbZzsNLTSgpw8VjQuWdp/jA==",
+      "role": "Exact-pinned TypeScript-aware lint sidecar selected and path-authenticated through Vite Plus for framework-owned project-quality checks.",
+      "reviewTrigger": "Any bump must re-run project-quality path authentication, TypeScript-aware lint diagnostics, full-catalog source coverage, analysis-time closure, and reproducible-pack evidence."
+    },
+    {
       "id": "analysis.shiki",
       "dependency": "shiki",
       "pinnedVersion": "3.23.0",
@@ -295,6 +303,7 @@ reviewer honesty remain in the TCB or residual boundary described by SPEC §6.6 
       "analysis.material-color-utilities",
       "analysis.moo",
       "analysis.nearley",
+      "analysis.oxlint-tsgolint",
       "analysis.shiki",
       "analysis.ts-morph",
       "analysis.typescript",
@@ -337,6 +346,10 @@ reviewer honesty remain in the TCB or residual boundary described by SPEC §6.6 
         "reason": "Capability closure resolves a normalized request derived from the statically extracted app package import; the target is application dependency input."
       },
       {
+        "id": "packages/cli/src/commands/build-export-framework-sources.test.ts#import#import( `data:text/javascript;charset=utf-8,${encodeURIComponent( cloudflareUnavailablePgliteModuleSourceForTesting(), )}` )",
+        "reason": "The Cloudflare substitution regression imports only the percent-encoded, framework-owned fixed module body returned by cloudflareUnavailablePgliteModuleSourceForTesting(); it contains no module edges or app/network input and verifies that the generated PGlite substitute fails closed."
+      },
+      {
         "id": "packages/cli/src/commands/build-export-framework-sources.test.ts#require.resolve#createRequire(context.entry).resolve(dependencyName)",
         "reason": "The source-root regression test resolves only manifest-declared first-party @kovojs dependency names from an already resolved framework package entry."
       },
@@ -351,6 +364,10 @@ reviewer honesty remain in the TCB or residual boundary described by SPEC §6.6 
       {
         "id": "packages/cli/src/commands/db.ts#import#import(pathToFileURL(resolvedPath).href)",
         "reason": "The database command imports the author-selected schema module after CLI path resolution; it is application input, not an undeclared third-party package edge."
+      },
+      {
+        "id": "packages/cli/src/commands/vite-plus-bin.ts#require.resolve#requireFromVitePlus.resolve(`${tool}/package.json`)",
+        "reason": "Framework-owned project-quality callers select only oxfmt or oxlint; resolution proceeds only after the bootstrap-resolved exact-pinned Vite Plus manifest names that dependency, then authenticates package name, version, regular-file bin containment, and stable realpath identity."
       },
       {
         "id": "packages/compiler/src/security-analyzer-soundness-oracle.ts#import#import(moduleUrl)",
