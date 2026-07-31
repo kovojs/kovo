@@ -81,7 +81,11 @@ describe('kovo add', () => {
       readFileSync(new URL('../../ui/package.json', import.meta.url), 'utf8'),
     ) as {
       exports: Record<string, string>;
-      kovo: { vendoredSource: boolean; vendoredSourceHashes: Record<string, string> };
+      kovo: {
+        vendoredSource: boolean;
+        vendoredSourceHashes: Record<string, string>;
+        vendoredSourceHelperHashes: Record<string, string>;
+      };
       name: string;
       version: string;
     };
@@ -129,6 +133,11 @@ describe('kovo add', () => {
       expect(entry.source).not.toContain('data-bind=');
       expect(soundSubsetFindings(entry.source), name).toEqual([]);
     }
+
+    expect(
+      vendoredUiComponents.breadcrumb.files.find((file) => file.fileName === 'safe-url.ts')
+        ?.sourceHash,
+    ).toBe(manifest.kovo.vendoredSourceHelperHashes['src/safe-url.ts']);
   });
 
   it('installs missing package dependencies for copied toast source', async () => {

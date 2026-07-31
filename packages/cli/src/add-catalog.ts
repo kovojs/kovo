@@ -1,8 +1,14 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, lstatSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
+import { dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import {
+  compilerSourceModuleSpecifiers,
+  createCompilerSourceFileSystem,
+  type CompilerSourceFileSystem,
+} from '@kovojs/compiler/internal/source-filesystem';
 
 import { KOVO_ADD_COMPONENT_NAMES, type AddComponentName } from './add-component-names.js';
 
@@ -24,7 +30,11 @@ export interface VendoredUiComponent {
 
 interface UiPackageManifest {
   exports?: Record<string, UiPackageExportTarget>;
-  kovo?: { vendoredSource?: boolean; vendoredSourceHashes?: Record<string, string> };
+  kovo?: {
+    vendoredSource?: boolean;
+    vendoredSourceHashes?: Record<string, string>;
+    vendoredSourceHelperHashes?: Record<string, string>;
+  };
   name?: string;
   version?: string;
 }
@@ -35,15 +45,30 @@ const catalogModuleDir = dirname(realpathSync(fileURLToPath(import.meta.url)));
 const catalogRequire = createRequire(import.meta.url);
 const uiPackageRoot = findUiPackageRoot(catalogModuleDir);
 const uiPackageManifestPath = join(uiPackageRoot, 'package.json');
-const uiPackageManifest = readUiPackageManifest();
+const maximumUiManifestBytes = 1024 * 1024;
+const maximumVendoredSourceBytes = 2 * 1024 * 1024;
+const maximumVendoredHelperSourceCount = 16;
+const vendoredSourceHashPattern = /^sha256-[A-Za-z0-9_-]{43}$/;
+const vendoredHelperSourcePathPattern = /^src\/[a-z][a-z0-9-]*\.ts$/;
+const uiPackageFileSystem = createCompilerSourceFileSystem(uiPackageRoot);
+if (uiPackageFileSystem === null) {
+  throw new Error(`@kovojs/ui vendored catalog root is unavailable: ${uiPackageRoot}`);
+}
+const uiPackageManifest = readUiPackageManifest(uiPackageFileSystem);
 
-const vendoredUiComponentEntries = uiPackageComponentEntries(uiPackageManifest);
+const vendoredUiComponentEntries = uiPackageComponentEntries(uiPackageManifest, uiPackageRoot);
 assertFiniteComponentCatalog(vendoredUiComponentEntries);
+const authenticatedUiPackageSources = authenticateVendoredUiPackageSources(
+  uiPackageManifest,
+  vendoredUiComponentEntries,
+  uiPackageRoot,
+  uiPackageFileSystem,
+);
 export const vendoredUiComponents = Object.freeze(
   Object.fromEntries(
     vendoredUiComponentEntries.map(([name, sourcePath]) => [
       name,
-      readVendoredComponent(name, sourcePath),
+      readVendoredComponent(name, sourcePath, authenticatedUiPackageSources),
     ]),
   ),
 ) as Readonly<Record<AddComponentName, VendoredUiComponent>>;
@@ -70,8 +95,14 @@ function assertFiniteComponentCatalog(entries: readonly [string, string][]): voi
   }
 }
 
-function readUiPackageManifest(): UiPackageManifest {
-  const parsed = JSON.parse(readFileSync(uiPackageManifestPath, 'utf8')) as unknown;
+function readUiPackageManifest(fileSystem: CompilerSourceFileSystem): UiPackageManifest {
+  const manifestSource = fileSystem.readFileBounded(uiPackageManifestPath, maximumUiManifestBytes);
+  if (manifestSource === null) {
+    throw new Error(
+      `@kovojs/ui vendored catalog manifest exceeds its source bound or is unavailable: ${uiPackageManifestPath}`,
+    );
+  }
+  const parsed = JSON.parse(manifestSource) as unknown;
   if (!isUiPackageManifest(parsed)) {
     throw new Error(`@kovojs/ui vendored catalog manifest is invalid: ${uiPackageManifestPath}`);
   }
@@ -119,7 +150,10 @@ function findPackageRoot(startDir: string): string {
   }
 }
 
-function uiPackageComponentEntries(manifest: UiPackageManifest): readonly [string, string][] {
+function uiPackageComponentEntries(
+  manifest: UiPackageManifest,
+  packageRoot: string,
+): readonly [string, string][] {
   return Object.entries(manifest.exports ?? {})
     .flatMap(([subpath, target]): [string, string][] => {
       if (subpath === '.' || !subpath.startsWith('./')) return [];
@@ -130,7 +164,7 @@ function uiPackageComponentEntries(manifest: UiPackageManifest): readonly [strin
           `@kovojs/ui export ${subpath} must map to vendored source ./src/${name}.tsx`,
         );
       }
-      return [[name, join(uiPackageRoot, sourceTarget)]];
+      return [[name, join(packageRoot, sourceTarget)]];
     })
     .sort(([left], [right]) => left.localeCompare(right));
 }
@@ -144,10 +178,215 @@ function uiPackageSourceTarget(name: string, target: UiPackageExportTarget): str
   return undefined;
 }
 
-function readVendoredComponent(name: string, sourcePath: string): VendoredUiComponent {
-  const mainSourceHash = verifyVendoredSourceHash(name, sourcePath);
-  const mainSource = readVendoredSource(name, sourcePath).source;
-  const files = vendoredUiFiles(name, sourcePath, mainSource);
+function authenticateVendoredUiPackageSources(
+  manifest: UiPackageManifest,
+  componentEntries: readonly [string, string][],
+  packageRoot: string,
+  fileSystem: CompilerSourceFileSystem,
+): ReadonlyMap<string, string> {
+  const componentHashes = manifest.kovo?.vendoredSourceHashes;
+  if (componentHashes === undefined) {
+    throw new Error(
+      '@kovojs/ui kovo.vendoredSourceHashes must authenticate every public component source',
+    );
+  }
+
+  const componentNames = componentEntries.map(([name]) => name);
+  const componentHashNames = Object.keys(componentHashes).sort();
+  if (!sameStringList(componentNames, componentHashNames)) {
+    throw new Error(
+      '@kovojs/ui kovo.vendoredSourceHashes must exactly cover the public component subpaths',
+    );
+  }
+
+  const sourceSnapshots = new Map<string, string>();
+  for (const [name, sourcePath] of componentEntries) {
+    const expectedHash = componentHashes[name];
+    if (typeof expectedHash !== 'string' || !vendoredSourceHashPattern.test(expectedHash)) {
+      throw new Error(
+        '@kovojs/ui kovo.vendoredSourceHashes must contain only exact component-name/SHA-256 pairs',
+      );
+    }
+    sourceSnapshots.set(
+      sourcePath,
+      readAuthenticatedVendoredSource(
+        packageRoot,
+        fileSystem,
+        `src/${name}.tsx`,
+        expectedHash,
+        'component',
+      ),
+    );
+  }
+
+  const helperHashes = manifest.kovo?.vendoredSourceHelperHashes;
+  if (helperHashes === undefined) {
+    throw new Error(
+      '@kovojs/ui kovo.vendoredSourceHelperHashes must authenticate the relative helper import closure',
+    );
+  }
+  const helperPaths = Object.keys(helperHashes).sort();
+  if (helperPaths.length > maximumVendoredHelperSourceCount) {
+    throw new Error(
+      `@kovojs/ui kovo.vendoredSourceHelperHashes exceeds ${maximumVendoredHelperSourceCount} helper sources`,
+    );
+  }
+
+  const declaredHelperFiles = new Set<string>();
+  for (const helperPath of helperPaths) {
+    const expectedHash = helperHashes[helperPath];
+    if (
+      !vendoredHelperSourcePathPattern.test(helperPath) ||
+      typeof expectedHash !== 'string' ||
+      !vendoredSourceHashPattern.test(expectedHash)
+    ) {
+      throw new Error(
+        '@kovojs/ui kovo.vendoredSourceHelperHashes must contain only exact src/<name>.ts/SHA-256 pairs',
+      );
+    }
+    const sourcePath = resolve(packageRoot, helperPath);
+    declaredHelperFiles.add(sourcePath);
+    sourceSnapshots.set(
+      sourcePath,
+      readAuthenticatedVendoredSource(packageRoot, fileSystem, helperPath, expectedHash, 'helper'),
+    );
+  }
+
+  authenticateVendoredUiHelperClosure(
+    packageRoot,
+    componentEntries.map(([, sourcePath]) => sourcePath),
+    sourceSnapshots,
+    declaredHelperFiles,
+    helperPaths,
+  );
+  return sourceSnapshots;
+}
+
+function readAuthenticatedVendoredSource(
+  packageRoot: string,
+  fileSystem: CompilerSourceFileSystem,
+  relativePath: string,
+  expectedHash: string,
+  kind: 'component' | 'helper',
+): string {
+  const sourcePath = resolve(packageRoot, relativePath);
+  if (vendoredSourcePathContainsSymbolicLink(packageRoot, sourcePath)) {
+    throw new Error(
+      `@kovojs/ui authenticated vendored ${kind} source must be a bounded regular non-symlink file: ${relativePath}`,
+    );
+  }
+  const source = fileSystem.readFileBounded(sourcePath, maximumVendoredSourceBytes);
+  if (source === null || vendoredSourcePathContainsSymbolicLink(packageRoot, sourcePath)) {
+    throw new Error(
+      `@kovojs/ui authenticated vendored ${kind} source could not be read within the source-size and non-symlink bounds: ${relativePath}`,
+    );
+  }
+  const observedHash = sourceHash(source);
+  if (expectedHash !== observedHash) {
+    throw new Error(
+      `@kovojs/ui authenticated vendored ${kind} source hash mismatch for ${relativePath}: expected ${expectedHash}, got ${observedHash}`,
+    );
+  }
+  return source;
+}
+
+function authenticateVendoredUiHelperClosure(
+  packageRoot: string,
+  componentSourcePaths: readonly string[],
+  sourceSnapshots: ReadonlyMap<string, string>,
+  declaredHelperFiles: ReadonlySet<string>,
+  helperPaths: readonly string[],
+): void {
+  const pending = [...componentSourcePaths];
+  const discoveredHelpers = new Set<string>();
+  for (let index = 0; index < pending.length; index += 1) {
+    const sourcePath = pending[index];
+    if (sourcePath === undefined) continue;
+    const source = sourceSnapshots.get(sourcePath);
+    if (source === undefined) {
+      throw new Error(
+        `@kovojs/ui authenticated vendored source closure lost its source snapshot: ${relative(packageRoot, sourcePath)}`,
+      );
+    }
+    for (const specifier of compilerSourceModuleSpecifiers(source)) {
+      if (!specifier.startsWith('.')) continue;
+      const importedSourcePath = resolveAuthenticatedSourceImport(
+        sourceSnapshots,
+        sourcePath,
+        specifier,
+      );
+      if (importedSourcePath === null) {
+        throw new Error(
+          `@kovojs/ui relative import ${specifier} is missing from the authenticated vendored source helper ledger: ${relative(packageRoot, sourcePath)}`,
+        );
+      }
+      if (
+        declaredHelperFiles.has(importedSourcePath) &&
+        !discoveredHelpers.has(importedSourcePath)
+      ) {
+        discoveredHelpers.add(importedSourcePath);
+        pending.push(importedSourcePath);
+      }
+    }
+  }
+
+  for (const helperPath of helperPaths) {
+    if (!discoveredHelpers.has(resolve(packageRoot, helperPath))) {
+      throw new Error(
+        `@kovojs/ui kovo.vendoredSourceHelperHashes must exactly cover the relative helper import closure; this path is extra: ${helperPath}`,
+      );
+    }
+  }
+}
+
+function resolveAuthenticatedSourceImport(
+  sourceSnapshots: ReadonlyMap<string, string>,
+  fromSourcePath: string,
+  specifier: string,
+): string | null {
+  const absolute = resolve(dirname(fromSourcePath), specifier);
+  const extension = extname(absolute);
+  const candidates =
+    extension === '.js' || extension === '.jsx'
+      ? [
+          `${absolute.slice(0, -extension.length)}.ts`,
+          `${absolute.slice(0, -extension.length)}.tsx`,
+        ]
+      : extension === ''
+        ? [
+            absolute,
+            `${absolute}.ts`,
+            `${absolute}.tsx`,
+            join(absolute, 'index.ts'),
+            join(absolute, 'index.tsx'),
+          ]
+        : [absolute];
+  return candidates.find((candidate) => sourceSnapshots.has(candidate)) ?? null;
+}
+
+function vendoredSourcePathContainsSymbolicLink(packageRoot: string, sourcePath: string): boolean {
+  try {
+    return (
+      lstatSync(resolve(packageRoot, 'src')).isSymbolicLink() ||
+      lstatSync(sourcePath).isSymbolicLink()
+    );
+  } catch {
+    return true;
+  }
+}
+
+function readVendoredComponent(
+  name: string,
+  sourcePath: string,
+  sourceSnapshots: ReadonlyMap<string, string>,
+): VendoredUiComponent {
+  const rawMainSource = sourceSnapshots.get(sourcePath);
+  if (rawMainSource === undefined) {
+    throw new Error(`@kovojs/ui authenticated component source is unavailable: ${sourcePath}`);
+  }
+  const mainSourceHash = sourceHash(rawMainSource);
+  const mainSource = readVendoredSource(sourcePath, rawMainSource).source;
+  const files = vendoredUiFiles(name, sourcePath, mainSource, sourceSnapshots);
   return {
     fileName: `${name}.tsx`,
     files,
@@ -161,11 +400,10 @@ function readVendoredComponent(name: string, sourcePath: string): VendoredUiComp
 }
 
 function readVendoredSource(
-  name: string,
   sourcePath: string,
+  rawSource: string,
 ): Pick<VendoredUiComponent, 'requiredPackageDependencies' | 'source'> {
-  verifyVendoredSourceHash(name, sourcePath);
-  const source = vendoredUiComponentSource(readFileSync(sourcePath, 'utf8'));
+  const source = vendoredUiComponentSource(rawSource);
   if (importsUiPackage(source)) {
     throw new Error(`vendored @kovojs/ui source must not import @kovojs/ui: ${sourcePath}`);
   }
@@ -186,18 +424,6 @@ function readVendoredSource(
     requiredPackageDependencies: requiredKovoPackageDependencies(source),
     source,
   };
-}
-
-function verifyVendoredSourceHash(name: string, sourcePath: string): string {
-  const source = readFileSync(sourcePath, 'utf8');
-  const hash = sourceHash(source);
-  const expected = uiPackageManifest.kovo?.vendoredSourceHashes?.[name];
-  if (expected !== hash) {
-    throw new Error(
-      `@kovojs/ui vendored source hash mismatch for ${name}: expected ${expected ?? '(missing)'}, got ${hash}`,
-    );
-  }
-  return hash;
 }
 
 function sourceHash(source: string): string {
@@ -492,19 +718,31 @@ function vendoredUiFiles(
   componentName: string,
   sourcePath: string,
   source: string,
+  sourceSnapshots: ReadonlyMap<string, string>,
 ): readonly VendoredUiFile[] {
   const files = new Map<string, VendoredUiFile>();
-  const queue = [...new Set([`${componentName}.tsx`, ...vendoredRelativeImports(source)])];
+  const queue = [
+    ...new Set([
+      `${componentName}.tsx`,
+      ...vendoredRelativeImports(source, sourcePath, sourceSnapshots),
+    ]),
+  ];
 
   while (queue.length > 0) {
     const fileName = queue.shift();
     if (!fileName || files.has(fileName)) continue;
     const filePath =
       fileName === `${componentName}.tsx` ? sourcePath : join(uiPackageRoot, 'src', fileName);
+    const authenticatedSource = sourceSnapshots.get(filePath);
     const fileSource =
       fileName === `${componentName}.tsx`
         ? source
-        : canonicalVendoredUiComponentSource(readFileSync(filePath, 'utf8'));
+        : authenticatedSource === undefined
+          ? undefined
+          : canonicalVendoredUiComponentSource(authenticatedSource);
+    if (fileSource === undefined) {
+      throw new Error(`@kovojs/ui sibling source lost its authenticated snapshot: ${fileName}`);
+    }
     const file = {
       fileName,
       requiredPackageDependencies: requiredKovoPackageDependencies(fileSource),
@@ -512,7 +750,7 @@ function vendoredUiFiles(
       sourceHash: sourceHash(fileSource),
     } satisfies VendoredUiFile;
     files.set(fileName, file);
-    for (const importedFile of vendoredRelativeImports(fileSource)) {
+    for (const importedFile of vendoredRelativeImports(fileSource, filePath, sourceSnapshots)) {
       if (!files.has(importedFile) && !queue.includes(importedFile)) queue.push(importedFile);
     }
   }
@@ -520,32 +758,33 @@ function vendoredUiFiles(
   return [...files.values()].sort((left, right) => left.fileName.localeCompare(right.fileName));
 }
 
-function vendoredRelativeImports(source: string): readonly string[] {
+function vendoredRelativeImports(
+  source: string,
+  sourcePath: string,
+  sourceSnapshots: ReadonlyMap<string, string>,
+): readonly string[] {
   const files = new Set<string>();
-  const sourceWithoutComments = source
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/^\s*\/\/.*$/gm, '');
-  for (const match of sourceWithoutComments.matchAll(/['"](\.\/[^'"]+)['"]/g)) {
-    const specifier = match[1];
-    if (!specifier) continue;
-    files.add(resolveUiSiblingFileName(specifier.replace(/^\.\//, '')));
+  for (const specifier of compilerSourceModuleSpecifiers(source)) {
+    if (!specifier.startsWith('./')) continue;
+    files.add(resolveUiSiblingFileName(sourcePath, specifier, sourceSnapshots));
   }
   return [...files].sort();
 }
 
-function resolveUiSiblingFileName(name: string): string {
-  if (name.endsWith('.ts') || name.endsWith('.tsx')) return name;
-  if (name.endsWith('.js')) {
-    const tsFile = `${name.slice(0, -3)}.ts`;
-    const tsxFile = `${name.slice(0, -3)}.tsx`;
-    if (existsSync(join(uiPackageRoot, 'src', tsFile))) return tsFile;
-    if (existsSync(join(uiPackageRoot, 'src', tsxFile))) return tsxFile;
+function resolveUiSiblingFileName(
+  sourcePath: string,
+  specifier: string,
+  sourceSnapshots: ReadonlyMap<string, string>,
+): string {
+  const resolved = resolveAuthenticatedSourceImport(sourceSnapshots, sourcePath, specifier);
+  if (resolved === null) {
+    throw new Error(`@kovojs/ui sibling source was not authenticated: ${specifier}`);
   }
-  const tsFile = `${name}.ts`;
-  const tsxFile = `${name}.tsx`;
-  if (existsSync(join(uiPackageRoot, 'src', tsFile))) return tsFile;
-  if (existsSync(join(uiPackageRoot, 'src', tsxFile))) return tsxFile;
-  throw new Error(`@kovojs/ui sibling source was not found: ${name}`);
+  const fileName = relative(resolve(uiPackageRoot, 'src'), resolved);
+  if (fileName === '' || fileName === '..' || fileName.startsWith(`..${sep}`)) {
+    throw new Error(`@kovojs/ui sibling source escaped src/: ${specifier}`);
+  }
+  return fileName;
 }
 
 function canonicalVendoredUiComponentSource(source: string): string {
@@ -778,6 +1017,11 @@ function isUiPackageManifest(value: unknown): value is UiPackageManifest {
           (isRecord(kovoValue.vendoredSourceHashes) &&
             Object.values(kovoValue.vendoredSourceHashes).every(
               (entry) => typeof entry === 'string',
+            ))) &&
+        (kovoValue.vendoredSourceHelperHashes === undefined ||
+          (isRecord(kovoValue.vendoredSourceHelperHashes) &&
+            Object.values(kovoValue.vendoredSourceHelperHashes).every(
+              (entry) => typeof entry === 'string',
             )))))
   );
 }
@@ -795,4 +1039,8 @@ function isAddComponentFileName(value: string): boolean {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function sameStringList(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
