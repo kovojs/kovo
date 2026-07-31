@@ -552,19 +552,24 @@ describe('check-security-classifier-corpus gate', () => {
   });
 
   it('runs load-sensitive corpus files in fresh serial batches without dropping coverage', () => {
+    const staticClassifierFile = 'packages/drizzle/src/trust-escapes-static.test.ts';
+    const factoryAliasTestName =
+      'resolves bounded framework-factory member aliases and fails closed beyond the budget';
+    const betterAuthEnvironmentTestName =
+      'accepts only exact Better Auth environment binding option records';
     const runs = [];
     const result = evaluateSecurityClassifierCorpus({
       corpora: [
         {
           id: 'redos',
           marker: '@kovo-security-classifier-corpus redos',
-          testFiles: ['ordinary.test.ts', 'cpu-budget.test.ts', 'packed-runtime.test.ts'],
+          testFiles: ['ordinary.test.ts', staticClassifierFile, 'packed-runtime.test.ts'],
         },
       ],
       loadIsolatedTestConfigs: [
         {
-          file: 'cpu-budget.test.ts',
-          freshTestNames: ['keeps safe misses bounded'],
+          file: staticClassifierFile,
+          freshTestNames: [factoryAliasTestName, betterAuthEnvironmentTestName],
         },
         {
           file: 'packed-runtime.test.ts',
@@ -572,8 +577,8 @@ describe('check-security-classifier-corpus gate', () => {
         },
       ],
       readText: (file) =>
-        file === 'cpu-budget.test.ts'
-          ? '// @kovo-security-classifier-corpus redos\nkeeps safe misses bounded\n'
+        file === staticClassifierFile
+          ? `// @kovo-security-classifier-corpus redos\n${factoryAliasTestName}\n${betterAuthEnvironmentTestName}\n`
           : file === 'packed-runtime.test.ts'
             ? '// @kovo-security-classifier-corpus redos\nshares one packed witness\n'
             : '// @kovo-security-classifier-corpus redos\n',
@@ -589,15 +594,19 @@ describe('check-security-classifier-corpus gate', () => {
         runOptions: { noFileParallelism: false, testNamePattern: undefined },
       },
       {
-        testFiles: ['cpu-budget.test.ts'],
+        testFiles: [staticClassifierFile],
         runOptions: {
           noFileParallelism: true,
-          testNamePattern: '^(?!.*(?:keeps safe misses bounded)).*$',
+          testNamePattern: `^(?!.*(?:${factoryAliasTestName}|${betterAuthEnvironmentTestName})).*$`,
         },
       },
       {
-        testFiles: ['cpu-budget.test.ts'],
-        runOptions: { noFileParallelism: true, testNamePattern: 'keeps safe misses bounded' },
+        testFiles: [staticClassifierFile],
+        runOptions: { noFileParallelism: true, testNamePattern: factoryAliasTestName },
+      },
+      {
+        testFiles: [staticClassifierFile],
+        runOptions: { noFileParallelism: true, testNamePattern: betterAuthEnvironmentTestName },
       },
       {
         testFiles: ['packed-runtime.test.ts'],
@@ -613,7 +622,7 @@ describe('check-security-classifier-corpus gate', () => {
     ]);
     expect(result).toMatchObject({
       ok: true,
-      testFiles: ['ordinary.test.ts', 'cpu-budget.test.ts', 'packed-runtime.test.ts'],
+      testFiles: ['ordinary.test.ts', staticClassifierFile, 'packed-runtime.test.ts'],
     });
   });
 

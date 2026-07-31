@@ -124,6 +124,15 @@ const LOAD_ISOLATED_TEST_CONFIGS = [
     freshTestNames: ['closes the normalized semantic summary budget with its exact reason'],
   },
   {
+    // These proofs retain their fixed semantic wall bounds. Isolate them from the cumulative load
+    // of this broad classifier file while the complementary batch still runs every other proof.
+    file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+    freshTestNames: [
+      'resolves bounded framework-factory member aliases and fails closed beyond the budget',
+      'accepts only exact Better Auth environment binding option records',
+    ],
+  },
+  {
     file: 'packages/drizzle/src/trust-escapes-static-global-member-lockdown.test.ts',
     freshTestNames: ['keeps 120 distinct iterable and parameter-pattern safe misses bounded'],
   },
