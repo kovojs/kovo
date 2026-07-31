@@ -53,7 +53,7 @@ const transferredSqlSafetyDiagnosticRegistrarDoor =
 const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#diagnosticAt`;
 const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
 const expectedDiagnosticEmissionSiteDigest =
-  '15ca1d2a820666c2196f5a02d63fb889d7357c278f90cd161fb9c4a0bd8977d7';
+  '8c36e5b3a2141eec90225cbca09e5ae5ecf6711cefba59dafcc611e2b5d12233';
 const expectedRootDiagnosticDoorDigest =
   '1660c7877e7a533c282cf38c291a10181bc2e7484d76f479f1d1f41cd51dac77';
 const expectedRegisteredDiagnosticGuardDigest =
@@ -85,7 +85,7 @@ const expectedDiagnosticFactorySinkDigest =
 const expectedDiagnosticEvidenceWitnessDigest =
   '23014067df10912624d8419128d1362787bb212e84ef0aac772d78ad26156aa3';
 const expectedDiagnosticActualLayerReviewDigest =
-  '0c8c5cbdcc216b625fe58aac407aba5fd30f428f1ec6779369e84286118b1a5e';
+  '8c848b39b9e2c92e33d9c8142de21807a2b1c75068772e884cb4798e8001eb12';
 const expectedBlockingStaticExportCollectionDigest =
   '3541644c641aec62abd0743093c653abd953e634f6042b941877b699666c4fdd';
 const expectedCompilerValidatorPipelineDigest =
@@ -128,7 +128,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ['packages/cli/src/bin.ts', '00ebe4233b9aa633b0ffb15fd2b1b2298cfa33164ec3fea3d9c8e79b0ec29b97'],
   [
     'packages/cli/src/commands/build-export.ts',
-    'd1017a6a57ff7444ab4f0993c028bf1ac6e935c959c9d4bf33010d706f55de98',
+    '42981c097af3c603a6e77dddfa3474a21833672c33e2b600159ccaf8d9269d65',
   ],
   [
     'packages/cli/src/commands/build-static-trust-source-hook.mjs',
@@ -136,7 +136,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/cli/src/commands/compile.ts',
-    'a271032195452758f8aab88d62e2249e5e61d7dfa9df7439836689b7d6a68fe5',
+    '9e36c91122559e9ece57b3bc5398f463f5b0ddf309f3b89c664eb664441d4aa9',
   ],
   [
     'packages/cli/src/commands/dev.ts',
@@ -172,7 +172,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/drizzle/src/trust-escapes-static.ts',
-    '74b1bf18fad9c28dccf889402afadbbf3b5f2809d2d4cbcec20b27207b749296',
+    'a04efcc819d0188b4194f88b2753a9eca4280f598fc507d350b919454f8598f0',
   ],
   [
     'packages/icons/scripts/icon-plan.mjs',
@@ -188,7 +188,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/server/src/sql-parser-authority.ts',
-    'ad4eb1800989bd4a18b4767fcdcecf1c1cd0258190369c2964041e2a545a3a7b',
+    '53600bedf95ee71367d168025a70d698b26497710b5f3d612ca0e815cb344e32',
   ],
   [
     'packages/server/src/sqlite.ts',
