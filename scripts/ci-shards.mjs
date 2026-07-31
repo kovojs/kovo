@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
-import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -17,6 +19,12 @@ const DEFAULT_HISTORY_NAME = 'timing-history.json';
 const DEFAULT_DURATION_SECONDS = 5;
 const STARTER_SHARD_COUNT = 10;
 const PACKED_STARTER_MANIFEST = 'packed-kovo-packages.json';
+const STARTER_CADENCES = new Set(['per-pr', 'nightly']);
+const STARTER_LIST_TIMEOUT_MS = 120_000;
+const STARTER_MIN_TIMEOUT_MS = 5 * 60_000;
+const STARTER_MAX_TIMEOUT_MS = 30 * 60_000;
+const CREATE_KOVO_ACCEPTANCE_TEST_PATTERN =
+  /^packages\/create-kovo\/src\/index\.build\.(?:prod-artifact(?:\.[^.]+)*|runtime|scaffold(?:\.[^.]+)*)\.test\.(?:mjs|ts|tsx|js)$/;
 const packedStarterWorkspacePackages = [
   { name: '@kovojs/core', dir: 'core' },
   { name: '@kovojs/style', dir: 'style' },
@@ -33,6 +41,47 @@ const packedStarterWorkspacePackages = [
   { name: '@kovojs/cli', dir: 'cli' },
   { name: 'create-kovo', dir: 'create-kovo' },
 ];
+
+// This is the single ownership registry for create-kovo's production-artifact, runtime, and
+// scaffold acceptance tests. Selector-level starter entries refine an owned file; they never
+// create a second owner. Keep lane names aligned with the one command that executes each file.
+const CREATE_KOVO_ACCEPTANCE_OWNERS = [
+  ['packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts', 'starter'],
+  ['packages/create-kovo/src/index.build.prod-artifact.assets.test.ts', 'starter'],
+  ['packages/create-kovo/src/index.build.prod-artifact.client-ip.test.ts', 'classifier'],
+  ['packages/create-kovo/src/index.build.prod-artifact.contacts.test.ts', 'starter'],
+  ['packages/create-kovo/src/index.build.prod-artifact.defer.test.ts', 'starter'],
+  ['packages/create-kovo/src/index.build.prod-artifact.durable-tasks.lifecycle.test.ts', 'starter'],
+  ['packages/create-kovo/src/index.build.prod-artifact.durable-tasks.retries.test.ts', 'starter'],
+  ['packages/create-kovo/src/index.build.prod-artifact.headers.test.ts', 'starter'],
+  ['packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts', 'starter'],
+  ['packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime-gate.test.ts', 'root'],
+  ['packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime-runner.test.ts', 'root'],
+  ['packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts', 'paranoid'],
+  ['packages/create-kovo/src/index.build.prod-artifact.postgres-external.test.ts', 'starter'],
+  ['packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts', 'starter'],
+  ['packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts', 'starter'],
+  ['packages/create-kovo/src/index.build.prod-artifact.runtime-contracts.test.ts', 'starter'],
+  ['packages/create-kovo/src/index.build.prod-artifact.security.test.ts', 'starter'],
+  ['packages/create-kovo/src/index.build.prod-artifact.sink-census.test.ts', 'c9'],
+  ['packages/create-kovo/src/index.build.prod-artifact.table-security.test.ts', 'starter'],
+  ['packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts', 'starter'],
+  ['packages/create-kovo/src/index.build.runtime.test.ts', 'starter'],
+  ['packages/create-kovo/src/index.build.scaffold.packed-postgres.test.ts', 'starter-packed'],
+  ['packages/create-kovo/src/index.build.scaffold.packed-runtime.test.ts', 'starter-packed'],
+  ['packages/create-kovo/src/index.build.scaffold.packed-sqlite.test.ts', 'starter-packed'],
+  ['packages/create-kovo/src/index.build.scaffold.production.test.ts', 'starter'],
+  ['packages/create-kovo/src/index.build.scaffold.source-check.test.ts', 'starter'],
+  ['packages/create-kovo/src/index.build.scaffold.sqlite.test.ts', 'starter'],
+  ['packages/create-kovo/src/index.build.scaffold.typecheck.test.ts', 'starter'],
+].map(([file, lane]) => ({ file, lane }));
+
+const CREATE_KOVO_ROOT_OWNED_FILES = new Set(
+  CREATE_KOVO_ACCEPTANCE_OWNERS.filter((owner) => owner.lane === 'root').map((owner) => owner.file),
+);
+const CREATE_KOVO_NON_ROOT_OWNED_FILES = CREATE_KOVO_ACCEPTANCE_OWNERS.filter(
+  (owner) => owner.lane !== 'root',
+).map((owner) => owner.file);
 const CONSOLIDATED_VITEST_FILES = new Set([
   // The G11 workflow owns this Node test directly through `node --test`; Vitest cannot collect its
   // `node:test` suites and would otherwise report the file as an empty test module.
@@ -45,28 +94,7 @@ const CONSOLIDATED_VITEST_FILES = new Set([
   'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts',
   'packages/core/src/diagnostics.test.ts',
   'packages/core/src/sql-safety.test.ts',
-  'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
-  'packages/create-kovo/src/index.build.prod-artifact.assets.test.ts',
-  'packages/create-kovo/src/index.build.prod-artifact.contacts.test.ts',
-  'packages/create-kovo/src/index.build.prod-artifact.defer.test.ts',
-  'packages/create-kovo/src/index.build.prod-artifact.durable-tasks.lifecycle.test.ts',
-  'packages/create-kovo/src/index.build.prod-artifact.durable-tasks.retries.test.ts',
-  'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts',
-  'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',
-  'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
-  'packages/create-kovo/src/index.build.prod-artifact.postgres-external.test.ts',
-  'packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts',
-  'packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts',
-  'packages/create-kovo/src/index.build.prod-artifact.runtime-contracts.test.ts',
-  'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
-  'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
-  'packages/create-kovo/src/index.build.runtime.test.ts',
-  'packages/create-kovo/src/index.build.scaffold.packed-postgres.test.ts',
-  'packages/create-kovo/src/index.build.scaffold.packed-runtime.test.ts',
-  'packages/create-kovo/src/index.build.scaffold.packed-sqlite.test.ts',
-  'packages/create-kovo/src/index.build.scaffold.production.test.ts',
-  'packages/create-kovo/src/index.build.scaffold.sqlite.test.ts',
-  'packages/create-kovo/src/index.build.scaffold.typecheck.test.ts',
+  ...CREATE_KOVO_NON_ROOT_OWNED_FILES,
   'packages/create-kovo/src/index.example.packed.test.ts',
   'packages/drizzle/src/runtime-surface.test.ts',
   'packages/drizzle/src/sql-safety-static.test.ts',
@@ -161,6 +189,72 @@ const STARTER_ENTRIES = [
     seconds: 280,
   },
   {
+    id: 'security-starter-mutation-source-contract',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName: 'augments the current app-scoped starter mutation shape without disabling CSRF',
+    seconds: 5,
+  },
+  ...[
+    [
+      'security-summarized-mutation-laundering',
+      'rejects summarized mutation input laundering through the real production build preflight',
+    ],
+    [
+      'security-no-row-side-effect',
+      'fails the production build for a request-reachable no-row side-effect mutation with no access guard',
+    ],
+    [
+      'security-runtime-db-import',
+      'blocks request-authored runtime DB imports from the production build artifact',
+    ],
+    [
+      'security-import-equals-authority',
+      'blocks runtime TypeScript import-equals authority in production preflight',
+    ],
+    [
+      'security-reexported-import-equals-authority',
+      'blocks authority under a route reached through a re-exported import-equals namespace',
+    ],
+    [
+      'security-shadowed-route-authority',
+      'blocks authority when lexical shadows and mutable aliases obscure route factories',
+    ],
+    [
+      'security-secret-drizzle-view',
+      'refuses a runtime Secret read through a Drizzle view before paranoid artifact emission',
+    ],
+    [
+      'security-request-closed-reveal',
+      'rejects request-reachable audited reveal imports before production artifact emission',
+    ],
+    [
+      'security-postgres-reader-denial',
+      'distinguishes Postgres reader-role denials from runtime Secret wire refusal',
+    ],
+    [
+      'security-starter-db-scope-drift',
+      'rejects statically visible starter DB scope drift before artifact emission',
+    ],
+    [
+      'security-starter-table-scope',
+      'enforces starter mutation DB table scope in paranoid production artifacts',
+    ],
+    [
+      'security-sqlite-source-provenance',
+      'boxes SQLite secret reads by source provenance while serving proven non-secret projections in paranoid mode',
+    ],
+    [
+      'security-declared-controls',
+      'serves only compiler-declared controls and session-transition reload hints from the production artifact',
+    ],
+  ].map(([id, testName]) => ({
+    id,
+    file: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName,
+    cadence: 'nightly',
+    seconds: 600,
+  })),
+  {
     id: 'm1-storage-write',
     file: 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
     testName: 'M1:storage-write',
@@ -197,6 +291,45 @@ const STARTER_ENTRIES = [
     testName: 'keeps BUGZ25/31 production fixtures formatter-clean before build preflight',
     seconds: 10,
   },
+  ...[
+    [
+      'adversarial-diagnostic-assertion',
+      'fails the diagnostic assertion when an unchanged production build succeeds',
+    ],
+    [
+      'adversarial-bugz25-postgres',
+      'bugz-25: composed concurrency provenance fails closed in the postgres production build',
+    ],
+    ...[
+      'ordinary-carriers',
+      'projection-carriers',
+      'array-result-carriers',
+      'iterable-binding-carriers',
+      'assignment-targets',
+      'loop-and-exhaustion-targets',
+    ].map((carrier) => [
+      `adversarial-bugz31-${carrier}`,
+      `bugz-31: exact global member ${carrier} fail closed in a production artifact`,
+    ]),
+    [
+      'adversarial-bugz31-assimilation',
+      'bugz-31: helper, container, reflection, and Promise callback assimilation fail the production build',
+    ],
+    [
+      'adversarial-bugz31-root-provenance',
+      'bugz-31: trusted input mutation and authored result laundering fail the production build',
+    ],
+    [
+      'adversarial-bugz31-namespace-members-postgres',
+      'bugz-31: exact global namespace-member replacements fail the postgres production build',
+    ],
+  ].map(([id, testName]) => ({
+    id,
+    file: 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
+    testName,
+    cadence: 'nightly',
+    seconds: 420,
+  })),
   {
     id: 'raw-sql-artifacts',
     file: 'packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts',
@@ -223,11 +356,20 @@ const STARTER_ENTRIES = [
     seconds: 682,
   },
   {
-    id: 'postgres-external-artifact',
+    id: 'postgres-external-pglite-refusal',
     file: 'packages/create-kovo/src/index.build.prod-artifact.postgres-external.test.ts',
-    // CI run 30605601333 measured the file at 371.702s before this heavyweight proof moved out of
-    // the generic root shard. Round up to a whole second for timing-weighted starter assignment.
-    seconds: 372,
+    testName: 'refuses a production artifact that resolves to in-process PGlite',
+    // Cold tsgolint dominated the latest exact baseline at 900.273s. This slice preserves that
+    // work and gives it a process bound; it does not attempt to optimize the compiler cold path.
+    seconds: 901,
+  },
+  {
+    id: 'postgres-external-real-postgres',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.postgres-external.test.ts',
+    testName:
+      'deploys the generated Postgres starter against admin-provisioned external Postgres with a least-privilege runtime URL',
+    needsPostgres: true,
+    seconds: 156,
   },
   {
     id: 'starter-sqlite',
@@ -238,6 +380,24 @@ const STARTER_ENTRIES = [
     id: 'starter-production',
     file: 'packages/create-kovo/src/index.build.scaffold.production.test.ts',
     seconds: 209,
+  },
+  {
+    id: 'starter-source-check-postgres',
+    file: 'packages/create-kovo/src/index.build.scaffold.source-check.test.ts',
+    testName: 'passes the generated postgres quick check without claiming deployment retention',
+    seconds: 240,
+  },
+  {
+    id: 'starter-source-check-sqlite',
+    file: 'packages/create-kovo/src/index.build.scaffold.source-check.test.ts',
+    testName: 'passes the generated sqlite quick check without claiming deployment retention',
+    seconds: 240,
+  },
+  {
+    id: 'table-security-paranoid-preflight',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.table-security.test.ts',
+    testName: 'rejects an exact Drizzle annotation-slot replacement during paranoid preflight',
+    seconds: 300,
   },
   {
     id: 'starter-packed-postgres',
@@ -411,15 +571,103 @@ export function balanceShards(files, history = {}, shardCount, options = {}) {
 }
 
 export function starterEntries() {
-  return STARTER_ENTRIES.map((entry) => ({ ...entry }));
+  return STARTER_ENTRIES.map((entry) => ({
+    ...entry,
+    cadence: entry.cadence ?? 'per-pr',
+    timeoutMs: starterEntryTimeoutMs(entry),
+  }));
 }
 
-export function starterEntriesForMode(mode = 'all') {
-  const entries = starterEntries();
-  if (mode === 'all') return entries;
-  if (mode === 'packed') return entries.filter((entry) => entry.needsPacked);
-  if (mode === 'unpacked') return entries.filter((entry) => !entry.needsPacked);
-  throw new Error(`Unknown starter mode: ${mode}`);
+export function starterEntriesForMode(mode = 'all', cadence = 'all') {
+  if (cadence !== 'all' && !STARTER_CADENCES.has(cadence)) {
+    throw new Error(`Unknown starter cadence: ${cadence}`);
+  }
+  let entries = starterEntries();
+  if (mode === 'packed') entries = entries.filter((entry) => entry.needsPacked);
+  else if (mode === 'unpacked') entries = entries.filter((entry) => !entry.needsPacked);
+  else if (mode !== 'all') throw new Error(`Unknown starter mode: ${mode}`);
+  return cadence === 'all' ? entries : entries.filter((entry) => entry.cadence === cadence);
+}
+
+export function createKovoAcceptanceOwners() {
+  return CREATE_KOVO_ACCEPTANCE_OWNERS.map((owner) => ({ ...owner }));
+}
+
+export async function discoverCreateKovoAcceptanceTests() {
+  const files = await discoverFromRoot('packages/create-kovo/src', 'acceptance');
+  return files.filter((file) => CREATE_KOVO_ACCEPTANCE_TEST_PATTERN.test(file));
+}
+
+export function validateCreateKovoAcceptanceOwnership(discoveredFiles, entries = starterEntries()) {
+  const discovered = [...new Set(discoveredFiles)].sort();
+  const ownerCounts = new Map();
+  for (const owner of CREATE_KOVO_ACCEPTANCE_OWNERS) {
+    ownerCounts.set(owner.file, (ownerCounts.get(owner.file) ?? 0) + 1);
+  }
+  const missing = discovered.filter((file) => !ownerCounts.has(file));
+  const stale = [...ownerCounts.keys()].filter((file) => !discovered.includes(file));
+  const duplicated = [...ownerCounts].filter(([, count]) => count !== 1).map(([file]) => file);
+  if (missing.length > 0 || stale.length > 0 || duplicated.length > 0) {
+    const parts = [];
+    if (missing.length > 0) parts.push(`missing owners: ${missing.join(', ')}`);
+    if (stale.length > 0) parts.push(`stale owners: ${stale.join(', ')}`);
+    if (duplicated.length > 0) parts.push(`duplicated owners: ${duplicated.join(', ')}`);
+    throw new Error(`Invalid create-kovo acceptance ownership (${parts.join('; ')})`);
+  }
+
+  const entryIds = new Set();
+  for (const entry of entries) {
+    if (entryIds.has(entry.id)) throw new Error(`Duplicate starter entry id: ${entry.id}`);
+    entryIds.add(entry.id);
+    if (!STARTER_CADENCES.has(entry.cadence)) {
+      throw new Error(`Starter entry ${entry.id} has invalid cadence ${String(entry.cadence)}`);
+    }
+    if (!Number.isFinite(entry.seconds) || entry.seconds <= 0) {
+      throw new Error(`Starter entry ${entry.id} has invalid seconds ${String(entry.seconds)}`);
+    }
+    if (entry.testName !== undefined && (typeof entry.testName !== 'string' || !entry.testName)) {
+      throw new Error(`Starter entry ${entry.id} has an invalid testName selector`);
+    }
+    if (
+      !Number.isInteger(entry.timeoutMs) ||
+      entry.timeoutMs < STARTER_MIN_TIMEOUT_MS ||
+      entry.timeoutMs > STARTER_MAX_TIMEOUT_MS
+    ) {
+      throw new Error(`Starter entry ${entry.id} has invalid timeoutMs ${String(entry.timeoutMs)}`);
+    }
+  }
+
+  const ownersByFile = new Map(CREATE_KOVO_ACCEPTANCE_OWNERS.map((owner) => [owner.file, owner]));
+  for (const owner of CREATE_KOVO_ACCEPTANCE_OWNERS) {
+    const ownedEntries = entries.filter((entry) => entry.file === owner.file);
+    const starterOwned = owner.lane === 'starter' || owner.lane === 'starter-packed';
+    if (starterOwned && ownedEntries.length === 0) {
+      throw new Error(`Starter-owned acceptance file has no entries: ${owner.file}`);
+    }
+    if (!starterOwned && ownedEntries.length > 0) {
+      throw new Error(
+        `${owner.lane}-owned acceptance file also has starter entries: ${owner.file}`,
+      );
+    }
+    if (
+      owner.lane === 'starter-packed' &&
+      ownedEntries.some((entry) => entry.needsPacked !== true)
+    ) {
+      throw new Error(`Packed starter owner has an unpacked entry: ${owner.file}`);
+    }
+    if (owner.lane === 'starter' && ownedEntries.some((entry) => entry.needsPacked === true)) {
+      throw new Error(`Unpacked starter owner has a packed entry: ${owner.file}`);
+    }
+  }
+  for (const entry of entries) {
+    if (!CREATE_KOVO_ACCEPTANCE_TEST_PATTERN.test(entry.file)) continue;
+    if (!ownersByFile.has(entry.file)) {
+      throw new Error(
+        `Starter entry targets an unowned create-kovo acceptance file: ${entry.file}`,
+      );
+    }
+  }
+  return true;
 }
 
 export function balanceStarterShards(shardCount = STARTER_SHARD_COUNT, entries = starterEntries()) {
@@ -639,8 +887,9 @@ export async function writeStarterShardManifest({
   shardIndex,
   outputDir,
   mode = 'all',
+  cadence = 'all',
 }) {
-  const entries = starterEntriesForMode(mode);
+  const entries = starterEntriesForMode(mode, cadence);
   const shards = balanceStarterShards(shardCount, entries);
   const root =
     outputDir ?? path.join(process.env.RUNNER_TEMP ?? process.cwd(), 'kovo-starter-shards');
@@ -649,11 +898,12 @@ export async function writeStarterShardManifest({
   for (let index = 0; index < shards.length; index += 1) {
     const file = path.join(
       root,
-      starterManifestName({ mode, index: index + 1, count: shards.length }),
+      starterManifestName({ cadence, mode, index: index + 1, count: shards.length }),
     );
     await writeJson(file, {
       kind: 'starter',
       mode,
+      cadence,
       shardIndex: index + 1,
       shardCount: shards.length,
       seconds: shards[index].seconds,
@@ -664,15 +914,31 @@ export async function writeStarterShardManifest({
   if (!selected) throw new Error(`Shard index ${shardIndex} is outside 1..${shards.length}`);
   const selectedPath = path.join(
     root,
-    starterManifestName({ mode, index: shardIndex, count: shards.length }),
+    starterManifestName({ cadence, mode, index: shardIndex, count: shards.length }),
   );
-  return { entries, mode, selectedPath, selected, shards };
+  return { cadence, entries, mode, selectedPath, selected, shards };
 }
 
 export async function readStarterShardManifest(file) {
   const manifest = await readJsonIfExists(file);
   if (manifest?.kind !== 'starter' || !Array.isArray(manifest.entries)) {
     throw new Error(`Invalid starter shard manifest: ${file}`);
+  }
+  for (const entry of manifest.entries) {
+    if (
+      typeof entry?.id !== 'string' ||
+      typeof entry?.file !== 'string' ||
+      !STARTER_CADENCES.has(entry?.cadence) ||
+      !Number.isFinite(entry?.seconds) ||
+      entry.seconds <= 0 ||
+      (entry.testName !== undefined &&
+        (typeof entry.testName !== 'string' || entry.testName.length === 0)) ||
+      !Number.isInteger(entry?.timeoutMs) ||
+      entry.timeoutMs < STARTER_MIN_TIMEOUT_MS ||
+      entry.timeoutMs > STARTER_MAX_TIMEOUT_MS
+    ) {
+      throw new Error(`Starter shard manifest has an invalid bounded entry: ${file}`);
+    }
   }
   return manifest;
 }
@@ -687,13 +953,33 @@ export async function starterShardNeedsPacked(file) {
   return manifest.entries.some((entry) => entry.needsPacked);
 }
 
+export async function starterShardNeedsPostgres(file) {
+  const manifest = await readStarterShardManifest(file);
+  return manifest.entries.some((entry) => entry.needsPostgres);
+}
+
 export async function runStarterShard(file, options = {}) {
   const manifest = await readStarterShardManifest(file);
-  const spawn = options.spawnSync ?? spawnSync;
+  await runStarterEntries(manifest.entries, options);
+}
+
+export async function runStarterEntries(entries, options = {}) {
+  const runProcess = resolveAcceptanceProcessRunner(options);
   const environment = options.env ?? process.env;
-  for (const group of groupStarterEntriesForExecution(manifest.entries)) {
+  const packedPackagesDir = environment.KOVO_PACKED_PACKAGES_DIR?.trim();
+  if (
+    environment.KOVO_STARTER_SOURCE_FIXTURE_DEPENDENCIES === 'packed-current' ||
+    entries.some((entry) => entry.needsPacked)
+  ) {
+    if (!packedPackagesDir) {
+      throw new Error('Packed-current starter execution requires KOVO_PACKED_PACKAGES_DIR.');
+    }
+    await validatePackedStarterDirectory(packedPackagesDir, environment);
+  }
+  const collectedByFile = new Map();
+  for (const group of groupStarterEntriesForExecution(entries)) {
     const needsPacked = group.some((entry) => entry.needsPacked);
-    const packedPackagesDir = environment.KOVO_PACKED_PACKAGES_DIR?.trim();
+    const needsPostgres = group.some((entry) => entry.needsPostgres);
     if (needsPacked && !packedPackagesDir) {
       throw new Error(
         'Packed starter entries require KOVO_PACKED_PACKAGES_DIR from scripts/ci-shards.mjs pack-starter.',
@@ -706,22 +992,36 @@ export async function runStarterShard(file, options = {}) {
           KOVO_STARTER_SOURCE_FIXTURE_DEPENDENCIES: 'packed-current',
         }
       : environment;
-    const collectedTestNames = collectStarterGroupTestNames(group, spawn, {
-      env: groupEnvironment,
-    });
+    if (needsPostgres) assertPostgresToolchain(options.postgresSpawnSync ?? spawnSync);
+    let collectedTestNames = collectedByFile.get(group[0].file);
+    if (!collectedTestNames) {
+      collectedTestNames = await collectStarterGroupTestNames(group, runProcess, {
+        env: groupEnvironment,
+      });
+      collectedByFile.set(group[0].file, collectedTestNames);
+    }
     validateStarterGroupTestFilters(group, collectedTestNames);
     const args = starterGroupVitestArgs(group);
     process.stderr.write(
       `\n[starter:${group.map((entry) => entry.id).join(',')}] vp ${args.join(' ')}\n`,
     );
-    const result = spawn('vp', args, { env: groupEnvironment, stdio: 'inherit' });
-    if (result.error) {
+    const result = await runProcess({
+      command: 'vp',
+      args,
+      cwd: process.cwd(),
+      env: groupEnvironment,
+      supervisorTimeoutMs: group.reduce((total, entry) => total + entry.timeoutMs, 0),
+      maxOutputBytes: 128 * 1024 * 1024,
+      captureOutput: false,
+    });
+    writeCapturedProcessOutput(result);
+    if (result?.error && !result?.timedOut) {
       throw new Error(
-        `Starter entries ${group.map((entry) => entry.id).join(', ')} could not start: ${result.error.message}`,
+        `Starter entries ${group.map((entry) => entry.id).join(', ')} could not start: ${String(result.error?.message ?? result.error)}`,
         { cause: result.error },
       );
     }
-    if (result.status !== 0) {
+    if (acceptanceProcessExitCode(result) !== 0) {
       throw new Error(
         `Starter entries ${group.map((entry) => entry.id).join(', ')} failed with ${starterSpawnOutcome(result)}`,
       );
@@ -729,23 +1029,31 @@ export async function runStarterShard(file, options = {}) {
   }
 }
 
-export function collectStarterGroupTestNames(group, spawn = spawnSync, options = {}) {
+export async function collectStarterGroupTestNames(
+  group,
+  runProcess = runAcceptanceTestProcess,
+  options = {},
+) {
   if (group.length === 0) throw new Error('Starter execution group cannot be empty.');
   const file = group[0].file;
-  const result = spawn('vp', ['exec', 'vitest', 'list', file, '--json'], {
-    encoding: 'utf8',
+  const result = await runProcess({
+    command: 'vp',
+    args: ['exec', 'vitest', 'list', file, '--json'],
+    cwd: process.cwd(),
     env: options.env,
-    maxBuffer: 16 * 1024 * 1024,
+    supervisorTimeoutMs: STARTER_LIST_TIMEOUT_MS,
+    maxOutputBytes: 16 * 1024 * 1024,
+    captureOutput: true,
   });
-  if (result.error) {
+  if (result?.error && !result?.timedOut) {
     throw new Error(
-      `Starter test collection for ${file} could not start: ${result.error.message}`,
+      `Starter test collection for ${file} could not start: ${String(result.error?.message ?? result.error)}`,
       {
         cause: result.error,
       },
     );
   }
-  if (result.status !== 0) {
+  if (acceptanceProcessExitCode(result) !== 0) {
     throw new Error(
       `Starter test collection for ${file} failed with ${starterSpawnOutcome(result)}`,
     );
@@ -775,16 +1083,7 @@ export function validateStarterGroupTestFilters(group, collectedTestNames) {
   const unmatched = [];
   for (const entry of group) {
     if (!entry.testName) continue;
-    let pattern;
-    try {
-      pattern = new RegExp(entry.testName);
-    } catch (error) {
-      throw new Error(
-        `Starter entry ${entry.id} has invalid testName regex ${JSON.stringify(entry.testName)}`,
-        { cause: error },
-      );
-    }
-    if (!collectedTestNames.some((testName) => pattern.test(testName))) {
+    if (!collectedTestNames.some((testName) => testName.includes(entry.testName))) {
       unmatched.push(`${entry.id}=${JSON.stringify(entry.testName)}`);
     }
   }
@@ -795,7 +1094,162 @@ export function validateStarterGroupTestFilters(group, collectedTestNames) {
   }
 }
 
-export async function packStarterPackages(outputDir) {
+export function validateStarterFileTestCoverage(fileEntries, collectedTestNames) {
+  if (fileEntries.length === 0)
+    throw new Error('Starter file coverage requires at least one entry.');
+  const file = fileEntries[0].file;
+  if (fileEntries.some((entry) => entry.file !== file)) {
+    throw new Error('Starter file coverage entries must target exactly one file.');
+  }
+  validateStarterGroupTestFilters(fileEntries, collectedTestNames);
+  const uncovered = [];
+  const multiplyOwned = [];
+  for (const testName of collectedTestNames) {
+    const matching = fileEntries.filter(
+      (entry) => !entry.testName || testName.includes(entry.testName),
+    );
+    if (matching.length === 0) uncovered.push(testName);
+    if (matching.length > 1) {
+      multiplyOwned.push(`${testName} => ${matching.map((entry) => entry.id).join(', ')}`);
+    }
+  }
+  if (uncovered.length > 0 || multiplyOwned.length > 0) {
+    const parts = [];
+    if (uncovered.length > 0) parts.push(`unmatched: ${uncovered.join(' | ')}`);
+    if (multiplyOwned.length > 0) parts.push(`multiply owned: ${multiplyOwned.join(' | ')}`);
+    throw new Error(
+      `Starter selector ownership is not exactly one in ${file} (${parts.join('; ')})`,
+    );
+  }
+}
+
+export async function validateAcceptanceTopology(options = {}) {
+  const entries = starterEntries();
+  const discoveredFiles = await discoverCreateKovoAcceptanceTests();
+  validateCreateKovoAcceptanceOwnership(discoveredFiles, entries);
+  const runProcess = resolveAcceptanceProcessRunner(options);
+  const selectorGroups = groupStarterEntriesByFile(entries).filter((group) =>
+    group.some((entry) => entry.testName),
+  );
+  for (const group of selectorGroups) {
+    const collectedTestNames = await collectStarterGroupTestNames(group, runProcess, {
+      env: options.env ?? process.env,
+    });
+    validateStarterFileTestCoverage(group, collectedTestNames);
+  }
+  return { discoveredFiles, selectorFiles: selectorGroups.map((group) => group[0].file) };
+}
+
+export async function runLocalStarter(options = {}) {
+  const mode = options.mode ?? 'unpacked';
+  const cadence = options.cadence ?? 'all';
+  const concurrency = Number(options.concurrency ?? 1);
+  if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 4) {
+    throw new Error(
+      `Local starter concurrency must be an integer from 1 through 4; received ${concurrency}`,
+    );
+  }
+  const entries = starterEntriesForMode(mode, cadence);
+  if (entries.length === 0) throw new Error(`No starter entries selected for ${mode}/${cadence}`);
+  await validateAcceptanceTopology(options);
+
+  let packedRoot;
+  let environment = options.env ?? process.env;
+  const tempParent = process.env.CI ? process.env.RUNNER_TEMP : os.tmpdir();
+  if (!tempParent) throw new Error('RUNNER_TEMP is required for starter execution in CI.');
+  await mkdir(tempParent, { recursive: true });
+  packedRoot = await mkdtemp(path.join(tempParent, 'kovo-local-packed-starter-'));
+
+  try {
+    await packStarterPackages(packedRoot, { ...options, env: environment });
+    environment = {
+      ...environment,
+      KOVO_PACKED_PACKAGES_DIR: packedRoot,
+      KOVO_STARTER_SOURCE_FIXTURE_DEPENDENCIES: 'packed-current',
+    };
+    const shards = balanceStarterShards(Math.min(concurrency, entries.length), entries);
+    await Promise.all(
+      shards.map((shard) => runStarterEntries(shard.entries, { ...options, env: environment })),
+    );
+  } finally {
+    if (packedRoot) await rm(packedRoot, { force: true, recursive: true });
+  }
+}
+
+export async function runRootTests(options = {}) {
+  await validateAcceptanceTopology(options);
+  const files = await discoverTests('vitest');
+  const runProcess = resolveAcceptanceProcessRunner(options);
+  const result = await runProcess({
+    command: 'vp',
+    args: ['exec', 'vitest', '--run', '--maxWorkers=1', ...files],
+    cwd: process.cwd(),
+    env: options.env ?? process.env,
+    supervisorTimeoutMs: 2 * 60 * 60_000,
+    maxOutputBytes: 256 * 1024 * 1024,
+    captureOutput: false,
+  });
+  writeCapturedProcessOutput(result);
+  if (acceptanceProcessExitCode(result) !== 0) {
+    throw new Error(`Root-owned Vitest route failed with ${starterSpawnOutcome(result)}`);
+  }
+}
+
+// Narrow integration seam: the marker-safe process-tree supervisor can be injected here without
+// coupling routing policy to its implementation module.
+export async function runAcceptanceTestProcess(invocation) {
+  const { runBoundedTestProcess } =
+    await import('../packages/create-kovo/src/index.test-process-supervisor.mjs');
+  return runBoundedTestProcess({
+    command: invocation.command,
+    args: invocation.args,
+    cwd: invocation.cwd,
+    env: invocation.env,
+    supervisorTimeoutMs: invocation.supervisorTimeoutMs,
+    maxOutputBytes: invocation.maxOutputBytes,
+  });
+}
+
+function resolveAcceptanceProcessRunner(options) {
+  if (options.runProcess) return options.runProcess;
+  if (!options.spawnSync) return runAcceptanceTestProcess;
+  return async (invocation) => {
+    const result = options.spawnSync(invocation.command, invocation.args, {
+      cwd: invocation.cwd,
+      encoding: invocation.captureOutput ? 'utf8' : undefined,
+      env: invocation.env,
+      maxBuffer: invocation.maxOutputBytes,
+      stdio: invocation.captureOutput ? undefined : 'inherit',
+      timeout: invocation.supervisorTimeoutMs,
+    });
+    return { ...result, exitCode: result.status };
+  };
+}
+
+function acceptanceProcessExitCode(result) {
+  if (result?.timedOut || result?.outputOverflowed || result?.cleanupError || result?.error) {
+    return 1;
+  }
+  return result?.exitCode ?? result?.status ?? 0;
+}
+
+function writeCapturedProcessOutput(result) {
+  if (result?.stdout) process.stdout.write(String(result.stdout));
+  if (result?.stderr) process.stderr.write(String(result.stderr));
+}
+
+function assertPostgresToolchain(spawn) {
+  for (const command of ['initdb', 'postgres']) {
+    const result = spawn(command, ['--version'], { encoding: 'utf8', timeout: 10_000 });
+    if (result.error || result.status !== 0) {
+      throw new Error(
+        `Starter entry requires real Postgres, but ${command} is unavailable. Install PostgreSQL and expose its bin directory on PATH.`,
+      );
+    }
+  }
+}
+
+export async function packStarterPackages(outputDir, options = {}) {
   const root = path.resolve(
     outputDir ?? path.join(process.env.RUNNER_TEMP ?? process.cwd(), 'kovo-packed-starter'),
   );
@@ -803,16 +1257,27 @@ export async function packStarterPackages(outputDir) {
   await rm(root, { force: true, recursive: true });
   await mkdir(root, { recursive: true });
   const tarballs = {};
+  const sha256 = {};
+  const runProcess = resolveAcceptanceProcessRunner(options);
 
   for (const pkg of packedStarterWorkspacePackages) {
     const packageRoot = path.join(process.cwd(), 'packages', pkg.dir);
     const before = new Set((await readdir(root)).filter((file) => file.endsWith('.tgz')));
-    const result = spawnSync('vp', ['exec', 'pnpm', 'pack', '--pack-destination', root], {
+    const result = await runProcess({
+      command: 'vp',
+      args: ['exec', 'pnpm', 'pack', '--pack-destination', root],
       cwd: packageRoot,
-      stdio: 'inherit',
+      env: options.env ?? process.env,
+      supervisorTimeoutMs: 5 * 60_000,
+      maxOutputBytes: 64 * 1024 * 1024,
+      captureOutput: false,
     });
-    if (result.error) throw result.error;
-    if (result.status !== 0) throw new Error(`vp exec pnpm pack failed for ${pkg.name}`);
+    writeCapturedProcessOutput(result);
+    if (acceptanceProcessExitCode(result) !== 0) {
+      throw new Error(
+        `vp exec pnpm pack failed for ${pkg.name} with ${starterSpawnOutcome(result)}`,
+      );
+    }
     const created = (await readdir(root))
       .filter((file) => file.endsWith('.tgz') && !before.has(file))
       .sort();
@@ -822,16 +1287,81 @@ export async function packStarterPackages(outputDir) {
     const tarball = path.join(root, created[0]);
     canonicalizePackedTarball(tarball);
     tarballs[pkg.name] = created[0];
+    sha256[pkg.name] = createHash('sha256')
+      .update(await readFile(tarball))
+      .digest('hex');
   }
 
   await writeJson(path.join(root, PACKED_STARTER_MANIFEST), {
     generatedBy: 'scripts/ci-shards.mjs pack-starter',
+    producer: packedStarterProducer(options.env ?? process.env),
+    sha256,
     tarballs,
   });
   return root;
 }
 
+export async function validatePackedStarterDirectory(root, environment = process.env) {
+  const manifest = await readJson(path.join(root, PACKED_STARTER_MANIFEST));
+  if (manifest.generatedBy !== 'scripts/ci-shards.mjs pack-starter') {
+    throw new Error('Packed starter manifest has an untrusted producer.');
+  }
+  const expectedProducer = packedStarterProducer(environment);
+  if (
+    expectedProducer.kind === 'github-actions' &&
+    (manifest.producer?.kind !== expectedProducer.kind ||
+      manifest.producer?.repository !== expectedProducer.repository ||
+      manifest.producer?.runId !== expectedProducer.runId ||
+      manifest.producer?.runAttempt !== expectedProducer.runAttempt ||
+      manifest.producer?.sha !== expectedProducer.sha)
+  ) {
+    throw new Error('Packed starter manifest was not produced by this GitHub Actions run and SHA.');
+  }
+  const files = new Set(await readdir(root));
+  const expectedPackages = new Set(packedStarterWorkspacePackages.map((pkg) => pkg.name));
+  const declaredPackages = Object.keys(manifest.tarballs ?? {});
+  const digestPackages = Object.keys(manifest.sha256 ?? {});
+  if (
+    declaredPackages.length !== expectedPackages.size ||
+    declaredPackages.some((name) => !expectedPackages.has(name)) ||
+    digestPackages.length !== expectedPackages.size ||
+    digestPackages.some((name) => !expectedPackages.has(name))
+  ) {
+    throw new Error('Packed starter manifest does not declare the exact workspace package set.');
+  }
+  for (const packageName of expectedPackages) {
+    const tarball = manifest.tarballs[packageName];
+    if (typeof tarball !== 'string' || !files.has(tarball)) {
+      throw new Error(`Packed starter manifest is missing the tarball for ${packageName}.`);
+    }
+    const digest = createHash('sha256')
+      .update(await readFile(path.join(root, tarball)))
+      .digest('hex');
+    if (manifest.sha256[packageName] !== digest) {
+      throw new Error(`Packed starter manifest has a digest mismatch for ${packageName}.`);
+    }
+  }
+  return manifest;
+}
+
+function packedStarterProducer(environment) {
+  if (environment.GITHUB_ACTIONS === 'true') {
+    return {
+      kind: 'github-actions',
+      repository: environment.GITHUB_REPOSITORY ?? '',
+      runId: environment.GITHUB_RUN_ID ?? '',
+      runAttempt: environment.GITHUB_RUN_ATTEMPT ?? '',
+      sha: environment.GITHUB_SHA ?? '',
+    };
+  }
+  return { kind: 'local' };
+}
+
 export function groupStarterEntriesForExecution(entries) {
+  return [...entries].sort((a, b) => a.id.localeCompare(b.id)).map((entry) => [entry]);
+}
+
+export function groupStarterEntriesByFile(entries) {
   const groupsByFile = new Map();
   for (const entry of entries) {
     const group = groupsByFile.get(entry.file) ?? [];
@@ -852,21 +1382,28 @@ export function starterGroupVitestArgs(group) {
 }
 
 function starterTestNamePattern(testNames) {
-  if (testNames.length === 1) return testNames[0];
   return testNames.map(escapeRegExp).join('|');
 }
 
 function starterSpawnOutcome(result) {
-  if (result.status !== null && result.status !== undefined) {
-    return `exit code ${result.status}`;
+  if (result?.timedOut) return 'a bounded-process timeout';
+  if (result?.outputOverflowed) return 'the bounded output limit';
+  if (result?.cleanupError) {
+    return `a process-tree cleanup failure: ${String(result.cleanupError?.message ?? result.cleanupError)}`;
   }
-  if (result.signal) return `signal ${result.signal}`;
+  const exitCode = result?.exitCode ?? result?.status;
+  if (exitCode !== null && exitCode !== undefined) {
+    return `exit code ${exitCode}`;
+  }
+  if (result?.signal) return `signal ${result.signal}`;
+  if (result?.error) return String(result.error?.message ?? result.error);
   return 'an unknown process status';
 }
 
-function starterManifestName({ mode, index, count }) {
+function starterManifestName({ cadence = 'all', mode, index, count }) {
   const modePrefix = mode === 'all' ? 'starter' : `starter-${mode}`;
-  return `${modePrefix}-${index}-of-${count}.json`;
+  const cadencePrefix = cadence === 'all' ? modePrefix : `${modePrefix}-${cadence}`;
+  return `${cadencePrefix}-${index}-of-${count}.json`;
 }
 
 function escapeRegExp(value) {
@@ -888,6 +1425,7 @@ async function discoverFromRoot(root, kind) {
       includeFile: ({ absolutePath }) => {
         const relativePath = normalizeRelativeFile(absolutePath);
         if (kind === 'integration') return /(?:^|\/)[^/]+\.spec\.ts$/.test(relativePath);
+        if (kind === 'acceptance') return CREATE_KOVO_ACCEPTANCE_TEST_PATTERN.test(relativePath);
         return (
           kind === 'vitest' &&
           /(?:^|\/)[^/]+\.test\.(?:mjs|ts|tsx|js)$/.test(relativePath) &&
@@ -907,6 +1445,7 @@ export function includeVitest(file) {
     !file.startsWith('scripts/fixtures/') &&
     !file.endsWith('.browser.test.ts') &&
     !file.includes('/templates/') &&
+    (!CREATE_KOVO_ACCEPTANCE_TEST_PATTERN.test(file) || CREATE_KOVO_ROOT_OWNED_FILES.has(file)) &&
     !CONSOLIDATED_VITEST_FILES.has(file) &&
     // `static-core` runs the complete C13 corpus, including named CPU proofs in fresh processes.
     // Keeping those exact files out of broad root shards prevents duplicate load from changing a
@@ -966,6 +1505,14 @@ function assertRunnerTempScoped(outputDir) {
 
 function roundSeconds(seconds) {
   return Math.round(seconds * 1000) / 1000;
+}
+
+function starterEntryTimeoutMs(entry) {
+  const estimateMs = Math.ceil(Number(entry.seconds) * 2_000);
+  return Math.min(
+    STARTER_MAX_TIMEOUT_MS,
+    Math.max(STARTER_MIN_TIMEOUT_MS, Number.isFinite(estimateMs) ? estimateMs : 0),
+  );
 }
 
 function durationHistoryEntries(report) {
@@ -1030,13 +1577,20 @@ async function main(argv) {
     const shardCount = Number(args.shards ?? STARTER_SHARD_COUNT);
     const shardIndex = Number(args.index);
     const mode = String(args.mode ?? 'all');
+    const cadence = String(args.cadence ?? 'all');
     const outputDir = String(
       args.outDir ?? path.join(process.env.RUNNER_TEMP ?? process.cwd(), 'kovo-starter-shards'),
     );
-    const result = await writeStarterShardManifest({ shardCount, shardIndex, outputDir, mode });
+    const result = await writeStarterShardManifest({
+      cadence,
+      shardCount,
+      shardIndex,
+      outputDir,
+      mode,
+    });
     process.stdout.write(`${result.selectedPath}\n`);
     process.stderr.write(
-      `Generated starter ${result.mode} shard ${shardIndex}/${shardCount}: ${result.selected.entries.length}/${result.entries.length} entries, estimate ${result.selected.seconds}s\n`,
+      `Generated starter ${result.mode}/${result.cadence} shard ${shardIndex}/${shardCount}: ${result.selected.entries.length}/${result.entries.length} entries, estimate ${result.selected.seconds}s\n`,
     );
     return;
   }
@@ -1051,6 +1605,11 @@ async function main(argv) {
     return;
   }
 
+  if (command === 'starter-needs-postgres') {
+    process.exitCode = (await starterShardNeedsPostgres(String(args.manifest))) ? 0 : 1;
+    return;
+  }
+
   if (command === 'pack-starter') {
     const outputDir = String(
       args.outDir ?? path.join(process.env.RUNNER_TEMP ?? process.cwd(), 'kovo-packed-starter'),
@@ -1062,6 +1621,28 @@ async function main(argv) {
 
   if (command === 'run-starter') {
     await runStarterShard(String(args.manifest));
+    return;
+  }
+
+  if (command === 'validate-acceptance-topology') {
+    const result = await validateAcceptanceTopology();
+    process.stdout.write(
+      `Validated ${result.discoveredFiles.length} create-kovo acceptance files and exact selector coverage in ${result.selectorFiles.length} files.\n`,
+    );
+    return;
+  }
+
+  if (command === 'run-local-starter') {
+    await runLocalStarter({
+      cadence: String(args.cadence ?? 'all'),
+      concurrency: Number(args.concurrency ?? 1),
+      mode: String(args.mode ?? 'unpacked'),
+    });
+    return;
+  }
+
+  if (command === 'run-root') {
+    await runRootTests();
     return;
   }
 
@@ -1086,11 +1667,15 @@ async function main(argv) {
 
   throw new Error(`Usage:
   node scripts/ci-shards.mjs generate --kind vitest|integration --shards N --index N --outDir "$RUNNER_TEMP/kovo-shards" [--history file]
-  node scripts/ci-shards.mjs generate-starter --mode all|packed|unpacked --shards N --index N --outDir "$RUNNER_TEMP/kovo-starter-shards"
+  node scripts/ci-shards.mjs generate-starter --mode all|packed|unpacked --cadence all|per-pr|nightly --shards N --index N --outDir "$RUNNER_TEMP/kovo-starter-shards"
   node scripts/ci-shards.mjs starter-needs-browser --manifest starter-shard.json
   node scripts/ci-shards.mjs starter-needs-packed --manifest starter-shard.json
+  node scripts/ci-shards.mjs starter-needs-postgres --manifest starter-shard.json
   node scripts/ci-shards.mjs pack-starter --outDir "$RUNNER_TEMP/kovo-packed-starter"
   node scripts/ci-shards.mjs run-starter --manifest starter-shard.json
+  node scripts/ci-shards.mjs validate-acceptance-topology
+  node scripts/ci-shards.mjs run-local-starter --mode all|packed|unpacked --cadence all|per-pr|nightly --concurrency 1..4
+  node scripts/ci-shards.mjs run-root
   node scripts/ci-shards.mjs combine-histories --inputDir "$RUNNER_TEMP/kovo-prior-timing" --out timing-history.json
   node scripts/ci-shards.mjs merge-vitest --report vitest.json --out timing-history.json [--previous timing-history.json]
   node scripts/ci-shards.mjs merge-playwright --report playwright.json --out timing-history.json [--previous timing-history.json]`);

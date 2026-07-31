@@ -21,6 +21,7 @@ env:
 jobs:
   static-core:
     runs-on: ubuntu-24.04
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -68,6 +69,7 @@ jobs:
 
   paranoid:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: ./.github/actions/kovo-setup
@@ -304,6 +306,7 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -362,9 +365,12 @@ jobs:
 
   starter-packages:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: ./.github/actions/kovo-setup
+      - name: Validate acceptance ownership and selector coverage
+        run: vp exec pnpm run test:acceptance-topology
       - name: Pack starter workspace packages
         run: vp exec node scripts/ci-shards.mjs pack-starter --outDir "$RUNNER_TEMP/kovo-packed-starter"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -377,6 +383,7 @@ jobs:
   starter:
     needs: starter-packages
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -399,12 +406,17 @@ jobs:
       - id: starter-shard
         name: Generate balanced starter shard
         run: |
-          manifest="$(vp exec node scripts/ci-shards.mjs generate-starter --mode unpacked --shards ${{ matrix.total }} --index ${{ matrix.shard }} --outDir "$RUNNER_TEMP/kovo-starter-shards")"
+          manifest="$(vp exec node scripts/ci-shards.mjs generate-starter --mode unpacked --cadence per-pr --shards ${{ matrix.total }} --index ${{ matrix.shard }} --outDir "$RUNNER_TEMP/kovo-starter-shards")"
           echo "manifest=$manifest" >> "$GITHUB_OUTPUT"
           if vp exec node scripts/ci-shards.mjs starter-needs-browser --manifest "$manifest"; then
             echo "needsBrowser=true" >> "$GITHUB_OUTPUT"
           else
             echo "needsBrowser=false" >> "$GITHUB_OUTPUT"
+          fi
+          if vp exec node scripts/ci-shards.mjs starter-needs-postgres --manifest "$manifest"; then
+            echo "needsPostgres=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "needsPostgres=false" >> "$GITHUB_OUTPUT"
           fi
       - name: Install Chromium for browser-backed starter shard
         if: steps.starter-shard.outputs.needsBrowser == 'true'
@@ -413,6 +425,13 @@ jobs:
           browsers: chromium
           cache-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-${{ hashFiles('pnpm-lock.yaml') }}
           restore-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-
+      - name: Expose hosted PostgreSQL binaries for the real-Postgres starter entry
+        if: steps.starter-shard.outputs.needsPostgres == 'true'
+        run: |
+          postgres_bindir="$(pg_config --bindir)"
+          test -x "$postgres_bindir/initdb"
+          test -x "$postgres_bindir/postgres"
+          echo "$postgres_bindir" >> "$GITHUB_PATH"
       - name: Generated starter proofs (${{ matrix.shard }})
         env:
           KOVO_PACKED_PACKAGES_DIR: ${{ runner.temp }}/kovo-packed-starter
@@ -422,6 +441,7 @@ jobs:
   starter-packed:
     needs: starter-packages
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: ./.github/actions/kovo-setup
@@ -430,7 +450,7 @@ jobs:
       - id: starter-shard
         name: Generate packed starter shard
         run: |
-          manifest="$(vp exec node scripts/ci-shards.mjs generate-starter --mode packed --shards 1 --index 1 --outDir "$RUNNER_TEMP/kovo-starter-shards")"
+          manifest="$(vp exec node scripts/ci-shards.mjs generate-starter --mode packed --cadence per-pr --shards 1 --index 1 --outDir "$RUNNER_TEMP/kovo-starter-shards")"
           echo "manifest=$manifest" >> "$GITHUB_OUTPUT"
           if vp exec node scripts/ci-shards.mjs starter-needs-browser --manifest "$manifest"; then
             echo "needsBrowser=true" >> "$GITHUB_OUTPUT"

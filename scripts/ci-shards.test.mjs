@@ -1,3 +1,5 @@
+import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -11,6 +13,8 @@ import {
   balanceShards,
   combineDurationHistories,
   combineTimingHistoryDirectory,
+  createKovoAcceptanceOwners,
+  discoverCreateKovoAcceptanceTests,
   extractPlaywrightDurations,
   extractVitestDurations,
   discoverTests,
@@ -22,7 +26,12 @@ import {
   starterEntriesForMode,
   starterGroupVitestArgs,
   starterShardNeedsPacked,
+  starterShardNeedsPostgres,
   unknownDurationSeconds,
+  validateAcceptanceTopology,
+  validateCreateKovoAcceptanceOwnership,
+  validatePackedStarterDirectory,
+  validateStarterFileTestCoverage,
   validateStarterGroupTestFilters,
   validateShardAssignment,
   writeShardManifests,
@@ -33,6 +42,11 @@ describe('ci-shards', () => {
     const source = await readFile(new URL('./ci-shards.mjs', import.meta.url), 'utf8');
     expect(source).toContain("{ name: '@kovojs/verify', dir: 'verify' }");
     expect(source).toContain('canonicalizePackedTarball(tarball);');
+    expect(source).toContain("'../packages/create-kovo/src/index.test-process-supervisor.mjs'");
+    expect(source).toContain('supervisorTimeoutMs: 5 * 60_000,');
+    expect(source).toContain(
+      'if (packedRoot) await rm(packedRoot, { force: true, recursive: true });',
+    );
   });
 
   it('balances tests with longest-processing-time first', () => {
@@ -238,10 +252,42 @@ describe('ci-shards', () => {
     );
     expect(starterJob).toContain('KOVO_STARTER_SOURCE_FIXTURE_DEPENDENCIES: packed-current');
     expect(starterJob).toContain('generate-starter --mode unpacked');
+    expect(starterJob).toContain('--cadence per-pr');
+    expect(starterJob).toContain('starter-needs-postgres');
+    expect(starterJob).toContain("if: steps.starter-shard.outputs.needsPostgres == 'true'");
     expect(starterJob.indexOf('actions/download-artifact@')).toBeLessThan(
       starterJob.indexOf('Generated starter proofs'),
     );
     expect(starterJob).not.toContain('PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS');
+  });
+
+  it('wires all-cadence acceptance plus bounded PR, nightly, and release owners', async () => {
+    const [pkg, ci, nightly, release] = await Promise.all([
+      readFile(new URL('../package.json', import.meta.url), 'utf8').then(JSON.parse),
+      readFile(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8'),
+      readFile(new URL('../.github/workflows/security-nightly.yml', import.meta.url), 'utf8'),
+      readFile(new URL('../.github/workflows/release.yml', import.meta.url), 'utf8'),
+    ]);
+    expect(pkg.scripts.acceptance).toContain('pnpm run test:starter:acceptance');
+    expect(pkg.scripts['test:starter:acceptance']).toContain('--mode all --cadence all');
+    expect(pkg.scripts['test:starter:security-nightly']).toContain(
+      '--mode unpacked --cadence nightly',
+    );
+    expect(pkg.scripts['test:authz-paranoid']).toContain(
+      'index.build.prod-artifact.paranoid-runtime-runner.ts',
+    );
+    expect(ci).toContain('  static-core:\n    runs-on: ubuntu-24.04\n    timeout-minutes: 90');
+    expect(ci).toContain('  paranoid:\n    runs-on: ubuntu-latest\n    timeout-minutes: 90');
+    expect(ci).toContain(
+      '  starter:\n    needs: starter-packages\n    runs-on: ubuntu-latest\n    timeout-minutes: 40',
+    );
+    expect(ci).toContain('name: Validate acceptance ownership and selector coverage');
+    expect(nightly).toContain('  starter-security-residual:');
+    expect(nightly).toContain('timeout-minutes: 140');
+    expect(nightly).toContain('vp exec pnpm run test:starter:security-nightly');
+    expect(release).toContain('  starter-security-residual:');
+    expect(release).toContain('      - starter-security-residual');
+    expect(release).toContain('"$KOVO_RELEASE_PNPM_CLI" run test:starter:security-nightly');
   });
 
   it('extracts vitest per-file durations from tolerant JSON reporter shapes', () => {
@@ -379,27 +425,86 @@ describe('ci-shards', () => {
     expect(includeVitest('packages/server/src/guards.test.ts')).toBe(false);
   });
 
-  it('routes the measured Postgres artifact proof exactly once through the heavyweight starter lane', () => {
+  it('gives every create-kovo acceptance file exactly one manifest owner', async () => {
+    const discovered = await discoverCreateKovoAcceptanceTests();
+    const owners = createKovoAcceptanceOwners();
+    expect(discovered).toHaveLength(28);
+    expect(owners).toHaveLength(discovered.length);
+    expect(() => validateCreateKovoAcceptanceOwnership(discovered)).not.toThrow();
+    expect(Object.fromEntries(owners.map((owner) => [owner.file, owner.lane]))).toMatchObject({
+      'packages/create-kovo/src/index.build.prod-artifact.client-ip.test.ts': 'classifier',
+      'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime-gate.test.ts': 'root',
+      'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime-runner.test.ts': 'root',
+      'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts': 'paranoid',
+      'packages/create-kovo/src/index.build.prod-artifact.sink-census.test.ts': 'c9',
+      'packages/create-kovo/src/index.build.prod-artifact.table-security.test.ts': 'starter',
+    });
+    expect(
+      includeVitest(
+        'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime-gate.test.ts',
+      ),
+    ).toBe(true);
+    expect(
+      includeVitest('packages/create-kovo/src/index.build.prod-artifact.client-ip.test.ts'),
+    ).toBe(false);
+    expect(
+      includeVitest('packages/create-kovo/src/index.build.prod-artifact.sink-census.test.ts'),
+    ).toBe(false);
+    expect(starterEntries().every((entry) => Number.isInteger(entry.timeoutMs))).toBe(true);
+  });
+
+  it('proves exact reverse selector ownership against current Vitest identities', async () => {
+    const adversarialSource = await readFile(
+      new URL(
+        '../packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+    if (!adversarialSource.includes('keeps BUGZ25/31 production fixtures formatter-clean')) {
+      // Integration commit 78513c adds this lightweight identity before the topology commit lands.
+      await expect(validateAcceptanceTopology({ spawnSync })).rejects.toThrow(
+        /bugz-fixture-format=.*keeps BUGZ25\/31 production fixtures formatter-clean/,
+      );
+      return;
+    }
+    const result = await validateAcceptanceTopology({ spawnSync });
+    expect(result.discoveredFiles).toHaveLength(28);
+    expect(result.selectorFiles).toEqual([
+      'packages/create-kovo/src/index.build.prod-artifact.contacts.test.ts',
+      'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+      'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
+      'packages/create-kovo/src/index.build.prod-artifact.postgres-external.test.ts',
+      'packages/create-kovo/src/index.build.scaffold.source-check.test.ts',
+      'packages/create-kovo/src/index.build.prod-artifact.table-security.test.ts',
+      'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
+    ]);
+  });
+
+  it('routes the two Postgres artifact identities explicitly and marks only real PG', () => {
     const file = 'packages/create-kovo/src/index.build.prod-artifact.postgres-external.test.ts';
     expect(includeVitest(file)).toBe(false);
-    expect(starterEntries().filter((entry) => entry.file === file)).toEqual([
-      {
-        file,
-        id: 'postgres-external-artifact',
-        seconds: 372,
-      },
+    const entries = starterEntries().filter((entry) => entry.file === file);
+    expect(entries.map((entry) => entry.id)).toEqual([
+      'postgres-external-pglite-refusal',
+      'postgres-external-real-postgres',
+    ]);
+    expect(entries.filter((entry) => entry.needsPostgres).map((entry) => entry.id)).toEqual([
+      'postgres-external-real-postgres',
     ]);
   });
 
   it('keeps the no-build BUGZ fixture-format regression enrolled in the starter lane', () => {
     const file = 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts';
     expect(includeVitest(file)).toBe(false);
-    expect(starterEntries().filter((entry) => entry.id === 'bugz-fixture-format')).toEqual([
+    expect(starterEntries().filter((entry) => entry.id === 'bugz-fixture-format')).toMatchObject([
       {
+        cadence: 'per-pr',
         file,
         id: 'bugz-fixture-format',
         seconds: 10,
         testName: 'keeps BUGZ25/31 production fixtures formatter-clean before build preflight',
+        timeoutMs: 300_000,
       },
     ]);
   });
@@ -546,9 +651,9 @@ describe('ci-shards', () => {
     );
     expect(redirectSource).toContain('}, 420_000);');
     expect(deferSource).toContain('    480_000,');
-    expect(routeOutcomesSource).toContain('const BUILD_DEADLINE_MS = 90_000;');
+    expect(routeOutcomesSource).toContain('KOVO_BUILD_TEST_PROCESS_DEADLINE_MS');
     expect(routeOutcomesSource).toContain(
-      'const ROUTE_OUTCOME_TEST_TIMEOUT_MS = BUILD_DEADLINE_MS + EXPLAIN_DEADLINE_MS + 10_000;',
+      'const ROUTE_OUTCOME_TEST_TIMEOUT_MS = kovoCliTestTimeoutMs(',
     );
     expect(productionArtifactSupportSource).toContain(
       'export const PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS = process.env.CI ? 600_000 : 240_000;',
@@ -571,9 +676,7 @@ describe('ci-shards', () => {
     expect(runtimeSource.match(/\}, 180_000\);/gu)).toHaveLength(1);
     expect(runtimeSource.match(/\}, 120_000\);/gu)).toHaveLength(1);
     expect(transactionSource).not.toContain('}, 180_000);');
-    expect(scaffoldTypecheckSource).toContain(
-      'vi.setConfig({ testTimeout: process.env.CI ? 600_000 : 420_000 });',
-    );
+    expect(scaffoldTypecheckSource.match(/generatedStarterTestTimeout\(/gu)).toHaveLength(3);
     expect(starterHarnessTemplateSource).toContain(
       'const devServerReadyTimeoutMs = process.env.CI ? 180_000 : 90_000;',
     );
@@ -690,8 +793,8 @@ describe('ci-shards', () => {
     ]);
   });
 
-  it('load-balances starter production artifact entries into ten CI shards', () => {
-    const entries = starterEntries();
+  it('keeps the per-PR starter route balanced in the existing ten CI shards', () => {
+    const entries = starterEntriesForMode('unpacked', 'per-pr');
     const shards = balanceStarterShards(10, entries);
     const assigned = shards.flatMap((shard) => shard.entries.map((entry) => entry.id));
 
@@ -701,7 +804,7 @@ describe('ci-shards', () => {
       entries.map((entry) => entry.id).toSorted(compareStrings),
     );
     expect(shards.map((shard) => shard.seconds)).toEqual([
-      1_200, 954, 958, 952, 954, 954, 965, 957, 949, 951,
+      981, 1_008, 981, 999, 979, 984, 977, 989, 979, 978,
     ]);
   });
 
@@ -726,6 +829,15 @@ describe('ci-shards', () => {
     expect([...packedIds, ...unpackedIds].toSorted(compareStrings)).toEqual(
       allEntries.map((entry) => entry.id).toSorted(compareStrings),
     );
+    expect(starterEntriesForMode('unpacked', 'per-pr')).toHaveLength(46);
+    expect(starterEntries().find((entry) => entry.id === 'bugz-fixture-format')).toMatchObject({
+      cadence: 'per-pr',
+      testName: 'keeps BUGZ25/31 production fixtures formatter-clean before build preflight',
+    });
+    const nightly = starterEntriesForMode('unpacked', 'nightly');
+    expect(nightly).toHaveLength(24);
+    expect(nightly.filter((entry) => entry.file.endsWith('.security.test.ts'))).toHaveLength(13);
+    expect(nightly.filter((entry) => entry.file.endsWith('.adversarial.test.ts'))).toHaveLength(11);
     expect(
       balanceStarterShards(10, unpackedEntries).flatMap((shard) => shard.entries),
     ).toHaveLength(unpackedEntries.length);
@@ -739,14 +851,14 @@ describe('ci-shards', () => {
   });
 
   it('keeps browser-backed starter entries isolated to the shard that needs Chromium', () => {
-    const browserShards = balanceStarterShards(10)
+    const browserShards = balanceStarterShards(10, starterEntriesForMode('unpacked', 'per-pr'))
       .map((shard, index) => ({
         index: index + 1,
         entries: shard.entries.filter((entry) => entry.needsBrowser).map((entry) => entry.id),
       }))
       .filter((shard) => shard.entries.length > 0);
 
-    expect(browserShards).toEqual([{ index: 7, entries: ['island-derive-artifacts'] }]);
+    expect(browserShards).toEqual([{ index: 2, entries: ['island-derive-artifacts'] }]);
   });
 
   it('marks only packed starter shards as needing the packed package artifact', async () => {
@@ -755,11 +867,11 @@ describe('ci-shards', () => {
     const plainManifest = path.join(root, 'plain.json');
     await writeFile(
       packedManifest,
-      `${JSON.stringify({ kind: 'starter', entries: [{ id: 'packed', needsPacked: true }] })}\n`,
+      `${JSON.stringify({ kind: 'starter', entries: [{ cadence: 'per-pr', file: 'packed.test.ts', id: 'packed', needsPacked: true, seconds: 1, timeoutMs: 300_000 }] })}\n`,
     );
     await writeFile(
       plainManifest,
-      `${JSON.stringify({ kind: 'starter', entries: [{ id: 'plain' }] })}\n`,
+      `${JSON.stringify({ kind: 'starter', entries: [{ cadence: 'per-pr', file: 'plain.test.ts', id: 'plain', seconds: 1, timeoutMs: 300_000 }] })}\n`,
     );
 
     await expect(starterShardNeedsPacked(packedManifest)).resolves.toBe(true);
@@ -775,6 +887,22 @@ describe('ci-shards', () => {
       'starter-packed-runtime',
       'starter-packed-sqlite',
     ]);
+  });
+
+  it('marks only the real-Postgres selector as needing hosted PostgreSQL', async () => {
+    const root = await fixtureRoot();
+    const realPgManifest = path.join(root, 'real-pg.json');
+    const pgliteManifest = path.join(root, 'pglite.json');
+    await writeFile(
+      realPgManifest,
+      `${JSON.stringify({ kind: 'starter', entries: [{ cadence: 'per-pr', file: 'pg.test.ts', id: 'real-pg', needsPostgres: true, seconds: 1, timeoutMs: 300_000 }] })}\n`,
+    );
+    await writeFile(
+      pgliteManifest,
+      `${JSON.stringify({ kind: 'starter', entries: [{ cadence: 'per-pr', file: 'pg.test.ts', id: 'pglite', seconds: 1, timeoutMs: 300_000 }] })}\n`,
+    );
+    await expect(starterShardNeedsPostgres(realPgManifest)).resolves.toBe(true);
+    await expect(starterShardNeedsPostgres(pgliteManifest)).resolves.toBe(false);
   });
 
   it('runs packed starter entries only against the declared same-run package artifact', async () => {
@@ -795,7 +923,7 @@ describe('ci-shards', () => {
       }
       return { status: 0 };
     };
-    const packedPackagesDir = '/tmp/kovo-same-run-packed-artifact';
+    const packedPackagesDir = await packedStarterFixture();
 
     await expect(
       runStarterShard(manifest, {
@@ -814,12 +942,42 @@ describe('ci-shards', () => {
     }
 
     await expect(runStarterShard(manifest, { env: {}, spawnSync })).rejects.toThrow(
-      'Packed starter entries require KOVO_PACKED_PACKAGES_DIR from scripts/ci-shards.mjs pack-starter.',
+      'Packed-current starter execution requires KOVO_PACKED_PACKAGES_DIR.',
     );
     expect(calls).toHaveLength(2);
   });
 
-  it('groups starter execution by file while preserving assigned test filters', () => {
+  it('rejects stale or wrong-producer packed starter manifests before execution', async () => {
+    const root = await packedStarterFixture({ generatedBy: 'some-other-producer' });
+    await expect(validatePackedStarterDirectory(root)).rejects.toThrow(
+      'Packed starter manifest has an untrusted producer.',
+    );
+    const staleRoot = await packedStarterFixture({
+      producer: {
+        kind: 'github-actions',
+        repository: 'kovojs/kovo',
+        runAttempt: '1',
+        runId: 'old-run',
+        sha: 'old-sha',
+      },
+    });
+    await expect(
+      validatePackedStarterDirectory(staleRoot, {
+        GITHUB_ACTIONS: 'true',
+        GITHUB_REPOSITORY: 'kovojs/kovo',
+        GITHUB_RUN_ATTEMPT: '2',
+        GITHUB_RUN_ID: 'current-run',
+        GITHUB_SHA: 'current-sha',
+      }),
+    ).rejects.toThrow('not produced by this GitHub Actions run and SHA');
+    const tamperedRoot = await packedStarterFixture();
+    await writeFile(path.join(tamperedRoot, 'package-0.tgz'), 'tampered');
+    await expect(validatePackedStarterDirectory(tamperedRoot)).rejects.toThrow(
+      'digest mismatch for @kovojs/core',
+    );
+  });
+
+  it('runs each selector as its own bounded process without a file monolith', () => {
     const groups = groupStarterEntriesForExecution([
       { file: 'b.test.ts', id: 'b-two', testName: 'two?' },
       { file: 'a.test.ts', id: 'a-one', testName: 'one' },
@@ -827,24 +985,25 @@ describe('ci-shards', () => {
     ]);
 
     expect(groups.map((group) => group.map((entry) => entry.id))).toEqual([
-      ['b-one', 'b-two'],
       ['a-one'],
+      ['b-one'],
+      ['b-two'],
     ]);
     expect(starterGroupVitestArgs(groups[0])).toEqual([
-      'exec',
-      'vitest',
-      '--run',
-      'b.test.ts',
-      '-t',
-      'one|two\\?',
-    ]);
-    expect(starterGroupVitestArgs(groups[1])).toEqual([
       'exec',
       'vitest',
       '--run',
       'a.test.ts',
       '-t',
       'one',
+    ]);
+    expect(starterGroupVitestArgs(groups[2])).toEqual([
+      'exec',
+      'vitest',
+      '--run',
+      'b.test.ts',
+      '-t',
+      'two\\?',
     ]);
   });
 
@@ -931,16 +1090,49 @@ describe('ci-shards', () => {
     expect(calls.filter((call) => call.args[2] === 'list')).toHaveLength(2);
     expect(
       calls.filter((call) => call.args[1] === 'vitest' && call.args[2] === '--run'),
-    ).toHaveLength(2);
+    ).toHaveLength(entries.length);
   });
 
-  it('applies each configured starter filter as a regular expression', () => {
+  it('treats configured selector text literally instead of loosening it as a regex', () => {
     expect(() =>
       validateStarterGroupTestFilters(
         [{ file: 'proof.test.ts', id: 'regex-entry', testName: 'proof (one|two)$' }],
         ['suite > proof two'],
       ),
+    ).toThrow(/matched zero collected tests/);
+    expect(() =>
+      validateStarterGroupTestFilters(
+        [{ file: 'proof.test.ts', id: 'literal-entry', testName: 'proof (one|two)$' }],
+        ['suite > proof (one|two)$'],
+      ),
     ).not.toThrow();
+  });
+
+  it('rejects uncovered identities, multiply owned identities, and stale selectors', () => {
+    expect(() =>
+      validateStarterFileTestCoverage(
+        [{ file: 'proof.test.ts', id: 'first', testName: 'first proof' }],
+        ['suite > first proof', 'suite > second proof'],
+      ),
+    ).toThrow(/unmatched: suite > second proof/);
+    expect(() =>
+      validateStarterFileTestCoverage(
+        [
+          { file: 'proof.test.ts', id: 'broad', testName: 'proof' },
+          { file: 'proof.test.ts', id: 'exact', testName: 'first proof' },
+        ],
+        ['suite > first proof'],
+      ),
+    ).toThrow(/multiply owned: suite > first proof => broad, exact/);
+    expect(() =>
+      validateStarterFileTestCoverage(
+        [
+          { file: 'proof.test.ts', id: 'current', testName: 'current proof' },
+          { file: 'proof.test.ts', id: 'stale', testName: 'renamed proof' },
+        ],
+        ['suite > current proof'],
+      ),
+    ).toThrow(/stale="renamed proof"/);
   });
 
   it('keeps file-wide starter entries supported after live test collection', async () => {
@@ -1026,6 +1218,35 @@ describe('ci-shards', () => {
       'Starter entries proof failed with exit code 7',
     );
   });
+
+  it('fails closed on supervisor timeout and process-tree cleanup failure', async () => {
+    const manifest = await starterManifest([
+      { file: 'proof.test.ts', id: 'proof', testName: 'current proof', timeoutMs: 300_000 },
+    ]);
+    const results = [
+      {
+        exitCode: 0,
+        stderr: '',
+        stdout: JSON.stringify([{ file: '/repo/proof.test.ts', name: 'suite > current proof' }]),
+      },
+      { cleanupError: new Error('marker survived'), exitCode: 0 },
+    ];
+    await expect(
+      runStarterShard(manifest, { runProcess: async () => results.shift() }),
+    ).rejects.toThrow('process-tree cleanup failure: marker survived');
+
+    const timeoutResults = [
+      {
+        exitCode: 0,
+        stderr: '',
+        stdout: JSON.stringify([{ file: '/repo/proof.test.ts', name: 'suite > current proof' }]),
+      },
+      { exitCode: null, timedOut: true },
+    ];
+    await expect(
+      runStarterShard(manifest, { runProcess: async () => timeoutResults.shift() }),
+    ).rejects.toThrow('bounded-process timeout');
+  });
 });
 
 function compareStrings(a, b) {
@@ -1053,6 +1274,55 @@ async function writeFixture(rootDir, relativePath, source) {
 async function starterManifest(entries) {
   const root = await fixtureRoot();
   const file = path.join(root, 'starter.json');
-  await writeFile(file, `${JSON.stringify({ entries, kind: 'starter' })}\n`);
+  await writeFile(
+    file,
+    `${JSON.stringify({
+      entries: entries.map((entry) => ({
+        cadence: 'per-pr',
+        seconds: 1,
+        timeoutMs: 300_000,
+        ...entry,
+      })),
+      kind: 'starter',
+    })}\n`,
+  );
   return file;
+}
+
+async function packedStarterFixture(options = {}) {
+  const root = await fixtureRoot();
+  const packageNames = [
+    '@kovojs/core',
+    '@kovojs/style',
+    '@kovojs/browser',
+    '@kovojs/server',
+    '@kovojs/test',
+    '@kovojs/drizzle',
+    '@kovojs/headless-ui',
+    '@kovojs/icons',
+    '@kovojs/ui',
+    '@kovojs/better-auth',
+    '@kovojs/verify',
+    '@kovojs/compiler',
+    '@kovojs/cli',
+    'create-kovo',
+  ];
+  const tarballs = {};
+  const sha256 = {};
+  for (const [index, packageName] of packageNames.entries()) {
+    const tarball = `package-${index}.tgz`;
+    tarballs[packageName] = tarball;
+    await writeFile(path.join(root, tarball), 'fixture');
+    sha256[packageName] = createHash('sha256').update('fixture').digest('hex');
+  }
+  await writeFile(
+    path.join(root, 'packed-kovo-packages.json'),
+    `${JSON.stringify({
+      generatedBy: options.generatedBy ?? 'scripts/ci-shards.mjs pack-starter',
+      producer: options.producer ?? { kind: 'local' },
+      sha256,
+      tarballs,
+    })}\n`,
+  );
+  return root;
 }

@@ -25,6 +25,19 @@ env:
   NODE_OPTIONS: --experimental-transform-types --disable-warning=ExperimentalWarning
 
 jobs:
+  starter-security-residual:
+    runs-on: ubuntu-latest
+    # Twenty-four selector-owned production proofs run two at a time from one same-run packed
+    # manifest. The bound includes package packing and supervisor cleanup margin.
+    timeout-minutes: 140
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: ./.github/actions/kovo-setup
+        with:
+          rebuild-better-sqlite3: 'true'
+      - name: Run selector-complete starter security residuals
+        run: vp exec pnpm run test:starter:security-nightly
+
   campaign:
     runs-on: ubuntu-latest
     # The release profile owns a 120-minute internal wall budget. Keep runner margin so a

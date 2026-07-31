@@ -74,10 +74,10 @@ describe('Plan 3 security-gate cost budgets', () => {
     expect(packageJson.scripts.check).not.toContain(
       'node scripts/security-cost-budget-runner.mjs --all',
     );
-    // The unsharded root suite must not scale heavyweight compiler/build
-    // proofs past the four-core CI resource envelope. CI shards independently
-    // tighten this to one file at a time with --no-file-parallelism.
-    expect(packageJson.scripts.test).toBe('vitest --run --maxWorkers=1');
+    // Local and CI root discovery share the acceptance ownership registry. The
+    // root runner retains one Vitest worker after excluding dedicated lanes.
+    expect(packageJson.scripts.test).toBe('pnpm run test:root');
+    expect(packageJson.scripts['test:root']).toBe('node scripts/ci-shards.mjs run-root');
   });
 
   it('routes already-built pack gates through the existing publish-readiness job', () => {

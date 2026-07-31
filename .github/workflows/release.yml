@@ -240,10 +240,39 @@ jobs:
           include-hidden-files: true
           retention-days: 1
 
+  starter-security-residual:
+    needs: authorize
+    runs-on: ubuntu-latest
+    timeout-minutes: 140
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: ./.github/actions/kovo-release-pnpm
+      - name: Install exact release dependencies
+        run: >-
+          "$RUNNER_TEMP/node-v24.18.0-linux-x64/bin/node"
+          "$KOVO_RELEASE_PNPM_CLI" install --frozen-lockfile
+        env:
+          COREPACK_HOME: ${{ runner.temp }}/kovo-corepack-pnpm-10.12.1
+          PATH: ${{ runner.temp }}/node-v24.18.0-linux-x64/bin:/usr/bin:/bin
+      - name: Run release starter security residuals from same-run packed packages
+        run: >-
+          "$RUNNER_TEMP/node-v24.18.0-linux-x64/bin/node"
+          "$KOVO_RELEASE_PNPM_CLI" run test:starter:security-nightly
+        env:
+          COREPACK_HOME: ${{ runner.temp }}/kovo-corepack-pnpm-10.12.1
+          PATH: ${{ runner.temp }}/node-v24.18.0-linux-x64/bin:/usr/bin:/bin
+
   seal-release:
     needs:
       - authorize
       - prepare
+      - starter-security-residual
     runs-on: ubuntu-latest
     env:
       BASH_ENV: ''
