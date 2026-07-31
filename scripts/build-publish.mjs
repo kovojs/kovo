@@ -1,4 +1,5 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, lstatSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
@@ -191,11 +192,18 @@ export function buildCommand(plan, pkgJson) {
 
 function write() {
   for (const pkg of publicPackages()) {
-    const pkgPath = path.join(packageDir(pkg), 'package.json');
+    const pkgDir = packageDir(pkg);
+    const pkgPath = path.join(pkgDir, 'package.json');
     const pkgJson = JSON.parse(readFileSync(pkgPath, 'utf8'));
     const plan = derivePublishPlan(pkgJson);
 
     pkgJson.files = publishFiles(pkg, pkgJson);
+    if (pkg.name === '@kovojs/ui') {
+      if (!pkgJson.kovo || typeof pkgJson.kovo !== 'object' || Array.isArray(pkgJson.kovo)) {
+        throw new Error('@kovojs/ui requires object-valued kovo metadata');
+      }
+      pkgJson.kovo.vendoredSourceHelperHashes = uiVendoredSourceHelperHashes(pkgDir);
+    }
     // Use a dedicated `build:dist` script so we never clobber a package's existing
     // `build` (e.g. @kovojs/browser's `build` = inline-loader generation).
     pkgJson.scripts = {
@@ -233,15 +241,42 @@ function uiVendoredSourceFiles(pkgJson) {
     const sourceFile = sourceTarget.replace(/^\.\//, '');
     if (/^src\/[^/]+\.tsx$/.test(sourceFile)) files.add(sourceFile);
   }
-  for (const helper of [
-    'src/navigation-types.ts',
-    'src/pass-through.ts',
-    'src/safe-url.ts',
-    'src/theme.ts',
-  ]) {
+  for (const helper of uiVendoredHelperSourcePaths) {
     files.add(helper);
   }
   return [...files].sort((left, right) => left.localeCompare(right));
+}
+
+export const uiVendoredHelperSourcePaths = Object.freeze([
+  'src/pass-through.ts',
+  'src/safe-url.ts',
+  'src/theme.ts',
+]);
+
+export function uiVendoredSourceHelperHashes(uiPackageDir) {
+  const hashes = {};
+  for (const helperPath of uiVendoredHelperSourcePaths) {
+    if (!/^src\/[a-z][a-z0-9-]*\.ts$/u.test(helperPath)) {
+      throw new Error(`unsupported @kovojs/ui vendored helper path ${helperPath}`);
+    }
+    const absolutePath = path.resolve(uiPackageDir, helperPath);
+    const relativePath = path.relative(uiPackageDir, absolutePath).split(path.sep).join('/');
+    if (relativePath !== helperPath) {
+      throw new Error(`@kovojs/ui vendored helper path escapes the package: ${helperPath}`);
+    }
+    const stats = lstatSync(absolutePath);
+    if (stats.isSymbolicLink() || !stats.isFile()) {
+      throw new Error(
+        `@kovojs/ui vendored helper must be a regular non-symlink file: ${helperPath}`,
+      );
+    }
+    const source = readFileSync(absolutePath, 'utf8');
+    const normalizedSource = source.endsWith('\n') ? source : `${source}\n`;
+    hashes[helperPath] = `sha256-${createHash('sha256')
+      .update(normalizedSource)
+      .digest('base64url')}`;
+  }
+  return hashes;
 }
 
 function buildAndVerify() {

@@ -1,8 +1,15 @@
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { buildCommand, derivePublishPlan } from './build-publish.mjs';
+import {
+  buildCommand,
+  derivePublishPlan,
+  uiVendoredHelperSourcePaths,
+  uiVendoredSourceHelperHashes,
+} from './build-publish.mjs';
 import {
   importPathForPackageSubpath,
   normalizePackageExports,
@@ -214,5 +221,32 @@ describe('package export resolver', () => {
     expect(buildCommand(plan, manifest)).toBe(
       'vp pack src/api.ts src/bin.ts src/index.ts --dts && node ../../scripts/agent-docs-snapshot.mjs',
     );
+  });
+
+  it('generates the exact path-keyed hash ledger for packed UI helpers', () => {
+    const manifest = JSON.parse(readFileSync('packages/ui/package.json', 'utf8'));
+    const generated = uiVendoredSourceHelperHashes(path.resolve('packages/ui'));
+
+    expect(Object.keys(generated)).toEqual(uiVendoredHelperSourcePaths);
+    expect(generated).toEqual(manifest.kovo.vendoredSourceHelperHashes);
+  });
+
+  it('refuses to generate helper authority from a symlink', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'kovo-ui-helper-ledger-'));
+    try {
+      mkdirSync(path.join(root, 'src'), { recursive: true });
+      for (const helperPath of uiVendoredHelperSourcePaths) {
+        writeFileSync(
+          path.join(root, helperPath),
+          `export const helper = ${JSON.stringify(helperPath)};\n`,
+        );
+      }
+      rmSync(path.join(root, 'src/theme.ts'));
+      symlinkSync('safe-url.ts', path.join(root, 'src/theme.ts'));
+
+      expect(() => uiVendoredSourceHelperHashes(root)).toThrow(/regular non-symlink/u);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
   });
 });

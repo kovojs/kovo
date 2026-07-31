@@ -350,6 +350,11 @@
       "toolbar": "sha256-ohT3J_DC2YCK_VBXGovaKUKdGn6LUSwntlUqKSqPdNk",
       "tooltip": "sha256-xDv_gGKCbM090H-9aYc32uTfJxlXhLAmtRl2YXHgQ2M"
     },
+    "vendoredSourceHelperHashes": {
+      "src/pass-through.ts": "sha256--LBWzGdyqnGVZOTg_tLeOTlbNfyGntp7dlkRq53YyF0",
+      "src/safe-url.ts": "sha256-so8ktAIqy8_KAklgoGwgIQ1XgKnVuMdZDnCUMBIDe1Y",
+      "src/theme.ts": "sha256-tI4MS3kmf8ZZ1u13dvoSJ80eQBMIiANCcUyEGjFduEc"
+    },
     "prefix": "kovo-ui-"
   }
 }

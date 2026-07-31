@@ -169,6 +169,160 @@ describe('extractPackageComponentCss over published vendored UI source', () => {
     }
   });
 
+  it('does not resolve an unledgered relative style helper from the package filesystem', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-package-css-packed-helper-'));
+    const packageDir = join(root, 'node_modules', '@fixture', 'ui');
+    const helperPath = join(packageDir, 'src/palette.ts');
+    const source = [
+      "import * as style from '@kovojs/style';",
+      "import { accent } from './palette.js';",
+      'const base = style.create({ root: { padding: 8 } });',
+      'const helper = style.create({ root: { color: accent } });',
+      'export function Button() {',
+      '  return <button {...style.attrs(base.root, helper.root)}>Button</button>;',
+      '}',
+      '',
+    ].join('\n');
+    const extract = () =>
+      extractPackageComponentCss('@fixture/ui', {
+        fileName: join(root, 'src/app.tsx'),
+        packagePrefixDiscoveryRoot: root,
+        source: `import '@fixture/ui/button';`,
+      });
+
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      mkdirSync(join(packageDir, 'src'), { recursive: true });
+      writeFileSync(join(root, 'src/app.tsx'), `import '@fixture/ui/button';`, 'utf8');
+      writeFileSync(join(packageDir, 'src/button.tsx'), source, 'utf8');
+      writeFileSync(helperPath, "export const accent = 'unledgered-helper-before';\n", 'utf8');
+      writeFileSync(
+        join(packageDir, 'package.json'),
+        JSON.stringify({
+          exports: { './button': { default: './dist/button.mjs' } },
+          kovo: {
+            vendoredSource: true,
+            vendoredSourceHashes: { button: vendoredSourceHash(source) },
+          },
+          name: '@fixture/ui',
+        }),
+        'utf8',
+      );
+
+      const beforeTamper = extract();
+      writeFileSync(helperPath, "export const accent = 'unledgered-helper-after';\n", 'utf8');
+      const afterTamper = extract();
+
+      expect(beforeTamper.css).toBeNull();
+      expect(beforeTamper.sourceFiles).toEqual([]);
+      expect(beforeTamper.diagnostics).toEqual([
+        expect.objectContaining({
+          fileName: 'src/button.tsx',
+          message: expect.stringContaining('missing from the authenticated'),
+        }),
+      ]);
+      expect(afterTamper).toEqual(beforeTamper);
+      expect(JSON.stringify(afterTamper)).not.toContain('unledgered-helper-after');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('requires an exact regular-file hash ledger for the relative helper closure', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-package-css-packed-helper-ledger-'));
+    const packageDir = join(root, 'node_modules', '@fixture', 'ui');
+    const manifestPath = join(packageDir, 'package.json');
+    const helperPath = join(packageDir, 'src/theme.ts');
+    const source = [
+      "import * as style from '@kovojs/style';",
+      "import { accent } from './theme.js';",
+      'const base = style.create({ root: { color: accent } });',
+      'export const Button = () => <button {...style.attrs(base.root)}>Button</button>;',
+      '',
+    ].join('\n');
+    const helperSource = "export const accent = 'authenticated-helper';\n";
+    const extraSource = 'export const extra = true;\n';
+    const manifest = (helperHashes?: Record<string, string>) => ({
+      exports: { './button': { default: './dist/button.mjs' } },
+      kovo: {
+        vendoredSource: true,
+        vendoredSourceHashes: { button: vendoredSourceHash(source) },
+        ...(helperHashes === undefined ? {} : { vendoredSourceHelperHashes: helperHashes }),
+      },
+      name: '@fixture/ui',
+    });
+    const writeManifest = (helperHashes?: Record<string, string>) =>
+      writeFileSync(manifestPath, JSON.stringify(manifest(helperHashes)), 'utf8');
+    const extract = () =>
+      extractPackageComponentCss('@fixture/ui', {
+        fileName: join(root, 'src/app.tsx'),
+        packagePrefixDiscoveryRoot: root,
+        source: `import '@fixture/ui/button';`,
+      });
+
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      mkdirSync(join(packageDir, 'src'), { recursive: true });
+      writeFileSync(join(root, 'src/app.tsx'), `import '@fixture/ui/button';`, 'utf8');
+      writeFileSync(join(packageDir, 'src/button.tsx'), source, 'utf8');
+      writeFileSync(helperPath, helperSource, 'utf8');
+
+      writeManifest({ 'src/theme.ts': vendoredSourceHash(helperSource) });
+      const authenticated = extract();
+      expect(authenticated.diagnostics).toEqual([]);
+      expect(authenticated.css).toContain('color:authenticated-helper');
+
+      writeFileSync(helperPath, "export const accent = 'tampered-helper';\n", 'utf8');
+      expect(extract().diagnostics).toEqual([
+        expect.objectContaining({
+          fileName: 'src/theme.ts',
+          message: expect.stringContaining('helper source hash mismatch'),
+        }),
+      ]);
+      writeFileSync(helperPath, helperSource, 'utf8');
+
+      writeManifest();
+      expect(extract().diagnostics).toEqual([
+        expect.objectContaining({ message: expect.stringContaining('missing from') }),
+      ]);
+
+      writeFileSync(join(packageDir, 'src/extra.ts'), extraSource, 'utf8');
+      writeManifest({
+        'src/extra.ts': vendoredSourceHash(extraSource),
+        'src/theme.ts': vendoredSourceHash(helperSource),
+      });
+      expect(extract().diagnostics).toEqual([
+        expect.objectContaining({
+          fileName: 'src/extra.ts',
+          message: expect.stringContaining('this path is extra'),
+        }),
+      ]);
+
+      for (const unsupportedPath of ['../escape.ts', 'src/nested/theme.ts', 'src/theme.json']) {
+        writeManifest({ [unsupportedPath]: vendoredSourceHash(helperSource) });
+        expect(extract().diagnostics).toEqual([
+          expect.objectContaining({
+            fileName: 'package.json',
+            message: expect.stringContaining('exact src/<name>.ts'),
+          }),
+        ]);
+      }
+
+      rmSync(helperPath);
+      writeFileSync(join(packageDir, 'src/real-theme.ts'), helperSource, 'utf8');
+      symlinkSync('real-theme.ts', helperPath);
+      writeManifest({ 'src/theme.ts': vendoredSourceHash(helperSource) });
+      expect(extract().diagnostics).toEqual([
+        expect.objectContaining({
+          fileName: 'src/theme.ts',
+          message: expect.stringContaining('non-symlink'),
+        }),
+      ]);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('fails closed when the hash ledger drifts or names a non-public source', () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-package-css-packed-untrusted-'));
     const packageDir = join(root, 'node_modules', '@fixture', 'ui');

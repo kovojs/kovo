@@ -8025,6 +8025,7 @@ async function kovoBuildStylesheetCss(appModulePath: string): Promise<KovoBuildS
   };
   const packageResult = extractPackageComponentCss('@kovojs/ui', extractionOptions);
   const appResult = extractAppComponentCss(extractionOptions);
+  assertKovoBuildStylesheetExtractionDiagnostics(packageResult.diagnostics, appResult.diagnostics);
   const appRouteTargets = extractAppRouteCssTargets(extractionOptions);
   const appCssAssets = buildSnapshotDenseArray(appResult.cssAssets, 'App CSS assets');
   const routeTargets = buildSnapshotDenseArray(
@@ -8060,6 +8061,72 @@ async function kovoBuildStylesheetCss(appModulePath: string): Promise<KovoBuildS
       ...stylesheetCssFromBuildStylesheetAssets(appSplitAssets),
     ],
   };
+}
+
+/** @internal Regression seam for fail-closed production stylesheet extraction. */
+export async function kovoBuildStylesheetCssForTesting(appModulePath: string): Promise<void> {
+  await kovoBuildStylesheetCss(appModulePath);
+}
+
+interface KovoBuildStylesheetExtractionDiagnostic {
+  readonly fileName: string;
+  readonly message: string;
+}
+
+function assertKovoBuildStylesheetExtractionDiagnostics(
+  packageDiagnostics: readonly KovoBuildStylesheetExtractionDiagnostic[],
+  appDiagnostics: readonly KovoBuildStylesheetExtractionDiagnostic[],
+): void {
+  const groups = [
+    { diagnostics: packageDiagnostics, label: 'package @kovojs/ui' },
+    { diagnostics: appDiagnostics, label: 'app' },
+  ] as const;
+  const detailLines: string[] = [];
+  let diagnosticCount = 0;
+
+  for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
+    const group = groups[groupIndex]!;
+    const diagnostics = buildSnapshotDenseArray(
+      group.diagnostics,
+      `Kovo build ${group.label} stylesheet extraction diagnostics`,
+    );
+    diagnosticCount += diagnostics.length;
+    for (let diagnosticIndex = 0; diagnosticIndex < diagnostics.length; diagnosticIndex += 1) {
+      const diagnostic = diagnostics[diagnosticIndex]!;
+      if (typeof diagnostic !== 'object' || diagnostic === null) {
+        throw new TypeError(`Kovo build ${group.label} stylesheet diagnostic must be a record.`);
+      }
+      const fileName = buildOwnDataValue(
+        diagnostic,
+        'fileName',
+        `Kovo build ${group.label} stylesheet diagnostic`,
+      );
+      const message = buildOwnDataValue(
+        diagnostic,
+        'message',
+        `Kovo build ${group.label} stylesheet diagnostic`,
+      );
+      if (typeof fileName !== 'string' || typeof message !== 'string') {
+        throw new TypeError(
+          `Kovo build ${group.label} stylesheet diagnostic requires fileName/message strings.`,
+        );
+      }
+      if (detailLines.length < 10) {
+        buildSecurityArrayAppend(
+          detailLines,
+          `${group.label} ${stableText(fileName)}: ${stableText(message)}`,
+          'CLI packages/cli/src/commands/build-export.ts stylesheet diagnostics',
+        );
+      }
+    }
+  }
+
+  if (diagnosticCount === 0) return;
+  const details = buildArrayJoin(detailLines, '\n');
+  const omittedCount = diagnosticCount - detailLines.length;
+  const suffix =
+    omittedCount > 0 ? `\n... ${omittedCount} more stylesheet extraction diagnostics` : '';
+  throw new Error(`kovo build stylesheet extraction failed:\n${details}${suffix}`);
 }
 
 function assertKovoBuildCssDelivery(

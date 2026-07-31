@@ -1,3 +1,4 @@
+import { lstatSync as builtinLstatSync } from 'node:fs';
 import {
   dirname as builtinPathDirname,
   extname as builtinPathExtname,
@@ -21,6 +22,7 @@ import { createCompilerOwnedAppContractProject } from './app-contract-project.js
 import { cssIrHeader } from './ir.js';
 import {
   compilerArrayAppend,
+  compilerArrayIsArray,
   compilerArrayLength,
   compilerCreateMap,
   compilerCreateSet,
@@ -39,6 +41,7 @@ import {
   compilerSha256Base64,
   compilerSnapshotDenseArray,
   compilerSnapshotJsonValue,
+  compilerStatsIsSymbolicLink,
   compilerStringEndsWith,
   compilerStringIncludes,
   compilerStringSlice,
@@ -66,6 +69,7 @@ const nativePathExtname = builtinPathExtname;
 const nativePathIsAbsolute = builtinPathIsAbsolute;
 const nativePathRelative = builtinPathRelative;
 const nativePathResolve = builtinPathResolve;
+const nativeLstatSync = builtinLstatSync;
 
 // SPEC §6.1.1 + §13.1: a first-party component package (one that declares a
 // `kovo.prefix`, e.g. `@kovojs/ui` → `kovo-ui-`) authors its styled components
@@ -136,8 +140,10 @@ interface PackageComponentSourceDiscovery {
 }
 
 const vendoredComponentNamePattern = /^[a-z][a-z0-9-]*$/;
+const vendoredHelperSourcePathPattern = /^src\/[a-z][a-z0-9-]*\.ts$/;
 const vendoredSourceHashPattern = /^sha256-[A-Za-z0-9_-]{43}$/;
 const maximumVendoredComponentSourceBytes = 2 * 1024 * 1024;
+const maximumVendoredHelperSourceCount = 16;
 
 /**
  * Extract the StyleX CSS for every styled component file reachable through a
@@ -156,10 +162,14 @@ export function extractPackageComponentCss(
   }
 
   const discovery = packageComponentSources(resolved);
+  const resolveStaticImport =
+    discovery.sourceSnapshots === undefined
+      ? resolveLocalStaticImport(resolved.fileSystem)
+      : resolveSnapshotStaticImport(discovery.sourceSnapshots);
   const extracted = extractComponentCssFromFiles(discovery.sourceFiles, {
     fileSystem: resolved.fileSystem,
     rootDir: resolved.packageDir,
-    resolveStaticImport: resolveLocalStaticImport(resolved.fileSystem),
+    resolveStaticImport,
     ...(discovery.sourceSnapshots === undefined
       ? {}
       : { sourceSnapshots: discovery.sourceSnapshots }),
@@ -889,11 +899,205 @@ function authenticatedVendoredPackageComponentSources(
     compilerMapSet(sourceSnapshots, absoluteFileName, source);
   }
 
+  const helperFailure = authenticateVendoredPackageHelperSources(
+    resolved,
+    kovo,
+    sourceFiles,
+    sourceSnapshots,
+  );
+  if (helperFailure !== null) {
+    return vendoredSourceDiscoveryFailure(helperFailure.fileName, helperFailure.message);
+  }
+
   return {
     diagnostics: [],
     sourceFiles: uniqueSorted(sourceFiles),
     sourceSnapshots,
   };
+}
+
+function authenticateVendoredPackageHelperSources(
+  resolved: ResolvedPackage,
+  kovo: object,
+  publicSourceFiles: readonly string[],
+  sourceSnapshots: Map<string, string>,
+): PackageComponentCssDiagnostic | null {
+  const helperHashesValue = compilerOwnDataValue(
+    kovo,
+    'vendoredSourceHelperHashes',
+    'Compiler package kovo metadata',
+  );
+  if (
+    helperHashesValue !== undefined &&
+    (typeof helperHashesValue !== 'object' ||
+      helperHashesValue === null ||
+      compilerArrayIsArray(helperHashesValue))
+  ) {
+    return {
+      fileName: 'package.json',
+      message: 'kovo.vendoredSourceHelperHashes must be a path-keyed SHA-256 record.',
+    };
+  }
+
+  const helperHashes = helperHashesValue ?? compilerFreeze({});
+  const helperPaths = compilerSnapshotDenseArray(
+    compilerObjectKeys(helperHashes),
+    'Compiler vendored helper source paths',
+  );
+  if (helperPaths.length > maximumVendoredHelperSourceCount) {
+    return {
+      fileName: 'package.json',
+      message: `kovo.vendoredSourceHelperHashes exceeds ${maximumVendoredHelperSourceCount} helper sources.`,
+    };
+  }
+
+  const declaredHelperFiles = compilerCreateSet<string>();
+  const sortedHelperPaths = uniqueSorted(helperPaths);
+  for (let index = 0; index < sortedHelperPaths.length; index += 1) {
+    const helperPath = sortedHelperPaths[index]!;
+    const expectedHash = compilerOwnDataValue(
+      helperHashes,
+      helperPath,
+      'Compiler vendored helper source hashes',
+    );
+    if (
+      compilerRegExpExec(vendoredHelperSourcePathPattern, helperPath) === null ||
+      typeof expectedHash !== 'string' ||
+      compilerRegExpExec(vendoredSourceHashPattern, expectedHash) === null
+    ) {
+      return {
+        fileName: 'package.json',
+        message:
+          'kovo.vendoredSourceHelperHashes must contain only exact src/<name>.ts/SHA-256 pairs.',
+      };
+    }
+
+    const absoluteFileName = nativePathResolve(resolved.packageDir, helperPath);
+    if (
+      !isInsideDirectory(resolved.packageDir, absoluteFileName) ||
+      vendoredHelperPathContainsSymbolicLink(resolved.packageDir, absoluteFileName) ||
+      resolved.fileSystem.kind(absoluteFileName) !== 'file'
+    ) {
+      return {
+        fileName: helperPath,
+        message:
+          'Authenticated vendored helper source must be a bounded regular non-symlink src/<name>.ts file.',
+      };
+    }
+    const source = resolved.fileSystem.readFileBounded(
+      absoluteFileName,
+      maximumVendoredComponentSourceBytes,
+    );
+    if (
+      source === null ||
+      vendoredHelperPathContainsSymbolicLink(resolved.packageDir, absoluteFileName)
+    ) {
+      return {
+        fileName: helperPath,
+        message:
+          'Authenticated vendored helper source could not be read within the source-size and non-symlink bounds.',
+      };
+    }
+    const observedHash = vendoredSourceHash(source);
+    if (!compilerSecureStringEqual(expectedHash, observedHash)) {
+      return {
+        fileName: helperPath,
+        message: `Authenticated vendored helper source hash mismatch: expected ${expectedHash}, got ${observedHash}.`,
+      };
+    }
+    compilerSetAdd(declaredHelperFiles, absoluteFileName);
+    compilerMapSet(sourceSnapshots, absoluteFileName, source);
+  }
+
+  return authenticateVendoredPackageHelperClosure(
+    resolved.packageDir,
+    publicSourceFiles,
+    sourceSnapshots,
+    declaredHelperFiles,
+    sortedHelperPaths,
+  );
+}
+
+function authenticateVendoredPackageHelperClosure(
+  packageDir: string,
+  publicSourceFiles: readonly string[],
+  sourceSnapshots: ReadonlyMap<string, string>,
+  declaredHelperFiles: ReadonlySet<string>,
+  sortedHelperPaths: readonly string[],
+): PackageComponentCssDiagnostic | null {
+  const pending = compilerSnapshotDenseArray(
+    publicSourceFiles,
+    'Compiler authenticated vendored source closure',
+  );
+  const discoveredHelpers = compilerCreateSet<string>();
+
+  for (let index = 0; index < pending.length; index += 1) {
+    const fileName = pending[index]!;
+    const source = compilerMapGet(sourceSnapshots, fileName);
+    if (source === undefined) {
+      return {
+        fileName: relativeToRoot(packageDir, fileName),
+        message: 'Authenticated vendored source closure lost its source snapshot.',
+      };
+    }
+    const specifiers = compilerSnapshotDenseArray(
+      compilerSourceModuleSpecifiers(source),
+      'Compiler authenticated vendored source module specifiers',
+    );
+    for (let specifierIndex = 0; specifierIndex < specifiers.length; specifierIndex += 1) {
+      const specifier = specifiers[specifierIndex]!;
+      if (!compilerStringStartsWith(specifier, '.')) continue;
+      const importedFileName = resolveSnapshotStaticImportFileName(
+        sourceSnapshots,
+        fileName,
+        specifier,
+      );
+      if (importedFileName === null) {
+        return {
+          fileName: relativeToRoot(packageDir, fileName),
+          message: `Relative import ${specifier} is missing from the authenticated vendored source helper ledger.`,
+        };
+      }
+      if (
+        compilerSetHas(declaredHelperFiles, importedFileName) &&
+        !compilerSetHas(discoveredHelpers, importedFileName)
+      ) {
+        compilerSetAdd(discoveredHelpers, importedFileName);
+        compilerArrayAppend(
+          pending,
+          importedFileName,
+          'Compiler authenticated vendored source closure',
+        );
+      }
+    }
+  }
+
+  for (let index = 0; index < sortedHelperPaths.length; index += 1) {
+    const helperPath = sortedHelperPaths[index]!;
+    const absoluteFileName = nativePathResolve(packageDir, helperPath);
+    if (!compilerSetHas(discoveredHelpers, absoluteFileName)) {
+      return {
+        fileName: helperPath,
+        message:
+          'kovo.vendoredSourceHelperHashes must exactly cover the relative helper import closure; this path is extra.',
+      };
+    }
+  }
+  return null;
+}
+
+function vendoredHelperPathContainsSymbolicLink(
+  packageDir: string,
+  absoluteFileName: string,
+): boolean {
+  try {
+    return (
+      compilerStatsIsSymbolicLink(nativeLstatSync(nativePathResolve(packageDir, 'src'))) ||
+      compilerStatsIsSymbolicLink(nativeLstatSync(absoluteFileName))
+    );
+  } catch {
+    return true;
+  }
 }
 
 function packagePublicComponentNames(exportsMap: object): string[] {
