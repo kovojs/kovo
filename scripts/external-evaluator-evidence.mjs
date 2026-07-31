@@ -1,11 +1,12 @@
 #!/usr/bin/env node
-import { createHash, createPublicKey, verify as verifyCryptographicSignature } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { authenticatedPackedJourneyPackages } from './golden-journey.mjs';
 import { packageSetIdentity } from './golden-journey/packed-app.mjs';
+import { isEd25519Spki, verifyEd25519Spki } from './kovo-certificate-signature.mjs';
 import { validateKnownFailureRegister } from './known-failure-register.mjs';
 import { readBoundedRegularFile } from './lib/bounded-regular-file.mjs';
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
@@ -694,15 +695,9 @@ function validateTranscriptSignature(transcript, evaluator, label, findings) {
       `${label} evaluator public key`,
     );
     const signatureBytes = canonicalBase64(signature.value, `${label} signature`);
-    const publicKey = createPublicKey({
-      key: publicKeyBytes,
-      format: 'der',
-      type: 'spki',
-    });
     if (
-      publicKey.asymmetricKeyType !== 'ed25519' ||
       signatureBytes.byteLength !== 64 ||
-      !verifyCryptographicSignature(null, payload, publicKey, signatureBytes)
+      !verifyEd25519Spki(payload, publicKeyBytes, signatureBytes)
     ) {
       findings.push(`${label}.signature failed Ed25519 verification`);
     }
@@ -722,8 +717,7 @@ function validateEvaluatorPublicKey(record, label, findings) {
   }
   try {
     const bytes = canonicalBase64(record.spki, `${label}.publicKey.spki`);
-    const key = createPublicKey({ key: bytes, format: 'der', type: 'spki' });
-    if (key.asymmetricKeyType !== 'ed25519') {
+    if (!isEd25519Spki(bytes)) {
       findings.push(`${label}.publicKey must decode as Ed25519`);
     }
     if (record.fingerprint !== sha256(bytes)) {

@@ -109,6 +109,41 @@ describe('external evaluator release evidence', () => {
     );
   });
 
+  it('rejects non-Ed25519, malformed, and non-canonical evaluator key material', () => {
+    const wrongType = validFixture();
+    const wrongTypeSpki = generateKeyPairSync('ec', {
+      namedCurve: 'prime256v1',
+    }).publicKey.export({ format: 'der', type: 'spki' });
+    const wrongTypeEncoded = wrongTypeSpki.toString('base64');
+    wrongType.policy.evaluators[0].publicKey = {
+      algorithm: 'ed25519',
+      fingerprint: externalEvaluatorPublicKeyFingerprint(wrongTypeEncoded),
+      spki: wrongTypeEncoded,
+    };
+    expect(findings(wrongType)).toContain('policy.evaluators[0].publicKey must decode as Ed25519');
+
+    const malformed = validFixture();
+    const malformedEncoded = Buffer.from('not a DER SPKI').toString('base64');
+    malformed.policy.evaluators[0].publicKey = {
+      algorithm: 'ed25519',
+      fingerprint: externalEvaluatorPublicKeyFingerprint(malformedEncoded),
+      spki: malformedEncoded,
+    };
+    expect(findings(malformed)).toContain('policy.evaluators[0].publicKey must decode as Ed25519');
+
+    const nonCanonicalKey = validFixture();
+    nonCanonicalKey.policy.evaluators[0].publicKey.spki += '\n';
+    expect(findings(nonCanonicalKey)).toContain(
+      'policy.evaluators[0].publicKey is malformed: policy.evaluators[0].publicKey.spki must be canonical base64',
+    );
+
+    const nonCanonicalSignature = validFixture();
+    nonCanonicalSignature.evidence.transcripts[0].signature.value += '\n';
+    expect(findings(nonCanonicalSignature)).toContain(
+      'evidence.transcripts[0].signature is malformed or unverifiable: evidence.transcripts[0] signature must be canonical base64',
+    );
+  });
+
   it('rejects stale, future-dated, and pre-registration journeys even when re-signed', () => {
     const stale = validFixture();
     resignTranscript(stale, 0, (transcript) => {

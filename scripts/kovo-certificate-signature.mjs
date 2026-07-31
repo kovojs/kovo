@@ -67,20 +67,35 @@ export function verifyKovoCertificateSignature(certificateBytes, envelope) {
   }
 }
 
+/** Check exact Ed25519 SPKI bytes through the existing script-side crypto acquisition door. */
+export function isEd25519Spki(publicKeySpki) {
+  try {
+    return ed25519SpkiKey(publicKeySpki) !== undefined;
+  } catch {
+    return false;
+  }
+}
+
 /** Verify exact Ed25519 bytes through the existing script-side crypto acquisition door. */
 export function verifyEd25519Spki(payloadBytes, publicKeySpki, signatureBytes) {
   try {
-    const publicKey = createPublicKey({
-      format: 'der',
-      key: Buffer.from(publicKeySpki),
-      type: 'spki',
-    });
     const signature = Buffer.from(signatureBytes);
-    if (publicKey.asymmetricKeyType !== 'ed25519' || signature.length !== 64) return false;
+    if (signature.length !== 64) return false;
+    const publicKey = ed25519SpkiKey(publicKeySpki);
+    if (publicKey === undefined) return false;
     return verifySignature(null, Buffer.from(payloadBytes), publicKey, signature);
   } catch {
     return false;
   }
+}
+
+function ed25519SpkiKey(publicKeySpki) {
+  const publicKey = createPublicKey({
+    format: 'der',
+    key: Buffer.from(publicKeySpki),
+    type: 'spki',
+  });
+  return publicKey.asymmetricKeyType === 'ed25519' ? publicKey : undefined;
 }
 
 function validSha512(value) {

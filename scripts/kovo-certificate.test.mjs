@@ -1,4 +1,4 @@
-import { createHash, generateKeyPairSync } from 'node:crypto';
+import { createHash, generateKeyPairSync, sign as createCryptographicSignature } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -16,7 +16,9 @@ import {
   validateCertificateLexicalAuthorityLedger,
 } from './kovo-certificate.mjs';
 import {
+  isEd25519Spki,
   signKovoCertificate,
+  verifyEd25519Spki,
   verifyKovoCertificateSignature,
 } from './kovo-certificate-signature.mjs';
 
@@ -147,6 +149,27 @@ describe('kovo.certificate/v1 search-side generator', () => {
       ),
     ).toBe(false);
     expect(() => signKovoCertificate(certificate)).toThrow(/caller-supplied PKCS8/iu);
+  });
+
+  it('keeps shared Ed25519 SPKI parsing and verification boolean-only and fail-closed', () => {
+    const payload = Buffer.from('kovo reviewed evidence payload');
+    const signingPair = generateKeyPairSync('ed25519');
+    const publicKeySpki = signingPair.publicKey.export({ format: 'der', type: 'spki' });
+    const signature = createCryptographicSignature(null, payload, signingPair.privateKey);
+    const forgedPair = generateKeyPairSync('ed25519');
+    const forgedSignature = createCryptographicSignature(null, payload, forgedPair.privateKey);
+    const wrongTypeSpki = generateKeyPairSync('ec', {
+      namedCurve: 'prime256v1',
+    }).publicKey.export({ format: 'der', type: 'spki' });
+
+    expect(isEd25519Spki(publicKeySpki)).toBe(true);
+    expect(isEd25519Spki(wrongTypeSpki)).toBe(false);
+    expect(isEd25519Spki(Buffer.from('not a DER SPKI'))).toBe(false);
+    expect(verifyEd25519Spki(payload, publicKeySpki, signature)).toBe(true);
+    expect(verifyEd25519Spki(Buffer.from('tampered'), publicKeySpki, signature)).toBe(false);
+    expect(verifyEd25519Spki(payload, publicKeySpki, forgedSignature)).toBe(false);
+    expect(verifyEd25519Spki(payload, wrongTypeSpki, signature)).toBe(false);
+    expect(verifyEd25519Spki(payload, publicKeySpki, signature.subarray(1))).toBe(false);
   });
 
   it('closes whole package trees, computes sha512 and a least post-fixpoint, and emits stable roots and doors', () => {
