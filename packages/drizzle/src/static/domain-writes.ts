@@ -747,8 +747,9 @@ import { staticAccessExpression, staticAccessName } from './summaries.js';
 
 /** @internal */ export function rawTablesByMutationHandler(
   file: SourceFileInput,
+  projectSourceFile?: SourceFile,
 ): ReadonlyMap<string, readonly string[]> {
-  return withParsedSourceFile(projectSourceFileInput(file), (sourceFile) => {
+  return withMutationSourceFile(file, projectSourceFile, (sourceFile) => {
     const rawTables = new Map<string, string[]>();
     const localFunctions = rawSqlLocalFunctionsByName(sourceFile);
 
@@ -775,8 +776,9 @@ import { staticAccessExpression, staticAccessName } from './summaries.js';
 
 /** @internal */ export function rawWriteSqlTrustByMutationHandler(
   file: SourceFileInput,
+  projectSourceFile?: SourceFile,
 ): ReadonlyMap<string, RawWriteSqlTrust> {
-  return withParsedSourceFile(projectSourceFileInput(file), (sourceFile) => {
+  return withMutationSourceFile(file, projectSourceFile, (sourceFile) => {
     const trustByMutation = new Map<string, RawWriteSqlTrust>();
 
     forEachMutationConfig(sourceFile, (key, config) => {
@@ -789,6 +791,22 @@ import { staticAccessExpression, staticAccessName } from './summaries.js';
 
     return trustByMutation;
   });
+}
+
+function withMutationSourceFile<T>(
+  file: SourceFileInput,
+  projectSourceFile: SourceFile | undefined,
+  visit: (sourceFile: SourceFile) => T,
+): T {
+  if (projectSourceFile) {
+    if (projectSourceFile.getFullText() !== file.source) {
+      throw new TypeError(
+        `Kovo mutation analysis source ${JSON.stringify(file.fileName)} does not match its project snapshot.`,
+      );
+    }
+    return visit(projectSourceFile);
+  }
+  return withParsedSourceFile(projectSourceFileInput(file), visit);
 }
 
 function projectSourceFileInput(file: SourceFileInput): SourceFileInput {

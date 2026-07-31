@@ -11,7 +11,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.3.0",
-      "sourceTreeSha256": "36250f3b72506911f73dcffacc2f8b0d299348819777090e87c69fd1228a52fc",
+      "sourceTreeSha256": "b3c8f03f06c8833e50174b7fc6d82e4a3f024316af4f8471685d4dd1a4762ad6",
       "manifestVariants": [
         {
           "fingerprint": "sha256:80d390e85123b76e58a9270f45d1420deaefd869d361bf8181cfa3f310ae6c08"
@@ -1882,7 +1882,7 @@
           "securityRole": "trust-escape"
         }
       ],
-      "sourceTreeSha256": "cc6500ee9d3f62fca22045f21542257cf36718764e807ec81e954710ea6d084d"
+      "sourceTreeSha256": "ed668bd013ec81639f0dc3756b0e6c6441cc5da760f5d021fe359f78f1d928f9"
     },
     {
       "manifestVariants": [

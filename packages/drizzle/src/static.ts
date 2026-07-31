@@ -3728,6 +3728,8 @@ function extractTouchGraphFromPreparedFiles(
   extraUnresolvedIdentifiers: ReadonlySet<string> = new Set(),
   tablesForContextFile: (file: SourceFileInput) => ReturnType<typeof tablesForFile> = (file) =>
     tablesForFile(file, sourceContext),
+  projectSourceFileForContextFile: (file: SourceFileInput) => SourceFile | undefined = () =>
+    undefined,
 ): TouchGraph {
   const unresolvedIdentifiers = new Set<string>(extraUnresolvedIdentifiers);
   const graph: Record<string, TouchGraphEntry> = {};
@@ -3744,7 +3746,10 @@ function extractTouchGraphFromPreparedFiles(
     const fileTables = tablesForContextFile(file);
     const functions = functionsForFile(file);
     const rawTablesByDomainWrite = rawTablesByDomainWriteCallback(file);
-    const rawTablesByMutation = rawTablesByMutationHandler(file);
+    const rawTablesByMutation = rawTablesByMutationHandler(
+      file,
+      projectSourceFileForContextFile(file),
+    );
     const summaries = functionTouchSummariesForFile(
       file,
       functions,
@@ -5023,12 +5028,13 @@ class LazyDrizzleFactStore implements DrizzleFactStore {
     const functions = this.functionExtractionsByFileName();
     const facts: WriteScopeFact[] = [];
 
-    for (const file of contextFiles) {
+    for (const [index, file] of contextFiles.entries()) {
       const fileTables = this.tablesForFile(file);
       const rawTablesByDomainWrite = rawTablesByDomainWriteCallback(file);
-      const rawTablesByMutation = rawTablesByMutationHandler(file);
+      const projectSourceFile = this.extraction.sourceFiles[index];
+      const rawTablesByMutation = rawTablesByMutationHandler(file, projectSourceFile);
       const rawWriteTrustByDomainWrite = rawWriteSqlTrustByDomainWriteCallback(file);
-      const rawWriteTrustByMutation = rawWriteSqlTrustByMutationHandler(file);
+      const rawWriteTrustByMutation = rawWriteSqlTrustByMutationHandler(file, projectSourceFile);
       for (const fn of projectFunctionsForFile(file, functions)) {
         if (fn.summaryOnly) continue;
         const rawTables = mergedRawTables(
@@ -5312,12 +5318,19 @@ class LazyDrizzleFactStore implements DrizzleFactStore {
   touchGraph(): TouchGraph {
     if (this.cachedTouchGraph) return this.cachedTouchGraph;
     const functions = this.functionExtractionsByFileName();
+    const projectSourceFilesByName = new Map(
+      this.extraction.files.map((file, index) => [
+        file.fileName,
+        this.extraction.sourceFiles[index],
+      ]),
+    );
     this.cachedTouchGraph = extractTouchGraphFromPreparedFiles(
       this.extraction.files,
       (file) => projectFunctionsForFile(file, functions),
       this.sourceContext(),
       projectUnresolvedConditionalTableExpressions(this.extraction),
       (file) => this.tablesForFile(file),
+      (file) => projectSourceFilesByName.get(file.fileName),
     );
     return this.cachedTouchGraph;
   }

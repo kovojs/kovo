@@ -588,12 +588,28 @@ export function addRawSqlOwnerWriteProof(
     ].join('\n'),
     'raw SQL proof Drizzle import',
   );
+  const inlineContactAssignment =
+    "trustedAssign(email, { evidence: { digest: 'sha256:18a30ad899a45b62f335cc711d04e66652b0d0edbe5bf7baeb7ccaa111d7808e', kind: 'test', reference: 'starter-tests/contact-email-primary-key' }, invariant: 'governed-write.authorized-principal', why: { kind: 'policy', policy: 'starter.contact-email-primary-key/v1' } })";
   mutations = replaceRequired(
     mutations,
     'const duplicateEmailError = s.object({ email: s.string() });',
     [
       'const duplicateEmailError = s.object({ email: s.string() });',
       "const rawOwner = domain('raw-owner');",
+      'type RawSqlProofDb = Parameters<Parameters<typeof app.mutation>[0]["handler"]>[1]["db"];',
+      'async function rawOwnerWriteProof(',
+      '  db: RawSqlProofDb,',
+      `  ${staticStatement ? '_company' : 'company'}: string,`,
+      `  ${staticStatement ? '_email' : 'email'}: string,`,
+      '): Promise<void> {',
+      `  await db.${rawSqlMethod}(`,
+      options.trusted
+        ? "    trustedSql(sql`update raw_owners set label = ${company} where id = ${email}`, { justification: 'reviewed owner predicate' }),"
+        : staticStatement
+          ? "    staticSql`update raw_owners set label = 'fixture' where id = 'fixture'`,"
+          : `    sql\`update raw_owners set label = \${company} where id = \${${inlineContactAssignment}}\`,`,
+      '  );',
+      '}',
     ].join('\n'),
     'raw SQL proof domain declaration',
   );
@@ -609,8 +625,6 @@ export function addRawSqlOwnerWriteProof(
     "        why: { kind: 'policy', policy: 'starter.contact-email-primary-key/v1' },",
     '      }),',
   ];
-  const inlineContactAssignment =
-    "trustedAssign(email, { evidence: { digest: 'sha256:18a30ad899a45b62f335cc711d04e66652b0d0edbe5bf7baeb7ccaa111d7808e', kind: 'test', reference: 'starter-tests/contact-email-primary-key' }, invariant: 'governed-write.authorized-principal', why: { kind: 'policy', policy: 'starter.contact-email-primary-key/v1' } })";
   mutations = replaceRequired(
     mutations,
     [
@@ -622,13 +636,7 @@ export function addRawSqlOwnerWriteProof(
       '    });',
     ].join('\n'),
     [
-      `    await request.db.${rawSqlMethod}(`,
-      options.trusted
-        ? `      trustedSql(sql\`update raw_owners set label = \${company} where id = \${${inlineContactAssignment}}\`, { justification: 'reviewed owner predicate' }),`
-        : staticStatement
-          ? "      staticSql`update raw_owners set label = 'fixture' where id = 'fixture'`,"
-          : `      sql\`update raw_owners set label = \${company} where id = \${${inlineContactAssignment}}\`,`,
-      '    );',
+      '    await rawOwnerWriteProof(request.db, company, email);',
       '    await request.db.insert(contacts).values({',
       '      company,',
       '      email,',
@@ -639,6 +647,7 @@ export function addRawSqlOwnerWriteProof(
     'raw SQL proof contact insert anchor',
   );
   writeFileSync(mutationsPath, mutations, 'utf8');
+  formatGeneratedSources(root, ['src/mutations.ts', 'src/schema.ts']);
 }
 
 function patchRawSqlProofMutationRegistry(source: string, declareTables: boolean): string {
@@ -1097,10 +1106,12 @@ import { webhook${includeWebhookTransactionProof ? ', createMemoryWebhookReplayS
             '  reads: [txProof],',
             '  async load(_input, context): Promise<{ ok: true }> {',
             '    const reader = context.db;',
-            '    // SPEC §6.6/§10.3: this deliberate cast proves the runtime KV433 floor remains',
-            '    // authoritative when paranoid mode makes the dedicated static KV433 finding advisory.',
-            '    const db = reader as unknown as RuntimeSafetyWriteDb;',
-            "    await db.insert(txProofs).values({ id: 'readonly-runtime-choke-must-not-write' });",
+            "    if ('insert' in reader && typeof reader.insert === 'function') {",
+            '      const insertBuilder = reader.insert(txProofs);',
+            "      if (typeof insertBuilder === 'object' && insertBuilder !== null && 'values' in insertBuilder && typeof insertBuilder.values === 'function') {",
+            "        await insertBuilder.values({ id: 'readonly-runtime-choke-must-not-write' });",
+            '      }',
+            '    }',
             '    return { ok: true };',
             '  },',
             '});',
