@@ -42,6 +42,11 @@ import { kovo } from '@kovojs/server/vite';
 import { installEgressFloorSync } from '../../server/src/egress-bootstrap.js';
 import { mergeBuildRevealFacts } from './commands/build-export.js';
 import {
+  kovoCliTestTimeoutMs,
+  KOVO_BUILD_TEST_PROCESS_DEADLINE_MS,
+  runBoundedKovoCli,
+} from '../test/bounded-cli.js';
+import {
   builtServerProcess,
   closeBuiltServerProcess,
   listenBuiltServerProcess,
@@ -55,6 +60,20 @@ const repoRoot = process.cwd();
 // giving the serialized build callback enough time to reach its own finite fail-closed bounds and
 // execute its cwd/stdio cleanup before Vitest advances to the next test.
 const BUILD_INTEGRATION_TEST_TIMEOUT_MS = 90_000;
+const ISOLATED_BUILD_TEST_TIMEOUT_MS = kovoCliTestTimeoutMs(KOVO_BUILD_TEST_PROCESS_DEADLINE_MS);
+const THREE_ISOLATED_BUILDS_TEST_TIMEOUT_MS = kovoCliTestTimeoutMs(
+  KOVO_BUILD_TEST_PROCESS_DEADLINE_MS,
+  KOVO_BUILD_TEST_PROCESS_DEADLINE_MS,
+  KOVO_BUILD_TEST_PROCESS_DEADLINE_MS,
+);
+const NESTED_ANALYSIS_INPUTS_TEST_NAME =
+  'binds nested app imports and client entry to invocation-root-relative source identities';
+const DECLASSIFICATION_DOOR_TEST_NAME =
+  'request-closes a declassification door imported by the application root';
+const DRIZZLE_DISK_CACHE_TEST_NAME =
+  'does not persist Drizzle security facts to app-writable disk cache state';
+const FRAGMENT_ONLY_OPTIMISTIC_TEST_NAME =
+  'treats fragment-only component consumers as dead hand-written optimistic transforms in build preflight';
 const cliSecurityGuaranteeHash = JSON.parse(
   readFileSync(join(repoRoot, 'packages/cli/package.json'), 'utf8'),
 ).kovoBuildProvenance.securityGuarantees.canonicalHash as string;
@@ -73,6 +92,14 @@ const BUILD_FIXTURE_CSRF = {
   sessionId: () => BUILD_FIXTURE_CSRF_SESSION_ID,
 };
 const dockerIt = process.env.KOVO_TEST_DOCKER === '1' && dockerAvailable() ? it : it.skip;
+
+function isolatedBuildIt(name: string, run: () => Promise<void>): void {
+  it(name, run, ISOLATED_BUILD_TEST_TIMEOUT_MS);
+}
+
+function isolatedThreeBuildsIt(name: string, run: () => Promise<void>): void {
+  it(name, run, THREE_ISOLATED_BUILDS_TEST_TIMEOUT_MS);
+}
 
 function buildFixtureMutationBody(
   audience: string,
@@ -1740,12 +1767,10 @@ export default app.assemble({ mutations: [decoy, actual] });
     }
   }, 90_000);
 
-  it('does not report guarded build surfaces as UNGUARDED', async () => {
+  isolatedBuildIt('does not report guarded build surfaces as UNGUARDED', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-access-facts-'));
     const appPath = join(root, 'app.mjs');
     const outDir = join(root, 'dist');
-    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
-    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const appSource = `
 import { defineKovo } from '@kovojs/server';
 const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
@@ -1815,12 +1840,13 @@ export default app.assemble({
       writeRetentionProofConfig(root);
       writeFileSync(appPath, appSource, 'utf8');
 
-      const exitCode = await withCwd(root, () =>
-        mainAsync(['build', './app.mjs', '--out', outDir]),
-      );
-      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
-      expect(exitCode, errorOutput).toBe(0);
-      expect(errorOutput).not.toContain('UNGUARDED');
+      const build = await runBoundedKovoCli({
+        args: ['build', './app.mjs', '--out', outDir],
+        cwd: root,
+        deadlineMs: KOVO_BUILD_TEST_PROCESS_DEADLINE_MS,
+      });
+      expect(build.exitCode, build.stderr).toBe(0);
+      expect(build.stderr).not.toContain('UNGUARDED');
       expect(existsSync(outDir)).toBe(true);
       const graph = JSON.parse(readFileSync(join(outDir, '.kovo/graph.json'), 'utf8')) as {
         escapeCensus?: Record<string, unknown>;
@@ -1909,17 +1935,13 @@ export default app.assemble({
         /private|publicKey|signature|keyId/u,
       );
     } finally {
-      stdout.mockRestore();
-      stderr.mockRestore();
       rmSync(root, { force: true, recursive: true });
     }
   });
 
-  it('binds nested app imports and client entry to invocation-root-relative source identities', async () => {
+  isolatedBuildIt(NESTED_ANALYSIS_INPUTS_TEST_NAME, async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-nested-analysis-inputs-'));
     const outDir = join(root, 'dist');
-    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
-    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const appSource = [
       "import { app } from './kovo.mjs';",
       "import { sharedRoute } from '../shared.mjs';",
@@ -1955,11 +1977,12 @@ export default app.assemble({
       writeFileSync(join(root, 'index.html'), clientEntry, 'utf8');
       writeRetentionProofConfig(root);
 
-      const exitCode = await withCwd(root, () =>
-        mainAsync(['build', './src/app.mjs', '--out', 'dist']),
-      );
-      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
-      expect(exitCode, errorOutput).toBe(0);
+      const build = await runBoundedKovoCli({
+        args: ['build', './src/app.mjs', '--out', 'dist'],
+        cwd: root,
+        deadlineMs: KOVO_BUILD_TEST_PROCESS_DEADLINE_MS,
+      });
+      expect(build.exitCode, build.stderr).toBe(0);
 
       const graph = JSON.parse(readFileSync(join(outDir, '.kovo/graph.json'), 'utf8')) as {
         analysisInputs: {
@@ -2013,18 +2036,14 @@ export default app.assemble({
         }),
       ]);
     } finally {
-      stdout.mockRestore();
-      stderr.mockRestore();
       rmSync(root, { force: true, recursive: true });
     }
-  }, 90_000);
+  });
 
-  it('request-closes a declassification door imported by the application root', async () => {
+  isolatedBuildIt(DECLASSIFICATION_DOOR_TEST_NAME, async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-runtime-reveal-'));
     const appPath = join(root, 'app.mjs');
     const outDir = join(root, 'dist');
-    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
-    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
@@ -2048,17 +2067,18 @@ export default app.assemble({
         'utf8',
       );
 
-      const exitCode = await withCwd(root, () => mainAsync(['build', appPath, '--out', outDir]));
-      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
-      expect(exitCode).toBe(1);
-      expect(errorOutput).toContain('ERROR KV448 app.mjs:1');
-      expect(errorOutput).toContain(
+      const build = await runBoundedKovoCli({
+        args: ['build', appPath, '--out', outDir],
+        cwd: root,
+        deadlineMs: KOVO_BUILD_TEST_PROCESS_DEADLINE_MS,
+      });
+      expect(build.exitCode).toBe(1);
+      expect(build.stderr).toContain('ERROR KV448 app.mjs:1');
+      expect(build.stderr).toContain(
         'declassification policy and reveal doors are unavailable to untrusted-data-reachable modules',
       );
       expect(existsSync(outDir)).toBe(false);
     } finally {
-      stdout.mockRestore();
-      stderr.mockRestore();
       rmSync(root, { force: true, recursive: true });
     }
   });
@@ -2472,11 +2492,9 @@ export async function unsafe(db, input) {
     }
   });
 
-  it('does not persist Drizzle security facts to app-writable disk cache state', async () => {
+  isolatedThreeBuildsIt(DRIZZLE_DISK_CACHE_TEST_NAME, async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-static-cache-'));
     const appPath = join(root, 'app.mjs');
-    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
-    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
@@ -2511,31 +2529,36 @@ export const marker = sql.raw('select 1');
         'utf8',
       );
 
-      await expect(withCwd(root, () => mainAsync(['build', './app.mjs']))).resolves.toBe(0);
+      const build = (args: readonly string[]) =>
+        runBoundedKovoCli({
+          args,
+          cwd: root,
+          deadlineMs: KOVO_BUILD_TEST_PROCESS_DEADLINE_MS,
+        });
+      const firstBuild = await build(['build', './app.mjs']);
+      expect(firstBuild.exitCode, firstBuild.stderr).toBe(0);
+      expect(firstBuild.stderr).toBe('');
 
-      await expect(withCwd(root, () => mainAsync(['build', './app.mjs']))).resolves.toBe(0);
+      const secondBuild = await build(['build', './app.mjs']);
+      expect(secondBuild.exitCode, secondBuild.stderr).toBe(0);
+      expect(secondBuild.stderr).toBe('');
 
-      await expect(
-        withCwd(root, () => mainAsync(['build', './app.mjs', '--no-cache'])),
-      ).resolves.toBe(0);
+      const uncachedBuild = await build(['build', './app.mjs', '--no-cache']);
+      expect(uncachedBuild.exitCode, uncachedBuild.stderr).toBe(0);
+      expect(uncachedBuild.stderr).toBe('');
       expect(existsSync(join(root, '.kovo/cache/static-build-analysis'))).toBe(false);
-      expect(stderr).not.toHaveBeenCalled();
     } finally {
-      stdout.mockRestore();
-      stderr.mockRestore();
       rmSync(root, { force: true, recursive: true });
     }
     // Three independent production builds prove that no app-writable security cache survives.
     // On the fully populated CI shard their combined runtime can legitimately exceed the generic
     // 30 second timeout; keep the bound local to this exact multi-build proof.
-  }, 90_000);
+  });
 
-  it('treats fragment-only component consumers as dead hand-written optimistic transforms in build preflight', async () => {
+  isolatedBuildIt(FRAGMENT_ONLY_OPTIMISTIC_TEST_NAME, async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-fragment-only-optimistic-'));
     const appPath = join(root, 'src/app.tsx');
     const outDir = join(root, 'dist');
-    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
-    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
@@ -2597,19 +2620,18 @@ export default app.assemble({
         'utf8',
       );
 
-      const exitCode = await withCwd(root, () =>
-        mainAsync(['build', './src/app.tsx', '--out', './dist']),
-      );
-      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
-      expect(exitCode, errorOutput).toBe(1);
-      expect(errorOutput).toContain(
+      const build = await runBoundedKovoCli({
+        args: ['build', './src/app.tsx', '--out', './dist'],
+        cwd: root,
+        deadlineMs: KOVO_BUILD_TEST_PROCESS_DEADLINE_MS,
+      });
+      expect(build.exitCode, build.stderr).toBe(1);
+      expect(build.stderr).toContain(
         'ERROR BUILD_FATAL KV310 app/add-contact -> app/contacts-query',
       );
-      expect(errorOutput).toContain('WARN KV310 app/add-contact -> app/contacts-query');
+      expect(build.stderr).toContain('WARN KV310 app/add-contact -> app/contacts-query');
       expect(existsSync(outDir)).toBe(false);
     } finally {
-      stdout.mockRestore();
-      stderr.mockRestore();
       rmSync(root, { force: true, recursive: true });
     }
   });
