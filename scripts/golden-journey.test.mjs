@@ -28,9 +28,7 @@ describe('golden journey command', () => {
   it('preserves the established helper exports while narrowing evaluator imports', () => {
     expect(authenticatedPackedJourneyPackages).toBe(directAuthenticatedPackedJourneyPackages);
     expect(packedTarballPath).toBe(directPackedTarballPath);
-    expect(validateExternalPackedJourneyManifest).toBe(
-      directValidateExternalPackedJourneyManifest,
-    );
+    expect(validateExternalPackedJourneyManifest).toBe(directValidateExternalPackedJourneyManifest);
     expect(packedAppPackageSetIdentity).toBe(packageSetIdentity);
   });
 
