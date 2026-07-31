@@ -42,7 +42,7 @@ export const defaultCommandExecutionToolingRationales = {
   'packages/cli/src/bin.ts':
     'CLI bootstrap synchronously delegates to the real implementation before framework runtime boot.',
   'packages/cli/src/commands/build-one-shot-orchestrator.ts':
-    'CLI build isolation launches package-owned phase workers with inherited stdio and a private control descriptor.',
+    'CLI build isolation launches package-owned phase workers with inherited stdio and a private control descriptor, then bounds and reaps their process trees on transport failure, deadline, or parent exit.',
   'packages/cli/src/commands/build-export.ts':
     'CLI build/export tooling invokes TypeScript/Vite subprocesses outside request/runtime paths.',
   'packages/cli/src/commands/compile.ts':

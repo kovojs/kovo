@@ -7,6 +7,7 @@ export const KOVO_BUILD_ONE_SHOT_HANDOFF_SCHEMA = 'kovo-build-one-shot-handoff/v
 export const KOVO_BUILD_ONE_SHOT_MAX_WIRE_BYTES = 128 * 1024 * 1024;
 const handoffMagic = Buffer.from('KOVO-BUILD-ONE-SHOT/2\n', 'ascii');
 const handoffHeaderMaxBytes = 16 * 1024;
+const handoffPreludeBytes = handoffMagic.byteLength + 9;
 const digestPattern = /^sha256:[0-9a-f]{64}$/u;
 const headerLengthPattern = /^[0-9a-f]{8}$/u;
 const capturedArrayEvery = Array.prototype.every;
@@ -127,19 +128,25 @@ export function readKovoBuildOneShotHandoff(
   return immutableJsonData(payload, 0) as KovoBuildOneShotPayload;
 }
 
-/** Read a private inherited fd without permitting an unbounded pre-parse allocation. */
+/**
+ * Read exactly one self-framed envelope from a private inherited fd.
+ *
+ * The sole writer is the framework parent, which authenticates the complete input buffer (and
+ * therefore rejects trailing bytes) before forwarding it. The worker reads the authenticated
+ * header-declared length instead of waiting for stream EOF: EOF is a transport cleanup signal, not
+ * part of the authenticated frame, and some child-process pipe states can delay it indefinitely.
+ */
 export function readKovoBuildOneShotWireFromFd(fd: number): Buffer {
-  const chunks: Buffer[] = [];
-  let total = 0;
-  for (;;) {
-    const chunk = capturedBufferAllocUnsafe(64 * 1024);
-    const count = readSync(fd, chunk, 0, chunk.byteLength, null);
-    if (count === 0) break;
-    total += count;
-    assertWireByteLength(total);
-    chunks[chunks.length] = count === chunk.byteLength ? chunk : bufferSubarray(chunk, 0, count);
-  }
-  return capturedBufferConcat(chunks, total);
+  const prelude = capturedBufferAllocUnsafe(handoffPreludeBytes);
+  readExactWireBytes(fd, prelude);
+  const headerLength = parseWirePrelude(prelude);
+  const headerBytes = capturedBufferAllocUnsafe(headerLength);
+  readExactWireBytes(fd, headerBytes);
+  const header = parseWireHeader(headerBytes);
+  const wireByteLength = framedWireByteLength(headerLength, header.payloadBytes);
+  const payload = capturedBufferAllocUnsafe(header.payloadBytes);
+  readExactWireBytes(fd, payload);
+  return capturedBufferConcat([prelude, headerBytes, payload], wireByteLength);
 }
 
 export function kovoBuildOneShotDigest(value: unknown): string {
@@ -169,16 +176,36 @@ function parseWire(wireInput: Uint8Array): {
 } {
   assertWireByteLength(wireInput.byteLength);
   const wire = capturedBufferFrom(wireInput.buffer, wireInput.byteOffset, wireInput.byteLength);
+  const headerLength = parseWirePrelude(wire);
+  const payloadOffset = handoffPreludeBytes + headerLength;
+  if (payloadOffset > wire.byteLength) {
+    throw new NativeTypeError('Kovo build handoff is truncated.');
+  }
+  const header = parseWireHeader(bufferSubarray(wire, handoffPreludeBytes, payloadOffset));
+  const declaredWireByteLength = framedWireByteLength(headerLength, header.payloadBytes);
+  const payload = bufferSubarray(wire, payloadOffset);
+  if (wire.byteLength !== declaredWireByteLength || payload.byteLength !== header.payloadBytes) {
+    throw new NativeTypeError('Kovo build handoff payload length is invalid.');
+  }
+  if (sha256(payload) !== header.digest) {
+    throw new NativeTypeError('Kovo build handoff payload is unauthenticated.');
+  }
+  return capturedObjectFreeze({ header, payload });
+}
+
+function parseWirePrelude(wire: Buffer): number {
   const lengthOffset = handoffMagic.byteLength;
-  const headerOffset = lengthOffset + 9;
   if (
-    wire.byteLength < headerOffset ||
+    wire.byteLength < handoffPreludeBytes ||
     !buffersEqual(bufferSubarray(wire, 0, handoffMagic.byteLength), handoffMagic) ||
-    wire[headerOffset - 1] !== 0x0a
+    wire[handoffPreludeBytes - 1] !== 0x0a
   ) {
     throw new NativeTypeError('Kovo build handoff wire prelude is invalid.');
   }
-  const lengthText = bufferToString(bufferSubarray(wire, lengthOffset, headerOffset - 1), 'ascii');
+  const lengthText = bufferToString(
+    bufferSubarray(wire, lengthOffset, handoffPreludeBytes - 1),
+    'ascii',
+  );
   if (!regExpTest(headerLengthPattern, lengthText)) {
     throw new NativeTypeError('Kovo build handoff header length is invalid.');
   }
@@ -186,44 +213,40 @@ function parseWire(wireInput: Uint8Array): {
   if (headerLength < 2 || headerLength > handoffHeaderMaxBytes) {
     throw new NativeTypeError('Kovo build handoff header exceeded its byte limit.');
   }
-  const payloadOffset = headerOffset + headerLength;
-  if (payloadOffset > wire.byteLength) {
-    throw new NativeTypeError('Kovo build handoff is truncated.');
-  }
+  return headerLength;
+}
+
+function parseWireHeader(headerBytes: Buffer): KovoBuildOneShotHeader {
   let header: unknown;
   try {
-    header = capturedJSONParse(
-      bufferToString(bufferSubarray(wire, headerOffset, payloadOffset), 'utf8'),
-    );
+    header = capturedJSONParse(bufferToString(headerBytes, 'utf8'));
   } catch {
     throw new NativeTypeError('Kovo build handoff header is malformed.');
   }
   if (!exactRecord(header, ['digest', 'identity', 'payloadBytes', 'schema'])) {
     throw new NativeTypeError('Kovo build handoff header is incomplete.');
   }
-  const payloadByteLength = header.payloadBytes;
   if (
     header.schema !== KOVO_BUILD_ONE_SHOT_HANDOFF_SCHEMA ||
     typeof header.digest !== 'string' ||
     !regExpTest(digestPattern, header.digest) ||
     !validIdentity(header.identity) ||
-    typeof payloadByteLength !== 'number' ||
-    !capturedNumberIsSafeInteger(payloadByteLength) ||
-    payloadByteLength < 2
+    typeof header.payloadBytes !== 'number' ||
+    !capturedNumberIsSafeInteger(header.payloadBytes) ||
+    header.payloadBytes < 2
   ) {
     throw new NativeTypeError('Kovo build handoff header is invalid.');
   }
-  const payload = bufferSubarray(wire, payloadOffset);
-  if (payload.byteLength !== payloadByteLength) {
-    throw new NativeTypeError('Kovo build handoff payload length is invalid.');
+  return capturedObjectFreeze(header) as unknown as KovoBuildOneShotHeader;
+}
+
+function readExactWireBytes(fd: number, bytes: Buffer): void {
+  let offset = 0;
+  while (offset < bytes.byteLength) {
+    const count = readSync(fd, bytes, offset, bytes.byteLength - offset, null);
+    if (count === 0) throw new NativeTypeError('Kovo build handoff is truncated.');
+    offset += count;
   }
-  if (sha256(payload) !== header.digest) {
-    throw new NativeTypeError('Kovo build handoff payload is unauthenticated.');
-  }
-  return capturedObjectFreeze({
-    header: capturedObjectFreeze(header) as unknown as KovoBuildOneShotHeader,
-    payload,
-  });
 }
 
 function strictJsonStringify(value: unknown, label: string): string {
@@ -416,6 +439,14 @@ function assertWireByteLength(byteLength: number): void {
   if (byteLength <= 0 || byteLength > KOVO_BUILD_ONE_SHOT_MAX_WIRE_BYTES) {
     throw new NativeTypeError('Kovo build handoff exceeded its byte limit.');
   }
+}
+
+function framedWireByteLength(headerLength: number, payloadBytes: number): number {
+  const prefixBytes = handoffPreludeBytes + headerLength;
+  if (payloadBytes > KOVO_BUILD_ONE_SHOT_MAX_WIRE_BYTES - prefixBytes) {
+    throw new NativeTypeError('Kovo build handoff exceeded its byte limit.');
+  }
+  return prefixBytes + payloadBytes;
 }
 
 function sha256(value: Uint8Array): string {

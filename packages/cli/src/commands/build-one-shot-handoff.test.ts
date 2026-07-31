@@ -1,3 +1,10 @@
+import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { closeSync, mkdtempSync, openSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import type { Writable } from 'node:stream';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -6,6 +13,7 @@ import {
   kovoBuildOneShotDigest,
   KOVO_BUILD_ONE_SHOT_MAX_WIRE_BYTES,
   readKovoBuildOneShotHandoff,
+  readKovoBuildOneShotWireFromFd,
   type KovoBuildOneShotIdentity,
 } from './build-one-shot-handoff.js';
 
@@ -33,6 +41,72 @@ function wire() {
 }
 
 describe('one-shot build private handoff', () => {
+  it('reads one large authenticated frame without depending on channel EOF', async () => {
+    const expectedIdentity = identity();
+    const bytes = encodeKovoBuildOneShotHandoff({
+      analysis: { source: 'x'.repeat(2 * 1024 * 1024) },
+      identity: expectedIdentity,
+      schema: 'kovo-build-one-shot-analysis/v1',
+    });
+
+    await expect(readWireWithoutClosingWriter(bytes)).resolves.toBe(bytes.byteLength);
+  }, 15_000);
+
+  it('rejects a declared over-limit frame without reading its payload or waiting for EOF', async () => {
+    const header = Buffer.from(
+      JSON.stringify({
+        digest: `sha256:${'0'.repeat(64)}`,
+        identity: identity(),
+        payloadBytes: KOVO_BUILD_ONE_SHOT_MAX_WIRE_BYTES,
+        schema: 'kovo-build-one-shot-handoff/v2',
+      }),
+      'utf8',
+    );
+    const bytes = Buffer.concat([
+      Buffer.from('KOVO-BUILD-ONE-SHOT/2\n', 'ascii'),
+      Buffer.from(`${header.byteLength.toString(16).padStart(8, '0')}\n`, 'ascii'),
+      header,
+    ]);
+    const result = await runWireReaderWithoutClosingWriter(bytes);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/byte limit/u);
+  });
+
+  it.each([
+    ['prelude', (bytes: Buffer) => bytes.subarray(0, 12)],
+    [
+      'header',
+      (bytes: Buffer) =>
+        bytes.subarray(0, Buffer.byteLength('KOVO-BUILD-ONE-SHOT/2\n', 'ascii') + 10),
+    ],
+    ['payload', (bytes: Buffer) => bytes.subarray(0, -1)],
+  ])('rejects a truncated %s at channel EOF', (_label, truncate) => {
+    const descriptor = temporaryReadableDescriptor(truncate(wire().bytes));
+    try {
+      expect(() => readKovoBuildOneShotWireFromFd(descriptor.fd)).toThrow(/truncated/u);
+    } finally {
+      descriptor.close();
+    }
+  });
+
+  it('rejects malformed framed length and header bytes before payload allocation', () => {
+    const length = Buffer.from(wire().bytes);
+    length[Buffer.byteLength('KOVO-BUILD-ONE-SHOT/2\n', 'ascii')] = 0x7a;
+    const malformedHeader = Buffer.from(wire().bytes);
+    malformedHeader[Buffer.byteLength('KOVO-BUILD-ONE-SHOT/2\n', 'ascii') + 9] = 0x7a;
+    for (const [bytes, pattern] of [
+      [length, /header length/u],
+      [malformedHeader, /header is malformed/u],
+    ] as const) {
+      const descriptor = temporaryReadableDescriptor(bytes);
+      try {
+        expect(() => readKovoBuildOneShotWireFromFd(descriptor.fd)).toThrow(pattern);
+      } finally {
+        descriptor.close();
+      }
+    }
+  });
+
   it('round-trips one exact, authenticated, deeply frozen payload', () => {
     const handoff = wire();
     expect(inspectKovoBuildOneShotHandoff(handoff.bytes)).toEqual({
@@ -222,4 +296,87 @@ describe('one-shot build private handoff', () => {
     expect(result?.schema).toBe('kovo-build-one-shot-analysis/v1');
   });
 });
-import { createHash } from 'node:crypto';
+
+async function readWireWithoutClosingWriter(bytes: Buffer): Promise<number> {
+  const result = await runWireReaderWithoutClosingWriter(bytes);
+  if (result.status !== 0) {
+    throw new TypeError(
+      `Kovo framed handoff reader failed (${String(result.status)}): ${result.stderr}`,
+    );
+  }
+  return Number(result.stdout);
+}
+
+async function runWireReaderWithoutClosingWriter(
+  bytes: Buffer,
+): Promise<{ readonly status: number | null; readonly stderr: string; readonly stdout: string }> {
+  const moduleUrl = new URL('./build-one-shot-handoff.ts', import.meta.url).href;
+  const child = spawn(
+    process.execPath,
+    [
+      '--disable-warning=ExperimentalWarning',
+      '--experimental-transform-types',
+      '--input-type=module',
+      '--eval',
+      `import { readKovoBuildOneShotWireFromFd } from ${JSON.stringify(moduleUrl)};\n` +
+        `try {\n` +
+        `  const wire = readKovoBuildOneShotWireFromFd(3);\n` +
+        `  process.stdout.write(String(wire.byteLength));\n` +
+        `} catch (error) {\n` +
+        `  process.stderr.write(error instanceof Error ? error.message : String(error));\n` +
+        `  process.exitCode = 1;\n` +
+        `}`,
+    ],
+    { stdio: ['ignore', 'pipe', 'pipe', 'pipe'] },
+  );
+  const control = child.stdio[3] as Writable | null;
+  if (control === null) throw new TypeError('Kovo handoff test omitted its private writer.');
+  let stdout = '';
+  let stderr = '';
+  child.stdout.on('data', (chunk: Buffer) => {
+    stdout += chunk.toString('utf8');
+  });
+  child.stderr.on('data', (chunk: Buffer) => {
+    stderr += chunk.toString('utf8');
+  });
+  control.on('error', () => undefined);
+  control.write(bytes);
+
+  try {
+    const status = await new Promise<number | null>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        child.kill();
+        reject(new TypeError('Kovo framed handoff reader waited for channel EOF.'));
+      }, 10_000);
+      child.on('error', (error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+      child.on('close', (code) => {
+        clearTimeout(timer);
+        resolve(code);
+      });
+    });
+    return { status, stderr, stdout };
+  } finally {
+    control.destroy();
+    child.kill();
+  }
+}
+
+function temporaryReadableDescriptor(bytes: Buffer): {
+  readonly close: () => void;
+  readonly fd: number;
+} {
+  const root = mkdtempSync(join(tmpdir(), 'kovo-one-shot-handoff-test-'));
+  const path = join(root, 'wire');
+  writeFileSync(path, bytes);
+  const fd = openSync(path, 'r');
+  return {
+    close: () => {
+      closeSync(fd);
+      rmSync(root, { force: true, recursive: true });
+    },
+    fd,
+  };
+}
