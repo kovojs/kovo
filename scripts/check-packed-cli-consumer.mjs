@@ -9,6 +9,12 @@ import ts from 'typescript';
 
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import {
+  DEV_READY_POST_BIND_BUDGET_MS,
+  reserveKovoDevLoopbackPort,
+  waitForKovoDevReadyReport,
+  waitForKovoDevTcpListener,
+} from './lib/dev-ready-probe-contract.mjs';
+import {
   packageSubjectFromSnapshotKey,
   parsePnpmSnapshotDependencies,
 } from './lib/pnpm-lock-packages.mjs';
@@ -733,6 +739,9 @@ export default app.assemble({ routes: [home] });
     'utf8',
   );
 
+  const port = await reserveKovoDevLoopbackPort();
+  const localUrl = `http://127.0.0.1:${port}/`;
+  const spawnedAt = Date.now();
   const child = spawn(
     process.execPath,
     [
@@ -744,7 +753,7 @@ export default app.assemble({ routes: [home] });
       '--host',
       '127.0.0.1',
       '--port',
-      '0',
+      String(port),
       '--strict-port',
     ],
     {
@@ -763,11 +772,31 @@ export default app.assemble({ routes: [home] });
   });
 
   try {
-    const localUrl = await waitForPackedDevReady(
-      () => ({ stderr, stdout }),
-      () => child.exitCode,
-    );
-    const page = await fetch(`${localUrl}__kovo`);
+    const listener = await waitForKovoDevTcpListener({
+      label: 'Packed kovo dev',
+      port,
+      readOutput: () => ({ stderr, stdout }),
+      readStatus: () => ({ exitCode: child.exitCode, signalCode: child.signalCode }),
+      startedAt: spawnedAt,
+    });
+    const listenedAt = Date.now();
+    const ready = await waitForKovoDevReadyReport({
+      expected: {
+        appEntry: 'src/app.ts',
+        database: 'none configured',
+        localUrl,
+        mode: 'development',
+      },
+      label: 'Packed kovo dev',
+      readOutput: () => ({ stderr, stdout }),
+      readStatus: () => ({ exitCode: child.exitCode, signalCode: child.signalCode }),
+      startedAt: listenedAt,
+    });
+    const phaseDiagnostics =
+      `listener=${listener.elapsedMs}ms ` + `postBindReadyReport=${ready.observedAfterMs}ms`;
+    const page = await fetch(`${localUrl}__kovo`, {
+      signal: AbortSignal.timeout(DEV_READY_POST_BIND_BUDGET_MS),
+    });
     const html = await page.text();
     if (
       page.status !== 200 ||
@@ -775,7 +804,8 @@ export default app.assemble({ routes: [home] });
       !html.includes('live closed app.assemble() runtime registry')
     ) {
       throw new Error(
-        `Packed kovo dev did not serve its devtool page (${page.status}).\n${stdout}\n${stderr}`,
+        `Packed kovo dev did not serve its devtool page (${page.status}; ${phaseDiagnostics}).` +
+          `\n${stdout}\n${stderr}`,
       );
     }
     const cookie = page.headers.get('set-cookie')?.split(';', 1)[0];
@@ -784,36 +814,19 @@ export default app.assemble({ routes: [home] });
     }
     const client = await fetch(`${localUrl}__kovo/client.js`, {
       headers: { Cookie: cookie },
+      signal: AbortSignal.timeout(DEV_READY_POST_BIND_BUDGET_MS),
     });
     const clientSource = await client.text();
     if (client.status !== 200 || !clientSource.includes('const kovoDevtoolInit = function')) {
       throw new Error(
-        `Packed kovo dev did not serve its bundled client island (${client.status}).\n${stdout}\n${stderr}`,
+        `Packed kovo dev did not serve its bundled client island ` +
+          `(${client.status}; ${phaseDiagnostics}).\n${stdout}\n${stderr}`,
       );
     }
   } finally {
     await stopPackedDev(child);
   }
 }
-
-async function waitForPackedDevReady(output, exitCode) {
-  const deadline = Date.now() + PACKED_DEV_READY_HARNESS_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    const current = output();
-    const match = /Local URL\s+(http:\/\/127\.0\.0\.1:(?!0\/)\d+\/)/u.exec(current.stdout);
-    if (match?.[1] !== undefined) return match[1];
-    if (exitCode() !== null) {
-      throw new Error(
-        `Packed kovo dev exited before readiness.\n${current.stdout}\n${current.stderr}`,
-      );
-    }
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  const current = output();
-  throw new Error(`Packed kovo dev readiness timed out.\n${current.stdout}\n${current.stderr}`);
-}
-
-export const PACKED_DEV_READY_HARNESS_TIMEOUT_MS = 60_000;
 
 async function stopPackedDev(child) {
   if (child.exitCode !== null) return;

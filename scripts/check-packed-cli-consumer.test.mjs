@@ -8,10 +8,15 @@ import {
   assertPackedDocsJourney,
   assertPackedMcpLifecycle,
   assertPackedSemanticApiBoundary,
-  PACKED_DEV_READY_HARNESS_TIMEOUT_MS,
   productionDependencyNamesFromLockfile,
   sourceImportsPackage,
 } from './check-packed-cli-consumer.mjs';
+import {
+  DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS,
+  DEV_READY_POST_BIND_BUDGET_MS,
+  parseKovoDevReadyReport,
+  waitForKovoDevReadyReport,
+} from './lib/dev-ready-probe-contract.mjs';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -25,12 +30,66 @@ ${packages.map((name) => `  '${name}@1.0.0': {}`).join('\n')}
 }
 
 describe('packed CLI consumer proof', () => {
-  it('keeps readiness observation grace separate from the cold-start performance target', () => {
+  it('keeps listener infrastructure and post-bind reporting separate from G2', () => {
     const budgets = JSON.parse(
       readFileSync(new URL('../devex-budgets.json', import.meta.url), 'utf8'),
     );
-    expect(PACKED_DEV_READY_HARNESS_TIMEOUT_MS).toBe(60_000);
+    const source = readFileSync(
+      new URL('./check-packed-cli-consumer.mjs', import.meta.url),
+      'utf8',
+    );
+    expect(DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS).toBe(120_000);
+    expect(DEV_READY_POST_BIND_BUDGET_MS).toBe(5_000);
     expect(budgets.metrics['dev.ready.cold.durationMs'].provisionalTarget).toBe(15_000);
+    expect(source).toContain('const port = await reserveKovoDevLoopbackPort()');
+    expect(source).toContain('waitForKovoDevTcpListener({');
+    expect(source).toContain('waitForKovoDevReadyReport({');
+    expect(source).not.toContain('PACKED_DEV_READY_HARNESS_TIMEOUT_MS');
+  });
+
+  it('accepts only a complete structured ready report and fails fast on child exit', async () => {
+    const expected = {
+      appEntry: 'src/app.ts',
+      database: 'none configured',
+      localUrl: 'http://127.0.0.1:4173/',
+      mode: 'development',
+    };
+    const report = [
+      'Kovo dev ready in 12ms',
+      '  Local URL    http://127.0.0.1:4173/',
+      '  Network URL  http://127.0.0.1:4173/ (loopback only)',
+      '  Mode         development',
+      '  App          src/app.ts',
+      '  Database     none configured',
+      '  Devtool      http://127.0.0.1:4173/__kovo',
+      '',
+    ].join('\n');
+
+    expect(parseKovoDevReadyReport(report, expected)).toEqual({
+      appEntry: 'src/app.ts',
+      database: 'none configured',
+      durationMs: 12,
+      localUrl: 'http://127.0.0.1:4173/',
+    });
+    expect(parseKovoDevReadyReport(report.replace(/  Devtool.*\n/u, ''), expected)).toBeNull();
+    await expect(
+      waitForKovoDevReadyReport({
+        expected,
+        label: 'Fixture kovo dev',
+        readOutput: () => ({ stderr: 'activation failed', stdout: report.slice(0, 40) }),
+        readStatus: () => ({ exitCode: 2, signalCode: null }),
+      }),
+    ).rejects.toThrow(/exited before structured ready report \(exit=2, signal=null/u);
+    await expect(
+      waitForKovoDevReadyReport({
+        expected,
+        label: 'Late fixture kovo dev',
+        readOutput: () => ({ stderr: '', stdout: report }),
+        readStatus: () => ({ exitCode: null, signalCode: null }),
+        startedAt: Date.now() - 2,
+        timeoutMs: 0,
+      }),
+    ).rejects.toThrow(/did not emit its complete structured ready report within the 0ms/u);
   });
 
   it('binds its authored app fixture to one literal receiver identity', () => {

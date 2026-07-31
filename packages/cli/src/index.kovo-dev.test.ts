@@ -9,12 +9,21 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { request as nodeHttpRequest } from 'node:http';
-import { createConnection, createServer as createNetServer } from 'node:net';
+import { createConnection } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import {
+  DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS,
+  DEV_READY_POST_BIND_BUDGET_MS,
+  DEV_READY_PROBE_PROCESS_TIMEOUT_MS,
+  kovoDevLoopbackTcpConnects as tcpConnects,
+  reserveKovoDevLoopbackPort as reservePort,
+  waitForKovoDevReadyReport,
+  waitForKovoDevTcpListener,
+} from '../../../scripts/lib/dev-ready-probe-contract.mjs';
 import {
   isolateAuthoredDevPluginOptions,
   parseDevArgs,
@@ -24,6 +33,16 @@ import type { KovoCommandSecurityDisposition } from './commands/security-disposi
 
 const repoRoot = process.cwd();
 const temporaryRoots: string[] = [];
+const DEV_HMR_TRANSITION_BUDGET_MS = 15_000;
+const DEV_PROCESS_SHUTDOWN_TIMEOUT_MS = 10_000;
+const DEV_READY_WORKER_TEST_TIMEOUT_MS =
+  DEV_READY_PROBE_PROCESS_TIMEOUT_MS + DEV_PROCESS_SHUTDOWN_TIMEOUT_MS;
+const DEV_READY_TWO_PROCESS_TEST_TIMEOUT_MS = DEV_READY_PROBE_PROCESS_TIMEOUT_MS * 2;
+const DEV_READY_HOST_DOOR_TEST_TIMEOUT_MS = DEV_READY_PROBE_PROCESS_TIMEOUT_MS * 3;
+const DEV_READY_HMR_TEST_TIMEOUT_MS =
+  DEV_READY_PROBE_PROCESS_TIMEOUT_MS +
+  DEV_HMR_TRANSITION_BUDGET_MS * 3 +
+  DEV_PROCESS_SHUTDOWN_TIMEOUT_MS;
 
 afterEach(() => {
   delete (globalThis as { __kovoDevCompilerIdsDistinct?: unknown }).__kovoDevCompilerIdsDistinct;
@@ -144,76 +163,82 @@ describe('kovo dev', () => {
     ).toThrow(/rejects authored Vite plugin property futureAuthorityHook/u);
   });
 
-  it('ignores undeclared Vite config in the real default CLI path', async () => {
-    const root = devFixture('undeclared-config', true);
-    const marker = join(root, 'undeclared-config-ran.marker');
-    writeFileSync(
-      join(root, 'vite.config.ts'),
-      `import { writeFileSync } from 'node:fs';
+  it(
+    'ignores undeclared Vite config in the real default CLI path',
+    async () => {
+      const root = devFixture('undeclared-config', true);
+      const marker = join(root, 'undeclared-config-ran.marker');
+      writeFileSync(
+        join(root, 'vite.config.ts'),
+        `import { writeFileSync } from 'node:fs';
 writeFileSync(${JSON.stringify(marker)}, 'executed', 'utf8');
 throw new Error('undeclared Vite config executed');
 `,
-      'utf8',
-    );
-
-    const port = await reservePort();
-    const child = spawnKovoDev(root, port);
-    const output = collectChildOutput(child);
-    try {
-      const response = await fetchWhenReady(`http://127.0.0.1:${port}/`, output, 30_000);
-      const body = await response.text();
-      expect(response.status, output.combined()).toBe(200);
-      expect(body).toContain('<main>Bootstrap safe</main>');
-      expect(existsSync(marker)).toBe(false);
-
-      await waitForOutput(output, /Kovo dev ready in \d+ms/u, 5_000);
-      expect(output.stdout).toContain(`  Local URL    http://127.0.0.1:${port}/`);
-      expect(output.stdout).toContain(`  Network URL  http://127.0.0.1:${port}/ (loopback only)`);
-      expect(output.stdout).toContain('  Mode         development');
-      expect(output.stdout).toContain('  App          src/app.ts');
-      expect(output.stdout).toContain('  Database     none configured');
-      expect(output.stdout).toContain(`  Devtool      http://127.0.0.1:${port}/__kovo`);
-      expect(output.stdout).not.toMatch(/(?:VITE|Local:|press h to show help)/u);
-
-      const devtoolResponse = await fetch(`http://127.0.0.1:${port}/__kovo`);
-      const devtoolHtml = await devtoolResponse.text();
-      expect(devtoolResponse.status, `${devtoolHtml}\n${output.combined()}`).toBe(200);
-      expect(devtoolResponse.headers.get('cache-control')).toBe('no-store');
-      expect(devtoolResponse.headers.get('content-security-policy')).toContain(
-        "default-src 'none'",
+        'utf8',
       );
-      expect(devtoolHtml).toContain('<title>Kovo Dataflow Devtool</title>');
-      expect(devtoolHtml).toContain('live closed app.assemble() runtime registry');
-      expect(devtoolHtml).toContain('Coverage limitations');
-      expect(devtoolHtml).toContain('data-node-id="mutation:app/add-inventory"');
-      expect(devtoolHtml).toContain('data-node-id="domain:inventory"');
-      expect(devtoolHtml).toContain('data-node-id="query:app/inventory-query"');
-      expect(devtoolHtml).toContain('Optimistic coverage (SPEC §10.6)');
-      expect(devtoolHtml).toContain('hand-written');
-      expect(devtoolHtml).toContain('data-node-id="page:/"');
-      expect(devtoolHtml).toContain('src="/__kovo/client.js"');
 
-      const devtoolCookie = devtoolResponse.headers.get('set-cookie')?.split(';', 1)[0] ?? '';
-      expect(devtoolCookie).toMatch(/^Kovo-Dev-Auth=/u);
-      const devtoolClientResponse = await fetch(`http://127.0.0.1:${port}/__kovo/client.js`, {
-        headers: { Cookie: devtoolCookie },
-      });
-      const devtoolClientSource = await devtoolClientResponse.text();
-      expect(devtoolClientResponse.status).toBe(200);
-      expect(devtoolClientResponse.headers.get('cache-control')).toBe('no-store');
-      expect(devtoolClientSource).toContain('const kovoDevtoolInit = function');
-    } finally {
-      await stopChild(child);
-    }
-    await expect(waitForPortClosed(port, 5_000)).resolves.toBeUndefined();
-  }, 40_000);
+      const port = await reservePort();
+      const child = spawnKovoDev(root, port);
+      const output = collectChildOutput(child);
+      try {
+        const ready = await waitForInitialKovoDevReady(port, child, output);
+        const response = await fetchReadyKovoDev(ready.localUrl, child, output);
+        const body = await response.text();
+        expect(response.status, output.combined()).toBe(200);
+        expect(body).toContain('<main>Bootstrap safe</main>');
+        expect(existsSync(marker)).toBe(false);
 
-  it('finishes fixed-port app activation before listen and reports within the post-bind budget', async () => {
-    const root = devFixture('fixed-port-ready-order');
-    const activationMarker = join(root, 'initial-activation.marker');
-    writeFileSync(
-      join(root, 'src/app.ts'),
-      `import { writeFileSync } from 'node:fs';
+        expect(output.stdout).toContain(`  Local URL    http://127.0.0.1:${port}/`);
+        expect(output.stdout).toContain(`  Network URL  http://127.0.0.1:${port}/ (loopback only)`);
+        expect(output.stdout).toContain('  Mode         development');
+        expect(output.stdout).toContain('  App          src/app.ts');
+        expect(output.stdout).toContain('  Database     none configured');
+        expect(output.stdout).toContain(`  Devtool      http://127.0.0.1:${port}/__kovo`);
+        expect(output.stdout).not.toMatch(/(?:VITE|Local:|press h to show help)/u);
+
+        const devtoolResponse = await fetch(`http://127.0.0.1:${port}/__kovo`);
+        const devtoolHtml = await devtoolResponse.text();
+        expect(devtoolResponse.status, `${devtoolHtml}\n${output.combined()}`).toBe(200);
+        expect(devtoolResponse.headers.get('cache-control')).toBe('no-store');
+        expect(devtoolResponse.headers.get('content-security-policy')).toContain(
+          "default-src 'none'",
+        );
+        expect(devtoolHtml).toContain('<title>Kovo Dataflow Devtool</title>');
+        expect(devtoolHtml).toContain('live closed app.assemble() runtime registry');
+        expect(devtoolHtml).toContain('Coverage limitations');
+        expect(devtoolHtml).toContain('data-node-id="mutation:app/add-inventory"');
+        expect(devtoolHtml).toContain('data-node-id="domain:inventory"');
+        expect(devtoolHtml).toContain('data-node-id="query:app/inventory-query"');
+        expect(devtoolHtml).toContain('Optimistic coverage (SPEC §10.6)');
+        expect(devtoolHtml).toContain('hand-written');
+        expect(devtoolHtml).toContain('data-node-id="page:/"');
+        expect(devtoolHtml).toContain('src="/__kovo/client.js"');
+
+        const devtoolCookie = devtoolResponse.headers.get('set-cookie')?.split(';', 1)[0] ?? '';
+        expect(devtoolCookie).toMatch(/^Kovo-Dev-Auth=/u);
+        const devtoolClientResponse = await fetch(`http://127.0.0.1:${port}/__kovo/client.js`, {
+          headers: { Cookie: devtoolCookie },
+        });
+        const devtoolClientSource = await devtoolClientResponse.text();
+        expect(devtoolClientResponse.status).toBe(200);
+        expect(devtoolClientResponse.headers.get('cache-control')).toBe('no-store');
+        expect(devtoolClientSource).toContain('const kovoDevtoolInit = function');
+      } finally {
+        await stopChild(child);
+      }
+      await expect(waitForPortClosed(port, 5_000)).resolves.toBeUndefined();
+    },
+    DEV_READY_PROBE_PROCESS_TIMEOUT_MS,
+  );
+
+  it(
+    'finishes fixed-port app activation before listen and reports within the post-bind budget',
+    async () => {
+      const root = devFixture('fixed-port-ready-order');
+      const activationMarker = join(root, 'initial-activation.marker');
+      writeFileSync(
+        join(root, 'src/app.ts'),
+        `import { writeFileSync } from 'node:fs';
 
 import { defineKovo } from '@kovojs/server';
 
@@ -231,243 +256,277 @@ export default app.assemble({
   routes: [homeRoute],
 });
 `,
-      'utf8',
-    );
+        'utf8',
+      );
 
-    const port = await reservePort();
-    const child = spawnKovoDev(root, port);
-    const output = collectChildOutput(child);
-    try {
-      await waitForFile(activationMarker, output, 30_000);
-      expect(output.stdout).not.toMatch(/Kovo dev ready in \d+ms/u);
-      await expect(tcpConnects(port)).resolves.toBe(false);
+      const port = await reservePort();
+      const child = spawnKovoDev(root, port);
+      const output = collectChildOutput(child);
+      const infrastructureStartedAt = Date.now();
+      try {
+        await waitForFile(
+          activationMarker,
+          child,
+          output,
+          DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS,
+        );
+        expect(output.stdout).not.toMatch(/Kovo dev ready in \d+ms/u);
+        await expect(tcpConnects(port)).resolves.toBe(false);
 
-      await waitForTcpListener(port, child, output, 30_000);
-      const listenedAt = Date.now();
-      await waitForOutput(output, /Kovo dev ready in \d+ms/u, 5_000);
-      expect(Date.now() - listenedAt).toBeLessThanOrEqual(5_000);
+        await waitForKovoDevTcpListener({
+          label: 'Source kovo dev',
+          port,
+          readOutput: () => ({ stderr: output.stderr, stdout: output.stdout }),
+          readStatus: () => ({ exitCode: child.exitCode, signalCode: child.signalCode }),
+          startedAt: infrastructureStartedAt,
+        });
+        const listenedAt = Date.now();
+        const ready = await waitForStructuredKovoDevReport(port, child, output, listenedAt);
+        expect(ready.observedAfterMs).toBeLessThanOrEqual(DEV_READY_POST_BIND_BUDGET_MS);
 
-      const response = await fetch(`http://127.0.0.1:${port}/`);
-      expect(response.status, output.combined()).toBe(200);
-      await expect(response.text()).resolves.toContain('Activation complete');
-    } finally {
-      await stopChild(child);
-    }
-  }, 50_000);
+        const response = await fetchReadyKovoDev(`http://127.0.0.1:${port}/`, child, output);
+        expect(response.status, output.combined()).toBe(200);
+        await expect(response.text()).resolves.toContain('Activation complete');
+      } finally {
+        await stopChild(child);
+      }
+    },
+    DEV_READY_PROBE_PROCESS_TIMEOUT_MS,
+  );
 
-  it('honors boot-pinned HOST and PORT without evaluating undeclared config', async () => {
-    const root = devFixture('pinned-listen-environment');
-    const port = await reservePort();
-    const invocationEnv = Object.freeze(
-      Object.assign(Object.create(null) as NodeJS.ProcessEnv, {
-        HOST: '127.0.0.1',
-        PORT: String(port),
-      }),
-    );
-    const result = await runKovoDevWorker(
-      {
-        appModulePath: join(root, 'src/app.ts'),
-        mode: 'development',
-        root,
-        strictPort: false,
-      },
-      {
-        invocationCwd: repoRoot,
-        invocationEnv,
-        paranoidStaticAdvisory: false,
-      },
-      `http://127.0.0.1:${port}/`,
-    );
-    expect(result, workerFailure(result)).toMatchObject({
-      ok: true,
-      response: { body: expect.stringContaining('<main>Bootstrap safe</main>'), status: 200 },
-      server: { host: '127.0.0.1', port, strictPort: true },
-    });
-  }, 30_000);
+  it(
+    'honors boot-pinned HOST and PORT without evaluating undeclared config',
+    async () => {
+      const root = devFixture('pinned-listen-environment');
+      const port = await reservePort();
+      const invocationEnv = Object.freeze(
+        Object.assign(Object.create(null) as NodeJS.ProcessEnv, {
+          HOST: '127.0.0.1',
+          PORT: String(port),
+        }),
+      );
+      const result = await runKovoDevWorker(
+        {
+          appModulePath: join(root, 'src/app.ts'),
+          mode: 'development',
+          root,
+          strictPort: false,
+        },
+        {
+          invocationCwd: repoRoot,
+          invocationEnv,
+          paranoidStaticAdvisory: false,
+        },
+        `http://127.0.0.1:${port}/`,
+        DEV_READY_PROBE_PROCESS_TIMEOUT_MS,
+      );
+      expect(result, workerFailure(result)).toMatchObject({
+        ok: true,
+        response: { body: expect.stringContaining('<main>Bootstrap safe</main>'), status: 200 },
+        server: { host: '127.0.0.1', port, strictPort: true },
+      });
+    },
+    DEV_READY_WORKER_TEST_TIMEOUT_MS,
+  );
 
-  it('restores verbose Vite lifecycle output under --debug without hiding readiness', async () => {
-    const root = devFixture('debug-output');
-    writeFileSync(
-      join(root, 'package.json'),
-      '{"private":true,"type":"module","dependencies":{"better-sqlite3":"12.11.1"}}\n',
-      'utf8',
-    );
-    const port = await reservePort();
-    const child = spawnKovoDev(root, port, false, true);
-    const output = collectChildOutput(child);
-    try {
-      const response = await fetchWhenReady(`http://127.0.0.1:${port}/`, output, 30_000);
-      expect(response.status, output.combined()).toBe(200);
-      await waitForOutput(output, /Kovo dev ready in \d+ms/u, 5_000);
-      expect(output.combined()).toContain('Local:');
-      expect(output.stdout).toContain('  Database     none configured');
-    } finally {
-      await stopChild(child);
-    }
-  }, 40_000);
+  it(
+    'restores verbose Vite lifecycle output under --debug without hiding readiness',
+    async () => {
+      const root = devFixture('debug-output');
+      writeFileSync(
+        join(root, 'package.json'),
+        '{"private":true,"type":"module","dependencies":{"better-sqlite3":"12.11.1"}}\n',
+        'utf8',
+      );
+      const port = await reservePort();
+      const child = spawnKovoDev(root, port, false, true);
+      const output = collectChildOutput(child);
+      try {
+        const ready = await waitForInitialKovoDevReady(port, child, output);
+        const response = await fetchReadyKovoDev(ready.localUrl, child, output);
+        expect(response.status, output.combined()).toBe(200);
+        expect(output.combined()).toContain('Local:');
+        expect(output.stdout).toContain('  Database     none configured');
+      } finally {
+        await stopChild(child);
+      }
+    },
+    DEV_READY_PROBE_PROCESS_TIMEOUT_MS,
+  );
 
   // @kovo-security-classifier-corpus dev-host-door
   // @kovo-security-certifies C13 dev-host-http-websocket-rebinding-closed
-  it('closes the real HTTP and HMR websocket dev-host door against DNS rebinding', async () => {
-    const root = devFixture('dev-host-door');
-    mkdirSync(join(root, 'public'), { recursive: true });
-    writeFileSync(join(root, 'public/source-secret'), 'extensionless source secret', 'utf8');
-    const defaultPosture = await runKovoDevWorker({
-      appModulePath: join(root, 'src/app.ts'),
-      mode: 'development',
-      port: 0,
-      root,
-      strictPort: true,
-    });
-    expect.soft(defaultPosture, workerFailure(defaultPosture)).toMatchObject({
-      ok: true,
-      readyReport: expect.stringMatching(/Local URL\s+http:\/\/127\.0\.0\.1:(?!0\/)\d+\//u),
-      server: { host: '127.0.0.1' },
-    });
+  it(
+    'closes the real HTTP and HMR websocket dev-host door against DNS rebinding',
+    async () => {
+      const root = devFixture('dev-host-door');
+      mkdirSync(join(root, 'public'), { recursive: true });
+      writeFileSync(join(root, 'public/source-secret'), 'extensionless source secret', 'utf8');
+      const defaultPosture = await runKovoDevWorker(
+        {
+          appModulePath: join(root, 'src/app.ts'),
+          mode: 'development',
+          port: 0,
+          root,
+          strictPort: true,
+        },
+        undefined,
+        undefined,
+        DEV_READY_PROBE_PROCESS_TIMEOUT_MS,
+      );
+      expect.soft(defaultPosture, workerFailure(defaultPosture)).toMatchObject({
+        ok: true,
+        readyReport: expect.stringMatching(/Local URL\s+http:\/\/127\.0\.0\.1:(?!0\/)\d+\//u),
+        server: { host: '127.0.0.1' },
+      });
 
-    const localhostPort = await reservePort('localhost');
-    const localhostPosture = await runKovoDevWorker(
-      {
+      const localhostPort = await reservePort('localhost');
+      const localhostPosture = await runKovoDevWorker(
+        {
+          appModulePath: join(root, 'src/app.ts'),
+          host: 'localhost',
+          mode: 'development',
+          port: localhostPort,
+          root,
+          strictPort: true,
+        },
+        undefined,
+        `http://localhost:${localhostPort}/`,
+        DEV_READY_PROBE_PROCESS_TIMEOUT_MS,
+      );
+      expect.soft(localhostPosture, workerFailure(localhostPosture)).toMatchObject({
+        ok: true,
+        readyReport: expect.stringContaining(`Local URL    http://localhost:${localhostPort}/`),
+        response: { body: expect.stringContaining('<main>Bootstrap safe</main>'), status: 200 },
+        server: { host: 'localhost' },
+      });
+
+      const exposedPosture = await runKovoDevWorker({
         appModulePath: join(root, 'src/app.ts'),
-        host: 'localhost',
+        host: '0.0.0.0',
         mode: 'development',
-        port: localhostPort,
+        port: 0,
         root,
         strictPort: true,
-      },
-      undefined,
-      `http://localhost:${localhostPort}/`,
-    );
-    expect.soft(localhostPosture, workerFailure(localhostPosture)).toMatchObject({
-      ok: true,
-      readyReport: expect.stringContaining(`Local URL    http://localhost:${localhostPort}/`),
-      response: { body: expect.stringContaining('<main>Bootstrap safe</main>'), status: 200 },
-      server: { host: 'localhost' },
-    });
-
-    const exposedPosture = await runKovoDevWorker({
-      appModulePath: join(root, 'src/app.ts'),
-      host: '0.0.0.0',
-      mode: 'development',
-      port: 0,
-      root,
-      strictPort: true,
-    });
-    expect.soft(exposedPosture).toMatchObject({
-      error: expect.stringMatching(/exact loopback host/u),
-      ok: false,
-    });
-
-    const port = await reservePort();
-    const child = spawnKovoDev(root, port);
-    const output = collectChildOutput(child);
-    const authority = `127.0.0.1:${port}`;
-    const origin = `http://${authority}`;
-    try {
-      const bootstrap = await fetchWhenReady(`${origin}/`, output, 30_000);
-      const setCookie = bootstrap.headers.get('set-cookie');
-      expect.soft(bootstrap.status, output.combined()).toBe(200);
-      expect.soft(setCookie).toEqual(expect.stringMatching(/^Kovo-Dev-Auth=[A-Za-z0-9_-]+;/u));
-      const cookie = setCookie?.split(';', 1)[0] ?? 'Kovo-Dev-Auth=missing';
-
-      const crossOriginDocument = await rawDevHttpRequest({
-        authority,
-        origin: 'http://attacker.example',
-        path: '/',
-        port,
       });
-      expect.soft(crossOriginDocument).toMatchObject({ status: 403 });
-      expect.soft(crossOriginDocument.headers['set-cookie']).toBeUndefined();
-
-      const crossOriginDevtool = await rawDevHttpRequest({
-        authority,
-        origin: 'http://attacker.example',
-        path: '/__kovo',
-        port,
-      });
-      expect.soft(crossOriginDevtool).toMatchObject({ status: 403 });
-
-      const unauthenticatedSource = await rawDevHttpRequest({
-        authority,
-        origin,
-        path: '/src/app.ts',
-        port,
-      });
-      expect.soft(unauthenticatedSource).toMatchObject({ status: 401 });
-
-      const reboundSource = await rawDevHttpRequest({
-        authority,
-        cookie,
-        origin: 'http://attacker.example',
-        path: '/src/app.ts',
-        port,
-      });
-      expect.soft(reboundSource).toMatchObject({ status: 403 });
-
-      const authenticatedSource = await rawDevHttpRequest({
-        authority,
-        cookie,
-        origin,
-        path: '/src/app.ts',
-        port,
-      });
-      expect.soft(authenticatedSource.status).toBe(200);
-      expect.soft(authenticatedSource.body).toContain('defineKovo');
-
-      const unauthenticatedExtensionlessSource = await rawDevHttpRequest({
-        authority,
-        origin,
-        path: '/source-secret',
-        port,
-      });
-      expect.soft(unauthenticatedExtensionlessSource).toMatchObject({ status: 401 });
-      const authenticatedExtensionlessSource = await rawDevHttpRequest({
-        authority,
-        cookie,
-        origin,
-        path: '/source-secret',
-        port,
-      });
-      expect.soft(authenticatedExtensionlessSource).toMatchObject({
-        body: 'extensionless source secret',
-        status: 200,
+      expect.soft(exposedPosture).toMatchObject({
+        error: expect.stringMatching(/exact loopback host/u),
+        ok: false,
       });
 
-      const reboundHost = await rawDevHttpRequest({
-        authority: `attacker.example:${port}`,
-        cookie,
-        origin: `http://attacker.example:${port}`,
-        path: '/src/app.ts',
-        port,
-      });
-      expect.soft(reboundHost).toMatchObject({ status: 403 });
+      const port = await reservePort();
+      const child = spawnKovoDev(root, port);
+      const output = collectChildOutput(child);
+      const authority = `127.0.0.1:${port}`;
+      const origin = `http://${authority}`;
+      try {
+        await waitForInitialKovoDevReady(port, child, output);
+        const bootstrap = await fetchReadyKovoDev(`${origin}/`, child, output);
+        const setCookie = bootstrap.headers.get('set-cookie');
+        expect.soft(bootstrap.status, output.combined()).toBe(200);
+        expect.soft(setCookie).toEqual(expect.stringMatching(/^Kovo-Dev-Auth=[A-Za-z0-9_-]+;/u));
+        const cookie = setCookie?.split(';', 1)[0] ?? 'Kovo-Dev-Auth=missing';
 
-      await expect(
-        rawDevWebSocketHandshake({
+        const crossOriginDocument = await rawDevHttpRequest({
+          authority,
+          origin: 'http://attacker.example',
+          path: '/',
+          port,
+        });
+        expect.soft(crossOriginDocument).toMatchObject({ status: 403 });
+        expect.soft(crossOriginDocument.headers['set-cookie']).toBeUndefined();
+
+        const crossOriginDevtool = await rawDevHttpRequest({
+          authority,
+          origin: 'http://attacker.example',
+          path: '/__kovo',
+          port,
+        });
+        expect.soft(crossOriginDevtool).toMatchObject({ status: 403 });
+
+        const unauthenticatedSource = await rawDevHttpRequest({
+          authority,
+          origin,
+          path: '/src/app.ts',
+          port,
+        });
+        expect.soft(unauthenticatedSource).toMatchObject({ status: 401 });
+
+        const reboundSource = await rawDevHttpRequest({
           authority,
           cookie,
           origin: 'http://attacker.example',
+          path: '/src/app.ts',
           port,
-        }),
-      ).resolves.toBe(403);
-      await expect(rawDevWebSocketHandshake({ authority, origin, port })).resolves.toBe(403);
-      await expect(rawDevWebSocketHandshake({ authority, cookie, origin, port })).resolves.toBe(
-        101,
-      );
-      await expect(
-        rawDevWebSocketHandshake({
+        });
+        expect.soft(reboundSource).toMatchObject({ status: 403 });
+
+        const authenticatedSource = await rawDevHttpRequest({
           authority,
           cookie,
           origin,
-          path: `/?token=${cookie.slice(cookie.indexOf('=') + 1)}`,
+          path: '/src/app.ts',
           port,
-          protocol: 'vite-hmr',
-        }),
-      ).resolves.toBe(101);
-    } finally {
-      await stopChild(child);
-    }
-  }, 75_000);
+        });
+        expect.soft(authenticatedSource.status).toBe(200);
+        expect.soft(authenticatedSource.body).toContain('defineKovo');
+
+        const unauthenticatedExtensionlessSource = await rawDevHttpRequest({
+          authority,
+          origin,
+          path: '/source-secret',
+          port,
+        });
+        expect.soft(unauthenticatedExtensionlessSource).toMatchObject({ status: 401 });
+        const authenticatedExtensionlessSource = await rawDevHttpRequest({
+          authority,
+          cookie,
+          origin,
+          path: '/source-secret',
+          port,
+        });
+        expect.soft(authenticatedExtensionlessSource).toMatchObject({
+          body: 'extensionless source secret',
+          status: 200,
+        });
+
+        const reboundHost = await rawDevHttpRequest({
+          authority: `attacker.example:${port}`,
+          cookie,
+          origin: `http://attacker.example:${port}`,
+          path: '/src/app.ts',
+          port,
+        });
+        expect.soft(reboundHost).toMatchObject({ status: 403 });
+
+        await expect(
+          rawDevWebSocketHandshake({
+            authority,
+            cookie,
+            origin: 'http://attacker.example',
+            port,
+          }),
+        ).resolves.toBe(403);
+        await expect(rawDevWebSocketHandshake({ authority, origin, port })).resolves.toBe(403);
+        await expect(rawDevWebSocketHandshake({ authority, cookie, origin, port })).resolves.toBe(
+          101,
+        );
+        await expect(
+          rawDevWebSocketHandshake({
+            authority,
+            cookie,
+            origin,
+            path: `/?token=${cookie.slice(cookie.indexOf('=') + 1)}`,
+            port,
+            protocol: 'vite-hmr',
+          }),
+        ).resolves.toBe(101);
+      } finally {
+        await stopChild(child);
+      }
+    },
+    DEV_READY_HOST_DOOR_TEST_TIMEOUT_MS,
+  );
 
   it('rejects authored app-level hooks that retain root-config or live-server authority', async () => {
     const hookNames = [
@@ -660,13 +719,15 @@ export default { server: { host: '127.0.0.1', port: 0, strictPort: true } };\n`,
     // shard can make the same assertions take ~40s even though each child stays within its bound.
   }, 90_000);
 
-  it('keeps real CLI SSR loads outside authored resolve/load/transform hooks', async () => {
-    const root = devFixture('plugin-graph-isolation');
-    const attackerPath = join(root, 'attacker-integration.ts');
-    writeAttackerIntegration(attackerPath);
-    writeFileSync(
-      join(root, 'vite.config.ts'),
-      `const attackerSource = ${JSON.stringify(attackerIntegrationSource())};
+  it(
+    'keeps real CLI SSR loads outside authored resolve/load/transform hooks',
+    async () => {
+      const root = devFixture('plugin-graph-isolation');
+      const attackerPath = join(root, 'attacker-integration.ts');
+      writeAttackerIntegration(attackerPath);
+      writeFileSync(
+        join(root, 'vite.config.ts'),
+        `const attackerSource = ${JSON.stringify(attackerIntegrationSource())};
 const attackerPlugin = {
   name: 'attacker-ssr-module-hooks',
   resolveId(id) {
@@ -695,28 +756,33 @@ Object.defineProperty(promisedPlugin, 'then', {
 export default {
   plugins: [promisedPlugin],
 };\n`,
-      'utf8',
-    );
+        'utf8',
+      );
 
-    const port = await reservePort();
-    const child = spawnKovoDev(root, port, true);
-    const output = collectChildOutput(child);
-    try {
-      const response = await fetchWhenReady(`http://127.0.0.1:${port}/`, output, 30_000);
-      const body = await response.text();
-      expect(response.status, output.combined()).toBe(200);
-      expect(body).toContain('<main>Bootstrap safe</main>');
-      expect(body).not.toContain('ALIASED FRAMEWORK');
-    } finally {
-      await stopChild(child);
-    }
-  }, 40_000);
+      const port = await reservePort();
+      const child = spawnKovoDev(root, port, true);
+      const output = collectChildOutput(child);
+      try {
+        const ready = await waitForInitialKovoDevReady(port, child, output);
+        const response = await fetchReadyKovoDev(ready.localUrl, child, output);
+        const body = await response.text();
+        expect(response.status, output.combined()).toBe(200);
+        expect(body).toContain('<main>Bootstrap safe</main>');
+        expect(body).not.toContain('ALIASED FRAMEWORK');
+      } finally {
+        await stopChild(child);
+      }
+    },
+    DEV_READY_PROBE_PROCESS_TIMEOUT_MS,
+  );
 
-  it('keeps first runtime entropy exact across real CLI process restarts', async () => {
-    const root = devFixture('runtime-restart-entropy');
-    writeFileSync(
-      join(root, 'src/app.ts'),
-      `import { createHmac } from 'node:crypto';
+  it(
+    'keeps first runtime entropy exact across real CLI process restarts',
+    async () => {
+      const root = devFixture('runtime-restart-entropy');
+      writeFileSync(
+        join(root, 'src/app.ts'),
+        `import { createHmac } from 'node:crypto';
 import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { defineKovo } from '@kovojs/server'
 import { mintCsrfToken } from '@kovojs/server/security';
@@ -779,82 +845,104 @@ export default app.assemble({
   routes: [entropyRoute],
 });
 `,
-      'utf8',
-    );
+        'utf8',
+      );
 
-    const tokens: string[] = [];
-    for (let restart = 0; restart < 2; restart += 1) {
+      const tokens: string[] = [];
+      for (let restart = 0; restart < 2; restart += 1) {
+        const port = await reservePort();
+        const child = spawnKovoDev(root, port);
+        const output = collectChildOutput(child);
+        try {
+          const ready = await waitForInitialKovoDevReady(port, child, output);
+          const response = await fetchReadyKovoDev(ready.localUrl, child, output);
+          const body = await response.text();
+          expect(response.status, output.combined()).toBe(200);
+          const token = /v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/u.exec(body)?.[0];
+          expect(token, body).toBeDefined();
+          tokens.push(token!);
+        } finally {
+          await stopChild(child);
+        }
+      }
+
+      expect(tokens).toHaveLength(2);
+      expect(tokens[0]).not.toBe(tokens[1]);
+    },
+    DEV_READY_TWO_PROCESS_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'atomically swaps a real app edit and keeps the last-good graph through failed evaluation',
+    async () => {
+      const root = devFixture('atomic-runner-hmr');
+      const appFile = join(root, 'src/app.ts');
+      const initialSource = readFileSync(appFile, 'utf8');
+      const secondSource = initialSource.replace('Bootstrap safe', 'Atomic generation two');
+      const recoveredSource = initialSource.replace('Bootstrap safe', 'Atomic generation three');
+      const failedCandidateMarker = join(root, 'failed-candidate-entered.marker');
       const port = await reservePort();
       const child = spawnKovoDev(root, port);
       const output = collectChildOutput(child);
+      const url = `http://127.0.0.1:${port}/`;
+
       try {
-        const response = await fetchWhenReady(`http://127.0.0.1:${port}/`, output, 30_000);
-        const body = await response.text();
-        expect(response.status, output.combined()).toBe(200);
-        const token = /v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/u.exec(body)?.[0];
-        expect(token, body).toBeDefined();
-        tokens.push(token!);
-      } finally {
-        await stopChild(child);
-      }
-    }
+        await waitForInitialKovoDevReady(port, child, output);
+        await expect(
+          fetchBodyContaining(url, 'Bootstrap safe', child, output, DEV_READY_POST_BIND_BUDGET_MS),
+        ).resolves.toContain('Bootstrap safe');
 
-    expect(tokens).toHaveLength(2);
-    expect(tokens[0]).not.toBe(tokens[1]);
-  }, 60_000);
+        writeFileSync(appFile, secondSource, 'utf8');
+        await expect(
+          fetchBodyContaining(
+            url,
+            'Atomic generation two',
+            child,
+            output,
+            DEV_HMR_TRANSITION_BUDGET_MS,
+          ),
+        ).resolves.toContain('Atomic generation two');
 
-  it('atomically swaps a real app edit and keeps the last-good graph through failed evaluation', async () => {
-    const root = devFixture('atomic-runner-hmr');
-    const appFile = join(root, 'src/app.ts');
-    const initialSource = readFileSync(appFile, 'utf8');
-    const secondSource = initialSource.replace('Bootstrap safe', 'Atomic generation two');
-    const recoveredSource = initialSource.replace('Bootstrap safe', 'Atomic generation three');
-    const failedCandidateMarker = join(root, 'failed-candidate-entered.marker');
-    const port = await reservePort();
-    const child = spawnKovoDev(root, port);
-    const output = collectChildOutput(child);
-    const url = `http://127.0.0.1:${port}/`;
-
-    try {
-      await expect(fetchBodyContaining(url, 'Bootstrap safe', output, 30_000)).resolves.toContain(
-        'Bootstrap safe',
-      );
-
-      writeFileSync(appFile, secondSource, 'utf8');
-      await expect(
-        fetchBodyContaining(url, 'Atomic generation two', output, 15_000),
-      ).resolves.toContain('Atomic generation two');
-
-      writeFileSync(
-        appFile,
-        `${secondSource}
+        writeFileSync(
+          appFile,
+          `${secondSource}
 import { writeFileSync as writeFailedCandidateMarker } from 'node:fs';
 writeFailedCandidateMarker(${JSON.stringify(failedCandidateMarker)}, 'entered', 'utf8');
 throw new Error('candidate evaluation failed');
 `,
-      );
-      // SPEC §9.5.1: synchronize on actual candidate evaluation, then prove concurrent request
-      // availability without turning Vite watcher settlement time into a throughput contract.
-      await waitForFile(failedCandidateMarker, output, 15_000);
-      const lastGoodResponses = await Promise.all(
-        [0, 1, 2].map(async () => {
-          const response = await fetch(url, { signal: AbortSignal.timeout(15_000) });
-          return { body: await response.text(), status: response.status };
-        }),
-      );
-      for (const response of lastGoodResponses) {
-        expect(response.status, `${response.body}\n${output.combined()}`).toBe(200);
-        expect(response.body, output.combined()).toContain('Atomic generation two');
-      }
+        );
+        // SPEC §9.5.1: synchronize on actual candidate evaluation, then prove concurrent request
+        // availability without turning Vite watcher settlement time into a throughput contract.
+        await waitForFile(failedCandidateMarker, child, output, DEV_HMR_TRANSITION_BUDGET_MS);
+        const lastGoodResponses = await Promise.all(
+          [0, 1, 2].map(async () => {
+            const response = await fetch(url, {
+              signal: AbortSignal.timeout(DEV_HMR_TRANSITION_BUDGET_MS),
+            });
+            return { body: await response.text(), status: response.status };
+          }),
+        );
+        for (const response of lastGoodResponses) {
+          expect(response.status, `${response.body}\n${output.combined()}`).toBe(200);
+          expect(response.body, output.combined()).toContain('Atomic generation two');
+        }
 
-      writeFileSync(appFile, recoveredSource, 'utf8');
-      await expect(
-        fetchBodyContaining(url, 'Atomic generation three', output, 15_000),
-      ).resolves.toContain('Atomic generation three');
-    } finally {
-      await stopChild(child);
-    }
-  }, 60_000);
+        writeFileSync(appFile, recoveredSource, 'utf8');
+        await expect(
+          fetchBodyContaining(
+            url,
+            'Atomic generation three',
+            child,
+            output,
+            DEV_HMR_TRANSITION_BUDGET_MS,
+          ),
+        ).resolves.toContain('Atomic generation three');
+      } finally {
+        await stopChild(child);
+      }
+    },
+    DEV_READY_HMR_TEST_TIMEOUT_MS,
+  );
 });
 
 function devFixture(name: string, richGraph = false): string {
@@ -968,6 +1056,7 @@ async function runKovoDevWorker(
   options: KovoDevOptions,
   security?: KovoCommandSecurityDisposition,
   probeUrl?: string,
+  timeoutMs = 30_000,
 ): Promise<KovoDevWorkerResult> {
   const payload = Buffer.from(JSON.stringify({ options, probeUrl, security }), 'utf8').toString(
     'base64url',
@@ -983,7 +1072,15 @@ async function runKovoDevWorker(
     { cwd: repoRoot, env: process.env },
   );
   const output = collectChildOutput(child);
-  const status = await waitForChildExit(child, 30_000);
+  let status: number | null;
+  try {
+    status = await waitForChildExit(child, timeoutMs);
+  } catch (error) {
+    throw new Error(
+      `Kovo dev worker exceeded the ${timeoutMs}ms outer process ` +
+        `ceiling: ${error instanceof Error ? error.message : String(error)}\n${output.combined()}`,
+    );
+  }
   const match = /kovo-dev-worker\/v1\n([^\n]+)\n/u.exec(output.stdout);
   if (status !== 0 || match?.[1] === undefined) {
     throw new Error(`Kovo dev worker failed with status ${status}.\n${output.combined()}`);
@@ -1044,20 +1141,6 @@ function collectChildOutput(child: ChildProcessWithoutNullStreams): {
     output.stderr += String(chunk);
   });
   return output;
-}
-
-async function reservePort(host = '127.0.0.1'): Promise<number> {
-  const server = createNetServer();
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(0, host, resolve);
-  });
-  const address = server.address();
-  if (address === null || typeof address === 'string') throw new Error('Unable to reserve port.');
-  await new Promise<void>((resolve, reject) => {
-    server.close((error) => (error ? reject(error) : resolve()));
-  });
-  return address.port;
 }
 
 interface RawDevRequestOptions {
@@ -1154,31 +1237,75 @@ async function rawDevWebSocketHandshake(
   });
 }
 
-async function fetchWhenReady(
+async function waitForInitialKovoDevReady(
+  port: number,
+  child: ChildProcessWithoutNullStreams,
+  output: { combined(): string; stderr: string; stdout: string },
+): Promise<{ localUrl: string; listenerElapsedMs: number; readyReportElapsedMs: number }> {
+  const infrastructureStartedAt = Date.now();
+  const listener = await waitForKovoDevTcpListener({
+    label: 'Source kovo dev',
+    port,
+    readOutput: () => ({ stderr: output.stderr, stdout: output.stdout }),
+    readStatus: () => ({ exitCode: child.exitCode, signalCode: child.signalCode }),
+    startedAt: infrastructureStartedAt,
+  });
+  const listenedAt = Date.now();
+  const ready = await waitForStructuredKovoDevReport(port, child, output, listenedAt);
+  return {
+    listenerElapsedMs: listener.elapsedMs,
+    localUrl: ready.localUrl,
+    readyReportElapsedMs: ready.observedAfterMs,
+  };
+}
+
+async function waitForStructuredKovoDevReport(
+  port: number,
+  child: ChildProcessWithoutNullStreams,
+  output: { combined(): string; stderr: string; stdout: string },
+  listenedAt: number,
+): Promise<{ localUrl: string; observedAfterMs: number }> {
+  return await waitForKovoDevReadyReport({
+    expected: {
+      appEntry: 'src/app.ts',
+      database: 'none configured',
+      localUrl: `http://127.0.0.1:${port}/`,
+      mode: 'development',
+    },
+    label: 'Source kovo dev',
+    readOutput: () => ({ stderr: output.stderr, stdout: output.stdout }),
+    readStatus: () => ({ exitCode: child.exitCode, signalCode: child.signalCode }),
+    startedAt: listenedAt,
+  });
+}
+
+async function fetchReadyKovoDev(
   url: string,
+  child: ChildProcessWithoutNullStreams,
   output: { combined(): string },
-  timeoutMs: number,
 ): Promise<Response> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    try {
-      return await fetch(url);
-    } catch {
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
+  try {
+    return await fetch(url, { signal: AbortSignal.timeout(DEV_READY_POST_BIND_BUDGET_MS) });
+  } catch (error) {
+    assertKovoDevChildRunning(child, output, `HTTP response for ${url}`);
+    throw new Error(
+      `Ready kovo dev did not return ${url} within ${DEV_READY_POST_BIND_BUDGET_MS}ms: ` +
+        `${error instanceof Error ? error.message : String(error)}\n${output.combined()}`,
+    );
   }
-  throw new Error(`Timed out waiting for ${url}.\n${output.combined()}`);
 }
 
 async function fetchBodyContaining(
   url: string,
   expected: string,
+  child: ChildProcessWithoutNullStreams,
   output: { combined(): string },
   timeoutMs: number,
 ): Promise<string> {
   const deadline = Date.now() + timeoutMs;
   let latest = '';
   while (Date.now() < deadline) {
+    assertKovoDevChildRunning(child, output, `HTTP body containing ${JSON.stringify(expected)}`);
     try {
       const response = await fetch(url);
       latest = await response.text();
@@ -1193,63 +1320,31 @@ async function fetchBodyContaining(
   );
 }
 
-async function waitForOutput(
-  output: { combined(): string },
-  pattern: RegExp,
-  timeoutMs: number,
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (pattern.test(output.combined())) return;
-    await new Promise((resolve) => setTimeout(resolve, 25));
-  }
-  throw new Error(`Timed out waiting for output ${pattern}.\n${output.combined()}`);
-}
-
 async function waitForFile(
   file: string,
-  output: { combined(): string },
-  timeoutMs: number,
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (existsSync(file)) return;
-    await new Promise((resolve) => setTimeout(resolve, 25));
-  }
-  throw new Error(`Timed out waiting for ${file}.\n${output.combined()}`);
-}
-
-async function waitForTcpListener(
-  port: number,
   child: ChildProcessWithoutNullStreams,
   output: { combined(): string },
   timeoutMs: number,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (child.exitCode !== null) {
-      throw new Error(`kovo dev exited before listening.\n${output.combined()}`);
-    }
-    if (await tcpConnects(port)) return;
+    assertKovoDevChildRunning(child, output, `file ${file}`);
+    if (existsSync(file)) return;
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
-  throw new Error(`Timed out waiting for kovo dev port ${port}.\n${output.combined()}`);
+  throw new Error(`Timed out waiting for ${file}.\n${output.combined()}`);
 }
 
-async function tcpConnects(port: number): Promise<boolean> {
-  return await new Promise<boolean>((resolve) => {
-    const socket = createConnection({ host: '127.0.0.1', port });
-    let settled = false;
-    const finish = (connected: boolean): void => {
-      if (settled) return;
-      settled = true;
-      socket.destroy();
-      resolve(connected);
-    };
-    socket.setTimeout(250, () => finish(false));
-    socket.once('connect', () => finish(true));
-    socket.once('error', () => finish(false));
-  });
+function assertKovoDevChildRunning(
+  child: ChildProcessWithoutNullStreams,
+  output: { combined(): string },
+  phase: string,
+): void {
+  if (child.exitCode === null && child.signalCode === null) return;
+  throw new Error(
+    `kovo dev exited before ${phase} (exit=${String(child.exitCode)}, ` +
+      `signal=${String(child.signalCode)}).\n${output.combined()}`,
+  );
 }
 
 async function waitForChildExit(
@@ -1276,7 +1371,7 @@ async function waitForChildExit(
 async function stopChild(child: ChildProcessWithoutNullStreams): Promise<void> {
   if (child.exitCode !== null) return;
   child.kill('SIGTERM');
-  await waitForChildExit(child, 10_000);
+  await waitForChildExit(child, DEV_PROCESS_SHUTDOWN_TIMEOUT_MS);
 }
 
 async function waitForPortClosed(port: number, timeoutMs: number): Promise<void> {
