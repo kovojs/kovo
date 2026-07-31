@@ -100,6 +100,7 @@ describe('realistic-app: commerce real stack driven in a browser (B2/S2/S3)', ()
       const csrfField = await shopperPage.locator('input[name="csrf"]').inputValue();
       const login = await shopperContext.request.post(`${origin}/_m/auth/sign-in`, {
         failOnStatusCode: false,
+        maxRedirects: 0,
         form: {
           csrf: csrfField,
           email: 'ada@example.com',
@@ -112,7 +113,11 @@ describe('realistic-app: commerce real stack driven in a browser (B2/S2/S3)', ()
           'x-forwarded-for': '203.0.113.90',
         },
       });
-      expect(login.ok()).toBe(true);
+      expect(
+        login.status(),
+        `commerce sign-in returned ${login.status()}:\n${await login.text()}\n${served?.stderr() ?? ''}`,
+      ).toBe(303);
+      expect(login.headers().location).toBe('/cart');
 
       await shopperPage.goto(`${origin}/cart`, { waitUntil: 'domcontentloaded' });
       await expect(
