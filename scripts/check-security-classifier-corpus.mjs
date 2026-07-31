@@ -115,6 +115,11 @@ const LOAD_ISOLATED_TEST_CONFIGS = [
     file: 'packages/cli/src/index.kovo-dev.test.ts',
   },
   {
+    // This proof builds and boots a complete starter. Broad-corpus contention can exhaust its
+    // fixed semantic deadline without changing any classifier verdict.
+    file: 'packages/create-kovo/src/index.build.prod-artifact.client-ip.test.ts',
+  },
+  {
     file: 'packages/compiler/src/security-operation-ir.security.test.ts',
     freshTestNames: ['closes the normalized semantic summary budget with its exact reason'],
   },
