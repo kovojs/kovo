@@ -391,7 +391,7 @@ describe('ci-shards', () => {
     ]);
   });
 
-  it('retains measured hosted-runner deadline headroom on the seven timed-out proofs', async () => {
+  it('retains measured hosted-runner deadline headroom on the eight timed-out proofs', async () => {
     const [
       asyncContextSource,
       sourceCheckSource,
@@ -400,6 +400,7 @@ describe('ci-shards', () => {
       redirectSource,
       securitySource,
       deferSource,
+      routeOutcomesSource,
     ] = await Promise.all([
       readFile(new URL('./check-async-context-confinement.test.mjs', import.meta.url), 'utf8'),
       readFile(new URL('../packages/cli/src/index.source-check.test.ts', import.meta.url), 'utf8'),
@@ -432,6 +433,10 @@ describe('ci-shards', () => {
         ),
         'utf8',
       ),
+      readFile(
+        new URL('../packages/cli/src/index.kovo-route-outcomes.test.ts', import.meta.url),
+        'utf8',
+      ),
     ]);
 
     expect(asyncContextSource).toContain('}, 60_000);');
@@ -440,6 +445,10 @@ describe('ci-shards', () => {
     expect(buildExportSource).toContain('const staticTrustWorkerTimeoutMs = 300_000;');
     expect(redirectSource).toContain('}, 420_000);');
     expect(deferSource).toContain('    480_000,');
+    expect(routeOutcomesSource).toContain('const BUILD_DEADLINE_MS = 90_000;');
+    expect(routeOutcomesSource).toContain(
+      'const ROUTE_OUTCOME_TEST_TIMEOUT_MS = BUILD_DEADLINE_MS + EXPLAIN_DEADLINE_MS + 10_000;',
+    );
     const securityAuthStart = securitySource.indexOf(
       "it('blocks local-helper credential-shaped secret laundering",
     );
