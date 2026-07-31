@@ -145,8 +145,11 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
         addPostgresParanoidFollowup8Shapes(root);
         disableRuntimeSeedSql(root);
 
+        // SPEC §6.6 classifies WebCrypto/global crypto as raw crypto-acquisition authority.
+        // The migrated app-scoped declarations have exact receiver provenance, so this legacy
+        // fixture closes on its real raw capability instead of a synthetic ambiguous-root reason.
         expect(() => buildParanoidProductionArtifact(root)).toThrow(
-          /KV448[\s\S]*lexical-provenance:mutable-or-ambiguous/u,
+          /KV448[\s\S]*raw crypto-acquisition authority \(global crypto\)/u,
         );
       } finally {
         rmSync(root, { force: true, recursive: true });
