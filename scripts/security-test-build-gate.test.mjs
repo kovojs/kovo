@@ -874,8 +874,37 @@ describe('security-test-build-gate', () => {
       requiredNeedles: expect.arrayContaining([
         'addRuntimeMutationSafetyProofs(root, { includeWebhookTxEscapeAttempt: true })',
         'captureProductionBuildFailure(() => buildProductionArtifact(root))',
+        "if ('$client' in context.tx) void context.tx.$client;",
+        "if ('session' in context.tx) void context.tx.session;",
+        "expect(proofSource).not.toContain('context.tx as unknown')",
         'KV330',
         'Direct db access in a webhook handler',
+      ]),
+    });
+  });
+
+  it('keeps the handler KV330 build proof tied to task and webhook sinks and no artifact emission', () => {
+    expect(
+      SECURITY_BUILD_PROOFS.find(
+        (proof) => proof.code === 'KV330' && proof.claimId === 'handler-direct-db-build-preflight',
+      ),
+    ).toMatchObject({
+      buildInvocation: 'cli-main-build',
+      proofFile: 'packages/cli/src/index.kovo-build.test.ts',
+      requiredNeedles: expect.arrayContaining([
+        'handlerWriteSinkPreflightAppModuleSource()',
+        "mainAsync(['build', './app.ts', '--out', './dist', '--no-cache'])",
+        'expect(exitCode).toBe(1)',
+        'kovo build check preflight failed',
+        'Direct db access in a task run body',
+        'Direct db access in a webhook handler',
+        'expect(existsSync(outDir)).toBe(false)',
+      ]),
+      requiredProofFileNeedles: expect.arrayContaining([
+        'context.db.insert(receipts).values({ id: input.id });',
+        'context.tx.insert(payments).values({ id: input.id });',
+        'endpoints: [paymentWebhook]',
+        'tasks: [sendReceipt]',
       ]),
     });
   });
