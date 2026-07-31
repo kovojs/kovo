@@ -110,7 +110,8 @@ const STARTER_ENTRIES = [
     file: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     testName:
       'blocks local-helper credential-shaped secret laundering from the production build artifact',
-    seconds: 147,
+    // CI run 30612746165 measured this focused entry at 425.980s.
+    seconds: 426,
   },
   {
     id: 'security-raw-html-helper-imports',
@@ -230,7 +231,9 @@ const STARTER_ENTRIES = [
   {
     id: 'durable-task-retries',
     file: 'packages/create-kovo/src/index.build.prod-artifact.durable-tasks.retries.test.ts',
-    seconds: 90,
+    // CI run 30612746165 reached 162.930s before the old worker deadline aborted the build; a clean
+    // complete replay under the concurrent verification load took 380.663s.
+    seconds: 381,
   },
   {
     id: 'starter-packed-sqlite',
@@ -315,12 +318,15 @@ const STARTER_ENTRIES = [
   {
     id: 'durable-task-lifecycle',
     file: 'packages/create-kovo/src/index.build.prod-artifact.durable-tasks.lifecycle.test.ts',
-    seconds: 85,
+    // CI run 30612746165 reached 163.902s before the old worker deadline aborted the same generated
+    // app built by the 380.663s retry proof. Use that complete sibling measurement.
+    seconds: 381,
   },
   {
     id: 'defer-artifacts',
     file: 'packages/create-kovo/src/index.build.prod-artifact.defer.test.ts',
-    seconds: 139,
+    // CI run 30612746165 measured the two sequential cases at 575.795s total.
+    seconds: 576,
   },
   {
     id: 'header-artifacts',
@@ -330,7 +336,8 @@ const STARTER_ENTRIES = [
   {
     id: 'redirect-capability-artifacts',
     file: 'packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts',
-    seconds: 73,
+    // CI run 30612746165 measured this focused entry at 254.669s.
+    seconds: 255,
   },
   {
     id: 'island-derive-artifacts',

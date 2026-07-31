@@ -391,8 +391,16 @@ describe('ci-shards', () => {
     ]);
   });
 
-  it('retains measured hosted-runner deadline headroom on the three timed-out proofs', async () => {
-    const [asyncContextSource, sourceCheckSource, postgresSource] = await Promise.all([
+  it('retains measured hosted-runner deadline headroom on the seven timed-out proofs', async () => {
+    const [
+      asyncContextSource,
+      sourceCheckSource,
+      postgresSource,
+      buildExportSource,
+      redirectSource,
+      securitySource,
+      deferSource,
+    ] = await Promise.all([
       readFile(new URL('./check-async-context-confinement.test.mjs', import.meta.url), 'utf8'),
       readFile(new URL('../packages/cli/src/index.source-check.test.ts', import.meta.url), 'utf8'),
       readFile(
@@ -402,11 +410,66 @@ describe('ci-shards', () => {
         ),
         'utf8',
       ),
+      readFile(new URL('../packages/cli/src/commands/build-export.ts', import.meta.url), 'utf8'),
+      readFile(
+        new URL(
+          '../packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts',
+          import.meta.url,
+        ),
+        'utf8',
+      ),
+      readFile(
+        new URL(
+          '../packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+          import.meta.url,
+        ),
+        'utf8',
+      ),
+      readFile(
+        new URL(
+          '../packages/create-kovo/src/index.build.prod-artifact.defer.test.ts',
+          import.meta.url,
+        ),
+        'utf8',
+      ),
     ]);
 
     expect(asyncContextSource).toContain('}, 60_000);');
     expect(sourceCheckSource).toContain('}, 360_000);');
     expect(postgresSource.match(/\}, 600_000\);/gu)).toHaveLength(2);
+    expect(buildExportSource).toContain('const staticTrustWorkerTimeoutMs = 300_000;');
+    expect(redirectSource).toContain('}, 420_000);');
+    expect(deferSource).toContain('    480_000,');
+    const securityAuthStart = securitySource.indexOf(
+      "it('blocks local-helper credential-shaped secret laundering",
+    );
+    const securityAuthEnd = securitySource.indexOf('\n\n  it(', securityAuthStart);
+    expect(securityAuthStart).toBeGreaterThan(-1);
+    expect(securityAuthEnd).toBeGreaterThan(securityAuthStart);
+    expect(securitySource.slice(securityAuthStart, securityAuthEnd)).toContain('}, 660_000);');
+  });
+
+  it('assigns every newly measured starter proof its observed scheduling weight', () => {
+    const measuredIds = new Set([
+      'defer-artifacts',
+      'durable-task-lifecycle',
+      'durable-task-retries',
+      'redirect-capability-artifacts',
+      'security-auth-helper',
+    ]);
+    expect(
+      Object.fromEntries(
+        starterEntries()
+          .filter((entry) => measuredIds.has(entry.id))
+          .map((entry) => [entry.id, entry.seconds]),
+      ),
+    ).toEqual({
+      'defer-artifacts': 576,
+      'durable-task-lifecycle': 381,
+      'durable-task-retries': 381,
+      'redirect-capability-artifacts': 255,
+      'security-auth-helper': 426,
+    });
   });
 
   it('keeps every C13-owned classifier file out of duplicate root Vitest shards', () => {
@@ -455,7 +518,7 @@ describe('ci-shards', () => {
       entries.map((entry) => entry.id).toSorted(compareStrings),
     );
     expect(shards.map((shard) => shard.seconds)).toEqual([
-      1_200, 486, 482, 506, 456, 504, 499, 508, 508, 489,
+      1_200, 646, 644, 659, 686, 652, 643, 671, 647, 675,
     ]);
   });
 
@@ -500,7 +563,7 @@ describe('ci-shards', () => {
       }))
       .filter((shard) => shard.entries.length > 0);
 
-    expect(browserShards).toEqual([{ index: 9, entries: ['island-derive-artifacts'] }]);
+    expect(browserShards).toEqual([{ index: 6, entries: ['island-derive-artifacts'] }]);
   });
 
   it('marks only packed starter shards as needing the packed package artifact', async () => {

@@ -280,7 +280,10 @@ const collectBuildGarbage =
   typeof globalThis.gc === 'function' ? globalThis.gc.bind(globalThis) : undefined;
 const staticTrustWorkerSchema = 'kovo-static-trust-worker/v1';
 const staticTrustWorkerMaxOutputBytes = 256 * 1024 * 1024;
-const staticTrustWorkerTimeoutMs = 120_000;
+// CI run 30612746165 exhausted the old 120s ceiling while deriving a valid generated app's trust
+// facts. Keep the worker bounded at 2.5x that exhausted ceiling; the deadline path still SIGKILLs
+// the complete process group and rejects without accepting partial trust output.
+const staticTrustWorkerTimeoutMs = 300_000;
 
 type BuildStaticAnalysisRuntime = typeof import('./build-static-analysis-runtime.js');
 let buildStaticAnalysisRuntime: BuildStaticAnalysisRuntime | undefined;

@@ -184,6 +184,8 @@ describe('create-kovo starter (build integration: production security artifacts)
   // @kovo-security-certifies KV435 transformed-query-loader-return-laundering
   // @kovo-security-certifies KV435 render-value-flow-laundering
   // @kovo-security-certifies KV435 value-flow-sibling-laundering
+  // CI run 30612746165 measured this helper-closure proof at 425.980s on ubuntu-24.04.
+  // Keep 1.5x headroom, rounded up to the next whole minute.
   it('blocks local-helper credential-shaped secret laundering from the production build artifact', () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
@@ -215,7 +217,7 @@ describe('create-kovo starter (build integration: production security artifacts)
       rmSync(unsafeRoot, { force: true, recursive: true });
       rmSync(safeRoot, { force: true, recursive: true });
     }
-  }, 360_000);
+  }, 660_000);
 
   it('blocks request-authored runtime DB imports from the production build artifact', () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-prod-runtime-db-import-'));

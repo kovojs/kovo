@@ -27,6 +27,8 @@ import {
 } from './index.test-support.js';
 
 describe('create-kovo starter (build integration: redirect and capability URL artifacts)', () => {
+  // CI run 30612746165 measured this production capability proof at 254.669s on ubuntu-24.04.
+  // Keep 1.5x headroom, rounded up to the next whole minute.
   it('finalizes redirect Location and capability download URLs in the production server artifact', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
@@ -140,7 +142,7 @@ describe('create-kovo starter (build integration: redirect and capability URL ar
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
     }
-  }, 180_000);
+  }, 420_000);
 });
 
 function endpointByPath(graph: Record<string, unknown>, path: string): Record<string, unknown> {

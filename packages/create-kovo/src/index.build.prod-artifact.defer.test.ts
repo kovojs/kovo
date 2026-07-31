@@ -21,6 +21,8 @@ import {
 import { assertProdArtifactSinkCensus } from './index.build.prod-artifact.sink-census.js';
 
 describe('create-kovo starter (build integration: production Defer artifacts)', () => {
+  // CI run 30612746165 measured the two builds at 277.149s and 298.644s on ubuntu-24.04.
+  // Keep 1.5x headroom from the slower case, rounded up to the next whole minute.
   it.each([
     ['default', undefined],
     ['SQLite', 'sqlite' as const],
@@ -158,7 +160,7 @@ describe('create-kovo starter (build integration: production Defer artifacts)', 
         rmSync(root, { force: true, recursive: true });
       }
     },
-    240_000,
+    480_000,
   );
 });
 
