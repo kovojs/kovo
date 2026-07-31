@@ -12,7 +12,7 @@ import {
 import { installAgentDocsSnapshot, searchInstalledAgentDocs } from './docs-store.js';
 import { createKovoMcpServer } from './index.js';
 
-const CLI_VERSION = '0.2.0';
+const CLI_VERSION = '0.3.0';
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 const roots: string[] = [];
 const snapshotState = vi.hoisted(() => ({ snapshot: undefined as unknown }));
