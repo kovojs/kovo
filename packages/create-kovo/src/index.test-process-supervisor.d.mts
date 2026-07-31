@@ -44,7 +44,6 @@ export interface BoundedTestProcessDependenciesForTest {
   readonly delay?: (milliseconds: number) => Promise<unknown>;
   readonly now?: () => number;
   readonly signalProcess?: (pid: number, signal: NodeJS.Signals) => void;
-  readonly signalProcessGroup?: (pgid: number, signal: NodeJS.Signals) => void;
   readonly snapshotProcessTable?: (
     markerName: string,
     deadlineAtMs: number,

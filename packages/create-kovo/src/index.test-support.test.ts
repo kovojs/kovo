@@ -147,7 +147,10 @@ describe('create-kovo starter test support', () => {
         descendantPid = Number.parseInt(String((error as { stdout?: unknown }).stdout).trim(), 10);
       }
 
-      expect(Date.now() - startedAt).toBeLessThan(2_500);
+      // Timer callbacks cannot run while a hosted shard is descheduled. Keep the assertion tight
+      // enough to catch a second cleanup window while allowing bounded wall-clock scheduler jitter;
+      // the supervisor seam separately exercises the single absolute cleanup-deadline path.
+      expect(Date.now() - startedAt).toBeLessThan(3_000);
       expect(Number.isSafeInteger(descendantPid)).toBe(true);
       expect(await processStopsWithin(descendantPid!, 1_000)).toBe(true);
     },

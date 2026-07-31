@@ -158,8 +158,7 @@ describe('paranoid runtime process isolation', () => {
     );
   });
 
-  it('does not signal a reused PID or a PGID whose revalidated membership is unmarked', async () => {
-    const signaledGroups: number[] = [];
+  it('does not signal a reused PID or stale PGID after marker revalidation', async () => {
     const signaledProcesses: number[] = [];
     let census = 0;
     const outcome = await runBoundedTestProcessForTest(
@@ -176,19 +175,16 @@ describe('paranoid runtime process isolation', () => {
       },
       {
         signalProcess: (pid) => signaledProcesses.push(pid),
-        signalProcessGroup: (pgid) => signaledGroups.push(pgid),
         snapshotProcessTable: async () => {
           census += 1;
           if (census === 1) return processTable(markedProcess(410, 700));
-          if (census === 2) return processTable(unmarkedProcess(999, 700));
-          if (census === 3) return processTable(unmarkedProcess(410, 701));
+          if (census === 2) return processTable(unmarkedProcess(410, 701));
           return new Map();
         },
       },
     );
 
     expect(outcome.cleanupError).toBeNull();
-    expect(signaledGroups).toEqual([]);
     expect(signaledProcesses).toEqual([]);
   });
 
@@ -234,7 +230,6 @@ describe('paranoid runtime process isolation', () => {
       {
         delay: async () => undefined,
         signalProcess: () => undefined,
-        signalProcessGroup: () => undefined,
         snapshotProcessTable: async () => processTable(markedProcess(410, 700)),
       },
     );

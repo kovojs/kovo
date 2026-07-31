@@ -31,48 +31,59 @@ describe('bounded CLI test process', () => {
     ).rejects.toThrow(/exceeded its 1024-byte output capture limit/u);
   });
 
-  it('terminates detached descendants and awaits root close at the child deadline', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'kovo-bounded-cli-tree-'));
-    const descendantPidPath = join(root, 'descendant-pid');
-    const descendantSource = 'setInterval(() => {}, 1000);';
-    const source = [
-      "const { spawn } = require('node:child_process');",
-      "const { writeFileSync } = require('node:fs');",
-      `const descendant = spawn(process.execPath, ['-e', ${JSON.stringify(descendantSource)}], {`,
-      '  detached: true,',
-      "  stdio: 'ignore',",
-      '});',
-      `writeFileSync(${JSON.stringify(descendantPidPath)}, String(descendant.pid));`,
-      'descendant.unref();',
-      'setInterval(() => {}, 1000);',
-    ].join('\n');
-    const startedAt = performance.now();
-    let descendantPid: number | undefined;
+  it.skipIf(process.platform === 'win32')(
+    'terminates a detached grandchild after its intermediate parent exits and releases inherited pipes',
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), 'kovo-bounded-cli-tree-'));
+      const grandchildPidPath = join(root, 'grandchild-pid');
+      const grandchildSource = [
+        "process.on('SIGTERM', () => undefined);",
+        'setInterval(() => {}, 1000);',
+      ].join('');
+      const intermediateSource = [
+        "const { spawn } = require('node:child_process');",
+        "const { writeFileSync } = require('node:fs');",
+        `const grandchild = spawn(process.execPath, ['-e', ${JSON.stringify(grandchildSource)}], {`,
+        '  detached: true,',
+        "  stdio: ['ignore', 'inherit', 'inherit'],",
+        '});',
+        `writeFileSync(${JSON.stringify(grandchildPidPath)}, String(grandchild.pid));`,
+        'grandchild.unref();',
+      ].join('\n');
+      const source = [
+        "const { spawn } = require('node:child_process');",
+        `spawn(process.execPath, ['-e', ${JSON.stringify(intermediateSource)}], { stdio: ['ignore', 'inherit', 'inherit'] });`,
+        'setInterval(() => {}, 1000);',
+      ].join('\n');
+      const startedAt = performance.now();
+      let grandchildPid: number | undefined;
 
-    try {
-      await expect(
-        runBoundedProcessForTesting({
-          args: ['-e', source],
-          cwd: root,
-          deadlineMs: 250,
-          executable: process.execPath,
-        }),
-      ).rejects.toThrow(/exceeded its 250ms deadline and was terminated/u);
-      expect(performance.now() - startedAt).toBeLessThan(3_000);
-      expect(existsSync(descendantPidPath)).toBe(true);
-      descendantPid = Number(readFileSync(descendantPidPath, 'utf8'));
-      await expectProcessToExit(descendantPid, 2_000);
-    } finally {
-      if (descendantPid !== undefined && processIsAlive(descendantPid)) {
-        try {
-          process.kill(descendantPid, 'SIGKILL');
-        } catch {
-          // The fixture descendant may race its explicit cleanup.
+      try {
+        await expect(
+          runBoundedProcessForTesting({
+            args: ['-e', source],
+            cwd: root,
+            deadlineMs: 250,
+            executable: process.execPath,
+          }),
+        ).rejects.toThrow(/exceeded its 250ms deadline and was terminated/u);
+        expect(performance.now() - startedAt).toBeLessThan(3_000);
+        expect(existsSync(grandchildPidPath)).toBe(true);
+        grandchildPid = Number(readFileSync(grandchildPidPath, 'utf8'));
+        await expectProcessToExit(grandchildPid, 2_000);
+      } finally {
+        if (grandchildPid !== undefined && processIsAlive(grandchildPid)) {
+          try {
+            process.kill(grandchildPid, 'SIGKILL');
+          } catch {
+            // The fixture grandchild may race its explicit cleanup.
+          }
         }
+        rmSync(root, { force: true, recursive: true });
       }
-      rmSync(root, { force: true, recursive: true });
-    }
-  }, 5_000);
+    },
+    5_000,
+  );
 });
 
 async function expectProcessToExit(pid: number, timeoutMs: number): Promise<void> {

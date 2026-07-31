@@ -323,32 +323,7 @@ async function signalIdentityCheckedSurvivors(
   limits,
   dependencies,
 ) {
-  const handledPids = new Set();
-  const candidateGroups = [...new Set(initialSurvivors.map((record) => record.pgid))]
-    .filter((pgid) => pgid > 0)
-    .toSorted((left, right) => right - left);
-
-  for (const pgid of candidateGroups) {
-    const table = await censusBefore(
-      markerName,
-      deadlineAtMs,
-      limits.censusTimeoutMs,
-      dependencies,
-    );
-    const members = liveGroupMembers(table, pgid);
-    if (members.length === 0 || members.some((record) => !record.marked)) continue;
-    try {
-      dependencies.signalProcessGroup(pgid, signal);
-    } catch (error) {
-      if (/** @type {NodeJS.ErrnoException} */ (error).code !== 'ESRCH') throw error;
-    }
-    for (const member of members) {
-      if (member.marked) handledPids.add(member.pid);
-    }
-  }
-
   for (const survivor of initialSurvivors) {
-    if (handledPids.has(survivor.pid)) continue;
     const table = await censusBefore(
       markerName,
       deadlineAtMs,
@@ -382,9 +357,6 @@ function defaultSupervisorDependencies() {
     signalProcess(pid, signal) {
       process.kill(pid, signal);
     },
-    signalProcessGroup(pgid, signal) {
-      process.kill(-pgid, signal);
-    },
     snapshotProcessTable,
   };
 }
@@ -406,8 +378,13 @@ async function snapshotProcessTable(markerName, deadlineAtMs) {
 
     const dispose = () => {
       clearTimeout(timer);
+      remainder = '';
       census.stdout.removeAllListeners();
       census.stderr.removeAllListeners();
+      census.removeAllListeners();
+      census.on('error', ignoreDisposedCensusError);
+      census.stdout.on('error', ignoreDisposedCensusError);
+      census.stderr.on('error', ignoreDisposedCensusError);
       census.stdout.destroy();
       census.stderr.destroy();
       census.unref();
@@ -461,12 +438,18 @@ async function snapshotProcessTable(markerName, deadlineAtMs) {
         fail(new Error('process census encountered an overlong process record'));
       }
     });
+    census.stdout.on('error', (error) =>
+      fail(new Error(`process census stdout failed: ${error.message}`)),
+    );
     census.stderr.on('data', (chunk) => {
       totalBytes += Buffer.byteLength(chunk);
       if (totalBytes > PROCESS_CENSUS_MAX_BYTES) {
         fail(new Error('process census exceeded its bounded read allowance'));
       }
     });
+    census.stderr.on('error', (error) =>
+      fail(new Error(`process census stderr failed: ${error.message}`)),
+    );
     census.once('close', (code, signal) => {
       if (settled) return;
       if (remainder !== '') {
@@ -521,10 +504,6 @@ function markedSurvivors(table) {
   return [...table.values()]
     .filter((record) => record.marked && !isZombie(record))
     .toSorted((left, right) => left.pid - right.pid);
-}
-
-function liveGroupMembers(table, pgid) {
-  return [...table.values()].filter((record) => record.pgid === pgid && !isZombie(record));
 }
 
 function isZombie(record) {
@@ -608,4 +587,9 @@ function positiveInteger(value, label) {
 
 function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function ignoreDisposedCensusError() {
+  // The census is killed and unreferenced before disposal. Ignore only late subprocess errors after
+  // the owning promise has already settled and every parser/output listener has been detached.
 }
