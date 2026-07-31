@@ -42,10 +42,7 @@ const NativeTypeError = globalThis.TypeError;
  * generated Worker locked the request-safe realm. Neither parser object nor its error crosses this
  * boundary (SPEC §6.6 rule 6, §10.3, §11.2).
  */
-export function parseAndSnapshotManagedSql(
-  parser: ManagedSqlParse,
-  sql: string,
-): Statement[] {
+export function parseAndSnapshotManagedSql(parser: ManagedSqlParse, sql: string): Statement[] {
   if (typeof sql !== 'string') {
     throw new NativeTypeError('Kovo managed SQL parser requires a string statement.');
   }

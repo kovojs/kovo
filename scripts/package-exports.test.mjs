@@ -166,7 +166,9 @@ describe('package export resolver', () => {
     expect(buildArguments).toContain('--dts');
     expect(buildArguments).toContain('--unbundle');
     expect(server.exports).not.toHaveProperty('./internal/generated-handler-runtime');
-    expect(server.publishConfig?.exports).not.toHaveProperty('./internal/generated-handler-runtime');
+    expect(server.publishConfig?.exports).not.toHaveProperty(
+      './internal/generated-handler-runtime',
+    );
     expect(server.exports).not.toHaveProperty('./internal/sql-parser-authority-cloudflare');
     expect(server.publishConfig?.exports).not.toHaveProperty(
       './internal/sql-parser-authority-cloudflare',

@@ -59,8 +59,7 @@ describe('browser deferred stream response apply', () => {
 
   it('replays co-located truth into a live-property binding introduced by the fragment', () => {
     const root = document.createElement('main');
-    root.innerHTML =
-      '<section kovo-c="profile"><input data-current="old" value="old"></section>';
+    root.innerHTML = '<section kovo-c="profile"><input data-current="old" value="old"></section>';
     document.body.append(root);
     const store = createQueryStore();
 

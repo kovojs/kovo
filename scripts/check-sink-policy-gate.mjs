@@ -362,9 +362,7 @@ export function checkSinkPolicyGate(options = {}) {
     );
     if (dynamicCodeExecutionSinkFileSet.has(filePath) && filePath === sqlParserAuthorityFile) {
       const snapshotText = readText(sqlParserAuthoritySnapshotFile);
-      findings.push(
-        ...sqlParserAuthorityInvariantFindings(filePath, `${text}\n${snapshotText}`),
-      );
+      findings.push(...sqlParserAuthorityInvariantFindings(filePath, `${text}\n${snapshotText}`));
     }
     findings.push(
       ...rootedFileServeRawSinkFindings(filePath, text, {

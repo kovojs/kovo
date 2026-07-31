@@ -336,8 +336,7 @@ function isZeroArgumentArrowReturningCall(node, callee, argumentNames) {
     return false;
   }
   return node.body.arguments.every(
-    (argument, index) =>
-      ts.isIdentifier(argument) && argument.text === argumentNames[index],
+    (argument, index) => ts.isIdentifier(argument) && argument.text === argumentNames[index],
   );
 }
 
