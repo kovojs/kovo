@@ -6937,6 +6937,9 @@ function sourceRegistryDeclarationName(
   fileName: string,
   call: ReturnType<typeof parseComponentModule>['calls'][number],
 ): string | undefined {
+  if (call.frameworkRegistryDeclarationName !== undefined) {
+    return call.frameworkRegistryDeclarationName;
+  }
   const argumentsSnapshot = buildSnapshotDenseArray(
     call.arguments,
     `Registry declaration arguments for ${fileName}`,

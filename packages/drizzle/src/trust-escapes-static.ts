@@ -1936,13 +1936,22 @@ function requestProcessSinksForProject(
       }
       const factoryInvocations = requestHandlerFactoryInvocationsForCall(call, context.provenance);
       for (const invocation of factoryInvocations) {
+        const { args, declarationContract, factory, site } = invocation;
+        if (
+          factory.exportName === 'endpoint' &&
+          Node.isCallExpression(site) &&
+          requestCallIsExactAppEndpointAdoption(site, context.provenance)
+        ) {
+          // SPEC §6.2.1: app.endpoint(declaration) retains no second authored callback graph.
+          // The standalone declaration is classified at its own exact factory call.
+          continue;
+        }
         if (requestRootCount >= REQUEST_ROOT_BUDGET) {
           appendRequestProvenanceBudgetFact(context, invocation.site);
           flushRequestRetainedConfigPristine(context, sourceFiles);
           return context.facts;
         }
         requestRootCount += 1;
-        const { args, declarationContract, factory, site } = invocation;
         if (!declarationContract) {
           verifyRequestTaskBCapabilityRoot(context, factory.exportName, site);
         }
@@ -4114,6 +4123,17 @@ function requestHandlerFactoryInvocationsForCall(
         ]
       : [];
   });
+}
+
+function requestCallIsExactAppEndpointAdoption(
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): boolean {
+  return (
+    !call.getQuestionDotTokenNode() &&
+    call.getArguments().length === 1 &&
+    requestAppAuthoringFactoryForExpression(call.getExpression(), session) === 'endpoint'
+  );
 }
 
 interface RequestAdaptedFactoryInvocation {
@@ -7773,6 +7793,7 @@ function requestRetainedConfigCallIsReviewed(
   if (requestCallIsExactMemoryWebhookReplayStoreConstructor(call, session)) return true;
   if (requestCallIsExactClosedMemoryClientModuleRegistryPut(call, session)) return true;
   if (requestCallIsExactSigningKeyRingConstructor(call, session)) return true;
+  if (requestCallIsExactFileSystemStorageConstructor(call, session)) return true;
   if (requestCallIsExactMemoryStorageConstructor(call, session)) return true;
   if (requestCallIsExactMemoryStoragePut(call, session)) return true;
   if (requestCallIsExactStorageDownloadEndpoint(call, session)) return true;
@@ -10256,9 +10277,15 @@ function requestMemoryClientModuleRegistryDefineKovoUseIsReviewed(
  */
 function requestExactModuleScopeConstCallDeclaration(
   call: import('ts-morph').CallExpression,
-  exportName: 'createMemoryStorage' | 'createSigningKeyRing' | 'createStorageDownloadEndpoint',
+  exportName:
+    | 'createFileSystemStorage'
+    | 'createMemoryStorage'
+    | 'createSigningKeyRing'
+    | 'createStorageDownloadEndpoint',
 ): import('ts-morph').VariableDeclaration | undefined {
-  const module = exportName === 'createMemoryStorage' ? '@kovojs/core' : '@kovojs/server';
+  const module = ['createFileSystemStorage', 'createMemoryStorage'].includes(exportName)
+    ? '@kovojs/core'
+    : '@kovojs/server';
   const direct = requestExactPristineDirectImport(call.getExpression(), module, exportName);
   if (!direct) {
     return undefined;
@@ -10484,6 +10511,74 @@ function requestCallIsExactModuleTopLevelEffect(call: import('ts-morph').CallExp
     requestNodesAreSame(parent.getExpression(), current) &&
     parent.getParent() === parent.getSourceFile()
   );
+}
+
+function requestExactFileSystemStorageOptions(expression: Node): boolean {
+  const options = requestExactPropertyAssignmentMap(expression, new Set(['root']));
+  const root = options?.get('root');
+  const value = root ? unwrapStaticExpression(root) : undefined;
+  return !!(
+    options &&
+    options.size === 1 &&
+    value &&
+    isStringLiteralLike(value) &&
+    value.getLiteralText().length > 0 &&
+    value.getLiteralText().length <= 4_096 &&
+    !value.getLiteralText().includes('\0')
+  );
+}
+
+function requestExactFileSystemStorageDeclarationForExpression(
+  expression: Node,
+): import('ts-morph').VariableDeclaration | undefined {
+  const node = unwrapStaticExpression(expression);
+  let declaration: import('ts-morph').VariableDeclaration | undefined;
+  if (Node.isCallExpression(node)) {
+    declaration = requestExactModuleScopeConstCallDeclaration(node, 'createFileSystemStorage');
+  } else if (Node.isIdentifier(node)) {
+    const symbol = requestIdentifierValueSymbol(node) ?? node.getSymbol();
+    const declarations = symbol?.getDeclarations().filter(Node.isVariableDeclaration) ?? [];
+    const initializer = declarations[0]?.getInitializer();
+    const call = initializer ? unwrapStaticExpression(initializer) : undefined;
+    if (declarations.length === 1 && call && Node.isCallExpression(call)) {
+      declaration = requestExactModuleScopeConstCallDeclaration(call, 'createFileSystemStorage');
+    }
+  }
+  const initializer = declaration?.getInitializer();
+  const call = initializer ? unwrapStaticExpression(initializer) : undefined;
+  return declaration &&
+    call &&
+    Node.isCallExpression(call) &&
+    call.getArguments().length === 1 &&
+    requestExactFileSystemStorageOptions(call.getArguments()[0]!)
+    ? declaration
+    : undefined;
+}
+
+function requestFileSystemStorageBindingIsPristine(
+  declaration: import('ts-morph').VariableDeclaration,
+  session: RequestProvenanceSession,
+): boolean {
+  const memoKey = `file-system-storage:${requestNodeIdentity(declaration)}`;
+  const memoized = session.exactCapabilityBindingMemo.get(memoKey);
+  if (memoized !== undefined) return memoized;
+  session.exactCapabilityBindingMemo.set(memoKey, false);
+  const references = requestExactBindingReferences(declaration);
+  const result = !!(
+    references &&
+    references.length === 1 &&
+    requestReferenceIsExactStorageEndpointProperty(references[0]!, 'storage')
+  );
+  session.exactCapabilityBindingMemo.set(memoKey, result);
+  return result;
+}
+
+function requestCallIsExactFileSystemStorageConstructor(
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): boolean {
+  const declaration = requestExactFileSystemStorageDeclarationForExpression(call);
+  return !!declaration && requestFileSystemStorageBindingIsPristine(declaration, session);
 }
 
 function requestMemoryStoragePutUseIsExact(
@@ -10744,22 +10839,24 @@ function requestStorageDownloadEndpointConfigIsExact(
   ) {
     return false;
   }
-  const storageDeclaration = requestExactMemoryStorageDeclarationForExpression(storage);
+  const memoryStorage = requestExactMemoryStorageDeclarationForExpression(storage);
+  if (memoryStorage) return requestMemoryStorageBindingIsPristine(memoryStorage, session);
+  const fileSystemStorage = requestExactFileSystemStorageDeclarationForExpression(storage);
   return !!(
-    storageDeclaration && requestMemoryStorageBindingIsPristine(storageDeclaration, session)
+    fileSystemStorage && requestFileSystemStorageBindingIsPristine(fileSystemStorage, session)
   );
 }
 
 function requestStorageEndpointAssemblyUseIsExact(
-  reference: import('ts-morph').Identifier,
+  expression: Node,
   session: RequestProvenanceSession,
 ): boolean {
-  const array = reference.getParentIfKind(SyntaxKind.ArrayLiteralExpression);
+  const array = expression.getParentIfKind(SyntaxKind.ArrayLiteralExpression);
   const property = array?.getParentIfKind(SyntaxKind.PropertyAssignment);
   if (
     !array ||
     !property ||
-    !array.getElements().some((element) => requestNodesAreSame(element, reference)) ||
+    !array.getElements().some((element) => requestNodesAreSame(element, expression)) ||
     Node.isComputedPropertyName(property.getNameNode()) ||
     staticMemberName(property.getNameNode()) !== 'endpoints' ||
     !requestNodesAreSame(property.getInitializer(), array)
@@ -10777,6 +10874,49 @@ function requestStorageEndpointAssemblyUseIsExact(
   );
 }
 
+function requestAppEndpointAdoptionResultAssemblyUseIsExact(
+  adoption: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): boolean {
+  if (!requestCallIsExactAppEndpointAdoption(adoption, session)) return false;
+  if (requestStorageEndpointAssemblyUseIsExact(adoption, session)) return true;
+  const declaration = adoption.getFirstAncestorByKind(SyntaxKind.VariableDeclaration);
+  const statement = declaration?.getVariableStatement();
+  const initializer = declaration?.getInitializer();
+  if (
+    !declaration ||
+    !statement ||
+    statement.getDeclarationKind() !== VariableDeclarationKind.Const ||
+    statement.isExported() ||
+    statement.getParent() !== declaration.getSourceFile() ||
+    !Node.isIdentifier(declaration.getNameNode()) ||
+    !initializer ||
+    !requestNodesAreSame(unwrapStaticExpression(initializer), adoption)
+  ) {
+    return false;
+  }
+  const references = requestExactBindingReferences(declaration);
+  return !!(
+    references &&
+    references.length === 1 &&
+    requestStorageEndpointAssemblyUseIsExact(references[0]!, session)
+  );
+}
+
+function requestStorageEndpointAdoptionUseIsExact(
+  declaration: Node,
+  session: RequestProvenanceSession,
+): boolean {
+  const adoption = declaration.getParentIfKind(SyntaxKind.CallExpression);
+  return !!(
+    adoption &&
+    adoption.getArguments().length === 1 &&
+    requestNodesAreSame(adoption.getArguments()[0], declaration) &&
+    requestCallIsExactAppEndpointAdoption(adoption, session) &&
+    requestAppEndpointAdoptionResultAssemblyUseIsExact(adoption, session)
+  );
+}
+
 function requestStorageEndpointBindingIsPristine(
   declaration: import('ts-morph').VariableDeclaration,
   session: RequestProvenanceSession,
@@ -10789,7 +10929,8 @@ function requestStorageEndpointBindingIsPristine(
   const pristine = !!(
     references &&
     references.length === 1 &&
-    requestStorageEndpointAssemblyUseIsExact(references[0]!, session)
+    (requestStorageEndpointAssemblyUseIsExact(references[0]!, session) ||
+      requestStorageEndpointAdoptionUseIsExact(references[0]!, session))
   );
   session.exactCapabilityBindingMemo.set(memoKey, pristine);
   return pristine;
@@ -10804,10 +10945,15 @@ function requestCallIsExactStorageDownloadEndpoint(
     'createStorageDownloadEndpoint',
   );
   return !!(
-    declaration &&
+    requestExactPristineDirectImport(
+      call.getExpression(),
+      '@kovojs/server',
+      'createStorageDownloadEndpoint',
+    ) &&
     call.getArguments().length === 1 &&
     requestStorageDownloadEndpointConfigIsExact(call.getArguments()[0]!, session) &&
-    requestStorageEndpointBindingIsPristine(declaration, session)
+    ((declaration && requestStorageEndpointBindingIsPristine(declaration, session)) ||
+      requestStorageEndpointAdoptionUseIsExact(call, session))
   );
 }
 

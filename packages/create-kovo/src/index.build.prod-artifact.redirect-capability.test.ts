@@ -5,8 +5,14 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { publicScopedKey } from '@kovojs/core';
+import { createFileSystemStorage } from '@kovojs/core/storage';
+
 import { writeKovoProject } from './index.js';
-import { buildReusableProductionArtifact } from './index.build.test-support.js';
+import {
+  buildReusableProductionArtifact,
+  formatGeneratedProjectSources,
+} from './index.build.test-support.js';
 import {
   assertProdArtifactSinkCensus,
   readProductionGraph,
@@ -31,6 +37,17 @@ describe('create-kovo starter (build integration: redirect and capability URL ar
 
     try {
       writeKovoProject(root, { name: 'Prod Redirect Capability Proof' });
+      const capabilityProofStorage = createFileSystemStorage({
+        root: join(root, '.kovo/capability-proof-storage'),
+      });
+      await capabilityProofStorage.put(
+        publicScopedKey('receipts/ord_1.txt'),
+        'capability secret\n',
+        {
+          contentType: 'text/plain',
+          metadata: { filename: 'ord_1.txt' },
+        },
+      );
       addRedirectAndCapabilityProof(root);
       linkStarterBuildDependencies(root);
 
@@ -144,22 +161,19 @@ function addRedirectAndCapabilityProof(root: string): void {
   const app = readFileSync(appPath, 'utf8');
   const withStorageImports = replaceRequired(
     app,
-    ['  createApp,', '  createMemoryVersionedClientModuleRegistry,'].join('\n'),
+    "import { redirect } from '@kovojs/core';",
     [
-      '  createApp,',
-      '  createMemoryStorage,',
-      '  createMemoryVersionedClientModuleRegistry,',
-      '  createSigningKeyRing,',
-      '  createStorageDownloadEndpoint,',
-      '  publicScopedKey,',
+      "import { publicScopedKey, redirect } from '@kovojs/core';",
+      "import { createFileSystemStorage } from '@kovojs/core/storage';",
+      "import { createSigningKeyRing } from '@kovojs/server/signing';",
+      "import { createStorageDownloadEndpoint } from '@kovojs/server/storage-downloads';",
     ].join('\n'),
     'capability proof imports',
   );
   const withStorage = replaceRequired(
     withStorageImports,
-    'const mutationReplayStore = appRuntimeMutationReplayStore;',
+    "const healthEndpoint = app.endpoint('/api/health', {",
     [
-      'const mutationReplayStore = appRuntimeMutationReplayStore;',
       'const capabilityProofSigningKeys = createSigningKeyRing({',
       '  keys: [',
       '    {',
@@ -169,55 +183,61 @@ function addRedirectAndCapabilityProof(root: string): void {
       '    },',
       '  ],',
       '});',
-      'const capabilityProofStorage = createMemoryStorage();',
-      "await capabilityProofStorage.put(publicScopedKey('receipts/ord_1.txt'), 'capability secret\\n', {",
-      "  contentType: 'text/plain',",
-      "  metadata: { filename: 'ord_1.txt' },",
-      '});',
-      'const capabilityDownloadEndpoint = createStorageDownloadEndpoint({',
+      "const capabilityProofStorage = createFileSystemStorage({ root: '.kovo/capability-proof-storage' });",
+      'const capabilityDownloadEndpoint = app.endpoint(createStorageDownloadEndpoint({',
       "  basePath: '/capability-download',",
       '  secret: capabilityProofSigningKeys,',
       '  storage: capabilityProofStorage,',
-      '});',
+      '}));',
+      '',
+      "const healthEndpoint = app.endpoint('/api/health', {",
     ].join('\n'),
     'capability proof storage setup',
   );
-  const withEndpoint = replaceRequired(
+  const withRoutes = replaceRequired(
     withStorage,
+    "const homeRoute = app.route('/', {",
+    [
+      "const redirectLocationProofRoute = app.route('/redirect-location-unsafe', {",
+      "  access: app.publicAccess('public redirect Location sink proof'),",
+      '  page() {',
+      "    return { location: 'https://evil.example/phish\\r\\nSet-Cookie: c2=owned', status: 303 };",
+      '  },',
+      '});',
+      '',
+      "const capabilityUrlProofRoute = app.route('/capability-url-proof', {",
+      "  access: app.publicAccess('public capability URL sink proof'),",
+      '  async page(context) {',
+      "    if (context.signUrl === undefined) throw new Error('missing ctx.signUrl');",
+      "    const signed = await context.signUrl({ key: publicScopedKey('receipts/ord_1.txt'), expiresIn: 60_000 });",
+      '    return (',
+      '      <main>',
+      '        <a id="capability-proof" href={signed.url}>',
+      '          Download capability',
+      '        </a>',
+      '      </main>',
+      '    );',
+      '  },',
+      '});',
+      '',
+      "const homeRoute = app.route('/', {",
+    ].join('\n'),
+    'redirect and capability proof routes',
+  );
+  const withEndpoint = replaceRequired(
+    withRoutes,
     '  endpoints: [healthEndpoint],',
     '  endpoints: [healthEndpoint, capabilityDownloadEndpoint],',
     'capability proof endpoint registration',
   );
-  const withRoutes = replaceRequired(
+  const withRouteRegistration = replaceRequired(
     withEndpoint,
-    "  routes: [\n    route('/', {",
-    [
-      '  routes: [',
-      "    route('/redirect-location-unsafe', {",
-      "      access: publicAccess('public redirect Location sink proof'),",
-      '      page() {',
-      "        return { location: 'https://evil.example/phish\\r\\nSet-Cookie: c2=owned', status: 303 };",
-      '      },',
-      '    }),',
-      "    route('/capability-url-proof', {",
-      "      access: publicAccess('public capability URL sink proof'),",
-      '      async page(context) {',
-      "        if (context.signUrl === undefined) throw new Error('missing ctx.signUrl');",
-      "        const signed = await context.signUrl({ key: publicScopedKey('receipts/ord_1.txt'), expiresIn: 60_000 });",
-      '        return (',
-      '          <main>',
-      '            <a id="capability-proof" href={signed.url}>',
-      '              Download capability',
-      '            </a>',
-      '          </main>',
-      '        );',
-      '      },',
-      '    }),',
-      "    route('/', {",
-    ].join('\n'),
-    'redirect and capability proof routes',
+    '  routes: [homeRoute, loginRoute],',
+    '  routes: [redirectLocationProofRoute, capabilityUrlProofRoute, homeRoute, loginRoute],',
+    'redirect and capability proof route registration',
   );
-  writeFileSync(appPath, withRoutes, 'utf8');
+  writeFileSync(appPath, withRouteRegistration, 'utf8');
+  formatGeneratedProjectSources(root, ['src/app.tsx']);
 }
 
 function replaceRequired(

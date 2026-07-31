@@ -172,6 +172,43 @@ describe('D1 compiler-owned exact project resolver', () => {
     );
   });
 
+  it('preserves the standalone handler root when app.endpoint adopts an advanced declaration', async () => {
+    const fixture = await createFixture();
+    const contract = join(fixture.root, 'app/src/kovo.ts');
+    const entry = join(fixture.root, 'app/src/adopted-endpoint.ts');
+    await writeSource(
+      contract,
+      [
+        "import { defineKovo } from '@kovojs/server';",
+        'export const app = defineKovo({',
+        "  appId: '00000000-0000-4000-8000-000000000002',",
+        '});',
+        '',
+      ].join('\n'),
+    );
+    await writeSource(
+      entry,
+      [
+        "import { endpoint } from '@kovojs/server';",
+        "import { app } from './kovo.js';",
+        "const capabilityEndpoint = endpoint('/api/capability', {",
+        '  handler: () => Response.json({ ok: true }),',
+        '});',
+        'export const adoptedCapabilityEndpoint = app.endpoint(capabilityEndpoint);',
+        '',
+      ].join('\n'),
+    );
+    const project = createCompilerOwnedAppContractProject({ rootNames: [contract, entry] });
+
+    const operations = project.withEntryResolutions(entry, (source) =>
+      componentTaskBSourceOperationFacts(parseComponentModule(entry, source)),
+    );
+
+    expect([...new Set(operations.map((operation) => operation.root))]).toEqual([
+      'endpoint:/api/capability',
+    ]);
+  });
+
   it('recognizes exact app access members and only exempts managed request.db writes', async () => {
     const fixture = await createFixture();
     const contract = join(fixture.root, 'app/src/kovo.ts');

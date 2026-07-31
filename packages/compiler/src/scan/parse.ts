@@ -174,6 +174,10 @@ const COMPONENT_FACTORY_IDENTITY = frameworkExport('@kovojs/core', 'component');
 const AGENT_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'agent');
 const DOMAIN_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'domain');
 const ENDPOINT_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'endpoint');
+const STORAGE_DOWNLOAD_ENDPOINT_FACTORY_IDENTITY = frameworkExport(
+  '@kovojs/server',
+  'createStorageDownloadEndpoint',
+);
 const MUTATION_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'mutation');
 const PUBLIC_ACCESS_IDENTITY = frameworkExport('@kovojs/server', 'publicAccess');
 const QUERY_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'query');
@@ -483,23 +487,25 @@ export function parseComponentModule(
           node.expression,
           { legacyGlobals: SERVER_CALL_FACTORY_IDENTITIES },
         );
-      const frameworkFactory = frameworkExportEquals(factoryIdentity, ENDPOINT_FACTORY_IDENTITY)
-        ? 'endpoint'
-        : frameworkExportEquals(factoryIdentity, AGENT_FACTORY_IDENTITY)
-          ? 'agent'
-          : frameworkExportEquals(factoryIdentity, DOMAIN_FACTORY_IDENTITY)
-            ? 'domain'
-            : frameworkExportEquals(factoryIdentity, MUTATION_FACTORY_IDENTITY)
-              ? 'mutation'
-              : frameworkExportEquals(factoryIdentity, QUERY_FACTORY_IDENTITY)
-                ? 'query'
-                : frameworkExportEquals(factoryIdentity, TASK_FACTORY_IDENTITY)
-                  ? 'task'
-                  : frameworkExportEquals(factoryIdentity, TOOL_FACTORY_IDENTITY)
-                    ? 'tool'
-                    : frameworkExportEquals(factoryIdentity, WEBHOOK_FACTORY_IDENTITY)
-                      ? 'webhook'
-                      : undefined;
+      const frameworkFactory =
+        frameworkExportEquals(factoryIdentity, ENDPOINT_FACTORY_IDENTITY) ||
+        frameworkExportEquals(factoryIdentity, STORAGE_DOWNLOAD_ENDPOINT_FACTORY_IDENTITY)
+          ? 'endpoint'
+          : frameworkExportEquals(factoryIdentity, AGENT_FACTORY_IDENTITY)
+            ? 'agent'
+            : frameworkExportEquals(factoryIdentity, DOMAIN_FACTORY_IDENTITY)
+              ? 'domain'
+              : frameworkExportEquals(factoryIdentity, MUTATION_FACTORY_IDENTITY)
+                ? 'mutation'
+                : frameworkExportEquals(factoryIdentity, QUERY_FACTORY_IDENTITY)
+                  ? 'query'
+                  : frameworkExportEquals(factoryIdentity, TASK_FACTORY_IDENTITY)
+                    ? 'task'
+                    : frameworkExportEquals(factoryIdentity, TOOL_FACTORY_IDENTITY)
+                      ? 'tool'
+                      : frameworkExportEquals(factoryIdentity, WEBHOOK_FACTORY_IDENTITY)
+                        ? 'webhook'
+                        : undefined;
       const frameworkSecurityOperation = frameworkIdentityIn(factoryIdentity, CSRF_FIELD_IDENTITIES)
         ? 'csrf-field'
         : frameworkIdentityIn(factoryIdentity, CSRF_TOKEN_IDENTITIES)
@@ -515,10 +521,16 @@ export function parseComponentModule(
           frameworkFactory,
           frameworkSecurityOperation,
           frameworkJsxRuntimeFactory,
+          frameworkExportEquals(factoryIdentity, STORAGE_DOWNLOAD_ENDPOINT_FACTORY_IDENTITY)
+            ? storageDownloadEndpointRegistryName(node)
+            : undefined,
         ),
         'Call models',
       );
-      if (frameworkExportEquals(factoryIdentity, ENDPOINT_FACTORY_IDENTITY)) {
+      if (
+        frameworkExportEquals(factoryIdentity, ENDPOINT_FACTORY_IDENTITY) &&
+        !isAppEndpointAdoptionBridge(appContractFactoryIdentity, node)
+      ) {
         appendDenseValues(
           endpointHandlers,
           endpointHandlerModels(sourceFile, source, node),
@@ -615,6 +627,27 @@ export function parseComponentModule(
   // never a post-parse search of raw source or emitted text.
   compilerDefineOwnDataProperty(model, 'sourceIdentifierNames', sourceIdentifierNames, false);
   return model;
+}
+
+function isAppEndpointAdoptionBridge(
+  appContractFactoryIdentity: FrameworkExportIdentity | undefined,
+  call: TS.CallExpression,
+): boolean {
+  // SPEC §6.2.1 / §5.2 rule 12: the one-argument app.endpoint(declaration) overload adopts an
+  // already-proven standalone declaration. Its authored handler facts belong to the declaration's
+  // factory call; treating this bridge as a second inline handler invents an opaque semantic root.
+  return (
+    frameworkExportEquals(appContractFactoryIdentity, ENDPOINT_FACTORY_IDENTITY) &&
+    compilerArrayLength(call.arguments, 'App endpoint adoption arguments') === 1
+  );
+}
+
+function storageDownloadEndpointRegistryName(call: TS.CallExpression): string | undefined {
+  const options = callArgument(call, 0);
+  const definition = options ? unwrapExpression(options) : undefined;
+  if (!definition || !ts.isObjectLiteralExpression(definition)) return undefined;
+  const basePath = staticStringObjectProperty(definition, 'basePath');
+  return basePath === undefined || basePath.length === 0 ? undefined : basePath;
 }
 
 function generatedImportInsertionOffset(sourceFile: TS.SourceFile, source: string): number {
@@ -8392,6 +8425,7 @@ function callExpressionModel(
   frameworkFactory: CallExpressionModel['frameworkFactory'],
   frameworkSecurityOperation: CallExpressionModel['frameworkSecurityOperation'],
   frameworkJsxRuntimeFactory: CallExpressionModel['frameworkJsxRuntimeFactory'],
+  frameworkRegistryDeclarationName: string | undefined,
 ): CallExpressionModel {
   const argumentSources: string[] = [];
   const argumentArrowFunctionParts: (ArrowFunctionPartsModel | null)[] = [];
@@ -8473,6 +8507,7 @@ function callExpressionModel(
     end: node.getEnd(),
     ...exportedConstInitializerName(node),
     ...(frameworkFactory === undefined ? {} : { frameworkFactory }),
+    ...(frameworkRegistryDeclarationName === undefined ? {} : { frameworkRegistryDeclarationName }),
     ...(frameworkSecurityOperation === undefined ? {} : { frameworkSecurityOperation }),
     ...(frameworkJsxRuntimeFactory === undefined ? {} : { frameworkJsxRuntimeFactory }),
     name: node.expression.getText(sourceFile),

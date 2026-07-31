@@ -6041,6 +6041,34 @@ import { publicAccess, route } from '@kovojs/server'; import { rootedFiles } fro
     expect(facts.filter((fact) => fact.sink === 'child_process.execFileSync')).toHaveLength(3);
   });
 
+  it('treats app.endpoint advanced-declaration adoption as membership, not a second handler root', () => {
+    const facts = sinksFor(`
+      import { createFileSystemStorage } from '@kovojs/core/storage';
+      import { defineKovo } from '@kovojs/server';
+      import { createSigningKeyRing } from '@kovojs/server/signing';
+      import { createStorageDownloadEndpoint } from '@kovojs/server/storage-downloads';
+
+      const signingKeys = createSigningKeyRing({
+        keys: [{
+          id: 'download-2026',
+          secret: 'download-test-signing-material-2026',
+          state: 'active',
+        }],
+      });
+      const storage = createFileSystemStorage({ root: '/srv/kovo/downloads' });
+      const standaloneDownload = createStorageDownloadEndpoint({
+        basePath: '/download',
+        secret: signingKeys,
+        storage,
+      });
+      const app = defineKovo({ appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e' });
+      const download = app.endpoint(standaloneDownload);
+      export default app.assemble({ endpoints: [download] });
+    `);
+
+    expect(facts).toEqual([]);
+  });
+
   it('closes the authoritative provider, access, schema, verifier, replay, registry, and nested-layout census', () => {
     const facts = sinksFor(`
       import { execFileSync } from 'node:child_process';

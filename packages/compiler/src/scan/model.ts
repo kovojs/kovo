@@ -266,6 +266,11 @@ export interface CallExpressionModel {
     | 'task'
     | 'tool'
     | 'webhook';
+  /**
+   * Parser-owned authored registry identity for a framework declaration whose public constructor
+   * carries its path/key inside a typed options object rather than a leading string argument.
+   */
+  frameworkRegistryDeclarationName?: string;
   /** Exact framework identity for a security helper whose call shape participates in finite IR. */
   frameworkSecurityOperation?: 'csrf-field' | 'csrf-token';
   /** Exact compiler JSX-runtime constructor identity; app source may not call this emitted ABI. */

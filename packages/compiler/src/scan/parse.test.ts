@@ -1218,6 +1218,40 @@ export const unsafeEndpoint = endpoint('/api/unsafe', {
     ]);
   });
 
+  it('records the exact storage-download endpoint path as a typed registry identity', () => {
+    const source = `
+import { createStorageDownloadEndpoint } from '@kovojs/server/storage-downloads';
+
+const capabilityDownloadEndpoint = createStorageDownloadEndpoint({
+  basePath: '/capability-download',
+  secret: signingKeys,
+  storage,
+});
+`;
+    const [declaration] = callExpressions(
+      parseComponentModule('storage-download-endpoint.ts', source),
+    ).filter((call) => call.frameworkRegistryDeclarationName !== undefined);
+
+    expect(declaration).toMatchObject({
+      frameworkFactory: 'endpoint',
+      frameworkRegistryDeclarationName: '/capability-download',
+      name: 'createStorageDownloadEndpoint',
+    });
+
+    const lookalike = callExpressions(
+      parseComponentModule(
+        'storage-download-lookalike.ts',
+        `
+const createStorageDownloadEndpoint = (options) => options;
+createStorageDownloadEndpoint({ basePath: '/forged', secret, storage });
+`,
+      ),
+    );
+    expect(lookalike.filter((call) => call.frameworkRegistryDeclarationName !== undefined)).toEqual(
+      [],
+    );
+  });
+
   it('records webhook recordChange facts with declared write keys', () => {
     const source = `
 import { domain } from '@kovojs/server'
