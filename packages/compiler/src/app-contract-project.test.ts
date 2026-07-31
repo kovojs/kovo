@@ -209,6 +209,110 @@ describe('D1 compiler-owned exact project resolver', () => {
     ]);
   });
 
+  it('derives distinct source identities for module-private assembled app mutations', async () => {
+    const fixture = await createFixture();
+    const contract = join(fixture.root, 'app/src/kovo.ts');
+    const entry = join(fixture.root, 'app/src/app.ts');
+    await writeSource(
+      contract,
+      [
+        "import { defineKovo } from '@kovojs/server';",
+        'export const app = defineKovo({',
+        "  appId: '00000000-0000-4000-8000-000000000002',",
+        '});',
+        '',
+      ].join('\n'),
+    );
+    const source = [
+      "import { app } from './kovo.js';",
+      'const unsafe = app.mutation({',
+      "  handler(_input, request) { request.headers.get('Cookie'); },",
+      '});',
+      'const safe = app.mutation({',
+      "  handler(_input, request) { return request.headers.get('X-Signature'); },",
+      '});',
+      'export default app.assemble({ mutations: [unsafe, safe] });',
+      '',
+    ].join('\n');
+    await writeSource(entry, source);
+    const project = createCompilerOwnedAppContractProject({ rootNames: [contract, entry] });
+
+    const result = project.compileEntry(entry);
+    const roots =
+      result.component?.componentGraphFacts.flatMap(
+        (fact) => fact.securitySemanticGraph?.roots.map((root) => root.root) ?? [],
+      ) ?? [];
+    const authority = project.withEntryResolutions(entry, (exactSource) =>
+      mutationSessionAuthorityFacts(parseComponentModule(entry, exactSource)),
+    );
+
+    expect(result.diagnostics).toEqual([]);
+    expect(roots).toEqual(expect.arrayContaining(['mutation:app/unsafe', 'mutation:app/safe']));
+    expect(roots).not.toContain('mutation:UNRESOLVED');
+    expect(authority.map((fact) => [fact.name, fact.referencesSession])).toEqual([
+      ['app/safe', false],
+      ['app/unsafe', true],
+    ]);
+    expect(result.loweredSource).toContain(
+      'const unsafe = __kovoAssignDerivedMutationKey(app.mutation({',
+    );
+    expect(result.loweredSource).toContain('"app/unsafe"');
+    expect(result.loweredSource).toContain(
+      'const safe = __kovoAssignDerivedMutationKey(app.mutation({',
+    );
+    expect(result.loweredSource).toContain('"app/safe"');
+  });
+
+  it('keeps private assembled query and mutation identities aligned through optimism lowering', async () => {
+    const fixture = await createFixture();
+    const contract = join(fixture.root, 'app/src/kovo.ts');
+    const entry = join(fixture.root, 'app/src/cart.ts');
+    await writeSource(
+      contract,
+      [
+        "import { defineKovo } from '@kovojs/server';",
+        'export const app = defineKovo({',
+        "  appId: '00000000-0000-4000-8000-000000000002',",
+        '});',
+        '',
+      ].join('\n'),
+    );
+    const source = [
+      "import { app } from './kovo.js';",
+      'const cart = app.query({ load() { return { count: 0 }; } });',
+      'const addInput = { parse(value: unknown) { return value; } };',
+      'const add = app.mutation({',
+      '  input: addInput,',
+      '  optimistic: [',
+      '    cart.optimistic(addInput, (data) => ({ ...data, count: data.count + 1 })),',
+      '  ],',
+      '  handler() { return { ok: true }; },',
+      '});',
+      'export default app.assemble({ mutations: [add], queries: [cart] });',
+      '',
+    ].join('\n');
+    await writeSource(entry, source);
+    const project = createCompilerOwnedAppContractProject({ rootNames: [contract, entry] });
+
+    const facts = project.projectMutationRegistryFacts([{ fileName: entry, source }]);
+    const result = project.compileEntry(entry);
+
+    expect(facts.mutationOptimism).toMatchObject({
+      'cart/add': {
+        invalidations: ['cart/cart'],
+        mutation: 'cart/add',
+        statuses: { 'cart/cart': 'hand-written' },
+      },
+    });
+    expect(facts.optimisticModules?.[0]?.mutationKeys).toEqual(['cart/add']);
+    expect(result.loweredSource).toContain('const cart = __kovoAssignDerivedQueryKey(app.query({');
+    expect(result.loweredSource).toContain('"cart/cart"');
+    expect(result.loweredSource).toContain(
+      'const add = __kovoAssignDerivedMutationKey(app.mutation({',
+    );
+    expect(result.loweredSource).toContain('"cart/add"');
+  });
+
   it('recognizes exact app access members and only exempts managed request.db writes', async () => {
     const fixture = await createFixture();
     const contract = join(fixture.root, 'app/src/kovo.ts');

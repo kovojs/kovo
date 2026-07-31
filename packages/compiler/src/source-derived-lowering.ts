@@ -399,7 +399,16 @@ function exportedRegistryAssignments(
 
       const primitive = sourceDerivedPrimitive(sourceFile, call, appContractOnly);
       if (primitive === null) continue;
-      if (registryAssignmentTable[primitive].requiresExport && !exported) continue;
+      // SPEC §5.2/§6.2.1: an exact app-owned module const has a stable source identity even when
+      // assembly keeps the handle private; free registry factories still require an export.
+      if (
+        registryAssignmentTable[primitive].requiresExport &&
+        !exported &&
+        (!variableStatementIsConst(statement) ||
+          sourceDerivedPrimitive(sourceFile, call, true) !== primitive)
+      ) {
+        continue;
+      }
       compilerArrayAppend(
         assignments,
         { binding: declaration.name.text, call, primitive },
@@ -454,6 +463,10 @@ function sourceDerivedPrimitive(
   }
 
   return null;
+}
+
+function variableStatementIsConst(statement: TS.VariableStatement): boolean {
+  return (statement.declarationList.flags & ts.NodeFlags.Const) !== 0;
 }
 
 function resolvesTo(

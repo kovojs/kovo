@@ -3311,6 +3311,33 @@ function localConstInitializerName(call: TS.CallExpression): string | undefined 
     : undefined;
 }
 
+function moduleConstInitializerName(
+  sourceFile: TS.SourceFile,
+  call: TS.CallExpression,
+): string | undefined {
+  // SPEC §5.2/§6.2.1: private app handles derive identity only from one direct, immutable,
+  // module-scoped declaration. Receiver provenance remains the separate compiler-owned proof.
+  const declaration = call.parent;
+  if (
+    !ts.isVariableDeclaration(declaration) ||
+    declaration.initializer !== call ||
+    !ts.isIdentifier(declaration.name)
+  ) {
+    return undefined;
+  }
+  const declarationList = declaration.parent;
+  if (
+    !ts.isVariableDeclarationList(declarationList) ||
+    (declarationList.flags & ts.NodeFlags.Const) === 0
+  ) {
+    return undefined;
+  }
+  const statement = declarationList.parent;
+  return ts.isVariableStatement(statement) && statement.parent === sourceFile
+    ? declaration.name.text
+    : undefined;
+}
+
 /**
  * Trace the handler's second (request) parameter to Headers aliases and classify
  * Cookie reads. Decisions are AST/provenance-based, never raw source text. A
@@ -5596,6 +5623,17 @@ function taskKey(sourceFile: TS.SourceFile, call: TS.CallExpression): string {
   const first = callArgument(call, 0);
   if (first && ts.isStringLiteralLike(first)) return first.text;
 
+  const appContractFactory = compilerOwnedAppContractFactoryIdentity(
+    ts as FrameworkIdentityTypeScript,
+    sourceFile,
+    call.expression,
+  );
+  const privateAppBinding =
+    appContractFactory !== undefined ? moduleConstInitializerName(sourceFile, call) : undefined;
+  if (privateAppBinding !== undefined) {
+    return deriveRegistryIdentity(sourceFile.fileName, privateAppBinding).key;
+  }
+
   const exported = exportedConstInitializerName(call);
   if ('exportedConstName' in exported) {
     return deriveRegistryIdentity(sourceFile.fileName, exported.exportedConstName).key;
@@ -5615,6 +5653,21 @@ function mutationOwner(sourceFile: TS.SourceFile, call: TS.CallExpression): Hand
   // unresolved owner and let KV418 conservatively apply it to every exempt mutation.
   if (firstValue && !ts.isObjectLiteralExpression(firstValue)) {
     return { kind: 'key', value: 'UNRESOLVED' };
+  }
+
+  const appContractFactory = compilerOwnedAppContractFactoryIdentity(
+    ts as FrameworkIdentityTypeScript,
+    sourceFile,
+    call.expression,
+  );
+  if (frameworkExportEquals(appContractFactory, MUTATION_FACTORY_IDENTITY)) {
+    const privateAppBinding = moduleConstInitializerName(sourceFile, call);
+    if (privateAppBinding !== undefined) {
+      return {
+        kind: 'key',
+        value: deriveMutationKey(sourceFile.fileName, privateAppBinding),
+      };
+    }
   }
 
   const exported = exportedConstInitializerName(call);
