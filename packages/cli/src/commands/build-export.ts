@@ -1,5 +1,9 @@
 /* oxlint-disable typescript/unbound-method -- Buffer.from is a static intrinsic and does not use this. */
-import { execFile as builtinExecFile } from 'node:child_process';
+import {
+  execFile as builtinExecFile,
+  spawn as builtinSpawn,
+  type ChildProcess,
+} from 'node:child_process';
 import { Buffer as builtinBuffer } from 'node:buffer';
 import {
   createHmac as builtinCreateHmac,
@@ -234,6 +238,7 @@ import {
 } from './build-security-intrinsics.js';
 
 const execFile = builtinExecFile;
+const spawn = builtinSpawn;
 const bufferFrom = builtinBuffer.from;
 const createHmac = builtinCreateHmac;
 const hash = builtinHash;
@@ -267,6 +272,10 @@ const fileURLToPath = builtinFileURLToPath;
 const pathToFileURL = builtinPathToFileURL;
 const promisify = builtinPromisify;
 const performanceNow = builtinPerformance.now.bind(builtinPerformance);
+const processKill = process.kill.bind(process);
+const processPlatform = process.platform;
+const staticClearTimeout = globalThis.clearTimeout.bind(globalThis);
+const staticSetTimeout = globalThis.setTimeout.bind(globalThis);
 const collectBuildGarbage =
   typeof globalThis.gc === 'function' ? globalThis.gc.bind(globalThis) : undefined;
 const staticTrustWorkerSchema = 'kovo-static-trust-worker/v1';
@@ -3744,7 +3753,7 @@ async function executeStaticTrustWorker(
       : rootAcceptanceWorkerPath;
   const request = stringifyBuildValue(workerRequest);
   try {
-    const result = await execFileAsync(
+    const result = await executeBoundedStaticTrustWorkerProcess(
       process.execPath,
       [
         ...(sourceMode
@@ -3760,17 +3769,157 @@ async function executeStaticTrustWorker(
         workerPath,
         request,
       ],
-      {
-        encoding: 'utf8',
-        env: invocationEnv,
-        maxBuffer: staticTrustWorkerMaxOutputBytes,
-        timeout: staticTrustWorkerTimeoutMs,
-      },
+      invocationEnv,
+      staticTrustWorkerTimeoutMs,
     );
     return result.stdout;
   } catch (error) {
     throw new Error(`Kovo static-trust worker failed: ${execFileErrorOutput(error)}`);
   }
+}
+
+interface StaticTrustWorkerProcessResult {
+  readonly stderr: string;
+  readonly stdout: string;
+}
+
+function executeBoundedStaticTrustWorkerProcess(
+  executable: string,
+  args: readonly string[],
+  invocationEnv: NodeJS.ProcessEnv,
+  timeoutMs: number,
+): Promise<StaticTrustWorkerProcessResult> {
+  return new Promise((resolveProcess, rejectProcess) => {
+    let timedOut = false;
+    let outputExceeded = false;
+    let spawnError: Error | undefined;
+    let stdoutBytes = 0;
+    let stderrBytes = 0;
+    const stdoutChunks: Buffer[] = [];
+    const stderrChunks: Buffer[] = [];
+    const child = spawn(executable, args, {
+      detached: processPlatform !== 'win32',
+      env: invocationEnv,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+    const appendOutput = (chunks: Buffer[], chunk: Buffer, stream: 'stderr' | 'stdout'): void => {
+      if (outputExceeded) return;
+      const nextBytes = (stream === 'stdout' ? stdoutBytes : stderrBytes) + chunk.byteLength;
+      if (nextBytes > staticTrustWorkerMaxOutputBytes) {
+        outputExceeded = true;
+        terminateStaticTrustWorkerProcessTree(child);
+        return;
+      }
+      chunks.push(chunk);
+      if (stream === 'stdout') stdoutBytes = nextBytes;
+      else stderrBytes = nextBytes;
+    };
+    child.stdout.on('data', (chunk: Buffer) => appendOutput(stdoutChunks, chunk, 'stdout'));
+    child.stderr.on('data', (chunk: Buffer) => appendOutput(stderrChunks, chunk, 'stderr'));
+    child.once('error', (error) => {
+      spawnError = error;
+    });
+    const timeout = staticSetTimeout(() => {
+      timedOut = true;
+      terminateStaticTrustWorkerProcessTree(child);
+    }, timeoutMs);
+    child.once('close', (code, signal) => {
+      staticClearTimeout(timeout);
+      const stdout = builtinBuffer.concat(stdoutChunks).toString('utf8');
+      const stderr = builtinBuffer.concat(stderrChunks).toString('utf8');
+      if (timedOut) {
+        const message = `Kovo static-trust worker exceeded its ${String(timeoutMs)}ms deadline.`;
+        rejectProcess(staticTrustWorkerProcessError(message, stdout, stderr));
+        return;
+      }
+      if (outputExceeded) {
+        rejectProcess(
+          staticTrustWorkerProcessError(
+            `Kovo static-trust worker output exceeded ${String(staticTrustWorkerMaxOutputBytes)} bytes.`,
+            stdout,
+            stderr,
+          ),
+        );
+        return;
+      }
+      if (spawnError !== undefined) {
+        rejectProcess(staticTrustWorkerProcessError(spawnError.message, stdout, stderr));
+        return;
+      }
+      if (code !== 0) {
+        rejectProcess(
+          staticTrustWorkerProcessError(
+            `Kovo static-trust worker exited with code ${String(code)} signal ${String(signal)}.`,
+            stdout,
+            stderr,
+          ),
+        );
+        return;
+      }
+      resolveProcess({ stderr, stdout });
+    });
+  });
+}
+
+function staticTrustWorkerProcessError(message: string, stdout: string, stderr: string): Error {
+  const processError = new Error(message) as Error & { stderr: string; stdout: string };
+  processError.stdout = stdout;
+  processError.stderr = stderr.length === 0 ? message : `${stderr}\n${message}`;
+  return processError;
+}
+
+function terminateStaticTrustWorkerProcessTree(child: ChildProcess): void {
+  const pid = child.pid;
+  if (pid === undefined) return;
+
+  if (processPlatform !== 'win32') {
+    try {
+      // The worker is its own process-group leader. Kill the entire group so Vite/OXC descendants
+      // cannot retain stdout/stderr and keep the close event alive past the stated deadline.
+      processKill(-pid, 'SIGKILL');
+      return;
+    } catch {
+      // If process-group delivery races process startup or is unavailable, still fail closed on the
+      // direct worker. Termination is called from stream/timer handlers and must never escape them.
+      terminateStaticTrustWorkerProcess(pid);
+    }
+    return;
+  }
+
+  // Node has no negative-PID process groups on Windows. taskkill /T is the platform process-tree
+  // primitive; the direct kill remains a fail-closed fallback if taskkill itself cannot launch.
+  const taskkill = spawn('taskkill', ['/pid', String(pid), '/T', '/F'], {
+    stdio: 'ignore',
+    windowsHide: true,
+  });
+  taskkill.once('error', () => terminateStaticTrustWorkerProcess(pid));
+  taskkill.once('exit', (code) => {
+    if (code !== 0) terminateStaticTrustWorkerProcess(pid);
+  });
+}
+
+function terminateStaticTrustWorkerProcess(pid: number): void {
+  try {
+    processKill(pid, 'SIGKILL');
+  } catch {
+    // The worker may already have exited between the deadline/output check and signal delivery.
+  }
+}
+
+/** @internal Deterministic process-tree deadline seam for orchestration regression tests. */
+export async function boundedStaticTrustWorkerProcessForTesting(
+  executable: string,
+  args: readonly string[],
+  timeoutMs: number,
+): Promise<string> {
+  const result = await executeBoundedStaticTrustWorkerProcess(
+    executable,
+    args,
+    process.env,
+    timeoutMs,
+  );
+  return result.stdout;
 }
 
 /** @internal Adversarial protocol seam; production callers consume the same fail-closed parser. */

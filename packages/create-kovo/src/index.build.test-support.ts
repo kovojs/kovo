@@ -14,12 +14,24 @@ import {
   resolveStarterBin,
   withStarterBinOnPath,
 } from './index.test-support.js';
-import { resolveVitePlusBin } from '../../cli/src/commands/vite-plus-bin.js';
+import { resolveVitePlusQualityBin } from '../../cli/src/commands/vite-plus-bin.js';
 
 // Production artifact proofs compile an entire generated application. Shared GitHub runners can
 // be several times slower under the full matrix, so keep the semantic test deadline distinct from
 // local feedback while still bounding a genuinely stuck build.
 export const PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS = process.env.CI ? 600_000 : 180_000;
+const generatedStarterFormatConfigAnchor = [
+  '  fmt: {',
+  '    semi: true,',
+  '    singleQuote: true,',
+  '    sortPackageJson: true,',
+  '  },',
+].join('\n');
+const generatedStarterFormatConfig = {
+  semi: true,
+  singleQuote: true,
+  sortPackageJson: true,
+};
 
 /** Supply the deployment-bound journal authority required by production boots (SPEC §7.4). */
 export function productionArtifactAttestationEnv(label: string): Readonly<{
@@ -183,10 +195,7 @@ export function formatGeneratedProjectSources(
   root: string,
   relativePaths: readonly string[],
 ): void {
-  execFileSync(process.execPath, [resolveVitePlusBin(), 'fmt', ...relativePaths], {
-    cwd: root,
-    stdio: 'pipe',
-  });
+  formatGeneratedSourcesWithPinnedFormatter(root, relativePaths);
 }
 
 export function buildParanoidProductionArtifact(root: string): void {
@@ -4035,8 +4044,8 @@ export function addParanoidPhase5AuthorizationProof(root: string): void {
     "import { phase5AuthzAliasQuery, phase5AuthzBuilderQuery, phase5AuthzChildQuery, phase5AuthzCompoundQuery, phase5AuthzEndpoint, phase5AuthzGraphProof, phase5AuthzStatusEndpoint } from './paranoid-phase5-authz-proof.js';";
   app = replaceRequired(
     app,
-    "import { appTheme } from './theme.js';",
-    [authzImport, "import { appTheme } from './theme.js';"].join('\n'),
+    "import { appSignIn, appSignOut } from './auth.js';",
+    ["import { appSignIn, appSignOut } from './auth.js';", authzImport].join('\n'),
     'phase 5.1 authorization app import',
   );
   for (const endpointEntry of ['phase5AuthzEndpoint', 'phase5AuthzStatusEndpoint']) {
@@ -4889,12 +4898,55 @@ function replaceRequired(
 }
 
 function formatGeneratedSources(root: string, files: readonly string[]): void {
+  formatGeneratedSourcesWithPinnedFormatter(root, files);
+}
+
+function formatGeneratedSourcesWithPinnedFormatter(root: string, files: readonly string[]): void {
   if (files.length === 0) return;
-  execFileSync(resolveStarterBin(root, 'vp'), ['fmt', '--write', ...files], {
-    cwd: root,
-    env: withStarterBinOnPath(root),
-    stdio: 'pipe',
-  });
+  const viteConfigPath = join(root, 'vite.config.ts');
+  if (!readFileSync(viteConfigPath, 'utf8').includes(generatedStarterFormatConfigAnchor)) {
+    throw new Error('Generated starter fixture formatter config no longer matches its template.');
+  }
+
+  // `vp fmt` forwards vite.config.ts to Oxfmt as its config module. That evaluates the generated
+  // Kovo plugin graph and can retain gigabytes merely to format a few fixture-owned source files.
+  // Resolve the exact Oxfmt version authenticated by Vite Plus, then give it only the declarative
+  // starter format options whose source anchor was checked above.
+  const formatter = resolveVitePlusQualityBin('oxfmt');
+  const formatterDirectory = join(root, '.kovo');
+  const formatterConfigPath = join(
+    formatterDirectory,
+    `fixture-formatter-${randomBytes(8).toString('hex')}.oxfmtrc.json`,
+  );
+  mkdirSync(formatterDirectory, { recursive: true });
+  writeFileSync(formatterConfigPath, `${JSON.stringify(generatedStarterFormatConfig)}\n`, 'utf8');
+  try {
+    execFileSync(
+      process.execPath,
+      [
+        formatter.executable,
+        '--config',
+        formatterConfigPath,
+        '--disable-nested-config',
+        '--threads=1',
+        '--write',
+        ...files,
+      ],
+      {
+        cwd: root,
+        env: {
+          ...process.env,
+          ...formatter.environment,
+          JS_RUNTIME_NAME: process.release.name,
+          JS_RUNTIME_VERSION: process.versions.node,
+          NODE_PACKAGE_MANAGER: 'vite-plus',
+        },
+        stdio: 'pipe',
+      },
+    );
+  } finally {
+    rmSync(formatterConfigPath, { force: true });
+  }
 }
 
 function addNamedImportSpecifiersRequired(

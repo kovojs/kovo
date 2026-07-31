@@ -1,9 +1,10 @@
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { formatGeneratedProjectSources } from './index.build.test-support.js';
 import { installStarterAppDependencies, resolveStarterInstallMode } from './index.test-support.js';
 
 describe('create-kovo starter test support', () => {
@@ -71,6 +72,38 @@ describe('create-kovo starter test support', () => {
     } finally {
       restoreEnvironment('KOVO_PACKED_PACKAGES_DIR', previousDirectory);
       restoreEnvironment('KOVO_STARTER_SOURCE_FIXTURE_DEPENDENCIES', previousPosture);
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('formats generated sources without evaluating the fixture Vite plugin graph', () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-kovo-pinned-fixture-formatter-'));
+    mkdirSync(join(root, 'src'));
+    writeFileSync(
+      join(root, 'vite.config.ts'),
+      [
+        'export default {',
+        '  fmt: {',
+        '    semi: true,',
+        '    singleQuote: true,',
+        '    sortPackageJson: true,',
+        '  },',
+        '};',
+        "throw new Error('fixture Vite config must not be evaluated by its formatter');",
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    const fixturePath = join(root, 'src/fixture.ts');
+    writeFileSync(fixturePath, 'export const fixture={label:"value"}\n', 'utf8');
+
+    try {
+      formatGeneratedProjectSources(root, ['src/fixture.ts']);
+
+      expect(readFileSync(fixturePath, 'utf8')).toBe(
+        "export const fixture = { label: 'value' };\n",
+      );
+    } finally {
       rmSync(root, { force: true, recursive: true });
     }
   });

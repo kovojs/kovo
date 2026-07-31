@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { formatKovoDiagnostics } from '../diagnostic.js';
 import {
+  boundedStaticTrustWorkerProcessForTesting,
   runPreEvaluationStaticTrustWorkerRequest,
   staticConfigTrustFromWorkerEnvelopeForTesting,
   staticTrustFromWorkerEnvelopeForTesting,
@@ -15,6 +16,7 @@ import {
 
 const schema = 'kovo-static-trust-worker/v1';
 const temporaryRoots: string[] = [];
+const itIfPosix = process.platform === 'win32' ? it.skip : it;
 const request: StaticTrustWorkerRequest = {
   authenticationKey: '11'.repeat(32),
   cache: null,
@@ -221,6 +223,26 @@ function successfulConfigEnvelope(
 }
 
 describe('static-trust worker protocol', () => {
+  itIfPosix(
+    'reaps the complete worker process group at the declared deadline',
+    async () => {
+      const script = [
+        "const { spawn } = require('node:child_process');",
+        "spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {",
+        "  stdio: ['ignore', 'inherit', 'inherit'],",
+        '});',
+        'setInterval(() => {}, 1000);',
+      ].join('\n');
+      const startedAt = performance.now();
+
+      await expect(
+        boundedStaticTrustWorkerProcessForTesting(process.execPath, ['-e', script], 100),
+      ).rejects.toThrow(/static-trust worker exceeded its 100ms deadline/u);
+      expect(performance.now() - startedAt).toBeLessThan(2_000);
+    },
+    5_000,
+  );
+
   it('preserves a diagnostic failure without evaluating an authored module in the parent', () => {
     const diagnostics = [
       {
