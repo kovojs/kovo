@@ -391,6 +391,19 @@ describe('ci-shards', () => {
     ]);
   });
 
+  it('keeps the no-build BUGZ fixture-format regression enrolled in the starter lane', () => {
+    const file = 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts';
+    expect(includeVitest(file)).toBe(false);
+    expect(starterEntries().filter((entry) => entry.id === 'bugz-fixture-format')).toEqual([
+      {
+        file,
+        id: 'bugz-fixture-format',
+        seconds: 10,
+        testName: 'keeps BUGZ25/31 production fixtures formatter-clean before build preflight',
+      },
+    ]);
+  });
+
   it('retains measured hosted-runner deadline headroom on timed-out proofs', async () => {
     const [
       asyncContextSource,
@@ -688,7 +701,7 @@ describe('ci-shards', () => {
       entries.map((entry) => entry.id).toSorted(compareStrings),
     );
     expect(shards.map((shard) => shard.seconds)).toEqual([
-      1_200, 947, 958, 952, 951, 954, 965, 957, 949, 951,
+      1_200, 954, 958, 952, 954, 954, 965, 957, 949, 951,
     ]);
   });
 

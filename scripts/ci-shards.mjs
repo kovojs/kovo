@@ -192,6 +192,12 @@ const STARTER_ENTRIES = [
     seconds: 748,
   },
   {
+    id: 'bugz-fixture-format',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
+    testName: 'keeps BUGZ25/31 production fixtures formatter-clean before build preflight',
+    seconds: 10,
+  },
+  {
     id: 'raw-sql-artifacts',
     file: 'packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts',
     // CI run 30622986364 measured this file at 117.067s.

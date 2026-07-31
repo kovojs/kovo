@@ -262,6 +262,48 @@ describe('create-kovo starter (build integration: adversarial production artifac
     480_000,
   );
 
+  it('keeps BUGZ25/31 production fixtures formatter-clean before build preflight', () => {
+    withProject('create-kovo-bugz-fixture-format-', undefined, (root) => {
+      addBugz25ToctouProof(root);
+      expectGeneratedProjectSourcesFormatterClean(root, [
+        'src/schema.ts',
+        'src/bugz25-toctou-proof.ts',
+      ]);
+
+      addBugz31GlobalMemberCarrierProof(root, 'ordinary-carriers');
+      expectGeneratedProjectSourcesFormatterClean(root, [
+        'src/app.tsx',
+        'src/bugz31-member-carrier-poison.ts',
+        'src/bugz31-member-carrier-proof.ts',
+      ]);
+      expectAppSideEffectImport(root, './bugz31-member-carrier-proof.js');
+
+      addBugz31AssimilationProof(root);
+      expectGeneratedProjectSourcesFormatterClean(root, [
+        'src/app.tsx',
+        'src/bugz31-assimilation-proof.ts',
+      ]);
+      expectAppSideEffectImport(root, './bugz31-assimilation-proof.js');
+
+      addBugz31TrustedInputProvenanceProof(root);
+      expectGeneratedProjectSourcesFormatterClean(root, [
+        'src/app.tsx',
+        'src/bugz31-root-provenance-proof.ts',
+      ]);
+      expectAppSideEffectImport(root, './bugz31-root-provenance-proof.js');
+
+      addBugz31GlobalMemberLockdownProof(root);
+      expectGeneratedProjectSourcesFormatterClean(root, [
+        'src/app.tsx',
+        'src/bugz31-intrinsic-alias.ts',
+        'src/bugz31-intrinsic-barrel.ts',
+        'src/bugz31-intrinsic-poison.ts',
+        'src/bugz31-intrinsic-member-proof.ts',
+      ]);
+      expectAppSideEffectImport(root, './bugz31-intrinsic-member-proof.js');
+    });
+  }, 60_000);
+
   it.each([...dialectIndependentCompilerGateCases])(
     'bugz-25: composed concurrency provenance fails closed in the %s production build',
     async (_label: string, dialect: CreateKovoDialect | undefined) => {
@@ -601,6 +643,27 @@ async function withProject(
   }
 }
 
+function expectGeneratedProjectSourcesFormatterClean(
+  root: string,
+  relativePaths: readonly string[],
+): void {
+  const before = relativePaths.map((relativePath) => [
+    relativePath,
+    readFileSync(join(root, relativePath), 'utf8'),
+  ]);
+  formatGeneratedProjectSources(root, relativePaths);
+  expect(
+    relativePaths.map((relativePath) => [
+      relativePath,
+      readFileSync(join(root, relativePath), 'utf8'),
+    ]),
+  ).toEqual(before);
+}
+
+function expectAppSideEffectImport(root: string, moduleSpecifier: string): void {
+  expect(readFileSync(join(root, 'src/app.tsx'), 'utf8')).toContain(`import '${moduleSpecifier}';`);
+}
+
 function expectBuildFailure(root: string, expectedOutput: readonly string[]): string {
   let output: string | undefined;
   try {
@@ -770,6 +833,8 @@ function addBugz25ToctouProof(root: string): void {
     ].join('\n'),
     'utf8',
   );
+
+  formatGeneratedProjectSources(root, ['src/schema.ts', 'src/bugz25-toctou-proof.ts']);
 }
 
 function addBugz31GlobalMemberLockdownProof(root: string): void {
@@ -833,7 +898,7 @@ function addBugz31GlobalMemberLockdownProof(root: string): void {
 
   const appPath = join(root, 'src/app.tsx');
   const app = readFileSync(appPath, 'utf8');
-  const anchor = "import { appTheme } from './theme.js';";
+  const anchor = "import { app, appStylesheets } from './kovo.js';";
   if (!app.includes(anchor)) {
     throw new Error('Expected scaffold app import anchor for bugz-31 intrinsic proof.');
   }
@@ -842,6 +907,13 @@ function addBugz31GlobalMemberLockdownProof(root: string): void {
     app.replace(anchor, `${anchor}\nimport './bugz31-intrinsic-member-proof.js';`),
     'utf8',
   );
+  formatGeneratedProjectSources(root, [
+    'src/app.tsx',
+    'src/bugz31-intrinsic-alias.ts',
+    'src/bugz31-intrinsic-barrel.ts',
+    'src/bugz31-intrinsic-poison.ts',
+    'src/bugz31-intrinsic-member-proof.ts',
+  ]);
 }
 
 function addBugz31AssimilationProof(root: string): void {
@@ -914,7 +986,7 @@ function addBugz31AssimilationProof(root: string): void {
 
   const appPath = join(root, 'src/app.tsx');
   const app = readFileSync(appPath, 'utf8');
-  const anchor = "import { appTheme } from './theme.js';";
+  const anchor = "import { app, appStylesheets } from './kovo.js';";
   if (!app.includes(anchor)) {
     throw new Error('Expected scaffold app import anchor for bugz-31 assimilation proof.');
   }
@@ -923,6 +995,7 @@ function addBugz31AssimilationProof(root: string): void {
     app.replace(anchor, `${anchor}\nimport './bugz31-assimilation-proof.js';`),
     'utf8',
   );
+  formatGeneratedProjectSources(root, ['src/app.tsx', 'src/bugz31-assimilation-proof.ts']);
 }
 
 function addBugz31TrustedInputProvenanceProof(root: string): void {
@@ -985,7 +1058,7 @@ function addBugz31TrustedInputProvenanceProof(root: string): void {
 
   const appPath = join(root, 'src/app.tsx');
   const app = readFileSync(appPath, 'utf8');
-  const anchor = "import { appTheme } from './theme.js';";
+  const anchor = "import { app, appStylesheets } from './kovo.js';";
   if (!app.includes(anchor)) {
     throw new Error('Expected scaffold app import anchor for bugz-31 root provenance proof.');
   }
@@ -994,6 +1067,7 @@ function addBugz31TrustedInputProvenanceProof(root: string): void {
     app.replace(anchor, `${anchor}\nimport './bugz31-root-provenance-proof.js';`),
     'utf8',
   );
+  formatGeneratedProjectSources(root, ['src/app.tsx', 'src/bugz31-root-provenance-proof.ts']);
 }
 
 function addBugz31GlobalMemberCarrierProof(
@@ -1160,7 +1234,7 @@ function addBugz31GlobalMemberCarrierProof(
 
   const appPath = join(root, 'src/app.tsx');
   const app = readFileSync(appPath, 'utf8');
-  const anchor = "import { appTheme } from './theme.js';";
+  const anchor = "import { app, appStylesheets } from './kovo.js';";
   if (!app.includes(anchor)) {
     throw new Error('Expected scaffold app import anchor for bugz-31 carrier proof.');
   }
@@ -1169,6 +1243,11 @@ function addBugz31GlobalMemberCarrierProof(
     app.replace(anchor, `${anchor}\nimport './bugz31-member-carrier-proof.js';`),
     'utf8',
   );
+  formatGeneratedProjectSources(root, [
+    'src/app.tsx',
+    'src/bugz31-member-carrier-poison.ts',
+    'src/bugz31-member-carrier-proof.ts',
+  ]);
 }
 
 async function withRunningProject(
