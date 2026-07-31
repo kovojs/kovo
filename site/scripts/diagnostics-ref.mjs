@@ -54,6 +54,12 @@ const INTENTIONAL_NON_FRAMEWORK_PLACEHOLDERS = [
     reason:
       'the authenticated Vite diagnostic handoff test proves an unknown registry code is rejected',
   },
+  {
+    code: 'KV999',
+    pathPattern: /packages\/cli\/src\/commands\/build-static-trust-worker\.test\.ts$/u,
+    reason:
+      'the static-trust worker wire validator test proves an unknown registry code is rejected',
+  },
 ];
 
 /** Read the diagnostics registry from core's internal source so the catalog

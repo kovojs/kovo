@@ -4,6 +4,7 @@ import {
   evaluateCustomRunnerBootstrapOrdering,
   evaluateRequestSafeRuntimeInventoryAlignment,
   evaluateSecurityClassifierCorpus,
+  evaluateSiteStaticExportRuntimeOrdering,
 } from './check-security-classifier-corpus.mjs';
 import {
   buildSecurityCoverageCells,
@@ -47,7 +48,9 @@ describe('check-security-classifier-corpus gate', () => {
         createSecurityLockedViteServer;
         const viteServer = await createViteServer({});
         viteServer.ssrLoadModule('/src/app.tsx');
-        viteServer.ssrLoadModule('@kovojs/server');
+        viteServer.ssrLoadModule('@kovojs/server/runtime-bootstrap');
+        viteServer.ssrLoadModule('@kovojs/server/static-export');
+        (await import('./content-pipeline.mjs')).runContentPipeline;
         await securityLockedViteRuntime();
         if (!skipPipeline) await runContentPipeline();
         await buildWithSecurityLockedVite({ root: siteRoot });
@@ -121,8 +124,10 @@ describe('check-security-classifier-corpus gate', () => {
         inventory.globalNamespaceMemberPaths;
       `,
       'packages/cli/src/commands/build-export.ts': `
-        createRequestHandler, deriveClosedKovoApp, runWithGeneratedLiveTargetRegistry;
+        createRequestHandler, deriveClosedKovoApp, resolveKovoAppToken, runWithGeneratedLiveTargetRegistry;
         runWithGeneratedLiveTargetRegistry;
+        export default createRequestHandler(appWithBuildStylesheetAssets(app, stylesheetAssets));
+        return deriveClosedKovoApp(app, {
       `,
       'packages/compiler/src/security-bootstrap.ts': `
         lockRequestSafeRuntimeRealm();
@@ -204,11 +209,13 @@ describe('check-security-classifier-corpus gate', () => {
       'site/scripts/export-static.mjs': `
         createSecurityLockedViteServer;
         await securityLockedViteRuntime();
+        (await import('./content-pipeline.mjs')).runContentPipeline;
         if (!skipPipeline) await runContentPipeline();
         await buildWithSecurityLockedVite({ root: siteRoot });
         const viteServer = await createViteServer({ root: siteRoot });
+        await viteServer.ssrLoadModule('@kovojs/server/runtime-bootstrap');
         await viteServer.ssrLoadModule('/src/app.tsx');
-        await viteServer.ssrLoadModule('@kovojs/server');
+        await viteServer.ssrLoadModule('@kovojs/server/static-export');
       `,
       'packages/create-kovo/templates/src/app.tsx': `export default app;`,
       'examples/commerce/src/app.tsx': `export default app;`,
@@ -228,6 +235,39 @@ describe('check-security-classifier-corpus gate', () => {
       'request-safe-runtime: REQUEST_REVIEWED_GLOBAL_NAMESPACE_MEMBERS exceeds requestSafeGlobalNamespaceMemberPaths: JSON.parse',
       'request-safe-runtime: callback globals exceed requestSafeCallbackGlobals: setImmediate',
     ]);
+  });
+
+  it('requires host lock and SSR bootstrap before either static-export graph sibling', () => {
+    const lockedPrelude = `
+      await securityLockedViteRuntime();
+      (await import('./content-pipeline.mjs')).runContentPipeline;
+      if (!skipPipeline) await runContentPipeline();
+      await buildWithSecurityLockedVite({ root: siteRoot });
+      const viteServer = await createViteServer({
+      await viteServer.ssrLoadModule('@kovojs/server/runtime-bootstrap');
+    `;
+    const appLoad = "viteServer.ssrLoadModule('/src/app.tsx');";
+    const staticExportLoad = "viteServer.ssrLoadModule('@kovojs/server/static-export');";
+
+    expect(
+      evaluateSiteStaticExportRuntimeOrdering(`${lockedPrelude}\n${staticExportLoad}\n${appLoad}`),
+    ).toEqual([]);
+    for (const source of [
+      `${lockedPrelude.replace(
+        "await viteServer.ssrLoadModule('@kovojs/server/runtime-bootstrap');",
+        '',
+      )}\n${appLoad}\n${staticExportLoad}`,
+      `${appLoad}\n${lockedPrelude}\n${staticExportLoad}`,
+      `${staticExportLoad}\n${lockedPrelude}\n${appLoad}`,
+      `${lockedPrelude.replace(
+        'await securityLockedViteRuntime();',
+        '',
+      )}\n${appLoad}\n${staticExportLoad}\nawait securityLockedViteRuntime();`,
+    ]) {
+      expect(evaluateSiteStaticExportRuntimeOrdering(source)).toEqual([
+        'request-safe-runtime: site/scripts/export-static.mjs must lock the runtime before importing the CLI/Vite graph',
+      ]);
+    }
   });
 
   it('requires a marker for every configured security classifier corpus', () => {

@@ -256,15 +256,25 @@ function appendDuplicateQueryBindingDiagnostics(
       ? compilerStringSlice(identity, 'runtime:'.length)
       : compilerStringStartsWith(identity, 'expression:')
         ? compilerStringSlice(identity, 'expression:'.length)
-        : compilerStringSlice(identity, 'alias:'.length);
+        : compilerStringStartsWith(identity, 'alias:')
+          ? compilerStringSlice(identity, 'alias:'.length)
+          : identity;
+    const blockedReason =
+      identityKind === 'component alias'
+        ? 'Blocked reason: one component alias names multiple runtime queries, so graph indexing would silently choose which query owns its bindings.'
+        : 'Blocked reason: multiple component aliases collapse to one runtime plan identity, but no generated alias-to-instance metadata can prove which alias owns which DOM writes.';
+    const fixes =
+      identityKind === 'component alias'
+        ? 'Fixes: give every query binding a unique component-local alias, then reference that alias consistently from the render.'
+        : 'Fixes: keep one binding for this query in the component, or split the bindings into separately owned components until exact alias-to-instance metadata is available.';
     compilerArrayAppend(
       target,
       contextualizeCompilerDiagnostic(base, {
         help: compilerArrayJoin(
           [
             'Would lower to: one component-owned update plan for one canonical runtime query and exact keyed instance.',
-            'Blocked reason: multiple component aliases collapse to one runtime plan identity, but no generated alias-to-instance metadata can prove which alias owns which DOM writes.',
-            'Fixes: keep one binding for this query in the component, or split the bindings into separately owned components until exact alias-to-instance metadata is available.',
+            blockedReason,
+            fixes,
             'SPEC §4.8 makes query updates compiler-emitted per-query plans, and §5.2 requires source-derived identities to remain unambiguous through generated runtime artifacts.',
           ],
           '\n',

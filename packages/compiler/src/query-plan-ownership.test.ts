@@ -70,6 +70,35 @@ export const DealCard = component({
     ).toEqual([]);
   });
 
+  it('rejects a duplicate component query alias even when the runtime queries differ', () => {
+    const result = compileComponentModule({
+      fileName: 'src/components/deal-card.tsx',
+      source: `
+import { dealByIdQuery, pipelineQuery } from '../queries/deals.ts';
+
+export const DealCard = component({
+  queries: {
+    deal: dealByIdQuery,
+    deal: pipelineQuery,
+  },
+  render: ({ deal }) => <span data-bind="deal.stage">{deal.stage}</span>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV240',
+          message: expect.stringContaining(
+            'Duplicate component query binding. component="DealCard" component alias="deal" aliases=deal, deal',
+          ),
+          severity: 'error',
+        }),
+      ]),
+    );
+  });
+
   it('emits full plan ownership for force-off query roots without live refresh authority', () => {
     const result = compileComponentModule({
       fileName: 'src/components/deal-card.tsx',

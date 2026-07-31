@@ -4896,8 +4896,10 @@ export function evaluateRequestSafeRuntimeInventoryAlignment(readText) {
 
   const requiredRunnerReferences = {
     cliHandler: [
-      'createRequestHandler, deriveClosedKovoApp, runWithGeneratedLiveTargetRegistry',
+      'createRequestHandler, deriveClosedKovoApp, resolveKovoAppToken, runWithGeneratedLiveTargetRegistry',
       'runWithGeneratedLiveTargetRegistry',
+      'export default createRequestHandler(appWithBuildStylesheetAssets(app, stylesheetAssets));',
+      'return deriveClosedKovoApp(app, {',
     ],
     compiler: ['lockRequestSafeRuntimeRealm();'],
     generatedPresets: [
@@ -5172,40 +5174,7 @@ export function evaluateCustomRunnerBootstrapOrdering(readText) {
     findings.push(`request-safe-runtime: missing ${SITE_STATIC_EXPORT_RUNNER_FILE}`);
   }
   if (siteStaticExportSource !== undefined) {
-    const lockIndex = siteStaticExportSource.indexOf('await securityLockedViteRuntime();');
-    const orderedGraphReferences = [
-      'if (!skipPipeline) await runContentPipeline();',
-      'await buildWithSecurityLockedVite({ root: siteRoot });',
-      'const viteServer = await createViteServer({',
-    ];
-    let priorIndex = lockIndex;
-    let invalidOrdering = lockIndex < 0;
-    for (const reference of orderedGraphReferences) {
-      const index = siteStaticExportSource.indexOf(reference);
-      if (index < 0 || index <= priorIndex) invalidOrdering = true;
-      priorIndex = index;
-    }
-    const appGraphIndex = siteStaticExportSource.indexOf(
-      "viteServer.ssrLoadModule('/src/app.tsx')",
-    );
-    const serverGraphIndex = siteStaticExportSource.indexOf(
-      "viteServer.ssrLoadModule('@kovojs/server')",
-    );
-    const legacyCliImportIndex = siteStaticExportSource.indexOf(
-      "await import('../../packages/cli/src/commands/build-export.js')",
-    );
-    if (
-      appGraphIndex <= priorIndex ||
-      serverGraphIndex <= priorIndex ||
-      (legacyCliImportIndex >= 0 && legacyCliImportIndex <= lockIndex)
-    ) {
-      invalidOrdering = true;
-    }
-    if (invalidOrdering) {
-      findings.push(
-        `request-safe-runtime: ${SITE_STATIC_EXPORT_RUNNER_FILE} must lock the runtime before importing the CLI/Vite graph`,
-      );
-    }
+    findings.push(...evaluateSiteStaticExportRuntimeOrdering(siteStaticExportSource));
   }
 
   for (const file of PURE_APP_ENTRY_FILES) {
@@ -5268,6 +5237,42 @@ export function evaluateCustomRunnerBootstrapOrdering(readText) {
     }
   }
   return findings;
+}
+
+/** Preserve the host lock -> SSR bootstrap -> authored/static graph authority order. */
+export function evaluateSiteStaticExportRuntimeOrdering(source) {
+  const finding =
+    `request-safe-runtime: ${SITE_STATIC_EXPORT_RUNNER_FILE} must lock the runtime before ` +
+    'importing the CLI/Vite graph';
+  const lockIndex = source.indexOf('await securityLockedViteRuntime();');
+  const orderedBootstrapReferences = [
+    "(await import('./content-pipeline.mjs')).runContentPipeline;",
+    'if (!skipPipeline) await runContentPipeline();',
+    'await buildWithSecurityLockedVite({ root: siteRoot });',
+    'const viteServer = await createViteServer({',
+    "await viteServer.ssrLoadModule('@kovojs/server/runtime-bootstrap');",
+  ];
+  let priorIndex = lockIndex;
+  let invalidOrdering = lockIndex < 0;
+  for (const reference of orderedBootstrapReferences) {
+    const index = source.indexOf(reference);
+    if (index < 0 || index <= priorIndex) invalidOrdering = true;
+    priorIndex = index;
+  }
+
+  for (const reference of [
+    "viteServer.ssrLoadModule('/src/app.tsx')",
+    "viteServer.ssrLoadModule('@kovojs/server/static-export')",
+  ]) {
+    const index = source.indexOf(reference);
+    if (index < 0 || index <= priorIndex) invalidOrdering = true;
+  }
+
+  const legacyCliImportIndex = source.indexOf(
+    "await import('../../packages/cli/src/commands/build-export.js')",
+  );
+  if (legacyCliImportIndex >= 0 && legacyCliImportIndex <= lockIndex) invalidOrdering = true;
+  return invalidOrdering ? [finding] : [];
 }
 
 function sourceStringArray(source, declarationName) {

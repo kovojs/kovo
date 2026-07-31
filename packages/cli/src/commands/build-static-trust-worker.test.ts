@@ -353,7 +353,12 @@ describe('static-trust worker protocol', () => {
     };
     expect(payload.status, outer.payload.slice(0, 8_000)).toBe('error');
     const rawKv235 = payload.error.diagnostics?.find((diagnostic) => diagnostic.code === 'KV235');
+    const rawKv424 = payload.error.diagnostics?.find((diagnostic) => diagnostic.code === 'KV424');
     expect(rawKv235, outer.payload.slice(0, 8_000)).toBeDefined();
+    expect(rawKv424, outer.payload.slice(0, 8_000)).toMatchObject({
+      code: 'KV424',
+    });
+    expect(rawKv424).not.toHaveProperty('source');
     expect(payload.error.diagnostics?.map((diagnostic) => diagnostic.code)).toEqual(
       expect.arrayContaining(['KV235', 'KV424']),
     );
@@ -369,12 +374,22 @@ describe('static-trust worker protocol', () => {
     const transferredKv235 = transferred.diagnostics.find(
       (diagnostic) => diagnostic.code === 'KV235',
     );
+    const transferredKv424 = transferred.diagnostics.find(
+      (diagnostic) => diagnostic.code === 'KV424',
+    );
     expect(transferredKv235).toMatchObject({
       category: 'proof',
       code: 'KV235',
       source: rawKv235?.source,
       version: 'kovo-diagnostic/v1',
     });
+    expect(transferredKv424).toMatchObject({
+      category: 'proof',
+      code: 'KV424',
+      severity: 'error',
+      version: 'kovo-diagnostic/v1',
+    });
+    expect(transferredKv424).not.toHaveProperty('source');
     expect(() => formatKovoDiagnostics(transferred.diagnostics, 'json')).not.toThrow();
   });
 

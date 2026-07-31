@@ -84,13 +84,15 @@ export const addToCart = mutation('cart/add', {
         source: `
 import { safeRichHtml, trustedHtml } from '@kovojs/browser';
 
+declare const reviewedTitle: string;
+
 export const PostBody = component({
   queries: { post: postQuery },
   render: ({ post }) => (
     <article>
       {safeRichHtml(post.body)}
       {trustedHtml('<hr/>')}
-      {trustedHtml(post.title, {
+      {trustedHtml(reviewedTitle, {
         reason: 'admin-curated title, sanitized upstream',
         source: 'admin/editor.ts',
       })}

@@ -85,7 +85,7 @@ describe('SPEC↔implementation diagnostic conformance closure (SPEC §2/§11)',
       errorCodes: 72,
       findings: [],
       ok: true,
-      sites: 202,
+      sites: 204,
     });
   }, 600_000);
 
@@ -324,7 +324,7 @@ function unreviewedDiagnostic(code, severity) {
         ),
     );
     const result = evaluate({ productionFiles });
-    expect(result.sites).toBe(202);
+    expect(result.sites).toBe(204);
     expect(result.findings.join('\n')).toContain(
       'production diagnostic emission site manifest drifted',
     );
@@ -343,7 +343,7 @@ function unreviewedDiagnostic(code, severity) {
         text.replace(exact, replacement),
       );
       const result = evaluate({ productionFiles });
-      expect(result.sites).toBe(202);
+      expect(result.sites).toBe(204);
       expect(result.findings.join('\n')).toContain(
         'production diagnostic emission site manifest drifted',
       );
@@ -370,7 +370,7 @@ function unreviewedDiagnostic(code, severity) {
         ),
     );
     const result = evaluate({ productionFiles });
-    expect(result.sites).toBe(202);
+    expect(result.sites).toBe(204);
     expect(result.findings.join('\n')).toContain(
       'reviewed validator registry and dispatch summary drifted',
     );
@@ -557,6 +557,41 @@ function unreviewedDiagnostic(code, severity) {
     const findings = evaluate({ productionFiles: changed }).findings.join('\n');
     expect(findings).toContain('unreviewed dynamic structured diagnostic literal');
     expect(findings).toContain('stale reviewed dynamic diagnostic-shape summary');
+  });
+
+  it('C13 mutations: dynamic diagnostic reminting owners and consumers stay exact', () => {
+    const fileName = 'packages/server/src/vite-dev.ts';
+    const source = productionText(fileName);
+    const ownerMutations = [
+      source.replace('    !isDiagnosticCode(code) ||', '    false ||'),
+      source.replace(
+        '  if (adopted.severity !== severity) {',
+        '  if (false && adopted.severity !== severity) {',
+      ),
+      source.replace(
+        '  const adopted = createRegisteredDiagnostic(\n    code,',
+        "  const adopted = createRegisteredDiagnostic(\n    'KV415',",
+      ),
+    ];
+    for (const mutated of ownerMutations) {
+      expect(mutated).not.toBe(source);
+      const findings = evaluate({
+        productionFiles: replaceProductionFile(fileName, () => mutated),
+      }).findings.join('\n');
+      expect(findings).toContain('stale reviewed dynamic diagnostic-emission owner');
+    }
+
+    const addedConsumer = `${source}
+function conformanceBypass(value: unknown): DiagnosticDocumentDiagnostic {
+  return adoptViteDevModuleDiagnostic(value, 0);
+}
+`;
+    const consumerFindings = evaluate({
+      productionFiles: replaceProductionFile(fileName, () => addedConsumer),
+    }).findings.join('\n');
+    expect(consumerFindings).toContain(
+      'unreviewed use of dynamic diagnostic-emission owner adoptViteDevModuleDiagnostic',
+    );
   });
 
   it('C13 canaries: excluded test and conformance sources cannot re-enter production', () => {

@@ -63,7 +63,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
 
   it('fails the diagnostic assertion when an unchanged production build succeeds', () => {
     withProject('create-kovo-m1-build-failure-helper-green-', undefined, (root) => {
-      expect(() => expectBuildFailure(root, ['KV999_SENTINEL_MUST_NOT_SELF_SATISFY'])).toThrowError(
+      expect(() => expectBuildFailure(root, ['KOVO_SENTINEL_MUST_NOT_SELF_SATISFY'])).toThrowError(
         'Expected production build to fail, but it succeeded.',
       );
     });

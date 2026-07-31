@@ -398,11 +398,11 @@ describe('diagnostic registry', () => {
         },
         "KV240": {
           "code": "KV240",
-          "help": "Would lower to: one query-shape fact per query name for server render, client updates, and binding validation.
-      Blocked reason: duplicate query-shape facts would make graph indexing silently choose one shape for all generated bindings.
-      Fixes: emit exactly one query-shape fact per query name, or rename one query so generated binding metadata has a single source of truth.
-      SPEC §4.8 query binding validation depends on one stable shape per query; duplicate facts would otherwise silently last-write-wins during graph indexing.",
-          "message": "Duplicate query-shape fact for one query name.",
+          "help": "Would lower to: one query-shape fact per query name and one component-local alias per canonical runtime query for server render, client updates, and binding validation.
+      Blocked reason: duplicate query-shape facts or ambiguous component aliases would make graph indexing or update-plan ownership silently choose one source for multiple generated bindings.
+      Fixes: emit exactly one query-shape fact per query name, keep one component binding per canonical runtime query, or rename/split the query so every generated binding has one source of truth.
+      SPEC §4.8 query binding validation depends on one stable shape per query and one unambiguous alias-to-runtime identity per component; duplicate identities would otherwise silently last-write-wins during graph indexing or DOM update ownership.",
+          "message": "Duplicate or ambiguous query-plan identity.",
           "severity": "error",
         },
         "KV241": {

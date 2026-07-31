@@ -53,7 +53,7 @@ const transferredSqlSafetyDiagnosticRegistrarDoor =
 const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#diagnosticAt`;
 const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
 const expectedDiagnosticEmissionSiteDigest =
-  'e4a3a478ce260c0f18f1d8d53c947f2aecbfcdffdf7e9cc62e8ac30f62962309';
+  '15ca1d2a820666c2196f5a02d63fb889d7357c278f90cd161fb9c4a0bd8977d7';
 const expectedRootDiagnosticDoorDigest =
   '1660c7877e7a533c282cf38c291a10181bc2e7484d76f479f1d1f41cd51dac77';
 const expectedRegisteredDiagnosticGuardDigest =
@@ -85,11 +85,11 @@ const expectedDiagnosticFactorySinkDigest =
 const expectedDiagnosticEvidenceWitnessDigest =
   '23014067df10912624d8419128d1362787bb212e84ef0aac772d78ad26156aa3';
 const expectedDiagnosticActualLayerReviewDigest =
-  'bab592c6e53f5a8b78b2f076b531a5600fe75ef4d8af1c1f39e3795fbf0a9770';
+  '0c8c5cbdcc216b625fe58aac407aba5fd30f428f1ec6779369e84286118b1a5e';
 const expectedBlockingStaticExportCollectionDigest =
   '3541644c641aec62abd0743093c653abd953e634f6042b941877b699666c4fdd';
 const expectedCompilerValidatorPipelineDigest =
-  '5c4ea6e80d4882483133a89d4d69ece75e7488ee30547d83c7d1150970f2ab45';
+  'e78650bfe86c953aef32fe5b1ed03f990c3e2d82040fd929609d672e2d8ba283';
 const expectedCompileComponentModuleDigest =
   'a22e75b77161b32169cd2d41c0248a61baf55e2296197e6e82adbd5341e4d904';
 const expectedValidateComponentPhaseDigest =
@@ -102,10 +102,10 @@ const expectedCoreBuildDistCommand =
 // JavaScript flow interpreter (plans/10x-better-security.md, layered-closure decision).
 const reviewedUnresolvedDynamicModuleAcquisitions = new Set([
   'packages/browser/src/client-installer.ts#2c7b7a1aae697bd8d488d7459007da844cddb796d21fb790fe0fffb74ab46bcb#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
-  'packages/browser/src/inline-loader.ts#3bd68914ebc31433aa89b5c79e96e303985a5986ef2dc3645f6e66084d5992c1#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
+  'packages/browser/src/inline-loader.ts#ef80cd19ec541a2d65f3b653020342fd832c038f6180358dcdf573391871c189#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
   'packages/cli/src/commands/db.ts#71f2e25eedf60743b28fb20ffadac69b9a2d9f342be7b5361e2133f0830fbfdf#88ff0d5b98c41aa906dd00878fccf940791c27dc1e087908d6efa85c9d56af3f',
-  'packages/compiler/src/security-analyzer-soundness-oracle.ts#b20cbdba721c81ed1668a40d1f0d0d4ad96d7304e3483a8669fa4c282e07432c#4597d4868f6caa7d49aa7fd626313ad01af41164f801c7ee52a9395287151099',
-  'packages/compiler/src/security-analyzer-soundness-oracle.ts#b20cbdba721c81ed1668a40d1f0d0d4ad96d7304e3483a8669fa4c282e07432c#7c8fe398cd82d5ea80560281e00f6154b09b15615233da0a8b56ac03f861e51b',
+  'packages/compiler/src/security-analyzer-soundness-oracle.ts#22ee982930cbc113c692d6995ae3b919cf4783cba81f795018505d88b75c5874#4597d4868f6caa7d49aa7fd626313ad01af41164f801c7ee52a9395287151099',
+  'packages/compiler/src/security-analyzer-soundness-oracle.ts#22ee982930cbc113c692d6995ae3b919cf4783cba81f795018505d88b75c5874#7c8fe398cd82d5ea80560281e00f6154b09b15615233da0a8b56ac03f861e51b',
   'packages/compiler/src/vite-config-source.ts#4b88f6e8e7657d91dbaffe6d75cf4c4bf5863b455fd5cafb901a5c8a1a577d52#2d48f56da770ec53b7e31eacdafd3983b0929513b177d3acfd08d2c3db8012ca',
   'packages/server/src/vite-source.ts#d20810d8378391eeced5375aa3c41998c433b9846f2a612735e2c1d9365d6d41#2d48f56da770ec53b7e31eacdafd3983b0929513b177d3acfd08d2c3db8012ca',
   'packages/server/src/sqlite.ts#6130e055e7a0a3dddfde44acbd354cedb7693528989f72b2f87fed50772369a8#cb1f4aa1ac29147775093dc3c4411e81e956780357d25c102098893d5361a482',
@@ -125,10 +125,10 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
     'packages/cli/src/capability-closure-packages.ts',
     'e27f8372435ccd68c5ad554bfc52579bf105ab8dde2cac1101e037b3f203f978',
   ],
-  ['packages/cli/src/bin.ts', 'c25df08ae63082fc227c0c8cd6e4c71cf68e44a05d238a5890cb4f17d7fcd07b'],
+  ['packages/cli/src/bin.ts', '00ebe4233b9aa633b0ffb15fd2b1b2298cfa33164ec3fea3d9c8e79b0ec29b97'],
   [
     'packages/cli/src/commands/build-export.ts',
-    '7031f99d5127f75f65a23a054a339354940b25c98efe446081a21afd0add098e',
+    'd1017a6a57ff7444ab4f0993c028bf1ac6e935c959c9d4bf33010d706f55de98',
   ],
   [
     'packages/cli/src/commands/build-static-trust-source-hook.mjs',
@@ -136,11 +136,11 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/cli/src/commands/compile.ts',
-    '085172bc8d7ec8f7d081a3a471ec59b611a075ac762df957d8aafd43034aa8e5',
+    'a271032195452758f8aab88d62e2249e5e61d7dfa9df7439836689b7d6a68fe5',
   ],
   [
     'packages/cli/src/commands/dev.ts',
-    'cb8225a71eb76d19bbc88dc7ea63fc692b72387d25266e328acda0f6da043617',
+    '1211eaa55a2a9071857ee601fe5de9af3f0b57845842683748b336545fecfc73',
   ],
   [
     'packages/cli/src/commands/sound-subset.mjs',
@@ -152,11 +152,11 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/cli/src/dependency-capability-loader.ts',
-    '8d06b534d7909d1239bdeb729f4bcd322977e267dab46f1eefe2e5768aff7db5',
+    'f4525488d63ef1ed80666d248f5267be72b8e1d6b24c64e6730ab10b9d544cbd',
   ],
   [
     'packages/compiler/src/ts-api.ts',
-    'a9f6ee33ff5fd49413db4d3ea34d2bfc201f7fd36cb1b645f4da28e203c68270',
+    '08b2a56c77269a9404bf4f3145fd26c13dad394dbba7fc88342eb812af18cc67',
   ],
   [
     'packages/compiler/scripts/gen-primitive-reactive-attrs.mjs',
@@ -172,7 +172,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/drizzle/src/trust-escapes-static.ts',
-    '6e8f9ae558a8434a42a1241e9b6016b39b7a2478c9bf4591036bd04cb6dfc8ae',
+    '74b1bf18fad9c28dccf889402afadbbf3b5f2809d2d4cbcec20b27207b749296',
   ],
   [
     'packages/icons/scripts/icon-plan.mjs',
@@ -181,6 +181,10 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   [
     'packages/server/src/egress-undici-runtime.ts',
     'ff47c870478a72733695d810b8b9cfa65fc10d7e6f8fafc342c9aef6874dfade',
+  ],
+  [
+    'packages/server/src/internal/data-plane-static-analysis.ts',
+    'b33733b1ebfe8f9e67f9a86eeeec7e825a927b3bc18fa757a5695da9cd5f7006',
   ],
   [
     'packages/server/src/sql-parser-authority.ts',
@@ -251,7 +255,7 @@ const reviewedDynamicDiagnosticShapeSummaries = new Map([
     'Non-Kovo JSON-RPC error response with protocol-defined code and message fields.',
   ],
   [
-    'packages/compiler/src/app-contract-project.ts#literal#49b787e5c61160df2d4f918188617ff9a0d8567690e6372a3af41f4871c890a8#3bd02af709ad98b0775169514ef4f7a9c43820d29183eb2c0a214474051799f5',
+    'packages/compiler/src/app-contract-project.ts#literal#49b787e5c61160df2d4f918188617ff9a0d8567690e6372a3af41f4871c890a8#7a23649bbcf48003860e84f00a72182b88ab565b9dace945789442ba1cf8cb90',
     'Pre-ratification D1 experiment diagnostic with a closed D1A/D1B/D1X code union; it is not a registry-backed Kovo diagnostic.',
   ],
   [
@@ -399,6 +403,10 @@ const reviewedDynamicDiagnosticShapeSummaries = new Map([
     'Registry-derived SQL-safety diagnostic projection for data-plane analysis.',
   ],
   [
+    'packages/server/src/vite.ts#literal#2688d74cc86a1560d38e11d3fd6774fd5731ecd68dff41fbf62ae132d30d19cb#0b9e112c1cd604cd1f9d4c1f6bea799adeea4186f6e048d5d2ef0b6b74c0d497',
+    'Exact-field bounded wire projection from a registry-authenticated server diagnostic before one-shot cross-graph transfer.',
+  ],
+  [
     'packages/test/src/integration/fixture-compiler-plugin.ts#literal#6d68b0cf359673b8aaa9738ba0e6082092fc51a98d943d841017256b72d1078a#305fc1bbeefe4be138b486fa15164dd12d8bdaf6b9390faccc71188226f48cab',
     'Registry-derived compiler diagnostic projection for integration fixtures.',
   ],
@@ -421,6 +429,63 @@ const reviewedDynamicDiagnosticShapeSummaries = new Map([
   [
     'packages/vscode/src/diagnostic-adapter.cjs#literal#f9940d506e852b890702731b91aa013f082db9f181a92f52d39aaf6a29f34ecc#11511a131dc5b22729add704c57b3ea954b5b661d867c33cef737ee7c64dafdf',
     'Exact-field bounded frozen kovo-diagnostic/v1 snapshot after finite category, code, severity, source, and version validation.',
+  ],
+]);
+// Dynamic registry rehydration is denied unless the complete top-level owner and the exact root
+// constructor call are both reviewed. These owners validate authenticated cross-realm or worker
+// wire records before reminting realm-local registry identity; they do not originate a new
+// diagnostic code. Pinning both nodes keeps the exception narrower than a spelling- or type-based
+// exemption: any validation, control-flow, argument, or additional-call change fails closed.
+const reviewedDynamicDiagnosticEmissionOwners = new Map([
+  [
+    'packages/cli/src/commands/build-export.ts#rehydrateStaticTrustWorkerDiagnostic#495857e4b7fd37867b44a0c172f527f3f3678a772bb711af4892b0692861d6ee#3cb0911e674af16a3a0e0c47cb2c19b6b6857a21e689769f403c2c425bb8767b',
+    {
+      reason:
+        'Authenticated worker diagnostic wire records are exact-field validated, registry-checked, and severity-matched before CLI-local projection.',
+      uses: new Set([
+        'packages/cli/src/commands/build-export.ts#throwStaticTrustDiagnostic#21fc49da3226fbb075cb53afde443711f7efb45bb7e370bb1dc87888e72fe840#0937adc6c7e267ce8529e1b3b50e738f1b0f65829af416a7874994eb9139a3ed',
+      ]),
+    },
+  ],
+  [
+    'packages/cli/src/commands/build-export.ts#rehydrateStaticTrustDiagnostic#1ab039e78d0370c9dc90757a33c5b0d1e4545b41ff774fde0d6cb50560f811cc#a7589d21ce1407dc02e08714b48739402adb7c125feb09ee42a8aa948528816b',
+    {
+      reason:
+        'Authenticated static-trust compiler diagnostics are exact-field validated and severity-matched before their realm-local registry identity is restored.',
+      uses: new Set([
+        'packages/cli/src/commands/build-export.ts#rehydrateStaticTrustComponents#166fc9eb72f5e97841260f7027fca3f4c4202314628cee0ccb30975cb282689d#3f34e1fa2737ad4a2c94ada88d1625a104de700061361745a2614c20b5545bbe',
+      ]),
+    },
+  ],
+  [
+    'packages/cli/src/commands/build-export.ts#projectStaticTrustDiagnosticForWorker#9a0066fec908394695d4da87e2a6068162c5c9bf77d56fcc35fe4d3f6d85ac89#208ccbb9afa14d18b8a4098747c1128f91902d4f4f9005d064c60b49237b3033',
+    {
+      reason:
+        'Previously authenticated compiler facts are reminted for the isolated proof worker and checked against their original severity before projection.',
+      uses: new Set([
+        'packages/cli/src/commands/build-export.ts#runPreEvaluationStaticTrustPreflight#452a7bc9ea4028fbd2ba7c6ab23a86bc810835bd038143fefde95293f2b02452#c5fbeecd3dc6a6625b90389c41e90f251b3653b0d990591f64cf9f6df168759a',
+      ]),
+    },
+  ],
+  [
+    'packages/server/src/vite-dev.ts#adoptViteDevModuleDiagnostic#98be8e30ce67ba24f6c13416b58128f92d0d48c2800979a8dfe8abd3329a238d#6a576bd3459f279053be76f87855674f3518d15162bc2218e2af58930440ab50',
+    {
+      reason:
+        'One-shot outer-owner-authenticated Vite diagnostic wires are bounded, exact-field validated, and severity-matched before live-graph adoption.',
+      uses: new Set([
+        'packages/server/src/vite-dev.ts#adoptViteDevModuleDiagnostics#a1c0fe820fc163186cb7457cc6201efa0433142fd5e6b60c6ef0651b3000aaf8#48048ad70cb7f83390b54d1ab8e26a4cbc37e3494dacaabcd6c13a1a74e7c593',
+      ]),
+    },
+  ],
+  [
+    'packages/server/src/vite.ts#adoptCompilerViteDiagnostic#f973326742959bb67e4bad0cef7f08dcf884ab1e1fbefd27703747d734ebb93d#f1614c36611fe7015575621af0c3034e36cd4c684adb813ceffc13f447204893',
+    {
+      reason:
+        'Compiler handoff membership and exact wire fields are validated before the server graph remints and severity-matches a diagnostic.',
+      uses: new Set([
+        'packages/server/src/vite.ts#adoptCompilerViteModuleDiagnosticReport#326ccd7ce4972138ccd33d5b1cda8342171d601f1015e5b2cfd156e06ddee066#62d8675d18d843651a8319caf14e1eae155436f99eb21210bbb573a0d242367f',
+      ]),
+    },
   ],
 ]);
 const protectedCoreBridgeExports = new Map([
@@ -533,7 +598,7 @@ const namedFixtureTestCache = new Map();
 const diagnosticLiteralExemptions = new Map([
   [
     'packages/core/src/diagnostics.ts',
-    'ff873900d582bb9bc27f04932856f4647ebb34362e853c8eea04d1aa858540f4',
+    'ed9ad5e7c03362cc17f766da22f29521dcff65dea1d693c4013b2a827de4830b',
   ],
   [
     'packages/core/src/internal/diagnostic-registry.generated.ts',
@@ -905,6 +970,7 @@ export function scanDiagnosticProductionSources(
   const observedDiagnosticLiteralExemptions = new Set();
   const observedLoaderAuthorityFiles = new Set();
   const observedDynamicDiagnosticShapes = new Set();
+  const observedDynamicDiagnosticEmissionOwners = new Map();
   let siteCount = 0;
   const analysis = createProductionAnalysis(files);
 
@@ -995,11 +1061,31 @@ export function scanDiagnosticProductionSources(
             }
           }
           const codes = diagnosticCodesAtExactEmissionPosition(node, resolution, sourceFile);
+          const wrapperDelegation = callIsReviewedWrapperDelegation(node, context);
+          const dynamicForwarding = callIsReviewedDynamicForwarding(
+            node,
+            resolution.target,
+            context,
+          );
+          const dynamicEmissionOwner =
+            codes.size === 0 && !wrapperDelegation && !dynamicForwarding
+              ? dynamicDiagnosticEmissionOwnerSummary(node, resolution.target, context)
+              : undefined;
+          const reviewedDynamicEmissionOwner =
+            dynamicEmissionOwner !== undefined &&
+            reviewedDynamicDiagnosticEmissionOwners.has(dynamicEmissionOwner);
+          if (reviewedDynamicEmissionOwner) {
+            observedDynamicDiagnosticEmissionOwners.set(
+              dynamicEmissionOwner,
+              (observedDynamicDiagnosticEmissionOwners.get(dynamicEmissionOwner) ?? 0) + 1,
+            );
+          }
           if (
             codes.size === 0 &&
             diagnosticEmitterRequiresLiteralCode(resolution.target) &&
-            !callIsReviewedWrapperDelegation(node, context) &&
-            !callIsReviewedDynamicForwarding(node, resolution.target, context)
+            !wrapperDelegation &&
+            !dynamicForwarding &&
+            !reviewedDynamicEmissionOwner
           ) {
             findings.push(
               `${fileName}:${position.line + 1}: diagnostic emitter ${node.expression.getText(sourceFile)} must bind its code at the exact reviewed code position`,
@@ -1109,6 +1195,20 @@ export function scanDiagnosticProductionSources(
       }
       if (!observedDynamicDiagnosticShapes.has(summary)) {
         findings.push(`stale reviewed dynamic diagnostic-shape summary ${summary}`);
+      }
+    }
+    findings.push(...reviewedDynamicDiagnosticEmissionOwnerUseFindings(analysis));
+    for (const [summary, review] of reviewedDynamicDiagnosticEmissionOwners) {
+      if (typeof review?.reason !== 'string' || review.reason.trim().length < 24) {
+        findings.push(
+          `reviewed dynamic diagnostic-emission owner lacks a substantive reason ${summary}`,
+        );
+      }
+      const count = observedDynamicDiagnosticEmissionOwners.get(summary) ?? 0;
+      if (count !== 1) {
+        findings.push(
+          `${count === 0 ? 'stale' : 'duplicate'} reviewed dynamic diagnostic-emission owner ${summary}`,
+        );
       }
     }
   }
@@ -2620,6 +2720,107 @@ function callIsReviewedWrapperDelegation(call, context) {
     owner = owner.parent;
   }
   return false;
+}
+
+function dynamicDiagnosticEmissionOwnerSummary(call, target, context) {
+  if (target !== rootDiagnosticDoor) return undefined;
+  let owner = call.parent;
+  while (owner !== undefined && !ts.isFunctionDeclaration(owner)) owner = owner.parent;
+  if (
+    owner === undefined ||
+    owner.parent !== context.sourceFile ||
+    owner.name === undefined ||
+    !ts.isIdentifier(owner.name)
+  ) {
+    return undefined;
+  }
+  return [
+    context.fileName,
+    owner.name.text,
+    sourceNodeDigest(owner, context.sourceFile),
+    sourceNodeDigest(call, context.sourceFile),
+  ].join('#');
+}
+
+function reviewedDynamicDiagnosticEmissionOwnerUseFindings(analysis) {
+  const findings = [];
+  for (const [ownerSummary, review] of reviewedDynamicDiagnosticEmissionOwners) {
+    const [fileName, ownerName] = ownerSummary.split('#');
+    const sourceFile = analysis.sourceFiles.get(fileName);
+    const declaration =
+      sourceFile === undefined ? undefined : findTopLevelFunction(sourceFile, ownerName);
+    const symbol =
+      declaration?.name === undefined
+        ? undefined
+        : analysis.checker.getSymbolAtLocation(declaration.name);
+    if (sourceFile === undefined || declaration === undefined || symbol === undefined) {
+      findings.push(
+        `${ownerSummary}: reviewed dynamic diagnostic-emission owner use authority is missing`,
+      );
+      continue;
+    }
+    if (!(review?.uses instanceof Set) || review.uses.size === 0) {
+      findings.push(`${ownerSummary}: reviewed dynamic diagnostic-emission uses are missing`);
+      continue;
+    }
+
+    const observed = new Map();
+    for (const [candidateFileName, candidateSourceFile] of analysis.sourceFiles) {
+      const visit = (node) => {
+        if (
+          ts.isIdentifier(node) &&
+          node !== declaration.name &&
+          analysis.checker.getSymbolAtLocation(node) === symbol
+        ) {
+          const use = node.parent;
+          if (
+            !ts.isCallExpression(use) ||
+            (use.expression !== node && !use.arguments.includes(node))
+          ) {
+            findings.push(
+              `${candidateFileName}:${candidateSourceFile.getLineAndCharacterOfPosition(node.getStart(candidateSourceFile)).line + 1}: reviewed dynamic diagnostic-emission owner ${ownerName} may only appear as an exact reviewed call or callback argument`,
+            );
+          } else {
+            const useOwner = diagnosticEmissionOwner(use);
+            const useOwnerName =
+              ts.isFunctionDeclaration(useOwner) &&
+              useOwner.name !== undefined &&
+              ts.isIdentifier(useOwner.name)
+                ? useOwner.name.text
+                : undefined;
+            const useSummary =
+              useOwnerName === undefined
+                ? undefined
+                : [
+                    candidateFileName,
+                    useOwnerName,
+                    sourceNodeDigest(useOwner, candidateSourceFile),
+                    sourceNodeDigest(use, candidateSourceFile),
+                  ].join('#');
+            if (useSummary === undefined || !review.uses.has(useSummary)) {
+              findings.push(
+                `${candidateFileName}:${candidateSourceFile.getLineAndCharacterOfPosition(node.getStart(candidateSourceFile)).line + 1}: unreviewed use of dynamic diagnostic-emission owner ${ownerName}`,
+              );
+            } else {
+              observed.set(useSummary, (observed.get(useSummary) ?? 0) + 1);
+            }
+          }
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(candidateSourceFile);
+    }
+
+    for (const expectedUse of review.uses) {
+      const count = observed.get(expectedUse) ?? 0;
+      if (count !== 1) {
+        findings.push(
+          `${count === 0 ? 'stale' : 'duplicate'} reviewed dynamic diagnostic-emission owner use ${expectedUse}`,
+        );
+      }
+    }
+  }
+  return findings;
 }
 
 function callIsReviewedDynamicForwarding(call, target, context) {

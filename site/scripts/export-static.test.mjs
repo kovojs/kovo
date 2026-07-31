@@ -146,8 +146,16 @@ describe('site export CSS guards', () => {
 
   it('keeps the build-owned direct export distinct from strict CLI conformance evidence', () => {
     const source = readFileSync(resolve(siteRoot, 'scripts/export-static.mjs'), 'utf8');
-    expect(source).toContain("viteServer.ssrLoadModule('/src/app.tsx')");
-    expect(source).toContain("viteServer.ssrLoadModule('@kovojs/server')");
+    const bootstrapIndex = source.indexOf(
+      "viteServer.ssrLoadModule('@kovojs/server/runtime-bootstrap')",
+    );
+    const appIndex = source.indexOf("viteServer.ssrLoadModule('/src/app.tsx')");
+    const staticExportIndex = source.indexOf(
+      "viteServer.ssrLoadModule('@kovojs/server/static-export')",
+    );
+    expect(bootstrapIndex).toBeGreaterThanOrEqual(0);
+    expect(appIndex).toBeGreaterThan(bootstrapIndex);
+    expect(staticExportIndex).toBeGreaterThan(bootstrapIndex);
     expect(source).toContain('not evidence that the authored site graph');
     expect(source).not.toContain('runExportCommandStructured');
   });
