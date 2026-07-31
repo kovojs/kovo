@@ -310,15 +310,16 @@ export const SECURITY_BUILD_PROOFS = [
   {
     buildInvocation: 'starter-build-production-artifact',
     claimId: 'analyzer-summary-carrier-laundering',
-    code: 'KV438',
+    code: 'KV449',
     proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     requiredNeedles: [
       "join(root, 'src', 'summary-carrier-proof.ts')",
       'kovoAnalyzerSummary(exactGuard',
       'await nestedWrite(request.db, input)',
       'buildProductionArtifact(root)',
-      'KV438',
-      'provenance=unknown',
+      'KV449',
+      'unsummarized nested callable',
+      'verdict=closed:opaque-transfer',
     ],
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     testName:
@@ -583,11 +584,10 @@ export const SECURITY_BUILD_PROOFS = [
     requiredNeedles: [
       'addRequestClosedDeclassificationProof(root)',
       'captureBuildFailure(() => buildParanoidProductionArtifact(root))',
-      "trustedReveal(secret('runtime-secret-value'), DeclassifyPolicy.create({",
-      "door: 'trustedReveal'",
+      "trustedReveal(secret('runtime-secret-value'), DeclassifyPolicy.forTrustedReveal({",
       "ownerScope: 'application'",
-      "purpose: 'public-projection'",
       "expect(output).toContain('KV448')",
+      "expect(output).toContain('root=query:requestClosedRevealQuery')",
       '@kovojs/core declassification policy and reveal doors are unavailable to untrusted-data-reachable modules',
       "expect(output).not.toContain('runtime-secret-value')",
     ],
