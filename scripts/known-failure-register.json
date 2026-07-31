@@ -214,14 +214,14 @@
       "owner": "Track 1 kovo-add source-closure work item",
       "childLedger": "plans/devex-gates.md",
       "observedLayer": "packed full-catalog check process",
-      "retirementCondition": "The packed all-44-component fixture typechecks, checks, and builds with unimported copies under the ratified peak-RSS budget.",
+      "retirementCondition": "The packed all-44-component fixture typechecks, checks, and builds with unimported copies under the provisional 2 GiB peak-RSS target until final runner ratification replaces it.",
       "planOwnership": {
         "registerTrack": "Track 0",
         "reproducerTrack": "Track 2",
         "fixTrack": "Track 1",
         "scorecardGates": ["G4"]
       },
-      "state": "executable",
+      "state": "retired",
       "probe": {
         "path": "scripts/known-failure-probes/packed-first-loop-contract.mjs",
         "command": [
@@ -238,7 +238,11 @@
         "cadence": "nightly",
         "resultSchema": "kovo-known-failure-probe-result/v1"
       },
-      "desiredBehavior": "A packed scaffold with all 44 copied components typechecks, checks, and builds under the provisional 2 GiB peak-RSS target."
+      "desiredBehavior": "A packed scaffold with all 44 copied components typechecks, checks, and builds under the provisional 2 GiB peak-RSS target.",
+      "retirement": {
+        "evidence": "The canonical three-sample authenticated packed run completed typecheck, check, and build with all 44 copied components left unimported; every process-tree peak remained below the provisional 2 GiB cap.",
+        "verification": "pnpm run test:devex-known-failures-nightly"
+      }
     },
     {
       "id": "KF-DEVEX-008",

@@ -158,6 +158,7 @@ describe('packed Drizzle consumer proof', () => {
       { id: 'minimum-and-development', version: '1.0.0-rc.4' },
     );
     expect(result.dependencies).toEqual({
+      '@kovojs/core': expect.stringMatching(/^file:/u),
       '@kovojs/drizzle': expect.stringMatching(/^file:/u),
       'drizzle-orm': '1.0.0-rc.4',
     });

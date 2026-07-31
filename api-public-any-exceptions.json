@@ -3,28 +3,6 @@
   "$comment": "Temporary exact-count debt only. AST reachability unwraps first-party aliases; expiry and descending match counts are binding.",
   "exceptions": [
     {
-      "id": "core-form-helper-generics",
-      "package": "@kovojs/core",
-      "declarationPattern": "@kovojs/core/dist/forms-types-<chunk>.d.mts",
-      "symbolPattern": "*",
-      "memberPattern": "*",
-      "maximumMatches": 1,
-      "owner": "core-authoring",
-      "reason": "Legacy form failure and mutation helper aliases retain unconstrained generic sentinels pending the inferred app contract.",
-      "expires": "2026-10-31"
-    },
-    {
-      "id": "core-root-generics",
-      "package": "@kovojs/core",
-      "declarationPattern": "@kovojs/core/dist/index-<chunk>.d.mts",
-      "symbolPattern": "*",
-      "memberPattern": "*",
-      "maximumMatches": 2,
-      "owner": "core-authoring",
-      "reason": "The current component, serialization, and form root contracts retain broad generic placeholders scheduled for the core surface batch.",
-      "expires": "2026-10-31"
-    },
-    {
       "id": "server-app-contract-generics",
       "package": "@kovojs/server",
       "declarationPattern": "@kovojs/server/dist/app-types-<chunk>.d.mts",

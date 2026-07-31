@@ -226,8 +226,7 @@
       "sampling": "statistical",
       "statistic": "p95",
       "provisionalTarget": 2147483648,
-      "ratification": null,
-      "knownFailure": "KF-DEVEX-007"
+      "ratification": null
     }
   }
 }

@@ -222,8 +222,12 @@ export function packedDrizzleConsumerManifest(packedPackages, packageManager, fi
     ]),
   );
   const drizzle = packedPackages.find((pkg) => pkg.name === DRIZZLE_PACKAGE);
+  const core = packedPackages.find((pkg) => pkg.name === CORE_PACKAGE);
   if (
+    core?.manifest === undefined ||
     drizzle?.manifest === undefined ||
+    core.manifest.version !== drizzle.manifest.version ||
+    tarballs[CORE_PACKAGE] === undefined ||
     tarballs[DRIZZLE_PACKAGE] === undefined ||
     typeof packageManager !== 'string' ||
     fixture?.version !== REVIEWED_DRIZZLE_FIXTURE
@@ -232,6 +236,7 @@ export function packedDrizzleConsumerManifest(packedPackages, packageManager, fi
   }
   return {
     dependencies: {
+      [CORE_PACKAGE]: tarballs[CORE_PACKAGE],
       [DRIZZLE_PACKAGE]: tarballs[DRIZZLE_PACKAGE],
       [DRIZZLE_ORM_PACKAGE]: fixture.version,
     },
@@ -315,10 +320,7 @@ function readDeclaration(packageRoot, manifest, subpath) {
 }
 
 function assertPackedTypeConsumer(consumerRoot) {
-  const sourcePath = path.join(consumerRoot, 'consumer.ts');
-  writeFileSync(
-    sourcePath,
-    `import {
+  const preamble = `import {
   kovo,
   sql,
   staticSql,
@@ -330,9 +332,6 @@ import {
   sqliteTable,
   text as sqliteText,
 } from 'drizzle-orm/sqlite-core';
-
-// @ts-expect-error runtime metadata is framework-internal, not part of the human root.
-import { extractKovoRuntimeDbMetadata } from '@kovojs/drizzle';
 
 const accounts = pgTable(
   'packed_accounts',
@@ -382,26 +381,55 @@ const sqliteAccounts = sqliteTable(
   })),
 );
 
+const ddl: KovoStaticSql = staticSql\`select 1\`;
+void [accounts, ddl, entries, sqliteAccounts];
+`;
+  const positiveDiagnostics = packedTypeDiagnostics(consumerRoot, 'positive', preamble);
+  if (positiveDiagnostics.length > 0) {
+    throw new Error(
+      `Packed Drizzle positive type consumer failed:\n${formatTypeDiagnostics(
+        consumerRoot,
+        positiveDiagnostics,
+      )}`,
+    );
+  }
+
+  const negativeSources = [
+    {
+      label: 'human-root runtime metadata import',
+      source: `import { extractKovoRuntimeDbMetadata } from '@kovojs/drizzle';
+void extractKovoRuntimeDbMetadata;
+`,
+    },
+    {
+      label: 'typo owner column',
+      source: `${preamble}
 pgTable(
   'packed_typo',
   { id: pgText('id').primaryKey() },
   kovo((columns) => ({
     domain: 'typo',
-    // @ts-expect-error annotation callbacks expose only actual table columns.
     owner: columns.owenrId,
   })),
 );
-
+`,
+    },
+    {
+      label: 'wrong-table owner column',
+      source: `${preamble}
 pgTable(
   'packed_wrong_owner',
   { id: pgText('id').primaryKey() },
   kovo(() => ({
     domain: 'wrong-owner',
-    // @ts-expect-error owner must carry the annotated table callback's private witness.
     owner: accounts.ownerId,
   })),
 );
-
+`,
+    },
+    {
+      label: 'wrong-parent owner-via column',
+      source: `${preamble}
 pgTable(
   'packed_wrong_owner_via',
   {
@@ -413,35 +441,50 @@ pgTable(
     ownerVia: {
       fk: columns.accountId,
       parent: accounts,
-      // @ts-expect-error parentKey must belong to the declared ownerVia parent.
       parentKey: entries.id,
     },
   })),
 );
-
+`,
+    },
+    {
+      label: 'wrong-table fan-out column',
+      source: `${preamble}
 sqliteTable(
   'packed_wrong_fan',
   { id: sqliteInteger('id').primaryKey() },
   kovo(() => ({
     domain: 'wrong-fan',
-    // @ts-expect-error fan-out edges must originate from the annotated table.
     fans: [{ domain: 'sqlite-account', via: sqliteAccounts.id }],
   })),
 );
-
+`,
+    },
+    {
+      label: 'structural SQL fake',
+      source: `${preamble}
 const structuralSqlFake = {
   getSQL() {
     return this;
   },
 };
-// @ts-expect-error Kovo SQL values require the constructor's module-private witness.
 const forgedSql: KovoStaticSql = structuralSqlFake;
-
-const ddl: KovoStaticSql = staticSql\`select 1\`;
-void [accounts, ddl, entries, extractKovoRuntimeDbMetadata, forgedSql, sqliteAccounts];
+void forgedSql;
 `,
-    'utf8',
-  );
+    },
+  ];
+  for (let index = 0; index < negativeSources.length; index += 1) {
+    const negative = negativeSources[index];
+    const diagnostics = packedTypeDiagnostics(consumerRoot, `negative-${index}`, negative.source);
+    if (diagnostics.length === 0) {
+      throw new Error(`Packed Drizzle type consumer accepted ${negative.label}`);
+    }
+  }
+}
+
+function packedTypeDiagnostics(consumerRoot, fixture, source) {
+  const sourcePath = path.join(consumerRoot, `consumer-${fixture}.ts`);
+  writeFileSync(sourcePath, source, 'utf8');
   const program = ts.createProgram([sourcePath], {
     module: ts.ModuleKind.NodeNext,
     moduleResolution: ts.ModuleResolutionKind.NodeNext,
@@ -450,21 +493,17 @@ void [accounts, ddl, entries, extractKovoRuntimeDbMetadata, forgedSql, sqliteAcc
     strict: true,
     target: ts.ScriptTarget.ES2022,
   });
-  const diagnostics = ts
+  return ts
     .getPreEmitDiagnostics(program)
     .filter((diagnostic) => !isThirdPartyDeclarationDiagnostic(diagnostic));
-  if (diagnostics.length > 0) {
-    throw new Error(
-      `Packed Drizzle type consumer failed:\n${ts.formatDiagnosticsWithColorAndContext(
-        diagnostics,
-        {
-          getCanonicalFileName: (fileName) => fileName,
-          getCurrentDirectory: () => consumerRoot,
-          getNewLine: () => '\n',
-        },
-      )}`,
-    );
-  }
+}
+
+function formatTypeDiagnostics(consumerRoot, diagnostics) {
+  return ts.formatDiagnosticsWithColorAndContext(diagnostics, {
+    getCanonicalFileName: (fileName) => fileName,
+    getCurrentDirectory: () => consumerRoot,
+    getNewLine: () => '\n',
+  });
 }
 
 function assertPackedRuntimeConsumer(consumerRoot) {

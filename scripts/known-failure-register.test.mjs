@@ -57,9 +57,9 @@ describe('known-failure register', () => {
     expect(validateRegister(register)).toEqual([]);
     expect(register.entries.map((entry) => entry.id)).toEqual(BASELINE_KNOWN_FAILURE_IDS);
     expect(knownFailureSummary(register)).toEqual({
-      executable: 2,
+      executable: 1,
       'pending-repro': 0,
-      retired: 8,
+      retired: 9,
     });
     expect(
       register.entries.every(
@@ -141,16 +141,23 @@ describe('known-failure register', () => {
     );
   });
 
-  it('keeps the high-memory full-catalog probe nightly without weakening its result contract', () => {
+  it('keeps the retired full-catalog regression nightly without weakening its result contract', () => {
     const nightly = runKnownFailureProbes(register, {
       repoRoot,
       packedManifest: ownershipLedgerPath,
       cadence: 'nightly',
       ledgerResolver,
-      spawnSync: (_executable, args) => processResult(commandId(args), 'defect-reproduced'),
+      spawnSync: (_executable, args) => {
+        const id = commandId(args);
+        const entry = register.entries.find((candidate) => candidate.id === id);
+        return processResult(
+          id,
+          entry?.state === 'retired' ? 'desired-behavior' : 'defect-reproduced',
+        );
+      },
     });
     expect(nightly.results.find((result) => result.id === 'KF-DEVEX-007')).toMatchObject({
-      status: 'xfail',
+      status: 'retired-pass',
     });
     expect(nightly.results.find((result) => result.id === 'KF-DEVEX-004')).toMatchObject({
       status: 'deferred',
@@ -208,13 +215,13 @@ describe('known-failure register', () => {
     expect(packedReleaseHarnessSource).toContain('verifyPackedAttestationBytes');
   });
 
-  it('keeps the full-catalog known failure linked to a non-binding provisional RSS target', () => {
+  it('keeps the retired full-catalog regression on a non-binding provisional RSS target', () => {
     expect(budgets.metrics['ui.fullCatalog.peakRssBytes']).toMatchObject({
       unit: 'bytes',
       provisionalTarget: 2 * 1024 * 1024 * 1024,
       ratification: null,
-      knownFailure: 'KF-DEVEX-007',
     });
+    expect(budgets.metrics['ui.fullCatalog.peakRssBytes']).not.toHaveProperty('knownFailure');
     expect(packedFirstLoopProbeSource).toContain('collectProcessTreeRssKiB');
     expect(packedFirstLoopProbeSource).toContain('2_048');
     expect(packedFirstLoopProbeSource).toContain('NODE_OPTIONS: null');
@@ -353,14 +360,12 @@ describe('known-failure register', () => {
     expect(xfail.pass).toBe(true);
     expect(xfail.results.filter((result) => result.status === 'xfail')).toEqual([
       expect.objectContaining({ id: 'KF-DEVEX-002' }),
-      expect.objectContaining({ id: 'KF-DEVEX-007' }),
     ]);
     expect(xpass.executableClosureComplete).toBe(true);
     expect(xpass.availablePass).toBe(false);
     expect(xpass.pass).toBe(false);
     expect(xpass.results.filter((result) => result.status === 'xpass')).toEqual([
       expect.objectContaining({ id: 'KF-DEVEX-002' }),
-      expect.objectContaining({ id: 'KF-DEVEX-007' }),
     ]);
   });
 
@@ -432,6 +437,7 @@ describe('known-failure register', () => {
       { id: 'KF-DEVEX-004', status: 'retired-pass' },
       { id: 'KF-DEVEX-005', status: 'retired-pass' },
       { id: 'KF-DEVEX-006', status: 'retired-pass' },
+      { id: 'KF-DEVEX-007', status: 'retired-pass' },
       { id: 'KF-DEVEX-008', status: 'retired-pass' },
       { id: 'KF-DEVEX-009', status: 'retired-pass' },
       { id: 'KF-DEVEX-010', status: 'retired-pass' },
@@ -453,6 +459,7 @@ describe('known-failure register', () => {
       { id: 'KF-DEVEX-004', status: 'retired-regression' },
       { id: 'KF-DEVEX-005', status: 'retired-regression' },
       { id: 'KF-DEVEX-006', status: 'retired-regression' },
+      { id: 'KF-DEVEX-007', status: 'retired-regression' },
       { id: 'KF-DEVEX-008', status: 'retired-regression' },
       { id: 'KF-DEVEX-009', status: 'retired-regression' },
       { id: 'KF-DEVEX-010', status: 'retired-regression' },
