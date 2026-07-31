@@ -4,7 +4,7 @@ import { isKovoTrustedHtml, kovoTrustedHtmlContent } from '@kovojs/browser/gener
 import {
   browserHarnessComponentDefinition,
   isBrowserHarnessComponent,
-} from './interactive-gallery.browser-core.js';
+} from '../../examples/gallery/src/interactive-gallery.browser-core.js';
 
 type JsxNode =
   | BrowserHarnessRenderedHtml

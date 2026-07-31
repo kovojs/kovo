@@ -3,7 +3,7 @@ import { isKovoTrustedHtml, kovoTrustedHtmlContent } from '@kovojs/browser/gener
 import {
   browserHarnessRenderedHtmlContent,
   escapeText,
-} from '../../examples/gallery/src/interactive-gallery.browser-jsx-runtime.js';
+} from './interactive-gallery.browser-jsx-runtime.js';
 
 export { trustedHtml, trustedUrl } from '@kovojs/browser';
 

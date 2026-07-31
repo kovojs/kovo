@@ -10,7 +10,7 @@ import {
   staticVisualFixtureHtml,
   type StaticVisualFixturePath,
 } from './interactive-gallery.browser-manifest.js';
-import { jsx } from './interactive-gallery.browser-jsx-runtime.js';
+import { jsx } from '../../../tests/gallery/interactive-gallery.browser-jsx-runtime.js';
 
 export {
   staticVisualFixtureHtml,

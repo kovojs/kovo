@@ -18,7 +18,7 @@ const browserServerRuntime = fileURLToPath(
   new URL('../../tests/gallery/interactive-gallery.browser-server.ts', import.meta.url),
 );
 const browserJsxRuntime = fileURLToPath(
-  new URL('./src/interactive-gallery.browser-jsx-runtime.ts', import.meta.url),
+  new URL('../../tests/gallery/interactive-gallery.browser-jsx-runtime.ts', import.meta.url),
 );
 
 export default defineConfig({

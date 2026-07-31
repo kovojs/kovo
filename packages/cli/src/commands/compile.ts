@@ -3,7 +3,7 @@ import { existsSync, lstatSync, mkdtempSync, readFileSync, rmSync } from 'node:f
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { basename, dirname, extname, join, relative, resolve } from 'node:path';
+import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import type {
@@ -668,6 +668,8 @@ function sortRecordKeys(record: Record<string, unknown>): Record<string, unknown
 
 function inferAddDependencySpec(manifest: Record<string, unknown>, packageName: string): string {
   if (packageName.startsWith('@kovojs/')) {
+    const exactOverride = exactPnpmPackageOverride(manifest, packageName);
+    if (exactOverride !== undefined) return exactOverride;
     const inferredKovoSpec = inferExistingKovoPackageSpec(manifest, packageName);
     if (inferredKovoSpec) return inferredKovoSpec;
     return cliPackageVersion;
@@ -694,10 +696,42 @@ function inferExistingKovoPackageSpec(
       const linkedSpec = inferLinkedKovoPackageSpec(existingPackageName, existingSpec, packageName);
       if (linkedSpec) return linkedSpec;
       if (existingSpec.startsWith('workspace:')) return existingSpec;
+      // Archive, URL, alias, and patch specs identify one concrete package. Reusing another
+      // Kovo package's spec can install bytes whose declared name differs from `packageName`.
+      if (packageBoundDependencySpec(existingSpec)) continue;
       return existingSpec;
     }
   }
   return undefined;
+}
+
+function exactPnpmPackageOverride(
+  manifest: Record<string, unknown>,
+  packageName: string,
+): string | undefined {
+  const pnpm = manifest.pnpm;
+  if (!isRecord(pnpm)) return undefined;
+  const overrides = pnpm.overrides;
+  if (!isRecord(overrides)) return undefined;
+  const exact = overrides[packageName];
+  return typeof exact === 'string' && exact.length > 0 ? exact : undefined;
+}
+
+function packageBoundDependencySpec(spec: string): boolean {
+  return (
+    spec.startsWith('file:') ||
+    spec.startsWith('portal:') ||
+    spec.startsWith('patch:') ||
+    spec.startsWith('npm:') ||
+    spec.startsWith('git:') ||
+    spec.startsWith('git+') ||
+    spec.startsWith('github:') ||
+    spec.startsWith('http:') ||
+    spec.startsWith('https:') ||
+    spec.startsWith('./') ||
+    spec.startsWith('../') ||
+    isAbsolute(spec)
+  );
 }
 
 function inferLinkedKovoPackageSpec(

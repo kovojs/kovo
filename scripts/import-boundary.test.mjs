@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -305,9 +306,14 @@ const ignored = "import('@kovojs/core/internal/string-literal')";
 });
 
 async function fixtureRoot() {
-  return mkdir(path.join(tmpdir(), `kovo-import-boundary-${process.pid}-${Date.now()}`), {
+  const root = path.join(
+    tmpdir(),
+    `kovo-import-boundary-${process.pid}-${Date.now()}-${randomUUID()}`,
+  );
+  await mkdir(root, {
     recursive: true,
   });
+  return root;
 }
 
 async function writeFixture(rootDir, relativePath, source) {

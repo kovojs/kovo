@@ -243,6 +243,59 @@ describe('kovo add', () => {
     }
   });
 
+  it('uses exact packed overrides instead of borrowing another package archive', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-add-cli-packed-'));
+    const outDir = join(root, 'src/components/ui');
+    writeFileSync(
+      join(root, 'package.json'),
+      `${JSON.stringify(
+        {
+          dependencies: {
+            '@kovojs/core': 'file:///release/kovojs-core-0.3.0.tgz',
+            '@kovojs/style': 'file:///release/kovojs-style-0.3.0.tgz',
+            '@kovojs/ui': 'file:///release/kovojs-ui-0.3.0.tgz',
+          },
+          packageManager: 'pnpm@10.12.1',
+          pnpm: {
+            overrides: {
+              '@kovojs/headless-ui': 'file:///release/kovojs-headless-ui-0.3.0.tgz',
+              '@kovojs/icons': 'file:///release/kovojs-icons-0.3.0.tgz',
+            },
+          },
+          type: 'module',
+        },
+        null,
+        2,
+      )}\n`,
+      'utf8',
+    );
+    const install = vi
+      .spyOn(addCommandShell, 'execFileSync')
+      .mockImplementation(() => Buffer.alloc(0));
+
+    try {
+      await expect(mainAsync(['add', 'toast', '--out', outDir])).resolves.toBe(0);
+
+      const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
+        dependencies: Record<string, string>;
+      };
+      expect(packageJson.dependencies['@kovojs/headless-ui']).toBe(
+        'file:///release/kovojs-headless-ui-0.3.0.tgz',
+      );
+      expect(packageJson.dependencies['@kovojs/icons']).toBe(
+        'file:///release/kovojs-icons-0.3.0.tgz',
+      );
+      expect(packageJson.dependencies['@kovojs/headless-ui']).not.toContain('kovojs-core');
+      expect(install).toHaveBeenCalledWith('pnpm', ['install'], {
+        cwd: root,
+        stdio: 'pipe',
+      });
+    } finally {
+      install.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('does not print dependency instructions when copied component imports are already declared', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-add-cli-'));
     const outDir = join(root, 'src/components/ui');
