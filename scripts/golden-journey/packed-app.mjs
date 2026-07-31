@@ -423,7 +423,7 @@ export function rewriteScaffoldDependenciesToPackedTarballs(appRoot, packedPacka
 export function declareJourneyProductionRetention(appRoot) {
   const configPath = path.join(appRoot, 'kovo.config.ts');
   const source = readFileSync(configPath, 'utf8');
-  const defaultPreset = 'preset: node(),';
+  const defaultPreset = '  preset: node(),';
   if (!source.includes(defaultPreset)) {
     throw new JourneyPhaseError(
       'build-posture',
@@ -440,13 +440,13 @@ export function declareJourneyProductionRetention(appRoot) {
     source.replace(
       defaultPreset,
       [
-        'preset: node({',
-        '  retention: {',
-        `    hours: ${String(retention.hours)},`,
-        `    immutableClientModules: '${retention.immutableClientModules}',`,
-        `    priorTokenQueryReads: '${retention.priorTokenQueryReads}',`,
-        '  },',
-        '}),',
+        '  preset: node({',
+        '    retention: {',
+        `      hours: ${String(retention.hours)},`,
+        `      immutableClientModules: '${retention.immutableClientModules}',`,
+        `      priorTokenQueryReads: '${retention.priorTokenQueryReads}',`,
+        '    },',
+        '  }),',
       ].join('\n'),
     ),
     'utf8',

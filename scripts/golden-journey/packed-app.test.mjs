@@ -258,8 +258,19 @@ describe('packed app golden journey', () => {
         priorTokenQueryReads: 'retained',
       },
     });
-    expect(readFileSync(path.join(root, 'kovo.config.ts'), 'utf8')).toContain(
-      "priorTokenQueryReads: 'retained'",
+    expect(readFileSync(path.join(root, 'kovo.config.ts'), 'utf8')).toBe(
+      [
+        "import { defineConfig, node } from '@kovojs/server/build';",
+        'export default defineConfig({',
+        '  preset: node({',
+        '    retention: {',
+        '      hours: 24,',
+        "      immutableClientModules: 'retained',",
+        "      priorTokenQueryReads: 'retained',",
+        '    },',
+        '  }),',
+        '});',
+      ].join('\n'),
     );
   });
 
