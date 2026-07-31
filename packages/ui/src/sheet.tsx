@@ -8,6 +8,7 @@ import {
 } from '@kovojs/headless-ui/dialog';
 import { X } from '@kovojs/icons/x';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
 
@@ -138,7 +139,7 @@ export interface SheetCloseProps extends SheetStateProps {
   contentId: string;
   id?: string;
 }
-const sheetStyles = style.create({
+const sheetStyles = createWithSource('sheet.tsx')({
   body: {
     fontSize: 14,
   },
@@ -251,7 +252,7 @@ const sheetStyles = style.create({
     },
   },
 });
-const sheetSideStyles = style.create({
+const sheetSideStyles = createWithSource('sheet.tsx')({
   bottom: {
     borderTopWidth: 1,
     bottom: 0,

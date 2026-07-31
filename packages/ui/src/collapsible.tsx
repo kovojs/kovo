@@ -6,6 +6,7 @@ import {
   collapsibleTriggerAttributes,
 } from '@kovojs/headless-ui/collapsible';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
 
@@ -75,7 +76,7 @@ export interface CollapsibleContentProps extends CollapsibleStateProps {
   contentId?: string;
   styles?: CollapsibleStyleOverrides;
 }
-const collapsibleStyles = style.create({
+const collapsibleStyles = createWithSource('collapsible.tsx')({
   // Grid wrapper animates open/close via grid-template-rows 0fr<->1fr. The author
   // `display:grid` overrides both the UA `details:not([open]) > *{display:none}`
   // rule and the closed state, so the panel smoothly expands/collapses instead of

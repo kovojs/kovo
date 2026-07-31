@@ -9,6 +9,7 @@ import {
   type SliderOrientation,
 } from '@kovojs/headless-ui/slider';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
 
@@ -107,7 +108,7 @@ export interface SliderThumbProps extends SliderPartProps {
   labelledBy?: string;
   valueText?: string;
 }
-const sliderStyles = style.create({
+const sliderStyles = createWithSource('slider.tsx')({
   // Native range kept for keyboard/form/validation; visually hidden but
   // stretched over the track so it stays the pointer/focus target.
   input: {

@@ -2,6 +2,7 @@
 import { component, type ComponentChild } from '@kovojs/core';
 import { toggleRootAttributes } from '@kovojs/headless-ui/toggle';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
 
@@ -31,7 +32,7 @@ export interface ToggleProps {
   variant?: ToggleVariant;
 }
 
-const base = style.create({
+const base = createWithSource('toggle.tsx')({
   root: {
     alignItems: 'center',
     borderRadius: 6,
@@ -60,7 +61,7 @@ const base = style.create({
   },
 });
 
-const variants = style.create({
+const variants = createWithSource('toggle.tsx')({
   outline: {
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.border,

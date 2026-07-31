@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { uiTheme } from './theme.js';
 
@@ -22,7 +23,7 @@ const pulse = style.keyframes({
   '0%, 100%': { opacity: 1 },
   '50%': { opacity: 0.5 },
 });
-const skeletonStyles = style.create({
+const skeletonStyles = createWithSource('skeleton.tsx')({
   root: {
     // `border` (outlineVariant) is the M3 divider tone — distinctly darker than
     // the card surface, so placeholders are clearly visible. The old

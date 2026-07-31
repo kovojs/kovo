@@ -119,6 +119,9 @@ describe('kovo add', () => {
       expect(entry.source).toContain('component({');
       expect(importsUiPackage(entry.source)).toBe(false);
       expect(entry.source).not.toContain('@kovojs/server/internal');
+      expect(entry.source).not.toContain('@kovojs/style/internal');
+      expect(entry.source).not.toContain('createWithSource');
+      expect(entry.source).toContain('style.create(');
       expect(entry.source).not.toContain("from './pass-through.js'");
       expect(entry.source).not.toContain("from './theme.js'");
       expect(entry.source).not.toContain('\n\n\n');

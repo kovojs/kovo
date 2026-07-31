@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component, type ComponentChild } from '@kovojs/core';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { uiTheme } from './theme.js';
 
@@ -31,7 +32,7 @@ export interface CardContentProps extends CardProps {}
 /** Props for the trailing actions or metadata region of a {@link Card}. */
 export interface CardFooterProps extends CardProps {}
 
-const cardStyles = style.create({
+const cardStyles = createWithSource('card.tsx')({
   content: {
     paddingBlockEnd: 16,
     paddingInline: 16,

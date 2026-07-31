@@ -6,6 +6,7 @@ import {
   popoverTriggerAttributes,
 } from '@kovojs/headless-ui/popover';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
 
@@ -75,7 +76,7 @@ export interface PopoverContentProps extends PopoverStateProps {
   contentId?: string;
   styles?: PopoverStyleOverrides;
 }
-const popoverStyles = style.create({
+const popoverStyles = createWithSource('popover.tsx')({
   content: {
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.border,

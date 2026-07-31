@@ -22,24 +22,16 @@ import {
   styleMapValues,
   styleMathImul,
   styleNullRecord,
-  styleNumber,
   styleNumberIsFinite,
   styleNumberToBase36,
   styleOwnDataEntries,
   styleOwnDataValue,
-  styleErrorStack,
-  styleRegExpExec,
-  styleStringEndsWith,
   styleStringCharCodeAt,
-  styleStringIncludes,
-  styleStringLastIndexOf,
   styleStringLocaleCompare,
   styleStringReplace,
-  styleStringReplaceAll,
   styleStringSlice,
   styleStringSplit,
   styleStringStartsWith,
-  styleStringTrim,
   styleWeakMap,
   styleWeakMapGet,
   styleWeakMapHas,
@@ -218,6 +210,22 @@ export function create<const Styles extends Record<string, StyleObject>>(
 }
 
 /**
+ * @internal Bind a framework-owned source literal before compiling a static
+ * style object. The curried shape keeps large first-party style definitions as
+ * ordinary one-argument object calls while making their runtime identity
+ * inspectable in source (SPEC.md §13.1).
+ */
+export function createWithSource(source: string) {
+  const identity = snapshotStyleIdentity({ source }, 'style.create source identity');
+  return function createFrameworkStyles<const Styles extends Record<string, StyleObject>>(
+    styles: Styles,
+  ): { readonly [Key in keyof Styles]: StyleHandle } {
+    assertObjectInput(styles, 'style.create', 'styles');
+    return createAtomicStylesInternal(styles, identity).styles;
+  };
+}
+
+/**
  * @internal Compile static style namespaces and return both the opaque style
  * records and the extracted CSS rules. Compiler integration uses this structured
  * result to build manifests and attribution instead of scraping strings
@@ -315,106 +323,11 @@ function resolveStyleIdentity(
   styles: Record<string, StyleObject>,
   identity: StyleIdentityOptions,
 ): StyleIdentityOptions {
-  if (identity.namespace && identity.source) return identity;
-  const callSite = inferStyleCallSite(styles);
-  if (!callSite) return identity;
-
+  if (identity.namespace !== undefined || identity.source === undefined) return identity;
   return {
-    namespace: identity.namespace ?? callSite.namespace,
-    source: identity.source ?? callSite.source,
+    namespace: derivedRuntimeStyleNamespace(identity.source, styles),
+    source: identity.source,
   };
-}
-
-function inferStyleCallSite(
-  styles: Record<string, StyleObject>,
-): { readonly namespace: string; readonly source: string } | null {
-  const site = styleStackCallSite();
-  if (!site) return null;
-  return runtimeUiStyleIdentityForCallSite(site.filePath, styles);
-}
-
-/**
- * Map a first-party UI source or published-dist callsite to the same stable
- * provenance used by static CSS extraction (SPEC §13.1). Kept off every package
- * entrypoint; the relative-module export exists so the exact path classifier can
- * be regression-tested without forging an Error stack.
- */
-export function runtimeUiStyleIdentityForCallSite(
-  callSiteFilePath: string,
-  styles: Record<string, StyleObject>,
-): { readonly namespace: string; readonly source: string } | null {
-  const filePath = slashPath(callSiteFilePath);
-  if (
-    !styleStringIncludes(filePath, '/packages/ui/src/') &&
-    !styleStringIncludes(filePath, '/packages/ui/dist/') &&
-    !styleStringIncludes(filePath, '/node_modules/@kovojs/ui/src/') &&
-    !styleStringIncludes(filePath, '/node_modules/@kovojs/ui/dist/')
-  ) {
-    return null;
-  }
-
-  const source = styleSourceFileName(callSiteFilePath);
-  return {
-    namespace: derivedRuntimeStyleNamespace(source, styles),
-    source,
-  };
-}
-
-function styleStackCallSite(): { column: number; filePath: string; line: number } | null {
-  const stack = styleErrorStack();
-  const stackLines = styleStringSplit(stack, '\n');
-  for (let stackIndex = 0; stackIndex < stackLines.length; stackIndex += 1) {
-    const line = stackLines[stackIndex] as string;
-    const rawFrame = styleStringReplace(styleStringTrim(line), /^at\s+/, '');
-    const frame = styleStringIncludes(rawFrame, '(')
-      ? styleStringSlice(
-          rawFrame,
-          styleStringLastIndexOf(rawFrame, '(') + 1,
-          styleStringEndsWith(rawFrame, ')') ? -1 : undefined,
-        )
-      : rawFrame;
-    const match =
-      styleRegExpExec(/\(?((?:file:\/\/)?\/[^():]+):(\d+):(\d+)\)?$/, frame) ??
-      styleRegExpExec(/\(?([A-Za-z]:\\[^():]+):(\d+):(\d+)\)?$/, frame);
-    if (!match) continue;
-    const rawFilePath = match[1] ?? '';
-    if (firstPartyStyleRuntimeFrame(rawFilePath)) continue;
-    const filePath = styleStringStartsWith(rawFilePath, 'file://')
-      ? new URL(rawFilePath).pathname
-      : rawFilePath;
-    return {
-      column: styleNumber(match[3]),
-      filePath,
-      line: styleNumber(match[2]),
-    };
-  }
-  return null;
-}
-
-function firstPartyStyleRuntimeFrame(rawFilePath: string): boolean {
-  const filePath = slashPath(rawFilePath);
-  return (
-    styleStringEndsWith(filePath, '/packages/style/src/engine.ts') ||
-    styleStringEndsWith(filePath, '/packages/style/src/style-security-intrinsics.ts') ||
-    styleStringIncludes(filePath, '/packages/style/dist/') ||
-    styleStringIncludes(filePath, '/node_modules/@kovojs/style/dist/')
-  );
-}
-
-function styleSourceFileName(filePath: string): string {
-  const parts = styleStringSplit(filePath, /[\\/]/);
-  let fileName = 'style.tsx';
-  for (let index = 0; index < parts.length; index += 1) {
-    if ((parts[index] ?? '') !== '') fileName = parts[index] ?? fileName;
-  }
-  if (styleRegExpExec(/\.[cm]?jsx?$/, fileName)) {
-    return styleStringReplace(fileName, /\.[cm]?jsx?$/, '.tsx');
-  }
-  return fileName;
-}
-
-function slashPath(value: string): string {
-  return styleStringReplaceAll(value, '\\', '/');
 }
 
 function derivedRuntimeStyleNamespace(

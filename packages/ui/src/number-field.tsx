@@ -8,6 +8,7 @@ import {
   type NumberFieldValue,
 } from '@kovojs/headless-ui/number-field';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
 
@@ -89,7 +90,7 @@ export interface NumberFieldButtonProps extends NumberFieldStateProps {
   label?: string;
   styles?: NumberFieldStyleOverrides;
 }
-const numberFieldStyles = style.create({
+const numberFieldStyles = createWithSource('number-field.tsx')({
   button: {
     alignItems: 'center',
     backgroundColor: uiTheme.color.backgroundRaised,

@@ -8,6 +8,7 @@ import {
   buildCommand,
   derivePublishPlan,
   uiVendoredHelperSourcePaths,
+  uiVendoredSourceHashes,
   uiVendoredSourceHelperHashes,
 } from './build-publish.mjs';
 import {
@@ -223,12 +224,15 @@ describe('package export resolver', () => {
     );
   });
 
-  it('generates the exact path-keyed hash ledger for packed UI helpers', () => {
+  it('generates the exact component and helper hash ledgers for packed UI source', () => {
     const manifest = JSON.parse(readFileSync('packages/ui/package.json', 'utf8'));
-    const generated = uiVendoredSourceHelperHashes(path.resolve('packages/ui'));
+    const packageRoot = path.resolve('packages/ui');
+    const generatedComponents = uiVendoredSourceHashes(packageRoot, manifest);
+    const generatedHelpers = uiVendoredSourceHelperHashes(packageRoot);
 
-    expect(Object.keys(generated)).toEqual(uiVendoredHelperSourcePaths);
-    expect(generated).toEqual(manifest.kovo.vendoredSourceHelperHashes);
+    expect(generatedComponents).toEqual(manifest.kovo.vendoredSourceHashes);
+    expect(Object.keys(generatedHelpers)).toEqual(uiVendoredHelperSourcePaths);
+    expect(generatedHelpers).toEqual(manifest.kovo.vendoredSourceHelperHashes);
   });
 
   it('refuses to generate helper authority from a symlink', () => {
@@ -247,6 +251,49 @@ describe('package export resolver', () => {
       expect(() => uiVendoredSourceHelperHashes(root)).toThrow(/regular non-symlink/u);
     } finally {
       rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('refuses component symlinks under the same source policy as helpers', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'kovo-ui-component-ledger-'));
+    try {
+      mkdirSync(path.join(root, 'src'), { recursive: true });
+      writeFileSync(path.join(root, 'src/real-button.tsx'), 'export const Button = true;\n');
+      symlinkSync('real-button.tsx', path.join(root, 'src/button.tsx'));
+
+      expect(() =>
+        uiVendoredSourceHashes(root, {
+          exports: { './button': './src/button.tsx' },
+        }),
+      ).toThrow(/regular non-symlink/u);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('refuses a symlinked src parent and bounded-read overflow', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'kovo-ui-source-parent-ledger-'));
+    const outside = mkdtempSync(path.join(tmpdir(), 'kovo-ui-source-parent-outside-'));
+    try {
+      for (const helperPath of uiVendoredHelperSourcePaths) {
+        writeFileSync(
+          path.join(outside, path.basename(helperPath)),
+          `export const helper = ${JSON.stringify(helperPath)};\n`,
+        );
+      }
+      symlinkSync(outside, path.join(root, 'src'), 'dir');
+      expect(() => uiVendoredSourceHelperHashes(root)).toThrow(/src parent.*non-symlink/u);
+
+      rmSync(path.join(root, 'src'));
+      mkdirSync(path.join(root, 'src'));
+      for (const helperPath of uiVendoredHelperSourcePaths) {
+        writeFileSync(path.join(root, helperPath), 'export const helper = true;\n');
+      }
+      writeFileSync(path.join(root, 'src/theme.ts'), 'x'.repeat(2 * 1024 * 1024 + 1));
+      expect(() => uiVendoredSourceHelperHashes(root)).toThrow(/read bound/u);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+      rmSync(outside, { force: true, recursive: true });
     }
   });
 });

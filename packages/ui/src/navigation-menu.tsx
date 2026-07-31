@@ -14,6 +14,7 @@ import {
 import type { CollectionOrientation, TextDirection } from '@kovojs/headless-ui/types';
 import { ChevronDown } from '@kovojs/icons/chevron-down';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
 
@@ -150,7 +151,7 @@ export interface NavigationMenuPartProps extends NavigationMenuStateProps {
   id?: string;
   styles?: NavigationMenuStyleOverrides;
 }
-const navigationMenuStyles = style.create({
+const navigationMenuStyles = createWithSource('navigation-menu.tsx')({
   content: {
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.border,

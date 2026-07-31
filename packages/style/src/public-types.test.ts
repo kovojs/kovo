@@ -12,6 +12,8 @@ function opaqueHandleTypeContract(): StyleHandle {
   attrs({ color: 'red' });
   // @ts-expect-error Source/provenance identity is compiler-owned, not public create input.
   create({ root: { color: 'red' } }, { source: 'forged.tsx' });
+  // @ts-expect-error Source-bound create is available only from the internal framework ABI.
+  create('forged.tsx')({ root: { color: 'red' } });
   // @ts-expect-error The retired raw tuple is not part of StyleInput.
   const legacyTuple: StyleInput = [null, { color: 'red' }];
   void legacyTuple;

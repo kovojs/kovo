@@ -1,10 +1,71 @@
 import { describe, expect, it } from 'vitest';
 
+import { attrs } from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
+
 import { assertFixpoint, assertRenderEquivalence, compileComponentModule } from './index.js';
 import { parseComponentModule } from './scan/parse.js';
 import { extractKovoStyles } from './style.js';
 
 describe('Kovo Style extraction', () => {
+  it('recognizes source-bound create only through the exact internal import identity', () => {
+    const trustedSource = `
+import * as style from '@kovojs/style';
+import { createWithSource as bindStyleSource } from '@kovojs/style/internal';
+
+const intentionallyOddBindingName = bindStyleSource('button.tsx')({
+  root: { color: 'trusted-internal-source' },
+});
+export const Button = () => <button {...style.attrs(intentionallyOddBindingName.root)}>Button</button>;
+`;
+    const trusted = extractKovoStyles(
+      'packages/ui/src/button.tsx',
+      trustedSource,
+      parseComponentModule('packages/ui/src/button.tsx', trustedSource),
+    );
+    expect(trusted.css).toContain('.kv-button-');
+    expect(trusted.css).not.toContain('.kv-intentionally-odd-binding-name-');
+    expect(trusted.css).toContain('color:trusted-internal-source');
+    const runtimeClass = attrs(
+      createWithSource('button.tsx')({ root: { color: 'trusted-internal-source' } }).root,
+    ).class;
+    expect(trusted.css).toContain(`.${runtimeClass}{`);
+    expect(JSON.stringify(trusted.replacements)).not.toContain('namespace:');
+
+    const dynamicSource = `
+import { createWithSource as bindStyleSource } from '@kovojs/style/internal';
+
+const source = 'button.tsx';
+const base = bindStyleSource(source)({ root: { color: 'dynamic-source' } });
+`;
+    const dynamic = extractKovoStyles(
+      'packages/ui/src/button.tsx',
+      dynamicSource,
+      parseComponentModule('packages/ui/src/button.tsx', dynamicSource),
+    );
+    expect(dynamic.css).toBeNull();
+    expect(dynamic.diagnostics).toHaveLength(1);
+
+    const forgedSource = `
+import * as style from '@kovojs/style';
+
+function createWithSource(_source: string) {
+  return (styles: unknown) => styles;
+}
+const base = createWithSource('button.tsx')({
+  root: { color: 'forged-local-source' },
+});
+export const Button = () => <button {...style.attrs(base.root)}>Button</button>;
+`;
+    const forged = extractKovoStyles(
+      'packages/ui/src/button.tsx',
+      forgedSource,
+      parseComponentModule('packages/ui/src/button.tsx', forgedSource),
+    );
+    expect(forged.css).toBeNull();
+    expect(JSON.stringify(forged)).not.toContain('forged-local-source');
+  });
+
   it('lowers static style.create references to readable classes and atomic CSS', () => {
     const source = `
 import { component } from '@kovojs/core';

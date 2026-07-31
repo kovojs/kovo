@@ -7,6 +7,7 @@ import {
   dialogTriggerAttributes,
 } from '@kovojs/headless-ui/dialog';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
 
@@ -111,7 +112,7 @@ export interface DialogPartProps {
   id?: string;
   styles?: DialogStyleOverrides;
 }
-const dialogStyles = style.create({
+const dialogStyles = createWithSource('dialog.tsx')({
   close: {
     alignItems: 'center',
     backgroundColor: uiTheme.color.background,

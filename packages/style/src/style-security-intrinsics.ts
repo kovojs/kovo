@@ -1,7 +1,6 @@
 /* eslint-disable typescript/unbound-method */
 
 const NativeArray = globalThis.Array;
-const NativeError = globalThis.Error;
 const NativeJSON = globalThis.JSON;
 const NativeMap = globalThis.Map;
 const NativeMath = globalThis.Math;
@@ -37,25 +36,20 @@ const nativeMathImul = NativeMath.imul;
 const nativeMathMax = NativeMath.max;
 const nativeMathMin = NativeMath.min;
 const nativeObjectFreeze = NativeObject.freeze;
-const nativeNumber = NativeNumber;
 const nativeNumberIsFinite = NativeNumber.isFinite;
 const nativeOwnKeys = NativeReflect.ownKeys;
 const nativeRegExpExec = NativeRegExp.prototype.exec;
 const nativeSetHas = NativeSet.prototype.has;
-const nativeStringEndsWith = NativeString.prototype.endsWith;
 const nativeStringCharCodeAt = NativeString.prototype.charCodeAt;
 const nativeStringIncludes = NativeString.prototype.includes;
 const nativeStringIndexOf = NativeString.prototype.indexOf;
-const nativeStringLastIndexOf = NativeString.prototype.lastIndexOf;
 const nativeStringLocaleCompare = NativeString.prototype.localeCompare;
 const nativeStringMatch = NativeString.prototype.match;
 const nativeStringReplace = NativeString.prototype.replace;
-const nativeStringReplaceAll = NativeString.prototype.replaceAll;
 const nativeStringSlice = NativeString.prototype.slice;
 const nativeStringSplit = NativeString.prototype.split;
 const nativeStringStartsWith = NativeString.prototype.startsWith;
 const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
-const nativeStringTrim = NativeString.prototype.trim;
 const nativeWeakMapGet = NativeWeakMap.prototype.get;
 const nativeWeakMapHas = NativeWeakMap.prototype.has;
 const nativeWeakMapSet = NativeWeakMap.prototype.set;
@@ -223,20 +217,6 @@ export function styleJsonStringify(value: unknown): string {
   return result;
 }
 
-export function styleErrorStack(): string {
-  try {
-    return new NativeError().stack ?? '';
-  } catch {
-    // Runtime call-site inference is optional provenance. Intrinsic poisoning in
-    // an engine's stack formatter must not enter or abort CSS serialization.
-    return '';
-  }
-}
-
-export function styleNumber(value: unknown): number {
-  return styleApply(nativeNumber, undefined, [value]);
-}
-
 export function styleNumberIsFinite(value: unknown): value is number {
   return styleApply(nativeNumberIsFinite, NativeNumber, [value]);
 }
@@ -333,20 +313,12 @@ export function styleStringValue(value: unknown): string {
   return styleApply(NativeString, undefined, [value]);
 }
 
-export function styleStringEndsWith(value: string, search: string): boolean {
-  return styleApply(nativeStringEndsWith, value, [search]);
-}
-
 export function styleStringIncludes(value: string, search: string): boolean {
   return styleApply(nativeStringIncludes, value, [search]);
 }
 
 export function styleStringIndexOf(value: string, search: string): number {
   return styleApply(nativeStringIndexOf, value, [search]);
-}
-
-export function styleStringLastIndexOf(value: string, search: string): number {
-  return styleApply(nativeStringLastIndexOf, value, [search]);
 }
 
 export function styleStringSlice(value: string, start: number, end?: number): string {
@@ -357,20 +329,12 @@ export function styleStringSplit(value: string, separator: string | RegExp): str
   return styleApply(nativeStringSplit, value, [separator]);
 }
 
-export function styleStringTrim(value: string): string {
-  return styleApply(nativeStringTrim, value, []);
-}
-
 export function styleStringReplace(
   value: string,
   search: string | RegExp,
   replacement: string | ((...args: string[]) => string),
 ): string {
   return styleApply(nativeStringReplace, value, [search, replacement]);
-}
-
-export function styleStringReplaceAll(value: string, search: string, replacement: string): string {
-  return styleApply(nativeStringReplaceAll, value, [search, replacement]);
 }
 
 export function styleStringToLowerCase(value: string): string {

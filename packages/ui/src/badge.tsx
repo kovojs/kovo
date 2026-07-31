@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component, type ComponentChild } from '@kovojs/core';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { uiTheme } from './theme.js';
 
@@ -26,7 +27,7 @@ export interface BadgeProps {
   variant?: BadgeVariant;
 }
 
-const base = style.create({
+const base = createWithSource('badge.tsx')({
   root: {
     // Filled variants are borderless; only the outline variant draws a border.
     alignItems: 'center',
@@ -41,7 +42,7 @@ const base = style.create({
   },
 });
 
-const variants = style.create({
+const variants = createWithSource('badge.tsx')({
   destructive: {
     backgroundColor: uiTheme.color.danger.background,
     borderColor: uiTheme.color.danger.border,

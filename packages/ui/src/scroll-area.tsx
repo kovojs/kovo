@@ -12,6 +12,7 @@ import {
 } from '@kovojs/headless-ui/scroll-area';
 import type { TextDirection } from '@kovojs/headless-ui/types';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
 
@@ -116,7 +117,7 @@ export interface ScrollAreaCornerProps extends ScrollAreaStateProps {
   styles?: ScrollAreaStyleOverrides;
   visible?: boolean;
 }
-const scrollAreaStyles = style.create({
+const scrollAreaStyles = createWithSource('scroll-area.tsx')({
   corner: {
     backgroundColor: uiTheme.color.backgroundSubtleHigh,
     bottom: 0,

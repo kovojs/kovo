@@ -9,6 +9,7 @@ import {
 } from '@kovojs/headless-ui/checkbox-group';
 import type { CollectionOrientation, TextDirection } from '@kovojs/headless-ui/types';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { bindingProps, passThroughProps } from './pass-through.js';
 
@@ -109,7 +110,7 @@ export interface CheckboxGroupLabelProps extends CheckboxGroupStateProps {
   itemValue: string;
   styles?: CheckboxGroupStyleOverrides;
 }
-const checkboxGroupStyles = style.create({
+const checkboxGroupStyles = createWithSource('checkbox-group.tsx')({
   // Custom square matching the standalone Checkbox box. Carries data-state to
   // paint the teal fill + check/dash glyph (mirrors checkbox.tsx `box`). Kept
   // under the `control` key so the public control class export is unchanged.

@@ -11,6 +11,7 @@ import {
   type SelectItem as HeadlessSelectItem,
 } from '@kovojs/headless-ui/select';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
 
@@ -169,7 +170,7 @@ export interface SelectValueProps extends SelectStateProps {
   id?: string;
   styles?: SelectStyleOverrides;
 }
-const selectStyles = style.create({
+const selectStyles = createWithSource('select.tsx')({
   content: {
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.border,

@@ -119,6 +119,42 @@ describe('extractPackageComponentCss over @kovojs/ui', () => {
 });
 
 describe('extractPackageComponentCss over published vendored UI source', () => {
+  it('fails closed when reachable @kovojs/ui omits its vendored-source authority', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-package-css-missing-ui-authority-'));
+    const packageDir = join(root, 'node_modules', '@kovojs', 'ui');
+
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      mkdirSync(packageDir, { recursive: true });
+      writeFileSync(join(root, 'src/app.tsx'), `import '@kovojs/ui/button';`, 'utf8');
+      writeFileSync(
+        join(packageDir, 'package.json'),
+        JSON.stringify({
+          exports: { './button': { default: './dist/button.mjs' } },
+          name: '@kovojs/ui',
+        }),
+        'utf8',
+      );
+
+      const result = extractPackageComponentCss('@kovojs/ui', {
+        fileName: join(root, 'src/app.tsx'),
+        packagePrefixDiscoveryRoot: root,
+        source: `import '@kovojs/ui/button';`,
+      });
+
+      expect(result.css).toBeNull();
+      expect(result.sourceFiles).toEqual([]);
+      expect(result.diagnostics).toEqual([
+        expect.objectContaining({
+          fileName: 'package.json',
+          message: expect.stringContaining('does not declare kovo.vendoredSource authority'),
+        }),
+      ]);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('recovers exact public src/<name>.tsx snapshots from dist-only exports', () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-package-css-packed-vendored-'));
     const packageDir = join(root, 'node_modules', '@fixture', 'ui');
@@ -316,6 +352,52 @@ describe('extractPackageComponentCss over published vendored UI source', () => {
         expect.objectContaining({
           fileName: 'src/theme.ts',
           message: expect.stringContaining('non-symlink'),
+        }),
+      ]);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('applies the helper non-symlink policy to vendored component sources', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-package-css-component-symlink-'));
+    const packageDir = join(root, 'node_modules', '@fixture', 'ui');
+    const source = [
+      "import * as style from '@kovojs/style';",
+      "const base = style.create({ root: { color: 'symlink-source' } });",
+      'export const Button = () => <button {...style.attrs(base.root)}>Button</button>;',
+      '',
+    ].join('\n');
+
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      mkdirSync(join(packageDir, 'src'), { recursive: true });
+      writeFileSync(join(root, 'src/app.tsx'), `import '@fixture/ui/button';`, 'utf8');
+      writeFileSync(join(packageDir, 'src/real-button.tsx'), source, 'utf8');
+      symlinkSync('real-button.tsx', join(packageDir, 'src/button.tsx'));
+      writeFileSync(
+        join(packageDir, 'package.json'),
+        JSON.stringify({
+          exports: { './button': { default: './dist/button.mjs' } },
+          kovo: {
+            vendoredSource: true,
+            vendoredSourceHashes: { button: vendoredSourceHash(source) },
+          },
+          name: '@fixture/ui',
+        }),
+        'utf8',
+      );
+
+      expect(
+        extractPackageComponentCss('@fixture/ui', {
+          fileName: join(root, 'src/app.tsx'),
+          packagePrefixDiscoveryRoot: root,
+          source: `import '@fixture/ui/button';`,
+        }).diagnostics,
+      ).toEqual([
+        expect.objectContaining({
+          fileName: 'src/button.tsx',
+          message: expect.stringContaining('regular non-symlink'),
         }),
       ]);
     } finally {

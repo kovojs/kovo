@@ -14,6 +14,7 @@ import {
 } from '@kovojs/headless-ui/command';
 import { Search } from '@kovojs/icons/search';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
 
@@ -186,7 +187,7 @@ export interface CommandValueProps extends CommandStateProps {
   id?: string;
   styles?: CommandStyleOverrides;
 }
-const commandStyles = style.create({
+const commandStyles = createWithSource('command.tsx')({
   close: {
     alignItems: 'center',
     appearance: 'none',

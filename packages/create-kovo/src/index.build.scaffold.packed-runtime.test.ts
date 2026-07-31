@@ -65,9 +65,14 @@ describe('create-kovo starter (build integration: packed runtime scaffold)', () 
       try {
         expectPackedKovoPackageShape(app.root);
         await buildReusableProductionArtifactWithInfrastructureDeadline(app.root);
-        expect(readFileSync(join(app.root, 'dist/server/server/handler.mjs'), 'utf8')).not.toMatch(
-          /from\s+['"]\.\/assets\//,
+        const handler = readFileSync(
+          join(app.root, 'dist/server/server/handler.mjs'),
+          'utf8',
         );
+        expect(handler).not.toMatch(/from\s+['"]\.\/assets\//);
+        expect(handler).toContain('button.tsx');
+        expect(handler).not.toContain('runtimeUiStyleIdentityForCallSite');
+        expect(handler).not.toContain('/node_modules/@kovojs/ui/dist/');
 
         server = spawn(process.execPath, ['dist/server/server.mjs'], {
           cwd: app.root,
@@ -93,7 +98,22 @@ describe('create-kovo starter (build integration: packed runtime scaffold)', () 
         // test on that derivation path instead of merely proving that the server process boots.
         const stylesheet = await fetch(`${origin}${stylesheetHref}`);
         expect(stylesheet.status).toBe(200);
-        expect(await stylesheet.text()).toContain('--kovo-theme');
+        const stylesheetText = await stylesheet.text();
+        expect(stylesheetText).toContain('--kovo-theme');
+
+        const renderedButtonClasses = [...login.matchAll(/\sclass=(?:"([^"]*)"|'([^']*)')/gu)]
+          .flatMap((match) => (match[1] ?? match[2] ?? '').split(/\s+/u))
+          .filter((className) => /^kv-button-/u.test(className));
+        const uniqueButtonClasses = [...new Set(renderedButtonClasses)].sort((left, right) =>
+          left.localeCompare(right),
+        );
+
+        expect(uniqueButtonClasses.length).toBeGreaterThanOrEqual(3);
+        for (const className of uniqueButtonClasses) {
+          expect(stylesheetText, `missing selector for rendered ${className}`).toContain(
+            `.${className}`,
+          );
+        }
       } finally {
         await stopProcess(server);
         app.cleanup();

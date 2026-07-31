@@ -2,6 +2,7 @@
 import { component, type ComponentChild } from '@kovojs/core';
 import { switchRootAttributes } from '@kovojs/headless-ui/switch';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { bindingProps, passThroughProps } from './pass-through.js';
 
@@ -41,7 +42,7 @@ export interface SwitchProps {
   styles?: SwitchStyleOverrides;
   value?: string;
 }
-const switchStyles = style.create({
+const switchStyles = createWithSource('switch.tsx')({
   // Native checkbox kept for a11y/form state; visually hidden but still the
   // click/focus target (stretched over the track via absolute positioning).
   input: {

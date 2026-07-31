@@ -4,47 +4,53 @@ import {
   attrs,
   create,
   createAtomicStyles,
+  createWithSource,
   createKeyframes,
   defineVars,
   defineVarsWithCss,
   emitAtomicCss,
   raw,
-  runtimeUiStyleIdentityForCallSite,
 } from './engine.js';
 
-describe('first-party UI runtime style identity (SPEC.md §13.1)', () => {
-  it('keeps packed dist Button classes identical to source-extracted selectors', () => {
-    expect(
-      runtimeUiStyleIdentityForCallSite('/app/node_modules/@kovojs/ui/dist/button.mjs', {
-        root: { color: 'red' },
-      }),
-    ).toEqual({ namespace: 'button', source: 'button.tsx' });
-    expect(
-      runtimeUiStyleIdentityForCallSite('/app/node_modules/@kovojs/ui/dist/button.mjs', {
-        md: { height: 36 },
-        sm: { height: 32 },
-      }),
-    ).toEqual({ namespace: 'button-size', source: 'button.tsx' });
-    expect(
-      runtimeUiStyleIdentityForCallSite('/app/node_modules/@kovojs/ui/dist/button.mjs', {
-        destructive: { color: 'red' },
-        ghost: { color: 'gray' },
-        outline: { color: 'black' },
-        primary: { color: 'blue' },
-        secondary: { color: 'white' },
-      }),
-    ).toEqual({ namespace: 'button-variant', source: 'button.tsx' });
+describe('explicit first-party runtime style identity (SPEC.md §13.1)', () => {
+  it('derives packed Button namespaces from source identity without a callsite', () => {
+    const cases = [
+      {
+        expectedNamespace: 'button',
+        styles: { root: { color: 'red' } },
+      },
+      {
+        expectedNamespace: 'button-size',
+        styles: { md: { height: 36 }, sm: { height: 32 } },
+      },
+      {
+        expectedNamespace: 'button-variant',
+        styles: {
+          destructive: { color: 'red' },
+          ghost: { color: 'gray' },
+          outline: { color: 'black' },
+          primary: { color: 'blue' },
+          secondary: { color: 'white' },
+        },
+      },
+    ] as const;
 
-    expect(
-      runtimeUiStyleIdentityForCallSite('/repo/packages/ui/src/button.tsx', {
-        root: { color: 'red' },
-      }),
-    ).toEqual({ namespace: 'button', source: 'button.tsx' });
-    expect(
-      runtimeUiStyleIdentityForCallSite('/app/node_modules/@kovojs/ui-dist/button.mjs', {
-        root: { color: 'red' },
-      }),
-    ).toBeNull();
+    for (const testCase of cases) {
+      const runtime = createWithSource('button.tsx')(testCase.styles);
+      const extracted = createAtomicStyles(testCase.styles, {
+        namespace: testCase.expectedNamespace,
+        source: '/authenticated/package/src/button.tsx',
+      });
+      expect(Object.keys(runtime)).toEqual(Object.keys(extracted.styles));
+      for (const key of Object.keys(runtime) as Array<keyof typeof runtime>) {
+        expect(attrs(runtime[key]).class).toBe(attrs(extracted.styles[key]).class);
+      }
+    }
+  });
+
+  it('keeps ordinary app create behavior independent of stack paths', () => {
+    const ordinary = create({ root: { color: 'red' } });
+    expect(attrs(ordinary.root).class).toMatch(/^kv-style-/u);
   });
 });
 

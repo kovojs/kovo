@@ -9,6 +9,7 @@ import {
 } from '@kovojs/headless-ui/radio-group';
 import type { CollectionOrientation, TextDirection } from '@kovojs/headless-ui/types';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { bindingProps, passThroughProps } from './pass-through.js';
 
@@ -109,7 +110,7 @@ export interface RadioGroupLabelProps extends RadioGroupStateProps {
   itemValue: string;
   styles?: RadioGroupStyleOverrides;
 }
-const radioGroupStyles = style.create({
+const radioGroupStyles = createWithSource('radio-group.tsx')({
   item: {
     alignItems: 'center',
     columnGap: 8,

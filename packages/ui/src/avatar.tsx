@@ -9,6 +9,7 @@ import {
 } from '@kovojs/headless-ui/avatar';
 import { attrs as styleAttributes } from '@kovojs/style';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
 
@@ -81,7 +82,7 @@ export interface AvatarFallbackProps extends AvatarStateProps {
   delayMs?: number;
   styles?: AvatarStyleOverrides;
 }
-const avatarStyles = style.create({
+const avatarStyles = createWithSource('avatar.tsx')({
   // The fallback fills the relative root (inset:0) so the initials sit centered
   // behind/over the image rather than stacking next to it in static flow.
   // Once the image reports `loaded` the fallback is removed so the photo shows.

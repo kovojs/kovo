@@ -225,6 +225,8 @@ export function vendoredUiComponentSource(source: string): string {
   const needsBindingProps =
     /import\s*\{\s*[^}]*\bbindingProps\b[^}]*\}\s*from '\.\/pass-through\.js';/.test(source);
   let transformed = source
+    .replace("\nimport { createWithSource } from '@kovojs/style/internal';\n", '\n')
+    .replace(/\bcreateWithSource\('[a-z][a-z0-9-]*\.tsx'\)\(/g, 'style.create(')
     .replace(
       /\nimport \{ (?:bindingProps, )?passThroughProps \} from '\.\/pass-through\.js';\n/g,
       '\n',

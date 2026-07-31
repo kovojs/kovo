@@ -11,6 +11,7 @@ import {
 } from '@kovojs/headless-ui/accordion';
 import type { CollectionOrientation } from '@kovojs/headless-ui/types';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { bindingProps, passThroughProps } from './pass-through.js';
 
@@ -107,7 +108,7 @@ export interface AccordionContentProps extends AccordionItemProps {
   contentId?: string;
   triggerId?: string;
 }
-const accordionStyles = style.create({
+const accordionStyles = createWithSource('accordion.tsx')({
   // Outer grid wrapper animates open/close via grid-template-rows 0fr<->1fr
   // (SPEC complaint #9: panel should smoothly animate height). The inner
   // `contentInner` owns padding/min-height:0; this div carries no padding so the

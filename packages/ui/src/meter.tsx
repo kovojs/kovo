@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component, type ComponentChild } from '@kovojs/core';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { bindingProps, passThroughProps } from './pass-through.js';
 import { meterRootAttributes } from '@kovojs/headless-ui/meter';
@@ -39,7 +40,7 @@ export interface MeterProps {
   value?: number;
   valueText?: string;
 }
-const meterStyles = style.create({
+const meterStyles = createWithSource('meter.tsx')({
   // Custom indicator filled by value ratio (set inline). Color tracks the
   // optimum/suboptimum/even-less-good state.
   indicator: {

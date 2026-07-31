@@ -13,6 +13,9 @@ import {
   sourceStem,
 } from './package-exports.mjs';
 import { computeIconPlan, iconPublishExports } from '../packages/icons/scripts/icon-plan.mjs';
+import { readBoundedRegularFile } from './lib/bounded-regular-file.mjs';
+
+const maximumUiVendoredSourceBytes = 2 * 1024 * 1024;
 
 /**
  * Publish-build generator for the public packages (`rules/api-surface.md`;
@@ -43,6 +46,7 @@ import { computeIconPlan, iconPublishExports } from '../packages/icons/scripts/i
  *             and `scripts.prepack` = `pnpm run build:dist` (a dedicated script name so
  *             a package's existing `build` — e.g. runtime's inline-loader build — is
  *             never clobbered; prepack runs on pack/publish, NOT install: zero in-repo risk).
+ *   --write-ui-ledgers  Regenerate only @kovojs/ui's authenticated component/helper hashes.
  *   (default) Build each public package and verify every `publishConfig` target
  *             file exists under `packages/<dir>/dist`.
  *
@@ -202,6 +206,7 @@ function write() {
       if (!pkgJson.kovo || typeof pkgJson.kovo !== 'object' || Array.isArray(pkgJson.kovo)) {
         throw new Error('@kovojs/ui requires object-valued kovo metadata');
       }
+      pkgJson.kovo.vendoredSourceHashes = uiVendoredSourceHashes(pkgDir, pkgJson);
       pkgJson.kovo.vendoredSourceHelperHashes = uiVendoredSourceHelperHashes(pkgDir);
     }
     // Use a dedicated `build:dist` script so we never clobber a package's existing
@@ -222,6 +227,19 @@ function write() {
   }
 }
 
+function writeUiVendoredSourceLedgers() {
+  const uiPackageDir = path.join(repoRoot, 'packages', 'ui');
+  const manifestPath = path.join(uiPackageDir, 'package.json');
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  if (!manifest.kovo || typeof manifest.kovo !== 'object' || Array.isArray(manifest.kovo)) {
+    throw new Error('@kovojs/ui requires object-valued kovo metadata');
+  }
+  manifest.kovo.vendoredSourceHashes = uiVendoredSourceHashes(uiPackageDir, manifest);
+  manifest.kovo.vendoredSourceHelperHashes = uiVendoredSourceHelperHashes(uiPackageDir);
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+  console.log('wrote @kovojs/ui authenticated component/helper source ledgers');
+}
+
 function publishFiles(pkg, pkgJson) {
   if (pkg.name === 'create-kovo') return ['dist', 'templates'];
   if (pkg.name === '@kovojs/icons') return ['catalog.json', 'dist'];
@@ -233,14 +251,7 @@ function publishFiles(pkg, pkgJson) {
 }
 
 function uiVendoredSourceFiles(pkgJson) {
-  const files = new Set();
-  for (const [subpath, target] of Object.entries(pkgJson.exports ?? {})) {
-    if (subpath === '.' || !subpath.startsWith('./')) continue;
-    const sourceTarget = resolveSourceExportTarget(target);
-    if (sourceTarget === null) continue;
-    const sourceFile = sourceTarget.replace(/^\.\//, '');
-    if (/^src\/[^/]+\.tsx$/.test(sourceFile)) files.add(sourceFile);
-  }
+  const files = new Set(uiVendoredComponentSourceEntries(pkgJson).map((entry) => entry.path));
   for (const helper of uiVendoredHelperSourcePaths) {
     files.add(helper);
   }
@@ -253,30 +264,95 @@ export const uiVendoredHelperSourcePaths = Object.freeze([
   'src/theme.ts',
 ]);
 
+function uiVendoredComponentSourceEntries(pkgJson) {
+  const entries = [];
+  for (const [subpath, target] of Object.entries(pkgJson.exports ?? {})) {
+    if (!/^\.\/[a-z][a-z0-9-]*$/u.test(subpath)) continue;
+    const name = subpath.slice(2);
+    const sourceTarget = resolveSourceExportTarget(target);
+    const expectedTarget = `./src/${name}.tsx`;
+    if (sourceTarget !== expectedTarget) {
+      throw new Error(`@kovojs/ui export ${subpath} must target ${expectedTarget}`);
+    }
+    entries.push({ name, path: sourceTarget.slice(2) });
+  }
+  return entries.sort((left, right) =>
+    left.name < right.name ? -1 : left.name > right.name ? 1 : 0,
+  );
+}
+
+export function uiVendoredSourceHashes(uiPackageDir, pkgJson) {
+  const hashes = {};
+  for (const entry of uiVendoredComponentSourceEntries(pkgJson)) {
+    hashes[entry.name] = uiVendoredSourceHash(
+      readBoundedUiVendoredSource(uiPackageDir, entry.path),
+    );
+  }
+  return hashes;
+}
+
 export function uiVendoredSourceHelperHashes(uiPackageDir) {
   const hashes = {};
   for (const helperPath of uiVendoredHelperSourcePaths) {
     if (!/^src\/[a-z][a-z0-9-]*\.ts$/u.test(helperPath)) {
       throw new Error(`unsupported @kovojs/ui vendored helper path ${helperPath}`);
     }
-    const absolutePath = path.resolve(uiPackageDir, helperPath);
-    const relativePath = path.relative(uiPackageDir, absolutePath).split(path.sep).join('/');
-    if (relativePath !== helperPath) {
-      throw new Error(`@kovojs/ui vendored helper path escapes the package: ${helperPath}`);
-    }
-    const stats = lstatSync(absolutePath);
-    if (stats.isSymbolicLink() || !stats.isFile()) {
-      throw new Error(
-        `@kovojs/ui vendored helper must be a regular non-symlink file: ${helperPath}`,
-      );
-    }
-    const source = readFileSync(absolutePath, 'utf8');
-    const normalizedSource = source.endsWith('\n') ? source : `${source}\n`;
-    hashes[helperPath] = `sha256-${createHash('sha256')
-      .update(normalizedSource)
-      .digest('base64url')}`;
+    hashes[helperPath] = uiVendoredSourceHash(
+      readBoundedUiVendoredSource(uiPackageDir, helperPath),
+    );
   }
   return hashes;
+}
+
+function readBoundedUiVendoredSource(uiPackageDir, sourcePath) {
+  const packageRoot = path.resolve(uiPackageDir);
+  const sourceRoot = path.resolve(packageRoot, 'src');
+  const sourceRootStats = lstatSync(sourceRoot);
+  if (sourceRootStats.isSymbolicLink() || !sourceRootStats.isDirectory()) {
+    throw new Error('@kovojs/ui vendored src parent must be a regular non-symlink directory');
+  }
+
+  const absolutePath = path.resolve(packageRoot, sourcePath);
+  const relativePath = path.relative(packageRoot, absolutePath).split(path.sep).join('/');
+  if (relativePath !== sourcePath) {
+    throw new Error(`@kovojs/ui vendored source path escapes the package: ${sourcePath}`);
+  }
+  const stats = lstatSync(absolutePath);
+  if (stats.isSymbolicLink() || !stats.isFile()) {
+    throw new Error(`@kovojs/ui vendored source must be a regular non-symlink file: ${sourcePath}`);
+  }
+  if (stats.size > maximumUiVendoredSourceBytes) {
+    throw new Error(
+      `@kovojs/ui vendored source exceeds the ${maximumUiVendoredSourceBytes}-byte read bound: ${sourcePath}`,
+    );
+  }
+  let sourceBytes;
+  try {
+    sourceBytes = readBoundedRegularFile(
+      absolutePath,
+      maximumUiVendoredSourceBytes,
+      `@kovojs/ui vendored source ${sourcePath}`,
+    );
+  } catch (error) {
+    throw new Error(
+      `@kovojs/ui vendored source changed or exceeded the ${maximumUiVendoredSourceBytes}-byte read bound: ${sourcePath}. ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  const sourceRootAfter = lstatSync(sourceRoot);
+  if (
+    sourceRootAfter.isSymbolicLink() ||
+    !sourceRootAfter.isDirectory() ||
+    sourceRootAfter.dev !== sourceRootStats.dev ||
+    sourceRootAfter.ino !== sourceRootStats.ino
+  ) {
+    throw new Error('@kovojs/ui vendored src parent changed while source was read');
+  }
+  return sourceBytes.toString('utf8');
+}
+
+function uiVendoredSourceHash(source) {
+  const normalizedSource = source.endsWith('\n') ? source : `${source}\n`;
+  return `sha256-${createHash('sha256').update(normalizedSource).digest('base64url')}`;
 }
 
 function buildAndVerify() {
@@ -311,9 +387,18 @@ function buildAndVerify() {
   return 0;
 }
 
-const mode = process.argv.includes('--write') ? 'write' : 'build';
+const mode = process.argv.includes('--write-ui-ledgers')
+  ? 'write-ui-ledgers'
+  : process.argv.includes('--write')
+    ? 'write'
+    : 'build';
 if (isMainEntry(import.meta.url)) {
-  if (mode === 'write') {
+  if (mode === 'write-ui-ledgers') {
+    await runGate(() => {
+      writeUiVendoredSourceLedgers();
+      return 0;
+    });
+  } else if (mode === 'write') {
     await runGate(() => {
       write();
       return 0;

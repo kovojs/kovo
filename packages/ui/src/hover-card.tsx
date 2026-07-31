@@ -6,6 +6,7 @@ import {
   hoverCardTriggerAttributes,
 } from '@kovojs/headless-ui/hover-card';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
 import { safeUrl } from './safe-url.js';
@@ -77,7 +78,7 @@ export interface HoverCardContentProps extends HoverCardStateProps {
   contentId?: string;
   styles?: HoverCardStyleOverrides;
 }
-const hoverCardStyles = style.create({
+const hoverCardStyles = createWithSource('hover-card.tsx')({
   content: {
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.border,

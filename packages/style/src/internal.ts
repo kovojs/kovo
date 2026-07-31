@@ -12,6 +12,7 @@ import {
 export {
   attrsWithProvenance,
   createAtomicStyles,
+  createWithSource,
   createKeyframes,
   defineConsts,
   defineVarsWithCss,

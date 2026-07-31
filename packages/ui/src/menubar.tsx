@@ -10,6 +10,7 @@ import {
 } from '@kovojs/headless-ui/menubar';
 import type { CollectionOrientation, TextDirection } from '@kovojs/headless-ui/types';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
 
@@ -121,7 +122,7 @@ export interface MenubarSeparatorProps {
   id?: string;
   styles?: MenubarStyleOverrides;
 }
-const menubarStyles = style.create({
+const menubarStyles = createWithSource('menubar.tsx')({
   group: {
     display: 'grid',
     gap: 4,

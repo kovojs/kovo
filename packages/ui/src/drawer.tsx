@@ -7,6 +7,7 @@ import {
   dialogTriggerAttributes,
 } from '@kovojs/headless-ui/dialog';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
 
@@ -138,7 +139,7 @@ export interface DrawerCloseProps extends DrawerStateProps {
   contentId: string;
   id?: string;
 }
-const drawerStyles = style.create({
+const drawerStyles = createWithSource('drawer.tsx')({
   body: {
     fontSize: 14,
   },
@@ -243,7 +244,7 @@ const drawerStyles = style.create({
     },
   },
 });
-const drawerSideStyles = style.create({
+const drawerSideStyles = createWithSource('drawer.tsx')({
   bottom: {
     borderTopLeftRadius: uiTheme.radius.lg,
     borderTopRightRadius: uiTheme.radius.lg,

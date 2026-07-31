@@ -10,6 +10,7 @@ import {
   type AutocompleteItem as HeadlessAutocompleteItem,
 } from '@kovojs/headless-ui/autocomplete';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
 
@@ -122,7 +123,7 @@ export interface AutocompleteValueProps extends AutocompleteStateProps {
   id?: string;
   styles?: AutocompleteStyleOverrides;
 }
-const autocompleteStyles = style.create({
+const autocompleteStyles = createWithSource('autocomplete.tsx')({
   input: {
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.border,

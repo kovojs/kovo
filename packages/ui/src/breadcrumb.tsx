@@ -2,6 +2,7 @@
 import { component, type ComponentChild } from '@kovojs/core';
 import { separatorRootAttributes } from '@kovojs/headless-ui/separator';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
 import { safeUrl } from './safe-url.js';
@@ -60,7 +61,7 @@ export interface BreadcrumbLinkProps extends BreadcrumbPartProps {
   current?: boolean;
   href?: string;
 }
-const breadcrumbStyles = style.create({
+const breadcrumbStyles = createWithSource('breadcrumb.tsx')({
   current: {
     color: uiTheme.color.foreground,
     fontWeight: 500,

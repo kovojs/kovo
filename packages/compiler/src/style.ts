@@ -78,10 +78,12 @@ import type {
 } from './types.js';
 
 const styleModuleSpecifier = '@kovojs/style';
+const styleInternalModuleSpecifier = '@kovojs/style/internal';
 const styleTokensExportName = 'tokens';
 const objectIdentifierName = 'Object';
 const objectFreezeMemberName = 'freeze';
 const styleCreateMemberName = 'create';
+const styleCreateWithSourceExportName = 'createWithSource';
 const styleDefineVarsMemberName = 'defineVars';
 const styleKeyframesMemberName = 'keyframes';
 const undefinedIdentifierName = 'undefined';
@@ -211,6 +213,7 @@ export function extractKovoStyles(
   if (
     compilerSetSize(styleImports.namespaces) === 0 &&
     compilerSetSize(styleImports.publicTokenNames) === 0 &&
+    compilerSetSize(styleImports.sourceBoundCreateNames) === 0 &&
     compilerMapSize(importedStaticValues) === 0 &&
     !hasInlineStyleExpressions(model)
   ) {
@@ -389,11 +392,13 @@ function emptyStyleExtraction(): KovoStyleExtraction {
 interface StyleImports {
   readonly namespaces: ReadonlySet<string>;
   readonly publicTokenNames: ReadonlySet<string>;
+  readonly sourceBoundCreateNames: ReadonlySet<string>;
 }
 
 function styleImportsFromSourceFile(sourceFile: TS.SourceFile): StyleImports {
   const namespaces = compilerCreateSet<string>();
   const publicTokenNames = compilerCreateSet<string>();
+  const sourceBoundCreateNames = compilerCreateSet<string>();
 
   const statementCount = compilerArrayLength(sourceFile.statements, 'Style source statements');
   for (let statementIndex = 0; statementIndex < statementCount; statementIndex += 1) {
@@ -404,11 +409,25 @@ function styleImportsFromSourceFile(sourceFile: TS.SourceFile): StyleImports {
     ) as TS.Statement;
     if (!ts.isImportDeclaration(statement)) continue;
     if (!ts.isStringLiteral(statement.moduleSpecifier)) continue;
-    if (statement.moduleSpecifier.text !== styleModuleSpecifier) continue;
+    if (
+      statement.moduleSpecifier.text !== styleModuleSpecifier &&
+      statement.moduleSpecifier.text !== styleInternalModuleSpecifier
+    ) {
+      continue;
+    }
     const namedBindings = statement.importClause?.namedBindings;
-    if (namedBindings && ts.isNamespaceImport(namedBindings))
+    if (
+      statement.moduleSpecifier.text === styleModuleSpecifier &&
+      namedBindings &&
+      ts.isNamespaceImport(namedBindings)
+    ) {
       compilerSetAdd(namespaces, namedBindings.name.text);
-    if (namedBindings && ts.isNamedImports(namedBindings)) {
+    }
+    if (
+      statement.moduleSpecifier.text === styleModuleSpecifier &&
+      namedBindings &&
+      ts.isNamedImports(namedBindings)
+    ) {
       const elementCount = compilerArrayLength(namedBindings.elements, 'Style named imports');
       for (let elementIndex = 0; elementIndex < elementCount; elementIndex += 1) {
         const element = compilerOwnDataValue(
@@ -421,9 +440,29 @@ function styleImportsFromSourceFile(sourceFile: TS.SourceFile): StyleImports {
         }
       }
     }
+    if (
+      statement.moduleSpecifier.text === styleInternalModuleSpecifier &&
+      namedBindings &&
+      ts.isNamedImports(namedBindings)
+    ) {
+      const elementCount = compilerArrayLength(
+        namedBindings.elements,
+        'Internal style named imports',
+      );
+      for (let elementIndex = 0; elementIndex < elementCount; elementIndex += 1) {
+        const element = compilerOwnDataValue(
+          namedBindings.elements,
+          elementIndex,
+          'Internal style named imports',
+        ) as TS.ImportSpecifier;
+        if ((element.propertyName ?? element.name).text === styleCreateWithSourceExportName) {
+          compilerSetAdd(sourceBoundCreateNames, element.name.text);
+        }
+      }
+    }
   }
 
-  return { namespaces, publicTokenNames };
+  return { namespaces, publicTokenNames, sourceBoundCreateNames };
 }
 
 function collectStyleEnvironment(
@@ -520,22 +559,27 @@ function collectStyleEnvironment(
 
       const created = styleCreateCall(node.initializer, styleImports, localObjects, staticValues);
       if (created) {
-        const identity = {
-          namespace:
-            created.options.namespace ??
+        const source = created.options.source ?? fileName;
+        const namespace = created.sourceBound
+          ? undefined
+          : (created.options.namespace ??
             defaultStyleIdentity.styles ??
-            derivedStyleNamespace(fileName, node.name.text),
-          source: created.options.source ?? fileName,
+            derivedStyleNamespace(fileName, node.name.text));
+        const identity = {
+          ...(namespace === undefined ? {} : { namespace }),
+          source,
         };
-        const result = createAtomicStylesWithIdentity(created.styles, {
-          namespace: identity.namespace,
-          source: identity.source,
-        });
-        const provenanceReplacement = styleCreateProvenanceReplacement(
-          created.call,
-          created.options,
-          identity,
-        );
+        const result = createAtomicStylesWithIdentity(created.styles, identity);
+        let provenanceReplacement: SourceReplacement | null = null;
+        if (!created.sourceBound) {
+          if (namespace === undefined) {
+            throw new TypeError('Direct style.create namespace could not be resolved.');
+          }
+          provenanceReplacement = styleCreateProvenanceReplacement(created.call, created.options, {
+            namespace,
+            source,
+          });
+        }
         if (provenanceReplacement) {
           compilerArrayAppend(
             provenanceReplacements,
@@ -585,7 +629,13 @@ function collectStyleEnvironment(
             );
           }
         }
-      } else if (isStyleCreateCall(node.initializer, styleImports.namespaces)) {
+      } else if (
+        isStyleCreateCall(
+          node.initializer,
+          styleImports.namespaces,
+          styleImports.sourceBoundCreateNames,
+        )
+      ) {
         compilerArrayAppend(
           diagnostics,
           staticStyleDiagnostic(fileName, source, node, 'style.create'),
@@ -862,20 +912,33 @@ function styleCreateCall(
 ): {
   readonly call: TS.CallExpression;
   readonly options: StyleIdentityOptions;
+  readonly sourceBound: boolean;
   readonly styles: Record<string, StyleObject>;
 } | null {
-  if (!isStyleCreateCall(initializer, styleImports.namespaces)) return null;
+  if (
+    !isStyleCreateCall(initializer, styleImports.namespaces, styleImports.sourceBoundCreateNames)
+  ) {
+    return null;
+  }
 
+  const sourceBound = isSourceBoundStyleCreateCall(
+    initializer,
+    styleImports.sourceBoundCreateNames,
+  );
+  const curriedSource = sourceBound
+    ? curriedStyleCreateSource(initializer, styleImports.sourceBoundCreateNames)
+    : null;
+  if (sourceBound && (curriedSource === null || initializer.arguments.length !== 1)) return null;
   const stylesArgument = compilerOwnDataValue(
     initializer.arguments,
     0,
     'Style create arguments',
   ) as TS.Expression | undefined;
-  const optionsArgument = compilerOwnDataValue(
-    initializer.arguments,
-    1,
-    'Style create arguments',
-  ) as TS.Expression | undefined;
+  const optionsArgument = sourceBound
+    ? undefined
+    : (compilerOwnDataValue(initializer.arguments, 1, 'Style create arguments') as
+        | TS.Expression
+        | undefined);
   if (!stylesArgument || !ts.isObjectLiteralExpression(stylesArgument)) return null;
 
   const styles = styleNamespacesFromObject(
@@ -886,9 +949,18 @@ function styleCreateCall(
   );
   if (!styles) return null;
 
+  let options: StyleIdentityOptions;
+  if (sourceBound) {
+    if (curriedSource === null) return null;
+    options = { source: curriedSource };
+  } else {
+    options = styleIdentityOptionsFromObject(optionsArgument);
+  }
+
   return {
     call: initializer,
-    options: styleIdentityOptionsFromObject(optionsArgument),
+    options,
+    sourceBound,
     styles,
   };
 }
@@ -896,12 +968,51 @@ function styleCreateCall(
 function isStyleCreateCall(
   initializer: TS.Expression | undefined,
   styleNamespaces: ReadonlySet<string>,
+  sourceBoundCreateNames: ReadonlySet<string>,
 ): initializer is TS.CallExpression {
   if (!initializer || !ts.isCallExpression(initializer)) return false;
-  if (!ts.isPropertyAccessExpression(initializer.expression)) return false;
-  if (initializer.expression.name.text !== styleCreateMemberName) return false;
-  if (!ts.isIdentifier(initializer.expression.expression)) return false;
-  return compilerSetHas(styleNamespaces, initializer.expression.expression.text);
+  return (
+    isDirectStyleCreateExpression(initializer, styleNamespaces) ||
+    isSourceBoundStyleCreateCall(initializer, sourceBoundCreateNames)
+  );
+}
+
+function isSourceBoundStyleCreateCall(
+  call: TS.CallExpression,
+  sourceBoundCreateNames: ReadonlySet<string>,
+): boolean {
+  return (
+    ts.isCallExpression(call.expression) &&
+    ts.isIdentifier(call.expression.expression) &&
+    compilerSetHas(sourceBoundCreateNames, call.expression.expression.text)
+  );
+}
+
+function isDirectStyleCreateExpression(
+  call: TS.CallExpression,
+  styleNamespaces: ReadonlySet<string>,
+): boolean {
+  if (!ts.isPropertyAccessExpression(call.expression)) return false;
+  if (call.expression.name.text !== styleCreateMemberName) return false;
+  if (!ts.isIdentifier(call.expression.expression)) return false;
+  return compilerSetHas(styleNamespaces, call.expression.expression.text);
+}
+
+function curriedStyleCreateSource(
+  call: TS.CallExpression,
+  sourceBoundCreateNames: ReadonlySet<string>,
+): string | null {
+  if (!ts.isCallExpression(call.expression)) return null;
+  if (!ts.isIdentifier(call.expression.expression)) return null;
+  if (!compilerSetHas(sourceBoundCreateNames, call.expression.expression.text)) return null;
+  const sourceArgument = compilerOwnDataValue(
+    call.expression.arguments,
+    0,
+    'Style curried create source arguments',
+  ) as TS.Expression | undefined;
+  if (sourceArgument === undefined || call.expression.arguments.length !== 1) return null;
+  const source = primitiveValue(sourceArgument);
+  return typeof source === 'string' ? source : null;
 }
 
 function styleDefineVarsCall(

@@ -7,6 +7,7 @@ import {
   type OtpFieldInputMode,
 } from '@kovojs/headless-ui/otp-field';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
 
@@ -92,7 +93,7 @@ export interface OtpFieldInputProps extends OtpFieldStateProps {
   slotIndex: number;
   styles?: OtpFieldStyleOverrides;
 }
-const otpFieldStyles = style.create({
+const otpFieldStyles = createWithSource('otp-field.tsx')({
   group: {
     alignItems: 'center',
     display: 'flex',

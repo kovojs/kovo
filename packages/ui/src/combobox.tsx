@@ -10,6 +10,7 @@ import {
   type ComboboxItem as HeadlessComboboxItem,
 } from '@kovojs/headless-ui/combobox';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
 
@@ -120,7 +121,7 @@ export interface ComboboxValueProps extends ComboboxStateProps {
   id?: string;
   styles?: ComboboxStyleOverrides;
 }
-const comboboxStyles = style.create({
+const comboboxStyles = createWithSource('combobox.tsx')({
   input: {
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.border,

@@ -9,6 +9,7 @@ import {
 } from '@kovojs/headless-ui/toolbar';
 import type { TextDirection } from '@kovojs/headless-ui/types';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
 
@@ -84,7 +85,7 @@ export interface ToolbarItemProps extends ToolbarStateProps {
 export interface ToolbarButtonProps extends ToolbarItemProps {
   pressed?: boolean;
 }
-const toolbarStyles = style.create({
+const toolbarStyles = createWithSource('toolbar.tsx')({
   button: {
     alignItems: 'center',
     borderRadius: uiTheme.radius.sm,

@@ -6,6 +6,7 @@ import {
   disclosureTriggerAttributes,
 } from '@kovojs/headless-ui/disclosure';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
 
@@ -75,7 +76,7 @@ export interface DisclosureContentProps extends DisclosureStateProps {
   contentId?: string;
   styles?: DisclosureStyleOverrides;
 }
-const disclosureStyles = style.create({
+const disclosureStyles = createWithSource('disclosure.tsx')({
   // Grid wrapper animates open/close via grid-template-rows 0fr<->1fr. The author
   // `display:grid` overrides the UA `[hidden]{display:none}` so the panel can
   // transition while `hidden` stays true (correct a11y + gallery contract).

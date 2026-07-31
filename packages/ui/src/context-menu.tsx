@@ -11,6 +11,7 @@ import {
   type ContextMenuPoint,
 } from '@kovojs/headless-ui/context-menu';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
 
@@ -130,7 +131,7 @@ export interface ContextMenuSeparatorProps {
   id?: string;
   styles?: ContextMenuStyleOverrides;
 }
-const contextMenuStyles = style.create({
+const contextMenuStyles = createWithSource('context-menu.tsx')({
   content: {
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.border,

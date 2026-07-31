@@ -10,6 +10,7 @@ import {
   type DropdownMenuItem as HeadlessDropdownMenuItem,
 } from '@kovojs/headless-ui/dropdown-menu';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
 
@@ -128,7 +129,7 @@ export interface DropdownMenuSeparatorProps {
   id?: string;
   styles?: DropdownMenuStyleOverrides;
 }
-const dropdownMenuStyles = style.create({
+const dropdownMenuStyles = createWithSource('dropdown-menu.tsx')({
   content: {
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.border,

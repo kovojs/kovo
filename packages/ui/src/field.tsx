@@ -10,6 +10,7 @@ import {
   fieldsetRootAttributes,
 } from '@kovojs/headless-ui/field';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
 
@@ -233,7 +234,7 @@ const nativeControlStyle = {
     boxShadow: '0 0 0 3px color-mix(in srgb, var(--kovo-theme-sys-color-error) 30%, transparent)',
   },
 } as const;
-const fieldStyles = style.create({
+const fieldStyles = createWithSource('field.tsx')({
   control: {
     ...nativeControlStyle,
     height: 36,

@@ -161,7 +161,7 @@ export function extractPackageComponentCss(
     return { css: null, cssAssets: [], diagnostics: [], sourceFiles: [] };
   }
 
-  const discovery = packageComponentSources(resolved);
+  const discovery = packageComponentSources(resolved, packageName === '@kovojs/ui');
   const resolveStaticImport =
     discovery.sourceSnapshots === undefined
       ? resolveLocalStaticImport(resolved.fileSystem)
@@ -392,7 +392,8 @@ function extractComponentCssFromFiles(
     // Cheap pre-filter so non-styled entries (behavior-only re-exports) are skipped.
     if (
       !compilerStringIncludes(source, '@kovojs/style') ||
-      !compilerStringIncludes(source, 'style.create')
+      (!compilerStringIncludes(source, 'style.create') &&
+        !compilerStringIncludes(source, 'createWithSource'))
     ) {
       continue;
     }
@@ -757,7 +758,22 @@ function resolvePackage(
  * published Kovo UI manifest resolves those exports to `dist/*.mjs`; its explicit
  * vendored-source ledger is the only fallback authority for the shipped TSX.
  */
-function packageComponentSources(resolved: ResolvedPackage): PackageComponentSourceDiscovery {
+function packageComponentSources(
+  resolved: ResolvedPackage,
+  requireVendoredAuthority: boolean,
+): PackageComponentSourceDiscovery {
+  const kovo = compilerOwnDataValue(resolved.manifest, 'kovo', 'Compiler package manifest');
+  const hasVendoredAuthority =
+    kovo !== null &&
+    typeof kovo === 'object' &&
+    compilerOwnDataValue(kovo, 'vendoredSource', 'Compiler package kovo metadata') === true;
+  if (requireVendoredAuthority && !hasVendoredAuthority) {
+    return vendoredSourceDiscoveryFailure(
+      'package.json',
+      '@kovojs/ui is reachable but does not declare kovo.vendoredSource authority; refusing to build without authenticated component CSS.',
+    );
+  }
+
   const exportsMap = compilerOwnDataValue(
     resolved.manifest,
     'exports',
@@ -785,12 +801,7 @@ function packageComponentSources(resolved: ResolvedPackage): PackageComponentSou
     }
   }
   const directSourceFiles = uniqueSorted(files);
-  const kovo = compilerOwnDataValue(resolved.manifest, 'kovo', 'Compiler package manifest');
-  if (
-    kovo &&
-    typeof kovo === 'object' &&
-    compilerOwnDataValue(kovo, 'vendoredSource', 'Compiler package kovo metadata') === true
-  ) {
+  if (hasVendoredAuthority) {
     return authenticatedVendoredPackageComponentSources(resolved, exportsMap);
   }
   if (directSourceFiles.length > 0) {
@@ -871,21 +882,25 @@ function authenticatedVendoredPackageComponentSources(
     const absoluteFileName = nativePathResolve(resolved.packageDir, 'src', `${name}.tsx`);
     if (
       !isInsideDirectory(resolved.packageDir, absoluteFileName) ||
+      vendoredSourcePathContainsSymbolicLink(resolved.packageDir, absoluteFileName) ||
       resolved.fileSystem.kind(absoluteFileName) !== 'file'
     ) {
       return vendoredSourceDiscoveryFailure(
         relativeFileName,
-        'Authenticated vendored component source must be a bounded regular src/<name>.tsx file.',
+        'Authenticated vendored component source must be a bounded regular non-symlink src/<name>.tsx file.',
       );
     }
     const source = resolved.fileSystem.readFileBounded(
       absoluteFileName,
       maximumVendoredComponentSourceBytes,
     );
-    if (source === null) {
+    if (
+      source === null ||
+      vendoredSourcePathContainsSymbolicLink(resolved.packageDir, absoluteFileName)
+    ) {
       return vendoredSourceDiscoveryFailure(
         relativeFileName,
-        'Authenticated vendored component source could not be read within the source-size bound.',
+        'Authenticated vendored component source could not be read within the source-size and non-symlink bounds.',
       );
     }
     const observedHash = vendoredSourceHash(source);
@@ -975,7 +990,7 @@ function authenticateVendoredPackageHelperSources(
     const absoluteFileName = nativePathResolve(resolved.packageDir, helperPath);
     if (
       !isInsideDirectory(resolved.packageDir, absoluteFileName) ||
-      vendoredHelperPathContainsSymbolicLink(resolved.packageDir, absoluteFileName) ||
+      vendoredSourcePathContainsSymbolicLink(resolved.packageDir, absoluteFileName) ||
       resolved.fileSystem.kind(absoluteFileName) !== 'file'
     ) {
       return {
@@ -990,7 +1005,7 @@ function authenticateVendoredPackageHelperSources(
     );
     if (
       source === null ||
-      vendoredHelperPathContainsSymbolicLink(resolved.packageDir, absoluteFileName)
+      vendoredSourcePathContainsSymbolicLink(resolved.packageDir, absoluteFileName)
     ) {
       return {
         fileName: helperPath,
@@ -1086,7 +1101,7 @@ function authenticateVendoredPackageHelperClosure(
   return null;
 }
 
-function vendoredHelperPathContainsSymbolicLink(
+function vendoredSourcePathContainsSymbolicLink(
   packageDir: string,
   absoluteFileName: string,
 ): boolean {

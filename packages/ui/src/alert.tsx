@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component, type ComponentChild } from '@kovojs/core';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { uiTheme } from './theme.js';
 
@@ -28,7 +29,7 @@ export interface AlertProps {
   variant?: AlertVariant;
 }
 
-const base = style.create({
+const base = createWithSource('alert.tsx')({
   description: {
     color: uiTheme.color.foregroundMuted,
   },
@@ -60,7 +61,7 @@ const base = style.create({
 
 // Variants set ONLY the left-accent hue (Material status border color); the body
 // stays a neutral card so colored text/fill no longer competes with content.
-const variants = style.create({
+const variants = createWithSource('alert.tsx')({
   danger: {
     borderLeftColor: uiTheme.color.danger.border,
   },

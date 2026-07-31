@@ -3,6 +3,7 @@ import { trustedHtml } from '@kovojs/browser';
 import { component, type ComponentChild } from '@kovojs/core';
 import { renderRouteHtml } from '@kovojs/server/rendering';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { uiTheme } from './theme.js';
 
@@ -209,7 +210,7 @@ function escapeHtmlText(value: string, attribute: boolean): string {
   }
   return escaped;
 }
-const tableStyles = style.create({
+const tableStyles = createWithSource('table.tsx')({
   body: {
     '[&_tr:last-child]': {
       borderBottomWidth: 0,

@@ -10,6 +10,7 @@ import {
 } from '@kovojs/headless-ui/alert-dialog';
 import { X } from '@kovojs/icons/x';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
 
@@ -131,7 +132,7 @@ export interface AlertDialogPartProps {
   id?: string;
   styles?: AlertDialogStyleOverrides;
 }
-const alertDialogStyles = style.create({
+const alertDialogStyles = createWithSource('alert-dialog.tsx')({
   action: {
     alignItems: 'center',
     backgroundColor: uiTheme.color.backgroundInverse,

@@ -2,6 +2,7 @@
 import { component, type ComponentChild } from '@kovojs/core';
 import { checkboxRootAttributes, type CheckboxCheckedState } from '@kovojs/headless-ui/checkbox';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { bindingProps, passThroughProps } from './pass-through.js';
 
@@ -40,7 +41,7 @@ export interface CheckboxProps {
   styles?: CheckboxStyleOverrides;
   value?: string;
 }
-const checkboxStyles = style.create({
+const checkboxStyles = createWithSource('checkbox.tsx')({
   // Custom square. Carries data-state to paint the fill + check/dash glyph.
   box: {
     alignItems: 'center',

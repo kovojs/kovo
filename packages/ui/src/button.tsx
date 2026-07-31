@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component, type ComponentChild } from '@kovojs/core';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
 
@@ -42,7 +43,7 @@ export interface ButtonProps {
   variant?: ButtonVariant;
 }
 
-const base = style.create({
+const base = createWithSource('button.tsx')({
   root: {
     alignItems: 'center',
     borderRadius: uiTheme.radius.md,
@@ -65,7 +66,7 @@ const base = style.create({
   },
 });
 
-const sizes = style.create({
+const sizes = createWithSource('button.tsx')({
   sm: {
     columnGap: 6,
     height: 32,
@@ -78,7 +79,7 @@ const sizes = style.create({
   },
 });
 
-const variants = style.create({
+const variants = createWithSource('button.tsx')({
   destructive: {
     backgroundColor: uiTheme.color.danger.border,
     borderColor: uiTheme.color.danger.border,

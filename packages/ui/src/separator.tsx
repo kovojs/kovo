@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
 import { separatorRootAttributes, type SeparatorOrientation } from '@kovojs/headless-ui/separator';
@@ -20,14 +21,14 @@ export interface SeparatorProps {
   style?: style.StyleInput;
 }
 
-const base = style.create({
+const base = createWithSource('separator.tsx')({
   root: {
     backgroundColor: uiTheme.color.border,
     flexShrink: 0,
   },
 });
 
-const orientations = style.create({
+const orientations = createWithSource('separator.tsx')({
   horizontal: {
     height: 1,
     width: '100%',

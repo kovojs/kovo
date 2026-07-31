@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component, type ComponentChild } from '@kovojs/core';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { uiTheme } from './theme.js';
 
@@ -15,7 +16,7 @@ export interface KbdProps {
   children?: ComponentChild;
   style?: style.StyleInput;
 }
-const kbdStyles = style.create({
+const kbdStyles = createWithSource('kbd.tsx')({
   root: {
     alignItems: 'center',
     backgroundColor: uiTheme.color.backgroundRaised,

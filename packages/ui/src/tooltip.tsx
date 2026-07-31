@@ -6,6 +6,7 @@ import {
   tooltipTriggerAttributes,
 } from '@kovojs/headless-ui/tooltip';
 import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
 
@@ -75,7 +76,7 @@ export interface TooltipContentProps extends TooltipStateProps {
   contentId?: string;
   styles?: TooltipStyleOverrides;
 }
-const tooltipStyles = style.create({
+const tooltipStyles = createWithSource('tooltip.tsx')({
   // Rotated-square arrow at the bottom center of the content, pointing down to
   // the trigger. Same fill as the content so the two read as one shape.
   arrow: {
