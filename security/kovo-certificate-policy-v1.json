@@ -190,7 +190,7 @@
     },
     {
       "path": "@kovojs/compiler/dist/internal.mjs",
-      "sha512": "sha512-6/9V2POFcRIgMw+EFVgLLfajVxZ3Eam8e9hZOr9IbB4L5SWGZ1XpUtd7z+Z9IkeP9ZRR9RgihukPuSqLO0Rmcg=="
+      "sha512": "sha512-WBlQZJhqOLJOQ9iaPHwwNMnnr/3FgO4Ij1iBr7lW7tyucMeAMo1LXv8SO7tpxSJut3CZqaYlEt7/RIMYHWLtFQ=="
     },
     {
       "path": "@kovojs/compiler/dist/internal/graph.mjs",
@@ -294,7 +294,7 @@
     },
     {
       "path": "@kovojs/core/dist/internal/filesystem.mjs",
-      "sha512": "sha512-8BtYpAHHGuLh3BXmf0UNuPlxckfV1rakXWoW977Zwo39ZO7o/aUcVHcDGW6hW6xfjVKfddA71rgJeOra6DZA0Q=="
+      "sha512": "sha512-IzfppDJdrGcDhcZQflqU2N8Hkhx5RsFb009oz7QOnDPGQQBINlejG2W7j+/ncXM69zI/RgCtnBi/t+5LMp1mCg=="
     },
     {
       "path": "@kovojs/core/dist/internal/fragment-target.mjs",
@@ -498,7 +498,7 @@
     },
     {
       "path": "@kovojs/server/dist/app-document.mjs",
-      "sha512": "sha512-T4d0kOvm3y4B01cKSNtKoSTZbk8eRADSP5ELxqiWH3RcoZrYFSz7MCQZhR57HgUGz/9Ml6s9tsPzOmg4IHI08w=="
+      "sha512": "sha512-K/jhQwtaCbtCT/+XaJ8DT0/4IIROxaBgufTvjYVW2HiPYIGaInH8zr79CnjjgCjdEDd1hpF+Tu6CH4bz1s2VlA=="
     },
     {
       "path": "@kovojs/server/dist/app-guards.mjs",
@@ -638,7 +638,7 @@
     },
     {
       "path": "@kovojs/server/dist/crypto-authority.mjs",
-      "sha512": "sha512-pcL/S+NVEnEpYY4cnRnCJL5nKnekugqeHUP8PeBO9pDqsoZAWsucxMgepMc3zo5fLnSFwLL6DVVSOusZti3siw=="
+      "sha512": "sha512-zpeUrlDDIU4aKkR7iomgkwAHwuoU+RuI6Q3ZUyK6XQdhQx/9jtSh3R8ta/KIBW5xi1vOpgbj/v6s+CpSftqyQQ=="
     },
     {
       "path": "@kovojs/server/dist/csp.mjs",
@@ -670,7 +670,7 @@
     },
     {
       "path": "@kovojs/server/dist/diagnostics.mjs",
-      "sha512": "sha512-10a5BJJ8eGBqoEETrC4rkhSAPiXD9Z4vQLbCy1KCFqMKpnBfHn4A+nDzr9AEyaVeNExxtJV3LndKRJbtMIVUlg=="
+      "sha512": "sha512-wwhSJ3nJ13a/82VyRjw0l9KzH3pVju92q1eEMWse4V45tXBVybPfeNgI1ICW4qCPk+t0344cTUuzkMzB1vm5WA=="
     },
     {
       "path": "@kovojs/server/dist/document-core.mjs",
@@ -954,7 +954,7 @@
     },
     {
       "path": "@kovojs/server/dist/live-target-app-identity.mjs",
-      "sha512": "sha512-BF/1IFQC9WU6rJpJz4dsezEDENo5Y5+RkaVDjgZA5No6JPyuho4jY8pfgRKaNs3UvDd3ZnrScRLGQ2Fbi8MJuw=="
+      "sha512": "sha512-AvwvUms5kUk/jwdUvv+tcN6N0YtCiVH5rr4fQlMdRBwLgObPLMMgd9bkWzmc7PbrHr7cXGC/qFiiSC9L0yZ19A=="
     },
     {
       "path": "@kovojs/server/dist/live-target-registry.mjs",
