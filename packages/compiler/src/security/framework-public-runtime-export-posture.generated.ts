@@ -90,14 +90,14 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./security",["default"]],
       ["./storage",["default"]],
       ["./webhooks",["default"]],
-    ], ["kovo-source-tree-sha256:9b9b63601f2dfe272a00b5b1173e12f31c07a3db0613539facb2bc58c4c4cc6c"]],
+    ], ["kovo-source-tree-sha256:b7cb9e936869994f36a19efc7ccad86d32112c535b12ae882058af46c4fb54f9"]],
     ["sha256:21df25de397fff0639cd204e15712acfb9dfcbc54e46fbf5acddada0050f7086", [
       [".",["default","types"]],
       ["./diagnostics",["default","types"]],
       ["./security",["default","types"]],
       ["./storage",["default","types"]],
       ["./webhooks",["default","types"]],
-    ], ["kovo-packed-tree-sha256:4cb33d01128d725ee6a75250b8b43a2236d1068facef737812d8cb0c07792552"]],
+    ], ["kovo-packed-tree-sha256:1ac46fe03fb1508812267a5e665ad93a706fb6ca591c8343cea685b7ba78b122"]],
   ], "exact-implementation"],
   ["@kovojs/drizzle", "0.3.0", [
     ["sha256:33536f15d5891c9c210b0e2558da2ba54535a32a60e491a513f71499f3c9e5eb", [
@@ -5481,7 +5481,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./vite",["default"]],
       ["./webhooks",["default"]],
       ["./write-safety",["default"]],
-    ], ["kovo-source-tree-sha256:c3ddf6733b3355f453c88c70dcaa474fa7e813128c9ae1789d1c52a83f9e067f"]],
+    ], ["kovo-source-tree-sha256:83814db3eaa279a2d2239c42fe89ba7a9edb2473a7652a28089bbf6d94e348c9"]],
     ["sha256:47b1a722c603df8231fda098af8d914733ba7a58e9dd363f32e4705eea5d04e1", [
       [".",["default","types"]],
       ["./agent",["default","types"]],
@@ -5517,7 +5517,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./vite",["default","types"]],
       ["./webhooks",["default","types"]],
       ["./write-safety",["default","types"]],
-    ], ["kovo-packed-tree-sha256:7cccf67906af046b19c7553e12c5a060d5a8f35cf2dfee901f3623a38e55df46"]],
+    ], ["kovo-packed-tree-sha256:eda52c2414e6d4182c0e0f786a3ca85be18c4497b69903f2a79502112d8b27d0"]],
     ["sha256:5fc1fe655abf6ac1f3c6cdfb466fb4d89001d1896612620c8b42b875270fbf20", [
       [".",["default","types"]],
       ["./agent",["default","types"]],
@@ -5553,7 +5553,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./vite",["default","types"]],
       ["./webhooks",["default","types"]],
       ["./write-safety",["default","types"]],
-    ], ["kovo-packed-tree-sha256:7cccf67906af046b19c7553e12c5a060d5a8f35cf2dfee901f3623a38e55df46"]],
+    ], ["kovo-packed-tree-sha256:eda52c2414e6d4182c0e0f786a3ca85be18c4497b69903f2a79502112d8b27d0"]],
   ], "exact-implementation"],
   ["@kovojs/style", "0.3.0", [
     ["sha256:0dcc9bb20da88bbdda16cdbb8be939edc7799494812d0c5557d1b49cc2c2c08f", [
