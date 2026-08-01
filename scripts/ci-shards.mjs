@@ -9,6 +9,7 @@ import { pathToFileURL } from 'node:url';
 import { collectFilesAsync } from './lib/source-files.mjs';
 import { canonicalizePackedTarball } from './lib/deterministic-tarball.mjs';
 import { REQUIRED_CLASSIFIER_CORPORA } from './check-security-classifier-corpus.mjs';
+import { adversarialResidualTestTimeoutMs } from '../packages/create-kovo/src/index.build.prod-artifact.adversarial-deadlines.mjs';
 
 const DEFAULT_ROOTS = {
   integration: ['tests/integration/specs'],
@@ -17,6 +18,38 @@ const DEFAULT_ROOTS = {
 
 const DEFAULT_HISTORY_NAME = 'timing-history.json';
 const DEFAULT_DURATION_SECONDS = 5;
+// Job 91354629850 exposed a multi-week successful-history blind spot: all four root shards were
+// planned at 1,354.66s, while the current proof corpus measured 2,615-3,288s per completed shard.
+// These ceil-rounded hosted measurements are conservative scheduling floors, not test watchdogs.
+// A newer artifact may increase a floor, but a stale or missing artifact must never underweight the
+// source-heavy proof again. The five-way plan keeps the 2,844s monolith isolated and every planned
+// shard below 3,000s, leaving ten minutes for setup, collection, reporting, and artifact upload.
+export const ROOT_VITEST_SHARD_COUNT = 5;
+export const ROOT_VITEST_JOB_TIMEOUT_SECONDS = 60 * 60;
+export const ROOT_VITEST_SHARD_BUDGET_SECONDS = ROOT_VITEST_JOB_TIMEOUT_SECONDS - 10 * 60;
+export const ROOT_VITEST_DURATION_FLOOR_SECONDS = Object.freeze({
+  'packages/cli/src/commands/build-export-process-sink-round2.test.ts': 1_030,
+  'packages/cli/src/commands/build-export-process-sink.test.ts': 852,
+  'packages/cli/src/commands/build-export-security-order.test.ts': 456,
+  'packages/cli/src/commands/build-export-semantic-intrinsics-calls.test.ts': 440,
+  'packages/cli/src/commands/build-export-semantic-intrinsics-controls.test.ts': 351,
+  'packages/cli/src/commands/build-export-semantic-intrinsics-identity.test.ts': 441,
+  'packages/cli/src/commands/build-export-semantic-intrinsics-local.test.ts': 362,
+  // The cancelled protocols sibling did not finish; use the adjacent calls/identity hosted ceiling.
+  'packages/cli/src/commands/build-export-semantic-intrinsics-protocols.test.ts': 441,
+  'packages/cli/src/commands/source-check-watch.test.ts': 69,
+  'packages/cli/src/index.kovo-build-browser.test.ts': 155,
+  'packages/cli/src/index.kovo-build.test.ts': 2_844,
+  'packages/cli/src/index.kovo-export.test.ts': 225,
+  'packages/cli/src/index.kovo-route-outcomes.test.ts': 127,
+  'packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts': 72,
+  'packages/server/src/vite-data-plane-gate.test.ts': 96,
+  'packages/server/src/vite-packed-provenance.test.ts': 73,
+  'packages/server/src/vite.test.ts': 157,
+  'packages/test/src/integration/boot-fixture-static-security.test.ts': 146,
+  'scripts/check-async-context-confinement.test.mjs': 176,
+  'scripts/check-spec-conformance-closure.test.mjs': 1_295,
+});
 const STARTER_SHARD_COUNT = 10;
 const PACKED_STARTER_MANIFEST = 'packed-kovo-packages.json';
 const STARTER_CADENCES = new Set(['per-pr', 'nightly']);
@@ -382,8 +415,10 @@ const STARTER_ENTRIES = [
     id,
     file: 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
     testName,
+    expectedTestCount: 1,
     cadence: 'nightly',
     seconds: 420,
+    testTimeoutMs: adversarialResidualTestTimeoutMs(id),
   })),
   {
     id: 'raw-sql-artifacts',
@@ -649,13 +684,18 @@ export function balanceShards(files, history = {}, shardCount, options = {}) {
     throw new Error(`shardCount must be a positive integer, received ${String(shardCount)}`);
   }
   const defaultDuration = options.defaultDurationSeconds ?? unknownDurationSeconds(history);
+  const durationFloors = options.durationFloors ?? {};
   const estimates = [...files]
     .sort((a, b) => {
       const durationDelta =
-        estimateSeconds(history, b, defaultDuration) - estimateSeconds(history, a, defaultDuration);
+        estimateSeconds(history, b, defaultDuration, durationFloors) -
+        estimateSeconds(history, a, defaultDuration, durationFloors);
       return durationDelta || a.localeCompare(b);
     })
-    .map((file) => ({ file, seconds: estimateSeconds(history, file, defaultDuration) }));
+    .map((file) => ({
+      file,
+      seconds: estimateSeconds(history, file, defaultDuration, durationFloors),
+    }));
   const shards = Array.from({ length: shardCount }, () => ({ files: [], seconds: 0 }));
 
   for (const estimate of estimates) {
@@ -999,7 +1039,18 @@ export async function writeShardManifests({
 }) {
   const files = await discoverTests(kind, roots === undefined ? {} : { roots });
   const history = await readJsonIfExists(historyPath);
-  const shards = balanceShards(files, history, shardCount);
+  const durationFloors = kind === 'vitest' ? ROOT_VITEST_DURATION_FLOOR_SECONDS : {};
+  const shards = balanceShards(files, history, shardCount, { durationFloors });
+  if (kind === 'vitest') {
+    const oversized = shards.filter((shard) => shard.seconds > ROOT_VITEST_SHARD_BUDGET_SECONDS);
+    if (oversized.length > 0) {
+      throw new Error(
+        `Root Vitest shard plan exceeds ${String(ROOT_VITEST_SHARD_BUDGET_SECONDS)}s: ${oversized
+          .map((shard) => `${String(shard.seconds)}s`)
+          .join(', ')}. Split a monolith or add shard capacity before running it.`,
+      );
+    }
+  }
   const root = outputDir ?? path.join(process.env.RUNNER_TEMP ?? process.cwd(), 'kovo-shards');
   assertRunnerTempScoped(root);
   await mkdir(root, { recursive: true });
@@ -1572,12 +1623,18 @@ function escapeRegExp(value) {
   return String(value).replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
 }
 
-function estimateSeconds(history, file, fallback) {
+function estimateSeconds(history, file, fallback, durationFloors = {}) {
   const exact = Number(history?.[file]?.seconds ?? history?.[file]);
-  if (Number.isFinite(exact) && exact > 0) return exact;
   const suffixMatch = Object.entries(history ?? {}).find(([key]) => key.endsWith(`:${file}`));
   const suffixSeconds = Number(suffixMatch?.[1]?.seconds ?? suffixMatch?.[1]);
-  return Number.isFinite(suffixSeconds) && suffixSeconds > 0 ? suffixSeconds : fallback;
+  const observed =
+    Number.isFinite(exact) && exact > 0
+      ? exact
+      : Number.isFinite(suffixSeconds) && suffixSeconds > 0
+        ? suffixSeconds
+        : fallback;
+  const floor = Number(durationFloors?.[file]);
+  return Number.isFinite(floor) && floor > 0 ? Math.max(observed, floor) : observed;
 }
 
 async function discoverFromRoot(root, kind) {

@@ -200,7 +200,7 @@ function expectProcessKv424(root: string, result: { code: number; stderr: string
 
 // SPEC §2 and §6.6: these exact intrinsics execute opaque package callbacks, accessors, or
 // coercion hooks. A strict build must not silently treat the whole operation as reviewed-safe.
-export function registerSemanticIntrinsicStrictCorpus(bucket: 0 | 1 | 2 | 3): void {
+export function registerSemanticIntrinsicStrictCorpus(bucket: 0 | 1 | 2 | 3 | 4): void {
   describe('kovo build KV424 strict semantic intrinsic corpus', () => {
     it.each(
       [
@@ -1094,7 +1094,9 @@ ${declarations}`,
         const result = await strictBuild(root);
         expectProcessKv424(root, result);
       }, 120_000);
+    }
 
+    if (bucket === 4) {
       it('accepts plain controls and rejects stronger-default boundary controls', async () => {
         const plainControls = `Object.groupBy(['safe'], (value) => value);
 Object.values({ value: 'safe' });

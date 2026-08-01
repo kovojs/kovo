@@ -15,6 +15,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { writeKovoProject, type CreateKovoDialect } from './index.js';
+import { adversarialResidualTestTimeoutMs } from './index.build.prod-artifact.adversarial-deadlines.mjs';
 import {
   addAuthSecretLeakProof,
   addEscapedAttackerTextProof,
@@ -54,21 +55,50 @@ const BUGZ31_GLOBAL_MEMBER_CARRIER_PROOFS = [
 
 type Bugz31GlobalMemberCarrierProof = (typeof BUGZ31_GLOBAL_MEMBER_CARRIER_PROOFS)[number];
 
+function uniformResidualProofTimeout(ids: readonly string[]): number {
+  const timeouts = ids.map((id) => adversarialResidualTestTimeoutMs(id));
+  const first = timeouts[0];
+  if (first === undefined || timeouts.some((timeoutMs) => timeoutMs !== first)) {
+    throw new Error(`Residual adversarial proofs must be split by watchdog: ${ids.join(', ')}`);
+  }
+  return first;
+}
+
 describe('create-kovo starter (build integration: adversarial production artifact sweep)', () => {
   const multiBuildProofTimeout = 720_000;
+  const diagnosticAssertionProofTimeout = adversarialResidualTestTimeoutMs(
+    'adversarial-diagnostic-assertion',
+  );
+  const bugz25ProofTimeout = adversarialResidualTestTimeoutMs('adversarial-bugz25-postgres');
+  const bugz31GlobalMemberCarrierProofTimeout = uniformResidualProofTimeout(
+    BUGZ31_GLOBAL_MEMBER_CARRIER_PROOFS.map((proof) => `adversarial-bugz31-${proof}`),
+  );
+  const bugz31AssimilationProofTimeout = adversarialResidualTestTimeoutMs(
+    'adversarial-bugz31-assimilation',
+  );
+  const bugz31RootProvenanceProofTimeout = adversarialResidualTestTimeoutMs(
+    'adversarial-bugz31-root-provenance',
+  );
+  const bugz31NamespaceMemberProofTimeout = adversarialResidualTestTimeoutMs(
+    'adversarial-bugz31-namespace-members-postgres',
+  );
   const dialectIndependentCompilerGateCases = [['postgres', undefined]] as const;
   const dialectSpecificRuntimeCases = [
     ['postgres', undefined],
     ['sqlite', 'sqlite'],
   ] as const;
 
-  it('fails the diagnostic assertion when an unchanged production build succeeds', async () => {
-    await withProject('create-kovo-m1-build-failure-helper-green-', undefined, (root) => {
-      expect(() => expectBuildFailure(root, ['KOVO_SENTINEL_MUST_NOT_SELF_SATISFY'])).toThrowError(
-        'Expected production build to fail, but it succeeded.',
-      );
-    });
-  }, 240_000);
+  it(
+    'fails the diagnostic assertion when an unchanged production build succeeds',
+    async () => {
+      await withProject('create-kovo-m1-build-failure-helper-green-', undefined, (root) => {
+        expect(() =>
+          expectBuildFailure(root, ['KOVO_SENTINEL_MUST_NOT_SELF_SATISFY']),
+        ).toThrowError('Expected production build to fail, but it succeeded.');
+      });
+    },
+    diagnosticAssertionProofTimeout,
+  );
 
   it.each([...dialectIndependentCompilerGateCases])(
     'M1:storage-write tracks storage write gates from current %s production source, not stale cache',
@@ -318,7 +348,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
         expectBuildFailure(root, ['KV424', 'src/schema.ts', 'source=<mutated-retained-config>']);
       });
     },
-    300_000,
+    bugz25ProofTimeout,
   );
 
   // @kovo-security-certifies KV424 exact-global-array-carrier-family-prod-artifact
@@ -337,43 +367,51 @@ describe('create-kovo starter (build integration: adversarial production artifac
         ]);
       });
     },
-    300_000,
+    bugz31GlobalMemberCarrierProofTimeout,
   );
 
   // @kovo-security-certifies KV424 helper-assimilation-prod-artifact
-  it('bugz-31: helper, container, reflection, and Promise callback assimilation fail the production build', async () => {
-    await withProject('create-kovo-bugz31-assimilation-red-', undefined, (root) => {
-      addBugz31AssimilationProof(root);
-      expectBuildFailure(root, [
-        'KV424',
-        'sink=request-handler.opaque-protocol',
-        'source=<class-thenable:reveal()>',
-        'source=<class-thenable:identity(Bugz31AssimilationDeferred)>',
-        'source=<class-thenable:Reflect.get',
-        'source=<class-thenable:revealDefault()>',
-        'source=<class-thenable:InheritedDeferred.value>',
-        'bugz31-assimilation-proof.ts',
-      ]);
-    });
-  }, 300_000);
+  it(
+    'bugz-31: helper, container, reflection, and Promise callback assimilation fail the production build',
+    async () => {
+      await withProject('create-kovo-bugz31-assimilation-red-', undefined, (root) => {
+        addBugz31AssimilationProof(root);
+        expectBuildFailure(root, [
+          'KV424',
+          'sink=request-handler.opaque-protocol',
+          'source=<class-thenable:reveal()>',
+          'source=<class-thenable:identity(Bugz31AssimilationDeferred)>',
+          'source=<class-thenable:Reflect.get',
+          'source=<class-thenable:revealDefault()>',
+          'source=<class-thenable:InheritedDeferred.value>',
+          'bugz31-assimilation-proof.ts',
+        ]);
+      });
+    },
+    bugz31AssimilationProofTimeout,
+  );
 
   // @kovo-security-certifies KV424 trusted-input-provenance-prod-artifact
   // @kovo-security-certifies KV424 call-derived-reference-alias-prod-artifact
-  it('bugz-31: trusted input mutation and authored result laundering fail the production build', async () => {
-    await withProject('create-kovo-bugz31-root-provenance-red-', undefined, (root) => {
-      addBugz31TrustedInputProvenanceProof(root);
-      expectBuildFailure(root, [
-        'KV424',
-        'sink=request-handler.opaque-protocol',
-        'source=<Object.defineProperty-target:input>',
-        'source=<Object.defineProperty-target:alias>',
-        'source=<class-thenable:input.values.concat',
-        'source=<class-thenable:input.values.map',
-        'source=<class-thenable:input.value.replace',
-        'bugz31-root-provenance-proof.ts',
-      ]);
-    });
-  }, 300_000);
+  it(
+    'bugz-31: trusted input mutation and authored result laundering fail the production build',
+    async () => {
+      await withProject('create-kovo-bugz31-root-provenance-red-', undefined, (root) => {
+        addBugz31TrustedInputProvenanceProof(root);
+        expectBuildFailure(root, [
+          'KV424',
+          'sink=request-handler.opaque-protocol',
+          'source=<Object.defineProperty-target:input>',
+          'source=<Object.defineProperty-target:alias>',
+          'source=<class-thenable:input.values.concat',
+          'source=<class-thenable:input.values.map',
+          'source=<class-thenable:input.value.replace',
+          'bugz31-root-provenance-proof.ts',
+        ]);
+      });
+    },
+    bugz31RootProvenanceProofTimeout,
+  );
 
   // @kovo-security-certifies KV424 exact-global-namespace-member-lockdown-prod-artifact
   it.each([...dialectIndependentCompilerGateCases])(
@@ -390,7 +428,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
         ]);
       });
     },
-    300_000,
+    bugz31NamespaceMemberProofTimeout,
   );
 
   it.each([...dialectSpecificRuntimeCases])(

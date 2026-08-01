@@ -66,10 +66,11 @@ const THREE_ISOLATED_BUILDS_TEST_TIMEOUT_MS = kovoCliTestTimeoutMs(
   KOVO_BUILD_TEST_PROCESS_DEADLINE_MS,
   KOVO_BUILD_TEST_PROCESS_DEADLINE_MS,
 );
-// Run 30690561205 proved that these two successful, artifact-inspecting builds can exceed the
-// common 180s child deadline on a hosted runner. Keep the larger 240s bound scoped to those exact
-// proofs; the derived Vitest timeout retains the bounded runner's 10s cleanup headroom.
-const HOSTED_SUCCESS_BUILD_PROCESS_DEADLINE_MS = 240_000;
+// Runs 30690561205 and 91354629836 proved that these two successful, artifact-inspecting builds can
+// exceed both the common 180s child deadline and the former 240s hosted ceiling. A focused
+// two-process run completed the guarded proof in 98.40s; 360s keeps 1.5x headroom over the newest
+// hosted lower bound while the derived Vitest timeout retains the bounded runner's finite cleanup.
+const HOSTED_SUCCESS_BUILD_PROCESS_DEADLINE_MS = 360_000;
 const HOSTED_SUCCESS_BUILD_TEST_TIMEOUT_MS = kovoCliTestTimeoutMs(
   HOSTED_SUCCESS_BUILD_PROCESS_DEADLINE_MS,
 );
@@ -79,6 +80,27 @@ const NESTED_ANALYSIS_INPUTS_TEST_NAME =
 type HostedSuccessBuildTestName =
   | typeof GUARDED_BUILD_SURFACES_TEST_NAME
   | typeof NESTED_ANALYSIS_INPUTS_TEST_NAME;
+// Run 91354629836 exhausted an unrelated 120s literal while this proof executed three serialized
+// no-cache builds. A focused contended run completed all three in 44.57s. Derive the outer watchdog
+// from the source-visible build cardinality and the established 90s integration-step budget.
+const TRUSTED_ASSIGN_REVIEW_BUILD_COUNT = 3;
+const TRUSTED_ASSIGN_REVIEW_BUILD_STEP_BUDGET_MS = 90_000;
+const TRUSTED_ASSIGN_REVIEW_BUILD_DEADLINES_MS = Array.from(
+  { length: TRUSTED_ASSIGN_REVIEW_BUILD_COUNT },
+  () => TRUSTED_ASSIGN_REVIEW_BUILD_STEP_BUDGET_MS,
+);
+const TRUSTED_ASSIGN_REVIEW_TEST_TIMEOUT_MS = kovoCliTestTimeoutMs(
+  ...TRUSTED_ASSIGN_REVIEW_BUILD_DEADLINES_MS,
+);
+
+function trustedAssignReviewIt(run: () => Promise<void>): void {
+  it(
+    'emits exact unsigned trustedAssign review subjects and rejects prose before emission',
+    run,
+    TRUSTED_ASSIGN_REVIEW_TEST_TIMEOUT_MS,
+  );
+}
+
 const DECLASSIFICATION_DOOR_TEST_NAME =
   'request-closes a declassification door imported by the application root';
 const DRIZZLE_DISK_CACHE_TEST_NAME =
@@ -2098,7 +2120,7 @@ export default app.assemble({
     }
   });
 
-  it('emits exact unsigned trustedAssign review subjects and rejects prose before emission', async () => {
+  trustedAssignReviewIt(async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-escape-obligation-'));
     const appPath = join(root, 'app.mjs');
     const outDir = join(root, 'dist');
@@ -2228,7 +2250,7 @@ export default app.assemble({
       stderr.mockRestore();
       rmSync(root, { force: true, recursive: true });
     }
-  }, 120_000);
+  });
 
   it('builds a declared config-secret app without receiving the production value', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-config-env-unavailable-'));

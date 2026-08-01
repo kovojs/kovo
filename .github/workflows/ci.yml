@@ -310,8 +310,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
-        total: [4]
+        shard: [1, 2, 3, 4, 5]
+        total: [5]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -330,15 +330,32 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p "$RUNNER_TEMP/kovo-prior-timing"
-          run_created_at="$(gh run view "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --json createdAt --jq '.createdAt')"
-          run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --branch main --status success --limit 100 --json databaseId,updatedAt --jq "[.[] | select(.updatedAt < \"$run_created_at\")][0].databaseId // \"\"")"
-          if [ -n "$run_id" ]; then
-            for shard in $(seq 1 "${{ matrix.total }}"); do
-              if ! gh run download "$run_id" --repo "$GITHUB_REPOSITORY" -n "kovo-root-timing-history-$shard" -D "$RUNNER_TEMP/kovo-prior-timing/shard-$shard"; then
-                echo "Timing history shard $shard is unavailable in run $run_id; continuing with available history."
-              fi
-            done
+          mkdir -p "$RUNNER_TEMP/kovo-timing-candidates"
+          if ! run_created_at="$(gh run view "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --json createdAt --jq '.createdAt')"; then
+            run_created_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "::warning::Current run timestamp lookup failed; excluding current-run artifacts and using the local UTC cutoff."
           fi
+          for shard in $(seq 1 "${{ matrix.total }}"); do
+            artifact_name="kovo-root-timing-history-$shard"
+            run_id=""
+            if ! run_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$artifact_name&per_page=100" --jq "[.artifacts[] | select(.expired == false and .workflow_run.head_branch == \"main\" and .workflow_run.id != $GITHUB_RUN_ID and .created_at < \"$run_created_at\")] | sort_by(.created_at) | reverse | .[0].workflow_run.id // \"\"")"; then
+              echo "::warning::Timing history shard $shard lookup failed; using reviewed duration floors."
+              run_id=""
+            fi
+            if [ -n "$run_id" ]; then
+              candidate="$RUNNER_TEMP/kovo-timing-candidates/run-$run_id-shard-$shard"
+              if gh run download "$run_id" --repo "$GITHUB_REPOSITORY" -n "$artifact_name" -D "$candidate" &&
+                test -f "$candidate/timing-history.json" &&
+                mkdir -p "$RUNNER_TEMP/kovo-prior-timing/shard-$shard" &&
+                cp "$candidate/timing-history.json" "$RUNNER_TEMP/kovo-prior-timing/shard-$shard/timing-history.json"; then
+                echo "Using timing history shard $shard from run $run_id."
+              else
+                echo "::warning::Timing history shard $shard disappeared during download; using reviewed duration floors."
+              fi
+            else
+              echo "Timing history shard $shard is unavailable; using reviewed duration floors."
+            fi
+          done
           vp exec node scripts/ci-shards.mjs combine-histories --inputDir "$RUNNER_TEMP/kovo-prior-timing" --out "$RUNNER_TEMP/kovo-common-timing/timing-history.json"
       - id: shard
         name: Generate deterministic test shard
@@ -347,7 +364,7 @@ jobs:
           echo "manifest=$manifest" >> "$GITHUB_OUTPUT"
       - name: Root Vitest shard
         run: |
-          # The four matrix runners own CI parallelism. Keep files serial inside each runner so
+          # The five matrix runners own CI parallelism. Keep files serial inside each runner so
           # process-spawning build/CLI proofs and fixed CPU budgets do not contend with sibling
           # Vitest workers on the same hosted VM.
           xargs -a "${{ steps.shard.outputs.manifest }}" vp exec vitest --run --no-file-parallelism --reporter=default --reporter=json --outputFile="$RUNNER_TEMP/kovo-vitest-${{ matrix.shard }}.json"

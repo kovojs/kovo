@@ -24,6 +24,10 @@ import {
   mergeDurationHistory,
   runAcceptanceTestProcess,
   runStarterShard,
+  ROOT_VITEST_DURATION_FLOOR_SECONDS,
+  ROOT_VITEST_JOB_TIMEOUT_SECONDS,
+  ROOT_VITEST_SHARD_BUDGET_SECONDS,
+  ROOT_VITEST_SHARD_COUNT,
   starterEntries,
   starterEntriesForMode,
   starterGroupVitestArgs,
@@ -38,6 +42,10 @@ import {
   validateShardAssignment,
   writeShardManifests,
 } from './ci-shards.mjs';
+import {
+  ADVERSARIAL_RESIDUAL_TEST_TIMEOUT_MS,
+  adversarialResidualTestTimeoutMs,
+} from '../packages/create-kovo/src/index.build.prod-artifact.adversarial-deadlines.mjs';
 
 describe('ci-shards', () => {
   it('packs the verify package required by packed starter installation', async () => {
@@ -211,12 +219,35 @@ describe('ci-shards', () => {
     );
     expect(actionRefs.length).toBeGreaterThan(0);
     for (const ref of actionRefs) expect(ref).toMatch(/^[0-9a-f]{40}$/u);
-    expect(rootTestJob).toContain('select(.updatedAt < \\"$run_created_at\\")');
+    expect(ROOT_VITEST_SHARD_COUNT).toBe(5);
+    expect(ROOT_VITEST_JOB_TIMEOUT_SECONDS).toBe(60 * 60);
+    expect(ROOT_VITEST_SHARD_BUDGET_SECONDS).toBe(50 * 60);
+    expect(ROOT_VITEST_SHARD_COUNT / 4).toBe(1.25);
+    expect((ROOT_VITEST_SHARD_COUNT * ROOT_VITEST_JOB_TIMEOUT_SECONDS) / 60).toBe(300);
+    expect(rootTestJob).toContain('timeout-minutes: 60');
+    expect(rootTestJob).toContain('shard: [1, 2, 3, 4, 5]');
+    expect(rootTestJob).toContain('total: [5]');
+    expect(rootTestJob).toContain('.created_at < \\"$run_created_at\\"');
+    expect(rootTestJob).toContain('.workflow_run.head_branch == \\"main\\"');
+    expect(rootTestJob).toContain('.workflow_run.id != $GITHUB_RUN_ID');
+    expect(rootTestJob).not.toContain('--status success');
     expect(rootTestJob).toContain('for shard in $(seq 1 "${{ matrix.total }}"); do');
-    expect(rootTestJob).toContain('-n "kovo-root-timing-history-$shard"');
+    expect(rootTestJob).toContain('actions/artifacts?name=$artifact_name&per_page=100');
+    expect(rootTestJob).toContain('artifact_name="kovo-root-timing-history-$shard"');
+    expect(rootTestJob).toContain('if ! run_id="$(gh api');
+    expect(rootTestJob).toContain('-n "$artifact_name"');
+    expect(rootTestJob).toContain('if gh run download "$run_id"');
+    expect(rootTestJob).toContain('test -f "$candidate/timing-history.json"');
+    expect(rootTestJob).toContain('cp "$candidate/timing-history.json"');
     expect(rootTestJob).toContain('scripts/ci-shards.mjs combine-histories');
     expect(rootTestJob).toContain(
-      'Timing history shard $shard is unavailable in run $run_id; continuing with available history.',
+      'Timing history shard $shard is unavailable; using reviewed duration floors.',
+    );
+    expect(rootTestJob).toContain(
+      'Timing history shard $shard disappeared during download; using reviewed duration floors.',
+    );
+    expect(rootTestJob).toContain(
+      'Timing history shard $shard lookup failed; using reviewed duration floors.',
     );
     expect(rootTestJob).toContain(
       '--history "$RUNNER_TEMP/kovo-common-timing/timing-history.json"',
@@ -227,6 +258,73 @@ describe('ci-shards', () => {
     );
     const extractStep = rootTestJob.slice(rootTestJob.indexOf('name: Extract root timing history'));
     expect(extractStep).not.toContain('merge-vitest --previous');
+  });
+
+  it('keeps the measured five-way root plan below the 50-minute execution budget', async () => {
+    const files = await discoverTests('vitest');
+    const floorFiles = Object.keys(ROOT_VITEST_DURATION_FLOOR_SECONDS);
+    expect(floorFiles).toHaveLength(20);
+    for (const file of floorFiles) expect(files, file).toContain(file);
+
+    // One second for every unmeasured file makes this a complete assignment proof while the
+    // reviewed floors carry the current hosted monolith measurements.
+    const history = Object.fromEntries(files.map((file) => [file, { seconds: 1 }]));
+    const shards = balanceShards(files, history, ROOT_VITEST_SHARD_COUNT, {
+      durationFloors: ROOT_VITEST_DURATION_FLOOR_SECONDS,
+    });
+    expect(() => validateShardAssignment(files, shards)).not.toThrow();
+    expect(Math.max(...shards.map((shard) => shard.seconds))).toBeLessThanOrEqual(
+      ROOT_VITEST_SHARD_BUDGET_SECONDS,
+    );
+    const indexBuildShard = shards.find((shard) =>
+      shard.files.includes('packages/cli/src/index.kovo-build.test.ts'),
+    );
+    expect(indexBuildShard).toEqual({
+      files: ['packages/cli/src/index.kovo-build.test.ts'],
+      seconds: ROOT_VITEST_DURATION_FLOOR_SECONDS['packages/cli/src/index.kovo-build.test.ts'],
+    });
+    expect(
+      ROOT_VITEST_JOB_TIMEOUT_SECONDS - (indexBuildShard?.seconds ?? 0),
+    ).toBeGreaterThanOrEqual(10 * 60);
+    const localShard = shards.findIndex((shard) =>
+      shard.files.includes(
+        'packages/cli/src/commands/build-export-semantic-intrinsics-local.test.ts',
+      ),
+    );
+    const controlsShard = shards.findIndex((shard) =>
+      shard.files.includes(
+        'packages/cli/src/commands/build-export-semantic-intrinsics-controls.test.ts',
+      ),
+    );
+    expect(localShard).toBeGreaterThan(-1);
+    expect(controlsShard).toBeGreaterThan(-1);
+    expect(controlsShard).not.toBe(localShard);
+  });
+
+  it('preserves all 97 semantic-intrinsic selectors across the five physical buckets', () => {
+    const files = ['calls', 'protocols', 'identity', 'local', 'controls'].map(
+      (bucket) => `packages/cli/src/commands/build-export-semantic-intrinsics-${bucket}.test.ts`,
+    );
+    const listed = spawnSync('vp', ['exec', 'vitest', 'list', ...files, '--json'], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      timeout: 30_000,
+    });
+    expect(listed.error, listed.stderr).toBeUndefined();
+    expect(listed.signal, listed.stderr).toBeNull();
+    expect(listed.status, listed.stderr).toBe(0);
+    const tests = JSON.parse(listed.stdout);
+    const counts = Object.fromEntries(
+      files.map((file) => [file, tests.filter((test) => test.file.endsWith(`/${file}`)).length]),
+    );
+    expect(counts).toEqual({
+      'packages/cli/src/commands/build-export-semantic-intrinsics-calls.test.ts': 26,
+      'packages/cli/src/commands/build-export-semantic-intrinsics-controls.test.ts': 2,
+      'packages/cli/src/commands/build-export-semantic-intrinsics-identity.test.ts': 25,
+      'packages/cli/src/commands/build-export-semantic-intrinsics-local.test.ts': 18,
+      'packages/cli/src/commands/build-export-semantic-intrinsics-protocols.test.ts': 26,
+    });
+    expect(Object.values(counts).reduce((total, count) => total + count, 0)).toBe(97);
   });
 
   it('runs source-generated starter fixtures against the same-run current package build', async () => {
@@ -690,6 +788,69 @@ describe('ci-shards', () => {
     }
   });
 
+  it('binds every residual adversarial selector to its source watchdog and outer headroom', async () => {
+    const source = await readFile(
+      new URL(
+        '../packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+    const sourceTimeouts = Object.entries(ADVERSARIAL_RESIDUAL_TEST_TIMEOUT_MS);
+    const entries = starterEntries().filter((entry) =>
+      Object.hasOwn(ADVERSARIAL_RESIDUAL_TEST_TIMEOUT_MS, entry.id),
+    );
+
+    expect(sourceTimeouts).toHaveLength(11);
+    expect(entries.map((entry) => entry.id)).toEqual(sourceTimeouts.map(([id]) => id));
+    expect(() => adversarialResidualTestTimeoutMs('adversarial-unknown-proof')).toThrow(
+      'Unknown adversarial residual proof deadline',
+    );
+
+    for (const [id, sourceTimeoutMs] of sourceTimeouts) {
+      const entry = entries.find((candidate) => candidate.id === id);
+      expect(entry, id).toBeDefined();
+      expect(entry).toMatchObject({
+        cadence: 'nightly',
+        expectedTestCount: 1,
+        seconds: 420,
+        testTimeoutMs: sourceTimeoutMs,
+      });
+      expect(entry.timeoutMs, id).toBeGreaterThan(sourceTimeoutMs);
+      expect(entry.timeoutMs - sourceTimeoutMs, id).toBeGreaterThanOrEqual(60_000);
+    }
+
+    const carrierArrayStart = source.indexOf('const BUGZ31_GLOBAL_MEMBER_CARRIER_PROOFS = [');
+    const carrierArrayEnd = source.indexOf('] as const;', carrierArrayStart);
+    expect(carrierArrayStart).toBeGreaterThan(-1);
+    expect(carrierArrayEnd).toBeGreaterThan(carrierArrayStart);
+    const carrierIds = [
+      ...source.slice(carrierArrayStart, carrierArrayEnd).matchAll(/^\s+'([^']+)',/gmu),
+    ].map(([, proof]) => `adversarial-bugz31-${proof}`);
+    expect(carrierIds).toHaveLength(6);
+    for (const id of carrierIds) {
+      expect(source, id).toContain(`'${id.slice('adversarial-bugz31-'.length)}'`);
+    }
+    for (const id of sourceTimeouts.map(([id]) => id).filter((id) => !carrierIds.includes(id))) {
+      expect(source, id).toContain(`'${id}'`);
+    }
+    expect(source).toContain(
+      'BUGZ31_GLOBAL_MEMBER_CARRIER_PROOFS.map((proof) => `adversarial-bugz31-${proof}`)',
+    );
+    expect(source).toContain('Residual adversarial proofs must be split by watchdog');
+
+    const diagnosticStart = source.indexOf(
+      "'fails the diagnostic assertion when an unchanged production build succeeds'",
+    );
+    const diagnosticEnd = source.indexOf('\n\n  it.each(', diagnosticStart);
+    expect(diagnosticStart).toBeGreaterThan(-1);
+    expect(diagnosticEnd).toBeGreaterThan(diagnosticStart);
+    expect(source.slice(diagnosticStart, diagnosticEnd)).toContain(
+      'diagnosticAssertionProofTimeout',
+    );
+    expect(source.slice(diagnosticStart, diagnosticEnd)).not.toContain('240_000');
+  });
+
   it('retains measured hosted-runner deadline headroom on timed-out proofs', async () => {
     const [
       asyncContextSource,
@@ -802,7 +963,7 @@ describe('ci-shards', () => {
     expect(postgresSource.match(/\}, 600_000\);/gu)).toHaveLength(2);
     expect(buildExportSource).toContain('const staticTrustWorkerTimeoutMs = 420_000;');
     expect(indexBuildSource).toContain('const BUILD_INTEGRATION_TEST_TIMEOUT_MS = 90_000;');
-    expect(indexBuildSource).toContain('const HOSTED_SUCCESS_BUILD_PROCESS_DEADLINE_MS = 240_000;');
+    expect(indexBuildSource).toContain('const HOSTED_SUCCESS_BUILD_PROCESS_DEADLINE_MS = 360_000;');
     expect(indexBuildSource).toContain(
       'const HOSTED_SUCCESS_BUILD_TEST_TIMEOUT_MS = kovoCliTestTimeoutMs(',
     );
@@ -814,6 +975,23 @@ describe('ci-shards', () => {
     expect(
       indexBuildSource.match(/deadlineMs: HOSTED_SUCCESS_BUILD_PROCESS_DEADLINE_MS/gu),
     ).toHaveLength(2);
+    expect(indexBuildSource).toContain('const TRUSTED_ASSIGN_REVIEW_BUILD_COUNT = 3;');
+    expect(indexBuildSource).toContain(
+      'const TRUSTED_ASSIGN_REVIEW_BUILD_STEP_BUDGET_MS = 90_000;',
+    );
+    expect(indexBuildSource).toContain('{ length: TRUSTED_ASSIGN_REVIEW_BUILD_COUNT },');
+    expect(indexBuildSource).toContain(
+      'const TRUSTED_ASSIGN_REVIEW_TEST_TIMEOUT_MS = kovoCliTestTimeoutMs(',
+    );
+    expect(indexBuildSource).toContain('...TRUSTED_ASSIGN_REVIEW_BUILD_DEADLINES_MS');
+    expect(indexBuildSource).toMatch(
+      /function trustedAssignReviewIt\([\s\S]*?TRUSTED_ASSIGN_REVIEW_TEST_TIMEOUT_MS,[\s\S]*?\n\}/u,
+    );
+    const trustedAssignProof = indexBuildSource.match(
+      /trustedAssignReviewIt\(async \(\) => \{(?<body>[\s\S]*?)\n  \}\);/u,
+    );
+    expect(trustedAssignProof).not.toBeNull();
+    expect(trustedAssignProof?.groups?.body.match(/mainAsync\(\['build'/gu)).toHaveLength(3);
     expect(indexBuildSource).toContain(
       "describe('kovo build', { concurrent: false, timeout: BUILD_INTEGRATION_TEST_TIMEOUT_MS }",
     );
@@ -823,16 +1001,27 @@ describe('ci-shards', () => {
     );
     expect(securityOrderSource).toContain('const KOVO_CLI_PROCESS_TIMEOUT_MS = 120_000;');
     expect(securityOrderSource).toContain(
+      'const STATIC_CACHE_SYMLINK_PROCESS_TIMEOUT_MS = 240_000;',
+    );
+    expect(securityOrderSource).toContain(
+      'const STATIC_CACHE_SYMLINK_TEST_TIMEOUT_MS = kovoCliTestTimeoutMs(',
+    );
+    expect(securityOrderSource).toContain(
       "describe('build/export security bootstrap ordering', { concurrent: false }",
     );
-    expect(securityOrderSource).toContain('timeout: KOVO_CLI_PROCESS_TIMEOUT_MS,');
-    const cacheSymlinkStart = securityOrderSource.indexOf(
-      "it('never follows an app-planted static-analysis cache symlink",
+    expect(securityOrderSource).toContain('timeoutMs: number = KOVO_CLI_PROCESS_TIMEOUT_MS,');
+    expect(securityOrderSource).toContain('timeout: timeoutMs,');
+    expect(securityOrderSource).toMatch(
+      /function staticCacheSymlinkIt\([\s\S]*?STATIC_CACHE_SYMLINK_TEST_TIMEOUT_MS,[\s\S]*?\n\}/u,
     );
+    const cacheSymlinkStart = securityOrderSource.indexOf('staticCacheSymlinkIt(() => {');
     const cacheSymlinkEnd = securityOrderSource.indexOf('\n\n  it(', cacheSymlinkStart);
     expect(cacheSymlinkStart).toBeGreaterThan(-1);
     expect(cacheSymlinkEnd).toBeGreaterThan(cacheSymlinkStart);
-    expect(securityOrderSource.slice(cacheSymlinkStart, cacheSymlinkEnd)).toContain('}, 150_000);');
+    const cacheSymlinkProof = securityOrderSource.slice(cacheSymlinkStart, cacheSymlinkEnd);
+    expect(cacheSymlinkProof).toContain('STATIC_CACHE_SYMLINK_PROCESS_TIMEOUT_MS,');
+    expect(cacheSymlinkProof).toContain('expect(result.error, result.stderr).toBeUndefined();');
+    expect(cacheSymlinkProof).toContain('expect(result.signal, result.stderr).toBeNull();');
     const undeclaredViteStart = securityOrderSource.indexOf(
       "it('keeps real build and export outside undeclared authored Vite config hooks",
     );

@@ -34,11 +34,27 @@ import {
   buildSnapshotDenseArray,
   buildStringSplit,
 } from './build-security-intrinsics.js';
+import { kovoCliTestTimeoutMs } from '../../test/bounded-cli.js';
 
 // Run 30612746165 killed two healthy CLI children at the old exact 55s ceiling. Locally those
 // proofs take 40.74s and 50.91s; 120s preserves more than two hosted ceilings without making a
 // stuck child unbounded.
 const KOVO_CLI_PROCESS_TIMEOUT_MS = 120_000;
+// This successful build traverses the full static-analysis cache path. Run 91354629823 exhausted
+// the common 120s child deadline under hosted shard contention, so keep the larger bound scoped to
+// this proof and derive the outer watchdog with the shared finite cleanup headroom.
+const STATIC_CACHE_SYMLINK_PROCESS_TIMEOUT_MS = 240_000;
+const STATIC_CACHE_SYMLINK_TEST_TIMEOUT_MS = kovoCliTestTimeoutMs(
+  STATIC_CACHE_SYMLINK_PROCESS_TIMEOUT_MS,
+);
+
+function staticCacheSymlinkIt(run: () => void): void {
+  it(
+    'never follows an app-planted static-analysis cache symlink outside the project',
+    run,
+    STATIC_CACHE_SYMLINK_TEST_TIMEOUT_MS,
+  );
+}
 
 describe('build/export security bootstrap ordering', { concurrent: false }, () => {
   it('rejects evaluated public-cache declarations that drift from compiler evidence', () => {
@@ -772,7 +788,7 @@ export default app.assemble({
     }
   }, 60_000);
 
-  it('never follows an app-planted static-analysis cache symlink outside the project', () => {
+  staticCacheSymlinkIt(() => {
     const root = cliFixtureRoot('static-cache-symlink');
     const outside = mkdtempSync(join(tmpdir(), 'kovo-static-cache-victim-'));
     const appPath = join(root, 'app.ts');
@@ -804,7 +820,14 @@ export default app.assemble({
         'utf8',
       );
 
-      const result = runKovoCli(root, ['build', appPath, '--out', join(root, 'dist')]);
+      const result = runKovoCli(
+        root,
+        ['build', appPath, '--out', join(root, 'dist')],
+        process.env,
+        STATIC_CACHE_SYMLINK_PROCESS_TIMEOUT_MS,
+      );
+      expect(result.error, result.stderr).toBeUndefined();
+      expect(result.signal, result.stderr).toBeNull();
       expect(result.status, result.stderr).toBe(0);
       expect(readdirSync(outside)).toEqual(['victim.txt']);
       expect(readFileSync(join(outside, 'victim.txt'), 'utf8')).toBe('ORIGINAL\n');
@@ -812,7 +835,7 @@ export default app.assemble({
       rmSync(root, { force: true, recursive: true });
       rmSync(outside, { force: true, recursive: true });
     }
-  }, 150_000);
+  });
 
   it('rejects app-authored paranoid disposition mutation before app evaluation', () => {
     const root = cliFixtureRoot('paranoid-disposition');
@@ -1316,12 +1339,17 @@ export default defineConfig({
   );
 }
 
-function runKovoCli(root: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env) {
+function runKovoCli(
+  root: string,
+  args: readonly string[],
+  env: NodeJS.ProcessEnv = process.env,
+  timeoutMs: number = KOVO_CLI_PROCESS_TIMEOUT_MS,
+) {
   return spawnSync(join(process.cwd(), 'packages/cli/src/bin.ts'), args, {
     cwd: root,
     encoding: 'utf8',
     env,
-    timeout: KOVO_CLI_PROCESS_TIMEOUT_MS,
+    timeout: timeoutMs,
   });
 }
 
