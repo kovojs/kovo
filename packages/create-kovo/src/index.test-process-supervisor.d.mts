@@ -1,10 +1,12 @@
 export interface BoundedTestProcessInvocation {
   readonly args: readonly string[];
+  readonly captureOutput?: boolean;
   readonly censusIntervalMs?: number;
   readonly censusTimeoutMs?: number;
   readonly command: string;
   readonly cwd: string;
   readonly env?: Readonly<Record<string, string | undefined>>;
+  readonly forwardOutput?: boolean;
   readonly killGraceMs?: number;
   readonly maxOutputBytes?: number;
   readonly rootExitTimeoutMs?: number;
@@ -43,6 +45,8 @@ export interface BoundedTestProcessRecordForTest {
 export interface BoundedTestProcessDependenciesForTest {
   readonly delay?: (milliseconds: number) => Promise<unknown>;
   readonly now?: () => number;
+  readonly parentStderr?: NodeJS.WritableStream;
+  readonly parentStdout?: NodeJS.WritableStream;
   readonly signalProcess?: (pid: number, signal: NodeJS.Signals) => void;
   readonly snapshotProcessTable?: (
     markerName: string,

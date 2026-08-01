@@ -13,6 +13,7 @@ import {
   balanceShards,
   combineDurationHistories,
   combineTimingHistoryDirectory,
+  collectStarterGroupTestNames,
   createKovoAcceptanceOwners,
   discoverCreateKovoAcceptanceTests,
   extractPlaywrightDurations,
@@ -21,6 +22,7 @@ import {
   groupStarterEntriesForExecution,
   includeVitest,
   mergeDurationHistory,
+  runAcceptanceTestProcess,
   runStarterShard,
   starterEntries,
   starterEntriesForMode,
@@ -47,6 +49,9 @@ describe('ci-shards', () => {
     expect(source).toContain(
       'if (packedRoot) await rm(packedRoot, { force: true, recursive: true });',
     );
+    expect(source).toContain('const MAX_LIVE_ACCEPTANCE_OUTPUT_BYTES = 32 * 1024 * 1024;');
+    expect(source.match(/maxOutputBytes: MAX_LIVE_ACCEPTANCE_OUTPUT_BYTES,/gu)).toHaveLength(3);
+    expect(source.match(/captureOutput: false,\n\s+forwardOutput: true,/gu)).toHaveLength(3);
   });
 
   it('balances tests with longest-processing-time first', () => {
@@ -1005,6 +1010,90 @@ describe('ci-shards', () => {
       '-t',
       'two\\?',
     ]);
+  });
+
+  it('keeps list JSON capture-only and forwards validated starter execution live', async () => {
+    const manifest = await starterManifest([
+      { file: 'proof.test.ts', id: 'proof', testName: 'current proof' },
+    ]);
+    const invocations = [];
+    await runStarterShard(manifest, {
+      runProcess: async (invocation) => {
+        invocations.push(invocation);
+        if (invocation.args[2] === 'list') {
+          return {
+            exitCode: 0,
+            stderr: '',
+            stdout: JSON.stringify([
+              { file: '/repo/proof.test.ts', name: 'suite > current proof' },
+            ]),
+          };
+        }
+        return { exitCode: 0, stderr: '', stdout: '' };
+      },
+    });
+
+    expect(invocations).toHaveLength(2);
+    expect(invocations[0]).toMatchObject({
+      captureOutput: true,
+      forwardOutput: false,
+      maxOutputBytes: 16 * 1024 * 1024,
+    });
+    expect(invocations[1]).toMatchObject({
+      captureOutput: false,
+      forwardOutput: true,
+      maxOutputBytes: 32 * 1024 * 1024,
+    });
+  });
+
+  it('passes capture and forwarding posture through the shared supervisor adapter', async () => {
+    const boundedInvocations = [];
+    const outcome = { exitCode: 0, stderr: '', stdout: '' };
+    await expect(
+      runAcceptanceTestProcess(
+        {
+          args: ['exec', 'vitest', '--run'],
+          captureOutput: false,
+          command: 'vp',
+          cwd: '/repo',
+          env: { CI: 'true' },
+          forwardOutput: true,
+          maxOutputBytes: 1234,
+          supervisorTimeoutMs: 5678,
+        },
+        {
+          runBoundedTestProcess: async (invocation) => {
+            boundedInvocations.push(invocation);
+            return outcome;
+          },
+        },
+      ),
+    ).resolves.toBe(outcome);
+    expect(boundedInvocations).toEqual([
+      {
+        args: ['exec', 'vitest', '--run'],
+        captureOutput: false,
+        command: 'vp',
+        cwd: '/repo',
+        env: { CI: 'true' },
+        forwardOutput: true,
+        maxOutputBytes: 1234,
+        supervisorTimeoutMs: 5678,
+      },
+    ]);
+
+    const collected = await collectStarterGroupTestNames(
+      [{ file: 'proof.test.ts', id: 'proof', testName: 'current proof' }],
+      async (invocation) => {
+        expect(invocation).toMatchObject({ captureOutput: true, forwardOutput: false });
+        return {
+          exitCode: 0,
+          stderr: '',
+          stdout: JSON.stringify([{ file: '/repo/proof.test.ts', name: 'current proof' }]),
+        };
+      },
+    );
+    expect(collected).toEqual(['current proof']);
   });
 
   it('runs a starter file once when a grouped manifest entry has no test filter', () => {

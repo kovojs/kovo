@@ -21,6 +21,7 @@ const STARTER_SHARD_COUNT = 10;
 const PACKED_STARTER_MANIFEST = 'packed-kovo-packages.json';
 const STARTER_CADENCES = new Set(['per-pr', 'nightly']);
 const STARTER_LIST_TIMEOUT_MS = 120_000;
+const MAX_LIVE_ACCEPTANCE_OUTPUT_BYTES = 32 * 1024 * 1024;
 const STARTER_MIN_TIMEOUT_MS = 5 * 60_000;
 const STARTER_MAX_TIMEOUT_MS = 30 * 60_000;
 const CREATE_KOVO_ACCEPTANCE_TEST_PATTERN =
@@ -1011,8 +1012,9 @@ export async function runStarterEntries(entries, options = {}) {
       cwd: process.cwd(),
       env: groupEnvironment,
       supervisorTimeoutMs: group.reduce((total, entry) => total + entry.timeoutMs, 0),
-      maxOutputBytes: 128 * 1024 * 1024,
+      maxOutputBytes: MAX_LIVE_ACCEPTANCE_OUTPUT_BYTES,
       captureOutput: false,
+      forwardOutput: true,
     });
     writeCapturedProcessOutput(result);
     if (result?.error && !result?.timedOut) {
@@ -1044,6 +1046,7 @@ export async function collectStarterGroupTestNames(
     supervisorTimeoutMs: STARTER_LIST_TIMEOUT_MS,
     maxOutputBytes: 16 * 1024 * 1024,
     captureOutput: true,
+    forwardOutput: false,
   });
   if (result?.error && !result?.timedOut) {
     throw new Error(
@@ -1186,8 +1189,9 @@ export async function runRootTests(options = {}) {
     cwd: process.cwd(),
     env: options.env ?? process.env,
     supervisorTimeoutMs: 2 * 60 * 60_000,
-    maxOutputBytes: 256 * 1024 * 1024,
+    maxOutputBytes: MAX_LIVE_ACCEPTANCE_OUTPUT_BYTES,
     captureOutput: false,
+    forwardOutput: true,
   });
   writeCapturedProcessOutput(result);
   if (acceptanceProcessExitCode(result) !== 0) {
@@ -1197,9 +1201,11 @@ export async function runRootTests(options = {}) {
 
 // Narrow integration seam: the marker-safe process-tree supervisor can be injected here without
 // coupling routing policy to its implementation module.
-export async function runAcceptanceTestProcess(invocation) {
-  const { runBoundedTestProcess } =
-    await import('../packages/create-kovo/src/index.test-process-supervisor.mjs');
+export async function runAcceptanceTestProcess(invocation, dependencies = {}) {
+  const runBoundedTestProcess =
+    dependencies.runBoundedTestProcess ??
+    (await import('../packages/create-kovo/src/index.test-process-supervisor.mjs'))
+      .runBoundedTestProcess;
   return runBoundedTestProcess({
     command: invocation.command,
     args: invocation.args,
@@ -1207,6 +1213,8 @@ export async function runAcceptanceTestProcess(invocation) {
     env: invocation.env,
     supervisorTimeoutMs: invocation.supervisorTimeoutMs,
     maxOutputBytes: invocation.maxOutputBytes,
+    captureOutput: invocation.captureOutput,
+    forwardOutput: invocation.forwardOutput,
   });
 }
 
@@ -1214,12 +1222,15 @@ function resolveAcceptanceProcessRunner(options) {
   if (options.runProcess) return options.runProcess;
   if (!options.spawnSync) return runAcceptanceTestProcess;
   return async (invocation) => {
+    if (invocation.captureOutput && invocation.forwardOutput) {
+      throw new Error('The synchronous acceptance test seam cannot capture and forward output.');
+    }
     const result = options.spawnSync(invocation.command, invocation.args, {
       cwd: invocation.cwd,
       encoding: invocation.captureOutput ? 'utf8' : undefined,
       env: invocation.env,
       maxBuffer: invocation.maxOutputBytes,
-      stdio: invocation.captureOutput ? undefined : 'inherit',
+      stdio: invocation.forwardOutput ? 'inherit' : invocation.captureOutput ? undefined : 'ignore',
       timeout: invocation.supervisorTimeoutMs,
     });
     return { ...result, exitCode: result.status };
@@ -1269,8 +1280,9 @@ export async function packStarterPackages(outputDir, options = {}) {
       cwd: packageRoot,
       env: options.env ?? process.env,
       supervisorTimeoutMs: 5 * 60_000,
-      maxOutputBytes: 64 * 1024 * 1024,
+      maxOutputBytes: MAX_LIVE_ACCEPTANCE_OUTPUT_BYTES,
       captureOutput: false,
+      forwardOutput: true,
     });
     writeCapturedProcessOutput(result);
     if (acceptanceProcessExitCode(result) !== 0) {

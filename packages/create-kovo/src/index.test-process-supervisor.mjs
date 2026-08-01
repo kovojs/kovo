@@ -56,7 +56,7 @@ async function runBoundedTestProcessWithDependencies(invocation, dependencies) {
   const limits = validateInvocation(invocation);
   const started = process.hrtime.bigint();
   const markerName = `${PROCESS_MARKER_PREFIX}${randomBytes(24).toString('hex').toUpperCase()}`;
-  const output = combinedOutput(limits.maxOutputBytes);
+  const output = combinedOutput(limits.maxOutputBytes, limits.captureOutput);
   let resolveOverflow;
   const overflow = new Promise((resolve) => {
     resolveOverflow = resolve;
@@ -76,6 +76,7 @@ async function runBoundedTestProcessWithDependencies(invocation, dependencies) {
   };
   child.stdout.on('data', onStdout);
   child.stderr.on('data', onStderr);
+  const stopForwarding = forwardChildOutput(child, limits.forwardOutput, dependencies);
 
   let exitSettled = false;
   let settleExit;
@@ -129,7 +130,7 @@ async function runBoundedTestProcessWithDependencies(invocation, dependencies) {
     await terminateMarkedProcessTree(markerName, limits, cleanupDeadlineAtMs, dependencies);
   } catch (error) {
     cleanupProblems.push(errorMessage(error));
-    disposeChildStreams(child, onStdout, onStderr);
+    disposeChildStreams(child, onStdout, onStderr, stopForwarding);
   }
 
   const firstExit = first.kind === 'exit' ? first.result : undefined;
@@ -145,7 +146,7 @@ async function runBoundedTestProcessWithDependencies(invocation, dependencies) {
     cleanupProblems.push(
       `root process did not exit before the cleanup deadline (${String(limits.rootExitTimeoutMs)}ms root-exit allowance)`,
     );
-    disposeChildStreams(child, onStdout, onStderr);
+    disposeChildStreams(child, onStdout, onStderr, stopForwarding);
   }
 
   const streamCloseDeadlineAtMs = phaseDeadline(
@@ -161,16 +162,19 @@ async function runBoundedTestProcessWithDependencies(invocation, dependencies) {
     cleanupProblems.push(
       `root process streams did not close before the cleanup deadline (${String(limits.streamCloseTimeoutMs)}ms stream-close allowance)`,
     );
-    disposeChildStreams(child, onStdout, onStderr);
+    disposeChildStreams(child, onStdout, onStderr, stopForwarding);
   }
 
+  stopForwarding();
   child.stdout.off('data', onStdout);
   child.stderr.off('data', onStderr);
   child.off('error', onChildError);
   child.off('error', onChildErrorClose);
   child.off('exit', onChildExit);
   child.off('close', onChildClose);
-  if (cleanupProblems.length > 0) disposeChildStreams(child, onStdout, onStderr);
+  if (cleanupProblems.length > 0) {
+    disposeChildStreams(child, onStdout, onStderr, stopForwarding);
+  }
   const captured = output.read();
   return {
     cleanupError: cleanupProblems.length === 0 ? null : cleanupProblems.join('; '),
@@ -213,8 +217,11 @@ function validateInvocation(invocation) {
     throw new TypeError('bounded test process cwd must be non-empty');
   }
   positiveInteger(invocation.supervisorTimeoutMs, 'bounded test process supervisor timeout');
+  optionalBoolean(invocation.captureOutput, 'bounded test process captureOutput');
+  optionalBoolean(invocation.forwardOutput, 'bounded test process forwardOutput');
 
   const limits = {
+    captureOutput: invocation.captureOutput ?? true,
     censusIntervalMs: invocation.censusIntervalMs ?? DEFAULT_CENSUS_INTERVAL_MS,
     censusTimeoutMs: invocation.censusTimeoutMs ?? DEFAULT_CENSUS_TIMEOUT_MS,
     killGraceMs: invocation.killGraceMs ?? DEFAULT_TEST_PROCESS_KILL_GRACE_MS,
@@ -223,8 +230,11 @@ function validateInvocation(invocation) {
     streamCloseTimeoutMs:
       invocation.streamCloseTimeoutMs ?? DEFAULT_TEST_PROCESS_STREAM_CLOSE_TIMEOUT_MS,
     terminationGraceMs: invocation.terminationGraceMs ?? DEFAULT_TEST_PROCESS_TERMINATION_GRACE_MS,
+    forwardOutput: invocation.forwardOutput ?? false,
   };
-  for (const [label, value] of Object.entries(limits)) {
+  for (const [label, value] of Object.entries(limits).filter(
+    ([, value]) => typeof value !== 'boolean',
+  )) {
     positiveInteger(value, `bounded test process ${label}`);
   }
   boundedTestProcessCleanupBudgetMs(limits);
@@ -354,6 +364,8 @@ function defaultSupervisorDependencies() {
   return {
     delay,
     now: Date.now,
+    parentStderr: process.stderr,
+    parentStdout: process.stdout,
     signalProcess(pid, signal) {
       process.kill(pid, signal);
     },
@@ -542,7 +554,25 @@ function safeDeadline(now, allowanceMs) {
   return deadline;
 }
 
-function disposeChildStreams(child, onStdout, onStderr) {
+function forwardChildOutput(child, enabled, dependencies) {
+  if (!enabled) return () => undefined;
+  const pipes = [
+    [child.stdout, dependencies.parentStdout],
+    [child.stderr, dependencies.parentStderr],
+  ];
+  for (const [source, destination] of pipes) {
+    source.pipe(destination, { end: false });
+  }
+  let stopped = false;
+  return () => {
+    if (stopped) return;
+    stopped = true;
+    for (const [source, destination] of pipes) source.unpipe(destination);
+  };
+}
+
+function disposeChildStreams(child, onStdout, onStderr, stopForwarding) {
+  stopForwarding();
   child.stdout.off('data', onStdout);
   child.stderr.off('data', onStderr);
   child.stdout.destroy();
@@ -550,9 +580,9 @@ function disposeChildStreams(child, onStdout, onStderr) {
   child.unref();
 }
 
-function combinedOutput(limit) {
+function combinedOutput(limit, captureOutput) {
   const chunks = { stderr: [], stdout: [] };
-  let capturedBytes = 0;
+  let observedBytes = 0;
   let overflowed = false;
   return {
     didOverflow() {
@@ -560,12 +590,12 @@ function combinedOutput(limit) {
     },
     push(channel, value) {
       const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value);
-      const remaining = Math.max(0, limit - capturedBytes);
-      if (remaining > 0) {
+      const remaining = Math.max(0, limit - observedBytes);
+      if (captureOutput && remaining > 0) {
         const captured = chunk.byteLength <= remaining ? chunk : chunk.subarray(0, remaining);
         chunks[channel].push(Buffer.from(captured));
-        capturedBytes += captured.byteLength;
       }
+      observedBytes += chunk.byteLength;
       if (chunk.byteLength <= remaining || overflowed) return false;
       overflowed = true;
       return true;
@@ -582,6 +612,12 @@ function combinedOutput(limit) {
 function positiveInteger(value, label) {
   if (!Number.isSafeInteger(value) || value <= 0) {
     throw new TypeError(`${label} must be a positive safe integer`);
+  }
+}
+
+function optionalBoolean(value, label) {
+  if (value !== undefined && typeof value !== 'boolean') {
+    throw new TypeError(`${label} must be a boolean when provided`);
   }
 }
 
