@@ -519,6 +519,7 @@ describe('ci-shards', () => {
       'packages/create-kovo/src/index.build.scaffold.source-check.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.table-security.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
+      'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',
     ]);
   });
 
@@ -550,13 +551,17 @@ describe('ci-shards', () => {
     ]);
   });
 
-  it('splits loaded dialect proofs and keeps the outer supervisor beyond each test watchdog', () => {
+  it('splits loaded proofs and keeps the outer supervisor beyond each test watchdog', () => {
     const affected = Object.fromEntries(
       starterEntries()
         .filter((entry) =>
           [
             'contacts-add-contact',
             'header-artifacts',
+            'island-derive-artifacts',
+            'island-derive-helper-preflight',
+            'm1-raw-html-mutable-alias',
+            'm1-raw-html-provenance',
             'm1-postgres-raw-sql',
             'm1-sqlite-raw-sql',
             'security-runtime-wires-postgres',
@@ -572,6 +577,29 @@ describe('ci-shards', () => {
     expect(affected).toMatchObject({
       'contacts-add-contact': { seconds: 257, testTimeoutMs: 600_000, timeoutMs: 660_000 },
       'header-artifacts': { seconds: 301, testTimeoutMs: 600_000, timeoutMs: 660_000 },
+      'island-derive-artifacts': {
+        seconds: 301,
+        testName: 'hydrates destructured state aliases',
+        testTimeoutMs: 600_000,
+        timeoutMs: 660_000,
+      },
+      'island-derive-helper-preflight': {
+        seconds: 67,
+        testName: 'rejects unbound module-helper state derives',
+        testTimeoutMs: 600_000,
+        timeoutMs: 660_000,
+      },
+      'm1-raw-html-provenance': {
+        seconds: 461,
+        testName: 'M1:raw-html tracks trusted output provenance',
+        testTimeoutMs: 720_000,
+        timeoutMs: 922_000,
+      },
+      'm1-raw-html-mutable-alias': {
+        seconds: 50,
+        testName: 'M1:raw-html keeps mutable trusted-output aliases',
+        timeoutMs: 300_000,
+      },
       'm1-postgres-raw-sql': {
         seconds: 151,
         testName: 'M1:postgres-raw-sql',
@@ -609,6 +637,7 @@ describe('ci-shards', () => {
       'starter-sqlite-parser-dependency': { seconds: 5, timeoutMs: 300_000 },
     });
     expect(starterEntries().some((entry) => entry.id === 'm1-raw-sql')).toBe(false);
+    expect(starterEntries().some((entry) => entry.id === 'm1-raw-html')).toBe(false);
     expect(starterEntries().some((entry) => entry.id === 'security-runtime-wires')).toBe(false);
     expect(starterEntries().some((entry) => entry.id === 'starter-sqlite')).toBe(false);
     for (const entry of Object.values(affected)) {
@@ -831,9 +860,13 @@ describe('ci-shards', () => {
       'contacts-idempotency-collisions',
       'contacts-sqlite-add-contact',
       'm1-output-wire',
+      'm1-raw-html-mutable-alias',
+      'm1-raw-html-provenance',
       'm1-postgres-raw-sql',
       'm1-sqlite-raw-sql',
       'header-artifacts',
+      'island-derive-artifacts',
+      'island-derive-helper-preflight',
       'raw-sql-artifacts',
       'redirect-capability-artifacts',
       'runtime-dev-server',
@@ -863,7 +896,11 @@ describe('ci-shards', () => {
       'durable-task-lifecycle': 563,
       'durable-task-retries': 381,
       'header-artifacts': 301,
+      'island-derive-artifacts': 301,
+      'island-derive-helper-preflight': 67,
       'm1-output-wire': 748,
+      'm1-raw-html-mutable-alias': 50,
+      'm1-raw-html-provenance': 461,
       'm1-postgres-raw-sql': 151,
       'm1-sqlite-raw-sql': 151,
       'raw-sql-artifacts': 118,
@@ -929,7 +966,7 @@ describe('ci-shards', () => {
       entries.map((entry) => entry.id).toSorted(compareStrings),
     );
     expect(shards.map((shard) => shard.seconds)).toEqual([
-      1_108, 1_087, 1_104, 1_111, 1_104, 1_083, 1_080, 1_091, 1_085, 1_079,
+      1_174, 1_136, 1_152, 1_136, 1_168, 1_138, 1_167, 1_150, 1_153, 1_143,
     ]);
   });
 
@@ -954,7 +991,7 @@ describe('ci-shards', () => {
     expect([...packedIds, ...unpackedIds].toSorted(compareStrings)).toEqual(
       allEntries.map((entry) => entry.id).toSorted(compareStrings),
     );
-    expect(starterEntriesForMode('unpacked', 'per-pr')).toHaveLength(51);
+    expect(starterEntriesForMode('unpacked', 'per-pr')).toHaveLength(53);
     expect(starterEntries().find((entry) => entry.id === 'bugz-fixture-format')).toMatchObject({
       cadence: 'per-pr',
       testName: 'keeps BUGZ25/31 production fixtures formatter-clean before build preflight',
@@ -983,7 +1020,7 @@ describe('ci-shards', () => {
       }))
       .filter((shard) => shard.entries.length > 0);
 
-    expect(browserShards).toEqual([{ index: 3, entries: ['island-derive-artifacts'] }]);
+    expect(browserShards).toEqual([{ index: 9, entries: ['island-derive-artifacts'] }]);
   });
 
   it('marks only packed starter shards as needing the packed package artifact', async () => {

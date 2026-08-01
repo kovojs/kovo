@@ -272,11 +272,20 @@ const STARTER_ENTRIES = [
     seconds: 210,
   },
   {
-    id: 'm1-raw-html',
+    id: 'm1-raw-html-provenance',
     file: 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
-    testName: 'M1:raw-html',
-    expectedTestCount: 2,
-    seconds: 151,
+    testName: 'M1:raw-html tracks trusted output provenance',
+    // CI-mode profiling on 2026-08-01 measured the three-build proof at 460.884s. Its source-level
+    // multi-build watchdog is 720s, so the outer supervisor must retain cleanup headroom beyond it.
+    seconds: 461,
+    testTimeoutMs: 720_000,
+  },
+  {
+    id: 'm1-raw-html-mutable-alias',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
+    testName: 'M1:raw-html keeps mutable trusted-output aliases',
+    // CI-mode profiling on 2026-08-01 measured this independent one-build proof at 49.505s.
+    seconds: 50,
   },
   {
     id: 'm1-secret-wire',
@@ -564,8 +573,22 @@ const STARTER_ENTRIES = [
   {
     id: 'island-derive-artifacts',
     file: 'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',
-    seconds: 143,
+    testName: 'hydrates destructured state aliases',
+    // Exact-SHA hosted job 91344680274 exceeded the former 300s outer floor. Keep that observed
+    // lower bound for balancing and the source-level 600s watchdog for bounded cleanup headroom.
+    seconds: 301,
+    testTimeoutMs: 600_000,
     needsBrowser: true,
+  },
+  {
+    id: 'island-derive-helper-preflight',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',
+    testName: 'rejects unbound module-helper state derives',
+    // CI-mode profiling on 2026-08-01 measured the non-browser build proof at 66.782s.
+    seconds: 67,
+    // The test uses PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS (600s in CI); the supervisor must not
+    // preempt that inner watchdog even though the scheduling weight remains evidence-based.
+    testTimeoutMs: 600_000,
   },
 ];
 
