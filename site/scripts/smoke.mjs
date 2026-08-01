@@ -149,8 +149,13 @@ try {
       secondResult,
     'JS: search keyboard ArrowDown selects next result',
   );
-  await page.keyboard.press('Enter');
-  await page.waitForFunction((href) => location.pathname + location.hash === href, secondResult);
+  // Subscribe before the keypress and wait for the destination document, not
+  // only its URL. The URL can match while the new body (including the search
+  // dialog at BodyEnd) is still being parsed on a slower hosted runner.
+  await Promise.all([
+    page.waitForURL(new URL(secondResult, origin).href, { waitUntil: 'domcontentloaded' }),
+    page.keyboard.press('Enter'),
+  ]);
   check(true, 'JS: search keyboard Enter opens active result');
   check(scriptRequests.includes('/search-index.json'), 'JS: index fetched on demand');
 
