@@ -253,6 +253,82 @@ globalThis.__restoreHmrControls = () => {
     ]);
   });
 
+  it('reloads once without advancing the build token when fragment apply fails focus verification', async () => {
+    const buildMeta = new FakeElement({ content: 'build-before', name: 'kovo-build' });
+    const document = new FakeDocument(buildMeta, [
+      new FakeElement({
+        'kovo-deps': 'public',
+        'kovo-fragment-target': 'catalog-panel',
+        'kovo-live-token': 'tok_catalog',
+      }),
+    ]);
+    const hotHandlers = Object.create(null) as Record<string, (event: unknown) => void>;
+    let applyCalls = 0;
+    let fetchCalls = 0;
+    let reloads = 0;
+    const context = {
+      Document: FakeDocument,
+      Element: FakeElement,
+      NodeList: FakeNodeList,
+      URL,
+      __createHotContext: () => ({
+        on(name: string, handler: (event: unknown) => void) {
+          hotHandlers[name] = handler;
+        },
+      }),
+      __kovo_a() {
+        applyCalls += 1;
+        throw new TypeError('Kovo DOM focus control did not focus its receiver.');
+      },
+      document,
+      async fetch(url: URL) {
+        fetchCalls += 1;
+        return {
+          headers: {
+            get(name: string) {
+              if (name === 'Kovo-Previous-Build') return 'build-before';
+              if (name === 'Kovo-Build') return 'build-after';
+              if (name === 'Kovo-HMR-Refresh') return 'live-targets';
+              if (name === 'Content-Type') {
+                return 'text/vnd.kovo.fragment+html; charset=utf-8';
+              }
+              return null;
+            },
+          },
+          ok: true,
+          redirected: false,
+          async text() {
+            return '<kovo-fragment target="catalog-panel">updated</kovo-fragment>';
+          },
+          url: String(url),
+        };
+      },
+      location: {
+        origin: 'https://kovo.test',
+        pathname: '/catalog',
+        reload() {
+          reloads += 1;
+        },
+        search: '',
+      },
+    };
+    const source = kovoHmrClientSource().replace(
+      'import { createHotContext } from "/@vite/client";',
+      'const createHotContext = globalThis.__createHotContext;',
+    );
+    runInNewContext(source, context);
+
+    hotHandlers['kovo:component-render']?.({});
+    await Promise.resolve();
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fetchCalls).toBe(1);
+    expect(applyCalls).toBe(1);
+    expect(reloads).toBe(1);
+    expect(buildMeta.getAttribute('content')).toBe('build-before');
+  });
+
   it.each([
     {
       contentDisposition: null,
