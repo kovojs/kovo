@@ -130,8 +130,12 @@ describe('browser inline loader response apply', () => {
     expect(textarea.selectionStart).toBe(1);
     expect(textarea.selectionEnd).toBe(3);
     expect(textarea.selectionDirection).toBe('forward');
+    expect(textarea.value).toBe('12345');
+    expect(textarea.defaultValue).toBe('67890');
     expect(root.querySelector('[kovo-key="panel"]')).toBe(panel);
     expect(panel.scrollTop).toBeCloseTo(4, 0);
+    form.reset();
+    expect(textarea.value).toBe('67890');
   });
 
   it('applies fragments to explicit fragment targets before conflicting component stamps', async () => {
@@ -315,6 +319,116 @@ describe('browser inline loader response apply', () => {
     expect(input.selectionStart).toBe(2);
     expect(input.selectionEnd).toBe(6);
     expect(input.selectionDirection).toBe('forward');
+    expect(root.querySelector('output')?.textContent).toBe('Version after');
+  });
+
+  it.each([
+    { nextType: 'checkbox', nextValue: 'checkbox-after' },
+    { nextType: 'number', nextValue: '7' },
+  ])(
+    'accepts a keyed $nextType transition without replaying the stale text draft',
+    ({ nextType, nextValue }) => {
+      const root = document.createElement('main');
+      root.innerHTML = [
+        '<section kovo-fragment-target="hmr-card">',
+        '<input id="hmr-draft" kovo-key="draft" type="text" value="server before">',
+        '<output kovo-key="output">Version before</output>',
+        '</section>',
+      ].join('');
+      document.body.append(root);
+
+      const input = root.querySelector<HTMLInputElement>('#hmr-draft');
+      if (!input) throw new Error('missing inline HMR type-transition fixture');
+      input.setAttribute('value', 'user draft');
+      input.focus();
+      input.setSelectionRange(2, 6, 'forward');
+
+      installTestInlineKovoLoader(async () => ({}));
+      expect(() =>
+        (globalThis as unknown as { __kovo_a?: (body: string) => void }).__kovo_a?.(
+          [
+            '<kovo-fragment target="hmr-card">',
+            '<section kovo-fragment-target="hmr-card">',
+            `<input id="hmr-draft" kovo-key="draft" type="${nextType}" value="${nextValue}">`,
+            '<output kovo-key="output">Version after</output>',
+            '</section>',
+            '</kovo-fragment>',
+          ].join(''),
+        ),
+      ).not.toThrow();
+
+      expect(root.querySelector('#hmr-draft')).toBe(input);
+      expect(input.type).toBe(nextType);
+      expect(input.value).toBe(nextValue);
+      expect(document.activeElement).toBe(input);
+      expect(root.querySelector('output')?.textContent).toBe('Version after');
+    },
+  );
+
+  it('keeps textarea default reconciliation pinned after late selection accessor replacement', () => {
+    const root = document.createElement('main');
+    root.innerHTML = [
+      '<section kovo-fragment-target="hmr-card">',
+      '<textarea id="hmr-draft" kovo-key="draft">server before</textarea>',
+      '<output kovo-key="output">Version before</output>',
+      '</section>',
+    ].join('');
+    document.body.append(root);
+
+    const textarea = root.querySelector<HTMLTextAreaElement>('#hmr-draft');
+    const selectionStart = Object.getOwnPropertyDescriptor(
+      HTMLTextAreaElement.prototype,
+      'selectionStart',
+    );
+    const focus = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'focus');
+    if (
+      !textarea ||
+      !selectionStart?.get ||
+      !focus ||
+      !('value' in focus) ||
+      typeof focus.value !== 'function'
+    ) {
+      throw new Error('missing inline HMR selection-accessor fixture');
+    }
+    textarea.value = 'user draft';
+    textarea.focus();
+    textarea.setSelectionRange(2, 6, 'forward');
+
+    installTestInlineKovoLoader(async () => ({}));
+    let poisonedFocusCalls = 0;
+    Object.defineProperty(HTMLTextAreaElement.prototype, 'selectionStart', {
+      ...selectionStart,
+      get: () => 0,
+    });
+    Object.defineProperty(HTMLElement.prototype, 'focus', {
+      ...focus,
+      value() {
+        poisonedFocusCalls += 1;
+      },
+    });
+    try {
+      (globalThis as unknown as { __kovo_a?: (body: string) => void }).__kovo_a?.(
+        [
+          '<kovo-fragment target="hmr-card">',
+          '<section kovo-fragment-target="hmr-card">',
+          '<textarea id="hmr-draft" kovo-key="draft">server after</textarea>',
+          '<output kovo-key="output">Version after</output>',
+          '</section>',
+          '</kovo-fragment>',
+        ].join(''),
+      );
+    } finally {
+      Object.defineProperty(HTMLTextAreaElement.prototype, 'selectionStart', selectionStart);
+      Object.defineProperty(HTMLElement.prototype, 'focus', focus);
+    }
+
+    expect(root.querySelector('#hmr-draft')).toBe(textarea);
+    expect(textarea.value).toBe('user draft');
+    expect(textarea.defaultValue).toBe('server after');
+    expect(textarea.selectionStart).toBe(2);
+    expect(textarea.selectionEnd).toBe(6);
+    expect(textarea.selectionDirection).toBe('forward');
+    expect(poisonedFocusCalls).toBe(0);
     expect(root.querySelector('output')?.textContent).toBe('Version after');
   });
 

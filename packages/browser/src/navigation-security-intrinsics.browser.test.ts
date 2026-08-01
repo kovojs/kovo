@@ -416,6 +416,98 @@ describe('browser navigation security controls', () => {
     }
   });
 
+  it('pins text selection and focus controls after late intrinsic replacement', () => {
+    const controls = createBrowserNavigationSecurityControls();
+    const selectionStart = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'selectionStart',
+    );
+    const selectionEnd = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'selectionEnd',
+    );
+    const selectionDirection = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'selectionDirection',
+    );
+    const focus = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'focus');
+    if (
+      !selectionStart?.get ||
+      !selectionStart.set ||
+      !selectionEnd?.get ||
+      !selectionEnd.set ||
+      !selectionDirection?.get ||
+      !selectionDirection.set ||
+      !focus ||
+      !('value' in focus) ||
+      typeof focus.value !== 'function'
+    ) {
+      throw new Error('native text selection or focus controls unavailable');
+    }
+
+    const root = document.createElement('main');
+    const input = document.createElement('input');
+    const button = document.createElement('button');
+    input.value = 'server-safe';
+    root.append(input, button);
+    document.body.append(root);
+    button.focus();
+    let poisonedReads = 0;
+    let poisonedWrites = 0;
+    let poisonedFocusCalls = 0;
+    const poisonSelection = (descriptor: PropertyDescriptor, value: unknown) => ({
+      ...descriptor,
+      get() {
+        poisonedReads += 1;
+        return value;
+      },
+      set() {
+        poisonedWrites += 1;
+      },
+    });
+    Object.defineProperty(
+      HTMLInputElement.prototype,
+      'selectionStart',
+      poisonSelection(selectionStart, 0),
+    );
+    Object.defineProperty(
+      HTMLInputElement.prototype,
+      'selectionEnd',
+      poisonSelection(selectionEnd, 0),
+    );
+    Object.defineProperty(
+      HTMLInputElement.prototype,
+      'selectionDirection',
+      poisonSelection(selectionDirection, 'none'),
+    );
+    Object.defineProperty(HTMLElement.prototype, 'focus', {
+      ...focus,
+      value() {
+        poisonedFocusCalls += 1;
+      },
+    });
+    try {
+      controls.setElementProperty(input, 'selectionEnd', 8);
+      controls.setElementProperty(input, 'selectionStart', 2);
+      controls.setElementProperty(input, 'selectionDirection', 'forward');
+      controls.focusElement(input);
+
+      expect(controls.readElementProperty(input, 'selectionStart')).toBe(2);
+      expect(controls.readElementProperty(input, 'selectionEnd')).toBe(8);
+      expect(controls.readElementProperty(input, 'selectionDirection')).toBe('forward');
+      expect(controls.readDocumentActiveElement()).toBe(input);
+      expect(poisonedReads).toBe(0);
+      expect(poisonedWrites).toBe(0);
+      expect(poisonedFocusCalls).toBe(0);
+    } finally {
+      Object.defineProperty(HTMLInputElement.prototype, 'selectionStart', selectionStart);
+      Object.defineProperty(HTMLInputElement.prototype, 'selectionEnd', selectionEnd);
+      Object.defineProperty(HTMLInputElement.prototype, 'selectionDirection', selectionDirection);
+      Object.defineProperty(HTMLElement.prototype, 'focus', focus);
+      document.body.replaceChildren();
+    }
+  });
+
   it('keeps URL, Headers, and DOMParser decisions pinned after late replacement', () => {
     const controls = createBrowserNavigationSecurityControls();
     const originDescriptor = Object.getOwnPropertyDescriptor(URL.prototype, 'origin')!;
@@ -527,6 +619,40 @@ describe('browser navigation security controls', () => {
       );
     } finally {
       Element.prototype.replaceWith = nativeReplaceWith;
+    }
+  });
+
+  it('fails closed when text selection or focus controls were poisoned before capture', () => {
+    for (const prototype of [HTMLInputElement.prototype, HTMLTextAreaElement.prototype]) {
+      const selectionStart = Object.getOwnPropertyDescriptor(prototype, 'selectionStart');
+      if (!selectionStart?.get) throw new Error('native selection-start control unavailable');
+      Object.defineProperty(prototype, 'selectionStart', {
+        ...selectionStart,
+        get: () => 0,
+      });
+      try {
+        expect(() => createBrowserNavigationSecurityControls()).toThrow(
+          /realm intrinsics were modified before runtime initialization/,
+        );
+      } finally {
+        Object.defineProperty(prototype, 'selectionStart', selectionStart);
+      }
+    }
+
+    const focus = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'focus');
+    if (!focus || !('value' in focus) || typeof focus.value !== 'function') {
+      throw new Error('native focus control unavailable');
+    }
+    Object.defineProperty(HTMLElement.prototype, 'focus', {
+      ...focus,
+      value() {},
+    });
+    try {
+      expect(() => createBrowserNavigationSecurityControls()).toThrow(
+        /realm intrinsics were modified before runtime initialization/,
+      );
+    } finally {
+      Object.defineProperty(HTMLElement.prototype, 'focus', focus);
     }
   });
 

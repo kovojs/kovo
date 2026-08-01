@@ -19,6 +19,7 @@ export type HtmlResponseFragmentSecurityControls = Pick<
   | 'createFragmentContent'
   | 'createSecurityMap'
   | 'elementContains'
+  | 'focusElement'
   | 'hasElementAttribute'
   | 'indexOf'
   | 'getSecurityMapValue'
@@ -244,10 +245,16 @@ function d(
 
 interface ActiveMorphState {
   element: Element;
-  selectionDirection?: 'backward' | 'forward' | 'none' | null;
-  selectionEnd?: number;
-  selectionStart?: number;
-  value?: string;
+  text: ActiveMorphTextState | null;
+}
+
+interface ActiveMorphTextState {
+  inputType: string | null;
+  selectionDirection: 'backward' | 'forward' | 'none' | null;
+  selectionEnd: number;
+  selectionStart: number;
+  tagName: 'INPUT' | 'TEXTAREA';
+  value: string;
 }
 
 function captureActiveMorphState(
@@ -257,29 +264,42 @@ function captureActiveMorphState(
   const element = security.readDocumentActiveElement();
   if (!element || !security.elementContains(root, element)) return null;
 
+  return { element, text: captureMorphTextState(element, security) };
+}
+
+function captureMorphTextState(
+  element: Element,
+  security: HtmlResponseFragmentSecurityControls,
+): ActiveMorphTextState | null {
+  const tagName = security.readElementTagName(element);
+  if (tagName !== 'INPUT' && tagName !== 'TEXTAREA') return null;
+
   const value = security.readElementProperty(element, 'value');
   const selectionStart = security.readElementProperty(element, 'selectionStart');
   const selectionEnd = security.readElementProperty(element, 'selectionEnd');
   const selectionDirection = security.readElementProperty(element, 'selectionDirection');
-  const hasTextState =
-    typeof value === 'string' &&
-    typeof selectionStart === 'number' &&
-    typeof selectionEnd === 'number' &&
-    (selectionDirection === null ||
-      selectionDirection === 'backward' ||
-      selectionDirection === 'forward' ||
-      selectionDirection === 'none');
+  if (
+    typeof value !== 'string' ||
+    typeof selectionStart !== 'number' ||
+    typeof selectionEnd !== 'number' ||
+    (selectionDirection !== null &&
+      selectionDirection !== 'backward' &&
+      selectionDirection !== 'forward' &&
+      selectionDirection !== 'none')
+  ) {
+    return null;
+  }
 
   return {
-    element,
-    ...(hasTextState
-      ? {
-          selectionDirection,
-          selectionEnd,
-          selectionStart,
-          value,
-        }
-      : {}),
+    inputType:
+      tagName === 'INPUT'
+        ? security.lower(security.readAttribute(element, 'type') ?? 'text')
+        : null,
+    selectionDirection,
+    selectionEnd,
+    selectionStart,
+    tagName,
+    value,
   };
 }
 
@@ -289,20 +309,27 @@ function restoreActiveMorphState(
 ): void {
   if (!state || !security.readNodeIsConnected(state.element)) return;
 
-  if (state.value !== undefined) {
-    if (security.readElementProperty(state.element, 'value') !== state.value) {
-      security.setElementProperty(state.element, 'value', state.value);
+  const nextText = captureMorphTextState(state.element, security);
+  const text = state.text;
+  const replayText =
+    text !== null &&
+    nextText !== null &&
+    text.tagName === nextText.tagName &&
+    text.inputType === nextText.inputType;
+  if (replayText) {
+    if (security.readElementProperty(state.element, 'value') !== text.value) {
+      security.setElementProperty(state.element, 'value', text.value);
     }
   }
   // SPEC §9.1: keyed HMR/fragment refreshes retain the active browser-owned control.
-  (state.element as HTMLElement).focus();
-  if (state.value !== undefined) {
-    security.setElementProperty(state.element, 'selectionStart', state.selectionStart);
-    security.setElementProperty(state.element, 'selectionEnd', state.selectionEnd);
+  security.focusElement(state.element);
+  if (replayText) {
+    security.setElementProperty(state.element, 'selectionStart', text.selectionStart);
+    security.setElementProperty(state.element, 'selectionEnd', text.selectionEnd);
     security.setElementProperty(
       state.element,
       'selectionDirection',
-      state.selectionDirection ?? 'none',
+      text.selectionDirection ?? 'none',
     );
   }
 }
@@ -378,11 +405,6 @@ function m(c: Element, n: Element, security: HtmlResponseFragmentSecurityControl
     if (attribute) sa(c, attribute.name, attribute.value, security, true);
   }
   inertUnsafeIframeSource(c, security);
-
-  // SPEC.md §9.1: a focused keyed input/textarea keeps its browser-owned
-  // selection state because keyed morph reuses the live element and skips
-  // rewriting its children/value.
-  if ((c as HTMLInputElement | HTMLTextAreaElement).selectionStart != null) return c;
 
   u(c, n, security);
   return c;

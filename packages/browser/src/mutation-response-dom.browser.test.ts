@@ -50,9 +50,13 @@ describe('browser mutation response DOM apply', () => {
     expect(textarea.selectionStart).toBe(1);
     expect(textarea.selectionEnd).toBe(3);
     expect(textarea.selectionDirection).toBe('forward');
+    expect(textarea.value).toBe('12345');
+    expect(textarea.defaultValue).toBe('67890');
     expect(root.querySelector<HTMLDivElement>('[kovo-key="panel"]')).toBe(panel);
     expect(panel.scrollTop).toBeCloseTo(4, 0);
     expect(root.querySelector('label')?.textContent).toBe('Updated quantity');
+    root.querySelector('form')?.reset();
+    expect(textarea.value).toBe('67890');
   });
 
   it('preserves an active keyed draft while accepting the next server default', () => {
@@ -96,6 +100,51 @@ describe('browser mutation response DOM apply', () => {
     expect(root.querySelector('output')?.textContent).toBe('Version after');
   });
 
+  it.each([
+    { nextType: 'checkbox', nextValue: 'checkbox-after' },
+    { nextType: 'number', nextValue: '7' },
+  ])(
+    'accepts a keyed $nextType transition without replaying the stale text draft',
+    ({ nextType, nextValue }) => {
+      const root = document.createElement('main');
+      root.innerHTML = [
+        '<section kovo-fragment-target="hmr-card">',
+        '<input id="hmr-draft" kovo-key="draft" type="text" value="server before">',
+        '<output kovo-key="output">Version before</output>',
+        '</section>',
+      ].join('');
+      document.body.append(root);
+
+      const input = root.querySelector<HTMLInputElement>('#hmr-draft');
+      if (!input) throw new Error('missing modular HMR type-transition fixture');
+      input.setAttribute('value', 'user draft');
+      input.focus();
+      input.setSelectionRange(2, 6, 'forward');
+
+      expect(() =>
+        applyMutationResponseBodyToRuntime({
+          body: [
+            '<kovo-fragment target="hmr-card">',
+            '<section kovo-fragment-target="hmr-card">',
+            `<input id="hmr-draft" kovo-key="draft" type="${nextType}" value="${nextValue}">`,
+            '<output kovo-key="output">Version after</output>',
+            '</section>',
+            '</kovo-fragment>',
+          ].join(''),
+          morph: keyedDomMorph,
+          root: new DomMorphRoot(root),
+          store: createQueryStore(),
+        }),
+      ).not.toThrow();
+
+      expect(root.querySelector('#hmr-draft')).toBe(input);
+      expect(input.type).toBe(nextType);
+      expect(input.value).toBe(nextValue);
+      expect(document.activeElement).toBe(input);
+      expect(root.querySelector('output')?.textContent).toBe('Version after');
+    },
+  );
+
   it('preserves focused buttons during a real DOM fragment morph', () => {
     const root = document.createElement('main');
     root.innerHTML = [
@@ -112,26 +161,44 @@ describe('browser mutation response DOM apply', () => {
     if (!button) throw new Error('missing button fixture');
 
     button.focus();
-
-    const applied = applyMutationResponseBodyToRuntime({
-      body: [
-        '<kovo-fragment target="contacts-region">',
-        '<section kovo-c="contacts-region">',
-        '<form kovo-key="add-contact">',
-        '<button kovo-key="submit" type="submit">Add contact</button>',
-        '</form>',
-        '<p>4 contacts</p>',
-        '</section>',
-        '</kovo-fragment>',
-      ].join(''),
-      morph: keyedDomMorph,
-      root: new DomMorphRoot(root),
-      store: createQueryStore(),
+    const focus = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'focus');
+    if (!focus || !('value' in focus) || typeof focus.value !== 'function') {
+      throw new Error('missing modular focus-control fixture');
+    }
+    let poisonedFocusCalls = 0;
+    Object.defineProperty(HTMLElement.prototype, 'focus', {
+      ...focus,
+      value() {
+        poisonedFocusCalls += 1;
+      },
     });
+
+    const applied = (() => {
+      try {
+        return applyMutationResponseBodyToRuntime({
+          body: [
+            '<kovo-fragment target="contacts-region">',
+            '<section kovo-c="contacts-region">',
+            '<form kovo-key="add-contact">',
+            '<button kovo-key="submit" type="submit">Add contact</button>',
+            '</form>',
+            '<p>4 contacts</p>',
+            '</section>',
+            '</kovo-fragment>',
+          ].join(''),
+          morph: keyedDomMorph,
+          root: new DomMorphRoot(root),
+          store: createQueryStore(),
+        });
+      } finally {
+        Object.defineProperty(HTMLElement.prototype, 'focus', focus);
+      }
+    })();
 
     expect(applied.appliedFragments).toEqual(['contacts-region']);
     expect(root.querySelector('button')).toBe(button);
     expect(document.activeElement).toBe(button);
+    expect(poisonedFocusCalls).toBe(0);
     expect(root.querySelector('p')?.textContent).toBe('4 contacts');
   });
 

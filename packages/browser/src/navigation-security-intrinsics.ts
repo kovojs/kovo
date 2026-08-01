@@ -91,6 +91,7 @@ export function createBrowserNavigationSecurityControls(
   const NativeFormData = scope.FormData;
   const NativeDocument = scope.Document;
   const NativeElement = scope.Element;
+  const NativeHTMLElement = scope.HTMLElement;
   const NativeNode = scope.Node;
   const NativeDocumentFragment = scope.DocumentFragment;
   const NativeHTMLTemplateElement = scope.HTMLTemplateElement;
@@ -225,6 +226,9 @@ export function createBrowserNavigationSecurityControls(
     : undefined;
   const elementReplaceWith = NativeElement
     ? valueMethod(NativeElement.prototype, 'replaceWith')
+    : undefined;
+  const htmlElementFocus = NativeHTMLElement
+    ? stableMethod(NativeHTMLElement.prototype, 'focus')
     : undefined;
   const nodeCloneNode = NativeNode ? valueMethod(NativeNode.prototype, 'cloneNode') : undefined;
   const nodeAppendChild = NativeNode ? valueMethod(NativeNode.prototype, 'appendChild') : undefined;
@@ -1194,6 +1198,17 @@ export function createBrowserNavigationSecurityControls(
       return;
     }
     throw new TypeError('Kovo DOM property control rejected its receiver.');
+  }
+
+  function focusElement(element: object): void {
+    if (!controlsSound || !htmlElementFocus) {
+      throw new TypeError('Kovo DOM focus control is unavailable.');
+    }
+    try {
+      call(htmlElementFocus, element, []);
+    } catch {
+      throw new TypeError('Kovo DOM focus control rejected its receiver.');
+    }
   }
 
   function submitForm(form: unknown): boolean {
@@ -3465,6 +3480,9 @@ export function createBrowserNavigationSecurityControls(
       }
       if (NativeDocument && NativeElement && NativeNode && documentObject) {
         if (
+          !NativeHTMLElement ||
+          !NativeHTMLInputElement ||
+          !NativeHTMLTextAreaElement ||
           !NativeHTMLFormElement ||
           !NativeFormData ||
           !formDataGet ||
@@ -3488,6 +3506,7 @@ export function createBrowserNavigationSecurityControls(
           !elementPrepend ||
           !elementReplaceChildren ||
           !elementReplaceWith ||
+          !htmlElementFocus ||
           !nodeCloneNode ||
           !nodeAppendChild ||
           !nodeInsertBefore ||
@@ -3503,6 +3522,20 @@ export function createBrowserNavigationSecurityControls(
           !inputIndeterminateSetter ||
           !inputValue ||
           !inputValueSetter ||
+          !inputSelectionStart ||
+          !inputSelectionStartSetter ||
+          !inputSelectionEnd ||
+          !inputSelectionEndSetter ||
+          !inputSelectionDirection ||
+          !inputSelectionDirectionSetter ||
+          !textAreaValue ||
+          !textAreaValueSetter ||
+          !textAreaSelectionStart ||
+          !textAreaSelectionStartSetter ||
+          !textAreaSelectionEnd ||
+          !textAreaSelectionEndSetter ||
+          !textAreaSelectionDirection ||
+          !textAreaSelectionDirectionSetter ||
           !fragmentChildren ||
           !templateContent ||
           !htmlCollectionLength ||
@@ -3514,6 +3547,7 @@ export function createBrowserNavigationSecurityControls(
           !attrName ||
           !attrValue ||
           !documentActiveElement ||
+          !documentElement ||
           !elementQuerySelector ||
           !elementQuerySelectorAll ||
           (NativeDocument !== undefined && !documentQuerySelectorAll) ||
@@ -3537,6 +3571,9 @@ export function createBrowserNavigationSecurityControls(
         ]);
         const formSubmitControl = apply<unknown>(documentCreateElement, documentObject, ['form']);
         const propertyControl = apply<unknown>(documentCreateElement, documentObject, ['input']);
+        const textAreaPropertyControl = apply<unknown>(documentCreateElement, documentObject, [
+          'textarea',
+        ]);
         const textControl = apply<unknown>(documentCreateElement, documentObject, ['span']);
         const insertParentControl = apply<unknown>(documentCreateElement, documentObject, ['div']);
         const insertAnchorControl = apply<unknown>(documentCreateElement, documentObject, ['em']);
@@ -3562,6 +3599,8 @@ export function createBrowserNavigationSecurityControls(
           typeof formSubmitControl !== 'object' ||
           propertyControl === null ||
           typeof propertyControl !== 'object' ||
+          textAreaPropertyControl === null ||
+          typeof textAreaPropertyControl !== 'object' ||
           textControl === null ||
           typeof textControl !== 'object' ||
           insertParentControl === null ||
@@ -3610,13 +3649,55 @@ export function createBrowserNavigationSecurityControls(
         apply(inputCheckedSetter, propertyControl, [true]);
         apply(inputIndeterminateSetter, propertyControl, [true]);
         apply(inputValueSetter, propertyControl, ['kovo-property-control']);
+        apply(inputSelectionStartSetter, propertyControl, [1]);
+        apply(inputSelectionEndSetter, propertyControl, [4]);
+        apply(inputSelectionDirectionSetter, propertyControl, ['backward']);
+        apply(textAreaValueSetter, textAreaPropertyControl, ['kovo-textarea-control']);
+        apply(textAreaSelectionStartSetter, textAreaPropertyControl, [2]);
+        apply(textAreaSelectionEndSetter, textAreaPropertyControl, [5]);
+        apply(textAreaSelectionDirectionSetter, textAreaPropertyControl, ['forward']);
         if (
           apply<unknown>(inputChecked, propertyControl, []) !== true ||
           apply<unknown>(inputIndeterminate, propertyControl, []) !== true ||
-          apply<unknown>(inputValue, propertyControl, []) !== 'kovo-property-control'
+          apply<unknown>(inputValue, propertyControl, []) !== 'kovo-property-control' ||
+          apply<unknown>(inputSelectionStart, propertyControl, []) !== 1 ||
+          apply<unknown>(inputSelectionEnd, propertyControl, []) !== 4 ||
+          apply<unknown>(inputSelectionDirection, propertyControl, []) !== 'backward' ||
+          apply<unknown>(textAreaValue, textAreaPropertyControl, []) !== 'kovo-textarea-control' ||
+          apply<unknown>(textAreaSelectionStart, textAreaPropertyControl, []) !== 2 ||
+          apply<unknown>(textAreaSelectionEnd, textAreaPropertyControl, []) !== 5 ||
+          apply<unknown>(textAreaSelectionDirection, textAreaPropertyControl, []) !== 'forward'
         ) {
           return false;
         }
+        const focusParentControl = apply<unknown>(documentElement, documentObject, []);
+        const previousActiveControl = apply<unknown>(documentActiveElement, documentObject, []);
+        if (focusParentControl === null || typeof focusParentControl !== 'object') return false;
+        apply(nodeAppendChild, focusParentControl, [propertyControl]);
+        try {
+          apply(htmlElementFocus, propertyControl, []);
+          if (apply<unknown>(documentActiveElement, documentObject, []) !== propertyControl) {
+            return false;
+          }
+        } finally {
+          apply(elementRemove, propertyControl, []);
+          if (
+            previousActiveControl !== null &&
+            typeof previousActiveControl === 'object' &&
+            apply<unknown>(nodeIsConnected, previousActiveControl, []) === true
+          ) {
+            try {
+              apply(htmlElementFocus, previousActiveControl, []);
+            } catch {}
+          }
+        }
+        let rejectedForeignFocusReceiver = false;
+        try {
+          apply(htmlElementFocus, {}, []);
+        } catch {
+          rejectedForeignFocusReceiver = true;
+        }
+        if (!rejectedForeignFocusReceiver) return false;
         apply(nodeAppendChild, snapshotControl, [nestedControl]);
         apply(nodeAppendChild, insertParentControl, [insertAnchorControl]);
         if (
@@ -3824,6 +3905,7 @@ export function createBrowserNavigationSecurityControls(
     fetchWith,
     fetchWithOptionalSyncResult,
     fetchValue,
+    focusElement,
     getOwnSecurityPropertyDescriptor,
     getSecurityMapValue,
     getElementById,

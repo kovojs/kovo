@@ -117,7 +117,6 @@ export class DomMorphTarget implements MorphTarget {
     // SF (secure-framework Tier 3): Trusted Types policy seam (see appendHtml).
     const content = security.createFragmentContent(kovoCreateHTML(securityStringTrim(html)));
     const next = firstMorphElement(content, security);
-    const activeState = captureActiveDomState(this.element);
     const scrollStates = captureDomScrollStates(this.element);
 
     if (!next) {
@@ -126,7 +125,6 @@ export class DomMorphTarget implements MorphTarget {
     }
 
     morphDomElement(this.element, next);
-    restoreActiveDomState(activeState);
     restoreDomScrollStates(scrollStates);
   }
 }
@@ -260,6 +258,7 @@ export function morphStructuralTree(
 /** @internal Reconcile a DOM element in place against its next shape, preserving focus/state (SPEC §9.1). */
 export function morphDomElement(current: Element, next: Element): Element {
   const security = requireBrowserDomSecurity();
+  const activeState = captureActiveDomState(current, security);
   // Resolve the reuse plan before validation. On replacement, the final sanitizer
   // pass is followed only by the boot-pinned native replaceWith invocation.
   const canReuse = canReuseDomElement(current, next, security);
@@ -267,18 +266,15 @@ export function morphDomElement(current: Element, next: Element): Element {
 
   if (!canReuse) {
     security.replaceElement(current, next);
+    restoreActiveDomState(activeState, security);
     return next;
   }
 
   syncDomAttributes(current, next, security);
-  if (security.readAttribute(current, 'kovo-state') !== null) {
-    return current;
+  if (security.readAttribute(current, 'kovo-state') === null) {
+    morphDomChildren(current, next, security);
   }
-  if (isActiveDomFormControl(current, security)) {
-    return current;
-  }
-
-  morphDomChildren(current, next, security);
+  restoreActiveDomState(activeState, security);
   return current;
 }
 
@@ -458,82 +454,102 @@ function syncDomAttributes(
   }
 }
 
-function isActiveDomFormControl(element: Element, security = requireBrowserDomSecurity()): boolean {
-  const tagName = security.readElementTagName(element);
-  return (
-    security.readDocumentActiveElement() === element &&
-    (tagName === 'INPUT' || tagName === 'TEXTAREA')
-  );
-}
-
 interface ActiveDomState {
-  element: HTMLElement;
-  selectionDirection?: 'backward' | 'forward' | 'none' | null;
-  selectionEnd?: number | null;
-  selectionStart?: number | null;
+  element: Element;
   scrollLeft: number;
   scrollTop: number;
-  value?: string;
+  text: ActiveDomTextState | null;
 }
 
-function captureActiveDomState(root: Element): ActiveDomState | null {
-  const security = requireBrowserDomSecurity();
+interface ActiveDomTextState {
+  inputType: string | null;
+  selectionDirection: 'backward' | 'forward' | 'none' | null;
+  selectionEnd: number;
+  selectionStart: number;
+  tagName: 'INPUT' | 'TEXTAREA';
+  value: string;
+}
+
+function captureActiveDomState(
+  root: Element,
+  security = requireBrowserDomSecurity(),
+): ActiveDomState | null {
   const element = security.readDocumentActiveElement();
 
-  if (!(element instanceof HTMLElement) || !security.elementContains(root, element)) {
+  if (!element || !security.elementContains(root, element)) {
     return null;
   }
+
+  return {
+    element,
+    scrollLeft: element.scrollLeft,
+    scrollTop: element.scrollTop,
+    text: captureActiveDomTextState(element, security),
+  };
+}
+
+function captureActiveDomTextState(
+  element: Element,
+  security = requireBrowserDomSecurity(),
+): ActiveDomTextState | null {
+  const tagName = security.readElementTagName(element);
+  if (tagName !== 'INPUT' && tagName !== 'TEXTAREA') return null;
 
   const value = security.readElementProperty(element, 'value');
   const selectionDirection = security.readElementProperty(element, 'selectionDirection');
   const selectionEnd = security.readElementProperty(element, 'selectionEnd');
   const selectionStart = security.readElementProperty(element, 'selectionStart');
-  const hasTextState =
-    typeof value === 'string' &&
-    typeof selectionStart === 'number' &&
-    typeof selectionEnd === 'number' &&
-    (selectionDirection === null ||
-      selectionDirection === 'backward' ||
-      selectionDirection === 'forward' ||
-      selectionDirection === 'none');
+  if (
+    typeof value !== 'string' ||
+    typeof selectionStart !== 'number' ||
+    typeof selectionEnd !== 'number' ||
+    (selectionDirection !== null &&
+      selectionDirection !== 'backward' &&
+      selectionDirection !== 'forward' &&
+      selectionDirection !== 'none')
+  ) {
+    return null;
+  }
 
   return {
-    element,
-    ...(hasTextState
-      ? {
-          selectionDirection,
-          selectionEnd,
-          selectionStart,
-          value,
-        }
-      : {}),
-    scrollLeft: element.scrollLeft,
-    scrollTop: element.scrollTop,
+    inputType:
+      tagName === 'INPUT'
+        ? security.lower(security.readAttribute(element, 'type') ?? 'text')
+        : null,
+    selectionDirection,
+    selectionEnd,
+    selectionStart,
+    tagName,
+    value,
   };
 }
 
-function restoreActiveDomState(state: ActiveDomState | null): void {
-  const security = requireBrowserDomSecurity();
+function restoreActiveDomState(
+  state: ActiveDomState | null,
+  security = requireBrowserDomSecurity(),
+): void {
   if (!state || !security.readNodeIsConnected(state.element)) return;
 
-  if (state.value !== undefined) {
-    if (security.readElementProperty(state.element, 'value') !== state.value) {
-      security.setElementProperty(state.element, 'value', state.value);
+  const nextText = captureActiveDomTextState(state.element, security);
+  const text = state.text;
+  const replayText =
+    text !== null &&
+    nextText !== null &&
+    text.tagName === nextText.tagName &&
+    text.inputType === nextText.inputType;
+  if (replayText) {
+    if (security.readElementProperty(state.element, 'value') !== text.value) {
+      security.setElementProperty(state.element, 'value', text.value);
     }
   }
-  state.element.focus();
-  if (
-    state.selectionStart !== undefined &&
-    state.selectionEnd !== undefined &&
-    state.selectionStart !== null &&
-    state.selectionEnd !== null
-  ) {
-    security.setElementProperty(state.element, 'selectionStart', state.selectionStart);
-    security.setElementProperty(state.element, 'selectionEnd', state.selectionEnd);
+  security.focusElement(state.element);
+  if (replayText) {
+    security.setElementProperty(state.element, 'selectionStart', text.selectionStart);
+    security.setElementProperty(state.element, 'selectionEnd', text.selectionEnd);
     security.setElementProperty(
       state.element,
       'selectionDirection',
-      state.selectionDirection ?? 'none',
+      text.selectionDirection ?? 'none',
     );
   }
   state.element.scrollLeft = state.scrollLeft;
