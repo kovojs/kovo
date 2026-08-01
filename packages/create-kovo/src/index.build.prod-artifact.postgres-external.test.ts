@@ -32,7 +32,6 @@ import {
 
 const POSTGRES_BINARIES = ['initdb', 'postgres'] as const;
 const postgresToolchain = localPostgresToolchain();
-const describeIfPostgres = postgresToolchain.available ? describe : describe.skip;
 const runId = `kovo_ck_ext_${process.pid}_${Date.now()}`.replace(/[^A-Za-z0-9_]/g, '_');
 const require = createRequire(import.meta.url);
 const { Pool } = require(resolveDependencyRoot('pg')) as {
@@ -82,264 +81,267 @@ describe('create-kovo starter (build integration: production Postgres driver flo
   }, 600_000);
 });
 
-describeIfPostgres(
-  'create-kovo starter (build integration: external Postgres production artifact)',
-  () => {
-    const roots: string[] = [];
-    const clusters: LocalPostgresCluster[] = [];
+describe('create-kovo starter (build integration: external Postgres production artifact)', () => {
+  const roots: string[] = [];
+  const clusters: LocalPostgresCluster[] = [];
 
-    afterAll(async () => {
-      await Promise.allSettled(clusters.splice(0).map((cluster) => cluster.stop()));
-      for (const root of roots.splice(0)) rmSync(root, { force: true, recursive: true });
-    });
+  afterAll(async () => {
+    await Promise.allSettled(clusters.splice(0).map((cluster) => cluster.stop()));
+    for (const root of roots.splice(0)) rmSync(root, { force: true, recursive: true });
+  });
 
-    it('deploys the generated Postgres starter against admin-provisioned external Postgres with a least-privilege runtime URL', async () => {
-      const tempParent = tmpdir();
-      mkdirSync(tempParent, { recursive: true });
-      const root = mkdtempSync(join(tempParent, 'create-kovo-prod-external-postgres-'));
-      const clusterRoot = mkdtempSync(join(tempParent, 'create-kovo-postgres-cluster-'));
-      roots.push(root, clusterRoot);
-      const cluster = await startLocalPostgres(clusterRoot);
-      clusters.push(cluster);
-      const port = await reservePort();
-      let server: ChildProcessWithoutNullStreams | undefined;
+  it('deploys the generated Postgres starter against admin-provisioned external Postgres with a least-privilege runtime URL', async ({
+    skip,
+  }) => {
+    if (!postgresToolchain.available) {
+      skip(postgresToolchain.reason);
+      return;
+    }
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-external-postgres-'));
+    const clusterRoot = mkdtempSync(join(tempParent, 'create-kovo-postgres-cluster-'));
+    roots.push(root, clusterRoot);
+    const cluster = await startLocalPostgres(clusterRoot);
+    clusters.push(cluster);
+    const port = await reservePort();
+    let server: ChildProcessWithoutNullStreams | undefined;
 
-      const database = `${runId}_app`;
-      const adminRole = `${runId}_admin`;
-      const runtimeRole = `${runId}_runtime`;
+    const database = `${runId}_app`;
+    const adminRole = `${runId}_admin`;
+    const runtimeRole = `${runId}_runtime`;
 
-      try {
-        writeKovoProject(root, { dialect: 'postgres', name: 'External Postgres Proof' });
-        await linkStarterBuildDependencies(root);
-        writeProductionEquivalentSchemaModule(root);
-        writeStarterPostgresMigration(root);
-        allowExternalPostgresEgress(root, cluster.port);
-        buildReusableProductionArtifact(root);
+    try {
+      writeKovoProject(root, { dialect: 'postgres', name: 'External Postgres Proof' });
+      await linkStarterBuildDependencies(root);
+      writeProductionEquivalentSchemaModule(root);
+      writeStarterPostgresMigration(root);
+      allowExternalPostgresEgress(root, cluster.port);
+      buildReusableProductionArtifact(root);
 
-        await createExternalDatabase(cluster, { adminRole, database, runtimeRole });
-        const adminUrl = cluster.url(database, adminRole);
-        const runtimeUrl = cluster.url(database, runtimeRole);
-        const systemUrl = cluster.url(database, 'kovo_system');
+      await createExternalDatabase(cluster, { adminRole, database, runtimeRole });
+      const adminUrl = cluster.url(database, adminRole);
+      const runtimeUrl = cluster.url(database, runtimeRole);
+      const systemUrl = cluster.url(database, 'kovo_system');
 
-        const provisionOutput = execKovo(root, [
-          'db',
-          'provision',
-          '--schema',
-          '.kovo/external-postgres-schema.mjs',
-          '--migrations',
-          'migrations',
-          '--admin-database-url',
-          adminUrl,
-          '--database-url',
-          runtimeUrl,
-        ]);
-        expect(provisionOutput).toContain('STATUS ok');
-        await grantRuntimeDataRoles(cluster.url(database, 'postgres'), runtimeRole);
-        const runtimeCheckOutput = execKovo(root, [
-          'db',
-          'check',
-          '--schema',
-          '.kovo/external-postgres-schema.mjs',
-          '--system-database-url',
-          systemUrl,
-          '--database-url',
-          runtimeUrl,
-        ]);
-        expect(runtimeCheckOutput).toContain('STATUS ok');
-        const adminFallbackCheckOutput = execKovo(root, [
-          'db',
-          'check',
-          '--schema',
-          '.kovo/external-postgres-schema.mjs',
-          '--admin-database-url',
-          adminUrl,
-          '--database-url',
-          runtimeUrl,
-        ]);
-        expect(adminFallbackCheckOutput).toContain('STATUS ok');
-        const postgresUrl = cluster.url(database, 'postgres');
-        await seedDemoUser(postgresUrl, demoPassword(root));
-        await expectPermissionDenied(runtimeUrl, `CREATE ROLE ${quoteIdent(`${runId}_blocked`)}`);
-        await expectPermissionDenied(runtimeUrl, 'ALTER TABLE contacts FORCE ROW LEVEL SECURITY');
+      const provisionOutput = execKovo(root, [
+        'db',
+        'provision',
+        '--schema',
+        '.kovo/external-postgres-schema.mjs',
+        '--migrations',
+        'migrations',
+        '--admin-database-url',
+        adminUrl,
+        '--database-url',
+        runtimeUrl,
+      ]);
+      expect(provisionOutput).toContain('STATUS ok');
+      await grantRuntimeDataRoles(cluster.url(database, 'postgres'), runtimeRole);
+      const runtimeCheckOutput = execKovo(root, [
+        'db',
+        'check',
+        '--schema',
+        '.kovo/external-postgres-schema.mjs',
+        '--system-database-url',
+        systemUrl,
+        '--database-url',
+        runtimeUrl,
+      ]);
+      expect(runtimeCheckOutput).toContain('STATUS ok');
+      const adminFallbackCheckOutput = execKovo(root, [
+        'db',
+        'check',
+        '--schema',
+        '.kovo/external-postgres-schema.mjs',
+        '--admin-database-url',
+        adminUrl,
+        '--database-url',
+        runtimeUrl,
+      ]);
+      expect(adminFallbackCheckOutput).toContain('STATUS ok');
+      const postgresUrl = cluster.url(database, 'postgres');
+      await seedDemoUser(postgresUrl, demoPassword(root));
+      await expectPermissionDenied(runtimeUrl, `CREATE ROLE ${quoteIdent(`${runId}_blocked`)}`);
+      await expectPermissionDenied(runtimeUrl, 'ALTER TABLE contacts FORCE ROW LEVEL SECURITY');
 
-        const transportOrigin = `http://127.0.0.1:${port}`;
-        const publicOrigin = `https://127.0.0.1:${port}`;
-        const mismatchingPublicOrigin = `https://127.0.0.1:${port === 65_535 ? port - 1 : port + 1}`;
-        const baseEnvironment = withRepoBinOnPath();
-        delete baseEnvironment.KOVO_NODE_ORIGIN;
-        delete baseEnvironment.KOVO_NODE_TRUSTED_PROXY;
-        Object.assign(baseEnvironment, {
-          ...productionArtifactAttestationEnv('postgres-external-runtime'),
-          BETTER_AUTH_URL: publicOrigin,
-          HOST: '127.0.0.1',
-          KOVO_DATABASE_URL: runtimeUrl,
-          KOVO_DB_SYSTEM_URL: systemUrl,
-          NODE_ENV: 'production',
-          PORT: String(port),
+      const transportOrigin = `http://127.0.0.1:${port}`;
+      const publicOrigin = `https://127.0.0.1:${port}`;
+      const mismatchingPublicOrigin = `https://127.0.0.1:${port === 65_535 ? port - 1 : port + 1}`;
+      const baseEnvironment = withRepoBinOnPath();
+      delete baseEnvironment.KOVO_NODE_ORIGIN;
+      delete baseEnvironment.KOVO_NODE_TRUSTED_PROXY;
+      Object.assign(baseEnvironment, {
+        ...productionArtifactAttestationEnv('postgres-external-runtime'),
+        BETTER_AUTH_URL: publicOrigin,
+        HOST: '127.0.0.1',
+        KOVO_DATABASE_URL: runtimeUrl,
+        KOVO_DB_SYSTEM_URL: systemUrl,
+        NODE_ENV: 'production',
+        PORT: String(port),
+      });
+      let output = (): string => '';
+      const boot = async (authorityEnvironment: Readonly<Record<string, string>>) => {
+        if (server !== undefined) throw new Error('Generated starter server is already running.');
+        server = spawn(process.execPath, ['dist/server/server.mjs'], {
+          cwd: root,
+          detached: process.platform !== 'win32',
+          env: { ...baseEnvironment, ...authorityEnvironment },
         });
-        let output = (): string => '';
-        const boot = async (authorityEnvironment: Readonly<Record<string, string>>) => {
-          if (server !== undefined) throw new Error('Generated starter server is already running.');
-          server = spawn(process.execPath, ['dist/server/server.mjs'], {
-            cwd: root,
-            detached: process.platform !== 'win32',
-            env: { ...baseEnvironment, ...authorityEnvironment },
-          });
-          output = collectOutput(server);
-          await waitForTcpPort('127.0.0.1', port, output);
-        };
-        const stop = async (): Promise<void> => {
-          await stopProcess(server);
-          server = undefined;
-        };
+        output = collectOutput(server);
+        await waitForTcpPort('127.0.0.1', port, output);
+      };
+      const stop = async (): Promise<void> => {
+        await stopProcess(server);
+        server = undefined;
+      };
 
-        // Capture a valid anonymous CSRF form under the exact fixed public origin. The same signed
-        // form then proves origin rejection happens inside the generated Better Auth credential
-        // boundary before its handler can touch rate-limit/session rows or emit a session cookie.
-        await boot({ KOVO_NODE_ORIGIN: publicOrigin });
-        const failureForm = await readGeneratedSignInForm(root, transportOrigin, output);
-        await stop();
-        const authRowsBeforeFailures = await authMutationSnapshot(postgresUrl);
+      // Capture a valid anonymous CSRF form under the exact fixed public origin. The same signed
+      // form then proves origin rejection happens inside the generated Better Auth credential
+      // boundary before its handler can touch rate-limit/session rows or emit a session cookie.
+      await boot({ KOVO_NODE_ORIGIN: publicOrigin });
+      const failureForm = await readGeneratedSignInForm(root, transportOrigin, output);
+      await stop();
+      const authRowsBeforeFailures = await authMutationSnapshot(postgresUrl);
 
-        await boot({});
-        const spoofedForwardedScheme = await submitGeneratedSignIn({
-          form: failureForm,
-          requestOrigin: transportOrigin,
-          transportOrigin,
-          xForwardedProto: 'https',
-        });
-        const spoofedBody = await spoofedForwardedScheme.text();
-        expect(spoofedForwardedScheme.status, `${spoofedBody}\n${output()}`).not.toBe(303);
-        expect(spoofedForwardedScheme.headers.getSetCookie()).toEqual([]);
-        expect(await authMutationSnapshot(postgresUrl)).toEqual(authRowsBeforeFailures);
-        await stop();
+      await boot({});
+      const spoofedForwardedScheme = await submitGeneratedSignIn({
+        form: failureForm,
+        requestOrigin: transportOrigin,
+        transportOrigin,
+        xForwardedProto: 'https',
+      });
+      const spoofedBody = await spoofedForwardedScheme.text();
+      expect(spoofedForwardedScheme.status, `${spoofedBody}\n${output()}`).not.toBe(303);
+      expect(spoofedForwardedScheme.headers.getSetCookie()).toEqual([]);
+      expect(await authMutationSnapshot(postgresUrl)).toEqual(authRowsBeforeFailures);
+      await stop();
 
-        await boot({ KOVO_NODE_ORIGIN: mismatchingPublicOrigin });
-        const mismatchingPort = await submitGeneratedSignIn({
-          form: failureForm,
-          requestOrigin: mismatchingPublicOrigin,
-          transportOrigin,
-        });
-        const mismatchingPortBody = await mismatchingPort.text();
-        expect(mismatchingPort.status, `${mismatchingPortBody}\n${output()}`).not.toBe(303);
-        expect(mismatchingPort.headers.getSetCookie()).toEqual([]);
-        expect(await authMutationSnapshot(postgresUrl)).toEqual(authRowsBeforeFailures);
-        await stop();
+      await boot({ KOVO_NODE_ORIGIN: mismatchingPublicOrigin });
+      const mismatchingPort = await submitGeneratedSignIn({
+        form: failureForm,
+        requestOrigin: mismatchingPublicOrigin,
+        transportOrigin,
+      });
+      const mismatchingPortBody = await mismatchingPort.text();
+      expect(mismatchingPort.status, `${mismatchingPortBody}\n${output()}`).not.toBe(303);
+      expect(mismatchingPort.headers.getSetCookie()).toEqual([]);
+      expect(await authMutationSnapshot(postgresUrl)).toEqual(authRowsBeforeFailures);
+      await stop();
 
-        // Explicit trusted-proxy mode reconstructs the configured HTTPS origin from the preserved
-        // Host authority plus a trusted X-Forwarded-Proto. It remains opt-in at process boot.
-        await boot({ KOVO_NODE_TRUSTED_PROXY: '1' });
-        const trustedProxyForm = await readGeneratedSignInForm(root, transportOrigin, output, {
-          'x-forwarded-proto': 'https',
-        });
-        const trustedProxySignIn = await submitGeneratedSignIn({
-          form: trustedProxyForm,
-          requestOrigin: publicOrigin,
-          transportOrigin,
-          xForwardedProto: 'https',
-        });
-        const trustedProxyBody = await trustedProxySignIn.text();
-        expect(trustedProxySignIn.status, `${trustedProxyBody}\n${output()}`).toBe(303);
-        expect(trustedProxySignIn.headers.getSetCookie().join('\n')).toMatch(
-          /__Host-better-auth\.session_token=/u,
+      // Explicit trusted-proxy mode reconstructs the configured HTTPS origin from the preserved
+      // Host authority plus a trusted X-Forwarded-Proto. It remains opt-in at process boot.
+      await boot({ KOVO_NODE_TRUSTED_PROXY: '1' });
+      const trustedProxyForm = await readGeneratedSignInForm(root, transportOrigin, output, {
+        'x-forwarded-proto': 'https',
+      });
+      const trustedProxySignIn = await submitGeneratedSignIn({
+        form: trustedProxyForm,
+        requestOrigin: publicOrigin,
+        transportOrigin,
+        xForwardedProto: 'https',
+      });
+      const trustedProxyBody = await trustedProxySignIn.text();
+      expect(trustedProxySignIn.status, `${trustedProxyBody}\n${output()}`).toBe(303);
+      expect(trustedProxySignIn.headers.getSetCookie().join('\n')).toMatch(
+        /__Host-better-auth\.session_token=/u,
+      );
+      expect((await authMutationSnapshot(postgresUrl)).sessions).toBe(
+        authRowsBeforeFailures.sessions + 1,
+      );
+      await stop();
+
+      // The strongest posture pins every Request to the configured public origin and ignores all
+      // forwarded authority. Keep this exact-origin server running for the rest of the production
+      // starter acceptance flow.
+      await boot({ KOVO_NODE_ORIGIN: publicOrigin });
+      const fixedOriginForm = await readGeneratedSignInForm(root, transportOrigin, output);
+      const exactOriginSignIn = await submitGeneratedSignIn({
+        form: fixedOriginForm,
+        requestOrigin: publicOrigin,
+        transportOrigin,
+        xForwardedProto: 'http',
+      });
+      const exactOriginBody = await exactOriginSignIn.text();
+      expect(exactOriginSignIn.status, `${exactOriginBody}\n${output()}`).toBe(303);
+      expect(exactOriginSignIn.headers.getSetCookie().join('\n')).toMatch(
+        /__Host-better-auth\.session_token=/u,
+      );
+      expect((await authMutationSnapshot(postgresUrl)).sessions).toBe(
+        authRowsBeforeFailures.sessions + 2,
+      );
+      const jar = fixedOriginForm.jar;
+      mergeCookies(jar, exactOriginSignIn.headers.getSetCookie());
+
+      const homeResponse = await fetchTextWhenReady(`${transportOrigin}/`, output, {
+        headers: { cookie: cookieHeader(jar) },
+      });
+      expect(homeResponse).toContain('Demo User');
+      expect(homeResponse).toContain('3 contacts');
+      expect(homeResponse).toContain('Ada Lovelace');
+
+      const addForm = formHtmlByAction(homeResponse, '/_m/mutations/add-contact');
+      const email = `external-${Date.now()}@example.com`;
+      const addContact = await fetch(`${transportOrigin}/_m/mutations/add-contact`, {
+        body: new URLSearchParams({
+          company: 'External Postgres',
+          csrf: fieldValue(addForm, 'csrf'),
+          email,
+          'Kovo-Idem': fieldValue(addForm, 'Kovo-Idem'),
+          name: 'External Pat',
+        }),
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          cookie: cookieHeader(jar),
+          origin: publicOrigin,
+        },
+        method: 'POST',
+        redirect: 'manual',
+      });
+      mergeCookies(jar, addContact.headers.getSetCookie());
+      const addContactBody = await addContact.text();
+      if (addContact.status !== 303) {
+        throw new Error(
+          `Expected add-contact redirect, got ${addContact.status}:\n${addContactBody}\n${output()}`,
         );
-        expect((await authMutationSnapshot(postgresUrl)).sessions).toBe(
-          authRowsBeforeFailures.sessions + 1,
+      }
+
+      const updatedHome = await fetch(`${transportOrigin}/`, {
+        headers: { cookie: cookieHeader(jar) },
+      });
+      const updatedHtml = await updatedHome.text();
+      expect(updatedHtml).toContain('External Pat');
+      expect(updatedHtml).toContain(email);
+      expect(updatedHtml).toContain('4 contacts');
+
+      await withPool(runtimeUrl, async (pool) => {
+        const anonymousContacts = await pool.query<{ email: string; name: string }>(
+          'SELECT email, name FROM contacts WHERE email = $1',
+          [email],
         );
-        await stop();
+        expect(anonymousContacts.rows).toEqual([]);
 
-        // The strongest posture pins every Request to the configured public origin and ignores all
-        // forwarded authority. Keep this exact-origin server running for the rest of the production
-        // starter acceptance flow.
-        await boot({ KOVO_NODE_ORIGIN: publicOrigin });
-        const fixedOriginForm = await readGeneratedSignInForm(root, transportOrigin, output);
-        const exactOriginSignIn = await submitGeneratedSignIn({
-          form: fixedOriginForm,
-          requestOrigin: publicOrigin,
-          transportOrigin,
-          xForwardedProto: 'http',
-        });
-        const exactOriginBody = await exactOriginSignIn.text();
-        expect(exactOriginSignIn.status, `${exactOriginBody}\n${output()}`).toBe(303);
-        expect(exactOriginSignIn.headers.getSetCookie().join('\n')).toMatch(
-          /__Host-better-auth\.session_token=/u,
-        );
-        expect((await authMutationSnapshot(postgresUrl)).sessions).toBe(
-          authRowsBeforeFailures.sessions + 2,
-        );
-        const jar = fixedOriginForm.jar;
-        mergeCookies(jar, exactOriginSignIn.headers.getSetCookie());
-
-        const homeResponse = await fetchTextWhenReady(`${transportOrigin}/`, output, {
-          headers: { cookie: cookieHeader(jar) },
-        });
-        expect(homeResponse).toContain('Demo User');
-        expect(homeResponse).toContain('3 contacts');
-        expect(homeResponse).toContain('Ada Lovelace');
-
-        const addForm = formHtmlByAction(homeResponse, '/_m/mutations/add-contact');
-        const email = `external-${Date.now()}@example.com`;
-        const addContact = await fetch(`${transportOrigin}/_m/mutations/add-contact`, {
-          body: new URLSearchParams({
-            company: 'External Postgres',
-            csrf: fieldValue(addForm, 'csrf'),
-            email,
-            'Kovo-Idem': fieldValue(addForm, 'Kovo-Idem'),
-            name: 'External Pat',
-          }),
-          headers: {
-            'content-type': 'application/x-www-form-urlencoded',
-            cookie: cookieHeader(jar),
-            origin: publicOrigin,
-          },
-          method: 'POST',
-          redirect: 'manual',
-        });
-        mergeCookies(jar, addContact.headers.getSetCookie());
-        const addContactBody = await addContact.text();
-        if (addContact.status !== 303) {
-          throw new Error(
-            `Expected add-contact redirect, got ${addContact.status}:\n${addContactBody}\n${output()}`,
-          );
-        }
-
-        const updatedHome = await fetch(`${transportOrigin}/`, {
-          headers: { cookie: cookieHeader(jar) },
-        });
-        const updatedHtml = await updatedHome.text();
-        expect(updatedHtml).toContain('External Pat');
-        expect(updatedHtml).toContain(email);
-        expect(updatedHtml).toContain('4 contacts');
-
-        await withPool(runtimeUrl, async (pool) => {
-          const anonymousContacts = await pool.query<{ email: string; name: string }>(
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          await client.query("SELECT set_config('kovo.principal', $1, true)", [
+            'artifact-verifier',
+          ]);
+          const contacts = await client.query<{ email: string; name: string }>(
             'SELECT email, name FROM contacts WHERE email = $1',
             [email],
           );
-          expect(anonymousContacts.rows).toEqual([]);
-
-          const client = await pool.connect();
-          try {
-            await client.query('BEGIN');
-            await client.query("SELECT set_config('kovo.principal', $1, true)", [
-              'artifact-verifier',
-            ]);
-            const contacts = await client.query<{ email: string; name: string }>(
-              'SELECT email, name FROM contacts WHERE email = $1',
-              [email],
-            );
-            expect(contacts.rows).toEqual([{ email, name: 'External Pat' }]);
-          } finally {
-            await client.query('ROLLBACK');
-            client.release();
-          }
-        });
-      } finally {
-        await stopProcess(server);
-      }
-    }, 600_000);
-  },
-);
+          expect(contacts.rows).toEqual([{ email, name: 'External Pat' }]);
+        } finally {
+          await client.query('ROLLBACK');
+          client.release();
+        }
+      });
+    } finally {
+      await stopProcess(server);
+    }
+  }, 600_000);
+});
 
 interface GeneratedSignInForm {
   readonly csrf: string;
