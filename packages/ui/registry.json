@@ -245,8 +245,9 @@
       "files": ["src/breadcrumb.tsx"],
       "exports": ["Breadcrumb", "BreadcrumbItem", "BreadcrumbLink", "BreadcrumbSeparator"],
       "dependencies": {
+        "@kovojs/browser": ["TrustedUrl"],
         "@kovojs/headless-ui": ["separatorRootAttributes"],
-        "@kovojs/style": ["*"],
+        "@kovojs/style": ["*", "attrs"],
         "@kovojs/core": ["component", "ComponentChild"]
       },
       "uiComponents": ["pass-through", "safe-url", "theme"]
@@ -802,12 +803,13 @@
       "files": ["src/hover-card.tsx"],
       "exports": ["HoverCard", "HoverCardTrigger", "HoverCardContent"],
       "dependencies": {
+        "@kovojs/browser": ["TrustedUrl"],
         "@kovojs/headless-ui": [
           "hoverCardContentAttributes",
           "hoverCardRootAttributes",
           "hoverCardTriggerAttributes"
         ],
-        "@kovojs/style": ["*"],
+        "@kovojs/style": ["*", "attrs"],
         "@kovojs/core": ["component", "ComponentChild"]
       },
       "uiComponents": ["pass-through", "safe-url", "theme"]
@@ -920,6 +922,7 @@
         "NavigationMenuIndicator"
       ],
       "dependencies": {
+        "@kovojs/browser": ["TrustedUrl"],
         "@kovojs/headless-ui": [
           "CollectionOrientation",
           "navigationMenuContentAttributes",
@@ -933,11 +936,11 @@
           "navigationMenuViewportAttributes",
           "TextDirection"
         ],
-        "@kovojs/style": ["*"],
+        "@kovojs/style": ["*", "attrs"],
         "@kovojs/core": ["component", "ComponentChild"],
         "@kovojs/icons": ["ChevronDown"]
       },
-      "uiComponents": ["pass-through", "theme"]
+      "uiComponents": ["pass-through", "safe-url", "theme"]
     },
     {
       "anatomy": {
