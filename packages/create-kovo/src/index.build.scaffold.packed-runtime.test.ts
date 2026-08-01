@@ -65,10 +65,7 @@ describe('create-kovo starter (build integration: packed runtime scaffold)', () 
       try {
         expectPackedKovoPackageShape(app.root);
         await buildReusableProductionArtifactWithInfrastructureDeadline(app.root);
-        const handler = readFileSync(
-          join(app.root, 'dist/server/server/handler.mjs'),
-          'utf8',
-        );
+        const handler = readFileSync(join(app.root, 'dist/server/server/handler.mjs'), 'utf8');
         expect(handler).not.toMatch(/from\s+['"]\.\/assets\//);
         expect(handler).toContain('button.tsx');
         expect(handler).not.toContain('runtimeUiStyleIdentityForCallSite');
