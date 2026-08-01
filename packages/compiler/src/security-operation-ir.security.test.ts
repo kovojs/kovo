@@ -1897,7 +1897,7 @@ export const report = endpoint('/report', {
       source: 'accounts.classified',
       table: 'accounts',
     });
-    const rawRows = await db.all(statement);
+    const rawRows = await context.db.rawRead(statement, { reads: ['accounts'] });
     const rows = await db
       .select({ classified: owned.classified, id: owned.id })
       .from(owned)
@@ -1966,8 +1966,8 @@ export const report = endpoint('/report', {
     expect(diagnostics[0]?.message).toContain('declassification');
   });
 
-  // @kovo-security-classifier-corpus C13 finite-ir-declared-secret-read-execution
-  it('classifies one exactly declared secret-read execute call as a managed query read', () => {
+  // @kovo-security-classifier-corpus C13 finite-ir-declared-secret-raw-read
+  it('keeps declared secret reads on managed rawRead and closes legacy all/execute spellings', () => {
     expect(
       kv449(`
 import { sql, trustedSql } from '@kovojs/drizzle';
@@ -1984,8 +1984,8 @@ export const report = query({
       source: 'accounts.classified',
       table: 'accounts',
     });
-    const result = await context.db.execute(statement);
-    return { items: result.rows ?? [] };
+    const items = await context.db.rawRead(statement, { reads: ['accounts'] });
+    return { items };
   },
 });
 `),
@@ -1994,9 +1994,41 @@ export const report = query({
     for (const source of [
       `
 import { sql, trustedSql } from '@kovojs/drizzle';
+import { declareSecretReadCapability } from '@kovojs/server/secret-reading'
 import { query } from '@kovojs/server';
 export const report = query({ async load(_input, context) {
-  const statement = trustedSql(sql.raw('select id from accounts'), { justification: 'undeclared' });
+  const statement = trustedSql(sql.raw('select id, classified from accounts'), { justification: 'reviewed' });
+  declareSecretReadCapability(statement, { columns: ['classified'], justification: 'reviewed', source: 'accounts.classified', table: 'accounts' });
+  return context.db.all(statement, undefined);
+} });
+`,
+      `
+import { sql, trustedSql } from '@kovojs/drizzle';
+import { declareSecretReadCapability } from '@kovojs/server/secret-reading'
+import { query } from '@kovojs/server';
+export const report = query({ async load(_input, context) {
+  const statement = trustedSql(sql.raw('select id, classified from accounts'), { justification: 'reviewed' });
+  declareSecretReadCapability(statement, { columns: ['classified'], justification: 'reviewed', source: 'accounts.classified', table: 'accounts' });
+  return context.db.write.all(statement);
+} });
+`,
+      `
+import { sql, trustedSql } from '@kovojs/drizzle';
+import { declareSecretReadCapability } from '@kovojs/server/secret-reading'
+import { query } from '@kovojs/server';
+export const report = query({ async load(_input, context) {
+  const statement = trustedSql(sql.raw('select id, classified from accounts'), { justification: 'reviewed' });
+  declareSecretReadCapability(statement, { columns: ['classified'], justification: 'reviewed', source: 'accounts.classified', table: 'accounts' });
+  return context.db.all(statement);
+} });
+`,
+      `
+import { sql, trustedSql } from '@kovojs/drizzle';
+import { declareSecretReadCapability } from '@kovojs/server/secret-reading'
+import { query } from '@kovojs/server';
+export const report = query({ async load(_input, context) {
+  const statement = trustedSql(sql.raw('select id, classified from accounts'), { justification: 'reviewed' });
+  declareSecretReadCapability(statement, { columns: ['classified'], justification: 'reviewed', source: 'accounts.classified', table: 'accounts' });
   return context.db.execute(statement);
 } });
 `,
@@ -2006,20 +2038,9 @@ import { declareSecretReadCapability } from '@kovojs/server/secret-reading'
 import { query } from '@kovojs/server';
 export const report = query({ async load(_input, context) {
   const statement = trustedSql(sql.raw('select id, classified from accounts'), { justification: 'reviewed' });
-  const escaped = statement;
+  const execute = context.db.execute;
   declareSecretReadCapability(statement, { columns: ['classified'], justification: 'reviewed', source: 'accounts.classified', table: 'accounts' });
-  return context.db.execute(escaped);
-} });
-`,
-      `
-import { sql, trustedSql } from '@kovojs/drizzle';
-import { declareSecretReadCapability } from '@kovojs/server/secret-reading'
-import { query } from '@kovojs/server';
-export const report = query({ async load(_input, context) {
-  const statement = trustedSql(sql.raw('select id, classified from accounts'), { justification: 'reviewed' });
-  const result = await context.db.execute(statement);
-  declareSecretReadCapability(statement, { columns: ['classified'], justification: 'late', source: 'accounts.classified', table: 'accounts' });
-  return result;
+  return execute(statement);
 } });
 `,
     ]) {

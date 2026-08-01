@@ -6385,6 +6385,17 @@ function classifyServerCall(
     // public constructor and immutable trustedSql statement shape.
     return;
   }
+  if (serverCallUsesDeclaredSecretStatementWithLegacyMethod(sourceFile, call, aliases)) {
+    // SPEC §6.6 / §10.3: app-authored declared secret reads have one terminal:
+    // directly awaited managed rawRead(statement, { reads }). Legacy adapter methods are not a
+    // public Reader surface and cannot inherit the declaration's authority.
+    appendViolation(
+      call,
+      'computed-security-operation',
+      'declared secret reads require the exact managed rawRead(statement, { reads }) terminal; legacy all/execute methods are outside the finite server IR',
+    );
+    return;
+  }
   if (serverCallIsExactDeclassifyPolicyConstructor(sourceFile, call)) {
     // The runtime constructor independently validates and registers the immutable policy. Static
     // admission requires the same direct class import and closed literal registry tuple.
@@ -6453,14 +6464,6 @@ function classifyServerCall(
     // SPEC §6.6 / §9.4 / §10.3: the generated app DB re-export is a read-only managed door only
     // through its exact direct import and reviewed generated source graph. Local aliases,
     // computed members, forged exports, and mutable re-exports never reach this branch.
-    appendOperation('server.database.read', call, nodeName(callee));
-    return;
-  }
-  if (serverCallIsExactDeclaredSecretReadExecution(sourceFile, call, aliases)) {
-    // SPEC §6.6: one declaration-before-one-execution sequence is the finite read form for a
-    // runtime-validated secret SQL witness. The declaration, statement binding, and managed DB
-    // receiver must all remain direct and linear; aliases, extra references, and late declarations
-    // stay on the generic execute-as-write path below.
     appendOperation('server.database.read', call, nodeName(callee));
     return;
   }
@@ -6814,6 +6817,51 @@ function serverCallIsExactDeclaredSecretReadCapability(
   return ts.isCallExpression(raw) && serverCallIsExactTrustedSqlRaw(sourceFile, raw);
 }
 
+function serverCallUsesDeclaredSecretStatementWithLegacyMethod(
+  sourceFile: TS.SourceFile,
+  call: TS.CallExpression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  const callee = unwrapExpression(call.expression);
+  const member = staticMember(callee);
+  if (
+    !member ||
+    (member.name !== 'all' && member.name !== 'execute') ||
+    call.arguments.length < 1
+  ) {
+    return false;
+  }
+  const receiverProvenance = serverExpressionProvenance(member.receiver, aliases);
+  if (
+    receiverProvenance !== 'database' &&
+    receiverProvenance !== 'database-read-namespace' &&
+    receiverProvenance !== 'database-write-namespace'
+  ) {
+    return false;
+  }
+  const statement = unwrapExpression(call.arguments[0]!);
+  if (!ts.isIdentifier(statement)) return false;
+  const initializer = securityIrImmutableBindingInitializer(sourceFile, statement);
+  if (!initializer) return false;
+
+  let exactDeclarations = 0;
+  const visit = (node: TS.Node): void => {
+    if (ts.isCallExpression(node) && node.arguments.length === 2) {
+      const declaredStatement = unwrapExpression(node.arguments[0]!);
+      if (
+        ts.isIdentifier(declaredStatement) &&
+        securityIrImmutableBindingInitializer(sourceFile, declaredStatement) === initializer &&
+        serverCallIsExactDeclaredSecretReadCapability(sourceFile, node, aliases)
+      ) {
+        exactDeclarations += 1;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return exactDeclarations > 0;
+}
+
 interface ServerExactDeclassifyPolicy {
   readonly door: 'trustedReveal';
   readonly label: string;
@@ -7030,101 +7078,6 @@ function serverCallIsExactDrizzleTableAlias(
   );
 }
 
-function serverCallIsExactDeclaredSecretReadExecution(
-  sourceFile: TS.SourceFile,
-  call: TS.CallExpression,
-  aliases: ReadonlyMap<string, ServerValueProvenance>,
-): boolean {
-  const callee = unwrapExpression(call.expression);
-  if (
-    !ts.isPropertyAccessExpression(callee) ||
-    callee.name.text !== 'execute' ||
-    call.arguments.length !== 1 ||
-    !securityIrMemberCallableIsStable(sourceFile, callee, call)
-  ) {
-    return false;
-  }
-  const receiverProvenance = serverExpressionProvenance(callee.expression, aliases);
-  if (receiverProvenance !== 'database' && receiverProvenance !== 'database-read-namespace') {
-    return false;
-  }
-
-  const statementUse = unwrapExpression(call.arguments[0]!);
-  if (!ts.isIdentifier(statementUse)) return false;
-  const initializer = securityIrImmutableBindingInitializer(sourceFile, statementUse);
-  if (!initializer) return false;
-  const trustedSqlCall = unwrapExpression(initializer);
-  if (!ts.isCallExpression(trustedSqlCall) || trustedSqlCall.arguments.length !== 2) return false;
-  const raw = unwrapExpression(trustedSqlCall.arguments[0]!);
-  if (!ts.isCallExpression(raw) || !serverCallIsExactTrustedSqlRaw(sourceFile, raw)) return false;
-
-  const declaration = serverExactVariableDeclarationForInitializer(initializer, statementUse.text);
-  const declarationLocation = declaration ? serverDirectStatementLocation(declaration) : undefined;
-  const executionLocation = serverDirectStatementLocation(call);
-  if (
-    !declaration ||
-    !declarationLocation ||
-    !executionLocation ||
-    declarationLocation.block !== executionLocation.block ||
-    declarationLocation.index >= executionLocation.index
-  ) {
-    return false;
-  }
-
-  let capabilityDeclaration: TS.CallExpression | undefined;
-  let capabilityDeclarationCount = 0;
-  const visit = (node: TS.Node): void => {
-    if (node !== executionLocation.block && isSecurityIrFunctionScope(node)) return;
-    if (ts.isCallExpression(node)) {
-      const argument = node.arguments.length > 0 ? unwrapExpression(node.arguments[0]!) : undefined;
-      if (
-        argument &&
-        ts.isIdentifier(argument) &&
-        argument.text === statementUse.text &&
-        serverCallIsExactDeclaredSecretReadCapability(sourceFile, node, aliases)
-      ) {
-        capabilityDeclarationCount += 1;
-        if (capabilityDeclarationCount === 1) capabilityDeclaration = node;
-      }
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(executionLocation.block);
-  if (capabilityDeclarationCount !== 1 || !capabilityDeclaration) return false;
-
-  const capabilityLocation = serverDirectStatementLocation(capabilityDeclaration);
-  if (
-    !capabilityLocation ||
-    capabilityLocation.block !== executionLocation.block ||
-    capabilityLocation.index <= declarationLocation.index ||
-    capabilityLocation.index >= executionLocation.index
-  ) {
-    return false;
-  }
-
-  const declarationArgument = unwrapExpression(capabilityDeclaration.arguments[0]!);
-  if (!ts.isIdentifier(declarationArgument)) return false;
-  const allowedReferences = compilerCreateSet<TS.Identifier>();
-  compilerSetAdd(allowedReferences, declaration.name as TS.Identifier);
-  compilerSetAdd(allowedReferences, declarationArgument);
-  compilerSetAdd(allowedReferences, statementUse);
-  let escaped = false;
-  const findEscape = (node: TS.Node): void => {
-    if (escaped) return;
-    if (
-      ts.isIdentifier(node) &&
-      node.text === statementUse.text &&
-      !compilerSetHas(allowedReferences, node)
-    ) {
-      escaped = true;
-      return;
-    }
-    ts.forEachChild(node, findEscape);
-  };
-  findEscape(executionLocation.block);
-  return !escaped;
-}
-
 function serverExactVariableDeclarationForInitializer(
   initializer: TS.Expression,
   name: string,
@@ -7142,29 +7095,6 @@ function serverExactVariableDeclarationForInitializer(
     isConstVariableDeclaration(declaration)
     ? declaration
     : undefined;
-}
-
-interface ServerDirectStatementLocation {
-  readonly block: TS.Block;
-  readonly index: number;
-}
-
-function serverDirectStatementLocation(node: TS.Node): ServerDirectStatementLocation | undefined {
-  let cursor: TS.Node = node;
-  while (cursor.parent) {
-    const parent = cursor.parent;
-    if (ts.isBlock(parent) && ts.isStatement(cursor)) {
-      const statements = compilerSnapshotDenseArray(
-        parent.statements,
-        'Finite declared secret-read statements',
-      );
-      const index = statements.indexOf(cursor);
-      return index >= 0 ? { block: parent, index } : undefined;
-    }
-    if (isSecurityIrFunctionScope(parent)) return undefined;
-    cursor = parent;
-  }
-  return undefined;
 }
 
 function serverCallUsesExactNamedFrameworkImport(

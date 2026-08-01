@@ -149,6 +149,18 @@ describe('framework identity resolver', () => {
 
   it('catalogs server authorities only from their semantic task subpaths', () => {
     expect(
+      frameworkCatalogExportForModuleSpecifier(
+        '@kovojs/server/secret-reading',
+        'declareSecretReadCapability',
+      ),
+    ).toEqual({
+      exportName: 'declareSecretReadCapability',
+      module: '@kovojs/server',
+    });
+    expect(
+      frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'declareSecretReadCapability'),
+    ).toBeUndefined();
+    expect(
       frameworkCatalogExportForModuleSpecifier('@kovojs/server/command', 'runCommand'),
     ).toEqual({
       exportName: 'runCommand',

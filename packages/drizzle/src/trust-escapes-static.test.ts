@@ -10495,7 +10495,8 @@ import { publicAccess, query, route } from '@kovojs/server';
     );
   });
 
-  it('accepts only an exact direct declared secret-read statement and DB execution', () => {
+  // @kovo-security-classifier-corpus C13 declared-secret-raw-read-composition
+  it('accepts only an exact direct declared secret-read statement and managed rawRead', () => {
     const bridge = {
       fileName: '_kovo/app-runtime-db.ts',
       source: `
@@ -10505,7 +10506,8 @@ import { publicAccess, query, route } from '@kovojs/server';
     };
     const querySource = `
       import { sql, trustedSql } from '@kovojs/drizzle';
-      import { declareSecretReadCapability } from '@kovojs/server/secret-reading'; import { query } from '@kovojs/server';
+      import { declareSecretReadCapability } from '@kovojs/server/secret-reading';
+      import { query } from '@kovojs/server';
       export const secretRows = query({ async load(_input, context) {
         if (context?.db === undefined) throw new Error('missing query DB');
         const statement = trustedSql(sql.raw('select id, classified from runtime_secret_proof'), {
@@ -10517,28 +10519,24 @@ import { publicAccess, query, route } from '@kovojs/server';
           source: 'runtime_secret_proof.classified',
           table: 'runtime_secret_proof',
         });
-        const rows = await (context.db as unknown as { all(value: unknown): Promise<unknown[]> }).all(statement);
+        const rows = await context.db.rawRead(statement, { reads: ['runtime_secret_proof'] });
         return { items: rows };
       } });
     `;
     const exactFiles = [{ fileName: 'queries.ts', source: querySource }];
     expect(sinksForFiles(exactFiles)).toEqual([]);
 
-    const executeSource = querySource
-      .replace(
-        '{ all(value: unknown): Promise<unknown[]> }).all(statement)',
-        '{ execute(value: unknown): Promise<{ rows: unknown[] }> }).execute(statement)',
-      )
-      .replace('return { items: rows };', 'return { items: rows.rows };');
-    expect(sinksForFiles([{ fileName: 'queries.ts', source: executeSource }])).toEqual([]);
-
     for (const [label, source] of [
+      [
+        'removed root import',
+        querySource.replace("from '@kovojs/server/secret-reading';", "from '@kovojs/server';"),
+      ],
       [
         'aliased package import',
         querySource
           .replace(
-            'import { declareSecretReadCapability, query }',
-            'import { declareSecretReadCapability as declareRead, query }',
+            'import { declareSecretReadCapability } from',
+            'import { declareSecretReadCapability as declareRead } from',
           )
           .replace('declareSecretReadCapability(statement, {', 'declareRead(statement, {'),
       ],
@@ -10546,19 +10544,19 @@ import { publicAccess, query, route } from '@kovojs/server';
         'namespace package import',
         querySource
           .replace(
-            "import { declareSecretReadCapability } from '@kovojs/server/secret-reading'; import { query } from '@kovojs/server';",
-            "import * as server from '@kovojs/server';\n      import { query } from '@kovojs/server';",
+            "import { declareSecretReadCapability } from '@kovojs/server/secret-reading';",
+            "import * as secretReading from '@kovojs/server/secret-reading';",
           )
           .replace(
             'declareSecretReadCapability(statement, {',
-            'server.declareSecretReadCapability(statement, {',
+            'secretReading.declareSecretReadCapability(statement, {',
           ),
       ],
       [
         'generated bridge import',
         querySource.replace(
-          "import { declareSecretReadCapability } from '@kovojs/server/secret-reading'; import { query } from '@kovojs/server';",
-          "import { query } from '@kovojs/server';\n      import { declareSecretReadCapability } from './_kovo/app-runtime-db.js';",
+          "import { declareSecretReadCapability } from '@kovojs/server/secret-reading';",
+          "import { declareSecretReadCapability } from './_kovo/app-runtime-db.js';",
         ),
       ],
       [
@@ -10568,7 +10566,44 @@ import { publicAccess, query, route } from '@kovojs/server';
             'declareSecretReadCapability(statement, {',
             'const escapedStatement = statement;\n        declareSecretReadCapability(statement, {',
           )
-          .replace('}).all(statement);', '}).all(escapedStatement);'),
+          .replace(
+            "context.db.rawRead(statement, { reads: ['runtime_secret_proof'] })",
+            "context.db.rawRead(escapedStatement, { reads: ['runtime_secret_proof'] })",
+          ),
+      ],
+      [
+        'duplicate declaration',
+        querySource.replace(
+          '        const rows = await context.db.rawRead',
+          `        declareSecretReadCapability(statement, {
+          columns: ['classified'],
+          justification: 'duplicate declaration must close',
+          source: 'runtime_secret_proof.classified',
+          table: 'runtime_secret_proof',
+        });
+        const rows = await context.db.rawRead`,
+        ),
+      ],
+      [
+        'declaration in a different block',
+        querySource
+          .replace(
+            '        declareSecretReadCapability(statement, {',
+            '        {\n          declareSecretReadCapability(statement, {',
+          )
+          .replace(
+            '        });\n        const rows = await',
+            '          });\n        }\n        const rows = await',
+          ),
+      ],
+      [
+        'conditional declaration',
+        querySource
+          .replace('async load(_input, context)', 'async load(input, context)')
+          .replace(
+            '        declareSecretReadCapability(statement, {',
+            '        if (input.allow) declareSecretReadCapability(statement, {',
+          ),
       ],
       [
         'dynamic SQL',
@@ -10578,6 +10613,20 @@ import { publicAccess, query, route } from '@kovojs/server';
             "sql.raw('select id, classified from runtime_secret_proof')",
             'sql.raw(input.statement)',
           ),
+      ],
+      [
+        'tagged SQL',
+        querySource.replace(
+          "sql.raw('select id, classified from runtime_secret_proof')",
+          'sql`select id, classified from runtime_secret_proof`',
+        ),
+      ],
+      [
+        'SQL table mismatches declaration',
+        querySource.replace(
+          "sql.raw('select id, classified from runtime_secret_proof')",
+          "sql.raw('select id, classified from other_runtime_table')",
+        ),
       ],
       [
         'dynamic columns',
@@ -10605,24 +10654,125 @@ import { publicAccess, query, route } from '@kovojs/server';
       ],
       [
         'computed execution method',
-        querySource.replace('}).all(statement)', "})['all'](statement)"),
+        querySource.replace('context.db.rawRead', "context.db['rawRead']"),
+      ],
+      [
+        'optional execution method',
+        querySource.replace('context.db.rawRead(', 'context.db.rawRead?.('),
+      ],
+      [
+        'extracted execution method',
+        querySource.replace(
+          '        const rows = await context.db.rawRead(statement',
+          '        const rawRead = context.db.rawRead;\n        const rows = await rawRead(statement',
+        ),
       ],
       [
         'extra execution argument',
-        querySource.replace('}).all(statement)', '}).all(statement, undefined)'),
+        querySource.replace(
+          "context.db.rawRead(statement, { reads: ['runtime_secret_proof'] })",
+          "context.db.rawRead(statement, { reads: ['runtime_secret_proof'] }, undefined)",
+        ),
       ],
       [
         'opaque receiver',
         querySource
           .replace('async load(_input, context)', 'async load(input, context)')
-          .replace('(context.db as unknown as', '(input.db as unknown as'),
+          .replace('context.db.rawRead', 'input.db.rawRead'),
+      ],
+      [
+        'aliased receiver',
+        querySource
+          .replace(
+            '        const statement = trustedSql',
+            '        const db = context.db;\n        const statement = trustedSql',
+          )
+          .replace('context.db.rawRead', 'db.rawRead'),
+      ],
+      [
+        'mutated receiver',
+        querySource
+          .replace('async load(_input, context)', 'async load(input, context)')
+          .replace(
+            '        const statement = trustedSql',
+            '        context.db.rawRead = input.rawRead;\n        const statement = trustedSql',
+          ),
       ],
       [
         'multiple executions',
         querySource.replace(
           'const rows = await',
-          'await (context.db as unknown as { all(value: unknown): Promise<unknown[]> }).all(statement);\n        const rows = await',
+          "await context.db.rawRead(statement, { reads: ['runtime_secret_proof'] });\n        const rows = await",
         ),
+      ],
+      [
+        'looped execution',
+        querySource.replace(
+          "        const rows = await context.db.rawRead(statement, { reads: ['runtime_secret_proof'] });",
+          "        let rows: unknown[] = [];\n        for (const _iteration of [0, 1]) rows = await context.db.rawRead(statement, { reads: ['runtime_secret_proof'] });",
+        ),
+      ],
+      [
+        'dynamic reads',
+        querySource
+          .replace('async load(_input, context)', 'async load(input, context)')
+          .replace("reads: ['runtime_secret_proof']", 'reads: [input.table]'),
+      ],
+      [
+        'spread reads',
+        querySource.replace(
+          "{ reads: ['runtime_secret_proof'] }",
+          "{ ...{ reads: ['runtime_secret_proof'] } }",
+        ),
+      ],
+      [
+        'computed reads',
+        querySource.replace(
+          "{ reads: ['runtime_secret_proof'] }",
+          "{ ['reads']: ['runtime_secret_proof'] }",
+        ),
+      ],
+      [
+        'duplicate reads',
+        querySource.replace(
+          "reads: ['runtime_secret_proof']",
+          "reads: ['runtime_secret_proof', 'runtime_secret_proof']",
+        ),
+      ],
+      [
+        'extra reads option',
+        querySource.replace(
+          "{ reads: ['runtime_secret_proof'] }",
+          "{ reads: ['runtime_secret_proof'], reason: 'forged' }",
+        ),
+      ],
+      ['empty reads', querySource.replace("reads: ['runtime_secret_proof']", 'reads: []')],
+      [
+        'mismatched reads',
+        querySource.replace("reads: ['runtime_secret_proof']", "reads: ['other_runtime_table']"),
+      ],
+      [
+        'unawaited execution',
+        querySource.replace(
+          'const rows = await context.db.rawRead',
+          'const rows = context.db.rawRead',
+        ),
+      ],
+      [
+        'legacy all execution',
+        querySource.replace(
+          "context.db.rawRead(statement, { reads: ['runtime_secret_proof'] })",
+          '(context.db as unknown as { all(value: unknown): Promise<unknown[]> }).all(statement)',
+        ),
+      ],
+      [
+        'legacy execute execution',
+        querySource
+          .replace(
+            "context.db.rawRead(statement, { reads: ['runtime_secret_proof'] })",
+            '(context.db as unknown as { execute(value: unknown): Promise<{ rows: unknown[] }> }).execute(statement)',
+          )
+          .replace('return { items: rows };', 'return { items: rows.rows };'),
       ],
     ] as const) {
       const facts = sinksForFiles([

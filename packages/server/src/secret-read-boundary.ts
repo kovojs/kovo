@@ -1614,7 +1614,7 @@ function readBoundaryForArgs(
           : { ...emptyReadBoundary(), rawWholeRowSecret: true }
         : sqliteSecretReadBoundaryForStatement(arg, sql, metadata, options.sqliteColumnOrigins);
     if (sqlReferencesSecretTable(sql, metadata.secretTableNames)) {
-      if (!hasDeclaredSecretReadCapability(arg, metadata)) {
+      if (!hasDeclaredSecretReadCapability(arg, sql, metadata)) {
         if (options.rawSecretTableRead !== 'engine') {
           throw new Error(
             'KV435: reader raw SQL secret-column read requires a declared secret-read capability (SPEC §10.3).',
@@ -1638,6 +1638,7 @@ function fallbackReadBoundaryForSql(sql: string, metadata: SecretReadMetadata): 
 
 function hasDeclaredSecretReadCapability(
   statement: unknown,
+  sql: string,
   metadata: SecretReadMetadata,
 ): boolean {
   if (statement === null || typeof statement !== 'object') return false;
@@ -1652,7 +1653,14 @@ function hasDeclaredSecretReadCapability(
   for (let index = 0; index < declaration.columns.length; index += 1) {
     if (!witnessSetHas(secretColumns as Set<string>, declaration.columns[index]!)) return false;
   }
-  return true;
+  if (!sqlReferencesTable(sql, declaration.table)) return false;
+  let referencesAnotherSecretTable = false;
+  witnessSetForEach(metadata.secretTableNames as Set<string>, (table) => {
+    if (table !== declaration.table && sqlReferencesTable(sql, table)) {
+      referencesAnotherSecretTable = true;
+    }
+  });
+  return !referencesAnotherSecretTable;
 }
 
 function isNativePromise(value: object): value is Promise<unknown> {

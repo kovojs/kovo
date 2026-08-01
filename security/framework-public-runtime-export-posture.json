@@ -11,7 +11,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.3.0",
-      "sourceTreeSha256": "92f59aada2422fb615f7a047f771794392c9a3a3e048501acda72249893bf9fc",
+      "sourceTreeSha256": "a3a99fbf1df3a73c35343b3eaf139620e00bdb7f5f053a511542510875d6fbde",
       "manifestVariants": [
         {
           "fingerprint": "sha256:80d390e85123b76e58a9270f45d1420deaefd869d361bf8181cfa3f310ae6c08"
@@ -783,7 +783,7 @@
           "reason": "The diagnostic schema constant belongs to the build-time CLI package and is not request-handler authority."
         }
       ],
-      "sourceTreeSha256": "97d092fb692f9eec94fdb41acb34aad583c03f938be1762288ebe91bbc7cdb01"
+      "sourceTreeSha256": "94cc4aed83a720658e11948d38c52bc06b97284b92ef196a59c578c8d699e42e"
     },
     {
       "manifestVariants": [
@@ -1617,7 +1617,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "b7cb9e936869994f36a19efc7ccad86d32112c535b12ae882058af46c4fb54f9"
+      "sourceTreeSha256": "244abba3a19dc6b3c7761715f6e7bde53cd7c33dd708d4c640c8c3894d19bfea"
     },
     {
       "manifestVariants": [
@@ -1882,7 +1882,7 @@
           "securityRole": "trust-escape"
         }
       ],
-      "sourceTreeSha256": "ed668bd013ec81639f0dc3756b0e6c6441cc5da760f5d021fe359f78f1d928f9"
+      "sourceTreeSha256": "71f8c71dabf97b5b6c84fb237bd39b7fa0d18a6e6b11dead5a16c3a9fdda1d04"
     },
     {
       "manifestVariants": [
@@ -9876,7 +9876,7 @@
           "reason": "derived binds a reviewed adapter to the current request principal through the canonical ScopedKey containment door."
         }
       ],
-      "sourceTreeSha256": "83814db3eaa279a2d2239c42fe89ba7a9edb2473a7652a28089bbf6d94e348c9"
+      "sourceTreeSha256": "01186f928a5c1660cac18c6a991d69d93d68fddfbae5dce76f7ed9db91d2aceb"
     },
     {
       "manifestVariants": [

@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 352,
+    "historicalWitnesses": 354,
     "productions": 12
   },
   "productions": [
@@ -664,6 +664,12 @@
       "reason": "This witness exercises a runtime-owned rejection, reconstruction, or boxing floor."
     },
     {
+      "anchor": "declared-secret-raw-read-composition",
+      "corpus": "kv424-request-process",
+      "production": "exact-operation",
+      "reason": "The sole app-authored declared-secret read reaches one exact managed rawRead terminal while aliases, malformed reads declarations, and legacy terminals close."
+    },
+    {
       "anchor": "compiler-semantic-context-raw-read-consistency",
       "corpus": "kv424-request-process",
       "production": "structural-closure",
@@ -1268,6 +1274,12 @@
       "corpus": "browser-posture",
       "production": "module-boundary",
       "reason": "This witness binds compiler production, generated registry transport, and document response consumption across package boundaries."
+    },
+    {
+      "anchor": "finite-ir-declared-secret-raw-read",
+      "corpus": "finite-security-operation-ir",
+      "production": "exact-operation",
+      "reason": "Finite server IR admits the managed rawRead spelling and closes legacy all or execute terminals for a declared secret statement."
     },
     {
       "anchor": "computed-key-first-registry-identity-closure",

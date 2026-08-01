@@ -267,7 +267,9 @@ That declaration, exactly one `declareSecretReadCapability` call, and exactly on
 as supplied by that callback signature) MUST occur in that lexical block and in that order. The
 `rawRead` options MUST be an exact inline `{ reads: [...] }` object whose entries are non-empty,
 duplicate-free string literals; the set MUST include the declared `table` and exhaust every relation
-the statement actually reads.
+the statement actually reads. The literal SQL MUST reference the declared table. At runtime, the
+same declaration is rejected if the executed SQL omits that table or references any other
+secret-bearing table; one declaration cannot widen privileged read authority across secret tables.
 Aliases, namespace imports, re-exports, lookalikes, statement escapes, computed/optional/extracted
 members, spreads, dynamic metadata, duplicate uses, and missing or extra arguments do not establish
 this authority. The legacy app-authored `.all(statement)` and `.execute(statement)` spellings are

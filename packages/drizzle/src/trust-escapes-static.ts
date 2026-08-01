@@ -7854,7 +7854,6 @@ function requestRetainedConfigCallIsReviewed(
   // retained config, so the retained-config mutation pass must recognize that finite read too.
   if (requestCallIsExactReviewedRawRead(call, session)) return true;
   if (requestCallIsExactDeclaredSecretReadDeclaration(call)) return true;
-  if (requestCallIsExactDeclaredSecretReadExecution(call, session)) return true;
   if (requestCallIsExactMutationDomainInvalidate(call, session)) return true;
   if (requestCallIsExactWebhookRecordChange(call, session)) return true;
   if (
@@ -7932,8 +7931,7 @@ function requestRetainedConfigReturnDoesNotCarryTarget(
     (requestCallIsExactAuthoredBetterAuthSessionProviderDelegation(node, session) ||
       requestCallIsReviewedDrizzleDbReadChainInDeclaredRoot(node, session) ||
       requestCallIsExactReviewedDrizzleRelationalReadInDeclaredRoot(node, session) ||
-      requestCallIsExactReviewedRawRead(node, session) ||
-      requestCallIsExactDeclaredSecretReadExecution(node, session))
+      requestCallIsExactReviewedRawRead(node, session))
   ) {
     return true;
   }
@@ -16119,10 +16117,19 @@ function requestRawReadCallArgumentsAreExact(call: import('ts-morph').CallExpres
   }
   const [statement, options, ...extra] = call.getArguments();
   if (!statement || !options || extra.length !== 0) return false;
+  if (!requestRawReadOptionsAreExact(options)) return false;
   const trusted = unwrapStaticExpression(statement);
-  if (!Node.isCallExpression(trusted) || !requestCallIsExactKovoTrustedSql(trusted)) return false;
+  if (Node.isCallExpression(trusted) && requestCallIsExactKovoTrustedSql(trusted)) return true;
+  if (!Node.isIdentifier(trusted) || !requestDeclaredSecretReadReceiverIsExact(callee)) {
+    return false;
+  }
+  const reviewed = requestExactDeclaredSecretReadForCall(call);
+  return !!reviewed && requestNodesAreSame(reviewed.executionCall, call);
+}
+
+function requestRawReadTableNames(options: Node): readonly string[] | undefined {
   const record = unwrapStaticExpression(options);
-  if (!Node.isObjectLiteralExpression(record)) return false;
+  if (!Node.isObjectLiteralExpression(record)) return undefined;
   const [reads, ...optionExtra] = record.getProperties();
   if (
     !reads ||
@@ -16131,24 +16138,50 @@ function requestRawReadCallArgumentsAreExact(call: import('ts-morph').CallExpres
     Node.isComputedPropertyName(reads.getNameNode()) ||
     staticMemberName(reads.getNameNode()) !== 'reads'
   ) {
-    return false;
+    return undefined;
   }
   const value = reads.getInitializer();
   const tables = value ? unwrapStaticExpression(value) : undefined;
-  if (!tables || !Node.isArrayLiteralExpression(tables)) return false;
+  if (!tables || !Node.isArrayLiteralExpression(tables)) return undefined;
   const names = tables.getElements().map((element) => {
     if (Node.isSpreadElement(element)) return undefined;
     const name = unwrapStaticExpression(element);
     return isStringLiteralLike(name) ? name.getLiteralText() : undefined;
   });
-  return !!(
+  if (
     names.length > 0 &&
     names.every(
       (name): name is string =>
         name !== undefined && runtimeRegExpTest(/^[A-Za-z_][A-Za-z0-9_]*$/u, name),
     ) &&
     new Set(names).size === names.length
-  );
+  ) {
+    return names;
+  }
+  return undefined;
+}
+
+function requestRawReadOptionsAreExact(options: Node): boolean {
+  return requestRawReadTableNames(options) !== undefined;
+}
+
+function requestDeclaredSecretReadReceiverIsExact(callee: Node): boolean {
+  if (
+    !Node.isPropertyAccessExpression(callee) ||
+    callee.getName() !== 'rawRead' ||
+    callee.getQuestionDotTokenNode()
+  ) {
+    return false;
+  }
+  const receiver = unwrapStaticExpression(callee.getExpression());
+  if (
+    !Node.isPropertyAccessExpression(receiver) ||
+    receiver.getName() !== 'db' ||
+    receiver.getQuestionDotTokenNode()
+  ) {
+    return false;
+  }
+  return Node.isIdentifier(unwrapStaticExpression(receiver.getExpression()));
 }
 
 function requestCallIsExactReviewedRawRead(
@@ -16166,7 +16199,6 @@ interface RequestExactDeclaredSecretReadStatement {
   readonly declarationCall: import('ts-morph').CallExpression;
   readonly executionCall: import('ts-morph').CallExpression;
   readonly statementDeclaration: import('ts-morph').VariableDeclaration;
-  readonly terminal: 'all' | 'execute';
 }
 
 const REQUEST_EXACT_SECRET_READ_STATEMENT_MEMO = new WeakMap<
@@ -16232,6 +16264,58 @@ function requestSecretReadDeclarationOptionsAreExact(expression: Node): boolean 
   );
 }
 
+function requestSecretReadDeclarationTable(expression: Node): string | undefined {
+  if (!requestSecretReadDeclarationOptionsAreExact(expression)) return undefined;
+  const object = unwrapStaticExpression(expression);
+  if (!Node.isObjectLiteralExpression(object)) return undefined;
+  const tableProperty = object.getProperties()[3];
+  if (!tableProperty || !Node.isPropertyAssignment(tableProperty)) return undefined;
+  const table = tableProperty.getInitializer();
+  return table && isStringLiteralLike(table) ? table.getLiteralText() : undefined;
+}
+
+function requestSqlReferencesTable(sql: string, table: string): boolean {
+  const source = sql.toLowerCase();
+  const expected = table.toLowerCase();
+  const isIdentifierContinue = (value: string | undefined): boolean =>
+    value !== undefined && runtimeRegExpTest(/^[A-Za-z0-9_]$/u, value);
+  let index = source.indexOf(expected);
+  while (index !== -1) {
+    const before = source[index - 1];
+    const after = source[index + expected.length];
+    if (!isIdentifierContinue(before) && !isIdentifierContinue(after)) return true;
+    index = source.indexOf(expected, index + 1);
+  }
+  return false;
+}
+
+function requestDeclaredSecretReadExecutionIsExact(
+  call: import('ts-morph').CallExpression,
+  block: import('ts-morph').Block,
+): boolean {
+  const awaited = call.getParent();
+  if (!Node.isAwaitExpression(awaited) || !requestNodesAreSame(awaited.getExpression(), call)) {
+    return false;
+  }
+  const resultDeclaration = awaited.getParent();
+  if (
+    !Node.isVariableDeclaration(resultDeclaration) ||
+    !Node.isIdentifier(resultDeclaration.getNameNode()) ||
+    !requestNodesAreSame(resultDeclaration.getInitializer(), awaited)
+  ) {
+    return false;
+  }
+  const resultStatement = resultDeclaration.getVariableStatement();
+  const declarations = resultStatement?.getDeclarationList().getDeclarations() ?? [];
+  return !!(
+    resultStatement &&
+    resultStatement.getDeclarationKind() === VariableDeclarationKind.Const &&
+    declarations.length === 1 &&
+    requestNodesAreSame(declarations[0], resultDeclaration) &&
+    requestNodesAreSame(resultStatement.getParent(), block)
+  );
+}
+
 function requestExactDeclaredSecretReadStatement(
   statementDeclaration: import('ts-morph').VariableDeclaration,
 ): RequestExactDeclaredSecretReadStatement | undefined {
@@ -16250,6 +16334,10 @@ function requestExactDeclaredSecretReadStatement(
   const name = statementDeclaration.getNameNode();
   const initializer = statementDeclaration.getInitializer();
   const statement = initializer ? unwrapStaticExpression(initializer) : undefined;
+  const statementSql =
+    statement && Node.isCallExpression(statement)
+      ? requestExactKovoTrustedSqlRawText(statement)
+      : undefined;
   const statementBlock = statementDeclaration
     .getVariableStatement()
     ?.getParentIfKind(SyntaxKind.Block);
@@ -16263,17 +16351,18 @@ function requestExactDeclaredSecretReadStatement(
     !statementBlock ||
     !statement ||
     !Node.isCallExpression(statement) ||
-    !requestCallIsExactKovoTrustedSql(statement) ||
+    statementSql === undefined ||
+    !requestNodesAreSame(
+      statementDeclaration.getVariableStatement()?.getParent(),
+      statementBlock,
+    ) ||
     requestAssignedBindingProjections(symbol).length !== 0
   ) {
     return undefined;
   }
 
   const declarationCalls: import('ts-morph').CallExpression[] = [];
-  const executionCalls: Array<{
-    call: import('ts-morph').CallExpression;
-    terminal: 'all' | 'execute';
-  }> = [];
+  const executionCalls: import('ts-morph').CallExpression[] = [];
   const allowedReferences = new Set([requestNodeIdentity(name)]);
   const symbolKey = requestSymbolKey(symbol);
   for (const sourceFile of project.getSourceFiles()) {
@@ -16299,7 +16388,8 @@ function requestExactDeclaredSecretReadStatement(
           !declaration ||
           extra.length !== 0 ||
           !requestSecretReadDeclarationOptionsAreExact(declaration) ||
-          !Node.isExpressionStatement(call.getParent())
+          !Node.isExpressionStatement(call.getParent()) ||
+          !requestNodesAreSame(call.getParent()?.getParent(), statementBlock)
         ) {
           return undefined;
         }
@@ -16307,46 +16397,58 @@ function requestExactDeclaredSecretReadStatement(
         allowedReferences.add(requestNodeIdentity(reference));
         continue;
       }
-      const [argument, ...extra] = call.getArguments();
+      const [argument, options, ...extra] = call.getArguments();
       const receiver = requestCallReceiver(callee);
       const member = requestStaticCallMember(callee);
       if (
         !argument ||
+        !options ||
         extra.length !== 0 ||
         !requestNodesAreSame(argument, reference) ||
         !receiver ||
-        (member !== 'all' && member !== 'execute') ||
+        member !== 'rawRead' ||
+        !requestRawReadOptionsAreExact(options) ||
         call.getQuestionDotTokenNode() ||
         !Node.isPropertyAccessExpression(callee) ||
-        callee.getQuestionDotTokenNode()
+        callee.getQuestionDotTokenNode() ||
+        !requestDeclaredSecretReadReceiverIsExact(callee) ||
+        !requestDeclaredSecretReadExecutionIsExact(call, statementBlock)
       ) {
         return undefined;
       }
-      executionCalls.push({ call, terminal: member });
+      executionCalls.push(call);
       allowedReferences.add(requestNodeIdentity(reference));
     }
   }
 
   const [declarationCall] = declarationCalls;
   const [execution] = executionCalls;
+  const declarationOptions = declarationCall?.getArguments()[1];
+  const executionOptions = execution?.getArguments()[1];
+  const declaredTable = declarationOptions
+    ? requestSecretReadDeclarationTable(declarationOptions)
+    : undefined;
+  const executionReads = executionOptions ? requestRawReadTableNames(executionOptions) : undefined;
   if (
     declarationCalls.length !== 1 ||
     !declarationCall ||
     executionCalls.length !== 1 ||
     !execution ||
     declarationCall.getFirstAncestorByKind(SyntaxKind.Block) !== statementBlock ||
-    execution.call.getFirstAncestorByKind(SyntaxKind.Block) !== statementBlock ||
+    execution.getFirstAncestorByKind(SyntaxKind.Block) !== statementBlock ||
+    !declaredTable ||
+    !executionReads?.includes(declaredTable) ||
+    !requestSqlReferencesTable(statementSql, declaredTable) ||
     !(statementDeclaration.getStart() < declarationCall.getStart()) ||
-    !(declarationCall.getStart() < execution.call.getStart()) ||
+    !(declarationCall.getStart() < execution.getStart()) ||
     allowedReferences.size !== 3
   ) {
     return undefined;
   }
   const result: RequestExactDeclaredSecretReadStatement = {
     declarationCall,
-    executionCall: execution.call,
+    executionCall: execution,
     statementDeclaration,
-    terminal: execution.terminal,
   };
   projectMemo.set(memoKey, result);
   return result;
@@ -16399,48 +16501,6 @@ function requestCallUsesReviewedDbCapabilityInDeclaredRoot(
   if (roots.some(valid)) return true;
   const helpers = requestExactClosedDeclaredRootHelperContexts(direct, session);
   return !!helpers && helpers.length > 0 && helpers.every(valid);
-}
-
-function requestCallIsExactDeclaredSecretReadExecution(
-  call: import('ts-morph').CallExpression,
-  session: RequestProvenanceSession,
-): boolean {
-  const callee = unwrapStaticExpression(call.getExpression());
-  const member = requestStaticCallMember(callee);
-  if (
-    !Node.isPropertyAccessExpression(callee) ||
-    (member !== 'all' && member !== 'execute') ||
-    call.getArguments().length !== 1
-  ) {
-    return false;
-  }
-  const reviewed = requestExactDeclaredSecretReadForCall(call);
-  return !!(
-    reviewed &&
-    requestNodesAreSame(reviewed.executionCall, call) &&
-    requestCallUsesReviewedDbCapabilityInDeclaredRoot(call, session)
-  );
-}
-
-function requestCallIsExactDeclaredSecretReadAll(
-  call: import('ts-morph').CallExpression,
-  session: RequestProvenanceSession,
-): boolean {
-  const callee = unwrapStaticExpression(call.getExpression());
-  if (
-    !Node.isPropertyAccessExpression(callee) ||
-    requestStaticCallMember(callee) !== 'all' ||
-    call.getArguments().length !== 1
-  ) {
-    return false;
-  }
-  const reviewed = requestExactDeclaredSecretReadForCall(call);
-  return !!(
-    reviewed &&
-    reviewed.terminal === 'all' &&
-    requestNodesAreSame(reviewed.executionCall, call) &&
-    requestCallUsesReviewedDbCapabilityInDeclaredRoot(call, session)
-  );
 }
 
 function requestCallIsReviewedRouteOutcome(
@@ -22362,7 +22422,6 @@ function requestExpressionIsProtocolSafeUncached(
     }
     if (requestCallIsExactReviewedRawRead(node, session)) return true;
     if (requestCallIsExactDeclaredSecretReadDeclaration(node)) return true;
-    if (requestCallIsExactDeclaredSecretReadExecution(node, session)) return true;
     if (requestCallIsExactMutationDomainInvalidate(node, session)) return true;
     if (requestCallUsesMutationDomainInvalidateShape(node)) return false;
     if (requestCallIsExactWebhookRecordChange(node, session)) return true;
@@ -23363,8 +23422,7 @@ function requestWireAuthoritiesForExpressionUncached(
     if (
       requestCallIsReviewedDrizzleDbReadChainInDeclaredRoot(node, state.session) ||
       requestCallIsExactReviewedDrizzleRelationalReadInDeclaredRoot(node, state.session) ||
-      requestCallIsExactReviewedRawRead(node, state.session) ||
-      requestCallIsExactDeclaredSecretReadExecution(node, state.session)
+      requestCallIsExactReviewedRawRead(node, state.session)
     ) {
       // A reviewed Drizzle select chain yields app-owned row data. Query arguments remain
       // server-side selectors and are scanned by the request-handler sink pass; they are not
@@ -23858,8 +23916,7 @@ function requestWireExpressionIsExactNativeArray(
     Node.isCallExpression(node) &&
     (requestCallIsReviewedDrizzleDbReadChainInDeclaredRoot(node, state.session) ||
       requestCallIsExactReviewedDrizzleRelationalManyInDeclaredRoot(node, state.session) ||
-      requestCallIsExactReviewedRawRead(node, state.session) ||
-      requestCallIsExactDeclaredSecretReadAll(node, state.session))
+      requestCallIsExactReviewedRawRead(node, state.session))
   ) {
     return true;
   }
@@ -23920,7 +23977,6 @@ function requestExpressionIsExactNativePromise(
     ) {
       return true;
     }
-    if (requestCallIsExactDeclaredSecretReadExecution(node, session)) return true;
     if (requestCallIsExactAuthoredBetterAuthSessionProviderDelegation(node, session)) return true;
     if (
       requestCallIsExactMutationTaskSchedule(node, session) ||
@@ -24256,8 +24312,7 @@ function requestExpressionIsPlainWireValue(
     if (
       requestCallIsReviewedDrizzleDbReadChainInDeclaredRoot(node, state.session) ||
       requestCallIsExactReviewedDrizzleRelationalReadInDeclaredRoot(node, state.session) ||
-      requestCallIsExactReviewedRawRead(node, state.session) ||
-      requestCallIsExactDeclaredSecretReadExecution(node, state.session)
+      requestCallIsExactReviewedRawRead(node, state.session)
     )
       return true;
     if (
@@ -25229,8 +25284,7 @@ function requestWireIterationValues(
     return Node.isCallExpression(awaited) &&
       (requestCallIsReviewedDrizzleDbReadChainInDeclaredRoot(awaited, state.session) ||
         requestCallIsExactReviewedDrizzleRelationalManyInDeclaredRoot(awaited, state.session) ||
-        requestCallIsExactReviewedRawRead(awaited, state.session) ||
-        requestCallIsExactDeclaredSecretReadAll(awaited, state.session))
+        requestCallIsExactReviewedRawRead(awaited, state.session))
       ? { candidates: [], handled: true }
       : { candidates: [], handled: false };
   }
@@ -25286,8 +25340,7 @@ function requestWireIterationValues(
     if (
       requestCallIsReviewedDrizzleDbReadChainInDeclaredRoot(node, state.session) ||
       requestCallIsExactReviewedDrizzleRelationalManyInDeclaredRoot(node, state.session) ||
-      requestCallIsExactReviewedRawRead(node, state.session) ||
-      requestCallIsExactDeclaredSecretReadAll(node, state.session)
+      requestCallIsExactReviewedRawRead(node, state.session)
     ) {
       // A reviewed Drizzle select chain yields native iterable row data. Selector arguments stay
       // server-side and are independently reviewed by the request-handler sink pass.
@@ -27172,10 +27225,7 @@ function requestCallIsKnownSafe(
   if (requestCallUsesWebhookRecordChangeShape(call)) return false;
   if (requestCallUsesSensitiveTaskCapabilityShape(call, context.provenance)) return false;
 
-  if (
-    requestCallIsExactDeclaredSecretReadDeclaration(call) ||
-    requestCallIsExactDeclaredSecretReadExecution(call, context.provenance)
-  ) {
+  if (requestCallIsExactDeclaredSecretReadDeclaration(call)) {
     scanRequestFunctionArguments(call, context);
     return true;
   }
@@ -28687,8 +28737,7 @@ function requestExpressionIsReviewedDbRowArray(
       return (
         requestCallIsReviewedDrizzleDbReadChain(node, callable) ||
         requestCallIsReviewedDrizzleDbReadChainInDeclaredRoot(node, context.provenance) ||
-        requestCallIsExactReviewedRawRead(node, context.provenance) ||
-        requestCallIsExactDeclaredSecretReadAll(node, context.provenance)
+        requestCallIsExactReviewedRawRead(node, context.provenance)
       );
     }
     if (Node.isConditionalExpression(node)) {
@@ -28780,8 +28829,7 @@ function requestLocalIntrinsicContainerKind(
     if (
       requestCallIsReviewedDrizzleDbReadChain(node, callable) ||
       requestCallIsReviewedDrizzleDbReadChainInDeclaredRoot(node, context.provenance) ||
-      requestCallIsExactReviewedRawRead(node, context.provenance) ||
-      requestCallIsExactDeclaredSecretReadAll(node, context.provenance)
+      requestCallIsExactReviewedRawRead(node, context.provenance)
     ) {
       return 'array';
     }
@@ -35624,6 +35672,18 @@ function requestCallIsExactKovoTrustedSql(call: import('ts-morph').CallExpressio
       requestTaggedTemplateUsesExactKovoSqlTag(statement)) ||
     (Node.isCallExpression(statement) && requestCallUsesExactKovoSqlRaw(statement))
   );
+}
+
+function requestExactKovoTrustedSqlRawText(
+  call: import('ts-morph').CallExpression,
+): string | undefined {
+  if (!requestCallHasExactKovoTrustedSqlCalleeAndOptions(call)) return undefined;
+  const statement = unwrapStaticExpression(call.getArguments()[0]!);
+  if (!Node.isCallExpression(statement) || !requestCallUsesExactKovoSqlRaw(statement)) {
+    return undefined;
+  }
+  const text = unwrapStaticExpression(statement.getArguments()[0]!);
+  return isStringLiteralLike(text) ? text.getLiteralText() : undefined;
 }
 
 function requestCallIsExactTrustedOutput(call: Node): boolean {

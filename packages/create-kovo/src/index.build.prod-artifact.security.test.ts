@@ -69,6 +69,18 @@ function captureBuildFailure(build: () => void): string {
   throw new Error('Expected production build to fail, but it succeeded.');
 }
 
+function queryEndpointFailureLine(output: string, query: string): string {
+  const line = output
+    .split('\n')
+    .find(
+      (candidate) =>
+        candidate.startsWith('[kovo] KTB003 query-endpoint failed ') &&
+        candidate.includes(` query=${query} `),
+    );
+  if (line === undefined) throw new Error(`Missing KTB003 failure for query ${query}.`);
+  return line;
+}
+
 async function waitForChildExit(
   child: ChildProcessWithoutNullStreams,
   output: () => string,
@@ -398,15 +410,14 @@ describe('create-kovo starter (build integration: production security artifacts)
         addRequestClosedDeclassificationProof(root);
 
         const proofQueries = readFileSync(join(root, 'src/queries.ts'), 'utf8');
-        expect(proofQueries).toContain(
-          "trustedReveal(secret('runtime-secret-value'), DeclassifyPolicy.forTrustedReveal({",
+        expect(proofQueries).toMatch(
+          /trustedReveal\(\s*secret\('runtime-secret-value'\),\s*DeclassifyPolicy\.forTrustedReveal\(\{\s*ownerScope: 'application',?\s*\}\),?\s*\)/u,
         );
-        expect(proofQueries).toContain("ownerScope: 'application'");
 
         const output = captureBuildFailure(() => buildParanoidProductionArtifact(root));
         expect(output).toContain('KV448');
         expect(output).toContain(
-          '@kovojs/core declassification policy and reveal doors are unavailable to untrusted-data-reachable modules',
+          '@kovojs/core/security declassification policy and reveal doors are unavailable to untrusted-data-reachable modules',
         );
         expect(output).toContain('root=query:requestClosedRevealQuery');
         expect(output).not.toContain('runtime-secret-value');
@@ -567,10 +578,10 @@ describe('create-kovo starter (build integration: production security artifacts)
         expect(body).not.toContain('runtime-whole-secret-value');
         await vi.waitFor(() => {
           const requestOutput = output().slice(outputOffset);
-          expect(requestOutput).toContain(`query-endpoint failed query=${key}`);
-          expect(requestOutput).toMatch(exactEngineDenial);
-          expect(requestOutput).not.toContain('KV433');
-          expect(requestOutput).not.toContain('KV435');
+          const failureLine = queryEndpointFailureLine(requestOutput, key);
+          expect(failureLine).toMatch(exactEngineDenial);
+          expect(failureLine).not.toContain('KV433');
+          expect(failureLine).not.toContain('KV435');
           expect(requestOutput).not.toContain('runtime-secret-value');
           expect(requestOutput).not.toContain('runtime-function-secret-value');
           expect(requestOutput).not.toContain('runtime-whole-secret-value');
@@ -617,9 +628,9 @@ describe('create-kovo starter (build integration: production security artifacts)
         expect(boxBody).not.toContain(secretValue);
         await vi.waitFor(() => {
           const requestOutput = output().slice(boxOutputOffset);
-          expect(requestOutput).toContain(`query-endpoint failed query=${key}`);
-          expect(requestOutput).toContain('KV435');
-          expect(requestOutput).toContain('Secret runtime value cannot cross');
+          const failureLine = queryEndpointFailureLine(requestOutput, key);
+          expect(failureLine).toContain('KV435');
+          expect(failureLine).toContain('Secret runtime value cannot cross');
           expect(requestOutput).not.toContain(secretValue);
         });
       }
@@ -822,8 +833,10 @@ describe('create-kovo starter (build integration: production security artifacts)
       expect(proofQueries).toContain('(select classified from runtime_secret_proof) as leaked');
       expect(proofQueries).toContain('drizzleSql<string>`upper(${contacts.name})');
       expect(proofQueries).toContain('label: proof.label');
-      expect(proofQueries).toContain("db.all<SqliteSecretRows['items'][number]>(statement)");
-      expect(proofQueries).not.toContain('db.all(statement)');
+      expect(proofQueries).toMatch(
+        /db\.rawRead<SqliteSecretRows\['items'\]\[number\]>\(\s*statement,\s*\{\s*reads: \['runtime_secret_proof'\],?\s*\},?\s*\)/u,
+      );
+      expect(proofQueries).not.toContain('db.all');
       buildParanoidProductionArtifact(root);
 
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
@@ -1664,17 +1677,13 @@ function addEnhancedMutationWireProof(root: string): void {
 
 function addNoAccessProvisionMutation(root: string): void {
   const mutationsPath = join(root, 'src/mutations.ts');
-  let mutations = replaceRequired(
-    readFileSync(mutationsPath, 'utf8'),
-    "import { s } from '@kovojs/server';",
-    "import { mutation, s } from '@kovojs/server';",
-    'missing-access provision mutation import',
-  );
+  let mutations = readFileSync(mutationsPath, 'utf8');
   mutations = replaceRequired(
     mutations,
     'export const appMutations = [addContact];',
     [
-      'export const provisionAccount = mutation({',
+      '// @ts-expect-error SPEC §10.2: the negative fixture deliberately omits access so KV436 must reject the reachable app graph.',
+      'export const provisionAccount = app.mutation({',
       '  csrf: false,',
       "  csrfJustification: 'negative access fixture uses no ambient browser authority',",
       '  input: s.object({ marker: s.string() }),',
@@ -1688,7 +1697,22 @@ function addNoAccessProvisionMutation(root: string): void {
     'missing-access provision mutation',
   );
   writeFileSync(mutationsPath, mutations, 'utf8');
-  formatGeneratedProjectSources(root, ['src/mutations.ts']);
+
+  const appPath = join(root, 'src/app.tsx');
+  let app = replaceRequired(
+    readFileSync(appPath, 'utf8'),
+    "import { addContact } from './mutations.js';",
+    "import { addContact, provisionAccount } from './mutations.js';",
+    'missing-access provision mutation app import',
+  );
+  app = replaceRequired(
+    app,
+    '  mutations: [addContact, signInMutation, signOutMutation],',
+    '  mutations: [addContact, provisionAccount, signInMutation, signOutMutation],',
+    'missing-access provision mutation app registration',
+  );
+  writeFileSync(appPath, app, 'utf8');
+  formatGeneratedProjectSources(root, ['src/app.tsx', 'src/mutations.ts']);
 }
 
 function addControlProvenanceProof(root: string): void {
@@ -1822,7 +1846,11 @@ function addControlProvenanceProof(root: string): void {
     ),
     'utf8',
   );
-  formatGeneratedProjectSources(root, ['src/app.tsx', 'src/control-provenance-proof.tsx']);
+  formatGeneratedProjectSources(root, [
+    'kovo.config.ts',
+    'src/app.tsx',
+    'src/control-provenance-proof.tsx',
+  ]);
 }
 
 function formHtmlByDataProof(html: string, value: string): string {

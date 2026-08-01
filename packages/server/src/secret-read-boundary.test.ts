@@ -1226,6 +1226,35 @@ describe('secret read boundary', () => {
     });
   });
 
+  it('refuses a declaration whose SQL reads a different secret table', () => {
+    const base = metadata();
+    const db = createSecretBoxingReadDb(readDb([{ classified: 'other-runtime-secret' }]), {
+      ...base,
+      secretColumnKeysByTable: new Map([
+        ...base.secretColumnKeysByTable,
+        ['other_secrets', new Set(['classified'])],
+      ]),
+      secretColumnNamesByTable: new Map([
+        ...base.secretColumnNamesByTable,
+        ['other_secrets', new Set(['classified'])],
+      ]),
+      secretTableNames: new Set(['secrets', 'other_secrets']),
+    });
+    const statement = declareSecretReadCapability(
+      { toSQL: () => ({ sql: 'select classified from other_secrets' }) },
+      {
+        columns: ['classified'],
+        justification: 'mismatched table authority must close',
+        source: 'secrets.classified',
+        table: 'secrets',
+      },
+    );
+
+    expect(() => db.all(statement)).toThrow(
+      'KV435: reader raw SQL secret-column read requires a declared secret-read capability',
+    );
+  });
+
   it('keeps declared secret-read authority out of attacker carrier property traps', () => {
     let definitionAttempts = 0;
     const statement = new Proxy(
