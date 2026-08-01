@@ -102,7 +102,7 @@ const expectedCoreBuildDistCommand =
 // JavaScript flow interpreter (plans/10x-better-security.md, layered-closure decision).
 const reviewedUnresolvedDynamicModuleAcquisitions = new Set([
   'packages/browser/src/client-installer.ts#2c7b7a1aae697bd8d488d7459007da844cddb796d21fb790fe0fffb74ab46bcb#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
-  'packages/browser/src/inline-loader.ts#ef80cd19ec541a2d65f3b653020342fd832c038f6180358dcdf573391871c189#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
+  'packages/browser/src/inline-loader.ts#fda095a8ebeba2411e8f6798fb057106e560b8e8a35761aa730e4ce85d69e0b9#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
   'packages/cli/src/commands/db.ts#71f2e25eedf60743b28fb20ffadac69b9a2d9f342be7b5361e2133f0830fbfdf#88ff0d5b98c41aa906dd00878fccf940791c27dc1e087908d6efa85c9d56af3f',
   'packages/compiler/src/security-analyzer-soundness-oracle.ts#22ee982930cbc113c692d6995ae3b919cf4783cba81f795018505d88b75c5874#4597d4868f6caa7d49aa7fd626313ad01af41164f801c7ee52a9395287151099',
   'packages/compiler/src/security-analyzer-soundness-oracle.ts#22ee982930cbc113c692d6995ae3b919cf4783cba81f795018505d88b75c5874#7c8fe398cd82d5ea80560281e00f6154b09b15615233da0a8b56ac03f861e51b',
@@ -115,7 +115,7 @@ const reviewedUnresolvedDynamicModuleAcquisitions = new Set([
 const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   [
     'packages/cli/src/add-catalog.ts',
-    'e1c8065e5d518fa49694e4b6fe592f0a7a5b968bc857c6979855c859c1cf5ff9',
+    'e40a2765c095c969feeca04f41047e4113348b50ee358a39f4505e2a964ea8b0',
   ],
   [
     'packages/cli/src/artifact-provenance.ts',
@@ -128,7 +128,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ['packages/cli/src/bin.ts', '00ebe4233b9aa633b0ffb15fd2b1b2298cfa33164ec3fea3d9c8e79b0ec29b97'],
   [
     'packages/cli/src/commands/build-export.ts',
-    '42981c097af3c603a6e77dddfa3474a21833672c33e2b600159ccaf8d9269d65',
+    '1d11a89f6509b260357d31659ccb50f94e267f0129976a373a0f4187cdc7fd68',
   ],
   [
     'packages/cli/src/commands/build-static-trust-source-hook.mjs',
@@ -140,7 +140,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/cli/src/commands/dev.ts',
-    '1211eaa55a2a9071857ee601fe5de9af3f0b57845842683748b336545fecfc73',
+    '2dedce9c71c18996899f3529bec19e8052106fdb7aa3e15bd408fb078ab496f6',
   ],
   [
     'packages/cli/src/commands/sound-subset.mjs',
@@ -172,7 +172,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/drizzle/src/trust-escapes-static.ts',
-    'a04efcc819d0188b4194f88b2753a9eca4280f598fc507d350b919454f8598f0',
+    '151a8300c4630cca68e91b1b000e79f3213e7ae684a8afcc720225a7d2d64f8d',
   ],
   [
     'packages/icons/scripts/icon-plan.mjs',
