@@ -1273,6 +1273,20 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     ],
     verdictAnchors: [
       {
+        id: 'declared-secret-raw-read-composition',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          '@kovo-security-classifier-corpus C13 declared-secret-raw-read-composition',
+          'accepts only an exact direct declared secret-read statement and managed rawRead',
+          "const rows = await context.db.rawRead(statement, { reads: ['runtime_secret_proof'] });",
+          "'dynamic reads'",
+          "'duplicate reads'",
+          "'mismatched reads'",
+          "'legacy all execution'",
+          "'legacy execute execution'",
+        ],
+      },
+      {
         id: 'compiler-semantic-context-raw-read-consistency',
         file: 'packages/cli/src/phase3c-semantic-bridge-adversarial.test.ts',
         snippets: [
@@ -3188,6 +3202,17 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'scripts/security-coverage.test.mjs',
     ],
     verdictAnchors: [
+      {
+        id: 'finite-ir-declared-secret-raw-read',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          '@kovo-security-classifier-corpus C13 finite-ir-declared-secret-raw-read',
+          'keeps declared secret reads on managed rawRead and closes legacy all/execute spellings',
+          "const items = await context.db.rawRead(statement, { reads: ['accounts'] });",
+          'return context.db.execute(statement);',
+          'const execute = context.db.execute;',
+        ],
+      },
       {
         id: 'computed-key-first-registry-identity-closure',
         file: 'packages/compiler/src/compile-component.test.ts',

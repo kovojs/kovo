@@ -240,6 +240,42 @@ tracking across storage.
 > handlers with analyzed Drizzle writes plus explicit `registry.tables`/`registry.touches` on opaque
 > write sites.
 
+**Declared raw secret reads have one finite app-authored grammar (normative).** The only authored
+spelling that may attach audited secret-read authority to raw SQL is this exact same-block sequence:
+
+```ts
+import { sql, trustedSql } from '@kovojs/drizzle';
+import { declareSecretReadCapability } from '@kovojs/server/secret-reading';
+
+const statement = trustedSql(sql.raw('select id, classified from accounts'), {
+  justification: 'reviewed raw secret read',
+});
+declareSecretReadCapability(statement, {
+  columns: ['classified'],
+  justification: 'review classified values on the server',
+  source: 'accounts.classified',
+  table: 'accounts',
+});
+const rows = await context.db.rawRead(statement, { reads: ['accounts'] });
+```
+
+`declareSecretReadCapability` MUST be an exact, unaliased named import directly from the semantic
+`@kovojs/server/secret-reading` subpath. `statement` MUST be one immutable `const` initialized by
+the exact `trustedSql(sql.raw(<string literal>), { justification: <string literal> })` composition.
+That declaration, exactly one `declareSecretReadCapability` call, and exactly one directly awaited
+`rawRead` call on the handler's compiler-recognized request-scoped DB (`context.db` or `request.db`,
+as supplied by that callback signature) MUST occur in that lexical block and in that order. The
+`rawRead` options MUST be an exact inline `{ reads: [...] }` object whose entries are non-empty,
+duplicate-free string literals; the set MUST include the declared `table` and exhaust every relation
+the statement actually reads.
+Aliases, namespace imports, re-exports, lookalikes, statement escapes, computed/optional/extracted
+members, spreads, dynamic metadata, duplicate uses, and missing or extra arguments do not establish
+this authority. The legacy app-authored `.all(statement)` and `.execute(statement)` spellings are
+closed; managed `rawRead` is the sole execution door. This declaration is audit-grade authority,
+not a proof or declassification (§6.6): runtime enforcement still boxes secret result fields
+(§11.2), and no result may cross the public wire without an independently named reveal or an owned
+sink that enforces its own policy.
+
 ```ts
 // cart.domain.ts — ALL writes flow through here (error KV330 bans db access in handlers)
 export const cart = domain({
