@@ -10,7 +10,7 @@ import {
   validatedPackageTarballEntries,
 } from './lib/deterministic-tarball.mjs';
 import { packWithoutLifecycleScripts } from './lib/pack-without-lifecycle.mjs';
-import { derivePublishPlan } from './build-publish.mjs';
+import { derivePublishPlan, uiVendoredHelperSourcePaths } from './build-publish.mjs';
 import { normalizePackageExports, resolveSourceExportTarget } from './package-exports.mjs';
 import { publicPackages, repoRoot } from './public-packages.mjs';
 
@@ -596,12 +596,7 @@ export function allowedPublishedSourceFiles(pkgJson) {
     if (/^src\/[^/]+\.tsx$/.test(sourceFile)) files.add(sourceFile);
   }
 
-  for (const helper of [
-    'src/navigation-types.ts',
-    'src/pass-through.ts',
-    'src/safe-url.ts',
-    'src/theme.ts',
-  ]) {
+  for (const helper of uiVendoredHelperSourcePaths) {
     files.add(helper);
   }
 

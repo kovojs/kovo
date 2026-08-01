@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
 import {
+  allowedPublishedSourceFiles,
   assertSnapshotMatches,
   collectFirstPartyScopes,
   collectManifestTargets,
@@ -14,6 +15,7 @@ import {
   validatePackedPackage,
   validateSelfContainedVerifierPack,
 } from './check-pack-security.mjs';
+import { uiVendoredHelperSourcePaths } from './build-publish.mjs';
 
 function validateFixture(files, overrides = {}) {
   const bytes = new Map(
@@ -425,6 +427,21 @@ describe('pack-security gate', () => {
       ]),
     );
     expect(findings.some((finding) => finding.includes('src/button.tsx'))).toBe(false);
+  });
+
+  it('derives the exact UI helper allowance from the publish authority', () => {
+    const allowed = allowedPublishedSourceFiles({
+      exports: {
+        '.': './src/index.ts',
+        './button': './src/button.tsx',
+      },
+      name: '@kovojs/ui',
+    });
+
+    expect(allowed).toEqual(
+      ['catalog.json', 'registry.json', 'src/button.tsx', ...uiVendoredHelperSourcePaths].sort(),
+    );
+    expect(allowed).not.toContain('src/navigation-types.ts');
   });
 
   it('allows package-owned UI and icon catalog metadata only when explicitly modeled', () => {

@@ -433,7 +433,7 @@ describe('ci-shards', () => {
   it('gives every create-kovo acceptance file exactly one manifest owner', async () => {
     const discovered = await discoverCreateKovoAcceptanceTests();
     const owners = createKovoAcceptanceOwners();
-    expect(discovered).toHaveLength(28);
+    expect(discovered).toHaveLength(29);
     expect(owners).toHaveLength(discovered.length);
     expect(() => validateCreateKovoAcceptanceOwnership(discovered)).not.toThrow();
     expect(Object.fromEntries(owners.map((owner) => [owner.file, owner.lane]))).toMatchObject({
@@ -443,7 +443,21 @@ describe('ci-shards', () => {
       'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts': 'paranoid',
       'packages/create-kovo/src/index.build.prod-artifact.sink-census.test.ts': 'c9',
       'packages/create-kovo/src/index.build.prod-artifact.table-security.test.ts': 'starter',
+      'packages/create-kovo/src/index.example.packed.test.ts': 'starter-packed',
     });
+    const packedExampleFile = 'packages/create-kovo/src/index.example.packed.test.ts';
+    const packedExampleEntries = starterEntries().filter(
+      (entry) => entry.file === packedExampleFile,
+    );
+    expect(packedExampleEntries).toMatchObject([
+      { cadence: 'per-pr', id: 'starter-packed-examples', needsPacked: true },
+    ]);
+    expect(() =>
+      validateCreateKovoAcceptanceOwnership(
+        discovered,
+        starterEntries().filter((entry) => entry.file !== packedExampleFile),
+      ),
+    ).toThrow(`Starter-owned acceptance file has no entries: ${packedExampleFile}`);
     expect(
       includeVitest(
         'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime-gate.test.ts',
@@ -474,7 +488,7 @@ describe('ci-shards', () => {
       return;
     }
     const result = await validateAcceptanceTopology({ spawnSync });
-    expect(result.discoveredFiles).toHaveLength(28);
+    expect(result.discoveredFiles).toHaveLength(29);
     expect(result.selectorFiles).toEqual([
       'packages/create-kovo/src/index.build.prod-artifact.contacts.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',

@@ -25,7 +25,7 @@ const MAX_LIVE_ACCEPTANCE_OUTPUT_BYTES = 32 * 1024 * 1024;
 const STARTER_MIN_TIMEOUT_MS = 5 * 60_000;
 const STARTER_MAX_TIMEOUT_MS = 30 * 60_000;
 const CREATE_KOVO_ACCEPTANCE_TEST_PATTERN =
-  /^packages\/create-kovo\/src\/index\.build\.(?:prod-artifact(?:\.[^.]+)*|runtime|scaffold(?:\.[^.]+)*)\.test\.(?:mjs|ts|tsx|js)$/;
+  /^packages\/create-kovo\/src\/index\.(?:build\.(?:prod-artifact(?:\.[^.]+)*|runtime|scaffold(?:\.[^.]+)*)|example\.packed)\.test\.(?:mjs|ts|tsx|js)$/;
 const packedStarterWorkspacePackages = [
   { name: '@kovojs/core', dir: 'core' },
   { name: '@kovojs/style', dir: 'style' },
@@ -43,9 +43,9 @@ const packedStarterWorkspacePackages = [
   { name: 'create-kovo', dir: 'create-kovo' },
 ];
 
-// This is the single ownership registry for create-kovo's production-artifact, runtime, and
-// scaffold acceptance tests. Selector-level starter entries refine an owned file; they never
-// create a second owner. Keep lane names aligned with the one command that executes each file.
+// This is the single ownership registry for create-kovo's build and packed-example acceptance
+// tests. Selector-level starter entries refine an owned file; they never create a second owner.
+// Keep lane names aligned with the one command that executes each file.
 const CREATE_KOVO_ACCEPTANCE_OWNERS = [
   ['packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts', 'starter'],
   ['packages/create-kovo/src/index.build.prod-artifact.assets.test.ts', 'starter'],
@@ -75,6 +75,7 @@ const CREATE_KOVO_ACCEPTANCE_OWNERS = [
   ['packages/create-kovo/src/index.build.scaffold.source-check.test.ts', 'starter'],
   ['packages/create-kovo/src/index.build.scaffold.sqlite.test.ts', 'starter'],
   ['packages/create-kovo/src/index.build.scaffold.typecheck.test.ts', 'starter'],
+  ['packages/create-kovo/src/index.example.packed.test.ts', 'starter-packed'],
 ].map(([file, lane]) => ({ file, lane }));
 
 const CREATE_KOVO_ROOT_OWNED_FILES = new Set(
@@ -96,7 +97,6 @@ const CONSOLIDATED_VITEST_FILES = new Set([
   'packages/core/src/diagnostics.test.ts',
   'packages/core/src/sql-safety.test.ts',
   ...CREATE_KOVO_NON_ROOT_OWNED_FILES,
-  'packages/create-kovo/src/index.example.packed.test.ts',
   'packages/drizzle/src/runtime-surface.test.ts',
   'packages/drizzle/src/sql-safety-static.test.ts',
   'packages/server/src/guards.test.ts',
