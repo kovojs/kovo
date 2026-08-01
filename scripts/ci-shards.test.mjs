@@ -516,6 +516,7 @@ describe('ci-shards', () => {
       'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.postgres-external.test.ts',
       'packages/create-kovo/src/index.build.scaffold.sqlite.test.ts',
+      'packages/create-kovo/src/index.build.scaffold.production.test.ts',
       'packages/create-kovo/src/index.build.scaffold.source-check.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.table-security.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
@@ -562,10 +563,15 @@ describe('ci-shards', () => {
             'island-derive-helper-preflight',
             'm1-raw-html-mutable-alias',
             'm1-raw-html-provenance',
+            'm1-storage-write-fixture-contract',
+            'm1-storage-write-opaque',
+            'm1-storage-write-provenance',
             'm1-postgres-raw-sql',
             'm1-sqlite-raw-sql',
             'security-runtime-wires-postgres',
             'security-runtime-wires-sqlite',
+            'starter-production-graph-gate',
+            'starter-production-warm-cache',
             'starter-sqlite-check',
             'starter-sqlite-durable-task-refusal',
             'starter-sqlite-parser-dependency',
@@ -600,6 +606,27 @@ describe('ci-shards', () => {
         testName: 'M1:raw-html keeps mutable trusted-output aliases',
         timeoutMs: 300_000,
       },
+      'm1-storage-write-fixture-contract': {
+        expectedTestCount: 1,
+        seconds: 5,
+        testName: 'M1:storage-write fixture uses the current app-scoped declaration contract',
+        timeoutMs: 300_000,
+      },
+      'm1-storage-write-opaque': {
+        expectedTestCount: 1,
+        seconds: 67,
+        testName: 'M1:storage-write keeps opaque storage authority on the postgres KV424 path',
+        testTimeoutMs: 480_000,
+        timeoutMs: 540_000,
+      },
+      'm1-storage-write-provenance': {
+        expectedTestCount: 1,
+        seconds: 355,
+        testName:
+          'M1:storage-write tracks storage write gates from current postgres production source, not stale cache',
+        testTimeoutMs: 720_000,
+        timeoutMs: 780_000,
+      },
       'm1-postgres-raw-sql': {
         seconds: 151,
         testName: 'M1:postgres-raw-sql',
@@ -624,6 +651,20 @@ describe('ci-shards', () => {
         testTimeoutMs: 820_000,
         timeoutMs: 880_000,
       },
+      'starter-production-graph-gate': {
+        expectedTestCount: 1,
+        seconds: 141,
+        testName: 'runs the generated production build graph gate',
+        testTimeoutMs: 360_000,
+        timeoutMs: 420_000,
+      },
+      'starter-production-warm-cache': {
+        expectedTestCount: 1,
+        seconds: 277,
+        testName: 'rebuilds production artifacts from current source when cache is warm',
+        testTimeoutMs: 600_000,
+        timeoutMs: 660_000,
+      },
       'starter-sqlite-check': {
         seconds: 151,
         testTimeoutMs: 620_000,
@@ -638,7 +679,9 @@ describe('ci-shards', () => {
     });
     expect(starterEntries().some((entry) => entry.id === 'm1-raw-sql')).toBe(false);
     expect(starterEntries().some((entry) => entry.id === 'm1-raw-html')).toBe(false);
+    expect(starterEntries().some((entry) => entry.id === 'm1-storage-write')).toBe(false);
     expect(starterEntries().some((entry) => entry.id === 'security-runtime-wires')).toBe(false);
+    expect(starterEntries().some((entry) => entry.id === 'starter-production')).toBe(false);
     expect(starterEntries().some((entry) => entry.id === 'starter-sqlite')).toBe(false);
     for (const entry of Object.values(affected)) {
       if (entry.testTimeoutMs !== undefined) {
@@ -978,7 +1021,7 @@ describe('ci-shards', () => {
       entries.map((entry) => entry.id).toSorted(compareStrings),
     );
     expect(shards.map((shard) => shard.seconds)).toEqual([
-      1_174, 1_136, 1_152, 1_136, 1_168, 1_138, 1_167, 1_150, 1_153, 1_143,
+      1_193, 1_184, 1_204, 1_207, 1_205, 1_184, 1_202, 1_190, 1_184, 1_190,
     ]);
   });
 
@@ -1003,7 +1046,7 @@ describe('ci-shards', () => {
     expect([...packedIds, ...unpackedIds].toSorted(compareStrings)).toEqual(
       allEntries.map((entry) => entry.id).toSorted(compareStrings),
     );
-    expect(starterEntriesForMode('unpacked', 'per-pr')).toHaveLength(53);
+    expect(starterEntriesForMode('unpacked', 'per-pr')).toHaveLength(56);
     expect(starterEntries().find((entry) => entry.id === 'bugz-fixture-format')).toMatchObject({
       cadence: 'per-pr',
       testName: 'keeps BUGZ25/31 production fixtures formatter-clean before build preflight',
@@ -1032,7 +1075,7 @@ describe('ci-shards', () => {
       }))
       .filter((shard) => shard.entries.length > 0);
 
-    expect(browserShards).toEqual([{ index: 9, entries: ['island-derive-artifacts'] }]);
+    expect(browserShards).toEqual([{ index: 8, entries: ['island-derive-artifacts'] }]);
   });
 
   it('marks only packed starter shards as needing the packed package artifact', async () => {

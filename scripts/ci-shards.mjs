@@ -265,11 +265,34 @@ const STARTER_ENTRIES = [
     seconds: 600,
   })),
   {
-    id: 'm1-storage-write',
+    id: 'm1-storage-write-provenance',
     file: 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
-    testName: 'M1:storage-write',
-    expectedTestCount: 3,
-    seconds: 210,
+    testName:
+      'M1:storage-write tracks storage write gates from current postgres production source, not stale cache',
+    expectedTestCount: 1,
+    // CI run 30694384762 exceeded the former broad selector's 420s outer bound. Exact-SHA local
+    // profiling measured this three-build proof at 250.182s; 355s preserves its proportional share
+    // of the hosted lower bound until an independently completed hosted marker replaces the weight.
+    seconds: 355,
+    testTimeoutMs: 720_000,
+  },
+  {
+    id: 'm1-storage-write-fixture-contract',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
+    testName: 'M1:storage-write fixture uses the current app-scoped declaration contract',
+    expectedTestCount: 1,
+    // Exact-SHA CI-mode profiling measured this source-only proof at 0.175s.
+    seconds: 5,
+  },
+  {
+    id: 'm1-storage-write-opaque',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
+    testName: 'M1:storage-write keeps opaque storage authority on the postgres KV424 path',
+    expectedTestCount: 1,
+    // Exact-SHA local profiling measured this one-build proof at 46.743s. Scale its scheduling
+    // weight with the same hosted lower-bound ratio as the provenance sibling.
+    seconds: 67,
+    testTimeoutMs: 480_000,
   },
   {
     id: 'm1-raw-html-provenance',
@@ -428,9 +451,24 @@ const STARTER_ENTRIES = [
     testTimeoutMs: 620_000,
   },
   {
-    id: 'starter-production',
+    id: 'starter-production-graph-gate',
     file: 'packages/create-kovo/src/index.build.scaffold.production.test.ts',
-    seconds: 209,
+    testName: 'runs the generated production build graph gate',
+    expectedTestCount: 1,
+    // CI run 30694384762 exceeded the former two-test selector's 418s outer bound. Exact-SHA
+    // CI-mode profiling measured this independent build at 134.266s.
+    seconds: 141,
+    testTimeoutMs: 360_000,
+  },
+  {
+    id: 'starter-production-warm-cache',
+    file: 'packages/create-kovo/src/index.build.scaffold.production.test.ts',
+    testName: 'rebuilds production artifacts from current source when cache is warm',
+    expectedTestCount: 1,
+    // The same local profile measured this two-build proof at 264.040s. Its hosted-lower-bound
+    // scheduling share is kept separate from the graph gate and its 600s test watchdog.
+    seconds: 277,
+    testTimeoutMs: 600_000,
   },
   {
     id: 'starter-source-check-postgres',
