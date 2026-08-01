@@ -1,15 +1,11 @@
 {
   "arms": {
     "arm-a": {
-      "eligible": false,
+      "eligible": true,
       "gates": {
         "artifacts": {
-          "details": [
-            "compiler-packed.tgz differs from the independently sealed v6 authority",
-            "generated-app.ts differs from the independently sealed v6 authority",
-            "mutation/selection coverage is incomplete"
-          ],
-          "pass": false
+          "details": [],
+          "pass": true
         },
         "compilerAndGraph": {
           "details": [],
@@ -38,15 +34,11 @@
       }
     },
     "arm-b": {
-      "eligible": false,
+      "eligible": true,
       "gates": {
         "artifacts": {
-          "details": [
-            "compiler-packed.tgz differs from the independently sealed v6 authority",
-            "generated-app.ts differs from the independently sealed v6 authority",
-            "mutation/selection coverage is incomplete"
-          ],
-          "pass": false
+          "details": [],
+          "pass": true
         },
         "compilerAndGraph": {
           "details": [],
@@ -76,7 +68,7 @@
     }
   },
   "criteria": "kovo.app-contract-d1-criteria/v6",
-  "decision": "fallback",
+  "decision": "arm-a",
   "priorEvidenceDisposition": {
     "v1": "invalidated",
     "v2": "invalidated",
