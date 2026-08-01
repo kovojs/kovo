@@ -168,7 +168,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/core/src/secret.ts',
-    'a0fd7ba26b7d62959f7c94d69e3bbd1565d4e91265559a59d28fff7fc0545dbd',
+    '522c5b0918b02811cea846e0c0eea2363302295511af31b6ac7aa19a77f71095',
   ],
   [
     'packages/drizzle/src/trust-escapes-static.ts',
@@ -606,7 +606,7 @@ const diagnosticLiteralExemptions = new Map([
   ],
   [
     'packages/core/src/internal/security-markers.ts',
-    '65f104f11ee87e77124fac889a4cc8a22a67acfd3018d1d9534c68dfe0c52bc3',
+    'f73fc0923298a8164ce26f61864f1d1ebbd8c4941a27a2aa80bb8ceaa9888f07',
   ],
   [
     'packages/core/src/internal/source-sink-registry.ts',
