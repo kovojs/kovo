@@ -86,6 +86,22 @@ function negativeTypeContract() {
     })),
   );
   pgTable(
+    'typed_typo_owner_via',
+    {
+      accountId: pgText('account_id').notNull(),
+      id: pgText('id').primaryKey(),
+    },
+    kovo((columns) => ({
+      domain: 'typed-typo-owner-via',
+      ownerVia: {
+        // @ts-expect-error owner-via child references expose only real selection keys
+        fk: columns.accuntId,
+        parent: accounts,
+        parentKey: accounts.id,
+      },
+    })),
+  );
+  pgTable(
     'typed_wrong_parent_key',
     {
       accountId: pgText('account_id').notNull(),
@@ -99,6 +115,18 @@ function negativeTypeContract() {
         // @ts-expect-error parentKey must belong to the declared parent table
         parentKey: entries.id,
       },
+    })),
+  );
+  sqliteTable(
+    'typed_typo_fan',
+    {
+      accountId: sqliteInteger('account_id').notNull(),
+      id: sqliteInteger('id').primaryKey(),
+    },
+    kovo((columns) => ({
+      domain: 'typed-typo-fan',
+      // @ts-expect-error fan-out references expose only real selection keys
+      fans: [{ domain: 'typed-account', via: columns.accuntId }],
     })),
   );
   pgTable(

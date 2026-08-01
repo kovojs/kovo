@@ -5,6 +5,7 @@ import {
   assertPackedDrizzleManifest,
   packedDrizzleConsumerManifest,
   packedDrizzleDeclarationExports,
+  packedDrizzleNegativeTypeFixtures,
   packedDrizzlePeerFixtures,
 } from './check-packed-drizzle-consumer.mjs';
 
@@ -174,5 +175,25 @@ describe('packed Drizzle consumer proof', () => {
         'export interface Alpha {}\nexport const beta = 1;\nexport { beta as gamma };\n',
       ),
     ).toEqual(['Alpha', 'beta', 'gamma']);
+  });
+
+  it('keeps typo and wrong-table packed negatives for every column-bearing ownership path', () => {
+    const fixtures = packedDrizzleNegativeTypeFixtures('// packed fixture preamble');
+    expect(fixtures.map((fixture) => fixture.label)).toEqual([
+      'human-root runtime metadata import',
+      'typo owner column',
+      'wrong-table owner column',
+      'typo owner-via child column',
+      'wrong-parent owner-via column',
+      'typo fan-out column',
+      'wrong-table fan-out column',
+      'structural SQL fake',
+    ]);
+    expect(
+      fixtures.find((fixture) => fixture.label === 'typo owner-via child column')?.source,
+    ).toContain('fk: columns.accuntId');
+    expect(fixtures.find((fixture) => fixture.label === 'typo fan-out column')?.source).toContain(
+      "fans: [{ domain: 'sqlite-account', via: columns.accuntId }]",
+    );
   });
 });

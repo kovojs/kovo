@@ -394,7 +394,21 @@ void [accounts, ddl, entries, sqliteAccounts];
     );
   }
 
-  const negativeSources = [
+  const negativeSources = packedDrizzleNegativeTypeFixtures(preamble);
+  for (let index = 0; index < negativeSources.length; index += 1) {
+    const negative = negativeSources[index];
+    const diagnostics = packedTypeDiagnostics(consumerRoot, `negative-${index}`, negative.source);
+    if (diagnostics.length === 0) {
+      throw new Error(`Packed Drizzle type consumer accepted ${negative.label}`);
+    }
+  }
+}
+
+/**
+ * Keep the packed type boundary's fail-closed annotation matrix reviewable and unit-testable.
+ */
+export function packedDrizzleNegativeTypeFixtures(preamble) {
+  return Object.freeze([
     {
       label: 'human-root runtime metadata import',
       source: `import { extractKovoRuntimeDbMetadata } from '@kovojs/drizzle';
@@ -428,6 +442,26 @@ pgTable(
 `,
     },
     {
+      label: 'typo owner-via child column',
+      source: `${preamble}
+pgTable(
+  'packed_typo_owner_via',
+  {
+    accountId: pgText('account_id').notNull(),
+    id: pgText('id').primaryKey(),
+  },
+  kovo((columns) => ({
+    domain: 'typo-owner-via',
+    ownerVia: {
+      fk: columns.accuntId,
+      parent: accounts,
+      parentKey: accounts.id,
+    },
+  })),
+);
+`,
+    },
+    {
       label: 'wrong-parent owner-via column',
       source: `${preamble}
 pgTable(
@@ -443,6 +477,22 @@ pgTable(
       parent: accounts,
       parentKey: entries.id,
     },
+  })),
+);
+`,
+    },
+    {
+      label: 'typo fan-out column',
+      source: `${preamble}
+sqliteTable(
+  'packed_typo_fan',
+  {
+    accountId: sqliteInteger('account_id').notNull(),
+    id: sqliteInteger('id').primaryKey(),
+  },
+  kovo((columns) => ({
+    domain: 'typo-fan',
+    fans: [{ domain: 'sqlite-account', via: columns.accuntId }],
   })),
 );
 `,
@@ -472,14 +522,7 @@ const forgedSql: KovoStaticSql = structuralSqlFake;
 void forgedSql;
 `,
     },
-  ];
-  for (let index = 0; index < negativeSources.length; index += 1) {
-    const negative = negativeSources[index];
-    const diagnostics = packedTypeDiagnostics(consumerRoot, `negative-${index}`, negative.source);
-    if (diagnostics.length === 0) {
-      throw new Error(`Packed Drizzle type consumer accepted ${negative.label}`);
-    }
-  }
+  ]);
 }
 
 function packedTypeDiagnostics(consumerRoot, fixture, source) {
