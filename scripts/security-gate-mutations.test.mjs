@@ -109,6 +109,20 @@ describe('security-gate-mutations', () => {
     expect(mutants.every((mutant) => mutant.sourceOnly === true)).toBe(true);
   });
 
+  it('enrolls the managed rawRead legacy-method closure mutant', () => {
+    const mutant = SECURITY_GATE_MUTANTS.find(
+      (candidate) =>
+        candidate.name ===
+        'compiler-finite-ir/drop-declared-secret-read-legacy-method-closure',
+    );
+
+    expect(mutant).toMatchObject({
+      behavioralTypeScript: true,
+      expectedKiller:
+        'finite IR must keep declared secret reads on managed rawRead and reject legacy all/execute methods',
+    });
+  });
+
   it('enrolls the dependency-loader and Metric E exact-evidence closure mutants', () => {
     const names = [
       'dependency-loader/drop-configured-alias-identity-join',

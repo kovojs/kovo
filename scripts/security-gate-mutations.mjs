@@ -3843,10 +3843,10 @@ const reviewedDeclaredSecretReadDoorBranch =
   '  if (serverCallIsExactDeclaredSecretReadCapability(sourceFile, call, aliases)) {';
 const removedReviewedDeclaredSecretReadDoorBranch =
   '  if (false && serverCallIsExactDeclaredSecretReadCapability(sourceFile, call, aliases)) {';
-const reviewedDeclaredSecretReadExecutionBranch =
-  '  if (serverCallIsExactDeclaredSecretReadExecution(sourceFile, call, aliases)) {';
-const removedReviewedDeclaredSecretReadExecutionBranch =
-  '  if (false && serverCallIsExactDeclaredSecretReadExecution(sourceFile, call, aliases)) {';
+const declaredSecretReadLegacyMethodClosureBranch =
+  '  if (serverCallUsesDeclaredSecretStatementWithLegacyMethod(sourceFile, call, aliases)) {';
+const removedDeclaredSecretReadLegacyMethodClosureBranch =
+  '  if (false && serverCallUsesDeclaredSecretStatementWithLegacyMethod(sourceFile, call, aliases)) {';
 const reviewedTrustedRevealDoorBranch =
   '  if (frameworkExportEquals(frameworkIdentity, TRUSTED_REVEAL_IDENTITY)) {';
 const removedReviewedTrustedRevealDoorBranch =
@@ -6746,13 +6746,14 @@ export const SECURITY_GATE_MUTANTS = [
   {
     behavioralEntryFile: compilerBehavioralEntryPath,
     behavioralTypeScript: true,
-    description: 'Deletes the exact declaration-before-one-execution secret-read door.',
-    expectedKiller: 'finite IR must retain exact declared secret-read execution admission',
-    name: 'compiler-finite-ir/drop-declared-secret-read-execution-door',
-    replacement: removedReviewedDeclaredSecretReadExecutionBranch,
-    search: reviewedDeclaredSecretReadExecutionBranch,
+    description: 'Deletes the fail-closed legacy-method branch for declared secret statements.',
+    expectedKiller:
+      'finite IR must keep declared secret reads on managed rawRead and reject legacy all/execute methods',
+    name: 'compiler-finite-ir/drop-declared-secret-read-legacy-method-closure',
+    replacement: removedDeclaredSecretReadLegacyMethodClosureBranch,
+    search: declaredSecretReadLegacyMethodClosureBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
-    test: assertReviewedDeclaredSecretReadExecutionBehavior,
+    test: assertDeclaredSecretReadLegacyMethodClosureBehavior,
   },
   {
     behavioralEntryFile: compilerBehavioralEntryPath,
@@ -10400,7 +10401,15 @@ function runIsolatedPackageVitestMutation({
       // CLI integration regressions intentionally exercise sibling framework packages through
       // repo-relative fixtures. Keep the mutated CLI copy isolated while exposing read-only
       // first-party package and policy subjects at the same workspace paths.
-      for (const sibling of ['browser', 'compiler', 'core', 'devtool', 'server', 'style']) {
+      for (const sibling of [
+        'browser',
+        'compiler',
+        'core',
+        'create-kovo',
+        'devtool',
+        'server',
+        'style',
+      ]) {
         symlinkSync(
           path.join(repoRoot, 'packages', sibling),
           path.join(tempRoot, 'packages', sibling),
@@ -15260,8 +15269,30 @@ function assertReviewedDeclaredSecretReadDoorBehavior(moduleUnderTest) {
   assertFiniteIrAllows(moduleUnderTest, reviewedDeclaredSecretReadFixture);
 }
 
-function assertReviewedDeclaredSecretReadExecutionBehavior(moduleUnderTest) {
+function assertDeclaredSecretReadLegacyMethodClosureBehavior(moduleUnderTest) {
   assertFiniteIrAllows(moduleUnderTest, reviewedDeclaredSecretReadFixture);
+  const diagnostics = finiteIrDiagnostics(
+    compileFiniteIrFixture(
+      moduleUnderTest,
+      reviewedDeclaredSecretReadFixture.replace(
+        "    const items = await context.db.rawRead(statement, { reads: ['accounts'] });\n    return { items };",
+        '    const result = await context.db.execute(statement);\n    return { items: result.rows ?? [] };',
+      ),
+    ),
+  );
+  if (
+    !diagnostics.some((diagnostic) =>
+      diagnostic.message.includes(
+        'declared secret reads require the exact managed rawRead(statement, { reads }) terminal',
+      ),
+    )
+  ) {
+    throw new Error(
+      `legacy declared-secret execution lost its exact closed verdict: ${finiteIrDiagnosticSummary(
+        diagnostics,
+      )}`,
+    );
+  }
 }
 
 function assertReviewedTrustedRevealDoorBehavior(moduleUnderTest) {
@@ -15385,8 +15416,8 @@ export const report = query({
       source: 'accounts.classified',
       table: 'accounts',
     });
-    const result = await context.db.execute(statement);
-    return { items: result.rows ?? [] };
+    const items = await context.db.rawRead(statement, { reads: ['accounts'] });
+    return { items };
   },
 });
 `;
