@@ -35,7 +35,17 @@ export function normalizePackageBin(bin) {
 }
 
 export function isSourceTarget(value) {
-  return typeof value === 'string' && /^\.\/src\/.+\.tsx?$/.test(value);
+  if (typeof value !== 'string' || !/^\.\/src\/[A-Za-z0-9_./-]+\.tsx?$/u.test(value)) {
+    return false;
+  }
+  const relativePath = value.slice(2);
+  const stemPath = relativePath.replace(/\.tsx?$/u, '');
+  const segments = stemPath.split('/');
+  return (
+    path.posix.normalize(relativePath) === relativePath &&
+    segments[0] === 'src' &&
+    segments.slice(1).every((segment) => segment !== '' && segment !== '.' && segment !== '..')
+  );
 }
 
 export function resolveExportTarget(
@@ -75,11 +85,11 @@ export function resolveSourceExportTarget(target, options = {}) {
 
 /** A source entry like `./src/api/app-shell/core.ts` -> `api/app-shell/core`. */
 export function sourceStem(srcPath) {
-  const normalized = srcPath.replace(/^\.\//, '');
-  const match = /^src\/(.+)\.tsx?$/.exec(normalized);
-  if (!match) {
+  if (!isSourceTarget(srcPath)) {
     throw new Error(`expected a ./src/<path>.ts(x) target, got: ${srcPath}`);
   }
+  const normalized = srcPath.replace(/^\.\//, '');
+  const match = /^src\/(.+)\.tsx?$/.exec(normalized);
   return match[1];
 }
 

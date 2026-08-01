@@ -6,7 +6,6 @@ import { execFileSync } from 'node:child_process';
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { publicPackages, repoRoot } from './public-packages.mjs';
 import {
-  isSourceTarget,
   normalizePackageBin,
   normalizePackageExports,
   resolveSourceExportTarget,
@@ -40,6 +39,7 @@ const maximumUiVendoredSourceBytes = 2 * 1024 * 1024;
  *
  * Modes:
  *   --write   Write each public package.json: `publishConfig` (exports/bin → dist),
+ *             manifest-declared private dist entries,
  *             publish `files` (dist, plus starter templates for `create-kovo` and
  *             vendored copy-in source for `@kovojs/ui`),
  *             `scripts["build:dist"]` = `vp pack <entries> --dts`,
@@ -50,8 +50,8 @@ const maximumUiVendoredSourceBytes = 2 * 1024 * 1024;
  *   (default) Build each public package and verify every `publishConfig` target
  *             file exists under `packages/<dir>/dist`.
  *
- * Determinism: no Date.now / Math.random; outputs derive only from the manifest
- * and each package's top-level `exports`/`bin`.
+ * Determinism: no Date.now / Math.random. Outputs derive from the manifest, authenticated UI
+ * source bytes, and the finite package-name-specific build/file rules in this generator.
  */
 
 /**
@@ -70,7 +70,19 @@ export function derivePublishPlan(pkgJson) {
 
   const entries = new Set(); // distinct ./src/<path>.ts(x) build entries
   const stemBySubpath = new Map(); // subpath -> dist stem
-  const extraStems = new Set(); // package-owned dist entries that are not exported subpaths
+  const extraTargetFiles = new Set(); // package-owned dist targets not exported as subpaths
+  const runtimeProducerByTarget = new Map();
+  const enrollEntry = (entry, stem) => {
+    const runtimeTarget = `dist/${stem}.mjs`;
+    const existing = runtimeProducerByTarget.get(runtimeTarget);
+    if (existing !== undefined && existing !== entry) {
+      throw new Error(
+        `publish entries ${existing} and ${entry} collide on generated target ${runtimeTarget}`,
+      );
+    }
+    runtimeProducerByTarget.set(runtimeTarget, entry);
+    entries.add(entry);
+  };
 
   const exportsMap = normalizePackageExports(pkgJson.exports);
   for (const [subpath, value] of Object.entries(exportsMap)) {
@@ -86,7 +98,7 @@ export function derivePublishPlan(pkgJson) {
         ? './src/vite.ts'
         : target;
     const stem = sourceStem(publishTarget);
-    entries.add(publishTarget.replace(/^\.\//, ''));
+    enrollEntry(publishTarget.replace(/^\.\//, ''), stem);
     stemBySubpath.set(subpath, stem);
   }
 
@@ -98,16 +110,18 @@ export function derivePublishPlan(pkgJson) {
     if (target === null) {
       throw new Error(`${label} does not target ./src: ${JSON.stringify(value)}`);
     }
-    entries.add(target.replace(/^\.\//, ''));
-    binTargets.set(name, sourceStem(target));
+    const stem = sourceStem(target);
+    enrollEntry(target.replace(/^\.\//, ''), stem);
+    binTargets.set(name, stem);
   }
 
   for (const target of pkgJson.kovoPublish?.extraEntries ?? []) {
-    if (!isSourceTarget(target)) {
-      throw new Error(`kovoPublish.extraEntries target does not target ./src: ${target}`);
+    const extraEntry = publishExtraEntry(target);
+    enrollEntry(extraEntry.entry, extraEntry.stem);
+    extraTargetFiles.add(`dist/${extraEntry.stem}.mjs`);
+    if (extraEntry.emitsDeclaration) {
+      extraTargetFiles.add(`dist/${extraEntry.stem}.d.mts`);
     }
-    entries.add(target.replace(/^\.\//, ''));
-    extraStems.add(sourceStem(target));
   }
 
   // publishConfig.exports — mirror the subpath structure, each → dist.
@@ -136,11 +150,13 @@ export function derivePublishPlan(pkgJson) {
   }
 
   const publishConfig = {};
-  if (publishExports) {
-    publishConfig.exports = publishExports;
-  }
+  // Preserve canonical lexicographic key order in the generated JSON. This is also the historic
+  // order of the two public manifests that carry both a bin and importable exports.
   if (publishBin !== undefined) {
     publishConfig.bin = publishBin;
+  }
+  if (publishExports) {
+    publishConfig.exports = publishExports;
   }
 
   // The set of dist files every publishConfig target points at (the proof set).
@@ -152,10 +168,7 @@ export function derivePublishPlan(pkgJson) {
   for (const stem of binTargets.values()) {
     targetFiles.add(`dist/${stem}.mjs`);
   }
-  for (const stem of extraStems) {
-    targetFiles.add(`dist/${stem}.mjs`);
-    targetFiles.add(`dist/${stem}.d.mts`);
-  }
+  for (const target of extraTargetFiles) targetFiles.add(target);
   if (pkgJson.name === '@kovojs/cli') {
     targetFiles.add('dist/kovo-docs.snapshot.json.gz');
   }
@@ -165,6 +178,34 @@ export function derivePublishPlan(pkgJson) {
     entries: [...entries].sort(byString),
     publishConfig,
     targetFiles: [...targetFiles].sort(byString),
+  };
+}
+
+function publishExtraEntry(target) {
+  if (typeof target !== 'string') {
+    throw new Error(`kovoPublish.extraEntries target does not target ./src: ${String(target)}`);
+  }
+  const relativePath = target.startsWith('./') ? target.slice(2) : '';
+  const segments = relativePath.split('/');
+  const canonical =
+    relativePath.startsWith('src/') &&
+    !target.includes('\\') &&
+    !target.includes('\0') &&
+    !target.includes('%') &&
+    !target.includes('?') &&
+    !target.includes('#') &&
+    segments.every((segment) => segment !== '' && segment !== '.' && segment !== '..') &&
+    path.posix.normalize(relativePath) === relativePath;
+  const match = canonical
+    ? /^src\/([A-Za-z0-9_./-]*[A-Za-z0-9_-])\.(mjs|tsx?)$/u.exec(relativePath)
+    : null;
+  if (match === null) {
+    throw new Error(`kovoPublish.extraEntries target does not target ./src: ${target}`);
+  }
+  return {
+    emitsDeclaration: match[2] !== 'mjs',
+    entry: relativePath,
+    stem: match[1],
   };
 }
 
@@ -187,11 +228,41 @@ export function buildCommand(plan, pkgJson) {
     const ordinaryEntries = plan.entries.filter((entry) => entry !== viteEntry);
     return `vp pack ${ordinaryEntries.join(' ')} --no-config --dts && vp pack ${viteEntry} --no-config --no-clean --dts`;
   }
+  if (pkgJson.name === '@kovojs/server') {
+    // The server's private fixed-name runtime siblings are resolved from emitted application
+    // modules. Keep them unbundled, and do not let workspace Vite config change their identities.
+    return `vp pack ${plan.entries.join(' ')} --no-config --dts --unbundle`;
+  }
   const packCommand = `vp pack ${plan.entries.join(' ')} --dts`;
   if (pkgJson.name === '@kovojs/cli') {
     return `${packCommand} && node ../../scripts/agent-docs-snapshot.mjs`;
   }
+  if (pkgJson.name === 'create-kovo') {
+    return `${packCommand} && node scripts/build-example-assets.mjs`;
+  }
   return packCommand;
+}
+
+export function derivePublishedPackageManifest(pkg, pkgJson, pkgDir = packageDir(pkg)) {
+  const generated = structuredClone(pkgJson);
+  const plan = derivePublishPlan(generated);
+
+  generated.files = publishFiles(pkg, generated);
+  if (pkg.name === '@kovojs/ui') {
+    if (!generated.kovo || typeof generated.kovo !== 'object' || Array.isArray(generated.kovo)) {
+      throw new Error('@kovojs/ui requires object-valued kovo metadata');
+    }
+    generated.kovo.vendoredSourceHashes = uiVendoredSourceHashes(pkgDir, generated);
+    generated.kovo.vendoredSourceHelperHashes = uiVendoredSourceHelperHashes(pkgDir);
+  }
+  generated.scripts = {
+    ...generated.scripts,
+    'build:dist': buildCommand(plan, generated),
+    prepack: 'pnpm run build:dist',
+  };
+  generated.publishConfig = plan.publishConfig;
+
+  return { manifest: generated, plan };
 }
 
 function write() {
@@ -199,26 +270,9 @@ function write() {
     const pkgDir = packageDir(pkg);
     const pkgPath = path.join(pkgDir, 'package.json');
     const pkgJson = JSON.parse(readFileSync(pkgPath, 'utf8'));
-    const plan = derivePublishPlan(pkgJson);
+    const { manifest, plan } = derivePublishedPackageManifest(pkg, pkgJson, pkgDir);
 
-    pkgJson.files = publishFiles(pkg, pkgJson);
-    if (pkg.name === '@kovojs/ui') {
-      if (!pkgJson.kovo || typeof pkgJson.kovo !== 'object' || Array.isArray(pkgJson.kovo)) {
-        throw new Error('@kovojs/ui requires object-valued kovo metadata');
-      }
-      pkgJson.kovo.vendoredSourceHashes = uiVendoredSourceHashes(pkgDir, pkgJson);
-      pkgJson.kovo.vendoredSourceHelperHashes = uiVendoredSourceHelperHashes(pkgDir);
-    }
-    // Use a dedicated `build:dist` script so we never clobber a package's existing
-    // `build` (e.g. @kovojs/browser's `build` = inline-loader generation).
-    pkgJson.scripts = {
-      ...pkgJson.scripts,
-      'build:dist': buildCommand(plan, pkgJson),
-      prepack: 'pnpm run build:dist',
-    };
-    pkgJson.publishConfig = plan.publishConfig;
-
-    writeFileSync(pkgPath, `${JSON.stringify(pkgJson, null, 2)}\n`, 'utf8');
+    writeFileSync(pkgPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
     console.log(
       `wrote ${pkg.name}: ${plan.entries.length} build entr${plan.entries.length === 1 ? 'y' : 'ies'}, ` +
         `${Object.keys(plan.publishConfig.exports ?? {}).length} publishConfig export subpath(s)` +
@@ -246,7 +300,7 @@ function publishFiles(pkg, pkgJson) {
   if (pkg.name === '@kovojs/ui') {
     return ['catalog.json', 'dist', 'registry.json', ...uiVendoredSourceFiles(pkgJson)];
   }
-  if (pkg.name === '@kovojs/verify') return ['dist', 'NOTICE'];
+  if (pkg.name === '@kovojs/verify') return ['dist', 'NOTICE', 'README.md'];
   return ['dist'];
 }
 

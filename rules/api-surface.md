@@ -169,12 +169,16 @@ published tarball instead resolves a built `dist/` (JS + rolled-up `.d.ts`) via 
 limits the tarball. This was chosen over a live `exports` flip / `development`
 condition precisely because those break in-repo source resolution.
 
-`scripts/build-publish.mjs` is the generator: from each public package's top-level
-`exports`/`bin` it derives the build entries (every distinct `./src/<path>.ts(x)`)
-and the `publishConfig` (each `./src/<path>.ts(x)` → `{ types: ./dist/<path>.d.mts,
-default: ./dist/<path>.mjs }`; `bin` → `./dist/<path>.mjs`). Run `--write` to
-regenerate after changing a package's `exports`; the default mode builds and verifies
-every published target resolves to a built file.
+`scripts/build-publish.mjs` is the generator. Each public package's top-level `exports`/`bin`
+declares its published entries; reviewed non-exported runtime entries live in
+`kovoPublish.extraEntries`. A private `.ts`/`.tsx` entry owns both its `.mjs` and `.d.mts` targets,
+while an authored `.mjs` entry owns only the matching `.mjs` target. The generator also owns the
+finite package-specific build and file rules needed for fixed-name unbundled server modules,
+generated CLI/docs/example assets, and reviewed package companions. It derives `publishConfig`
+(`./src/<path>.ts(x)` → `{ types: ./dist/<path>.d.mts, default: ./dist/<path>.mjs }`; `bin` →
+`./dist/<path>.mjs`) and `build:dist` from those inputs. Run `--write` after changing any of them;
+the write MUST be byte-idempotent across every tracked public manifest. The default mode builds and
+verifies every declared target resolves to a built file.
 
 ## Enforcement
 

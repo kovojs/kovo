@@ -78,7 +78,7 @@
     "check:app-runtime": "node ../../scripts/generate-browser-deferred-app-runtime.mjs --check",
     "check:inline-loader:trusted-types": "vitest run src/inline-loader-trusted-types-routing.test.ts",
     "check:inline-loader": "node --experimental-strip-types src/inline-loader-build.ts --check",
-    "build:dist": "vp pack src/client.ts src/generated.ts src/index.ts src/deferred-app-runtime-identity.ts src/deferred-app-runtime-module.ts src/internal/delegation.ts src/internal/hmr-target-snapshot.ts src/internal/inline-loader.ts src/internal/morph.ts src/internal/mutation.ts src/internal/output.ts --dts",
+    "build:dist": "vp pack src/client.ts src/deferred-app-runtime-identity.ts src/deferred-app-runtime-module.ts src/generated.ts src/index.ts src/internal/delegation.ts src/internal/hmr-target-snapshot.ts src/internal/inline-loader.ts src/internal/morph.ts src/internal/mutation.ts src/internal/output.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {

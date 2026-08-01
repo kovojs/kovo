@@ -32,7 +32,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/api.ts src/bin.ts src/index.ts src/test-runner-config.ts src/test-runtime-bootstrap.ts src/commands/build-static-trust-worker.ts src/commands/build-one-shot-analyze-worker.ts src/commands/build-one-shot-check-worker.ts src/commands/build-one-shot-check-final-worker.ts src/commands/build-one-shot-client-worker.ts src/commands/build-one-shot-server-worker.ts src/commands/build-one-shot-final-worker.ts src/commands/sound-subset.mjs --dts && node ../../scripts/agent-docs-snapshot.mjs",
+    "build:dist": "vp pack src/api.ts src/bin.ts src/commands/build-one-shot-analyze-worker.ts src/commands/build-one-shot-check-final-worker.ts src/commands/build-one-shot-check-worker.ts src/commands/build-one-shot-client-worker.ts src/commands/build-one-shot-final-worker.ts src/commands/build-one-shot-server-worker.ts src/commands/build-static-trust-worker.ts src/commands/sound-subset.mjs src/index.ts src/test-runner-config.ts src/test-runtime-bootstrap.ts --dts && node ../../scripts/agent-docs-snapshot.mjs",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {
@@ -57,5 +57,19 @@
       "schema": "kovo.security.guarantees/v1",
       "canonicalHash": "sha256:a74f656197edd4973cde5259cf29181b3a73a6f9ae5c2960b674f81ff05e21fb"
     }
+  },
+  "kovoPublish": {
+    "extraEntries": [
+      "./src/commands/build-one-shot-analyze-worker.ts",
+      "./src/commands/build-one-shot-check-final-worker.ts",
+      "./src/commands/build-one-shot-check-worker.ts",
+      "./src/commands/build-one-shot-client-worker.ts",
+      "./src/commands/build-one-shot-final-worker.ts",
+      "./src/commands/build-one-shot-server-worker.ts",
+      "./src/commands/build-static-trust-worker.ts",
+      "./src/commands/sound-subset.mjs",
+      "./src/test-runner-config.ts",
+      "./src/test-runtime-bootstrap.ts"
+    ]
   }
 }

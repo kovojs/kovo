@@ -391,7 +391,11 @@
   },
   "kovoPublish": {
     "extraEntries": [
-      "./src/egress-dgram.ts"
+      "./src/egress-dgram.ts",
+      "./src/internal/generated-build-client-modules.ts",
+      "./src/internal/generated-handler-runtime.ts",
+      "./src/sql-parser-authority-cloudflare.ts",
+      "./src/sql-parser-authority-snapshot.ts"
     ]
   }
 }

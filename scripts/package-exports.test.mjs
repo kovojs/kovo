@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildCommand,
+  derivePublishedPackageManifest,
   derivePublishPlan,
   uiVendoredHelperSourcePaths,
   uiVendoredSourceHashes,
@@ -13,11 +14,13 @@ import {
 } from './build-publish.mjs';
 import {
   importPathForPackageSubpath,
+  isSourceTarget,
   normalizePackageExports,
   resolveExportTarget,
   resolveSourceExportTarget,
   sourceStem,
 } from './package-exports.mjs';
+import { publicPackages, repoRoot } from './public-packages.mjs';
 
 describe('package export resolver', () => {
   it('normalizes root exports and subpath maps', () => {
@@ -73,6 +76,32 @@ describe('package export resolver', () => {
     expect(sourceStem('./src/button.tsx')).toBe('button');
   });
 
+  it('accepts only canonical shell-safe TypeScript source targets', () => {
+    expect(isSourceTarget('./src/index.ts')).toBe(true);
+    expect(isSourceTarget('./src/internal/app-shell_v2.tsx')).toBe(true);
+
+    for (const target of [
+      './src/../outside.ts',
+      './src/a/../../outside.tsx',
+      './src/a\\outside.ts',
+      './src/a//outside.ts',
+      './src/a/./outside.ts',
+      './src/a/.ts',
+      './src/with space.ts',
+      './src/with;command.ts',
+      './src/with$(command).ts',
+      './src/with%2fescape.ts',
+      './src/with?query.ts',
+      './src/with#fragment.ts',
+      './dist/index.ts',
+      './src/index.mjs',
+      './src/index.js',
+    ]) {
+      expect(isSourceTarget(target), target).toBe(false);
+      expect(() => sourceStem(target), target).toThrow('expected a ./src/<path>.ts(x) target');
+    }
+  });
+
   it('drives publish plan entries, exports, and bin targets from the same resolver', () => {
     expect(
       derivePublishPlan({
@@ -113,18 +142,18 @@ describe('package export resolver', () => {
     });
   });
 
-  it('includes non-exported package-owned publish entries in the publish proof set', () => {
+  it('includes typed and authored-MJS private publish entries in the exact proof set', () => {
     expect(
       derivePublishPlan({
         exports: {
           '.': './src/index.ts',
         },
         kovoPublish: {
-          extraEntries: ['./src/compile.ts'],
+          extraEntries: ['./src/commands/sound-subset.mjs', './src/compile.ts'],
         },
       }),
     ).toEqual({
-      entries: ['src/compile.ts', 'src/index.ts'],
+      entries: ['src/commands/sound-subset.mjs', 'src/compile.ts', 'src/index.ts'],
       publishConfig: {
         exports: {
           '.': {
@@ -133,19 +162,61 @@ describe('package export resolver', () => {
           },
         },
       },
-      targetFiles: ['dist/compile.d.mts', 'dist/compile.mjs', 'dist/index.d.mts', 'dist/index.mjs'],
+      targetFiles: [
+        'dist/commands/sound-subset.mjs',
+        'dist/compile.d.mts',
+        'dist/compile.mjs',
+        'dist/index.d.mts',
+        'dist/index.mjs',
+      ],
     });
+
+    for (const target of [
+      './dist/compile.mjs',
+      './src/../outside.ts',
+      './src/a/../../outside.mjs',
+      './src/a\\outside.mjs',
+      './src/a//outside.ts',
+      './src/a/./outside.ts',
+      './src/a/.mjs',
+      './src/with space.mjs',
+      './src/with;command.ts',
+      './src/with$(command).mjs',
+      './src/with%2fescape.mjs',
+      './src/with?query.mjs',
+      './src/with#fragment.mjs',
+      './src/unsupported.js',
+    ]) {
+      expect(
+        () =>
+          derivePublishPlan({
+            exports: { '.': './src/index.ts' },
+            kovoPublish: { extraEntries: [target] },
+          }),
+        target,
+      ).toThrow('kovoPublish.extraEntries target does not target ./src');
+    }
 
     expect(() =>
       derivePublishPlan({
-        exports: {
-          '.': './src/index.ts',
-        },
-        kovoPublish: {
-          extraEntries: ['./dist/compile.mjs'],
-        },
+        exports: { '.': './src/index.ts' },
+        kovoPublish: { extraEntries: ['./src/index.mjs'] },
       }),
-    ).toThrow('kovoPublish.extraEntries target does not target ./src');
+    ).toThrow(
+      'publish entries src/index.ts and src/index.mjs collide on generated target dist/index.mjs',
+    );
+    expect(() =>
+      derivePublishPlan({
+        kovoPublish: { extraEntries: ['./src/worker.ts', './src/worker.tsx'] },
+      }),
+    ).toThrow(
+      'publish entries src/worker.ts and src/worker.tsx collide on generated target dist/worker.mjs',
+    );
+    expect(
+      derivePublishPlan({
+        kovoPublish: { extraEntries: ['./src/worker.ts', './src/worker.ts'] },
+      }).entries,
+    ).toEqual(['src/worker.ts']);
   });
 
   it('keeps the Cloudflare dgram floor behind a private stable server dist entry', () => {
@@ -163,11 +234,21 @@ describe('package export resolver', () => {
 
   it('builds every server runtime entry as one private fixed-name module graph', () => {
     const server = JSON.parse(readFileSync('packages/server/package.json', 'utf8'));
+    expect(server.kovoPublish?.extraEntries).toEqual([
+      './src/egress-dgram.ts',
+      './src/internal/generated-build-client-modules.ts',
+      './src/internal/generated-handler-runtime.ts',
+      './src/sql-parser-authority-cloudflare.ts',
+      './src/sql-parser-authority-snapshot.ts',
+    ]);
+    const plan = derivePublishPlan(server);
     const phases = server.scripts?.['build:dist']?.split(' && ') ?? [];
     const buildArguments = phases[0]?.split(' ') ?? [];
 
     expect(phases).toHaveLength(1);
+    expect(buildCommand(plan, server)).toBe(server.scripts['build:dist']);
     expect(buildArguments).toContain('src/index.ts');
+    expect(buildArguments).toContain('src/internal/generated-build-client-modules.ts');
     expect(buildArguments).toContain('src/internal/generated-handler-runtime.ts');
     expect(buildArguments).toContain('src/sql-parser-authority-cloudflare.ts');
     expect(buildArguments).toContain('src/sql-parser-authority-snapshot.ts');
@@ -181,6 +262,53 @@ describe('package export resolver', () => {
     expect(server.publishConfig?.exports).not.toHaveProperty(
       './internal/sql-parser-authority-cloudflare',
     );
+  });
+
+  it('keeps the exact CLI private runtime-entry denominator without inventing MJS declarations', () => {
+    const cli = JSON.parse(readFileSync('packages/cli/package.json', 'utf8'));
+    const privateEntries = [
+      './src/commands/build-one-shot-analyze-worker.ts',
+      './src/commands/build-one-shot-check-final-worker.ts',
+      './src/commands/build-one-shot-check-worker.ts',
+      './src/commands/build-one-shot-client-worker.ts',
+      './src/commands/build-one-shot-final-worker.ts',
+      './src/commands/build-one-shot-server-worker.ts',
+      './src/commands/build-static-trust-worker.ts',
+      './src/commands/sound-subset.mjs',
+      './src/test-runner-config.ts',
+      './src/test-runtime-bootstrap.ts',
+    ];
+    expect(cli.kovoPublish?.extraEntries).toEqual(privateEntries);
+
+    const plan = derivePublishPlan(cli);
+    expect(plan.entries).toEqual(
+      expect.arrayContaining(privateEntries.map((entry) => entry.slice(2))),
+    );
+    expect(plan.targetFiles).toContain('dist/commands/sound-subset.mjs');
+    expect(plan.targetFiles).not.toContain('dist/commands/sound-subset.d.mts');
+    expect(buildCommand(plan, cli)).toBe(cli.scripts['build:dist']);
+  });
+
+  it('retains reviewed package-specific generated files and post-build steps', () => {
+    const createKovo = JSON.parse(readFileSync('packages/create-kovo/package.json', 'utf8'));
+    const createPlan = derivePublishPlan(createKovo);
+    expect(buildCommand(createPlan, createKovo)).toBe(
+      'vp pack src/index.ts --dts && node scripts/build-example-assets.mjs',
+    );
+    expect(buildCommand(createPlan, createKovo)).toBe(createKovo.scripts['build:dist']);
+
+    const verifyPackage = publicPackages().find((pkg) => pkg.name === '@kovojs/verify');
+    expect(verifyPackage).toBeDefined();
+    const verifyDirectory = path.join(repoRoot, 'packages', verifyPackage.dir);
+    const verifyManifest = JSON.parse(
+      readFileSync(path.join(verifyDirectory, 'package.json'), 'utf8'),
+    );
+    const generated = derivePublishedPackageManifest(
+      verifyPackage,
+      verifyManifest,
+      verifyDirectory,
+    ).manifest;
+    expect(generated.files).toEqual(['dist', 'NOTICE', 'README.md']);
   });
 
   it('keeps the workspace-only server Vite resolver out of published packages', () => {
@@ -222,6 +350,23 @@ describe('package export resolver', () => {
     expect(buildCommand(plan, manifest)).toBe(
       'vp pack src/api.ts src/bin.ts src/index.ts --dts && node ../../scripts/agent-docs-snapshot.mjs',
     );
+  });
+
+  it('regenerates all tracked public manifests byte-idempotently', () => {
+    for (const pkg of publicPackages()) {
+      const directory = path.join(repoRoot, 'packages', pkg.dir);
+      const manifestPath = path.join(directory, 'package.json');
+      const trackedBytes = readFileSync(manifestPath, 'utf8');
+      const tracked = JSON.parse(trackedBytes);
+      const first = derivePublishedPackageManifest(pkg, tracked, directory).manifest;
+      const firstBytes = `${JSON.stringify(first, null, 2)}\n`;
+      expect(firstBytes, `${pkg.name} first generation`).toBe(trackedBytes);
+
+      const second = derivePublishedPackageManifest(pkg, first, directory).manifest;
+      expect(`${JSON.stringify(second, null, 2)}\n`, `${pkg.name} second generation`).toBe(
+        firstBytes,
+      );
+    }
   });
 
   it('generates the exact component and helper hash ledgers for packed UI source', () => {
