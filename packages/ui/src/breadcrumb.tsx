@@ -174,7 +174,6 @@ export const BreadcrumbLink = component({
     return (
       <a
         {...attrs}
-        {...passThroughProps(props)}
         aria-current={current ? 'page' : undefined}
         // SECURITY_FINDINGS.md H3: route the caller href through safeUrl so a
         // `javascript:`/`data:` scheme is neutralized; keep the existing

@@ -183,7 +183,6 @@ export const HoverCardTrigger = component({
     return (
       <a
         {...styleAttrs}
-        {...passThroughProps(props)}
         aria-controls={attrs['aria-controls']}
         aria-disabled={props.disabled === true ? 'true' : undefined}
         aria-expanded={attrs['aria-expanded']}

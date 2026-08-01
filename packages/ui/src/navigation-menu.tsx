@@ -548,7 +548,6 @@ export const NavigationMenuLink = component({
       <a
         aria-disabled={attrs['aria-disabled']}
         {...styleAttrs}
-        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-highlighted={attrs['data-highlighted']}
         data-state={attrs['data-state']}
