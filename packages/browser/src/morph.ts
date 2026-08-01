@@ -473,6 +473,7 @@ interface ActiveDomState {
   selectionStart?: number | null;
   scrollLeft: number;
   scrollTop: number;
+  value?: string;
 }
 
 function captureActiveDomState(root: Element): ActiveDomState | null {
@@ -483,13 +484,27 @@ function captureActiveDomState(root: Element): ActiveDomState | null {
     return null;
   }
 
+  const value = security.readElementProperty(element, 'value');
+  const selectionDirection = security.readElementProperty(element, 'selectionDirection');
+  const selectionEnd = security.readElementProperty(element, 'selectionEnd');
+  const selectionStart = security.readElementProperty(element, 'selectionStart');
+  const hasTextState =
+    typeof value === 'string' &&
+    typeof selectionStart === 'number' &&
+    typeof selectionEnd === 'number' &&
+    (selectionDirection === null ||
+      selectionDirection === 'backward' ||
+      selectionDirection === 'forward' ||
+      selectionDirection === 'none');
+
   return {
     element,
-    ...(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement
+    ...(hasTextState
       ? {
-          selectionDirection: element.selectionDirection,
-          selectionEnd: element.selectionEnd,
-          selectionStart: element.selectionStart,
+          selectionDirection,
+          selectionEnd,
+          selectionStart,
+          value,
         }
       : {}),
     scrollLeft: element.scrollLeft,
@@ -501,17 +516,23 @@ function restoreActiveDomState(state: ActiveDomState | null): void {
   const security = requireBrowserDomSecurity();
   if (!state || !security.readNodeIsConnected(state.element)) return;
 
+  if (state.value !== undefined) {
+    if (security.readElementProperty(state.element, 'value') !== state.value) {
+      security.setElementProperty(state.element, 'value', state.value);
+    }
+  }
   state.element.focus();
   if (
-    (state.element instanceof HTMLInputElement || state.element instanceof HTMLTextAreaElement) &&
     state.selectionStart !== undefined &&
     state.selectionEnd !== undefined &&
     state.selectionStart !== null &&
     state.selectionEnd !== null
   ) {
-    state.element.setSelectionRange(
-      state.selectionStart,
-      state.selectionEnd,
+    security.setElementProperty(state.element, 'selectionStart', state.selectionStart);
+    security.setElementProperty(state.element, 'selectionEnd', state.selectionEnd);
+    security.setElementProperty(
+      state.element,
+      'selectionDirection',
       state.selectionDirection ?? 'none',
     );
   }

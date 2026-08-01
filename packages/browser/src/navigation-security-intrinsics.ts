@@ -278,6 +278,24 @@ export function createBrowserNavigationSecurityControls(
   const inputValueSetter = NativeHTMLInputElement
     ? stableSetter(NativeHTMLInputElement.prototype, 'value')
     : undefined;
+  const inputSelectionStart = NativeHTMLInputElement
+    ? stableGetter(NativeHTMLInputElement.prototype, 'selectionStart')
+    : undefined;
+  const inputSelectionStartSetter = NativeHTMLInputElement
+    ? stableSetter(NativeHTMLInputElement.prototype, 'selectionStart')
+    : undefined;
+  const inputSelectionEnd = NativeHTMLInputElement
+    ? stableGetter(NativeHTMLInputElement.prototype, 'selectionEnd')
+    : undefined;
+  const inputSelectionEndSetter = NativeHTMLInputElement
+    ? stableSetter(NativeHTMLInputElement.prototype, 'selectionEnd')
+    : undefined;
+  const inputSelectionDirection = NativeHTMLInputElement
+    ? stableGetter(NativeHTMLInputElement.prototype, 'selectionDirection')
+    : undefined;
+  const inputSelectionDirectionSetter = NativeHTMLInputElement
+    ? stableSetter(NativeHTMLInputElement.prototype, 'selectionDirection')
+    : undefined;
   const optionSelected = NativeHTMLOptionElement
     ? stableGetter(NativeHTMLOptionElement.prototype, 'selected')
     : undefined;
@@ -313,6 +331,24 @@ export function createBrowserNavigationSecurityControls(
     : undefined;
   const textAreaValueSetter = NativeHTMLTextAreaElement
     ? stableSetter(NativeHTMLTextAreaElement.prototype, 'value')
+    : undefined;
+  const textAreaSelectionStart = NativeHTMLTextAreaElement
+    ? stableGetter(NativeHTMLTextAreaElement.prototype, 'selectionStart')
+    : undefined;
+  const textAreaSelectionStartSetter = NativeHTMLTextAreaElement
+    ? stableSetter(NativeHTMLTextAreaElement.prototype, 'selectionStart')
+    : undefined;
+  const textAreaSelectionEnd = NativeHTMLTextAreaElement
+    ? stableGetter(NativeHTMLTextAreaElement.prototype, 'selectionEnd')
+    : undefined;
+  const textAreaSelectionEndSetter = NativeHTMLTextAreaElement
+    ? stableSetter(NativeHTMLTextAreaElement.prototype, 'selectionEnd')
+    : undefined;
+  const textAreaSelectionDirection = NativeHTMLTextAreaElement
+    ? stableGetter(NativeHTMLTextAreaElement.prototype, 'selectionDirection')
+    : undefined;
+  const textAreaSelectionDirectionSetter = NativeHTMLTextAreaElement
+    ? stableSetter(NativeHTMLTextAreaElement.prototype, 'selectionDirection')
     : undefined;
   const buttonValue = NativeHTMLButtonElement
     ? stableGetter(NativeHTMLButtonElement.prototype, 'value')
@@ -1089,6 +1125,24 @@ export function createBrowserNavigationSecurityControls(
     }
     if (property === 'scrollTop') {
       return { getters: [elementScrollTop], setters: [elementScrollTopSetter] };
+    }
+    if (property === 'selectionDirection') {
+      return {
+        getters: [inputSelectionDirection, textAreaSelectionDirection],
+        setters: [inputSelectionDirectionSetter, textAreaSelectionDirectionSetter],
+      };
+    }
+    if (property === 'selectionEnd') {
+      return {
+        getters: [inputSelectionEnd, textAreaSelectionEnd],
+        setters: [inputSelectionEndSetter, textAreaSelectionEndSetter],
+      };
+    }
+    if (property === 'selectionStart') {
+      return {
+        getters: [inputSelectionStart, textAreaSelectionStart],
+        setters: [inputSelectionStartSetter, textAreaSelectionStartSetter],
+      };
     }
     if (property === 'value') {
       return {

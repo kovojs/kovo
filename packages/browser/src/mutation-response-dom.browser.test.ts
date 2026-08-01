@@ -55,6 +55,47 @@ describe('browser mutation response DOM apply', () => {
     expect(root.querySelector('label')?.textContent).toBe('Updated quantity');
   });
 
+  it('preserves an active keyed draft while accepting the next server default', () => {
+    const root = document.createElement('main');
+    root.innerHTML = [
+      '<section kovo-fragment-target="hmr-card">',
+      '<input id="hmr-draft" kovo-key="draft" value="server before">',
+      '<output kovo-key="output">Version before</output>',
+      '</section>',
+    ].join('');
+    document.body.append(root);
+
+    const input = root.querySelector<HTMLInputElement>('#hmr-draft');
+    if (!input) throw new Error('missing modular HMR draft fixture');
+
+    input.setAttribute('value', 'user draft');
+    input.focus();
+    input.setSelectionRange(2, 6, 'forward');
+
+    applyMutationResponseBodyToRuntime({
+      body: [
+        '<kovo-fragment target="hmr-card">',
+        '<section kovo-fragment-target="hmr-card">',
+        '<input id="hmr-draft" kovo-key="draft" value="server after">',
+        '<output kovo-key="output">Version after</output>',
+        '</section>',
+        '</kovo-fragment>',
+      ].join(''),
+      morph: keyedDomMorph,
+      root: new DomMorphRoot(root),
+      store: createQueryStore(),
+    });
+
+    expect(root.querySelector('#hmr-draft')).toBe(input);
+    expect(input.getAttribute('value')).toBe('server after');
+    expect(input.value).toBe('user draft');
+    expect(document.activeElement).toBe(input);
+    expect(input.selectionStart).toBe(2);
+    expect(input.selectionEnd).toBe(6);
+    expect(input.selectionDirection).toBe('forward');
+    expect(root.querySelector('output')?.textContent).toBe('Version after');
+  });
+
   it('preserves focused buttons during a real DOM fragment morph', () => {
     const root = document.createElement('main');
     root.innerHTML = [

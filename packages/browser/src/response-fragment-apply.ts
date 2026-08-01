@@ -28,6 +28,7 @@ export type HtmlResponseFragmentSecurityControls = Pick<
   | 'queryAllElements'
   | 'readAttribute'
   | 'readDocumentActiveElement'
+  | 'readElementProperty'
   | 'readElementTagName'
   | 'readNodeIsConnected'
   | 'regExpExec'
@@ -36,6 +37,7 @@ export type HtmlResponseFragmentSecurityControls = Pick<
   | 'replaceElement'
   | 'replaceElementChildren'
   | 'setElementAttribute'
+  | 'setElementProperty'
   | 'setSecurityMapValue'
   | 'slice'
   | 'snapshotChildNodes'
@@ -210,8 +212,7 @@ function d(
 ): void {
   const content = security.createFragmentContent(createHTML(renderedFragmentHtmlContent(h)));
   const n = firstMorphElement(content, security);
-  const active = security.readDocumentActiveElement();
-  const s = active && security.elementContains(e, active) ? active : null;
+  const activeState = captureActiveMorphState(e, security);
   const q: HTMLElement[] = [];
   const keyed = security.queryAllElements(e, '[kovo-key]');
   for (let index = 0; index < keyed.length; index += 1) {
@@ -232,12 +233,77 @@ function d(
   } else {
     security.replaceElementChildren(e, []);
   }
-  (s as HTMLElement | null)?.focus();
+  restoreActiveMorphState(activeState, security);
   for (let index = 0; index < q.length; index += 1) {
     const x = q[index];
     if (x && security.readNodeIsConnected(x)) {
       x.scrollTop = (x as HTMLElement & { s: number }).s;
     }
+  }
+}
+
+interface ActiveMorphState {
+  element: Element;
+  selectionDirection?: 'backward' | 'forward' | 'none' | null;
+  selectionEnd?: number;
+  selectionStart?: number;
+  value?: string;
+}
+
+function captureActiveMorphState(
+  root: Element,
+  security: HtmlResponseFragmentSecurityControls,
+): ActiveMorphState | null {
+  const element = security.readDocumentActiveElement();
+  if (!element || !security.elementContains(root, element)) return null;
+
+  const value = security.readElementProperty(element, 'value');
+  const selectionStart = security.readElementProperty(element, 'selectionStart');
+  const selectionEnd = security.readElementProperty(element, 'selectionEnd');
+  const selectionDirection = security.readElementProperty(element, 'selectionDirection');
+  const hasTextState =
+    typeof value === 'string' &&
+    typeof selectionStart === 'number' &&
+    typeof selectionEnd === 'number' &&
+    (selectionDirection === null ||
+      selectionDirection === 'backward' ||
+      selectionDirection === 'forward' ||
+      selectionDirection === 'none');
+
+  return {
+    element,
+    ...(hasTextState
+      ? {
+          selectionDirection,
+          selectionEnd,
+          selectionStart,
+          value,
+        }
+      : {}),
+  };
+}
+
+function restoreActiveMorphState(
+  state: ActiveMorphState | null,
+  security: HtmlResponseFragmentSecurityControls,
+): void {
+  if (!state || !security.readNodeIsConnected(state.element)) return;
+
+  if (state.value !== undefined) {
+    if (security.readElementProperty(state.element, 'value') !== state.value) {
+      security.setElementProperty(state.element, 'value', state.value);
+    }
+  }
+  // SPEC §9.1: keyed HMR/fragment refreshes retain the active browser-owned control.
+  (state.element as HTMLElement).focus();
+  if (state.value !== undefined) {
+    security.setElementProperty(state.element, 'selectionStart', state.selectionStart);
+    security.setElementProperty(state.element, 'selectionEnd', state.selectionEnd);
+    security.setElementProperty(
+      state.element,
+      'selectionDirection',
+      state.selectionDirection ?? 'none',
+    );
   }
 }
 

@@ -276,6 +276,48 @@ describe('browser inline loader response apply', () => {
     expect(feedLink?.getAttribute('style')).toBeNull();
   });
 
+  it('preserves active keyed text state when a source refresh updates pristine defaults', () => {
+    const root = document.createElement('main');
+    root.innerHTML = [
+      '<section kovo-fragment-target="hmr-card">',
+      '<input id="hmr-draft" kovo-key="draft" value="server before">',
+      '<output kovo-key="output">Version before</output>',
+      '</section>',
+    ].join('');
+    document.body.append(root);
+
+    const input = root.querySelector<HTMLInputElement>('#hmr-draft');
+    if (!input) throw new Error('missing HMR draft fixture');
+
+    // Mirror a browser-owned draft whose live value currently follows its default-value slot.
+    // The incoming server attribute would otherwise rewrite both slots before the keyed morph
+    // notices that this is the active text control.
+    input.setAttribute('value', 'user draft');
+    input.focus();
+    input.setSelectionRange(2, 6, 'forward');
+
+    installTestInlineKovoLoader(async () => ({}));
+    (globalThis as unknown as { __kovo_a?: (body: string) => void }).__kovo_a?.(
+      [
+        '<kovo-fragment target="hmr-card">',
+        '<section kovo-fragment-target="hmr-card">',
+        '<input id="hmr-draft" kovo-key="draft" value="server after">',
+        '<output kovo-key="output">Version after</output>',
+        '</section>',
+        '</kovo-fragment>',
+      ].join(''),
+    );
+
+    expect(root.querySelector('#hmr-draft')).toBe(input);
+    expect(input.getAttribute('value')).toBe('server after');
+    expect(input.value).toBe('user draft');
+    expect(document.activeElement).toBe(input);
+    expect(input.selectionStart).toBe(2);
+    expect(input.selectionEnd).toBe(6);
+    expect(input.selectionDirection).toBe('forward');
+    expect(root.querySelector('output')?.textContent).toBe('Version after');
+  });
+
   it('preserves reviewed finite browser controls through generated inline keyed morphs', () => {
     const root = document.createElement('main');
     root.innerHTML = [
