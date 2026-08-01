@@ -46,6 +46,31 @@ describe('analysis-time closure', () => {
     expect(discovered.commandPackages).toEqual(['vitest']);
   });
 
+  it('enrolls child test entrypoints declared after an isolated gate runner', () => {
+    const files = new Set([
+      'scripts/isolated-runner.ts',
+      'packages/framework/src/security-proof.test.ts',
+    ]);
+    const discovered = discoverGateEntrypoints({
+      compileEntrypoints: [],
+      exists: (file) => files.has(file),
+      rootManifest: {
+        scripts: {
+          check: 'pnpm run test:isolated',
+          'test:isolated':
+            'node --experimental-strip-types scripts/isolated-runner.ts packages/framework/src/security-proof.test.ts',
+        },
+      },
+      workspaceManifests: [],
+    });
+
+    expect(discovered.findings).toEqual([]);
+    expect(discovered.entrypoints).toEqual([
+      'packages/framework/src/security-proof.test.ts',
+      'scripts/isolated-runner.ts',
+    ]);
+  });
+
   it('discovers gate entrypoints hidden behind the reviewed cost-runner registry', () => {
     const registryPath = 'security/plan3-security-gate-commands.json';
     const files = new Map([

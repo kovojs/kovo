@@ -99,6 +99,14 @@ export const PARANOID_GATE_CASES = [
   },
 ] as const satisfies readonly ParanoidGateCaseDefinition[];
 
+/**
+ * These files are also positional arguments in package.json so the analysis-time closure scanner
+ * sees every child entrypoint hidden behind this process-isolating runner. main() rejects drift.
+ */
+export const PARANOID_GATE_ENTRYPOINTS = [
+  ...new Set(PARANOID_GATE_CASES.map((testCase) => testCase.file)),
+] as const;
+
 export interface ParanoidRuntimeWorkerRequirements {
   readonly authorizationMatrixCases: readonly RequiredParanoidAuthorizationMatrixCase[];
   readonly postgresCases: readonly RequiredParanoidPostgresCase[];
@@ -162,6 +170,20 @@ export function assertParanoidRuntimeCasesExecuted(
   if (missing.length === 0) return;
   throw new Error(
     `paranoid runtime worker did not execute every selected runtime case; missing: ${missing.join(', ')}`,
+  );
+}
+
+export function assertParanoidGateEntrypoints(declaredEntrypoints: readonly string[]): void {
+  if (
+    declaredEntrypoints.length === PARANOID_GATE_ENTRYPOINTS.length &&
+    declaredEntrypoints.every(
+      (entrypoint, index) => entrypoint === PARANOID_GATE_ENTRYPOINTS[index],
+    )
+  ) {
+    return;
+  }
+  throw new Error(
+    `paranoid runtime gate command must declare its analysis entrypoints exactly; received ${JSON.stringify(declaredEntrypoints)}; expected ${JSON.stringify(PARANOID_GATE_ENTRYPOINTS)}`,
   );
 }
 
@@ -360,6 +382,7 @@ function isDirectExecution(): boolean {
 }
 
 async function main(): Promise<void> {
+  assertParanoidGateEntrypoints(process.argv.slice(2));
   const run = await runParanoidRuntimeGate();
   if (run.passed) return;
   process.stderr.write(`\n${formatParanoidGateFailures(run)}`);

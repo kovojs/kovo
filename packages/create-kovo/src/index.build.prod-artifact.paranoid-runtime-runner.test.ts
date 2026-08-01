@@ -10,9 +10,11 @@ import {
 } from './index.test-process-supervisor.mjs';
 
 import {
+  assertParanoidGateEntrypoints,
   assertParanoidRuntimeCasesExecuted,
   formatParanoidGateFailures,
   PARANOID_GATE_CASES,
+  PARANOID_GATE_ENTRYPOINTS,
   PARANOID_RUNTIME_CASES,
   paranoidRuntimeWorkerRequirements,
   runIsolatedProcess,
@@ -80,6 +82,23 @@ describe('paranoid runtime process isolation', () => {
         testCase.id,
       ]);
     }
+  });
+
+  it('fails closed when the command-declared analysis entrypoints drift from its case registry', () => {
+    expect(PARANOID_GATE_ENTRYPOINTS).toEqual([
+      'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
+      'packages/server/src/postgres-grant-shape-fuzzer.test.ts',
+    ]);
+    expect(() => assertParanoidGateEntrypoints(PARANOID_GATE_ENTRYPOINTS)).not.toThrow();
+    expect(() => assertParanoidGateEntrypoints(PARANOID_GATE_ENTRYPOINTS.slice(1))).toThrow(
+      /must declare its analysis entrypoints exactly/u,
+    );
+    expect(() => assertParanoidGateEntrypoints([...PARANOID_GATE_ENTRYPOINTS].reverse())).toThrow(
+      /must declare its analysis entrypoints exactly/u,
+    );
+    expect(() =>
+      assertParanoidGateEntrypoints([...PARANOID_GATE_ENTRYPOINTS, PARANOID_GATE_ENTRYPOINTS[0]]),
+    ).toThrow(/must declare its analysis entrypoints exactly/u);
   });
 
   it('fails closed when the selected SQLite runtime case has no executed marker', () => {

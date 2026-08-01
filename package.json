@@ -139,7 +139,7 @@
     "test:starter:acceptance": "node scripts/ci-shards.mjs run-local-starter --mode all --cadence all --concurrency 2",
     "test:starter:per-pr": "node scripts/ci-shards.mjs run-local-starter --mode unpacked --cadence per-pr --concurrency 2",
     "test:starter:security-nightly": "node scripts/ci-shards.mjs run-local-starter --mode unpacked --cadence nightly --concurrency 2",
-    "test:authz-paranoid": "node --disable-warning=ExperimentalWarning --experimental-strip-types packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime-runner.ts",
+    "test:authz-paranoid": "node --disable-warning=ExperimentalWarning --experimental-strip-types packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime-runner.ts packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts packages/server/src/postgres-grant-shape-fuzzer.test.ts",
     "test:browser": "vp run browser",
     "test:gallery-browser": "pnpm --filter @kovojs/example-gallery run test:browser",
     "test:examples-live": "pnpm --filter @kovojs/site run test:examples-live",
