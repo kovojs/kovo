@@ -289,6 +289,11 @@ export interface ParseComponentModuleOptions {
   }[];
 }
 
+export interface ParseComponentProjectFile {
+  readonly fileName: string;
+  readonly source: string;
+}
+
 export function parseDiagnosticsForSourceFile(
   sourceFile: TS.SourceFile,
   source: string,
@@ -367,6 +372,53 @@ export function parseComponentModule(
     }
     registerFrameworkIdentityProject(sourceFile, identityFiles);
   }
+  return parseComponentModuleFromSourceFile(sourceFile, source);
+}
+
+/**
+ * @internal Parse one immutable project snapshot without rebuilding its framework-identity AST
+ * for every module. All models retain the same source bytes and share one exact, last-wins module
+ * lookup graph, matching `parseComponentModule(..., { frameworkIdentityFiles })` while bounding
+ * source parsing to one AST per approved project file (SPEC §5.2 rule 10 / §6.6).
+ */
+export function parseComponentProjectModules(
+  files: readonly ParseComponentProjectFile[],
+): readonly ComponentModuleModel[] {
+  const snapshot = compilerSnapshotDenseArray(files, 'Component project source files');
+  const sourceFiles: TS.SourceFile[] = [];
+  const sources: string[] = [];
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const file = snapshot[index]!;
+    const fileName = compilerOwnDataValue(file, 'fileName', 'Component project source file');
+    const source = compilerOwnDataValue(file, 'source', 'Component project source file');
+    if (typeof fileName !== 'string' || typeof source !== 'string') {
+      throw new TypeError(`Component project source files[${index}] must contain own strings.`);
+    }
+    compilerArrayAppend(
+      sourceFiles,
+      parseSourceFile(fileName, source),
+      'Component project parsed source files',
+    );
+    compilerArrayAppend(sources, source, 'Component project source bytes');
+  }
+  if (sourceFiles.length > 0) {
+    registerFrameworkIdentityProject(sourceFiles[0]!, sourceFiles);
+  }
+  const models: ComponentModuleModel[] = [];
+  for (let index = 0; index < sourceFiles.length; index += 1) {
+    compilerArrayAppend(
+      models,
+      parseComponentModuleFromSourceFile(sourceFiles[index]!, sources[index]!),
+      'Component project parsed models',
+    );
+  }
+  return models;
+}
+
+function parseComponentModuleFromSourceFile(
+  sourceFile: TS.SourceFile,
+  source: string,
+): ComponentModuleModel {
   const componentFactories = componentFactoryBindings(sourceFile);
   const calls: CallExpressionModel[] = [];
   const agentDefinitions: AgentDefinitionModel[] = [];

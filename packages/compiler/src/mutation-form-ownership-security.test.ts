@@ -1,6 +1,12 @@
+// @kovo-security-classifier-corpus mutation-form-project-provenance
 import { describe, expect, it } from 'vitest';
 
 import { compileComponentModule } from './index.js';
+import {
+  lowerStructuralJsx,
+  mutationComponentProjectWorkForTesting,
+} from './lower/structural-jsx.js';
+import { parseComponentModule } from './scan/parse.js';
 
 interface ExtraFile {
   readonly fileName: string;
@@ -13,6 +19,17 @@ function compile(source: string, extraFiles: readonly ExtraFile[] = []) {
     source,
     extraFiles,
   } as Parameters<typeof compileComponentModule>[0] & { extraFiles: readonly ExtraFile[] });
+}
+
+function lowerWithWork(source: string, extraFiles: readonly ExtraFile[]) {
+  const fileName = 'ownership-work-probe.tsx';
+  const model = parseComponentModule(fileName, source, { frameworkIdentityFiles: extraFiles });
+  const options = { extraFiles, fileName, source };
+  return {
+    lower: () => lowerStructuralJsx(model, 'OwnershipWorkProbe', options),
+    model,
+    options,
+  };
 }
 
 describe('mutation form ownership provenance', () => {
@@ -521,6 +538,194 @@ export const View = component({ render: () => <>
   <UnresolvedCarrier form="account-save" />
 </> });
 `);
+    expect(result.diagnostics.filter((entry) => entry.code === 'KV242')).not.toEqual([]);
+  });
+
+  it('does not materialize a component project for a non-visual authority module', () => {
+    const extraFiles = Array.from({ length: 32 }, (_, index) => ({
+      fileName: `inert-${String(index)}.ts`,
+      source: `export const inert${String(index)} = ${String(index)};`,
+    }));
+    const probe = lowerWithWork(
+      `
+export const save = mutation('account/save', {
+  input: s.object({}),
+  handler() { return null; },
+});
+`,
+      extraFiles,
+    );
+
+    expect(probe.lower().diagnostics.filter((entry) => entry.code === 'KV242')).toEqual([]);
+    expect(mutationComponentProjectWorkForTesting(probe.model, probe.options)).toEqual({
+      approvedExtraSourceFiles: 32,
+      parsedExtraSourceFiles: 0,
+      projectBuilds: 0,
+      snapshotRevision: 1,
+    });
+  });
+
+  it('parses one exact extra-source AST per needed project and reuses that project', () => {
+    const extraFiles = [
+      {
+        fileName: 'unsafe-submit.tsx',
+        source:
+          'export function UnsafeSubmit() { return <button formtarget="_blank">Unsafe</button>; }',
+      },
+      ...Array.from({ length: 31 }, (_, index) => ({
+        fileName: `inert-${String(index)}.ts`,
+        source: `export const inert${String(index)} = ${String(index)};`,
+      })),
+    ];
+    const probe = lowerWithWork(
+      `
+import { UnsafeSubmit } from './unsafe-submit';
+export const save = mutation('account/save', {
+  input: s.object({}),
+  handler() { return null; },
+});
+export const View = component({
+  render: () => <form mutation={save}><UnsafeSubmit /></form>,
+});
+`,
+      extraFiles,
+    );
+
+    const coldDiagnostics = probe.lower().diagnostics.filter((entry) => entry.code === 'KV242');
+    expect(coldDiagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: expect.stringContaining('component-rendered formtarget'),
+        }),
+      ]),
+    );
+    expect(mutationComponentProjectWorkForTesting(probe.model, probe.options)).toEqual({
+      approvedExtraSourceFiles: 32,
+      parsedExtraSourceFiles: 32,
+      projectBuilds: 1,
+      snapshotRevision: 1,
+    });
+
+    expect(probe.lower().diagnostics.filter((entry) => entry.code === 'KV242')).toEqual(
+      coldDiagnostics,
+    );
+    expect(mutationComponentProjectWorkForTesting(probe.model, probe.options)).toEqual({
+      approvedExtraSourceFiles: 32,
+      parsedExtraSourceFiles: 32,
+      projectBuilds: 1,
+      snapshotRevision: 1,
+    });
+  });
+
+  it('invalidates a cached project when the same extra-files array receives new bytes', () => {
+    const extraFiles = [
+      {
+        fileName: 'cached-submit.tsx',
+        source: 'export function CachedSubmit() { return <button type="submit">Safe</button>; }',
+      },
+    ];
+    const probe = lowerWithWork(
+      `
+import { CachedSubmit } from './cached-submit';
+export const save = mutation('account/save', {
+  input: s.object({}),
+  handler() { return null; },
+});
+export const View = component({
+  render: () => <form mutation={save}><CachedSubmit /></form>,
+});
+`,
+      extraFiles,
+    );
+
+    expect(probe.lower().diagnostics.filter((entry) => entry.code === 'KV242')).toEqual([]);
+    expect(mutationComponentProjectWorkForTesting(probe.model, probe.options)).toEqual({
+      approvedExtraSourceFiles: 1,
+      parsedExtraSourceFiles: 1,
+      projectBuilds: 1,
+      snapshotRevision: 1,
+    });
+
+    extraFiles[0] = {
+      fileName: 'cached-submit.tsx',
+      source:
+        'export function CachedSubmit() { return <button formtarget="_blank">Unsafe</button>; }',
+    };
+    expect(probe.lower().diagnostics.filter((entry) => entry.code === 'KV242')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: expect.stringContaining('component-rendered formtarget'),
+        }),
+      ]),
+    );
+    expect(mutationComponentProjectWorkForTesting(probe.model, probe.options)).toEqual({
+      approvedExtraSourceFiles: 1,
+      parsedExtraSourceFiles: 1,
+      projectBuilds: 1,
+      snapshotRevision: 2,
+    });
+  });
+
+  it('keeps extra-to-root component imports closed under the extras-only lookup topology', () => {
+    const result = compile(
+      `
+import { ImportedSubmitter } from './imported-submitter';
+export { component as rootComponent } from '@kovojs/core';
+export const save = mutation('account/save', {
+  input: s.object({}),
+  handler() { return null; },
+});
+export const View = component({
+  render: () => <form mutation={save}><ImportedSubmitter /></form>,
+});
+`,
+      [
+        {
+          fileName: 'imported-submitter.tsx',
+          source: `
+import { rootComponent } from './ownership-probe';
+export const ImportedSubmitter = rootComponent({
+  render: () => <button type="submit">Save</button>,
+});
+`,
+        },
+      ],
+    );
+
+    expect(result.diagnostics.filter((entry) => entry.code === 'KV242')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ message: expect.stringContaining('cannot be resolved') }),
+      ]),
+    );
+  });
+
+  it('keeps extra-module component alias cycles closed after shared-AST parsing', () => {
+    const result = compile(
+      `
+import { ImportedSubmitter } from './imported-submitter';
+export const save = mutation('account/save', {
+  input: s.object({}),
+  handler() { return null; },
+});
+export const View = component({
+  render: () => <form mutation={save}><ImportedSubmitter /></form>,
+});
+`,
+      [
+        {
+          fileName: 'imported-submitter.tsx',
+          source: `
+import { CyclicSubmitter } from './submitter-barrel';
+export function ImportedSubmitter() { return <CyclicSubmitter />; }
+`,
+        },
+        {
+          fileName: 'submitter-barrel.ts',
+          source: "export { ImportedSubmitter as CyclicSubmitter } from './imported-submitter';",
+        },
+      ],
+    );
+
     expect(result.diagnostics.filter((entry) => entry.code === 'KV242')).not.toEqual([]);
   });
 });

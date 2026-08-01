@@ -39,7 +39,7 @@ import {
   type JsxIrExpression,
 } from '../jsx-ir.js';
 import {
-  parseComponentModule,
+  parseComponentProjectModules,
   parserFactFrameworkTrustedUrlReason,
   parserFactFrameworkTrustedUrlValue,
   parserFactHasFrameworkTrustedUrl,
@@ -87,6 +87,7 @@ import {
   compilerArrayLength,
   compilerCreateMap,
   compilerCreateSet,
+  compilerCreateWeakMap,
   compilerDefineOwnDataProperty,
   compilerFailClosed,
   compilerJsonStringify,
@@ -112,6 +113,8 @@ import {
   compilerStringStartsWith,
   compilerStringToLowerCase,
   compilerStringTrim,
+  compilerWeakMapGet,
+  compilerWeakMapSet,
 } from '../compiler-security-intrinsics.js';
 
 const RUNTIME_OUTPUT_IMPORT = '@kovojs/browser/internal/output';
@@ -832,6 +835,10 @@ function componentMutationSubmitterOverrideDiagnostics(
     mutationForms,
     'Component mutation submitter forms',
   );
+  // A root with no typed mutation form cannot confer mutation-form ownership on a rendered child.
+  // Stop before materializing the exact-source component project: build/check invokes this pass for
+  // every module in the approved closure, most of which are non-visual authority modules.
+  if (formSnapshot.length === 0) return diagnostics;
   const project = mutationComponentProject(model, options);
 
   for (let formIndex = 0; formIndex < formSnapshot.length; formIndex += 1) {
@@ -934,20 +941,61 @@ export interface MutationDocumentReachableControl {
   readonly fileName: string;
 }
 
+interface MutationComponentProjectCacheEntry {
+  readonly extraFiles: readonly { readonly fileName: string; readonly source: string }[];
+  readonly fileName: string;
+  readonly root: MutationComponentSource;
+  readonly source: string;
+  parsedExtraSourceFiles: number;
+  project?: MutationComponentProject;
+  projectBuilds: number;
+  readonly snapshotRevision: number;
+}
+
+/** @internal Bounded-work evidence for the exact mutation-form project snapshot. */
+export interface MutationComponentProjectWork {
+  readonly approvedExtraSourceFiles: number;
+  readonly parsedExtraSourceFiles: number;
+  readonly projectBuilds: number;
+  readonly snapshotRevision: number;
+}
+
+const emptyMutationComponentProjectSnapshot = {};
+const mutationComponentProjectCache = compilerCreateWeakMap<
+  ComponentModuleModel,
+  WeakMap<object, MutationComponentProjectCacheEntry>
+>();
+
+/** @internal Test-only observation of parser work; it cannot alter classifier behavior. */
+export function mutationComponentProjectWorkForTesting(
+  model: ComponentModuleModel,
+  options: StructuralJsxLoweringOptions,
+): MutationComponentProjectWork | undefined {
+  const entry = cachedMutationComponentProjectEntry(model, options);
+  return entry === undefined
+    ? undefined
+    : {
+        approvedExtraSourceFiles: entry.extraFiles.length,
+        parsedExtraSourceFiles: entry.parsedExtraSourceFiles,
+        projectBuilds: entry.projectBuilds,
+        snapshotRevision: entry.snapshotRevision,
+      };
+}
+
 function mutationComponentProject(
   model: ComponentModuleModel,
   options: StructuralJsxLoweringOptions,
 ): MutationComponentProject {
-  const root: MutationComponentSource = {
-    fileName: normalizeComponentFileName(options.fileName),
-    model,
-    source: options.source,
-  };
+  const entry = mutationComponentProjectEntry(model, options);
+  if (entry.project !== undefined) return entry.project;
+  const root = entry.root;
   const files: MutationComponentSource[] = [root];
-  const extraFiles = compilerSnapshotDenseArray(
-    options.extraFiles ?? [],
-    'Mutation component project files',
-  );
+  const extraFiles = entry.extraFiles;
+  // Parse and register the exact extra-source snapshot once. The former per-module path reparsed
+  // every identity file for every extra model, turning N approved files into N² ASTs each time the
+  // same classifier asked for its project. Shared AST identity changes no source/span/provenance
+  // fact; it only removes redundant construction.
+  const extraModels = parseComponentProjectModules(extraFiles);
   for (let index = 0; index < extraFiles.length; index += 1) {
     const file = extraFiles[index]!;
     const fileName = normalizeComponentFileName(file.fileName);
@@ -956,15 +1004,114 @@ function mutationComponentProject(
       files,
       {
         fileName,
-        model: parseComponentModule(fileName, file.source, {
-          frameworkIdentityFiles: extraFiles,
-        }),
+        model: extraModels[index]!,
         source: file.source,
       },
       'Mutation component project models',
     );
   }
-  return { files, root };
+  entry.parsedExtraSourceFiles = extraModels.length;
+  entry.projectBuilds += 1;
+  entry.project = { files, root };
+  return entry.project;
+}
+
+function mutationComponentProjectRoot(
+  model: ComponentModuleModel,
+  options: StructuralJsxLoweringOptions,
+): MutationComponentSource {
+  return mutationComponentProjectEntry(model, options).root;
+}
+
+function mutationComponentProjectEntry(
+  model: ComponentModuleModel,
+  options: StructuralJsxLoweringOptions,
+): MutationComponentProjectCacheEntry {
+  const cached = cachedMutationComponentProjectEntry(model, options);
+  if (cached !== undefined) return cached;
+  const extraFiles = snapshotMutationComponentProjectFiles(options.extraFiles ?? []);
+  let bySnapshot = compilerWeakMapGet(mutationComponentProjectCache, model);
+  const snapshotKey = mutationComponentProjectSnapshotKey(options);
+  const prior = bySnapshot === undefined ? undefined : compilerWeakMapGet(bySnapshot, snapshotKey);
+  const entry: MutationComponentProjectCacheEntry = {
+    extraFiles,
+    fileName: normalizeComponentFileName(options.fileName),
+    parsedExtraSourceFiles: 0,
+    projectBuilds: 0,
+    root: {
+      fileName: normalizeComponentFileName(options.fileName),
+      model,
+      source: options.source,
+    },
+    snapshotRevision: (prior?.snapshotRevision ?? 0) + 1,
+    source: options.source,
+  };
+  if (bySnapshot === undefined) {
+    bySnapshot = compilerCreateWeakMap<object, MutationComponentProjectCacheEntry>();
+    compilerWeakMapSet(mutationComponentProjectCache, model, bySnapshot);
+  }
+  compilerWeakMapSet(bySnapshot, snapshotKey, entry);
+  return entry;
+}
+
+function cachedMutationComponentProjectEntry(
+  model: ComponentModuleModel,
+  options: StructuralJsxLoweringOptions,
+): MutationComponentProjectCacheEntry | undefined {
+  const bySnapshot = compilerWeakMapGet(mutationComponentProjectCache, model);
+  const cached =
+    bySnapshot === undefined
+      ? undefined
+      : compilerWeakMapGet(bySnapshot, mutationComponentProjectSnapshotKey(options));
+  return cached !== undefined && mutationComponentProjectSnapshotMatches(cached, options)
+    ? cached
+    : undefined;
+}
+
+function mutationComponentProjectSnapshotKey(options: StructuralJsxLoweringOptions): object {
+  return options.extraFiles ?? emptyMutationComponentProjectSnapshot;
+}
+
+function snapshotMutationComponentProjectFiles(
+  files: readonly { readonly fileName: string; readonly source: string }[],
+): readonly { readonly fileName: string; readonly source: string }[] {
+  const snapshot = compilerSnapshotDenseArray(files, 'Mutation component project files');
+  const result: { fileName: string; source: string }[] = [];
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const file = snapshot[index]!;
+    const fileName = compilerOwnDataValue(file, 'fileName', 'Mutation component project file');
+    const source = compilerOwnDataValue(file, 'source', 'Mutation component project file');
+    if (typeof fileName !== 'string' || typeof source !== 'string') {
+      throw new TypeError(`Mutation component project files[${index}] must contain own strings.`);
+    }
+    appendCompilerFact(result, { fileName, source }, 'Mutation component project source snapshot');
+  }
+  return result;
+}
+
+function mutationComponentProjectSnapshotMatches(
+  entry: MutationComponentProjectCacheEntry,
+  options: StructuralJsxLoweringOptions,
+): boolean {
+  if (
+    entry.fileName !== normalizeComponentFileName(options.fileName) ||
+    entry.source !== options.source
+  ) {
+    return false;
+  }
+  const files = compilerSnapshotDenseArray(
+    options.extraFiles ?? [],
+    'Current mutation component project files',
+  );
+  if (files.length !== entry.extraFiles.length) return false;
+  for (let index = 0; index < files.length; index += 1) {
+    const file = files[index]!;
+    const fileName = compilerOwnDataValue(file, 'fileName', 'Mutation component project file');
+    const source = compilerOwnDataValue(file, 'source', 'Mutation component project file');
+    const approved = entry.extraFiles[index]!;
+    if (fileName !== approved.fileName || source !== approved.source) return false;
+  }
+  return true;
 }
 
 function documentMutationFormOwnershipDiagnostics(
@@ -1283,24 +1430,29 @@ function mutationDocumentCensuses(
   model: ComponentModuleModel,
   options: StructuralJsxLoweringOptions,
 ): MutationDocumentCensus[] {
-  const project = mutationComponentProject(model, options);
+  const root = mutationComponentProjectRoot(model, options);
   const roots: MutationComponentImplementation[] = [];
   const rootIdentities = compilerCreateSet<string>();
   const components = compilerSnapshotDenseArray(
-    project.root.model.components,
+    root.model.components,
     'Mutation document root components',
   );
   for (let index = 0; index < components.length; index += 1) {
     const localName = components[index]!.localName;
     if (localName === undefined) continue;
-    const implementation = localMutationComponentImplementation(project.root, localName);
+    const implementation = localMutationComponentImplementation(root, localName);
     if (implementation === null) continue;
     const identity = mutationComponentImplementationIdentity(implementation);
     if (compilerSetHas(rootIdentities, identity)) continue;
     compilerSetAdd(rootIdentities, identity);
     appendCompilerFact(roots, implementation, 'Mutation document root implementations');
   }
-  appendMutationDocumentRouteRoots(project.root, roots, rootIdentities);
+  appendMutationDocumentRouteRoots(root, roots, rootIdentities);
+  // No local component/route root means no document graph can inherit or acquire form ownership
+  // from this module. Keep the verdict empty without parsing its unrelated project closure.
+  if (roots.length === 0) return [];
+
+  const project = mutationComponentProject(model, options);
 
   const censuses: MutationDocumentCensus[] = [];
   for (let rootIndex = 0; rootIndex < roots.length; rootIndex += 1) {
