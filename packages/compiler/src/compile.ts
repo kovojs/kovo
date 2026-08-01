@@ -46,6 +46,7 @@ import {
   compilerDefineOwnDataProperty,
   compilerFailClosed,
   compilerFreeze,
+  compilerJsonStringify,
   compilerMapGet,
   compilerMapSet,
   compilerObjectKeys,
@@ -115,6 +116,8 @@ import {
   componentOptionObjectEntries,
   componentOptionObjectEntriesFor,
   jsxComments,
+  jsxAttributeSemanticStringValue,
+  parserFactCompilerGeneratedComponentControlName,
   type CallExpressionModel,
   type ComponentModel,
   type ComponentModuleModel,
@@ -870,15 +873,16 @@ function createAuthoredSourceAnchorIndex(
   );
   for (let index = 0; index < attributes.length; index += 1) {
     const attribute = attributes[index]!;
+    const semanticValue = jsxAttributeSemanticStringValue(attribute);
     if (
-      attribute.value !== undefined &&
+      semanticValue !== undefined &&
       (attribute.name === 'data-bind' ||
         attribute.name === 'data-bind-list' ||
         compilerStringStartsWith(attribute.name, 'data-bind:'))
     ) {
       order = indexAuthoredReactivePath(
         reactiveByPath,
-        attribute.value,
+        semanticValue,
         { end: attribute.end, file: fileName, start: attribute.start },
         order,
       );
@@ -2659,6 +2663,7 @@ export function collectStateDeriveReferenceFacts(
     );
     for (let attributeIndex = 0; attributeIndex < attributes.length; attributeIndex += 1) {
       const attribute = attributes[attributeIndex]!;
+      const semanticValue = jsxAttributeSemanticStringValue(attribute);
       if (
         !(
           attribute.name === 'data-bind' ||
@@ -2667,19 +2672,30 @@ export function collectStateDeriveReferenceFacts(
           // reference identically to its data-bind:<attr> sibling.
           compilerStringStartsWith(attribute.name, 'data-bind-prop:')
         ) ||
-        !attribute.value
+        !semanticValue
       ) {
         continue;
       }
 
-      const derive = compilerMapGet(derivesByPlaceholder, attribute.value);
+      const derive = compilerMapGet(derivesByPlaceholder, semanticValue);
       if (!derive) continue;
+
+      const componentControlHelper =
+        element.intrinsicTagName === undefined
+          ? generatedComponentControlHelperForReference(model, attribute)
+          : undefined;
+      if (element.intrinsicTagName === undefined && componentControlHelper === undefined) {
+        compilerFailClosed(
+          `Generated ${attribute.name} derive reference on a component host must retain its exact component-control receipt fact.`,
+        );
+      }
 
       appendCompileValue(
         references,
         {
           attr: attribute.name,
           clientHref,
+          ...(componentControlHelper === undefined ? {} : { componentControlHelper }),
           exportName: derive.exportName,
           placeholder: derive.placeholder,
           target: { end: attribute.end, start: attribute.start },
@@ -2697,11 +2713,52 @@ export function collectStateDeriveReferenceFacts(
 function versionStateDeriveReferences(
   references: readonly StateDeriveReferenceFact[],
 ): SourceReplacement[] {
-  return compilerMapDense(references, 'State-derive reference replacements', (reference) => ({
-    end: reference.target.end,
-    replacement: `${reference.attr}="${escapeAttribute(reference.value)}"`,
-    start: reference.target.start,
-  }));
+  return compilerMapDense(references, 'State-derive reference replacements', (reference) => {
+    let replacement: string;
+    if (reference.componentControlHelper === undefined) {
+      replacement = `${reference.attr}="${escapeAttribute(reference.value)}"`;
+    } else {
+      const name = compilerJsonStringify(reference.attr);
+      const value = compilerJsonStringify(reference.value);
+      if (name === undefined || value === undefined) {
+        compilerFailClosed('Generated component-control derive reference must serialize exactly.');
+      }
+      replacement = `${reference.attr}={${reference.componentControlHelper}(${name}, ${value})}`;
+    }
+    return {
+      end: reference.target.end,
+      replacement,
+      start: reference.target.start,
+    };
+  });
+}
+
+function generatedComponentControlHelperForReference(
+  model: ComponentModuleModel,
+  attribute: ComponentModuleModel['jsxElements'][number]['attributes'][number],
+): string | undefined {
+  if (parserFactCompilerGeneratedComponentControlName(attribute) !== attribute.name) {
+    return undefined;
+  }
+  const imports = compilerSnapshotDenseArray(
+    model.namedImports,
+    'Generated component-control reference imports',
+  );
+  let helper: string | undefined;
+  for (let index = 0; index < imports.length; index += 1) {
+    const candidate = imports[index]!;
+    if (
+      candidate.moduleSpecifier !== '@kovojs/server/internal/escape' ||
+      candidate.importedName !== 'kovoGeneratedComponentControl'
+    ) {
+      continue;
+    }
+    if (helper !== undefined) {
+      compilerFailClosed('Generated component-control reference import must be unique.');
+    }
+    helper = candidate.localName;
+  }
+  return helper;
 }
 
 /**

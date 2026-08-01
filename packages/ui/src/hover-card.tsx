@@ -1,4 +1,5 @@
 /** @jsxImportSource @kovojs/server */
+import type { TrustedUrl } from '@kovojs/browser';
 import { component, type ComponentChild } from '@kovojs/core';
 import {
   hoverCardContentAttributes,
@@ -6,6 +7,7 @@ import {
   hoverCardTriggerAttributes,
 } from '@kovojs/headless-ui/hover-card';
 import * as style from '@kovojs/style';
+import { attrs as styleAttributes } from '@kovojs/style';
 import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
@@ -61,7 +63,7 @@ export interface HoverCardProps extends HoverCardStateProps {
 export interface HoverCardTriggerProps extends HoverCardStateProps {
   children?: ComponentChild;
   contentId?: string;
-  href?: string;
+  href?: string | TrustedUrl;
   id?: string;
   styles?: HoverCardStyleOverrides;
 }
@@ -178,11 +180,10 @@ export const HoverCardTrigger = component({
       ...hoverCardState(props),
       ...(props.contentId === undefined ? {} : { contentId: props.contentId }),
     });
-    const styleAttrs = style.attrs(hoverCardStyles.trigger, props.styles?.trigger);
-
     return (
       <a
-        {...styleAttrs}
+        {...styleAttributes(hoverCardStyles.trigger, props.styles?.trigger)}
+        {...passThroughProps(props)}
         aria-controls={attrs['aria-controls']}
         aria-disabled={props.disabled === true ? 'true' : undefined}
         aria-expanded={attrs['aria-expanded']}

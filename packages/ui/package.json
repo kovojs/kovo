@@ -311,7 +311,7 @@
       "autocomplete": "sha256-M_QvnF1KnoAQ4JrYJPWuourcTOVXztR1yzWWwU0cmYk",
       "avatar": "sha256-A22S5ryuJBjOKB2CeeR3Ek-1DPpJHxjpO3A-Mg24Cmc",
       "badge": "sha256-I92JxrQ6b9Qk4nM0ZnTobjdVX9bK-84nhsXdK5MGvtM",
-      "breadcrumb": "sha256-yZH8iWfsQwSRRAd5oMvjZJWup-U11uk09pdKPHRGxWU",
+      "breadcrumb": "sha256-OIO0dMzHmHnIT_WPm9gKu1dkPTaJOuGmWvVADPw8hf8",
       "button": "sha256-m-d0fx44_-V2ce0b0qBdAyH7aql822GQFVUaGcQJG70",
       "card": "sha256-DXjnw2JyiMOS7WEzMhCZnu7ZQf4dSDiI9sOu5Hbt3Zc",
       "checkbox": "sha256-0_ZXYX21v5jPfFRTj9LeHQeTja6I-AWfJQW11eNNZd0",
@@ -325,11 +325,11 @@
       "drawer": "sha256-RrIJ1SVqnq2-11Sw5GzDZB6Ka9cUBBh3J6a9em50ZXo",
       "dropdown-menu": "sha256-8vYSIsun5hKiroqWsFPcSBH8jHB7QjxCKgdCPH1vKPc",
       "field": "sha256-ptmMsvvjMl8zEj4AzRFjlkLYDD0eFoUwUzYgfyugNb0",
-      "hover-card": "sha256-diuTfJP5ZpUKtt9TNquCWSr3fBroZh2K3RRvtmjniog",
+      "hover-card": "sha256-bkKPPbflczxOhl2f5731W0iFQVQCgEc8T5eHXHJ7B5U",
       "kbd": "sha256-5b0i-CmbQGmCJyvjVXt78c65x1i3EsJ-J64QVlquVyo",
       "menubar": "sha256-QyWoqhhtO53LUvYnFc0ikt4Y1PuifmWglIL8nCC0FCQ",
       "meter": "sha256-kv73MtCdD-L7qgyfI2SYG5mVpl7rrcWAklyFJPBMquE",
-      "navigation-menu": "sha256-387ceTH5YecpO55es1XfFj72mC02fZ8udJQtRrZ4chQ",
+      "navigation-menu": "sha256-urNpiT-C4yF8-zgFBvWP5iWhHwIL4UjEh9Y5oGQZUcw",
       "number-field": "sha256-7iRvB5oEVjNZxNPyZZR0QEdUmY1W_P0-zbCSZc2yJRc",
       "otp-field": "sha256-Yi3yYI6uPKgQIlL3b6x4l3VlyBRgb6M6fIWFW8_DkYY",
       "popover": "sha256-eM7JZqogKx15j5kHYjny8tC4F0wXqBu_32kqmiT5f5M",
@@ -352,7 +352,7 @@
     },
     "vendoredSourceHelperHashes": {
       "src/pass-through.ts": "sha256--LBWzGdyqnGVZOTg_tLeOTlbNfyGntp7dlkRq53YyF0",
-      "src/safe-url.ts": "sha256-so8ktAIqy8_KAklgoGwgIQ1XgKnVuMdZDnCUMBIDe1Y",
+      "src/safe-url.ts": "sha256-YafsNJGBORzYRzS2ZY_BVD5ORYLuyV-1vvQnSojeTxc",
       "src/theme.ts": "sha256-tI4MS3kmf8ZZ1u13dvoSJ80eQBMIiANCcUyEGjFduEc"
     },
     "prefix": "kovo-ui-"

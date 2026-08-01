@@ -1,3 +1,5 @@
+import type { TrustedUrl } from '@kovojs/browser';
+
 /**
  * Browser-safe URL sink adapter for UI components.
  *
@@ -9,7 +11,14 @@
  * called, so late-bound `RegExp.prototype.exec`, `String.prototype.replace`, or
  * `Set.prototype.has` would let that code redefine what the URL allowlist means.
  */
-export function safeUrl(value: string | null | undefined, fallback = '#'): string {
+export function safeUrl(
+  value: string | TrustedUrl | null | undefined,
+  fallback = '#',
+): string | TrustedUrl {
+  if (value === null || value === undefined) return fallback;
+  // Preserve the opaque public type through the component boundary. The intrinsic JSX URL sink
+  // verifies the module-private TrustedUrl witness; a cast/structural lookalike is dropped there.
+  if (typeof value === 'object') return value;
   if (typeof value !== 'string') return fallback;
 
   const normalized = normalizedUrlForSchemeCheck(value);

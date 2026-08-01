@@ -16,7 +16,11 @@ import {
   frameworkExport,
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
-import { isHtmlWireValueStable } from '@kovojs/core/internal/semantic-attributes';
+import {
+  isCompilerOwnedResidualAttribute,
+  isHtmlWireValueStable,
+  isKovoComponentHostControlAttribute,
+} from '@kovojs/core/internal/semantic-attributes';
 import { contextualizeCompilerDiagnostic, diagnosticFor } from '../diagnostics.js';
 import type { CompilerDiagnostic } from '../diagnostics.js';
 import {
@@ -216,6 +220,8 @@ export const structuralJsxPhaseOrder = [
   'helper-import-insertion',
 ] as const;
 
+const generatedComponentControlBindingBase = 'kovoGeneratedComponentControl';
+
 export function lowerStructuralJsx(
   model: ComponentModuleModel,
   componentName: string,
@@ -314,6 +320,11 @@ export function lowerStructuralJsx(
     model,
     outputContexts,
   );
+  const generatedComponentControlBinding = compilerGeneratedComponentControlBinding(model);
+  const needsGeneratedComponentControlHelper = protectGeneratedComponentControlAttributes(
+    tree.elements,
+    generatedComponentControlBinding.localName,
+  );
   const escapeApplied = inlineTextEscapeApplied || staticTextEscapeApplied;
   appendCompilerFacts(
     diagnostics,
@@ -328,6 +339,15 @@ export function lowerStructuralJsx(
   const compilerEscapeImports: string[] = [];
   if (escapeApplied && !hasCompilerEscapeImport(model, 'escapeText')) {
     appendCompilerFact(compilerEscapeImports, 'escapeText', 'Compiler escape imports');
+  }
+  if (needsGeneratedComponentControlHelper && generatedComponentControlBinding.importRequired) {
+    appendCompilerFact(
+      compilerEscapeImports,
+      generatedComponentControlBinding.localName === generatedComponentControlBindingBase
+        ? generatedComponentControlBindingBase
+        : `${generatedComponentControlBindingBase} as ${generatedComponentControlBinding.localName}`,
+      'Compiler escape imports',
+    );
   }
   if (needsSafeJsxSpreadHelper && !hasCompilerEscapeImport(model, 'kovoSafeJsxSpread')) {
     appendCompilerFact(compilerEscapeImports, 'kovoSafeJsxSpread', 'Compiler escape imports');
@@ -2963,6 +2983,104 @@ function hasCompilerEscapeImport(model: ComponentModuleModel, importedName: stri
   return false;
 }
 
+function compilerGeneratedComponentControlBinding(model: ComponentModuleModel): {
+  importRequired: boolean;
+  localName: string;
+} {
+  const importLength = compilerArrayLength(model.namedImports, 'Component-control imports');
+  for (let importIndex = 0; importIndex < importLength; importIndex += 1) {
+    const entry = compilerOwnDataValue(
+      model.namedImports,
+      importIndex,
+      'Component-control imports',
+    ) as ComponentModuleModel['namedImports'][number];
+    if (
+      entry.importedName === generatedComponentControlBindingBase &&
+      entry.moduleSpecifier === '@kovojs/server/internal/escape'
+    ) {
+      return { importRequired: false, localName: entry.localName };
+    }
+  }
+
+  const identifiers = compilerSnapshotDenseArray(
+    model.sourceIdentifierNames,
+    'Component-control identifier parser facts',
+  );
+  for (let suffix = 0; suffix <= identifiers.length; suffix += 1) {
+    const candidate =
+      suffix === 0
+        ? generatedComponentControlBindingBase
+        : `${generatedComponentControlBindingBase}_${suffix}`;
+    let occupied = false;
+    for (let index = 0; index < identifiers.length; index += 1) {
+      if (identifiers[index] === candidate) {
+        occupied = true;
+        break;
+      }
+    }
+    if (!occupied) return { importRequired: true, localName: candidate };
+  }
+  throw new TypeError('Kovo could not select a collision-free component-control binding.');
+}
+
+/**
+ * Give generated control-plane values crossing a component call an exact name-bound runtime
+ * receipt. Opaque caller spreads stay untouched and therefore cannot acquire the receipt. The
+ * receiving primitive must still reconstruct through kovoSafeJsxSpread before an intrinsic sink.
+ * SPEC §5.2 rule 10 / §6.6.
+ */
+function protectGeneratedComponentControlAttributes(
+  elements: readonly JsxIrElement[],
+  helperLocalName: string,
+): boolean {
+  let applied = false;
+  const elementLength = compilerArrayLength(elements, 'Generated component-control elements');
+  for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {
+    const element = compilerOwnDataValue(
+      elements,
+      elementIndex,
+      'Generated component-control elements',
+    ) as JsxIrElement;
+    if (element.intrinsicTagName !== undefined) continue;
+    const attributeLength = compilerArrayLength(
+      element.attributes,
+      'Generated component-control attributes',
+    );
+    for (let attributeIndex = 0; attributeIndex < attributeLength; attributeIndex += 1) {
+      const attribute = compilerOwnDataValue(
+        element.attributes,
+        attributeIndex,
+        'Generated component-control attributes',
+      ) as JsxIrAttribute;
+      if (attribute.ownership === 'author' || compilerStringStartsWith(attribute.name, '...')) {
+        continue;
+      }
+      if (!isKovoComponentHostControlAttribute(attribute.name)) {
+        if (isCompilerOwnedResidualAttribute(attribute.name)) {
+          compilerFailClosed(
+            `Generated ${attribute.name} cannot cross a non-intrinsic component host because it is outside the finite component-control receipt denominator.`,
+          );
+        }
+        continue;
+      }
+      const name = compilerJsonSource(attribute.name, 'Generated component-control name');
+      const value = jsxIrAttributeRuntimeExpression(attribute.value);
+      attribute.value = {
+        kind: 'expression',
+        source: `${helperLocalName}(${name}, ${value})`,
+      };
+      markJsxIrChanged(element);
+      applied = true;
+    }
+  }
+  return applied;
+}
+
+function jsxIrAttributeRuntimeExpression(value: JsxIrAttributeValue): string {
+  if (value.kind === 'expression') return value.source;
+  return compilerJsonSource(value.value, 'Generated component-control value');
+}
+
 /**
  * SPEC §4.7/§4.8, §5.2 rule 10, §6.6: caller-owned spread records may carry ordinary
  * HTML/ARIA/data attributes, but may not mint Kovo's executable/control metadata. Static object
@@ -2981,7 +3099,7 @@ function lowerDynamicJsxSpreads(elements: readonly JsxIrElement[]): boolean {
       'Dynamic spread JSX elements',
     ) as JsxIrElement;
     if (element.element.intrinsicTagName === undefined) continue;
-    const transportBoundary = isIntrinsicHtmlElement(element.element, 'form')
+    const elementReconstructionBoundary = isIntrinsicHtmlElement(element.element, 'form')
       ? enhancedMutationFormBinding(element.element) === null
         ? undefined
         : 'mutation-form'
@@ -3004,10 +3122,24 @@ function lowerDynamicJsxSpreads(elements: readonly JsxIrElement[]): boolean {
       if (!source || 'name' in source) continue;
       if (isMutationFormAttributesSpread(source)) continue;
 
+      let reconstructionBoundary: 'mutation-form' | 'mutation-submitter' | 'ui-anchor' | undefined =
+        elementReconstructionBoundary;
+      if (
+        source.uiCopyDefaultPassThrough === true &&
+        isIntrinsicHtmlElement(element.element, 'a')
+      ) {
+        if (source.expressionCallArgumentBareIdentifierName !== 'props') {
+          compilerFailClosed('UI copy-in pass-through parser facts must target <a> props.');
+        }
+        // Keep evaluating the authored helper expression. The parser fact selects the finite
+        // receiving boundary; it is not authority to substitute a raw argument or otherwise alter
+        // authored render semantics. Exact compiler receipts survive the helper's own-data copy.
+        reconstructionBoundary = 'ui-anchor';
+      }
       const expression =
-        transportBoundary === undefined
+        reconstructionBoundary === undefined
           ? `...kovoSafeJsxSpread(${source.expression})`
-          : `...kovoSafeJsxSpread(${source.expression}, '${transportBoundary}')`;
+          : `...kovoSafeJsxSpread(${source.expression}, '${reconstructionBoundary}')`;
       attribute.name = expression;
       attribute.value = {
         kind: 'expression',

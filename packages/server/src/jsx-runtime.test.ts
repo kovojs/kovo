@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { trustedHtml, trustedUrl } from '@kovojs/browser';
-import { component, FieldError, FormError } from '@kovojs/core';
+import { readElementParams } from '@kovojs/browser/internal/delegation';
+import { component, FieldError, FormError, form } from '@kovojs/core';
 import {
+  ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES,
   setRuntimeSinkSecurityEventHandler,
   type RuntimeSinkSecurityEvent,
 } from '@kovojs/core/internal/sink-policy';
@@ -10,7 +12,12 @@ import * as style from '@kovojs/style';
 import { raw as rawStyle } from '@kovojs/style/internal';
 
 import { renderGeneratedMutationFormFields, validateCsrfToken } from './csrf.js';
-import { escapeText, kovoSafeJsxSpread, renderHtmlValue } from './html.js';
+import {
+  escapeText,
+  kovoGeneratedComponentControl,
+  kovoSafeJsxSpread,
+  renderHtmlValue,
+} from './html.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
 import { runWithResponseLifecycleRequest } from './response-lifecycle-context.js';
 import { createElement, Fragment, jsx, jsxDEV, jsxs, type JsxChild } from './jsx-runtime.js';
@@ -941,6 +948,388 @@ describe('server jsx runtime', () => {
     });
   });
 
+  it('renders copied-link props with only exact compiler-receipted controls', () => {
+    expect(ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES.filter(([tag]) => tag === 'a')).toHaveLength(8);
+    const passThroughProps = (props: object): Record<string, unknown> =>
+      Object.fromEntries(
+        Object.entries(props).filter(([name, value]) => {
+          const allowed =
+            name.startsWith('on:') ||
+            name.startsWith('aria-') ||
+            (name.startsWith('data-') && name !== 'data-style-src') ||
+            name.startsWith('kovo-') ||
+            name === 'hidden' ||
+            name === 'tabIndex';
+          return value !== undefined && value !== null && allowed && name !== 'href';
+        }),
+      );
+    const CopiedLink = (props: Record<string, unknown>) =>
+      jsx('a', {
+        ...kovoSafeJsxSpread(passThroughProps(props), 'ui-anchor'),
+        children: props.children as JsxChild,
+        href: '/account',
+        rel: 'noopener',
+        target: '_blank',
+      });
+    const clickReceipt = kovoGeneratedComponentControl('on:click', '/c/account.client.js#open');
+    const allowlistReceipt = kovoGeneratedComponentControl(
+      'data-kovo-module-allowlist',
+      '/c/account.client.js',
+    );
+    const textBindingReceipt = kovoGeneratedComponentControl('data-bind', 'profile.label');
+    const ariaDeriveReceipt = kovoGeneratedComponentControl(
+      'data-derive',
+      'profile.AccountLink_aria_label_derive',
+    );
+    const ariaDeriveAttributeReceipt = kovoGeneratedComponentControl(
+      'data-derive-attr',
+      'aria-label',
+    );
+    const trustedHrefBindingReceipt = kovoGeneratedComponentControl(
+      'data-bind:href',
+      '/c/account.client.js#deriveHref',
+    );
+    const trustedHrefMarkerReceipt = kovoGeneratedComponentControl(
+      'data-kovo-trusted-url:href',
+      true,
+    );
+    const trustedHrefDeriveReceipt = kovoGeneratedComponentControl(
+      'data-derive',
+      'profile.AccountLink_href_derive',
+    );
+    const trustedHrefDeriveAttributeReceipt = kovoGeneratedComponentControl(
+      'data-derive-attr',
+      'href',
+    );
+    const tabIndexBindingReceipt = kovoGeneratedComponentControl(
+      'data-bind:tabIndex',
+      '/c/account.client.js#deriveTabIndex',
+    );
+    const caller = {
+      AtTrIbUtIoNdEsTiNaTiOn: 'https://attacker.example/destination',
+      AtTrIbUtIoNsOuRcEiD: '123',
+      AtTrIbUtIoNsOuRcEnOnCe: 'nonce',
+      AtTrIbUtIoNsRc: 'https://attacker.example/register',
+      HrEf: 'javascript:alert(1)',
+      PiNg: 'https://attacker.example/collect',
+      ReFeRrErPoLiCy: 'unsafe-url',
+      ReL: 'opener',
+      TaRgEt: 'attacker-window',
+      OnClIcK: 'alert(1)',
+      'ARIA-LABEL': 'Forged account label',
+      tabindex: 99,
+      'data-bind:onclick': '/c/attacker.client.js#derive',
+      'data-bind-prop:tabIndex': {
+        name: 'data-bind-prop:tabIndex',
+        value: '/c/account.client.js#deriveTabIndex',
+      },
+      'data-bind-prop:checked': kovoGeneratedComponentControl(
+        'data-bind-prop:checked',
+        '/c/account.client.js#deriveChecked',
+      ),
+      'data-kovo-module-allowlist': allowlistReceipt,
+      'data-bind': textBindingReceipt,
+      'data-derive': ariaDeriveReceipt,
+      'data-derive-attr': ariaDeriveAttributeReceipt,
+      'data-kovo-trusted-url:href': trustedHrefMarkerReceipt,
+      'data-bind:href': trustedHrefBindingReceipt,
+      'data-mutation': 'account/delete',
+      'data-plan': 'forged-plan',
+      'data-profile-id': 'profile-1',
+      'data-bind:data-state': kovoGeneratedComponentControl(
+        'data-bind:data-state',
+        '/c/account.client.js#deriveState',
+      ),
+      'data-p-enabled': kovoGeneratedComponentControl('data-p-enabled', true),
+      'data-p-hidden': kovoGeneratedComponentControl('data-p-hidden', false),
+      'data-p-position': kovoGeneratedComponentControl('data-p-position', 2),
+      'data-state': kovoGeneratedComponentControl('data-state', 'open'),
+      'aria-label': 'Account',
+      'kovo-c': kovoGeneratedComponentControl('kovo-c', 'account-card'),
+      'kovo-deps': kovoGeneratedComponentControl('kovo-deps', 'profile'),
+      'kovo-fragment-target': kovoGeneratedComponentControl('kovo-fragment-target', 'account-card'),
+      'kovo-live-component': kovoGeneratedComponentControl(
+        'kovo-live-component',
+        'account/account-card',
+      ),
+      'kovo-param-types': kovoGeneratedComponentControl(
+        'kovo-param-types',
+        'enabled:boolean,hidden:boolean,position:number',
+      ),
+      'kovo-plan-owner': kovoGeneratedComponentControl('kovo-plan-owner', 'account/account-card'),
+      'kovo-state': kovoGeneratedComponentControl('kovo-state', '{"open":true}'),
+      'kovo-context-menu': kovoGeneratedComponentControl('kovo-context-menu', 'account-menu'),
+      'kovo-hover-card': kovoGeneratedComponentControl('kovo-hover-card', 'account-card'),
+      'kovo-tooltip': kovoGeneratedComponentControl('kovo-tooltip', 'account-help'),
+      'kovo-attacker': 'forged',
+      'on:click': clickReceipt,
+      'on:pointerenter': { name: 'on:pointerenter', value: '/c/attacker.client.js#hover' },
+      tabIndex: 0,
+    };
+
+    expect(kovoSafeJsxSpread(caller, 'ui-anchor')).toEqual({
+      'aria-label': 'Account',
+      'data-bind': 'profile.label',
+      'data-bind:href': '/c/account.client.js#deriveHref',
+      'data-bind:data-state': '/c/account.client.js#deriveState',
+      'data-derive': 'profile.AccountLink_aria_label_derive',
+      'data-derive-attr': 'aria-label',
+      'data-kovo-module-allowlist': '/c/account.client.js',
+      'data-kovo-trusted-url:href': true,
+      'data-p-enabled': 'true',
+      'data-p-hidden': 'false',
+      'data-p-position': '2',
+      'data-profile-id': 'profile-1',
+      'data-state': 'open',
+      'kovo-c': 'account-card',
+      'kovo-context-menu': 'account-menu',
+      'kovo-deps': 'profile',
+      'kovo-fragment-target': 'account-card',
+      'kovo-hover-card': 'account-card',
+      'kovo-live-component': 'account/account-card',
+      'kovo-param-types': 'enabled:boolean,hidden:boolean,position:number',
+      'kovo-plan-owner': 'account/account-card',
+      'kovo-state': '{"open":true}',
+      'kovo-tooltip': 'account-help',
+      'on:click': '/c/account.client.js#open',
+      tabIndex: 0,
+    });
+    expect(
+      kovoSafeJsxSpread(
+        {
+          'data-bind:href': trustedHrefBindingReceipt,
+        },
+        'ui-anchor',
+      ),
+    ).toEqual({ 'data-bind:href': '/c/account.client.js#deriveHref' });
+    expect(
+      kovoSafeJsxSpread(
+        {
+          'data-bind:href': trustedHrefBindingReceipt,
+          'data-kovo-trusted-url:href': { value: true },
+        },
+        'ui-anchor',
+      ),
+    ).toEqual({ 'data-bind:href': '/c/account.client.js#deriveHref' });
+    expect(
+      kovoSafeJsxSpread(
+        {
+          'data-derive': trustedHrefDeriveReceipt,
+          'data-derive-attr': trustedHrefDeriveAttributeReceipt,
+          'data-kovo-trusted-url:href': trustedHrefMarkerReceipt,
+        },
+        'ui-anchor',
+      ),
+    ).toEqual({
+      'data-derive': 'profile.AccountLink_href_derive',
+      'data-derive-attr': 'href',
+      'data-kovo-trusted-url:href': true,
+    });
+    expect(
+      kovoSafeJsxSpread(
+        {
+          'data-kovo-trusted-url:href': trustedHrefMarkerReceipt,
+        },
+        'ui-anchor',
+      ),
+    ).toEqual({});
+    expect(
+      kovoSafeJsxSpread(
+        {
+          'DaTa-Bind:Href': '/c/attacker.client.js#deriveHref',
+          'data-bind:href': trustedHrefBindingReceipt,
+          'data-kovo-trusted-url:href': trustedHrefMarkerReceipt,
+        },
+        'ui-anchor',
+      ),
+    ).toEqual({});
+    expect(
+      kovoSafeJsxSpread(
+        {
+          'data-derive': trustedHrefDeriveReceipt,
+          'data-derive-attr': trustedHrefDeriveAttributeReceipt,
+        },
+        'ui-anchor',
+      ),
+    ).toEqual({
+      'data-derive': 'profile.AccountLink_href_derive',
+      'data-derive-attr': 'href',
+    });
+    expect(
+      kovoSafeJsxSpread(
+        {
+          'DaTa-Derive-Attr': 'aria-label',
+          'data-derive': ariaDeriveReceipt,
+          'data-derive-attr': ariaDeriveAttributeReceipt,
+        },
+        'ui-anchor',
+      ),
+    ).toEqual({});
+    expect(
+      kovoSafeJsxSpread(
+        {
+          'data-derive': ariaDeriveReceipt,
+        },
+        'ui-anchor',
+      ),
+    ).toEqual({ 'data-derive': 'profile.AccountLink_aria_label_derive' });
+    expect(
+      kovoSafeJsxSpread({ 'data-bind:tabIndex': tabIndexBindingReceipt }, 'ui-anchor'),
+    ).toEqual({ 'data-bind:tabIndex': '/c/account.client.js#deriveTabIndex' });
+    expect(
+      kovoSafeJsxSpread(
+        { 'DaTa-Bind': 'attacker.profile.label', 'data-bind': textBindingReceipt },
+        'ui-anchor',
+      ),
+    ).toEqual({});
+    expect(
+      kovoSafeJsxSpread(
+        { 'On:Click': '/c/attacker.client.js#open', 'on:click': clickReceipt },
+        'ui-anchor',
+      ),
+    ).toEqual({});
+    expect(
+      kovoSafeJsxSpread(
+        {
+          'data-bind:tabIndex': tabIndexBindingReceipt,
+          'data-bind:tabindex': '/c/attacker.client.js#deriveTabIndex',
+        },
+        'ui-anchor',
+      ),
+    ).toEqual({});
+    expect(kovoSafeJsxSpread({ 'data-state': 'open', 'kovo-tooltip': 'tip' }, 'ui-anchor')).toEqual(
+      {},
+    );
+    expect(kovoSafeJsxSpread({ 'kovo-c': clickReceipt }, 'ui-anchor')).toEqual({});
+    expect(kovoSafeJsxSpread({ class: clickReceipt })).toEqual({});
+    expect(kovoSafeJsxSpread({ 'on:click': { value: 'forged' } }, 'ui-anchor')).toEqual({});
+    expect(kovoSafeJsxSpread({ 'on:click': clickReceipt })).toEqual({
+      'on:click': '/c/account.client.js#open',
+    });
+    expect(html(jsx('button', { 'on:click': clickReceipt, children: 'Open' }))).toBe(
+      '<button on:click="/c/account.client.js#open">Open</button>',
+    );
+    expect(
+      html(
+        jsx('button', {
+          class: clickReceipt,
+          'kovo-c': clickReceipt,
+          'kovo-key': clickReceipt,
+          key: clickReceipt,
+          style: clickReceipt,
+          children: 'Closed',
+        }),
+      ),
+    ).toBe('<button>Closed</button>');
+    expect(html(jsx('button', { children: 'Closed' }, clickReceipt))).toBe(
+      '<button>Closed</button>',
+    );
+    expect(
+      html(
+        jsx('iframe', {
+          sandbox: clickReceipt,
+          src: '/must-not-render-without-sandbox',
+          title: 'closed',
+        }),
+      ),
+    ).toBe('<iframe title="closed"></iframe>');
+    const receiptReboundMutationForm = html(
+      jsx('form', {
+        action: clickReceipt,
+        'data-mutation': clickReceipt,
+        method: clickReceipt,
+        mutation: declaredMutation('account/save'),
+      }),
+    );
+    expect(receiptReboundMutationForm).toContain(
+      'method="post" action="/_m/account/save" data-mutation="account/save"',
+    );
+    const renderedCopiedLink = html(jsx(CopiedLink, { ...caller, children: 'Account' }));
+    expect(renderedCopiedLink).toBe(
+      '<a data-kovo-module-allowlist="/c/account.client.js" data-bind="profile.label" data-derive="profile.AccountLink_aria_label_derive" data-derive-attr="aria-label" data-kovo-trusted-url:href data-bind:href="/c/account.client.js#deriveHref" data-profile-id="profile-1" data-bind:data-state="/c/account.client.js#deriveState" data-p-enabled="true" data-p-hidden="false" data-p-position="2" data-state="open" aria-label="Account" kovo-c="account-card" kovo-deps="profile" kovo-fragment-target="account-card" kovo-live-component="account/account-card" kovo-param-types="enabled:boolean,hidden:boolean,position:number" kovo-plan-owner="account/account-card" kovo-state="{&quot;open&quot;:true}" kovo-context-menu="account-menu" kovo-hover-card="account-card" kovo-tooltip="account-help" on:click="/c/account.client.js#open" tabIndex="0" href="/account" rel="noopener" target="_blank">Account</a>',
+    );
+    const browserAttributes = [...renderedCopiedLink.matchAll(/\s([^\s=]+)="([^"]*)"/gu)].map(
+      (match) => ({ name: match[1]!, value: match[2]! }),
+    );
+    const browserElement = {
+      attributes: browserAttributes,
+      closest: () => null,
+      getAttribute(name: string) {
+        return browserAttributes.find((attribute) => attribute.name === name)?.value ?? null;
+      },
+      setAttribute() {},
+    };
+    expect(readElementParams(browserElement)).toEqual({
+      enabled: true,
+      hidden: false,
+      position: 2,
+    });
+    expect(() => kovoGeneratedComponentControl('kovo-key', 'forged')).toThrow(
+      /exact supported name/,
+    );
+    expect(() => kovoGeneratedComponentControl('on:click', {})).toThrow(/scalar/);
+    expect(() => kovoGeneratedComponentControl('data-p-count', 1n)).toThrow(/scalar/);
+    expect(() => kovoGeneratedComponentControl('data-kovo-trusted-url:href', false)).toThrow(
+      /trusted-URL marker/,
+    );
+    expect(() => kovoGeneratedComponentControl('kovo-attacker', 'forged')).toThrow(
+      /exact supported name/,
+    );
+  });
+
+  it('normalizes rebound receipts before route, option, and form-key relational decisions', () => {
+    const receipt = kovoGeneratedComponentControl('on:click', '/c/account.client.js#open');
+    const search = form.get('/search');
+    const getForm = html(
+      jsx(search.Form, {
+        action: receipt,
+        method: receipt,
+        children: '',
+      }),
+    );
+    expect(getForm).toContain('action="/search"');
+    expect(getForm).toContain('method="get"');
+    expect(getForm).not.toContain('[object Object]');
+
+    expect(() =>
+      html(
+        jsx('option', {
+          value: receipt,
+          rawHtml: trustedHtml('<b>Record one</b>', {
+            reason: 'framework server rendering test fixture',
+          }),
+        }),
+      ),
+    ).toThrow(/KV236.*raw HTML.*SPEC §13\.2/u);
+    expect(() =>
+      html(
+        jsx('option', {
+          value: receipt,
+          children: trustedHtml('record&#32;&#32;one', {
+            reason: 'framework server rendering test fixture',
+          }),
+        }),
+      ),
+    ).toThrow(/KV236.*TrustedHtml.*SPEC §13\.2/u);
+
+    const mutationForm = html(
+      jsx(
+        'form',
+        {
+          key: receipt,
+          'kovo-key': receipt,
+          mutation: declaredMutation('account/save-rebound-key'),
+          children: '',
+        },
+        receipt,
+      ),
+    );
+    expect(mutationForm).not.toContain('kovo-key=');
+    expect(mutationForm).not.toContain('name="kovo-form-key"');
+    expect(mutationForm).not.toContain('[object Object]');
+    expect(mutationForm).toContain('name="Kovo-Idem"');
+  });
+
   it('keeps spread control-plane filtering pinned after object and string prototype changes', () => {
     const originalCreate = Object.create;
     const originalKeys = Object.keys;
@@ -1090,6 +1479,7 @@ describe('server jsx runtime', () => {
     expect(
       html(
         jsx('button', {
+          OnClIcK: 'alert(2)',
           onclick: 'alert(1)',
           'on:click': '/c/client.js#run',
           children: 'Run',

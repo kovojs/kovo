@@ -14,6 +14,7 @@ import {
   isCompilerOwnedResidualAttribute,
   isGeneratedOnlySemanticAttribute,
   isHtmlWireValueStable,
+  isKovoComponentHostControlAttribute,
   isKovoControlPlaneAttribute,
   KOVO_CONTROL_PLANE_ATTRIBUTES,
   KOVO_CONTROL_PLANE_ATTRIBUTE_PREFIXES,
@@ -24,6 +25,104 @@ import {
 // @kovo-security-classifier-corpus html-wire-identity
 
 describe('semantic attribute policy authority', () => {
+  it('keeps component-host receipts on the exact finite control-family denominator', () => {
+    for (const name of [
+      'on:click',
+      'data-bind:data-state',
+      'data-bind:scrollTop',
+      'data-bind:tabIndex',
+      'data-bind-prop:checked',
+      'data-bind-prop:scrollLeft',
+      'data-bind-prop:scrollTop',
+      'data-bind',
+      'data-derive',
+      'data-derive-attr',
+      'data-kovo-trusted-url:href',
+      'data-p-count',
+      'data-kovo-module-allowlist',
+      'data-state',
+      'kovo-c',
+      'kovo-context-menu',
+      'kovo-deps',
+      'kovo-fragment-target',
+      'kovo-hover-card',
+      'kovo-live-component',
+      'kovo-param-types',
+      'kovo-plan-owner',
+      'kovo-state',
+      'kovo-tooltip',
+    ]) {
+      expect(isKovoComponentHostControlAttribute(name), name).toBe(true);
+    }
+
+    for (const name of [
+      '',
+      'on:',
+      'data-bind:',
+      'data-bind-prop:',
+      'data-bind-prop:onclick',
+      'data-bind-prop:scrollleft',
+      'data-bind-prop:tabIndex',
+      'data-kovo-trusted-url:',
+      'data-p-',
+      // Structural list/template controls never target reviewed component hosts.
+      'data-bind-list',
+      'data-enhance',
+      'data-key',
+      'kovo-stamp',
+      'ON:CLICK',
+      'Data-Bind:data-state',
+      'data-Bind:tabIndex',
+      'Data-Bind:scrollTop',
+      'Data-Kovo-Trusted-Url:href',
+      'DATA-P-count',
+      'kovo-key',
+      'kovo-props',
+      'kovo-live-token',
+      'data-mutation',
+      'data-mutation-stream',
+      'data-stream-renderer',
+      'data-kovo-deferred-style',
+      'data-kovo-attacker',
+      'kovo-attacker',
+    ]) {
+      expect(isKovoComponentHostControlAttribute(name), name).toBe(false);
+    }
+
+    // Structural lowering mechanically fails closed if any compiler-owned residual reaches a
+    // component host outside the finite receipt denominator. These negatives are therefore
+    // excluded because they terminate at intrinsic/list/template boundaries, not by convention.
+    for (const name of ['data-bind-list', 'data-enhance', 'data-key', 'kovo-stamp']) {
+      expect(isCompilerOwnedResidualAttribute(name), name).toBe(true);
+      expect(isKovoComponentHostControlAttribute(name), name).toBe(false);
+    }
+  });
+
+  it('keeps component-host receipt classification stable after string prototype poisoning', () => {
+    const originalLowerCase = String.prototype.toLowerCase;
+    const originalStartsWith = String.prototype.startsWith;
+    let verdicts: readonly boolean[] = [];
+    try {
+      String.prototype.toLowerCase = () => 'on:click';
+      String.prototype.startsWith = () => true;
+      verdicts = [
+        isKovoComponentHostControlAttribute('on:click'),
+        isKovoComponentHostControlAttribute('ON:CLICK'),
+        isKovoComponentHostControlAttribute('kovo-key'),
+        isKovoComponentHostControlAttribute('data-p-count'),
+        isKovoComponentHostControlAttribute('data-bind:tabIndex'),
+        isKovoComponentHostControlAttribute('data-bind-prop:scrollTop'),
+        isKovoComponentHostControlAttribute('data-kovo-trusted-url:href'),
+        isKovoComponentHostControlAttribute('kovo-tooltip'),
+      ];
+    } finally {
+      String.prototype.toLowerCase = originalLowerCase;
+      String.prototype.startsWith = originalStartsWith;
+    }
+
+    expect(verdicts).toEqual([true, false, false, true, true, true, true, true]);
+  });
+
   it('does not expose mutable render-equivalence classification policy', () => {
     const prefix = GENERATED_ONLY_SEMANTIC_ATTRIBUTE_PREFIXES[0]!;
     const changedPrefix = Reflect.set(GENERATED_ONLY_SEMANTIC_ATTRIBUTE_PREFIXES, 0, '');

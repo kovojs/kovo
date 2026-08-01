@@ -21,7 +21,11 @@ import {
   compilerSetHas,
   compilerStringTrim,
 } from '../compiler-security-intrinsics.js';
-import { jsxElements, type ComponentModuleModel } from '../scan/parse.js';
+import {
+  jsxElements,
+  parserFactCompilerGeneratedComponentControlName,
+  type ComponentModuleModel,
+} from '../scan/parse.js';
 import type {
   BrowserSecurityOperationModel,
   AgentDefinitionModel,
@@ -198,7 +202,8 @@ function appendRuntimeSelectedExecutableReferenceDiagnostics(
     if (
       kind === undefined ||
       attribute.expression === undefined ||
-      attribute.expressionStaticValue !== undefined
+      attribute.expressionStaticValue !== undefined ||
+      parserFactCompilerGeneratedComponentControlName(attribute) === attribute.name
     ) {
       continue;
     }

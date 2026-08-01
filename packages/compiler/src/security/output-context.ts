@@ -961,6 +961,28 @@ function opaqueSpreadHasClosedElementContextControls(
     return true;
   }
 
+  // SPEC §4.8 / §5.2 rule 10: the exact canonical `kovo add` default pass-through call is
+  // reconstructed through the UI-anchor boundary. It preserves the compiler-owned event/binding/
+  // island metadata that the copied primitive needs while removing href plus every shared anchor
+  // control by ASCII-case-insensitive name before JSX object merging. Ordinary opaque anchor
+  // carriers remain closed.
+  if (tag === 'a' && spread.uiCopyDefaultPassThrough === true) {
+    let foundAnchorControl = false;
+    const tupleLength = compilerArrayLength(
+      ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES,
+      'Anchor element-context security controls',
+    );
+    for (let index = 0; index < tupleLength; index += 1) {
+      const tuple = outputArrayValue(
+        ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES,
+        index,
+        'Anchor element-context security controls',
+      );
+      if (tuple[0] === 'a') foundAnchorControl = true;
+    }
+    return foundAnchorControl;
+  }
+
   if (tag === 'form') {
     const keys = frameworkMutationFormAttributesReturnedKeys(spread);
     if (keys === undefined) return false;

@@ -1,7 +1,9 @@
 /** @jsxImportSource @kovojs/server */
+import type { TrustedUrl } from '@kovojs/browser';
 import { component, type ComponentChild } from '@kovojs/core';
 import { separatorRootAttributes } from '@kovojs/headless-ui/separator';
 import * as style from '@kovojs/style';
+import { attrs as styleAttributes } from '@kovojs/style';
 import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
@@ -59,7 +61,7 @@ export interface BreadcrumbPartProps {
  */
 export interface BreadcrumbLinkProps extends BreadcrumbPartProps {
   current?: boolean;
-  href?: string;
+  href?: string | TrustedUrl;
 }
 const breadcrumbStyles = createWithSource('breadcrumb.tsx')({
   current: {
@@ -166,14 +168,14 @@ export const BreadcrumbItem = component({
 export const BreadcrumbLink = component({
   render(props: BreadcrumbLinkProps) {
     const current = props.current === true;
-    const attrs = style.attrs(
-      current ? breadcrumbStyles.current : breadcrumbStyles.link,
-      current ? props.styles?.current : props.styles?.link,
-    );
 
     return (
       <a
-        {...attrs}
+        {...styleAttributes(
+          current ? breadcrumbStyles.current : breadcrumbStyles.link,
+          current ? props.styles?.current : props.styles?.link,
+        )}
+        {...passThroughProps(props)}
         aria-current={current ? 'page' : undefined}
         // SECURITY_FINDINGS.md H3: route the caller href through safeUrl so a
         // `javascript:`/`data:` scheme is neutralized; keep the existing

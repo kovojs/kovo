@@ -39,6 +39,7 @@ import { renderMutationCsrfField, renderMutationIdemField, type CsrfOptions } fr
 import {
   escapeAttribute,
   escapeWireAttribute,
+  kovoGeneratedComponentControlValue,
   renderedHtml,
   type RenderedHtml,
   safeRuntimeAttributeName,
@@ -169,22 +170,27 @@ export function jsx(
     return renderMutationFormHelper('form', props);
   }
   if (isGetRouteFormHelperComponent(type, 'form')) {
+    const action = kovoGeneratedComponentControlValue('action', props.action);
+    const method = kovoGeneratedComponentControlValue('method', props.method);
     return jsx('form', {
       ...props,
-      action: props.action ?? (type as { action?: unknown }).action,
-      method: props.method ?? 'get',
+      action: action ?? (type as { action?: unknown }).action,
+      method: method ?? 'get',
     });
   }
   if (isGetRouteFormHelperComponent(type, 'input')) {
     return jsx('input', props);
   }
-  if (isKovoComponent(type)) return renderKovoComponent(type, props, key);
+  const renderedKey = kovoGeneratedComponentControlValue('key', key);
+  if (isKovoComponent(type)) return renderKovoComponent(type, props, renderedKey);
   if (typeof type === 'function') {
     const functionComponent = type as JsxComponent<JsxProps>;
     return renderFunctionComponentResult(functionComponent(props));
   }
 
-  const intrinsicProps = formHelperSnapshotRecord(props, 'JSX intrinsic element props') as JsxProps;
+  const intrinsicProps = normalizeIntrinsicComponentControlProps(
+    formHelperSnapshotRecord(props, 'JSX intrinsic element props') as JsxProps,
+  );
   if (!formHelperIsSafeElementName(type)) {
     drainRuntimeSinkSecurityEvent(
       runtimeElementSinkEvent(
@@ -261,20 +267,20 @@ export function jsx(
   // own-data props snapshot that the HTML sink consumes. In particular, hidden `_charset_`
   // controls substitute their authored value during native form entry-list construction.
   assertIntrinsicElementWireValueStable(intrinsicType, intrinsicProps);
-  const attributes = renderJsxAttributes(intrinsicType, intrinsicProps, key);
+  const attributes = renderJsxAttributes(intrinsicType, intrinsicProps, renderedKey);
   if (isVoidElement(intrinsicType)) return renderedHtml(`<${type}${attributes}>`);
 
   const children = renderJsxElementChildren(intrinsicType, intrinsicProps);
   const afterChildren =
-    intrinsicType === 'form' ? renderFormAfterChildrenContent(intrinsicProps, key) : '';
+    intrinsicType === 'form' ? renderFormAfterChildrenContent(intrinsicProps, renderedKey) : '';
   return isPromiseLike(children)
     ? formHelperPromiseThen(children, (html) =>
         renderedHtml(
-          `<${type}${attributes}>${renderFormChildrenContent(intrinsicType, intrinsicProps, key, html)}${afterChildren}</${type}>`,
+          `<${type}${attributes}>${renderFormChildrenContent(intrinsicType, intrinsicProps, renderedKey, html)}${afterChildren}</${type}>`,
         ),
       )
     : renderedHtml(
-        `<${type}${attributes}>${renderFormChildrenContent(intrinsicType, intrinsicProps, key, children)}${afterChildren}</${type}>`,
+        `<${type}${attributes}>${renderFormChildrenContent(intrinsicType, intrinsicProps, renderedKey, children)}${afterChildren}</${type}>`,
       );
 }
 
@@ -294,6 +300,21 @@ function isVoidElement(type: string): boolean {
     type === 'track' ||
     type === 'wbr'
   );
+}
+
+function normalizeIntrinsicComponentControlProps(props: JsxProps): JsxProps {
+  const normalized = formHelperCreateRecord() as JsxProps;
+  const names = formHelperObjectKeys(props);
+  for (let index = 0; index < names.length; index += 1) {
+    const name = formHelperOwnDataValue(names, index);
+    if (typeof name !== 'string') continue;
+    const value = kovoGeneratedComponentControlValue(name, formHelperOwnDataValue(props, name));
+    formHelperDefineDataProperty(normalized, name, value);
+  }
+  return formHelperSnapshotRecord(
+    normalized,
+    'Normalized JSX intrinsic component-control props',
+  ) as JsxProps;
 }
 
 function isErrorBoundaryComponent(type: JsxComponent | KovoJsxComponent | string): boolean {
@@ -392,9 +413,16 @@ function isStructuredDocumentValue(value: unknown): value is object {
 
 function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): string {
   let rendered = '';
-  const key = props['kovo-key'] === undefined ? (props.key ?? jsxKey) : undefined;
-  const styleAttrs = kovoStyleInputAttributes(props.style);
-  const viewTransitionStyle = kovoStyleProperty('view-transition-name', props.viewTransitionName);
+  const kovoKey = kovoGeneratedComponentControlValue('kovo-key', props['kovo-key']);
+  const jsxPropKey = kovoGeneratedComponentControlValue('key', props.key);
+  const key = kovoKey === undefined ? (jsxPropKey ?? jsxKey) : undefined;
+  const styleAttrs = kovoStyleInputAttributes(
+    kovoGeneratedComponentControlValue('style', props.style),
+  );
+  const viewTransitionStyle = kovoStyleProperty(
+    'view-transition-name',
+    kovoGeneratedComponentControlValue('viewTransitionName', props.viewTransitionName),
+  );
   let renderedClass = false;
   let renderedStyle = false;
   let renderedStyleSource = false;
@@ -411,7 +439,7 @@ function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): s
   for (let index = 0; index < names.length; index += 1) {
     const name = formHelperOwnDataValue(names, index);
     if (typeof name !== 'string') continue;
-    const value = formHelperOwnDataValue(props, name);
+    const value = kovoGeneratedComponentControlValue(name, formHelperOwnDataValue(props, name));
     if (
       name === 'children' ||
       name === 'key' ||
@@ -842,7 +870,10 @@ function renderJsxElementChildren(type: string, props: JsxProps): MaybePromise<s
     }
     return rawHtml;
   }
-  const children = formHelperOwnDataValue(props, 'children') as JsxChild;
+  const children = kovoGeneratedComponentControlValue(
+    'children',
+    formHelperOwnDataValue(props, 'children'),
+  ) as JsxChild;
   const posture = htmlTextWireValuePosture(type, optionHasExplicitValue(props));
   const rendered =
     posture !== undefined
@@ -942,6 +973,22 @@ function renderContextualAttributeValue(
   name: string,
   value: unknown,
 ): string | null {
+  if (
+    isUrlAttributeName(name) &&
+    typeof value === 'object' &&
+    value !== null &&
+    !isKovoTrustedUrl(value)
+  ) {
+    drainRuntimeSinkSecurityEvent(
+      runtimeElementSinkEvent(
+        `<${type}>[${name}]`,
+        'url',
+        '',
+        'URL attribute object lacks direct TrustedUrl provenance',
+      ),
+    );
+    return null;
+  }
   if (isDeclarativeShadowDomRuntimeControl(type, name, value)) {
     drainRuntimeSinkSecurityEvent(
       runtimeElementSinkEvent(

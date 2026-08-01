@@ -92,6 +92,59 @@ export function isKovoControlPlaneAttribute(name: string): boolean {
   return false;
 }
 
+/**
+ * @internal Exact compiler-owned controls that may cross a component call before a reviewed
+ * primitive projects them onto its intrinsic host. This is deliberately narrower than the whole
+ * control plane: it includes the exact identity/live-root fields that must reach that host, while
+ * excluding `kovo-key`, live attestations/serialized props, mutation, stream, and arbitrary
+ * `kovo-*`/`data-kovo-*` names consumed by other framework boundaries.
+ */
+export function isKovoComponentHostControlAttribute(name: string): boolean {
+  const normalizedName = securityStringToLowerCase(name);
+  // Binding target suffixes retain the compiler's canonical DOM spelling (`tabIndex`,
+  // `scrollTop`, ...). Keep the family prefix exact/lowercase; the module-private receipt still
+  // binds the complete spelling and the receiving UI boundary applies element/sink policy.
+  if (securityStringStartsWith(name, 'data-bind:') && name.length > 'data-bind:'.length) {
+    return true;
+  }
+  // SPEC §4.8's property writer is a closed set. Unlike ordinary attribute bindings, there is no
+  // reason to accept an arbitrary property suffix merely because the compiler signed it.
+  switch (name) {
+    case 'data-bind-prop:checked':
+    case 'data-bind-prop:indeterminate':
+    case 'data-bind-prop:open':
+    case 'data-bind-prop:scrollLeft':
+    case 'data-bind-prop:scrollTop':
+    case 'data-bind-prop:selected':
+    case 'data-bind-prop:value':
+      return true;
+    default:
+      break;
+  }
+  if (name !== normalizedName) return false;
+  return (
+    (securityStringStartsWith(name, 'on:') && name.length > 'on:'.length) ||
+    (securityStringStartsWith(name, 'data-kovo-trusted-url:') &&
+      name.length > 'data-kovo-trusted-url:'.length) ||
+    (securityStringStartsWith(name, 'data-p-') && name.length > 'data-p-'.length) ||
+    name === 'data-bind' ||
+    name === 'data-derive' ||
+    name === 'data-derive-attr' ||
+    name === 'data-kovo-module-allowlist' ||
+    name === 'data-state' ||
+    name === 'kovo-c' ||
+    name === 'kovo-context-menu' ||
+    name === 'kovo-deps' ||
+    name === 'kovo-fragment-target' ||
+    name === 'kovo-hover-card' ||
+    name === 'kovo-live-component' ||
+    name === 'kovo-param-types' ||
+    name === 'kovo-plan-owner' ||
+    name === 'kovo-state' ||
+    name === 'kovo-tooltip'
+  );
+}
+
 /** @internal True when app TSX is attempting to author compiler-owned residual wire IR. */
 export function isCompilerOwnedResidualAttribute(name: string): boolean {
   const normalizedName = securityStringToLowerCase(name);

@@ -416,7 +416,9 @@ export const SwitchQueryDemo = component({
     // derive input must be ["account"], param must be "account"
     expect(server).toContain('derive(["account"], (account) =>');
     // The stamp must be account.* not state.*
-    expect(server).toMatch(/data-bind:aria-checked="account\./);
+    expect(server).toMatch(
+      /data-bind:aria-checked=\{kovoGeneratedComponentControl\("data-bind:aria-checked", "account\./,
+    );
   });
 
   // A11Y-3: Tabs and ToggleGroup components must appear in the reactive registry

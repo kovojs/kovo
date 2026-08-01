@@ -23,6 +23,7 @@ import {
   type DataBindAttribute,
 } from './query-internal.js';
 import {
+  jsxAttributeSemanticStringValue,
   jsxElementChildBody,
   jsxElements,
   type ComponentModuleModel,
@@ -47,17 +48,14 @@ export function dataBindAttributes(model: ComponentModuleModel): DataBindAttribu
   );
   for (let index = 0; index < attributes.length; index += 1) {
     const attribute = attributes[index]!;
-    if (
-      !isBindingAttribute(attribute.name) ||
-      attribute.value === undefined ||
-      attribute.value === ''
-    ) {
+    const value = jsxAttributeSemanticStringValue(attribute);
+    if (!isBindingAttribute(attribute.name) || value === undefined || value === '') {
       continue;
     }
     compilerArrayAppend(
       output,
       {
-        ...dataBindAttributeFact(attribute.name, attribute.value),
+        ...dataBindAttributeFact(attribute.name, value),
         end: attribute.end,
         start: attribute.start,
       },
@@ -209,16 +207,13 @@ function templateItemBindingPlaceholders(
     );
     for (let attributeIndex = 0; attributeIndex < attributes.length; attributeIndex += 1) {
       const attribute = attributes[attributeIndex]!;
+      const value = jsxAttributeSemanticStringValue(attribute);
       // SPEC §5.x: Only TEXT bindings (data-bind, no colon suffix) produce a child-body
       // placeholders. Attribute bindings are applied by the runtime property path.
-      if (
-        attribute.name !== 'data-bind' ||
-        attribute.value === undefined ||
-        attribute.value === ''
-      ) {
+      if (attribute.name !== 'data-bind' || value === undefined || value === '') {
         continue;
       }
-      const fact = dataBindAttributeFact(attribute.name, attribute.value);
+      const fact = dataBindAttributeFact(attribute.name, value);
       if (fact.relativeReadPath === null) continue;
       const childBody = jsxElementChildBody(candidate);
       const templateStart = childBody ? childBody.offset - templateBody.offset : 0;

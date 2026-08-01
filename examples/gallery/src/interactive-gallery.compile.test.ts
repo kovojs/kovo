@@ -8,6 +8,31 @@ import {
   readCompiledArtifact,
 } from './interactive-gallery-harness.js';
 
+function expectReceiptedKovoState(source: string, state: string): void {
+  const receipted = `kovo-state={kovoGeneratedComponentControl("kovo-state", ${JSON.stringify(state)})}`;
+  const directIntrinsic = `kovo-state='${state}'`;
+  expect(
+    source.includes(receipted) || source.includes(directIntrinsic),
+    'kovo-state must be direct only on an intrinsic host or exact-receipted across a component host',
+  ).toBe(true);
+}
+
+function expectReceiptedControl(source: string, semanticPattern: RegExp): void {
+  const separator = semanticPattern.source.indexOf('="');
+  if (separator < 1) throw new TypeError('Expected an exact generated control attribute pattern.');
+  const name = semanticPattern.source.slice(0, separator);
+  const valuePattern = semanticPattern.source.slice(separator + 1);
+  const directIntrinsicPattern = `${name}=${valuePattern}`;
+  const componentHostReceiptPattern = `${name}=\\{kovoGeneratedComponentControl\\("${name}", ${valuePattern}\\)\\}`;
+  expect(
+    new RegExp(
+      `(?:${directIntrinsicPattern}|${componentHostReceiptPattern})`,
+      semanticPattern.flags,
+    ).test(source),
+    'generated controls must remain direct on intrinsic hosts or exact-receipted across component hosts',
+  ).toBe(true);
+}
+
 describe('compiled interactive gallery demos', () => {
   it('keeps app-authored interactive demos on the styled UI surface', () => {
     // rules/api-surface.md forbids `@kovojs/ui` re-exporting its `@kovojs/headless-ui`
@@ -80,7 +105,7 @@ describe('compiled interactive gallery demos', () => {
     const toastClient = readCompiledArtifact('toast-demo.client.js');
 
     expect(accordion).toContain('data-gallery-interactive="accordion"');
-    expect(accordion).toContain('kovo-state=\'{"activeValue":"shipping","value":"shipping"}\'');
+    expectReceiptedKovoState(accordion, '{"activeValue":"shipping","value":"shipping"}');
     expect(accordion).toContain('<AccordionTrigger');
     expect(accordion).toContain('accordionKeyDown as _accordionKeyDown');
     expect(accordion).toContain('accordionTriggerClick as _accordionTriggerClick');
@@ -92,18 +117,21 @@ describe('compiled interactive gallery demos', () => {
     expect(accordionClient).not.toMatch(
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );
-    expect(accordion).toMatch(
+    expectReceiptedControl(
+      accordion,
       /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/accordion-demo\.client\.js#GalleryAccordionDemo\$[A-Za-z]+_keydown"/,
     );
-    expect(accordion).toMatch(
+    expectReceiptedControl(
+      accordion,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/accordion-demo\.client\.js#GalleryAccordionDemo\$[A-Za-z]+_click"/,
     );
-    expect(accordion).toMatch(
+    expectReceiptedControl(
+      accordion,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/accordion-demo\.client\.js#GalleryAccordionDemo\$[A-Za-z]+_click_2"/,
     );
 
     expect(alertDialog).toContain('data-gallery-interactive="alert-dialog"');
-    expect(alertDialog).toContain('kovo-state=\'{"open":false}\'');
+    expectReceiptedKovoState(alertDialog, '{"open":false}');
     expect(alertDialog).toContain('<AlertDialogTrigger');
     expect(alertDialog).toContain('<AlertDialogCancel');
     expect(alertDialog).toContain('intent="destructive"');
@@ -113,10 +141,12 @@ describe('compiled interactive gallery demos', () => {
     expect(alertDialog).toContain('data-bind:data-state=');
     expect(alertDialog).toContain('data-bind:open=');
     expect(alertDialog).not.toContain('closedby');
-    expect(alertDialog).toMatch(
+    expectReceiptedControl(
+      alertDialog,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/alert-dialog-demo\.client\.js#GalleryAlertDialogDemo\$[A-Za-z]+_click"/,
     );
-    expect(alertDialog).toMatch(
+    expectReceiptedControl(
+      alertDialog,
       /on:cancel="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/alert-dialog-demo\.client\.js#GalleryAlertDialogDemo\$[A-Za-z]+_cancel"/,
     );
     expect(alertDialog).not.toContain('on:keydown=');
@@ -124,8 +154,9 @@ describe('compiled interactive gallery demos', () => {
     expect(alertDialog).toContain('GalleryAlertDialogDemo$AlertDialogAction_click');
 
     expect(autocomplete).toContain('data-gallery-interactive="autocomplete"');
-    expect(autocomplete).toContain(
-      'kovo-state=\'{"highlightedValue":"design","inputValue":"","open":false,"value":"design"}\'',
+    expectReceiptedKovoState(
+      autocomplete,
+      '{"highlightedValue":"design","inputValue":"","open":false,"value":"design"}',
     );
     expect(autocomplete).toContain('<AutocompleteInput');
     expect(autocomplete).toContain(
@@ -138,13 +169,16 @@ describe('compiled interactive gallery demos', () => {
     expect(autocomplete).toContain('data-bind:aria-expanded=');
     expect(autocomplete).toContain('data-bind:aria-activedescendant=');
     expect(autocomplete).toContain('data-bind:hidden=');
-    expect(autocomplete).toMatch(
+    expectReceiptedControl(
+      autocomplete,
       /on:input="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/autocomplete-demo\.client\.js#GalleryAutocompleteDemo\$[A-Za-z]+_input"/,
     );
-    expect(autocomplete).toMatch(
+    expectReceiptedControl(
+      autocomplete,
       /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/autocomplete-demo\.client\.js#GalleryAutocompleteDemo\$[A-Za-z]+_keydown"/,
     );
-    expect(autocomplete).toMatch(
+    expectReceiptedControl(
+      autocomplete,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/autocomplete-demo\.client\.js#GalleryAutocompleteDemo\$[A-Za-z]+_click_2"/,
     );
     expect(autocompleteClient).toContain('autocompleteInput as _autocompleteInput');
@@ -155,19 +189,21 @@ describe('compiled interactive gallery demos', () => {
     );
 
     expect(toggle).toContain('data-gallery-interactive="toggle"');
-    expect(toggle).toContain('kovo-state=\'{"pressed":false}\'');
-    expect(toggle).toMatch(
+    expectReceiptedKovoState(toggle, '{"pressed":false}');
+    expectReceiptedControl(
+      toggle,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/toggle-demo\.client\.js#GalleryToggleDemo\$[A-Za-z]+_click"/,
     );
 
     expect(checkbox).toContain('data-gallery-interactive="checkbox"');
-    expect(checkbox).toContain('kovo-state=\'{"checked":"indeterminate"}\'');
-    expect(checkbox).toMatch(
+    expectReceiptedKovoState(checkbox, '{"checked":"indeterminate"}');
+    expectReceiptedControl(
+      checkbox,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/checkbox-demo\.client\.js#GalleryCheckboxDemo\$[A-Za-z]+_click"/,
     );
 
     expect(checkboxGroup).toContain('data-gallery-interactive="checkbox-group"');
-    expect(checkboxGroup).toContain('kovo-state=\'{"activeValue":"updates","value":"updates"}\'');
+    expectReceiptedKovoState(checkboxGroup, '{"activeValue":"updates","value":"updates"}');
     expect(checkboxGroup).toContain('id="gallery-checkbox-group-form"');
     expect(checkboxGroup).toContain("form: 'gallery-checkbox-group-form'");
     expect(checkboxGroup).toContain('<CheckboxGroupControl');
@@ -185,8 +221,9 @@ describe('compiled interactive gallery demos', () => {
     expect(checkboxGroup).toContain('GalleryCheckboxGroupDemo$CheckboxGroupControl_checked_derive');
 
     expect(combobox).toContain('data-gallery-interactive="combobox"');
-    expect(combobox).toContain(
-      'kovo-state=\'{"highlightedValue":"austin","inputValue":"","open":false,"value":"austin"}\'',
+    expectReceiptedKovoState(
+      combobox,
+      '{"highlightedValue":"austin","inputValue":"","open":false,"value":"austin"}',
     );
     expect(combobox).toContain('<ComboboxInput');
     expect(combobox).toContain('id="gallery-combobox-form" data-gallery-form="combobox"');
@@ -195,13 +232,16 @@ describe('compiled interactive gallery demos', () => {
     expect(combobox).toContain('data-bind:aria-expanded=');
     expect(combobox).toContain('data-bind:aria-activedescendant=');
     expect(combobox).toContain('data-bind:hidden=');
-    expect(combobox).toMatch(
+    expectReceiptedControl(
+      combobox,
       /on:input="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/combobox-demo\.client\.js#GalleryComboboxDemo\$[A-Za-z]+_input"/,
     );
-    expect(combobox).toMatch(
+    expectReceiptedControl(
+      combobox,
       /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/combobox-demo\.client\.js#GalleryComboboxDemo\$[A-Za-z]+_keydown"/,
     );
-    expect(combobox).toMatch(
+    expectReceiptedControl(
+      combobox,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/combobox-demo\.client\.js#GalleryComboboxDemo\$[A-Za-z]+_click"/,
     );
     expect(comboboxClient).toContain('comboboxInput as _comboboxInput');
@@ -212,8 +252,9 @@ describe('compiled interactive gallery demos', () => {
     );
 
     expect(command).toContain('data-gallery-interactive="command"');
-    expect(command).toContain(
-      'kovo-state=\'{"highlightedValue":"dashboard","inputValue":"","lastKeyAction":"idle","open":false,"value":"dashboard"}\'',
+    expectReceiptedKovoState(
+      command,
+      '{"highlightedValue":"dashboard","inputValue":"","lastKeyAction":"idle","open":false,"value":"dashboard"}',
     );
     expect(command).toContain(
       "{ id: 'gallery-command-listbox-item-1', label: 'Invite teammate', value: 'invite' }",
@@ -228,10 +269,12 @@ describe('compiled interactive gallery demos', () => {
     expect(command).toContain('data-bind:aria-expanded=');
     expect(command).toContain('data-bind:aria-activedescendant=');
     expect(command).toContain('data-bind:hidden=');
-    expect(command).toMatch(
+    expectReceiptedControl(
+      command,
       /on:input="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/command-demo\.client\.js#GalleryCommandDemo\$[A-Za-z]+_input"/,
     );
-    expect(command).toMatch(
+    expectReceiptedControl(
+      command,
       /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/command-demo\.client\.js#GalleryCommandDemo\$[A-Za-z]+_keydown"/,
     );
     expect(command).toContain('GalleryCommandDemo$CommandItem_click');
@@ -245,8 +288,9 @@ describe('compiled interactive gallery demos', () => {
     );
 
     expect(contextMenu).toContain('data-gallery-interactive="context-menu"');
-    expect(contextMenu).toContain(
-      'kovo-state=\'{"highlightedValue":"copy","open":false,"point":{"x":24,"y":40},"value":"copy"}\'',
+    expectReceiptedKovoState(
+      contextMenu,
+      '{"highlightedValue":"copy","open":false,"point":{"x":24,"y":40},"value":"copy"}',
     );
     expect(contextMenu).toContain('<ContextMenuTrigger');
     expect(contextMenu).toContain('contextMenuFocusElement as _contextMenuFocusElement');
@@ -273,46 +317,54 @@ describe('compiled interactive gallery demos', () => {
     expect(contextMenuClient).not.toMatch(
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );
-    expect(contextMenu).toMatch(
+    expectReceiptedControl(
+      contextMenu,
       /on:contextmenu="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/context-menu-demo\.client\.js#GalleryContextMenuDemo\$[A-Za-z]+_contextmenu"/,
     );
-    expect(contextMenu).toMatch(
+    expectReceiptedControl(
+      contextMenu,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/context-menu-demo\.client\.js#GalleryContextMenuDemo\$[A-Za-z]+_click"/,
     );
-    expect(contextMenu).toMatch(
+    expectReceiptedControl(
+      contextMenu,
       /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/context-menu-demo\.client\.js#GalleryContextMenuDemo\$[A-Za-z]+_keydown"/,
     );
-    expect(contextMenu).toMatch(
+    expectReceiptedControl(
+      contextMenu,
       /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/context-menu-demo\.client\.js#GalleryContextMenuDemo\$[A-Za-z]+_keydown_2"/,
     );
-    expect(contextMenu).toMatch(
+    expectReceiptedControl(
+      contextMenu,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/context-menu-demo\.client\.js#GalleryContextMenuDemo\$[A-Za-z]+_click_2"/,
     );
 
     expect(disclosure).toContain('data-gallery-interactive="disclosure"');
-    expect(disclosure).toContain('kovo-state=\'{"open":false}\'');
-    expect(disclosure).toMatch(
+    expectReceiptedKovoState(disclosure, '{"open":false}');
+    expectReceiptedControl(
+      disclosure,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/disclosure-demo\.client\.js#GalleryDisclosureDemo\$[A-Za-z]+_click"/,
     );
 
     expect(dialog).toContain('data-gallery-interactive="dialog"');
-    expect(dialog).toContain('kovo-state=\'{"open":false}\'');
+    expectReceiptedKovoState(dialog, '{"open":false}');
     expect(dialog).toContain('<DialogTrigger');
     expect(dialog).toContain('<DialogClose');
     expect(dialog).toContain('dialogTriggerClick as _dialogTriggerClick');
     expect(dialog).toContain('dialogCloseClick as _dialogCloseClick');
     expect(dialog).toContain('data-bind:open=');
-    expect(dialog).toMatch(
+    expectReceiptedControl(
+      dialog,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/dialog-demo\.client\.js#GalleryDialogDemo\$[A-Za-z]+_click"/,
     );
-    expect(dialog).toMatch(
+    expectReceiptedControl(
+      dialog,
       /on:cancel="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/dialog-demo\.client\.js#GalleryDialogDemo\$[A-Za-z]+_cancel"/,
     );
     expect(dialog).not.toContain('on:keydown=');
 
     expect(drawer).toContain('data-gallery-interactive="drawer"');
     expect(drawer).toContain('data-side="bottom"');
-    expect(drawer).toContain('kovo-state=\'{"open":false}\'');
+    expectReceiptedKovoState(drawer, '{"open":false}');
     expect(drawer).toContain('<DrawerTrigger');
     expect(drawer).toContain('<DrawerClose');
     expect(drawer).toContain('dialogTriggerClick as _dialogTriggerClick');
@@ -321,10 +373,12 @@ describe('compiled interactive gallery demos', () => {
     expect(drawer).toContain('data-bind:open=');
     expect(drawer).toContain('Vaul drag, snap, and background-scale gestures are not');
     expect(drawer).toContain('modeled.');
-    expect(drawer).toMatch(
+    expectReceiptedControl(
+      drawer,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/drawer-demo\.client\.js#GalleryDrawerDemo\$[A-Za-z]+_click"/,
     );
-    expect(drawer).toMatch(
+    expectReceiptedControl(
+      drawer,
       /on:cancel="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/drawer-demo\.client\.js#GalleryDrawerDemo\$[A-Za-z]+_cancel"/,
     );
     expect(drawer).not.toContain('on:keydown=');
@@ -332,8 +386,9 @@ describe('compiled interactive gallery demos', () => {
     expect(drawer).toContain('GalleryDrawerDemo$DrawerClose_click');
 
     expect(dropdownMenu).toContain('data-gallery-interactive="dropdown-menu"');
-    expect(dropdownMenu).toContain(
-      'kovo-state=\'{"highlightedValue":"duplicate","open":false,"value":"duplicate"}\'',
+    expectReceiptedKovoState(
+      dropdownMenu,
+      '{"highlightedValue":"duplicate","open":false,"value":"duplicate"}',
     );
     expect(dropdownMenu).toContain('<DropdownMenuContent');
     expect(dropdownMenu).toContain('dropdownMenuFocusElement as _dropdownMenuFocusElement');
@@ -357,16 +412,20 @@ describe('compiled interactive gallery demos', () => {
     expect(dropdownMenuClient).not.toMatch(
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );
-    expect(dropdownMenu).toMatch(
+    expectReceiptedControl(
+      dropdownMenu,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/dropdown-menu-demo\.client\.js#GalleryDropdownMenuDemo\$[A-Za-z]+_click"/,
     );
-    expect(dropdownMenu).toMatch(
+    expectReceiptedControl(
+      dropdownMenu,
       /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/dropdown-menu-demo\.client\.js#GalleryDropdownMenuDemo\$[A-Za-z]+_keydown"/,
     );
-    expect(dropdownMenu).toMatch(
+    expectReceiptedControl(
+      dropdownMenu,
       /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/dropdown-menu-demo\.client\.js#GalleryDropdownMenuDemo\$[A-Za-z]+_keydown_2"/,
     );
-    expect(dropdownMenu).toMatch(
+    expectReceiptedControl(
+      dropdownMenu,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/dropdown-menu-demo\.client\.js#GalleryDropdownMenuDemo\$[A-Za-z]+_click_2"/,
     );
     expect(dropdownMenu).toContain('GalleryDropdownMenuDemo$DropdownMenuItem_keydown');
@@ -375,8 +434,9 @@ describe('compiled interactive gallery demos', () => {
     expect(dropdownMenu).toContain('GalleryDropdownMenuDemo$DropdownMenuItem_click_2');
 
     expect(field).toContain('data-gallery-interactive="field"');
-    expect(field).toContain(
-      'kovo-state=\'{"email":"ada@example","invalid":true,"plan":"team","shippingDisabled":false}\'',
+    expectReceiptedKovoState(
+      field,
+      '{"email":"ada@example","invalid":true,"plan":"team","shippingDisabled":false}',
     );
     expect(field).toContain('<FieldControl');
     expect(field).toContain('<Fieldset');
@@ -392,18 +452,21 @@ describe('compiled interactive gallery demos', () => {
     expect(fieldClient).not.toMatch(
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );
-    expect(field).toMatch(
+    expectReceiptedControl(
+      field,
       /on:input="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/field-demo\.client\.js#GalleryFieldDemo\$[A-Za-z]+_input"/,
     );
-    expect(field).toMatch(
+    expectReceiptedControl(
+      field,
       /on:change="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/field-demo\.client\.js#GalleryFieldDemo\$[A-Za-z]+_change"/,
     );
-    expect(field).toMatch(
+    expectReceiptedControl(
+      field,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/field-demo\.client\.js#GalleryFieldDemo\$[A-Za-z]+_click"/,
     );
 
     expect(hoverCard).toContain('data-gallery-interactive="hover-card"');
-    expect(hoverCard).toContain('kovo-state=\'{"open":false}\'');
+    expectReceiptedKovoState(hoverCard, '{"open":false}');
     expect(hoverCard).toContain('<HoverCardTrigger');
     expect(hoverCard).toContain('hoverCardContentPointerEnter as _hoverCardContentPointerEnter');
     expect(hoverCard).toContain('data-bind:data-state=');
@@ -420,18 +483,21 @@ describe('compiled interactive gallery demos', () => {
     expect(hoverCardClient).not.toMatch(
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );
-    expect(hoverCard).toMatch(
+    expectReceiptedControl(
+      hoverCard,
       /on:focus="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/hover-card-demo\.client\.js#GalleryHoverCardDemo\$[A-Za-z]+_focus"/,
     );
-    expect(hoverCard).toMatch(
+    expectReceiptedControl(
+      hoverCard,
       /on:pointerenter="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/hover-card-demo\.client\.js#GalleryHoverCardDemo\$[A-Za-z]+_pointerenter"/,
     );
-    expect(hoverCard).toMatch(
+    expectReceiptedControl(
+      hoverCard,
       /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/hover-card-demo\.client\.js#GalleryHoverCardDemo\$[A-Za-z]+_keydown"/,
     );
 
     expect(menubar).toContain('data-gallery-interactive="menubar"');
-    expect(menubar).toContain('kovo-state=\'{"activeValue":"file","openValue":"","value":"new"}\'');
+    expectReceiptedKovoState(menubar, '{"activeValue":"file","openValue":"","value":"new"}');
     expect(menubar).toContain('<MenubarSubmenu');
     expect(menubar).toContain('menubarFocusElement as _menubarFocusElement');
     expect(menubar).toContain('menubarItemClick as _menubarItemClick');
@@ -451,36 +517,44 @@ describe('compiled interactive gallery demos', () => {
     expect(menubarClient).not.toMatch(
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );
-    expect(menubar).toMatch(
+    expectReceiptedControl(
+      menubar,
       /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$[A-Za-z]+_keydown"/,
     );
-    expect(menubar).toMatch(
+    expectReceiptedControl(
+      menubar,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$[A-Za-z]+_click"/,
     );
-    expect(menubar).toMatch(
+    expectReceiptedControl(
+      menubar,
       /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$[A-Za-z]+_keydown"/,
     );
-    expect(menubar).toMatch(
+    expectReceiptedControl(
+      menubar,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$[A-Za-z]+_click_2"/,
     );
-    expect(menubar).toMatch(
+    expectReceiptedControl(
+      menubar,
       /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$[A-Za-z]+_keydown_2"/,
     );
-    expect(menubar).toMatch(
+    expectReceiptedControl(
+      menubar,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$[A-Za-z]+_click_3"/,
     );
 
     expect(meter).toContain('data-gallery-interactive="meter"');
-    expect(meter).toContain('kovo-state=\'{"value":72}\'');
+    expectReceiptedKovoState(meter, '{"value":72}');
     expect(meter).toContain('<Meter');
     expect(meter).toContain('data-bind:data-state=');
-    expect(meter).toMatch(
+    expectReceiptedControl(
+      meter,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/meter-demo\.client\.js#GalleryMeterDemo\$[A-Za-z]+_click"/,
     );
 
     expect(navigationMenu).toContain('data-gallery-interactive="navigation-menu"');
-    expect(navigationMenu).toContain(
-      'kovo-state=\'{"activeValue":"products","openValue":"","value":"none"}\'',
+    expectReceiptedKovoState(
+      navigationMenu,
+      '{"activeValue":"products","openValue":"","value":"none"}',
     );
     expect(navigationMenu).toContain('<NavigationMenuTrigger');
     expect(navigationMenu).toContain('navigationMenuFocusElement as _navigationMenuFocusElement');
@@ -505,27 +579,33 @@ describe('compiled interactive gallery demos', () => {
     expect(navigationMenuClient).not.toMatch(
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );
-    expect(navigationMenu).toMatch(
+    expectReceiptedControl(
+      navigationMenu,
       /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$[A-Za-z]+_keydown"/,
     );
-    expect(navigationMenu).toMatch(
+    expectReceiptedControl(
+      navigationMenu,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$[A-Za-z]+_click"/,
     );
-    expect(navigationMenu).toMatch(
+    expectReceiptedControl(
+      navigationMenu,
       /on:focus="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$[A-Za-z]+_focus"/,
     );
-    expect(navigationMenu).toMatch(
+    expectReceiptedControl(
+      navigationMenu,
       /on:pointerenter="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$[A-Za-z]+_pointerenter"/,
     );
-    expect(navigationMenu).toMatch(
+    expectReceiptedControl(
+      navigationMenu,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$[A-Za-z]+_click"/,
     );
-    expect(navigationMenu).toMatch(
+    expectReceiptedControl(
+      navigationMenu,
       /on:focus="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$[A-Za-z]+_focus"/,
     );
 
     expect(numberField).toContain('data-gallery-interactive="number-field"');
-    expect(numberField).toContain('kovo-state=\'{"value":2}\'');
+    expectReceiptedKovoState(numberField, '{"value":2}');
     expect(numberField).toContain('numberFieldInput as _numberFieldInput');
     expect(numberField).toContain('numberFieldKeyDown as _numberFieldKeyDown');
     expect(numberField).toContain('data-bind:value=');
@@ -536,17 +616,19 @@ describe('compiled interactive gallery demos', () => {
     expect(numberFieldClient).not.toMatch(
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );
-    expect(numberField).toMatch(
+    expectReceiptedControl(
+      numberField,
       /on:input="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/number-field-demo\.client\.js#GalleryNumberFieldDemo\$[A-Za-z]+_input"/,
     );
-    expect(numberField).toMatch(
+    expectReceiptedControl(
+      numberField,
       /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/number-field-demo\.client\.js#GalleryNumberFieldDemo\$[A-Za-z]+_keydown"/,
     );
     expect(numberField).toContain('GalleryNumberFieldDemo$NumberFieldDecrement_click');
     expect(numberField).toContain('GalleryNumberFieldDemo$NumberFieldIncrement_click');
 
     expect(otpField).toContain('data-gallery-interactive="otp-field"');
-    expect(otpField).toContain('kovo-state=\'{"activeSlot":2,"value":"12"}\'');
+    expectReceiptedKovoState(otpField, '{"activeSlot":2,"value":"12"}');
     expect(otpField).toContain("const formId = 'gallery-otp-form'");
     expect(otpField).toContain('<form id={formId} data-gallery-form="otp-field" />');
     expect(otpField).toContain('<OtpFieldHiddenInput');
@@ -555,25 +637,28 @@ describe('compiled interactive gallery demos', () => {
     expect(otpField).toContain('data-bind:value=');
     expect(otpField).toContain('data-bind:data-filled=');
     expect(otpField).toContain('data-bind:tabIndex=');
-    expect(otpField).toMatch(
+    expectReceiptedControl(
+      otpField,
       /on:input="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/otp-field-demo\.client\.js#GalleryOtpFieldDemo\$[A-Za-z]+_input"/,
     );
-    expect(otpField).toMatch(
+    expectReceiptedControl(
+      otpField,
       /on:paste="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/otp-field-demo\.client\.js#GalleryOtpFieldDemo\$[A-Za-z]+_paste_4"/,
     );
 
     expect(collapsible).toContain('data-gallery-interactive="collapsible"');
-    expect(collapsible).toContain('kovo-state=\'{"open":false}\'');
+    expectReceiptedKovoState(collapsible, '{"open":false}');
     expect(collapsible).toContain('GalleryCollapsibleDemo$CollapsibleTrigger_click');
 
     expect(popover).toContain('data-gallery-interactive="popover"');
-    expect(popover).toContain('kovo-state=\'{"open":false}\'');
+    expectReceiptedKovoState(popover, '{"open":false}');
     expect(popover).toContain('<PopoverTrigger');
     expect(popover).toContain('<PopoverContent');
     expect(popover).toContain('data-demo-state="popover-open"');
     expect(popover).toContain('popoverBeforeToggle as _popoverBeforeToggle');
     expect(popover).toContain('data-bind:open=');
-    expect(popover).toMatch(
+    expectReceiptedControl(
+      popover,
       /on:beforetoggle="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/popover-demo\.client\.js#GalleryPopoverDemo\$[A-Za-z]+_beforetoggle"/,
     );
     expect(popover).not.toContain('on:click=');
@@ -584,12 +669,14 @@ describe('compiled interactive gallery demos', () => {
     );
 
     expect(progress).toContain('data-gallery-interactive="progress"');
-    expect(progress).toContain('kovo-state=\'{"value":40}\'');
+    expectReceiptedKovoState(progress, '{"value":40}');
     expect(progress).toContain('<Progress');
-    expect(progress).toMatch(
+    expectReceiptedControl(
+      progress,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/progress-demo\.client\.js#GalleryProgressDemo\$[A-Za-z]+_click"/,
     );
-    expect(progress).toMatch(
+    expectReceiptedControl(
+      progress,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/progress-demo\.client\.js#GalleryProgressDemo\$[A-Za-z]+_click_2"/,
     );
 
@@ -604,18 +691,21 @@ describe('compiled interactive gallery demos', () => {
     expect(radioGroup).toContain('data-gallery-interactive="radio-group"');
     expect(radioGroup).toContain('id="gallery-radio-form" data-gallery-form="radio-group"');
     expect(radioGroup).toContain("form: 'gallery-radio-form'");
-    expect(radioGroup).toContain('kovo-state=\'{"value":"email"}\'');
+    expectReceiptedKovoState(radioGroup, '{"value":"email"}');
     expect(radioGroup).toContain('<RadioGroupRadio');
-    expect(radioGroup).toMatch(
+    expectReceiptedControl(
+      radioGroup,
       /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/radio-group-demo\.client\.js#GalleryRadioGroupDemo\$[A-Za-z]+_keydown"/,
     );
-    expect(radioGroup).toMatch(
+    expectReceiptedControl(
+      radioGroup,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/radio-group-demo\.client\.js#GalleryRadioGroupDemo\$[A-Za-z]+_click_2"/,
     );
 
     expect(scrollArea).toContain('data-gallery-interactive="scroll-area"');
-    expect(scrollArea).toContain(
-      'kovo-state=\'{"dragging":false,"dragPointerStart":0,"dragScrollTop":0,"dragThumbSize":28,"dragTrackSize":72,"hasOverflowY":true,"hovering":false,"scrolling":false,"scrollTop":0,"scrollY":"start","thumbOffset":0,"thumbSize":28,"verticalVisible":true}\'',
+    expectReceiptedKovoState(
+      scrollArea,
+      '{"dragging":false,"dragPointerStart":0,"dragScrollTop":0,"dragThumbSize":28,"dragTrackSize":72,"hasOverflowY":true,"hovering":false,"scrolling":false,"scrollTop":0,"scrollY":"start","thumbOffset":0,"thumbSize":28,"verticalVisible":true}',
     );
     expect(scrollArea).toContain('<ScrollAreaViewport');
     expect(scrollArea).toContain('<ScrollAreaThumb');
@@ -626,29 +716,35 @@ describe('compiled interactive gallery demos', () => {
     expect(scrollArea).toContain('data-bind:data-scrolling=');
     expect(scrollArea).toContain('data-bind:scrollTop=');
     expect(scrollArea).toContain('data-bind:style=');
-    expect(scrollArea).toMatch(
+    expectReceiptedControl(
+      scrollArea,
       /on:scroll="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/scroll-area-demo\.client\.js#GalleryScrollAreaDemo\$[A-Za-z]+_scroll"/,
     );
-    expect(scrollArea).toMatch(
+    expectReceiptedControl(
+      scrollArea,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/scroll-area-demo\.client\.js#GalleryScrollAreaDemo\$[A-Za-z]+_click"/,
     );
-    expect(scrollArea).toMatch(
+    expectReceiptedControl(
+      scrollArea,
       /on:pointerdown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/scroll-area-demo\.client\.js#GalleryScrollAreaDemo\$[A-Za-z]+_pointerdown"/,
     );
 
     expect(select).toContain('data-gallery-interactive="select"');
     expect(select).toContain('id="gallery-select-form" data-gallery-form="select"');
     expect(select).toContain("form: 'gallery-select-form'");
-    expect(select).toContain(
-      'kovo-state=\'{"highlightedValue":"standard","open":false,"value":"standard"}\'',
+    expectReceiptedKovoState(
+      select,
+      '{"highlightedValue":"standard","open":false,"value":"standard"}',
     );
     expect(select).toContain('<SelectHiddenInput');
     expect(select).toContain('<SelectTrigger');
     expect(select).toContain('<SelectItem');
-    expect(select).toMatch(
+    expectReceiptedControl(
+      select,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/select-demo\.client\.js#GallerySelectDemo\$[A-Za-z]+_click"/,
     );
-    expect(select).toMatch(
+    expectReceiptedControl(
+      select,
       /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/select-demo\.client\.js#GallerySelectDemo\$[A-Za-z]+_keydown"/,
     );
     expect(select).toContain('<SelectContent');
@@ -657,17 +753,19 @@ describe('compiled interactive gallery demos', () => {
 
     expect(sheet).toContain('data-gallery-interactive="sheet"');
     expect(sheet).toContain('data-side="right"');
-    expect(sheet).toContain('kovo-state=\'{"open":false}\'');
+    expectReceiptedKovoState(sheet, '{"open":false}');
     expect(sheet).toContain('<SheetTrigger');
     expect(sheet).toContain('<SheetClose');
     expect(sheet).toContain('dialogTriggerClick as _dialogTriggerClick');
     expect(sheet).toContain('data-bind:aria-expanded=');
     expect(sheet).toContain('data-bind:data-state=');
     expect(sheet).toContain('data-bind:open=');
-    expect(sheet).toMatch(
+    expectReceiptedControl(
+      sheet,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/sheet-demo\.client\.js#GallerySheetDemo\$[A-Za-z]+_click"/,
     );
-    expect(sheet).toMatch(
+    expectReceiptedControl(
+      sheet,
       /on:cancel="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/sheet-demo\.client\.js#GallerySheetDemo\$[A-Za-z]+_cancel"/,
     );
     expect(sheet).not.toContain('on:keydown=');
@@ -677,45 +775,54 @@ describe('compiled interactive gallery demos', () => {
     expect(slider).toContain('data-gallery-interactive="slider"');
     expect(slider).toContain('id="gallery-slider-form" data-gallery-form="slider"');
     expect(slider).toContain("form: 'gallery-slider-form'");
-    expect(slider).toContain(
-      'kovo-state=\'{"dragging":false,"dragPointerStart":0,"dragValueStart":25,"value":25}\'',
+    expectReceiptedKovoState(
+      slider,
+      '{"dragging":false,"dragPointerStart":0,"dragValueStart":25,"value":25}',
     );
     expect(slider).toContain('<SliderInput');
     expect(slider).toContain('<SliderThumb');
     expect(slider).toContain('data-bind:aria-valuenow=');
-    expect(slider).toMatch(
+    expectReceiptedControl(
+      slider,
       /on:pointerdown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/slider-demo\.client\.js#GallerySliderDemo\$[A-Za-z]+_pointerdown"/,
     );
-    expect(slider).toMatch(
+    expectReceiptedControl(
+      slider,
       /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/slider-demo\.client\.js#GallerySliderDemo\$[A-Za-z]+_keydown"/,
     );
-    expect(slider).toMatch(
+    expectReceiptedControl(
+      slider,
       /on:pointermove="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/slider-demo\.client\.js#GallerySliderDemo\$[A-Za-z]+_pointermove"/,
     );
 
     expect(switchDemo).toContain('data-gallery-interactive="switch"');
     expect(switchDemo).toContain('form="gallery-switch-form"');
-    expect(switchDemo).toContain('kovo-state=\'{"checked":false}\'');
-    expect(switchDemo).toMatch(
+    expectReceiptedKovoState(switchDemo, '{"checked":false}');
+    expectReceiptedControl(
+      switchDemo,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/switch-demo\.client\.js#GallerySwitchDemo\$[A-Za-z]+_click"/,
     );
 
     expect(tabs).toContain('data-gallery-interactive="tabs"');
-    expect(tabs).toContain('kovo-state=\'{"activeValue":"overview","value":"overview"}\'');
-    expect(tabs).toMatch(
+    expectReceiptedKovoState(tabs, '{"activeValue":"overview","value":"overview"}');
+    expectReceiptedControl(
+      tabs,
       /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/tabs-demo\.client\.js#GalleryTabsDemo\$[A-Za-z]+_keydown"/,
     );
-    expect(tabs).toMatch(
+    expectReceiptedControl(
+      tabs,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/tabs-demo\.client\.js#GalleryTabsDemo\$[A-Za-z]+_click_2"/,
     );
 
     expect(toolbar).toContain('data-gallery-interactive="toolbar"');
-    expect(toolbar).toContain('kovo-state=\'{"activeValue":"bold","pressedValue":"bold"}\'');
+    expectReceiptedKovoState(toolbar, '{"activeValue":"bold","pressedValue":"bold"}');
     expect(toolbar).toContain('<ToolbarButton');
-    expect(toolbar).toMatch(
+    expectReceiptedControl(
+      toolbar,
       /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/toolbar-demo\.client\.js#GalleryToolbarDemo\$[A-Za-z]+_keydown"/,
     );
-    expect(toolbar).toMatch(
+    expectReceiptedControl(
+      toolbar,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/toolbar-demo\.client\.js#GalleryToolbarDemo\$[A-Za-z]+_click_2"/,
     );
     expect(toolbar).toContain('data-bind:aria-pressed=');
@@ -727,7 +834,7 @@ describe('compiled interactive gallery demos', () => {
     expect(toolbarClient).not.toMatch(/Reflect|getElementById|setAttribute|document|globalThis/);
 
     expect(tooltip).toContain('data-gallery-interactive="tooltip"');
-    expect(tooltip).toContain('kovo-state=\'{"open":false}\'');
+    expectReceiptedKovoState(tooltip, '{"open":false}');
     expect(tooltip).toContain('<TooltipTrigger');
     expect(tooltip).toContain('tooltipTriggerPointerEnter as _tooltipTriggerPointerEnter');
     expect(tooltip).toContain('data-bind:aria-describedby=');
@@ -738,23 +845,28 @@ describe('compiled interactive gallery demos', () => {
     expect(tooltipClient).not.toMatch(
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );
-    expect(tooltip).toMatch(
+    expectReceiptedControl(
+      tooltip,
       /on:focus="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/tooltip-demo\.client\.js#GalleryTooltipDemo\$[A-Za-z]+_focus"/,
     );
-    expect(tooltip).toMatch(
+    expectReceiptedControl(
+      tooltip,
       /on:pointerenter="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/tooltip-demo\.client\.js#GalleryTooltipDemo\$[A-Za-z]+_pointerenter"/,
     );
-    expect(tooltip).toMatch(
+    expectReceiptedControl(
+      tooltip,
       /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/tooltip-demo\.client\.js#GalleryTooltipDemo\$[A-Za-z]+_keydown"/,
     );
 
     expect(toggleGroup).toContain('data-gallery-interactive="toggle-group"');
-    expect(toggleGroup).toContain('kovo-state=\'{"activeValue":"bold","value":"bold"}\'');
+    expectReceiptedKovoState(toggleGroup, '{"activeValue":"bold","value":"bold"}');
     expect(toggleGroup).toContain('<ToggleGroupButton');
-    expect(toggleGroup).toMatch(
+    expectReceiptedControl(
+      toggleGroup,
       /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/toggle-group-demo\.client\.js#GalleryToggleGroupDemo\$[A-Za-z]+_keydown"/,
     );
-    expect(toggleGroup).toMatch(
+    expectReceiptedControl(
+      toggleGroup,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/toggle-group-demo\.client\.js#GalleryToggleGroupDemo\$[A-Za-z]+_click_2"/,
     );
     expect(toggleGroup).toContain('data-bind:aria-pressed=');
@@ -767,8 +879,9 @@ describe('compiled interactive gallery demos', () => {
     );
 
     expect(toast).toContain('data-gallery-interactive="toast"');
-    expect(toast).toContain(
-      'kovo-state=\'{"activeCount":0,"activeOpen":false,"previousCount":0,"previousOpen":false}\'',
+    expectReceiptedKovoState(
+      toast,
+      '{"activeCount":0,"activeOpen":false,"previousCount":0,"previousOpen":false}',
     );
     expect(toast).toContain('<Toast');
     expect(toast).toContain('<ToastViewport');
@@ -780,13 +893,16 @@ describe('compiled interactive gallery demos', () => {
     expect(toast).toContain('data-bind:hidden=');
     expect(toast).toContain('data-bind:data-state=');
     expect(toast).toContain('data-demo-state="toast-count"');
-    expect(toast).toMatch(
+    expectReceiptedControl(
+      toast,
       /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/toast-demo\.client\.js#GalleryToastDemo\$[A-Za-z]+_keydown"/,
     );
-    expect(toast).toMatch(
+    expectReceiptedControl(
+      toast,
       /on:animationend="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/toast-demo\.client\.js#GalleryToastDemo\$[A-Za-z]+_animationend"/,
     );
-    expect(toast).toMatch(
+    expectReceiptedControl(
+      toast,
       /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/toast-demo\.client\.js#GalleryToastDemo\$[A-Za-z]+_click"/,
     );
     expect(toast).toContain('GalleryToastDemo$ToastAction_click');

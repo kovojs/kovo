@@ -1,4 +1,5 @@
 import { formatKovoModuleRef, parseKovoModuleRef } from '@kovojs/core/internal/module-ref';
+import { isKovoComponentHostControlAttribute } from '@kovojs/core/internal/semantic-attributes';
 import { securityOperationIrSchema } from '@kovojs/core/internal/security-operation-ir';
 import { encodeFrameworkQueryDependencyToken } from '@kovojs/core/internal/wire-input-grammar';
 
@@ -42,6 +43,7 @@ import {
   type SourceReplacement,
 } from '../shared.js';
 import {
+  elementParamNameFromAttribute,
   emitElementParamTypes,
   type ElementParam,
   type HandlerLowering,
@@ -97,6 +99,7 @@ export interface ServerRenderComponentStampTarget {
 }
 
 const generatedDependencyEncoderBase = '__kovoEncodeGeneratedDependencyIdentity';
+const generatedComponentControlBindingBase = 'kovoGeneratedComponentControl';
 
 export function emitServerModule(
   renderedSource: string,
@@ -168,6 +171,8 @@ function serverRenderPatches(
   },
 ): ServerRenderLowering {
   const handlerSnapshot = compilerSnapshotDenseArray(handlers, 'Server render handlers');
+  const generatedComponentControl = generatedComponentControlBinding(model);
+  let componentControlReceiptRequired = componentHandlerReceiptRequired(handlerSnapshot, model);
   const diagnostics: CompilerDiagnostic[] = [];
   const host = componentRenderHost(model);
   const patches: SourceReplacement[] = [];
@@ -207,7 +212,11 @@ function serverRenderPatches(
   const formErrorLowering = mutationFormErrorRenderLowering(model, options);
   appendServerValues(diagnostics, formErrorLowering.diagnostics, 'Mutation error diagnostics');
   appendServerValues(patches, formErrorLowering.replacements, 'Mutation error patches');
-  const triggerLowering = executionTriggerRenderLowering(model, options);
+  const triggerLowering = executionTriggerRenderLowering(
+    model,
+    options,
+    generatedComponentControl.localName,
+  );
   appendServerValues(patches, triggerLowering.replacements, 'Execution trigger patches');
   appendServerValues(
     outputContexts,
@@ -236,7 +245,11 @@ function serverRenderPatches(
       patches,
       {
         end: handler.attributeEnd,
-        replacement: handlerAttributeReplacement(handler),
+        replacement: handlerAttributeReplacement(
+          handler,
+          handlerTargetsNonIntrinsicComponent(handler, model),
+          generatedComponentControl.localName,
+        ),
         start: handler.attributeStart,
       },
       'Compiler packages/compiler/src/emit/server-render.ts collection',
@@ -256,7 +269,11 @@ function serverRenderPatches(
         if (compilerSetHas(chainedHandlers, handler)) continue;
         compilerArrayAppend(
           patches,
-          handlerSourceReplacement(handler),
+          handlerSourceReplacement(
+            handler,
+            handlerTargetsNonIntrinsicComponent(handler, model),
+            generatedComponentControl.localName,
+          ),
           'Compiler packages/compiler/src/emit/server-render.ts collection',
         );
         appendServerValues(
@@ -283,10 +300,13 @@ function serverRenderPatches(
       target,
       dependencyEncoder.localName,
     );
+    if (hostElement.intrinsicTagName === undefined && hostStampReceiptRequired(hostStamps.writes)) {
+      componentControlReceiptRequired = true;
+    }
     appendServerValues(stampWrites, hostStamps.writes, 'Host stamp writes');
     appendServerValues(
       patches,
-      renderHostStampPatches(hostElement, hostStamps.writes),
+      renderHostStampPatches(hostElement, hostStamps.writes, generatedComponentControl.localName),
       'Host stamp patches',
     );
     appendServerValues(
@@ -303,16 +323,27 @@ function serverRenderPatches(
     }
   }
 
+  let generatedInternalImports = '';
+  if (componentControlReceiptRequired && generatedComponentControl.importRequired) {
+    const importedBinding =
+      generatedComponentControl.localName === generatedComponentControlBindingBase
+        ? generatedComponentControlBindingBase
+        : `${generatedComponentControlBindingBase} as ${generatedComponentControl.localName}`;
+    generatedInternalImports += `import { ${importedBinding} } from '@kovojs/server/internal/escape';\n`;
+  }
   if (options && dependencyEncoderImportRequired(stampWrites) && dependencyEncoder.importRequired) {
+    generatedInternalImports += `import { encodeGeneratedDependencyIdentity as ${dependencyEncoder.localName} } from '@kovojs/server/internal/wire';\n`;
+  }
+  if (generatedInternalImports.length > 0) {
     const start = model.moduleImportInsertionOffset;
     compilerArrayAppend(
       patches,
       {
         end: start,
-        replacement: `import { encodeGeneratedDependencyIdentity as ${dependencyEncoder.localName} } from '@kovojs/server/internal/wire';\n`,
+        replacement: generatedInternalImports,
         start,
       },
-      'Compiler generated dependency encoder import',
+      'Compiler generated server-internal imports',
     );
   }
 
@@ -326,6 +357,83 @@ function dependencyEncoderImportRequired(writes: readonly ServerRenderStampWrite
     if (write.attr === 'kovo-deps' && write.valueKind === 'expression') return true;
   }
   return false;
+}
+
+function componentHandlerReceiptRequired(
+  handlers: readonly HandlerLowering[],
+  model: ComponentModuleModel,
+): boolean {
+  const handlerSnapshot = compilerSnapshotDenseArray(handlers, 'Component-control handler facts');
+  for (let index = 0; index < handlerSnapshot.length; index += 1) {
+    if (handlerTargetsNonIntrinsicComponent(handlerSnapshot[index]!, model)) return true;
+  }
+
+  const elements = compilerSnapshotDenseArray(
+    model.jsxElements,
+    'Component execution-trigger elements',
+  );
+  for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
+    const element = elements[elementIndex]!;
+    if (element.intrinsicTagName !== undefined) continue;
+    const attributes = compilerSnapshotDenseArray(
+      element.attributes,
+      'Component execution-trigger attributes',
+    );
+    for (let attributeIndex = 0; attributeIndex < attributes.length; attributeIndex += 1) {
+      if (attributes[attributeIndex]!.executionTriggerName !== undefined) return true;
+    }
+  }
+  return false;
+}
+
+function handlerTargetsNonIntrinsicComponent(
+  handler: HandlerLowering,
+  model: ComponentModuleModel,
+): boolean {
+  const elements = compilerSnapshotDenseArray(model.jsxElements, 'Handler target JSX elements');
+  for (let index = 0; index < elements.length; index += 1) {
+    const element = elements[index]!;
+    if (handler.attributeStart >= element.start && handler.attributeEnd <= element.openingEnd) {
+      return element.intrinsicTagName === undefined;
+    }
+  }
+  return false;
+}
+
+function generatedComponentControlBinding(model: ComponentModuleModel): {
+  importRequired: boolean;
+  localName: string;
+} {
+  const imports = compilerSnapshotDenseArray(model.namedImports, 'Component-control imports');
+  for (let index = 0; index < imports.length; index += 1) {
+    const imported = imports[index]!;
+    if (
+      imported.moduleSpecifier === '@kovojs/server/internal/escape' &&
+      imported.importedName === generatedComponentControlBindingBase
+    ) {
+      return { importRequired: false, localName: imported.localName };
+    }
+  }
+
+  const identifiers = compilerSnapshotDenseArray(
+    model.sourceIdentifierNames,
+    'Component-control identifier parser facts',
+  );
+  for (let suffix = 0; suffix <= identifiers.length; suffix += 1) {
+    const candidate =
+      suffix === 0
+        ? generatedComponentControlBindingBase
+        : `${generatedComponentControlBindingBase}_${suffix}`;
+    let occupied = false;
+    for (let index = 0; index < identifiers.length; index += 1) {
+      if (identifiers[index] === candidate) {
+        occupied = true;
+        break;
+      }
+    }
+    if (!occupied) return { importRequired: true, localName: candidate };
+  }
+  throw new TypeError('Kovo could not select a collision-free component-control binding.');
 }
 
 function generatedDependencyEncoderBinding(model: ComponentModuleModel): {
@@ -417,6 +525,7 @@ function executionTriggerRenderLowering(
         fileName: string;
       }
     | undefined,
+  componentControlHelperLocalName: string,
 ): {
   outputContexts: readonly GeneratedOutputWriteFact[];
   replacements: readonly SourceReplacement[];
@@ -440,11 +549,21 @@ function executionTriggerRenderLowering(
       if (!ref || ref.url !== unversionedHref) continue;
 
       const value = formatKovoModuleRef({ ...ref, url: options.clientHref });
+      const protectComponentControls = element.intrinsicTagName === undefined;
       compilerArrayAppend(
         replacements,
         {
           end: attribute.end,
-          replacement: `${attribute.name}="${escapeAttribute(value)}" ${clientModuleAllowlistAttribute([value])}`,
+          replacement: `${generatedControlAttribute(
+            attribute.name,
+            value,
+            protectComponentControls,
+            componentControlHelperLocalName,
+          )} ${clientModuleAllowlistAttribute(
+            [value],
+            protectComponentControls,
+            componentControlHelperLocalName,
+          )}`,
           start: attribute.start,
         },
         'Compiler packages/compiler/src/emit/server-render.ts collection',
@@ -553,6 +672,8 @@ function chainedPrimitiveHandlerPatches(
             attribute.name,
             attribute.value,
             attributeHandlers,
+            element.intrinsicTagName === undefined,
+            generatedComponentControlBinding(model).localName,
           ),
           start: attribute.start,
         },
@@ -601,6 +722,8 @@ function chainedPrimitiveHandlerAttribute(
   name: string,
   primitiveRefs: string,
   handlers: readonly HandlerLowering[],
+  protectComponentControls: boolean,
+  helperLocalName: string,
 ): string {
   const handlerSnapshot = compilerSnapshotDenseArray(handlers, 'Chained primitive handlers');
   const refValues: string[] = [];
@@ -633,35 +756,77 @@ function chainedPrimitiveHandlerAttribute(
     );
   }
 
+  const paramTypes = elementParamTypesValue(params);
   const parts = [
-    `${name}="${escapeAttribute(joinServerStrings(refValues, ' '))}"`,
-    clientModuleAllowlistAttribute(refValues),
-    emitElementParamTypes(params),
+    generatedControlAttribute(
+      name,
+      joinServerStrings(refValues, ' '),
+      protectComponentControls,
+      helperLocalName,
+    ),
+    clientModuleAllowlistAttribute(refValues, protectComponentControls, helperLocalName),
+    paramTypes.length === 0
+      ? ''
+      : generatedControlAttribute(
+          'kovo-param-types',
+          paramTypes,
+          protectComponentControls,
+          helperLocalName,
+        ),
   ];
-  appendHandlerParamAttributes(parts, params);
+  appendHandlerParamAttributes(parts, params, protectComponentControls, helperLocalName);
   return joinNonEmptyServerStrings(parts, ' ');
 }
 
-function handlerSourceReplacement(handler: HandlerLowering): SourceReplacement {
+function handlerSourceReplacement(
+  handler: HandlerLowering,
+  protectComponentControls: boolean,
+  helperLocalName: string,
+): SourceReplacement {
   return {
     end: handler.attributeEnd,
-    replacement: handlerAttributeReplacement(handler),
+    replacement: handlerAttributeReplacement(handler, protectComponentControls, helperLocalName),
     start: handler.attributeStart,
   };
 }
 
-function handlerAttributeReplacement(handler: HandlerLowering): string {
+function handlerAttributeReplacement(
+  handler: HandlerLowering,
+  protectComponentControls: boolean,
+  helperLocalName: string,
+): string {
   const params = compilerSnapshotDenseArray(handler.params, 'Server handler parameters');
+  const paramTypes = elementParamTypesValue(params);
   const parts = [
-    `${handler.attributeName}="${handler.attributeValue}"`,
-    clientModuleAllowlistAttribute([handler.attributeValue]),
-    emitElementParamTypes(params),
+    generatedControlAttribute(
+      handler.attributeName,
+      handler.attributeValue,
+      protectComponentControls,
+      helperLocalName,
+    ),
+    clientModuleAllowlistAttribute(
+      [handler.attributeValue],
+      protectComponentControls,
+      helperLocalName,
+    ),
+    paramTypes.length === 0
+      ? ''
+      : generatedControlAttribute(
+          'kovo-param-types',
+          paramTypes,
+          protectComponentControls,
+          helperLocalName,
+        ),
   ];
-  appendHandlerParamAttributes(parts, params);
+  appendHandlerParamAttributes(parts, params, protectComponentControls, helperLocalName);
   return joinNonEmptyServerStrings(parts, ' ');
 }
 
-function clientModuleAllowlistAttribute(refValues: readonly string[]): string {
+function clientModuleAllowlistAttribute(
+  refValues: readonly string[],
+  protectComponentControls = false,
+  helperLocalName = generatedComponentControlBindingBase,
+): string {
   const urls = compilerCreateSet<string>();
   const orderedUrls: string[] = [];
   const values = compilerSnapshotDenseArray(refValues, 'Client module reference values');
@@ -678,19 +843,64 @@ function clientModuleAllowlistAttribute(refValues: readonly string[]): string {
     }
   }
   return orderedUrls.length > 0
-    ? `data-kovo-module-allowlist="${escapeAttribute(joinServerStrings(orderedUrls, ' '))}"`
+    ? generatedControlAttribute(
+        'data-kovo-module-allowlist',
+        joinServerStrings(orderedUrls, ' '),
+        protectComponentControls,
+        helperLocalName,
+      )
     : '';
 }
 
-function appendHandlerParamAttributes(target: string[], params: readonly ElementParam[]): void {
+function appendHandlerParamAttributes(
+  target: string[],
+  params: readonly ElementParam[],
+  protectComponentControls: boolean,
+  helperLocalName: string,
+): void {
   for (let index = 0; index < params.length; index += 1) {
     const param = params[index]!;
     compilerArrayAppend(
       target,
-      `${param.attributeName}="${escapeAttribute(param.value)}"`,
+      generatedControlAttribute(
+        param.attributeName,
+        param.value,
+        protectComponentControls,
+        helperLocalName,
+        param.expression,
+      ),
       'Compiler packages/compiler/src/emit/server-render.ts collection',
     );
   }
+}
+
+function generatedControlAttribute(
+  name: string,
+  value: string,
+  protectComponentControls: boolean,
+  helperLocalName: string,
+  protectedValueExpression?: string,
+): string {
+  if (!protectComponentControls) return `${name}="${escapeAttribute(value)}"`;
+  return `${name}={${helperLocalName}(${serverJsonSource(
+    name,
+    'Generated component-control attribute name',
+  )}, ${
+    protectedValueExpression ??
+    serverJsonSource(value, 'Generated component-control attribute value')
+  })}`;
+}
+
+function elementParamTypesValue(params: readonly ElementParam[]): string {
+  const snapshot = compilerSnapshotDenseArray(params, 'Element parameter types');
+  let entries = '';
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const param = snapshot[index]!;
+    if (param.type === 'string') continue;
+    if (entries.length > 0) entries += ',';
+    entries += `${elementParamNameFromAttribute(param.attributeName)}:${param.type}`;
+  }
+  return entries;
 }
 
 function joinNonEmptyServerStrings(values: readonly string[], separator: string): string {
@@ -716,6 +926,7 @@ function joinServerStrings(values: readonly string[], separator: string): string
 function renderHostStampPatches(
   hostElement: JsxElementModel,
   writes: readonly ServerRenderStampWriteFact[],
+  componentControlHelperLocalName: string,
 ): SourceReplacement[] {
   const patches: SourceReplacement[] = [];
   const insertedAttributes: string[] = [];
@@ -723,7 +934,12 @@ function renderHostStampPatches(
 
   for (let index = 0; index < writeSnapshot.length; index += 1) {
     const write = writeSnapshot[index]!;
-    const rendered = renderHostStampAttribute(write);
+    if (write.mode === 'preserve') continue;
+    const rendered = renderHostStampAttribute(
+      write,
+      hostElement.intrinsicTagName === undefined,
+      componentControlHelperLocalName,
+    );
     if (write.mode === 'insert') {
       compilerArrayAppend(
         insertedAttributes,
@@ -761,6 +977,15 @@ function renderHostStampPatches(
   }
 
   return patches;
+}
+
+function hostStampReceiptRequired(writes: readonly ServerRenderStampWriteFact[]): boolean {
+  const snapshot = compilerSnapshotDenseArray(writes, 'Component host receipt writes');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const write = snapshot[index]!;
+    if (write.mode !== 'preserve' && isKovoComponentHostControlAttribute(write.attr)) return true;
+  }
+  return false;
 }
 
 function renderHostStampOutputContexts(
@@ -1194,7 +1419,26 @@ interface HostStampConflict {
     | 'host state stamp';
 }
 
-function renderHostStampAttribute(write: ServerRenderStampWriteFact): string {
+function renderHostStampAttribute(
+  write: ServerRenderStampWriteFact,
+  protectComponentControl: boolean,
+  componentControlHelperLocalName: string,
+): string {
+  if (protectComponentControl) {
+    if (!isKovoComponentHostControlAttribute(write.attr)) {
+      throw new TypeError(
+        `Kovo cannot relay generated ${write.attr} through a non-intrinsic component host; the finite component-host receipt denominator excludes this root control.`,
+      );
+    }
+    return `${write.attr}={${componentControlHelperLocalName}(${serverJsonSource(
+      write.attr,
+      'Generated component host-control attribute name',
+    )}, ${
+      write.valueKind === 'expression'
+        ? write.value
+        : serverJsonSource(write.value, 'Generated component host-control attribute value')
+    })}`;
+  }
   if (write.valueKind === 'expression') {
     return `${write.attr}={${write.value}}`;
   }

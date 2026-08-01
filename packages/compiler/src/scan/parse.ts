@@ -17,6 +17,7 @@ import {
 } from '@kovojs/core/internal/framework-identity';
 import type { SessionAuthorityFact } from '@kovojs/core/internal/graph';
 import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
+import { isKovoComponentHostControlAttribute } from '@kovojs/core/internal/semantic-attributes';
 
 import { isReviewedComponentEventBoundary } from '../component-event-boundary-registry.js';
 import { reviewedCanonicalClientHandlerImportTarget } from '../client-handler-import-policy.js';
@@ -65,6 +66,7 @@ import {
   compilerWeakMapSet,
 } from '../compiler-security-intrinsics.js';
 import { deriveMutationKey } from '../mutation-names.js';
+import { kovoExecutableReferenceAttributeKind } from '../executable-reference-attributes.js';
 import { mutationFormProvenanceAttributeName } from '../mutation-form-provenance.js';
 import { deriveRegistryIdentity } from '../registry-identities.js';
 import { isCompilerAuditText } from '../security/audit-text.js';
@@ -145,6 +147,15 @@ export type * from './model.js';
 const frameworkTrustedUrlFacts = compilerCreateWeakMap<object, true>();
 const frameworkTrustedUrlReasonFacts = compilerCreateWeakMap<object, string>();
 const frameworkTrustedUrlValueFacts = compilerCreateWeakMap<object, string>();
+const compilerGeneratedComponentControlFacts = compilerCreateWeakMap<object, string>();
+const compilerGeneratedComponentControlSemanticValueFacts = compilerCreateWeakMap<object, string>();
+
+// SHA-256 of the exact top-level `function passThroughProps(...) { ... }` emitted by
+// packages/cli/src/add-catalog.ts. This is deliberately narrower than the forgeable
+// `// @kovojs-ui-copy` marker: any helper-body edit closes the special copy-in projection until the
+// compiler and catalog are reviewed together.
+const canonicalUiCopyPassThroughFunctionHash =
+  'de93346e2d0fdd8a2da98ff38e76a7deec2fefade432b8ada5bae57be7e78781';
 
 /** @internal Exact parser-owned trustedUrl identity without widening serialized model shapes. */
 export function parserFactHasFrameworkTrustedUrl(fact: object): boolean {
@@ -161,6 +172,27 @@ export function parserFactFrameworkTrustedUrlValue(fact: object): string | undef
   return compilerWeakMapGet(frameworkTrustedUrlValueFacts, fact);
 }
 
+/** @internal Exact generated component-control receipt name carried by this JSX attribute. */
+export function parserFactCompilerGeneratedComponentControlName(fact: object): string | undefined {
+  return compilerWeakMapGet(compilerGeneratedComponentControlFacts, fact);
+}
+
+/** @internal Exact literal wire value inside a parser-proven generated component receipt. */
+export function parserFactCompilerGeneratedComponentControlSemanticValue(
+  fact: object,
+): string | undefined {
+  return compilerWeakMapGet(compilerGeneratedComponentControlSemanticValueFacts, fact);
+}
+
+/**
+ * @internal Static semantic string for analysis only. Receipt syntax remains an expression so
+ * emit ownership cannot accidentally serialize the privileged value as an ordinary component
+ * prop.
+ */
+export function jsxAttributeSemanticStringValue(attribute: JsxAttributeModel): string | undefined {
+  return attribute.value ?? parserFactCompilerGeneratedComponentControlSemanticValue(attribute);
+}
+
 interface ComponentFactoryBindings {
   readonly sourceFile: TS.SourceFile;
 }
@@ -168,6 +200,36 @@ interface ComponentFactoryBindings {
 interface ModuleScopeStaticStringBinding {
   readonly identifier: TS.Identifier;
   readonly value: string;
+}
+
+function canonicalUiCopyPassThroughBinding(
+  sourceFile: TS.SourceFile,
+  source: string,
+): TS.Identifier | undefined {
+  if (!compilerStringStartsWith(source, '// @kovojs-ui-copy\n')) return undefined;
+  const statements = sourceFile.statements;
+  const statementLength = compilerArrayLength(statements, 'UI copy-in source statements');
+  for (let index = 0; index < statementLength; index += 1) {
+    const statement = compilerOwnDataValue(statements, index, 'UI copy-in source statements') as
+      | TS.Statement
+      | undefined;
+    if (
+      !statement ||
+      !ts.isFunctionDeclaration(statement) ||
+      statement.name?.text !== 'passThroughProps'
+    ) {
+      continue;
+    }
+    const functionSource = compilerStringSlice(
+      source,
+      statement.getStart(sourceFile),
+      statement.getEnd(),
+    );
+    return compilerSha256Hex(functionSource) === canonicalUiCopyPassThroughFunctionHash
+      ? statement.name
+      : undefined;
+  }
+  return undefined;
 }
 
 const COMPONENT_FACTORY_IDENTITY = frameworkExport('@kovojs/core', 'component');
@@ -454,6 +516,7 @@ function parseComponentModuleFromSourceFile(
   const moduleScopeObjectEntries = moduleScopeObjectEntryModels(sourceFile, source);
   const moduleScopeMutationFormControlNames = moduleScopeMutationFormControlNameModels(sourceFile);
   const moduleScopeStaticStringBindings = moduleScopeConstStaticStringBindings(sourceFile);
+  const uiCopyPassThroughBinding = canonicalUiCopyPassThroughBinding(sourceFile, source);
   const moduleImportInsertionOffset = generatedImportInsertionOffset(sourceFile, source);
   const domainBindings = domainBindingKeys(sourceFile);
 
@@ -507,6 +570,7 @@ function parseComponentModuleFromSourceFile(
           moduleScopeMutationFormControlNames,
           moduleScopeStaticStringBindings,
           namedImports,
+          uiCopyPassThroughBinding,
         ),
         'JSX element models',
       );
@@ -7758,6 +7822,7 @@ function jsxElementModel(
   moduleScopeMutationFormControlNames: ReadonlyMap<string, readonly string[]>,
   moduleScopeStaticStringBindings: ReadonlyMap<string, ModuleScopeStaticStringBinding>,
   namedImports: readonly NamedImportModel[],
+  uiCopyPassThroughBinding: TS.Identifier | undefined,
 ): JsxElementModel {
   const openingElement = ts.isJsxElement(node) ? node.openingElement : node;
   const closingStart = ts.isJsxElement(node)
@@ -7779,7 +7844,13 @@ function jsxElementModel(
 
   return {
     ancestorTags: jsxAncestorTags(sourceFile, node),
-    attributes: jsxAttributeModels(sourceFile, source, openingElement, unreviewedComponentTag),
+    attributes: jsxAttributeModels(
+      sourceFile,
+      source,
+      openingElement,
+      namedImports,
+      unreviewedComponentTag,
+    ),
     childBody: jsxChildBody(childSource, openingElement.getEnd(), selfClosing),
     ...jsxChildFacts(node, sourceFile),
     closingStart,
@@ -7805,6 +7876,7 @@ function jsxElementModel(
       moduleScopeStaticStringBindings,
       namedImports,
       unreviewedComponentTag,
+      uiCopyPassThroughBinding,
     ),
     start: node.getStart(sourceFile),
     tag,
@@ -7815,6 +7887,7 @@ function jsxAttributeModels(
   sourceFile: TS.SourceFile,
   source: string,
   openingElement: TS.JsxOpeningElement | TS.JsxSelfClosingElement,
+  namedImports: readonly NamedImportModel[],
   unreviewedComponentTag: boolean,
 ): JsxElementModel['attributes'][number][] {
   const result: JsxElementModel['attributes'][number][] = [];
@@ -7847,6 +7920,13 @@ function jsxAttributeModels(
     const initializer = property.initializer;
     if (initializer && ts.isJsxExpression(initializer) && initializer.expression) {
       recordFrameworkTrustedUrlFact(attribute, sourceFile, initializer.expression);
+      recordCompilerGeneratedComponentControlFact(
+        attribute,
+        sourceFile,
+        initializer.expression,
+        name,
+        namedImports,
+      );
     }
     compilerArrayAppend(result, attribute, 'JSX attributes');
   }
@@ -8210,6 +8290,7 @@ function jsxSpreadAttributeModels(
   moduleScopeStaticStringBindings: ReadonlyMap<string, ModuleScopeStaticStringBinding>,
   namedImports: readonly NamedImportModel[],
   unreviewedComponentTag: boolean,
+  uiCopyPassThroughBinding: TS.Identifier | undefined,
 ): JsxElementModel['spreadAttributes'][number][] {
   const result: JsxElementModel['spreadAttributes'][number][] = [];
   const properties = openingElement.attributes.properties;
@@ -8255,6 +8336,25 @@ function jsxSpreadAttributeModels(
       unwrappedCallArgument && ts.isIdentifier(unwrappedCallArgument)
         ? unwrappedCallArgument.text
         : undefined;
+    const uiCopyRenderPropsBinding =
+      unwrappedCallArgument && ts.isIdentifier(unwrappedCallArgument)
+        ? uiCopyComponentRenderPropsBinding(unwrappedCallArgument, sourceFile)
+        : undefined;
+    const uiCopyDefaultPassThrough =
+      uiCopyPassThroughBinding !== undefined &&
+      callExpression !== undefined &&
+      callIdentifier !== undefined &&
+      callName === 'passThroughProps' &&
+      callArgumentBareIdentifierName === 'props' &&
+      uiCopyRenderPropsBinding !== undefined &&
+      compilerArrayLength(callExpression.arguments, 'UI copy-in pass-through arguments') === 1 &&
+      !identifierIsShadowedBeforeScope(callIdentifier, uiCopyPassThroughBinding, sourceFile) &&
+      !identifierIsShadowedBeforeScope(
+        unwrappedCallArgument as TS.Identifier,
+        uiCopyRenderPropsBinding,
+        sourceFile,
+      ) &&
+      !reviewedMutationSubmitterBindingHasVisibleMutation(sourceFile, uiCopyRenderPropsBinding);
     const objectEntries = ts.isObjectLiteralExpression(unwrapped)
       ? completeJsxSpreadObjectLiteralEntries(sourceFile, source, unwrapped)
       : bareIdentifierName === undefined
@@ -8310,11 +8410,65 @@ function jsxSpreadAttributeModels(
         ...(objectEntries === undefined ? {} : { objectEntries }),
         start: property.getStart(sourceFile),
         ...(staticWireAttributeEntries === undefined ? {} : { staticWireAttributeEntries }),
+        ...(uiCopyDefaultPassThrough ? { uiCopyDefaultPassThrough: true as const } : {}),
       },
       'JSX spread attributes',
     );
   }
   return result;
+}
+
+/**
+ * The copy-in exception is scoped to the exact first parameter of a direct component render
+ * function. A nested callback, same-named local, or reassigned parameter is ordinary opaque input
+ * again; the marker/helper hash alone must not bless a different carrier named `props`.
+ */
+function uiCopyComponentRenderPropsBinding(
+  identifier: TS.Identifier,
+  sourceFile: TS.SourceFile,
+): TS.Identifier | undefined {
+  let current: TS.Node | undefined = identifier.parent;
+  while (current && current !== sourceFile) {
+    if (isFunctionScopeNode(current)) {
+      let optionsObject: TS.ObjectLiteralExpression | undefined;
+      if (
+        ts.isMethodDeclaration(current) &&
+        propertyNameText(current.name) === 'render' &&
+        ts.isObjectLiteralExpression(current.parent)
+      ) {
+        optionsObject = current.parent;
+      } else if (
+        (ts.isArrowFunction(current) || ts.isFunctionExpression(current)) &&
+        ts.isPropertyAssignment(current.parent) &&
+        current.parent.initializer === current &&
+        propertyNameText(current.parent.name) === 'render' &&
+        ts.isObjectLiteralExpression(current.parent.parent)
+      ) {
+        optionsObject = current.parent.parent;
+      }
+      if (optionsObject === undefined) return undefined;
+      const componentCall = optionsObject.parent;
+      if (
+        !ts.isCallExpression(componentCall) ||
+        callArgument(componentCall, 0) !== optionsObject ||
+        !isComponentFactoryReference(componentCall.expression, componentFactoryBindings(sourceFile))
+      ) {
+        return undefined;
+      }
+      const firstParameter = compilerOwnDataValue(
+        current.parameters,
+        0,
+        'UI copy-in render parameters',
+      ) as TS.ParameterDeclaration | undefined;
+      return firstParameter &&
+        ts.isIdentifier(firstParameter.name) &&
+        firstParameter.name.text === 'props'
+        ? firstParameter.name
+        : undefined;
+    }
+    current = current.parent;
+  }
+  return undefined;
 }
 
 /**
@@ -9073,6 +9227,72 @@ function recordFrameworkTrustedUrlFact(
   if (auditedReason !== undefined) {
     compilerWeakMapSet(frameworkTrustedUrlFacts, fact, true);
     compilerWeakMapSet(frameworkTrustedUrlReasonFacts, fact, auditedReason);
+  }
+}
+
+function recordCompilerGeneratedComponentControlFact(
+  fact: object,
+  sourceFile: TS.SourceFile,
+  expression: TS.Expression,
+  attributeName: string,
+  namedImports: readonly NamedImportModel[],
+): void {
+  if (!isKovoComponentHostControlAttribute(attributeName)) return;
+  const candidate = unwrapExpression(expression);
+  if (
+    !ts.isCallExpression(candidate) ||
+    compilerArrayLength(candidate.arguments, 'Generated component-control arguments') !== 2
+  ) {
+    return;
+  }
+  if (!ts.isIdentifier(candidate.expression)) return;
+  const callIdentifier = candidate.expression;
+  if (identifierIsShadowedBeforeScope(callIdentifier, undefined, sourceFile)) return;
+  let exactImportCount = 0;
+  let competingImportCount = 0;
+  const importLength = compilerArrayLength(
+    namedImports,
+    'Generated component-control named imports',
+  );
+  for (let index = 0; index < importLength; index += 1) {
+    const namedImport = compilerOwnDataValue(
+      namedImports,
+      index,
+      'Generated component-control named imports',
+    ) as NamedImportModel | undefined;
+    if (!namedImport) {
+      throw new TypeError(`Generated component-control named imports[${index}] must be own data.`);
+    }
+    if (namedImport.localName !== callIdentifier.text) continue;
+    if (
+      namedImport.moduleSpecifier === '@kovojs/server/internal/escape' &&
+      namedImport.importedName === 'kovoGeneratedComponentControl'
+    ) {
+      exactImportCount += 1;
+    } else {
+      competingImportCount += 1;
+    }
+  }
+  if (exactImportCount !== 1 || competingImportCount !== 0) return;
+  const firstArgument = compilerOwnDataValue(
+    candidate.arguments,
+    0,
+    'Generated component-control arguments',
+  ) as TS.Expression;
+  const receiptName = unwrapExpression(firstArgument);
+  if (!ts.isStringLiteralLike(receiptName) || receiptName.text !== attributeName) return;
+  const secondArgument = compilerOwnDataValue(
+    candidate.arguments,
+    1,
+    'Generated component-control arguments',
+  ) as TS.Expression;
+  const semanticValue = staticLiteralValue(secondArgument);
+  if (kovoExecutableReferenceAttributeKind(attributeName) !== undefined) {
+    if (typeof semanticValue !== 'string') return;
+  }
+  compilerWeakMapSet(compilerGeneratedComponentControlFacts, fact, receiptName.text);
+  if (typeof semanticValue === 'string') {
+    compilerWeakMapSet(compilerGeneratedComponentControlSemanticValueFacts, fact, semanticValue);
   }
 }
 

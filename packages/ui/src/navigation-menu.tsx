@@ -1,4 +1,5 @@
 /** @jsxImportSource @kovojs/server */
+import type { TrustedUrl } from '@kovojs/browser';
 import { component, type ComponentChild } from '@kovojs/core';
 import {
   navigationMenuContentAttributes,
@@ -14,9 +15,11 @@ import {
 import type { CollectionOrientation, TextDirection } from '@kovojs/headless-ui/types';
 import { ChevronDown } from '@kovojs/icons/chevron-down';
 import * as style from '@kovojs/style';
+import { attrs as styleAttributes } from '@kovojs/style';
 import { createWithSource } from '@kovojs/style/internal';
 
 import { passThroughProps } from './pass-through.js';
+import { safeUrl } from './safe-url.js';
 
 import { uiTheme } from './theme.js';
 
@@ -135,7 +138,7 @@ export interface NavigationMenuContentProps extends NavigationMenuStateProps {
  * const props: NavigationMenuLinkProps = { itemValue: 'item', children: 'Content' };
  */
 export interface NavigationMenuLinkProps extends NavigationMenuItemProps {
-  href?: string;
+  href?: string | TrustedUrl;
   itemLabel?: string;
 }
 
@@ -534,24 +537,30 @@ export const NavigationMenuContent = component({
  */
 export const NavigationMenuLink = component({
   render(props: NavigationMenuLinkProps) {
+    const hrefCandidate = props.href;
     const attrs = navigationMenuLinkAttributes({
       ...toNavigationState(props),
-      ...(props.href === undefined ? {} : { href: props.href }),
+      ...(typeof hrefCandidate === 'string' ? { href: hrefCandidate } : {}),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.itemDisabled === undefined ? {} : { itemDisabled: props.itemDisabled }),
       ...(props.itemLabel === undefined ? {} : { itemLabel: props.itemLabel }),
       itemValue: props.itemValue,
     });
-    const styleAttrs = style.attrs(navigationMenuStyles.link, props.styles?.link);
-
     return (
       <a
+        {...styleAttributes(navigationMenuStyles.link, props.styles?.link)}
+        {...passThroughProps(props)}
         aria-disabled={attrs['aria-disabled']}
-        {...styleAttrs}
         data-disabled={attrs['data-disabled']}
         data-highlighted={attrs['data-highlighted']}
         data-state={attrs['data-state']}
-        href={attrs.href}
+        href={
+          attrs['aria-disabled'] === 'true' || hrefCandidate === undefined
+            ? undefined
+            : typeof hrefCandidate === 'string'
+              ? attrs.href
+              : safeUrl(hrefCandidate)
+        }
         id={attrs.id}
         tabIndex={attrs.tabIndex}
         value={attrs.value}

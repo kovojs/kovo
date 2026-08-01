@@ -43,6 +43,19 @@ describe('NavigationMenuLink href sanitization (SECURITY_FINDINGS.md H3)', () =>
 
     expect(html).toContain('href="ftp://example.test/file.txt"');
   });
+
+  it('keeps primitive-owned disabled semantics ahead of caller pass-through props', () => {
+    const html = String(
+      renderUiComponent(NavigationMenuLink, {
+        ...{ 'aria-disabled': 'false' },
+        itemDisabled: true,
+        itemValue: 'company',
+      }),
+    );
+
+    expect(html).toContain('aria-disabled="true"');
+    expect(html).not.toContain('aria-disabled="false"');
+  });
 });
 
 describe('navigation-menu scalar text props are escaped (SECURITY_FINDINGS.md C1)', () => {

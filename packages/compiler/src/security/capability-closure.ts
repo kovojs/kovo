@@ -197,6 +197,7 @@ const compilerGeneratedInternalAbi = new Map<string, CompilerGeneratedAbiPosture
       initializer: generatedAuthorityFree,
       members: new Map([
         ['escapeText', generatedAuthorityFree],
+        ['kovoGeneratedComponentControl', generatedAuthorityFree],
         ['kovoSafeJsxSpread', generatedAuthorityFree],
       ]),
     },

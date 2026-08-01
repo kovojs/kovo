@@ -4322,6 +4322,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/server/src/jsx-runtime.test.ts',
       'packages/server/src/wire-html.test.ts',
       'packages/compiler/src/browser-final-rereview.test.ts',
+      'packages/compiler/src/ui-copy-in-security.test.ts',
     ],
     verdictAnchors: [
       {
@@ -4339,6 +4340,20 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'component-host-control-receipt-denominator',
+        file: 'packages/core/src/internal/semantic-attributes.test.ts',
+        snippets: [
+          'keeps component-host receipts on the exact finite control-family denominator',
+          "'data-bind:tabIndex'",
+          "'data-bind-prop:scrollTop'",
+          "'data-kovo-trusted-url:href'",
+          "'kovo-tooltip'",
+          "'data-bind-list'",
+          'isCompilerOwnedResidualAttribute(name)',
+          'keeps component-host receipt classification stable after string prototype poisoning',
+        ],
+      },
+      {
         id: 'runtime-and-raw-html-closed-verdicts',
         file: 'packages/server/src/jsx-runtime.test.ts',
         snippets: [
@@ -4348,6 +4363,17 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'skips an undefined exact-key value before applying case-folded duplicate semantics',
           'rejects trusted raw HTML where parsing derives a submitted text value',
           'record&#13;1',
+        ],
+      },
+      {
+        id: 'copied-ui-component-host-receipt-runtime',
+        file: 'packages/server/src/jsx-runtime.test.ts',
+        snippets: [
+          'renders copied-link props with only exact compiler-receipted controls',
+          "'data-kovo-trusted-url:href'",
+          "'data-bind:tabIndex'",
+          "'kovo-context-menu'",
+          'trustedHrefBindingReceipt',
         ],
       },
       {
@@ -4389,6 +4415,19 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'nested false spread with no enumerable keys',
           'keeps emitted runtime sink authority for statically omitted spread values',
           'accepts wire-stable DOM and submitted identities',
+        ],
+      },
+      {
+        id: 'copied-ui-component-host-receipt-compiler',
+        file: 'packages/compiler/src/ui-copy-in-security.test.ts',
+        snippets: [
+          'receipts an exact query text binding on the copied component host and keeps its client plan',
+          'keeps a trusted state-derived copied-link href live only through its exact receipt pair',
+          'keeps an ordinary query-derived copied-link href on the runtime URL sink path',
+          'keeps an ordinary state-derived copied-link href on the runtime URL sink path',
+          'receipts a canonical camelCase tabIndex binding across a copied link',
+          'receipts canonical scrollTop attribute and property bindings across a generic component host',
+          'receipts the finite primitive-composition controls before they cross a copied link',
         ],
       },
     ],

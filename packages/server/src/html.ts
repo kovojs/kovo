@@ -2,6 +2,7 @@ import { hasUnsafeUrlScheme, isUrlAttributeName } from '@kovojs/core/internal/se
 import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import {
   assertHtmlWireValueStable,
+  isKovoComponentHostControlAttribute,
   isKovoControlPlaneAttribute,
   type HtmlWireValuePosture,
 } from '@kovojs/core/internal/semantic-attributes';
@@ -9,8 +10,10 @@ import {
   createFragmentHtml,
   decideRuntimeAttributeWrite,
   drainRuntimeSinkSecurityEvent,
+  elementContextSecurityControl,
   fragmentHtmlContent,
   isFragmentHtml,
+  runtimeSinkFamilyForAttribute,
   type RuntimeSinkSecurityEvent,
   type FragmentHtml,
 } from '@kovojs/core/internal/sink-policy';
@@ -36,6 +39,7 @@ import {
   witnessRegExpTest,
   witnessString,
   witnessStringReplaceAll,
+  witnessStringStartsWith,
   witnessStringToLowerCase,
   witnessObjectKeys,
   witnessWeakMapGet,
@@ -86,7 +90,69 @@ const coercedRenderedHtmlSecret = capabilityRandomBytes(32);
 const coercedRenderedHtmlCrypto = createRenderedHtmlCryptoHandle(coercedRenderedHtmlSecret);
 const renderedHtmlValues = createWitnessWeakSet<object>();
 const renderedHtmlSnapshots = createWitnessWeakMap<object, string>();
+const generatedComponentControlSnapshots = createWitnessWeakMap<
+  object,
+  Readonly<{ name: string; value: unknown }>
+>();
 const maxCoercedRenderedHtmlDepth = 32;
+
+/**
+ * @internal Compiler-generated receipt for one exact control-plane component prop.
+ *
+ * The receipt has no structural authority: its exact name/value snapshot lives only in the
+ * module-private WeakMap. App-authored imports of this compiler ABI are rejected as lowered IR
+ * (SPEC §5.2 KV235); the runtime witness is the independent defense-in-depth floor.
+ */
+export function kovoGeneratedComponentControl(name: string, value: unknown): object {
+  if (typeof name !== 'string' || !isKovoComponentHostControlAttribute(name)) {
+    throw new TypeError('Compiler component-control receipts require an exact supported name.');
+  }
+  const isElementParam = witnessStringStartsWith(name, 'data-p-');
+  const isTrustedUrlMarker = witnessStringStartsWith(name, 'data-kovo-trusted-url:');
+  const scalar =
+    value === null ||
+    value === undefined ||
+    typeof value === 'string' ||
+    (isElementParam && (typeof value === 'number' || typeof value === 'boolean')) ||
+    (isTrustedUrlMarker && value === true);
+  if (!scalar) {
+    throw new TypeError(
+      'Compiler component-control receipts require a string control value, a string/number/boolean data-p-* scalar, or an exact true trusted-URL marker.',
+    );
+  }
+  const receipt = witnessFreeze(witnessCreateNullRecord<Record<string, never>>());
+  witnessWeakMapSet(generatedComponentControlSnapshots, receipt, witnessFreeze({ name, value }));
+  return receipt;
+}
+
+function generatedComponentControlSnapshot(
+  name: string,
+  value: unknown,
+): Readonly<{ name: string; value: unknown }> | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const snapshot = witnessWeakMapGet(generatedComponentControlSnapshots, value);
+  return snapshot?.name === name ? snapshot : undefined;
+}
+
+function generatedComponentControlWireValue(
+  snapshot: Readonly<{ name: string; value: unknown }>,
+): unknown {
+  if (
+    witnessStringStartsWith(snapshot.name, 'data-p-') &&
+    (typeof snapshot.value === 'number' || typeof snapshot.value === 'boolean')
+  ) {
+    return witnessString(snapshot.value);
+  }
+  return snapshot.value;
+}
+
+/** @internal Unwrap an exact compiler-generated component-control receipt for intrinsic render. */
+export function kovoGeneratedComponentControlValue(name: string, value: unknown): unknown {
+  if (typeof value !== 'object' || value === null) return value;
+  const snapshot = witnessWeakMapGet(generatedComponentControlSnapshots, value);
+  if (snapshot === undefined) return value;
+  return snapshot.name === name ? generatedComponentControlWireValue(snapshot) : undefined;
+}
 
 /** @internal framework-rendered HTML, distinct from app-authored text strings. */
 export type RenderedHtml = string & {
@@ -349,39 +415,84 @@ export function isKovoControlAttributeName(name: string): boolean {
 
 /**
  * @internal Compiler-injected reconstruction boundary for a dynamic intrinsic-element JSX
- * spread. Only ordinary presentation/semantic attributes cross the boundary; Kovo control-plane
- * attributes are omitted regardless of the carrier's prototype, getters, or key casing. A
- * compiler-selected mutation transport boundary additionally removes native form/submitter
- * override attributes so a late spread cannot replace generated action/method authority. The
- * returned null-prototype snapshot also pins the values consumed by the JSX renderer so a mutable
- * caller carrier is never re-read after classification (SPEC §6.6 rule 5).
+ * spread. Only ordinary presentation/semantic attributes and exact name-bound compiler receipts
+ * cross the boundary; unbranded Kovo control-plane attributes are omitted regardless of the
+ * carrier's prototype, getters, or key casing. A
+ * compiler-selected reconstruction boundary additionally removes native form/submitter overrides,
+ * or reconstructs the exact canonical UI-anchor projection while stripping href and the shared
+ * activation/isolation denominator. The returned null-prototype snapshot also pins the values
+ * consumed by the JSX renderer so a mutable caller carrier is never re-read after classification
+ * (SPEC §6.6 rule 5).
  */
 export function kovoSafeJsxSpread(
   value: unknown,
-  transportBoundary?: 'mutation-form' | 'mutation-submitter',
+  reconstructionBoundary?: 'mutation-form' | 'mutation-submitter' | 'ui-anchor',
 ): Record<string, unknown> {
   const safe = witnessCreateNullRecord<Record<string, unknown>>();
   if ((typeof value !== 'object' || value === null) && typeof value !== 'function') return safe;
 
   const names = witnessObjectKeys(value);
+  const uiAnchorControlFacts =
+    reconstructionBoundary === 'ui-anchor'
+      ? uiAnchorRelationalControlFacts(value, names)
+      : undefined;
   for (let index = 0; index < names.length; index += 1) {
     const name = names[index];
     if (name === undefined) continue;
     const descriptor = witnessGetOwnPropertyDescriptor(value, name);
     if (descriptor === undefined || !('value' in descriptor)) continue;
-    if (isKovoControlAttributeName(name)) continue;
-    if (isMutationTransportOverrideAttributeName(name, transportBoundary)) continue;
-    safe[name] = descriptor.value;
+    if (
+      reconstructionBoundary === 'ui-anchor' &&
+      (descriptor.value === undefined || descriptor.value === null)
+    ) {
+      continue;
+    }
+    if (isReconstructionBoundaryAttributeName(name, reconstructionBoundary)) continue;
+    const receiptSnapshot =
+      typeof descriptor.value === 'object' && descriptor.value !== null
+        ? witnessWeakMapGet(generatedComponentControlSnapshots, descriptor.value)
+        : undefined;
+    if (receiptSnapshot !== undefined && receiptSnapshot.name !== name) continue;
+    const control = isKovoControlAttributeName(name);
+    const generatedControl = control
+      ? generatedComponentControlSnapshot(name, descriptor.value)
+      : undefined;
+    if (control && generatedControl === undefined) continue;
+    if (
+      reconstructionBoundary === 'ui-anchor' &&
+      control &&
+      uiAnchorCaseFoldedNameCount(names, name) !== 1
+    ) {
+      continue;
+    }
+    if (
+      reconstructionBoundary === 'ui-anchor' &&
+      (control
+        ? !isUiAnchorGeneratedControlAttributeName(name, uiAnchorControlFacts)
+        : !isUiAnchorOrdinaryPassThroughAttributeName(name))
+    ) {
+      continue;
+    }
+    safe[name] =
+      generatedControl === undefined
+        ? descriptor.value
+        : generatedComponentControlWireValue(generatedControl);
   }
   return safe;
 }
 
-function isMutationTransportOverrideAttributeName(
+function isReconstructionBoundaryAttributeName(
   name: string,
-  boundary: 'mutation-form' | 'mutation-submitter' | undefined,
+  boundary: 'mutation-form' | 'mutation-submitter' | 'ui-anchor' | undefined,
 ): boolean {
   if (boundary === undefined) return false;
   const lower = witnessStringToLowerCase(name);
+  if (boundary === 'ui-anchor') {
+    // SPEC §4.8 / §5.2 rule 10: the reviewed UI projection may not compete with the explicit href
+    // or any activation/isolation control, including through differently-cased duplicate JS keys.
+    // The compiler emits this boundary before JSX merging, so the browser never observes the key.
+    return lower === 'href' || elementContextSecurityControl('a', lower) !== undefined;
+  }
   if (boundary === 'mutation-form') {
     return lower === 'action' || lower === 'enctype' || lower === 'method';
   }
@@ -392,6 +503,115 @@ function isMutationTransportOverrideAttributeName(
     lower === 'formmethod' ||
     lower === 'formnovalidate' ||
     lower === 'formtarget'
+  );
+}
+
+interface UiAnchorRelationalControlFacts {
+  readonly derive: boolean;
+  readonly deriveAttribute: boolean;
+  readonly hrefBinding: boolean;
+  readonly trustedHrefMarker: boolean;
+}
+
+function uiAnchorRelationalControlFacts(
+  source: object,
+  names: readonly string[],
+): UiAnchorRelationalControlFacts {
+  const trustedHrefMarker = uiAnchorExactReceiptSnapshot(
+    source,
+    names,
+    'data-kovo-trusted-url:href',
+  );
+  const hasTrustedHrefMarker = trustedHrefMarker?.value === true;
+  const hrefBinding = uiAnchorExactReceiptSnapshot(source, names, 'data-bind:href');
+
+  const derive = uiAnchorExactReceiptSnapshot(source, names, 'data-derive');
+  const deriveAttribute = uiAnchorExactReceiptSnapshot(source, names, 'data-derive-attr');
+  const hasAnyDeriveAttribute = uiAnchorCaseFoldedNameCount(names, 'data-derive-attr') > 0;
+  const target =
+    deriveAttribute !== undefined && typeof deriveAttribute.value === 'string'
+      ? deriveAttribute.value
+      : undefined;
+  const safeOrdinaryDeriveTarget =
+    target !== undefined &&
+    runtimeSinkFamilyForAttribute(target) === 'attribute' &&
+    elementContextSecurityControl('a', target) === undefined;
+  const hrefDeriveTarget = target === 'href';
+  const hasAdmittedDeriveAttribute =
+    derive !== undefined &&
+    deriveAttribute !== undefined &&
+    (safeOrdinaryDeriveTarget || hrefDeriveTarget);
+  const hasAdmittedDerive =
+    derive !== undefined && (!hasAnyDeriveAttribute || hasAdmittedDeriveAttribute);
+  const hasHrefBinding = hrefBinding !== undefined;
+
+  return witnessFreeze({
+    derive: hasAdmittedDerive,
+    deriveAttribute: hasAdmittedDeriveAttribute,
+    hrefBinding: hasHrefBinding,
+    trustedHrefMarker:
+      hasTrustedHrefMarker && (hasHrefBinding || (hasAdmittedDerive && hrefDeriveTarget)),
+  });
+}
+
+function uiAnchorExactReceiptSnapshot(
+  source: object,
+  names: readonly string[],
+  name: string,
+): Readonly<{ name: string; value: unknown }> | undefined {
+  if (uiAnchorCaseFoldedNameCount(names, name) !== 1) return undefined;
+  const descriptor = witnessGetOwnPropertyDescriptor(source, name);
+  if (descriptor === undefined || !('value' in descriptor)) return undefined;
+  return generatedComponentControlSnapshot(name, descriptor.value);
+}
+
+function uiAnchorCaseFoldedNameCount(names: readonly string[], expected: string): number {
+  const normalizedExpected = witnessStringToLowerCase(expected);
+  let count = 0;
+  for (let index = 0; index < names.length; index += 1) {
+    const candidate = names[index];
+    if (candidate !== undefined && witnessStringToLowerCase(candidate) === normalizedExpected) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+function isUiAnchorGeneratedControlAttributeName(
+  name: string,
+  relational: UiAnchorRelationalControlFacts | undefined,
+): boolean {
+  if (!isKovoComponentHostControlAttribute(name)) return false;
+  if (name === 'data-derive') return relational?.derive === true;
+  if (name === 'data-derive-attr') return relational?.deriveAttribute === true;
+  if (name === 'data-bind:href') return relational?.hrefBinding === true;
+  if (name === 'data-kovo-trusted-url:href') {
+    return relational?.trustedHrefMarker === true;
+  }
+  if (witnessStringStartsWith(name, 'data-kovo-trusted-url:')) return false;
+  // No anchor UI primitive has a SPEC-backed need for property writes. In particular tabindex is
+  // an attribute binding, not one of §4.8's finite checked/indeterminate/value/scroll property
+  // sinks, so data-bind-prop:* remains closed here even with a genuine receipt.
+  if (!witnessStringStartsWith(name, 'data-bind:')) {
+    return !witnessStringStartsWith(name, 'data-bind-prop:');
+  }
+  const target = witnessStringToLowerCase(securityStringSlice(name, 'data-bind:'.length));
+  return (
+    runtimeSinkFamilyForAttribute(target) === 'attribute' &&
+    elementContextSecurityControl('a', target) === undefined
+  );
+}
+
+function isUiAnchorOrdinaryPassThroughAttributeName(name: string): boolean {
+  const lower = witnessStringToLowerCase(name);
+  // Match the canonical helper's case-sensitive projection. Security-deny checks above remain
+  // ASCII-case-insensitive so differently-cased HTML/control aliases cannot bypass them.
+  if (isKovoControlAttributeName(lower)) return false;
+  return (
+    witnessStringStartsWith(name, 'aria-') ||
+    (witnessStringStartsWith(name, 'data-') && name !== 'data-style-src') ||
+    name === 'hidden' ||
+    name === 'tabIndex'
   );
 }
 

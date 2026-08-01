@@ -855,6 +855,8 @@ export interface StateDeriveFact {
 export interface StateDeriveReferenceFact {
   attr: string;
   clientHref: string;
+  /** Exact generated receipt import local when the rewritten ref crosses a component host. */
+  componentControlHelper?: string;
   exportName: string;
   placeholder: string;
   target: { end: number; start: number };

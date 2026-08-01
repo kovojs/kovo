@@ -392,6 +392,8 @@ export interface JsxSpreadAttributeModel {
   start: number;
   /** Complete parser-owned entries used only by cross-attribute HTML wire classifiers. */
   staticWireAttributeEntries?: readonly StaticJsxWireAttributeEntry[];
+  /** Exact canonical `kovo add` pass-through call, proven at the parser boundary. */
+  uiCopyDefaultPassThrough?: true;
 }
 
 export interface JsxElementModel {

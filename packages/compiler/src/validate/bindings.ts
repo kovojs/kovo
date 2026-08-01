@@ -23,6 +23,7 @@ import {
 import { dedupeBy } from '../shared.js';
 import {
   callExpressions,
+  jsxAttributeSemanticStringValue,
   jsxElements,
   soleJsxExpressionChild,
   type ComponentModel,
@@ -239,16 +240,13 @@ function dataBindAttributes(model: ComponentModuleModel): DataBindAttribute[] {
   );
   for (let index = 0; index < attributes.length; index += 1) {
     const attribute = attributes[index]!;
-    if (
-      !isBindingAttribute(attribute.name) ||
-      attribute.value === undefined ||
-      attribute.value === ''
-    ) {
+    const value = jsxAttributeSemanticStringValue(attribute);
+    if (!isBindingAttribute(attribute.name) || value === undefined || value === '') {
       continue;
     }
     compilerArrayAppend(
       output,
-      dataBindAttributeFact(attribute.name, attribute.value, attribute),
+      dataBindAttributeFact(attribute.name, value, attribute),
       'Compiler data-bind attributes',
     );
   }

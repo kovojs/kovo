@@ -99,7 +99,7 @@ describe('SPEC §6.6 capability-closed module graph', () => {
         import { query, route } from '@kovojs/server';
         import { derive, kovoStyleProperty } from '@kovojs/browser/internal/output';
         import { renderGeneratedMutationFormFields } from '@kovojs/server/internal/csrf';
-        import { escapeText, kovoSafeJsxSpread } from '@kovojs/server/internal/escape';
+        import { escapeText, kovoGeneratedComponentControl, kovoSafeJsxSpread } from '@kovojs/server/internal/escape';
         import { defineCompiledRoutePage } from '@kovojs/server/internal/route';
         import { assignDerivedQueryKey as __kovoAssignDerivedQueryKey } from '@kovojs/server/internal/wire';
         export const lookup = __kovoAssignDerivedQueryKey(query({ run() { return 'safe'; } }), 'lookup');
@@ -123,7 +123,7 @@ describe('SPEC §6.6 capability-closed module graph', () => {
       },
       {
         importer: 'app.ts',
-        importedNames: ['escapeText', 'kovoSafeJsxSpread'],
+        importedNames: ['escapeText', 'kovoGeneratedComponentControl', 'kovoSafeJsxSpread'],
         kind: 'generated-internal-abi',
         site: 'app.ts:compiler-lowered',
         specifier: '@kovojs/server/internal/escape',

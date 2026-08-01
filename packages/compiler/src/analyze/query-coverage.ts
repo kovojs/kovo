@@ -15,6 +15,7 @@ import {
 } from '../compiler-security-intrinsics.js';
 import {
   callExpressions,
+  jsxAttributeSemanticStringValue,
   jsxElements,
   jsxExpressions,
   type ComponentModuleModel,
@@ -147,7 +148,9 @@ export function queryExpressionCoveredByDataBind(
     ? false
     : hasAttribute(
         element,
-        (attribute) => attribute.name === 'data-bind' && isQueryBindingPath(attribute.value),
+        (attribute) =>
+          attribute.name === 'data-bind' &&
+          isQueryBindingPath(jsxAttributeSemanticStringValue(attribute)),
       );
 }
 
@@ -172,7 +175,7 @@ function queryAttributeExpressionCoveredByDataBind(
       element,
       (attribute) =>
         attribute.name === `data-bind:${sourceAttribute.name}` &&
-        isQueryBindingPath(attribute.value),
+        isQueryBindingPath(jsxAttributeSemanticStringValue(attribute)),
     );
   }
 
@@ -189,13 +192,14 @@ export function stateExpressionCoveredByDataBind(
   const element = innermostContainingElement(expression, context);
   return element === null
     ? false
-    : hasAttribute(
-        element,
-        (attribute) =>
+    : hasAttribute(element, (attribute) => {
+        const value = jsxAttributeSemanticStringValue(attribute);
+        return (
           attribute.name === 'data-bind' &&
-          attribute.value !== undefined &&
-          compilerStringStartsWith(attribute.value, 'state.'),
-      );
+          value !== undefined &&
+          compilerStringStartsWith(value, 'state.')
+        );
+      });
 }
 
 function stateAttributeExpressionCoveredByDataBind(
@@ -215,13 +219,14 @@ function stateAttributeExpressionCoveredByDataBind(
     );
     if (!sourceAttribute) continue;
 
-    return hasAttribute(
-      element,
-      (attribute) =>
+    return hasAttribute(element, (attribute) => {
+      const value = jsxAttributeSemanticStringValue(attribute);
+      return (
         attribute.name === `data-bind:${sourceAttribute.name}` &&
-        attribute.value !== undefined &&
-        compilerStringStartsWith(attribute.value, 'state.'),
-    );
+        value !== undefined &&
+        compilerStringStartsWith(value, 'state.')
+      );
+    });
   }
 
   return false;

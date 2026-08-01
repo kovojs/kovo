@@ -21,6 +21,7 @@ import {
 } from '../compiler-security-intrinsics.js';
 import {
   callExpressions,
+  jsxAttributeSemanticStringValue,
   jsxElements,
   type ArrowFunctionPartsModel,
   type ComponentModuleModel,
@@ -182,10 +183,10 @@ export function dataDeriveStamps(
     );
     for (let attributeIndex = 0; attributeIndex < attributes.length; attributeIndex += 1) {
       const attribute = attributes[attributeIndex]!;
-      if (!compilerStringStartsWith(attribute.name, 'data-bind:') || !attribute.value) continue;
-      if (!attribute.value) continue;
+      const value = jsxAttributeSemanticStringValue(attribute);
+      if (!compilerStringStartsWith(attribute.name, 'data-bind:') || !value) continue;
 
-      const segments = parseBindingPath(attribute.value);
+      const segments = parseBindingPath(value);
       const inputSegment = segments[0];
       const nameSegment = segments[1];
       if (!inputSegment || !nameSegment || segments.length > 2) continue;
@@ -195,7 +196,7 @@ export function dataDeriveStamps(
       if (inputSegment.name === 'state') continue;
 
       const attr = compilerStringSlice(attribute.name, 'data-bind:'.length);
-      const selector = queryBindingAttributeSelector(attribute.name, attribute.value);
+      const selector = queryBindingAttributeSelector(attribute.name, value);
       const trustedUrl = hasTrustedUrlMarker(attributes, attr);
       compilerArrayAppend(
         stampFacts,
@@ -219,11 +220,17 @@ export function dataDeriveStamps(
     }
 
     const deriveAttribute = findAttribute(attributes, 'data-derive');
-    if (!deriveAttribute?.value) continue;
+    const deriveValue =
+      deriveAttribute === undefined ? undefined : jsxAttributeSemanticStringValue(deriveAttribute);
+    if (!deriveAttribute || !deriveValue) continue;
 
-    const attr = findAttribute(attributes, 'data-derive-attr')?.value;
+    const deriveAttrAttribute = findAttribute(attributes, 'data-derive-attr');
+    const attr =
+      deriveAttrAttribute === undefined
+        ? undefined
+        : jsxAttributeSemanticStringValue(deriveAttrAttribute);
 
-    const segments = parseBindingPath(deriveAttribute.value);
+    const segments = parseBindingPath(deriveValue);
     const inputSegment = segments[0];
     const nameSegment = segments[1];
     if (!inputSegment || !nameSegment || segments.length > 2) continue;
@@ -327,7 +334,7 @@ function findAttribute<Attribute extends { readonly name: string; readonly value
 ): Attribute | undefined {
   const source = compilerSnapshotDenseArray(attributes, 'Compiler derive attribute lookup');
   for (let index = 0; index < source.length; index += 1) {
-    if (source[index]!.name === name && source[index]!.value) return source[index]!;
+    if (source[index]!.name === name) return source[index]!;
   }
   return undefined;
 }

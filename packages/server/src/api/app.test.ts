@@ -721,6 +721,7 @@ describe('server app-shell public API barrels', () => {
       'escapeHtml',
       'escapeScriptJson',
       'escapeText',
+      'kovoGeneratedComponentControl',
       'kovoSafeJsxSpread',
       'safeUrlAttribute',
     ]);

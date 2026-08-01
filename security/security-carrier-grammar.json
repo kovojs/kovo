@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 354,
+    "historicalWitnesses": 357,
     "productions": 12
   },
   "productions": [
@@ -1792,10 +1792,22 @@
       "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
     },
     {
+      "anchor": "component-host-control-receipt-denominator",
+      "corpus": "html-wire-identity",
+      "production": "structural-closure",
+      "reason": "This witness closes the exact generated component-host receipt families and live-property suffix allowlist before a control can cross a copied component boundary."
+    },
+    {
       "anchor": "runtime-and-raw-html-closed-verdicts",
       "corpus": "html-wire-identity",
       "production": "encoding-variant",
       "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "copied-ui-component-host-receipt-runtime",
+      "corpus": "html-wire-identity",
+      "production": "runtime-floor",
+      "reason": "This witness requires the runtime UI-anchor reconstruction floor to unwrap only exact name-bound compiler receipts and reject forged or colliding controls."
     },
     {
       "anchor": "runtime-meta-refresh-first-attribute-verdict",
@@ -1814,6 +1826,12 @@
       "corpus": "html-wire-identity",
       "production": "positive-control",
       "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "copied-ui-component-host-receipt-compiler",
+      "corpus": "html-wire-identity",
+      "production": "helper-transfer",
+      "reason": "This witness binds each compiler-generated copied-component control to the exact private receipt helper transfer that preserves its client update plan."
     },
     {
       "anchor": "loopback-default-and-remote-bind-closed",
