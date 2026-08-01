@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { compileRouteModule } from '@kovojs/compiler';
-import { createApp } from '@kovojs/server/internal/fixture-app';
 import { renderRouteHtml } from '@kovojs/server/rendering';
 import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/test/csrf';
 import { accessFactsFromApp } from '../../../../../packages/server/src/internal/execution.js';
@@ -48,16 +47,14 @@ const tutorialLiveTargetAuthority = createLiveTargetTestAuthority<AddToCartReque
 );
 const tutorialWireCsrf = tutorialLiveTargetAuthority.app.csrf;
 
-const tutorialAccessApp = createApp({
-  egress: {
-    enabled: false,
-    justification: 'tutorial verification fixture performs no outbound I/O',
-  },
+// SPEC §5.2 rule 8: app-facing tests build fixtures from authored declarations instead of
+// importing the framework-maintenance createApp bridge.
+const tutorialAccessFacts = accessFactsFromApp({
+  endpoints: [],
   mutations: [addToCart],
   queries: [cartQuery, productsQuery, orderHistoryQuery],
   routes: [homeRoute],
 });
-const tutorialAccessFacts = accessFactsFromApp(tutorialAccessApp);
 
 // Tutorial step 07: the whole behavior surface is checkable without a
 // browser — kovo check over the app graph, kovo explain as the queryable
