@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
+import { decodeFrameworkQueryDependencyToken } from '@kovojs/core/internal/wire-input-grammar';
+import { htmlAttributeValue } from '../../../../../packages/server/src/component-root-stamps.js';
 import { renderRoutePageResponse } from '../../../../../packages/server/src/internal/route.js';
 import { createLiveTargetTestAuthority } from '../../../../../packages/server/src/test-fixtures.js';
 import { renderRouteHtml } from '@kovojs/server/rendering';
@@ -21,15 +23,27 @@ describe('tutorial step 03 — queries & data binding', () => {
   it('serves compiler-derived dependency and binding stamps', async () => {
     const html = await renderShopRoute();
 
-    // The queries declaration became kovo-deps plus inferred refresh target metadata.
-    expect(html).toContain(
-      `<cart-badge kovo-deps="${encodeURIComponent(cartQuery.key)}" kovo-fragment-target="cart-badge" kovo-live-component="components/cart-badge/cart-badge"`,
+    // SPEC §9.1/§10.2: query dependencies are semantic { name, key? } facts; HTML attribute order
+    // is not part of the wire contract. These unparameterized queries carry exact unkeyed names.
+    const cartAttrs = requiredOpeningTagAttributes(html, 'cart-badge');
+    expect(
+      decodeFrameworkQueryDependencyToken(requiredHtmlAttribute(cartAttrs, 'kovo-deps')),
+    ).toEqual({ name: cartQuery.key });
+    expect(requiredHtmlAttribute(cartAttrs, 'kovo-fragment-target')).toBe('cart-badge');
+    expect(requiredHtmlAttribute(cartAttrs, 'kovo-live-component')).toBe(
+      'components/cart-badge/cart-badge',
     );
-    expect(html).toContain('kovo-c="product-list"');
-    expect(html).toContain(`kovo-deps="${encodeURIComponent(productsQuery.key)}"`);
+
+    const productListAttrs = requiredOpeningTagAttributes(html, 'ul');
+    expect(requiredHtmlAttribute(productListAttrs, 'kovo-c')).toBe('product-list');
+    expect(
+      decodeFrameworkQueryDependencyToken(requiredHtmlAttribute(productListAttrs, 'kovo-deps')),
+    ).toEqual({ name: productsQuery.key });
 
     // {cart.count} became a typed data-bind path the loader can re-run.
-    expect(html).toContain('<span data-bind="cart.count">0</span>');
+    const countAttrs = requiredOpeningTagAttributes(html, 'span');
+    expect(requiredHtmlAttribute(countAttrs, 'data-bind')).toBe('cart.count');
+    expect(html).toMatch(/<span\b[^>]*>0<\/span>/u);
   });
   // /snippet
 
@@ -81,4 +95,16 @@ async function renderShopRoute(db: ShopDb = createShopDb()): Promise<string> {
   });
   if (typeof response.body !== 'string') throw new Error('expected a string page body');
   return response.body;
+}
+
+function requiredOpeningTagAttributes(html: string, tagName: string): string {
+  const match = new RegExp(`<${tagName}\\b([^>]*)>`, 'u').exec(html);
+  if (!match) throw new Error(`expected a <${tagName}> opening tag`);
+  return match[1] ?? '';
+}
+
+function requiredHtmlAttribute(attrs: string, name: string): string {
+  const value = htmlAttributeValue(attrs, name);
+  if (value === undefined) throw new Error(`expected ${name} on rendered tutorial element`);
+  return value;
 }
