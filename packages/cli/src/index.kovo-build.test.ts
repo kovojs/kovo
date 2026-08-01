@@ -66,8 +66,19 @@ const THREE_ISOLATED_BUILDS_TEST_TIMEOUT_MS = kovoCliTestTimeoutMs(
   KOVO_BUILD_TEST_PROCESS_DEADLINE_MS,
   KOVO_BUILD_TEST_PROCESS_DEADLINE_MS,
 );
+// Run 30690561205 proved that these two successful, artifact-inspecting builds can exceed the
+// common 180s child deadline on a hosted runner. Keep the larger 240s bound scoped to those exact
+// proofs; the derived Vitest timeout retains the bounded runner's 10s cleanup headroom.
+const HOSTED_SUCCESS_BUILD_PROCESS_DEADLINE_MS = 240_000;
+const HOSTED_SUCCESS_BUILD_TEST_TIMEOUT_MS = kovoCliTestTimeoutMs(
+  HOSTED_SUCCESS_BUILD_PROCESS_DEADLINE_MS,
+);
+const GUARDED_BUILD_SURFACES_TEST_NAME = 'does not report guarded build surfaces as UNGUARDED';
 const NESTED_ANALYSIS_INPUTS_TEST_NAME =
   'binds nested app imports and client entry to invocation-root-relative source identities';
+type HostedSuccessBuildTestName =
+  | typeof GUARDED_BUILD_SURFACES_TEST_NAME
+  | typeof NESTED_ANALYSIS_INPUTS_TEST_NAME;
 const DECLASSIFICATION_DOOR_TEST_NAME =
   'request-closes a declassification door imported by the application root';
 const DRIZZLE_DISK_CACHE_TEST_NAME =
@@ -99,6 +110,10 @@ function isolatedBuildIt(name: string, run: () => Promise<void>): void {
 
 function isolatedThreeBuildsIt(name: string, run: () => Promise<void>): void {
   it(name, run, THREE_ISOLATED_BUILDS_TEST_TIMEOUT_MS);
+}
+
+function hostedSuccessBuildIt(name: HostedSuccessBuildTestName, run: () => Promise<void>): void {
+  it(name, run, HOSTED_SUCCESS_BUILD_TEST_TIMEOUT_MS);
 }
 
 function buildFixtureMutationBody(
@@ -1767,7 +1782,7 @@ export default app.assemble({ mutations: [decoy, actual] });
     }
   }, 90_000);
 
-  isolatedBuildIt('does not report guarded build surfaces as UNGUARDED', async () => {
+  hostedSuccessBuildIt(GUARDED_BUILD_SURFACES_TEST_NAME, async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-access-facts-'));
     const appPath = join(root, 'app.mjs');
     const outDir = join(root, 'dist');
@@ -1843,7 +1858,7 @@ export default app.assemble({
       const build = await runBoundedKovoCli({
         args: ['build', './app.mjs', '--out', outDir],
         cwd: root,
-        deadlineMs: KOVO_BUILD_TEST_PROCESS_DEADLINE_MS,
+        deadlineMs: HOSTED_SUCCESS_BUILD_PROCESS_DEADLINE_MS,
       });
       expect(build.exitCode, build.stderr).toBe(0);
       expect(build.stderr).not.toContain('UNGUARDED');
@@ -1939,7 +1954,7 @@ export default app.assemble({
     }
   });
 
-  isolatedBuildIt(NESTED_ANALYSIS_INPUTS_TEST_NAME, async () => {
+  hostedSuccessBuildIt(NESTED_ANALYSIS_INPUTS_TEST_NAME, async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-nested-analysis-inputs-'));
     const outDir = join(root, 'dist');
     const appSource = [
@@ -1980,7 +1995,7 @@ export default app.assemble({
       const build = await runBoundedKovoCli({
         args: ['build', './src/app.mjs', '--out', 'dist'],
         cwd: root,
-        deadlineMs: KOVO_BUILD_TEST_PROCESS_DEADLINE_MS,
+        deadlineMs: HOSTED_SUCCESS_BUILD_PROCESS_DEADLINE_MS,
       });
       expect(build.exitCode, build.stderr).toBe(0);
 

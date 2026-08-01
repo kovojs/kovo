@@ -759,6 +759,18 @@ describe('ci-shards', () => {
     expect(postgresSource.match(/\}, 600_000\);/gu)).toHaveLength(2);
     expect(buildExportSource).toContain('const staticTrustWorkerTimeoutMs = 420_000;');
     expect(indexBuildSource).toContain('const BUILD_INTEGRATION_TEST_TIMEOUT_MS = 90_000;');
+    expect(indexBuildSource).toContain('const HOSTED_SUCCESS_BUILD_PROCESS_DEADLINE_MS = 240_000;');
+    expect(indexBuildSource).toContain(
+      'const HOSTED_SUCCESS_BUILD_TEST_TIMEOUT_MS = kovoCliTestTimeoutMs(',
+    );
+    expect(
+      [...indexBuildSource.matchAll(/^  hostedSuccessBuildIt\(([^,]+),/gmu)].map(
+        ([, testName]) => testName,
+      ),
+    ).toEqual(['GUARDED_BUILD_SURFACES_TEST_NAME', 'NESTED_ANALYSIS_INPUTS_TEST_NAME']);
+    expect(
+      indexBuildSource.match(/deadlineMs: HOSTED_SUCCESS_BUILD_PROCESS_DEADLINE_MS/gu),
+    ).toHaveLength(2);
     expect(indexBuildSource).toContain(
       "describe('kovo build', { concurrent: false, timeout: BUILD_INTEGRATION_TEST_TIMEOUT_MS }",
     );
