@@ -6,7 +6,10 @@ import { and, asc, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
 import {
+  canonicalQueryInstanceKeyValue,
+  decodeFrameworkLiveTargetHeader,
   decodeFrameworkQueryDependencyToken,
+  decodeFrameworkTargetHeader,
   encodeFrameworkLiveTargetHeader,
   encodeFrameworkTargetHeader,
   type FrameworkQueryDependencyIdentity,
@@ -143,6 +146,58 @@ function readDeps(value: string | undefined): FrameworkQueryDependencyIdentity[]
     });
 }
 
+// SPEC §9.1/§10.2: parameterized dependencies carry the exact query name and canonical full
+// instance key. Tests compare those semantic facts after decoding instead of matching wire bytes.
+function questionDetailDependencies(questionId: string): FrameworkQueryDependencyIdentity[] {
+  return [
+    keyedQueryDependency('queries/question-answers', ['questionId'], { questionId }),
+    keyedQueryDependency('queries/question-detail', ['id'], { id: questionId }),
+  ];
+}
+
+function keyedQueryDependency(
+  name: string,
+  declaredFields: readonly string[],
+  input: Readonly<Record<string, string>>,
+): FrameworkQueryDependencyIdentity {
+  return {
+    key: `${name}:${canonicalQueryInstanceKeyValue(declaredFields, input)}`,
+    name,
+  };
+}
+
+function requiredTargetFromHeader(header: string, target: string) {
+  const entry = decodeFrameworkTargetHeader(header).find(
+    (candidate) => candidate.target === target,
+  );
+  if (!entry) throw new Error(`StackOverflow document omitted Kovo target ${target}.`);
+  return entry;
+}
+
+function requiredLiveTargetFromHeader(header: string, target: string) {
+  const entry = decodeFrameworkLiveTargetHeader(header, JSON.parse).find(
+    (candidate) => candidate.target === target,
+  );
+  if (!entry) throw new Error(`StackOverflow document omitted live Kovo target ${target}.`);
+  return entry;
+}
+
+function sortedQueryDependencies(
+  dependencies: readonly FrameworkQueryDependencyIdentity[],
+): FrameworkQueryDependencyIdentity[] {
+  return dependencies
+    .map((dependency) =>
+      dependency.key === undefined
+        ? { name: dependency.name }
+        : { key: dependency.key, name: dependency.name },
+    )
+    .sort((left, right) => {
+      const leftIdentity = `${left.name}\0${left.key ?? ''}`;
+      const rightIdentity = `${right.name}\0${right.key ?? ''}`;
+      return leftIdentity < rightIdentity ? -1 : leftIdentity > rightIdentity ? 1 : 0;
+    });
+}
+
 function readTagAttributes(tag: string): Record<string, string> {
   const attrs: Record<string, string> = {};
   for (const match of tag.matchAll(/\s([A-Za-z_:][\w:.-]*)=(?:"([^"]*)"|'([^']*)')/g)) {
@@ -261,12 +316,12 @@ describe('stackoverflow interactive app', () => {
     const { handler } = await buildSoInteractiveApp();
     const routes = [
       {
-        deps: 'queries%2Fquestion-list queries%2Fquestion-score',
+        deps: [{ name: 'queries/question-list' }, { name: 'queries/question-score' }],
         route: '/',
         target: questionListTarget,
       },
       {
-        deps: 'queries%2Fquestion-answers queries%2Fquestion-detail',
+        deps: questionDetailDependencies('q1'),
         route: '/questions/q1',
         target: `${questionDetailTarget}:q1`,
       },
@@ -284,7 +339,11 @@ describe('stackoverflow interactive app', () => {
       expect(html).toContain('<!doctype html>');
       expect(html).toContain('<main');
       expect(html).toContain(`kovo-fragment-target="${target}"`);
-      expect(html).toContain(`kovo-deps="${deps}"`);
+      const documentTarget = requiredTargetFromHeader(
+        browserCollectedLiveHeaders(html).targets,
+        target,
+      );
+      expect(sortedQueryDependencies(documentTarget.deps)).toEqual(sortedQueryDependencies(deps));
       expect(html).toContain(
         '<kovo-defer target="stackoverflow-right-rail" state="pending" data-kovo-region-priority="visible">',
       );
@@ -411,13 +470,15 @@ describe('stackoverflow interactive app', () => {
 
     const headers = await browserCollectedLiveHeadersForRoute(handler, `/questions/${question.id}`);
     const detailTarget = `${questionDetailTarget}:${question.id}`;
-    expect(headers.targets).toContain(
-      `${encodeURIComponent(detailTarget)}=queries%2Fquestion-answers queries%2Fquestion-detail`,
+    const target = requiredTargetFromHeader(headers.targets, detailTarget);
+    expect(sortedQueryDependencies(target.deps)).toEqual(
+      sortedQueryDependencies(questionDetailDependencies(question.id)),
     );
-    expect(headers.liveTargets).toContain(
-      `${encodeURIComponent(detailTarget)}#${encodeURIComponent(questionDetailComponent)}@`,
-    );
-    expect(headers.liveTargets).toContain(`:${JSON.stringify({ questionId: question.id })}`);
+    const liveTarget = requiredLiveTargetFromHeader(headers.liveTargets, detailTarget);
+    expect(liveTarget.component).toBe(questionDetailComponent);
+    expect(liveTarget.props).toEqual({ questionId: question.id });
+    expect(liveTarget.target).toBe(detailTarget);
+    expect(liveTarget.attestation).not.toBe('');
 
     const { status, html } = await postForm(
       handler,
