@@ -15,4 +15,4 @@ export const ADVERSARIAL_RESIDUAL_TEST_TIMEOUT_MS: Readonly<
   Record<AdversarialResidualProofId, number>
 >;
 
-export function adversarialResidualTestTimeoutMs(id: string): number;
+export function adversarialResidualTestTimeoutMs(id: AdversarialResidualProofId): number;

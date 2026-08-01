@@ -15,7 +15,10 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { writeKovoProject, type CreateKovoDialect } from './index.js';
-import { adversarialResidualTestTimeoutMs } from './index.build.prod-artifact.adversarial-deadlines.mjs';
+import {
+  adversarialResidualTestTimeoutMs,
+  type AdversarialResidualProofId,
+} from './index.build.prod-artifact.adversarial-deadlines.mjs';
 import {
   addAuthSecretLeakProof,
   addEscapedAttackerTextProof,
@@ -55,7 +58,7 @@ const BUGZ31_GLOBAL_MEMBER_CARRIER_PROOFS = [
 
 type Bugz31GlobalMemberCarrierProof = (typeof BUGZ31_GLOBAL_MEMBER_CARRIER_PROOFS)[number];
 
-function uniformResidualProofTimeout(ids: readonly string[]): number {
+function uniformResidualProofTimeout(ids: readonly AdversarialResidualProofId[]): number {
   const timeouts = ids.map((id) => adversarialResidualTestTimeoutMs(id));
   const first = timeouts[0];
   if (first === undefined || timeouts.some((timeoutMs) => timeoutMs !== first)) {
