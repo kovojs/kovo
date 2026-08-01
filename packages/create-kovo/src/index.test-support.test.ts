@@ -13,6 +13,7 @@ import {
   formatGeneratedProjectSources,
 } from './index.build.test-support.js';
 import { writeKovoProject } from './index.js';
+import { testProcessCensusArguments } from './index.test-process-supervisor.mjs';
 import {
   GENERATED_STARTER_CLI_PROCESS_TIMEOUT_MS,
   GENERATED_STARTER_CLI_SIGNAL_GRACE_MS,
@@ -31,6 +32,22 @@ const soundSubsetScript = fileURLToPath(
 const repoNodeModules = fileURLToPath(new URL('../../../node_modules', import.meta.url));
 
 describe('create-kovo starter test support', () => {
+  it.skipIf(process.platform !== 'linux' && process.platform !== 'darwin')(
+    'uses one finite process-census command accepted by the supported host ps',
+    () => {
+      const args = testProcessCensusArguments();
+      expect(args).toEqual(['eww', '-A', '-o', 'pid=,ppid=,pgid=,stat=,command=']);
+
+      const census = spawnSync('ps', args, {
+        encoding: 'utf8',
+        env: process.env,
+        maxBuffer: 32 * 1024 * 1024,
+      });
+      expect(census.status, census.stderr).toBe(0);
+      expect(census.stdout).toMatch(/^\s*\d+\s+\d+\s+\d+\s+\S+\s+/mu);
+    },
+  );
+
   it('keeps Vitest outside every generated-starter child and cleanup deadline', () => {
     const oneCli = generatedStarterTestTimeout({ cliProcessCount: 1 });
     const twoCli = generatedStarterTestTimeout({ cliProcessCount: 2 });

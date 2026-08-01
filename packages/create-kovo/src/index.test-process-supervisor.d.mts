@@ -74,3 +74,5 @@ export function runBoundedTestProcessForTest(
 ): Promise<BoundedTestProcessOutcome>;
 
 export function assertSupportedTestProcessPlatform(platform?: NodeJS.Platform): void;
+
+export function testProcessCensusArguments(platform?: NodeJS.Platform): readonly string[];

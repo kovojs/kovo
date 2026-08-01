@@ -12,6 +12,7 @@ const DEFAULT_CENSUS_INTERVAL_MS = 100;
 const DEFAULT_CENSUS_TIMEOUT_MS = 5_000;
 const PROCESS_CENSUS_MAX_BYTES = 32 * 1024 * 1024;
 const PROCESS_CENSUS_MAX_LINE_BYTES = 2 * 1024 * 1024;
+const PROCESS_CENSUS_FIELDS = 'pid=,ppid=,pgid=,stat=,command=';
 const PROCESS_MARKER_PREFIX = 'KOVO_TEST_PROCESS_MARKER_';
 
 /**
@@ -38,6 +39,12 @@ export function assertSupportedTestProcessPlatform(platform = process.platform) 
   throw new Error(
     `bounded test process supervision supports only the repository's Linux and macOS test hosts; received ${platform}`,
   );
+}
+
+/** Test-only seam proving the shared GNU procps/BSD ps invocation on both supported hosts. */
+export function testProcessCensusArguments(platform = process.platform) {
+  assertSupportedTestProcessPlatform(platform);
+  return ['eww', '-A', '-o', PROCESS_CENSUS_FIELDS];
 }
 
 function markedChildEnvironment(requestedEnvironment, markerName) {
@@ -379,17 +386,20 @@ async function snapshotProcessTable(markerName, deadlineAtMs) {
 
   return new Promise((resolve, reject) => {
     const table = new Map();
-    const census = spawn('ps', ['eww', '-axo', 'pid=,ppid=,pgid=,stat=,command='], {
+    const census = spawn('ps', testProcessCensusArguments(), {
       env: process.env,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     census.stdout.setEncoding('utf8');
+    census.stderr.setEncoding('utf8');
     let settled = false;
+    let censusStderr = '';
     let totalBytes = 0;
     let remainder = '';
 
     const dispose = () => {
       clearTimeout(timer);
+      censusStderr = '';
       remainder = '';
       census.stdout.removeAllListeners();
       census.stderr.removeAllListeners();
@@ -457,7 +467,9 @@ async function snapshotProcessTable(markerName, deadlineAtMs) {
       totalBytes += Buffer.byteLength(chunk);
       if (totalBytes > PROCESS_CENSUS_MAX_BYTES) {
         fail(new Error('process census exceeded its bounded read allowance'));
+        return;
       }
+      censusStderr += chunk;
     });
     census.stderr.on('error', (error) =>
       fail(new Error(`process census stderr failed: ${error.message}`)),
@@ -469,7 +481,14 @@ async function snapshotProcessTable(markerName, deadlineAtMs) {
         if (record !== undefined) table.set(record.pid, record);
       }
       if (code !== 0) {
-        fail(new Error(`process census exited unsuccessfully (${signal ?? code ?? 'unknown'})`));
+        const detail = censusStderr.trim();
+        fail(
+          new Error(
+            `process census exited unsuccessfully (${signal ?? code ?? 'unknown'})${
+              detail === '' ? '' : `: ${detail}`
+            }`,
+          ),
+        );
         return;
       }
       settled = true;
