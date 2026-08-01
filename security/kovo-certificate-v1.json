@@ -100,8 +100,9 @@
     "@kovojs/core/dist/internal/wire-input-grammar.mjs",
     "@kovojs/core/dist/internal/wire-json.mjs",
     "@kovojs/core/dist/json-clone-DyZpkX4r.mjs",
+    "@kovojs/core/dist/runtime-audit-collector-DUzjLpcY.mjs",
     "@kovojs/core/dist/scoped-key-YZj-euZq.mjs",
-    "@kovojs/core/dist/secret-Csi-n27k.mjs",
+    "@kovojs/core/dist/secret-ywBFPdCr.mjs",
     "@kovojs/core/dist/security-decision-CSd_sj2A.mjs",
     "@kovojs/core/dist/security.mjs",
     "@kovojs/core/dist/semantic-attributes-GZzOYMkL.mjs",
@@ -687,8 +688,9 @@
     "@kovojs/core/dist/internal/wire-input-grammar.mjs": [],
     "@kovojs/core/dist/internal/wire-json.mjs": [],
     "@kovojs/core/dist/json-clone-DyZpkX4r.mjs": [],
+    "@kovojs/core/dist/runtime-audit-collector-DUzjLpcY.mjs": [],
     "@kovojs/core/dist/scoped-key-YZj-euZq.mjs": [],
-    "@kovojs/core/dist/secret-Csi-n27k.mjs": [],
+    "@kovojs/core/dist/secret-ywBFPdCr.mjs": [],
     "@kovojs/core/dist/security-decision-CSd_sj2A.mjs": [],
     "@kovojs/core/dist/security.mjs": [],
     "@kovojs/core/dist/semantic-attributes-GZzOYMkL.mjs": [],
@@ -4070,6 +4072,10 @@
       "@kovojs/core/dist/internal/security-witness-intrinsics.mjs"
     ],
     [
+      "@kovojs/core/dist/internal/security-markers.mjs",
+      "@kovojs/core/dist/runtime-audit-collector-DUzjLpcY.mjs"
+    ],
+    [
       "@kovojs/core/dist/internal/security-operation-ir.mjs",
       "@kovojs/core/dist/internal/security-witness-intrinsics.mjs"
     ],
@@ -4083,7 +4089,7 @@
     ],
     [
       "@kovojs/core/dist/internal/security.mjs",
-      "@kovojs/core/dist/secret-Csi-n27k.mjs"
+      "@kovojs/core/dist/secret-ywBFPdCr.mjs"
     ],
     [
       "@kovojs/core/dist/internal/semantic-attributes.mjs",
@@ -4159,10 +4165,14 @@
     ],
     [
       "@kovojs/core/dist/internal/wire-json.mjs",
-      "@kovojs/core/dist/secret-Csi-n27k.mjs"
+      "@kovojs/core/dist/secret-ywBFPdCr.mjs"
     ],
     [
       "@kovojs/core/dist/json-clone-DyZpkX4r.mjs",
+      "@kovojs/core/dist/internal/security-witness-intrinsics.mjs"
+    ],
+    [
+      "@kovojs/core/dist/runtime-audit-collector-DUzjLpcY.mjs",
       "@kovojs/core/dist/internal/security-witness-intrinsics.mjs"
     ],
     [
@@ -4170,24 +4180,24 @@
       "@kovojs/core/dist/internal/security-witness-intrinsics.mjs"
     ],
     [
-      "@kovojs/core/dist/secret-Csi-n27k.mjs",
+      "@kovojs/core/dist/secret-ywBFPdCr.mjs",
       "@kovojs/core/dist/audit-text-CmsLNB8H.mjs"
     ],
     [
-      "@kovojs/core/dist/secret-Csi-n27k.mjs",
-      "@kovojs/core/dist/internal/security-markers.mjs"
-    ],
-    [
-      "@kovojs/core/dist/secret-Csi-n27k.mjs",
+      "@kovojs/core/dist/secret-ywBFPdCr.mjs",
       "@kovojs/core/dist/internal/security-witness-intrinsics.mjs"
     ],
     [
-      "@kovojs/core/dist/secret-Csi-n27k.mjs",
+      "@kovojs/core/dist/secret-ywBFPdCr.mjs",
+      "@kovojs/core/dist/runtime-audit-collector-DUzjLpcY.mjs"
+    ],
+    [
+      "@kovojs/core/dist/secret-ywBFPdCr.mjs",
       "@kovojs/core/dist/security-decision-CSd_sj2A.mjs"
     ],
     [
       "@kovojs/core/dist/security.mjs",
-      "@kovojs/core/dist/secret-Csi-n27k.mjs"
+      "@kovojs/core/dist/secret-ywBFPdCr.mjs"
     ],
     [
       "@kovojs/core/dist/semantic-attributes-GZzOYMkL.mjs",
@@ -10828,7 +10838,7 @@
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     }
   ],
-  "policySha512": "sha512-/oXQjtAr/H7/Lkq9w6DKx+n1dGO0CbY2X2xpLJFrPHP2XgczZ6FoPtHc3INvz2Wr19fDo31RnFTw0hcFtU8bKw==",
+  "policySha512": "sha512-uuOa778waTDrGAOC4YosVBQNrNOACvhv/x7LK3nQasKbAttslPBn8Uq3GqTPwuGRmbmpr5WWoxdlecDefPvQVw==",
   "roots": [
     {
       "module": "@kovojs/better-auth/dist/index.mjs",

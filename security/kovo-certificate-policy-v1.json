@@ -82,11 +82,11 @@
     },
     {
       "path": "@kovojs/browser/dist/deferred-app-runtime-identity.mjs",
-      "sha512": "sha512-zphBAb4l4uXlqHeq5/FwmyyoicXKMtbv58ftJe1hNwcwsFDZBstx+irCKLHRFFES7Zl06Pr3bVQZXnRFxV041Q=="
+      "sha512": "sha512-pt3aLoexIHsULOjiboLszfeLl1fj6F6XMoKH4iLJBiAZunuZMnX7Gfoh1K1ZEre7bGpZfPpuUhH3UR8xRdqMBw=="
     },
     {
       "path": "@kovojs/browser/dist/deferred-app-runtime-module.mjs",
-      "sha512": "sha512-R1fvCilqnuupBcqT65eksHiiDiUugzCxUE3rqVYwQMpSqfmWAGayCVzIif8j6wWTbOh+cxQT5yEwq5ZCzcdC7w=="
+      "sha512": "sha512-m/fuYLqSzgpzvkBNuuoQ1IbZwCMnfTx3IK8lq0O+rWE+nBv3Alw4OvZVD2LXLAcvvGooLwh1aYNdyDK1nNrXgg=="
     },
     {
       "path": "@kovojs/browser/dist/derive-C7KCgbCY.mjs",
@@ -190,7 +190,7 @@
     },
     {
       "path": "@kovojs/compiler/dist/internal.mjs",
-      "sha512": "sha512-ZjyaZeo5BLeRJX6MxvEGBA00it8Id586fmKofmZK9X+Z7N8arAsQ7zQU4vrLKoQAdAnXCp0ivLbr5pLx9s4cIQ=="
+      "sha512": "sha512-BMgGtMcJ0zQ00g5XyKqMVRw1upVTcmS0SI9bHqJSGJUsn2yVmBNZPdadUZGNKNfS0EVN1DXXZD/ql53mpFNmcg=="
     },
     {
       "path": "@kovojs/compiler/dist/internal/graph.mjs",
@@ -346,7 +346,7 @@
     },
     {
       "path": "@kovojs/core/dist/internal/security-markers.mjs",
-      "sha512": "sha512-H4P1CAgicetu9sc4+bm8oFVrO1yYVFJGJdmQ6Mk9ISeGF2Qh3AP1Yi0hqfc91SzykTC0AifgFMVI65HGqs4bdQ=="
+      "sha512": "sha512-K/94/6LTsOydM8MWog3AuILRawK65qlbSxHb03xB9+/TOeVaFjkCt+0ALNv8Cjn/5e+/hYEcCh7Z/aL1Fz1HRw=="
     },
     {
       "path": "@kovojs/core/dist/internal/security-operation-ir.mjs",
@@ -362,7 +362,7 @@
     },
     {
       "path": "@kovojs/core/dist/internal/security.mjs",
-      "sha512": "sha512-4/IQIoaBfYYpLP7F0J4zksj9ZehmhPMbJPPPNq0qOox+W0FVLVb3bJnX9CNZHOxCLrSmCyrEK2OXk5OvmmH8rA=="
+      "sha512": "sha512-1/86bxrFY1nWRwITIggMPEK0y8sj8c8gixUAtYG6MV+OuI61FrvsaXioTHgT2Q4pp3/rHRe7HOISYI6Q0uXptw=="
     },
     {
       "path": "@kovojs/core/dist/internal/semantic-attributes.mjs",
@@ -394,19 +394,23 @@
     },
     {
       "path": "@kovojs/core/dist/internal/wire-json.mjs",
-      "sha512": "sha512-AayOx74ogwjjmhTGKdu3LRgFRMj6TP+mVm7rJbwgQe6ajFg0w5Z9t8mOe12GUex802o+OxGh4Qo+5yKsA5qUnA=="
+      "sha512": "sha512-Ol7iwiOFwiggn7JUB5bX2nYlkANsxGSUbLg0zEuAlIcRnki8jsqJEQpGBzUrs6l/i7NHTXLpvJrZU51MZzUCNA=="
     },
     {
       "path": "@kovojs/core/dist/json-clone-DyZpkX4r.mjs",
       "sha512": "sha512-gwYzSk3571RWIeKTA0AlvLxnth7r2PuqZafDZSTTNj4z+NfTzKSEOs/SkF6V8jUlRGNrElpbt/FOfSc2QRH2ig=="
     },
     {
+      "path": "@kovojs/core/dist/runtime-audit-collector-DUzjLpcY.mjs",
+      "sha512": "sha512-ta1AAVopraYb0OlXVYpSMazasei5FqzsnQSuBWPZMBfSxMa8yYAJG4+cJ3Zr0d/lybtaNRYLtaTgLZyS2fJldA=="
+    },
+    {
       "path": "@kovojs/core/dist/scoped-key-YZj-euZq.mjs",
       "sha512": "sha512-4mX1W5jX2BSGeFpyhEot0p4dGb6+0LUDfErw83rXrs7PjNBKYYQme5Zu26pe0ocOoyx0iXzjwkDKi+yR3792Yg=="
     },
     {
-      "path": "@kovojs/core/dist/secret-Csi-n27k.mjs",
-      "sha512": "sha512-nQwEiZXms1w7RAALYvPQLCzr0hHJ/IGzrNHcDcVwj6FhOdjFly8I2lTpW4eHKExj+XfIY3VsQuZF7GHGzXlTmQ=="
+      "path": "@kovojs/core/dist/secret-ywBFPdCr.mjs",
+      "sha512": "sha512-7ICTrWg3iee/v1B1bLO0EC5dOSowEuc6UMDfItO+KEuNZdg7cMwFA8i+IOvf//k4t6iexc7q7++MAdhVSVImrg=="
     },
     {
       "path": "@kovojs/core/dist/security-decision-CSd_sj2A.mjs",
@@ -414,7 +418,7 @@
     },
     {
       "path": "@kovojs/core/dist/security.mjs",
-      "sha512": "sha512-fiCNh0qvyh4MQl0/AXYdg0dnyaEjbVsTLyLPHLiuLq88nN6wG4yIXPAhG+Zl71D7L52y/7rLbyX2kuhQvb6p8Q=="
+      "sha512": "sha512-uD3/DWMJZvdTf+ohOGl4ExKlTydsSB4ypBxo0GXFE2pQ44bqWc78JBMa0LfF2f82VoBq32vFU2vVKqVDQE0q/g=="
     },
     {
       "path": "@kovojs/core/dist/semantic-attributes-GZzOYMkL.mjs",
