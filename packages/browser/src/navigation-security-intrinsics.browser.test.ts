@@ -508,6 +508,32 @@ describe('browser navigation security controls', () => {
     }
   });
 
+  it('witnesses focus controls without moving the active element or dispatching focus events', () => {
+    const root = document.createElement('main');
+    const button = document.createElement('button');
+    root.append(button);
+    document.body.append(root);
+    button.focus();
+    let blurCalls = 0;
+    let focusCalls = 0;
+    button.addEventListener('blur', () => {
+      blurCalls += 1;
+    });
+    button.addEventListener('focus', () => {
+      focusCalls += 1;
+    });
+
+    try {
+      const controls = createBrowserNavigationSecurityControls();
+      expect(controls.readDocumentActiveElement()).toBe(button);
+      expect(document.activeElement).toBe(button);
+      expect(blurCalls).toBe(0);
+      expect(focusCalls).toBe(0);
+    } finally {
+      document.body.replaceChildren();
+    }
+  });
+
   it('keeps URL, Headers, and DOMParser decisions pinned after late replacement', () => {
     const controls = createBrowserNavigationSecurityControls();
     const originDescriptor = Object.getOwnPropertyDescriptor(URL.prototype, 'origin')!;
@@ -645,7 +671,11 @@ describe('browser navigation security controls', () => {
     }
     Object.defineProperty(HTMLElement.prototype, 'focus', {
       ...focus,
-      value() {},
+      value(this: HTMLElement) {
+        if (!(this instanceof HTMLElement)) {
+          throw new TypeError('poisoned focus rejected a foreign receiver');
+        }
+      },
     });
     try {
       expect(() => createBrowserNavigationSecurityControls()).toThrow(

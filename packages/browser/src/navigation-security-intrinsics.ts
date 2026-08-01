@@ -228,7 +228,7 @@ export function createBrowserNavigationSecurityControls(
     ? valueMethod(NativeElement.prototype, 'replaceWith')
     : undefined;
   const htmlElementFocus = NativeHTMLElement
-    ? stableMethod(NativeHTMLElement.prototype, 'focus')
+    ? valueMethod(NativeHTMLElement.prototype, 'focus')
     : undefined;
   const nodeCloneNode = NativeNode ? valueMethod(NativeNode.prototype, 'cloneNode') : undefined;
   const nodeAppendChild = NativeNode ? valueMethod(NativeNode.prototype, 'appendChild') : undefined;
@@ -3547,7 +3547,6 @@ export function createBrowserNavigationSecurityControls(
           !attrName ||
           !attrValue ||
           !documentActiveElement ||
-          !documentElement ||
           !elementQuerySelector ||
           !elementQuerySelectorAll ||
           (NativeDocument !== undefined && !documentQuerySelectorAll) ||
@@ -3668,36 +3667,26 @@ export function createBrowserNavigationSecurityControls(
           apply<unknown>(textAreaSelectionEnd, textAreaPropertyControl, []) !== 5 ||
           apply<unknown>(textAreaSelectionDirection, textAreaPropertyControl, []) !== 'forward'
         ) {
-          return false;
+          return fail('DOM form property controls');
         }
-        const focusParentControl = apply<unknown>(documentElement, documentObject, []);
-        const previousActiveControl = apply<unknown>(documentActiveElement, documentObject, []);
-        if (focusParentControl === null || typeof focusParentControl !== 'object') return false;
-        apply(nodeAppendChild, focusParentControl, [propertyControl]);
-        try {
-          apply(htmlElementFocus, propertyControl, []);
-          if (apply<unknown>(documentActiveElement, documentObject, []) !== propertyControl) {
-            return false;
-          }
-        } finally {
-          apply(elementRemove, propertyControl, []);
-          if (
-            previousActiveControl !== null &&
-            typeof previousActiveControl === 'object' &&
-            apply<unknown>(nodeIsConnected, previousActiveControl, []) === true
-          ) {
-            try {
-              apply(htmlElementFocus, previousActiveControl, []);
-            } catch {}
-          }
+        // SPEC §6.6/§9.1: focus is observable. A connected witness can dispatch authored
+        // focus/blur handlers, steal browsing-context focus, and suppress iframe reloads. Capture
+        // only the platform's own data method, validate its own name/arity descriptors, exercise a
+        // detached real receiver, and prove its receiver brand without changing document focus.
+        if (
+          readOwnData(htmlElementFocus, 'name') !== 'focus' ||
+          readOwnData(htmlElementFocus, 'length') !== 0
+        ) {
+          return fail('DOM focus control');
         }
+        apply(htmlElementFocus, propertyControl, []);
         let rejectedForeignFocusReceiver = false;
         try {
           apply(htmlElementFocus, {}, []);
         } catch {
           rejectedForeignFocusReceiver = true;
         }
-        if (!rejectedForeignFocusReceiver) return false;
+        if (!rejectedForeignFocusReceiver) return fail('DOM focus receiver rejection');
         apply(nodeAppendChild, snapshotControl, [nestedControl]);
         apply(nodeAppendChild, insertParentControl, [insertAnchorControl]);
         if (
