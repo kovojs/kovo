@@ -652,7 +652,7 @@ describe('security-test-build-gate', () => {
         'migrateRuntimeSecretBoundaryProof(root, dataDir)',
         'queries/runtime-secret-column-engine-denial-query',
         '/permission denied for table runtime_secret_proof/u',
-        "expect(requestOutput).not.toContain('KV435')",
+        "expect(failureLine).not.toContain('KV435')",
       ]),
       testName,
     });
@@ -673,7 +673,7 @@ describe('security-test-build-gate', () => {
         "const boxed = secret('runtime-secret-value')",
         'queries/runtime-secret-explicit-box-egress-query',
         'expect(boxResponse.status, `${key}: ${boxBody}`).toBe(500)',
-        "expect(requestOutput).toContain('KV435')",
+        "expect(failureLine).toContain('KV435')",
       ]),
       testName,
     });
@@ -683,11 +683,11 @@ describe('security-test-build-gate', () => {
       requiredNeedles: expect.arrayContaining([
         'addRequestClosedDeclassificationProof(root)',
         'captureBuildFailure(() => buildParanoidProductionArtifact(root))',
-        "trustedReveal(secret('runtime-secret-value'), DeclassifyPolicy.forTrustedReveal({",
+        "/trustedReveal\\(\\s*secret\\('runtime-secret-value'\\),\\s*DeclassifyPolicy\\.forTrustedReveal\\(\\{",
         "ownerScope: 'application'",
         "expect(output).toContain('KV448')",
         "expect(output).toContain('root=query:requestClosedRevealQuery')",
-        '@kovojs/core declassification policy and reveal doors are unavailable to untrusted-data-reachable modules',
+        '@kovojs/core/security declassification policy and reveal doors are unavailable to untrusted-data-reachable modules',
         "expect(output).not.toContain('runtime-secret-value')",
       ]),
       testName:
@@ -706,9 +706,9 @@ describe('security-test-build-gate', () => {
           '  void posture;',
           '  addRequestClosedDeclassificationProof(root);',
           '  const output = captureBuildFailure(() => buildParanoidProductionArtifact(root));',
-          "  trustedReveal(secret('runtime-secret-value'), DeclassifyPolicy.forTrustedReveal({",
-          "    ownerScope: 'application',",
-          '  }));',
+          '  expect(proofQueries).toMatch(',
+          "    /trustedReveal\\(\\s*secret\\('runtime-secret-value'\\),\\s*DeclassifyPolicy\\.forTrustedReveal\\(\\{\\s*ownerScope: 'application'/u,",
+          '  );',
           "  expect(output).toContain('KV448');",
           "  expect(output).toContain('root=query:requestClosedRevealQuery');",
           "  expect(output).not.toContain('runtime-secret-value');",
@@ -732,7 +732,7 @@ describe('security-test-build-gate', () => {
       ).toEqual(
         expect.arrayContaining([
           expect.stringContaining(
-            'proof test is missing required evidence "@kovojs/core declassification policy and reveal doors are unavailable to untrusted-data-reachable modules"',
+            'proof test is missing required evidence "@kovojs/core/security declassification policy and reveal doors are unavailable to untrusted-data-reachable modules"',
           ),
         ]),
       );
