@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderUiComponent } from './test-component-render.js';
 
-import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { ToggleGroup, ToggleGroupButton, ToggleGroupItem } from './toggle-group.js';
 
@@ -56,7 +56,7 @@ describe('@kovojs/ui ToggleGroup StyleX slots', () => {
       type: 'multiple' as const,
       value: ['bold'] as const,
     };
-    const overrides = style.create({
+    const overrides = createWithSource('toggle-group.stylex.test.tsx')({
       button: {
         backgroundColor: '#dbeafe',
         color: '#1d4ed8',

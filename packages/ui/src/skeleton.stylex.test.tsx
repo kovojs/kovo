@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { renderUiComponent } from './test-component-render.js';
-import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 import { createKeyframes } from '@kovojs/style/internal';
 import { Skeleton } from './skeleton.js';
 describe('@kovojs/ui Skeleton StyleX styles', () => {
@@ -28,7 +28,7 @@ describe('@kovojs/ui Skeleton StyleX styles', () => {
     expect(pulse.css).toBe(`@keyframes ${pulse.name}{0%, 100%{opacity:1}50%{opacity:0.5}}`);
   });
   it('accepts author-last StyleX size overrides', () => {
-    const overrides = style.create({
+    const overrides = createWithSource('skeleton.stylex.test.tsx')({
       root: {
         height: 16,
         width: 160,

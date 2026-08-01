@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { renderUiComponent } from './test-component-render.js';
-import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 import { AccordionContent, AccordionHeader, AccordionItem, AccordionTrigger } from './accordion.js';
 import { Alert } from './alert.js';
 import {
@@ -29,7 +29,8 @@ import { TooltipContent, TooltipTrigger } from './tooltip.js';
 import { readSource } from './test-source.js';
 describe('@kovojs/ui styled package foundation', () => {
   it('exports pure-markup button, badge, and card TSX components', () => {
-    const buttonOverride = style.create({ root: { letterSpacing: 1 } });
+    const createFixtureStyles = createWithSource('index.markup.test.tsx');
+    const buttonOverride = createFixtureStyles({ root: { letterSpacing: 1 } });
     expect(
       String(
         renderUiComponent(Button, {
@@ -86,7 +87,7 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(String(renderUiComponent(Alert, { children: 'Saved.', variant: 'success' }))).toContain(
       'role="status"',
     );
-    const skeletonOverride = style.create({ root: { height: 16, width: 128 } });
+    const skeletonOverride = createFixtureStyles({ root: { height: 16, width: 128 } });
     expect(String(renderUiComponent(Skeleton, { style: skeletonOverride.root }))).toContain(
       'data-style-src="skeleton.tsx#root; index.markup.test.tsx#root"',
     );

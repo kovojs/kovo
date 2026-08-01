@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderUiComponent } from './test-component-render.js';
 
-import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip.js';
 
@@ -35,7 +35,7 @@ describe('@kovojs/ui Tooltip StyleX slots', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create({
+    const overrides = createWithSource('tooltip.stylex.test.tsx')({
       content: {
         maxWidth: 288,
       },

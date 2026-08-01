@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderUiComponent } from './test-component-render.js';
 
-import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import {
   Autocomplete,
@@ -63,7 +63,7 @@ describe('@kovojs/ui Autocomplete StyleX slots', () => {
   });
 
   it('accepts author-last StyleX slot overrides', () => {
-    const overrides = style.create({
+    const overrides = createWithSource('autocomplete.stylex.test.tsx')({
       input: {
         backgroundColor: '#dbeafe',
         color: '#1d4ed8',

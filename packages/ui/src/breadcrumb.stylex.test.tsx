@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderUiComponent } from './test-component-render.js';
 
-import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbSeparator } from './breadcrumb.js';
 
@@ -27,7 +27,7 @@ describe('@kovojs/ui Breadcrumb StyleX styles', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create({
+    const overrides = createWithSource('breadcrumb.stylex.test.tsx')({
       current: {
         color: '#2563eb',
       },

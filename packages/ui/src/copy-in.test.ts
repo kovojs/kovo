@@ -1,9 +1,19 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
+
+import { vendoredUiComponentSource } from '../../cli/src/add-catalog.js';
 
 // Phase 7 of plans/api-cleanup.md — the @kovojs/ui copy-in model.
 //
@@ -15,7 +25,7 @@ import { describe, expect, it } from 'vitest';
 // optionally @kovojs/server (server rendering helpers) — with NO dependency on any
 // @kovojs/ui-internal module.
 //
-// This test proves the model end to end: it copies representative components
+// This test proves the model end to end: it vendors representative components
 // into a scratch dir that resolves the public packages the same way an external
 // app would (a flat node_modules with the three @kovojs deps), then typechecks
 // the copied source with `tsc --noEmit`. A green run means a copied component
@@ -76,21 +86,23 @@ describe('@kovojs/ui copy-in model', () => {
     const root = mkdtempSync(join(tempParent, 'kovo-ui-copy-in-'));
 
     try {
-      // Lay out a scratch external app: copy the component sources into
+      // Lay out a scratch external app: run the same source transformation as
+      // `kovo add`, then write the result into
       // src/components/ui/ and resolve the public deps via a flat node_modules.
       const componentsDir = join(root, 'src', 'components', 'ui');
       mkdirSync(componentsDir, { recursive: true });
       for (const { file } of COMPONENTS) {
         const componentName = file.replace(/\.tsx$/, '');
         const registryEntry = registryByName.get(componentName);
-        const source = readFileSync(join(srcDir, file), 'utf8');
-        // Copy verbatim — the point is that the unmodified source compiles.
-        execFileSync('cp', [join(srcDir, file), join(componentsDir, file)]);
+        const source = vendoredUiComponentSource(readFileSync(join(srcDir, file), 'utf8'));
+        writeFileSync(join(componentsDir, file), source, 'utf8');
         for (const sibling of registryEntry?.uiComponents ?? []) {
           execFileSync('cp', [join(srcDir, `${sibling}.ts`), join(componentsDir, `${sibling}.ts`)]);
         }
         // Sanity: the copied source must NOT import @kovojs/ui itself.
         expect(source).not.toMatch(/from '@kovojs\/ui/);
+        expect(source).not.toContain('@kovojs/style/internal');
+        expect(source).not.toContain('createWithSource');
       }
 
       const nodeModules = join(root, 'node_modules');

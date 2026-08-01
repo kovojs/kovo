@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderUiComponent } from './test-component-render.js';
 
-import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { Disclosure, DisclosureContent, DisclosureTrigger } from './disclosure.js';
 
@@ -53,7 +53,7 @@ describe('@kovojs/ui Disclosure StyleX styles', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create({
+    const overrides = createWithSource('disclosure.stylex.test.tsx')({
       content: {
         backgroundColor: '#eff6ff',
       },

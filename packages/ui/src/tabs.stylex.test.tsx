@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { renderUiComponent } from './test-component-render.js';
-import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from './tabs.js';
 const items = [
   { label: 'Overview', value: 'overview' },
@@ -60,7 +60,7 @@ describe('@kovojs/ui Tabs StyleX slots', () => {
     expect(inactivePanel).toContain('role="tabpanel"');
   });
   it('accepts per-slot StyleX override objects', () => {
-    const overrides = style.create({
+    const overrides = createWithSource('tabs.stylex.test.tsx')({
       list: {
         backgroundColor: '#111827',
       },

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderUiComponent } from './test-component-render.js';
 
-import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './collapsible.js';
 
@@ -51,7 +51,7 @@ describe('@kovojs/ui Collapsible StyleX styles', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create({
+    const overrides = createWithSource('collapsible.stylex.test.tsx')({
       content: {
         color: '#1d4ed8',
       },

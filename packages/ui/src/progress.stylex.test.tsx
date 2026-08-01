@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderUiComponent } from './test-component-render.js';
 
-import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { Progress } from './progress.js';
 
@@ -20,7 +20,7 @@ describe('@kovojs/ui Progress StyleX styles', () => {
   });
 
   it('matches author-last override output', () => {
-    const overrides = style.create({
+    const overrides = createWithSource('progress.stylex.test.tsx')({
       root: {
         accentColor: '#2563eb',
         height: 12,

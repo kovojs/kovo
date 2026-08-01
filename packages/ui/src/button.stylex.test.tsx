@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { renderUiComponent } from './test-component-render.js';
-import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 import { Button } from './button.js';
 describe('@kovojs/ui Button StyleX prototype', () => {
   it('renders StyleX-authored classes and metadata', () => {
@@ -25,7 +25,7 @@ describe('@kovojs/ui Button StyleX prototype', () => {
     expect(html).not.toContain('inline-flex items-center justify-center');
   });
   it('accepts author-last typed style overrides', () => {
-    const overrides = style.create({
+    const overrides = createWithSource('button.stylex.test.tsx')({
       root: {
         backgroundColor: 'tomato',
         color: 'black',

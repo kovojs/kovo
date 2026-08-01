@@ -296,6 +296,16 @@ function generateUiRegistryJson() {
         } else {
           styleSymbols.add('*');
         }
+      } else if (module === '@kovojs/style/internal') {
+        if (symbols.length !== 1 || symbols[0] !== 'createWithSource') {
+          findings.push(
+            `${file}: may import only createWithSource from @kovojs/style/internal`,
+          );
+        }
+        // Framework package source binds runtime selectors to an authenticated
+        // source literal (SPEC.md §13.1). `kovo add` removes this internal
+        // binding and restores public style.create(...) before dependency
+        // collection, so it is intentionally absent from the copy-in registry.
       } else if (module === '@kovojs/server' || module.startsWith('@kovojs/server/')) {
         symbols.forEach((symbol) => serverSymbols.add(symbol));
       } else if (module === '@kovojs/core') {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderUiComponent } from './test-component-render.js';
 
-import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import {
   Accordion,
@@ -72,7 +72,7 @@ describe('@kovojs/ui Accordion StyleX styles', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create({
+    const overrides = createWithSource('accordion.stylex.test.tsx')({
       content: {
         paddingTop: 12,
       },

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { renderUiComponent } from './test-component-render.js';
 
 import { trustedHtml } from '@kovojs/browser';
-import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import {
   Field,
@@ -101,7 +101,7 @@ describe('@kovojs/ui Field StyleX styles', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create({
+    const overrides = createWithSource('field.stylex.test.tsx')({
       control: { backgroundColor: '#eff6ff' },
       description: { color: '#1d4ed8' },
       error: { color: '#991b1b' },

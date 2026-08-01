@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { renderUiComponent } from './test-component-render.js';
 
 import { jsx } from '@kovojs/server/jsx-runtime';
-import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { Card } from './card.js';
 import { Table, TableBody, TableCell, TableRow } from './table.js';
@@ -17,7 +17,7 @@ describe('@kovojs/ui Card StyleX styles', () => {
   });
 
   it('matches author-last override output', () => {
-    const overrides = style.create({
+    const overrides = createWithSource('card.stylex.test.tsx')({
       root: {
         backgroundColor: '#111827',
         color: '#ffffff',

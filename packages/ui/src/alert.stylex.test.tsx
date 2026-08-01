@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderUiComponent } from './test-component-render.js';
 
-import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { Alert } from './alert.js';
 
@@ -24,7 +24,7 @@ describe('@kovojs/ui Alert StyleX styles', () => {
   });
 
   it('accepts author-last StyleX overrides', () => {
-    const overrides = style.create({
+    const overrides = createWithSource('alert.stylex.test.tsx')({
       root: {
         backgroundColor: '#312e81',
         borderColor: '#312e81',

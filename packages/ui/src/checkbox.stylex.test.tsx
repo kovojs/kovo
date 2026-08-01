@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderUiComponent } from './test-component-render.js';
 
-import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { Checkbox } from './checkbox.js';
 
@@ -27,7 +27,7 @@ describe('@kovojs/ui Checkbox StyleX styles', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create({
+    const overrides = createWithSource('checkbox.stylex.test.tsx')({
       input: {
         accentColor: '#2563eb',
         width: 20,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { renderUiComponent } from './test-component-render.js';
-import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 import {
   Select,
   SelectContent,
@@ -86,7 +86,7 @@ describe('@kovojs/ui Select StyleX slots', () => {
     expect(rendered.value).toContain('id="team-value">Design</span>');
   });
   it('accepts author-last StyleX slot overrides', () => {
-    const overrides = style.create({
+    const overrides = createWithSource('select.stylex.test.tsx')({
       content: {
         backgroundColor: '#111827',
       },

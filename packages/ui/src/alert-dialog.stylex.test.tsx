@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderUiComponent } from './test-component-render.js';
 
-import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import {
   AlertDialog,
@@ -60,7 +60,7 @@ describe('@kovojs/ui AlertDialog StyleX slots', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create({
+    const overrides = createWithSource('alert-dialog.stylex.test.tsx')({
       action: {
         backgroundColor: '#991b1b',
       },

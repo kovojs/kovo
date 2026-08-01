@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderUiComponent } from './test-component-render.js';
 
-import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { Separator } from './separator.js';
 
@@ -17,7 +17,7 @@ describe('@kovojs/ui Separator StyleX styles', () => {
   });
 
   it('matches author-last override output', () => {
-    const overrides = style.create({
+    const overrides = createWithSource('separator.stylex.test.tsx')({
       root: {
         backgroundColor: '#111827',
         width: 256,

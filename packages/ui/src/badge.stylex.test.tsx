@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { renderUiComponent } from './test-component-render.js';
-import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 import { Badge } from './badge.js';
 describe('@kovojs/ui Badge StyleX styles', () => {
   it('renders default and variant StyleX classes', () => {
@@ -25,7 +25,7 @@ describe('@kovojs/ui Badge StyleX styles', () => {
     );
   });
   it('accepts author-last StyleX overrides', () => {
-    const overrides = style.create({
+    const overrides = createWithSource('badge.stylex.test.tsx')({
       root: {
         backgroundColor: '#1d4ed8',
         color: '#ffffff',

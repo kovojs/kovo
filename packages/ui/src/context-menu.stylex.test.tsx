@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderUiComponent } from './test-component-render.js';
 
-import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import {
   ContextMenu,
@@ -61,7 +61,7 @@ describe('@kovojs/ui ContextMenu StyleX slots', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create({
+    const overrides = createWithSource('context-menu.stylex.test.tsx')({
       content: {
         backgroundColor: '#111827',
       },

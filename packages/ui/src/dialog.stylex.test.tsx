@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderUiComponent } from './test-component-render.js';
 
-import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import {
   Dialog,
@@ -45,7 +45,7 @@ describe('@kovojs/ui Dialog StyleX slots', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create({
+    const overrides = createWithSource('dialog.stylex.test.tsx')({
       close: {
         color: '#1d4ed8',
       },

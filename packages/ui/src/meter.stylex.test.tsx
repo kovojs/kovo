@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderUiComponent } from './test-component-render.js';
 
-import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { Meter } from './meter.js';
 
@@ -30,7 +30,7 @@ describe('@kovojs/ui Meter StyleX styles', () => {
   });
 
   it('matches author-last override output', () => {
-    const overrides = style.create({
+    const overrides = createWithSource('meter.stylex.test.tsx')({
       root: {
         accentColor: '#2563eb',
         height: 12,

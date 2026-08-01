@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderUiComponent } from './test-component-render.js';
 
-import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { HoverCard, HoverCardContent, HoverCardTrigger } from './hover-card.js';
 
@@ -38,7 +38,7 @@ describe('@kovojs/ui HoverCard StyleX slots', () => {
   });
 
   it('matches author-last slot override output', () => {
-    const overrides = style.create({
+    const overrides = createWithSource('hover-card.stylex.test.tsx')({
       content: {
         width: 320,
       },

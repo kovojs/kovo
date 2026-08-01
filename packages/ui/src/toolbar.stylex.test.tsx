@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderUiComponent } from './test-component-render.js';
 
-import * as style from '@kovojs/style';
+import { createWithSource } from '@kovojs/style/internal';
 
 import { Toolbar, ToolbarButton, ToolbarItem } from './toolbar.js';
 
@@ -50,7 +50,7 @@ describe('@kovojs/ui Toolbar StyleX slots', () => {
       activeValue: 'bold',
       items,
     };
-    const overrides = style.create({
+    const overrides = createWithSource('toolbar.stylex.test.tsx')({
       button: {
         backgroundColor: '#dbeafe',
         color: '#1d4ed8',
