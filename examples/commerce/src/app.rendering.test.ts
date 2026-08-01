@@ -23,6 +23,12 @@ describe('commerce example', () => {
     const cartResponse = await createCommerceScenarioClient().get('/cart');
     const cartPage = await cartResponse.text();
     const pageHints = htmlDocumentFacts(cartPage);
+    const i18nScripts = pageHints.jsonScripts.filter(
+      (script) => script.attrs['kovo-i18n'] !== undefined,
+    );
+    const queryScripts = pageHints.jsonScripts.filter(
+      (script) => script.attrs['kovo-query'] !== undefined,
+    );
 
     expect(commerceMessageCatalog).toEqual({
       cartLabel: 'Cart',
@@ -48,7 +54,16 @@ describe('commerce example', () => {
         }),
       ]),
     );
-    expect(pageHints.jsonScripts.map((script) => script.json)).toEqual([commerceMessageCatalog]);
+    expect(i18nScripts.map((script) => script.json)).toEqual([commerceMessageCatalog]);
+    expect(queryScripts.map((script) => script.json)).toEqual(
+      expect.arrayContaining([
+        { count: 0 },
+        expect.objectContaining({
+          items: expect.arrayContaining([expect.objectContaining({ id: 'p1' })]),
+          nextCursor: 'p2',
+        }),
+      ]),
+    );
     expect(pageHints.links).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
