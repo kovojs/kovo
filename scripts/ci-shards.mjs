@@ -24,6 +24,9 @@ const STARTER_LIST_TIMEOUT_MS = 120_000;
 const MAX_LIVE_ACCEPTANCE_OUTPUT_BYTES = 32 * 1024 * 1024;
 const STARTER_MIN_TIMEOUT_MS = 5 * 60_000;
 const STARTER_MAX_TIMEOUT_MS = 30 * 60_000;
+// The supervisor owns process launch, Vitest collection/reporting, and verified descendant cleanup
+// outside the selected test's own watchdog. Keep those phases out of the test's deadline budget.
+const STARTER_OUTER_PROCESS_HEADROOM_MS = 60_000;
 const CREATE_KOVO_ACCEPTANCE_TEST_PATTERN =
   /^packages\/create-kovo\/src\/index\.(?:build\.(?:prod-artifact(?:\.[^.]+)*|runtime|scaffold(?:\.[^.]+)*)|example\.packed)\.test\.(?:mjs|ts|tsx|js)$/;
 const packedStarterWorkspacePackages = [
@@ -114,7 +117,9 @@ const STARTER_ENTRIES = [
     id: 'contacts-add-contact',
     file: 'packages/create-kovo/src/index.build.prod-artifact.contacts.test.ts',
     testName: 'non-empty enhanced add-contact',
-    seconds: 70,
+    // CI run 30685556558 measured the hosted marker at about 256.8s.
+    seconds: 257,
+    testTimeoutMs: 600_000,
   },
   {
     id: 'contacts-sqlite-add-contact',
@@ -176,12 +181,16 @@ const STARTER_ENTRIES = [
     // CI run 30622986364 measured this focused proof at 10.555s.
     seconds: 11,
   },
-  {
-    id: 'security-runtime-wires',
+  ...['postgres', 'sqlite'].map((dialect) => ({
+    id: `security-runtime-wires-${dialect}`,
     file: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
-    testName: 'escaped runtime security wires',
-    seconds: 143,
-  },
+    testName: `serves ${dialect} runtime-security wire escaping`,
+    // CI run 30685556558 exceeded 300s for the former two-dialect selector. Split the observed
+    // lower bound evenly until the first independent hosted timings replace these weights.
+    seconds: 151,
+    // generatedStarterTestTimeout({ cliProcessCount: 1, serverProcessCount: 1 }) is 820s in CI.
+    testTimeoutMs: 820_000,
+  })),
   {
     id: 'security-form-error',
     file: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
@@ -259,18 +268,21 @@ const STARTER_ENTRIES = [
     id: 'm1-storage-write',
     file: 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
     testName: 'M1:storage-write',
+    expectedTestCount: 3,
     seconds: 210,
   },
   {
     id: 'm1-raw-html',
     file: 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
     testName: 'M1:raw-html',
+    expectedTestCount: 2,
     seconds: 151,
   },
   {
     id: 'm1-secret-wire',
     file: 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
     testName: 'M1:secret-wire',
+    expectedTestCount: 4,
     seconds: 153,
   },
   {
@@ -279,16 +291,20 @@ const STARTER_ENTRIES = [
     testName: 'M1:safe-secret-wire',
     seconds: 144,
   },
-  {
-    id: 'm1-raw-sql',
+  ...['postgres', 'sqlite'].map((dialect) => ({
+    id: `m1-${dialect}-raw-sql`,
     file: 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
-    testName: 'M1:raw-sql',
-    seconds: 146,
-  },
+    testName: `M1:${dialect}-raw-sql`,
+    // CI run 30685556558 exceeded 300s for the former four-build, two-dialect selector. Split the
+    // observed lower bound evenly until independent hosted timings replace these weights.
+    seconds: 151,
+    testTimeoutMs: 480_000,
+  })),
   {
     id: 'm1-output-wire',
     file: 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
     testName: 'M1:output-wire',
+    expectedTestCount: 3,
     // CI run 30622986364 measured the filtered file at 747.315s across both dialects.
     seconds: 748,
   },
@@ -379,9 +395,28 @@ const STARTER_ENTRIES = [
     seconds: 156,
   },
   {
-    id: 'starter-sqlite',
+    id: 'starter-sqlite-check',
     file: 'packages/create-kovo/src/index.build.scaffold.sqlite.test.ts',
-    seconds: 101,
+    testName: 'runs kovo check in the generated SQLite app',
+    // CI run 30685556558 exceeded 300s for the former two-CLI whole-file selector. Split the
+    // observed lower bound evenly until independent hosted timings replace these weights.
+    seconds: 151,
+    // generatedStarterTestTimeout({ cliProcessCount: 1 }) is 620s in CI.
+    testTimeoutMs: 620_000,
+  },
+  {
+    id: 'starter-sqlite-parser-dependency',
+    file: 'packages/create-kovo/src/index.build.scaffold.sqlite.test.ts',
+    testName: 'declares pgsql-ast-parser in the generated SQLite app package',
+    seconds: 5,
+  },
+  {
+    id: 'starter-sqlite-durable-task-refusal',
+    file: 'packages/create-kovo/src/index.build.scaffold.sqlite.test.ts',
+    testName: 'fails production build when a SQLite app registers durable tasks',
+    // This is the second CLI-backed half of the former selector's hosted >300s lower bound.
+    seconds: 151,
+    testTimeoutMs: 620_000,
   },
   {
     id: 'starter-production',
@@ -516,7 +551,9 @@ const STARTER_ENTRIES = [
   {
     id: 'header-artifacts',
     file: 'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts',
-    seconds: 78,
+    // CI run 30685556558 exceeded the 300s outer floor in this irreducible one-build proof.
+    seconds: 301,
+    testTimeoutMs: 600_000,
   },
   {
     id: 'redirect-capability-artifacts',
@@ -636,11 +673,37 @@ export function validateCreateKovoAcceptanceOwnership(discoveredFiles, entries =
       throw new Error(`Starter entry ${entry.id} has an invalid testName selector`);
     }
     if (
+      entry.expectedTestCount !== undefined &&
+      (!Number.isInteger(entry.expectedTestCount) || entry.expectedTestCount < 1)
+    ) {
+      throw new Error(
+        `Starter entry ${entry.id} has invalid expectedTestCount ${String(entry.expectedTestCount)}`,
+      );
+    }
+    if (
+      entry.testTimeoutMs !== undefined &&
+      (!Number.isInteger(entry.testTimeoutMs) ||
+        entry.testTimeoutMs <= 0 ||
+        entry.testTimeoutMs + STARTER_OUTER_PROCESS_HEADROOM_MS > STARTER_MAX_TIMEOUT_MS)
+    ) {
+      throw new Error(
+        `Starter entry ${entry.id} has invalid testTimeoutMs ${String(entry.testTimeoutMs)}`,
+      );
+    }
+    if (
       !Number.isInteger(entry.timeoutMs) ||
       entry.timeoutMs < STARTER_MIN_TIMEOUT_MS ||
       entry.timeoutMs > STARTER_MAX_TIMEOUT_MS
     ) {
       throw new Error(`Starter entry ${entry.id} has invalid timeoutMs ${String(entry.timeoutMs)}`);
+    }
+    if (
+      entry.testTimeoutMs !== undefined &&
+      entry.timeoutMs < entry.testTimeoutMs + STARTER_OUTER_PROCESS_HEADROOM_MS
+    ) {
+      throw new Error(
+        `Starter entry ${entry.id} outer timeout ${entry.timeoutMs} must retain ${STARTER_OUTER_PROCESS_HEADROOM_MS}ms beyond its test timeout ${entry.testTimeoutMs}`,
+      );
     }
   }
 
@@ -940,9 +1003,17 @@ export async function readStarterShardManifest(file) {
       entry.seconds <= 0 ||
       (entry.testName !== undefined &&
         (typeof entry.testName !== 'string' || entry.testName.length === 0)) ||
+      (entry.expectedTestCount !== undefined &&
+        (!Number.isInteger(entry.expectedTestCount) || entry.expectedTestCount < 1)) ||
+      (entry.testTimeoutMs !== undefined &&
+        (!Number.isInteger(entry.testTimeoutMs) ||
+          entry.testTimeoutMs <= 0 ||
+          entry.testTimeoutMs + STARTER_OUTER_PROCESS_HEADROOM_MS > STARTER_MAX_TIMEOUT_MS)) ||
       !Number.isInteger(entry?.timeoutMs) ||
       entry.timeoutMs < STARTER_MIN_TIMEOUT_MS ||
-      entry.timeoutMs > STARTER_MAX_TIMEOUT_MS
+      entry.timeoutMs > STARTER_MAX_TIMEOUT_MS ||
+      (entry.testTimeoutMs !== undefined &&
+        entry.timeoutMs < entry.testTimeoutMs + STARTER_OUTER_PROCESS_HEADROOM_MS)
     ) {
       throw new Error(`Starter shard manifest has an invalid bounded entry: ${file}`);
     }
@@ -1090,15 +1161,27 @@ export function validateStarterGroupTestFilters(group, collectedTestNames) {
   if (group.length === 0) throw new Error('Starter execution group cannot be empty.');
   const file = group[0].file;
   const unmatched = [];
+  const countMismatches = [];
   for (const entry of group) {
     if (!entry.testName) continue;
-    if (!collectedTestNames.some((testName) => testName.includes(entry.testName))) {
+    const matches = collectedTestNames.filter((testName) => testName.includes(entry.testName));
+    if (matches.length === 0) {
       unmatched.push(`${entry.id}=${JSON.stringify(entry.testName)}`);
+      continue;
+    }
+    const expectedTestCount = entry.expectedTestCount ?? 1;
+    if (matches.length !== expectedTestCount) {
+      countMismatches.push(`${entry.id}=${matches.length}/${expectedTestCount}`);
     }
   }
   if (unmatched.length > 0) {
     throw new Error(
       `Starter test filters matched zero collected tests in ${file}: ${unmatched.join(', ')}`,
+    );
+  }
+  if (countMismatches.length > 0) {
+    throw new Error(
+      `Starter test filters matched an unexpected number of collected tests in ${file}: ${countMismatches.join(', ')}`,
     );
   }
 }
@@ -1527,9 +1610,17 @@ function roundSeconds(seconds) {
 
 function starterEntryTimeoutMs(entry) {
   const estimateMs = Math.ceil(Number(entry.seconds) * 2_000);
+  const testWatchdogFloorMs =
+    entry.testTimeoutMs === undefined
+      ? 0
+      : Number(entry.testTimeoutMs) + STARTER_OUTER_PROCESS_HEADROOM_MS;
   return Math.min(
     STARTER_MAX_TIMEOUT_MS,
-    Math.max(STARTER_MIN_TIMEOUT_MS, Number.isFinite(estimateMs) ? estimateMs : 0),
+    Math.max(
+      STARTER_MIN_TIMEOUT_MS,
+      Number.isFinite(estimateMs) ? estimateMs : 0,
+      Number.isFinite(testWatchdogFloorMs) ? testWatchdogFloorMs : 0,
+    ),
   );
 }
 

@@ -436,6 +436,27 @@ describe('ci-shards', () => {
     expect(discovered).toHaveLength(29);
     expect(owners).toHaveLength(discovered.length);
     expect(() => validateCreateKovoAcceptanceOwnership(discovered)).not.toThrow();
+    const manuallyBoundEntries = starterEntries();
+    expect(() =>
+      validateCreateKovoAcceptanceOwnership(
+        discovered,
+        manuallyBoundEntries.map((entry) =>
+          entry.id === 'contacts-add-contact'
+            ? { ...entry, timeoutMs: entry.testTimeoutMs + 59_999 }
+            : entry,
+        ),
+      ),
+    ).toThrow('must retain 60000ms beyond its test timeout');
+    expect(() =>
+      validateCreateKovoAcceptanceOwnership(
+        discovered,
+        manuallyBoundEntries.map((entry) =>
+          entry.id === 'contacts-add-contact'
+            ? { ...entry, timeoutMs: entry.testTimeoutMs + 60_000 }
+            : entry,
+        ),
+      ),
+    ).not.toThrow();
     expect(Object.fromEntries(owners.map((owner) => [owner.file, owner.lane]))).toMatchObject({
       'packages/create-kovo/src/index.build.prod-artifact.client-ip.test.ts': 'classifier',
       'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime-gate.test.ts': 'root',
@@ -494,6 +515,7 @@ describe('ci-shards', () => {
       'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.postgres-external.test.ts',
+      'packages/create-kovo/src/index.build.scaffold.sqlite.test.ts',
       'packages/create-kovo/src/index.build.scaffold.source-check.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.table-security.test.ts',
       'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
@@ -526,6 +548,74 @@ describe('ci-shards', () => {
         timeoutMs: 300_000,
       },
     ]);
+  });
+
+  it('splits loaded dialect proofs and keeps the outer supervisor beyond each test watchdog', () => {
+    const affected = Object.fromEntries(
+      starterEntries()
+        .filter((entry) =>
+          [
+            'contacts-add-contact',
+            'header-artifacts',
+            'm1-postgres-raw-sql',
+            'm1-sqlite-raw-sql',
+            'security-runtime-wires-postgres',
+            'security-runtime-wires-sqlite',
+            'starter-sqlite-check',
+            'starter-sqlite-durable-task-refusal',
+            'starter-sqlite-parser-dependency',
+          ].includes(entry.id),
+        )
+        .map((entry) => [entry.id, entry]),
+    );
+
+    expect(affected).toMatchObject({
+      'contacts-add-contact': { seconds: 257, testTimeoutMs: 600_000, timeoutMs: 660_000 },
+      'header-artifacts': { seconds: 301, testTimeoutMs: 600_000, timeoutMs: 660_000 },
+      'm1-postgres-raw-sql': {
+        seconds: 151,
+        testName: 'M1:postgres-raw-sql',
+        testTimeoutMs: 480_000,
+        timeoutMs: 540_000,
+      },
+      'm1-sqlite-raw-sql': {
+        seconds: 151,
+        testName: 'M1:sqlite-raw-sql',
+        testTimeoutMs: 480_000,
+        timeoutMs: 540_000,
+      },
+      'security-runtime-wires-postgres': {
+        seconds: 151,
+        testName: 'serves postgres runtime-security wire escaping',
+        testTimeoutMs: 820_000,
+        timeoutMs: 880_000,
+      },
+      'security-runtime-wires-sqlite': {
+        seconds: 151,
+        testName: 'serves sqlite runtime-security wire escaping',
+        testTimeoutMs: 820_000,
+        timeoutMs: 880_000,
+      },
+      'starter-sqlite-check': {
+        seconds: 151,
+        testTimeoutMs: 620_000,
+        timeoutMs: 680_000,
+      },
+      'starter-sqlite-durable-task-refusal': {
+        seconds: 151,
+        testTimeoutMs: 620_000,
+        timeoutMs: 680_000,
+      },
+      'starter-sqlite-parser-dependency': { seconds: 5, timeoutMs: 300_000 },
+    });
+    expect(starterEntries().some((entry) => entry.id === 'm1-raw-sql')).toBe(false);
+    expect(starterEntries().some((entry) => entry.id === 'security-runtime-wires')).toBe(false);
+    expect(starterEntries().some((entry) => entry.id === 'starter-sqlite')).toBe(false);
+    for (const entry of Object.values(affected)) {
+      if (entry.testTimeoutMs !== undefined) {
+        expect(entry.timeoutMs - entry.testTimeoutMs, entry.id).toBeGreaterThanOrEqual(60_000);
+      }
+    }
   });
 
   it('retains measured hosted-runner deadline headroom on timed-out proofs', async () => {
@@ -734,17 +824,25 @@ describe('ci-shards', () => {
 
   it('assigns every newly measured starter proof its observed scheduling weight', () => {
     const measuredIds = new Set([
+      'contacts-add-contact',
       'defer-artifacts',
       'durable-task-lifecycle',
       'durable-task-retries',
       'contacts-idempotency-collisions',
       'contacts-sqlite-add-contact',
       'm1-output-wire',
+      'm1-postgres-raw-sql',
+      'm1-sqlite-raw-sql',
+      'header-artifacts',
       'raw-sql-artifacts',
       'redirect-capability-artifacts',
       'runtime-dev-server',
       'security-auth-helper',
       'security-form-error',
+      'security-runtime-wires-postgres',
+      'security-runtime-wires-sqlite',
+      'starter-sqlite-check',
+      'starter-sqlite-durable-task-refusal',
       'security-trusted-output-provenance',
       'security-trusted-url-attributes',
       'starter-typecheck',
@@ -758,17 +856,25 @@ describe('ci-shards', () => {
           .map((entry) => [entry.id, entry.seconds]),
       ),
     ).toEqual({
+      'contacts-add-contact': 257,
       'contacts-idempotency-collisions': 252,
       'contacts-sqlite-add-contact': 269,
       'defer-artifacts': 576,
       'durable-task-lifecycle': 563,
       'durable-task-retries': 381,
+      'header-artifacts': 301,
       'm1-output-wire': 748,
+      'm1-postgres-raw-sql': 151,
+      'm1-sqlite-raw-sql': 151,
       'raw-sql-artifacts': 118,
       'redirect-capability-artifacts': 255,
       'runtime-dev-server': 682,
       'security-auth-helper': 426,
       'security-form-error': 280,
+      'security-runtime-wires-postgres': 151,
+      'security-runtime-wires-sqlite': 151,
+      'starter-sqlite-check': 151,
+      'starter-sqlite-durable-task-refusal': 151,
       'security-trusted-output-provenance': 391,
       'security-trusted-url-attributes': 11,
       'starter-typecheck': 454,
@@ -823,7 +929,7 @@ describe('ci-shards', () => {
       entries.map((entry) => entry.id).toSorted(compareStrings),
     );
     expect(shards.map((shard) => shard.seconds)).toEqual([
-      1_018, 1_026, 991, 999, 991, 993, 991, 999, 990, 1_003,
+      1_108, 1_087, 1_104, 1_111, 1_104, 1_083, 1_080, 1_091, 1_085, 1_079,
     ]);
   });
 
@@ -848,7 +954,7 @@ describe('ci-shards', () => {
     expect([...packedIds, ...unpackedIds].toSorted(compareStrings)).toEqual(
       allEntries.map((entry) => entry.id).toSorted(compareStrings),
     );
-    expect(starterEntriesForMode('unpacked', 'per-pr')).toHaveLength(47);
+    expect(starterEntriesForMode('unpacked', 'per-pr')).toHaveLength(51);
     expect(starterEntries().find((entry) => entry.id === 'bugz-fixture-format')).toMatchObject({
       cadence: 'per-pr',
       testName: 'keeps BUGZ25/31 production fixtures formatter-clean before build preflight',
@@ -877,7 +983,7 @@ describe('ci-shards', () => {
       }))
       .filter((shard) => shard.entries.length > 0);
 
-    expect(browserShards).toEqual([{ index: 4, entries: ['island-derive-artifacts'] }]);
+    expect(browserShards).toEqual([{ index: 3, entries: ['island-derive-artifacts'] }]);
   });
 
   it('marks only packed starter shards as needing the packed package artifact', async () => {
@@ -906,6 +1012,49 @@ describe('ci-shards', () => {
       'starter-packed-runtime',
       'starter-packed-sqlite',
     ]);
+  });
+
+  it('rejects a starter manifest whose outer supervisor cannot outlive its test watchdog', async () => {
+    const root = await fixtureRoot();
+    const rejectedManifest = path.join(root, 'short-headroom.json');
+    const acceptedManifest = path.join(root, 'exact-headroom.json');
+    await writeFile(
+      rejectedManifest,
+      `${JSON.stringify({
+        entries: [
+          {
+            cadence: 'per-pr',
+            file: 'proof.test.ts',
+            id: 'proof',
+            seconds: 151,
+            testTimeoutMs: 300_000,
+            timeoutMs: 359_999,
+          },
+        ],
+        kind: 'starter',
+      })}\n`,
+    );
+    await writeFile(
+      acceptedManifest,
+      `${JSON.stringify({
+        entries: [
+          {
+            cadence: 'per-pr',
+            file: 'proof.test.ts',
+            id: 'proof',
+            seconds: 151,
+            testTimeoutMs: 300_000,
+            timeoutMs: 360_000,
+          },
+        ],
+        kind: 'starter',
+      })}\n`,
+    );
+
+    await expect(starterShardNeedsPacked(rejectedManifest)).rejects.toThrow(
+      'Starter shard manifest has an invalid bounded entry',
+    );
+    await expect(starterShardNeedsPacked(acceptedManifest)).resolves.toBe(false);
   });
 
   it('marks only the real-Postgres selector as needing hosted PostgreSQL', async () => {
@@ -1141,6 +1290,18 @@ describe('ci-shards', () => {
       args: ['exec', 'vitest', 'list', 'stale.test.ts', '--json'],
       command: 'vp',
     });
+  });
+
+  it('fails closed when a selector collects more tests than its reviewed topology count', () => {
+    const group = [{ file: 'proof.test.ts', id: 'proof', testName: 'current proof' }];
+    const collected = ['suite > current proof postgres', 'suite > current proof sqlite'];
+
+    expect(() => validateStarterGroupTestFilters(group, collected)).toThrow(
+      'Starter test filters matched an unexpected number of collected tests in proof.test.ts: proof=2/1',
+    );
+    expect(() =>
+      validateStarterGroupTestFilters([{ ...group[0], expectedTestCount: 2 }], collected),
+    ).not.toThrow();
   });
 
   it('matches every corrected starter filter against the current quoted test titles', async () => {

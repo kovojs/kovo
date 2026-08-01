@@ -253,7 +253,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
   });
 
   it.each([...dialectSpecificRuntimeCases])(
-    'M1:raw-sql covers raw SQL owner-write unsafe and trusted %s production siblings',
+    'M1:%s-raw-sql covers raw SQL owner-write unsafe and trusted production siblings',
     async (_label: string, dialect: CreateKovoDialect | undefined) => {
       await withProject(`create-kovo-m1-raw-sql-${_label}-red-`, dialect, (root) => {
         addRawSqlOwnerWriteProof(root, { staticStatement: true });

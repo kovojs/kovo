@@ -1868,7 +1868,7 @@ export function addRuntimeContractProofs(
   writeFileSync(
     join(root, 'src/runtime-contract-proofs.tsx'),
     [
-      "import { s } from '@kovojs/server';",
+      "import { domain, s } from '@kovojs/server';",
       '',
       "import { app } from './kovo.js';",
       '',

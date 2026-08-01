@@ -1035,52 +1035,50 @@ describe('create-kovo starter (build integration: production security artifacts)
     PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS,
   );
 
-  it(
-    'serves escaped runtime security wires from shared production artifacts',
-    async () => {
-      for (const dialect of ['postgres', 'sqlite'] as const) {
-        const tempParent = tmpdir();
-        mkdirSync(tempParent, { recursive: true });
-        const root = mkdtempSync(join(tempParent, `create-kovo-prod-runtime-security-${dialect}-`));
-        const port = await reservePort();
-        let server: ChildProcessWithoutNullStreams | undefined;
+  it.each(['postgres', 'sqlite'] as const)(
+    'serves %s runtime-security wire escaping from a production artifact',
+    async (dialect: 'postgres' | 'sqlite') => {
+      const tempParent = tmpdir();
+      mkdirSync(tempParent, { recursive: true });
+      const root = mkdtempSync(join(tempParent, `create-kovo-prod-runtime-security-${dialect}-`));
+      const port = await reservePort();
+      let server: ChildProcessWithoutNullStreams | undefined;
 
-        try {
-          writeKovoProject(root, { dialect, name: `Prod Runtime Security Proof ${dialect}` });
-          await linkStarterBuildDependencies(root);
-          addEscapedAttackerTextProof(root);
-          addQueryWireProof(root);
-          addEnhancedMutationWireProof(root);
+      try {
+        writeKovoProject(root, { dialect, name: `Prod Runtime Security Proof ${dialect}` });
+        await linkStarterBuildDependencies(root);
+        addEscapedAttackerTextProof(root);
+        addQueryWireProof(root);
+        addEnhancedMutationWireProof(root);
 
-          await buildReusableProductionArtifactWithInfrastructureDeadline(root);
-          assertEscapedAttackerTextCensus(root);
-          assertEnhancedMutationWireCensus(root);
-          assertQueryWireCensus(root);
+        await buildReusableProductionArtifactWithInfrastructureDeadline(root);
+        assertEscapedAttackerTextCensus(root);
+        assertEnhancedMutationWireCensus(root);
+        assertQueryWireCensus(root);
 
-          server = spawn(process.execPath, ['dist/server/server.mjs'], {
-            cwd: root,
-            detached: process.platform !== 'win32',
-            env: {
-              ...withRepoBinOnPath(),
-              BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
-              HOST: '127.0.0.1',
-              NODE_ENV: 'test',
-              PORT: String(port),
-            },
-          });
-          const output = collectOutput(server);
-          const origin = `http://127.0.0.1:${port}`;
+        server = spawn(process.execPath, ['dist/server/server.mjs'], {
+          cwd: root,
+          detached: process.platform !== 'win32',
+          env: {
+            ...withRepoBinOnPath(),
+            BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
+            HOST: '127.0.0.1',
+            NODE_ENV: 'test',
+            PORT: String(port),
+          },
+        });
+        const output = collectOutput(server);
+        const origin = `http://127.0.0.1:${port}`;
 
-          await assertEscapedAttackerTextServed(origin, output);
-          await assertEnhancedMutationWireServed(origin, dialect, output);
-          await assertQueryWireServed(origin, output);
-        } finally {
-          await stopProcess(server);
-          rmSync(root, { force: true, recursive: true });
-        }
+        await assertEscapedAttackerTextServed(origin, output);
+        await assertEnhancedMutationWireServed(origin, dialect, output);
+        await assertQueryWireServed(origin, output);
+      } finally {
+        await stopProcess(server);
+        rmSync(root, { force: true, recursive: true });
       }
     },
-    generatedStarterTestTimeout({ cliProcessCount: 2, serverProcessCount: 2 }),
+    generatedStarterTestTimeout({ cliProcessCount: 1, serverProcessCount: 1 }),
   );
 
   it('serves component-scoped FormError as a real no-JS 422 output from the production artifact', async () => {
