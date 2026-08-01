@@ -8,7 +8,7 @@ export const __kovoGeneratedContract = Object.freeze({
   providerExportBinding: 'contactsProvider',
   providerImportSpecifier: './provider.js',
   providerKey: 'contacts-provider-v6',
-  serverPackedContentsSha256: '29e2a5b7319622f6626c4eca7cb4884314ae9706ff8c5cd825e0e5fef5a1379e',
+  serverPackedContentsSha256: '95acaf4f963b6e1c01e92ff872bd76bf65f45fed7e09d750a2a918c177470f7b',
 });
 export const endpoint: typeof app.endpoint = app.endpoint;
 export const layout: typeof app.layout = app.layout;
