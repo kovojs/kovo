@@ -21,6 +21,7 @@ const check = process.argv.includes('--check');
 
 const result = await build({
   bundle: true,
+  charset: 'utf8',
   entryPoints: [entryPath],
   format: 'esm',
   legalComments: 'none',

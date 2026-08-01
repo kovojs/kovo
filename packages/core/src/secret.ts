@@ -1,4 +1,4 @@
-import { createBoundedRuntimeAuditCollector } from './internal/security-markers.js';
+import { createBoundedRuntimeAuditCollector } from './internal/runtime-audit-collector.js';
 import { snapshotAuditText } from './internal/audit-text.js';
 import { emitCoreSecurityDecision } from './internal/security-decision.js';
 import {
