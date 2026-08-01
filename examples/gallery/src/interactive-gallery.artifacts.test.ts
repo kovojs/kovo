@@ -273,6 +273,32 @@ describe('compiled interactive gallery demos', () => {
       }
     }
   });
+
+  it('extracts only direct or exact name-bound generated client refs', () => {
+    const directDigest = 'a'.repeat(64);
+    const receiptedDigest = 'b'.repeat(64);
+    const mismatchedDigest = 'c'.repeat(64);
+    const source = `
+      <button on:click="/c/__v/${directDigest}/src/direct.client.js#Direct_click" />
+      <Button on:keydown={kovoGeneratedComponentControl("on:keydown", "/c/__v/${receiptedDigest}/src/receipted.client.js#Receipted_keydown")} />
+      <Input on:input={kovoGeneratedComponentControl("on:change", "/c/__v/${mismatchedDigest}/src/mismatched.client.js#Mismatched_input")} />
+    `;
+
+    expect(extractCompiledClientRefs(source)).toEqual([
+      {
+        digest: directDigest,
+        eventName: 'click',
+        exportName: 'Direct_click',
+        modulePath: '/c/src/direct.client.js',
+      },
+      {
+        digest: receiptedDigest,
+        eventName: 'keydown',
+        exportName: 'Receipted_keydown',
+        modulePath: '/c/src/receipted.client.js',
+      },
+    ]);
+  });
 });
 
 function exportedModulePath(href: string): string {

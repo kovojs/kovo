@@ -1,5 +1,6 @@
 import type { Component } from '@kovojs/core';
 import { isKovoTrustedHtml, kovoTrustedHtmlContent } from '@kovojs/browser/generated';
+import { isKovoComponentHostControlAttribute } from '../../packages/core/src/internal/semantic-attributes.js';
 
 import {
   browserHarnessComponentDefinition,
@@ -32,6 +33,10 @@ interface BrowserHarnessRenderedHtml {
 }
 
 const browserHarnessRenderedHtmlValues = new WeakMap<object, string>();
+const browserHarnessGeneratedComponentControlSnapshots = new WeakMap<
+  object,
+  Readonly<{ name: string; value: unknown }>
+>();
 
 const voidElements = new Set([
   'area',
@@ -78,6 +83,31 @@ export function escapeText(value: unknown): BrowserHarnessRenderedHtml {
   return browserHarnessRenderedHtml(escapeTextContent(value));
 }
 
+/** Browser-harness equivalent of the compiler-owned component-control receipt ABI. */
+export function kovoGeneratedComponentControl(name: string, value: unknown): object {
+  if (typeof name !== 'string' || !isKovoComponentHostControlAttribute(name)) {
+    throw new TypeError('Compiler component-control receipts require an exact supported name.');
+  }
+
+  const isElementParam = name.startsWith('data-p-');
+  const isTrustedUrlMarker = name.startsWith('data-kovo-trusted-url:');
+  const scalar =
+    value === null ||
+    value === undefined ||
+    typeof value === 'string' ||
+    (isElementParam && (typeof value === 'number' || typeof value === 'boolean')) ||
+    (isTrustedUrlMarker && value === true);
+  if (!scalar) {
+    throw new TypeError(
+      'Compiler component-control receipts require a string control value, a string/number/boolean data-p-* scalar, or an exact true trusted-URL marker.',
+    );
+  }
+
+  const receipt = Object.freeze(Object.create(null)) as object;
+  browserHarnessGeneratedComponentControlSnapshots.set(receipt, Object.freeze({ name, value }));
+  return receipt;
+}
+
 function escapeTextContent(value: unknown): string {
   if (value === null || value === undefined || typeof value === 'boolean') return '';
   if (Array.isArray(value)) return value.map((item) => escapeTextContent(item)).join('');
@@ -115,8 +145,10 @@ function renderJsxAttributes(props: JsxProps, jsxKey?: unknown): string {
     rendered += ` kovo-key="${escapeAttribute(serializeAttributeValue(key))}"`;
   }
 
-  for (const [name, value] of Object.entries(props)) {
-    if (name === 'children' || name === 'key' || value === false || value == null) continue;
+  for (const [name, rawValue] of Object.entries(props)) {
+    if (name === 'children' || name === 'key') continue;
+    const value = browserHarnessGeneratedComponentControlValue(name, rawValue);
+    if (value === false || value == null) continue;
     rendered +=
       value === true ? ` ${name}` : ` ${name}="${escapeAttribute(serializeAttributeValue(value))}"`;
   }
@@ -177,6 +209,20 @@ export function browserHarnessRenderedHtmlContent(value: unknown): string | unde
 
 function isKovoComponent(value: unknown): value is KovoJsxComponent {
   return isBrowserHarnessComponent(value);
+}
+
+function browserHarnessGeneratedComponentControlValue(name: string, value: unknown): unknown {
+  if (typeof value !== 'object' || value === null) return value;
+  const snapshot = browserHarnessGeneratedComponentControlSnapshots.get(value);
+  if (snapshot === undefined) return value;
+  if (snapshot.name !== name) return undefined;
+  if (
+    snapshot.name.startsWith('data-p-') &&
+    (typeof snapshot.value === 'number' || typeof snapshot.value === 'boolean')
+  ) {
+    return String(snapshot.value);
+  }
+  return snapshot.value;
 }
 
 function isPromiseLike<Value = unknown>(value: unknown): value is Promise<Value> {

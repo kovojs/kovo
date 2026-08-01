@@ -74,9 +74,13 @@ export function extractClientExports(source: string): string[] {
 export function extractCompiledClientRefs(
   html: string,
 ): Array<{ digest: string; eventName: string; exportName: string; modulePath: string }> {
-  return [...html.matchAll(/on:([a-z]+)="([^"]+)"/g)].map((match) => {
+  return [
+    ...html.matchAll(
+      /on:([a-z]+)=(?:"([^"]+)"|\{kovoGeneratedComponentControl\("on:\1", "([^"]+)"\)\})/g,
+    ),
+  ].map((match) => {
     const eventName = match[1] ?? '';
-    const ref = match[2] ?? '';
+    const ref = match[2] ?? match[3] ?? '';
     const parsed = ref.match(/^\/c\/__v\/([0-9a-f]{64})\/([^?#"]+\.client\.js)#([A-Za-z0-9_$]+)$/);
     if (parsed === null) throw new Error(`Unexpected generated client ref: ${ref}`);
 
