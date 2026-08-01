@@ -1,8 +1,8 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   collectFiles,
@@ -11,7 +11,16 @@ import {
   securityMarkerSourceRoots,
 } from './source-files.mjs';
 
+const fixtureRoots = new Set();
+
 describe('source file collection', () => {
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    const roots = [...fixtureRoots];
+    fixtureRoots.clear();
+    await Promise.all(roots.map((root) => rm(root, { force: true, recursive: true })));
+  });
+
   it('classifies production TypeScript source without tests or declarations', () => {
     expect(isProductionSourceFile('packages/server/src/route.ts')).toBe(true);
     expect(isProductionSourceFile('packages/server/src/view.tsx')).toBe(true);
@@ -20,6 +29,17 @@ describe('source file collection', () => {
     expect(isProductionSourceFile('packages/server/src/route.spec.tsx')).toBe(false);
     expect(isProductionSourceFile('packages/browser/src/client.ts')).toBe(false);
     expect(isProductionSourceFile('packages/server/src/runtime.js')).toBe(false);
+  });
+
+  it('allocates distinct string fixture roots without clock-based uniqueness', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_234);
+
+    const firstRoot = await fixtureRoot();
+    const secondRoot = await fixtureRoot();
+
+    expect(typeof firstRoot).toBe('string');
+    expect(typeof secondRoot).toBe('string');
+    expect(secondRoot).not.toBe(firstRoot);
   });
 
   it('recursively collects canonical source files with stable relative paths', async () => {
@@ -80,9 +100,9 @@ describe('source file collection', () => {
 });
 
 async function fixtureRoot() {
-  return mkdir(path.join(tmpdir(), `kovo-source-files-${process.pid}-${Date.now()}`), {
-    recursive: true,
-  });
+  const root = await mkdtemp(path.join(tmpdir(), 'kovo-source-files-'));
+  fixtureRoots.add(root);
+  return root;
 }
 
 async function writeFixture(rootDir, relativePath, source) {
