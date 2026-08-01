@@ -648,7 +648,7 @@ describe('browser navigation security controls', () => {
     }
   });
 
-  it('fails closed when text selection or focus controls were poisoned before capture', () => {
+  it('fails closed when text selection controls were poisoned before capture', () => {
     for (const prototype of [HTMLInputElement.prototype, HTMLTextAreaElement.prototype]) {
       const selectionStart = Object.getOwnPropertyDescriptor(prototype, 'selectionStart');
       if (!selectionStart?.get) throw new Error('native selection-start control unavailable');
@@ -664,25 +664,35 @@ describe('browser navigation security controls', () => {
         Object.defineProperty(prototype, 'selectionStart', selectionStart);
       }
     }
+  });
 
+  it('fails the focus capability closed for a branded no-op captured before initialization', () => {
     const focus = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'focus');
     if (!focus || !('value' in focus) || typeof focus.value !== 'function') {
       throw new Error('native focus control unavailable');
     }
+    const root = document.createElement('main');
+    const input = document.createElement('input');
+    const button = document.createElement('button');
+    root.append(input, button);
+    document.body.append(root);
+    Reflect.apply(focus.value, button, []);
+
     Object.defineProperty(HTMLElement.prototype, 'focus', {
       ...focus,
-      value(this: HTMLElement) {
-        if (!(this instanceof HTMLElement)) {
-          throw new TypeError('poisoned focus rejected a foreign receiver');
-        }
+      value: function focus(this: HTMLElement) {
+        if (!(this instanceof HTMLElement)) throw new TypeError();
       },
     });
     try {
-      expect(() => createBrowserNavigationSecurityControls()).toThrow(
-        /realm intrinsics were modified before runtime initialization/,
+      const controls = createBrowserNavigationSecurityControls();
+      expect(() => controls.focusElement(input)).toThrow(
+        /Kovo DOM focus control did not focus its receiver/,
       );
+      expect(document.activeElement).toBe(button);
     } finally {
       Object.defineProperty(HTMLElement.prototype, 'focus', focus);
+      document.body.replaceChildren();
     }
   });
 

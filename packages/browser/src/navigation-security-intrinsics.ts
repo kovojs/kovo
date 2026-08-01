@@ -1201,13 +1201,27 @@ export function createBrowserNavigationSecurityControls(
   }
 
   function focusElement(element: object): void {
-    if (!controlsSound || !htmlElementFocus) {
+    // SPEC §6.6/§9.1: focus depends on a fully active browsing context, so it cannot soundly gate
+    // unrelated navigation controls at boot. Verify the captured capability only when a morph
+    // actually needs to restore focus, and fail closed if the platform did not honor that request.
+    if (!controlsSound || !documentObject || !documentActiveElement || !htmlElementFocus) {
       throw new TypeError('Kovo DOM focus control is unavailable.');
     }
+    let active: unknown;
     try {
+      active = call(documentActiveElement, documentObject, []);
+      if (active === element) return;
       call(htmlElementFocus, element, []);
     } catch {
       throw new TypeError('Kovo DOM focus control rejected its receiver.');
+    }
+    try {
+      active = call(documentActiveElement, documentObject, []);
+    } catch {
+      throw new TypeError('Kovo DOM focus control could not verify its result.');
+    }
+    if (active !== element) {
+      throw new TypeError('Kovo DOM focus control did not focus its receiver.');
     }
   }
 
@@ -3480,7 +3494,6 @@ export function createBrowserNavigationSecurityControls(
       }
       if (NativeDocument && NativeElement && NativeNode && documentObject) {
         if (
-          !NativeHTMLElement ||
           !NativeHTMLInputElement ||
           !NativeHTMLTextAreaElement ||
           !NativeHTMLFormElement ||
@@ -3506,7 +3519,6 @@ export function createBrowserNavigationSecurityControls(
           !elementPrepend ||
           !elementReplaceChildren ||
           !elementReplaceWith ||
-          !htmlElementFocus ||
           !nodeCloneNode ||
           !nodeAppendChild ||
           !nodeInsertBefore ||
@@ -3669,24 +3681,6 @@ export function createBrowserNavigationSecurityControls(
         ) {
           return fail('DOM form property controls');
         }
-        // SPEC §6.6/§9.1: focus is observable. A connected witness can dispatch authored
-        // focus/blur handlers, steal browsing-context focus, and suppress iframe reloads. Capture
-        // only the platform's own data method, validate its own name/arity descriptors, exercise a
-        // detached real receiver, and prove its receiver brand without changing document focus.
-        if (
-          readOwnData(htmlElementFocus, 'name') !== 'focus' ||
-          readOwnData(htmlElementFocus, 'length') !== 0
-        ) {
-          return fail('DOM focus control');
-        }
-        apply(htmlElementFocus, propertyControl, []);
-        let rejectedForeignFocusReceiver = false;
-        try {
-          apply(htmlElementFocus, {}, []);
-        } catch {
-          rejectedForeignFocusReceiver = true;
-        }
-        if (!rejectedForeignFocusReceiver) return fail('DOM focus receiver rejection');
         apply(nodeAppendChild, snapshotControl, [nestedControl]);
         apply(nodeAppendChild, insertParentControl, [insertAnchorControl]);
         if (
