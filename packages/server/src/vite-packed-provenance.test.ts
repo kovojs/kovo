@@ -12,6 +12,7 @@ import {
 import { createServer as createNetServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
+import { performance } from 'node:perf_hooks';
 
 import { compilerOwnedViteClientModuleRoleForPlugin, kovoVitePlugin } from '@kovojs/compiler/vite';
 import {
@@ -19,6 +20,12 @@ import {
   versionedClientModuleHref,
 } from '@kovojs/core/internal/client-module-url';
 import { describe, expect, it } from 'vitest';
+
+import {
+  createKovoDevReadyReportObserver,
+  DEV_READY_POST_BIND_BUDGET_MS,
+  waitForKovoDevReadiness,
+} from '../../../scripts/lib/dev-ready-probe-contract.mjs';
 
 const repoRoot = process.cwd();
 
@@ -46,6 +53,7 @@ describe('installed packed Vite provenance', () => {
 
       const port = await reservePort();
       const cli = join(appRoot, 'node_modules/@kovojs/cli/dist/bin.mjs');
+      const spawnedAt = performance.now();
       const child = spawn(
         process.execPath,
         [
@@ -66,9 +74,26 @@ describe('installed packed Vite provenance', () => {
           stdio: 'pipe',
         },
       );
+      const localUrl = `http://127.0.0.1:${port}/`;
+      const readyExpected = {
+        appEntry: 'src/app.tsx',
+        database: 'none configured',
+        localUrl,
+        mode: 'development',
+      };
+      const readyReportObserver = createKovoDevReadyReportObserver(child.stdout, readyExpected);
       const output = collectOutput(child);
       try {
-        const first = await fetchWhenReady(`http://127.0.0.1:${port}/`, child, output, 30_000);
+        await waitForKovoDevReadiness({
+          expected: readyExpected,
+          label: 'Packed Vite provenance kovo dev',
+          port,
+          readOutput: () => ({ stderr: output.stderr, stdout: output.stdout }),
+          readStatus: () => ({ exitCode: child.exitCode, signalCode: child.signalCode }),
+          reportObserver: readyReportObserver,
+          startedAt: spawnedAt,
+        });
+        const first = await fetchReadyPackedKovoDev(localUrl, child, output);
         const firstBody = await first.text();
         expect(first.status, `${firstBody}\n${output.combined()}`).toBe(200);
         expect(firstBody).toContain('data-testid="counter"');
@@ -243,38 +268,40 @@ async function compilePackedFixtureClientModule(
 
 function collectOutput(child: ChildProcessWithoutNullStreams): {
   combined(): string;
+  stderr: string;
+  stdout: string;
 } {
-  let stdout = '';
-  let stderr = '';
+  const output = {
+    combined: () => `${output.stdout}${output.stderr}`,
+    stderr: '',
+    stdout: '',
+  };
   child.stdout.on('data', (chunk) => {
-    stdout += String(chunk);
+    output.stdout += String(chunk);
   });
   child.stderr.on('data', (chunk) => {
-    stderr += String(chunk);
+    output.stderr += String(chunk);
   });
-  return {
-    combined: () => `${stdout}${stderr}`,
-  };
+  return output;
 }
 
-async function fetchWhenReady(
+async function fetchReadyPackedKovoDev(
   url: string,
   child: ChildProcessWithoutNullStreams,
   output: { combined(): string },
-  timeoutMs: number,
 ): Promise<Response> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (child.exitCode !== null) {
-      throw new Error(`Kovo dev exited before serving ${url}.\n${output.combined()}`);
-    }
-    try {
-      return await fetch(url);
-    } catch {
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
+  try {
+    return await fetch(url, { signal: AbortSignal.timeout(DEV_READY_POST_BIND_BUDGET_MS) });
+  } catch (error) {
+    const status =
+      child.exitCode === null && child.signalCode === null
+        ? 'still running'
+        : `exit=${String(child.exitCode)} signal=${String(child.signalCode)}`;
+    throw new Error(
+      `Ready packed kovo dev did not serve ${url} within ${DEV_READY_POST_BIND_BUDGET_MS}ms ` +
+        `(${status}): ${error instanceof Error ? error.message : String(error)}\n${output.combined()}`,
+    );
   }
-  throw new Error(`Timed out waiting for ${url}.\n${output.combined()}`);
 }
 
 async function reservePort(): Promise<number> {

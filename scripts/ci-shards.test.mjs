@@ -1177,9 +1177,10 @@ describe('ci-shards', () => {
     ).rejects.toThrow('not produced by this GitHub Actions run and SHA');
     const tamperedRoot = await packedStarterFixture();
     await writeFile(path.join(tamperedRoot, 'package-0.tgz'), 'tampered');
-    await expect(validatePackedStarterDirectory(tamperedRoot)).rejects.toThrow(
-      'digest mismatch for @kovojs/core',
-    );
+    const localProducerEnvironment = {};
+    await expect(
+      validatePackedStarterDirectory(tamperedRoot, localProducerEnvironment),
+    ).rejects.toThrow('digest mismatch for @kovojs/core');
   });
 
   it('runs each selector as its own bounded process without a file monolith', () => {
