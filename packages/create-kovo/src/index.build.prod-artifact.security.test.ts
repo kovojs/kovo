@@ -673,6 +673,17 @@ describe('create-kovo starter (build integration: production security artifacts)
       await linkStarterBuildDependencies(root);
       addStarterMutationDbScopeProof(root, { mode: 'runtime-table-choke' });
 
+      const proofSource = readFileSync(
+        join(root, 'src/starter-mutation-db-scope-proof.ts'),
+        'utf8',
+      );
+      const proofForms = readFileSync(
+        join(root, 'src/starter-mutation-db-scope-proof-forms.tsx'),
+        'utf8',
+      );
+      expect(proofSource).toContain('await request.db.insert(contacts).values({');
+      expect(proofSource).not.toContain('async function starterAbsentTablesContactWrite');
+      expect(proofForms.match(/<input name="marker" \/>/gu)).toHaveLength(2);
       expect(() => addParanoidPhase5WriteBoundaryProof(root)).not.toThrow();
     } finally {
       rmSync(root, { force: true, recursive: true });
