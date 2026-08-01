@@ -722,10 +722,11 @@ function packedCliConsumerManifest(packedPackages, packageManager) {
   };
 }
 
-async function assertPackedDevJourney(consumerRoot) {
-  mkdirSync(path.join(consumerRoot, 'src'), { recursive: true });
+export function preparePackedDevJourney(consumerRoot, port) {
+  const devRoot = path.join(consumerRoot, 'packed-dev-smoke');
+  mkdirSync(path.join(devRoot, 'src'), { recursive: true });
   writeFileSync(
-    path.join(consumerRoot, 'src', 'app.ts'),
+    path.join(devRoot, 'src', 'app.ts'),
     `import '@kovojs/server/runtime-bootstrap';
 import { defineKovo } from '@kovojs/server';
 
@@ -740,7 +741,6 @@ export default app.assemble({ routes: [home] });
     'utf8',
   );
 
-  const port = await reserveKovoDevLoopbackPort();
   const localUrl = `http://127.0.0.1:${port}/`;
   const expectedReadyReport = {
     appEntry: 'src/app.ts',
@@ -748,28 +748,41 @@ export default app.assemble({ routes: [home] });
     localUrl,
     mode: 'development',
   };
-  const spawnedAt = performance.now();
-  const child = spawn(
-    process.execPath,
-    [
+  return {
+    args: [
       path.join(consumerRoot, 'node_modules', '@kovojs', 'cli', 'dist', 'bin.mjs'),
       'dev',
       './src/app.ts',
       '--root',
-      consumerRoot,
+      devRoot,
       '--host',
       '127.0.0.1',
       '--port',
       String(port),
       '--strict-port',
     ],
-    {
-      cwd: consumerRoot,
-      env: process.env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    },
+    cwd: devRoot,
+    expectedReadyReport,
+    localUrl,
+  };
+}
+
+async function assertPackedDevJourney(consumerRoot) {
+  const port = await reserveKovoDevLoopbackPort();
+  // The cumulative consumer also writes the full copied UI catalog and API-migration fixtures.
+  // Keep those independent proofs outside this smoke's Vite/Kovo root so this journey measures a
+  // minimal packed app instead of accidentally making every publish gate a full-catalog dev boot.
+  const invocation = preparePackedDevJourney(consumerRoot, port);
+  const spawnedAt = performance.now();
+  const child = spawn(process.execPath, invocation.args, {
+    cwd: invocation.cwd,
+    env: process.env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const reportObserver = createKovoDevReadyReportObserver(
+    child.stdout,
+    invocation.expectedReadyReport,
   );
-  const reportObserver = createKovoDevReadyReportObserver(child.stdout, expectedReadyReport);
   let stdout = '';
   let stderr = '';
   child.stdout.on('data', (chunk) => {
@@ -781,7 +794,7 @@ export default app.assemble({ routes: [home] });
 
   try {
     const ready = await waitForKovoDevReadiness({
-      expected: expectedReadyReport,
+      expected: invocation.expectedReadyReport,
       label: 'Packed kovo dev',
       port,
       readOutput: () => ({ stderr, stdout }),
@@ -793,7 +806,7 @@ export default app.assemble({ routes: [home] });
       `listener=${ready.listenerElapsedMs}ms ` +
       `postBindReadyReport=${ready.observedAfterMs}ms/${ready.observedAfterMsKind} ` +
       `upperBound=${ready.observedAfterMsUpperBound}ms`;
-    const page = await fetch(`${localUrl}__kovo`, {
+    const page = await fetch(`${invocation.localUrl}__kovo`, {
       signal: AbortSignal.timeout(DEV_READY_POST_BIND_BUDGET_MS),
     });
     const html = await page.text();
@@ -811,7 +824,7 @@ export default app.assemble({ routes: [home] });
     if (cookie === undefined) {
       throw new Error('Packed kovo dev did not mint its browser authentication cookie');
     }
-    const client = await fetch(`${localUrl}__kovo/client.js`, {
+    const client = await fetch(`${invocation.localUrl}__kovo/client.js`, {
       headers: { Cookie: cookie },
       signal: AbortSignal.timeout(DEV_READY_POST_BIND_BUDGET_MS),
     });

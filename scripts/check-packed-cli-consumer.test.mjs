@@ -1,4 +1,12 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { createServer } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -15,6 +23,7 @@ import {
   assertPackedDocsJourney,
   assertPackedMcpLifecycle,
   assertPackedSemanticApiBoundary,
+  preparePackedDevJourney,
   productionDependencyNamesFromLockfile,
   sourceImportsPackage,
 } from './check-packed-cli-consumer.mjs';
@@ -437,6 +446,48 @@ describe('packed CLI consumer proof', () => {
     );
     expect(source).toContain("defineKovo({ appId: '00000000-0000-4000-8000-000000000001' })");
     expect(source).not.toContain('defineKovo({})');
+  });
+
+  it('launches packed dev from a root isolated from cumulative consumer fixtures', () => {
+    const consumerRoot = mkdtempSync(path.join(os.tmpdir(), 'kovo-packed-dev-root-'));
+    try {
+      mkdirSync(path.join(consumerRoot, 'src', 'components', 'ui'), { recursive: true });
+      writeFileSync(
+        path.join(consumerRoot, 'src', 'components', 'ui', 'catalog-marker.tsx'),
+        'export const catalogMarker = true;\n',
+        'utf8',
+      );
+      mkdirSync(path.join(consumerRoot, 'api-v1-rewrites'), { recursive: true });
+      writeFileSync(
+        path.join(consumerRoot, 'api-v1-rewrites', 'migration-marker.ts'),
+        'export const migrationMarker = true;\n',
+        'utf8',
+      );
+
+      const invocation = preparePackedDevJourney(consumerRoot, 4173);
+      const rootFlag = invocation.args.indexOf('--root');
+      expect(invocation.cwd).toBe(path.join(consumerRoot, 'packed-dev-smoke'));
+      expect(invocation.args[0]).toBe(
+        path.join(consumerRoot, 'node_modules', '@kovojs', 'cli', 'dist', 'bin.mjs'),
+      );
+      expect(invocation.args[rootFlag + 1]).toBe(invocation.cwd);
+      expect(readFileSync(path.join(invocation.cwd, 'src', 'app.ts'), 'utf8')).toContain(
+        "defineKovo({ appId: '00000000-0000-4000-8000-000000000001' })",
+      );
+      expect(readdirSync(invocation.cwd)).toEqual(['src']);
+      expect(readdirSync(path.join(invocation.cwd, 'src'))).toEqual(['app.ts']);
+      expect(existsSync(path.join(invocation.cwd, 'src', 'components', 'ui'))).toBe(false);
+      expect(existsSync(path.join(invocation.cwd, 'api-v1-rewrites'))).toBe(false);
+
+      const source = readFileSync(
+        new URL('./check-packed-cli-consumer.mjs', import.meta.url),
+        'utf8',
+      );
+      expect(source).toContain('preparePackedDevJourney(consumerRoot, port)');
+      expect(source).toContain('cwd: invocation.cwd');
+    } finally {
+      rmSync(consumerRoot, { force: true, recursive: true });
+    }
   });
 
   it('requires the exact cumulative api-v1 protocol and file-count summary', () => {
