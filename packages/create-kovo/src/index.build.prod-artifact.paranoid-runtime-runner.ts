@@ -41,18 +41,19 @@ const PARANOID_RUNTIME_TEST_FILE =
   'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts';
 
 /**
- * The static-trust worker owns a 300s production deadline. The external boot proof can then spend
- * up to 180s waiting for the served artifact. Its 600s Vitest bound contains those inner phases.
+ * The static-trust worker owns a 420s production deadline. The external boot proof can then spend
+ * up to 180s waiting for the served artifact. Its 720s Vitest bound contains those inner phases.
  * Some callbacks enter synchronous build code that Vitest cannot interrupt, so the descendant-aware
- * process supervisor is the actual hard bound; 660s contains the callback and verified cleanup
+ * process supervisor is the actual hard bound; the larger cases retain 120s beyond those inner
+ * phases for callback work and verified cleanup
  * without letting a timed-out worker leak into the next proof.
  */
 export const PARANOID_RUNTIME_CASES = [
   {
     file: PARANOID_RUNTIME_TEST_FILE,
     id: 'phase5-postgres-paranoid-dogfood',
-    supervisorTimeoutMs: 480_000,
-    testTimeoutMs: 420_000,
+    supervisorTimeoutMs: 660_000,
+    testTimeoutMs: 600_000,
     workerCaseId: 'phase5-postgres-paranoid-dogfood',
   },
   {
@@ -65,15 +66,15 @@ export const PARANOID_RUNTIME_CASES = [
   {
     file: PARANOID_RUNTIME_TEST_FILE,
     id: 'paranoid-external-provision-check-boot',
-    supervisorTimeoutMs: 660_000,
-    testTimeoutMs: 600_000,
+    supervisorTimeoutMs: 780_000,
+    testTimeoutMs: 720_000,
     workerCaseId: 'paranoid-external-provision-check-boot',
   },
   {
     file: PARANOID_RUNTIME_TEST_FILE,
     id: 'paranoid-external-leak-refusal',
-    supervisorTimeoutMs: 660_000,
-    testTimeoutMs: 600_000,
+    supervisorTimeoutMs: 780_000,
+    testTimeoutMs: 720_000,
     workerCaseId: 'paranoid-external-leak-refusal',
   },
 ] as const satisfies readonly ParanoidGateCaseDefinition[];

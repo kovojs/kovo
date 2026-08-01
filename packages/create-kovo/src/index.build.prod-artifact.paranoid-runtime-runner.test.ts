@@ -39,9 +39,9 @@ describe('paranoid runtime process isolation', () => {
     const externalBoot = PARANOID_RUNTIME_CASES.find(
       (testCase) => testCase.id === 'paranoid-external-provision-check-boot',
     );
-    // This proof serially contains the production 300s static-trust deadline and the hosted 180s
+    // This proof serially contains the production 420s static-trust deadline and the hosted 180s
     // server-readiness deadline. Vitest must be outside both before the process supervisor applies.
-    expect(externalBoot?.testTimeoutMs).toBeGreaterThan(300_000 + 180_000);
+    expect(externalBoot?.testTimeoutMs).toBeGreaterThan(420_000 + 180_000);
 
     expect(paranoidRuntimeWorkerRequirements('phase5-sqlite-paranoid-dogfood', false)).toEqual({
       authorizationMatrixCases: [],

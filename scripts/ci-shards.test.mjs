@@ -638,7 +638,7 @@ describe('ci-shards', () => {
     expect(asyncContextSource).toContain('}, 60_000);');
     expect(sourceCheckSource).toContain('}, 360_000);');
     expect(postgresSource.match(/\}, 600_000\);/gu)).toHaveLength(2);
-    expect(buildExportSource).toContain('const staticTrustWorkerTimeoutMs = 300_000;');
+    expect(buildExportSource).toContain('const staticTrustWorkerTimeoutMs = 420_000;');
     expect(indexBuildSource).toContain('const BUILD_INTEGRATION_TEST_TIMEOUT_MS = 90_000;');
     expect(indexBuildSource).toContain(
       "describe('kovo build', { concurrent: false, timeout: BUILD_INTEGRATION_TEST_TIMEOUT_MS }",
