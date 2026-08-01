@@ -18,7 +18,9 @@ export const commerceViteConfig = defineConfig({
     manifest: true,
     rollupOptions: {
       input: {
-        styles: 'src/styles.css',
+        // Keep dependency scanning independent of the process that launches
+        // the configured app; hosted tests start this server from the repo root.
+        styles: fileURLToPath(new URL('./src/styles.css', import.meta.url)),
       },
       output: {
         assetFileNames: 'assets/[name][extname]',

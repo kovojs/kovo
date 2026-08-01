@@ -17,9 +17,11 @@ export function createCommerceDemoServer(options = {}) {
     root: commerceRoot,
     configFile: fileURLToPath(new URL('../vite.config.ts', import.meta.url)),
     async loadInstanceFactory(vite, { createRequestHandler, toNodeHandler }) {
-      // The commerce domain pulls in the cold PGlite/WASM graph. Transform it through Vite's
-      // public environment API before module evaluation so a contended CI runner cannot spend
-      // Vite's entire per-fetch transport budget compiling this one dependency.
+      // Prime the query module before the domain module that imports it. Vite's
+      // transformRequest() does not recursively evaluate imports, and the
+      // commerce graph otherwise reaches this cold module through the SSR
+      // fetch transport while a contended hosted runner is loading PGlite/WASM.
+      await vite.environments.ssr.transformRequest('/src/queries.ts');
       await vite.environments.ssr.transformRequest('/src/domain.ts');
       const appShell = await vite.ssrLoadModule('/src/app.tsx');
       const { createCommerceApplication } = appShell;
