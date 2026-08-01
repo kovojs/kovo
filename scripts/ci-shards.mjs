@@ -271,7 +271,13 @@ const STARTER_ENTRIES = [
     id: 'm1-secret-wire',
     file: 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
     testName: 'M1:secret-wire',
-    seconds: 151,
+    seconds: 153,
+  },
+  {
+    id: 'm1-safe-secret-wire',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
+    testName: 'M1:safe-secret-wire',
+    seconds: 144,
   },
   {
     id: 'm1-raw-sql',

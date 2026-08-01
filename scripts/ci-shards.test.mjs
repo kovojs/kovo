@@ -823,7 +823,7 @@ describe('ci-shards', () => {
       entries.map((entry) => entry.id).toSorted(compareStrings),
     );
     expect(shards.map((shard) => shard.seconds)).toEqual([
-      981, 1_008, 981, 999, 979, 984, 977, 989, 979, 978,
+      1_018, 1_026, 991, 999, 991, 993, 991, 999, 990, 1_003,
     ]);
   });
 
@@ -848,7 +848,7 @@ describe('ci-shards', () => {
     expect([...packedIds, ...unpackedIds].toSorted(compareStrings)).toEqual(
       allEntries.map((entry) => entry.id).toSorted(compareStrings),
     );
-    expect(starterEntriesForMode('unpacked', 'per-pr')).toHaveLength(46);
+    expect(starterEntriesForMode('unpacked', 'per-pr')).toHaveLength(47);
     expect(starterEntries().find((entry) => entry.id === 'bugz-fixture-format')).toMatchObject({
       cadence: 'per-pr',
       testName: 'keeps BUGZ25/31 production fixtures formatter-clean before build preflight',
@@ -877,7 +877,7 @@ describe('ci-shards', () => {
       }))
       .filter((shard) => shard.entries.length > 0);
 
-    expect(browserShards).toEqual([{ index: 2, entries: ['island-derive-artifacts'] }]);
+    expect(browserShards).toEqual([{ index: 4, entries: ['island-derive-artifacts'] }]);
   });
 
   it('marks only packed starter shards as needing the packed package artifact', async () => {
