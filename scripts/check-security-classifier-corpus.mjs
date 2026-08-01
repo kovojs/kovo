@@ -148,6 +148,12 @@ const LOAD_ISOLATED_TEST_CONFIGS = [
       'shares one packed anonymous-CSRF witness through emitted Node and Vercel app shells',
     ],
   },
+  {
+    file: 'packages/verify/src/translation.test.ts',
+    freshTestNames: [
+      'keeps the fixed-mode parser census inside its per-translation performance budget',
+    ],
+  },
 ];
 
 const REQUEST_SAFE_RUNTIME_SET_ALIGNMENT = [
