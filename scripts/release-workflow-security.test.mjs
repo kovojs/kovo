@@ -40,6 +40,9 @@ const PUBLISH_RELEASE_DOWNLOAD_DIRECTORY = '${{ runner.temp }}/kovo-release-arti
 const PUBLISH_ARCHIVE_PATH = `${PUBLISH_RELEASE_DOWNLOAD_DIRECTORY}/${RELEASE_ARTIFACT_NAME}/${RELEASE_ARCHIVE_NAME}`;
 const REPRODUCIBLE_PACK_ARTIFACT_NAME = 'kovo-reproducible-pack-attestation';
 const AUTHORIZED_CI_RUN_ID = '${{ needs.authorize.outputs.ci-run-id }}';
+const DEVEX_RUN_ID = 417;
+const DEVEX_RUN_ATTEMPT = 2;
+const DEVEX_SHA = '0123456789abcdef0123456789abcdef01234567';
 const ATTESTATION_JOB_ACTIONS = Object.freeze([DOWNLOAD_ARTIFACT_ACTION, ATTEST_ACTION]);
 const ATTESTATION_JOB_PERMISSIONS = Object.freeze([
   'artifact-metadata: write',
@@ -217,6 +220,51 @@ function publishDownloadsMatchTrustBoundary(source) {
   return downloads.length === 1 && downloads[0] === PUBLISH_RELEASE_DOWNLOAD_INPUTS;
 }
 
+function devexJobsFilter(source) {
+  return source.match(/^          devex_jobs_filter='\n([\s\S]*?)^          '\n/mu)?.[1] ?? '';
+}
+
+function devexJob(name, overrides = {}) {
+  return {
+    conclusion: 'success',
+    head_branch: 'main',
+    head_sha: DEVEX_SHA,
+    name,
+    run_attempt: DEVEX_RUN_ATTEMPT,
+    run_id: DEVEX_RUN_ID,
+    status: 'completed',
+    workflow_name: 'DevEx Nightly',
+    ...overrides,
+  };
+}
+
+function devexJobsQualify(payload) {
+  const filter = devexJobsFilter(releaseWorkflow);
+  if (filter === '') return false;
+  try {
+    execFileSync(
+      'jq',
+      [
+        '-e',
+        '--argjson',
+        'run_id',
+        String(DEVEX_RUN_ID),
+        '--argjson',
+        'run_attempt',
+        String(DEVEX_RUN_ATTEMPT),
+        '--arg',
+        'sha',
+        DEVEX_SHA,
+        filter,
+      ],
+      { input: JSON.stringify(payload), stdio: ['pipe', 'ignore', 'ignore'] },
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 describe('release workflow authority', () => {
   it('admits only an exact successful main commit and has no dispatch bypass', () => {
     expect(releaseWorkflow).toContain('test "$RELEASE_REF" = refs/heads/main');
@@ -235,6 +283,14 @@ describe('release workflow authority', () => {
     expect(releaseWorkflow).toContain('.workflow_id == 322844190');
     expect(releaseWorkflow).toContain('(.event == "workflow_dispatch" or .event == "schedule")');
     expect(releaseWorkflow).toContain('.path == ".github/workflows/devex-nightly.yml"');
+    expect(releaseWorkflow).toContain(
+      '/actions/runs/${candidate_id}/jobs?filter=latest&per_page=100&page=1',
+    );
+    expect(releaseWorkflow).toContain(
+      '["package-producer", "benchmark", "packed-journeys", "full-catalog"]',
+    );
+    expect(releaseWorkflow).toContain('.total_count != (.workflow_runs | length)');
+    expect(releaseWorkflow).toContain('.total_count != (.jobs | length)');
     expect(releaseWorkflow).toContain(
       'ci-run-id: ${{ steps.authorize-release.outputs.ci-run-id }}',
     );
@@ -256,6 +312,79 @@ describe('release workflow authority', () => {
     );
     expect(releaseWorkflow).not.toContain('skip_verify_release_input');
     expect(releaseWorkflow).not.toContain('SKIP_RELEASE_CHECKS');
+  });
+
+  it('requires one successful exact-binding ordinary DevEx job set', () => {
+    const ordinaryJobs = [
+      devexJob('package-producer'),
+      devexJob('benchmark'),
+      devexJob('packed-journeys'),
+      devexJob('full-catalog'),
+    ];
+    const cases = [
+      {
+        expected: true,
+        name: 'complete ordinary run',
+        payload: { jobs: ordinaryJobs, total_count: ordinaryJobs.length },
+      },
+      {
+        expected: false,
+        name: 'ratification-only run',
+        payload: {
+          jobs: [
+            devexJob('package-producer'),
+            devexJob('benchmark', { conclusion: 'skipped' }),
+            devexJob('packed-journeys', { conclusion: 'skipped' }),
+            devexJob('full-catalog', { conclusion: 'skipped' }),
+            devexJob('hosted-ratification'),
+          ],
+          total_count: 5,
+        },
+      },
+      {
+        expected: false,
+        name: 'missing required job',
+        payload: { jobs: ordinaryJobs.slice(0, -1), total_count: ordinaryJobs.length - 1 },
+      },
+      {
+        expected: false,
+        name: 'skipped required job',
+        payload: {
+          jobs: ordinaryJobs.map((job) =>
+            job.name === 'benchmark' ? { ...job, conclusion: 'skipped' } : job,
+          ),
+          total_count: ordinaryJobs.length,
+        },
+      },
+      {
+        expected: false,
+        name: 'duplicate required job',
+        payload: {
+          jobs: [...ordinaryJobs, devexJob('benchmark')],
+          total_count: ordinaryJobs.length + 1,
+        },
+      },
+      {
+        expected: false,
+        name: 'paginated response',
+        payload: { jobs: ordinaryJobs, total_count: ordinaryJobs.length + 1 },
+      },
+      {
+        expected: false,
+        name: 'job bound to another attempt',
+        payload: {
+          jobs: ordinaryJobs.map((job) =>
+            job.name === 'full-catalog' ? { ...job, run_attempt: DEVEX_RUN_ATTEMPT + 1 } : job,
+          ),
+          total_count: ordinaryJobs.length,
+        },
+      },
+    ];
+
+    expect(devexJobsFilter(releaseWorkflow)).not.toBe('');
+    for (const testCase of cases) {
+      expect(devexJobsQualify(testCase.payload), testCase.name).toBe(testCase.expected);
+    }
   });
 
   it('isolates release preparation, exact attestations, and package-publish authority', () => {

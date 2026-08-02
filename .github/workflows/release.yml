@@ -101,29 +101,86 @@ jobs:
                   | if length == 1 then .[0] else error("expected one trusted aggregate workflow run") end
                 '
           )"
-          devex_workflow_run="$(
-            gh api "/repos/${GITHUB_REPOSITORY}/actions/workflows/322844190/runs?branch=main&head_sha=${RELEASE_SHA}&status=completed&per_page=100" |
+          devex_workflow_runs="$(
+            gh api "/repos/${GITHUB_REPOSITORY}/actions/workflows/322844190/runs?branch=main&head_sha=${RELEASE_SHA}&status=completed&per_page=100&page=1" |
               jq -ce \
                 --arg repo "$GITHUB_REPOSITORY" \
                 --arg sha "$RELEASE_SHA" '
-                  [
-                    .workflow_runs[]
-                    | select(
-                        .workflow_id == 322844190
-                        and (.event == "workflow_dispatch" or .event == "schedule")
-                        and .head_branch == "main"
-                        and .head_sha == $sha
-                        and .path == ".github/workflows/devex-nightly.yml"
-                        and .status == "completed"
-                        and .conclusion == "success"
-                        and .repository.full_name == $repo
-                        and .head_repository.full_name == $repo
-                      )
-                  ]
-                  | sort_by(.id)
-                  | if length >= 1 then .[-1] else error("expected a trusted exact-SHA DevEx Nightly run") end
+                  if (
+                    (.total_count | type) != "number"
+                    or (.workflow_runs | type) != "array"
+                    or .total_count != (.workflow_runs | length)
+                  ) then
+                    error("DevEx Nightly run response is malformed or paginated")
+                  else
+                    [
+                      .workflow_runs[]
+                      | select(
+                          .workflow_id == 322844190
+                          and (.event == "workflow_dispatch" or .event == "schedule")
+                          and .head_branch == "main"
+                          and .head_sha == $sha
+                          and .path == ".github/workflows/devex-nightly.yml"
+                          and .status == "completed"
+                          and .conclusion == "success"
+                          and .repository.full_name == $repo
+                          and .head_repository.full_name == $repo
+                          and (.id | type) == "number"
+                          and .id >= 1
+                          and (.run_attempt | type) == "number"
+                          and .run_attempt >= 1
+                        )
+                    ]
+                    | sort_by(.id)
+                    | reverse
+                  end
                 '
           )"
+          devex_jobs_filter='
+            def required_names:
+              ["package-producer", "benchmark", "packed-journeys", "full-catalog"];
+
+            if (
+              (.total_count | type) != "number"
+              or (.jobs | type) != "array"
+              or .total_count != (.jobs | length)
+            ) then
+              false
+            else
+              [.jobs[] | select(.name as $name | required_names | index($name))] as $required_jobs
+              | ([ $required_jobs[].name ] | sort) == (required_names | sort)
+                and all(
+                  $required_jobs[];
+                  .run_id == $run_id
+                  and .run_attempt == $run_attempt
+                  and .workflow_name == "DevEx Nightly"
+                  and .head_branch == "main"
+                  and .head_sha == $sha
+                  and .status == "completed"
+                  and .conclusion == "success"
+                )
+            end
+          '
+          devex_workflow_run=""
+          while IFS= read -r candidate; do
+            candidate_id="$(jq -er '.id' <<<"$candidate")"
+            candidate_attempt="$(jq -er '.run_attempt' <<<"$candidate")"
+            candidate_jobs="$(
+              gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${candidate_id}/jobs?filter=latest&per_page=100&page=1"
+            )"
+            if jq -e \
+              --argjson run_id "$candidate_id" \
+              --argjson run_attempt "$candidate_attempt" \
+              --arg sha "$RELEASE_SHA" \
+              "$devex_jobs_filter" <<<"$candidate_jobs" >/dev/null; then
+              devex_workflow_run="$candidate"
+              break
+            fi
+          done < <(jq -cr '.[]' <<<"$devex_workflow_runs")
+          if [ -z "$devex_workflow_run" ]; then
+            echo "No successful exact-SHA DevEx Nightly run completed the ordinary release job set." >&2
+            exit 1
+          fi
           printf 'ci-run-id=%s\n' "$(jq -er '.id' <<<"$workflow_run")" >> "$GITHUB_OUTPUT"
           printf 'devex-run-id=%s\n' "$(jq -er '.id' <<<"$devex_workflow_run")" >> "$GITHUB_OUTPUT"
 
