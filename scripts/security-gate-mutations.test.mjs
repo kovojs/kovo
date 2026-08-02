@@ -112,8 +112,7 @@ describe('security-gate-mutations', () => {
   it('enrolls the managed rawRead legacy-method closure mutant', () => {
     const mutant = SECURITY_GATE_MUTANTS.find(
       (candidate) =>
-        candidate.name ===
-        'compiler-finite-ir/drop-declared-secret-read-legacy-method-closure',
+        candidate.name === 'compiler-finite-ir/drop-declared-secret-read-legacy-method-closure',
     );
 
     expect(mutant).toMatchObject({

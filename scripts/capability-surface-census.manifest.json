@@ -51,9 +51,7 @@
       "authority": "Opaque Postgres request-scoped DB provider token consumed by createApp construction",
       "mint": "packages/create-kovo/templates/src/_kovo/app-runtime-db.ts#appRuntimeDbProvider",
       "publicStatus": "non-callable framework-managed provider token",
-      "allowedConsumers": [
-        "packages/create-kovo/templates/src/kovo.ts"
-      ],
+      "allowedConsumers": ["packages/create-kovo/templates/src/kovo.ts"],
       "buildDiagnostic": "packages/cli/src/commands/sound-subset.mjs only permits appRuntimeDbProvider from src/kovo.ts",
       "evidence": "packages/create-kovo/src/index.test.ts asserts appRuntimeDbProvider is the opaque appDatabase.db token and rejects auth.ts importing it"
     },
@@ -63,9 +61,7 @@
       "authority": "Opaque SQLite request-scoped DB provider token consumed by createApp construction",
       "mint": "packages/create-kovo/templates/src/_kovo/app-runtime-db.sqlite.ts#appRuntimeDbProvider",
       "publicStatus": "non-callable framework-managed provider token",
-      "allowedConsumers": [
-        "packages/create-kovo/templates/src/kovo.ts"
-      ],
+      "allowedConsumers": ["packages/create-kovo/templates/src/kovo.ts"],
       "buildDiagnostic": "packages/cli/src/commands/sound-subset.mjs only permits appRuntimeDbProvider from src/kovo.ts",
       "evidence": "packages/create-kovo/src/index.test.ts asserts SQLite emits the opaque appDatabase.db token and rejects auth.ts importing it"
     },
@@ -89,9 +85,7 @@
       "authority": "Managed SQL statement value passed to DB drivers after validation",
       "mint": "packages/core/src/internal/sql-safety.ts",
       "publicStatus": "framework-owned-artifact",
-      "allowedConsumers": [
-        "managed DB read/write execution chokes"
-      ],
+      "allowedConsumers": ["managed DB read/write execution chokes"],
       "buildDiagnostic": "scripts/capability-surface-census-gate.mjs rejects managed wrappers that pass the original statement",
       "evidence": "pnpm exec vitest --run packages/core/src/sql-safety.test.ts packages/server/src/managed-db.test.ts packages/test/src/pglite-harness.test.ts packages/test/src/sqlite-harness.test.ts --config ./vite.config.ts"
     },
@@ -101,11 +95,7 @@
       "authority": "Resolved Postgres reader/writer/admin/system roles and runtime membership edges",
       "mint": "packages/server/src/postgres-runtime.ts#resolvePostgresRuntimeConfig",
       "publicStatus": "deployment-manifest",
-      "allowedConsumers": [
-        "kovo db provision",
-        "kovo db check",
-        "runtime boot posture check"
-      ],
+      "allowedConsumers": ["kovo db provision", "kovo db check", "runtime boot posture check"],
       "buildDiagnostic": "DEC-C tests cover external target resolution and role adoption diagnostics",
       "evidence": "plans/fundamental-fixes-followup-11.md DEC-C verification bundle"
     },
@@ -115,9 +105,7 @@
       "authority": "Framework-owned storage download capability signer/verifier",
       "mint": "packages/server/src/capability-route.ts#createStorageDownloadEndpoint",
       "publicStatus": "narrowed-endpoint-factory",
-      "allowedConsumers": [
-        "apps configuring storage download endpoints"
-      ],
+      "allowedConsumers": ["apps configuring storage download endpoints"],
       "buildDiagnostic": "existing capability route tests and sink-policy gates",
       "evidence": "pnpm run check:sink-policy"
     },
@@ -127,9 +115,7 @@
       "authority": "Webhook transaction/request DB facade",
       "mint": "packages/server/src/app.ts",
       "publicStatus": "framework-threaded-request-facade",
-      "allowedConsumers": [
-        "webhook handlers through request context"
-      ],
+      "allowedConsumers": ["webhook handlers through request context"],
       "buildDiagnostic": "existing webhook verifier and managed DB gates",
       "evidence": "pnpm run check:security-gate-mutations"
     },
@@ -139,9 +125,7 @@
       "authority": "Request principal posture used to scope DB reads and writes",
       "mint": "packages/server/src/principal-posture.ts",
       "publicStatus": "framework-owned-request-fact",
-      "allowedConsumers": [
-        "request-scoped DB construction and diagnostics"
-      ],
+      "allowedConsumers": ["request-scoped DB construction and diagnostics"],
       "buildDiagnostic": "existing principal ingress and guard tests",
       "evidence": "pnpm run check:fail-closed-classifiers"
     }
@@ -151,10 +135,7 @@
       "id": "server.egress-fetch",
       "path": "packages/server/src/egress.ts",
       "owner": "frameworkEgressFetch",
-      "consumes": [
-        "composeCurrentRequestDeadlineSignal",
-        "awaitWithCurrentRequestDeadline"
-      ],
+      "consumes": ["composeCurrentRequestDeadlineSignal", "awaitWithCurrentRequestDeadline"],
       "purpose": "The sole framework network door composes caller cancellation with the mandatory request deadline and bounds DNS resolution.",
       "evidence": "packages/server/src/egress.test.ts plus request-deadline.test.ts exercise transport policy and deadline abort behavior."
     },
@@ -162,9 +143,7 @@
       "id": "server.db-provider",
       "path": "packages/server/src/guards.ts",
       "owner": "resolveDbProvider",
-      "consumes": [
-        "awaitWithCurrentRequestDeadline"
-      ],
+      "consumes": ["awaitWithCurrentRequestDeadline"],
       "purpose": "The framework-managed database provider wait is discarded when the request deadline expires and receives the deadline-bound Request signal.",
       "evidence": "packages/server/src/request-deadline.test.ts proves a hanging DB provider observes abort before handler progress."
     },
@@ -172,9 +151,7 @@
       "id": "server.mutation-transaction",
       "path": "packages/server/src/mutation.ts",
       "owner": "runInDefaultTransaction",
-      "consumes": [
-        "assertCurrentRequestDeadlineActive"
-      ],
+      "consumes": ["assertCurrentRequestDeadlineActive"],
       "purpose": "The mutation transaction door rejects an expired request before opening work and rechecks inside the transaction callback before commit success.",
       "evidence": "packages/server/src/request-deadline.test.ts proves cooperative expiry takes the pre-commit rollback path and never records commit."
     },
@@ -182,9 +159,7 @@
       "id": "server.deferred-region",
       "path": "packages/server/src/deferred-region.ts",
       "owner": "withDeferredRegionTimeout",
-      "consumes": [
-        "onCurrentRequestDeadline"
-      ],
+      "consumes": ["onCurrentRequestDeadline"],
       "purpose": "The owned deferred-render winner treats the mandatory request deadline as a timeout and revokes its retained render authority.",
       "evidence": "packages/server/src/deferred-region.test.ts and async-context confinement tests prove one-shot timeout and revocation behavior."
     },
@@ -192,9 +167,7 @@
       "id": "server.response-stream-flush",
       "path": "packages/server/src/request-deadline.ts",
       "owner": "wrapRequestDeadlineResponse",
-      "consumes": [
-        "RequestDeadlineAdmission.signal"
-      ],
+      "consumes": ["RequestDeadlineAdmission.signal"],
       "purpose": "The sole response deadline wrapper errors and cancels an unfinished body stream and releases occupancy at deadline or completion.",
       "evidence": "packages/server/src/request-deadline.test.ts proves stream error, late discard, and occupancy reacquisition."
     },
@@ -202,9 +175,7 @@
       "id": "server.node-response-transport",
       "path": "packages/server/src/node.ts",
       "owner": "createNodeHandler",
-      "consumes": [
-        "bindRequestDeadlineResponseTransport"
-      ],
+      "consumes": ["bindRequestDeadlineResponseTransport"],
       "purpose": "The Node adapter holds occupancy through actual response finish or close and destroys a slow response transport when its mandatory deadline expires.",
       "evidence": "packages/server/src/node.test.ts proves a stalled response transport is destroyed at deadline and the occupancy slot is reacquired."
     }
