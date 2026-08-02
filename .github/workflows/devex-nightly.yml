@@ -248,15 +248,33 @@ jobs:
       - name: Ratify all reports in one atomic budget transaction
         run: vp exec node scripts/devex-benchmark.mjs --ratify --budgets devex-budgets.json --baseline "$RUNNER_TEMP/kovo-devex-ratification/benchmark.json" --proposal "$RUNNER_TEMP/kovo-devex-ratification/proposals/benchmark.json" --baseline-record-path baselines/devex-hosted-benchmark-v1.json --baseline "$RUNNER_TEMP/kovo-devex-ratification/golden/report.json" --proposal "$RUNNER_TEMP/kovo-devex-ratification/proposals/golden-journey.json" --baseline-record-path baselines/devex-hosted-golden-journey-v1.json --baseline "$RUNNER_TEMP/kovo-devex-ratification/full-catalog/report.json" --proposal "$RUNNER_TEMP/kovo-devex-ratification/proposals/full-catalog.json" --baseline-record-path baselines/devex-hosted-full-catalog-v1.json --write
       - name: Assemble and validate the reviewable candidate
+        env:
+          KOVO_DEVEX_CANDIDATE_ROOT: ${{ runner.temp }}/kovo-devex-ratification/candidate
         run: |
-          mkdir -p baselines "$RUNNER_TEMP/kovo-devex-ratification/candidate/baselines"
-          cp "$RUNNER_TEMP/kovo-devex-ratification/benchmark.json" baselines/devex-hosted-benchmark-v1.json
-          cp "$RUNNER_TEMP/kovo-devex-ratification/golden/report.json" baselines/devex-hosted-golden-journey-v1.json
-          cp "$RUNNER_TEMP/kovo-devex-ratification/full-catalog/report.json" baselines/devex-hosted-full-catalog-v1.json
-          vp exec node scripts/devex-benchmark.mjs --check-budgets
-          git diff --check -- devex-budgets.json baselines
-          cp devex-budgets.json "$RUNNER_TEMP/kovo-devex-ratification/candidate/devex-budgets.json"
-          cp baselines/devex-hosted-*-v1.json "$RUNNER_TEMP/kovo-devex-ratification/candidate/baselines/"
+          mkdir -p "$KOVO_DEVEX_CANDIDATE_ROOT/baselines"
+          cp devex-budgets.json "$KOVO_DEVEX_CANDIDATE_ROOT/devex-budgets.json"
+          cp "$RUNNER_TEMP/kovo-devex-ratification/benchmark.json" "$KOVO_DEVEX_CANDIDATE_ROOT/baselines/devex-hosted-benchmark-v1.json"
+          cp "$RUNNER_TEMP/kovo-devex-ratification/golden/report.json" "$KOVO_DEVEX_CANDIDATE_ROOT/baselines/devex-hosted-golden-journey-v1.json"
+          cp "$RUNNER_TEMP/kovo-devex-ratification/full-catalog/report.json" "$KOVO_DEVEX_CANDIDATE_ROOT/baselines/devex-hosted-full-catalog-v1.json"
+          vp exec node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          import path from 'node:path';
+
+          import { createRatifiedDevexBaselinePolicyCandidate } from './scripts/devex-ci-policy.mjs';
+
+          const checkoutPolicy = JSON.parse(readFileSync('devex-baseline-policy.json', 'utf8'));
+          const candidatePolicy = createRatifiedDevexBaselinePolicyCandidate(checkoutPolicy);
+          writeFileSync(
+            path.join(process.env.KOVO_DEVEX_CANDIDATE_ROOT, 'devex-baseline-policy.json'),
+            `${JSON.stringify(candidatePolicy, null, 2)}\n`,
+            { flag: 'wx', mode: 0o600 },
+          );
+          NODE
+          vp exec node scripts/devex-benchmark.mjs --check-budgets --budgets "$KOVO_DEVEX_CANDIDATE_ROOT/devex-budgets.json"
+          vp exec node scripts/devex-ci-policy.mjs --candidate-root "$KOVO_DEVEX_CANDIDATE_ROOT"
+          git diff --check -- devex-budgets.json
+          actual_status="$(git status --porcelain=v1 --untracked-files=all)"
+          test "$actual_status" = ' M devex-budgets.json'
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:

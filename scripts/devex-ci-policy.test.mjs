@@ -1,13 +1,17 @@
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
 import {
+  createRatifiedDevexBaselinePolicyCandidate,
   runnerMinutes,
   validateDevexBaselinePolicy,
   validateDevexCiPolicy,
+  validateDevexRatificationCandidateCensus,
+  validateRatifiedDevexBaselinePolicyCandidate,
 } from './devex-ci-policy.mjs';
 
 const repoRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -152,6 +156,91 @@ describe('DevEx CI and baseline policy', () => {
     expect(validateDevexCiPolicy(tooFewAuditSamples, { workflowSources })).toContain(
       'gates[6] must collect one-runner N=5 benchmark, golden, and full-catalog evidence before one clean transactional budget write',
     );
+
+    for (const fragment of [
+      'createRatifiedDevexBaselinePolicyCandidate(checkoutPolicy)',
+      'vp exec node scripts/devex-benchmark.mjs --check-budgets --budgets "$KOVO_DEVEX_CANDIDATE_ROOT/devex-budgets.json"',
+      'vp exec node scripts/devex-ci-policy.mjs --candidate-root "$KOVO_DEVEX_CANDIDATE_ROOT"',
+      'test "$actual_status" = \' M devex-budgets.json\'',
+    ]) {
+      const incompleteCandidate = new Map(workflowSources);
+      incompleteCandidate.set(
+        '.github/workflows/devex-nightly.yml',
+        incompleteCandidate.get('.github/workflows/devex-nightly.yml').replace(fragment, ''),
+      );
+      expect(validateDevexCiPolicy(ci, { workflowSources: incompleteCandidate })).toContain(
+        'gates[6] must hand off and validate the exact five-file ratification candidate without checkout baseline writes',
+      );
+    }
+
+    const checkoutBaselineWrite = new Map(workflowSources);
+    checkoutBaselineWrite.set(
+      '.github/workflows/devex-nightly.yml',
+      checkoutBaselineWrite
+        .get('.github/workflows/devex-nightly.yml')
+        .replace(
+          '          cp benchmark.json "$KOVO_DEVEX_CANDIDATE_ROOT/baselines/devex-hosted-benchmark-v1.json"',
+          '          cp benchmark.json "$KOVO_DEVEX_CANDIDATE_ROOT/baselines/devex-hosted-benchmark-v1.json"\n          cp benchmark.json baselines/devex-hosted-benchmark-v1.json',
+        ),
+    );
+    expect(validateDevexCiPolicy(ci, { workflowSources: checkoutBaselineWrite })).toContain(
+      'gates[6] must hand off and validate the exact five-file ratification candidate without checkout baseline writes',
+    );
+  });
+
+  it('reconciles only ratification posture and requires the complete regular-file candidate', () => {
+    const candidate = createRatifiedDevexBaselinePolicyCandidate(baseline);
+    expect(candidate).toEqual({
+      ...baseline,
+      status: 'ratified',
+      blockers: [],
+    });
+    expect(validateRatifiedDevexBaselinePolicyCandidate(baseline, candidate)).toEqual([]);
+
+    const drifted = structuredClone(candidate);
+    drifted.collection.baselineSampleCount = 6;
+    expect(validateRatifiedDevexBaselinePolicyCandidate(baseline, drifted)).toEqual([
+      'candidate baseline policy must differ from checkout only by status=ratified and blockers=[]',
+    ]);
+    expect(validateRatifiedDevexBaselinePolicyCandidate(baseline, baseline)).toEqual([
+      'candidate baseline policy must differ from checkout only by status=ratified and blockers=[]',
+    ]);
+
+    const candidateRoot = mkdtempSync(path.join(os.tmpdir(), 'kovo-devex-candidate-'));
+    try {
+      mkdirSync(path.join(candidateRoot, 'baselines'));
+      for (const relative of [
+        'baselines/devex-hosted-benchmark-v1.json',
+        'baselines/devex-hosted-full-catalog-v1.json',
+        'baselines/devex-hosted-golden-journey-v1.json',
+        'devex-baseline-policy.json',
+        'devex-budgets.json',
+      ]) {
+        writeFileSync(path.join(candidateRoot, relative), '{}\n');
+      }
+      expect(validateDevexRatificationCandidateCensus(candidateRoot)).toEqual([]);
+
+      writeFileSync(path.join(candidateRoot, 'unexpected.json'), '{}\n');
+      expect(validateDevexRatificationCandidateCensus(candidateRoot)).toContain(
+        'ratification candidate must contain exactly baselines/devex-hosted-benchmark-v1.json, baselines/devex-hosted-full-catalog-v1.json, baselines/devex-hosted-golden-journey-v1.json, devex-baseline-policy.json, devex-budgets.json',
+      );
+      rmSync(path.join(candidateRoot, 'unexpected.json'));
+      mkdirSync(path.join(candidateRoot, 'unexpected'));
+      expect(validateDevexRatificationCandidateCensus(candidateRoot)).toContain(
+        'ratification candidate must contain only the baselines directory',
+      );
+      rmSync(path.join(candidateRoot, 'unexpected'), { recursive: true });
+      rmSync(path.join(candidateRoot, 'devex-baseline-policy.json'));
+      symlinkSync(
+        path.join(candidateRoot, 'devex-budgets.json'),
+        path.join(candidateRoot, 'devex-baseline-policy.json'),
+      );
+      expect(validateDevexRatificationCandidateCensus(candidateRoot)).toContain(
+        'ratification candidate entry must not be a symbolic link: devex-baseline-policy.json',
+      );
+    } finally {
+      rmSync(candidateRoot, { recursive: true, force: true });
+    }
   });
 
   it('requires N>=5, exact statistics, reviewed targets, and an exact accepted runner', () => {
@@ -336,7 +425,22 @@ function policyWorkflowSources(policy) {
     }
     for (const command of gate.commands) lines.push(`      - run: ${command}`);
     if (gate.id === 'manual-hosted-ratification') {
-      lines.push('      - run: test -z "$(git status --porcelain=v1 --untracked-files=all)"');
+      lines.push(
+        '      - run: test -z "$(git status --porcelain=v1 --untracked-files=all)"',
+        '      - env:',
+        '          KOVO_DEVEX_CANDIDATE_ROOT: ${{ runner.temp }}/kovo-devex-ratification/candidate',
+        '        run: |',
+        '          cp devex-budgets.json "$KOVO_DEVEX_CANDIDATE_ROOT/devex-budgets.json"',
+        '          cp benchmark.json "$KOVO_DEVEX_CANDIDATE_ROOT/baselines/devex-hosted-benchmark-v1.json"',
+        '          cp golden.json "$KOVO_DEVEX_CANDIDATE_ROOT/baselines/devex-hosted-golden-journey-v1.json"',
+        '          cp catalog.json "$KOVO_DEVEX_CANDIDATE_ROOT/baselines/devex-hosted-full-catalog-v1.json"',
+        '          const candidatePolicy = createRatifiedDevexBaselinePolicyCandidate(checkoutPolicy)',
+        "          path.join(process.env.KOVO_DEVEX_CANDIDATE_ROOT, 'devex-baseline-policy.json')",
+        '          vp exec node scripts/devex-benchmark.mjs --check-budgets --budgets "$KOVO_DEVEX_CANDIDATE_ROOT/devex-budgets.json"',
+        '          vp exec node scripts/devex-ci-policy.mjs --candidate-root "$KOVO_DEVEX_CANDIDATE_ROOT"',
+        '          git diff --check -- devex-budgets.json',
+        '          test "$actual_status" = \' M devex-budgets.json\'',
+      );
     }
     if (gate.preserveReportOnFailure) {
       lines.push(

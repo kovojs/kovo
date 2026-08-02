@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
@@ -43,6 +43,70 @@ const HOSTED_RUNNER_MACHINE_CLASS = Object.freeze({
 });
 const HOSTED_EVIDENCE_SOURCES = Object.freeze(['benchmark', 'golden-journey', 'full-catalog']);
 const HOSTED_RUNNER_BOUND_METRIC_COUNT = 14;
+const RATIFICATION_CANDIDATE_FILES = Object.freeze([
+  'baselines/devex-hosted-benchmark-v1.json',
+  'baselines/devex-hosted-full-catalog-v1.json',
+  'baselines/devex-hosted-golden-journey-v1.json',
+  'devex-baseline-policy.json',
+  'devex-budgets.json',
+]);
+
+export function createRatifiedDevexBaselinePolicyCandidate(policy) {
+  if (!policy || typeof policy !== 'object' || Array.isArray(policy)) {
+    throw new TypeError('baseline policy candidate source must be an object');
+  }
+  return {
+    ...structuredClone(policy),
+    status: 'ratified',
+    blockers: [],
+  };
+}
+
+export function validateRatifiedDevexBaselinePolicyCandidate(checkoutPolicy, candidatePolicy) {
+  const expected = createRatifiedDevexBaselinePolicyCandidate(checkoutPolicy);
+  return JSON.stringify(candidatePolicy) === JSON.stringify(expected)
+    ? []
+    : [
+        'candidate baseline policy must differ from checkout only by status=ratified and blockers=[]',
+      ];
+}
+
+export function validateDevexRatificationCandidateCensus(candidateRoot) {
+  const root = path.resolve(candidateRoot);
+  if (!existsSync(root) || !lstatSync(root).isDirectory()) {
+    return ['ratification candidate root must be a directory'];
+  }
+  const findings = [];
+  const observedDirectories = [];
+  const observed = [];
+  const visit = (directory, prefix = '') => {
+    for (const name of readdirSync(directory).sort((left, right) => left.localeCompare(right))) {
+      const relative = prefix === '' ? name : `${prefix}/${name}`;
+      const absolute = path.join(directory, name);
+      const entry = lstatSync(absolute);
+      if (entry.isSymbolicLink()) {
+        findings.push(`ratification candidate entry must not be a symbolic link: ${relative}`);
+      } else if (entry.isDirectory()) {
+        observedDirectories.push(relative);
+        visit(absolute, relative);
+      } else if (entry.isFile()) {
+        observed.push(relative);
+      } else {
+        findings.push(`ratification candidate entry must be a regular file: ${relative}`);
+      }
+    }
+  };
+  visit(root);
+  if (JSON.stringify(observedDirectories) !== JSON.stringify(['baselines'])) {
+    findings.push('ratification candidate must contain only the baselines directory');
+  }
+  if (JSON.stringify(observed) !== JSON.stringify(RATIFICATION_CANDIDATE_FILES)) {
+    findings.push(
+      `ratification candidate must contain exactly ${RATIFICATION_CANDIDATE_FILES.join(', ')}`,
+    );
+  }
+  return findings;
+}
 
 export function validateDevexCiPolicy(policy, options = {}) {
   const findings = [];
@@ -290,6 +354,27 @@ export function validateDevexCiPolicy(policy, options = {}) {
       ) {
         findings.push(
           `${label} must collect one-runner N=5 benchmark, golden, and full-catalog evidence before one clean transactional budget write`,
+        );
+      }
+      const candidateHandoffFragments = [
+        'KOVO_DEVEX_CANDIDATE_ROOT: ${{ runner.temp }}/kovo-devex-ratification/candidate',
+        'cp devex-budgets.json "$KOVO_DEVEX_CANDIDATE_ROOT/devex-budgets.json"',
+        '"$KOVO_DEVEX_CANDIDATE_ROOT/baselines/devex-hosted-benchmark-v1.json"',
+        '"$KOVO_DEVEX_CANDIDATE_ROOT/baselines/devex-hosted-golden-journey-v1.json"',
+        '"$KOVO_DEVEX_CANDIDATE_ROOT/baselines/devex-hosted-full-catalog-v1.json"',
+        'createRatifiedDevexBaselinePolicyCandidate(checkoutPolicy)',
+        "path.join(process.env.KOVO_DEVEX_CANDIDATE_ROOT, 'devex-baseline-policy.json')",
+        'vp exec node scripts/devex-benchmark.mjs --check-budgets --budgets "$KOVO_DEVEX_CANDIDATE_ROOT/devex-budgets.json"',
+        'vp exec node scripts/devex-ci-policy.mjs --candidate-root "$KOVO_DEVEX_CANDIDATE_ROOT"',
+        'git diff --check -- devex-budgets.json',
+        'test "$actual_status" = \' M devex-budgets.json\'',
+      ];
+      if (
+        candidateHandoffFragments.some((fragment) => !segment.includes(fragment)) ||
+        /^\s*cp\s+.*(?:^|\s)baselines\/devex-hosted-/mu.test(segment)
+      ) {
+        findings.push(
+          `${label} must hand off and validate the exact five-file ratification candidate without checkout baseline writes`,
         );
       }
     }
@@ -718,13 +803,58 @@ function canonicalWorkflowPath(value) {
   );
 }
 
+function parseDevexCiPolicyArgs(argv) {
+  const options = {};
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    if (argument === '--candidate-root') {
+      if (options.candidateRoot !== undefined) {
+        throw new Error('--candidate-root may be provided only once');
+      }
+      const value = argv[++index];
+      if (value === undefined || value.trim() === '') {
+        throw new Error('--candidate-root requires a path');
+      }
+      options.candidateRoot = path.resolve(value);
+    } else {
+      throw new Error(`Unknown argument: ${String(argument)}`);
+    }
+  }
+  return options;
+}
+
 async function main() {
+  const options = parseDevexCiPolicyArgs(process.argv.slice(2));
   const ci = JSON.parse(readFileSync(path.join(repoRoot, 'devex-ci-policy.json'), 'utf8'));
-  const baseline = JSON.parse(
+  const checkoutBaseline = JSON.parse(
     readFileSync(path.join(repoRoot, 'devex-baseline-policy.json'), 'utf8'),
   );
-  const budgets = JSON.parse(readFileSync(path.join(repoRoot, 'devex-budgets.json'), 'utf8'));
+  const candidateFindings =
+    options.candidateRoot === undefined
+      ? []
+      : validateDevexRatificationCandidateCensus(options.candidateRoot);
+  if (candidateFindings.length > 0) {
+    process.stderr.write(`${candidateFindings.join('\n')}\n`);
+    return 1;
+  }
+  const baseline =
+    options.candidateRoot === undefined
+      ? checkoutBaseline
+      : JSON.parse(
+          readFileSync(path.join(options.candidateRoot, 'devex-baseline-policy.json'), 'utf8'),
+        );
+  const budgets = JSON.parse(
+    readFileSync(
+      options.candidateRoot === undefined
+        ? path.join(repoRoot, 'devex-budgets.json')
+        : path.join(options.candidateRoot, 'devex-budgets.json'),
+      'utf8',
+    ),
+  );
   const findings = [
+    ...(options.candidateRoot === undefined
+      ? []
+      : validateRatifiedDevexBaselinePolicyCandidate(checkoutBaseline, baseline)),
     ...validateDevexCiPolicy(ci, { repoRoot }),
     ...validateDevexBaselinePolicy(baseline, budgets, ci),
   ];
@@ -733,7 +863,7 @@ async function main() {
     return 1;
   }
   process.stdout.write(
-    `${DEVEX_CI_POLICY_SCHEMA} per-pr=${String(runnerMinutes(ci.gates, 'per-pr'))}/${String(ci.budgets.perPullRequestRunnerMinutes)} nightly=${String(runnerMinutes(ci.gates, 'nightly'))}/${String(ci.budgets.nightlyRunnerMinutes)} manual=${String(runnerMinutes(ci.gates, 'manual'))} baseline=${baseline.status} baseline-samples=${String(baseline.collection.baselineSampleCount)} evaluation-samples=${String(baseline.collection.evaluationSampleCount)}\n`,
+    `${DEVEX_CI_POLICY_SCHEMA} per-pr=${String(runnerMinutes(ci.gates, 'per-pr'))}/${String(ci.budgets.perPullRequestRunnerMinutes)} nightly=${String(runnerMinutes(ci.gates, 'nightly'))}/${String(ci.budgets.nightlyRunnerMinutes)} manual=${String(runnerMinutes(ci.gates, 'manual'))} baseline=${baseline.status} baseline-samples=${String(baseline.collection.baselineSampleCount)} evaluation-samples=${String(baseline.collection.evaluationSampleCount)}${options.candidateRoot === undefined ? '' : ' candidate=complete'}\n`,
   );
   return 0;
 }
