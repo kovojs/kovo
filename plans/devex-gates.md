@@ -49,12 +49,12 @@ This literal table is also validated by `scripts/known-failure-register.mjs`.
     directories. Built-tree counts are not accepted as the census.
 - [x] Enforce a classified DevEx CI budget and bounded PR reports for public surface, docs
       freshness, and speed deltas.
-  - Evidence: `pnpm run test:devex-track2` reports 138/138 per-PR and 290/300 ordinary-nightly
-    runner-minutes, passes 102/102 focused tests, and validates the always-run fail-closed report
+  - Evidence: `pnpm run test:devex-track2` reports 140/140 per-PR and 290/300 ordinary-nightly
+    runner-minutes, passes 104/104 focused tests, and validates the always-run fail-closed report
     contract.
-  - Cost: the 28-minute cap increase contains three real isolated packed installs and their
-    cleanup ceilings; local KF-DEVEX-002/010 runs completed in 64-68 seconds, but hosted contention
-    remains the authority for the exact watchdog.
+  - Cost: the 30-minute cap increase contains three real isolated packed installs, cleanup, and a
+    four-minute infrastructure-only packed-build ceiling. Exact-SHA CI for `3b15aef0e` reached the
+    former three-minute KF-DEVEX-005 ceiling; G8's transactional semantics remain unchanged.
 - [x] Isolate hosted ratification from ordinary nightly topology and make release authorization
       select a complete exact-SHA ordinary run rather than a newer ratification-only run.
   - Evidence: `.github/workflows/devex-nightly.yml`, `.github/workflows/release.yml`, and the

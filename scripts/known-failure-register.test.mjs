@@ -28,6 +28,7 @@ import {
 import {
   KNOWN_FAILURE_FIRST_RESPONSE_INFRASTRUCTURE_TIMEOUT_MS,
   KNOWN_FAILURE_FIRST_LOOP_OUTER_TIMEOUT_FLOORS_MS,
+  KNOWN_FAILURE_PACKED_BUILD_TIMEOUT_MS,
 } from './lib/known-failure-probe-deadlines.mjs';
 
 const repoRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -131,7 +132,7 @@ describe('known-failure register', () => {
       'pnpm run test:devex-known-failures-available',
     );
     expect(ciWorkflowSource).toContain(
-      'run: timeout --kill-after=30s 78m vp exec pnpm run test:devex-known-failures-available',
+      'run: timeout --kill-after=30s 80m vp exec pnpm run test:devex-known-failures-available',
     );
 
     const perPrProbeTimeoutBudgetMs = register.entries
@@ -143,7 +144,7 @@ describe('known-failure register', () => {
     const watchdog = ciWorkflowSource.match(
       /run: timeout --kill-after=(\d+)s (\d+)m vp exec pnpm run test:devex-known-failures-available/u,
     );
-    expect(perPrProbeTimeoutBudgetMs).toBe(71 * 60_000);
+    expect(perPrProbeTimeoutBudgetMs).toBe(73 * 60_000);
     expect(watchdog).not.toBeNull();
     expect(Number(watchdog?.[1])).toBeGreaterThan(0);
     expect(Number(watchdog?.[1])).toBeLessThanOrEqual(60);
@@ -173,8 +174,13 @@ describe('known-failure register', () => {
     expect(register.entries.find((entry) => entry.id === 'KF-DEVEX-010')?.probe.timeoutMs).toBe(
       840_000,
     );
+    expect(register.entries.find((entry) => entry.id === 'KF-DEVEX-005')?.probe.timeoutMs).toBe(
+      600_000,
+    );
+    expect(KNOWN_FAILURE_PACKED_BUILD_TIMEOUT_MS).toBe(240_000);
     expect(KNOWN_FAILURE_FIRST_LOOP_OUTER_TIMEOUT_FLOORS_MS['sqlite-login']).toBe(822_100);
     expect(KNOWN_FAILURE_FIRST_LOOP_OUTER_TIMEOUT_FLOORS_MS['opaque-boundary']).toBe(822_100);
+    expect(KNOWN_FAILURE_FIRST_LOOP_OUTER_TIMEOUT_FLOORS_MS['transactional-build']).toBe(594_000);
   });
 
   it('keeps dev-ready infrastructure ceilings separate from post-bind and G2 budgets', () => {
