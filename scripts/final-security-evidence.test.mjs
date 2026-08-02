@@ -38,11 +38,15 @@ function git(root, args) {
 
 function fixtureOperations(codeSubjectSha, overrides = {}) {
   return {
-    buildDecidedSurfaceArtifact: () => ({ subject: { codeSubjectSha } }),
+    buildDecidedSurfaceArtifact: () => ({
+      shortValues: ['first', 'second'],
+      subject: { codeSubjectSha },
+    }),
     collectSecurityConvergenceSnapshot: () => ({ metric: 'live' }),
     readBaseline: () => ({ schema: 'fixture' }),
     updateSecurityConvergenceRecord: () => ({
       currentSnapshot: { measuredCodeSha: codeSubjectSha },
+      shortValues: ['first', 'second'],
     }),
     validateDecidedSurfaceArtifact: () => ({ findings: [], ok: true }),
     validateSecurityConvergenceRecord: () => ({ findings: [], ok: true }),
@@ -51,10 +55,10 @@ function fixtureOperations(codeSubjectSha, overrides = {}) {
 }
 
 describe('final security evidence orchestrator', () => {
-  it('asserts one clean subject and writes both validated artifacts with that subject', () => {
+  it('asserts one clean subject and writes both validated artifacts with that subject', async () => {
     const { root, subjectSha } = cleanRepository();
     const assertClean = vi.fn(assertCleanCurrentCodeSubject);
-    const result = writeFinalSecurityEvidence({
+    const result = await writeFinalSecurityEvidence({
       codeSubjectSha: subjectSha,
       operations: fixtureOperations(subjectSha, {
         assertCleanCurrentCodeSubject: assertClean,
@@ -74,11 +78,17 @@ describe('final security evidence orchestrator', () => {
       JSON.parse(readFileSync(path.join(root, 'security/decided-surface.json'), 'utf8')).subject
         .codeSubjectSha,
     ).toBe(subjectSha);
+    expect(
+      readFileSync(path.join(root, 'security/security-convergence-baseline.json'), 'utf8'),
+    ).toContain('"shortValues": ["first", "second"]');
+    expect(readFileSync(path.join(root, 'security/decided-surface.json'), 'utf8')).toContain(
+      '"shortValues": ["first", "second"]',
+    );
   });
 
-  it('does not write either artifact when pre-write construction or validation fails', () => {
+  it('does not write either artifact when pre-write construction or validation fails', async () => {
     const { root, subjectSha } = cleanRepository();
-    expect(() =>
+    await expect(
       writeFinalSecurityEvidence({
         codeSubjectSha: subjectSha,
         operations: fixtureOperations(subjectSha, {
@@ -89,14 +99,14 @@ describe('final security evidence orchestrator', () => {
         reason: 'final v1 candidate',
         repoRoot: root,
       }),
-    ).toThrow('late validation failed');
+    ).rejects.toThrow('late validation failed');
     expect(existsSync(path.join(root, 'security/security-convergence-baseline.json'))).toBe(false);
     expect(existsSync(path.join(root, 'security/decided-surface.json'))).toBe(false);
   });
 
-  it('rejects mismatched subjects before writing', () => {
+  it('rejects mismatched subjects before writing', async () => {
     const { root, subjectSha } = cleanRepository();
-    expect(() =>
+    await expect(
       writeFinalSecurityEvidence({
         codeSubjectSha: subjectSha,
         operations: fixtureOperations(subjectSha, {
@@ -107,7 +117,25 @@ describe('final security evidence orchestrator', () => {
         reason: 'final v1 candidate',
         repoRoot: root,
       }),
-    ).toThrow('must name the same requested code subject');
+    ).rejects.toThrow('must name the same requested code subject');
+    expect(existsSync(path.join(root, 'security/security-convergence-baseline.json'))).toBe(false);
+    expect(existsSync(path.join(root, 'security/decided-surface.json'))).toBe(false);
+  });
+
+  it('does not write either artifact when presentation formatting fails', async () => {
+    const { root, subjectSha } = cleanRepository();
+    await expect(
+      writeFinalSecurityEvidence({
+        codeSubjectSha: subjectSha,
+        operations: fixtureOperations(subjectSha, {
+          formatRepositoryJson: async () => {
+            throw new Error('formatter failed closed');
+          },
+        }),
+        reason: 'final v1 candidate',
+        repoRoot: root,
+      }),
+    ).rejects.toThrow('formatter failed closed');
     expect(existsSync(path.join(root, 'security/security-convergence-baseline.json'))).toBe(false);
     expect(existsSync(path.join(root, 'security/decided-surface.json'))).toBe(false);
   });

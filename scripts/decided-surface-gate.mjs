@@ -5,6 +5,7 @@ import path from 'node:path';
 
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
+import { formatRepositoryJson } from './lib/repository-json.mjs';
 import {
   assertCleanCurrentCodeSubject,
   buildSourceSet,
@@ -275,7 +276,7 @@ async function main() {
     assertCleanCurrentCodeSubject({ repoRoot: root, subjectSha: codeSubjectSha });
     const artifact = buildDecidedSurfaceArtifact({ codeSubjectSha, repoRoot: root });
     mkdirSync(path.dirname(artifactPath), { recursive: true });
-    writeFileSync(artifactPath, canonicalJson(artifact), 'utf8');
+    writeFileSync(artifactPath, await formatRepositoryJson(artifactPath, artifact), 'utf8');
   }
   const document = JSON.parse(readFileSync(artifactPath, 'utf8'));
   const check = validateDecidedSurfaceArtifact(document, { repoRoot: root });

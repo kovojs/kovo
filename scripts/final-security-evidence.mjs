@@ -9,9 +9,9 @@ import {
 } from './decided-surface-gate.mjs';
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
+import { formatRepositoryJson } from './lib/repository-json.mjs';
 import {
   assertCleanCurrentCodeSubject,
-  canonicalJson,
   parseExactCliArguments,
 } from './lib/security-evidence-subject.mjs';
 import {
@@ -33,7 +33,7 @@ export function parseFinalSecurityEvidenceArguments(args) {
  * validation happens before either destination changes, and both artifacts must name the same
  * subject. The individual artifact writers remain strict for standalone use.
  */
-export function writeFinalSecurityEvidence({
+export async function writeFinalSecurityEvidence({
   codeSubjectSha,
   operations = {},
   reason,
@@ -54,6 +54,7 @@ export function writeFinalSecurityEvidence({
   const validateDecided =
     operations.validateDecidedSurfaceArtifact ?? validateDecidedSurfaceArtifact;
   const writeFiles = operations.writeFinalSecurityEvidenceFiles ?? writeFinalSecurityEvidenceFiles;
+  const formatJson = operations.formatRepositoryJson ?? formatRepositoryJson;
 
   assertClean({ repoRoot, subjectSha: codeSubjectSha });
 
@@ -91,9 +92,13 @@ export function writeFinalSecurityEvidence({
     );
   }
 
+  const formatted = await Promise.all([
+    formatJson(baselinePath, convergence),
+    formatJson(decidedPath, decided),
+  ]);
   writeFiles([
-    { contents: canonicalJson(convergence), path: baselinePath },
-    { contents: canonicalJson(decided), path: decidedPath },
+    { contents: formatted[0], path: baselinePath },
+    { contents: formatted[1], path: decidedPath },
   ]);
   return Object.freeze({ codeSubjectSha, convergence, decided });
 }
@@ -151,7 +156,7 @@ export function writeFinalSecurityEvidenceFiles(files, fsOperations = {}) {
 
 async function main() {
   const options = parseFinalSecurityEvidenceArguments(process.argv.slice(2));
-  const result = writeFinalSecurityEvidence({
+  const result = await writeFinalSecurityEvidence({
     codeSubjectSha: options['subject-sha'],
     reason: options.reason,
   });

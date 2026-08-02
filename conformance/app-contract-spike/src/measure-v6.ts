@@ -204,5 +204,6 @@ async function readJson<Value>(url: URL): Promise<Value> {
 }
 
 async function writeJson(url: URL, value: unknown): Promise<void> {
-  await writeFile(url, `${JSON.stringify(value, null, 2)}\n`);
+  const { formatRepositoryJson } = await import('../../../scripts/lib/repository-json.mjs');
+  await writeFile(url, await formatRepositoryJson(url.pathname, value));
 }

@@ -12,6 +12,7 @@ import { loadSecurityDenominatorInventories } from './derivation-rewitness-inven
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { parseTimePeakRssBytes } from './lib/process-cost.mjs';
 import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
+import { formatRepositoryJson } from './lib/repository-json.mjs';
 import {
   assertCleanCurrentCodeSubject,
   assertRetainedCodeSubject,
@@ -639,7 +640,7 @@ export async function main(options = {}) {
       repoRoot: root,
       snapshot: actual,
     });
-    writeFileSync(baselinePath, canonicalJson(baseline), 'utf8');
+    writeFileSync(baselinePath, await formatRepositoryJson(baselinePath, baseline), 'utf8');
   }
   const validation = validateSecurityConvergenceRecord(baseline, {
     actualSnapshot: actual,

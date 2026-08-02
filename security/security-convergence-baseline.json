@@ -629,9 +629,7 @@
             "fd00:ec2::254"
           ],
           "opaqueAllowPathCount": 1,
-          "opaqueAllowPaths": [
-            "egressSetHas(policy.allowDestinations, origin)"
-          ],
+          "opaqueAllowPaths": ["egressSetHas(policy.allowDestinations, origin)"],
           "rangeEntryCount": 37,
           "rangeTables": [
             {

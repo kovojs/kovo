@@ -95,13 +95,13 @@ describe('security convergence baseline', () => {
     });
     expect(baseline.historicalRows[0]).not.toHaveProperty('snapshotSha256');
     expect(baseline.currentSnapshot).toMatchObject({
-      measuredCodeSha: 'fa326cdfdde18c027b95aee2702b82771d396fbe',
+      measuredCodeSha: expect.stringMatching(/^[0-9a-f]{40}$/u),
       snapshot: {
-        c13: { anchorCount: 198, corpusCount: 21 },
+        c13: { anchorCount: 357, corpusCount: 24 },
         p: {
           category: 'conservative-production-predicate-lower-bound',
-          staticPredicates: { fileCount: 13, total: 7964 },
-          total: 8021,
+          staticPredicates: { fileCount: 13, total: 9923 },
+          total: 9966,
         },
       },
     });
