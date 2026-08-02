@@ -442,6 +442,34 @@ test('Vite source edits surface and recover from compiler diagnostics', async ({
   }
 });
 
+test('Vite source-edit fallback only owns an uncommitted response', () => {
+  expect(
+    canWriteViteFixtureFallback({ destroyed: false, headersSent: false, writableEnded: false }),
+  ).toBe(true);
+  expect(
+    canWriteViteFixtureFallback({ destroyed: false, headersSent: true, writableEnded: false }),
+  ).toBe(false);
+  expect(
+    canWriteViteFixtureFallback({ destroyed: false, headersSent: false, writableEnded: true }),
+  ).toBe(false);
+  expect(
+    canWriteViteFixtureFallback({ destroyed: true, headersSent: false, writableEnded: false }),
+  ).toBe(false);
+});
+
+test('Vite source-edit app shell remains authored TSX over public APIs', () => {
+  const source = hmrSourceAppShell({
+    appId: '18f5819a-0919-42ae-bfb3-044522457ce2',
+    routeVersion: 'authored',
+    signingSecret: 'fixture-signing-secret-at-least-32-bytes',
+  });
+
+  expect(source).toContain('/** @jsxImportSource @kovojs/server */');
+  expect(source).toContain('<h1 id="hmr-route-version">{"authored"}</h1>');
+  expect(source).not.toContain('@kovojs/server/jsx-runtime');
+  expect(source).not.toContain('@kovojs/test/internal');
+});
+
 test('Vite route-shell source edits use full reload fallback with fresh server output', async ({
   page,
 }) => {
@@ -470,7 +498,7 @@ test('Vite route-shell source edits use full reload fallback with fresh server o
     expect(event).toMatchObject({
       impact: 'routeRefresh',
       reasons: ['route-shell'],
-      sourceFile: 'src/app-shell.ts',
+      sourceFile: 'src/app-shell.tsx',
     });
     await routeReload;
 
@@ -630,7 +658,7 @@ async function serveViteSourceEditFixture(options: {
 }): Promise<ViteSourceEditFixture> {
   const root = await mkdtemp(fileURLToPath(new URL('../.hmr-source-edit-', import.meta.url)));
   const srcDir = join(root, 'src');
-  const appShellPath = join(srcDir, 'app-shell.ts');
+  const appShellPath = join(srcDir, 'app-shell.tsx');
   const cardPath = join(srcDir, 'hmr-card.tsx');
   const appId = randomUUID();
   const signingSecret = randomBytes(32).toString('base64url');
@@ -655,7 +683,7 @@ async function serveViteSourceEditFixture(options: {
     createServer(options: Record<string, unknown>): Promise<ViteDevServer>;
   };
   const createViteServer = (options: Record<string, unknown>) => vitePlus.createServer(options);
-  const integration = createKovoAppShellViteDevIntegration({ moduleId: '/src/app-shell.ts' });
+  const integration = createKovoAppShellViteDevIntegration({ moduleId: '/src/app-shell.tsx' });
   const onModuleDiagnostics: OnModuleDiagnostics = (diagnostics) =>
     integration.onModuleDiagnostics(diagnostics);
   const hmrPlugin = kovoSourceEditFixturePlugin({
@@ -671,12 +699,14 @@ async function serveViteSourceEditFixture(options: {
     }
     vite.middlewares(request, response, (error?: unknown) => {
       if (error) {
-        response.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
-        response.end(error instanceof Error ? error.message : JSON.stringify(error));
+        writeViteFixtureFallback(
+          response,
+          500,
+          error instanceof Error ? error.message : JSON.stringify(error),
+        );
         return;
       }
-      response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-      response.end('not found');
+      writeViteFixtureFallback(response, 404, 'not found');
     });
   });
 
@@ -776,6 +806,23 @@ async function serveViteSourceEditFixture(options: {
   }
 }
 
+function canWriteViteFixtureFallback(response: {
+  destroyed: boolean;
+  headersSent: boolean;
+  writableEnded: boolean;
+}): boolean {
+  return !response.destroyed && !response.headersSent && !response.writableEnded;
+}
+
+function writeViteFixtureFallback(response: ServerResponse, status: 404 | 500, body: string): void {
+  // Connect-style middleware may call `next()` after an async Kovo handler has already committed
+  // the response. At that point Kovo still owns completion; replacing it with the fixture's 404
+  // (or error 500) throws ERR_HTTP_HEADERS_SENT and aborts the observable full-reload response.
+  if (!canWriteViteFixtureFallback(response)) return;
+  response.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8' });
+  response.end(body);
+}
+
 async function waitForKovoSourceEditEvent(
   events: readonly { event: string }[],
   startIndex: number,
@@ -812,34 +859,37 @@ function hmrSourceAppShell(options: {
   signingSecret: string;
 }): string {
   const routeVersion = options.routeVersion ?? '';
-  return `
-import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
-import { route } from '@kovojs/server';
-import { jsx } from '@kovojs/server/jsx-runtime';
+  return `/** @jsxImportSource @kovojs/server */
+import { defineKovo } from '@kovojs/server';
+import { renderRouteHtml } from '@kovojs/server/rendering';
 
 import { HmrSourceCard } from './hmr-card';
 
-export default createApp({
+const app = defineKovo({
   appId: ${JSON.stringify(options.appId)},
   csrf: {
+    anonymousCookie: false,
     secret: ${JSON.stringify(options.signingSecret)},
     sessionId() {
       return undefined;
     },
   },
-  routes: [
-    route('/', {
-      page() {
-        return jsx('main', {
-          children: [
-            ${routeVersion ? `jsx('h1', { children: '${routeVersion}', id: 'hmr-route-version' }),` : ''}
-            jsx(HmrSourceCard, {}),
-          ],
-        });
-      },
-    }),
-  ],
+  renderRoute: renderRouteHtml,
 });
+
+const homeRoute = app.route('/', {
+  access: app.publicAccess('the HMR source-edit fixture is intentionally public'),
+  page() {
+    return (
+      <main>
+        ${routeVersion ? `<h1 id="hmr-route-version">{${JSON.stringify(routeVersion)}}</h1>` : ''}
+        <HmrSourceCard />
+      </main>
+    );
+  },
+});
+
+export default app.assemble({ routes: [homeRoute] });
 `;
 }
 
