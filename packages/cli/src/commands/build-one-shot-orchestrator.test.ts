@@ -12,6 +12,12 @@ import {
   KOVO_BUILD_ONE_SHOT_MAX_WIRE_BYTES,
   type KovoBuildOneShotIdentity,
 } from './build-one-shot-handoff.js';
+import {
+  KOVO_BUILD_ONE_SHOT_ORCHESTRATION_HEADROOM_MS,
+  KOVO_BUILD_ONE_SHOT_STATIC_TRUST_PHASES,
+  KOVO_BUILD_ONE_SHOT_WORKER_TIMEOUT_MS,
+  STATIC_TRUST_WORKER_TIMEOUT_MS,
+} from './build-security-deadlines.js';
 import { boundedKovoBuildOneShotWorkerForTesting } from './build-one-shot-orchestrator.js';
 
 const itIfPosix = process.platform === 'win32' ? it.skip : it;
@@ -38,6 +44,15 @@ function wire(sourceBytes = 2 * 1024 * 1024): Buffer {
 }
 
 describe('one-shot build worker orchestration', () => {
+  it('contains both static-trust preflights plus explicit orchestration headroom', () => {
+    expect(KOVO_BUILD_ONE_SHOT_WORKER_TIMEOUT_MS).toBe(
+      STATIC_TRUST_WORKER_TIMEOUT_MS * KOVO_BUILD_ONE_SHOT_STATIC_TRUST_PHASES.length +
+        KOVO_BUILD_ONE_SHOT_ORCHESTRATION_HEADROOM_MS,
+    );
+    expect(KOVO_BUILD_ONE_SHOT_STATIC_TRUST_PHASES).toEqual(['config', 'app']);
+    expect(KOVO_BUILD_ONE_SHOT_ORCHESTRATION_HEADROOM_MS).toBeGreaterThanOrEqual(60_000);
+  });
+
   it('pins, authenticates, flushes, and explicitly closes a multi-MiB worker input', async () => {
     const input = wire();
     const script = [

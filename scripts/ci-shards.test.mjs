@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 import { REQUIRED_CLASSIFIER_CORPORA } from './check-security-classifier-corpus.mjs';
@@ -46,8 +47,119 @@ import {
   ADVERSARIAL_RESIDUAL_TEST_TIMEOUT_MS,
   adversarialResidualTestTimeoutMs,
 } from '../packages/create-kovo/src/index.build.prod-artifact.adversarial-deadlines.mjs';
+import {
+  KOVO_BUILD_ONE_SHOT_WORKER_TIMEOUT_MS,
+  KOVO_BUILD_ONE_SHOT_STATIC_TRUST_PHASES,
+  STATIC_TRUST_WORKER_TIMEOUT_MS,
+} from '../packages/cli/src/commands/build-security-deadlines.js';
+import {
+  PARANOID_GATE_CASES,
+  PARANOID_NESTED_ONE_SHOT_TIMEOUT_MS,
+} from '../packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime-runner.js';
+
+function namedFunctionDeclaration(sourceFile, name) {
+  let declaration;
+  const visit = (node) => {
+    if (ts.isFunctionDeclaration(node) && node.name?.text === name) {
+      declaration = node;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  if (declaration === undefined) throw new Error(`Missing function declaration: ${name}`);
+  return declaration;
+}
+
+function directlyNamedCalls(node) {
+  const calls = [];
+  const visit = (child) => {
+    if (ts.isCallExpression(child) && ts.isIdentifier(child.expression)) {
+      calls.push(child.expression.text);
+    }
+    ts.forEachChild(child, visit);
+  };
+  visit(node);
+  return calls;
+}
 
 describe('ci-shards', () => {
+  it('binds the one-shot timeout plan to the exact production trust preflights', async () => {
+    const sourceText = await readFile(
+      new URL('../packages/cli/src/commands/build-export.ts', import.meta.url),
+      'utf8',
+    );
+    const sourceFile = ts.createSourceFile(
+      'build-export.ts',
+      sourceText,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const produceAnalysisCalls = directlyNamedCalls(
+      namedFunctionDeclaration(sourceFile, 'produceKovoBuildOneShotAnalysis'),
+    );
+    const loadAndCheckCalls = directlyNamedCalls(
+      namedFunctionDeclaration(sourceFile, 'loadAndCheckBuildApp'),
+    );
+    expect(produceAnalysisCalls.filter((name) => name === 'loadAndCheckBuildApp')).toHaveLength(1);
+
+    const trustPreflightByPhase = {
+      app: 'runPreEvaluationStaticTrustPreflightInWorker',
+      config: 'runPreEvaluationBuildConfigTrustPreflightInWorker',
+    };
+    const plannedTrustPreflights = KOVO_BUILD_ONE_SHOT_STATIC_TRUST_PHASES.map(
+      (phase) => trustPreflightByPhase[phase],
+    );
+    const productionTrustPreflights = [...produceAnalysisCalls, ...loadAndCheckCalls].filter(
+      (name) => name.endsWith('TrustPreflightInWorker'),
+    );
+    expect(productionTrustPreflights).toEqual(plannedTrustPreflights);
+  });
+
+  it('keeps the direct-Node paranoid runner and every nested hard deadline loadable and contained', async () => {
+    const runnerUrl = new URL(
+      '../packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime-runner.ts',
+      import.meta.url,
+    );
+    const directImport = spawnSync(
+      process.execPath,
+      [
+        '--disable-warning=ExperimentalWarning',
+        '--experimental-strip-types',
+        '--input-type=module',
+        '--eval',
+        `await import(${JSON.stringify(runnerUrl.href)});`,
+      ],
+      { encoding: 'utf8' },
+    );
+    expect(directImport.status, directImport.stderr).toBe(0);
+
+    expect(PARANOID_NESTED_ONE_SHOT_TIMEOUT_MS).toBe(KOVO_BUILD_ONE_SHOT_WORKER_TIMEOUT_MS);
+
+    const workflowSource = await readFile(
+      new URL('../.github/workflows/ci.yml', import.meta.url),
+      'utf8',
+    );
+    const paranoidJobStart = workflowSource.indexOf('\n  paranoid:\n');
+    const paranoidJobEnd = workflowSource.indexOf('\n  api-surface:\n', paranoidJobStart);
+    expect(paranoidJobStart).toBeGreaterThan(-1);
+    expect(paranoidJobEnd).toBeGreaterThan(paranoidJobStart);
+    const timeoutMatch = workflowSource
+      .slice(paranoidJobStart, paranoidJobEnd)
+      .match(/^\s+timeout-minutes:\s*(\d+)\s*$/mu);
+    expect(timeoutMatch).not.toBeNull();
+    const workflowTimeoutMs = Number(timeoutMatch?.[1]) * 60_000;
+    const serialSupervisorTimeoutMs = PARANOID_GATE_CASES.reduce(
+      (total, testCase) => total + testCase.supervisorTimeoutMs,
+      0,
+    );
+    const workflowSetupAndOrchestrationHeadroomMs = 9 * 60_000;
+    expect(workflowTimeoutMs).toBeGreaterThanOrEqual(
+      serialSupervisorTimeoutMs + workflowSetupAndOrchestrationHeadroomMs,
+    );
+  });
+
   it('packs the verify package required by packed starter installation', async () => {
     const source = await readFile(new URL('./ci-shards.mjs', import.meta.url), 'utf8');
     expect(source).toContain("{ name: '@kovojs/verify', dir: 'verify' }");
@@ -380,7 +492,7 @@ describe('ci-shards', () => {
       'index.build.prod-artifact.paranoid-runtime-runner.ts',
     );
     expect(ci).toContain('  static-core:\n    runs-on: ubuntu-24.04\n    timeout-minutes: 90');
-    expect(ci).toContain('  paranoid:\n    runs-on: ubuntu-latest\n    timeout-minutes: 90');
+    expect(ci).toContain('  paranoid:\n    runs-on: ubuntu-latest');
     expect(ci).toContain(
       '  starter:\n    needs: starter-packages\n    runs-on: ubuntu-latest\n    timeout-minutes: 40',
     );
@@ -870,7 +982,6 @@ describe('ci-shards', () => {
       asyncContextSource,
       sourceCheckSource,
       postgresSource,
-      buildExportSource,
       indexBuildSource,
       runnableBuildSource,
       securityOrderSource,
@@ -895,7 +1006,6 @@ describe('ci-shards', () => {
         ),
         'utf8',
       ),
-      readFile(new URL('../packages/cli/src/commands/build-export.ts', import.meta.url), 'utf8'),
       readFile(new URL('../packages/cli/src/index.kovo-build.test.ts', import.meta.url), 'utf8'),
       readFile(
         new URL('../packages/cli/src/commands/build-export-runnable.test.ts', import.meta.url),
@@ -975,7 +1085,7 @@ describe('ci-shards', () => {
     expect(asyncContextSource).toContain('}, 60_000);');
     expect(sourceCheckSource).toContain('}, 360_000);');
     expect(postgresSource.match(/\}, 600_000\);/gu)).toHaveLength(2);
-    expect(buildExportSource).toContain('const staticTrustWorkerTimeoutMs = 420_000;');
+    expect(STATIC_TRUST_WORKER_TIMEOUT_MS).toBe(600_000);
     expect(indexBuildSource).toContain('const BUILD_INTEGRATION_TEST_TIMEOUT_MS = 90_000;');
     expect(indexBuildSource).toContain('const HOSTED_SUCCESS_BUILD_PROCESS_DEADLINE_MS = 360_000;');
     expect(indexBuildSource).toContain(

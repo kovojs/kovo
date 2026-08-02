@@ -6,6 +6,7 @@ import { isRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { formatKovoDiagnostics } from '../diagnostic.js';
+import { STATIC_TRUST_WORKER_TIMEOUT_MS } from './build-security-deadlines.js';
 import {
   boundedStaticTrustWorkerProcessForTesting,
   runPreEvaluationStaticTrustWorkerRequest,
@@ -27,6 +28,10 @@ const request: StaticTrustWorkerRequest = {
   paranoidStaticAdvisory: false,
   root: '/app',
 };
+
+it('retains bounded measured headroom for the production static-trust worker', () => {
+  expect(STATIC_TRUST_WORKER_TIMEOUT_MS).toBe(600_000);
+});
 
 afterEach(() => {
   for (const root of temporaryRoots.splice(0)) {

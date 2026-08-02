@@ -13,9 +13,16 @@ import {
   assertParanoidGateEntrypoints,
   assertParanoidRuntimeCasesExecuted,
   formatParanoidGateFailures,
+  PARANOID_EXTERNAL_CALLBACK_HEADROOM_MS,
+  PARANOID_EXTERNAL_READY_TIMEOUT_MS,
+  PARANOID_EXTERNAL_TEST_TIMEOUT_MS,
   PARANOID_GATE_CASES,
   PARANOID_GATE_ENTRYPOINTS,
+  PARANOID_NESTED_ONE_SHOT_TIMEOUT_MS,
   PARANOID_RUNTIME_CASES,
+  PARANOID_RUNTIME_POST_ONE_SHOT_HEADROOM_MS,
+  PARANOID_RUNTIME_TEST_TIMEOUT_MS,
+  PARANOID_SUPERVISOR_CLEANUP_HEADROOM_MS,
   paranoidRuntimeWorkerRequirements,
   runIsolatedProcess,
   runParanoidRuntimeGate,
@@ -35,15 +42,25 @@ describe('paranoid runtime process isolation', () => {
       expect(testCase.workerCaseId).toBe(testCase.id);
     }
     for (const testCase of PARANOID_GATE_CASES) {
-      expect(testCase.supervisorTimeoutMs, testCase.id).toBeGreaterThan(testCase.testTimeoutMs);
+      expect(testCase.supervisorTimeoutMs, testCase.id).toBeGreaterThanOrEqual(
+        testCase.testTimeoutMs + PARANOID_SUPERVISOR_CLEANUP_HEADROOM_MS,
+      );
     }
 
-    const externalBoot = PARANOID_RUNTIME_CASES.find(
-      (testCase) => testCase.id === 'paranoid-external-provision-check-boot',
+    expect(PARANOID_RUNTIME_TEST_TIMEOUT_MS).toBe(
+      PARANOID_NESTED_ONE_SHOT_TIMEOUT_MS + PARANOID_RUNTIME_POST_ONE_SHOT_HEADROOM_MS,
     );
-    // This proof serially contains the production 420s static-trust deadline and the hosted 180s
-    // server-readiness deadline. Vitest must be outside both before the process supervisor applies.
-    expect(externalBoot?.testTimeoutMs).toBeGreaterThan(420_000 + 180_000);
+    expect(PARANOID_EXTERNAL_TEST_TIMEOUT_MS).toBe(
+      PARANOID_NESTED_ONE_SHOT_TIMEOUT_MS +
+        PARANOID_EXTERNAL_READY_TIMEOUT_MS +
+        PARANOID_EXTERNAL_CALLBACK_HEADROOM_MS,
+    );
+    expect(PARANOID_RUNTIME_CASES.map((testCase) => testCase.testTimeoutMs)).toEqual([
+      PARANOID_RUNTIME_TEST_TIMEOUT_MS,
+      PARANOID_RUNTIME_TEST_TIMEOUT_MS,
+      PARANOID_EXTERNAL_TEST_TIMEOUT_MS,
+      PARANOID_EXTERNAL_TEST_TIMEOUT_MS,
+    ]);
 
     expect(paranoidRuntimeWorkerRequirements('phase5-sqlite-paranoid-dogfood', false)).toEqual({
       authorizationMatrixCases: [],
@@ -99,6 +116,23 @@ describe('paranoid runtime process isolation', () => {
     expect(() =>
       assertParanoidGateEntrypoints([...PARANOID_GATE_ENTRYPOINTS, PARANOID_GATE_ENTRYPOINTS[0]]),
     ).toThrow(/must declare its analysis entrypoints exactly/u);
+  });
+
+  it('rejects a supervisor envelope without the required cleanup headroom', async () => {
+    await expect(
+      runParanoidRuntimeGate({
+        cases: [
+          {
+            file: 'insufficient-headroom.test.ts',
+            id: 'insufficient-headroom',
+            supervisorTimeoutMs: PARANOID_SUPERVISOR_CLEANUP_HEADROOM_MS,
+            testTimeoutMs: 1,
+          },
+        ],
+        executeCase: async () => isolatedOutcome(),
+        onProgress: () => undefined,
+      }),
+    ).rejects.toThrow(/supervisor timeout must retain 60000ms beyond/u);
   });
 
   it('fails closed when the selected SQLite runtime case has no executed marker', () => {

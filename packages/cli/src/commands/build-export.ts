@@ -207,6 +207,7 @@ import { declaresKovoLifecyclePolicy, runLifecyclePolicyCheck } from './lifecycl
 import { runProjectQualityCheck } from './project-quality.js';
 import { runSoundSubsetCheck } from './sound-subset.js';
 import { kovoBuildOneShotDigest, type KovoBuildOneShotIdentity } from './build-one-shot-handoff.js';
+import { STATIC_TRUST_WORKER_TIMEOUT_MS } from './build-security-deadlines.js';
 import {
   buildByteLength,
   buildSecurityArrayAppend,
@@ -280,10 +281,6 @@ const collectBuildGarbage =
   typeof globalThis.gc === 'function' ? globalThis.gc.bind(globalThis) : undefined;
 const staticTrustWorkerSchema = 'kovo-static-trust-worker/v1';
 const staticTrustWorkerMaxOutputBytes = 256 * 1024 * 1024;
-// CI runs 30612746165 and 30682007694 exhausted the former 120s and 300s ceilings while deriving
-// valid generated-app trust facts. Keep 40% headroom over the latest exhausted bound; the deadline
-// path still SIGKILLs the complete process group and rejects without accepting partial trust output.
-const staticTrustWorkerTimeoutMs = 420_000;
 
 type BuildStaticAnalysisRuntime = typeof import('./build-static-analysis-runtime.js');
 let buildStaticAnalysisRuntime: BuildStaticAnalysisRuntime | undefined;
@@ -3862,7 +3859,7 @@ async function executeStaticTrustWorker(
         request,
       ],
       invocationEnv,
-      staticTrustWorkerTimeoutMs,
+      STATIC_TRUST_WORKER_TIMEOUT_MS,
     );
     return result.stdout;
   } catch (error) {

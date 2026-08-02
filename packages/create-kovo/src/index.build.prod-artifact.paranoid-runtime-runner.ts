@@ -41,40 +41,55 @@ const PARANOID_RUNTIME_TEST_FILE =
   'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts';
 
 /**
- * The static-trust worker owns a 420s production deadline. The external boot proof can then spend
- * up to 180s waiting for the served artifact. Its 720s Vitest bound contains those inner phases.
+ * Each envelope contains its nested production deadline plus explicit callback/readiness headroom.
  * Some callbacks enter synchronous build code that Vitest cannot interrupt, so the descendant-aware
- * process supervisor is the actual hard bound; the larger cases retain 120s beyond those inner
- * phases for callback work and verified cleanup
- * without letting a timed-out worker leak into the next proof.
+ * process supervisor is the actual hard bound and retains a separate cleanup allowance. A timed-out
+ * worker must be reaped before the next proof starts.
  */
+// This package-local mirror avoids turning a private @kovojs/cli implementation file into a
+// cross-package contract. scripts/ci-shards.test.mjs binds it to the CLI one-shot deadline.
+export const PARANOID_NESTED_ONE_SHOT_TIMEOUT_MS = 1_260_000;
+export const PARANOID_RUNTIME_POST_ONE_SHOT_HEADROOM_MS = 180_000;
+export const PARANOID_EXTERNAL_READY_TIMEOUT_MS = 180_000;
+export const PARANOID_EXTERNAL_CALLBACK_HEADROOM_MS = 120_000;
+export const PARANOID_SUPERVISOR_CLEANUP_HEADROOM_MS = 60_000;
+
+export const PARANOID_RUNTIME_TEST_TIMEOUT_MS =
+  PARANOID_NESTED_ONE_SHOT_TIMEOUT_MS + PARANOID_RUNTIME_POST_ONE_SHOT_HEADROOM_MS;
+export const PARANOID_EXTERNAL_TEST_TIMEOUT_MS =
+  PARANOID_NESTED_ONE_SHOT_TIMEOUT_MS +
+  PARANOID_EXTERNAL_READY_TIMEOUT_MS +
+  PARANOID_EXTERNAL_CALLBACK_HEADROOM_MS;
+
 export const PARANOID_RUNTIME_CASES = [
   {
     file: PARANOID_RUNTIME_TEST_FILE,
     id: 'phase5-postgres-paranoid-dogfood',
-    supervisorTimeoutMs: 660_000,
-    testTimeoutMs: 600_000,
+    supervisorTimeoutMs: PARANOID_RUNTIME_TEST_TIMEOUT_MS + PARANOID_SUPERVISOR_CLEANUP_HEADROOM_MS,
+    testTimeoutMs: PARANOID_RUNTIME_TEST_TIMEOUT_MS,
     workerCaseId: 'phase5-postgres-paranoid-dogfood',
   },
   {
     file: PARANOID_RUNTIME_TEST_FILE,
     id: 'phase5-sqlite-paranoid-dogfood',
-    supervisorTimeoutMs: 660_000,
-    testTimeoutMs: 600_000,
+    supervisorTimeoutMs: PARANOID_RUNTIME_TEST_TIMEOUT_MS + PARANOID_SUPERVISOR_CLEANUP_HEADROOM_MS,
+    testTimeoutMs: PARANOID_RUNTIME_TEST_TIMEOUT_MS,
     workerCaseId: 'phase5-sqlite-paranoid-dogfood',
   },
   {
     file: PARANOID_RUNTIME_TEST_FILE,
     id: 'paranoid-external-provision-check-boot',
-    supervisorTimeoutMs: 780_000,
-    testTimeoutMs: 720_000,
+    supervisorTimeoutMs:
+      PARANOID_EXTERNAL_TEST_TIMEOUT_MS + PARANOID_SUPERVISOR_CLEANUP_HEADROOM_MS,
+    testTimeoutMs: PARANOID_EXTERNAL_TEST_TIMEOUT_MS,
     workerCaseId: 'paranoid-external-provision-check-boot',
   },
   {
     file: PARANOID_RUNTIME_TEST_FILE,
     id: 'paranoid-external-leak-refusal',
-    supervisorTimeoutMs: 780_000,
-    testTimeoutMs: 720_000,
+    supervisorTimeoutMs:
+      PARANOID_EXTERNAL_TEST_TIMEOUT_MS + PARANOID_SUPERVISOR_CLEANUP_HEADROOM_MS,
+    testTimeoutMs: PARANOID_EXTERNAL_TEST_TIMEOUT_MS,
     workerCaseId: 'paranoid-external-leak-refusal',
   },
 ] as const satisfies readonly ParanoidGateCaseDefinition[];
@@ -314,8 +329,13 @@ function validateParanoidGateCases(cases: readonly ParanoidGateCaseDefinition[])
     seen.add(testCase.id);
     positiveInteger(testCase.testTimeoutMs, `${testCase.id} test timeout`);
     positiveInteger(testCase.supervisorTimeoutMs, `${testCase.id} supervisor timeout`);
-    if (testCase.supervisorTimeoutMs <= testCase.testTimeoutMs) {
-      throw new TypeError(`${testCase.id} supervisor timeout must exceed its inner Vitest timeout`);
+    if (
+      testCase.supervisorTimeoutMs <
+      testCase.testTimeoutMs + PARANOID_SUPERVISOR_CLEANUP_HEADROOM_MS
+    ) {
+      throw new TypeError(
+        `${testCase.id} supervisor timeout must retain ${String(PARANOID_SUPERVISOR_CLEANUP_HEADROOM_MS)}ms beyond its inner Vitest timeout`,
+      );
     }
     if (
       testCase.workerCaseId !== undefined &&

@@ -10,11 +10,8 @@ import {
   inspectKovoBuildOneShotHandoff,
   KOVO_BUILD_ONE_SHOT_MAX_WIRE_BYTES,
 } from './build-one-shot-handoff.js';
+import { KOVO_BUILD_ONE_SHOT_WORKER_TIMEOUT_MS } from './build-security-deadlines.js';
 
-// A one-shot analysis can itself run the bounded 420s static-trust worker. The outer phase retains
-// more than twice that measured ceiling so loaded CI remains viable, while every spawn/input/work/
-// output/close path still has a fixed framework-owned wall deadline.
-const kovoBuildOneShotWorkerTimeoutMs = 900_000;
 const kovoBuildOneShotInputCloseTimeoutMs = 30_000;
 const capturedClearTimeout = globalThis.clearTimeout.bind(globalThis);
 const capturedSetTimeout = globalThis.setTimeout.bind(globalThis);
@@ -152,7 +149,7 @@ function runWorker(
     ...(input === undefined ? {} : { input }),
     maxControlBytes: KOVO_BUILD_ONE_SHOT_MAX_WIRE_BYTES,
     phase,
-    timeoutMs: kovoBuildOneShotWorkerTimeoutMs,
+    timeoutMs: KOVO_BUILD_ONE_SHOT_WORKER_TIMEOUT_MS,
   });
 }
 
