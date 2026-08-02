@@ -666,6 +666,7 @@ describe('ci-shards', () => {
             'm1-storage-write-provenance',
             'm1-postgres-raw-sql',
             'm1-sqlite-raw-sql',
+            'runtime-contract-artifacts',
             'security-runtime-wires-postgres',
             'security-runtime-wires-sqlite',
             'starter-production-graph-gate',
@@ -736,6 +737,11 @@ describe('ci-shards', () => {
         testName: 'M1:sqlite-raw-sql',
         testTimeoutMs: 480_000,
         timeoutMs: 540_000,
+      },
+      'runtime-contract-artifacts': {
+        seconds: 302,
+        testTimeoutMs: 600_000,
+        timeoutMs: 660_000,
       },
       'security-runtime-wires-postgres': {
         seconds: 151,
@@ -1210,7 +1216,7 @@ describe('ci-shards', () => {
       entries.map((entry) => entry.id).toSorted(compareStrings),
     );
     expect(shards.map((shard) => shard.seconds)).toEqual([
-      1_193, 1_184, 1_204, 1_207, 1_205, 1_184, 1_202, 1_190, 1_184, 1_190,
+      1_210, 1_206, 1_235, 1_237, 1_233, 1_208, 1_206, 1_208, 1_225, 1_207,
     ]);
   });
 
@@ -1264,7 +1270,7 @@ describe('ci-shards', () => {
       }))
       .filter((shard) => shard.entries.length > 0);
 
-    expect(browserShards).toEqual([{ index: 8, entries: ['island-derive-artifacts'] }]);
+    expect(browserShards).toEqual([{ index: 7, entries: ['island-derive-artifacts'] }]);
   });
 
   it('marks only packed starter shards as needing the packed package artifact', async () => {

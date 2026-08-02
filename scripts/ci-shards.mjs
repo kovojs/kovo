@@ -616,7 +616,11 @@ const STARTER_ENTRIES = [
   {
     id: 'runtime-contract-artifacts',
     file: 'packages/create-kovo/src/index.build.prod-artifact.runtime-contracts.test.ts',
-    seconds: 70,
+    // CI run 30622986364 completed this focused proof in 301.500s. Run 30731019291 then
+    // demonstrated that the stale 70s estimate's 300s outer floor could preempt the proof before
+    // Vitest reached its shared 600s production-artifact watchdog.
+    seconds: 302,
+    testTimeoutMs: 600_000,
   },
   {
     id: 'durable-task-lifecycle',
