@@ -64,7 +64,7 @@ the runner, workload identity, sample statistic, measured noise, rationale, and 
 | G1 packed Postgres/PGlite and SQLite journeys   | final proof pending  | Historical report `b0bf20b05` passed the former nine-phase contract; the current create→install→ready→first-200→login→CRUD→ready-warm→check→build→test contract still needs final-subject reconfirmation. |
 | G2 ready output and cold/warm time              | ratification pending | Framework-owned ready facts are tested; hosted timing thresholds remain unratified.                                                                                                                       |
 | G3 edit-to-diagnostic/result time               | ratification pending | Deterministic driver exists; no accepted hosted N≥5 threshold.                                                                                                                                            |
-| G4 cold/warm/incremental check and phase census | ratification pending | All 11 phases are retained; the hosted seed, reviewed bindings, and final ordinary Nightly remain open.                                                                                                    |
+| G4 cold/warm/incremental check and phase census | ratification pending | All 11 phases are retained; the hosted seed, reviewed bindings, and final ordinary Nightly remain open.                                                                                                   |
 | G5 help/version/error exits                     | green                | CLI exit-contract suites cover 0/1/2 behavior.                                                                                                                                                            |
 | G6 one semantic command model                   | green                | Command-schema derivation suites cover parsing, help, completion, and references.                                                                                                                         |
 | G7 current graph truth                          | green                | Adversarial source/artifact identity suite rejects missing, stale, partial, and wrong-app proof.                                                                                                          |
@@ -76,7 +76,7 @@ the runner, workload identity, sample statistic, measured noise, rationale, and 
 | G13 authenticated executable docs               | green                | Packed docs/reference gates reject placeholders/drift and compile the classified corpus.                                                                                                                  |
 | G14 first-CRUD concept census                   | green                | Both packed scaffold reports record the concept categories and zero undocumented environment edits.                                                                                                       |
 | G15 development-only devtool                    | green                | Mount/ready-line tests and production/static artifact census pass.                                                                                                                                        |
-| G16 install time and size                       | ratification pending | Measurements exist; hosted timing/size binding and final ordinary Nightly remain open.                                                                                                                     |
+| G16 install time and size                       | ratification pending | Measurements exist; hosted timing/size binding and final ordinary Nightly remain open.                                                                                                                    |
 | G17 recursive-publicness zero                   | green                | `check:api-surface` reports total zero and rejects widening as a repair.                                                                                                                                  |
 | G18 no unapproved app-public `any`              | green                | Packed AST gate and reviewed-exception policy pass.                                                                                                                                                       |
 | G19 opaque style values                         | green                | Packed style tests reject forgery and preserve emitted CSS/artifacts.                                                                                                                                     |
@@ -193,16 +193,24 @@ run for `S` cannot authorize `R`, and any change after `R` requires a new final 
       retain its public URL, exact `R` SHA, build token, retention posture, and cleanup artifact.
   - Blocker: the environment and cloud/IAM authority do not exist. Do not auto-create an
     unprotected environment or cloud resources without explicit authorization.
+  - Current check (2026-08-02): GitHub reports no `g11-cloud-run` environment, zero manual G11
+    dispatches, and zero qualifying deployment artifacts; the latest `main` run passed only the
+    workflow-contract job while deployment and retention were skipped.
 - [ ] **Collect the three preregistered evaluator journeys against exact `R`.** Use policy `P`'s
       immutable identities/keys, collect signed no-intervention journeys against `R`'s
       authenticated manifest/package set, and triage every finding.
   - Blocker: policy `P` and qualifying external transcripts do not exist. Generated identities,
     self-dogfood, repeated principals/keys, intervention, or another HEAD do not count.
+  - Current check (2026-08-02): neither the policy nor transcript path exists in the checkout or
+    any Git ref, so there is no preregistered roster or historical evidence to reuse.
 - [ ] **Publish the cumulative preview minor.** Publish immutable package versions and provenance
       only after exact-SHA CI, hosted bindings plus `R`'s ordinary Nightly, G11, the evaluator gate,
       and registry/release credentials are ready.
-  - Blocker: external gates and publication authority remain absent; local tarballs are not
-    registry evidence.
+  - Blocker: external gates remain absent and current publication authority for the complete
+    package set is unconfirmed; local tarballs are not registry evidence.
+  - Current check (2026-08-02): the protected `release` environment and historical `0.2.0`
+    publication exist, but every `0.3.0` is absent and `@kovojs/verify` has never been published;
+    an authorized owner still must confirm trusted-publisher coverage for all fourteen packages.
 - [ ] **Capstone exit.** All applicable G1-G24 rows are green with current evidence, all final
       local/hosted/external gates above are complete, and the one cumulative release is published.
 

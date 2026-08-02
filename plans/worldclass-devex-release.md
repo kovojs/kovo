@@ -93,15 +93,22 @@ release.
       public-URL/exact-`R`-SHA/build-token/retention/cleanup artifact.
   - Blocker: the GitHub environment and required GCP variables/IAM authority are absent. Do not
     dispatch or create cloud state until they are explicitly configured.
+  - Current check (2026-08-02): the environment is absent, no manual G11 dispatch exists, and the
+    latest exact-`main` run passed only the contract job with deployment/retention skipped and no
+    artifact.
 - [ ] Collect signed no-intervention packed journeys from policy `P`'s three evaluators against
       exact `R` and triage every finding into the known-failure register.
   - Blocker: policy `P` and qualifying external evidence do not exist; generated/self/repeated
     identities or another subject do not qualify.
+  - Current check (2026-08-02): neither required path exists in the checkout or any Git ref.
 - [ ] Publish exactly one cumulative breaking technical-preview minor with immutable registry
       versions and provenance.
   - Blocker: exact-SHA CI, committed hosted bindings, `R`'s ordinary Nightly, G11, evaluators,
     registry credentials, release environment, version, and tag must all be ready. Local tarballs
     are not publication evidence.
+  - Current check (2026-08-02): historical `0.2.0` publication and the protected `release`
+    environment exist, but all `0.3.0` versions are absent and `@kovojs/verify` has no public
+    package; trusted-publisher coverage for all fourteen names remains unconfirmed.
 - [ ] Close the capstone only when every applicable G1-G24 row has one current authoritative proof
       and all final candidate, hosted, external, and publication boxes above are complete.
 
