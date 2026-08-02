@@ -30,29 +30,52 @@ explicit later wrapper; that relationship is recorded rather than presented as o
     identity, unsigned/wrong-subject evidence, intervention, and bounded-input bypasses.
 - [x] Seal the current D1 v6 source evidence, certificate policy, and certificate through their
       official fail-closed workflows.
-  - Evidence: `5595ee4dd` refreshed the framework identities, certificate policy, and certificate;
-    `56234f3da`→`2d2fac1f0` authorized and recorded the current D1 v6 evidence, and `6ca604d7c`
-    sealed the final pack inventory. At clean `6ca604d7c`, posture passed 10/10, the pack snapshot
-    matched twice, certificate passed 101/101, module identity passed 8/8, and D1 passed 44/44 plus
-    two clean Arm-A verification replays.
+  - Evidence: following process-cleanup checkpoint `f3cee8687`, `49296c4b1` resealed
+    posture/certificate inputs and `33a8857cb` → `8d0a17d06` authorized and regenerated the v6
+    evidence. `conformance/app-contract-spike/results-v6.json` at checkpoint `15b3514da` selects Arm
+    A with every gate green for both arms.
+
+## Candidate prerequisites
+
+The mandatory sequence is ratification seed `S` → N≥5 artifact review → committed budget bindings →
+final candidate `R` → exact proof and ordinary DevEx Nightly. Evaluator policy commit `P` must be
+an immutable strict ancestor of `R`; neither the ratification-only run nor its seed can authorize a
+release.
+
+- [ ] Push one clean seed `S` to `main`, verify its remote SHA, and dispatch the ratification-only
+      DevEx Nightly workload on that exact seed.
+- [ ] Review the N≥5 benchmark, packed-journey, and full-catalog artifacts and commit only justified
+      baseline and G2-G4/G16/full-catalog budget bindings.
+- [ ] Introduce three real qualifying evaluator identities/keys as the only change in policy commit
+      `P` at `evidence/devex/external-evaluators/policy.json`, then leave it immutable.
+  - Blocker: no qualifying external roster or keys exist; generated/self/repeated identities do not
+    qualify.
+- [ ] Select `R` only after the binding commit and `P`; require `R` to descend both and restart this
+      sequence if later code, budget, policy, or release-subject changes land.
 
 ## Final candidate proof
 
-- [ ] Generate/authenticate one final packed manifest and run all consumer classes from it:
-      scaffold, CRM/commerce examples, 44-component UI copy-in, Drizzle Postgres/SQLite peer
-      fixtures, custom shell, custom adapter, verifier-only, Node build, supported presets, and
-      inferred test harness.
-- [ ] Run the full-catalog reproducer from that manifest with typecheck/check/build exit 0 and all
-      measured process-tree RSS values ≤2.0 GiB; then require all ten nightly known failures to
-      report `retired-pass`.
 - [ ] Run `pnpm run acceptance` at the exact clean candidate with pinned Java/offline TLA posture.
-  - Do not infer this from earlier candidate or focused gates. Preserve the command subject and
-    terminal result.
+  - Its single `check:publish` execution is the canonical packed-manifest producer. Preserve the
+    terminal result, authenticate and hash that manifest/package set, and do not rerun acceptance,
+    `check:publish`, or another pack producer after the freeze.
 - [ ] Run `pnpm run test:security-fuzz-release` and `pnpm run check:hermetic-proof-stage` at that
-      same exact candidate.
-- [ ] Run final publish/docs/API/publicness/type/browser/accessibility, compiler fixpoint/render,
-      wire-compatibility, pack-security, certificate, module-identity, provenance-closure, and
-      precision gates from the final manifest.
+      same exact `R`.
+- [ ] Run the standing checkout gates at `R`: docs snippets, API decision/migration/snapshot/
+      ratchet, test-package budget, framework-export posture, compiler fixpoint/render,
+      wire-compatibility, provenance closure, and precision.
+  - These gates bind the checkout/build subject; they are not packed-manifest consumers.
+- [ ] Run all packed consumers from the one frozen `R` manifest/package set: scaffold,
+      CRM/commerce, 44-component UI copy-in, packed docs/public declarations, Drizzle
+      Postgres/SQLite peers, custom shell/adapter, verifier-only, Node build, supported presets,
+      offline agent, and inferred harness.
+- [ ] Run the full-catalog reproducer from that manifest with typecheck/check/build exit 0 and all
+      measured process-tree RSS values ≤2.0 GiB; then run
+      `node scripts/known-failure-register.mjs --run-available --cadence all` with
+      `--packed-manifest .release/packed-packages.json` and require all ten entries to report
+      `retired-pass`.
+- [ ] Verify certificate/module identity and then pack security against the frozen package set
+      without regenerating the canonical manifest.
 - [ ] Run `scripts/release-artifact-inspection.mjs` into a fresh output directory and inspect
       emitted server/client modules, graph, diagnostics, HTML, CSS, and wire frames.
 - [ ] Prove app components remain authored TSX/JSX and no app-authored lowered IR exists
@@ -60,23 +83,25 @@ explicit later wrapper; that relationship is recorded rather than presented as o
 
 ## Hosted and external proof
 
-- [ ] Push the final candidate to `main`, verify the remote exact SHA, and make every applicable
-      exact-SHA GitHub check terminal-green.
-- [ ] Dispatch the ratification-only DevEx Nightly path for the final SHA; review the N≥5 artifact
-      and commit only justified G2-G4/G16/full-catalog budget bindings.
+- [ ] Push exact `R` to `main`, verify the remote SHA, and make every applicable exact-SHA GitHub
+      check terminal-green.
+- [ ] Complete one ordinary DevEx Nightly run at exact `R` with package-producer, benchmark,
+      packed-journeys, and full-catalog terminal-green.
+  - A ratification-only run for seed `S` deliberately lacks that job set and cannot authorize
+    release `R`.
 - [ ] Complete G11 through the reviewed `g11-cloud-run` environment and retain the successful
-      public-URL/source/build-token/retention/cleanup artifact.
+      public-URL/exact-`R`-SHA/build-token/retention/cleanup artifact.
   - Blocker: the GitHub environment and required GCP variables/IAM authority are absent. Do not
     dispatch or create cloud state until they are explicitly configured.
-- [ ] Preregister three actual qualifying evaluator identities/keys, collect signed no-intervention
-      packed journeys for the exact release subject, and triage every finding into the known-
-      failure register.
-  - Blocker: no real N=3 external roster or evidence exists; generated/self/repeated identities do
-    not qualify.
+- [ ] Collect signed no-intervention packed journeys from policy `P`'s three evaluators against
+      exact `R` and triage every finding into the known-failure register.
+  - Blocker: policy `P` and qualifying external evidence do not exist; generated/self/repeated
+    identities or another subject do not qualify.
 - [ ] Publish exactly one cumulative breaking technical-preview minor with immutable registry
       versions and provenance.
-  - Blocker: exact-SHA CI/ratification, G11, evaluators, registry credentials, release environment,
-    version, and tag must all be ready. Local tarballs are not publication evidence.
+  - Blocker: exact-SHA CI, committed hosted bindings, `R`'s ordinary Nightly, G11, evaluators,
+    registry credentials, release environment, version, and tag must all be ready. Local tarballs
+    are not publication evidence.
 - [ ] Close the capstone only when every applicable G1-G24 row has one current authoritative proof
       and all final candidate, hosted, external, and publication boxes above are complete.
 

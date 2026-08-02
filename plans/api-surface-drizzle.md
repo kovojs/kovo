@@ -30,8 +30,11 @@ authoritative under `SPEC.md` §10.1.
   - Require the canonical `drizzle-orm@1.0.0-rc.4` peer fixture, Postgres and SQLite success,
     compile-time typo/wrong-table/owner-via/fan-out refusal, structural SQL-fake refusal, and no
     unapproved `any` or recursive leak.
-- [ ] Close Track 5c only after the same exact manifest also passes the standing API, migration,
-      snapshot, ratchet, pack-security, and certificate gates in the release capstone.
+- [ ] Close Track 5c only after exact candidate `R` passes the standing source-checkout API,
+      migration, snapshot, and ratchet gates, while `R`'s frozen manifest/package set separately
+      passes packed publicness, Drizzle, pack-security, and certificate/module-identity gates in
+      the release capstone.
+  - Source gates bind `R`; only packed gates consume the authenticated manifest/tarballs.
 
 The prior package-local and runner-contract suites are deliberately not promoted to final packed
 evidence.

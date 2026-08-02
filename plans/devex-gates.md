@@ -1,6 +1,6 @@
 # World-class DevEx — release measurement
 
-Status: **measurement infrastructure complete; final nightly proof and hosted ratification pending**
+Status: **measurement infrastructure complete; final all-cadence, ratification, and ordinary Nightly proof pending**
 
 Charter: `plans/worldclass-devex.md` Track 2. Gates: G1-G4, G10, G12, G14, G16-G18.
 Runner-bound measurements are informational until `devex-budgets.json` binds the named runner,
@@ -62,8 +62,9 @@ This literal table is also validated by `scripts/known-failure-register.mjs`.
 
 All ten entries, including KF-DEVEX-007, are `state: retired` in the register. KF-DEVEX-007's
 recorded evidence is the canonical three-sample authenticated packed run. The release candidate
-still requires a same-manifest full-catalog and nightly reconfirmation; the earlier retirement
-does not substitute for that final-subject proof.
+still requires same-manifest full-catalog and all-cadence register reconfirmation; the earlier
+retirement does not substitute for that final-subject proof. Hosted ratification and the ordinary
+release-authorizing Nightly are separate job topologies and separate evidence.
 
 - [ ] Run both current ten-phase packed journeys against the final canonical manifest and require
       create→install→ready→first-200→login→CRUD→ready-warm→check→build→test, zero undocumented
@@ -71,14 +72,20 @@ does not substitute for that final-subject proof.
 - [ ] Run the final full-catalog reproducer from the canonical packed manifest with all 44 copied
       components present, including unimported files; require typecheck/check/build exit 0 and each
       process-tree peak RSS ≤2.0 GiB.
-- [ ] Run `pnpm run test:devex-known-failures-nightly` from that same manifest and require all ten
+- [ ] Run `node scripts/known-failure-register.mjs --run-available --cadence all` with
+      `--packed-manifest .release/packed-packages.json` from that same manifest and require all ten
       entries to report `retired-pass` before closing the final integration ledger.
-- [ ] Ratify G2-G4, G16, and full-catalog thresholds from the final hosted workload with N≥5.
-  - Dispatch only the reviewed ratification path. Review the artifact and threshold derivation;
-    workflow success alone does not authorize budget edits.
-- [ ] Close Track 2 only after the final packed/nightly proofs are deterministic, all retired
-      entries pass against the final subject, hosted budgets are bound, and PR reports remain
-      green.
+- [ ] Push a clean ratification seed `S`, collect the benchmark, packed-journey, and full-catalog
+      N≥5 artifacts on the accepted runner, review noise/formulas, and commit only justified G2-G4,
+      G16, and full-catalog bindings.
+  - Workflow success alone does not authorize budget edits. `S` is a measurement subject, not the
+    final release candidate.
+- [ ] After those bindings land, select final `R`, complete its exact local proof, and require an
+      exact-SHA ordinary DevEx Nightly with all four release jobs green.
+  - The ratification-only run for `S` cannot authorize `R` because it omits the ordinary job set.
+- [ ] Close Track 2 only after the final packed/full-catalog/all-cadence proofs are deterministic,
+      all retired entries pass against `R`, hosted budgets are bound and met by `R`'s ordinary
+      Nightly, and PR reports remain green.
 
 ## Latest accepted evidence
 
@@ -86,5 +93,5 @@ does not substitute for that final-subject proof.
   at clean exact audit subject `838007981` on 2026-08-01, with Core 33/target:60 and Server
   116/target:116.
 - Prior N=1 smoke measurements prove driver completeness only; they are not ratification evidence.
-- Final full-catalog/nightly results and hosted N≥5 evidence are intentionally absent at this
-  checkpoint and remain open above.
+- Final full-catalog/all-cadence results, hosted N≥5 bindings, and an exact-`R` ordinary Nightly are
+  intentionally absent at this checkpoint and remain open above.

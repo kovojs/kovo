@@ -39,19 +39,22 @@ standing rules remain authoritative.
       44-component copy-in fixture retains unimported files, typechecks, checks, and builds with
       peak RSS ≤2.0 GiB.
   - A below-cap partial run or package-local test does not satisfy this item. After the report
-    passes, run `pnpm run test:devex-known-failures-nightly` against the same manifest and require
-    `retired-pass`.
-- [ ] Ratify and meet cold/warm/one-file G4 budgets on the final packed workload without dropping
-      any of the 11 ordered diagnostic-producing phases.
-  - Required proof: the hosted ratification-only DevEx Nightly run records a named runner, exact
-    workload fingerprint, N≥5 samples, statistic, measured noise, rationale, and reviewed threshold
-    formula in `devex-budgets.json`.
-- [ ] Complete one packed create→build→deploy→public-200 journey on Cloud Run.
-  - Required proof: the manual G11 artifact binds public URL, source SHA, build token, retention
+    passes, run `node scripts/known-failure-register.mjs --run-available --cadence all` with
+    `--packed-manifest .release/packed-packages.json` against the same manifest and require all ten
+    entries to report `retired-pass`.
+- [ ] Ratify cold/warm/one-file G4 budgets on a pushed packed seed `S` without dropping any of the
+      11 ordered diagnostic-producing phases, then commit reviewed bindings before selecting final
+      candidate `R`.
+  - Required proof: the ratification-only DevEx Nightly run records a named runner, exact workload
+    fingerprint, N≥5 samples, statistic, measured noise, rationale, and threshold formula; the
+    resulting bindings land before `R`, whose exact ordinary Nightly run must meet them.
+- [ ] Complete one exact-`R` packed create→build→deploy→public-200 journey on Cloud Run.
+  - Required proof: the manual G11 artifact binds public URL, exact `R` SHA, build token, retention
     posture, and cleanup. The reviewed `g11-cloud-run` environment and its five GCP variables are
     currently absent; do not create cloud/IAM state without explicit authority.
 - [ ] Close Track 1 only when the final packed journeys, KF-DEVEX-007 final-subject
-      reconfirmation, ratified G2-G4 and G16 budgets, and G11 are all green.
+      reconfirmation, all-cadence register run, ratified G2-G4/G16 bindings, exact-`R` ordinary
+      Nightly, and G11 are all green.
 
 ## Current verification
 
@@ -63,5 +66,5 @@ standing rules remain authoritative.
 - Focused command/diagnostic/doctor/add/creator/graph/build tests cover the completed outcomes
   above; `pnpm run check:spec-conformance-closure` at `b865601f1` passed 92 codes, 72 error classes,
   and 204 sites across evidence for 37 files, 108 witnesses, and all 6 mandatory categories.
-- Final-candidate full-catalog/nightly, hosted ratification, and external G11 evidence are
-  intentionally not claimed here.
+- Final-candidate full-catalog/all-cadence proof, hosted ratification bindings, exact-`R` ordinary
+  Nightly, and external G11 evidence are intentionally not claimed here.

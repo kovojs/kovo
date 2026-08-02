@@ -64,7 +64,7 @@ the runner, workload identity, sample statistic, measured noise, rationale, and 
 | G1 packed Postgres/PGlite and SQLite journeys   | final proof pending  | Historical report `b0bf20b05` passed the former nine-phase contract; the current create→install→ready→first-200→login→CRUD→ready-warm→check→build→test contract still needs final-subject reconfirmation. |
 | G2 ready output and cold/warm time              | ratification pending | Framework-owned ready facts are tested; hosted timing thresholds remain unratified.                                                                                                                       |
 | G3 edit-to-diagnostic/result time               | ratification pending | Deterministic driver exists; no accepted hosted N≥5 threshold.                                                                                                                                            |
-| G4 cold/warm/incremental check and phase census | ratification pending | All 11 phases are retained; final hosted workload and thresholds remain open.                                                                                                                             |
+| G4 cold/warm/incremental check and phase census | ratification pending | All 11 phases are retained; the hosted seed, reviewed bindings, and final ordinary Nightly remain open.                                                                                                    |
 | G5 help/version/error exits                     | green                | CLI exit-contract suites cover 0/1/2 behavior.                                                                                                                                                            |
 | G6 one semantic command model                   | green                | Command-schema derivation suites cover parsing, help, completion, and references.                                                                                                                         |
 | G7 current graph truth                          | green                | Adversarial source/artifact identity suite rejects missing, stale, partial, and wrong-app proof.                                                                                                          |
@@ -76,7 +76,7 @@ the runner, workload identity, sample statistic, measured noise, rationale, and 
 | G13 authenticated executable docs               | green                | Packed docs/reference gates reject placeholders/drift and compile the classified corpus.                                                                                                                  |
 | G14 first-CRUD concept census                   | green                | Both packed scaffold reports record the concept categories and zero undocumented environment edits.                                                                                                       |
 | G15 development-only devtool                    | green                | Mount/ready-line tests and production/static artifact census pass.                                                                                                                                        |
-| G16 install time and size                       | ratification pending | Measurements exist; hosted timing/size binding remains unratified.                                                                                                                                        |
+| G16 install time and size                       | ratification pending | Measurements exist; hosted timing/size binding and final ordinary Nightly remain open.                                                                                                                     |
 | G17 recursive-publicness zero                   | green                | `check:api-surface` reports total zero and rejects widening as a repair.                                                                                                                                  |
 | G18 no unapproved app-public `any`              | green                | Packed AST gate and reviewed-exception policy pass.                                                                                                                                                       |
 | G19 opaque style values                         | green                | Packed style tests reject forgery and preserve emitted CSS/artifacts.                                                                                                                                     |
@@ -91,9 +91,9 @@ the runner, workload identity, sample statistic, measured noise, rationale, and 
 - [x] **D1 — select receiver provenance (Arm A).** Both receiver methods and a generated app-scoped
       module passed the preregistered v6 matrix; Arm A won the preference rule.
   - Evidence: `conformance/app-contract-spike/results-v6.json` records `decision: arm-a` with every
-    gate green for both arms. After package identities were refreshed at `5595ee4dd`, commits
-    `56234f3da` and `2d2fac1f0` authorize and bind the current evidence; D1 passed 44/44 and two
-    clean `measure:verify` replays selected Arm A.
+    gate green for both arms. Following process-cleanup checkpoint `f3cee8687`, `49296c4b1`
+    resealed posture/certificate inputs and `33a8857cb` → `8d0a17d06` authorized and regenerated
+    the current v6 evidence; checkpoint `15b3514da` contains that Arm-A decision.
 - [x] **D2 — one cumulative breaking preview release.** Implementation batches may land on `main`,
       but the registry receives exactly one cumulative technical-preview minor with
       `kovo fix api-v1`; no compatibility barrels or interim stable API are added.
@@ -112,8 +112,8 @@ the runner, workload identity, sample statistic, measured noise, rationale, and 
       ten-ID known-failure register, PR reports, CI minute policy, and fail-closed budget schema are
       implemented.
   - Evidence: `plans/devex-gates.md`; all ten register entries are retired, while hosted
-    ratification and the final-candidate full-catalog/nightly reconfirmation remain open rather
-    than being inferred from machinery.
+    ratification bindings, final-candidate full-catalog/all-cadence reconfirmation, and the
+    ordinary Nightly remain open rather than being inferred from machinery.
 - [x] **Version-matched agent loop.** Authenticated local docs, atomic `update-docs`, bounded
       CLI/MCP retrieval, deterministic `llms` output, and the offline repair journey are complete.
   - Evidence: the retired `plans/devex-agent-loop.md` is summarized in `plans/archive.md`.
@@ -136,55 +136,71 @@ the runner, workload identity, sample statistic, measured noise, rationale, and 
 Each open action names its authoritative or coordinating child ledgers. Do not close a box from an
 earlier package-local run or from a different packed manifest.
 
-- [ ] **Seal one final integrated packed manifest and run every named consumer from it.** Include
-      both current ten-phase scaffold journeys, CRM/commerce examples, 44-component copy-in
-      catalog, Drizzle Postgres/SQLite peer fixtures, custom shell/adapter, verifier-only,
-      Node/presets, and inferred harness.
+The causal order is fixed: pushed ratification seed `S` → reviewed N≥5 evidence → committed budget
+bindings → final candidate `R` → exact local proof and an exact-SHA ordinary DevEx Nightly run.
+The evaluator policy-only commit `P` must be an immutable strict ancestor of `R`. A ratification-only
+run for `S` cannot authorize `R`, and any change after `R` requires a new final proof subject.
+
+- [ ] **Push and ratify one clean seed `S`, then commit only reviewed bindings.** Run the
+      ratification-only DevEx Nightly path on `S`, collect the benchmark, packed-journey, and
+      full-catalog N≥5 artifacts on the accepted runner, review noise/formulas, and commit the
+      justified baseline and G2-G4/G16/full-catalog bindings.
+  - Benefit: performance policy is derived before the release commit is selected. Risk: treating
+    `S` or workflow success as final authority would leave `R` unmeasured. Owner:
+    `plans/devex-gates.md`.
+- [ ] **Commit evaluator policy `P` before selecting `R`.** Introduce exactly three real qualifying
+      identities, principals, organizations, and Ed25519 keys in policy-only commit
+      `evidence/devex/external-evaluators/policy.json`; never edit that policy after preregistration.
+  - Benefit: evaluators cannot be chosen after seeing release results. Risk: generated,
+    self-authored, repeated, mutable, or same-commit identities fail the gate. Blocker: no real
+    roster or keys exist.
+- [ ] **Select final candidate `R` only after the binding commit and `P`, then run the exact local
+      proof.** From a clean `R`, run pinned/offline `pnpm run acceptance`, security fuzz, hermetic
+      proof, compiler fixpoint/render and wire equivalence, checkout-level docs/API/type/browser/
+      accessibility/security gates, and release-artifact inspection. The single `check:publish`
+      inside acceptance is the canonical packed-manifest producer; authenticate and freeze its
+      manifest rather than producing another one.
+  - Benefit: every local claim names the commit that can actually ship. Risk: rerunning a pack
+    producer or changing code/policy/budgets after the freeze creates a different subject. Owner:
+    `plans/worldclass-devex-release.md`.
+- [ ] **Run every named packed consumer from `R`'s frozen manifest.** Include both current
+      ten-phase scaffold journeys, CRM/commerce examples, 44-component copy-in catalog, packed
+      docs/public declarations, Drizzle Postgres/SQLite peers, custom shell/adapter,
+      verifier-only, Node/presets, offline agent, and inferred harness.
   - Benefit: proves package topology and generated metadata work as installed, not only in the
-    monorepo. Risk: a stale or mixed tarball set can falsely pass; every runner must authenticate
-    the same manifest/source subject. Owner: `plans/worldclass-devex-release.md` and API child
-    ledgers.
+    monorepo. Risk: a stale or mixed tarball set can falsely pass; every packed runner must
+    authenticate the same manifest/package set while source-only gates continue to bind `R`.
+    Owner: `plans/worldclass-devex-release.md` and API child ledgers.
 - [ ] **Reconfirm KF-DEVEX-007 on the final release manifest.** Copy all 44 components, retain
       unimported files, and require typecheck/check/build exit 0 with peak RSS ≤2.0 GiB; then
-      require the nightly known-failure run to record `retired-pass` for that same subject.
+      run `node scripts/known-failure-register.mjs --run-available --cadence all` with
+      `--packed-manifest .release/packed-packages.json` and require all ten entries to report
+      `retired-pass` for that same subject.
   - Benefit: ordinary copy-in no longer exhausts developer/CI memory. Risk: a below-cap partial
     run is not closure. Owner: `plans/devex-first-loop.md` and `plans/devex-gates.md`.
-- [ ] **Run the final local release proof at the exact candidate.** Complete root acceptance,
-      security/adversarial fuzz release, hermetic proof stage, compiler fixpoint/render and wire
-      equivalence, publish/docs/API/type/browser/accessibility gates, and release-artifact
-      inspection. Inspect emitted server/client modules, graph, diagnostics, HTML, CSS, and wire
-      frames and confirm app components remain authored TSX/JSX.
-  - Benefit: replaces a collection of focused successes with one release-level subject. Risk:
-    pack, D1, certificate, or hermetic identities must be regenerated only through their official
-    fail-closed workflows. Owner: `plans/worldclass-devex-release.md`.
-- [ ] **Push the final candidate and make exact-SHA GitHub checks terminal-green.** Treat queued or
-      failed checks as open; inspect and repair in-scope failures before advancing.
-  - Benefit: proves the committed candidate rather than a local tree. Risk: a later commit makes
-    prior CI inapplicable.
-- [ ] **Ratify G2-G4, G16, and full-catalog budgets on the hosted final workload.** Dispatch the
-      ratification-only DevEx Nightly path, collect N≥5 samples, review noise and threshold
-      derivation, then commit accepted bindings. Do not turn measurements into authority merely
-      because the workflow completed.
-  - Benefit: performance becomes a release contract. Risk: noisy or workload-mismatched baselines
-    institutionalize false thresholds. Owner: `plans/devex-gates.md`.
+- [ ] **Push exact `R` and make CI plus the ordinary DevEx Nightly terminal-green at that SHA.**
+      Treat queued, failed, canceled, or ratification-only runs as open; inspect and repair
+      in-scope failures, then designate a new `R` and repeat exact proof if any repair lands.
+  - Benefit: release authorization proves the committed candidate and its bound budgets. Risk: a
+    later commit or a ratification-only job set is not evidence for `R`.
 
 ## External release gates
 
 - [ ] **G11 Cloud Run deployment.** Create/configure the reviewed `g11-cloud-run` GitHub
       environment with `KOVO_G11_GCP_PROJECT`, `KOVO_G11_GCP_REGION`,
       `KOVO_G11_GCP_ARTIFACT_REPOSITORY`, `KOVO_G11_GCP_SERVICE_ACCOUNT`, and
-      `KOVO_G11_GCP_WORKLOAD_IDENTITY_PROVIDER`; then run the manual journey and retain its public
-      URL, source SHA, build token, retention posture, and cleanup artifact.
+      `KOVO_G11_GCP_WORKLOAD_IDENTITY_PROVIDER`; after `R` is pushed, run the manual journey and
+      retain its public URL, exact `R` SHA, build token, retention posture, and cleanup artifact.
   - Blocker: the environment and cloud/IAM authority do not exist. Do not auto-create an
     unprotected environment or cloud resources without explicit authorization.
-- [ ] **Preregister N=3 independent evaluators.** Record three real non-author identities,
-      principals, organizations, and Ed25519 keys, then collect signed no-intervention packed
-      journeys against the exact release subject and triage every finding.
-  - Blocker: no qualifying external roster/evidence exists. Generated identities, self-dogfood,
-    repeated principals/keys, or another HEAD do not count.
+- [ ] **Collect the three preregistered evaluator journeys against exact `R`.** Use policy `P`'s
+      immutable identities/keys, collect signed no-intervention journeys against `R`'s
+      authenticated manifest/package set, and triage every finding.
+  - Blocker: policy `P` and qualifying external transcripts do not exist. Generated identities,
+    self-dogfood, repeated principals/keys, intervention, or another HEAD do not count.
 - [ ] **Publish the cumulative preview minor.** Publish immutable package versions and provenance
-      only after exact-SHA CI, hosted ratification, G11, the evaluator gate, and registry/release
-      credentials are ready.
+      only after exact-SHA CI, hosted bindings plus `R`'s ordinary Nightly, G11, the evaluator gate,
+      and registry/release credentials are ready.
   - Blocker: external gates and publication authority remain absent; local tarballs are not
     registry evidence.
 - [ ] **Capstone exit.** All applicable G1-G24 rows are green with current evidence, all final
@@ -209,7 +225,8 @@ earlier package-local run or from a different packed manifest.
 
 - `plans/devex-first-loop.md`: final journeys/catalog/KF-DEVEX-007, hosted G2-G4/G16 budgets, and
   G11.
-- `plans/devex-gates.md`: final same-manifest/nightly proof and hosted budget ratification.
+- `plans/devex-gates.md`: final same-manifest full-catalog/all-cadence proof, hosted budget
+  ratification, and exact-`R` ordinary Nightly.
 - `plans/api-surface-5a.md`: final Style/UI catalog and contract-independent API seal.
 - `plans/api-surface-5b.md`: final Server/Better Auth/harness standing seal.
 - `plans/api-surface-drizzle.md`: final packed typed-annotation and peer matrix.
