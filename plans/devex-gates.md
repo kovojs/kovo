@@ -50,7 +50,7 @@ This literal table is also validated by `scripts/known-failure-register.mjs`.
 - [x] Enforce a classified DevEx CI budget and bounded PR reports for public surface, docs
       freshness, and speed deltas.
   - Evidence: `pnpm run test:devex-track2` reports 140/140 per-PR and 290/300 ordinary-nightly
-    runner-minutes, passes 104/104 focused tests, and validates the always-run fail-closed report
+    runner-minutes, passes 105/105 focused tests, and validates the always-run fail-closed report
     contract.
   - Cost: the 30-minute cap increase contains three real isolated packed installs, cleanup, and a
     four-minute infrastructure-only packed-build ceiling. Exact-SHA CI for `3b15aef0e` reached the

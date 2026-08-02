@@ -23,6 +23,7 @@ export function authenticatedPackedJourneyPackages(packedManifestPath) {
 export function authenticatedPackedJourneyPackagesFromManifestBytes(
   packedManifestPath,
   manifestBytes,
+  dependencies = {},
 ) {
   if (!Buffer.isBuffer(manifestBytes) || manifestBytes.byteLength > packedManifestMaxBytes) {
     throw new TypeError(
@@ -31,11 +32,16 @@ export function authenticatedPackedJourneyPackagesFromManifestBytes(
   }
   const resolvedManifest = path.resolve(packedManifestPath);
   const manifest = JSON.parse(manifestBytes.toString('utf8'));
-  const expectedPackages = releasePackages();
+  // Repository-internal branch seam: production callers always use the real release inventory and
+  // validators. Keeping this below parsing lets tests prove path posture without mocking byte input.
+  const expectedPackages = (dependencies.releasePackages ?? releasePackages)();
+  const validateLocalManifest = dependencies.validateLocalManifest ?? validatePackedReleaseManifest;
+  const validateExternalManifest =
+    dependencies.validateExternalManifest ?? validateExternalPackedJourneyManifest;
   const packages =
     packedManifestReleaseRoot(resolvedManifest) === path.resolve(repoRoot)
-      ? validatePackedReleaseManifest(manifest, expectedPackages)
-      : validateExternalPackedJourneyManifest(manifest, expectedPackages);
+      ? validateLocalManifest(manifest, expectedPackages)
+      : validateExternalManifest(manifest, expectedPackages);
   return new Map(
     packages.map((pkg) => {
       const tarballPath = packedTarballPath(resolvedManifest, pkg.tarball);
