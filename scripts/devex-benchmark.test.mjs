@@ -14,6 +14,8 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
+import { compileComponentModule } from '../packages/compiler/src/compile.js';
+import { emitQueryPlanBootstrapModule } from '../packages/compiler/src/emit/bootstrap.js';
 import {
   DEVEX_BENCHMARK_REPORT_SCHEMA,
   DEVEX_DETERMINISTIC_ARTIFACT_REPORT_SCHEMA,
@@ -34,6 +36,10 @@ import {
   validateKovoBrowserWorkload,
   validateIncrementalSessionMarkerForTesting,
 } from './devex-benchmark.mjs';
+import {
+  benchmarkQueryPlanBootstrapInput,
+  buildBenchmarkBrowserBundle,
+} from './devex-workloads/kovo-packed-check/package/build-browser.mjs';
 import { processTreeRssBytesForTesting } from './devex-workloads/kovo-packed-check/package/workload.mjs';
 import { validatedPackageTarballEntries } from './lib/deterministic-tarball.mjs';
 import { packWithoutLifecycleScripts } from './lib/pack-without-lifecycle.mjs';
@@ -59,6 +65,13 @@ const kovoPackedWorkloadSource = readFileSync(
 );
 const kovoPackedContractSource = readFileSync(
   path.join(repoRoot, 'scripts/devex-workloads/kovo-packed-check/package/src/kovo.ts'),
+  'utf8',
+);
+const kovoPackedComponentSource = readFileSync(
+  path.join(
+    repoRoot,
+    'scripts/devex-workloads/kovo-packed-check/package/src/components/counter-island.tsx',
+  ),
   'utf8',
 );
 const kovoPackedBrowserBuildSource = readFileSync(
@@ -548,6 +561,66 @@ describe('DevEx benchmark foundation', () => {
       "['install', '--offline', '--frozen-lockfile', '--ignore-scripts']",
     );
     expect(devexBenchmarkSource).toContain("['run', 'check:publish']");
+  });
+
+  it('builds the benchmark browser bootstrap from exact compiler and graph facts', async () => {
+    const outputRoot = mkdtempSync(path.join(os.tmpdir(), 'kovo-devex-browser-build-'));
+    try {
+      const built = await buildBenchmarkBrowserBundle({
+        compileComponent: compileComponentModule,
+        emitBootstrap: emitQueryPlanBootstrapModule,
+        outputRoot,
+        readSource: () => kovoPackedComponentSource,
+        runBuild: () => ({
+          clientFile: 'c/__v/aaaaaaaa/c/src/components/counter-island.client.js',
+          queryPlanComponent: {
+            componentName: 'components/counter-island/counter-island',
+            queryNames: ['components/counter-island/benchmark-query'],
+            sourceFile: 'src/components/counter-island.tsx',
+          },
+        }),
+      });
+
+      expect(built.input).toEqual({
+        componentName: 'components/counter-island/counter-island',
+        exportName: 'CounterIsland$queryUpdatePlans',
+        importPath: '../c/__v/aaaaaaaa/c/src/components/counter-island.client.js',
+        queryNames: {
+          benchmark: 'components/counter-island/benchmark-query',
+        },
+      });
+      expect(readFileSync(built.output, 'utf8')).toContain(
+        '[kovo-plan-owner=\\"components/counter-island/counter-island\\"]',
+      );
+    } finally {
+      rmSync(outputRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects malformed benchmark compiler facts before bootstrap emission', () => {
+    expect(() =>
+      benchmarkQueryPlanBootstrapInput(
+        {
+          clientFile: 'counter-island.client.js',
+          queryPlanComponent: {
+            componentName: 'components/counter-island/counter-island',
+            queryNames: ['components/counter-island/benchmark-query'],
+            sourceFile: 'src/components/counter-island.tsx',
+          },
+        },
+        {
+          compileComponent: () => ({
+            queryPlanBootstrapMetadata: {
+              exportName: 'CounterIsland$queryUpdatePlans',
+              queryNames: {
+                benchmark: 'components/counter-island/benchmark-query',
+              },
+            },
+          }),
+          readSource: () => kovoPackedComponentSource,
+        },
+      ),
+    ).toThrow('packed browser compiler facts require an exact componentName');
   });
 
   it('accepts only N edits from one live authenticated incremental session', () => {

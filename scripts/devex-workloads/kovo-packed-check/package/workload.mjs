@@ -260,6 +260,27 @@ export function runVerifiedBuild() {
       'packed Kovo app build did not bind the edited component into compiler/security analysis',
     );
   }
+  const queryPlanComponents = Array.isArray(graph.components)
+    ? graph.components.filter((entry) => entry?.exportName === 'CounterIsland')
+    : [];
+  const queryPlanComponent = queryPlanComponents[0];
+  const queryPlanSourceFile = queryPlanComponent?.source?.file;
+  const normalizedQueryPlanSourceFile =
+    typeof queryPlanSourceFile === 'string' ? queryPlanSourceFile.replaceAll('\\', '/') : '';
+  if (
+    queryPlanComponents.length !== 1 ||
+    typeof queryPlanComponent?.name !== 'string' ||
+    queryPlanComponent.name.length === 0 ||
+    (normalizedQueryPlanSourceFile !== SOURCE_PATH &&
+      !normalizedQueryPlanSourceFile.endsWith(`/${SOURCE_PATH}`)) ||
+    !Array.isArray(queryPlanComponent.queries) ||
+    queryPlanComponent.queries.length === 0 ||
+    queryPlanComponent.queries.some(
+      (queryName) => typeof queryName !== 'string' || queryName.length === 0,
+    )
+  ) {
+    throw new Error('packed Kovo app build omitted exact query-plan owner/query source facts');
+  }
 
   const manifest = JSON.parse(readFileSync('dist/.kovo/manifest.json', 'utf8'));
   const clientModule = manifest.clientModules?.find((entry) =>
@@ -283,6 +304,11 @@ export function runVerifiedBuild() {
     clientFile: clientModule.file,
     durationMs,
     peakRssBytes: invocation === null ? null : peakRssBytes(result.stderr ?? ''),
+    queryPlanComponent: {
+      componentName: queryPlanComponent.name,
+      queryNames: [...queryPlanComponent.queries],
+      sourceFile: queryPlanSourceFile,
+    },
   };
 }
 
