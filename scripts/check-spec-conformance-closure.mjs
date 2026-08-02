@@ -53,7 +53,7 @@ const transferredSqlSafetyDiagnosticRegistrarDoor =
 const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#diagnosticAt`;
 const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
 const expectedDiagnosticEmissionSiteDigest =
-  'f61a0fdf78c384bfec7c19b8f4ff50abded8a53eeb7e47225e57a2de720f12f7';
+  '84bf4dd41497712192830f7ca0a1da63b784c7d4f2bbb64a357d143cad966e16';
 const expectedRootDiagnosticDoorDigest =
   '1660c7877e7a533c282cf38c291a10181bc2e7484d76f479f1d1f41cd51dac77';
 const expectedRegisteredDiagnosticGuardDigest =
@@ -85,7 +85,7 @@ const expectedDiagnosticFactorySinkDigest =
 const expectedDiagnosticEvidenceWitnessDigest =
   '23014067df10912624d8419128d1362787bb212e84ef0aac772d78ad26156aa3';
 const expectedDiagnosticActualLayerReviewDigest =
-  '4c992f289ea67c304c827d6041477d4e70e1a08edf608aaa941202b45e6c54af';
+  '2850b1474d39c158087b61ecc22c140481ad696d378030baf870910c9ad04988';
 const expectedBlockingStaticExportCollectionDigest =
   '3541644c641aec62abd0743093c653abd953e634f6042b941877b699666c4fdd';
 const expectedCompilerValidatorPipelineDigest =
@@ -128,7 +128,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ['packages/cli/src/bin.ts', '00ebe4233b9aa633b0ffb15fd2b1b2298cfa33164ec3fea3d9c8e79b0ec29b97'],
   [
     'packages/cli/src/commands/build-export.ts',
-    '1d11a89f6509b260357d31659ccb50f94e267f0129976a373a0f4187cdc7fd68',
+    'b893679f5369776145e6e31ae4a3672bd7c3721182e2ad876cc49ee2717a1dd2',
   ],
   [
     'packages/cli/src/commands/build-static-trust-source-hook.mjs',
