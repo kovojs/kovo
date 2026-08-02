@@ -49,8 +49,9 @@ This literal table is also validated by `scripts/known-failure-register.mjs`.
     directories. Built-tree counts are not accepted as the census.
 - [x] Enforce a classified DevEx CI budget and bounded PR reports for public surface, docs
       freshness, and speed deltas.
-  - Evidence: `pnpm run test:devex-track2` reports 65/65 per-PR and 290/300 ordinary-nightly
-    runner-minutes and validates the always-run fail-closed report contract.
+  - Evidence: `pnpm run test:devex-track2` reports 110/110 per-PR and 290/300 ordinary-nightly
+    runner-minutes, passes 101/101 focused tests, and validates the always-run fail-closed report
+    contract.
 - [x] Isolate hosted ratification from ordinary nightly topology and make release authorization
       select a complete exact-SHA ordinary run rather than a newer ratification-only run.
   - Evidence: `.github/workflows/devex-nightly.yml`, `.github/workflows/release.yml`, and the
