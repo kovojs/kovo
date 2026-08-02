@@ -5481,7 +5481,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./vite",["default"]],
       ["./webhooks",["default"]],
       ["./write-safety",["default"]],
-    ], ["kovo-source-tree-sha256:557f57a6ae0ed584388af07bcb3b3ae426cba3d5ab8f49d481ed9ddd5c46b5fd"]],
+    ], ["kovo-source-tree-sha256:19038c2cda1e8cca1fc444144023f99f6c9071b3e87e053ea4444bb858352936"]],
     ["sha256:47b1a722c603df8231fda098af8d914733ba7a58e9dd363f32e4705eea5d04e1", [
       [".",["default","types"]],
       ["./agent",["default","types"]],
@@ -5517,7 +5517,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./vite",["default","types"]],
       ["./webhooks",["default","types"]],
       ["./write-safety",["default","types"]],
-    ], ["kovo-packed-tree-sha256:33d3170463db60af835929778341d9d791bfed2fb0ba3c0626e441d9d4817c00"]],
+    ], ["kovo-packed-tree-sha256:503a3f01aa0f759b69a8c3a6877bb687ec5fcfac5ffb1f9e4776af9684951f2c"]],
     ["sha256:5fc1fe655abf6ac1f3c6cdfb466fb4d89001d1896612620c8b42b875270fbf20", [
       [".",["default","types"]],
       ["./agent",["default","types"]],
@@ -5553,7 +5553,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./vite",["default","types"]],
       ["./webhooks",["default","types"]],
       ["./write-safety",["default","types"]],
-    ], ["kovo-packed-tree-sha256:33d3170463db60af835929778341d9d791bfed2fb0ba3c0626e441d9d4817c00"]],
+    ], ["kovo-packed-tree-sha256:503a3f01aa0f759b69a8c3a6877bb687ec5fcfac5ffb1f9e4776af9684951f2c"]],
   ], "exact-implementation"],
   ["@kovojs/style", "0.3.0", [
     ["sha256:0dcc9bb20da88bbdda16cdbb8be939edc7799494812d0c5557d1b49cc2c2c08f", [
@@ -5746,10 +5746,10 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
   ["create-kovo", "0.3.0", [
     ["sha256:80d390e85123b76e58a9270f45d1420deaefd869d361bf8181cfa3f310ae6c08", [
 
-    ], ["kovo-packed-tree-sha256:016e1ca8aae30b03f616d0422c436b992f49ca8b1fa659e37f05ef9c6043317c","kovo-source-tree-sha256:58fbc6451aa65f3ecbb0bcb2d2dbda395c44a8899269a8518fa7f8fdbc872016"]],
+    ], ["kovo-packed-tree-sha256:43a99fea95e569e38ba2f295f2c577d224f51aa16bfc1036a530bbcdfcb65dda","kovo-source-tree-sha256:13b556d86e1f4a26d8df3625ea98b940193b809c7ae221d986295a1aba7d5710"]],
     ["sha256:ab8a54156a8c7a9662163fa21e51ffe2042988d5457151d70d51c75ac634689e", [
 
-    ], ["kovo-packed-tree-sha256:016e1ca8aae30b03f616d0422c436b992f49ca8b1fa659e37f05ef9c6043317c"]],
+    ], ["kovo-packed-tree-sha256:43a99fea95e569e38ba2f295f2c577d224f51aa16bfc1036a530bbcdfcb65dda"]],
   ], "exact-implementation"],
 ];
 
