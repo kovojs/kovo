@@ -3,44 +3,53 @@ import { mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { authenticatedPackedJourneyPackages } from '../golden-journey/packed-package-auth.mjs';
+import { authenticatedPackedJourneyPackagesFromManifestBytes } from '../golden-journey/packed-package-auth.mjs';
 import { packedManifestMaxBytes } from '../release-packages.mjs';
 import { readBoundedRegularFile } from './bounded-regular-file.mjs';
 import { readPackageTarballSnapshot } from './deterministic-tarball.mjs';
 
 /**
- * Authenticate one existing release manifest and snapshot every exact tarball byte sequence.
- * Reading the bounded manifest before and after both phases closes replacement races.
+ * Authenticate one authoritative bounded manifest snapshot and snapshot its exact tarball bytes.
+ * The final path reread detects ordinary drift but is diagnostic only: authentication and the
+ * reported digest are both derived from the first Buffer, so an A→B→A replacement cannot mix them.
  */
-export function loadAuthenticatedPackedConsumerInputs(packedManifest) {
+export function loadAuthenticatedPackedConsumerInputs(packedManifest, dependencies = {}) {
   const resolvedManifest = path.resolve(packedManifest);
-  const before = readBoundedRegularFile(
-    resolvedManifest,
-    packedManifestMaxBytes,
-    'authenticated packed consumer manifest',
-  );
-  const authenticated = authenticatedPackedJourneyPackages(resolvedManifest);
-  const afterAuthentication = readBoundedRegularFile(
-    resolvedManifest,
-    packedManifestMaxBytes,
-    'authenticated packed consumer manifest',
-  );
-  if (!before.equals(afterAuthentication)) {
-    throw new Error('authenticated packed consumer manifest changed during authentication');
-  }
+  // Repository-internal deterministic race seam; production callers always omit dependencies.
+  const readManifestBytes = dependencies.readManifestBytes ?? readAuthenticatedManifestBytes;
+  const authenticateManifestBytes =
+    dependencies.authenticateManifestBytes ?? authenticatedPackedJourneyPackagesFromManifestBytes;
+  const authoritativeManifest = readManifestBytes(resolvedManifest);
+  assertBoundedManifestBuffer(authoritativeManifest);
+  const manifestSha256 = `sha256:${createHash('sha256')
+    .update(authoritativeManifest)
+    .digest('hex')}`;
+  const authenticated = authenticateManifestBytes(resolvedManifest, authoritativeManifest);
   const packages = snapshotAuthenticatedTarballBytes(authenticated);
-  const afterSnapshot = readBoundedRegularFile(
-    resolvedManifest,
-    packedManifestMaxBytes,
-    'authenticated packed consumer manifest',
-  );
-  if (!before.equals(afterSnapshot)) {
+  const finalManifest = readManifestBytes(resolvedManifest);
+  if (!Buffer.isBuffer(finalManifest) || !authoritativeManifest.equals(finalManifest)) {
     throw new Error('authenticated packed consumer manifest changed while snapshotting tarballs');
   }
   return Object.freeze({
-    manifestSha256: `sha256:${createHash('sha256').update(before).digest('hex')}`,
+    manifestSha256,
     packages,
   });
+}
+
+function readAuthenticatedManifestBytes(resolvedManifest) {
+  return readBoundedRegularFile(
+    resolvedManifest,
+    packedManifestMaxBytes,
+    'authenticated packed consumer manifest',
+  );
+}
+
+function assertBoundedManifestBuffer(value) {
+  if (!Buffer.isBuffer(value) || value.byteLength > packedManifestMaxBytes) {
+    throw new TypeError(
+      `authenticated packed consumer manifest reader must return a Buffer no larger than ${String(packedManifestMaxBytes)}`,
+    );
+  }
 }
 
 /** Re-hash exact authenticated tarball bytes before any consumer can use them. */

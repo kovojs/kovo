@@ -1,17 +1,36 @@
 import { realpathSync } from 'node:fs';
 import path from 'node:path';
 
+import { readBoundedRegularFile } from '../lib/bounded-regular-file.mjs';
 import { readPackageTarballSnapshot } from '../lib/deterministic-tarball.mjs';
 import {
-  readPackedReleaseManifest,
   validatePackedReleaseManifest,
   verifyPackedAttestationBytes,
 } from '../publish-packed-packages.mjs';
-import { releasePackages, repoRoot } from '../release-packages.mjs';
+import { packedManifestMaxBytes, releasePackages, repoRoot } from '../release-packages.mjs';
 
 export function authenticatedPackedJourneyPackages(packedManifestPath) {
   const resolvedManifest = path.resolve(packedManifestPath);
-  const manifest = readPackedReleaseManifest(resolvedManifest);
+  const manifestBytes = readBoundedRegularFile(
+    resolvedManifest,
+    packedManifestMaxBytes,
+    'packed journey manifest',
+  );
+  return authenticatedPackedJourneyPackagesFromManifestBytes(resolvedManifest, manifestBytes);
+}
+
+/** Authenticate the exact bounded manifest snapshot supplied by the caller; never reread its path. */
+export function authenticatedPackedJourneyPackagesFromManifestBytes(
+  packedManifestPath,
+  manifestBytes,
+) {
+  if (!Buffer.isBuffer(manifestBytes) || manifestBytes.byteLength > packedManifestMaxBytes) {
+    throw new TypeError(
+      `packed journey manifest bytes must be a Buffer no larger than ${String(packedManifestMaxBytes)}`,
+    );
+  }
+  const resolvedManifest = path.resolve(packedManifestPath);
+  const manifest = JSON.parse(manifestBytes.toString('utf8'));
   const expectedPackages = releasePackages();
   const packages =
     packedManifestReleaseRoot(resolvedManifest) === path.resolve(repoRoot)
