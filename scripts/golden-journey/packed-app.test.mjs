@@ -341,9 +341,29 @@ describe('packed app golden journey', () => {
     expect(validatePackedAppsReport(report)).toEqual([]);
 
     const missingBuild = structuredClone(report);
-    missingBuild.variants[0].phases.pop();
+    missingBuild.variants[0].phases = missingBuild.variants[0].phases.filter(
+      (phase) => phase.name !== 'build',
+    );
     expect(validatePackedAppsReport(missingBuild)).toContain(
       'variants[0] is missing successful phase build',
+    );
+
+    const testBeforeBuild = structuredClone(report);
+    const buildIndex = testBeforeBuild.variants[0].phases.findIndex(
+      (phase) => phase.name === 'build',
+    );
+    const testIndex = testBeforeBuild.variants[0].phases.findIndex(
+      (phase) => phase.name === 'test',
+    );
+    [
+      testBeforeBuild.variants[0].phases[buildIndex],
+      testBeforeBuild.variants[0].phases[testIndex],
+    ] = [
+      testBeforeBuild.variants[0].phases[testIndex],
+      testBeforeBuild.variants[0].phases[buildIndex],
+    ];
+    expect(validatePackedAppsReport(testBeforeBuild)).toContain(
+      'variants[0] does not retain the exact successful phase order',
     );
 
     const hiddenViolation = structuredClone(report);
@@ -475,13 +495,13 @@ function successfulReport() {
         'create',
         'install',
         'ready',
-        'ready-warm',
         'first-200',
         'login',
         'crud',
-        'test',
+        'ready-warm',
         'check',
         'build',
+        'test',
       ].map((name) => ({
         durationMs: 1,
         name,

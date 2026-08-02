@@ -24,6 +24,21 @@ const runner = createRunnerFingerprint({
 });
 
 describe('golden release evidence contract', () => {
+  it('checks source before building the graph consumed by generated app tests', () => {
+    expect(DEVEX_GOLDEN_PHASE_CONTRACT.app).toEqual([
+      'create',
+      'install',
+      'ready',
+      'first-200',
+      'login',
+      'crud',
+      'ready-warm',
+      'check',
+      'build',
+      'test',
+    ]);
+  });
+
   it('projects exact dual-dialect install and ready samples beside the offline agent proof', () => {
     const report = releaseReport(1);
 

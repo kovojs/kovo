@@ -20,6 +20,7 @@ import { pathToFileURL } from 'node:url';
 
 import ts from 'typescript';
 
+import { DEVEX_GOLDEN_PHASE_CONTRACT } from '../devex-golden-contract.mjs';
 import { measureProcessTreeCommand } from '../lib/process-tree-rss.mjs';
 import { repoRoot } from '../release-packages.mjs';
 import {
@@ -309,15 +310,6 @@ export async function runPackedAppVariant({
     });
     devServer = undefined;
 
-    for (const [name, command] of [['test', ['pnpm', 'run', 'test']]]) {
-      const observation = commandRunner(command, {
-        cwd: appRoot,
-        phase: name,
-        timeoutMs: COMMAND_TIMEOUT_MS,
-      });
-      transcripts.push(transcript(name, observation));
-      phases.push(requirePackedPhaseSuccess(name, observation));
-    }
     const check = commandRunner(['pnpm', 'run', 'check'], {
       cwd: appRoot,
       env: { KOVO_DEVEX_CHECK_PHASE_CENSUS_SOURCE: PACKED_APPS_CHECK_SOURCE },
@@ -336,6 +328,13 @@ export async function runPackedAppVariant({
     transcripts.push(transcript('build', build));
     phases.push(requirePackedPhaseSuccess('build', build));
     requirePackedSqliteOwnerWarnings(dialect, 'build', build);
+    const test = commandRunner(['pnpm', 'run', 'test'], {
+      cwd: appRoot,
+      phase: 'test',
+      timeoutMs: COMMAND_TIMEOUT_MS,
+    });
+    transcripts.push(transcript('test', test));
+    phases.push(requirePackedPhaseSuccess('test', test));
 
     return Object.freeze({
       schema: PACKED_APPS_VARIANT_SCHEMA,
@@ -614,18 +613,15 @@ export function validatePackedAppsReport(report) {
     if (variantKeys.has(variantKey)) findings.push(`${label} duplicates ${variantKey}`);
     variantKeys.add(variantKey);
     if (variant?.pass === true) {
-      for (const required of [
-        'create',
-        'install',
-        'ready',
-        'ready-warm',
-        'first-200',
-        'login',
-        'crud',
-        'test',
-        'check',
-        'build',
-      ]) {
+      if (
+        variant.phases.length !== DEVEX_GOLDEN_PHASE_CONTRACT.app.length ||
+        variant.phases.some(
+          (phase, phaseIndex) => phase?.name !== DEVEX_GOLDEN_PHASE_CONTRACT.app[phaseIndex],
+        )
+      ) {
+        findings.push(`${label} does not retain the exact successful phase order`);
+      }
+      for (const required of DEVEX_GOLDEN_PHASE_CONTRACT.app) {
         if (!variant.phases.some((phase) => phase.name === required && phase.status === 0)) {
           findings.push(`${label} is missing successful phase ${required}`);
         }

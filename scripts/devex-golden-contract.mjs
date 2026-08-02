@@ -23,9 +23,9 @@ export const DEVEX_GOLDEN_PHASE_CONTRACT = Object.freeze({
     'login',
     'crud',
     'ready-warm',
-    'test',
     'check',
     'build',
+    'test',
   ]),
   agent: Object.freeze([
     'scaffold',
