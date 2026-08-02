@@ -47,12 +47,28 @@ const STATIC_CACHE_SYMLINK_PROCESS_TIMEOUT_MS = 240_000;
 const STATIC_CACHE_SYMLINK_TEST_TIMEOUT_MS = kovoCliTestTimeoutMs(
   STATIC_CACHE_SYMLINK_PROCESS_TIMEOUT_MS,
 );
+// Run 30731827720 exhausted the common 120s child deadline while the five-way root shard was
+// saturated. This proof owns one real build and one real export, so give each the same scoped 240s
+// ceiling as the static-cache build and derive one finite outer bound for both children.
+const UNDECLARED_VITE_CONFIG_PROCESS_TIMEOUT_MS = 240_000;
+const UNDECLARED_VITE_CONFIG_TEST_TIMEOUT_MS = kovoCliTestTimeoutMs(
+  UNDECLARED_VITE_CONFIG_PROCESS_TIMEOUT_MS,
+  UNDECLARED_VITE_CONFIG_PROCESS_TIMEOUT_MS,
+);
 
 function staticCacheSymlinkIt(run: () => void): void {
   it(
     'never follows an app-planted static-analysis cache symlink outside the project',
     run,
     STATIC_CACHE_SYMLINK_TEST_TIMEOUT_MS,
+  );
+}
+
+function undeclaredViteConfigIt(run: () => void): void {
+  it(
+    'keeps real build and export outside undeclared authored Vite config hooks',
+    run,
+    UNDECLARED_VITE_CONFIG_TEST_TIMEOUT_MS,
   );
 }
 
@@ -1200,7 +1216,7 @@ export default app.assemble({
     }
   }, 120_000);
 
-  it('keeps real build and export outside undeclared authored Vite config hooks', () => {
+  undeclaredViteConfigIt(() => {
     const root = cliFixtureRoot('undeclared-vite-config');
     const appPath = join(root, 'app.mjs');
     const markerPath = join(root, 'vite-config-evaluated.marker');
@@ -1237,20 +1253,34 @@ export default app.assemble({
       );
 
       const buildOut = join(root, 'build-dist');
-      const built = runKovoCli(root, ['build', appPath, '--out', buildOut, '--check']);
+      const built = runKovoCli(
+        root,
+        ['build', appPath, '--out', buildOut, '--check'],
+        process.env,
+        UNDECLARED_VITE_CONFIG_PROCESS_TIMEOUT_MS,
+      );
+      expect(built.error, built.stderr).toBeUndefined();
+      expect(built.signal, built.stderr).toBeNull();
       expect(built.status, built.stderr).toBe(0);
       expect(built.stdout).toContain('CHECK ok preset=node');
       expect(readFileIfPresent(markerPath)).toBeUndefined();
 
       const exportOut = join(root, 'export-dist');
-      const exported = runKovoCli(root, ['export', appPath, '--out', exportOut]);
+      const exported = runKovoCli(
+        root,
+        ['export', appPath, '--out', exportOut],
+        process.env,
+        UNDECLARED_VITE_CONFIG_PROCESS_TIMEOUT_MS,
+      );
+      expect(exported.error, exported.stderr).toBeUndefined();
+      expect(exported.signal, exported.stderr).toBeNull();
       expect(exported.status, exported.stderr).toBe(0);
       expect(readFileSync(join(exportOut, 'index.html'), 'utf8')).toContain('C74-safe-document');
       expect(readFileIfPresent(markerPath)).toBeUndefined();
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
-  }, 270_000);
+  });
 
   it('rejects config and relative-config authority before either module can execute', () => {
     for (const variant of ['direct', 'relative'] as const) {
