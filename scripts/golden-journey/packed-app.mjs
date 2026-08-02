@@ -44,6 +44,19 @@ export const AXE_WCAG_22_AA_TAGS = Object.freeze([
   'wcag22aa',
 ]);
 
+export function selectPublicStyledButtonBackground(buttons) {
+  if (!Array.isArray(buttons)) return '';
+  return (
+    buttons.find(
+      (button) =>
+        typeof button?.background === 'string' &&
+        typeof button?.styleSource === 'string' &&
+        button.styleSource.split(';').some((source) => source.trim() === 'button.tsx#primary') &&
+        !isTransparentStyledBackground(button.background),
+    )?.background ?? ''
+  );
+}
+
 const DIALECTS = Object.freeze(['postgres', 'sqlite']);
 const READY_TIMEOUT_MS = 90_000;
 const FIRST_200_TIMEOUT_MS = 90_000;
@@ -652,8 +665,7 @@ export function validatePackedAppsReport(report) {
         variant.styledUi.styled.styledSourceElements < 1 ||
         typeof variant.styledUi?.styled?.buttonBackground !== 'string' ||
         variant.styledUi.styled.buttonBackground.trim().length === 0 ||
-        variant.styledUi.styled.buttonBackground === 'rgba(0, 0, 0, 0)' ||
-        variant.styledUi.styled.buttonBackground === 'transparent' ||
+        isTransparentStyledBackground(variant.styledUi.styled.buttonBackground) ||
         typeof variant.styledUi?.styled?.fontFamily !== 'string' ||
         variant.styledUi.styled.fontFamily.trim().length === 0
       ) {
@@ -1006,21 +1018,29 @@ async function runBrowserJourney({
     const crudDurationMs = performance.now() - crudStarted;
     recordPhase({ durationMs: crudDurationMs, name: 'crud', status: 0 });
 
-    const styled = await page.evaluate(() => {
-      const button = document.querySelector('button');
+    const styledSnapshot = await page.evaluate(() => {
       const body = getComputedStyle(document.body);
-      const buttonStyle = button ? getComputedStyle(button) : null;
       return {
-        buttonBackground: buttonStyle?.backgroundColor ?? '',
+        buttons: [...document.querySelectorAll('button')].map((button) => ({
+          background: getComputedStyle(button).backgroundColor,
+          styleSource: button.getAttribute('data-style-src') ?? '',
+        })),
         fontFamily: body.fontFamily,
         styleSheets: document.styleSheets.length,
         styledSourceElements: document.querySelectorAll('[data-style-src]').length,
       };
     });
+    const styled = {
+      buttonBackground: selectPublicStyledButtonBackground(styledSnapshot.buttons),
+      fontFamily: styledSnapshot.fontFamily,
+      styleSheets: styledSnapshot.styleSheets,
+      styledSourceElements: styledSnapshot.styledSourceElements,
+    };
     if (
       styled.styleSheets < 1 ||
+      styled.styledSourceElements < 1 ||
       styled.fontFamily.trim().length === 0 ||
-      styled.buttonBackground === 'rgba(0, 0, 0, 0)'
+      isTransparentStyledBackground(styled.buttonBackground)
     ) {
       throw new JourneyPhaseError('styled-ui', 'starter did not render its public styled UI');
     }
@@ -1060,6 +1080,17 @@ async function runBrowserJourney({
   } finally {
     await browser.close();
   }
+}
+
+function isTransparentStyledBackground(background) {
+  if (typeof background !== 'string') return true;
+  const normalized = background.trim().toLowerCase().replaceAll(' ', '');
+  return (
+    normalized.length === 0 ||
+    normalized === 'transparent' ||
+    normalized === 'rgba(0,0,0,0)' ||
+    normalized === 'rgb(0 0 0/0)'
+  );
 }
 
 function captureMutationFetchResponses() {

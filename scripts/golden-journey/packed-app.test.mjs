@@ -25,6 +25,7 @@ import {
   sanitizeDiagnosticResponseHeaders,
   sanitizeMarkupPreview,
   sanitizeTargetMarkupPreview,
+  selectPublicStyledButtonBackground,
   validatePackedAppsReport,
 } from './packed-app.mjs';
 
@@ -37,6 +38,30 @@ afterEach(() => {
 describe('packed app golden journey', () => {
   it('runs every WCAG 2.2 A/AA axe tag available to the pinned engine', () => {
     expect(AXE_WCAG_22_AA_TAGS).toEqual(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']);
+  });
+
+  it('proves the public primary button without mistaking an earlier outline button for a failure', () => {
+    expect(
+      selectPublicStyledButtonBackground([
+        { background: 'rgb(239, 239, 239)', styleSource: '' },
+        {
+          background: 'rgba(0, 0, 0, 0)',
+          styleSource: 'button.tsx#root; button.tsx#sm; button.tsx#outline',
+        },
+        {
+          background: 'rgb(15, 139, 141)',
+          styleSource: 'button.tsx#root; button.tsx#md; button.tsx#primary',
+        },
+      ]),
+    ).toBe('rgb(15, 139, 141)');
+    expect(
+      selectPublicStyledButtonBackground([
+        {
+          background: 'rgba(0, 0, 0, 0)',
+          styleSource: 'button.tsx#root; button.tsx#md; button.tsx#primary',
+        },
+      ]),
+    ).toBe('');
   });
 
   it('requires the exact conditional creator handoff and SQLite warning surfaces', () => {
