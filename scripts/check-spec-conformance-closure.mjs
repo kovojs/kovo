@@ -53,7 +53,7 @@ const transferredSqlSafetyDiagnosticRegistrarDoor =
 const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#diagnosticAt`;
 const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
 const expectedDiagnosticEmissionSiteDigest =
-  '84bf4dd41497712192830f7ca0a1da63b784c7d4f2bbb64a357d143cad966e16';
+  '78edf250699740d468ef6d61afbf18520231a623f9059ab2218083e81940cd53';
 const expectedRootDiagnosticDoorDigest =
   '1660c7877e7a533c282cf38c291a10181bc2e7484d76f479f1d1f41cd51dac77';
 const expectedRegisteredDiagnosticGuardDigest =
@@ -85,7 +85,7 @@ const expectedDiagnosticFactorySinkDigest =
 const expectedDiagnosticEvidenceWitnessDigest =
   '23014067df10912624d8419128d1362787bb212e84ef0aac772d78ad26156aa3';
 const expectedDiagnosticActualLayerReviewDigest =
-  '2850b1474d39c158087b61ecc22c140481ad696d378030baf870910c9ad04988';
+  '6584be3c280e1d4a651cc861b2a2784e6df893e28e117e34cab7e14a67edd42a';
 const expectedBlockingStaticExportCollectionDigest =
   '3541644c641aec62abd0743093c653abd953e634f6042b941877b699666c4fdd';
 const expectedCompilerValidatorPipelineDigest =
@@ -128,7 +128,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ['packages/cli/src/bin.ts', '00ebe4233b9aa633b0ffb15fd2b1b2298cfa33164ec3fea3d9c8e79b0ec29b97'],
   [
     'packages/cli/src/commands/build-export.ts',
-    'b893679f5369776145e6e31ae4a3672bd7c3721182e2ad876cc49ee2717a1dd2',
+    '30639146957f095c2089587648ff58fbd53dd509cf2fe5b6ef9e06cdaf8040c7',
   ],
   [
     'packages/cli/src/commands/build-static-trust-source-hook.mjs',
