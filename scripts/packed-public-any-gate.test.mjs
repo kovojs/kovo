@@ -114,6 +114,23 @@ describe('packed app-public any gate', () => {
     expect(analyzeAppPublicAny(input)).toEqual([]);
   });
 
+  it('preserves stable unbundled declaration identities for exact exception matching', () => {
+    const input = fixture({
+      'first-party/index.d.ts': 'export type { Route } from "./route.js";',
+      'first-party/route.d.ts': 'export interface Route { value: any }',
+    });
+    const findings = analyzeAppPublicAny(input);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.declaration).toBe('@kovojs/fixture/dist/route.d.ts');
+    expect(
+      applyAnyExceptions(
+        findings,
+        exceptionConfig({ declarationPattern: '@kovojs/fixture/dist/route.d.ts' }),
+        { today: '2026-07-28' },
+      ).findings,
+    ).toEqual([]);
+  });
+
   it('accepts only exact-count, owned, unexpired reviewed exceptions', () => {
     const anyFindings = [
       {

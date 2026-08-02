@@ -3,20 +3,42 @@
   "$comment": "Temporary exact-count debt only. AST reachability unwraps first-party aliases; expiry and descending match counts are binding.",
   "exceptions": [
     {
-      "id": "server-app-contract-generics",
+      "id": "server-mutation-definition-generics",
       "package": "@kovojs/server",
-      "declarationPattern": "@kovojs/server/dist/app-types-<chunk>.d.mts",
+      "declarationPattern": "@kovojs/server/dist/mutation/definition.d.mts",
       "symbolPattern": "*",
       "memberPattern": "*",
-      "maximumMatches": 53,
+      "maximumMatches": 5,
       "owner": "server-runtime",
-      "reason": "The pre-facade app, route, query, mutation, and task inference graph contains the largest remaining generic any debt.",
+      "reason": "Mutation definition draft and query inference contains reviewed generic any debt after the server declaration graph was unbundled.",
+      "expires": "2026-10-31"
+    },
+    {
+      "id": "server-query-generics",
+      "package": "@kovojs/server",
+      "declarationPattern": "@kovojs/server/dist/query.d.mts",
+      "symbolPattern": "*",
+      "memberPattern": "*",
+      "maximumMatches": 16,
+      "owner": "server-runtime",
+      "reason": "Query definition overload and property inference contains reviewed generic any debt after the server declaration graph was unbundled.",
+      "expires": "2026-10-31"
+    },
+    {
+      "id": "server-route-generics",
+      "package": "@kovojs/server",
+      "declarationPattern": "@kovojs/server/dist/route.d.mts",
+      "symbolPattern": "*",
+      "memberPattern": "*",
+      "maximumMatches": 32,
+      "owner": "server-runtime",
+      "reason": "Route, layout, region, and query inference contains reviewed generic any debt after the server declaration graph was unbundled.",
       "expires": "2026-10-31"
     },
     {
       "id": "server-root-meta-query",
       "package": "@kovojs/server",
-      "declarationPattern": "@kovojs/server/dist/index.d.mts",
+      "declarationPattern": "@kovojs/server/dist/meta.d.mts",
       "symbolPattern": "metaFromQuery",
       "memberPattern": "*",
       "maximumMatches": 2,
@@ -27,7 +49,7 @@
     {
       "id": "server-managed-reader",
       "package": "@kovojs/server",
-      "declarationPattern": "@kovojs/server/dist/managed-db-<chunk>.d.mts",
+      "declarationPattern": "@kovojs/server/dist/managed-db.d.mts",
       "symbolPattern": "*",
       "memberPattern": "*",
       "maximumMatches": 2,
@@ -38,7 +60,7 @@
     {
       "id": "server-webhook-mutations",
       "package": "@kovojs/server",
-      "declarationPattern": "@kovojs/server/dist/webhook-<chunk>.d.mts",
+      "declarationPattern": "@kovojs/server/dist/webhook.d.mts",
       "symbolPattern": "*",
       "memberPattern": "*",
       "maximumMatches": 2,
