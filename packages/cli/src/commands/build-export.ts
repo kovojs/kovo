@@ -1633,6 +1633,7 @@ export async function runBuildCommand(
         throw new KovoBuildPresetDiagnosticError(blockingDiagnostics);
       }
       return {
+        checkWarningLines: successfulBuildCheckWarningLines(completedCheckGraph),
         neutralBuild,
         preset,
         presetContext,
@@ -1642,6 +1643,7 @@ export async function runBuildCommand(
       };
     })();
     const {
+      checkWarningLines,
       neutralBuild,
       preset,
       presetContext,
@@ -1661,6 +1663,7 @@ export async function runBuildCommand(
       transaction = undefined;
       return kovoBuildCheckResult({
         appModulePath: resolvedAppModulePath,
+        checkWarningLines,
         neutralOutDir: join(outDir, '.kovo'),
         preset: selectedPresetName,
         presetDiagnostics,
@@ -1674,6 +1677,7 @@ export async function runBuildCommand(
 
     return kovoBuildResult({
       appModulePath: resolvedAppModulePath,
+      checkWarningLines,
       neutralOutDir: join(outDir, '.kovo'),
       outDir,
       preset: selectedPresetName,
@@ -2070,6 +2074,7 @@ export async function finishKovoBuildOneShot(
       abortKovoBuildOutputTransaction(transaction);
       return kovoBuildCheckResult({
         appModulePath: resolvedAppModulePath,
+        checkWarningLines: successfulBuildCheckWarningLines(clientPhase.completedCheckGraph),
         neutralOutDir: join(transaction.finalOutDir, '.kovo'),
         preset: selectedPreset.name,
         presetDiagnostics,
@@ -2080,6 +2085,7 @@ export async function finishKovoBuildOneShot(
     promoteKovoBuildOutputTransaction(transaction);
     return kovoBuildResult({
       appModulePath: resolvedAppModulePath,
+      checkWarningLines: successfulBuildCheckWarningLines(clientPhase.completedCheckGraph),
       neutralOutDir: join(transaction.finalOutDir, '.kovo'),
       outDir: transaction.finalOutDir,
       preset: selectedPreset.name,
@@ -2357,6 +2363,7 @@ export async function runBuildCommandFromOneShotAnalysis(
       transaction = undefined;
       return kovoBuildCheckResult({
         appModulePath: resolvedAppModulePath,
+        checkWarningLines: successfulBuildCheckWarningLines(completedCheckGraph),
         neutralOutDir: join(outDir, '.kovo'),
         preset: selectedPreset.name,
         presetDiagnostics,
@@ -2368,6 +2375,7 @@ export async function runBuildCommandFromOneShotAnalysis(
     transaction = undefined;
     return kovoBuildResult({
       appModulePath: resolvedAppModulePath,
+      checkWarningLines: successfulBuildCheckWarningLines(completedCheckGraph),
       neutralOutDir: join(outDir, '.kovo'),
       outDir,
       preset: selectedPreset.name,
@@ -12563,6 +12571,7 @@ function exportResultExitCode(
 
 function kovoBuildResult(options: {
   appModulePath: string;
+  checkWarningLines: readonly string[];
   neutralOutDir: string;
   outDir: string;
   preset: KovoBuildPresetName;
@@ -12585,6 +12594,13 @@ function kovoBuildResult(options: {
     'Build result preset logs',
     (message) => `PRESET ${stableText(message)}`,
   );
+  for (let index = 0; index < options.checkWarningLines.length; index += 1) {
+    buildSecurityArrayAppend(
+      lines,
+      options.checkWarningLines[index]!,
+      'CLI packages/cli/src/commands/build-export.ts collection',
+    );
+  }
   for (let index = 0; index < diagnosticLines.length; index += 1) {
     buildSecurityArrayAppend(
       lines,
@@ -12610,6 +12626,7 @@ function kovoBuildResult(options: {
 
 function kovoBuildCheckResult(options: {
   appModulePath: string;
+  checkWarningLines: readonly string[];
   neutralOutDir: string;
   preset: KovoBuildPresetName;
   presetDiagnostics: readonly KovoBuildPresetDiagnostic[];
@@ -12630,6 +12647,13 @@ function kovoBuildCheckResult(options: {
     'Build-check result preset logs',
     (message) => `PRESET ${stableText(message)}`,
   );
+  for (let index = 0; index < options.checkWarningLines.length; index += 1) {
+    buildSecurityArrayAppend(
+      lines,
+      options.checkWarningLines[index]!,
+      'CLI packages/cli/src/commands/build-export.ts collection',
+    );
+  }
   for (let index = 0; index < diagnosticLines.length; index += 1) {
     buildSecurityArrayAppend(
       lines,
@@ -12654,6 +12678,22 @@ function kovoBuildCheckResult(options: {
     exitCode: 0,
     output: `${buildJoinStrings(lines, '\n', 'Build-check result lines')}\n`,
   };
+}
+
+function successfulBuildCheckWarningLines(graph: CoreGraph.KovoCheckInput): string[] {
+  // SPEC §10.3 DEC-A / KV447: the authenticated build graph owns advisory diagnostics even when
+  // the Vite graph-derivation context intentionally skips a duplicate analyzer pass. Replay the
+  // canonical successful-check presentation from that graph so check -> build cannot make an
+  // owner-table warning disappear merely because deployment proof reused the derived facts.
+  const result = kovoCheck(graph);
+  if (result.exitCode !== 0) {
+    throw new TypeError('Kovo successful build result received a failing check graph.');
+  }
+  return buildFilterDense(
+    buildStringSplit(result.output, '\n'),
+    'Successful build check output lines',
+    (line) => buildStringStartsWith(line, 'WARN '),
+  );
 }
 
 class KovoBuildPresetDiagnosticError extends Error {
