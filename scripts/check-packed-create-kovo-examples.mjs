@@ -258,10 +258,6 @@ export function packedExampleVerificationCommands(storeRoot) {
       phase: 'typecheck',
     }),
     Object.freeze({
-      command: Object.freeze(['pnpm', 'exec', 'vitest', '--run', '--config', 'vitest.config.ts']),
-      phase: 'test',
-    }),
-    Object.freeze({
       // Bare `kovo check` owns the default src/app.tsx journey. These named examples use their
       // authenticated scaffold entry, so exercise the documented explicit current-source form.
       command: Object.freeze(['pnpm', 'exec', 'kovo', 'check', 'source', './src/scaffold-app.tsx']),
@@ -270,6 +266,11 @@ export function packedExampleVerificationCommands(storeRoot) {
     Object.freeze({
       command: Object.freeze(['pnpm', 'exec', 'kovo', 'build', './src/scaffold-app.tsx']),
       phase: 'build',
+    }),
+    Object.freeze({
+      // The generated test is allowed to consume only the graph produced by the successful build.
+      command: Object.freeze(['pnpm', 'exec', 'vitest', '--run', '--config', 'vitest.config.ts']),
+      phase: 'test',
     }),
   ]);
 }

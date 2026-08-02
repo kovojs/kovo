@@ -181,16 +181,16 @@ describe('packed create-kovo examples gate', () => {
       { command: ['pnpm', 'rebuild'], phase: 'rebuild' },
       { command: ['pnpm', 'exec', 'tsc', '--noEmit'], phase: 'typecheck' },
       {
-        command: ['pnpm', 'exec', 'vitest', '--run', '--config', 'vitest.config.ts'],
-        phase: 'test',
-      },
-      {
         command: ['pnpm', 'exec', 'kovo', 'check', 'source', './src/scaffold-app.tsx'],
         phase: 'check',
       },
       {
         command: ['pnpm', 'exec', 'kovo', 'build', './src/scaffold-app.tsx'],
         phase: 'build',
+      },
+      {
+        command: ['pnpm', 'exec', 'vitest', '--run', '--config', 'vitest.config.ts'],
+        phase: 'test',
       },
     ]);
   });

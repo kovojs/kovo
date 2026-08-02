@@ -589,7 +589,7 @@ function renderExamplePackageJson(
       type: 'module',
       scripts: {
         build: `kovo build ./${entry}`,
-        check: 'kovo check',
+        check: `kovo check source ./${entry}`,
         dev: `kovo dev ./${entry}`,
         test: 'vitest --run --config vitest.config.ts',
         typecheck: 'tsc --noEmit',
@@ -693,8 +693,9 @@ function renderExampleCiWorkflow(): string {
     '      - run: corepack pnpm exec kovo check lifecycle',
     '      - run: corepack pnpm rebuild',
     '      - run: corepack pnpm run typecheck',
-    '      - run: corepack pnpm run test',
+    '      - run: corepack pnpm run check',
     '      - run: corepack pnpm run build',
+    '      - run: corepack pnpm run test',
     '',
   ].join('\n');
 }
@@ -724,7 +725,7 @@ function renderExampleReadme(
     'pnpm exec kovo check lifecycle',
     'pnpm rebuild',
     'pnpm run typecheck',
-    'pnpm run test',
+    'pnpm run check',
     'pnpm run dev',
     '```',
     '',
@@ -752,6 +753,7 @@ function renderExampleReadme(
     '',
     '```sh',
     'pnpm run build',
+    'pnpm run test',
     '```',
     '',
     'The build checks every TS/JS source named by `package.json#kovo.soundSubset.securitySurface`.',

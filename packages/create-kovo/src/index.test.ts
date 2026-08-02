@@ -112,10 +112,24 @@ describe('create-kovo starter (metadata)', () => {
           name: `my-${example}`,
           scripts: {
             build: expect.stringContaining('kovo build'),
+            check: 'kovo check source ./src/scaffold-app.tsx',
             test: 'vitest --run --config vitest.config.ts',
             typecheck: 'tsc --noEmit',
           },
         });
+        expect(
+          readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8')
+            .split('\n')
+            .filter((line) => line.startsWith('      - run: ')),
+        ).toEqual([
+          '      - run: corepack pnpm install --frozen-lockfile --ignore-scripts',
+          '      - run: corepack pnpm exec kovo check lifecycle',
+          '      - run: corepack pnpm rebuild',
+          '      - run: corepack pnpm run typecheck',
+          '      - run: corepack pnpm run check',
+          '      - run: corepack pnpm run build',
+          '      - run: corepack pnpm run test',
+        ]);
         expect(manifest.kovo.soundSubset.securitySurface).toEqual(
           project.files
             .map((file) => file.path)
@@ -124,8 +138,13 @@ describe('create-kovo starter (metadata)', () => {
         expect(existsSync(join(root, 'scripts'))).toBe(false);
         expect(existsSync(join(root, 'scratch'))).toBe(false);
         expect(existsSync(join(root, 'vite.config.ts'))).toBe(true);
-        expect(readFileSync(join(root, 'README.md'), 'utf8')).toContain(
-          'copied byte-for-byte from the tracked Kovo example',
+        const exampleReadme = readFileSync(join(root, 'README.md'), 'utf8');
+        expect(exampleReadme).toContain('copied byte-for-byte from the tracked Kovo example');
+        expect(exampleReadme.indexOf('pnpm run check')).toBeLessThan(
+          exampleReadme.indexOf('pnpm run build'),
+        );
+        expect(exampleReadme.indexOf('pnpm run build')).toBeLessThan(
+          exampleReadme.indexOf('pnpm run test'),
         );
         const sourcePath = 'src/scaffold-app.tsx';
         expect(readFileSync(join(root, sourcePath), 'utf8')).toBe(

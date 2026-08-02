@@ -12,7 +12,7 @@ describe('create-kovo examples (packed consumer)', () => {
     ['commerce', 'src/scaffold-app.tsx'],
   ] as const) {
     it(
-      `installs, typechecks, tests, and builds the ${example} clone from packed Kovo packages`,
+      `installs, checks, builds, and tests the ${example} clone from packed Kovo packages`,
       async () => {
         const app = await createStarterApp({
           example,
@@ -58,16 +58,12 @@ describe('create-kovo examples (packed consumer)', () => {
             env,
             stdio: 'pipe',
           });
-          execFileSync(
-            resolveStarterBin(app.root, 'vitest'),
-            ['--run', '--config', 'vitest.config.ts'],
-            {
-              cwd: app.root,
-              env,
-              maxBuffer: 128 * 1024 * 1024,
-              stdio: 'pipe',
-            },
-          );
+          execFileSync(resolveStarterBin(app.root, 'kovo'), ['check', 'source', `./${entry}`], {
+            cwd: app.root,
+            env,
+            maxBuffer: 128 * 1024 * 1024,
+            stdio: 'pipe',
+          });
           if (example === 'crm') {
             writeFileSync(
               configPath,
@@ -107,6 +103,16 @@ describe('create-kovo examples (packed consumer)', () => {
             maxBuffer: 128 * 1024 * 1024,
             stdio: 'pipe',
           });
+          execFileSync(
+            resolveStarterBin(app.root, 'vitest'),
+            ['--run', '--config', 'vitest.config.ts'],
+            {
+              cwd: app.root,
+              env,
+              maxBuffer: 128 * 1024 * 1024,
+              stdio: 'pipe',
+            },
+          );
         } finally {
           app.cleanup();
         }
