@@ -11,7 +11,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.3.0",
-      "sourceTreeSha256": "13b556d86e1f4a26d8df3625ea98b940193b809c7ae221d986295a1aba7d5710",
+      "sourceTreeSha256": "2ba9e89153fc58a2b39cafc69693a457c214c6e0c26a688e1cfe40f2c1af4b23",
       "manifestVariants": [
         {
           "fingerprint": "sha256:80d390e85123b76e58a9270f45d1420deaefd869d361bf8181cfa3f310ae6c08"
@@ -783,7 +783,7 @@
           "reason": "The diagnostic schema constant belongs to the build-time CLI package and is not request-handler authority."
         }
       ],
-      "sourceTreeSha256": "9cb0b573499191ca18530fb792426b28b63e93d1a8dcfae4718ef02b34bf00f2"
+      "sourceTreeSha256": "74383a5952d9168972a269a857394693ca8ef38e234612dc0ddcffaad1fcb93f"
     },
     {
       "manifestVariants": [
