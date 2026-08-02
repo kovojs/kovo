@@ -14,6 +14,7 @@ import {
 } from '../lib/known-failure-packed-release.mjs';
 import {
   createKovoDevReadyReportObserver,
+  DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS,
   isKovoDevReadyReportTimeout,
   waitForKovoDevReadiness,
 } from '../lib/dev-ready-probe-contract.mjs';
@@ -90,10 +91,14 @@ async function sqliteLoginObservation(packedRelease) {
     directory: 'sqlite-login-app',
     name: 'known-failure-sqlite-login',
   });
-  isolateAuthOriginFixture(appRoot);
   const dev = startDevServer(packedRelease, appRoot, 5173, './src/app.tsx');
   try {
-    const health = await waitForHttpResponse('http://127.0.0.1:5173/api/health', dev, 45_000, 200);
+    const health = await waitForHttpResponse(
+      'http://127.0.0.1:5173/api/health',
+      dev,
+      DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS,
+      200,
+    );
     const login = await waitForHttpResponse('http://127.0.0.1:5173/login', dev, 30_000);
     await delay(100);
     return {
@@ -329,13 +334,12 @@ async function opaqueBoundaryObservation(packedRelease) {
     directory: 'opaque-boundary-app',
     name: 'known-failure-opaque-boundary',
   });
-  isolateAuthOriginFixture(appRoot);
   const dev = startDevServer(packedRelease, appRoot, port, './src/app.tsx');
   try {
     const health = await waitForHttpResponse(
       `http://127.0.0.1:${port}/api/health`,
       dev,
-      45_000,
+      DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS,
       200,
     );
     const login = await waitForHttpResponse(`http://127.0.0.1:${port}/login`, dev, 30_000);
@@ -726,22 +730,6 @@ function retentionConfigSource(source) {
   const updated = source.replace('preset: node(),', replacement);
   if (updated === source) throw new Error('packed scaffold config no longer has the node preset');
   return updated;
-}
-
-/**
- * Keep the auth-origin reproducer focused when an unrelated stylesheet diagnostic is present.
- * This changes no auth, origin, server, route, or environment configuration; retirement still
- * requires the exact packed golden journey named in the register.
- */
-function isolateAuthOriginFixture(appRoot) {
-  const appPath = path.join(appRoot, 'src', 'app.tsx');
-  const source = readFileSync(appPath, 'utf8');
-  const declaration =
-    "const stylesheets = [stylesheet('./styles.css', { theme: appTheme })] as const;";
-  if (!source.includes(declaration)) {
-    throw new Error('packed starter no longer exposes the auth-origin minimization sentinel');
-  }
-  writeFileSync(appPath, source.replace(declaration, 'const stylesheets = [] as const;'), 'utf8');
 }
 
 /**

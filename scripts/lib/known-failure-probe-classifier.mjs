@@ -155,7 +155,7 @@ export function packedFirstLoopContractOutcome(mode, observation) {
       observation.variants.every(
         (variant) =>
           variant.exit === 0 &&
-          /check passed/iu.test(variant.output) &&
+          /^kovo-check\/v1(?:\r?\n|$)/u.test(variant.output) &&
           !/\bKV417\b/u.test(variant.output),
       )
     ) {

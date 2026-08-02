@@ -149,6 +149,8 @@ describe('known-failure register', () => {
       'The packed dev journey emits the required structured ready report within five seconds after socket bind.',
     );
     expect(packedFirstLoopProbeSource).toContain('waitForKovoDevReadiness({');
+    expect(packedFirstLoopProbeSource).toContain('DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS');
+    expect(packedFirstLoopProbeSource).not.toContain('45_000');
     expect(packedFirstLoopProbeSource).toContain('readyDelayKind: ready.observedAfterMsKind');
     expect(packedFirstLoopProbeSource).toContain('readyDelayMs: ready.observedAfterMs');
     expect(packedFirstLoopProbeSource).not.toContain('waitForTcpListener(');
@@ -227,6 +229,11 @@ describe('known-failure register', () => {
     }
     expect(packedReleaseHarnessSource).toContain('validatedPackageTarballEntries');
     expect(packedReleaseHarnessSource).toContain('verifyPackedAttestationBytes');
+  });
+
+  it('runs login and opaque-boundary retirement probes against the exact packed starter', () => {
+    expect(packedFirstLoopProbeSource).not.toContain('isolateAuthOriginFixture');
+    expect(packedFirstLoopProbeSource).not.toContain('auth-origin minimization sentinel');
   });
 
   it('keeps the retired full-catalog regression on a non-binding provisional RSS target', () => {
@@ -652,15 +659,19 @@ describe('known-failure register', () => {
     expect(
       packedFirstLoopContractOutcome('fresh-check', {
         variants: [
-          { dialect: 'postgres', exit: 0, output: 'check summary\ncheck passed\n' },
-          { dialect: 'sqlite', exit: 0, output: 'check summary\ncheck passed\n' },
+          { dialect: 'postgres', exit: 0, output: 'kovo-check/v1\nCOVERAGE component=App\n' },
+          {
+            dialect: 'sqlite',
+            exit: 0,
+            output: 'kovo-check/v1\nWARN KV447 Table session declares owner scoping\n',
+          },
         ],
       }),
     ).toBe('desired-behavior');
     expect(
       packedFirstLoopContractOutcome('fresh-check', {
         variants: [
-          { dialect: 'postgres', exit: 0, output: 'check summary\ncheck passed\n' },
+          { dialect: 'postgres', exit: 0, output: 'kovo-check/v1\n' },
           { dialect: 'sqlite', exit: 1, output: failedOutput },
         ],
       }),
@@ -668,8 +679,16 @@ describe('known-failure register', () => {
     expect(
       packedFirstLoopContractOutcome('fresh-check', {
         variants: [
-          { dialect: 'postgres', exit: 0, output: 'check summary\ncheck passed\n' },
+          { dialect: 'postgres', exit: 0, output: 'kovo-check/v1\n' },
           { dialect: 'sqlite', exit: 1, output: 'permission denied' },
+        ],
+      }),
+    ).toBeNull();
+    expect(
+      packedFirstLoopContractOutcome('fresh-check', {
+        variants: [
+          { dialect: 'postgres', exit: 0, output: 'check passed\n' },
+          { dialect: 'sqlite', exit: 0, output: 'check passed\n' },
         ],
       }),
     ).toBeNull();
