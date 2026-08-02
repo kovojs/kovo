@@ -18,6 +18,7 @@ import {
   COMPONENT_CATALOG_SCHEMA,
   validateComponentCatalogDocument,
 } from '../../../scripts/component-catalog-schema.mjs';
+import { derivePublishedPackageManifest } from '../../../scripts/build-publish.mjs';
 import { primitiveComponentManifest } from './primitive-component-manifest.mjs';
 
 const pkgRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -29,6 +30,10 @@ const coreRoot = path.join(repoRoot, 'packages/core');
 const galleryRoot = path.join(repoRoot, 'examples/gallery');
 const publicPackagesPath = path.join(repoRoot, 'public-packages.json');
 const componentsGuidePath = path.join(repoRoot, 'site', 'content', 'guides', 'components.md');
+const headlessPublishPackage = Object.freeze({
+  dir: 'headless-ui',
+  name: '@kovojs/headless-ui',
+});
 
 const registryGuideStartMarker = '<!-- GENERATED:ui-registry-copy:start -->';
 const registryGuideEndMarker = '<!-- GENERATED:ui-registry-copy:end -->';
@@ -801,15 +806,14 @@ function formatTypeScriptString(value) {
 function generateHeadlessPackageJson() {
   const packageJson = JSON.parse(readFileSync(paths.headlessPackageJson, 'utf8'));
   packageJson.exports = generateHeadlessDevelopmentExports();
-  packageJson.publishConfig = {
-    ...packageJson.publishConfig,
-    exports: generateHeadlessPublishExports(),
-  };
-  packageJson.scripts = {
-    ...packageJson.scripts,
-    'build:dist': generateHeadlessPackCommand(),
-  };
-  return `${JSON.stringify(packageJson, null, 2)}\n`;
+  // Keep app-facing source exports in manifest order, then let the distribution owner derive
+  // files, publishConfig, and pack scripts from those exports (rules/api-surface.md).
+  const { manifest } = derivePublishedPackageManifest(
+    headlessPublishPackage,
+    packageJson,
+    headlessRoot,
+  );
+  return `${JSON.stringify(manifest, null, 2)}\n`;
 }
 
 function generateHeadlessDevelopmentExports() {
@@ -822,50 +826,6 @@ function generateHeadlessDevelopmentExports() {
     './internal': './src/internal.ts',
     './internal/primitive': './src/primitive-internal.ts',
   };
-}
-
-function generateHeadlessPublishExports() {
-  return {
-    ...Object.fromEntries(
-      headlessPrimitiveSubpaths.map((subpath) => [
-        `./${subpath}`,
-        {
-          types: `./dist/public/${subpath}.d.mts`,
-          default: `./dist/public/${subpath}.mjs`,
-        },
-      ]),
-    ),
-    './types': {
-      types: './dist/types.d.mts',
-      default: './dist/types.mjs',
-    },
-    './generated': {
-      types: './dist/generated.d.mts',
-      default: './dist/generated.mjs',
-    },
-    './internal': {
-      types: './dist/internal.d.mts',
-      default: './dist/internal.mjs',
-    },
-    './internal/primitive': {
-      types: './dist/primitive-internal.d.mts',
-      default: './dist/primitive-internal.mjs',
-    },
-  };
-}
-
-function generateHeadlessPackCommand() {
-  return `vp pack ${headlessPackEntryPoints().join(' ')} --dts`;
-}
-
-function headlessPackEntryPoints() {
-  return [
-    'src/generated.ts',
-    'src/internal.ts',
-    'src/primitive-internal.ts',
-    ...headlessPrimitiveSubpaths.map((subpath) => `src/public/${subpath}.ts`),
-    'src/types.ts',
-  ];
 }
 
 function generateHeadlessPublicFacadeTargets() {
