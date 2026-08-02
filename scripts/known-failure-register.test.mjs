@@ -114,8 +114,23 @@ describe('known-failure register', () => {
       'pnpm run test:devex-known-failures-available',
     );
     expect(ciWorkflowSource).toContain(
-      'run: timeout 5m vp exec pnpm run test:devex-known-failures-available',
+      'run: timeout 45m vp exec pnpm run test:devex-known-failures-available',
     );
+
+    const perPrProbeTimeoutBudgetMs = register.entries
+      .filter(
+        (entry) =>
+          entry.state !== 'pending-repro' && (entry.probe.cadence ?? 'per-pr') === 'per-pr',
+      )
+      .reduce((total, entry) => total + entry.probe.timeoutMs, 0);
+    const watchdog = ciWorkflowSource.match(
+      /run: timeout (\d+)m vp exec pnpm run test:devex-known-failures-available/u,
+    );
+    expect(perPrProbeTimeoutBudgetMs).toBe(36 * 60_000);
+    expect(watchdog).not.toBeNull();
+    const watchdogMs = Number(watchdog?.[1]) * 60_000;
+    expect(watchdogMs).toBeGreaterThanOrEqual(perPrProbeTimeoutBudgetMs + 5 * 60_000);
+    expect(watchdogMs).toBeLessThanOrEqual(perPrProbeTimeoutBudgetMs + 10 * 60_000);
   });
 
   it('keeps dev-ready infrastructure ceilings separate from post-bind and G2 budgets', () => {
