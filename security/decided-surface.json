@@ -1,0 +1,174 @@
+{
+  "schema": "kovo.decided-surface/v1",
+  "subject": {
+    "schema": "kovo.security-evidence-subject/v1",
+    "codeSubject": "codeSubjectSha names the clean committed code tree measured before this evidence artifact is written",
+    "evidenceCommit": "the later commit containing the evidence artifact is intentionally not embedded because its own SHA is self-referential",
+    "codeSubjectSha": "6ca604d7c61c983f359aa37bf690261d27cfad6e",
+    "sources": {
+      "files": [
+        {
+          "path": "packages/compiler/src/scan/security-operation-ir.ts",
+          "sha256": "8eb3b298384098183b11ba575fa1fd8c0907ada33dd52afd088599cfc893442f"
+        },
+        {
+          "path": "packages/compiler/src/scan/security-provenance-relation.ts",
+          "sha256": "50cf6ecad5970b14397c5a3a7ba263e7913527ebe7f1a05ceb31ba62efb23596"
+        },
+        {
+          "path": "packages/server/src/content-disposition.ts",
+          "sha256": "64d564655c6ab564bc201ea66ff0765e9ca692d227fed22ea5cd64a55fe10b1c"
+        },
+        {
+          "path": "packages/server/src/cookies.ts",
+          "sha256": "aaa50ed9e36a69ee393ac4552744ba2ebbc148554f30e45114ea2b604d7ef394"
+        },
+        {
+          "path": "packages/server/src/egress.ts",
+          "sha256": "80ad1df8b2177a66832fc5d6b15a9654b75b1c4b1788f650d2f2df7cfb07a09d"
+        },
+        {
+          "path": "packages/server/src/internal/header-serializer-grammars.ts",
+          "sha256": "9a5a4ef5303a152cad42fb9d4159338204af231589a1cc39287e3bf3986745df"
+        },
+        {
+          "path": "packages/server/src/internal/ipv4-grammars.ts",
+          "sha256": "5985e529326339abd8f2ab8f1c15f07e8563bf6d90f057593ff5e021790f94b2"
+        },
+        {
+          "path": "packages/server/src/internal/linear-regex/automata.ts",
+          "sha256": "3da69a3628fbf06f850d7fdebc6eb5b7b3646da39dd116ced52b8772116a8636"
+        },
+        {
+          "path": "packages/server/src/postgres-authorization-correspondence.ts",
+          "sha256": "f58c3a54aa650b2cc56f4590d06ab598c7f7dc4da14700fbab04a124442d3aa0"
+        },
+        {
+          "path": "packages/server/src/serialized-header-safety.ts",
+          "sha256": "056f6d692b5d9af738a3d376a52251e81393307827695c8a6840e87afade20b0"
+        },
+        {
+          "path": "scripts/decided-surface-gate.mjs",
+          "sha256": "c3b88428de9865f03e2d2105dbcc91f5e67f70435b979680b06e5443a3d4f6e6"
+        },
+        {
+          "path": "scripts/provenance-closure.mjs",
+          "sha256": "86114eac5fc507b34c199faa8b174f14f9450337ed374b12a65f8aa1ae876f21"
+        },
+        {
+          "path": "security-provenance-relation/v1.json",
+          "sha256": "aaf7cdc3434b9d40b68b5e1834e90236da06b51bd7e56be9a4e49cb4b15a2d39"
+        }
+      ],
+      "sha256": "34df9c4ec17992ce3bd1837c6f945c1b5992f8ea9bc2707c383f332b56f89d65"
+    }
+  },
+  "fragments": [
+    {
+      "id": "provenance-transition-pairs",
+      "schema": "kovo-security-provenance-relation/v1",
+      "artifact": "security-provenance-relation/v1.json",
+      "decided": 2508,
+      "denominator": {
+        "memberClasses": 57,
+        "serverStates": 44
+      },
+      "total": 2508,
+      "unit": "server-state/member-class transition pair"
+    },
+    {
+      "id": "postgres-owner-policy-models",
+      "schema": "kovo.postgres-owner-policy-fragment/v1",
+      "decided": 363,
+      "denominator": {
+        "constructors": 2,
+        "maximumOwnerViaDepth": 4,
+        "shapes": [
+          {
+            "checkedModels": 3,
+            "closedForm": "3^(1+0)",
+            "depth": 0,
+            "expectedModels": 3
+          },
+          {
+            "checkedModels": 9,
+            "closedForm": "3^(1+1)",
+            "depth": 1,
+            "expectedModels": 9
+          },
+          {
+            "checkedModels": 27,
+            "closedForm": "3^(1+2)",
+            "depth": 2,
+            "expectedModels": 27
+          },
+          {
+            "checkedModels": 81,
+            "closedForm": "3^(1+3)",
+            "depth": 3,
+            "expectedModels": 81
+          },
+          {
+            "checkedModels": 243,
+            "closedForm": "3^(1+4)",
+            "depth": 4,
+            "expectedModels": 243
+          }
+        ]
+      },
+      "total": 363,
+      "unit": "three-valued abstract policy model across every shipped depth shape"
+    },
+    {
+      "id": "grammar-decision-obligations",
+      "schema": "kovo.grammar-decisions/v1",
+      "decided": 6,
+      "denominator": {
+        "headerVersion": "kovo.header-serializer-grammar/v1",
+        "ipv4Version": "kovo.ipv4-grammar/v1",
+        "obligations": [
+          {
+            "exploredStates": 69,
+            "holds": true,
+            "id": "header/content-disposition-disjoint"
+          },
+          {
+            "exploredStates": 118,
+            "holds": true,
+            "id": "header/set-cookie-disjoint"
+          },
+          {
+            "counterexample": "0",
+            "exploredStates": 532,
+            "holds": false,
+            "id": "ipv4/kovo-within-rfc3986"
+          },
+          {
+            "exploredStates": 491,
+            "holds": true,
+            "id": "ipv4/kovo-within-traditional-inet-aton"
+          },
+          {
+            "exploredStates": 532,
+            "holds": true,
+            "id": "ipv4/rfc3986-within-kovo"
+          },
+          {
+            "counterexample": "4294967296",
+            "exploredStates": 491,
+            "holds": false,
+            "id": "ipv4/traditional-inet-aton-within-kovo"
+          }
+        ]
+      },
+      "total": 6,
+      "unit": "declared language containment or disjointness obligation"
+    }
+  ],
+  "aggregate": {
+    "decided": 2877,
+    "percent": 100,
+    "total": 2877,
+    "unit": "sum of each fragment exact denominator; per-fragment rows remain authoritative because units differ"
+  }
+}
