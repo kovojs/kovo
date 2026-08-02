@@ -40,7 +40,10 @@ import {
   benchmarkQueryPlanBootstrapInput,
   buildBenchmarkBrowserBundle,
 } from './devex-workloads/kovo-packed-check/package/build-browser.mjs';
-import { processTreeRssBytesForTesting } from './devex-workloads/kovo-packed-check/package/workload.mjs';
+import {
+  processTreeRssBytesForTesting,
+  queryPlanGraphFacts,
+} from './devex-workloads/kovo-packed-check/package/workload.mjs';
 import { validatedPackageTarballEntries } from './lib/deterministic-tarball.mjs';
 import { packWithoutLifecycleScripts } from './lib/pack-without-lifecycle.mjs';
 
@@ -621,6 +624,31 @@ describe('DevEx benchmark foundation', () => {
         },
       ),
     ).toThrow('packed browser compiler facts require an exact componentName');
+  });
+
+  it('maps the component-local plan to the source-anchored runtime query graph fact', () => {
+    expect(
+      queryPlanGraphFacts({
+        components: [
+          {
+            exportName: 'CounterIsland',
+            name: 'components/counter-island/counter-island',
+            queries: ['benchmark', 'benchmarkQuery'],
+            source: { file: 'src/components/counter-island.tsx' },
+          },
+        ],
+        queries: [
+          {
+            query: 'components/counter-island/benchmark-query',
+            source: { file: 'src/components/counter-island.tsx' },
+          },
+        ],
+      }),
+    ).toEqual({
+      componentName: 'components/counter-island/counter-island',
+      queryNames: ['components/counter-island/benchmark-query'],
+      sourceFile: 'src/components/counter-island.tsx',
+    });
   });
 
   it('accepts only N edits from one live authenticated incremental session', () => {
