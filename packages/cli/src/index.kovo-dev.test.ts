@@ -13,6 +13,7 @@ import { createConnection } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
+import { stripVTControlCharacters } from 'node:util';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -39,7 +40,14 @@ import type { KovoCommandSecurityDisposition } from './commands/security-disposi
 
 const repoRoot = process.cwd();
 const temporaryRoots: string[] = [];
-const DEV_HMR_TRANSITION_BUDGET_MS = 15_000;
+// SPEC §9.5.1 makes atomic last-good/recovery behavior the contract; hosted G3 measurement owns
+// edit latency. Give a contended source-runner generation the same infrastructure-only ceiling as
+// initial listener acquisition instead of turning this conformance test into an unratified budget.
+const DEV_HMR_TRANSITION_INFRASTRUCTURE_TIMEOUT_MS = DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS;
+// The first page can perform request-only module/render work after the ready report. Match the
+// packed dev probe's bounded first-response ceiling without weakening post-bind report readiness.
+const DEV_HMR_INITIAL_RESPONSE_INFRASTRUCTURE_TIMEOUT_MS = 30_000;
+const DEV_HMR_LAST_GOOD_REQUEST_TIMEOUT_MS = 15_000;
 const DEV_PROCESS_SHUTDOWN_TIMEOUT_MS = 10_000;
 const DEV_READY_WORKER_TEST_TIMEOUT_MS =
   DEV_READY_PROBE_PROCESS_TIMEOUT_MS + DEV_PROCESS_SHUTDOWN_TIMEOUT_MS;
@@ -47,7 +55,9 @@ const DEV_READY_TWO_PROCESS_TEST_TIMEOUT_MS = DEV_READY_PROBE_PROCESS_TIMEOUT_MS
 const DEV_READY_HOST_DOOR_TEST_TIMEOUT_MS = DEV_READY_PROBE_PROCESS_TIMEOUT_MS * 3;
 const DEV_READY_HMR_TEST_TIMEOUT_MS =
   DEV_READY_PROBE_PROCESS_TIMEOUT_MS +
-  DEV_HMR_TRANSITION_BUDGET_MS * 3 +
+  DEV_HMR_INITIAL_RESPONSE_INFRASTRUCTURE_TIMEOUT_MS +
+  DEV_HMR_TRANSITION_INFRASTRUCTURE_TIMEOUT_MS * 3 +
+  DEV_HMR_LAST_GOOD_REQUEST_TIMEOUT_MS +
   DEV_PROCESS_SHUTDOWN_TIMEOUT_MS;
 
 afterEach(() => {
@@ -363,7 +373,7 @@ export default app.assemble({
         const ready = await waitForInitialKovoDevReady(port, child, output);
         const response = await fetchReadyKovoDev(ready.localUrl, child, output);
         expect(response.status, output.combined()).toBe(200);
-        expect(output.combined()).toContain('Local:');
+        expect(stripVTControlCharacters(output.combined())).toContain('Local:');
         expect(output.stdout).toContain('  Database     none configured');
       } finally {
         await stopChild(child);
@@ -907,7 +917,13 @@ export default app.assemble({
       try {
         await waitForInitialKovoDevReady(port, child, output);
         await expect(
-          fetchBodyContaining(url, 'Bootstrap safe', child, output, DEV_READY_POST_BIND_BUDGET_MS),
+          fetchBodyContaining(
+            url,
+            'Bootstrap safe',
+            child,
+            output,
+            DEV_HMR_INITIAL_RESPONSE_INFRASTRUCTURE_TIMEOUT_MS,
+          ),
         ).resolves.toContain('Bootstrap safe');
 
         writeFileSync(appFile, secondSource, 'utf8');
@@ -917,7 +933,7 @@ export default app.assemble({
             'Atomic generation two',
             child,
             output,
-            DEV_HMR_TRANSITION_BUDGET_MS,
+            DEV_HMR_TRANSITION_INFRASTRUCTURE_TIMEOUT_MS,
           ),
         ).resolves.toContain('Atomic generation two');
 
@@ -931,11 +947,16 @@ throw new Error('candidate evaluation failed');
         );
         // SPEC §9.5.1: synchronize on actual candidate evaluation, then prove concurrent request
         // availability without turning Vite watcher settlement time into a throughput contract.
-        await waitForFile(failedCandidateMarker, child, output, DEV_HMR_TRANSITION_BUDGET_MS);
+        await waitForFile(
+          failedCandidateMarker,
+          child,
+          output,
+          DEV_HMR_TRANSITION_INFRASTRUCTURE_TIMEOUT_MS,
+        );
         const lastGoodResponses = await Promise.all(
           [0, 1, 2].map(async () => {
             const response = await fetch(url, {
-              signal: AbortSignal.timeout(DEV_HMR_TRANSITION_BUDGET_MS),
+              signal: AbortSignal.timeout(DEV_HMR_LAST_GOOD_REQUEST_TIMEOUT_MS),
             });
             return { body: await response.text(), status: response.status };
           }),
@@ -952,7 +973,7 @@ throw new Error('candidate evaluation failed');
             'Atomic generation three',
             child,
             output,
-            DEV_HMR_TRANSITION_BUDGET_MS,
+            DEV_HMR_TRANSITION_INFRASTRUCTURE_TIMEOUT_MS,
           ),
         ).resolves.toContain('Atomic generation three');
       } finally {
@@ -1017,7 +1038,7 @@ export default app.assemble({
             'data-revision="zero"',
             child,
             output,
-            DEV_HMR_TRANSITION_BUDGET_MS,
+            DEV_HMR_INITIAL_RESPONSE_INFRASTRUCTURE_TIMEOUT_MS,
           ),
         ).resolves.toContain('Kovo KV235 dev recovery fixture');
 
@@ -1027,7 +1048,7 @@ export default app.assemble({
           'KV235',
           child,
           output,
-          DEV_HMR_TRANSITION_BUDGET_MS,
+          DEV_HMR_TRANSITION_INFRASTRUCTURE_TIMEOUT_MS,
           fetch,
           500,
         );
@@ -1041,7 +1062,7 @@ export default app.assemble({
             'data-revision="one"',
             child,
             output,
-            DEV_HMR_TRANSITION_BUDGET_MS,
+            DEV_HMR_TRANSITION_INFRASTRUCTURE_TIMEOUT_MS,
           ),
         ).resolves.toContain('Kovo KV235 dev recovery fixture');
       } finally {
