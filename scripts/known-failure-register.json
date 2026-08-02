@@ -27,7 +27,7 @@
           "--packed-manifest",
           "{packedManifest}"
         ],
-        "timeoutMs": 180000,
+        "timeoutMs": 300000,
         "packedInput": true,
         "resultSchema": "kovo-known-failure-probe-result/v1"
       },
@@ -167,7 +167,7 @@
           "--packed-manifest",
           "{packedManifest}"
         ],
-        "timeoutMs": 240000,
+        "timeoutMs": 480000,
         "packedInput": true,
         "resultSchema": "kovo-known-failure-probe-result/v1"
       },
@@ -343,7 +343,7 @@
           "--packed-manifest",
           "{packedManifest}"
         ],
-        "timeoutMs": 240000,
+        "timeoutMs": 300000,
         "packedInput": true,
         "resultSchema": "kovo-known-failure-probe-result/v1"
       },

@@ -13,6 +13,13 @@ import {
   materializeKnownFailurePackedRelease,
 } from '../lib/known-failure-packed-release.mjs';
 import {
+  KNOWN_FAILURE_DEV_STOP_PHASE_TIMEOUT_MS,
+  KNOWN_FAILURE_HTTP_ATTEMPT_TIMEOUT_MS,
+  KNOWN_FAILURE_LOGIN_RESPONSE_TIMEOUT_MS,
+  KNOWN_FAILURE_PACKED_BUILD_TIMEOUT_MS,
+  KNOWN_FAILURE_RESPONSE_STABILITY_DELAY_MS,
+} from '../lib/known-failure-probe-deadlines.mjs';
+import {
   createKovoDevReadyReportObserver,
   DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS,
   isKovoDevReadyReportTimeout,
@@ -99,8 +106,12 @@ async function sqliteLoginObservation(packedRelease) {
       DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS,
       200,
     );
-    const login = await waitForHttpResponse('http://127.0.0.1:5173/login', dev, 30_000);
-    await delay(100);
+    const login = await waitForHttpResponse(
+      'http://127.0.0.1:5173/login',
+      dev,
+      KNOWN_FAILURE_LOGIN_RESPONSE_TIMEOUT_MS,
+    );
+    await delay(KNOWN_FAILURE_RESPONSE_STABILITY_DELAY_MS);
     return {
       body: login.body,
       healthStatus: health.status,
@@ -177,7 +188,7 @@ function transactionalBuildObservation(packedRelease) {
     packedRelease,
     appRoot,
     ['build', './src/app.tsx', '--no-cache'],
-    180_000,
+    KNOWN_FAILURE_PACKED_BUILD_TIMEOUT_MS,
   );
   requireOrdinaryExit(initial, 'initial packed build');
   if (initial.status !== 0) {
@@ -202,7 +213,7 @@ function transactionalBuildObservation(packedRelease) {
     packedRelease,
     appRoot,
     ['build', './src/app.tsx', '--no-cache'],
-    180_000,
+    KNOWN_FAILURE_PACKED_BUILD_TIMEOUT_MS,
   );
   requireOrdinaryExit(failed, 'deliberately failed packed build');
   const afterDigest = existsSync(dist) ? digestDirectory(dist) : 'missing';
@@ -342,8 +353,12 @@ async function opaqueBoundaryObservation(packedRelease) {
       DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS,
       200,
     );
-    const login = await waitForHttpResponse(`http://127.0.0.1:${port}/login`, dev, 30_000);
-    await delay(100);
+    const login = await waitForHttpResponse(
+      `http://127.0.0.1:${port}/login`,
+      dev,
+      KNOWN_FAILURE_LOGIN_RESPONSE_TIMEOUT_MS,
+    );
+    await delay(KNOWN_FAILURE_RESPONSE_STABILITY_DELAY_MS);
     return {
       body: login.body,
       healthStatus: health.status,
@@ -449,7 +464,9 @@ function httpRequest(url) {
       });
       response.once('end', () => resolve({ body, status: response.statusCode ?? 0 }));
     });
-    request.setTimeout(2_000, () => request.destroy(new Error('packed HTTP probe timed out')));
+    request.setTimeout(KNOWN_FAILURE_HTTP_ATTEMPT_TIMEOUT_MS, () =>
+      request.destroy(new Error('packed HTTP probe timed out')),
+    );
     request.once('error', reject);
     request.end();
   });
@@ -468,9 +485,9 @@ function assertChildRunning(dev, label) {
 async function stopChildProcess(child) {
   if (child.exitCode !== null || child.signalCode !== null) return;
   signalChildTree(child, 'SIGTERM');
-  if (await waitForExit(child, 3_000)) return;
+  if (await waitForExit(child, KNOWN_FAILURE_DEV_STOP_PHASE_TIMEOUT_MS)) return;
   signalChildTree(child, 'SIGKILL');
-  await waitForExit(child, 3_000);
+  await waitForExit(child, KNOWN_FAILURE_DEV_STOP_PHASE_TIMEOUT_MS);
 }
 
 function signalChildTree(child, signal) {

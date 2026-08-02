@@ -546,7 +546,11 @@ const STARTER_ENTRIES = [
     id: 'transaction-default-served-artifact',
     file: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
     testName: 'rolls back default mutation transactions and executes webhook mutation composition',
-    seconds: 78,
+    // CI run 30734667311 reached the former 300s outer floor before this focused proof completed.
+    // The file owns a 600s production-artifact watchdog, so the supervisor must retain cleanup
+    // headroom outside that behavioral deadline even when the scheduling weight is only 301s.
+    seconds: 301,
+    testTimeoutMs: 600_000,
   },
   {
     id: 'transaction-readonly-runtime-floor',

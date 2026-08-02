@@ -25,6 +25,7 @@ import {
   verifyPackedAttestationBytes,
 } from '../publish-packed-packages.mjs';
 import { releasePackages } from '../release-packages.mjs';
+import { KNOWN_FAILURE_PACKED_SCAFFOLD_TIMEOUT_MS } from './known-failure-probe-deadlines.mjs';
 
 const PACKED_RELEASE_SCHEMA = 'kovo.packed-public-packages/v2';
 const PACKAGE_NAME = /^(?:@([a-z0-9][a-z0-9._-]*)\/)?([a-z0-9][a-z0-9._-]*)$/u;
@@ -117,7 +118,7 @@ export function createKnownFailurePackedScaffold(release, options = {}) {
     env: knownFailurePackedEnvironment(release),
     maxBuffer: 16 * 1024 * 1024,
     stdio: ['ignore', 'pipe', 'pipe'],
-    timeout: options.timeoutMs ?? 30_000,
+    timeout: options.timeoutMs ?? KNOWN_FAILURE_PACKED_SCAFFOLD_TIMEOUT_MS,
   });
   if (
     result.status !== 0 ||

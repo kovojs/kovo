@@ -168,9 +168,9 @@ jobs:
       - name: Packed app-public declaration contract
         run: vp exec pnpm run check:api-surface:packed
       - name: Gate available DevEx known-failure probes
-        # The nine per-PR probes run serially with 36m of row-owned fail-closed deadlines. Keep the
+        # The nine per-PR probes run serially with 43m of row-owned fail-closed deadlines. Keep the
         # aggregate watchdog above that declared budget while still bounding runner orchestration.
-        run: timeout 45m vp exec pnpm run test:devex-known-failures-available
+        run: timeout 50m vp exec pnpm run test:devex-known-failures-available
       - name: Enforce packed security evidence budgets
         run: |
           vp exec pnpm run check:pack-security

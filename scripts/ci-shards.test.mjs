@@ -674,6 +674,7 @@ describe('ci-shards', () => {
             'starter-sqlite-check',
             'starter-sqlite-durable-task-refusal',
             'starter-sqlite-parser-dependency',
+            'transaction-default-served-artifact',
           ].includes(entry.id),
         )
         .map((entry) => [entry.id, entry]),
@@ -778,6 +779,13 @@ describe('ci-shards', () => {
         seconds: 151,
         testTimeoutMs: 620_000,
         timeoutMs: 680_000,
+      },
+      'transaction-default-served-artifact': {
+        seconds: 301,
+        testName:
+          'rolls back default mutation transactions and executes webhook mutation composition',
+        testTimeoutMs: 600_000,
+        timeoutMs: 660_000,
       },
       'starter-sqlite-parser-dependency': { seconds: 5, timeoutMs: 300_000 },
     });
@@ -1230,7 +1238,7 @@ describe('ci-shards', () => {
       entries.map((entry) => entry.id).toSorted(compareStrings),
     );
     expect(shards.map((shard) => shard.seconds)).toEqual([
-      1_210, 1_206, 1_235, 1_237, 1_233, 1_208, 1_206, 1_208, 1_225, 1_207,
+      1_239, 1_231, 1_251, 1_231, 1_230, 1_227, 1_226, 1_258, 1_247, 1_258,
     ]);
   });
 

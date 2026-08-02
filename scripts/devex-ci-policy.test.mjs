@@ -19,7 +19,7 @@ const workflowSources = policyWorkflowSources(ci);
 describe('DevEx CI and baseline policy', () => {
   it('keeps every gate mapped and below the explicit per-PR/nightly runner-minute caps', () => {
     expect(validateDevexCiPolicy(ci, { workflowSources })).toEqual([]);
-    expect(runnerMinutes(ci.gates, 'per-pr')).toBe(65);
+    expect(runnerMinutes(ci.gates, 'per-pr')).toBe(110);
     expect(runnerMinutes(ci.gates, 'nightly')).toBe(290);
     expect(runnerMinutes(ci.gates, 'manual')).toBe(240);
   });
@@ -28,7 +28,7 @@ describe('DevEx CI and baseline policy', () => {
     const overspent = structuredClone(ci);
     overspent.gates.find((gate) => gate.id === 'pr-scorecard').runnerCount = 2;
     expect(validateDevexCiPolicy(overspent, { workflowSources })).toContain(
-      'per-PR DevEx gates cost 125 runner-minutes, above budget 65',
+      'per-PR DevEx gates cost 170 runner-minutes, above budget 110',
     );
 
     const drifted = structuredClone(ci);

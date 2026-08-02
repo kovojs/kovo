@@ -25,6 +25,7 @@ import {
   DEV_READY_POST_BIND_BUDGET_MS,
   DEV_READY_PROBE_PROCESS_TIMEOUT_MS,
 } from './lib/dev-ready-probe-contract.mjs';
+import { KNOWN_FAILURE_FIRST_LOOP_OUTER_TIMEOUT_FLOORS_MS } from './lib/known-failure-probe-deadlines.mjs';
 
 const repoRoot = fileURLToPath(new URL('../', import.meta.url));
 const register = JSON.parse(
@@ -108,13 +109,13 @@ describe('known-failure register', () => {
 
   it('publishes a packed-manifest-backed available-probe gate in CI', () => {
     expect(rootPackage.scripts['test:devex-known-failures-available']).toBe(
-      'node scripts/known-failure-register.mjs --run-available --cadence per-pr --packed-manifest .release/packed-packages.json',
+      'node scripts/known-failure-register.mjs --run-available --cadence per-pr --packed-manifest .release/packed-packages.json --json',
     );
     expect(rootPackage.scripts['devex:known-failures']).toBe(
       'pnpm run test:devex-known-failures-available',
     );
     expect(ciWorkflowSource).toContain(
-      'run: timeout 45m vp exec pnpm run test:devex-known-failures-available',
+      'run: timeout 50m vp exec pnpm run test:devex-known-failures-available',
     );
 
     const perPrProbeTimeoutBudgetMs = register.entries
@@ -126,11 +127,26 @@ describe('known-failure register', () => {
     const watchdog = ciWorkflowSource.match(
       /run: timeout (\d+)m vp exec pnpm run test:devex-known-failures-available/u,
     );
-    expect(perPrProbeTimeoutBudgetMs).toBe(36 * 60_000);
+    expect(perPrProbeTimeoutBudgetMs).toBe(43 * 60_000);
     expect(watchdog).not.toBeNull();
     const watchdogMs = Number(watchdog?.[1]) * 60_000;
     expect(watchdogMs).toBeGreaterThanOrEqual(perPrProbeTimeoutBudgetMs + 5 * 60_000);
     expect(watchdogMs).toBeLessThanOrEqual(perPrProbeTimeoutBudgetMs + 10 * 60_000);
+  });
+
+  it('keeps whole-probe deadlines outside the serial first-loop phase ceilings', () => {
+    const modesById = {
+      'KF-DEVEX-001': 'sqlite-login',
+      'KF-DEVEX-005': 'transactional-build',
+      'KF-DEVEX-010': 'opaque-boundary',
+    };
+
+    for (const [id, mode] of Object.entries(modesById)) {
+      const entry = register.entries.find((candidate) => candidate.id === id);
+      const floor = KNOWN_FAILURE_FIRST_LOOP_OUTER_TIMEOUT_FLOORS_MS[mode];
+      expect(entry?.probe.timeoutMs, id).toBeGreaterThanOrEqual(floor);
+      expect(entry?.probe.timeoutMs, id).toBeLessThan(floor + 60_000);
+    }
   });
 
   it('keeps dev-ready infrastructure ceilings separate from post-bind and G2 budgets', () => {

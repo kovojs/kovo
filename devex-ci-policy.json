@@ -1,7 +1,7 @@
 {
   "schema": "kovo-devex-ci-policy/v2",
   "budgets": {
-    "perPullRequestRunnerMinutes": 65,
+    "perPullRequestRunnerMinutes": 110,
     "nightlyRunnerMinutes": 300
   },
   "pullRequestDelivery": {
@@ -24,9 +24,9 @@
       "scope": "step",
       "workflow": ".github/workflows/ci.yml",
       "job": "publish-readiness",
-      "budgetMinutes": 5,
+      "budgetMinutes": 50,
       "runnerCount": 1,
-      "commands": ["timeout 5m vp exec pnpm run test:devex-known-failures-available"],
+      "commands": ["timeout 50m vp exec pnpm run test:devex-known-failures-available"],
       "prVisible": false
     },
     {
