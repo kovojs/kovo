@@ -1,28 +1,51 @@
 #!/usr/bin/env node
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
-import { request as nodeHttpRequest } from 'node:http';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { createServer as createNetServer } from 'node:net';
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 
+import { applyEgressFloorEnv, ciEgressPolicies } from '../egress-floor.mjs';
 import { packedFirstLoopContractOutcome } from '../lib/known-failure-probe-classifier.mjs';
 import {
   createKnownFailurePackedScaffold,
-  knownFailurePackedEnvironment,
+  knownFailurePackedRuntimeEnvironment,
   materializeKnownFailurePackedRelease,
 } from '../lib/known-failure-packed-release.mjs';
+import { rewriteScaffoldDependenciesToPackedTarballs } from '../lib/authenticated-packed-consumer.mjs';
 import {
   KNOWN_FAILURE_DEV_STOP_PHASE_TIMEOUT_MS,
+  KNOWN_FAILURE_FIRST_RESPONSE_INFRASTRUCTURE_TIMEOUT_MS,
   KNOWN_FAILURE_HTTP_ATTEMPT_TIMEOUT_MS,
   KNOWN_FAILURE_LOGIN_RESPONSE_TIMEOUT_MS,
+  KNOWN_FAILURE_PACKED_INSTALL_TIMEOUT_MS,
+  KNOWN_FAILURE_PACKED_LIFECYCLE_TIMEOUT_MS,
+  KNOWN_FAILURE_PACKED_REBUILD_TIMEOUT_MS,
   KNOWN_FAILURE_PACKED_BUILD_TIMEOUT_MS,
+  KNOWN_FAILURE_PACKED_CHECK_TIMEOUT_MS,
   KNOWN_FAILURE_RESPONSE_STABILITY_DELAY_MS,
 } from '../lib/known-failure-probe-deadlines.mjs';
 import {
+  isKnownFailurePackedHealthResponse,
+  requestKnownFailureHttpResponse,
+} from '../lib/known-failure-http-response.mjs';
+import { runKnownFailureProbeCommand } from '../lib/known-failure-probe-process.mjs';
+import {
   createKovoDevReadyReportObserver,
   DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS,
+  DEV_READY_POST_BIND_BUDGET_MS,
   isKovoDevReadyReportTimeout,
+  kovoDevLoopbackTcpConnects,
   waitForKovoDevReadiness,
 } from '../lib/dev-ready-probe-contract.mjs';
 import { collectProcessTreeRssKiB } from '../security-cost-budget-runner.mjs';
@@ -66,9 +89,9 @@ try {
       : mode === 'dev-ready'
         ? await devReadyObservation(release)
         : mode === 'transactional-build'
-          ? transactionalBuildObservation(release)
+          ? await transactionalBuildObservation(release)
           : mode === 'fresh-check'
-            ? freshCheckObservation(release)
+            ? await freshCheckObservation(release)
             : mode === 'full-catalog'
               ? await fullCatalogObservation(release)
               : await opaqueBoundaryObservation(release);
@@ -93,18 +116,24 @@ try {
 
 async function sqliteLoginObservation(packedRelease) {
   await requireAvailablePort(5173);
-  const appRoot = createKnownFailurePackedScaffold(packedRelease, {
+  const { appRoot, installedCli } = await createKnownFailureServedScaffold(packedRelease, {
     dialect: 'sqlite',
     directory: 'sqlite-login-app',
     name: 'known-failure-sqlite-login',
   });
-  const dev = startDevServer(packedRelease, appRoot, 5173, './src/app.tsx');
+  const dev = startDevServer(packedRelease, appRoot, installedCli, 5173, './src/app.tsx');
   try {
+    const listener = await waitForPackedDevListener(dev, 5173, 'Packed SQLite kovo dev');
     const health = await waitForHttpResponse(
       'http://127.0.0.1:5173/api/health',
       dev,
-      DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS,
-      200,
+      KNOWN_FAILURE_FIRST_RESPONSE_INFRASTRUCTURE_TIMEOUT_MS,
+      {
+        acceptResponse: isKnownFailurePackedHealthResponse,
+        requestAccept: 'application/json',
+        phaseLabel: 'first-response infrastructure',
+        requiredStatus: 200,
+      },
     );
     const login = await waitForHttpResponse(
       'http://127.0.0.1:5173/login',
@@ -116,42 +145,41 @@ async function sqliteLoginObservation(packedRelease) {
       body: login.body,
       healthStatus: health.status,
       listened: true,
+      listenerElapsedMs: listener.listenerElapsedMs,
       serverOutput: dev.output(),
       status: login.status,
     };
   } finally {
-    await stopChildProcess(dev.child);
+    await stopDevServer(dev);
   }
 }
 
 async function devReadyObservation(packedRelease) {
   const port = await reservePort();
-  const appRoot = createKnownFailurePackedScaffold(packedRelease, {
+  const { appRoot, installedCli } = await createKnownFailureServedScaffold(packedRelease, {
     dialect: 'sqlite',
     directory: 'dev-ready-app',
     name: 'known-failure-dev-ready',
   });
   const entry = path.join(appRoot, 'src', 'ready.tsx');
   writeFileSync(entry, minimalAppSource('packed ready probe'), 'utf8');
-  const expectedReadyReport = {
-    appEntry: 'src/ready.tsx',
-    localUrl: `http://127.0.0.1:${port}/`,
-    mode: 'development',
-  };
-  const dev = startDevServer(packedRelease, appRoot, port, './src/ready.tsx', expectedReadyReport);
+  const expectedReadyReport = packedDevReadyReport(port, 'src/ready.tsx');
+  const dev = startDevServer(
+    packedRelease,
+    appRoot,
+    installedCli,
+    port,
+    './src/ready.tsx',
+    expectedReadyReport,
+  );
   try {
     try {
-      const ready = await waitForKovoDevReadiness({
-        expected: expectedReadyReport,
-        label: 'Packed known-failure kovo dev',
+      const ready = await waitForPackedDevReadiness(
+        dev,
         port,
-        readOutput: () => ({ stderr: dev.stderr(), stdout: dev.stdout() }),
-        readStatus: () => ({
-          exitCode: dev.child.exitCode,
-          signalCode: dev.child.signalCode,
-        }),
-        reportObserver: dev.readyReportObserver,
-      });
+        expectedReadyReport,
+        'Packed known-failure kovo dev',
+      );
       return {
         graceExpired: false,
         listened: true,
@@ -170,25 +198,28 @@ async function devReadyObservation(packedRelease) {
       };
     }
   } finally {
-    await stopChildProcess(dev.child);
+    await stopDevServer(dev);
   }
 }
 
-function transactionalBuildObservation(packedRelease) {
+async function transactionalBuildObservation(packedRelease) {
   const appRoot = createKnownFailurePackedScaffold(packedRelease, {
     dialect: 'sqlite',
     directory: 'transactional-build-app',
     name: 'known-failure-transactional-build',
   });
-  prepareInstalledScaffoldFixture(appRoot);
+  prepareInstalledCommandScaffoldFixture(appRoot);
   const configPath = path.join(appRoot, 'kovo.config.ts');
   const originalConfig = readFileSync(configPath, 'utf8');
   writeFileSync(configPath, retentionConfigSource(originalConfig), 'utf8');
-  const initial = runPackedCli(
+  // SPEC §5.2.4 requires both the successful promotion and the deliberately failed build. Each
+  // invocation owns its command deadline and verified descendant cleanup inside the row deadline.
+  const initial = await runPackedCli(
     packedRelease,
     appRoot,
     ['build', './src/app.tsx', '--no-cache'],
     KNOWN_FAILURE_PACKED_BUILD_TIMEOUT_MS,
+    'initial packed build',
   );
   requireOrdinaryExit(initial, 'initial packed build');
   if (initial.status !== 0) {
@@ -209,11 +240,12 @@ function transactionalBuildObservation(packedRelease) {
   }
   writeFileSync(appPath, source.replace('Kovo Starter', 'Kovo Failed Build Sentinel'), 'utf8');
   writeFileSync(configPath, originalConfig, 'utf8');
-  const failed = runPackedCli(
+  const failed = await runPackedCli(
     packedRelease,
     appRoot,
     ['build', './src/app.tsx', '--no-cache'],
     KNOWN_FAILURE_PACKED_BUILD_TIMEOUT_MS,
+    'deliberately failed packed build',
   );
   requireOrdinaryExit(failed, 'deliberately failed packed build');
   const afterDigest = existsSync(dist) ? digestDirectory(dist) : 'missing';
@@ -228,7 +260,7 @@ function transactionalBuildObservation(packedRelease) {
   };
 }
 
-function freshCheckObservation(packedRelease) {
+async function freshCheckObservation(packedRelease) {
   const variants = [];
   for (const dialect of ['postgres', 'sqlite']) {
     const appRoot = createKnownFailurePackedScaffold(packedRelease, {
@@ -236,8 +268,14 @@ function freshCheckObservation(packedRelease) {
       directory: `fresh-check-${dialect}-app`,
       name: `known-failure-fresh-check-${dialect}`,
     });
-    prepareInstalledScaffoldFixture(appRoot);
-    const result = runPackedCli(packedRelease, appRoot, ['check', '--no-cache'], 240_000);
+    prepareInstalledCommandScaffoldFixture(appRoot);
+    const result = await runPackedCli(
+      packedRelease,
+      appRoot,
+      ['check', '--no-cache'],
+      KNOWN_FAILURE_PACKED_CHECK_TIMEOUT_MS,
+      `fresh packed ${dialect} scaffold check`,
+    );
     requireOrdinaryExit(result, `fresh packed ${dialect} scaffold check`);
     variants.push({
       dialect,
@@ -254,14 +292,15 @@ async function fullCatalogObservation(packedRelease) {
     directory: 'full-catalog-app',
     name: 'known-failure-full-catalog',
   });
-  prepareInstalledScaffoldFixture(appRoot);
+  prepareInstalledCommandScaffoldFixture(appRoot);
   declareCatalogDependencies(packedRelease, appRoot);
   const componentNames = packedUiComponentNames(packedRelease);
-  const add = runPackedCli(
+  const add = await runPackedCli(
     packedRelease,
     appRoot,
     ['add', ...componentNames, '--out', 'src/components/ui'],
     90_000,
+    'packed full-catalog copy-in',
   );
   requireOrdinaryExit(add, 'packed full-catalog copy-in');
   if (
@@ -279,9 +318,7 @@ async function fullCatalogObservation(packedRelease) {
     .filter((file) => !file.startsWith('src/components/ui/'))
     .some((file) => readFileSync(path.join(appRoot, file), 'utf8').includes('components/ui/'));
 
-  const boundedEnvironment = knownFailurePackedEnvironment(packedRelease, {
-    NODE_OPTIONS: null,
-  });
+  const boundedEnvironment = knownFailurePackedRuntimeEnvironment(packedRelease);
   const typecheck = await runBoundedCommand(
     path.join(packedRelease.nodeModules, '.bin', 'tsc'),
     ['--noEmit'],
@@ -340,18 +377,24 @@ async function fullCatalogObservation(packedRelease) {
 
 async function opaqueBoundaryObservation(packedRelease) {
   const port = await reservePort();
-  const appRoot = createKnownFailurePackedScaffold(packedRelease, {
+  const { appRoot, installedCli } = await createKnownFailureServedScaffold(packedRelease, {
     dialect: 'sqlite',
     directory: 'opaque-boundary-app',
     name: 'known-failure-opaque-boundary',
   });
-  const dev = startDevServer(packedRelease, appRoot, port, './src/app.tsx');
+  const dev = startDevServer(packedRelease, appRoot, installedCli, port, './src/app.tsx');
   try {
+    const listener = await waitForPackedDevListener(dev, port, 'Packed opaque-boundary kovo dev');
     const health = await waitForHttpResponse(
       `http://127.0.0.1:${port}/api/health`,
       dev,
-      DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS,
-      200,
+      KNOWN_FAILURE_FIRST_RESPONSE_INFRASTRUCTURE_TIMEOUT_MS,
+      {
+        acceptResponse: isKnownFailurePackedHealthResponse,
+        requestAccept: 'application/json',
+        phaseLabel: 'first-response infrastructure',
+        requiredStatus: 200,
+      },
     );
     const login = await waitForHttpResponse(
       `http://127.0.0.1:${port}/login`,
@@ -363,30 +406,177 @@ async function opaqueBoundaryObservation(packedRelease) {
       body: login.body,
       healthStatus: health.status,
       listened: true,
+      listenerElapsedMs: listener.listenerElapsedMs,
       serverOutput: dev.output(),
       status: login.status,
     };
   } finally {
-    await stopChildProcess(dev.child);
+    await stopDevServer(dev);
   }
 }
 
-function startDevServer(packedRelease, appRoot, port, entry, expectedReadyReport) {
-  const cli = path.join(packedRelease.packageRoot('@kovojs/cli'), 'dist', 'bin.mjs');
+async function createKnownFailureServedScaffold(packedRelease, options) {
+  const appRoot = createKnownFailurePackedScaffold(packedRelease, {
+    ...options,
+    linkPackedNodeModules: false,
+  });
+  const packedPackages = packedRelease.packedPackages();
+  rewriteScaffoldDependenciesToPackedTarballs(appRoot, packedPackages);
+
+  const storeRoot = path.join(packedRelease.root, `${options.directory}-pnpm-store`);
+  mkdirSync(storeRoot, { mode: 0o700 });
+  const installEnvironment = applyEgressFloorEnv(
+    knownFailurePackedRuntimeEnvironment(packedRelease, {
+      CI: '1',
+      npm_config_audit: 'false',
+      npm_config_fund: 'false',
+    }),
+    { allowlist: ciEgressPolicies.install, mode: 'deny' },
+  );
+  await runSuccessfulPackedInstallPhase(
+    packedRelease,
+    appRoot,
+    [
+      'install',
+      '--ignore-workspace',
+      '--no-frozen-lockfile',
+      '--ignore-scripts',
+      '--strict-peer-dependencies',
+      '--store-dir',
+      storeRoot,
+    ],
+    installEnvironment,
+    KNOWN_FAILURE_PACKED_INSTALL_TIMEOUT_MS,
+    'isolated packed consumer install',
+  );
+
+  assertInstalledPackedCli(appRoot, packedPackages);
+  await runSuccessfulPackedInstallPhase(
+    packedRelease,
+    appRoot,
+    ['exec', 'kovo', 'check', 'lifecycle'],
+    applyEgressFloorEnv(
+      knownFailureInstalledRuntimeEnvironment(packedRelease, appRoot, {
+        BETTER_AUTH_URL: null,
+        NODE_ENV: 'development',
+      }),
+      { allowlist: [], mode: 'deny' },
+    ),
+    KNOWN_FAILURE_PACKED_LIFECYCLE_TIMEOUT_MS,
+    'installed packed consumer lifecycle check',
+  );
+  await runSuccessfulPackedInstallPhase(
+    packedRelease,
+    appRoot,
+    ['rebuild'],
+    applyEgressFloorEnv(
+      knownFailurePackedRuntimeEnvironment(packedRelease, {
+        CI: '1',
+        npm_config_audit: 'false',
+        npm_config_fund: 'false',
+      }),
+      { allowlist: [], mode: 'deny' },
+    ),
+    KNOWN_FAILURE_PACKED_REBUILD_TIMEOUT_MS,
+    'isolated packed consumer rebuild',
+  );
+  return { appRoot, installedCli: assertInstalledPackedCli(appRoot, packedPackages) };
+}
+
+async function runSuccessfulPackedInstallPhase(
+  packedRelease,
+  appRoot,
+  pnpmArgs,
+  env,
+  timeoutMs,
+  label,
+) {
+  const result = await runKnownFailureProbeCommand({
+    args: ['exec', 'pnpm', ...pnpmArgs],
+    command: path.join(packedRelease.nodeModules, '.bin', 'vp'),
+    cwd: appRoot,
+    env,
+    label,
+    timeoutMs,
+  });
+  requireOrdinaryExit(result, label);
+  if (result.status !== 0) {
+    throw new Error(`${label} failed:\n${boundedDiagnostic(combinedOutput(result))}`);
+  }
+}
+
+function assertInstalledPackedCli(appRoot, packedPackages) {
+  const nodeModules = path.join(appRoot, 'node_modules');
+  if (
+    !existsSync(nodeModules) ||
+    lstatSync(nodeModules).isSymbolicLink() ||
+    !lstatSync(nodeModules).isDirectory()
+  ) {
+    throw new Error('served packed consumer requires an installed app-local node_modules tree');
+  }
+  const realNodeModules = realpathSync(nodeModules);
+  const packageRoot = realpathSync(path.join(nodeModules, '@kovojs', 'cli'));
+  assertContainedPath(realNodeModules, packageRoot, 'installed @kovojs/cli package');
+  const installedCli = realpathSync(path.join(packageRoot, 'dist', 'bin.mjs'));
+  assertContainedPath(realNodeModules, installedCli, 'installed @kovojs/cli executable');
+  if (!lstatSync(installedCli).isFile() || lstatSync(installedCli).isSymbolicLink()) {
+    throw new Error('installed @kovojs/cli executable is not a regular package file');
+  }
+
+  const authenticatedCli = packedPackages
+    .get('@kovojs/cli')
+    ?.entries.find((entry) => entry.name === 'package/dist/bin.mjs');
+  if (!Buffer.isBuffer(authenticatedCli?.data)) {
+    throw new Error('authenticated @kovojs/cli tarball is missing package/dist/bin.mjs');
+  }
+  const expectedDigest = `sha256:${createHash('sha256')
+    .update(authenticatedCli.data)
+    .digest('hex')}`;
+  if (digestFile(installedCli) !== expectedDigest) {
+    throw new Error('installed @kovojs/cli executable differs from its authenticated tarball');
+  }
+  return installedCli;
+}
+
+function assertContainedPath(root, candidate, label) {
+  const relative = path.relative(root, candidate);
+  if (
+    relative === '' ||
+    relative === '..' ||
+    relative.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relative)
+  ) {
+    throw new Error(`${label} resolves outside the app-local node_modules tree`);
+  }
+}
+
+function knownFailureInstalledRuntimeEnvironment(packedRelease, appRoot, overrides = {}) {
+  const env = knownFailurePackedRuntimeEnvironment(packedRelease, overrides);
+  env.PATH = `${path.join(appRoot, 'node_modules', '.bin')}${path.delimiter}${
+    process.env.PATH ?? ''
+  }`;
+  return env;
+}
+
+function startDevServer(packedRelease, appRoot, installedCli, port, entry, expectedReadyReport) {
+  const startedAt = performance.now();
   const child = spawn(
     process.execPath,
-    [cli, 'dev', entry, '--host', '127.0.0.1', '--port', String(port), '--strict-port'],
+    [installedCli, 'dev', entry, '--host', '127.0.0.1', '--port', String(port), '--strict-port'],
     {
       cwd: appRoot,
       detached: process.platform !== 'win32',
-      env: knownFailurePackedEnvironment(packedRelease, {
-        BETTER_AUTH_URL: null,
-        HOST: null,
-        KOVO_NODE_ORIGIN: null,
-        KOVO_NODE_TRUSTED_PROXY: null,
-        NODE_ENV: 'development',
-        PORT: null,
-      }),
+      env: applyEgressFloorEnv(
+        knownFailureInstalledRuntimeEnvironment(packedRelease, appRoot, {
+          BETTER_AUTH_URL: null,
+          HOST: null,
+          KOVO_NODE_ORIGIN: null,
+          KOVO_NODE_TRUSTED_PROXY: null,
+          NODE_ENV: 'development',
+          PORT: null,
+        }),
+        { allowlist: [], mode: 'deny' },
+      ),
       stdio: ['ignore', 'pipe', 'pipe'],
     },
   );
@@ -397,6 +587,13 @@ function startDevServer(packedRelease, appRoot, port, entry, expectedReadyReport
   let stdout = '';
   let stderr = '';
   let outputExceeded = false;
+  let closed = false;
+  const close = new Promise((resolve) => {
+    child.once('close', (exitCode, signalCode) => {
+      closed = true;
+      resolve({ exitCode, signalCode });
+    });
+  });
   child.stdout.on('data', (chunk) => {
     ({ outputExceeded, value: stdout } = appendBounded(stdout, chunk, outputExceeded));
   });
@@ -409,11 +606,71 @@ function startDevServer(packedRelease, appRoot, port, entry, expectedReadyReport
   };
   return {
     child,
+    close,
+    closed: () => closed,
     output: () => bounded(`${stdout}\n${stderr}`),
     readyReportObserver,
     stderr: () => bounded(stderr),
+    startedAt,
     stdout: () => bounded(stdout),
   };
+}
+
+function packedDevReadyReport(port, appEntry) {
+  return {
+    appEntry,
+    localUrl: `http://127.0.0.1:${port}/`,
+    mode: 'development',
+  };
+}
+
+async function waitForPackedDevListener(dev, port, label) {
+  const deadline = dev.startedAt + DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS;
+  for (;;) {
+    const now = performance.now();
+    if (now >= deadline) {
+      throw new Error(
+        `${label} did not acquire its loopback listener within the ${DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS}ms infrastructure deadline (elapsed=${Math.ceil(
+          now - dev.startedAt,
+        )}ms)\n${boundedDiagnostic(dev.output())}`,
+      );
+    }
+    assertChildRunning(dev, `${label} loopback listener`);
+    const abortController = new AbortController();
+    const attemptTimeoutMs = Math.max(1, Math.ceil(Math.min(250, deadline - now)));
+    const timer = setTimeout(() => abortController.abort(), attemptTimeoutMs);
+    let listened;
+    try {
+      listened = await kovoDevLoopbackTcpConnects(port, '127.0.0.1', {
+        signal: abortController.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+    if (listened) {
+      return { listenerElapsedMs: Math.ceil(performance.now() - dev.startedAt) };
+    }
+    await delay(Math.max(0, Math.min(25, deadline - performance.now())));
+  }
+}
+
+async function waitForPackedDevReadiness(dev, port, expected, label) {
+  // SPEC §9.5.1's complete structured report is the behavior owned by KF-DEVEX-002. Served-app
+  // rows own listener acquisition and first response as separate phases instead.
+  return waitForKovoDevReadiness({
+    expected,
+    label,
+    listenerTimeoutMs: DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS,
+    port,
+    readOutput: () => ({ stderr: dev.stderr(), stdout: dev.stdout() }),
+    readStatus: () => ({
+      exitCode: dev.child.exitCode,
+      signalCode: dev.child.signalCode,
+    }),
+    reportObserver: dev.readyReportObserver,
+    reportTimeoutMs: DEV_READY_POST_BIND_BUDGET_MS,
+    startedAt: dev.startedAt,
+  });
 }
 
 function appendBounded(current, chunk, alreadyExceeded) {
@@ -428,48 +685,49 @@ function appendBounded(current, chunk, alreadyExceeded) {
   return { outputExceeded: false, value: next };
 }
 
-async function waitForHttpResponse(url, dev, timeoutMs, requiredStatus) {
-  const deadline = Date.now() + timeoutMs;
+async function waitForHttpResponse(url, dev, timeoutMs, options = {}) {
+  const startedAt = performance.now();
+  const deadline = startedAt + timeoutMs;
   let lastResponse;
-  while (Date.now() < deadline) {
+  let lastError;
+  while (performance.now() < deadline) {
     assertChildRunning(dev, `HTTP response for ${url}`);
     try {
-      const response = await httpRequest(url);
+      const response = await requestKnownFailureHttpResponse(
+        url,
+        Math.ceil(
+          Math.max(
+            1,
+            Math.min(KNOWN_FAILURE_HTTP_ATTEMPT_TIMEOUT_MS, deadline - performance.now()),
+          ),
+        ),
+        { accept: options.requestAccept },
+      );
       lastResponse = response;
-      if (requiredStatus === undefined || response.status === requiredStatus) return response;
-    } catch {
-      // Connection refusal/early close is expected while Vite is opening the listener.
+      if (
+        (options.requiredStatus === undefined || response.status === options.requiredStatus) &&
+        (options.acceptResponse === undefined || options.acceptResponse(response))
+      ) {
+        return response;
+      }
+    } catch (error) {
+      lastError = error;
     }
-    await delay(50);
+    await delay(Math.max(0, Math.min(50, deadline - performance.now())));
   }
   throw new Error(
     `packed dev server did not return ${
-      requiredStatus === undefined ? 'an HTTP response' : `HTTP ${requiredStatus}`
-    } within ${timeoutMs}ms${lastResponse ? ` (last status ${lastResponse.status})` : ''}\n${boundedDiagnostic(
-      dev.output(),
-    )}`,
+      options.requiredStatus === undefined ? 'an HTTP response' : `HTTP ${options.requiredStatus}`
+    } within its ${timeoutMs}ms ${options.phaseLabel ?? 'response'} deadline (elapsed=${Math.ceil(
+      performance.now() - startedAt,
+    )}ms)${lastResponse ? `; last status=${lastResponse.status}` : ''}${
+      lastResponse?.headers['content-type']
+        ? `; last content-type=${String(lastResponse.headers['content-type'])}`
+        : ''
+    }${lastResponse ? `; last body=${boundedHttpResponseBody(lastResponse.body)}` : ''}${
+      lastError instanceof Error ? `; last error=${lastError.message}` : ''
+    }\n${boundedDiagnostic(dev.output())}`,
   );
-}
-
-function httpRequest(url) {
-  return new Promise((resolve, reject) => {
-    const request = nodeHttpRequest(url, { method: 'GET' }, (response) => {
-      let body = '';
-      response.setEncoding('utf8');
-      response.on('data', (chunk) => {
-        body += chunk;
-        if (body.length > 2 * 1024 * 1024) {
-          request.destroy(new Error('packed HTTP probe response exceeded 2 MiB'));
-        }
-      });
-      response.once('end', () => resolve({ body, status: response.statusCode ?? 0 }));
-    });
-    request.setTimeout(KNOWN_FAILURE_HTTP_ATTEMPT_TIMEOUT_MS, () =>
-      request.destroy(new Error('packed HTTP probe timed out')),
-    );
-    request.once('error', reject);
-    request.end();
-  });
 }
 
 function assertChildRunning(dev, label) {
@@ -482,12 +740,13 @@ function assertChildRunning(dev, label) {
   }
 }
 
-async function stopChildProcess(child) {
-  if (child.exitCode !== null || child.signalCode !== null) return;
-  signalChildTree(child, 'SIGTERM');
-  if (await waitForExit(child, KNOWN_FAILURE_DEV_STOP_PHASE_TIMEOUT_MS)) return;
-  signalChildTree(child, 'SIGKILL');
-  await waitForExit(child, KNOWN_FAILURE_DEV_STOP_PHASE_TIMEOUT_MS);
+async function stopDevServer(dev) {
+  if (dev.closed()) return;
+  signalChildTree(dev.child, 'SIGTERM');
+  if (await waitForClose(dev, KNOWN_FAILURE_DEV_STOP_PHASE_TIMEOUT_MS)) return;
+  signalChildTree(dev.child, 'SIGKILL');
+  if (await waitForClose(dev, KNOWN_FAILURE_DEV_STOP_PHASE_TIMEOUT_MS)) return;
+  throw new Error('packed dev process-group streams did not close after bounded TERM/KILL cleanup');
 }
 
 function signalChildTree(child, signal) {
@@ -499,18 +758,19 @@ function signalChildTree(child, signal) {
   }
 }
 
-function waitForExit(child, timeoutMs) {
-  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true);
+function waitForClose(dev, timeoutMs) {
+  if (dev.closed()) return Promise.resolve(true);
   return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      child.removeListener('exit', onExit);
-      resolve(false);
-    }, timeoutMs);
-    const onExit = () => {
+    let settled = false;
+    let timer;
+    const finish = (closed) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
-      resolve(true);
+      resolve(closed);
     };
-    child.once('exit', onExit);
+    timer = setTimeout(() => finish(false), timeoutMs);
+    void dev.close.then(() => finish(true));
   });
 }
 
@@ -544,37 +804,18 @@ async function requireAvailablePort(port) {
   );
 }
 
-function runPackedCli(packedRelease, cwd, args, timeoutMs) {
-  return runCommand(
-    process.execPath,
-    [path.join(packedRelease.packageRoot('@kovojs/cli'), 'dist', 'bin.mjs'), ...args],
+function runPackedCli(packedRelease, cwd, args, timeoutMs, label) {
+  return runKnownFailureProbeCommand({
+    args: [path.join(packedRelease.packageRoot('@kovojs/cli'), 'dist', 'bin.mjs'), ...args],
+    command: process.execPath,
     cwd,
-    knownFailurePackedEnvironment(packedRelease, {
+    env: knownFailurePackedRuntimeEnvironment(packedRelease, {
       BETTER_AUTH_URL: null,
       NODE_ENV: 'development',
     }),
+    label,
     timeoutMs,
-  );
-}
-
-function runCommand(executable, args, cwd, env, timeoutMs) {
-  const result = spawnSync(executable, args, {
-    cwd,
-    encoding: 'utf8',
-    env,
-    maxBuffer: 32 * 1024 * 1024,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    timeout: timeoutMs,
   });
-  if (result.error) {
-    throw new Error(`packed command failed to execute: ${result.error.message}`);
-  }
-  if (result.signal || result.status === null) {
-    throw new Error(
-      `packed command did not return an exit status: ${result.signal ?? 'unknown signal'}`,
-    );
-  }
-  return result;
 }
 
 async function runBoundedCommand(executable, args, cwd, env, timeoutMs, memoryCeilingMiB) {
@@ -750,18 +991,18 @@ function retentionConfigSource(source) {
 }
 
 /**
- * Model the two non-package artifacts present after the documented install step without invoking
- * an installer: the lockfile identity required by SPEC §5.2.3 and formatter-normalized package
- * metadata. Packed dependencies remain the only executable framework input.
+ * Command-only rows execute the authenticated synthetic release tree and need only the lockfile
+ * identity required by SPEC §5.2.3. Served rows never use this seam: their isolated pnpm install
+ * owns the real lockfile and app-local module topology.
  */
-function prepareInstalledScaffoldFixture(appRoot) {
+function prepareInstalledCommandScaffoldFixture(appRoot) {
   const manifestPath = path.join(appRoot, 'package.json');
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
   writeFileSync(
     path.join(appRoot, 'pnpm-lock.yaml'),
-    'lockfileVersion: 9.0\n# authenticated packed known-failure fixture\n',
-    'utf8',
+    "lockfileVersion: '9.0'\n# authenticated packed known-failure command fixture\n",
+    { encoding: 'utf8', flag: 'wx', mode: 0o600 },
   );
 }
 
@@ -848,6 +1089,12 @@ function boundedDiagnostic(value) {
   if (value.length <= maximum) return value;
   const half = maximum / 2;
   return `${value.slice(0, half)}\n... packed probe output truncated ...\n${value.slice(-half)}`;
+}
+
+function boundedHttpResponseBody(value) {
+  const maximum = 512;
+  const bounded = value.length <= maximum ? value : `${value.slice(0, maximum)}...`;
+  return JSON.stringify(bounded);
 }
 
 function delay(ms) {

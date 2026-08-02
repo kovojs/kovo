@@ -17,24 +17,19 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  readPackageTarballSnapshot,
-  validatedPackageTarballEntries,
-} from './deterministic-tarball.mjs';
-import {
-  validatePackedReleaseManifest,
-  verifyPackedAttestationBytes,
-} from '../publish-packed-packages.mjs';
+  loadAuthenticatedPackedConsumerInputs,
+  materializeAuthenticatedTarballSet,
+} from './authenticated-packed-consumer.mjs';
 import { releasePackages } from '../release-packages.mjs';
 import { KNOWN_FAILURE_PACKED_SCAFFOLD_TIMEOUT_MS } from './known-failure-probe-deadlines.mjs';
 
-const PACKED_RELEASE_SCHEMA = 'kovo.packed-public-packages/v2';
 const PACKAGE_NAME = /^(?:@([a-z0-9][a-z0-9._-]*)\/)?([a-z0-9][a-z0-9._-]*)$/u;
 const sourceRepositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 
 /**
- * Materialize every first-party package from its attested tarball while borrowing only external
- * dependencies from the repository's frozen install. Known-failure probes perform no dependency
- * install, so lifecycle policy and lockfile state cannot be bypassed by their throwaway apps.
+ * Authenticate and privately snapshot every first-party tarball, then materialize the synthetic
+ * release tree used by command-only known-failure probes. Served probes install the same immutable
+ * snapshots into an isolated consumer instead of borrowing this tree as app node_modules.
  */
 export function materializeKnownFailurePackedRelease(packedManifestPath) {
   const manifestPath = path.resolve(packedManifestPath);
@@ -45,29 +40,26 @@ export function materializeKnownFailurePackedRelease(packedManifestPath) {
   ) {
     throw new TypeError('packed release manifest must be a regular non-symlink file');
   }
-  const packedManifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
-  if (packedManifest.schema !== PACKED_RELEASE_SCHEMA) {
-    throw new TypeError(`known-failure probes require ${PACKED_RELEASE_SCHEMA}`);
-  }
-
+  const authenticated = loadAuthenticatedPackedConsumerInputs(manifestPath);
   const expectedPackages = releasePackages();
-  const packedPackages = validatePackedReleaseManifest(packedManifest, expectedPackages);
   const repositoryRoot = path.resolve(path.dirname(manifestPath), '..');
   const root = mkdtempSync(path.join(os.tmpdir(), 'kovo-known-failure-packed-'));
   const nodeModules = path.join(root, 'node_modules');
   mkdirSync(nodeModules);
 
   try {
-    const packedNames = new Set(packedPackages.map((pkg) => pkg.name));
+    const packedPackages = materializeAuthenticatedTarballSet(
+      authenticated.packages,
+      path.join(root, 'tarballs'),
+    );
+    const packedNames = new Set(packedPackages.keys());
     linkExternalWorkspaceDependencies(
       path.join(repositoryRoot, 'node_modules'),
       nodeModules,
       packedNames,
     );
     linkDeclaredExternalDependencies(expectedPackages, repositoryRoot, nodeModules, packedNames);
-    for (const pkg of packedPackages) {
-      materializePackedPackage(pkg, repositoryRoot, nodeModules);
-    }
+    for (const pkg of packedPackages.values()) materializePackedPackage(pkg, nodeModules);
     createPackedBinLinks(nodeModules);
 
     let cleaned = false;
@@ -78,6 +70,9 @@ export function materializeKnownFailurePackedRelease(packedManifestPath) {
         rmSync(root, { recursive: true, force: true });
       },
       nodeModules,
+      packedPackages() {
+        return new Map(packedPackages);
+      },
       packageRoot(name) {
         const destination = packageDestination(nodeModules, name);
         if (!existsSync(destination) || !statSync(destination).isDirectory()) {
@@ -100,6 +95,10 @@ export function createKnownFailurePackedScaffold(release, options = {}) {
   if (dialect !== 'postgres' && dialect !== 'sqlite') {
     throw new TypeError(`unsupported known-failure scaffold dialect: ${String(dialect)}`);
   }
+  const linkPackedNodeModules = options.linkPackedNodeModules ?? true;
+  if (typeof linkPackedNodeModules !== 'boolean') {
+    throw new TypeError('known-failure scaffold linkPackedNodeModules must be boolean');
+  }
   const appRoot = path.join(release.root, options.directory ?? `app-${dialect}`);
   const createBin = path.join(release.packageRoot('create-kovo'), 'dist', 'index.mjs');
   const args = [
@@ -110,12 +109,13 @@ export function createKnownFailurePackedScaffold(release, options = {}) {
     '--dialect',
     dialect,
     '--disable-git',
+    '--no-install',
   ];
   if (dialect === 'sqlite') args.push('--experimental-sqlite');
   const result = spawnSync(process.execPath, args, {
     cwd: release.root,
     encoding: 'utf8',
-    env: knownFailurePackedEnvironment(release),
+    env: knownFailurePackedRuntimeEnvironment(release),
     maxBuffer: 16 * 1024 * 1024,
     stdio: ['ignore', 'pipe', 'pipe'],
     timeout: options.timeoutMs ?? KNOWN_FAILURE_PACKED_SCAFFOLD_TIMEOUT_MS,
@@ -136,7 +136,9 @@ export function createKnownFailurePackedScaffold(release, options = {}) {
       }`,
     );
   }
-  symlinkSync(release.nodeModules, path.join(appRoot, 'node_modules'), 'dir');
+  if (linkPackedNodeModules) {
+    symlinkSync(release.nodeModules, path.join(appRoot, 'node_modules'), 'dir');
+  }
   return appRoot;
 }
 
@@ -151,6 +153,14 @@ export function knownFailurePackedEnvironment(release, overrides = {}) {
 }
 
 /**
+ * Run packed public executables without the repository-only Node source-transform flags inherited
+ * by CI. Packed JavaScript and the framework's own config loader remain the executable subject.
+ */
+export function knownFailurePackedRuntimeEnvironment(release, overrides = {}) {
+  return knownFailurePackedEnvironment(release, { ...overrides, NODE_OPTIONS: null });
+}
+
+/**
  * A `null` override means "delete even if the probe runner inherited it". This keeps first-run
  * probes honest when a developer shell happens to export a deployment-only Kovo variable.
  */
@@ -160,16 +170,10 @@ function optionsDeletedEnvironment(overrides) {
     .map(([name]) => name);
 }
 
-function materializePackedPackage(pkg, repositoryRoot, nodeModules) {
+function materializePackedPackage(pkg, nodeModules) {
   const destination = packageDestination(nodeModules, pkg.name);
   mkdirSync(destination, { recursive: true });
-  const tarballPath = path.resolve(repositoryRoot, pkg.tarball);
-  if (tarballPath === repositoryRoot || !tarballPath.startsWith(`${repositoryRoot}${path.sep}`)) {
-    throw new TypeError(`${pkg.name}: packed tarball path escapes the repository`);
-  }
-  const compressed = readPackageTarballSnapshot(tarballPath);
-  verifyPackedAttestationBytes(pkg, compressed);
-  for (const entry of validatedPackageTarballEntries(compressed)) {
+  for (const entry of pkg.entries) {
     const relative = entry.name.slice('package/'.length);
     const output = path.join(destination, ...relative.split('/'));
     mkdirSync(path.dirname(output), { recursive: true });

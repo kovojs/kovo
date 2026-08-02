@@ -15,7 +15,8 @@ export const DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS = 120_000;
 export const DEV_READY_POST_BIND_BUDGET_MS = 5_000;
 
 /**
- * The register's outer process deadline must leave cleanup headroom after listener acquisition.
+ * Direct CLI readiness tests use this supervisor ceiling. Packed known-failure rows own separate
+ * outer floors because their authenticated consumer install is not part of this reusable contract.
  */
 export const DEV_READY_PROBE_PROCESS_TIMEOUT_MS = 180_000;
 

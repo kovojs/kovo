@@ -16,11 +16,11 @@ import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 
 import ts from 'typescript';
 
 import { DEVEX_GOLDEN_PHASE_CONTRACT } from '../devex-golden-contract.mjs';
+import { rewriteScaffoldDependenciesToPackedTarballs } from '../lib/authenticated-packed-consumer.mjs';
 import { measureProcessTreeCommand } from '../lib/process-tree-rss.mjs';
 import { repoRoot } from '../release-packages.mjs';
 import {
@@ -31,6 +31,7 @@ import {
 import { packageSetIdentity } from './packed-package-auth.mjs';
 
 export { packageSetIdentity };
+export { rewriteScaffoldDependenciesToPackedTarballs };
 
 export const packedAppsScenario = 'packed-apps';
 export const PACKED_APPS_REPORT_SCHEMA = 'kovo.golden-journey/packed-apps/v1';
@@ -406,25 +407,6 @@ export async function runPackedAppVariant({
   } finally {
     rmSync(temporaryRoot, { recursive: true, force: true });
   }
-}
-
-export function rewriteScaffoldDependenciesToPackedTarballs(appRoot, packedPackages) {
-  const packageJsonPath = path.join(appRoot, 'package.json');
-  const manifest = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
-  const overrides = { ...manifest.pnpm?.overrides };
-  for (const [name, pkg] of [...packedPackages].sort(([left], [right]) =>
-    compareUtf8(left, right),
-  )) {
-    const specifier = pathToFileURL(pkg.tarballPath).href;
-    for (const field of ['dependencies', 'devDependencies', 'optionalDependencies']) {
-      if (manifest[field] && Object.hasOwn(manifest[field], name)) {
-        manifest[field][name] = specifier;
-      }
-    }
-    if (name.startsWith('@kovojs/')) overrides[name] = specifier;
-  }
-  manifest.pnpm = { ...manifest.pnpm, overrides };
-  writeFileSync(packageJsonPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
 }
 
 /**

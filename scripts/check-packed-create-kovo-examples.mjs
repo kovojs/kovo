@@ -1,30 +1,22 @@
 #!/usr/bin/env node
 
-import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { authenticatedPackedJourneyPackages } from './golden-journey.mjs';
+import { materializePackedPackage, packageSetIdentity } from './golden-journey/packed-app.mjs';
 import {
-  materializePackedPackage,
-  packageSetIdentity,
+  loadAuthenticatedPackedConsumerInputs,
+  materializeAuthenticatedTarballSet,
   rewriteScaffoldDependenciesToPackedTarballs,
-} from './golden-journey/packed-app.mjs';
-import { readBoundedRegularFile } from './lib/bounded-regular-file.mjs';
+  snapshotAuthenticatedTarballBytes,
+} from './lib/authenticated-packed-consumer.mjs';
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
-import { readPackageTarballSnapshot } from './lib/deterministic-tarball.mjs';
-import { packedManifestMaxBytes, repoRoot } from './release-packages.mjs';
+import { repoRoot } from './release-packages.mjs';
+
+export { snapshotAuthenticatedTarballBytes };
 
 export const PACKED_CREATE_KOVO_EXAMPLES_SCHEMA = 'kovo.packed-create-kovo-examples/v1';
 export const PACKED_CREATE_KOVO_EXAMPLE_NAMES = Object.freeze(['crm', 'commerce']);
@@ -70,106 +62,7 @@ export function parsePackedCreateKovoExamplesArgs(argv) {
  * No pack command or workspace package source participates in this path.
  */
 export function loadPackedCreateKovoExampleInputs(packedManifest) {
-  const resolvedManifest = path.resolve(packedManifest);
-  const before = readBoundedRegularFile(
-    resolvedManifest,
-    packedManifestMaxBytes,
-    'packed create-kovo examples manifest',
-  );
-  const authenticated = authenticatedPackedJourneyPackages(resolvedManifest);
-  const afterAuthentication = readBoundedRegularFile(
-    resolvedManifest,
-    packedManifestMaxBytes,
-    'packed create-kovo examples manifest',
-  );
-  if (!before.equals(afterAuthentication)) {
-    throw new Error('packed create-kovo examples manifest changed during authentication');
-  }
-  const packages = snapshotAuthenticatedTarballBytes(authenticated);
-  const afterSnapshot = readBoundedRegularFile(
-    resolvedManifest,
-    packedManifestMaxBytes,
-    'packed create-kovo examples manifest',
-  );
-  if (!before.equals(afterSnapshot)) {
-    throw new Error('packed create-kovo examples manifest changed while snapshotting tarballs');
-  }
-  return Object.freeze({
-    manifestSha256: `sha256:${createHash('sha256').update(before).digest('hex')}`,
-    packages,
-  });
-}
-
-/**
- * Take a second digest-bound snapshot after the shared release authenticator has validated the
- * tarball's canonical entries, file census, embedded manifest, and reviewer-owned SHA-512.
- */
-export function snapshotAuthenticatedTarballBytes(authenticatedPackages) {
-  if (!(authenticatedPackages instanceof Map) || authenticatedPackages.size === 0) {
-    throw new TypeError('packed create-kovo examples require authenticated package records');
-  }
-  const snapshots = new Map();
-  for (const [name, pkg] of authenticatedPackages) {
-    if (
-      pkg?.name !== name ||
-      typeof pkg.tarballPath !== 'string' ||
-      !/^sha512-[A-Za-z0-9+/]+={0,2}$/u.test(pkg.sha512 ?? '') ||
-      !Array.isArray(pkg.entries)
-    ) {
-      throw new TypeError(`packed create-kovo examples received invalid authenticated ${name}`);
-    }
-    const tarballBytes = readPackageTarballSnapshot(pkg.tarballPath);
-    const observedSha512 = `sha512-${createHash('sha512').update(tarballBytes).digest('base64')}`;
-    if (observedSha512 !== pkg.sha512) {
-      throw new Error(`${name} tarball changed after packed-manifest authentication`);
-    }
-    snapshots.set(
-      name,
-      Object.freeze({
-        ...pkg,
-        tarballBytes: Buffer.from(tarballBytes),
-      }),
-    );
-  }
-  return snapshots;
-}
-
-/**
- * Write the authenticated snapshots into one private set shared by both consumers.
- *
- * Both generated apps therefore install byte-identical Kovo tarballs even if the caller points at
- * a mutable external release directory.
- */
-export function materializeAuthenticatedTarballSet(authenticatedPackages, destination) {
-  mkdirSync(destination, { recursive: true, mode: 0o700 });
-  const tarballNames = new Set();
-  const materialized = new Map();
-  for (const [name, pkg] of authenticatedPackages) {
-    if (!Buffer.isBuffer(pkg?.tarballBytes)) {
-      throw new TypeError(`packed create-kovo examples are missing snapshotted ${name} bytes`);
-    }
-    const tarballName = path.basename(pkg.tarballPath);
-    if (!/^[a-z0-9][a-z0-9._-]*\.tgz$/u.test(tarballName) || tarballNames.has(tarballName)) {
-      throw new Error(`packed create-kovo examples received ambiguous tarball ${tarballName}`);
-    }
-    tarballNames.add(tarballName);
-    const tarballPath = path.join(destination, tarballName);
-    writeFileSync(tarballPath, pkg.tarballBytes, { flag: 'wx', mode: 0o400 });
-    const observedSha512 = `sha512-${createHash('sha512')
-      .update(readPackageTarballSnapshot(tarballPath))
-      .digest('base64')}`;
-    if (observedSha512 !== pkg.sha512) {
-      throw new Error(`${name} private tarball snapshot does not match the authenticated manifest`);
-    }
-    materialized.set(
-      name,
-      Object.freeze({
-        ...pkg,
-        tarballPath: realpathSync(tarballPath),
-      }),
-    );
-  }
-  return materialized;
+  return loadAuthenticatedPackedConsumerInputs(packedManifest);
 }
 
 export function assertExampleScaffoldReleaseVersions(appRoot, packedPackages, example) {

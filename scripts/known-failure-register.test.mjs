@@ -25,7 +25,10 @@ import {
   DEV_READY_POST_BIND_BUDGET_MS,
   DEV_READY_PROBE_PROCESS_TIMEOUT_MS,
 } from './lib/dev-ready-probe-contract.mjs';
-import { KNOWN_FAILURE_FIRST_LOOP_OUTER_TIMEOUT_FLOORS_MS } from './lib/known-failure-probe-deadlines.mjs';
+import {
+  KNOWN_FAILURE_FIRST_RESPONSE_INFRASTRUCTURE_TIMEOUT_MS,
+  KNOWN_FAILURE_FIRST_LOOP_OUTER_TIMEOUT_FLOORS_MS,
+} from './lib/known-failure-probe-deadlines.mjs';
 
 const repoRoot = fileURLToPath(new URL('../', import.meta.url));
 const register = JSON.parse(
@@ -50,6 +53,10 @@ const packedFirstLoopProbeSource = readFileSync(
 );
 const packedReleaseHarnessSource = readFileSync(
   path.join(repoRoot, 'scripts/lib/known-failure-packed-release.mjs'),
+  'utf8',
+);
+const authenticatedPackedConsumerSource = readFileSync(
+  path.join(repoRoot, 'scripts/lib/authenticated-packed-consumer.mjs'),
   'utf8',
 );
 
@@ -108,6 +115,15 @@ describe('known-failure register', () => {
   });
 
   it('publishes a packed-manifest-backed available-probe gate in CI', () => {
+    expect(rootPackage.scripts['test:devex-foundation-schema']).toContain(
+      'scripts/lib/known-failure-http-response.test.mjs',
+    );
+    expect(rootPackage.scripts['test:devex-foundation-schema']).toContain(
+      'scripts/lib/known-failure-probe-process.test.mjs',
+    );
+    expect(rootPackage.scripts['test:devex-foundation-schema']).toContain(
+      'scripts/lib/known-failure-packed-release.test.mjs',
+    );
     expect(rootPackage.scripts['test:devex-known-failures-available']).toBe(
       'node scripts/known-failure-register.mjs --run-available --cadence per-pr --packed-manifest .release/packed-packages.json --json',
     );
@@ -115,7 +131,7 @@ describe('known-failure register', () => {
       'pnpm run test:devex-known-failures-available',
     );
     expect(ciWorkflowSource).toContain(
-      'run: timeout 50m vp exec pnpm run test:devex-known-failures-available',
+      'run: timeout --kill-after=30s 78m vp exec pnpm run test:devex-known-failures-available',
     );
 
     const perPrProbeTimeoutBudgetMs = register.entries
@@ -125,11 +141,13 @@ describe('known-failure register', () => {
       )
       .reduce((total, entry) => total + entry.probe.timeoutMs, 0);
     const watchdog = ciWorkflowSource.match(
-      /run: timeout (\d+)m vp exec pnpm run test:devex-known-failures-available/u,
+      /run: timeout --kill-after=(\d+)s (\d+)m vp exec pnpm run test:devex-known-failures-available/u,
     );
-    expect(perPrProbeTimeoutBudgetMs).toBe(43 * 60_000);
+    expect(perPrProbeTimeoutBudgetMs).toBe(71 * 60_000);
     expect(watchdog).not.toBeNull();
-    const watchdogMs = Number(watchdog?.[1]) * 60_000;
+    expect(Number(watchdog?.[1])).toBeGreaterThan(0);
+    expect(Number(watchdog?.[1])).toBeLessThanOrEqual(60);
+    const watchdogMs = Number(watchdog?.[2]) * 60_000;
     expect(watchdogMs).toBeGreaterThanOrEqual(perPrProbeTimeoutBudgetMs + 5 * 60_000);
     expect(watchdogMs).toBeLessThanOrEqual(perPrProbeTimeoutBudgetMs + 10 * 60_000);
   });
@@ -137,7 +155,9 @@ describe('known-failure register', () => {
   it('keeps whole-probe deadlines outside the serial first-loop phase ceilings', () => {
     const modesById = {
       'KF-DEVEX-001': 'sqlite-login',
+      'KF-DEVEX-002': 'dev-ready',
       'KF-DEVEX-005': 'transactional-build',
+      'KF-DEVEX-006': 'fresh-check',
       'KF-DEVEX-010': 'opaque-boundary',
     };
 
@@ -147,6 +167,14 @@ describe('known-failure register', () => {
       expect(entry?.probe.timeoutMs, id).toBeGreaterThanOrEqual(floor);
       expect(entry?.probe.timeoutMs, id).toBeLessThan(floor + 60_000);
     }
+    expect(register.entries.find((entry) => entry.id === 'KF-DEVEX-001')?.probe.timeoutMs).toBe(
+      840_000,
+    );
+    expect(register.entries.find((entry) => entry.id === 'KF-DEVEX-010')?.probe.timeoutMs).toBe(
+      840_000,
+    );
+    expect(KNOWN_FAILURE_FIRST_LOOP_OUTER_TIMEOUT_FLOORS_MS['sqlite-login']).toBe(822_100);
+    expect(KNOWN_FAILURE_FIRST_LOOP_OUTER_TIMEOUT_FLOORS_MS['opaque-boundary']).toBe(822_100);
   });
 
   it('keeps dev-ready infrastructure ceilings separate from post-bind and G2 budgets', () => {
@@ -154,7 +182,11 @@ describe('known-failure register', () => {
     const coldG2 = budgets.metrics['dev.ready.cold.durationMs'];
     const warmG2 = budgets.metrics['dev.ready.warm.durationMs'];
 
-    expect(devReady.probe.timeoutMs).toBe(DEV_READY_PROBE_PROCESS_TIMEOUT_MS);
+    expect(devReady.probe.timeoutMs).toBe(720_000);
+    expect(devReady.probe.timeoutMs).toBeGreaterThanOrEqual(
+      KNOWN_FAILURE_FIRST_LOOP_OUTER_TIMEOUT_FLOORS_MS['dev-ready'],
+    );
+    expect(DEV_READY_PROBE_PROCESS_TIMEOUT_MS).toBe(180_000);
     expect(DEV_READY_PROBE_PROCESS_TIMEOUT_MS).toBeGreaterThan(
       DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS,
     );
@@ -171,6 +203,63 @@ describe('known-failure register', () => {
     expect(packedFirstLoopProbeSource).toContain('readyDelayMs: ready.observedAfterMs');
     expect(packedFirstLoopProbeSource).not.toContain('waitForTcpListener(');
     expect(packedFirstLoopProbeSource).not.toContain('Date.now() - listenedAt');
+  });
+
+  it('owns served-app startup, first-response, and packed command deadlines independently', () => {
+    expect(KNOWN_FAILURE_FIRST_RESPONSE_INFRASTRUCTURE_TIMEOUT_MS).toBe(120_000);
+    expect(packedFirstLoopProbeSource.match(/waitForPackedDevListener\(/gu)).toHaveLength(3);
+    expect(packedFirstLoopProbeSource.match(/waitForPackedDevReadiness\(/gu)).toHaveLength(2);
+    expect(packedFirstLoopProbeSource).toContain(
+      'listenerTimeoutMs: DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS',
+    );
+    expect(packedFirstLoopProbeSource).toContain('reportTimeoutMs: DEV_READY_POST_BIND_BUDGET_MS');
+    expect(packedFirstLoopProbeSource).toContain(
+      'KNOWN_FAILURE_FIRST_RESPONSE_INFRASTRUCTURE_TIMEOUT_MS',
+    );
+    expect(packedFirstLoopProbeSource).toContain("'first-response infrastructure'");
+    expect(packedFirstLoopProbeSource).toContain('requestKnownFailureHttpResponse(');
+    expect(packedFirstLoopProbeSource.match(/isKnownFailurePackedHealthResponse/gu)).toHaveLength(
+      3,
+    );
+    expect(packedFirstLoopProbeSource).toContain('startedAt: dev.startedAt');
+    const sqliteModeSource = packedFirstLoopProbeSource.slice(
+      packedFirstLoopProbeSource.indexOf('async function sqliteLoginObservation'),
+      packedFirstLoopProbeSource.indexOf('async function devReadyObservation'),
+    );
+    const devReadyModeSource = packedFirstLoopProbeSource.slice(
+      packedFirstLoopProbeSource.indexOf('async function devReadyObservation'),
+      packedFirstLoopProbeSource.indexOf('async function transactionalBuildObservation'),
+    );
+    const opaqueModeSource = packedFirstLoopProbeSource.slice(
+      packedFirstLoopProbeSource.indexOf('async function opaqueBoundaryObservation'),
+      packedFirstLoopProbeSource.indexOf('function startDevServer'),
+    );
+    expect(sqliteModeSource).toContain('waitForPackedDevListener(');
+    expect(sqliteModeSource).not.toContain('waitForPackedDevReadiness(');
+    expect(opaqueModeSource).toContain('waitForPackedDevListener(');
+    expect(opaqueModeSource).not.toContain('waitForPackedDevReadiness(');
+    expect(devReadyModeSource).toContain('waitForPackedDevReadiness(');
+    expect(devReadyModeSource).not.toContain('waitForPackedDevListener(');
+    for (const servedModeSource of [sqliteModeSource, devReadyModeSource, opaqueModeSource]) {
+      expect(servedModeSource).toContain('await createKnownFailureServedScaffold(packedRelease');
+      expect(servedModeSource).not.toContain('prepareInstalledCommandScaffoldFixture');
+    }
+    expect(
+      packedFirstLoopProbeSource.match(/prepareInstalledCommandScaffoldFixture/gu),
+    ).toHaveLength(4);
+    expect(packedFirstLoopProbeSource).toContain('linkPackedNodeModules: false');
+    expect(packedFirstLoopProbeSource).toContain("['exec', 'kovo', 'check', 'lifecycle']");
+    expect(packedFirstLoopProbeSource).toContain("['rebuild']");
+    expect(packedFirstLoopProbeSource).toContain(
+      'assertInstalledPackedCli(appRoot, packedPackages)',
+    );
+    expect(packedFirstLoopProbeSource).toContain("entry.name === 'package/dist/bin.mjs'");
+    expect(packedFirstLoopProbeSource).toContain(
+      'last body=${boundedHttpResponseBody(lastResponse.body)}',
+    );
+    expect(packedFirstLoopProbeSource).toContain('runKnownFailureProbeCommand({');
+    expect(packedFirstLoopProbeSource).not.toContain('spawnSync');
+    expect(packedFirstLoopProbeSource).toContain('knownFailureInstalledRuntimeEnvironment(');
   });
 
   it('keeps the retired full-catalog regression nightly without weakening its result contract', () => {
@@ -233,18 +322,25 @@ describe('known-failure register', () => {
     );
   });
 
-  it('materializes authenticated tarballs without running a dependency install', () => {
-    for (const source of [
-      packedProbeSource,
-      packedFirstLoopProbeSource,
-      packedReleaseHarnessSource,
-    ]) {
+  it('keeps command probes synthetic while served probes install private authenticated tarballs', () => {
+    for (const source of [packedProbeSource, packedReleaseHarnessSource]) {
       expect(source).not.toMatch(/\bpnpm\s+install\b/u);
       expect(source).not.toContain('--no-frozen-lockfile');
       expect(source).not.toContain('--ignore-scripts');
     }
-    expect(packedReleaseHarnessSource).toContain('validatedPackageTarballEntries');
-    expect(packedReleaseHarnessSource).toContain('verifyPackedAttestationBytes');
+    expect(packedReleaseHarnessSource).toContain('loadAuthenticatedPackedConsumerInputs');
+    expect(packedReleaseHarnessSource).toContain('materializeAuthenticatedTarballSet');
+    expect(authenticatedPackedConsumerSource).toContain('readBoundedRegularFile(');
+    expect(authenticatedPackedConsumerSource).toContain(
+      'writeFileSync(tarballPath, pkg.tarballBytes',
+    );
+    expect(authenticatedPackedConsumerSource).toContain('mode: 0o400');
+    expect(packedFirstLoopProbeSource).toContain("'--ignore-scripts'");
+    expect(packedFirstLoopProbeSource).toContain("'--strict-peer-dependencies'");
+    expect(packedFirstLoopProbeSource).toContain("'--store-dir'");
+    expect(packedFirstLoopProbeSource).toContain('applyEgressFloorEnv(');
+    expect(packedFirstLoopProbeSource).toContain('allowlist: ciEgressPolicies.install');
+    expect(packedFirstLoopProbeSource).toContain("allowlist: [], mode: 'deny'");
   });
 
   it('runs login and opaque-boundary retirement probes against the exact packed starter', () => {
@@ -261,7 +357,8 @@ describe('known-failure register', () => {
     expect(budgets.metrics['ui.fullCatalog.peakRssBytes']).not.toHaveProperty('knownFailure');
     expect(packedFirstLoopProbeSource).toContain('collectProcessTreeRssKiB');
     expect(packedFirstLoopProbeSource).toContain('2_048');
-    expect(packedFirstLoopProbeSource).toContain('NODE_OPTIONS: null');
+    expect(packedFirstLoopProbeSource).toContain('knownFailurePackedRuntimeEnvironment');
+    expect(packedReleaseHarnessSource).toContain('NODE_OPTIONS: null');
   });
 
   it('reports missing IDs, missing probe files, and stale unregistered probe files', () => {

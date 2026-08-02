@@ -217,9 +217,7 @@ export function validateDevexCiPolicy(policy, options = {}) {
     }
     if (
       gate.scope === 'step' &&
-      !gate.commands.some((command) =>
-        command.startsWith(`timeout ${String(gate.budgetMinutes)}m `),
-      )
+      !gate.commands.some((command) => commandEnforcesStepBudget(command, gate.budgetMinutes))
     ) {
       findings.push(`${label} step budget must be enforced by its exact timeout command`);
     }
@@ -649,6 +647,14 @@ export function runnerMinutes(gates, cadence) {
   return gates
     .filter((gate) => gate.cadence === cadence)
     .reduce((total, gate) => total + gate.budgetMinutes * gate.runnerCount, 0);
+}
+
+function commandEnforcesStepBudget(command, budgetMinutes) {
+  const match = /^timeout(?: --kill-after=(\d+)s)? (\d+)m \S/u.exec(command);
+  if (match === null || Number(match[2]) !== budgetMinutes) return false;
+  if (match[1] === undefined) return true;
+  const killAfterSeconds = Number(match[1]);
+  return Number.isSafeInteger(killAfterSeconds) && killAfterSeconds >= 1 && killAfterSeconds <= 60;
 }
 
 function countOccurrences(value, fragment) {
