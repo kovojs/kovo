@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
+import { threadId } from 'node:worker_threads';
 
 export const DEFAULT_TEST_PROCESS_MAX_OUTPUT_BYTES = 64 * 1024;
 export const DEFAULT_TEST_PROCESS_TERMINATION_GRACE_MS = 2_000;
@@ -14,6 +14,13 @@ const PROCESS_CENSUS_MAX_BYTES = 32 * 1024 * 1024;
 const PROCESS_CENSUS_MAX_LINE_BYTES = 2 * 1024 * 1024;
 const PROCESS_CENSUS_FIELDS = 'pid=,ppid=,pgid=,stat=,command=';
 const PROCESS_MARKER_PREFIX = 'KOVO_TEST_PROCESS_MARKER_';
+// SPEC §6.6: this marker separates concurrently supervised test trees; it is not a credential or
+// authenticity proof. PID + worker identity separate live module instances, the module-load
+// monotonic stamp separates reused identities, and the local sequence separates concurrent runs.
+const PROCESS_MARKER_INSTANCE = [process.pid, threadId, process.hrtime.bigint()]
+  .map((part) => part.toString(36).toUpperCase())
+  .join('_');
+let processMarkerSequence = 0n;
 
 /**
  * Run one test-owned command under a hard parent deadline. Each run adds a unique inherited
@@ -62,7 +69,7 @@ function markedChildEnvironment(requestedEnvironment, markerName) {
 async function runBoundedTestProcessWithDependencies(invocation, dependencies) {
   const limits = validateInvocation(invocation);
   const started = process.hrtime.bigint();
-  const markerName = `${PROCESS_MARKER_PREFIX}${randomBytes(24).toString('hex').toUpperCase()}`;
+  const markerName = nextProcessMarkerName();
   const output = combinedOutput(limits.maxOutputBytes, limits.captureOutput);
   let resolveOverflow;
   const overflow = new Promise((resolve) => {
@@ -194,6 +201,13 @@ async function runBoundedTestProcessWithDependencies(invocation, dependencies) {
     stdout: captured.stdout,
     timedOut: first.kind === 'timeout',
   };
+}
+
+function nextProcessMarkerName() {
+  processMarkerSequence += 1n;
+  return `${PROCESS_MARKER_PREFIX}${PROCESS_MARKER_INSTANCE}_${processMarkerSequence
+    .toString(36)
+    .toUpperCase()}`;
 }
 
 export function boundedTestProcessCleanupBudgetMs(options = {}) {

@@ -8,6 +8,36 @@ import { runBoundedTestProcessForTest } from './index.test-process-supervisor.mj
 const itIfPosix = process.platform === 'win32' ? it.skip : it;
 
 describe('bounded test process output', () => {
+  itIfPosix(
+    'keeps concurrent cleanup marker identities distinct without credential entropy',
+    async () => {
+      const markerNames = new Set<string>();
+      const run = () =>
+        runBoundedTestProcessForTest(
+          {
+            args: ['-e', ''],
+            command: process.execPath,
+            cwd: resolve('.'),
+            supervisorTimeoutMs: 5_000,
+          },
+          {
+            snapshotProcessTable: async (markerName) => {
+              markerNames.add(markerName);
+              return new Map();
+            },
+          },
+        );
+
+      const outcomes = await Promise.all([run(), run()]);
+
+      expect(outcomes.every((outcome) => outcome.cleanupError === null)).toBe(true);
+      expect([...markerNames]).toHaveLength(2);
+      expect(
+        [...markerNames].every((name) => /^KOVO_TEST_PROCESS_MARKER_[0-9A-Z_]+$/u.test(name)),
+      ).toBe(true);
+    },
+  );
+
   itIfPosix('forwards live output with pipe backpressure without retaining it', async () => {
     const stdout = new SlowRecordingStream();
     const stderr = new SlowRecordingStream();

@@ -416,6 +416,22 @@
       "review": "Exact non-keyed SHA-256 digests verify bounded type-budget criteria, fixture, and compiler configuration bytes; they acquire no entropy, key material, or keyed operation."
     },
     {
+      "id": "crypto-door-build-publish",
+      "file": "scripts/build-publish.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind normalized, bounded @kovojs/ui vendored source bytes to their generated package-manifest integrity rows; they acquire no entropy, key material, or keyed operation."
+    },
+    {
+      "id": "crypto-door-ci-shards",
+      "file": "scripts/ci-shards.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind canonical packed-starter tarball bytes to the same-run shard manifest and verify those bytes before test installation; they acquire no entropy, key material, or keyed operation."
+    },
+    {
       "id": "crypto-door-pack-security",
       "file": "scripts/check-pack-security.mjs",
       "kind": "digest",
