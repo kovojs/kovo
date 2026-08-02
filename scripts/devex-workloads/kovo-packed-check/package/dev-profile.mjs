@@ -13,6 +13,26 @@ const READY_TIMEOUT_MS = 60_000;
 const EDIT_TIMEOUT_MS = 30_000;
 const POLL_INTERVAL_MS = 5;
 
+function hasCompleteKovoDevReadyReport(stdout, origin) {
+  const lines = stdout.replaceAll('\r\n', '\n').split('\n');
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!/^Kovo dev ready in \d+ms$/u.test(lines[index] ?? '')) continue;
+    const database = lines[index + 5] ?? '';
+    if (
+      (lines[index + 1] ?? '') === `  Local URL    ${origin}/` &&
+      (lines[index + 2] ?? '') === `  Network URL  ${origin}/ (loopback only)` &&
+      (lines[index + 3] ?? '') === '  Mode         development' &&
+      (lines[index + 4] ?? '') === '  App          src/app.tsx' &&
+      database.startsWith('  Database     ') &&
+      database.length > '  Database     '.length &&
+      (lines[index + 6] ?? '') === `  Devtool      ${origin}/__kovo`
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function digest(bytes) {
   return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 }
@@ -68,6 +88,7 @@ async function startKovoDevServer(options = {}) {
   let stdout = '';
   let stderr = '';
   let exit = null;
+  const origin = `http://127.0.0.1:${port}`;
   child.stdout.on('data', (chunk) => {
     stdout = appendBounded(stdout, chunk);
   });
@@ -94,7 +115,10 @@ async function startKovoDevServer(options = {}) {
         )} signal=${String(exit.signal)} ${exit.error?.message ?? stderr ?? stdout}`.trim(),
       );
     },
-    origin: `http://127.0.0.1:${port}`,
+    isReady() {
+      return hasCompleteKovoDevReadyReport(stdout, origin);
+    },
+    origin,
     transcript() {
       return { stderr, stdout };
     },
@@ -134,10 +158,13 @@ export async function waitForDevEvidence(options) {
     try {
       const response = await options.request(options.server.origin);
       const evidence = options.accept(response);
-      if (evidence !== null) {
+      const ready = options.server.isReady?.() ?? true;
+      if (evidence !== null && ready) {
         return { durationMs: Math.max(0, clock() - started), evidence };
       }
-      last = `status=${response.status} digest=${digest(response.body)}`;
+      last = ready
+        ? `status=${response.status} digest=${digest(response.body)}`
+        : 'complete kovo dev ready report pending';
     } catch (error) {
       last = error instanceof Error ? error.message : String(error);
     }

@@ -103,6 +103,7 @@ import {
   securityIsResponse,
   securityIsUint8Array,
   securityMapDelete,
+  securityMapForEach,
   securityMapGet,
   securityMapHas,
   securityMapSet,
@@ -457,7 +458,9 @@ export interface KovoAppShellDevDiagnosticLedger {
   allDiagnosticsForFile(fileName: string): KovoAppShellDevDiagnosticRecord | undefined;
   allDiagnosticsForModuleHref(href: string): KovoAppShellDevDiagnosticRecord | undefined;
   diagnosticsForModuleHref(href: string): KovoAppShellDevDiagnosticRecord | undefined;
+  firstErrorDiagnostic(): KovoAppShellDevDiagnosticRecord | undefined;
   recordModuleDiagnostics(record: KovoAppShellDevModuleDiagnostics): void;
+  renderDiagnostic(record: KovoAppShellDevDiagnosticRecord): RoutePageResponse & { body: string };
 }
 
 const requestDiagnosticStores = createWitnessWeakMap<
@@ -488,6 +491,13 @@ export function createKovoAppShellDevDiagnosticLedger(): KovoAppShellDevDiagnost
     diagnosticsForModuleHref(href) {
       const fileName = securityMapGet(hrefToFileName, normalizedModuleHref(href));
       return fileName === undefined ? undefined : securityMapGet(moduleRecords, fileName);
+    },
+    firstErrorDiagnostic() {
+      let first: KovoAppShellDevDiagnosticRecord | undefined;
+      securityMapForEach(moduleRecords, (record) => {
+        first ??= record;
+      });
+      return first;
     },
     recordModuleDiagnostics(record) {
       const fileName = slashPath(record.fileName);
@@ -521,6 +531,13 @@ export function createKovoAppShellDevDiagnosticLedger(): KovoAppShellDevDiagnost
       for (let index = 0; index < allHrefs.length; index += 1) {
         securityMapSet(hrefToFileName, normalizedModuleHref(allHrefs[index]!), fileName);
       }
+    },
+    renderDiagnostic(record) {
+      const fileName = viteDevOwnDataValue(record, 'fileName', 'Kovo Vite dev diagnostic record');
+      if (typeof fileName !== 'string' || securityMapGet(allModuleRecords, fileName) !== record) {
+        throw new TypeError('Kovo Vite dev refused a diagnostic record not owned by its ledger.');
+      }
+      return renderDiagnosticDocumentForOwnedRecord(record);
     },
   };
   registerRequestDiagnosticStore(ledger, requestRecords);
@@ -2239,7 +2256,9 @@ export function renderKovoAppShellViteDevDiagnosticResponse(
 
   const url = viteDevUrlSnapshot(request.url ?? '/', 'http://kovo.local');
   const requestRecord = requestDiagnosticForHref(diagnostics, url.pathname + url.search);
-  if (requestRecord) return renderDiagnosticDocumentForRecord(requestRecord);
+  // Request-local records are minted by this live SSR graph, while compiler module records are
+  // owned by the config graph's ledger closure. Render each in the realm that registered it.
+  if (requestRecord) return renderDiagnosticDocumentForOwnedRecord(requestRecord);
 
   const match = matchShellDispatch({
     endpoints: app.endpoints,
@@ -2251,7 +2270,7 @@ export function renderKovoAppShellViteDevDiagnosticResponse(
     const record = diagnostics.diagnosticsForModuleHref(url.pathname);
     if (!record) return undefined;
 
-    const document = renderDiagnosticDocumentForRecord(record);
+    const document = diagnostics.renderDiagnostic(record);
     if (securityStringToLowerCase(readHeader(request.headers, 'Kovo-Fragment') ?? '') !== 'true') {
       return document;
     }
@@ -2280,13 +2299,19 @@ export function renderKovoAppShellViteDevDiagnosticResponse(
 
     // SPEC §11.3: dev page requests depending on a failed module answer with
     // the same server-rendered teaching diagnostic document, never a local policy.
-    return renderDiagnosticDocumentForRecord(record);
+    return diagnostics.renderDiagnostic(record);
   }
 
-  return undefined;
+  // SPEC §9.5.1: compiler-owned dev bundles may collapse component representations into the app
+  // bootstrap instead of exposing route-local modulepreloads. In that topology a successfully
+  // authenticated compiler error still invalidates the app aggregate even though no authored
+  // route hint can name it. Keep the last-good app as matching authority, but answer its page
+  // routes with the same teaching record until a clean compile clears the ledger.
+  const aggregateRecord = diagnostics.firstErrorDiagnostic();
+  return aggregateRecord === undefined ? undefined : diagnostics.renderDiagnostic(aggregateRecord);
 }
 
-function renderDiagnosticDocumentForRecord(
+function renderDiagnosticDocumentForOwnedRecord(
   record: KovoAppShellDevDiagnosticRecord,
 ): RoutePageResponse & { body: string } {
   return renderDiagnosticDocument({

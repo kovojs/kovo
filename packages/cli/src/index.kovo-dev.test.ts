@@ -26,6 +26,10 @@ import {
   waitForKovoDevReadiness,
 } from '../../../scripts/lib/dev-ready-probe-contract.mjs';
 import {
+  SOURCE_DIAGNOSTIC_VARIANT,
+  SOURCE_VARIANTS,
+} from '../../../scripts/devex-workloads/kovo-packed-check/package/workload.mjs';
+import {
   formatAuthenticatedKovoDevReadyReport,
   isolateAuthoredDevPluginOptions,
   parseDevArgs,
@@ -958,6 +962,95 @@ throw new Error('candidate evaluation failed');
     DEV_READY_HMR_TEST_TIMEOUT_MS,
   );
 
+  it(
+    'keeps the last-good graph alive through a KV235 component edit and recovers',
+    async () => {
+      const root = devFixture('kv235-runner-hmr');
+      const appFile = join(root, 'src/app.tsx');
+      const componentDirectory = join(root, 'src/components');
+      const componentFile = join(componentDirectory, 'counter-island.tsx');
+      mkdirSync(componentDirectory, { recursive: true });
+      writeFileSync(
+        join(root, 'src/kovo.ts'),
+        `import { defineKovo } from '@kovojs/server';
+
+export const app = defineKovo({
+  appId: '6ca7d9e8-9d8f-4b65-a261-3f1a33b3d8c1',
+});
+`,
+        'utf8',
+      );
+      writeFileSync(
+        appFile,
+        `/** @jsxImportSource @kovojs/server */
+import { benchmarkQuery, CounterIsland } from './components/counter-island.js';
+import { app } from './kovo.js';
+
+const home = app.route('/', {
+  access: app.publicAccess('KV235 dev recovery fixture'),
+  page: () => (
+    <main>
+      <h1>Kovo KV235 dev recovery fixture</h1>
+      <CounterIsland />
+    </main>
+  ),
+});
+
+export default app.assemble({
+  queries: [benchmarkQuery],
+  routes: [home],
+});
+`,
+        'utf8',
+      );
+      writeFileSync(componentFile, SOURCE_VARIANTS[0], 'utf8');
+      const port = await reservePort();
+      const child = spawnKovoDev(root, port, false, false, './src/app.tsx');
+      const output = collectKovoDevOutput(child, port, 'src/app.tsx');
+      const url = `http://127.0.0.1:${port}/`;
+
+      try {
+        await waitForInitialKovoDevReady(port, child, output);
+        await expect(
+          fetchBodyContaining(
+            url,
+            'data-revision="zero"',
+            child,
+            output,
+            DEV_HMR_TRANSITION_BUDGET_MS,
+          ),
+        ).resolves.toContain('Kovo KV235 dev recovery fixture');
+
+        writeFileSync(componentFile, SOURCE_DIAGNOSTIC_VARIANT, 'utf8');
+        const diagnosticBody = await fetchBodyContaining(
+          url,
+          'KV235',
+          child,
+          output,
+          DEV_HMR_TRANSITION_BUDGET_MS,
+          fetch,
+          500,
+        );
+        expect(diagnosticBody).toContain('counter-island.tsx');
+        assertKovoDevChildRunning(child, output, 'KV235 teaching diagnostic recovery');
+
+        writeFileSync(componentFile, SOURCE_VARIANTS[1], 'utf8');
+        await expect(
+          fetchBodyContaining(
+            url,
+            'data-revision="one"',
+            child,
+            output,
+            DEV_HMR_TRANSITION_BUDGET_MS,
+          ),
+        ).resolves.toContain('Kovo KV235 dev recovery fixture');
+      } finally {
+        await stopChild(child);
+      }
+    },
+    DEV_READY_HMR_TEST_TIMEOUT_MS,
+  );
+
   it.each(['response acquisition', 'response body'] as const)(
     'aborts a stalled HMR transition %s at the nominal deadline and releases it',
     async (stage) => {
@@ -1158,8 +1251,9 @@ function spawnKovoDev(
   port: number,
   explicitConfig = false,
   debug = false,
+  appModule = './src/app.ts',
 ): ChildProcessWithoutNullStreams {
-  const args = ['dev', './src/app.ts', '--root', root];
+  const args = ['dev', appModule, '--root', root];
   if (explicitConfig) {
     args[args.length] = '--config';
     args[args.length] = join(root, 'vite.config.ts');
@@ -1204,10 +1298,14 @@ function collectChildOutput(child: ChildProcessWithoutNullStreams): {
   return output;
 }
 
-function collectKovoDevOutput(child: ChildProcessWithoutNullStreams, port: number) {
+function collectKovoDevOutput(
+  child: ChildProcessWithoutNullStreams,
+  port: number,
+  appEntry = 'src/app.ts',
+) {
   const startedAt = performance.now();
   const readyExpected = {
-    appEntry: 'src/app.ts',
+    appEntry,
     database: 'none configured',
     localUrl: `http://127.0.0.1:${port}/`,
     mode: 'development',
@@ -1364,6 +1462,7 @@ async function fetchBodyContaining(
   output: { combined(): string },
   timeoutMs: number,
   request: typeof fetch = fetch,
+  expectedStatus = 200,
 ): Promise<string> {
   const deadline = performance.now() + timeoutMs;
   let latest = '';
@@ -1383,7 +1482,7 @@ async function fetchBodyContaining(
     try {
       response = await request(url, { signal: abortController.signal });
       latest = await response.text();
-      if (response.status === 200 && latest.includes(expected)) return latest;
+      if (response.status === expectedStatus && latest.includes(expected)) return latest;
     } catch {
       // Startup and an in-progress watcher settlement are ordinary retry states.
     } finally {

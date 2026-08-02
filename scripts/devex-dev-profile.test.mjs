@@ -107,6 +107,38 @@ describe('packed Kovo dev latency profile', () => {
     expect(result).toEqual({ durationMs: 10, evidence: { body: 'served' } });
   });
 
+  it('does not mutate past HTTP readiness before the complete CLI ready report', async () => {
+    let now = 0;
+    let ready = false;
+    let requests = 0;
+    const result = await waitForDevEvidence({
+      accept: (response) => ({ body: response.body }),
+      clock: () => now,
+      delay: async () => {
+        now += 5;
+        ready = true;
+      },
+      label: 'authenticated readiness fixture',
+      request: async () => {
+        requests += 1;
+        return { body: 'HTTP graph already observable', status: 200 };
+      },
+      server: {
+        assertRunning() {},
+        isReady: () => ready,
+        origin: 'http://127.0.0.1:4173',
+        transcript: () => ({ stderr: '', stdout: '' }),
+      },
+      timeoutMs: 20,
+    });
+
+    expect(requests).toBe(2);
+    expect(result).toEqual({
+      durationMs: 5,
+      evidence: { body: 'HTTP graph already observable' },
+    });
+  });
+
   it('stops a spawned server when transition evidence never appears', async () => {
     let source = SOURCE_VARIANTS[0];
     let now = 0;

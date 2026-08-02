@@ -205,6 +205,36 @@ describe('server app shell Vite dev seam', () => {
     });
   });
 
+  it('renders authenticated aggregate diagnostics for bundled routes without modulepreloads', () => {
+    const diagnostics = createKovoAppShellDevDiagnosticLedger();
+    const app = createApp({ routes: [route('/cart')] });
+    diagnostics.recordModuleDiagnostics({
+      diagnostics: [
+        devDiagnostic(
+          'KV235',
+          'src/components/cart.tsx',
+          'App source hand-authors lowered IR/string-rendered components.',
+        ),
+      ],
+      fileName: 'src/components/cart.tsx',
+    });
+
+    expect(
+      renderKovoAppShellViteDevDiagnosticResponse(app, request('/cart'), diagnostics),
+    ).toMatchObject({
+      body: expect.stringContaining('<p class="kovo-diagnostic-code">KV235</p>'),
+      status: 500,
+    });
+
+    diagnostics.recordModuleDiagnostics({
+      diagnostics: [],
+      fileName: 'src/components/cart.tsx',
+    });
+    expect(
+      renderKovoAppShellViteDevDiagnosticResponse(app, request('/cart'), diagnostics),
+    ).toBeUndefined();
+  });
+
   it('records endpoint posture mismatches in the dev diagnostic ledger', async () => {
     const diagnostics = createKovoAppShellDevDiagnosticLedger();
     const app = createApp({
