@@ -1,11 +1,15 @@
 {
   "arms": {
     "arm-a": {
-      "eligible": true,
+      "eligible": false,
       "gates": {
         "artifacts": {
-          "details": [],
-          "pass": true
+          "details": [
+            "compiler-packed.tgz differs from the independently sealed v6 authority",
+            "generated-app.ts differs from the independently sealed v6 authority",
+            "mutation/selection coverage is incomplete"
+          ],
+          "pass": false
         },
         "compilerAndGraph": {
           "details": [],
@@ -24,8 +28,10 @@
           "pass": true
         },
         "performance": {
-          "details": [],
-          "pass": true
+          "details": [
+            "warm completion p95 exceeds threshold"
+          ],
+          "pass": false
         },
         "publicForgery": {
           "details": [],
@@ -34,11 +40,15 @@
       }
     },
     "arm-b": {
-      "eligible": true,
+      "eligible": false,
       "gates": {
         "artifacts": {
-          "details": [],
-          "pass": true
+          "details": [
+            "compiler-packed.tgz differs from the independently sealed v6 authority",
+            "generated-app.ts differs from the independently sealed v6 authority",
+            "mutation/selection coverage is incomplete"
+          ],
+          "pass": false
         },
         "compilerAndGraph": {
           "details": [],
@@ -68,7 +78,7 @@
     }
   },
   "criteria": "kovo.app-contract-d1-criteria/v6",
-  "decision": "arm-a",
+  "decision": "fallback",
   "priorEvidenceDisposition": {
     "v1": "invalidated",
     "v2": "invalidated",
