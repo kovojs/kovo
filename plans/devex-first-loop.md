@@ -1,192 +1,61 @@
 # World-class DevEx — first loop
 
-Status: **active child ledger**
+Status: **implementation complete; final catalog, hosted budget, and deployment proof pending**
 
 Charter: `plans/worldclass-devex.md` Track 1. Gates: G1-G11 and G15. `SPEC.md` and the
-standing rules remain authoritative. Each checkbox closes only with the named behavior-level
-proof; shared root verification belongs in the latest-verification block.
+standing rules remain authoritative.
 
-## Command contract
+## Completed outcomes
 
-- [x] Define one semantic command/discriminant model for all current CLI capabilities.
-  - Evidence: `packages/cli/src/command-schema.ts` owns all 14 commands; the CLI semantic suite in
-    Latest verification proves the generated exhaustive request union.
-- [x] Derive argv parsing from that model, including aliases, required values, enums, defaults,
-      repeatability, categories, examples, and exit behavior.
-  - Evidence: `packages/cli/src/command-contract.test.ts` proves aliases, exact value grammars,
-    repeatables, defaults, and schema-correlated requests.
-- [x] Derive root and subcommand help from that model.
-  - Evidence: the CLI semantic and exit suites prove root/subcommand help is rendered from the
-    command schema.
-- [x] Derive shell-completion data and the authored command-reference input from that model.
-  - Evidence: `packages/cli/src/commands-manifest.test.ts` and `site/scripts/cli-ref.mjs` prove both
-    derived surfaces use the same manifest.
-- [x] Publish the framework-owned `kovo-diagnostic/v1` record and render human, JSON, and GitHub
-      adapters without re-deriving severity, help, or source ranges.
-  - Evidence: the 36-test diagnostic/command/doctor/standalone-verifier suite proves one projected
-    record per producer, hostile GitHub escaping, authenticated CLI envelopes, preserved command
-    protocols, and field parity across human, JSON, and GitHub adapters.
-- [x] Make root help, `help`, command help, and version write to stdout and exit 0.
-  - Evidence: the CLI exit suite in Latest verification passes the stdout/exit-zero matrix.
-- [x] Make usage/config errors exit 2 and proof/build findings exit 1.
-  - Evidence: `packages/cli/src/commands/build-export-exit-contract.test.ts` plus the CLI exit suite
-    prove configuration failures exit 2 and findings exit 1.
-- [x] Normalize `kovo explain` on one subcommand/discriminant grammar while preserving or
-      explicitly versioning `kovo-explain/v1`.
-  - Evidence: `packages/cli/src/explain-command-contract.test.ts` plus the command-manifest and MCP
-    suites prove one AST-derived view set, rejection of flag-shaped selectors, adapter parity, and
-    the unchanged `kovo-explain/v1` protocol.
+- [x] Derive parsing, help, completion, command references, semantic programmatic requests, and
+      0/1/2 exit behavior from one command schema.
+  - Evidence: CLI schema/contract/exit suites pass; `packages/cli/src/command-schema.ts` owns all
+    14 commands and `site/scripts/cli-ref.mjs` consumes its manifest.
+- [x] Make checks source-current and artifacts explicit, authenticated, and fail closed; make
+      builds transactional and keep failed redacted debug facts outside deploy output.
+  - Evidence: `packages/cli/src/graph-input.test.ts`, source-check, and transactional-output suites
+    reject missing/stale/partial/wrong-app proof and preserve the last good `dist`.
+- [x] Provide the complete post-bind ready report, loopback-only development origin, automatic
+      `/__kovo`, production/static absence, and framework-owned lifecycle/source/build/test
+      orchestration with no app-facing `vp` vocabulary.
+  - Evidence: focused CLI/dev-server/Better Auth/creator tests plus `check:publish` cover the ready
+    facts, local handoff, route boundary, and generated starter scripts.
+- [x] Make creator prompts/flags, host posture, SQLite acknowledgement/KV447 output, install-aware
+      handoff, public styled starter, and test-bootstrap ordering deterministic.
+  - Evidence: creator contract and starter runtime suites cover zero-write SQLite refusal,
+    Linux/macOS support, explicit Windows/WSL non-support, public UI/style use, and no internal
+    classifier mock.
+- [x] Project the seven first-run and top-20 authoring failures through one safe diagnostic record;
+      add bounded `doctor` and transactional `add --list|--dry-run|--install` workflows.
+  - Evidence: diagnostic-empathy, doctor, and add suites prove cause/anchor/next-step parity,
+    credential non-disclosure, zero-write dry run, staged promotion, and unambiguous rollback.
 
-## Source truth and transactional output
+## Remaining proof
 
-- [x] Make source-backed `kovo check` reject missing graph input rather than return vacuous `OK`.
-  - Evidence: `packages/cli/src/index.source-check.test.ts` proves a focused missing graph is an
-    error and bare `kovo check` re-derives current type/compiler facts.
-- [x] Separate source/check proof from deployment-only preset, retention, and skew proof.
-  - Evidence: both starter source-check fixtures pass without deployment posture while the same
-    focused CLI suite proves `kovo build` still rejects missing SPEC §14 retention.
-- [x] Stamp graph/cache facts with source-set, compiler, config, app-build, completion, and posture
-      identities.
-  - Evidence: `packages/cli/src/graph-input.test.ts` recomputes and adversarially mutates every
-    `kovo.graph.proof/v1` identity before artifact admission.
-- [x] Require explicit `--artifact <path>` plus matching identities for built-graph inspection.
-  - Evidence: the graph-input suite rejects a proved build graph in review mode and admits it only
-    through explicit artifact mode with an intact proof and runtime-posture subject.
-- [x] Stage builds outside `dist`, atomically promote a complete build, and preserve the last
-      known-good `dist` after failure.
-  - Evidence: the transactional-output suite proves complete promotion, rollback, and abort preserve
-    last-good output from a unique sibling staging tree.
-- [x] Keep failed-build debug facts redacted under `.kovo/debug/<build-id>` and out of deploy
-      output.
-  - Evidence: the transactional-output suite proves opt-in evidence contains only framework-owned
-    safe fields, copies no exception/environment secret or local path, and never enters `dist`.
-- [x] Add stale, partial, wrong-app, wrong-compiler, wrong-config, and failed-build adversarial
-      fixtures.
-  - Evidence: the 7-test graph/transaction suite mutates missing/failed completion, source/config,
-    compiler, app-token, and posture identities and rejects every inconsistent artifact.
-
-## Ready loop and starter
-
-- [x] Print bound local/network URL, mode, app entry, DB posture, devtool URL, and readiness
-      duration from framework-owned `kovo dev` output.
-  - Evidence: `packages/cli/src/index.kovo-dev.test.ts` proves the complete post-listen report.
-- [x] Auto-mount `/__kovo` in development without app Vite configuration.
-  - Evidence: the dev-server route fixtures prove the framework-owned mount and ready-line link.
-- [x] Prove the devtool route and implementation are absent from Node production and static-export
-      artifacts.
-  - Evidence: the production/static-export artifact census in `pnpm run check:publish` passes.
-- [x] Derive a complete loopback development origin from the bound URL while keeping non-loopback
-      and production origins explicit, fixed, and HTTPS-validated.
-  - Evidence: Better Auth environment/runtime-authority tests plus KF-DEVEX-001 prove the
-    post-listen loopback handoff and fail-closed deployment boundary.
-- [x] Move lifecycle, sound-subset, endpoint-posture, and parallel scheduling algorithms from the
-      starter scripts into versioned Kovo commands.
-  - Evidence: the focused 13-test CLI/starter suite proves framework-owned lifecycle,
-    sound-subset, project-quality scheduling, and endpoint-posture orchestration; the generated
-    starter contains no copied `scripts/check-*` implementation.
-- [x] Remove `vp` from the app-facing command vocabulary and update the three standing-rule
-      evidence contracts in the same checkpoint.
-  - Evidence: the focused creator metadata test and 3-test `kovo test` suite prove the generated
-    scripts use `kovo check`, `kovo test`, and `kovo build`; the template/docs/rule census found no
-    app-facing `vp` command, and the 201-snippet packed-docs gate passed.
-- [x] Make framework test bootstrap establish runtime ordering before eager app evaluation, then
-      remove the starter classifier mock and `isKovoApp` assertion.
-  - Evidence: the starter scaffold census proves the generated test owns a bootstrap-first public
-    HTTP journey with no setup mock/internal import; the DDL proof locks the runtime before loading
-    authored modules.
-- [x] Drive creator prompts and non-interactive flags from one schema.
-  - Evidence: the 46-test creator contract suite proves prompt choices, deterministic flags,
-    help/defaults, and interactive answers all project through `CREATE_KOVO_CREATOR_SCHEMA`.
-- [x] Record the supported v1 host-OS posture and add the chosen smoke journey or explicit
-      non-support statement.
-  - Evidence: the creator contract suite pins Linux/macOS support and the explicit technical-preview
-    non-support statement for native Windows and WSL in generated help/reference facts.
-- [x] Make creator success instructions conditional on install state and exact for the selected
-      scaffold.
-  - Evidence: the creator contract suite proves installed, skipped-install, and partial-install
-    output, including exact lifecycle, dev, and check commands without a false success claim.
-- [x] Refuse unacknowledged experimental SQLite with zero filesystem writes and show the
-      single-principal/KV447 posture on accepted SQLite journeys.
-  - Evidence: the focused creator suite passes 56 tests for zero-write refusal and accepted
-    single-principal output; the CLI/server KV447 slice passes 135 tests across check, build, and
-    the non-blocking dev ledger.
-- [x] Render the packed starter through public UI/style APIs and pass the named WCAG check.
-  - Evidence: the authenticated packed report at `b0bf20b05` retains styled-UI screenshot digests
-    and records zero violations in login and authenticated-CRUD states for every pinned WCAG 2.2
-    A/AA axe tag.
-
-## Diagnostics, doctor, add, deploy, and speed
-
-- [x] Cover the seven first-run failures with one safe cause, source/config anchor, and executable
-      next step.
-  - Evidence: `packages/cli/src/diagnostic-empathy.test.ts`, doctor, and lifecycle-policy suites
-    pass the exact seven-class matrix through human, JSON, and GitHub adapters.
-- [x] Cover the top 20 authoring diagnostics with the same three fields.
-  - Evidence: the diagnostic-empathy and core diagnostic-registry suites pass the exact 20-code
-    access/CSRF/trusted-output/Drizzle/optimism matrix through `kovo-diagnostic/v1`.
-- [x] Add `kovo doctor` checks for toolchain, duplicate packages, peers, config/preset, origin, DB
-      roles, migrations, retention, writable paths, and stale caches.
-  - Evidence: `packages/cli/src/index.kovo-doctor.test.ts` passes 6 tests covering the complete
-    healthy inventory, a fail-closed negative for every named axis, safe cache repair, symlink
-    refusal, credential non-disclosure, and human/JSON/GitHub parity.
-- [x] Add `kovo add --list`, typo suggestions, `--dry-run`, and `--install=auto|never`.
-  - Evidence: the 24-test add suite proves the command schema, exact component registry,
-    enum-derived typo suggestion, and both install modes.
-- [x] Prove `kovo add --dry-run` performs zero filesystem or process writes.
-  - Evidence: the add suite spies on framework filesystem/process boundaries and proves the
-    dry-run reports the plan with no directory, manifest, or package-manager mutation.
-- [x] Stage add/install mutations so output distinguishes completed work from planned work after
-      failure.
-  - Evidence: the add suite proves install failure rolls back staged component, manifest, and
-    lockfile changes while reporting the attempted and still-planned work separately.
-- [ ] Fix source-closure scanning so the packed 44-component copy-in fixture typechecks, checks,
-      and builds within the ratified RSS budget.
-  - Current proof: scanner pruning, formatter isolation, process-tree accounting, and bounded
-    attempts are implemented. Retirement requires one same-run report from current canonical
-    tarballs in which typecheck, check, and build all exit 0 below the ratified cap; a below-cap
-    measurement before another failure is not sufficient.
-- [ ] Ratify and meet the cold/warm/one-file G4 budgets on the final packed workload without
-      dropping a diagnostic-producing phase.
-  - Current proof: the focused source-check fixture records all 11 ordered phases and commit
-    `b80fd353c` replaces the build-time Vite server while preserving runnable/teardown behavior.
-    The named-runner N≥5 baseline, noise measurement, threshold derivation, and binding
-    ratification remain open in `plans/devex-gates.md`.
+- [ ] Reconfirm retired KF-DEVEX-007 on one final canonical packed-manifest run in which the
+      44-component copy-in fixture retains unimported files, typechecks, checks, and builds with
+      peak RSS ≤2.0 GiB.
+  - A below-cap partial run or package-local test does not satisfy this item. After the report
+    passes, run `pnpm run test:devex-known-failures-nightly` against the same manifest and require
+    `retired-pass`.
+- [ ] Ratify and meet cold/warm/one-file G4 budgets on the final packed workload without dropping
+      any of the 11 ordered diagnostic-producing phases.
+  - Required proof: the hosted ratification-only DevEx Nightly run records a named runner, exact
+    workload fingerprint, N≥5 samples, statistic, measured noise, rationale, and reviewed threshold
+    formula in `devex-budgets.json`.
 - [ ] Complete one packed create→build→deploy→public-200 journey on Cloud Run.
-  - Current proof: `.github/workflows/g11-cloud-run.yml` and its packed driver enforce the source
-    SHA, build token, retention posture, public probe, and cleanup contract. G11 remains open until
-    an actual successful deployment artifact records the public URL.
+  - Required proof: the manual G11 artifact binds public URL, source SHA, build token, retention
+    posture, and cleanup. The reviewed `g11-cloud-run` environment and its five GCP variables are
+    currently absent; do not create cloud/IAM state without explicit authority.
+- [ ] Close Track 1 only when the final packed journeys, KF-DEVEX-007 final-subject
+      reconfirmation, ratified G2-G4 and G16 budgets, and G11 are all green.
 
-## Exit
+## Current verification
 
-- [ ] Track 1 exit is proven through the Track 2 packed journeys and ratified budgets, with G1-G9,
-      G10, G11, and G15 green.
-
-## Latest verification
-
-- **CLI semantic suite:** `pnpm exec vitest run` over the 11 command/schema/docs boundary files
-  passed (11 files, 67 tests).
-- **CLI exit suite:** `pnpm exec vitest run` over command-contract, build/export-exit, and export
-  behavior passed (3 files, 34 tests).
-- **Command/diagnostic closeout:** focused explain, diagnostic-empathy, doctor, lifecycle, MCP,
-  manifest, renderer, and core-registry suites passed (8 files, 61 tests); scoped `vp check` passed
-  for all ten behavior-owning files.
-- **Starter scaffold census:** focused `packages/create-kovo/src/index.test.ts` passed (1 test,
-  35 skipped).
-- **Creator contract:** `packages/create-kovo/src/{cli-schema,index}.test.ts` passed (2 files,
-  46 tests), including schema-derived prompts/flags, host posture, SQLite pre-write refusal, and
-  install-aware handoff.
-- **First-loop closeout:** the focused add, source-closure, project-quality, creator, readiness,
-  known-failure, and packed-journey suites passed (7 files, 104 tests before the feedback merge;
-  post-merge source-closure/project-quality checks passed 5 tests). KF-DEVEX-002 now separates a
-  120-second listener-acquisition ceiling from the unchanged five-second post-bind readiness
-  contract. The exact packed probe completed in 46.65 seconds as a classified expected failure
-  rather than an infrastructure timeout; the post-bind scorecard budget remains unmet and
-  unratified.
-- **Starter DDL proof:** focused `packages/create-kovo/src/index.build.runtime.test.ts` passed
-  (1 test, 5 skipped), including initial, additive, reordered-FK, and serial-column boot.
-- **First-loop proof:** `pnpm run test:devex-known-failures-available` passes all ten registered
-  probes with eight retired behaviors and two explicit expected failures; no reproducer is pending.
-- `pnpm run check:publish` packed and attested all 14 public packages; the packed CLI consumer
-  installed with 265 production dependencies and zero advisories.
-- `pnpm run check:spec-conformance-closure` passed (92 codes, 72 error classes, 201 throw sites;
-  37 evidence files, 108 witnesses, 6 mandatory cases).
+- Authenticated packed Postgres/PGlite and experimental SQLite journeys at `b0bf20b05` pass all
+  nine phases with zero undocumented environment edits and zero pinned WCAG 2.2 A/AA axe
+  violations.
+- Focused command/diagnostic/doctor/add/creator/graph/build tests cover the completed outcomes
+  above; `pnpm run check:spec-conformance-closure` reports 92 codes and 72 error classes.
+- Final-candidate full-catalog/nightly, hosted ratification, and external G11 evidence are
+  intentionally not claimed here.

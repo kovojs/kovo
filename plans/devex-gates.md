@@ -1,139 +1,82 @@
 # World-class DevEx — release measurement
 
-Status: **active child ledger**
+Status: **measurement infrastructure complete; final nightly proof and hosted ratification pending**
 
 Charter: `plans/worldclass-devex.md` Track 2. Gates: G1-G4, G10, G12, G14, G16-G18.
-Measurements are informational until `devex-budgets.json` records their runner, sample count,
-statistic, noise allowance, rationale, and binding threshold.
+Runner-bound measurements are informational until `devex-budgets.json` binds the named runner,
+workload, sample count, statistic, noise allowance, rationale, and threshold formula.
 
-## Known failures
+## Known-failure ownership
 
-The baseline ID denominator is closed and ownership is explicit: Track 2 owns each packed
-reproducer, while the named implementation work item owns retirement.
+Track 2 owns every reproducer; the named fix track and implementation item own behavior changes.
+This literal table is also validated by `scripts/known-failure-register.mjs`.
 
-| ID           | Reproducer owner | Fix track | Implementation owner                            | Gates  |
-| ------------ | ---------------- | --------- | ----------------------------------------------- | ------ |
-| KF-DEVEX-001 | Track 2          | Track 1   | Track 1 development-origin work item            | G1     |
-| KF-DEVEX-002 | Track 2          | Track 1   | Track 1 dev-reporter work item                  | G2     |
-| KF-DEVEX-003 | Track 2          | Track 1   | Track 1 help/version exit-contract work item    | G5     |
-| KF-DEVEX-004 | Track 2          | Track 1   | Track 1 source-proof work item                  | G7     |
-| KF-DEVEX-005 | Track 2          | Track 1   | Track 1 transactional-build work item           | G8     |
-| KF-DEVEX-006 | Track 2          | Track 1   | Track 1 source/deployment-proof split work item | G1, G7 |
-| KF-DEVEX-007 | Track 2          | Track 1   | Track 1 kovo-add source-closure work item       | G4     |
-| KF-DEVEX-008 | Track 2          | Track 5   | Track 5b test-harness batch                     | G24    |
-| KF-DEVEX-009 | Track 2          | Track 3   | Track 3 version-matched agent-docs work item    | G13    |
-| KF-DEVEX-010 | Track 2          | Track 1   | Track 1 diagnostic-empathy work item            | G9     |
+| ID | Reproducer | Fix track | Implementation owner | Gates |
+| --- | --- | --- | --- | --- |
+| KF-DEVEX-001 | Track 2 | Track 1 | Track 1 development-origin work item | G1 |
+| KF-DEVEX-002 | Track 2 | Track 1 | Track 1 dev-reporter work item | G2 |
+| KF-DEVEX-003 | Track 2 | Track 1 | Track 1 help/version exit-contract work item | G5 |
+| KF-DEVEX-004 | Track 2 | Track 1 | Track 1 source-proof work item | G7 |
+| KF-DEVEX-005 | Track 2 | Track 1 | Track 1 transactional-build work item | G8 |
+| KF-DEVEX-006 | Track 2 | Track 1 | Track 1 source/deployment-proof split work item | G1, G7 |
+| KF-DEVEX-007 | Track 2 | Track 1 | Track 1 kovo-add source-closure work item | G4 |
+| KF-DEVEX-008 | Track 2 | Track 5 | Track 5b test-harness batch | G24 |
+| KF-DEVEX-009 | Track 2 | Track 3 | Track 3 version-matched agent-docs work item | G13 |
+| KF-DEVEX-010 | Track 2 | Track 1 | Track 1 diagnostic-empathy work item | G9 |
 
-- [x] Add a versioned machine-readable register for each confirmed baseline defect.
-  - Evidence: `scripts/known-failure-register.json` contains the closed ten-ID baseline under
-    `known-failures/v1`.
-- [x] Give every entry a stable ID, owner, observed layer, expected-failure probe, retirement
-      condition, and scorecard/track owner.
-  - Evidence: `pnpm run test:devex-foundation-schema` validates all ten rows and reports no
-    pending reproducer.
-- [x] Make the register gate fail for missing probes, duplicate IDs, stale paths, or an
-      unexpectedly passing probe that was not retired.
-  - Evidence: `scripts/known-failure-register.test.mjs` passes its schema, path, classifier, and
-    retirement mutation cases.
-- [x] Reproduce the auth-origin, silent-ready, help-exit, vacuous-check, stale-graph, KV417
-      coupling, full-catalog OOM, starter internal mock, placeholder-doc success, and opaque-500
-      defects through packed or artifact-level probes.
-  - Evidence: `pnpm run test:devex-known-failures-available` returns retired-pass for
-    KF-DEVEX-001-006 and KF-DEVEX-008-010; only nightly KF-DEVEX-007 remains expected-failing.
+## Completed infrastructure
 
-## Packed journeys
+- [x] Maintain one versioned ten-ID known-failure register with an executable packed/artifact probe,
+      owner, observed layer, retirement condition, and gate mapping for every baseline defect.
+  - Evidence: `scripts/known-failure-register.json` and its schema/mutation suite reject missing,
+    duplicated, stale, or unexpectedly passing entries.
+- [x] Run deterministic authenticated packed journeys for default Postgres/PGlite and explicit
+      experimental SQLite, preserving bounded redacted failures and recording phases, screenshots,
+      accessibility, concepts, install size/time, and dependencies.
+  - Evidence: the combined report at `b0bf20b05` passes both nine-phase journeys; artifact tests
+    prove bounded redacted preservation.
+- [x] Provide deterministic cold/warm/incremental, ready/edit, RSS, phase-census, and browser-byte
+      measurement drivers with a fail-closed ratification schema.
+  - Evidence: `scripts/devex-benchmark.mjs`, `kovo-devex-budgets/v8`, and their hostile policy
+    fixtures validate the driver and reject invented or unratified authority.
+- [x] Inventory public surface and consumer evidence without conflating manifest subpaths,
+      TypeScript entrypoints, declarations, or generated-family members.
+  - Evidence: at clean exact HEAD `260ffd6f5`, `node scripts/public-api-inventory.mjs --check`
+    reports 1,873/136/1,640/1,737 and consumer classes 105/114/1,892/18/4/416 with 33 excluded
+    directories. Built-tree counts are not accepted as the census.
+- [x] Enforce a classified DevEx CI budget and bounded PR reports for public surface, docs
+      freshness, and speed deltas.
+  - Evidence: `pnpm run test:devex-track2` reports 65/65 per-PR and 290/300 ordinary-nightly
+    runner-minutes and validates the always-run fail-closed report contract.
+- [x] Isolate hosted ratification from ordinary nightly topology and make release authorization
+      select a complete exact-SHA ordinary run rather than a newer ratification-only run.
+  - Evidence: `.github/workflows/devex-nightly.yml`, `.github/workflows/release.yml`, and the
+    workflow security suites require the four ordinary jobs exactly once and reject skipped,
+    duplicate, mismatched, or paginated authority.
 
-- [x] Build deterministic packed tarballs for the framework and both starter variants.
-  - Evidence: `node scripts/pack-public-packages.mjs` authenticated all 14 packages before the
-    two exact journey runs.
-- [x] Run default Postgres/PGlite-dev create→install→ready→first-200→login→CRUD→test→check→build.
-  - Evidence: the combined packed report at commit `b0bf20b05` passes all nine Postgres phases.
-- [x] Run the corresponding explicitly experimental SQLite journey.
-  - Evidence: the combined packed report at commit `b0bf20b05` passes all nine SQLite phases.
-- [x] Preserve failed apps as redacted CI artifacts.
-  - Evidence: diagnosed journey failures produced bounded, redacted failure manifests;
-    `scripts/golden-journey/artifacts.test.mjs` proves the preservation contract.
-- [x] Capture styled-UI screenshot and terminal-state accessibility results.
-  - Evidence: both exact reports contain authenticated screenshots and zero axe violations across
-    login and authenticated-CRUD states.
-- [x] Capture concepts encountered before first authenticated CRUD.
-  - Evidence: both exact reports separate imports, bindings, config keys, creator flags, prompts,
-    and environment edits; both record zero environment edits.
-- [x] Capture cold install duration, installed bytes, and direct/transitive dependency counts.
-  - Evidence: both exact reports record install time/RSS, physical bytes/files, and direct plus
-    transitive production dependency counts.
-- [x] Integrate the offline agent journey from the completed Track 3 agent-loop ledger.
-  - Evidence: `pnpm run test:devex-offline-agent` passes 3 files and 26 tests for the exact
-    scaffold/edit/check/fix protocol, structured diagnostic boundary, installed-doc boundary, and
-    deny-all-network posture.
+## Current known-failure state
 
-## Benchmark and budgets
+All ten entries, including KF-DEVEX-007, are `state: retired` in the register. KF-DEVEX-007's
+recorded evidence is the canonical three-sample authenticated packed run. The release candidate
+still requires a same-manifest full-catalog and nightly reconfirmation; the earlier retirement
+does not substitute for that final-subject proof.
 
-- [x] Add a deterministic benchmark driver for cold, warm, and one-file incremental checks.
-  - Evidence: the authenticated N=1 packed smoke in Latest verification proves the v3 cold,
-    warm-prime/timed, and changed-revision incremental phase census with direct CLI duration/RSS.
-- [x] Record ready, edit-to-diagnostic, edit-to-served-result, phase timings, peak RSS, and browser
-      bootstrap bytes.
-  - Evidence: the authenticated N=1 command in Latest verification records all eleven benchmark
-    metrics and binds ready/edit observations to exact response, diagnostic, and source digests.
-- [x] Version the budget schema and reject malformed, invented, or unratified binding budgets.
-  - Evidence: `pnpm run test:devex-foundation-schema` validates `kovo-devex-budgets/v8` and its
-    hostile ratification fixtures; only the two deterministic snapshot-size metrics are bound.
-- [ ] Ratify each runner-bound numeric gate from the final packed workload, a named runner,
-      baseline, target rationale, sample count, statistic, measured noise, and threshold formula.
-  - Current gap: runner and workload status remain `unratified`; 14 runner-bound metrics have no
-    ratification, fingerprint, or workload identity. The driver, transactional ratifier, and
-    complete phase census are machinery, not N≥5 evidence.
+- [ ] Run the final full-catalog reproducer from the canonical packed manifest with all 44 copied
+      components present, including unimported files; require typecheck/check/build exit 0 and each
+      process-tree peak RSS ≤2.0 GiB.
+- [ ] Run `pnpm run test:devex-known-failures-nightly` from that same manifest and require all ten
+      entries to report `retired-pass` before closing the final integration ledger.
+- [ ] Ratify G2-G4, G16, and full-catalog thresholds from the final hosted workload with N≥5.
+  - Dispatch only the reviewed ratification path. Review the artifact and threshold derivation;
+    workflow success alone does not authorize budget edits.
+- [ ] Close Track 2 only after the final packed/nightly proofs are deterministic, all retired
+      entries pass against the final subject, hosted budgets are bound, and PR reports remain
+      green.
 
-## Inventory and public-surface evidence
+## Latest accepted evidence
 
-- [x] Exclude nested dependencies, generated/dist/cache trees, packed fixtures, and throwaway apps
-      from authored-consumer evidence.
-  - Evidence: the foundation inventory reports 47 excluded directories and passes the reviewed
-    exclusion policy.
-- [x] Report authored examples, docs, package internals, generated emit, conformance, and tests as
-      separate consumer classes.
-  - Evidence: the inventory reports 90/128/154/18/4/456 files across the six classes.
-- [x] Report manifest subpaths, analyzed TypeScript entrypoints, exported declarations, and
-      generated-family members as distinct units.
-  - Evidence: the current census separates 1,839 manifest subpaths, 102 TypeScript entrypoints,
-    1,849 exported declarations, and 1,737 generated-family members.
-- [x] Add hostile fixtures proving excluded files cannot create false consumers.
-  - Evidence: `scripts/public-api-inventory.test.mjs` passes nested dependency, generated/cache,
-    packed-app, and throwaway-app hostile cases.
-- [x] Add the packed all-44-component reproducer while unimported copied files remain on disk.
-  - Evidence: executable KF-DEVEX-007 materializes the attested packed release, copies all 44
-    components, retains unimported files, and reproduces the bounded memory failure.
-
-## CI posture
-
-- [x] Set a total DevEx CI minute budget and classify every new gate as per-PR, nightly, or manual.
-  - Evidence: `pnpm run test:devex-track2` reports 65/65 per-PR and 290/300 nightly
-    runner-minutes and validates every declared gate against its workflow.
-- [x] Publish bounded PR reports for public surface, docs freshness, and speed deltas.
-  - Evidence: `pnpm run test:devex-track2` proves the always-run, fail-closed
-    `kovo-devex-pr-report/v1` workflow and renderer.
-- [x] Keep one compact current scorecard-status block in the charter rather than appending
-      historical transcripts.
-  - Evidence: `plans/worldclass-devex.md` carries one replace-in-place current-status paragraph
-    immediately above the atomic scorecard.
-- [ ] Track 2 exit: packed journeys deterministic, known-failure mappings complete, budgets
-      ratified, and PR reports visible.
-
-## Latest verification
-
-- `pnpm run test:devex-foundation-schema` passed (4 files, 51 tests), reporting 1,839 public
-  subpaths, 1,849 exported declarations, 47 excluded directories, and a complete ten-ID register.
-- `pnpm run test:devex-known-failures-available` passed: nine retired behaviors pass,
-  nightly KF-DEVEX-007 remains the sole expected failure, and executable closure is complete.
-- Exact authenticated packed journeys at `b0bf20b05` passed for Postgres/PGlite and SQLite,
-  including login, enhanced CRUD, test, check, controlled-retention build, screenshot, and a11y.
-- `pnpm exec vitest run scripts/fcp-harness.test.mjs` passed (17 tests).
-- `node scripts/devex-benchmark.mjs --scenario .release/devex/kovo-packed-scenario.json --samples 1`
-  authenticated commit `f65c080ac`: cold 10,069.35 ms / 2,173,337,600 bytes; warm 9,548.86 ms /
-  2,282,389,504 bytes; incremental 9,809.03 ms / 2,275,278,848 bytes; ready
-  6,528.73/6,608.75 ms cold/warm; edit-to-diagnostic 1,063.01 ms; edit-to-served-result 1,032.01
-  ms; bootstrap 2,173 bytes. This proves the drivers only and is not ratification evidence.
-- `pnpm run check:publish` rebuilt, packed, inspected, and attested all 14 public packages; it
-  validated 3,096 classified documentation samples and the packed CLI consumer installed with 265
-  production dependencies and zero advisories.
+- `node scripts/public-api-inventory.mjs --check` and `node scripts/api-decision-ledger.mjs` passed
+  in the clean exact-HEAD worktree on 2026-08-01.
+- Prior N=1 smoke measurements prove driver completeness only; they are not ratification evidence.
+- Final full-catalog/nightly results and hosted N≥5 evidence are intentionally absent at this
+  checkpoint and remain open above.

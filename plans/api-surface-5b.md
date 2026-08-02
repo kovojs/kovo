@@ -1,105 +1,47 @@
 # World-class DevEx — app-contract-dependent API batches
 
-Status: **active child ledger**
+Status: **implementation complete; final same-manifest standing seal pending**
 
-Charter: `plans/worldclass-devex.md` Track 5b. Dependency: D1 and the relevant Track 4 primitives.
-Gates: G17, G18, G22-G24. Every batch carries the full standing API/migration/snapshot/packed proof
-checklist from the charter.
+Charter: `plans/worldclass-devex.md` Track 5b. Gates: G17, G18, G22-G24. D1 selected the receiver-
+provenance app contract; every batch carries the full public API/migration/snapshot/packed proof
+checklist.
 
-## Server
+## Completed batches
 
-- [x] Keep only decision-ledger-backed daily declarations at the server root.
-  - Evidence: `packages/server/src/api-topology.test.ts` and the API ledger pin the daily root to
-    116 reviewed declarations.
-- [x] Move each advanced capability family to its named semantic task path.
-  - Evidence: the topology test imports every reviewed advanced family from its manifest-declared
-    semantic path and the migration suite rewrites the former root homes.
-- [x] Internalize resolved options, generated protocol/fragment shapes, framework DB carriers,
-      live-target authority, and `isKovoApp`.
-  - Evidence: the topology type refusals plus `pnpm run check:api-surface` reject every named
-    carrier from all manifest-public Server paths.
-- [x] Delete `committedSecretWaiver` or implement a real explain-visible AST lint before retaining
-      any replacement.
-  - Evidence: the topology source census and checked decision ledger prove the discarded heuristic
-    is absent from production Server source and public declarations.
-- [x] Remove duplicate server-root homes for core storage/verifier/scoped-key/browser-trust
-      constructors.
-  - Evidence: the topology test rejects each advanced authority from the root while loading its
-    one reviewed canonical task home.
-- [x] Keep and document `runtime-bootstrap` for the `SPEC.md` §6.6 literal-first boundary.
-  - Evidence: the topology test pins its public/API-reference/export metadata and
-    `docs/releases/server-task-topology-v1.md` documents the literal-first custom-adapter import.
-- [x] Reach the server ≤120 root target only through decision-backed concept reduction.
-  - Evidence: the decision ledger reports 116/120 root declarations and rejects duplicate homes,
-    reintroduced remove/internalize rows, or count-only `/types` moves.
-
-## Better Auth and optimism
-
-- [x] Reduce Better Auth human root to guards, CSRF/environment config, mounting, and mature
-      workflows.
-  - Evidence: `pnpm run check:api-surface` reports zero undecided exports; the root exports only
-    reviewed app-binding types, guards, environment/CSRF, mount, session, and password-reset APIs.
-- [x] Move generated backend binding/carrier machinery to a generated/private assembly boundary
-      and converge Postgres/SQLite shapes.
-  - Evidence: `/generated/postgres` and `/generated/sqlite` own compiler assembly while
-    `/postgres` and `/sqlite` expose the same app-owned options/result contract without accepting
-    a human-supplied system DB capability.
-- [x] Add real mount/OAuth and password-reset journeys or mark incomplete workflows experimental.
-  - Evidence: `packages/better-auth/README.md` classifies OAuth and password recovery as
-    experimental while naming email/password sign-in/out, sanitized sessions, and guards as the
-    mature workflows.
-- [x] Make inline mutation optimism the sole taught ordinary path.
-  - Evidence: the inline-optimism migration test, compiler suite, and guides teach
-    query-handle-bound `mutation({ optimistic })`; the CRM browser acceptance executes it through
-    the production loader.
-- [x] Remove duplicate plans/cast adapters unless an advanced example proves a standalone need.
-  - Evidence: commit `dcb784159`, the API decision ledger, and packed consumer refusals remove
-    `optimisticPlan`, `OptimisticPlan`, and the former cast/support adapters.
-
-## Test harness
-
-- [x] Implement an app-scoped harness whose types come from the imported app contract.
-  - Evidence: `packages/test/src/harness.test.ts` compiles inferred DB, request, route, mutation,
-    query, result, and declared-error types from the supplied app.
-- [x] Load runtime proof facts only from digest-verified, complete, matching app artifacts.
-  - Evidence: the focused harness suite executes imported app handles using only a verified graph
-    artifact and matching lock/source/config digests.
-- [x] Reject stale, partial, failed-build, and wrong-app artifacts.
-  - Evidence: the harness suite proves all four refusal paths plus missing identity and non-absolute
-    artifact/project paths.
-- [x] Move useful RLS/CSRF helpers to `@kovojs/test` and remove the parallel server/testing home.
-  - Evidence: package-export conformance covers `@kovojs/test/csrf` and `/postgres`;
-    `pnpm run check:api-surface` records the removed `@kovojs/server/testing` home.
-- [x] Remove `/test-case` unless a sound Vitest fixture API replaces it.
-  - Evidence: the decision/migration gates classify and exercise removal of the subpath and
-    `kovoTest` family; the package-export conformance fixture has no `/test-case` import.
-- [x] Split ordinary harness dependencies from Playwright and optional/native backend engines.
-  - Evidence: `pnpm run check:test-package-budget` proves the harness runtime closure contains none
-    of the optional Playwright, PGlite, or native SQLite peers.
-- [x] Ratify installed-size and dependency-count budgets before adding the harness to the starter.
-  - Evidence: the budget gate measures 3,088,503 installed bytes, nine package-store entries, and a
-    243,685-byte tarball within the dated ratchets.
-- [x] Add the dependency and a real inferred harness example to the packed starter.
-  - Evidence: G24 runs `templates/src/app.test.ts` with `createKovoTestHarness`, an imported app
-    contract, and the digest-verified successful-build graph (1 passed, 2 skipped).
-
-## Exit
-
-- [x] Server root meets G22 through ledger-backed decisions, not `/types` barrels.
+- [x] **Server:** keep 116 decision-backed daily root declarations; move advanced capabilities to
+      semantic task paths; internalize resolved options, generated protocol/fragment records, DB
+      carriers, live-target authority, and `isKovoApp`; delete `committedSecretWaiver`; remove
+      duplicate Core/Browser homes; retain documented literal-first `runtime-bootstrap`.
+  - Evidence: Server topology/migration tests plus `check:api-surface` prove 116/116 root names,
+    zero recursive leaks, canonical homes, and no `/types` count game.
+- [x] **Better Auth:** keep human guards, CSRF/environment configuration, mounting, and mature
+      workflows; converge Postgres/SQLite app bindings while moving generated backend carriers to
+      the generated/private assembly boundary; label OAuth/password recovery experimental.
+  - Evidence: generated API tests, packed consumer, README, and API ledger cover the converged
+    boundary and workflow classification.
+- [x] **Optimism:** make inline query-handle-bound `mutation({ optimistic })` the sole ordinary
+      path and remove standalone plan/cast adapters.
+  - Evidence: migration/compiler suites and the production CRM browser round trip prove
+    success/rejection/reload behavior through emitted allowlisted modules.
+- [x] **Test harness:** infer types from the imported app contract while admitting runtime graph
+      facts only from a complete matching digest-verified artifact; reject stale, partial, failed,
+      wrong-app, or path-invalid artifacts; consolidate helpers under `@kovojs/test`; remove
+      `/test-case` and the parallel Server home; bound dependencies/size; use the public harness in
+      the starter.
+  - Evidence: harness refusal/type suites, `check:test-package-budget`, API gates, and packed G24
+    prove the split type/runtime mechanisms and bounded closure.
+- [x] Meet G22 and G24 through the decision-backed Server root and inferred packed starter harness.
   - Evidence: `pnpm run check:api-surface` reports the 116-name Server root with zero recursive
-    leaks; Core's independently completed 33-name root belongs to the 5a ledger.
-- [x] Packed starter harness satisfies G24.
-  - Evidence: the packed starter runs `templates/src/app.test.ts` through
-    `createKovoTestHarness` with the imported app contract and digest-verified successful-build
-    graph.
-- [ ] All 5b batches pass their standing API/migration/snapshot/packed checklist from one final
-      integrated release manifest.
-  - Current gap: implementation and focused packed contracts are green, but the final
-    all-consumer/API standing seal remains a release-integration gate.
+    leaks; packed G24 runs `templates/src/app.test.ts` through `createKovoTestHarness` with the
+    imported app contract and matching digest-verified successful-build graph.
 
-## Latest verification
+## Remaining integration proof
 
-Latest verification: G24 passes in 290.89 seconds real; `pnpm run check:api-surface` reports 1,674
-ledger-backed declarations across 1,873 subpaths and passes 28 API/migration tests. Server topology
-and migration tests directly cover the 116-name root, task paths, carrier/waiver removals, and
-`runtime-bootstrap`; only the final integrated standing seal remains open.
+- [ ] Run Server, Better Auth, optimism, custom-adapter, and test-harness consumers from the one
+      final authenticated release manifest.
+- [ ] Close Track 5b only after that subject also passes the standing SPEC/API/migration/snapshot/
+      ratchet, packed-declaration `any`, publish, pack-security, certificate, and full release
+      acceptance gates.
+
+Focused and earlier packed proofs remain valid implementation evidence but do not close the final
+integrated seal.
