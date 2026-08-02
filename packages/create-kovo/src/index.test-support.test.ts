@@ -30,6 +30,7 @@ const soundSubsetScript = fileURLToPath(
   new URL('../../cli/src/commands/sound-subset.mjs', import.meta.url),
 );
 const repoNodeModules = fileURLToPath(new URL('../../../node_modules', import.meta.url));
+const liveProcessCleanupGraceMs = 1_000;
 
 describe('create-kovo starter test support', () => {
   it.skipIf(process.platform !== 'linux' && process.platform !== 'darwin')(
@@ -100,11 +101,16 @@ describe('create-kovo starter test support', () => {
               'setInterval(() => {}, 1000);',
             ].join(''),
           ],
-          { cwd: process.cwd(), signalGraceMs: 100, timeoutMs: 1_000 },
+          {
+            cwd: process.cwd(),
+            signalGraceMs: liveProcessCleanupGraceMs,
+            timeoutMs: 1_000,
+          },
         );
       } catch (error) {
         expect(error).toBeInstanceOf(Error);
         expect((error as Error).message).toContain('Command timed out after 1000ms');
+        expect((error as Error).message).not.toContain('Process-tree cleanup failed:');
         const stdout = (error as { stdout?: unknown }).stdout;
         expect(typeof stdout).toBe('string');
         descendantPid = Number.parseInt(String(stdout).trim(), 10);
@@ -114,6 +120,7 @@ describe('create-kovo starter test support', () => {
       expect(Number.isSafeInteger(descendantPid)).toBe(true);
       expect(await processStopsWithin(descendantPid!, 1_000)).toBe(true);
     },
+    10_000,
   );
 
   it.skipIf(process.platform === 'win32')(
@@ -161,23 +168,29 @@ describe('create-kovo starter test support', () => {
               'setInterval(() => {}, 1000);',
             ].join(''),
           ],
-          { cwd: process.cwd(), signalGraceMs: 100, timeoutMs: 2_500 },
+          {
+            cwd: process.cwd(),
+            signalGraceMs: liveProcessCleanupGraceMs,
+            timeoutMs: 6_500,
+          },
         );
       } catch (error) {
         expect(error).toBeInstanceOf(Error);
         expect((error as Error).message).toMatch(
           /fixture setup command timed out.+inside its aggregate deadline/u,
         );
+        expect((error as Error).message).not.toContain('Process-tree cleanup failed:');
         descendantPid = Number.parseInt(String((error as { stdout?: unknown }).stdout).trim(), 10);
       }
 
       // Timer callbacks cannot run while a hosted shard is descheduled. Keep the assertion tight
       // enough to catch a second cleanup window while allowing bounded wall-clock scheduler jitter;
       // the supervisor seam separately exercises the single absolute cleanup-deadline path.
-      expect(Date.now() - startedAt).toBeLessThan(3_000);
+      expect(Date.now() - startedAt).toBeLessThan(7_000);
       expect(Number.isSafeInteger(descendantPid)).toBe(true);
       expect(await processStopsWithin(descendantPid!, 1_000)).toBe(true);
     },
+    10_000,
   );
 
   it('keeps local source fixtures linked unless CI supplies the same-run packed build', () => {
