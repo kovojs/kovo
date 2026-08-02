@@ -1020,6 +1020,15 @@ describe('ci-shards', () => {
     expect(securityOrderSource).toMatch(
       /function staticCacheSymlinkIt\([\s\S]*?STATIC_CACHE_SYMLINK_TEST_TIMEOUT_MS,[\s\S]*?\n\}/u,
     );
+    expect(securityOrderSource).toContain(
+      'const UNDECLARED_VITE_CONFIG_PROCESS_TIMEOUT_MS = 240_000;',
+    );
+    expect(securityOrderSource).toContain(
+      'const UNDECLARED_VITE_CONFIG_TEST_TIMEOUT_MS = kovoCliTestTimeoutMs(',
+    );
+    expect(securityOrderSource).toMatch(
+      /function undeclaredViteConfigIt\([\s\S]*?UNDECLARED_VITE_CONFIG_TEST_TIMEOUT_MS,[\s\S]*?\n\}/u,
+    );
     const cacheSymlinkStart = securityOrderSource.indexOf('staticCacheSymlinkIt(() => {');
     const cacheSymlinkEnd = securityOrderSource.indexOf('\n\n  it(', cacheSymlinkStart);
     expect(cacheSymlinkStart).toBeGreaterThan(-1);
@@ -1028,15 +1037,20 @@ describe('ci-shards', () => {
     expect(cacheSymlinkProof).toContain('STATIC_CACHE_SYMLINK_PROCESS_TIMEOUT_MS,');
     expect(cacheSymlinkProof).toContain('expect(result.error, result.stderr).toBeUndefined();');
     expect(cacheSymlinkProof).toContain('expect(result.signal, result.stderr).toBeNull();');
-    const undeclaredViteStart = securityOrderSource.indexOf(
-      "it('keeps real build and export outside undeclared authored Vite config hooks",
-    );
+    const undeclaredViteStart = securityOrderSource.indexOf('undeclaredViteConfigIt(() => {');
     const undeclaredViteEnd = securityOrderSource.indexOf('\n\n  it(', undeclaredViteStart);
     expect(undeclaredViteStart).toBeGreaterThan(-1);
     expect(undeclaredViteEnd).toBeGreaterThan(undeclaredViteStart);
-    expect(securityOrderSource.slice(undeclaredViteStart, undeclaredViteEnd)).toContain(
-      '}, 270_000);',
+    const undeclaredViteProof = securityOrderSource.slice(undeclaredViteStart, undeclaredViteEnd);
+    expect(undeclaredViteProof.match(/UNDECLARED_VITE_CONFIG_PROCESS_TIMEOUT_MS,/gu)).toHaveLength(
+      2,
     );
+    expect(
+      undeclaredViteProof.match(/expect\(\w+\.error, \w+\.stderr\)\.toBeUndefined\(\);/gu),
+    ).toHaveLength(2);
+    expect(
+      undeclaredViteProof.match(/expect\(\w+\.signal, \w+\.stderr\)\.toBeNull\(\);/gu),
+    ).toHaveLength(2);
     expect(redirectSource).toContain('}, 420_000);');
     expect(deferSource).toContain('    480_000,');
     expect(routeOutcomesSource).toContain('KOVO_BUILD_TEST_PROCESS_DEADLINE_MS');
