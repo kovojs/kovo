@@ -30,19 +30,22 @@ This literal table is also validated by `scripts/known-failure-register.mjs`.
       owner, observed layer, retirement condition, and gate mapping for every baseline defect.
   - Evidence: `scripts/known-failure-register.json` and its schema/mutation suite reject missing,
     duplicated, stale, or unexpectedly passing entries.
-- [x] Run deterministic authenticated packed journeys for default Postgres/PGlite and explicit
-      experimental SQLite, preserving bounded redacted failures and recording phases, screenshots,
-      accessibility, concepts, install size/time, and dependencies.
-  - Evidence: the combined report at `b0bf20b05` passes both nine-phase journeys; artifact tests
-    prove bounded redacted preservation.
+- [x] Provide a deterministic authenticated packed-journey runner for default Postgres/PGlite and
+      explicit experimental SQLite, preserving bounded redacted failures and recording phases,
+      screenshots, accessibility, concepts, install size/time, and dependencies.
+  - Evidence: the combined report at `b0bf20b05` exercised both former nine-phase journeys;
+    artifact tests prove bounded redacted preservation. The code-owned contract now requires
+    create→install→ready→first-200→login→CRUD→ready-warm→check→build→test, whose final-subject run
+    remains open below.
 - [x] Provide deterministic cold/warm/incremental, ready/edit, RSS, phase-census, and browser-byte
       measurement drivers with a fail-closed ratification schema.
   - Evidence: `scripts/devex-benchmark.mjs`, `kovo-devex-budgets/v8`, and their hostile policy
     fixtures validate the driver and reject invented or unratified authority.
 - [x] Inventory public surface and consumer evidence without conflating manifest subpaths,
       TypeScript entrypoints, declarations, or generated-family members.
-  - Evidence: at clean exact HEAD `260ffd6f5`, `node scripts/public-api-inventory.mjs --check`
-    reports 1,873/136/1,640/1,737 and consumer classes 105/114/1,892/18/4/416 with 33 excluded
+  - Evidence: at clean exact audit subject `838007981`,
+    `node scripts/public-api-inventory.mjs --check` reports 1,873/136/1,640/1,737 and consumer
+    classes 105/114/1,892/18/4/416 with 47 excluded
     directories. Built-tree counts are not accepted as the census.
 - [x] Enforce a classified DevEx CI budget and bounded PR reports for public surface, docs
       freshness, and speed deltas.
@@ -61,6 +64,9 @@ recorded evidence is the canonical three-sample authenticated packed run. The re
 still requires a same-manifest full-catalog and nightly reconfirmation; the earlier retirement
 does not substitute for that final-subject proof.
 
+- [ ] Run both current ten-phase packed journeys against the final canonical manifest and require
+      create→install→ready→first-200→login→CRUD→ready-warm→check→build→test, zero undocumented
+      environment edits, and zero pinned WCAG 2.2 A/AA axe violations.
 - [ ] Run the final full-catalog reproducer from the canonical packed manifest with all 44 copied
       components present, including unimported files; require typecheck/check/build exit 0 and each
       process-tree peak RSS ≤2.0 GiB.
@@ -76,7 +82,8 @@ does not substitute for that final-subject proof.
 ## Latest accepted evidence
 
 - `node scripts/public-api-inventory.mjs --check` and `node scripts/api-decision-ledger.mjs` passed
-  in the clean exact-HEAD worktree on 2026-08-01.
+  at clean exact audit subject `838007981` on 2026-08-01, with Core 33/target:60 and Server
+  116/target:116.
 - Prior N=1 smoke measurements prove driver completeness only; they are not ratification evidence.
 - Final full-catalog/nightly results and hosted N≥5 evidence are intentionally absent at this
   checkpoint and remain open above.

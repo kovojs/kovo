@@ -2,8 +2,9 @@
 
 Status: **active integration and release ledger**
 
-Created 2026-07-27; compacted 2026-08-01 at candidate
-`260ffd6f5e58d8393ae0844516bac431657fa57c`.
+Created 2026-07-27; compacted 2026-08-01 after diagnostic-evidence checkpoint
+`b865601f139dcf9e2e404108be5342631edd8c6d`. Security evidence wrapper `838007981` explicitly
+binds clean code subject `6ca604d7c` through its non-self-referential records.
 
 `SPEC.md` is authoritative, especially §§1.1-1.3, §2, §4-§6, §9-§12, and §14.
 This plan may reduce proof ceremony, but it may not replace runtime/AST/provenance enforcement
@@ -33,7 +34,8 @@ evidence. It is not another API redesign.
 
 ## Current measured surface
 
-At clean exact HEAD `260ffd6f5`, `node scripts/public-api-inventory.mjs --check` reports:
+At clean exact release-candidate audit subject `838007981`,
+`node scripts/public-api-inventory.mjs --check` reports:
 
 | Unit                            | Count |
 | ------------------------------- | ----: |
@@ -44,52 +46,54 @@ At clean exact HEAD `260ffd6f5`, `node scripts/public-api-inventory.mjs --check`
 
 Consumer files with public imports are classified as 105 authored examples, 114 authored docs,
 1,892 package internals, 18 generated emitters, 4 conformance files, and 416 tests. The clean run
-recorded 33 excluded directories. Counts from a built tree are not accepted as the census because
+recorded 47 excluded directories. Counts from a built tree are not accepted as the census because
 ignored output directories can change exclusion totals or contaminate consumer evidence.
 
-`node scripts/api-decision-ledger.mjs` validates all 1,640 declarations and reports Core 33/60 and
-Server 116/116 at their roots. `pnpm run check:api-surface` remains the release gate; the counts
-are health signals, not permission to move concepts into `/types` or undocumented deep imports.
+`node scripts/api-decision-ledger.mjs` validates all 1,640 declarations and reports Core
+33/target:60 and Server 116/target:116 at their roots. `pnpm run check:api-surface` remains the
+release gate; the counts are health signals, not permission to move concepts into `/types` or
+undocumented deep imports.
 
 ## Atomic release scorecard
 
 Numeric runner-bound thresholds remain informational until the hosted N≥5 ratification records
 the runner, workload identity, sample statistic, measured noise, rationale, and threshold formula.
 
-| Gate                                            | State                | Current proof or exact gap                                                                                   |
-| ----------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------ |
-| G1 packed Postgres/PGlite and SQLite journeys   | green                | Authenticated report at `b0bf20b05` passes create→install→dev→login→CRUD→test→check→build for both variants. |
-| G2 ready output and cold/warm time              | ratification pending | Framework-owned ready facts are tested; hosted timing thresholds remain unratified.                          |
-| G3 edit-to-diagnostic/result time               | ratification pending | Deterministic driver exists; no accepted hosted N≥5 threshold.                                               |
-| G4 cold/warm/incremental check and phase census | ratification pending | All 11 phases are retained; final hosted workload and thresholds remain open.                                |
-| G5 help/version/error exits                     | green                | CLI exit-contract suites cover 0/1/2 behavior.                                                               |
-| G6 one semantic command model                   | green                | Command-schema derivation suites cover parsing, help, completion, and references.                            |
-| G7 current graph truth                          | green                | Adversarial source/artifact identity suite rejects missing, stale, partial, and wrong-app proof.             |
-| G8 transactional build                          | green                | Staging/promotion suite preserves the last good `dist` and excludes failed proof from deploy output.         |
-| G9 empathetic diagnostics                       | green                | Seven first-run and top-20 authoring classes share safe cause, anchor, and next step.                        |
-| G10 styled accessible starter                   | green                | Packed journey records authenticated screenshots and zero pinned WCAG 2.2 A/AA axe violations.               |
-| G11 blessed Cloud Run deployment                | externally blocked   | Workflow contract is green; no `g11-cloud-run` environment or successful public-URL artifact exists.         |
-| G12 offline agent journey                       | green                | Packed offline scaffold→edit→check→fix uses only JSON diagnostics and installed docs.                        |
-| G13 authenticated executable docs               | green                | Packed docs/reference gates reject placeholders/drift and compile the classified corpus.                     |
-| G14 first-CRUD concept census                   | green                | Both packed scaffold reports record the concept categories and zero undocumented environment edits.          |
-| G15 development-only devtool                    | green                | Mount/ready-line tests and production/static artifact census pass.                                           |
-| G16 install time and size                       | ratification pending | Measurements exist; hosted timing/size binding remains unratified.                                           |
-| G17 recursive-publicness zero                   | green                | `check:api-surface` reports total zero and rejects widening as a repair.                                     |
-| G18 no unapproved app-public `any`              | green                | Packed AST gate and reviewed-exception policy pass.                                                          |
-| G19 opaque style values                         | green                | Packed style tests reject forgery and preserve emitted CSS/artifacts.                                        |
-| G20 narrow custom-shell installer               | green                | Browser consumer exposes the reviewed three-export client facade with bounded hooks.                         |
-| G21 standalone verifier contract                | green                | Packed verifier proves 0/1/2 exits, human/JSON parity, and no Kovo runtime dependency.                       |
-| G22 decision-backed Core/Server roots           | green                | Decision ledger reports Core 33 and Server 116 with no recursive leaks.                                      |
-| G23 declare app context once                    | green                | Packed starter and CRM app-contract corpora typecheck without manual context plumbing.                       |
-| G24 inferred public test harness                | green                | Packed starter harness uses imported app types plus digest-verified runtime graph facts.                     |
+| Gate                                            | State                | Current proof or exact gap                                                                                                                                                                                |
+| ----------------------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| G1 packed Postgres/PGlite and SQLite journeys   | final proof pending  | Historical report `b0bf20b05` passed the former nine-phase contract; the current create→install→ready→first-200→login→CRUD→ready-warm→check→build→test contract still needs final-subject reconfirmation. |
+| G2 ready output and cold/warm time              | ratification pending | Framework-owned ready facts are tested; hosted timing thresholds remain unratified.                                                                                                                       |
+| G3 edit-to-diagnostic/result time               | ratification pending | Deterministic driver exists; no accepted hosted N≥5 threshold.                                                                                                                                            |
+| G4 cold/warm/incremental check and phase census | ratification pending | All 11 phases are retained; final hosted workload and thresholds remain open.                                                                                                                             |
+| G5 help/version/error exits                     | green                | CLI exit-contract suites cover 0/1/2 behavior.                                                                                                                                                            |
+| G6 one semantic command model                   | green                | Command-schema derivation suites cover parsing, help, completion, and references.                                                                                                                         |
+| G7 current graph truth                          | green                | Adversarial source/artifact identity suite rejects missing, stale, partial, and wrong-app proof.                                                                                                          |
+| G8 transactional build                          | green                | Staging/promotion suite preserves the last good `dist` and excludes failed proof from deploy output.                                                                                                      |
+| G9 empathetic diagnostics                       | green                | Seven first-run and top-20 authoring classes share safe cause, anchor, and next step.                                                                                                                     |
+| G10 styled accessible starter                   | green                | Packed journey records authenticated screenshots and zero pinned WCAG 2.2 A/AA axe violations.                                                                                                            |
+| G11 blessed Cloud Run deployment                | externally blocked   | Workflow contract is green; no `g11-cloud-run` environment or successful public-URL artifact exists.                                                                                                      |
+| G12 offline agent journey                       | green                | Packed offline scaffold→edit→check→fix uses only JSON diagnostics and installed docs.                                                                                                                     |
+| G13 authenticated executable docs               | green                | Packed docs/reference gates reject placeholders/drift and compile the classified corpus.                                                                                                                  |
+| G14 first-CRUD concept census                   | green                | Both packed scaffold reports record the concept categories and zero undocumented environment edits.                                                                                                       |
+| G15 development-only devtool                    | green                | Mount/ready-line tests and production/static artifact census pass.                                                                                                                                        |
+| G16 install time and size                       | ratification pending | Measurements exist; hosted timing/size binding remains unratified.                                                                                                                                        |
+| G17 recursive-publicness zero                   | green                | `check:api-surface` reports total zero and rejects widening as a repair.                                                                                                                                  |
+| G18 no unapproved app-public `any`              | green                | Packed AST gate and reviewed-exception policy pass.                                                                                                                                                       |
+| G19 opaque style values                         | green                | Packed style tests reject forgery and preserve emitted CSS/artifacts.                                                                                                                                     |
+| G20 narrow custom-shell installer               | green                | Browser consumer exposes the reviewed three-export client facade with bounded hooks.                                                                                                                      |
+| G21 standalone verifier contract                | green                | Packed verifier proves 0/1/2 exits, human/JSON parity, and no Kovo runtime dependency.                                                                                                                    |
+| G22 decision-backed Core/Server roots           | green                | Decision ledger reports Core 33 and Server 116 with no recursive leaks.                                                                                                                                   |
+| G23 declare app context once                    | green                | Packed starter and CRM app-contract corpora typecheck without manual context plumbing.                                                                                                                    |
+| G24 inferred public test harness                | green                | Packed starter harness uses imported app types plus digest-verified runtime graph facts.                                                                                                                  |
 
 ## Decisions
 
 - [x] **D1 — select receiver provenance (Arm A).** Both receiver methods and a generated app-scoped
       module passed the preregistered v6 matrix; Arm A won the preference rule.
   - Evidence: `conformance/app-contract-spike/results-v6.json` records `decision: arm-a` with every
-    gate green for both arms. Commits `55ecaf644`, `b48007c9e`, and direct child `457dfd741`
-    authorize and bind the final evidence; two clean `measure:verify` runs passed.
+    gate green for both arms. After package identities were refreshed at `5595ee4dd`, commits
+    `56234f3da` and `2d2fac1f0` authorize and bind the current evidence; D1 passed 44/44 and two
+    clean `measure:verify` replays selected Arm A.
 - [x] **D2 — one cumulative breaking preview release.** Implementation batches may land on `main`,
       but the registry receives exactly one cumulative technical-preview minor with
       `kovo fix api-v1`; no compatibility barrels or interim stable API are added.
@@ -102,8 +106,8 @@ the runner, workload identity, sample statistic, measured noise, rationale, and 
       mode, transactional build, loopback-only dev origin, framework-owned ready output/devtool,
       doctor/add workflows, test bootstrap, SQLite posture, and empathetic diagnostics are in
       place.
-  - Evidence: `plans/devex-first-loop.md` retains the focused contracts and only its catalog,
-    hosted-budget, G11, and aggregate exit work remains open.
+  - Evidence: `plans/devex-first-loop.md` retains the focused contracts; only its final packed
+    journeys/catalog, hosted budgets, and G11 proof remain open.
 - [x] **Release measurement infrastructure.** Packed journeys, benchmark/census drivers, the
       ten-ID known-failure register, PR reports, CI minute policy, and fail-closed budget schema are
       implemented.
@@ -133,8 +137,9 @@ Each open action names its authoritative or coordinating child ledgers. Do not c
 earlier package-local run or from a different packed manifest.
 
 - [ ] **Seal one final integrated packed manifest and run every named consumer from it.** Include
-      scaffold, CRM/commerce examples, 44-component copy-in catalog, Drizzle Postgres/SQLite peer
-      fixtures, custom shell/adapter, verifier-only, Node/presets, and inferred harness.
+      both current ten-phase scaffold journeys, CRM/commerce examples, 44-component copy-in
+      catalog, Drizzle Postgres/SQLite peer fixtures, custom shell/adapter, verifier-only,
+      Node/presets, and inferred harness.
   - Benefit: proves package topology and generated metadata work as installed, not only in the
     monorepo. Risk: a stale or mixed tarball set can falsely pass; every runner must authenticate
     the same manifest/source subject. Owner: `plans/worldclass-devex-release.md` and API child
@@ -187,22 +192,23 @@ earlier package-local run or from a different packed manifest.
 
 ## Risks that still govern release
 
-| Risk                              | Release control                                                                                                                                                             |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Convenience weakens security      | Runtime validation, compiler symbol identity, fail-closed sinks, and emitted-artifact inspection remain authoritative; types are defense-in-depth only (`SPEC.md` §2/§6.6). |
-| Public-surface reduction is gamed | The decision ledger, real examples, contract tests, zero recursive-publicness ratchet, and no `/types` junk drawer gate every public home.                                  |
-| Browser/server boundary regresses | Packed per-entry bundle and Node-builtin scans cover custom-shell and generated bootstrap paths.                                                                            |
-| Cache or graph proof is stale     | Every admitted artifact binds source/config/compiler/app/completion/posture identities; explicit artifact mode rejects mismatches.                                          |
-| Local defaults leak to deploy     | Only loopback development origin is derived; production origin, DB, retention, and preset posture remain explicit and fail closed.                                          |
-| Diagnostics disclose secrets      | One bounded safe-cause registry and correlation ID project to every surface; raw causes stay server-side and redacted.                                                      |
-| Documentation drifts              | API/docs/catalog/recipe output binds source and manifest digests and compiles against packed exports.                                                                       |
-| Ratification blesses noise        | Named runner, exact workload fingerprint, N≥5, measured noise, statistic, rationale, and reviewed formula are mandatory.                                                    |
-| Migration rewrites intent         | `kovo fix api-v1` performs mechanical edits only and refuses app-context, trust, SQL, CSRF, auth, or deployment decisions.                                                  |
-| Release evidence crosses commits  | Packed manifest, D1, certificate, CI, hosted reports, evaluator signatures, and registry provenance must name the same exact subject.                                       |
+| Risk                              | Release control                                                                                                                                                                                                                                                     |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Convenience weakens security      | Runtime validation, compiler symbol identity, fail-closed sinks, and emitted-artifact inspection remain authoritative; types are defense-in-depth only (`SPEC.md` §2/§6.6).                                                                                         |
+| Public-surface reduction is gamed | The decision ledger, real examples, contract tests, zero recursive-publicness ratchet, and no `/types` junk drawer gate every public home.                                                                                                                          |
+| Browser/server boundary regresses | Packed per-entry bundle and Node-builtin scans cover custom-shell and generated bootstrap paths.                                                                                                                                                                    |
+| Cache or graph proof is stale     | Every admitted artifact binds source/config/compiler/app/completion/posture identities; explicit artifact mode rejects mismatches.                                                                                                                                  |
+| Local defaults leak to deploy     | Only loopback development origin is derived; production origin, DB, retention, and preset posture remain explicit and fail closed.                                                                                                                                  |
+| Diagnostics disclose secrets      | One bounded safe-cause registry and correlation ID project to every surface; raw causes stay server-side and redacted.                                                                                                                                              |
+| Documentation drifts              | API/docs/catalog/recipe output binds source and manifest digests and compiles against packed exports.                                                                                                                                                               |
+| Ratification blesses noise        | Named runner, exact workload fingerprint, N≥5, measured noise, statistic, rationale, and reviewed formula are mandatory.                                                                                                                                            |
+| Migration rewrites intent         | `kovo fix api-v1` performs mechanical edits only and refuses app-context, trust, SQL, CSRF, auth, or deployment decisions.                                                                                                                                          |
+| Release evidence crosses commits  | Packed, CI, hosted, evaluator, and registry proof must bind one documented release subject. A self-referential evidence artifact instead names its clean predecessor code subject and lands in an explicit later wrapper; the two must never be silently conflated. |
 
 ## Active ownership
 
-- `plans/devex-first-loop.md`: final catalog/KF-DEVEX-007, hosted G4, and G11.
+- `plans/devex-first-loop.md`: final journeys/catalog/KF-DEVEX-007, hosted G2-G4/G16 budgets, and
+  G11.
 - `plans/devex-gates.md`: final same-manifest/nightly proof and hosted budget ratification.
 - `plans/api-surface-5a.md`: final Style/UI catalog and contract-independent API seal.
 - `plans/api-surface-5b.md`: final Server/Better Auth/harness standing seal.

@@ -3,7 +3,9 @@
 Status: **active final integration ledger**
 
 Charter: `plans/worldclass-devex.md` release capstone and D2. This ledger closes only when every
-applicable G1-G24 proof names the same exact source and packed subject.
+applicable G1-G24 proof binds one documented release subject. An evidence artifact whose containing
+commit would be self-referential must name its clean predecessor code subject and land in an
+explicit later wrapper; that relationship is recorded rather than presented as one SHA.
 
 ## Completed release machinery
 
@@ -28,8 +30,11 @@ applicable G1-G24 proof names the same exact source and packed subject.
     identity, unsigned/wrong-subject evidence, intervention, and bounded-input bypasses.
 - [x] Seal the current D1 v6 source evidence, certificate policy, and certificate through their
       official fail-closed workflows.
-  - Evidence: D1 commits `55ecaf644`→`b48007c9e`→`457dfd741`; candidate
-    `260ffd6f5e58d8393ae0844516bac431657fa57c` contains the resulting certificate reseal.
+  - Evidence: `5595ee4dd` refreshed the framework identities, certificate policy, and certificate;
+    `56234f3da`→`2d2fac1f0` authorized and recorded the current D1 v6 evidence, and `6ca604d7c`
+    sealed the final pack inventory. At clean `6ca604d7c`, posture passed 10/10, the pack snapshot
+    matched twice, certificate passed 101/101, module identity passed 8/8, and D1 passed 44/44 plus
+    two clean Arm-A verification replays.
 
 ## Final candidate proof
 
@@ -75,5 +80,17 @@ applicable G1-G24 proof names the same exact source and packed subject.
 - [ ] Close the capstone only when every applicable G1-G24 row has one current authoritative proof
       and all final candidate, hosted, external, and publication boxes above are complete.
 
-No final acceptance, consumer matrix, catalog, artifact-inspection, fuzz, hermetic, hosted,
-evaluator, or registry claim is made at candidate `260ffd6f5` by this compaction.
+## Latest integrated evidence
+
+- Evidence wrapper `838007981` deliberately binds clean code subject `6ca604d7c`; its convergence
+  artifact check passed 495 mutants, P=9,966, 18 green rows, and C13 24/357, while its decided-
+  surface artifact check passed 2,877/2,877.
+- At exact `838007981`, `pnpm run test:security-fuzz-release` passed 7 families, 21 cases, and
+  495/495 mutants; after the official publish build supplied CI's package-dist prerequisite,
+  pinned/offline `pnpm run check:hermetic-proof-stage` passed with a closed sandbox and bound
+  signed certificate. The required rerun at the eventual final candidate remains open above.
+- `pnpm run check:spec-conformance-closure` at `b865601f1` passed 92 codes, 72 error classes, and
+  204 sites; the evidence ledger covers 37 files, 108 witnesses, and all 6 mandatory categories.
+- Final-candidate acceptance, consumer matrix, catalog, artifact inspection, fuzz, hermetic,
+  hosted, evaluator, and registry proof remain open above and are not inferred from these focused
+  results.

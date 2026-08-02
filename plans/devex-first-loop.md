@@ -1,6 +1,6 @@
 # World-class DevEx — first loop
 
-Status: **implementation complete; final catalog, hosted budget, and deployment proof pending**
+Status: **implementation complete; final catalog, hosted budgets, and deployment proof pending**
 
 Charter: `plans/worldclass-devex.md` Track 1. Gates: G1-G11 and G15. `SPEC.md` and the
 standing rules remain authoritative.
@@ -32,6 +32,9 @@ standing rules remain authoritative.
 
 ## Remaining proof
 
+- [ ] Run the default Postgres/PGlite and explicit SQLite journeys from the final canonical packed
+      manifest through create→install→ready→first-200→login→CRUD→ready-warm→check→build→test,
+      with zero undocumented environment edits and zero pinned WCAG 2.2 A/AA axe violations.
 - [ ] Reconfirm retired KF-DEVEX-007 on one final canonical packed-manifest run in which the
       44-component copy-in fixture retains unimported files, typechecks, checks, and builds with
       peak RSS ≤2.0 GiB.
@@ -52,10 +55,13 @@ standing rules remain authoritative.
 
 ## Current verification
 
-- Authenticated packed Postgres/PGlite and experimental SQLite journeys at `b0bf20b05` pass all
-  nine phases with zero undocumented environment edits and zero pinned WCAG 2.2 A/AA axe
-  violations.
+- Authenticated packed Postgres/PGlite and experimental SQLite journeys at `b0bf20b05` passed the
+  former nine-phase contract with zero undocumented environment edits and zero pinned WCAG 2.2
+  A/AA axe violations. The current ten-phase contract is
+  create→install→ready→first-200→login→CRUD→ready-warm→check→build→test and remains open for
+  final-subject reconfirmation.
 - Focused command/diagnostic/doctor/add/creator/graph/build tests cover the completed outcomes
-  above; `pnpm run check:spec-conformance-closure` reports 92 codes and 72 error classes.
+  above; `pnpm run check:spec-conformance-closure` at `b865601f1` passed 92 codes, 72 error classes,
+  and 204 sites across evidence for 37 files, 108 witnesses, and all 6 mandatory categories.
 - Final-candidate full-catalog/nightly, hosted ratification, and external G11 evidence are
   intentionally not claimed here.
