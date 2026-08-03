@@ -1651,6 +1651,48 @@ export function addTrustedOutputProvenanceBuildProof(
   options: { unsafe?: boolean } = {},
 ): void {
   const unsafe = options.unsafe ?? true;
+  writeTrustedOutputProvenanceBuildProof(root, unsafe);
+
+  const appPath = join(root, 'src/app.tsx');
+  let app = readFileSync(appPath, 'utf8');
+  app = replaceRequired(
+    app,
+    "import { ContactsRegion } from './components/contacts.js';",
+    [
+      "import { ContactsRegion } from './components/contacts.js';",
+      "import { trustedOutputProvenanceRoute } from './trusted-output-provenance-proof.js';",
+    ].join('\n'),
+    'trusted output proof import',
+  );
+  app = replaceRequired(
+    app,
+    '  routes: [homeRoute, loginRoute],',
+    '  routes: [homeRoute, loginRoute, trustedOutputProvenanceRoute],',
+    'trusted output proof route assembly',
+  );
+  writeFileSync(appPath, app, 'utf8');
+  formatGeneratedProjectSources(root, ['src/app.tsx', 'src/trusted-output-provenance-proof.tsx']);
+}
+
+/** Replace only the already-registered proof source so a warm build must consume current bytes. */
+export function rewriteTrustedOutputProvenanceBuildProof(
+  root: string,
+  options: { unsafe: boolean },
+): void {
+  const app = readFileSync(join(root, 'src/app.tsx'), 'utf8');
+  if (
+    !app.includes(
+      "import { trustedOutputProvenanceRoute } from './trusted-output-provenance-proof.js';",
+    ) ||
+    !app.includes('routes: [homeRoute, loginRoute, trustedOutputProvenanceRoute]')
+  ) {
+    throw new Error('Expected registered trusted output proof before rewriting its source.');
+  }
+  writeTrustedOutputProvenanceBuildProof(root, options.unsafe);
+  formatGeneratedProjectSources(root, ['src/trusted-output-provenance-proof.tsx']);
+}
+
+function writeTrustedOutputProvenanceBuildProof(root: string, unsafe: boolean): void {
   writeFileSync(
     join(root, 'src/trusted-output-provenance-proof.tsx'),
     [
@@ -1698,26 +1740,6 @@ export function addTrustedOutputProvenanceBuildProof(
     ].join('\n'),
     'utf8',
   );
-
-  const appPath = join(root, 'src/app.tsx');
-  let app = readFileSync(appPath, 'utf8');
-  app = replaceRequired(
-    app,
-    "import { ContactsRegion } from './components/contacts.js';",
-    [
-      "import { ContactsRegion } from './components/contacts.js';",
-      "import { trustedOutputProvenanceRoute } from './trusted-output-provenance-proof.js';",
-    ].join('\n'),
-    'trusted output proof import',
-  );
-  app = replaceRequired(
-    app,
-    '  routes: [homeRoute, loginRoute],',
-    '  routes: [homeRoute, loginRoute, trustedOutputProvenanceRoute],',
-    'trusted output proof route assembly',
-  );
-  writeFileSync(appPath, app, 'utf8');
-  formatGeneratedProjectSources(root, ['src/app.tsx', 'src/trusted-output-provenance-proof.tsx']);
 }
 
 export function addOpaqueTrustedOutputAuthorityProof(root: string): void {

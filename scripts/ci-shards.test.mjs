@@ -47,6 +47,7 @@ import {
   ADVERSARIAL_RESIDUAL_TEST_TIMEOUT_MS,
   adversarialResidualTestTimeoutMs,
 } from '../packages/create-kovo/src/index.build.prod-artifact.adversarial-deadlines.mjs';
+import { generatedStarterTestTimeoutMs } from '../packages/create-kovo/src/index.test-deadlines.mjs';
 import {
   KOVO_BUILD_ONE_SHOT_WORKER_TIMEOUT_MS,
   KOVO_BUILD_ONE_SHOT_STATIC_TRUST_PHASES,
@@ -763,6 +764,11 @@ describe('ci-shards', () => {
   });
 
   it('splits loaded proofs and keeps the outer supervisor beyond each test watchdog', () => {
+    const rawHtmlProvenanceTestTimeoutMs = generatedStarterTestTimeoutMs(
+      { cliProcessCount: 2 },
+      { ci: true },
+    );
+    expect(rawHtmlProvenanceTestTimeoutMs).toBe(1_060_000);
     const affected = Object.fromEntries(
       starterEntries()
         .filter((entry) =>
@@ -808,10 +814,10 @@ describe('ci-shards', () => {
         timeoutMs: 660_000,
       },
       'm1-raw-html-provenance': {
-        seconds: 461,
+        seconds: 391,
         testName: 'M1:raw-html tracks trusted output provenance',
-        testTimeoutMs: 720_000,
-        timeoutMs: 922_000,
+        testTimeoutMs: rawHtmlProvenanceTestTimeoutMs,
+        timeoutMs: rawHtmlProvenanceTestTimeoutMs + 60_000,
       },
       'm1-raw-html-mutable-alias': {
         seconds: 50,
@@ -993,6 +999,7 @@ describe('ci-shards', () => {
       transactionSource,
       productionArtifactSupportSource,
       starterTestSupportSource,
+      starterDeadlineSource,
       scaffoldTypecheckSource,
       starterHarnessTemplateSource,
       adversarialSource,
@@ -1060,6 +1067,10 @@ describe('ci-shards', () => {
       ),
       readFile(
         new URL('../packages/create-kovo/src/index.test-support.ts', import.meta.url),
+        'utf8',
+      ),
+      readFile(
+        new URL('../packages/create-kovo/src/index.test-deadlines.mjs', import.meta.url),
         'utf8',
       ),
       readFile(
@@ -1179,7 +1190,13 @@ describe('ci-shards', () => {
       'export const PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS = process.env.CI ? 600_000 : 240_000;',
     );
     expect(starterTestSupportSource).toContain(
-      'export const STARTER_SERVER_READY_TIMEOUT_MS = process.env.CI ? 180_000 : 90_000;',
+      'export const STARTER_SERVER_READY_TIMEOUT_MS = starterServerReadyTimeoutMs();',
+    );
+    expect(starterDeadlineSource).toContain(
+      'const CI_GENERATED_STARTER_CLI_PROCESS_TIMEOUT_MS = 420_000;',
+    );
+    expect(starterDeadlineSource).toContain(
+      'options.cliProcessCount * (generatedStarterCliProcessTimeoutMs({ ci }) + cleanupWindowMs)',
     );
     expect(starterTestSupportSource).toContain(
       'const deadline = Date.now() + STARTER_SERVER_READY_TIMEOUT_MS;',
@@ -1230,6 +1247,30 @@ describe('ci-shards', () => {
     expect(outputWireEnd).toBeGreaterThan(outputWireStart);
     expect(adversarialSource.slice(outputWireStart, outputWireEnd)).toContain(
       'multiBuildProofTimeout',
+    );
+    const rawHtmlStart = adversarialSource.indexOf(
+      "'M1:raw-html tracks trusted output provenance gates from current %s production source, not stale cache'",
+    );
+    const rawHtmlEnd = adversarialSource.indexOf('\n\n  it.each(', rawHtmlStart);
+    expect(rawHtmlStart).toBeGreaterThan(-1);
+    expect(rawHtmlEnd).toBeGreaterThan(rawHtmlStart);
+    const rawHtmlProof = adversarialSource.slice(rawHtmlStart, rawHtmlEnd);
+    expect(adversarialSource).toContain(
+      'const rawHtmlProvenanceProofTimeout = generatedStarterTestTimeout({ cliProcessCount: 2 });',
+    );
+    expect(rawHtmlProof).toContain('addTrustedOutputProvenanceBuildProof(root, { unsafe: false })');
+    expect(rawHtmlProof).toContain(
+      'rewriteTrustedOutputProvenanceBuildProof(root, { unsafe: true })',
+    );
+    expect(rawHtmlProof).toContain("runRawHtmlBuildSuccessPhase(root, 'safe-baseline')");
+    expect(rawHtmlProof).toContain("expectRawHtmlBuildFailurePhase(root, 'unsafe-source-flip'");
+    expect(rawHtmlProof).not.toContain('buildProductionArtifact(root)');
+    expect(rawHtmlProof).not.toContain('expectBuildFailure(root');
+    expect(adversarialSource).toContain(
+      'await buildProductionArtifactWithInfrastructureDeadline(root);',
+    );
+    expect(adversarialSource).toContain(
+      '`[m1-raw-html-provenance] phase=${phase} state=${state}\\n`',
     );
   });
 
@@ -1282,7 +1323,7 @@ describe('ci-shards', () => {
       'island-derive-helper-preflight': 67,
       'm1-output-wire': 748,
       'm1-raw-html-mutable-alias': 50,
-      'm1-raw-html-provenance': 461,
+      'm1-raw-html-provenance': 391,
       'm1-postgres-raw-sql': 151,
       'm1-sqlite-raw-sql': 151,
       'raw-sql-artifacts': 118,
@@ -1348,7 +1389,7 @@ describe('ci-shards', () => {
       entries.map((entry) => entry.id).toSorted(compareStrings),
     );
     expect(shards.map((shard) => shard.seconds)).toEqual([
-      1_239, 1_231, 1_251, 1_231, 1_230, 1_227, 1_226, 1_258, 1_247, 1_258,
+      1_239, 1_220, 1_244, 1_226, 1_230, 1_224, 1_249, 1_242, 1_235, 1_219,
     ]);
   });
 

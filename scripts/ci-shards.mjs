@@ -10,6 +10,7 @@ import { collectFilesAsync } from './lib/source-files.mjs';
 import { canonicalizePackedTarball } from './lib/deterministic-tarball.mjs';
 import { REQUIRED_CLASSIFIER_CORPORA } from './check-security-classifier-corpus.mjs';
 import { adversarialResidualTestTimeoutMs } from '../packages/create-kovo/src/index.build.prod-artifact.adversarial-deadlines.mjs';
+import { generatedStarterTestTimeoutMs } from '../packages/create-kovo/src/index.test-deadlines.mjs';
 
 const DEFAULT_ROOTS = {
   integration: ['tests/integration/specs'],
@@ -60,6 +61,7 @@ const STARTER_MAX_TIMEOUT_MS = 30 * 60_000;
 // The supervisor owns process launch, Vitest collection/reporting, and verified descendant cleanup
 // outside the selected test's own watchdog. Keep those phases out of the test's deadline budget.
 const STARTER_OUTER_PROCESS_HEADROOM_MS = 60_000;
+const M1_RAW_HTML_PROVENANCE_BUILD_PROCESS_COUNT = 2;
 const CREATE_KOVO_ACCEPTANCE_TEST_PATTERN =
   /^packages\/create-kovo\/src\/index\.(?:build\.(?:prod-artifact(?:\.[^.]+)*|runtime|scaffold(?:\.[^.]+)*)|example\.packed)\.test\.(?:mjs|ts|tsx|js)$/;
 const packedStarterWorkspacePackages = [
@@ -331,10 +333,15 @@ const STARTER_ENTRIES = [
     id: 'm1-raw-html-provenance',
     file: 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
     testName: 'M1:raw-html tracks trusted output provenance',
-    // CI-mode profiling on 2026-08-01 measured the three-build proof at 460.884s. Its source-level
-    // multi-build watchdog is 720s, so the outer supervisor must retain cleanup headroom beyond it.
-    seconds: 461,
-    testTimeoutMs: 720_000,
+    // The former four-command proof reached 730.181s in job 91567952019 after five adjacent hosted
+    // passes at 685-719s. Fresh unsafe/safe behavior already has its dedicated security proof; this
+    // entry now owns only the two-command safe -> unsafe source-flip contract. Use that sibling's
+    // 390.476s hosted observation until this reduced exact selector completes independently.
+    seconds: 391,
+    testTimeoutMs: generatedStarterTestTimeoutMs(
+      { cliProcessCount: M1_RAW_HTML_PROVENANCE_BUILD_PROCESS_COUNT },
+      { ci: true },
+    ),
   },
   {
     id: 'm1-raw-html-mutable-alias',

@@ -31,15 +31,18 @@ import {
   addTrustedOutputProvenanceBuildProof,
   attributeValue,
   buildProductionArtifact,
+  buildProductionArtifactWithInfrastructureDeadline,
   execFileSyncErrorOutput,
   formatGeneratedProjectSources,
   freshProductionArtifactIdempotencyToken,
+  rewriteTrustedOutputProvenanceBuildProof,
 } from './index.build.test-support.js';
 import { assertProdArtifactSinkCensus } from './index.build.prod-artifact.sink-census.js';
 import {
   collectOutput,
   cookieHeader,
   fetchTextWhenReady,
+  generatedStarterTestTimeout,
   linkStarterBuildDependencies,
   mergeCookies,
   reservePort,
@@ -69,6 +72,7 @@ function uniformResidualProofTimeout(ids: readonly AdversarialResidualProofId[])
 
 describe('create-kovo starter (build integration: adversarial production artifact sweep)', () => {
   const multiBuildProofTimeout = 720_000;
+  const rawHtmlProvenanceProofTimeout = generatedStarterTestTimeout({ cliProcessCount: 2 });
   const diagnosticAssertionProofTimeout = adversarialResidualTestTimeoutMs(
     'adversarial-diagnostic-assertion',
   );
@@ -160,31 +164,18 @@ describe('create-kovo starter (build integration: adversarial production artifac
   it.each([...dialectIndependentCompilerGateCases])(
     'M1:raw-html tracks trusted output provenance gates from current %s production source, not stale cache',
     async (_label: string, dialect: CreateKovoDialect | undefined) => {
-      await withProject(`create-kovo-m1-trusted-output-${_label}-red-`, dialect, (root) => {
-        addTrustedOutputProvenanceBuildProof(root);
-        expectBuildFailure(root, [
-          'KV426',
-          'trustedUrl() sends query-derived data',
-          'trustedHtml() sends request-derived data',
-        ]);
-      });
-
-      await withProject(`create-kovo-m1-trusted-output-${_label}-green-`, dialect, (root) => {
-        addEscapedAttackerTextProof(root);
-        buildProductionArtifact(root);
-      });
-
-      await withProject(`create-kovo-m1-trusted-output-${_label}-flip-`, dialect, (root) => {
-        buildProductionArtifact(root);
-        addTrustedOutputProvenanceBuildProof(root);
-        expectBuildFailure(root, [
+      await withProject(`create-kovo-m1-trusted-output-${_label}-flip-`, dialect, async (root) => {
+        addTrustedOutputProvenanceBuildProof(root, { unsafe: false });
+        await runRawHtmlBuildSuccessPhase(root, 'safe-baseline');
+        rewriteTrustedOutputProvenanceBuildProof(root, { unsafe: true });
+        await expectRawHtmlBuildFailurePhase(root, 'unsafe-source-flip', [
           'KV426',
           'trustedUrl() sends query-derived data',
           'trustedHtml() sends request-derived data',
         ]);
       });
     },
-    multiBuildProofTimeout,
+    rawHtmlProvenanceProofTimeout,
   );
 
   it.each([...dialectIndependentCompilerGateCases])(
@@ -688,6 +679,52 @@ async function withProject(
   } finally {
     rmSync(root, { force: true, recursive: true });
   }
+}
+
+type RawHtmlBuildPhase = 'safe-baseline' | 'unsafe-source-flip';
+
+function reportRawHtmlBuildPhase(
+  phase: RawHtmlBuildPhase,
+  state: 'command-error' | 'expected-failure' | 'start' | 'success' | 'unexpected-success',
+): void {
+  process.stderr.write(`[m1-raw-html-provenance] phase=${phase} state=${state}\n`);
+}
+
+async function runRawHtmlBuildSuccessPhase(root: string, phase: RawHtmlBuildPhase): Promise<void> {
+  reportRawHtmlBuildPhase(phase, 'start');
+  try {
+    await buildProductionArtifactWithInfrastructureDeadline(root);
+  } catch (error) {
+    reportRawHtmlBuildPhase(phase, 'command-error');
+    throw error;
+  }
+  reportRawHtmlBuildPhase(phase, 'success');
+}
+
+async function expectRawHtmlBuildFailurePhase(
+  root: string,
+  phase: RawHtmlBuildPhase,
+  expectedOutput: readonly string[],
+): Promise<string> {
+  reportRawHtmlBuildPhase(phase, 'start');
+  let output: string | undefined;
+  try {
+    await buildProductionArtifactWithInfrastructureDeadline(root);
+  } catch (error) {
+    output = execFileSyncErrorOutput(error);
+  }
+  if (output === undefined) {
+    reportRawHtmlBuildPhase(phase, 'unexpected-success');
+    throw new Error('Expected production build to fail, but it succeeded.');
+  }
+  if (expectedOutput.some((expected) => !output.includes(expected))) {
+    reportRawHtmlBuildPhase(phase, 'command-error');
+  }
+  for (const expected of expectedOutput) {
+    expect(output).toContain(expected);
+  }
+  reportRawHtmlBuildPhase(phase, 'expected-failure');
+  return output;
 }
 
 function expectGeneratedProjectSourcesFormatterClean(

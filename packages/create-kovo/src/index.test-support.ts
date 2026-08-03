@@ -27,19 +27,26 @@ import {
   runBoundedTestProcess,
   type BoundedTestProcessOutcome,
 } from './index.test-process-supervisor.mjs';
+import {
+  GENERATED_STARTER_CLI_SIGNAL_GRACE_MS as GENERATED_STARTER_SIGNAL_GRACE_MS,
+  generatedStarterCliProcessTimeoutMs,
+  generatedStarterFixtureSetupHeadroomMs,
+  generatedStarterTestTimeoutMs,
+  starterServerReadyTimeoutMs,
+} from './index.test-deadlines.mjs';
 
 // A generated application can spend over a minute compiling its initial development graph on a
 // contended machine. Keep local feedback bounded at ninety seconds while giving the two-core hosted
 // runner enough headroom to distinguish slow compilation from a server that never becomes ready.
-export const STARTER_SERVER_READY_TIMEOUT_MS = process.env.CI ? 180_000 : 90_000;
+export const STARTER_SERVER_READY_TIMEOUT_MS = starterServerReadyTimeoutMs();
 
 // A valid production build reached roughly 5.5 minutes on a contended two-core hosted runner. The
 // seven-minute ceiling leaves scheduling headroom while still bounding deadlock. This is test
 // infrastructure, not a Kovo product-performance budget.
-export const GENERATED_STARTER_CLI_PROCESS_TIMEOUT_MS = process.env.CI ? 420_000 : 240_000;
-export const GENERATED_STARTER_CLI_SIGNAL_GRACE_MS = 5_000;
+export const GENERATED_STARTER_CLI_PROCESS_TIMEOUT_MS = generatedStarterCliProcessTimeoutMs();
+export const GENERATED_STARTER_CLI_SIGNAL_GRACE_MS = GENERATED_STARTER_SIGNAL_GRACE_MS;
 export const GENERATED_STARTER_CLI_MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
-const GENERATED_STARTER_FIXTURE_SETUP_HEADROOM_MS = process.env.CI ? 180_000 : 60_000;
+const GENERATED_STARTER_FIXTURE_SETUP_HEADROOM_MS = generatedStarterFixtureSetupHeadroomMs();
 
 export interface GeneratedStarterCommandOptions {
   cwd: string;
@@ -63,24 +70,7 @@ export function generatedStarterTestTimeout(options: {
   cliProcessCount: number;
   serverProcessCount?: number;
 }): number {
-  const serverProcessCount = options.serverProcessCount ?? 0;
-  if (!Number.isSafeInteger(options.cliProcessCount) || options.cliProcessCount < 0) {
-    throw new TypeError('cliProcessCount must be a non-negative safe integer.');
-  }
-  if (!Number.isSafeInteger(serverProcessCount) || serverProcessCount < 0) {
-    throw new TypeError('serverProcessCount must be a non-negative safe integer.');
-  }
-  const cleanupWindowMs = boundedTestProcessCleanupBudgetMs({
-    killGraceMs: GENERATED_STARTER_CLI_SIGNAL_GRACE_MS,
-    rootExitTimeoutMs: GENERATED_STARTER_CLI_SIGNAL_GRACE_MS,
-    streamCloseTimeoutMs: GENERATED_STARTER_CLI_SIGNAL_GRACE_MS,
-    terminationGraceMs: GENERATED_STARTER_CLI_SIGNAL_GRACE_MS,
-  });
-  return (
-    GENERATED_STARTER_FIXTURE_SETUP_HEADROOM_MS +
-    options.cliProcessCount * (GENERATED_STARTER_CLI_PROCESS_TIMEOUT_MS + cleanupWindowMs) +
-    serverProcessCount * (STARTER_SERVER_READY_TIMEOUT_MS + cleanupWindowMs)
-  );
+  return generatedStarterTestTimeoutMs(options);
 }
 
 type StarterInstallMode = 'link-local' | 'packed' | 'symlink';
