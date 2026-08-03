@@ -42,6 +42,7 @@ import {
   validateGoldenReleaseScorecard,
   validateGoldenWorkloadIdentity,
 } from './devex-golden-contract.mjs';
+import { readBoundedRegularFile } from './lib/bounded-regular-file.mjs';
 import { packWithoutLifecycleScripts } from './lib/pack-without-lifecycle.mjs';
 import { measureProcessTreeCommand } from './lib/process-tree-rss.mjs';
 import {
@@ -114,6 +115,8 @@ const KOVO_BENCHMARK_CONSUMER = '@kovojs/devex-packed-check-consumer';
 const KOVO_PACKED_RECIPE_PATH = 'scripts/devex-scenarios/kovo-packed-check.json';
 const KOVO_FULL_CATALOG_SCENARIO = 'kovo-packed-full-catalog';
 const KOVO_FULL_CATALOG_COMPONENT_COUNT = 44;
+const MAX_DEVEX_BUDGET_BYTES = 1024 * 1024;
+const MAX_DEVEX_BASELINE_REPORT_BYTES = 64 * 1024 * 1024;
 const KOVO_FULL_CATALOG_PHASES = Object.freeze([
   Object.freeze({
     command: 'create-kovo --postgres --retention retained-24h --disable-git',
@@ -3109,12 +3112,13 @@ function baselineSourceAtRoot(root, sourcePath) {
   } catch {
     return { status: 'invalid' };
   }
+  const directories = [{ path: absoluteRoot, stat: lstatSync(absoluteRoot, { bigint: true }) }];
   let current = absoluteRoot;
   const segments = sourcePath.split('/');
   for (const [index, segment] of segments.entries()) {
     current = path.join(current, segment);
-    const entry = lstatSync(current, { throwIfNoEntry: false });
-    if (entry === undefined) return { status: 'missing' };
+    const entry = lstatSync(current, { bigint: true, throwIfNoEntry: false });
+    if (entry === undefined) return { status: 'missing', directories };
     if (
       entry.isSymbolicLink() ||
       (index < segments.length - 1 && !entry.isDirectory()) ||
@@ -3122,20 +3126,56 @@ function baselineSourceAtRoot(root, sourcePath) {
     ) {
       return { status: 'invalid' };
     }
+    if (entry.isDirectory()) directories.push({ path: current, stat: entry });
   }
   try {
-    return {
-      status: 'present',
-      bytes: readFileSync(
-        nonSymlinkDescendant(absoluteRoot, sourcePath, {
-          kind: 'file',
-          label: 'baseline provenance',
-        }),
-      ),
-    };
+    const bytes = readBoundedRegularFile(
+      nonSymlinkDescendant(absoluteRoot, sourcePath, {
+        kind: 'file',
+        label: 'baseline provenance',
+      }),
+      MAX_DEVEX_BASELINE_REPORT_BYTES,
+      'baseline provenance',
+    );
+    return directorySnapshotsUnchanged(directories)
+      ? { status: 'present', bytes }
+      : { status: 'invalid' };
   } catch {
     return { status: 'invalid' };
   }
+}
+
+function directorySnapshotsUnchanged(directories) {
+  return directories.every(({ path: directory, stat }) => {
+    const current = lstatSync(directory, { bigint: true, throwIfNoEntry: false });
+    return (
+      current !== undefined &&
+      current.isDirectory() &&
+      !current.isSymbolicLink() &&
+      current.dev === stat.dev &&
+      current.ino === stat.ino &&
+      current.size === stat.size &&
+      current.mtimeNs === stat.mtimeNs &&
+      current.ctimeNs === stat.ctimeNs
+    );
+  });
+}
+
+function sameDirectorySnapshots(left, right) {
+  return (
+    left.length === right.length &&
+    left.every(({ path: leftPath, stat: leftStat }, index) => {
+      const { path: rightPath, stat: rightStat } = right[index];
+      return (
+        leftPath === rightPath &&
+        leftStat.dev === rightStat.dev &&
+        leftStat.ino === rightStat.ino &&
+        leftStat.size === rightStat.size &&
+        leftStat.mtimeNs === rightStat.mtimeNs &&
+        leftStat.ctimeNs === rightStat.ctimeNs
+      );
+    })
+  );
 }
 
 /**
@@ -3157,7 +3197,15 @@ function baselineSourceBytes(metricId, record, options) {
   const inheritedRecord = options.inheritedBudgets?.metrics?.[metricId]?.ratification;
   if (!sameJson(record, inheritedRecord)) return null;
   const inherited = baselineSourceAtRoot(options.inheritedRepoRoot, sourcePath);
-  return inherited.status === 'present' ? inherited.bytes : null;
+  if (inherited.status !== 'present') return null;
+  const candidateAfterFallback = baselineSourceAtRoot(options.repoRoot, sourcePath);
+  if (
+    candidateAfterFallback.status !== 'missing' ||
+    !sameDirectorySnapshots(candidate.directories, candidateAfterFallback.directories)
+  ) {
+    return null;
+  }
+  return inherited.bytes;
 }
 
 function validateRatificationProvenance(metricId, metric, record, budgets, options) {
@@ -4696,18 +4744,83 @@ function usage() {
   ].join('\n');
 }
 
+function checkedGitResult(repositoryRoot, args, options = {}) {
+  const result = spawnSync('git', ['-C', repositoryRoot, ...args], {
+    encoding: Object.hasOwn(options, 'encoding') ? options.encoding : 'utf8',
+    maxBuffer: options.maxBuffer ?? 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  if (result.status !== 0 || result.signal || result.error) {
+    throw new Error(
+      `could not authenticate inherited budgets to Git HEAD: ${
+        result.error?.message ?? result.signal ?? result.stderr ?? `exit ${String(result.status)}`
+      }`,
+    );
+  }
+  return result.stdout;
+}
+
+function gitHeadBudgetBytes(repositoryRoot) {
+  const root = nonSymlinkRootDirectory(repositoryRoot, 'inherited provenance');
+  const topLevel = checkedGitResult(root, ['rev-parse', '--show-toplevel']).trim();
+  if (realpathSync(topLevel) !== realpathSync(root)) {
+    throw new Error('inherited provenance root must be the Git worktree root');
+  }
+  const head = checkedGitResult(root, ['rev-parse', '--verify', 'HEAD^{commit}']).trim();
+  if (!validGitObjectId(head)) {
+    throw new Error('inherited provenance root HEAD must resolve to an exact Git commit');
+  }
+  const bytes = checkedGitResult(root, ['show', `${head}:devex-budgets.json`], {
+    encoding: null,
+    maxBuffer: MAX_DEVEX_BUDGET_BYTES + 1,
+  });
+  if (!Buffer.isBuffer(bytes) || bytes.byteLength > MAX_DEVEX_BUDGET_BYTES) {
+    throw new Error('Git HEAD devex-budgets.json exceeds its byte limit');
+  }
+  const headAfterRead = checkedGitResult(root, ['rev-parse', '--verify', 'HEAD^{commit}']).trim();
+  if (headAfterRead !== head) {
+    throw new Error('inherited provenance root HEAD changed during authentication');
+  }
+  return bytes;
+}
+
+function parseBoundedJsonFile(filePath, maxBytes, label) {
+  const absolute = path.resolve(filePath);
+  const parent = nonSymlinkRootDirectory(path.dirname(absolute), `${label} parent`);
+  const parentBefore = lstatSync(parent, { bigint: true });
+  const bytes = readBoundedRegularFile(
+    nonSymlinkDescendant(parent, path.basename(absolute), { kind: 'file', label }),
+    maxBytes,
+    label,
+  );
+  const parentAfter = lstatSync(parent, { bigint: true, throwIfNoEntry: false });
+  if (
+    parentAfter === undefined ||
+    parentAfter.dev !== parentBefore.dev ||
+    parentAfter.ino !== parentBefore.ino ||
+    parentAfter.mtimeNs !== parentBefore.mtimeNs ||
+    parentAfter.ctimeNs !== parentBefore.ctimeNs
+  ) {
+    throw new Error(`${label} parent changed while its bytes were snapshotted`);
+  }
+  try {
+    return { bytes, value: JSON.parse(bytes.toString('utf8')) };
+  } catch {
+    throw new Error(`${label} must contain valid JSON`);
+  }
+}
+
 export function runDevexBenchmark(argv = process.argv.slice(2), runtime = {}) {
   const args = parseArgs(argv);
-  if (args.help) {
-    process.stdout.write(usage());
-    return 0;
-  }
-  if (args.prepareKovoScenario) {
-    const prepared = prepareKovoPackedScenario();
-    process.stdout.write(
-      `Prepared ${path.relative(defaultRepoRoot, prepared.scenarioPath)} from authenticated packed Kovo packages.\n`,
-    );
-    return 0;
+  const modes = [
+    args.help ? 'help' : null,
+    args.prepareKovoScenario ? 'prepare-kovo-scenario' : null,
+    args.checkBudgets ? 'check-budgets' : null,
+    args.ratify ? 'ratify' : null,
+    args.scenario === undefined ? null : 'scenario',
+  ].filter(Boolean);
+  if (modes.length > 1) {
+    throw new Error(`DevEx benchmark requires exactly one mode; received ${modes.join(', ')}`);
   }
   if ((args.inheritedBudgets === undefined) !== (args.inheritedProvenanceRoot === undefined)) {
     throw new Error(
@@ -4717,7 +4830,28 @@ export function runDevexBenchmark(argv = process.argv.slice(2), runtime = {}) {
   if (args.inheritedBudgets !== undefined && !args.checkBudgets) {
     throw new Error('inherited provenance is reserved for --check-budgets');
   }
-  const budgets = readJson(path.resolve(args.budgets));
+  if (args.help) {
+    if (argv.length !== 1) throw new Error('--help cannot be combined with other arguments');
+    process.stdout.write(usage());
+    return 0;
+  }
+  if (modes.length === 0) {
+    process.stderr.write(usage());
+    return 2;
+  }
+  if (args.prepareKovoScenario) {
+    const prepared = prepareKovoPackedScenario();
+    process.stdout.write(
+      `Prepared ${path.relative(defaultRepoRoot, prepared.scenarioPath)} from authenticated packed Kovo packages.\n`,
+    );
+    return 0;
+  }
+  const budgetFile = parseBoundedJsonFile(
+    path.resolve(args.budgets),
+    MAX_DEVEX_BUDGET_BYTES,
+    args.checkBudgets ? 'ratification candidate budgets' : 'DevEx budgets',
+  );
+  const budgets = budgetFile.value;
   if (args.checkBudgets) {
     const inheritedBudgetsPath =
       args.inheritedBudgets === undefined ? undefined : path.resolve(args.inheritedBudgets);
@@ -4725,8 +4859,21 @@ export function runDevexBenchmark(argv = process.argv.slice(2), runtime = {}) {
       args.inheritedProvenanceRoot === undefined
         ? undefined
         : path.resolve(args.inheritedProvenanceRoot);
-    const inheritedBudgets =
-      inheritedBudgetsPath === undefined ? undefined : readJson(inheritedBudgetsPath);
+    let inheritedBudgets;
+    if (inheritedBudgetsPath !== undefined) {
+      const inheritedSnapshot = parseBoundedJsonFile(
+        inheritedBudgetsPath,
+        MAX_DEVEX_BUDGET_BYTES,
+        'inherited budget snapshot',
+      );
+      const authenticatedHeadBytes = gitHeadBudgetBytes(inheritedRepoRoot);
+      if (!inheritedSnapshot.bytes.equals(authenticatedHeadBytes)) {
+        throw new Error(
+          'inherited budget snapshot must match Git HEAD devex-budgets.json byte-for-byte',
+        );
+      }
+      inheritedBudgets = JSON.parse(authenticatedHeadBytes.toString('utf8'));
+    }
     const findings = validateBudgets(budgets, {
       repoRoot: path.dirname(path.resolve(args.budgets)),
       inheritedBudgets,

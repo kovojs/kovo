@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   cpSync,
@@ -12,7 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { compileComponentModule } from '../packages/compiler/src/compile.js';
 import { emitQueryPlanBootstrapModule } from '../packages/compiler/src/emit/bootstrap.js';
@@ -1048,12 +1049,45 @@ describe('DevEx benchmark foundation', () => {
       expect(validateBudgets(changedInheritedRecord, overlay)).toContain(provenanceFailure);
 
       cpSync(path.join(repoRoot, relativeReport), candidateReport);
+      const digestTampered = structuredClone(budgets);
+      digestTampered.metrics['docs.snapshot.compressedBytes'].ratification.baselineReport.sha256 =
+        `sha256:${'0'.repeat(64)}`;
+      expect(validateBudgets(digestTampered, overlay)).toContain(
+        'docs.snapshot.compressedBytes.ratification baseline report digest does not match baselines/devex-docs-snapshot-v1.json',
+      );
+
       writeFileSync(inheritedReport, '{}\n');
       expect(validateBudgets(budgets, overlay)).toEqual([]);
 
       rmSync(candidateReport);
       cpSync(path.join(repoRoot, relativeReport), inheritedReport);
       symlinkSync(inheritedReport, candidateReport);
+      expect(validateBudgets(budgets, overlay)).toContain(provenanceFailure);
+
+      rmSync(candidateReport);
+      const racingInheritedBudgets = structuredClone(budgets);
+      const inheritedRecord = structuredClone(
+        racingInheritedBudgets.metrics['docs.snapshot.compressedBytes'].ratification,
+      );
+      Object.defineProperty(
+        racingInheritedBudgets.metrics['docs.snapshot.compressedBytes'],
+        'ratification',
+        {
+          enumerable: true,
+          get() {
+            cpSync(path.join(repoRoot, relativeReport), candidateReport);
+            return inheritedRecord;
+          },
+        },
+      );
+      expect(
+        validateBudgets(budgets, { ...overlay, inheritedBudgets: racingInheritedBudgets }),
+      ).toContain(provenanceFailure);
+
+      rmSync(path.join(candidateRoot, 'baselines'), { recursive: true });
+      const linkedBaselines = path.join(temporaryRoot, 'linked-baselines');
+      mkdirSync(linkedBaselines);
+      symlinkSync(linkedBaselines, path.join(candidateRoot, 'baselines'), 'dir');
       expect(validateBudgets(budgets, overlay)).toContain(provenanceFailure);
     } finally {
       rmSync(temporaryRoot, { recursive: true, force: true });
@@ -1072,6 +1106,100 @@ describe('DevEx benchmark foundation', () => {
         '.',
       ]),
     ).toThrow('inherited provenance is reserved for --check-budgets');
+    expect(() =>
+      runDevexBenchmark([
+        '--prepare-kovo-scenario',
+        '--inherited-budgets',
+        'devex-budgets.json',
+        '--inherited-provenance-root',
+        '.',
+      ]),
+    ).toThrow('inherited provenance is reserved for --check-budgets');
+    expect(() =>
+      runDevexBenchmark([
+        '--ratify',
+        '--inherited-budgets',
+        'devex-budgets.json',
+        '--inherited-provenance-root',
+        '.',
+      ]),
+    ).toThrow('inherited provenance is reserved for --check-budgets');
+    expect(() => runDevexBenchmark(['--check-budgets', '--ratify'])).toThrow(
+      'DevEx benchmark requires exactly one mode; received check-budgets, ratify',
+    );
+  });
+
+  it('authenticates inherited budget snapshots to Git HEAD before overlay validation', () => {
+    const temporaryRoot = mkdtempSync(path.join(os.tmpdir(), 'kovo-devex-git-overlay-'));
+    const candidateRoot = path.join(temporaryRoot, 'candidate');
+    const candidateBudgets = path.join(candidateRoot, 'devex-budgets.json');
+    const inheritedSnapshot = path.join(temporaryRoot, 'inherited-devex-budgets.json');
+    const gitResult = spawnSync('git', ['show', 'HEAD:devex-budgets.json'], {
+      cwd: repoRoot,
+      encoding: null,
+    });
+    expect(gitResult.status).toBe(0);
+    const gitBudgetBytes = gitResult.stdout;
+    const argv = (
+      budgetPath = candidateBudgets,
+      snapshotPath = inheritedSnapshot,
+      root = repoRoot,
+    ) => [
+      '--check-budgets',
+      '--budgets',
+      budgetPath,
+      '--inherited-budgets',
+      snapshotPath,
+      '--inherited-provenance-root',
+      root,
+    ];
+    try {
+      mkdirSync(path.join(candidateRoot, 'baselines'), { recursive: true });
+      writeFileSync(candidateBudgets, gitBudgetBytes);
+      writeFileSync(inheritedSnapshot, gitBudgetBytes);
+      const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+      try {
+        expect(runDevexBenchmark(argv())).toBe(0);
+      } finally {
+        stdout.mockRestore();
+      }
+
+      const forged = JSON.parse(gitBudgetBytes.toString('utf8'));
+      forged.metrics['docs.snapshot.compressedBytes'].ratification.targetRationale +=
+        ' Forged together.';
+      writeFileSync(candidateBudgets, `${JSON.stringify(forged, null, 2)}\n`);
+      writeFileSync(inheritedSnapshot, `${JSON.stringify(forged, null, 2)}\n`);
+      expect(() => runDevexBenchmark(argv())).toThrow(
+        'inherited budget snapshot must match Git HEAD devex-budgets.json byte-for-byte',
+      );
+
+      writeFileSync(candidateBudgets, gitBudgetBytes);
+      writeFileSync(inheritedSnapshot, gitBudgetBytes);
+      const snapshotLink = path.join(temporaryRoot, 'inherited-link.json');
+      symlinkSync(inheritedSnapshot, snapshotLink);
+      expect(() => runDevexBenchmark(argv(candidateBudgets, snapshotLink))).toThrow(
+        'inherited budget snapshot contains a symbolic-link path segment',
+      );
+
+      const realCandidateRoot = path.join(temporaryRoot, 'real-candidate');
+      mkdirSync(realCandidateRoot);
+      writeFileSync(path.join(realCandidateRoot, 'devex-budgets.json'), gitBudgetBytes);
+      const candidateRootLink = path.join(temporaryRoot, 'candidate-link');
+      symlinkSync(realCandidateRoot, candidateRootLink, 'dir');
+      expect(() =>
+        runDevexBenchmark(argv(path.join(candidateRootLink, 'devex-budgets.json'))),
+      ).toThrow(
+        'ratification candidate budgets parent root must be a regular non-symlink directory',
+      );
+
+      const provenanceRootLink = path.join(temporaryRoot, 'provenance-root-link');
+      symlinkSync(repoRoot, provenanceRootLink, 'dir');
+      expect(() =>
+        runDevexBenchmark(argv(candidateBudgets, inheritedSnapshot, provenanceRootLink)),
+      ).toThrow('inherited provenance root must be a regular non-symlink directory');
+    } finally {
+      rmSync(temporaryRoot, { recursive: true, force: true });
+    }
   });
 
   it('reserves deterministic artifact reports for packed-artifact metrics', () => {

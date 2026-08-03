@@ -210,7 +210,7 @@ jobs:
       - name: Create the one-runner audit workspace
         run: |
           mkdir -p "$RUNNER_TEMP/kovo-devex-ratification/proposals" "$RUNNER_TEMP/kovo-devex-ratification/golden/failures" "$RUNNER_TEMP/kovo-devex-ratification/full-catalog/failures"
-          cp devex-budgets.json "$RUNNER_TEMP/kovo-devex-ratification/inherited-devex-budgets.json"
+          git show HEAD:devex-budgets.json > "$RUNNER_TEMP/kovo-devex-ratification/inherited-devex-budgets.json"
       - name: Prepare the authenticated benchmark scenario
         run: vp exec node scripts/devex-benchmark.mjs --prepare-kovo-scenario
       - name: Collect five benchmark samples without pre-claiming ratification

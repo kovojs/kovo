@@ -167,7 +167,7 @@ describe('DevEx CI and baseline policy', () => {
 
     for (const fragment of [
       'createRatifiedDevexBaselinePolicyCandidate(checkoutPolicy)',
-      'cp devex-budgets.json "$RUNNER_TEMP/kovo-devex-ratification/inherited-devex-budgets.json"',
+      'git show HEAD:devex-budgets.json > "$RUNNER_TEMP/kovo-devex-ratification/inherited-devex-budgets.json"',
       'KOVO_DEVEX_INHERITED_BUDGETS: ${{ runner.temp }}/kovo-devex-ratification/inherited-devex-budgets.json',
       'vp exec node scripts/devex-benchmark.mjs --check-budgets --budgets "$KOVO_DEVEX_CANDIDATE_ROOT/devex-budgets.json" --inherited-budgets "$KOVO_DEVEX_INHERITED_BUDGETS" --inherited-provenance-root "$GITHUB_WORKSPACE"',
       'vp exec node scripts/devex-ci-policy.mjs --candidate-root "$KOVO_DEVEX_CANDIDATE_ROOT"',
@@ -199,7 +199,7 @@ describe('DevEx CI and baseline policy', () => {
 
     const lateInheritedSnapshot = new Map(workflowSources);
     const snapshot =
-      'cp devex-budgets.json "$RUNNER_TEMP/kovo-devex-ratification/inherited-devex-budgets.json"';
+      'git show HEAD:devex-budgets.json > "$RUNNER_TEMP/kovo-devex-ratification/inherited-devex-budgets.json"';
     const transaction = ci.gates
       .find((gate) => gate.id === 'manual-hosted-ratification')
       .commands.find((command) => command.includes(' --ratify '));
@@ -211,6 +211,33 @@ describe('DevEx CI and baseline policy', () => {
         .replace(transaction, `${transaction}\n      - run: ${snapshot}`),
     );
     expect(validateDevexCiPolicy(ci, { workflowSources: lateInheritedSnapshot })).toContain(
+      'gates[6] must collect one-runner N=5 benchmark, golden, and full-catalog evidence before one clean transactional budget write',
+    );
+
+    const earlyTransaction = new Map(workflowSources);
+    const cleanCheckout = 'test -z "$(git status --porcelain=v1 --untracked-files=all)"';
+    earlyTransaction.set(
+      '.github/workflows/devex-nightly.yml',
+      earlyTransaction
+        .get('.github/workflows/devex-nightly.yml')
+        .replace(cleanCheckout, '')
+        .replace(transaction, `${transaction}\n      - run: ${cleanCheckout}`),
+    );
+    expect(validateDevexCiPolicy(ci, { workflowSources: earlyTransaction })).toContain(
+      'gates[6] must collect one-runner N=5 benchmark, golden, and full-catalog evidence before one clean transactional budget write',
+    );
+
+    const earlyCandidateValidation = new Map(workflowSources);
+    const candidateValidation =
+      'vp exec node scripts/devex-benchmark.mjs --check-budgets --budgets "$KOVO_DEVEX_CANDIDATE_ROOT/devex-budgets.json" --inherited-budgets "$KOVO_DEVEX_INHERITED_BUDGETS" --inherited-provenance-root "$GITHUB_WORKSPACE"';
+    earlyCandidateValidation.set(
+      '.github/workflows/devex-nightly.yml',
+      earlyCandidateValidation
+        .get('.github/workflows/devex-nightly.yml')
+        .replace(candidateValidation, '')
+        .replace(transaction, `${candidateValidation}\n      - run: ${transaction}`),
+    );
+    expect(validateDevexCiPolicy(ci, { workflowSources: earlyCandidateValidation })).toContain(
       'gates[6] must collect one-runner N=5 benchmark, golden, and full-catalog evidence before one clean transactional budget write',
     );
   });
@@ -452,13 +479,17 @@ function policyWorkflowSources(policy) {
     }
     if (gate.id === 'manual-hosted-ratification') {
       lines.push(
-        '      - run: cp devex-budgets.json "$RUNNER_TEMP/kovo-devex-ratification/inherited-devex-budgets.json"',
+        '      - run: git show HEAD:devex-budgets.json > "$RUNNER_TEMP/kovo-devex-ratification/inherited-devex-budgets.json"',
       );
     }
-    for (const command of gate.commands) lines.push(`      - run: ${command}`);
+    for (const command of gate.commands) {
+      if (gate.id === 'manual-hosted-ratification' && command.includes(' --ratify ')) {
+        lines.push('      - run: test -z "$(git status --porcelain=v1 --untracked-files=all)"');
+      }
+      lines.push(`      - run: ${command}`);
+    }
     if (gate.id === 'manual-hosted-ratification') {
       lines.push(
-        '      - run: test -z "$(git status --porcelain=v1 --untracked-files=all)"',
         '      - env:',
         '          KOVO_DEVEX_CANDIDATE_ROOT: ${{ runner.temp }}/kovo-devex-ratification/candidate',
         '          KOVO_DEVEX_INHERITED_BUDGETS: ${{ runner.temp }}/kovo-devex-ratification/inherited-devex-budgets.json',

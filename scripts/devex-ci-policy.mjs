@@ -3,10 +3,12 @@ import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
+import { readBoundedRegularFile } from './lib/bounded-regular-file.mjs';
 import { repoRoot } from './release-packages.mjs';
 
 export const DEVEX_CI_POLICY_SCHEMA = 'kovo-devex-ci-policy/v2';
 export const DEVEX_BASELINE_POLICY_SCHEMA = 'kovo-devex-baseline-policy/v5';
+const MAX_DEVEX_POLICY_BYTES = 1024 * 1024;
 
 const CADENCES = new Set(['per-pr', 'nightly', 'manual']);
 const GATE_SCOPES = new Set(['job', 'step']);
@@ -311,7 +313,10 @@ export function validateDevexCiPolicy(policy, options = {}) {
     }
     if (gate.id === 'manual-hosted-ratification') {
       const inheritedBudgetsSnapshot =
-        'cp devex-budgets.json "$RUNNER_TEMP/kovo-devex-ratification/inherited-devex-budgets.json"';
+        'git show HEAD:devex-budgets.json > "$RUNNER_TEMP/kovo-devex-ratification/inherited-devex-budgets.json"';
+      const cleanCheckout = 'test -z "$(git status --porcelain=v1 --untracked-files=all)"';
+      const candidateBudgetValidation =
+        'vp exec node scripts/devex-benchmark.mjs --check-budgets --budgets "$KOVO_DEVEX_CANDIDATE_ROOT/devex-budgets.json" --inherited-budgets "$KOVO_DEVEX_INHERITED_BUDGETS" --inherited-provenance-root "$GITHUB_WORKSPACE"';
       const transaction = gate.commands?.find((command) => command.includes(' --ratify '));
       const benchmark = gate.commands?.find(
         (command) =>
@@ -336,15 +341,19 @@ export function validateDevexCiPolicy(policy, options = {}) {
         gate.preserveReportOnFailure !== true ||
         gate.requiresBrowser !== true ||
         !segment.includes('if: ${{ inputs.ratify_hosted_budgets }}') ||
-        !segment.includes('test -z "$(git status --porcelain=v1 --untracked-files=all)"') ||
+        !segment.includes(cleanCheckout) ||
         !segment.includes('path: ${{ runner.temp }}/kovo-devex-ratification') ||
         !segment.includes('include-hidden-files: true') ||
         benchmark === undefined ||
         golden === undefined ||
         fullCatalog === undefined ||
         transaction === undefined ||
-        !segment.includes(inheritedBudgetsSnapshot) ||
+        countOccurrences(segment, inheritedBudgetsSnapshot) !== 1 ||
         segment.indexOf(inheritedBudgetsSnapshot) > segment.indexOf(transaction) ||
+        countOccurrences(segment, cleanCheckout) !== 1 ||
+        segment.indexOf(cleanCheckout) > segment.indexOf(transaction) ||
+        countOccurrences(segment, candidateBudgetValidation) !== 1 ||
+        segment.indexOf(transaction) > segment.indexOf(candidateBudgetValidation) ||
         countOccurrences(transaction, ' --baseline "') !== 3 ||
         countOccurrences(transaction, ' --proposal "') !== 3 ||
         countOccurrences(transaction, ' --baseline-record-path ') !== 3 ||
@@ -368,7 +377,7 @@ export function validateDevexCiPolicy(policy, options = {}) {
         'createRatifiedDevexBaselinePolicyCandidate(checkoutPolicy)',
         "path.join(process.env.KOVO_DEVEX_CANDIDATE_ROOT, 'devex-baseline-policy.json')",
         'KOVO_DEVEX_INHERITED_BUDGETS: ${{ runner.temp }}/kovo-devex-ratification/inherited-devex-budgets.json',
-        'vp exec node scripts/devex-benchmark.mjs --check-budgets --budgets "$KOVO_DEVEX_CANDIDATE_ROOT/devex-budgets.json" --inherited-budgets "$KOVO_DEVEX_INHERITED_BUDGETS" --inherited-provenance-root "$GITHUB_WORKSPACE"',
+        candidateBudgetValidation,
         'vp exec node scripts/devex-ci-policy.mjs --candidate-root "$KOVO_DEVEX_CANDIDATE_ROOT"',
         'git diff --check -- devex-budgets.json',
         'test "$actual_status" = \' M devex-budgets.json\'',
@@ -835,6 +844,19 @@ function parseDevexCiPolicyArgs(argv) {
   return options;
 }
 
+function readBoundedCandidateJson(candidateRoot, relative, label) {
+  const bytes = readBoundedRegularFile(
+    path.join(candidateRoot, relative),
+    MAX_DEVEX_POLICY_BYTES,
+    label,
+  );
+  try {
+    return JSON.parse(bytes.toString('utf8'));
+  } catch {
+    throw new Error(`${label} must contain valid JSON`);
+  }
+}
+
 async function main() {
   const options = parseDevexCiPolicyArgs(process.argv.slice(2));
   const ci = JSON.parse(readFileSync(path.join(repoRoot, 'devex-ci-policy.json'), 'utf8'));
@@ -852,17 +874,19 @@ async function main() {
   const baseline =
     options.candidateRoot === undefined
       ? checkoutBaseline
-      : JSON.parse(
-          readFileSync(path.join(options.candidateRoot, 'devex-baseline-policy.json'), 'utf8'),
+      : readBoundedCandidateJson(
+          options.candidateRoot,
+          'devex-baseline-policy.json',
+          'ratification candidate baseline policy',
         );
-  const budgets = JSON.parse(
-    readFileSync(
-      options.candidateRoot === undefined
-        ? path.join(repoRoot, 'devex-budgets.json')
-        : path.join(options.candidateRoot, 'devex-budgets.json'),
-      'utf8',
-    ),
-  );
+  const budgets =
+    options.candidateRoot === undefined
+      ? JSON.parse(readFileSync(path.join(repoRoot, 'devex-budgets.json'), 'utf8'))
+      : readBoundedCandidateJson(
+          options.candidateRoot,
+          'devex-budgets.json',
+          'ratification candidate budgets',
+        );
   const findings = [
     ...(options.candidateRoot === undefined
       ? []
