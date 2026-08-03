@@ -59,6 +59,14 @@ const modeledActionOperators = Object.freeze({
   'replay.settle': 'Settle',
 });
 
+function workflowJobSource(workflow, job) {
+  const lines = workflow.split(/\r?\n/u);
+  const start = lines.findIndex((line) => line === `  ${job}:`);
+  if (start === -1) return '';
+  const end = lines.findIndex((line, index) => index > start && /^  [a-z][a-z0-9-]*:$/u.test(line));
+  return lines.slice(start, end === -1 ? undefined : end).join('\n');
+}
+
 const counterexampleCases = Object.freeze([
   {
     actions: ['Init', 'Reserve', 'Execute', 'EvictPending', 'Reserve', 'Execute'],
@@ -371,19 +379,20 @@ export function validateReplayModelContract(inputs) {
   if (!packageJson?.scripts?.check?.includes('pnpm run check:replay-model')) {
     findings.push('the root check chain must invoke check:replay-model');
   }
-  if (!ciText.includes(`uses: ${toolchain?.java?.ciAction}`)) {
+  const staticCoreCi = workflowJobSource(ciText, 'static-core');
+  if (!staticCoreCi.includes(`uses: ${toolchain?.java?.ciAction}`)) {
     findings.push('CI must use the exact-pinned Java setup action');
   }
-  if (!ciText.includes(`distribution: ${toolchain?.java?.distribution}`)) {
+  if (!staticCoreCi.includes(`distribution: ${toolchain?.java?.distribution}`)) {
     findings.push('CI must select the pinned Java distribution');
   }
-  if (!ciText.includes(`java-version: '${toolchain?.java?.ciVersion}'`)) {
+  if (!staticCoreCi.includes(`java-version: '${toolchain?.java?.ciVersion}'`)) {
     findings.push('CI must select the exact-pinned Java runtime build');
   }
-  if (!ciText.includes("KOVO_TLA_OFFLINE: '1'")) {
+  if (!staticCoreCi.includes("KOVO_TLA_OFFLINE: '1'")) {
     findings.push('CI must run the checked model with tool download disabled');
   }
-  if (!ciText.includes('check-replay-reservation-model.mjs --prepare')) {
+  if (!staticCoreCi.includes('check-replay-reservation-model.mjs --prepare')) {
     findings.push('CI must prepare and digest-check the TLC artifact before offline proof');
   }
   if (!specText.includes('bounded-model-checked') || !specText.includes(toolchain?.tlc?.release)) {

@@ -92,6 +92,15 @@ function workflowJobSource(workflow, job) {
   return lines.slice(start, end === -1 ? undefined : end).join('\n');
 }
 
+function classifierCheckTopologyIsExact(scripts) {
+  const expected = [
+    ...scripts['check:pre-classifier'].split(' && '),
+    'pnpm run check:security-classifier-corpus',
+    ...scripts['check:post-classifier'].split(' && '),
+  ].join(' && ');
+  return scripts.check === expected;
+}
+
 describe('ci-shards', () => {
   it('keeps the classifier corpus mandatory while running it independently from static-core', async () => {
     const [packageSource, workflowSource] = await Promise.all([
@@ -99,15 +108,35 @@ describe('ci-shards', () => {
       readFile(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8'),
     ]);
     const scripts = JSON.parse(packageSource).scripts;
-    const checkPhases = scripts.check.split(' && ');
-    expect(checkPhases).toEqual([
-      'pnpm run check:pre-classifier',
-      'pnpm run check:security-classifier-corpus',
-      'pnpm run check:post-classifier',
-    ]);
+    const checkSteps = scripts.check.split(' && ');
+    expect(classifierCheckTopologyIsExact(scripts)).toBe(true);
     expect(
-      checkPhases.filter((phase) => phase === 'pnpm run check:security-classifier-corpus'),
+      checkSteps.filter((step) => step === 'pnpm run check:security-classifier-corpus'),
     ).toHaveLength(1);
+    expect(
+      classifierCheckTopologyIsExact({
+        ...scripts,
+        check: scripts.check.replace(' && pnpm run check:security-classifier-corpus', ''),
+      }),
+    ).toBe(false);
+    expect(
+      classifierCheckTopologyIsExact({
+        ...scripts,
+        check: scripts.check.replace(
+          'pnpm run check:security-classifier-corpus && pnpm run check:security-test-builds',
+          'pnpm run check:security-test-builds && pnpm run check:security-classifier-corpus',
+        ),
+      }),
+    ).toBe(false);
+    expect(
+      classifierCheckTopologyIsExact({
+        ...scripts,
+        'check:pre-classifier': scripts['check:pre-classifier'].replace(
+          'pnpm run check:replay-model',
+          'pnpm run check:vp',
+        ),
+      }),
+    ).toBe(false);
     expect(scripts['check:static-core']).toBe(
       'pnpm run check:pre-classifier && pnpm run check:post-classifier',
     );

@@ -67,19 +67,10 @@ describe('Plan 3 security-gate cost budgets', () => {
             : `node scripts/security-cost-budget-runner.mjs --gate ${gate.id}`;
       expect(packageJson.scripts[scriptName], gate.id).toBe(expected);
     }
-    expect(packageJson.scripts.check).toContain('pnpm run check:pre-classifier');
-    expect(packageJson.scripts['check:pre-classifier']).toContain(
-      'pnpm run check:plan3-cost-budgets',
-    );
-    expect(packageJson.scripts['check:pre-classifier']).toContain(
-      'pnpm run check:artifact-provenance-build',
-    );
-    expect(packageJson.scripts['check:pre-classifier']).toContain(
-      'pnpm run check:plan3-phase3-gates',
-    );
-    expect(packageJson.scripts['check:pre-classifier']).toContain(
-      'pnpm run check:analyzable-fragment',
-    );
+    expect(packageJson.scripts.check).toContain('pnpm run check:plan3-cost-budgets');
+    expect(packageJson.scripts.check).toContain('pnpm run check:artifact-provenance-build');
+    expect(packageJson.scripts.check).toContain('pnpm run check:plan3-phase3-gates');
+    expect(packageJson.scripts.check).toContain('pnpm run check:analyzable-fragment');
     expect(packageJson.scripts.check).not.toContain(
       'node scripts/security-cost-budget-runner.mjs --all',
     );
