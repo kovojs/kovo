@@ -1021,7 +1021,7 @@ describe('DevEx benchmark foundation', () => {
     ).toMatchObject({ status: 'pass' });
   });
 
-  it('validates omitted unchanged provenance through a fail-closed candidate-first overlay', () => {
+  it('rejects forged direct inherited options and keeps candidate provenance authoritative', () => {
     const temporaryRoot = mkdtempSync(path.join(os.tmpdir(), 'kovo-devex-budget-overlay-'));
     const candidateRoot = path.join(temporaryRoot, 'candidate');
     const inheritedRoot = path.join(temporaryRoot, 'checkout');
@@ -1040,13 +1040,17 @@ describe('DevEx benchmark foundation', () => {
         repoRoot: candidateRoot,
       };
 
-      expect(validateBudgets(budgets, overlay)).toEqual([]);
+      expect(validateBudgets(budgets, overlay)).toContain(provenanceFailure);
 
-      const changedInheritedRecord = structuredClone(budgets);
-      changedInheritedRecord.metrics[
-        'docs.snapshot.compressedBytes'
-      ].ratification.targetRationale += ' Changed after checkout.';
-      expect(validateBudgets(changedInheritedRecord, overlay)).toContain(provenanceFailure);
+      const forgedCandidate = structuredClone(budgets);
+      forgedCandidate.metrics['docs.snapshot.compressedBytes'].ratification.targetRationale +=
+        ' Forged together.';
+      expect(
+        validateBudgets(forgedCandidate, {
+          ...overlay,
+          inheritedBudgets: structuredClone(forgedCandidate),
+        }),
+      ).toContain(provenanceFailure);
 
       cpSync(path.join(repoRoot, relativeReport), candidateReport);
       const digestTampered = structuredClone(budgets);
@@ -1063,26 +1067,6 @@ describe('DevEx benchmark foundation', () => {
       cpSync(path.join(repoRoot, relativeReport), inheritedReport);
       symlinkSync(inheritedReport, candidateReport);
       expect(validateBudgets(budgets, overlay)).toContain(provenanceFailure);
-
-      rmSync(candidateReport);
-      const racingInheritedBudgets = structuredClone(budgets);
-      const inheritedRecord = structuredClone(
-        racingInheritedBudgets.metrics['docs.snapshot.compressedBytes'].ratification,
-      );
-      Object.defineProperty(
-        racingInheritedBudgets.metrics['docs.snapshot.compressedBytes'],
-        'ratification',
-        {
-          enumerable: true,
-          get() {
-            cpSync(path.join(repoRoot, relativeReport), candidateReport);
-            return inheritedRecord;
-          },
-        },
-      );
-      expect(
-        validateBudgets(budgets, { ...overlay, inheritedBudgets: racingInheritedBudgets }),
-      ).toContain(provenanceFailure);
 
       rmSync(path.join(candidateRoot, 'baselines'), { recursive: true });
       const linkedBaselines = path.join(temporaryRoot, 'linked-baselines');
@@ -1163,6 +1147,26 @@ describe('DevEx benchmark foundation', () => {
       } finally {
         stdout.mockRestore();
       }
+
+      const candidateReport = path.join(candidateRoot, 'baselines/devex-docs-snapshot-v1.json');
+      const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      try {
+        expect(
+          runDevexBenchmark(argv(), {
+            afterCandidateProvenanceMiss() {
+              cpSync(path.join(repoRoot, 'baselines/devex-docs-snapshot-v1.json'), candidateReport);
+            },
+          }),
+        ).toBe(1);
+        expect(stderr).toHaveBeenCalledWith(
+          expect.stringContaining(
+            'docs.snapshot.compressedBytes.ratification baseline report provenance could not be verified',
+          ),
+        );
+      } finally {
+        stderr.mockRestore();
+      }
+      rmSync(candidateReport);
 
       const forged = JSON.parse(gitBudgetBytes.toString('utf8'));
       forged.metrics['docs.snapshot.compressedBytes'].ratification.targetRationale +=

@@ -203,6 +203,17 @@ describe('DevEx CI and baseline policy', () => {
     const transaction = ci.gates
       .find((gate) => gate.id === 'manual-hosted-ratification')
       .commands.find((command) => command.includes(' --ratify '));
+    const duplicatedTransaction = new Map(workflowSources);
+    duplicatedTransaction.set(
+      '.github/workflows/devex-nightly.yml',
+      duplicatedTransaction
+        .get('.github/workflows/devex-nightly.yml')
+        .replace(transaction, `${transaction}\n      - run: ${transaction}`),
+    );
+    expect(validateDevexCiPolicy(ci, { workflowSources: duplicatedTransaction })).toContain(
+      'gates[6] must collect one-runner N=5 benchmark, golden, and full-catalog evidence before one clean transactional budget write',
+    );
+
     lateInheritedSnapshot.set(
       '.github/workflows/devex-nightly.yml',
       lateInheritedSnapshot

@@ -137,6 +137,7 @@ const KOVO_FULL_CATALOG_PHASES = Object.freeze([
 const authenticatedProductionScenarios = new WeakSet();
 const authenticatedProductionDocsEvidence = new WeakMap();
 const authenticatedFullCatalogBaselineReports = new WeakSet();
+const authenticatedInheritedBudgetSnapshots = new WeakSet();
 const METRIC_UNITS = new Set(['bytes', 'ms']);
 const STATISTICS = new Set(['median', 'p95']);
 const RUNNER_STATUSES = new Set(['unratified', 'ratified']);
@@ -3194,8 +3195,10 @@ function baselineSourceBytes(metricId, record, options) {
   if (candidate.status === 'present') return candidate.bytes;
   if (candidate.status !== 'missing') return null;
 
+  if (!authenticatedInheritedBudgetSnapshots.has(options.inheritedBudgets)) return null;
   const inheritedRecord = options.inheritedBudgets?.metrics?.[metricId]?.ratification;
   if (!sameJson(record, inheritedRecord)) return null;
+  options.afterCandidateProvenanceMiss?.({ metricId, sourcePath });
   const inherited = baselineSourceAtRoot(options.inheritedRepoRoot, sourcePath);
   if (inherited.status !== 'present') return null;
   const candidateAfterFallback = baselineSourceAtRoot(options.repoRoot, sourcePath);
@@ -4873,11 +4876,15 @@ export function runDevexBenchmark(argv = process.argv.slice(2), runtime = {}) {
         );
       }
       inheritedBudgets = JSON.parse(authenticatedHeadBytes.toString('utf8'));
+      authenticatedInheritedBudgetSnapshots.add(inheritedBudgets);
     }
     const findings = validateBudgets(budgets, {
       repoRoot: path.dirname(path.resolve(args.budgets)),
       inheritedBudgets,
       inheritedRepoRoot,
+      ...(runtime.afterCandidateProvenanceMiss === undefined
+        ? {}
+        : { afterCandidateProvenanceMiss: runtime.afterCandidateProvenanceMiss }),
     });
     if (findings.length > 0) {
       process.stderr.write(`${findings.join('\n')}\n`);

@@ -348,6 +348,7 @@ export function validateDevexCiPolicy(policy, options = {}) {
         golden === undefined ||
         fullCatalog === undefined ||
         transaction === undefined ||
+        countOccurrences(segment, transaction) !== 1 ||
         countOccurrences(segment, inheritedBudgetsSnapshot) !== 1 ||
         segment.indexOf(inheritedBudgetsSnapshot) > segment.indexOf(transaction) ||
         countOccurrences(segment, cleanCheckout) !== 1 ||
