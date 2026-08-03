@@ -37,11 +37,31 @@ jobs:
           rebuild-better-sqlite3: 'true'
       - name: Prepare exact-pinned TLC checker
         run: vp exec node scripts/check-replay-reservation-model.mjs --prepare
-      - name: Format, type, and import checks
+      - name: Pre- and post-classifier static checks
         env:
           KOVO_TLA_OFFLINE: '1'
-        run: vp exec pnpm run check
+        run: vp exec pnpm run check:static-core
       - run: git diff --check
+
+  classifier-corpus:
+    runs-on: ubuntu-24.04
+    # The corpus gate has a 50-minute process ceiling; retain 40 minutes for setup and cleanup.
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95
+        with:
+          distribution: temurin
+          java-version: '21.0.11+10.0.LTS'
+      - uses: ./.github/actions/kovo-setup
+        with:
+          rebuild-better-sqlite3: 'true'
+      - name: Security classifier corpus
+        env:
+          KOVO_TLA_OFFLINE: '1'
+        run: vp exec pnpm run check:security-classifier-corpus
 
   hermetic-proof:
     runs-on: ubuntu-24.04
@@ -735,6 +755,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - static-core
+      - classifier-corpus
       - hermetic-proof
       - paranoid
       - api-surface

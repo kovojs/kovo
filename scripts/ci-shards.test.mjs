@@ -84,7 +84,49 @@ function directlyNamedCalls(node) {
   return calls;
 }
 
+function workflowJobSource(workflow, job) {
+  const lines = workflow.split(/\r?\n/u);
+  const start = lines.findIndex((line) => line === `  ${job}:`);
+  if (start === -1) throw new Error(`CI workflow is missing ${job}.`);
+  const end = lines.findIndex((line, index) => index > start && /^  [a-z][a-z0-9-]*:$/u.test(line));
+  return lines.slice(start, end === -1 ? undefined : end).join('\n');
+}
+
 describe('ci-shards', () => {
+  it('keeps the classifier corpus mandatory while running it independently from static-core', async () => {
+    const [packageSource, workflowSource] = await Promise.all([
+      readFile(new URL('../package.json', import.meta.url), 'utf8'),
+      readFile(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8'),
+    ]);
+    const scripts = JSON.parse(packageSource).scripts;
+    const checkPhases = scripts.check.split(' && ');
+    expect(checkPhases).toEqual([
+      'pnpm run check:pre-classifier',
+      'pnpm run check:security-classifier-corpus',
+      'pnpm run check:post-classifier',
+    ]);
+    expect(
+      checkPhases.filter((phase) => phase === 'pnpm run check:security-classifier-corpus'),
+    ).toHaveLength(1);
+    expect(scripts['check:static-core']).toBe(
+      'pnpm run check:pre-classifier && pnpm run check:post-classifier',
+    );
+
+    const staticCore = workflowJobSource(workflowSource, 'static-core');
+    const classifierCorpus = workflowJobSource(workflowSource, 'classifier-corpus');
+    const aggregate = workflowJobSource(workflowSource, 'check');
+    expect(staticCore).toContain('run: vp exec pnpm run check:static-core');
+    expect(staticCore).not.toContain('check:security-classifier-corpus');
+    expect(classifierCorpus).toContain('run: vp exec pnpm run check:security-classifier-corpus');
+    expect(classifierCorpus).not.toContain('needs:');
+    expect(aggregate.match(/^      - classifier-corpus$/gmu)).toHaveLength(1);
+    expect(classifierCorpus).toContain("java-version: '21.0.11+10.0.LTS'");
+    expect(classifierCorpus).toContain("KOVO_TLA_OFFLINE: '1'");
+    expect(classifierCorpus).toContain("rebuild-better-sqlite3: 'true'");
+    const timeoutMinutes = Number(classifierCorpus.match(/timeout-minutes: (\d+)/u)?.[1]);
+    expect(timeoutMinutes).toBeGreaterThanOrEqual(50 + 40);
+  });
+
   it('binds the one-shot timeout plan to the exact production trust preflights', async () => {
     const sourceText = await readFile(
       new URL('../packages/cli/src/commands/build-export.ts', import.meta.url),
