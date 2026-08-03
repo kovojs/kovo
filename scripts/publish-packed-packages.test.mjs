@@ -4,6 +4,8 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  packedBytesSha256,
+  packedTarballSha512,
   publishPackedPackages,
   readPackedReleaseManifest,
   validatePackedReleaseManifest,
@@ -36,6 +38,20 @@ function releasePackagesFor(packedManifest) {
 }
 
 describe('publish-packed-packages', () => {
+  it('owns the fixed packed-manifest and tarball digest formats', () => {
+    const bytes = Buffer.from('abc');
+    expect(packedBytesSha256(bytes)).toBe(
+      'sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
+    );
+    expect(packedTarballSha512(bytes)).toBe(
+      'sha512-3a81oZNherrMQXNJriBBMRLm+k6JqX6iCp7u5ktV05ohkpkqJ0/BqDa6PCOj/uu9RU1EI2Q86A4qmslPpUyknw==',
+    );
+    expect(() => packedBytesSha256('abc')).toThrow('packed manifest digest input must be a Buffer');
+    expect(() => packedTarballSha512('abc')).toThrow(
+      'packed tarball digest input must be a Buffer',
+    );
+  });
+
   it('bounds the downloaded release manifest before allocating or parsing it', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'kovo-packed-manifest-limit-'));
     const sparseManifest = path.join(root, 'packed-packages.json');

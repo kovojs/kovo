@@ -195,7 +195,7 @@ export function verifyPackedAttestationBytes(pkg, tarballBytes) {
   if (!Buffer.isBuffer(tarballBytes)) {
     throw new TypeError(`${String(pkg?.name)} tarball snapshot must be a Buffer`);
   }
-  const expectedSha512 = `sha512-${createHash('sha512').update(tarballBytes).digest('base64')}`;
+  const expectedSha512 = packedTarballSha512(tarballBytes);
   if (pkg.sha512 !== expectedSha512) {
     throw new Error(`${pkg.name} tarball sha512 attestation mismatch`);
   }
@@ -215,6 +215,24 @@ export function verifyPackedAttestationBytes(pkg, tarballBytes) {
     throw new Error(`${pkg.name} packed manifest attestation mismatch`);
   }
   return { entries, tarballBytes };
+}
+
+/** Digest authoritative packed-manifest bytes using the release report's fixed SHA-256 format. */
+export function packedBytesSha256(manifestBytes) {
+  assertPackedDigestBytes(manifestBytes, 'packed manifest');
+  return `sha256:${createHash('sha256').update(manifestBytes).digest('hex')}`;
+}
+
+/** Digest snapshotted package tarball bytes using npm's fixed SHA-512 integrity format. */
+export function packedTarballSha512(tarballBytes) {
+  assertPackedDigestBytes(tarballBytes, 'packed tarball');
+  return `sha512-${createHash('sha512').update(tarballBytes).digest('base64')}`;
+}
+
+function assertPackedDigestBytes(value, label) {
+  if (!Buffer.isBuffer(value)) {
+    throw new TypeError(`${label} digest input must be a Buffer`);
+  }
 }
 
 function readTag(args) {

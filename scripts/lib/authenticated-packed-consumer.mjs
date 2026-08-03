@@ -1,9 +1,9 @@
-import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { authenticatedPackedJourneyPackagesFromManifestBytes } from '../golden-journey/packed-package-auth.mjs';
+import { packedBytesSha256, packedTarballSha512 } from '../publish-packed-packages.mjs';
 import { packedManifestMaxBytes } from '../release-packages.mjs';
 import { readBoundedRegularFile } from './bounded-regular-file.mjs';
 import { readPackageTarballSnapshot } from './deterministic-tarball.mjs';
@@ -21,9 +21,7 @@ export function loadAuthenticatedPackedConsumerInputs(packedManifest, dependenci
     dependencies.authenticateManifestBytes ?? authenticatedPackedJourneyPackagesFromManifestBytes;
   const authoritativeManifest = readManifestBytes(resolvedManifest);
   assertBoundedManifestBuffer(authoritativeManifest);
-  const manifestSha256 = `sha256:${createHash('sha256')
-    .update(authoritativeManifest)
-    .digest('hex')}`;
+  const manifestSha256 = packedBytesSha256(authoritativeManifest);
   const authenticated = authenticateManifestBytes(resolvedManifest, authoritativeManifest);
   const packages = snapshotAuthenticatedTarballBytes(authenticated);
   const finalManifest = readManifestBytes(resolvedManifest);
@@ -68,7 +66,7 @@ export function snapshotAuthenticatedTarballBytes(authenticatedPackages) {
       throw new TypeError(`authenticated packed consumer received invalid ${name}`);
     }
     const tarballBytes = readPackageTarballSnapshot(pkg.tarballPath);
-    const observedSha512 = `sha512-${createHash('sha512').update(tarballBytes).digest('base64')}`;
+    const observedSha512 = packedTarballSha512(tarballBytes);
     if (observedSha512 !== pkg.sha512) {
       throw new Error(`${name} tarball changed after packed-manifest authentication`);
     }
@@ -93,9 +91,7 @@ export function materializeAuthenticatedTarballSet(authenticatedPackages, destin
     tarballNames.add(tarballName);
     const tarballPath = path.join(destination, tarballName);
     writeFileSync(tarballPath, pkg.tarballBytes, { flag: 'wx', mode: 0o400 });
-    const observedSha512 = `sha512-${createHash('sha512')
-      .update(readPackageTarballSnapshot(tarballPath))
-      .digest('base64')}`;
+    const observedSha512 = packedTarballSha512(readPackageTarballSnapshot(tarballPath));
     if (observedSha512 !== pkg.sha512) {
       throw new Error(`${name} private tarball snapshot does not match the authenticated manifest`);
     }

@@ -440,14 +440,6 @@
       "review": "Exact non-keyed SHA-256 digests compare create-kovo example assets and their authenticated manifest; they acquire no entropy, key material, or keyed operation."
     },
     {
-      "id": "crypto-door-packed-create-kovo-examples",
-      "file": "scripts/check-packed-create-kovo-examples.mjs",
-      "kind": "digest",
-      "operations": ["createHash"],
-      "tier": "build-tooling",
-      "review": "Exact non-keyed SHA-256 and SHA-512 digests authenticate the pack manifest and recheck snapshot and materialized tarball bytes; they acquire no entropy, key material, or keyed operation."
-    },
-    {
       "id": "crypto-door-packed-preset-consumers",
       "file": "scripts/check-packed-preset-consumers.mjs",
       "kind": "digest",
@@ -757,7 +749,7 @@
       "kind": "digest",
       "operations": ["createHash"],
       "tier": "build-tooling",
-      "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
+      "review": "Purpose-specific Buffer-only helpers own the exact non-keyed SHA-256 packed-manifest identity and npm-format SHA-512 tarball integrity used by authenticated packed consumers; they acquire no entropy, key material, or keyed operation."
     },
     {
       "id": "crypto-door-054",
