@@ -167,7 +167,9 @@ describe('DevEx CI and baseline policy', () => {
 
     for (const fragment of [
       'createRatifiedDevexBaselinePolicyCandidate(checkoutPolicy)',
-      'vp exec node scripts/devex-benchmark.mjs --check-budgets --budgets "$KOVO_DEVEX_CANDIDATE_ROOT/devex-budgets.json"',
+      'cp devex-budgets.json "$RUNNER_TEMP/kovo-devex-ratification/inherited-devex-budgets.json"',
+      'KOVO_DEVEX_INHERITED_BUDGETS: ${{ runner.temp }}/kovo-devex-ratification/inherited-devex-budgets.json',
+      'vp exec node scripts/devex-benchmark.mjs --check-budgets --budgets "$KOVO_DEVEX_CANDIDATE_ROOT/devex-budgets.json" --inherited-budgets "$KOVO_DEVEX_INHERITED_BUDGETS" --inherited-provenance-root "$GITHUB_WORKSPACE"',
       'vp exec node scripts/devex-ci-policy.mjs --candidate-root "$KOVO_DEVEX_CANDIDATE_ROOT"',
       'test "$actual_status" = \' M devex-budgets.json\'',
     ]) {
@@ -193,6 +195,23 @@ describe('DevEx CI and baseline policy', () => {
     );
     expect(validateDevexCiPolicy(ci, { workflowSources: checkoutBaselineWrite })).toContain(
       'gates[6] must hand off and validate the exact five-file ratification candidate without checkout baseline writes',
+    );
+
+    const lateInheritedSnapshot = new Map(workflowSources);
+    const snapshot =
+      'cp devex-budgets.json "$RUNNER_TEMP/kovo-devex-ratification/inherited-devex-budgets.json"';
+    const transaction = ci.gates
+      .find((gate) => gate.id === 'manual-hosted-ratification')
+      .commands.find((command) => command.includes(' --ratify '));
+    lateInheritedSnapshot.set(
+      '.github/workflows/devex-nightly.yml',
+      lateInheritedSnapshot
+        .get('.github/workflows/devex-nightly.yml')
+        .replace(snapshot, '')
+        .replace(transaction, `${transaction}\n      - run: ${snapshot}`),
+    );
+    expect(validateDevexCiPolicy(ci, { workflowSources: lateInheritedSnapshot })).toContain(
+      'gates[6] must collect one-runner N=5 benchmark, golden, and full-catalog evidence before one clean transactional budget write',
     );
   });
 
@@ -431,12 +450,18 @@ function policyWorkflowSources(policy) {
         '          echo "KOVO_DEVEX_RUNNER_NAME=github-hosted-ubuntu-24.04-accepted"',
       );
     }
+    if (gate.id === 'manual-hosted-ratification') {
+      lines.push(
+        '      - run: cp devex-budgets.json "$RUNNER_TEMP/kovo-devex-ratification/inherited-devex-budgets.json"',
+      );
+    }
     for (const command of gate.commands) lines.push(`      - run: ${command}`);
     if (gate.id === 'manual-hosted-ratification') {
       lines.push(
         '      - run: test -z "$(git status --porcelain=v1 --untracked-files=all)"',
         '      - env:',
         '          KOVO_DEVEX_CANDIDATE_ROOT: ${{ runner.temp }}/kovo-devex-ratification/candidate',
+        '          KOVO_DEVEX_INHERITED_BUDGETS: ${{ runner.temp }}/kovo-devex-ratification/inherited-devex-budgets.json',
         '        run: |',
         '          cp devex-budgets.json "$KOVO_DEVEX_CANDIDATE_ROOT/devex-budgets.json"',
         '          cp benchmark.json "$KOVO_DEVEX_CANDIDATE_ROOT/baselines/devex-hosted-benchmark-v1.json"',
@@ -444,7 +469,7 @@ function policyWorkflowSources(policy) {
         '          cp catalog.json "$KOVO_DEVEX_CANDIDATE_ROOT/baselines/devex-hosted-full-catalog-v1.json"',
         '          const candidatePolicy = createRatifiedDevexBaselinePolicyCandidate(checkoutPolicy)',
         "          path.join(process.env.KOVO_DEVEX_CANDIDATE_ROOT, 'devex-baseline-policy.json')",
-        '          vp exec node scripts/devex-benchmark.mjs --check-budgets --budgets "$KOVO_DEVEX_CANDIDATE_ROOT/devex-budgets.json"',
+        '          vp exec node scripts/devex-benchmark.mjs --check-budgets --budgets "$KOVO_DEVEX_CANDIDATE_ROOT/devex-budgets.json" --inherited-budgets "$KOVO_DEVEX_INHERITED_BUDGETS" --inherited-provenance-root "$GITHUB_WORKSPACE"',
         '          vp exec node scripts/devex-ci-policy.mjs --candidate-root "$KOVO_DEVEX_CANDIDATE_ROOT"',
         '          git diff --check -- devex-budgets.json',
         '          test "$actual_status" = \' M devex-budgets.json\'',

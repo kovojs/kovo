@@ -30,6 +30,7 @@ import {
   packedArtifactBinding,
   percentile,
   ratifyBudgets,
+  runDevexBenchmark,
   runBenchmarkScenario,
   validateBudgets,
   validateDeterministicArtifactReportIdentity,
@@ -1017,6 +1018,60 @@ describe('DevEx benchmark foundation', () => {
         (result) => result.metric === 'docs.snapshot.compressedBytes',
       ),
     ).toMatchObject({ status: 'pass' });
+  });
+
+  it('validates omitted unchanged provenance through a fail-closed candidate-first overlay', () => {
+    const temporaryRoot = mkdtempSync(path.join(os.tmpdir(), 'kovo-devex-budget-overlay-'));
+    const candidateRoot = path.join(temporaryRoot, 'candidate');
+    const inheritedRoot = path.join(temporaryRoot, 'checkout');
+    const relativeReport = 'baselines/devex-docs-snapshot-v1.json';
+    const candidateReport = path.join(candidateRoot, relativeReport);
+    const inheritedReport = path.join(inheritedRoot, relativeReport);
+    const provenanceFailure =
+      'docs.snapshot.compressedBytes.ratification baseline report provenance could not be verified: baselines/devex-docs-snapshot-v1.json';
+    try {
+      mkdirSync(path.dirname(candidateReport), { recursive: true });
+      mkdirSync(path.dirname(inheritedReport), { recursive: true });
+      cpSync(path.join(repoRoot, relativeReport), inheritedReport);
+      const overlay = {
+        inheritedBudgets: budgets,
+        inheritedRepoRoot: inheritedRoot,
+        repoRoot: candidateRoot,
+      };
+
+      expect(validateBudgets(budgets, overlay)).toEqual([]);
+
+      const changedInheritedRecord = structuredClone(budgets);
+      changedInheritedRecord.metrics[
+        'docs.snapshot.compressedBytes'
+      ].ratification.targetRationale += ' Changed after checkout.';
+      expect(validateBudgets(changedInheritedRecord, overlay)).toContain(provenanceFailure);
+
+      cpSync(path.join(repoRoot, relativeReport), candidateReport);
+      writeFileSync(inheritedReport, '{}\n');
+      expect(validateBudgets(budgets, overlay)).toEqual([]);
+
+      rmSync(candidateReport);
+      cpSync(path.join(repoRoot, relativeReport), inheritedReport);
+      symlinkSync(inheritedReport, candidateReport);
+      expect(validateBudgets(budgets, overlay)).toContain(provenanceFailure);
+    } finally {
+      rmSync(temporaryRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('requires an explicit complete inherited-provenance CLI overlay', () => {
+    expect(() =>
+      runDevexBenchmark(['--check-budgets', '--inherited-budgets', 'devex-budgets.json']),
+    ).toThrow('--inherited-budgets and --inherited-provenance-root must be provided together');
+    expect(() =>
+      runDevexBenchmark([
+        '--inherited-budgets',
+        'devex-budgets.json',
+        '--inherited-provenance-root',
+        '.',
+      ]),
+    ).toThrow('inherited provenance is reserved for --check-budgets');
   });
 
   it('reserves deterministic artifact reports for packed-artifact metrics', () => {

@@ -3101,29 +3101,63 @@ function validateWorkloadIdentity(identity, label) {
   return findings;
 }
 
-function baselineSourceBytes(record, options) {
+function baselineSourceAtRoot(root, sourcePath) {
+  if (root === undefined) return { status: 'unavailable' };
+  let absoluteRoot;
+  try {
+    absoluteRoot = nonSymlinkRootDirectory(root, 'baseline provenance');
+  } catch {
+    return { status: 'invalid' };
+  }
+  let current = absoluteRoot;
+  const segments = sourcePath.split('/');
+  for (const [index, segment] of segments.entries()) {
+    current = path.join(current, segment);
+    const entry = lstatSync(current, { throwIfNoEntry: false });
+    if (entry === undefined) return { status: 'missing' };
+    if (
+      entry.isSymbolicLink() ||
+      (index < segments.length - 1 && !entry.isDirectory()) ||
+      (index === segments.length - 1 && !entry.isFile())
+    ) {
+      return { status: 'invalid' };
+    }
+  }
+  try {
+    return {
+      status: 'present',
+      bytes: readFileSync(
+        nonSymlinkDescendant(absoluteRoot, sourcePath, {
+          kind: 'file',
+          label: 'baseline provenance',
+        }),
+      ),
+    };
+  } catch {
+    return { status: 'invalid' };
+  }
+}
+
+/**
+ * A ratification candidate is an exact delta, so it may omit provenance already bound by the
+ * checkout. Candidate entries always win; fallback is allowed only for an absent entry whose
+ * complete metric ratification record is unchanged from the pre-ratification checkout budget.
+ */
+function baselineSourceBytes(metricId, record, options) {
   const sourcePath = record?.baselineReport?.path;
   if (!safeRepositoryRelativePath(sourcePath)) return null;
   const supplied = options.baselineReports?.get(sourcePath);
   if (supplied !== undefined) {
     return Buffer.isBuffer(supplied) ? supplied : Buffer.from(supplied);
   }
-  if (!options.repoRoot) return null;
-  const absolute = path.resolve(options.repoRoot, sourcePath);
-  const root = path.resolve(options.repoRoot);
-  if (!existsSync(root) || !lstatSync(root).isDirectory()) return null;
-  if (absolute !== root && !absolute.startsWith(`${root}${path.sep}`)) return null;
-  if (
-    !existsSync(absolute) ||
-    !lstatSync(absolute).isFile() ||
-    lstatSync(absolute).isSymbolicLink()
-  ) {
-    return null;
-  }
-  const realRoot = realpathSync(root);
-  const realSource = realpathSync(absolute);
-  if (realSource === realRoot || !realSource.startsWith(`${realRoot}${path.sep}`)) return null;
-  return readFileSync(absolute);
+  const candidate = baselineSourceAtRoot(options.repoRoot, sourcePath);
+  if (candidate.status === 'present') return candidate.bytes;
+  if (candidate.status !== 'missing') return null;
+
+  const inheritedRecord = options.inheritedBudgets?.metrics?.[metricId]?.ratification;
+  if (!sameJson(record, inheritedRecord)) return null;
+  const inherited = baselineSourceAtRoot(options.inheritedRepoRoot, sourcePath);
+  return inherited.status === 'present' ? inherited.bytes : null;
 }
 
 function validateRatificationProvenance(metricId, metric, record, budgets, options) {
@@ -3166,7 +3200,7 @@ function validateRatificationProvenance(metricId, metric, record, budgets, optio
   }
   if (findings.length > 0) return findings;
 
-  const bytes = baselineSourceBytes(record, options);
+  const bytes = baselineSourceBytes(metricId, record, options);
   if (bytes === null) {
     findings.push(
       `${metricId}.ratification baseline report provenance could not be verified: ${source.path}`,
@@ -4626,7 +4660,21 @@ function parseArgs(argv) {
     else if (arg === '--proposal') args.proposals.push(argv[++index]);
     else if (arg === '--write') args.write = true;
     else if (arg === '--check-budgets') args.checkBudgets = true;
-    else if (arg === '--prepare-kovo-scenario') args.prepareKovoScenario = true;
+    else if (arg === '--inherited-budgets') {
+      if (args.inheritedBudgets !== undefined) {
+        throw new Error('--inherited-budgets may be provided only once');
+      }
+      args.inheritedBudgets = argv[++index];
+      if (!args.inheritedBudgets) throw new Error('--inherited-budgets requires a path');
+    } else if (arg === '--inherited-provenance-root') {
+      if (args.inheritedProvenanceRoot !== undefined) {
+        throw new Error('--inherited-provenance-root may be provided only once');
+      }
+      args.inheritedProvenanceRoot = argv[++index];
+      if (!args.inheritedProvenanceRoot) {
+        throw new Error('--inherited-provenance-root requires a path');
+      }
+    } else if (arg === '--prepare-kovo-scenario') args.prepareKovoScenario = true;
     else if (arg === '--help' || arg === '-h') args.help = true;
     else throw new Error(`Unknown argument: ${arg}`);
   }
@@ -4640,7 +4688,7 @@ function usage() {
     '  node scripts/devex-benchmark.mjs --scenario <file> --deterministic-artifacts [--output <file>]',
     '  node scripts/devex-benchmark.mjs --ratify --baseline <report> [--baseline-record-path <path>] --proposal <file> [--write]',
     '  node scripts/devex-benchmark.mjs --ratify --baseline <benchmark> --proposal <file> --baseline <golden> --proposal <file> --baseline <full-catalog> --proposal <file> [--baseline-record-path <path> ...] [--write]',
-    '  node scripts/devex-benchmark.mjs --check-budgets',
+    '  node scripts/devex-benchmark.mjs --check-budgets [--inherited-budgets <file> --inherited-provenance-root <directory>]',
     '  node scripts/devex-benchmark.mjs --prepare-kovo-scenario',
     '',
     'Budgets remain non-binding until a separate baseline report and proposal ratify them.',
@@ -4661,10 +4709,28 @@ export function runDevexBenchmark(argv = process.argv.slice(2), runtime = {}) {
     );
     return 0;
   }
+  if ((args.inheritedBudgets === undefined) !== (args.inheritedProvenanceRoot === undefined)) {
+    throw new Error(
+      '--inherited-budgets and --inherited-provenance-root must be provided together',
+    );
+  }
+  if (args.inheritedBudgets !== undefined && !args.checkBudgets) {
+    throw new Error('inherited provenance is reserved for --check-budgets');
+  }
   const budgets = readJson(path.resolve(args.budgets));
   if (args.checkBudgets) {
+    const inheritedBudgetsPath =
+      args.inheritedBudgets === undefined ? undefined : path.resolve(args.inheritedBudgets);
+    const inheritedRepoRoot =
+      args.inheritedProvenanceRoot === undefined
+        ? undefined
+        : path.resolve(args.inheritedProvenanceRoot);
+    const inheritedBudgets =
+      inheritedBudgetsPath === undefined ? undefined : readJson(inheritedBudgetsPath);
     const findings = validateBudgets(budgets, {
       repoRoot: path.dirname(path.resolve(args.budgets)),
+      inheritedBudgets,
+      inheritedRepoRoot,
     });
     if (findings.length > 0) {
       process.stderr.write(`${findings.join('\n')}\n`);

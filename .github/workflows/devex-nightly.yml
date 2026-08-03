@@ -208,7 +208,9 @@ jobs:
           cache-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-${{ hashFiles('pnpm-lock.yaml') }}
           restore-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-
       - name: Create the one-runner audit workspace
-        run: mkdir -p "$RUNNER_TEMP/kovo-devex-ratification/proposals" "$RUNNER_TEMP/kovo-devex-ratification/golden/failures" "$RUNNER_TEMP/kovo-devex-ratification/full-catalog/failures"
+        run: |
+          mkdir -p "$RUNNER_TEMP/kovo-devex-ratification/proposals" "$RUNNER_TEMP/kovo-devex-ratification/golden/failures" "$RUNNER_TEMP/kovo-devex-ratification/full-catalog/failures"
+          cp devex-budgets.json "$RUNNER_TEMP/kovo-devex-ratification/inherited-devex-budgets.json"
       - name: Prepare the authenticated benchmark scenario
         run: vp exec node scripts/devex-benchmark.mjs --prepare-kovo-scenario
       - name: Collect five benchmark samples without pre-claiming ratification
@@ -250,6 +252,7 @@ jobs:
       - name: Assemble and validate the reviewable candidate
         env:
           KOVO_DEVEX_CANDIDATE_ROOT: ${{ runner.temp }}/kovo-devex-ratification/candidate
+          KOVO_DEVEX_INHERITED_BUDGETS: ${{ runner.temp }}/kovo-devex-ratification/inherited-devex-budgets.json
         run: |
           mkdir -p "$KOVO_DEVEX_CANDIDATE_ROOT/baselines"
           cp devex-budgets.json "$KOVO_DEVEX_CANDIDATE_ROOT/devex-budgets.json"
@@ -270,7 +273,7 @@ jobs:
             { flag: 'wx', mode: 0o600 },
           );
           NODE
-          vp exec node scripts/devex-benchmark.mjs --check-budgets --budgets "$KOVO_DEVEX_CANDIDATE_ROOT/devex-budgets.json"
+          vp exec node scripts/devex-benchmark.mjs --check-budgets --budgets "$KOVO_DEVEX_CANDIDATE_ROOT/devex-budgets.json" --inherited-budgets "$KOVO_DEVEX_INHERITED_BUDGETS" --inherited-provenance-root "$GITHUB_WORKSPACE"
           vp exec node scripts/devex-ci-policy.mjs --candidate-root "$KOVO_DEVEX_CANDIDATE_ROOT"
           git diff --check -- devex-budgets.json
           actual_status="$(git status --porcelain=v1 --untracked-files=all)"

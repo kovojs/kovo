@@ -310,6 +310,8 @@ export function validateDevexCiPolicy(policy, options = {}) {
       );
     }
     if (gate.id === 'manual-hosted-ratification') {
+      const inheritedBudgetsSnapshot =
+        'cp devex-budgets.json "$RUNNER_TEMP/kovo-devex-ratification/inherited-devex-budgets.json"';
       const transaction = gate.commands?.find((command) => command.includes(' --ratify '));
       const benchmark = gate.commands?.find(
         (command) =>
@@ -341,6 +343,8 @@ export function validateDevexCiPolicy(policy, options = {}) {
         golden === undefined ||
         fullCatalog === undefined ||
         transaction === undefined ||
+        !segment.includes(inheritedBudgetsSnapshot) ||
+        segment.indexOf(inheritedBudgetsSnapshot) > segment.indexOf(transaction) ||
         countOccurrences(transaction, ' --baseline "') !== 3 ||
         countOccurrences(transaction, ' --proposal "') !== 3 ||
         countOccurrences(transaction, ' --baseline-record-path ') !== 3 ||
@@ -355,6 +359,7 @@ export function validateDevexCiPolicy(policy, options = {}) {
         );
       }
       const candidateHandoffFragments = [
+        inheritedBudgetsSnapshot,
         'KOVO_DEVEX_CANDIDATE_ROOT: ${{ runner.temp }}/kovo-devex-ratification/candidate',
         'cp devex-budgets.json "$KOVO_DEVEX_CANDIDATE_ROOT/devex-budgets.json"',
         '"$KOVO_DEVEX_CANDIDATE_ROOT/baselines/devex-hosted-benchmark-v1.json"',
@@ -362,7 +367,8 @@ export function validateDevexCiPolicy(policy, options = {}) {
         '"$KOVO_DEVEX_CANDIDATE_ROOT/baselines/devex-hosted-full-catalog-v1.json"',
         'createRatifiedDevexBaselinePolicyCandidate(checkoutPolicy)',
         "path.join(process.env.KOVO_DEVEX_CANDIDATE_ROOT, 'devex-baseline-policy.json')",
-        'vp exec node scripts/devex-benchmark.mjs --check-budgets --budgets "$KOVO_DEVEX_CANDIDATE_ROOT/devex-budgets.json"',
+        'KOVO_DEVEX_INHERITED_BUDGETS: ${{ runner.temp }}/kovo-devex-ratification/inherited-devex-budgets.json',
+        'vp exec node scripts/devex-benchmark.mjs --check-budgets --budgets "$KOVO_DEVEX_CANDIDATE_ROOT/devex-budgets.json" --inherited-budgets "$KOVO_DEVEX_INHERITED_BUDGETS" --inherited-provenance-root "$GITHUB_WORKSPACE"',
         'vp exec node scripts/devex-ci-policy.mjs --candidate-root "$KOVO_DEVEX_CANDIDATE_ROOT"',
         'git diff --check -- devex-budgets.json',
         'test "$actual_status" = \' M devex-budgets.json\'',
