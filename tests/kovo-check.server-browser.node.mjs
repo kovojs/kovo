@@ -1228,7 +1228,8 @@ void test('root acceptance and CI cover the omitted release gates plus gallery b
   const workflowCommands = workflowStepCommands(ciWorkflowSource)
     .map((step) => step.run)
     .filter(Boolean);
-  assert.ok(workflowCommands.includes('vp exec pnpm run check'));
+  assert.ok(workflowCommands.includes('vp exec pnpm run check:static-core'));
+  assert.ok(workflowCommands.includes('vp exec pnpm run check:security-classifier-corpus'));
   assert.ok(workflowCommands.includes('vp exec pnpm run check:api-surface'));
   assert.ok(
     ciWorkflowSource.includes('vp exec pnpm --filter @kovojs/example-gallery run test:browser'),
