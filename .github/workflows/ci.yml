@@ -58,6 +58,12 @@ jobs:
       - uses: ./.github/actions/kovo-setup
         with:
           rebuild-better-sqlite3: 'true'
+      - name: Expose hosted PostgreSQL server binaries
+        run: |
+          postgres_bindir="$(pg_config --bindir)"
+          test -x "$postgres_bindir/initdb"
+          test -x "$postgres_bindir/postgres"
+          echo "$postgres_bindir" >> "$GITHUB_PATH"
       - name: Security classifier corpus
         env:
           KOVO_TLA_OFFLINE: '1'

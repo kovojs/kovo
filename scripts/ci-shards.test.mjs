@@ -152,6 +152,16 @@ describe('ci-shards', () => {
     expect(classifierCorpus).toContain("java-version: '21.0.11+10.0.LTS'");
     expect(classifierCorpus).toContain("KOVO_TLA_OFFLINE: '1'");
     expect(classifierCorpus).toContain("rebuild-better-sqlite3: 'true'");
+    const postgresBinariesStep = `      - name: Expose hosted PostgreSQL server binaries
+        run: |
+          postgres_bindir="$(pg_config --bindir)"
+          test -x "$postgres_bindir/initdb"
+          test -x "$postgres_bindir/postgres"
+          echo "$postgres_bindir" >> "$GITHUB_PATH"`;
+    expect(classifierCorpus).toContain(postgresBinariesStep);
+    expect(classifierCorpus.indexOf(postgresBinariesStep)).toBeLessThan(
+      classifierCorpus.indexOf('run: vp exec pnpm run check:security-classifier-corpus'),
+    );
     const timeoutMinutes = Number(classifierCorpus.match(/timeout-minutes: (\d+)/u)?.[1]);
     expect(timeoutMinutes).toBeGreaterThanOrEqual(50 + 40);
   });
