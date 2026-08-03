@@ -45,6 +45,7 @@ import {
   generatedStarterTestTimeout,
   linkStarterBuildDependencies,
   mergeCookies,
+  requireGeneratedStarterCommandNonzeroExitFailure,
   reservePort,
   stopProcess,
   withRepoBinOnPath,
@@ -711,7 +712,15 @@ async function expectRawHtmlBuildFailurePhase(
   try {
     await buildProductionArtifactWithInfrastructureDeadline(root);
   } catch (error) {
-    output = execFileSyncErrorOutput(error);
+    const failure = (() => {
+      try {
+        return requireGeneratedStarterCommandNonzeroExitFailure(error);
+      } catch {
+        reportRawHtmlBuildPhase(phase, 'command-error');
+        throw error;
+      }
+    })();
+    output = [failure.stdout, failure.stderr].join('\n');
   }
   if (output === undefined) {
     reportRawHtmlBuildPhase(phase, 'unexpected-success');

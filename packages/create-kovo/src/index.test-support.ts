@@ -57,9 +57,52 @@ export interface GeneratedStarterCommandOptions {
 }
 
 export interface GeneratedStarterCommandResult {
-  stderr: string;
-  stdout: string;
+  readonly stderr: string;
+  readonly stdout: string;
 }
+
+export type GeneratedStarterCommandOutcomeKind =
+  | 'cleanup-error'
+  | 'launch-error'
+  | 'nonzero-exit'
+  | 'output-overflow'
+  | 'signal'
+  | 'success'
+  | 'timeout'
+  | 'unknown-exit';
+
+interface GeneratedStarterCommandFailureBase extends GeneratedStarterCommandResult {
+  readonly outcome: Readonly<BoundedTestProcessOutcome>;
+}
+
+type GeneratedStarterCommandInfrastructureFailureKind = Exclude<
+  GeneratedStarterCommandOutcomeKind,
+  'nonzero-exit' | 'signal' | 'success'
+>;
+
+export type GeneratedStarterCommandFailure =
+  | (GeneratedStarterCommandFailureBase & {
+      readonly kind: GeneratedStarterCommandInfrastructureFailureKind;
+    })
+  | (GeneratedStarterCommandFailureBase & {
+      readonly exitCode: number;
+      readonly kind: 'nonzero-exit';
+    })
+  | (GeneratedStarterCommandFailureBase & {
+      readonly kind: 'signal';
+      readonly signal: string;
+    });
+
+export type GeneratedStarterCommandNonzeroExitFailure = Extract<
+  GeneratedStarterCommandFailure,
+  { readonly kind: 'nonzero-exit' }
+>;
+
+export interface GeneratedStarterCommandError extends Error, GeneratedStarterCommandResult {
+  readonly failure: GeneratedStarterCommandFailure;
+}
+
+const generatedStarterCommandFailureByError = new WeakMap<Error, GeneratedStarterCommandFailure>();
 
 /**
  * Keep Vitest's outer watchdog beyond every child deadline, forced-cleanup window, and server-ready
@@ -343,42 +386,55 @@ export async function runGeneratedStarterCommand(
     terminationGraceMs: signalGraceMs,
   });
   const result = commandOutput(outcome);
-  if (outcome.timedOut) {
+  const kind = classifyGeneratedStarterCommandOutcome(outcome);
+  if (kind !== 'success') {
+    const failure = generatedStarterCommandFailureFromOutcome(outcome, kind);
     throw generatedStarterCommandError(
-      `Command timed out after ${timeoutMs}ms: ${[file, ...args].join(' ')}`,
-      result,
-      outcome.cleanupError,
-    );
-  }
-  if (outcome.outputOverflowed) {
-    throw generatedStarterCommandError(
-      `Command output exceeded the ${String(options.maxOutputBytes ?? GENERATED_STARTER_CLI_MAX_OUTPUT_BYTES)}-byte combined limit: ${[file, ...args].join(' ')}`,
-      result,
-      outcome.cleanupError,
-    );
-  }
-  if (outcome.cleanupError !== null) {
-    throw generatedStarterCommandError(
-      `Command process-tree cleanup failed: ${[file, ...args].join(' ')}`,
-      result,
-      outcome.cleanupError,
-    );
-  }
-  if (outcome.error !== null) {
-    throw generatedStarterCommandError(
-      `Command could not start: ${[file, ...args].join(' ')}: ${outcome.error}`,
-      result,
-    );
-  }
-  if (outcome.exitCode !== 0 || outcome.signal !== null) {
-    throw generatedStarterCommandError(
-      `Command failed (${outcome.signal ?? outcome.exitCode ?? 'unknown'}): ${[file, ...args].join(
-        ' ',
-      )}`,
-      result,
+      generatedStarterCommandFailureMessage(file, args, options, failure),
+      failure,
     );
   }
   return result;
+}
+
+/**
+ * Classify a supervised child outcome without inspecting diagnostic text. Infrastructure failures
+ * take precedence over exit status so a timeout or cleanup failure can never masquerade as an
+ * expected compiler rejection merely because its captured output contains the expected code.
+ */
+export function classifyGeneratedStarterCommandOutcome(
+  outcome: Readonly<BoundedTestProcessOutcome>,
+): GeneratedStarterCommandOutcomeKind {
+  if (outcome.timedOut) return 'timeout';
+  if (outcome.outputOverflowed) return 'output-overflow';
+  if (outcome.cleanupError !== null) return 'cleanup-error';
+  if (outcome.error !== null) return 'launch-error';
+  if (outcome.signal !== null) return 'signal';
+  if (Number.isSafeInteger(outcome.exitCode) && outcome.exitCode !== 0) return 'nonzero-exit';
+  if (outcome.exitCode === 0) return 'success';
+  return 'unknown-exit';
+}
+
+/** Return only authenticated failures created by runGeneratedStarterCommand. */
+export function generatedStarterCommandFailure(
+  error: unknown,
+): GeneratedStarterCommandFailure | undefined {
+  return error instanceof Error ? generatedStarterCommandFailureByError.get(error) : undefined;
+}
+
+export function isGeneratedStarterCommandNonzeroExitFailure(
+  failure: GeneratedStarterCommandFailure,
+): failure is GeneratedStarterCommandNonzeroExitFailure {
+  return failure.kind === 'nonzero-exit';
+}
+
+/** Fail closed unless this exact runner produced an ordinary numeric nonzero exit. */
+export function requireGeneratedStarterCommandNonzeroExitFailure(
+  error: unknown,
+): GeneratedStarterCommandNonzeroExitFailure {
+  const failure = generatedStarterCommandFailure(error);
+  if (failure === undefined || !isGeneratedStarterCommandNonzeroExitFailure(failure)) throw error;
+  return failure;
 }
 
 export function installedPackageJson(root: string, packageName: string): Record<string, unknown> {
@@ -866,38 +922,12 @@ async function execStarterCommand(
     supervisorTimeoutMs,
     terminationGraceMs: signalGraceMs,
   });
-  const result = commandOutput(outcome);
-  if (outcome.timedOut) {
+  const kind = classifyGeneratedStarterCommandOutcome(outcome);
+  if (kind !== 'success') {
+    const failure = generatedStarterCommandFailureFromOutcome(outcome, kind);
     throw generatedStarterCommandError(
-      `Generated-starter fixture setup command timed out after ${String(supervisorTimeoutMs)}ms inside its aggregate deadline: ${[file, ...args].join(' ')}`,
-      result,
-      outcome.cleanupError,
-    );
-  }
-  if (outcome.outputOverflowed) {
-    throw generatedStarterCommandError(
-      `Generated-starter fixture setup command output exceeded the ${String(GENERATED_STARTER_CLI_MAX_OUTPUT_BYTES)}-byte combined limit: ${[file, ...args].join(' ')}`,
-      result,
-      outcome.cleanupError,
-    );
-  }
-  if (outcome.cleanupError !== null) {
-    throw generatedStarterCommandError(
-      `Generated-starter fixture setup command cleanup failed: ${[file, ...args].join(' ')}`,
-      result,
-      outcome.cleanupError,
-    );
-  }
-  if (outcome.error !== null) {
-    throw generatedStarterCommandError(
-      `Generated-starter fixture setup command could not start: ${[file, ...args].join(' ')}: ${outcome.error}`,
-      result,
-    );
-  }
-  if (outcome.exitCode !== 0 || outcome.signal !== null) {
-    throw generatedStarterCommandError(
-      `Generated-starter fixture setup command failed (${outcome.signal ?? outcome.exitCode ?? 'unknown'}): ${[file, ...args].join(' ')}`,
-      result,
+      generatedStarterFixtureSetupFailureMessage(file, args, supervisorTimeoutMs, failure),
+      failure,
     );
   }
 }
@@ -965,24 +995,99 @@ function commandOutput(outcome: BoundedTestProcessOutcome): GeneratedStarterComm
   return { stderr: outcome.stderr, stdout: outcome.stdout };
 }
 
+function generatedStarterCommandFailureFromOutcome(
+  outcome: BoundedTestProcessOutcome,
+  kind: Exclude<GeneratedStarterCommandOutcomeKind, 'success'>,
+): GeneratedStarterCommandFailure {
+  const frozenOutcome = Object.freeze({ ...outcome });
+  const base = {
+    outcome: frozenOutcome,
+    stderr: frozenOutcome.stderr,
+    stdout: frozenOutcome.stdout,
+  };
+  if (kind === 'nonzero-exit') {
+    const exitCode = frozenOutcome.exitCode;
+    if (typeof exitCode !== 'number' || !Number.isSafeInteger(exitCode) || exitCode === 0) {
+      throw new Error('Internal generated-starter nonzero-exit classification drifted.');
+    }
+    return Object.freeze({ ...base, exitCode, kind });
+  }
+  if (kind === 'signal') {
+    if (frozenOutcome.signal === null) {
+      throw new Error('Internal generated-starter signal classification drifted.');
+    }
+    return Object.freeze({ ...base, kind, signal: frozenOutcome.signal });
+  }
+  return Object.freeze({ ...base, kind });
+}
+
+function generatedStarterCommandFailureMessage(
+  file: string,
+  args: readonly string[],
+  options: GeneratedStarterCommandOptions,
+  failure: GeneratedStarterCommandFailure,
+): string {
+  const command = [file, ...args].join(' ');
+  switch (failure.kind) {
+    case 'timeout':
+      return `Command timed out after ${String(options.timeoutMs ?? GENERATED_STARTER_CLI_PROCESS_TIMEOUT_MS)}ms: ${command}`;
+    case 'output-overflow':
+      return `Command output exceeded the ${String(options.maxOutputBytes ?? GENERATED_STARTER_CLI_MAX_OUTPUT_BYTES)}-byte combined limit: ${command}`;
+    case 'cleanup-error':
+      return `Command process-tree cleanup failed: ${command}`;
+    case 'launch-error':
+      return `Command could not start: ${command}: ${failure.outcome.error ?? 'unknown launch error'}`;
+    case 'nonzero-exit':
+      return `Command failed (${String(failure.exitCode)}): ${command}`;
+    case 'signal':
+      return `Command failed (${failure.signal}): ${command}`;
+    case 'unknown-exit':
+      return `Command failed (unknown): ${command}`;
+  }
+}
+
+function generatedStarterFixtureSetupFailureMessage(
+  file: string,
+  args: readonly string[],
+  supervisorTimeoutMs: number,
+  failure: GeneratedStarterCommandFailure,
+): string {
+  const command = [file, ...args].join(' ');
+  switch (failure.kind) {
+    case 'timeout':
+      return `Generated-starter fixture setup command timed out after ${String(supervisorTimeoutMs)}ms inside its aggregate deadline: ${command}`;
+    case 'output-overflow':
+      return `Generated-starter fixture setup command output exceeded the ${String(GENERATED_STARTER_CLI_MAX_OUTPUT_BYTES)}-byte combined limit: ${command}`;
+    case 'cleanup-error':
+      return `Generated-starter fixture setup command cleanup failed: ${command}`;
+    case 'launch-error':
+      return `Generated-starter fixture setup command could not start: ${command}: ${failure.outcome.error ?? 'unknown launch error'}`;
+    case 'nonzero-exit':
+      return `Generated-starter fixture setup command failed (${String(failure.exitCode)}): ${command}`;
+    case 'signal':
+      return `Generated-starter fixture setup command failed (${failure.signal}): ${command}`;
+    case 'unknown-exit':
+      return `Generated-starter fixture setup command failed (unknown): ${command}`;
+  }
+}
+
 function generatedStarterCommandError(
   message: string,
-  result: GeneratedStarterCommandResult,
-  cleanupError?: unknown,
-): Error & GeneratedStarterCommandResult {
-  const details = [message, result.stdout.trim(), result.stderr.trim()];
-  if (cleanupError !== undefined && cleanupError !== null) {
+  failure: GeneratedStarterCommandFailure,
+): GeneratedStarterCommandError {
+  const details = [message, failure.stdout.trim(), failure.stderr.trim()];
+  if (failure.outcome.cleanupError !== null) {
     details.push(
-      `Process-tree cleanup failed: ${
-        cleanupError instanceof Error
-          ? cleanupError.message
-          : typeof cleanupError === 'string'
-            ? cleanupError
-            : 'unknown cleanup error'
-      }`,
+      `Process-tree cleanup failed: ${failure.outcome.cleanupError || 'unknown cleanup error'}`,
     );
   }
-  return Object.assign(new Error(details.filter(Boolean).join('\n')), result);
+  const error = Object.assign(new Error(details.filter(Boolean).join('\n')), {
+    failure,
+    stderr: failure.stderr,
+    stdout: failure.stdout,
+  });
+  generatedStarterCommandFailureByError.set(error, failure);
+  return error;
 }
 
 function childHasExited(childProcess: ChildProcessWithoutNullStreams): boolean {

@@ -13,12 +13,19 @@ import {
   formatGeneratedProjectSources,
 } from './index.build.test-support.js';
 import { writeKovoProject } from './index.js';
-import { testProcessCensusArguments } from './index.test-process-supervisor.mjs';
 import {
+  testProcessCensusArguments,
+  type BoundedTestProcessOutcome,
+} from './index.test-process-supervisor.mjs';
+import {
+  classifyGeneratedStarterCommandOutcome,
   GENERATED_STARTER_CLI_PROCESS_TIMEOUT_MS,
   GENERATED_STARTER_CLI_SIGNAL_GRACE_MS,
+  generatedStarterCommandFailure,
   generatedStarterTestTimeout,
   installStarterAppDependencies,
+  isGeneratedStarterCommandNonzeroExitFailure,
+  requireGeneratedStarterCommandNonzeroExitFailure,
   resolveStarterInstallMode,
   runGeneratedStarterCommand,
   runGeneratedStarterFixtureSetupCommandForTest,
@@ -71,7 +78,7 @@ describe('create-kovo starter test support', () => {
     );
     expect(success).toEqual({ stderr: '', stdout: 'proof-ok' });
 
-    await expect(
+    const error = await captureRejection(
       runGeneratedStarterCommand(
         process.execPath,
         [
@@ -80,7 +87,83 @@ describe('create-kovo starter test support', () => {
         ],
         { cwd: process.cwd(), timeoutMs: 5_000 },
       ),
-    ).rejects.toMatchObject({ stderr: 'semantic-stderr', stdout: 'semantic-stdout' });
+    );
+    const failure = generatedStarterCommandFailure(error);
+    expect(failure).toMatchObject({
+      exitCode: 7,
+      kind: 'nonzero-exit',
+      outcome: {
+        cleanupError: null,
+        error: null,
+        exitCode: 7,
+        outputOverflowed: false,
+        signal: null,
+        timedOut: false,
+      },
+      stderr: 'semantic-stderr',
+      stdout: 'semantic-stdout',
+    });
+    expect((error as { failure?: unknown }).failure).toBe(failure);
+    expect(failure && isGeneratedStarterCommandNonzeroExitFailure(failure)).toBe(true);
+    expect(requireGeneratedStarterCommandNonzeroExitFailure(error)).toBe(failure);
+  });
+
+  it('classifies infrastructure outcomes before diagnostic-bearing exit status', () => {
+    const diagnosticExit = generatedStarterOutcome({
+      exitCode: 7,
+      stderr: 'KV426 expected compiler diagnostic',
+    });
+
+    expect(classifyGeneratedStarterCommandOutcome(diagnosticExit)).toBe('nonzero-exit');
+    expect(classifyGeneratedStarterCommandOutcome({ ...diagnosticExit, timedOut: true })).toBe(
+      'timeout',
+    );
+    expect(
+      classifyGeneratedStarterCommandOutcome({ ...diagnosticExit, outputOverflowed: true }),
+    ).toBe('output-overflow');
+    expect(
+      classifyGeneratedStarterCommandOutcome({
+        ...diagnosticExit,
+        cleanupError: 'KV426 cleanup failed',
+      }),
+    ).toBe('cleanup-error');
+    expect(
+      classifyGeneratedStarterCommandOutcome({
+        ...diagnosticExit,
+        exitCode: null,
+        signal: 'SIGTERM',
+      }),
+    ).toBe('signal');
+    expect(
+      classifyGeneratedStarterCommandOutcome({
+        ...diagnosticExit,
+        error: 'KV426 launch failed',
+        exitCode: null,
+      }),
+    ).toBe('launch-error');
+  });
+
+  it('does not authenticate a structurally forged generated-starter failure', () => {
+    const outcome = generatedStarterOutcome({
+      exitCode: 7,
+      stderr: 'KV426 forged compiler diagnostic',
+    });
+    const forged = Object.assign(new Error('forged generated-starter failure'), {
+      failure: {
+        exitCode: 7,
+        kind: 'nonzero-exit',
+        outcome,
+        stderr: outcome.stderr,
+        stdout: outcome.stdout,
+      },
+      stderr: outcome.stderr,
+      stdout: outcome.stdout,
+    });
+
+    expect(generatedStarterCommandFailure(forged)).toBeUndefined();
+    expect(captureThrow(() => requireGeneratedStarterCommandNonzeroExitFailure(forged))).toBe(
+      forged,
+    );
   });
 
   it.skipIf(process.platform === 'win32')(
@@ -97,7 +180,7 @@ describe('create-kovo starter test support', () => {
               "const descendant = spawn(process.execPath, ['-e', \"process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)\"], { detached: true, stdio: 'ignore' });",
               'descendant.unref();',
               "process.on('SIGTERM', () => {});",
-              "process.stdout.write(String(descendant.pid) + '\\n');",
+              "process.stdout.write('KV426 timeout text is not a compiler rejection\\n' + String(descendant.pid) + '\\n');",
               'setInterval(() => {}, 1000);',
             ].join(''),
           ],
@@ -111,9 +194,14 @@ describe('create-kovo starter test support', () => {
         expect(error).toBeInstanceOf(Error);
         expect((error as Error).message).toContain('Command timed out after 1000ms');
         expect((error as Error).message).not.toContain('Process-tree cleanup failed:');
-        const stdout = (error as { stdout?: unknown }).stdout;
-        expect(typeof stdout).toBe('string');
-        descendantPid = Number.parseInt(String(stdout).trim(), 10);
+        const failure = generatedStarterCommandFailure(error);
+        expect(failure?.kind).toBe('timeout');
+        expect(failure?.outcome.timedOut).toBe(true);
+        expect(failure?.stdout).toContain('KV426');
+        expect(captureThrow(() => requireGeneratedStarterCommandNonzeroExitFailure(error))).toBe(
+          error,
+        );
+        descendantPid = Number.parseInt(failure?.stdout.trim().split('\n').at(-1) ?? '', 10);
       }
 
       expect(descendantPid).toBeTypeOf('number');
@@ -126,14 +214,14 @@ describe('create-kovo starter test support', () => {
   it.skipIf(process.platform === 'win32')(
     'fails deterministically when combined generated-starter output exceeds its cap',
     async () => {
-      await expect(
+      const error = await captureRejection(
         runGeneratedStarterCommand(
           process.execPath,
           [
             '-e',
             [
               "process.on('SIGTERM', () => {});",
-              "process.stdout.write('o'.repeat(800));",
+              "process.stdout.write('KV426 overflow text is not a compiler rejection\\n' + 'o'.repeat(800));",
               "process.stderr.write('e'.repeat(800));",
               'setInterval(() => {}, 1000);',
             ].join(''),
@@ -145,7 +233,18 @@ describe('create-kovo starter test support', () => {
             timeoutMs: 5_000,
           },
         ),
-      ).rejects.toThrow(/Command output exceeded the 1024-byte combined limit/u);
+      );
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toMatch(
+        /Command output exceeded the 1024-byte combined limit/u,
+      );
+      const failure = generatedStarterCommandFailure(error);
+      expect(failure?.kind).toBe('output-overflow');
+      expect(failure?.outcome.outputOverflowed).toBe(true);
+      expect(failure?.stdout).toContain('KV426');
+      expect(captureThrow(() => requireGeneratedStarterCommandNonzeroExitFailure(error))).toBe(
+        error,
+      );
     },
   );
 
@@ -403,6 +502,42 @@ describe('create-kovo starter test support', () => {
     15_000,
   );
 });
+
+function generatedStarterOutcome(
+  overrides: Partial<BoundedTestProcessOutcome> = {},
+): BoundedTestProcessOutcome {
+  return {
+    cleanupError: null,
+    durationMs: 1,
+    error: null,
+    exitCode: 0,
+    outputOverflowed: false,
+    signal: null,
+    stderr: '',
+    stdout: '',
+    timedOut: false,
+    ...overrides,
+  };
+}
+
+async function captureRejection(promise: Promise<unknown>): Promise<unknown> {
+  const resolved = Symbol('resolved');
+  const result = await promise.then(
+    () => resolved,
+    (error: unknown) => error,
+  );
+  if (result === resolved) throw new Error('Expected generated-starter command to reject.');
+  return result;
+}
+
+function captureThrow(action: () => unknown): unknown {
+  try {
+    action();
+  } catch (error) {
+    return error;
+  }
+  throw new Error('Expected generated-starter failure policy to throw.');
+}
 
 function restoreEnvironment(name: string, value: string | undefined): void {
   if (value === undefined) delete process.env[name];

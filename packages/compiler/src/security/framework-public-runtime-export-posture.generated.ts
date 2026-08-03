@@ -5746,7 +5746,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
   ["create-kovo", "0.3.0", [
     ["sha256:80d390e85123b76e58a9270f45d1420deaefd869d361bf8181cfa3f310ae6c08", [
 
-    ], ["kovo-packed-tree-sha256:43a99fea95e569e38ba2f295f2c577d224f51aa16bfc1036a530bbcdfcb65dda","kovo-source-tree-sha256:610f2ad640a2a9c7c570403275df4ea86362ddc891573adfc2e994cb623d50e7"]],
+    ], ["kovo-packed-tree-sha256:43a99fea95e569e38ba2f295f2c577d224f51aa16bfc1036a530bbcdfcb65dda","kovo-source-tree-sha256:c7adbeaedf24c05550b4ecca2422ecabc3944cdd7fa8028775d0e6b2387d74d7"]],
     ["sha256:ab8a54156a8c7a9662163fa21e51ffe2042988d5457151d70d51c75ac634689e", [
 
     ], ["kovo-packed-tree-sha256:43a99fea95e569e38ba2f295f2c577d224f51aa16bfc1036a530bbcdfcb65dda"]],

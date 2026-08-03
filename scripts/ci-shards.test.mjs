@@ -1266,11 +1266,30 @@ describe('ci-shards', () => {
     expect(rawHtmlProof).toContain("expectRawHtmlBuildFailurePhase(root, 'unsafe-source-flip'");
     expect(rawHtmlProof).not.toContain('buildProductionArtifact(root)');
     expect(rawHtmlProof).not.toContain('expectBuildFailure(root');
+    expect(rawHtmlProof).not.toContain('execFileSyncErrorOutput(error)');
+    const rawHtmlFailureStart = adversarialSource.indexOf(
+      'async function expectRawHtmlBuildFailurePhase(',
+    );
+    const rawHtmlFailureEnd = adversarialSource.indexOf('\n}\n', rawHtmlFailureStart);
+    expect(rawHtmlFailureStart).toBeGreaterThan(-1);
+    expect(rawHtmlFailureEnd).toBeGreaterThan(rawHtmlFailureStart);
+    const rawHtmlFailureSource = adversarialSource.slice(rawHtmlFailureStart, rawHtmlFailureEnd);
+    expect(rawHtmlFailureSource).toContain(
+      'requireGeneratedStarterCommandNonzeroExitFailure(error)',
+    );
+    expect(rawHtmlFailureSource).toContain("output = [failure.stdout, failure.stderr].join('\\n')");
+    expect(rawHtmlFailureSource).not.toContain('execFileSyncErrorOutput(error)');
     expect(adversarialSource).toContain(
       'await buildProductionArtifactWithInfrastructureDeadline(root);',
     );
     expect(adversarialSource).toContain(
       '`[m1-raw-html-provenance] phase=${phase} state=${state}\\n`',
+    );
+    expect(starterTestSupportSource).toContain(
+      'const generatedStarterCommandFailureByError = new WeakMap<',
+    );
+    expect(starterTestSupportSource).toContain(
+      "if (kind !== 'success') {\n    const failure = generatedStarterCommandFailureFromOutcome(outcome, kind);",
     );
   });
 
