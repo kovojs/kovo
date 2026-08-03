@@ -1,8 +1,12 @@
 #!/usr/bin/env node
-import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeSync } from 'node:fs';
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 
+import {
+  boundedTestProcessCleanupBudgetMs,
+  runBoundedTestProcess,
+} from '../packages/create-kovo/src/index.test-process-supervisor.mjs';
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
 import {
@@ -12,6 +16,18 @@ import {
 } from './security-coverage.mjs';
 
 export const repoRoot = findRepoRoot();
+
+export const CLASSIFIER_CORPUS_CI_JOB_TIMEOUT_MINUTES = 90;
+export const CLASSIFIER_CORPUS_GATE_TIMEOUT_MS = 50 * 60_000;
+export const CLASSIFIER_CORPUS_ORDINARY_BATCH_TIMEOUT_MS = 30 * 60_000;
+export const CLASSIFIER_CORPUS_ISOLATED_BATCH_TIMEOUT_MS = 15 * 60_000;
+export const CLASSIFIER_CORPUS_BROWSER_BATCH_TIMEOUT_MS = 15 * 60_000;
+export const CLASSIFIER_CORPUS_PROCESS_CLEANUP_TIMEOUT_MS = boundedTestProcessCleanupBudgetMs();
+export const CLASSIFIER_CORPUS_MAX_OUTPUT_BYTES = 32 * 1024 * 1024;
+export const CLASSIFIER_CORPUS_BROWSER_CONFIG = 'vitest.browser.config.ts';
+export const CLASSIFIER_CORPUS_BROWSER_NAME = 'chromium';
+
+const CLASSIFIER_CORPUS_DIAGNOSTIC_BYTES = 32 * 1024;
 
 const REQUEST_SAFE_RUNTIME_INVENTORY_FILE =
   'packages/core/src/internal/request-safe-runtime-inventory.ts';
@@ -4720,12 +4736,26 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
   },
 ];
 
-export function evaluateSecurityClassifierCorpus(options = {}) {
+export async function evaluateSecurityClassifierCorpus(options = {}) {
   const root = options.repoRoot ?? repoRoot;
   const corpora = options.corpora ?? REQUIRED_CLASSIFIER_CORPORA;
   const readText =
     options.readText ?? ((relativePath) => readFileSync(path.join(root, relativePath), 'utf8'));
-  const run = options.run ?? ((testFiles, runOptions) => runVitest(testFiles, root, runOptions));
+  const run =
+    options.run ??
+    ((testFiles, runOptions) =>
+      runVitest(testFiles, root, {
+        ...runOptions,
+        env: options.env,
+        runProcess: options.runProcess,
+      }));
+  const now = options.now ?? performance.now.bind(performance);
+  const gateTimeoutMs = positiveTimeout(
+    options.gateTimeoutMs ?? CLASSIFIER_CORPUS_GATE_TIMEOUT_MS,
+    'security classifier corpus gate timeout',
+  );
+  const onPhase = options.onPhase ?? (() => undefined);
+  const gateStartedAt = now();
   const findings = [];
   const testFiles = [];
   const fileText = new Map();
@@ -4784,6 +4814,12 @@ export function evaluateSecurityClassifierCorpus(options = {}) {
     options.loadIsolatedTestConfigs ??
     (options.corpora === undefined ? LOAD_ISOLATED_TEST_CONFIGS : []);
   for (const config of loadIsolatedTestConfigs) {
+    if (isBrowserTestFile(config.file)) {
+      findings.push(
+        `load-isolated browser corpus file requires an explicit browser-isolation design: ${config.file}`,
+      );
+      continue;
+    }
     if (!uniqueTestFiles.includes(config.file)) {
       findings.push(`load-isolated corpus file is not enrolled: ${config.file}`);
       continue;
@@ -4797,12 +4833,63 @@ export function evaluateSecurityClassifierCorpus(options = {}) {
   }
   if (findings.length === 0) {
     const batches = classifierCorpusTestBatches(uniqueTestFiles, loadIsolatedTestConfigs);
-    for (const batch of batches) {
-      const result = run(batch.files, {
-        noFileParallelism: batch.noFileParallelism,
-        testNamePattern: batch.testNamePattern,
-      });
-      if (!result.ok) findings.push(result.output || 'security classifier corpus vitest failed');
+    for (const [index, batch] of batches.entries()) {
+      const elapsedBeforeBatchMs = Math.max(0, now() - gateStartedAt);
+      const remainingGateMs = Math.floor(gateTimeoutMs - elapsedBeforeBatchMs);
+      if (remainingGateMs <= 0) {
+        findings.push(
+          `security classifier corpus exceeded its ${String(gateTimeoutMs)}ms gate deadline before batch ${batch.id}`,
+        );
+        break;
+      }
+      const batchBudgetMs = Math.min(batch.timeoutMs, remainingGateMs);
+      const supervisorTimeoutMs = batchBudgetMs - CLASSIFIER_CORPUS_PROCESS_CLEANUP_TIMEOUT_MS;
+      if (supervisorTimeoutMs <= 0) {
+        findings.push(
+          `security classifier corpus cannot start batch ${batch.id}: its remaining ${String(
+            batchBudgetMs,
+          )}ms budget does not preserve the ${String(
+            CLASSIFIER_CORPUS_PROCESS_CLEANUP_TIMEOUT_MS,
+          )}ms process-tree cleanup allowance`,
+        );
+        break;
+      }
+      const phase = {
+        batch: index + 1,
+        budgetMs: batchBudgetMs,
+        batches: batches.length,
+        cleanupTimeoutMs: CLASSIFIER_CORPUS_PROCESS_CLEANUP_TIMEOUT_MS,
+        files: batch.files,
+        id: batch.id,
+        supervisorTimeoutMs,
+      };
+      await onPhase({ ...phase, state: 'start' });
+      const batchStartedAt = now();
+      let result;
+      try {
+        result = await run(batch.files, {
+          batchId: batch.id,
+          noFileParallelism: batch.noFileParallelism,
+          runtime: batch.runtime,
+          testNamePattern: batch.testNamePattern,
+          timeoutMs: supervisorTimeoutMs,
+        });
+      } catch (error) {
+        result = {
+          ok: false,
+          output: `security classifier corpus batch ${batch.id} supervisor failed: ${errorMessage(error)}`,
+        };
+      }
+      const durationMs = Math.ceil(
+        Number.isFinite(result.durationMs)
+          ? result.durationMs
+          : Math.max(0, now() - batchStartedAt),
+      );
+      await onPhase({ ...phase, durationMs, state: result.ok ? 'pass' : 'fail' });
+      if (!result.ok) {
+        findings.push(result.output || `security classifier corpus batch ${batch.id} failed`);
+        break;
+      }
     }
   }
 
@@ -4835,31 +4922,66 @@ function readSecurityCoverageInputs(readText, findings) {
 
 function classifierCorpusTestBatches(testFiles, loadIsolatedTestConfigs) {
   const configByFile = new Map(loadIsolatedTestConfigs.map((config) => [config.file, config]));
-  const ordinaryTestFiles = testFiles.filter((file) => !configByFile.has(file));
+  const browserTestFiles = testFiles.filter(isBrowserTestFile);
+  const ordinaryTestFiles = testFiles.filter(
+    (file) => !configByFile.has(file) && !isBrowserTestFile(file),
+  );
   const batches =
     ordinaryTestFiles.length > 0
-      ? [{ files: ordinaryTestFiles, noFileParallelism: false, testNamePattern: undefined }]
+      ? [
+          {
+            files: ordinaryTestFiles,
+            id: 'ordinary',
+            noFileParallelism: false,
+            runtime: 'node',
+            testNamePattern: undefined,
+            timeoutMs: CLASSIFIER_CORPUS_ORDINARY_BATCH_TIMEOUT_MS,
+          },
+        ]
       : [];
+  if (browserTestFiles.length > 0) {
+    batches.push({
+      files: browserTestFiles,
+      id: `browser:${CLASSIFIER_CORPUS_BROWSER_NAME}`,
+      noFileParallelism: false,
+      runtime: 'browser',
+      testNamePattern: undefined,
+      timeoutMs: CLASSIFIER_CORPUS_BROWSER_BATCH_TIMEOUT_MS,
+    });
+  }
 
   for (const file of testFiles) {
     const config = configByFile.get(file);
-    if (config === undefined) continue;
+    if (config === undefined || isBrowserTestFile(file)) continue;
     const freshTestNames = config.freshTestNames ?? [];
     if (freshTestNames.length === 0) {
-      batches.push({ files: [file], noFileParallelism: true, testNamePattern: undefined });
+      batches.push({
+        files: [file],
+        id: `isolated:${file}`,
+        noFileParallelism: true,
+        runtime: 'node',
+        testNamePattern: undefined,
+        timeoutMs: CLASSIFIER_CORPUS_ISOLATED_BATCH_TIMEOUT_MS,
+      });
       continue;
     }
     const freshPattern = freshTestNames.map(escapeRegex).join('|');
     batches.push({
       files: [file],
+      id: `isolated:${file}:complement`,
       noFileParallelism: true,
+      runtime: 'node',
       testNamePattern: `^(?!.*(?:${freshPattern})).*$`,
+      timeoutMs: CLASSIFIER_CORPUS_ISOLATED_BATCH_TIMEOUT_MS,
     });
-    for (const testName of freshTestNames) {
+    for (const [index, testName] of freshTestNames.entries()) {
       batches.push({
         files: [file],
+        id: `isolated:${file}:named-${String(index + 1)}`,
         noFileParallelism: true,
+        runtime: 'node',
         testNamePattern: escapeRegex(testName),
+        timeoutMs: CLASSIFIER_CORPUS_ISOLATED_BATCH_TIMEOUT_MS,
       });
     }
   }
@@ -5405,8 +5527,11 @@ function sourceReviewedGlobalNamespaceMembers(source) {
   return paths;
 }
 
-export function main(options = {}) {
-  const result = evaluateSecurityClassifierCorpus(options);
+export async function main(options = {}) {
+  const result = await evaluateSecurityClassifierCorpus({
+    ...options,
+    onPhase: options.onPhase ?? writeClassifierCorpusPhase,
+  });
   process.stdout.write(
     `check-security-classifier-corpus/v1 ${result.ok ? 'OK' : 'FAIL'} corpora=${result.corpora}\n`,
   );
@@ -5414,27 +5539,136 @@ export function main(options = {}) {
   return result.ok;
 }
 
-function runVitest(testFiles, root, options = {}) {
-  const result = spawnSync(
-    'pnpm',
-    [
+export async function runVitest(testFiles, root, options = {}) {
+  const timeoutMs = positiveTimeout(
+    options.timeoutMs,
+    `security classifier corpus batch ${options.batchId ?? 'unknown'} timeout`,
+  );
+  const runtime = options.runtime;
+  if (runtime !== 'node' && runtime !== 'browser') {
+    throw new TypeError(
+      `security classifier corpus batch ${options.batchId ?? 'unknown'} runtime must be node or browser`,
+    );
+  }
+  if (!Array.isArray(testFiles) || testFiles.length === 0) {
+    throw new TypeError('security classifier corpus batch must contain at least one test file');
+  }
+  const browserFileCount = testFiles.filter(isBrowserTestFile).length;
+  if (browserFileCount !== 0 && browserFileCount !== testFiles.length) {
+    throw new TypeError('security classifier corpus must not mix browser and Node test files');
+  }
+  if (runtime === 'browser' && browserFileCount !== testFiles.length) {
+    throw new TypeError('security classifier corpus browser batch must contain only browser tests');
+  }
+  if (runtime === 'node' && browserFileCount !== 0) {
+    throw new TypeError('security classifier corpus browser tests require the browser batch');
+  }
+  const runProcess = options.runProcess ?? runBoundedTestProcess;
+  const result = await runProcess({
+    command: 'vp',
+    args: [
       'exec',
       'vitest',
+      ...(runtime === 'browser'
+        ? [
+            '--config',
+            CLASSIFIER_CORPUS_BROWSER_CONFIG,
+            '--browser.name',
+            CLASSIFIER_CORPUS_BROWSER_NAME,
+          ]
+        : []),
       '--run',
       '--testTimeout=60000',
       ...(options.noFileParallelism ? ['--no-file-parallelism'] : []),
       ...(options.testNamePattern ? ['--testNamePattern', options.testNamePattern] : []),
       ...testFiles,
     ],
-    {
-      cwd: root,
-      encoding: 'utf8',
-    },
-  );
+    captureOutput: true,
+    cwd: root,
+    env: options.env,
+    forwardOutput: true,
+    maxOutputBytes: CLASSIFIER_CORPUS_MAX_OUTPUT_BYTES,
+    supervisorTimeoutMs: timeoutMs,
+  });
+  const failures = classifierCorpusProcessFailures(result, timeoutMs);
   return {
-    ok: result.status === 0,
-    output: `${result.stdout ?? ''}${result.stderr ?? ''}`.trim(),
+    durationMs: result.durationMs,
+    ok: failures.length === 0,
+    output:
+      failures.length === 0
+        ? ''
+        : `security classifier corpus batch ${options.batchId ?? 'unknown'} ${failures.join('; ')}` +
+          formatBatchOutput(result.stdout, result.stderr),
   };
+}
+
+function classifierCorpusProcessFailures(result, timeoutMs) {
+  const failures = [];
+  if (result?.timedOut) failures.push(`timed out after ${String(timeoutMs)}ms`);
+  if (result?.outputOverflowed) {
+    failures.push(`exceeded its ${String(CLASSIFIER_CORPUS_MAX_OUTPUT_BYTES)}-byte output ceiling`);
+  }
+  if (result?.cleanupError) {
+    failures.push(`could not prove process-tree cleanup: ${errorMessage(result.cleanupError)}`);
+  }
+  if (result?.error) failures.push(`could not start: ${errorMessage(result.error)}`);
+  if (result?.signal) failures.push(`ended with signal ${String(result.signal)}`);
+  if (!Number.isInteger(result?.exitCode)) {
+    failures.push('did not return an integer exit status');
+  } else if (result.exitCode !== 0) {
+    failures.push(`exited with status ${String(result.exitCode)}`);
+  }
+  return failures;
+}
+
+function formatBatchOutput(stdout, stderr) {
+  const rendered = `${stdout ?? ''}${stderr ?? ''}`.trim();
+  if (rendered === '') return '';
+  const bytes = Buffer.from(rendered);
+  const retained =
+    bytes.byteLength <= CLASSIFIER_CORPUS_DIAGNOSTIC_BYTES
+      ? bytes
+      : bytes.subarray(bytes.byteLength - CLASSIFIER_CORPUS_DIAGNOSTIC_BYTES);
+  const prefix =
+    retained.byteLength === bytes.byteLength
+      ? '\n--- batch output ---\n'
+      : '\n--- batch output tail (truncated) ---\n';
+  return `${prefix}${retained.toString('utf8')}`;
+}
+
+function writeClassifierCorpusPhase(phase) {
+  const file = phase.files.length === 1 ? ` file=${JSON.stringify(phase.files[0])}` : '';
+  const duration = phase.durationMs === undefined ? '' : ` durationMs=${String(phase.durationMs)}`;
+  const bytes = Buffer.from(
+    `check-security-classifier-corpus/v1 phase=${phase.state} batch=${String(phase.batch)}/${String(
+      phase.batches,
+    )} id=${JSON.stringify(phase.id)} files=${String(phase.files.length)}${file} budgetMs=${String(
+      phase.budgetMs,
+    )} supervisorTimeoutMs=${String(phase.supervisorTimeoutMs)} cleanupTimeoutMs=${String(
+      phase.cleanupTimeoutMs,
+    )}${duration}\n`,
+  );
+  let offset = 0;
+  while (offset < bytes.byteLength) {
+    const written = writeSync(process.stdout.fd, bytes, offset, bytes.byteLength - offset);
+    if (written <= 0) throw new Error('security classifier corpus phase write made no progress');
+    offset += written;
+  }
+}
+
+function positiveTimeout(value, label) {
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new TypeError(`${label} must be a positive safe integer`);
+  }
+  return value;
+}
+
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isBrowserTestFile(file) {
+  return file.endsWith('.browser.test.ts');
 }
 
 if (isMainEntry(import.meta.url)) await runGate(main);
