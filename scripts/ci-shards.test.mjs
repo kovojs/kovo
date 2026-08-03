@@ -7,7 +7,12 @@ import path from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
-import { REQUIRED_CLASSIFIER_CORPORA } from './check-security-classifier-corpus.mjs';
+import {
+  CLASSIFIER_CORPUS_BROWSER_NAME,
+  CLASSIFIER_CORPUS_CI_JOB_TIMEOUT_MINUTES,
+  CLASSIFIER_CORPUS_GATE_TIMEOUT_MS,
+  REQUIRED_CLASSIFIER_CORPORA,
+} from './check-security-classifier-corpus.mjs';
 
 import {
   balanceStarterShards,
@@ -152,18 +157,29 @@ describe('ci-shards', () => {
     expect(classifierCorpus).toContain("java-version: '21.0.11+10.0.LTS'");
     expect(classifierCorpus).toContain("KOVO_TLA_OFFLINE: '1'");
     expect(classifierCorpus).toContain("rebuild-better-sqlite3: 'true'");
+    const browserInstallStep = `      - uses: ./.github/actions/playwright-install
+        with:
+          browsers: ${CLASSIFIER_CORPUS_BROWSER_NAME}
+          cache-key: kovo-playwright-\${{ runner.os }}-\${{ env.PLAYWRIGHT_VERSION }}-${CLASSIFIER_CORPUS_BROWSER_NAME}-\${{ hashFiles('pnpm-lock.yaml') }}
+          restore-key: kovo-playwright-\${{ runner.os }}-\${{ env.PLAYWRIGHT_VERSION }}-${CLASSIFIER_CORPUS_BROWSER_NAME}-`;
     const postgresBinariesStep = `      - name: Expose hosted PostgreSQL server binaries
         run: |
           postgres_bindir="$(pg_config --bindir)"
           test -x "$postgres_bindir/initdb"
           test -x "$postgres_bindir/postgres"
+          openssl version >/dev/null
           echo "$postgres_bindir" >> "$GITHUB_PATH"`;
+    expect(classifierCorpus).toContain(browserInstallStep);
     expect(classifierCorpus).toContain(postgresBinariesStep);
+    expect(classifierCorpus.indexOf(browserInstallStep)).toBeLessThan(
+      classifierCorpus.indexOf(postgresBinariesStep),
+    );
     expect(classifierCorpus.indexOf(postgresBinariesStep)).toBeLessThan(
       classifierCorpus.indexOf('run: vp exec pnpm run check:security-classifier-corpus'),
     );
     const timeoutMinutes = Number(classifierCorpus.match(/timeout-minutes: (\d+)/u)?.[1]);
-    expect(timeoutMinutes).toBeGreaterThanOrEqual(50 + 40);
+    expect(timeoutMinutes).toBe(CLASSIFIER_CORPUS_CI_JOB_TIMEOUT_MINUTES);
+    expect(timeoutMinutes * 60_000 - CLASSIFIER_CORPUS_GATE_TIMEOUT_MS).toBe(40 * 60_000);
   });
 
   it('binds the one-shot timeout plan to the exact production trust preflights', async () => {

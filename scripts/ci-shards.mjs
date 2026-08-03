@@ -1681,9 +1681,10 @@ export function includeVitest(file) {
     !file.includes('/templates/') &&
     (!CREATE_KOVO_ACCEPTANCE_TEST_PATTERN.test(file) || CREATE_KOVO_ROOT_OWNED_FILES.has(file)) &&
     !CONSOLIDATED_VITEST_FILES.has(file) &&
-    // `static-core` runs the complete C13 corpus, including named CPU proofs in fresh processes.
-    // Keeping those exact files out of broad root shards prevents duplicate load from changing a
-    // performance verdict while the required security gate remains the single fail-closed owner.
+    // The dedicated `classifier-corpus` job runs the complete C13 corpus, including named CPU
+    // proofs in fresh processes. Keeping those exact files out of broad root shards prevents
+    // duplicate load from changing a performance verdict while that security job remains the
+    // single fail-closed owner.
     !SECURITY_CLASSIFIER_CORPUS_FILES.has(file)
   );
 }

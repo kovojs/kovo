@@ -58,11 +58,17 @@ jobs:
       - uses: ./.github/actions/kovo-setup
         with:
           rebuild-better-sqlite3: 'true'
+      - uses: ./.github/actions/playwright-install
+        with:
+          browsers: chromium
+          cache-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-
       - name: Expose hosted PostgreSQL server binaries
         run: |
           postgres_bindir="$(pg_config --bindir)"
           test -x "$postgres_bindir/initdb"
           test -x "$postgres_bindir/postgres"
+          openssl version >/dev/null
           echo "$postgres_bindir" >> "$GITHUB_PATH"
       - name: Security classifier corpus
         env:
