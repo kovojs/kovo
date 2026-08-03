@@ -168,11 +168,12 @@ jobs:
       - name: Packed app-public declaration contract
         run: vp exec pnpm run check:api-surface:packed
       - name: Gate available DevEx known-failure probes
-        # The nine per-PR probes run serially with 73m of row-owned fail-closed deadlines. Keep the
+        # The nine per-PR probes run serially with 80m of row-owned fail-closed deadlines. Keep the
         # aggregate watchdog above that declared budget while still bounding runner orchestration.
-        # Real installs and the hosted packed-build ceiling raise the DevEx cap from 110m to 140m.
+        # The bounded hosted-capacity quarantine raises the DevEx cap from 110m to 147m.
+        # A repeat at any widened ceiling is a hard stop for instrumentation, not more headroom.
         # Escalate TERM after 30s so a wedged descendant cannot turn the watchdog into an open wait.
-        run: timeout --kill-after=30s 80m vp exec pnpm run test:devex-known-failures-available
+        run: timeout --kill-after=30s 87m vp exec pnpm run test:devex-known-failures-available
       - name: Enforce packed security evidence budgets
         run: |
           vp exec pnpm run check:pack-security

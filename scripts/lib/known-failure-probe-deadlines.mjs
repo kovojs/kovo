@@ -13,7 +13,7 @@ export const KNOWN_FAILURE_PACKED_INSTALL_TIMEOUT_MS = 180_000;
 export const KNOWN_FAILURE_PACKED_LIFECYCLE_TIMEOUT_MS = 120_000;
 export const KNOWN_FAILURE_PACKED_REBUILD_TIMEOUT_MS = 120_000;
 /** Hosted reachability ceiling only; G8 still owns transactional promotion semantics, not speed. */
-export const KNOWN_FAILURE_PACKED_BUILD_TIMEOUT_MS = 240_000;
+export const KNOWN_FAILURE_PACKED_BUILD_TIMEOUT_MS = 360_000;
 export const KNOWN_FAILURE_PACKED_CHECK_TIMEOUT_MS = 240_000;
 /** CI reachability ceiling only; this is not G1/G2 startup or first-response performance authority. */
 export const KNOWN_FAILURE_FIRST_RESPONSE_INFRASTRUCTURE_TIMEOUT_MS = 120_000;

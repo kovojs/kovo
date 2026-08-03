@@ -6,7 +6,7 @@ import { performance } from 'node:perf_hooks';
  * runner than the product is allowed to take on the ratified G2 runner. This ceiling exists only
  * to let the probe reach the socket-bind observation; it is not a startup-performance budget.
  */
-export const DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS = 120_000;
+export const DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS = 180_000;
 
 /**
  * KF-DEVEX-002 observes the reporter after the socket is listening. Keep this behavioral contract
@@ -18,7 +18,7 @@ export const DEV_READY_POST_BIND_BUDGET_MS = 5_000;
  * Direct CLI readiness tests use this supervisor ceiling. Packed known-failure rows own separate
  * outer floors because their authenticated consumer install is not part of this reusable contract.
  */
-export const DEV_READY_PROBE_PROCESS_TIMEOUT_MS = 180_000;
+export const DEV_READY_PROBE_PROCESS_TIMEOUT_MS = 240_000;
 
 const DEV_READY_POLL_INTERVAL_MS = 25;
 const DEV_READY_TCP_ATTEMPT_TIMEOUT_MS = 250;

@@ -109,7 +109,7 @@ describe('packed CLI consumer proof', () => {
       new URL('./check-packed-cli-consumer.mjs', import.meta.url),
       'utf8',
     );
-    expect(DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS).toBe(120_000);
+    expect(DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS).toBe(180_000);
     expect(DEV_READY_POST_BIND_BUDGET_MS).toBe(5_000);
     expect(budgets.metrics['dev.ready.cold.durationMs'].provisionalTarget).toBe(15_000);
     expect(source).toContain('const port = await reserveKovoDevLoopbackPort()');

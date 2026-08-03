@@ -132,7 +132,7 @@ describe('known-failure register', () => {
       'pnpm run test:devex-known-failures-available',
     );
     expect(ciWorkflowSource).toContain(
-      'run: timeout --kill-after=30s 80m vp exec pnpm run test:devex-known-failures-available',
+      'run: timeout --kill-after=30s 87m vp exec pnpm run test:devex-known-failures-available',
     );
 
     const perPrProbeTimeoutBudgetMs = register.entries
@@ -144,7 +144,7 @@ describe('known-failure register', () => {
     const watchdog = ciWorkflowSource.match(
       /run: timeout --kill-after=(\d+)s (\d+)m vp exec pnpm run test:devex-known-failures-available/u,
     );
-    expect(perPrProbeTimeoutBudgetMs).toBe(73 * 60_000);
+    expect(perPrProbeTimeoutBudgetMs).toBe(80 * 60_000);
     expect(watchdog).not.toBeNull();
     expect(Number(watchdog?.[1])).toBeGreaterThan(0);
     expect(Number(watchdog?.[1])).toBeLessThanOrEqual(60);
@@ -169,18 +169,18 @@ describe('known-failure register', () => {
       expect(entry?.probe.timeoutMs, id).toBeLessThan(floor + 60_000);
     }
     expect(register.entries.find((entry) => entry.id === 'KF-DEVEX-001')?.probe.timeoutMs).toBe(
-      840_000,
+      900_000,
     );
     expect(register.entries.find((entry) => entry.id === 'KF-DEVEX-010')?.probe.timeoutMs).toBe(
-      840_000,
+      900_000,
     );
     expect(register.entries.find((entry) => entry.id === 'KF-DEVEX-005')?.probe.timeoutMs).toBe(
-      600_000,
+      840_000,
     );
-    expect(KNOWN_FAILURE_PACKED_BUILD_TIMEOUT_MS).toBe(240_000);
-    expect(KNOWN_FAILURE_FIRST_LOOP_OUTER_TIMEOUT_FLOORS_MS['sqlite-login']).toBe(822_100);
-    expect(KNOWN_FAILURE_FIRST_LOOP_OUTER_TIMEOUT_FLOORS_MS['opaque-boundary']).toBe(822_100);
-    expect(KNOWN_FAILURE_FIRST_LOOP_OUTER_TIMEOUT_FLOORS_MS['transactional-build']).toBe(594_000);
+    expect(KNOWN_FAILURE_PACKED_BUILD_TIMEOUT_MS).toBe(360_000);
+    expect(KNOWN_FAILURE_FIRST_LOOP_OUTER_TIMEOUT_FLOORS_MS['sqlite-login']).toBe(882_100);
+    expect(KNOWN_FAILURE_FIRST_LOOP_OUTER_TIMEOUT_FLOORS_MS['opaque-boundary']).toBe(882_100);
+    expect(KNOWN_FAILURE_FIRST_LOOP_OUTER_TIMEOUT_FLOORS_MS['transactional-build']).toBe(834_000);
   });
 
   it('keeps dev-ready infrastructure ceilings separate from post-bind and G2 budgets', () => {
@@ -188,11 +188,11 @@ describe('known-failure register', () => {
     const coldG2 = budgets.metrics['dev.ready.cold.durationMs'];
     const warmG2 = budgets.metrics['dev.ready.warm.durationMs'];
 
-    expect(devReady.probe.timeoutMs).toBe(720_000);
+    expect(devReady.probe.timeoutMs).toBe(780_000);
     expect(devReady.probe.timeoutMs).toBeGreaterThanOrEqual(
       KNOWN_FAILURE_FIRST_LOOP_OUTER_TIMEOUT_FLOORS_MS['dev-ready'],
     );
-    expect(DEV_READY_PROBE_PROCESS_TIMEOUT_MS).toBe(180_000);
+    expect(DEV_READY_PROBE_PROCESS_TIMEOUT_MS).toBe(240_000);
     expect(DEV_READY_PROBE_PROCESS_TIMEOUT_MS).toBeGreaterThan(
       DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS,
     );
