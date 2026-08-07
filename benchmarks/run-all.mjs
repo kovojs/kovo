@@ -10,7 +10,7 @@ import { writeReport } from './harness/report.mjs';
 const benchmarkRoot = fileURLToPath(new URL('.', import.meta.url));
 const resultsDir = path.join(benchmarkRoot, 'results');
 
-const apps = [
+const allApps = [
   {
     build: ['pnpm', ['--dir', path.join(benchmarkRoot, 'kovo'), 'run', 'build']],
     cwd: path.join(benchmarkRoot, 'kovo'),
@@ -55,7 +55,19 @@ const iterations = Number(readArg('--iterations') ?? process.env.BENCH_ITERATION
 const runLighthouse = !process.argv.includes('--skip-lighthouse');
 const skipBuild = process.argv.includes('--skip-build');
 
-await mkdir(resultsDir, { recursive: true });
+// `--apps kovo,nextjs` restricts the run to a subset of entrants so one entrant that cannot build
+// does not block the rest of the comparison. `--out-dir` redirects results away from the committed
+// `benchmarks/results/` snapshot.
+const appFilter = readArg('--apps')
+  ?.split(',')
+  .map((id) => id.trim())
+  .filter(Boolean);
+const apps = appFilter ? allApps.filter((app) => appFilter.includes(app.id)) : allApps;
+if (apps.length === 0) throw new Error(`No benchmark apps matched --apps ${readArg('--apps')}.`);
+
+const outDir = readArg('--out-dir') ? path.resolve(readArg('--out-dir')) : resultsDir;
+
+await mkdir(outDir, { recursive: true });
 
 if (!skipBuild) {
   for (const app of apps) {
@@ -85,8 +97,8 @@ const output = {
   iterations,
   apps: results,
 };
-const resultsPath = path.join(resultsDir, 'results.json');
-const reportPath = path.join(resultsDir, 'report.md');
+const resultsPath = path.join(outDir, 'results.json');
+const reportPath = path.join(outDir, 'report.md');
 await writeFile(resultsPath, `${JSON.stringify(output, null, 2)}\n`);
 await writeReport(resultsPath, reportPath);
 process.stdout.write(`benchmark results written to ${path.relative(process.cwd(), reportPath)}\n`);

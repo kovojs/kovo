@@ -249,12 +249,25 @@ async function performanceMetrics(page) {
     const fcp = performance.getEntriesByName('first-contentful-paint')[0];
     const longTasks = window.__kovoBenchLongTasks ?? [];
     const tbt = longTasks.reduce((sum, duration) => sum + Math.max(0, duration - 50), 0);
+
+    // Time to first byte. `PerformanceNavigationTiming.startTime` is always 0, so `responseStart`
+    // is already TTFB measured from navigation start, matching the web-vitals TTFB definition.
+    // `requestStart` is kept alongside it so the connection-setup share (DNS/TCP/TLS) can be
+    // separated from the server's own think time via `serverResponseMs`.
+    const ttfb = navigation?.responseStart ?? null;
+    const requestStart = navigation?.requestStart ?? null;
     return {
       domContentLoadedMs: navigation?.domContentLoadedEventEnd ?? null,
       fcpMs: fcp?.startTime ?? null,
       lcpMs: window.__kovoBenchLcp ?? null,
       loadMs: navigation?.loadEventEnd ?? null,
+      requestStartMs: requestStart,
+      responseEndMs: navigation?.responseEnd ?? null,
+      // Server think time + response transfer start, excluding DNS/TCP/TLS setup.
+      serverResponseMs:
+        typeof ttfb === 'number' && typeof requestStart === 'number' ? ttfb - requestStart : null,
       tbtMs: tbt,
+      ttfbMs: ttfb,
     };
   });
 }

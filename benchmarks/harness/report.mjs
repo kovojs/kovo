@@ -56,8 +56,8 @@ function metricTable(apps, condition) {
   const rows = [
     `### ${condition[0].toUpperCase()}${condition.slice(1)}`,
     '',
-    '| App | FCP ms | LCP ms | TBT ms | JS bytes | Total bytes | TTI proxy ms | Nav detail ms |',
-    '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
+    '| App | TTFB ms | FCP ms | LCP ms | TBT ms | JS bytes | Total bytes | TTI proxy ms | Nav detail ms |',
+    '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
   ];
 
   for (const app of apps) {
@@ -68,6 +68,7 @@ function metricTable(apps, condition) {
     rows.push(
       [
         `| ${app.app}`,
+        format(cold['ttfbMs']?.median),
         format(cold['fcpMs']?.median),
         format(cold['lcpMs']?.median),
         format(cold['tbtMs']?.median),
