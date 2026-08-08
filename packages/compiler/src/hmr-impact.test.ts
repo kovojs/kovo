@@ -19,6 +19,22 @@ describe('compiler HMR impact facts', () => {
     });
   });
 
+  it('classifies render-output-only edits on a live-target component as component refreshes', () => {
+    // plans/good-perf.md O6 ground truth (browser-verified 2026-08-08 on examples/stackoverflow):
+    // a non-entry component edit that only changes render output must patch through the
+    // live-target refresh instead of a full reload, so client state survives the save.
+    const previous = compile(hmrSource({ visibleText: 'Cart' })).hmrImpact;
+    const next = compile(hmrSource({ visibleText: 'Cart updated' })).hmrImpact;
+
+    expect(previous?.renderOutputHash).not.toBe(next?.renderOutputHash);
+    expect(previous?.liveTargetFacts.length).toBeGreaterThan(0);
+    expect(previous?.liveTargetFactsHash).toBe(next?.liveTargetFactsHash);
+    expect(classifyHmrImpact(previous, next)).toEqual({
+      impact: 'componentRefresh',
+      reasons: ['render-output'],
+    });
+  });
+
   it('classifies query-plan edits as route refreshes', () => {
     const previous = compile(hmrSource({ bindingPath: 'cart.count' })).hmrImpact;
     const next = compile(hmrSource({ bindingPath: 'cart.total' })).hmrImpact;

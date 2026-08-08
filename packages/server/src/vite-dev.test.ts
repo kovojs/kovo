@@ -952,6 +952,56 @@ describe('server app shell Vite dev seam', () => {
     expect(ws.send).not.toHaveBeenCalled();
   });
 
+  it('keeps client state when an app-shell edit fails to stage (plans/good-perf.md O6)', async () => {
+    // SPEC §6.2.1: a failed candidate generation keeps the previous generation active. The
+    // plugin must not answer that failure with route-shell + full-reload — reloading would only
+    // destroy client state to re-render the stale build — and the hook must not reject into
+    // Vite's silent hot-update error path.
+    const ws = { send: vi.fn() };
+    const staged: unknown[] = [];
+    const runnerGenerations = {
+      configure() {},
+      stage(token?: object) {
+        staged.push(token);
+        return Promise.reject(new Error('candidate generation failed to evaluate'));
+      },
+      withLease() {
+        return Promise.reject(new Error('unused'));
+      },
+    };
+    const plugin = kovoAppShellViteDevPlugin({
+      moduleId: '/src/app-shell.ts',
+      runnerGenerationModules: {
+        appShellModuleId: '/app-shell-vite',
+        nodeDataPlaneBootstrapModuleId: '/data-plane-bootstrap',
+        securityProfileModuleId: '/security-profile',
+        serverRootModuleId: '/server-root',
+      },
+      runnerGenerations,
+    } as never);
+    const server = {
+      config: { root: '/workspace/app' },
+      middlewares: { use() {} },
+      async ssrLoadModule() {
+        return { default: createApp() };
+      },
+      ws,
+    };
+    plugin.configureServer(server);
+
+    await expect(
+      plugin.handleHotUpdate?.({
+        file: '/workspace/app/src/app-shell.ts',
+        modules: ['vite-module'],
+        read: async () => 'export default brokenSyntax(;',
+        server,
+      }),
+    ).resolves.toEqual([]);
+
+    expect(staged).toHaveLength(1);
+    expect(ws.send).not.toHaveBeenCalled();
+  });
+
   it('rejects non-callable and re-entrant public SSR runner carriers', () => {
     const middlewares = { use: vi.fn() };
     const invalidMethodPlugin = createRawKovoAppShellViteDevPlugin();
