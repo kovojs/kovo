@@ -141,6 +141,33 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
       expect(devtoolResponse.status, `${devtoolBody}\n${output()}`).toBe(404);
       expect(devtoolBody).not.toContain('Kovo Dataflow Devtool');
 
+      // SPEC §4.4 loader-emission gate, positive direction: the starter's `/login` document is
+      // interactive (enhanced sign-in mutation form, query-backed session posture), so the full
+      // production build must ship the inline bootstrap, hash it into the document CSP, and
+      // resolve the runtime chain the bootstrap imports — here the compiler-generated app
+      // bootstrap, which in turn imports the generated deferred app runtime. A false-negative in
+      // the client-surface detector would strip all of it and silently break the sign-in
+      // enhancement.
+      expect(loginHtml).toContain('installInlineKovoBootstrap');
+      expect(loginResponse.headers.get('content-security-policy') ?? '').toContain("'sha256-");
+      const loaderRuntimeHref =
+        /\/c\/__v\/[0-9a-f]+\/(?:kovo-runtime\.client\.js|generated\/app\.client\.js)/.exec(
+          loginHtml,
+        )?.[0];
+      expect(loaderRuntimeHref, loginHtml.slice(0, 2000)).toBeTruthy();
+      const loaderRuntimeResponse = await fetch(`${origin}${loaderRuntimeHref}`);
+      expect(loaderRuntimeResponse.status).toBe(200);
+      const loaderRuntimeSource = await loaderRuntimeResponse.text();
+      const deferredRuntimeHref =
+        /\/c\/__v\/[0-9a-f]+\/kovo-(?:generated-app-)?runtime\.client\.js/.exec(
+          loaderRuntimeSource,
+        )?.[0];
+      expect(deferredRuntimeHref, loaderRuntimeSource.slice(0, 2000)).toBeTruthy();
+      const deferredRuntimeResponse = await fetch(`${origin}${deferredRuntimeHref}`);
+      expect(deferredRuntimeResponse.status).toBe(200);
+      const deferredRuntimeBytes = (await deferredRuntimeResponse.arrayBuffer()).byteLength;
+      expect(deferredRuntimeBytes).toBeGreaterThan(100_000);
+
       // SPEC §10.3: a pre-auth enhanced mutation has no session principal, so replay must bind
       // to the framework-owned anonymous CSRF cookie instead of the rotating submitted token.
       // Exercise the generated production artifact to prove the real app wiring preserves the
