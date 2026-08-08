@@ -104,6 +104,33 @@ comparison.
 | `check` cold / warm / one-file (benchmark app) | 19,324 / 17,668 / 13,707 ms | — | warm ≈ cold |
 | `check` cold / warm / one-file (`stackoverflow`) | 38,486 / 38,684 / 32,394 ms | — | warm ≈ cold |
 
+## Current state after batch 1 (merged to main, 2026-08-08)
+
+The tables above are the **2026-08-07 baseline** and are kept as the reference point. Verified on
+merged main by rebuilding `benchmarks/kovo` and probing the running production artifact:
+
+| Asset | Baseline (wire) | Merged main (wire) | Change |
+| --- | ---: | ---: | ---: |
+| document `/` | 41,014 B | **7,390 B** (br) | **-82.0%** |
+| document `/product/...` | 25,195 B | **5,543 B** (br) | **-78.0%** |
+| `/assets/styles.css` | 122,222 B | **1,050 B** (br, 3,907 B identity) | **-99.1%** |
+| critical path excluding the client runtime | 163,236 B | **8,440 B** | **-94.8%** |
+| client runtime `/c/…kovo-runtime.client.js` | 267,611 B | 47,680 B (br) | -82.2% |
+| stylesheet revalidation | 122,222 B re-download | **304, 0 body bytes** | — |
+
+Next.js's render-blocking critical path on the same app is 8,064 B, so Kovo is now at parity on
+first-load bytes — and the O10 slice (still to merge) removes the runtime and the inline bootstrap
+entirely for inert pages, taking the document to 18,105 B identity.
+
+Behaviour confirmed on merged main: cookie-bearing documents now compress (`content-encoding: br`
+with a per-response `kovo-pad` length mask) where they previously refused; `/assets/*` carry strong
+ETags and return real 304s; document GETs are exempt from the framework-default per-IP limit; the
+listing still renders all 24 product cards.
+
+Also merged: `kovo dev` edit→served 25,704 ms → 3,590 ms on `benchmarks/kovo` (n=10 each, same
+loaded box back to back — INDICATIVE, not a clean-box number; a clean re-measurement is owned by
+O17).
+
 ## The single cross-cutting root cause (development)
 
 Three of the four worst development findings are the same mechanism: **Kovo builds full TypeScript
@@ -254,7 +281,12 @@ absorbs `plans/better-js-loader.md` Phases 4–5, which are superseded.
 
 ### O4 — Prune the emitted stylesheet to actually-used components — **critical, medium, low risk**
 
-- [ ] Make `/assets/styles.css` a function of imported components, not of the whole `@kovojs/ui` package.
+- [x] Make `/assets/styles.css` a function of imported components, not of the whole `@kovojs/ui` package.
+  - Evidence (merged, verified on main): `/assets/styles.css` 122,222 B → **3,907 B identity /
+    1,050 B brotli on the wire**; a 3-component app builds end to end at 8,685 B. When the import
+    graph cannot prove the set the build falls back to the full catalog with an explanatory comment —
+    it fails safe toward correct rendering, never toward smaller output.
+    `packages/compiler/src/package-styles.test.ts` + `build-export-stylesheet-diagnostics.test.ts`.
   - Root cause: `packages/cli/src/commands/build-export.ts:8016-8067` calls
     `extractPackageComponentCss('@kovojs/ui', ...)` unconditionally, and
     `packages/compiler/src/package-styles.ts` `packageComponentSources()` walks the package's entire
@@ -267,9 +299,18 @@ absorbs `plans/better-js-loader.md` Phases 4–5, which are superseded.
     brotli (-98.5%). A hypothetical 4-component app: 12,224 B raw (-90.0%).
   - Risk: `kovo add` copies components into the app's own `src/`, so an import-specifier filter must
     handle copy-in users; dynamic/conditional usage needs a conservative fallback.
-  - Related defect found while measuring: the benchmark page renders with **no app CSS at all** — the
-    app's authored stylesheet (`/assets/index-*.css`, 3,095 B) is built but never linked, while the
-    122 KB library sheet is. Fix before quoting any styling-related number.
+- [x] Related defect: the benchmark page rendered with **no app CSS at all** — the authored stylesheet
+      was compiled but never reached the served sheet, while the 122 KB library sheet was.
+  - Evidence: app CSS actually applied 0 B → 3,907 B on merged main.
+  - Residual, still open: an app that imports ≥1 `@kovojs/ui` component **and** declares
+    `stylesheet('./styles.css')` still loses its authored CSS — `hints.ts` derives the href
+    separately. Precise repro recorded by the implementing slice; carried into O10's file ownership.
+- [ ] Adopt `components: 'imported'` on the dev stylesheet manifest for dev/prod parity.
+  - `packages/server/src/vite.ts:906` still extracts the full catalog with the `exported` default, so
+    dev and prod now disagree about which component CSS exists. One-line adoption.
+    `packages/cli/src/commands/compile.ts:1906` (`kovo compile package-css`) deliberately keeps
+    `exported` — it is a whole-package artifact command and must not be changed.
+- [ ] Evaluate per-route stylesheet splitting on measurement (deferred from D4, not yet assessed).
 
 ### O5 — Stop rebuilding whole-project TypeScript state on every dev edit — **critical, large, medium risk**
 
@@ -277,12 +318,18 @@ Per D5, all four approaches are in scope, in this order. The governing ruling: *
 posture per commit, not per keystroke.** `check` and `build` stay fail-closed and unchanged; the dev
 server stops blocking on proofs that will be re-established before anything ships.
 
-- [ ] D5-a: share one `ts.Program` / `DocumentRegistry` across the four construction sites.
+- [x] D5-a: share one `ts.Program` / `DocumentRegistry` across the four construction sites.
+  - Evidence (merged): `@ts-morph/common` bundled TypeScript self time inside one CDP-profiled
+    edit→served window 1,727 ms → **0 ms**; `typescript.js` 3,552 ms → **561 ms**. Honest limit
+    recorded by the slice: ts-morph@28 has no `documentRegistry` option, so apps that DO use the
+    data plane still pay the drizzle ts-morph pass on every content change.
   - Cheapest win, no posture change. Sites: `handleHotUpdate`'s two calls
     (`packages/server/src/vite.ts:660-671`), the `transform` hook's
     `lowerViteSourceDerivedRegistryDeclarations`, and the second one at `vite.ts:620`. Together those
     are 2,220 ms of a 7,225 ms edit before counting the data-plane analyses.
-- [ ] D5-b: fix the data-plane cache key so a hit is actually cheap.
+- [x] D5-b: fix the data-plane cache key so a hit is actually cheap.
+  - Evidence (merged): re-keyed on a per-file sha256 content hash, invalidated by the watcher; the
+    memo is per-run, not process-global, per the documented ts-morph OOM history.
   - `data-plane-static-analysis.ts:281-293` computes its key by first building a full TS Program and
     canonical-JSON-serialising every app source byte, so a hit costs nearly as much as a miss. Key on
     a content hash of app sources, invalidated by the watcher. An mtime key is unsound under some
@@ -296,7 +343,9 @@ server stops blocking on proofs that will be re-established before anything ship
     remain fail-closed and unchanged — that split is what makes this safe.
   - This also fixes O6's "edit never lands" defect at the root: today `handleHotUpdate` spends ~23 s
     computing whole-project facts on `examples/stackoverflow` and the per-module transform never runs.
-- [ ] Remove the extension-only data-plane test so non-data-plane files get a genuinely cheap path.
+- [x] Remove the extension-only data-plane test so non-data-plane files get a genuinely cheap path.
+  - Evidence (merged): `kovo dev` edit→served on `benchmarks/kovo` 25,704 ms → **3,590 ms** (n=10
+    each, same loaded box back to back, load avg 22-30 — INDICATIVE, not a clean-box number).
   - Mechanism: `packages/server/src/vite.ts:660-671` — `handleHotUpdate` awaits
     `collectCompilerProjectMutationFacts` then `collectCompilerQueryShapeFacts` **before** the
     compiler sees the change. Each builds a full `ts.createProgram` + `getTypeChecker` over every app
