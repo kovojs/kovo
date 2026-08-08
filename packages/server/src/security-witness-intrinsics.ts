@@ -6,6 +6,15 @@
  * mutable globals after application evaluation. This module captures the controls once, proves
  * their basic positive and negative semantics with private identities, and makes every operation
  * fail closed when the captured controls do not satisfy those checks (SPEC §9.5/§10.3).
+ *
+ * Dispatch mechanism (plans/good-perf.md D8; threat model in
+ * security/boot-captured-direct-call.md): post-boot invocations call module-private direct
+ * callers minted at module init from the boot-captured `Function.prototype.call`/`bind`
+ * (`uncurryThis`), or call receiver-insensitive captured statics directly. Neither form performs
+ * an observable property lookup or touches the iterator protocol at invocation time, so the
+ * poisoned-`Function.prototype.apply`/`call` and poisoned-iterator threats the previous per-call
+ * `Reflect.apply` indirection closed remain closed (SPEC §6.6 rule 6). Only genuinely dynamic
+ * targets (`witnessReflectApply`) keep the `Reflect.apply` shape.
  */
 
 const NativeWeakMap = globalThis.WeakMap;
@@ -19,6 +28,7 @@ const NativeProxy = globalThis.Proxy;
 const NativeReflect = globalThis.Reflect;
 const NativeRegExp = globalThis.RegExp;
 const NativeJSON = globalThis.JSON;
+const NativeFunction = globalThis.Function;
 const nativeEncodeURIComponent = globalThis.encodeURIComponent;
 const nativeReflectApply = NativeReflect.apply;
 const nativeReflectConstruct = NativeReflect.construct;
@@ -26,6 +36,8 @@ const nativeReflectGet = NativeReflect.get;
 const nativeReflectOwnKeys = NativeReflect.ownKeys;
 const nativeArrayIsArray = NativeArray.isArray;
 const nativeArraySort = NativeArray.prototype.sort;
+const nativeFunctionCall = NativeFunction.prototype.call;
+const nativeFunctionBind = NativeFunction.prototype.bind;
 const nativeWeakMapGet = NativeWeakMap.prototype.get;
 const nativeWeakMapHas = NativeWeakMap.prototype.has;
 const nativeWeakMapSet = NativeWeakMap.prototype.set;
@@ -53,41 +65,136 @@ const nativeObjectIsFrozen = NativeObject.isFrozen;
 const nativeObjectKeys = NativeObject.keys;
 const nativeObjectPrototype = NativeObject.prototype;
 const nativeNumberIsSafeInteger = NativeNumber.isSafeInteger;
-const nativeMapSize = apply<PropertyDescriptor | undefined>(
-  nativeObjectGetOwnPropertyDescriptor,
-  NativeObject,
-  [NativeMap.prototype, 'size'],
-)?.get;
-const nativeSetSize = apply<PropertyDescriptor | undefined>(
-  nativeObjectGetOwnPropertyDescriptor,
-  NativeObject,
-  [NativeSet.prototype, 'size'],
-)?.get;
+const nativeMapSize = nativeObjectGetOwnPropertyDescriptor(NativeMap.prototype, 'size')?.get;
+const nativeSetSize = nativeObjectGetOwnPropertyDescriptor(NativeSet.prototype, 'size')?.get;
 const NativeString = globalThis.String;
 const nativeStringReplaceAll = NativeString.prototype.replaceAll;
 const nativeStringStartsWith = NativeString.prototype.startsWith;
 const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
 const nativeRegExpExec = NativeRegExp.prototype.exec;
-const nativeJsonStringify = NativeJSON.stringify;
+const nativeJsonStringify = NativeJSON.stringify as (value: unknown) => string | undefined;
 
-function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
-  return nativeReflectApply(fn, receiver, args) as Return;
-}
+/**
+ * Boot-derived direct-caller mint (D8): `uncurryThis(fn)` is the boot-captured
+ * `Function.prototype.call` bound to `fn`, so `uncurryThis(fn)(receiver, ...args)` invokes the
+ * captured `fn` through bound-function internal slots only — no post-boot property lookup, no
+ * iterator protocol. Minted through the boot-captured `Reflect.apply` before any
+ * caller-controlled module evaluates (SPEC §6.6 rule 6). Fixed-arity call sites only; a spread
+ * of caller data would reopen the iterator-poisoning threat and is prohibited
+ * (security/boot-captured-direct-call.md R4).
+ */
+const uncurryThis = nativeReflectApply(nativeFunctionBind, nativeFunctionBind, [
+  nativeFunctionCall,
+]) as (fn: Function) => (receiver: unknown, ...args: unknown[]) => unknown;
+
+const callWeakMapGet = uncurryThis(nativeWeakMapGet) as <Key extends object, Value>(
+  map: WeakMap<Key, Value>,
+  key: Key,
+) => Value | undefined;
+const callWeakMapHas = uncurryThis(nativeWeakMapHas) as <Key extends object>(
+  map: WeakMap<Key, unknown>,
+  key: Key,
+) => boolean;
+const callWeakMapSet = uncurryThis(nativeWeakMapSet) as <Key extends object, Value>(
+  map: WeakMap<Key, Value>,
+  key: Key,
+  value: Value,
+) => WeakMap<Key, Value>;
+const callWeakMapDelete = uncurryThis(nativeWeakMapDelete) as <Key extends object>(
+  map: WeakMap<Key, unknown>,
+  key: Key,
+) => boolean;
+const callWeakSetAdd = uncurryThis(nativeWeakSetAdd) as <Value extends object>(
+  set: WeakSet<Value>,
+  value: Value,
+) => WeakSet<Value>;
+const callWeakSetHas = uncurryThis(nativeWeakSetHas) as <Value extends object>(
+  set: WeakSet<Value>,
+  value: Value,
+) => boolean;
+const callWeakSetDelete = uncurryThis(nativeWeakSetDelete) as <Value extends object>(
+  set: WeakSet<Value>,
+  value: Value,
+) => boolean;
+const callMapGet = uncurryThis(nativeMapGet) as <Key, Value>(
+  map: ReadonlyMap<Key, Value>,
+  key: Key,
+) => Value | undefined;
+const callMapHas = uncurryThis(nativeMapHas) as <Key>(
+  map: ReadonlyMap<Key, unknown>,
+  key: Key,
+) => boolean;
+const callMapSet = uncurryThis(nativeMapSet) as <Key, Value>(
+  map: Map<Key, Value>,
+  key: Key,
+  value: Value,
+) => Map<Key, Value>;
+const callMapDelete = uncurryThis(nativeMapDelete) as <Key>(
+  map: Map<Key, unknown>,
+  key: Key,
+) => boolean;
+const callMapForEach = uncurryThis(nativeMapForEach) as <Key, Value>(
+  map: ReadonlyMap<Key, Value>,
+  callback: (value: Value, key: Key) => void,
+) => void;
+const callSetAdd = uncurryThis(nativeSetAdd) as <Value>(set: Set<Value>, value: Value) => Set<Value>;
+const callSetHas = uncurryThis(nativeSetHas) as <Value>(
+  set: ReadonlySet<Value>,
+  value: Value,
+) => boolean;
+const callSetDelete = uncurryThis(nativeSetDelete) as <Value>(
+  set: Set<Value>,
+  value: Value,
+) => boolean;
+const callSetForEach = uncurryThis(nativeSetForEach) as <Value>(
+  set: ReadonlySet<Value>,
+  callback: (value: Value) => void,
+) => void;
+const callMapSize =
+  typeof nativeMapSize === 'function'
+    ? (uncurryThis(nativeMapSize) as (map: ReadonlyMap<unknown, unknown>) => number)
+    : undefined;
+const callSetSize =
+  typeof nativeSetSize === 'function'
+    ? (uncurryThis(nativeSetSize) as (set: ReadonlySet<unknown>) => number)
+    : undefined;
+const callArraySort = uncurryThis(nativeArraySort) as <Value>(
+  values: Value[],
+  compare?: (left: Value, right: Value) => number,
+) => Value[];
+const callStringReplaceAll = uncurryThis(nativeStringReplaceAll) as (
+  value: string,
+  searchValue: string | RegExp,
+  replaceValue: string | ((substring: string, ...args: unknown[]) => string),
+) => string;
+const callStringStartsWith = uncurryThis(nativeStringStartsWith) as (
+  value: string,
+  searchValue: string,
+  position?: number,
+) => boolean;
+const callStringToLowerCase = uncurryThis(nativeStringToLowerCase) as (value: string) => string;
+const callRegExpExec = uncurryThis(nativeRegExpExec) as (
+  expression: RegExp,
+  value: string,
+) => RegExpExecArray | null;
 
 function capturedControlsAreSound(): boolean {
   try {
-    if (apply(nativeArrayIsArray, NativeArray, [[]]) !== true) return false;
-    if (apply(nativeArrayIsArray, NativeArray, [{}]) !== false) return false;
-    if (apply(nativeNumberIsSafeInteger, NativeNumber, [1]) !== true) return false;
-    if (apply(nativeNumberIsSafeInteger, NativeNumber, [1.5]) !== false) return false;
+    // The probe corpus exercises the exact boot-derived direct callers and captured statics the
+    // runtime dispatches through, so a pre-boot forgery of `Function.prototype.call`/`bind`, a
+    // collection prototype method, or a namespace static fails closed here (SPEC §6.6 rule 6).
+    if (nativeArrayIsArray([]) !== true) return false;
+    if (nativeArrayIsArray({}) !== false) return false;
+    if (nativeNumberIsSafeInteger(1) !== true) return false;
+    if (nativeNumberIsSafeInteger(1.5) !== false) return false;
     const sorted = ['z', 'a', 'aa'];
-    apply(nativeArraySort, sorted, []);
+    callArraySort(sorted);
     if (sorted[0] !== 'a' || sorted[1] !== 'aa' || sorted[2] !== 'z') return false;
-    if (apply(nativeJsonStringify, NativeJSON, ['a"b']) !== '"a\\"b"') return false;
-    if (apply(nativeJsonStringify, NativeJSON, [42]) !== '42') return false;
-    if (apply(nativeJsonStringify, NativeJSON, [null]) !== 'null') return false;
-    if (apply(nativeJsonStringify, NativeJSON, [undefined]) !== undefined) return false;
-    if (apply(nativeEncodeURIComponent, undefined, ['a#b:c']) !== 'a%23b%3Ac') return false;
+    if (nativeJsonStringify('a"b') !== '"a\\"b"') return false;
+    if (nativeJsonStringify(42) !== '42') return false;
+    if (nativeJsonStringify(null) !== 'null') return false;
+    if (nativeJsonStringify(undefined) !== undefined) return false;
+    if (nativeEncodeURIComponent('a#b:c') !== 'a%23b%3Ac') return false;
     const key = {};
     const other = {};
     const value = {};
@@ -98,117 +205,85 @@ function capturedControlsAreSound(): boolean {
         this.witness = witness;
       }
     }
-    const constructed = apply<WitnessConstructedValue>(nativeReflectConstruct, NativeReflect, [
-      WitnessConstructedValue,
-      [value],
-    ]);
+    const constructed = nativeReflectConstruct(WitnessConstructedValue, [
+      value,
+    ]) as WitnessConstructedValue;
     if (
-      apply(nativeObjectGetPrototypeOf, NativeObject, [constructed]) !==
-        WitnessConstructedValue.prototype ||
+      nativeObjectGetPrototypeOf(constructed) !== WitnessConstructedValue.prototype ||
       constructed.witness !== value
     ) {
       return false;
     }
 
     const weakMap = new NativeWeakMap<object, object>();
-    apply(nativeWeakMapSet, weakMap, [key, value]);
-    if (apply(nativeWeakMapGet, weakMap, [key]) !== value) return false;
-    if (apply(nativeWeakMapGet, weakMap, [other]) !== undefined) return false;
-    if (apply(nativeWeakMapHas, weakMap, [key]) !== true) return false;
-    if (apply(nativeWeakMapHas, weakMap, [other]) !== false) return false;
-    if (apply(nativeWeakMapDelete, weakMap, [key]) !== true) return false;
-    if (apply(nativeWeakMapHas, weakMap, [key]) !== false) return false;
+    callWeakMapSet(weakMap, key, value);
+    if (callWeakMapGet(weakMap, key) !== value) return false;
+    if (callWeakMapGet(weakMap, other) !== undefined) return false;
+    if (callWeakMapHas(weakMap, key) !== true) return false;
+    if (callWeakMapHas(weakMap, other) !== false) return false;
+    if (callWeakMapDelete(weakMap, key) !== true) return false;
+    if (callWeakMapHas(weakMap, key) !== false) return false;
 
     const weakSet = new NativeWeakSet<object>();
-    apply(nativeWeakSetAdd, weakSet, [key]);
-    if (apply(nativeWeakSetHas, weakSet, [key]) !== true) return false;
-    if (apply(nativeWeakSetHas, weakSet, [other]) !== false) return false;
-    if (apply(nativeWeakSetDelete, weakSet, [key]) !== true) return false;
-    if (apply(nativeWeakSetHas, weakSet, [key]) !== false) return false;
+    callWeakSetAdd(weakSet, key);
+    if (callWeakSetHas(weakSet, key) !== true) return false;
+    if (callWeakSetHas(weakSet, other) !== false) return false;
+    if (callWeakSetDelete(weakSet, key) !== true) return false;
+    if (callWeakSetHas(weakSet, key) !== false) return false;
 
     const map = new NativeMap<object, object>();
-    apply(nativeMapSet, map, [key, value]);
-    if (apply(nativeMapGet, map, [key]) !== value) return false;
-    if (apply(nativeMapGet, map, [other]) !== undefined) return false;
-    if (apply(nativeMapHas, map, [key]) !== true) return false;
-    if (apply(nativeMapHas, map, [other]) !== false) return false;
-    if (typeof nativeMapSize !== 'function' || apply(nativeMapSize, map, []) !== 1) return false;
+    callMapSet(map, key, value);
+    if (callMapGet(map, key) !== value) return false;
+    if (callMapGet(map, other) !== undefined) return false;
+    if (callMapHas(map, key) !== true) return false;
+    if (callMapHas(map, other) !== false) return false;
+    if (callMapSize === undefined || callMapSize(map) !== 1) return false;
     let visitedMapEntry = false;
-    apply(nativeMapForEach, map, [
-      (entryValue: object, entryKey: object): void => {
-        if (entryKey === key && entryValue === value) visitedMapEntry = true;
-      },
-    ]);
+    callMapForEach(map, (entryValue: object, entryKey: object): void => {
+      if (entryKey === key && entryValue === value) visitedMapEntry = true;
+    });
     if (!visitedMapEntry) return false;
-    if (apply(nativeMapDelete, map, [key]) !== true) return false;
-    if (apply(nativeMapHas, map, [key]) !== false) return false;
+    if (callMapDelete(map, key) !== true) return false;
+    if (callMapHas(map, key) !== false) return false;
 
     const set = new NativeSet<object>();
-    apply(nativeSetAdd, set, [key]);
-    if (apply(nativeSetHas, set, [key]) !== true) return false;
-    if (apply(nativeSetHas, set, [other]) !== false) return false;
-    if (typeof nativeSetSize !== 'function' || apply(nativeSetSize, set, []) !== 1) return false;
+    callSetAdd(set, key);
+    if (callSetHas(set, key) !== true) return false;
+    if (callSetHas(set, other) !== false) return false;
+    if (callSetSize === undefined || callSetSize(set) !== 1) return false;
     let visitedSetEntry = false;
-    apply(nativeSetForEach, set, [
-      (entryValue: object): void => {
-        if (entryValue === key) visitedSetEntry = true;
-      },
-    ]);
+    callSetForEach(set, (entryValue: object): void => {
+      if (entryValue === key) visitedSetEntry = true;
+    });
     if (!visitedSetEntry) return false;
-    if (apply(nativeSetDelete, set, [key]) !== true) return false;
-    if (apply(nativeSetHas, set, [key]) !== false) return false;
+    if (callSetDelete(set, key) !== true) return false;
+    if (callSetHas(set, key) !== false) return false;
 
     const record = { visible: value } as { hidden?: object; visible: object };
-    const nullRecord = apply<Record<PropertyKey, unknown>>(nativeObjectCreate, NativeObject, [
-      null,
-    ]);
-    if (apply(nativeObjectGetPrototypeOf, NativeObject, [nullRecord]) !== null) return false;
-    apply(nativeObjectDefineProperty, NativeObject, [record, 'hidden', { value }]);
-    const descriptor = apply<PropertyDescriptor | undefined>(
-      nativeObjectGetOwnPropertyDescriptor,
-      NativeObject,
-      [record, 'hidden'],
-    );
+    const nullRecord = nativeObjectCreate(null) as Record<PropertyKey, unknown>;
+    if (nativeObjectGetPrototypeOf(nullRecord) !== null) return false;
+    nativeObjectDefineProperty(record, 'hidden', { value });
+    const descriptor = nativeObjectGetOwnPropertyDescriptor(record, 'hidden');
     if (descriptor?.value !== value || descriptor.enumerable !== false) return false;
-    const descriptors = apply<PropertyDescriptorMap>(
-      nativeObjectGetOwnPropertyDescriptors,
-      NativeObject,
-      [record],
-    );
+    const descriptors = nativeObjectGetOwnPropertyDescriptors(record);
     if (descriptors.visible?.value !== value || descriptors.hidden?.value !== value) return false;
-    const ownKeys = apply<PropertyKey[]>(nativeReflectOwnKeys, NativeReflect, [record]);
-    const ownKeysLength = apply<PropertyDescriptor | undefined>(
-      nativeObjectGetOwnPropertyDescriptor,
-      NativeObject,
-      [ownKeys, 'length'],
-    );
+    const ownKeys = nativeReflectOwnKeys(record);
+    const ownKeysLength = nativeObjectGetOwnPropertyDescriptor(ownKeys, 'length');
     if (ownKeysLength === undefined || !('value' in ownKeysLength) || ownKeysLength.value !== 2) {
       return false;
     }
     let sawVisible = false;
     let sawHidden = false;
     for (let index = 0; index < ownKeysLength.value; index += 1) {
-      const keyDescriptor = apply<PropertyDescriptor | undefined>(
-        nativeObjectGetOwnPropertyDescriptor,
-        NativeObject,
-        [ownKeys, index],
-      );
+      const keyDescriptor = nativeObjectGetOwnPropertyDescriptor(ownKeys, index);
       if (keyDescriptor === undefined || !('value' in keyDescriptor)) return false;
       if (keyDescriptor.value === 'visible') sawVisible = true;
       if (keyDescriptor.value === 'hidden') sawHidden = true;
     }
     if (!sawVisible || !sawHidden) return false;
-    const keys = apply<string[]>(nativeObjectKeys, NativeObject, [record]);
-    const keysLength = apply<PropertyDescriptor | undefined>(
-      nativeObjectGetOwnPropertyDescriptor,
-      NativeObject,
-      [keys, 'length'],
-    );
-    const firstKey = apply<PropertyDescriptor | undefined>(
-      nativeObjectGetOwnPropertyDescriptor,
-      NativeObject,
-      [keys, 0],
-    );
+    const keys = nativeObjectKeys(record);
+    const keysLength = nativeObjectGetOwnPropertyDescriptor(keys, 'length');
+    const firstKey = nativeObjectGetOwnPropertyDescriptor(keys, 0);
     if (
       keysLength === undefined ||
       !('value' in keysLength) ||
@@ -219,34 +294,37 @@ function capturedControlsAreSound(): boolean {
     ) {
       return false;
     }
-    if (apply(nativeReflectGet, NativeReflect, [record, 'visible', record]) !== value) {
+    if (nativeReflectGet(record, 'visible', record) !== value) {
       return false;
     }
     const proxy = new NativeProxy(record, {
       get(target, property, receiver) {
-        return apply(nativeReflectGet, NativeReflect, [target, property, receiver]);
+        return nativeReflectGet(target, property, receiver);
       },
     });
     if (proxy.visible !== value) return false;
-    if (apply(nativeObjectGetPrototypeOf, NativeObject, [record]) !== nativeObjectPrototype) {
+    if (nativeObjectGetPrototypeOf(record) !== nativeObjectPrototype) {
       return false;
     }
-    if (apply(nativeObjectIs, NativeObject, [value, value]) !== true) return false;
-    if (apply(nativeObjectIs, NativeObject, [value, other]) !== false) return false;
-    if (
-      apply(NativeString, undefined, [42]) !== '42' ||
-      apply(NativeString, undefined, [null]) !== 'null'
-    ) {
+    if (nativeObjectIs(value, value) !== true) return false;
+    if (nativeObjectIs(value, other) !== false) return false;
+    if (NativeString(42) !== '42' || NativeString(null) !== 'null') {
       return false;
     }
-    if (apply(nativeStringReplaceAll, 'a-b-a', ['a', 'x']) !== 'x-b-x') return false;
-    if (apply(nativeStringStartsWith, 'kovo-control', ['kovo-']) !== true) return false;
-    if (apply(nativeStringStartsWith, 'app-control', ['kovo-']) !== false) return false;
-    if (apply(nativeStringToLowerCase, 'KoVo', []) !== 'kovo') return false;
-    if (apply<RegExpExecArray | null>(nativeRegExpExec, /^a+$/, ['aaa']) === null) return false;
-    if (apply<RegExpExecArray | null>(nativeRegExpExec, /^a+$/, ['a!']) !== null) return false;
-    const frozen = apply<object>(nativeObjectFreeze, NativeObject, [record]);
-    if (frozen !== record || apply(nativeObjectIsFrozen, NativeObject, [record]) !== true) {
+    if (callStringReplaceAll('a-b-a', 'a', 'x') !== 'x-b-x') return false;
+    if (callStringStartsWith('kovo-control', 'kovo-') !== true) return false;
+    if (callStringStartsWith('app-control', 'kovo-') !== false) return false;
+    if (callStringToLowerCase('KoVo') !== 'kovo') return false;
+    if (callRegExpExec(/^a+$/, 'aaa') === null) return false;
+    if (callRegExpExec(/^a+$/, 'a!') !== null) return false;
+    // Prove the genuinely dynamic dispatch shape (`witnessReflectApply`'s residual R3 path) with
+    // positive and negative semantics: a pre-import Reflect.apply forgery that misroutes a
+    // captured control fails closed even though fixed-shape operations no longer route through it.
+    if (nativeReflectApply(nativeStringToLowerCase, 'KoVo', []) !== 'kovo') return false;
+    if (nativeReflectApply(nativeArrayIsArray, NativeArray, [{}]) !== false) return false;
+    if (nativeReflectApply(nativeWeakSetHas, weakSet, [key]) !== false) return false;
+    const frozen = nativeObjectFreeze(record);
+    if (frozen !== record || nativeObjectIsFrozen(record) !== true) {
       return false;
     }
     return true;
@@ -290,7 +368,7 @@ export function witnessWeakMapGet<Key extends object, Value>(
   key: Key,
 ): Value | undefined {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeWeakMapGet, map, [key]);
+  return callWeakMapGet(map, key);
 }
 
 export function witnessWeakMapHas<Key extends object>(
@@ -298,7 +376,7 @@ export function witnessWeakMapHas<Key extends object>(
   key: Key,
 ): boolean {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeWeakMapHas, map, [key]);
+  return callWeakMapHas(map, key);
 }
 
 export function witnessWeakMapSet<Key extends object, Value>(
@@ -307,7 +385,7 @@ export function witnessWeakMapSet<Key extends object, Value>(
   value: Value,
 ): void {
   assertSecurityWitnessIntrinsics();
-  apply(nativeWeakMapSet, map, [key, value]);
+  callWeakMapSet(map, key, value);
 }
 
 export function witnessWeakMapDelete<Key extends object>(
@@ -315,7 +393,7 @@ export function witnessWeakMapDelete<Key extends object>(
   key: Key,
 ): boolean {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeWeakMapDelete, map, [key]);
+  return callWeakMapDelete(map, key);
 }
 
 export function witnessWeakSetHas<Value extends object>(
@@ -323,12 +401,12 @@ export function witnessWeakSetHas<Value extends object>(
   value: Value,
 ): boolean {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeWeakSetHas, set, [value]);
+  return callWeakSetHas(set, value);
 }
 
 export function witnessWeakSetAdd<Value extends object>(set: WeakSet<Value>, value: Value): void {
   assertSecurityWitnessIntrinsics();
-  apply(nativeWeakSetAdd, set, [value]);
+  callWeakSetAdd(set, value);
 }
 
 export function witnessWeakSetDelete<Value extends object>(
@@ -336,7 +414,7 @@ export function witnessWeakSetDelete<Value extends object>(
   value: Value,
 ): boolean {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeWeakSetDelete, set, [value]);
+  return callWeakSetDelete(set, value);
 }
 
 export function witnessMapGet<Key, Value>(
@@ -344,22 +422,22 @@ export function witnessMapGet<Key, Value>(
   key: Key,
 ): Value | undefined {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeMapGet, map, [key]);
+  return callMapGet(map, key);
 }
 
 export function witnessMapHas<Key>(map: ReadonlyMap<Key, unknown>, key: Key): boolean {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeMapHas, map, [key]);
+  return callMapHas(map, key);
 }
 
 export function witnessMapSet<Key, Value>(map: Map<Key, Value>, key: Key, value: Value): void {
   assertSecurityWitnessIntrinsics();
-  apply(nativeMapSet, map, [key, value]);
+  callMapSet(map, key, value);
 }
 
 export function witnessMapDelete<Key>(map: Map<Key, unknown>, key: Key): boolean {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeMapDelete, map, [key]);
+  return callMapDelete(map, key);
 }
 
 export function witnessMapForEach<Key, Value>(
@@ -367,38 +445,38 @@ export function witnessMapForEach<Key, Value>(
   callback: (value: Value, key: Key) => void,
 ): void {
   assertSecurityWitnessIntrinsics();
-  apply(nativeMapForEach, map, [callback]);
+  callMapForEach(map, callback);
 }
 
 export function witnessMapSize(map: ReadonlyMap<unknown, unknown>): number {
   assertSecurityWitnessIntrinsics();
-  if (typeof nativeMapSize !== 'function') {
+  if (callMapSize === undefined) {
     throw new TypeError('Kovo security witness Map size control is unavailable.');
   }
-  return apply(nativeMapSize, map, []);
+  return callMapSize(map);
 }
 
 export function witnessSetHas<Value>(set: ReadonlySet<Value>, value: Value): boolean {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeSetHas, set, [value]);
+  return callSetHas(set, value);
 }
 
 export function witnessSetAdd<Value>(set: Set<Value>, value: Value): void {
   assertSecurityWitnessIntrinsics();
-  apply(nativeSetAdd, set, [value]);
+  callSetAdd(set, value);
 }
 
 export function witnessSetDelete<Value>(set: Set<Value>, value: Value): boolean {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeSetDelete, set, [value]);
+  return callSetDelete(set, value);
 }
 
 export function witnessSetSize(set: ReadonlySet<unknown>): number {
   assertSecurityWitnessIntrinsics();
-  if (typeof nativeSetSize !== 'function') {
+  if (callSetSize === undefined) {
     throw new TypeError('Kovo security witness Set size control is unavailable.');
   }
-  return apply(nativeSetSize, set, []);
+  return callSetSize(set);
 }
 
 export function witnessSetForEach<Value>(
@@ -406,7 +484,7 @@ export function witnessSetForEach<Value>(
   callback: (value: Value) => void,
 ): void {
   assertSecurityWitnessIntrinsics();
-  apply(nativeSetForEach, set, [callback]);
+  callSetForEach(set, callback);
 }
 
 export function witnessGetOwnPropertyDescriptor(
@@ -414,22 +492,22 @@ export function witnessGetOwnPropertyDescriptor(
   property: PropertyKey,
 ): PropertyDescriptor | undefined {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeObjectGetOwnPropertyDescriptor, NativeObject, [value, property]);
+  return nativeObjectGetOwnPropertyDescriptor(value, property);
 }
 
 export function witnessCreateNullRecord<Value = unknown>(): Record<PropertyKey, Value> {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeObjectCreate, NativeObject, [null]);
+  return nativeObjectCreate(null) as Record<PropertyKey, Value>;
 }
 
 export function witnessCreateWithPrototype<Value extends object>(prototype: object | null): Value {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeObjectCreate, NativeObject, [prototype]);
+  return nativeObjectCreate(prototype) as Value;
 }
 
 export function witnessGetOwnPropertyDescriptors(value: object): PropertyDescriptorMap {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeObjectGetOwnPropertyDescriptors, NativeObject, [value]);
+  return nativeObjectGetOwnPropertyDescriptors(value);
 }
 
 export function witnessDefineProperty<Value extends object>(
@@ -438,37 +516,37 @@ export function witnessDefineProperty<Value extends object>(
   descriptor: PropertyDescriptor,
 ): Value {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeObjectDefineProperty, NativeObject, [value, property, descriptor]);
+  return nativeObjectDefineProperty(value, property, descriptor);
 }
 
 export function witnessFreeze<Value>(value: Value): Readonly<Value> {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeObjectFreeze, NativeObject, [value]);
+  return nativeObjectFreeze(value);
 }
 
 export function witnessGetPrototypeOf(value: object): object | null {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeObjectGetPrototypeOf, NativeObject, [value]);
+  return nativeObjectGetPrototypeOf(value);
 }
 
 export function witnessObjectIs(left: unknown, right: unknown): boolean {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeObjectIs, NativeObject, [left, right]);
+  return nativeObjectIs(left, right);
 }
 
 export function witnessNumberIsSafeInteger(value: unknown): value is number {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeNumberIsSafeInteger, NativeNumber, [value]);
+  return nativeNumberIsSafeInteger(value);
 }
 
 export function witnessObjectKeys(value: object): string[] {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeObjectKeys, NativeObject, [value]);
+  return nativeObjectKeys(value);
 }
 
 export function witnessOwnKeys(value: object): PropertyKey[] {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeReflectOwnKeys, NativeReflect, [value]);
+  return nativeReflectOwnKeys(value);
 }
 
 export function witnessReflectGet(
@@ -477,16 +555,22 @@ export function witnessReflectGet(
   receiver: unknown = target,
 ): unknown {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeReflectGet, NativeReflect, [target, property, receiver]);
+  return nativeReflectGet(target, property, receiver);
 }
 
+/**
+ * Residual dynamic dispatch (security/boot-captured-direct-call.md R3): the target function and
+ * arity are caller-shaped, so this stays on the boot-captured `Reflect.apply`
+ * (`CreateListFromArrayLike`, iterator-free). Fixed-shape membrane operations use the minted
+ * direct callers instead.
+ */
 export function witnessReflectApply<Return>(
   target: Function,
   thisArgument: unknown,
   argumentsList: readonly unknown[],
 ): Return {
   assertSecurityWitnessIntrinsics();
-  return apply(target, thisArgument, argumentsList);
+  return nativeReflectApply(target, thisArgument, argumentsList) as Return;
 }
 
 export function witnessReflectConstruct<Return extends object>(
@@ -494,7 +578,7 @@ export function witnessReflectConstruct<Return extends object>(
   argumentsList: readonly unknown[],
 ): Return {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeReflectConstruct, NativeReflect, [target, argumentsList]);
+  return nativeReflectConstruct(target, argumentsList) as Return;
 }
 
 export function witnessProxy<Target extends object>(
@@ -507,7 +591,7 @@ export function witnessProxy<Target extends object>(
 
 export function witnessString(value: unknown): string {
   assertSecurityWitnessIntrinsics();
-  return apply(NativeString, undefined, [value]);
+  return NativeString(value);
 }
 
 export function witnessIsArray<Value>(
@@ -516,57 +600,41 @@ export function witnessIsArray<Value>(
 export function witnessIsArray(value: unknown): value is unknown[];
 export function witnessIsArray(value: unknown): value is unknown[] {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeArrayIsArray, NativeArray, [value]);
+  return nativeArrayIsArray(value);
 }
 
 export function witnessSortStrings(values: string[]): void {
   assertSecurityWitnessIntrinsics();
-  apply(nativeArraySort, values, []);
+  callArraySort(values);
 }
 
 /** Own-data append for authority-bearing server collections (SPEC §9.5/§10.3). */
 export function witnessArrayAppend<Value>(target: Value[], value: Value, label: string): void {
   assertSecurityWitnessIntrinsics();
-  const before = apply<PropertyDescriptor | undefined>(
-    nativeObjectGetOwnPropertyDescriptor,
-    NativeObject,
-    [target, 'length'],
-  );
+  const before = nativeObjectGetOwnPropertyDescriptor(target, 'length');
   if (
     before === undefined ||
     !('value' in before) ||
     typeof before.value !== 'number' ||
-    !apply(nativeNumberIsSafeInteger, NativeNumber, [before.value]) ||
+    !nativeNumberIsSafeInteger(before.value) ||
     before.value < 0 ||
     before.value >= 1_000_000
   ) {
     throw new TypeError(`${label} must have a bounded own array length.`);
   }
   const index = before.value;
-  apply(nativeObjectDefineProperty, NativeObject, [
-    target,
-    index,
-    {
-      configurable: true,
-      enumerable: true,
-      value,
-      writable: true,
-    },
-  ]);
-  const committed = apply<PropertyDescriptor | undefined>(
-    nativeObjectGetOwnPropertyDescriptor,
-    NativeObject,
-    [target, index],
-  );
-  const after = apply<PropertyDescriptor | undefined>(
-    nativeObjectGetOwnPropertyDescriptor,
-    NativeObject,
-    [target, 'length'],
-  );
+  nativeObjectDefineProperty(target, index, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
+  const committed = nativeObjectGetOwnPropertyDescriptor(target, index);
+  const after = nativeObjectGetOwnPropertyDescriptor(target, 'length');
   if (
     committed === undefined ||
     !('value' in committed) ||
-    !apply(nativeObjectIs, NativeObject, [committed.value, value]) ||
+    !nativeObjectIs(committed.value, value) ||
     after === undefined ||
     !('value' in after) ||
     after.value !== index + 1
@@ -579,12 +647,12 @@ export function witnessJsonStringifyPrimitive(
   value: string | number | boolean | null | undefined,
 ): string | undefined {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeJsonStringify, NativeJSON, [value]);
+  return nativeJsonStringify(value);
 }
 
 export function witnessEncodeURIComponent(value: string): string {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeEncodeURIComponent, undefined, [value]);
+  return nativeEncodeURIComponent(value);
 }
 
 export function witnessStringReplaceAll(
@@ -593,7 +661,7 @@ export function witnessStringReplaceAll(
   replaceValue: string | ((substring: string, ...args: unknown[]) => string),
 ): string {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeStringReplaceAll, value, [searchValue, replaceValue]);
+  return callStringReplaceAll(value, searchValue, replaceValue);
 }
 
 export function witnessStringStartsWith(
@@ -602,20 +670,20 @@ export function witnessStringStartsWith(
   position?: number,
 ): boolean {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeStringStartsWith, value, [searchValue, position]);
+  return callStringStartsWith(value, searchValue, position);
 }
 
 export function witnessStringToLowerCase(value: string): string {
   assertSecurityWitnessIntrinsics();
-  return apply(nativeStringToLowerCase, value, []);
+  return callStringToLowerCase(value);
 }
 
 export function witnessRegExpTest(expression: RegExp, value: string): boolean {
   assertSecurityWitnessIntrinsics();
-  return apply<RegExpExecArray | null>(nativeRegExpExec, expression, [value]) !== null;
+  return callRegExpExec(expression, value) !== null;
 }
 
 export function witnessRegExpExec(expression: RegExp, value: string): RegExpExecArray | null {
   assertSecurityWitnessIntrinsics();
-  return apply<RegExpExecArray | null>(nativeRegExpExec, expression, [value]);
+  return callRegExpExec(expression, value);
 }
