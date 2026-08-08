@@ -1,3 +1,4 @@
+import { createHash as builtinCreateHash } from 'node:crypto';
 import { existsSync as builtinExistsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { extractStaticBuildAnalysisFactsFromProject } from '@kovojs/drizzle/internal/static';
@@ -158,7 +159,8 @@ interface StaticBuildAnalysisFactsLike {
   touchGraph: unknown;
 }
 
-const STATIC_DATA_PLANE_FACTS_CACHE_VERSION = '2026-07-19.grant-graph.v1';
+const STATIC_DATA_PLANE_FACTS_CACHE_VERSION = '2026-08-07.content-hash-key.v1';
+const createHash = builtinCreateHash;
 const existsSync = builtinExistsSync;
 const dirname = builtinDirname;
 const relative = builtinRelative;
@@ -257,13 +259,63 @@ export function buildCheckSourceGraphFiles(
   return files;
 }
 
+/** @internal Disposition of a data-plane analysis request (SPEC.md §9.5.1 / §11.4). */
+export type DataPlaneAnalysisDisposition = 'build' | 'dev';
+
+/**
+ * @internal Whether any app source can contribute data-plane facts at all.
+ *
+ * plans/good-perf.md O5: the only pre-filter used to be a file-extension test, so an app with zero
+ * `app.query`/`app.mutation` calls and no Drizzle usage still paid the whole-project TypeScript +
+ * ts-morph pass on every dev save. This is a conservative textual superset of every spelling the
+ * analyzers can turn into a fact or a refusal:
+ *
+ * - declaration/factory member names as bare words (`agent`…`task`), which also cover aliased
+ *   imports (`import { query as defineQuery }`), destructuring, and element-access strings;
+ * - Kovo/drizzle SQL helper words (`sql`, `staticSql`, `trustedSql`, `compareAndSet`);
+ * - drizzle module import specifiers (schema, receivers, dialects) and the generated
+ *   `_kovo/app-runtime-db` runtime-db module (endpoint raw-driver-import refusals);
+ * - raw SQL sink call spellings: the `RAW_SQL_RECEIVER_SINK_METHODS` names as property or
+ *   element-access calls, computed element-access calls (`receiver[method](...)` ⇒ `](`), and
+ *   the `db`/`tx` canonical receiver-name heuristic that seeds KV406/KV422 on untyped receivers;
+ * - dynamic `import(` (D1A009 app-provider refusals).
+ *
+ * A false positive merely runs the full pass. The fast path is consulted only under the dev
+ * disposition, so `kovo check`/`kovo build`/`vite build` remain fail-closed on the full analyzers
+ * per D5's ruling (posture is proven per commit, not per keystroke).
+ */
+const DATA_PLANE_SOURCE_MARKER_EXPRESSION =
+  /\b(?:agent|compareAndSet|db|endpoint|integrateMutation|mutation|query|sql|staticSql|task|trustedSql|tx)\b|['"](?:drizzle-orm|@kovojs\/drizzle)(?:['"]|\/)|app-runtime-db|\bimport\s*\(|\.\s*(?:all|exec|execute|get|prepare|run|values)\s*\(|\[\s*['"](?:all|exec|execute|get|prepare|run|values)['"]\s*\]|\]\s*\(/u;
+
+/** @internal True when any file contains a data-plane marker (see the expression's contract). */
+export function sourceFilesHaveDataPlaneMarkers(files: readonly DataPlaneSourceFile[]): boolean {
+  const sourceFiles = snapshotDataPlaneSourceFiles(files, 'Data-plane marker sources');
+  for (let index = 0; index < sourceFiles.length; index += 1) {
+    if (staticAnalysisRegExpTest(DATA_PLANE_SOURCE_MARKER_EXPRESSION, sourceFiles[index]!.source)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** @internal Run Vite/server app source static analysis and cache by source snapshot. */
 export async function collectDataPlaneAnalysis(options: {
   appSourceDir: string;
   root: string;
   skipStaticFacts?: boolean;
+  disposition?: DataPlaneAnalysisDisposition;
 }): Promise<DataPlaneAnalysis> {
   const files = dataPlaneSourceFiles(options.appSourceDir, options.root);
+  if (options.disposition === 'dev' && !sourceFilesHaveDataPlaneMarkers(files)) {
+    // Dev teaching disposition only: no source can contribute a data-plane fact or refusal, so
+    // the empty analysis is exact and the whole-project TypeScript/ts-morph pass is skipped.
+    // `kovo check`/`kovo build`/`vite build` never take this branch (SPEC.md §9.5.1; D5 ruling).
+    return {
+      files: snapshotDataPlaneSourceFiles(files, 'Vite static-analysis sources'),
+      outputQueryShapeFacts: [],
+      staticFacts: emptyStaticBuildAnalysisFactsLike(),
+    };
+  }
   if (options.skipStaticFacts) {
     // Graph derivation may skip the expensive Drizzle/static-facts pass, but component lowering
     // still needs exact app.query output shapes. Authenticate those receiver spans through the
@@ -278,16 +330,24 @@ export async function collectDataPlaneAnalysis(options: {
       staticFacts: emptyStaticBuildAnalysisFactsLike(),
     };
   }
-  const appContractStaticFacts = compilerOwnedAppContractStaticFactsFromFiles(files, options.root);
+  // plans/good-perf.md O5/D5-b: the cache key is a content digest of the exact app source
+  // snapshot plus the app/root identity the derivation depends on. The previous key first built a
+  // full TypeScript Program (appContractStaticFacts) and canonical-JSON-serialised every source
+  // byte, so a cache HIT cost nearly as much as a miss. The static facts are a pure function of
+  // (files, root) and are now derived only on a miss, inside the cached preimage computation.
   const identity = staticAnalysisCanonicalJson({
-    appContractStaticFacts,
+    appSourceDir: options.appSourceDir,
+    root: options.root,
     sources: dataPlaneAnalysisCacheIdentity(files),
   });
   let entry = dataPlaneAnalysisCacheEntry;
   if (entry?.identity !== identity) {
     entry = {
       identity,
-      resultPreimage: createDataPlaneAnalysisPreimage(files, appContractStaticFacts),
+      resultPreimage: createDataPlaneAnalysisPreimage(
+        files,
+        compilerOwnedAppContractStaticFactsFromFiles(files, options.root),
+      ),
     };
     dataPlaneAnalysisCacheEntry = entry;
   }
@@ -303,6 +363,7 @@ export async function collectDataPlaneAnalysis(options: {
 export async function collectDataPlaneDiagnostics(options: {
   appSourceDir: string;
   root: string;
+  disposition?: DataPlaneAnalysisDisposition;
 }): Promise<DataPlaneDiagnostic[]> {
   const analysis = await collectDataPlaneAnalysis(options);
   return dataPlaneDiagnosticsFromStaticFacts(analysis.staticFacts, analysis.files);
@@ -312,6 +373,7 @@ export async function collectDataPlaneDiagnostics(options: {
 export async function collectDataPlaneErrorDiagnostics(options: {
   appSourceDir: string;
   root: string;
+  disposition?: DataPlaneAnalysisDisposition;
 }): Promise<DataPlaneDiagnostic[]> {
   const diagnostics = await collectDataPlaneDiagnostics(options);
   const errors: DataPlaneDiagnostic[] = [];
@@ -328,6 +390,7 @@ export async function collectDataPlaneErrorDiagnostics(options: {
 export async function collectCompilerQueryShapeFacts(options: {
   appSourceDir: string;
   root: string;
+  disposition?: DataPlaneAnalysisDisposition;
 }): Promise<readonly QueryShapeFact[]> {
   // SPEC.md §2 / §11.4: authored config shares this process and therefore cannot provide
   // verification facts through ambient globals. Derive them here; trusted CLI builds pass their
@@ -347,6 +410,7 @@ export async function collectCompilerQueryShapeFacts(options: {
 export async function collectRuntimeRegistryFacts(options: {
   appSourceDir: string;
   root: string;
+  disposition?: DataPlaneAnalysisDisposition;
 }): Promise<DataPlaneRuntimeRegistryFacts> {
   const analysis = await collectDataPlaneAnalysis(options);
   if (analysis.files.length === 0) {
@@ -598,10 +662,14 @@ async function cachedStaticBuildAnalysisFacts(
 ): Promise<StaticBuildAnalysisFactsLike> {
   const sourceFiles = snapshotDataPlaneSourceFiles(files, 'Cached static-analysis sources');
   const appContractStaticFacts = options.appContractStaticFacts ?? [];
+  // D5-b: facts embed whole source texts; digest their canonical form instead of retaining the
+  // multi-megabyte serialization inside the cache key string.
   const cacheIdentity = namespacedDataPlaneCacheIdentity(
     'build',
     staticAnalysisCanonicalJson({
-      appContractStaticFacts,
+      appContractStaticFacts: dataPlaneSourceContentDigest(
+        staticAnalysisCanonicalJson(appContractStaticFacts),
+      ),
       sources: dataPlaneAnalysisCacheIdentity(sourceFiles),
     }),
   );
@@ -721,12 +789,27 @@ function dataPlaneStaticAnalysisError(
   );
 }
 
+/** Length-prefixed sha256 of one source text; collision-resistant stand-in for the exact bytes. */
+function dataPlaneSourceContentDigest(source: string): string {
+  return createHash('sha256')
+    .update(`${source.length}:`)
+    .update(source, 'utf8')
+    .digest('hex');
+}
+
 function dataPlaneAnalysisCacheIdentity(files: readonly DataPlaneSourceFile[]): string {
+  // plans/good-perf.md O5/D5-b: identify the snapshot by per-file content digests instead of
+  // embedding every source byte in a canonical-JSON key. One digest per app file per lookup is
+  // ~1000x cheaper than the Program the old key construction required, and content (not mtime)
+  // keying stays sound under editor write patterns and git operations that preserve mtime.
   const sourceFiles = snapshotDataPlaneSourceFiles(files, 'Static-analysis cache-key sources');
-  const entries: { path: string; source: string }[] = [];
+  const entries: { digest: string; path: string }[] = [];
   for (let index = 0; index < sourceFiles.length; index += 1) {
     const file = sourceFiles[index]!;
-    const entry = { path: portableCacheFilePath(file.fileName), source: file.source };
+    const entry = {
+      digest: dataPlaneSourceContentDigest(file.source),
+      path: portableCacheFilePath(file.fileName),
+    };
     let insertAt = entries.length;
     while (insertAt > 0 && entry.path < entries[insertAt - 1]!.path) {
       staticAnalysisArraySet(

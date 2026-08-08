@@ -50,6 +50,8 @@ import {
   collectRuntimeRegistryFacts as collectRuntimeRegistryFactsAdapter,
   dataPlaneSourceFiles as dataPlaneSourceFilesAdapter,
   isDataPlaneSourceFile,
+  sourceFilesHaveDataPlaneMarkers,
+  type DataPlaneAnalysisDisposition,
   type DataPlaneDiagnostic,
   type DataPlaneRuntimeRegistryFacts as RuntimeRegistryFacts,
   type QueryShapeFact as DataPlaneQueryShapeFact,
@@ -356,6 +358,11 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   // SPEC.md §9.5: `serve` is the dev disposition (teaching, never fail-closed); any other
   // command is the fail-closed build path. Default to build so an unset command stays safe.
   let viteCommand: 'build' | 'serve' = 'build';
+  // Data-plane analyses take the dev disposition only under `serve` (SPEC.md §9.5.1): dev may use
+  // the exact marker fast path (plans/good-perf.md O5); every build command runs the full
+  // fail-closed analyzers.
+  const dataPlaneDisposition = (): DataPlaneAnalysisDisposition =>
+    viteCommand === 'serve' ? 'dev' : 'build';
   let devDataPlaneDebounce: ReturnType<typeof setTimeout> | undefined;
   // Files for which the data-plane gate last surfaced dev teaching diagnostics, so a follow-up
   // re-evaluation can clear records for files that became clean (SPEC.md §9.5.1).
@@ -369,7 +376,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
     if (!emit) return;
     let diagnostics: readonly DataPlaneDiagnostic[];
     try {
-      diagnostics = await collectDataPlaneDiagnostics(root, app);
+      diagnostics = await collectDataPlaneDiagnostics(root, app, dataPlaneDisposition());
     } catch {
       // A transient analyzer/parse failure must not take down the dev server.
       return;
@@ -463,10 +470,14 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       viteCommand =
         commandProperty.present && commandProperty.value === 'serve' ? 'serve' : 'build';
       compilerQueryShapeFacts = snapshotBuildArray(
-        await collectCompilerQueryShapeFacts(root, app),
+        await collectCompilerQueryShapeFacts(root, app, dataPlaneDisposition()),
         'compiler query-shape facts',
       );
-      compilerProjectMutationFacts = collectCompilerProjectMutationFacts(root, app);
+      compilerProjectMutationFacts = collectCompilerProjectMutationFacts(
+        root,
+        app,
+        dataPlaneDisposition(),
+      );
       const configuredCompiler = configuredExternalCompilerPlugin(config, plugin, app, root);
       assertExternalCompilerHasNoDerivedFacts(
         configuredCompiler,
@@ -487,10 +498,14 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       // `kovo` CLI uses (one source of truth, zero drift). Until now these gates ran ONLY via the
       // CLI over app source, so unsafe raw SQL shipped green through `vp build`.
       compilerQueryShapeFacts = snapshotBuildArray(
-        await collectCompilerQueryShapeFacts(root, app),
+        await collectCompilerQueryShapeFacts(root, app, dataPlaneDisposition()),
         'compiler query-shape facts',
       );
-      compilerProjectMutationFacts = collectCompilerProjectMutationFacts(root, app);
+      compilerProjectMutationFacts = collectCompilerProjectMutationFacts(
+        root,
+        app,
+        dataPlaneDisposition(),
+      );
       assertExternalCompilerHasNoDerivedFacts(
         externalCompilerPlugin,
         compilerQueryShapeFacts,
@@ -504,7 +519,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       // Build disposition: warnings remain visible and non-blocking; only error-severity
       // findings fail closed (SPEC §11 diagnostic severity ownership).
       const diagnostics = snapshotBuildArray(
-        await collectDataPlaneDiagnostics(root, app),
+        await collectDataPlaneDiagnostics(root, app, 'build'),
         'data-plane build diagnostics',
       );
       emitBuildDataPlaneWarnings(this, diagnostics);
@@ -617,7 +632,9 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
     },
     async load(id) {
       if (id === runtimeRegistryResolvedId) {
-        return serializeRuntimeRegistryWireModule(await collectRuntimeRegistry(root, app));
+        return serializeRuntimeRegistryWireModule(
+          await collectRuntimeRegistry(root, app, dataPlaneDisposition()),
+        );
       }
       if (externalCompilerPlugin !== undefined) return null;
       return (await compilerPlugin()).load?.(id) ?? null;
@@ -657,10 +674,16 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       // SPEC §5.2 rule 10 / §6.3: imported mutation-form authority comes from a whole-project
       // source snapshot. Refresh it before the compiler handles this update so a removed or
       // redirected export cannot retain stale positive provenance through the next HMR transform.
+      // `isDataPlaneSourceFile` is only the boundary/extension trigger; the collectors below are
+      // cheap for non-data-plane projects (marker fast path + content-keyed memos, O5/D5-a/D5-b).
       if (isDataPlaneSourceFile(context.file, root)) {
-        compilerProjectMutationFacts = collectCompilerProjectMutationFacts(root, app);
+        compilerProjectMutationFacts = collectCompilerProjectMutationFacts(
+          root,
+          app,
+          dataPlaneDisposition(),
+        );
         compilerQueryShapeFacts = snapshotBuildArray(
-          await collectCompilerQueryShapeFacts(root, app),
+          await collectCompilerQueryShapeFacts(root, app, dataPlaneDisposition()),
           'compiler query-shape facts',
         );
         assertExternalCompilerHasNoDerivedFacts(
@@ -1062,16 +1085,23 @@ const DATA_PLANE_GATE_DEBOUNCE_MS = 200;
 async function collectDataPlaneDiagnostics(
   root: string,
   app: string,
+  disposition: DataPlaneAnalysisDisposition,
 ): Promise<DataPlaneDiagnostic[]> {
   return collectDataPlaneDiagnosticsAdapter({
     appSourceDir: buildSecurityPathDirname(appEntryFileName(app, root)),
+    disposition,
     root,
   });
 }
 
-async function collectRuntimeRegistry(root: string, app: string): Promise<RuntimeRegistryFacts> {
+async function collectRuntimeRegistry(
+  root: string,
+  app: string,
+  disposition: DataPlaneAnalysisDisposition,
+): Promise<RuntimeRegistryFacts> {
   return collectRuntimeRegistryFactsAdapter({
     appSourceDir: buildSecurityPathDirname(appEntryFileName(app, root)),
+    disposition,
     root,
   });
 }
@@ -1079,10 +1109,12 @@ async function collectRuntimeRegistry(root: string, app: string): Promise<Runtim
 async function collectCompilerQueryShapeFacts(
   root: string,
   app: string,
+  disposition: DataPlaneAnalysisDisposition,
 ): Promise<readonly CompilerViteQueryShapeFact[]> {
   if (currentKovoBuildContext()?.graphDerivation === true) {
     await collectDataPlaneAnalysisAdapter({
       appSourceDir: buildSecurityPathDirname(appEntryFileName(app, root)),
+      disposition,
       root,
       skipStaticFacts: true,
     });
@@ -1090,6 +1122,7 @@ async function collectCompilerQueryShapeFacts(
   return compilerViteQueryShapeFacts(
     await collectCompilerQueryShapeFactsAdapter({
       appSourceDir: buildSecurityPathDirname(appEntryFileName(app, root)),
+      disposition,
       root,
     }),
   );
@@ -1098,12 +1131,17 @@ async function collectCompilerQueryShapeFacts(
 function collectCompilerProjectMutationFacts(
   root: string,
   app: string,
+  disposition: DataPlaneAnalysisDisposition,
 ): ProjectMutationRegistryFacts {
   const appSourceDir = buildSecurityPathDirname(appEntryFileName(app, root));
-  return compilerOwnedProjectMutationRegistryFactsFromFiles(
-    dataPlaneSourceFilesAdapter(appSourceDir, root),
-    root,
-  );
+  const files = dataPlaneSourceFilesAdapter(appSourceDir, root);
+  if (disposition === 'dev' && !sourceFilesHaveDataPlaneMarkers(files)) {
+    // plans/good-perf.md O5: no app source can declare, import, or redirect a mutation form, so
+    // the census is exactly empty and the whole-project Program is skipped. Dev disposition only;
+    // build commands always run the full census (SPEC.md §5.2 rule 10 / §9.5.1).
+    return compilerOwnedProjectMutationRegistryFactsFromFiles([], root);
+  }
+  return compilerOwnedProjectMutationRegistryFactsFromFiles(files, root);
 }
 
 function compilerViteQueryShapeFacts(
