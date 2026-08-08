@@ -811,6 +811,30 @@ through `Reflect.apply`. No fast-vs-hardened build flag.
   demote-authored-public posture; the node adapter still brotli-compresses each cached-document
   response per request (extending the adapter's ETag-keyed compressed cache to proved documents
   is a build.ts follow-up, not this slice's ownership).
+- [x] D9 verified end-to-end on `perf/cache-tier` (2026-08-08, second agent; predecessor never
+      reported). Attacked the safety property and confirmed the accidental-leak surface is
+      **airtight**: `cache-influence-adversarial.test.ts` (9 real-compile-pipeline cases — passing
+      the context object into a helper, `process.env` through a same-module call graph, computed
+      context member, `Math.random`/`Date.now`, `globalThis`, non-allowlisted method calls,
+      request-header via the destructured 2nd param — all close; a genuinely pure params/search
+      page proves) plus the predecessor's 19 tier tests (forged-`public-proved` manifests still
+      refuse guards/sessions/cookies). Built-artifact probes (raised limits, measurement-only):
+      anonymous `/` → `public, max-age=0, must-revalidate` + strong ETag + 304 on If-None-Match;
+      `Cookie:`-bearing `/` → `no-store` + `Vary: Cookie, Accept`; closed `document:/images/:name`
+      → `private, no-store`. `kovo build` on the unmodified benchmark emits `document:/` and
+      `document:/product/:slug` `public-proved`, `document:/images/:name` closed.
+  - Re-measured (built node artifact, load 5–6 recorded, `KOVO_PROCESSES` unset, identity encoding,
+    requestLimits 1e6 measurement-only, INDICATIVE): cached `/` **2,116 / 3,504 / 4,669 req/s** at
+    c=1/8/32 vs cookie-uncached **351 / 370 / 334 req/s** — **6.0x / 9.5x / 14.0x**; 304 path
+    5,957 req/s @ c=32; cached p50 0.28 ms (c=1) / 5.65 ms (c=32); 18,105 B identity/doc. Consistent
+    with the predecessor's cell (lower absolute rps at higher box load).
+  - **Soundness boundary (explicit, SPEC §9.4 amended):** the render-hook clause trusts the
+    manifest (KV235) to attest that a route module's own visible `defineKovo` is the app that
+    assembles its routes. Only single-module apps (routes + `defineKovo` together) ever prove, and
+    there the attested hook is the serving hook. A deliberately-planted decoy `defineKovo` in a
+    route module whose routes are served by a different app with a per-visitor `renderRoute` is a
+    trusted-author manifest-integrity concern, not a runtime-observable one — out of the
+    cache-safety threat model, which the §9.5 runtime floors (all manifest-independent) own.
 
 ### O15 — Restore benchmark and harness validity — **high, medium, low risk**
 
