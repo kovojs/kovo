@@ -104,6 +104,32 @@ comparison.
 | `check` cold / warm / one-file (benchmark app) | 19,324 / 17,668 / 13,707 ms | — | warm ≈ cold |
 | `check` cold / warm / one-file (`stackoverflow`) | 38,486 / 38,684 / 32,394 ms | — | warm ≈ cold |
 
+## Current state after batch 2 (merged to main, 2026-08-08)
+
+**Enhanced navigation works.** `tests/integration/specs/enhanced-navigation-no-reload.spec.ts` — the
+acceptance criterion for O2, which failed by construction on 2026-08-07 — now passes 2/2: an eligible
+in-app navigation does not replace the document, and a pre-navigation `window.__sentinel` survives.
+
+Verified on merged main against the rebuilt production artifact:
+
+| Metric | Baseline | Batch 2 merged | Change |
+| --- | ---: | ---: | ---: |
+| per-navigation wire bytes | 152,537 B (full reload) | **920 B** (br) | **-99.4%** |
+| navigation payload vs Next.js | 1.29x worse | **1.9x better** (920 B vs 1,776 B) | — |
+| `examples/stackoverflow` edit→served | never landed (4/4) | 3/4 land, median 35,861 ms | — |
+| `benchmarks/kovo` edit→served | 2,478 ms | 1,224 ms | -50.6% |
+| parse-error feedback | none for 90 s | 580 ms + browser overlay | — |
+| client state on a non-entry save | destroyed 3/3 | preserved | — |
+| KV448 import wall | unbuildable at N≥130 | flat-200 passes end to end | — |
+
+The navigation response negotiates `application/vnd.kovo.document-parts+json` and carries
+`Kovo-Build` plus `Vary: Accept, Accept-Encoding`; the client validates build identity before
+constructing any DOM and never parses an HTML string, so `require-trusted-types-for 'script'` holds
+with no policy shim.
+
+Wall-clock figures throughout are from a box shared with concurrent agents (loads 8-23 recorded per
+cell) and are INDICATIVE. Clean-box re-measurement is owned by O17.
+
 ## Current state after batch 1 (merged to main, 2026-08-08)
 
 The tables above are the **2026-08-07 baseline** and are kept as the reference point. Verified on
