@@ -1,5 +1,10 @@
 # Better JavaScript Loader
 
+Status: **superseded 2026-08-07 by [`plans/good-perf.md`](good-perf.md)**, which absorbed every open
+item here (Phases 2–7, the two open baseline gaps, and the standing constraints) and is now the
+single active performance ledger. Do not work this file independently; the completed evidence below
+is retained as the historical record.
+
 Created 2026-06-23. Behavioral source of truth is `SPEC.md`, especially the
 loader contract in section 4.4: a gzip-capped always-loaded bootstrap captures
 first interactions and imports a versioned deferred runtime. The bootstrap is

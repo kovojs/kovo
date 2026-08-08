@@ -1,0 +1,686 @@
+# Performance: Is Kovo Competitive With Next.js?
+
+Created 2026-08-07. Owner: perf. Behavioral source of truth remains `SPEC.md`.
+
+Scope: development speed (`kovo dev` edit loop, `kovo check`, `kovo build`) and production speed
+(wire bytes, FCP/LCP, TTFB, SSR throughput, navigation, repeat visit, cold start) measured
+head-to-head against Next.js 16.2.9 + React 19.2.7 (Turbopack default) on the identical
+`benchmarks/` commerce app.
+
+**This is the single active performance ledger and it defers to nothing.** It absorbs the open
+items of `plans/better-js-loader.md` (loader byte/protocol work) and `plans/fast-ci.md` (CI wall
+clock); those two are superseded and should not be worked independently. `plans/fast-check.md` is
+closed and remains the historical record of the four prior build-speed rounds.
+
+Scope decision (2026-08-07): **everything below is in scope.** The ordering in "Ranked
+opportunities" is a dependency and value-delivery order, not a scope boundary.
+
+## Verdict
+
+Kovo is **not** currently competitive on either axis, and it loses worst on the axis its
+architecture was designed to win.
+
+- **Production bytes**: four concrete defects, two of them near-trivial to fix, account for the
+  entire loss. Kovo's *raw* HTML is 6.2% leaner than Next.js's and its navigation protocol is 2.7x
+  more compact — then it ships everything uncompressed and loses anyway.
+- **Navigation and repeat visit**: Kovo's headline architectural feature, server-owned enhanced
+  navigation, is **100% dead in the production build** — Kovo's own CSP blocks Kovo's own client
+  runtime. Every in-app navigation falls back to a full page reload. Measured to actual paint, Kovo
+  is **23–35x slower** and moves **438x more bytes** than Next.js.
+- **Development**: one architectural mistake — uncached whole-project TypeScript `Program`
+  construction on the edit path — makes the edit loop **67x slower** than Turbopack, and at
+  realistic app size it stops being a performance problem and becomes a correctness problem: an edit
+  **never reaches the browser**, and an in-flight request during the resulting stall **crashes the
+  dev server**.
+
+Kovo does hold genuine wins: **0 ms TBT** on both profiles, and mobile time-to-interactive-dialog
+**3.0x better** than Next.js (405.9 ms vs 1225.5 ms). Those are real and currently buried.
+
+### Production — first load
+
+| Metric | Kovo | Next.js 16.2.9 | Ratio |
+| --- | ---: | ---: | ---: |
+| Document on the wire, `/` | 41,014 B | 6,036 B (gzip) | **6.8x worse** |
+| Document on the wire, `/product/...` | 25,195 B | 3,066 B (gzip) | **8.2x worse** |
+| Document identity bytes (uncompressed) | 41,014 B | 43,725 B | 1.06x **better** |
+| Critical-path bytes shipped | 430,847 B | 8,064 B render-blocking | — |
+| Mobile FCP/LCP (4x CPU, ~1.6 Mbps, 150 ms RTT) | 980 ms (MAD 4) | 408 ms (MAD 12) | **2.40x worse** |
+| Desktop FCP/LCP | 40 ms (MAD 0) | 40 ms (MAD 0) | tie |
+| Desktop TTFB | 3.9 ms (MAD 0.1) | 1.3 ms (MAD 0.1) | 3.0x worse |
+| Mobile TTI proxy (cart dialog) | 405.9 ms | 1225.5 ms | **3.02x better** |
+| Total Blocking Time (both profiles) | 0 ms | 0 / 11 ms | **better** |
+| Lighthouse desktop `/` | 88 | 89 | ~tie |
+| Lighthouse desktop `/product/...` | 70 | 90 | **worse** |
+| Boot to first 200 | 266.4 ms (MAD 30.5) | 228.7 ms (MAD 11.0) | ~tie |
+| Steady-state RSS @ c=32 | 339.5 MiB | 289.1 MiB | ~tie |
+
+### Production — navigation and repeat visit (mobile-throttled session, 7 medians)
+
+| Metric | Kovo | Next.js | Ratio |
+| --- | ---: | ---: | ---: |
+| Nav to product A (click → heading laid out) | 2,125 ms (MAD 6) | 61 ms (MAD 2) | **34.8x worse** |
+| Nav to product A, wire bytes | 152,537 B | 0 B | — |
+| Nav to product B | 1,162 ms (MAD 5) | 51 ms (MAD 1) | **22.8x worse** |
+| Nav to product B, wire bytes | 152,839 B | 349 B | **438x worse** |
+| Back to listing (to actual paint) | 784 ms (MAD 3) | 24 ms (MAD 2) | **32.7x worse** |
+| Repeat visit `/` FCP (warm HTTP cache) | 960 ms (MAD 0) | 192 ms (MAD 4) | **5.0x worse** |
+| Repeat visit `/` wire bytes | 166,899 B | 7,255 B | cold→repeat saving 61.6% vs 95.9% |
+| Enhanced-nav document, raw | 2,286 B | 6,249 B (RSC) | **2.7x better** |
+| Enhanced-nav document, on the wire | 2,286 B (never compressed) | 1,776 B (gzip) | 1.29x worse |
+
+Note on prior numbers: the committed harness measures navigation as *DOM presence*, which reports
+Kovo at 36.9 ms desktop / 88.5 ms mobile. Measured to **actual paint** in a real session the same
+navigation costs 2,125 ms. DOM-presence timing understates Kovo's navigation cost by ~39x because
+Kovo replaces the whole document. Do not quote the DOM-presence figure.
+
+### Production — SSR throughput
+
+| Metric | Kovo | Next.js | Ratio |
+| --- | ---: | ---: | ---: |
+| req/s, `/` @ c=32 (vs force-dynamic Next) | 399.6 | 766.4 | **1.92x worse** |
+| req/s, `/product` @ c=32 (vs force-dynamic Next) | 772.3 | 1759.4 | **2.28x worse** |
+| req/s, `/` @ c=32 (vs Next **as it actually ships**: prerendered) | 399.6 | 5330.2 | **13.3x worse** |
+
+Two comparisons matter and the repo's benchmark conflates them. Against a *force-dynamic* Next
+rebuild that genuinely renders per request, Kovo is ~2x slower. Against what `next build` produces
+for this app **by default** — prerendered routes served as `x-nextjs-cache: HIT` — Kovo is 13x
+slower, because Kovo has no prerender/ISR/route-cache tier at all. Both belong in any honest
+comparison.
+
+### Development
+
+| Metric | Kovo | Next.js (Turbopack) | Ratio |
+| --- | ---: | ---: | ---: |
+| `dev` cold start, benchmark app (1 file, 541 LOC) | 19,657 ms (MAD 366) | 1,000 ms (MAD 4.2) | **19.7x worse** |
+| `dev` cold start, `examples/stackoverflow` (24 files, 5,007 LOC) | 59,049 ms (MAD 80) | — | **59x** vs Next on the small app |
+| `dev` warm start, benchmark app | 18,618 ms (MAD 557) | 986 ms (MAD 10.6) | warm saves only 5.3% |
+| **Edit → served HTML updated**, benchmark app | **7,225 ms** (MAD 33.6) | **107 ms** (MAD 3.1) | **67x worse** |
+| **Edit → served HTML updated**, `examples/stackoverflow` | **never lands** (4/4 runs) | — | broken |
+| HMR preserves client state | **no** — full reload every save, 3/3 | **yes**, 4/4 | — |
+| Dev server RSS, idle after cold start | 3,013 MB | 630 MB | **4.8x worse** |
+| Dev server RSS, `examples/stackoverflow` peak | 4,026 MB | — | on a 16 GiB box |
+| `build` cold / warm / one-line edit | 50,730 / 52,743 / 46,647 ms | 2,456 / 2,561 / 2,531 ms | **20.7x / 20.6x / 18.4x worse** |
+| Build peak process-tree RSS | 1,831–2,198 MiB | 1,127–1,140 MiB | 1.6–1.9x worse |
+| `check` cold / warm / one-file (benchmark app) | 19,324 / 17,668 / 13,707 ms | — | warm ≈ cold |
+| `check` cold / warm / one-file (`stackoverflow`) | 38,486 / 38,684 / 32,394 ms | — | warm ≈ cold |
+
+## The single cross-cutting root cause (development)
+
+Three of the four worst development findings are the same mechanism: **Kovo builds full TypeScript
+`Program`s + `getTypeChecker`s, uncached, repeatedly, on paths that should be incremental.**
+
+CPU attribution of one `kovo dev` edit on the benchmark app (V8 sampler over an exact
+edit→served window, 4 merged profiles; the main thread is **99% saturated for the whole 7.2 s**):
+
+| Bucket | ms/edit | % |
+| --- | ---: | ---: |
+| `handleHotUpdate` → `collectCompilerQueryShapeFacts` → `collectDataPlaneAnalysis` | 2,869 | 37.3 |
+| `handleHotUpdate` → `collectCompilerProjectMutationFacts` → `createProgram` | 724 | 9.4 |
+| `transform` → `lowerViteSourceDerivedRegistryDeclarations` → `ts.createProgram` | 753 | 9.8 |
+| second `lowerViteSourceDerivedRegistryDeclarations` (vite.ts:620) → another fresh `ts.createProgram` | 743 | 9.7 |
+| `runDevDataPlaneGate` (debounced) → `collectDataPlaneAnalysis` again | 703 | 9.1 |
+| garbage collector | 563 | 7.3 |
+| `extractPackageComponentCss` (stylesheet manifest re-extraction) | 451 | 5.9 |
+| module-runner re-executing the SSR graph | 177 | 2.3 |
+
+**Whole-project TypeScript analysis is 5,792 ms = 75.3% of every edit** (≈87% including the GC it
+causes). Self time by file: `typescript@6.0.3/lib/typescript.js` 3,552 ms (46.2%) **plus a second,
+separate TypeScript bundled inside `@ts-morph/common/dist/typescript.js` at 1,727 ms (22.5%)** —
+two TypeScript compilers and four-plus `createProgram` calls per keystroke-save. Kovo's own
+`packages/compiler` self time is 190 ms (2.5%), and **actual JSX lowering is invisible in the
+profile**. App source costs ~1 ms.
+
+The same shape appears in `check`/`build` as a quadratic in closure size (O6) and in the dev
+server's 3 GB idle RSS. Speeding up the compiler's lowering would achieve nothing; reducing how many
+times a `Program` is constructed is the whole game.
+
+## Decisions taken (2026-08-07)
+
+All decided. These are binding for the work below; do not re-open them without recording why.
+
+| # | Decision | Ruling | Gates |
+| --- | --- | --- | --- |
+| D1 | Compress cookie-bearing / `no-store` responses? | **Compress everywhere.** Mitigate BREACH by token masking / padding, never by refusing to compress | O1 |
+| D2 | How to unblock enhanced navigation past Trusted Types | **Structured document-part protocol, directly.** No interim Trusted Types stopgap; the CSP directive stays | O2 |
+| D3 | Document caching policy | **Content-hash `/assets/*` immutable now**; document validators are decided as part of D9 | O3, O14 |
+| D4 | CSS pruning strategy | **Import-graph pruning**; per-route splitting evaluated afterwards on measurement | O4 |
+| D5 | Prove security posture per keystroke or per commit? | **Per commit.** Do all four: shared `Program`/`DocumentRegistry`, content-hash memo, incremental analysis, **and** move analysis off the HMR blocking path. `check`/`build` stay fail-closed | O5, O6 |
+| D6 | Speculation Rules default | **Default on** for routes the compiler proves are side-effect-free GETs; opt-out per route | O9 |
+| D7 | Deferred client runtime registration | **Register only for apps with ≥1 L1 interaction** | O10 |
+| D8 | `Reflect.apply` wrapper vs boot-captured direct call | **Boot-capture then direct-call.** Threat model is written as a prerequisite deliverable, not as a gate on the decision. No fast/hardened build flag | O8 |
+| D9 | Prerender / route-cache tier | **Build the compiler-proved cache-influence cache**, not a Next-style annotation cache | O14, O3 |
+| D10 | Multi-core story | **Document N-process-behind-proxy; make the rate limiter process-aware.** Built-in cluster only after D9 | O14 |
+| D11 | Streaming / early `<head>` flush | **Stay buffered.** Revisit only after O1–O4, and only for routes proven to make no post-render header decisions | O14 |
+| D12 | Default per-IP rate limit on document GETs | **Exempt document GETs**; keep shedding on mutations/queries | O13 |
+| D13 | Budget workload | **Two tiers**: keep the toy for cheap CI signal, add a realistic tier allowed to fail loudly | O17 |
+| D14 | Committed benchmark report | **Regenerate or delete it**; it currently errs in Kovo's favour | O15 |
+| D15 | Scope | **Everything.** No deferral to other ledgers | all |
+
+### Accepted consequence of D2
+
+Choosing the document-part protocol over a Trusted Types stopgap means **enhanced navigation stays
+broken in production until the protocol lands** — every in-app navigation remains a full page reload,
+at a measured 2,125 ms / 152,537 B versus Next.js's 61 ms / 0 B. This was chosen deliberately over a
+short-lived `DOMParser` policy shim. Two mitigations are required in the meantime, both listed under
+O2: land the navigation regression test immediately so the state cannot silently change again, and
+land O1/O3/O4 first so the reload that does happen is as cheap as possible.
+
+## Ranked opportunities
+
+Ranked by measured win ÷ (implementation cost × security risk).
+
+### O1 — Ship response compression in the generated production adapter — **critical, small, low risk**
+
+- [ ] Emit `Content-Encoding` from the `--preset node` (and Vercel/Cloudflare) build artifact.
+  - Root cause: `packages/server/src/build.ts` is the emitter of the standalone adapter and contains
+    **zero** compression tokens — `grep -cE 'zlib|gzip|brotli|Content-Encoding|acceptEncoding'`
+    returns `0` across all 4,919 lines, while `packages/server/src/node.ts` returns `17`. The emitted
+    `writeWebResponseToNode` (build.ts:1803-1823) ends in a bare
+    `pipeline(Readable.fromWeb(body), nodeResponse)`, and the call site at build.ts:4223-4225 never
+    passes `acceptEncoding`, which `node.ts:1430` requires to select an encoder. Static assets bypass
+    it entirely via `serveRootedStaticFile` (build.ts:4347).
+  - Measured: with `Accept-Encoding: br, gzip` the Kovo server returns no `Content-Encoding` for the
+    document (41,014 B), the stylesheet (122,222 B), the client runtime (267,611 B), or the
+    enhanced-navigation document (2,286 B). Next.js standalone gzips all of them.
+  - Win: the three critical-path assets total 430,847 B shipped; measured brotli-11 of the identical
+    bytes is 70,974 B — **-83.5%**. At the harness's 209,715 B/s mobile throttle that is the entire
+    564 ms FCP gap. It also flips the navigation payload comparison: Kovo's 2,286 B enhanced document
+    gzips to 963 B versus Next's 1,776 B, turning a 1.29x loss into a 1.84x win.
+  - Decision required, per the Technical Preview Bias rule: `isSensitiveResponse` (node.ts:1444-1455)
+    disables compression for any `no-store`/`private`/`Set-Cookie`/`Vary: Cookie` response, and
+    `app-document.ts:368-379` stamps `noStore` whenever the request merely carries a `Cookie` header
+    or the page renders a CSRF form — i.e. every realistic logged-in page. Choose and document the
+    stronger default explicitly (BREACH/CRIME posture) rather than inheriting today's accidental
+    "compress nothing in production".
+
+### O2 — Enhanced navigation is dead in production: Kovo's CSP blocks Kovo's own runtime — **critical, small, low risk**
+
+This is a bug, not a tuning opportunity, and it invalidates Kovo's headline architectural claim.
+
+Per D2, the fix is the structured document-part protocol, not a Trusted Types shim. This item
+absorbs `plans/better-js-loader.md` Phases 4–5, which are superseded.
+
+- [ ] Land a navigation regression test **first**, before any protocol work.
+  - Assert that an in-app navigation does not replace the document: after a link click,
+    `performance.getEntriesByType('navigation')[0].type !== 'reload'` and a pre-navigation
+    `window.__sentinel` survives. This defect shipped and stayed invisible because no test asserted
+    the client half of the feature was reachable at all.
+- [ ] Diagnose and record why the client half is unreachable, as the protocol's acceptance criterion.
+  - The server half works perfectly: `Accept: text/vnd.kovo.document+html` returns a document with
+    exactly **22,909 bytes of inline loader removed** (`/product` 25,195 → 2,286 B; `/` 41,014 →
+    18,105 B). The client half never uses it. The framework-generated CSP sets
+    `require-trusted-types-for 'script'; trusted-types kovo kovo-browser`, and Kovo's own deferred
+    client runtime then calls `DOMParser.parseFromString(<raw string>)`, which the policy rejects. The
+    runtime falls back to `location.assign`, so **every in-app navigation is a full page reload**.
+  - Measured consequence (mobile session, 7 medians): nav to product A **2,125 ms / 152,537 B** vs
+    Next **61 ms / 0 B**; nav to product B **1,162 ms / 152,839 B** vs **51 ms / 349 B**; back to
+    listing **784 ms / 122,539 B** vs **24 ms / 0 B**. Kovo reports `navType='navigate'` with a fresh
+    936 ms document FCP on every navigation; Next.js never replaces the document.
+- [ ] Split enhanced navigation into a modular source helper with an inline build target.
+  - Absorbed from `plans/better-js-loader.md` Phase 4.
+- [ ] Add the enhanced-navigation **document-part response**: the server returns structured parts, and
+      the client applies them without ever parsing an HTML string.
+  - Absorbed from `plans/better-js-loader.md` Phase 5. This removes the `DOMParser` call entirely
+    rather than authorising it, so `require-trusted-types-for 'script'` stays intact and there is no
+    string→DOM sink on the navigation path at all.
+  - Constraints carried over from that ledger and still binding: no client router (enhanced navigation
+    stays real-anchor); no app-authored import of internal runtime helpers; no CSP weakening; a
+    partial navigation response must validate the build identity before applying, so a stale build
+    cannot be applied.
+  - Win: this is the difference between Kovo's navigation story existing and not existing. Combined
+    with O1, Kovo's per-navigation payload should land near 963 B against Next's 1,776 B.
+- [ ] Fix the `Vary` asymmetry on document responses.
+  - The enhanced-navigation response carries `vary: Accept`; the ordinary `text/html` response carries
+    **no `Vary` at all**. The dangerous direction is covered, but a shared cache can store the full
+    25 KB document under a key with no `Accept` dimension and replay it to enhanced-navigation
+    fetches, silently defeating the loader-omission mechanism.
+
+### O3 — Give static assets and documents real cache validators — **critical, small, low risk**
+
+- [ ] Stop re-downloading the 122 KB stylesheet on every navigation.
+  - `/assets/styles.css` is served `cache-control: public, max-age=0, must-revalidate` with **no
+    ETag and no Last-Modified**. `must-revalidate` with no validator means revalidation cannot produce
+    a 304 — the whole file is re-downloaded. This single header accounts for 122,539 of the 152,537
+    bytes on each navigation, **100%** of the back navigation, and 122,539 of the 166,899 bytes on a
+    repeat visit.
+- [ ] Give document responses cache headers at all.
+  - Kovo document responses carry **no `Cache-Control`, no `ETag`, and no `Last-Modified`**, so the
+    42,134 B home document is refetched in full on every visit. Measured repeat-visit byte saving:
+    Kovo **61.6%** vs Next.js **95.9%**; repeat-visit FCP 960 ms vs 192 ms (**5.0x**).
+  - Content-hashed immutable assets already exist for `/c/__v/<digest>/…`; extend the same treatment
+    to `/assets/*` and decide a document validator policy.
+
+### O4 — Prune the emitted stylesheet to actually-used components — **critical, medium, low risk**
+
+- [ ] Make `/assets/styles.css` a function of imported components, not of the whole `@kovojs/ui` package.
+  - Root cause: `packages/cli/src/commands/build-export.ts:8016-8067` calls
+    `extractPackageComponentCss('@kovojs/ui', ...)` unconditionally, and
+    `packages/compiler/src/package-styles.ts` `packageComponentSources()` walks the package's entire
+    exports map (44 `.tsx` entries) regardless of imports.
+  - Measured: the served sheet is 122,222 B raw. **119,095 B (97.44%)** is `@kovojs/ui` component CSS
+    for an app that imports **zero** `@kovojs/ui` components. Tokens are 3,125 B (2.56%); app CSS
+    contributes 0 B to this sheet. Cross-component sharing is negligible — 119,740 B summed vs
+    119,095 B deduped (0.54%) — so pruning is nearly linear in components dropped.
+  - Win (MODELED from measured segments): this app 122,222 → 3,125 B raw (-97.4%), 16,528 → 256 B
+    brotli (-98.5%). A hypothetical 4-component app: 12,224 B raw (-90.0%).
+  - Risk: `kovo add` copies components into the app's own `src/`, so an import-specifier filter must
+    handle copy-in users; dynamic/conditional usage needs a conservative fallback.
+  - Related defect found while measuring: the benchmark page renders with **no app CSS at all** — the
+    app's authored stylesheet (`/assets/index-*.css`, 3,095 B) is built but never linked, while the
+    122 KB library sheet is. Fix before quoting any styling-related number.
+
+### O5 — Stop rebuilding whole-project TypeScript state on every dev edit — **critical, large, medium risk**
+
+Per D5, all four approaches are in scope, in this order. The governing ruling: **Kovo proves security
+posture per commit, not per keystroke.** `check` and `build` stay fail-closed and unchanged; the dev
+server stops blocking on proofs that will be re-established before anything ships.
+
+- [ ] D5-a: share one `ts.Program` / `DocumentRegistry` across the four construction sites.
+  - Cheapest win, no posture change. Sites: `handleHotUpdate`'s two calls
+    (`packages/server/src/vite.ts:660-671`), the `transform` hook's
+    `lowerViteSourceDerivedRegistryDeclarations`, and the second one at `vite.ts:620`. Together those
+    are 2,220 ms of a 7,225 ms edit before counting the data-plane analyses.
+- [ ] D5-b: fix the data-plane cache key so a hit is actually cheap.
+  - `data-plane-static-analysis.ts:281-293` computes its key by first building a full TS Program and
+    canonical-JSON-serialising every app source byte, so a hit costs nearly as much as a miss. Key on
+    a content hash of app sources, invalidated by the watcher. An mtime key is unsound under some
+    editor write patterns and under git operations that preserve mtime; a content hash costs one read
+    per app file per edit, still ~1000x cheaper than a `Program`.
+- [ ] D5-c: make the analysis incremental — re-analyse changed files plus dependents, not the closure.
+  - The real fix, and shared with O7's quadratic term.
+- [ ] D5-d: take whole-project analysis off the HMR blocking path entirely.
+  - Serve the edit immediately; run analysis asynchronously; surface diagnostics when they land. The
+    dev-served page must be explicitly marked dev-unproven, and `kovo check` / `kovo build` must
+    remain fail-closed and unchanged — that split is what makes this safe.
+  - This also fixes O6's "edit never lands" defect at the root: today `handleHotUpdate` spends ~23 s
+    computing whole-project facts on `examples/stackoverflow` and the per-module transform never runs.
+- [ ] Remove the extension-only data-plane test so non-data-plane files get a genuinely cheap path.
+  - Mechanism: `packages/server/src/vite.ts:660-671` — `handleHotUpdate` awaits
+    `collectCompilerProjectMutationFacts` then `collectCompilerQueryShapeFacts` **before** the
+    compiler sees the change. Each builds a full `ts.createProgram` + `getTypeChecker` over every app
+    root file (`packages/compiler/src/app-contract-project.ts:330-331`). Two more fresh Programs come
+    from `lowerViteSourceDerivedRegistryDeclarations` (transform hook and vite.ts:620), and a
+    debounced `runDevDataPlaneGate` runs the data-plane analysis a third time.
+  - The existing cache is inert: `data-plane-static-analysis.ts:281-293` computes its cache **key** by
+    first building a full TS Program and canonical-JSON-serialising every app source byte, so a hit
+    still costs nearly as much as a miss.
+  - **There is no cheap path for non-data-plane files.** `isDataPlaneSourceFile`
+    (`internal/data-plane-static-analysis.ts:200`) delegates to `isDataPlaneAppSourcePath`, whose only
+    content test is `staticAnalysisRegExpTest(/\.(?:[cm]?[jt]sx?)$/u, baseName)` — a **file-extension
+    check**. The benchmark app contains zero `app.query`/`app.mutation` calls and still pays the full
+    whole-project query-shape pass on every save.
+  - Measured: edit → served is **7,225 ms (MAD 33.6, n=10)** on a 1-file app vs **107 ms (MAD 3.1)**
+    for `next dev` — **67x**. On `examples/stackoverflow` a single save burns **≈27.5 s of CPU**
+    (22.9 s in `handleHotUpdate` + 2.1 s in the gate) and then serves nothing.
+  - The earlier "~13 s per save" recon estimate is wrong in both directions: it **overstates** by
+    ~1.8x on a small app (real: 7.2 s) and **understates** by ~2x on a realistic one (real: ~25 s).
+  - Win: removes 75.3% of edit latency directly, plus most of the GC and most of the 3 GB dev RSS.
+  - Constraint: an mtime-keyed memo is unsound under some editor write patterns and git operations
+    that preserve mtime; a content-hash key costs one read per app file per edit, still ~1000x cheaper
+    than a `Program`.
+
+### O6 — The dev loop is broken, not just slow, at realistic app size — **critical, correctness**
+
+Not throughput items; defects that make `kovo dev` unusable on the repo's own flagship example.
+Grouped here because they share O5's root cause.
+
+- [ ] Fix: an edit to `examples/stackoverflow` **never reaches the served HTML**.
+  - Reproduced 4/4. After boot (53.5 s) and one edit to `src/components/question-list.tsx` (a string
+    verifiably present in the dev-served HTML): 150 s of enforced silence then 6 probes over 10 s all
+    returned **200 with the old HTML** (257,058 B, no token). A separate 240 s poll made 395 polls
+    with **zero hits**. HTTP is hard-blocked from t+1.6 s to t+30 s.
+  - Mechanism, from the profile: there is **no `transform` frame at all** — `handleHotUpdate` spends
+    ~23 s computing whole-project facts and the per-module transform / SSR re-render never runs.
+  - `"dev": "kovo dev ./src/app-shell.ts"` is the example's own committed script.
+- [ ] Fix: a request in flight when the 30 s request deadline fires **crashes the dev server**.
+  - Reproduced 2/2. Unhandled `'error'` event on a `Readable`: `RequestDeadlineExceededError` at
+    `packages/server/src/request-deadline.ts:318` via `abortCapability` (:148) / `interrupt` (:154);
+    the process exits. A client-initiated disconnect (abort < 30 s) does not crash it.
+- [ ] Fix: a hard parse error produces **zero developer feedback** for at least 90 s.
+  - Injecting `</h9>` inside `<h1>` (independently confirmed as 6 syntactic diagnostics from
+    `ts.createSourceFile` with `ScriptKind.TSX`) produced no terminal diagnostic and no failing HTTP
+    in 90 s — the server kept returning `200` with stale HTML. An undefined identifier surfaced only
+    as a 500 at 8,246 ms, also with no terminal diagnostic.
+- [ ] Fix: every app-source edit forces a full page reload; client state is destroyed on every save.
+  - `packages/compiler/src/hmr-impact.ts:115` short-circuits
+    `if (next.sourceKind === 'route-shell') return { impact: 'routeRefresh' }` before
+    `componentRefresh` is ever considered. Browser capture: Kovo emits `kovo:route-shell` immediately
+    followed by `{"type":"full-reload"}`; a `window.__sentinel` set before the edit did not survive,
+    3/3 (`navigation.type === "reload"` 3/3). Next.js preserved it 4/4 at 104–107 ms.
+  - Not yet proven: whether `componentRefresh` is reachable for a **non-entry** component edit. The
+    benchmark app is a single file, so only the entry-file path was exercised. Needs a two-file fixture.
+- [ ] Fix: `kovo check source --watch` leaks orphaned processes.
+  - Five orphaned watch processes reparented to launchd were found at the start of a measurement run,
+    burning ~39% of a core, left by earlier runs in three different app directories.
+
+### O7 — Fix the quadratic `app-source-trust` phase in check/build — **critical, large, medium risk**
+
+- [ ] Remove the super-linear term from `kovo check` / `kovo build` closure analysis.
+  - Confirmed, not hypothesised. A synthetic 8-ary tree holding entry-module size constant while
+    growing the reachable closure gives check durations 22.2 s (N=25) → 24.0 → 28.5 → 39.8 →
+    **75.5 s (N=400)**. Quadratic fit `T = 20.766 + 0.05466N + 2.052e-4·N²` has RMSE 0.109 s; the
+    linear fit has RMSE 2.795 s — **26x worse**. Marginal cost per added module rises monotonically
+    74.7 → 88.8 → 113.1 → **178.5 ms**.
+  - Localised: `app-source-trust` share of wall clock goes 26% (N=2) → 34% (N=100) → 47% (N=200) →
+    **73% (N=400)**; its local doubling exponent rises 1.43 → 1.61 → 1.77 → **2.12**.
+  - Suspected mechanism (not yet instrumented to call counts):
+    `packages/cli/src/commands/build-export.ts:6732-6753` passes every *other* closure file as
+    `extraFiles` to each file's compilation, and `packages/compiler/src/scan/parse.ts:335-343`
+    re-parses them with an unmemoized `ts.createSourceFile` reached from at least three call sites.
+  - Constraint: any memo must be **per-run, not process-global** —
+    `packages/drizzle/src/static/project-setup.ts:60-69` records that a prior process-global memo
+    leaked ts-morph Projects and OOM'd.
+  - Also the RSS driver: peak process-tree RSS grows 2,172 (N=25) → 3,027 (N=200) → **3,089 MiB
+    (N=400)** against a 3,072 MiB budget. A 200-module app is at 98.5% of budget.
+- [ ] Fix the hard scaling wall: a legitimate app becomes unbuildable purely by growing.
+  - A flat app whose entry imports N components passes check at N=125 and **fails closed at N=130**
+    with `KV448` (`framework root is reached through mutable or ambiguous lexical provenance`). Cause:
+    a fixed per-module abstract-interpretation budget, `lexical-provenance.ts:63`
+    `abstractWorkBudget = 16_384`, exhausted into a refusal by `scan/capability-closure.ts`.
+
+### O8 — Remove the `Reflect.apply` indirection from the SSR hot path — **high, large, high risk**
+
+Per D8, the ruling is **boot-capture then direct-call**: prove intrinsic identity once at module init,
+before any app code runs, then call the captured function directly instead of routing every call
+through `Reflect.apply`. No fast-vs-hardened build flag.
+
+- [ ] Write the threat model as a prerequisite deliverable (not a gate on the decision).
+  - State precisely what `apply(fn, receiver, args)` defends against that `fn.call(receiver, …)` on a
+    **boot-captured** `fn` does not. `Reflect.apply` defends against a poisoned `Function.prototype.apply`;
+    if `fn` itself was captured before any app code ran, that attack is already closed. Record the
+    residual cases (if any) and handle them explicitly rather than by blanket indirection.
+- [ ] Replace the indirection with boot-captured direct calls on the render path.
+  - Where a call site cannot be proven boot-captured, emit a specialised monomorphic wrapper for that
+    site rather than sharing the megamorphic `apply$12`.
+- [ ] Re-measure throughput and re-profile; the acceptance criterion is that no `apply`-shaped frame
+      remains in the top 5 self-time frames under c=32 load.
+  - Measured by CPU profile under c=32 load: the #1 self-time frame is `apply$12 @ handler.mjs:30`
+    at **34.41%** (6,928 ms of 20.14 s non-idle CPU) — a function whose entire body is
+    `return nativeReflectApply(fn, receiver, args)`. `invoke$1` adds 4.05% and `apply$10` 1.14%:
+    **38.5% of all server CPU** is call indirection.
+  - All six recon-phase suspects were **refuted** as dominant: HKDF re-derivation per HMAC is 0.10%
+    self; the frozen `renderedHtml` wrapper is a real but modest 3.07%; prop snapshotting, the request
+    Proxy, per-request head re-serialisation and the CSP rescan are noise. Do not optimise those first.
+  - Microbenchmark: `apply(fn, receiver, [args])` costs 4.463 ns/call vs 0.516 ns direct (8.7x) at a
+    monomorphic site; `apply$12` is megamorphic in production so the real unit cost is higher.
+    Implied ~285,000 apply calls/request (MODELED upper bound).
+  - Constraint: this is the `witnessReflectApply` / captured-intrinsic pattern defending against
+    prototype mutation. Any change must preserve that guarantee — e.g. specialise wrappers per call
+    site at emission so the site stays monomorphic, or prove intrinsic identity once at module init
+    and call directly thereafter. Compiler/security design task, not a micro-tweak.
+
+### O9 — Enable Speculation Rules by default, or justify the 3.3x cost — **high, small, design decision**
+
+- [ ] Revisit `spec/07-navigation.md`'s "never auto-emitted, default off" for prefetch.
+  - Confirmed: zero `speculationrules` occurrences in emitted documents. Next.js `<Link>` prefetches
+    by default with no configuration.
+  - Measured A/B on the same app: turning rules on via
+    `route({ prefetch: 'moderate', prefetchJustification })` on both page routes cuts navigation
+    latency from **1,151 ms (MAD 18) to 349 ms (MAD 1)** — a **3.3x** improvement Kovo currently
+    leaves on the table by default.
+  - Note this was measured with the settled-runtime protocol while enhanced navigation is broken
+    (O2); re-measure after O2 lands, since the two interact.
+
+### O10 — Stop shipping a 267 KB client runtime unconditionally — **high, medium, medium risk**
+
+- [ ] Make the deferred runtime conditional on the app actually needing it, and compress it.
+  - `ensureKovoLoaderRuntimeClientModule` (`packages/server/src/loader-runtime-client-module.ts:106-111`)
+    mandatorily registers `/c/kovo-runtime.client.js` for **every** app. The benchmark app — an MPA
+    with a native popover dialog and no client handlers — ships 267,611 B of it, uncompressed.
+  - Disambiguated: this app ships `kovoDeferredRuntimeModuleSource` (267,611 B), **not** the 1.92x
+    larger `kovoDeferredAppRuntimeModuleSource` (512,843 B), which `packages/compiler/src/vite.ts:999`
+    emits only when query plans exist. Rollup tree-shakes neither.
+  - Win: 56,448 B with gzip-9 (subsumed by O1); far more by not registering it for apps with no L1
+    interactions. Likely cause of the Lighthouse `/product` desktop regression 88 → 70
+    (FCP 1509 → 2258 ms, LCP 1659 → 3158 ms, bytes 147,646 → 417,120).
+- [ ] Avoid resending stable loader bytes across documents.
+  - Absorbed from `plans/better-js-loader.md` Phase 6. The 22,819-byte inline bootstrap is re-emitted
+    in full on every document; only the enhanced-navigation variant omits it, and that path is dead
+    until O2 lands.
+- [ ] Keep the modular runtime authoritative and generate the inline orchestration from it.
+  - Absorbed from `plans/better-js-loader.md` Phases 2, 3 and 7 plus its two open baseline gaps
+    ("inline orchestration is not generated from the modular runtime", "loader transport has no
+    reusable document-part protocol" — the latter is O2's protocol). Binding constraint carried over:
+    the installed always-loaded bootstrap must not regress its gzip budget.
+
+### O11 — Give `check`/`build` a working warm and incremental path — **high, large, medium risk**
+
+- [ ] Make a second `kovo check` cheaper than the first, and a one-line edit cheaper than a full run.
+  - Measured: `kovo check` on `benchmarks/kovo` — cold 19,324 ms (MAD 21), **warm 17,668 ms**,
+    one-file 19,020 ms fresh / **13,707 ms via a persistent `--watch` session**. `kovo build` — cold
+    50,730 / **warm 52,743** / incremental 46,647 ms. Warm is inside the noise of cold in both; the
+    surviving `.kovo` cache is only 252 KiB. `kovo dev` warm start saves only 5.3–10.4%, same story.
+  - Reuse never fires: every revision reports `reusedPhases=0 / executedPhases=8`, even though the
+    phase census supports a `reused-authenticated` status for exactly this purpose.
+  - Against `devex-budgets.json` provisional targets (cold 30 s / warm 10 s / one-file 2 s):
+    `benchmarks/kovo` fails warm 1.77x and one-file **9.51x** (6.85x via watch);
+    `examples/stackoverflow` fails cold 1.28x, warm 3.87x, one-file **19.57x** (16.2x via watch).
+  - ~7 s of every run is fixed cost no app can amortise: config-trust ~1.85–2.19 s, stylesheet
+    ~1.75–2.41 s, typescript ~2.77–2.86 s are flat from a 1-module app to a 400-module app, plus
+    2.8–5.3 s the census does not attribute at all (CLI startup + on-the-fly TypeScript transform of
+    the CLI's own source under `--experimental-transform-types`).
+  - Asymmetry worth noting: a build that **fails** in the check phase exits in ~7 s, so "time to first
+    error" looks fine while "time to a green build" is 53 s.
+  - Hard constraint — **do not re-propose an on-disk compiler cache**. `plans/compiler-refactoring.md:128`
+    (FN3) and commit `cab4b4b84` deliberately deleted `compile-cache.ts` /
+    `persistent-compile-cache.ts` because "the disk store could not authenticate entries against
+    same-UID authored config (SPEC §2/§6.6) and raced concurrent manifest writers".
+    `plans/fast-ci.md:57` retired cross-run CI cache restores for the same reason. The win must come
+    from authenticated in-session reuse or from removing work (O5/O7), not from a disk cache.
+
+### O12 — Move the stylesheet link ahead of the inline bootstrap — **medium, small, low risk**
+
+- [ ] Emit `<link rel=stylesheet>` before the 22.8 KB inline loader in the document head.
+  - Measured: Kovo's `<script>` opens at byte offset 229 and carries a 22,819-byte inline body
+    (55.64% of the whole document); the single `<link rel=stylesheet>` does not appear until byte
+    offset **23,174** (56.50% in). Next.js puts its stylesheet link at byte **132**.
+  - With a typical initcwnd of ~14.6 KB, CSS discovery from markup alone costs more than one extra
+    round trip. Kovo does emit a `Link: rel=preload; as=style` response header, which mitigates this
+    for clients that honour it — quantify the residual before spending effort here.
+
+### O13 — Fix production transport defects found while load-testing — **medium, small, low risk**
+
+- [ ] Restore HTTP keep-alive for bodyless GETs.
+  - `createKovoNodeServer` calls `armIncompleteNodeRequestClose` for every bodyless method before
+    dispatch; its guard `nodeRequestComplete` reads only the own property descriptor of
+    `req.complete`, which Node sets in `parserOnMessageComplete` — *after* the `request` event. So a
+    plain GET always reads `complete === false` and gets `Connection: close`.
+  - Measured: a full 8-cell load sweep accumulated **16,416 TIME_WAIT sockets — the entire macOS
+    ephemeral port range (49152–65535)**. A keep-alive probe build reduced that to 99. Throughput was
+    unchanged (402.6 vs 399.6 req/s), so this is a reliability fix, not a speed fix.
+- [ ] Revisit the default per-IP rate limit for document GETs.
+  - `DEFAULT_PER_IP_RATE = { max: 600, windowMs: 60_000 }` (`packages/server/src/app-load-shed.ts:136-140`)
+    is **10 req/s** and gates ordinary page rendering via `preDispatchLoadShedResponse`. The first
+    load-test attempt returned 429 for 100% of requests and stayed latched. Behind a CDN, NAT, or load
+    balancer every visitor shares one source IP.
+- [ ] Stop reporting a normal client disconnect as an unhandled server error.
+  - Every benchmark run reproduces `ERR_STREAM_UNABLE_TO_PIPE` from `writeWebResponseToNode` when
+    Chromium cancels a lazy image load.
+
+### O14 — Decide the prerender / route-cache, multi-core, and streaming stories — **high, large, design decision**
+
+- [ ] Record whether Kovo will offer a build-time prerender or route-cache tier, or explicitly will not.
+  - `next build` prerenders both benchmark routes by default and serves them at 5,330 req/s
+    (13.3x Kovo). Kovo has no equivalent: no document ETag/If-None-Match, no Last-Modified, no route
+    or fragment cache, no ISR/`s-maxage`, and `narrowDocumentPublicCacheFromManifest`
+    (`app-document.ts:462`) demotes any `public` document to the credential floor unless a compiler
+    cache-influence manifest entry exists. Overlaps O3.
+  - Kovo also saturates a single core at c=1 (103–106% CPU at 376 req/s) and throughput is flat from
+    c=8 to c=64 — there is no multi-process/cluster story either. Decide both together.
+- [ ] Decide whether the document should stream.
+  - `route.ts:1838` awaits the complete body string before `document-core.ts:469` assembles the shell,
+    so TTFB equals full render time by construction. The deferred path (`document-core.ts:577`) still
+    puts the entire non-deferred body in the first chunk (`:929`), so it does not help TTFB. Next.js
+    ships shell-flush + PPR. High risk: committing the head early freezes status and headers before
+    body render, so any error/redirect/auth decision during render can no longer change them.
+
+### O15 — Restore benchmark and harness validity — **high, medium, low risk**
+
+The evidence base is unsound in seven independent ways. Fix before publishing any perf claim.
+
+- [ ] Land the `benchmarks/kovo` repair so the entrant builds at HEAD.
+  - At HEAD `a4e1d55a9` the entrant fails `D1A007`, so every number in the committed
+    `benchmarks/results/report.md` (2026-06-23) is unreproducible from the tree as committed. All Kovo
+    numbers here come from an in-flight repair on branch `perf/benchmark-entrant-repair`.
+- [ ] Stop measuring navigation by DOM presence.
+  - The committed harness waits for DOM presence, which reports Kovo navigation at 36.9 ms desktop.
+    Measured to actual paint the same navigation costs 2,125 ms — the harness **understates Kovo's
+    navigation cost by ~39x** because Kovo replaces the whole document.
+- [ ] Fix the harness's load-window byte accounting.
+  - `benchmarks/harness/scenarios.mjs` collects at `load` + 150 ms; Kovo's bootstrap imports the
+    runtime on double-rAF *after* load. Measured: mobile records `total 164,673 / js 0`, while a +5 s
+    settle gives `total 434,847 / js 267,948` for the identical build — the harness understates Kovo's
+    mobile bytes by **2.64x** and reports `js: 0` for an app shipping 267,948 B of JS. The Next.js
+    control is unaffected. Every "Kovo ships 0 JS" claim read off the mobile row is an artifact.
+- [ ] Make the harness refuse to benchmark a foreign process.
+  - `run-all.mjs` `waitForHttp` only checks that something answers <500 on the port. One full run was
+    silently attributed to a concurrent agent's `next-server` and produced a complete, plausible-looking
+    report.
+- [ ] Measure Kovo in production posture, or record why it cannot be posture-matched.
+  - `dist/server/server.mjs` throws at module load under `NODE_ENV=production` without
+    `KOVO_ATTESTATION_DEPLOYMENT_ID` and `KOVO_ATTESTATION_SECRET`. `run-all.mjs` never sets
+    `NODE_ENV`, so Kovo has always been benchmarked in **development posture** against Next.js
+    production standalone.
+- [ ] Repeat Lighthouse cells; a single sample is not reportable.
+  - `benchmarks/harness/lighthouse.mjs` runs each cell once. One recorded cell returned null for every
+    metric; a 3-run probe of the same URL returned 0.69 / 0.88 / 0.87 — a **19-point spread**.
+- [ ] Land the TTFB instrumentation and add a bfcache probe.
+  - The harness captured no `responseStart` and could not measure TTFB at all; a patch adding
+    `ttfbMs`/`requestStartMs`/`responseEndMs` exists (branch `perf/bench-refresh-ttfb`). Caveat: CDP
+    mobile emulation does not apply RTT to first byte, so the mobile TTFB row is not
+    network-realistic. Separately, **bfcache participation could not be measured for either
+    framework** — Playwright's `chrome-headless-shell` launches with `--disable-back-forward-cache`.
+- [ ] Repair or retire the TanStack entrant.
+  - `benchmarks/tanstack` fails to build: `readFile is not exported by __vite-browser-external,
+    imported by src/routes/images/$name.ts` (TanStack Start server-route API drift). Excluded this round.
+
+### O16 — Fix the production artifact's ability to boot and serve files — **high, small, low risk**
+
+- [ ] Stage `rootedFiles` roots into the build output.
+  - `await rootedFiles('../shared/images')` resolves at runtime against `dist/server/`, i.e.
+    `dist/shared/images`, which the build never creates. `createFrameworkFileSystemBoundary` throws
+    `Filesystem root '.../dist/shared/images' does not exist` and the process exits before listening.
+    Reproduces in the untouched tree; images had to be staged by hand for any measurement to run.
+
+### O17 — Instrumentation, budgets, and CI wall clock — **high, medium, low risk**
+
+Absorbs the open items of `plans/fast-ci.md`, which is superseded.
+
+- [ ] Update root Vitest timing history after every successful CI run and verify shard balance.
+  - Absorbed from `plans/fast-ci.md`.
+- [ ] Make CI cache hits visible and keyed safely.
+  - Absorbed from `plans/fast-ci.md`. Note the standing constraint recorded there: cross-run
+    compiler/security-fact cache restores were retired deliberately and must not return (see
+    "Do not re-propose").
+- [ ] Make the check phase census obtainable on failing apps.
+  - `appendSourceCheckPhaseCensus` is only reached on the success path (`build-export.ts:1099`); any
+    throwing phase routes to `sourceCheckErrorResult` at `:1104` and the census is dropped. The
+    instrument that exists to diagnose check cost is unavailable on exactly the slowest apps.
+- [ ] Fix the fact that only 1 of 7 apps in the repo passes `kovo check`.
+  - `benchmarks/kovo` passes only after a same-day hand repair; `examples/stackoverflow` fails with
+    558 diagnostics (422 KV424 + 134 KV448 + 2 KV449); `examples/commerce` fails KV424;
+    `examples/crm` fails KV422; `examples/{reference,gallery,devtool,verifier}` have no build script.
+    This is a perf problem: there is no corpus to measure against.
+- [ ] Re-baseline `devex-budgets.json` against a realistic workload.
+  - Every metric is `"ratification": null` and calibrated on
+    `scripts/devex-workloads/kovo-packed-check/package` — 4 files / 56 LOC / 1 route / no Drizzle. The
+    dominant real cost (project-mode ts-morph/Drizzle analysis) is not in the benchmark at all, so
+    none of the O(app size) behaviour in O5/O7 is detectable by CI today.
+- [ ] Add an SSR throughput/TTFB gate, a navigation-to-paint gate, and a dev edit-to-served gate.
+  - None of the three exists anywhere in the repo.
+- [ ] Add CPU/heap profiling wiring to the perf scripts.
+  - No `--cpu-prof`/`--heap-prof` path exists in any perf script, and the dominant `app-source-trust`
+    work happens in a spawned worker the parent profiler cannot see. Note `--cpu-prof` via
+    `NODE_OPTIONS` produces **zero** `.cpuprofile` files for `kovo dev` because SIGINT terminates it
+    without flushing; CDP `Profiler.start/stop` works and gives exact windows.
+- [ ] Narrow the compiler-perf budget back toward measured reality, or document why not.
+  - `test:compiler-perf` total cold median is **2,179.3 ms (MAD 26.5)** against an 8,250 ms budget —
+    73.6% headroom. The budget was 2,750 ms on 2026-06-16, 3,500 on 2026-07-13 and 8,250 on
+    2026-07-24; the current median would pass the original. JSX lowering is **not** a bottleneck (it is
+    invisible in the dev-edit profile and ~3% of check cost); this gate protects nothing.
+
+## DevEx defects found while measuring
+
+Not perf bugs, but they cost hours of measurement time. Candidates for a papercuts ledger.
+
+- [ ] `D1A007` emits no file, no line, no source excerpt, no receiver expression, and no remediation —
+      the entire output is one sentence, and the emitter already holds the node.
+  - Actual cause: `defineKovo({...})` had no `appId`. `packages/compiler/src/app-contract-project.ts:1300`
+    `if (!appId) return undefined;` makes `proveDirectDefineKovo` bail, and control falls to the
+    catch-all refusal at :1270-1278. Localisation took ~4 minutes **and only because the compiler
+    source was available**; an app author has no path at all — the message names no file to open and
+    no option to add.
+  - What it should say: `D1A007 src/app.tsx:15 receiver 'app' cannot be proved: defineKovo({...}) is
+    missing the required 'appId'.`
+- [ ] Build refusals surface strictly one gate at a time: repairing the benchmark entrant took **six
+      independent hard stops across eight full build attempts** (D1A007 → import-escapes-app-root →
+      22 KV424 + 16 KV448 rows → KV236 → KV417 → KV448 filesystem/process authority), each costing a
+      ~50 s build to discover the next.
+- [ ] `KV417` instructs the author to configure `node({ retention })`, but the `--preset node` CLI flag
+      silently overrides the config file that would fix it, so the message loops forever.
+- [ ] The build boundary root is `dirname(entry)`, so `../shared/catalog.json` escapes it and symlinks
+      are refused outright (`Kovo client source tree contains an unstable entry`). Shared benchmark
+      assets must be byte-copied, creating a drift hazard between entrants.
+- [ ] `KV424` refusals are internally surprising: `array.map` is allowed but `array.find` is refused;
+      a `for...of` over the same array is allowed; parameter destructuring is allowed but reading the
+      same property off a non-destructured binding is refused.
+
+## Do not re-propose
+
+- **On-disk compiler / static-analysis caches.** Deleted deliberately in `cab4b4b84`; reason recorded
+  under O11 (`plans/compiler-refactoring.md:128` FN3).
+- **Concurrent execution of check analyzer phases.** `build-export.ts:939-942` serialises them:
+  "Retaining both heaps made valid 44-component apps exceed 2 GiB even when the processes did not
+  overlap."
+- **Process-global ts-morph memos.** `packages/drizzle/src/static/project-setup.ts:60-69` — a prior
+  process-global memo leaked Projects and OOM'd.
+- **Optimising JSX lowering / the compiler's own transform.** Invisible in the dev-edit profile
+  (`packages/compiler` self time 2.5%; app source ~1 ms) and 3.79x under its CI budget.
+- **Optimising HKDF-per-HMAC, the request Proxy, prop snapshotting, per-request head re-serialisation,
+  or the CSP rescan** as SSR hot spots. All measured and refuted (O8).
+- **Running `packages/cli/dist/bin.mjs` inside the monorepo** to time anything: it yields 0 diagnostics
+  and therefore meaningless timings. Use `./node_modules/.bin/kovo` (the source path).
+- **`autocannon` against the Kovo server.** Its latency histogram is wrong by ~400x against
+  `Connection: close` — it reported p50 1003 ms while simultaneously reporting 366 req/s at c=1.
+  Invalidate any past Kovo latency number taken with it.
+- **Measuring Next.js dev HMR over `127.0.0.1`.** The Turbopack HMR websocket handshake fails
+  (`ERR_INVALID_HTTP_RESPONSE`), the client retry-loops and full-reloads at 35–77 s. Use `localhost`.
+- **Quoting DOM-presence navigation timings.** They understate Kovo's real navigation cost by ~39x.
+
+## Latest verification (2026-08-07, HEAD `a4e1d55a9` + uncommitted `perf/benchmark-entrant-repair`)
+
+Machine: Apple Silicon macOS 26.2, 10 cores, 16 GiB, node v24.19.0, pnpm 10.12.1. All wall-clock
+figures are medians over ≥5 samples with MAD, first sample discarded, on a box shared with other
+agents (load average recorded per cell, 1.8–4.7).
+
+- Browser head-to-head: `node benchmarks/run-all.mjs --iterations 10` (Kovo + Next.js; TanStack
+  excluded), plus a 5x Lighthouse matrix.
+- Navigation / repeat visit: mobile-throttled Playwright sessions (390x844, 4x CPU, ~1.6 Mbps /
+  750 Kbps / 150 ms RTT via CDP) over cold `/` → product A → back → product B, 7 iterations, measured
+  to actual paint; plus a speculation-rules A/B against a rebuilt scratchpad copy.
+- Throughput: a Node `undici`/`node:http` keep-alive load generator (validated at 45,698 req/s against
+  a null server — 53x the fastest server measured, so no cell was client-bound), c ∈ {1,8,32,64}, `/`
+  and `/product/linen-field-jacket`, with and without a `Cookie` header. Kovo's default rate limits had
+  to be raised from 600/min to 1e6 for any measurement to complete.
+- SSR CPU profile: single 20 s `--cpu-prof` capture at c=32, ~24% profiler overhead (304.5 req/s
+  profiled vs 399.6 unprofiled).
+- Dev loop: `spawn → first 200` (6 samples, first discarded) and `source write → served HTML contains
+  the new token` (11 edits, first discarded, 15 ms poll). Per-edit attribution via CDP
+  `Profiler.start/stop` bracketing the exact edit→served window, 4 merged profiles at 500 µs. HMR
+  classification via headless Chromium (Playwright 1.60.0) with a pre-edit `window.__sentinel`.
+- Check/build: `KOVO_DEVEX_CHECK_PHASE_CENSUS_SOURCE=<entry> ./node_modules/.bin/kovo check source <entry>`
+  wrapped in `node scripts/lib/process-tree-rss.mjs`, over `benchmarks/kovo`,
+  `examples/stackoverflow`, and a synthetic 8-ary tree ladder at N ∈ {25,50,100,200,400} plus an
+  unimported-module ballast control at M ∈ {0..400} (flat — confirming the `plans/claude-papercuts-22.md`
+  A1 OOM cause is fixed).
+- Byte accounting: `curl` with `Accept-Encoding: br, gzip` against both production servers, plus
+  offline gzip-9/brotli-11 of the identical served bytes.
+
+Not verified: `scripts/devex-benchmark.mjs` (hard-requires `KOVO_DEVEX_OS_IMAGE` +
+`KOVO_DEVEX_RUNNER_NAME`, a clean tree, and pins ubuntu-24.04/x64 — this box is darwin/arm64);
+Cloudflare and Vercel presets (every transport finding is Node-preset only); HTTP/2, TLS, and
+multi-process configurations; bfcache participation for either framework; speculation-rules
+`prerender` eagerness; the query/loader execution layer, excluded from the SSR profile and possibly
+dominant on data-heavy routes; a measured data-plane-vs-component edit split (established by code
+reading only — `isDataPlaneSourceFile` is extension-only, so no cheap path exists to compare against);
+whether `componentRefresh` is reachable for a non-entry component edit.

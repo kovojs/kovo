@@ -1,5 +1,10 @@
 # Fast CI Without Hiding Coverage
 
+Status: **superseded 2026-08-07 by [`plans/good-perf.md`](good-perf.md)** (O17), which absorbed both
+remaining open items and is now the single active performance ledger. Do not work this file
+independently; the completed evidence below is retained as the historical record, including the
+standing rule that cross-run compiler/security-fact cache restores stay retired.
+
 Created 2026-07-02. Goal: reduce Kovo CI wall-clock time by caching expensive setup and avoiding repeated work while keeping the same tests and proof jobs on the normal CI path. This plan must not move tests behind a weaker gate, nightly-only workflow, manual trigger, path filter, or merge-only condition.
 
 ## Constraints
