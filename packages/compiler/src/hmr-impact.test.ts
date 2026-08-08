@@ -35,6 +35,29 @@ describe('compiler HMR impact facts', () => {
     });
   });
 
+  it('ignores pure byte-offset shifts above style declarations (no anchors in HMR facts)', () => {
+    // plans/good-perf.md O6: styleRuleUsages leaked `generatedFrom` source anchors into
+    // stylesheetAssetsHash, so ANY insertion above a style.create block (a comment, an import,
+    // a new prop) reclassified the save as a style change and forced a full page reload.
+    // HmrImpactStylesheetFact deliberately carries no positions.
+    const previous = compile(styleUsageSource('// one-line note')).hmrImpact;
+    const next = compile(
+      styleUsageSource('// a considerably longer leading comment that shifts every byte offset'),
+    ).hmrImpact;
+
+    expect(previous?.stylesheetAssetsHash).toBe(next?.stylesheetAssetsHash);
+    expect(previous?.liveTargetFactsHash).toBe(next?.liveTargetFactsHash);
+    expect(previous?.queryUpdatePlanHash).toBe(next?.queryUpdatePlanHash);
+    expect(previous?.liveTargetFacts.length).toBeGreaterThan(0);
+    const serialized = JSON.stringify(previous);
+    expect(serialized).not.toContain('generatedFrom');
+    expect(serialized).not.toContain('queryKeySpan');
+    expect(classifyHmrImpact(previous, next)).toEqual({
+      impact: 'componentRefresh',
+      reasons: [],
+    });
+  });
+
   it('classifies query-plan edits as route refreshes', () => {
     const previous = compile(hmrSource({ bindingPath: 'cart.count' })).hmrImpact;
     const next = compile(hmrSource({ bindingPath: 'cart.total' })).hmrImpact;
@@ -141,6 +164,27 @@ import { tabsTriggerClick as removeItem } from '@kovojs/headless-ui/tabs';
 
 export const ActionButton = component({
   render: () => <button onClick={removeItem}>Run</button>,
+});
+`;
+}
+
+function styleUsageSource(leadingComment: string): string {
+  return `${leadingComment}
+import { component } from '@kovojs/core';
+import { tabsTriggerClick as removeItem } from '@kovojs/headless-ui/tabs';
+import * as style from '@kovojs/style';
+
+const badgeStyles = style.create({
+  badge: { color: 'red' },
+});
+
+export const CartBadge = component({
+  queries: { cart: {} },
+  render: ({ cart }) => (
+    <button onClick={removeItem} style={badgeStyles.badge}>
+      <span>{cart.count}</span>
+    </button>
+  ),
 });
 `;
 }

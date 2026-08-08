@@ -60,11 +60,56 @@ export function createComponentHmrImpactMetadata(input: HmrImpactMetadataInput):
       ...(asset.cspHash ? { cspHash: asset.cspHash } : {}),
       href: asset.href,
       sourceFileName: asset.sourceFileName,
-      ...(asset.styleRuleUsages ? { styleRuleUsages: asset.styleRuleUsages } : {}),
+      ...(asset.styleRuleUsages
+        ? {
+            // HmrImpactStylesheetFact deliberately omits the `generatedFrom` source anchor:
+            // byte offsets shift on any edit above a style.create block, and carrying them
+            // into stylesheetAssetsHash reclassified render-only edits as style changes and
+            // forced a full reload on nearly every save (plans/good-perf.md O6). The anchors
+            // stay available on the underlying ComponentCssAsset for route splitting.
+            styleRuleUsages: asset.styleRuleUsages.map((usage) => ({
+              className: usage.className,
+              moduleFileName: usage.moduleFileName,
+              source: usage.source,
+              styleRef: usage.styleRef,
+            })),
+          }
+        : {}),
     };
   });
-  const queryUpdatePlanHash = factHash(input.queryUpdatePlans);
-  const liveTargetFactsHash = factHash(input.liveTargetFacts);
+  // Like the stylesheet facts above, HMR change detection must not hash authoritative-source
+  // byte spans: they shift on any edit above the fact's declaration, which turned render-only
+  // saves into route refreshes and full reloads (plans/good-perf.md O6). Semantic fields
+  // (expressions, selectors, names, paths) still move the hashes on real changes; exact spans
+  // stay on the scanner-owned models for diagnostics and lowering.
+  const liveTargetFacts = input.liveTargetFacts.map((fact) => ({
+    ...fact,
+    queryBindings: fact.queryBindings.map(({ queryKeySpan: _span, ...binding }) => binding),
+  }));
+  const queryUpdatePlanHash = factHash(
+    input.queryUpdatePlans.map((plan) => ({
+      ...plan,
+      ...(plan.derives === undefined
+        ? {}
+        : { derives: plan.derives.map(({ generatedFromSpan: _span, ...derive }) => derive) }),
+      ...(plan.stamps === undefined
+        ? {}
+        : {
+            stamps: plan.stamps.map((stamp) => ({
+              ...stamp,
+              derive: (({ generatedFromSpan: _span, ...derive }) => derive)(stamp.derive),
+            })),
+          }),
+      ...(plan.templateStamps === undefined
+        ? {}
+        : {
+            templateStamps: plan.templateStamps.map(
+              ({ sourceSpan: _span, ...stamp }) => stamp,
+            ),
+          }),
+    })),
+  );
+  const liveTargetFactsHash = factHash(liveTargetFacts);
   const stylesheetAssetsHash = factHash(stylesheetAssets);
   const renderOutputHash = factHash(
     input.renderEquivalenceChecks.map((check) => ({
@@ -79,7 +124,7 @@ export function createComponentHmrImpactMetadata(input: HmrImpactMetadataInput):
     clientHref: input.clientHref,
     component,
     diagnostics,
-    liveTargetFacts: input.liveTargetFacts,
+    liveTargetFacts,
     liveTargetFactsHash,
     queryUpdatePlanHash,
     routeShellHash: null,
