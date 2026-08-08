@@ -269,6 +269,15 @@ absorbs `plans/better-js-loader.md` Phases 4–5, which are superseded.
     `text/html` (client hard-navigates) — script replay no longer exists on the navigation path.
   - A target document with no segment stamps now applies via wholesale in-realm body replacement
     (spec §8 "Segment persistence is derived" updated): stamps only ever ADD preservation.
+  - Measured per-navigation wire (rebuilt `benchmarks/kovo` production artifact, node client with
+    `Accept-Encoding: br, gzip`): enhanced parts document `/product/linen-field-jacket` =
+    **920 B wire (br) / 2,800 B identity**; `/` = 2,793 B wire / 21,197 B identity; envelope
+    build token === `Kovo-Build` header on both. Baseline was **152,537 B per navigation**
+    (-99.4%); the plan's own ~963 B projection and Next's 1,776 B are both beaten. The benchmark
+    app itself is INERT under the O10/D7 gate (ships zero scripts), so it navigates natively at
+    788 B br/document; the interactive direction is proven end-to-end by the acceptance spec
+    (typed-link-navigation fixture in real Chromium under the real Trusted Types CSP: parts
+    response 500 B identity / 263 B br, realm survives).
   - Residual (pre-existing, orthogonal to D2): the live page's CSP `style-src` hash list is
     computed from the CURRENT document, so `style=""` attributes morphing in from the target
     document are not covered by an already-sent CSP header; unchanged from the old design.
