@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import {
   captureKovoDevRunnerBootstrapAuthority,
   type KovoDevRunnerGenerationBroker,
+  type KovoDevRunnerGenerationObserver,
   type KovoDevRunnerModuleServer,
 } from './dev-runner-generation.js';
 
@@ -23,7 +24,7 @@ function deferred<T>(): Deferred<T> {
   return { promise, resolve };
 }
 
-function runnerFixture() {
+function runnerFixture(observer?: KovoDevRunnerGenerationObserver) {
   const closed: string[] = [];
   const origins: string[] = [];
   let failValidation = false;
@@ -31,6 +32,8 @@ function runnerFixture() {
   let failCloseFor: string | undefined;
   let poisonImportOnNextCall = false;
   let source = 'initial';
+  let validationGate: Promise<void> | undefined;
+  let validations = 0;
 
   class FakeModuleGraph {
     invalidations = 0;
@@ -85,7 +88,7 @@ function runnerFixture() {
   const bootstrapServer = { environments: { ssr: bootstrapEnvironment } };
   const liveServer = { environments: { ssr: liveEnvironment } };
   const authority = captureKovoDevRunnerBootstrapAuthority(viteModule, bootstrapServer);
-  const broker = authority.createBroker();
+  const broker = authority.createBroker(observer);
   const hooks = {
     async prepare(_server: KovoDevRunnerModuleServer): Promise<(origin: string) => void> {
       return (origin: string) => {
@@ -93,6 +96,8 @@ function runnerFixture() {
       };
     },
     async validate(server: KovoDevRunnerModuleServer): Promise<void> {
+      validations += 1;
+      if (validationGate !== undefined) await validationGate;
       await server.ssrLoadModule('/security-bootstrap');
       await server.ssrLoadModule('/server-root');
       await server.ssrLoadModule('/app');
@@ -126,9 +131,15 @@ function runnerFixture() {
     restoreRunnerImport(): void {
       FakeRunner.prototype.import = authenticRunnerImport;
     },
+    gateValidation(promise: Promise<void> | undefined): void {
+      validationGate = promise;
+    },
     setSource(next: string): void {
       source = next;
       liveEnvironment.source = next;
+    },
+    validationCount(): number {
+      return validations;
     },
     viteModule,
   };
@@ -471,5 +482,123 @@ describe('Kovo dev runner generations (SPEC §6.2.1 / §6.6 rule 6)', () => {
       await bootstrapServer.close();
       rmSync(root, { force: true, recursive: true });
     }
+  });
+});
+
+describe('dev-loop generation observability (plans/good-perf.md O6)', () => {
+  function recordingObserver(intervalMs?: number) {
+    const events: {
+      kind: 'failed' | 'pending' | 'staged';
+      report: Record<string, unknown>;
+    }[] = [];
+    const observer: KovoDevRunnerGenerationObserver = {
+      staged(report) {
+        events.push({ kind: 'staged', report: { ...report } });
+      },
+      stageFailed(report) {
+        events.push({ kind: 'failed', report: { ...report } });
+      },
+      stagePending(report) {
+        events.push({ kind: 'pending', report: { ...report } });
+      },
+      ...(intervalMs === undefined ? {} : { stagePendingIntervalMs: intervalMs }),
+    };
+    return { events, observer };
+  }
+
+  it('reports one staged completion per successful edit', async () => {
+    const { events, observer } = recordingObserver();
+    const fixture = runnerFixture(observer);
+    await startBroker(fixture.broker, fixture.configure);
+
+    fixture.setSource('second');
+    await fixture.broker.stage({});
+    await Promise.resolve();
+
+    const staged = events.filter((event) => event.kind === 'staged');
+    expect(staged).toHaveLength(1);
+    expect(staged[0]!.report).toMatchObject({ revision: 1, superseded: false });
+    expect(staged[0]!.report.durationMs).toBeGreaterThanOrEqual(0);
+    expect(events.filter((event) => event.kind === 'failed')).toHaveLength(0);
+    await fixture.broker.close();
+  });
+
+  it('reports a stage failure exactly once while the previous build stays active', async () => {
+    const { events, observer } = recordingObserver();
+    const fixture = runnerFixture(observer);
+    await startBroker(fixture.broker, fixture.configure);
+
+    fixture.setSource('broken');
+    fixture.fail('deliberately broken edit');
+    await expect(fixture.broker.stage({})).rejects.toThrow('deliberately broken edit');
+    await Promise.resolve();
+
+    const failed = events.filter((event) => event.kind === 'failed');
+    expect(failed).toHaveLength(1);
+    expect(failed[0]!.report.revision).toBe(1);
+    expect((failed[0]!.report.error as Error).message).toBe('deliberately broken edit');
+    expect(events.filter((event) => event.kind === 'staged')).toHaveLength(0);
+
+    await expect(
+      fixture.broker.withLease((server) => server.ssrLoadModule('/app')),
+    ).resolves.toMatchObject({ snapshot: 'initial' });
+    await fixture.broker.close();
+  });
+
+  it('reports progress while a staged edit is still being proven', async () => {
+    const { events, observer } = recordingObserver(25);
+    const fixture = runnerFixture(observer);
+    await startBroker(fixture.broker, fixture.configure);
+
+    const gate = deferred<void>();
+    fixture.gateValidation(gate.promise);
+    fixture.setSource('slow');
+    const staging = fixture.broker.stage({});
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    gate.resolve();
+    fixture.gateValidation(undefined);
+    await staging;
+    await Promise.resolve();
+
+    const pending = events.filter((event) => event.kind === 'pending');
+    expect(pending.length).toBeGreaterThanOrEqual(1);
+    expect(pending[0]!.report.revision).toBe(1);
+    expect(pending[0]!.report.pendingMs).toBeGreaterThanOrEqual(25);
+    expect(events.filter((event) => event.kind === 'staged')).toHaveLength(1);
+    await fixture.broker.close();
+  });
+
+  it('skips validating a superseded backlog revision and swaps only the newest edit', async () => {
+    const { events, observer } = recordingObserver();
+    const fixture = runnerFixture(observer);
+    await startBroker(fixture.broker, fixture.configure);
+    const initialValidations = fixture.validationCount();
+
+    const gate = deferred<void>();
+    fixture.gateValidation(gate.promise);
+    fixture.setSource('edit-1');
+    const first = fixture.broker.stage({});
+    // Let revision 1 begin validating before the next edits arrive.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fixture.setSource('edit-2');
+    const second = fixture.broker.stage({});
+    fixture.setSource('edit-3');
+    const third = fixture.broker.stage({});
+    gate.resolve();
+    fixture.gateValidation(undefined);
+    await Promise.all([first, second, third]);
+    await Promise.resolve();
+
+    // Revision 1 validated (it was already running) but was superseded before its swap;
+    // revision 2 was skipped without validating; revision 3 validated and swapped.
+    expect(fixture.validationCount() - initialValidations).toBe(2);
+    await expect(
+      fixture.broker.withLease((server) => server.ssrLoadModule('/app')),
+    ).resolves.toMatchObject({ snapshot: 'edit-3' });
+
+    const staged = events.filter((event) => event.kind === 'staged');
+    expect(staged.map((event) => event.report.superseded)).toEqual([true, true, false]);
+    expect(events.filter((event) => event.kind === 'failed')).toHaveLength(0);
+    await fixture.broker.close();
   });
 });

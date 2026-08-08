@@ -1,10 +1,13 @@
 /* oxlint-disable typescript/unbound-method -- Boot-captured controls are invoked through pinned Reflect.apply. */
 
+const NativeDate = globalThis.Date;
 const NativeObject = globalThis.Object;
 const NativePromise = globalThis.Promise;
 const NativeReflect = globalThis.Reflect;
 const NativeWeakMap = globalThis.WeakMap;
 const nativeArrayPush = globalThis.Array.prototype.push;
+const nativeClearInterval = globalThis.clearInterval;
+const nativeDateNow = NativeDate.now;
 const nativeObjectFreeze = NativeObject.freeze;
 const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
 const nativeObjectGetPrototypeOf = NativeObject.getPrototypeOf;
@@ -14,8 +17,12 @@ const nativePromiseResolve = NativePromise.resolve.bind(NativePromise);
 const nativePromiseThen = NativePromise.prototype.then;
 const nativeReflectApply = NativeReflect.apply;
 const nativeReflectGet = NativeReflect.get;
+const nativeSetInterval = globalThis.setInterval;
 const nativeWeakMapGet = NativeWeakMap.prototype.get;
 const nativeWeakMapSet = NativeWeakMap.prototype.set;
+
+/** plans/good-perf.md O6: how long a staged edit may pend before the dev loop reports a stall. */
+const STAGE_PENDING_REPORT_INTERVAL_MS = 10_000;
 
 interface ViteRunner {
   clearCache(): void;
@@ -59,7 +66,36 @@ interface GetterWitness {
  * @internal Supported `kovo dev` trust root (SPEC §6.6 rule 6).
  */
 export interface KovoDevRunnerBootstrapAuthority {
-  readonly createBroker: () => KovoDevRunnerGenerationBroker;
+  readonly createBroker: (
+    observer?: KovoDevRunnerGenerationObserver,
+  ) => KovoDevRunnerGenerationBroker;
+}
+
+/**
+ * Dev-loop observability for staged runner generations (plans/good-perf.md O6): every edit-driven
+ * generation swap must report progress, completion, and failure instead of failing silently while
+ * the browser keeps being served the previous build.
+ *
+ * @internal Callbacks are framework-owned (`kovo dev`), snapshot at broker creation, and must not
+ * throw; a throwing observer is a host bug and is deliberately not shielded.
+ */
+export interface KovoDevRunnerGenerationObserver {
+  /** A staged edit finished; `superseded` means a newer staged edit owns the final swap. */
+  staged(report: {
+    readonly durationMs: number;
+    readonly revision: number;
+    readonly superseded: boolean;
+  }): void;
+  /** A staged edit failed validation. The previous generation stays active. */
+  stageFailed(report: {
+    readonly durationMs: number;
+    readonly error: unknown;
+    readonly revision: number;
+  }): void;
+  /** A staged edit is still pending after each progress interval; repeats until it settles. */
+  stagePending(report: { readonly pendingMs: number; readonly revision: number }): void;
+  /** Test seam: progress-report interval override (25..60000 ms). Production uses the default. */
+  readonly stagePendingIntervalMs?: number;
 }
 
 /** @internal Runner-local module carrier; never accepts Vite's compatibility `ssrLoadModule`. */
@@ -141,29 +177,96 @@ export function captureKovoDevRunnerBootstrapAuthority(
     'Vite EnvironmentModuleGraph.invalidateAll',
   );
 
-  const createBroker = (): KovoDevRunnerGenerationBroker =>
-    createKovoDevRunnerGenerationBroker({
-      createServerModuleRunner,
-      moduleGraphInvalidateAll,
-      runnerClearCache,
-      runnerClose,
-      runnerGetter,
-      runnerImport,
-      viteModule: viteModule as ViteRunnerModule,
-    });
+  const createBroker = (
+    observer?: KovoDevRunnerGenerationObserver,
+  ): KovoDevRunnerGenerationBroker =>
+    createKovoDevRunnerGenerationBroker(
+      {
+        createServerModuleRunner,
+        moduleGraphInvalidateAll,
+        runnerClearCache,
+        runnerClose,
+        runnerGetter,
+        runnerImport,
+        viteModule: viteModule as ViteRunnerModule,
+      },
+      snapshotRunnerGenerationObserver(observer),
+    );
 
   return nativeObjectFreeze({ createBroker });
 }
 
-function createKovoDevRunnerGenerationBroker(authority: {
-  readonly createServerModuleRunner: ViteRunnerFactory;
-  readonly moduleGraphInvalidateAll: MethodWitness;
-  readonly runnerClearCache: MethodWitness;
-  readonly runnerClose: MethodWitness;
-  readonly runnerGetter: GetterWitness;
-  readonly runnerImport: MethodWitness;
-  readonly viteModule: ViteRunnerModule;
-}): KovoDevRunnerGenerationBroker {
+interface SnapshotRunnerGenerationObserver {
+  staged(report: Parameters<KovoDevRunnerGenerationObserver['staged']>[0]): void;
+  stageFailed(report: Parameters<KovoDevRunnerGenerationObserver['stageFailed']>[0]): void;
+  stagePending(report: Parameters<KovoDevRunnerGenerationObserver['stagePending']>[0]): void;
+  readonly stagePendingIntervalMs: number;
+}
+
+function snapshotRunnerGenerationObserver(
+  observer: KovoDevRunnerGenerationObserver | undefined,
+): SnapshotRunnerGenerationObserver | undefined {
+  if (observer === undefined) return undefined;
+  if (typeof observer !== 'object' || observer === null) {
+    throw new TypeError('Kovo dev runner generation observer must be an object.');
+  }
+  const staged = ownDataFunction(observer, 'staged', 'Kovo dev runner generation observer.staged');
+  const stageFailed = ownDataFunction(
+    observer,
+    'stageFailed',
+    'Kovo dev runner generation observer.stageFailed',
+  );
+  const stagePending = ownDataFunction(
+    observer,
+    'stagePending',
+    'Kovo dev runner generation observer.stagePending',
+  );
+  const intervalDescriptor = nativeObjectGetOwnPropertyDescriptor(
+    observer,
+    'stagePendingIntervalMs',
+  );
+  let stagePendingIntervalMs = STAGE_PENDING_REPORT_INTERVAL_MS;
+  if (intervalDescriptor !== undefined && intervalDescriptor.value !== undefined) {
+    const value = intervalDescriptor.value as unknown;
+    if (
+      !('value' in intervalDescriptor) ||
+      typeof value !== 'number' ||
+      !Number.isSafeInteger(value) ||
+      value < 25 ||
+      value > 60_000
+    ) {
+      throw new TypeError(
+        'Kovo dev runner generation observer.stagePendingIntervalMs must be 25..60000.',
+      );
+    }
+    stagePendingIntervalMs = value;
+  }
+  return nativeObjectFreeze({
+    staged(report: Parameters<KovoDevRunnerGenerationObserver['staged']>[0]): void {
+      nativeReflectApply(staged, observer, [nativeObjectFreeze(report)]);
+    },
+    stageFailed(report: Parameters<KovoDevRunnerGenerationObserver['stageFailed']>[0]): void {
+      nativeReflectApply(stageFailed, observer, [nativeObjectFreeze(report)]);
+    },
+    stagePending(report: Parameters<KovoDevRunnerGenerationObserver['stagePending']>[0]): void {
+      nativeReflectApply(stagePending, observer, [nativeObjectFreeze(report)]);
+    },
+    stagePendingIntervalMs,
+  });
+}
+
+function createKovoDevRunnerGenerationBroker(
+  authority: {
+    readonly createServerModuleRunner: ViteRunnerFactory;
+    readonly moduleGraphInvalidateAll: MethodWitness;
+    readonly runnerClearCache: MethodWitness;
+    readonly runnerClose: MethodWitness;
+    readonly runnerGetter: GetterWitness;
+    readonly runnerImport: MethodWitness;
+    readonly viteModule: ViteRunnerModule;
+  },
+  observer?: SnapshotRunnerGenerationObserver,
+): KovoDevRunnerGenerationBroker {
   let active: RunnerGeneration | undefined;
   let closed = false;
   let configured = false;
@@ -428,9 +531,35 @@ function createKovoDevRunnerGenerationBroker(authority: {
     }
     requestedRevision += 1;
     const revision = requestedRevision;
+    const requestedAt = nativeReflectApply(nativeDateNow, NativeDate, []) as number;
+    let superseded = false;
+    // plans/good-perf.md O6: a silently pending or silently failing staged edit left the dev
+    // server serving stale HTML with no feedback at all. The watchdog covers queue wait plus
+    // validation; the settle report covers success, supersession, and failure exactly once.
+    const watchdog =
+      observer === undefined
+        ? undefined
+        : nativeSetInterval(() => {
+            observer.stagePending({
+              pendingMs:
+                (nativeReflectApply(nativeDateNow, NativeDate, []) as number) - requestedAt,
+              revision,
+            });
+          }, observer.stagePendingIntervalMs);
+    (watchdog as { unref?: () => void } | undefined)?.unref?.();
+    const settleDuration = (): number =>
+      (nativeReflectApply(nativeDateNow, NativeDate, []) as number) - requestedAt;
     const run = async (): Promise<void> => {
       await activateInitial();
       if (closed) throw new Error('Kovo dev runner generation broker is closed.');
+      if (revision !== requestedRevision) {
+        // A newer staged edit was requested while this one waited in the queue. Validation reads
+        // the live current sources, so the newest revision proves the exact same bytes this one
+        // would have proven; skipping avoids serially re-validating an obsolete backlog while
+        // requests starve (plans/good-perf.md O6).
+        superseded = true;
+        return;
+      }
       // Vite invalidates the shared transform graph before invoking handleHotUpdate. Repeating a
       // global invalidation here would widen the race for a draining old runner that performs a
       // late dynamic import. Exact graph identity is still attested at configure/stage boundaries;
@@ -443,18 +572,37 @@ function createKovoDevRunnerGenerationBroker(authority: {
         // evaluation boundary and before the single active-pointer swap.
         assertGenerationCurrent(generation);
         if (closed || revision !== requestedRevision) {
+          superseded = true;
           await closeGeneration(generation);
           return;
         }
         swapGeneration(generation);
       } catch (cause) {
         await closeGeneration(generation);
-        if (closed || revision !== requestedRevision) return;
+        if (closed || revision !== requestedRevision) {
+          superseded = true;
+          return;
+        }
         throw cause;
       }
     };
     const pending = nativeReflectApply(nativePromiseThen, stageTail, [run, run]) as Promise<void>;
     stageTail = nativeReflectApply(nativePromiseCatch, pending, [() => undefined]) as Promise<void>;
+    if (observer !== undefined) {
+      const observed = nativeReflectApply(nativePromiseThen, pending, [
+        () => {
+          if (watchdog !== undefined) nativeClearInterval(watchdog);
+          observer.staged({ durationMs: settleDuration(), revision, superseded });
+        },
+        (cause: unknown) => {
+          if (watchdog !== undefined) nativeClearInterval(watchdog);
+          // Shutdown rejects pending stages by design; that is not an edit failure.
+          if (closed) return;
+          observer.stageFailed({ durationMs: settleDuration(), error: cause, revision });
+        },
+      ]) as Promise<void>;
+      void nativeReflectApply(nativePromiseCatch, observed, [() => undefined]);
+    }
     if (token !== undefined) nativeReflectApply(nativeWeakMapSet, stagesByToken, [token, pending]);
     return pending;
   };

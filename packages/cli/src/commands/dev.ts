@@ -43,7 +43,9 @@ import {
 import {
   captureKovoDevRunnerBootstrapAuthority,
   type KovoDevRunnerGenerationBroker,
+  type KovoDevRunnerGenerationObserver,
 } from './dev-runner-generation.js';
+import { superviseKovoCliSessionParent } from './process-supervision.js';
 import {
   createKovoDevtoolPlugin,
   inspectKovoDevDatabasePosture,
@@ -170,12 +172,13 @@ export async function startKovoDevServer(
 
   let liveServer: ViteDevServer | undefined;
   let runnerGenerations: KovoDevRunnerGenerationBroker | undefined;
+  const devLoopMonitor = createKovoDevLoopMonitor(() => liveServer);
   try {
     // SPEC §6.6 rule 6: Vite's authority is first observed through this config-free bootstrap
     // server. Authored config has not been imported and therefore cannot forge these identities.
     const runnerAuthority = captureKovoDevRunnerBootstrapAuthority(viteModule, bootstrapServer);
     const profile = await preloadDevSecurityProfile(bootstrapServer, options.appModulePath, root);
-    runnerGenerations = runnerAuthority.createBroker();
+    runnerGenerations = runnerAuthority.createBroker(devLoopMonitor.observer);
     // Construct and freeze the framework plugin before authored config/plugin evaluation. Authored
     // hooks may mutate their own config, but cannot replace the proof plugin or its hook table.
     const createdPlugin = profile.trustedKovoVitePlugin({
@@ -225,6 +228,11 @@ export async function startKovoDevServer(
     liveServer = await createServer(liveConfig);
     const activeLiveServer = liveServer;
     lockLiveDevEnvironmentPluginLists(liveServer.config);
+    // plans/good-perf.md O6: report an app-source change that never converges into a new
+    // generation. The watcher is Vite's own; this is an observability tap, not a control path.
+    liveServer.watcher?.on('change', (changedFile: string) => {
+      devLoopMonitor.sourceChanged(changedFile, root);
+    });
     await runnerGenerations.prepareInitial();
     const liveHttpServer = liveServer.httpServer;
     if (liveHttpServer === null) {
@@ -277,10 +285,19 @@ export async function startKovoDevServer(
       root,
     });
 
+    // plans/good-perf.md O6: a dev server whose invoking parent died must shut itself down
+    // instead of running orphaned under launchd/init and burning CPU on a dead session.
+    const supervision = superviseKovoCliSessionParent({
+      onOrphaned: (message) => {
+        process.stderr.write(message);
+      },
+    });
     let closed = false;
     const close = async (): Promise<void> => {
       if (closed) return;
       closed = true;
+      supervision.close();
+      devLoopMonitor.close();
       process.removeListener('SIGINT', onSignal);
       process.removeListener('SIGTERM', onSignal);
       try {
@@ -298,6 +315,13 @@ export async function startKovoDevServer(
     };
     process.once('SIGINT', onSignal);
     process.once('SIGTERM', onSignal);
+    supervision.signal.addEventListener(
+      'abort',
+      () => {
+        void close();
+      },
+      { once: true },
+    );
     liveServer.httpServer?.once('close', () => {
       if (!closed) void close();
     });
@@ -400,6 +424,116 @@ function formatKovoDevReadyReport(options: KovoDevReadyReportOptions): string {
 }
 
 const DEVTOOL_READY_PATH = '__kovo';
+
+interface KovoDevLoopMonitor {
+  close(): void;
+  readonly observer: KovoDevRunnerGenerationObserver;
+  sourceChanged(file: string, root: string): void;
+}
+
+const DEV_CHANGE_STALL_REPORT_INTERVAL_MS = 10_000;
+const DEV_SOURCE_CHANGE_PATTERN = /\.(?:[cm]?[jt]sx?|css)$/u;
+
+/**
+ * plans/good-perf.md O6: the dev loop must never go silent. Every staged edit reports progress
+ * (still proving after N seconds), completion (active in N ms), and failure (terminal line plus
+ * the Vite error overlay) — a broken or stalled edit was previously indistinguishable from a
+ * working one because the browser kept being served the previous build with zero feedback.
+ * The watcher-side stall report covers the window BEFORE a candidate generation is even staged
+ * (whole-project analysis inside hot-update hooks), which is where a realistic app spends most
+ * of its edit latency.
+ */
+function createKovoDevLoopMonitor(
+  liveServer: () => ViteDevServer | undefined,
+): KovoDevLoopMonitor {
+  let overlayShownForRevision: number | undefined;
+  let pendingChange: { at: number; file: string } | undefined;
+  let pendingChangeReports = 0;
+  let stallTimer: ReturnType<typeof setInterval> | undefined;
+  const write = (line: string): void => {
+    process.stderr.write(line);
+  };
+  const settlePendingChange = (): void => {
+    pendingChange = undefined;
+    pendingChangeReports = 0;
+    if (stallTimer !== undefined) {
+      clearInterval(stallTimer);
+      stallTimer = undefined;
+    }
+  };
+  const observer: KovoDevRunnerGenerationObserver = {
+    staged({ durationMs, revision, superseded }) {
+      if (superseded) return;
+      settlePendingChange();
+      write(
+        `[kovo dev] edit #${revision} active after ${nativeApply<number>(nativeMathRound, NativeMath, [durationMs])}ms\n`,
+      );
+      if (overlayShownForRevision !== undefined) {
+        overlayShownForRevision = undefined;
+        // Clear a previous save's error overlay without reloading (state-preserving updates
+        // arrive through Kovo's own HMR events; an empty update list only clears the overlay).
+        liveServer()?.ws?.send({ type: 'update', updates: [] });
+      }
+    },
+    stageFailed({ durationMs, error, revision }) {
+      settlePendingChange();
+      const message = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error && typeof error.stack === 'string' ? error.stack : '';
+      write(
+        `[kovo dev] edit #${revision} failed after ${nativeApply<number>(nativeMathRound, NativeMath, [durationMs])}ms: ${message}\n` +
+          `[kovo dev] the previous build remains active; fix the error and save again.\n`,
+      );
+      overlayShownForRevision = revision;
+      liveServer()?.ws?.send({ err: { message, stack }, type: 'error' });
+    },
+    stagePending({ pendingMs, revision }) {
+      const seconds = nativeApply<number>(nativeMathRound, NativeMath, [pendingMs / 1000]);
+      write(
+        `[kovo dev] edit #${revision} is still being proven after ${seconds}s; ` +
+          'the browser keeps the previous build until it lands.\n',
+      );
+    },
+  };
+  return {
+    close: settlePendingChange,
+    observer: nativeObjectFreeze(observer),
+    sourceChanged(file, root) {
+      if (!DEV_SOURCE_CHANGE_PATTERN.test(file)) return;
+      const relativePath = relative(root, file);
+      if (
+        relativePath === '' ||
+        relativePath.startsWith('..') ||
+        isAbsolute(relativePath) ||
+        nativeApply<boolean>(nativeStringIncludes, relativePath, ['node_modules'])
+      ) {
+        return;
+      }
+      pendingChange = { at: Date.now(), file: relativePath };
+      pendingChangeReports = 0;
+      // One stall reporter per latest change; the broker's own stagePending takes over once a
+      // candidate generation exists. This covers "the edit never even reached staging".
+      stallTimer ??= setInterval(() => {
+        if (pendingChange === undefined) return;
+        // Bound the noise for a change that legitimately produces no generation (for example a
+        // module outside the app graph) while staying impossible to miss for a real stall.
+        if (pendingChangeReports >= 30) {
+          settlePendingChange();
+          return;
+        }
+        pendingChangeReports += 1;
+        const seconds = nativeApply<number>(nativeMathRound, NativeMath, [
+          (Date.now() - pendingChange.at) / 1000,
+        ]);
+        write(
+          `[kovo dev] change to ${pendingChange.file} has not produced a new app generation ` +
+            `after ${seconds}s; the dev server is still analyzing and the browser keeps the ` +
+            'previous build.\n',
+        );
+      }, DEV_CHANGE_STALL_REPORT_INTERVAL_MS);
+      (stallTimer as { unref?: () => void }).unref?.();
+    },
+  };
+}
 
 function boundDevServerOrigin(server: ViteDevServer): string {
   const address = server.httpServer?.address();

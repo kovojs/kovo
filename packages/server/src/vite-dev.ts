@@ -1389,9 +1389,16 @@ export function kovoAppShellViteDevPlugin(
     async handleHotUpdate(context) {
       const sourceFile = viteDevSourceFileName(context.file, root);
       if (sourceFile !== viteDevSourceFileName(moduleId, '')) return undefined;
-      // The same context token is also presented by the compiler plugin. The broker deduplicates
-      // the stage so route-shell events follow exactly one successful atomic generation swap.
-      await stageRunnerGeneration?.(context);
+      try {
+        // The same context token is also presented by the compiler plugin. The broker deduplicates
+        // the stage so route-shell events follow exactly one successful atomic generation swap.
+        await stageRunnerGeneration?.(context);
+      } catch {
+        // plans/good-perf.md O6: a failed candidate generation keeps the previous build active
+        // (SPEC §6.2.1). The CLI's generation observer owns terminal and overlay reporting;
+        // forcing a reload here would only destroy client state to re-render the stale build.
+        return [];
+      }
       context.server.ws?.send({
         data: {
           impact: 'routeRefresh',
