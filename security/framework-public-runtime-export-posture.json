@@ -1,5 +1,5 @@
 {
-  "$comment": "Reviewer-authored closed membership for every manifest-public first-party runtime export and module initializer. New packages, subpaths, value exports, condition arms, or manifest targets fail the gate until explicitly classified. SPEC.md §6.6.",
+  "$comment": "Reviewer-authored closed membership for every manifest-public first-party runtime export and module initializer. New packages, subpaths, value exports, condition arms, or manifest targets fail the gate until explicitly classified. SPEC.md \u00a76.6.",
   "schema": "kovo-framework-public-runtime-export-posture/v1",
   "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-29.1",
   "emptyPublicPackages": [
@@ -1076,7 +1076,7 @@
             ]
           },
           "review": {
-            "basis": "SPEC §6.6 makes policy construction and all three declassification doors L1 capabilities. Any import reachable from an untrusted root closes before a runtime reveal can be attempted.",
+            "basis": "SPEC \u00a76.6 makes policy construction and all three declassification doors L1 capabilities. Any import reachable from an untrusted root closes before a runtime reveal can be attempted.",
             "evidence": [
               "packages/core/src/security.ts",
               "packages/core/src/secret.ts",
@@ -1086,7 +1086,7 @@
           },
           "rootKind": "none",
           "securityRole": "request-closed",
-          "reason": "Declassification policy construction and reveal doors are unavailable to every untrusted-data-reachable module (SPEC §6.6)."
+          "reason": "Declassification policy construction and reveal doors are unavailable to every untrusted-data-reachable module (SPEC \u00a76.6)."
         },
         {
           "capabilities": [],
@@ -17299,7 +17299,7 @@
             ]
           },
           "review": {
-            "basis": "erasePrincipal is the fixed SPEC §10.3 erasure door over an exact managed Postgres runtime, a fixed-purpose signing key ring, and every supplied enumerable storage adapter. It exposes no raw SQL, storage enumeration, network, filesystem, digest, or signing primitive.",
+            "basis": "erasePrincipal is the fixed SPEC \u00a710.3 erasure door over an exact managed Postgres runtime, a fixed-purpose signing key ring, and every supplied enumerable storage adapter. It exposes no raw SQL, storage enumeration, network, filesystem, digest, or signing primitive.",
             "evidence": [
               "packages/server/src/index.ts",
               "packages/server/src/principal-erasure.ts",
@@ -17376,7 +17376,7 @@
           "reason": "derived binds a reviewed adapter to the current request principal through the canonical ScopedKey containment door."
         }
       ],
-      "sourceTreeSha256": "42815a91236694190a56f2ab2e64c5470e13c4d510a1abaeeab01e29d32119da"
+      "sourceTreeSha256": "cf28a54f9112af30a2286efcfee531dc693e56c2529fbc02e3e20e72e248651c"
     },
     {
       "manifestVariants": [
@@ -17876,7 +17876,7 @@
           },
           "reason": "CSRF token minting here is explicit test-process setup authority and is not a request-handler capability door.",
           "review": {
-            "basis": "The focused test helper reaches Kovo’s purpose-closed CSRF signing path only to prepare synthetic mutation submissions; both module evaluation and the named helper remain request-closed.",
+            "basis": "The focused test helper reaches Kovo\u2019s purpose-closed CSRF signing path only to prepare synthetic mutation submissions; both module evaluation and the named helper remain request-closed.",
             "evidence": [
               "packages/server/src/csrf.ts",
               "packages/server/src/internal/csrf.ts",
@@ -17912,7 +17912,7 @@
           },
           "reason": "Ephemeral Postgres construction is explicit test-process setup authority and is not a request-handler capability door.",
           "review": {
-            "basis": "The Postgres test helper owns an ephemeral PGlite data directory and exercises Kovo’s real database posture only from the test process; the former public server/testing door has been removed.",
+            "basis": "The Postgres test helper owns an ephemeral PGlite data directory and exercises Kovo\u2019s real database posture only from the test process; the former public server/testing door has been removed.",
             "evidence": [
               "packages/server/src/internal/testing.ts",
               "packages/server/src/postgres-runtime.ts",
