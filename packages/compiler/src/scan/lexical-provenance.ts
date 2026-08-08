@@ -50,6 +50,8 @@ interface AnalysisState {
   readonly activeInvocations: Set<string>;
   readonly accessors: Map<string, string>;
   budgetExhausted: boolean;
+  /** Per-module effect-site cap: scales with syntax size, clamped to a hostile-input ceiling. */
+  readonly effectSiteBudget: number;
   readonly callables: Map<
     string,
     { readonly node: TS.FunctionLikeDeclaration; readonly parent: Scope }
@@ -64,7 +66,17 @@ const abstractWorkBudget = 16_384;
 // Effect history protects mutable bindings from opaque calls. Keep the history finite and
 // fail-closed, but leave enough room for an ordinary database-backed handler or composed TSX view.
 // Candidate joins remain capped much more tightly below because they multiply provenance states.
-const effectSiteBudget = 128;
+//
+// The budget scales with the module's own syntax size (plans/good-perf.md O7): every recorded
+// effect site names one concrete syntax node, so a legitimate module that simply grows — e.g. a
+// flat entry rendering N imported components, where every module-scope JSX element is one opaque
+// call site — records O(N) distinct sites and must never become unbuildable purely by growing.
+// A fixed 128-site cap refused exactly that at N > 128 (KV448 via `budgetExhausted`). The scaled
+// budget changes no analysis semantics: exhaustion still fails closed, and completion still yields
+// the same exact verdicts — the cap only bounds analyzer time/memory, so the ceiling keeps hostile
+// single-module input from turning the per-record set copy into an unbounded quadratic.
+const effectSiteBudgetFloor = 128;
+const effectSiteBudgetCeiling = 4_096;
 const loopReanalysisBudget = 16;
 const unmodeledEffectsKey = '\0kovo:unmodeled-effects';
 const valueCandidateBudget = 32;
@@ -186,6 +198,7 @@ export function scanLexicalProvenance(
     activeInvocations: new Set(),
     accessors: new Map(),
     budgetExhausted: false,
+    effectSiteBudget: moduleEffectSiteBudget(sourceFile),
     callables: new Map(),
     calls: new Map(),
     history: new Map(),
@@ -1441,6 +1454,16 @@ function projectValue(value: Value, member: string): Value {
   };
 }
 
+// Per-array memo so repeated joins over the same (immutable) effect-site list build one Set.
+const effectSiteSets = new WeakMap<readonly string[], ReadonlySet<string>>();
+function effectSiteSetFor(value: Value): ReadonlySet<string> {
+  const cached = effectSiteSets.get(value.effectSites);
+  if (cached !== undefined) return cached;
+  const set = new Set(value.effectSites);
+  effectSiteSets.set(value.effectSites, set);
+  return set;
+}
+
 function joinValues(state: AnalysisState, ...values: Value[]): Value {
   const callables = new Set<string>();
   const candidates = new Map<string, ScannedBindingCandidate>();
@@ -1479,12 +1502,17 @@ function joinValues(state: AnalysisState, ...values: Value[]): Value {
     captured: [...captured],
     containsRoot: values.some((value) => value.containsRoot),
     effectsModeled: values.every((value) => value.effectsModeled),
+    // Set-based intersection keeps this linear in total sites; with the size-scaled effect-site
+    // budget an array-includes scan would be quadratic per join on large modules.
     effectSites:
       values.length === 0
         ? []
-        : values[0]!.effectSites.filter((site) =>
-            values.slice(1).every((value) => value.effectSites.includes(site)),
-          ),
+        : values[0]!.effectSites.filter((site) => {
+            for (let index = 1; index < values.length; index += 1) {
+              if (!effectSiteSetFor(values[index]!).has(site)) return false;
+            }
+            return true;
+          }),
     rootWideningRequired: overflow || values.some((value) => value.rootWideningRequired),
     uncertain:
       overflow ||
@@ -1727,8 +1755,9 @@ function withCurrentEffects(value: Value, env: Environment): Value {
 }
 
 function hasUnseenEffects(value: Value, env: Environment, owner: string): boolean {
+  const seen = effectSiteSetFor(value);
   return currentEffectSites(env).some(
-    (effect) => effect.startsWith(`${owner}\u0001`) && !value.effectSites.includes(effect),
+    (effect) => effect.startsWith(`${owner}\u0001`) && !seen.has(effect),
   );
 }
 
@@ -1744,7 +1773,7 @@ function markUnmodeledEffects(
       effectSites.add(`${current.owner}\u0001${site}`);
     }
   }
-  if (effectSites.size > effectSiteBudget) {
+  if (effectSites.size > state.effectSiteBudget) {
     state.budgetExhausted = true;
     return env;
   }
@@ -1765,8 +1794,8 @@ function joinEnvironments(
     if (key === unmodeledEffectsKey) {
       const prior = result.get(key);
       const effectSites = [...new Set([...(prior?.effectSites ?? []), ...value.effectSites])];
-      if (effectSites.length > effectSiteBudget) state.budgetExhausted = true;
-      result.set(key, { ...value, effectSites: effectSites.slice(0, effectSiteBudget) });
+      if (effectSites.length > state.effectSiteBudget) state.budgetExhausted = true;
+      result.set(key, { ...value, effectSites: effectSites.slice(0, state.effectSiteBudget) });
       continue;
     }
     result.set(key, result.has(key) ? joinValues(state, result.get(key)!, value) : value);
@@ -1823,6 +1852,24 @@ function consumeAbstractWork(state: AnalysisState): boolean {
   }
   state.abstractWorkRemaining -= 1;
   return true;
+}
+
+/**
+ * Effect-site cap for one module: proportional to the module's own syntax-node count, clamped to
+ * [floor, ceiling]. Distinct effect sites name distinct syntax nodes (times a small scope-chain
+ * factor), so a linear module records linearly many sites and stays inside a linear budget; the
+ * ceiling keeps the per-record set copy bounded on adversarial single-module input. Counting stops
+ * at the ceiling, so the counter itself is O(ceiling) (plans/good-perf.md O7).
+ */
+function moduleEffectSiteBudget(sourceFile: TS.SourceFile): number {
+  let count = 0;
+  const visit = (node: TS.Node): void => {
+    if (count >= effectSiteBudgetCeiling) return;
+    count += 1;
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return count < effectSiteBudgetFloor ? effectSiteBudgetFloor : count;
 }
 
 export function lexicalCallKey(node: TS.Node, sourceFile: TS.SourceFile): string {
