@@ -4216,6 +4216,103 @@ export const homeQuery = {
     }
   });
 
+  // plans/good-perf.md DevEx defect (KV417 loop): --preset previously kept only the preset NAME
+  // and silently discarded the config file's configured instance, so the node({ retention })
+  // proof KV417 instructs the author to write could never satisfy a `--preset node` build.
+  it('keeps configured preset options when --preset names the same preset', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-config-flag-agree-'));
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeFileSync(join(root, 'app.mjs'), dynamicAppModuleSource(), 'utf8');
+      writeClientEntry(root);
+      writeFileSync(
+        join(root, 'kovo.config.ts'),
+        [
+          "import { defineConfig, node } from '@kovojs/server/build';",
+          'export default defineConfig({',
+          '  preset: node({',
+          '    dockerfile: false,',
+          '    retention: {',
+          '      hours: 24,',
+          "      immutableClientModules: 'retained',",
+          "      priorTokenQueryReads: 'retained',",
+          '    },',
+          '  }),',
+          '});',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', './app.mjs', '--out', './dist', '--preset', 'node', '--check']),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      // Without the configured retention proof this build fails KV417; exit 0 proves the flag
+      // reused the configured node({ retention }) instance instead of a bare default.
+      expect(exitCode, errorOutput).toBe(0);
+      expect(errorOutput).not.toContain('KV417');
+      expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
+        'CHECK ok preset=node',
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('refuses a --preset that contradicts the configured preset', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-config-flag-conflict-'));
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeFileSync(join(root, 'app.mjs'), dynamicAppModuleSource(), 'utf8');
+      writeClientEntry(root);
+      writeFileSync(
+        join(root, 'kovo.config.ts'),
+        [
+          "import { defineConfig, node } from '@kovojs/server/build';",
+          'export default defineConfig({',
+          '  preset: node({',
+          '    dockerfile: false,',
+          '    retention: {',
+          '      hours: 24,',
+          "      immutableClientModules: 'retained',",
+          "      priorTokenQueryReads: 'retained',",
+          '    },',
+          '  }),',
+          '});',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', './app.mjs', '--out', './dist', '--preset', 'vercel', '--check']),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode).toBe(2);
+      expect(errorOutput).toContain(
+        '--preset selects preset vercel but the kovo config file configures preset node(...)',
+      );
+      expect(errorOutput).toContain("change the config's preset or drop --preset");
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('rejects copied built-in preset tokens during config preflight', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-config-copied-preset-'));
     const outDir = join(root, 'dist');

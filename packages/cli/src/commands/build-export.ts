@@ -8213,15 +8213,23 @@ function selectedKovoBuildPreset(
   configuredPreset: KovoBuildPreset | undefined,
   invocationEnv: NodeJS.ProcessEnv,
 ): SelectedKovoBuildPreset {
-  if (options.preset !== undefined) return { name: options.preset };
-
-  const envPreset = kovoInvocationEnvironmentValue(invocationEnv, 'KOVO_PRESET');
-  if (envPreset) {
-    const parsedPreset = parseKovoBuildPresetName(envPreset);
-    if (!parsedPreset) {
-      throw new KovoCommandConfigurationError(`unsupported KOVO_PRESET ${stableValue(envPreset)}`);
-    }
-    return { name: parsedPreset };
+  const requested = requestedKovoBuildPresetName(options, invocationEnv);
+  if (requested !== undefined) {
+    if (configuredPreset === undefined) return { name: requested.name };
+    const configured = selectedConfiguredKovoBuildPreset(configuredPreset);
+    // plans/good-perf.md DevEx defect (KV417 loop): the flag/env selector previously returned only
+    // the preset NAME, silently discarding the config file's configured preset instance —
+    // including the node({ retention }) proof KV417 instructs the author to write, so following
+    // the diagnostic could never terminate. A selector that agrees with the config keeps the
+    // configured instance and its authored options; a selector that contradicts the config
+    // refuses loudly instead of silently overriding authored deployment configuration.
+    if (configured.name === requested.name) return configured;
+    throw new KovoCommandConfigurationError(
+      `${requested.source} selects preset ${requested.name} but the kovo config file configures ` +
+        `preset ${configured.name}(...). The config's preset options (for example ` +
+        `${configured.name}({ retention }) required by KV417) are authoritative and are never ` +
+        `silently discarded; change the config's preset or drop ${requested.source}.`,
+    );
   }
 
   if (configuredPreset !== undefined) return selectedConfiguredKovoBuildPreset(configuredPreset);
@@ -8234,6 +8242,22 @@ function selectedKovoBuildPreset(
     return { name: 'cloudflare' };
   }
   return { name: 'node' };
+}
+
+function requestedKovoBuildPresetName(
+  options: KovoBuildOptions,
+  invocationEnv: NodeJS.ProcessEnv,
+): { name: KovoBuildPresetName; source: string } | undefined {
+  if (options.preset !== undefined) return { name: options.preset, source: '--preset' };
+  const envPreset = kovoInvocationEnvironmentValue(invocationEnv, 'KOVO_PRESET');
+  if (envPreset) {
+    const parsedPreset = parseKovoBuildPresetName(envPreset);
+    if (!parsedPreset) {
+      throw new KovoCommandConfigurationError(`unsupported KOVO_PRESET ${stableValue(envPreset)}`);
+    }
+    return { name: parsedPreset, source: 'KOVO_PRESET' };
+  }
+  return undefined;
 }
 
 function selectedConfiguredKovoBuildPreset(preset: KovoBuildPreset): SelectedKovoBuildPreset {
