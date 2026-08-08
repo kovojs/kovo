@@ -6,7 +6,7 @@ export default defineConfig({
     manifest: true,
     rollupOptions: {
       input: {
-        styles: '../shared/styles.css',
+        styles: 'src/styles.css',
       },
     },
   },
