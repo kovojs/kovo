@@ -21,7 +21,27 @@ runs:
         version: ${{ inputs.vp-version }}
     - run: vp install --frozen-lockfile
       shell: bash
-    - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+    # The prefix fallback is deliberately RETAINED, and it is worth being precise about why, because
+    # this repo has a standing constraint that reads like it forbids it.
+    #
+    # What is retired is cross-run restore of Kovo's OWN compiler and security-fact caches
+    # (`compile-cache.ts` / `persistent-compile-cache.ts`, deleted in cab4b4b84; see
+    # plans/good-perf.md O11 "Do not re-propose"). Those stores could not authenticate their entries
+    # against same-UID authored config, so a restored entry asserted a proof nothing re-established.
+    # That constraint stands and nothing here reintroduces such a cache.
+    #
+    # A `.tsbuildinfo` is not that. It is TypeScript's own incremental state, and tsc revalidates it
+    # against the recorded compiler options and per-file version hashes before reusing anything —
+    # a buildinfo from a different tsconfig or dependency closure is discarded by tsc itself, not
+    # trusted. It also carries no Kovo security fact: `kovo check` and `kovo build` derive their
+    # proofs independently and stay fail-closed. Dropping the fallback would therefore buy no
+    # additional soundness and would cost a full cold typecheck on every lockfile bump, which is a
+    # CI wall-clock regression this slice has no measurement to justify.
+    #
+    # What WAS missing is visibility, which is the actual O17 item: a job that silently missed looked
+    # exactly like one that hit. The step below reports which of the three states occurred.
+    - id: tsbuildinfo-cache
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
       with:
         path: |
           .kovo/cache/*.tsbuildinfo
@@ -29,6 +49,46 @@ runs:
         key: kovo-tsc-${{ runner.os }}-${{ inputs.node-version }}-${{ hashFiles('**/tsconfig*.json', 'packages/*/package.json', 'pnpm-lock.yaml') }}
         restore-keys: |
           kovo-tsc-${{ runner.os }}-${{ inputs.node-version }}-
+    # Three distinguishable states, because "hit" and "prefix-hit" have very different meanings for
+    # how much work the job is about to redo, and "miss" that should have hit is a real defect that
+    # was previously invisible (plans/good-perf.md O17, "make CI cache hits visible and keyed
+    # safely"). `cache-hit` is only true for an EXACT key match; a prefix match still populates
+    # `cache-matched-key`.
+    - name: Report TypeScript incremental cache state
+      shell: bash
+      env:
+        KOVO_TSC_CACHE_HIT: ${{ steps.tsbuildinfo-cache.outputs.cache-hit }}
+        KOVO_TSC_CACHE_KEY: ${{ steps.tsbuildinfo-cache.outputs.cache-primary-key }}
+        KOVO_TSC_CACHE_MATCHED: ${{ steps.tsbuildinfo-cache.outputs.cache-matched-key }}
+      run: |
+        restored_count="$(find . -path '*/.kovo/cache/*.tsbuildinfo' -type f 2>/dev/null | wc -l | tr -d ' ')"
+        restored_bytes="$(find . -path '*/.kovo/cache/*.tsbuildinfo' -type f -exec cat {} + 2>/dev/null | wc -c | tr -d ' ')"
+        if [ "${KOVO_TSC_CACHE_HIT:-false}" = "true" ]; then
+          state="exact-hit"
+        elif [ -n "${KOVO_TSC_CACHE_MATCHED:-}" ]; then
+          state="prefix-hit"
+        else
+          state="miss"
+        fi
+        printf 'kovo-tsc cache: %s files=%s bytes=%s\n' "$state" "$restored_count" "$restored_bytes"
+        printf 'kovo-tsc cache key: %s\n' "${KOVO_TSC_CACHE_KEY:-unknown}"
+        printf 'kovo-tsc cache matched: %s\n' "${KOVO_TSC_CACHE_MATCHED:-none}"
+        if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+          {
+            printf '### kovo-tsc incremental cache\n\n'
+            printf -- '- state: `%s`\n' "$state"
+            printf -- '- restored: %s tsbuildinfo files, %s bytes\n' "$restored_count" "$restored_bytes"
+            printf -- '- key: `%s`\n' "${KOVO_TSC_CACHE_KEY:-unknown}"
+            printf -- '- matched: `%s`\n' "${KOVO_TSC_CACHE_MATCHED:-none}"
+            printf -- '\nA `prefix-hit` is a tsbuildinfo from a different tsconfig/lockfile closure; '
+            printf 'tsc revalidates it against its recorded options and file hashes and discards what no longer applies.\n'
+          } >> "$GITHUB_STEP_SUMMARY"
+        fi
+        # A restore that reports success and produces nothing means the cached paths moved. Silent
+        # before; a warning now, because the symptom is only ever "CI got slower for no reason".
+        if [ "$state" != "miss" ] && [ "$restored_count" = "0" ]; then
+          echo "::warning::kovo-tsc cache reported a $state but restored no tsbuildinfo files"
+        fi
     - if: ${{ inputs['rebuild-better-sqlite3'] == 'true' }}
       run: vp exec pnpm rebuild better-sqlite3
       shell: bash

@@ -340,6 +340,13 @@ const KOVO_FRAMEWORK_SOURCE_MAX_FILE_BYTES = 16 * 1024 * 1024;
 const KOVO_FRAMEWORK_SOURCE_MAX_TOTAL_BYTES = 256 * 1024 * 1024;
 const KOVO_DEVEX_CHECK_PHASE_CENSUS_ENV = 'KOVO_DEVEX_CHECK_PHASE_CENSUS_SOURCE';
 const KOVO_DEVEX_CHECK_PHASE_CENSUS_SCHEMA = 'kovo-check-phase-census/v1';
+// A check that refuses or throws still has to say where its time went: the slowest apps are
+// exactly the ones that fail, so dropping the census on the failure path removes the instrument
+// from the only population that needs it. The incomplete census carries a DIFFERENT schema and an
+// explicit `complete: false` so no consumer can mistake it for the authenticated success census —
+// it has no check-graph digest and no source content hash, because on this path neither has been
+// derived and claiming either would be a proof Kovo did not perform (SPEC §1.1 honesty boundary).
+const KOVO_DEVEX_CHECK_PHASE_CENSUS_INCOMPLETE_SCHEMA = 'kovo-check-phase-census-incomplete/v1';
 const KOVO_SOURCE_CHECK_PHASES = [
   'lifecycle-policy',
   'config-trust',
@@ -905,17 +912,22 @@ export async function produceKovoSourceCheckOneShotAnalysis(
   options: KovoSourceCheckOptions,
   security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
 ): Promise<KovoSourceCheckOneShotAnalysis | CliCommandResult> {
+  // Hoisted so the catch can still report where the run spent its time. A check that throws is
+  // exactly the run whose cost nobody can otherwise measure.
+  let phaseCensus: KovoSourceCheckPhaseCensus | undefined;
   try {
     options = configurationBoundary(() => snapshotKovoSourceCheckOptions(options));
     const invocationRoot = security.invocationCwd;
     const resolvedAppModulePath = resolve(invocationRoot, options.appModulePath);
-    const phaseCensus = sourceCheckPhaseCensus(security.invocationEnv);
+    phaseCensus = sourceCheckPhaseCensus(security.invocationEnv);
     assertReadableKovoInputFile(resolvedAppModulePath, 'kovo check app module');
     const strictLifecyclePolicy = declaresKovoLifecyclePolicy(invocationRoot);
     if (strictLifecyclePolicy) {
-      const startedAt = startSourceCheckPhase(phaseCensus);
+      const startedAt = startSourceCheckPhase(phaseCensus, 'lifecycle-policy');
       const lifecyclePolicy = runLifecyclePolicyCheck(invocationRoot);
-      if (lifecyclePolicy.exitCode !== 0) return lifecyclePolicy;
+      if (lifecyclePolicy.exitCode !== 0) {
+        return withIncompleteSourceCheckPhaseCensus(lifecyclePolicy, phaseCensus);
+      }
       recordSourceCheckPhase(phaseCensus, 'lifecycle-policy', 'executed', startedAt);
     } else {
       recordSourceCheckPhase(phaseCensus, 'lifecycle-policy', 'not-applicable');
@@ -927,7 +939,7 @@ export async function produceKovoSourceCheckOneShotAnalysis(
 
     let approvedConfig: PreEvaluationBuildConfigTrust | undefined;
     if (configPath !== undefined) {
-      const startedAt = startSourceCheckPhase(phaseCensus);
+      const startedAt = startSourceCheckPhase(phaseCensus, 'config-trust');
       approvedConfig = await runPreEvaluationBuildConfigTrustPreflightInWorker(
         configPath,
         invocationRoot,
@@ -944,7 +956,7 @@ export async function produceKovoSourceCheckOneShotAnalysis(
     // entry-reachable compiler graph. A copied catalog is deliberately outside that closure, but
     // TypeScript, formatting, and lint still inspect it. Retaining both heaps made valid
     // 44-component apps exceed 2 GiB even when the processes did not overlap.
-    const typescriptStartedAt = startSourceCheckPhase(phaseCensus);
+    const typescriptStartedAt = startSourceCheckPhase(phaseCensus, 'typescript');
     const typescriptExecuted = await runTypeScriptBuildPreflight(
       resolvedAppModulePath,
       invocationRoot,
@@ -958,21 +970,25 @@ export async function produceKovoSourceCheckOneShotAnalysis(
       typescriptStartedAt,
     );
     if (strictLifecyclePolicy) {
-      const projectQualityStartedAt = startSourceCheckPhase(phaseCensus);
+      const projectQualityStartedAt = startSourceCheckPhase(phaseCensus, 'project-quality');
       const projectQuality = await runProjectQualityCheck(
         invocationRoot,
         security.invocationEnv,
         'kovo-check/v1',
       );
-      if (projectQuality.exitCode !== 0) return projectQuality;
+      if (projectQuality.exitCode !== 0) {
+        return withIncompleteSourceCheckPhaseCensus(projectQuality, phaseCensus);
+      }
       recordSourceCheckPhase(phaseCensus, 'project-quality', 'executed', projectQualityStartedAt);
-      const soundSubsetStartedAt = startSourceCheckPhase(phaseCensus);
+      const soundSubsetStartedAt = startSourceCheckPhase(phaseCensus, 'sound-subset');
       const soundSubset = await runSoundSubsetCheck(
         invocationRoot,
         security.invocationEnv,
         'kovo-check/v1',
       );
-      if (soundSubset.exitCode !== 0) return soundSubset;
+      if (soundSubset.exitCode !== 0) {
+        return withIncompleteSourceCheckPhaseCensus(soundSubset, phaseCensus);
+      }
       recordSourceCheckPhase(phaseCensus, 'sound-subset', 'executed', soundSubsetStartedAt);
     } else {
       recordSourceCheckPhase(phaseCensus, 'project-quality', 'not-applicable');
@@ -982,7 +998,7 @@ export async function produceKovoSourceCheckOneShotAnalysis(
     // SPEC §6.6 rule 6: source checking evaluates the same authored authority as build. Capture
     // source/config authority before any authored module is evaluated, but only after independent
     // process preflights have exited and released their bounded heaps.
-    const sessionAuthorityStartedAt = startSourceCheckPhase(phaseCensus);
+    const sessionAuthorityStartedAt = startSourceCheckPhase(phaseCensus, 'session-authority');
     const reachableSessionAuthorityFacts =
       await sessionAuthorityFactsFromEntry(resolvedAppModulePath);
     recordSourceCheckPhase(phaseCensus, 'session-authority', 'executed', sessionAuthorityStartedAt);
@@ -1016,7 +1032,7 @@ export async function produceKovoSourceCheckOneShotAnalysis(
       sourceFiles: artifacts.sourceFiles,
     };
   } catch (error) {
-    return sourceCheckErrorResult(error);
+    return sourceCheckErrorResult(error, phaseCensus);
   }
 }
 
@@ -1051,6 +1067,7 @@ export async function finishKovoSourceCheckOneShot(
   expectedIdentity: KovoBuildOneShotIdentity,
   security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
 ): Promise<CliCommandResult> {
+  let phaseCensus: KovoSourceCheckPhaseCensus | undefined;
   try {
     const options = configurationBoundary(() => snapshotKovoSourceCheckOptions(inputOptions));
     const analysis = requireKovoSourceCheckOneShotAnalysis(inputAnalysis);
@@ -1082,7 +1099,7 @@ export async function finishKovoSourceCheckOneShot(
     if (buildJsonStringify(currentIdentity) !== buildJsonStringify(expectedIdentity)) {
       throw new TypeError('Kovo check handoff invocation identity changed before consumption.');
     }
-    const phaseCensus =
+    phaseCensus =
       analysis.phaseCensus === undefined
         ? undefined
         : {
@@ -1093,7 +1110,7 @@ export async function finishKovoSourceCheckOneShot(
             ),
             sourcePath: analysis.phaseCensus.sourcePath,
           };
-    const graphDiagnosticsStartedAt = startSourceCheckPhase(phaseCensus);
+    const graphDiagnosticsStartedAt = startSourceCheckPhase(phaseCensus, 'graph-diagnostics');
     const result = kovoCheckWithDiagnosticSourceCatalog(
       analysis.graph,
       { paranoidStaticAdvisory: security.paranoidStaticAdvisory },
@@ -1107,7 +1124,7 @@ export async function finishKovoSourceCheckOneShot(
       sourceFiles: analysis.sourceFiles,
     });
   } catch (error) {
-    return sourceCheckErrorResult(error);
+    return sourceCheckErrorResult(error, phaseCensus);
   }
 }
 
@@ -2996,7 +3013,7 @@ async function deriveCurrentSourceCheckArtifacts(
   invocationRoot: string,
   phaseCensus: KovoSourceCheckPhaseCensus | undefined,
 ): Promise<KovoBuildCheckArtifacts> {
-  const appSourceTrustStartedAt = startSourceCheckPhase(phaseCensus);
+  const appSourceTrustStartedAt = startSourceCheckPhase(phaseCensus, 'app-source-trust');
   const preEvaluationStaticTrust = await runPreEvaluationStaticTrustPreflightInWorker(
     resolvedAppModulePath,
     invocationRoot,
@@ -3008,11 +3025,11 @@ async function deriveCurrentSourceCheckArtifacts(
   // Stylesheet compilation is source proof even though asset placement is deployment proof. Keep
   // it after authenticated source trust but before app/Vite evaluation so their independent
   // compiler heaps cannot overlap on valid copied-catalog projects (SPEC §5.2 rules 6/9; §11.4).
-  const stylesheetStartedAt = startSourceCheckPhase(phaseCensus);
+  const stylesheetStartedAt = startSourceCheckPhase(phaseCensus, 'stylesheet');
   await withBuildGraphDerivationContext(() => kovoBuildStylesheetCss(resolvedAppModulePath));
   collectBuildGarbage?.();
   recordSourceCheckPhase(phaseCensus, 'stylesheet', 'executed', stylesheetStartedAt);
-  const appEvaluationStartedAt = startSourceCheckPhase(phaseCensus);
+  const appEvaluationStartedAt = startSourceCheckPhase(phaseCensus, 'app-evaluation');
   const loadedBuildApp = await withBuildGraphDerivationContext(() =>
     loadBuildAppModule(
       resolvedAppModulePath,
@@ -3029,7 +3046,7 @@ async function deriveCurrentSourceCheckArtifacts(
     resolvedAppModulePath,
     loadedBuildApp.serverInternalBuildModule.resolveKovoAppToken,
   );
-  const buildCheckGraphStartedAt = startSourceCheckPhase(phaseCensus);
+  const buildCheckGraphStartedAt = startSourceCheckPhase(phaseCensus, 'build-check-graph');
   const artifacts = await buildCheckGraph(app, {
     cache,
     execution: loadedBuildApp.serverExecutionModule,
@@ -3058,6 +3075,16 @@ function sourceCheckPhaseCensus(
   return { phases: [], sourcePath };
 }
 
+// The in-flight phase is deliberately NOT a field on the census object: the analysis -> finish
+// handoff pins the census to the exact keys ['phases','sourcePath']
+// (`requireKovoSourceCheckPhaseCensus`), and widening that contract to carry mutable measurement
+// state would let a hostile handoff payload assert a phase it never ran. A module-private side
+// table keyed by the census identity cannot cross the handoff at all.
+const sourceCheckPhaseInFlight = new WeakMap<
+  KovoSourceCheckPhaseCensus,
+  { readonly name: KovoSourceCheckPhase; readonly startedAt: number }
+>();
+
 function recordSourceCheckPhase(
   census: KovoSourceCheckPhaseCensus | undefined,
   name: KovoSourceCheckPhase,
@@ -3065,6 +3092,7 @@ function recordSourceCheckPhase(
   startedAt?: number,
 ): void {
   if (census === undefined) return;
+  sourceCheckPhaseInFlight.delete(census);
   const expected = KOVO_SOURCE_CHECK_PHASES[census.phases.length];
   if (expected !== name) {
     throw new TypeError(
@@ -3088,8 +3116,66 @@ function recordSourceCheckPhase(
   );
 }
 
-function startSourceCheckPhase(census: KovoSourceCheckPhaseCensus | undefined): number | undefined {
-  return census === undefined ? undefined : performanceNow();
+function startSourceCheckPhase(
+  census: KovoSourceCheckPhaseCensus | undefined,
+  name: KovoSourceCheckPhase,
+): number | undefined {
+  if (census === undefined) return undefined;
+  const startedAt = performanceNow();
+  sourceCheckPhaseInFlight.set(census, { name, startedAt });
+  return startedAt;
+}
+
+/**
+ * Render the census of a check run that did not reach `graph-diagnostics`. Emitted on both failure
+ * shapes: a phase that threw, and a gate phase that returned a non-zero exit code without throwing.
+ */
+function incompleteSourceCheckPhaseCensusLine(
+  census: KovoSourceCheckPhaseCensus | undefined,
+  outcome: 'refused' | 'threw',
+): string {
+  if (census === undefined) return '';
+  const inFlight = sourceCheckPhaseInFlight.get(census);
+  const elapsedMs = inFlight === undefined ? 0 : performanceNow() - inFlight.startedAt;
+  const evidence = {
+    complete: false,
+    failedPhase:
+      inFlight === undefined
+        ? null
+        : {
+            elapsedMs: elapsedMs >= 0 && elapsedMs < Infinity ? elapsedMs : 0,
+            name: inFlight.name,
+          },
+    outcome,
+    phases: census.phases,
+    recordedPhases: census.phases.length,
+    schema: KOVO_DEVEX_CHECK_PHASE_CENSUS_INCOMPLETE_SCHEMA,
+    source: { path: census.sourcePath },
+    totalPhases: KOVO_SOURCE_CHECK_PHASES.length,
+  };
+  return `\n${KOVO_DEVEX_CHECK_PHASE_CENSUS_INCOMPLETE_SCHEMA} ${stringifyBuildValue(evidence)}`;
+}
+
+/** Attach the incomplete census to a gate result that refused without throwing. */
+function withIncompleteSourceCheckPhaseCensus(
+  result: CliCommandResult,
+  census: KovoSourceCheckPhaseCensus | undefined,
+): CliCommandResult {
+  const line = incompleteSourceCheckPhaseCensusLine(census, 'refused');
+  if (line === '') return result;
+  const attached: CliCommandResult =
+    'error' in result
+      ? { error: `${result.error}${line}`, exitCode: result.exitCode }
+      : { exitCode: result.exitCode, output: `${result.output}${line}\n` };
+  if (result.diagnostics !== undefined) {
+    Object.defineProperty(attached, 'diagnostics', {
+      configurable: false,
+      enumerable: false,
+      value: result.diagnostics,
+      writable: false,
+    });
+  }
+  return attached;
 }
 
 function appendSourceCheckPhaseCensus(
@@ -12834,12 +12920,17 @@ function buildErrorResult(error: unknown): CliCommandResult {
   return result;
 }
 
-function sourceCheckErrorResult(error: unknown): CliCommandResult {
+function sourceCheckErrorResult(
+  error: unknown,
+  census?: KovoSourceCheckPhaseCensus | undefined,
+): CliCommandResult {
   const configurationError = error instanceof KovoCommandConfigurationError;
   const result: CliCommandResult = {
     error: `${requireKovoCommandResultProtocol('check')}\nERROR ${
       error instanceof Error ? error.message : String(error)
-    }${configurationError ? '' : `\n${GATE_SHORT_CIRCUIT_NOTICE}`}`,
+    }${incompleteSourceCheckPhaseCensusLine(census, 'threw')}${
+      configurationError ? '' : `\n${GATE_SHORT_CIRCUIT_NOTICE}`
+    }`,
     exitCode: configurationError ? 2 : 1,
   };
   if (error instanceof KovoBuildCheckDiagnosticError && error.diagnostics !== undefined) {

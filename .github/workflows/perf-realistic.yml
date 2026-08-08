@@ -1,0 +1,119 @@
+name: Perf Realistic Tier
+
+# The second of the two budget tiers decision D13 calls for (plans/good-perf.md O17).
+#
+# `devex-budgets.json` is the toy tier: 4 files, 56 LOC, one route, ratifiable, runner-pinned, cheap
+# enough for every PR — and structurally unable to observe anything that scales with app size, which
+# is why the quadratic `kovo check` term and the KV448 import wall both shipped while it stayed
+# green. This workflow is the other tier. Its workload's module count is a parameter, and it is
+# ALLOWED TO FAIL LOUDLY: it is not a release gate and it blocks nothing.
+#
+# It is scheduled rather than per-PR because the check-scaling ladder runs `kovo check` at N=216,
+# and because its throughput and edit-loop cells are wall-clock measurements that a shared hosted
+# runner cannot make honestly. Those cells report `unproven` above their load ceiling rather than
+# failing; the byte and scaling-exponent cells are deterministic or ratio-based and are gated
+# unconditionally. Every budget it enforces was calibrated from recorded samples — see the
+# `rationale` on each metric in perf-budgets.json.
+
+on:
+  schedule:
+    - cron: '41 5 * * *'
+  workflow_dispatch:
+    inputs:
+      components:
+        description: Component count for the byte suite
+        required: false
+        default: '24'
+        type: string
+      ladder:
+        description: Component-count ladder for the check-scaling suite
+        required: false
+        default: '8,24,72,216'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: perf-realistic-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_OPTIONS: --experimental-transform-types --disable-warning=ExperimentalWarning
+
+jobs:
+  bytes:
+    name: Production bytes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/kovo-setup
+      - name: Measure critical-path, navigation and bootstrap bytes
+        # Dispatch inputs reach the command through env, never through direct `${{ }}`
+        # interpolation into the shell (rules/github-workflows.md).
+        env:
+          KOVO_PERF_COMPONENTS: ${{ inputs.components || '24' }}
+        run: >-
+          vp exec node scripts/perf-gate.mjs
+          --suite bytes
+          --components "$KOVO_PERF_COMPONENTS"
+          --out "$RUNNER_TEMP/kovo-perf/bytes.json"
+      # Separated from the measurement so a build or boot failure is distinguishable from a budget
+      # failure: the suite exits non-zero on the former and this step is what reports the latter.
+      - name: Evaluate against perf-budgets.json
+        # `shell: bash` runs with `set -eo pipefail`, so a budget failure survives the `| tee` pipe.
+        # Without it the pipeline's exit status is tee's and a violation reports green.
+        shell: bash
+        run: >-
+          vp exec node scripts/perf-gate.mjs
+          --evaluate "$RUNNER_TEMP/kovo-perf/bytes.json"
+          | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          if-no-files-found: warn
+          name: kovo-perf-bytes
+          path: ${{ runner.temp }}/kovo-perf/bytes.json
+          retention-days: 14
+
+  check-scaling:
+    name: Check scaling
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/kovo-setup
+      # The gated statistic is the growth exponent between the two largest rungs, which is a ratio
+      # taken within a single session, so it survives a contended runner far better than any
+      # absolute duration would. Peak RSS is also collected here and has the least headroom of any
+      # budget in the file (3.4%) — see its rationale in perf-budgets.json.
+      - name: Run the kovo check component-count ladder
+        # Dispatch inputs reach the command through env, never through direct `${{ }}`
+        # interpolation into the shell (rules/github-workflows.md).
+        env:
+          KOVO_PERF_LADDER: ${{ inputs.ladder || '8,24,72,216' }}
+        run: >-
+          vp exec node scripts/perf-gate.mjs
+          --suite check-scaling
+          --ladder "$KOVO_PERF_LADDER"
+          --out "$RUNNER_TEMP/kovo-perf/check-scaling.json"
+      - name: Evaluate against perf-budgets.json
+        # `shell: bash` runs with `set -eo pipefail`, so a budget failure survives the `| tee` pipe.
+        # Without it the pipeline's exit status is tee's and a violation reports green.
+        shell: bash
+        run: >-
+          vp exec node scripts/perf-gate.mjs
+          --evaluate "$RUNNER_TEMP/kovo-perf/check-scaling.json"
+          | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          if-no-files-found: warn
+          name: kovo-perf-check-scaling
+          path: ${{ runner.temp }}/kovo-perf/check-scaling.json
+          retention-days: 14

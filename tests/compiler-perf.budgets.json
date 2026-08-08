@@ -1,6 +1,23 @@
 {
   "$schema": "https://kovojs.dev/schemas/compiler-perf-budgets.v2.json",
   "version": 2,
+  "calibration": {
+    "measuredOn": "2026-08-08",
+    "runnerClass": "github-hosted ubuntu-24.04 x64 (4 vCPU) — the runner this gate actually executes on. `test:compiler-perf` is gated behind KOVO_RUN_COMPILER_PERF=1 and is skipped by a bare `vitest --run`.",
+    "samples": "14 successful `compiler-perf` CI jobs on main between 2026-08-02T03:24Z and 2026-08-03T06:13Z, read out of the jobs' own `compiler-perf <corpus> ... coldMedianMs=` log lines. Each value is itself the median of that job's 5 cold samples (runs.cold below).",
+    "observedCiCold": {
+      "large-component": { "min": 1307.4, "median": 2241.2, "max": 2321.2 },
+      "many-small-components": { "min": 814.5, "median": 1277.1, "max": 1349.7 },
+      "many-routes-registries": { "min": 420.1, "median": 680.5, "max": 725.1 },
+      "css-heavy-components": { "min": 175.9, "median": 277.7, "max": 301.2 },
+      "heavy-primitive-composition": { "min": 369.1, "median": 614.4, "max": 648.5 },
+      "mixed-real-app": { "min": 159.9, "median": 256.0, "max": 269.8 },
+      "total": { "min": 3268.3, "median": 5312.5, "max": 5617.4 }
+    },
+    "rule": "coldMaxMs = 1.3 x the WORST of the 14 CI medians, rounded up to the next 25 ms, and never widened above the incumbent budget. Where that formula lands above the incumbent (large-component: 3017.6) the incumbent is kept.",
+    "note": "The hosted fleet is bimodal: max/min is 1.66-1.78x across all seven cells while each individual job's own MAD is 4-110 ms. Between-runner hardware variance therefore dominates entirely, and a multiplier tighter than 1.3 would flake rather than gate.",
+    "doNotCalibrateLocally": "A local Apple M4 run of this same gate reports total coldMedianMs=1885.3 (MAD 44.7) at load 1.64 — 2.8x faster than the CI median of 5312.5. plans/good-perf.md O17 records the budget as having '73.6% headroom' against a 2,179.3 ms local median; that comparison is between a local measurement and a CI-only gate. Measured against the runner it actually runs on, the incumbent 8,250 ms budget had 1.47x headroom over the worst CI job, not 3.79x, and narrowing it to the original 2,750 ms would have failed every CI run in this window by ~2x."
+  },
   "runs": {
     "cold": 5
   },
@@ -13,32 +30,32 @@
     "many-small-components": {
       "fileCount": 48,
       "minLoc": 620,
-      "coldMaxMs": 2050
+      "coldMaxMs": 1775
     },
     "many-routes-registries": {
       "fileCount": 32,
       "minLoc": 380,
-      "coldMaxMs": 1050
+      "coldMaxMs": 950
     },
     "css-heavy-components": {
       "fileCount": 16,
       "minLoc": 1660,
-      "coldMaxMs": 550
+      "coldMaxMs": 400
     },
     "heavy-primitive-composition": {
       "fileCount": 20,
       "minLoc": 1390,
-      "coldMaxMs": 1000
+      "coldMaxMs": 850
     },
     "mixed-real-app": {
       "fileCount": 8,
       "minLoc": 200,
-      "coldMaxMs": 425
+      "coldMaxMs": 375
     }
   },
   "total": {
     "fileCount": 125,
     "minLoc": 5290,
-    "coldMaxMs": 8250
+    "coldMaxMs": 7325
   }
 }

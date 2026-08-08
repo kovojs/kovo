@@ -1,0 +1,111 @@
+{
+  "schema": "kovo-perf-budgets/v1",
+  "tier": {
+    "name": "realistic",
+    "purpose": "Regression gate for the wins recorded in plans/good-perf.md batches 1-3. Decision D13: keep devex-budgets.json as the cheap toy tier for per-PR signal; this tier is allowed to fail loudly.",
+    "runner": "Any host. Deliberately NOT pinned to ubuntu-24.04 x64 and deliberately not gated on KOVO_DEVEX_OS_IMAGE / KOVO_DEVEX_RUNNER_NAME / a clean git tree, so it can be reproduced on a developer machine.",
+    "workload": "scripts/perf-workload.mjs — a fan-out-8 component tree whose module count is a parameter, with one query-bound interactive leaf (so the app is not INERT and therefore ships the inline bootstrap and negotiates the enhanced-navigation parts protocol), one @kovojs/ui component and one authored stylesheet (so a <link rel=stylesheet> exists and O4's catalog pruning is on the critical path).",
+    "runner_commands": [
+      "node scripts/perf-gate.mjs --suite bytes --components 24 --out reports/bytes.json",
+      "node scripts/perf-gate.mjs --suite check-scaling --ladder 8,24,72,216 --out reports/check-scaling.json",
+      "node scripts/perf-gate.mjs --suite ssr --components 24 --connections 32 --out reports/ssr.json",
+      "node scripts/perf-gate.mjs --suite dev-edit --components 24 --edits 4 --out reports/dev-edit.json",
+      "node scripts/perf-gate.mjs --evaluate reports/bytes.json --evaluate reports/check-scaling.json"
+    ]
+  },
+  "calibration": {
+    "measuredOn": "2026-08-08",
+    "host": "Apple M4, 10 cores, 16 GiB, macOS 26.2 (darwin arm64), node v24.19.0, pnpm 10.12.1",
+    "contention": "Box shared with concurrent agent worktrees. Every cell below records the 1-minute load average observed while it was taken. Byte and exponent cells are load-independent; throughput and TTFB cells are not, and carry a load ceiling above which the gate reports `unproven` rather than failing.",
+    "rule": "No budget in this file is a guess. Every entry names the samples it was derived from, the load those samples were taken under, and the margin applied over the worst of them. A metric that has not been measured carries `max: null` and says so, and evaluates as `unbudgeted` — never as a pass.",
+    "baselineReport": "reports/perf-baseline-2026-08-08.json — the byte suite run these budgets were set from, committed so a future run has something to diff against."
+  },
+  "metrics": {
+    "production.criticalPath.wireBytes": {
+      "unit": "bytes",
+      "loadSensitive": false,
+      "max": 7000,
+      "samples": [6383, 6382, 6382],
+      "rationale": "Render-blocking closure — the document plus every stylesheet it links — on the wire with `Accept-Encoding: br, gzip`, at 24 components. n=3 full rebuilds at load 3.8-5.3; spread 1 B, from the per-response random `kovo-pad` BREACH mask (SPEC §9.5). Budget = worst observed + 9.7%. Guards three separate batch-1 wins at once: compression (losing it puts identity 27,213 + 5,017 = 32 KB on the wire), O4 catalog pruning (the unpruned sheet is 122,439 B raw / 16,664 B br, which alone lands the critical path at 22.4 KB), and the inline-bootstrap size. Kovo's headline comparison is 3,638 B against Next.js's 8,064 B render-blocking on benchmarks/kovo; this workload is larger, so treat the number as a same-workload regression gate, not as that comparison."
+    },
+    "production.document.wireBytes": {
+      "unit": "bytes",
+      "loadSensitive": false,
+      "max": 6300,
+      "samples": [5747, 5746, 5746],
+      "rationale": "The document alone, br-encoded (identity 27,213 B — a 4.73x compression ratio). Same three builds. Budget = worst observed + 9.6%. Separated from the critical path so a regression can be attributed: document bloat and a stylesheet regression move different metrics."
+    },
+    "production.navigation.wireBytes": {
+      "unit": "bytes",
+      "loadSensitive": false,
+      "max": 1250,
+      "samples": [1098, 1100, 1101],
+      "rationale": "One enhanced navigation answered as `application/vnd.kovo.document-parts+json`, br-encoded. n=3, spread 3 B. Budget = worst observed + 13.5%, and deliberately below Next.js's 1,776 B gzip RSC payload for the equivalent navigation, so a regression that surrenders Kovo's advantage fails before it is lost. The batch-2 figure of 920 B was measured on benchmarks/kovo; this workload carries a UI component and an authored stylesheet, hence the larger baseline."
+    },
+    "production.inlineBootstrap.gzipBytes": {
+      "unit": "bytes",
+      "loadSensitive": false,
+      "max": 5200,
+      "samples": [4829, 4829, 4829],
+      "rationale": "gzip-9 of the largest inline <script> in the served document. Byte-identical across all 3 builds. The framework's own ceiling (`inlineKovoLoaderGzipByteBudget`) is 10,500 B, so this tier tightens by 2.02x: at +7.7% over measured it catches a bootstrap regression long before the framework ceiling would notice one."
+    },
+    "production.inlineBootstrap.identityBytes": {
+      "unit": "bytes",
+      "loadSensitive": false,
+      "max": 23500,
+      "samples": [22820, 22820, 22820],
+      "rationale": "Uncompressed inline bootstrap. Byte-identical across all 3 builds; budget = +3.0%. Held separately from the gzip figure because a change that compresses better while shipping more source is still more parse work on the main thread."
+    },
+    "check.appSourceTrust.marginalScalingExponent": {
+      "unit": "exponent",
+      "loadSensitive": false,
+      "max": 1.3,
+      "samples": [1.0878, 0.9955, 1.1086],
+      "rationale": "THE check-scaling gate. Local growth exponent ln(y2/y1)/ln(x2/x1) between the two largest ladder rungs (72 -> 216 components) of the `app-source-trust` phase duration, read from the `kovo check` phase census. This is the phase O7 de-quadraticised (ts.createSourceFile 23,894 -> 995 at N=50) and, per plans/good-perf.md, the single easiest win to lose. n=3 full 8/24/72/216 ladders at load 3.0-6.1; worst observed 1.1086. A least-squares line through the top pair is y = 144.7*N - 691, i.e. the fixed cost is negligible up there, which is the regime in which an exponent means what it says: 1.0 is linear, 2.0 is quadratic. Budget 1.30 = worst observed + 17%. Detection margin: even on the most detection-hostile assumption — that 5,000 ms of the 9,866 ms N=72 cost is irreducibly fixed and only the remainder returns to quadratic — the exponent lands at 1.44, above this budget; with no fixed floor it is 2.0. Do NOT gate the whole-ladder OLS fit instead: it reads 0.49-0.57 on the same data because the bottom of the ladder is fixed-cost dominated (8 -> 24 triples N for 1.19x cost), and a real quadratic term hides comfortably under a sublinear-looking average."
+    },
+    "check.total.marginalScalingExponent": {
+      "unit": "exponent",
+      "loadSensitive": false,
+      "max": 1.0,
+      "samples": [0.6766, 0.5767, 0.7174],
+      "rationale": "Same statistic over total `kovo check` wall time rather than one phase. n=3 ladders, worst observed 0.7174; it sits below the app-source-trust exponent because ~19 s of every run is fixed cost the other ten phases pay regardless of N (config-trust, stylesheet, typescript and CLI startup, per plans/good-perf.md O11). Budget 1.00 = worst observed + 39%, and is the plainly meaningful line: total check cost must not grow faster than linearly in module count. A return of the quadratic term in app-source-trust drives this metric to ~1.41, so it fails here too."
+    },
+    "check.peakRssBytes": {
+      "unit": "bytes",
+      "loadSensitive": false,
+      "max": 3221225472,
+      "samples": [3111124992, 2910846976, 2911895552],
+      "rationale": "Peak concurrently-live process-tree RSS across the whole ladder, via scripts/lib/process-tree-rss.mjs; the peak is always the N=216 rung. Worst observed 2,967 MiB. The budget is the same 3,072 MiB ceiling devex-budgets.json uses for check.*.peakRssBytes, so the two tiers cannot disagree about what a memory regression is. HONEST WARNING: this leaves only 3.4% headroom and is the metric most likely to go red first. That is the real state of the world, not a calibration error — plans/good-perf.md O7 records N=400 peaking at 3,022 MiB against the same 3,072 MiB ceiling after the fix, having exceeded it at 3,110 MiB before. This is a resource ceiling, not a budget fitted to observation."
+    },
+    "production.ssr.requestsPerSecondFloor": {
+      "unit": "negated req/s",
+      "loadSensitive": true,
+      "maxLoadAverage": 8,
+      "max": -110,
+      "samples": [-152.9, -196.2, -196.8, -196.8],
+      "rationale": "Throughput floor at c=32 against the built production artifact, expressed as a negated maximum so one comparison direction covers every metric in this file. n=4 at pre-suite load 4.8-7.6; median 196.5 req/s, worst 152.9 (that sample ran while the box was also driven to load 7.9 by other work). Floor 110 req/s = 1.39x below the worst observed and 1.79x below the median. Deliberately wide: the observed spread is 28% and the wins this effort actually took here were 5-9% (O8), which no throughput gate at this sample count can resolve. What this catches is a structural loss — anything worse than -44% from the median. Note plans/good-perf.md measured benchmarks/kovo at 399.6 req/s on the same box; this workload renders 24 components plus a UI component per request, so the absolute numbers are not comparable across workloads."
+    },
+    "production.ssr.ttfbMedianMs": {
+      "unit": "ms",
+      "loadSensitive": true,
+      "maxLoadAverage": 8,
+      "max": 400,
+      "samples": [207.25, 157.94, 160.94, 159.9],
+      "rationale": "Median time to first byte over the same c=32 run, so it is latency under saturation rather than idle TTFB. n=4, 1,559-1,993 requests per sample; median 160.4 ms, worst 207.25. Budget 400 ms = 1.93x the worst observed, sized to catch a doubling. Measured with the repo's own keep-alive generator and NOT with autocannon: plans/good-perf.md records autocannon's latency histogram as wrong by ~400x against `Connection: close` and instructs that any Kovo latency number taken with it be invalidated."
+    },
+    "dev.editToServed.medianMs": {
+      "unit": "ms",
+      "loadSensitive": true,
+      "maxLoadAverage": 8,
+      "max": 1500,
+      "samples": [517.7, 477.8, 475.8],
+      "rationale": "Source write -> the served HTML contains the new token, median over 4 consecutive edits to a leaf component, on a 24-component app. n=3 runs at load 2.9-3.8, all landing 4/4; per-edit spread within a run was 372-1,100 ms. Budget 1,500 ms = 2.90x the worst run median. Deliberately loose: n=3 on a shared box does not support a tight bound, and the point of the gate is the regime, not the millisecond. plans/good-perf.md records this loop at 7,225 ms before batch 1, 3,590 ms after the extension-only data-plane test was removed, and 1,224 ms on benchmarks/kovo after D5-c/D5-d; a return to any of those states fails this budget, while ordinary contention does not. NOTE these figures are much better than the plan's benchmarks/kovo numbers because that app is a single 541-LOC entry file and an entry-file edit still full-reloads by design (O6 residual), whereas this workload edits a leaf component and takes the componentRefresh path."
+    },
+    "dev.editToServed.missRate": {
+      "unit": "fraction",
+      "loadSensitive": false,
+      "max": 0,
+      "rationale": "Not a timing budget and not load-sensitive: an edit that NEVER reaches the served HTML inside the per-edit timeout is the O6 correctness defect, not slowness. plans/good-perf.md records `examples/stackoverflow` edits landing 0/4 at baseline. Zero is the only defensible value for a correctness contract, and it is gated unconditionally."
+    }
+  }
+}

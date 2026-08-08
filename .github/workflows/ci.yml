@@ -399,6 +399,20 @@ jobs:
         run: |
           manifest="$(vp exec node scripts/ci-shards.mjs generate --kind vitest --shards ${{ matrix.total }} --index ${{ matrix.shard }} --outDir "$RUNNER_TEMP/kovo-shards" --history "$RUNNER_TEMP/kovo-common-timing/timing-history.json")"
           echo "manifest=$manifest" >> "$GITHUB_OUTPUT"
+      # `ci-shards.mjs` refuses a shard plan over the job budget. That is a ceiling, not a balance
+      # check, and it cannot see a timing history that quietly stopped being restored — in which case
+      # every file falls back to the default duration and the "balanced" plan is a file-count split.
+      # Reported from shard 1 only; `generate` writes every shard's manifest, so one job sees the
+      # whole plan (plans/good-perf.md O17, absorbed from plans/fast-ci.md).
+      - name: Verify shard balance and timing-history freshness
+        if: ${{ matrix.shard == 1 }}
+        run: |
+          vp exec node scripts/ci-shard-balance.mjs \
+            --manifest-dir "$RUNNER_TEMP/kovo-shards" \
+            --kind vitest \
+            --history "$RUNNER_TEMP/kovo-common-timing/timing-history.json" \
+            --max-imbalance 1.35 \
+            --min-coverage 0.6 | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Root Vitest shard
         run: |
           # The five matrix runners own CI parallelism. Keep files serial inside each runner so
