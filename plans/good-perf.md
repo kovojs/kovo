@@ -335,9 +335,11 @@ absorbs `plans/better-js-loader.md` Phases 4–5, which are superseded.
   - Residual, still open: an app that imports ≥1 `@kovojs/ui` component **and** declares
     `stylesheet('./styles.css')` still loses its authored CSS — `hints.ts` derives the href
     separately. Precise repro recorded by the implementing slice; carried into O10's file ownership.
-- [ ] Adopt `components: 'imported'` on the dev stylesheet manifest for dev/prod parity.
-  - `packages/server/src/vite.ts:906` still extracts the full catalog with the `exported` default, so
-    dev and prod now disagree about which component CSS exists. One-line adoption.
+- [x] Adopt `components: 'imported'` on the dev stylesheet manifest for dev/prod parity.
+  - Done 2026-08-08 on `perf/dev-incremental`: `collectDevStylesheetManifest` in
+    `packages/server/src/vite.ts` now passes `components: 'imported'` (same selection
+    `build-export.ts:8040` uses; unprovable graphs still fall back to the full catalog).
+    `kovo compile package-css` untouched per the note below.
     `packages/cli/src/commands/compile.ts:1906` (`kovo compile package-css`) deliberately keeps
     `exported` — it is a whole-package artifact command and must not be changed.
 - [ ] Evaluate per-route stylesheet splitting on measurement (deferred from D4, not yet assessed).
@@ -365,14 +367,41 @@ server stops blocking on proofs that will be re-established before anything ship
     a content hash of app sources, invalidated by the watcher. An mtime key is unsound under some
     editor write patterns and under git operations that preserve mtime; a content hash costs one read
     per app file per edit, still ~1000x cheaper than a `Program`.
-- [ ] D5-c: make the analysis incremental — re-analyse changed files plus dependents, not the closure.
-  - The real fix, and shared with O7's quadratic term.
-- [ ] D5-d: take whole-project analysis off the HMR blocking path entirely.
-  - Serve the edit immediately; run analysis asynchronously; surface diagnostics when they land. The
-    dev-served page must be explicitly marked dev-unproven, and `kovo check` / `kovo build` must
-    remain fail-closed and unchanged — that split is what makes this safe.
-  - This also fixes O6's "edit never lands" defect at the root: today `handleHotUpdate` spends ~23 s
-    computing whole-project facts on `examples/stackoverflow` and the per-module transform never runs.
+- [x] D5-c: make the analysis incremental — re-analyse changed files plus dependents, not the closure.
+  - Done 2026-08-08 on `perf/dev-incremental` (`app-contract-project.ts`): root files now share
+    parsed ASTs across Program constructions under the same byte-exact revalidation dependencies
+    always had (only the edited file re-parses), and `analyzeEntry` is memoized per immutable
+    project so the mutation census and static census stop re-running identical checker sweeps.
+    Measured on a copy of `examples/stackoverflow` (21 files, loaded box): mutation census cold
+    2,451 → 735 ms; warm same-content 1,480 → 40 ms; static census on the memoized project
+    4,983 → **1 ms**; census after a real 1-file change 458 ms. Verified by the three
+    app-contract suites (32), compiler vite suites (119), drizzle static suites (22).
+  - Honest residual: the drizzle/ts-morph + output-schema pass inside `collectDataPlaneAnalysis`
+    is still whole-project per content change — measured 17.4 s cold / ~31 s after a 1-file edit
+    on the same loaded box. It lives in `packages/drizzle` + `packages/core` (outside this
+    slice's ownership) and is now fully off the HMR blocking path per D5-d.
+- [x] D5-d: take whole-project analysis off the HMR blocking path entirely.
+  - Done 2026-08-08 on `perf/dev-incremental` (`packages/server/src/vite.ts`): `handleHotUpdate`
+    no longer derives whole-project facts before compiler staging. One debounced (1.5 s settle)
+    single-flight pass re-derives facts + gate diagnostics asynchronously; a changed canonical
+    fact digest invalidates derived modules and publishes a convergence full-reload; analyzer
+    failures keep last-good facts and never crash HMR. Every dev response carries
+    `Kovo-Dev-Posture: dev-unproven` (verified on a live `kovo dev` server). Normative wording:
+    spec/09-wire-protocol.md §9.5.1 "per commit, not per keystroke" paragraph. `kovo check` /
+    `kovo build` unchanged and fail-closed (vite-data-plane-gate suite 27/27; the split-ownership
+    external-compiler embedding keeps the synchronous fail-closed revocation, vite.test.ts 21/21).
+    Pinned by `vite-dev-unproven.test.ts` (header; non-blocking staging + convergence reload on a
+    real fact change; no reload on a comment-only edit).
+  - Measured `examples/stackoverflow` edit→served: baseline **never lands** (ledger 4/4; not
+    re-reproducible here — a re-measurement found the prior probe's token anchor matched a code
+    comment, so its "never" rows were vacuous) → with D5-c+D5-d **3/4 land, median 35,861 ms
+    (MAD 1,858)** at load 8–23 on a box shared with concurrent agent runs (INDICATIVE). The 4th
+    edit missed the 240 s window during a load-23.5 spike. The remaining ~35 s is generation
+    restaging (compiler `hotUpdateGenerationStage` measured 36.4 s contended) plus analysis CPU
+    contention — the dev-runner generation path, owned by the `perf/dev-correctness` slice (O6).
+  - Measured `benchmarks/kovo` edit→served, same box back to back (INDICATIVE): pre-slice
+    2,478 ms median (MAD 1,042, worst 22.0 s, load 13–20) → **1,224 ms median (MAD 173, worst
+    1.3 s, load 9–15)**, n=6 each, landed 6/6 both.
 - [x] Remove the extension-only data-plane test so non-data-plane files get a genuinely cheap path.
   - Evidence (merged): `kovo dev` edit→served on `benchmarks/kovo` 25,704 ms → **3,590 ms** (n=10
     each, same loaded box back to back, load avg 22-30 — INDICATIVE, not a clean-box number).
@@ -413,6 +442,13 @@ Grouped here because they share O5's root cause.
   - Mechanism, from the profile: there is **no `transform` frame at all** — `handleHotUpdate` spends
     ~23 s computing whole-project facts and the per-module transform / SSR re-render never runs.
   - `"dev": "kovo dev ./src/app-shell.ts"` is the example's own committed script.
+  - Partial (2026-08-08, `perf/dev-incremental`): with D5-c+D5-d the edit now **lands 3/4 with
+    median 35,861 ms** (load 8–23, INDICATIVE; the miss was a load-23.5 spike). The residual
+    ~35 s is the compiler `hotUpdateGenerationStage` whole-generation restaging (measured 36.4 s
+    contended) plus analysis CPU contention — dev-runner generation path, this item's owner. Note
+    for that owner: `vite-dev.ts:1391` app-shell `handleHotUpdate` swaps/reloads **only when the
+    edited file is the app entry** (`sourceFile !== moduleId → return undefined`); component
+    edits rely solely on the compiler-plugin staging path.
 - [ ] Fix: a request in flight when the 30 s request deadline fires **crashes the dev server**.
   - Reproduced 2/2. Unhandled `'error'` event on a `Readable`: `RequestDeadlineExceededError` at
     `packages/server/src/request-deadline.ts:318` via `abortCapability` (:148) / `interrupt` (:154);
@@ -453,11 +489,22 @@ Grouped here because they share O5's root cause.
     leaked ts-morph Projects and OOM'd.
   - Also the RSS driver: peak process-tree RSS grows 2,172 (N=25) → 3,027 (N=200) → **3,089 MiB
     (N=400)** against a 3,072 MiB budget. A 200-module app is at 98.5% of budget.
-- [ ] Fix the hard scaling wall: a legitimate app becomes unbuildable purely by growing.
-  - A flat app whose entry imports N components passes check at N=125 and **fails closed at N=130**
-    with `KV448` (`framework root is reached through mutable or ambiguous lexical provenance`). Cause:
-    a fixed per-module abstract-interpretation budget, `lexical-provenance.ts:63`
-    `abstractWorkBudget = 16_384`, exhausted into a refusal by `scan/capability-closure.ts`.
+- [x] Fix the hard scaling wall: a legitimate app becomes unbuildable purely by growing.
+  - Done 2026-08-08 on `perf/dev-incremental`. **Cause correction**: instrumentation shows the
+    N=130 flat entry consumes only ~540 abstract work units — the 16,384-step
+    `abstractWorkBudget` this item suspected was never the wall. The real wall was the fixed
+    128-entry **effect-site history cap** in `scan/lexical-provenance.ts`: every module-scope JSX
+    element is one opaque call recording an unmodeled-effect site, so the 129th component set
+    `budgetExhausted` and `security/capability-closure.ts` widened every use into the KV448
+    refusal. The cap now scales with the module's own syntax-node count, clamped [128, 4096];
+    exhaustion semantics are unchanged and still fail closed on adversarial input.
+  - End-to-end evidence (canonical flat shape: N components + one routed page, per-app UUID):
+    main `feef77093` refuses flat-130 with the exact ledger message; `perf/dev-incremental`
+    passes flat-130 and flat-200 (`kovo check source` exit 0; flat-200 87.6 s wall on a loaded
+    box, peak process-tree RSS 3,281 MB). Memory control at N=125 (passes on both): main
+    3,445.0 MB / 52.4 s vs branch 3,440.5 MB / 51.2 s — no regression. Unit ladder pinned by
+    `scan/lexical-provenance-scaling.test.ts` (flat N∈{125,130,200,400,1000} in-budget; a
+    >4,096-site module still refused).
 
 ### O8 — Remove the `Reflect.apply` indirection from the SSR hot path — **high, large, high risk**
 

@@ -1090,8 +1090,16 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     await plugin
       .handleHotUpdate({ file: queryPath, modules: [], read: async () => KV422_CLEAN, server })
       .catch(() => []);
-    // Debounced re-evaluation runs after DATA_PLANE_GATE_DEBOUNCE_MS (200ms).
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    // The whole-project pass is debounced by DEV_ANALYSIS_SETTLE_MS (1.5s) so the post-edit
+    // reload wins the event loop before analysis starts (plans/good-perf.md D5-d). Poll until
+    // the pass lands rather than assuming a fixed window.
+    const deadline = Date.now() + 30_000;
+    while (
+      Date.now() < deadline &&
+      !captured.some((report) => report.fileName.endsWith('search.ts'))
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
 
     const cleared = captured.find((report) => report.fileName.endsWith('search.ts'));
     expect(cleared, JSON.stringify(captured)).toBeDefined();
