@@ -3,6 +3,7 @@ import {
   inlineKovoLoaderInstallerSource,
 } from '@kovojs/browser/internal/inline-loader';
 import { stringifyWireValue } from '@kovojs/core/internal/wire-json';
+import { SEMANTIC_ATTRIBUTE_MANIFEST } from '@kovojs/core/internal/semantic-attributes';
 import { wireEmitter } from '@kovojs/core/internal/security-markers';
 import {
   KOVO_CSP_REPORT_GROUP,
@@ -51,6 +52,7 @@ import {
   securityObjectKeys,
   securityStringIncludes,
   securityStringSplit,
+  securityStringStartsWith,
   securityStringToLowerCase,
   securityStringTrim,
 } from './response-security-intrinsics.js';
@@ -94,8 +96,8 @@ export interface DocumentAssemblyOptions {
   lang?: string;
   /**
    * Enhanced navigation may request a canonical document variant without the
-   * already-installed inline loader. Ordinary documents keep the SPEC §4.4
-   * bootstrap inline.
+   * already-installed inline loader. Ordinary documents carrying client surface
+   * keep the SPEC §4.4 bootstrap inline; inert documents omit it either way.
    */
   loader?: 'inline' | 'omit';
   loaderRuntimeHref?: string;
@@ -867,10 +869,13 @@ export const renderErrorDocument = wireEmitter(
         ...(options.secure === true && shouldEmitDocumentHsts(true)
           ? { 'Strict-Transport-Security': DOCUMENT_HSTS_VALUE }
           : {}),
-        // SF (secure-framework Tier 3): error documents are framework-rendered HTML with
-        // the same inline loader/hashes, so they carry the strict default-on CSP too. No
-        // route response means no author allowlist here — the plain strict `'self'` policy
-        // (with the non-overridable hardening directives) applies unconditionally.
+        // SF (secure-framework Tier 3): error documents are framework-rendered HTML, so
+        // they carry the same strict default-on CSP as successful documents. Under the
+        // SPEC §4.4 emission gate an inert built-in 403/404/500 ships no inline loader,
+        // so `document.csp` then carries no inline-script hash and the rendered policy is
+        // strictly tighter. No route response means no author allowlist here — the strict
+        // `'self'` policy (with the non-overridable hardening directives) applies
+        // unconditionally.
         'Content-Security-Policy': renderDefaultDocumentCsp(document.csp),
         ...(options.buildToken === undefined ? {} : { 'Kovo-Build': options.buildToken }),
         ...renderCspReportingHeaders(
@@ -958,33 +963,79 @@ function appendDocumentStrings(target: string[], values: readonly string[] | und
 }
 
 /**
- * Framework-emitted markers that make a document client-reactive (SPEC §4.4 loader
+ * Framework-emitted vocabulary that makes a document client-reactive (SPEC §4.4 loader
  * responsibilities, §4.7 triggers, §4.8 update plan, §9 enhanced mutations).
  *
- * These are **prefix** tests over the framework's own emission vocabulary rather than an
- * enumeration of individual attributes, so a marker added to an emitter cannot silently fall out of
- * the set. Kovo's JSX attribute namespaces are exactly `kovo-*`, `data-*`, and `on:*`
- * (`jsx-runtime.ts` `HtmlAttributes`), every attribute is serialized with a leading space
- * (`jsx-runtime.ts:520`), and every framework custom element is `<kovo-…>` — so
- * `' kovo-'` / `' data-kovo-'` / `'<kovo-'` / `' on:'` cover island, state, deps, key, props, live,
- * fragment-target, text, defer, and query markup by construction.
+ * The attribute denominator is **derived from `SEMANTIC_ATTRIBUTE_MANIFEST.generatedOnly`** — the
+ * same closed generated-attribute manifest the compiler and runtime gates share — rather than
+ * hand-enumerated, so an attribute added to the framework's emission vocabulary is client surface
+ * here by construction and cannot silently fall out of the set. `document-loader-gate.test.ts`
+ * pins the full manifest against this detector.
  *
- * The test is a deliberate **over**-approximation and is only ever read in the fail-safe direction:
- * a match keeps the bootstrap (the pre-existing behaviour), and only the total absence of every
- * marker drops it.
+ * Exactly two manifest names are excluded: `popovertarget`/`popovertargetaction` are complete
+ * browser-native behavior (a SPEC §5.2.4 platform-lowering target; see the loader browser test
+ * "preserves L0 popover behavior without handler imports"), and the bootstrap ships no popover
+ * code — the loader-gate suite asserts the installer source carries no `showPopover`/
+ * `togglePopover`. `command`/`commandfor` are **not** excluded: the bootstrap carries the
+ * dialog-invoker `showModal` fallback, so a `commandfor` document without the loader is dead in a
+ * browser without native invoker support.
+ *
+ * Matching is a leading-space (or `<`) **substring** probe over serialized markup, not an
+ * attribute-position parse. The JSX serializer emits every attribute with a leading space
+ * (`jsx-runtime.ts:520`) and every framework custom element as `<kovo-…>`, so the leading space
+ * rules out a bare token inside a quoted attribute *value* (`data-cart-root="kovo"`), while
+ * ordinary prose that happens to contain a marker (`… command …`) still matches. That false
+ * positive is read only in the fail-safe direction: a match keeps the bootstrap (the pre-existing
+ * behaviour), and only the total absence of every marker drops it.
  */
-const clientSurfaceMarkers = [
-  ' kovo-',
-  '<kovo-',
-  ' data-kovo-',
-  ' on:',
-  ' data-bind',
-  ' data-mutation',
-  ' data-enhance',
-  ' data-stream-text',
-  ' enhance',
-  '__kovo_',
-] as const;
+const browserNativeOnlyGeneratedAttributes = ['popovertarget', 'popovertargetaction'] as const;
+
+const clientSurfaceMarkers: readonly string[] = (() => {
+  const candidates: string[] = [
+    // Framework custom elements and the bootstrap's own runtime globals/stream-apply queue.
+    '<kovo-',
+    '__kovo_',
+    // Namespace umbrellas: strict supersets of the manifest's `kovo-*`/`data-kovo-*` names, kept
+    // so attribute-shaped framework tokens in app markup stay fail-safe mid-emitter-refactor.
+    ' kovo-',
+    ' data-kovo-',
+  ];
+  const { attributes, prefixes } = SEMANTIC_ATTRIBUTE_MANIFEST.generatedOnly;
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index]!;
+    let browserNativeOnly = false;
+    for (let excluded = 0; excluded < browserNativeOnlyGeneratedAttributes.length; excluded += 1) {
+      if (attribute === browserNativeOnlyGeneratedAttributes[excluded]) {
+        browserNativeOnly = true;
+        break;
+      }
+    }
+    if (browserNativeOnly) continue;
+    securityArrayPush(candidates, ` ${attribute}`);
+  }
+  for (let index = 0; index < prefixes.length; index += 1) {
+    securityArrayPush(candidates, ` ${prefixes[index]!}`);
+  }
+  // A candidate that begins with a shorter candidate can never be the first match under substring
+  // probing, so collapsing it keeps the per-document scan at the namespace count without changing
+  // the accepted set (` data-bind` covers ` data-bind-list`/` data-bind:`, ` kovo-` covers every
+  // `kovo-*` name, and so on).
+  const markers: string[] = [];
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = candidates[index]!;
+    let covered = false;
+    for (let other = 0; other < candidates.length; other += 1) {
+      if (other === index) continue;
+      const prefix = candidates[other]!;
+      if (prefix.length < candidate.length && securityStringStartsWith(candidate, prefix)) {
+        covered = true;
+        break;
+      }
+    }
+    if (!covered) securityArrayPush(markers, candidate);
+  }
+  return markers;
+})();
 
 function htmlCarriesClientSurfaceMarker(html: string): boolean {
   for (let index = 0; index < clientSurfaceMarkers.length; index += 1) {

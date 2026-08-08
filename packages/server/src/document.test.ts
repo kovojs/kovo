@@ -762,7 +762,7 @@ describe('server app shell document assembly', () => {
   // SF (secure-framework Tier 3, SPEC §6.6): the strict CSP is auto-attached to every
   // framework-rendered document by default (was previously opt-in via `document.csp`).
   describe('strict default-on Content-Security-Policy (SF Tier 3)', () => {
-    // SPEC §4.4 / O10-D7 (plans/good-perf.md): the always-loaded bootstrap is emitted only for a
+    // SPEC §4.4 / O10-D7 (plans/good-perf.md): the inline bootstrap is emitted only for a
     // document that carries client surface. These cases assert the loader's inline script hash
     // rides in `script-src`, so the fixture declares an island handler.
     const htmlResponse = () => ({

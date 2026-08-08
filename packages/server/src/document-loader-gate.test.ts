@@ -1,3 +1,5 @@
+import { inlineKovoLoaderInstallerSource } from '@kovojs/browser/internal/inline-loader';
+import { SEMANTIC_ATTRIBUTE_MANIFEST } from '@kovojs/core/internal/semantic-attributes';
 import { describe, expect, it } from 'vitest';
 
 import { renderDeferredDocument, renderDocument } from './document-core.js';
@@ -12,10 +14,10 @@ function documentHtml(options: Parameters<typeof renderDocument>[0]): string {
 /**
  * SPEC §4.4 (the loader) + O10/D7 in `plans/good-perf.md`.
  *
- * The always-loaded bootstrap and the deferred runtime module it imports exist to serve client
- * surface. A document with none — no islands, no handlers, no enhanced form, no query truth, no
- * deferred region, no session-dependent bfcache posture — previously still shipped 22,819 bytes of
- * inline bootstrap and then imported a 267,611-byte runtime after paint for no behaviour at all.
+ * The inline bootstrap and the deferred runtime module it imports exist to serve client surface. A
+ * document with none — no islands, no handlers, no enhanced form, no query truth, no deferred
+ * region, no session-dependent bfcache posture — previously still shipped 22,819 bytes of inline
+ * bootstrap and then imported a 267,611-byte runtime after paint for no behaviour at all.
  */
 describe('document loader emission gate (SPEC §4.4)', () => {
   it('omits the inline bootstrap for a document with no client surface', () => {
@@ -28,8 +30,11 @@ describe('document loader emission gate (SPEC §4.4)', () => {
 
   it('does not treat an app-authored attribute value that mentions kovo as client surface', () => {
     // Regression: the first cut of this gate matched the bare substring `kovo`, which the
-    // benchmark app trips with `data-cart-root="kovo"` — an inert app-authored value. The markers
-    // are attribute/element-position prefixes, not free text.
+    // benchmark app trips with `data-cart-root="kovo"` — an inert app-authored value. Markers are
+    // leading-space substring probes over the serialized attribute vocabulary, not an
+    // attribute-position parse: the leading space rules out a bare token inside a quoted attribute
+    // value, while ordinary prose containing a marker still matches and — fail-safe — keeps the
+    // bootstrap.
     const html = documentHtml({
       body: '<span data-cart-root="kovo"><a href="/kovo-supply">Kovo Supply</a></span>',
     });
@@ -110,6 +115,82 @@ describe('document loader emission gate (SPEC §4.4)', () => {
     const html = documentHtml({
       body: '<main>Static</main>',
       document: { bodyEnd: ['<footer kovo-c="site-footer"></footer>'] },
+    });
+
+    expect(html).toContain('installInlineKovoBootstrap');
+  });
+});
+
+/**
+ * Recurrence gate for the detector's denominator. The first cut of `clientSurfaceMarkers` was a
+ * hand-rolled list that missed manifest vocabulary (`data-derive`, `data-derive-attr`, `data-key`,
+ * `data-plan`, `data-stream`, `data-stream-renderer`, `data-stream-state`, `data-p-…`), so a page
+ * using only those was classified inert and shipped without the runtime — silently broken
+ * interactivity. The detector is now derived from `SEMANTIC_ATTRIBUTE_MANIFEST.generatedOnly`
+ * (`document-core.ts`), and this suite iterates the manifest itself: an attribute or prefix added
+ * to the framework's closed emission vocabulary is asserted here automatically, so it cannot fall
+ * out of the detector again without failing this file.
+ */
+describe('client-surface detector covers the closed generated-attribute manifest (SPEC §4.4)', () => {
+  // The only names the detector may treat as inert. Deliberately duplicated from
+  // `document-core.ts` rather than imported: widening the exclusion there without updating this
+  // pin makes the coverage cases below fail.
+  const browserNativeOnlyVocabulary = ['popovertarget', 'popovertargetaction'];
+
+  const coveredAttributes = SEMANTIC_ATTRIBUTE_MANIFEST.generatedOnly.attributes.filter(
+    (attribute) => !browserNativeOnlyVocabulary.includes(attribute),
+  );
+
+  it.each(coveredAttributes)(
+    'emits the bootstrap for a document carrying generated-only attribute `%s`',
+    (attribute) => {
+      const html = documentHtml({
+        body: `<main><div ${attribute}="probe">Static copy.</div></main>`,
+      });
+
+      expect(html).toContain('installInlineKovoBootstrap');
+      expect(html).toContain(runtimeHref);
+    },
+  );
+
+  it.each([...SEMANTIC_ATTRIBUTE_MANIFEST.generatedOnly.prefixes])(
+    'emits the bootstrap for a document carrying a `%s`-prefixed attribute',
+    (prefix) => {
+      const html = documentHtml({
+        body: `<main><div ${prefix}probe="value">Static copy.</div></main>`,
+      });
+
+      expect(html).toContain('installInlineKovoBootstrap');
+      expect(html).toContain(runtimeHref);
+    },
+  );
+
+  it('treats browser-native popover invocation as inert, which the bootstrap ships no code for', () => {
+    // SPEC §5.2.4 platform lowering: `popovertarget`/`popovertargetaction` are complete UA
+    // behavior ("preserves L0 popover behavior without handler imports",
+    // `loader.browser.test.ts`). The exclusion is only sound while the bootstrap carries no
+    // popover fallback — pinned below against the installer source itself.
+    expect(inlineKovoLoaderInstallerSource).not.toContain('showPopover');
+    expect(inlineKovoLoaderInstallerSource).not.toContain('togglePopover');
+
+    const html = documentHtml({
+      body: [
+        '<main><button popovertarget="cart" popovertargetaction="toggle">Cart</button>',
+        '<div id="cart" popover="">Empty cart.</div></main>',
+      ].join(''),
+    });
+
+    expect(html).not.toContain('installInlineKovoBootstrap');
+  });
+
+  it('keeps `command`/`commandfor` as client surface because the bootstrap owns their fallback', () => {
+    // The generated installer implements the dialog-invoker fallback (`showModal`), so a
+    // `commandfor` document without the bootstrap is dead in a browser without native invoker
+    // support. If the fallback ever leaves the bootstrap, revisit the marker set with it.
+    expect(inlineKovoLoaderInstallerSource).toContain('showModal');
+
+    const html = documentHtml({
+      body: '<main><button commandfor="details" command="show-modal">Open</button></main>',
     });
 
     expect(html).toContain('installInlineKovoBootstrap');
