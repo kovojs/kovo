@@ -594,6 +594,17 @@ client render graph, hydration mode, or router. Vite's websocket may carry Kovo 
 but every DOM-changing hot action still asks the app shell for server-owned route, query, or
 fragment output before morphing. Unsupported or unproven edits delegate to Vite's full reload.
 
+Kovo proves security posture per commit, not per keystroke. Whole-project analysis — the
+data-plane analyzers of §10.2/§10.3/§11.4 and the project query/mutation fact census of §5.2
+rule 10 — MUST stay off the dev hot-update blocking path: the edited module is staged and served
+against the last-committed fact snapshot, the analysis re-runs asynchronously after edits settle,
+its findings surface as teaching diagnostics when they land, and a changed fact snapshot
+invalidates derived modules and publishes a full reload so the served output converges to the
+proven snapshot. Because a dev-served page may therefore precede its analysis, every dev response
+MUST carry the explicit `Kovo-Dev-Posture: dev-unproven` header — a dev page is never a posture
+proof. `kovo check` and `kovo build` are unaffected: they derive every fact synchronously from the
+current authored source and fail closed (§5.2 rule 9).
+
 The app-facing dev API is a convenience wrapper around the compiler plugin and the app-shell dev
 plugin. App authors should not hand-wire generated refresh registries, HMR endpoints, or client
 module maps into `defineKovo()` or `assemble()`: the request shell remains the owner of dev serving, diagnostics,

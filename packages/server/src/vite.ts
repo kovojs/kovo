@@ -2,7 +2,10 @@
 // engines it owns before the config body runs; the live SSR graph separately preloads the complete
 // server profile before loading the app (SPEC §6.6 rule 6).
 import '@kovojs/compiler/internal/security-bootstrap';
-import { assertDataPlaneStaticAnalysisIntrinsics } from './internal/data-plane-static-analysis-intrinsics.ts';
+import {
+  assertDataPlaneStaticAnalysisIntrinsics,
+  staticAnalysisCanonicalJson,
+} from './internal/data-plane-static-analysis-intrinsics.ts';
 
 assertDataPlaneStaticAnalysisIntrinsics();
 
@@ -129,6 +132,9 @@ interface KovoViteDevServer {
   };
   environments?: Readonly<{
     ssr?: {
+      moduleGraph?: {
+        invalidateAll?(): void;
+      };
       runner?: {
         clearCache(): void;
         import<T = Record<string, unknown>>(id: string): Promise<T>;
@@ -139,8 +145,16 @@ interface KovoViteDevServer {
   middlewares: {
     use(handler: KovoViteMiddleware): void;
   };
+  /** Legacy merged module graph (kept by Vite alongside per-environment graphs). */
+  moduleGraph?: {
+    invalidateAll?(): void;
+  };
   /** Load an SSR module through Vite's transform pipeline. */
   ssrLoadModule(id: string): Promise<Record<string, unknown>>;
+  /** Dev websocket channel; used to publish a convergence reload after async analysis lands. */
+  ws?: {
+    send?(payload: { type: 'full-reload'; path?: string }): void;
+  };
 }
 
 /** Connect-compatible middleware installed by the Kovo Vite plugin. */
@@ -367,6 +381,75 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   // Files for which the data-plane gate last surfaced dev teaching diagnostics, so a follow-up
   // re-evaluation can clear records for files that became clean (SPEC.md §9.5.1).
   let devDataPlaneReportedFiles = new Set<string>();
+  // plans/good-perf.md O5/D5-d: whole-project analysis is off the HMR blocking path. The dev
+  // server captured here lets the async refresh publish a convergence reload when fresh facts
+  // actually differ from the facts the last transforms used.
+  let devServer: KovoViteDevServer | undefined;
+  let devAnalysisRunning = false;
+  let devAnalysisDirty = false;
+  let committedProjectFactsDigest: string | undefined;
+
+  let projectFactsDigestFallback = 0;
+  const projectFactsDigest = (
+    queryFacts: readonly CompilerViteQueryShapeFact[],
+    mutationFacts: ProjectMutationRegistryFacts,
+  ): string => {
+    try {
+      return staticAnalysisCanonicalJson({ mutationFacts, queryFacts });
+    } catch {
+      // An unserializable fact set can never prove "unchanged"; fall back to a unique token so
+      // the comparison conservatively reports a change instead of failing the caller.
+      projectFactsDigestFallback += 1;
+      return `\0kovo-facts-digest-fallback:${projectFactsDigestFallback}`;
+    }
+  };
+
+  // D5-d convergence: fresh facts differ from the facts already-served transforms consumed, so
+  // every derived module is suspect. Invalidate coarsely and reload; this branch is rare (facts
+  // change only when a query/mutation contract changes, not on ordinary component edits).
+  const publishDevFactsConvergence = (): void => {
+    const server = devServer;
+    if (server === undefined) return;
+    try {
+      server.environments?.ssr?.moduleGraph?.invalidateAll?.();
+      server.moduleGraph?.invalidateAll?.();
+      server.environments?.ssr?.runner?.clearCache();
+      server.ws?.send?.({ type: 'full-reload' });
+    } catch {
+      // Convergence is best-effort in dev; the next authored edit re-transforms regardless.
+    }
+  };
+
+  // SPEC.md §9.5.1 / plans/good-perf.md D5-d: re-derive whole-project query/mutation facts
+  // asynchronously after an edit, never blocking HMR staging on them. Kovo proves security
+  // posture per commit (`kovo check`/`kovo build` are unchanged and fail-closed); the dev-served
+  // page is explicitly marked dev-unproven via the `Kovo-Dev-Posture` response header. Analyzer
+  // failures keep the last-good facts and never take down the dev server; the data-plane gate
+  // owns surfacing them as teaching diagnostics.
+  const runDevProjectFactsRefresh = async (): Promise<void> => {
+    try {
+      const mutationFacts = collectCompilerProjectMutationFacts(
+        root,
+        app,
+        dataPlaneDisposition(),
+      );
+      const queryFacts = snapshotBuildArray(
+        await collectCompilerQueryShapeFacts(root, app, dataPlaneDisposition()),
+        'compiler query-shape facts',
+      );
+      const digest = projectFactsDigest(queryFacts, mutationFacts);
+      if (digest === committedProjectFactsDigest) return;
+      // The async refresh only runs under sole compiler ownership (see handleHotUpdate); this
+      // assert is defense-in-depth and returns immediately for an undefined external owner.
+      assertExternalCompilerHasNoDerivedFacts(externalCompilerPlugin, queryFacts, mutationFacts);
+      compilerProjectMutationFacts = mutationFacts;
+      compilerQueryShapeFacts = queryFacts;
+      committedProjectFactsDigest = digest;
+      publishDevFactsConvergence();
+    } catch {
+      // Keep serving with the last-good facts (dev-unproven posture). Dev never crashes HMR.
+    }
+  };
 
   // SPEC.md §11.4 / §10.2 / §10.3: re-run the project-level data-plane gate and surface its
   // findings as dev teaching diagnostics in the existing ledger. Never throws — dev must not
@@ -404,17 +487,41 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
     devDataPlaneReportedFiles = reportedNow;
   };
 
-  // SPEC.md §11.4: re-run the whole-project gate at most once per debounce window when an app
-  // data-plane source file changes — never on every per-file transform/HMR keystroke.
-  const scheduleDevDataPlaneGate = async (file: string): Promise<void> => {
+  // One whole-project dev analysis pass: refresh the compiler's project facts, then surface the
+  // gate's teaching diagnostics. Both consumers read the same content-keyed analysis memo, so the
+  // pass runs the underlying analyzers once. Single-flight with a dirty bit: a save landing while
+  // a pass runs coalesces into exactly one follow-up pass over the newest content (D5-d).
+  const runDevWholeProjectAnalysis = async (): Promise<void> => {
+    if (devAnalysisRunning) {
+      devAnalysisDirty = true;
+      return;
+    }
+    devAnalysisRunning = true;
+    try {
+      do {
+        devAnalysisDirty = false;
+        await runDevProjectFactsRefresh();
+        await runDevDataPlaneGate();
+      } while (devAnalysisDirty);
+    } finally {
+      devAnalysisRunning = false;
+    }
+  };
+
+  // SPEC.md §11.4 / §9.5.1: schedule the whole-project pass at most once per settle window when
+  // an app data-plane source file changes — never on every per-file transform/HMR keystroke, and
+  // never on the HMR blocking path. The settle window deliberately exceeds a typical post-edit
+  // reload round trip so the re-rendered page wins the event loop before the analyzers (which
+  // contain long synchronous stretches) start (plans/good-perf.md D5-d).
+  const scheduleDevWholeProjectAnalysis = (file: string): void => {
     if (viteCommand !== 'serve') return;
     if (!isDataPlaneSourceFile(file, root)) {
       return;
     }
     if (devDataPlaneDebounce) viteClearTimeout(devDataPlaneDebounce);
     devDataPlaneDebounce = viteSetTimeout(() => {
-      void runDevDataPlaneGate();
-    }, DATA_PLANE_GATE_DEBOUNCE_MS);
+      void runDevWholeProjectAnalysis();
+    }, DEV_ANALYSIS_SETTLE_MS);
     devDataPlaneDebounce.unref?.();
   };
 
@@ -478,6 +585,10 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
         app,
         dataPlaneDisposition(),
       );
+      committedProjectFactsDigest = projectFactsDigest(
+        compilerQueryShapeFacts,
+        compilerProjectMutationFacts,
+      );
       const configuredCompiler = configuredExternalCompilerPlugin(config, plugin, app, root);
       assertExternalCompilerHasNoDerivedFacts(
         configuredCompiler,
@@ -505,6 +616,10 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
         root,
         app,
         dataPlaneDisposition(),
+      );
+      committedProjectFactsDigest = projectFactsDigest(
+        compilerQueryShapeFacts,
+        compilerProjectMutationFacts,
       );
       assertExternalCompilerHasNoDerivedFacts(
         externalCompilerPlugin,
@@ -541,6 +656,19 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
           root = rootProperty.value;
         }
       }
+      devServer = server;
+      // SPEC.md §9.5.1 / plans/good-perf.md D5-d: every dev response is explicitly marked as
+      // dev-unproven. Dev serves edits before whole-project analysis completes; security posture
+      // is proven per commit by the unchanged fail-closed `kovo check`/`kovo build` paths. The
+      // marker is unconditional — a dev page is never a posture proof, even between analyses.
+      server.middlewares.use((_request, response, next) => {
+        try {
+          response.setHeader('Kovo-Dev-Posture', 'dev-unproven');
+        } catch {
+          // A torn-down response cannot accept headers; the page it belonged to is gone.
+        }
+        next();
+      });
       const compiler = await compilerPlugin();
       if (externalCompilerPlugin === undefined) await compiler.configureServer?.(server);
       const compilerProvenanceHandoff = createCompilerClientModuleViteHandoff(
@@ -667,16 +795,20 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       return null;
     },
     async handleHotUpdate(context) {
-      // SPEC.md §9.5.1 / §11.4: an app data-plane file changed — re-run the project-level gate
-      // (debounced) so dev teaching diagnostics stay current without per-keystroke analysis.
-      void scheduleDevDataPlaneGate(context.file).catch(() => {});
-
-      // SPEC §5.2 rule 10 / §6.3: imported mutation-form authority comes from a whole-project
-      // source snapshot. Refresh it before the compiler handles this update so a removed or
-      // redirected export cannot retain stale positive provenance through the next HMR transform.
-      // `isDataPlaneSourceFile` is only the boundary/extension trigger; the collectors below are
-      // cheap for non-data-plane projects (marker fast path + content-keyed memos, O5/D5-a/D5-b).
-      if (isDataPlaneSourceFile(context.file, root)) {
+      // plans/good-perf.md O5/D5-d (SPEC.md §9.5.1): whole-project analysis — the compiler's
+      // query/mutation fact snapshot AND the data-plane teaching gate — is OFF the HMR blocking
+      // path. The edit is staged and served immediately against the last-committed facts; the
+      // scheduled pass re-derives the whole-project snapshot asynchronously, surfaces gate
+      // diagnostics when they land, and publishes an invalidate + full reload only when the
+      // fresh facts differ. Dev responses are explicitly marked `Kovo-Dev-Posture: dev-unproven`;
+      // `kovo check` and `kovo build` still derive these facts synchronously and fail closed
+      // (SPEC §5.2 rule 10 posture is proven per commit, not per keystroke).
+      scheduleDevWholeProjectAnalysis(context.file);
+      if (externalCompilerPlugin !== undefined && isDataPlaneSourceFile(context.file, root)) {
+        // Split-ownership embedding (separately configured compiler owner): the adopted owner
+        // cannot receive server-derived facts, so fact derivation stays synchronous here and
+        // the empty-fact adoption is revoked fail-closed the moment facts appear. Only the
+        // supported sole-ownership `kovo dev` path takes the D5-d async pass.
         compilerProjectMutationFacts = collectCompilerProjectMutationFacts(
           root,
           app,
@@ -685,6 +817,10 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
         compilerQueryShapeFacts = snapshotBuildArray(
           await collectCompilerQueryShapeFacts(root, app, dataPlaneDisposition()),
           'compiler query-shape facts',
+        );
+        committedProjectFactsDigest = projectFactsDigest(
+          compilerQueryShapeFacts,
+          compilerProjectMutationFacts,
         );
         assertExternalCompilerHasNoDerivedFacts(
           externalCompilerPlugin,
@@ -926,7 +1062,13 @@ function collectDevStylesheetManifest(
   };
   const appResult = extractAppComponentCss(extractionOptions);
   assertCompleteDevStylesheetExtraction('app', appResult.diagnostics);
-  const packageResult = extractPackageComponentCss('@kovojs/ui', extractionOptions);
+  // plans/good-perf.md O4/D4: dev serves the same import-graph-pruned package stylesheet the
+  // production build emits (build-export.ts uses the identical selection), so dev and prod agree
+  // about which component CSS exists. Unprovable import graphs fall back to the full catalog.
+  const packageResult = extractPackageComponentCss('@kovojs/ui', {
+    ...extractionOptions,
+    components: 'imported',
+  });
   assertCompleteDevStylesheetExtraction('@kovojs/ui', packageResult.diagnostics);
 
   const cssAssets: ComponentCssAsset[] = [];
@@ -1079,8 +1221,12 @@ function slashPath(value: string): string {
 // diagnostics, and the build-only query-shape bridge through the internal adapter.
 // ---------------------------------------------------------------------------
 
-/** Debounce window for the dev-mode re-evaluation; one whole-project pass per burst of edits. */
-const DATA_PLANE_GATE_DEBOUNCE_MS = 200;
+/**
+ * Settle window for the dev-mode whole-project analysis pass; one pass per burst of edits, and
+ * long enough that the post-edit reload's render wins the event loop before the analyzers' long
+ * synchronous stretches begin (plans/good-perf.md D5-d).
+ */
+const DEV_ANALYSIS_SETTLE_MS = 1_500;
 
 async function collectDataPlaneDiagnostics(
   root: string,
