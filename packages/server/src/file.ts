@@ -1,3 +1,5 @@
+import { isAbsolute, resolve } from 'node:path';
+
 import {
   createFrameworkFileSystemBoundary,
   isFrameworkFileSystemBoundary,
@@ -35,15 +37,81 @@ export interface RootedFiles {
   serve(path: string, options: RootedFileServeOptions): Promise<RouteResponseOutcome | undefined>;
 }
 
+const nativePathIsAbsolute = isAbsolute;
+const nativePathResolve = resolve;
+const nativeEncodeURIComponent = encodeURIComponent;
+// SPEC §14 / plans/good-perf.md O16: the generated production server entry sets this before it
+// imports the handler graph so relative `rootedFiles()` roots resolve deterministically against
+// the artifact's staged copies instead of against the launch process's working directory. Boot-read
+// once; app code that later mutates process.env cannot re-point already-resolved roots.
+const stagedRootedFilesDirectory = readStagedRootedFilesDirectory();
+
+function readStagedRootedFilesDirectory(): string | undefined {
+  const environment = typeof process === 'object' && process !== null ? process.env : undefined;
+  const value = environment?.KOVO_ROOTED_FILES_DIR;
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+/**
+ * @internal Deterministic single-segment staging name shared by the runtime resolver above and
+ * the build preset emitters (SPEC §14). The `root-` prefix guarantees the name is never `.`/`..`,
+ * and percent-encoding folds every path separator into the single directory entry name.
+ */
+export function stagedRootedFilesEntryName(root: string): string {
+  return `root-${nativeEncodeURIComponent(root)}`;
+}
+
+function stagedRootedFilesRoot(root: string): string | undefined {
+  if (stagedRootedFilesDirectory === undefined) return undefined;
+  if (typeof root !== 'string' || root.length === 0 || nativePathIsAbsolute(root)) {
+    return undefined;
+  }
+  return nativePathResolve(stagedRootedFilesDirectory, stagedRootedFilesEntryName(root));
+}
+
+const MAX_RECORDED_ROOTED_FILES_ROOTS = 128;
+const rootedFilesBuildRoots: { readonly root: string; readonly spec: string }[] = [];
+
+function recordRootedFilesBuildRoot(spec: string, root: string): void {
+  // Consumed only by build preset emitters in the `kovo build` process; the cap keeps a server
+  // that constructs capabilities per request from growing this ledger without bound.
+  if (rootedFilesBuildRoots.length >= MAX_RECORDED_ROOTED_FILES_ROOTS) return;
+  for (let index = 0; index < rootedFilesBuildRoots.length; index += 1) {
+    if (rootedFilesBuildRoots[index]!.spec === spec) return;
+  }
+  rootedFilesBuildRoots[rootedFilesBuildRoots.length] = witnessFreeze({ root, spec });
+}
+
+/**
+ * @internal Build-time inventory of constructed `rootedFiles()` roots so preset emitters can
+ * stage relative roots into the deploy artifact (SPEC §14; plans/good-perf.md O16).
+ */
+export function rootedFilesBuildInventory(): readonly {
+  readonly root: string;
+  readonly spec: string;
+}[] {
+  const snapshot: { readonly root: string; readonly spec: string }[] = [];
+  for (let index = 0; index < rootedFilesBuildRoots.length; index += 1) {
+    snapshot[index] = rootedFilesBuildRoots[index]!;
+  }
+  return witnessFreeze(snapshot);
+}
+
 /**
  * Create a path-traversal-safe file serving primitive for a single filesystem root.
  *
  * SPEC §6.6 / §9.1: raw file/path sinks must be routed through a safe framework surface. This
  * primitive treats traversal, symlink escape, directories, missing files, and open races as generic
  * not-found outcomes so callers do not branch on filesystem internals.
+ *
+ * SPEC §14: a **relative** root is resolved against the process working directory in dev and at
+ * build time, and against the artifact's staged `rooted/` copies in the generated production
+ * server — `kovo build` snapshots each relative root into the deploy artifact so the server never
+ * depends on files outside its own output. Absolute roots always name live deploy-host paths.
  */
 export async function rootedFiles(root: string): Promise<RootedFiles> {
-  const fileSystem = await createFrameworkFileSystemBoundary(root);
+  const fileSystem = await createFrameworkFileSystemBoundary(stagedRootedFilesRoot(root) ?? root);
+  if (typeof root === 'string') recordRootedFilesBuildRoot(root, fileSystem.root);
   const capability: RootedFiles = {
     root: fileSystem.root,
     serve: (path, options) => serveRootedFile(fileSystem, path, options),

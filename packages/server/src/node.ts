@@ -1,6 +1,7 @@
+import { randomBytes } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { createBrotliCompress, createGzip } from 'node:zlib';
+import { constants as zlibConstants, createBrotliCompress, createGzip } from 'node:zlib';
 import {
   IncomingMessage as NativeIncomingMessage,
   ServerResponse as NativeServerResponse,
@@ -271,6 +272,13 @@ const nativeReadableToWeb = Readable.toWeb;
 const nativePipeline = pipeline;
 const nativeCreateBrotliCompress = createBrotliCompress;
 const nativeCreateGzip = createGzip;
+const nativeRandomBytes = randomBytes;
+// SPEC §9.5 transport compression: brotli quality for per-request dynamic responses. Node's
+// default quality 11 costs ~163 ms for a 225 KB document versus ~1.4 ms at quality 5 for a
+// nearly identical wire size (plans/good-perf.md O1); quality 11 belongs to build-time static
+// compression, never to the per-request render path.
+const BROTLI_DYNAMIC_QUALITY = 5;
+const brotliQualityParam = zlibConstants.BROTLI_PARAM_QUALITY;
 const nativeUrlHashGetter = requiredGetter(NativeURL.prototype, 'hash');
 const nativeUrlHostGetter = requiredGetter(NativeURL.prototype, 'host');
 const nativeUrlHrefGetter = requiredGetter(NativeURL.prototype, 'href');
@@ -1128,6 +1136,8 @@ export async function writeWebResponseToNode(
     setHeader(responseHeaders, 'Content-Encoding', compression);
     deleteHeader(responseHeaders, 'Content-Length');
     appendVary(responseHeaders, 'Accept-Encoding');
+    // SPEC §9.5 BREACH posture: per-response random length noise on every compressed response.
+    setHeader(responseHeaders, 'Kovo-Pad', compressionPaddingValue());
   }
   const headers = responseHeadersToNodeHeaders(responseHeaders);
   const earlyHints = getHeader(responseHeaders, 'Link');
@@ -1161,13 +1171,47 @@ export async function writeWebResponseToNode(
   // error mid-body must not let the caller append error text onto the partial response —
   // tear the socket so the client sees a truncated/aborted transfer, then reject so the
   // caller's catch knows the write failed (its `headersSent` guard short-circuits).
-  if (compression === 'br') {
-    await nativePipeline(source, nativeCreateBrotliCompress(), nodeResponse);
-  } else if (compression === 'gzip') {
-    await nativePipeline(source, nativeCreateGzip(), nodeResponse);
-  } else {
-    await nativePipeline(source, nodeResponse);
+  try {
+    if (compression === 'br') {
+      await nativePipeline(
+        source,
+        nativeCreateBrotliCompress({ params: { [brotliQualityParam]: BROTLI_DYNAMIC_QUALITY } }),
+        nodeResponse,
+      );
+    } else if (compression === 'gzip') {
+      await nativePipeline(source, nativeCreateGzip(), nodeResponse);
+    } else {
+      await nativePipeline(source, nodeResponse);
+    }
+  } catch (error) {
+    // O13 (plans/good-perf.md): a peer that goes away mid-body (for example Chromium canceling
+    // a lazy image load) is ordinary transport teardown, not a server fault. Complete the E1
+    // teardown quietly instead of rejecting into the caller's unhandled-error path; genuine
+    // source-stream failures still reject so the caller can log and tear the socket.
+    if (!isClientDisconnectStreamError(error)) throw error;
+    if (responseTransport.destroy !== undefined) {
+      witnessReflectApply(responseTransport.destroy, nodeResponse, []);
+    }
   }
+}
+
+/**
+ * SPEC §9.5 / O13: classify pipeline failures caused by the peer closing or the response
+ * transport already being torn down. Reads only the own `code` data property so a hostile
+ * error object cannot re-route a genuine server failure through the quiet path with a getter.
+ */
+function isClientDisconnectStreamError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const descriptor = witnessGetOwnPropertyDescriptor(error, 'code');
+  if (descriptor === undefined || !('value' in descriptor)) return false;
+  const code = descriptor.value;
+  return (
+    code === 'ERR_STREAM_PREMATURE_CLOSE' ||
+    code === 'ERR_STREAM_UNABLE_TO_PIPE' ||
+    code === 'ERR_STREAM_DESTROYED' ||
+    code === 'EPIPE' ||
+    code === 'ECONNRESET'
+  );
 }
 
 function appendAdditionalNodeSetCookies(
@@ -1434,25 +1478,39 @@ function responseCompression(
   if (method === 'HEAD' || response.body === null) return undefined;
   if (response.status === 204 || response.status === 304) return undefined;
   if (hasHeader(response.headers, 'Content-Encoding')) return undefined;
-  if (isSensitiveResponse(response.headers)) return undefined;
+  // SPEC §9.5 transport compression (plans/good-perf.md D1): cookie-bearing, `no-store`, and
+  // `private` responses are compressed like every other eligible response. Refusing to compress
+  // is not the BREACH mitigation Kovo ships: CSRF tokens are XOR-masked with fresh randomness at
+  // every mint (csrf.ts createCsrfToken), so the one framework-owned body secret never repeats
+  // across responses, and every compressed response carries `Kovo-Pad` random length noise
+  // (compressionPaddingValue). RFC 9111 `no-transform` remains the sole authored opt-out.
+  const cacheControl = getHeader(response.headers, 'Cache-Control') ?? '';
+  if (cacheControlHasDirective(cacheControl, 'no-transform')) return undefined;
   if (!isCompressibleContentType(getHeader(response.headers, 'Content-Type') ?? '')) {
     return undefined;
   }
   return preferredCompression(options.acceptEncoding ?? '');
 }
 
-function isSensitiveResponse(headers: Headers): boolean {
-  const cacheControl = getHeader(headers, 'Cache-Control') ?? '';
-  if (
-    cacheControlHasDirective(cacheControl, 'no-transform') ||
-    cacheControlHasDirective(cacheControl, 'no-store') ||
-    cacheControlHasDirective(cacheControl, 'private')
-  ) {
-    return true;
+const PADDING_HEX_DIGITS = '0123456789abcdef';
+
+/**
+ * SPEC §9.5 BREACH posture: uniform random length noise (1..64 hex chars) attached to every
+ * compressed response as `Kovo-Pad`. The header rides the same encrypted stream the compressed
+ * body does, so a ciphertext-length observer sees the compressed size plus uniform noise; a
+ * compression-oracle attack must average that noise away across many samples instead of reading
+ * a deterministic length signal. Unconditional on compression so its presence is never an oracle
+ * for response sensitivity.
+ */
+function compressionPaddingValue(): string {
+  const bytes = witnessReflectApply<Uint8Array>(nativeRandomBytes, undefined, [33]);
+  const length = (bytes[0]! & 63) + 1;
+  let value = '';
+  for (let index = 0; index < length; index += 1) {
+    const byte = bytes[1 + (index >> 1)]!;
+    value += PADDING_HEX_DIGITS[(index & 1) === 0 ? (byte >> 4) & 15 : byte & 15]!;
   }
-  if (hasHeader(headers, 'Set-Cookie')) return true;
-  const vary = getHeader(headers, 'Vary') ?? '';
-  return commaSeparatedTokenContains(vary, 'cookie');
+  return value;
 }
 
 function preferredCompression(acceptEncoding: string): 'br' | 'gzip' | undefined {

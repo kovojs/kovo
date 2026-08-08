@@ -24,15 +24,17 @@ import {
 import { connect as netConnect, createServer as createNetServer } from 'node:net';
 import type { Socket } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { isAbsolute, join, relative } from 'node:path';
 import { Readable } from 'node:stream';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 
 import * as packageBuildApi from '@kovojs/server/build';
 import { clientModuleRepresentationDigest } from '@kovojs/core/internal/client-module-url';
 import { createApp, createRequestHandler } from './app.js';
 import { resolveRequestClientIp } from './app-load-shed.js';
+import { rootedFiles } from './file.js';
 import { computeRenderPlanFingerprint, versionedClientModuleHref } from './client-modules.js';
 import { renderedHtml } from './html.js';
 import { route } from './route.js';
@@ -2124,7 +2126,9 @@ export default createRequestHandler(app);
       const distDir = join(root, 'dist');
       await mkdir(join(distDir, '.vite'), { recursive: true });
       await mkdir(join(distDir, 'assets'), { recursive: true });
-      await writeFile(join(distDir, 'assets/cart.css'), 'body { color: navy; }');
+      // ≥1024 bytes so the O3 static compression threshold engages for this asset.
+      const cartCssSource = `body { color: navy; }${'\n.cart-pad { color: navy; }'.repeat(64)}`;
+      await writeFile(join(distDir, 'assets/cart.css'), cartCssSource);
       await writeFile(
         join(distDir, '.vite/manifest.json'),
         JSON.stringify({
@@ -2272,10 +2276,20 @@ export default async function handler(request) {
       expect(nodeServer).toContain(
         'if (rejectPreparedNodeRequestIngress(prepared, nodeResponse)) return',
       );
-      expect(nodeServer).toContain('const { httpVersion, method, target } =');
+      expect(nodeServer).toContain('const { acceptEncoding, httpVersion, method, target } =');
+      // O13a (SPEC §9.5): the pre-dispatch bodyless arm forced Connection: close on every GET;
+      // the generated server must not arm teardown before dispatch for payload-free methods.
+      // The only remaining pre-write arms are the post-dispatch one and the rejection writers.
+      expect(nodeServer).not.toMatch(
+        /isBodylessMethod\(method\)\)\s*\{?\s*armIncompleteNodeRequestClose/u,
+      );
       expect(
         nodeServer.indexOf('const prepared = prepareNodeRequestIngress(nodeRequest, options)'),
-      ).toBeLessThan(nodeServer.indexOf('await maybeServeStatic(target, method, nodeResponse)'));
+      ).toBeLessThan(
+        nodeServer.indexOf(
+          'await maybeServeStatic(target, method, nodeResponse, prepared.request.headers)',
+        ),
+      );
       expect(nodeServer.indexOf('prepareNodeRequestIngress(nodeRequest, options)')).toBeLessThan(
         nodeServer.indexOf('await loadHandler()'),
       );
@@ -2362,7 +2376,7 @@ export default async function handler(request) {
         expect(canonicalAbsoluteStatic).toContain('body { color: navy; }');
 
         const fetchedAsset = await fetch(`${baseUrl}/assets/cart.css`);
-        await expect(fetchedAsset.text()).resolves.toBe('body { color: navy; }');
+        await expect(fetchedAsset.text()).resolves.toBe(cartCssSource);
 
         const declaredOversized = await rawHttpExchange(
           baseUrl,
@@ -2428,6 +2442,35 @@ export default async function handler(request) {
           'csrf=c1; Path=/; SameSite=Strict',
         ]);
 
+        // O13a (SPEC §9.5): a plain document GET keeps the connection reusable. The removed
+        // pre-dispatch teardown arm used to stamp Connection: close on every bodyless request
+        // and exhausted the ephemeral port range under load.
+        const keepAliveProbe = await nodeGet(baseUrl, '/hello', { connection: 'keep-alive' });
+        expect(keepAliveProbe.statusCode).toBe(200);
+        expect(keepAliveProbe.headers.connection).not.toBe('close');
+
+        // O1/D1 (SPEC §9.5): dynamic responses negotiate compression and carry Kovo-Pad
+        // random length noise; cookie-bearing responses compress identically.
+        const compressedDynamic = await nodeGet(baseUrl, '/hello', {
+          'accept-encoding': 'br, gzip',
+        });
+        expect(compressedDynamic.headers['content-encoding']).toBe('br');
+        expect(compressedDynamic.headers['kovo-pad']).toMatch(/^[0-9a-f]{1,64}$/u);
+        expect(compressedDynamic.headers.vary).toContain('Accept-Encoding');
+        expect(brotliDecompressSync(compressedDynamic.bodyBytes).toString('utf8')).toContain(
+          'route:/hello',
+        );
+        const compressedCookie = await nodeGet(baseUrl, '/cookies', {
+          'accept-encoding': 'gzip',
+        });
+        expect(compressedCookie.headers['set-cookie']).toEqual([
+          'session=s1; Path=/; HttpOnly',
+          'csrf=c1; Path=/; SameSite=Strict',
+        ]);
+        expect(compressedCookie.headers['cache-control']).toBe('private, no-store');
+        expect(compressedCookie.headers['content-encoding']).toBe('gzip');
+        expect(compressedCookie.headers['kovo-pad']).toMatch(/^[0-9a-f]{1,64}$/u);
+
         const clientModuleResponse = await fetch(`${baseUrl}${cartClientHref}`);
         await expect(clientModuleResponse.text()).resolves.toBe(cartClientSource);
         expect(clientModuleResponse.headers.get('cache-control')).toBe(
@@ -2438,23 +2481,73 @@ export default async function handler(request) {
         );
         expect(clientModuleResponse.headers.get('x-content-type-options')).toBe('nosniff');
         expect(clientModuleResponse.headers.get('access-control-allow-origin')).toBeNull();
-        expect(clientModuleResponse.headers.get('vary')).toBeNull();
+        // O3 (SPEC §9.5): compressible static files declare the Accept-Encoding cache dimension
+        // and a strong content ETag.
+        expect(clientModuleResponse.headers.get('vary')).toBe('Accept-Encoding');
+        expect(clientModuleResponse.headers.get('etag')).toMatch(/^"[0-9a-f]{32}"$/u);
         expect(clientModuleResponse.headers.get('set-cookie')).toBeNull();
         expect(clientModuleResponse.headers.get('content-type')).toBe(
           'text/javascript; charset=utf-8',
         );
 
-        const assetResponse = await fetch(`${baseUrl}/assets/cart.css`);
-        await expect(assetResponse.text()).resolves.toBe('body { color: navy; }');
-        expect(assetResponse.headers.get('cache-control')).toBe(
+        const assetResponse = await nodeGet(baseUrl, '/assets/cart.css');
+        expect(assetResponse.body).toBe(cartCssSource);
+        expect(assetResponse.headers['cache-control']).toBe('public, max-age=0, must-revalidate');
+        expect(assetResponse.headers['cross-origin-resource-policy']).toBe('same-origin');
+        expect(assetResponse.headers['x-content-type-options']).toBe('nosniff');
+        expect(assetResponse.headers['access-control-allow-origin']).toBeUndefined();
+        expect(assetResponse.headers.vary).toBe('Accept-Encoding');
+        expect(assetResponse.headers['set-cookie']).toBeUndefined();
+        expect(assetResponse.headers['content-type']).toBe('text/css; charset=utf-8');
+        // A client that sends no Accept-Encoding receives identity bytes.
+        expect(assetResponse.headers['content-encoding']).toBeUndefined();
+
+        // O3 (SPEC §9.5; plans/good-perf.md D3): must-revalidate now actually revalidates —
+        // If-None-Match against the strong content ETag returns 304 with no body instead of
+        // re-downloading the asset on every navigation.
+        const assetEtag = assetResponse.headers.etag;
+        expect(assetEtag).toMatch(/^"[0-9a-f]{32}"$/u);
+        const revalidatedAsset = await nodeGet(baseUrl, '/assets/cart.css', {
+          'if-none-match': assetEtag!,
+        });
+        expect(revalidatedAsset.statusCode).toBe(304);
+        expect(revalidatedAsset.headers.etag).toBe(assetEtag);
+        expect(revalidatedAsset.headers['cache-control']).toBe(
           'public, max-age=0, must-revalidate',
         );
-        expect(assetResponse.headers.get('cross-origin-resource-policy')).toBe('same-origin');
-        expect(assetResponse.headers.get('x-content-type-options')).toBe('nosniff');
-        expect(assetResponse.headers.get('access-control-allow-origin')).toBeNull();
-        expect(assetResponse.headers.get('vary')).toBeNull();
-        expect(assetResponse.headers.get('set-cookie')).toBeNull();
-        expect(assetResponse.headers.get('content-type')).toBe('text/css; charset=utf-8');
+        expect(revalidatedAsset.body).toBe('');
+        const weakRevalidatedAsset = await nodeGet(baseUrl, '/assets/cart.css', {
+          'if-none-match': `W/${assetEtag!}`,
+        });
+        expect(weakRevalidatedAsset.statusCode).toBe(304);
+        const missRevalidatedAsset = await nodeGet(baseUrl, '/assets/cart.css', {
+          'if-none-match': '"0000000000000000000000000000dead"',
+        });
+        expect(missRevalidatedAsset.statusCode).toBe(200);
+        expect(missRevalidatedAsset.body).toBe(cartCssSource);
+
+        // O1 (SPEC §9.5): static bytes above the 1024-byte threshold are served brotli/gzip
+        // compressed by content identity, with an exact Content-Length for the encoded bytes.
+        const compressedAsset = await nodeGet(baseUrl, '/assets/cart.css', {
+          'accept-encoding': 'br, gzip',
+        });
+        expect(compressedAsset.statusCode).toBe(200);
+        expect(compressedAsset.headers['content-encoding']).toBe('br');
+        expect(compressedAsset.headers.etag).toBe(assetEtag);
+        expect(Number(compressedAsset.headers['content-length'])).toBe(
+          compressedAsset.bodyBytes.byteLength,
+        );
+        expect(compressedAsset.bodyBytes.byteLength).toBeLessThan(
+          Buffer.byteLength(cartCssSource),
+        );
+        expect(brotliDecompressSync(compressedAsset.bodyBytes).toString('utf8')).toBe(
+          cartCssSource,
+        );
+        const gzipAsset = await nodeGet(baseUrl, '/assets/cart.css', {
+          'accept-encoding': 'gzip',
+        });
+        expect(gzipAsset.headers['content-encoding']).toBe('gzip');
+        expect(gunzipSync(gzipAsset.bodyBytes).toString('utf8')).toBe(cartCssSource);
 
         const missingClientModule = await fetch(`${baseUrl}${missingClientHref}`);
         expect(missingClientModule.status).toBe(404);
@@ -4680,7 +4773,10 @@ export default async function handler(request) {
         expect(staticResponse.headers.get('content-type')).toBe('text/html; charset=utf-8');
         expect(staticResponse.headers.get('x-content-type-options')).toBe('nosniff');
         expect(staticResponse.headers.get('cache-control')).toBeNull();
-        expect(staticResponse.headers.get('vary')).toBeNull();
+        // O3 (SPEC §9.5): compressible static files negotiate Content-Encoding, so they always
+        // declare the Accept-Encoding cache dimension and a strong content ETag.
+        expect(staticResponse.headers.get('vary')).toBe('Accept-Encoding');
+        expect(staticResponse.headers.get('etag')).toMatch(/^"[0-9a-f]{32}"$/u);
         expect(staticResponse.headers.get('set-cookie')).toBeNull();
 
         const dynamicResponse = await fetch(`${baseUrl}/dynamic`);
@@ -5853,6 +5949,53 @@ export default async function handler() {
         },
       }),
     ).toThrow(/finite non-negative safe integer/u);
+  });
+
+  // O16 (SPEC §14; plans/good-perf.md): a relative rootedFiles() root constructed while the app
+  // evaluated during `kovo build` is staged into the node artifact, and the generated server
+  // publishes the staged directory before importing the handler. Without this the artifact threw
+  // "Filesystem root '.../dist/shared/images' does not exist" and exited before listening.
+  // Declared last in this describe so the module-global inventory this test seeds cannot leak
+  // into the artifacts asserted by the earlier preset-emission tests.
+  it('stages relative rootedFiles roots into the node artifact (O16)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-node-rooted-staging-'));
+
+    try {
+      const imagesDir = join(root, 'shared-images');
+      await mkdir(imagesDir, { recursive: true });
+      await writeFile(join(imagesDir, 'product-01.webp'), 'staged-image-bytes');
+      const relativeSpec = relative(process.cwd(), imagesDir);
+      expect(isAbsolute(relativeSpec)).toBe(false);
+      const capability = await rootedFiles(relativeSpec);
+      expect(capability.root.endsWith('shared-images')).toBe(true);
+
+      const build = await writeKovoNeutralBuild({
+        app: createApp({}),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource: 'export default async () => new Response("ok");\n',
+      });
+      const nodeOutDir = join(root, 'node-output');
+      await node({ dockerfile: false }).emit!(build, {
+        declaredEnv: [],
+        log() {},
+        outDir: nodeOutDir,
+        projectRoot: root,
+        readNeutral: () => build,
+      });
+
+      const stagedEntry = join(
+        nodeOutDir,
+        'rooted',
+        `root-${encodeURIComponent(relativeSpec)}`,
+        'product-01.webp',
+      );
+      await expect(readFile(stagedEntry, 'utf8')).resolves.toBe('staged-image-bytes');
+      const serverSource = await readFile(join(nodeOutDir, 'server.mjs'), 'utf8');
+      expect(serverSource).toContain("process.env.KOVO_ROOTED_FILES_DIR = pathResolve(");
+      expect(serverSource).toContain("'rooted',");
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
   });
 });
 
@@ -7057,24 +7200,32 @@ function sqliteDurableTaskStoreError(presetName: string, taskList: string) {
 async function nodeGet(
   baseUrl: string,
   pathname: string,
-): Promise<{ body: string; headers: IncomingHttpHeaders; statusCode: number }> {
+  requestHeaders?: Record<string, string>,
+): Promise<{
+  body: string;
+  bodyBytes: Buffer;
+  headers: IncomingHttpHeaders;
+  statusCode: number;
+}> {
   const url = new URL(pathname, baseUrl);
   return await new Promise((resolve, reject) => {
     const request = nodeHttpRequest(
       {
+        ...(requestHeaders === undefined ? {} : { headers: requestHeaders }),
         hostname: url.hostname,
         path: `${url.pathname}${url.search}`,
         port: url.port,
       },
       (response) => {
-        let body = '';
-        response.setEncoding('utf8');
-        response.on('data', (chunk: string) => {
-          body += chunk;
+        const chunks: Buffer[] = [];
+        response.on('data', (chunk: Buffer) => {
+          chunks.push(chunk);
         });
         response.on('end', () => {
+          const bodyBytes = Buffer.concat(chunks);
           resolve({
-            body,
+            body: bodyBytes.toString('utf8'),
+            bodyBytes,
             headers: response.headers,
             statusCode: response.statusCode ?? 0,
           });
