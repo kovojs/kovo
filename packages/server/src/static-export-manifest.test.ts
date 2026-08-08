@@ -54,6 +54,9 @@ const staticExportBootstrapCspHash = cspSha256(
   createInlineKovoLoaderSource(JSON.stringify(staticExportRuntimeHref), '(url)=>import(url)'),
 );
 const staticExportDocumentCsp = `default-src 'self'; script-src 'self' '${staticExportBootstrapCspHash}'; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; report-to kovo-csp; require-trusted-types-for 'script'; trusted-types kovo kovo-browser`;
+// SPEC §4.4 / O10-D7 (plans/good-perf.md): a document with no client surface ships no inline
+// bootstrap, so its policy carries no inline-script hash at all — strictly tighter, not looser.
+const staticExportLoaderlessDocumentCsp = `default-src 'self'; script-src 'self'; style-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; report-to kovo-csp; require-trusted-types-for 'script'; trusted-types kovo kovo-browser`;
 const staticExportReportingHeaders = {
   'report-to': '{"endpoints":[{"url":"/_kovo/reports/csp"}],"group":"kovo-csp","max_age":10886400}',
   'reporting-endpoints': 'kovo-csp="/_kovo/reports/csp"',
@@ -295,7 +298,7 @@ describe('server static export', () => {
         },
         {
           headers: {
-            'content-security-policy': staticExportDocumentCsp,
+            'content-security-policy': staticExportLoaderlessDocumentCsp,
             'content-type': 'text/html; charset=utf-8',
             link: '</assets/docs.css>; rel=preload; as=style',
             'origin-agent-cluster': '?1',
@@ -352,7 +355,7 @@ describe('server static export', () => {
         },
         {
           headers: {
-            'content-security-policy': staticExportDocumentCsp,
+            'content-security-policy': staticExportLoaderlessDocumentCsp,
             'content-type': 'text/html; charset=utf-8',
             link: '</assets/docs.css>; rel=preload; as=style',
             'origin-agent-cluster': '?1',

@@ -195,6 +195,27 @@ export interface PageHints {
   html: string;
 }
 
+/**
+ * @internal Head hints split by authority class so the document shell can order them (SPEC §6.6,
+ * §8, §13.1).
+ *
+ * `stylesheetHtml` is the render-blocking, **non-executable** CSS delivery — inline critical
+ * `<style>` plus the `<link rel="stylesheet">` (or its deferred `rel="preload"` + `<noscript>`
+ * form). CSS cannot replace fetch, DOM lookup, navigation, lifecycle, or timer controls, so it is
+ * the one head class that may precede the SPEC §4.4 framework bootstrap without weakening the
+ * browser authority boundary. Everything that *can* execute — module preloads, an authored
+ * bootstrap script, speculation rules — stays in `html`, which the shell keeps after the bootstrap.
+ *
+ * `clientRuntimeDependent` is true when a rendered hint itself needs the §4.4 loader to be
+ * installed: a `deferFull` stylesheet is only promoted from `rel="preload"` to `rel="stylesheet"`
+ * by the bootstrap, and module preloads / an authored bootstrap script imply client modules that
+ * the loader owns the allowlist for.
+ */
+export interface PageHintParts extends PageHints {
+  clientRuntimeDependent: boolean;
+  stylesheetHtml: string;
+}
+
 interface InlineHtmlWithCsp {
   csp?: CspInlineMetadata;
   html: string;
@@ -357,6 +378,23 @@ export function renderPageHints(
   options: PageHintOptions,
   context: PageHintRenderContext = {},
 ): PageHints {
+  const parts = renderPageHintParts(options, context);
+  return {
+    ...(parts.csp === undefined ? {} : { csp: parts.csp }),
+    earlyHints: parts.earlyHints,
+    html: `${parts.stylesheetHtml}${parts.html}`,
+  };
+}
+
+/**
+ * Render framework document hints split by authority class (SPEC §6.6/§8/§13.1).
+ *
+ * @internal
+ */
+export function renderPageHintParts(
+  options: PageHintOptions,
+  context: PageHintRenderContext = {},
+): PageHintParts {
   const snapshot = snapshotPageHintOptions(options);
   const moduleCandidates = snapshot.modulepreloads ?? [];
   const modulepreloads = dedupe(moduleCandidates);
@@ -383,12 +421,19 @@ export function renderPageHints(
   for (let index = 0; index < cspParts.length; index += 1) {
     csp = mergeCspInlineMetadata(csp, cspParts[index]);
   }
+  // O12 (plans/good-perf.md): CSS delivery is emitted as its own head part so the document shell
+  // can place it ahead of the SPEC §4.4 inline bootstrap. Kovo's bootstrap carries ~22.8 KB of
+  // inline body, which previously pushed the only `<link rel=stylesheet>` past byte 23,000 —
+  // outside the first congestion window — even though the bytes are non-executable CSS.
+  const stylesheetHtmlParts: string[] = [];
+  for (let index = 0; index < stylesheetHints.length; index += 1) {
+    securityArrayPush(stylesheetHtmlParts, stylesheetHints[index]!.html);
+  }
+  const stylesheetHtml = securityArrayJoin(stylesheetHtmlParts, '');
+
   const htmlParts = renderRouteMeta(snapshot.meta, context);
   for (let index = 0; index < i18nCatalogs.length; index += 1) {
     securityArrayPush(htmlParts, i18nCatalogs[index]!.html);
-  }
-  for (let index = 0; index < stylesheetHints.length; index += 1) {
-    securityArrayPush(htmlParts, stylesheetHints[index]!.html);
   }
   for (let index = 0; index < modulepreloads.length; index += 1) {
     const href = safeHintUrl(modulepreloads[index]!, 'modulepreload');
@@ -407,10 +452,22 @@ export function renderPageHints(
   if (speculationRules.html !== '') securityArrayPush(htmlParts, speculationRules.html);
   const html = securityArrayJoin(htmlParts, '');
 
+  // SPEC §4.4: a `deferFull` stylesheet ships as `rel="preload"` plus a `<noscript>` fallback and is
+  // promoted to `rel="stylesheet"` by the inline bootstrap's `ps()` step. With JS enabled the
+  // `<noscript>` copy never applies, so dropping the bootstrap from such a document would leave the
+  // page permanently unstyled. Module preloads and an authored bootstrap script likewise imply
+  // client modules whose allowlist the loader owns.
+  let clientRuntimeDependent = modulepreloads.length > 0 || snapshot.bootstrapScript !== undefined;
+  for (let index = 0; index < stylesheets.length; index += 1) {
+    if (stylesheets[index]!.deferFull === true) clientRuntimeDependent = true;
+  }
+
   return {
     ...(hasCspInlineMetadata(csp) ? { csp } : {}),
+    clientRuntimeDependent,
     earlyHints: renderEarlyHints(stylesheets, modulepreloads),
     html,
+    stylesheetHtml,
   };
 }
 

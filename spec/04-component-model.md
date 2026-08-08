@@ -254,7 +254,7 @@ last successfully committed state snapshot.
 
 ### 4.4 The loader
 
-A gzip-capped inline bootstrap is the only always-loaded JavaScript. Its enforced
+A gzip-capped inline bootstrap is the only JavaScript Kovo ever puts in a document. Its enforced
 ceiling lives in `inlineKovoLoaderGzipByteBudget` (currently 10,500 gzip bytes).
 The bootstrap captures first interactions, queues or falls back safely while the
 runtime loads, promotes deferred styles, and imports the versioned Kovo deferred
@@ -262,6 +262,27 @@ runtime module from the framework-owned `/c/` module registry. The deferred
 runtime module is not part of the first-paint byte budget and has no SPEC gzip
 cap; it is versioned, cacheable, and loaded by `import()` after the bootstrap's
 first-interaction or post-paint trigger.
+
+**Emission is conditional (normative).** The bootstrap is emitted only into a document that carries
+client surface — anything below the deferred runtime's responsibilities: an island or delegated
+handler or execution trigger, an update-plan binding, an enhanced form, `<kovo-query>` truth, a
+deferred region, a `deferFull` stylesheet the bootstrap alone promotes (§13.1), an app-declared
+module preload or bootstrap script, or a session-dependent/fingerprinted document whose bfcache
+restore the runtime must force through the server (§8, §9.3). A document with none of those has
+nothing for the deferred runtime to do, so it ships **zero** JavaScript: no inline bootstrap, no
+`import()`, and correspondingly no inline-script hash in its `Content-Security-Policy` — a strictly
+tighter policy, never a looser one. The test is a deliberate over-approximation read only in the
+fail-safe direction: any framework-emitted client marker keeps the bootstrap, and only the total
+absence of every marker drops it. A fully server-rendered document therefore also has no enhanced
+navigation; it navigates natively, which is the same behavior it already has before the runtime
+settles.
+
+Ordering inside `<head>` is fixed by authority class, not by hint kind. Non-executable CSS delivery
+— inline critical `<style>` and the `<link rel="stylesheet">` (or its deferred `rel="preload"` +
+`<noscript>` form) — is emitted **before** the bootstrap so the browser can discover the stylesheet
+within the first congestion window. Everything that can execute — app-declared module preloads, an
+authored bootstrap script, structured-document head scripts — is emitted **after** it, so the
+bootstrap still installs its controls before any app-authored script runs (§6.6, §8).
 
 Deferred runtime responsibilities:
 

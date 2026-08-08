@@ -590,7 +590,9 @@ describe('server app shell document assembly', () => {
   // surface the assembled CSP so the dispatch path can emit a Content-Security-Policy.
   it('attaches baseline security headers and plumbs document.csp on HTML responses (CSP-3)', () => {
     const wrapped = renderRouteDocumentResponse({
-      body: '<main>Orders</main>',
+      // SPEC §4.4 / O10-D7: the inline bootstrap — and therefore its script hash — is emitted only
+      // for a document that carries client surface, so this fixture declares an island handler.
+      body: '<main kovo-c="orders"><button on:click="/c/orders.client.js#refresh">Refresh</button></main>',
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
       status: 200,
     });
@@ -760,8 +762,11 @@ describe('server app shell document assembly', () => {
   // SF (secure-framework Tier 3, SPEC §6.6): the strict CSP is auto-attached to every
   // framework-rendered document by default (was previously opt-in via `document.csp`).
   describe('strict default-on Content-Security-Policy (SF Tier 3)', () => {
+    // SPEC §4.4 / O10-D7 (plans/good-perf.md): the always-loaded bootstrap is emitted only for a
+    // document that carries client surface. These cases assert the loader's inline script hash
+    // rides in `script-src`, so the fixture declares an island handler.
     const htmlResponse = () => ({
-      body: '<main>Orders</main>',
+      body: '<main kovo-c="orders"><button on:click="/c/orders.client.js#refresh">Refresh</button></main>',
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
       status: 200 as const,
     });
