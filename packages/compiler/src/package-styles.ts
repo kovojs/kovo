@@ -938,7 +938,7 @@ function selectImportedPackageComponentSources(
   if (appSources === undefined || appSources.files.length === 0) {
     compilerArrayAppend(
       fallbackReasons,
-      `app entry ${options.fileName} could not be read for import-graph analysis`,
+      `app entry ${relativeToRoot(rootDir, nativePathResolve(options.fileName))} could not be read for import-graph analysis`,
       'Compiler import-selection fallback reasons',
     );
   }
