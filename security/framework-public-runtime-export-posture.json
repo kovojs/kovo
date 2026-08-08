@@ -836,7 +836,7 @@
           "reason": "The diagnostic schema constant belongs to the build-time CLI package and is not request-handler authority."
         }
       ],
-      "sourceTreeSha256": "34cc6802e65e3011c34636630c7ecd764c96c5279df1aa43ef9b91b878643d88"
+      "sourceTreeSha256": "0108804e03436300c20e7e5f40b76796c3bfe5be5170243d3ebe4c2aee6e3b16"
     },
     {
       "manifestVariants": [
