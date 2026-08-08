@@ -1162,11 +1162,26 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV448')).toHaveLength(4);
   });
 
-  it('keeps more than 128 opaque JSX component invocations globally fail closed', () => {
-    const opaqueComponents = Array.from({ length: 160 }, (_, index) => `<Opaque${index} />`).join(
+  // SPEC §6.6: the lexical-provenance effect-site history budget scales with the module's own
+  // syntax-node count, clamped to [128, 4096] (plans/good-perf.md O7). The next three tests pin
+  // the fail-closed property at that scaled denominator from both directions: a module whose
+  // recorded effect-site history genuinely exceeds its own budget must set
+  // `lexicalProvenanceBudgetExhausted` AND close every framework root in the module with the
+  // exact KV448 lexical-provenance refusal — never report the partial analysis as exact — while
+  // the same shape inside its own budget must complete with exact verdicts and no refusal. The
+  // in-budget controls sit above the retired fixed 128-site cap, so silently re-fixing the budget
+  // fails the controls and removing the exhaustion-to-closure path fails the over-budget cases.
+  it('keeps opaque JSX component invocations beyond the scaled effect-site budget globally fail closed', () => {
+    // 4,200 opaque invocations exceed the 4,096 effect-site ceiling: a module cannot buy a budget
+    // above the ceiling no matter how large its own syntax grows.
+    const overCeiling = Array.from({ length: 4_200 }, (_, index) => `<Opaque${index} />`).join(
       '\n',
     );
-    const files = [
+    // 160 invocations exceed the retired fixed 128-site cap but stay inside this module's own
+    // scaled budget: analysis must complete exactly (the O7 contract — a legitimate flat module
+    // must not become unbuildable purely by growing).
+    const inBudget = Array.from({ length: 160 }, (_, index) => `<Opaque${index} />`).join('\n');
+    const moduleFor = (body: string) => [
       {
         fileName: 'opaque-components.tsx',
         source: `
@@ -1174,39 +1189,56 @@ describe('SPEC §6.6 capability-closed module graph', () => {
 
           export const page = route('/opaque-component-budget', {
             render() {
-              return <section>${opaqueComponents}</section>;
+              return <section>${body}</section>;
             },
           });
         `,
       },
     ];
 
-    const scanned = scanCapabilityClosureModules(files)[0]!;
-    expect(scanned.lexicalProvenanceBudgetExhausted).toBe(true);
-
-    const result = analyze(files);
-    expect(result.facts).toContainEqual(
+    const exhausted = scanCapabilityClosureModules(moduleFor(overCeiling))[0]!;
+    expect(exhausted.lexicalProvenanceBudgetExhausted).toBe(true);
+    const refused = analyze(moduleFor(overCeiling));
+    expect(refused.facts).toContainEqual(
       expect.objectContaining({
         kind: 'closed',
+        name: '/opaque-component-budget',
+        reason: 'framework root is reached through mutable or ambiguous lexical provenance',
+        rootKind: 'route',
+      }),
+    );
+    expect(refused.diagnostics.map((diagnostic) => diagnostic.code)).toContain('KV448');
+    expect(refused.diagnostics.map((diagnostic) => diagnostic.message).join('\n')).toContain(
+      'mutable or ambiguous lexical provenance',
+    );
+
+    const completed = scanCapabilityClosureModules(moduleFor(inBudget))[0]!;
+    expect(completed.lexicalProvenanceBudgetExhausted).toBeUndefined();
+    const accepted = analyze(moduleFor(inBudget));
+    expect(accepted.facts).toContainEqual(
+      expect.objectContaining({
+        kind: 'root',
         name: '/opaque-component-budget',
         rootKind: 'route',
       }),
     );
-    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('KV448');
+    expect(accepted.diagnostics).toEqual([]);
   });
 
-  it('keeps more than 128 genuine opaque effects globally fail closed', () => {
-    const opaqueReads = Array.from({ length: 160 }, (_, index) => `value.member${index};`).join(
+  it('keeps genuine opaque effects beyond the scaled effect-site budget globally fail closed', () => {
+    // Same denominator contract as above, for non-JSX opaque member-read effects.
+    const overCeiling = Array.from({ length: 4_200 }, (_, index) => `value.member${index};`).join(
       '\n',
     );
-    const files = [
+    const inBudget = Array.from({ length: 160 }, (_, index) => `value.member${index};`).join('\n');
+    const moduleFor = (body: string) => [
       {
         fileName: 'opaque-effects.ts',
         source: `
           import { route } from '@kovojs/server';
 
           function inspectOpaqueValue(value) {
-            ${opaqueReads}
+            ${body}
           }
 
           export const page = route('/opaque-effect-budget', {
@@ -1217,6 +1249,64 @@ describe('SPEC §6.6 capability-closed module graph', () => {
       },
     ];
 
+    const exhausted = scanCapabilityClosureModules(moduleFor(overCeiling))[0]!;
+    expect(exhausted.lexicalProvenanceBudgetExhausted).toBe(true);
+    const refused = analyze(moduleFor(overCeiling));
+    expect(refused.facts).toContainEqual(
+      expect.objectContaining({
+        kind: 'closed',
+        name: '/opaque-effect-budget',
+        reason: 'framework root is reached through mutable or ambiguous lexical provenance',
+        rootKind: 'route',
+      }),
+    );
+    expect(refused.diagnostics.map((diagnostic) => diagnostic.code)).toContain('KV448');
+    expect(refused.diagnostics.map((diagnostic) => diagnostic.message).join('\n')).toContain(
+      'mutable or ambiguous lexical provenance',
+    );
+
+    const completed = scanCapabilityClosureModules(moduleFor(inBudget))[0]!;
+    expect(completed.lexicalProvenanceBudgetExhausted).toBeUndefined();
+    const accepted = analyze(moduleFor(inBudget));
+    expect(accepted.facts).toContainEqual(
+      expect.objectContaining({
+        kind: 'root',
+        name: '/opaque-effect-budget',
+        rootKind: 'route',
+      }),
+    );
+    expect(accepted.diagnostics).toEqual([]);
+  });
+
+  it('fails closed when the effect-site history exceeds the scaled budget below the ceiling', () => {
+    // The scaled budget counts the module's own syntax nodes, but one opaque effect records one
+    // history entry per distinct enclosing function owner, so deep uninvoked nesting multiplies
+    // recorded sites past the module's node count while staying far below the 4,096 ceiling
+    // (measured: budget 319 from this module's syntax nodes, trip at site 320, ~900 recordable
+    // sites). The functions stay uninvoked so the flat abstract-work budget stays untouched —
+    // this fixture completes if and only if the denominator stops being per-module-scaled
+    // (verified by mutation: with `effectSiteBudget` fixed at the ceiling, exhaustion here goes
+    // away and the first assertion below fails, while the two over-ceiling tests still pass).
+    const reads = Array.from({ length: 60 }, (_, index) => `value.member${index};`).join('\n');
+    let body = reads;
+    for (let depth = 0; depth < 16; depth += 1) {
+      body = `function level${depth}() {\n${body}\n}`;
+    }
+    const files = [
+      {
+        fileName: 'nested-effects.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          declare const value: unknown;
+          ${body}
+          export const page = route('/nested-effect-budget', {
+            render() { return null; },
+          });
+          void level15;
+        `,
+      },
+    ];
+
     const scanned = scanCapabilityClosureModules(files)[0]!;
     expect(scanned.lexicalProvenanceBudgetExhausted).toBe(true);
 
@@ -1224,7 +1314,8 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     expect(result.facts).toContainEqual(
       expect.objectContaining({
         kind: 'closed',
-        name: '/opaque-effect-budget',
+        name: '/nested-effect-budget',
+        reason: 'framework root is reached through mutable or ambiguous lexical provenance',
         rootKind: 'route',
       }),
     );
