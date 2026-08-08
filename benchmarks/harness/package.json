@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "report": "node report.mjs ../results/results.json ../results/report.md",
+    "bfcache": "node bfcache.mjs",
+    "report": "node report.mjs",
     "run": "node run.mjs"
   },
   "dependencies": {

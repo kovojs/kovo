@@ -1,20 +1,44 @@
 #!/usr/bin/env node
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
+import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
 
+import { parseIntegerFlag, readArg, readIntegerArg } from './harness/args.mjs';
 import { runAppBenchmark } from './harness/run.mjs';
+import { DEFAULT_LIGHTHOUSE_REPEATS } from './harness/lighthouse.mjs';
+import { SETTLE_DEFAULTS } from './harness/scenarios.mjs';
 import { writeReport } from './harness/report.mjs';
 
 const benchmarkRoot = fileURLToPath(new URL('.', import.meta.url));
 const resultsDir = path.join(benchmarkRoot, 'results');
 
+// Every entrant is started with NODE_ENV=production. Kovo additionally requires deployment
+// attestation material in that posture: `registerGeneratedRuntimePostureManifest` throws
+// "Production runtime posture registration requires KOVO_ATTESTATION_DEPLOYMENT_ID and
+// KOVO_ATTESTATION_SECRET" (SPEC §11.2) at module load. Because the framework itself refuses to
+// boot in production without them, a Kovo server that answers HTTP with these set is, by
+// construction, in production posture — that is the posture check, not a claim in a comment.
+//
+// plans/good-perf.md O15: run-all.mjs previously never set NODE_ENV, so Kovo was benchmarked in
+// DEVELOPMENT posture against a Next.js production standalone build for every published number.
+const runId = randomBytes(6).toString('hex');
+const kovoAttestation = {
+  KOVO_ATTESTATION_DEPLOYMENT_ID: `deployment:kovo-benchmark-${runId}`,
+  KOVO_ATTESTATION_SECRET: randomBytes(32).toString('hex'),
+};
+
+/** Log fragments that prove a server is NOT in the posture this harness claims it is in. */
+const DEVELOPMENT_POSTURE_MARKERS = [' in development', 'development posture'];
+
 const allApps = [
   {
     build: ['pnpm', ['--dir', path.join(benchmarkRoot, 'kovo'), 'run', 'build']],
     cwd: path.join(benchmarkRoot, 'kovo'),
+    env: { NODE_ENV: 'production', ...kovoAttestation },
     framework: 'Kovo',
     id: 'kovo',
     port: 4310,
@@ -26,6 +50,7 @@ const allApps = [
   {
     build: ['pnpm', ['--dir', path.join(benchmarkRoot, 'nextjs'), 'run', 'build']],
     cwd: path.join(benchmarkRoot, 'nextjs'),
+    env: { NODE_ENV: 'production' },
     framework: 'Next.js App Router',
     id: 'nextjs',
     port: 4311,
@@ -39,6 +64,7 @@ const allApps = [
   {
     build: ['pnpm', ['--dir', path.join(benchmarkRoot, 'tanstack'), 'run', 'build']],
     cwd: path.join(benchmarkRoot, 'tanstack'),
+    env: { NODE_ENV: 'production' },
     framework: 'TanStack Start',
     id: 'tanstack',
     port: 4312,
@@ -52,9 +78,32 @@ const allApps = [
   },
 ];
 
-const iterations = Number(readArg('--iterations') ?? process.env.BENCH_ITERATIONS ?? '10');
+// Every count is validated, not `Number()`-coerced. An unvalidated NaN does not throw anywhere
+// downstream — it silently runs a loop zero times and publishes an empty cell that looks like a
+// measurement. See benchmarks/harness/args.mjs.
+const iterations = parseIntegerFlag(
+  '--iterations',
+  readArg('--iterations') ?? process.env.BENCH_ITERATIONS,
+  { fallback: 10, max: 1_000 },
+);
 const runLighthouse = !process.argv.includes('--skip-lighthouse');
+const lighthouseRepeats = readIntegerArg('--lighthouse-runs', {
+  fallback: DEFAULT_LIGHTHOUSE_REPEATS,
+  max: 100,
+});
+const bfcacheIterations = readIntegerArg('--bfcache-iterations', { fallback: 3, max: 1_000 });
 const skipBuild = process.argv.includes('--skip-build');
+const settle = {
+  maxMs: readIntegerArg('--settle-max-ms', { fallback: SETTLE_DEFAULTS.maxMs, max: 600_000 }),
+  quietMs: readIntegerArg('--settle-quiet-ms', { fallback: SETTLE_DEFAULTS.quietMs, max: 600_000 }),
+};
+if (settle.quietMs > settle.maxMs) {
+  throw new Error(
+    `--settle-quiet-ms (${settle.quietMs}) cannot exceed --settle-max-ms (${settle.maxMs}): the ` +
+      `quiet window would never fit inside the cap, so every iteration would report a capped ` +
+      `settle and understate its own byte count.`,
+  );
+}
 
 // `--apps kovo,nextjs` restricts the run to a subset of entrants so one entrant that cannot build
 // does not block the rest of the comparison. `--out-dir` redirects results away from the committed
@@ -71,11 +120,14 @@ const outDir = readArg('--out-dir') ? path.resolve(readArg('--out-dir')) : resul
 // `--port-base 4810` shifts every entrant's listen port so two benchmark runs on the same machine
 // cannot silently measure each other's server. Without this, a stale listener on the default port
 // is indistinguishable from a healthy start: `waitForHttp` just sees a 200 and proceeds.
-const portBase = readArg('--port-base') ? Number(readArg('--port-base')) : null;
+const portBaseArg = readArg('--port-base');
+// `fallback` is unreachable here — the flag's absence is already handled by the ternary — but a
+// present-with-no-value `--port-base` now throws instead of silently keeping the default ports.
+const portBase =
+  portBaseArg === undefined
+    ? null
+    : parseIntegerFlag('--port-base', portBaseArg, { fallback: 0, max: 65_000, min: 1024 });
 if (portBase !== null) {
-  if (!Number.isInteger(portBase) || portBase < 1024 || portBase > 65000) {
-    throw new Error(`--port-base must be an integer between 1024 and 65000, got ${portBase}.`);
-  }
   const basePort = Math.min(...allApps.map((app) => app.port));
   for (const app of allApps) app.port = portBase + (app.port - basePort);
 }
@@ -103,12 +155,19 @@ for (const app of apps) {
 
 const results = [];
 for (const app of apps) {
+  const serverLog = [];
   const server = spawn(app.start[0], app.start[1], {
     cwd: app.cwd,
-    env: { ...process.env, HOST: '127.0.0.1', HOSTNAME: '127.0.0.1', PORT: String(app.port) },
+    env: {
+      ...process.env,
+      ...app.env,
+      HOST: '127.0.0.1',
+      HOSTNAME: '127.0.0.1',
+      PORT: String(app.port),
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-  pipeServerLogs(app.id, server);
+  pipeServerLogs(app.id, server, serverLog);
   // A server that dies mid-run leaves the scenarios timing a dead origin, so surface it loudly.
   let serverExit = null;
   server.on('exit', (code, signal) => {
@@ -117,9 +176,27 @@ for (const app of apps) {
   });
   try {
     const origin = `http://127.0.0.1:${app.port}`;
-    await waitForHttp(origin);
-    results.push(await runAppBenchmark({ app, iterations, lighthouse: runLighthouse, origin }));
+    await waitForHttp(origin, () => serverExit);
+    app.posture = {
+      attestation: app.id === 'kovo' ? 'synthesized-per-run' : 'not-required',
+      nodeEnv: app.env?.NODE_ENV ?? null,
+    };
+    results.push(
+      await runAppBenchmark({
+        app,
+        bfcacheIterations,
+        iterations,
+        lighthouse: runLighthouse,
+        lighthouseRepeats,
+        origin,
+        settle,
+      }),
+    );
     if (serverExit) throw new Error(serverExit);
+    assertPostureMatched(app, serverLog);
+    // Checked per entrant, not at the end: a rejected run should not first spend the remaining
+    // entrants' wall clock producing numbers it is going to refuse to publish anyway.
+    assertMeasurementIntegrity(results.slice(-1));
   } finally {
     await stopServer(server);
   }
@@ -128,6 +205,19 @@ for (const app of apps) {
 const output = {
   generatedAt: new Date().toISOString(),
   iterations,
+  lighthouseRepeats: runLighthouse ? lighthouseRepeats : 0,
+  machine: {
+    arch: os.arch(),
+    cpus: os.cpus().length,
+    // Load average AT THE END of the run. Wall-clock numbers taken above ~1.0 per core are not
+    // comparable with numbers taken on an idle box; the report prints this so a reader can tell.
+    loadAverage: os.loadavg(),
+    node: process.version,
+    platform: os.platform(),
+    totalMemoryBytes: os.totalmem(),
+  },
+  runId,
+  settle,
   apps: results,
 };
 const resultsPath = path.join(outDir, 'results.json');
@@ -136,10 +226,116 @@ await writeFile(resultsPath, `${JSON.stringify(output, null, 2)}\n`);
 await writeReport(resultsPath, reportPath);
 process.stdout.write(`benchmark results written to ${path.relative(process.cwd(), reportPath)}\n`);
 
-function readArg(name) {
-  const index = process.argv.indexOf(name);
-  if (index === -1) return undefined;
-  return process.argv[index + 1];
+/**
+ * Refuses to report numbers taken in a posture the run did not actually achieve.
+ *
+ * plans/good-perf.md O15 requires the harness to "either posture-match both entrants or fail loudly
+ * and record the mismatch in the report. Do not silently continue."
+ */
+function assertPostureMatched(app, serverLog) {
+  if (app.env?.NODE_ENV !== 'production') return;
+  const offending = serverLog.filter((line) =>
+    DEVELOPMENT_POSTURE_MARKERS.some((marker) => line.toLowerCase().includes(marker)),
+  );
+  if (offending.length > 0) {
+    throw new Error(
+      `${app.id} was started with NODE_ENV=production but reported development posture:\n` +
+        offending.map((line) => `  ${line}`).join('\n'),
+    );
+  }
+}
+
+/**
+ * Refuses to publish a run whose numbers were shaped by load shedding, server errors, or traffic
+ * that never completed at the network layer.
+ *
+ * Kovo's DEFAULT_PER_IP_RATE is 600 requests/minute for every source IP, and the whole benchmark
+ * arrives from 127.0.0.1 (plans/good-perf.md O13). A shed run looks fast and plausible; without
+ * this check it would be indistinguishable from a healthy one.
+ *
+ * Covers ALL THREE traffic sources, not just the custom scenarios: the custom scenario iterations,
+ * the Lighthouse cells (4 per entrant x `--lighthouse-runs` page loads, previously untracked), and
+ * the back/forward-cache probe (2 document loads per iteration in its own browser, previously
+ * untracked). A probe whose status could not be observed is reported as untracked rather than
+ * counted as clean.
+ */
+function assertMeasurementIntegrity(runs) {
+  const problems = [];
+  const notes = [];
+  for (const run of runs) {
+    for (const [conditionName, condition] of Object.entries(run.conditions ?? {})) {
+      for (const [scenarioName, scenario] of Object.entries(condition)) {
+        for (const iteration of scenario?.iterations ?? []) {
+          const where = `${run.app}/${conditionName}/${scenarioName}`;
+          if (iteration.rateLimitedResponses > 0) {
+            problems.push(
+              `${where}: ${iteration.rateLimitedResponses} HTTP 429 responses — the server shed ` +
+                `load, so these timings are not comparable.`,
+            );
+          }
+          if (iteration.errorResponses > 0) {
+            problems.push(`${where}: ${iteration.errorResponses} HTTP >=400 responses.`);
+          }
+          // A request that never produced an HTTP response carries no status at all, so neither
+          // check above can see it. Harness-caused aborts are excluded in scenarios.mjs.
+          if (iteration.failedRequests > 0) {
+            problems.push(
+              `${where}: ${iteration.failedRequests} requests failed at the network layer ` +
+                `(${(iteration.failureReasons ?? []).join(', ') || 'no reason reported'}) — the ` +
+                `page did not receive the bytes this iteration claims to have measured.`,
+            );
+          }
+        }
+      }
+    }
+
+    for (const cell of run.lighthouse ?? []) {
+      const where = `${run.app}/lighthouse/${cell.formFactor}${cell.path}`;
+      const network = cell.network;
+      if (!network || network.tracked !== true) {
+        notes.push(`${where}: HTTP statuses were not observable for this cell.`);
+        continue;
+      }
+      if (network.rateLimitedResponses > 0) {
+        problems.push(
+          `${where}: ${network.rateLimitedResponses} HTTP 429 responses across ${cell.repeats} ` +
+            `Lighthouse repeats — the server shed load while Lighthouse was scoring it.`,
+        );
+      }
+      if (network.errorResponses > 0) {
+        problems.push(`${where}: ${network.errorResponses} HTTP >=400 responses.`);
+      }
+    }
+
+    for (const [index, iteration] of (run.bfcache?.iterations ?? []).entries()) {
+      const where = `${run.app}/bfcache/${index}`;
+      const network = iteration.network;
+      if (!network) {
+        notes.push(`${where}: HTTP statuses were not observable for this probe iteration.`);
+        continue;
+      }
+      if (network.rateLimitedResponses > 0) {
+        problems.push(
+          `${where}: ${network.rateLimitedResponses} HTTP 429 responses — the back/forward-cache ` +
+            `verdict was taken against a shedding server.`,
+        );
+      }
+      if (network.errorResponses > 0) {
+        problems.push(`${where}: ${network.errorResponses} HTTP >=400 responses.`);
+      }
+    }
+  }
+  for (const note of [...new Set(notes)]) {
+    process.stderr.write(`[integrity] untracked: ${note}\n`);
+  }
+  if (problems.length > 0) {
+    const unique = [...new Set(problems)];
+    throw new Error(
+      `Benchmark run rejected — the measurement was not clean:\n${unique
+        .map((problem) => `  ${problem}`)
+        .join('\n')}`,
+    );
+  }
 }
 
 async function dependencyVersions(packagePath, names) {
@@ -163,12 +359,19 @@ function runCommand(command, args, { cwd, label }) {
   });
 }
 
-function pipeServerLogs(id, server) {
+function pipeServerLogs(id, server, sink) {
+  const record = (chunk) => {
+    const text = String(chunk);
+    for (const line of text.split('\n')) {
+      if (line.trim().length > 0) sink.push(line);
+    }
+    return text;
+  };
   server.stdout.on('data', (chunk) => {
-    process.stdout.write(`[${id}] ${chunk}`);
+    process.stdout.write(`[${id}] ${record(chunk)}`);
   });
   server.stderr.on('data', (chunk) => {
-    process.stderr.write(`[${id}] ${chunk}`);
+    process.stderr.write(`[${id}] ${record(chunk)}`);
   });
 }
 
@@ -181,10 +384,14 @@ function portInUse(port) {
   });
 }
 
-async function waitForHttp(origin) {
+async function waitForHttp(origin, exited) {
   const deadline = Date.now() + 30000;
   let lastError;
   while (Date.now() < deadline) {
+    // A server that refuses to boot in the requested posture exits instead of listening; report
+    // that instead of a 30 s timeout whose message blames the network.
+    const exitMessage = exited?.();
+    if (exitMessage) throw new Error(exitMessage);
     try {
       const response = await fetch(origin);
       if (response.status < 500) return;

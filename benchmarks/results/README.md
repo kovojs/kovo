@@ -1,0 +1,108 @@
+# Benchmark results
+
+**There is deliberately no committed benchmark report here.**
+
+`report.md` and `results.json` (generated 2026-06-23) were deleted on 2026-08-07 under
+`plans/good-perf.md` decision **D14**: "Committed benchmark report — regenerate or delete it; it
+currently errs in Kovo's favour."
+
+## Why the old snapshot had to go
+
+It was not merely stale. Every one of these defects moved the published numbers in Kovo's favour,
+and none of them was visible in the report itself:
+
+- **The navigation column did not measure navigation.** The probe clicked a product link and waited
+  for `main h1` to exist — but the listing page also has a `main h1`, so the selector was already
+  satisfied by the origin document and the probe resolved before the navigation committed. It timed
+  two harness round-trips. That is why the snapshot reported ~49-50 ms desktop for Kovo, Next.js
+  **and** TanStack alike. Measured to actual paint on the repaired harness, Kovo's mobile navigation
+  is 1,153 ms and replaces the document on 3/3 attempts.
+- **"JS bytes: 0" was an artifact.** Bytes were collected at `load` + 150 ms, and Kovo imports its
+  deferred client runtime on a double `requestAnimationFrame` **after** `load`. The same build that
+  the old window recorded as `total 164,673 / js 0` on mobile measures `total 434,847 / js 267,948`
+  when collection runs to network quiescence — a 2.64x understatement of total bytes, and a
+  headline "ships no JavaScript" claim for an app shipping 267,948 B of it. The Next.js control was
+  unaffected, so the error was one-sided.
+- **Kovo was measured in development posture.** `run-all.mjs` never set `NODE_ENV`, so Kovo ran in
+  development against a Next.js production standalone build.
+- **Lighthouse cells were single samples.** Repeated runs of the same URL on the repaired harness
+  show up to an 8-point performance-score spread across two runs, and one cell returns `null`
+  metrics for several samples.
+- **It is not reproducible from the tree.** The TanStack entrant did not build at all until the
+  repair on this branch, so the TanStack rows could not be regenerated.
+
+## What may be committed here
+
+A report may be committed only when all of the following hold. Otherwise leave this directory with
+just this README and keep the run under `--out-dir`.
+
+1. It was produced by a single uninterrupted `node benchmarks/run-all.mjs` at the committed tree, by
+   the harness as committed — not by a patched or in-flight harness.
+2. Every entrant built and started in the run (no `--skip-build` against stale `dist/`).
+3. The load average recorded in the report header is below roughly 1.0 per core for the whole run.
+   Wall-clock numbers taken on a loaded box are not comparable to anything.
+4. The report's `Doc replaced`, `Capped runs`, `Null samples` and posture columns are read and
+   accepted, not skipped. They exist to make a bad run look bad.
+
+Byte counts are robust to machine load; wall-clock numbers are not. If a run must be published from
+a loaded machine, publish the byte columns and say explicitly that the timing columns are indicative.
+
+## Generating a run
+
+```sh
+# All entrants, results written outside the repo snapshot.
+node benchmarks/run-all.mjs --iterations 10 --lighthouse-runs 5 --out-dir /tmp/kovo-bench
+
+# Two entrants, no Lighthouse, on shifted ports so a concurrent run cannot collide.
+node benchmarks/run-all.mjs --apps kovo,nextjs --skip-lighthouse --port-base 4820 \
+  --out-dir /tmp/kovo-bench
+```
+
+All traffic arrives from `127.0.0.1`, so the whole run shares one source IP against Kovo's per-IP
+budget. A measured `--iterations 10` run of the Kovo entrant, with Lighthouse and the bfcache probe,
+recorded **zero 429s** — the run is not dense enough to reach a per-rolling-minute budget, and the
+D12 document-GET exemption is not what makes that iteration count viable.
+[`../README.md`](../README.md) has the numbers and what the exemption does change.
+
+The run aborts rather than publishing if a port is already held, if a server exits early, if a
+server reports development posture under `NODE_ENV=production`, or if any **observed** request was
+rate-limited (429) or returned `>= 400`. "Observed" is narrower than "every request": HTTP statuses
+are read from the custom scenarios, the Lighthouse cells and the back/forward-cache probe, but only
+the custom scenarios can also see a request that failed at the network layer with no HTTP status at
+all. `../README.md` has the per-source table. A source whose statuses could not be read is printed
+as `[integrity] untracked:` rather than counted as clean.
+
+## What is trustworthy in a run from this harness
+
+- **Byte columns are the strong result.** They are counted from the wire at network quiescence and
+  are unaffected by machine load.
+- **Timing columns are conditional.** They are only comparable to numbers taken at a similar load
+  average, which the report header records.
+- **The navigation-to-paint column carries a known one-sided bias toward document-replacing
+  entrants — currently Kovo.** The report's "Known limits of this instrument" section states the
+  mechanism and the direction. Do not quote a small navigation gap between a document-replacing and
+  a same-document entrant as a result.
+
+### Calibrating that bias against a real run
+
+A full three-entrant run on 2026-08-08 (`--iterations 10`, default Lighthouse and bfcache, run with
+`--skip-build` and therefore **not** eligible to be committed here under rule 2 above; load average
+4.2-6.5 on 10 cores, so treat every timing as indicative) produced:
+
+- **Desktop navigation-to-paint: 73-77 ms for all three entrants**, a 4 ms spread, with Kovo
+  replacing the document on 10/10 attempts and both React entrants on 0/10. The instrument's
+  one-sided bias is of the same order as that whole spread, and it is charged only to the two
+  same-document entrants. **The desktop navigation row therefore distinguishes nothing**, and any
+  reading of it as a Kovo win is an artifact.
+- **Mobile navigation-to-paint separates the entrants by an order of magnitude**, and it separates
+  them _against_ Kovo — far outside anything the bias could explain. That row is informative in a
+  way the desktop row is not.
+- Byte columns, which are load-independent, showed Kovo shipping the most JS and the most total
+  bytes of the three on the listing page.
+- The mobile `load` + 150 ms collection window reported Kovo `js: 0` against 267,948 B settled, the
+  2.64x total-byte understatement reproducing exactly. Desktop showed no understatement, so the
+  artifact is condition-specific — another reason to read the byte-window table rather than assume.
+
+The point of recording this is not the numbers, which are not publishable from a `--skip-build` run
+on a loaded box. It is that the instrument's known error is large enough to swallow one of its own
+headline columns, and a reader has to know which column that is.
