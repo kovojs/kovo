@@ -29,6 +29,7 @@ import {
   compilerFreeze,
   compilerJsonParse,
   compilerMapDelete,
+  compilerMapForEach,
   compilerMapGet,
   compilerMapSet,
   compilerObjectKeys,
@@ -44,6 +45,7 @@ import {
   compilerStatsIsSymbolicLink,
   compilerStringEndsWith,
   compilerStringIncludes,
+  compilerStringIndexOf,
   compilerStringSlice,
   compilerStringSplit,
   compilerStringStartsWith,
@@ -88,6 +90,44 @@ export interface PackageComponentCssDiagnostic {
   readonly message: string;
 }
 
+/**
+ * Which package components feed the extracted stylesheet (SPEC §13.1).
+ *
+ * - `'exported'` (default): every styled component reachable through the package
+ *   `exports` map — the historical whole-catalog sheet.
+ * - `'imported'`: only components proven reachable from the app entry's authored
+ *   relative-import closure, expanded through the package's own internal imports.
+ *   Selection *narrows* exclusively from typed module-specifier facts; whenever
+ *   the graph cannot prove the set (bare package imports, non-component subpaths,
+ *   package references outside recognized specifiers such as dynamic
+ *   `import(name + …)`), the extractor fails SAFE back to `'exported'` and
+ *   records why in {@link PackageComponentCssImportSelection.fallbackReasons}.
+ */
+export type PackageComponentCssSelection = 'exported' | 'imported';
+
+/** Options for {@link extractPackageComponentCss}. */
+export interface PackageComponentCssExtractionOptions
+  extends PackageComponentPrefixDiscoveryOptions {
+  /** Component selection strategy; defaults to `'exported'`. */
+  readonly components?: PackageComponentCssSelection;
+}
+
+/**
+ * Import-graph selection evidence, present when `components: 'imported'` was
+ * requested. Informational only — never a fail-closed diagnostics channel: a
+ * non-empty `fallbackReasons` means the full exported catalog shipped (correct
+ * rendering, larger sheet), not that the build must stop.
+ */
+export interface PackageComponentCssImportSelection {
+  /**
+   * Why the import graph could not prove the component set; empty when pruning
+   * succeeded. Non-empty means every exported component's CSS was retained.
+   */
+  readonly fallbackReasons: readonly string[];
+  /** Component subpath names proven imported from the app closure, sorted. */
+  readonly importedComponents: readonly string[];
+}
+
 /** Result returned by the first-party package CSS extraction build helper. */
 export interface PackageComponentCssResult {
   /** Deduped CSS across every styled component file in the package. */
@@ -100,6 +140,8 @@ export interface PackageComponentCssResult {
    * keys, non-static values). These would render silently unstyled (A5 gate).
    */
   readonly diagnostics: readonly PackageComponentCssDiagnostic[];
+  /** Present when `components: 'imported'` selection ran (SPEC §13.1). */
+  readonly importSelection?: PackageComponentCssImportSelection;
   /** Absolute `.tsx` entry files that were scanned, in stable order. */
   readonly sourceFiles: readonly string[];
 }
@@ -146,15 +188,20 @@ const maximumVendoredComponentSourceBytes = 2 * 1024 * 1024;
 const maximumVendoredHelperSourceCount = 16;
 
 /**
- * Extract the StyleX CSS for every styled component file reachable through a
+ * Extract the StyleX CSS for styled component files reachable through a
  * package's `exports` map. Returns deduped CSS ready to serve as one stylesheet
  * asset, plus coverage diagnostics for files whose styles could not be lowered.
+ *
+ * With `components: 'imported'` the scanned set is pruned to components proven
+ * reachable from the app entry's authored import closure (SPEC §13.1); an
+ * unprovable graph fails SAFE back to the full exported catalog with recorded
+ * reasons, never to a smaller sheet.
  *
  * Public first-party build API for package CSS extraction in app/site build scripts.
  */
 export function extractPackageComponentCss(
   packageName: string,
-  options: PackageComponentPrefixDiscoveryOptions,
+  options: PackageComponentCssExtractionOptions,
 ): PackageComponentCssResult {
   const resolved = resolvePackage(packageName, options);
   if (!resolved) {
@@ -162,21 +209,32 @@ export function extractPackageComponentCss(
   }
 
   const discovery = packageComponentSources(resolved, packageName === '@kovojs/ui');
+  const importSelection =
+    options.components === 'imported' && discovery.sourceFiles.length > 0
+      ? selectImportedPackageComponentSources(packageName, options, resolved, discovery)
+      : undefined;
   const resolveStaticImport =
     discovery.sourceSnapshots === undefined
       ? resolveLocalStaticImport(resolved.fileSystem)
       : resolveSnapshotStaticImport(discovery.sourceSnapshots);
-  const extracted = extractComponentCssFromFiles(discovery.sourceFiles, {
-    fileSystem: resolved.fileSystem,
-    rootDir: resolved.packageDir,
-    resolveStaticImport,
-    ...(discovery.sourceSnapshots === undefined
-      ? {}
-      : { sourceSnapshots: discovery.sourceSnapshots }),
-  });
-  if (discovery.diagnostics.length === 0) return extracted;
+  const extracted = extractComponentCssFromFiles(
+    importSelection === undefined ? discovery.sourceFiles : importSelection.sourceFiles,
+    {
+      fileSystem: resolved.fileSystem,
+      rootDir: resolved.packageDir,
+      resolveStaticImport,
+      ...(discovery.sourceSnapshots === undefined
+        ? {}
+        : { sourceSnapshots: discovery.sourceSnapshots }),
+    },
+  );
+  const selected =
+    importSelection === undefined
+      ? extracted
+      : { ...extracted, importSelection: importSelection.importSelection };
+  if (discovery.diagnostics.length === 0) return selected;
   return {
-    ...extracted,
+    ...selected,
     diagnostics: [...discovery.diagnostics, ...extracted.diagnostics],
   };
 }
@@ -808,6 +866,337 @@ function packageComponentSources(
     return { diagnostics: [], sourceFiles: directSourceFiles };
   }
   return { diagnostics: [], sourceFiles: [] };
+}
+
+interface ImportedPackageComponentSelection {
+  readonly importSelection: PackageComponentCssImportSelection;
+  readonly sourceFiles: readonly string[];
+}
+
+/**
+ * Bound on how many package files the internal-import expansion may visit
+ * before the selection declares itself unprovable and fails safe to the full
+ * exported catalog. Generous: `@kovojs/ui` ships ~44 components + ≤16 helpers.
+ */
+const maximumImportSelectionTraversal = 2048;
+
+/**
+ * Characters that may continue an npm package name. An occurrence of
+ * `packageName` followed by one of these (e.g. `@kovojs/ui-icons`) is a
+ * different package, not a reference to `packageName`.
+ */
+const packageNameContinuationPattern = /^[A-Za-z0-9._-]/;
+
+/**
+ * Prune the discovered package component sources to the components proven
+ * imported from the app entry's authored relative-import closure, expanded
+ * through the package's own internal imports (SPEC §13.1; §6.1.1 first-party
+ * component packages).
+ *
+ * Soundness posture (SPEC §5.2 rule 9/10): the *narrowing* decision — which
+ * components stay — is made only from typed module-specifier facts
+ * (`compilerSourceModuleSpecifiers`, the same scanner boundary the app source
+ * closure walk uses). Raw source text is consulted only as a *widening* guard:
+ * if a closure file textually references the package more times than its typed
+ * specifier facts account for (dynamic `import(pkg + name)`, computed
+ * specifiers, or even prose mentions), the set is unprovable and every exported
+ * component is kept. A false positive costs bytes, never styling correctness.
+ */
+function selectImportedPackageComponentSources(
+  packageName: string,
+  options: PackageComponentPrefixDiscoveryOptions,
+  resolved: ResolvedPackage,
+  discovery: PackageComponentSourceDiscovery,
+): ImportedPackageComponentSelection {
+  const fallbackReasons: string[] = [];
+  const componentFilesByName = packageComponentFilesByName(resolved, discovery);
+  const componentNamesByFile = compilerCreateMap<string, string>();
+  compilerMapForEach(componentFilesByName, (file, name) => {
+    compilerMapSet(componentNamesByFile, file, name);
+  });
+  const discoveredFiles = compilerSnapshotDenseArray(
+    discovery.sourceFiles,
+    'Compiler import-selection discovered component files',
+  );
+  for (let index = 0; index < discoveredFiles.length; index += 1) {
+    const file = discoveredFiles[index]!;
+    if (compilerMapGet(componentNamesByFile, file) === undefined) {
+      compilerArrayAppend(
+        fallbackReasons,
+        `package source ${relativeToRoot(resolved.packageDir, file)} has no component export subpath, so the import graph cannot prove it unused`,
+        'Compiler import-selection fallback reasons',
+      );
+    }
+  }
+
+  const rootDir = nativePathDirname(nativePathResolve(options.fileName));
+  const appFileSystem = createCompilerSourceFileSystem(rootDir);
+  const appSources =
+    appFileSystem === null
+      ? undefined
+      : compilerOwnedAppSources(options.fileName, rootDir, appFileSystem);
+  if (appSources === undefined || appSources.files.length === 0) {
+    compilerArrayAppend(
+      fallbackReasons,
+      `app entry ${relativeToRoot(rootDir, nativePathResolve(options.fileName))} could not be read for import-graph analysis`,
+      'Compiler import-selection fallback reasons',
+    );
+  }
+
+  const importedNames: string[] = [];
+  const appFiles = compilerSnapshotDenseArray(
+    appSources?.files ?? [],
+    'Compiler import-selection app closure files',
+  );
+  for (let index = 0; index < appFiles.length; index += 1) {
+    const appFile = appFiles[index]!;
+    const relativeAppFile = relativeToRoot(rootDir, appFile.fileName);
+    const specifiers = compilerSnapshotDenseArray(
+      compilerSourceModuleSpecifiers(appFile.source),
+      'Compiler import-selection app module specifiers',
+    );
+    let packageReferenceSpecifiers = 0;
+    for (let specifierIndex = 0; specifierIndex < specifiers.length; specifierIndex += 1) {
+      const specifier = specifiers[specifierIndex]!;
+      if (specifier === packageName) {
+        packageReferenceSpecifiers += 1;
+        compilerArrayAppend(
+          fallbackReasons,
+          `${relativeAppFile} imports bare '${packageName}', which cannot be mapped to component subpaths`,
+          'Compiler import-selection fallback reasons',
+        );
+        continue;
+      }
+      if (!compilerStringStartsWith(specifier, `${packageName}/`)) continue;
+      packageReferenceSpecifiers += 1;
+      const subpath = compilerStringSlice(specifier, packageName.length + 1);
+      if (compilerMapGet(componentFilesByName, subpath) === undefined) {
+        compilerArrayAppend(
+          fallbackReasons,
+          `${relativeAppFile} imports '${specifier}', which is not a component export subpath`,
+          'Compiler import-selection fallback reasons',
+        );
+        continue;
+      }
+      compilerArrayAppend(importedNames, subpath, 'Compiler import-selection imported names');
+    }
+    const textualReferences = countPackageNameReferences(appFile.source, packageName);
+    if (textualReferences !== packageReferenceSpecifiers) {
+      compilerArrayAppend(
+        fallbackReasons,
+        `${relativeAppFile} references '${packageName}' ${textualReferences} time(s) but only ${packageReferenceSpecifiers} recognized import specifier(s) were found; dynamic or computed usage cannot be pruned`,
+        'Compiler import-selection fallback reasons',
+      );
+    }
+  }
+
+  if (fallbackReasons.length === 0) {
+    expandImportedComponentsThroughPackageImports(
+      importedNames,
+      componentFilesByName,
+      componentNamesByFile,
+      resolved,
+      discovery,
+      fallbackReasons,
+    );
+  }
+
+  const importedComponents = uniqueSorted(importedNames);
+  if (fallbackReasons.length > 0) {
+    return {
+      importSelection: {
+        fallbackReasons: uniqueSorted(fallbackReasons),
+        importedComponents,
+      },
+      sourceFiles: discovery.sourceFiles,
+    };
+  }
+  const sourceFiles: string[] = [];
+  for (let index = 0; index < importedComponents.length; index += 1) {
+    const file = compilerMapGet(componentFilesByName, importedComponents[index]!);
+    if (file !== undefined) {
+      compilerArrayAppend(sourceFiles, file, 'Compiler import-selection pruned source files');
+    }
+  }
+  return {
+    importSelection: { fallbackReasons: [], importedComponents },
+    sourceFiles: uniqueSorted(sourceFiles),
+  };
+}
+
+/**
+ * Expand the proven-imported component set through the package's own internal
+ * relative imports (a selected component or helper importing another component
+ * pulls that component's CSS in too), so pruning can never drop CSS a selected
+ * component composes. Traversal is bounded; exceeding the bound fails safe.
+ */
+function expandImportedComponentsThroughPackageImports(
+  importedNames: string[],
+  componentFilesByName: ReadonlyMap<string, string>,
+  componentNamesByFile: ReadonlyMap<string, string>,
+  resolved: ResolvedPackage,
+  discovery: PackageComponentSourceDiscovery,
+  fallbackReasons: string[],
+): void {
+  const pending: string[] = [];
+  const visited = compilerCreateSet<string>();
+  const initialNames = compilerSnapshotDenseArray(
+    importedNames,
+    'Compiler import-selection expansion roots',
+  );
+  for (let index = 0; index < initialNames.length; index += 1) {
+    const file = compilerMapGet(componentFilesByName, initialNames[index]!);
+    if (file !== undefined && !compilerSetHas(visited, file)) {
+      compilerSetAdd(visited, file);
+      compilerArrayAppend(pending, file, 'Compiler import-selection expansion queue');
+    }
+  }
+
+  for (
+    let index = 0;
+    index < compilerArrayLength(pending, 'Compiler import-selection expansion queue');
+    index += 1
+  ) {
+    if (index >= maximumImportSelectionTraversal) {
+      compilerArrayAppend(
+        fallbackReasons,
+        `package internal import expansion exceeded ${maximumImportSelectionTraversal} files`,
+        'Compiler import-selection fallback reasons',
+      );
+      return;
+    }
+    const fileName = compilerOwnDataValue(
+      pending,
+      index,
+      'Compiler import-selection expansion queue',
+    ) as string;
+    const source =
+      discovery.sourceSnapshots === undefined
+        ? resolved.fileSystem.readFile(fileName)
+        : compilerMapGet(discovery.sourceSnapshots, fileName);
+    if (source === null || source === undefined) continue;
+    const specifiers = compilerSnapshotDenseArray(
+      compilerSourceModuleSpecifiers(source),
+      'Compiler import-selection package module specifiers',
+    );
+    for (let specifierIndex = 0; specifierIndex < specifiers.length; specifierIndex += 1) {
+      const specifier = specifiers[specifierIndex]!;
+      if (!compilerStringStartsWith(specifier, '.')) continue;
+      const resolvedFileName =
+        discovery.sourceSnapshots === undefined
+          ? resolveLocalStaticImportFileName(resolved.fileSystem, fileName, specifier)
+          : resolveSnapshotStaticImportFileName(discovery.sourceSnapshots, fileName, specifier);
+      // An unresolvable relative import contributes no CSS in the unpruned mode
+      // either (only discovered component files are CSS sources), so skipping it
+      // here cannot drop styling relative to `'exported'` selection.
+      if (resolvedFileName === null || compilerSetHas(visited, resolvedFileName)) continue;
+      if (!isInsideDirectory(resolved.packageDir, resolvedFileName)) continue;
+      compilerSetAdd(visited, resolvedFileName);
+      compilerArrayAppend(pending, resolvedFileName, 'Compiler import-selection expansion queue');
+      const componentName = compilerMapGet(componentNamesByFile, resolvedFileName);
+      if (componentName !== undefined) {
+        compilerArrayAppend(
+          importedNames,
+          componentName,
+          'Compiler import-selection imported names',
+        );
+      }
+    }
+  }
+}
+
+/**
+ * Map component export subpath names (`./button` → `button`) to the discovered
+ * absolute source file that authors them, covering both the vendored
+ * (`src/<name>.tsx`) and direct-exports discovery modes.
+ */
+function packageComponentFilesByName(
+  resolved: ResolvedPackage,
+  discovery: PackageComponentSourceDiscovery,
+): ReadonlyMap<string, string> {
+  const filesByName = compilerCreateMap<string, string>();
+  const discoveredFiles = compilerCreateSet<string>();
+  const sourceFiles = compilerSnapshotDenseArray(
+    discovery.sourceFiles,
+    'Compiler import-selection component source files',
+  );
+  for (let index = 0; index < sourceFiles.length; index += 1) {
+    compilerSetAdd(discoveredFiles, sourceFiles[index]!);
+  }
+  const exportsMap = compilerOwnDataValue(
+    resolved.manifest,
+    'exports',
+    'Compiler package manifest',
+  );
+  if (!exportsMap || typeof exportsMap !== 'object') return filesByName;
+  const keys = compilerSnapshotDenseArray(
+    compilerObjectKeys(exportsMap),
+    'Compiler package export keys',
+  );
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    if (!compilerStringStartsWith(key, './')) continue;
+    const name = compilerStringSlice(key, 2);
+    if (compilerRegExpExec(vendoredComponentNamePattern, name) === null) continue;
+    const vendoredCandidate = nativePathResolve(resolved.packageDir, 'src', `${name}.tsx`);
+    if (compilerSetHas(discoveredFiles, vendoredCandidate)) {
+      compilerMapSet(filesByName, name, vendoredCandidate);
+      continue;
+    }
+    const target = exportTargetPath(
+      compilerOwnDataValue(exportsMap, key, 'Compiler package exports'),
+      0,
+    );
+    if (target === null) continue;
+    const directCandidate = nativePathResolve(resolved.packageDir, target);
+    if (compilerSetHas(discoveredFiles, directCandidate)) {
+      compilerMapSet(filesByName, name, directCandidate);
+    }
+  }
+  return filesByName;
+}
+
+/**
+ * Count textual references to `packageName` at a package-name boundary (next
+ * character is `/`, end of text, or any non-package-name character). Used only
+ * to *widen* — a count exceeding the typed specifier facts triggers the
+ * fail-safe full catalog — never to select components (SPEC §5.2 rule 9/10).
+ */
+function countPackageNameReferences(source: string, packageName: string): number {
+  let count = 0;
+  let index = compilerStringIndexOf(source, packageName);
+  while (index !== -1) {
+    const next = compilerStringSlice(
+      source,
+      index + packageName.length,
+      index + packageName.length + 1,
+    );
+    if (next === '' || compilerRegExpExec(packageNameContinuationPattern, next) === null) {
+      count += 1;
+    }
+    index = compilerStringIndexOf(source, packageName, index + 1);
+  }
+  return count;
+}
+
+function resolveLocalStaticImportFileName(
+  fileSystem: CompilerSourceFileSystem,
+  fromFileName: string,
+  specifier: string,
+): string | null {
+  if (!compilerStringStartsWith(specifier, '.')) return null;
+  const absolute = nativePathResolve(nativePathDirname(fromFileName), specifier);
+  if (!isInsideDirectory(fileSystem.root, absolute)) return null;
+  const candidates = compilerSnapshotDenseArray(
+    staticImportCandidates(absolute),
+    'Compiler static import candidates',
+  );
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = candidates[index]!;
+    if (!isInsideDirectory(fileSystem.root, candidate)) continue;
+    if (fileSystem.kind(candidate) === 'file') return candidate;
+  }
+  return null;
 }
 
 function authenticatedVendoredPackageComponentSources(
