@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { realpathSync, readFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
 import type * as TS from 'typescript';
 import { typescriptRuntime as ts } from './ts-api.js';
@@ -543,8 +543,11 @@ export function createCompilerOwnedAppContractProject(
         ),
       );
     }
+    // plans/good-perf.md DevEx: keep walking after a refusal so one analysis pass reports every
+    // refused receiver in the file (deduplicated by code+position). Each proof is independent;
+    // acceptance still requires zero diagnostics, so collecting more refusals never widens what
+    // the resolver accepts.
     const visit = (node: TS.Node): void => {
-      if (diagnostics.length > 0) return;
       if (
         node !== sourceFile &&
         (ts.isArrowFunction(node) ||
@@ -609,17 +612,22 @@ export function createCompilerOwnedAppContractProject(
             hidden.call.expression,
             code,
             generated
-              ? 'D1B007 generated app provenance refuses declaration calls hidden in an uninvoked function or method body.'
-              : 'D1A007 receiver provenance refuses declaration calls hidden in an uninvoked function or method body.',
+              ? 'D1B007 generated app provenance refuses declaration calls hidden in an uninvoked function or method body. Move the declaration call to module scope so it executes unconditionally at module evaluation.'
+              : 'D1A007 receiver provenance refuses declaration calls hidden in an uninvoked function or method body. Move the app.<member>(...) call to module scope so it executes unconditionally at module evaluation.',
           ),
         );
       }
     }
 
-    const integrity = [
-      ...validateCompilerOwnedAppContractResolutions(facts),
-      ...validateCompilerOwnedAppContractMemberResolutions(memberFacts),
-    ];
+    // Integrity guards protect facts before they are used; a refused analysis discards its facts
+    // below, so facts collected while walking past a refusal are exempt from span-shape guards.
+    const integrity =
+      diagnostics.length > 0
+        ? []
+        : [
+            ...validateCompilerOwnedAppContractResolutions(facts),
+            ...validateCompilerOwnedAppContractMemberResolutions(memberFacts),
+          ];
     if (integrity.length > 0) {
       throw new TypeError(integrity.map((entry) => entry.message).join('\n'));
     }
@@ -749,6 +757,9 @@ export function createCompilerOwnedAppContractProject(
       const facts: CompilerOwnedAppContractResolution[] = [];
       const members: CompilerOwnedAppContractMemberResolution[] = [];
       const inputs: ProjectMutationSourceFile[] = [];
+      // plans/good-perf.md DevEx: analyze every file before refusing so one census run reports the
+      // refusals of the whole project instead of one file per run.
+      const refusals: string[] = [];
       for (const file of files) {
         if (
           !file ||
@@ -768,11 +779,8 @@ export function createCompilerOwnedAppContractProject(
         }
         const analysis = analyzeEntry(file.fileName);
         if (analysis.diagnostics.length > 0) {
-          throw new TypeError(
-            analysis.diagnostics
-              .map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`)
-              .join('\n'),
-          );
+          refusals.push(...analysis.diagnostics.map((diagnostic) => diagnostic.message));
+          continue;
         }
         facts.push(
           ...analysis.facts.map((fact) => ({
@@ -788,6 +796,7 @@ export function createCompilerOwnedAppContractProject(
         );
         inputs.push({ fileName: file.fileName, source: sourceFile.text });
       }
+      if (refusals.length > 0) throw new TypeError(refusals.join('\n'));
       return withCompilerOwnedAppContractResolutions(
         facts,
         () => {
@@ -839,15 +848,15 @@ export function createCompilerOwnedAppContractProject(
       ) {
         throw new TypeError('App-contract static census refused duplicate source identities.');
       }
+      // plans/good-perf.md DevEx: analyze every file before refusing so one census run reports the
+      // refusals of the whole project instead of one file per run.
+      const refusals: string[] = [];
       for (const fileName of fileNames) {
         const sourceFile = sourceFileFor(fileName);
         const analysis = analyzeEntry(fileName);
         if (analysis.diagnostics.length > 0) {
-          throw new TypeError(
-            analysis.diagnostics
-              .map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`)
-              .join('\n'),
-          );
+          refusals.push(...analysis.diagnostics.map((diagnostic) => diagnostic.message));
+          continue;
         }
         for (const member of analysis.memberFacts) {
           const declaration = appContractMemberDeclaration(member, checker, fileName);
@@ -862,6 +871,7 @@ export function createCompilerOwnedAppContractProject(
           });
         }
       }
+      if (refusals.length > 0) throw new TypeError(refusals.join('\n'));
       return Object.freeze(
         facts.sort(
           (left, right) =>
@@ -911,7 +921,7 @@ export function createCompilerOwnedAppContractProject(
       if (analysis.diagnostics.length > 0) {
         throw new TypeError(
           analysis.diagnostics
-            .map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`)
+            .map((diagnostic) => diagnostic.message)
             .join('\n'),
         );
       }
@@ -1172,8 +1182,8 @@ function proveFactoryCall(
         expression,
         code,
         code === 'D1A001'
-          ? 'D1A001 receiver provenance refuses wrapper results because the declaration call-site owner cannot be proved exactly.'
-          : 'D1A007 receiver provenance refuses declaration calls hidden in a function body.',
+          ? 'D1A001 receiver provenance refuses wrapper results because the declaration call-site owner cannot be proved exactly. Call the declaration member directly on the module-scope app const instead of through a wrapper function.'
+          : 'D1A007 receiver provenance refuses declaration calls hidden in a function body. Call the declaration member directly at module scope instead of through a wrapper function.',
       ),
       kind: 'diagnostic',
     };
@@ -1268,8 +1278,8 @@ function proveFactoryCall(
         expression,
         bound ? 'D1A007' : 'D1A002',
         bound
-          ? 'D1A007 receiver provenance refuses declaration factories transferred through Function.bind.'
-          : 'D1A002 receiver provenance refuses dynamic declaration-factory selection.',
+          ? 'D1A007 receiver provenance refuses declaration factories transferred through Function.bind. Call the declaration member directly on the module-scope app const.'
+          : 'D1A002 receiver provenance refuses dynamic declaration-factory selection. Spell the declaration member literally (app.query(...), app.mutation(...), ...) instead of selecting it at runtime.',
       ),
       kind: 'diagnostic',
     };
@@ -1290,7 +1300,7 @@ function proveReceiver(
         diagnosticSourceFile,
         rawExpression,
         'D1A007',
-        'D1A007 app-derived receiver provenance exceeded the bounded proof depth.',
+        'D1A007 app-derived receiver provenance exceeded the bounded proof depth (48 alias hops). Reference the defineKovo(...) const directly instead of through a long alias chain.',
       ),
       kind: 'diagnostic',
     };
@@ -1356,12 +1366,21 @@ function proveReceiver(
   }
 
   if (expressionDerivesFromApp(expression, context, new Set(), depth + 1)) {
+    const defineKovoFailure = defineKovoProofFailureDetail(expression, context);
+    const inlineDefineKovo =
+      ts.isCallExpression(expression) &&
+      ts.isIdentifier(expression.expression) &&
+      serverPackageRootForDefineKovo(expression.expression, context.checker) !== undefined;
     return {
       diagnostic: appContractExperimentDiagnostic(
         diagnosticSourceFile,
         expression,
         'D1A007',
-        'D1A007 receiver provenance refuses an app-derived receiver whose exact binding cannot be proved.',
+        defineKovoFailure !== undefined
+          ? `D1A007 receiver cannot be proved: ${defineKovoFailure}`
+          : inlineDefineKovo
+            ? `D1A007 receiver provenance refuses the inline call result \`${nodeExcerpt(expression, diagnosticSourceFile)}\`; bind the defineKovo(...) result to a module-scope const first and call declaration members on that binding.`
+            : `D1A007 receiver provenance refuses app-derived receiver \`${nodeExcerpt(expression, diagnosticSourceFile)}\`: its exact binding cannot be proved. Declare the app once as a module-scope \`const app = defineKovo({ appId: '<uuid-v4>', ... })\` and call declaration members directly on that binding.`,
       ),
       kind: 'diagnostic',
     };
@@ -1450,12 +1469,26 @@ function proveVariableReceiver(
   if (ts.isIdentifier(initializer)) {
     return proveReceiver(diagnosticSourceFile, initializer, context, nextSeen, depth + 1);
   }
+  const defineKovoFailure = defineKovoProofFailureDetail(initializer, context);
+  if (defineKovoFailure !== undefined && ts.isCallExpression(initializer)) {
+    // Anchor at the defineKovo call itself — that is the line the author must edit, and it may
+    // live in a different module than the refused member access.
+    return {
+      diagnostic: appContractExperimentDiagnostic(
+        declaration.getSourceFile(),
+        initializer.expression,
+        'D1A007',
+        `D1A007 receiver '${expression.text}' cannot be proved: ${defineKovoFailure}`,
+      ),
+      kind: 'diagnostic',
+    };
+  }
   return {
     diagnostic: appContractExperimentDiagnostic(
       diagnosticSourceFile,
       expression,
       'D1A007',
-      'D1A007 receiver provenance refuses an app-derived receiver whose exact binding cannot be proved.',
+      `D1A007 receiver provenance refuses app-derived receiver '${expression.text}': its initializer \`${nodeExcerpt(initializer, declaration.getSourceFile())}\` is not a form the compiler can prove. Declare the app once as a module-scope \`const ${expression.text} = defineKovo({ appId: '<uuid-v4>', ... })\` and call declaration members directly on that binding.`,
     ),
     kind: 'diagnostic',
   };
@@ -1548,6 +1581,48 @@ function proveDirectDefineKovo(
     ownerKey,
     serverPackageRoot,
   };
+}
+
+/**
+ * Names the exact reason `proveDirectDefineKovo` bailed for a call whose callee IS the genuine
+ * `defineKovo` export. Diagnostic text only — this function re-runs the same shape checks the
+ * proof runs and never grants anything; a `undefined` result falls back to the generic refusal.
+ *
+ * plans/good-perf.md DevEx: a `defineKovo({...})` missing `appId` previously fell through to the
+ * one-sentence catch-all refusal with no file, cause, or remediation.
+ */
+function defineKovoProofFailureDetail(
+  rawInitializer: TS.Expression,
+  context: ProvenanceContext,
+): string | undefined {
+  const initializer = unwrapExpression(rawInitializer);
+  if (!ts.isCallExpression(initializer)) return undefined;
+  const callee = initializer.expression;
+  if (!ts.isIdentifier(callee)) return undefined;
+  if (serverPackageRootForDefineKovo(callee, context.checker) === undefined) return undefined;
+  if (initializer.arguments.length !== 1) {
+    return `defineKovo() was called with ${initializer.arguments.length} arguments; the compiler can only prove a call with exactly one inline object-literal options argument.`;
+  }
+  const rawArgument = initializer.arguments[0];
+  if (rawArgument !== undefined && !ts.isObjectLiteralExpression(rawArgument)) {
+    if (ts.isObjectLiteralExpression(unwrapExpression(rawArgument))) {
+      return `defineKovo(...) options are wrapped in a type assertion or parentheses; write the object literal directly so the compiler can prove the app identity.`;
+    }
+    return `defineKovo(...) options are not an inline object literal; a variable, spread, or call result cannot carry the app identity proof.`;
+  }
+  if (rawArgument === undefined) return undefined;
+  const appId = stringProperty(rawArgument, 'appId');
+  if (appId === undefined) {
+    if (hasStaticProperty(rawArgument, 'appId')) {
+      return `defineKovo({...}) has an 'appId' that is not a static string literal; write the UUID directly in the options object.`;
+    }
+    return `defineKovo({...}) is missing the required 'appId'. Add appId: '<uuid-v4>' to the options object.`;
+  }
+  const providerKey = stringProperty(rawArgument, 'providerKey');
+  if (providerKey !== undefined || hasStaticProperty(rawArgument, 'provider')) {
+    return `defineKovo({...}) carries a partial provider/providerKey identity; supply both a static 'providerKey' string and a directly imported 'provider' binding, or remove both.`;
+  }
+  return undefined;
 }
 
 function importedProviderIdentity(
@@ -3217,13 +3292,49 @@ function appContractExperimentDiagnostic(
   message: string,
 ): CompilerOwnedAppContractDiagnostic {
   const start = node.getStart(sourceFile);
+  // plans/good-perf.md DevEx: every D1 refusal names the exact file:line:column of the refused
+  // node inside the message itself, because several consumers (check/build error results, the dev
+  // overlay) render only the message string and previously dropped the position this record
+  // already carried. The message may not restate the code prefix the emit sites spell.
+  const { character, line } = sourceFile.getLineAndCharacterOfPosition(start);
+  const detail = message.startsWith(`${code} `) ? message.slice(code.length + 1) : message;
+  const location = `${diagnosticPathLabel(sourceFile.fileName)}:${line + 1}:${character + 1}`;
   return {
     code,
     fileName: normalizeFileName(sourceFile.fileName),
     length: Math.max(1, node.getEnd() - start),
-    message,
+    message: `${code} ${location} ${detail}`,
     start,
   };
+}
+
+/**
+ * Diagnostic-text spelling for a Program file name: invocation-relative when the file lives under
+ * the current working directory (matching KV424's `src/app.tsx:206` shape), the normalized Program
+ * spelling otherwise. Diagnostic text only; never used for authority or file access.
+ */
+function diagnosticPathLabel(fileName: string): string {
+  const normalized = normalizeFileName(fileName);
+  const relativePath = relative(process.cwd(), normalized);
+  if (
+    relativePath.length === 0 ||
+    relativePath === '..' ||
+    relativePath.startsWith(`..${'/'}`) ||
+    relativePath.startsWith('..\\') ||
+    isAbsolute(relativePath)
+  ) {
+    return normalized;
+  }
+  return normalizeFileName(relativePath);
+}
+
+/**
+ * Single-line source excerpt of the refused node for diagnostic text: whitespace-collapsed and
+ * bounded so multi-line receivers stay readable in one ERROR row.
+ */
+function nodeExcerpt(node: TS.Node, sourceFile: TS.SourceFile): string {
+  const text = node.getText(sourceFile).replaceAll(/\s+/gu, ' ').trim();
+  return text.length <= 60 ? text : `${text.slice(0, 57)}...`;
 }
 
 function dedupeDiagnostics(
