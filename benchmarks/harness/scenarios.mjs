@@ -22,11 +22,36 @@ const CONDITIONS = {
   },
 };
 
+/**
+ * The old collection window: `load` + 150 ms. Retained ONLY so each run can report how much the
+ * old window understated the truth (plans/good-perf.md O15). Never use it as the headline number.
+ */
+const LOAD_WINDOW_MS = 150;
+
+/** Network-quiescence settings for the real byte-accounting window. */
+export const SETTLE_DEFAULTS = Object.freeze({ maxMs: 10_000, quietMs: 750 });
+
+/**
+ * Marker written into the page before an in-app navigation. It cannot survive a document
+ * replacement, so its absence afterwards is proof the navigation destroyed the JS realm.
+ */
+const NAV_SENTINEL = 'kovo-bench-nav-sentinel';
+
 export function percentile(values, pct) {
   if (values.length === 0) return null;
   const sorted = [...values].sort((left, right) => left - right);
   const index = Math.min(sorted.length - 1, Math.ceil((pct / 100) * sorted.length) - 1);
   return sorted[index];
+}
+
+/** Median absolute deviation — the spread figure the perf ledger quotes alongside every median. */
+export function medianAbsoluteDeviation(values) {
+  if (values.length === 0) return null;
+  const median = percentile(values, 50);
+  return percentile(
+    values.map((value) => Math.abs(value - median)),
+    50,
+  );
 }
 
 export function summarizeIterations(iterations) {
@@ -43,9 +68,12 @@ export function summarizeIterations(iterations) {
       .map((iteration) => flattenMetrics(iteration)[key])
       .filter((value) => typeof value === 'number' && Number.isFinite(value));
     summary[key] = {
+      mad: medianAbsoluteDeviation(values),
+      max: values.length === 0 ? null : Math.max(...values),
       median: percentile(values, 50),
       min: values.length === 0 ? null : Math.min(...values),
       p75: percentile(values, 75),
+      samples: values.length,
     };
   }
   return summary;
@@ -63,10 +91,11 @@ function flattenMetrics(value, prefix = '', output = {}) {
   return output;
 }
 
-export async function runScenarios({ app: _app, conditionName, iterations, origin }) {
+export async function runScenarios({ app: _app, conditionName, iterations, origin, settle }) {
   const browser = await chromium.launch({ headless: true });
   const condition = CONDITIONS[conditionName];
   if (!condition) throw new Error(`Unknown benchmark condition ${conditionName}.`);
+  const settleOptions = { ...SETTLE_DEFAULTS, ...settle };
 
   try {
     const coldLoad = [];
@@ -76,15 +105,17 @@ export async function runScenarios({ app: _app, conditionName, iterations, origi
     for (let index = 0; index < iterations; index += 1) {
       coldLoad.push(
         await withPage(browser, condition, (page, tracker) =>
-          coldLoadScenario(page, tracker, origin),
+          coldLoadScenario(page, tracker, origin, settleOptions),
         ),
       );
       ttiProbe.push(
-        await withPage(browser, condition, (page, tracker) => ttiScenario(page, tracker, origin)),
+        await withPage(browser, condition, (page, tracker) =>
+          ttiScenario(page, tracker, origin, settleOptions),
+        ),
       );
       navigation.push(
         await withPage(browser, condition, (page, tracker) =>
-          navigationScenario(page, tracker, origin),
+          navigationScenario(page, tracker, origin, settleOptions),
         ),
       );
     }
@@ -92,6 +123,7 @@ export async function runScenarios({ app: _app, conditionName, iterations, origi
     return {
       coldLoad: { iterations: coldLoad, summary: summarizeIterations(coldLoad) },
       navigation: { iterations: navigation, summary: summarizeIterations(navigation) },
+      settle: settleOptions,
       ttiProbe: { iterations: ttiProbe, summary: summarizeIterations(ttiProbe) },
     };
   } finally {
@@ -132,32 +164,59 @@ async function withPage(browser, condition, run) {
     }
   });
 
+  let pageErrors = 0;
+  page.on('pageerror', () => {
+    pageErrors += 1;
+  });
+
   try {
-    return await run(page, tracker);
+    const result = await run(page, tracker);
+    return { ...result, pageErrors };
   } finally {
     await context.close();
   }
 }
 
 function createRequestTracker(page) {
-  const requests = [];
+  const settled = [];
+  let started = 0;
+  let completed = 0;
+  let lastActivityAt = Date.now();
+
+  page.on('request', () => {
+    started += 1;
+    lastActivityAt = Date.now();
+  });
+  page.on('requestfailed', () => {
+    completed += 1;
+    lastActivityAt = Date.now();
+  });
   page.on('requestfinished', (request) => {
-    requests.push(
-      request
-        .sizes()
-        .then((sizes) => ({
+    completed += 1;
+    lastActivityAt = Date.now();
+    settled.push(
+      (async () => {
+        const [sizes, response] = await Promise.all([request.sizes(), request.response()]);
+        return {
           bytes: sizes.responseBodySize + sizes.responseHeadersSize,
           resourceType: request.resourceType(),
+          status: response?.status() ?? 0,
           url: request.url(),
-        }))
-        .catch(() => null),
+        };
+      })().catch(() => null),
     );
   });
 
   return {
+    /** Live counters used to detect network quiescence without awaiting size resolution. */
+    activity() {
+      return { completed, lastActivityAt, pending: started - completed, started };
+    },
     async collect() {
-      const finished = (await Promise.all(requests)).filter(Boolean);
+      const finished = (await Promise.all(settled)).filter(Boolean);
       const buckets = { css: 0, html: 0, img: 0, js: 0, other: 0, total: 0 };
+      let errorResponses = 0;
+      let rateLimitedResponses = 0;
       for (const request of finished) {
         const bucket =
           request.resourceType === 'document'
@@ -171,21 +230,70 @@ function createRequestTracker(page) {
                   : 'other';
         buckets[bucket] += request.bytes;
         buckets.total += request.bytes;
+        if (request.status === 429) rateLimitedResponses += 1;
+        else if (request.status >= 400) errorResponses += 1;
       }
-      return { bytes: buckets, requests: finished.length };
+      return {
+        bytes: buckets,
+        errorResponses,
+        rateLimitedResponses,
+        requests: finished.length,
+      };
     },
   };
 }
 
-async function coldLoadScenario(page, tracker, origin) {
-  await page.goto(`${origin}/`, { waitUntil: 'load' });
-  await page.waitForTimeout(150);
-  const perf = await performanceMetrics(page);
-  const network = await tracker.collect();
-  return { ...perf, ...network };
+/**
+ * Waits for real network quiescence instead of stopping at `load` + 150 ms.
+ *
+ * plans/good-perf.md O15: Kovo's inline bootstrap schedules its deferred-runtime import on a
+ * double rAF AFTER `load`, so the old window recorded `total 164,673 / js 0` on mobile for a build
+ * that actually ships 267,948 B of JS (a 2.64x understatement of total bytes). Yield two frames so
+ * the import is at least scheduled, then require `quietMs` with zero in-flight requests.
+ *
+ * Returns `settleTimedOut: 1` when quiescence was never reached, so a capped window is visible in
+ * the results rather than silently reported as a complete one.
+ */
+async function settleNetwork(page, tracker, { maxMs, quietMs }) {
+  const startedAt = Date.now();
+  await page
+    .evaluate(
+      () =>
+        new Promise((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)));
+        }),
+    )
+    .catch(() => undefined);
+
+  for (;;) {
+    const { lastActivityAt, pending } = tracker.activity();
+    if (pending === 0 && Date.now() - lastActivityAt >= quietMs) {
+      return { settleMs: Date.now() - startedAt, settleTimedOut: 0 };
+    }
+    if (Date.now() - startedAt >= maxMs) {
+      return { settleMs: Date.now() - startedAt, settleTimedOut: 1 };
+    }
+    await page.waitForTimeout(25);
+  }
 }
 
-async function ttiScenario(page, tracker, origin) {
+async function coldLoadScenario(page, tracker, origin, settle) {
+  await page.goto(`${origin}/`, { waitUntil: 'load' });
+  await page.waitForTimeout(LOAD_WINDOW_MS);
+  const loadWindow = await tracker.collect();
+  const settled = await settleNetwork(page, tracker, settle);
+  const perf = await performanceMetrics(page);
+  const network = await tracker.collect();
+  return {
+    ...perf,
+    ...network,
+    ...settled,
+    // The superseded `load` + 150 ms window, kept so every run reports its own understatement.
+    loadWindow: { bytes: loadWindow.bytes, requests: loadWindow.requests },
+  };
+}
+
+async function ttiScenario(page, tracker, origin, settle) {
   await page.goto(`${origin}/`, { waitUntil: 'domcontentloaded' });
   const tti = await page.evaluate(async () => {
     const deadline = performance.now() + 10000;
@@ -223,24 +331,136 @@ async function ttiScenario(page, tracker, origin) {
   await dialog.locator('input[name="email"]').fill('bench@example.test');
   await dialog.getByRole('button', { name: 'Place order' }).click({ force: true });
   await dialog.locator('[role="status"]').waitFor({ state: 'visible', timeout: 5000 });
+  const settled = await settleNetwork(page, tracker, settle);
   const perf = await performanceMetrics(page);
   const network = await tracker.collect();
-  return { ...perf, checkoutConfirmed: 1, ...tti, ...network };
+  return { ...perf, checkoutConfirmed: 1, ...tti, ...network, ...settled };
 }
 
-async function navigationScenario(page, tracker, origin) {
+/**
+ * Measures an in-app navigation to actual paint, not to DOM presence.
+ *
+ * plans/good-perf.md O15: the old probe waited for `main h1` to exist and reported Kovo at 36.9 ms
+ * desktop; measured to paint the same navigation costs 2,125 ms, a ~39x understatement, because
+ * Kovo replaces the whole document. Both figures are reported here — `navToPaintMs` is the headline
+ * and `navToDomMs` is retained only to keep the size of that gap visible.
+ *
+ * Timestamps are absolute (`performance.timeOrigin + …`) precisely because a document-replacing
+ * navigation resets `performance.now()` and destroys any mark set before the click.
+ */
+async function navigationScenario(page, tracker, origin, settle) {
   await page.goto(`${origin}/`, { waitUntil: 'load' });
-  await page.evaluate(() => performance.mark('bench-nav-start'));
-  const firstProduct = page.locator('a[aria-label^="View "]').first();
-  await firstProduct.click();
+  await settleNetwork(page, tracker, settle);
+  const before = await tracker.collect();
+
+  const link = page.locator('a[aria-label^="View "]').first();
+  const targetPath = new URL(await link.getAttribute('href'), origin).pathname;
+
+  await page.evaluate((sentinel) => {
+    window.__kovoBenchNavSentinel = sentinel;
+  }, NAV_SENTINEL);
+  const startEpochMs = await epochNow(page);
+
+  await link.click();
+
+  // The superseded probe, reproduced exactly: wait for `main h1` to exist and stop. It is not a
+  // navigation measurement at all — the LISTING page also has a `main h1`, so the selector is
+  // already satisfied by the ORIGIN document and this resolves before the navigation commits.
+  // Keeping it makes the size of that error visible in every run instead of asserted in prose.
   await page.waitForSelector('main h1');
-  const navMs = await page.evaluate(() => {
-    performance.mark('bench-nav-end');
-    const measure = performance.measure('bench-nav', 'bench-nav-start', 'bench-nav-end');
-    return measure.duration;
-  });
-  const network = await tracker.collect();
-  return { navToDetailMs: navMs, ...network };
+  const legacyDomEpochMs = await epochNow(page);
+
+  // Real commit: the destination URL, then the destination's own heading.
+  await page.waitForURL((url) => url.pathname === targetPath);
+  await page.waitForSelector('main h1');
+  const domEpochMs = await epochNow(page);
+  const paint = await navigationPaint(page, targetPath);
+  const atPaint = await tracker.collect();
+
+  const settled = await settleNetwork(page, tracker, settle);
+  const after = await tracker.collect();
+
+  return {
+    navBytesAtPaint: atPaint.bytes.total - before.bytes.total,
+    navBytesSettled: after.bytes.total - before.bytes.total,
+    // 1 when the navigation destroyed the JS realm, i.e. enhanced navigation did not happen.
+    navDocumentReplaced: paint.documentReplaced,
+    navErrorResponses: after.errorResponses - before.errorResponses,
+    // The superseded metric. Do not quote it (plans/good-perf.md "Do not re-propose").
+    navLegacyDomPresenceMs: legacyDomEpochMs - startEpochMs,
+    navPaintFromDocumentFcp: paint.fromDocumentFcp,
+    navRateLimitedResponses: after.rateLimitedResponses - before.rateLimitedResponses,
+    navRequests: after.requests - before.requests,
+    navSettleTimedOut: settled.settleTimedOut,
+    navToDomMs: domEpochMs - startEpochMs,
+    navToPaintMs: paint.epochMs - startEpochMs,
+    ...after,
+  };
+}
+
+/**
+ * Absolute (epoch) timestamp from inside the page.
+ *
+ * Absolute, not `performance.now()`, because a document-replacing navigation resets the document
+ * timeline to 0 and destroys any mark set before the click — the exact reason the superseded probe
+ * could not measure a Kovo navigation. Retries across execution-context destruction.
+ */
+async function epochNow(page) {
+  const deadline = Date.now() + 30_000;
+  for (;;) {
+    try {
+      return await page.evaluate(() => performance.timeOrigin + performance.now());
+    } catch (error) {
+      if (Date.now() >= deadline) throw error;
+      await page.waitForTimeout(25);
+    }
+  }
+}
+
+async function navigationPaint(page, targetPath) {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    try {
+      const result = await page.evaluate(
+        async ({ path, sentinel }) => {
+          // Never answer from the origin document: a full-document navigation is asynchronous, so
+          // an evaluate scheduled during it can still land in the document being replaced.
+          if (location.pathname !== path) return null;
+          if (!document.querySelector('main h1')) return null;
+
+          const replaced = window.__kovoBenchNavSentinel !== sentinel;
+          if (replaced) {
+            // A new document was created: its browser-recorded first contentful paint IS the moment
+            // the user first sees the destination, with no polling overshoot.
+            const fcp = performance.getEntriesByName('first-contentful-paint')[0];
+            if (!fcp) return null;
+            return {
+              documentReplaced: 1,
+              epochMs: performance.timeOrigin + fcp.startTime,
+              fromDocumentFcp: 1,
+            };
+          }
+          // Same document: no new paint entry is emitted, so take the timestamp of the first frame
+          // rendered after the destination content is in the DOM.
+          await new Promise((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)));
+          });
+          return {
+            documentReplaced: 0,
+            epochMs: performance.timeOrigin + performance.now(),
+            fromDocumentFcp: 0,
+          };
+        },
+        { path: targetPath, sentinel: NAV_SENTINEL },
+      );
+      if (result) return result;
+    } catch {
+      // The in-flight full-document navigation destroyed this execution context. Retry in the
+      // document that replaced it — that retry is itself evidence the document was replaced.
+    }
+    await page.waitForTimeout(25);
+  }
+  throw new Error('Timed out waiting for the post-navigation paint signal.');
 }
 
 async function performanceMetrics(page) {

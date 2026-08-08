@@ -1,15 +1,26 @@
 #!/usr/bin/env node
-import { runLighthouse } from './lighthouse.mjs';
+import { runBfcacheProbe } from './bfcache.mjs';
+import { DEFAULT_LIGHTHOUSE_REPEATS, runLighthouse } from './lighthouse.mjs';
 import { runScenarios } from './scenarios.mjs';
 
-export async function runAppBenchmark({ app, iterations = 10, lighthouse = true, origin }) {
+export async function runAppBenchmark({
+  app,
+  bfcacheIterations = 3,
+  iterations = 10,
+  lighthouse = true,
+  lighthouseRepeats = DEFAULT_LIGHTHOUSE_REPEATS,
+  origin,
+  settle,
+}) {
   const result = {
     app: app.id,
     framework: app.framework,
     origin,
+    posture: app.posture ?? null,
     versions: app.versions ?? {},
     conditions: {},
     lighthouse: [],
+    bfcache: null,
   };
 
   for (const conditionName of ['desktop', 'mobile']) {
@@ -18,11 +29,15 @@ export async function runAppBenchmark({ app, iterations = 10, lighthouse = true,
       conditionName,
       iterations,
       origin,
+      settle,
     });
   }
 
+  // Runs in its own bfcache-enabled full-Chromium process; see benchmarks/harness/bfcache.mjs.
+  result.bfcache = await runBfcacheProbe({ iterations: bfcacheIterations, origin });
+
   if (lighthouse) {
-    result.lighthouse = await runLighthouse(origin);
+    result.lighthouse = await runLighthouse(origin, { repeats: lighthouseRepeats });
   }
 
   return result;
