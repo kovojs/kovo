@@ -5,6 +5,8 @@ import {
   capabilityClosureLine,
   capabilityLine,
   diagnosticsForTouchGraph,
+  opaqueProtocolSinkExplanation,
+  unregisteredSinkLine,
 } from './graph-explain-format.js';
 
 describe('graph explain formatters', () => {
@@ -76,6 +78,41 @@ describe('graph explain formatters', () => {
     ).toBe(
       'CLOSED root=webhook:"billing" capability=network module=src/routes/webhook.ts site=src/lib/send.ts:4:1 path="webhook:billing -> src/lib/send.ts -> package:raw-http" reason="package summary is absent"',
     );
+  });
+
+  // plans/good-perf.md DevEx defect 5: KV424 opaque-protocol rows teach the actual provenance
+  // rule (destructured callback parameter accepted, property read on the parameter refused)
+  // instead of the generic dangerous-output-sink help about raw HTML/eval/child_process.
+  it('explains the opaque-protocol provenance rule on KV424 rows', () => {
+    const line = unregisteredSinkLine({
+      safePath:
+        'use compiler-provable plain data or keep every authored protocol hook inside the authoritative app snapshot',
+      sink: 'request-handler.opaque-protocol',
+      site: 'src/app.tsx:314',
+      source: '<property-getter:candidate>',
+    });
+
+    expect(line).toContain(
+      'ERROR KV424 src/app.tsx:314 sink=request-handler.opaque-protocol source=<property-getter:candidate>',
+    );
+    expect(line).toContain('a hook site is accepted only when the compiler proves the receiver is plain data');
+    expect(line).toContain('destructuring the same field at the callback parameter (({ slug }) => ...) is accepted');
+    // The generic output-sink help would mislead here and must not be attached to this family.
+    expect(line).not.toContain('raw HTML');
+  });
+
+  it('keeps the generic KV424 help for non-protocol sink families', () => {
+    expect(
+      opaqueProtocolSinkExplanation({ sink: 'child_process.spawnSync' }),
+    ).toBeUndefined();
+    const line = unregisteredSinkLine({
+      safePath: 'runCommand(cmd(...), ...)',
+      sink: 'child_process.spawnSync',
+      site: 'app.mjs:10',
+      source: "'true'",
+    });
+    expect(line).toContain('ERROR KV424 app.mjs:10 sink=child_process.spawnSync');
+    expect(line).toContain('raw HTML');
   });
 
   it('fails closed when a tampered touch graph carries an unregistered diagnostic code', () => {

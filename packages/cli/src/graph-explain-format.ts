@@ -225,8 +225,33 @@ export function unregisteredSinkLine(sink: CoreGraph.UnregisteredSinkFact): stri
   return [
     `${diagnostic.severity.toUpperCase()} ${diagnostic.code} ${sink.site} sink=${sink.sink}${source} safe=${sink.safePath}`,
     diagnostic.message,
-    diagnostic.help ?? '',
+    opaqueProtocolSinkExplanation(sink) ?? diagnostic.help ?? '',
   ].join(' ');
+}
+
+/**
+ * Family-specific KV424 teaching text for `request-handler.opaque-protocol` refusals.
+ *
+ * plans/good-perf.md DevEx defect 5: the generic KV424 help (raw HTML / eval / child_process
+ * output sinks) cannot let an author predict opaque-protocol refusals — `catalog.map(({ name }) =>
+ * ...)` is accepted while `catalog.find((c) => c.slug === slug)` is refused, and a `for...of` over
+ * the same array with the same property read is accepted. This states the actual rule so the next
+ * refusal is predictable. Behaviour verified against the classifier on `benchmarks/kovo`
+ * (2026-08-08): for...of + property read over a module-local literal array = OK; find/map with a
+ * destructured callback parameter = OK; find/map callback property read = refused
+ * `<property-getter:...>`; template interpolation of a destructured binding = refused
+ * `<@@toPrimitive|valueOf|toString:...>`. Text only — the analysis is unchanged.
+ */
+export function opaqueProtocolSinkExplanation(
+  sink: Pick<CoreGraph.UnregisteredSinkFact, 'sink'>,
+): string | undefined {
+  if (sink.sink !== 'request-handler.opaque-protocol') return undefined;
+  return [
+    'The refused operation named in source= is a JavaScript protocol hook on a request-reachable path: a property read can run an authored getter (<property-getter:x>), and string interpolation or coercion can run authored @@toPrimitive/valueOf/toString hooks.',
+    'The rule: a hook site is accepted only when the compiler proves the receiver is plain data. Provenance survives module-scope literal data, for...of over a proven local array (property reads on the loop variable are fine), and destructuring at a parameter or binding pattern. Provenance is NOT tracked into builtin callback parameters: reading candidate.slug inside array.find or array.map is refused even over a local literal array, while destructuring the same field at the callback parameter (({ slug }) => ...) is accepted.',
+    'Fixes: destructure the fields you need at the callback parameter or another binding pattern, precompute derived strings as literals in the data instead of interpolating at render time, or move the computation behind a framework-owned typed surface.',
+    'SPEC §4.8 and §5.2 rule 10 make unproven authored protocol hooks on request-reachable paths dangerous sinks.',
+  ].join('\n');
 }
 
 export interface EndpointMetadataDiagnostic {

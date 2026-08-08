@@ -172,6 +172,7 @@ import {
   type KovoCheckDiagnosticSourceCatalog,
   type KovoCheckDiagnosticSourceFact,
 } from '../graph-output.js';
+import { opaqueProtocolSinkExplanation } from '../graph-explain-format.js';
 import { kovoInvocationEnvironmentValue } from '../invocation-environment.js';
 import { kovoCertificatePolicyV1Json, kovoCertificateV1Json } from '../certificate.js';
 import { escapeCensusReviewManifestForBuild } from '../escape-census-review-subjects.js';
@@ -6056,13 +6057,18 @@ function projectStaticTrustDiagnosticForWorker(
 function projectStaticTrustUnregisteredSinkForWorker(
   sink: CoreGraph.UnregisteredSinkFact,
 ): KovoDiagnosticRecord {
+  // plans/good-perf.md DevEx defect 5: opaque-protocol refusals carry the family-specific
+  // predictive rule instead of only the generic dangerous-output-sink help.
+  const explanation = opaqueProtocolSinkExplanation(sink);
   return projectKovoDiagnostic(
     createRegisteredDiagnostic(
       'KV424',
       {},
       {
         includeHelp: true,
-        message: `Unregistered app sink ${stringifyBuildValue(sink.sink)} at ${stringifyBuildValue(sink.site)}; ${sink.safePath}.`,
+        message:
+          `Unregistered app sink ${stringifyBuildValue(sink.sink)} at ${stringifyBuildValue(sink.site)}; ${sink.safePath}.` +
+          (explanation === undefined ? '' : `\n${explanation}`),
       },
     ),
     'proof',
