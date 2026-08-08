@@ -1,5 +1,6 @@
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import {
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -180,7 +181,7 @@ function materializePackedAppNodeModules(
     const manifest = JSON.parse(readFileSync(packageJson, 'utf8')) as { name?: string };
     if (!manifest.name?.startsWith('@kovojs/')) continue;
     const target = join(kovoScope, basename(manifest.name));
-    if (!statSync(target, { throwIfNoEntry: false })) {
+    if (!lstatSync(target, { throwIfNoEntry: false })) {
       symlinkSync(packageRoot, target, 'dir');
     }
   }
@@ -213,7 +214,11 @@ function linkExternalNodeModules(source: string, target: string): void {
 }
 
 function linkNodeModuleIfAbsent(source: string, target: string): void {
-  if (!statSync(target, { throwIfNoEntry: false })) {
+  // lstat, not stat: this asks "is an entry already here", and stat follows the link. A workspace
+  // link left dangling by a dependency bump (e.g. packages/server/node_modules/vitest still naming
+  // a removed vitest version) resolves to nothing under stat, so we would try to create a link that
+  // already exists and fail the whole suite with EEXIST.
+  if (!lstatSync(target, { throwIfNoEntry: false })) {
     symlinkSync(source, target, 'dir');
   }
 }
