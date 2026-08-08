@@ -118,6 +118,9 @@ describe('kovo check current-source proof', () => {
         'kovo-check/v1\nERROR kovo check TypeScript preflight failed:',
       );
       expect(typeFailure.stderr).toContain("Type 'number' is not assignable to type 'string'");
+      // plans/good-perf.md DevEx defect 2: every finding-class check stop announces that dependent
+      // gates have not run yet.
+      expect(typeFailure.stderr).toContain('note: this stopped at the first failing gate');
       expect(existsSync(join(root, 'dist'))).toBe(false);
 
       writeFileSync(appPath, sourceCheckApp(false));
@@ -129,6 +132,10 @@ describe('kovo check current-source proof', () => {
       );
       expect(compilerFailure.stderr).toContain('kovo-check/v1\nERROR KV436 QUERY ');
       expect(compilerFailure.stderr).toContain('Missing explicit access decision.');
+      // graph-diagnostics is the check pipeline's final gate (the census below proves every phase
+      // executed), so the short-circuit notice would be false here and must be absent: nothing
+      // depends on this gate. Early thrown gate stops (the TypeScript preflight above) carry it.
+      expect(compilerFailure.stderr).not.toContain('note: this stopped at the first failing gate');
       expect(sourceCheckPhaseCensus(compilerFailure.stderr).phases.at(-1)).toMatchObject({
         name: 'graph-diagnostics',
         status: 'executed',

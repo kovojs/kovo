@@ -1199,8 +1199,115 @@ describe('D1 compiler-owned exact project resolver', () => {
       ).toEqual([cases[name as keyof typeof cases]]);
       expect(result.diagnostics[0]?.length, name).toBeLessThanOrEqual(64);
       expect(result.diagnostics[0]?.message.length, name).toBeLessThanOrEqual(700);
+      // plans/good-perf.md DevEx: every D1 refusal names file:line:column inside the message.
+      expect(result.diagnostics[0]?.message, name).toMatch(/^D1[ABX]\d{3} \S+:\d+:\d+ \S/u);
       expect(result.resolver.exactNodeCount, name).toBe(0);
     }
+  });
+
+  it('names the file, line, and actual cause when defineKovo is missing appId', async () => {
+    const fixture = await createFixture();
+    const contract = join(fixture.root, 'app/src/kovo-missing-appid.ts');
+    const entry = join(fixture.root, 'app/src/missing-appid-entry.ts');
+    await writeSource(
+      contract,
+      ["import { defineKovo } from '@kovojs/server';", 'export const app = defineKovo({});', ''].join(
+        '\n',
+      ),
+    );
+    await writeSource(
+      entry,
+      "import { app } from './kovo-missing-appid.js';\nexport const item = app.query({ load() { return 1; } });\n",
+    );
+    const project = createCompilerOwnedAppContractProject({ rootNames: [contract, entry] });
+
+    const result = project.compileEntry(entry);
+
+    expect(result.diagnostics.map((entry) => entry.code)).toEqual(['D1A007']);
+    const diagnostic = result.diagnostics[0]!;
+    // The diagnostic anchors at the defineKovo call the author must edit, not at the member use.
+    expect(diagnostic.fileName).toBe(contract.replaceAll('\\', '/'));
+    expect(diagnostic.message).toMatch(
+      /^D1A007 \S*kovo-missing-appid\.ts:2:20 receiver 'app' cannot be proved: defineKovo\(\{\.\.\.\}\) is missing the required 'appId'\. Add appId: '<uuid-v4>' to the options object\.$/u,
+    );
+  });
+
+  it('names a non-literal appId as the cause', async () => {
+    const fixture = await createFixture();
+    const contract = join(fixture.root, 'app/src/kovo-computed-appid.ts');
+    const entry = join(fixture.root, 'app/src/computed-appid-entry.ts');
+    await writeSource(
+      contract,
+      [
+        "import { defineKovo } from '@kovojs/server';",
+        "const id = '00000000-0000-4000-8000-000000000002';",
+        'export const app = defineKovo({ appId: id });',
+        '',
+      ].join('\n'),
+    );
+    await writeSource(
+      entry,
+      "import { app } from './kovo-computed-appid.js';\nexport const item = app.query({ load() { return 1; } });\n",
+    );
+    const project = createCompilerOwnedAppContractProject({ rootNames: [contract, entry] });
+
+    const result = project.compileEntry(entry);
+
+    expect(result.diagnostics.map((entry) => entry.code)).toEqual(['D1A007']);
+    expect(result.diagnostics[0]?.message).toContain(
+      "has an 'appId' that is not a static string literal",
+    );
+  });
+
+  it('reports every refused receiver of a file in one analysis pass', async () => {
+    const fixture = await createFixture();
+    const entry = join(fixture.root, 'app/src/multi-refusal.ts');
+    await writeSource(
+      entry,
+      [
+        "import { app } from './provider.js';",
+        'const first = [app][0]!;',
+        'const second = ({ value: app }).value;',
+        'export const one = first.query({ load() { return 1; } });',
+        'export const two = second.query({ load() { return 2; } });',
+        '',
+      ].join('\n'),
+    );
+    const project = createCompilerOwnedAppContractProject({
+      rootNames: [fixture.provider, entry],
+    });
+
+    const result = project.compileEntry(entry);
+
+    // Both independent refusals surface in one pass (plans/good-perf.md DevEx: no
+    // one-refusal-per-run loop), at distinct positions, each self-locating.
+    expect(result.diagnostics.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(result.diagnostics.map((entry) => entry.start)).size).toBe(
+      result.diagnostics.length,
+    );
+    for (const diagnostic of result.diagnostics) {
+      expect(diagnostic.message).toMatch(/^D1[ABX]\d{3} \S+:\d+:\d+ \S/u);
+    }
+    expect(result.resolver.exactNodeCount).toBe(0);
+  });
+
+  it('aggregates refusals across project files into one census error', async () => {
+    const fixture = await createFixture();
+    const firstBroken = join(fixture.root, 'app/src/first-broken.ts');
+    const secondBroken = join(fixture.root, 'app/src/second-broken.ts');
+    await writeSource(firstBroken, rejectedSource('array'));
+    await writeSource(secondBroken, rejectedSource('object'));
+    const project = createCompilerOwnedAppContractProject({
+      rootNames: [fixture.provider, firstBroken, secondBroken],
+    });
+    const files = [firstBroken, secondBroken].map((fileName) => ({
+      fileName,
+      source: rejectedSource(fileName === firstBroken ? 'array' : 'object'),
+    }));
+
+    expect(() => project.staticFacts(files)).toThrowError(
+      /first-broken\.ts[\s\S]*second-broken\.ts/u,
+    );
   });
 
   it('does not recognize an unrelated object with same-named members', async () => {

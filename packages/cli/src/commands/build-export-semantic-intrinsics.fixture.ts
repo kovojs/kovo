@@ -181,6 +181,9 @@ function expectOpaqueKv424(root: string, result: { code: number; stderr: string 
   expect(result, result.stderr).toMatchObject({ code: 1 });
   expect(result.stderr).toContain('ERROR KV424');
   expect(result.stderr).toMatch(/sink=request-handler\.opaque/u);
+  // plans/good-perf.md DevEx defect 2: every finding-class hard stop announces that dependent
+  // gates have not run yet, so the author expects possible further refusals after fixing these.
+  expect(result.stderr).toContain('note: this stopped at the first failing gate');
   expect(existsSync(join(root, 'dist'))).toBe(false);
 }
 

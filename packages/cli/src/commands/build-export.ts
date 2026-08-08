@@ -172,6 +172,7 @@ import {
   type KovoCheckDiagnosticSourceCatalog,
   type KovoCheckDiagnosticSourceFact,
 } from '../graph-output.js';
+import { opaqueProtocolSinkExplanation } from '../graph-explain-format.js';
 import { kovoInvocationEnvironmentValue } from '../invocation-environment.js';
 import { kovoCertificatePolicyV1Json, kovoCertificateV1Json } from '../certificate.js';
 import { escapeCensusReviewManifestForBuild } from '../escape-census-review-subjects.js';
@@ -6056,13 +6057,18 @@ function projectStaticTrustDiagnosticForWorker(
 function projectStaticTrustUnregisteredSinkForWorker(
   sink: CoreGraph.UnregisteredSinkFact,
 ): KovoDiagnosticRecord {
+  // plans/good-perf.md DevEx defect 5: opaque-protocol refusals carry the family-specific
+  // predictive rule instead of only the generic dangerous-output-sink help.
+  const explanation = opaqueProtocolSinkExplanation(sink);
   return projectKovoDiagnostic(
     createRegisteredDiagnostic(
       'KV424',
       {},
       {
         includeHelp: true,
-        message: `Unregistered app sink ${stringifyBuildValue(sink.sink)} at ${stringifyBuildValue(sink.site)}; ${sink.safePath}.`,
+        message:
+          `Unregistered app sink ${stringifyBuildValue(sink.sink)} at ${stringifyBuildValue(sink.site)}; ${sink.safePath}.` +
+          (explanation === undefined ? '' : `\n${explanation}`),
       },
     ),
     'proof',
@@ -8213,15 +8219,23 @@ function selectedKovoBuildPreset(
   configuredPreset: KovoBuildPreset | undefined,
   invocationEnv: NodeJS.ProcessEnv,
 ): SelectedKovoBuildPreset {
-  if (options.preset !== undefined) return { name: options.preset };
-
-  const envPreset = kovoInvocationEnvironmentValue(invocationEnv, 'KOVO_PRESET');
-  if (envPreset) {
-    const parsedPreset = parseKovoBuildPresetName(envPreset);
-    if (!parsedPreset) {
-      throw new KovoCommandConfigurationError(`unsupported KOVO_PRESET ${stableValue(envPreset)}`);
-    }
-    return { name: parsedPreset };
+  const requested = requestedKovoBuildPresetName(options, invocationEnv);
+  if (requested !== undefined) {
+    if (configuredPreset === undefined) return { name: requested.name };
+    const configured = selectedConfiguredKovoBuildPreset(configuredPreset);
+    // plans/good-perf.md DevEx defect (KV417 loop): the flag/env selector previously returned only
+    // the preset NAME, silently discarding the config file's configured preset instance —
+    // including the node({ retention }) proof KV417 instructs the author to write, so following
+    // the diagnostic could never terminate. A selector that agrees with the config keeps the
+    // configured instance and its authored options; a selector that contradicts the config
+    // refuses loudly instead of silently overriding authored deployment configuration.
+    if (configured.name === requested.name) return configured;
+    throw new KovoCommandConfigurationError(
+      `${requested.source} selects preset ${requested.name} but the kovo config file configures ` +
+        `preset ${configured.name}(...). The config's preset options (for example ` +
+        `${configured.name}({ retention }) required by KV417) are authoritative and are never ` +
+        `silently discarded; change the config's preset or drop ${requested.source}.`,
+    );
   }
 
   if (configuredPreset !== undefined) return selectedConfiguredKovoBuildPreset(configuredPreset);
@@ -8234,6 +8248,22 @@ function selectedKovoBuildPreset(
     return { name: 'cloudflare' };
   }
   return { name: 'node' };
+}
+
+function requestedKovoBuildPresetName(
+  options: KovoBuildOptions,
+  invocationEnv: NodeJS.ProcessEnv,
+): { name: KovoBuildPresetName; source: string } | undefined {
+  if (options.preset !== undefined) return { name: options.preset, source: '--preset' };
+  const envPreset = kovoInvocationEnvironmentValue(invocationEnv, 'KOVO_PRESET');
+  if (envPreset) {
+    const parsedPreset = parseKovoBuildPresetName(envPreset);
+    if (!parsedPreset) {
+      throw new KovoCommandConfigurationError(`unsupported KOVO_PRESET ${stableValue(envPreset)}`);
+    }
+    return { name: parsedPreset, source: 'KOVO_PRESET' };
+  }
+  return undefined;
 }
 
 function selectedConfiguredKovoBuildPreset(preset: KovoBuildPreset): SelectedKovoBuildPreset {
@@ -12775,10 +12805,23 @@ function stringifyBuildValue(value: unknown, space?: number): string {
   return serialized;
 }
 
+/**
+ * plans/good-perf.md DevEx defect 2: build/check refusals surface one gate at a time because each
+ * gate proves artifacts the next gate's analysis is unsound without (source trust must pass before
+ * the app is evaluated; evaluation must pass before route/attribute lowering; the neutral build
+ * must exist before preset/deployment proofs). Independent refusals inside one gate are already
+ * batched; this notice makes the genuine short-circuit explicit so an author fixing the reported
+ * refusals knows a later gate may still report more.
+ */
+const GATE_SHORT_CIRCUIT_NOTICE =
+  'note: this stopped at the first failing gate; gates that depend on it have not run yet and may report further refusals once these are fixed.';
+
 function buildErrorResult(error: unknown): CliCommandResult {
+  const configurationError = error instanceof KovoCommandConfigurationError;
+  const message = error instanceof Error ? error.message : String(error);
   const result: CliCommandResult = {
-    error: `${buildOutputVersion}\nERROR ${error instanceof Error ? error.message : String(error)}`,
-    exitCode: error instanceof KovoCommandConfigurationError ? 2 : 1,
+    error: `${buildOutputVersion}\nERROR ${message}${configurationError ? '' : `\n${GATE_SHORT_CIRCUIT_NOTICE}`}`,
+    exitCode: configurationError ? 2 : 1,
   };
   if (error instanceof KovoBuildCheckDiagnosticError && error.diagnostics !== undefined) {
     Object.defineProperty(result, 'diagnostics', {
@@ -12792,11 +12835,12 @@ function buildErrorResult(error: unknown): CliCommandResult {
 }
 
 function sourceCheckErrorResult(error: unknown): CliCommandResult {
+  const configurationError = error instanceof KovoCommandConfigurationError;
   const result: CliCommandResult = {
     error: `${requireKovoCommandResultProtocol('check')}\nERROR ${
       error instanceof Error ? error.message : String(error)
-    }`,
-    exitCode: error instanceof KovoCommandConfigurationError ? 2 : 1,
+    }${configurationError ? '' : `\n${GATE_SHORT_CIRCUIT_NOTICE}`}`,
+    exitCode: configurationError ? 2 : 1,
   };
   if (error instanceof KovoBuildCheckDiagnosticError && error.diagnostics !== undefined) {
     Object.defineProperty(result, 'diagnostics', {
