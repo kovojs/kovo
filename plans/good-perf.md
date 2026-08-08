@@ -542,23 +542,38 @@ Grouped here because they share O5's root cause. Four of five closed 2026-08-08 
 
 ### O7 — Fix the quadratic `app-source-trust` phase in check/build — **critical, large, medium risk**
 
-- [ ] Remove the super-linear term from `kovo check` / `kovo build` closure analysis.
-  - Confirmed, not hypothesised. A synthetic 8-ary tree holding entry-module size constant while
-    growing the reachable closure gives check durations 22.2 s (N=25) → 24.0 → 28.5 → 39.8 →
-    **75.5 s (N=400)**. Quadratic fit `T = 20.766 + 0.05466N + 2.052e-4·N²` has RMSE 0.109 s; the
-    linear fit has RMSE 2.795 s — **26x worse**. Marginal cost per added module rises monotonically
-    74.7 → 88.8 → 113.1 → **178.5 ms**.
-  - Localised: `app-source-trust` share of wall clock goes 26% (N=2) → 34% (N=100) → 47% (N=200) →
-    **73% (N=400)**; its local doubling exponent rises 1.43 → 1.61 → 1.77 → **2.12**.
-  - Suspected mechanism (not yet instrumented to call counts):
-    `packages/cli/src/commands/build-export.ts:6732-6753` passes every *other* closure file as
-    `extraFiles` to each file's compilation, and `packages/compiler/src/scan/parse.ts:335-343`
-    re-parses them with an unmemoized `ts.createSourceFile` reached from at least three call sites.
-  - Constraint: any memo must be **per-run, not process-global** —
-    `packages/drizzle/src/static/project-setup.ts:60-69` records that a prior process-global memo
-    leaked ts-morph Projects and OOM'd.
-  - Also the RSS driver: peak process-tree RSS grows 2,172 (N=25) → 3,027 (N=200) → **3,089 MiB
-    (N=400)** against a 3,072 MiB budget. A 200-module app is at 98.5% of budget.
+- [x] Remove the super-linear term from `kovo check` / `kovo build` closure analysis.
+  - Done 2026-08-08 on `perf/check-quadratic`. Mechanism confirmed by call counts before
+    optimising: `parseSourceFile` (`ts.createSourceFile`) executed **6,319 times at N=25 →
+    23,894 at N=50** (3.78x for 2x modules, ~N²; 96% in the `app-source-trust` trust worker) —
+    ~9 whole-closure re-parse sweeps per module: `compile.ts` identity registration at parse AND
+    lower phases, the `scan/parse.ts` identity loop, `build-export.ts` `parsedModule`,
+    render-equivalence, and browser-posture, all fed by the ledger's suspected
+    `build-export.ts` `extraFiles` shape.
+  - Fix: `parseSharedSnapshotEntry` (`scan/parse.ts`) — one AST per snapshot entry OBJECT per
+    run, weakly keyed (never process-global content-keyed, honoring the drizzle OOM constraint);
+    reuse only on byte-exact fileName+source match (SPEC §5.2: the reuse condition is the
+    exactness proof). The §5.2.1 pinned options snapshot stays the sole decision carrier; its
+    `extraFiles` clones (and structural-jsx's defensive clones) are aliased to their origin
+    entries as identity hints only, so a mutated/hostile entry can only cause a fresh parse.
+  - Post-fix call counts are linear: **495 / 995 / 2,049** at N=25/50/100 (2.0x per doubling).
+    Residual slight super-linearity lives in the check-worker `sessionAuthorityFactsFromEntry`
+    vite-closure walk (261→536→1,140; ~N·log₈N) — negligible at this size.
+  - Ladder re-measured, same 8-ary-tree protocol, 3 samples/rung medians, shared box
+    (load1 recorded 7–17, INDICATIVE): pristine-main baseline 27.6 / 30.8 / 50.4 / 73.7 /
+    **143.1 s** (N=25→400) → fixed 21.4 / 22.2 / 31.5 / 39.3 / **64.2 s** (N=400 **-55%**).
+    Quadratic coefficient 1.626e-4 → **2.428e-5** (-85%); linear-fit/quadratic-fit RMSE ratio
+    1.4x → **1.0x** — the quadratic model no longer explains anything the linear model doesn't.
+    Marginal cost per module stopped rising monotonically (base 129→392→233→347 ms;
+    fixed 32→185→78→125 ms, noise-dominated, ~linear ≈115 ms/module contended).
+  - RSS improved at every rung (max over samples): N=200 2,956 → **2,513 MiB**; N=400 3,110 →
+    **3,022 MiB** — back under the 3,072 MiB budget (median 2,627).
+  - Verified: `scan/shared-snapshot-entry-parse.test.ts` (identity reuse, byte-exact
+    revalidation, no cross-run content sharing, clone aliasing, O(N)-vs-O(N²) parse-count bound
+    with byte-identical compile output); full `packages/compiler` suite 2,595 passed with only
+    the 3 pre-existing main failures; `kovo check source` exit 0 at every rung; `kovo build`
+    exit 0 end-to-end on the N=25 ladder app (node preset); framework-export-posture gate
+    exit 0 (compiler is digest-exempt: request-closed).
 - [x] Fix the hard scaling wall: a legitimate app becomes unbuildable purely by growing.
   - Done 2026-08-08 on `perf/dev-incremental`. **Cause correction**: instrumentation shows the
     N=130 flat entry consumes only ~540 abstract work units — the 16,384-step
