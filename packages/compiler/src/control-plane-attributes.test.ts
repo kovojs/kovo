@@ -171,6 +171,15 @@ export const NestedAuthoredControlPlane = component({
         names: ['data-stream-renderer', 'data-stream-text', 'data-stream-state'],
       },
       {
+        // SPEC §8 (plans/good-perf.md D2): the loader template's own `data-kovo-csp-hash`
+        // consumer was the script-replay helper, deleted because a parts document is inert by
+        // protocol — the runtime never recreates a script element after apply (pinned by
+        // inline-loader-artifact-minifier.test.ts). The attribute stays live vocabulary: the
+        // server still stamps every hash-admitted inline script/style (csp.ts
+        // `cspHashAttribute`), and the surviving browser consumer is the enhanced-navigation
+        // fail-closed body-replacement branch pinned in this list under
+        // packages/browser/src/enhanced-navigation.ts, which ships embedded in every generated
+        // loader bundle.
         anchors: [
           "ras(el, 'kovo-live-token')",
           "ras(el, 'kovo-live-component')",
@@ -183,7 +192,6 @@ export const NestedAuthoredControlPlane = component({
           "bns.readAttribute(form, 'data-mutation-stream')",
           "bns.readAttribute(el, 'data-kovo-critical-href')",
           "'link[data-kovo-deferred-style]'",
-          "'script[data-kovo-csp-hash]'",
           "bns.readAttribute(form, 'data-kovo-native-fallback')",
         ],
         file: 'packages/browser/src/inline-loader-build.ts',
@@ -199,7 +207,6 @@ export const NestedAuthoredControlPlane = component({
           'data-mutation-stream',
           'data-kovo-critical-href',
           'data-kovo-deferred-style',
-          'data-kovo-csp-hash',
           'data-kovo-native-fallback',
         ],
       },
