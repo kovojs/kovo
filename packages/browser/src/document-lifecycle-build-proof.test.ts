@@ -27,7 +27,7 @@ function recoveryOptions(overrides: Partial<DocumentLifecycleRecoveryOptions> = 
     fetchValue: async () => ({ status: 200 }),
     findTarget: () => nextTarget,
     liveTargets: () => [{ target: 'account', wireEntry: 'account#account@token:{}' }],
-    parseHtmlDocument: () => nextDocument,
+    parseDocumentParts: () => nextDocument,
     planTargetRequestHeaders: planFrameworkTargetRequestHeaders,
     queryAll: () => [],
     queryOne: () => null,
@@ -37,7 +37,7 @@ function recoveryOptions(overrides: Partial<DocumentLifecycleRecoveryOptions> = 
     rememberQueryHref: () => undefined,
     readElementAttribute: () => ({ present: false }),
     readPageTransitionPersisted: () => false,
-    responseContentType: () => 'text/html; charset=utf-8',
+    responseContentType: () => 'application/vnd.kovo.document-parts+json; charset=utf-8',
     responseAllowsInlineBody: () => true,
     responseIsBuildSkew: () => false,
     responseUrlIsExact: () => true,
@@ -186,6 +186,7 @@ describe('document lifecycle build proof (SPEC §9.1.1/§14)', () => {
       readResponseText: async () => {
         throw new Error('body reader failed');
       },
+      responseContentType: () => 'text/html; charset=utf-8',
     });
 
     createDocumentLifecycleRecovery(options).refreshQuery('cart');
@@ -272,6 +273,7 @@ describe('document lifecycle build proof (SPEC §9.1.1/§14)', () => {
           : '<kovo-query name="private">{"secret":true}</kovo-query>' +
               '<kovo-query name="foreign">{"secret":true}</kovo-query>';
       },
+      responseContentType: () => 'text/html; charset=utf-8',
       responseUrlIsExact: (response, expected) => (response as { url: string }).url === expected,
       wireKey: (name, key) => (name ? (key ? { key, name } : { name }) : undefined),
     });
@@ -304,6 +306,7 @@ describe('document lifecycle build proof (SPEC §9.1.1/§14)', () => {
           ? '<kovo-query name="cart">{"count":2}</kovo-query>'
           : '<kovo-query name="private">{"secret":</kovo-query>';
       },
+      responseContentType: () => 'text/html; charset=utf-8',
       responseUrlIsExact: (response, expected) => (response as { url: string }).url === expected,
       wireKey: (name, key) => (name ? (key ? { key, name } : { name }) : undefined),
     });
@@ -331,6 +334,7 @@ describe('document lifecycle build proof (SPEC §9.1.1/§14)', () => {
         queryUrl: () => '/_q/cart?key=c1',
         readResponseText: async () =>
           `<kovo-query name="cart" href="${bodyHref.replace('&', '&amp;')}">{"count":2}</kovo-query>`,
+        responseContentType: () => 'text/html; charset=utf-8',
       });
 
       createDocumentLifecycleRecovery(options).refreshQuery('cart');

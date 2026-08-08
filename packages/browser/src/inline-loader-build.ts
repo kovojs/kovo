@@ -1249,24 +1249,10 @@ function installInlineKovoLoader(im, options = {}) {
     bns.replaceElement(currentBody, nextBody);
     return nextBody;
   };
-  const ks = 'script[data-kovo-csp-hash]';
-  const rscr = (root) => {
-    const scripts = qa(root, ks);
-    for (let scriptIndex = 0; scriptIndex < scripts.length; scriptIndex += 1) {
-      const old = scripts[scriptIndex];
-      if (!old || !bns.readNodeIsConnected(old)) continue;
-      // SPEC §6.6/§9.1: replaying a compiler-approved script is a script-creation sink. Use
-      // the boot-witnessed Document.createElement method, never a live authored prototype method.
-      const fresh = bns.createHtmlElement('script');
-      const attributes = bns.snapshotElementAttributes(old);
-      for (let attributeIndex = 0; attributeIndex < attributes.length; attributeIndex += 1) {
-        const attribute = attributes[attributeIndex];
-        if (attribute) bns.setElementAttribute(fresh, attribute.name, attribute.value);
-      }
-      bns.setNodeTextContent(fresh, bns.readNodeTextContent(old) ?? '');
-      bns.replaceElement(old, fresh);
-    }
-  };
+  // SPEC §8 (plans/good-perf.md D2): no script replay exists on the navigation path anymore.
+  // A parts document is inert by protocol (every admitted <script> is application/json data),
+  // so the runtime never recreates script elements — a Trusted Types script sink — after a
+  // navigation or lifecycle apply.
   const canonicalRel = (value) => {
     const rawTokens = tk(value, /\s/u);
     const tokens = [];
@@ -1421,7 +1407,6 @@ function installInlineKovoLoader(im, options = {}) {
     document: doc,
     morph: (current, next) => m(current, next, bns),
     queryAll: qa,
-    replayScripts: rscr,
     replaceBody: rbd,
     replaceElementAttributes: xa,
     retireIsland: (island) => bns.retireIslandSignal(island),
@@ -1517,7 +1502,13 @@ function installInlineKovoLoader(im, options = {}) {
     fetchValue: (input, init) => bns.fetchValue(input, init),
     findTarget: ftd,
     liveTargets: rlt,
-    parseHtmlDocument: (value) => bns.parseHtmlDocument(value),
+    parseDocumentParts: (value) => {
+      // SPEC §8/§5.2.1/§14 (D2): decode the structured parts envelope and validate the build
+      // identity against the immutable page-load proof BEFORE constructing any DOM.
+      const envelope = bns.parseDocumentPartsEnvelope(value);
+      if (!envelope || !pbt || envelope.build !== pbt) return undefined;
+      return bns.buildDocumentFromParts(envelope);
+    },
     planTargetRequestHeaders: frameworkWireTargetCodec.planTargetRequestHeaders,
     queryOne: (root, selector) => bns.queryOne(root, selector),
     queryAll: qa,

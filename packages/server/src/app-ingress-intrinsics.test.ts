@@ -177,7 +177,11 @@ describe('request ingress intrinsic authority', () => {
     }
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('vary')).toBeNull();
+    // The poisoned Headers.get could not select the enhanced parts variant: the response is
+    // the ordinary full text/html document with the bootstrap. (plans/good-perf.md O2: every
+    // 200 document representation now carries the Accept negotiation dimension.)
+    expect(response.headers.get('content-type')).toContain('text/html');
+    expect(response.headers.get('vary')).toBe('Accept');
     await expect(response.text()).resolves.toContain('installInlineKovoBootstrap');
   });
 

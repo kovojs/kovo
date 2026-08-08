@@ -378,6 +378,93 @@ describe('trusted request scheme provenance', () => {
 
 // ─── DEPLOY-3: module-less app always stamps kovo-build ───────────────────────
 
+describe('enhanced-navigation document parts (SPEC §8, plans/good-perf.md O2/D2)', () => {
+  const enhancedAccept = 'application/vnd.kovo.document-parts+json, text/html';
+
+  it('answers the enhanced Accept with a structured parts envelope, never an HTML string', async () => {
+    const homeRoute = route('/', {
+      page: () =>
+        trustedHtml('<main id="root"><h1>Home</h1></main>', {
+          reason: 'framework server rendering test fixture',
+        }),
+    });
+    const app = createApp({ routes: [homeRoute] });
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: {},
+      request: new Request('https://example.test/', { headers: { Accept: enhancedAccept } }),
+      route: homeRoute,
+      url: new URL('https://example.test/'),
+    });
+
+    expect(response.status).toBe(200);
+    expect(headerValue(response.headers, 'content-type')).toBe(
+      'application/vnd.kovo.document-parts+json; charset=utf-8',
+    );
+    expect(headerValue(response.headers, 'vary')).toContain('Accept');
+    const buildHeader = headerValue(response.headers, 'kovo-build');
+    const envelope = JSON.parse(response.body as string) as {
+      body: unknown[];
+      build: string;
+      head: unknown[];
+      protocol: string;
+    };
+    expect(envelope.protocol).toBe('kovo-document-parts/v1');
+    // SPEC §5.2.1/§14: envelope build identity === transport build identity.
+    expect(envelope.build).toBe(buildHeader);
+    expect(JSON.stringify(envelope.head)).toContain('kovo-build');
+    expect(JSON.stringify(envelope.body)).toContain('Home');
+    // SPEC §4.4 + §8: the negotiated variant never carries the executable bootstrap.
+    expect(response.body as string).not.toContain('installInlineKovo');
+  });
+
+  it('serves the canonical text/html document when the encoder refuses', async () => {
+    const scriptedRoute = route('/scripted', {
+      page: () =>
+        trustedHtml('<main><script>window.__x=1</script></main>', {
+          reason: 'framework server rendering test fixture',
+        }),
+    });
+    const app = createApp({ routes: [scriptedRoute] });
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: {},
+      request: new Request('https://example.test/scripted', {
+        headers: { Accept: enhancedAccept },
+      }),
+      route: scriptedRoute,
+      url: new URL('https://example.test/scripted'),
+    });
+
+    // SPEC §8 fallback contract: refusal answers the canonical document; the client then
+    // performs the normal full GET instead of interpreting a body.
+    expect(response.status).toBe(200);
+    expect(headerValue(response.headers, 'content-type')).toContain('text/html');
+    expect(headerValue(response.headers, 'vary')).toContain('Accept');
+    expect(response.body as string).toContain('<script>window.__x=1</script>');
+  });
+
+  it('keeps the ordinary text/html representation for a plain Accept, with Vary: Accept', async () => {
+    const homeRoute = route('/', {
+      page: () =>
+        trustedHtml('<main>Home</main>', { reason: 'framework server rendering test fixture' }),
+    });
+    const app = createApp({ routes: [homeRoute] });
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: {},
+      request: new Request('https://example.test/', { headers: { Accept: 'text/html' } }),
+      route: homeRoute,
+      url: new URL('https://example.test/'),
+    });
+
+    expect(response.status).toBe(200);
+    expect(headerValue(response.headers, 'content-type')).toContain('text/html');
+    // plans/good-perf.md O2 Vary symmetry: the ordinary representation is negotiated too.
+    expect(headerValue(response.headers, 'vary')).toContain('Accept');
+  });
+});
+
 describe('kovo-build meta always stamped (DEPLOY-3, D1)', () => {
   it('a module-less app stamps a non-empty kovo-build meta (DEPLOY-3)', async () => {
     // SPEC §5.2.1 rule 2(b): every full page render must carry the build token.
@@ -1687,7 +1774,12 @@ describe('server app document boundary', () => {
       expect(response.status).toBe(status);
       expect(headerValue(response.headers, 'set-cookie')).toContain('rolling_sid=victim-token');
       expect(headerValue(response.headers, 'cache-control')).toBe('private, no-store');
-      expect(headerValue(response.headers, 'vary')).toBe('Cookie');
+      // plans/good-perf.md O2 Vary symmetry: every 200 document is Accept-negotiated now
+      // (kovo-document-parts/v1 variant), so the ordinary representation carries the Accept
+      // dimension too; non-200 outcomes keep the plain credential floor.
+      expect(headerValue(response.headers, 'vary')).toBe(
+        status === 200 ? 'Cookie, Accept' : 'Cookie',
+      );
     }
   });
 
@@ -2076,7 +2168,8 @@ describe('rolling-session Set-Cookie forces no-store on unguarded GET documents 
     expect(lifecycleRequest).toBeInstanceOf(Request);
     expect(response.headers['Set-Cookie']).toBeUndefined();
     expect(response.headers['Cache-Control']).toBe('no-store');
-    expect(response.headers.Vary).toBe('Cookie');
+    // plans/good-perf.md O2 Vary symmetry: 200 documents carry the Accept dimension too.
+    expect(response.headers.Vary).toBe('Cookie, Accept');
   });
 
   it('does not lose the session cache floor through late lifecycle attachment poison', async () => {
@@ -2116,7 +2209,8 @@ describe('rolling-session Set-Cookie forces no-store on unguarded GET documents 
 
     expect(response.status).toBe(200);
     expect(response.headers['Cache-Control']).toBe('no-store');
-    expect(response.headers.Vary).toBe('Cookie');
+    // plans/good-perf.md O2 Vary symmetry: 200 documents carry the Accept dimension too.
+    expect(response.headers.Vary).toBe('Cookie, Accept');
   });
 
   it('does not let route code replace a session-provider cookie through array iteration', async () => {

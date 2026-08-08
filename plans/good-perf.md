@@ -228,40 +228,67 @@ This is a bug, not a tuning opportunity, and it invalidates Kovo's headline arch
 Per D2, the fix is the structured document-part protocol, not a Trusted Types shim. This item
 absorbs `plans/better-js-loader.md` Phases 4–5, which are superseded.
 
-- [ ] Land a navigation regression test **first**, before any protocol work.
-  - Assert that an in-app navigation does not replace the document: after a link click,
-    `performance.getEntriesByType('navigation')[0].type !== 'reload'` and a pre-navigation
-    `window.__sentinel` survives. This defect shipped and stayed invisible because no test asserted
-    the client half of the feature was reachable at all.
-- [ ] Diagnose and record why the client half is unreachable, as the protocol's acceptance criterion.
-  - The server half works perfectly: `Accept: text/vnd.kovo.document+html` returns a document with
-    exactly **22,909 bytes of inline loader removed** (`/product` 25,195 → 2,286 B; `/` 41,014 →
-    18,105 B). The client half never uses it. The framework-generated CSP sets
-    `require-trusted-types-for 'script'; trusted-types kovo kovo-browser`, and Kovo's own deferred
-    client runtime then calls `DOMParser.parseFromString(<raw string>)`, which the policy rejects. The
-    runtime falls back to `location.assign`, so **every in-app navigation is a full page reload**.
-  - Measured consequence (mobile session, 7 medians): nav to product A **2,125 ms / 152,537 B** vs
-    Next **61 ms / 0 B**; nav to product B **1,162 ms / 152,839 B** vs **51 ms / 349 B**; back to
-    listing **784 ms / 122,539 B** vs **24 ms / 0 B**. Kovo reports `navType='navigate'` with a fresh
-    936 ms document FCP on every navigation; Next.js never replaces the document.
-- [ ] Split enhanced navigation into a modular source helper with an inline build target.
-  - Absorbed from `plans/better-js-loader.md` Phase 4.
-- [ ] Add the enhanced-navigation **document-part response**: the server returns structured parts, and
-      the client applies them without ever parsing an HTML string.
-  - Absorbed from `plans/better-js-loader.md` Phase 5. This removes the `DOMParser` call entirely
-    rather than authorising it, so `require-trusted-types-for 'script'` stays intact and there is no
-    string→DOM sink on the navigation path at all.
-  - Constraints carried over from that ledger and still binding: no client router (enhanced navigation
-    stays real-anchor); no app-authored import of internal runtime helpers; no CSP weakening; a
-    partial navigation response must validate the build identity before applying, so a stale build
-    cannot be applied.
-  - Win: this is the difference between Kovo's navigation story existing and not existing. Combined
-    with O1, Kovo's per-navigation payload should land near 963 B against Next's 1,776 B.
-- [ ] Fix the `Vary` asymmetry on document responses.
-  - The enhanced-navigation response carries `vary: Accept`; the ordinary `text/html` response carries
-    **no `Vary` at all**. The dangerous direction is covered, but a shared cache can store the full
-    25 KB document under a key with no `Accept` dimension and replay it to enhanced-navigation
-    fetches, silently defeating the loader-omission mechanism.
+- [x] Land a navigation regression test **first**, before any protocol work.
+  - `tests/integration/specs/enhanced-navigation-no-reload.spec.ts` landed with the plan; on
+    `perf/nav-document-parts` the `test.fail()` marker is deleted (per its own contract) and both
+    tests pass green: the pre-click `window.__sentinel` survives and the navigation timing entry
+    still names the `/` document after navigating to `/products/sku-1`.
+- [x] Diagnose and record why the client half is unreachable, as the protocol's acceptance criterion.
+  - Diagnosis recorded below stands (CSP `require-trusted-types-for 'script'` rejects the deferred
+    runtime's `DOMParser.parseFromString`); acceptance criterion is now met — the spec above passes
+    with the parts protocol and there is no `DOMParser`/`parseFromString` reference left in the
+    generated installer (`inline-loader-artifact-minifier.test.ts` pins the absence).
+  - Historical measurement kept for the baseline: nav to product A **2,125 ms / 152,537 B** vs
+    Next **61 ms / 0 B**; nav to product B **1,162 ms / 152,839 B** vs **51 ms / 349 B**.
+- [x] Split enhanced navigation into a modular source helper with an inline build target.
+  - `enhanced-navigation.ts` + `navigation-security-intrinsics.ts` are the single source embedded
+    by `inline-loader-build.ts` (`inlineHelperSpecs.enhancedNavigation`) into both the inline
+    bootstrap artifact and the deferred runtime module; the D2 protocol change flowed through that
+    one source into both artifacts, with parity pinned by the minified-parity asserts.
+- [x] Add the enhanced-navigation **document-part response** (`perf/nav-document-parts`).
+  - Wire shape normative in `spec/07-navigation.md` §8 "The document-part representation":
+    `application/vnd.kovo.document-parts+json` carrying `kovo-document-parts/v1` — a JSON part
+    tree of the exact canonical document. Server encoder `packages/server/src/document-parts.ts`
+    (fail-closed tokenizer; refusal serves canonical `text/html` and the client does the normal
+    full GET); client applier builds the detached document via boot-captured
+    createElement/createElementNS/createTextNode/setAttribute in
+    `navigation-security-intrinsics.ts` — `DOMParser` is deleted from the runtime entirely.
+  - Build identity: the envelope-level `build` token is validated against the immutable page-load
+    proof BEFORE any DOM is constructed (enhanced-navigation.ts + the lifecycle wiring), then the
+    built document's `kovo-build` meta is re-validated. Pinned by `app-document.test.ts`
+    ("answers the enhanced Accept with a structured parts envelope"), `document-parts.test.ts`
+    (28 encoder cases), `inline-loader-navigation.test.ts`/`.browser.test.ts` (108 apply/fallback
+    cases per suite), and the acceptance spec above.
+  - Carried constraints held: no client router (real-anchor interception unchanged); no
+    app-authored internal-runtime imports; CSP untouched (`require-trusted-types-for 'script'`
+    stays, no parser policy); inline bootstrap SHRANK 22,819 → 22,699 B identity (gzip 4,731 B vs
+    the 10,500 `inlineKovoLoaderGzipByteBudget`) because script replay was removed. The deferred
+    runtime artifact budgets were raised 520,000→530,000 raw / 150,000→153,000 gzip
+    (`scripts/browser-deferred-app-runtime-policy.mjs`) for the parts builder, which lands twice
+    in that versioned/cacheable artifact.
+  - Inert-by-construction floor: only `application/json` and `speculationrules` (D6/O9) script
+    data blocks encode; executable scripts, `on*` attributes, `srcdoc`, `is`, `base` refuse
+    server-side AND abort client construction. Deferred/streaming documents answer canonical
+    `text/html` (client hard-navigates) — script replay no longer exists on the navigation path.
+  - A target document with no segment stamps now applies via wholesale in-realm body replacement
+    (spec §8 "Segment persistence is derived" updated): stamps only ever ADD preservation.
+  - Measured per-navigation wire (rebuilt `benchmarks/kovo` production artifact, node client with
+    `Accept-Encoding: br, gzip`): enhanced parts document `/product/linen-field-jacket` =
+    **920 B wire (br) / 2,800 B identity**; `/` = 2,793 B wire / 21,197 B identity; envelope
+    build token === `Kovo-Build` header on both. Baseline was **152,537 B per navigation**
+    (-99.4%); the plan's own ~963 B projection and Next's 1,776 B are both beaten. The benchmark
+    app itself is INERT under the O10/D7 gate (ships zero scripts), so it navigates natively at
+    788 B br/document; the interactive direction is proven end-to-end by the acceptance spec
+    (typed-link-navigation fixture in real Chromium under the real Trusted Types CSP: parts
+    response 500 B identity / 263 B br, realm survives).
+  - Residual (pre-existing, orthogonal to D2): the live page's CSP `style-src` hash list is
+    computed from the CURRENT document, so `style=""` attributes morphing in from the target
+    document are not covered by an already-sent CSP header; unchanged from the old design.
+- [x] Fix the `Vary` asymmetry on document responses.
+  - Every 200 document representation (text/html AND parts) now carries `Vary: Accept`
+    (`app-document.ts` `documentResponseIsAcceptNegotiated`); file/stream route outcomes are
+    excluded. Pinned by `app.test.ts` + `app-ingress-intrinsics.test.ts` + the static-export
+    manifest tests (exported documents carry the dimension too).
 
 ### O3 — Give static assets and documents real cache validators — **critical, small, low risk**
 

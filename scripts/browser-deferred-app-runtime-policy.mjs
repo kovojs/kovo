@@ -1,7 +1,13 @@
 import { gzipSync } from 'node:zlib';
 
-export const browserDeferredAppRuntimeRawByteBudget = 520_000;
-export const browserDeferredAppRuntimeGzipByteBudget = 150_000;
+// 2026-08-08 (plans/good-perf.md O2/D2): +10 KB for the kovo-document-parts/v1 construction
+// machinery (structured document build replacing the DOMParser string→DOM sink), which lands
+// twice in this versioned/cacheable artifact — once in the modular runtime and once inside the
+// embedded installer string. The SPEC §4.4 always-loaded bootstrap budget is unchanged and the
+// generated bootstrap SHRANK (22,819 → 22,699 identity bytes) because script replay was removed.
+export const browserDeferredAppRuntimeRawByteBudget = 530_000;
+// 2026-08-08 (plans/good-perf.md O2/D2): +3 KB gzip alongside the raw-budget note above.
+export const browserDeferredAppRuntimeGzipByteBudget = 153_000;
 export const browserDeferredAppRuntimeForbiddenFragments = Object.freeze([
   'createInlineKovoLoaderSource',
   'derive input names must be non-empty strings',

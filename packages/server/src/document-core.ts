@@ -1214,7 +1214,8 @@ function headerValueArray(value: string | readonly string[]): readonly string[] 
   return typeof value === 'string' ? [value] : value;
 }
 
-function replaceDocumentHeader(
+/** @internal Exact single-value header replacement preserving other header names. */
+export function replaceDocumentHeader(
   headers: ResponseHeaders,
   name: string,
   value: string,

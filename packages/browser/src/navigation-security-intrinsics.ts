@@ -7,6 +7,19 @@ export interface NavigationUrlFacts {
   search: string;
 }
 
+/**
+ * @internal Validated `kovo-document-parts/v1` envelope facts (SPEC §8). The part trees are
+ * own-data JSON values from the boot-captured parser; the builder re-validates every node.
+ */
+export interface DocumentPartsEnvelope {
+  body: readonly unknown[];
+  bodyAttrs: readonly unknown[];
+  /** Exact §5.2.1 app build token — validated by callers BEFORE any DOM is constructed. */
+  build: string;
+  head: readonly unknown[];
+  htmlAttrs: readonly unknown[];
+}
+
 /** @internal Boot-witnessed readable-stream/reader binding for mutation bytes. */
 export type BrowserStreamReaderPlan = readonly [
   stream: ReadableStream<Uint8Array>,
@@ -87,7 +100,7 @@ export function createBrowserNavigationSecurityControls(
   const NativeURL = scope.URL;
   const NativeHeaders = scope.Headers;
   const NativeResponse = scope.Response;
-  const NativeDOMParser = scope.DOMParser;
+  const NativeDOMImplementation = scope.DOMImplementation;
   const NativeFormData = scope.FormData;
   const NativeDocument = scope.Document;
   const NativeElement = scope.Element;
@@ -166,8 +179,27 @@ export function createBrowserNavigationSecurityControls(
   const responseStatus = responsePrototype ? getter(responsePrototype, 'status') : undefined;
   const responseUrl = responsePrototype ? getter(responsePrototype, 'url') : undefined;
   const responseText = responsePrototype ? valueMethod(responsePrototype, 'text') : undefined;
-  const domParserParse = NativeDOMParser
-    ? valueMethod(NativeDOMParser.prototype, 'parseFromString')
+  // SPEC §8 / plans/good-perf.md D2: navigation carries structured document parts, never an HTML
+  // string, so this closure captures document CONSTRUCTION controls and no string→DOM parser.
+  const nativeJsonParse = JSON.parse;
+  const NativeJSON = JSON;
+  const documentImplementation = NativeDocument
+    ? getter(NativeDocument.prototype, 'implementation')
+    : undefined;
+  const domImplementationCreateHtmlDocument = NativeDOMImplementation
+    ? valueMethod(NativeDOMImplementation.prototype, 'createHTMLDocument')
+    : undefined;
+  const documentCreateElementNs = NativeDocument
+    ? valueMethod(NativeDocument.prototype, 'createElementNS')
+    : undefined;
+  const documentCreateTextNode = NativeDocument
+    ? valueMethod(NativeDocument.prototype, 'createTextNode')
+    : undefined;
+  const documentCreateComment = NativeDocument
+    ? valueMethod(NativeDocument.prototype, 'createComment')
+    : undefined;
+  const elementSetAttributeNs = NativeElement
+    ? valueMethod(NativeElement.prototype, 'setAttributeNS')
     : undefined;
   const formDataGet = NativeFormData ? valueMethod(NativeFormData.prototype, 'get') : undefined;
   const formDataSet = NativeFormData ? valueMethod(NativeFormData.prototype, 'set') : undefined;
@@ -2848,14 +2880,336 @@ export function createBrowserNavigationSecurityControls(
     return value;
   }
 
-  function parseHtmlDocument(value: string): Document | undefined {
-    if (!controlsSound || !NativeDOMParser || !domParserParse) return undefined;
+  /**
+   * SPEC §8: only the exact `kovo-document-parts/v1` media field grants document-apply
+   * authority; a comma-combined field or raw control byte never does.
+   */
+  function isDocumentPartsContentType(value: unknown): boolean {
+    if (!controlsSound || typeof value !== 'string') return false;
+    if (
+      indexOf(value, ',') >= 0 ||
+      indexOf(value, '\r') >= 0 ||
+      indexOf(value, '\n') >= 0 ||
+      indexOf(value, '\0') >= 0
+    ) {
+      return false;
+    }
+    const separator = indexOf(value, ';');
+    const mediaType = lower(trim(separator < 0 ? value : slice(value, 0, separator)));
+    return mediaType === 'application/vnd.kovo.document-parts+json';
+  }
+
+  /**
+   * SPEC §8 / plans/good-perf.md D2: decode a `kovo-document-parts/v1` envelope through the
+   * boot-captured JSON parser. The returned facts are own-data reads of the freshly parsed
+   * value; the envelope-level `build` token is exposed so callers can validate build identity
+   * BEFORE any DOM is constructed (SPEC §5.2.1/§14).
+   */
+  function parseDocumentPartsEnvelope(value: string): DocumentPartsEnvelope | undefined {
+    if (!controlsSound || typeof value !== 'string' || value.length > 33_554_432) {
+      return undefined;
+    }
+    let parsed: unknown;
     try {
-      const parsed = apply<unknown>(domParserParse, new NativeDOMParser(), [value, 'text/html']);
-      return parsed !== null && typeof parsed === 'object' ? (parsed as Document) : undefined;
+      parsed = apply<unknown>(nativeJsonParse, NativeJSON, [value]);
     } catch {
       return undefined;
     }
+    if (parsed === null || typeof parsed !== 'object') return undefined;
+    const protocol = readOwnData(parsed, 'protocol');
+    const build = readOwnData(parsed, 'build');
+    const htmlAttrs = readOwnData(parsed, 'htmlAttrs');
+    const bodyAttrs = readOwnData(parsed, 'bodyAttrs');
+    const head = readOwnData(parsed, 'head');
+    const body = readOwnData(parsed, 'body');
+    if (
+      protocol !== 'kovo-document-parts/v1' ||
+      typeof build !== 'string' ||
+      build === '' ||
+      build.length > 4096 ||
+      !isOwnPartsArray(htmlAttrs) ||
+      !isOwnPartsArray(bodyAttrs) ||
+      !isOwnPartsArray(head) ||
+      !isOwnPartsArray(body)
+    ) {
+      return undefined;
+    }
+    return { body, bodyAttrs, build, head, htmlAttrs };
+  }
+
+  function isOwnPartsArray(value: unknown): value is readonly unknown[] {
+    if (!apply<boolean>(nativeArrayIsArray, NativeArray, [value])) return false;
+    const length = descriptor(value as object, 'length');
+    return (
+      length !== undefined &&
+      'value' in length &&
+      typeof length.value === 'number' &&
+      length.value >= 0 &&
+      length.value % 1 === 0 &&
+      length.value <= 262_144
+    );
+  }
+
+  function readOwnPartsEntry(value: object, index: number): unknown {
+    const entry = descriptor(value, index);
+    if (entry === undefined || !('value' in entry)) {
+      throw new TypeError('Kovo document parts must be a dense own-data tree.');
+    }
+    return entry.value;
+  }
+
+  /**
+   * SPEC §8: build a detached Document from validated structured parts using only captured
+   * construction controls — createElement/createElementNS/createTextNode/createComment/
+   * setAttribute. No HTML string is ever parsed, so `require-trusted-types-for 'script'`
+   * stays intact on the navigation path, and the parts grammar keeps the result inert: an
+   * executable script or native event-handler attribute aborts construction.
+   */
+  function buildDocumentFromParts(envelope: DocumentPartsEnvelope): Document | undefined {
+    if (!controlsSound) return undefined;
+    try {
+      return buildPartsDocument(envelope);
+    } catch {
+      return undefined;
+    }
+  }
+
+  function buildPartsDocument(envelope: DocumentPartsEnvelope): Document {
+    if (!documentObject) {
+      throw new TypeError('Kovo document construction controls are unavailable.');
+    }
+    let implementation: unknown;
+    if (documentImplementation) {
+      try {
+        implementation = apply<unknown>(documentImplementation, documentObject, []);
+      } catch {}
+    }
+    if (implementation === null || implementation === undefined) {
+      // Explicit structural seam for browser-free conformance fakes; a real Document always
+      // resolves through the captured WebIDL getter above.
+      implementation = readOwnData(documentObject, 'implementation');
+    }
+    if (implementation === null || typeof implementation !== 'object') {
+      throw new TypeError('Kovo document implementation control is unavailable.');
+    }
+    const createDetached =
+      domImplementationCreateHtmlDocument ?? stableMethod(implementation, 'createHTMLDocument');
+    if (!createDetached) {
+      throw new TypeError('Kovo detached document construction control is unavailable.');
+    }
+    const target = apply<unknown>(createDetached, implementation, []);
+    if (target === null || typeof target !== 'object') {
+      throw new TypeError('Kovo detached document construction failed.');
+    }
+    const root = readDocumentField(target, 'documentElement');
+    const head = readDocumentField(target, 'head');
+    const body = readDocumentField(target, 'body');
+    if (!root || !head || !body) {
+      throw new TypeError('Kovo detached document shell is unavailable.');
+    }
+    const budget = { depth: 0, parts: 0 };
+    applyPartsAttributes(root as Element, envelope.htmlAttrs, 0, 'html');
+    applyPartsAttributes(body as Element, envelope.bodyAttrs, 0, 'body');
+    appendPartsChildren(target as Document, head as Element, envelope.head, budget);
+    appendPartsChildren(target as Document, body as Element, envelope.body, budget);
+    return target as Document;
+  }
+
+  function appendPartsNode(parent: object, node: unknown): void {
+    if (node === null || typeof node !== 'object') {
+      throw new TypeError('Kovo document parts appended an invalid node.');
+    }
+    const method = nodeAppendChild ?? stableMethod(parent, 'appendChild');
+    if (!method || apply<unknown>(method, parent, [node]) !== node) {
+      throw new TypeError('Kovo document parts append control rejected its commit.');
+    }
+  }
+
+  function appendPartsChildren(
+    target: Document,
+    parent: object,
+    parts: readonly unknown[],
+    budget: { depth: number; parts: number },
+  ): void {
+    budget.depth += 1;
+    if (budget.depth > 256) throw new TypeError('Kovo document parts exceed the depth budget.');
+    const length = (parts as { length: number }).length;
+    for (let index = 0; index < length; index += 1) {
+      budget.parts += 1;
+      if (budget.parts > 262_144) {
+        throw new TypeError('Kovo document parts exceed the part budget.');
+      }
+      const part = readOwnPartsEntry(parts as object, index);
+      if (typeof part === 'string') {
+        const createText = documentCreateTextNode ?? stableMethod(target, 'createTextNode');
+        if (!createText) throw new TypeError('Kovo text construction control is unavailable.');
+        appendPartsNode(parent, apply<unknown>(createText, target, [part]));
+        continue;
+      }
+      if (!isOwnPartsArray(part)) {
+        throw new TypeError('Kovo document parts contain an invalid part.');
+      }
+      const first = readOwnPartsEntry(part as object, 0);
+      if (first === '!') {
+        const text = readOwnPartsEntry(part as object, 1);
+        if (part.length !== 2 || typeof text !== 'string') {
+          throw new TypeError('Kovo document parts contain an invalid comment.');
+        }
+        const createComment = documentCreateComment ?? stableMethod(target, 'createComment');
+        if (!createComment) {
+          throw new TypeError('Kovo comment construction control is unavailable.');
+        }
+        appendPartsNode(parent, apply<unknown>(createComment, target, [text]));
+        continue;
+      }
+      appendPartsElement(target, parent, part, first, budget);
+    }
+    budget.depth -= 1;
+  }
+
+  function appendPartsElement(
+    target: Document,
+    parent: object,
+    part: readonly unknown[],
+    tag: unknown,
+    budget: { depth: number; parts: number },
+  ): void {
+    const attrs = readOwnPartsEntry(part as object, 1);
+    const children = readOwnPartsEntry(part as object, 2);
+    const nsTag = part.length > 3 ? readOwnPartsEntry(part as object, 3) : 0;
+    if (
+      typeof tag !== 'string' ||
+      tag === '' ||
+      tag.length > 256 ||
+      (part.length !== 3 && part.length !== 4) ||
+      !isOwnPartsArray(attrs) ||
+      !isOwnPartsArray(children) ||
+      (nsTag !== 0 && nsTag !== 1 && nsTag !== 2)
+    ) {
+      throw new TypeError('Kovo document parts contain an invalid element.');
+    }
+    const ns = nsTag as 0 | 1 | 2;
+    if (ns === 0) {
+      if (!regExpTest(/^[a-z][a-z0-9-]*$/, tag)) {
+        throw new TypeError('Kovo document parts contain an invalid HTML tag.');
+      }
+      // SPEC §8: a parts document never reconstructs these — base rebinds the document base
+      // URL, and the frame/document shells cannot be built into an existing shell.
+      if (tag === 'base' || tag === 'html' || tag === 'head' || tag === 'body' || tag === 'frameset' || tag === 'frame') {
+        throw new TypeError('Kovo document parts contain a refused element.');
+      }
+    } else if (!regExpTest(/^[a-zA-Z][a-zA-Z0-9-]*$/, tag)) {
+      throw new TypeError('Kovo document parts contain an invalid foreign tag.');
+    }
+    if (ns === 0 && tag === 'script') assertInertPartsScript(attrs);
+    const element = createPartsElement(target, tag, ns);
+    applyPartsAttributes(element, attrs, ns, tag);
+    let childParent: object = element;
+    if (ns === 0 && tag === 'template') {
+      const content = readDomProperty(element, 'content', [templateContent]);
+      if (content === null || typeof content !== 'object') {
+        throw new TypeError('Kovo document parts template content is unavailable.');
+      }
+      childParent = content;
+    }
+    appendPartsChildren(target, childParent, children, budget);
+    appendPartsNode(parent, element);
+  }
+
+  function createPartsElement(target: Document, tag: string, ns: 0 | 1 | 2): Element {
+    let element: unknown;
+    if (ns === 0) {
+      const create = documentCreateElement ?? stableMethod(target, 'createElement');
+      if (!create) throw new TypeError('Kovo element construction control is unavailable.');
+      element = apply<unknown>(create, target, [tag]);
+    } else {
+      const createNs = documentCreateElementNs ?? stableMethod(target, 'createElementNS');
+      if (!createNs) {
+        throw new TypeError('Kovo document parts namespace control is unavailable.');
+      }
+      const namespace = ns === 1 ? 'http://www.w3.org/2000/svg' : 'http://www.w3.org/1998/Math/MathML';
+      element = apply<unknown>(createNs, target, [namespace, tag]);
+    }
+    if (element === null || typeof element !== 'object') {
+      throw new TypeError('Kovo document parts element construction failed.');
+    }
+    return element as Element;
+  }
+
+  /**
+   * SPEC §8: the inert-document floor, re-checked at the construction boundary: only the
+   * framework's JSON data script and the Speculation Rules data block (D6/O9) may be built —
+   * neither executes author JavaScript. Everything else aborts (the navigation then falls
+   * back to the normal full GET).
+   */
+  function assertInertPartsScript(attrs: readonly unknown[]): void {
+    let type: string | undefined;
+    for (let index = 0; index < attrs.length; index += 1) {
+      const attr = readOwnPartsEntry(attrs as object, index);
+      if (!isOwnPartsArray(attr)) throw new TypeError('Kovo document parts attribute invalid.');
+      const name = readOwnPartsEntry(attr as object, 0);
+      if (name === 'src') throw new TypeError('Kovo document parts script carries src.');
+      if (name === 'type') {
+        const value = attr.length > 1 ? readOwnPartsEntry(attr as object, 1) : '';
+        type = typeof value === 'string' ? value : undefined;
+      }
+    }
+    if (type !== 'application/json' && type !== 'speculationrules') {
+      throw new TypeError('Kovo document parts contain an executable script.');
+    }
+  }
+
+  function applyPartsAttributes(
+    element: Element,
+    attrs: readonly unknown[],
+    ns: 0 | 1 | 2,
+    tag: string,
+  ): void {
+    if (attrs.length > 512) throw new TypeError('Kovo document parts attribute budget.');
+    for (let index = 0; index < attrs.length; index += 1) {
+      const attr = readOwnPartsEntry(attrs as object, index);
+      if (!isOwnPartsArray(attr) || (attr.length !== 1 && attr.length !== 2)) {
+        throw new TypeError('Kovo document parts attribute invalid.');
+      }
+      const name = readOwnPartsEntry(attr as object, 0);
+      const value = attr.length === 2 ? readOwnPartsEntry(attr as object, 1) : '';
+      if (
+        typeof name !== 'string' ||
+        typeof value !== 'string' ||
+        name === '' ||
+        name.length > 512 ||
+        !regExpTest(/^[a-zA-Z][a-zA-Z0-9_.:-]*$/, name)
+      ) {
+        throw new TypeError('Kovo document parts attribute name invalid.');
+      }
+      // SPEC §6.6/§8: native event-handler attributes are Trusted Types script sinks; srcdoc
+      // is an HTML sink; `is` selects a customized built-in construction cannot reproduce.
+      const loweredName = lower(name);
+      if (regExpTest(/^on[a-z]+$/, loweredName) || loweredName === 'srcdoc' || loweredName === 'is') {
+        throw new TypeError(
+          'Kovo document parts contain a refused attribute: ' + loweredName + ' on ' + tag + '.',
+        );
+      }
+      if (ns !== 0) {
+        const namespace = partsForeignAttributeNamespace(name);
+        if (namespace !== undefined) {
+          if (!elementSetAttributeNs) {
+            throw new TypeError('Kovo document parts namespaced-attribute control missing.');
+          }
+          apply(elementSetAttributeNs, element, [namespace, name, value]);
+          continue;
+        }
+      }
+      setElementAttribute(element, name, value);
+    }
+  }
+
+  /** HTML tree-construction "adjust foreign attributes" namespace table. */
+  function partsForeignAttributeNamespace(name: string): string | undefined {
+    if (name === 'xmlns' || name === 'xmlns:xlink') return 'http://www.w3.org/2000/xmlns/';
+    if (indexOf(name, 'xlink:') === 0) return 'http://www.w3.org/1999/xlink';
+    if (indexOf(name, 'xml:') === 0) return 'http://www.w3.org/XML/1998/namespace';
+    return undefined;
   }
 
   async function fetchWith(
@@ -3907,7 +4261,9 @@ export function createBrowserNavigationSecurityControls(
     lower,
     matchesElement,
     navigateSameOrigin,
-    parseHtmlDocument,
+    buildDocumentFromParts,
+    isDocumentPartsContentType,
+    parseDocumentPartsEnvelope,
     parseUrl,
     preventDelegatedEventDefault,
     prependElementChildren,

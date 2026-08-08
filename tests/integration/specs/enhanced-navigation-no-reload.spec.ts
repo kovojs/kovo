@@ -84,10 +84,9 @@ test('an eligible in-app navigation does not replace the document', async ({ pag
   await page.locator('#product-link').click();
   await expect(page.getByRole('heading', { name: 'Product sku-1' })).toBeVisible();
 
-  // Expected to FAIL until plans/good-perf.md O2 lands the structured document-part protocol (D2).
-  // Playwright fails the run if this ever passes, so the fix cannot land without deleting the
-  // marker — the defect cannot be fixed silently, and it cannot regress silently either.
-  test.fail();
+  // plans/good-perf.md O2 (D2): the structured kovo-document-parts/v1 protocol landed, so this
+  // spec now runs as an ordinary regression gate — an in-app navigation MUST NOT replace the
+  // document, and any future fallback-to-full-GET regression turns this red again.
 
   const after = await page.evaluate(() => {
     const entry = performance.getEntriesByType('navigation')[0] as

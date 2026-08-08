@@ -19,6 +19,37 @@ import {
   readInlineMutationResponseBodyChunks,
 } from './wire-response-scanner.js';
 
+// SPEC §8 (plans/good-perf.md D2): navigation/lifecycle fixtures serve the structured
+// kovo-document-parts/v1 envelope. DOMParser here is TEST tooling converting an HTML fixture
+// into parts; the runtime under test never parses an HTML string.
+const partsMediaType = 'application/vnd.kovo.document-parts+json; charset=utf-8';
+function partsFromHtml(html: string, build: string): string {
+  const parsed = new DOMParser().parseFromString(html, 'text/html');
+  const attrsOf = (el: Element) => [...el.attributes].map((a) => [a.name, a.value]);
+  const encode = (node: Node): unknown => {
+    if (node.nodeType === Node.TEXT_NODE) return node.nodeValue ?? '';
+    if (node.nodeType === Node.COMMENT_NODE) return ['!', node.nodeValue ?? ''];
+    const el = node as Element;
+    const ns =
+      el.namespaceURI === 'http://www.w3.org/2000/svg'
+        ? 1
+        : el.namespaceURI === 'http://www.w3.org/1998/Math/MathML'
+          ? 2
+          : 0;
+    const children = [...el.childNodes].map(encode);
+    const tag = ns === 0 ? el.tagName.toLowerCase() : el.tagName;
+    return ns === 0 ? [tag, attrsOf(el), children] : [tag, attrsOf(el), children, ns];
+  };
+  return JSON.stringify({
+    body: [...parsed.body.childNodes].map(encode),
+    bodyAttrs: attrsOf(parsed.body),
+    build,
+    head: [...parsed.head.childNodes].map(encode),
+    htmlAttrs: attrsOf(parsed.documentElement),
+    protocol: 'kovo-document-parts/v1',
+  });
+}
+
 const originalTrim = String.prototype.trim;
 const originalLowerCase = String.prototype.toLowerCase;
 const originalHasOwnCallDescriptor = Object.getOwnPropertyDescriptor(
@@ -434,8 +465,8 @@ describe('browser-runtime security regressions', () => {
       '</body></html>',
     ].join('');
     vi.stubGlobal('fetch', async () => ({
-      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
-      text: async () => targetHtml,
+      headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
+      text: async () => partsFromHtml(targetHtml, 'build-a'),
       redirected: false,
       url: new URL('/orders?page=2', location.href).href,
     }));
@@ -455,7 +486,6 @@ describe('browser-runtime security regressions', () => {
       queryAll(root, selector) {
         return [...root.querySelectorAll(selector)];
       },
-      replayScripts() {},
       replaceBody(nextBody) {
         document.body.replaceWith(nextBody);
         return nextBody;
@@ -511,9 +541,9 @@ describe('browser-runtime security regressions', () => {
     vi.stubGlobal('fetch', async (_input: string, init: { redirect?: string }) => {
       expect(init.redirect).toBe('error');
       return {
-        headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+        headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
         redirected: false,
-        text: async () => targetHtml,
+        text: async () => partsFromHtml(targetHtml, 'build-a'),
         url: new URL('/orders?page=2', location.href).href,
       };
     });
@@ -521,7 +551,6 @@ describe('browser-runtime security regressions', () => {
     const applyDocumentElementAttributes = vi.fn();
     const applyHead = vi.fn();
     const applyStylePromotion = vi.fn();
-    const replayScripts = vi.fn();
     const replaceBody = vi.fn((body: HTMLBodyElement) => body);
     const replaceElementAttributes = vi.fn();
     let generation = 0;
@@ -545,7 +574,6 @@ describe('browser-runtime security regressions', () => {
       queryAll(root, selector) {
         return [...root.querySelectorAll(selector)];
       },
-      replayScripts,
       replaceBody,
       replaceElementAttributes,
       retireIsland() {},
@@ -564,7 +592,6 @@ describe('browser-runtime security regressions', () => {
     expect(applyStylePromotion).not.toHaveBeenCalled();
     expect(applyDocumentElementAttributes).not.toHaveBeenCalled();
     expect(replaceElementAttributes).not.toHaveBeenCalled();
-    expect(replayScripts).not.toHaveBeenCalled();
     expect(replaceBody).not.toHaveBeenCalled();
     expect(pushState).not.toHaveBeenCalled();
   });
@@ -590,9 +617,9 @@ describe('browser-runtime security regressions', () => {
       '</body></html>',
     ].join('');
     vi.stubGlobal('fetch', async () => ({
-      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       redirected: false,
-      text: async () => targetHtml,
+      text: async () => partsFromHtml(targetHtml, 'build-a'),
       url: new URL('/orders?page=2', location.href).href,
     }));
     const pushState = vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
@@ -627,8 +654,7 @@ describe('browser-runtime security regressions', () => {
         queryAll(root, selector) {
           return [...root.querySelectorAll(selector)];
         },
-        replayScripts() {},
-        replaceBody(nextBody) {
+          replaceBody(nextBody) {
           document.body.replaceWith(nextBody);
           return nextBody;
         },
@@ -692,7 +718,7 @@ describe('browser-runtime security regressions', () => {
     const originalBase = document.baseURI;
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => new Response(safeHtml, { status: 200 })),
+      vi.fn(async () => new Response(partsFromHtml(safeHtml, 'build-test'), { status: 200 })),
     );
     const security = createBrowserNavigationSecurityControls();
 
@@ -718,7 +744,11 @@ describe('browser-runtime security regressions', () => {
         return root.querySelector(`[kovo-fragment-target="${name}"]`) ?? undefined;
       },
       liveTargets: () => [{ target: 'account', wireEntry: 'account#account@tok_account:{}' }],
-      parseHtmlDocument: (value) => security.parseHtmlDocument(value),
+      parseDocumentParts: (value) => {
+        const envelope = security.parseDocumentPartsEnvelope(value);
+        if (!envelope || envelope.build !== 'build-test') return undefined;
+        return security.buildDocumentFromParts(envelope);
+      },
       planTargetRequestHeaders: planFrameworkTargetRequestHeaders,
       queryOne: (root, selector) => security.queryOne(root, selector),
       queryAll: (root, selector) => [...root.querySelectorAll(selector)],
@@ -728,7 +758,7 @@ describe('browser-runtime security regressions', () => {
       readDomAttribute: (element, name) => security.readAttribute(element, name),
       rememberQueryHref: () => undefined,
       readPageTransitionPersisted: (event) => security.readPageTransitionPersisted(event),
-      responseContentType: () => 'text/html; charset=utf-8',
+      responseContentType: () => partsMediaType,
       responseAllowsInlineBody: () => true,
       responseIsBuildSkew: () => false,
       responseUrlIsExact: () => true,
@@ -803,7 +833,7 @@ describe('browser-runtime security regressions', () => {
       fetchValue: safeFetch,
       findTarget: () => undefined,
       liveTargets: () => [],
-      parseHtmlDocument: () => undefined,
+      parseDocumentParts: () => undefined,
       planTargetRequestHeaders: planFrameworkTargetRequestHeaders,
       queryOne: () => null,
       queryAll: () => [script],
@@ -897,7 +927,7 @@ describe('browser-runtime security regressions', () => {
       fetchValue: async () => ({}),
       findTarget: () => undefined,
       liveTargets: () => [],
-      parseHtmlDocument: () => undefined,
+      parseDocumentParts: () => undefined,
       planTargetRequestHeaders: planFrameworkTargetRequestHeaders,
       queryOne: () => null,
       queryAll: () => [],
@@ -967,7 +997,7 @@ describe('browser-runtime security regressions', () => {
       fetchValue: async () => ({}),
       findTarget: () => undefined,
       liveTargets: () => [],
-      parseHtmlDocument: () => undefined,
+      parseDocumentParts: () => undefined,
       queryOne: () => null,
       queryAll: () => [],
       queryUrl: () => '',

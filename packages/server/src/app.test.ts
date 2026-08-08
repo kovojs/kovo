@@ -1508,8 +1508,13 @@ describe('server createApp request shell', () => {
 
     expect(full.status).toBe(200);
     expect(enhanced.status).toBe(200);
-    expect(enhanced.headers.get('content-type')).toBe('text/html; charset=utf-8');
+    // SPEC §8 (plans/good-perf.md O2/D2): the negotiated variant is the structured
+    // kovo-document-parts/v1 envelope — never an HTML string, never the bootstrap bytes.
+    expect(enhanced.headers.get('content-type')).toBe(
+      'application/vnd.kovo.document-parts+json; charset=utf-8',
+    );
     expect(enhanced.headers.get('vary')).toBe('Accept');
+    expect(full.headers.get('vary')).toContain('Accept');
 
     const fullBody = await full.text();
     const enhancedBody = await enhanced.text();
@@ -1521,9 +1526,17 @@ describe('server createApp request shell', () => {
     );
     expect(enhancedBody).not.toContain('installInlineKovoBootstrap');
     expect(enhancedBody).not.toContain('installInlineKovoLoader');
-    expect(enhancedBody).toContain('<title>Product</title>');
-    expect(enhancedBody).toContain('<meta name="kovo-build"');
-    expect(enhancedBody).toContain('<main kovo-nav-segment="page:/products/:id">p1</main>');
+    const envelope = JSON.parse(enhancedBody) as {
+      body: unknown[];
+      build: string;
+      head: unknown[];
+      protocol: string;
+    };
+    expect(envelope.protocol).toBe('kovo-document-parts/v1');
+    expect(envelope.build).toBe(enhanced.headers.get('kovo-build'));
+    expect(JSON.stringify(envelope.head)).toContain('Product');
+    expect(JSON.stringify(envelope.head)).toContain('kovo-build');
+    expect(JSON.stringify(envelope.body)).toContain('page:/products/:id');
   });
 
   it('normalizes trailing slashes before dispatching routes', async () => {

@@ -81,8 +81,15 @@ describe('inline loader minified artifact', () => {
     expect(inlineKovoLoaderInstallerSource).not.toContain('root.querySelector?.');
     expect(inlineKovoLoaderInstallerSource).toContain("ras(el,'kovo-param-types')");
     expect(inlineKovoLoaderInstallerSource).not.toContain('new DOMParser().parseFromString');
+    // SPEC §8 / plans/good-perf.md D2: there is NO string→DOM parser on the navigation or
+    // lifecycle path. The wiring decodes the kovo-document-parts/v1 envelope, validates build
+    // identity against the immutable page-load proof BEFORE building, then constructs DOM.
+    expect(inlineKovoLoaderInstallerSource).not.toContain('parseHtmlDocument');
+    expect(inlineKovoLoaderInstallerSource).not.toContain('parseFromString');
     expect(inlineKovoLoaderInstallerSource).toContain(
-      'parseHtmlDocument:(value)=>bns.parseHtmlDocument(value)',
+      'parseDocumentParts:(value)=>{const envelope=bns.parseDocumentPartsEnvelope(value);' +
+        'if(!envelope||!pbt||envelope.build!==pbt)return undefined;' +
+        'return bns.buildDocumentFromParts(envelope);}',
     );
     expect(inlineKovoLoaderInstallerSource).toContain("'[kovo-nav-segment]'");
     expect(inlineKovoLoaderInstallerSource).not.toContain('Math.random');
@@ -234,9 +241,9 @@ describe('inline loader minified artifact', () => {
     expect(inlineKovoLoaderInstallerSource).not.toContain('.some(');
     expect(inlineKovoLoaderInstallerSource).not.toContain('.forEach(');
     expect(inlineKovoLoaderInstallerSource).toContain('function m(c,n,security)');
-    expect(inlineKovoLoaderInstallerSource).toContain(
-      "const fresh=bns.createHtmlElement('script');",
-    );
+    // SPEC §8 (D2): script replay is gone — a parts document is inert by protocol, so the
+    // runtime never recreates a script element (a Trusted Types script sink) after apply.
+    expect(inlineKovoLoaderInstallerSource).not.toContain("bns.createHtmlElement('script')");
     expect(inlineKovoLoaderInstallerSource).not.toContain("doc.createElement('script')");
     expect(inlineKovoLoaderInstallerSource).toContain(
       'return p(chunks.fragments,(target)=>options.ff(target),options.security,(html)=>options.createHTML(html))',
