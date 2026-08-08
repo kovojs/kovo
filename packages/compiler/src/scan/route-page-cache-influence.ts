@@ -40,6 +40,9 @@ export interface RoutePageCacheInfluenceFact {
 
 interface ModuleDeclarationModel {
   kind: 'const' | 'function' | 'import' | 'mutable' | 'other';
+  /** Import provenance: source module specifier and the exported name bound locally. */
+  importExportName?: string;
+  importModule?: string;
   initializer?: TS.Expression;
   node?: TS.Node;
 }
@@ -66,6 +69,16 @@ const PURE_GLOBAL_CALLEES = [
   'decodeURIComponent',
   'encodeURIComponent',
 ] as const;
+
+/**
+ * Framework exports admitted as direct-call callees: reviewed pure branded constructors whose
+ * output is a deterministic function of their inputs (no authority, no clock, no randomness).
+ * Everything else imported stays outside the finite document cache language.
+ */
+const PURE_FRAMEWORK_CALLEES: readonly { exportName: string; module: string }[] = [
+  { exportName: 'trustedHtml', module: '@kovojs/browser' },
+  { exportName: 'trustedUrl', module: '@kovojs/browser' },
+];
 
 /**
  * Method names admitted on non-authority receivers. Every listed member is a deterministic pure
@@ -153,6 +166,7 @@ export function routePageCacheInfluenceFact(
     ) as RoutePageCacheHandlerInput;
     analyzeHandlerExpression(state, handler.node, handler.role);
   }
+  analyzeAppDocumentConfiguration(state);
 
   if (!state.secret && state.unclassified.length === 0) return undefined;
   return {
@@ -187,7 +201,17 @@ function moduleDeclarationModels(
     if (ts.isImportDeclaration(statement)) {
       const clause = statement.importClause;
       if (!clause) continue;
-      if (clause.name) compilerMapSet(declarations, clause.name.text, { kind: 'import' });
+      const moduleSpecifier =
+        statement.moduleSpecifier && ts.isStringLiteralLike(statement.moduleSpecifier)
+          ? statement.moduleSpecifier.text
+          : undefined;
+      if (clause.name) {
+        compilerMapSet(declarations, clause.name.text, {
+          ...(moduleSpecifier === undefined ? {} : { importModule: moduleSpecifier }),
+          importExportName: 'default',
+          kind: 'import',
+        });
+      }
       const named = clause.namedBindings;
       if (named && ts.isNamedImports(named)) {
         const elementCount = compilerArrayLength(named.elements, 'Route cache import elements');
@@ -197,10 +221,17 @@ function moduleDeclarationModels(
             element,
             'Route cache import elements',
           ) as TS.ImportSpecifier;
-          compilerMapSet(declarations, specifier.name.text, { kind: 'import' });
+          compilerMapSet(declarations, specifier.name.text, {
+            ...(moduleSpecifier === undefined ? {} : { importModule: moduleSpecifier }),
+            importExportName: specifier.propertyName?.text ?? specifier.name.text,
+            kind: 'import',
+          });
         }
       } else if (named && ts.isNamespaceImport(named)) {
-        compilerMapSet(declarations, named.name.text, { kind: 'import' });
+        compilerMapSet(declarations, named.name.text, {
+          ...(moduleSpecifier === undefined ? {} : { importModule: moduleSpecifier }),
+          kind: 'import',
+        });
       }
       continue;
     }
@@ -295,6 +326,126 @@ function analyzeHandlerExpression(
     }
   }
   appendUnclassified(state, `route ${role} handler is outside the finite document cache language`);
+}
+
+/**
+ * SPEC §9.4 document surface: the app's `defineKovo({ renderRoute })` hook runs per request with
+ * the rendered page value AND a context carrying the raw request, so an unproven renderRoute can
+ * fold per-visitor identity into the document bytes invisibly to the per-route handlers. The
+ * document proof therefore requires the route module to declare its own app configuration: a
+ * same-module `defineKovo(...)` whose `renderRoute` is absent or a one-parameter function inside
+ * the finite language. A route module with no visible defineKovo cannot prove the render hook of
+ * whatever app later assembles it — fail closed.
+ */
+function analyzeAppDocumentConfiguration(state: ScanState): void {
+  const defineKovoCalls: TS.CallExpression[] = [];
+  const visit = (node: TS.Node): void => {
+    if (ts.isCallExpression(node)) {
+      const callee = unwrapExpression(node.expression);
+      if (ts.isIdentifier(callee)) {
+        const declaration = compilerMapGet(state.moduleDeclarations, callee.text);
+        if (
+          declaration?.kind === 'import' &&
+          declaration.importModule === '@kovojs/server' &&
+          declaration.importExportName === 'defineKovo'
+        ) {
+          compilerArrayAppend(defineKovoCalls, node, 'Route cache defineKovo calls');
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(state.sourceFile);
+
+  if (defineKovoCalls.length === 0) {
+    appendUnclassified(
+      state,
+      'route module does not declare the app document configuration (defineKovo)',
+    );
+    return;
+  }
+  for (let index = 0; index < defineKovoCalls.length; index += 1) {
+    const call = defineKovoCalls[index]!;
+    const config = compilerOwnDataValue(call.arguments, 0, 'Route cache defineKovo arguments') as
+      | TS.Expression
+      | undefined;
+    const configObject =
+      config !== undefined && ts.isObjectLiteralExpression(unwrapExpression(config))
+        ? (unwrapExpression(config) as TS.ObjectLiteralExpression)
+        : undefined;
+    if (configObject === undefined) {
+      appendUnclassified(state, 'app definition is not a static object');
+      continue;
+    }
+    const renderRoute = objectMemberFunction(configObject, 'renderRoute');
+    if (renderRoute === undefined) {
+      if (objectHasMember(configObject, 'renderRoute')) {
+        appendUnclassified(state, 'app renderRoute is not a statically analyzable function');
+      }
+      continue;
+    }
+    const parameterCount = compilerArrayLength(
+      (renderRoute as TS.FunctionLikeDeclaration).parameters,
+      'Route cache renderRoute parameters',
+    );
+    if (parameterCount > 1) {
+      // The second renderRoute parameter carries { params, request, route, search }.
+      appendUnclassified(state, 'app renderRoute consumes the per-request render context');
+      continue;
+    }
+    analyzeFunction(state, renderRoute, false);
+  }
+}
+
+function objectHasMember(object: TS.ObjectLiteralExpression, name: string): boolean {
+  const propertyCount = compilerArrayLength(object.properties, 'Route cache config properties');
+  for (let index = 0; index < propertyCount; index += 1) {
+    const property = compilerOwnDataValue(
+      object.properties,
+      index,
+      'Route cache config properties',
+    ) as TS.ObjectLiteralElementLike;
+    const propertyName = property.name;
+    if (
+      propertyName !== undefined &&
+      (ts.isIdentifier(propertyName) || ts.isStringLiteralLike(propertyName)) &&
+      propertyName.text === name
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function objectMemberFunction(
+  object: TS.ObjectLiteralExpression,
+  name: string,
+): TS.Node | undefined {
+  const propertyCount = compilerArrayLength(object.properties, 'Route cache config properties');
+  for (let index = 0; index < propertyCount; index += 1) {
+    const property = compilerOwnDataValue(
+      object.properties,
+      index,
+      'Route cache config properties',
+    ) as TS.ObjectLiteralElementLike;
+    const propertyName = property.name;
+    if (
+      propertyName === undefined ||
+      (!ts.isIdentifier(propertyName) && !ts.isStringLiteralLike(propertyName)) ||
+      propertyName.text !== name
+    ) {
+      continue;
+    }
+    if (ts.isMethodDeclaration(property)) return property;
+    if (ts.isPropertyAssignment(property)) {
+      const initializer = unwrapExpression(property.initializer);
+      if (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer)) {
+        return initializer;
+      }
+    }
+    return undefined;
+  }
+  return undefined;
 }
 
 function resolveModuleFunction(declaration: ModuleDeclarationModel): TS.Node | undefined {
@@ -617,6 +768,7 @@ function analyzeCall(state: ScanState, scope: FunctionScope, node: TS.CallExpres
         analyzeFunction(state, fn, false);
         return;
       }
+      if (declaration.kind === 'import' && isPureFrameworkCallee(declaration)) return;
       // Falls through to the identifier-reference rules, which close on imports/mutables and
       // admit static const data (a call on data still closes below).
       appendUnclassified(state, `call target '${callee.text}' is not a module function literal`);
@@ -647,6 +799,22 @@ function analyzeCall(state: ScanState, scope: FunctionScope, node: TS.CallExpres
 function isPureGlobalCallee(name: string): boolean {
   for (let index = 0; index < PURE_GLOBAL_CALLEES.length; index += 1) {
     if (PURE_GLOBAL_CALLEES[index] === name) return true;
+  }
+  return false;
+}
+
+function isPureFrameworkCallee(declaration: ModuleDeclarationModel): boolean {
+  if (declaration.importModule === undefined || declaration.importExportName === undefined) {
+    return false;
+  }
+  for (let index = 0; index < PURE_FRAMEWORK_CALLEES.length; index += 1) {
+    const candidate = PURE_FRAMEWORK_CALLEES[index]!;
+    if (
+      candidate.module === declaration.importModule &&
+      candidate.exportName === declaration.importExportName
+    ) {
+      return true;
+    }
   }
   return false;
 }
@@ -739,6 +907,13 @@ function analyzeIdentifierReference(
       return;
     }
     if (declaration.kind === 'import') {
+      if (
+        isPureFrameworkCallee(declaration) &&
+        ts.isCallExpression(node.parent) &&
+        node.parent.expression === node
+      ) {
+        return;
+      }
       appendUnclassified(
         state,
         `imported module value '${text}' is outside the finite document cache language`,

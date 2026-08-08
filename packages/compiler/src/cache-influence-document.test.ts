@@ -23,7 +23,9 @@ function verdictByRoot(source: string): Record<string, string> {
 describe('document cache-influence derivation (SPEC §9.4, D9)', () => {
   it('proves a pure same-module JSX page with public access and closes credentialed shapes', () => {
     const verdicts = verdictByRoot(`
-import { route, publicAccess } from '@kovojs/server';
+import { defineKovo, route, publicAccess } from '@kovojs/server';
+
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000000' });
 
 const products = [
   { slug: 'a', name: 'Alpha', priceLabel: '$1' },
@@ -70,7 +72,9 @@ export const guarded = route('/account', {
 
   it('emits canonical url-path/url-search cache-key axes on proved documents', () => {
     const entries = documentEntries(`
-import { route, publicAccess } from '@kovojs/server';
+import { defineKovo, route, publicAccess } from '@kovojs/server';
+
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000000' });
 export const home = route('/', {
   access: publicAccess('public'),
   page: () => <main>Home</main>,
@@ -93,7 +97,9 @@ export const home = route('/', {
 
   it('closes every credential- or identity-reaching page shape (the adversarial matrix)', () => {
     const verdicts = verdictByRoot(`
-import { route, publicAccess } from '@kovojs/server';
+import { defineKovo, route, publicAccess } from '@kovojs/server';
+
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000000' });
 import { ImportedCard } from './card.js';
 
 let counter = 0;
@@ -157,7 +163,9 @@ export const noDecision = route('/no-decision', {
 
   it('records secret influence for signUrl and ambient environment reads', () => {
     const entries = documentEntries(`
-import { route, publicAccess } from '@kovojs/server';
+import { defineKovo, route, publicAccess } from '@kovojs/server';
+
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000000' });
 export const signer = route('/signed', {
   access: publicAccess('mints capability urls'),
   page: ({ signUrl, params }) => <div>{params.id}</div>,
@@ -169,7 +177,8 @@ export const signer = route('/signed', {
 
   it('closes guard chains as principal/session influence, machine auth as authorization', () => {
     const entries = documentEntries(`
-import { route, guard, verifiedAccess, publicAccess } from '@kovojs/server';
+import { defineKovo, route, guard, verifiedAccess, publicAccess } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000000' });
 const allow = () => true as const;
 export const guarded = route('/guarded', {
   access: [guard('allow', allow)],
@@ -197,7 +206,8 @@ export const machine = route('/machine', {
 
   it('closes file/stream outcomes, layouts, and dynamic meta while proving static meta', () => {
     const verdicts = verdictByRoot(`
-import { route, layout, respond, publicAccess } from '@kovojs/server';
+import { defineKovo, route, layout, respond, publicAccess } from '@kovojs/server';
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000000' });
 import { rootedFiles } from '@kovojs/server/files';
 
 const files = rootedFiles('../shared/images');
@@ -234,11 +244,93 @@ export const staticMeta = route('/static-meta', {
     });
   });
 
+  it('requires the app document configuration: no same-module defineKovo closes the entry', () => {
+    const entries = documentEntries(`
+import { route, publicAccess } from '@kovojs/server';
+export const home = route('/', {
+  access: publicAccess('public but the assembling app is not visible'),
+  page: () => <main>Home</main>,
+});
+`);
+    expect(entries[0]?.verdict).toBe('shared-cache-closed');
+    expect(entries[0]?.closedReasons).toContain('unclassified-influence');
+  });
+
+  it('proves an absent or pure one-parameter renderRoute and closes a context-consuming one', () => {
+    const prefix = `
+import { defineKovo, route, publicAccess } from '@kovojs/server';
+`;
+    const routeSource = `
+export const home = route('/', {
+  access: publicAccess('renderRoute matrix'),
+  page: () => <main>Home</main>,
+});
+`;
+    const pure = verdictByRoot(`${prefix}
+const app = defineKovo({
+  appId: '00000000-0000-4000-8000-000000000000',
+  renderRoute(value) {
+    return typeof value === 'string' ? value : String(value ?? '');
+  },
+});
+${routeSource}`);
+    expect(pure['document:/']).toBe('public-proved');
+
+    const contextConsuming = verdictByRoot(`${prefix}
+const app = defineKovo({
+  appId: '00000000-0000-4000-8000-000000000000',
+  renderRoute(value, context) {
+    return String(value ?? '') + String(context.request.headers.get('cookie') ?? '');
+  },
+});
+${routeSource}`);
+    expect(contextConsuming['document:/']).toBe('shared-cache-closed');
+
+    const ambient = verdictByRoot(`${prefix}
+const app = defineKovo({
+  appId: '00000000-0000-4000-8000-000000000000',
+  renderRoute(value) {
+    return String(value ?? '') + String(process.env.SUFFIX ?? '');
+  },
+});
+${routeSource}`);
+    expect(ambient['document:/']).toBe('shared-cache-closed');
+  });
+
+  it('admits reviewed pure framework constructors (trustedUrl) as direct callees only', () => {
+    const verdicts = verdictByRoot(`
+import { trustedUrl } from '@kovojs/browser';
+import { defineKovo, route, publicAccess } from '@kovojs/server';
+
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000000' });
+
+const catalog = [{ img: '/images/a.webp', name: 'Alpha' }];
+
+function Card({ img, name }: { img: string; name: string }): string {
+  return <article><img src={trustedUrl(img, { reason: 'same-origin catalog image' })} alt={name} /></article>;
+}
+
+export const home = route('/', {
+  access: publicAccess('uses the framework escape constructor'),
+  page: () => <main>{catalog.map((entry) => <Card img={entry.img} name={entry.name} />)}</main>,
+});
+
+export const escaped = route('/escaped', {
+  access: publicAccess('framework constructor leaves callee position'),
+  page: () => <main>{[trustedUrl][0]}</main>,
+});
+`);
+    expect(verdicts['document:/']).toBe('public-proved');
+    expect(verdicts['document:/escaped']).toBe('shared-cache-closed');
+  });
+
   it('keeps document entries out of the runtime route ABI', () => {
     const routes = compileRouteModule({
       fileName: 'src/routes.tsx',
       source: `
-import { route, publicAccess } from '@kovojs/server';
+import { defineKovo, route, publicAccess } from '@kovojs/server';
+
+const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000000' });
 export const cookiePage = route('/cookie', {
   access: publicAccess('reads the request identity'),
   page: (context, request) => <div>{request.headers.get('cookie')}</div>,
