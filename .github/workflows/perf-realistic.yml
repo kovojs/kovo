@@ -52,14 +52,21 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/kovo-setup
       - name: Measure critical-path, navigation and bootstrap bytes
+        # Dispatch inputs reach the command through env, never through direct `${{ }}`
+        # interpolation into the shell (rules/github-workflows.md).
+        env:
+          KOVO_PERF_COMPONENTS: ${{ inputs.components || '24' }}
         run: >-
           vp exec node scripts/perf-gate.mjs
           --suite bytes
-          --components ${{ inputs.components || '24' }}
+          --components "$KOVO_PERF_COMPONENTS"
           --out "$RUNNER_TEMP/kovo-perf/bytes.json"
       # Separated from the measurement so a build or boot failure is distinguishable from a budget
       # failure: the suite exits non-zero on the former and this step is what reports the latter.
       - name: Evaluate against perf-budgets.json
+        # `shell: bash` runs with `set -eo pipefail`, so a budget failure survives the `| tee` pipe.
+        # Without it the pipeline's exit status is tee's and a violation reports green.
+        shell: bash
         run: >-
           vp exec node scripts/perf-gate.mjs
           --evaluate "$RUNNER_TEMP/kovo-perf/bytes.json"
@@ -86,12 +93,19 @@ jobs:
       # absolute duration would. Peak RSS is also collected here and has the least headroom of any
       # budget in the file (3.4%) — see its rationale in perf-budgets.json.
       - name: Run the kovo check component-count ladder
+        # Dispatch inputs reach the command through env, never through direct `${{ }}`
+        # interpolation into the shell (rules/github-workflows.md).
+        env:
+          KOVO_PERF_LADDER: ${{ inputs.ladder || '8,24,72,216' }}
         run: >-
           vp exec node scripts/perf-gate.mjs
           --suite check-scaling
-          --ladder ${{ inputs.ladder || '8,24,72,216' }}
+          --ladder "$KOVO_PERF_LADDER"
           --out "$RUNNER_TEMP/kovo-perf/check-scaling.json"
       - name: Evaluate against perf-budgets.json
+        # `shell: bash` runs with `set -eo pipefail`, so a budget failure survives the `| tee` pipe.
+        # Without it the pipeline's exit status is tee's and a violation reports green.
+        shell: bash
         run: >-
           vp exec node scripts/perf-gate.mjs
           --evaluate "$RUNNER_TEMP/kovo-perf/check-scaling.json"

@@ -329,6 +329,27 @@ export async function runCheckScalingSuite(options) {
     });
   }
 
+  // Rung integrity gates the whole suite. A rung whose `kovo check` exited non-zero, or whose phase
+  // census came back incomplete, did not measure the thing these metrics claim to measure — and a
+  // KV448-class refusal is exactly the regression that would produce one. Reporting a scaling
+  // exponent computed over a broken ladder is worse than reporting nothing, because it reads green.
+  const brokenRungs = rungs.flatMap((rung) =>
+    rung.samples
+      .filter((sample) => sample.exitCode !== 0 || sample.censusComplete !== true)
+      .map(
+        (sample) =>
+          `N=${String(rung.componentCount)} (exit ${String(sample.exitCode)}, census ${
+            sample.censusComplete === true ? 'complete' : 'incomplete'
+          })`,
+      ),
+  );
+  if (brokenRungs.length > 0) {
+    return {
+      detail: { rungs },
+      error: `check-scaling ladder did not complete cleanly: ${brokenRungs.join('; ')}`,
+    };
+  }
+
   const trustPoints = rungs.map((rung) => ({
     x: rung.componentCount,
     y: rung.appSourceTrustMedianMs,
@@ -925,7 +946,7 @@ async function main(argv) {
     process.stderr.write(
       `usage: node scripts/perf-gate.mjs --suite <${[...SUITES.keys()].join('|')}> [--out report.json]\n` +
         '       node scripts/perf-gate.mjs --evaluate report.json [--evaluate other.json]\n' +
-        'options: --ladder 8,24,72  --samples 1  --components 24  --port 43117\n' +
+        'options: --ladder 8,24,72,216  --samples 1  --components 24  --port 43117\n' +
         '         --connections 32  --duration 10000  --edits 5\n' +
         '         --cpu-prof <dir>  --heap-prof <dir>\n' +
         '       node scripts/perf-gate.mjs --profile-summary <dir>\n',
@@ -943,7 +964,10 @@ async function main(argv) {
     edits: Number(args.edits ?? 5),
     heapProfDir:
       args['heap-prof'] === undefined ? undefined : path.resolve(String(args['heap-prof'])),
-    ladder: String(args.ladder ?? '8,24,72')
+    // Default matches the span the budgets were calibrated on (the 72->216 marginal step). A
+    // shorter default would compute the exponent over 24->72, where a genuinely quadratic workload
+    // can still look linear — a gate that cannot see the regression it exists to catch.
+    ladder: String(args.ladder ?? '8,24,72,216')
       .split(',')
       .map((value) => Number(value.trim()))
       .filter((value) => Number.isInteger(value) && value > 0),
