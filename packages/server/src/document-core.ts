@@ -3,6 +3,7 @@ import {
   inlineKovoLoaderInstallerSource,
 } from '@kovojs/browser/internal/inline-loader';
 import { stringifyWireValue } from '@kovojs/core/internal/wire-json';
+import { SEMANTIC_ATTRIBUTE_MANIFEST } from '@kovojs/core/internal/semantic-attributes';
 import { wireEmitter } from '@kovojs/core/internal/security-markers';
 import {
   KOVO_CSP_REPORT_GROUP,
@@ -26,8 +27,9 @@ import { escapeHtml, escapeScriptJson, escapeWireAttribute } from './html.js';
 import { renderShellAttributes, type DocumentConfig } from './document-structured.js';
 import {
   assertPageHintsCrossOriginIsolationEligible,
-  renderPageHints,
+  renderPageHintParts,
   type PageHintOptions,
+  type PageHintParts,
   type PageHints,
   type RouteMetaSource,
 } from './hints.js';
@@ -50,6 +52,7 @@ import {
   securityObjectKeys,
   securityStringIncludes,
   securityStringSplit,
+  securityStringStartsWith,
   securityStringToLowerCase,
   securityStringTrim,
 } from './response-security-intrinsics.js';
@@ -93,8 +96,8 @@ export interface DocumentAssemblyOptions {
   lang?: string;
   /**
    * Enhanced navigation may request a canonical document variant without the
-   * already-installed inline loader. Ordinary documents keep the SPEC §4.4
-   * bootstrap inline.
+   * already-installed inline loader. Ordinary documents carrying client surface
+   * keep the SPEC §4.4 bootstrap inline; inert documents omit it either way.
    */
   loader?: 'inline' | 'omit';
   loaderRuntimeHref?: string;
@@ -273,7 +276,9 @@ export const renderDocument = wireEmitter(
 export function renderDeferredDocument(
   options: DeferredDocumentAssemblyOptions,
 ): DeferredDocumentRenderResult {
-  const assembled = assembleDocumentShellParts(options);
+  // SPEC §8: deferred region chunks are applied through the bootstrap's `__kovo_a` queue, so a
+  // deferred document always installs the loader regardless of its shell markup.
+  const assembled = assembleDocumentShellParts(options, true);
   const frame = renderStructuredDeferredDocumentShell(
     { csp: assembled.csp, parts: assembled.parts },
     assembled.document,
@@ -303,7 +308,8 @@ function renderDeferredStreamingDocument(
     chunks: readonly (DeferredStreamChunk | Promise<DeferredStreamChunk>)[];
   },
 ): DeferredStreamingDocumentRenderResult {
-  const assembled = assembleDocumentShellParts(options);
+  // SPEC §8: see renderDeferredDocument — streamed regions need the `__kovo_a` apply queue.
+  const assembled = assembleDocumentShellParts(options, true);
   const frame = renderStructuredDeferredDocumentShell(
     { csp: assembled.csp, parts: assembled.parts },
     assembled.document,
@@ -343,6 +349,7 @@ function assembleDocumentShellParts(
     | 'sessionFingerprint'
     | 'loaderRuntimeHref'
   >,
+  deferredRegions = false,
 ): {
   csp: CspInlineMetadata;
   document: DocumentConfig | undefined;
@@ -359,13 +366,21 @@ function assembleDocumentShellParts(
     ...(securityObjectKeys(queryValues).length > 0 ? { queries: queryValues } : {}),
     ...(options.metaContext === undefined ? {} : { route: options.metaContext }),
   };
-  const hints = renderPageHints(options.hints ?? {}, hintContext);
+  const hints = renderPageHintParts(options.hints ?? {}, hintContext);
   const queryScripts: ReturnType<typeof renderDocumentQueryScriptWithCsp>[] = [];
   for (let index = 0; index < queries.length; index += 1) {
     securityArrayPush(queryScripts, renderDocumentQueryScriptWithCsp(queries[index]!));
   }
+  // O10/D7 (plans/good-perf.md): the SPEC §4.4 bootstrap is emitted only for a document that
+  // actually carries client-reactive surface. A purely server-rendered document — no islands, no
+  // handlers, no enhanced form, no query truth, no deferred region, no session-dependent bfcache
+  // posture — has nothing for the deferred runtime to do, so shipping the bootstrap costs 22.8 KB
+  // of first-flight bytes and then imports a 267 KB runtime after paint for no behaviour at all.
   const loader =
-    options.loader === 'omit' ? undefined : inlineLoaderScript(options.loaderRuntimeHref);
+    options.loader === 'omit' ||
+    !documentCarriesClientSurface(options, hints, queries.length, deferredRegions)
+      ? undefined
+      : inlineLoaderScript(options.loaderRuntimeHref);
   let csp = mergeCspInlineMetadata(options.document?.csp, hints.csp);
   if (loader !== undefined) csp = mergeCspInlineMetadata(csp, loader.csp);
   for (let index = 0; index < queryScripts.length; index += 1) {
@@ -409,8 +424,12 @@ function assembleDocumentShellParts(
     parts: {
       body: options.body,
       // SPEC §6.6/§8: even module bootstrap hints are app-authored executable head content. Keep
-      // the framework loader ahead of all hints, then structured document head contributions.
-      head: `${buildMeta}${sessionDependentMeta}${sessionMeta}${loader?.html ?? ''}${hints.html}`,
+      // the framework loader ahead of all *executable* hints, then structured document head
+      // contributions. O12 (plans/good-perf.md): CSS delivery is not executable — a stylesheet
+      // link cannot replace fetch, DOM lookup, navigation, lifecycle, or timer controls — so it is
+      // emitted first, where the browser can discover it inside the first congestion window. The
+      // relative order of the bootstrap and every app-authored head script is unchanged.
+      head: `${hints.stylesheetHtml}${buildMeta}${sessionDependentMeta}${sessionMeta}${loader?.html ?? ''}${hints.html}`,
       lang: options.lang ?? options.document?.lang ?? langFromHints(options.hints) ?? 'en',
       queryScripts: renderedQueryScripts,
     },
@@ -850,10 +869,13 @@ export const renderErrorDocument = wireEmitter(
         ...(options.secure === true && shouldEmitDocumentHsts(true)
           ? { 'Strict-Transport-Security': DOCUMENT_HSTS_VALUE }
           : {}),
-        // SF (secure-framework Tier 3): error documents are framework-rendered HTML with
-        // the same inline loader/hashes, so they carry the strict default-on CSP too. No
-        // route response means no author allowlist here — the plain strict `'self'` policy
-        // (with the non-overridable hardening directives) applies unconditionally.
+        // SF (secure-framework Tier 3): error documents are framework-rendered HTML, so
+        // they carry the same strict default-on CSP as successful documents. Under the
+        // SPEC §4.4 emission gate an inert built-in 403/404/500 ships no inline loader,
+        // so `document.csp` then carries no inline-script hash and the rendered policy is
+        // strictly tighter. No route response means no author allowlist here — the strict
+        // `'self'` policy (with the non-overridable hardening directives) applies
+        // unconditionally.
         'Content-Security-Policy': renderDefaultDocumentCsp(document.csp),
         ...(options.buildToken === undefined ? {} : { 'Kovo-Build': options.buildToken }),
         ...renderCspReportingHeaders(
@@ -938,6 +960,128 @@ function appendDocumentStrings(target: string[], values: readonly string[] | und
   for (let index = 0; index < values.length; index += 1) {
     securityArrayPush(target, values[index]!);
   }
+}
+
+/**
+ * Framework-emitted vocabulary that makes a document client-reactive (SPEC §4.4 loader
+ * responsibilities, §4.7 triggers, §4.8 update plan, §9 enhanced mutations).
+ *
+ * The attribute denominator is **derived from `SEMANTIC_ATTRIBUTE_MANIFEST.generatedOnly`** — the
+ * same closed generated-attribute manifest the compiler and runtime gates share — rather than
+ * hand-enumerated, so an attribute added to the framework's emission vocabulary is client surface
+ * here by construction and cannot silently fall out of the set. `document-loader-gate.test.ts`
+ * pins the full manifest against this detector.
+ *
+ * Exactly two manifest names are excluded: `popovertarget`/`popovertargetaction` are complete
+ * browser-native behavior (a SPEC §5.2.4 platform-lowering target; see the loader browser test
+ * "preserves L0 popover behavior without handler imports"), and the bootstrap ships no popover
+ * code — the loader-gate suite asserts the installer source carries no `showPopover`/
+ * `togglePopover`. `command`/`commandfor` are **not** excluded: the bootstrap carries the
+ * dialog-invoker `showModal` fallback, so a `commandfor` document without the loader is dead in a
+ * browser without native invoker support.
+ *
+ * Matching is a leading-space (or `<`) **substring** probe over serialized markup, not an
+ * attribute-position parse. The JSX serializer emits every attribute with a leading space
+ * (`jsx-runtime.ts:520`) and every framework custom element as `<kovo-…>`, so the leading space
+ * rules out a bare token inside a quoted attribute *value* (`data-cart-root="kovo"`), while
+ * ordinary prose that happens to contain a marker (`… command …`) still matches. That false
+ * positive is read only in the fail-safe direction: a match keeps the bootstrap (the pre-existing
+ * behaviour), and only the total absence of every marker drops it.
+ */
+const browserNativeOnlyGeneratedAttributes = ['popovertarget', 'popovertargetaction'] as const;
+
+const clientSurfaceMarkers: readonly string[] = (() => {
+  const candidates: string[] = [
+    // Framework custom elements and the bootstrap's own runtime globals/stream-apply queue.
+    '<kovo-',
+    '__kovo_',
+    // Namespace umbrellas: strict supersets of the manifest's `kovo-*`/`data-kovo-*` names, kept
+    // so attribute-shaped framework tokens in app markup stay fail-safe mid-emitter-refactor.
+    ' kovo-',
+    ' data-kovo-',
+  ];
+  const { attributes, prefixes } = SEMANTIC_ATTRIBUTE_MANIFEST.generatedOnly;
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index]!;
+    let browserNativeOnly = false;
+    for (let excluded = 0; excluded < browserNativeOnlyGeneratedAttributes.length; excluded += 1) {
+      if (attribute === browserNativeOnlyGeneratedAttributes[excluded]) {
+        browserNativeOnly = true;
+        break;
+      }
+    }
+    if (browserNativeOnly) continue;
+    securityArrayPush(candidates, ` ${attribute}`);
+  }
+  for (let index = 0; index < prefixes.length; index += 1) {
+    securityArrayPush(candidates, ` ${prefixes[index]!}`);
+  }
+  // A candidate that begins with a shorter candidate can never be the first match under substring
+  // probing, so collapsing it keeps the per-document scan at the namespace count without changing
+  // the accepted set (` data-bind` covers ` data-bind-list`/` data-bind:`, ` kovo-` covers every
+  // `kovo-*` name, and so on).
+  const markers: string[] = [];
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = candidates[index]!;
+    let covered = false;
+    for (let other = 0; other < candidates.length; other += 1) {
+      if (other === index) continue;
+      const prefix = candidates[other]!;
+      if (prefix.length < candidate.length && securityStringStartsWith(candidate, prefix)) {
+        covered = true;
+        break;
+      }
+    }
+    if (!covered) securityArrayPush(markers, candidate);
+  }
+  return markers;
+})();
+
+function htmlCarriesClientSurfaceMarker(html: string): boolean {
+  for (let index = 0; index < clientSurfaceMarkers.length; index += 1) {
+    if (securityStringIncludes(html, clientSurfaceMarkers[index]!)) return true;
+  }
+  return false;
+}
+
+function documentStringsCarryClientSurfaceMarker(values: readonly string[] | undefined): boolean {
+  if (values === undefined) return false;
+  for (let index = 0; index < values.length; index += 1) {
+    if (htmlCarriesClientSurfaceMarker(values[index]!)) return true;
+  }
+  return false;
+}
+
+/**
+ * Whether this exact document needs the SPEC §4.4 inline bootstrap installed.
+ *
+ * O10/D7 (plans/good-perf.md): registering and importing the deferred runtime for a document with
+ * no client surface is pure cost. Every input below is a reason the runtime has real work:
+ * query truth to hydrate/refetch (§4.8, §9.3), a session-dependent or fingerprinted document whose
+ * bfcache restore must be forced through the server (§8, §9.3), deferred regions that arrive as
+ * `__kovo_a` stream applies (§8), a hint that only the bootstrap completes (§13.1 `deferFull`), or
+ * any framework-emitted interactive marker in app or structured-document markup.
+ */
+function documentCarriesClientSurface(
+  options: Pick<
+    DocumentAssemblyOptions,
+    'body' | 'document' | 'sessionDependent' | 'sessionFingerprint'
+  >,
+  hints: PageHintParts,
+  queryCount: number,
+  deferredRegions: boolean,
+): boolean {
+  if (queryCount > 0 || deferredRegions || hints.clientRuntimeDependent) return true;
+  if (options.sessionDependent === true) return true;
+  if (options.sessionFingerprint !== undefined && options.sessionFingerprint !== '') return true;
+  if (htmlCarriesClientSurfaceMarker(options.body)) return true;
+  const document = options.document;
+  if (document === undefined) return false;
+  return (
+    documentStringsCarryClientSurfaceMarker(document.head) ||
+    documentStringsCarryClientSurfaceMarker(document.bodyStart) ||
+    documentStringsCarryClientSurfaceMarker(document.bodyEnd)
+  );
 }
 
 function inlineLoaderScript(runtimeHref: string | undefined): {

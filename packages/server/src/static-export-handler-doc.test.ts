@@ -78,6 +78,29 @@ describe('server static export', () => {
     ]);
     await expect(handled.text()).resolves.toBe(exported.artifacts[0]?.body);
     expect(exported.artifacts[0]?.body).toContain('<main data-url="/">from-page</main>');
+    // SPEC §4.4 / O10-D7 (plans/good-perf.md): this page carries no client surface, so the
+    // inline bootstrap and its deferred-runtime import are not emitted at all.
+    expect(exported.artifacts[0]?.body).not.toContain('installInlineKovoBootstrap');
+    expect(exported.artifacts[0]?.body).not.toContain('/kovo-runtime.client.js');
+  });
+
+  it('emits the inline bootstrap for an exported page that carries client surface', async () => {
+    const app = createApp({
+      renderRoute(value) {
+        return `<main kovo-c="cart">${String(value)}</main>`;
+      },
+      routes: [
+        route('/', {
+          page: () =>
+            trustedHtml('<span data-bind="cart.count">0</span>', {
+              reason: 'framework server rendering test fixture',
+            }),
+        }),
+      ],
+    });
+
+    const exported = await exportStaticApp(app);
+
     expect(exported.artifacts[0]?.body).toContain('installInlineKovoBootstrap');
     expect(exported.artifacts[0]?.body).toContain('/kovo-runtime.client.js');
   });

@@ -154,9 +154,13 @@ describe('request ingress intrinsic authority', () => {
                 }
                 return Reflect.apply(nativeGet, this, [name]);
               };
-              return trustedHtml('<main>full-document</main>', {
-                reason: 'framework server rendering test fixture',
-              });
+              // SPEC §4.4 / O10-D7: the bootstrap rides only a document with client surface, so
+              // this fixture declares an island handler to keep the loader an observable proof
+              // that the full (not loader-omitted enhanced-navigation) document was selected.
+              return trustedHtml(
+                '<main kovo-c="doc"><button on:click="/c/doc.client.js#go">full-document</button></main>',
+                { reason: 'framework server rendering test fixture' },
+              );
             },
           }),
         ],

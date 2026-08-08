@@ -93,15 +93,29 @@ describe('server app shell Vite plugin', () => {
     expect(routeResponse.headers.get('link')).toBe(
       '</assets/manual.css>; rel=preload; as=style, </assets/cart.css>; rel=preload; as=style, </assets/theme.css>; rel=preload; as=style, </c/manual.client.js?v=manual>; rel=modulepreload, </assets/cart.js>; rel=modulepreload, </assets/shared.js>; rel=modulepreload',
     );
-    await expect(routeResponse.text()).resolves.toContain(
+    // O12 (plans/good-perf.md): CSS delivery is non-executable, so it is emitted as one block
+    // ahead of the SPEC §4.4 bootstrap; module preloads stay after it with the other executable
+    // head hints.
+    const routeHtml = await routeResponse.text();
+    expect(routeHtml).toContain(
       [
         '<link rel="stylesheet" href="/assets/manual.css">',
         '<link rel="stylesheet" href="/assets/cart.css">',
         '<link rel="stylesheet" href="/assets/theme.css">',
+      ].join(''),
+    );
+    expect(routeHtml).toContain(
+      [
         '<link rel="modulepreload" href="/c/manual.client.js?v=manual" data-kovo-module-allowlist>',
         '<link rel="modulepreload" href="/assets/cart.js">',
         '<link rel="modulepreload" href="/assets/shared.js">',
       ].join(''),
+    );
+    expect(routeHtml.indexOf('<link rel="stylesheet" href="/assets/manual.css">')).toBeLessThan(
+      routeHtml.indexOf('installInlineKovoBootstrap'),
+    );
+    expect(routeHtml.indexOf('installInlineKovoBootstrap')).toBeLessThan(
+      routeHtml.indexOf('<link rel="modulepreload"'),
     );
 
     const moduleResponse = await handler(new Request(`https://example.test${module.href}`));
