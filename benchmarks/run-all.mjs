@@ -7,6 +7,7 @@ import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
 
+import { parseIntegerFlag, readArg, readIntegerArg } from './harness/args.mjs';
 import { runAppBenchmark } from './harness/run.mjs';
 import { DEFAULT_LIGHTHOUSE_REPEATS } from './harness/lighthouse.mjs';
 import { SETTLE_DEFAULTS } from './harness/scenarios.mjs';
@@ -77,15 +78,32 @@ const allApps = [
   },
 ];
 
-const iterations = Number(readArg('--iterations') ?? process.env.BENCH_ITERATIONS ?? '10');
+// Every count is validated, not `Number()`-coerced. An unvalidated NaN does not throw anywhere
+// downstream — it silently runs a loop zero times and publishes an empty cell that looks like a
+// measurement. See benchmarks/harness/args.mjs.
+const iterations = parseIntegerFlag(
+  '--iterations',
+  readArg('--iterations') ?? process.env.BENCH_ITERATIONS,
+  { fallback: 10, max: 1_000 },
+);
 const runLighthouse = !process.argv.includes('--skip-lighthouse');
-const lighthouseRepeats = Number(readArg('--lighthouse-runs') ?? DEFAULT_LIGHTHOUSE_REPEATS);
-const bfcacheIterations = Number(readArg('--bfcache-iterations') ?? '3');
+const lighthouseRepeats = readIntegerArg('--lighthouse-runs', {
+  fallback: DEFAULT_LIGHTHOUSE_REPEATS,
+  max: 100,
+});
+const bfcacheIterations = readIntegerArg('--bfcache-iterations', { fallback: 3, max: 1_000 });
 const skipBuild = process.argv.includes('--skip-build');
 const settle = {
-  maxMs: Number(readArg('--settle-max-ms') ?? SETTLE_DEFAULTS.maxMs),
-  quietMs: Number(readArg('--settle-quiet-ms') ?? SETTLE_DEFAULTS.quietMs),
+  maxMs: readIntegerArg('--settle-max-ms', { fallback: SETTLE_DEFAULTS.maxMs, max: 600_000 }),
+  quietMs: readIntegerArg('--settle-quiet-ms', { fallback: SETTLE_DEFAULTS.quietMs, max: 600_000 }),
 };
+if (settle.quietMs > settle.maxMs) {
+  throw new Error(
+    `--settle-quiet-ms (${settle.quietMs}) cannot exceed --settle-max-ms (${settle.maxMs}): the ` +
+      `quiet window would never fit inside the cap, so every iteration would report a capped ` +
+      `settle and understate its own byte count.`,
+  );
+}
 
 // `--apps kovo,nextjs` restricts the run to a subset of entrants so one entrant that cannot build
 // does not block the rest of the comparison. `--out-dir` redirects results away from the committed
@@ -102,11 +120,11 @@ const outDir = readArg('--out-dir') ? path.resolve(readArg('--out-dir')) : resul
 // `--port-base 4810` shifts every entrant's listen port so two benchmark runs on the same machine
 // cannot silently measure each other's server. Without this, a stale listener on the default port
 // is indistinguishable from a healthy start: `waitForHttp` just sees a 200 and proceeds.
-const portBase = readArg('--port-base') ? Number(readArg('--port-base')) : null;
+const portBase =
+  readArg('--port-base') === undefined
+    ? null
+    : readIntegerArg('--port-base', { fallback: 0, max: 65_000, min: 1024 });
 if (portBase !== null) {
-  if (!Number.isInteger(portBase) || portBase < 1024 || portBase > 65000) {
-    throw new Error(`--port-base must be an integer between 1024 and 65000, got ${portBase}.`);
-  }
   const basePort = Math.min(...allApps.map((app) => app.port));
   for (const app of allApps) app.port = portBase + (app.port - basePort);
 }
@@ -205,12 +223,6 @@ await writeFile(resultsPath, `${JSON.stringify(output, null, 2)}\n`);
 await writeReport(resultsPath, reportPath);
 process.stdout.write(`benchmark results written to ${path.relative(process.cwd(), reportPath)}\n`);
 
-function readArg(name) {
-  const index = process.argv.indexOf(name);
-  if (index === -1) return undefined;
-  return process.argv[index + 1];
-}
-
 /**
  * Refuses to report numbers taken in a posture the run did not actually achieve.
  *
@@ -231,33 +243,87 @@ function assertPostureMatched(app, serverLog) {
 }
 
 /**
- * Refuses to publish a run whose numbers were shaped by load shedding or server errors.
+ * Refuses to publish a run whose numbers were shaped by load shedding, server errors, or traffic
+ * that never completed at the network layer.
  *
  * Kovo's DEFAULT_PER_IP_RATE is 600 requests/minute for every source IP, and the whole benchmark
  * arrives from 127.0.0.1 (plans/good-perf.md O13). A shed run looks fast and plausible; without
  * this check it would be indistinguishable from a healthy one.
+ *
+ * Covers ALL THREE traffic sources, not just the custom scenarios: the custom scenario iterations,
+ * the Lighthouse cells (4 per entrant x `--lighthouse-runs` page loads, previously untracked), and
+ * the back/forward-cache probe (2 document loads per iteration in its own browser, previously
+ * untracked). A probe whose status could not be observed is reported as untracked rather than
+ * counted as clean.
  */
 function assertMeasurementIntegrity(runs) {
   const problems = [];
+  const notes = [];
   for (const run of runs) {
     for (const [conditionName, condition] of Object.entries(run.conditions ?? {})) {
       for (const [scenarioName, scenario] of Object.entries(condition)) {
         for (const iteration of scenario?.iterations ?? []) {
+          const where = `${run.app}/${conditionName}/${scenarioName}`;
           if (iteration.rateLimitedResponses > 0) {
             problems.push(
-              `${run.app}/${conditionName}/${scenarioName}: ${iteration.rateLimitedResponses} ` +
-                `HTTP 429 responses — the server shed load, so these timings are not comparable.`,
+              `${where}: ${iteration.rateLimitedResponses} HTTP 429 responses — the server shed ` +
+                `load, so these timings are not comparable.`,
             );
           }
           if (iteration.errorResponses > 0) {
+            problems.push(`${where}: ${iteration.errorResponses} HTTP >=400 responses.`);
+          }
+          // A request that never produced an HTTP response carries no status at all, so neither
+          // check above can see it. Harness-caused aborts are excluded in scenarios.mjs.
+          if (iteration.failedRequests > 0) {
             problems.push(
-              `${run.app}/${conditionName}/${scenarioName}: ${iteration.errorResponses} ` +
-                `HTTP >=400 responses.`,
+              `${where}: ${iteration.failedRequests} requests failed at the network layer ` +
+                `(${(iteration.failureReasons ?? []).join(', ') || 'no reason reported'}) — the ` +
+                `page did not receive the bytes this iteration claims to have measured.`,
             );
           }
         }
       }
     }
+
+    for (const cell of run.lighthouse ?? []) {
+      const where = `${run.app}/lighthouse/${cell.formFactor}${cell.path}`;
+      const network = cell.network;
+      if (!network || network.tracked !== true) {
+        notes.push(`${where}: HTTP statuses were not observable for this cell.`);
+        continue;
+      }
+      if (network.rateLimitedResponses > 0) {
+        problems.push(
+          `${where}: ${network.rateLimitedResponses} HTTP 429 responses across ${cell.repeats} ` +
+            `Lighthouse repeats — the server shed load while Lighthouse was scoring it.`,
+        );
+      }
+      if (network.errorResponses > 0) {
+        problems.push(`${where}: ${network.errorResponses} HTTP >=400 responses.`);
+      }
+    }
+
+    for (const [index, iteration] of (run.bfcache?.iterations ?? []).entries()) {
+      const where = `${run.app}/bfcache/${index}`;
+      const network = iteration.network;
+      if (!network) {
+        notes.push(`${where}: HTTP statuses were not observable for this probe iteration.`);
+        continue;
+      }
+      if (network.rateLimitedResponses > 0) {
+        problems.push(
+          `${where}: ${network.rateLimitedResponses} HTTP 429 responses — the back/forward-cache ` +
+            `verdict was taken against a shedding server.`,
+        );
+      }
+      if (network.errorResponses > 0) {
+        problems.push(`${where}: ${network.errorResponses} HTTP >=400 responses.`);
+      }
+    }
+  }
+  for (const note of [...new Set(notes)]) {
+    process.stderr.write(`[integrity] untracked: ${note}\n`);
   }
   if (problems.length > 0) {
     const unique = [...new Set(problems)];

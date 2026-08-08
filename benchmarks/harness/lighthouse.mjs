@@ -55,13 +55,19 @@ export async function runLighthouse(origin, { repeats = DEFAULT_LIGHTHOUSE_REPEA
             : undefined,
       };
       const samples = [];
+      const networkSamples = [];
       for (let index = 0; index < repeats; index += 1) {
         const result = await lighthouse(`${origin}${run.path}`, flags).catch(() => undefined);
         samples.push(extractMetrics(result?.lhr));
+        networkSamples.push(extractNetworkStatuses(result?.lhr));
       }
       results.push({
         formFactor: run.formFactor,
         metrics: aggregate(samples, (values) => percentile(values, 50)),
+        // Lighthouse drives 4 cells x `repeats` page loads of its own, and that traffic used to be
+        // invisible to the run's integrity gate: a Lighthouse cell could be entirely shaped by 429
+        // load shedding and still be published. See `extractNetworkStatuses`.
+        network: mergeNetwork(networkSamples),
         nullSamples: countNullSamples(samples),
         path: run.path,
         repeats,
@@ -96,6 +102,45 @@ function countNullSamples(samples) {
     ).length;
   }
   return output;
+}
+
+/**
+ * Per-request HTTP statuses for one Lighthouse sample, from the `network-requests` diagnostic
+ * audit.
+ *
+ * That audit is part of the performance category's `auditRefs`, so it is collected under
+ * `onlyCategories: ['performance']` — verified against the installed lighthouse default config
+ * rather than assumed. When it is missing (a sample that threw, or a future config that drops it)
+ * this returns `tracked: false` so the integrity gate can say "not measured" instead of "clean":
+ * an untracked probe must never be reported as a passing one.
+ */
+function extractNetworkStatuses(lhr) {
+  const items = lhr?.audits?.['network-requests']?.details?.items;
+  if (!Array.isArray(items)) {
+    return { errorResponses: 0, rateLimitedResponses: 0, requests: 0, tracked: false };
+  }
+  let errorResponses = 0;
+  let rateLimitedResponses = 0;
+  for (const item of items) {
+    const status = typeof item?.statusCode === 'number' ? item.statusCode : 0;
+    if (status === 429) rateLimitedResponses += 1;
+    else if (status >= 400) errorResponses += 1;
+  }
+  return { errorResponses, rateLimitedResponses, requests: items.length, tracked: true };
+}
+
+function mergeNetwork(networkSamples) {
+  return {
+    errorResponses: networkSamples.reduce((sum, sample) => sum + sample.errorResponses, 0),
+    rateLimitedResponses: networkSamples.reduce(
+      (sum, sample) => sum + sample.rateLimitedResponses,
+      0,
+    ),
+    requests: networkSamples.reduce((sum, sample) => sum + sample.requests, 0),
+    // Every sample must have been observable for the cell to count as tracked.
+    tracked: networkSamples.length > 0 && networkSamples.every((sample) => sample.tracked),
+    untrackedSamples: networkSamples.filter((sample) => !sample.tracked).length,
+  };
 }
 
 function extractMetrics(lhr) {

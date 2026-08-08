@@ -58,6 +58,26 @@ node benchmarks/run-all.mjs --apps kovo,nextjs --skip-lighthouse --port-base 482
   --out-dir /tmp/kovo-bench
 ```
 
+All traffic arrives from `127.0.0.1`, so the whole run shares one source IP against Kovo's per-IP
+budget. Document and endpoint `GET`/`HEAD` dispatch is exempt from the framework-default per-IP
+budget (plans/good-perf.md D12), which is what makes `--iterations 10` viable; the global budget and
+the mutation/query per-IP budgets still apply. See [`../README.md`](../README.md).
+
 The run aborts rather than publishing if a port is already held, if a server exits early, if a
-server reports development posture under `NODE_ENV=production`, or if any request was rate-limited
-or returned `>= 400`.
+server reports development posture under `NODE_ENV=production`, or if any **observed** request was
+rate-limited (429) or returned `>= 400`. "Observed" is narrower than "every request": HTTP statuses
+are read from the custom scenarios, the Lighthouse cells and the back/forward-cache probe, but only
+the custom scenarios can also see a request that failed at the network layer with no HTTP status at
+all. `../README.md` has the per-source table. A source whose statuses could not be read is printed
+as `[integrity] untracked:` rather than counted as clean.
+
+## What is trustworthy in a run from this harness
+
+- **Byte columns are the strong result.** They are counted from the wire at network quiescence and
+  are unaffected by machine load.
+- **Timing columns are conditional.** They are only comparable to numbers taken at a similar load
+  average, which the report header records.
+- **The navigation-to-paint column carries a known one-sided bias toward document-replacing
+  entrants — currently Kovo.** The report's "Known limits of this instrument" section states the
+  mechanism and the direction. Do not quote a small navigation gap between a document-replacing and
+  a same-document entrant as a result.

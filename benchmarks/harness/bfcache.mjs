@@ -1,5 +1,7 @@
 import { chromium } from 'playwright';
 
+import { readArg, readIntegerArg } from './args.mjs';
+
 /**
  * Back/forward-cache participation probe.
  *
@@ -73,6 +75,16 @@ export async function runBfcacheProbe({ iterations = 3, origin }) {
 async function probeOnce(browser, origin) {
   const context = await browser.newContext();
   const page = await context.newPage();
+  // The probe drives two real document loads per iteration in its own browser. That traffic used
+  // to carry no status tracking at all, so a probe run entirely under 429 load shedding was
+  // indistinguishable from a healthy one. Counted here and checked by run-all.mjs.
+  const network = { errorResponses: 0, rateLimitedResponses: 0, requests: 0 };
+  page.on('response', (response) => {
+    network.requests += 1;
+    const status = response.status();
+    if (status === 429) network.rateLimitedResponses += 1;
+    else if (status >= 400) network.errorResponses += 1;
+  });
   await page.addInitScript(() => {
     window.__kovoBenchBfcacheRestored = false;
     addEventListener('pageshow', (event) => {
@@ -123,6 +135,7 @@ async function probeOnce(browser, origin) {
     return {
       ...observed,
       applicable: leftTheDocument,
+      network,
       notApplicableReason: leftTheDocument
         ? null
         : 'in-app navigation stayed in one document, so the history traversal never involved the back/forward cache',
@@ -133,10 +146,10 @@ async function probeOnce(browser, origin) {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const originIndex = process.argv.indexOf('--origin');
-  const origin = originIndex === -1 ? 'http://127.0.0.1:3000' : process.argv[originIndex + 1];
-  const iterationsIndex = process.argv.indexOf('--iterations');
-  const iterations = iterationsIndex === -1 ? 3 : Number(process.argv[iterationsIndex + 1]);
+  const origin = readArg('--origin') || 'http://127.0.0.1:3000';
+  // Validated, not `Number()`-coerced: `--iterations three` used to yield NaN, run the probe loop
+  // zero times, and report a confident `applicableCount: 0` about a probe that never ran.
+  const iterations = readIntegerArg('--iterations', { fallback: 3, max: 1_000 });
   process.stdout.write(
     `${JSON.stringify(await runBfcacheProbe({ iterations, origin }), null, 2)}\n`,
   );

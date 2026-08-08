@@ -9,11 +9,11 @@
 // Imports only `report.mjs`, which depends on nothing outside node:fs — the rest of the harness
 // needs Playwright/Lighthouse from `benchmarks/harness/node_modules`, which the root unit pool does
 // not install.
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { writeReport } from './report.mjs';
 
@@ -123,13 +123,33 @@ const RESULTS = {
   ],
 };
 
+// One temp dir for the file, removed afterwards. Creating (and leaking) a fresh mkdtemp per test
+// left one directory per assertion behind on every run.
+let workDir;
+let renderCount = 0;
+
+beforeAll(async () => {
+  workDir = await mkdtemp(path.join(tmpdir(), 'kovo-bench-report-'));
+});
+
+afterAll(async () => {
+  if (workDir) await rm(workDir, { force: true, recursive: true });
+});
+
 async function renderReport(results) {
-  const dir = await mkdtemp(path.join(tmpdir(), 'kovo-bench-report-'));
-  const resultsPath = path.join(dir, 'results.json');
-  const reportPath = path.join(dir, 'report.md');
+  renderCount += 1;
+  const resultsPath = path.join(workDir, `results-${renderCount}.json`);
+  const reportPath = path.join(workDir, `report-${renderCount}.md`);
   await writeFile(resultsPath, JSON.stringify(results));
   await writeReport(resultsPath, reportPath);
   return readFile(reportPath, 'utf8');
+}
+
+/** The "Known limits of this instrument" section only, so a limit cannot be pinned from elsewhere. */
+function knownLimits(report) {
+  const start = report.indexOf('## Known limits of this instrument');
+  expect(start).toBeGreaterThan(-1);
+  return report.slice(start);
 }
 
 describe('benchmark report', () => {
@@ -177,9 +197,31 @@ describe('benchmark report', () => {
   });
 
   it('always states the instrument’s known limits', async () => {
-    const report = await renderReport(RESULTS);
-    expect(report).toContain('## Known limits of this instrument');
-    expect(report).toContain('Mobile TTFB is not network-realistic');
-    expect(report).toContain('cannot participate in the back/forward cache');
+    const limits = knownLimits(await renderReport(RESULTS));
+    expect(limits).toContain('Mobile TTFB is not network-realistic');
+    expect(limits).toContain('cannot participate in the back/forward cache');
+    // The harness, the browser and the server are three processes on ONE machine, not one process.
+    expect(limits).toContain('three separate processes on the same machine');
+  });
+
+  // This is the one limit that errs in the project's own favour, so it is pinned hardest. The
+  // navigation probe has two branches and they are not the same instrument: a document-replacing
+  // entrant is handed the destination document's browser-recorded FCP with no harness cost in the
+  // number, while a same-document entrant is charged a 25 ms poll interval, a CDP evaluate
+  // round-trip and two animation frames. Kovo is the document-replacing entrant today, so the
+  // error runs Kovo's way. An earlier handoff described this as symmetric; it is not, and a report
+  // that silently drops the disclosure is exactly the failure mode D14 deleted the last report for.
+  it('discloses that the navigation probe is biased toward document-replacing entrants', async () => {
+    const limits = knownLimits(await renderReport(RESULTS));
+    expect(limits).toContain(
+      'The navigation-to-paint probe is biased in favour of document-replacing entrants',
+    );
+    // Must name the direction, not merely admit an unspecified imprecision.
+    expect(limits).toContain("this instrument errs in Kovo's favour");
+    // Must not be relabelled as an evenly-applied limitation.
+    expect(limits).toContain('This bias is one-sided; it does not apply equally to every entrant.');
+    // Must keep the mechanism, so a reader can check the claim rather than trust it.
+    expect(limits).toContain('two animation frames');
+    expect(limits).toContain('first contentful paint');
   });
 });

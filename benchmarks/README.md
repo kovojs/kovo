@@ -54,7 +54,17 @@ node benchmarks/run-all.mjs --iterations 2 --skip-lighthouse --out-dir /tmp/kovo
 
 Useful flags: `--apps kovo,nextjs`, `--port-base 4820` (so two runs on one machine
 cannot measure each other's server), `--lighthouse-runs N`, `--bfcache-iterations N`,
-`--settle-quiet-ms` / `--settle-max-ms`.
+`--settle-quiet-ms` / `--settle-max-ms`. Every numeric flag is validated and rejects
+a non-integer instead of coercing it to `NaN`: an unvalidated `NaN` count runs its
+loop zero times and publishes an empty cell that reads like a measurement.
+
+To regenerate `report.md` from an existing `results.json` without re-running the
+benchmark, pass the path explicitly — there is no default, because
+`benchmarks/results/` holds no committed run:
+
+```sh
+pnpm --dir benchmarks/harness run report -- /tmp/kovo-bench/results.json
+```
 
 You can also build or serve an entrant directly:
 
@@ -96,7 +106,40 @@ each iteration. It records:
 
 The run aborts rather than publishing if a port is already held, if a server exits
 early, if a server reports development posture under `NODE_ENV=production`, or if
-any request was rate-limited or returned `>= 400`.
+any **observed** request was rate-limited (429) or returned `>= 400`.
+
+What "observed" covers, precisely — the gate is only as wide as its instrumentation:
+
+| Traffic source                                         | HTTP status observed via     | Transport failure observed |
+| ------------------------------------------------------ | ---------------------------- | -------------------------- |
+| Custom scenarios (cold load, TTI, navigation)          | Playwright `requestfinished` | yes, `requestfailed`       |
+| Lighthouse cells (4 per entrant x `--lighthouse-runs`) | the `network-requests` audit | no                         |
+| Back/forward-cache probe (2 loads per iteration)       | Playwright `response`        | no                         |
+
+Only the custom scenarios can see a request that failed **at the network layer** —
+a connection reset or DNS failure produces no HTTP status, so a page whose
+subresources all failed that way would otherwise report zero errors. Aborts caused
+by the harness's own document-replacing navigation are counted separately and do
+not reject a run. A source whose statuses could not be read at all is printed as
+`[integrity] untracked: …` on stderr and is never silently counted as clean.
+
+### Rate limiting and iteration count
+
+Every request in a run arrives from `127.0.0.1`, so the whole benchmark shares a
+single source IP against Kovo's per-IP budget. The framework default is 600
+requests/minute per IP (`DEFAULT_PER_IP_RATE`, `packages/server/src/app-load-shed.ts`),
+which a `--iterations 10` run can exhaust — and the integrity gate then refuses to
+publish rather than reporting shed traffic as fast traffic.
+
+Ordinary document and endpoint `GET`/`HEAD` dispatch is exempt from that _default_
+per-IP budget (plans/good-perf.md D12). The cold-load, navigation and bfcache
+scenarios are document GETs, so they no longer consume it. This does not make a run
+unlimited: the mandatory global budget still applies to documents, mutation and
+query surfaces keep their own per-IP budgets, and an app-authored
+`requestLimits.perIp` is enforced on every surface — so the checkout mutation the
+TTI scenario performs is still metered. If a run is refused for 429s on plain page
+loads, you are on a tree that predates that exemption; lower `--iterations` or
+space the run out.
 
 Conditions:
 

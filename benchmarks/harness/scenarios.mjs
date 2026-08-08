@@ -177,8 +177,18 @@ async function withPage(browser, condition, run) {
   }
 }
 
+/**
+ * Playwright's `requestfailed` fires for a request that never produced an HTTP response at all.
+ * A navigation that replaces the document legitimately aborts the origin document's in-flight
+ * subresource requests, and those surface here as `net::ERR_ABORTED` — expected, not a defect. Any
+ * OTHER failure text (connection reset, DNS, TLS, timeout) means the entrant's traffic did not
+ * complete at the network layer, which no HTTP-status check can ever see.
+ */
+const ABORT_ERROR_TEXT = 'net::ERR_ABORTED';
+
 function createRequestTracker(page) {
   const settled = [];
+  const failures = [];
   let started = 0;
   let completed = 0;
   let lastActivityAt = Date.now();
@@ -187,9 +197,13 @@ function createRequestTracker(page) {
     started += 1;
     lastActivityAt = Date.now();
   });
-  page.on('requestfailed', () => {
+  page.on('requestfailed', (request) => {
     completed += 1;
     lastActivityAt = Date.now();
+    failures.push({
+      errorText: request.failure()?.errorText ?? 'unknown',
+      resourceType: request.resourceType(),
+    });
   });
   page.on('requestfinished', (request) => {
     completed += 1;
@@ -233,9 +247,18 @@ function createRequestTracker(page) {
         if (request.status === 429) rateLimitedResponses += 1;
         else if (request.status >= 400) errorResponses += 1;
       }
+      // A request that failed at the network layer carries NO HTTP status, so `errorResponses`
+      // cannot see it: an iteration whose every subresource was reset would otherwise report a
+      // clean zero. Aborts caused by the harness's own document-replacing navigation are counted
+      // separately so they cannot spuriously reject an otherwise healthy run.
+      const aborted = failures.filter((failure) => failure.errorText.includes(ABORT_ERROR_TEXT));
+      const failed = failures.filter((failure) => !failure.errorText.includes(ABORT_ERROR_TEXT));
       return {
+        abortedRequests: aborted.length,
         bytes: buckets,
         errorResponses,
+        failedRequests: failed.length,
+        failureReasons: [...new Set(failed.map((failure) => failure.errorText))].sort(),
         rateLimitedResponses,
         requests: finished.length,
       };
@@ -386,6 +409,7 @@ async function navigationScenario(page, tracker, origin, settle) {
     // 1 when the navigation destroyed the JS realm, i.e. enhanced navigation did not happen.
     navDocumentReplaced: paint.documentReplaced,
     navErrorResponses: after.errorResponses - before.errorResponses,
+    navFailedRequests: after.failedRequests - before.failedRequests,
     // The superseded metric. Do not quote it (plans/good-perf.md "Do not re-propose").
     navLegacyDomPresenceMs: legacyDomEpochMs - startEpochMs,
     navPaintFromDocumentFcp: paint.fromDocumentFcp,

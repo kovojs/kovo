@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { readFile, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 
 export async function writeReport(resultsPath, reportPath) {
   const data = JSON.parse(await readFile(resultsPath, 'utf8'));
@@ -69,10 +70,11 @@ export async function writeReport(resultsPath, reportPath) {
     '',
     '## Known limits of this instrument',
     '',
+    "- **The navigation-to-paint probe is biased in favour of document-replacing entrants, and Kovo is the document-replacing entrant.** This bias is one-sided; it does not apply equally to every entrant. The probe's two branches are not the same instrument. When the navigation replaced the document, the reported time is the destination document's own browser-recorded first contentful paint — written by the browser at paint and read afterwards, with no harness cost inside the number. When it did not, no new paint entry is emitted, so the harness polls the page over CDP every 25 ms and then waits two animation frames before reading the clock; one poll interval, one evaluate round-trip and two frames are all inside the same-document number and none of them are inside the document-replacing one. The same branch split also picks different moments: first contentful paint can land before the destination's own `main h1` is painted, while the same-document branch cannot fire before that heading is in the DOM. Both differences push the same way. Nothing here is calibrated out, so a gap of a few tens of milliseconds on desktop — more under the 4x mobile CPU throttle — is within instrument error, and it favours whichever entrant the `Doc replaced` column shows replacing the document. Today that is Kovo, so this instrument errs in Kovo's favour.",
     '- **Wall-clock numbers are only comparable to numbers taken at a similar load.** The load average at the end of the run is recorded above; treat timings taken above roughly 1.0 per core as indicative only. Byte counts are unaffected.',
     '- **Mobile TTFB is not network-realistic.** CDP mobile emulation does not apply the emulated RTT to the first byte, so the mobile TTFB column understates a real mobile connection.',
     '- **The back/forward-cache probe uses a different browser build** than the timing scenarios: full Chromium with `--disable-back-forward-cache` removed. Playwright\'s default `chrome-headless-shell` cannot participate in the back/forward cache at all, so a probe sharing that browser could only ever report "not restored".',
-    '- **Timings and byte counts come from the same process as the server.** Loopback transport costs are excluded for every entrant equally, but no entrant is measured over a real network.',
+    "- **Nothing is measured over a real network.** The browser, the harness and each entrant's server are three separate processes on the same machine, talking over loopback. Transport cost is excluded for every entrant equally, but no entrant is measured across a real link, so none of these numbers describe behaviour under real RTT, loss, or a CDN.",
     '',
   ];
 
@@ -301,8 +303,22 @@ function format(value) {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
+  // No default results path. `benchmarks/results/` deliberately holds no committed run (see
+  // benchmarks/results/README.md), so the old `../results/results.json` default could only ever
+  // resolve to a file that is not there — `pnpm run report` failed on ENOENT every single time.
+  const resultsPath = process.argv[2];
+  if (!resultsPath) {
+    process.stderr.write(
+      'Usage: node report.mjs <results.json> [report.md]\n' +
+        '       pnpm run report -- /tmp/kovo-bench/results.json\n' +
+        '\n' +
+        'Point this at the --out-dir of an actual run. There is no default: benchmarks/results/\n' +
+        'holds no committed run by design (benchmarks/results/README.md).\n',
+    );
+    process.exit(1);
+  }
   await writeReport(
-    process.argv[2] ?? '../results/results.json',
-    process.argv[3] ?? '../results/report.md',
+    resultsPath,
+    process.argv[3] ?? path.join(path.dirname(resultsPath), 'report.md'),
   );
 }
