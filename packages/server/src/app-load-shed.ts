@@ -727,11 +727,69 @@ function rateLimitFailure(
     }
     const check = descriptor.value;
     const store = appRateBucketStore(state, check.id, check.scope);
-    const decision = consumeRateLimit(store, check.key, check.limit, now);
+    const decision = consumeRateLimit(store, check.key, processScaledRateLimit(check.limit), now);
     if (decision) return decision;
   }
 
   return undefined;
+}
+
+/**
+ * SPEC §9.5 / plans/good-perf.md D10 (multi-core posture): Kovo's supported horizontal model is N
+ * single-threaded processes behind one reverse proxy. Rate budgets — authored and framework
+ * defaults alike — describe the DEPLOYMENT aggregate, so each process must enforce its share.
+ * `KOVO_PROCESSES=N` divides every request-rate `max` by N (ceiling, floor 1); `maxKeys` (a
+ * per-process memory bound) and `windowMs` are untouched. Unset or `1` keeps single-process
+ * behavior byte-identical. An unparseable value is a deployment configuration error and fails
+ * loudly rather than silently multiplying the authored budget by N.
+ */
+const MAX_KOVO_PROCESSES = 1_024;
+let processShareCache: { raw: string | undefined; value: number } | undefined;
+
+function deploymentProcessShare(): number {
+  const raw = process.env.KOVO_PROCESSES;
+  if (processShareCache !== undefined && processShareCache.raw === raw) {
+    return processShareCache.value;
+  }
+  let value = 1;
+  if (raw !== undefined && raw !== '') {
+    const parsed = Number(raw);
+    if (
+      !requestStateIsSafeInteger(parsed) ||
+      parsed < 1 ||
+      parsed > MAX_KOVO_PROCESSES ||
+      requestStateString(parsed) !== raw
+    ) {
+      throw new TypeError(
+        `KOVO_PROCESSES must be a decimal integer between 1 and ${MAX_KOVO_PROCESSES} ` +
+          '(the number of server processes sharing this deployment behind one proxy); ' +
+          `received ${JSON.stringify(raw)}.`,
+      );
+    }
+    value = parsed;
+  }
+  processShareCache = { raw, value };
+  return value;
+}
+
+const processScaledRateLimits = createWitnessWeakMap<
+  ResolvedAppRateLimitOptions,
+  { scaled: ResolvedAppRateLimitOptions; share: number }
+>();
+
+function processScaledRateLimit(limit: ResolvedAppRateLimitOptions): ResolvedAppRateLimitOptions {
+  const share = deploymentProcessShare();
+  if (share === 1) return limit;
+  const memo = witnessWeakMapGet(processScaledRateLimits, limit);
+  if (memo !== undefined && memo.share === share) return memo.scaled;
+  const scaledMax = Math.ceil(limit.max / share);
+  const scaled = witnessFreeze({
+    max: scaledMax >= 1 ? scaledMax : 1,
+    maxKeys: limit.maxKeys,
+    windowMs: limit.windowMs,
+  });
+  witnessWeakMapSet(processScaledRateLimits, limit, witnessFreeze({ scaled, share }));
+  return scaled;
 }
 
 function isBodylessReadMethod(method: string): boolean {

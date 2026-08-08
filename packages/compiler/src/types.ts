@@ -7,6 +7,7 @@ import type {
 } from '@kovojs/core/internal/security-operation-ir';
 
 import type { ComponentCssAsset } from './css.js';
+import type { RoutePageCacheInfluenceFact } from './scan/route-page-cache-influence.js';
 import {
   compilerArrayAppend,
   compilerArrayIsArray,
@@ -374,6 +375,12 @@ export interface CompileRouteModuleResult {
 /** Compiler-derived facts for one JSX-authored `route().page`. */
 export interface RoutePageFact {
   access?: CoreGraph.AccessDecisionFact;
+  /**
+   * Scanner-owned closing influences for the SPEC §9.4 `document:` cache-influence surface.
+   * Absent when every route handler stays inside the finite document cache language. Stripped
+   * from the runtime route ABI; consumed only by the app-graph manifest derivation.
+   */
+  cacheInfluence?: RoutePageCacheInfluenceFact;
   css?: RoutePageCssFact;
   components: readonly RoutePageComponentFact[];
   fileName: string;

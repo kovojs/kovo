@@ -38,6 +38,10 @@ import type {
 } from '../types.js';
 import { propertyAccessPath, propertyNameText, unwrapExpression } from './ast.js';
 import { accessGuardExclusivityDiagnostics } from './access-guard-exclusivity.js';
+import {
+  routePageCacheInfluenceFact,
+  type RoutePageCacheHandlerInput,
+} from './route-page-cache-influence.js';
 import type { StaticLiteralValue } from './object.js';
 import { scanServerScopedKeySinkViolations } from './security-operation-ir.js';
 import {
@@ -310,8 +314,17 @@ function routePageFromCall(
   const css = routePageCssFact(components, componentImports);
   const access = routeAccessFact(definitionArg, routeLayouts, layouts, sourceFile);
   const guards = routeGuardFacts(definitionArg, routeLayouts, layouts, sourceFile);
+  // SPEC §9.4 document cache surface: scan every per-request route handler (page, regions, meta)
+  // under the finite document cache language. The result carries only CLOSING influences; the
+  // app-graph derivation combines it with access/guard/layout/query facts to emit the
+  // `document:<path>` manifest entry. Fail-closed: an unscanned handler shape closes the entry.
+  const cacheInfluence = routePageCacheInfluenceFact(
+    sourceFile,
+    routeCacheHandlerInputs(definitionArg, pageHandler, sourceFile),
+  );
   const fact: RoutePageFact = {
     ...(access === undefined ? {} : { access }),
+    ...(cacheInfluence === undefined ? {} : { cacheInfluence }),
     ...(css === undefined ? {} : { css }),
     components,
     fileName,
@@ -329,9 +342,10 @@ function routePageFromCall(
       start: node.getStart(sourceFile),
     },
   };
-  // Source provenance belongs to the compiler/check graph, not the executable route ABI. Keeping
-  // it out of the lowered helper argument avoids making runtime evaluation a source-map carrier.
-  const runtimeFact = { ...fact, source: undefined };
+  // Source provenance and cache-influence facts belong to the compiler/check graph, not the
+  // executable route ABI. Keeping them out of the lowered helper argument avoids making runtime
+  // evaluation a source-map or proof carrier.
+  const runtimeFact = { ...fact, cacheInfluence: undefined, source: undefined };
 
   return {
     fact,
@@ -343,6 +357,66 @@ function routePageFromCall(
       start: pageHandler?.replacementStart ?? definitionArg.properties.pos,
     },
   };
+}
+
+/**
+ * SPEC §9.4: collect every route-definition member that executes per request and can shape the
+ * document bytes — the page handler, each region handler, and the meta source. Members evaluated
+ * once at module scope (schemas, stylesheets, static meta objects) are build state and are not
+ * scanned; the scanner separately closes any meta shape that is not build-constant.
+ */
+function routeCacheHandlerInputs(
+  definition: TS.ObjectLiteralExpression,
+  pageHandler: RoutePageHandler | null,
+  sourceFile: TS.SourceFile,
+): RoutePageCacheHandlerInput[] {
+  const handlers: RoutePageCacheHandlerInput[] = [];
+  if (pageHandler) {
+    compilerArrayAppend(
+      handlers,
+      { node: pageHandler.node, role: 'page' as const },
+      'Compiler route cache handlers',
+    );
+  }
+  const regions = objectPropertyInitializer(definition, 'regions');
+  if (regions && ts.isObjectLiteralExpression(regions)) {
+    const propertyCount = compilerArrayLength(
+      regions.properties,
+      'Compiler route cache region properties',
+    );
+    for (let index = 0; index < propertyCount; index += 1) {
+      const property = compilerOwnDataValue(
+        regions.properties,
+        index,
+        'Compiler route cache region properties',
+      ) as TS.ObjectLiteralElementLike;
+      if (ts.isPropertyAssignment(property)) {
+        compilerArrayAppend(
+          handlers,
+          { node: property.initializer, role: 'region' as const },
+          'Compiler route cache handlers',
+        );
+      } else if (ts.isMethodDeclaration(property)) {
+        compilerArrayAppend(
+          handlers,
+          { node: property, role: 'region' as const },
+          'Compiler route cache handlers',
+        );
+      }
+    }
+  }
+  const meta = objectPropertyInitializer(definition, 'meta');
+  if (meta) {
+    compilerArrayAppend(
+      handlers,
+      { node: meta, role: 'meta' as const },
+      'Compiler route cache handlers',
+    );
+  }
+  // `boundaries`/`onUnauthenticated` only render non-200/guard-failure outcomes, which the
+  // runtime document cache never stores; guards themselves close the entry via access facts.
+  void sourceFile;
+  return handlers;
 }
 
 function appendRouteScopedKeyDiagnostics(
