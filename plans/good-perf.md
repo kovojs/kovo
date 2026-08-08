@@ -582,30 +582,55 @@ Per D8, the ruling is **boot-capture then direct-call**: prove intrinsic identit
 before any app code runs, then call the captured function directly instead of routing every call
 through `Reflect.apply`. No fast-vs-hardened build flag.
 
-- [ ] Write the threat model as a prerequisite deliverable (not a gate on the decision).
-  - State precisely what `apply(fn, receiver, args)` defends against that `fn.call(receiver, …)` on a
-    **boot-captured** `fn` does not. `Reflect.apply` defends against a poisoned `Function.prototype.apply`;
-    if `fn` itself was captured before any app code ran, that attack is already closed. Record the
-    residual cases (if any) and handle them explicitly rather than by blanket indirection.
-- [ ] Replace the indirection with boot-captured direct calls on the render path.
-  - Where a call site cannot be proven boot-captured, emit a specialised monomorphic wrapper for that
-    site rather than sharing the megamorphic `apply$12`.
-- [ ] Re-measure throughput and re-profile; the acceptance criterion is that no `apply`-shaped frame
+- [x] Write the threat model as a prerequisite deliverable (not a gate on the decision).
+  - `security/boot-captured-direct-call.md` (landed on `perf/ssr-apply-indirection` before the
+    implementation change). Conclusion: on a boot-captured `fn`, a boot-minted bound direct caller
+    (`uncurryThis = bind.bind(call)` from the boot-captured `Function.prototype.call`/`bind`) has
+    the same no-lookup/no-iterator invocation property as `Reflect.apply`, so the T1/T2/T3
+    poisoned-`apply`/`call`, poisoned-receiver-method, and poisoned-iterator threats stay closed.
+    Residuals enumerated and handled: pre-boot `call`/`bind` forgery (same trust class as the
+    existing capture set; probe corpus now runs through the minted callers), receiver-sensitive
+    statics (`Promise.resolve` keeps a boot-bound receiver; standing review rule for new
+    captures), dynamic targets (R3 — keep `Reflect.apply`), spread ban (R4), explicit-`undefined`
+    optional-argument review (R5). Normative anchor: spec/06-type-system.md §6.6 rule 6.
+- [x] Replace the indirection with boot-captured direct calls on the render path.
+  - Done 2026-08-08 on `perf/ssr-apply-indirection`. All four membranes converted:
+    `packages/server/src/security-witness-intrinsics.ts` (= `apply$12`, 33.2% self),
+    `packages/server/src/jsx-form-helper-intrinsics.ts` (largest single feeder — its
+    `formHelperSnapshotRecord`/`ownDataValue` flow was 4.3 s of the 6.7 s apply-shaped total),
+    `packages/server/src/response-security-intrinsics.ts` (= `apply$10`), and
+    `packages/core/src/internal/security-witness-intrinsics.ts` (= `invoke$1`). Receiver-bearing
+    methods dispatch through boot-minted `uncurryThis` callers; receiver-insensitive statics are
+    called directly; `witnessReflectApply`/`securityApply`/`formHelperApply` keep the boot-captured
+    `Reflect.apply` for caller-shaped targets and that dynamic path retains its own
+    positive/negative probes (a pre-import `Reflect.apply` forgery still fails closed — pinned by
+    the pre-existing core preimport-poison suite). New pins in
+    `security-witness-intrinsics.test.ts`: post-boot poisoning of `call`/`apply`/`bind` +
+    `Reflect.apply` is inert (0 poison hits), pre-import poisoning of `Function.prototype.call` or
+    `.bind` fails closed. Suites: core 559/559, server membrane + dependent files
+    (cookies/crypto/csrf/guards/html/jsx) 417/417; root `tsc` error set byte-identical to main.
+- [x] Re-measure throughput and re-profile; the acceptance criterion is that no `apply`-shaped frame
       remains in the top 5 self-time frames under c=32 load.
-  - Measured by CPU profile under c=32 load: the #1 self-time frame is `apply$12 @ handler.mjs:30`
-    at **34.41%** (6,928 ms of 20.14 s non-idle CPU) — a function whose entire body is
-    `return nativeReflectApply(fn, receiver, args)`. `invoke$1` adds 4.05% and `apply$10` 1.14%:
-    **38.5% of all server CPU** is call indirection.
-  - All six recon-phase suspects were **refuted** as dominant: HKDF re-derivation per HMAC is 0.10%
-    self; the frozen `renderedHtml` wrapper is a real but modest 3.07%; prop snapshotting, the request
-    Proxy, per-request head re-serialisation and the CSP rescan are noise. Do not optimise those first.
-  - Microbenchmark: `apply(fn, receiver, [args])` costs 4.463 ns/call vs 0.516 ns direct (8.7x) at a
-    monomorphic site; `apply$12` is megamorphic in production so the real unit cost is higher.
-    Implied ~285,000 apply calls/request (MODELED upper bound).
-  - Constraint: this is the `witnessReflectApply` / captured-intrinsic pattern defending against
-    prototype mutation. Any change must preserve that guarantee — e.g. specialise wrappers per call
-    site at emission so the site stays monomorphic, or prove intrinsic identity once at module init
-    and call directly thereafter. Compiler/security design task, not a micro-tweak.
+  - **Acceptance met.** Rebuilt `benchmarks/kovo` production artifact, c=32 `--cpu-prof`: top 5
+    self-time frames are `formHelperSnapshotRecord` 9.7%, `ownDataValue` 5.3%, GC 4.6%,
+    `renderJsxAttributes` 3.3%, `formHelperDefineDataProperty` 3.1%. Apply-shaped residue is
+    **1.31–1.33% total** (was 38.6% reproduced pre-change on this box: `apply$12` 33.18% +
+    `invoke$1` 3.68% + `apply$10` 0.77%), and none of it is in the top 16. The remaining 0.59%
+    `invoke` is `packages/browser/src/security-witness-intrinsics.ts` (outside this slice's
+    ownership; same conversion applies if ever worth it).
+  - Throughput and CPU (simultaneous A/B: baseline `4cc66bf28` artifact and branch artifact
+    serving at the same instant on one box, equal contention, load 10–13 — INDICATIVE, shared
+    box): per-request main-thread CPU 7.81 → **7.28 ms (-6.9%)** at c=16 with byte-identical
+    documents; same-window req/s +7.4%; four unprofiled simultaneous cells: `/` c=1 **+7.5%**,
+    `/product` c=1 **+6.4%**, `/` c=32 **+8.6%**, `/product` c=32 **+5.4%**. Dispatch
+    microbenchmark on this box: megamorphic shared-`Reflect.apply` helper 15.13 ns/call →
+    boot-minted caller **3.18 ns** (4.8x), within 4% of the 3.06 ns raw-call floor.
+  - **Attribution correction for the ledger** (do not re-open expecting ~1.6x): the profiler
+    attributes callee *builtin* ticks to the calling JS frame, so the 34–38% "apply-shaped self
+    time" bucket mostly contained the invoked natives' real work. The recoverable indirection
+    overhead was ≈0.5 ms of 7.8 ms/request (~7%), consistent across all measurements; the rest of
+    that bucket now re-attributes to the witness wrappers (`formHelperSnapshotRecord` etc.), which
+    is the true remaining cost of per-prop own-data snapshotting, not call indirection.
 
 ### O9 — Enable Speculation Rules by default, or justify the 3.3x cost — **high, small, design decision**
 
