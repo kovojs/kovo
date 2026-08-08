@@ -7,6 +7,12 @@ import { createHash, randomBytes } from 'node:crypto';
  * response security floor therefore captures every load-bearing operation before application
  * evaluation, proves both its accepting and rejecting semantics, and dispatches only through the
  * captured functions afterwards (SPEC §6.6/§9.1/§9.5).
+ *
+ * Dispatch follows plans/good-perf.md D8 (threat model:
+ * security/boot-captured-direct-call.md): receiver-insensitive captured statics are called
+ * directly; per-receiver methods and accessor getters go through direct callers minted at module
+ * init from the boot-captured `Function.prototype.call`/`bind`. Neither form performs an
+ * observable property lookup or touches the iterator protocol at invocation time.
  */
 
 const NativeArray = globalThis.Array;
@@ -37,6 +43,8 @@ const nativeCreateHash = createHash;
 const nativeRandomBytes = randomBytes;
 
 const nativeReflectApply = NativeReflect.apply;
+const nativeFunctionCall = NativeFunction.prototype.call;
+const nativeFunctionBind = NativeFunction.prototype.bind;
 const nativeArrayIsArray = NativeArray.isArray;
 const nativeArrayJoin = NativeArray.prototype.join;
 const nativeArraySort = NativeArray.prototype.sort;
@@ -52,7 +60,7 @@ const nativeEncodeURIComponent = globalThis.encodeURIComponent;
 const nativeEncodeUri = globalThis.encodeURI;
 const nativeFunctionHasInstance = NativeFunction.prototype[Symbol.hasInstance];
 const nativeJsonParse = NativeJSON.parse;
-const nativeJsonStringify = NativeJSON.stringify;
+const nativeJsonStringify = NativeJSON.stringify as (value: unknown) => string | undefined;
 const nativeHeadersForEach = NativeHeaders.prototype.forEach;
 const nativeHeadersGet = NativeHeaders.prototype.get;
 const nativeHeadersDelete = NativeHeaders.prototype.delete;
@@ -73,10 +81,7 @@ const nativeObjectDefineProperty = NativeObject.defineProperty;
 const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
 const nativeObjectGetPrototypeOf = NativeObject.getPrototypeOf;
 const nativeObjectKeys = NativeObject.keys;
-const nativeArrayBufferByteLength = stableOwnAccessor(NativeArrayBuffer.prototype, 'byteLength');
 const nativeRegExpExec = NativeRegExp.prototype.exec;
-const nativeRegExpFlags = stableOwnAccessor(NativeRegExp.prototype, 'flags');
-const nativeRegExpSource = stableOwnAccessor(NativeRegExp.prototype, 'source');
 const nativeSetAdd = NativeSet.prototype.add;
 const nativeSetDelete = NativeSet.prototype.delete;
 const nativeSetHas = NativeSet.prototype.has;
@@ -97,14 +102,63 @@ const nativeTextDecoderDecode = NativeTextDecoder.prototype.decode;
 const nativeTextEncoderEncode = NativeTextEncoder.prototype.encode;
 const nativePromiseResolve = NativePromise.resolve;
 const nativePromiseThen = NativePromise.prototype.then;
+const nativeControllerClose = NativeReadableStreamDefaultController.prototype.close;
+const nativeControllerEnqueue = NativeReadableStreamDefaultController.prototype.enqueue;
+const nativeControllerError = NativeReadableStreamDefaultController.prototype.error;
+const nativeUint8ArrayFill = NativeUint8Array.prototype.fill;
+
+// Boot-derived direct-caller mint (D8; SPEC §6.6 rule 6). Fixed-arity call sites only — see
+// security/boot-captured-direct-call.md R4.
+const uncurryThis = nativeReflectApply(nativeFunctionBind, nativeFunctionBind, [
+  nativeFunctionCall,
+]) as (fn: Function) => (receiver: unknown, ...args: unknown[]) => unknown;
+
+function stableOwnFunction(value: object, property: PropertyKey): Function {
+  let owner: object | null = value;
+  for (let depth = 0; owner !== null && depth < 16; depth += 1) {
+    const descriptor = nativeObjectGetOwnPropertyDescriptor(owner, property);
+    if (descriptor !== undefined) {
+      if (!('value' in descriptor) || typeof descriptor.value !== 'function') {
+        throw new TypeError(`Kovo response security control ${String(property)} is unavailable.`);
+      }
+      return descriptor.value;
+    }
+    owner = nativeObjectGetPrototypeOf(owner);
+  }
+  throw new TypeError(`Kovo response security control ${String(property)} is unavailable.`);
+}
+
+function stableOwnGetter(value: object, property: PropertyKey): Function {
+  const descriptor = nativeObjectGetOwnPropertyDescriptor(value, property);
+  if (typeof descriptor?.get !== 'function') {
+    throw new TypeError(`Kovo response security getter ${String(property)} is unavailable.`);
+  }
+  return descriptor.get;
+}
+
+function stableOwnAccessor(value: object, property: PropertyKey): Function {
+  let owner: object | null = value;
+  for (let depth = 0; owner !== null && depth < 16; depth += 1) {
+    const descriptor = nativeObjectGetOwnPropertyDescriptor(owner, property);
+    if (descriptor !== undefined) {
+      if (typeof descriptor.get !== 'function') {
+        throw new TypeError(`Kovo response security control ${String(property)} is unavailable.`);
+      }
+      return descriptor.get;
+    }
+    owner = nativeObjectGetPrototypeOf(owner);
+  }
+  throw new TypeError(`Kovo response security control ${String(property)} is unavailable.`);
+}
+
+const nativeArrayBufferByteLength = stableOwnAccessor(NativeArrayBuffer.prototype, 'byteLength');
+const nativeRegExpFlags = stableOwnAccessor(NativeRegExp.prototype, 'flags');
+const nativeRegExpSource = stableOwnAccessor(NativeRegExp.prototype, 'source');
 const nativeResponseBody = stableOwnGetter(NativeResponse.prototype, 'body');
 const nativeResponseHeaders = stableOwnGetter(NativeResponse.prototype, 'headers');
 const nativeResponseStatus = stableOwnGetter(NativeResponse.prototype, 'status');
 const nativeResponseStatusText = stableOwnGetter(NativeResponse.prototype, 'statusText');
 const nativeResponseText = stableOwnFunction(NativeResponse.prototype, 'text');
-const nativeControllerClose = NativeReadableStreamDefaultController.prototype.close;
-const nativeControllerEnqueue = NativeReadableStreamDefaultController.prototype.enqueue;
-const nativeControllerError = NativeReadableStreamDefaultController.prototype.error;
 const nativeUrlHashGet = stableOwnGetter(NativeURL.prototype, 'hash');
 const nativeUrlHrefGet = stableOwnGetter(NativeURL.prototype, 'href');
 const nativeUrlOriginGet = stableOwnGetter(NativeURL.prototype, 'origin');
@@ -112,7 +166,6 @@ const nativeUrlPathnameGet = stableOwnGetter(NativeURL.prototype, 'pathname');
 const nativeUrlProtocolGet = stableOwnGetter(NativeURL.prototype, 'protocol');
 const nativeUrlSearchGet = stableOwnGetter(NativeURL.prototype, 'search');
 const nativeUint8ArrayLength = stableOwnAccessor(NativeUint8Array.prototype, 'length');
-const nativeUint8ArrayFill = NativeUint8Array.prototype.fill;
 
 const hashControl = nativeCreateHash('sha256');
 const nativeHashUpdate = stableOwnFunction(hashControl, 'update');
@@ -120,9 +173,176 @@ const nativeHashDigest = stableOwnFunction(hashControl, 'digest');
 const textEncoder = new NativeTextEncoder();
 const fatalTextDecoder = new NativeTextDecoder('utf-8', { fatal: true });
 
-function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
-  return nativeReflectApply(fn, receiver, args) as Return;
-}
+const callArrayJoin = uncurryThis(nativeArrayJoin) as (
+  values: readonly unknown[],
+  separator: string,
+) => string;
+const callArraySort = uncurryThis(nativeArraySort) as <Value>(
+  values: Value[],
+  compare?: (left: Value, right: Value) => number,
+) => Value[];
+const callBufferToString = uncurryThis(nativeBufferToString) as (
+  value: Buffer,
+  encoding?: BufferEncoding,
+) => string;
+const callDateGetTime = uncurryThis(nativeDateGetTime) as (value: Date) => number;
+const callDateToISOString = uncurryThis(nativeDateToISOString) as (value: Date) => string;
+const callDateToUtcString = uncurryThis(nativeDateToUtcString) as (value: Date) => string;
+const callHasInstance = uncurryThis(nativeFunctionHasInstance) as (
+  constructor: Function,
+  value: unknown,
+) => boolean;
+const callHeadersForEach = uncurryThis(nativeHeadersForEach) as (
+  headers: Headers,
+  callback: (value: string, name: string) => void,
+) => void;
+const callHeadersGet = uncurryThis(nativeHeadersGet) as (
+  headers: Headers,
+  name: string,
+) => string | null;
+const callHeadersDelete = uncurryThis(nativeHeadersDelete) as (
+  headers: Headers,
+  name: string,
+) => void;
+const callHeadersSet = uncurryThis(nativeHeadersSet) as (
+  headers: Headers,
+  name: string,
+  value: string,
+) => void;
+const callMapGet = uncurryThis(nativeMapGet) as <Key, Value>(
+  map: Map<Key, Value>,
+  key: Key,
+) => Value | undefined;
+const callMapHas = uncurryThis(nativeMapHas) as <Key>(map: Map<Key, unknown>, key: Key) => boolean;
+const callMapDelete = uncurryThis(nativeMapDelete) as <Key>(
+  map: Map<Key, unknown>,
+  key: Key,
+) => boolean;
+const callMapSet = uncurryThis(nativeMapSet) as <Key, Value>(
+  map: Map<Key, Value>,
+  key: Key,
+  value: Value,
+) => Map<Key, Value>;
+const callMapForEach = uncurryThis(nativeMapForEach) as <Key, Value>(
+  map: Map<Key, Value>,
+  callback: (value: Value, key: Key) => void,
+) => void;
+const callRegExpExec = uncurryThis(nativeRegExpExec) as (
+  expression: RegExp,
+  value: string,
+) => RegExpExecArray | null;
+const callRegExpFlags = uncurryThis(nativeRegExpFlags) as (expression: RegExp) => string;
+const callRegExpSource = uncurryThis(nativeRegExpSource) as (expression: RegExp) => string;
+const callSetAdd = uncurryThis(nativeSetAdd) as <Value>(set: Set<Value>, value: Value) => Set<Value>;
+const callSetDelete = uncurryThis(nativeSetDelete) as <Value>(
+  set: Set<Value>,
+  value: Value,
+) => boolean;
+const callSetHas = uncurryThis(nativeSetHas) as <Value>(set: Set<Value>, value: Value) => boolean;
+const callStringCharCodeAt = uncurryThis(nativeStringCharCodeAt) as (
+  value: string,
+  index: number,
+) => number;
+const callStringEndsWith = uncurryThis(nativeStringEndsWith) as (
+  value: string,
+  search: string,
+) => boolean;
+const callStringIncludes = uncurryThis(nativeStringIncludes) as (
+  value: string,
+  search: string,
+) => boolean;
+const callStringIndexOf = uncurryThis(nativeStringIndexOf) as (
+  value: string,
+  search: string,
+  fromIndex?: number,
+) => number;
+const callStringLastIndexOf = uncurryThis(nativeStringLastIndexOf) as (
+  value: string,
+  search: string,
+) => number;
+const callStringReplaceAll = uncurryThis(nativeStringReplaceAll) as (
+  value: string,
+  search: string,
+  replacement: string,
+) => string;
+const callStringSlice = uncurryThis(nativeStringSlice) as (
+  value: string,
+  start: number,
+  end?: number,
+) => string;
+const callStringSplit = uncurryThis(nativeStringSplit) as (
+  value: string,
+  separator: string,
+) => string[];
+const callStringStartsWith = uncurryThis(nativeStringStartsWith) as (
+  value: string,
+  search: string,
+  position?: number,
+) => boolean;
+const callStringToLowerCase = uncurryThis(nativeStringToLowerCase) as (value: string) => string;
+const callStringTrim = uncurryThis(nativeStringTrim) as (value: string) => string;
+const callTextDecoderDecode = uncurryThis(nativeTextDecoderDecode) as (
+  decoder: TextDecoder,
+  value: Uint8Array,
+) => string;
+const callTextEncoderEncode = uncurryThis(nativeTextEncoderEncode) as (
+  encoder: TextEncoder,
+  value: string,
+) => Uint8Array;
+const callPromiseThen = uncurryThis(nativePromiseThen) as <Value, Result>(
+  promise: Promise<Value>,
+  fulfilled: (value: Value) => Result | PromiseLike<Result>,
+  rejected?: (reason: unknown) => Result | PromiseLike<Result>,
+) => Promise<Result>;
+const callResponseBody = uncurryThis(nativeResponseBody) as (
+  response: Response,
+) => ReadableStream<Uint8Array> | null;
+const callResponseHeaders = uncurryThis(nativeResponseHeaders) as (response: Response) => Headers;
+const callResponseStatus = uncurryThis(nativeResponseStatus) as (response: Response) => number;
+const callResponseStatusText = uncurryThis(nativeResponseStatusText) as (
+  response: Response,
+) => string;
+const callResponseText = uncurryThis(nativeResponseText) as (
+  response: Response,
+) => Promise<string>;
+const callControllerClose = uncurryThis(nativeControllerClose) as (
+  controller: ReadableStreamDefaultController<unknown>,
+) => void;
+const callControllerEnqueue = uncurryThis(nativeControllerEnqueue) as <Value>(
+  controller: ReadableStreamDefaultController<Value>,
+  value: Value,
+) => void;
+const callControllerError = uncurryThis(nativeControllerError) as (
+  controller: ReadableStreamDefaultController<unknown>,
+  error: unknown,
+) => void;
+const callUrlHashGet = uncurryThis(nativeUrlHashGet) as (url: URL) => string;
+const callUrlHrefGet = uncurryThis(nativeUrlHrefGet) as (url: URL) => string;
+const callUrlOriginGet = uncurryThis(nativeUrlOriginGet) as (url: URL) => string;
+const callUrlPathnameGet = uncurryThis(nativeUrlPathnameGet) as (url: URL) => string;
+const callUrlProtocolGet = uncurryThis(nativeUrlProtocolGet) as (url: URL) => string;
+const callUrlSearchGet = uncurryThis(nativeUrlSearchGet) as (url: URL) => string;
+const callUint8ArrayLength = uncurryThis(nativeUint8ArrayLength) as (value: Uint8Array) => number;
+const callUint8ArrayFill = uncurryThis(nativeUint8ArrayFill) as (
+  value: Uint8Array,
+  fill: number,
+) => Uint8Array;
+const callArrayBufferByteLength = uncurryThis(nativeArrayBufferByteLength) as (
+  value: ArrayBuffer,
+) => number;
+const callHashUpdate = uncurryThis(nativeHashUpdate) as (
+  hash: ReturnType<typeof createHash>,
+  value: string | Uint8Array,
+) => unknown;
+const callHashDigest = uncurryThis(nativeHashDigest) as (
+  hash: ReturnType<typeof createHash>,
+  encoding: 'base64' | 'hex',
+) => string;
+// `Promise.resolve` reads `this` as the species constructor, so its receiver is bound at boot
+// (security/boot-captured-direct-call.md R2).
+const boundPromiseResolve = nativeReflectApply(nativeFunctionBind, nativePromiseResolve, [
+  NativePromise,
+]) as <Value>(value: Value | PromiseLike<Value>) => Promise<Awaited<Value>>;
 
 function normalizedByteSliceIndex(
   value: number | undefined,
@@ -136,10 +356,7 @@ function normalizedByteSliceIndex(
   if (value !== value || value === 0) return 0;
   if (value === 1 / 0) return length;
   if (value === -1 / 0) return 0;
-  const integer =
-    value < 0
-      ? -apply<number>(nativeMathFloor, NativeMath, [-value])
-      : apply<number>(nativeMathFloor, NativeMath, [value]);
+  const integer = value < 0 ? -nativeMathFloor(-value) : nativeMathFloor(value);
   if (integer < 0) return length + integer < 0 ? 0 : length + integer;
   return integer > length ? length : integer;
 }
@@ -149,20 +366,20 @@ function rawUint8ArraySlice(
   start?: number,
   end?: number,
 ): Uint8Array<ArrayBuffer> {
-  const sourceLength = apply<number>(nativeUint8ArrayLength, value, []);
+  const sourceLength = callUint8ArrayLength(value);
   const first = normalizedByteSliceIndex(start, sourceLength, 0);
   const last = normalizedByteSliceIndex(end, sourceLength, sourceLength);
   const copyLength = last > first ? last - first : 0;
   const copy = new NativeUint8Array(copyLength);
   for (let index = 0; index < copyLength; index += 1) copy[index] = value[first + index]!;
-  if (apply(nativeUint8ArrayLength, value, []) !== sourceLength) {
+  if (callUint8ArrayLength(value) !== sourceLength) {
     throw new NativeTypeError('Kovo byte source changed length while it was snapshotted.');
   }
   return copy;
 }
 
 function rawArrayBufferSlice(value: ArrayBuffer, start?: number, end?: number): ArrayBuffer {
-  const sourceLength = apply<number>(nativeArrayBufferByteLength, value, []);
+  const sourceLength = callArrayBufferByteLength(value);
   const first = normalizedByteSliceIndex(start, sourceLength, 0);
   const last = normalizedByteSliceIndex(end, sourceLength, sourceLength);
   const copyLength = last > first ? last - first : 0;
@@ -170,7 +387,7 @@ function rawArrayBufferSlice(value: ArrayBuffer, start?: number, end?: number): 
   const copy = new NativeArrayBuffer(copyLength);
   const copyBytes = new NativeUint8Array(copy);
   for (let index = 0; index < copyLength; index += 1) copyBytes[index] = source[first + index]!;
-  if (apply(nativeArrayBufferByteLength, value, []) !== sourceLength) {
+  if (callArrayBufferByteLength(value) !== sourceLength) {
     throw new NativeTypeError('Kovo ArrayBuffer source changed length while it was snapshotted.');
   }
   return copy;
@@ -184,14 +401,10 @@ function defineResponseArrayIndex<Value>(
   value: Value,
   label: string,
 ): void {
-  if (apply(nativeArrayIsArray, NativeArray, [values]) !== true) {
+  if (nativeArrayIsArray(values) !== true) {
     throw new NativeTypeError(`${label} target must be an array.`);
   }
-  const lengthDescriptor = apply<PropertyDescriptor | undefined>(
-    nativeObjectGetOwnPropertyDescriptor,
-    NativeObject,
-    [values, 'length'],
-  );
+  const lengthDescriptor = nativeObjectGetOwnPropertyDescriptor(values, 'length');
   if (
     lengthDescriptor === undefined ||
     !('value' in lengthDescriptor) ||
@@ -203,25 +416,17 @@ function defineResponseArrayIndex<Value>(
   if (index < 0 || index > length || index >= 4_294_967_295 || index % 1 !== 0) {
     throw new NativeTypeError(`${label} index must preserve dense array bounds.`);
   }
-  apply(nativeObjectDefineProperty, NativeObject, [
-    values,
-    index,
-    {
-      configurable: true,
-      enumerable: true,
-      value,
-      writable: true,
-    },
-  ]);
+  nativeObjectDefineProperty(values, index, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
 }
 
 function commitResponseArrayValue<Value>(values: Value[], value: Value, label: string): void {
   assertResponseSecurityIntrinsics();
-  const lengthDescriptor = apply<PropertyDescriptor | undefined>(
-    nativeObjectGetOwnPropertyDescriptor,
-    NativeObject,
-    [values, 'length'],
-  );
+  const lengthDescriptor = nativeObjectGetOwnPropertyDescriptor(values, 'length');
   if (
     lengthDescriptor === undefined ||
     !('value' in lengthDescriptor) ||
@@ -232,93 +437,45 @@ function commitResponseArrayValue<Value>(values: Value[], value: Value, label: s
   defineResponseArrayIndex(values, lengthDescriptor.value, value, label);
 }
 
-function stableOwnFunction(value: object, property: PropertyKey): Function {
-  let owner: object | null = value;
-  for (let depth = 0; owner !== null && depth < 16; depth += 1) {
-    const descriptor = apply<PropertyDescriptor | undefined>(
-      nativeObjectGetOwnPropertyDescriptor,
-      NativeObject,
-      [owner, property],
-    );
-    if (descriptor !== undefined) {
-      if (!('value' in descriptor) || typeof descriptor.value !== 'function') {
-        throw new TypeError(`Kovo response security control ${String(property)} is unavailable.`);
-      }
-      return descriptor.value;
-    }
-    owner = apply(nativeObjectGetPrototypeOf, NativeObject, [owner]);
-  }
-  throw new TypeError(`Kovo response security control ${String(property)} is unavailable.`);
-}
-
-function stableOwnGetter(value: object, property: PropertyKey): Function {
-  const descriptor = apply<PropertyDescriptor | undefined>(
-    nativeObjectGetOwnPropertyDescriptor,
-    NativeObject,
-    [value, property],
-  );
-  if (typeof descriptor?.get !== 'function') {
-    throw new TypeError(`Kovo response security getter ${String(property)} is unavailable.`);
-  }
-  return descriptor.get;
-}
-
-function stableOwnAccessor(value: object, property: PropertyKey): Function {
-  let owner: object | null = value;
-  for (let depth = 0; owner !== null && depth < 16; depth += 1) {
-    const descriptor = apply<PropertyDescriptor | undefined>(
-      nativeObjectGetOwnPropertyDescriptor,
-      NativeObject,
-      [owner, property],
-    );
-    if (descriptor !== undefined) {
-      if (typeof descriptor.get !== 'function') {
-        throw new TypeError(`Kovo response security control ${String(property)} is unavailable.`);
-      }
-      return descriptor.get;
-    }
-    owner = apply(nativeObjectGetPrototypeOf, NativeObject, [owner]);
-  }
-  throw new TypeError(`Kovo response security control ${String(property)} is unavailable.`);
-}
-
 function capturedControlsAreSound(): boolean {
   try {
+    // The probe corpus exercises the exact boot-derived direct callers and captured statics the
+    // runtime dispatches through (SPEC §6.6 rule 6; security/boot-captured-direct-call.md R1).
     const response = new NativeResponse('safe', {
       headers: { 'x-kovo-control': 'safe' },
       status: 201,
       statusText: 'Created',
     });
-    const responseHeaders = apply<Headers>(nativeResponseHeaders, response, []);
+    const responseHeaders = callResponseHeaders(response);
     if (
-      apply(nativeResponseStatus, response, []) !== 201 ||
-      apply(nativeResponseStatusText, response, []) !== 'Created' ||
-      apply(nativeHeadersGet, responseHeaders, ['x-kovo-control']) !== 'safe' ||
-      apply(nativeResponseBody, response, []) === null
+      callResponseStatus(response) !== 201 ||
+      callResponseStatusText(response) !== 'Created' ||
+      callHeadersGet(responseHeaders, 'x-kovo-control') !== 'safe' ||
+      callResponseBody(response) === null
     ) {
       return false;
     }
     const shell = ['<!doctype html>', '<html><body>safe</body></html>'];
-    if (apply(nativeArrayJoin, shell, ['']) !== '<!doctype html><html><body>safe</body></html>') {
+    if (callArrayJoin(shell, '') !== '<!doctype html><html><body>safe</body></html>') {
       return false;
     }
     const shellAttributes = [' lang="en"', ' data-shell="safe"'];
-    if (apply(nativeArrayJoin, shellAttributes, ['']) !== ' lang="en" data-shell="safe"') {
+    if (callArrayJoin(shellAttributes, '') !== ' lang="en" data-shell="safe"') {
       return false;
     }
     const pushed: string[] = [];
     defineResponseArrayIndex(pushed, 0, 'safe', 'Kovo response control array');
     if (pushed.length !== 1 || pushed[0] !== 'safe') return false;
-    if (apply(nativeArrayIsArray, NativeArray, [[]]) !== true) return false;
-    if (apply(nativeArrayIsArray, NativeArray, [{}]) !== false) return false;
+    if (nativeArrayIsArray([]) !== true) return false;
+    if (nativeArrayIsArray({}) !== false) return false;
     const sorted = [1, 3, 2];
-    apply(nativeArraySort, sorted, [(left: number, right: number) => right - left]);
+    callArraySort(sorted, (left: number, right: number) => right - left);
     if (sorted[0] !== 3 || sorted[1] !== 2 || sorted[2] !== 1) return false;
 
     const injectedDomain = 'example.test; Partitioned';
-    if (apply(nativeStringIncludes, injectedDomain, [';']) !== true) return false;
-    if (apply(nativeStringIncludes, 'example.test', [';']) !== false) return false;
-    const tokenParts = apply<string[]>(nativeStringSplit, 'v1.attacker.attacker', ['.']);
+    if (callStringIncludes(injectedDomain, ';') !== true) return false;
+    if (callStringIncludes('example.test', ';') !== false) return false;
+    const tokenParts = callStringSplit('v1.attacker.attacker', '.');
     if (
       tokenParts.length !== 3 ||
       tokenParts[0] !== 'v1' ||
@@ -327,48 +484,42 @@ function capturedControlsAreSound(): boolean {
     ) {
       return false;
     }
-    if (apply(nativeStringTrim, '  safe \t', []) !== 'safe') return false;
-    if (apply(nativeStringTrim, '   ', []) !== '') return false;
-    if (apply(nativeStringIndexOf, 'name=value', ['=']) !== 4) return false;
-    if (apply(nativeStringIndexOf, 'name', ['=']) !== -1) return false;
-    if (apply(nativeStringLastIndexOf, 'a@b@c', ['@']) !== 3) return false;
-    if (apply(nativeStringLastIndexOf, 'abc', ['@']) !== -1) return false;
-    if (apply(nativeStringSlice, 'name=value', [5]) !== 'value') return false;
-    if (apply(nativeStringToLowerCase, 'SameSite', []) !== 'samesite') return false;
-    if (apply(nativeStringStartsWith, '__Host-id', ['__Host-']) !== true) return false;
-    if (apply(nativeStringStartsWith, 'id', ['__Host-']) !== false) return false;
-    if (apply(nativeStringStartsWith, 'data-safe', ['data-']) !== true) return false;
-    if (apply(nativeStringStartsWith, 'onclick', ['data-']) !== false) return false;
-    if (apply(nativeStringStartsWith, '//evil.example/phish', ['//']) !== true) return false;
-    if (apply(nativeStringStartsWith, '/safe', ['//']) !== false) return false;
-    if (apply(nativeStringEndsWith, 'safe.txt', ['.txt']) !== true) return false;
-    if (apply(nativeStringEndsWith, 'safe.txt', ['.html']) !== false) return false;
-    if (apply(nativeStringCharCodeAt, '\u007f', [0]) !== 0x7f) return false;
-    if (apply(nativeStringFromCharCode, NativeString, [0x73, 0x61, 0x66, 0x65]) !== 'safe') {
+    if (callStringTrim('  safe \t') !== 'safe') return false;
+    if (callStringTrim('   ') !== '') return false;
+    if (callStringIndexOf('name=value', '=') !== 4) return false;
+    if (callStringIndexOf('name', '=') !== -1) return false;
+    if (callStringLastIndexOf('a@b@c', '@') !== 3) return false;
+    if (callStringLastIndexOf('abc', '@') !== -1) return false;
+    if (callStringSlice('name=value', 5) !== 'value') return false;
+    if (callStringToLowerCase('SameSite') !== 'samesite') return false;
+    if (callStringStartsWith('__Host-id', '__Host-') !== true) return false;
+    if (callStringStartsWith('id', '__Host-') !== false) return false;
+    if (callStringStartsWith('data-safe', 'data-') !== true) return false;
+    if (callStringStartsWith('onclick', 'data-') !== false) return false;
+    if (callStringStartsWith('//evil.example/phish', '//') !== true) return false;
+    if (callStringStartsWith('/safe', '//') !== false) return false;
+    if (callStringEndsWith('safe.txt', '.txt') !== true) return false;
+    if (callStringEndsWith('safe.txt', '.html') !== false) return false;
+    if (callStringCharCodeAt('\u007f', 0) !== 0x7f) return false;
+    if (nativeStringFromCharCode(0x73, 0x61, 0x66, 0x65) !== 'safe') {
       return false;
     }
-    if (apply(nativeStringReplaceAll, '&amp;&amp;', ['&amp;', '&']) !== '&&') return false;
-    if (apply(NativeString, undefined, [42]) !== '42') return false;
-    if (apply(NativeString, undefined, [null]) !== 'null') return false;
+    if (callStringReplaceAll('&amp;&amp;', '&amp;', '&') !== '&&') return false;
+    if (NativeString(42) !== '42') return false;
+    if (NativeString(null) !== 'null') return false;
 
     const safeCookieName = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
-    if (apply<RegExpExecArray | null>(nativeRegExpExec, safeCookieName, ['sid']) === null) {
+    if (callRegExpExec(safeCookieName, 'sid') === null) {
       return false;
     }
-    if (
-      apply<RegExpExecArray | null>(nativeRegExpExec, safeCookieName, ['sid; Partitioned']) !== null
-    ) {
+    if (callRegExpExec(safeCookieName, 'sid; Partitioned') !== null) {
       return false;
     }
     const invalidAttribute = /[\s"'=<>/\u0000-\u001f\u007f]/u;
-    if (apply<RegExpExecArray | null>(nativeRegExpExec, invalidAttribute, ['data-safe']) !== null) {
+    if (callRegExpExec(invalidAttribute, 'data-safe') !== null) {
       return false;
     }
-    if (
-      apply<RegExpExecArray | null>(nativeRegExpExec, invalidAttribute, [
-        'data-evil" onclick="x',
-      ]) === null
-    ) {
+    if (callRegExpExec(invalidAttribute, 'data-evil" onclick="x') === null) {
       return false;
     }
     if (
@@ -388,154 +539,135 @@ function capturedControlsAreSound(): boolean {
     }
     if (replaceRegExp('...safe', /^\.+/, '') !== 'safe') return false;
     const expression = /^safe$/giu;
-    if (apply(nativeRegExpSource, expression, []) !== '^safe$') return false;
-    if (apply(nativeRegExpFlags, expression, []) !== 'giu') return false;
+    if (callRegExpSource(expression) !== '^safe$') return false;
+    if (callRegExpFlags(expression) !== 'giu') return false;
     const recreated = new NativeRegExp('^safe$', 'u');
-    if (apply<RegExpExecArray | null>(nativeRegExpExec, recreated, ['safe']) === null) return false;
-    if (apply<RegExpExecArray | null>(nativeRegExpExec, recreated, ['unsafe']) !== null)
-      return false;
+    if (callRegExpExec(recreated, 'safe') === null) return false;
+    if (callRegExpExec(recreated, 'unsafe') !== null) return false;
 
-    if (apply(nativeNumberIsInteger, NativeNumber, [2]) !== true) return false;
-    if (apply(nativeNumberIsInteger, NativeNumber, [2.5]) !== false) return false;
-    if (apply(nativeNumberIsFinite, NativeNumber, [2]) !== true) return false;
-    if (apply(nativeNumberIsFinite, NativeNumber, [Infinity]) !== false) return false;
-    if (apply(nativeNumberParseInt, NativeNumber, ['10', 10]) !== 10) return false;
-    if (apply(nativeNumberIsNaN, NativeNumber, [NaN]) !== true) return false;
-    if (apply(nativeNumberIsNaN, NativeNumber, [0]) !== false) return false;
-    if (apply(NativeNumber, undefined, ['42']) !== 42) return false;
-    if (apply(nativeMathFloor, NativeMath, [2.9]) !== 2) return false;
-    if (apply(nativeMathLog2, NativeMath, [8]) !== 3) return false;
-    if (apply(nativeEncodeURIComponent, undefined, ['a;b']) !== 'a%3Bb') return false;
-    if (apply(nativeEncodeUri, undefined, ['/a b,<']) !== '/a%20b,%3C') return false;
-    if (apply(nativeJsonStringify, NativeJSON, [{ safe: true }]) !== '{"safe":true}') return false;
-    if (apply(nativeStringFromCodePoint, NativeString, [0x1f642]) !== '🙂') return false;
-    const parsedJson = apply<Record<string, unknown>>(nativeJsonParse, NativeJSON, [
-      '{"safe":true}',
-    ]);
+    if (nativeNumberIsInteger(2) !== true) return false;
+    if (nativeNumberIsInteger(2.5) !== false) return false;
+    if (nativeNumberIsFinite(2) !== true) return false;
+    if (nativeNumberIsFinite(Infinity) !== false) return false;
+    if (nativeNumberParseInt('10', 10) !== 10) return false;
+    if (nativeNumberIsNaN(NaN) !== true) return false;
+    if (nativeNumberIsNaN(0) !== false) return false;
+    if (NativeNumber('42') !== 42) return false;
+    if (nativeMathFloor(2.9) !== 2) return false;
+    if (nativeMathLog2(8) !== 3) return false;
+    if (nativeEncodeURIComponent('a;b') !== 'a%3Bb') return false;
+    if (nativeEncodeUri('/a b,<') !== '/a%20b,%3C') return false;
+    if (nativeJsonStringify({ safe: true }) !== '{"safe":true}') return false;
+    if (nativeStringFromCodePoint(0x1f642) !== '🙂') return false;
+    const parsedJson = nativeJsonParse('{"safe":true}') as Record<string, unknown>;
     if (parsedJson.safe !== true) return false;
 
     const map = new NativeMap<string, string>();
-    apply(nativeMapSet, map, ['safe', 'value']);
-    if (apply(nativeMapHas, map, ['safe']) !== true) return false;
-    if (apply(nativeMapHas, map, ['attacker']) !== false) return false;
-    if (apply(nativeMapGet, map, ['safe']) !== 'value') return false;
-    if (apply(nativeMapGet, map, ['attacker']) !== undefined) return false;
+    callMapSet(map, 'safe', 'value');
+    if (callMapHas(map, 'safe') !== true) return false;
+    if (callMapHas(map, 'attacker') !== false) return false;
+    if (callMapGet(map, 'safe') !== 'value') return false;
+    if (callMapGet(map, 'attacker') !== undefined) return false;
     let mapSeen = false;
-    apply(nativeMapForEach, map, [
-      (value: string, key: string) => {
-        if (key === 'safe' && value === 'value') mapSeen = true;
-      },
-    ]);
+    callMapForEach(map, (value: string, key: string) => {
+      if (key === 'safe' && value === 'value') mapSeen = true;
+    });
     if (!mapSeen) return false;
-    if (apply(nativeMapDelete, map, ['safe']) !== true || apply(nativeMapHas, map, ['safe'])) {
+    if (callMapDelete(map, 'safe') !== true || callMapHas(map, 'safe')) {
       return false;
     }
     const set = new NativeSet<string>();
-    apply(nativeSetAdd, set, ['safe']);
-    if (apply(nativeSetHas, set, ['safe']) !== true) return false;
-    if (apply(nativeSetHas, set, ['attacker']) !== false) return false;
-    if (apply(nativeSetDelete, set, ['safe']) !== true) return false;
-    if (apply(nativeSetHas, set, ['safe']) !== false) return false;
+    callSetAdd(set, 'safe');
+    if (callSetHas(set, 'safe') !== true) return false;
+    if (callSetHas(set, 'attacker') !== false) return false;
+    if (callSetDelete(set, 'safe') !== true) return false;
+    if (callSetHas(set, 'safe') !== false) return false;
 
     const headers = new NativeHeaders([['X-Kovo-Probe', 'safe']]);
-    if (apply(nativeHeadersGet, headers, ['x-kovo-probe']) !== 'safe') return false;
+    if (callHeadersGet(headers, 'x-kovo-probe') !== 'safe') return false;
     let headerSeen = false;
-    apply(nativeHeadersForEach, headers, [
-      (value: string, name: string) => {
-        if (name === 'x-kovo-probe' && value === 'safe') headerSeen = true;
-      },
-    ]);
+    callHeadersForEach(headers, (value: string, name: string) => {
+      if (name === 'x-kovo-probe' && value === 'safe') headerSeen = true;
+    });
     if (!headerSeen) return false;
 
     const url = new NativeURL('https://example.test/a?b=1#c');
-    if (apply(nativeUrlProtocolGet, url, []) !== 'https:') return false;
-    if (apply(nativeUrlOriginGet, url, []) !== 'https://example.test') return false;
-    if (apply(nativeUrlPathnameGet, url, []) !== '/a') return false;
-    if (apply(nativeUrlSearchGet, url, []) !== '?b=1') return false;
-    if (apply(nativeUrlHashGet, url, []) !== '#c') return false;
-    if (apply(nativeUrlHrefGet, url, []) !== 'https://example.test/a?b=1#c') return false;
+    if (callUrlProtocolGet(url) !== 'https:') return false;
+    if (callUrlOriginGet(url) !== 'https://example.test') return false;
+    if (callUrlPathnameGet(url) !== '/a') return false;
+    if (callUrlSearchGet(url) !== '?b=1') return false;
+    if (callUrlHashGet(url) !== '#c') return false;
+    if (callUrlHrefGet(url) !== 'https://example.test/a?b=1#c') return false;
 
-    const promise = apply<Promise<string>>(nativePromiseResolve, NativePromise, ['safe']);
-    if (apply(nativeFunctionHasInstance, NativePromise, [promise]) !== true) return false;
-    const chained = apply<Promise<string>>(nativePromiseThen, promise, [(value: string) => value]);
-    if (apply(nativeFunctionHasInstance, NativePromise, [chained]) !== true) return false;
+    const promise = boundPromiseResolve('safe');
+    if (callHasInstance(NativePromise, promise) !== true) return false;
+    const chained = callPromiseThen(promise, (value: string) => value);
+    if (callHasInstance(NativePromise, chained) !== true) return false;
     const stream = new NativeReadableStream<Uint8Array>();
-    if (apply(nativeFunctionHasInstance, NativeReadableStream, [stream]) !== true) return false;
-    if (apply(nativeFunctionHasInstance, NativeReadableStream, [{}]) !== false) return false;
+    if (callHasInstance(NativeReadableStream, stream) !== true) return false;
+    if (callHasInstance(NativeReadableStream, {}) !== false) return false;
 
     const arrayBuffer = new NativeArrayBuffer(4);
-    if (apply(nativeFunctionHasInstance, NativeArrayBuffer, [arrayBuffer]) !== true) return false;
-    if (apply(nativeFunctionHasInstance, NativeArrayBuffer, [{}]) !== false) return false;
+    if (callHasInstance(NativeArrayBuffer, arrayBuffer) !== true) return false;
+    if (callHasInstance(NativeArrayBuffer, {}) !== false) return false;
     const slicedArrayBuffer = rawArrayBufferSlice(arrayBuffer, 1, 3);
-    if (apply(nativeArrayBufferByteLength, slicedArrayBuffer, []) !== 2) return false;
+    if (callArrayBufferByteLength(slicedArrayBuffer) !== 2) return false;
 
     const date = new NativeDate('2026-01-02T03:04:05Z');
-    if (apply(nativeFunctionHasInstance, NativeDate, [date]) !== true) return false;
-    if (apply(nativeFunctionHasInstance, NativeDate, [{}]) !== false) return false;
-    if (apply(nativeDateToUtcString, date, []) !== 'Fri, 02 Jan 2026 03:04:05 GMT') return false;
-    if (apply(nativeDateGetTime, date, []) !== 1_767_323_045_000) return false;
-    if (apply(nativeDateToISOString, date, []) !== '2026-01-02T03:04:05.000Z') return false;
+    if (callHasInstance(NativeDate, date) !== true) return false;
+    if (callHasInstance(NativeDate, {}) !== false) return false;
+    if (callDateToUtcString(date) !== 'Fri, 02 Jan 2026 03:04:05 GMT') return false;
+    if (callDateGetTime(date) !== 1_767_323_045_000) return false;
+    if (callDateToISOString(date) !== '2026-01-02T03:04:05.000Z') return false;
 
-    const bytes = apply<Buffer>(nativeBufferFrom, NativeBuffer, ['safe', 'utf8']);
-    if (apply(nativeBufferToString, bytes, ['base64url']) !== 'c2FmZQ') return false;
-    const joinedBytes = apply<Buffer>(nativeBufferConcat, NativeBuffer, [
-      [bytes, apply<Buffer>(nativeBufferFrom, NativeBuffer, ['-joined', 'utf8'])],
-    ]);
-    if (apply(nativeBufferToString, joinedBytes, ['utf8']) !== 'safe-joined') return false;
-    const loneSurrogateBytes = apply<Buffer>(nativeBufferFrom, NativeBuffer, ['\uD800', 'utf16le']);
+    const bytes = nativeBufferFrom('safe', 'utf8');
+    if (callBufferToString(bytes, 'base64url') !== 'c2FmZQ') return false;
+    const joinedBytes = nativeBufferConcat([bytes, nativeBufferFrom('-joined', 'utf8')]);
+    if (callBufferToString(joinedBytes, 'utf8') !== 'safe-joined') return false;
+    const loneSurrogateBytes = nativeBufferFrom('\uD800', 'utf16le');
     if (
-      apply(nativeUint8ArrayLength, loneSurrogateBytes, []) !== 2 ||
+      callUint8ArrayLength(loneSurrogateBytes) !== 2 ||
       loneSurrogateBytes[0] !== 0 ||
       loneSurrogateBytes[1] !== 0xd8
     ) {
       return false;
     }
-    const allocated = apply<Buffer>(nativeBufferAllocUnsafe, NativeBuffer, [4]);
-    if (apply(nativeUint8ArrayLength, allocated, []) !== 4) return false;
-    const encoded = apply<Uint8Array>(nativeTextEncoderEncode, textEncoder, ['safe']);
-    if (
-      apply(nativeUint8ArrayLength, encoded, []) !== 4 ||
-      encoded[0] !== 0x73 ||
-      encoded[3] !== 0x65
-    )
+    const allocated = nativeBufferAllocUnsafe(4);
+    if (callUint8ArrayLength(allocated) !== 4) return false;
+    const encoded = callTextEncoderEncode(textEncoder, 'safe');
+    if (callUint8ArrayLength(encoded) !== 4 || encoded[0] !== 0x73 || encoded[3] !== 0x65)
       return false;
-    if (apply(nativeFunctionHasInstance, NativeUint8Array, [encoded]) !== true) return false;
-    if (apply(nativeFunctionHasInstance, NativeUint8Array, [{}]) !== false) return false;
-    if (apply(nativeUint8ArrayLength, encoded, []) !== 4) return false;
+    if (callHasInstance(NativeUint8Array, encoded) !== true) return false;
+    if (callHasInstance(NativeUint8Array, {}) !== false) return false;
+    if (callUint8ArrayLength(encoded) !== 4) return false;
     const filled = new NativeUint8Array(3);
-    apply(nativeUint8ArrayFill, filled, [0x2a]);
+    callUint8ArrayFill(filled, 0x2a);
     if (filled[0] !== 0x2a || filled[2] !== 0x2a) return false;
     const sliced = rawUint8ArraySlice(encoded, 1, 3);
-    if (
-      sliced[0] !== 0x61 ||
-      sliced[1] !== 0x66 ||
-      apply(nativeUint8ArrayLength, sliced, []) !== 2
-    ) {
+    if (sliced[0] !== 0x61 || sliced[1] !== 0x66 || callUint8ArrayLength(sliced) !== 2) {
       return false;
     }
-    if (apply(nativeTextDecoderDecode, fatalTextDecoder, [encoded]) !== 'safe') return false;
+    if (callTextDecoderDecode(fatalTextDecoder, encoded) !== 'safe') return false;
     let invalidUtf8Rejected = false;
     try {
-      apply(nativeTextDecoderDecode, fatalTextDecoder, [new NativeUint8Array([0xff])]);
+      callTextDecoderDecode(fatalTextDecoder, new NativeUint8Array([0xff]));
     } catch {
       invalidUtf8Rejected = true;
     }
     if (!invalidUtf8Rejected) return false;
 
     const hash = nativeCreateHash('sha256');
-    apply(nativeHashUpdate, hash, ['abc']);
-    if (
-      apply(nativeHashDigest, hash, ['base64']) !== 'ungWv48Bz+pBQUDeXa4iI7ADYaOWF3qctBD/YfIAFa0='
-    ) {
+    callHashUpdate(hash, 'abc');
+    if (callHashDigest(hash, 'base64') !== 'ungWv48Bz+pBQUDeXa4iI7ADYaOWF3qctBD/YfIAFa0=') {
       return false;
     }
     const randomLeft = nativeRandomBytes(32);
     const randomRight = nativeRandomBytes(32);
     if (
-      apply(nativeBufferIsBuffer, NativeBuffer, [randomLeft]) !== true ||
-      apply(nativeBufferIsBuffer, NativeBuffer, [randomRight]) !== true ||
-      apply(nativeUint8ArrayLength, randomLeft, []) !== 32 ||
-      apply(nativeUint8ArrayLength, randomRight, []) !== 32
+      nativeBufferIsBuffer(randomLeft) !== true ||
+      nativeBufferIsBuffer(randomRight) !== true ||
+      callUint8ArrayLength(randomLeft) !== 32 ||
+      callUint8ArrayLength(randomRight) !== 32
     ) {
       return false;
     }
@@ -548,26 +680,17 @@ function capturedControlsAreSound(): boolean {
     }
     if (!randomDiffers) return false;
 
-    const keys = apply<string[]>(nativeObjectKeys, NativeObject, [{ one: 1, two: 2 }]);
+    const keys = nativeObjectKeys({ one: 1, two: 2 });
     if (keys.length !== 2 || keys[0] !== 'one' || keys[1] !== 'two') return false;
-    const descriptor = apply<PropertyDescriptor | undefined>(
-      nativeObjectGetOwnPropertyDescriptor,
-      NativeObject,
-      [{ proof: 'safe' }, 'proof'],
-    );
+    const descriptor = nativeObjectGetOwnPropertyDescriptor({ proof: 'safe' }, 'proof');
     if (descriptor === undefined || !('value' in descriptor) || descriptor.value !== 'safe') {
       return false;
     }
-    if (
-      apply(nativeObjectGetOwnPropertyDescriptor, NativeObject, [{ proof: 'safe' }, 'missing']) !==
-      undefined
-    ) {
+    if (nativeObjectGetOwnPropertyDescriptor({ proof: 'safe' }, 'missing') !== undefined) {
       return false;
     }
-    const nullRecord = apply<Record<PropertyKey, unknown>>(nativeObjectCreate, NativeObject, [
-      null,
-    ]);
-    if (apply(nativeObjectGetPrototypeOf, NativeObject, [nullRecord]) !== null) return false;
+    const nullRecord = nativeObjectCreate(null) as Record<PropertyKey, unknown>;
+    if (nativeObjectGetPrototypeOf(nullRecord) !== null) return false;
     return true;
   } catch {
     return false;
@@ -582,7 +705,7 @@ let recentEntropyCursor = 0;
 
 function rememberEntropy(kind: 'bytes' | 'uuid', value: string): void {
   const key = `${kind}\0${value}`;
-  if (apply(nativeSetHas, recentEntropy, [key])) {
+  if (callSetHas(recentEntropy, key)) {
     throw new NativeTypeError(
       'Kovo cryptographic entropy source repeated a recent authority value; refusing to continue.',
     );
@@ -591,11 +714,11 @@ function rememberEntropy(kind: 'bytes' | 'uuid', value: string): void {
     securityArrayPush(recentEntropyOrder, key);
   } else {
     const expired = recentEntropyOrder[recentEntropyCursor]!;
-    apply(nativeSetDelete, recentEntropy, [expired]);
+    callSetDelete(recentEntropy, expired);
     recentEntropyOrder[recentEntropyCursor] = key;
     recentEntropyCursor = (recentEntropyCursor + 1) % ENTROPY_REPLAY_WINDOW;
   }
-  apply(nativeSetAdd, recentEntropy, [key]);
+  callSetAdd(recentEntropy, key);
 }
 
 export function assertResponseSecurityIntrinsics(): void {
@@ -608,12 +731,12 @@ export function assertResponseSecurityIntrinsics(): void {
 
 export function securityArrayIsArray(value: unknown): value is unknown[] {
   assertResponseSecurityIntrinsics();
-  return apply(nativeArrayIsArray, NativeArray, [value]);
+  return nativeArrayIsArray(value);
 }
 
 export function securityArrayJoin(values: readonly unknown[], separator: string): string {
   assertResponseSecurityIntrinsics();
-  return apply(nativeArrayJoin, values, [separator]);
+  return callArrayJoin(values, separator);
 }
 
 export function securityArrayPush<Value>(values: Value[], value: Value): void {
@@ -625,51 +748,48 @@ export function securityArraySort<Value>(
   compare: (left: Value, right: Value) => number,
 ): void {
   assertResponseSecurityIntrinsics();
-  apply(nativeArraySort, values, [compare]);
+  callArraySort(values, compare);
 }
 
 export function securityStringIncludes(value: string, search: string): boolean {
   assertResponseSecurityIntrinsics();
-  return apply(nativeStringIncludes, value, [search]);
+  return callStringIncludes(value, search);
 }
 
 export function securityString(value: unknown): string {
   assertResponseSecurityIntrinsics();
-  return apply(NativeString, undefined, [value]);
+  return NativeString(value);
 }
 
 export function securityStringSplit(value: string, separator: string): string[] {
   assertResponseSecurityIntrinsics();
-  return apply(nativeStringSplit, value, [separator]);
+  return callStringSplit(value, separator);
 }
 
 export function securityStringTrim(value: string): string {
   assertResponseSecurityIntrinsics();
-  return apply(nativeStringTrim, value, []);
+  return callStringTrim(value);
 }
 
 export function securityStringIndexOf(value: string, search: string, fromIndex?: number): number {
   assertResponseSecurityIntrinsics();
-  return apply(
-    nativeStringIndexOf,
-    value,
-    fromIndex === undefined ? [search] : [search, fromIndex],
-  );
+  // R5 (security/boot-captured-direct-call.md): explicit undefined ≡ absent for this builtin.
+  return callStringIndexOf(value, search, fromIndex);
 }
 
 export function securityStringLastIndexOf(value: string, search: string): number {
   assertResponseSecurityIntrinsics();
-  return apply(nativeStringLastIndexOf, value, [search]);
+  return callStringLastIndexOf(value, search);
 }
 
 export function securityStringSlice(value: string, start: number, end?: number): string {
   assertResponseSecurityIntrinsics();
-  return apply(nativeStringSlice, value, end === undefined ? [start] : [start, end]);
+  return callStringSlice(value, start, end);
 }
 
 export function securityStringToLowerCase(value: string): string {
   assertResponseSecurityIntrinsics();
-  return apply(nativeStringToLowerCase, value, []);
+  return callStringToLowerCase(value);
 }
 
 export function securityStringStartsWith(
@@ -678,26 +798,22 @@ export function securityStringStartsWith(
   position?: number,
 ): boolean {
   assertResponseSecurityIntrinsics();
-  return apply(
-    nativeStringStartsWith,
-    value,
-    position === undefined ? [search] : [search, position],
-  );
+  return callStringStartsWith(value, search, position);
 }
 
 export function securityStringEndsWith(value: string, search: string): boolean {
   assertResponseSecurityIntrinsics();
-  return apply(nativeStringEndsWith, value, [search]);
+  return callStringEndsWith(value, search);
 }
 
 export function securityStringCharCodeAt(value: string, index: number): number {
   assertResponseSecurityIntrinsics();
-  return apply(nativeStringCharCodeAt, value, [index]);
+  return callStringCharCodeAt(value, index);
 }
 
 export function securityStringFromCharCode(value: number): string {
   assertResponseSecurityIntrinsics();
-  return apply(nativeStringFromCharCode, NativeString, [value]);
+  return nativeStringFromCharCode(value);
 }
 
 export function securityStringReplaceAll(
@@ -706,27 +822,27 @@ export function securityStringReplaceAll(
   replacement: string,
 ): string {
   assertResponseSecurityIntrinsics();
-  return apply(nativeStringReplaceAll, value, [search, replacement]);
+  return callStringReplaceAll(value, search, replacement);
 }
 
 export function securityRegExpTest(expression: RegExp, value: string): boolean {
   assertResponseSecurityIntrinsics();
-  return apply<RegExpExecArray | null>(nativeRegExpExec, expression, [value]) !== null;
+  return callRegExpExec(expression, value) !== null;
 }
 
 export function securityRegExpExec(expression: RegExp, value: string): RegExpExecArray | null {
   assertResponseSecurityIntrinsics();
-  return apply(nativeRegExpExec, expression, [value]);
+  return callRegExpExec(expression, value);
 }
 
 export function securityRegExpSource(expression: RegExp): string {
   assertResponseSecurityIntrinsics();
-  return apply(nativeRegExpSource, expression, []);
+  return callRegExpSource(expression);
 }
 
 export function securityRegExpFlags(expression: RegExp): string {
   assertResponseSecurityIntrinsics();
-  return apply(nativeRegExpFlags, expression, []);
+  return callRegExpFlags(expression);
 }
 
 export function securityCreateRegExp(source: string, flags = ''): RegExp {
@@ -753,38 +869,36 @@ export function securityRegExpReplaceMatches(
   let result = '';
   let consumed = 0;
   let match: RegExpExecArray | null;
-  while ((match = apply<RegExpExecArray | null>(nativeRegExpExec, expression, [value])) !== null) {
+  while ((match = callRegExpExec(expression, value)) !== null) {
     const matched = match[0];
-    result += apply<string>(nativeStringSlice, value, [consumed, match.index]);
+    result += callStringSlice(value, consumed, match.index);
     result += replacement(match);
     consumed = match.index + matched.length;
     if (matched.length === 0) expression.lastIndex = match.index + 1;
   }
-  return result + apply<string>(nativeStringSlice, value, [consumed]);
+  return result + callStringSlice(value, consumed);
 }
 
 function replaceRegExp(value: string, expression: RegExp, replacement: string): string {
   expression.lastIndex = 0;
-  const repeats = apply<boolean>(nativeStringIncludes, apply(nativeRegExpFlags, expression, []), [
-    'g',
-  ]);
+  const repeats = callStringIncludes(callRegExpFlags(expression), 'g');
   let result = '';
   let consumed = 0;
   let match: RegExpExecArray | null;
-  while ((match = apply<RegExpExecArray | null>(nativeRegExpExec, expression, [value])) !== null) {
+  while ((match = callRegExpExec(expression, value)) !== null) {
     const matched = match[0];
-    result += apply<string>(nativeStringSlice, value, [consumed, match.index]);
+    result += callStringSlice(value, consumed, match.index);
     result += replacement;
     consumed = match.index + matched.length;
     if (!repeats) break;
     if (matched.length === 0) expression.lastIndex = match.index + 1;
   }
-  return result + apply<string>(nativeStringSlice, value, [consumed]);
+  return result + callStringSlice(value, consumed);
 }
 
 export function securityObjectKeys(value: object): string[] {
   assertResponseSecurityIntrinsics();
-  return apply(nativeObjectKeys, NativeObject, [value]);
+  return nativeObjectKeys(value);
 }
 
 export function securityHeadersForEach(
@@ -792,22 +906,22 @@ export function securityHeadersForEach(
   callback: (value: string, name: string) => void,
 ): void {
   assertResponseSecurityIntrinsics();
-  apply(nativeHeadersForEach, headers, [callback]);
+  callHeadersForEach(headers, callback);
 }
 
 export function securityHeadersGet(headers: Headers, name: string): string | null {
   assertResponseSecurityIntrinsics();
-  return apply(nativeHeadersGet, headers, [name]);
+  return callHeadersGet(headers, name);
 }
 
 export function securityHeadersDelete(headers: Headers, name: string): void {
   assertResponseSecurityIntrinsics();
-  apply(nativeHeadersDelete, headers, [name]);
+  callHeadersDelete(headers, name);
 }
 
 export function securityHeadersSet(headers: Headers, name: string, value: string): void {
   assertResponseSecurityIntrinsics();
-  apply(nativeHeadersSet, headers, [name, value]);
+  callHeadersSet(headers, name, value);
 }
 
 export function createSecurityHeaders(init?: unknown): Headers {
@@ -822,52 +936,52 @@ export function createSecurityResponse(body?: BodyInit | null, init?: ResponseIn
 
 export function securityIsResponse(value: unknown): value is Response {
   assertResponseSecurityIntrinsics();
-  return apply(nativeFunctionHasInstance, NativeResponse, [value]);
+  return callHasInstance(NativeResponse, value);
 }
 
 export function securityResponseBody(response: Response): ReadableStream<Uint8Array> | null {
   assertResponseSecurityIntrinsics();
-  return apply(nativeResponseBody, response, []);
+  return callResponseBody(response);
 }
 
 export function securityResponseHeaders(response: Response): Headers {
   assertResponseSecurityIntrinsics();
-  return apply(nativeResponseHeaders, response, []);
+  return callResponseHeaders(response);
 }
 
 export function securityResponseStatus(response: Response): number {
   assertResponseSecurityIntrinsics();
-  return apply(nativeResponseStatus, response, []);
+  return callResponseStatus(response);
 }
 
 export function securityResponseStatusText(response: Response): string {
   assertResponseSecurityIntrinsics();
-  return apply(nativeResponseStatusText, response, []);
+  return callResponseStatusText(response);
 }
 
 export function securityResponseText(response: Response): Promise<string> {
   assertResponseSecurityIntrinsics();
-  return apply(nativeResponseText, response, []);
+  return callResponseText(response);
 }
 
 export function createSecurityNullRecord<Value = unknown>(): Record<PropertyKey, Value> {
   assertResponseSecurityIntrinsics();
-  return apply(nativeObjectCreate, NativeObject, [null]);
+  return nativeObjectCreate(null) as Record<PropertyKey, Value>;
 }
 
 export function createSecurityObject<Value extends object>(prototype: object | null): Value {
   assertResponseSecurityIntrinsics();
-  return apply(nativeObjectCreate, NativeObject, [prototype]);
+  return nativeObjectCreate(prototype) as Value;
 }
 
 export function securityGetPrototypeOf(value: object): object | null {
   assertResponseSecurityIntrinsics();
-  return apply(nativeObjectGetPrototypeOf, NativeObject, [value]);
+  return nativeObjectGetPrototypeOf(value);
 }
 
 export function securityJsonStringify(value: unknown): string | undefined {
   assertResponseSecurityIntrinsics();
-  return apply(nativeJsonStringify, NativeJSON, [value]);
+  return nativeJsonStringify(value);
 }
 
 export function createSecurityMap<Key, Value>(): Map<Key, Value> {
@@ -877,22 +991,22 @@ export function createSecurityMap<Key, Value>(): Map<Key, Value> {
 
 export function securityMapGet<Key, Value>(map: Map<Key, Value>, key: Key): Value | undefined {
   assertResponseSecurityIntrinsics();
-  return apply(nativeMapGet, map, [key]);
+  return callMapGet(map, key);
 }
 
 export function securityMapHas<Key>(map: Map<Key, unknown>, key: Key): boolean {
   assertResponseSecurityIntrinsics();
-  return apply(nativeMapHas, map, [key]);
+  return callMapHas(map, key);
 }
 
 export function securityMapDelete<Key>(map: Map<Key, unknown>, key: Key): boolean {
   assertResponseSecurityIntrinsics();
-  return apply(nativeMapDelete, map, [key]);
+  return callMapDelete(map, key);
 }
 
 export function securityMapSet<Key, Value>(map: Map<Key, Value>, key: Key, value: Value): void {
   assertResponseSecurityIntrinsics();
-  apply(nativeMapSet, map, [key, value]);
+  callMapSet(map, key, value);
 }
 
 export function securityMapForEach<Key, Value>(
@@ -900,17 +1014,17 @@ export function securityMapForEach<Key, Value>(
   callback: (value: Value, key: Key) => void,
 ): void {
   assertResponseSecurityIntrinsics();
-  apply(nativeMapForEach, map, [callback]);
+  callMapForEach(map, callback);
 }
 
 export function securityIsMap(value: unknown): value is Map<unknown, unknown> {
   assertResponseSecurityIntrinsics();
-  return apply(nativeFunctionHasInstance, NativeMap, [value]);
+  return callHasInstance(NativeMap, value);
 }
 
 export function securityIsHeaders(value: unknown): value is Headers {
   assertResponseSecurityIntrinsics();
-  return apply(nativeFunctionHasInstance, NativeHeaders, [value]);
+  return callHasInstance(NativeHeaders, value);
 }
 
 export function createSecuritySet<Value>(): Set<Value> {
@@ -920,62 +1034,62 @@ export function createSecuritySet<Value>(): Set<Value> {
 
 export function securitySetAdd<Value>(set: Set<Value>, value: Value): void {
   assertResponseSecurityIntrinsics();
-  apply(nativeSetAdd, set, [value]);
+  callSetAdd(set, value);
 }
 
 export function securitySetHas<Value>(set: Set<Value>, value: Value): boolean {
   assertResponseSecurityIntrinsics();
-  return apply(nativeSetHas, set, [value]);
+  return callSetHas(set, value);
 }
 
 export function securityNumberIsInteger(value: unknown): boolean {
   assertResponseSecurityIntrinsics();
-  return apply(nativeNumberIsInteger, NativeNumber, [value]);
+  return nativeNumberIsInteger(value);
 }
 
 export function securityNumberIsFinite(value: unknown): boolean {
   assertResponseSecurityIntrinsics();
-  return apply(nativeNumberIsFinite, NativeNumber, [value]);
+  return nativeNumberIsFinite(value);
 }
 
 export function securityNumberParseInt(value: string, radix: number): number {
   assertResponseSecurityIntrinsics();
-  return apply(nativeNumberParseInt, NativeNumber, [value, radix]);
+  return nativeNumberParseInt(value, radix);
 }
 
 export function securityNumberIsNaN(value: unknown): boolean {
   assertResponseSecurityIntrinsics();
-  return apply(nativeNumberIsNaN, NativeNumber, [value]);
+  return nativeNumberIsNaN(value);
 }
 
 export function securityNumber(value: unknown): number {
   assertResponseSecurityIntrinsics();
-  return apply(NativeNumber, undefined, [value]);
+  return NativeNumber(value);
 }
 
 export function securityMathFloor(value: number): number {
   assertResponseSecurityIntrinsics();
-  return apply(nativeMathFloor, NativeMath, [value]);
+  return nativeMathFloor(value);
 }
 
 export function securityMathLog2(value: number): number {
   assertResponseSecurityIntrinsics();
-  return apply(nativeMathLog2, NativeMath, [value]);
+  return nativeMathLog2(value);
 }
 
 export function securityEncodeURIComponent(value: string): string {
   assertResponseSecurityIntrinsics();
-  return apply(nativeEncodeURIComponent, undefined, [value]);
+  return nativeEncodeURIComponent(value);
 }
 
 export function securityEncodeUri(value: string): string {
   assertResponseSecurityIntrinsics();
-  return apply(nativeEncodeUri, undefined, [value]);
+  return nativeEncodeUri(value);
 }
 
 export function securityStringFromCodePoint(value: number): string {
   assertResponseSecurityIntrinsics();
-  return apply(nativeStringFromCodePoint, NativeString, [value]);
+  return nativeStringFromCodePoint(value);
 }
 
 export interface SecurityUrlSnapshot {
@@ -995,24 +1109,24 @@ export function securityUrlSnapshot(value: string, base?: string): SecurityUrlSn
 
 export function securityIsUrl(value: unknown): value is URL {
   assertResponseSecurityIntrinsics();
-  return apply(nativeFunctionHasInstance, NativeURL, [value]);
+  return callHasInstance(NativeURL, value);
 }
 
 export function securityUrlObjectSnapshot(value: URL): SecurityUrlSnapshot {
   assertResponseSecurityIntrinsics();
   return {
-    hash: apply(nativeUrlHashGet, value, []),
-    href: apply(nativeUrlHrefGet, value, []),
-    origin: apply(nativeUrlOriginGet, value, []),
-    pathname: apply(nativeUrlPathnameGet, value, []),
-    protocol: apply(nativeUrlProtocolGet, value, []),
-    search: apply(nativeUrlSearchGet, value, []),
+    hash: callUrlHashGet(value),
+    href: callUrlHrefGet(value),
+    origin: callUrlOriginGet(value),
+    pathname: callUrlPathnameGet(value),
+    protocol: callUrlProtocolGet(value),
+    search: callUrlSearchGet(value),
   };
 }
 
 export function securityIsDate(value: unknown): value is Date {
   assertResponseSecurityIntrinsics();
-  return apply(nativeFunctionHasInstance, NativeDate, [value]);
+  return callHasInstance(NativeDate, value);
 }
 
 export function securityCreateDate(value: string | number): Date {
@@ -1022,27 +1136,27 @@ export function securityCreateDate(value: string | number): Date {
 
 export function securityDateGetTime(value: Date): number {
   assertResponseSecurityIntrinsics();
-  return apply(nativeDateGetTime, value, []);
+  return callDateGetTime(value);
 }
 
 export function securityDateToISOString(value: Date): string {
   assertResponseSecurityIntrinsics();
-  return apply(nativeDateToISOString, value, []);
+  return callDateToISOString(value);
 }
 
 export function securityIsUint8Array(value: unknown): value is Uint8Array {
   assertResponseSecurityIntrinsics();
-  return apply(nativeFunctionHasInstance, NativeUint8Array, [value]);
+  return callHasInstance(NativeUint8Array, value);
 }
 
 export function securityIsArrayBuffer(value: unknown): value is ArrayBuffer {
   assertResponseSecurityIntrinsics();
-  return apply(nativeFunctionHasInstance, NativeArrayBuffer, [value]);
+  return callHasInstance(NativeArrayBuffer, value);
 }
 
 export function securityArrayBufferByteLength(value: ArrayBuffer): number {
   assertResponseSecurityIntrinsics();
-  return apply(nativeArrayBufferByteLength, value, []);
+  return callArrayBufferByteLength(value);
 }
 
 export function securityArrayBufferSlice(
@@ -1056,7 +1170,7 @@ export function securityArrayBufferSlice(
 
 export function securityDateToUtcString(value: Date): string {
   assertResponseSecurityIntrinsics();
-  return apply(nativeDateToUtcString, value, []);
+  return callDateToUtcString(value);
 }
 
 export function securityBufferFrom(
@@ -1064,36 +1178,34 @@ export function securityBufferFrom(
   encoding?: BufferEncoding,
 ): Buffer {
   assertResponseSecurityIntrinsics();
-  return apply(
-    nativeBufferFrom,
-    NativeBuffer,
-    encoding === undefined ? [value] : [value, encoding],
-  );
+  // R5 (security/boot-captured-direct-call.md): explicit undefined ≡ absent for Buffer.from's
+  // encoding/offset parameter across all three input shapes.
+  return nativeBufferFrom(value as string, encoding);
 }
 
 export function securityBufferConcat(values: readonly Uint8Array[]): Buffer {
   assertResponseSecurityIntrinsics();
-  return apply(nativeBufferConcat, NativeBuffer, [values]);
+  return nativeBufferConcat(values);
 }
 
 export function securityBufferAllocUnsafe(size: number): Buffer {
   assertResponseSecurityIntrinsics();
-  return apply(nativeBufferAllocUnsafe, NativeBuffer, [size]);
+  return nativeBufferAllocUnsafe(size);
 }
 
 export function securityBufferToString(value: Buffer, encoding?: BufferEncoding): string {
   assertResponseSecurityIntrinsics();
-  return apply(nativeBufferToString, value, encoding === undefined ? [] : [encoding]);
+  return callBufferToString(value, encoding);
 }
 
 export function securityTextEncode(value: string): Uint8Array {
   assertResponseSecurityIntrinsics();
-  return apply(nativeTextEncoderEncode, textEncoder, [value]);
+  return callTextEncoderEncode(textEncoder, value);
 }
 
 export function securityPromiseResolve<Value>(value: Value | PromiseLike<Value>): Promise<Value> {
   assertResponseSecurityIntrinsics();
-  return apply(nativePromiseResolve, NativePromise, [value]);
+  return boundPromiseResolve(value) as Promise<Value>;
 }
 
 export function createSecurityPromise<Value>(
@@ -1112,25 +1224,21 @@ export function securityPromiseThen<Value, Result>(
   rejected?: (reason: unknown) => Result | PromiseLike<Result>,
 ): Promise<Result> {
   assertResponseSecurityIntrinsics();
-  return apply(
-    nativePromiseThen,
-    promise,
-    rejected === undefined ? [fulfilled] : [fulfilled, rejected],
-  );
+  return callPromiseThen(promise, fulfilled, rejected);
 }
 
 export function securityPromiseRace<Value>(promises: readonly Promise<Value>[]): Promise<Value> {
   assertResponseSecurityIntrinsics();
   return new NativePromise<Value>((resolve, reject) => {
     for (let index = 0; index < promises.length; index += 1) {
-      apply(nativePromiseThen, promises[index]!, [resolve, reject]);
+      callPromiseThen(promises[index]!, resolve, reject);
     }
   });
 }
 
 export function securityIsPromise(value: unknown): value is Promise<unknown> {
   assertResponseSecurityIntrinsics();
-  return apply(nativeFunctionHasInstance, NativePromise, [value]);
+  return callHasInstance(NativePromise, value);
 }
 
 export function createSecurityReadableStream<Value>(
@@ -1142,7 +1250,7 @@ export function createSecurityReadableStream<Value>(
 
 export function securityIsReadableStream(value: unknown): value is ReadableStream<unknown> {
   assertResponseSecurityIntrinsics();
-  return apply(nativeFunctionHasInstance, NativeReadableStream, [value]);
+  return callHasInstance(NativeReadableStream, value);
 }
 
 export function securityStreamEnqueue<Value>(
@@ -1150,14 +1258,14 @@ export function securityStreamEnqueue<Value>(
   value: Value,
 ): void {
   assertResponseSecurityIntrinsics();
-  apply(nativeControllerEnqueue, controller, [value]);
+  callControllerEnqueue(controller, value);
 }
 
 export function securityStreamClose<Value>(
   controller: ReadableStreamDefaultController<Value>,
 ): void {
   assertResponseSecurityIntrinsics();
-  apply(nativeControllerClose, controller, []);
+  callControllerClose(controller);
 }
 
 export function securityStreamError<Value>(
@@ -1165,17 +1273,17 @@ export function securityStreamError<Value>(
   error: unknown,
 ): void {
   assertResponseSecurityIntrinsics();
-  apply(nativeControllerError, controller, [error]);
+  callControllerError(controller, error);
 }
 
 export function securityDecodeUtf8Fatal(value: Uint8Array): string {
   assertResponseSecurityIntrinsics();
-  return apply(nativeTextDecoderDecode, fatalTextDecoder, [value]);
+  return callTextDecoderDecode(fatalTextDecoder, value);
 }
 
 export function securityUint8ArrayLength(value: Uint8Array): number {
   assertResponseSecurityIntrinsics();
-  return apply(nativeUint8ArrayLength, value, []);
+  return callUint8ArrayLength(value);
 }
 
 export function securityUint8ArrayFromArrayBuffer(value: ArrayBuffer): Uint8Array<ArrayBuffer> {
@@ -1190,7 +1298,7 @@ export function securityCreateUint8Array(size: number): Uint8Array<ArrayBuffer> 
 
 export function securityUint8ArrayFill(value: Uint8Array, fill: number): void {
   assertResponseSecurityIntrinsics();
-  apply(nativeUint8ArrayFill, value, [fill]);
+  callUint8ArrayFill(value, fill);
 }
 
 export function securityUint8ArraySlice(
@@ -1204,23 +1312,20 @@ export function securityUint8ArraySlice(
 
 export function securityJsonParse(value: string): unknown {
   assertResponseSecurityIntrinsics();
-  return apply(nativeJsonParse, NativeJSON, [value]);
+  return nativeJsonParse(value);
 }
 
 export function securityRandomBytes(size: number): Buffer {
   assertResponseSecurityIntrinsics();
-  if (apply(nativeNumberIsInteger, NativeNumber, [size]) !== true || size <= 0 || size > 65_536) {
+  if (nativeNumberIsInteger(size) !== true || size <= 0 || size > 65_536) {
     throw new NativeTypeError('Kovo security entropy requests require 1..65536 whole bytes.');
   }
   const generated = nativeRandomBytes(size);
-  if (
-    apply(nativeBufferIsBuffer, NativeBuffer, [generated]) !== true ||
-    apply(nativeUint8ArrayLength, generated, []) !== size
-  ) {
+  if (nativeBufferIsBuffer(generated) !== true || callUint8ArrayLength(generated) !== size) {
     throw new NativeTypeError('Kovo cryptographic entropy source returned invalid bytes.');
   }
-  const exact = apply<Buffer>(nativeBufferFrom, NativeBuffer, [generated]);
-  rememberEntropy('bytes', apply<string>(nativeBufferToString, exact, ['base64url']));
+  const exact = nativeBufferFrom(generated);
+  rememberEntropy('bytes', callBufferToString(exact, 'base64url'));
   return exact;
 }
 
@@ -1228,16 +1333,12 @@ export function securityRandomUuid(): string {
   const bytes = securityRandomBytes(16);
   bytes[6] = (bytes[6]! & 0x0f) | 0x40;
   bytes[8] = (bytes[8]! & 0x3f) | 0x80;
-  const hex = apply<string>(nativeBufferToString, bytes, ['hex']);
-  const uuid = `${apply<string>(nativeStringSlice, hex, [0, 8])}-${apply<string>(
-    nativeStringSlice,
+  const hex = callBufferToString(bytes, 'hex');
+  const uuid = `${callStringSlice(hex, 0, 8)}-${callStringSlice(hex, 8, 12)}-${callStringSlice(
     hex,
-    [8, 12],
-  )}-${apply<string>(nativeStringSlice, hex, [12, 16])}-${apply<string>(
-    nativeStringSlice,
-    hex,
-    [16, 20],
-  )}-${apply<string>(nativeStringSlice, hex, [20])}`;
+    12,
+    16,
+  )}-${callStringSlice(hex, 16, 20)}-${callStringSlice(hex, 20)}`;
   rememberEntropy('uuid', uuid);
   return uuid;
 }
@@ -1245,23 +1346,23 @@ export function securityRandomUuid(): string {
 export function securitySha256Base64(value: string): string {
   assertResponseSecurityIntrinsics();
   const hash = nativeCreateHash('sha256');
-  apply(nativeHashUpdate, hash, [value]);
-  return apply(nativeHashDigest, hash, ['base64']);
+  callHashUpdate(hash, value);
+  return callHashDigest(hash, 'base64');
 }
 
 /** Boot-pinned SHA-256 used for opaque, no-payload security-event identities. */
 export function securitySha256Hex(value: string): string {
   assertResponseSecurityIntrinsics();
   const hash = nativeCreateHash('sha256');
-  apply(nativeHashUpdate, hash, [value]);
-  return apply(nativeHashDigest, hash, ['hex']);
+  callHashUpdate(hash, value);
+  return callHashDigest(hash, 'hex');
 }
 
 /** Boot-pinned SHA-256 over the exact UTF-16 code-unit sequence, including lone surrogates. */
 export function securitySha256Utf16LeHex(value: string): string {
   assertResponseSecurityIntrinsics();
-  const bytes = apply<Buffer>(nativeBufferFrom, NativeBuffer, [value, 'utf16le']);
+  const bytes = nativeBufferFrom(value, 'utf16le');
   const hash = nativeCreateHash('sha256');
-  apply(nativeHashUpdate, hash, [bytes]);
-  return apply(nativeHashDigest, hash, ['hex']);
+  callHashUpdate(hash, bytes);
+  return callHashDigest(hash, 'hex');
 }

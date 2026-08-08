@@ -4,6 +4,13 @@
  * Security decisions never dispatch through mutable ambient collection prototypes. Private
  * positive and negative controls make generic pre-import poisoning fail closed at boot and before
  * each witness operation.
+ *
+ * Dispatch follows plans/good-perf.md D8 (threat model:
+ * security/boot-captured-direct-call.md): receiver-insensitive captured statics are called
+ * directly and per-receiver methods go through direct callers minted at module init from the
+ * boot-captured `Function.prototype.call`/`bind`. Neither form performs an observable property
+ * lookup or touches the iterator protocol at invocation time; only the caller-shaped
+ * `securityApply` keeps the boot-captured `Reflect.apply` (residual R3).
  */
 
 const IntrinsicWeakMap = WeakMap;
@@ -13,8 +20,11 @@ const IntrinsicSet = Set;
 const IntrinsicObject = Object;
 const IntrinsicArray = Array;
 const IntrinsicError = Error;
+const IntrinsicFunction = Function;
 
 const intrinsicReflectApply = Reflect.apply;
+const intrinsicFunctionCall = IntrinsicFunction.prototype.call;
+const intrinsicFunctionBind = IntrinsicFunction.prototype.bind;
 const intrinsicWeakMapGet = WeakMap.prototype.get;
 const intrinsicWeakMapSet = WeakMap.prototype.set;
 const intrinsicWeakMapHas = WeakMap.prototype.has;
@@ -55,16 +65,105 @@ const intrinsicStringToUpperCase = String.prototype.toUpperCase;
 const intrinsicRegExpExec = RegExp.prototype.exec;
 const intrinsicEncodeURIComponent = globalThis.encodeURIComponent;
 const intrinsicDecodeURIComponent = globalThis.decodeURIComponent;
-const intrinsicJsonStringify = JSON.stringify;
+const intrinsicJsonStringify = JSON.stringify as (value: unknown) => string | undefined;
 const intrinsicFunctionHasInstance = Function.prototype[Symbol.hasInstance];
 
-function invoke<T>(
-  target: (...args: any[]) => unknown,
-  receiver: unknown,
-  args: readonly unknown[],
-): T {
-  return intrinsicReflectApply(target, receiver, args) as T;
-}
+// Boot-derived direct-caller mint (D8; SPEC §6.6 rule 6). Fixed-arity call sites only — see
+// security/boot-captured-direct-call.md R4.
+const uncurryThis = intrinsicReflectApply(intrinsicFunctionBind, intrinsicFunctionBind, [
+  intrinsicFunctionCall,
+]) as (fn: Function) => (receiver: unknown, ...args: unknown[]) => unknown;
+
+const callWeakMapGet = uncurryThis(intrinsicWeakMapGet) as <K extends object, V>(
+  map: WeakMap<K, V>,
+  key: K,
+) => V | undefined;
+const callWeakMapSet = uncurryThis(intrinsicWeakMapSet) as <K extends object, V>(
+  map: WeakMap<K, V>,
+  key: K,
+  value: V,
+) => WeakMap<K, V>;
+const callWeakMapHas = uncurryThis(intrinsicWeakMapHas) as <K extends object>(
+  map: WeakMap<K, unknown>,
+  key: K,
+) => boolean;
+const callWeakSetAdd = uncurryThis(intrinsicWeakSetAdd) as <T extends object>(
+  set: WeakSet<T>,
+  value: T,
+) => WeakSet<T>;
+const callWeakSetHas = uncurryThis(intrinsicWeakSetHas) as <T extends object>(
+  set: WeakSet<T>,
+  value: T,
+) => boolean;
+const callWeakSetDelete = uncurryThis(intrinsicWeakSetDelete) as <T extends object>(
+  set: WeakSet<T>,
+  value: T,
+) => boolean;
+const callMapGet = uncurryThis(intrinsicMapGet) as <K, V>(
+  map: ReadonlyMap<K, V>,
+  key: K,
+) => V | undefined;
+const callMapSet = uncurryThis(intrinsicMapSet) as <K, V>(
+  map: Map<K, V>,
+  key: K,
+  value: V,
+) => Map<K, V>;
+const callMapHas = uncurryThis(intrinsicMapHas) as <K>(
+  map: ReadonlyMap<K, unknown>,
+  key: K,
+) => boolean;
+const callMapDelete = uncurryThis(intrinsicMapDelete) as <K>(
+  map: Map<K, unknown>,
+  key: K,
+) => boolean;
+const callMapForEach = uncurryThis(intrinsicMapForEach) as <K, V>(
+  map: ReadonlyMap<K, V>,
+  callback: (value: V, key: K) => void,
+) => void;
+const callSetAdd = uncurryThis(intrinsicSetAdd) as <T>(set: Set<T>, value: T) => Set<T>;
+const callSetHas = uncurryThis(intrinsicSetHas) as <T>(set: ReadonlySet<T>, value: T) => boolean;
+const callSetDelete = uncurryThis(intrinsicSetDelete) as <T>(set: Set<T>, value: T) => boolean;
+const callSetForEach = uncurryThis(intrinsicSetForEach) as <T>(
+  set: ReadonlySet<T>,
+  callback: (value: T) => void,
+) => void;
+const callHasOwnProperty = uncurryThis(intrinsicObjectHasOwnProperty) as (
+  value: object,
+  key: PropertyKey,
+) => boolean;
+const callPropertyIsEnumerable = uncurryThis(intrinsicObjectPropertyIsEnumerable) as (
+  value: object,
+  key: PropertyKey,
+) => boolean;
+const callStringTrim = uncurryThis(intrinsicStringTrim) as (value: string) => string;
+const callStringSlice = uncurryThis(intrinsicStringSlice) as (
+  value: string,
+  start?: number,
+  end?: number,
+) => string;
+const callStringCharCodeAt = uncurryThis(intrinsicStringCharCodeAt) as (
+  value: string,
+  index: number,
+) => number;
+const callStringStartsWith = uncurryThis(intrinsicStringStartsWith) as (
+  value: string,
+  search: string,
+  position?: number,
+) => boolean;
+const callStringSplit = uncurryThis(intrinsicStringSplit) as (
+  value: string,
+  separator: string,
+) => string[];
+const callStringToLowerCase = uncurryThis(intrinsicStringToLowerCase) as (value: string) => string;
+const callStringToUpperCase = uncurryThis(intrinsicStringToUpperCase) as (value: string) => string;
+const callRegExpExec = uncurryThis(intrinsicRegExpExec) as (
+  pattern: RegExp,
+  value: string,
+) => RegExpExecArray | null;
+const callHasInstance = uncurryThis(intrinsicFunctionHasInstance) as (
+  constructor: Function,
+  value: unknown,
+) => boolean;
 
 const weakMapPositiveKeyA = {};
 const weakMapPositiveKeyB = () => undefined;
@@ -72,15 +171,15 @@ const weakMapNegativeKey = {};
 const weakMapValueA = {};
 const weakMapValueB = {};
 const weakMapControl = new IntrinsicWeakMap<object, object>();
-invoke(intrinsicWeakMapSet, weakMapControl, [weakMapPositiveKeyA, weakMapValueA]);
-invoke(intrinsicWeakMapSet, weakMapControl, [weakMapPositiveKeyB, weakMapValueB]);
+callWeakMapSet(weakMapControl, weakMapPositiveKeyA, weakMapValueA);
+callWeakMapSet(weakMapControl, weakMapPositiveKeyB, weakMapValueB);
 
 const weakSetPositiveKeyA = {};
 const weakSetPositiveKeyB = () => undefined;
 const weakSetNegativeKey = {};
 const weakSetControl = new IntrinsicWeakSet<object>();
-invoke(intrinsicWeakSetAdd, weakSetControl, [weakSetPositiveKeyA]);
-invoke(intrinsicWeakSetAdd, weakSetControl, [weakSetPositiveKeyB]);
+callWeakSetAdd(weakSetControl, weakSetPositiveKeyA);
+callWeakSetAdd(weakSetControl, weakSetPositiveKeyB);
 
 const mapPositiveKeyA = Symbol('kovo.security.map-control-a');
 const mapPositiveKeyB = {};
@@ -88,18 +187,18 @@ const mapNegativeKey = Symbol('kovo.security.map-control-negative');
 const mapValueA = {};
 const mapValueB = {};
 const mapControl = new IntrinsicMap<unknown, object>();
-invoke(intrinsicMapSet, mapControl, [mapPositiveKeyA, mapValueA]);
-invoke(intrinsicMapSet, mapControl, [mapPositiveKeyB, mapValueB]);
+callMapSet(mapControl, mapPositiveKeyA, mapValueA);
+callMapSet(mapControl, mapPositiveKeyB, mapValueB);
 
 const setPositiveValueA = Symbol('kovo.security.set-control-a');
 const setPositiveValueB = {};
 const setNegativeValue = Symbol('kovo.security.set-control-negative');
 const setControl = new IntrinsicSet<unknown>();
-invoke(intrinsicSetAdd, setControl, [setPositiveValueA]);
-invoke(intrinsicSetAdd, setControl, [setPositiveValueB]);
+callSetAdd(setControl, setPositiveValueA);
+callSetAdd(setControl, setPositiveValueB);
 
 const freezeControl = { marker: {} };
-const freezeResult = invoke<object>(intrinsicObjectFreeze, IntrinsicObject, [freezeControl]);
+const freezeResult = intrinsicObjectFreeze(freezeControl);
 const objectControlValue = {};
 const objectControlSymbol = Symbol('kovo.security.object-control');
 const objectControl = {
@@ -110,19 +209,21 @@ const objectControl = {
   visible: object;
   [objectControlSymbol]: object;
 };
-const definePropertyResult = invoke<object>(intrinsicObjectDefineProperty, IntrinsicObject, [
-  objectControl,
-  'hidden',
-  { configurable: false, enumerable: false, value: objectControlValue, writable: false },
-]);
+const definePropertyResult = intrinsicObjectDefineProperty(objectControl, 'hidden', {
+  configurable: false,
+  enumerable: false,
+  value: objectControlValue,
+  writable: false,
+});
 const nullPrototypeControl = { __proto__: null } as object;
-const createdNullPrototypeControl = invoke<object>(intrinsicObjectCreate, IntrinsicObject, [null]);
-const jsonStringifyControl = invoke<object>(intrinsicObjectCreate, IntrinsicObject, [null]);
-invoke(intrinsicObjectDefineProperty, IntrinsicObject, [
-  jsonStringifyControl,
-  'kovo',
-  { configurable: false, enumerable: true, value: 418, writable: false },
-]);
+const createdNullPrototypeControl = intrinsicObjectCreate(null) as object;
+const jsonStringifyControl = intrinsicObjectCreate(null) as object;
+intrinsicObjectDefineProperty(jsonStringifyControl, 'kovo', {
+  configurable: false,
+  enumerable: true,
+  value: 418,
+  writable: false,
+});
 class HasInstanceControl {}
 const hasInstancePositive = new HasInstanceControl();
 const hasInstanceNegative = {};
@@ -133,12 +234,12 @@ function failIntrinsic(name: string): never {
 
 function assertWeakMapIntegrity(): void {
   if (
-    invoke(intrinsicWeakMapGet, weakMapControl, [weakMapPositiveKeyA]) !== weakMapValueA ||
-    invoke(intrinsicWeakMapGet, weakMapControl, [weakMapPositiveKeyB]) !== weakMapValueB ||
-    invoke(intrinsicWeakMapHas, weakMapControl, [weakMapPositiveKeyA]) !== true ||
-    invoke(intrinsicWeakMapHas, weakMapControl, [weakMapPositiveKeyB]) !== true ||
-    invoke(intrinsicWeakMapHas, weakMapControl, [weakMapNegativeKey]) !== false ||
-    invoke(intrinsicWeakMapGet, weakMapControl, [weakMapNegativeKey]) !== undefined
+    callWeakMapGet(weakMapControl, weakMapPositiveKeyA) !== weakMapValueA ||
+    callWeakMapGet(weakMapControl, weakMapPositiveKeyB) !== weakMapValueB ||
+    callWeakMapHas(weakMapControl, weakMapPositiveKeyA) !== true ||
+    callWeakMapHas(weakMapControl, weakMapPositiveKeyB) !== true ||
+    callWeakMapHas(weakMapControl, weakMapNegativeKey) !== false ||
+    callWeakMapGet(weakMapControl, weakMapNegativeKey) !== undefined
   ) {
     failIntrinsic('WeakMap');
   }
@@ -146,18 +247,18 @@ function assertWeakMapIntegrity(): void {
 
 function assertWeakSetIntegrity(): void {
   if (
-    invoke(intrinsicWeakSetHas, weakSetControl, [weakSetPositiveKeyA]) !== true ||
-    invoke(intrinsicWeakSetHas, weakSetControl, [weakSetPositiveKeyB]) !== true ||
-    invoke(intrinsicWeakSetHas, weakSetControl, [weakSetNegativeKey]) !== false
+    callWeakSetHas(weakSetControl, weakSetPositiveKeyA) !== true ||
+    callWeakSetHas(weakSetControl, weakSetPositiveKeyB) !== true ||
+    callWeakSetHas(weakSetControl, weakSetNegativeKey) !== false
   ) {
     failIntrinsic('WeakSet');
   }
   const deletionControl = new IntrinsicWeakSet<object>();
-  invoke(intrinsicWeakSetAdd, deletionControl, [weakSetPositiveKeyA]);
+  callWeakSetAdd(deletionControl, weakSetPositiveKeyA);
   if (
-    invoke(intrinsicWeakSetDelete, deletionControl, [weakSetPositiveKeyA]) !== true ||
-    invoke(intrinsicWeakSetDelete, deletionControl, [weakSetNegativeKey]) !== false ||
-    invoke(intrinsicWeakSetHas, deletionControl, [weakSetPositiveKeyA]) !== false
+    callWeakSetDelete(deletionControl, weakSetPositiveKeyA) !== true ||
+    callWeakSetDelete(deletionControl, weakSetNegativeKey) !== false ||
+    callWeakSetHas(deletionControl, weakSetPositiveKeyA) !== false
   ) {
     failIntrinsic('WeakSet.delete');
   }
@@ -165,34 +266,32 @@ function assertWeakSetIntegrity(): void {
 
 function assertMapIntegrity(): void {
   if (
-    invoke(intrinsicMapGet, mapControl, [mapPositiveKeyA]) !== mapValueA ||
-    invoke(intrinsicMapGet, mapControl, [mapPositiveKeyB]) !== mapValueB ||
-    invoke(intrinsicMapHas, mapControl, [mapPositiveKeyA]) !== true ||
-    invoke(intrinsicMapHas, mapControl, [mapPositiveKeyB]) !== true ||
-    invoke(intrinsicMapHas, mapControl, [mapNegativeKey]) !== false ||
-    invoke(intrinsicMapGet, mapControl, [mapNegativeKey]) !== undefined
+    callMapGet(mapControl, mapPositiveKeyA) !== mapValueA ||
+    callMapGet(mapControl, mapPositiveKeyB) !== mapValueB ||
+    callMapHas(mapControl, mapPositiveKeyA) !== true ||
+    callMapHas(mapControl, mapPositiveKeyB) !== true ||
+    callMapHas(mapControl, mapNegativeKey) !== false ||
+    callMapGet(mapControl, mapNegativeKey) !== undefined
   ) {
     failIntrinsic('Map');
   }
   let visitedCount = 0;
   let visitedA = false;
   let visitedB = false;
-  invoke(intrinsicMapForEach, mapControl, [
-    (value: object, key: unknown) => {
-      visitedCount += 1;
-      if (key === mapPositiveKeyA && value === mapValueA) visitedA = true;
-      if (key === mapPositiveKeyB && value === mapValueB) visitedB = true;
-    },
-  ]);
+  callMapForEach(mapControl, (value: object, key: unknown) => {
+    visitedCount += 1;
+    if (key === mapPositiveKeyA && value === mapValueA) visitedA = true;
+    if (key === mapPositiveKeyB && value === mapValueB) visitedB = true;
+  });
   if (visitedCount !== 2 || !visitedA || !visitedB) {
     failIntrinsic('Map.forEach');
   }
   const deletionControl = new IntrinsicMap<unknown, object>();
-  invoke(intrinsicMapSet, deletionControl, [mapPositiveKeyA, mapValueA]);
+  callMapSet(deletionControl, mapPositiveKeyA, mapValueA);
   if (
-    invoke(intrinsicMapDelete, deletionControl, [mapPositiveKeyA]) !== true ||
-    invoke(intrinsicMapDelete, deletionControl, [mapNegativeKey]) !== false ||
-    invoke(intrinsicMapHas, deletionControl, [mapPositiveKeyA]) !== false
+    callMapDelete(deletionControl, mapPositiveKeyA) !== true ||
+    callMapDelete(deletionControl, mapNegativeKey) !== false ||
+    callMapHas(deletionControl, mapPositiveKeyA) !== false
   ) {
     failIntrinsic('Map.delete');
   }
@@ -200,46 +299,40 @@ function assertMapIntegrity(): void {
 
 function assertSetIntegrity(): void {
   if (
-    invoke(intrinsicSetHas, setControl, [setPositiveValueA]) !== true ||
-    invoke(intrinsicSetHas, setControl, [setPositiveValueB]) !== true ||
-    invoke(intrinsicSetHas, setControl, [setNegativeValue]) !== false
+    callSetHas(setControl, setPositiveValueA) !== true ||
+    callSetHas(setControl, setPositiveValueB) !== true ||
+    callSetHas(setControl, setNegativeValue) !== false
   ) {
     failIntrinsic('Set');
   }
   let visitedCount = 0;
   let visitedA = false;
   let visitedB = false;
-  invoke(intrinsicSetForEach, setControl, [
-    (value: unknown) => {
-      visitedCount += 1;
-      if (value === setPositiveValueA) visitedA = true;
-      if (value === setPositiveValueB) visitedB = true;
-    },
-  ]);
+  callSetForEach(setControl, (value: unknown) => {
+    visitedCount += 1;
+    if (value === setPositiveValueA) visitedA = true;
+    if (value === setPositiveValueB) visitedB = true;
+  });
   if (visitedCount !== 2 || !visitedA || !visitedB) {
     failIntrinsic('Set.forEach');
   }
   const deletionControl = new IntrinsicSet<unknown>();
-  invoke(intrinsicSetAdd, deletionControl, [setPositiveValueA]);
+  callSetAdd(deletionControl, setPositiveValueA);
   if (
-    invoke(intrinsicSetDelete, deletionControl, [setPositiveValueA]) !== true ||
-    invoke(intrinsicSetDelete, deletionControl, [setNegativeValue]) !== false ||
-    invoke(intrinsicSetHas, deletionControl, [setPositiveValueA]) !== false
+    callSetDelete(deletionControl, setPositiveValueA) !== true ||
+    callSetDelete(deletionControl, setNegativeValue) !== false ||
+    callSetHas(deletionControl, setPositiveValueA) !== false
   ) {
     failIntrinsic('Set.delete');
   }
 }
 
 function assertFreezeIntegrity(): void {
-  const marker = invoke<PropertyDescriptor | undefined>(
-    intrinsicObjectGetOwnPropertyDescriptor,
-    IntrinsicObject,
-    [freezeControl, 'marker'],
-  );
+  const marker = intrinsicObjectGetOwnPropertyDescriptor(freezeControl, 'marker');
   if (
     freezeResult !== freezeControl ||
-    invoke(intrinsicObjectIsFrozen, IntrinsicObject, [freezeControl]) !== true ||
-    invoke(intrinsicObjectIsExtensible, IntrinsicObject, [freezeControl]) !== false ||
+    intrinsicObjectIsFrozen(freezeControl) !== true ||
+    intrinsicObjectIsExtensible(freezeControl) !== false ||
     marker === undefined ||
     marker.configurable !== false ||
     marker.writable !== false
@@ -249,45 +342,27 @@ function assertFreezeIntegrity(): void {
 }
 
 function assertObjectIntegrity(): void {
-  const visible = invoke<PropertyDescriptor | undefined>(
-    intrinsicObjectGetOwnPropertyDescriptor,
-    IntrinsicObject,
-    [objectControl, 'visible'],
-  );
-  const hidden = invoke<PropertyDescriptor | undefined>(
-    intrinsicObjectGetOwnPropertyDescriptor,
-    IntrinsicObject,
-    [objectControl, 'hidden'],
-  );
-  const missing = invoke<PropertyDescriptor | undefined>(
-    intrinsicObjectGetOwnPropertyDescriptor,
-    IntrinsicObject,
-    [objectControl, 'missing'],
-  );
-  const keys = invoke<string[]>(intrinsicObjectKeys, IntrinsicObject, [objectControl]);
-  const propertyNames = invoke<string[]>(intrinsicObjectGetOwnPropertyNames, IntrinsicObject, [
-    objectControl,
-  ]);
-  const symbols = invoke<symbol[]>(intrinsicObjectGetOwnPropertySymbols, IntrinsicObject, [
-    objectControl,
-  ]);
+  const visible = intrinsicObjectGetOwnPropertyDescriptor(objectControl, 'visible');
+  const hidden = intrinsicObjectGetOwnPropertyDescriptor(objectControl, 'hidden');
+  const missing = intrinsicObjectGetOwnPropertyDescriptor(objectControl, 'missing');
+  const keys = intrinsicObjectKeys(objectControl);
+  const propertyNames = intrinsicObjectGetOwnPropertyNames(objectControl);
+  const symbols = intrinsicObjectGetOwnPropertySymbols(objectControl);
   if (
     definePropertyResult !== objectControl ||
     visible?.value !== objectControlValue ||
     hidden?.value !== objectControlValue ||
     hidden.enumerable !== false ||
     missing !== undefined ||
-    invoke(intrinsicObjectGetPrototypeOf, IntrinsicObject, [objectControl]) !==
-      IntrinsicObject.prototype ||
-    invoke(intrinsicObjectGetPrototypeOf, IntrinsicObject, [nullPrototypeControl]) !== null ||
-    invoke(intrinsicObjectGetPrototypeOf, IntrinsicObject, [createdNullPrototypeControl]) !==
-      null ||
-    invoke(intrinsicObjectHasOwnProperty, objectControl, ['visible']) !== true ||
-    invoke(intrinsicObjectHasOwnProperty, objectControl, ['missing']) !== false ||
-    invoke(intrinsicObjectPropertyIsEnumerable, objectControl, ['visible']) !== true ||
-    invoke(intrinsicObjectPropertyIsEnumerable, objectControl, ['hidden']) !== false ||
-    invoke(intrinsicObjectIs, IntrinsicObject, [objectControlValue, objectControlValue]) !== true ||
-    invoke(intrinsicObjectIs, IntrinsicObject, [objectControlValue, objectControl]) !== false ||
+    intrinsicObjectGetPrototypeOf(objectControl) !== IntrinsicObject.prototype ||
+    intrinsicObjectGetPrototypeOf(nullPrototypeControl) !== null ||
+    intrinsicObjectGetPrototypeOf(createdNullPrototypeControl) !== null ||
+    callHasOwnProperty(objectControl, 'visible') !== true ||
+    callHasOwnProperty(objectControl, 'missing') !== false ||
+    callPropertyIsEnumerable(objectControl, 'visible') !== true ||
+    callPropertyIsEnumerable(objectControl, 'hidden') !== false ||
+    intrinsicObjectIs(objectControlValue, objectControlValue) !== true ||
+    intrinsicObjectIs(objectControlValue, objectControl) !== false ||
     keys.length !== 1 ||
     keys[0] !== 'visible' ||
     propertyNames.length !== 2 ||
@@ -295,65 +370,76 @@ function assertObjectIntegrity(): void {
     propertyNames[1] !== 'hidden' ||
     symbols.length !== 1 ||
     symbols[0] !== objectControlSymbol ||
-    invoke(intrinsicArrayIsArray, IntrinsicArray, [[]]) !== true ||
-    invoke(intrinsicArrayIsArray, IntrinsicArray, [objectControl]) !== false
+    intrinsicArrayIsArray([]) !== true ||
+    intrinsicArrayIsArray(objectControl) !== false
   ) {
     failIntrinsic('Object/Array');
   }
 }
 
+/**
+ * `securityApply` (residual R3, security/boot-captured-direct-call.md) still dispatches
+ * caller-shaped targets through the boot-captured `Reflect.apply`, so that dynamic path keeps its
+ * own positive/negative probes: a pre-import `Reflect.apply` forgery that misroutes a captured
+ * control fails closed here even though fixed-shape operations no longer route through it.
+ */
+function assertDynamicApplyIntegrity(): void {
+  if (
+    intrinsicReflectApply(intrinsicFunctionHasInstance, HasInstanceControl, [
+      hasInstancePositive,
+    ]) !== true ||
+    intrinsicReflectApply(intrinsicFunctionHasInstance, HasInstanceControl, [
+      hasInstanceNegative,
+    ]) !== false ||
+    intrinsicReflectApply(intrinsicStringToLowerCase, 'JaVaScRiPt', []) !== 'javascript' ||
+    intrinsicReflectApply(intrinsicArrayIsArray, IntrinsicArray, [objectControl]) !== false
+  ) {
+    failIntrinsic('Reflect.apply');
+  }
+}
+
 function assertHasInstanceIntegrity(): void {
   if (
-    invoke(intrinsicFunctionHasInstance, HasInstanceControl, [hasInstancePositive]) !== true ||
-    invoke(intrinsicFunctionHasInstance, HasInstanceControl, [hasInstanceNegative]) !== false ||
-    invoke(intrinsicFunctionHasInstance, IntrinsicMap, [mapControl]) !== true ||
-    invoke(intrinsicFunctionHasInstance, IntrinsicMap, [setControl]) !== false ||
-    invoke(intrinsicFunctionHasInstance, IntrinsicSet, [setControl]) !== true ||
-    invoke(intrinsicFunctionHasInstance, IntrinsicSet, [mapControl]) !== false ||
-    invoke(intrinsicFunctionHasInstance, IntrinsicError, [new IntrinsicError('control')]) !==
-      true ||
-    invoke(intrinsicFunctionHasInstance, IntrinsicError, [objectControl]) !== false
+    callHasInstance(HasInstanceControl, hasInstancePositive) !== true ||
+    callHasInstance(HasInstanceControl, hasInstanceNegative) !== false ||
+    callHasInstance(IntrinsicMap, mapControl) !== true ||
+    callHasInstance(IntrinsicMap, setControl) !== false ||
+    callHasInstance(IntrinsicSet, setControl) !== true ||
+    callHasInstance(IntrinsicSet, mapControl) !== false ||
+    callHasInstance(IntrinsicError, new IntrinsicError('control')) !== true ||
+    callHasInstance(IntrinsicError, objectControl) !== false
   ) {
     failIntrinsic('Function@@hasInstance');
   }
 }
 
 function assertStringIntegrity(): void {
-  const match = invoke<RegExpExecArray | null>(intrinsicRegExpExec, /^([a-z]+):/, ['https:']);
-  const segments = invoke<string[]>(intrinsicStringSplit, 'root/child/file', ['/']);
-  const firstSegment = invoke<PropertyDescriptor | undefined>(
-    intrinsicObjectGetOwnPropertyDescriptor,
-    IntrinsicObject,
-    [segments, 0],
-  );
-  const lastSegment = invoke<PropertyDescriptor | undefined>(
-    intrinsicObjectGetOwnPropertyDescriptor,
-    IntrinsicObject,
-    [segments, 2],
-  );
+  const match = callRegExpExec(/^([a-z]+):/, 'https:');
+  const segments = callStringSplit('root/child/file', '/');
+  const firstSegment = intrinsicObjectGetOwnPropertyDescriptor(segments, 0);
+  const lastSegment = intrinsicObjectGetOwnPropertyDescriptor(segments, 2);
   if (
-    invoke(intrinsicString, undefined, ['kovo-security-control']) !== 'kovo-security-control' ||
-    invoke(intrinsicString, undefined, [422]) !== '422' ||
-    invoke(intrinsicStringTrim, ' \tKovo\n', []) !== 'Kovo' ||
-    invoke(intrinsicStringSlice, 'Kovo-security', [5, 13]) !== 'security' ||
-    invoke(intrinsicStringCharCodeAt, 'Kovo', [0]) !== 0x4b ||
-    invoke(intrinsicStringCharCodeAt, 'Kovo', [99]) ===
-      invoke(intrinsicStringCharCodeAt, 'Kovo', [99]) ||
-    invoke(intrinsicStringStartsWith, 'kovo/security', ['kovo/', 0]) !== true ||
-    invoke(intrinsicStringStartsWith, 'kovo/security', ['security', 0]) !== false ||
+    intrinsicString('kovo-security-control') !== 'kovo-security-control' ||
+    intrinsicString(422) !== '422' ||
+    callStringTrim(' \tKovo\n') !== 'Kovo' ||
+    callStringSlice('Kovo-security', 5, 13) !== 'security' ||
+    callStringCharCodeAt('Kovo', 0) !== 0x4b ||
+    callStringCharCodeAt('Kovo', 99) === callStringCharCodeAt('Kovo', 99) ||
+    callStringStartsWith('kovo/security', 'kovo/', 0) !== true ||
+    callStringStartsWith('kovo/security', 'security', 0) !== false ||
     segments.length !== 3 ||
     firstSegment?.value !== 'root' ||
     lastSegment?.value !== 'file' ||
-    invoke(intrinsicStringToLowerCase, 'JaVaScRiPt', []) !== 'javascript' ||
-    invoke(intrinsicStringToUpperCase, 'x-kovo', []) !== 'X-KOVO' ||
-    invoke(intrinsicEncodeURIComponent, undefined, ['a/b c']) !== 'a%2Fb%20c' ||
-    invoke(intrinsicDecodeURIComponent, undefined, ['a%2Fb%20c']) !== 'a/b c' ||
-    invoke(intrinsicJsonStringify, JSON, [jsonStringifyControl]) !== '{"kovo":418}' ||
+    callStringToLowerCase('JaVaScRiPt') !== 'javascript' ||
+    callStringToUpperCase('x-kovo') !== 'X-KOVO' ||
+    intrinsicEncodeURIComponent('a/b c') !== 'a%2Fb%20c' ||
+    intrinsicDecodeURIComponent('a%2Fb%20c') !== 'a/b c' ||
+    intrinsicJsonStringify(jsonStringifyControl) !== '{"kovo":418}' ||
     match?.[0] !== 'https:' ||
     match[1] !== 'https' ||
-    invoke(intrinsicRegExpExec, /^https:/, ['javascript:']) !== null ||
-    invoke(intrinsicRegExpExec, /^https:/, ['https://kovo.test']) === null ||
-    invoke(intrinsicRegExpExec, /^https:/, ['javascript:']) !== null
+    callRegExpExec(/^https:/, 'javascript:') !== null ||
+    callRegExpExec(/^https:/, 'https://kovo.test') === null ||
+    callRegExpExec(/^https:/, 'javascript:') !== null
   ) {
     failIntrinsic('String');
   }
@@ -369,6 +455,7 @@ const capturedSecurityControlsSound = (() => {
     assertObjectIntegrity();
     assertStringIntegrity();
     assertHasInstanceIntegrity();
+    assertDynamicApplyIntegrity();
     return true;
   } catch {
     return false;
@@ -382,7 +469,7 @@ function assertCapturedSecurityControls(): void {
 export function securityWeakMap<K extends object, V>(): WeakMap<K, V> {
   assertCapturedSecurityControls();
   const value = new IntrinsicWeakMap<K, V>();
-  if (invoke(intrinsicWeakMapHas, value, [weakMapNegativeKey]) !== false) {
+  if (callWeakMapHas(value, weakMapNegativeKey as K) !== false) {
     failIntrinsic('WeakMap constructor');
   }
   return value;
@@ -390,12 +477,12 @@ export function securityWeakMap<K extends object, V>(): WeakMap<K, V> {
 
 export function securityWeakMapGet<K extends object, V>(map: WeakMap<K, V>, key: K): V | undefined {
   assertCapturedSecurityControls();
-  return invoke<V | undefined>(intrinsicWeakMapGet, map, [key]);
+  return callWeakMapGet(map, key);
 }
 
 export function securityWeakMapHas<K extends object>(map: WeakMap<K, unknown>, key: K): boolean {
   assertCapturedSecurityControls();
-  return invoke(intrinsicWeakMapHas, map, [key]) === true;
+  return callWeakMapHas(map, key) === true;
 }
 
 export function securityWeakMapSet<K extends object, V>(
@@ -404,11 +491,8 @@ export function securityWeakMapSet<K extends object, V>(
   value: V,
 ): void {
   assertCapturedSecurityControls();
-  invoke(intrinsicWeakMapSet, map, [key, value]);
-  if (
-    invoke(intrinsicWeakMapHas, map, [key]) !== true ||
-    invoke(intrinsicWeakMapGet, map, [key]) !== value
-  ) {
+  callWeakMapSet(map, key, value);
+  if (callWeakMapHas(map, key) !== true || callWeakMapGet(map, key) !== value) {
     failIntrinsic('WeakMap write');
   }
 }
@@ -416,7 +500,7 @@ export function securityWeakMapSet<K extends object, V>(
 export function securityWeakSet<T extends object>(): WeakSet<T> {
   assertCapturedSecurityControls();
   const value = new IntrinsicWeakSet<T>();
-  if (invoke(intrinsicWeakSetHas, value, [weakSetNegativeKey]) !== false) {
+  if (callWeakSetHas(value, weakSetNegativeKey as T) !== false) {
     failIntrinsic('WeakSet constructor');
   }
   return value;
@@ -424,18 +508,18 @@ export function securityWeakSet<T extends object>(): WeakSet<T> {
 
 export function securityWeakSetAdd<T extends object>(set: WeakSet<T>, value: T): void {
   assertCapturedSecurityControls();
-  invoke(intrinsicWeakSetAdd, set, [value]);
-  if (invoke(intrinsicWeakSetHas, set, [value]) !== true) failIntrinsic('WeakSet write');
+  callWeakSetAdd(set, value);
+  if (callWeakSetHas(set, value) !== true) failIntrinsic('WeakSet write');
 }
 
 export function securityWeakSetHas<T extends object>(set: WeakSet<T>, value: T): boolean {
   assertCapturedSecurityControls();
-  return invoke(intrinsicWeakSetHas, set, [value]) === true;
+  return callWeakSetHas(set, value) === true;
 }
 
 export function securityWeakSetDelete<T extends object>(set: WeakSet<T>, value: T): boolean {
   assertCapturedSecurityControls();
-  return invoke(intrinsicWeakSetDelete, set, [value]) === true;
+  return callWeakSetDelete(set, value) === true;
 }
 
 export function securityMap<K, V>(): Map<K, V> {
@@ -445,28 +529,25 @@ export function securityMap<K, V>(): Map<K, V> {
 
 export function securityMapGet<K, V>(map: ReadonlyMap<K, V>, key: K): V | undefined {
   assertCapturedSecurityControls();
-  return invoke<V | undefined>(intrinsicMapGet, map, [key]);
+  return callMapGet(map, key);
 }
 
 export function securityMapHas<K>(map: ReadonlyMap<K, unknown>, key: K): boolean {
   assertCapturedSecurityControls();
-  return invoke(intrinsicMapHas, map, [key]) === true;
+  return callMapHas(map, key) === true;
 }
 
 export function securityMapSet<K, V>(map: Map<K, V>, key: K, value: V): void {
   assertCapturedSecurityControls();
-  invoke(intrinsicMapSet, map, [key, value]);
-  if (
-    invoke(intrinsicMapHas, map, [key]) !== true ||
-    invoke(intrinsicMapGet, map, [key]) !== value
-  ) {
+  callMapSet(map, key, value);
+  if (callMapHas(map, key) !== true || callMapGet(map, key) !== value) {
     failIntrinsic('Map write');
   }
 }
 
 export function securityMapDelete<K>(map: Map<K, unknown>, key: K): boolean {
   assertCapturedSecurityControls();
-  return invoke(intrinsicMapDelete, map, [key]) === true;
+  return callMapDelete(map, key) === true;
 }
 
 export function securityMapForEach<K, V>(
@@ -474,7 +555,7 @@ export function securityMapForEach<K, V>(
   callback: (value: V, key: K) => void,
 ): void {
   assertCapturedSecurityControls();
-  invoke(intrinsicMapForEach, map, [callback]);
+  callMapForEach(map, callback);
 }
 
 export function securitySet<T>(): Set<T> {
@@ -484,23 +565,23 @@ export function securitySet<T>(): Set<T> {
 
 export function securitySetAdd<T>(set: Set<T>, value: T): void {
   assertCapturedSecurityControls();
-  invoke(intrinsicSetAdd, set, [value]);
-  if (invoke(intrinsicSetHas, set, [value]) !== true) failIntrinsic('Set write');
+  callSetAdd(set, value);
+  if (callSetHas(set, value) !== true) failIntrinsic('Set write');
 }
 
 export function securitySetHas<T>(set: ReadonlySet<T>, value: T): boolean {
   assertCapturedSecurityControls();
-  return invoke(intrinsicSetHas, set, [value]) === true;
+  return callSetHas(set, value) === true;
 }
 
 export function securitySetDelete<T>(set: Set<T>, value: T): boolean {
   assertCapturedSecurityControls();
-  return invoke(intrinsicSetDelete, set, [value]) === true;
+  return callSetDelete(set, value) === true;
 }
 
 export function securitySetForEach<T>(set: ReadonlySet<T>, callback: (value: T) => void): void {
   assertCapturedSecurityControls();
-  invoke(intrinsicSetForEach, set, [callback]);
+  callSetForEach(set, callback);
 }
 
 export function securitySetValues<T>(set: ReadonlySet<T>): T[] {
@@ -543,8 +624,8 @@ export function securityArrayAppend<T>(values: T[], value: T): void {
 
 export function freezeSecurityValue<T extends object>(value: T): T {
   assertCapturedSecurityControls();
-  const frozen = invoke<T>(intrinsicObjectFreeze, IntrinsicObject, [value]);
-  if (frozen !== value || invoke(intrinsicObjectIsFrozen, IntrinsicObject, [value]) !== true) {
+  const frozen = intrinsicObjectFreeze(value);
+  if (frozen !== value || intrinsicObjectIsFrozen(value) !== true) {
     failIntrinsic('Object.freeze result');
   }
   return frozen;
@@ -552,67 +633,67 @@ export function freezeSecurityValue<T extends object>(value: T): T {
 
 export function securityString(value: unknown): string {
   assertCapturedSecurityControls();
-  return invoke(intrinsicString, undefined, [value]);
+  return intrinsicString(value);
 }
 
 export function securityStringTrim(value: string): string {
   assertCapturedSecurityControls();
-  return invoke(intrinsicStringTrim, value, []);
+  return callStringTrim(value);
 }
 
 export function securityStringSlice(value: string, start?: number, end?: number): string {
   assertCapturedSecurityControls();
-  return invoke(intrinsicStringSlice, value, [start, end]);
+  return callStringSlice(value, start, end);
 }
 
 export function securityStringCharCodeAt(value: string, index: number): number {
   assertCapturedSecurityControls();
-  return invoke(intrinsicStringCharCodeAt, value, [index]);
+  return callStringCharCodeAt(value, index);
 }
 
 export function securityStringStartsWith(value: string, search: string, position = 0): boolean {
   assertCapturedSecurityControls();
-  return invoke(intrinsicStringStartsWith, value, [search, position]) === true;
+  return callStringStartsWith(value, search, position) === true;
 }
 
 export function securityStringSplit(value: string, separator: string): string[] {
   assertCapturedSecurityControls();
-  return invoke(intrinsicStringSplit, value, [separator]);
+  return callStringSplit(value, separator);
 }
 
 export function securityEncodeURIComponent(value: string): string {
   assertCapturedSecurityControls();
-  return invoke(intrinsicEncodeURIComponent, undefined, [value]);
+  return intrinsicEncodeURIComponent(value);
 }
 
 export function securityDecodeURIComponent(value: string): string {
   assertCapturedSecurityControls();
-  return invoke(intrinsicDecodeURIComponent, undefined, [value]);
+  return intrinsicDecodeURIComponent(value);
 }
 
 export function securityJsonStringify(value: unknown): string | undefined {
   assertCapturedSecurityControls();
-  return invoke<string | undefined>(intrinsicJsonStringify, JSON, [value]);
+  return intrinsicJsonStringify(value);
 }
 
 export function securityStringToLowerCase(value: string): string {
   assertCapturedSecurityControls();
-  return invoke(intrinsicStringToLowerCase, value, []);
+  return callStringToLowerCase(value);
 }
 
 export function securityStringToUpperCase(value: string): string {
   assertCapturedSecurityControls();
-  return invoke(intrinsicStringToUpperCase, value, []);
+  return callStringToUpperCase(value);
 }
 
 export function securityRegExpExec(pattern: RegExp, value: string): RegExpExecArray | null {
   assertCapturedSecurityControls();
-  return invoke(intrinsicRegExpExec, pattern, [value]);
+  return callRegExpExec(pattern, value);
 }
 
 export function securityRegExpTest(pattern: RegExp, value: string): boolean {
   assertCapturedSecurityControls();
-  return invoke(intrinsicRegExpExec, pattern, [value]) !== null;
+  return callRegExpExec(pattern, value) !== null;
 }
 
 export function securityGetOwnPropertyDescriptor(
@@ -620,23 +701,19 @@ export function securityGetOwnPropertyDescriptor(
   key: PropertyKey,
 ): PropertyDescriptor | undefined {
   assertCapturedSecurityControls();
-  return invoke<PropertyDescriptor | undefined>(
-    intrinsicObjectGetOwnPropertyDescriptor,
-    IntrinsicObject,
-    [value, key],
-  );
+  return intrinsicObjectGetOwnPropertyDescriptor(value, key);
 }
 
 export function securityNullRecord<Value = unknown>(): Record<string, Value> {
   assertCapturedSecurityControls();
-  const value = invoke<Record<string, Value>>(intrinsicObjectCreate, IntrinsicObject, [null]);
+  const value = intrinsicObjectCreate(null) as Record<string, Value>;
   if (securityGetPrototypeOf(value) !== null) failIntrinsic('Object.create(null)');
   return value;
 }
 
 export function securityGetPrototypeOf(value: object): object | null {
   assertCapturedSecurityControls();
-  return invoke<object | null>(intrinsicObjectGetPrototypeOf, IntrinsicObject, [value]);
+  return intrinsicObjectGetPrototypeOf(value);
 }
 
 export function securityDefineProperty<T extends object>(
@@ -649,11 +726,7 @@ export function securityDefineProperty<T extends object>(
   // an ordinary descriptor literal after Object.prototype pollution can change
   // a data definition into an invalid or attacker-selected accessor definition.
   const exactDescriptor = snapshotSecurityPropertyDescriptor(descriptor);
-  const result = invoke<T>(intrinsicObjectDefineProperty, IntrinsicObject, [
-    value,
-    key,
-    exactDescriptor,
-  ]);
+  const result = intrinsicObjectDefineProperty(value, key, exactDescriptor);
   if (result !== value) failIntrinsic('Object.defineProperty');
   return result;
 }
@@ -662,7 +735,7 @@ function snapshotSecurityPropertyDescriptor(descriptor: PropertyDescriptor): Pro
   if (typeof descriptor !== 'object' || descriptor === null) {
     throw new TypeError('Kovo security property descriptor must be an object.');
   }
-  const snapshot = invoke<Record<string, unknown>>(intrinsicObjectCreate, IntrinsicObject, [null]);
+  const snapshot = intrinsicObjectCreate(null) as Record<string, unknown>;
   copySecurityDescriptorField(descriptor, snapshot, 'configurable');
   copySecurityDescriptorField(descriptor, snapshot, 'enumerable');
   copySecurityDescriptorField(descriptor, snapshot, 'value');
@@ -677,11 +750,7 @@ function copySecurityDescriptorField(
   snapshot: Record<string, unknown>,
   field: string,
 ): void {
-  const own = invoke<PropertyDescriptor | undefined>(
-    intrinsicObjectGetOwnPropertyDescriptor,
-    IntrinsicObject,
-    [descriptor, field],
-  );
+  const own = intrinsicObjectGetOwnPropertyDescriptor(descriptor, field);
   if (own === undefined) return;
   if (!('value' in own)) {
     throw new TypeError('Kovo security property descriptor fields must be own data properties.');
@@ -691,37 +760,37 @@ function copySecurityDescriptorField(
 
 export function securityHasOwn(value: object, key: PropertyKey): boolean {
   assertCapturedSecurityControls();
-  return invoke(intrinsicObjectHasOwnProperty, value, [key]) === true;
+  return callHasOwnProperty(value, key) === true;
 }
 
 export function securityPropertyIsEnumerable(value: object, key: PropertyKey): boolean {
   assertCapturedSecurityControls();
-  return invoke(intrinsicObjectPropertyIsEnumerable, value, [key]) === true;
+  return callPropertyIsEnumerable(value, key) === true;
 }
 
 export function securityObjectKeys(value: object): string[] {
   assertCapturedSecurityControls();
-  return invoke<string[]>(intrinsicObjectKeys, IntrinsicObject, [value]);
+  return intrinsicObjectKeys(value);
 }
 
 export function securityGetOwnPropertyNames(value: object): string[] {
   assertCapturedSecurityControls();
-  return invoke<string[]>(intrinsicObjectGetOwnPropertyNames, IntrinsicObject, [value]);
+  return intrinsicObjectGetOwnPropertyNames(value);
 }
 
 export function securityGetOwnPropertySymbols(value: object): symbol[] {
   assertCapturedSecurityControls();
-  return invoke<symbol[]>(intrinsicObjectGetOwnPropertySymbols, IntrinsicObject, [value]);
+  return intrinsicObjectGetOwnPropertySymbols(value);
 }
 
 export function securityObjectIs(left: unknown, right: unknown): boolean {
   assertCapturedSecurityControls();
-  return invoke(intrinsicObjectIs, IntrinsicObject, [left, right]) === true;
+  return intrinsicObjectIs(left, right) === true;
 }
 
 export function securityIsArray(value: unknown): value is unknown[] {
   assertCapturedSecurityControls();
-  return invoke(intrinsicArrayIsArray, IntrinsicArray, [value]) === true;
+  return intrinsicArrayIsArray(value) === true;
 }
 
 export function securityOwnArrayEntry<T>(
@@ -750,29 +819,33 @@ export function securityArrayIncludesExact<T>(values: readonly T[], expected: T)
 
 export function securityIsMap(value: unknown): value is Map<unknown, unknown> {
   assertCapturedSecurityControls();
-  return invoke(intrinsicFunctionHasInstance, IntrinsicMap, [value]) === true;
+  return callHasInstance(IntrinsicMap, value) === true;
 }
 
 export function securityIsSet(value: unknown): value is Set<unknown> {
   assertCapturedSecurityControls();
-  return invoke(intrinsicFunctionHasInstance, IntrinsicSet, [value]) === true;
+  return callHasInstance(IntrinsicSet, value) === true;
 }
 
 export function securityIsError(value: unknown): value is Error {
   assertCapturedSecurityControls();
-  return invoke(intrinsicFunctionHasInstance, IntrinsicError, [value]) === true;
+  return callHasInstance(IntrinsicError, value) === true;
 }
 
 export function securityHasInstance(constructor: Function, value: unknown): boolean {
   assertCapturedSecurityControls();
-  return invoke(intrinsicFunctionHasInstance, constructor, [value]) === true;
+  return callHasInstance(constructor, value) === true;
 }
 
+/**
+ * Residual dynamic dispatch (security/boot-captured-direct-call.md R3): caller-shaped target and
+ * arity stay on the boot-captured `Reflect.apply`.
+ */
 export function securityApply<Return>(
   target: Function,
   receiver: unknown,
   args: readonly unknown[],
 ): Return {
   assertCapturedSecurityControls();
-  return invoke<Return>(target as (...args: any[]) => unknown, receiver, args);
+  return intrinsicReflectApply(target, receiver, args) as Return;
 }

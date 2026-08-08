@@ -7,10 +7,18 @@ import {
   witnessMapDelete,
   witnessMapGet,
   witnessMapSet,
-  witnessReflectApply,
 } from './security-witness-intrinsics.js';
 
-/** Boot-pinned controls for request-local mutation form-helper rendering (SPEC §6.3/§9.2). */
+/**
+ * Boot-pinned controls for request-local mutation form-helper rendering (SPEC §6.3/§9.2).
+ *
+ * Dispatch follows plans/good-perf.md D8 (threat model:
+ * security/boot-captured-direct-call.md): receiver-insensitive captured statics are called
+ * directly and per-receiver methods go through direct callers minted at module init from the
+ * boot-captured `Function.prototype.call`/`bind`. No post-boot property lookup and no iterator
+ * protocol occur on any dispatch; only the caller-shaped `formHelperApply` keeps the
+ * boot-captured `Reflect.apply` (residual R3).
+ */
 
 const NativeArray = globalThis.Array;
 const NativeAsyncLocalStorage = AsyncLocalStorage;
@@ -18,8 +26,12 @@ const NativeFunction = globalThis.Function;
 const NativeNumber = globalThis.Number;
 const NativeObject = globalThis.Object;
 const NativePromise = globalThis.Promise;
+const NativeReflect = globalThis.Reflect;
 const NativeString = globalThis.String;
 
+const nativeReflectApply = NativeReflect.apply;
+const nativeFunctionCall = NativeFunction.prototype.call;
+const nativeFunctionBind = NativeFunction.prototype.bind;
 const nativeArrayIsArray = NativeArray.isArray;
 const nativeAsyncLocalStorageGetStore = NativeAsyncLocalStorage.prototype.getStore;
 const nativeAsyncLocalStorageRun = NativeAsyncLocalStorage.prototype.run;
@@ -42,68 +54,113 @@ const nativeStringSlice = NativeString.prototype.slice;
 const nativeStringStartsWith = NativeString.prototype.startsWith;
 const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
 
-function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]): Return {
-  return witnessReflectApply<Return>(fn, receiver, args);
-}
+// Boot-derived direct-caller mint (D8; SPEC §6.6 rule 6). Fixed-arity call sites only — see
+// security/boot-captured-direct-call.md R4.
+const uncurryThis = nativeReflectApply(nativeFunctionBind, nativeFunctionBind, [
+  nativeFunctionCall,
+]) as (fn: Function) => (receiver: unknown, ...args: unknown[]) => unknown;
+
+const callAsyncLocalGetStore = uncurryThis(nativeAsyncLocalStorageGetStore) as <Value>(
+  storage: AsyncLocalStorage<Value>,
+) => Value | undefined;
+const callAsyncLocalRun = uncurryThis(nativeAsyncLocalStorageRun) as <Value, Result>(
+  storage: AsyncLocalStorage<Value>,
+  value: Value,
+  render: () => Result,
+) => Result;
+const callHasInstance = uncurryThis(nativeFunctionHasInstance) as (
+  constructor: Function,
+  value: unknown,
+) => boolean;
+const callPromiseThen = uncurryThis(nativePromiseThen) as <Value, Result>(
+  promise: Promise<Value>,
+  onFulfilled: (value: Value) => Result | PromiseLike<Result>,
+  onRejected?: (reason: unknown) => Result | PromiseLike<Result>,
+) => Promise<Result>;
+const callStringCharCodeAt = uncurryThis(nativeStringCharCodeAt) as (
+  value: string,
+  index: number,
+) => number;
+const callStringEndsWith = uncurryThis(nativeStringEndsWith) as (
+  value: string,
+  search: string,
+) => boolean;
+const callStringIndexOf = uncurryThis(nativeStringIndexOf) as (
+  value: string,
+  search: string,
+  fromIndex?: number,
+) => number;
+const callStringLastIndexOf = uncurryThis(nativeStringLastIndexOf) as (
+  value: string,
+  search: string,
+) => number;
+const callStringSlice = uncurryThis(nativeStringSlice) as (
+  value: string,
+  start: number,
+  end?: number,
+) => string;
+const callStringStartsWith = uncurryThis(nativeStringStartsWith) as (
+  value: string,
+  search: string,
+) => boolean;
+const callStringToLowerCase = uncurryThis(nativeStringToLowerCase) as (value: string) => string;
+// `Promise.resolve` reads `this` as the species constructor, so its receiver is bound at boot
+// (security/boot-captured-direct-call.md R2).
+const boundPromiseResolve = nativeReflectApply(nativeFunctionBind, nativePromiseResolve, [
+  NativePromise,
+]) as <Value>(value: Value | PromiseLike<Value>) => Promise<Awaited<Value>>;
 
 function capturedControlsAreSound(): boolean {
   try {
     assertSecurityWitnessIntrinsics();
-    if (apply(nativeArrayIsArray, NativeArray, [[]]) !== true) return false;
-    if (apply(nativeArrayIsArray, NativeArray, [{}]) !== false) return false;
-    if (apply(nativeNumberIsSafeInteger, NativeNumber, [7]) !== true) return false;
-    if (apply(nativeNumberIsSafeInteger, NativeNumber, [7.5]) !== false) return false;
-    if (apply(nativeStringIndexOf, 'safe:12', [':']) !== 4) return false;
-    if (apply(nativeStringLastIndexOf, 'safe:12', [':']) !== 4) return false;
-    if (apply(nativeStringSlice, 'safe:12', [5]) !== '12') return false;
-    if (apply(nativeStringCharCodeAt, '9', [0]) !== 0x39) return false;
-    if (apply(nativeStringEndsWith, 'target:key', [':key']) !== true) return false;
-    if (apply(nativeStringEndsWith, 'target:other', [':key']) !== false) return false;
-    if (apply(nativeStringStartsWith, 'aria-label', ['aria-']) !== true) return false;
-    if (apply(nativeStringStartsWith, 'data-label', ['aria-']) !== false) return false;
-    if (apply(nativeStringToLowerCase, 'ScRiPt', []) !== 'script') return false;
+    if (nativeArrayIsArray([]) !== true) return false;
+    if (nativeArrayIsArray({}) !== false) return false;
+    if (nativeNumberIsSafeInteger(7) !== true) return false;
+    if (nativeNumberIsSafeInteger(7.5) !== false) return false;
+    if (callStringIndexOf('safe:12', ':') !== 4) return false;
+    if (callStringLastIndexOf('safe:12', ':') !== 4) return false;
+    if (callStringSlice('safe:12', 5) !== '12') return false;
+    if (callStringCharCodeAt('9', 0) !== 0x39) return false;
+    if (callStringEndsWith('target:key', ':key') !== true) return false;
+    if (callStringEndsWith('target:other', ':key') !== false) return false;
+    if (callStringStartsWith('aria-label', 'aria-') !== true) return false;
+    if (callStringStartsWith('data-label', 'aria-') !== false) return false;
+    if (callStringToLowerCase('ScRiPt') !== 'script') return false;
     if (!rawSafeElementName('cart-item') || !rawSafeElementName('linearGradient')) return false;
     if (rawSafeElementName('img src=x') || rawSafeElementName('x><script')) return false;
 
     const proof = { safe: true };
-    const descriptor = apply<PropertyDescriptor | undefined>(
-      nativeObjectGetOwnPropertyDescriptor,
-      NativeObject,
-      [proof, 'safe'],
-    );
+    const descriptor = nativeObjectGetOwnPropertyDescriptor(proof, 'safe');
     if (descriptor === undefined || !('value' in descriptor) || descriptor.value !== true) {
       return false;
     }
-    const keys = apply<string[]>(nativeObjectKeys, NativeObject, [proof]);
+    const keys = nativeObjectKeys(proof);
     if (keys.length !== 1 || keys[0] !== 'safe') return false;
-    const nullRecord = apply<Record<PropertyKey, unknown>>(nativeObjectCreate, NativeObject, [
-      null,
-    ]);
-    if (apply(nativeObjectGetPrototypeOf, NativeObject, [nullRecord]) !== null) return false;
-    apply(nativeObjectDefineProperty, NativeObject, [nullRecord, 'safe', { value: proof }]);
+    const nullRecord = nativeObjectCreate(null) as Record<PropertyKey, unknown>;
+    if (nativeObjectGetPrototypeOf(nullRecord) !== null) return false;
+    nativeObjectDefineProperty(nullRecord, 'safe', { value: proof });
     if (ownDataValue(nullRecord, 'safe') !== proof) return false;
-    if (
-      apply(nativeObjectFreeze, NativeObject, [proof]) !== proof ||
-      apply(nativeObjectIsFrozen, NativeObject, [proof]) !== true
-    ) {
+    if (nativeObjectFreeze(proof) !== proof || nativeObjectIsFrozen(proof) !== true) {
       return false;
     }
 
-    const promise = apply<Promise<string>>(nativePromiseResolve, NativePromise, ['safe']);
-    if (apply(nativeFunctionHasInstance, NativePromise, [promise]) !== true) return false;
-    const chained = apply<Promise<string>>(nativePromiseThen, promise, [(value: string) => value]);
-    if (apply(nativeFunctionHasInstance, NativePromise, [chained]) !== true) return false;
+    const promise = boundPromiseResolve('safe');
+    if (callHasInstance(NativePromise, promise) !== true) return false;
+    const chained = callPromiseThen(promise, (value: string) => value);
+    if (callHasInstance(NativePromise, chained) !== true) return false;
+
+    // Prove the genuinely dynamic dispatch shape (`formHelperApply`'s residual R3 path) with
+    // positive and negative semantics (security/boot-captured-direct-call.md).
+    if (nativeReflectApply(nativeStringToLowerCase, 'ScRiPt', []) !== 'script') return false;
+    if (nativeReflectApply(nativeFunctionHasInstance, NativePromise, [{}]) !== false) return false;
 
     const storage = new NativeAsyncLocalStorage<object>();
     const marker = {};
     let observed: object | undefined;
-    apply(nativeAsyncLocalStorageRun, storage, [
-      marker,
-      () => {
-        observed = apply(nativeAsyncLocalStorageGetStore, storage, []);
-      },
-    ]);
-    if (observed !== marker || apply(nativeAsyncLocalStorageGetStore, storage, []) !== undefined) {
+    callAsyncLocalRun(storage, marker, () => {
+      observed = callAsyncLocalGetStore(storage);
+    });
+    if (observed !== marker || callAsyncLocalGetStore(storage) !== undefined) {
       return false;
     }
 
@@ -136,7 +193,7 @@ export function formHelperAsyncLocalGetStore<Value>(
   storage: AsyncLocalStorage<Value>,
 ): Value | undefined {
   assertJsxFormHelperIntrinsics();
-  return apply(nativeAsyncLocalStorageGetStore, storage, []);
+  return callAsyncLocalGetStore(storage);
 }
 
 export function formHelperAsyncLocalRun<Value, Result>(
@@ -145,7 +202,7 @@ export function formHelperAsyncLocalRun<Value, Result>(
   render: () => Result,
 ): Result {
   assertJsxFormHelperIntrinsics();
-  return apply(nativeAsyncLocalStorageRun, storage, [value, render]);
+  return callAsyncLocalRun(storage, value, render);
 }
 
 export function formHelperCreateMap<Key, Value>(): Map<Key, Value> {
@@ -180,7 +237,7 @@ function rawToken(): string {
 function isBase64UrlToken(value: string): boolean {
   if (value.length !== 22) return false;
   for (let index = 0; index < value.length; index += 1) {
-    const code = apply<number>(nativeStringCharCodeAt, value, [index]);
+    const code = callStringCharCodeAt(value, index);
     if (
       !(
         (code >= 0x30 && code <= 0x39) ||
@@ -202,11 +259,7 @@ export function formHelperOwnDataValue(value: object, property: PropertyKey): un
 }
 
 function ownDataValue(value: object, property: PropertyKey): unknown {
-  const descriptor = apply<PropertyDescriptor | undefined>(
-    nativeObjectGetOwnPropertyDescriptor,
-    NativeObject,
-    [value, property],
-  );
+  const descriptor = nativeObjectGetOwnPropertyDescriptor(value, property);
   return descriptor !== undefined && 'value' in descriptor ? descriptor.value : undefined;
 }
 
@@ -215,36 +268,28 @@ export function formHelperSnapshotRecord(
   label: string,
 ): Readonly<Record<string, unknown>> {
   assertJsxFormHelperIntrinsics();
-  const snapshot = apply<Record<string, unknown>>(nativeObjectCreate, NativeObject, [null]);
-  const keys = apply<string[]>(nativeObjectKeys, NativeObject, [value]);
+  const snapshot = nativeObjectCreate(null) as Record<string, unknown>;
+  const keys = nativeObjectKeys(value);
   for (let index = 0; index < keys.length; index += 1) {
     const name = keys[index];
     if (name === undefined) continue;
-    const descriptor = apply<PropertyDescriptor | undefined>(
-      nativeObjectGetOwnPropertyDescriptor,
-      NativeObject,
-      [value, name],
-    );
+    const descriptor = nativeObjectGetOwnPropertyDescriptor(value, name);
     if (descriptor === undefined || !('value' in descriptor)) {
       throw new TypeError(`${label} property ${name} must be an own data value.`);
     }
-    apply(nativeObjectDefineProperty, NativeObject, [
-      snapshot,
-      name,
-      {
-        configurable: false,
-        enumerable: true,
-        value: descriptor.value,
-        writable: false,
-      },
-    ]);
+    nativeObjectDefineProperty(snapshot, name, {
+      configurable: false,
+      enumerable: true,
+      value: descriptor.value,
+      writable: false,
+    });
   }
-  return apply(nativeObjectFreeze, NativeObject, [snapshot]);
+  return nativeObjectFreeze(snapshot);
 }
 
 export function formHelperCreateRecord(): Record<string, unknown> {
   assertJsxFormHelperIntrinsics();
-  return apply(nativeObjectCreate, NativeObject, [null]);
+  return nativeObjectCreate(null) as Record<string, unknown>;
 }
 
 export function formHelperDefineDataProperty(
@@ -253,16 +298,12 @@ export function formHelperDefineDataProperty(
   propertyValue: unknown,
 ): void {
   assertJsxFormHelperIntrinsics();
-  apply(nativeObjectDefineProperty, NativeObject, [
-    value,
-    property,
-    {
-      configurable: true,
-      enumerable: true,
-      value: propertyValue,
-      writable: true,
-    },
-  ]);
+  nativeObjectDefineProperty(value, property, {
+    configurable: true,
+    enumerable: true,
+    value: propertyValue,
+    writable: true,
+  });
 }
 
 export function formHelperDefineArrayValue<Value>(
@@ -271,36 +312,32 @@ export function formHelperDefineArrayValue<Value>(
   value: Value,
 ): void {
   assertJsxFormHelperIntrinsics();
-  apply(nativeObjectDefineProperty, NativeObject, [
-    values,
-    index,
-    {
-      configurable: true,
-      enumerable: true,
-      value,
-      writable: true,
-    },
-  ]);
+  nativeObjectDefineProperty(values, index, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
 }
 
 export function formHelperObjectKeys(value: object): string[] {
   assertJsxFormHelperIntrinsics();
-  return apply(nativeObjectKeys, NativeObject, [value]);
+  return nativeObjectKeys(value);
 }
 
 export function formHelperFreeze<Value>(value: Value): Readonly<Value> {
   assertJsxFormHelperIntrinsics();
-  return apply(nativeObjectFreeze, NativeObject, [value]);
+  return nativeObjectFreeze(value);
 }
 
 export function formHelperIsArray(value: unknown): value is unknown[] {
   assertJsxFormHelperIntrinsics();
-  return apply(nativeArrayIsArray, NativeArray, [value]);
+  return nativeArrayIsArray(value);
 }
 
 export function formHelperString(value: unknown): string {
   assertJsxFormHelperIntrinsics();
-  return apply(NativeString, undefined, [value]);
+  return NativeString(value);
 }
 
 export function formHelperIsSafeElementName(value: string): boolean {
@@ -311,7 +348,7 @@ export function formHelperIsSafeElementName(value: string): boolean {
 function rawSafeElementName(value: string): boolean {
   if (value.length === 0) return false;
   for (let index = 0; index < value.length; index += 1) {
-    const code = apply<number>(nativeStringCharCodeAt, value, [index]);
+    const code = callStringCharCodeAt(value, index);
     const letter = (code >= 0x41 && code <= 0x5a) || (code >= 0x61 && code <= 0x7a);
     if (index === 0) {
       if (!letter) return false;
@@ -335,35 +372,35 @@ function rawSafeElementName(value: string): boolean {
 
 export function formHelperStringIndexOf(value: string, search: string, fromIndex = 0): number {
   assertJsxFormHelperIntrinsics();
-  return apply(nativeStringIndexOf, value, [search, fromIndex]);
+  return callStringIndexOf(value, search, fromIndex);
 }
 
 export function formHelperStringLastIndexOf(value: string, search: string): number {
   assertJsxFormHelperIntrinsics();
-  return apply(nativeStringLastIndexOf, value, [search]);
+  return callStringLastIndexOf(value, search);
 }
 
 export function formHelperStringEndsWith(value: string, search: string): boolean {
   assertJsxFormHelperIntrinsics();
-  return apply(nativeStringEndsWith, value, [search]);
+  return callStringEndsWith(value, search);
 }
 
 export function formHelperStringStartsWith(value: string, search: string): boolean {
   assertJsxFormHelperIntrinsics();
-  return apply(nativeStringStartsWith, value, [search]);
+  return callStringStartsWith(value, search);
 }
 
 export function formHelperStringToLowerCase(value: string): string {
   assertJsxFormHelperIntrinsics();
-  return apply(nativeStringToLowerCase, value, []);
+  return callStringToLowerCase(value);
 }
 
 export function formHelperAsciiCaseInsensitiveEqual(left: string, right: string): boolean {
   assertJsxFormHelperIntrinsics();
   if (left.length !== right.length) return false;
   for (let index = 0; index < left.length; index += 1) {
-    const leftCode = apply<number>(nativeStringCharCodeAt, left, [index]);
-    const rightCode = apply<number>(nativeStringCharCodeAt, right, [index]);
+    const leftCode = callStringCharCodeAt(left, index);
+    const rightCode = callStringCharCodeAt(right, index);
     const foldedLeft = leftCode >= 0x41 && leftCode <= 0x5a ? leftCode + 0x20 : leftCode;
     const foldedRight = rightCode >= 0x41 && rightCode <= 0x5a ? rightCode + 0x20 : rightCode;
     if (foldedLeft !== foldedRight) return false;
@@ -373,9 +410,7 @@ export function formHelperAsciiCaseInsensitiveEqual(left: string, right: string)
 
 export function formHelperStringSlice(value: string, start: number, end?: number): string {
   assertJsxFormHelperIntrinsics();
-  return end === undefined
-    ? apply(nativeStringSlice, value, [start])
-    : apply(nativeStringSlice, value, [start, end]);
+  return callStringSlice(value, start, end);
 }
 
 export function formHelperParseId(value: string): number | undefined {
@@ -383,10 +418,10 @@ export function formHelperParseId(value: string): number | undefined {
   if (value.length === 0) return undefined;
   let result = 0;
   for (let index = 0; index < value.length; index += 1) {
-    const code = apply<number>(nativeStringCharCodeAt, value, [index]);
+    const code = callStringCharCodeAt(value, index);
     if (code < 0x30 || code > 0x39) return undefined;
     result = result * 10 + code - 0x30;
-    if (!apply(nativeNumberIsSafeInteger, NativeNumber, [result])) return undefined;
+    if (!nativeNumberIsSafeInteger(result)) return undefined;
   }
   return result > 0 ? result : undefined;
 }
@@ -394,24 +429,28 @@ export function formHelperParseId(value: string): number | undefined {
 export function formHelperNextId(current: number): number {
   assertJsxFormHelperIntrinsics();
   const next = current + 1;
-  if (!apply(nativeNumberIsSafeInteger, NativeNumber, [next]) || next <= 0) {
+  if (!nativeNumberIsSafeInteger(next) || next <= 0) {
     throw new TypeError('Kovo JSX form-helper placeholder id space is exhausted.');
   }
   return next;
 }
 
+/**
+ * Residual dynamic dispatch (security/boot-captured-direct-call.md R3): caller-shaped target and
+ * arity stay on the boot-captured `Reflect.apply`.
+ */
 export function formHelperApply<Return>(
   fn: Function,
   receiver: unknown,
   args: readonly unknown[],
 ): Return {
   assertJsxFormHelperIntrinsics();
-  return apply(fn, receiver, args);
+  return nativeReflectApply(fn, receiver, args) as Return;
 }
 
 export function formHelperIsPromise(value: unknown): value is Promise<unknown> {
   assertJsxFormHelperIntrinsics();
-  return apply(nativeFunctionHasInstance, NativePromise, [value]);
+  return callHasInstance(NativePromise, value);
 }
 
 export function formHelperPromiseThen<Value, Result>(
@@ -420,7 +459,7 @@ export function formHelperPromiseThen<Value, Result>(
   onRejected?: (reason: unknown) => Result | PromiseLike<Result>,
 ): Promise<Result> {
   assertJsxFormHelperIntrinsics();
-  return apply(nativePromiseThen, promise, [onFulfilled, onRejected]);
+  return callPromiseThen(promise, onFulfilled, onRejected);
 }
 
 export function formHelperPromiseAll<Value>(
@@ -435,26 +474,21 @@ export function formHelperPromiseAll<Value>(
     const results = new NativeArray<Awaited<Value>>(values.length);
     let remaining = values.length;
     for (let index = 0; index < values.length; index += 1) {
-      const descriptor = apply<PropertyDescriptor | undefined>(
-        nativeObjectGetOwnPropertyDescriptor,
-        NativeObject,
-        [values, index],
-      );
+      const descriptor = nativeObjectGetOwnPropertyDescriptor(values, index);
       if (descriptor === undefined || !('value' in descriptor)) {
         reject(new TypeError('Kovo JSX Promise input must be a dense array of own data values.'));
         return;
       }
-      const promise = apply<Promise<Awaited<Value>>>(nativePromiseResolve, NativePromise, [
-        descriptor.value,
-      ]);
-      apply(nativePromiseThen, promise, [
+      const promise = boundPromiseResolve(descriptor.value as Value | PromiseLike<Value>);
+      callPromiseThen(
+        promise,
         (result: Awaited<Value>) => {
           formHelperDefineArrayValue(results, index, result);
           remaining -= 1;
           if (remaining === 0) resolve(results);
         },
         reject,
-      ]);
+      );
     }
   });
 }
