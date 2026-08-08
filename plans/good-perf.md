@@ -109,27 +109,30 @@ comparison.
 The tables above are the **2026-08-07 baseline** and are kept as the reference point. Verified on
 merged main by rebuilding `benchmarks/kovo` and probing the running production artifact:
 
-| Asset | Baseline (wire) | Merged main (wire) | Change |
+| Asset | Baseline (wire) | Batch 1 merged (wire) | Change |
 | --- | ---: | ---: | ---: |
-| document `/` | 41,014 B | **7,390 B** (br) | **-82.0%** |
-| document `/product/...` | 25,195 B | **5,543 B** (br) | **-78.0%** |
+| document `/` | 41,014 B | **2,588 B** (br, 18,105 B identity) | **-93.7%** |
+| document `/product/...` | 25,195 B | **787 B** (br, 2,286 B identity) | **-96.9%** |
 | `/assets/styles.css` | 122,222 B | **1,050 B** (br, 3,907 B identity) | **-99.1%** |
-| critical path excluding the client runtime | 163,236 B | **8,440 B** | **-94.8%** |
-| client runtime `/c/…kovo-runtime.client.js` | 267,611 B | 47,680 B (br) | -82.2% |
+| client runtime | 267,611 B | **0 B** (not referenced by an inert document) | **-100%** |
+| **critical path** | **430,847 B** | **3,638 B** | **-99.2%** |
+| first `<link rel=stylesheet>` offset | byte 23,174 (56.5% in) | **byte 130** (0.72% in) | — |
 | stylesheet revalidation | 122,222 B re-download | **304, 0 body bytes** | — |
 
-Next.js's render-blocking critical path on the same app is 8,064 B, so Kovo is now at parity on
-first-load bytes — and the O10 slice (still to merge) removes the runtime and the inline bootstrap
-entirely for inert pages, taking the document to 18,105 B identity.
+**Next.js ships 8,064 B render-blocking on the same app. Kovo now ships 3,638 B — 2.2x fewer.**
+The mobile FCP loss the baseline recorded (980 ms vs 408 ms) was ~83% transfer time on a
+209,715 B/s link; that transfer is now ~3.6 KB instead of ~163 KB. A clean-box FCP re-measurement
+is owned by O17 and is the acceptance criterion for closing the headline claim.
 
-Behaviour confirmed on merged main: cookie-bearing documents now compress (`content-encoding: br`
-with a per-response `kovo-pad` length mask) where they previously refused; `/assets/*` carry strong
-ETags and return real 304s; document GETs are exempt from the framework-default per-IP limit; the
-listing still renders all 24 product cards.
+Behaviour confirmed on merged main: cookie-bearing documents compress (`content-encoding: br` plus a
+per-response `kovo-pad` length mask) where they previously refused outright; `/assets/*` carry
+strong ETags and return real 304s; document GETs are exempt from the framework-default per-IP limit;
+an inert document ships no `<script>` and a `script-src 'self'` CSP with no inline hash; an
+interactive document still receives the bootstrap and runtime (pinned by the create-kovo production
+build test); the listing still renders all 24 product cards.
 
 Also merged: `kovo dev` edit→served 25,704 ms → 3,590 ms on `benchmarks/kovo` (n=10 each, same
-loaded box back to back — INDICATIVE, not a clean-box number; a clean re-measurement is owned by
-O17).
+loaded box back to back — INDICATIVE, not a clean-box number; clean re-measurement owned by O17).
 
 ## The single cross-cutting root cause (development)
 
@@ -660,6 +663,23 @@ Absorbs the open items of `plans/fast-ci.md`, which is superseded.
     73.6% headroom. The budget was 2,750 ms on 2026-06-16, 3,500 on 2026-07-13 and 8,250 on
     2026-07-24; the current median would pass the original. JSX lowering is **not** a bottleneck (it is
     invisible in the dev-edit profile and ~3% of check cost); this gate protects nothing.
+
+## Pre-existing defects surfaced by the batch-1 regression sweep
+
+Found while verifying merged main. Reproduced at `93412b7e4` (before any good-perf work), so these
+are **not** regressions from this effort — but they are real and currently un-owned.
+
+- [ ] `packages/server/src/vite-packed-provenance.test.ts` cannot pass on main.
+  - The fixture symlinks the repo's `@kovojs` sources into a temp app, and `kovo dev` then loads them
+    under Node's strip-only TypeScript loader, which rejects `export namespace derive` at
+    `packages/browser/src/derive.ts:160` with `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`. `kovo dev` exits 1
+    in ~610 ms before any ready report.
+  - Either the fixture must resolve `@kovojs` to built output rather than source, or `derive.ts` must
+    stop using a TypeScript `namespace`. The same strip-only constraint is already recorded in this
+    plan's "Do not re-propose" section for `packages/cli/dist/bin.mjs`.
+  - A second, separate defect in the same file was fixed in passing: `statSync` was used for
+    link-existence checks, so a workspace link left dangling by a dependency bump read as absent and
+    the fixture re-created it, failing with `EEXIST`. Now `lstatSync`.
 
 ## DevEx defects found while measuring
 
