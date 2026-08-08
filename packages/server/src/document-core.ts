@@ -993,9 +993,7 @@ function htmlCarriesClientSurfaceMarker(html: string): boolean {
   return false;
 }
 
-function documentStringsCarryClientSurfaceMarker(
-  values: readonly string[] | undefined,
-): boolean {
+function documentStringsCarryClientSurfaceMarker(values: readonly string[] | undefined): boolean {
   if (values === undefined) return false;
   for (let index = 0; index < values.length; index += 1) {
     if (htmlCarriesClientSurfaceMarker(values[index]!)) return true;
@@ -1014,7 +1012,10 @@ function documentStringsCarryClientSurfaceMarker(
  * any framework-emitted interactive marker in app or structured-document markup.
  */
 function documentCarriesClientSurface(
-  options: Pick<DocumentAssemblyOptions, 'body' | 'document' | 'sessionDependent' | 'sessionFingerprint'>,
+  options: Pick<
+    DocumentAssemblyOptions,
+    'body' | 'document' | 'sessionDependent' | 'sessionFingerprint'
+  >,
   hints: PageHintParts,
   queryCount: number,
   deferredRegions: boolean,
