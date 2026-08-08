@@ -2,6 +2,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
 
 import { runAppBenchmark } from './harness/run.mjs';
@@ -67,11 +68,36 @@ if (apps.length === 0) throw new Error(`No benchmark apps matched --apps ${readA
 
 const outDir = readArg('--out-dir') ? path.resolve(readArg('--out-dir')) : resultsDir;
 
+// `--port-base 4810` shifts every entrant's listen port so two benchmark runs on the same machine
+// cannot silently measure each other's server. Without this, a stale listener on the default port
+// is indistinguishable from a healthy start: `waitForHttp` just sees a 200 and proceeds.
+const portBase = readArg('--port-base') ? Number(readArg('--port-base')) : null;
+if (portBase !== null) {
+  if (!Number.isInteger(portBase) || portBase < 1024 || portBase > 65000) {
+    throw new Error(`--port-base must be an integer between 1024 and 65000, got ${portBase}.`);
+  }
+  const basePort = Math.min(...allApps.map((app) => app.port));
+  for (const app of allApps) app.port = portBase + (app.port - basePort);
+}
+
 await mkdir(outDir, { recursive: true });
 
 if (!skipBuild) {
   for (const app of apps) {
     await runCommand(app.build[0], app.build[1], { cwd: benchmarkRoot, label: `${app.id}:build` });
+  }
+}
+
+// Fail fast if any entrant's port is already taken. `waitForHttp` cannot tell a healthy start from
+// a foreign listener left behind by another run: both answer 200, so the benchmark would silently
+// measure someone else's process. Checking every port up front also avoids burning the first
+// entrant's run before discovering the second entrant's port is occupied.
+for (const app of apps) {
+  if (await portInUse(app.port)) {
+    throw new Error(
+      `Port ${app.port} (${app.id}) is already in use. Another benchmark run or a stale server is ` +
+        `holding it; stop it or pass --port-base to move this run out of the way.`,
+    );
   }
 }
 
@@ -83,10 +109,17 @@ for (const app of apps) {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   pipeServerLogs(app.id, server);
+  // A server that dies mid-run leaves the scenarios timing a dead origin, so surface it loudly.
+  let serverExit = null;
+  server.on('exit', (code, signal) => {
+    serverExit = `${app.id} server exited early (code ${code}, signal ${signal}).`;
+    process.stderr.write(`[${app.id}] ${serverExit}\n`);
+  });
   try {
     const origin = `http://127.0.0.1:${app.port}`;
     await waitForHttp(origin);
     results.push(await runAppBenchmark({ app, iterations, lighthouse: runLighthouse, origin }));
+    if (serverExit) throw new Error(serverExit);
   } finally {
     await stopServer(server);
   }
@@ -136,6 +169,15 @@ function pipeServerLogs(id, server) {
   });
   server.stderr.on('data', (chunk) => {
     process.stderr.write(`[${id}] ${chunk}`);
+  });
+}
+
+function portInUse(port) {
+  return new Promise((resolve) => {
+    const probe = createServer();
+    probe.once('error', () => resolve(true));
+    probe.once('listening', () => probe.close(() => resolve(false)));
+    probe.listen(port, '127.0.0.1');
   });
 }
 
