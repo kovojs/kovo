@@ -440,22 +440,19 @@ function storeMemoizedAppContractProject(
 }
 
 /**
- * Program host that shares parsed dependency SourceFiles across constructions. Root files are
- * always parsed fresh from disk; non-root files reuse the shared AST only when the current
- * on-disk text is byte-identical to the cached parse (SPEC.md §5.2 exact-snapshot rule).
+ * Program host that shares parsed SourceFiles across constructions. Every file — root or
+ * dependency — reuses the shared AST only when the current on-disk text is byte-identical to the
+ * cached parse (SPEC.md §5.2 exact-snapshot rule): the reuse condition IS the exactness proof, so
+ * a stale AST can never enter a Program. Sharing roots too is the D5-c incremental step — after a
+ * one-file edit, only the changed file re-parses; every unchanged app module keeps its AST and
+ * binder state instead of the whole project re-parsing per construction (plans/good-perf.md O5).
  */
-function createAppContractCompilerHost(
-  options: TS.CompilerOptions,
-  canonicalRootNames: ReadonlySet<string>,
-): TS.CompilerHost {
+function createAppContractCompilerHost(options: TS.CompilerOptions): TS.CompilerHost {
   const host = ts.createCompilerHost(options);
   const baseGetSourceFile = host.getSourceFile.bind(host);
   const baseReadFile = host.readFile.bind(host);
   host.getSourceFile = (fileName, languageVersionOrOptions, onError, shouldCreateNewSourceFile) => {
     const canonical = normalizeFileName(resolve(fileName));
-    if (canonicalRootNames.has(canonical)) {
-      return baseGetSourceFile(fileName, languageVersionOrOptions, onError, shouldCreateNewSourceFile);
-    }
     if (shouldCreateNewSourceFile !== true) {
       const cached = sharedDependencySourceFiles.get(canonical);
       if (cached !== undefined && cached.text === baseReadFile(fileName)) return cached;
@@ -494,10 +491,7 @@ export function createCompilerOwnedAppContractProject(
   const memoized = memoizedAppContractProject(memoSignature);
   if (memoized !== undefined) return memoized;
   const options = appContractCompilerOptions();
-  const host = createAppContractCompilerHost(
-    options,
-    new Set(rootNames.map((rootName) => normalizeFileName(rootName))),
-  );
+  const host = createAppContractCompilerHost(options);
   const program = ts.createProgram({ host, options, rootNames });
   const checker = program.getTypeChecker();
   const context: ProvenanceContext = { checker, options, program };
@@ -517,7 +511,23 @@ export function createCompilerOwnedAppContractProject(
     return exact;
   };
 
+  // plans/good-perf.md O5/D5-c: one immutable Program yields one immutable per-file analysis.
+  // The mutation census and the static census both sweep every project file through this
+  // function (and compileEntry repeats it per entry), so without the memo one dev-refresh or
+  // build pass re-ran every checker-heavy visit two-plus times over identical state. Keyed by
+  // exact Program source file identity; entries live and die with this project object.
+  const entryAnalyses = new Map<TS.SourceFile, EntryAnalysis>();
+
   const analyzeEntry = (fileName: string): EntryAnalysis => {
+    const memoSourceFile = sourceFileFor(fileName);
+    const cached = entryAnalyses.get(memoSourceFile);
+    if (cached !== undefined) return cached;
+    const analysis = analyzeEntryUncached(fileName);
+    entryAnalyses.set(memoSourceFile, analysis);
+    return analysis;
+  };
+
+  const analyzeEntryUncached = (fileName: string): EntryAnalysis => {
     const sourceFile = sourceFileFor(fileName);
     const diagnostics: CompilerOwnedAppContractDiagnostic[] = [];
     const facts: CompilerOwnedAppContractResolution[] = [];
