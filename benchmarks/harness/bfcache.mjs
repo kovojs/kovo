@@ -92,9 +92,7 @@ async function probeOnce(browser, origin) {
     await link.click();
     await page.waitForURL((url) => url.pathname === targetPath);
     await page.waitForSelector('main h1');
-    const leftTheDocument = await page.evaluate(
-      () => window.__kovoBenchBfcacheSentinel !== true,
-    );
+    const leftTheDocument = await page.evaluate(() => window.__kovoBenchBfcacheSentinel !== true);
     await page.waitForTimeout(250);
     // `waitUntil: 'load'` cannot be used here: a bfcache restore fires no `load` event, so waiting
     // for one times out on exactly the outcome being probed. Commit, then let `pageshow` land.

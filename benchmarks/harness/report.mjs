@@ -40,7 +40,7 @@ export async function writeReport(resultsPath, reportPath) {
     '',
     '## Navigation',
     '',
-    'Measured from the click to the paint that presents the destination: the destination document\'s browser-recorded first contentful paint when the navigation replaced the document, and the first frame rendered after the destination content is in the DOM when it did not. `Doc replaced` counts the navigations that destroyed the JS realm, i.e. where the framework fell back to a full document load.',
+    "Measured from the click to the paint that presents the destination: the destination document's browser-recorded first contentful paint when the navigation replaced the document, and the first frame rendered after the destination content is in the DOM when it did not. `Doc replaced` counts the navigations that destroyed the JS realm, i.e. where the framework fell back to a full document load.",
     '',
     '`Superseded probe` reproduces the previous harness metric — wait for `main h1` to exist, then stop. The listing page also has a `main h1`, so that selector is already satisfied by the ORIGIN document and the probe resolves before the navigation commits: it measured harness round-trip latency, not navigation. `Superseded error` is how far low it lands. Do not quote it.',
     '',
