@@ -1,0 +1,526 @@
+{
+  "schema": "kovo-perf-baseline/v1",
+  "recordedOn": "2026-08-08",
+  "purpose": "The runs perf-budgets.json was calibrated from, committed so a later run has something concrete to diff against rather than a number in a rationale string. One representative run per suite; the full sample sets and their spreads are recorded in each metric rationale in perf-budgets.json.",
+  "suites": [
+    {
+      "suite": "bytes",
+      "startedAt": "2026-08-08T15:16:50.407Z",
+      "finishedAt": "2026-08-08T15:17:41.384Z",
+      "host": {
+        "arch": "arm64",
+        "cpuCount": "10",
+        "loadAverage": [
+          3.7783203125,
+          3.81787109375,
+          2.98388671875
+        ],
+        "node": "v24.19.0",
+        "platform": "darwin"
+      },
+      "options": {
+        "componentCount": 24,
+        "connections": 32,
+        "durationMs": 10000,
+        "editTimeoutMs": 240000,
+        "edits": 5,
+        "ladder": [
+          8,
+          24,
+          72
+        ],
+        "port": 43131,
+        "readyTimeoutMs": 300000,
+        "samples": 1,
+        "timeoutMs": 1800000
+      },
+      "metrics": {
+        "production.criticalPath.wireBytes": {
+          "value": 6383
+        },
+        "production.document.wireBytes": {
+          "value": 5747
+        },
+        "production.inlineBootstrap.gzipBytes": {
+          "value": 4829
+        },
+        "production.inlineBootstrap.identityBytes": {
+          "value": 22820
+        },
+        "production.navigation.wireBytes": {
+          "value": 1098
+        }
+      },
+      "detail": {
+        "documentIdentityBytes": 27213,
+        "documentContentEncoding": "br",
+        "navigationContentType": "application/vnd.kovo.document-parts+json; charset=utf-8",
+        "stylesheetHrefs": [
+          "/assets/styles.css"
+        ]
+      }
+    },
+    {
+      "suite": "check-scaling",
+      "startedAt": "2026-08-08T15:26:40.558Z",
+      "finishedAt": "2026-08-08T15:28:48.738Z",
+      "host": {
+        "arch": "arm64",
+        "cpuCount": "10",
+        "loadAverage": [
+          5.10693359375,
+          4.4033203125,
+          3.830078125
+        ],
+        "node": "v24.19.0",
+        "platform": "darwin"
+      },
+      "options": {
+        "componentCount": 24,
+        "connections": 32,
+        "durationMs": 10000,
+        "editTimeoutMs": 240000,
+        "edits": 5,
+        "ladder": [
+          8,
+          24,
+          72,
+          216
+        ],
+        "port": 43117,
+        "readyTimeoutMs": 300000,
+        "samples": 1,
+        "timeoutMs": 1800000
+      },
+      "metrics": {
+        "check.appSourceTrust.marginalScalingExponent": {
+          "value": 1.0878037632838975
+        },
+        "check.peakRssBytes": {
+          "loadAverage": 3.809814453125,
+          "value": 2909470720
+        },
+        "check.total.marginalScalingExponent": {
+          "value": 0.6765515743419344
+        }
+      },
+      "detail": {
+        "wholeLadderOlsExponent": {
+          "appSourceTrust": 0.5672164186471191,
+          "total": 0.3366256522941607
+        },
+        "rungs": [
+          {
+            "appSourceTrustMedianMs": 4765.302749999999,
+            "componentCount": 8,
+            "durationMedianMs": 19149.640458,
+            "peakRssBytes": 2372894720,
+            "samples": [
+              {
+                "appSourceTrustMs": 4765.302749999999,
+                "censusComplete": true,
+                "durationMs": 19149.640458,
+                "exitCode": 0,
+                "loadAverage": 2.96630859375,
+                "peakRssBytes": 2372894720,
+                "phases": [
+                  {
+                    "durationMs": 0,
+                    "name": "lifecycle-policy",
+                    "status": "not-applicable"
+                  },
+                  {
+                    "durationMs": 2267.417791,
+                    "name": "config-trust",
+                    "status": "executed"
+                  },
+                  {
+                    "durationMs": 3160.9075410000005,
+                    "name": "typescript",
+                    "status": "executed"
+                  },
+                  {
+                    "durationMs": 0,
+                    "name": "project-quality",
+                    "status": "not-applicable"
+                  },
+                  {
+                    "durationMs": 0,
+                    "name": "sound-subset",
+                    "status": "not-applicable"
+                  },
+                  {
+                    "durationMs": 1162.9988750000002,
+                    "name": "session-authority",
+                    "status": "executed"
+                  },
+                  {
+                    "durationMs": 4765.302749999999,
+                    "name": "app-source-trust",
+                    "status": "executed"
+                  },
+                  {
+                    "durationMs": 266.84170900000026,
+                    "name": "stylesheet",
+                    "status": "executed"
+                  },
+                  {
+                    "durationMs": 3724.885708,
+                    "name": "app-evaluation",
+                    "status": "executed"
+                  },
+                  {
+                    "durationMs": 7.1238330000014685,
+                    "name": "build-check-graph",
+                    "status": "executed"
+                  },
+                  {
+                    "durationMs": 3.3029590000005555,
+                    "name": "graph-diagnostics",
+                    "status": "executed"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "appSourceTrustMedianMs": 6166.936333000001,
+            "componentCount": 24,
+            "durationMedianMs": 21048.56825,
+            "peakRssBytes": 2460221440,
+            "samples": [
+              {
+                "appSourceTrustMs": 6166.936333000001,
+                "censusComplete": true,
+                "durationMs": 21048.56825,
+                "exitCode": 0,
+                "loadAverage": 3.5400390625,
+                "peakRssBytes": 2460221440,
+                "phases": [
+                  {
+                    "durationMs": 0,
+                    "name": "lifecycle-policy",
+                    "status": "not-applicable"
+                  },
+                  {
+                    "durationMs": 2091.041708,
+                    "name": "config-trust",
+                    "status": "executed"
+                  },
+                  {
+                    "durationMs": 2802.822083,
+                    "name": "typescript",
+                    "status": "executed"
+                  },
+                  {
+                    "durationMs": 0,
+                    "name": "project-quality",
+                    "status": "not-applicable"
+                  },
+                  {
+                    "durationMs": 0,
+                    "name": "sound-subset",
+                    "status": "not-applicable"
+                  },
+                  {
+                    "durationMs": 1361.2022499999994,
+                    "name": "session-authority",
+                    "status": "executed"
+                  },
+                  {
+                    "durationMs": 6166.936333000001,
+                    "name": "app-source-trust",
+                    "status": "executed"
+                  },
+                  {
+                    "durationMs": 386.3122920000005,
+                    "name": "stylesheet",
+                    "status": "executed"
+                  },
+                  {
+                    "durationMs": 4443.7824169999985,
+                    "name": "app-evaluation",
+                    "status": "executed"
+                  },
+                  {
+                    "durationMs": 9.42291699999987,
+                    "name": "build-check-graph",
+                    "status": "executed"
+                  },
+                  {
+                    "durationMs": 4.593791999999667,
+                    "name": "graph-diagnostics",
+                    "status": "executed"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "appSourceTrustMedianMs": 9849.224584000001,
+            "componentCount": 72,
+            "durationMedianMs": 28304.558834,
+            "peakRssBytes": 2602401792,
+            "samples": [
+              {
+                "appSourceTrustMs": 9849.224584000001,
+                "censusComplete": true,
+                "durationMs": 28304.558834,
+                "exitCode": 0,
+                "loadAverage": 4.07958984375,
+                "peakRssBytes": 2602401792,
+                "phases": [
+                  {
+                    "durationMs": 0,
+                    "name": "lifecycle-policy",
+                    "status": "not-applicable"
+                  },
+                  {
+                    "durationMs": 2163.1680829999996,
+                    "name": "config-trust",
+                    "status": "executed"
+                  },
+                  {
+                    "durationMs": 3102.5264170000005,
+                    "name": "typescript",
+                    "status": "executed"
+                  },
+                  {
+                    "durationMs": 0,
+                    "name": "project-quality",
+                    "status": "not-applicable"
+                  },
+                  {
+                    "durationMs": 0,
+                    "name": "sound-subset",
+                    "status": "not-applicable"
+                  },
+                  {
+                    "durationMs": 1687.0350420000013,
+                    "name": "session-authority",
+                    "status": "executed"
+                  },
+                  {
+                    "durationMs": 9849.224584000001,
+                    "name": "app-source-trust",
+                    "status": "executed"
+                  },
+                  {
+                    "durationMs": 683.2629579999993,
+                    "name": "stylesheet",
+                    "status": "executed"
+                  },
+                  {
+                    "durationMs": 6932.474957999999,
+                    "name": "app-evaluation",
+                    "status": "executed"
+                  },
+                  {
+                    "durationMs": 17.354290999999648,
+                    "name": "build-check-graph",
+                    "status": "executed"
+                  },
+                  {
+                    "durationMs": 7.7757500000006985,
+                    "name": "graph-diagnostics",
+                    "status": "executed"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "appSourceTrustMedianMs": 32539.909208999998,
+            "componentCount": 216,
+            "durationMedianMs": 59518.71225,
+            "peakRssBytes": 2909470720,
+            "samples": [
+              {
+                "appSourceTrustMs": 32539.909208999998,
+                "censusComplete": true,
+                "durationMs": 59518.71225,
+                "exitCode": 0,
+                "loadAverage": 4.0966796875,
+                "peakRssBytes": 2909470720,
+                "phases": [
+                  {
+                    "durationMs": 0,
+                    "name": "lifecycle-policy",
+                    "status": "not-applicable"
+                  },
+                  {
+                    "durationMs": 2203.070083,
+                    "name": "config-trust",
+                    "status": "executed"
+                  },
+                  {
+                    "durationMs": 3421.8622079999996,
+                    "name": "typescript",
+                    "status": "executed"
+                  },
+                  {
+                    "durationMs": 0,
+                    "name": "project-quality",
+                    "status": "not-applicable"
+                  },
+                  {
+                    "durationMs": 0,
+                    "name": "sound-subset",
+                    "status": "not-applicable"
+                  },
+                  {
+                    "durationMs": 2896.042834,
+                    "name": "session-authority",
+                    "status": "executed"
+                  },
+                  {
+                    "durationMs": 32539.909208999998,
+                    "name": "app-source-trust",
+                    "status": "executed"
+                  },
+                  {
+                    "durationMs": 1368.737792,
+                    "name": "stylesheet",
+                    "status": "executed"
+                  },
+                  {
+                    "durationMs": 13218.070791999999,
+                    "name": "app-evaluation",
+                    "status": "executed"
+                  },
+                  {
+                    "durationMs": 37.427834000001894,
+                    "name": "build-check-graph",
+                    "status": "executed"
+                  },
+                  {
+                    "durationMs": 14.950333000000683,
+                    "name": "graph-diagnostics",
+                    "status": "executed"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "suite": "ssr",
+      "startedAt": "2026-08-08T15:37:15.450Z",
+      "finishedAt": "2026-08-08T15:38:15.576Z",
+      "host": {
+        "arch": "arm64",
+        "cpuCount": "10",
+        "loadAverage": [
+          5.7578125,
+          6.05908203125,
+          5.00341796875
+        ],
+        "node": "v24.19.0",
+        "platform": "darwin"
+      },
+      "options": {
+        "componentCount": 24,
+        "connections": 32,
+        "durationMs": 10000,
+        "editTimeoutMs": 240000,
+        "edits": 5,
+        "ladder": [
+          8,
+          24,
+          72
+        ],
+        "port": 43153,
+        "readyTimeoutMs": 300000,
+        "samples": 1,
+        "timeoutMs": 1800000
+      },
+      "metrics": {
+        "production.ssr.requestsPerSecondFloor": {
+          "loadAverage": 5.55908203125,
+          "value": -196.83785400580666
+        },
+        "production.ssr.ttfbMedianMs": {
+          "loadAverage": 5.55908203125,
+          "value": 160.94477050000205
+        }
+      },
+      "detail": {
+        "requestsPerSecond": 196.83785400580666,
+        "ttfbMedianMs": 160.94477050000205,
+        "ttfbSampleCount": 2000,
+        "connections": 32,
+        "loadAverageDuringRun": 5.7578125,
+        "preSuiteLoadAverage": 5.55908203125
+      }
+    },
+    {
+      "suite": "dev-edit",
+      "startedAt": "2026-08-08T15:39:29.756Z",
+      "finishedAt": "2026-08-08T15:39:46.224Z",
+      "host": {
+        "arch": "arm64",
+        "cpuCount": "10",
+        "loadAverage": [
+          3.97705078125,
+          5.3134765625,
+          4.8212890625
+        ],
+        "node": "v24.19.0",
+        "platform": "darwin"
+      },
+      "options": {
+        "componentCount": 24,
+        "connections": 32,
+        "durationMs": 10000,
+        "editTimeoutMs": 180000,
+        "edits": 4,
+        "ladder": [
+          8,
+          24,
+          72
+        ],
+        "port": 43180,
+        "readyTimeoutMs": 300000,
+        "samples": 1,
+        "timeoutMs": 1800000
+      },
+      "metrics": {
+        "dev.editToServed.medianMs": {
+          "loadAverage": 3.80126953125,
+          "value": 517.6626254999992
+        },
+        "dev.editToServed.missRate": {
+          "value": 0
+        }
+      },
+      "detail": {
+        "devLogTail": "Debugger listening on ws://127.0.0.1:43181/326624ab-ece3-42ac-817c-1bba4a167525\nFor help, see: https://nodejs.org/learn/getting-started/debugging\n[kovo egress] app.assemble() installed the default outbound-egress floor in development with local private-network destinations permitted; cloud metadata remains blocked. Pass `defineKovo({ egress: { allowInternal: [] } })` to exercise production empty-allowlist semantics.\nKovo dev ready in 11844ms\n  Local URL    http://127.0.0.1:43180/\n  Network URL  http://127.0.0.1:43180/ (loopback only)\n  Mode         development\n  App          src/app.tsx\n  Database     none configured\n  Devtool      http://127.0.0.1:43180/__kovo\n[kovo egress] app.assemble() installed the default outbound-egress floor in development with local private-network destinations permitted; cloud metadata remains blocked. Pass `defineKovo({ egress: { allowInternal: [] } })` to exercise production empty-allowlist semantics.\n[kovo dev] edit #1 active after 347ms\n[kovo egress] app.assemble() installed the default outbound-egress floor in development with local private-network destinations permitted; cloud metadata remains blocked. Pass `defineKovo({ egress: { allowInternal: [] } })` to exercise production empty-allowlist semantics.\n[kovo dev] edit #2 active after 323ms\n[kovo egress] app.assemble() installed the default outbound-egress floor in development with local private-network destinations permitted; cloud metadata remains blocked. Pass `defineKovo({ egress: { allowInternal: [] } })` to exercise production empty-allowlist semantics.\n[kovo dev] edit #3 active after 366ms\n[kovo egress] app.assemble() installed the default outbound-egress floor in development with local private-network destinations permitted; cloud metadata remains blocked. Pass `defineKovo({ egress: { allowInternal: [] } })` to exercise production empty-allowlist semantics.\n[kovo dev] edit #4 active after 502ms\n",
+        "landedCount": 4,
+        "samples": [
+          {
+            "durationMs": 508.23883399999977,
+            "edit": 1,
+            "loadAverage": 3.80126953125
+          },
+          {
+            "durationMs": 371.9919580000005,
+            "edit": 2,
+            "loadAverage": 3.80126953125
+          },
+          {
+            "durationMs": 527.0864169999986,
+            "edit": 3,
+            "loadAverage": 3.80126953125
+          },
+          {
+            "durationMs": 1099.7702080000017,
+            "edit": 4,
+            "loadAverage": 3.80126953125
+          }
+        ]
+      }
+    }
+  ]
+}

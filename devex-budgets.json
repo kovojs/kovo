@@ -1,5 +1,13 @@
 {
   "schema": "kovo-devex-budgets/v8",
+  "tier": {
+    "name": "toy",
+    "purpose": "Cheap, ratifiable, runner-pinned per-PR signal. Deliberately small and deliberately not a scaling gate. Decision D13 (plans/good-perf.md) keeps this tier exactly as it is and adds a second one beside it rather than re-baselining this one.",
+    "workloadScale": "scripts/devex-workloads/kovo-packed-check/package: 4 files / 56 LOC / 1 route / no Drizzle. Nothing here grows with app size.",
+    "blindSpot": "No O(app size) behaviour is observable in this tier, so it cannot fail for any of the reasons this codebase actually got slow. The quadratic `kovo check` term (O7: ts.createSourceFile 23,894 calls at N=50, check wall 143.1 s at N=400) and the KV448 import wall that made apps unbuildable at N>=130 both shipped while every metric below stayed green. Note also that every metric here carries \"ratification\": null except the two packed-docs byte metrics.",
+    "whyItIsNotRunnableLocally": "scripts/devex-benchmark.mjs refuses to benchmark without KOVO_DEVEX_OS_IMAGE and KOVO_DEVEX_RUNNER_NAME (:1176-1180), refuses a dirty working tree (:1189), and pins the accepted runner to github-hosted ubuntu-24.04 x64 (:148, :532-537). Those constraints are what make its numbers ratifiable, and they are also why nobody can reproduce a failure on a developer machine.",
+    "realisticTier": "perf-budgets.json + scripts/perf-gate.mjs \u2014 decision D13. Component count is a parameter, it is allowed to fail loudly, and it has no runner pin, no environment demands and no clean-tree requirement, so it runs on a developer machine: every budget in it was calibrated on darwin/arm64 on 2026-08-08."
+  },
   "runner": {
     "status": "unratified",
     "machineClass": {
