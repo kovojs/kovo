@@ -26,6 +26,17 @@ describe('document loader emission gate (SPEC §4.4)', () => {
     expect(html).toContain('<main><h1>Catalog</h1><p>Static copy.</p></main>');
   });
 
+  it('does not treat an app-authored attribute value that mentions kovo as client surface', () => {
+    // Regression: the first cut of this gate matched the bare substring `kovo`, which the
+    // benchmark app trips with `data-cart-root="kovo"` — an inert app-authored value. The markers
+    // are attribute/element-position prefixes, not free text.
+    const html = documentHtml({
+      body: '<span data-cart-root="kovo"><a href="/kovo-supply">Kovo Supply</a></span>',
+    });
+
+    expect(html).not.toContain('installInlineKovoBootstrap');
+  });
+
   it.each([
     ['island marker', '<main kovo-c="cart">0</main>'],
     ['delegated handler', '<main><button on:click="/c/cart.client.js#add">Add</button></main>'],

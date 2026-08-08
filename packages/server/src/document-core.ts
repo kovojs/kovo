@@ -961,16 +961,30 @@ function appendDocumentStrings(target: string[], values: readonly string[] | und
  * Framework-emitted markers that make a document client-reactive (SPEC §4.4 loader
  * responsibilities, §4.7 triggers, §4.8 update plan, §9 enhanced mutations).
  *
- * The test is a deliberate **over**-approximation and is only ever read in the fail-safe
- * direction: a match keeps the bootstrap (today's behaviour), and only the total absence of every
- * marker drops it. `kovo` alone covers every framework-emitted island/binding/live/fragment/defer
- * attribute and custom element (`kovo-c`, `kovo-state`, `kovo-deps`, `kovo-key`, `kovo-defer`,
- * `kovo-fragment-target`, `kovo-live-*`, `kovo-text`, `<kovo-fragment>`, `__kovo_a`, …), so a new
- * marker added to the emitters cannot silently fall out of this set; `on:` covers delegated event
- * and trigger attributes, `data-bind` the §4.8 text bindings, and `enhance` both `form[enhance]`
- * and the compiler-owned `data-enhance` / `data-mutation` transports.
+ * These are **prefix** tests over the framework's own emission vocabulary rather than an
+ * enumeration of individual attributes, so a marker added to an emitter cannot silently fall out of
+ * the set. Kovo's JSX attribute namespaces are exactly `kovo-*`, `data-*`, and `on:*`
+ * (`jsx-runtime.ts` `HtmlAttributes`), every attribute is serialized with a leading space
+ * (`jsx-runtime.ts:520`), and every framework custom element is `<kovo-…>` — so
+ * `' kovo-'` / `' data-kovo-'` / `'<kovo-'` / `' on:'` cover island, state, deps, key, props, live,
+ * fragment-target, text, defer, and query markup by construction.
+ *
+ * The test is a deliberate **over**-approximation and is only ever read in the fail-safe direction:
+ * a match keeps the bootstrap (the pre-existing behaviour), and only the total absence of every
+ * marker drops it.
  */
-const clientSurfaceMarkers = ['kovo', 'on:', 'data-bind', 'enhance'] as const;
+const clientSurfaceMarkers = [
+  ' kovo-',
+  '<kovo-',
+  ' data-kovo-',
+  ' on:',
+  ' data-bind',
+  ' data-mutation',
+  ' data-enhance',
+  ' data-stream-text',
+  ' enhance',
+  '__kovo_',
+] as const;
 
 function htmlCarriesClientSurfaceMarker(html: string): boolean {
   for (let index = 0; index < clientSurfaceMarkers.length; index += 1) {
