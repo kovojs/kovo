@@ -36,16 +36,25 @@ node benchmarks/run-all.mjs
 
 The default run uses 10 iterations per app, per condition, per custom scenario
 and also runs Lighthouse for `/` and `/product/linen-field-jacket` on mobile and
-desktop presets. Results are written to:
+desktop presets, repeating each Lighthouse cell 3 times. Every entrant is started
+with `NODE_ENV=production`; Kovo additionally receives per-run
+`KOVO_ATTESTATION_DEPLOYMENT_ID`/`KOVO_ATTESTATION_SECRET`, without which it
+refuses to boot in that posture (SPEC §11.2).
 
-- `benchmarks/results/results.json`
-- `benchmarks/results/report.md`
+Results are written to `results.json` and `report.md` under `--out-dir`, which
+defaults to `benchmarks/results/`. **That directory deliberately holds no committed
+report** — see [`results/README.md`](results/README.md) for why, and for the
+conditions a committed report must meet. Prefer `--out-dir` outside the repo.
 
 For a faster local smoke run:
 
 ```sh
-node benchmarks/run-all.mjs --iterations 2 --skip-lighthouse
+node benchmarks/run-all.mjs --iterations 2 --skip-lighthouse --out-dir /tmp/kovo-bench
 ```
+
+Useful flags: `--apps kovo,nextjs`, `--port-base 4820` (so two runs on one machine
+cannot measure each other's server), `--lighthouse-runs N`, `--bfcache-iterations N`,
+`--settle-quiet-ms` / `--settle-max-ms`.
 
 You can also build or serve an entrant directly:
 
@@ -65,13 +74,29 @@ PORT=4312 pnpm --dir benchmarks/tanstack run start
 The custom harness uses Playwright Chromium with a fresh browser context for
 each iteration. It records:
 
-- cold listing load: FCP, LCP, DOMContentLoaded, load, Total Blocking Time,
-  request count, and wire bytes bucketed by HTML/JS/CSS/image/other;
+- cold listing load: TTFB, FCP, LCP, DOMContentLoaded, load, Total Blocking Time,
+  request count, and wire bytes bucketed by HTML/JS/CSS/image/other. Bytes are
+  collected at **network quiescence**, not at `load` + 150 ms: Kovo imports its
+  deferred client runtime on a double `requestAnimationFrame` after `load`, so the
+  old window reported `js: 0` for an app shipping 267,948 B of JS. Both windows
+  appear in the report so the gap is visible per run;
 - TTI proxy: a tight in-page poll loop repeatedly clicks the cart button until
   `[role=dialog]` is visible, exposing hydration dead time versus Kovo's first
   lazy interaction import;
-- navigation: click the first product card and measure until the product detail
-  heading is visible.
+- navigation: click the first product card and measure **to actual paint** — the
+  destination document's first contentful paint when the navigation replaced the
+  document, otherwise the first frame rendered after the destination content is in
+  the DOM. Timestamps are absolute, because a document-replacing navigation resets
+  the document timeline. The report also records how many navigations replaced the
+  document, and what the superseded DOM-presence probe would have reported;
+- back/forward cache: a separate probe in full Chromium with Playwright's
+  `--disable-back-forward-cache` removed (the default `chrome-headless-shell`
+  cannot participate in bfcache at all). Frameworks that navigate in-document are
+  reported `n/a` rather than scored as non-restores.
+
+The run aborts rather than publishing if a port is already held, if a server exits
+early, if a server reports development posture under `NODE_ENV=production`, or if
+any request was rate-limited or returned `>= 400`.
 
 Conditions:
 
