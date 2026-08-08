@@ -6,8 +6,14 @@ import {
   mergeVaryHeader,
   renderErrorDocument,
   renderRouteDocumentResponse,
+  replaceDocumentHeader,
   stampCredentialBearingResponseCacheFloor,
+  type DocumentRoutePageResponseWithCsp,
 } from './document-core.js';
+import {
+  DOCUMENT_PARTS_CONTENT_TYPE,
+  encodeEnhancedNavigationDocumentParts,
+} from './document-parts.js';
 import { forwardSetCookie, frameworkSetCookieNeedsAppend } from './cookies.js';
 import {
   anonymousCsrfResponsePersonalizationWitness,
@@ -36,6 +42,7 @@ import {
 import {
   appendResponseHeader,
   cloneResponseHeaders,
+  markFrameworkDocumentResponse,
   readHeader,
   routeResponseToDocumentResponse,
   type ResponseHeaders,
@@ -78,6 +85,8 @@ import {
   securityArrayJoin,
   securityIsReadableStream,
   securityRegExpTest,
+  securityStringIncludes,
+  securityStringToLowerCase,
 } from './response-security-intrinsics.js';
 import {
   createWitnessSet,
@@ -386,53 +395,77 @@ export async function renderAppRouteDocumentResponse({
     // already reflected in Request.url by the adapter.
     const secure = isTrustedSecureRequest(request);
 
+    const documentAssemblyOptions = {
+      // SPEC §5.2.1 rule 2(b): stamp every full page render; buildToken() is now
+      // always non-empty so the carve-out is no longer needed (DEPLOY-3).
+      buildToken,
+      ...(secure ? { secure: true } : {}),
+      // SF (secure-framework Tier 3, SPEC §6.6 runtime DiD): thread the app's third-party
+      // CSP allowlist + Trusted Types opt-in (`createApp({ document: { csp } })`) into the
+      // auto-attached strict document CSP so declared analytics/Stripe/embed origins are
+      // APPENDED to the overridable per-fetch directives. Hardening directives stay locked
+      // (the allowlist can never reach them — see csp.ts `renderDefaultDocumentCsp`).
+      ...(app.document.csp === undefined ? {} : { csp: app.document.csp }),
+      ...(app.document.structured === undefined ? {} : { document: app.document.structured }),
+      hints: mergeAppRouteHints(app, route),
+      ...(metaContext === undefined ? {} : { metaContext }),
+      ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
+      loaderRuntimeHref,
+      queries: documentQueries.snapshot(),
+      reportingOrigin: requestUrlSnapshot(
+        requestCreateUrl(requestUrl(requestForAuthorityNeutralMetadata(request))),
+      ).origin,
+      // bugs-1 F34: a guarded route renders session-dependent content; mark its
+      // document no-store so a Back/bfcache restore can't show it after logout.
+      // part-4 G1: also no-store when a per-principal refresh `Set-Cookie` rode this
+      // response on an unguarded route (cross-principal shared-cache leak).
+      // bugz-3 L2 (SPEC §9.5:780): also no-store when a per-principal session identity
+      // resolved (a stamped `kovo-session` fingerprint) even under a non-rolling provider.
+      // `renderRouteDocumentResponse` carries this floor onto file/stream outcomes too (M2).
+      ...(noStore ? { noStore: true } : {}),
+      // SPEC §8: no-store is the server-side signal that this route document depends on session
+      // posture. Mirror it into a non-secret DOM marker so unresolved principals receive the same
+      // persisted-pageshow revalidation as fingerprinted principals.
+      ...(noStore ? { sessionDependent: true } : {}),
+      ...((routeResponse.status === 404 && routeHasBoundary(route, 'notFound')) ||
+      (routeResponse.status === 500 && routeHasBoundary(route, 'error'))
+        ? { wrapNonOk: true }
+        : {}),
+      // bugs-1 F13: stamp an opaque per-session fingerprint for the client's
+      // cross-principal BroadcastChannel discard (SPEC §9.3).
+      ...(sessionFingerprint === undefined ? {} : { sessionFingerprint }),
+    };
+    // SPEC §8 / plans/good-perf.md D2: an enhanced-navigation request negotiates the structured
+    // `kovo-document-parts/v1` variant. A buffered 200 HTML document is encoded from the exact
+    // canonical bytes (with the bootstrap omitted — the requesting realm already installed it).
+    // A deferred/streaming document, a non-wrappable outcome, or a tokenizer refusal serves the
+    // canonical `text/html` document instead; the client then performs the normal full GET.
+    const attemptDocumentParts =
+      enhancedNavigationDocument &&
+      !hasLateExecutableBody &&
+      !routeResponseHasDeferredChunks(routeResponse);
     let documentResponse = renderRouteDocumentResponse(
       routeResponseToDocumentResponse(routeResponse),
       {
-        // SPEC §5.2.1 rule 2(b): stamp every full page render; buildToken() is now
-        // always non-empty so the carve-out is no longer needed (DEPLOY-3).
-        buildToken,
-        ...(secure ? { secure: true } : {}),
-        // SF (secure-framework Tier 3, SPEC §6.6 runtime DiD): thread the app's third-party
-        // CSP allowlist + Trusted Types opt-in (`createApp({ document: { csp } })`) into the
-        // auto-attached strict document CSP so declared analytics/Stripe/embed origins are
-        // APPENDED to the overridable per-fetch directives. Hardening directives stay locked
-        // (the allowlist can never reach them — see csp.ts `renderDefaultDocumentCsp`).
-        ...(app.document.csp === undefined ? {} : { csp: app.document.csp }),
-        ...(app.document.structured === undefined ? {} : { document: app.document.structured }),
-        hints: mergeAppRouteHints(app, route),
-        ...(metaContext === undefined ? {} : { metaContext }),
-        ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
-        loaderRuntimeHref,
-        queries: documentQueries.snapshot(),
-        reportingOrigin: requestUrlSnapshot(
-          requestCreateUrl(requestUrl(requestForAuthorityNeutralMetadata(request))),
-        ).origin,
-        // bugs-1 F34: a guarded route renders session-dependent content; mark its
-        // document no-store so a Back/bfcache restore can't show it after logout.
-        // part-4 G1: also no-store when a per-principal refresh `Set-Cookie` rode this
-        // response on an unguarded route (cross-principal shared-cache leak).
-        // bugz-3 L2 (SPEC §9.5:780): also no-store when a per-principal session identity
-        // resolved (a stamped `kovo-session` fingerprint) even under a non-rolling provider.
-        // `renderRouteDocumentResponse` carries this floor onto file/stream outcomes too (M2).
-        ...(noStore ? { noStore: true } : {}),
-        // SPEC §8: no-store is the server-side signal that this route document depends on session
-        // posture. Mirror it into a non-secret DOM marker so unresolved principals receive the same
-        // persisted-pageshow revalidation as fingerprinted principals.
-        ...(noStore ? { sessionDependent: true } : {}),
-        ...((routeResponse.status === 404 && routeHasBoundary(route, 'notFound')) ||
-        (routeResponse.status === 500 && routeHasBoundary(route, 'error'))
-          ? { wrapNonOk: true }
-          : {}),
-        // SPEC §4.4 / plans/better-js-loader.md: enhanced navigation has already
-        // installed the inline loader, so its negotiated document variant omits the
-        // stable bootstrap bytes while retaining a complete parseable document.
-        ...(enhancedNavigationDocument ? { loader: 'omit' } : {}),
-        // bugs-1 F13: stamp an opaque per-session fingerprint for the client's
-        // cross-principal BroadcastChannel discard (SPEC §9.3).
-        ...(sessionFingerprint === undefined ? {} : { sessionFingerprint }),
+        ...documentAssemblyOptions,
+        // SPEC §4.4: the negotiated variant omits the stable bootstrap bytes; the parts
+        // encoding must never carry the (executable) inline loader.
+        ...(attemptDocumentParts ? { loader: 'omit' as const } : {}),
       },
     );
+    if (attemptDocumentParts) {
+      const partsResponse = documentPartsResponseVariant(documentResponse, buildToken);
+      if (partsResponse !== undefined) {
+        documentResponse = partsResponse;
+      } else if (documentResponse.status === 200) {
+        // Refused encoding: serve the canonical document (bootstrap included) so the variant a
+        // shared cache may store under `Vary: Accept` is self-consistent for full navigations.
+        documentResponse = renderRouteDocumentResponse(
+          routeResponseToDocumentResponse(routeResponse),
+          documentAssemblyOptions,
+        );
+      }
+    }
 
     if (anonymousCsrfSensitive || hasLateExecutableBody) {
       // This response is not merely non-restorable: its body bytes vary by Cookie. Force the stronger
@@ -442,7 +475,11 @@ export async function renderAppRouteDocumentResponse({
       documentResponse = stampCredentialBearingResponseCacheFloor(documentResponse);
     }
 
-    if (enhancedNavigationDocument && documentResponse.status === 200) {
+    if (documentResponse.status === 200) {
+      // plans/good-perf.md O2 Vary symmetry: EVERY 200 document response is negotiated on
+      // `Accept` now, including the ordinary `text/html` representation — otherwise a shared
+      // cache may store the full document under a key with no Accept dimension and replay it
+      // to enhanced-navigation fetches, silently defeating the parts protocol.
       documentResponse.headers = mergeVaryHeader(documentResponse.headers, 'Accept');
     }
     documentResponse = narrowDocumentPublicCacheFromManifest(route, documentResponse);
@@ -457,6 +494,36 @@ export async function renderAppRouteDocumentResponse({
   } finally {
     captureRouteResponseLifecycleCookies();
   }
+}
+
+/**
+ * SPEC §8 / plans/good-perf.md D2: convert a wrapped 200 HTML document response into the
+ * `kovo-document-parts/v1` JSON representation, preserving every already-computed security and
+ * cache header. Returns `undefined` when the response is not a wrappable buffered HTML document
+ * or the encoder refuses; the caller then serves the canonical `text/html` document.
+ */
+function documentPartsResponseVariant(
+  response: DocumentRoutePageResponseWithCsp,
+  buildToken: string,
+): DocumentRoutePageResponseWithCsp | undefined {
+  if (response.status !== 200 || typeof response.body !== 'string') return undefined;
+  const contentType = readHeader(response.headers, 'content-type');
+  if (
+    contentType === undefined ||
+    !securityStringIncludes(securityStringToLowerCase(contentType), 'text/html')
+  ) {
+    return undefined;
+  }
+  const encoded = encodeEnhancedNavigationDocumentParts(response.body, buildToken);
+  if (encoded === undefined) return undefined;
+  const variant: DocumentRoutePageResponseWithCsp = {
+    ...response,
+    body: encoded,
+    headers: replaceDocumentHeader(response.headers, 'Content-Type', DOCUMENT_PARTS_CONTENT_TYPE),
+  };
+  // The witness marker rides the exact response object; re-mark the copied variant so the
+  // transport boundary keeps observing a framework document response (SPEC §5.2.1/§14).
+  return markFrameworkDocumentResponse(variant, buildToken);
 }
 
 function narrowDocumentPublicCacheFromManifest<Response extends RoutePageResponse>(

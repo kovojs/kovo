@@ -19,7 +19,6 @@ export interface EnhancedNavigationRuntimeOptions {
   /** Retire all page-scoped authority and then invoke the boot-pinned hard-navigation sink. */
   retireRuntime: (href: string) => void;
   queryAll: (root: ParentNode, selector: string) => Element[];
-  replayScripts: (root: ParentNode) => void;
   replaceBody: (nextBody: HTMLBodyElement) => HTMLBodyElement;
   replaceElementAttributes: (current: Element, next: Element) => void;
   retireIsland: (island: Element) => void;
@@ -49,7 +48,6 @@ export function installEnhancedNavigationRuntime(
   const applyStylePromotion = options.applyStylePromotion;
   const morph = options.morph;
   const queryAll = options.queryAll;
-  const replayScripts = options.replayScripts;
   const replaceBody = options.replaceBody;
   const replaceElementAttributes = options.replaceElementAttributes;
   const retireIsland = options.retireIsland;
@@ -66,7 +64,6 @@ export function installEnhancedNavigationRuntime(
     typeof applyStylePromotion !== 'function' ||
     typeof morph !== 'function' ||
     typeof queryAll !== 'function' ||
-    typeof replayScripts !== 'function' ||
     typeof replaceBody !== 'function' ||
     typeof replaceElementAttributes !== 'function' ||
     typeof retireIsland !== 'function' ||
@@ -276,14 +273,24 @@ export function installEnhancedNavigationRuntime(
         finalUrl.origin === 'null' ||
         (finalUrl.protocol !== 'http:' && finalUrl.protocol !== 'https:') ||
         finalUrl.origin !== currentUrl.origin ||
-        !security.isHtmlContentType(contentType) ||
+        !security.isDocumentPartsContentType(contentType) ||
         !security.isInlineContentDisposition(contentDisposition)
       ) {
+        // SPEC §8: a `text/html` (or any non-parts) answer means the server declined the
+        // structured variant; the loader performs the normal full GET, never a body parse.
         throw Error();
       }
       const responseText = await security.readResponseText(response);
       if (!runtimeActive(navId, generation)) return;
-      const nextDoc = security.parseHtmlDocument(responseText);
+      // SPEC §8 / plans/good-perf.md D2: decode the structured `kovo-document-parts/v1`
+      // envelope and validate the app build identity BEFORE constructing any DOM, so a stale
+      // build can never be applied to a newer document (SPEC §5.2.1/§14). The detached
+      // document is then BUILT from parts — no HTML string ever reaches a string→DOM sink.
+      const envelope = security.parseDocumentPartsEnvelope(responseText);
+      if (!envelope) throw Error();
+      if (!pageBuild || envelope.build !== pageBuild) throw Error();
+      if (!runtimeActive(navId, generation)) return;
+      const nextDoc = security.buildDocumentFromParts(envelope);
       if (!runtimeActive(navId, generation)) return;
       const nextBody = security.readDocumentField(nextDoc, 'body') as HTMLBodyElement | undefined;
       const nextHead = security.readDocumentField(nextDoc, 'head') as HTMLHeadElement | undefined;
@@ -418,8 +425,9 @@ export function installEnhancedNavigationRuntime(
           (security.readDocumentField(doc, 'body') as HTMLBodyElement | undefined) || triggerRoot;
         if (!body) throw Error();
         replaceElementAttributes(body, nextBody);
-        if (!runtimeActive(navId, generation)) return;
-        replayScripts(body);
+        // SPEC §8 (D2): no script replay. A parts document is inert by protocol — every
+        // admitted <script> is `type="application/json"` data — so recreating script elements
+        // (a Trusted Types script sink) has no place on the navigation path.
       });
       if (!runtimeActive(navId, generation)) return;
       const body =

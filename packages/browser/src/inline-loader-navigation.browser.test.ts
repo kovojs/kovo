@@ -22,6 +22,41 @@ let navigationViewTransitionControl: (callback: () => void) => unknown =
 const pinnedNavigationTestViewTransition = (callback: () => void): unknown =>
   navigationViewTransitionControl(callback);
 
+// SPEC §8 (plans/good-perf.md D2): fixtures serve the structured kovo-document-parts/v1
+// envelope. DOMParser below is TEST tooling converting HTML fixtures into parts; the runtime
+// under test never parses an HTML string. The envelope build is auto-derived from the
+// fixture's kovo-build meta so build-proof scenarios keep their exact semantics.
+const partsMediaType = 'application/vnd.kovo.document-parts+json; charset=utf-8';
+function partsFromHtml(html: string): string {
+  const parsed = new DOMParser().parseFromString(html, 'text/html');
+  const build =
+    parsed.querySelector('meta[name="kovo-build"]')?.getAttribute('content') ??
+    'kovo-missing-build-proof';
+  const attrsOf = (el: Element) => [...el.attributes].map((a) => [a.name, a.value]);
+  const encode = (node: Node): unknown => {
+    if (node.nodeType === Node.TEXT_NODE) return node.nodeValue ?? '';
+    if (node.nodeType === Node.COMMENT_NODE) return ['!', node.nodeValue ?? ''];
+    const el = node as Element;
+    const ns =
+      el.namespaceURI === 'http://www.w3.org/2000/svg'
+        ? 1
+        : el.namespaceURI === 'http://www.w3.org/1998/Math/MathML'
+          ? 2
+          : 0;
+    const children = [...el.childNodes].map(encode);
+    const tag = ns === 0 ? el.tagName.toLowerCase() : el.tagName;
+    return ns === 0 ? [tag, attrsOf(el), children] : [tag, attrsOf(el), children, ns];
+  };
+  return JSON.stringify({
+    body: [...parsed.body.childNodes].map(encode),
+    bodyAttrs: attrsOf(parsed.body),
+    build,
+    head: [...parsed.head.childNodes].map(encode),
+    htmlAttrs: attrsOf(parsed.documentElement),
+    protocol: 'kovo-document-parts/v1',
+  });
+}
+
 function installNavigationLoader(): void {
   const selectedFetch = globalThis.fetch as (...args: unknown[]) => unknown;
   if (selectedFetch !== pinnedNavigationTestFetch) navigationFetchControl = selectedFetch;
@@ -144,22 +179,27 @@ describe('browser inline loader enhanced navigation', () => {
       '<section kovo-nav-segment="page:/products" kovo-nav-kind="page" kovo-nav-name="page">Products</section>',
       '</main>',
     ].join('');
+    // Precompute the parts fixture: partsFromHtml is TEST tooling whose DOMParser document
+    // reads `.head`; the assertion below counts prototype reads made by the runtime only.
+    const targetParts = partsFromHtml(
+      [
+        '<!doctype html><html><head>',
+        '<meta name="kovo-build" content="build-a">',
+        '<title>Cart</title>',
+        '<meta name="description" content="server-authoritative">',
+        '</head><body>',
+        '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
+        '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">Cart</section>',
+        '</main>',
+        '</body></html>',
+      ].join(''),
+    );
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({
-        headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+        headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
         async text() {
-          return [
-            '<!doctype html><html><head>',
-            '<meta name="kovo-build" content="build-a">',
-            '<title>Cart</title>',
-            '<meta name="description" content="server-authoritative">',
-            '</head><body>',
-            '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
-            '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">Cart</section>',
-            '</main>',
-            '</body></html>',
-          ].join('');
+          return targetParts;
         },
         redirected: false,
         url: new URL('/cart', location.href).href,
@@ -211,9 +251,9 @@ describe('browser inline loader enhanced navigation', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({
-        headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+        headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
         async text() {
-          return [
+          return partsFromHtml([
             '<!doctype html><html><head>',
             '<meta name="kovo-build" content="build-a">',
             '<title>Account refreshed</title>',
@@ -223,7 +263,7 @@ describe('browser inline loader enhanced navigation', () => {
             '<section kovo-nav-segment="panel:right" kovo-nav-kind="page" kovo-nav-name="right"><p id="revoked-next">ACCESS-REVOKED</p></section>',
             '</main>',
             '</body></html>',
-          ].join('');
+          ].join(''));
         },
         redirected: false,
         url: new URL('/account?refresh=1', location.href).href,
@@ -256,9 +296,9 @@ describe('browser inline loader enhanced navigation', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({
-        headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+        headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
         async text() {
-          return [
+          return partsFromHtml([
             '<!doctype html><html><head>',
             '<meta name="kovo-build" content="build-a">',
             '<title>Revoked</title>',
@@ -267,7 +307,7 @@ describe('browser inline loader enhanced navigation', () => {
             '<section kovo-nav-segment="page:/private" kovo-nav-kind="page" kovo-nav-name="private"><p id="revoked-next">ACCESS-REVOKED</p></section>',
             '</main>',
             '</body></html>',
-          ].join('');
+          ].join(''));
         },
         redirected: false,
         url: new URL('/private?refresh=1', location.href).href,
@@ -311,17 +351,17 @@ describe('browser inline loader enhanced navigation', () => {
       '</body></html>',
     ].join('');
     const safeFetch = vi.fn(async () => ({
-      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return safeHtml;
+        return partsFromHtml(safeHtml);
       },
       redirected: false,
       url: new URL('/cart', location.href).href,
     }));
     const attackFetch = vi.fn(async () => ({
-      headers: { get: () => 'text/html' },
+      headers: { get: () => partsMediaType },
       async text() {
-        return '<!doctype html><html><body><main kovo-nav-segment="layout:attack">ATTACKER</main></body></html>';
+        return partsFromHtml('<!doctype html><html><body><main kovo-nav-segment="layout:attack">ATTACKER</main></body></html>');
       },
       redirected: false,
       url: new URL('/cart', location.href).href,
@@ -369,9 +409,9 @@ describe('browser inline loader enhanced navigation', () => {
       '</body></html>',
     ].join('');
     const fetch = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => ({
-      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return targetHtml;
+        return partsFromHtml(targetHtml);
       },
       redirected: false,
       url: new URL('/cart', location.href).href,
@@ -390,7 +430,7 @@ describe('browser inline loader enhanced navigation', () => {
 
       expect(click.defaultPrevented).toBe(true);
       expect(fetch).toHaveBeenCalledWith(new URL('/cart', location.href).href, {
-        headers: { Accept: 'text/vnd.kovo.document+html, text/html' },
+        headers: { Accept: 'application/vnd.kovo.document-parts+json, text/html' },
         redirect: 'error',
       });
       expect(document.querySelector('main')).toBe(layout);
@@ -437,9 +477,9 @@ describe('browser inline loader enhanced navigation', () => {
       value: startViewTransition,
     });
     const fetch = vi.fn(async () => ({
-      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return [
+        return partsFromHtml([
           '<!doctype html><html><head>',
           '<meta name="kovo-build" content="build-a">',
           '<title>Cart</title>',
@@ -450,7 +490,7 @@ describe('browser inline loader enhanced navigation', () => {
           '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">Cart</section>',
           '</main>',
           '</body></html>',
-        ].join('');
+        ].join(''));
       },
       redirected: false,
       url: new URL('/cart', location.href).href,
@@ -498,9 +538,9 @@ describe('browser inline loader enhanced navigation', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({
-        headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+        headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
         async text() {
-          return [
+          return partsFromHtml([
             '<!doctype html><html><head>',
             '<meta name="kovo-build" content="build-a">',
             '<title>Revoked</title>',
@@ -510,7 +550,7 @@ describe('browser inline loader enhanced navigation', () => {
             '<section kovo-nav-segment="page:/private" kovo-nav-kind="page" kovo-nav-name="private"><p id="revoked-next">ACCESS-REVOKED</p></section>',
             '</main>',
             '</body></html>',
-          ].join('');
+          ].join(''));
         },
         redirected: false,
         url: new URL('/private?refresh=1', location.href).href,
@@ -528,7 +568,12 @@ describe('browser inline loader enhanced navigation', () => {
     expect(document.querySelector('#revoked-next')?.textContent).toBe('ACCESS-REVOKED');
   });
 
-  it('executes deferred body scripts from full-document enhanced navigation targets', async () => {
+  it('builds inert JSON data scripts without creating executable script elements', async () => {
+    // SPEC §8 (plans/good-perf.md D2): a parts document is inert by protocol — the server never
+    // encodes an executable script (a deferred/streaming document answers canonical text/html
+    // and the loader performs the normal full GET). The only script shape a navigation can
+    // carry is JSON data, and it must be BUILT through the boot-captured construction controls,
+    // never through a live prototype createElement that authored code could have replaced.
     document.head.innerHTML = [
       '<meta name="kovo-build" content="build-a">',
       '<title>Products</title>',
@@ -547,35 +592,23 @@ describe('browser inline loader enhanced navigation', () => {
       '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
       '<a id="to-cart" href="/cart">Cart</a>',
       '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">',
-      '<kovo-defer target="cart-rail">Loading rail</kovo-defer>',
       '<script type="application/json" id="cart-data">{"ok":true}</script>',
+      'Cart ready',
       '</section>',
       '</main>',
-      '\n--kovo-boundary\n',
-      '<kovo-fragment target="cart-rail"><aside id="cart-rail">Deferred rail</aside></kovo-fragment>',
-      '<script data-kovo-csp-hash="sha256-apply">',
-      'var s=document.currentScript,n=s.previousSibling,e=[];',
-      'for(;n;){var p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--kovo-boundary"))break;n=p}',
-      'globalThis.__navDeferredApplied = (globalThis.__navDeferredApplied || 0) + 1;',
-      'globalThis.__kovo_a?.(e.join("\\n"));s.remove();',
-      '</script>',
-      '\n--kovo-boundary--\n',
-      '<script data-kovo-csp-hash="sha256-cleanup">',
-      'for (const node of [...document.body.childNodes]) if ((node.textContent || "").includes("--kovo-boundary")) node.remove();',
-      'document.currentScript.remove();',
-      '</script>',
       '</body></html>',
     ].join('');
     const fetch = vi.fn(async () => ({
-      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return targetHtml;
+        return partsFromHtml(targetHtml);
       },
       redirected: false,
       url: new URL('/cart', location.href).href,
     }));
     vi.stubGlobal('fetch', fetch);
     vi.stubGlobal('scrollTo', vi.fn());
+    vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
 
     installNavigationLoader();
     const nativeCreateElement = Document.prototype.createElement;
@@ -590,18 +623,14 @@ describe('browser inline loader enhanced navigation', () => {
 
       await vi.waitFor(() => expect(document.title).toBe('Cart'));
       await vi.waitFor(() =>
-        expect(document.querySelector('#cart-rail')?.textContent).toBe('Deferred rail'),
+        expect(document.querySelector('#cart-data')?.textContent).toBe('{"ok":true}'),
       );
     } finally {
       Document.prototype.createElement = nativeCreateElement;
     }
 
-    expect(
-      (globalThis as typeof globalThis & { __navDeferredApplied?: number }).__navDeferredApplied,
-    ).toBe(1);
-    expect(document.body.textContent).not.toContain('--kovo-boundary');
-    expect(comparableBodyMarkup(document)).not.toContain('kovo-fragment');
-    expect(document.querySelector('#cart-data')?.textContent).toBe('{"ok":true}');
+    expect(document.body.textContent).toContain('Cart ready');
+    // Construction routed through the boot-captured Document.createElement, not the prototype.
     expect(poisonedScriptCreations).toBe(0);
   });
 
@@ -622,9 +651,9 @@ describe('browser inline loader enhanced navigation', () => {
       '</main>',
     ].join('');
     const fetch = vi.fn(async () => ({
-      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return [
+        return partsFromHtml([
           '<!doctype html><html lang="fr" data-theme="dark"><head>',
           '<meta name="kovo-build" content="build-a">',
           '<title>Cart</title>',
@@ -638,7 +667,7 @@ describe('browser inline loader enhanced navigation', () => {
           '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">Cart</section>',
           '</main>',
           '</body></html>',
-        ].join('');
+        ].join(''));
       },
       redirected: false,
       url: new URL('/cart', location.href).href,
@@ -694,9 +723,9 @@ describe('browser inline loader enhanced navigation', () => {
       return insertBefore(node, child);
     });
     const fetch = vi.fn(async () => ({
-      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return [
+        return partsFromHtml([
           '<!doctype html><html><head>',
           '<meta name="kovo-build" content="build-a">',
           '<title>Cart</title>',
@@ -709,7 +738,7 @@ describe('browser inline loader enhanced navigation', () => {
           '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">Cart</section>',
           '</main>',
           '</body></html>',
-        ].join('');
+        ].join(''));
       },
       redirected: false,
       url: new URL('/cart', location.href).href,
@@ -766,9 +795,9 @@ describe('browser inline loader enhanced navigation', () => {
       return insertBefore(node, child);
     });
     const fetch = vi.fn(async () => ({
-      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return [
+        return partsFromHtml([
           '<!doctype html><html><head>',
           '<meta name="kovo-build" content="build-a">',
           '<title>Cart</title>',
@@ -781,7 +810,7 @@ describe('browser inline loader enhanced navigation', () => {
           '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">Cart</section>',
           '</main>',
           '</body></html>',
-        ].join('');
+        ].join(''));
       },
       redirected: false,
       url: new URL('/cart', location.href).href,
@@ -818,9 +847,9 @@ describe('browser inline loader enhanced navigation', () => {
       '</main>',
     ].join('');
     const fetch = vi.fn(async () => ({
-      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return [
+        return partsFromHtml([
           '<!doctype html><html><head>',
           '<meta name="kovo-build" content="build-a">',
           '<title>Cart</title>',
@@ -833,7 +862,7 @@ describe('browser inline loader enhanced navigation', () => {
           '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">Cart</section>',
           '</main>',
           '</body></html>',
-        ].join('');
+        ].join(''));
       },
       redirected: false,
       url: new URL('/cart', location.href).href,
@@ -877,9 +906,9 @@ describe('browser inline loader enhanced navigation', () => {
       '</main>',
     ].join('');
     const fetch = vi.fn(async () => ({
-      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return [
+        return partsFromHtml([
           '<!doctype html><html lang="en" class="target-shell" data-route="cart"><head>',
           '<meta name="kovo-build" content="build-a">',
           '<title>Cart</title>',
@@ -889,7 +918,7 @@ describe('browser inline loader enhanced navigation', () => {
           '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">Cart</section>',
           '</main>',
           '</body></html>',
-        ].join('');
+        ].join(''));
       },
       redirected: false,
       url: new URL('/cart', location.href).href,
@@ -926,9 +955,9 @@ describe('browser inline loader enhanced navigation', () => {
       '</main>',
     ].join('');
     const fetch = vi.fn(async () => ({
-      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return [
+        return partsFromHtml([
           '<!doctype html><html lang="en" class="target-shell"><head>',
           '<meta name="kovo-build" content="build-a">',
           '<title>API</title>',
@@ -938,7 +967,7 @@ describe('browser inline loader enhanced navigation', () => {
           '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">API</section>',
           '</main>',
           '</body></html>',
-        ].join('');
+        ].join(''));
       },
       redirected: false,
       url: new URL('/api', location.href).href,
@@ -982,9 +1011,9 @@ describe('browser inline loader enhanced navigation', () => {
       '</main>',
     ].join('');
     const fetch = vi.fn(async () => ({
-      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return [
+        return partsFromHtml([
           '<!doctype html><html lang="en" class="dark target-shell"><head>',
           '<meta name="kovo-build" content="build-a">',
           '<title>API</title>',
@@ -994,7 +1023,7 @@ describe('browser inline loader enhanced navigation', () => {
           '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">API</section>',
           '</main>',
           '</body></html>',
-        ].join('');
+        ].join(''));
       },
       redirected: false,
       url: new URL('/api', location.href).href,
@@ -1031,9 +1060,9 @@ describe('browser inline loader enhanced navigation', () => {
       '</main>',
     ].join('');
     const fetch = vi.fn(async () => ({
-      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return [
+        return partsFromHtml([
           '<!doctype html><html lang="en" class="light target-shell" data-theme="light">',
           '<head><meta name="kovo-build" content="build-a"><title>API</title></head>',
           '<body data-route="api">',
@@ -1042,7 +1071,7 @@ describe('browser inline loader enhanced navigation', () => {
           '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">API</section>',
           '</main>',
           '</body></html>',
-        ].join('');
+        ].join(''));
       },
       redirected: false,
       url: new URL('/api', location.href).href,
@@ -1079,7 +1108,7 @@ describe('browser inline loader enhanced navigation', () => {
     ].join('');
     let resolveText: ((html: string) => void) | undefined;
     const fetch = vi.fn(async () => ({
-      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       text: () =>
         new Promise<string>((resolve) => {
           resolveText = resolve;
@@ -1100,17 +1129,19 @@ describe('browser inline loader enhanced navigation', () => {
     document.documentElement.classList.add('light');
     document.documentElement.setAttribute('data-theme', 'light');
     resolveText?.(
-      [
-        '<!doctype html><html lang="en" class="dark target-shell" data-theme="dark"><head>',
-        '<meta name="kovo-build" content="build-a">',
-        '<title>API</title>',
-        '</head><body data-route="api">',
-        '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
-        '<a id="to-api" href="/api">API</a>',
-        '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">API</section>',
-        '</main>',
-        '</body></html>',
-      ].join(''),
+      partsFromHtml(
+        [
+          '<!doctype html><html lang="en" class="dark target-shell" data-theme="dark"><head>',
+          '<meta name="kovo-build" content="build-a">',
+          '<title>API</title>',
+          '</head><body data-route="api">',
+          '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+          '<a id="to-api" href="/api">API</a>',
+          '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">API</section>',
+          '</main>',
+          '</body></html>',
+        ].join(''),
+      ),
     );
 
     await vi.waitFor(() => expect(document.title).toBe('API'));
@@ -1143,9 +1174,9 @@ describe('browser inline loader enhanced navigation', () => {
       '</main>',
     ].join('');
     const fetch = vi.fn(async () => ({
-      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return [
+        return partsFromHtml([
           '<!doctype html><html lang="en"><head>',
           '<meta name="kovo-build" content="build-a">',
           '<title>API</title>',
@@ -1156,7 +1187,7 @@ describe('browser inline loader enhanced navigation', () => {
           '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">API</section>',
           '</main>',
           '</body></html>',
-        ].join('');
+        ].join(''));
       },
       redirected: false,
       url: new URL('/api', location.href).href,
@@ -1226,9 +1257,9 @@ describe('browser inline loader enhanced navigation', () => {
       '</main>',
     ].join('');
     const fetch = vi.fn(async () => ({
-      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return [
+        return partsFromHtml([
           '<!doctype html><html><head>',
           '<meta name="kovo-build" content="build-a">',
           '<title>Cart</title>',
@@ -1240,7 +1271,7 @@ describe('browser inline loader enhanced navigation', () => {
           '</section>',
           '</main>',
           '</body></html>',
-        ].join('');
+        ].join(''));
       },
       redirected: false,
       url: new URL('/cart', location.href).href,
@@ -1291,9 +1322,9 @@ describe('browser inline loader enhanced navigation', () => {
       '</main>',
     ].join('');
     const fetch = vi.fn(async () => ({
-      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return [
+        return partsFromHtml([
           '<!doctype html><html><head>',
           '<meta name="kovo-build" content="build-a">',
           '<title>API</title>',
@@ -1306,7 +1337,7 @@ describe('browser inline loader enhanced navigation', () => {
           '</section>',
           '</main>',
           '</body></html>',
-        ].join('');
+        ].join(''));
       },
       redirected: false,
       url: new URL('/api', location.href).href,
@@ -1336,9 +1367,9 @@ describe('browser inline loader enhanced navigation', () => {
     ].join('');
     const scrollIntoView = vi.fn();
     const fetch = vi.fn(async () => ({
-      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return [
+        return partsFromHtml([
           '<!doctype html><html><head>',
           '<meta name="kovo-build" content="build-a">',
           '<title>Cart</title>',
@@ -1349,7 +1380,7 @@ describe('browser inline loader enhanced navigation', () => {
           '</section>',
           '</main>',
           '</body></html>',
-        ].join('');
+        ].join(''));
       },
       redirected: false,
       url: new URL('/cart', location.href).href,
@@ -1383,9 +1414,9 @@ describe('browser inline loader enhanced navigation', () => {
     ].join('');
     const scrolledIds: string[] = [];
     const fetch = vi.fn(async () => ({
-      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return [
+        return partsFromHtml([
           '<!doctype html><html><head>',
           '<meta name="kovo-build" content="build-a">',
           '<title>API Core</title>',
@@ -1396,7 +1427,7 @@ describe('browser inline loader enhanced navigation', () => {
           '</section>',
           '</main>',
           '</body></html>',
-        ].join('');
+        ].join(''));
       },
       redirected: false,
       url: new URL('/api/core/', location.href).href,
@@ -1432,9 +1463,9 @@ describe('browser inline loader enhanced navigation', () => {
     ].join('');
     const scrolledIds: string[] = [];
     const fetch = vi.fn(async () => ({
-      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return [
+        return partsFromHtml([
           '<!doctype html><html><head>',
           '<meta name="kovo-build" content="build-a">',
           '<title>API</title>',
@@ -1449,7 +1480,7 @@ describe('browser inline loader enhanced navigation', () => {
           '</section>',
           '</main>',
           '</body></html>',
-        ].join('');
+        ].join(''));
       },
       redirected: false,
       url: new URL('/api', location.href).href,
@@ -1499,9 +1530,9 @@ describe('browser inline loader enhanced navigation', () => {
       const url = new URL(requestInputHref(input), location.href);
       const isApi = url.pathname === '/api';
       return {
-        headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+        headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
         async text() {
-          return [
+          return partsFromHtml([
             '<!doctype html><html><head>',
             '<meta name="kovo-build" content="build-a">',
             `<title>${isApi ? 'API' : 'Docs'}</title>`,
@@ -1522,7 +1553,7 @@ describe('browser inline loader enhanced navigation', () => {
                 ].join(''),
             '</main>',
             '</body></html>',
-          ].join('');
+          ].join(''));
         },
         redirected: false,
         url: responseUrlWithoutFragment(url),
@@ -1573,10 +1604,10 @@ describe('browser inline loader enhanced navigation', () => {
       const url = new URL(requestInputHref(input), location.href);
       const isApi = url.pathname === '/api';
       return {
-        headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+        headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
         async text() {
           const apiPage = url.hash === '#symbols%2Fnew' ? 'new' : 'old';
-          return [
+          return partsFromHtml([
             '<!doctype html><html><head>',
             '<meta name="kovo-build" content="build-a">',
             `<title>${isApi ? `API ${apiPage}` : 'Docs'}</title>`,
@@ -1593,7 +1624,7 @@ describe('browser inline loader enhanced navigation', () => {
               : '<section kovo-nav-segment="page:/docs" kovo-nav-kind="page" kovo-nav-name="page">Docs</section>',
             '</main>',
             '</body></html>',
-          ].join('');
+          ].join(''));
         },
         redirected: false,
         url: responseUrlWithoutFragment(url),
@@ -1644,9 +1675,9 @@ describe('browser inline loader enhanced navigation', () => {
       '</main>',
     ].join('');
     const fetch = vi.fn(async () => ({
-      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return [
+        return partsFromHtml([
           '<!doctype html><html><head>',
           '<meta name="kovo-build" content="build-a">',
           '<title>API</title>',
@@ -1658,7 +1689,7 @@ describe('browser inline loader enhanced navigation', () => {
           '</section>',
           '</main>',
           '</body></html>',
-        ].join('');
+        ].join(''));
       },
       redirected: false,
       url: new URL('/api', location.href).href,
@@ -1732,9 +1763,9 @@ describe('browser inline loader enhanced navigation', () => {
       '</main>',
     ].join('');
     const fetch = vi.fn(async () => ({
-      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return [
+        return partsFromHtml([
           '<!doctype html><html><head>',
           '<meta name="kovo-build" content="build-a">',
           '<title>API</title>',
@@ -1746,7 +1777,7 @@ describe('browser inline loader enhanced navigation', () => {
           '</section>',
           '</main>',
           '</body></html>',
-        ].join('');
+        ].join(''));
       },
       redirected: false,
       url: new URL('/api', location.href).href,
@@ -1822,13 +1853,13 @@ describe('browser inline loader enhanced navigation', () => {
     const fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(requestInputHref(input), location.href);
       return {
-        headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+        headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
         async text() {
           const target =
             url.hash === '#symbols%252Fencoded'
               ? '<h2 id="symbols%2Fencoded">Encoded symbol</h2>'
               : '<a name="legacy-symbol"></a><h2>Legacy symbol</h2>';
-          return [
+          return partsFromHtml([
             '<!doctype html><html><head>',
             '<meta name="kovo-build" content="build-a">',
             '<title>API</title>',
@@ -1839,7 +1870,7 @@ describe('browser inline loader enhanced navigation', () => {
             '</section>',
             '</main>',
             '</body></html>',
-          ].join('');
+          ].join(''));
         },
         redirected: false,
         url: responseUrlWithoutFragment(url),
@@ -1882,7 +1913,7 @@ describe('browser inline loader enhanced navigation', () => {
       const url = new URL(requestInputHref(input), location.href);
       if (url.hash === '#slow') {
         return {
-          headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+          headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
           text: () =>
             new Promise<string>((resolve) => {
               resolveSlowText = resolve;
@@ -1892,9 +1923,9 @@ describe('browser inline loader enhanced navigation', () => {
         };
       }
       return {
-        headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+        headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
         async text() {
-          return [
+          return partsFromHtml([
             '<!doctype html><html><head>',
             '<meta name="kovo-build" content="build-a">',
             '<title>Fast</title>',
@@ -1905,7 +1936,7 @@ describe('browser inline loader enhanced navigation', () => {
             '</section>',
             '</main>',
             '</body></html>',
-          ].join('');
+          ].join(''));
         },
         redirected: false,
         url: responseUrlWithoutFragment(url),
@@ -1963,9 +1994,9 @@ describe('browser inline loader enhanced navigation', () => {
       const url = new URL(requestInputHref(input), location.href);
       const isApi = url.pathname === '/api';
       return {
-        headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+        headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
         async text() {
-          return [
+          return partsFromHtml([
             '<!doctype html><html><head>',
             '<meta name="kovo-build" content="build-a">',
             `<title>${isApi ? 'API' : 'Docs'}</title>`,
@@ -1984,7 +2015,7 @@ describe('browser inline loader enhanced navigation', () => {
               : '<section kovo-nav-segment="page:/docs" kovo-nav-kind="page" kovo-nav-name="page">Docs again</section>',
             '</main>',
             '</body></html>',
-          ].join('');
+          ].join(''));
         },
         redirected: false,
         url: responseUrlWithoutFragment(url),
@@ -2040,9 +2071,9 @@ describe('browser inline loader enhanced navigation', () => {
     ].join('');
     const scrolledIds: string[] = [];
     const fetch = vi.fn(async () => ({
-      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return [
+        return partsFromHtml([
           '<!doctype html><html><head>',
           '<meta name="kovo-build" content="build-a">',
           '<title>API</title>',
@@ -2053,7 +2084,7 @@ describe('browser inline loader enhanced navigation', () => {
           '</section>',
           '</main>',
           '</body></html>',
-        ].join('');
+        ].join(''));
       },
       redirected: false,
       url: new URL('/api', location.href).href,
@@ -2118,9 +2149,9 @@ describe('browser inline loader enhanced navigation', () => {
     ].join('');
     const scrolledIds: string[] = [];
     const fetch = vi.fn(async () => ({
-      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return [
+        return partsFromHtml([
           '<!doctype html><html><head>',
           '<meta name="kovo-build" content="build-a">',
           '<title>API details</title>',
@@ -2132,7 +2163,7 @@ describe('browser inline loader enhanced navigation', () => {
           '</section>',
           '</main>',
           '</body></html>',
-        ].join('');
+        ].join(''));
       },
       redirected: false,
       url: new URL('/api?view=details', location.href).href,
@@ -2173,9 +2204,9 @@ describe('browser inline loader enhanced navigation', () => {
       '</main>',
     ].join('');
     const fetch = vi.fn(async () => ({
-      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return [
+        return partsFromHtml([
           '<!doctype html><html><head>',
           '<meta name="kovo-build" content="build-a">',
           '<title>Login</title>',
@@ -2184,7 +2215,7 @@ describe('browser inline loader enhanced navigation', () => {
           '<section kovo-nav-segment="page:/login" kovo-nav-kind="page" kovo-nav-name="page">Login</section>',
           '</main>',
           '</body></html>',
-        ].join('');
+        ].join(''));
       },
       redirected: false,
       url: new URL('/login', location.href).href,
@@ -2239,9 +2270,9 @@ describe('browser inline loader enhanced navigation', () => {
       }
 
       return {
-        headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+        headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
         async text() {
-          return [
+          return partsFromHtml([
             '<!doctype html><html><head>',
             '<meta name="kovo-build" content="build-a">',
             '<title>Cart</title>',
@@ -2256,7 +2287,7 @@ describe('browser inline loader enhanced navigation', () => {
             '</section>',
             '</main>',
             '</body></html>',
-          ].join('');
+          ].join(''));
         },
         redirected: false,
         url: new URL('/cart', location.href).href,
@@ -2315,7 +2346,7 @@ describe('browser inline loader enhanced navigation', () => {
       headers: {
         get(name: string) {
           const normalized = name.toLowerCase();
-          if (normalized === 'content-type') return 'text/html';
+          if (normalized === 'content-type') return partsMediaType;
           if (normalized === 'kovo-build') return 'build-a';
           return null;
         },
@@ -2324,7 +2355,7 @@ describe('browser inline loader enhanced navigation', () => {
       redirected: false,
       status: 200,
       async text() {
-        return [
+        return partsFromHtml([
           '<!doctype html><html><head>',
           '<meta name="kovo-build" content="build-a">',
           '<title>Cart</title>',
@@ -2335,7 +2366,7 @@ describe('browser inline loader enhanced navigation', () => {
           '</section>',
           '</main>',
           '</body></html>',
-        ].join('');
+        ].join(''));
       },
       url: location.href,
     }));
@@ -2353,7 +2384,7 @@ describe('browser inline loader enhanced navigation', () => {
     expect(fetch).toHaveBeenCalledWith(location.href, {
       cache: 'no-store',
       headers: {
-        Accept: 'text/vnd.kovo.document+html, text/html',
+        Accept: 'application/vnd.kovo.document-parts+json, text/html',
         'Kovo-Build': 'build-a',
         'Kovo-Current-Url': location.href,
         'Kovo-Fragment': 'true',

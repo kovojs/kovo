@@ -534,13 +534,24 @@ describe('browser navigation security controls', () => {
     }
   });
 
-  it('keeps URL, Headers, and DOMParser decisions pinned after late replacement', () => {
+  it('keeps URL, Headers, and document construction decisions pinned after late replacement', () => {
+    // SPEC §8 (D2): the navigation path BUILDS documents from structured parts; the pinned
+    // construction controls are the JSON parser and DOMImplementation.createHTMLDocument.
     const controls = createBrowserNavigationSecurityControls();
     const originDescriptor = Object.getOwnPropertyDescriptor(URL.prototype, 'origin')!;
     const originalHeadersGet = Headers.prototype.get;
-    const originalParseFromString = DOMParser.prototype.parseFromString;
-    const response = new Response('<!doctype html><html><body>safe</body></html>', {
+    const originalCreateHtmlDocument = DOMImplementation.prototype.createHTMLDocument;
+    const originalJsonParse = JSON.parse;
+    const response = new Response('{}', {
       headers: { 'content-type': 'text/html; charset=utf-8' },
+    });
+    const envelopeText = JSON.stringify({
+      body: [['main', [], ['safe']]],
+      bodyAttrs: [],
+      build: 'build-a',
+      head: [],
+      htmlAttrs: [],
+      protocol: 'kovo-document-parts/v1',
     });
 
     Object.defineProperty(URL.prototype, 'origin', {
@@ -550,32 +561,87 @@ describe('browser navigation security controls', () => {
       },
     });
     Headers.prototype.get = () => 'text/plain';
-    DOMParser.prototype.parseFromString = function () {
-      return document.implementation.createHTMLDocument('attacker');
+    DOMImplementation.prototype.createHTMLDocument = function (title?: string) {
+      const forged = originalCreateHtmlDocument.call(this, title ?? 'attacker');
+      forged.body.textContent = 'attacker';
+      return forged;
+    };
+    JSON.parse = () => {
+      throw new Error('late JSON.parse poison must not run');
     };
     try {
       expect(controls.parseUrl('https://evil.example/phish')?.origin).toBe('https://evil.example');
       expect(controls.readHeader(response, 'content-type')).toBe('text/html; charset=utf-8');
-      expect(
-        controls.parseHtmlDocument('<!doctype html><html><body>safe</body></html>')?.body
-          .textContent,
-      ).toBe('safe');
+      const envelope = controls.parseDocumentPartsEnvelope(envelopeText);
+      expect(envelope?.build).toBe('build-a');
+      const built = envelope ? controls.buildDocumentFromParts(envelope) : undefined;
+      expect(built?.body.textContent).toBe('safe');
     } finally {
       Object.defineProperty(URL.prototype, 'origin', originDescriptor);
       Headers.prototype.get = originalHeadersGet;
-      DOMParser.prototype.parseFromString = originalParseFromString;
+      DOMImplementation.prototype.createHTMLDocument = originalCreateHtmlDocument;
+      JSON.parse = originalJsonParse;
     }
   });
 
   it.each([
-    'text/html; charset=utf-8, text/plain',
-    'text/html; charset=utf-8\r\nX-Content-Type: text/plain',
-    'text/html\0',
-  ])('rejects ambiguous HTML navigation media %j', (contentType) => {
+    'application/vnd.kovo.document-parts+json, text/plain',
+    'application/vnd.kovo.document-parts+json; charset=utf-8\r\nX-Content-Type: text/plain',
+    'application/vnd.kovo.document-parts+json\0',
+    'text/html; charset=utf-8',
+  ])('rejects ambiguous or non-parts navigation media %j', (contentType) => {
     const controls = createBrowserNavigationSecurityControls();
 
-    expect(controls.isHtmlContentType(contentType)).toBe(false);
-    expect(controls.isHtmlContentType('text/html; charset=utf-8')).toBe(true);
+    expect(controls.isDocumentPartsContentType(contentType)).toBe(false);
+    expect(
+      controls.isDocumentPartsContentType('application/vnd.kovo.document-parts+json; charset=utf-8'),
+    ).toBe(true);
+  });
+
+  it('builds an inert document from parts and refuses executable construction', () => {
+    // SPEC §8: the builder is the last line of the inert-document floor — an executable script
+    // or native handler attribute aborts construction entirely (undefined, never partial DOM).
+    const controls = createBrowserNavigationSecurityControls();
+    const envelope = (body: unknown[]) =>
+      controls.parseDocumentPartsEnvelope(
+        JSON.stringify({
+          body,
+          bodyAttrs: [],
+          build: 'build-a',
+          head: [],
+          htmlAttrs: [],
+          protocol: 'kovo-document-parts/v1',
+        }),
+      );
+
+    const jsonScript = envelope([
+      ['script', [['type', 'application/json'], ['kovo-query', 'cart']], ['{"count":1}']],
+    ]);
+    expect(jsonScript).toBeDefined();
+    const builtJson = controls.buildDocumentFromParts(jsonScript!);
+    expect(builtJson?.body.querySelector('script[kovo-query="cart"]')?.textContent).toBe(
+      '{"count":1}',
+    );
+
+    const executable = envelope([['script', [], ['window.__x=1']]]);
+    expect(executable).toBeDefined();
+    expect(controls.buildDocumentFromParts(executable!)).toBeUndefined();
+
+    const handler = envelope([['main', [['onclick', 'x()']], []]]);
+    expect(handler).toBeDefined();
+    expect(controls.buildDocumentFromParts(handler!)).toBeUndefined();
+
+    const srcdoc = envelope([['iframe', [['srcdoc', '<b>x</b>']], []]]);
+    expect(srcdoc).toBeDefined();
+    expect(controls.buildDocumentFromParts(srcdoc!)).toBeUndefined();
+
+    const svg = envelope([
+      ['svg', [['viewBox', '0 0 8 8']], [['linearGradient', [['id', 'g']], [], 1]], 1],
+    ]);
+    expect(svg).toBeDefined();
+    const builtSvg = controls.buildDocumentFromParts(svg!);
+    const gradient = builtSvg?.body.querySelector('linearGradient');
+    expect(gradient?.namespaceURI).toBe('http://www.w3.org/2000/svg');
   });
 
   it('fails closed on pre-initialization snapshot controls selectively forged for Kovo DOM authority', () => {

@@ -2,11 +2,25 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { inlineSourceInstallCases } from './inline-loader-test-utils.js';
 
+// SPEC §8 (plans/good-perf.md D2): the enhanced-navigation variant is the structured
+// kovo-document-parts/v1 JSON encoding; fixtures below serve that envelope, never HTML text.
+const partsMediaType = 'application/vnd.kovo.document-parts+json';
+const partsText = (build = 'build-a') =>
+  JSON.stringify({
+    body: [],
+    bodyAttrs: [],
+    build,
+    head: [],
+    htmlAttrs: [],
+    protocol: 'kovo-document-parts/v1',
+  });
+
 const ambiguousNavigationMediaCases = inlineSourceInstallCases.flatMap(
   ([sourceName, installSource]) =>
     [
-      ['comma-combined HTML', 'text/html; charset=utf-8, text/plain'],
-      ['control-tainted HTML', 'text/html; charset=utf-8\r\nX-Content-Type: text/plain'],
+      ['comma-combined parts', `${partsMediaType}; charset=utf-8, text/plain`],
+      ['control-tainted parts', `${partsMediaType}; charset=utf-8\r\nX-Content-Type: text/plain`],
+      ['declined text/html document', 'text/html; charset=utf-8'],
     ].map(([posture, contentType]) => [posture, sourceName, installSource, contentType] as const),
 );
 
@@ -274,11 +288,9 @@ async function withEnhancedNavigationHarness(
     };
     globalRecord.dispatchEvent = dispatchEvent;
     globalRecord.document = currentDocument;
-    globalRecord.DOMParser = class TestDOMParser {
-      parseFromString() {
-        return documents.shift();
-      }
-    };
+    (currentDocument as unknown as Record<string, unknown>).implementation = {
+        createHTMLDocument: () => documents.shift(),
+      };
     globalRecord.fetch = fetch;
     globalRecord.history = { pushState };
     globalRecord.location = locationRecord;
@@ -393,9 +405,9 @@ describe('inline loader enhanced navigation fallback', () => {
             ],
             fetch: vi.fn(async () => ({
               headers: {
-                get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+                get: (name: string) => (name.toLowerCase() === 'content-type' ? partsMediaType : null),
               },
-              text: async () => '<!doctype html><html></html>',
+              text: async () => partsText(),
               redirected: false,
               url: 'http://app.test/account',
             })),
@@ -430,7 +442,7 @@ describe('inline loader enhanced navigation fallback', () => {
       const navigationResponse = new Promise<unknown>((resolve) => {
         resolveNavigation = resolve;
       });
-      const navigationText = vi.fn(async () => '<!doctype html><html></html>');
+      const navigationText = vi.fn(async () => partsText());
       const replaceWith = vi.fn();
       const navigationHref = 'http://app.test/account';
       const currentSegment = new TestNavSegment(
@@ -485,7 +497,7 @@ describe('inline loader enhanced navigation fallback', () => {
           expect(reload).toHaveBeenCalledOnce();
           resolveNavigation({
             headers: {
-              get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+              get: (name: string) => (name.toLowerCase() === 'content-type' ? partsMediaType : null),
             },
             text: navigationText,
             redirected: false,
@@ -532,9 +544,9 @@ describe('inline loader enhanced navigation fallback', () => {
       const fetch = vi.fn(() =>
         Promise.resolve({
           headers: {
-            get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+            get: (name: string) => (name.toLowerCase() === 'content-type' ? partsMediaType : null),
           },
-          text: async () => '<!doctype html><html></html>',
+          text: async () => partsText(),
           redirected: false,
           url: navigationHref,
         }),
@@ -639,9 +651,9 @@ describe('inline loader enhanced navigation fallback', () => {
           documents: [createTestShell({ session: 'session-a', segments: [nextSegment] })],
           fetch: vi.fn(async () => ({
             headers: {
-              get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+              get: (name: string) => (name.toLowerCase() === 'content-type' ? partsMediaType : null),
             },
-            text: async () => '<!doctype html><html></html>',
+            text: async () => partsText(),
             redirected: false,
             url: 'http://app.test/account',
           })),
@@ -689,14 +701,14 @@ describe('inline loader enhanced navigation fallback', () => {
           headers: {
             get(name: string) {
               const normalized = name.toLowerCase();
-              if (normalized === 'content-type') return 'text/html; charset=utf-8';
+              if (normalized === 'content-type') return partsMediaType;
               if (normalized === 'content-disposition') {
                 return 'attachment; filename="attacker.html"';
               }
               return null;
             },
           },
-          text: async () => '<!doctype html><html></html>',
+          text: async () => partsText(),
           redirected: false,
           url: 'http://app.test/uploads/attacker.html',
         })),
@@ -757,9 +769,9 @@ describe('inline loader enhanced navigation fallback', () => {
         documents: [createTestShell({ build: nextBuild, segments: [nextSegment] })],
         fetch: vi.fn(async () => ({
           headers: {
-            get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+            get: (name: string) => (name.toLowerCase() === 'content-type' ? partsMediaType : null),
           },
-          text: async () => '<!doctype html><html></html>',
+          text: async () => partsText(),
           redirected: false,
           url: 'http://app.test/account',
         })),
@@ -835,9 +847,9 @@ describe('inline loader enhanced navigation fallback', () => {
             ],
             fetch: vi.fn(async () => ({
               headers: {
-                get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+                get: (name: string) => (name.toLowerCase() === 'content-type' ? partsMediaType : null),
               },
-              text: async () => '<!doctype html><html></html>',
+              text: async () => partsText(),
               redirected: false,
               url: 'http://app.test/account',
             })),
@@ -892,7 +904,7 @@ describe('inline loader enhanced navigation fallback', () => {
           fetch: vi.fn(async () => ({
             headers: {
               get: (name: string) =>
-                name.toLowerCase() === 'content-type' ? 'text/html; charset=utf-8' : null,
+                name.toLowerCase() === 'content-type' ? partsMediaType : null,
             },
             text: async () => '<!doctype html><html><body>attacker</body></html>',
             redirected: false,
@@ -965,7 +977,7 @@ describe('inline loader enhanced navigation fallback', () => {
         fetch: vi.fn(async () => ({
           headers: {
             get: (name: string) =>
-              name.toLowerCase() === 'content-type' ? 'text/html; charset=utf-8' : null,
+              name.toLowerCase() === 'content-type' ? partsMediaType : null,
           },
           text: async () => '<!doctype html><html><body>attacker</body></html>',
           redirected: false,
@@ -1137,24 +1149,13 @@ describe('inline loader enhanced navigation fallback', () => {
           },
           querySelectorAll: () => [],
         };
-        globalRecord.DOMParser = class TestDOMParser {
-          parseFromString() {
-            return {
-              body: {},
-              querySelector(selector: string) {
-                if (selector === 'meta[name="kovo-build"]') {
-                  return { getAttribute: () => 'build-b' };
-                }
-                return null;
-              },
-            };
-          }
-        };
+        // SPEC §8/§5.2.1/§14 (D2): the envelope-level build identity is validated BEFORE any
+        // DOM construction, so the mismatched build never reaches a builder at all.
         globalRecord.fetch = vi.fn(async () => ({
           headers: {
-            get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+            get: (name: string) => (name.toLowerCase() === 'content-type' ? partsMediaType : null),
           },
-          text: async () => '<!doctype html><html></html>',
+          text: async () => partsText('build-b'),
           redirected: false,
           url: 'http://app.test/cart',
         }));
@@ -1294,7 +1295,7 @@ describe('inline loader enhanced navigation fallback', () => {
     'falls back before parsing %s navigation media through %s',
     async (_posture, _sourceName, installSource, contentType) => {
       const replaceWith = vi.fn();
-      const responseText = vi.fn(async () => '<!doctype html><html></html>');
+      const responseText = vi.fn(async () => partsText());
       const currentLayout = new TestNavSegment(
         {
           'kovo-nav-components': '',
@@ -1360,9 +1361,9 @@ describe('inline loader enhanced navigation fallback', () => {
         documents: [targetDocument],
         fetch: vi.fn(async () => ({
           headers: {
-            get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+            get: (name: string) => (name.toLowerCase() === 'content-type' ? partsMediaType : null),
           },
-          text: async () => '<!doctype html><html></html>',
+          text: async () => partsText(),
           redirected: false,
           url: 'http://app.test/cart',
         })),
@@ -1386,7 +1387,7 @@ describe('inline loader enhanced navigation fallback', () => {
         { redirected: false, url: '' },
       ]) {
         const replaceWith = vi.fn();
-        const responseText = vi.fn(async () => '<!doctype html><html></html>');
+        const responseText = vi.fn(async () => partsText());
         const currentLayout = new TestNavSegment(
           {
             'kovo-nav-components': '',
@@ -1405,7 +1406,7 @@ describe('inline loader enhanced navigation fallback', () => {
             expect(init.redirect).toBe('error');
             return {
               headers: {
-                get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+                get: (name: string) => (name.toLowerCase() === 'content-type' ? partsMediaType : null),
               },
               text: responseText,
               ...responseFacts,
@@ -1466,10 +1467,10 @@ describe('inline loader enhanced navigation fallback', () => {
       documents: [targetDocument],
       fetch: vi.fn(async () => ({
         headers: {
-          get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+          get: (name: string) => (name.toLowerCase() === 'content-type' ? partsMediaType : null),
         },
         status,
-        text: async () => '<!doctype html><html></html>',
+        text: async () => partsText(),
         redirected: false,
         url: 'http://app.test/admin',
       })),
@@ -1533,10 +1534,10 @@ describe('inline loader enhanced navigation fallback', () => {
       let fetchCount = 0;
       const response = (url: string) => ({
         headers: {
-          get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+          get: (name: string) => (name.toLowerCase() === 'content-type' ? partsMediaType : null),
         },
         redirected: false,
-        text: async () => '<!doctype html><html></html>',
+        text: async () => partsText(),
         url,
       });
 
@@ -1655,9 +1656,9 @@ describe('inline loader enhanced navigation fallback', () => {
         documents: [targetDocument],
         fetch: vi.fn(async (href: string) => ({
           headers: {
-            get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+            get: (name: string) => (name.toLowerCase() === 'content-type' ? partsMediaType : null),
           },
-          text: async () => '<!doctype html><html></html>',
+          text: async () => partsText(),
           redirected: false,
           url: href,
         })),
@@ -1723,9 +1724,9 @@ describe('inline loader enhanced navigation fallback', () => {
         documents: [cartDocument, secondProductsDocument],
         fetch: vi.fn(async (href: string) => ({
           headers: {
-            get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+            get: (name: string) => (name.toLowerCase() === 'content-type' ? partsMediaType : null),
           },
-          text: async () => '<!doctype html><html></html>',
+          text: async () => partsText(),
           redirected: false,
           url: href,
         })),
@@ -1815,9 +1816,9 @@ describe('inline loader enhanced navigation fallback', () => {
         documents: [cartDocument, secondProductsDocument],
         fetch: vi.fn(async (href: string) => ({
           headers: {
-            get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+            get: (name: string) => (name.toLowerCase() === 'content-type' ? partsMediaType : null),
           },
-          text: async () => '<!doctype html><html></html>',
+          text: async () => partsText(),
           redirected: false,
           url: href,
         })),
@@ -1948,16 +1949,14 @@ describe('inline loader enhanced navigation fallback', () => {
           segments: [currentLayout],
         });
         globalRecord.document = currentDocument;
-        globalRecord.DOMParser = class TestDOMParser {
-          parseFromString() {
-            return targetDocument;
-          }
+        (currentDocument as unknown as Record<string, unknown>).implementation = {
+          createHTMLDocument: () => targetDocument,
         };
         globalRecord.fetch = vi.fn(async () => ({
           headers: {
-            get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+            get: (name: string) => (name.toLowerCase() === 'content-type' ? partsMediaType : null),
           },
-          text: async () => '<!doctype html><html></html>',
+          text: async () => partsText(),
           redirected: false,
           url: 'http://app.test/cart',
         }));
@@ -2071,9 +2070,9 @@ describe('inline loader enhanced navigation fallback', () => {
         documents: [targetDocument],
         fetch: vi.fn(async () => ({
           headers: {
-            get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+            get: (name: string) => (name.toLowerCase() === 'content-type' ? partsMediaType : null),
           },
-          text: async () => '<!doctype html><html></html>',
+          text: async () => partsText(),
           redirected: false,
           url: 'http://app.test/cart',
         })),

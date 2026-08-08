@@ -28,7 +28,12 @@ export interface DocumentLifecycleRecoveryOptions {
   fetchValue: (input: string, init: object) => Promise<unknown>;
   findTarget: (root: ParentNode, target: string) => Element | undefined;
   liveTargets: () => readonly FrameworkWireEntrySnapshot[];
-  parseHtmlDocument: (value: string) => Document | undefined;
+  /**
+   * SPEC §8 (D2): decode a `kovo-document-parts/v1` body into a detached built Document —
+   * never an HTML string parse. Implementations MUST validate the envelope build identity
+   * against the page build before constructing DOM and return undefined on any mismatch.
+   */
+  parseDocumentParts: (value: string) => Document | undefined;
   /** Core-owned exact target-bearing request planner (SPEC §9.1). */
   planTargetRequestHeaders: (input: {
     build: string;
@@ -127,9 +132,9 @@ export function createDocumentLifecycleRecovery(
     options,
     'liveTargets',
   );
-  const parseHtmlDocument = lifecycleFunctionOption<
-    DocumentLifecycleRecoveryOptions['parseHtmlDocument']
-  >(options, 'parseHtmlDocument');
+  const parseDocumentParts = lifecycleFunctionOption<
+    DocumentLifecycleRecoveryOptions['parseDocumentParts']
+  >(options, 'parseDocumentParts');
   const planTargetRequestHeaders = lifecycleFunctionOption<
     DocumentLifecycleRecoveryOptions['planTargetRequestHeaders']
   >(options, 'planTargetRequestHeaders');
@@ -436,13 +441,13 @@ export function createDocumentLifecycleRecovery(
           if (queryGenerationIsCurrent(generation)) applyBody(text, responseBuild);
           return;
         }
-        if (
-          lifecycleMediaTypeEquals(contentType, 'text/html') ||
-          lifecycleMediaTypeEquals(contentType, 'text/vnd.kovo.document+html')
-        ) {
+        if (lifecycleMediaTypeEquals(contentType, 'application/vnd.kovo.document-parts+json')) {
+          // SPEC §8 (D2): the parts body is decoded and BUILT, never parsed as an HTML string.
+          // A `text/html` answer (the server declined the variant) falls through to full
+          // recovery below — the lifecycle never interprets an HTML document body.
           const text = await readResponseText(res);
           if (!queryGenerationIsCurrent(generation)) return;
-          const nextDoc = parseHtmlDocument(text);
+          const nextDoc = parseDocumentParts(text);
           if (!nextDoc) {
             recoverQueryDocument(generation);
             return;
