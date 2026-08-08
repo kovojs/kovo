@@ -69,11 +69,10 @@ test('enhanced navigation preconditions hold', async ({ page }) => {
 });
 
 test('an eligible in-app navigation does not replace the document', async ({ page }) => {
-  // Expected to FAIL until plans/good-perf.md O2 lands the structured document-part protocol (D2).
-  // Playwright fails the run if this ever passes, so the fix cannot land without deleting the
-  // marker — the defect cannot be fixed silently, and it cannot regress silently either.
-  test.fail();
-
+  // Everything up to the navigation must succeed LOUDLY. `test.fail()` is armed only once the
+  // navigation has actually happened, so a fixture that will not boot, a runtime that never
+  // installs, or a link that never navigates fails this test red instead of being absorbed as
+  // "expected failure".
   await page.goto('/');
   await waitForDeferredRuntime(page);
 
@@ -84,6 +83,11 @@ test('an eligible in-app navigation does not replace the document', async ({ pag
 
   await page.locator('#product-link').click();
   await expect(page.getByRole('heading', { name: 'Product sku-1' })).toBeVisible();
+
+  // Expected to FAIL until plans/good-perf.md O2 lands the structured document-part protocol (D2).
+  // Playwright fails the run if this ever passes, so the fix cannot land without deleting the
+  // marker — the defect cannot be fixed silently, and it cannot regress silently either.
+  test.fail();
 
   const after = await page.evaluate(() => {
     const entry = performance.getEntriesByType('navigation')[0] as
