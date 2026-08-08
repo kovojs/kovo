@@ -9,6 +9,8 @@ import type { KovoCommandSecurityDisposition } from './security-disposition.js';
 import {
   inspectKovoBuildOneShotHandoff,
   KOVO_BUILD_ONE_SHOT_MAX_WIRE_BYTES,
+  parseKovoBuildOneShotIdentity,
+  readKovoBuildOneShotHandoff,
 } from './build-one-shot-handoff.js';
 import { KOVO_BUILD_ONE_SHOT_WORKER_TIMEOUT_MS } from './build-security-deadlines.js';
 
@@ -42,16 +44,7 @@ async function runKovoIsolatedOneShotInvocationAsync(
       if (!Buffer.isBuffer(analysis.control)) {
         throw new TypeError('Kovo check analysis worker omitted its private handoff.');
       }
-      const inspection = inspectKovoBuildOneShotHandoff(analysis.control);
-      return (
-        await runWorker(
-          binPath,
-          'check-final',
-          [JSON.stringify(inspection.identity), ...args.slice(1)],
-          security,
-          analysis.control,
-        )
-      ).status;
+      return await finishSourceCheckInParent(analysis.control, args.slice(1), security);
     } catch (error) {
       process.stderr.write(
         `kovo check isolation failed: ${error instanceof Error ? error.message : String(error)}\n`,
@@ -112,6 +105,72 @@ interface OneShotWorkerResult {
   readonly status: number;
 }
 
+/**
+ * Consume the authenticated source-check handoff in the thin parent instead of a third worker.
+ *
+ * plans/good-perf.md O11: the dedicated `check-final` worker re-imported (and, in source mode,
+ * re-transformed) the complete build-export graph only to revalidate the handoff and run the
+ * cheap graph-diagnostics phase, adding one full Node start (~2-3 s) to every `kovo check`. The
+ * producer worker has already exited before this runs, so the sequential heap posture of
+ * 37c6d2e14 is preserved: at no point do the producer and finisher heaps coexist. The exact
+ * check-final worker sequence is replicated — trusted-graph import before compiler realm
+ * lockdown (matching bin.ts ordering), identity re-parse from its own serialization, handoff
+ * re-authentication against that identity, identical result formatting and stream flushing.
+ */
+async function finishSourceCheckInParent(
+  wire: Buffer,
+  checkArgs: readonly string[],
+  security: KovoCommandSecurityDisposition,
+): Promise<number> {
+  const inspection = inspectKovoBuildOneShotHandoff(wire);
+  const [buildExport, graphArgs, shared, securityBootstrap] = await Promise.all([
+    import('./build-export.js'),
+    import('../graph-args.js'),
+    import('../shared.js'),
+    import('@kovojs/compiler/internal/security-bootstrap'),
+  ]);
+  securityBootstrap.lockCompilerSecurityRealm();
+  const parsed = graphArgs.parseCheckArgs(checkArgs);
+  if (!parsed.ok || !('source' in parsed)) {
+    return shared.writeUsageError(
+      parsed.ok ? 'kovo: isolated check final phase requires one source handoff.\n' : parsed.message,
+      'check',
+    );
+  }
+  let exitCode: 0 | 1 | 2;
+  try {
+    const identity = parseKovoBuildOneShotIdentity(JSON.stringify(inspection.identity));
+    const payload = readKovoBuildOneShotHandoff(wire, identity);
+    exitCode = shared.writeFormattedCommandResult(
+      await buildExport.finishKovoSourceCheckOneShot(
+        { appModulePath: parsed.appModulePath, cache: parsed.cache },
+        payload.analysis,
+        identity,
+        security,
+      ),
+      parsed.format,
+      'proof',
+      'check',
+    );
+  } catch (error) {
+    exitCode = shared.writeFormattedCommandResult(
+      {
+        error: `${error instanceof Error ? error.message : String(error)}\n`,
+        exitCode: 1,
+      },
+      parsed.format,
+      'proof',
+      'check',
+    );
+  }
+  await Promise.all(
+    [process.stdout, process.stderr].map(
+      (stream) => new Promise<void>((resolveFlush) => stream.write('', () => resolveFlush())),
+    ),
+  );
+  return exitCode;
+}
+
 function runWorker(
   binPath: string,
   phase: 'analyze' | 'check' | 'check-final' | 'client' | 'final' | 'server',
@@ -128,8 +187,7 @@ function runWorker(
     args: [
       '--expose-gc',
       '--max-old-space-size=1600',
-      '--max-semi-space-size=1',
-      '--optimize-for-size',
+      '--max-semi-space-size=64',
       ...(sourceMode
         ? [
             '--disable-warning=ExperimentalWarning',

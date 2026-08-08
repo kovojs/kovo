@@ -11,6 +11,7 @@ import {
   type KovoDiagnosticCommandResult,
   type KovoDiagnosticRecord,
 } from '../diagnostic.js';
+import { type KovoBuildOneShotIdentity } from './build-one-shot-handoff.js';
 import { type CliCommandResult } from '../shared.js';
 import {
   buildApply,
@@ -178,9 +179,28 @@ export interface KovoSourceCheckPhaseCensusV2 {
   readonly schema: typeof phaseCensusProtocol;
 }
 
+/**
+ * @internal Complete retained evidence from a session's latest accepted revision. It is the
+ * authenticated payload behind `reused-authenticated` (plans/good-perf.md O11): a later
+ * revision may republish `result` only after re-proving, from fresh byte digests, that every
+ * closure input is unchanged and after re-executing the whole-project `typescript` phase.
+ */
+export interface KovoSourceCheckSessionContinuity {
+  readonly census: KovoSourceCheckPhaseCensusV2;
+  /** Exact admitted app+config closure text, retained for the reuse reference scan. */
+  readonly closureSources: readonly KovoSourceCheckInputFile[];
+  readonly graphDigest: string;
+  readonly identity: KovoBuildOneShotIdentity;
+  readonly input: KovoAcceptedSourceCheckInputProof;
+  readonly result: CliCommandResult;
+  readonly trigger: KovoSourceCheckWatchSnapshot;
+}
+
 /** @internal Result returned by the exact one-shot source-proof pipeline per revision. */
 export interface KovoSourceCheckRevisionResult {
   readonly census: KovoSourceCheckPhaseCensusV2;
+  /** @internal Session-retained reuse evidence; never serialized into the JSONL record. */
+  readonly continuity?: KovoSourceCheckSessionContinuity;
   readonly input: KovoSourceCheckInputProof;
   readonly result: CliCommandResult;
 }
@@ -188,6 +208,12 @@ export interface KovoSourceCheckRevisionResult {
 /** @internal Bounded project trigger snapshot. It is scheduling evidence, never proof authority. */
 export interface KovoSourceCheckWatchSnapshot {
   readonly digest: string;
+  /**
+   * Exact per-file content digests observed by the same bounded scan that produced `digest`.
+   * Optional because deterministic test seams may synthesize digest-only snapshots; the
+   * session-reuse fast path (plans/good-perf.md O11) refuses to fire without it.
+   */
+  readonly fileDigests?: ReadonlyMap<string, string>;
   readonly files: number;
   readonly symlinks: readonly string[];
 }
@@ -203,9 +229,10 @@ export interface KovoSourceCheckSnapshotLimits {
   readonly symlinks?: number;
 }
 
-/** @internal Test-only mutation point for deterministic readdir-to-lstat race fixtures. */
+/** @internal Test-only mutation points for deterministic filesystem-race fixtures. */
 export interface KovoSourceCheckSnapshotTestHooks {
   readonly beforeEntryLstat?: (relativePath: string) => void;
+  readonly beforeEntryRead?: (relativePath: string) => void;
 }
 
 /** @internal Dependencies for one foreground source-check session. */
@@ -443,11 +470,20 @@ export function snapshotKovoSourceCheckProject(
     'beforeEntryLstat',
     'Source-check snapshot test hooks',
   );
-  if (beforeEntryLstat !== undefined && typeof beforeEntryLstat !== 'function') {
-    throw new NativeTypeError('Source-check snapshot beforeEntryLstat hook must be a function.');
+  const beforeEntryRead = buildOwnDataValue(
+    testHooks,
+    'beforeEntryRead',
+    'Source-check snapshot test hooks',
+  );
+  if (
+    (beforeEntryLstat !== undefined && typeof beforeEntryLstat !== 'function') ||
+    (beforeEntryRead !== undefined && typeof beforeEntryRead !== 'function')
+  ) {
+    throw new NativeTypeError('Source-check snapshot test hooks must be functions.');
   }
   const frames: string[] = [];
   const symlinks: string[] = [];
+  const fileDigests = buildCreateMap<string, string>();
   let directories = 0;
   let entries = 0;
   let files = 0;
@@ -538,6 +574,7 @@ export function snapshotKovoSourceCheckProject(
           'Source-check watch project snapshot exceeded its resource bounds.',
         );
       }
+      if (beforeEntryRead !== undefined) beforeEntryRead(relativePath);
       const bytes = readStableRegularFile(absolute, relativePath, before, limits.fileBytes);
       files += 1;
       totalBytes += buildByteLength(bytes);
@@ -546,9 +583,11 @@ export function snapshotKovoSourceCheckProject(
           'Source-check watch project snapshot exceeded its resource bounds.',
         );
       }
+      const fileDigest = digestBuffer(bytes);
+      buildMapSet(fileDigests, relativePath, fileDigest);
       buildSecurityArrayAppend(
         frames,
-        `F\0${relativePath}\0${digestBuffer(bytes)}`,
+        `F\0${relativePath}\0${fileDigest}`,
         'Source-check watch project frames',
       );
     }
@@ -562,6 +601,7 @@ export function snapshotKovoSourceCheckProject(
   visit(root, 0);
   return freeze({
     digest: digestText(buildArrayJoin(frames, '\0')),
+    fileDigests,
     files,
     symlinks: freeze(sortedStrings(symlinks)),
   });
@@ -779,8 +819,16 @@ function readStableRegularFile(
       maxBytes: maximumBytes,
     });
   } catch (error) {
-    if (isSnapshotRace(error) || filesystemErrorCode(error) === undefined) throw error;
-    throw snapshotFilesystemError(error, path);
+    if (isSnapshotRace(error)) throw error;
+    if (filesystemErrorCode(error) !== undefined) throw snapshotFilesystemError(error, path);
+    // The bounded reader refuses with codeless errors both for real policy violations and for
+    // benign mid-write/mid-rename races its descriptor pinning detected. Re-observing the path
+    // decides honestly: any identity change against the pre-read observation is a retryable
+    // snapshot race (`assertSameStat` throws it), while an unchanged file re-raises the real
+    // refusal. Before this classification, one editor save landing mid-scan crashed the whole
+    // `kovo check source --watch` session (plans/good-perf.md O11).
+    assertSameStat(pathStat, stableLstat(absolute), path);
+    throw error;
   }
   assertSameStat(pathStat, stableLstat(absolute), path);
   if (buildByteLength(bytes) !== statNumber(pathStat, 'size', path)) throw snapshotRace(path);
@@ -837,6 +885,7 @@ function validateWatchSnapshot(value: KovoSourceCheckWatchSnapshot): KovoSourceC
   const digest = buildOwnDataValue(value, 'digest', 'Source-check watch snapshot');
   const files = buildOwnDataValue(value, 'files', 'Source-check watch snapshot');
   const symlinkValue = buildOwnDataValue(value, 'symlinks', 'Source-check watch snapshot');
+  const fileDigestsValue = buildOwnDataValue(value, 'fileDigests', 'Source-check watch snapshot');
   if (
     typeof digest !== 'string' ||
     buildRegExpExec(digestPattern, digest) === null ||
@@ -854,7 +903,33 @@ function validateWatchSnapshot(value: KovoSourceCheckWatchSnapshot): KovoSourceC
   for (let index = 0; index < symlinks.length; index += 1) {
     exactRelativePath(symlinks[index]!, `Source-check watch symlink[${index}]`);
   }
-  return freeze({ digest, files, symlinks: freeze(symlinks) });
+  let fileDigests: Map<string, string> | undefined;
+  if (fileDigestsValue !== undefined) {
+    // Per-file digests are optional session-reuse evidence; when present they must be exact and
+    // complete or the snapshot is rejected outright — a partial ledger could otherwise hide a
+    // changed file from the reuse eligibility diff.
+    if (!(fileDigestsValue instanceof Map) || fileDigestsValue.size !== files) {
+      throw new NativeTypeError('Source-check snapshot file digests are invalid.');
+    }
+    fileDigests = buildCreateMap<string, string>();
+    for (const [path, fileDigest] of fileDigestsValue as ReadonlyMap<unknown, unknown>) {
+      if (
+        typeof path !== 'string' ||
+        typeof fileDigest !== 'string' ||
+        buildRegExpExec(digestPattern, fileDigest) === null
+      ) {
+        throw new NativeTypeError('Source-check snapshot file digests are invalid.');
+      }
+      exactRelativePath(path, 'Source-check snapshot file digest path');
+      buildMapSet(fileDigests, path, fileDigest);
+    }
+  }
+  return freeze({
+    digest,
+    ...(fileDigests === undefined ? {} : { fileDigests }),
+    files,
+    symlinks: freeze(symlinks),
+  });
 }
 
 function canonicalInputFiles(

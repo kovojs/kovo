@@ -123,6 +123,48 @@ describe('foreground source-check session', () => {
     expect(symlink.symlinks).toEqual(['src/app.tsx']);
   });
 
+  it('publishes an exact, complete per-file digest ledger alongside the trigger digest', () => {
+    const root = fixtureRoot();
+    const source = join(root, 'src/app.tsx');
+    writeFileSync(source, 'export const revision = 0;\n');
+    writeFileSync(join(root, 'NOTES.md'), 'notes\n');
+    mkdirSync(join(root, 'node_modules/vendored'), { recursive: true });
+    writeFileSync(join(root, 'node_modules/vendored/index.ts'), 'export const vendored = 0;\n');
+
+    const baseline = snapshotKovoSourceCheckProject(root);
+    expect(baseline.fileDigests?.size).toBe(baseline.files);
+    expect(baseline.fileDigests?.get('src/app.tsx')).toMatch(/^sha256:[0-9a-f]{64}$/u);
+    expect(baseline.fileDigests?.has('node_modules/vendored/index.ts')).toBe(false);
+
+    writeFileSync(join(root, 'NOTES.md'), 'notes, expanded\n');
+    const edited = snapshotKovoSourceCheckProject(root);
+    expect(edited.fileDigests?.get('src/app.tsx')).toBe(baseline.fileDigests?.get('src/app.tsx'));
+    expect(edited.fileDigests?.get('NOTES.md')).not.toBe(baseline.fileDigests?.get('NOTES.md'));
+  });
+
+  it('rejects a snapshot callback whose per-file ledger is partial or malformed', async () => {
+    const root = fixtureRoot();
+    writeFileSync(join(root, 'src/app.tsx'), 'export default {};\n');
+    const real = snapshotKovoSourceCheckProject(root);
+    const forged = {
+      digest: real.digest,
+      fileDigests: new Map([['src/app.tsx', real.fileDigests!.get('src/app.tsx')!]]),
+      files: real.files + 1,
+      symlinks: [],
+    };
+    await expect(
+      runKovoSourceCheckWatchSession({
+        appModulePath: './src/app.tsx',
+        invocationRoot: root,
+        maxRevisions: 1,
+        async runRevision() {
+          return revisionResult();
+        },
+        snapshotProject: () => forged,
+      }),
+    ).rejects.toThrow(/file digests are invalid/u);
+  });
+
   it('bounds directories, depth, symlinks, and each file before reading bytes', () => {
     const root = fixtureRoot();
     writeFileSync(join(root, 'src/app.tsx'), '12345');
@@ -167,6 +209,27 @@ describe('foreground source-check session', () => {
     ).toThrow(KovoSourceCheckSnapshotRaceError);
 
     renameSync(renamed, source);
+    let raced = false;
+    expect(() =>
+      snapshotKovoSourceCheckProject(
+        root,
+        {},
+        {
+          beforeEntryRead(relativePath) {
+            if (relativePath !== 'src/app.tsx' || raced) return;
+            raced = true;
+            // Replace the just-observed regular file so the bounded reader refuses with its
+            // codeless identity error; the classifier must turn that into retry evidence
+            // instead of crashing the session (plans/good-perf.md O11 measurement crash).
+            rmSync(source);
+            mkdirSync(source);
+          },
+        },
+      ),
+    ).toThrow(KovoSourceCheckSnapshotRaceError);
+    rmSync(source, { force: true, recursive: true });
+    writeFileSync(source, 'export default {};\n');
+
     let attempts = 0;
     const exit = await runKovoSourceCheckWatchSession({
       appModulePath: 'src/app.tsx',
