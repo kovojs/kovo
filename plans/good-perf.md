@@ -104,6 +104,22 @@ comparison.
 | `check` cold / warm / one-file (benchmark app) | 19,324 / 17,668 / 13,707 ms | — | warm ≈ cold |
 | `check` cold / warm / one-file (`stackoverflow`) | 38,486 / 38,684 / 32,394 ms | — | warm ≈ cold |
 
+## Final verification (2026-08-08, quiet box)
+
+Full sweep of `packages/{server,compiler,cli,browser}/src` at load average 3.63, `--testTimeout=300000`:
+**9,275 passed / 2 failed**. Both failures are the pre-existing ones recorded below and proven at
+`93412b7e4` before any of this work: `runtime-bootstrap.test.ts` (one case) and
+`vite-packed-provenance.test.ts`. **Four batches, zero regressions.**
+
+Re-verified on the rebuilt production artifact: document `/` 2,590 B br, `/product` 788 B br,
+stylesheet 1,050 B br, no inline `<script>`, no `/c/` runtime reference, stylesheet link at byte 130,
+cookie-bearing documents compress with a `kovo-pad` mask, `Vary: Cookie, Accept, Accept-Encoding`,
+and asset revalidation returns 304 with 0 body bytes. `tests/integration/specs/enhanced-navigation-no-reload.spec.ts`
+passes 2/2.
+
+Earlier sweeps during the effort reported up to 29 failures and were all noise; the two causes worth
+remembering are recorded under "Pre-existing defects" below.
+
 ## Current state after batch 3 (merged to main, 2026-08-08)
 
 | Metric | Baseline | Batch 3 merged | Change |
