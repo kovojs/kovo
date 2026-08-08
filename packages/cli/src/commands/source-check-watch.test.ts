@@ -259,6 +259,81 @@ describe('production source-check watch command', () => {
       );
     }
   }, 180_000);
+
+  it('republishes the accepted revision with reused-authenticated phases after a docs-only edit', async () => {
+    const root = fixtureRoot('session-reuse');
+    const appPath = join(root, 'src/app.tsx');
+    const notesPath = join(root, 'NOTES.md');
+    writeSourceCheckFixture(root, sourceCheckApp('session reuse'));
+    writeFileSync(notesPath, 'design notes\n', 'utf8');
+    const lines: string[] = [];
+
+    const exit = await runKovoSourceCheckWatchCommand(
+      { appModulePath: './src/app.tsx', cache: true },
+      security(root),
+      {
+        maxRevisions: 3,
+        pollIntervalMs: 25,
+        write(line) {
+          lines.push(line);
+          const revision = JSON.parse(line).revision as number;
+          if (revision === 0) writeFileSync(notesPath, 'design notes, expanded\n', 'utf8');
+          if (revision === 1) {
+            writeFileSync(appPath, sourceCheckApp('session reuse, closure edit'), 'utf8');
+          }
+        },
+      },
+    );
+
+    expect(lines).toHaveLength(3);
+    const records = lines.map((line) => JSON.parse(line));
+    if (exit === 1) {
+      // Same stale-posture tolerance as the N-edit invocation proof above: an unsealed
+      // implementation digest refuses every revision before reuse could ever be reached.
+      expect(records.every((record) => record.input.status === 'rejected')).toBe(true);
+      return;
+    }
+    expect(exit, lines.join('\n')).toBe(0);
+    const [baseline, reused, edited] = records;
+
+    // Revision 1 (docs-only edit, plans/good-perf.md O11): the previous accepted result is
+    // republished under fresh byte evidence; every previously executed phase except the
+    // whole-project `typescript` phase reports `reused-authenticated` with zero duration.
+    expect(reused.check.result.text).toBe(baseline.check.result.text);
+    expect(reused.input).toEqual(baseline.input);
+    expect(reused.phaseCensus.checkGraphDigest).toBe(baseline.phaseCensus.checkGraphDigest);
+    expect(reused).not.toHaveProperty('continuity');
+    let reusedCount = 0;
+    for (let index = 0; index < baseline.phaseCensus.phases.length; index += 1) {
+      const before = baseline.phaseCensus.phases[index] as { name: string; status: string };
+      const after = reused.phaseCensus.phases[index] as { durationMs: number; status: string };
+      if (before.status !== 'executed') {
+        expect(after.status, before.name).toBe(before.status);
+        continue;
+      }
+      if (before.name === 'typescript') {
+        expect(after.status, before.name).toBe('executed');
+        continue;
+      }
+      expect(after.status, before.name).toBe('reused-authenticated');
+      expect(after.durationMs, before.name).toBe(0);
+      reusedCount += 1;
+    }
+    expect(reusedCount).toBeGreaterThan(0);
+
+    // Revision 2 (closure edit): reuse refuses and the complete fresh pipeline re-executes.
+    expect(
+      (edited.phaseCensus.phases as { status: string }[]).some(
+        (phase) => phase.status === 'reused-authenticated',
+      ),
+    ).toBe(false);
+    expect(edited.input.projectDigest).not.toBe(baseline.input.projectDigest);
+    expect(
+      (edited.phaseCensus.phases as { status: string }[]).filter(
+        (phase) => phase.status === 'executed',
+      ).length,
+    ).toBeGreaterThan(0);
+  }, 180_000);
 });
 
 function fixtureRoot(name: string): string {
