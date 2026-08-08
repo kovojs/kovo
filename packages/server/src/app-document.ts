@@ -1,4 +1,7 @@
+import { createHash } from 'node:crypto';
+
 import { acceptsEnhancedNavigationDocument } from '@kovojs/core/internal/document-protocol';
+import type { CacheInfluenceManifestEntry } from '@kovojs/core/internal/cache-influence';
 
 import { principalPostureFromRequest } from './auth-principal.js';
 import { reportServerError } from './diagnostics.js';
@@ -74,11 +77,13 @@ import type { JsxAnonymousCsrfBinding } from './jsx-context.js';
 import {
   requestCreateUrl,
   requestHeader,
+  requestMethod,
   requestUrl,
   requestUrlSearchParams,
   requestUrlSearchParamsEntries,
   requestUrlSnapshot,
 } from './request-body-intrinsics.js';
+import { canonicalRequestMethod } from './request-method.js';
 import { requestMetadataWithoutAmbientAuthority } from './response-posture.js';
 import {
   createSecurityMap,
@@ -86,21 +91,37 @@ import {
   securityIsReadableStream,
   securityRegExpTest,
   securityStringIncludes,
+  securityStringSlice,
+  securityStringSplit,
+  securityStringStartsWith,
   securityStringToLowerCase,
+  securityStringTrim,
 } from './response-security-intrinsics.js';
 import {
+  createWitnessMap,
   createWitnessSet,
+  createWitnessWeakMap,
+  createWitnessWeakSet,
   witnessCreateNullRecord,
   witnessDefineProperty,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
   witnessIsArray,
+  witnessMapDelete,
+  witnessMapForEach,
+  witnessMapGet,
+  witnessMapSet,
+  witnessMapSize,
   witnessObjectKeys,
   witnessReflectApply,
   witnessReflectGet,
   witnessSetAdd,
   witnessSetHas,
   witnessStringToLowerCase,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
+  witnessWeakSetAdd,
+  witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
 
 type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
@@ -484,6 +505,15 @@ export async function renderAppRouteDocumentResponse({
       documentResponse.headers = mergeVaryHeader(documentResponse.headers, 'Accept');
     }
     documentResponse = narrowDocumentPublicCacheFromManifest(route, documentResponse);
+    // SPEC §9.5 proved-document tier (plans/good-perf.md D9): a route whose `document:` manifest
+    // entry is compiler-proved public receives the canonical validator posture (Cache-Control,
+    // strong ETag, Last-Modified) and answers a matching If-None-Match with 304. The manifest is
+    // the sole positive evidence; every runtime credential signal above (noStore) rejects. This
+    // runs AFTER the manifest narrowing so a demoted authored `public` header can never re-open.
+    documentResponse = applyProvedDocumentValidatorTier(route, request, documentResponse, {
+      buildToken,
+      noStore,
+    });
     const queryWarningHeader = queryRuntimeWarningHeaderValue(
       queryRuntimeWarningsFromRequest(routeResponse.lifecycleRequest),
     );
@@ -564,8 +594,253 @@ function narrowDocumentPublicCacheFromManifest<Response extends RoutePageRespons
   }
   // A document's actual response headers are runtime observations. They can reject compiler proof,
   // but a public-looking header cannot manufacture a missing document manifest or widen a closed
-  // verdict. Until the finite document language emits such a root, public documents stay private.
+  // verdict. Authored public Cache-Control on documents therefore stays demoted; the only public
+  // document posture is the framework-emitted proved-document tier below, which requires the
+  // compiler manifest AND the absence of every runtime credential signal.
   return stampCredentialBearingResponseCacheFloor(response);
+}
+
+/**
+ * SPEC §9.5 "Proved-document caching" (plans/good-perf.md D9): the canonical validator posture for
+ * a compiler-proved public document. `max-age=0, must-revalidate` makes every reuse revalidate
+ * against the strong ETag (a 0-byte 304), so freshness rides the validator rather than a TTL the
+ * compiler cannot prove.
+ */
+const PROVED_DOCUMENT_CACHE_CONTROL = 'public, max-age=0, must-revalidate';
+const PROVED_DOCUMENT_CACHE_MAX_ENTRIES = 512;
+const PROVED_DOCUMENT_CACHE_MAX_BODY_BYTES = 4_194_304;
+const nativeCreateHash = createHash;
+/** Per-app in-memory proved-document cache; the app object dies with its build (SPEC §14). */
+const provedDocumentCaches = createWitnessWeakMap<KovoApp, Map<string, ProvedDocumentCacheEntry>>();
+/** Module-private witness that a response passed the proved-document stamping floor. */
+const provedDocumentTierResponses = createWitnessWeakSet<object>();
+let provedDocumentLastModified: string | undefined;
+
+interface ProvedDocumentCacheEntry {
+  readonly body: string;
+  readonly buildToken: string;
+  readonly etag: string;
+  readonly headers: ResponseHeaders;
+}
+
+function provedDocumentManifestEntry(
+  route: RouteDeclaration<string>,
+): CacheInfluenceManifestEntry | undefined {
+  const entry = registeredCacheInfluenceForRoot(`document:${route.path}`);
+  if (
+    entry === undefined ||
+    entry.surface !== 'document' ||
+    entry.verdict !== 'public-proved' ||
+    entry.authored.posture !== 'public'
+  ) {
+    return undefined;
+  }
+  return entry;
+}
+
+/** SPEC §9.4 runtime rejection floor: ambient credentials always bypass the proved tier. */
+function requestBearsAmbientCredentials(request: Request): boolean {
+  return (
+    requestHeader(request, 'cookie') !== null || requestHeader(request, 'authorization') !== null
+  );
+}
+
+/**
+ * Cache key for one proved-document representation: the manifest's cache-key axes (URL path,
+ * URL search), each manifest Vary header value, and the negotiated representation. Returns
+ * `undefined` whenever the request is outside the provable envelope (non-GET/HEAD, credentials,
+ * or no `public-proved` manifest entry) — the caller then renders normally.
+ */
+function provedDocumentCacheKey(
+  route: RouteDeclaration<string>,
+  request: Request,
+  url: URL,
+): string | undefined {
+  const entry = provedDocumentManifestEntry(route);
+  if (entry === undefined) return undefined;
+  const method = canonicalRequestMethod(requestMethod(request));
+  if (method !== 'GET' && method !== 'HEAD') return undefined;
+  if (requestBearsAmbientCredentials(request)) return undefined;
+  const snapshot = requestUrlSnapshot(url);
+  const variant = acceptsEnhancedNavigationDocument(requestHeader(request, 'accept'))
+    ? 'parts'
+    : 'html';
+  let varyKey = '';
+  for (let index = 0; index < entry.vary.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(entry.vary, index);
+    if (
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      typeof descriptor.value !== 'string'
+    ) {
+      return undefined;
+    }
+    varyKey += ` ${descriptor.value}:${requestHeader(request, descriptor.value) ?? ''}`;
+  }
+  return `${variant} ${snapshot.pathname} ${snapshot.search}${varyKey}`;
+}
+
+/**
+ * Serve a proved-document representation from the per-app cache, answering a matching
+ * `If-None-Match` with a 0-byte 304. Returns `undefined` on any miss or floor rejection.
+ *
+ * @internal Dispatch-only seam (app-dispatch.ts); not a package entrypoint export.
+ */
+export function provedDocumentCachedResponse(
+  app: KovoApp,
+  route: RouteDeclaration<string>,
+  request: Request,
+  url: URL,
+): RoutePageResponse | undefined {
+  const key = provedDocumentCacheKey(route, request, url);
+  if (key === undefined) return undefined;
+  const cache = witnessWeakMapGet(provedDocumentCaches, app);
+  if (cache === undefined) return undefined;
+  const entry = witnessMapGet(cache, key);
+  if (entry === undefined) return undefined;
+  if (entry.buildToken !== app.clientModules.buildToken()) {
+    witnessMapDelete(cache, key);
+    return undefined;
+  }
+  // LRU touch: Map iteration order is insertion order; re-inserting keeps eviction oldest-first.
+  witnessMapDelete(cache, key);
+  witnessMapSet(cache, key, entry);
+  if (ifNoneMatchSatisfiedByStrongEtag(requestHeader(request, 'if-none-match'), entry.etag)) {
+    return markFrameworkDocumentResponse(
+      { body: '', headers: cloneResponseHeaders(entry.headers), status: 304 as const },
+      entry.buildToken,
+    );
+  }
+  return markFrameworkDocumentResponse(
+    { body: entry.body, headers: cloneResponseHeaders(entry.headers), status: 200 as const },
+    entry.buildToken,
+  );
+}
+
+/**
+ * Admit one rendered response into the proved-document cache. Fail-closed admission: the response
+ * must carry the module-private stamping witness (which itself required the compiler manifest and
+ * the absence of every credential signal), the exact canonical Cache-Control, a strong ETag, a
+ * buffered string body, and no Set-Cookie; the request must carry no ambient credentials.
+ *
+ * @internal Dispatch-only seam (app-dispatch.ts); not a package entrypoint export.
+ */
+export function admitProvedDocumentResponse(
+  app: KovoApp,
+  route: RouteDeclaration<string>,
+  request: Request,
+  url: URL,
+  response: RoutePageResponse,
+): void {
+  if (!witnessWeakSetHas(provedDocumentTierResponses, response)) return;
+  if (response.status !== 200 || typeof response.body !== 'string') return;
+  if (response.body.length > PROVED_DOCUMENT_CACHE_MAX_BODY_BYTES) return;
+  if (readHeader(response.headers, 'set-cookie') !== undefined) return;
+  if (readHeader(response.headers, 'cache-control') !== PROVED_DOCUMENT_CACHE_CONTROL) return;
+  const etag = readHeader(response.headers, 'etag');
+  if (etag === undefined) return;
+  const key = provedDocumentCacheKey(route, request, url);
+  if (key === undefined) return;
+  let cache = witnessWeakMapGet(provedDocumentCaches, app);
+  if (cache === undefined) {
+    cache = createWitnessMap<string, ProvedDocumentCacheEntry>();
+    witnessWeakMapSet(provedDocumentCaches, app, cache);
+  }
+  if (witnessMapGet(cache, key) === undefined && witnessMapSize(cache) >= PROVED_DOCUMENT_CACHE_MAX_ENTRIES) {
+    let oldest: string | undefined;
+    witnessMapForEach(cache, (_value, mapKey) => {
+      if (oldest === undefined) oldest = mapKey;
+    });
+    if (oldest !== undefined) witnessMapDelete(cache, oldest);
+  }
+  witnessMapSet(cache, key, {
+    body: response.body,
+    buildToken: app.clientModules.buildToken(),
+    etag,
+    headers: cloneResponseHeaders(response.headers),
+  });
+}
+
+/** @internal Test-only seam: drop the proved-document cache for one app. */
+export function clearProvedDocumentCacheForApp(app: KovoApp): void {
+  const cache = witnessWeakMapGet(provedDocumentCaches, app);
+  if (cache !== undefined) {
+    const keys: string[] = [];
+    witnessMapForEach(cache, (_value, key) => {
+      keys[keys.length] = key;
+    });
+    for (let index = 0; index < keys.length; index += 1) witnessMapDelete(cache, keys[index]!);
+  }
+}
+
+function applyProvedDocumentValidatorTier(
+  route: RouteDeclaration<string>,
+  request: Request,
+  response: DocumentRoutePageResponseWithCsp,
+  options: { buildToken: string; noStore: boolean },
+): DocumentRoutePageResponseWithCsp {
+  // Runtime signals reject, never widen: any credential/personalization evidence computed by the
+  // caller (noStore) or present on the wire keeps the response off the proved tier entirely.
+  if (options.noStore) return response;
+  const entry = provedDocumentManifestEntry(route);
+  if (entry === undefined) return response;
+  if (response.status !== 200 || typeof response.body !== 'string') return response;
+  if (requestBearsAmbientCredentials(request)) return response;
+  if (!documentResponseIsAcceptNegotiated(response)) return response;
+  if (readHeader(response.headers, 'cache-control') !== undefined) return response;
+  if (readHeader(response.headers, 'set-cookie') !== undefined) return response;
+  const method = canonicalRequestMethod(requestMethod(request));
+  if (method !== 'GET' && method !== 'HEAD') return response;
+
+  const etag = strongDocumentEtag(response.body);
+  provedDocumentLastModified ??= new Date().toUTCString();
+  let headers: ResponseHeaders = {
+    ...response.headers,
+    'Cache-Control': PROVED_DOCUMENT_CACHE_CONTROL,
+    ETag: etag,
+    'Last-Modified': provedDocumentLastModified,
+  };
+  for (let index = 0; index < entry.vary.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(entry.vary, index);
+    if (descriptor !== undefined && 'value' in descriptor && typeof descriptor.value === 'string') {
+      headers = mergeVaryHeader(headers, descriptor.value);
+    }
+  }
+
+  if (ifNoneMatchSatisfiedByStrongEtag(requestHeader(request, 'if-none-match'), etag)) {
+    // RFC 9110 §15.4.5: the 304 carries the validator/caching metadata of the representation it
+    // validates. The 200 was fully rendered; only the transfer is elided.
+    return markFrameworkDocumentResponse(
+      { ...response, body: '', headers, status: 304 },
+      options.buildToken,
+    );
+  }
+  const stamped = markFrameworkDocumentResponse({ ...response, headers }, options.buildToken);
+  witnessWeakSetAdd(provedDocumentTierResponses, stamped);
+  return stamped;
+}
+
+function strongDocumentEtag(body: string): string {
+  return `"${nativeCreateHash('sha256').update(body, 'utf8').digest('base64url')}"`;
+}
+
+/**
+ * RFC 9110 §13.1.2 weak comparison over a strong stored ETag: `W/` prefixes are ignored on the
+ * candidate list, `*` matches any current representation, and opaque-tags compare byte-exact.
+ */
+function ifNoneMatchSatisfiedByStrongEtag(header: string | null, etag: string): boolean {
+  if (header === null) return false;
+  const trimmedHeader = securityStringTrim(header);
+  if (trimmedHeader === '*') return true;
+  const candidates = securityStringSplit(trimmedHeader, ',');
+  for (let index = 0; index < candidates.length; index += 1) {
+    let candidate = securityStringTrim(candidates[index] ?? '');
+    if (securityStringStartsWith(candidate, 'W/')) {
+      candidate = securityStringSlice(candidate, 2);
+    }
+    if (candidate === etag) return true;
+  }
+  return false;
 }
 
 interface RefreshSetCookie {

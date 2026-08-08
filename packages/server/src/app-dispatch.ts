@@ -29,7 +29,9 @@ import type { ShellDispatchMatch } from './shell.js';
 import type { KovoApp } from './app-types.js';
 import type { EndpointDeclaration, EndpointMethod, EndpointMount } from './endpoint.js';
 import {
+  admitProvedDocumentResponse,
   appRequestUrl,
+  provedDocumentCachedResponse,
   renderAppErrorDocumentResponse,
   renderAppRouteDocumentResponse,
 } from './app-document.js';
@@ -300,17 +302,25 @@ export async function dispatchMatchedAppRequest({
       return methodNotAllowedWebResponse({ method: exactMethod }, match.allowedMethods);
     }
 
-    return routeResponseToWebResponse(
-      await renderAppRouteDocumentResponse({
-        app,
-        ...(admittedBuildToken === undefined ? {} : { buildToken: admittedBuildToken }),
-        params: match.params,
-        request,
-        route: match.route,
-        url,
-      }),
-      { method: exactMethod },
-    );
+    // SPEC §9.5 proved-document tier (plans/good-perf.md D9): a route whose compiler-emitted
+    // `document:` cache-influence entry is `public-proved` may serve its cached representation
+    // (or a 0-byte 304) without re-rendering. Both seams fail closed inside app-document.ts:
+    // credentials on the request, a missing/closed manifest entry, or any personalization on the
+    // rendered response bypass the cache entirely and keep the credential floor.
+    const cachedDocument = provedDocumentCachedResponse(app, match.route, request, url);
+    if (cachedDocument !== undefined) {
+      return routeResponseToWebResponse(cachedDocument, { method: exactMethod });
+    }
+    const documentResponse = await renderAppRouteDocumentResponse({
+      app,
+      ...(admittedBuildToken === undefined ? {} : { buildToken: admittedBuildToken }),
+      params: match.params,
+      request,
+      route: match.route,
+      url,
+    });
+    admitProvedDocumentResponse(app, match.route, request, url, documentResponse);
+    return routeResponseToWebResponse(documentResponse, { method: exactMethod });
   }
 
   return routeResponseToWebResponse(

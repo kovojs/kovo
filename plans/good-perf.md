@@ -350,12 +350,14 @@ absorbs `plans/better-js-loader.md` Phases 4–5, which are superseded.
     content-hashing the `styles.css` *filename* so `/assets/*` can go immutable — lives with the
     asset emitters (`build-export.ts`/`package-styles.ts`, the O4 slice); the immutable-pattern
     header path already engages for hashed names (e.g. `/assets/index-DEZ6Vmj6.css`).
-- [ ] Give document responses cache headers at all.
-  - Kovo document responses carry **no `Cache-Control`, no `ETag`, and no `Last-Modified`**, so the
-    42,134 B home document is refetched in full on every visit. Measured repeat-visit byte saving:
-    Kovo **61.6%** vs Next.js **95.9%**; repeat-visit FCP 960 ms vs 192 ms (**5.0x**).
-  - Content-hashed immutable assets already exist for `/c/__v/<digest>/…`; extend the same treatment
-    to `/assets/*` and decide a document validator policy.
+- [x] Give document responses cache headers at all (documents half; decided and built as D9/O14).
+  - Compiler-proved public documents now carry `Cache-Control: public, max-age=0, must-revalidate`,
+    a strong sha256 `ETag`, and `Last-Modified`, and answer `If-None-Match` with a 0-byte 304
+    (verified on the rebuilt `benchmarks/kovo` artifact: `/` 18,105 B identity -> 304 with 0 body
+    bytes). Credential-influenced documents keep the credential floor by proof + runtime floors.
+    See O14 for the full contract, measurements, and adversarial pins.
+  - Still open under this item: content-hashing the `/assets/styles.css` FILENAME so `/assets/*`
+    can go immutable (lives with the asset emitters, O4 ownership).
 
 ### O4 — Prune the emitted stylesheet to actually-used components — **critical, medium, low risk**
 
@@ -763,20 +765,76 @@ through `Reflect.apply`. No fast-vs-hardened build flag.
 
 ### O14 — Decide the prerender / route-cache, multi-core, and streaming stories — **high, large, design decision**
 
-- [ ] Record whether Kovo will offer a build-time prerender or route-cache tier, or explicitly will not.
-  - `next build` prerenders both benchmark routes by default and serves them at 5,330 req/s
-    (13.3x Kovo). Kovo has no equivalent: no document ETag/If-None-Match, no Last-Modified, no route
-    or fragment cache, no ISR/`s-maxage`, and `narrowDocumentPublicCacheFromManifest`
-    (`app-document.ts:462`) demotes any `public` document to the credential floor unless a compiler
-    cache-influence manifest entry exists. Overlaps O3.
-  - Kovo also saturates a single core at c=1 (103–106% CPU at 376 req/s) and throughput is flat from
-    c=8 to c=64 — there is no multi-process/cluster story either. Decide both together.
-- [ ] Decide whether the document should stream.
-  - `route.ts:1838` awaits the complete body string before `document-core.ts:469` assembles the shell,
-    so TTFB equals full render time by construction. The deferred path (`document-core.ts:577`) still
-    puts the entire non-deferred body in the first chunk (`:929`), so it does not help TTFB. Next.js
-    ships shell-flush + PPR. High risk: committing the head early freezes status and headers before
-    body render, so any error/redirect/auth decision during render can no longer change them.
+- [x] D9 built: the compiler-proved cache-influence document cache tier (`perf/cache-tier`, 2026-08-08).
+  - Compiler: every JSX-authored `route()` now emits a `document:<path>` entry into the
+    `kovo-cache-influence/v1` manifest (`scan/route-page-cache-influence.ts` finite document cache
+    language + `app-graph.ts documentCacheInfluenceEntries`; normative in SPEC §9.4 "Document
+    cache-influence surface"). Fail-closed derivation: request-identity/signUrl/process reads,
+    awaits, construction, imported or mutable module values, layouts, queries, file/stream
+    outcomes, guards/missing access, dynamic meta, and an absent/unprovable same-module
+    `defineKovo({ renderRoute })` all close the entry; same-module JSX/helper closures over
+    build-constant literal data plus `trustedUrl`/`trustedHtml` as direct callees prove.
+    `kovo build` on the UNMODIFIED `benchmarks/kovo` proves `document:/` and
+    `document:/product/:slug` `public-proved` and closes `document:/images/:name` (stream outcome);
+    entries register in the emitted server (`dist/.kovo/graph.json` + generated handler).
+  - Runtime (SPEC §9.5 "Proved-document caching"): proved 200 html/parts documents carry
+    `Cache-Control: public, max-age=0, must-revalidate` + strong sha256 ETag + Last-Modified,
+    answer If-None-Match with a 0-byte 304 (measured 0 body / 1,217 header bytes), and repeats are
+    served from a per-app LRU cache keyed by manifest axes (path, search, vary values, negotiated
+    representation, build token). Adversarially pinned (`proved-document-cache.test.ts`, 9 tests):
+    cookie/authorization requests bypass in both directions; guard chains, legacy guards, resolved
+    session principals, and Set-Cookie all refuse EVEN AGAINST A FORGED public-proved manifest;
+    closed/missing entries never stamp; authored public Cache-Control stays demoted
+    (cache-generality intermediary suite still green). Compiler pins:
+    `cache-influence-document.test.ts` (10 tests incl. the adversarial matrix).
+  - Measured (branch artifact vs baseline `b848ca3ef` artifact, same box back-to-back, load1
+    5.6–8.2 recorded per cell, `Accept-Encoding: identity`, requestLimits raised to 1e6 on both
+    sides for measurement only — INDICATIVE): `/` c=32 **334.4 -> 5,082.6 req/s (15.2x)**, p50
+    93.1 -> 5.25 ms; `/` c=8 337.6 -> 6,188.1; `/` c=1 254.7 -> 1,209.8; `/product` c=32
+    873.6 -> 4,638.9 (5.3x); 304 revalidation path up to 7,100 req/s. Vs Next's as-shipped
+    prerender tier (5,330.2 req/s @ c=32, the 13.3x row): **parity at c=32 (0.95x), above it at
+    c=8** — and Kovo's tier is compiler-proved, not annotation-guessed. Cookie-bearing requests
+    render per request (334.4 vs 331.9 req/s baseline-vs-branch — floors intact, no regression).
+- [x] D10 recorded + rate limiter process-aware: N processes behind one proxy is the supported
+      horizontal model (SPEC §9.5 "Multi-process deployment posture"). `KOVO_PROCESSES=N` divides
+      every rate budget's `max` by N (ceil, floor 1) so authored budgets stay deployment-aggregate;
+      `maxKeys`/`windowMs` stay per-process; unparseable values throw. Pinned by
+      `app-load-shed.test.ts` (5 new tests). Built-in cluster stays out of scope until D9 is
+      re-measured on a quiet box (O17).
+- [x] D11 recorded: documents stay buffered (SPEC §9.5 "Buffered document assembly"): status and
+      every header (cookies, CSP hashes, guard/notFound outcomes, cache floors) are decided after
+      the complete render and measured TTFB is 3.9 ms; streaming is revisitable only for routes the
+      compiler proves make no post-render header decisions. §8 deferred regions remain the
+      progressive path.
+- Residuals: split-module apps (routes without a same-module `defineKovo`) and layout-composed
+  routes are closed in v1 by construction; `respond.file`/stream outcomes keep the pre-existing
+  demote-authored-public posture; the node adapter still brotli-compresses each cached-document
+  response per request (extending the adapter's ETag-keyed compressed cache to proved documents
+  is a build.ts follow-up, not this slice's ownership).
+- [x] D9 verified end-to-end on `perf/cache-tier` (2026-08-08, second agent; predecessor never
+      reported). Attacked the safety property and confirmed the accidental-leak surface is
+      **airtight**: `cache-influence-adversarial.test.ts` (9 real-compile-pipeline cases — passing
+      the context object into a helper, `process.env` through a same-module call graph, computed
+      context member, `Math.random`/`Date.now`, `globalThis`, non-allowlisted method calls,
+      request-header via the destructured 2nd param — all close; a genuinely pure params/search
+      page proves) plus the predecessor's 19 tier tests (forged-`public-proved` manifests still
+      refuse guards/sessions/cookies). Built-artifact probes (raised limits, measurement-only):
+      anonymous `/` → `public, max-age=0, must-revalidate` + strong ETag + 304 on If-None-Match;
+      `Cookie:`-bearing `/` → `no-store` + `Vary: Cookie, Accept`; closed `document:/images/:name`
+      → `private, no-store`. `kovo build` on the unmodified benchmark emits `document:/` and
+      `document:/product/:slug` `public-proved`, `document:/images/:name` closed.
+  - Re-measured (built node artifact, load 5–6 recorded, `KOVO_PROCESSES` unset, identity encoding,
+    requestLimits 1e6 measurement-only, INDICATIVE): cached `/` **2,116 / 3,504 / 4,669 req/s** at
+    c=1/8/32 vs cookie-uncached **351 / 370 / 334 req/s** — **6.0x / 9.5x / 14.0x**; 304 path
+    5,957 req/s @ c=32; cached p50 0.28 ms (c=1) / 5.65 ms (c=32); 18,105 B identity/doc. Consistent
+    with the predecessor's cell (lower absolute rps at higher box load).
+  - **Soundness boundary (explicit, SPEC §9.4 amended):** the render-hook clause trusts the
+    manifest (KV235) to attest that a route module's own visible `defineKovo` is the app that
+    assembles its routes. Only single-module apps (routes + `defineKovo` together) ever prove, and
+    there the attested hook is the serving hook. A deliberately-planted decoy `defineKovo` in a
+    route module whose routes are served by a different app with a per-visitor `renderRoute` is a
+    trusted-author manifest-integrity concern, not a runtime-observable one — out of the
+    cache-safety threat model, which the §9.5 runtime floors (all manifest-independent) own.
 
 ### O15 — Restore benchmark and harness validity — **high, medium, low risk**
 

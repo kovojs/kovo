@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { normalizeAppRequestLimits, preDispatchLoadShedResponse } from './app-load-shed.js';
 import type { KovoApp } from './app-types.js';
@@ -77,5 +77,76 @@ describe('pre-dispatch per-IP load shedding for document GETs (SPEC §9.5, D12)'
       shed = preDispatchLoadShedResponse(app, requestWithPeerIp('GET'), 'other');
     }
     expect(shed?.status).toBe(429);
+  });
+
+  /**
+   * D10 (plans/good-perf.md) / SPEC §9.5 multi-process deployment posture: rate budgets describe
+   * the deployment aggregate. `KOVO_PROCESSES=N` makes each process enforce `ceil(max / N)`;
+   * unset or `1` keeps single-process behavior identical; an unparseable value fails loudly.
+   */
+  describe('process-aware rate budgets (SPEC §9.5, D10)', () => {
+    afterEach(() => {
+      delete process.env.KOVO_PROCESSES;
+    });
+
+    it('divides an authored per-IP budget by the declared process count', () => {
+      process.env.KOVO_PROCESSES = '4';
+      const app = appWithLimits({ perIp: { max: 20 } });
+      let admitted = 0;
+      let shed: Response | undefined;
+      for (let index = 0; index < 20 && shed === undefined; index += 1) {
+        shed = preDispatchLoadShedResponse(app, requestWithPeerIp('GET'), 'other');
+        if (shed === undefined) admitted += 1;
+      }
+      // ceil(20 / 4) = 5 admitted per process share.
+      expect(admitted).toBe(5);
+      expect(shed?.status).toBe(429);
+    });
+
+    it('divides the global budget by the declared process count', () => {
+      process.env.KOVO_PROCESSES = '2';
+      const app = appWithLimits({ global: { max: 10 } });
+      let admitted = 0;
+      let shed: Response | undefined;
+      for (let index = 0; index < 12 && shed === undefined; index += 1) {
+        shed = preDispatchLoadShedResponse(app, requestWithPeerIp('GET'), 'other');
+        if (shed === undefined) admitted += 1;
+      }
+      expect(admitted).toBe(5);
+      expect(shed?.status).toBe(429);
+    });
+
+    it('keeps single-process behavior identical when unset or 1', () => {
+      process.env.KOVO_PROCESSES = '1';
+      const app = appWithLimits({ perIp: { max: 3 } });
+      let admitted = 0;
+      let shed: Response | undefined;
+      for (let index = 0; index < 5 && shed === undefined; index += 1) {
+        shed = preDispatchLoadShedResponse(app, requestWithPeerIp('GET'), 'other');
+        if (shed === undefined) admitted += 1;
+      }
+      expect(admitted).toBe(3);
+    });
+
+    it('fails loudly on an unparseable KOVO_PROCESSES instead of multiplying the budget', () => {
+      process.env.KOVO_PROCESSES = 'two';
+      const app = appWithLimits();
+      expect(() => preDispatchLoadShedResponse(app, requestWithPeerIp('GET'), 'other')).toThrow(
+        /KOVO_PROCESSES must be a decimal integer/u,
+      );
+      process.env.KOVO_PROCESSES = '0';
+      expect(() => preDispatchLoadShedResponse(app, requestWithPeerIp('GET'), 'other')).toThrow(
+        /KOVO_PROCESSES/u,
+      );
+    });
+
+    it('never divides below one admitted request per window', () => {
+      process.env.KOVO_PROCESSES = '1024';
+      const app = appWithLimits({ perIp: { max: 3 } });
+      const first = preDispatchLoadShedResponse(app, requestWithPeerIp('GET'), 'other');
+      expect(first).toBeUndefined();
+      const second = preDispatchLoadShedResponse(app, requestWithPeerIp('GET'), 'other');
+      expect(second?.status).toBe(429);
+    });
   });
 });

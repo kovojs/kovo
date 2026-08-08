@@ -2,6 +2,8 @@ import { dirname, join } from 'node:path';
 
 import {
   createCacheInfluenceManifest,
+  deriveCacheInfluenceManifestEntry,
+  type CacheInfluenceDerivationInput,
   type CacheInfluenceManifest,
   type CacheInfluenceManifestEntry,
 } from '@kovojs/core/internal/cache-influence';
@@ -110,14 +112,6 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
       ),
     ),
   );
-  const cacheInfluence = mergeCacheInfluenceManifest(
-    graphInput?.cacheInfluence,
-    flattenFactProperty<CacheInfluenceManifestEntry>(
-      components,
-      'cacheInfluence',
-      'Cache influence facts',
-    ),
-  );
   const tasks = mergeTaskExplainFacts(
     concatDense(
       graphInput?.tasks ?? [],
@@ -148,6 +142,22 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     input.routePages ?? [],
     'routePageFacts',
     'Route-page facts',
+  );
+  // SPEC §9.4: the cache-influence manifest carries query/endpoint roots from component facts AND
+  // one `document:<path>` root per JSX-authored route page. Document entries are derived here —
+  // where route access/guard/layout/query facts and the scanner's finite-language closure meet —
+  // and are the ONLY source that can open the runtime's proved-document tier. Fail-closed: a route
+  // with any unresolved influence produces a `shared-cache-closed` entry, never a missing one.
+  const cacheInfluence = mergeCacheInfluenceManifest(
+    graphInput?.cacheInfluence,
+    concatDense(
+      flattenFactProperty<CacheInfluenceManifestEntry>(
+        components,
+        'cacheInfluence',
+        'Cache influence facts',
+      ),
+      documentCacheInfluenceEntries(routePages, components),
+    ),
   );
   const publishToClientCapabilities = publishToClientCapabilitiesFromFacts(
     flattenFactProperty<PublishToClientFact>(
@@ -267,6 +277,149 @@ function mergeAgentExplainFacts(
     compilerSetAdd(names, name);
   }
   return agents;
+}
+
+/**
+ * SPEC §9.4 (document surface): derive one `document:<route path>` cache-influence entry per
+ * JSX-authored route page. The authored posture is the route's OWN mandatory access decision —
+ * `publicAccess(reason)` is the authored public intent; guard chains and machine auth are
+ * principal/authorization influences; a missing decision is unclassified. Every route contributes
+ * the URL path and URL search as cache-key axes. Queries reached by the page or its layouts are
+ * framework state (closed without keyed external versions); layout composition, file/stream
+ * outcomes, and every scanner-recorded feature outside the finite document cache language close
+ * the entry. `public-proved` here is the ONLY evidence that can open the runtime document cache;
+ * runtime observations may still narrow it, never widen (fail-closed both directions).
+ */
+function documentCacheInfluenceEntries(
+  routePages: readonly RoutePageFact[],
+  components: readonly ComponentGraphFact[],
+): CacheInfluenceManifestEntry[] {
+  const pages = compilerSnapshotDenseArray(routePages, 'Document cache route pages');
+  if (pages.length === 0) return [];
+  const componentQueriesByExportName = documentComponentQueryMap(components);
+  const byRoot = compilerCreateMap<string, CacheInfluenceManifestEntry>();
+  const entries: CacheInfluenceManifestEntry[] = [];
+  for (let index = 0; index < pages.length; index += 1) {
+    const page = pages[index]!;
+    const entry = deriveCacheInfluenceManifestEntry(
+      documentCacheInfluenceInput(page, componentQueriesByExportName),
+    );
+    const existing = compilerMapGet(byRoot, entry.root);
+    if (existing === undefined) {
+      compilerMapSet(byRoot, entry.root, entry);
+      compilerArrayAppend(entries, entry, 'Document cache influence entries');
+      continue;
+    }
+    if (compilerJsonStringify(existing) === compilerJsonStringify(entry)) continue;
+    // Duplicate route paths are a KV228-class graph ambiguity reported elsewhere; the cache
+    // manifest must stay derivable, so the ambiguous root degrades to a closed entry.
+    const closed = deriveCacheInfluenceManifestEntry({
+      authored: { posture: 'non-public' },
+      influences: {
+        unclassified: ['duplicate route path declarations for one document root'],
+        urlPath: true,
+        urlSearch: true,
+      },
+      root: entry.root,
+      surface: 'document',
+    });
+    compilerMapSet(byRoot, entry.root, closed);
+    for (let position = 0; position < entries.length; position += 1) {
+      if (entries[position]!.root === entry.root) {
+        compilerSetOwnDataProperty(entries, position, closed);
+        break;
+      }
+    }
+  }
+  return entries;
+}
+
+function documentCacheInfluenceInput(
+  page: RoutePageFact,
+  componentQueriesByExportName: ReadonlyMap<string, readonly string[]>,
+): CacheInfluenceDerivationInput {
+  const unclassified: string[] = [];
+  const appendClosure = (detail: string): void => {
+    for (let index = 0; index < unclassified.length; index += 1) {
+      if (unclassified[index] === detail) return;
+    }
+    compilerArrayAppend(unclassified, detail, 'Document cache closures');
+  };
+
+  let authorization = false;
+  let frameworkState = false;
+  let principalSession = false;
+  const access = page.access;
+  if (access === undefined) {
+    appendClosure('route access decision is not statically proved');
+  } else if (access.kind === 'guard-chain') {
+    principalSession = true;
+  } else if (access.kind === 'verified-machine-auth') {
+    authorization = true;
+  }
+  if (page.guards !== undefined && page.guards.length > 0) principalSession = true;
+
+  const layouts = compilerSnapshotDenseArray(page.layouts ?? [], 'Document cache route layouts');
+  if (layouts.length > 0) {
+    // Layout render functions are not yet inside the finite document cache language; their
+    // queries additionally read framework state per request.
+    appendClosure('route layout composition is outside the finite document cache language');
+    for (let index = 0; index < layouts.length; index += 1) {
+      if (layouts[index]!.queries.length > 0) frameworkState = true;
+    }
+  }
+
+  const pageComponents = compilerSnapshotDenseArray(
+    page.components,
+    'Document cache route components',
+  );
+  for (let index = 0; index < pageComponents.length; index += 1) {
+    const component = pageComponents[index]!;
+    const exportName = component.exportName ?? component.localName;
+    const queries = compilerMapGet(componentQueriesByExportName, exportName);
+    if (queries !== undefined && queries.length > 0) frameworkState = true;
+  }
+
+  if (page.outcome !== undefined) {
+    appendClosure(`route page produces a ${page.outcome.kind} outcome`);
+  }
+
+  const scanner = page.cacheInfluence;
+  const scannerClosures = compilerSnapshotDenseArray(
+    scanner?.unclassified ?? [],
+    'Document cache scanner closures',
+  );
+  for (let index = 0; index < scannerClosures.length; index += 1) {
+    appendClosure(scannerClosures[index]!);
+  }
+
+  return {
+    authored: { posture: access?.kind === 'public' ? 'public' : 'non-public' },
+    influences: {
+      ...(authorization ? { authorization: true as const } : {}),
+      ...(frameworkState ? { frameworkState: true as const } : {}),
+      ...(principalSession ? { principal: true as const, session: true as const } : {}),
+      ...(scanner?.secret === true ? { secret: true as const } : {}),
+      ...(unclassified.length === 0 ? {} : { unclassified }),
+      urlPath: true,
+      urlSearch: true,
+    },
+    root: `document:${page.route}`,
+    surface: 'document',
+  };
+}
+
+function documentComponentQueryMap(
+  components: readonly ComponentGraphFact[],
+): ReadonlyMap<string, readonly string[]> {
+  const queriesByExportName = compilerCreateMap<string, readonly string[]>();
+  const snapshot = compilerSnapshotDenseArray(components, 'Document cache component facts');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const component = snapshot[index]!;
+    if (component.exportName === undefined) continue;
+    compilerMapSet(queriesByExportName, component.exportName, component.queries ?? []);
+  }
+  return queriesByExportName;
 }
 
 function mergeCacheInfluenceManifest(
