@@ -673,6 +673,39 @@ through `Reflect.apply`. No fast-vs-hardened build flag.
 
 ### O9 — Enable Speculation Rules by default, or justify the 3.3x cost — **high, small, design decision**
 
+> **NOT MERGED. Implemented on branch `perf/speculation-rules` (head `c478c52e4`) and held back by
+> an adversarial review that found two blockers.** The branch is complete and internally tested; the
+> defects below are why it must not land as-is. Do not merge without fixing both and re-reviewing.
+>
+> - **BLOCKER — startup crash for ordinary apps.** `prefetchPatternForPath` lowers any whole-segment
+>   `:param` to `*` regardless of position, so `/user/:id/posts` becomes `/user/*/posts` and the
+>   table is proved complete with it. The runtime floor `isSafePrefetchPattern`
+>   (`packages/server/src/route-prefetch-safety.ts:173`) then rejects any non-final `*` by **throwing
+>   inside minting**, which runs at top level in the lowered module. Any app with a non-final route
+>   parameter fails to build or boot. The benchmark app uses only trailing params, which is exactly
+>   why every measurement passed. The invariant to establish: the compiler must never emit a fact the
+>   runtime will reject.
+> - **BLOCKER — the safety proof fails open on indirection.** Obligation 4 (page synchronous, no
+>   await, no file/stream) is defeated by `page: someIdentifier` or shorthand `page`: the scanner
+>   walks the Identifier, finds no await, and returns `side-effect-free-get`. Confirmed by probe that
+>   `const page = async (ctx) => { await fetch(...); ... }` proves side-effect-free. A speculative GET
+>   would execute that body on every hover-prefetch. Note the asymmetry: `access` indirection already
+>   fails **closed**; `page` must too.
+> - **MAJOR — the completeness proof** is defeated by `let` reassignment and inner-scope shadowing;
+>   `assembleCoversRouteTable` resolves array elements by identifier name with no scope analysis, so
+>   a rewired route proves `routeTableComplete === true`. Either fix, or narrow the SPEC claim to what
+>   is actually proved.
+> - MINOR — `*` matches across `/` in speculation-rules semantics, so a proved `/product/*` also
+>   prefetches undeclared deeper paths that 404. Wasted GETs, not a credential risk.
+>
+> What the review **confirmed good**, and what a re-attempt should preserve: the CSRF conclusion is
+> correct (a speculative GET reuses the stored anonymous binding and emits no `Set-Cookie`, so a
+> discarded prefetch cannot rotate a live document's form tokens); the WeakSet identity gate defeats
+> structural clones, hand-authored values, and foreign schemas; the same-origin pattern floor rejects
+> off-origin, protocol-relative and backslash-authority patterns; emission is prefetch-only, never
+> prerender; and the re-measured win (1.83x, 362 → 198 ms, post-batch-2 tree) is honestly labelled
+> rather than quoting the stale 3.3x.
+
 - [ ] Revisit `spec/07-navigation.md`'s "never auto-emitted, default off" for prefetch.
   - Confirmed: zero `speculationrules` occurrences in emitted documents. Next.js `<Link>` prefetches
     by default with no configuration.
