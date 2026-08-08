@@ -373,36 +373,81 @@ server stops blocking on proofs that will be re-established before anything ship
 ### O6 — The dev loop is broken, not just slow, at realistic app size — **critical, correctness**
 
 Not throughput items; defects that make `kovo dev` unusable on the repo's own flagship example.
-Grouped here because they share O5's root cause.
+Grouped here because they share O5's root cause. Four of five closed 2026-08-08 on
+`perf/dev-correctness`; the remaining latency root cause stays with O5 D5-c/D5-d.
 
 - [ ] Fix: an edit to `examples/stackoverflow` **never reaches the served HTML**.
-  - Reproduced 4/4. After boot (53.5 s) and one edit to `src/components/question-list.tsx` (a string
-    verifiably present in the dev-served HTML): 150 s of enforced silence then 6 probes over 10 s all
-    returned **200 with the old HTML** (257,058 B, no token). A separate 240 s poll made 395 polls
-    with **zero hits**. HTTP is hard-blocked from t+1.6 s to t+30 s.
-  - Mechanism, from the profile: there is **no `transform` frame at all** — `handleHotUpdate` spends
-    ~23 s computing whole-project facts and the per-module transform / SSR re-render never runs.
-  - `"dev": "kovo dev ./src/app-shell.ts"` is the example's own committed script.
-- [ ] Fix: a request in flight when the 30 s request deadline fires **crashes the dev server**.
-  - Reproduced 2/2. Unhandled `'error'` event on a `Readable`: `RequestDeadlineExceededError` at
-    `packages/server/src/request-deadline.ts:318` via `abortCapability` (:148) / `interrupt` (:154);
-    the process exits. A client-initiated disconnect (abort < 30 s) does not crash it.
-- [ ] Fix: a hard parse error produces **zero developer feedback** for at least 90 s.
-  - Injecting `</h9>` inside `<h1>` (independently confirmed as 6 syntactic diagnostics from
-    `ts.createSourceFile` with `ScriptKind.TSX`) produced no terminal diagnostic and no failing HTTP
-    in 90 s — the server kept returning `200` with stale HTML. An undefined identifier surfaced only
-    as a 500 at 8,246 ms, also with no terminal diagnostic.
-- [ ] Fix: every app-source edit forces a full page reload; client state is destroyed on every save.
-  - `packages/compiler/src/hmr-impact.ts:115` short-circuits
-    `if (next.sourceKind === 'route-shell') return { impact: 'routeRefresh' }` before
-    `componentRefresh` is ever considered. Browser capture: Kovo emits `kovo:route-shell` immediately
-    followed by `{"type":"full-reload"}`; a `window.__sentinel` set before the edit did not survive,
-    3/3 (`navigation.type === "reload"` 3/3). Next.js preserved it 4/4 at 104–107 ms.
-  - Not yet proven: whether `componentRefresh` is reachable for a **non-entry** component edit. The
-    benchmark app is a single file, so only the entry-file path was exercised. Needs a two-file fixture.
-- [ ] Fix: `kovo check source --watch` leaks orphaned processes.
-  - Five orphaned watch processes reparented to launchd were found at the start of a measurement run,
-    burning ~39% of a core, left by earlier runs in three different app directories.
+  - Latency root cause (whole-project facts on the HMR path) stays with O5 D5-c/D5-d. Re-measured
+    at HEAD after batch 1: a single edit now lands in **36–50 s** (was: never, 4/4), but three
+    rapid edits still froze HTTP hard — 7 held requests got **0 bytes for 150 s** — and took
+    ~6.5 min to converge because every obsolete backlog revision revalidated serially.
+  - Landed here — the failure MODE can no longer be silent (loud-by-construction watchdog):
+    the runner-generation broker takes an observer; `kovo dev` prints
+    `change to <file> has not produced a new app generation after Ns…` every 10 s from the
+    watcher, `edit #N is still being proven after Ns…` while a candidate validates, and
+    `edit #N active after Nms` on every landing. Verified live on `examples/stackoverflow`
+    (stall line at t+43 s, then `edit #1 active after 3447ms`). During a hard CPU pin the
+    interval fires late-but-loud when the loop unblocks.
+    `dev-runner-generation.ts` + `dev.ts` monitor; pinned by
+    `dev-runner-generation.test.ts` observer suite.
+  - Landed here — superseded-backlog skip: a staged revision that was out-requested before it
+    began validating resolves without a full app validation (validation reads live bytes, so the
+    newest revision proves the same source). Pinned by "skips validating a superseded backlog
+    revision and swaps only the newest edit".
+- [x] Fix: a request in flight when the 30 s request deadline fires **crashes the dev server**.
+  - **Not reproducible at HEAD** (5 distinct attempts, 2026-08-08): (1) stackoverflow stall with
+    an admitted in-flight request crossing t+30 s → 200 after 30.76 s, server alive; (2) 7 held
+    requests through a 150 s outage → server alive; (3) real `kovo dev` app with
+    `deadlineMs: 3000` and a never-resolving endpoint → **503 at 3.0 s**, server alive; (4) same
+    with a mid-stream stalled body → connection torn at 3.0 s, server alive; (5) two
+    real-Node-transport unit paths. Most plausibly fixed by O13's quiet-teardown/E1 changes,
+    which landed after the recon. The contract "a deadline produces a failed response, never a
+    dead server" is now pinned by
+    `packages/server/src/request-deadline-node-transport.test.ts` (process-level
+    uncaughtException/unhandledRejection capture over a real `node:http` transport, slow-handler
+    and mid-stream cases, dev posture `compression: false`).
+- [x] Fix: a hard parse error produces **zero developer feedback** for at least 90 s.
+  - Done on `perf/dev-correctness`. The generation stage failure (previously swallowed entirely —
+    the app-shell plugin rejected before sending any event) now reports through the broker
+    observer: terminal `[kovo dev] edit #N failed after Nms: <full teaching diagnostic>` plus
+    `the previous build remains active; fix the error and save again.`, and the Vite error
+    overlay via a ws `{type:'error'}` payload; the next successful stage clears the overlay
+    without a reload (`{type:'update',updates:[]}`).
+  - Verified live on `benchmarks/kovo`: `</h9>` in `<h1>` → terminal PARSE_ERROR with
+    `src/app.tsx:439:45` + source excerpt at **580 ms** (was: nothing for 90 s) and
+    `vite-error-overlay` present in a Playwright browser; undefined identifier →
+    `edit #5 failed after 470ms: definitelyNotDefinedIdentifier is not defined` (was: bare 500
+    at 8,246 ms). Serving the previous build with 200 is deliberate (SPEC §6.2.1 keeps the
+    last-good generation active) and is now announced instead of silent.
+- [x] Fix: every app-source edit forces a full page reload; client state is destroyed on every save.
+  - Ground truth established (2026-08-08, Playwright on `examples/stackoverflow`):
+    `componentRefresh` **is** reachable for a non-entry live-target component edit — resolved the
+    plan's open question. But only for byte-length-preserving edits: three offset-bearing fields
+    leaked into the HMR fact hashes, so any insertion/deletion above a declaration downgraded a
+    render-only save (observed live, in order: `routeRefresh['style']` from
+    `styleRuleUsages[].generatedFrom`; `fullReload['live-target']` from
+    `queryBindings[].queryKeySpan`; plus `generatedFromSpan`/`sourceSpan` in query-update plans).
+    This — not the route-shell short-circuit, which is dead code (`sourceKind` is only ever
+    `'component'`) — is why every real save reloaded.
+  - Fixed in `createComponentHmrImpactMetadata` (`packages/compiler/src/hmr-impact.ts`): HMR
+    hashes are computed over span-free projections (SPEC §5.2 rule 9). Verified live: the same
+    offset-shifting edit now classifies `componentRefresh['render-output']`, patches via
+    `kovo:component-render` with **no** full-reload, and `window.__sentinel` survives with
+    `navigation.type === 'navigate'`. Pinned by `hmr-impact.test.ts` ("ignores pure byte-offset
+    shifts…" + "classifies render-output-only edits…").
+  - Residual, out of this slice: an **entry-file** edit still full-reloads by design
+    (`vite-dev.ts` route-shell path) — the single-file benchmark app therefore still reloads
+    every save. State-preserving route-shell refresh needs O2's document-part protocol plus
+    route-shell facts; a failed entry stage no longer reloads (regression-tested).
+- [x] Fix: `kovo check source --watch` leaks orphaned processes.
+  - Done on `perf/dev-correctness`: `superviseKovoCliSessionParent`
+    (`packages/cli/src/commands/process-supervision.ts`) polls the parent pid (unref'd); a
+    changed ppid proves the invoker died, aborts the watch session (and closes `kovo dev`).
+    Verified end to end: SIGKILL of the wrapper `kovo` process → the watch child printed
+    `[kovo] the invoking parent process (pid …) is gone …` and exited **3 s** later. Unit-pinned
+    by `process-supervision.test.ts`. Residual: killing only the *grandparent* (harness shell)
+    leaves the pair alive because `bin.ts`'s spawnSync wrapper has no supervision — needs a
+    `bin.ts` follow-up (out of this slice's ownership).
 
 ### O7 — Fix the quadratic `app-source-trust` phase in check/build — **critical, large, medium risk**
 
@@ -744,5 +789,6 @@ Cloudflare and Vercel presets (every transport finding is Node-preset only); HTT
 multi-process configurations; bfcache participation for either framework; speculation-rules
 `prerender` eagerness; the query/loader execution layer, excluded from the SSR profile and possibly
 dominant on data-heavy routes; a measured data-plane-vs-component edit split (established by code
-reading only — `isDataPlaneSourceFile` is extension-only, so no cheap path exists to compare against);
-whether `componentRefresh` is reachable for a non-entry component edit.
+reading only — `isDataPlaneSourceFile` is extension-only, so no cheap path exists to compare against).
+Resolved since: `componentRefresh` IS reachable for a non-entry component edit and preserves client
+state (O6, browser-verified 2026-08-08 on `perf/dev-correctness`).
