@@ -695,6 +695,20 @@ provenance path. Reviewed
 framework APIs are the only nodes that may terminate such a path as a capability door; app or
 package metadata cannot mint a framework door.
 
+The lexical-provenance scan behind this gate is resource-bounded and fail-closed. Its analysis
+budgets — abstract work, per-value candidates, loop reanalysis, invocation cycles, and the recorded
+unmodeled-effect-site history — bound analyzer time and memory only; they are not classification
+inputs, and a completed analysis yields the same verdicts at any budget. Exceeding any budget MUST
+mark the module's provenance analysis exhausted, and an exhausted module MUST close every framework
+root discovered in it with KV448 rather than report the partial analysis as exact. The effect-site
+history budget is derived, not constant: it scales with the module's own syntax-node count, clamped
+to a floor of 128 and a ceiling of 4,096 recorded sites, so a legitimate module does not become
+unbuildable purely by growing, while no module can obtain more than the ceiling by inflating its
+own syntax. The remaining budgets are flat and MUST NOT scale with module size; inflating a module
+to raise the effect-site budget therefore spends the flat abstract-work budget and still fails
+closed. Partial effect-site history MUST never be consumed as if complete: any truncation or
+refused recording is valid only in the same analysis that marks the module exhausted.
+
 A custom Node adapter is privileged host wiring, not request-handler code. Its entry module MUST
 import `@kovojs/server/runtime-bootstrap` as its exact literal first side-effect import and MUST pass
 one directly imported handler from a separate local module to `toNodeHandler()`. Capability closure
