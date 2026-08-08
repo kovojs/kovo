@@ -41,7 +41,6 @@ import {
 } from './source-check-session.js';
 
 const execFileAsync = promisify(execFile);
-const typescriptPhaseIndex = 2;
 const wholeProjectPhaseIndexes = [0, 3, 4] as const; // lifecycle-policy, project-quality, sound-subset
 
 /**
