@@ -173,12 +173,13 @@ for (const app of apps) {
     );
     if (serverExit) throw new Error(serverExit);
     assertPostureMatched(app, serverLog);
+    // Checked per entrant, not at the end: a rejected run should not first spend the remaining
+    // entrants' wall clock producing numbers it is going to refuse to publish anyway.
+    assertMeasurementIntegrity(results.slice(-1));
   } finally {
     await stopServer(server);
   }
 }
-
-assertMeasurementIntegrity(results);
 
 const output = {
   generatedAt: new Date().toISOString(),
