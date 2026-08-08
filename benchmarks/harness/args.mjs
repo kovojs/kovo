@@ -25,8 +25,13 @@
  */
 export function readArg(name, argv = process.argv) {
   const index = argv.indexOf(name);
-  if (index === -1) return undefined;
-  return argv[index + 1] ?? '';
+  if (index !== -1) return argv[index + 1] ?? '';
+  // Equals form (`--iterations=5`). Without this, the equals form parses as an unrecognized
+  // operand and the run silently proceeds on defaults — a false-looking result rather than an
+  // error, which is exactly the failure mode this harness exists to prevent.
+  const equals = argv.find((token) => token.startsWith(`${name}=`));
+  if (equals !== undefined) return equals.slice(name.length + 1);
+  return undefined;
 }
 
 /**
