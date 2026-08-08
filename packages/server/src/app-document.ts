@@ -475,11 +475,12 @@ export async function renderAppRouteDocumentResponse({
       documentResponse = stampCredentialBearingResponseCacheFloor(documentResponse);
     }
 
-    if (documentResponse.status === 200) {
-      // plans/good-perf.md O2 Vary symmetry: EVERY 200 document response is negotiated on
-      // `Accept` now, including the ordinary `text/html` representation — otherwise a shared
-      // cache may store the full document under a key with no Accept dimension and replay it
-      // to enhanced-navigation fetches, silently defeating the parts protocol.
+    if (documentResponse.status === 200 && documentResponseIsAcceptNegotiated(documentResponse)) {
+      // plans/good-perf.md O2 Vary symmetry: EVERY 200 document representation is negotiated
+      // on `Accept` now, including the ordinary `text/html` one — otherwise a shared cache may
+      // store the full document under a key with no Accept dimension and replay it to
+      // enhanced-navigation fetches, silently defeating the parts protocol. File/stream route
+      // outcomes are not Accept-negotiated and keep their own cache posture.
       documentResponse.headers = mergeVaryHeader(documentResponse.headers, 'Accept');
     }
     documentResponse = narrowDocumentPublicCacheFromManifest(route, documentResponse);
@@ -494,6 +495,17 @@ export async function renderAppRouteDocumentResponse({
   } finally {
     captureRouteResponseLifecycleCookies();
   }
+}
+
+/** SPEC §8: the two Accept-negotiated document representations. */
+function documentResponseIsAcceptNegotiated(response: RoutePageResponse): boolean {
+  const contentType = readHeader(response.headers, 'content-type');
+  if (contentType === undefined) return false;
+  const lowered = securityStringToLowerCase(contentType);
+  return (
+    securityStringIncludes(lowered, 'text/html') ||
+    securityStringIncludes(lowered, 'application/vnd.kovo.document-parts+json')
+  );
 }
 
 /**

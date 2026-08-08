@@ -115,10 +115,12 @@ describe('anonymous mutation-form document cache posture', () => {
 
     // This is the required contract: a body carrying per-cookie CSRF authority must never be a
     // reusable public representation. These assertions are intentionally red at the audited tip.
+    // plans/good-perf.md O2 Vary symmetry: 200 documents also carry the Accept dimension now
+    // (the kovo-document-parts/v1 variant is negotiated on Accept).
     expect({
       cacheControl: primed.headers.get('cache-control'),
       vary: primed.headers.get('vary'),
-    }).toEqual({ cacheControl: 'private, no-store', vary: 'Cookie' });
+    }).toEqual({ cacheControl: 'private, no-store', vary: 'Cookie, Accept' });
   });
 
   it('does not reject a victim submit after a shared cache reuses an attacker-cookie variant', async () => {

@@ -83,6 +83,9 @@ const staticExportDocumentCsp = `default-src 'self'; script-src 'self' '${static
 const staticExportReportingHeaders = {
   'report-to': '{"endpoints":[{"url":"/_kovo/reports/csp"}],"group":"kovo-csp","max_age":10886400}',
   'reporting-endpoints': 'kovo-csp="/_kovo/reports/csp"',
+  // plans/good-perf.md O2 Vary symmetry: every 200 document representation is
+  // negotiated on Accept (the kovo-document-parts/v1 variant), exports included.
+  vary: 'Accept',
 };
 const testRenderPlanFingerprint = computeRenderPlanFingerprint({
   test: 'field:id',

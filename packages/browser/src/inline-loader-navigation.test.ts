@@ -1341,8 +1341,11 @@ describe('inline loader enhanced navigation fallback', () => {
   );
 
   it.each(inlineSourceInstallCases)(
-    'falls back when target documents cannot prove navigation segments through %s',
+    'replaces the body wholesale when the target document carries no segment stamps through %s',
     async (_name, installSource) => {
+      // SPEC §8 (plans/good-perf.md O2): segment stamps only ever ADD preservation. A target
+      // document with none preserves nothing and is applied wholesale inside the same realm —
+      // the full-GET fallback is reserved for navigations that would preserve uncertain DOM.
       const currentLayout = new TestNavSegment(
         {
           'kovo-nav-components': '',
@@ -1353,7 +1356,8 @@ describe('inline loader enhanced navigation fallback', () => {
         },
         '<main><section>Products</section></main>',
       );
-      const currentDocument = createTestShell({ segments: [currentLayout] });
+      const replaceWith = vi.fn();
+      const currentDocument = createTestShell({ replaceWith, segments: [currentLayout] });
       const targetDocument = createTestShell({ segments: [] });
 
       await withEnhancedNavigationHarness(installSource, {
@@ -1369,10 +1373,11 @@ describe('inline loader enhanced navigation fallback', () => {
         })),
         async assert({ assign, preventDefault, pushState }) {
           await vi.waitFor(() => {
-            expect(assign).toHaveBeenCalledWith('http://app.test/cart');
+            expect(replaceWith).toHaveBeenCalledWith(targetDocument.body);
           });
           expect(preventDefault).toHaveBeenCalledTimes(1);
-          expect(pushState).not.toHaveBeenCalled();
+          expect(pushState).toHaveBeenCalledWith({}, '', 'http://app.test/cart');
+          expect(assign).not.toHaveBeenCalled();
         },
       });
     },

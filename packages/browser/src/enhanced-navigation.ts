@@ -332,7 +332,10 @@ export function installEnhancedNavigationRuntime(
       }
       const currentSegments = ns(currentBody);
       const nextSegments = ns(nextBody);
-      if (!nextSegments.length) throw Error();
+      // SPEC §8: segment stamps only ever ADD preservation. A target document with no
+      // compiler-stamped segments preserves nothing, so it is applied wholesale through the
+      // body-replacement branch below — a valid enhanced navigation (the realm survives);
+      // the full-GET fallback is reserved for navigations that would preserve uncertain DOM.
       let triggerRoot: Element | undefined;
       if (!runtimeActive(navId, generation)) return;
       await vt(() => {
