@@ -104,6 +104,28 @@ comparison.
 | `check` cold / warm / one-file (benchmark app) | 19,324 / 17,668 / 13,707 ms | — | warm ≈ cold |
 | `check` cold / warm / one-file (`stackoverflow`) | 38,486 / 38,684 / 32,394 ms | — | warm ≈ cold |
 
+## Current state after batch 3 (merged to main, 2026-08-08)
+
+| Metric | Baseline | Batch 3 merged | Change |
+| --- | ---: | ---: | ---: |
+| `kovo check` growth in module count | **quadratic** (fit RMSE 26x better than linear) | **linear** (quadratic fit no longer beats linear) | — |
+| `kovo check` wall, N=400 | 143.1 s | 64.2 s | -55.1% |
+| `ts.createSourceFile` calls, N=50 | 23,894 | 995 | -95.8% |
+| peak check RSS, N=400 | 3,110 MiB (over the 3,072 budget) | 3,022 MiB | under budget |
+| apply-shaped SSR CPU @ c=32 | 38.63% | 1.31% | — |
+| per-dispatch cost | 15.13 ns | 3.18 ns | 4.8x |
+| SSR throughput (simultaneous A/B) | — | +5.4% to +8.6% | — |
+| watch reuse on a docs-only edit | 25,233 ms, `reused 0/8` | 1,049 ms, `reused 7/8` | -95.8% |
+
+**Read the O8 attribution correction before quoting the old 38.5% figure.** The V8 profiler
+attributes callee builtin ticks to the calling JS frame, so that bucket mostly contained the invoked
+natives' real work. Removing the indirection was worth doing — 4.8x per dispatch, 5-9% throughput —
+but the recoverable overhead was ~7% of per-request CPU, never 38.5%. The remainder re-attributes to
+per-prop own-data snapshotting, which is the real next target.
+
+Still open after batch 3: an in-closure source edit still executes all 8 check phases (~15 s via
+watch, 9.9x over the 2 s budget); closing it needs a producer seam in `build-export.ts`.
+
 ## Current state after batch 2 (merged to main, 2026-08-08)
 
 **Enhanced navigation works.** `tests/integration/specs/enhanced-navigation-no-reload.spec.ts` — the
