@@ -17,6 +17,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { writeReport } from './report.mjs';
 
+/** A probe whose HTTP statuses were readable and clean. */
+const TRACKED_CLEAN = { errorResponses: 0, rateLimitedResponses: 0, requests: 12, tracked: true };
+
 const RESULTS = {
   generatedAt: '2026-08-07T00:00:00.000Z',
   iterations: 3,
@@ -41,7 +44,11 @@ const RESULTS = {
         applicableCount: 3,
         available: true,
         browser: '148.0.0.0',
-        iterations: [{ applicable: true }, { applicable: true }, { applicable: true }],
+        iterations: [
+          { applicable: true, network: TRACKED_CLEAN },
+          { applicable: true, network: TRACKED_CLEAN },
+          { applicable: true, network: TRACKED_CLEAN },
+        ],
         notRestoredReasons: [],
         restoredCount: 3,
         restoredRate: 1,
@@ -51,6 +58,7 @@ const RESULTS = {
         {
           formFactor: 'desktop',
           metrics: { bytes: 400_000, fcpMs: 1500, lcpMs: 1600, performanceScore: 0.8, tbtMs: 0 },
+          network: { ...TRACKED_CLEAN, untrackedSamples: 0 },
           nullSamples: { performanceScore: 2 },
           path: '/',
           repeats: 3,
@@ -97,7 +105,11 @@ const RESULTS = {
         applicableCount: 0,
         available: true,
         browser: '148.0.0.0',
-        iterations: [{ applicable: false }, { applicable: false }, { applicable: false }],
+        iterations: [
+          { applicable: false, network: TRACKED_CLEAN },
+          { applicable: false, network: TRACKED_CLEAN },
+          { applicable: false, network: TRACKED_CLEAN },
+        ],
         notRestoredReasons: [],
         restoredCount: 0,
         restoredRate: null,
@@ -188,6 +200,43 @@ describe('benchmark report', () => {
     const report = await renderReport(RESULTS);
     expect(report).toContain('80 (±19)');
     expect(report).toContain('| **2** |');
+  });
+
+  // "No errors reported" and "errors could not be reported" are different claims. The integrity
+  // gate only rejects statuses it can observe, so a probe it could not observe has to say so in
+  // the report — not only on stderr, which nobody keeps next to the number they quote.
+  it('names probes whose HTTP statuses could not be observed', async () => {
+    const clean = await renderReport(RESULTS);
+    expect(clean).toContain('HTTP statuses were observed for every probe in this run');
+
+    const untracked = structuredClone(RESULTS);
+    untracked.apps[0].lighthouse[0].network = {
+      errorResponses: 0,
+      rateLimitedResponses: 0,
+      requests: 0,
+      tracked: false,
+      untrackedSamples: 2,
+    };
+    untracked.apps[1].bfcache.iterations = [{ applicable: false }, { applicable: false }];
+    const report = await renderReport(untracked);
+    expect(report).toContain(
+      '**HTTP statuses could not be observed for some probes in this run.**',
+    );
+    expect(report).toContain('- replacer lighthouse desktop/ (2/3 samples)');
+    expect(report).toContain('- sameDoc bfcache probe (2/2 iterations)');
+  });
+
+  // `GET /favicon.ico` 404s are exempt from the >=400 gate — the browser asks on its own and only
+  // Lighthouse's browser build does, so counting them would reject every run on a difference
+  // between browser builds. Exempt is not the same as hidden: the report has to say it happened.
+  it('reports favicon 404s that the >=400 gate exempts', async () => {
+    expect(await renderReport(RESULTS)).not.toContain('favicon.ico');
+
+    const withFavicon = structuredClone(RESULTS);
+    withFavicon.apps[0].lighthouse[0].network.faviconMisses = 3;
+    const report = await renderReport(withFavicon);
+    expect(report).toContain('3 `GET /favicon.ico` 404s across the Lighthouse cells');
+    expect(report).toContain('exempt from the >=400 gate');
   });
 
   it('does not score a same-document framework as failing the back/forward cache', async () => {

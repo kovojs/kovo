@@ -61,6 +61,11 @@ export async function writeReport(resultsPath, reportPath) {
     '',
     lighthouseTable(data.apps),
     '',
+    // The integrity gate rejects a run whose Lighthouse traffic was shed or errored, but a cell
+    // whose statuses could not be READ passes it with only a stderr note. Say so in the report,
+    // where the number is quoted, rather than only in a log nobody keeps.
+    untrackedTrafficNote(data.apps),
+    '',
     '## Conditions',
     '',
     '- Desktop: Chromium, 1440x900 viewport, no CPU or network throttling.',
@@ -70,7 +75,7 @@ export async function writeReport(resultsPath, reportPath) {
     '',
     '## Known limits of this instrument',
     '',
-    "- **The navigation-to-paint probe is biased in favour of document-replacing entrants, and Kovo is the document-replacing entrant.** This bias is one-sided; it does not apply equally to every entrant. The probe's two branches are not the same instrument. When the navigation replaced the document, the reported time is the destination document's own browser-recorded first contentful paint — written by the browser at paint and read afterwards, with no harness cost inside the number. When it did not, no new paint entry is emitted, so the harness polls the page over CDP every 25 ms and then waits two animation frames before reading the clock; one poll interval, one evaluate round-trip and two frames are all inside the same-document number and none of them are inside the document-replacing one. The same branch split also picks different moments: first contentful paint can land before the destination's own `main h1` is painted, while the same-document branch cannot fire before that heading is in the DOM. Both differences push the same way. Nothing here is calibrated out, so a gap of a few tens of milliseconds on desktop — more under the 4x mobile CPU throttle — is within instrument error, and it favours whichever entrant the `Doc replaced` column shows replacing the document. Today that is Kovo, so this instrument errs in Kovo's favour.",
+    "- **The navigation-to-paint probe is biased in favour of document-replacing entrants, and Kovo is the document-replacing entrant.** This bias is one-sided; it does not apply equally to every entrant. The probe's two branches are not the same instrument. When the navigation replaced the document, the reported time is the destination document's own browser-recorded first contentful paint — written by the browser at paint and read afterwards, with no harness cost inside the number. When it did not, no new paint entry is emitted, so the harness polls the page over CDP (25 ms interval) and then waits two animation frames before reading the clock. Up to one poll interval, the CDP round-trips of that wait chain, and two animation frames are all inside the same-document number, and none of them are inside the document-replacing one. The same branch split also picks different moments: first contentful paint can land before the destination's own `main h1` is painted, while the same-document branch cannot fire before that heading is in the DOM. Both differences push the same way. Nothing here is calibrated out, so a gap of a few tens of milliseconds on desktop — more under the 4x mobile CPU throttle — is within instrument error, and it favours whichever entrant the `Doc replaced` column shows replacing the document. Today that is Kovo, so this instrument errs in Kovo's favour.",
     '- **Wall-clock numbers are only comparable to numbers taken at a similar load.** The load average at the end of the run is recorded above; treat timings taken above roughly 1.0 per core as indicative only. Byte counts are unaffected.',
     '- **Mobile TTFB is not network-realistic.** CDP mobile emulation does not apply the emulated RTT to the first byte, so the mobile TTFB column understates a real mobile connection.',
     '- **The back/forward-cache probe uses a different browser build** than the timing scenarios: full Chromium with `--disable-back-forward-cache` removed. Playwright\'s default `chrome-headless-shell` cannot participate in the back/forward cache at all, so a probe sharing that browser could only ever report "not restored".',
@@ -276,6 +281,58 @@ function lighthouseTable(apps) {
     }
   }
   return rows.join('\n');
+}
+
+/**
+ * Names every probe whose HTTP statuses the run could not observe.
+ *
+ * "No errors reported" and "errors could not be reported" are different claims and the report must
+ * not collapse them: the integrity gate only rejects statuses it can see.
+ */
+function untrackedTrafficNote(apps) {
+  const untracked = [];
+  for (const app of apps) {
+    for (const cell of app.lighthouse ?? []) {
+      if (cell.network?.tracked !== true) {
+        const samples = cell.network?.untrackedSamples;
+        untracked.push(
+          `${app.app} lighthouse ${cell.formFactor}${cell.path}` +
+            (typeof samples === 'number' ? ` (${samples}/${cell.repeats} samples)` : ''),
+        );
+      }
+    }
+    const bfcacheUntracked = (app.bfcache?.iterations ?? []).filter(
+      (iteration) => !iteration.network,
+    ).length;
+    if (bfcacheUntracked > 0) {
+      untracked.push(
+        `${app.app} bfcache probe (${bfcacheUntracked}/${app.bfcache.iterations.length} iterations)`,
+      );
+    }
+  }
+  const faviconMisses = apps.reduce(
+    (sum, app) =>
+      sum +
+      (app.lighthouse ?? []).reduce((cell, run) => cell + (run.network?.faviconMisses ?? 0), 0),
+    0,
+  );
+  // Exempt from the >=400 gate but never hidden: see `isFaviconProbe` in harness/lighthouse.mjs.
+  const faviconNote =
+    faviconMisses === 0
+      ? ''
+      : `\n\n_${faviconMisses} \`GET /favicon.ico\` 404s across the Lighthouse cells. No entrant ships a favicon and no document references one; the browser asks on its own. Counted here, exempt from the >=400 gate, and included in the Lighthouse byte totals._`;
+
+  if (untracked.length === 0) {
+    return `_HTTP statuses were observed for every probe in this run, so the integrity gate saw all of its traffic._${faviconNote}`;
+  }
+  return (
+    [
+      '**HTTP statuses could not be observed for some probes in this run.** The integrity gate only',
+      'rejects load shedding and errors it can see, so these numbers were NOT status-checked:',
+      '',
+      ...untracked.map((entry) => `- ${entry}`),
+    ].join('\n') + faviconNote
+  );
 }
 
 function scoreWithSpread(run) {

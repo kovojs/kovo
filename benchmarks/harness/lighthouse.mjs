@@ -117,21 +117,56 @@ function countNullSamples(samples) {
 function extractNetworkStatuses(lhr) {
   const items = lhr?.audits?.['network-requests']?.details?.items;
   if (!Array.isArray(items)) {
-    return { errorResponses: 0, rateLimitedResponses: 0, requests: 0, tracked: false };
+    return {
+      errorResponses: 0,
+      faviconMisses: 0,
+      rateLimitedResponses: 0,
+      requests: 0,
+      tracked: false,
+    };
   }
   let errorResponses = 0;
+  let faviconMisses = 0;
   let rateLimitedResponses = 0;
   for (const item of items) {
     const status = typeof item?.statusCode === 'number' ? item.statusCode : 0;
     if (status === 429) rateLimitedResponses += 1;
+    else if (status === 404 && isFaviconProbe(item.url)) faviconMisses += 1;
     else if (status >= 400) errorResponses += 1;
   }
-  return { errorResponses, rateLimitedResponses, requests: items.length, tracked: true };
+  return {
+    errorResponses,
+    faviconMisses,
+    rateLimitedResponses,
+    requests: items.length,
+    tracked: true,
+  };
+}
+
+/**
+ * A missing `/favicon.ico` is counted separately, not as a server error.
+ *
+ * The browser asks for it on its own; no entrant's document references it and none of them ship
+ * one. Lighthouse drives full headless Chrome, which makes that request, while the custom
+ * scenarios drive Playwright's `chrome-headless-shell`, which does not — so counting it as an
+ * error would reject every run on a difference between two BROWSER BUILDS rather than anything
+ * about the entrants. Measured on this harness: 1 of 8 requests on the Kovo desktop `/` cell.
+ *
+ * Deliberately narrow. Only 404 is exempt: a 429 or a 5xx on the same URL still means the server
+ * shed or failed, and still rejects the run. The count is reported so it is visible, not dropped.
+ */
+function isFaviconProbe(url) {
+  try {
+    return new URL(url).pathname === '/favicon.ico';
+  } catch {
+    return false;
+  }
 }
 
 function mergeNetwork(networkSamples) {
   return {
     errorResponses: networkSamples.reduce((sum, sample) => sum + sample.errorResponses, 0),
+    faviconMisses: networkSamples.reduce((sum, sample) => sum + sample.faviconMisses, 0),
     rateLimitedResponses: networkSamples.reduce(
       (sum, sample) => sum + sample.rateLimitedResponses,
       0,

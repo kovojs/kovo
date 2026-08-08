@@ -120,10 +120,13 @@ const outDir = readArg('--out-dir') ? path.resolve(readArg('--out-dir')) : resul
 // `--port-base 4810` shifts every entrant's listen port so two benchmark runs on the same machine
 // cannot silently measure each other's server. Without this, a stale listener on the default port
 // is indistinguishable from a healthy start: `waitForHttp` just sees a 200 and proceeds.
+const portBaseArg = readArg('--port-base');
+// `fallback` is unreachable here — the flag's absence is already handled by the ternary — but a
+// present-with-no-value `--port-base` now throws instead of silently keeping the default ports.
 const portBase =
-  readArg('--port-base') === undefined
+  portBaseArg === undefined
     ? null
-    : readIntegerArg('--port-base', { fallback: 0, max: 65_000, min: 1024 });
+    : parseIntegerFlag('--port-base', portBaseArg, { fallback: 0, max: 65_000, min: 1024 });
 if (portBase !== null) {
   const basePort = Math.min(...allApps.map((app) => app.port));
   for (const app of allApps) app.port = portBase + (app.port - basePort);
