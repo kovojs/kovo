@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   cpSync,
   existsSync,
@@ -166,6 +167,103 @@ export default app.assemble({ routes: [home] });
       expect(readdirSync(outDir)).toEqual(['marker']);
       expect(existsSync(join(outDir, '.kovo'))).toBe(false);
       expect(readdirSync(root).filter((name) => name.startsWith('.kovo-build-stage-'))).toEqual([]);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 60_000);
+});
+
+// O4/D4 (plans/good-perf.md): /assets/styles.css is a function of the app's
+// imported components, not of the whole @kovojs/ui catalog (SPEC §13.1).
+describe('production stylesheet import-graph pruning (O4/D4)', () => {
+  function sha256(source: string): string {
+    const normalized = source.endsWith('\n') ? source : `${source}\n`;
+    return `sha256-${createHash('sha256').update(normalized).digest('base64url')}`;
+  }
+
+  function componentSource(color: string): string {
+    return [
+      "import * as style from '@kovojs/style';",
+      `const base = style.create({ root: { color: '${color}' } });`,
+      'export const Component = () => <div {...style.attrs(base.root)}>x</div>;',
+      '',
+    ].join('\n');
+  }
+
+  function writeVendoredUi(root: string): void {
+    const packageDir = join(root, 'node_modules/@kovojs/ui');
+    const button = componentSource('build-pruned-button');
+    const combobox = componentSource('build-pruned-combobox');
+    mkdirSync(join(packageDir, 'src'), { recursive: true });
+    writeFileSync(join(packageDir, 'src/button.tsx'), button, 'utf8');
+    writeFileSync(join(packageDir, 'src/combobox.tsx'), combobox, 'utf8');
+    writeFileSync(
+      join(packageDir, 'package.json'),
+      JSON.stringify({
+        exports: {
+          './button': { default: './dist/button.mjs' },
+          './combobox': { default: './dist/combobox.mjs' },
+        },
+        kovo: {
+          vendoredSource: true,
+          vendoredSourceHashes: { button: sha256(button), combobox: sha256(combobox) },
+        },
+        name: '@kovojs/ui',
+      }),
+      'utf8',
+    );
+  }
+
+  it('emits only imported-component CSS, and no package CSS for zero imports', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-build-stylesheet-pruning-'));
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      writeVendoredUi(root);
+      const appPath = join(root, 'src/app.tsx');
+
+      // Zero @kovojs/ui imports: no package CSS at all, so no /assets/styles.css
+      // build chunk exists and an authored styles.css can materialize instead.
+      writeFileSync(appPath, 'export const app = 1;\n', 'utf8');
+      const zeroImports = await kovoBuildStylesheetCssForTesting(appPath);
+      expect(zeroImports.stylesheetCss).toEqual([]);
+
+      // One imported component: its CSS ships, the rest of the catalog does not.
+      writeFileSync(appPath, "import '@kovojs/ui/button';\nexport const app = 1;\n", 'utf8');
+      const oneImport = await kovoBuildStylesheetCssForTesting(appPath);
+      const sheet = oneImport.stylesheetCss.find((entry) => entry.href === '/assets/styles.css');
+      expect(sheet).toBeDefined();
+      expect(sheet?.css).toContain('color:build-pruned-button');
+      expect(sheet?.css).not.toContain('build-pruned-combobox');
+      expect(sheet?.css).not.toContain('import graph unprovable');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 60_000);
+
+  it('leads the sheet with a fallback comment when the import graph is unprovable', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-build-stylesheet-pruning-fallback-'));
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      writeVendoredUi(root);
+      const appPath = join(root, 'src/app.tsx');
+      writeFileSync(
+        appPath,
+        [
+          "import '@kovojs/ui/button';",
+          "export const load = (name: string) => import('@kovojs/ui/' + name);",
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      const result = await kovoBuildStylesheetCssForTesting(appPath);
+      const sheet = result.stylesheetCss.find((entry) => entry.href === '/assets/styles.css');
+      expect(sheet?.css).toContain(
+        '/* kovo: full @kovojs/ui component CSS retained (import graph unprovable):',
+      );
+      // Fail SAFE: the whole catalog ships when the set cannot be proven.
+      expect(sheet?.css).toContain('color:build-pruned-button');
+      expect(sheet?.css).toContain('color:build-pruned-combobox');
     } finally {
       rmSync(root, { force: true, recursive: true });
     }

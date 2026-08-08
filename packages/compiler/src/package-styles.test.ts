@@ -1022,3 +1022,302 @@ export const CheckoutSummary = component({
     }
   });
 });
+
+// O4/D4 (plans/good-perf.md): the emitted stylesheet must be a function of the
+// components the app actually imports, not of the whole package catalog
+// (SPEC §13.1). Narrowing comes only from typed module-specifier facts; any
+// unprovable usage fails SAFE back to the full exported catalog with reasons.
+describe("extractPackageComponentCss components: 'imported' (O4/D4 import-graph pruning)", () => {
+  function fixtureComponentSource(color: string, extraImport?: string): string {
+    return [
+      "import * as style from '@kovojs/style';",
+      ...(extraImport === undefined ? [] : [extraImport]),
+      `const base = style.create({ root: { color: '${color}' } });`,
+      'export function Component() {',
+      '  return <div {...style.attrs(base.root)}>x</div>;',
+      '}',
+      '',
+    ].join('\n');
+  }
+
+  interface VendoredFixture {
+    readonly appPath: string;
+    readonly root: string;
+  }
+
+  /**
+   * A hermetic vendored `@fixture/ui` with three authenticated components:
+   * `button` (which composes `./badge.js` internally), `badge`, and `combobox`.
+   */
+  function writeVendoredFixture(prefix: string, appSource: string): VendoredFixture {
+    const root = mkdtempSync(join(tmpdir(), prefix));
+    const packageDir = join(root, 'node_modules', '@fixture', 'ui');
+    const buttonSource = fixtureComponentSource(
+      'pruned-button',
+      "import { Component as Badge } from './badge.js';",
+    );
+    const badgeSource = fixtureComponentSource('pruned-badge');
+    const comboboxSource = fixtureComponentSource('pruned-combobox');
+    mkdirSync(join(root, 'src'), { recursive: true });
+    mkdirSync(join(packageDir, 'src'), { recursive: true });
+    writeFileSync(join(root, 'src/app.tsx'), appSource, 'utf8');
+    writeFileSync(join(packageDir, 'src/button.tsx'), buttonSource, 'utf8');
+    writeFileSync(join(packageDir, 'src/badge.tsx'), badgeSource, 'utf8');
+    writeFileSync(join(packageDir, 'src/combobox.tsx'), comboboxSource, 'utf8');
+    writeFileSync(
+      join(packageDir, 'package.json'),
+      JSON.stringify({
+        exports: {
+          './badge': { default: './dist/badge.mjs' },
+          './button': { default: './dist/button.mjs' },
+          './combobox': { default: './dist/combobox.mjs' },
+        },
+        kovo: {
+          vendoredSource: true,
+          vendoredSourceHashes: {
+            badge: vendoredSourceHash(badgeSource),
+            button: vendoredSourceHash(buttonSource),
+            combobox: vendoredSourceHash(comboboxSource),
+          },
+        },
+        name: '@fixture/ui',
+      }),
+      'utf8',
+    );
+    return { appPath: join(root, 'src/app.tsx'), root };
+  }
+
+  function extractImported(fixture: VendoredFixture, appSource: string) {
+    return extractPackageComponentCss('@fixture/ui', {
+      components: 'imported',
+      fileName: fixture.appPath,
+      packagePrefixDiscoveryRoot: fixture.root,
+      source: appSource,
+    });
+  }
+
+  it('prunes to app-imported components plus package-internal composition', () => {
+    const appSource = "import '@fixture/ui/button';\n";
+    const fixture = writeVendoredFixture('kovo-package-css-prune-basic-', appSource);
+    try {
+      const result = extractImported(fixture, appSource);
+      expect(result.importSelection).toEqual({
+        fallbackReasons: [],
+        importedComponents: ['badge', 'button'],
+      });
+      expect(result.diagnostics).toEqual([]);
+      // button + its internal ./badge.js composition ship; combobox does not.
+      expect(result.css).toContain('color:pruned-button');
+      expect(result.css).toContain('color:pruned-badge');
+      expect(result.css).not.toContain('pruned-combobox');
+      expect(result.sourceFiles.map((file) => file.split('/').at(-1))).toEqual([
+        'badge.tsx',
+        'button.tsx',
+      ]);
+    } finally {
+      rmSync(fixture.root, { force: true, recursive: true });
+    }
+  });
+
+  it('emits no package CSS for an app that imports zero package components', () => {
+    const appSource = "export const answer = 42;\n";
+    const fixture = writeVendoredFixture('kovo-package-css-prune-zero-', appSource);
+    try {
+      const result = extractImported(fixture, appSource);
+      expect(result.importSelection).toEqual({ fallbackReasons: [], importedComponents: [] });
+      expect(result.css).toBeNull();
+      expect(result.sourceFiles).toEqual([]);
+      expect(result.diagnostics).toEqual([]);
+    } finally {
+      rmSync(fixture.root, { force: true, recursive: true });
+    }
+  });
+
+  it('fails SAFE to the full catalog on dynamic/computed package usage', () => {
+    const appSource = [
+      "import '@fixture/ui/button';",
+      "const name = 'combobox';",
+      "export const load = () => import('@fixture/ui/' + name);",
+      '',
+    ].join('\n');
+    const fixture = writeVendoredFixture('kovo-package-css-prune-dynamic-', appSource);
+    try {
+      const result = extractImported(fixture, appSource);
+      expect(result.importSelection?.fallbackReasons.length).toBeGreaterThan(0);
+      // Include more rather than less: every exported component's CSS ships.
+      expect(result.css).toContain('color:pruned-button');
+      expect(result.css).toContain('color:pruned-badge');
+      expect(result.css).toContain('color:pruned-combobox');
+      expect(result.sourceFiles.length).toBe(3);
+    } finally {
+      rmSync(fixture.root, { force: true, recursive: true });
+    }
+  });
+
+  it('fails SAFE to the full catalog on a bare package import', () => {
+    const appSource = "import '@fixture/ui';\n";
+    const fixture = writeVendoredFixture('kovo-package-css-prune-bare-', appSource);
+    try {
+      const result = extractImported(fixture, appSource);
+      expect(result.importSelection?.fallbackReasons.join('\n')).toContain('bare');
+      expect(result.css).toContain('color:pruned-combobox');
+      expect(result.sourceFiles.length).toBe(3);
+    } finally {
+      rmSync(fixture.root, { force: true, recursive: true });
+    }
+  });
+
+  it('fails SAFE when the package is referenced outside recognized specifiers', () => {
+    // Even a prose/comment mention is unprovable without a comment-aware parse;
+    // the cost is bytes (full catalog + recorded reason), never lost styling.
+    const appSource = [
+      "import '@fixture/ui/button';",
+      '// migration note: replace @fixture/ui with copy-in components',
+      '',
+    ].join('\n');
+    const fixture = writeVendoredFixture('kovo-package-css-prune-prose-', appSource);
+    try {
+      const result = extractImported(fixture, appSource);
+      expect(result.importSelection?.fallbackReasons.join('\n')).toContain(
+        'dynamic or computed usage',
+      );
+      expect(result.css).toContain('color:pruned-combobox');
+    } finally {
+      rmSync(fixture.root, { force: true, recursive: true });
+    }
+  });
+
+  it('walks the app relative-import closure, so kovo-add copy-in components ride the app graph', () => {
+    // `kovo add` copies components into the app's own src/; a copied component
+    // is app source (extractAppComponentCss's closure), and only components the
+    // app still imports from the package keep package CSS.
+    const appSource = [
+      "import { Component as Copied } from './copied-button.js';",
+      "import '@fixture/ui/badge';",
+      '',
+    ].join('\n');
+    const fixture = writeVendoredFixture('kovo-package-css-prune-copyin-', appSource);
+    try {
+      writeFileSync(
+        join(fixture.root, 'src/copied-button.tsx'),
+        fixtureComponentSource('copied-in-button'),
+        'utf8',
+      );
+      const packageResult = extractImported(fixture, appSource);
+      expect(packageResult.importSelection).toEqual({
+        fallbackReasons: [],
+        importedComponents: ['badge'],
+      });
+      expect(packageResult.css).toContain('color:pruned-badge');
+      expect(packageResult.css).not.toContain('pruned-button');
+
+      const appResult = extractAppComponentCss({
+        fileName: fixture.appPath,
+        packagePrefixDiscoveryRoot: fixture.root,
+        source: appSource,
+      });
+      expect(appResult.css).toContain('color:copied-in-button');
+    } finally {
+      rmSync(fixture.root, { force: true, recursive: true });
+    }
+  });
+
+  it('prunes a direct-source (non-vendored) package through filesystem import resolution', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-package-css-prune-direct-'));
+    const packageDir = join(root, 'node_modules', '@fixture', 'plain');
+    const appSource = "import '@fixture/plain/button';\n";
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      mkdirSync(join(packageDir, 'src'), { recursive: true });
+      writeFileSync(join(root, 'src/app.tsx'), appSource, 'utf8');
+      writeFileSync(
+        join(packageDir, 'src/button.tsx'),
+        fixtureComponentSource('direct-button', "import { Component as Badge } from './badge.js';"),
+        'utf8',
+      );
+      writeFileSync(join(packageDir, 'src/badge.tsx'), fixtureComponentSource('direct-badge'), 'utf8');
+      writeFileSync(
+        join(packageDir, 'src/combobox.tsx'),
+        fixtureComponentSource('direct-combobox'),
+        'utf8',
+      );
+      writeFileSync(
+        join(packageDir, 'package.json'),
+        JSON.stringify({
+          exports: {
+            './badge': './src/badge.tsx',
+            './button': './src/button.tsx',
+            './combobox': './src/combobox.tsx',
+          },
+          name: '@fixture/plain',
+        }),
+        'utf8',
+      );
+
+      const result = extractPackageComponentCss('@fixture/plain', {
+        components: 'imported',
+        fileName: join(root, 'src/app.tsx'),
+        packagePrefixDiscoveryRoot: root,
+        source: appSource,
+      });
+      expect(result.importSelection).toEqual({
+        fallbackReasons: [],
+        importedComponents: ['badge', 'button'],
+      });
+      expect(result.css).toContain('color:direct-button');
+      expect(result.css).toContain('color:direct-badge');
+      expect(result.css).not.toContain('direct-combobox');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('prunes the real @kovojs/ui catalog to a 4-component fixture app import graph', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-package-css-prune-real-ui-'));
+    const appSource = [
+      "import '@kovojs/ui/button';",
+      "import '@kovojs/ui/badge';",
+      "import '@kovojs/ui/card';",
+      "import { Pricing } from './pricing.js';",
+      '',
+    ].join('\n');
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      // Resolve the workspace catalog through the app's own node_modules walk
+      // (same workspace-symlink shape a pnpm app install produces).
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot(), 'packages', 'ui'), join(root, 'node_modules/@kovojs/ui'));
+      writeFileSync(join(root, 'src/app.tsx'), appSource, 'utf8');
+      writeFileSync(
+        join(root, 'src/pricing.tsx'),
+        ["import '@kovojs/ui/kbd';", 'export function Pricing() {', "  return 'pricing';", '}', ''].join(
+          '\n',
+        ),
+        'utf8',
+      );
+
+      const result = extractPackageComponentCss('@kovojs/ui', {
+        components: 'imported',
+        fileName: join(root, 'src/app.tsx'),
+        packagePrefixDiscoveryRoot: root,
+        source: appSource,
+      });
+      expect(result.importSelection).toEqual({
+        fallbackReasons: [],
+        importedComponents: ['badge', 'button', 'card', 'kbd'],
+      });
+      expect(result.diagnostics).toEqual([]);
+      const css = result.css ?? '';
+      expect(css).toContain('.kv-button-');
+      expect(css).toContain('.kv-badge-');
+      expect(css).toContain('.kv-card-');
+      expect(css).toContain('.kv-kbd-');
+      expect(css).not.toContain('.kv-combobox-');
+      expect(css).not.toContain('.kv-accordion-');
+      expect(css).not.toContain('.kv-table-');
+      expect(result.sourceFiles.length).toBe(4);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+});

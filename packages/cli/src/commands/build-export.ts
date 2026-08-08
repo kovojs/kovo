@@ -110,7 +110,10 @@ import {
   createCompilerSourceFileSystem,
   type CompilerSourceFileSystem,
 } from '@kovojs/compiler/internal/source-filesystem';
-import { extractAppRouteCssTargets } from '@kovojs/compiler/package-styles';
+import {
+  extractAppRouteCssTargets,
+  type PackageComponentCssImportSelection,
+} from '@kovojs/compiler/package-styles';
 import type {
   collectStaticBuildTrustFactsFromProject,
   CompilerSecuritySemanticSource,
@@ -8028,7 +8031,14 @@ async function kovoBuildStylesheetCss(appModulePath: string): Promise<KovoBuildS
     packagePrefixDiscoveryRoot: dirname(appModulePath),
     source: existsSync(appModulePath) ? readFileSync(appModulePath, 'utf8') : '',
   };
-  const packageResult = extractPackageComponentCss('@kovojs/ui', extractionOptions);
+  // O4/D4 (plans/good-perf.md): the emitted stylesheet is a function of the
+  // components the app actually imports, not of the whole @kovojs/ui catalog
+  // (SPEC §13.1). An unprovable import graph fails SAFE to the full catalog and
+  // the served sheet documents why in a leading comment.
+  const packageResult = extractPackageComponentCss('@kovojs/ui', {
+    ...extractionOptions,
+    components: 'imported',
+  });
   const appResult = extractAppComponentCss(extractionOptions);
   assertKovoBuildStylesheetExtractionDiagnostics(packageResult.diagnostics, appResult.diagnostics);
   const appRouteTargets = extractAppRouteCssTargets(extractionOptions);
@@ -8052,7 +8062,12 @@ async function kovoBuildStylesheetCss(appModulePath: string): Promise<KovoBuildS
   );
   const monolithAppCss = appSplitManifest ? null : appResult.css;
   const stylesheetChunks = buildFilterDense(
-    [tokenCss, packageResult.css, monolithAppCss],
+    [
+      stylesheetImportSelectionFallbackComment(packageResult.importSelection),
+      tokenCss,
+      packageResult.css,
+      monolithAppCss,
+    ],
     'Kovo build stylesheet chunks',
     (value): value is string => typeof value === 'string' && value.length > 0,
   );
@@ -8068,9 +8083,37 @@ async function kovoBuildStylesheetCss(appModulePath: string): Promise<KovoBuildS
   };
 }
 
-/** @internal Regression seam for fail-closed production stylesheet extraction. */
-export async function kovoBuildStylesheetCssForTesting(appModulePath: string): Promise<void> {
-  await kovoBuildStylesheetCss(appModulePath);
+/** @internal Regression seam for fail-closed production stylesheet extraction (SPEC §13.1). */
+export async function kovoBuildStylesheetCssForTesting(
+  appModulePath: string,
+): Promise<KovoBuildStylesheetBuild> {
+  return kovoBuildStylesheetCss(appModulePath);
+}
+
+/**
+ * When the import graph could not prove the used-component set and the full
+ * `@kovojs/ui` catalog shipped (O4/D4 fail-safe), lead the served sheet with a
+ * comment explaining why, so the size regression is diagnosable from the
+ * artifact itself. Informational only — never a build failure (SPEC §13.1).
+ */
+function stylesheetImportSelectionFallbackComment(
+  importSelection: PackageComponentCssImportSelection | undefined,
+): string | null {
+  if (importSelection === undefined || importSelection.fallbackReasons.length === 0) return null;
+  const reasons = buildJoinStrings(
+    buildMapDense(
+      buildSnapshotDenseArray(
+        importSelection.fallbackReasons,
+        'Kovo build stylesheet import-selection fallback reasons',
+      ),
+      'Kovo build stylesheet import-selection fallback reasons',
+      // A reason must not be able to close the comment early.
+      (reason) => buildRegExpReplace(/\*\//gu, reason, '*∕'),
+    ),
+    '; ',
+    'Kovo build stylesheet import-selection fallback reasons',
+  );
+  return `/* kovo: full @kovojs/ui component CSS retained (import graph unprovable): ${reasons} */`;
 }
 
 interface KovoBuildStylesheetExtractionDiagnostic {
