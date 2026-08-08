@@ -16,6 +16,7 @@ import {
   parseCheckPhaseCensus,
   phaseDurationMs,
   PERF_BUDGETS_SCHEMA,
+  reportSuites,
 } from './perf-gate.mjs';
 import {
   materializePerfWorkload,
@@ -316,6 +317,21 @@ describe('evaluateMetric', () => {
   it('reports a missing observation as unproven, never as a pass', () => {
     expect(evaluateMetric({ max: 10 }, { value: null }).status).toBe('unproven');
     expect(evaluateMetric({ max: 10 }, undefined).status).toBe('unproven');
+  });
+});
+
+describe('reportSuites', () => {
+  it('accepts a single suite report and the committed baseline bundle alike', () => {
+    expect(reportSuites({ metrics: {}, suite: 'bytes' }, 'x.json')).toHaveLength(1);
+    expect(reportSuites({ suites: [{ metrics: {} }, { metrics: {} }] }, 'x.json')).toHaveLength(2);
+  });
+
+  // "0 failed, 0 total" reads as green at a glance, so a file that carries no observations has to
+  // be an error rather than a silent pass.
+  it('throws rather than evaluating nothing', () => {
+    expect(() => reportSuites({ suites: [] }, 'empty.json')).toThrow('no suite reports');
+    expect(() => reportSuites({ host: {} }, 'wrong.json')).toThrow('is not a perf report');
+    expect(() => reportSuites(null, 'null.json')).toThrow('is not a perf report');
   });
 });
 

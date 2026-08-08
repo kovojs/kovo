@@ -179,6 +179,25 @@ export function evaluateReport(budgets, report) {
   return results;
 }
 
+/**
+ * Normalize either accepted file shape into a list of suite reports.
+ *
+ * A single suite run has `metrics` at the top level; the committed baseline bundles several under
+ * `suites`. Anything else THROWS rather than evaluating zero metrics, because "0 failed, 0 total"
+ * is indistinguishable from a pass at a glance and this tier exists to stop exactly that kind of
+ * silent green.
+ */
+export function reportSuites(report, label) {
+  if (Array.isArray(report?.suites)) {
+    if (report.suites.length === 0) throw new Error(`${label} contains no suite reports`);
+    return report.suites;
+  }
+  if (report?.metrics !== undefined && report.metrics !== null) return [report];
+  throw new Error(
+    `${label} is not a perf report: expected a top-level 'metrics' object or a 'suites' array`,
+  );
+}
+
 export function formatEvaluation(results) {
   const lines = [];
   for (const result of results) {
@@ -863,11 +882,26 @@ async function main(argv) {
       throw new Error(`perf budgets schema must be ${PERF_BUDGETS_SCHEMA}`);
     }
     let failed = 0;
+    let evaluated = 0;
     for (const reportPath of args.evaluate) {
-      const report = JSON.parse(readFileSync(path.resolve(String(reportPath)), 'utf8'));
-      const results = evaluateReport(budgets, report);
-      process.stdout.write(`# ${report.suite} (${String(reportPath)})\n${formatEvaluation(results)}`);
-      failed += results.filter((result) => result.status === 'fail').length;
+      const label = String(reportPath);
+      const report = JSON.parse(readFileSync(path.resolve(label), 'utf8'));
+      for (const suite of reportSuites(report, label)) {
+        const results = evaluateReport(budgets, suite);
+        process.stdout.write(
+          `# ${String(suite.suite ?? 'unknown')} (${label})\n${formatEvaluation(results)}`,
+        );
+        failed += results.filter((result) => result.status === 'fail').length;
+        evaluated += results.length;
+      }
+    }
+    // A run that compared nothing is a failure, not a pass. Every previous perf number in this
+    // effort was taken by an ad-hoc script; the one thing a committed gate must never do is report
+    // green because it silently had no work to do.
+    if (evaluated === 0) {
+      process.stderr.write('perf gate evaluated 0 metrics; refusing to report success\n');
+      process.exitCode = 1;
+      return;
     }
     process.exitCode = failed === 0 ? 0 : 1;
     return;
@@ -940,7 +974,13 @@ async function main(argv) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main(process.argv.slice(2)).catch((error) => {
-    process.stderr.write(`${error.stack ?? error.message}\n`);
+    // A malformed or wrong-shaped report is an operator mistake, not a crash to debug: print the
+    // sentence, keep the stack behind KOVO_PERF_GATE_DEBUG for when it really is a crash.
+    process.stderr.write(
+      process.env.KOVO_PERF_GATE_DEBUG === '1'
+        ? `${error.stack ?? error.message}\n`
+        : `perf gate: ${error instanceof Error ? error.message : String(error)}\n`,
+    );
     process.exit(1);
   });
 }
