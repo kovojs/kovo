@@ -1006,6 +1006,122 @@ export const status = query({
       await rm(root, { force: true, recursive: true });
     }
   });
+
+  it('O5: skips the whole-project analyzers under the dev disposition for marker-less sources', async () => {
+    // plans/good-perf.md O5: an app with zero data-plane spellings must not pay the TypeScript +
+    // ts-morph whole-project pass per dev save; every build disposition still runs it fail-closed.
+    const root = await mkdtemp(join(tmpdir(), 'kovo-data-plane-dev-fast-path-'));
+    const srcDir = join(root, 'src');
+    await mkdir(srcDir, { recursive: true });
+    await writeFile(
+      join(srcDir, 'status-card.tsx'),
+      [
+        'import { component } from "@kovojs/core";',
+        '',
+        'export const StatusCard = component({',
+        '  render: () => <p>ready</p>,',
+        '});',
+      ].join('\n'),
+      'utf8',
+    );
+    const extractStaticBuildAnalysisFactsFromProject = vi.fn(() => ({
+      queries: [],
+      sqlSafetyDiagnostics: [],
+      toctouFacts: [],
+      touchGraph: {},
+    }));
+    vi.doMock('@kovojs/drizzle/internal/static', () => ({
+      deriveMutationTouchRegistry: () => ({}),
+      extractStaticBuildAnalysisFactsFromProject,
+    }));
+    const { collectDataPlaneAnalysis } = await loadSubject();
+
+    try {
+      const devAnalysis = await collectDataPlaneAnalysis({
+        appSourceDir: srcDir,
+        disposition: 'dev',
+        root,
+      });
+      expect(devAnalysis.files).toHaveLength(1);
+      expect(devAnalysis.outputQueryShapeFacts).toEqual([]);
+      expect(devAnalysis.staticFacts).toEqual({
+        queries: [],
+        sqlSafetyDiagnostics: [],
+        toctouFacts: [],
+        touchGraph: {},
+      });
+      expect(extractStaticBuildAnalysisFactsFromProject).not.toHaveBeenCalled();
+
+      // The default (build) disposition never takes the fast path on the identical tree.
+      await collectDataPlaneAnalysis({ appSourceDir: srcDir, root });
+      expect(extractStaticBuildAnalysisFactsFromProject).toHaveBeenCalledTimes(1);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('O5: dev disposition still runs the analyzers when any data-plane spelling is present', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-data-plane-dev-markers-'));
+    const srcDir = join(root, 'src');
+    await mkdir(srcDir, { recursive: true });
+    // Aliased factory import: the pre-filter must match the original exported name at the
+    // import site even though every call site spells `defineQuery(...)`.
+    await writeFile(
+      join(srcDir, 'status.ts'),
+      [
+        'import { query as defineQuery, s } from "@kovojs/server";',
+        '',
+        'export const statusQuery = defineQuery({',
+        '  load: () => ({ summary: "ready" }),',
+        '  output: s.object({ summary: s.string() }),',
+        '  reads: [],',
+        '});',
+      ].join('\n'),
+      'utf8',
+    );
+    const extractStaticBuildAnalysisFactsFromProject = vi.fn(() => ({
+      queries: [],
+      sqlSafetyDiagnostics: [],
+      toctouFacts: [],
+      touchGraph: {},
+    }));
+    vi.doMock('@kovojs/drizzle/internal/static', () => ({
+      deriveMutationTouchRegistry: () => ({}),
+      extractStaticBuildAnalysisFactsFromProject,
+    }));
+    const { collectDataPlaneAnalysis } = await loadSubject();
+
+    try {
+      await collectDataPlaneAnalysis({ appSourceDir: srcDir, disposition: 'dev', root });
+      expect(extractStaticBuildAnalysisFactsFromProject).toHaveBeenCalledTimes(1);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('O5: the marker pre-filter is a superset of analyzer-reachable spellings', async () => {
+    const { sourceFilesHaveDataPlaneMarkers } = await loadSubject();
+    const has = (source: string): boolean =>
+      sourceFilesHaveDataPlaneMarkers([{ fileName: 'src/module.ts', source }]);
+
+    // Declaration/factory spellings, including aliasing and element access.
+    expect(has('import { query as defineQuery } from "@kovojs/server";')).toBe(true);
+    expect(has('const declare = app["mutation"];')).toBe(true);
+    expect(has('const { task } = app;')).toBe(true);
+    // Drizzle module imports and SQL helpers.
+    expect(has('import { pgTable } from "drizzle-orm/pg-core";')).toBe(true);
+    expect(has('import { compareAndSet } from "@kovojs/drizzle";')).toBe(true);
+    // Raw SQL sink spellings on unproven receivers (KV422/KV406 surface).
+    expect(has('await database.execute("select * from products where id = " + id);')).toBe(true);
+    expect(has('await runner[method]("select 1");')).toBe(true);
+    expect(has('await client["exec"]("select 1");')).toBe(true);
+    // Dynamic app-provider import (D1A009 refusal surface).
+    expect(has('const provider = await import("./kovo.js");')).toBe(true);
+    // A data-plane-free component module takes the cheap path.
+    expect(
+      has('import { component } from "@kovojs/core";\nexport const C = component({ render: () => null });'),
+    ).toBe(false);
+  });
 });
 
 async function loadSubject(): Promise<DataPlaneStaticAnalysisModule> {

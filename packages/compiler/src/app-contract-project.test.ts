@@ -1542,6 +1542,55 @@ describe('D1 compiler-owned exact project resolver', () => {
   });
 });
 
+describe('O5/D5-a content-exact project memo (plans/good-perf.md; SPEC.md §5.2)', () => {
+  it('returns the same immutable project for byte-identical roots and a fresh one after an edit', async () => {
+    const fixture = await createFixture();
+    const first = createCompilerOwnedAppContractProject({
+      rootNames: [fixture.provider, fixture.local],
+    });
+    const second = createCompilerOwnedAppContractProject({
+      rootNames: [fixture.provider, fixture.local],
+    });
+    // Same root set, same bytes on disk: the construction is memoized, so all four per-edit
+    // Vite construction sites share one whole-project Program instead of rebuilding it.
+    expect(second).toBe(first);
+
+    await writeSource(
+      fixture.local,
+      "import { app } from './provider.js';\nexport const item = app.mutation({ handler() { return 1; } });\n",
+    );
+    const third = createCompilerOwnedAppContractProject({
+      rootNames: [fixture.provider, fixture.local],
+    });
+    expect(third).not.toBe(first);
+    expect(third.compileEntry(fixture.local).parsedFactories).toContain('mutation');
+    // The pre-edit project still answers from its own immutable snapshot.
+    expect(first.compileEntry(fixture.local).parsedFactories).toContain('query');
+  });
+
+  it('revalidates non-root mutable dependencies, not only the roots', async () => {
+    // The entry is the only Program root; the provider module enters the Program as a resolved
+    // dependency. Editing it with the root unchanged must construct a fresh Program — reusing the
+    // memoized one would retain stale receiver provenance (SPEC.md §5.2 exact-snapshot rule).
+    const fixture = await createFixture();
+    const first = createCompilerOwnedAppContractProject({ rootNames: [fixture.local] });
+    expect(first.compileEntry(fixture.local).diagnostics).toEqual([]);
+
+    await writeSource(
+      fixture.provider,
+      [
+        "import { defineKovo } from '@kovojs/server';",
+        '// appId removed: receiver provenance for app.query must now be refused.',
+        'export const app = defineKovo({});',
+        '',
+      ].join('\n'),
+    );
+    const second = createCompilerOwnedAppContractProject({ rootNames: [fixture.local] });
+    expect(second).not.toBe(first);
+    expect(second.compileEntry(fixture.local).diagnostics).not.toEqual([]);
+  });
+});
+
 const ownerKey = ownerKeyFor('contacts');
 
 interface Fixture {

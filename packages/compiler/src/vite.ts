@@ -3724,9 +3724,11 @@ function lowerViteSourceDerivedRegistryDeclarations(
   onAppContractOperation?: () => void,
 ): string | null {
   // Legacy free factories have no receiver to prove. App-scoped factories do: run their lowering
-  // inside a fresh compiler-owned Program so Vite cannot turn spelling such as `app.query(...)`
-  // into framework authority. The Program is deliberately invocation-local because HMR may replace
-  // the same file between transforms.
+  // inside a compiler-owned Program so Vite cannot turn spelling such as `app.query(...)` into
+  // framework authority. HMR may replace the same file between transforms, so the Program must be
+  // exact per content: `createCompilerOwnedAppContractProject` returns a memoized project only
+  // when every mutable file the Program parsed is byte-identical on disk (O5/D5-a), and
+  // `withEntryResolutions` still refuses a stale source snapshot below.
   if (
     !compilerRegExpTest(
       /\.\s*(?:agent|assemble|endpoint|integrateMutation|layout|mutation|query|route|task)\s*\(/u,

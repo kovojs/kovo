@@ -316,9 +316,169 @@ type AnalyzableFunctionLike =
   | TS.FunctionExpression
   | TS.MethodDeclaration;
 
+// ---------------------------------------------------------------------------
+// Shared TypeScript state across app-contract Program constructions
+// (SPEC.md §5.2; plans/good-perf.md O5/D5-a).
+//
+// Every construction site used to build a fresh whole-project Program per call — four or more per
+// `kovo dev` edit — re-parsing the identical lib.es2024/lib.dom/node_modules declaration closure
+// each time (measured 700–750 ms per construction). Two content-exact caches remove the repeated
+// work without weakening any proof:
+//
+// 1. `sharedDependencySourceFiles` shares parsed non-root SourceFiles (libs, node_modules and
+//    framework declaration closure) across Programs, the raw-TypeScript analogue of a language-
+//    service DocumentRegistry. Every reuse revalidates the entry against the current on-disk text —
+//    an mtime key would be unsound under editor write patterns and git operations that preserve
+//    mtime — so a stale AST can never enter a Program. Entries are replaced in place on content
+//    change; the map is bounded by the number of distinct dependency files and never grows with
+//    edits. This is deliberately NOT a ts-morph Project memo: the process-global ts-morph memo that
+//    OOM'd stays banned (packages/drizzle/src/static/project-setup.ts), and ts-morph@28 has no
+//    documentRegistry option, so the drizzle analyzer's separate TypeScript is out of scope here.
+//
+// 2. `appContractProjectMemo` returns the same immutable project object for a repeated
+//    construction whose root spelling AND the exact on-disk bytes of every mutable file the
+//    memoized Program parsed (roots plus all non-node_modules dependencies) are unchanged. Same
+//    inputs, same Program: a hit is byte-equivalent to a fresh construction, so `check`/`build`
+//    stay fail-closed and dev proofs stay exact (D5 ruling: posture is proven per commit; the dev
+//    server must stop rebuilding identical whole-project state per keystroke). The memo is a small
+//    capacity-bounded LRU replaced wholesale on content change — bounded memory, unlike the banned
+//    accumulating ts-morph memo above.
+//
+// Known, accepted staleness window for both caches: files under node_modules changing mid-process
+// without any mutable-file change (e.g. `pnpm install` while `kovo dev` runs), and a newly added
+// file that shadows an existing module resolution while no tracked file changed. Both already
+// require a dev-server restart for Vite's own graph; fresh CLI processes are unaffected.
+// ---------------------------------------------------------------------------
+
+const sharedDependencySourceFiles = new Map<string, TS.SourceFile>();
+
+const APP_CONTRACT_PROJECT_MEMO_CAPACITY = 4;
+
+interface AppContractProjectMemoEntry {
+  readonly project: CompilerOwnedAppContractProject;
+  /** Canonical path → sha256(text) for every mutable file the memoized Program parsed. */
+  readonly validatedFiles: ReadonlyMap<string, string>;
+}
+
+const appContractProjectMemo = new Map<string, AppContractProjectMemoEntry>();
+
+function appContractProjectMemoSignature(
+  rootDirectory: string,
+  rootNames: readonly string[],
+  consumerRootNames: readonly string[],
+): string {
+  // Length-prefix every component so distinct inputs can never collide by concatenation.
+  const hash = createHash('sha256');
+  const update = (value: string): void => {
+    hash.update(`${value.length}:`);
+    hash.update(value, 'utf8');
+  };
+  update(rootDirectory);
+  update(`${rootNames.length}`);
+  for (const rootName of rootNames) update(rootName);
+  update(`${consumerRootNames.length}`);
+  for (const rootName of consumerRootNames) update(rootName);
+  return hash.digest('hex');
+}
+
+function appContractSourceTextDigest(text: string): string {
+  return createHash('sha256').update(text, 'utf8').digest('hex');
+}
+
+/** Whether a Program file must be revalidated byte-exactly on every memo lookup. */
+function isMutableAppContractProgramFile(canonicalFileName: string): boolean {
+  // node_modules content (including TypeScript's own lib.*.d.ts) is treated as session-stable,
+  // exactly like Vite's dependency optimizer. Everything else — app source and workspace-resolved
+  // framework source — is mutable during a dev session and gets byte-exact revalidation.
+  return !canonicalFileName.includes('/node_modules/');
+}
+
+function memoizedAppContractProject(signature: string): CompilerOwnedAppContractProject | undefined {
+  const entry = appContractProjectMemo.get(signature);
+  if (entry === undefined) return undefined;
+  for (const [canonicalFileName, digest] of entry.validatedFiles) {
+    let text: string;
+    try {
+      text = readFileSync(canonicalFileName, 'utf8');
+    } catch {
+      return undefined;
+    }
+    if (appContractSourceTextDigest(text) !== digest) return undefined;
+  }
+  // Refresh LRU recency on a proven byte-exact hit.
+  appContractProjectMemo.delete(signature);
+  appContractProjectMemo.set(signature, entry);
+  return entry.project;
+}
+
+function storeMemoizedAppContractProject(
+  signature: string,
+  rootNames: readonly string[],
+  program: TS.Program,
+  project: CompilerOwnedAppContractProject,
+): void {
+  const validatedFiles = new Map<string, string>();
+  const canonicalProgramFiles = new Set<string>();
+  for (const sourceFile of program.getSourceFiles()) {
+    const canonical = normalizeFileName(resolve(sourceFile.fileName));
+    canonicalProgramFiles.add(canonical);
+    if (!isMutableAppContractProgramFile(canonical)) continue;
+    validatedFiles.set(canonical, appContractSourceTextDigest(sourceFile.text));
+  }
+  for (const rootName of rootNames) {
+    // Never memoize a Program missing one of its requested roots: a later construction after the
+    // file appears on disk must parse it, and the digest set below could not detect that.
+    if (!canonicalProgramFiles.has(normalizeFileName(rootName))) return;
+  }
+  appContractProjectMemo.delete(signature);
+  while (appContractProjectMemo.size >= APP_CONTRACT_PROJECT_MEMO_CAPACITY) {
+    const oldest = appContractProjectMemo.keys().next().value;
+    if (oldest === undefined) break;
+    appContractProjectMemo.delete(oldest);
+  }
+  appContractProjectMemo.set(signature, { project, validatedFiles });
+}
+
+/**
+ * Program host that shares parsed dependency SourceFiles across constructions. Root files are
+ * always parsed fresh from disk; non-root files reuse the shared AST only when the current
+ * on-disk text is byte-identical to the cached parse (SPEC.md §5.2 exact-snapshot rule).
+ */
+function createAppContractCompilerHost(
+  options: TS.CompilerOptions,
+  canonicalRootNames: ReadonlySet<string>,
+): TS.CompilerHost {
+  const host = ts.createCompilerHost(options);
+  const baseGetSourceFile = host.getSourceFile.bind(host);
+  const baseReadFile = host.readFile.bind(host);
+  host.getSourceFile = (fileName, languageVersionOrOptions, onError, shouldCreateNewSourceFile) => {
+    const canonical = normalizeFileName(resolve(fileName));
+    if (canonicalRootNames.has(canonical)) {
+      return baseGetSourceFile(fileName, languageVersionOrOptions, onError, shouldCreateNewSourceFile);
+    }
+    if (shouldCreateNewSourceFile !== true) {
+      const cached = sharedDependencySourceFiles.get(canonical);
+      if (cached !== undefined && cached.text === baseReadFile(fileName)) return cached;
+    }
+    const sourceFile = baseGetSourceFile(
+      fileName,
+      languageVersionOrOptions,
+      onError,
+      shouldCreateNewSourceFile,
+    );
+    if (sourceFile !== undefined) sharedDependencySourceFiles.set(canonical, sourceFile);
+    return sourceFile;
+  };
+  return host;
+}
+
 /**
  * Build the Arm A project from filesystem roots. Identity is derived from compiler-owned AST and
  * package facts, then consumed only while lowering the exact source snapshot (SPEC.md §5.2).
+ *
+ * Constructions are memoized content-exactly (see the shared-state note above): when the root set
+ * and every mutable file the previous Program parsed are byte-identical on disk, the previously
+ * constructed immutable project is returned instead of a fresh whole-project Program.
  */
 export function createCompilerOwnedAppContractProject(
   rawOptions: CreateCompilerOwnedAppContractProjectOptions,
@@ -326,8 +486,19 @@ export function createCompilerOwnedAppContractProject(
   const rootDirectory = snapshotRootDirectory(rawOptions);
   const rootNames = snapshotRootNames(rawOptions, rootDirectory);
   const consumerRootNames = Object.freeze([...new Set(rawOptions.rootNames)].sort());
+  const memoSignature = appContractProjectMemoSignature(
+    rootDirectory,
+    rootNames,
+    consumerRootNames,
+  );
+  const memoized = memoizedAppContractProject(memoSignature);
+  if (memoized !== undefined) return memoized;
   const options = appContractCompilerOptions();
-  const program = ts.createProgram({ options, rootNames });
+  const host = createAppContractCompilerHost(
+    options,
+    new Set(rootNames.map((rootName) => normalizeFileName(rootName))),
+  );
+  const program = ts.createProgram({ host, options, rootNames });
   const checker = program.getTypeChecker();
   const context: ProvenanceContext = { checker, options, program };
   let semanticDiagnostics: readonly TS.Diagnostic[] | undefined;
@@ -498,7 +669,7 @@ export function createCompilerOwnedAppContractProject(
     };
   };
 
-  return Object.freeze({
+  const project: CompilerOwnedAppContractProject = Object.freeze({
     compileEntry(fileName: string): CompilerOwnedAppContractEntry {
       const sourceFile = sourceFileFor(fileName);
       const analysis = analyzeEntry(fileName);
@@ -753,6 +924,8 @@ export function createCompilerOwnedAppContractProject(
       );
     },
   });
+  storeMemoizedAppContractProject(memoSignature, rootNames, program, project);
+  return project;
 }
 
 function appContractMemberDeclaration(
