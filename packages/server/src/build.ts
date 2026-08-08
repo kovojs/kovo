@@ -358,7 +358,7 @@ async function emitNodePreset(
     await writePresetDirectory(build.staticOutput.dir, outDir, 'static', 'node static output');
   }
   await writePresetDirectory(build.serverDir, outDir, 'server', 'node server');
-  await stageNodeRootedFileRoots(outDir);
+  await stageNodeRootedFileRoots(build, outDir);
   const nodeAdapterSource = nodeAdapterRuntimeSource();
   const serverSource = nodeServerSource();
   validateGeneratedJavaScript(path.join(outDir, 'node-adapter.mjs'), nodeAdapterSource, 'module');
@@ -908,25 +908,37 @@ async function writePresetArtifacts(
  * directory — without staging, `dist` never contained the files and the artifact could not boot.
  * Absolute roots intentionally stay live deploy-host paths and are not staged.
  */
-async function stageNodeRootedFileRoots(outDir: string): Promise<void> {
-  const inventory = snapshotBuildArray(
-    rootedFilesBuildInventory(),
-    'node rooted files inventory',
-  );
+async function stageNodeRootedFileRoots(
+  build: KovoNeutralBuild,
+  outDir: string,
+): Promise<void> {
+  // The neutral build records the inventory from the app's own module graph; the module-local
+  // inventory covers embedders that evaluated the app in this instance. Merge both, then
+  // validate every entry shape before it can influence a filesystem copy.
+  const recorded = witnessIsBuildArray(build.rootedFileRoots) ? build.rootedFileRoots : [];
+  const local = rootedFilesBuildInventory();
   const stagedEntryNames = createSecurityNullRecord<true>();
-  for (let index = 0; index < inventory.length; index += 1) {
-    const entry = inventory[index]!;
-    if (path.isAbsolute(entry.spec)) continue;
-    const entryName = stagedRootedFilesEntryName(entry.spec);
-    if (stagedEntryNames[entryName] === true) continue;
-    stagedEntryNames[entryName] = true;
-    await writePresetDirectory(
-      entry.root,
-      outDir,
-      `rooted/${entryName}`,
-      `node rooted files ${entry.spec}`,
-    );
+  for (const inventory of [recorded, local]) {
+    const pinned = snapshotBuildArray(inventory, 'node rooted files inventory');
+    for (let index = 0; index < pinned.length; index += 1) {
+      const entry = pinned[index];
+      if (typeof entry !== 'object' || entry === null) continue;
+      const spec = (entry as { spec?: unknown }).spec;
+      const root = (entry as { root?: unknown }).root;
+      if (typeof spec !== 'string' || typeof root !== 'string') {
+        throw new TypeError('Node rooted files inventory entries must carry string spec/root.');
+      }
+      if (path.isAbsolute(spec)) continue;
+      const entryName = stagedRootedFilesEntryName(spec);
+      if (stagedEntryNames[entryName] === true) continue;
+      stagedEntryNames[entryName] = true;
+      await writePresetDirectory(root, outDir, `rooted/${entryName}`, `node rooted files ${spec}`);
+    }
   }
+}
+
+function witnessIsBuildArray(value: unknown): value is readonly unknown[] {
+  return securityArrayIsArray(value);
 }
 
 async function writePresetDirectory(
