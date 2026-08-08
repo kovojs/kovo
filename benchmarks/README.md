@@ -98,7 +98,13 @@ each iteration. It records:
   document, otherwise the first frame rendered after the destination content is in
   the DOM. Timestamps are absolute, because a document-replacing navigation resets
   the document timeline. The report also records how many navigations replaced the
-  document, and what the superseded DOM-presence probe would have reported;
+  document, and what the superseded DOM-presence probe would have reported.
+  **Those two branches are not the same instrument and the difference is one-sided**:
+  the document-replacing branch reads a browser-recorded paint timestamp with no
+  harness cost in it, while the same-document branch pays a poll interval, CDP
+  round-trips and two animation frames. Kovo is the document-replacing entrant, so
+  the error runs in Kovo's favour. The report states this under "Known limits of
+  this instrument"; do not quote a small navigation gap as a result;
 - back/forward cache: a separate probe in full Chromium with Playwright's
   `--disable-back-forward-cache` removed (the default `chrome-headless-shell`
   cannot participate in bfcache at all). Frameworks that navigate in-document are
@@ -126,20 +132,31 @@ not reject a run. A source whose statuses could not be read at all is printed as
 ### Rate limiting and iteration count
 
 Every request in a run arrives from `127.0.0.1`, so the whole benchmark shares a
-single source IP against Kovo's per-IP budget. The framework default is 600
-requests/minute per IP (`DEFAULT_PER_IP_RATE`, `packages/server/src/app-load-shed.ts`),
-which a `--iterations 10` run can exhaust — and the integrity gate then refuses to
-publish rather than reporting shed traffic as fast traffic.
+single source IP against Kovo's per-IP budget: 600 requests per rolling minute by
+framework default (`DEFAULT_PER_IP_RATE`, `packages/server/src/app-load-shed.ts`).
+Only the Kovo entrant has such a budget at all; the React entrants do not shed.
 
-Ordinary document and endpoint `GET`/`HEAD` dispatch is exempt from that _default_
-per-IP budget (plans/good-perf.md D12). The cold-load, navigation and bfcache
-scenarios are document GETs, so they no longer consume it. This does not make a run
-unlimited: the mandatory global budget still applies to documents, mutation and
-query surfaces keep their own per-IP budgets, and an app-authored
-`requestLimits.perIp` is enforced on every surface — so the checkout mutation the
-TTI scenario performs is still metered. If a run is refused for 429s on plain page
-loads, you are on a tree that predates that exemption; lower `--iterations` or
-space the run out.
+**Measured, not assumed.** A `--iterations 10` run of the Kovo entrant — 10
+iterations x 2 conditions x 3 scenarios, plus 3 bfcache iterations and 4 Lighthouse
+cells x 3 repeats — recorded **zero 429s**, and the integrity gate saw all of it.
+That was on a tree that did _not_ yet carry the D12 document-GET exemption. A run of
+this shape is simply not dense enough to reach the budget: it spreads on the order of
+a hundred page loads across several minutes, against a limit expressed per rolling
+minute. For contrast, a tight loop of document GETs against the same server took
+**605 requests in 2.1 s and first shed on request 600** — so the budget is real, it
+just is not what a benchmark run looks like.
+
+So the earlier worry that a default `--iterations 10` run would trip the limit did
+not reproduce, and the D12 exemption is not what makes that iteration count viable.
+What the exemption changes is the dense case — load generators, `perf/transport-bytes`
+style measurement, or anything hammering documents from one IP. It does not make a
+run unlimited either: the mandatory global budget still applies to documents,
+mutation and query surfaces keep their own per-IP budgets, and an app-authored
+`requestLimits.perIp` is enforced on every surface, so the checkout mutation the TTI
+scenario performs is still metered.
+
+If a run is ever refused for 429s, the integrity gate names the entrant, condition
+and scenario; lower `--iterations` or space the run out.
 
 Conditions:
 

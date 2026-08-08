@@ -59,9 +59,10 @@ node benchmarks/run-all.mjs --apps kovo,nextjs --skip-lighthouse --port-base 482
 ```
 
 All traffic arrives from `127.0.0.1`, so the whole run shares one source IP against Kovo's per-IP
-budget. Document and endpoint `GET`/`HEAD` dispatch is exempt from the framework-default per-IP
-budget (plans/good-perf.md D12), which is what makes `--iterations 10` viable; the global budget and
-the mutation/query per-IP budgets still apply. See [`../README.md`](../README.md).
+budget. A measured `--iterations 10` run of the Kovo entrant, with Lighthouse and the bfcache probe,
+recorded **zero 429s** — the run is not dense enough to reach a per-rolling-minute budget, and the
+D12 document-GET exemption is not what makes that iteration count viable.
+[`../README.md`](../README.md) has the numbers and what the exemption does change.
 
 The run aborts rather than publishing if a port is already held, if a server exits early, if a
 server reports development posture under `NODE_ENV=production`, or if any **observed** request was
