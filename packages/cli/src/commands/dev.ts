@@ -43,7 +43,9 @@ import {
 import {
   captureKovoDevRunnerBootstrapAuthority,
   type KovoDevRunnerGenerationBroker,
+  type KovoDevRunnerGenerationObserver,
 } from './dev-runner-generation.js';
+import { superviseKovoCliSessionParent } from './process-supervision.js';
 import {
   createKovoDevtoolPlugin,
   inspectKovoDevDatabasePosture,
@@ -175,7 +177,9 @@ export async function startKovoDevServer(
     // server. Authored config has not been imported and therefore cannot forge these identities.
     const runnerAuthority = captureKovoDevRunnerBootstrapAuthority(viteModule, bootstrapServer);
     const profile = await preloadDevSecurityProfile(bootstrapServer, options.appModulePath, root);
-    runnerGenerations = runnerAuthority.createBroker();
+    runnerGenerations = runnerAuthority.createBroker(
+      createDevGenerationObserver(() => liveServer),
+    );
     // Construct and freeze the framework plugin before authored config/plugin evaluation. Authored
     // hooks may mutate their own config, but cannot replace the proof plugin or its hook table.
     const createdPlugin = profile.trustedKovoVitePlugin({
@@ -277,10 +281,18 @@ export async function startKovoDevServer(
       root,
     });
 
+    // plans/good-perf.md O6: a dev server whose invoking parent died must shut itself down
+    // instead of running orphaned under launchd/init and burning CPU on a dead session.
+    const supervision = superviseKovoCliSessionParent({
+      onOrphaned: (message) => {
+        process.stderr.write(message);
+      },
+    });
     let closed = false;
     const close = async (): Promise<void> => {
       if (closed) return;
       closed = true;
+      supervision.close();
       process.removeListener('SIGINT', onSignal);
       process.removeListener('SIGTERM', onSignal);
       try {
@@ -298,6 +310,13 @@ export async function startKovoDevServer(
     };
     process.once('SIGINT', onSignal);
     process.once('SIGTERM', onSignal);
+    supervision.signal.addEventListener(
+      'abort',
+      () => {
+        void close();
+      },
+      { once: true },
+    );
     liveServer.httpServer?.once('close', () => {
       if (!closed) void close();
     });
@@ -400,6 +419,51 @@ function formatKovoDevReadyReport(options: KovoDevReadyReportOptions): string {
 }
 
 const DEVTOOL_READY_PATH = '__kovo';
+
+/**
+ * plans/good-perf.md O6: the dev loop must never go silent. Every staged edit reports progress
+ * (still proving after N seconds), completion (active in N ms), and failure (terminal line plus
+ * the Vite error overlay) — a broken or stalled edit was previously indistinguishable from a
+ * working one because the browser kept being served the previous build with zero feedback.
+ */
+function createDevGenerationObserver(
+  liveServer: () => ViteDevServer | undefined,
+): KovoDevRunnerGenerationObserver {
+  let overlayShownForRevision: number | undefined;
+  const write = (line: string): void => {
+    process.stderr.write(line);
+  };
+  const observer: KovoDevRunnerGenerationObserver = {
+    staged({ durationMs, revision, superseded }) {
+      if (superseded) return;
+      write(`[kovo dev] edit #${revision} active after ${nativeApply<number>(nativeMathRound, NativeMath, [durationMs])}ms\n`);
+      if (overlayShownForRevision !== undefined) {
+        overlayShownForRevision = undefined;
+        // Clear a previous save's error overlay without reloading (state-preserving updates
+        // arrive through Kovo's own HMR events; an empty update list only clears the overlay).
+        liveServer()?.ws?.send({ type: 'update', updates: [] });
+      }
+    },
+    stageFailed({ durationMs, error, revision }) {
+      const message = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error && typeof error.stack === 'string' ? error.stack : '';
+      write(
+        `[kovo dev] edit #${revision} failed after ${nativeApply<number>(nativeMathRound, NativeMath, [durationMs])}ms: ${message}\n` +
+          `[kovo dev] the previous build remains active; fix the error and save again.\n`,
+      );
+      overlayShownForRevision = revision;
+      liveServer()?.ws?.send({ err: { message, stack }, type: 'error' });
+    },
+    stagePending({ pendingMs, revision }) {
+      const seconds = nativeApply<number>(nativeMathRound, NativeMath, [pendingMs / 1000]);
+      write(
+        `[kovo dev] edit #${revision} is still being proven after ${seconds}s; ` +
+          'the browser keeps the previous build until it lands.\n',
+      );
+    },
+  };
+  return nativeObjectFreeze(observer);
+}
 
 function boundDevServerOrigin(server: ViteDevServer): string {
   const address = server.httpServer?.address();

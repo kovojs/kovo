@@ -28,6 +28,7 @@ import {
   buildStringStartsWith,
 } from './build-security-intrinsics.js';
 import { kovoBuildOneShotDigest, type KovoBuildOneShotIdentity } from './build-one-shot-handoff.js';
+import { superviseKovoCliSessionParent } from './process-supervision.js';
 import { type KovoCommandSecurityDisposition } from './security-disposition.js';
 import {
   createKovoSourceCheckInputProof,
@@ -49,6 +50,7 @@ const phaseCensusEnvironmentName = 'KOVO_DEVEX_CHECK_PHASE_CENSUS_SOURCE';
 const phaseCensusLinePrefix = 'kovo-check-phase-census/v1 ';
 const maximumSessionFactKeys = 512;
 const digestPattern = /^sha256:[0-9a-f]{64}$/u;
+const NativeAbortSignalAny = AbortSignal.any;
 const NativeObject = Object;
 const NativeObjectCreate = Object.create;
 const NativeObjectDefineProperty = Object.defineProperty;
@@ -191,6 +193,18 @@ export async function runKovoSourceCheckWatchCommand(
   const checkSecurity = sourceCheckCensusSecurity(security, entryPath);
   const cache = new KovoSourceCheckSessionFactCache(options.cache);
   const snapshotProject = controls.snapshotProject ?? snapshotKovoSourceCheckProject;
+  // plans/good-perf.md O6: a watch process whose invoking parent died used to keep polling and
+  // running full check revisions forever after being reparented to launchd/init. Supervise the
+  // parent and end the session (exit 0, same as an authored abort) instead of running orphaned.
+  const supervision = superviseKovoCliSessionParent({
+    onOrphaned: (message) => {
+      process.stderr.write(message);
+    },
+  });
+  const sessionSignal =
+    controls.signal === undefined
+      ? supervision.signal
+      : NativeAbortSignalAny([controls.signal, supervision.signal]);
   const sessionOptions: KovoSourceCheckWatchSessionOptions = {
     appModulePath: options.appModulePath,
     invocationRoot: root,
@@ -205,7 +219,7 @@ export async function runKovoSourceCheckWatchCommand(
     },
     ...(controls.maxRevisions === undefined ? {} : { maxRevisions: controls.maxRevisions }),
     ...(controls.pollIntervalMs === undefined ? {} : { pollIntervalMs: controls.pollIntervalMs }),
-    ...(controls.signal === undefined ? {} : { signal: controls.signal }),
+    signal: sessionSignal,
     ...(controls.snapshotProject === undefined
       ? {}
       : { snapshotProject: controls.snapshotProject }),
@@ -214,6 +228,7 @@ export async function runKovoSourceCheckWatchCommand(
   try {
     return await runKovoSourceCheckWatchSession(sessionOptions);
   } finally {
+    supervision.close();
     cache.close();
   }
 }
