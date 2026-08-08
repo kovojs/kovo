@@ -20,7 +20,7 @@
 //   2. `an eligible in-app navigation does not replace the document` is marked `test.fail()`: it
 //      reproduces the defect today, and Playwright turns the run RED the moment it starts passing.
 //      Delete the `test.fail()` marker in the same change that lands the O2 document-part protocol.
-import { expect, test } from '@kovojs/test/internal/integration';
+import { expect, test, type Page } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'typed-link-navigation' });
 
@@ -31,7 +31,7 @@ const SENTINEL = 'kovo-enhanced-navigation-sentinel';
  * i.e. the client half of enhanced navigation is actually installed in this document. Mirrors the
  * probe in `deferred-runtime-trusted-types.spec.ts`.
  */
-async function waitForDeferredRuntime(page: import('@playwright/test').Page): Promise<void> {
+async function waitForDeferredRuntime(page: Page): Promise<void> {
   await expect
     .poll(
       () =>
