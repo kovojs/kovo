@@ -666,8 +666,21 @@ Absorbs the open items of `plans/fast-ci.md`, which is superseded.
 
 ## Pre-existing defects surfaced by the batch-1 regression sweep
 
-Found while verifying merged main. Reproduced at `93412b7e4` (before any good-perf work), so these
-are **not** regressions from this effort — but they are real and currently un-owned.
+Batch 1 introduced **zero regressions**. Established by running the same three files in isolation at
+`93412b7e4` (before any good-perf work) and on merged main: both report exactly
+`runtime-bootstrap.test.ts` 1 failing, `vite-packed-provenance.test.ts` 1 failing,
+`vite.test.ts` passing. Full server sweep on merged main: **3,914 of 3,919 passing**.
+
+Two classes of noise had to be eliminated first, and both are worth knowing about:
+- `vite.test.ts` fails only under parallel load (90 s timeouts in a 258-file sweep with other work on
+  the box) and passes in isolation both before and after. Not a defect in the code under test.
+- Dangling workspace symlinks left by dependency bumps produce failures that look like code
+  regressions. `packages/server/node_modules/vitest` still named the removed `vitest@4.1.8`, and
+  `packages/better-auth/node_modules/better-auth` named a build keyed to `drizzle-orm@0.45.2`. Both
+  read as `lstat: true, stat: false`. `pnpm install --frozen-lockfile` repairs them. Any perf
+  measurement or regression claim taken without repairing these first is unreliable.
+
+The remaining two failures are real and currently un-owned:
 
 - [ ] `packages/server/src/vite-packed-provenance.test.ts` cannot pass on main.
   - The fixture symlinks the repo's `@kovojs` sources into a temp app, and `kovo dev` then loads them
@@ -680,6 +693,9 @@ are **not** regressions from this effort — but they are real and currently un-
   - A second, separate defect in the same file was fixed in passing: `statSync` was used for
     link-existence checks, so a workspace link left dangling by a dependency bump read as absent and
     the fixture re-created it, failing with `EEXIST`. Now `lstatSync`.
+- [ ] `packages/server/src/runtime-bootstrap.test.ts` — "keeps packed mutation identity bound while
+      private minting stays unexported" fails on main.
+  - `runPackedMutationAuthorityChild` exits 1. Reproduces identically at `93412b7e4`.
 
 ## DevEx defects found while measuring
 
