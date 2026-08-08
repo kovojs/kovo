@@ -171,27 +171,25 @@ Ranked by measured win ÷ (implementation cost × security risk).
 
 ### O1 — Ship response compression in the generated production adapter — **critical, small, low risk**
 
-- [ ] Emit `Content-Encoding` from the `--preset node` (and Vercel/Cloudflare) build artifact.
-  - Root cause: `packages/server/src/build.ts` is the emitter of the standalone adapter and contains
-    **zero** compression tokens — `grep -cE 'zlib|gzip|brotli|Content-Encoding|acceptEncoding'`
-    returns `0` across all 4,919 lines, while `packages/server/src/node.ts` returns `17`. The emitted
-    `writeWebResponseToNode` (build.ts:1803-1823) ends in a bare
-    `pipeline(Readable.fromWeb(body), nodeResponse)`, and the call site at build.ts:4223-4225 never
-    passes `acceptEncoding`, which `node.ts:1430` requires to select an encoder. Static assets bypass
-    it entirely via `serveRootedStaticFile` (build.ts:4347).
-  - Measured: with `Accept-Encoding: br, gzip` the Kovo server returns no `Content-Encoding` for the
-    document (41,014 B), the stylesheet (122,222 B), the client runtime (267,611 B), or the
-    enhanced-navigation document (2,286 B). Next.js standalone gzips all of them.
-  - Win: the three critical-path assets total 430,847 B shipped; measured brotli-11 of the identical
-    bytes is 70,974 B — **-83.5%**. At the harness's 209,715 B/s mobile throttle that is the entire
-    564 ms FCP gap. It also flips the navigation payload comparison: Kovo's 2,286 B enhanced document
-    gzips to 963 B versus Next's 1,776 B, turning a 1.29x loss into a 1.84x win.
-  - Decision required, per the Technical Preview Bias rule: `isSensitiveResponse` (node.ts:1444-1455)
-    disables compression for any `no-store`/`private`/`Set-Cookie`/`Vary: Cookie` response, and
-    `app-document.ts:368-379` stamps `noStore` whenever the request merely carries a `Cookie` header
-    or the page renders a CSRF form — i.e. every realistic logged-in page. Choose and document the
-    stronger default explicitly (BREACH/CRIME posture) rather than inheriting today's accidental
-    "compress nothing in production".
+- [x] Emit `Content-Encoding` from the `--preset node` (and Vercel) build artifact.
+  - Done 2026-08-08 on `perf/transport-bytes`. The emitted adapter (`build.ts`
+    `nodeAdapterRuntimeSource`) now negotiates br/gzip with q-values; the generated server and
+    Vercel function pass `acceptEncoding` through `preparedNodeRequestTransportMetadata`; static
+    files are compressed from a per-content cache (brotli-11/gzip-9, ≥1024 B, keyed by the strong
+    sha256 ETag) and dynamic responses use brotli q5 (measured 1.41 ms vs 163 ms at q11 per doc).
+    Cloudflare worker emission unchanged — its edge applies compression; not re-verified here.
+  - D1 executed: the `isSensitiveResponse` refusal is deleted. Cookie-bearing/`no-store`/`private`
+    responses compress; BREACH posture = per-mint XOR-masked CSRF tokens (already in
+    `csrf.ts createCsrfToken`) plus a per-response random `Kovo-Pad` (1..64 hex chars) on every
+    compressed response; `Cache-Control: no-transform` is the sole authored opt-out. Normative in
+    SPEC §9.5 ("Transport compression and BREACH posture"); pinned by
+    `node.test.ts` ("compresses private no-store and cookie-bearing responses…") and
+    `build.test.ts` ("emits a standalone node server…" compressed-cookie probes).
+  - Measured (rebuilt `benchmarks/kovo`, curl with `Accept-Encoding: br, gzip`): document `/`
+    41,014 → **7,390 B**; `/assets/styles.css` 122,222 → **16,528 B**; runtime client module
+    267,611 → **47,680 B**; three critical-path assets 430,847 → **71,598 B (-83.4%)**.
+    Enhanced-nav document 2,286 → **786 B** (vs Next 1,776 B gzip); `/product/...` 25,195 →
+    **5,543 B**. With a `Cookie` header the document still compresses (7,408 B, `no-store` kept).
 
 ### O2 — Enhanced navigation is dead in production: Kovo's CSP blocks Kovo's own runtime — **critical, small, low risk**
 
@@ -237,12 +235,16 @@ absorbs `plans/better-js-loader.md` Phases 4–5, which are superseded.
 
 ### O3 — Give static assets and documents real cache validators — **critical, small, low risk**
 
-- [ ] Stop re-downloading the 122 KB stylesheet on every navigation.
-  - `/assets/styles.css` is served `cache-control: public, max-age=0, must-revalidate` with **no
-    ETag and no Last-Modified**. `must-revalidate` with no validator means revalidation cannot produce
-    a 304 — the whole file is re-downloaded. This single header accounts for 122,539 of the 152,537
-    bytes on each navigation, **100%** of the back navigation, and 122,539 of the 166,899 bytes on a
-    repeat visit.
+- [x] Stop re-downloading the 122 KB stylesheet on every navigation.
+  - Done 2026-08-08 on `perf/transport-bytes` (per D3; document validators stay with D9/O14).
+    Every statically served file from the generated node server carries a strong sha256 content
+    ETag and answers `If-None-Match` (weak comparison per RFC 9110 §13.1.2) with **304**.
+    Measured: `/assets/styles.css` → `etag: "9f766c01…"`, conditional refetch → `304`, 0 body
+    bytes (was a full 122,222 B re-download). Normative in SPEC §9.5 ("Static validators and
+    connection reuse"); pinned by `build.test.ts` 304/ETag probes. The remaining half of D3 —
+    content-hashing the `styles.css` *filename* so `/assets/*` can go immutable — lives with the
+    asset emitters (`build-export.ts`/`package-styles.ts`, the O4 slice); the immutable-pattern
+    header path already engages for hashed names (e.g. `/assets/index-DEZ6Vmj6.css`).
 - [ ] Give document responses cache headers at all.
   - Kovo document responses carry **no `Cache-Control`, no `ETag`, and no `Last-Modified`**, so the
     42,134 B home document is refetched in full on every visit. Measured repeat-visit byte saving:
@@ -480,22 +482,26 @@ through `Reflect.apply`. No fast-vs-hardened build flag.
 
 ### O13 — Fix production transport defects found while load-testing — **medium, small, low risk**
 
-- [ ] Restore HTTP keep-alive for bodyless GETs.
-  - `createKovoNodeServer` calls `armIncompleteNodeRequestClose` for every bodyless method before
-    dispatch; its guard `nodeRequestComplete` reads only the own property descriptor of
-    `req.complete`, which Node sets in `parserOnMessageComplete` — *after* the `request` event. So a
-    plain GET always reads `complete === false` and gets `Connection: close`.
-  - Measured: a full 8-cell load sweep accumulated **16,416 TIME_WAIT sockets — the entire macOS
-    ephemeral port range (49152–65535)**. A keep-alive probe build reduced that to 99. Throughput was
-    unchanged (402.6 vs 399.6 req/s), so this is a reliability fix, not a speed fix.
-- [ ] Revisit the default per-IP rate limit for document GETs.
-  - `DEFAULT_PER_IP_RATE = { max: 600, windowMs: 60_000 }` (`packages/server/src/app-load-shed.ts:136-140`)
-    is **10 req/s** and gates ordinary page rendering via `preDispatchLoadShedResponse`. The first
-    load-test attempt returned 429 for 100% of requests and stayed latched. Behind a CDN, NAT, or load
-    balancer every visitor shares one source IP.
-- [ ] Stop reporting a normal client disconnect as an unhandled server error.
-  - Every benchmark run reproduces `ERR_STREAM_UNABLE_TO_PIPE` from `writeWebResponseToNode` when
-    Chromium cancels a lazy image load.
+- [x] Restore HTTP keep-alive for bodyless GETs.
+  - Done 2026-08-08 on `perf/transport-bytes`: the generated server no longer arms
+    `armIncompleteNodeRequestClose` before dispatch for GET/HEAD (the payload-free ingress gate
+    already proved there is no body to guard; the post-dispatch arm and rejection writers stay).
+    Verified on the rebuilt artifact: plain GET returns `Connection: keep-alive`; curl reuses one
+    connection across 3 URLs; an 800-request keep-alive sweep left **18** TIME_WAIT sockets (was
+    16,416 — the whole ephemeral range). Pinned by `build.test.ts` (keep-alive probe + emitted
+    source regex).
+- [x] Revisit the default per-IP rate limit for document GETs.
+  - Done per D12: `rateLimitFailure` skips the `all:per-ip` check for surface `other` GET/HEAD
+    when `limits.perIp` is identity-equal to the framework default. Authored `perIp`, the global
+    budget, and mutation/query per-IP budgets are unchanged. Verified: 800 document GETs from one
+    IP → **800×200, zero 429** on the rebuilt artifact; `app-load-shed.test.ts` pins all five
+    postures. Normative sentence added to SPEC §9.5 pre-dispatch load shed.
+- [x] Stop reporting a normal client disconnect as an unhandled server error.
+  - Done: `writeWebResponseToNode` (node.ts and the emitted adapter) classifies
+    `ERR_STREAM_PREMATURE_CLOSE`/`ERR_STREAM_UNABLE_TO_PIPE`/`ERR_STREAM_DESTROYED`/`EPIPE`/
+    `ECONNRESET` (own `code` data property only) as peer teardown, destroys the response quietly,
+    and rethrows everything else. Verified: 10 mid-body client aborts against the rebuilt
+    artifact produced **zero** `[kovo] unhandled node server error` log lines.
 
 ### O14 — Decide the prerender / route-cache, multi-core, and streaming stories — **high, large, design decision**
 
@@ -556,11 +562,18 @@ The evidence base is unsound in seven independent ways. Fix before publishing an
 
 ### O16 — Fix the production artifact's ability to boot and serve files — **high, small, low risk**
 
-- [ ] Stage `rootedFiles` roots into the build output.
-  - `await rootedFiles('../shared/images')` resolves at runtime against `dist/server/`, i.e.
-    `dist/shared/images`, which the build never creates. `createFrameworkFileSystemBoundary` throws
-    `Filesystem root '.../dist/shared/images' does not exist` and the process exits before listening.
-    Reproduces in the untouched tree; images had to be staged by hand for any measurement to run.
+- [x] Stage `rootedFiles` roots into the build output.
+  - Done 2026-08-08 on `perf/transport-bytes`. `rootedFiles()` records constructed roots;
+    `writeKovoNeutralBuild` captures them as `KovoNeutralBuild.rootedFileRoots` (the app and the
+    neutral build share one build-time SSR module graph; the emitting preset engine may not);
+    the node preset stages each **relative** root under `rooted/root-<encodeURIComponent(spec)>/`
+    and the generated server publishes `KOVO_ROOTED_FILES_DIR` before importing the handler, so
+    the same relative spec resolves to its staged snapshot from any launch cwd (absolute roots
+    stay live host paths; a missing staged root fails closed). Contract in SPEC §14
+    ("Self-contained artifact filesystem roots"). Verified: `benchmarks/kovo` build emits
+    `dist/server/rooted/root-..%2Fshared%2Fimages/product-*.webp`; the artifact **boots from a
+    foreign cwd** and serves `/images/product-01.webp` 200. Pinned by
+    `file.rooted-staging.test.ts` and the `build.test.ts` O16 staging test.
 
 ### O17 — Instrumentation, budgets, and CI wall clock — **high, medium, low risk**
 
