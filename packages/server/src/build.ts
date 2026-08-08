@@ -16,6 +16,7 @@ import {
 import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 
 import { createContentDispositionWithFilename } from './content-disposition.js';
+import { rootedFilesBuildInventory, stagedRootedFilesEntryName } from './file.js';
 import {
   createSerializedHeaderSafetyAssertion,
   serializedHeaderSafetyTransition,
@@ -357,6 +358,7 @@ async function emitNodePreset(
     await writePresetDirectory(build.staticOutput.dir, outDir, 'static', 'node static output');
   }
   await writePresetDirectory(build.serverDir, outDir, 'server', 'node server');
+  await stageNodeRootedFileRoots(build, outDir);
   const nodeAdapterSource = nodeAdapterRuntimeSource();
   const serverSource = nodeServerSource();
   validateGeneratedJavaScript(path.join(outDir, 'node-adapter.mjs'), nodeAdapterSource, 'module');
@@ -898,6 +900,47 @@ async function writePresetArtifacts(
   });
 }
 
+/**
+ * O16 (SPEC §14; plans/good-perf.md): copy every relative `rootedFiles()` root that the app
+ * constructed while `kovo build` evaluated it into the artifact under `rooted/<entry-name>/`.
+ * The generated server publishes that directory through `KOVO_ROOTED_FILES_DIR` before importing
+ * the handler, so a relative root resolves to its staged snapshot instead of the launch working
+ * directory — without staging, `dist` never contained the files and the artifact could not boot.
+ * Absolute roots intentionally stay live deploy-host paths and are not staged.
+ */
+async function stageNodeRootedFileRoots(
+  build: KovoNeutralBuild,
+  outDir: string,
+): Promise<void> {
+  // The neutral build records the inventory from the app's own module graph; the module-local
+  // inventory covers embedders that evaluated the app in this instance. Merge both, then
+  // validate every entry shape before it can influence a filesystem copy.
+  const recorded = witnessIsBuildArray(build.rootedFileRoots) ? build.rootedFileRoots : [];
+  const local = rootedFilesBuildInventory();
+  const stagedEntryNames = createSecurityNullRecord<true>();
+  for (const inventory of [recorded, local]) {
+    const pinned = snapshotBuildArray(inventory, 'node rooted files inventory');
+    for (let index = 0; index < pinned.length; index += 1) {
+      const entry = pinned[index];
+      if (typeof entry !== 'object' || entry === null) continue;
+      const spec = (entry as { spec?: unknown }).spec;
+      const root = (entry as { root?: unknown }).root;
+      if (typeof spec !== 'string' || typeof root !== 'string') {
+        throw new TypeError('Node rooted files inventory entries must carry string spec/root.');
+      }
+      if (path.isAbsolute(spec)) continue;
+      const entryName = stagedRootedFilesEntryName(spec);
+      if (stagedEntryNames[entryName] === true) continue;
+      stagedEntryNames[entryName] = true;
+      await writePresetDirectory(root, outDir, `rooted/${entryName}`, `node rooted files ${spec}`);
+    }
+  }
+}
+
+function witnessIsBuildArray(value: unknown): value is readonly unknown[] {
+  return securityArrayIsArray(value);
+}
+
 async function writePresetDirectory(
   sourceDir: string,
   outDir: string,
@@ -1047,11 +1090,13 @@ function vercelStaticBuildOutputConfig(): unknown {
 }
 
 function nodeAdapterRuntimeSource(): string {
-  return `import { Readable } from 'node:stream';
+  return `import { randomBytes } from 'node:crypto';
+import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { IncomingMessage, ServerResponse } from 'node:http';
 import { Http2ServerRequest } from 'node:http2';
 import { Socket } from 'node:net';
+import { constants as zlibConstants, createBrotliCompress, createGzip } from 'node:zlib';
 
 const NativeAbortController = globalThis.AbortController;
 const NativeAbortSignal = globalThis.AbortSignal;
@@ -1082,11 +1127,20 @@ const nativeRequestGlobalDescriptor = nativeObjectGetOwnPropertyDescriptor(globa
 const nativeUrlGlobalDescriptor = nativeObjectGetOwnPropertyDescriptor(globalThis, 'URL');
 const nativeSetHas = Set.prototype.has;
 const nativeHeadersAppend = NativeHeaders.prototype.append;
+const nativeHeadersDelete = NativeHeaders.prototype.delete;
 const nativeHeadersForEach = NativeHeaders.prototype.forEach;
 const nativeHeadersGet = NativeHeaders.prototype.get;
 const nativeHeadersGetSetCookie = NativeHeaders.prototype.getSetCookie;
 const nativeHeadersHas = NativeHeaders.prototype.has;
 const nativeHeadersSet = NativeHeaders.prototype.set;
+const nativeCreateBrotliCompress = createBrotliCompress;
+const nativeCreateGzip = createGzip;
+const nativeRandomBytes = randomBytes;
+// SPEC §9.5 transport compression: brotli quality for per-request dynamic responses. Node's
+// default quality 11 costs ~163 ms per 225 KB document versus ~1.4 ms at quality 5 for a nearly
+// identical wire size (plans/good-perf.md O1); quality 11 is reserved for cached static bytes.
+const brotliDynamicQuality = 5;
+const brotliQualityParam = zlibConstants.BROTLI_PARAM_QUALITY;
 const nativeResponseBodyGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'body').get;
 const nativeResponseHeadersGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'headers').get;
 const nativeResponseStatusGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'status').get;
@@ -1292,7 +1346,9 @@ export function rejectPreparedNodeRequestIngress(prepared, nodeResponse) {
 export function preparedNodeRequestTransportMetadata(prepared) {
   assertPreparedNodeRequestIngress(prepared);
   if (!prepared.ok) throw new TypeError(requestIngressFailureMessage(prepared.issue));
+  const acceptEncoding = firstHeaderValue(prepared.request.headers['accept-encoding']);
   return {
+    ...(acceptEncoding === undefined ? {} : { acceptEncoding }),
     httpVersion: prepared.request.httpVersion,
     method: prepared.decision.method,
     target: prepared.decision.target,
@@ -1808,8 +1864,16 @@ export async function writeWebResponseToNode(response, nodeResponse, method = 'G
   const responseHeaders = pinnedResponse.headers;
   assertSafeTransportResponseHeaderEntries(transportResponseHeaderEntries(responseHeaders));
   stampBrowserStateResponseCacheFloor(responseHeaders);
+  const compression = responseCompression(pinnedResponse, options, method);
   if (nodeResponse.shouldKeepAlive === false && options.httpVersion !== '2.0') {
     apply(nativeHeadersSet, responseHeaders, ['connection', 'close']);
+  }
+  if (compression !== undefined) {
+    apply(nativeHeadersSet, responseHeaders, ['content-encoding', compression]);
+    apply(nativeHeadersDelete, responseHeaders, ['content-length']);
+    appendVaryHeaderToken(responseHeaders, 'Accept-Encoding');
+    // SPEC §9.5 BREACH posture: per-response random length noise on every compressed response.
+    apply(nativeHeadersSet, responseHeaders, ['kovo-pad', compressionPaddingValue()]);
   }
   const headers = responseHeadersToNodeHeaders(responseHeaders);
 
@@ -1819,7 +1883,226 @@ export async function writeWebResponseToNode(response, nodeResponse, method = 'G
     return;
   }
 
-  await pipeline(apply(nativeReadableFromWeb, Readable, [pinnedResponse.body]), nodeResponse);
+  const source = apply(nativeReadableFromWeb, Readable, [pinnedResponse.body]);
+  try {
+    if (compression === 'br') {
+      await pipeline(
+        source,
+        nativeCreateBrotliCompress({ params: { [brotliQualityParam]: brotliDynamicQuality } }),
+        nodeResponse,
+      );
+    } else if (compression === 'gzip') {
+      await pipeline(source, nativeCreateGzip(), nodeResponse);
+    } else {
+      await pipeline(source, nodeResponse);
+    }
+  } catch (error) {
+    // O13 (plans/good-perf.md): a peer that goes away mid-body (for example a browser canceling
+    // a lazy image load) is ordinary transport teardown, not a server fault. Complete the E1
+    // (SPEC §9.5/§9.2) teardown quietly; genuine source-stream failures still reject so the
+    // caller can log and tear the socket.
+    if (!isClientDisconnectStreamError(error)) throw error;
+    nodeResponse.destroy();
+  }
+}
+
+// SPEC §9.5 / O13: classify pipeline failures caused by the peer closing or the response
+// transport already being torn down. Reads only the own code data property so a hostile error
+// object cannot re-route a genuine server failure through the quiet path with a getter.
+function isClientDisconnectStreamError(error) {
+  if (typeof error !== 'object' || error === null) return false;
+  const descriptor = apply(nativeObjectGetOwnPropertyDescriptor, Object, [error, 'code']);
+  if (descriptor === undefined || !('value' in descriptor)) return false;
+  const code = descriptor.value;
+  return code === 'ERR_STREAM_PREMATURE_CLOSE' ||
+    code === 'ERR_STREAM_UNABLE_TO_PIPE' ||
+    code === 'ERR_STREAM_DESTROYED' ||
+    code === 'EPIPE' ||
+    code === 'ECONNRESET';
+}
+
+function responseCompression(response, options, method) {
+  if (method === 'HEAD' || response.body === null) return undefined;
+  if (response.status === 204 || response.status === 304) return undefined;
+  if (apply(nativeHeadersHas, response.headers, ['content-encoding'])) return undefined;
+  // SPEC §9.5 transport compression (plans/good-perf.md D1): cookie-bearing, no-store, and
+  // private responses are compressed like every other eligible response. Refusing to compress is
+  // not the BREACH mitigation Kovo ships: CSRF tokens are XOR-masked with fresh randomness at
+  // every mint, and every compressed response carries Kovo-Pad random length noise. RFC 9111
+  // no-transform remains the sole authored opt-out.
+  const cacheControl = apply(nativeHeadersGet, response.headers, ['cache-control']) ?? '';
+  if (cacheControlHasDirective(cacheControl, 'no-transform')) return undefined;
+  const contentType = apply(nativeHeadersGet, response.headers, ['content-type']) ?? '';
+  if (!isCompressibleContentType(contentType)) return undefined;
+  return negotiateResponseCompression(options.acceptEncoding ?? '');
+}
+
+/** Select br or gzip from one Accept-Encoding header value, honoring q-values (SPEC §9.5). */
+export function negotiateResponseCompression(acceptEncoding) {
+  if (typeof acceptEncoding !== 'string' || acceptEncoding === '') return undefined;
+  const encodings = parseAcceptEncoding(acceptEncoding);
+  const wildcard = encodings.wildcard ?? 0;
+  const br = encodings.br ?? wildcard;
+  const gzip = encodings.gzip ?? wildcard;
+  if (br <= 0 && gzip <= 0) return undefined;
+  return br >= gzip && br > 0 ? 'br' : 'gzip';
+}
+
+function parseAcceptEncoding(value) {
+  const encodings = { br: undefined, gzip: undefined, wildcard: undefined };
+  let entryStart = 0;
+  while (entryStart <= value.length) {
+    const entryEnd = findAsciiIndex(value, ',', entryStart, value.length);
+    const boundedEnd = entryEnd < 0 ? value.length : entryEnd;
+    const semicolon = findAsciiIndex(value, ';', entryStart, boundedEnd);
+    const nameEnd = semicolon < 0 ? boundedEnd : semicolon;
+    const name = apply(nativeStringToLowerCase, trimAsciiRange(value, entryStart, nameEnd), []);
+    let quality = 1000;
+    let parameterStart = semicolon < 0 ? boundedEnd : semicolon + 1;
+    while (parameterStart < boundedEnd) {
+      const nextSemicolon = findAsciiIndex(value, ';', parameterStart, boundedEnd);
+      const parameterEnd = nextSemicolon < 0 ? boundedEnd : nextSemicolon;
+      const equals = findAsciiIndex(value, '=', parameterStart, parameterEnd);
+      if (equals >= 0) {
+        const key = apply(nativeStringToLowerCase, trimAsciiRange(value, parameterStart, equals), []);
+        if (key === 'q') quality = parseEncodingQuality(trimAsciiRange(value, equals + 1, parameterEnd));
+      }
+      parameterStart = parameterEnd + 1;
+    }
+    if (name === 'br') encodings.br = quality;
+    else if (name === 'gzip') encodings.gzip = quality;
+    else if (name === '*') encodings.wildcard = quality;
+    if (entryEnd < 0) break;
+    entryStart = entryEnd + 1;
+  }
+  return encodings;
+}
+
+function parseEncodingQuality(value) {
+  if (value === '0' || value === '0.') return 0;
+  if (value === '1' || value === '1.') return 1000;
+  if (value.length < 3 || value[1] !== '.' || value.length > 5) return 0;
+  if (value[0] === '1') {
+    for (let index = 2; index < value.length; index += 1) {
+      if (value[index] !== '0') return 0;
+    }
+    return 1000;
+  }
+  if (value[0] !== '0') return 0;
+  let quality = 0;
+  let scale = 100;
+  for (let index = 2; index < value.length; index += 1) {
+    const character = value[index];
+    if (character === undefined || character < '0' || character > '9') return 0;
+    quality += (apply(nativeStringCharCodeAt, character, [0]) - 48) * scale;
+    scale /= 10;
+  }
+  return quality;
+}
+
+function cacheControlHasDirective(value, directive) {
+  let start = 0;
+  while (start <= value.length) {
+    const comma = findAsciiIndex(value, ',', start, value.length);
+    const end = comma < 0 ? value.length : comma;
+    let nameStart = start;
+    while (nameStart < end && isAsciiWhitespace(value[nameStart])) nameStart += 1;
+    let nameEnd = nameStart;
+    while (nameEnd < end) {
+      const character = value[nameEnd];
+      if (character === '=' || character === ';' || character === ' ' || character === '\\t') break;
+      nameEnd += 1;
+    }
+    const name = apply(nativeStringToLowerCase, trimAsciiRange(value, nameStart, nameEnd), []);
+    if (name === directive) return true;
+    if (comma < 0) return false;
+    start = comma + 1;
+  }
+  return false;
+}
+
+function isCompressibleContentType(contentType) {
+  const semicolon = findAsciiIndex(contentType, ';', 0, contentType.length);
+  const type = apply(nativeStringToLowerCase,
+    trimAsciiRange(contentType, 0, semicolon < 0 ? contentType.length : semicolon), []);
+  return stringHasPrefix(type, 'text/') ||
+    type === 'application/javascript' ||
+    type === 'application/json' ||
+    type === 'application/ld+json' ||
+    type === 'application/manifest+json' ||
+    type === 'application/x-javascript' ||
+    type === 'application/xhtml+xml' ||
+    type === 'application/xml' ||
+    type === 'image/svg+xml' ||
+    stringHasSuffix(type, '+json') ||
+    stringHasSuffix(type, '+xml');
+}
+
+function appendVaryHeaderToken(headers, token) {
+  const existing = apply(nativeHeadersGet, headers, ['vary']);
+  if (existing === null || apply(nativeStringTrim, existing, []) === '') {
+    apply(nativeHeadersSet, headers, ['vary', token]);
+    return;
+  }
+  const lowered = apply(nativeStringToLowerCase, token, []);
+  if (!commaSeparatedHeaderHasToken(existing, lowered) &&
+      !commaSeparatedHeaderHasToken(existing, '*')) {
+    apply(nativeHeadersSet, headers, ['vary', existing + ', ' + token]);
+  }
+}
+
+const paddingHexDigits = '0123456789abcdef';
+
+// SPEC §9.5 BREACH posture: uniform random length noise (1..64 hex chars) attached to every
+// compressed response as Kovo-Pad. The header rides the same encrypted stream the compressed body
+// does, so a ciphertext-length observer sees the compressed size plus uniform noise; a
+// compression-oracle attack must average that noise away across many samples instead of reading a
+// deterministic length signal. Unconditional on compression so its presence never leaks anything.
+function compressionPaddingValue() {
+  const bytes = nativeRandomBytes(33);
+  const length = (bytes[0] & 63) + 1;
+  let value = '';
+  for (let index = 0; index < length; index += 1) {
+    const byte = bytes[1 + (index >> 1)];
+    value += paddingHexDigits[(index & 1) === 0 ? (byte >> 4) & 15 : byte & 15];
+  }
+  return value;
+}
+
+function findAsciiIndex(value, expected, start, limit) {
+  for (let index = start; index < limit; index += 1) {
+    if (value[index] === expected) return index;
+  }
+  return -1;
+}
+
+function trimAsciiRange(value, start, end) {
+  while (start < end && isAsciiWhitespace(value[start])) start += 1;
+  while (end > start && isAsciiWhitespace(value[end - 1])) end -= 1;
+  let result = '';
+  for (let index = start; index < end; index += 1) result += value[index];
+  return result;
+}
+
+function isAsciiWhitespace(value) {
+  return value === ' ' || value === '\\t' || value === '\\r' || value === '\\n';
+}
+
+function stringHasPrefix(value, prefix) {
+  if (prefix.length > value.length) return false;
+  for (let index = 0; index < prefix.length; index += 1) {
+    if (value[index] !== prefix[index]) return false;
+  }
+  return true;
+}
+
+function stringHasSuffix(value, suffix) {
+  if (suffix.length > value.length) return false;
+  const offset = value.length - suffix.length;
+  for (let index = 0; index < suffix.length; index += 1) {
+    if (value[offset + index] !== suffix[index]) return false;
+  }
+  return true;
 }
 
 // SPEC §9.1: this emitted adapter is the last authoritative header boundary for both generated
@@ -2253,6 +2536,9 @@ module.exports = async function kovoVercelFunction(nodeRequest, nodeResponse) {
     const response = await handler(request);
     closeIncompleteRequest(nodeRequest, nodeResponse);
     await writeWebResponseToNode(response, nodeResponse, transport.method, {
+      ...(transport.acceptEncoding === undefined
+        ? {}
+        : { acceptEncoding: transport.acceptEncoding }),
       httpVersion: transport.httpVersion,
     });
   } catch {
@@ -3961,6 +4247,7 @@ const generatedRequestSafeRuntimeInventorySource = buildSecuritySourceLiteral(
 
 function nodeServerSource(): string {
   return `import { Buffer } from 'node:buffer';
+import { createHash as importedCreateHash } from 'node:crypto';
 import {
   close as importedCloseFileDescriptor,
   constants as fsConstants,
@@ -3982,6 +4269,11 @@ import {
   fileURLToPath as importedFileUrlToPath,
   pathToFileURL as importedPathToFileUrl,
 } from 'node:url';
+import {
+  brotliCompress as importedBrotliCompress,
+  constants as zlibConstants,
+  gzip as importedGzipCompress,
+} from 'node:zlib';
 // SPEC §6.6 bootstrap rule: make every classifier-reviewed global and prototype immutable before
 // importing any generated module or the authored handler. Node builtins above are trusted host
 // modules, but node-adapter.mjs must evaluate only after this eager outer-entry lock.
@@ -3991,6 +4283,7 @@ lockRequestSafeRuntimeRealm(${generatedRequestSafeRuntimeInventorySource});
 const {
   armIncompleteNodeRequestClose,
   assertSafeTransportResponseHeaderEntries,
+  negotiateResponseCompression,
   prepareNodeRequestIngress,
   preparedNodeRequestToWebRequest,
   preparedNodeRequestTransportMetadata,
@@ -4023,7 +4316,17 @@ const readFileDescriptor = importedReadFileDescriptor;
 const realpath = importedRealpath;
 const statFileDescriptor = importedStatFileDescriptor;
 const statFilePath = importedStatFilePath;
+const brotliCompressBytes = importedBrotliCompress;
+const gzipCompressBytes = importedGzipCompress;
+const createContentHash = importedCreateHash;
+// Static bytes are compressed once per content identity and cached, so the expensive quality is
+// paid once per process instead of per request (SPEC §9.5; plans/good-perf.md O1).
+const brotliStaticQuality = 11;
+const brotliQualityParam = zlibConstants.BROTLI_PARAM_QUALITY;
+const brotliSizeHintParam = zlibConstants.BROTLI_PARAM_SIZE_HINT;
+const gzipStaticLevel = 9;
 const nativeReflectApply = Reflect.apply;
+const nativeArrayIsArray = Array.isArray;
 const nativeDecodeURIComponent = globalThis.decodeURIComponent;
 const nativeEncodeURIComponent = globalThis.encodeURIComponent;
 const nativeMapGet = NativeMap.prototype.get;
@@ -4042,6 +4345,7 @@ const nativeSetHas = NativeSet.prototype.has;
 const nativeStringCharCodeAt = NativeString.prototype.charCodeAt;
 const nativeStringEndsWith = NativeString.prototype.endsWith;
 const nativeStringIncludes = NativeString.prototype.includes;
+const nativeStringIndexOf = NativeString.prototype.indexOf;
 const nativeStringSlice = NativeString.prototype.slice;
 const nativeStringStartsWith = NativeString.prototype.startsWith;
 const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
@@ -4059,6 +4363,11 @@ const nativeServerResponseEnd = stablePrototypeFunction(ServerResponse.prototype
 const nativeServerResponseHeadersSentGetter = stablePrototypeGetter(ServerResponse.prototype, 'headersSent');
 const nativeServerResponseWriteHead = stablePrototypeFunction(ServerResponse.prototype, 'writeHead');
 const nativeConsoleError = console.error;
+const contentHashControlPrototype = apply(nativeObjectGetPrototypeOf, NativeObject, [
+  importedCreateHash('sha256'),
+]);
+const nativeHashUpdate = stablePrototypeFunction(contentHashControlPrototype, 'update');
+const nativeHashDigest = stablePrototypeFunction(contentHashControlPrototype, 'digest');
 const immutableAssetPathPattern = new NativeRegExp(${immutableAssetPathPatternSourceLiteral}, ${immutableAssetPathPatternFlagsLiteral});
 const encodedStaticPathSeparatorPattern = new NativeRegExp('%(?:2f|5c)', 'iu');
 const fsFileTypeMask = fsConstants.S_IFMT;
@@ -4096,6 +4405,13 @@ const contentDispositionWithFilename = (${generatedContentDispositionFactorySour
 
 const clientRoot = pathResolve(fileUrlToPath(new NativeURL('.', import.meta.url)), 'client');
 const staticRoot = pathResolve(fileUrlToPath(new NativeURL('.', import.meta.url)), 'static');
+// O16 (SPEC §14; plans/good-perf.md): kovo build stages every relative rootedFiles() root under
+// rooted/. Publish the staged directory before the handler graph is imported so relative roots
+// resolve deterministically against the artifact instead of the launch working directory.
+process.env.KOVO_ROOTED_FILES_DIR = pathResolve(
+  fileUrlToPath(new NativeURL('.', import.meta.url)),
+  'rooted',
+);
 const clientModuleHeaders = ${clientModuleHeadersSource};
 const immutableAssetHeaders = ${immutableAssetHeadersSource};
 const revalidatingAssetHeaders = ${revalidatingAssetHeadersSource};
@@ -4209,11 +4525,15 @@ export function createKovoNodeServer(options = {}) {
     try {
       const prepared = prepareNodeRequestIngress(nodeRequest, options);
       if (rejectPreparedNodeRequestIngress(prepared, nodeResponse)) return;
-      const { httpVersion, method, target } = preparedNodeRequestTransportMetadata(prepared);
-      if (isBodylessMethod(method)) {
-        armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
-      }
-      if (await maybeServeStatic(target, method, nodeResponse)) return;
+      const { acceptEncoding, httpVersion, method, target } =
+        preparedNodeRequestTransportMetadata(prepared);
+      // O13a (SPEC §9.5; plans/good-perf.md): a bodyless GET/HEAD that passed the payload-free
+      // ingress gate has no request body left to guard, so it is NOT armed for teardown here.
+      // The pre-dispatch arm read req.complete before the parser finished the message, which
+      // stamped Connection: close on every plain GET and exhausted the ephemeral port range
+      // under load. armIncompleteNodeRequestClose below still runs after dispatch for methods
+      // that carry bodies, and rejection paths arm explicitly.
+      if (await maybeServeStatic(target, method, nodeResponse, prepared.request.headers)) return;
 
       const request = preparedNodeRequestToWebRequest(prepared, nodeResponse);
       diagnosticRequestUrl = apply(nativeRequestUrlGetter, request, []);
@@ -4221,6 +4541,7 @@ export function createKovoNodeServer(options = {}) {
       const response = await handler(request);
       armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
       await writeWebResponseToNode(response, nodeResponse, method, {
+        ...(acceptEncoding === undefined ? {} : { acceptEncoding }),
         httpVersion,
       });
     } catch (error) {
@@ -4258,7 +4579,7 @@ function logUnhandledNodeError(error, nodeRequest, webRequestUrl) {
   }
 }
 
-async function maybeServeStatic(rawTarget, method, nodeResponse) {
+async function maybeServeStatic(rawTarget, method, nodeResponse, requestHeaders) {
   if (!isBodylessMethod(method)) return false;
 
   const pathname = staticPathname(rawTarget);
@@ -4299,7 +4620,7 @@ async function maybeServeStatic(rawTarget, method, nodeResponse) {
     return true;
   }
 
-  await writeRouteOutcomeToNode(outcome, nodeResponse, method);
+  await writeRouteOutcomeToNode(outcome, nodeResponse, method, requestHeaders);
   return true;
 }
 
@@ -4605,19 +4926,132 @@ function routeOutcomeContentDisposition(options, resolvedPath) {
   return filename ? contentDispositionWithFilename(disposition, filename) : disposition;
 }
 
-async function writeRouteOutcomeToNode(outcome, nodeResponse, method) {
+async function writeRouteOutcomeToNode(outcome, nodeResponse, method, requestHeaders) {
   const headers = safeRouteOutcomeHeaders(ownDataValue(outcome, 'headers'));
-  defineData(headers, 'content-disposition', ownDataValue(outcome, 'contentDisposition'));
-  defineData(headers, 'content-type', ownDataValue(outcome, 'contentType'));
-  defineData(headers, 'x-content-type-options', 'nosniff');
   const body = ownDataValue(outcome, 'body');
-  defineData(headers, 'content-length', apply(nativeBufferByteLength, Buffer, [body]));
+  const contentType = ownDataValue(outcome, 'contentType');
+  // O3/D3 (SPEC §9.5; plans/good-perf.md): every statically served file carries a strong
+  // content ETag so must-revalidate assets revalidate to a 304 instead of re-downloading, and
+  // compressible bytes are served with negotiated Content-Encoding from a per-content cache.
+  const etag = staticContentETag(body);
+  defineData(headers, 'etag', etag);
+  const compressible = isCompressibleStaticContentType(contentType);
+  if (compressible) appendStaticVary(headers, 'Accept-Encoding');
+  if (requestHeaders !== undefined &&
+      ifNoneMatchSatisfied(firstRequestHeaderValue(requestHeaders['if-none-match']), etag)) {
+    // RFC 9110 §15.4.5: 304 repeats the validator and cache directives, never the body fields.
+    apply(nativeServerResponseWriteHead, nodeResponse, [304, headers]);
+    apply(nativeServerResponseEnd, nodeResponse, []);
+    return;
+  }
+  defineData(headers, 'content-disposition', ownDataValue(outcome, 'contentDisposition'));
+  defineData(headers, 'content-type', contentType);
+  defineData(headers, 'x-content-type-options', 'nosniff');
+  let responseBody = body;
+  const byteLength = apply(nativeBufferByteLength, Buffer, [body]);
+  const encoding = compressible && byteLength >= 1024 && requestHeaders !== undefined
+    ? negotiateResponseCompression(firstRequestHeaderValue(requestHeaders['accept-encoding']) ?? '')
+    : undefined;
+  if (encoding !== undefined) {
+    responseBody = await compressedStaticBody(etag, encoding, body, byteLength);
+    defineData(headers, 'content-encoding', encoding);
+  }
+  defineData(headers, 'content-length', apply(nativeBufferByteLength, Buffer, [responseBody]));
   apply(nativeServerResponseWriteHead, nodeResponse, [200, headers]);
   if (method === 'HEAD') {
     apply(nativeServerResponseEnd, nodeResponse, []);
     return;
   }
-  apply(nativeServerResponseEnd, nodeResponse, [body]);
+  apply(nativeServerResponseEnd, nodeResponse, [responseBody]);
+}
+
+function staticContentETag(body) {
+  const hash = createContentHash('sha256');
+  apply(nativeHashUpdate, hash, [body]);
+  const digest = apply(nativeHashDigest, hash, ['hex']);
+  return '"' + apply(nativeStringSlice, digest, [0, 32]) + '"';
+}
+
+// RFC 9110 §13.1.2: If-None-Match uses weak comparison, so W/-prefixed entries match their
+// strong counterpart. The framework only mints strong sha256 content ETags.
+function ifNoneMatchSatisfied(headerValue, etag) {
+  if (typeof headerValue !== 'string' || headerValue === '') return false;
+  let start = 0;
+  while (start <= headerValue.length) {
+    const comma = apply(nativeStringIndexOf, headerValue, [',', start]);
+    const end = comma < 0 ? headerValue.length : comma;
+    let candidate = apply(nativeStringTrim, apply(nativeStringSlice, headerValue, [start, end]), []);
+    if (candidate === '*') return true;
+    if (candidate[0] === 'W' && candidate[1] === '/') {
+      candidate = apply(nativeStringSlice, candidate, [2]);
+    }
+    if (candidate === etag) return true;
+    if (comma < 0) return false;
+    start = comma + 1;
+  }
+  return false;
+}
+
+function isCompressibleStaticContentType(contentType) {
+  if (typeof contentType !== 'string') return false;
+  return stringStartsWith(contentType, 'text/') ||
+    stringStartsWith(contentType, 'application/json') ||
+    stringStartsWith(contentType, 'image/svg+xml') ||
+    stringStartsWith(contentType, 'application/manifest+json');
+}
+
+function appendStaticVary(headers, token) {
+  const existing = ownDataValue(headers, 'vary');
+  if (existing === undefined || apply(nativeStringTrim, existing, []) === '') {
+    defineData(headers, 'vary', token);
+    return;
+  }
+  defineData(headers, 'vary', existing + ', ' + token);
+}
+
+function firstRequestHeaderValue(value) {
+  if (typeof value === 'string') return value;
+  if (!apply(nativeArrayIsArray, NativeObject, [value])) return undefined;
+  const first = apply(nativeObjectGetOwnPropertyDescriptor, NativeObject, [value, 0]);
+  return first !== undefined && 'value' in first && typeof first.value === 'string'
+    ? first.value
+    : undefined;
+}
+
+// Compressed variants are cached by exact content identity (the strong sha256 ETag of the bytes
+// just read), so a cache hit can only replay byte-identical content. Bounded clear-all eviction
+// keeps a hostile asset sweep from growing the map without bound.
+let staticCompressedVariants = new NativeMap();
+let staticCompressedVariantCount = 0;
+const staticCompressedVariantLimit = 64;
+
+async function compressedStaticBody(etag, encoding, body, byteLength) {
+  const key = etag + ':' + encoding;
+  const cached = apply(nativeMapGet, staticCompressedVariants, [key]);
+  if (cached !== undefined) return cached;
+  const compressed = await new NativePromise((resolvePromise, rejectPromise) => {
+    const finish = (error, bytes) => {
+      if (error) rejectPromise(error);
+      else resolvePromise(bytes);
+    };
+    if (encoding === 'br') {
+      brotliCompressBytes(body, {
+        params: {
+          [brotliQualityParam]: brotliStaticQuality,
+          [brotliSizeHintParam]: byteLength,
+        },
+      }, finish);
+    } else {
+      gzipCompressBytes(body, { level: gzipStaticLevel }, finish);
+    }
+  });
+  if (staticCompressedVariantCount >= staticCompressedVariantLimit) {
+    staticCompressedVariants = new NativeMap();
+    staticCompressedVariantCount = 0;
+  }
+  apply(nativeMapSet, staticCompressedVariants, [key, compressed]);
+  staticCompressedVariantCount += 1;
+  return compressed;
 }
 
 function safeRouteOutcomeHeaders(headers) {

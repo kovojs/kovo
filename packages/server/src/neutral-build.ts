@@ -15,6 +15,7 @@ import {
 } from '@kovojs/core/internal/filesystem';
 
 import type { KovoApp } from './app-types.js';
+import { rootedFilesBuildInventory } from './file.js';
 import {
   buildOwnDataProperty,
   buildSecurityPathDirname,
@@ -117,6 +118,13 @@ export interface KovoNeutralBuild {
   publicAssetDir?: string;
   /** Per-route Vite hints merged into the built app shell. */
   routeHints: readonly KovoAppShellRouteBuildHints[];
+  /**
+   * `rootedFiles()` roots constructed while the app evaluated in this build's module graph
+   * (SPEC §14; plans/good-perf.md O16). Preset emitters stage the relative entries into the
+   * deploy artifact; recorded here because the emitting preset engine may live in a different
+   * module-graph instance than the app and cannot read the module-local inventory directly.
+   */
+  rootedFileRoots?: readonly { readonly root: string; readonly spec: string }[];
   /** Absolute path to the neutral routes JSON file. */
   routesPath: string;
   /** Absolute path to the neutral server directory. */
@@ -331,6 +339,9 @@ export async function writeKovoNeutralBuild(
     outDir,
     ...(publicAssetDir === undefined ? {} : { publicAssetDir }),
     routeHints: buildWithRegisteredClientModules.routeHints,
+    // SPEC §14 / O16: capture the module-graph-local rootedFiles inventory here — this module
+    // shares the app's graph, while the preset engine that stages the roots may not.
+    rootedFileRoots: rootedFilesBuildInventory(),
     routesPath,
     serverDir,
     ...(serverHandlerPath === undefined ? {} : { serverHandlerPath }),

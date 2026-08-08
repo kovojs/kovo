@@ -691,12 +691,25 @@ function rateLimitFailure(
     });
   }
   if (ip !== undefined) {
-    appendLoadShedValue(checks, {
-      id: 'all:per-ip',
-      key: ip,
-      limit: limits.perIp,
-      scope: 'perIp',
-    });
+    // D12 (plans/good-perf.md) / SPEC §9.5: ordinary document/endpoint GET and HEAD dispatch is
+    // exempt from the framework-default per-IP budget. Behind a CDN, NAT, or load balancer every
+    // visitor shares one source IP, and the measured default (600/min = 10 req/s) returned 429
+    // for 100% of an ordinary page-load test. Mutations and queries keep per-IP shedding, the
+    // mandatory global budget still applies to documents, and an app-authored
+    // `requestLimits.perIp` (any value, detected by identity against the default posture object)
+    // is always enforced on every surface.
+    const exemptDefaultDocumentPerIp =
+      scoped === undefined &&
+      limits.perIp === DEFAULT_PER_IP_RATE &&
+      isBodylessReadMethod(readNativeRequestMethod(request));
+    if (!exemptDefaultDocumentPerIp) {
+      appendLoadShedValue(checks, {
+        id: 'all:per-ip',
+        key: ip,
+        limit: limits.perIp,
+        scope: 'perIp',
+      });
+    }
     if (scoped !== undefined) {
       appendLoadShedValue(checks, {
         id: `${surface}:per-ip`,
@@ -719,6 +732,10 @@ function rateLimitFailure(
   }
 
   return undefined;
+}
+
+function isBodylessReadMethod(method: string): boolean {
+  return method === 'GET' || method === 'HEAD';
 }
 
 function surfaceRateLimits(

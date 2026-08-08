@@ -514,17 +514,21 @@ describe('server node adapter', () => {
         headers: { 'Accept-Encoding': 'gzip' },
       });
       expect(cookieResponse.headers.get('cache-control')).toBe('private, no-store');
-      expect(cookieResponse.headers.get('vary')).toBe('Accept-Language, Cookie');
+      // D1 (SPEC §9.5 transport compression): browser-state responses compress like any other
+      // eligible response; the cache floor and Vary: Cookie stamp are unchanged.
+      expect(cookieResponse.headers.get('vary')).toBe('Accept-Language, Cookie, Accept-Encoding');
       expect(cookieResponse.headers.get('set-cookie')).toBe('session=abc; HttpOnly; Path=/');
-      expect(cookieResponse.headers.get('content-encoding')).toBeNull();
+      expect(cookieResponse.headers.get('content-encoding')).toBe('gzip');
+      expect(cookieResponse.headers.get('kovo-pad')).toMatch(/^[0-9a-f]{1,64}$/u);
+      expect(await cookieResponse.text()).toBe('signed in');
 
       const clearResponse = await fetch(`${server.origin}/clear`, {
         headers: { 'Accept-Encoding': 'gzip' },
       });
       expect(clearResponse.headers.get('cache-control')).toBe('private, no-store');
-      expect(clearResponse.headers.get('vary')).toBe('Accept-Language, Cookie');
+      expect(clearResponse.headers.get('vary')).toBe('Accept-Language, Cookie, Accept-Encoding');
       expect(clearResponse.headers.get('clear-site-data')).toBe('"storage"');
-      expect(clearResponse.headers.get('content-encoding')).toBeNull();
+      expect(clearResponse.headers.get('content-encoding')).toBe('gzip');
     } finally {
       await server.close();
     }
@@ -1021,7 +1025,11 @@ describe('server node adapter', () => {
     }
   });
 
-  it('skips default compression for private no-store and cookie-bearing responses', async () => {
+  it('compresses private no-store and cookie-bearing responses with Kovo-Pad length noise', async () => {
+    // D1 (SPEC §9.5 transport compression; plans/good-perf.md O1): refusing to compress
+    // sensitive responses was replaced by real BREACH mitigation — per-mint masked CSRF tokens
+    // plus per-response random `Kovo-Pad` length noise — so every realistic logged-in page
+    // ships compressed instead of paying full wire bytes.
     const server = await serveWithNode(
       toNodeHandler(async (request) => {
         const pathname = new URL(request.url).pathname;
@@ -1052,46 +1060,59 @@ describe('server node adapter', () => {
 
     try {
       const requestOptions = { headers: { 'Accept-Encoding': 'br,gzip' } };
-      expect(
-        (await server.fetch('/private', requestOptions)).headers['content-encoding'],
-      ).toBeUndefined();
-      expect(
-        (await server.fetch('/cookie', requestOptions)).headers['content-encoding'],
-      ).toBeUndefined();
-      expect(
-        (await server.fetch('/vary-cookie', requestOptions)).headers['content-encoding'],
-      ).toBeUndefined();
+      const privateResponse = await server.fetch('/private', requestOptions);
+      expect(privateResponse.headers['content-encoding']).toBe('br');
+      expect(privateResponse.headers['kovo-pad']).toMatch(/^[0-9a-f]{1,64}$/u);
+      expect(brotliDecompressSync(privateResponse.encodedBody).toString('utf8')).toBe(
+        'private response'.repeat(128),
+      );
+      const cookieResponse = await server.fetch('/cookie', requestOptions);
+      expect(cookieResponse.headers['content-encoding']).toBe('br');
+      expect(cookieResponse.headers['kovo-pad']).toMatch(/^[0-9a-f]{1,64}$/u);
+      expect(brotliDecompressSync(cookieResponse.encodedBody).toString('utf8')).toBe(
+        'cookie response'.repeat(128),
+      );
+      const varyCookieResponse = await server.fetch('/vary-cookie', requestOptions);
+      expect(varyCookieResponse.headers['content-encoding']).toBe('br');
+      expect(varyCookieResponse.headers.vary).toBe('Cookie, Accept-Encoding');
+      // The padding is fresh per response: 1..64 uniformly random hex characters collide across
+      // three responses with probability well under 1e-3; a deterministic pad fails this loudly.
+      const pads = [
+        privateResponse.headers['kovo-pad'],
+        cookieResponse.headers['kovo-pad'],
+        varyCookieResponse.headers['kovo-pad'],
+      ];
+      expect(new Set(pads).size).toBeGreaterThan(1);
     } finally {
       await server.close();
     }
   });
 
-  it('keeps Vary-Cookie responses uncompressed after authored collection poisoning', async () => {
+  it('keeps the RFC 9111 no-transform refusal intact under authored collection poisoning', async () => {
     const originalIncludes = Array.prototype.includes;
-    const originalReflectApply = Reflect.apply;
     const server = await serveWithNode(
       toNodeHandler(async () => {
-        Array.prototype.includes = function selectiveSensitiveTokenOmission(
-          searchElement: unknown,
-          fromIndex?: number,
-        ): boolean {
-          if (searchElement === 'cookie' && this.length === 1 && this[0] === 'cookie') return false;
-          return originalReflectApply(originalIncludes, this, [searchElement, fromIndex]);
+        // The former sensitive-response refusal is gone (D1); no-transform is the sole authored
+        // opt-out and its detection uses boot-captured char scans, so hostile Array prototype
+        // mutation cannot flip the decision in either direction.
+        Array.prototype.includes = function alwaysFalse(): boolean {
+          return false;
         };
-        return new Response('COOKIE-BOUND-SECRET'.repeat(128), {
+        return new Response('NO-TRANSFORM-BOUND'.repeat(128), {
           headers: {
+            'Cache-Control': 'no-transform',
             'Content-Type': 'text/plain; charset=utf-8',
-            Vary: 'Cookie',
           },
         });
       }),
     );
 
     try {
-      const response = await server.fetch('/vary-cookie-poison', {
+      const response = await server.fetch('/no-transform-poison', {
         headers: { 'Accept-Encoding': 'br,gzip' },
       });
       expect(response.headers['content-encoding']).toBeUndefined();
+      expect(response.headers['kovo-pad']).toBeUndefined();
     } finally {
       Array.prototype.includes = originalIncludes;
       await server.close();

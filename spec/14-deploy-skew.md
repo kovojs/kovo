@@ -30,3 +30,14 @@ redeploys, not a property of authored app source. `kovo build` MUST validate tha
 KV417 before emitting or promoting a deployment that does not establish it. Source-backed
 `kovo check` MUST neither require the claim nor manufacture a passing retention value; its success
 does not attest deployment skew recovery.
+
+**Self-contained artifact filesystem roots (normative).** A deploy artifact MUST NOT depend on
+files outside its own output to boot. A **relative** `rootedFiles()` root resolves against the
+process working directory in dev and while `kovo build` evaluates the app; the build MUST stage a
+snapshot of each such root into the artifact (the node preset emits `rooted/root-<encoded-spec>/`),
+and the generated server MUST publish the staged directory (via `KOVO_ROOTED_FILES_DIR`, set
+before the handler graph is imported) so the same relative spec resolves to its staged copy at
+serve time — deterministically, regardless of launch working directory. A published staging
+directory that lacks a requested relative root fails closed at capability construction; it never
+falls back to the launch cwd. An **absolute** root is operator intent for a live deploy-host path
+and is never staged or remapped.
