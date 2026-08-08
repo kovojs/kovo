@@ -124,10 +124,18 @@ What "observed" covers, precisely — the gate is only as wide as its instrument
 
 Only the custom scenarios can see a request that failed **at the network layer** —
 a connection reset or DNS failure produces no HTTP status, so a page whose
-subresources all failed that way would otherwise report zero errors. Aborts caused
-by the harness's own document-replacing navigation are counted separately and do
-not reject a run. A source whose statuses could not be read at all is printed as
-`[integrity] untracked: …` on stderr and is never silently counted as clean.
+subresources all failed that way would otherwise report zero errors.
+
+Aborts are counted separately from failures and do not reject a run, because a
+document-replacing navigation legitimately cancels the origin document's in-flight
+subresources. This is not hypothetical: a `--iterations 10` run recorded 15 aborted
+requests for the Kovo entrant and 0 for both React entrants, exactly tracking which
+entrant replaces the document. Folding aborts into the failure count would have
+rejected the Kovo entrant on every run, for doing the thing it is being measured for.
+
+A source whose statuses could not be read at all is printed as
+`[integrity] untracked: …` on stderr, named in the generated report, and never
+silently counted as clean.
 
 ### Rate limiting and iteration count
 

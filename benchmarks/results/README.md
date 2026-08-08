@@ -82,3 +82,27 @@ as `[integrity] untracked:` rather than counted as clean.
   entrants — currently Kovo.** The report's "Known limits of this instrument" section states the
   mechanism and the direction. Do not quote a small navigation gap between a document-replacing and
   a same-document entrant as a result.
+
+### Calibrating that bias against a real run
+
+A full three-entrant run on 2026-08-08 (`--iterations 10`, default Lighthouse and bfcache, run with
+`--skip-build` and therefore **not** eligible to be committed here under rule 2 above; load average
+4.2-6.5 on 10 cores, so treat every timing as indicative) produced:
+
+- **Desktop navigation-to-paint: 73-77 ms for all three entrants**, a 4 ms spread, with Kovo
+  replacing the document on 10/10 attempts and both React entrants on 0/10. The instrument's
+  one-sided bias is of the same order as that whole spread, and it is charged only to the two
+  same-document entrants. **The desktop navigation row therefore distinguishes nothing**, and any
+  reading of it as a Kovo win is an artifact.
+- **Mobile navigation-to-paint separates the entrants by an order of magnitude**, and it separates
+  them _against_ Kovo — far outside anything the bias could explain. That row is informative in a
+  way the desktop row is not.
+- Byte columns, which are load-independent, showed Kovo shipping the most JS and the most total
+  bytes of the three on the listing page.
+- The mobile `load` + 150 ms collection window reported Kovo `js: 0` against 267,948 B settled, the
+  2.64x total-byte understatement reproducing exactly. Desktop showed no understatement, so the
+  artifact is condition-specific — another reason to read the byte-window table rather than assume.
+
+The point of recording this is not the numbers, which are not publishable from a `--skip-build` run
+on a loaded box. It is that the instrument's known error is large enough to swallow one of its own
+headline columns, and a reader has to know which column that is.

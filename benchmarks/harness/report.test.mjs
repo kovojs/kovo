@@ -272,5 +272,9 @@ describe('benchmark report', () => {
     // Must keep the mechanism, so a reader can check the claim rather than trust it.
     expect(limits).toContain('two animation frames');
     expect(limits).toContain('first contentful paint');
+    // Must keep the recipe for sizing the bias from the report's own two navigation columns —
+    // a disclosure the reader can verify beats one they have to take on faith.
+    expect(limits).toContain('You can size the bias from this report');
+    expect(limits).toContain('`Nav to paint ms` minus `Nav to destination DOM ms`');
   });
 });
