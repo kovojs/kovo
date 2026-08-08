@@ -12805,10 +12805,23 @@ function stringifyBuildValue(value: unknown, space?: number): string {
   return serialized;
 }
 
+/**
+ * plans/good-perf.md DevEx defect 2: build/check refusals surface one gate at a time because each
+ * gate proves artifacts the next gate's analysis is unsound without (source trust must pass before
+ * the app is evaluated; evaluation must pass before route/attribute lowering; the neutral build
+ * must exist before preset/deployment proofs). Independent refusals inside one gate are already
+ * batched; this notice makes the genuine short-circuit explicit so an author fixing the reported
+ * refusals knows a later gate may still report more.
+ */
+const GATE_SHORT_CIRCUIT_NOTICE =
+  'note: this stopped at the first failing gate; gates that depend on it have not run yet and may report further refusals once these are fixed.';
+
 function buildErrorResult(error: unknown): CliCommandResult {
+  const configurationError = error instanceof KovoCommandConfigurationError;
+  const message = error instanceof Error ? error.message : String(error);
   const result: CliCommandResult = {
-    error: `${buildOutputVersion}\nERROR ${error instanceof Error ? error.message : String(error)}`,
-    exitCode: error instanceof KovoCommandConfigurationError ? 2 : 1,
+    error: `${buildOutputVersion}\nERROR ${message}${configurationError ? '' : `\n${GATE_SHORT_CIRCUIT_NOTICE}`}`,
+    exitCode: configurationError ? 2 : 1,
   };
   if (error instanceof KovoBuildCheckDiagnosticError && error.diagnostics !== undefined) {
     Object.defineProperty(result, 'diagnostics', {
@@ -12822,11 +12835,12 @@ function buildErrorResult(error: unknown): CliCommandResult {
 }
 
 function sourceCheckErrorResult(error: unknown): CliCommandResult {
+  const configurationError = error instanceof KovoCommandConfigurationError;
   const result: CliCommandResult = {
     error: `${requireKovoCommandResultProtocol('check')}\nERROR ${
       error instanceof Error ? error.message : String(error)
-    }`,
-    exitCode: error instanceof KovoCommandConfigurationError ? 2 : 1,
+    }${configurationError ? '' : `\n${GATE_SHORT_CIRCUIT_NOTICE}`}`,
+    exitCode: configurationError ? 2 : 1,
   };
   if (error instanceof KovoBuildCheckDiagnosticError && error.diagnostics !== undefined) {
     Object.defineProperty(result, 'diagnostics', {
