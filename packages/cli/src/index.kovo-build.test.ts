@@ -4306,6 +4306,60 @@ export const homeQuery = {
         '--preset selects preset vercel but the kovo config file configures preset node(...)',
       );
       expect(errorOutput).toContain("change the config's preset or drop --preset");
+      // plans/good-perf.md DevEx defect 2: configuration errors (exit 2) are not gate stops and
+      // must not carry the finding-class short-circuit notice.
+      expect(errorOutput).not.toContain('note: this stopped at the first failing gate');
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('refuses a KOVO_PRESET that contradicts the configured preset', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-config-env-conflict-'));
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeFileSync(join(root, 'app.mjs'), dynamicAppModuleSource(), 'utf8');
+      writeClientEntry(root);
+      writeFileSync(
+        join(root, 'kovo.config.ts'),
+        [
+          "import { defineConfig, node } from '@kovojs/server/build';",
+          'export default defineConfig({',
+          '  preset: node({',
+          '    dockerfile: false,',
+          '    retention: {',
+          '      hours: 24,',
+          "      immutableClientModules: 'retained',",
+          "      priorTokenQueryReads: 'retained',",
+          '    },',
+          '  }),',
+          '});',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      const exitCode = await withCwd(root, () =>
+        withEnv({ KOVO_PRESET: 'vercel' }, () =>
+          mainAsync(['build', './app.mjs', '--out', './dist', '--check']),
+        ),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      // The env selector shares the flag selector's contract: agreement reuses the configured
+      // instance, contradiction refuses loudly and names the KOVO_PRESET source.
+      expect(exitCode).toBe(2);
+      expect(errorOutput).toContain(
+        'KOVO_PRESET selects preset vercel but the kovo config file configures preset node(...)',
+      );
+      expect(errorOutput).toContain("change the config's preset or drop KOVO_PRESET");
+      expect(errorOutput).not.toContain('note: this stopped at the first failing gate');
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();

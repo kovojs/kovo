@@ -907,27 +907,59 @@ The remaining two failures are real and currently un-owned:
 
 Not perf bugs, but they cost hours of measurement time. Candidates for a papercuts ledger.
 
-- [ ] `D1A007` emits no file, no line, no source excerpt, no receiver expression, and no remediation —
+- [x] `D1A007` emits no file, no line, no source excerpt, no receiver expression, and no remediation —
       the entire output is one sentence, and the emitter already holds the node.
-  - Actual cause: `defineKovo({...})` had no `appId`. `packages/compiler/src/app-contract-project.ts:1300`
-    `if (!appId) return undefined;` makes `proveDirectDefineKovo` bail, and control falls to the
-    catch-all refusal at :1270-1278. Localisation took ~4 minutes **and only because the compiler
-    source was available**; an app author has no path at all — the message names no file to open and
-    no option to add.
-  - What it should say: `D1A007 src/app.tsx:15 receiver 'app' cannot be proved: defineKovo({...}) is
-    missing the required 'appId'.`
-- [ ] Build refusals surface strictly one gate at a time: repairing the benchmark entrant took **six
+  - Fixed 2026-08-08 on `perf/devex-diagnostics` (`app-contract-project.ts`). Every D1 refusal now
+    embeds `file:line:col` in the message, `defineKovoProofFailureDetail` names the exact proof
+    failure (missing/non-literal `appId`, wrapped/non-literal options, partial provider identity,
+    wrong arity) anchored at the `defineKovo` call, the generic catch-alls name the receiver
+    expression with the module-scope-const remediation, and one pass reports every refused receiver
+    instead of one per run. Reproduced on `benchmarks/kovo` (appId removed, pre-fix CLI): one
+    unlocated sentence; post-fix: `ERROR D1A007 src/app.tsx:305:13 receiver 'app' cannot be proved:
+    defineKovo({...}) is missing the required 'appId'. Add appId: '<uuid-v4>' ...` plus a second
+    seeded refusal in the same report; wrapper/inline/hidden-body variants all located+actionable;
+    restored app checks OK. Pinned by `app-contract-project.test.ts` (+107 lines).
+- [x] Build refusals surface strictly one gate at a time: repairing the benchmark entrant took **six
       independent hard stops across eight full build attempts** (D1A007 → import-escapes-app-root →
       22 KV424 + 16 KV448 rows → KV236 → KV417 → KV448 filesystem/process authority), each costing a
       ~50 s build to discover the next.
-- [ ] `KV417` instructs the author to configure `node({ retention })`, but the `--preset node` CLI flag
+  - Fixed 2026-08-08 on `perf/devex-diagnostics`. Independent refusals inside one gate batch (live:
+    6 KV424 + 4 KV448 rows in a single `kovo check` report on seeded `benchmarks/kovo`; the D1
+    commit extended batching to all receiver-provenance refusals). Genuinely dependent gates cannot
+    batch (KV236 needs app evaluation, unsound before source trust passes), so every finding-class
+    hard stop (exit 1) appends `note: this stopped at the first failing gate; ...may report further
+    refusals once these are fixed.` — verified live: the seeded trust stop carries it, fixing those
+    seeds surfaces the KV236 stop (also carried), configuration errors (exit 2) carry none, and the
+    check pipeline's final gate (graph-diagnostics, census-proved all 11 phases executed) correctly
+    omits it. Pinned by `build-export-semantic-intrinsics.fixture.ts` (build path notice),
+    `index.source-check.test.ts` (check path: early gate carries / final gate omits), and the
+    kovo-build conflict tests (exit-2 absence).
+- [x] `KV417` instructs the author to configure `node({ retention })`, but the `--preset node` CLI flag
       silently overrides the config file that would fix it, so the message loops forever.
+  - Fixed 2026-08-08 on `perf/devex-diagnostics` with the stronger contract, not a reworded message:
+    a `--preset`/`KOVO_PRESET` selector that agrees with the configured preset keeps the configured
+    instance (retention proof included); one that contradicts it refuses with a configuration error
+    (exit 2) naming both sides; host auto-detection stays below config priority. Reproduced on
+    `benchmarks/kovo` (config = `node({ retention })`): pre-fix `kovo build --preset node --check`
+    fails KV417 despite the config containing exactly what KV417 demands; post-fix the same command
+    passes `CHECK ok preset=node`; `--preset vercel` refuses exit 2. Pinned by four
+    `index.kovo-build.test.ts` preset tests (flag/env agree + conflict).
 - [ ] The build boundary root is `dirname(entry)`, so `../shared/catalog.json` escapes it and symlinks
       are refused outright (`Kovo client source tree contains an unstable entry`). Shared benchmark
       assets must be byte-copied, creating a drift hazard between entrants.
-- [ ] `KV424` refusals are internally surprising: `array.map` is allowed but `array.find` is refused;
+- [x] `KV424` refusals are internally surprising: `array.map` is allowed but `array.find` is refused;
       a `for...of` over the same array is allowed; parameter destructuring is allowed but reading the
       same property off a non-destructured binding is refused.
+  - Fixed 2026-08-08 on `perf/devex-diagnostics`, text only — the analysis is unchanged (verified:
+    seeded probe rows' `site sink= source= safe=` head-lines byte-identical between pre-fix and
+    post-fix CLIs; the branch touches no classifier package). The rule was never map-vs-find:
+    provenance is not tracked into builtin callback parameters, so a callback property read
+    (`candidate.slug` in `find`/`map`) refuses `<property-getter:...>` while destructuring at the
+    callback parameter is accepted, and interpolating a destructured binding refuses
+    `<@@toPrimitive|valueOf|toString:...>`. `opaqueProtocolSinkExplanation`
+    (`graph-explain-format.ts`) states that rule on the `request-handler.opaque-protocol` family
+    only, replacing the generic raw-HTML/eval help; the worker-path projection carries the same
+    text. Pinned by two `graph-explain-format.test.ts` tests.
 
 ## Do not re-propose
 
