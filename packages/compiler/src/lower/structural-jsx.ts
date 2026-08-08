@@ -47,6 +47,7 @@ import {
   parserFactFrameworkTrustedUrlReason,
   parserFactFrameworkTrustedUrlValue,
   parserFactHasFrameworkTrustedUrl,
+  shareSnapshotEntryParseOrigin,
   type ComponentModuleModel,
   type JsxAttributeModel,
   type JsxElementModel,
@@ -1104,7 +1105,11 @@ function snapshotMutationComponentProjectFiles(
     if (typeof fileName !== 'string' || typeof source !== 'string') {
       throw new TypeError(`Mutation component project files[${index}] must contain own strings.`);
     }
-    appendCompilerFact(result, { fileName, source }, 'Mutation component project source snapshot');
+    const snapshotFile = { fileName, source };
+    // plans/good-perf.md O7: the defensive clone breaks entry-object identity, so alias it to its
+    // origin entry; `parseSharedSnapshotEntry` still revalidates the clone's exact bytes on reuse.
+    shareSnapshotEntryParseOrigin(file, snapshotFile);
+    appendCompilerFact(result, snapshotFile, 'Mutation component project source snapshot');
   }
   return result;
 }

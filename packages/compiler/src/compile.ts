@@ -109,7 +109,8 @@ import {
   normalizeComponentFileName,
   parseComponentModule as parseComponentModuleModel,
   parseDiagnosticsForSourceFile,
-  parseSourceFile,
+  parseSharedSnapshotEntry,
+  shareSnapshotEntryParseOrigin,
   firstComponentModel,
   componentHasInferredFragmentTarget,
   componentModelForSourceSpan,
@@ -314,7 +315,9 @@ interface CompileComponentProjectOptions extends CompileComponentOptions {
  * so the pipeline reaches a fixpoint (SPEC.md §5.2; hand-authored lowered IR is KV235).
  */
 export function compileComponentModule(rawOptions: CompileComponentOptions): CompileResult {
-  const parsed = parseComponentPhase(snapshotCompileComponentOptions(rawOptions));
+  const parsed = parseComponentPhase(
+    shareSnapshotExtraFileParseOrigins(rawOptions, snapshotCompileComponentOptions(rawOptions)),
+  );
   if (parsed.kind === 'compiler-ir') return compilerIrPassThroughResult(parsed);
   if (parsed.kind === 'parse-error') return parseErrorResult(parsed);
 
@@ -326,6 +329,39 @@ export function compileComponentModule(rawOptions: CompileComponentOptions): Com
   const verified = verifyComponentPhase(parsed, lowered, validated, client, server);
 
   return assembleCompileResult(parsed, lowered, validated, client, registryCss, server, verified);
+}
+
+/**
+ * plans/good-perf.md O7: the SPEC §5.2.1 options snapshot deliberately clones `extraFiles`
+ * entries, which breaks the object identity `parseSharedSnapshotEntry` keys on — so every
+ * compile of the same closure snapshot re-parsed its N-1 extras, the quadratic term in
+ * check/build closure analysis. Alias each pinned clone to the caller's corresponding entry so
+ * one run shares one AST per closure file. The alias is only an identity hint: reuse still
+ * revalidates the clone's exact bytes against the cached AST, so a hostile or mutated caller
+ * entry can only cause a fresh parse, never a stale or foreign AST. The pinned snapshot stays
+ * the sole decision carrier for every compile phase.
+ */
+function shareSnapshotExtraFileParseOrigins(
+  rawOptions: CompileComponentOptions,
+  options: CompileComponentOptions,
+): CompileComponentOptions {
+  const pinnedExtras = (options as CompileComponentProjectOptions).extraFiles;
+  if (pinnedExtras === undefined || pinnedExtras.length === 0) return options;
+  // The snapshot call above already validated `extraFiles` as deep own data; nothing can mutate
+  // `rawOptions` between that read and this one inside the same synchronous call.
+  const rawExtras = compilerOwnDataValue(rawOptions, 'extraFiles', 'Compiler options') as
+    | readonly CompileComponentProjectFile[]
+    | undefined;
+  if (rawExtras === undefined || rawExtras.length !== pinnedExtras.length) return options;
+  for (let index = 0; index < pinnedExtras.length; index += 1) {
+    const origin = compilerOwnDataValue(rawExtras, index, 'Compiler options.extraFiles') as
+      | CompileComponentProjectFile
+      | undefined;
+    if (typeof origin === 'object' && origin !== null) {
+      shareSnapshotEntryParseOrigin(origin, pinnedExtras[index]!);
+    }
+  }
+  return options;
 }
 
 type ComponentNames = ReturnType<typeof deriveComponentNames>;
@@ -1118,8 +1154,11 @@ function registerFrameworkIdentityProjectForOptions(
   if (!options.extraFiles?.length) return;
   registerFrameworkIdentityProject(
     sourceFile,
+    // plans/good-perf.md O7: extras are re-registered per compile phase over the same snapshot
+    // entries; reuse each entry's shared parse (byte-exact revalidated) instead of re-parsing
+    // every other closure file for every phase of every module.
     compilerMapDense(options.extraFiles, 'Compiler framework-identity files', (file) =>
-      parseSourceFile(file.fileName, file.source),
+      parseSharedSnapshotEntry(file),
     ),
   );
 }

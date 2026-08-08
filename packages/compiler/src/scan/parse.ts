@@ -333,6 +333,7 @@ function denseStringArrayIncludes(
  * (SPEC.md §5.2 rule 9).
  */
 export function parseSourceFile(fileName: string, source: string): TS.SourceFile {
+  parseSourceFileConstructions += 1;
   return ts.createSourceFile(
     normalizeComponentFileName(fileName),
     source,
@@ -340,6 +341,58 @@ export function parseSourceFile(fileName: string, source: string): TS.SourceFile
     true,
     ts.ScriptKind.TSX,
   );
+}
+
+let parseSourceFileConstructions = 0;
+
+/** @internal Test-only observation of parser constructions; it cannot alter compiler behavior. */
+export function parseSourceFileConstructionsForTesting(): number {
+  return parseSourceFileConstructions;
+}
+
+/**
+ * @internal plans/good-perf.md O7: share one parsed AST per immutable snapshot entry object.
+ *
+ * `kovo check`/`kovo build` pass every other closure file as a framework-identity extra to each
+ * file's compilation, and each consumer re-parsed those same bytes with a fresh
+ * `ts.createSourceFile` — measured N×(N-1) parses per analysis pass, the quadratic term in
+ * check/build closure analysis. The memo is keyed weakly by the per-run snapshot entry OBJECT,
+ * never by content in a process-global table (packages/drizzle/src/static/project-setup.ts
+ * records the OOM history of process-global content-keyed memos), so cached ASTs live and die
+ * with the run's snapshot arrays. A hit is admitted only when the cached AST's normalized
+ * fileName and exact source bytes match the entry's current fields (SPEC §5.2 exact-snapshot
+ * rule: the reuse condition IS the exactness proof); any divergence re-parses.
+ */
+const sharedSnapshotEntryParses = compilerCreateWeakMap<object, TS.SourceFile>();
+const sharedSnapshotEntryParseOrigins = compilerCreateWeakMap<object, object>();
+
+/**
+ * @internal Alias a defensive clone of a snapshot entry to its origin entry so both share one
+ * parse. Sharing is only an identity hint; `parseSharedSnapshotEntry` still revalidates the
+ * clone's own bytes before reusing the origin's AST.
+ */
+export function shareSnapshotEntryParseOrigin(origin: object, clone: object): void {
+  const root = compilerWeakMapGet(sharedSnapshotEntryParseOrigins, origin) ?? origin;
+  compilerWeakMapSet(sharedSnapshotEntryParseOrigins, clone, root);
+}
+
+/** @internal Parse a snapshot entry once per run; byte-exact revalidation guards every reuse. */
+export function parseSharedSnapshotEntry(entry: {
+  readonly fileName: string;
+  readonly source: string;
+}): TS.SourceFile {
+  const key = compilerWeakMapGet(sharedSnapshotEntryParseOrigins, entry) ?? entry;
+  const cached = compilerWeakMapGet(sharedSnapshotEntryParses, key);
+  if (
+    cached !== undefined &&
+    cached.fileName === normalizeComponentFileName(entry.fileName) &&
+    cached.text === entry.source
+  ) {
+    return cached;
+  }
+  const parsed = parseSourceFile(entry.fileName, entry.source);
+  compilerWeakMapSet(sharedSnapshotEntryParses, key, parsed);
+  return parsed;
 }
 
 export { normalizeComponentFileName };
@@ -428,7 +481,9 @@ export function parseComponentModule(
       if (!file) throw new TypeError(`Framework identity files[${index}] must be own data.`);
       compilerArrayAppend(
         identityFiles,
-        parseSourceFile(file.fileName, file.source),
+        // plans/good-perf.md O7: identity files are re-supplied for every module of the same
+        // snapshot; reuse the per-entry shared parse instead of re-parsing N-1 files per module.
+        parseSharedSnapshotEntry(file),
         'Framework identity source files',
       );
     }
@@ -458,7 +513,9 @@ export function parseComponentProjectModules(
     }
     compilerArrayAppend(
       sourceFiles,
-      parseSourceFile(fileName, source),
+      // plans/good-perf.md O7: the same approved project snapshot is re-supplied per module;
+      // reuse each entry's shared parse (byte-exact revalidated) instead of re-parsing it.
+      parseSharedSnapshotEntry(file),
       'Component project parsed source files',
     );
     compilerArrayAppend(sources, source, 'Component project source bytes');
