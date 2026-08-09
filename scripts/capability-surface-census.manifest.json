@@ -1,9 +1,9 @@
 {
   "schema": "kovo-capability-surface-census/v2",
   "summary": {
-    "internalRegistries": 134,
+    "internalRegistries": 136,
     "mints": 3,
-    "sites": 137
+    "sites": 139
   },
   "rows": [
     {
@@ -352,6 +352,14 @@
     },
     {
       "api": "createWitnessWeakMap",
+      "file": "packages/server/src/app-document.ts",
+      "id": "packages/server/src/app-document.ts#provedDocumentCaches",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Retains bounded proved-document cache entries behind exact app identity for framework-owned response reuse; it does not mint or expose app authority."
+    },
+    {
+      "api": "createWitnessWeakMap",
       "file": "packages/server/src/app-load-shed.ts",
       "id": "packages/server/src/app-load-shed.ts#frameworkLoadShedErrors",
       "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
@@ -381,6 +389,14 @@
       "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
       "classification": "internal-registry",
       "reason": "Binds exact native Request identities to framework-minted deadline admissions for private dispatch transfer only."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/app-load-shed.ts",
+      "id": "packages/server/src/app-load-shed.ts#processScaledRateLimits",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Memoizes process-scaled rate-limit snapshots behind exact resolved-limit identity; it remains private optimization state and mints no outward capability."
     },
     {
       "api": "createWitnessWeakMap",
