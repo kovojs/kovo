@@ -1182,7 +1182,7 @@ function proveFactoryCall(
         expression,
         code,
         code === 'D1A001'
-          ? 'D1A001 receiver provenance refuses wrapper results because the declaration call-site owner cannot be proved exactly. Call the declaration member directly on the module-scope app const instead of through a wrapper function.'
+          ? 'D1A001 receiver provenance cannot prove wrapper results. Call the declaration member directly on the module-scope app const.'
           : 'D1A007 receiver provenance refuses declaration calls hidden in a function body. Call the declaration member directly at module scope instead of through a wrapper function.',
       ),
       kind: 'diagnostic',
@@ -1279,7 +1279,7 @@ function proveFactoryCall(
         bound ? 'D1A007' : 'D1A002',
         bound
           ? 'D1A007 receiver provenance refuses declaration factories transferred through Function.bind. Call the declaration member directly on the module-scope app const.'
-          : 'D1A002 receiver provenance refuses dynamic declaration-factory selection. Spell the declaration member literally (app.query(...), app.mutation(...), ...) instead of selecting it at runtime.',
+          : 'D1A002 receiver provenance refuses dynamic factory selection. Call the declaration member literally on the app const.',
       ),
       kind: 'diagnostic',
     };
@@ -1380,7 +1380,7 @@ function proveReceiver(
           ? `D1A007 receiver cannot be proved: ${defineKovoFailure}`
           : inlineDefineKovo
             ? `D1A007 receiver provenance refuses the inline call result \`${nodeExcerpt(expression, diagnosticSourceFile)}\`; bind the defineKovo(...) result to a module-scope const first and call declaration members on that binding.`
-            : `D1A007 receiver provenance refuses app-derived receiver \`${nodeExcerpt(expression, diagnosticSourceFile)}\`: its exact binding cannot be proved. Declare the app once as a module-scope \`const app = defineKovo({ appId: '<uuid-v4>', ... })\` and call declaration members directly on that binding.`,
+            : `D1A007 receiver provenance cannot prove app-derived receiver \`${nodeExcerpt(expression, diagnosticSourceFile)}\`. Bind defineKovo(...) to a module-scope const and call declaration members directly.`,
       ),
       kind: 'diagnostic',
     };
@@ -1488,7 +1488,7 @@ function proveVariableReceiver(
       diagnosticSourceFile,
       expression,
       'D1A007',
-      `D1A007 receiver provenance refuses app-derived receiver '${expression.text}': its initializer \`${nodeExcerpt(initializer, declaration.getSourceFile())}\` is not a form the compiler can prove. Declare the app once as a module-scope \`const ${expression.text} = defineKovo({ appId: '<uuid-v4>', ... })\` and call declaration members directly on that binding.`,
+      `D1A007 receiver '${expression.text}' has an unsupported app-derived initializer \`${nodeExcerpt(initializer, declaration.getSourceFile())}\`. Bind defineKovo(...) directly to that module-scope const.`,
     ),
     kind: 'diagnostic',
   };
