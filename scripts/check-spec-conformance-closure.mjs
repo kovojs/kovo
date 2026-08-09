@@ -53,7 +53,7 @@ const transferredSqlSafetyDiagnosticRegistrarDoor =
 const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#diagnosticAt`;
 const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
 const expectedDiagnosticEmissionSiteDigest =
-  '4391c75cdb6a33499de13f9252d744d7b424a33e063488984c878c2d14bb36c0';
+  'e1c7f72f162b95a2796b2b1f2981ce79dd0ebf7c117683f9734fabb89ce194bb';
 const expectedRootDiagnosticDoorDigest =
   '1660c7877e7a533c282cf38c291a10181bc2e7484d76f479f1d1f41cd51dac77';
 const expectedRegisteredDiagnosticGuardDigest =
@@ -85,7 +85,7 @@ const expectedDiagnosticFactorySinkDigest =
 const expectedDiagnosticEvidenceWitnessDigest =
   '23014067df10912624d8419128d1362787bb212e84ef0aac772d78ad26156aa3';
 const expectedDiagnosticActualLayerReviewDigest =
-  'a166c01045f4ea5ce29b99d85579da21712be6dd3888338db3c7d41c525deb7b';
+  'e7ddfb8adc9549250d8d8237539d65e21db8480876017e9eac44638008d517d9';
 const expectedBlockingStaticExportCollectionDigest =
   '3541644c641aec62abd0743093c653abd953e634f6042b941877b699666c4fdd';
 const expectedCompilerValidatorPipelineDigest =
@@ -105,7 +105,7 @@ const expectedCoreBuildDistCommand =
 const reviewedUnresolvedDynamicModuleAcquisitions = new Set([
   'packages/browser/src/client-installer.ts#2c7b7a1aae697bd8d488d7459007da844cddb796d21fb790fe0fffb74ab46bcb#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
   'packages/browser/src/inline-loader.ts#3cb658fb87a5568ec970c76b16232247175e44d6403eca10f02447fd397cf1f3#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
-  'packages/cli/src/commands/build-one-shot-orchestrator.ts#e8b63c0d8d44bcfbe116c61d0fc2966418dd3259f8f211446564ed8c55dc25c4#155dc086a67d2a9e403ab8fb47af4b37fd0fe57b81238f765189c672470d7607',
+  'packages/cli/src/commands/build-one-shot-orchestrator.ts#dcfc927fae9ee13b2b89a4d4c848cd06faba0bb9b67b811f50bc0783c77ab560#155dc086a67d2a9e403ab8fb47af4b37fd0fe57b81238f765189c672470d7607',
   'packages/cli/src/commands/db.ts#71f2e25eedf60743b28fb20ffadac69b9a2d9f342be7b5361e2133f0830fbfdf#88ff0d5b98c41aa906dd00878fccf940791c27dc1e087908d6efa85c9d56af3f',
   'packages/compiler/src/security-analyzer-soundness-oracle.ts#22ee982930cbc113c692d6995ae3b919cf4783cba81f795018505d88b75c5874#4597d4868f6caa7d49aa7fd626313ad01af41164f801c7ee52a9395287151099',
   'packages/compiler/src/security-analyzer-soundness-oracle.ts#22ee982930cbc113c692d6995ae3b919cf4783cba81f795018505d88b75c5874#7c8fe398cd82d5ea80560281e00f6154b09b15615233da0a8b56ac03f861e51b',
@@ -135,7 +135,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/cli/src/commands/check-session-reuse.ts',
-    '3149dd23ce6ce9a48120b4f8bcd644a31c956c8d4280ba41fbf6c95eefacbcca',
+    '109e465f49b61766948dc844f3ac73bf2341ba57ba490740f30aaa0d52d406b1',
   ],
   [
     'packages/cli/src/commands/build-static-trust-source-hook.mjs',
@@ -147,7 +147,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/cli/src/commands/dev.ts',
-    'e7a452a0676dbc595cd0e2b21a573120f1a606799daa73ed0099c0b92091e186',
+    '85bdac253966d5769e8c627620cb00fbdd10780f6e5d215ab9799d96a3e519c6',
   ],
   [
     'packages/cli/src/commands/sound-subset.mjs',
@@ -318,7 +318,7 @@ const reviewedDynamicDiagnosticShapeSummaries = new Map([
     'Gallery oracle mismatch record; code is a non-diagnostic comparison label.',
   ],
   [
-    'packages/compiler/src/hmr-impact.ts#literal#d36859e8a89c106c98eb8f0d2ce79cf1cbbdde9ebbb0c5b4a707207683282580#9f0ad1e633f258c0076a7b82cc67a1e2bbba3508ec3018b0cb1debc99e90c8ba',
+    'packages/compiler/src/hmr-impact.ts#literal#d36859e8a89c106c98eb8f0d2ce79cf1cbbdde9ebbb0c5b4a707207683282580#bdd87a5654625165680f3a738a7bb92a21e06b01bc1ee10f1ac5188a73adc0a1',
     'Registry-derived compiler diagnostic projection for the HMR impact protocol.',
   ],
   [
