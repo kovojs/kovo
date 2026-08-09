@@ -157,39 +157,37 @@ export function derive(
   return deriveRuntime(inputs, fn);
 }
 
-export namespace derive {
-  /** Bind a query registry handle while preserving its result type. */
-  export function query<const Handle extends { readonly key: string }>(
-    handle: Handle,
-  ): DeriveInput<
-    Handle['key'],
-    'result' extends keyof Handle
-      ? Handle extends { readonly result?: infer Value }
-        ? Value
-        : unknown
-      : Handle extends {
-            optimistic(status: 'await-fragment'): infer Binding;
-          }
-        ? Binding extends object
-          ? Binding[keyof Binding] extends { readonly value: infer Value }
-            ? Value
-            : unknown
+/** Bind a query registry handle while preserving its result type. */
+derive.query = function query<const Handle extends { readonly key: string }>(
+  handle: Handle,
+): DeriveInput<
+  Handle['key'],
+  'result' extends keyof Handle
+    ? Handle extends { readonly result?: infer Value }
+      ? Value
+      : unknown
+    : Handle extends {
+          optimistic(status: 'await-fragment'): infer Binding;
+        }
+      ? Binding extends object
+        ? Binding[keyof Binding] extends { readonly value: infer Value }
+          ? Value
           : unknown
         : unknown
-  > {
-    return queryInput(handle);
-  }
+      : unknown
+> {
+  return queryInput(handle);
+};
 
-  /** Bind the component's compiler-owned state input. */
-  export function state<Value>(): DeriveInput<'state', Value> {
-    return mintDeriveInput('state');
-  }
+/** Bind the component's compiler-owned state input. */
+derive.state = function state<Value>(): DeriveInput<'state', Value> {
+  return mintDeriveInput('state');
+};
 
-  /** Bind the component's declared `now.*` clock values. */
-  export function clock<Value>(): DeriveInput<'now', Value> {
-    return mintDeriveInput('now');
-  }
-}
+/** Bind the component's declared `now.*` clock values. */
+derive.clock = function clock<Value>(): DeriveInput<'now', Value> {
+  return mintDeriveInput('now');
+};
 
 /**
  * Compiler-emitted derive ABI. Raw names remain authorable lowered IR, but are not reachable from

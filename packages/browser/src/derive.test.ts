@@ -1,3 +1,6 @@
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 import { derive as generatedDerive } from './generated.js';
@@ -5,6 +8,40 @@ import { derive as deriveFromBarrel } from './index.js';
 import { derive, type DeriveInput } from './derive.js';
 
 describe('derive runtime surface', () => {
+  it('loads the public helper through Node strip-only TypeScript execution', () => {
+    const modulePath = fileURLToPath(new URL('./derive.ts', import.meta.url));
+    const stdout = execFileSync(
+      process.execPath,
+      [
+        '--disable-warning=ExperimentalWarning',
+        '--experimental-strip-types',
+        '--input-type=module',
+        '--eval',
+        `
+import { pathToFileURL } from 'node:url';
+const { derive } = await import(pathToFileURL(process.argv[1]).href);
+const query = derive.query({ key: 'cart' });
+const state = derive.state();
+const clock = derive.clock();
+const definition = derive([query, state, clock], (...values) => values);
+process.stdout.write(JSON.stringify({
+  inputs: definition.inputs,
+  methods: [typeof derive.query, typeof derive.state, typeof derive.clock],
+  values: definition.run(1, 2, 3),
+}));
+`,
+        modulePath,
+      ],
+      { encoding: 'utf8' },
+    );
+
+    expect(JSON.parse(stdout)).toEqual({
+      inputs: ['cart', 'state', 'now'],
+      methods: ['function', 'function', 'function'],
+      values: [1, 2, 3],
+    });
+  });
+
   it('keeps the public barrel wired to the opaque-input derive owner', () => {
     expect(deriveFromBarrel).toBe(derive);
     expect(generatedDerive).not.toBe(derive);

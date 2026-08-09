@@ -1,5 +1,13 @@
 import type { ExecFileException } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdtempSync,
+  mkdirSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -138,6 +146,65 @@ describe('framework-owned project quality check', () => {
       expect(readdirSync(root).some((name) => name.startsWith('.kovo-project-quality-'))).toBe(
         false,
       );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('loads workspace TypeScript through the paranoid config resolver strip-only path', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-project-quality-strip-only-'));
+    try {
+      const fixturePackage = join(root, 'node_modules/kovo-paranoid-derive-fixture');
+      mkdirSync(fixturePackage, { recursive: true });
+      writeFileSync(join(root, 'package.json'), '{"type":"module"}\n');
+      writeFileSync(
+        join(fixturePackage, 'package.json'),
+        '{"name":"kovo-paranoid-derive-fixture","type":"module","exports":"./derive.ts"}\n',
+      );
+      symlinkSync(
+        realpathSync(join(process.cwd(), 'packages/browser/src/derive.ts')),
+        join(fixturePackage, 'derive.ts'),
+      );
+      writeFileSync(
+        join(root, 'vite.config.mjs'),
+        `import { derive } from 'kovo-paranoid-derive-fixture';
+const state = derive.state();
+if (typeof state !== 'object') throw new TypeError('derive state input was not minted');
+export default { fmt: { semi: true }, lint: {} };
+`,
+      );
+
+      const executeNode = projectQualityCommandShell.execFile;
+      const execute = vi.spyOn(projectQualityCommandShell, 'execFile').mockImplementation((
+        command,
+        args,
+        options,
+        callback,
+      ) => {
+        const toolArgs = args as readonly string[];
+        if (toolArgs.includes('--eval')) {
+          return executeNode(command, args, options, callback);
+        }
+        callback(
+          null,
+          toolArgs[0]?.endsWith('/oxlint') || toolArgs[0]?.endsWith('\\oxlint')
+            ? JSON.stringify({ diagnostics: [] })
+            : '',
+          '',
+        );
+        return {} as ReturnType<typeof projectQualityCommandShell.execFile>;
+      });
+
+      await expect(runProjectQualityCheck(root, process.env, 'kovo-check/v1')).resolves.toEqual({
+        exitCode: 0,
+        output: 'kovo-check/v1\nOK PROJECT-QUALITY format=clean lint=clean\n',
+      });
+      expect(execute.mock.calls[0]?.[1]).toEqual([
+        '--input-type=module',
+        '--eval',
+        expect.stringContaining('loadConfigFromFile'),
+        expect.stringMatching(/[/\\]vite-plus[/\\]dist[/\\]index\.(?:c?js)$/u),
+      ]);
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
