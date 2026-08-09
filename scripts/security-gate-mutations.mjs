@@ -2314,8 +2314,11 @@ const removedCoreExportStarResolverBranch = [
 const compileSiblingRegistrationBranch = [
   '  registerFrameworkIdentityProject(',
   '    sourceFile,',
+  '    // plans/good-perf.md O7: extras are re-registered per compile phase over the same snapshot',
+  '    // entries; reuse each entry\'s shared parse (byte-exact revalidated) instead of re-parsing',
+  '    // every other closure file for every phase of every module.',
   "    compilerMapDense(options.extraFiles, 'Compiler framework-identity files', (file) =>",
-  '      parseSourceFile(file.fileName, file.source),',
+  '      parseSharedSnapshotEntry(file),',
   '    ),',
   '  );',
 ].join('\n');
@@ -2325,7 +2328,7 @@ const compilerIdentityRegistrationBehavioralInstrumentation = [
   '',
   'export function __compilerFrameworkIdentityProjectRegistrationVerdict(): boolean {',
   "  const source = \"import { th } from './browser-root.js'; th('<b>safe</b>');\";",
-  "  const sourceFile = parseSourceFile('pages/probe.tsx', source);",
+  "  const sourceFile = parseComponentModuleModel('pages/probe.tsx', source).sourceFile;",
   '  registerFrameworkIdentityProjectForOptions(sourceFile, {',
   "    fileName: 'pages/probe.tsx',",
   '    source,',
@@ -2989,9 +2992,9 @@ const removedDeterministicEnhancedFailureReplayBoundary = [
   '      }));',
 ].join('\n');
 const exactUtf16MachinePrincipalHash =
-  "  const bytes = apply<Buffer>(nativeBufferFrom, NativeBuffer, [value, 'utf16le']);";
+  "  const bytes = nativeBufferFrom(value, 'utf16le');";
 const weakenedUtf8MachinePrincipalHash =
-  "  const bytes = apply<Buffer>(nativeBufferFrom, NativeBuffer, [value, 'utf8']);";
+  "  const bytes = nativeBufferFrom(value, 'utf8');";
 const canonicalTaskInternalOrigin =
   "const TASK_INTERNAL_REQUEST_URL = 'https://kovo.invalid/_kovo/task';";
 const attackerSelectedTaskInternalOrigin =
