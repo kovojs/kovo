@@ -82,11 +82,11 @@
     },
     {
       "path": "@kovojs/browser/dist/deferred-app-runtime-identity.mjs",
-      "sha512": "sha512-DHFddkAiMzDlUKCQv0In/ysUBMo7z21wZoJFmXPDry0kIKXkapfTCWVdeh7CJLo2cpXO+7NXUZoOG98bmMs8EQ=="
+      "sha512": "sha512-Vpg6ScO0nrrKf704jS2k6gmqoS4VJy6SLkBInIjplEKADdbNTZyEUdgNVnkVqwxwCJASgeSkmv9KUhUfFRUB5w=="
     },
     {
       "path": "@kovojs/browser/dist/deferred-app-runtime-module.mjs",
-      "sha512": "sha512-kPoVe5bziyLCCcDLdwrIzPJJf5UONcrupSXs7ZvHBzkmHd2Vb1EDwL8NalHmsWXc+MRrZ0dEHmbgwTL8RTYF/g=="
+      "sha512": "sha512-Q8uKMpKgNAYGk7NdyDO+mDD8b9V+JAcSEcM4Y3ADCUKv8JFzpmGd3hwY2VK5/2zs/kuLbO6tz1+eVo1IYE4+TQ=="
     },
     {
       "path": "@kovojs/browser/dist/derive-C7KCgbCY.mjs",
@@ -190,7 +190,7 @@
     },
     {
       "path": "@kovojs/compiler/dist/internal.mjs",
-      "sha512": "sha512-HGV6YaviNbWAKw3V54UaiY8UDN5EW2KpVPy/ETTv2PSnfDtxM/wMS15z+swUY1qrH+kwukiu9FdAxgXrmY/K7A=="
+      "sha512": "sha512-mEB+anY+jtfJxrn1akOK57HrxxFwhdmh4g1d+/j98SJLwwbthJJSQZU3ADI+RFng9xmEJ9nuR1hqPYLPYDcocA=="
     },
     {
       "path": "@kovojs/compiler/dist/internal/graph.mjs",
