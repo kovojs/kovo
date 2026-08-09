@@ -68,10 +68,11 @@ import {
   trustedViteSecurityProfileRunnerGenerationsSentinel,
   trustedViteSecurityProfileSentinel,
 } from './internal/vite-security-sentinel.ts';
-import type {
-  KovoAppShellViteCompilerModuleDiagnosticReport,
-  KovoViteDevRunnerGenerationBroker,
-  KovoViteDevRunnerGenerationModules,
+import {
+  installKovoDevPostureHeaderMiddleware,
+  type KovoAppShellViteCompilerModuleDiagnosticReport,
+  type KovoViteDevRunnerGenerationBroker,
+  type KovoViteDevRunnerGenerationModules,
 } from './vite-dev.js';
 import {
   compilerDiagnosticBelongsToViteHandoff,
@@ -661,14 +662,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       // dev-unproven. Dev serves edits before whole-project analysis completes; security posture
       // is proven per commit by the unchanged fail-closed `kovo check`/`kovo build` paths. The
       // marker is unconditional — a dev page is never a posture proof, even between analyses.
-      server.middlewares.use((_request, response, next) => {
-        try {
-          response.setHeader('Kovo-Dev-Posture', 'dev-unproven');
-        } catch {
-          // A torn-down response cannot accept headers; the page it belonged to is gone.
-        }
-        next();
-      });
+      installKovoDevPostureHeaderMiddleware(server);
       const compiler = await compilerPlugin();
       if (externalCompilerPlugin === undefined) await compiler.configureServer?.(server);
       const compilerProvenanceHandoff = createCompilerClientModuleViteHandoff(

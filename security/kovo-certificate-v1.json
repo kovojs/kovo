@@ -1947,6 +1947,7 @@
       "digest",
       "dynamic-loader",
       "filesystem",
+      "network",
       "vm"
     ],
     "@kovojs/server/dist/webhook.mjs": [
@@ -10410,6 +10411,10 @@
       "@kovojs/server/dist/security-witness-intrinsics.mjs"
     ],
     [
+      "@kovojs/server/dist/vite.mjs",
+      "@kovojs/server/dist/vite-dev.mjs"
+    ],
+    [
       "@kovojs/server/dist/webhook.mjs",
       "@kovojs/core/dist/internal/security-markers.mjs"
     ],
@@ -10872,7 +10877,7 @@
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     }
   ],
-  "policySha512": "sha512-wflW29iSxPeMOhLRqnou15vuyib6yCDgMLEgd8/KhRrpipHtFptYJGYo8Vjr13AONWeYlu/y8CfI1dYT5geI1g==",
+  "policySha512": "sha512-BpO6DOIAV7C1BF5OO++0dcUwLfpFGvImWdn5hGV8QS/WVVSYYncOVlZwmw5ckhF7OHT6SqFzJxfaE+37A3mIqw==",
   "roots": [
     {
       "module": "@kovojs/better-auth/dist/index.mjs",
