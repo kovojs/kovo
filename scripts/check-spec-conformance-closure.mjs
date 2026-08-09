@@ -53,7 +53,7 @@ const transferredSqlSafetyDiagnosticRegistrarDoor =
 const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#diagnosticAt`;
 const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
 const expectedDiagnosticEmissionSiteDigest =
-  '0e95afba3dd626db32f391c003aeab039b688d10ca79305ed70c6db4bff0f2e0';
+  'be57c9a7697af72be3ca042d5a801cff158eb53c4e69cfd1fb142ac4200ec692';
 const expectedRootDiagnosticDoorDigest =
   '1660c7877e7a533c282cf38c291a10181bc2e7484d76f479f1d1f41cd51dac77';
 const expectedRegisteredDiagnosticGuardDigest =
@@ -85,7 +85,7 @@ const expectedDiagnosticFactorySinkDigest =
 const expectedDiagnosticEvidenceWitnessDigest =
   '23014067df10912624d8419128d1362787bb212e84ef0aac772d78ad26156aa3';
 const expectedDiagnosticActualLayerReviewDigest =
-  '7ef3f4ca7b00d5d3f51b60806e5b155c52c02c175615d821cdc5afb2a092bef0';
+  '8770b88079dd41f19ecb831a062c8d99a2ead08c14325eae66a1c42adc952365';
 const expectedBlockingStaticExportCollectionDigest =
   '3541644c641aec62abd0743093c653abd953e634f6042b941877b699666c4fdd';
 const expectedCompilerValidatorPipelineDigest =
@@ -191,7 +191,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/server/src/internal/data-plane-static-analysis.ts',
-    '5a0d73c7f55670fa06069e8ec9356423c41842ea82dd88b8f8e94903e7984b2c',
+    'caa1ef5460c4f2e9f570ebe5a87ac6f485379a169ac4f06b43574168dd693b4e',
   ],
   [
     'packages/server/src/sql-parser-authority.ts',
