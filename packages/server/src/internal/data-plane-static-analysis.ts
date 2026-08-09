@@ -1,4 +1,3 @@
-import { createHash as builtinCreateHash } from 'node:crypto';
 import { existsSync as builtinExistsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { extractStaticBuildAnalysisFactsFromProject } from '@kovojs/drizzle/internal/static';
@@ -58,6 +57,7 @@ import {
   staticAnalysisObjectKeys,
   staticAnalysisOwnDataValue,
   staticAnalysisRegExpTest,
+  staticAnalysisSha256,
   staticAnalysisStringEndsWith,
   staticAnalysisStringIndexOf,
   staticAnalysisStringLastIndexOf,
@@ -160,7 +160,6 @@ interface StaticBuildAnalysisFactsLike {
 }
 
 const STATIC_DATA_PLANE_FACTS_CACHE_VERSION = '2026-08-07.content-hash-key.v1';
-const createHash = builtinCreateHash;
 const existsSync = builtinExistsSync;
 const dirname = builtinDirname;
 const relative = builtinRelative;
@@ -791,10 +790,7 @@ function dataPlaneStaticAnalysisError(
 
 /** Length-prefixed sha256 of one source text; collision-resistant stand-in for the exact bytes. */
 function dataPlaneSourceContentDigest(source: string): string {
-  return createHash('sha256')
-    .update(`${source.length}:`)
-    .update(source, 'utf8')
-    .digest('hex');
+  return staticAnalysisSha256(`${source.length}:${source}`);
 }
 
 function dataPlaneAnalysisCacheIdentity(files: readonly DataPlaneSourceFile[]): string {

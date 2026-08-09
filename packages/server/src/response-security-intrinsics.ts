@@ -336,7 +336,7 @@ const callHashUpdate = uncurryThis(nativeHashUpdate) as (
 ) => unknown;
 const callHashDigest = uncurryThis(nativeHashDigest) as (
   hash: ReturnType<typeof createHash>,
-  encoding: 'base64' | 'hex',
+  encoding: 'base64' | 'base64url' | 'hex',
 ) => string;
 // `Promise.resolve` reads `this` as the species constructor, so its receiver is bound at boot
 // (security/boot-captured-direct-call.md R2).
@@ -1348,6 +1348,14 @@ export function securitySha256Base64(value: string): string {
   const hash = nativeCreateHash('sha256');
   callHashUpdate(hash, value);
   return callHashDigest(hash, 'base64');
+}
+
+/** Boot-pinned SHA-256 for strong HTTP validators over framework-rendered document bytes. */
+export function securitySha256Base64Url(value: string): string {
+  assertResponseSecurityIntrinsics();
+  const hash = nativeCreateHash('sha256');
+  callHashUpdate(hash, value);
+  return callHashDigest(hash, 'base64url');
 }
 
 /** Boot-pinned SHA-256 used for opaque, no-payload security-event identities. */

@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto';
-
 import { acceptsEnhancedNavigationDocument } from '@kovojs/core/internal/document-protocol';
 import type { CacheInfluenceManifestEntry } from '@kovojs/core/internal/cache-influence';
 
@@ -27,6 +25,7 @@ import {
   type CsrfOptions,
 } from './csrf.js';
 import { createSessionFingerprintCryptoHandle } from './crypto-authority.js';
+import { securitySha256Base64Url } from './response-security-intrinsics.js';
 import type { SigningSecret } from './keyring.js';
 import {
   createSignUrl,
@@ -609,7 +608,6 @@ function narrowDocumentPublicCacheFromManifest<Response extends RoutePageRespons
 const PROVED_DOCUMENT_CACHE_CONTROL = 'public, max-age=0, must-revalidate';
 const PROVED_DOCUMENT_CACHE_MAX_ENTRIES = 512;
 const PROVED_DOCUMENT_CACHE_MAX_BODY_BYTES = 4_194_304;
-const nativeCreateHash = createHash;
 /** Per-app in-memory proved-document cache; the app object dies with its build (SPEC §14). */
 const provedDocumentCaches = createWitnessWeakMap<KovoApp, Map<string, ProvedDocumentCacheEntry>>();
 /** Module-private witness that a response passed the proved-document stamping floor. */
@@ -821,7 +819,7 @@ function applyProvedDocumentValidatorTier(
 }
 
 function strongDocumentEtag(body: string): string {
-  return `"${nativeCreateHash('sha256').update(body, 'utf8').digest('base64url')}"`;
+  return `"${securitySha256Base64Url(body)}"`;
 }
 
 /**

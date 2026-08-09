@@ -190,7 +190,7 @@
     },
     {
       "path": "@kovojs/compiler/dist/internal.mjs",
-      "sha512": "sha512-K7ccEvs8qc1uGQLBhnrsb0rKbVhcy0WFffAHUBBxOIhuT3SX6jMtVr9bKEEvRomAY1Gk9V6Y/5+Ym2Ywbm+abw=="
+      "sha512": "sha512-fSnaai40SDwJTCrJusV2ct0UzsbezAfbm/EhPMFxw4uY5p3iUMallVoqCt80Zz0JIJhuKMKppqTRcixjWwLhKw=="
     },
     {
       "path": "@kovojs/compiler/dist/internal/graph.mjs",
@@ -502,7 +502,7 @@
     },
     {
       "path": "@kovojs/server/dist/app-document.mjs",
-      "sha512": "sha512-sowBFokLaGdqh2BwNoBEiIFvwXEL6n97jjboAepg545on8tDj+2Unk3sehrse8zZv2aFT3HQUzc2mNshS5VJPQ=="
+      "sha512": "sha512-9Gq0IiV9kWjwWoauAmfxAqLnlH5xYtwiyoIpRbEvvE4vP9JGN3odb8G61krYDZCwz5wIYb75gxT3nJG7C7vEIg=="
     },
     {
       "path": "@kovojs/server/dist/app-guards.mjs",
@@ -842,11 +842,11 @@
     },
     {
       "path": "@kovojs/server/dist/internal/data-plane-static-analysis-intrinsics.mjs",
-      "sha512": "sha512-biYTGbUQWiCq+54Zl3Sn2/fMZdlXQ/qOAgwcj0QRvHlgcIgZ0daWj50dSU15PuAMyC1rjp6bw8VDMTs99XGiIw=="
+      "sha512": "sha512-hGnWW14JOqkrDJb3+gvw896WWG4EXxF1jPItc97ztXL7ZSSf3to0jn1YysNcnxvmqFsfhVbCu+txyfOFEoMtcg=="
     },
     {
       "path": "@kovojs/server/dist/internal/data-plane-static-analysis.mjs",
-      "sha512": "sha512-ys3kqeWt/BI2d/qkfgE1x0wy54RxZY955tRyqDqa/fBO7pS96oB0VItHhCTk9FC5uaUgNwLNBu55mf/CyjFcWQ=="
+      "sha512": "sha512-v0S+30Sh887L0+2ITKnUWv54nFl4YC1gKHqVPRI/rur82la248E3iSlqGjeAaKelYAqXeZe3FWGal1bH86rbMg=="
     },
     {
       "path": "@kovojs/server/dist/internal/egress.mjs",
@@ -1070,7 +1070,7 @@
     },
     {
       "path": "@kovojs/server/dist/node.mjs",
-      "sha512": "sha512-8PMFHy4eBYd+EJbwm+ikKgqLsLeVx/qz6vVb16x5z0N8hxLCUBW0Gik517CSLQuvQghogjkPIkliCIm3HdSIIA=="
+      "sha512": "sha512-ZtRAnmT7xQwLJPFmQjK+C6RHJL4Cgckapc6kbtVZHJYD/qhstPznORiQrW+zG9C9z+D8MwRMC1AoIaiGytS9Mg=="
     },
     {
       "path": "@kovojs/server/dist/output-staging.mjs",
@@ -1342,7 +1342,7 @@
     },
     {
       "path": "@kovojs/server/dist/response-security-intrinsics.mjs",
-      "sha512": "sha512-57FvOfUdp80Yae/ypzr/P70j9Q5ClsZ9Hb12BfsDC86fEF73Rw7BlEoGEs6IlyKlm/0Nt0pQmjOcGTO72XuEng=="
+      "sha512": "sha512-Ms00GuPFMgM+5wDA9Ffs2KkxTTroNA91KIuWIxrwLjFrvS00EDXy02kPokrwV1VqBYEbZcLvvgJ9W129rP3Aqg=="
     },
     {
       "path": "@kovojs/server/dist/response-transport-headers.mjs",

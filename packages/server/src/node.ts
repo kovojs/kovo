@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { constants as zlibConstants, createBrotliCompress, createGzip } from 'node:zlib';
@@ -17,6 +16,7 @@ import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import type { RequestHandler } from './app-types.js';
 import { requestUrlLimitFailure } from './request-url-limits.js';
 import { requestStateCanonicalClientIpValue } from './request-state-intrinsics.js';
+import { securityRandomBytes } from './response-security-intrinsics.js';
 import {
   bindRequestDeadlineResponseTransport,
   registerRequestDeadlineTransport,
@@ -272,7 +272,6 @@ const nativeReadableToWeb = Readable.toWeb;
 const nativePipeline = pipeline;
 const nativeCreateBrotliCompress = createBrotliCompress;
 const nativeCreateGzip = createGzip;
-const nativeRandomBytes = randomBytes;
 // SPEC §9.5 transport compression: brotli quality for per-request dynamic responses. Node's
 // default quality 11 costs ~163 ms for a 225 KB document versus ~1.4 ms at quality 5 for a
 // nearly identical wire size (plans/good-perf.md O1); quality 11 belongs to build-time static
@@ -1515,7 +1514,7 @@ const PADDING_HEX_DIGITS = '0123456789abcdef';
  * for response sensitivity.
  */
 function compressionPaddingValue(): string {
-  const bytes = witnessReflectApply<Uint8Array>(nativeRandomBytes, undefined, [33]);
+  const bytes = securityRandomBytes(33);
   const length = (bytes[0]! & 63) + 1;
   let value = '';
   for (let index = 0; index < length; index += 1) {

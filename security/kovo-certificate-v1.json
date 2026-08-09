@@ -7887,6 +7887,10 @@
     ],
     [
       "@kovojs/server/dist/node.mjs",
+      "@kovojs/server/dist/response-security-intrinsics.mjs"
+    ],
+    [
+      "@kovojs/server/dist/node.mjs",
       "@kovojs/server/dist/response-transport-headers.mjs"
     ],
     [
@@ -10868,7 +10872,7 @@
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     }
   ],
-  "policySha512": "sha512-Xc+fpebQ/15/W7LNT7DQdP+VEc6BTGnNxmRXHi9zmuDe+N+hYB6iDmK1mSta3zGjpY4j6JwDltILqEPm52anbg==",
+  "policySha512": "sha512-v0+zs0lBw5LY3MJMzhqrYnvacWod4rDrOVkWczDVxklpfPb7piDI4CsUdaTfPtq2JtULV4OsD2Dt8Kbn8EihvA==",
   "roots": [
     {
       "module": "@kovojs/better-auth/dist/index.mjs",
