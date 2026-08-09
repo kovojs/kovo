@@ -3,12 +3,12 @@ import { app as app } from '../src/kovo.js';
 export { publicAccess } from '@kovojs/server';
 export const __kovoGeneratedContract = Object.freeze({
   appId: '00000000-0000-4000-8000-000000000006',
-  compilerSourceSha256: 'e5947ebd6be16c0ce4cf9afae459c739ec3d69c794ce58153459de434afc9fc2',
+  compilerSourceSha256: '858af5b18d860528e147d0ccec955e397a4960dc578bb856b16f293a68a73387',
   ownerKey: 'd1v6:8e1ad46ea269b622b40f91319d6436083a67660aac22933d52ef75b086274fd1',
   providerExportBinding: 'contactsProvider',
   providerImportSpecifier: './provider.js',
   providerKey: 'contacts-provider-v6',
-  serverPackedContentsSha256: '9fbed19eff3feebc9b27edb116ea1ec79f260787c1c8d6f50beb76ac4e8b1a12',
+  serverPackedContentsSha256: '802222395805c4c687e96ae39e698783412dc5fac4552882dd4f784a4739df50',
 });
 export const endpoint: typeof app.endpoint = app.endpoint;
 export const layout: typeof app.layout = app.layout;
