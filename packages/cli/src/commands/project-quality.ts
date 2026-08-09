@@ -182,7 +182,14 @@ async function resolveProjectQualityConfig(
   invocationEnv: NodeJS.ProcessEnv,
 ): Promise<ProjectQualityConfig | { readonly error: unknown }> {
   const configProbe = await executeNode(
-    ['--input-type=module', '--eval', QUALITY_CONFIG_PROBE, configModule],
+    [
+      '--disable-warning=ExperimentalWarning',
+      '--experimental-transform-types',
+      '--input-type=module',
+      '--eval',
+      QUALITY_CONFIG_PROBE,
+      configModule,
+    ],
     root,
     invocationEnv,
   );

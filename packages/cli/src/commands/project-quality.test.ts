@@ -1,5 +1,6 @@
 import type { ExecFileException } from 'node:child_process';
 import {
+  copyFileSync,
   mkdtempSync,
   mkdirSync,
   readdirSync,
@@ -64,6 +65,8 @@ describe('framework-owned project quality check', () => {
 
       expect(execute).toHaveBeenCalledTimes(3);
       expect(execute.mock.calls[0]?.[1]).toEqual([
+        '--disable-warning=ExperimentalWarning',
+        '--experimental-transform-types',
         '--input-type=module',
         '--eval',
         expect.stringContaining('loadConfigFromFile'),
@@ -151,60 +154,107 @@ describe('framework-owned project quality check', () => {
     }
   });
 
-  it('loads workspace TypeScript through the paranoid config resolver strip-only path', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'kovo-project-quality-strip-only-'));
+  it('loads every runtime namespace owner through the paranoid config resolver TypeScript path', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-project-quality-transform-types-'));
     try {
-      const fixturePackage = join(root, 'node_modules/kovo-paranoid-derive-fixture');
-      mkdirSync(fixturePackage, { recursive: true });
+      const deriveFixturePackage = join(root, 'node_modules/kovo-paranoid-derive-fixture');
+      const coreFixturePackage = join(root, 'node_modules/@kovojs/core');
+      const serverSourceRoot = join(root, 'server-source');
+      mkdirSync(deriveFixturePackage, { recursive: true });
+      mkdirSync(coreFixturePackage, { recursive: true });
+      mkdirSync(serverSourceRoot, { recursive: true });
       writeFileSync(join(root, 'package.json'), '{"type":"module"}\n');
       writeFileSync(
-        join(fixturePackage, 'package.json'),
+        join(deriveFixturePackage, 'package.json'),
         '{"name":"kovo-paranoid-derive-fixture","type":"module","exports":"./derive.ts"}\n',
       );
       symlinkSync(
         realpathSync(join(process.cwd(), 'packages/browser/src/derive.ts')),
-        join(fixturePackage, 'derive.ts'),
+        join(deriveFixturePackage, 'derive.ts'),
       );
+      writeFileSync(
+        join(coreFixturePackage, 'package.json'),
+        JSON.stringify({
+          exports: {
+            './internal/diagnostics': './diagnostics.mjs',
+            './internal/security-markers': './security-markers.mjs',
+          },
+          name: '@kovojs/core',
+          type: 'module',
+        }),
+      );
+      writeFileSync(
+        join(coreFixturePackage, 'diagnostics.mjs'),
+        'export function createRegisteredDiagnostic(...args) { return args; }\n',
+      );
+      writeFileSync(
+        join(coreFixturePackage, 'security-markers.mjs'),
+        `export function createBoundedRuntimeAuditCollector() {
+  return { drain: () => [], record: () => undefined };
+}
+`,
+      );
+      // Copy the exact server namespace owner and its local imports. Minimal core stubs keep the
+      // regression about config-module TypeScript loading rather than unrelated package wiring.
+      for (const fileName of [
+        'audit-justification.ts',
+        'response-security-intrinsics.ts',
+        'security-witness-intrinsics.ts',
+        'upload-sniff.ts',
+      ]) {
+        copyFileSync(
+          realpathSync(join(process.cwd(), 'packages/server/src', fileName)),
+          join(serverSourceRoot, fileName),
+        );
+      }
       writeFileSync(
         join(root, 'vite.config.mjs'),
         `import { derive } from 'kovo-paranoid-derive-fixture';
+import { accept } from './server-source/upload-sniff.ts';
 const state = derive.state();
 if (typeof state !== 'object') throw new TypeError('derive state input was not minted');
+if (typeof accept.unverified !== 'function') throw new TypeError('accept.unverified is unavailable');
 export default { fmt: { semi: true }, lint: {} };
 `,
       );
 
       const executeNode = projectQualityCommandShell.execFile;
-      const execute = vi.spyOn(projectQualityCommandShell, 'execFile').mockImplementation((
-        command,
-        args,
-        options,
-        callback,
-      ) => {
-        const toolArgs = args as readonly string[];
-        if (toolArgs.includes('--eval')) {
-          return executeNode(command, args, options, callback);
-        }
-        callback(
-          null,
-          toolArgs[0]?.endsWith('/oxlint') || toolArgs[0]?.endsWith('\\oxlint')
-            ? JSON.stringify({ diagnostics: [] })
-            : '',
-          '',
-        );
-        return {} as ReturnType<typeof projectQualityCommandShell.execFile>;
-      });
+      const execute = vi
+        .spyOn(projectQualityCommandShell, 'execFile')
+        .mockImplementation((command, args, options, callback) => {
+          const toolArgs = args as readonly string[];
+          if (toolArgs.includes('--eval')) {
+            return executeNode(command, args, options, callback);
+          }
+          callback(
+            null,
+            toolArgs[0]?.endsWith('/oxlint') || toolArgs[0]?.endsWith('\\oxlint')
+              ? JSON.stringify({ diagnostics: [] })
+              : '',
+            '',
+          );
+          return {} as ReturnType<typeof projectQualityCommandShell.execFile>;
+        });
 
-      await expect(runProjectQualityCheck(root, process.env, 'kovo-check/v1')).resolves.toEqual({
+      await expect(
+        runProjectQualityCheck(
+          root,
+          { ...process.env, NODE_OPTIONS: '--max-old-space-size=4096' },
+          'kovo-check/v1',
+        ),
+      ).resolves.toEqual({
         exitCode: 0,
         output: 'kovo-check/v1\nOK PROJECT-QUALITY format=clean lint=clean\n',
       });
       expect(execute.mock.calls[0]?.[1]).toEqual([
+        '--disable-warning=ExperimentalWarning',
+        '--experimental-transform-types',
         '--input-type=module',
         '--eval',
         expect.stringContaining('loadConfigFromFile'),
         expect.stringMatching(/[/\\]vite-plus[/\\]dist[/\\]index\.(?:c?js)$/u),
       ]);
+      expect(execute.mock.calls[0]?.[2]?.env?.NODE_OPTIONS).toBe('--max-old-space-size=4096');
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
