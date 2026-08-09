@@ -417,6 +417,34 @@ describe('sink-policy gate', () => {
         `
           const ROOTED_FILE_SERVE_SINK = 'rooted-file-serve';
           export async function rootedFiles(root) {
+            const fileSystem = await createFrameworkFileSystemBoundary(
+              stagedRootedFilesRoot(root) ?? root,
+            );
+            const capability = {
+              root: fileSystem.root,
+              serve: (path, options) => serveRootedFile(fileSystem, path, options),
+            };
+            return blessSink(ROOTED_FILE_SERVE_SINK, witnessFreeze(capability));
+          }
+          export function isRootedFileServeCapability(value) {
+            return isBlessedSink(ROOTED_FILE_SERVE_SINK, value);
+          }
+          async function serveRootedFile(fileSystem, requestedPath, options) {
+            if (!isFrameworkFileSystemBoundary(fileSystem)) return undefined;
+            const file = await fileSystem.readFile(requestedPath, { requireSingleLink: true });
+            if (file === undefined) return undefined;
+            return respond.stream(file.body, options);
+          }
+        `,
+      ),
+    ).toEqual([]);
+
+    expect(
+      rootedFileServeInvariantFindings(
+        'packages/server/src/file.ts',
+        `
+          const ROOTED_FILE_SERVE_SINK = 'rooted-file-serve';
+          export async function rootedFiles(root) {
             const fileSystem = await createFrameworkFileSystemBoundary(root);
             const capability = {
               root: fileSystem.root,

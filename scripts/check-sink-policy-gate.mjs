@@ -45,6 +45,8 @@ export const defaultCommandExecutionToolingRationales = {
     'CLI build isolation launches package-owned phase workers with inherited stdio and a private control descriptor, then bounds and reaps their process trees on transport failure, deadline, or parent exit.',
   'packages/cli/src/commands/build-export.ts':
     'CLI build/export tooling invokes TypeScript/Vite subprocesses outside request/runtime paths.',
+  'packages/cli/src/commands/check-session-reuse.ts':
+    'CLI watch reuse re-runs the package-resolved TypeScript preflight outside request/runtime paths before accepting cached phase evidence.',
   'packages/cli/src/commands/compile.ts':
     'CLI compile tooling runs the TypeScript checker outside request/runtime paths.',
   'packages/cli/src/commands/fix.ts':
@@ -2408,7 +2410,7 @@ export function rootedFileServeInvariantFindings(filePath, text) {
   const source = stripComments(text);
   const findings = [];
   const delegatesToFrameworkFileSystemBase =
-    /\bconst\s+fileSystem\s*=\s*await\s+createFrameworkFileSystemBoundary\s*\(\s*root\s*\)/.test(
+    /\bconst\s+fileSystem\s*=\s*await\s+createFrameworkFileSystemBoundary\s*\(\s*(?:root|stagedRootedFilesRoot\s*\(\s*root\s*\)\s*\?\?\s*root)\s*,?\s*\)/.test(
       source,
     ) &&
     /\bserve\s*:\s*\([^)]*\)\s*=>\s*serveRootedFile\s*\(\s*fileSystem\s*,\s*path\s*,\s*options\s*\)/.test(
