@@ -329,6 +329,76 @@ globalThis.__restoreHmrControls = () => {
     expect(buildMeta.getAttribute('content')).toBe('build-before');
   });
 
+  it('coalesces adjacent component-render notices into one server-owned refresh', async () => {
+    const buildMeta = new FakeElement({ content: 'build-before', name: 'kovo-build' });
+    const document = new FakeDocument(buildMeta, [
+      new FakeElement({
+        'kovo-deps': 'public',
+        'kovo-fragment-target': 'catalog-panel',
+        'kovo-live-token': 'tok_catalog',
+      }),
+    ]);
+    const hotHandlers = Object.create(null) as Record<string, (event: unknown) => void>;
+    const pendingFetches: Array<{
+      resolve(response: {
+        headers: { get(name: string): string | null };
+        ok: boolean;
+        redirected: boolean;
+        text(): Promise<string>;
+        url: string;
+      }): void;
+      url: string;
+    }> = [];
+    let applyCalls = 0;
+    let reloads = 0;
+    const context = {
+      Document: FakeDocument,
+      Element: FakeElement,
+      NodeList: FakeNodeList,
+      URL,
+      __createHotContext: () => ({
+        on(name: string, handler: (event: unknown) => void) {
+          hotHandlers[name] = handler;
+        },
+      }),
+      __kovo_a() {
+        applyCalls += 1;
+      },
+      document,
+      fetch(url: URL) {
+        return new Promise((resolve) => pendingFetches.push({ resolve, url: String(url) }));
+      },
+      location: {
+        origin: 'https://kovo.test',
+        pathname: '/catalog',
+        reload() {
+          reloads += 1;
+        },
+        search: '',
+      },
+    };
+    const source = kovoHmrClientSource().replace(
+      'import { createHotContext } from "/@vite/client";',
+      'const createHotContext = globalThis.__createHotContext;',
+    );
+    runInNewContext(source, context);
+
+    hotHandlers['kovo:component-render']?.({});
+    hotHandlers['kovo:component-render']?.({});
+    await Promise.resolve();
+    expect(pendingFetches).toHaveLength(1);
+
+    pendingFetches[0]!.resolve(hmrResponse(pendingFetches[0]!.url, 'build-before', 'build-after'));
+    await Promise.resolve();
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(pendingFetches).toHaveLength(1);
+    expect(applyCalls).toBe(1);
+    expect(reloads).toBe(0);
+    expect(buildMeta.getAttribute('content')).toBe('build-after');
+  });
+
   it.each([
     {
       contentDisposition: null,
@@ -425,3 +495,23 @@ globalThis.__restoreHmrControls = () => {
     expect(buildMeta.getAttribute('content')).toBe('build-before');
   });
 });
+
+function hmrResponse(url: string, previousBuild: string, nextBuild: string) {
+  return {
+    headers: {
+      get(name: string) {
+        if (name === 'Kovo-Previous-Build') return previousBuild;
+        if (name === 'Kovo-Build') return nextBuild;
+        if (name === 'Kovo-HMR-Refresh') return 'live-targets';
+        if (name === 'Content-Type') return 'text/vnd.kovo.fragment+html; charset=utf-8';
+        return null;
+      },
+    },
+    ok: true,
+    redirected: false,
+    async text() {
+      return '<kovo-fragment target="catalog-panel">updated</kovo-fragment>';
+    },
+    url,
+  };
+}

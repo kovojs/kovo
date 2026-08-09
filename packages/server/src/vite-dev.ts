@@ -2169,8 +2169,26 @@ async function refreshLiveTargets() {
   hmrTargetSnapshotReader.writeBuild(document, nextBuild);
 }
 
+let liveTargetRefreshRunning = false;
+async function scheduleLiveTargetRefresh() {
+  if (liveTargetRefreshRunning) return;
+
+  liveTargetRefreshRunning = true;
+  try {
+    await refreshLiveTargets();
+  } catch {
+    reload();
+  } finally {
+    liveTargetRefreshRunning = false;
+  }
+}
+
 hot.on("kovo:component-render", () => {
-  refreshLiveTargets().catch(reload);
+  // SPEC §9.5.1: one source invalidation can produce adjacent component-render notices.
+  // Coalesce them while the server-owned refresh is pending so a duplicate cannot use the first
+  // response's committed build with its already-consumed live-target attestation and force a
+  // document reload that discards client-owned draft state.
+  void scheduleLiveTargetRefresh();
 });
 // SPEC §5.2 rule 10: a whole-document refresh must re-enter the canonical server document sink.
 // Do not introduce a second raw HTML parser through document.write in the dev-only client.
