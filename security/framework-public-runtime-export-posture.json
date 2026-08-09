@@ -13357,7 +13357,7 @@
             "./jsx-runtime": "./src/jsx-runtime.ts",
             "./jsx-dev-runtime": "./src/jsx-runtime.ts"
           },
-          "fingerprint": "sha256:40aebdee78710334a21d907c9f7dd4717c39d854474b33413d434179be900ce8"
+          "fingerprint": "sha256:44be732149664296a09cb30df3568a4265277115645d3997ae7e43e08b212aa2"
         },
         {
           "exports": {
@@ -13630,7 +13630,7 @@
               "default": "./dist/jsx-runtime.mjs"
             }
           },
-          "fingerprint": "sha256:47b1a722c603df8231fda098af8d914733ba7a58e9dd363f32e4705eea5d04e1"
+          "fingerprint": "sha256:32991c3a2977c0a8551843a562e1976ac28a8e91de17f28681edbd9d9b8a074d"
         },
         {
           "exports": {
@@ -13903,7 +13903,7 @@
               "default": "./dist/jsx-runtime.mjs"
             }
           },
-          "fingerprint": "sha256:5fc1fe655abf6ac1f3c6cdfb466fb4d89001d1896612620c8b42b875270fbf20"
+          "fingerprint": "sha256:9d6bb2c12a61d1dced1583ddabf99ce78d6bbfa73605fa6a9f0843eb0d6ca00e"
         }
       ],
       "packageName": "@kovojs/server",
