@@ -723,7 +723,7 @@
           "reason": "The custom-shell browser installer captures framework-bounded network and dynamic-loader authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "f0485a400604b18d0ede1d8462e815f5aee9c909982c5a5d3009ff1007ff403c"
+      "sourceTreeSha256": "2ce4f95e004def2f9137406e061184dcd95cfeb2fbff746e7234fd52dad7bd18"
     },
     {
       "manifestVariants": [
