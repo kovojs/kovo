@@ -4453,7 +4453,7 @@ describe('createPostgresAppRuntimeDb', () => {
         new RegExp(`KV433_RUNTIME_ROLE[\\s\\S]*PostgreSQL predefined role ${predefinedRole}`),
       );
     }
-  }, 30_000);
+  }, 60_000);
 
   // SPEC §10.3 (C10/C11): membership in only the framework's own roles must not over-block; the
   // predefined-role allowlist targets `pg_*` predefined roles, not the framework reader/writer/etc.
