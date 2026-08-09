@@ -53,7 +53,7 @@ const transferredSqlSafetyDiagnosticRegistrarDoor =
 const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#diagnosticAt`;
 const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
 const expectedDiagnosticEmissionSiteDigest =
-  'be57c9a7697af72be3ca042d5a801cff158eb53c4e69cfd1fb142ac4200ec692';
+  '4391c75cdb6a33499de13f9252d744d7b424a33e063488984c878c2d14bb36c0';
 const expectedRootDiagnosticDoorDigest =
   '1660c7877e7a533c282cf38c291a10181bc2e7484d76f479f1d1f41cd51dac77';
 const expectedRegisteredDiagnosticGuardDigest =
@@ -85,7 +85,7 @@ const expectedDiagnosticFactorySinkDigest =
 const expectedDiagnosticEvidenceWitnessDigest =
   '23014067df10912624d8419128d1362787bb212e84ef0aac772d78ad26156aa3';
 const expectedDiagnosticActualLayerReviewDigest =
-  '8770b88079dd41f19ecb831a062c8d99a2ead08c14325eae66a1c42adc952365';
+  'a166c01045f4ea5ce29b99d85579da21712be6dd3888338db3c7d41c525deb7b';
 const expectedBlockingStaticExportCollectionDigest =
   '3541644c641aec62abd0743093c653abd953e634f6042b941877b699666c4fdd';
 const expectedCompilerValidatorPipelineDigest =
