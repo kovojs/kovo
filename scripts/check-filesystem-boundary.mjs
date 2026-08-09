@@ -706,7 +706,7 @@ export function responseSecurityArrayCommitFindings(filePath, sourceText) {
     ],
     [
       'descriptor-indexed response commit',
-      /\bfunction\s+defineResponseArrayIndex\s*<[^>]+>\s*\([\s\S]*?\bapply\s*\(\s*nativeObjectDefineProperty\s*,\s*NativeObject\s*,/u,
+      /\bfunction\s+defineResponseArrayIndex\s*<[^>]+>\s*\([\s\S]*?\bnativeObjectDefineProperty\s*\(\s*values\s*,\s*index\s*,/u,
     ],
     [
       'securityArrayPush own-data delegation',

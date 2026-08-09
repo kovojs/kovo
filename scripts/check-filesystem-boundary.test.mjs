@@ -383,6 +383,24 @@ export const controls = [randomUUID, path.resolve, Readable.toWeb];
       responseSecurityArrayCommitFindings(
         responseSecurityIntrinsicsFile,
         `
+          const nativeObjectDefineProperty = NativeObject.defineProperty;
+          function defineResponseArrayIndex<Value>(values, index, value) {
+            nativeObjectDefineProperty(values, index, { value });
+          }
+          function commitResponseArrayValue(values, value) {}
+          function securityArrayPush<Value>(values, value): void {
+            commitResponseArrayValue(values, value);
+          }
+          const recentEntropyOrder = [];
+          securityArrayPush(recentEntropyOrder, key);
+        `,
+      ),
+    ).toEqual([]);
+
+    expect(
+      responseSecurityArrayCommitFindings(
+        responseSecurityIntrinsicsFile,
+        `
           const nativeArrayPush = NativeArray.prototype.push;
           export function securityArrayPush(values, value) {
             apply(nativeArrayPush, values, [value]);
