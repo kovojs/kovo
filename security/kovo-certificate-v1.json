@@ -22,7 +22,7 @@
     "@kovojs/browser/dist/client.mjs",
     "@kovojs/browser/dist/deferred-app-runtime-identity.mjs",
     "@kovojs/browser/dist/deferred-app-runtime-module.mjs",
-    "@kovojs/browser/dist/derive-C7KCgbCY.mjs",
+    "@kovojs/browser/dist/derive-CzKL5lcp.mjs",
     "@kovojs/browser/dist/generated.mjs",
     "@kovojs/browser/dist/handlers-tLOdJQYR.mjs",
     "@kovojs/browser/dist/index.mjs",
@@ -526,7 +526,7 @@
     "@kovojs/browser/dist/client.mjs": [],
     "@kovojs/browser/dist/deferred-app-runtime-identity.mjs": [],
     "@kovojs/browser/dist/deferred-app-runtime-module.mjs": [],
-    "@kovojs/browser/dist/derive-C7KCgbCY.mjs": [],
+    "@kovojs/browser/dist/derive-CzKL5lcp.mjs": [],
     "@kovojs/browser/dist/generated.mjs": [],
     "@kovojs/browser/dist/handlers-tLOdJQYR.mjs": [],
     "@kovojs/browser/dist/index.mjs": [],
@@ -3268,7 +3268,7 @@
     ],
     [
       "@kovojs/browser/dist/generated.mjs",
-      "@kovojs/browser/dist/derive-C7KCgbCY.mjs"
+      "@kovojs/browser/dist/derive-CzKL5lcp.mjs"
     ],
     [
       "@kovojs/browser/dist/generated.mjs",
@@ -3328,7 +3328,7 @@
     ],
     [
       "@kovojs/browser/dist/index.mjs",
-      "@kovojs/browser/dist/derive-C7KCgbCY.mjs"
+      "@kovojs/browser/dist/derive-CzKL5lcp.mjs"
     ],
     [
       "@kovojs/browser/dist/index.mjs",
@@ -3372,7 +3372,7 @@
     ],
     [
       "@kovojs/browser/dist/internal/output.mjs",
-      "@kovojs/browser/dist/derive-C7KCgbCY.mjs"
+      "@kovojs/browser/dist/derive-CzKL5lcp.mjs"
     ],
     [
       "@kovojs/browser/dist/internal/output.mjs",
@@ -10877,7 +10877,7 @@
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     }
   ],
-  "policySha512": "sha512-BpO6DOIAV7C1BF5OO++0dcUwLfpFGvImWdn5hGV8QS/WVVSYYncOVlZwmw5ckhF7OHT6SqFzJxfaE+37A3mIqw==",
+  "policySha512": "sha512-C3CKNo0Gb3z5J3dPetXyOTMuJm/C7heVBpWMrzsUufHynGnD0ALq3gcT4EvrRl98ebPkl0X/BaSTOrQV4eVSFg==",
   "roots": [
     {
       "module": "@kovojs/better-auth/dist/index.mjs",

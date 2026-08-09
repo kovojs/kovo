@@ -89,12 +89,12 @@
       "sha512": "sha512-8TMwPZa/yRjwIiyDXg+hhedF7Jh2Dni8j898D6s03SY+3D+rhC8wVtfGxOzzmKXR0ZMObpKG9s4QyQhJN1xYcQ=="
     },
     {
-      "path": "@kovojs/browser/dist/derive-C7KCgbCY.mjs",
-      "sha512": "sha512-sP+8n4ZxDE08On39JKaNPS6nIDRKmjsNm5yXN/U8EZJhaK/LL6XEdrb6zSqBE8I70jxnZ6QQuRm235sO2ygFEQ=="
+      "path": "@kovojs/browser/dist/derive-CzKL5lcp.mjs",
+      "sha512": "sha512-zTvnVbaBpNCBeBxRLk7wYUiGtPCv1Rb24+alT0bu9eC06NYKb76eF7Zyl9i4/1vRptEQqd9WvACirQ0wT99QPg=="
     },
     {
       "path": "@kovojs/browser/dist/generated.mjs",
-      "sha512": "sha512-C3g47Q4sGQ9kyYTMLY2/wedUSksJKsb1jxuNkNm26fD8bCvGh+rA7CqCFATsYydYHle4F6taZxrMvHKzV8MdIA=="
+      "sha512": "sha512-QjauJDI/fq07jUloj/uIBMxQGns6e6ipiQ/vWknvqyT58NECrfGxtYWrxOLBqW4lV94Ajzu0uGEzLTrrcMHxJA=="
     },
     {
       "path": "@kovojs/browser/dist/handlers-tLOdJQYR.mjs",
@@ -102,7 +102,7 @@
     },
     {
       "path": "@kovojs/browser/dist/index.mjs",
-      "sha512": "sha512-Tcc4FYfUKvXwR7jvMSjZ8xGn0gKt3NXc5Bhk1elydWEJXeI/JLEL0XaU19nh4IzynhZZGGILDACMXdat9XbIEg=="
+      "sha512": "sha512-+98GtSxfmImbg1lLIrIoE3GSBLyTpBY73IGxBIP7y0KVFqlLj8K07ySHzGKlQeJDHtreLSUbYsidXkJWLoBFvQ=="
     },
     {
       "path": "@kovojs/browser/dist/inline-loader-runtime-CPDVqw9D.mjs",
@@ -130,7 +130,7 @@
     },
     {
       "path": "@kovojs/browser/dist/internal/output.mjs",
-      "sha512": "sha512-zQqQhAJVMLyEsCn+NwVtaMunvaeOWUH161E6/5dIQ/5XmAC2U6rTSBGDLvRUBIE9QDOOHuUsNoCk3Jpbl49YSg=="
+      "sha512": "sha512-jLXx3eFU6G1cx51AA4eTB+VZQw7Bfa8AnbGPUakkKmatV8EHJK7brrTj4uRqcIc0iwFoAggYWcmGWlKOcMF5nA=="
     },
     {
       "path": "@kovojs/browser/dist/loader-DiIbJQzH.mjs",
@@ -190,7 +190,7 @@
     },
     {
       "path": "@kovojs/compiler/dist/internal.mjs",
-      "sha512": "sha512-8IbmZkunb99cTWejR25/eIRkRpoYa845abL8mlETIE5xtPa1wc0skZ6g3cbxFf2iepsLQU9ggv3amsk5lETY4g=="
+      "sha512": "sha512-B2QfhR6KwAAv1EqdL4BS8PQTROYjKkzEYhc6RIp7hAUeCXjZIctsu+rZUNAqNjQdO9f/ECSh6gMRormnafSN3A=="
     },
     {
       "path": "@kovojs/compiler/dist/internal/graph.mjs",
