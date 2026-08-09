@@ -390,7 +390,7 @@
     },
     {
       "path": "@kovojs/core/dist/internal/wire-input-grammar.mjs",
-      "sha512": "sha512-FiThfvtPD3T6IZI9xhYIOCvRY+l7PZQvCmecFgSvWQEByZV5M6R5aFTdoAafDyl6mSVt4waVNENIedPkvSftgg=="
+      "sha512": "sha512-uUiX/bh6KMfRikeSArX+4kxFNH46D/4ZjlA1/FTwiDR9rM7BBXedet+oX8TDWNXNKHE4TMOzTuAKcknUCUeuXw=="
     },
     {
       "path": "@kovojs/core/dist/internal/wire-json.mjs",

@@ -440,6 +440,12 @@ export const FRAMEWORK_WIRE_INPUT_REGISTRY = Object.freeze({
     {
       carrier: 'response-header',
       grammar: 'opaque-token',
+      id: 'response-header.etag',
+      name: 'etag',
+    },
+    {
+      carrier: 'response-header',
+      grammar: 'opaque-token',
       id: 'response-header.kovo-build',
       name: 'kovo-build',
     },
@@ -472,6 +478,12 @@ export const FRAMEWORK_WIRE_INPUT_REGISTRY = Object.freeze({
       grammar: 'same-origin-url',
       id: 'response-header.location',
       name: 'location',
+    },
+    {
+      carrier: 'response-header',
+      grammar: 'http-field-value',
+      id: 'response-header.set-cookie',
+      name: 'set-cookie',
     },
     {
       carrier: 'response-header',

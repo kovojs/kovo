@@ -264,6 +264,26 @@
       "allowedCarriers": ["header", "request-header", "response-header"],
       "api": "serverReadHeader",
       "file": "packages/server/src/app-document.ts",
+      "id": "packages/server/src/app-document.ts#contentType",
+      "inputName": "content-type",
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "Accept-negotiation proof reads the registered response media type and rejects documents outside the two supported representations.",
+      "registryId": "response-header.content-type"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/app-document.ts",
+      "id": "packages/server/src/app-document.ts#contentType~2",
+      "inputName": "content-type",
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "Enhanced-navigation variant construction reads the registered response media type and narrows to HTML before encoding document parts.",
+      "registryId": "response-header.content-type"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/app-document.ts",
       "id": "packages/server/src/app-document.ts#cacheControl",
       "inputName": "cache-control",
       "symbol": "packages/server/src/response.ts#readHeader",
@@ -279,6 +299,116 @@
       "symbol": "packages/server/src/response.ts#readHeader",
       "reason": "Document cache verification compares the exact response Vary field with the compiler-derived axis set and can only narrow.",
       "registryId": "response-header.vary"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "requestBodyHeader",
+      "file": "packages/server/src/app-document.ts",
+      "id": "packages/server/src/app-document.ts#requestBearsAmbientCredentials.return",
+      "inputName": "cookie",
+      "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
+      "reason": "The proved-document cache rejects requests carrying the registered Cookie credential field.",
+      "registryId": "request-header.cookie"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "requestBodyHeader",
+      "file": "packages/server/src/app-document.ts",
+      "id": "packages/server/src/app-document.ts#requestBearsAmbientCredentials.return~2",
+      "inputName": "authorization",
+      "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
+      "reason": "The proved-document cache rejects requests carrying the registered Authorization credential field.",
+      "registryId": "request-header.authorization"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "requestBodyHeader",
+      "file": "packages/server/src/app-document.ts",
+      "id": "packages/server/src/app-document.ts#variant",
+      "inputName": "accept",
+      "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
+      "reason": "The proved-document cache key selects only the registered Accept negotiation axis and otherwise narrows to the HTML variant.",
+      "registryId": "request-header.accept"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "requestBodyHeader",
+      "file": "packages/server/src/app-document.ts",
+      "id": "packages/server/src/app-document.ts#provedDocumentCacheKey.call",
+      "inputName": null,
+      "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
+      "reason": "Compiler-proved Vary axes are the sole source of dynamic request-header names used to derive the private cache key.",
+      "registryId": "request-header.dynamic-framework-door"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "requestBodyHeader",
+      "file": "packages/server/src/app-document.ts",
+      "id": "packages/server/src/app-document.ts#provedDocumentCachedResponse.call",
+      "inputName": "if-none-match",
+      "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
+      "reason": "Cache lookup compares the registered If-None-Match request field with the stored strong validator before returning 304.",
+      "registryId": "request-header.if-none-match"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/app-document.ts",
+      "id": "packages/server/src/app-document.ts#admitProvedDocumentResponse.call",
+      "inputName": "set-cookie",
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "Cache admission rejects any response carrying the registered Set-Cookie field before retaining public document bytes.",
+      "registryId": "response-header.set-cookie"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/app-document.ts",
+      "id": "packages/server/src/app-document.ts#admitProvedDocumentResponse.call~2",
+      "inputName": "cache-control",
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "Cache admission requires the exact registered Cache-Control field value established by the proved validator tier.",
+      "registryId": "response-header.cache-control"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/app-document.ts",
+      "id": "packages/server/src/app-document.ts#etag",
+      "inputName": "etag",
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "Cache admission retains only the registered opaque ETag validator emitted by the proved document tier.",
+      "registryId": "response-header.etag"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/app-document.ts",
+      "id": "packages/server/src/app-document.ts#applyProvedDocumentValidatorTier.call",
+      "inputName": "cache-control",
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "Validator-tier admission refuses to overwrite any existing registered Cache-Control response field.",
+      "registryId": "response-header.cache-control"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/app-document.ts",
+      "id": "packages/server/src/app-document.ts#applyProvedDocumentValidatorTier.call~2",
+      "inputName": "set-cookie",
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "Validator-tier admission rejects responses carrying the registered Set-Cookie field before assigning public cache posture.",
+      "registryId": "response-header.set-cookie"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "requestBodyHeader",
+      "file": "packages/server/src/app-document.ts",
+      "id": "packages/server/src/app-document.ts#applyProvedDocumentValidatorTier.call~3",
+      "inputName": "if-none-match",
+      "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
+      "reason": "Conditional proved-document responses compare only the registered If-None-Match request validator.",
+      "registryId": "request-header.if-none-match"
     },
     {
       "allowedCarriers": ["request-header"],
@@ -673,8 +803,8 @@
   ],
   "schema": "kovo-wire-input-boundary/v1",
   "summary": {
-    "classified": 67,
-    "dynamicNames": 5,
-    "sites": 67
+    "classified": 80,
+    "dynamicNames": 6,
+    "sites": 80
   }
 }
