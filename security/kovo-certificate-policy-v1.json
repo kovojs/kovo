@@ -190,7 +190,7 @@
     },
     {
       "path": "@kovojs/compiler/dist/internal.mjs",
-      "sha512": "sha512-B2QfhR6KwAAv1EqdL4BS8PQTROYjKkzEYhc6RIp7hAUeCXjZIctsu+rZUNAqNjQdO9f/ECSh6gMRormnafSN3A=="
+      "sha512": "sha512-QNzoT4LGmQRL3+WEgogl+3Mf26fxIdLGUM7/nA4iBLjfWqzonuz6LnonuNxRK8cScn/OYiKITc4h7qzJpWgQjw=="
     },
     {
       "path": "@kovojs/compiler/dist/internal/graph.mjs",
