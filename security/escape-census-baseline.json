@@ -13,11 +13,11 @@
     {
       "app": "metric-e-representative",
       "manifest": {
-        "artifactSubject": "sha256:e1b86716c1f2401c30b36703cb029365ac08b38563691a3fc2dd9089087f7331",
+        "artifactSubject": "sha256:2ce4932bb9cefb318457d6859e1ae0ead54ddd69a3c6e03ecff69d47bc5fca39",
         "schema": "kovo.escape-census-review-subjects/v1",
         "subjects": [
           {
-            "artifactSubject": "sha256:e1b86716c1f2401c30b36703cb029365ac08b38563691a3fc2dd9089087f7331",
+            "artifactSubject": "sha256:2ce4932bb9cefb318457d6859e1ae0ead54ddd69a3c6e03ecff69d47bc5fca39",
             "door": "allowControlChars",
             "root": "app.tsx:646:676",
             "schema": "kovo.escape-census-review/v1",
@@ -33,7 +33,7 @@
             ]
           },
           {
-            "artifactSubject": "sha256:e1b86716c1f2401c30b36703cb029365ac08b38563691a3fc2dd9089087f7331",
+            "artifactSubject": "sha256:2ce4932bb9cefb318457d6859e1ae0ead54ddd69a3c6e03ecff69d47bc5fca39",
             "door": "csrf:false",
             "root": "mutation:app/admin-mutation",
             "schema": "kovo.escape-census-review/v1",
@@ -49,7 +49,7 @@
             ]
           },
           {
-            "artifactSubject": "sha256:e1b86716c1f2401c30b36703cb029365ac08b38563691a3fc2dd9089087f7331",
+            "artifactSubject": "sha256:2ce4932bb9cefb318457d6859e1ae0ead54ddd69a3c6e03ecff69d47bc5fca39",
             "door": "trustedHtml",
             "root": "app.tsx:1112:1192",
             "schema": "kovo.escape-census-review/v1",
