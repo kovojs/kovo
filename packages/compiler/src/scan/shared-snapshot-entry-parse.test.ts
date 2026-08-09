@@ -93,8 +93,14 @@ describe('parseSharedSnapshotEntry (plans/good-perf.md O7)', () => {
   it('distinct entry objects do not share by content — the memo is object-keyed, never content-keyed', () => {
     // packages/drizzle/src/static/project-setup.ts records the OOM history of process-global
     // content-keyed memos; identical bytes in two runs must not alias through a global table.
-    const runA = parseSharedSnapshotEntry({ fileName: 'same.tsx', source: 'export const x = 1;\n' });
-    const runB = parseSharedSnapshotEntry({ fileName: 'same.tsx', source: 'export const x = 1;\n' });
+    const runA = parseSharedSnapshotEntry({
+      fileName: 'same.tsx',
+      source: 'export const x = 1;\n',
+    });
+    const runB = parseSharedSnapshotEntry({
+      fileName: 'same.tsx',
+      source: 'export const x = 1;\n',
+    });
     expect(runB).not.toBe(runA);
   });
 
@@ -144,6 +150,8 @@ describe('parseSharedSnapshotEntry (plans/good-perf.md O7)', () => {
     // parse each of the N extras at most once overall; everything else is per-root work that does
     // not grow with closure size.
     expect(freshParses).toBeGreaterThanOrEqual(moduleCount * (moduleCount - 1));
-    expect(sharedParses).toBeLessThanOrEqual(freshParses - moduleCount * (moduleCount - 1) + moduleCount);
+    expect(sharedParses).toBeLessThanOrEqual(
+      freshParses - moduleCount * (moduleCount - 1) + moduleCount,
+    );
   });
 });

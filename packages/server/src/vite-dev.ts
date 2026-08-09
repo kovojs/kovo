@@ -181,9 +181,7 @@ export interface KovoAppShellViteDevServer {
  * @internal Vite adapter/header bridge for the unconditional dev posture marker.
  * SPEC §9.5.1: dev serves are not proof-bearing responses, even between analyses.
  */
-export function installKovoDevPostureHeaderMiddleware(
-  server: KovoAppShellViteDevServer,
-): void {
+export function installKovoDevPostureHeaderMiddleware(server: KovoAppShellViteDevServer): void {
   server.middlewares.use((_request, response, next) => {
     try {
       response.setHeader('Kovo-Dev-Posture', 'dev-unproven');

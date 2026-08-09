@@ -24,12 +24,12 @@ Given that `fn` itself is boot-captured, the indirection defends exactly three t
 
 - **T1 — poisoned `Function.prototype.apply` / `Function.prototype.call`.** Writing
   `fn.apply(receiver, args)` or `fn.call(receiver, …)` performs a property lookup on `fn`'s
-  prototype chain *at every invocation*. App code that replaces `Function.prototype.apply`/`call`
+  prototype chain _at every invocation_. App code that replaces `Function.prototype.apply`/`call`
   after boot would intercept every security-relevant call: read secret arguments, forge return
   values, skip the native entirely. `Reflect.apply` invokes `fn` with no property lookup.
 - **T2 — poisoned method on the receiver's prototype.** Writing `value.slice(…)` looks `slice` up
   on `String.prototype` per call. Capturing `nativeStringSlice` closes this, but only if the
-  *invocation* of the captured function also avoids lookups — which is T1 again.
+  _invocation_ of the captured function also avoids lookups — which is T1 again.
 - **T3 — poisoned iterator protocol.** Spreading (`fn(...args)`) drives
   `%Array.prototype%[Symbol.iterator]` / `%ArrayIteratorPrototype%.next`, both mutable.
   `Reflect.apply` materializes arguments via `CreateListFromArrayLike` (length + indexed reads on

@@ -1120,7 +1120,7 @@ describe("extractPackageComponentCss components: 'imported' (O4/D4 import-graph 
   });
 
   it('emits no package CSS for an app that imports zero package components', () => {
-    const appSource = "export const answer = 42;\n";
+    const appSource = 'export const answer = 42;\n';
     const fixture = writeVendoredFixture('kovo-package-css-prune-zero-', appSource);
     try {
       const result = extractImported(fixture, appSource);
@@ -1235,7 +1235,11 @@ describe("extractPackageComponentCss components: 'imported' (O4/D4 import-graph 
         fixtureComponentSource('direct-button', "import { Component as Badge } from './badge.js';"),
         'utf8',
       );
-      writeFileSync(join(packageDir, 'src/badge.tsx'), fixtureComponentSource('direct-badge'), 'utf8');
+      writeFileSync(
+        join(packageDir, 'src/badge.tsx'),
+        fixtureComponentSource('direct-badge'),
+        'utf8',
+      );
       writeFileSync(
         join(packageDir, 'src/combobox.tsx'),
         fixtureComponentSource('direct-combobox'),
@@ -1290,9 +1294,13 @@ describe("extractPackageComponentCss components: 'imported' (O4/D4 import-graph 
       writeFileSync(join(root, 'src/app.tsx'), appSource, 'utf8');
       writeFileSync(
         join(root, 'src/pricing.tsx'),
-        ["import '@kovojs/ui/kbd';", 'export function Pricing() {', "  return 'pricing';", '}', ''].join(
-          '\n',
-        ),
+        [
+          "import '@kovojs/ui/kbd';",
+          'export function Pricing() {',
+          "  return 'pricing';",
+          '}',
+          '',
+        ].join('\n'),
         'utf8',
       );
 

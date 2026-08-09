@@ -429,11 +429,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   // owns surfacing them as teaching diagnostics.
   const runDevProjectFactsRefresh = async (): Promise<void> => {
     try {
-      const mutationFacts = collectCompilerProjectMutationFacts(
-        root,
-        app,
-        dataPlaneDisposition(),
-      );
+      const mutationFacts = collectCompilerProjectMutationFacts(root, app, dataPlaneDisposition());
       const queryFacts = snapshotBuildArray(
         await collectCompilerQueryShapeFacts(root, app, dataPlaneDisposition()),
         'compiler query-shape facts',

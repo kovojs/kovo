@@ -21,7 +21,7 @@ Kovo is **not** currently competitive on either axis, and it loses worst on the 
 architecture was designed to win.
 
 - **Production bytes**: four concrete defects, two of them near-trivial to fix, account for the
-  entire loss. Kovo's *raw* HTML is 6.2% leaner than Next.js's and its navigation protocol is 2.7x
+  entire loss. Kovo's _raw_ HTML is 6.2% leaner than Next.js's and its navigation protocol is 2.7x
   more compact — then it ships everything uncompressed and loses anyway.
 - **Navigation and repeat visit**: Kovo's headline architectural feature, server-owned enhanced
   navigation, is **100% dead in the production build** — Kovo's own CSP blocks Kovo's own client
@@ -38,50 +38,50 @@ Kovo does hold genuine wins: **0 ms TBT** on both profiles, and mobile time-to-i
 
 ### Production — first load
 
-| Metric | Kovo | Next.js 16.2.9 | Ratio |
-| --- | ---: | ---: | ---: |
-| Document on the wire, `/` | 41,014 B | 6,036 B (gzip) | **6.8x worse** |
-| Document on the wire, `/product/...` | 25,195 B | 3,066 B (gzip) | **8.2x worse** |
-| Document identity bytes (uncompressed) | 41,014 B | 43,725 B | 1.06x **better** |
-| Critical-path bytes shipped | 430,847 B | 8,064 B render-blocking | — |
-| Mobile FCP/LCP (4x CPU, ~1.6 Mbps, 150 ms RTT) | 980 ms (MAD 4) | 408 ms (MAD 12) | **2.40x worse** |
-| Desktop FCP/LCP | 40 ms (MAD 0) | 40 ms (MAD 0) | tie |
-| Desktop TTFB | 3.9 ms (MAD 0.1) | 1.3 ms (MAD 0.1) | 3.0x worse |
-| Mobile TTI proxy (cart dialog) | 405.9 ms | 1225.5 ms | **3.02x better** |
-| Total Blocking Time (both profiles) | 0 ms | 0 / 11 ms | **better** |
-| Lighthouse desktop `/` | 88 | 89 | ~tie |
-| Lighthouse desktop `/product/...` | 70 | 90 | **worse** |
-| Boot to first 200 | 266.4 ms (MAD 30.5) | 228.7 ms (MAD 11.0) | ~tie |
-| Steady-state RSS @ c=32 | 339.5 MiB | 289.1 MiB | ~tie |
+| Metric                                         |                Kovo |          Next.js 16.2.9 |            Ratio |
+| ---------------------------------------------- | ------------------: | ----------------------: | ---------------: |
+| Document on the wire, `/`                      |            41,014 B |          6,036 B (gzip) |   **6.8x worse** |
+| Document on the wire, `/product/...`           |            25,195 B |          3,066 B (gzip) |   **8.2x worse** |
+| Document identity bytes (uncompressed)         |            41,014 B |                43,725 B | 1.06x **better** |
+| Critical-path bytes shipped                    |           430,847 B | 8,064 B render-blocking |                — |
+| Mobile FCP/LCP (4x CPU, ~1.6 Mbps, 150 ms RTT) |      980 ms (MAD 4) |         408 ms (MAD 12) |  **2.40x worse** |
+| Desktop FCP/LCP                                |       40 ms (MAD 0) |           40 ms (MAD 0) |              tie |
+| Desktop TTFB                                   |    3.9 ms (MAD 0.1) |        1.3 ms (MAD 0.1) |       3.0x worse |
+| Mobile TTI proxy (cart dialog)                 |            405.9 ms |               1225.5 ms | **3.02x better** |
+| Total Blocking Time (both profiles)            |                0 ms |               0 / 11 ms |       **better** |
+| Lighthouse desktop `/`                         |                  88 |                      89 |             ~tie |
+| Lighthouse desktop `/product/...`              |                  70 |                      90 |        **worse** |
+| Boot to first 200                              | 266.4 ms (MAD 30.5) |     228.7 ms (MAD 11.0) |             ~tie |
+| Steady-state RSS @ c=32                        |           339.5 MiB |               289.1 MiB |             ~tie |
 
 ### Production — navigation and repeat visit (mobile-throttled session, 7 medians)
 
-| Metric | Kovo | Next.js | Ratio |
-| --- | ---: | ---: | ---: |
-| Nav to product A (click → heading laid out) | 2,125 ms (MAD 6) | 61 ms (MAD 2) | **34.8x worse** |
-| Nav to product A, wire bytes | 152,537 B | 0 B | — |
-| Nav to product B | 1,162 ms (MAD 5) | 51 ms (MAD 1) | **22.8x worse** |
-| Nav to product B, wire bytes | 152,839 B | 349 B | **438x worse** |
-| Back to listing (to actual paint) | 784 ms (MAD 3) | 24 ms (MAD 2) | **32.7x worse** |
-| Repeat visit `/` FCP (warm HTTP cache) | 960 ms (MAD 0) | 192 ms (MAD 4) | **5.0x worse** |
-| Repeat visit `/` wire bytes | 166,899 B | 7,255 B | cold→repeat saving 61.6% vs 95.9% |
-| Enhanced-nav document, raw | 2,286 B | 6,249 B (RSC) | **2.7x better** |
-| Enhanced-nav document, on the wire | 2,286 B (never compressed) | 1,776 B (gzip) | 1.29x worse |
+| Metric                                      |                       Kovo |        Next.js |                             Ratio |
+| ------------------------------------------- | -------------------------: | -------------: | --------------------------------: |
+| Nav to product A (click → heading laid out) |           2,125 ms (MAD 6) |  61 ms (MAD 2) |                   **34.8x worse** |
+| Nav to product A, wire bytes                |                  152,537 B |            0 B |                                 — |
+| Nav to product B                            |           1,162 ms (MAD 5) |  51 ms (MAD 1) |                   **22.8x worse** |
+| Nav to product B, wire bytes                |                  152,839 B |          349 B |                    **438x worse** |
+| Back to listing (to actual paint)           |             784 ms (MAD 3) |  24 ms (MAD 2) |                   **32.7x worse** |
+| Repeat visit `/` FCP (warm HTTP cache)      |             960 ms (MAD 0) | 192 ms (MAD 4) |                    **5.0x worse** |
+| Repeat visit `/` wire bytes                 |                  166,899 B |        7,255 B | cold→repeat saving 61.6% vs 95.9% |
+| Enhanced-nav document, raw                  |                    2,286 B |  6,249 B (RSC) |                   **2.7x better** |
+| Enhanced-nav document, on the wire          | 2,286 B (never compressed) | 1,776 B (gzip) |                       1.29x worse |
 
-Note on prior numbers: the committed harness measures navigation as *DOM presence*, which reports
+Note on prior numbers: the committed harness measures navigation as _DOM presence_, which reports
 Kovo at 36.9 ms desktop / 88.5 ms mobile. Measured to **actual paint** in a real session the same
 navigation costs 2,125 ms. DOM-presence timing understates Kovo's navigation cost by ~39x because
 Kovo replaces the whole document. Do not quote the DOM-presence figure.
 
 ### Production — SSR throughput
 
-| Metric | Kovo | Next.js | Ratio |
-| --- | ---: | ---: | ---: |
-| req/s, `/` @ c=32 (vs force-dynamic Next) | 399.6 | 766.4 | **1.92x worse** |
-| req/s, `/product` @ c=32 (vs force-dynamic Next) | 772.3 | 1759.4 | **2.28x worse** |
-| req/s, `/` @ c=32 (vs Next **as it actually ships**: prerendered) | 399.6 | 5330.2 | **13.3x worse** |
+| Metric                                                            |  Kovo | Next.js |           Ratio |
+| ----------------------------------------------------------------- | ----: | ------: | --------------: |
+| req/s, `/` @ c=32 (vs force-dynamic Next)                         | 399.6 |   766.4 | **1.92x worse** |
+| req/s, `/product` @ c=32 (vs force-dynamic Next)                  | 772.3 |  1759.4 | **2.28x worse** |
+| req/s, `/` @ c=32 (vs Next **as it actually ships**: prerendered) | 399.6 |  5330.2 | **13.3x worse** |
 
-Two comparisons matter and the repo's benchmark conflates them. Against a *force-dynamic* Next
+Two comparisons matter and the repo's benchmark conflates them. Against a _force-dynamic_ Next
 rebuild that genuinely renders per request, Kovo is ~2x slower. Against what `next build` produces
 for this app **by default** — prerendered routes served as `x-nextjs-cache: HIT` — Kovo is 13x
 slower, because Kovo has no prerender/ISR/route-cache tier at all. Both belong in any honest
@@ -89,20 +89,20 @@ comparison.
 
 ### Development
 
-| Metric | Kovo | Next.js (Turbopack) | Ratio |
-| --- | ---: | ---: | ---: |
-| `dev` cold start, benchmark app (1 file, 541 LOC) | 19,657 ms (MAD 366) | 1,000 ms (MAD 4.2) | **19.7x worse** |
-| `dev` cold start, `examples/stackoverflow` (24 files, 5,007 LOC) | 59,049 ms (MAD 80) | — | **59x** vs Next on the small app |
-| `dev` warm start, benchmark app | 18,618 ms (MAD 557) | 986 ms (MAD 10.6) | warm saves only 5.3% |
-| **Edit → served HTML updated**, benchmark app | **7,225 ms** (MAD 33.6) | **107 ms** (MAD 3.1) | **67x worse** |
-| **Edit → served HTML updated**, `examples/stackoverflow` | **never lands** (4/4 runs) | — | broken |
-| HMR preserves client state | **no** — full reload every save, 3/3 | **yes**, 4/4 | — |
-| Dev server RSS, idle after cold start | 3,013 MB | 630 MB | **4.8x worse** |
-| Dev server RSS, `examples/stackoverflow` peak | 4,026 MB | — | on a 16 GiB box |
-| `build` cold / warm / one-line edit | 50,730 / 52,743 / 46,647 ms | 2,456 / 2,561 / 2,531 ms | **20.7x / 20.6x / 18.4x worse** |
-| Build peak process-tree RSS | 1,831–2,198 MiB | 1,127–1,140 MiB | 1.6–1.9x worse |
-| `check` cold / warm / one-file (benchmark app) | 19,324 / 17,668 / 13,707 ms | — | warm ≈ cold |
-| `check` cold / warm / one-file (`stackoverflow`) | 38,486 / 38,684 / 32,394 ms | — | warm ≈ cold |
+| Metric                                                           |                                 Kovo |      Next.js (Turbopack) |                            Ratio |
+| ---------------------------------------------------------------- | -----------------------------------: | -----------------------: | -------------------------------: |
+| `dev` cold start, benchmark app (1 file, 541 LOC)                |                  19,657 ms (MAD 366) |       1,000 ms (MAD 4.2) |                  **19.7x worse** |
+| `dev` cold start, `examples/stackoverflow` (24 files, 5,007 LOC) |                   59,049 ms (MAD 80) |                        — | **59x** vs Next on the small app |
+| `dev` warm start, benchmark app                                  |                  18,618 ms (MAD 557) |        986 ms (MAD 10.6) |             warm saves only 5.3% |
+| **Edit → served HTML updated**, benchmark app                    |              **7,225 ms** (MAD 33.6) |     **107 ms** (MAD 3.1) |                    **67x worse** |
+| **Edit → served HTML updated**, `examples/stackoverflow`         |           **never lands** (4/4 runs) |                        — |                           broken |
+| HMR preserves client state                                       | **no** — full reload every save, 3/3 |             **yes**, 4/4 |                                — |
+| Dev server RSS, idle after cold start                            |                             3,013 MB |                   630 MB |                   **4.8x worse** |
+| Dev server RSS, `examples/stackoverflow` peak                    |                             4,026 MB |                        — |                  on a 16 GiB box |
+| `build` cold / warm / one-line edit                              |          50,730 / 52,743 / 46,647 ms | 2,456 / 2,561 / 2,531 ms |  **20.7x / 20.6x / 18.4x worse** |
+| Build peak process-tree RSS                                      |                      1,831–2,198 MiB |          1,127–1,140 MiB |                   1.6–1.9x worse |
+| `check` cold / warm / one-file (benchmark app)                   |          19,324 / 17,668 / 13,707 ms |                        — |                      warm ≈ cold |
+| `check` cold / warm / one-file (`stackoverflow`)                 |          38,486 / 38,684 / 32,394 ms |                        — |                      warm ≈ cold |
 
 ## Final verification (2026-08-08, quiet box)
 
@@ -122,16 +122,16 @@ remembering are recorded under "Pre-existing defects" below.
 
 ## Current state after batch 3 (merged to main, 2026-08-08)
 
-| Metric | Baseline | Batch 3 merged | Change |
-| --- | ---: | ---: | ---: |
-| `kovo check` growth in module count | **quadratic** (fit RMSE 26x better than linear) | **linear** (quadratic fit no longer beats linear) | — |
-| `kovo check` wall, N=400 | 143.1 s | 64.2 s | -55.1% |
-| `ts.createSourceFile` calls, N=50 | 23,894 | 995 | -95.8% |
-| peak check RSS, N=400 | 3,110 MiB (over the 3,072 budget) | 3,022 MiB | under budget |
-| apply-shaped SSR CPU @ c=32 | 38.63% | 1.31% | — |
-| per-dispatch cost | 15.13 ns | 3.18 ns | 4.8x |
-| SSR throughput (simultaneous A/B) | — | +5.4% to +8.6% | — |
-| watch reuse on a docs-only edit | 25,233 ms, `reused 0/8` | 1,049 ms, `reused 7/8` | -95.8% |
+| Metric                              |                                        Baseline |                                    Batch 3 merged |       Change |
+| ----------------------------------- | ----------------------------------------------: | ------------------------------------------------: | -----------: |
+| `kovo check` growth in module count | **quadratic** (fit RMSE 26x better than linear) | **linear** (quadratic fit no longer beats linear) |            — |
+| `kovo check` wall, N=400            |                                         143.1 s |                                            64.2 s |       -55.1% |
+| `ts.createSourceFile` calls, N=50   |                                          23,894 |                                               995 |       -95.8% |
+| peak check RSS, N=400               |               3,110 MiB (over the 3,072 budget) |                                         3,022 MiB | under budget |
+| apply-shaped SSR CPU @ c=32         |                                          38.63% |                                             1.31% |            — |
+| per-dispatch cost                   |                                        15.13 ns |                                           3.18 ns |         4.8x |
+| SSR throughput (simultaneous A/B)   |                                               — |                                    +5.4% to +8.6% |            — |
+| watch reuse on a docs-only edit     |                         25,233 ms, `reused 0/8` |                            1,049 ms, `reused 7/8` |       -95.8% |
 
 **Read the O8 attribution correction before quoting the old 38.5% figure.** The V8 profiler
 attributes callee builtin ticks to the calling JS frame, so that bucket mostly contained the invoked
@@ -150,15 +150,15 @@ in-app navigation does not replace the document, and a pre-navigation `window.__
 
 Verified on merged main against the rebuilt production artifact:
 
-| Metric | Baseline | Batch 2 merged | Change |
-| --- | ---: | ---: | ---: |
-| per-navigation wire bytes | 152,537 B (full reload) | **920 B** (br) | **-99.4%** |
-| navigation payload vs Next.js | 1.29x worse | **1.9x better** (920 B vs 1,776 B) | — |
-| `examples/stackoverflow` edit→served | never landed (4/4) | 3/4 land, median 35,861 ms | — |
-| `benchmarks/kovo` edit→served | 2,478 ms | 1,224 ms | -50.6% |
-| parse-error feedback | none for 90 s | 580 ms + browser overlay | — |
-| client state on a non-entry save | destroyed 3/3 | preserved | — |
-| KV448 import wall | unbuildable at N≥130 | flat-200 passes end to end | — |
+| Metric                               |                Baseline |                     Batch 2 merged |     Change |
+| ------------------------------------ | ----------------------: | ---------------------------------: | ---------: |
+| per-navigation wire bytes            | 152,537 B (full reload) |                     **920 B** (br) | **-99.4%** |
+| navigation payload vs Next.js        |             1.29x worse | **1.9x better** (920 B vs 1,776 B) |          — |
+| `examples/stackoverflow` edit→served |      never landed (4/4) |         3/4 land, median 35,861 ms |          — |
+| `benchmarks/kovo` edit→served        |                2,478 ms |                           1,224 ms |     -50.6% |
+| parse-error feedback                 |           none for 90 s |           580 ms + browser overlay |          — |
+| client state on a non-entry save     |           destroyed 3/3 |                          preserved |          — |
+| KV448 import wall                    |    unbuildable at N≥130 |         flat-200 passes end to end |          — |
 
 The navigation response negotiates `application/vnd.kovo.document-parts+json` and carries
 `Kovo-Build` plus `Vary: Accept, Accept-Encoding`; the client validates build identity before
@@ -173,15 +173,15 @@ cell) and are INDICATIVE. Clean-box re-measurement is owned by O17.
 The tables above are the **2026-08-07 baseline** and are kept as the reference point. Verified on
 merged main by rebuilding `benchmarks/kovo` and probing the running production artifact:
 
-| Asset | Baseline (wire) | Batch 1 merged (wire) | Change |
-| --- | ---: | ---: | ---: |
-| document `/` | 41,014 B | **2,588 B** (br, 18,105 B identity) | **-93.7%** |
-| document `/product/...` | 25,195 B | **787 B** (br, 2,286 B identity) | **-96.9%** |
-| `/assets/styles.css` | 122,222 B | **1,050 B** (br, 3,907 B identity) | **-99.1%** |
-| client runtime | 267,611 B | **0 B** (not referenced by an inert document) | **-100%** |
-| **critical path** | **430,847 B** | **3,638 B** | **-99.2%** |
-| first `<link rel=stylesheet>` offset | byte 23,174 (56.5% in) | **byte 130** (0.72% in) | — |
-| stylesheet revalidation | 122,222 B re-download | **304, 0 body bytes** | — |
+| Asset                                |        Baseline (wire) |                         Batch 1 merged (wire) |     Change |
+| ------------------------------------ | ---------------------: | --------------------------------------------: | ---------: |
+| document `/`                         |               41,014 B |           **2,588 B** (br, 18,105 B identity) | **-93.7%** |
+| document `/product/...`              |               25,195 B |              **787 B** (br, 2,286 B identity) | **-96.9%** |
+| `/assets/styles.css`                 |              122,222 B |            **1,050 B** (br, 3,907 B identity) | **-99.1%** |
+| client runtime                       |              267,611 B | **0 B** (not referenced by an inert document) |  **-100%** |
+| **critical path**                    |          **430,847 B** |                                   **3,638 B** | **-99.2%** |
+| first `<link rel=stylesheet>` offset | byte 23,174 (56.5% in) |                       **byte 130** (0.72% in) |          — |
+| stylesheet revalidation              |  122,222 B re-download |                         **304, 0 body bytes** |          — |
 
 **Next.js ships 8,064 B render-blocking on the same app. Kovo now ships 3,638 B — 2.2x fewer.**
 The mobile FCP loss the baseline recorded (980 ms vs 408 ms) was ~83% transfer time on a
@@ -206,16 +206,16 @@ Three of the four worst development findings are the same mechanism: **Kovo buil
 CPU attribution of one `kovo dev` edit on the benchmark app (V8 sampler over an exact
 edit→served window, 4 merged profiles; the main thread is **99% saturated for the whole 7.2 s**):
 
-| Bucket | ms/edit | % |
-| --- | ---: | ---: |
-| `handleHotUpdate` → `collectCompilerQueryShapeFacts` → `collectDataPlaneAnalysis` | 2,869 | 37.3 |
-| `handleHotUpdate` → `collectCompilerProjectMutationFacts` → `createProgram` | 724 | 9.4 |
-| `transform` → `lowerViteSourceDerivedRegistryDeclarations` → `ts.createProgram` | 753 | 9.8 |
-| second `lowerViteSourceDerivedRegistryDeclarations` (vite.ts:620) → another fresh `ts.createProgram` | 743 | 9.7 |
-| `runDevDataPlaneGate` (debounced) → `collectDataPlaneAnalysis` again | 703 | 9.1 |
-| garbage collector | 563 | 7.3 |
-| `extractPackageComponentCss` (stylesheet manifest re-extraction) | 451 | 5.9 |
-| module-runner re-executing the SSR graph | 177 | 2.3 |
+| Bucket                                                                                               | ms/edit |    % |
+| ---------------------------------------------------------------------------------------------------- | ------: | ---: |
+| `handleHotUpdate` → `collectCompilerQueryShapeFacts` → `collectDataPlaneAnalysis`                    |   2,869 | 37.3 |
+| `handleHotUpdate` → `collectCompilerProjectMutationFacts` → `createProgram`                          |     724 |  9.4 |
+| `transform` → `lowerViteSourceDerivedRegistryDeclarations` → `ts.createProgram`                      |     753 |  9.8 |
+| second `lowerViteSourceDerivedRegistryDeclarations` (vite.ts:620) → another fresh `ts.createProgram` |     743 |  9.7 |
+| `runDevDataPlaneGate` (debounced) → `collectDataPlaneAnalysis` again                                 |     703 |  9.1 |
+| garbage collector                                                                                    |     563 |  7.3 |
+| `extractPackageComponentCss` (stylesheet manifest re-extraction)                                     |     451 |  5.9 |
+| module-runner re-executing the SSR graph                                                             |     177 |  2.3 |
 
 **Whole-project TypeScript analysis is 5,792 ms = 75.3% of every edit** (≈87% including the GC it
 causes). Self time by file: `typescript@6.0.3/lib/typescript.js` 3,552 ms (46.2%) **plus a second,
@@ -232,23 +232,23 @@ times a `Program` is constructed is the whole game.
 
 All decided. These are binding for the work below; do not re-open them without recording why.
 
-| # | Decision | Ruling | Gates |
-| --- | --- | --- | --- |
-| D1 | Compress cookie-bearing / `no-store` responses? | **Compress everywhere.** Mitigate BREACH by token masking / padding, never by refusing to compress | O1 |
-| D2 | How to unblock enhanced navigation past Trusted Types | **Structured document-part protocol, directly.** No interim Trusted Types stopgap; the CSP directive stays | O2 |
-| D3 | Document caching policy | **Content-hash `/assets/*` immutable now**; document validators are decided as part of D9 | O3, O14 |
-| D4 | CSS pruning strategy | **Import-graph pruning**; per-route splitting evaluated afterwards on measurement | O4 |
-| D5 | Prove security posture per keystroke or per commit? | **Per commit.** Do all four: shared `Program`/`DocumentRegistry`, content-hash memo, incremental analysis, **and** move analysis off the HMR blocking path. `check`/`build` stay fail-closed | O5, O6 |
-| D6 | Speculation Rules default | **Default on** for routes the compiler proves are side-effect-free GETs; opt-out per route | O9 |
-| D7 | Deferred client runtime registration | **Register only for apps with ≥1 L1 interaction** | O10 |
-| D8 | `Reflect.apply` wrapper vs boot-captured direct call | **Boot-capture then direct-call.** Threat model is written as a prerequisite deliverable, not as a gate on the decision. No fast/hardened build flag | O8 |
-| D9 | Prerender / route-cache tier | **Build the compiler-proved cache-influence cache**, not a Next-style annotation cache | O14, O3 |
-| D10 | Multi-core story | **Document N-process-behind-proxy; make the rate limiter process-aware.** Built-in cluster only after D9 | O14 |
-| D11 | Streaming / early `<head>` flush | **Stay buffered.** Revisit only after O1–O4, and only for routes proven to make no post-render header decisions | O14 |
-| D12 | Default per-IP rate limit on document GETs | **Exempt document GETs**; keep shedding on mutations/queries | O13 |
-| D13 | Budget workload | **Two tiers**: keep the toy for cheap CI signal, add a realistic tier allowed to fail loudly | O17 |
-| D14 | Committed benchmark report | **Regenerate or delete it**; it currently errs in Kovo's favour | O15 |
-| D15 | Scope | **Everything.** No deferral to other ledgers | all |
+| #   | Decision                                              | Ruling                                                                                                                                                                                       | Gates   |
+| --- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| D1  | Compress cookie-bearing / `no-store` responses?       | **Compress everywhere.** Mitigate BREACH by token masking / padding, never by refusing to compress                                                                                           | O1      |
+| D2  | How to unblock enhanced navigation past Trusted Types | **Structured document-part protocol, directly.** No interim Trusted Types stopgap; the CSP directive stays                                                                                   | O2      |
+| D3  | Document caching policy                               | **Content-hash `/assets/*` immutable now**; document validators are decided as part of D9                                                                                                    | O3, O14 |
+| D4  | CSS pruning strategy                                  | **Import-graph pruning**; per-route splitting evaluated afterwards on measurement                                                                                                            | O4      |
+| D5  | Prove security posture per keystroke or per commit?   | **Per commit.** Do all four: shared `Program`/`DocumentRegistry`, content-hash memo, incremental analysis, **and** move analysis off the HMR blocking path. `check`/`build` stay fail-closed | O5, O6  |
+| D6  | Speculation Rules default                             | **Default on** for routes the compiler proves are side-effect-free GETs; opt-out per route                                                                                                   | O9      |
+| D7  | Deferred client runtime registration                  | **Register only for apps with ≥1 L1 interaction**                                                                                                                                            | O10     |
+| D8  | `Reflect.apply` wrapper vs boot-captured direct call  | **Boot-capture then direct-call.** Threat model is written as a prerequisite deliverable, not as a gate on the decision. No fast/hardened build flag                                         | O8      |
+| D9  | Prerender / route-cache tier                          | **Build the compiler-proved cache-influence cache**, not a Next-style annotation cache                                                                                                       | O14, O3 |
+| D10 | Multi-core story                                      | **Document N-process-behind-proxy; make the rate limiter process-aware.** Built-in cluster only after D9                                                                                     | O14     |
+| D11 | Streaming / early `<head>` flush                      | **Stay buffered.** Revisit only after O1–O4, and only for routes proven to make no post-render header decisions                                                                              | O14     |
+| D12 | Default per-IP rate limit on document GETs            | **Exempt document GETs**; keep shedding on mutations/queries                                                                                                                                 | O13     |
+| D13 | Budget workload                                       | **Two tiers**: keep the toy for cheap CI signal, add a realistic tier allowed to fail loudly                                                                                                 | O17     |
+| D14 | Committed benchmark report                            | **Regenerate or delete it**; it currently errs in Kovo's favour                                                                                                                              | O15     |
+| D15 | Scope                                                 | **Everything.** No deferral to other ledgers                                                                                                                                                 | all     |
 
 ### Accepted consequence of D2
 
@@ -363,7 +363,7 @@ absorbs `plans/better-js-loader.md` Phases 4–5, which are superseded.
     Measured: `/assets/styles.css` → `etag: "9f766c01…"`, conditional refetch → `304`, 0 body
     bytes (was a full 122,222 B re-download). Normative in SPEC §9.5 ("Static validators and
     connection reuse"); pinned by `build.test.ts` 304/ETag probes. The remaining half of D3 —
-    content-hashing the `styles.css` *filename* so `/assets/*` can go immutable — lives with the
+    content-hashing the `styles.css` _filename_ so `/assets/*` can go immutable — lives with the
     asset emitters (`build-export.ts`/`package-styles.ts`, the O4 slice); the immutable-pattern
     header path already engages for hashed names (e.g. `/assets/index-DEZ6Vmj6.css`).
 - [x] Give document responses cache headers at all (documents half; decided and built as D9/O14).
@@ -576,7 +576,7 @@ Grouped here because they share O5's root cause. Four of five closed 2026-08-08 
     changed ppid proves the invoker died, aborts the watch session (and closes `kovo dev`).
     Verified end to end: SIGKILL of the wrapper `kovo` process → the watch child printed
     `[kovo] the invoking parent process (pid …) is gone …` and exited **3 s** later. Unit-pinned
-    by `process-supervision.test.ts`. Residual: killing only the *grandparent* (harness shell)
+    by `process-supervision.test.ts`. Residual: killing only the _grandparent_ (harness shell)
     leaves the pair alive because `bin.ts`'s spawnSync wrapper has no supervision — needs a
     `bin.ts` follow-up (out of this slice's ownership).
 
@@ -629,7 +629,7 @@ Grouped here because they share O5's root cause. Four of five closed 2026-08-08 
     box, peak process-tree RSS 3,281 MB). Memory control at N=125 (passes on both): main
     3,445.0 MB / 52.4 s vs branch 3,440.5 MB / 51.2 s — no regression. Unit ladder pinned by
     `scan/lexical-provenance-scaling.test.ts` (flat N∈{125,130,200,400,1000} in-budget; a
-    >4,096-site module still refused).
+    > 4,096-site module still refused).
 
 ### O8 — Remove the `Reflect.apply` indirection from the SSR hot path — **high, large, high risk**
 
@@ -681,7 +681,7 @@ through `Reflect.apply`. No fast-vs-hardened build flag.
     microbenchmark on this box: megamorphic shared-`Reflect.apply` helper 15.13 ns/call →
     boot-minted caller **3.18 ns** (4.8x), within 4% of the 3.06 ns raw-call floor.
   - **Attribution correction for the ledger** (do not re-open expecting ~1.6x): the profiler
-    attributes callee *builtin* ticks to the calling JS frame, so the 34–38% "apply-shaped self
+    attributes callee _builtin_ ticks to the calling JS frame, so the 34–38% "apply-shaped self
     time" bucket mostly contained the invoked natives' real work. The recoverable indirection
     overhead was ≈0.5 ms of 7.8 ms/request (~7%), consistent across all measurements; the rest of
     that bucket now re-attributes to the witness wrappers (`formHelperSnapshotRecord` etc.), which
@@ -899,7 +899,7 @@ The evidence base is unsound in seven independent ways. Fix before publishing an
     navigation cost by ~39x** because Kovo replaces the whole document.
 - [ ] Fix the harness's load-window byte accounting.
   - `benchmarks/harness/scenarios.mjs` collects at `load` + 150 ms; Kovo's bootstrap imports the
-    runtime on double-rAF *after* load. Measured: mobile records `total 164,673 / js 0`, while a +5 s
+    runtime on double-rAF _after_ load. Measured: mobile records `total 164,673 / js 0`, while a +5 s
     settle gives `total 434,847 / js 267,948` for the identical build — the harness understates Kovo's
     mobile bytes by **2.64x** and reports `js: 0` for an app shipping 267,948 B of JS. The Next.js
     control is unaffected. Every "Kovo ships 0 JS" claim read off the mobile row is an artifact.
@@ -923,7 +923,7 @@ The evidence base is unsound in seven independent ways. Fix before publishing an
     framework** — Playwright's `chrome-headless-shell` launches with `--disable-back-forward-cache`.
 - [ ] Repair or retire the TanStack entrant.
   - `benchmarks/tanstack` fails to build: `readFile is not exported by __vite-browser-external,
-    imported by src/routes/images/$name.ts` (TanStack Start server-route API drift). Excluded this round.
+imported by src/routes/images/$name.ts` (TanStack Start server-route API drift). Excluded this round.
 
 ### O16 — Fix the production artifact's ability to boot and serve files — **high, small, low risk**
 
@@ -985,6 +985,7 @@ Batch 1 introduced **zero regressions**. Established by running the same three f
 `vite.test.ts` passing. Full server sweep on merged main: **3,914 of 3,919 passing**.
 
 Two classes of noise had to be eliminated first, and both are worth knowing about:
+
 - `vite.test.ts` fails only under parallel load (90 s timeouts in a 258-file sweep with other work on
   the box) and passes in isolation both before and after. Not a defect in the code under test.
 - Dangling workspace symlinks left by dependency bumps produce failures that look like code
@@ -1023,7 +1024,7 @@ Not perf bugs, but they cost hours of measurement time. Candidates for a papercu
     expression with the module-scope-const remediation, and one pass reports every refused receiver
     instead of one per run. Reproduced on `benchmarks/kovo` (appId removed, pre-fix CLI): one
     unlocated sentence; post-fix: `ERROR D1A007 src/app.tsx:305:13 receiver 'app' cannot be proved:
-    defineKovo({...}) is missing the required 'appId'. Add appId: '<uuid-v4>' ...` plus a second
+defineKovo({...}) is missing the required 'appId'. Add appId: '<uuid-v4>' ...` plus a second
     seeded refusal in the same report; wrapper/inline/hidden-body variants all located+actionable;
     restored app checks OK. Pinned by `app-contract-project.test.ts` (+107 lines).
 - [x] Build refusals surface strictly one gate at a time: repairing the benchmark entrant took **six
@@ -1035,7 +1036,7 @@ Not perf bugs, but they cost hours of measurement time. Candidates for a papercu
     commit extended batching to all receiver-provenance refusals). Genuinely dependent gates cannot
     batch (KV236 needs app evaluation, unsound before source trust passes), so every finding-class
     hard stop (exit 1) appends `note: this stopped at the first failing gate; ...may report further
-    refusals once these are fixed.` — verified live: the seeded trust stop carries it, fixing those
+refusals once these are fixed.` — verified live: the seeded trust stop carries it, fixing those
     seeds surfaces the KV236 stop (also carried), configuration errors (exit 2) carry none, and the
     check pipeline's final gate (graph-diagnostics, census-proved all 11 phases executed) correctly
     omits it. Pinned by `build-export-semantic-intrinsics.fixture.ts` (build path notice),
@@ -1108,7 +1109,7 @@ agents (load average recorded per cell, 1.8–4.7).
 - SSR CPU profile: single 20 s `--cpu-prof` capture at c=32, ~24% profiler overhead (304.5 req/s
   profiled vs 399.6 unprofiled).
 - Dev loop: `spawn → first 200` (6 samples, first discarded) and `source write → served HTML contains
-  the new token` (11 edits, first discarded, 15 ms poll). Per-edit attribution via CDP
+the new token` (11 edits, first discarded, 15 ms poll). Per-edit attribution via CDP
   `Profiler.start/stop` bracketing the exact edit→served window, 4 merged profiles at 500 µs. HMR
   classification via headless Chromium (Playwright 1.60.0) with a pre-edit `window.__sentinel`.
 - Check/build: `KOVO_DEVEX_CHECK_PHASE_CENSUS_SOURCE=<entry> ./node_modules/.bin/kovo check source <entry>`

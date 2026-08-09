@@ -20,7 +20,9 @@ describe('kovo check phase census on a failing run', () => {
       });
 
       expect(result.exitCode, `${result.stdout}\n${result.stderr}`).toBe(1);
-      expect(result.stderr).toContain('kovo-check/v1\nERROR kovo check TypeScript preflight failed');
+      expect(result.stderr).toContain(
+        'kovo-check/v1\nERROR kovo check TypeScript preflight failed',
+      );
 
       const census = incompleteCensus(result.stderr);
       // The failing census must be distinguishable from the authenticated success census by schema

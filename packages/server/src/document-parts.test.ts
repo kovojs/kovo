@@ -44,9 +44,23 @@ describe('encodeEnhancedNavigationDocumentParts', () => {
     expect(envelope.bodyAttrs).toEqual([]);
     expect(envelope.head).toEqual([
       ['meta', [['charset', 'utf-8']], []],
-      ['meta', [['name', 'kovo-build'], ['content', 'build-token-1']], []],
+      [
+        'meta',
+        [
+          ['name', 'kovo-build'],
+          ['content', 'build-token-1'],
+        ],
+        [],
+      ],
       ['title', [], ['Home & Start']],
-      ['link', [['rel', 'stylesheet'], ['href', '/assets/styles.css']], []],
+      [
+        'link',
+        [
+          ['rel', 'stylesheet'],
+          ['href', '/assets/styles.css'],
+        ],
+        [],
+      ],
     ]);
     expect(envelope.body).toEqual([
       [

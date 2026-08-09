@@ -17,9 +17,7 @@ const rawStreamResponse = {
   cache: 'no-store',
 } satisfies EndpointResponsePosture;
 
-async function withProcessErrorCapture(
-  run: () => Promise<void>,
-): Promise<readonly unknown[]> {
+async function withProcessErrorCapture(run: () => Promise<void>): Promise<readonly unknown[]> {
   const processErrors: unknown[] = [];
   const onUncaught = (error: unknown): void => {
     processErrors.push(error);

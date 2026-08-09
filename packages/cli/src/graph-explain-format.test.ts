@@ -95,16 +95,18 @@ describe('graph explain formatters', () => {
     expect(line).toContain(
       'ERROR KV424 src/app.tsx:314 sink=request-handler.opaque-protocol source=<property-getter:candidate>',
     );
-    expect(line).toContain('a hook site is accepted only when the compiler proves the receiver is plain data');
-    expect(line).toContain('destructuring the same field at the callback parameter (({ slug }) => ...) is accepted');
+    expect(line).toContain(
+      'a hook site is accepted only when the compiler proves the receiver is plain data',
+    );
+    expect(line).toContain(
+      'destructuring the same field at the callback parameter (({ slug }) => ...) is accepted',
+    );
     // The generic output-sink help would mislead here and must not be attached to this family.
     expect(line).not.toContain('raw HTML');
   });
 
   it('keeps the generic KV424 help for non-protocol sink families', () => {
-    expect(
-      opaqueProtocolSinkExplanation({ sink: 'child_process.spawnSync' }),
-    ).toBeUndefined();
+    expect(opaqueProtocolSinkExplanation({ sink: 'child_process.spawnSync' })).toBeUndefined();
     const line = unregisteredSinkLine({
       safePath: 'runCommand(cmd(...), ...)',
       sink: 'child_process.spawnSync',

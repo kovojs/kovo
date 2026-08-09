@@ -393,7 +393,9 @@ function isMutableAppContractProgramFile(canonicalFileName: string): boolean {
   return !canonicalFileName.includes('/node_modules/');
 }
 
-function memoizedAppContractProject(signature: string): CompilerOwnedAppContractProject | undefined {
+function memoizedAppContractProject(
+  signature: string,
+): CompilerOwnedAppContractProject | undefined {
   const entry = appContractProjectMemo.get(signature);
   if (entry === undefined) return undefined;
   for (const [canonicalFileName, digest] of entry.validatedFiles) {
@@ -920,9 +922,7 @@ export function createCompilerOwnedAppContractProject(
       const analysis = analyzeEntry(fileName);
       if (analysis.diagnostics.length > 0) {
         throw new TypeError(
-          analysis.diagnostics
-            .map((diagnostic) => diagnostic.message)
-            .join('\n'),
+          analysis.diagnostics.map((diagnostic) => diagnostic.message).join('\n'),
         );
       }
       // `sourceFileFor()` above proves this caller spelling resolves to the exact Program

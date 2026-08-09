@@ -3095,7 +3095,14 @@ export function createBrowserNavigationSecurityControls(
       }
       // SPEC §8: a parts document never reconstructs these — base rebinds the document base
       // URL, and the frame/document shells cannot be built into an existing shell.
-      if (tag === 'base' || tag === 'html' || tag === 'head' || tag === 'body' || tag === 'frameset' || tag === 'frame') {
+      if (
+        tag === 'base' ||
+        tag === 'html' ||
+        tag === 'head' ||
+        tag === 'body' ||
+        tag === 'frameset' ||
+        tag === 'frame'
+      ) {
         throw new TypeError('Kovo document parts contain a refused element.');
       }
     } else if (!regExpTest(/^[a-zA-Z][a-zA-Z0-9-]*$/, tag)) {
@@ -3127,7 +3134,8 @@ export function createBrowserNavigationSecurityControls(
       if (!createNs) {
         throw new TypeError('Kovo document parts namespace control is unavailable.');
       }
-      const namespace = ns === 1 ? 'http://www.w3.org/2000/svg' : 'http://www.w3.org/1998/Math/MathML';
+      const namespace =
+        ns === 1 ? 'http://www.w3.org/2000/svg' : 'http://www.w3.org/1998/Math/MathML';
       element = apply<unknown>(createNs, target, [namespace, tag]);
     }
     if (element === null || typeof element !== 'object') {
@@ -3185,7 +3193,11 @@ export function createBrowserNavigationSecurityControls(
       // SPEC §6.6/§8: native event-handler attributes are Trusted Types script sinks; srcdoc
       // is an HTML sink; `is` selects a customized built-in construction cannot reproduce.
       const loweredName = lower(name);
-      if (regExpTest(/^on[a-z]+$/, loweredName) || loweredName === 'srcdoc' || loweredName === 'is') {
+      if (
+        regExpTest(/^on[a-z]+$/, loweredName) ||
+        loweredName === 'srcdoc' ||
+        loweredName === 'is'
+      ) {
         throw new TypeError(
           'Kovo document parts contain a refused attribute: ' + loweredName + ' on ' + tag + '.',
         );

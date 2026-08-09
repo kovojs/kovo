@@ -133,7 +133,9 @@ async function finishSourceCheckInParent(
   const parsed = graphArgs.parseCheckArgs(checkArgs);
   if (!parsed.ok || !('source' in parsed)) {
     return shared.writeUsageError(
-      parsed.ok ? 'kovo: isolated check final phase requires one source handoff.\n' : parsed.message,
+      parsed.ok
+        ? 'kovo: isolated check final phase requires one source handoff.\n'
+        : parsed.message,
       'check',
     );
   }

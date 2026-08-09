@@ -48,9 +48,7 @@ export function median(values) {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((left, right) => left - right);
   const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 1
-    ? sorted[middle]
-    : (sorted[middle - 1] + sorted[middle]) / 2;
+  return sorted.length % 2 === 1 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
 export function medianAbsoluteDeviation(values) {
@@ -211,7 +209,9 @@ export function formatEvaluation(results) {
   }
   const failed = results.filter((result) => result.status === 'fail').length;
   const unproven = results.filter((result) => result.status === 'unproven').length;
-  lines.push(`${String(failed)} failed, ${String(unproven)} unproven, ${String(results.length)} total`);
+  lines.push(
+    `${String(failed)} failed, ${String(unproven)} unproven, ${String(results.length)} total`,
+  );
   return `${lines.join('\n')}\n`;
 }
 
@@ -543,14 +543,19 @@ export async function runBytesSuite(options) {
         'production.document.wireBytes': { value: document.wireBytes },
         'production.inlineBootstrap.gzipBytes': {
           value:
-            inlineBootstrap === '' ? 0 : gzipSync(Buffer.from(inlineBootstrap, 'utf8'), { level: 9 }).byteLength,
+            inlineBootstrap === ''
+              ? 0
+              : gzipSync(Buffer.from(inlineBootstrap, 'utf8'), { level: 9 }).byteLength,
         },
         'production.inlineBootstrap.identityBytes': {
           value: Buffer.byteLength(inlineBootstrap, 'utf8'),
         },
         'production.navigation.wireBytes': { value: navigation.wireBytes },
       },
-      profiles: { cpu: profileCensus(options.cpuProfDir), heap: profileCensus(options.heapProfDir) },
+      profiles: {
+        cpu: profileCensus(options.cpuProfDir),
+        heap: profileCensus(options.heapProfDir),
+      },
       suite: 'bytes',
     };
   } finally {
@@ -772,7 +777,9 @@ export async function runDevEditSuite(options) {
       const deadline = startedAt + options.editTimeoutMs;
       while (performance.now() < deadline) {
         try {
-          const response = await fetch(origin + '/', { headers: { 'accept-encoding': 'identity' } });
+          const response = await fetch(origin + '/', {
+            headers: { 'accept-encoding': 'identity' },
+          });
           if ((await response.text()).includes(token)) {
             landedMs = performance.now() - startedAt;
             break;
@@ -816,7 +823,12 @@ export async function runDevEditSuite(options) {
     // NODE_OPTIONS does flush for `kovo dev` under SIGINT at this HEAD, but only as one
     // whole-session profile in which the edit is a small fraction of a cold start; see
     // `profilingEnv` for the measured comparison.
-    profiles: { cpu: profilePath === null ? null : { directory: options.cpuProfDir, files: [path.basename(profilePath)], fileCount: 1 } },
+    profiles: {
+      cpu:
+        profilePath === null
+          ? null
+          : { directory: options.cpuProfDir, files: [path.basename(profilePath)], fileCount: 1 },
+    },
     suite: 'dev-edit',
   };
 }
@@ -886,7 +898,8 @@ function parseArgs(argv) {
 function hostFacts() {
   return {
     arch: process.arch,
-    cpuCount: (spawnSync('sysctl', ['-n', 'hw.ncpu'], { encoding: 'utf8' }).stdout ?? '').trim() || null,
+    cpuCount:
+      (spawnSync('sysctl', ['-n', 'hw.ncpu'], { encoding: 'utf8' }).stdout ?? '').trim() || null,
     loadAverage: loadavg(),
     node: process.version,
     platform: process.platform,
@@ -895,7 +908,9 @@ function hostFacts() {
 
 async function main(argv) {
   const args = parseArgs(argv);
-  const budgetsPath = path.resolve(String(args.budgets ?? path.join(repoRoot, 'perf-budgets.json')));
+  const budgetsPath = path.resolve(
+    String(args.budgets ?? path.join(repoRoot, 'perf-budgets.json')),
+  );
 
   if (args.evaluate.length > 0) {
     const budgets = JSON.parse(readFileSync(budgetsPath, 'utf8'));

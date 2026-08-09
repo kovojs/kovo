@@ -233,7 +233,10 @@ const callRegExpExec = uncurryThis(nativeRegExpExec) as (
 ) => RegExpExecArray | null;
 const callRegExpFlags = uncurryThis(nativeRegExpFlags) as (expression: RegExp) => string;
 const callRegExpSource = uncurryThis(nativeRegExpSource) as (expression: RegExp) => string;
-const callSetAdd = uncurryThis(nativeSetAdd) as <Value>(set: Set<Value>, value: Value) => Set<Value>;
+const callSetAdd = uncurryThis(nativeSetAdd) as <Value>(
+  set: Set<Value>,
+  value: Value,
+) => Set<Value>;
 const callSetDelete = uncurryThis(nativeSetDelete) as <Value>(
   set: Set<Value>,
   value: Value,
@@ -302,9 +305,7 @@ const callResponseStatus = uncurryThis(nativeResponseStatus) as (response: Respo
 const callResponseStatusText = uncurryThis(nativeResponseStatusText) as (
   response: Response,
 ) => string;
-const callResponseText = uncurryThis(nativeResponseText) as (
-  response: Response,
-) => Promise<string>;
+const callResponseText = uncurryThis(nativeResponseText) as (response: Response) => Promise<string>;
 const callControllerClose = uncurryThis(nativeControllerClose) as (
   controller: ReadableStreamDefaultController<unknown>,
 ) => void;

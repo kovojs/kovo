@@ -908,10 +908,7 @@ async function writePresetArtifacts(
  * directory — without staging, `dist` never contained the files and the artifact could not boot.
  * Absolute roots intentionally stay live deploy-host paths and are not staged.
  */
-async function stageNodeRootedFileRoots(
-  build: KovoNeutralBuild,
-  outDir: string,
-): Promise<void> {
+async function stageNodeRootedFileRoots(build: KovoNeutralBuild, outDir: string): Promise<void> {
   // The neutral build records the inventory from the app's own module graph; the module-local
   // inventory covers embedders that evaluated the app in this instance. Merge both, then
   // validate every entry shape before it can influence a filesystem copy.

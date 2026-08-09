@@ -443,9 +443,7 @@ const DEV_SOURCE_CHANGE_PATTERN = /\.(?:[cm]?[jt]sx?|css)$/u;
  * (whole-project analysis inside hot-update hooks), which is where a realistic app spends most
  * of its edit latency.
  */
-function createKovoDevLoopMonitor(
-  liveServer: () => ViteDevServer | undefined,
-): KovoDevLoopMonitor {
+function createKovoDevLoopMonitor(liveServer: () => ViteDevServer | undefined): KovoDevLoopMonitor {
   let overlayShownForRevision: number | undefined;
   let pendingChange: { at: number; file: string } | undefined;
   let pendingChangeReports = 0;

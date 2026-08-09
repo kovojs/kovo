@@ -204,7 +204,10 @@ describe('source-check session reuse planning', () => {
           ['src/app.tsx', digestOf('b')],
         ]),
       ),
-    ).toMatchObject({ eligible: false, reason: expect.stringContaining('references changed file') });
+    ).toMatchObject({
+      eligible: false,
+      reason: expect.stringContaining('references changed file'),
+    });
     const globbing = continuity({
       closureSourceText: "const docs = import.meta.glob('./docs/*');\n",
     });

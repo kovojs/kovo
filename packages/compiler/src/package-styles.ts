@@ -106,8 +106,7 @@ export interface PackageComponentCssDiagnostic {
 export type PackageComponentCssSelection = 'exported' | 'imported';
 
 /** Options for {@link extractPackageComponentCss}. */
-export interface PackageComponentCssExtractionOptions
-  extends PackageComponentPrefixDiscoveryOptions {
+export interface PackageComponentCssExtractionOptions extends PackageComponentPrefixDiscoveryOptions {
   /** Component selection strategy; defaults to `'exported'`. */
   readonly components?: PackageComponentCssSelection;
 }

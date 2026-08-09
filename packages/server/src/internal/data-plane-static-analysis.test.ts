@@ -1119,7 +1119,9 @@ export const status = query({
     expect(has('const provider = await import("./kovo.js");')).toBe(true);
     // A data-plane-free component module takes the cheap path.
     expect(
-      has('import { component } from "@kovojs/core";\nexport const C = component({ render: () => null });'),
+      has(
+        'import { component } from "@kovojs/core";\nexport const C = component({ render: () => null });',
+      ),
     ).toBe(false);
   });
 });

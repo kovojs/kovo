@@ -744,7 +744,10 @@ export function admitProvedDocumentResponse(
     cache = createWitnessMap<string, ProvedDocumentCacheEntry>();
     witnessWeakMapSet(provedDocumentCaches, app, cache);
   }
-  if (witnessMapGet(cache, key) === undefined && witnessMapSize(cache) >= PROVED_DOCUMENT_CACHE_MAX_ENTRIES) {
+  if (
+    witnessMapGet(cache, key) === undefined &&
+    witnessMapSize(cache) >= PROVED_DOCUMENT_CACHE_MAX_ENTRIES
+  ) {
     let oldest: string | undefined;
     witnessMapForEach(cache, (_value, mapKey) => {
       if (oldest === undefined) oldest = mapKey;

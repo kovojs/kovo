@@ -654,7 +654,7 @@ describe('browser-runtime security regressions', () => {
         queryAll(root, selector) {
           return [...root.querySelectorAll(selector)];
         },
-          replaceBody(nextBody) {
+        replaceBody(nextBody) {
           document.body.replaceWith(nextBody);
           return nextBody;
         },

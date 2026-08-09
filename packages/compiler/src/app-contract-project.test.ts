@@ -1211,9 +1211,11 @@ describe('D1 compiler-owned exact project resolver', () => {
     const entry = join(fixture.root, 'app/src/missing-appid-entry.ts');
     await writeSource(
       contract,
-      ["import { defineKovo } from '@kovojs/server';", 'export const app = defineKovo({});', ''].join(
-        '\n',
-      ),
+      [
+        "import { defineKovo } from '@kovojs/server';",
+        'export const app = defineKovo({});',
+        '',
+      ].join('\n'),
     );
     await writeSource(
       entry,

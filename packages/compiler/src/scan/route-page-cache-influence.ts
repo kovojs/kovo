@@ -555,7 +555,10 @@ function bindContextParameter(
     return;
   }
   if (!ts.isObjectBindingPattern(name)) {
-    appendUnclassified(state, 'route context binding is outside the finite document cache language');
+    appendUnclassified(
+      state,
+      'route context binding is outside the finite document cache language',
+    );
     return;
   }
   const elementCount = compilerArrayLength(name.elements, 'Route cache context bindings');
@@ -631,7 +634,9 @@ function collectLexicalBindings(root: TS.Node, target: Set<string>): void {
     if (ts.isVariableDeclaration(node)) {
       collectBindingNames(node.name, target);
     } else if (
-      (ts.isArrowFunction(node) || ts.isFunctionExpression(node) || ts.isFunctionDeclaration(node)) &&
+      (ts.isArrowFunction(node) ||
+        ts.isFunctionExpression(node) ||
+        ts.isFunctionDeclaration(node)) &&
       node !== root
     ) {
       const parameterCount = compilerArrayLength(node.parameters, 'Route cache nested parameters');
@@ -696,10 +701,7 @@ function analyzeBody(state: ScanState, scope: FunctionScope, body: TS.Node): voi
     if (ts.isJsxSpreadAttribute(node)) {
       appendUnclassified(state, 'JSX spread outside the finite document cache language');
     }
-    if (
-      ts.isJsxElement(node) ||
-      ts.isJsxSelfClosingElement(node)
-    ) {
+    if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) {
       const tagName = ts.isJsxElement(node) ? node.openingElement.tagName : node.tagName;
       analyzeJsxTag(state, tagName);
     }
@@ -757,7 +759,10 @@ function analyzeCall(state: ScanState, scope: FunctionScope, node: TS.CallExpres
   }
   if (ts.isIdentifier(callee)) {
     if (isContextCarrier(scope, callee.text)) {
-      appendUnclassified(state, 'route context authority leaves the finite document cache language');
+      appendUnclassified(
+        state,
+        'route context authority leaves the finite document cache language',
+      );
       return;
     }
     if (compilerSetHas(scope.locals, callee.text)) return;
@@ -924,13 +929,23 @@ function analyzeIdentifierReference(
       appendUnclassified(state, `module value '${text}' is mutable`);
       return;
     }
-    appendUnclassified(state, `module value '${text}' is outside the finite document cache language`);
+    appendUnclassified(
+      state,
+      `module value '${text}' is outside the finite document cache language`,
+    );
     return;
   }
-  if (isPureGlobalCallee(text) && ts.isCallExpression(node.parent) && node.parent.expression === node) {
+  if (
+    isPureGlobalCallee(text) &&
+    ts.isCallExpression(node.parent) &&
+    node.parent.expression === node
+  ) {
     return;
   }
-  appendUnclassified(state, `free identifier '${text}' is outside the finite document cache language`);
+  appendUnclassified(
+    state,
+    `free identifier '${text}' is outside the finite document cache language`,
+  );
 }
 
 function isInertFreeIdentifier(text: string): boolean {
@@ -1014,8 +1029,7 @@ function staticDataExpressionUncached(
   }
   if (ts.isPrefixUnaryExpression(value)) {
     return (
-      (value.operator === ts.SyntaxKind.MinusToken ||
-        value.operator === ts.SyntaxKind.PlusToken) &&
+      (value.operator === ts.SyntaxKind.MinusToken || value.operator === ts.SyntaxKind.PlusToken) &&
       staticDataExpressionUncached(state, value.operand as TS.Expression, visiting)
     );
   }

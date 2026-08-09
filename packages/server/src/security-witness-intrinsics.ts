@@ -137,7 +137,10 @@ const callMapForEach = uncurryThis(nativeMapForEach) as <Key, Value>(
   map: ReadonlyMap<Key, Value>,
   callback: (value: Value, key: Key) => void,
 ) => void;
-const callSetAdd = uncurryThis(nativeSetAdd) as <Value>(set: Set<Value>, value: Value) => Set<Value>;
+const callSetAdd = uncurryThis(nativeSetAdd) as <Value>(
+  set: Set<Value>,
+  value: Value,
+) => Set<Value>;
 const callSetHas = uncurryThis(nativeSetHas) as <Value>(
   set: ReadonlySet<Value>,
   value: Value,

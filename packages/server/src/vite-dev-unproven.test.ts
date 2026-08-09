@@ -168,9 +168,7 @@ describe('kovo dev D5-d posture split (SPEC.md §9.5.1)', () => {
       while (Date.now() < deadline && convergenceReloads() === 0) {
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
-      expect(convergenceReloads(), `ws payloads: ${JSON.stringify(wsPayloads)}`).toBeGreaterThan(
-        0,
-      );
+      expect(convergenceReloads(), `ws payloads: ${JSON.stringify(wsPayloads)}`).toBeGreaterThan(0);
     } finally {
       await rm(root, { force: true, recursive: true });
     }

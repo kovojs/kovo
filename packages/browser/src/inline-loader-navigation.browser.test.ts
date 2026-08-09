@@ -253,17 +253,19 @@ describe('browser inline loader enhanced navigation', () => {
       vi.fn(async () => ({
         headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
         async text() {
-          return partsFromHtml([
-            '<!doctype html><html><head>',
-            '<meta name="kovo-build" content="build-a">',
-            '<title>Account refreshed</title>',
-            '</head><body>',
-            '<main kovo-nav-segment="layout:Account" kovo-nav-kind="layout" kovo-nav-name="Account">',
-            '<section kovo-nav-segment="panel:left" kovo-nav-kind="page" kovo-nav-name="left">NEW-LEFT</section>',
-            '<section kovo-nav-segment="panel:right" kovo-nav-kind="page" kovo-nav-name="right"><p id="revoked-next">ACCESS-REVOKED</p></section>',
-            '</main>',
-            '</body></html>',
-          ].join(''));
+          return partsFromHtml(
+            [
+              '<!doctype html><html><head>',
+              '<meta name="kovo-build" content="build-a">',
+              '<title>Account refreshed</title>',
+              '</head><body>',
+              '<main kovo-nav-segment="layout:Account" kovo-nav-kind="layout" kovo-nav-name="Account">',
+              '<section kovo-nav-segment="panel:left" kovo-nav-kind="page" kovo-nav-name="left">NEW-LEFT</section>',
+              '<section kovo-nav-segment="panel:right" kovo-nav-kind="page" kovo-nav-name="right"><p id="revoked-next">ACCESS-REVOKED</p></section>',
+              '</main>',
+              '</body></html>',
+            ].join(''),
+          );
         },
         redirected: false,
         url: new URL('/account?refresh=1', location.href).href,
@@ -298,16 +300,18 @@ describe('browser inline loader enhanced navigation', () => {
       vi.fn(async () => ({
         headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
         async text() {
-          return partsFromHtml([
-            '<!doctype html><html><head>',
-            '<meta name="kovo-build" content="build-a">',
-            '<title>Revoked</title>',
-            '</head><body>',
-            '<main kovo-nav-segment="layout:Account" kovo-nav-kind="layout" kovo-nav-name="Account">',
-            '<section kovo-nav-segment="page:/private" kovo-nav-kind="page" kovo-nav-name="private"><p id="revoked-next">ACCESS-REVOKED</p></section>',
-            '</main>',
-            '</body></html>',
-          ].join(''));
+          return partsFromHtml(
+            [
+              '<!doctype html><html><head>',
+              '<meta name="kovo-build" content="build-a">',
+              '<title>Revoked</title>',
+              '</head><body>',
+              '<main kovo-nav-segment="layout:Account" kovo-nav-kind="layout" kovo-nav-name="Account">',
+              '<section kovo-nav-segment="page:/private" kovo-nav-kind="page" kovo-nav-name="private"><p id="revoked-next">ACCESS-REVOKED</p></section>',
+              '</main>',
+              '</body></html>',
+            ].join(''),
+          );
         },
         redirected: false,
         url: new URL('/private?refresh=1', location.href).href,
@@ -361,7 +365,9 @@ describe('browser inline loader enhanced navigation', () => {
     const attackFetch = vi.fn(async () => ({
       headers: { get: () => partsMediaType },
       async text() {
-        return partsFromHtml('<!doctype html><html><body><main kovo-nav-segment="layout:attack">ATTACKER</main></body></html>');
+        return partsFromHtml(
+          '<!doctype html><html><body><main kovo-nav-segment="layout:attack">ATTACKER</main></body></html>',
+        );
       },
       redirected: false,
       url: new URL('/cart', location.href).href,
@@ -479,18 +485,20 @@ describe('browser inline loader enhanced navigation', () => {
     const fetch = vi.fn(async () => ({
       headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return partsFromHtml([
-          '<!doctype html><html><head>',
-          '<meta name="kovo-build" content="build-a">',
-          '<title>Cart</title>',
-          '</head><body>',
-          '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
-          '<a id="to-cart" href="/cart">Cart</a>',
-          '<span style="view-transition-name: brand">Kovo</span>',
-          '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">Cart</section>',
-          '</main>',
-          '</body></html>',
-        ].join(''));
+        return partsFromHtml(
+          [
+            '<!doctype html><html><head>',
+            '<meta name="kovo-build" content="build-a">',
+            '<title>Cart</title>',
+            '</head><body>',
+            '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
+            '<a id="to-cart" href="/cart">Cart</a>',
+            '<span style="view-transition-name: brand">Kovo</span>',
+            '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">Cart</section>',
+            '</main>',
+            '</body></html>',
+          ].join(''),
+        );
       },
       redirected: false,
       url: new URL('/cart', location.href).href,
@@ -540,17 +548,19 @@ describe('browser inline loader enhanced navigation', () => {
       vi.fn(async () => ({
         headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
         async text() {
-          return partsFromHtml([
-            '<!doctype html><html><head>',
-            '<meta name="kovo-build" content="build-a">',
-            '<title>Revoked</title>',
-            '</head><body>',
-            '<main kovo-nav-segment="layout:Account" kovo-nav-kind="layout" kovo-nav-name="Account">',
-            '<a id="refresh" href="/private?refresh=1">Refresh</a>',
-            '<section kovo-nav-segment="page:/private" kovo-nav-kind="page" kovo-nav-name="private"><p id="revoked-next">ACCESS-REVOKED</p></section>',
-            '</main>',
-            '</body></html>',
-          ].join(''));
+          return partsFromHtml(
+            [
+              '<!doctype html><html><head>',
+              '<meta name="kovo-build" content="build-a">',
+              '<title>Revoked</title>',
+              '</head><body>',
+              '<main kovo-nav-segment="layout:Account" kovo-nav-kind="layout" kovo-nav-name="Account">',
+              '<a id="refresh" href="/private?refresh=1">Refresh</a>',
+              '<section kovo-nav-segment="page:/private" kovo-nav-kind="page" kovo-nav-name="private"><p id="revoked-next">ACCESS-REVOKED</p></section>',
+              '</main>',
+              '</body></html>',
+            ].join(''),
+          );
         },
         redirected: false,
         url: new URL('/private?refresh=1', location.href).href,
@@ -653,21 +663,23 @@ describe('browser inline loader enhanced navigation', () => {
     const fetch = vi.fn(async () => ({
       headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return partsFromHtml([
-          '<!doctype html><html lang="fr" data-theme="dark"><head>',
-          '<meta name="kovo-build" content="build-a">',
-          '<title>Cart</title>',
-          '<meta name="description" content="Cart">',
-          '<link rel="stylesheet" href="/cart.css">',
-          '<link rel="modulepreload" href="/cart.client.js">',
-          '<script type="speculationrules">{"prefetch":[{"source":"list","urls":["/checkout"]}]}</script>',
-          '</head><body data-route="cart" data-shell="checkout">',
-          '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
-          '<a id="to-cart" href="/cart">Cart</a>',
-          '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">Cart</section>',
-          '</main>',
-          '</body></html>',
-        ].join(''));
+        return partsFromHtml(
+          [
+            '<!doctype html><html lang="fr" data-theme="dark"><head>',
+            '<meta name="kovo-build" content="build-a">',
+            '<title>Cart</title>',
+            '<meta name="description" content="Cart">',
+            '<link rel="stylesheet" href="/cart.css">',
+            '<link rel="modulepreload" href="/cart.client.js">',
+            '<script type="speculationrules">{"prefetch":[{"source":"list","urls":["/checkout"]}]}</script>',
+            '</head><body data-route="cart" data-shell="checkout">',
+            '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
+            '<a id="to-cart" href="/cart">Cart</a>',
+            '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">Cart</section>',
+            '</main>',
+            '</body></html>',
+          ].join(''),
+        );
       },
       redirected: false,
       url: new URL('/cart', location.href).href,
@@ -725,20 +737,22 @@ describe('browser inline loader enhanced navigation', () => {
     const fetch = vi.fn(async () => ({
       headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return partsFromHtml([
-          '<!doctype html><html><head>',
-          '<meta name="kovo-build" content="build-a">',
-          '<title>Cart</title>',
-          '<meta name="description" content="Cart">',
-          '<link rel="stylesheet" href="/assets/site.css">',
-          '<link rel="modulepreload" href="/c/shared.js" data-kovo-module-allowlist>',
-          '</head><body>',
-          '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
-          '<a id="to-cart" href="/cart">Cart</a>',
-          '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">Cart</section>',
-          '</main>',
-          '</body></html>',
-        ].join(''));
+        return partsFromHtml(
+          [
+            '<!doctype html><html><head>',
+            '<meta name="kovo-build" content="build-a">',
+            '<title>Cart</title>',
+            '<meta name="description" content="Cart">',
+            '<link rel="stylesheet" href="/assets/site.css">',
+            '<link rel="modulepreload" href="/c/shared.js" data-kovo-module-allowlist>',
+            '</head><body>',
+            '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
+            '<a id="to-cart" href="/cart">Cart</a>',
+            '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">Cart</section>',
+            '</main>',
+            '</body></html>',
+          ].join(''),
+        );
       },
       redirected: false,
       url: new URL('/cart', location.href).href,
@@ -797,20 +811,22 @@ describe('browser inline loader enhanced navigation', () => {
     const fetch = vi.fn(async () => ({
       headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return partsFromHtml([
-          '<!doctype html><html><head>',
-          '<meta name="kovo-build" content="build-a">',
-          '<title>Cart</title>',
-          '<style data-kovo-critical-href="/assets/site.css">main{display:block}</style>',
-          '<link rel="preload" as="style" href="/assets/site.css" data-kovo-deferred-style>',
-          '<noscript><link rel="stylesheet" href="/assets/site.css"></noscript>',
-          '</head><body>',
-          '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
-          '<a id="to-cart" href="/cart">Cart</a>',
-          '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">Cart</section>',
-          '</main>',
-          '</body></html>',
-        ].join(''));
+        return partsFromHtml(
+          [
+            '<!doctype html><html><head>',
+            '<meta name="kovo-build" content="build-a">',
+            '<title>Cart</title>',
+            '<style data-kovo-critical-href="/assets/site.css">main{display:block}</style>',
+            '<link rel="preload" as="style" href="/assets/site.css" data-kovo-deferred-style>',
+            '<noscript><link rel="stylesheet" href="/assets/site.css"></noscript>',
+            '</head><body>',
+            '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
+            '<a id="to-cart" href="/cart">Cart</a>',
+            '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">Cart</section>',
+            '</main>',
+            '</body></html>',
+          ].join(''),
+        );
       },
       redirected: false,
       url: new URL('/cart', location.href).href,
@@ -849,20 +865,22 @@ describe('browser inline loader enhanced navigation', () => {
     const fetch = vi.fn(async () => ({
       headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return partsFromHtml([
-          '<!doctype html><html><head>',
-          '<meta name="kovo-build" content="build-a">',
-          '<title>Cart</title>',
-          '<style data-kovo-critical-href="/cart.css">main{display:block}</style>',
-          '<link rel="preload" as="style" href="/cart.css" data-kovo-deferred-style>',
-          '<noscript><link rel="stylesheet" href="/cart.css"></noscript>',
-          '</head><body>',
-          '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
-          '<a id="to-cart" href="/cart">Cart</a>',
-          '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">Cart</section>',
-          '</main>',
-          '</body></html>',
-        ].join(''));
+        return partsFromHtml(
+          [
+            '<!doctype html><html><head>',
+            '<meta name="kovo-build" content="build-a">',
+            '<title>Cart</title>',
+            '<style data-kovo-critical-href="/cart.css">main{display:block}</style>',
+            '<link rel="preload" as="style" href="/cart.css" data-kovo-deferred-style>',
+            '<noscript><link rel="stylesheet" href="/cart.css"></noscript>',
+            '</head><body>',
+            '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
+            '<a id="to-cart" href="/cart">Cart</a>',
+            '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">Cart</section>',
+            '</main>',
+            '</body></html>',
+          ].join(''),
+        );
       },
       redirected: false,
       url: new URL('/cart', location.href).href,
@@ -908,17 +926,19 @@ describe('browser inline loader enhanced navigation', () => {
     const fetch = vi.fn(async () => ({
       headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return partsFromHtml([
-          '<!doctype html><html lang="en" class="target-shell" data-route="cart"><head>',
-          '<meta name="kovo-build" content="build-a">',
-          '<title>Cart</title>',
-          '</head><body data-theme="cart" data-shell="docs">',
-          '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
-          '<button type="button" class="icon-btn" on:click="/c/theme.js#toggle" data-kovo-module-allowlist="/c/theme.js">Theme</button>',
-          '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">Cart</section>',
-          '</main>',
-          '</body></html>',
-        ].join(''));
+        return partsFromHtml(
+          [
+            '<!doctype html><html lang="en" class="target-shell" data-route="cart"><head>',
+            '<meta name="kovo-build" content="build-a">',
+            '<title>Cart</title>',
+            '</head><body data-theme="cart" data-shell="docs">',
+            '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+            '<button type="button" class="icon-btn" on:click="/c/theme.js#toggle" data-kovo-module-allowlist="/c/theme.js">Theme</button>',
+            '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">Cart</section>',
+            '</main>',
+            '</body></html>',
+          ].join(''),
+        );
       },
       redirected: false,
       url: new URL('/cart', location.href).href,
@@ -957,17 +977,19 @@ describe('browser inline loader enhanced navigation', () => {
     const fetch = vi.fn(async () => ({
       headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return partsFromHtml([
-          '<!doctype html><html lang="en" class="target-shell"><head>',
-          '<meta name="kovo-build" content="build-a">',
-          '<title>API</title>',
-          '</head><body data-route="api">',
-          '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
-          '<a id="to-api" href="/api">API</a>',
-          '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">API</section>',
-          '</main>',
-          '</body></html>',
-        ].join(''));
+        return partsFromHtml(
+          [
+            '<!doctype html><html lang="en" class="target-shell"><head>',
+            '<meta name="kovo-build" content="build-a">',
+            '<title>API</title>',
+            '</head><body data-route="api">',
+            '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+            '<a id="to-api" href="/api">API</a>',
+            '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">API</section>',
+            '</main>',
+            '</body></html>',
+          ].join(''),
+        );
       },
       redirected: false,
       url: new URL('/api', location.href).href,
@@ -1013,17 +1035,19 @@ describe('browser inline loader enhanced navigation', () => {
     const fetch = vi.fn(async () => ({
       headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return partsFromHtml([
-          '<!doctype html><html lang="en" class="dark target-shell"><head>',
-          '<meta name="kovo-build" content="build-a">',
-          '<title>API</title>',
-          '</head><body data-route="api">',
-          '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
-          '<a id="to-api" href="/api">API</a>',
-          '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">API</section>',
-          '</main>',
-          '</body></html>',
-        ].join(''));
+        return partsFromHtml(
+          [
+            '<!doctype html><html lang="en" class="dark target-shell"><head>',
+            '<meta name="kovo-build" content="build-a">',
+            '<title>API</title>',
+            '</head><body data-route="api">',
+            '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+            '<a id="to-api" href="/api">API</a>',
+            '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">API</section>',
+            '</main>',
+            '</body></html>',
+          ].join(''),
+        );
       },
       redirected: false,
       url: new URL('/api', location.href).href,
@@ -1062,16 +1086,18 @@ describe('browser inline loader enhanced navigation', () => {
     const fetch = vi.fn(async () => ({
       headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return partsFromHtml([
-          '<!doctype html><html lang="en" class="light target-shell" data-theme="light">',
-          '<head><meta name="kovo-build" content="build-a"><title>API</title></head>',
-          '<body data-route="api">',
-          '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
-          '<a id="to-api" href="/api">API</a>',
-          '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">API</section>',
-          '</main>',
-          '</body></html>',
-        ].join(''));
+        return partsFromHtml(
+          [
+            '<!doctype html><html lang="en" class="light target-shell" data-theme="light">',
+            '<head><meta name="kovo-build" content="build-a"><title>API</title></head>',
+            '<body data-route="api">',
+            '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+            '<a id="to-api" href="/api">API</a>',
+            '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">API</section>',
+            '</main>',
+            '</body></html>',
+          ].join(''),
+        );
       },
       redirected: false,
       url: new URL('/api', location.href).href,
@@ -1176,18 +1202,20 @@ describe('browser inline loader enhanced navigation', () => {
     const fetch = vi.fn(async () => ({
       headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return partsFromHtml([
-          '<!doctype html><html lang="en"><head>',
-          '<meta name="kovo-build" content="build-a">',
-          '<title>API</title>',
-          '</head><body data-route="api">',
-          '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
-          '<button id="theme" type="button" on:click="/c/theme.js#toggle" data-kovo-module-allowlist="/c/theme.js">Theme</button>',
-          '<a id="to-api" href="/api">API</a>',
-          '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">API</section>',
-          '</main>',
-          '</body></html>',
-        ].join(''));
+        return partsFromHtml(
+          [
+            '<!doctype html><html lang="en"><head>',
+            '<meta name="kovo-build" content="build-a">',
+            '<title>API</title>',
+            '</head><body data-route="api">',
+            '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+            '<button id="theme" type="button" on:click="/c/theme.js#toggle" data-kovo-module-allowlist="/c/theme.js">Theme</button>',
+            '<a id="to-api" href="/api">API</a>',
+            '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">API</section>',
+            '</main>',
+            '</body></html>',
+          ].join(''),
+        );
       },
       redirected: false,
       url: new URL('/api', location.href).href,
@@ -1259,19 +1287,21 @@ describe('browser inline loader enhanced navigation', () => {
     const fetch = vi.fn(async () => ({
       headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return partsFromHtml([
-          '<!doctype html><html><head>',
-          '<meta name="kovo-build" content="build-a">',
-          '<title>Cart</title>',
-          '</head><body>',
-          '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
-          '<section id="layout-island" kovo-c="layout-shell" on:click="/c/page.js#mount" data-kovo-module-allowlist="/c/page.js">Layout</section>',
-          '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">',
-          '<article id="new-page-island" on:load="/c/page.js#load" on:idle="/c/page.js#idle" on:visible="/c/page.js#visible" data-kovo-module-allowlist="/c/page.js">Cart</article>',
-          '</section>',
-          '</main>',
-          '</body></html>',
-        ].join(''));
+        return partsFromHtml(
+          [
+            '<!doctype html><html><head>',
+            '<meta name="kovo-build" content="build-a">',
+            '<title>Cart</title>',
+            '</head><body>',
+            '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
+            '<section id="layout-island" kovo-c="layout-shell" on:click="/c/page.js#mount" data-kovo-module-allowlist="/c/page.js">Layout</section>',
+            '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">',
+            '<article id="new-page-island" on:load="/c/page.js#load" on:idle="/c/page.js#idle" on:visible="/c/page.js#visible" data-kovo-module-allowlist="/c/page.js">Cart</article>',
+            '</section>',
+            '</main>',
+            '</body></html>',
+          ].join(''),
+        );
       },
       redirected: false,
       url: new URL('/cart', location.href).href,
@@ -1324,20 +1354,22 @@ describe('browser inline loader enhanced navigation', () => {
     const fetch = vi.fn(async () => ({
       headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return partsFromHtml([
-          '<!doctype html><html><head>',
-          '<meta name="kovo-build" content="build-a">',
-          '<title>API</title>',
-          '</head><body>',
-          '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
-          '<header id="layout-island" on:load="/c/layout.js#layoutLoad" data-kovo-module-allowlist="/c/layout.js">Docs</header>',
-          '<a id="to-api" href="/api">API</a>',
-          '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">',
-          '<article id="api-page" on:load="/c/page.js#pageLoad" data-kovo-module-allowlist="/c/page.js">API</article>',
-          '</section>',
-          '</main>',
-          '</body></html>',
-        ].join(''));
+        return partsFromHtml(
+          [
+            '<!doctype html><html><head>',
+            '<meta name="kovo-build" content="build-a">',
+            '<title>API</title>',
+            '</head><body>',
+            '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+            '<header id="layout-island" on:load="/c/layout.js#layoutLoad" data-kovo-module-allowlist="/c/layout.js">Docs</header>',
+            '<a id="to-api" href="/api">API</a>',
+            '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">',
+            '<article id="api-page" on:load="/c/page.js#pageLoad" data-kovo-module-allowlist="/c/page.js">API</article>',
+            '</section>',
+            '</main>',
+            '</body></html>',
+          ].join(''),
+        );
       },
       redirected: false,
       url: new URL('/api', location.href).href,
@@ -1369,18 +1401,20 @@ describe('browser inline loader enhanced navigation', () => {
     const fetch = vi.fn(async () => ({
       headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return partsFromHtml([
-          '<!doctype html><html><head>',
-          '<meta name="kovo-build" content="build-a">',
-          '<title>Cart</title>',
-          '</head><body>',
-          '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
-          '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">',
-          '<h2 id="checkout">Checkout</h2>',
-          '</section>',
-          '</main>',
-          '</body></html>',
-        ].join(''));
+        return partsFromHtml(
+          [
+            '<!doctype html><html><head>',
+            '<meta name="kovo-build" content="build-a">',
+            '<title>Cart</title>',
+            '</head><body>',
+            '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
+            '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">',
+            '<h2 id="checkout">Checkout</h2>',
+            '</section>',
+            '</main>',
+            '</body></html>',
+          ].join(''),
+        );
       },
       redirected: false,
       url: new URL('/cart', location.href).href,
@@ -1416,18 +1450,20 @@ describe('browser inline loader enhanced navigation', () => {
     const fetch = vi.fn(async () => ({
       headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return partsFromHtml([
-          '<!doctype html><html><head>',
-          '<meta name="kovo-build" content="build-a">',
-          '<title>API Core</title>',
-          '</head><body>',
-          '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
-          '<section kovo-nav-segment="page:/api/core" kovo-nav-kind="page" kovo-nav-name="page">',
-          '<h2 id="symbols/fragment">Fragment target</h2>',
-          '</section>',
-          '</main>',
-          '</body></html>',
-        ].join(''));
+        return partsFromHtml(
+          [
+            '<!doctype html><html><head>',
+            '<meta name="kovo-build" content="build-a">',
+            '<title>API Core</title>',
+            '</head><body>',
+            '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+            '<section kovo-nav-segment="page:/api/core" kovo-nav-kind="page" kovo-nav-name="page">',
+            '<h2 id="symbols/fragment">Fragment target</h2>',
+            '</section>',
+            '</main>',
+            '</body></html>',
+          ].join(''),
+        );
       },
       redirected: false,
       url: new URL('/api/core/', location.href).href,
@@ -1465,22 +1501,24 @@ describe('browser inline loader enhanced navigation', () => {
     const fetch = vi.fn(async () => ({
       headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return partsFromHtml([
-          '<!doctype html><html><head>',
-          '<meta name="kovo-build" content="build-a">',
-          '<title>API</title>',
-          '</head><body>',
-          '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
-          '<a id="to-symbol" href="/api#symbols%2Fproperty%20value">Symbol</a>',
-          '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">',
-          '<nav class="api-nav" aria-label="Symbols on this page">',
-          '<a href="#symbols%2Fproperty%20value">property value</a>',
-          '</nav>',
-          '<article class="prose"><h2 id="symbols/property value">property value</h2></article>',
-          '</section>',
-          '</main>',
-          '</body></html>',
-        ].join(''));
+        return partsFromHtml(
+          [
+            '<!doctype html><html><head>',
+            '<meta name="kovo-build" content="build-a">',
+            '<title>API</title>',
+            '</head><body>',
+            '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+            '<a id="to-symbol" href="/api#symbols%2Fproperty%20value">Symbol</a>',
+            '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">',
+            '<nav class="api-nav" aria-label="Symbols on this page">',
+            '<a href="#symbols%2Fproperty%20value">property value</a>',
+            '</nav>',
+            '<article class="prose"><h2 id="symbols/property value">property value</h2></article>',
+            '</section>',
+            '</main>',
+            '</body></html>',
+          ].join(''),
+        );
       },
       redirected: false,
       url: new URL('/api', location.href).href,
@@ -1532,28 +1570,30 @@ describe('browser inline loader enhanced navigation', () => {
       return {
         headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
         async text() {
-          return partsFromHtml([
-            '<!doctype html><html><head>',
-            '<meta name="kovo-build" content="build-a">',
-            `<title>${isApi ? 'API' : 'Docs'}</title>`,
-            '</head><body>',
-            '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
-            '<a id="to-docs" href="/docs">Docs</a>',
-            isApi
-              ? [
-                  '<a id="to-symbol" href="/api#symbols%2Fproperty%20value">Symbol</a>',
-                  '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">',
-                  '<nav class="api-nav"><a href="#symbols%2Fproperty%20value">property value</a></nav>',
-                  '<article><h2 id="symbols/property value">property value</h2></article>',
-                  '</section>',
-                ].join('')
-              : [
-                  '<a id="to-symbol" href="/api#symbols%2Fproperty%20value">Symbol</a>',
-                  '<section kovo-nav-segment="page:/docs" kovo-nav-kind="page" kovo-nav-name="page">Docs</section>',
-                ].join(''),
-            '</main>',
-            '</body></html>',
-          ].join(''));
+          return partsFromHtml(
+            [
+              '<!doctype html><html><head>',
+              '<meta name="kovo-build" content="build-a">',
+              `<title>${isApi ? 'API' : 'Docs'}</title>`,
+              '</head><body>',
+              '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+              '<a id="to-docs" href="/docs">Docs</a>',
+              isApi
+                ? [
+                    '<a id="to-symbol" href="/api#symbols%2Fproperty%20value">Symbol</a>',
+                    '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">',
+                    '<nav class="api-nav"><a href="#symbols%2Fproperty%20value">property value</a></nav>',
+                    '<article><h2 id="symbols/property value">property value</h2></article>',
+                    '</section>',
+                  ].join('')
+                : [
+                    '<a id="to-symbol" href="/api#symbols%2Fproperty%20value">Symbol</a>',
+                    '<section kovo-nav-segment="page:/docs" kovo-nav-kind="page" kovo-nav-name="page">Docs</section>',
+                  ].join(''),
+              '</main>',
+              '</body></html>',
+            ].join(''),
+          );
         },
         redirected: false,
         url: responseUrlWithoutFragment(url),
@@ -1607,24 +1647,26 @@ describe('browser inline loader enhanced navigation', () => {
         headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
         async text() {
           const apiPage = url.hash === '#symbols%2Fnew' ? 'new' : 'old';
-          return partsFromHtml([
-            '<!doctype html><html><head>',
-            '<meta name="kovo-build" content="build-a">',
-            `<title>${isApi ? `API ${apiPage}` : 'Docs'}</title>`,
-            '</head><body>',
-            '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
-            '<a id="to-docs" href="/docs">Docs</a>',
-            '<a id="to-new-symbol" href="/api#symbols%2Fnew">New symbol</a>',
-            isApi
-              ? [
-                  `<section kovo-nav-segment="page:/api-${apiPage}" kovo-nav-kind="page" kovo-nav-name="page">`,
-                  `<h2 id="symbols/${apiPage}">${apiPage} symbol</h2>`,
-                  '</section>',
-                ].join('')
-              : '<section kovo-nav-segment="page:/docs" kovo-nav-kind="page" kovo-nav-name="page">Docs</section>',
-            '</main>',
-            '</body></html>',
-          ].join(''));
+          return partsFromHtml(
+            [
+              '<!doctype html><html><head>',
+              '<meta name="kovo-build" content="build-a">',
+              `<title>${isApi ? `API ${apiPage}` : 'Docs'}</title>`,
+              '</head><body>',
+              '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+              '<a id="to-docs" href="/docs">Docs</a>',
+              '<a id="to-new-symbol" href="/api#symbols%2Fnew">New symbol</a>',
+              isApi
+                ? [
+                    `<section kovo-nav-segment="page:/api-${apiPage}" kovo-nav-kind="page" kovo-nav-name="page">`,
+                    `<h2 id="symbols/${apiPage}">${apiPage} symbol</h2>`,
+                    '</section>',
+                  ].join('')
+                : '<section kovo-nav-segment="page:/docs" kovo-nav-kind="page" kovo-nav-name="page">Docs</section>',
+              '</main>',
+              '</body></html>',
+            ].join(''),
+          );
         },
         redirected: false,
         url: responseUrlWithoutFragment(url),
@@ -1677,19 +1719,21 @@ describe('browser inline loader enhanced navigation', () => {
     const fetch = vi.fn(async () => ({
       headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return partsFromHtml([
-          '<!doctype html><html><head>',
-          '<meta name="kovo-build" content="build-a">',
-          '<title>API</title>',
-          '</head><body>',
-          '<header id="fixed-docs-header">Docs</header>',
-          '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
-          '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">',
-          '<h2 id="symbols/sticky">Sticky target</h2>',
-          '</section>',
-          '</main>',
-          '</body></html>',
-        ].join(''));
+        return partsFromHtml(
+          [
+            '<!doctype html><html><head>',
+            '<meta name="kovo-build" content="build-a">',
+            '<title>API</title>',
+            '</head><body>',
+            '<header id="fixed-docs-header">Docs</header>',
+            '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+            '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">',
+            '<h2 id="symbols/sticky">Sticky target</h2>',
+            '</section>',
+            '</main>',
+            '</body></html>',
+          ].join(''),
+        );
       },
       redirected: false,
       url: new URL('/api', location.href).href,
@@ -1765,19 +1809,21 @@ describe('browser inline loader enhanced navigation', () => {
     const fetch = vi.fn(async () => ({
       headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return partsFromHtml([
-          '<!doctype html><html><head>',
-          '<meta name="kovo-build" content="build-a">',
-          '<title>API</title>',
-          '</head><body>',
-          '<header id="fixed-docs-header">Docs</header>',
-          '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
-          '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">',
-          '<h2 id="symbols/shifted">Shifted target</h2>',
-          '</section>',
-          '</main>',
-          '</body></html>',
-        ].join(''));
+        return partsFromHtml(
+          [
+            '<!doctype html><html><head>',
+            '<meta name="kovo-build" content="build-a">',
+            '<title>API</title>',
+            '</head><body>',
+            '<header id="fixed-docs-header">Docs</header>',
+            '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+            '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">',
+            '<h2 id="symbols/shifted">Shifted target</h2>',
+            '</section>',
+            '</main>',
+            '</body></html>',
+          ].join(''),
+        );
       },
       redirected: false,
       url: new URL('/api', location.href).href,
@@ -1859,18 +1905,20 @@ describe('browser inline loader enhanced navigation', () => {
             url.hash === '#symbols%252Fencoded'
               ? '<h2 id="symbols%2Fencoded">Encoded symbol</h2>'
               : '<a name="legacy-symbol"></a><h2>Legacy symbol</h2>';
-          return partsFromHtml([
-            '<!doctype html><html><head>',
-            '<meta name="kovo-build" content="build-a">',
-            '<title>API</title>',
-            '</head><body>',
-            '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
-            '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">',
-            target,
-            '</section>',
-            '</main>',
-            '</body></html>',
-          ].join(''));
+          return partsFromHtml(
+            [
+              '<!doctype html><html><head>',
+              '<meta name="kovo-build" content="build-a">',
+              '<title>API</title>',
+              '</head><body>',
+              '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+              '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">',
+              target,
+              '</section>',
+              '</main>',
+              '</body></html>',
+            ].join(''),
+          );
         },
         redirected: false,
         url: responseUrlWithoutFragment(url),
@@ -1925,18 +1973,20 @@ describe('browser inline loader enhanced navigation', () => {
       return {
         headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
         async text() {
-          return partsFromHtml([
-            '<!doctype html><html><head>',
-            '<meta name="kovo-build" content="build-a">',
-            '<title>Fast</title>',
-            '</head><body>',
-            '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
-            '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">',
-            '<h2 id="fast">Fast</h2>',
-            '</section>',
-            '</main>',
-            '</body></html>',
-          ].join(''));
+          return partsFromHtml(
+            [
+              '<!doctype html><html><head>',
+              '<meta name="kovo-build" content="build-a">',
+              '<title>Fast</title>',
+              '</head><body>',
+              '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+              '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">',
+              '<h2 id="fast">Fast</h2>',
+              '</section>',
+              '</main>',
+              '</body></html>',
+            ].join(''),
+          );
         },
         redirected: false,
         url: responseUrlWithoutFragment(url),
@@ -1996,26 +2046,28 @@ describe('browser inline loader enhanced navigation', () => {
       return {
         headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
         async text() {
-          return partsFromHtml([
-            '<!doctype html><html><head>',
-            '<meta name="kovo-build" content="build-a">',
-            `<title>${isApi ? 'API' : 'Docs'}</title>`,
-            '</head><body>',
-            '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
-            '<a id="to-symbol" href="/api#symbols%2Fproperty%20value">Symbol</a>',
-            isApi
-              ? [
-                  '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">',
-                  '<nav class="api-nav" aria-label="Symbols on this page">',
-                  '<a href="#symbols%2Fproperty%20value">property value</a>',
-                  '</nav>',
-                  '<article><h2 id="symbols/property value">property value</h2></article>',
-                  '</section>',
-                ].join('')
-              : '<section kovo-nav-segment="page:/docs" kovo-nav-kind="page" kovo-nav-name="page">Docs again</section>',
-            '</main>',
-            '</body></html>',
-          ].join(''));
+          return partsFromHtml(
+            [
+              '<!doctype html><html><head>',
+              '<meta name="kovo-build" content="build-a">',
+              `<title>${isApi ? 'API' : 'Docs'}</title>`,
+              '</head><body>',
+              '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+              '<a id="to-symbol" href="/api#symbols%2Fproperty%20value">Symbol</a>',
+              isApi
+                ? [
+                    '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">',
+                    '<nav class="api-nav" aria-label="Symbols on this page">',
+                    '<a href="#symbols%2Fproperty%20value">property value</a>',
+                    '</nav>',
+                    '<article><h2 id="symbols/property value">property value</h2></article>',
+                    '</section>',
+                  ].join('')
+                : '<section kovo-nav-segment="page:/docs" kovo-nav-kind="page" kovo-nav-name="page">Docs again</section>',
+              '</main>',
+              '</body></html>',
+            ].join(''),
+          );
         },
         redirected: false,
         url: responseUrlWithoutFragment(url),
@@ -2073,18 +2125,20 @@ describe('browser inline loader enhanced navigation', () => {
     const fetch = vi.fn(async () => ({
       headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return partsFromHtml([
-          '<!doctype html><html><head>',
-          '<meta name="kovo-build" content="build-a">',
-          '<title>API</title>',
-          '</head><body>',
-          '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
-          '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">',
-          '<h2 id="symbols/fresh-popstate">Fresh popstate target</h2>',
-          '</section>',
-          '</main>',
-          '</body></html>',
-        ].join(''));
+        return partsFromHtml(
+          [
+            '<!doctype html><html><head>',
+            '<meta name="kovo-build" content="build-a">',
+            '<title>API</title>',
+            '</head><body>',
+            '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+            '<section kovo-nav-segment="page:/api" kovo-nav-kind="page" kovo-nav-name="page">',
+            '<h2 id="symbols/fresh-popstate">Fresh popstate target</h2>',
+            '</section>',
+            '</main>',
+            '</body></html>',
+          ].join(''),
+        );
       },
       redirected: false,
       url: new URL('/api', location.href).href,
@@ -2151,19 +2205,21 @@ describe('browser inline loader enhanced navigation', () => {
     const fetch = vi.fn(async () => ({
       headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return partsFromHtml([
-          '<!doctype html><html><head>',
-          '<meta name="kovo-build" content="build-a">',
-          '<title>API details</title>',
-          '</head><body>',
-          '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
-          '<a id="to-summary" href="/api?view=summary#symbols%2Fsummary">Summary</a>',
-          '<section kovo-nav-segment="page:/api-details" kovo-nav-kind="page" kovo-nav-name="page">',
-          '<h2 id="symbols/details">Details</h2>',
-          '</section>',
-          '</main>',
-          '</body></html>',
-        ].join(''));
+        return partsFromHtml(
+          [
+            '<!doctype html><html><head>',
+            '<meta name="kovo-build" content="build-a">',
+            '<title>API details</title>',
+            '</head><body>',
+            '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+            '<a id="to-summary" href="/api?view=summary#symbols%2Fsummary">Summary</a>',
+            '<section kovo-nav-segment="page:/api-details" kovo-nav-kind="page" kovo-nav-name="page">',
+            '<h2 id="symbols/details">Details</h2>',
+            '</section>',
+            '</main>',
+            '</body></html>',
+          ].join(''),
+        );
       },
       redirected: false,
       url: new URL('/api?view=details', location.href).href,
@@ -2206,16 +2262,18 @@ describe('browser inline loader enhanced navigation', () => {
     const fetch = vi.fn(async () => ({
       headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
       async text() {
-        return partsFromHtml([
-          '<!doctype html><html><head>',
-          '<meta name="kovo-build" content="build-a">',
-          '<title>Login</title>',
-          '</head><body data-route="login">',
-          '<main kovo-nav-segment="layout:Auth" kovo-nav-kind="layout" kovo-nav-name="Auth">',
-          '<section kovo-nav-segment="page:/login" kovo-nav-kind="page" kovo-nav-name="page">Login</section>',
-          '</main>',
-          '</body></html>',
-        ].join(''));
+        return partsFromHtml(
+          [
+            '<!doctype html><html><head>',
+            '<meta name="kovo-build" content="build-a">',
+            '<title>Login</title>',
+            '</head><body data-route="login">',
+            '<main kovo-nav-segment="layout:Auth" kovo-nav-kind="layout" kovo-nav-name="Auth">',
+            '<section kovo-nav-segment="page:/login" kovo-nav-kind="page" kovo-nav-name="page">Login</section>',
+            '</main>',
+            '</body></html>',
+          ].join(''),
+        );
       },
       redirected: false,
       url: new URL('/login', location.href).href,
@@ -2272,22 +2330,24 @@ describe('browser inline loader enhanced navigation', () => {
       return {
         headers: { get: (name: string) => (name === 'content-type' ? partsMediaType : null) },
         async text() {
-          return partsFromHtml([
-            '<!doctype html><html><head>',
-            '<meta name="kovo-build" content="build-a">',
-            '<title>Cart</title>',
-            '</head><body>',
-            '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop" kovo-fragment-target="layout-shell" kovo-live-component="layout-shell/layout-shell" kovo-live-token="tok_layout" kovo-deps="viewer">',
-            '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">',
-            '<form id="cart-form" enhance data-mutation="cart/add" action="/_m/cart/add" method="post" kovo-fragment-target="cart-form">',
-            '<input type="hidden" name="Kovo-Idem" value="v1_1750000000000_000102030405060708090a0b0c0d0e0f">',
-            '<button type="submit">Save</button>',
-            '</form>',
-            '<section kovo-fragment-target="cart-badge" kovo-live-component="cart-badge/cart-badge" kovo-live-token="tok_cart" kovo-deps="cart">Cart</section>',
-            '</section>',
-            '</main>',
-            '</body></html>',
-          ].join(''));
+          return partsFromHtml(
+            [
+              '<!doctype html><html><head>',
+              '<meta name="kovo-build" content="build-a">',
+              '<title>Cart</title>',
+              '</head><body>',
+              '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop" kovo-fragment-target="layout-shell" kovo-live-component="layout-shell/layout-shell" kovo-live-token="tok_layout" kovo-deps="viewer">',
+              '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">',
+              '<form id="cart-form" enhance data-mutation="cart/add" action="/_m/cart/add" method="post" kovo-fragment-target="cart-form">',
+              '<input type="hidden" name="Kovo-Idem" value="v1_1750000000000_000102030405060708090a0b0c0d0e0f">',
+              '<button type="submit">Save</button>',
+              '</form>',
+              '<section kovo-fragment-target="cart-badge" kovo-live-component="cart-badge/cart-badge" kovo-live-token="tok_cart" kovo-deps="cart">Cart</section>',
+              '</section>',
+              '</main>',
+              '</body></html>',
+            ].join(''),
+          );
         },
         redirected: false,
         url: new URL('/cart', location.href).href,
@@ -2355,18 +2415,20 @@ describe('browser inline loader enhanced navigation', () => {
       redirected: false,
       status: 200,
       async text() {
-        return partsFromHtml([
-          '<!doctype html><html><head>',
-          '<meta name="kovo-build" content="build-a">',
-          '<title>Cart</title>',
-          '</head><body>',
-          '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
-          '<section kovo-fragment-target="cart-badge" kovo-live-component="cart-badge/cart-badge" kovo-live-token="tok_cart" kovo-deps="cart">',
-          '<button id="cart-button">Cart fresh</button>',
-          '</section>',
-          '</main>',
-          '</body></html>',
-        ].join(''));
+        return partsFromHtml(
+          [
+            '<!doctype html><html><head>',
+            '<meta name="kovo-build" content="build-a">',
+            '<title>Cart</title>',
+            '</head><body>',
+            '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
+            '<section kovo-fragment-target="cart-badge" kovo-live-component="cart-badge/cart-badge" kovo-live-token="tok_cart" kovo-deps="cart">',
+            '<button id="cart-button">Cart fresh</button>',
+            '</section>',
+            '</main>',
+            '</body></html>',
+          ].join(''),
+        );
       },
       url: location.href,
     }));

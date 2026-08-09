@@ -2315,7 +2315,7 @@ const compileSiblingRegistrationBranch = [
   '  registerFrameworkIdentityProject(',
   '    sourceFile,',
   '    // plans/good-perf.md O7: extras are re-registered per compile phase over the same snapshot',
-  '    // entries; reuse each entry\'s shared parse (byte-exact revalidated) instead of re-parsing',
+  "    // entries; reuse each entry's shared parse (byte-exact revalidated) instead of re-parsing",
   '    // every other closure file for every phase of every module.',
   "    compilerMapDense(options.extraFiles, 'Compiler framework-identity files', (file) =>",
   '      parseSharedSnapshotEntry(file),',
@@ -2991,10 +2991,8 @@ const removedDeterministicEnhancedFailureReplayBoundary = [
   '        status: result.status,',
   '      }));',
 ].join('\n');
-const exactUtf16MachinePrincipalHash =
-  "  const bytes = nativeBufferFrom(value, 'utf16le');";
-const weakenedUtf8MachinePrincipalHash =
-  "  const bytes = nativeBufferFrom(value, 'utf8');";
+const exactUtf16MachinePrincipalHash = "  const bytes = nativeBufferFrom(value, 'utf16le');";
+const weakenedUtf8MachinePrincipalHash = "  const bytes = nativeBufferFrom(value, 'utf8');";
 const canonicalTaskInternalOrigin =
   "const TASK_INTERNAL_REQUEST_URL = 'https://kovo.invalid/_kovo/task';";
 const attackerSelectedTaskInternalOrigin =

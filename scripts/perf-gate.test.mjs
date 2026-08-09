@@ -104,7 +104,10 @@ describe('perf gate regression sensitivity', () => {
       const budget = budgets.metrics[metricId];
       // One representable step past the budget, in whichever direction is worse for this metric.
       // `requestsPerSecondFloor` is a negated throughput floor, so "worse" is still "larger".
-      const regressed = { ...observation, value: budget.max + Math.max(Math.abs(budget.max) * 0.01, 1e-6) };
+      const regressed = {
+        ...observation,
+        value: budget.max + Math.max(Math.abs(budget.max) * 0.01, 1e-6),
+      };
       expect(evaluateMetric(budget, { ...observation, value: budget.max }).status).toBe('pass');
       expect(evaluateMetric(budget, regressed).status).toBe('fail');
     },
@@ -116,7 +119,7 @@ describe('perf gate regression sensitivity', () => {
     {
       metricId: 'production.criticalPath.wireBytes',
       regressed: 22415,
-      why: "O4 catalog pruning falls back to the full @kovojs/ui sheet (122,439 B raw / 16,664 B br)",
+      why: 'O4 catalog pruning falls back to the full @kovojs/ui sheet (122,439 B raw / 16,664 B br)',
     },
     {
       metricId: 'production.document.wireBytes',
@@ -183,7 +186,12 @@ describe('fitLogLogExponent', () => {
 
   it('refuses to fit fewer than two usable points or a degenerate ladder', () => {
     expect(fitLogLogExponent([{ x: 8, y: 8 }])).toBeNull();
-    expect(fitLogLogExponent([{ x: 8, y: 0 }, { x: 24, y: 1 }])).toBeNull();
+    expect(
+      fitLogLogExponent([
+        { x: 8, y: 0 },
+        { x: 24, y: 1 },
+      ]),
+    ).toBeNull();
     expect(
       fitLogLogExponent([
         { x: 8, y: 1 },
@@ -296,7 +304,10 @@ describe('evaluateMetric', () => {
   });
 
   it('reports an unmeasured budget as unbudgeted rather than passing it', () => {
-    const result = evaluateMetric({ max: null, rationale: 'UNMEASURED on a quiet box' }, { value: 5 });
+    const result = evaluateMetric(
+      { max: null, rationale: 'UNMEASURED on a quiet box' },
+      { value: 5 },
+    );
     expect(result.status).toBe('unbudgeted');
     expect(result.reason).toContain('UNMEASURED');
   });
@@ -375,8 +386,12 @@ describe('realistic workload generator', () => {
   it('makes the app non-inert by giving the root an interactive leaf', () => {
     const interactive = perfWorkloadComponentSource(0, 4, { interactive: true });
     expect(interactive).toContain("import { InteractiveLeaf } from './interactive-leaf.js';");
-    expect(perfWorkloadComponentSource(1, 4, { interactive: true })).not.toContain('InteractiveLeaf');
-    expect(perfWorkloadComponentSource(0, 4, { interactive: false })).not.toContain('InteractiveLeaf');
+    expect(perfWorkloadComponentSource(1, 4, { interactive: true })).not.toContain(
+      'InteractiveLeaf',
+    );
+    expect(perfWorkloadComponentSource(0, 4, { interactive: false })).not.toContain(
+      'InteractiveLeaf',
+    );
   });
 
   it('produces a byte-different edit for the dev loop', () => {
@@ -394,9 +409,9 @@ describe('realistic workload generator', () => {
       expect(readFileSync(path.join(root, 'src/app.tsx'), 'utf8')).toContain('interactiveQuery');
       expect(readFileSync(path.join(root, 'tsconfig.json'), 'utf8')).toContain('"strict": true');
       // The TypeScript preflight resolves from the app root, so both links have to exist.
-      expect(readFileSync(path.join(root, 'node_modules/typescript/package.json'), 'utf8')).toContain(
-        '"name": "typescript"',
-      );
+      expect(
+        readFileSync(path.join(root, 'node_modules/typescript/package.json'), 'utf8'),
+      ).toContain('"name": "typescript"');
       expect(
         readFileSync(path.join(root, 'node_modules/@kovojs/server/package.json'), 'utf8'),
       ).toContain('@kovojs/server');

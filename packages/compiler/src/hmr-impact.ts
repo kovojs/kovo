@@ -103,9 +103,7 @@ export function createComponentHmrImpactMetadata(input: HmrImpactMetadataInput):
       ...(plan.templateStamps === undefined
         ? {}
         : {
-            templateStamps: plan.templateStamps.map(
-              ({ sourceSpan: _span, ...stamp }) => stamp,
-            ),
+            templateStamps: plan.templateStamps.map(({ sourceSpan: _span, ...stamp }) => stamp),
           }),
     })),
   );

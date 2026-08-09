@@ -594,7 +594,9 @@ describe('browser navigation security controls', () => {
 
     expect(controls.isDocumentPartsContentType(contentType)).toBe(false);
     expect(
-      controls.isDocumentPartsContentType('application/vnd.kovo.document-parts+json; charset=utf-8'),
+      controls.isDocumentPartsContentType(
+        'application/vnd.kovo.document-parts+json; charset=utf-8',
+      ),
     ).toBe(true);
   });
 
@@ -615,7 +617,14 @@ describe('browser navigation security controls', () => {
       );
 
     const jsonScript = envelope([
-      ['script', [['type', 'application/json'], ['kovo-query', 'cart']], ['{"count":1}']],
+      [
+        'script',
+        [
+          ['type', 'application/json'],
+          ['kovo-query', 'cart'],
+        ],
+        ['{"count":1}'],
+      ],
     ]);
     expect(jsonScript).toBeDefined();
     const builtJson = controls.buildDocumentFromParts(jsonScript!);

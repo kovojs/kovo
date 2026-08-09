@@ -10,11 +10,7 @@
       "host": {
         "arch": "arm64",
         "cpuCount": "10",
-        "loadAverage": [
-          3.7783203125,
-          3.81787109375,
-          2.98388671875
-        ],
+        "loadAverage": [3.7783203125, 3.81787109375, 2.98388671875],
         "node": "v24.19.0",
         "platform": "darwin"
       },
@@ -24,11 +20,7 @@
         "durationMs": 10000,
         "editTimeoutMs": 240000,
         "edits": 5,
-        "ladder": [
-          8,
-          24,
-          72
-        ],
+        "ladder": [8, 24, 72],
         "port": 43131,
         "readyTimeoutMs": 300000,
         "samples": 1,
@@ -55,9 +47,7 @@
         "documentIdentityBytes": 27213,
         "documentContentEncoding": "br",
         "navigationContentType": "application/vnd.kovo.document-parts+json; charset=utf-8",
-        "stylesheetHrefs": [
-          "/assets/styles.css"
-        ]
+        "stylesheetHrefs": ["/assets/styles.css"]
       }
     },
     {
@@ -67,11 +57,7 @@
       "host": {
         "arch": "arm64",
         "cpuCount": "10",
-        "loadAverage": [
-          5.10693359375,
-          4.4033203125,
-          3.830078125
-        ],
+        "loadAverage": [5.10693359375, 4.4033203125, 3.830078125],
         "node": "v24.19.0",
         "platform": "darwin"
       },
@@ -81,12 +67,7 @@
         "durationMs": 10000,
         "editTimeoutMs": 240000,
         "edits": 5,
-        "ladder": [
-          8,
-          24,
-          72,
-          216
-        ],
+        "ladder": [8, 24, 72, 216],
         "port": 43117,
         "readyTimeoutMs": 300000,
         "samples": 1,
@@ -412,11 +393,7 @@
       "host": {
         "arch": "arm64",
         "cpuCount": "10",
-        "loadAverage": [
-          5.7578125,
-          6.05908203125,
-          5.00341796875
-        ],
+        "loadAverage": [5.7578125, 6.05908203125, 5.00341796875],
         "node": "v24.19.0",
         "platform": "darwin"
       },
@@ -426,11 +403,7 @@
         "durationMs": 10000,
         "editTimeoutMs": 240000,
         "edits": 5,
-        "ladder": [
-          8,
-          24,
-          72
-        ],
+        "ladder": [8, 24, 72],
         "port": 43153,
         "readyTimeoutMs": 300000,
         "samples": 1,
@@ -462,11 +435,7 @@
       "host": {
         "arch": "arm64",
         "cpuCount": "10",
-        "loadAverage": [
-          3.97705078125,
-          5.3134765625,
-          4.8212890625
-        ],
+        "loadAverage": [3.97705078125, 5.3134765625, 4.8212890625],
         "node": "v24.19.0",
         "platform": "darwin"
       },
@@ -476,11 +445,7 @@
         "durationMs": 10000,
         "editTimeoutMs": 180000,
         "edits": 4,
-        "ladder": [
-          8,
-          24,
-          72
-        ],
+        "ladder": [8, 24, 72],
         "port": 43180,
         "readyTimeoutMs": 300000,
         "samples": 1,

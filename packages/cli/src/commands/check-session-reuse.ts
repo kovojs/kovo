@@ -108,7 +108,8 @@ export function planKovoSourceCheckSessionReuse(
     }
   }
   for (const phase of previous.census.phases) {
-    if (phase.status === 'not-reached') return refuse('previous revision did not reach every phase');
+    if (phase.status === 'not-reached')
+      return refuse('previous revision did not reach every phase');
   }
   if (candidateDigests.size !== previousDigests.size) return refuse('files were added or removed');
   const changedPaths: string[] = [];

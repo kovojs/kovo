@@ -12922,7 +12922,7 @@ function buildErrorResult(error: unknown): CliCommandResult {
 
 function sourceCheckErrorResult(
   error: unknown,
-  census?: KovoSourceCheckPhaseCensus | undefined,
+  census?: KovoSourceCheckPhaseCensus,
 ): CliCommandResult {
   const configurationError = error instanceof KovoCommandConfigurationError;
   const result: CliCommandResult = {

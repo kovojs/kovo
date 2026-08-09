@@ -2537,9 +2537,7 @@ export default async function handler(request) {
         expect(Number(compressedAsset.headers['content-length'])).toBe(
           compressedAsset.bodyBytes.byteLength,
         );
-        expect(compressedAsset.bodyBytes.byteLength).toBeLessThan(
-          Buffer.byteLength(cartCssSource),
-        );
+        expect(compressedAsset.bodyBytes.byteLength).toBeLessThan(Buffer.byteLength(cartCssSource));
         expect(brotliDecompressSync(compressedAsset.bodyBytes).toString('utf8')).toBe(
           cartCssSource,
         );
@@ -5991,7 +5989,7 @@ export default async function handler() {
       );
       await expect(readFile(stagedEntry, 'utf8')).resolves.toBe('staged-image-bytes');
       const serverSource = await readFile(join(nodeOutDir, 'server.mjs'), 'utf8');
-      expect(serverSource).toContain("process.env.KOVO_ROOTED_FILES_DIR = pathResolve(");
+      expect(serverSource).toContain('process.env.KOVO_ROOTED_FILES_DIR = pathResolve(');
       expect(serverSource).toContain("'rooted',");
     } finally {
       await rm(root, { force: true, recursive: true });

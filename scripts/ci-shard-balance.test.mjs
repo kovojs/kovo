@@ -26,7 +26,11 @@ function manifests(shards) {
 
 describe('shardPrediction', () => {
   it('uses the measured duration when history has one and the default when it does not', () => {
-    const prediction = shardPrediction(['a.test.ts', 'b.test.ts'], { 'a.test.ts': { seconds: 12 } }, 5);
+    const prediction = shardPrediction(
+      ['a.test.ts', 'b.test.ts'],
+      { 'a.test.ts': { seconds: 12 } },
+      5,
+    );
     expect(prediction).toEqual({ covered: 1, fileCount: 2, seconds: 17 });
   });
 
@@ -38,16 +42,20 @@ describe('shardPrediction', () => {
   // floored monoliths read as 5-second files and the heaviest shard looks like the lightest.
   it('applies the reviewed duration floor when it exceeds the measured duration', () => {
     const floors = { 'heavy.test.ts': 300 };
-    expect(shardPrediction(['heavy.test.ts'], { 'heavy.test.ts': { seconds: 4 } }, 5, floors).seconds).toBe(
-      300,
-    );
-    expect(shardPrediction(['heavy.test.ts'], { 'heavy.test.ts': { seconds: 450 } }, 5, floors).seconds).toBe(
-      450,
-    );
+    expect(
+      shardPrediction(['heavy.test.ts'], { 'heavy.test.ts': { seconds: 4 } }, 5, floors).seconds,
+    ).toBe(300);
+    expect(
+      shardPrediction(['heavy.test.ts'], { 'heavy.test.ts': { seconds: 450 } }, 5, floors).seconds,
+    ).toBe(450);
   });
 
   it('treats a zero, negative or unparseable duration as uncovered', () => {
-    const history = { 'a.test.ts': { seconds: 0 }, 'b.test.ts': { seconds: -3 }, 'c.test.ts': 'soon' };
+    const history = {
+      'a.test.ts': { seconds: 0 },
+      'b.test.ts': { seconds: -3 },
+      'c.test.ts': 'soon',
+    };
     const prediction = shardPrediction(['a.test.ts', 'b.test.ts', 'c.test.ts'], history, 5);
     expect(prediction.covered).toBe(0);
     expect(prediction.seconds).toBe(15);
@@ -64,7 +72,10 @@ describe('analyzeShardBalance', () => {
 
   it('reports a perfectly balanced plan as imbalance 1.0 with full coverage', () => {
     const analysis = analyzeShardBalance(
-      manifests([['a.test.ts', 'b.test.ts'], ['c.test.ts', 'd.test.ts']]),
+      manifests([
+        ['a.test.ts', 'b.test.ts'],
+        ['c.test.ts', 'd.test.ts'],
+      ]),
       history,
       { floors: {} },
     );
@@ -92,7 +103,10 @@ describe('analyzeShardBalance', () => {
   // the default duration, and the "balanced" plan is really a file-count split.
   it('fails when the timing history stopped covering the plan', () => {
     const analysis = analyzeShardBalance(
-      manifests([['a.test.ts', 'b.test.ts'], ['c.test.ts', 'd.test.ts']]),
+      manifests([
+        ['a.test.ts', 'b.test.ts'],
+        ['c.test.ts', 'd.test.ts'],
+      ]),
       {},
       { floors: {} },
     );
