@@ -73,7 +73,9 @@ test('session-dependent route documents are no-store, guarded or not (bugs-1 F34
   const unguarded = await page.request.get('/login');
   expect(unguarded.status()).toBe(200);
   expect(unguarded.headers()['cache-control']).toBe('no-store');
-  expect(unguarded.headers().vary).toBe('Cookie');
+  // SPEC §9.5: documents negotiate both the representation and compression in addition to
+  // the session-dependent Cookie dimension.
+  expect(unguarded.headers().vary).toBe('Cookie, Accept, Accept-Encoding');
 });
 
 test('documents stamp an opaque per-session fingerprint for broadcast scoping (bugs-1 F13)', async ({

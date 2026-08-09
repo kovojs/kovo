@@ -1458,7 +1458,8 @@ async function assertQueryWireServed(origin: string, output: () => string): Prom
   expect(response.status, body).toBe(200);
   expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8');
   expect(response.headers.get('cache-control')).toBe('public, max-age=600');
-  expect(response.headers.get('vary')).toBeNull();
+  // SPEC §9.5: query truth is compressible and therefore varies by the negotiated encoding.
+  expect(response.headers.get('vary')).toBe('Accept-Encoding');
   expect(body).toContain(`<kovo-query name="${queryWireProofKey}"`);
   expect(body).toContain('&lt;img src=x onerror=\\"alert(1)\\"&gt;');
   expect(body).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');

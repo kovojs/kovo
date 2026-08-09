@@ -11,7 +11,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.3.0",
-      "sourceTreeSha256": "b79ffc5a7f71cde91fda01bf2c18f355084a25ab8eff9f9c30b4bcd3a425bb3c",
+      "sourceTreeSha256": "eea79129d8474383c320f04d6cc14e3e7b3625728e6409da582ff05487575358",
       "manifestVariants": [
         {
           "fingerprint": "sha256:80d390e85123b76e58a9270f45d1420deaefd869d361bf8181cfa3f310ae6c08"
@@ -17376,7 +17376,7 @@
           "reason": "derived binds a reviewed adapter to the current request principal through the canonical ScopedKey containment door."
         }
       ],
-      "sourceTreeSha256": "cf28a54f9112af30a2286efcfee531dc693e56c2529fbc02e3e20e72e248651c"
+      "sourceTreeSha256": "0491a14393ac659aaf478c8069af091176bc548e3e27af2d18fa59ead54392c8"
     },
     {
       "manifestVariants": [

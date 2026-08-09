@@ -242,7 +242,11 @@ export async function captureLoaderBudget() {
     const home = contract.route('/', {
       access: contract.publicAccess('public loader-budget capture route'),
       page: () =>
-        trustedHtml('<main>loader budget</main>', { reason: 'site capture renderer output' }),
+        // SPEC §4.4: the loader now ships only for documents with client surface. Keep this
+        // capture deliberately interactive so it continues measuring bytes that actually ship.
+        trustedHtml('<main kovo-c="loader-budget">loader budget</main>', {
+          reason: 'site capture renderer output',
+        }),
     });
     const app = contract.assemble({ routes: [home] });
     const response = await createRequestHandler(app)(new Request('https://kovo.test/'));

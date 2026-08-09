@@ -293,7 +293,9 @@ test('dev HMR client full reloads for route-shell changes', async ({ page }) => 
     routes: [
       route('/', {
         page() {
-          return `<main><h1 id="route-version">${routeVersion}</h1></main>`;
+          // SPEC §4.4: this test exercises the browser HMR hook, so the fixture must declare
+          // client surface now that inert documents intentionally omit the inline bootstrap.
+          return `<main kovo-c="hmr-route-shell"><h1 id="route-version">${routeVersion}</h1></main>`;
         },
       }),
     ],

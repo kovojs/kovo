@@ -143,7 +143,9 @@ describe('create-kovo starter (build integration: production response header art
         const unsafe = await fetch(`${origin}/header-sink-unsafe.txt`);
         const unsafeBody = await unsafe.text();
         expect(unsafe.status, unsafeBody).toBe(500);
-        expect(unsafe.headers.get('vary')).toBeNull();
+        // SPEC §9.5: even the framework-owned 500 body negotiates transport compression.
+        // The unsafe authored Vary value is gone; only the adapter-owned dimension survives.
+        expect(unsafe.headers.get('vary')).toBe('Accept-Encoding');
         expect(unsafe.headers.getSetCookie()).toEqual([]);
         expect(unsafeBody).toContain('Server Error');
 

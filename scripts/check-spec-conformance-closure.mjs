@@ -53,7 +53,7 @@ const transferredSqlSafetyDiagnosticRegistrarDoor =
 const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#diagnosticAt`;
 const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
 const expectedDiagnosticEmissionSiteDigest =
-  '78edf250699740d468ef6d61afbf18520231a623f9059ab2218083e81940cd53';
+  '315f19f9e520ab3231d9dfa67ff61efb753ebe72c2d4c39a431dbab7b2462ba2';
 const expectedRootDiagnosticDoorDigest =
   '1660c7877e7a533c282cf38c291a10181bc2e7484d76f479f1d1f41cd51dac77';
 const expectedRegisteredDiagnosticGuardDigest =
@@ -85,24 +85,27 @@ const expectedDiagnosticFactorySinkDigest =
 const expectedDiagnosticEvidenceWitnessDigest =
   '23014067df10912624d8419128d1362787bb212e84ef0aac772d78ad26156aa3';
 const expectedDiagnosticActualLayerReviewDigest =
-  '6584be3c280e1d4a651cc861b2a2784e6df893e28e117e34cab7e14a67edd42a';
+  'c4ad9b9ff09faa6433acb8dfd22acb9c1dbdcc6d1d0326e7fe61f7e8acd49fb4';
 const expectedBlockingStaticExportCollectionDigest =
   '3541644c641aec62abd0743093c653abd953e634f6042b941877b699666c4fdd';
 const expectedCompilerValidatorPipelineDigest =
   'e78650bfe86c953aef32fe5b1ed03f990c3e2d82040fd929609d672e2d8ba283';
 const expectedCompileComponentModuleDigest =
-  'a22e75b77161b32169cd2d41c0248a61baf55e2296197e6e82adbd5341e4d904';
+  '15d1e2505068be6145127370442109244e27bd8adc63cf8381fd489b83c77e0f';
 const expectedValidateComponentPhaseDigest =
   '73844a343bcba2f074618fdba85eb9db9733214adb4cfde6d1f73ff8d34285f0';
 const expectedCoreBuildDistCommand =
   'vp pack src/diagnostics-public.ts src/generated.ts src/index.ts src/internal/agent-docs.ts src/internal/cache-influence.ts src/internal/classifier-verdict.ts src/internal/client-module-url-intrinsics.ts src/internal/client-module-url.ts src/internal/component-render.ts src/internal/derivation.ts src/internal/diagnostics.ts src/internal/document-protocol.ts src/internal/emission.ts src/internal/event.ts src/internal/filesystem-intrinsics.ts src/internal/filesystem.ts src/internal/fragment-target.ts src/internal/framework-identity.ts src/internal/graph.ts src/internal/json.ts src/internal/mcp-stdio.ts src/internal/module-ref.ts src/internal/package-prefix.ts src/internal/query-delta.ts src/internal/query-shape-source.ts src/internal/render-plan-token-intrinsics.ts src/internal/render-plan-token.ts src/internal/route-pattern.ts src/internal/security-markers.ts src/internal/security-operation-ir.ts src/internal/security-url.ts src/internal/security-witness-intrinsics.ts src/internal/security.ts src/internal/semantic-attributes.ts src/internal/sink-policy.ts src/internal/source-sink-registry.ts src/internal/sql-safety.ts src/internal/storage.ts src/internal/verifier.ts src/internal/wire-input-grammar.ts src/internal/wire-json.ts src/security.ts src/storage-public.ts src/webhooks.ts --dts';
 // Capability-closure summaries for the few framework-owned loaders whose target is intentionally
-// runtime-selected. Each row pins both the complete source file and the acquisition expression, so
+// runtime-selected, plus the one reviewed lazy diagnostic-module edge whose source-check latency
+// contract requires it not to become a static import. Each row pins both the complete source file
+// and the acquisition expression, so
 // a new loader, consumer shape, or file-level dataflow change fails closed instead of extending a hand-written
 // JavaScript flow interpreter (plans/10x-better-security.md, layered-closure decision).
 const reviewedUnresolvedDynamicModuleAcquisitions = new Set([
   'packages/browser/src/client-installer.ts#2c7b7a1aae697bd8d488d7459007da844cddb796d21fb790fe0fffb74ab46bcb#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
-  'packages/browser/src/inline-loader.ts#3c97cacbf561fcebed91f0d010281750c273c410dafe52372c8658f8b4c6a88c#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
+  'packages/browser/src/inline-loader.ts#3cb658fb87a5568ec970c76b16232247175e44d6403eca10f02447fd397cf1f3#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
+  'packages/cli/src/commands/build-one-shot-orchestrator.ts#e8b63c0d8d44bcfbe116c61d0fc2966418dd3259f8f211446564ed8c55dc25c4#155dc086a67d2a9e403ab8fb47af4b37fd0fe57b81238f765189c672470d7607',
   'packages/cli/src/commands/db.ts#71f2e25eedf60743b28fb20ffadac69b9a2d9f342be7b5361e2133f0830fbfdf#88ff0d5b98c41aa906dd00878fccf940791c27dc1e087908d6efa85c9d56af3f',
   'packages/compiler/src/security-analyzer-soundness-oracle.ts#22ee982930cbc113c692d6995ae3b919cf4783cba81f795018505d88b75c5874#4597d4868f6caa7d49aa7fd626313ad01af41164f801c7ee52a9395287151099',
   'packages/compiler/src/security-analyzer-soundness-oracle.ts#22ee982930cbc113c692d6995ae3b919cf4783cba81f795018505d88b75c5874#7c8fe398cd82d5ea80560281e00f6154b09b15615233da0a8b56ac03f861e51b',
@@ -128,7 +131,11 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ['packages/cli/src/bin.ts', '00ebe4233b9aa633b0ffb15fd2b1b2298cfa33164ec3fea3d9c8e79b0ec29b97'],
   [
     'packages/cli/src/commands/build-export.ts',
-    '30639146957f095c2089587648ff58fbd53dd509cf2fe5b6ef9e06cdaf8040c7',
+    'a6ca1b530ec48fdbe1c68ef9ea8e8db3271a86353a7a85f043b5f3df5035b86f',
+  ],
+  [
+    'packages/cli/src/commands/check-session-reuse.ts',
+    '3149dd23ce6ce9a48120b4f8bcd644a31c956c8d4280ba41fbf6c95eefacbcca',
   ],
   [
     'packages/cli/src/commands/build-static-trust-source-hook.mjs',
@@ -140,7 +147,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/cli/src/commands/dev.ts',
-    '2dedce9c71c18996899f3529bec19e8052106fdb7aa3e15bd408fb078ab496f6',
+    'e7a452a0676dbc595cd0e2b21a573120f1a606799daa73ed0099c0b92091e186',
   ],
   [
     'packages/cli/src/commands/sound-subset.mjs',
@@ -184,7 +191,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/server/src/internal/data-plane-static-analysis.ts',
-    'b33733b1ebfe8f9e67f9a86eeeec7e825a927b3bc18fa757a5695da9cd5f7006',
+    '5a0d73c7f55670fa06069e8ec9356423c41842ea82dd88b8f8e94903e7984b2c',
   ],
   [
     'packages/server/src/sql-parser-authority.ts',
@@ -255,7 +262,7 @@ const reviewedDynamicDiagnosticShapeSummaries = new Map([
     'Non-Kovo JSON-RPC error response with protocol-defined code and message fields.',
   ],
   [
-    'packages/compiler/src/app-contract-project.ts#literal#49b787e5c61160df2d4f918188617ff9a0d8567690e6372a3af41f4871c890a8#7a23649bbcf48003860e84f00a72182b88ab565b9dace945789442ba1cf8cb90',
+    'packages/compiler/src/app-contract-project.ts#literal#ed2327f0a49283e2417cdaa634d44da5948dce560953d976708ed5d8bea99c87#1030c4edf141fac610e851c85c40b90928ed71a1b817f3880689974a6942c9ce',
     'Pre-ratification D1 experiment diagnostic with a closed D1A/D1B/D1X code union; it is not a registry-backed Kovo diagnostic.',
   ],
   [
@@ -311,7 +318,7 @@ const reviewedDynamicDiagnosticShapeSummaries = new Map([
     'Gallery oracle mismatch record; code is a non-diagnostic comparison label.',
   ],
   [
-    'packages/compiler/src/hmr-impact.ts#literal#d36859e8a89c106c98eb8f0d2ce79cf1cbbdde9ebbb0c5b4a707207683282580#e620a964cb6cae4d07073c9168c847a6b869bc832f8ab7e4ce60d57dd83b2097',
+    'packages/compiler/src/hmr-impact.ts#literal#d36859e8a89c106c98eb8f0d2ce79cf1cbbdde9ebbb0c5b4a707207683282580#9f0ad1e633f258c0076a7b82cc67a1e2bbba3508ec3018b0cb1debc99e90c8ba',
     'Registry-derived compiler diagnostic projection for the HMR impact protocol.',
   ],
   [
@@ -1508,6 +1515,7 @@ function diagnosticModuleAcquisitionFinding(node, context) {
       : undefined;
   }
   const moduleSpecifiers = possibleStaticStringValues(moduleExpression, context, new Set());
+  if (reviewedUnresolvedDynamicModuleAcquisition(node, context)) return undefined;
   for (const moduleSpecifier of moduleSpecifiers) {
     const modulePath = resolveImportModulePath(context.fileName, moduleSpecifier);
     if (isReviewedDiagnosticModule(modulePath)) {

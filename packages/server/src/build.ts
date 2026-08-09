@@ -1141,6 +1141,8 @@ const nativeRandomBytes = randomBytes;
 // identical wire size (plans/good-perf.md O1); quality 11 is reserved for cached static bytes.
 const brotliDynamicQuality = 5;
 const brotliQualityParam = zlibConstants.BROTLI_PARAM_QUALITY;
+const brotliStreamFlush = zlibConstants.BROTLI_OPERATION_FLUSH;
+const gzipStreamFlush = zlibConstants.Z_SYNC_FLUSH;
 const nativeResponseBodyGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'body').get;
 const nativeResponseHeadersGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'headers').get;
 const nativeResponseStatusGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'status').get;
@@ -1865,7 +1867,12 @@ export async function writeWebResponseToNode(response, nodeResponse, method = 'G
   assertSafeTransportResponseHeaderEntries(transportResponseHeaderEntries(responseHeaders));
   stampBrowserStateResponseCacheFloor(responseHeaders);
   const compression = responseCompression(pinnedResponse, options, method);
-  if (nodeResponse.shouldKeepAlive === false && options.httpVersion !== '2.0') {
+  if (
+    options.httpVersion !== '2.0' &&
+    (pinnedResponse.status >= 500 || nodeResponse.shouldKeepAlive === false)
+  ) {
+    // SPEC §9.5: an HTTP/1.x server failure is terminal for the connection. This prevents a
+    // sanitized rejection from becoming a response prefix for an already queued request.
     apply(nativeHeadersSet, responseHeaders, ['connection', 'close']);
   }
   if (compression !== undefined) {
@@ -1888,11 +1895,16 @@ export async function writeWebResponseToNode(response, nodeResponse, method = 'G
     if (compression === 'br') {
       await pipeline(
         source,
-        nativeCreateBrotliCompress({ params: { [brotliQualityParam]: brotliDynamicQuality } }),
+        // SPEC §7/§9.5: compression must preserve deferred response chunk boundaries instead of
+        // buffering the initial shell until every region resolves.
+        nativeCreateBrotliCompress({
+          flush: brotliStreamFlush,
+          params: { [brotliQualityParam]: brotliDynamicQuality },
+        }),
         nodeResponse,
       );
     } else if (compression === 'gzip') {
-      await pipeline(source, nativeCreateGzip(), nodeResponse);
+      await pipeline(source, nativeCreateGzip({ flush: gzipStreamFlush }), nodeResponse);
     } else {
       await pipeline(source, nodeResponse);
     }

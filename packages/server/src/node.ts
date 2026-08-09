@@ -279,6 +279,8 @@ const nativeRandomBytes = randomBytes;
 // compression, never to the per-request render path.
 const BROTLI_DYNAMIC_QUALITY = 5;
 const brotliQualityParam = zlibConstants.BROTLI_PARAM_QUALITY;
+const brotliStreamFlush = zlibConstants.BROTLI_OPERATION_FLUSH;
+const gzipStreamFlush = zlibConstants.Z_SYNC_FLUSH;
 const nativeUrlHashGetter = requiredGetter(NativeURL.prototype, 'hash');
 const nativeUrlHostGetter = requiredGetter(NativeURL.prototype, 'host');
 const nativeUrlHrefGetter = requiredGetter(NativeURL.prototype, 'href');
@@ -1129,7 +1131,12 @@ export async function writeWebResponseToNode(
   stampBrowserStateResponseCacheFloor(pinnedResponse.headers);
   const compression = responseCompression(pinnedResponse, options, method);
   const responseHeaders = pinnedResponse.headers;
-  if (nodeResponseShouldKeepAlive(nodeResponse) === false && options.httpVersion !== '2.0') {
+  if (
+    options.httpVersion !== '2.0' &&
+    (pinnedResponse.status >= 500 || nodeResponseShouldKeepAlive(nodeResponse) === false)
+  ) {
+    // SPEC §9.5: an HTTP/1.x server failure is terminal for the connection. This prevents a
+    // sanitized rejection from becoming a response prefix for an already queued request.
     setHeader(responseHeaders, 'Connection', 'close');
   }
   if (compression) {
@@ -1175,11 +1182,16 @@ export async function writeWebResponseToNode(
     if (compression === 'br') {
       await nativePipeline(
         source,
-        nativeCreateBrotliCompress({ params: { [brotliQualityParam]: BROTLI_DYNAMIC_QUALITY } }),
+        // SPEC §7/§9.5: compression must not turn a deferred/streaming response back into a
+        // buffered response. Flush each source chunk while retaining the bounded dynamic quality.
+        nativeCreateBrotliCompress({
+          flush: brotliStreamFlush,
+          params: { [brotliQualityParam]: BROTLI_DYNAMIC_QUALITY },
+        }),
         nodeResponse,
       );
     } else if (compression === 'gzip') {
-      await nativePipeline(source, nativeCreateGzip(), nodeResponse);
+      await nativePipeline(source, nativeCreateGzip({ flush: gzipStreamFlush }), nodeResponse);
     } else {
       await nativePipeline(source, nodeResponse);
     }
