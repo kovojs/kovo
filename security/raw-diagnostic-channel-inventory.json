@@ -575,6 +575,17 @@
       "expressionSha256": "bdd3bd65e4a8b052027b7d84ec559f51041d02a4acacef947f46dc8911d87b97"
     },
     {
+      "id": "packages/cli/src/commands/build-export.ts#throw#KV417#1a9f0afefbfb6a53c2fc7577fc30afa34fa51ca4a0c8ec34249c2463e4a6bc14#0",
+      "code": "KV417",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "analysis",
+      "channel": "throw",
+      "file": "packages/cli/src/commands/build-export.ts",
+      "owner": "selectedKovoBuildPreset",
+      "expressionSha256": "1a9f0afefbfb6a53c2fc7577fc30afa34fa51ca4a0c8ec34249c2463e4a6bc14"
+    },
+    {
       "id": "packages/cli/src/commands/build-export.ts#throw#KV438#0068a8b3bc15aeaa18affa6bee893d2d92d98fc31627ef8a893166c39eace672#0",
       "code": "KV438",
       "enforcementClass": "compile-error",
