@@ -62,15 +62,15 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
     ["sha256:068b72419a979f98d4326f1517f1279405b21e934ef4276a48156881155362b7", [
       [".",["default","types"]],
       ["./client",["default","types"]],
-    ], ["kovo-packed-tree-sha256:a92b02f7bab8ff330ffe9a6f3e67fd1dca8528d06e3512d6c686386d878b14bc"]],
+    ], ["kovo-packed-tree-sha256:8b0533285147a06c038e4d47bb07d6f794fc3ca04f8a6715bfca105d6614ef33"]],
     ["sha256:37382b4373fed2973a8e683f4f973a885014c3f214b2fced98bd287bc7658681", [
       [".",["default","types"]],
       ["./client",["default","types"]],
-    ], ["kovo-packed-tree-sha256:a92b02f7bab8ff330ffe9a6f3e67fd1dca8528d06e3512d6c686386d878b14bc"]],
+    ], ["kovo-packed-tree-sha256:8b0533285147a06c038e4d47bb07d6f794fc3ca04f8a6715bfca105d6614ef33"]],
     ["sha256:3f36e44add959c957577dd2a7d5fe2625e3e6666ba152711b7045d85bcc319fa", [
       [".",["default"]],
       ["./client",["default"]],
-    ], ["kovo-source-tree-sha256:8eeb319a57f2da45a0212dbf04bad552141e13ef7f4bd910ee9f0602491e5223"]],
+    ], ["kovo-source-tree-sha256:ae1eec2f5497e83cddeec89ab0ccd11a01d3915719d9736243054abe56d8fbfb"]],
   ], "exact-implementation"],
   ["@kovojs/cli", "0.3.0", [
     ["sha256:d8c75aa2cffc8af35aa3f4978ac0cce600564d6c5f29a60eeab9ae05c1b2a091", [
