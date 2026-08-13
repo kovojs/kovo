@@ -1,45 +1,110 @@
 {
-  "schema": "kovo-route-css-workload/v1",
+  "schema": "kovo-route-css-workload/v2",
   "name": "matched-commerce-listing-detail",
-  "description": "The capability-matched commerce listing and detail routes, partitioned into shared shell/cart CSS and route-only CSS.",
-  "assets": [
+  "description": "A counterfactual partition of the real capability-matched Kovo stylesheet for the matched-l0 listing and detail workload.",
+  "sources": [
+    {
+      "id": "stylesheet",
+      "file": "benchmarks/kovo/src/styles.css",
+      "expectedDigest": "sha256:713cffba81912d9c0f415e989481f32db022773729cbcf6ece70a01fd8f75c0c"
+    },
+    {
+      "id": "routes",
+      "file": "benchmarks/kovo/src/app.tsx",
+      "expectedDigest": "sha256:06e437f3a574b4f8a036b312a3273f6552b3363276441b21db5d8a1f2c1e188d",
+      "evidence": [
+        {
+          "text": "const benchmarkStylesheets = [stylesheet('./styles.css')] as const;",
+          "occurrences": 1
+        },
+        {
+          "text": "const matchedL0HomeRoute = app.route('/matched/l0', {",
+          "occurrences": 1
+        },
+        {
+          "text": "const matchedL0ProductRoute = app.route('/matched/l0/product/:slug', {",
+          "occurrences": 1
+        },
+        {
+          "text": "stylesheets: benchmarkStylesheets,",
+          "occurrences": 8
+        }
+      ]
+    },
+    {
+      "id": "workload",
+      "file": "benchmarks/run-all.mjs",
+      "expectedDigest": "sha256:3defbb4a998e97465e6d954180d248da6fbb1eb28dc7aa60a756bbf5d8d1093c",
+      "evidence": [
+        {
+          "text": "'matched-l0': { listing: '/matched/l0', scenarios: ['coldLoad', 'navigation'] }",
+          "occurrences": 1
+        }
+      ]
+    },
+    {
+      "id": "matched-fixture",
+      "file": "benchmarks/shared/matched-fixture.json",
+      "expectedDigest": "sha256:81c57cbd937a1e7014cf337a2deb34abf30dae2b8f23bed548b898b15840787a",
+      "evidence": [
+        {
+          "text": "\"schema\": \"kovo-benchmark-matched-fixture/v1\"",
+          "occurrences": 1
+        },
+        {
+          "text": "\"catalogItems\": 24",
+          "occurrences": 1
+        }
+      ]
+    }
+  ],
+  "stylesheetSource": "stylesheet",
+  "routeSource": "routes",
+  "componentOwnership": {
+    "shared": ["MatchedL0Shell"],
+    "listing": ["MatchedL0ListingPage", "MatchedProductCard"],
+    "detail": ["MatchedProductPage"]
+  },
+  "partitions": [
     {
       "id": "shared",
-      "file": "shared.css",
-      "sourceFileName": "matched/shared.css",
-      "componentName": "matched-shared",
-      "className": "matched-shared",
-      "marker": "kovo-perf-route-css:shared"
+      "classes": [
+        "brand",
+        "cart-button",
+        "cart-dialog",
+        "cart-line",
+        "cart-lines",
+        "cart-total",
+        "checkout",
+        "confirmation",
+        "detail-actions",
+        "modal-backdrop",
+        "nav",
+        "price",
+        "primary-button",
+        "secondary-button",
+        "shell"
+      ]
     },
     {
       "id": "listing",
-      "file": "listing.css",
-      "sourceFileName": "matched/listing.css",
-      "componentName": "matched-listing",
-      "className": "matched-listing",
-      "marker": "kovo-perf-route-css:listing"
+      "classes": ["card", "card-actions", "grid", "hero"]
     },
     {
       "id": "detail",
-      "file": "detail.css",
-      "sourceFileName": "matched/detail.css",
-      "componentName": "matched-detail",
-      "className": "matched-detail",
-      "marker": "kovo-perf-route-css:detail"
+      "classes": ["detail", "detail-copy", "detail-media", "qty-row"]
     }
   ],
   "routes": [
     {
       "id": "listing",
       "path": "/matched/l0",
-      "assets": ["shared", "listing"],
-      "requiredMarkers": ["kovo-perf-route-css:shared", "kovo-perf-route-css:listing"]
+      "partitions": ["shared", "listing"]
     },
     {
       "id": "detail",
       "path": "/matched/l0/product/linen-field-jacket",
-      "assets": ["shared", "detail"],
-      "requiredMarkers": ["kovo-perf-route-css:shared", "kovo-perf-route-css:detail"]
+      "partitions": ["shared", "detail"]
     }
   ],
   "sessions": [
