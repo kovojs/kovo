@@ -190,7 +190,7 @@
     },
     {
       "path": "@kovojs/compiler/dist/internal.mjs",
-      "sha512": "sha512-YcUNwgVNCu0Jkp5brlUTmG769YiOMg+rM/F3+noXrQ81Jpxa3TnYVnlGQ9HjQTcYPoqqKUUNXwD1N77/FcJ48g=="
+      "sha512": "sha512-reEhLDhx5LrqvqQSlzlh44XIdk3o141/+BOkAj+ahQFXlanIVHVLW0LvQq/HqymeZDn1oZD9j3MRRM9L+PQq2A=="
     },
     {
       "path": "@kovojs/compiler/dist/internal/graph.mjs",
@@ -502,7 +502,7 @@
     },
     {
       "path": "@kovojs/server/dist/app-document.mjs",
-      "sha512": "sha512-9Gq0IiV9kWjwWoauAmfxAqLnlH5xYtwiyoIpRbEvvE4vP9JGN3odb8G61krYDZCwz5wIYb75gxT3nJG7C7vEIg=="
+      "sha512": "sha512-hfsMAtaOrLwEd0m6refdRWXoCdxAO6beMgRsZKNua5PJWUG6Qi19Mr6b3syea7vvA56jlHdk8tLTOXVz8Zr71w=="
     },
     {
       "path": "@kovojs/server/dist/app-guards.mjs",
@@ -566,7 +566,7 @@
     },
     {
       "path": "@kovojs/server/dist/build.mjs",
-      "sha512": "sha512-wUP9wh2rgbsbxNdmBPfotpcwPG9rtWk27Mlh2TQoShIFKxM3aFd0p97SIOLSUxpLxgOADBoGLwX98JZtgr7zcQ=="
+      "sha512": "sha512-5na+QuSo8EGYe7Ny7d+GgxpTeGzteONFyUIPbz6/5mVjRNY7M0aXOp3eLSOaCSJ7XWN96bC++4re800ULJVBZw=="
     },
     {
       "path": "@kovojs/server/dist/cache-influence.mjs",
@@ -822,7 +822,7 @@
     },
     {
       "path": "@kovojs/server/dist/internal/build.mjs",
-      "sha512": "sha512-CwGAGhwtZr/JljTN4qshM5unh9XECXrskW7Vioge8x7rjYhLznK6a4Cncrl14rZs1QX7IMAShHpCoPkY05tqfw=="
+      "sha512": "sha512-7OGx8+KEiptSBcsvUBGdfeWe7vwlLE+ejgLDeaFF/aisM7xdpZ7CBIhWRuVTvW805vec754n9rMs/q4Wa/yWCw=="
     },
     {
       "path": "@kovojs/server/dist/internal/capabilities.mjs",
@@ -870,7 +870,7 @@
     },
     {
       "path": "@kovojs/server/dist/internal/generated-handler-runtime.mjs",
-      "sha512": "sha512-CshK65Gpp9mhS8aT2CG/F5lw1G24MJ3aitDXWfyTkFNH+i1vZqCB7LXrHO7XLkr6wv0XbNvBBXlQQ/Wl4dT6aA=="
+      "sha512": "sha512-35BWDMuhm9BSQPti41ucftHetLVwGFKPPyQDFRR/O8IpYEfFdJNY2ZSZgMzEZ5trWAZVln426JjHZ2bP5bKY1A=="
     },
     {
       "path": "@kovojs/server/dist/internal/html.mjs",
@@ -1066,11 +1066,11 @@
     },
     {
       "path": "@kovojs/server/dist/neutral-build.mjs",
-      "sha512": "sha512-GbYwfLoTqiGEQvvLJee41kmIlXUX5ZTy3Y5hlZndjOVh78BFsjTAjuOgITCoat2vjoZZq3HWYwsKuyhx69G8Ag=="
+      "sha512": "sha512-fcepFTJuIU5h0s4pNbBRvfROr6xFIBQl386IQ+fkohFKETYO0s2mSmQNKC244LsRky57sZ2IgBSCAWrgl/Ju/g=="
     },
     {
       "path": "@kovojs/server/dist/node.mjs",
-      "sha512": "sha512-ZtRAnmT7xQwLJPFmQjK+C6RHJL4Cgckapc6kbtVZHJYD/qhstPznORiQrW+zG9C9z+D8MwRMC1AoIaiGytS9Mg=="
+      "sha512": "sha512-y9m1RadUdVquUJYl/S2KX0A/OXcTERkNu0v8VypDlnLp+4M51Uw1cUnadI4R2Hk+EWyLXufCkhA6RRfnSKbzKQ=="
     },
     {
       "path": "@kovojs/server/dist/output-staging.mjs",
@@ -1294,7 +1294,7 @@
     },
     {
       "path": "@kovojs/server/dist/request-deadline.mjs",
-      "sha512": "sha512-g5/SLvW6tyS/vfBiX0Gf1Az6ndkpLasjMd84BUin60jv3e9B9S5mLfE/uuE05qLL9evHHwjeD2EzfqVRmt+01Q=="
+      "sha512": "sha512-qr09TNujsty6CXP4LsEQHl8fbFI/NZjgDcCkBoMCIjUw+RxwXPL9QK/iMZ6feOvcDdCI4svoM6Sh7RiQGCykog=="
     },
     {
       "path": "@kovojs/server/dist/request-handler.mjs",
@@ -1350,7 +1350,7 @@
     },
     {
       "path": "@kovojs/server/dist/response.mjs",
-      "sha512": "sha512-BfUG3NZGqXJPYoh6T9lJiBUQ1lHuS0O9G0l1TKpO8MtExND2XvHSP0C7Po8HDvVH92aDieoL5TVJ5eWamYHy6w=="
+      "sha512": "sha512-DV+//uYkzChbyQ5veswfBkl5kfLGDq2BBHpfCD7i0BsZaKY+71eiTaxt8YCBKg58UuipsvxfUW0TZot5IlTcBw=="
     },
     {
       "path": "@kovojs/server/dist/route-ir.mjs",

@@ -6576,6 +6576,10 @@
     ],
     [
       "@kovojs/server/dist/internal/build.mjs",
+      "@kovojs/server/dist/file.mjs"
+    ],
+    [
+      "@kovojs/server/dist/internal/build.mjs",
       "@kovojs/server/dist/internal/build-context.mjs"
     ],
     [
@@ -6781,6 +6785,10 @@
     [
       "@kovojs/server/dist/internal/generated-handler-runtime.mjs",
       "@kovojs/server/dist/live-target-registry.mjs"
+    ],
+    [
+      "@kovojs/server/dist/internal/generated-handler-runtime.mjs",
+      "@kovojs/server/dist/response.mjs"
     ],
     [
       "@kovojs/server/dist/internal/generated-handler-runtime.mjs",
@@ -7893,6 +7901,10 @@
     [
       "@kovojs/server/dist/node.mjs",
       "@kovojs/server/dist/response-transport-headers.mjs"
+    ],
+    [
+      "@kovojs/server/dist/node.mjs",
+      "@kovojs/server/dist/response.mjs"
     ],
     [
       "@kovojs/server/dist/node.mjs",
@@ -10877,7 +10889,7 @@
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     }
   ],
-  "policySha512": "sha512-Wkcg4L7F8efSWJGWh5TBjdmsAmv3WC+YP5HlgBlRjpzKyrqre2xdVavbbuAIze2mBswSCHo3ZnUSo2FhavF/Ig==",
+  "policySha512": "sha512-IaeZzn96jtopFbRGuVHirtmGsIG0iCZfEH+c9Q66hnqCsUpikvdq4Aw6Qn61+5Qf+OrqGojSMTvrfOeW64XutA==",
   "roots": [
     {
       "module": "@kovojs/better-auth/dist/index.mjs",
