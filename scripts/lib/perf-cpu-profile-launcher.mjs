@@ -10,7 +10,7 @@
 import { writeFile } from 'node:fs/promises';
 import inspector from 'node:inspector';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const profilePath = process.env.KOVO_PERF_CPU_PROFILE_PATH;
 const entry = process.argv[2];
@@ -77,6 +77,12 @@ process.once('SIGTERM', onSigterm);
 
 try {
   const entryUrl = /^(?:data|file):/u.test(entry) ? entry : pathToFileURL(path.resolve(entry)).href;
+  // The generated Node adapter opens its listener only when its own file is argv[1]. Importing it
+  // through this launcher otherwise makes the adapter correctly behave like a library, so the
+  // process exits before either the benchmark or the SIGTERM profile flush can run. Preserve the
+  // ordinary `node dist/server/server.mjs` main-module identity before evaluating the adapter.
+  // This launcher is measurement-only; the generated source and its main-entry check are unchanged.
+  if (entryUrl.startsWith('file:')) process.argv[1] = fileURLToPath(entryUrl);
   await import(entryUrl);
 } catch (error) {
   process.stderr.write(
