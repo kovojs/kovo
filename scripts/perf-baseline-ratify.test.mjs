@@ -65,6 +65,28 @@ describe('performance baseline ratification', () => {
     expect(result.reports).toHaveLength(5);
   });
 
+  it('matches normalized host cohorts while preserving raw memory and rejects capacity drift', () => {
+    const entries = [100, 102, 104, 106, 108].map((durationMs, index) =>
+      entryFixture(index, durationMs),
+    );
+    entries[0].report.host.totalMemoryBytes = 16_766_427_136;
+    entries[1].report.host.totalMemoryBytes = 16_766_414_848;
+
+    expect(ratifyPerformanceBaseline(entries, { requireProvider: 'any' }).verdict).toEqual({
+      reasons: [],
+      status: 'ratified',
+    });
+
+    const changed = entries[4].report.host;
+    changed.totalMemoryBytes = 8 * 1024 ** 3;
+    changed.memoryCapacityClassBytes = 8 * 1024 ** 3;
+    const { digest: _digest, schema: _schema, totalMemoryBytes: _raw, ...cohort } = changed;
+    changed.digest = digest(canonicalJson(cohort));
+    expect(
+      ratifyPerformanceBaseline(entries, { requireProvider: 'any' }).verdict.reasons,
+    ).toContain('host cohort identity differs across reports');
+  });
+
   it('rejects short, duplicate, or identity-drifted evidence', () => {
     const entries = [100, 102, 104, 106].map((durationMs, index) =>
       entryFixture(index, durationMs),
@@ -201,11 +223,11 @@ function entryFixture(index, durationMs) {
     arch: 'arm64',
     browsers: [],
     cpu: { count: 10, model: 'Fixture CPU' },
+    memoryCapacityClassBytes: 16 * 1024 * 1024 * 1024,
     node: 'v24.19.0',
     platform: 'darwin',
     release: '25.2.0',
     runnerImage: 'fixture-runner@sha256:one',
-    totalMemoryBytes: 16 * 1024 * 1024 * 1024,
   };
   const workloadFacts = {
     adapters: { server: 'kovo-server-benchmark/v1' },
@@ -239,7 +261,8 @@ function entryFixture(index, durationMs) {
     host: {
       ...hostFacts,
       digest: digest(canonicalJson(hostFacts)),
-      schema: 'kovo-performance-host/v1',
+      schema: 'kovo-performance-host/v2',
+      totalMemoryBytes: 16 * 1024 * 1024 * 1024,
     },
     hostSamples: [{ ceiling: 1, loadPerCpu: 0.1 }],
     integrity: {

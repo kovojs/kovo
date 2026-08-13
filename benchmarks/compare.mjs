@@ -14,6 +14,7 @@ import {
   canonicalJson,
   PERF_HOST_SCHEMA,
   performanceHostFingerprint,
+  validPerformanceHostFingerprint,
 } from '../scripts/lib/perf-host.mjs';
 import { collectPerformanceProvenance } from '../scripts/lib/perf-provenance.mjs';
 import {
@@ -1657,18 +1658,7 @@ function observedBrowserVersions(cells) {
 }
 
 export function validHostFingerprint(host) {
-  if (
-    !host ||
-    host.schema !== PERF_HOST_SCHEMA ||
-    !/^sha256:[0-9a-f]{64}$/u.test(host.digest ?? '')
-  ) {
-    return false;
-  }
-  const { digest, schema, ...facts } = host;
-  return (
-    schema === PERF_HOST_SCHEMA &&
-    digest === `sha256:${createHash('sha256').update(canonicalJson(facts)).digest('hex')}`
-  );
+  return host?.schema === PERF_HOST_SCHEMA && validPerformanceHostFingerprint(host);
 }
 
 export async function performanceWorkloadIdentity(

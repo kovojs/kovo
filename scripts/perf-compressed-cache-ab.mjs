@@ -15,7 +15,11 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { bootstrapMedianCi, summarize } from '../benchmarks/compare.mjs';
-import { canonicalJson, performanceHostFingerprint } from './lib/perf-host.mjs';
+import {
+  canonicalJson,
+  performanceHostFingerprint,
+  validPerformanceHostFingerprint,
+} from './lib/perf-host.mjs';
 import { collectPerformanceProvenance } from './lib/perf-provenance.mjs';
 import {
   PROVED_DOCUMENT_COMPRESSION_CACHE_DISABLE_ENV,
@@ -820,13 +824,7 @@ function sameSourceState(left, right) {
 }
 
 function validHostFingerprint(host) {
-  if (host?.schema !== 'kovo-performance-host/v1') return false;
-  const { digest, schema, ...facts } = host;
-  return (
-    /^sha256:[0-9a-f]{64}$/u.test(digest ?? '') &&
-    digest === sha256(Buffer.from(canonicalJson(facts), 'utf8')) &&
-    schema === 'kovo-performance-host/v1'
-  );
+  return validPerformanceHostFingerprint(host);
 }
 
 function hostObservation() {

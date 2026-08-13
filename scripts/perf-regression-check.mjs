@@ -5,10 +5,10 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { executionIdentityFindings } from './lib/perf-execution.mjs';
+import { PERF_HOST_SCHEMA, performanceHostFingerprintFindings } from './lib/perf-host.mjs';
 
 export const PERF_REGRESSION_SCHEMA = 'kovo-performance-regression/v1';
 const comparisonSchema = 'kovo-next-performance-comparison/v1';
-const hostSchema = 'kovo-performance-host/v1';
 const workloadSchema = 'kovo-performance-workload-identity/v1';
 const digestPattern = /^sha256:[0-9a-f]{64}$/u;
 const commitPattern = /^[0-9a-f]{40,64}$/u;
@@ -185,14 +185,10 @@ function isSupersededServerSettleSample(samples, index) {
 }
 
 export function hostFingerprintFindings(host, label = 'report') {
-  if (!ownRecord(host) || host.schema !== hostSchema) {
-    return [`${label} host fingerprint is unavailable`];
+  if (!ownRecord(host) || host.schema !== PERF_HOST_SCHEMA) {
+    return [`${label} host fingerprint is not ${PERF_HOST_SCHEMA}`];
   }
-  const facts = Object.fromEntries(
-    Object.entries(host).filter(([key]) => key !== 'digest' && key !== 'schema'),
-  );
-  const expected = sha256Canonical(facts);
-  return host.digest === expected ? [] : [`${label} host digest is not derived from its facts`];
+  return performanceHostFingerprintFindings(host).map((finding) => `${label} ${finding}`);
 }
 
 export function workloadIdentityFindings(workload, label = 'report') {

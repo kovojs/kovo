@@ -76,7 +76,7 @@ describe('performance regression comparator', () => {
     expect(result.verdict.reasons).toEqual(
       expect.arrayContaining([
         'analysis metric census differs',
-        'candidate host digest is not derived from its facts',
+        'candidate host digest is not derived from normalized cohort facts',
         'candidate workload digest is not derived from its facts',
         'dependency lock identity differs',
         'source commit identity differs',
@@ -136,10 +136,10 @@ describe('performance regression comparator', () => {
     expect(hostFingerprintFindings(report.host)).toEqual([]);
     expect(workloadIdentityFindings(report.workloadIdentity)).toEqual([]);
 
-    report.host.totalMemoryBytes += 1;
+    report.host.cpu.model = 'forged CPU';
     report.workloadIdentity.identity.cells.push('invented');
     expect(hostFingerprintFindings(report.host)).toContain(
-      'report host digest is not derived from its facts',
+      'report host digest is not derived from normalized cohort facts',
     );
     expect(workloadIdentityFindings(report.workloadIdentity)).toContain(
       'report workload digest is not derived from its facts',
@@ -219,11 +219,11 @@ function reportFixture({
     arch: 'arm64',
     browsers: ['chromium 148'],
     cpu: { count: 10, model: 'Fixture CPU' },
+    memoryCapacityClassBytes: 16 * 1024 * 1024 * 1024,
     node: 'v24.19.0',
     platform: 'darwin',
     release: '25.2.0',
     runnerImage: null,
-    totalMemoryBytes: 16 * 1024 * 1024 * 1024,
   };
   const workloadFacts = {
     adapters: {
@@ -272,7 +272,8 @@ function reportFixture({
     host: {
       ...hostFacts,
       digest: digest(canonicalJson(hostFacts)),
-      schema: 'kovo-performance-host/v1',
+      schema: 'kovo-performance-host/v2',
+      totalMemoryBytes: 16 * 1024 * 1024 * 1024,
     },
     hostSamples: [
       {

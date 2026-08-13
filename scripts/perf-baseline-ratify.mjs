@@ -56,7 +56,7 @@ export function ratifyPerformanceBaseline(entries, options = {}) {
     for (const [label, left, right] of [
       ['source commit', first?.source?.commit, report?.source?.commit],
       ['dependency locks', first?.source?.locks, report?.source?.locks],
-      ['host', first?.host, report?.host],
+      ['host cohort identity', first?.host?.digest, report?.host?.digest],
       ['workload', first?.workloadIdentity, report?.workloadIdentity],
       ['analysis metric census', objectKeys(first?.analysis), objectKeys(report?.analysis)],
     ]) {
