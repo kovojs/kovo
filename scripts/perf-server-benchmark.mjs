@@ -41,6 +41,8 @@ const DEFAULT_DURATION_MS = 15_000;
 const DEFAULT_WARMUP_MS = 5_000;
 const MAX_ERROR_EVIDENCE = 20;
 const PRODUCT_SLUG = 'linen-field-jacket';
+export const PROVED_DOCUMENT_COMPRESSION_CACHE_DISABLE_ENV =
+  'KOVO_BENCHMARK_DISABLE_PROVED_DOCUMENT_COMPRESSION_CACHE';
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 
 export function serverConditionKey(condition) {
@@ -394,6 +396,14 @@ export async function runServerBenchmark(options, dependencies = {}) {
       timingExcluded: support.status === 'unsupported',
     },
     policy: { durationMs, warmupMs },
+    optimization: {
+      provedDocumentCompressionCache:
+        framework === 'kovo'
+          ? process.env[PROVED_DOCUMENT_COMPRESSION_CACHE_DISABLE_ENV] === '1'
+            ? 'disabled'
+            : 'enabled'
+          : 'not-applicable',
+    },
     samples: sample === null ? [] : [sample],
     schema: SERVER_BENCHMARK_SCHEMA,
     source,

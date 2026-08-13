@@ -282,7 +282,11 @@ export async function runComparison(options = {}) {
 
     if (cells.includes('server') && !executionError) {
       for (const [frameworkIndex, framework] of ['kovo', 'nextjs'].entries()) {
-        const host = sampleHost(hostSamples, options.maxLoadPerCpu ?? 1);
+        const host = await waitForServerHost(hostSamples, options.maxLoadPerCpu ?? 1, {
+          context: `prepare/${framework}`,
+          maxWaitMs: options.serverHostSettleMaxMs ?? 30_000,
+          pollMs: options.serverHostSettlePollMs ?? 1_000,
+        });
         if (!host.comparable) {
           executionError = `host load ${host.loadPerCpu.toFixed(3)} per CPU exceeded ceiling ${host.ceiling}`;
           break;
@@ -322,7 +326,11 @@ export async function runComparison(options = {}) {
         if (executionError) break;
         const schedule = serverSampleSchedule(options.serverSamples ?? 7);
         for (const [scheduleIndex, scheduled] of schedule.entries()) {
-          const host = sampleHost(hostSamples, options.maxLoadPerCpu ?? 1);
+          const host = await waitForServerHost(hostSamples, options.maxLoadPerCpu ?? 1, {
+            context: `${condition.key}/${scheduled.framework}/${String(scheduled.occurrence)}`,
+            maxWaitMs: options.serverHostSettleMaxMs ?? 30_000,
+            pollMs: options.serverHostSettlePollMs ?? 1_000,
+          });
           if (!host.comparable) {
             executionError = `host load ${host.loadPerCpu.toFixed(3)} per CPU exceeded ceiling ${host.ceiling}`;
             break;
@@ -414,6 +422,8 @@ export async function runComparison(options = {}) {
           serverConcurrencies: options.serverConcurrencies ?? SERVER_CONCURRENCIES,
           serverDurationMs: options.serverDurationMs ?? 15_000,
           serverEncodings: options.serverEncodings ?? SERVER_ENCODINGS,
+          serverHostSettleMaxMs: options.serverHostSettleMaxMs ?? 30_000,
+          serverHostSettlePollMs: options.serverHostSettlePollMs ?? 1_000,
           serverModes: options.serverModes ?? SERVER_MODES,
           serverPreparation,
           serverRoutes: options.serverRoutes ?? SERVER_ROUTES,
@@ -444,6 +454,8 @@ export async function runComparison(options = {}) {
           concurrencies: options.serverConcurrencies ?? SERVER_CONCURRENCIES,
           durationMs: options.serverDurationMs ?? 15_000,
           encodings: options.serverEncodings ?? SERVER_ENCODINGS,
+          hostSettleMaxMs: options.serverHostSettleMaxMs ?? 30_000,
+          hostSettlePollMs: options.serverHostSettlePollMs ?? 1_000,
           modes: options.serverModes ?? SERVER_MODES,
           routes: options.serverRoutes ?? SERVER_ROUTES,
           samplesPerFrameworkCondition: options.serverSamples ?? 7,
@@ -678,6 +690,57 @@ function sampleHost(samples, ceiling) {
   return { ...sample, ceiling, comparable: sample.loadPerCpu <= ceiling };
 }
 
+/**
+ * Wait only between serialized server cells, preserving every rejected load sample. This prevents
+ * the previous build/sample's one-minute load average from becoming an immediate false abort while
+ * retaining a hard upper bound on settling.
+ */
+export async function waitForServerHost(
+  samples,
+  ceiling,
+  {
+    context = 'server',
+    maxWaitMs = 30_000,
+    now = Date.now,
+    pollMs = 1_000,
+    readLoad = () => ({ loadAverage: os.loadavg(), logicalCpuCount: os.cpus().length }),
+    wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+  } = {},
+) {
+  if (!Number.isFinite(ceiling) || ceiling <= 0) throw new TypeError('host ceiling is invalid');
+  if (!Number.isSafeInteger(maxWaitMs) || maxWaitMs < 0 || maxWaitMs > 300_000)
+    throw new TypeError('server host settle max wait must be between 0 and 300000ms');
+  if (!Number.isSafeInteger(pollMs) || pollMs < 10 || pollMs > 60_000)
+    throw new TypeError('server host settle poll must be between 10 and 60000ms');
+  const startedAt = now();
+  let attempt = 0;
+  while (true) {
+    const observed = readLoad();
+    const loadAverage = observed.loadAverage;
+    const logicalCpuCount = observed.logicalCpuCount;
+    const loadPerCpu = loadAverage?.[0] / logicalCpuCount;
+    const waitedMs = Math.max(0, now() - startedAt);
+    const sample = {
+      at: new Date().toISOString(),
+      attempt,
+      context,
+      loadAverage,
+      loadPerCpu,
+      logicalCpuCount,
+      phase: 'server-quiet-host-settle',
+      waitedMs,
+    };
+    samples.push(sample);
+    if (Number.isFinite(loadPerCpu) && loadPerCpu >= 0 && loadPerCpu <= ceiling) {
+      return { ...sample, ceiling, comparable: true };
+    }
+    if (waitedMs >= maxWaitMs) return { ...sample, ceiling, comparable: false };
+    const remainingMs = maxWaitMs - waitedMs;
+    await wait(Math.min(pollMs, remainingMs));
+    attempt += 1;
+  }
+}
+
 function assertServerMatrixOptions(options) {
   for (const concurrency of options.serverConcurrencies ?? SERVER_CONCURRENCIES)
     assertMember('--server-concurrencies', concurrency, SERVER_CONCURRENCIES);
@@ -688,6 +751,16 @@ function assertServerMatrixOptions(options) {
   for (const route of options.serverRoutes ?? SERVER_ROUTES)
     assertMember('--server-routes', route, SERVER_ROUTES);
   serverSampleSchedule(options.serverSamples ?? 7);
+  boundedServerSettleOption(options.serverHostSettleMaxMs ?? 30_000, 0, 300_000, 'max');
+  boundedServerSettleOption(options.serverHostSettlePollMs ?? 1_000, 10, 60_000, 'poll');
+}
+
+function boundedServerSettleOption(value, min, max, label) {
+  if (!Number.isSafeInteger(value) || value < min || value > max) {
+    throw new TypeError(
+      `server host settle ${label} must be between ${String(min)} and ${String(max)}ms`,
+    );
+  }
 }
 
 async function runAdapter({ args, cwd, label }) {
@@ -1221,6 +1294,12 @@ export function validateServerCell(cell, expected) {
     expected.reasons.push(`${key} scheduled condition mismatch`);
   }
   if (
+    report?.optimization?.provedDocumentCompressionCache !==
+    (cell.framework === 'kovo' ? 'enabled' : 'not-applicable')
+  ) {
+    expected.reasons.push(`${key} optimization posture mismatch`);
+  }
+  if (
     report?.policy?.durationMs !== expected.policy.serverDurationMs ||
     report?.policy?.warmupMs !== expected.policy.serverWarmupMs ||
     (!unsupported &&
@@ -1541,6 +1620,8 @@ export async function performanceWorkloadIdentity(
         concurrencies: [...(options.serverConcurrencies ?? SERVER_CONCURRENCIES)],
         durationMs: options.serverDurationMs ?? 15_000,
         encodings: [...(options.serverEncodings ?? SERVER_ENCODINGS)],
+        hostSettleMaxMs: options.serverHostSettleMaxMs ?? 30_000,
+        hostSettlePollMs: options.serverHostSettlePollMs ?? 1_000,
         modes: [...(options.serverModes ?? SERVER_MODES)],
         routes: [...(options.serverRoutes ?? SERVER_ROUTES)],
         samples: options.serverSamples ?? 7,
@@ -1612,6 +1693,16 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     serverEncodings: (readArg('--server-encodings') ?? SERVER_ENCODINGS.join(','))
       .split(',')
       .filter(Boolean),
+    serverHostSettleMaxMs: readIntegerArg('--server-host-settle-max-ms', {
+      fallback: 30_000,
+      max: 300_000,
+      min: 0,
+    }),
+    serverHostSettlePollMs: readIntegerArg('--server-host-settle-poll-ms', {
+      fallback: 1_000,
+      max: 60_000,
+      min: 10,
+    }),
     serverModes: (readArg('--server-modes') ?? SERVER_MODES.join(',')).split(',').filter(Boolean),
     serverPortBase: readIntegerArg('--server-port-base', {
       fallback: 50_310,

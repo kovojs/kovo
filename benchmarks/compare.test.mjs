@@ -21,6 +21,7 @@ import {
   validateDevCell,
   validateServerCell,
   validHostFingerprint,
+  waitForServerHost,
 } from './compare.mjs';
 
 describe('serialized comparison analysis', () => {
@@ -62,6 +63,41 @@ describe('serialized comparison analysis', () => {
       schedule.filter((entry) => entry.framework === 'nextjs').map((entry) => entry.occurrence),
     ).toEqual([0, 1, 2, 3, 4, 5, 6]);
     expect(() => serverSampleSchedule(0)).toThrow(/between 1 and 100/u);
+  });
+
+  it('settles residual server load within a bound and preserves every rejected observation', async () => {
+    const samples = [];
+    const loads = [4, 1];
+    let nowMs = 0;
+    const result = await waitForServerHost(samples, 0.5, {
+      context: 'hit-listing-br-c1/kovo/0',
+      maxWaitMs: 100,
+      now: () => nowMs,
+      pollMs: 50,
+      readLoad: () => ({ loadAverage: [loads.shift(), 0, 0], logicalCpuCount: 4 }),
+      wait: async (milliseconds) => {
+        nowMs += milliseconds;
+      },
+    });
+    expect(result).toMatchObject({ comparable: true, loadPerCpu: 0.25, waitedMs: 50 });
+    expect(samples).toMatchObject([
+      { attempt: 0, loadPerCpu: 1, phase: 'server-quiet-host-settle', waitedMs: 0 },
+      { attempt: 1, loadPerCpu: 0.25, phase: 'server-quiet-host-settle', waitedMs: 50 },
+    ]);
+
+    const refused = [];
+    nowMs = 0;
+    const blocked = await waitForServerHost(refused, 0.5, {
+      maxWaitMs: 100,
+      now: () => nowMs,
+      pollMs: 50,
+      readLoad: () => ({ loadAverage: [4, 0, 0], logicalCpuCount: 4 }),
+      wait: async (milliseconds) => {
+        nowMs += milliseconds;
+      },
+    });
+    expect(blocked).toMatchObject({ comparable: false, waitedMs: 100 });
+    expect(refused).toHaveLength(3);
   });
 
   it('authenticates a server-only workload without requiring generated dev corpora', async () => {
@@ -230,6 +266,7 @@ describe('serialized comparison analysis', () => {
         sourceStable: true,
         timingExcluded: true,
       },
+      optimization: { provedDocumentCompressionCache: 'not-applicable' },
       policy: { durationMs: 15_000, warmupMs: 5_000 },
       samples: [],
       schema: 'kovo-server-benchmark/v1',
