@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { chromium } from 'playwright';
 
 const MOBILE_NETWORK = {
@@ -72,6 +74,7 @@ export function summarizeIterations(iterations) {
       max: values.length === 0 ? null : Math.max(...values),
       median: percentile(values, 50),
       min: values.length === 0 ? null : Math.min(...values),
+      p95: percentile(values, 95),
       p75: percentile(values, 75),
       samples: values.length,
     };
@@ -91,7 +94,14 @@ function flattenMetrics(value, prefix = '', output = {}) {
   return output;
 }
 
-export async function runScenarios({ app: _app, conditionName, iterations, origin, settle }) {
+export async function runScenarios({
+  app,
+  conditionName,
+  iterations,
+  origin,
+  settle,
+  warmups = 0,
+}) {
   const browser = await chromium.launch({ headless: true });
   const condition = CONDITIONS[conditionName];
   if (!condition) throw new Error(`Unknown benchmark condition ${conditionName}.`);
@@ -102,22 +112,40 @@ export async function runScenarios({ app: _app, conditionName, iterations, origi
     const ttiProbe = [];
     const navigation = [];
 
-    for (let index = 0; index < iterations; index += 1) {
-      coldLoad.push(
-        await withPage(browser, condition, (page, tracker) =>
-          coldLoadScenario(page, tracker, origin, settleOptions),
-        ),
-      );
-      ttiProbe.push(
-        await withPage(browser, condition, (page, tracker) =>
-          ttiScenario(page, tracker, origin, settleOptions),
-        ),
-      );
-      navigation.push(
-        await withPage(browser, condition, (page, tracker) =>
-          navigationScenario(page, tracker, origin, settleOptions),
-        ),
-      );
+    for (let index = -warmups; index < iterations; index += 1) {
+      const record = index >= 0;
+      if (app.scenarios?.includes('coldLoad') !== false) {
+        const value = await withPage(browser, condition, (page, tracker) =>
+          coldLoadScenario(
+            page,
+            tracker,
+            `${origin}${app.paths?.listing ?? '/'}`,
+            settleOptions,
+            app.id,
+            app.lane ?? 'default',
+          ),
+        );
+        if (record) coldLoad.push(value);
+      }
+      if (app.scenarios?.includes('ttiProbe') !== false) {
+        const value = await withPage(browser, condition, (page, tracker) =>
+          ttiScenario(
+            page,
+            tracker,
+            `${origin}${app.paths?.listing ?? '/'}`,
+            settleOptions,
+            app.id,
+            app.lane ?? 'default',
+          ),
+        );
+        if (record) ttiProbe.push(value);
+      }
+      if (app.scenarios?.includes('navigation') !== false) {
+        const value = await withPage(browser, condition, (page, tracker) =>
+          navigationScenario(page, tracker, `${origin}${app.paths?.listing ?? '/'}`, settleOptions),
+        );
+        if (record) navigation.push(value);
+      }
     }
 
     return {
@@ -148,9 +176,36 @@ async function withPage(browser, condition, run) {
   if (condition.network) {
     await cdp.send('Network.emulateNetworkConditions', condition.network);
   }
-  await page.addInitScript(() => {
+  const destinationMark = `kovo-bench-destination-${randomUUID()}`;
+  await page.addInitScript((destinationMark) => {
     window.__kovoBenchLongTasks = [];
     window.__kovoBenchLcp = null;
+    window.__kovoBenchDestinationPaintMark = null;
+    window.__kovoBenchDestinationPaintMarkedEpochMs = null;
+    window.__kovoBenchNavigationClickMark = null;
+    addEventListener(
+      'click',
+      (event) => {
+        const target = event.target instanceof Element ? event.target.closest('a[href]') : null;
+        const mark = window.__kovoBenchArmedNavigationClickMark;
+        if (!target || typeof mark !== 'string' || !mark) return;
+        window.__kovoBenchNavigationClickMark = mark;
+        window.__kovoBenchArmedNavigationClickMark = null;
+        console.timeStamp(mark);
+      },
+      true,
+    );
+    const stampDestination = () => {
+      const destination = document.querySelector(
+        '[data-benchmark-destination="detail"], main.detail',
+      );
+      if (!destination || window.__kovoBenchDestinationPaintMark !== null) return;
+      window.__kovoBenchDestinationPaintMark = destinationMark;
+      window.__kovoBenchDestinationPaintMarkedEpochMs = performance.timeOrigin + performance.now();
+      console.timeStamp(destinationMark);
+    };
+    new MutationObserver(stampDestination).observe(document, { childList: true, subtree: true });
+    addEventListener('DOMContentLoaded', stampDestination, { once: true });
     try {
       new PerformanceObserver((list) => {
         for (const entry of list.getEntries()) window.__kovoBenchLongTasks.push(entry.duration);
@@ -162,7 +217,7 @@ async function withPage(browser, condition, run) {
     } catch {
       // Older browser builds may reject one observer type; missing values stay null.
     }
-  });
+  }, destinationMark);
 
   let pageErrors = 0;
   page.on('pageerror', () => {
@@ -193,9 +248,17 @@ function createRequestTracker(page) {
   let completed = 0;
   let lastActivityAt = Date.now();
 
-  page.on('request', () => {
+  const records = new Map();
+  page.on('request', (request) => {
     started += 1;
     lastActivityAt = Date.now();
+    records.set(request, {
+      headers: request.headers(),
+      method: request.method(),
+      resourceType: request.resourceType(),
+      startedEpochMs: Date.now(),
+      url: request.url(),
+    });
   });
   page.on('requestfailed', (request) => {
     completed += 1;
@@ -204,6 +267,7 @@ function createRequestTracker(page) {
       errorText: request.failure()?.errorText ?? 'unknown',
       resourceType: request.resourceType(),
     });
+    records.delete(request);
   });
   page.on('requestfinished', (request) => {
     completed += 1;
@@ -211,9 +275,14 @@ function createRequestTracker(page) {
     settled.push(
       (async () => {
         const [sizes, response] = await Promise.all([request.sizes(), request.response()]);
+        const record = records.get(request);
+        records.delete(request);
         return {
           bytes: sizes.responseBodySize + sizes.responseHeadersSize,
+          headers: record?.headers ?? {},
+          method: record?.method ?? request.method(),
           resourceType: request.resourceType(),
+          startedEpochMs: record?.startedEpochMs ?? Date.now(),
           status: response?.status() ?? 0,
           url: request.url(),
         };
@@ -226,7 +295,7 @@ function createRequestTracker(page) {
     activity() {
       return { completed, lastActivityAt, pending: started - completed, started };
     },
-    async collect() {
+    async collect({ includeRecords = false } = {}) {
       const finished = (await Promise.all(settled)).filter(Boolean);
       const buckets = { css: 0, html: 0, img: 0, js: 0, other: 0, total: 0 };
       let errorResponses = 0;
@@ -253,7 +322,7 @@ function createRequestTracker(page) {
       // separately so they cannot spuriously reject an otherwise healthy run.
       const aborted = failures.filter((failure) => failure.errorText.includes(ABORT_ERROR_TEXT));
       const failed = failures.filter((failure) => !failure.errorText.includes(ABORT_ERROR_TEXT));
-      return {
+      const result = {
         abortedRequests: aborted.length,
         bytes: buckets,
         errorResponses,
@@ -262,6 +331,8 @@ function createRequestTracker(page) {
         rateLimitedResponses,
         requests: finished.length,
       };
+      if (includeRecords) result.records = finished.map((request) => ({ ...request }));
+      return result;
     },
   };
 }
@@ -300,14 +371,23 @@ async function settleNetwork(page, tracker, { maxMs, quietMs }) {
   }
 }
 
-async function coldLoadScenario(page, tracker, origin, settle) {
-  await page.goto(`${origin}/`, { waitUntil: 'load' });
+async function coldLoadScenario(
+  page,
+  tracker,
+  listingUrl,
+  settle,
+  expectedFramework,
+  expectedLane,
+) {
+  await page.goto(listingUrl, { waitUntil: 'load' });
   await page.waitForTimeout(LOAD_WINDOW_MS);
   const loadWindow = await tracker.collect();
   const settled = await settleNetwork(page, tracker, settle);
   const perf = await performanceMetrics(page);
   const network = await tracker.collect();
+  const fixture = await fixtureIntegrity(page, { expectedFramework, expectedLane });
   return {
+    ...fixture,
     ...perf,
     ...network,
     ...settled,
@@ -316,8 +396,8 @@ async function coldLoadScenario(page, tracker, origin, settle) {
   };
 }
 
-async function ttiScenario(page, tracker, origin, settle) {
-  await page.goto(`${origin}/`, { waitUntil: 'domcontentloaded' });
+async function ttiScenario(page, tracker, listingUrl, settle, expectedFramework, expectedLane) {
+  await page.goto(listingUrl, { waitUntil: 'domcontentloaded' });
   const tti = await page.evaluate(async () => {
     const deadline = performance.now() + 10000;
     let firstClick = null;
@@ -351,13 +431,38 @@ async function ttiScenario(page, tracker, origin, settle) {
     throw new Error('Timed out waiting for cart dialog to open.');
   });
   const dialog = page.getByRole('dialog');
-  await dialog.locator('input[name="email"]').fill('bench@example.test');
+  let stateMutationConfirmed = 0;
+  const lane = await page.evaluate(
+    () =>
+      document.querySelector('[data-benchmark-lane]')?.getAttribute('data-benchmark-lane') ??
+      'default',
+  );
+  if (lane === 'matched-l1') {
+    await dialog.getByRole('button', { name: 'Add benchmark item' }).click();
+    await page.getByRole('button', { name: /Open cart with 1 items/u }).waitFor();
+    stateMutationConfirmed = 1;
+  }
+  const email = dialog.locator('input[name="email"]');
+  if ((await email.getAttribute('readonly')) !== null) {
+    await dialog.getByRole('button', { name: 'Use alternate email' }).click();
+  } else {
+    await email.fill('bench@example.test');
+  }
   await dialog.getByRole('button', { name: 'Place order' }).click({ force: true });
   await dialog.locator('[role="status"]').waitFor({ state: 'visible', timeout: 5000 });
   const settled = await settleNetwork(page, tracker, settle);
   const perf = await performanceMetrics(page);
   const network = await tracker.collect();
-  return { ...perf, checkoutConfirmed: 1, ...tti, ...network, ...settled };
+  const fixture = await fixtureIntegrity(page, { expectedFramework, expectedLane });
+  return {
+    ...fixture,
+    ...perf,
+    checkoutConfirmed: 1,
+    stateMutationConfirmed,
+    ...tti,
+    ...network,
+    ...settled,
+  };
 }
 
 /**
@@ -368,58 +473,85 @@ async function ttiScenario(page, tracker, origin, settle) {
  * Kovo replaces the whole document. Both figures are reported here — `navToPaintMs` is the headline
  * and `navToDomMs` is retained only to keep the size of that gap visible.
  *
- * Timestamps are absolute (`performance.timeOrigin + …`) precisely because a document-replacing
- * navigation resets `performance.now()` and destroys any mark set before the click.
+ * Click-to-paint duration stays entirely on Chrome's trace clock. Trace timestamps are converted
+ * to epoch time only to place network requests into the byte-accounting phases; this avoids mixing
+ * page clocks when a document-replacing navigation resets `performance.now()`.
  */
-async function navigationScenario(page, tracker, origin, settle) {
-  await page.goto(`${origin}/`, { waitUntil: 'load' });
+async function navigationScenario(page, tracker, listingUrl, settle) {
+  await page.goto(listingUrl, { waitUntil: 'load' });
+  const initialEndEpochMs = await epochNow(page);
   await settleNetwork(page, tracker, settle);
   const before = await tracker.collect();
 
   const link = page.locator('a[aria-label^="View "]').first();
-  const targetPath = new URL(await link.getAttribute('href'), origin).pathname;
+  const targetPath = new URL(await link.getAttribute('href'), listingUrl).pathname;
 
   await page.evaluate((sentinel) => {
     window.__kovoBenchNavSentinel = sentinel;
   }, NAV_SENTINEL);
-  const startEpochMs = await epochNow(page);
+  const clickMark = `kovo-bench-click-${randomUUID()}`;
+  await page.evaluate((mark) => {
+    window.__kovoBenchArmedNavigationClickMark = mark;
+  }, clickMark);
+  const trace = await startNavigationTrace(page);
+  let destination;
+  let traceResult;
+  try {
+    await link.click();
 
-  await link.click();
+    // The superseded probe, reproduced exactly: wait for `main h1` to exist and stop. It is not a
+    // navigation measurement at all — the LISTING page also has a `main h1`, so the selector is
+    // already satisfied by the ORIGIN document and this resolves before the navigation commits.
+    // Keeping it makes the size of that error visible in every run instead of asserted in prose.
+    await page.waitForSelector('main h1');
+    const legacyDomEpochMs = await epochNow(page);
 
-  // The superseded probe, reproduced exactly: wait for `main h1` to exist and stop. It is not a
-  // navigation measurement at all — the LISTING page also has a `main h1`, so the selector is
-  // already satisfied by the ORIGIN document and this resolves before the navigation commits.
-  // Keeping it makes the size of that error visible in every run instead of asserted in prose.
-  await page.waitForSelector('main h1');
-  const legacyDomEpochMs = await epochNow(page);
+    // Real commit: the destination URL, then the destination's own heading.
+    await page.waitForURL((url) => url.pathname === targetPath);
+    await page.waitForSelector('main h1');
+    const domEpochMs = await epochNow(page);
+    destination = await destinationObservation(page, targetPath);
+    const settled = await settleNetwork(page, tracker, settle);
+    const after = await tracker.collect({ includeRecords: true });
+    traceResult = await stopNavigationTrace(trace, {
+      clickMark,
+      destinationMark: destination.mark,
+    });
+    const phases = sessionBytePhases(after.records, {
+      clickEpochMs: traceResult.clickEpochMs,
+      destinationPaintEpochMs: traceResult.destinationPaintEpochMs,
+      initialEndEpochMs,
+    });
+    const traceMarkerEpochSkewMs = traceResult.destinationMarkEpochMs - destination.markedEpochMs;
+    if (Math.abs(traceMarkerEpochSkewMs) > 250) {
+      throw new Error(
+        `Trace/page epoch calibration diverged by ${String(traceMarkerEpochSkewMs)} ms.`,
+      );
+    }
 
-  // Real commit: the destination URL, then the destination's own heading.
-  await page.waitForURL((url) => url.pathname === targetPath);
-  await page.waitForSelector('main h1');
-  const domEpochMs = await epochNow(page);
-  const paint = await navigationPaint(page, targetPath);
-  const atPaint = await tracker.collect();
-
-  const settled = await settleNetwork(page, tracker, settle);
-  const after = await tracker.collect();
-
-  return {
-    navBytesAtPaint: atPaint.bytes.total - before.bytes.total,
-    navBytesSettled: after.bytes.total - before.bytes.total,
-    // 1 when the navigation destroyed the JS realm, i.e. enhanced navigation did not happen.
-    navDocumentReplaced: paint.documentReplaced,
-    navErrorResponses: after.errorResponses - before.errorResponses,
-    navFailedRequests: after.failedRequests - before.failedRequests,
-    // The superseded metric. Do not quote it (plans/good-perf.md "Do not re-propose").
-    navLegacyDomPresenceMs: legacyDomEpochMs - startEpochMs,
-    navPaintFromDocumentFcp: paint.fromDocumentFcp,
-    navRateLimitedResponses: after.rateLimitedResponses - before.rateLimitedResponses,
-    navRequests: after.requests - before.requests,
-    navSettleTimedOut: settled.settleTimedOut,
-    navToDomMs: domEpochMs - startEpochMs,
-    navToPaintMs: paint.epochMs - startEpochMs,
-    ...after,
-  };
+    const { records: _records, ...networkAfter } = after;
+    return {
+      navBytesAtPaint: phases.click.total,
+      navBytesSettled: after.bytes.total - before.bytes.total,
+      // 1 when the navigation destroyed the JS realm, i.e. enhanced navigation did not happen.
+      navDocumentReplaced: destination.documentReplaced,
+      navErrorResponses: after.errorResponses - before.errorResponses,
+      navFailedRequests: after.failedRequests - before.failedRequests,
+      // The superseded metric. Do not quote it (plans/good-perf.md "Do not re-propose").
+      navLegacyDomPresenceMs: legacyDomEpochMs - traceResult.clickEpochMs,
+      navPaintBoundary: traceResult.boundary,
+      navRateLimitedResponses: after.rateLimitedResponses - before.rateLimitedResponses,
+      navRequests: after.requests - before.requests,
+      navSettleTimedOut: settled.settleTimedOut,
+      navToDomMs: domEpochMs - traceResult.clickEpochMs,
+      navToPaintMs: traceResult.durationMs,
+      sessionBytes: phases,
+      traceMarkerEpochSkewMs,
+      ...networkAfter,
+    };
+  } finally {
+    if (!trace.stopped) await abortNavigationTrace(trace);
+  }
 }
 
 /**
@@ -441,7 +573,7 @@ async function epochNow(page) {
   }
 }
 
-async function navigationPaint(page, targetPath) {
+async function destinationObservation(page, targetPath) {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     try {
@@ -452,39 +584,211 @@ async function navigationPaint(page, targetPath) {
           if (location.pathname !== path) return null;
           if (!document.querySelector('main h1')) return null;
 
-          const replaced = window.__kovoBenchNavSentinel !== sentinel;
-          if (replaced) {
-            // A new document was created: its browser-recorded first contentful paint IS the moment
-            // the user first sees the destination, with no polling overshoot.
-            const fcp = performance.getEntriesByName('first-contentful-paint')[0];
-            if (!fcp) return null;
-            return {
-              documentReplaced: 1,
-              epochMs: performance.timeOrigin + fcp.startTime,
-              fromDocumentFcp: 1,
-            };
-          }
-          // Same document: no new paint entry is emitted, so take the timestamp of the first frame
-          // rendered after the destination content is in the DOM.
-          await new Promise((resolve) => {
-            requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)));
-          });
           return {
-            documentReplaced: 0,
-            epochMs: performance.timeOrigin + performance.now(),
-            fromDocumentFcp: 0,
+            documentReplaced: window.__kovoBenchNavSentinel !== sentinel ? 1 : 0,
+            mark: window.__kovoBenchDestinationPaintMark,
+            markedEpochMs: window.__kovoBenchDestinationPaintMarkedEpochMs,
           };
         },
         { path: targetPath, sentinel: NAV_SENTINEL },
       );
-      if (result) return result;
+      if (
+        typeof result?.mark === 'string' &&
+        result.mark &&
+        Number.isFinite(result.markedEpochMs)
+      ) {
+        return result;
+      }
     } catch {
       // The in-flight full-document navigation destroyed this execution context. Retry in the
       // document that replaced it — that retry is itself evidence the document was replaced.
     }
     await page.waitForTimeout(25);
   }
-  throw new Error('Timed out waiting for the post-navigation paint signal.');
+  throw new Error('Timed out waiting for the destination trace signal.');
+}
+
+/**
+ * Starts one Chrome trace instrument for both full-document and same-document navigations.
+ * The page init script emits a TimeStamp from the MutationObserver that first sees the destination
+ * marker. The reported boundary is the first compositor frame after that mark in the same trace.
+ * Unlike the superseded branch split, both entrants therefore pay the same observation cost and
+ * are timed at the same browser event.
+ */
+async function startNavigationTrace(page) {
+  const context = page.context();
+  const cdp = await context.newCDPSession(page);
+  try {
+    const events = [];
+    await cdp.send('Performance.enable');
+    const { metrics } = await cdp.send('Performance.getMetrics');
+    const timestamp = metrics.find((metric) => metric.name === 'Timestamp')?.value;
+    if (!Number.isFinite(timestamp)) throw new Error('CDP Performance.Timestamp was unavailable.');
+    const epochOffsetMs = Date.now() - timestamp * 1_000;
+    cdp.on('Tracing.dataCollected', ({ value }) => events.push(...value));
+    const complete = new Promise((resolve) => cdp.once('Tracing.tracingComplete', resolve));
+    await cdp.send('Tracing.start', {
+      categories:
+        'blink.console,devtools.timeline,disabled-by-default-devtools.timeline,disabled-by-default-devtools.timeline.frame',
+      options: 'record-as-much-as-possible',
+      transferMode: 'ReportEvents',
+    });
+    return {
+      cdp,
+      complete,
+      endRequested: false,
+      epochOffsetMs,
+      events,
+      page,
+      stopped: false,
+    };
+  } catch (error) {
+    await cdp.detach().catch(() => undefined);
+    throw error;
+  }
+}
+
+async function stopNavigationTrace(trace, { clickMark, destinationMark }) {
+  try {
+    await trace.page.evaluate(
+      () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+    );
+    await endNavigationTrace(trace);
+  } finally {
+    await closeNavigationTrace(trace);
+  }
+
+  const click = findTraceTimestamp(trace.events, clickMark);
+  const mark = findTraceTimestamp(trace.events, destinationMark);
+  const paint = trace.events
+    .filter(
+      (event) =>
+        Number.isFinite(event.ts) &&
+        event.ts >= mark.ts &&
+        (event.name === 'DrawFrame' || event.name === 'CompositeLayers' || event.name === 'Paint'),
+    )
+    .sort((left, right) => left.ts - right.ts)[0];
+  if (!paint) throw new Error('Trace did not contain a destination paint/compositor frame.');
+
+  const clickEpochMs = click.ts / 1_000 + trace.epochOffsetMs;
+  const destinationPaintEpochMs = paint.ts / 1_000 + trace.epochOffsetMs;
+  const destinationMarkEpochMs = mark.ts / 1_000 + trace.epochOffsetMs;
+  return {
+    boundary: 'first-traced-frame-after-destination-marker',
+    clickEpochMs,
+    destinationMarkEpochMs,
+    destinationPaintEpochMs,
+    durationMs: (paint.ts - click.ts) / 1_000,
+  };
+}
+
+function findTraceTimestamp(events, expectedMark) {
+  const mark = events.find((event) => {
+    if (event.name !== 'TimeStamp') return false;
+    return (event.args?.data?.message ?? event.args?.message) === expectedMark;
+  });
+  if (!mark || !Number.isFinite(mark.ts)) {
+    throw new Error(`Trace did not contain timestamp ${String(expectedMark)}.`);
+  }
+  return mark;
+}
+
+async function abortNavigationTrace(trace) {
+  await closeNavigationTrace(trace);
+}
+
+async function endNavigationTrace(trace) {
+  if (!trace.endRequested) {
+    await trace.cdp.send('Tracing.end');
+    trace.endRequested = true;
+  }
+  await trace.complete;
+}
+
+async function closeNavigationTrace(trace) {
+  try {
+    await endNavigationTrace(trace);
+  } catch {
+    // The page or browser may already have closed. Detaching below is still mandatory so a failed
+    // measurement cannot retain a live CDP session or contaminate the next iteration.
+  } finally {
+    await trace.cdp.detach().catch(() => undefined);
+    trace.stopped = true;
+  }
+}
+
+export function sessionBytePhases(
+  records,
+  { clickEpochMs, destinationPaintEpochMs, initialEndEpochMs = clickEpochMs },
+) {
+  const phases = {
+    automaticPrefetch: emptyByteBucket(),
+    click: emptyByteBucket(),
+    initial: emptyByteBucket(),
+    postClick: emptyByteBucket(),
+  };
+  for (const record of records) {
+    const explicitPrefetch = isPrefetchRequest(record.headers);
+    // Requests without explicit prefetch headers are still automatic-prefetch traffic when they
+    // begin after the initial load event and before the captured user click.
+    const phase =
+      record.startedEpochMs < clickEpochMs
+        ? explicitPrefetch || record.startedEpochMs >= initialEndEpochMs
+          ? 'automaticPrefetch'
+          : 'initial'
+        : record.startedEpochMs <= destinationPaintEpochMs
+          ? 'click'
+          : 'postClick';
+    addRequestBytes(phases[phase], record);
+  }
+  phases.throughDestinationPaint = sumByteBuckets(
+    phases.initial,
+    phases.automaticPrefetch,
+    phases.click,
+  );
+  phases.throughClick = sumByteBuckets(phases.initial, phases.automaticPrefetch);
+  phases.settledSession = sumByteBuckets(phases.throughDestinationPaint, phases.postClick);
+  return phases;
+}
+
+function isPrefetchRequest(headers = {}) {
+  return ['purpose', 'sec-purpose', 'next-router-prefetch'].some((name) => {
+    const value = headers[name];
+    return (
+      value === '1' ||
+      String(value ?? '')
+        .toLowerCase()
+        .includes('prefetch')
+    );
+  });
+}
+
+function emptyByteBucket() {
+  return { css: 0, html: 0, img: 0, js: 0, other: 0, requests: 0, total: 0 };
+}
+
+function addRequestBytes(bucket, request) {
+  const key =
+    request.resourceType === 'document'
+      ? 'html'
+      : request.resourceType === 'script'
+        ? 'js'
+        : request.resourceType === 'stylesheet'
+          ? 'css'
+          : request.resourceType === 'image'
+            ? 'img'
+            : 'other';
+  bucket[key] += request.bytes;
+  bucket.total += request.bytes;
+  bucket.requests += 1;
+}
+
+function sumByteBuckets(...buckets) {
+  const total = emptyByteBucket();
+  for (const bucket of buckets) {
+    for (const key of Object.keys(total)) total[key] += bucket[key] ?? 0;
+  }
+  return total;
 }
 
 async function performanceMetrics(page) {
@@ -514,4 +818,28 @@ async function performanceMetrics(page) {
       ttfbMs: ttfb,
     };
   });
+}
+
+async function fixtureIntegrity(page, { expectedFramework, expectedLane }) {
+  return page.evaluate(
+    ({ expectedFramework, expectedLane }) => {
+      const lane =
+        document.querySelector('[data-benchmark-lane]')?.getAttribute('data-benchmark-lane') ??
+        'default';
+      const cards = document.querySelectorAll('main .card').length;
+      const linkedStyles = document.querySelectorAll('link[rel="stylesheet"]').length;
+      const scripts = document.scripts.length;
+      const cartControl = document.querySelector('button[aria-label^="Open cart"]');
+      const expectsScripts = expectedFramework !== 'kovo' || expectedLane === 'matched-l1';
+      return {
+        fixtureBootstrapValid: Number(expectsScripts ? scripts > 0 : scripts === 0),
+        fixtureContentValid: Number(cards === 24),
+        fixtureControlsValid: Number(cartControl !== null),
+        fixtureCssValid: Number(linkedStyles > 0),
+        fixtureLaneValid: Number(lane === expectedLane),
+        fixtureScriptCount: scripts,
+      };
+    },
+    { expectedFramework, expectedLane },
+  );
 }

@@ -3,13 +3,6 @@ import { launch } from 'chrome-launcher';
 
 import { percentile } from './scenarios.mjs';
 
-const RUNS = [
-  { formFactor: 'desktop', path: '/' },
-  { formFactor: 'desktop', path: '/product/linen-field-jacket' },
-  { formFactor: 'mobile', path: '/' },
-  { formFactor: 'mobile', path: '/product/linen-field-jacket' },
-];
-
 const METRIC_KEYS = [
   'bytes',
   'fcpMs',
@@ -32,7 +25,10 @@ export const DEFAULT_LIGHTHOUSE_REPEATS = 3;
  * original key names (now medians) so downstream readers do not silently switch meaning; `spread`
  * and `nullSamples` are additive and make an unreportable cell visible instead of plausible.
  */
-export async function runLighthouse(origin, { repeats = DEFAULT_LIGHTHOUSE_REPEATS } = {}) {
+export async function runLighthouse(
+  origin,
+  { listingPath = '/', repeats = DEFAULT_LIGHTHOUSE_REPEATS } = {},
+) {
   if (!Number.isInteger(repeats) || repeats < 1) {
     throw new Error(`Lighthouse repeats must be a positive integer, got ${repeats}.`);
   }
@@ -41,8 +37,15 @@ export async function runLighthouse(origin, { repeats = DEFAULT_LIGHTHOUSE_REPEA
   });
 
   try {
+    const productPath = `${listingPath === '/' ? '' : listingPath}/product/linen-field-jacket`;
+    const runs = [
+      { formFactor: 'desktop', path: listingPath },
+      { formFactor: 'desktop', path: productPath },
+      { formFactor: 'mobile', path: listingPath },
+      { formFactor: 'mobile', path: productPath },
+    ];
     const results = [];
-    for (const run of RUNS) {
+    for (const run of runs) {
       const flags = {
         formFactor: run.formFactor,
         logLevel: 'error',

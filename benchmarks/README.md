@@ -72,11 +72,28 @@ sentinel-owned scratch apps; regeneration refuses to replace a directory that wa
 the generator. The manifest commands bind development servers to literal `localhost`, including
 Next.js Turbopack, so its HMR websocket origin matches the benchmark URL exactly.
 
-Useful flags: `--apps kovo,nextjs`, `--port-base 4820` (so two runs on one machine
-cannot measure each other's server), `--lighthouse-runs N`, `--bfcache-iterations N`,
+Useful flags: `--apps kovo,nextjs`, `--lane default|matched-l0|matched-l1`,
+`--warmups N`, `--port-base 4820` (so two runs on one machine cannot measure each
+other's server), `--lighthouse-runs N`, `--bfcache-iterations N`,
 `--settle-quiet-ms` / `--settle-max-ms`. Every numeric flag is validated and rejects
 a non-integer instead of coercing it to `NaN`: an unvalidated `NaN` count runs its
 loop zero times and publishes an empty cell that reads like a measurement.
+
+The authoritative Kovo/Next comparison is serialized through one orchestrator:
+
+```sh
+node benchmarks/compare.mjs --cells browser,dev,build --iterations 30 --warmups 3 \
+  --dev-ready-iterations 15 --dev-iterations 30 --dev-warmups 3 \
+  --lighthouse-runs 5 --bfcache-iterations 10 --out-dir /tmp/kovo-next-comparison
+```
+
+It runs each cell in `Kovo, Next, Next, Kovo` order, rejects a busy host before the
+next entrant starts, embeds raw per-cell reports, and writes paired median/MAD/p95
+plus a deterministic bootstrap confidence interval. Source commit, root and Next
+lock digests, corpus identity, sample counts, browser evidence, and adapter integrity
+must all match or `comparison.json` is retained with an `unproven` verdict. A dirty
+tree is rejected before execution; `--allow-dirty` permits a diagnostic run only and
+can never produce publishable evidence.
 
 To regenerate `report.md` from an existing `results.json` without re-running the
 benchmark, pass the path explicitly — there is no default, because
@@ -113,18 +130,14 @@ each iteration. It records:
 - TTI proxy: a tight in-page poll loop repeatedly clicks the cart button until
   `[role=dialog]` is visible, exposing hydration dead time versus Kovo's first
   lazy interaction import;
-- navigation: click the first product card and measure **to actual paint** — the
-  destination document's first contentful paint when the navigation replaced the
-  document, otherwise the first frame rendered after the destination content is in
-  the DOM. Timestamps are absolute, because a document-replacing navigation resets
-  the document timeline. The report also records how many navigations replaced the
-  document, and what the superseded DOM-presence probe would have reported.
-  **Those two branches are not the same instrument and the difference is one-sided**:
-  the document-replacing branch reads a browser-recorded paint timestamp with no
-  harness cost in it, while the same-document branch pays a poll interval, CDP
-  round-trips and two animation frames. Kovo is the document-replacing entrant, so
-  the error runs in Kovo's favour. The report states this under "Known limits of
-  this instrument"; do not quote a small navigation gap as a result;
+- navigation: click the first product card and measure **to actual paint** using one
+  Chrome trace boundary for both navigation types. An init-script MutationObserver
+  emits a trace timestamp when the destination marker appears; the first later
+  compositor/paint frame is the reported destination paint. Click-to-paint duration
+  stays on that trace clock; timestamps are mapped to epoch time only to place
+  requests into session-byte phases across document replacement. The report also
+  records how many navigations replaced the document and what the superseded
+  DOM-presence probe would have reported;
 - back/forward cache: a separate probe in full Chromium with Playwright's
   `--disable-back-forward-cache` removed (the default `chrome-headless-shell`
   cannot participate in bfcache at all). Frameworks that navigate in-document are

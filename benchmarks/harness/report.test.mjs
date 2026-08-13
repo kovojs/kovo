@@ -271,28 +271,11 @@ describe('benchmark report', () => {
     expect(limits).toContain('three separate processes on the same machine');
   });
 
-  // This is the one limit that errs in the project's own favour, so it is pinned hardest. The
-  // navigation probe has two branches and they are not the same instrument: a document-replacing
-  // entrant is handed the destination document's browser-recorded FCP with no harness cost in the
-  // number, while a same-document entrant is charged a 25 ms poll interval, a CDP evaluate
-  // round-trip and two animation frames. Kovo is the document-replacing entrant today, so the
-  // error runs Kovo's way. An earlier handoff described this as symmetric; it is not, and a report
-  // that silently drops the disclosure is exactly the failure mode D14 deleted the last report for.
-  it('discloses that the navigation probe is biased toward document-replacing entrants', async () => {
+  it('states the shared trace boundary and its remaining common observation delay', async () => {
     const limits = knownLimits(await renderReport(RESULTS));
-    expect(limits).toContain(
-      'The navigation-to-paint probe is biased in favour of document-replacing entrants',
-    );
-    // Must name the direction, not merely admit an unspecified imprecision.
-    expect(limits).toContain("this instrument errs in Kovo's favour");
-    // Must not be relabelled as an evenly-applied limitation.
-    expect(limits).toContain('This bias is one-sided; it does not apply equally to every entrant.');
-    // Must keep the mechanism, so a reader can check the claim rather than trust it.
-    expect(limits).toContain('two animation frames');
-    expect(limits).toContain('first contentful paint');
-    // Must keep the recipe for sizing the bias from the report's own two navigation columns —
-    // a disclosure the reader can verify beats one they have to take on faith.
-    expect(limits).toContain('You can size the bias from this report');
-    expect(limits).toContain('`Nav to paint ms` minus `Nav to destination DOM ms`');
+    expect(limits).toContain('destination-paint mark observes DOM readiness');
+    expect(limits).toContain('first later frame');
+    expect(limits).toContain('old asymmetric FCP-versus-two-rAF branch has been removed');
+    expect(limits).not.toContain('errs in Kovo');
   });
 });

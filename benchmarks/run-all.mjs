@@ -80,6 +80,22 @@ const allApps = [
   },
 ];
 
+const lane = readArg('--lane') ?? 'default';
+const laneDefinitions = {
+  default: { listing: '/', scenarios: ['coldLoad', 'ttiProbe', 'navigation'] },
+  'matched-l0': { listing: '/matched/l0', scenarios: ['coldLoad', 'navigation'] },
+  'matched-l1': { listing: '/matched/l1', scenarios: ['coldLoad', 'ttiProbe', 'navigation'] },
+};
+const laneDefinition = laneDefinitions[lane];
+if (!laneDefinition) {
+  throw new Error(`Unknown --lane ${lane}; expected ${Object.keys(laneDefinitions).join(', ')}.`);
+}
+for (const app of allApps) {
+  app.lane = lane;
+  app.paths = { listing: laneDefinition.listing };
+  app.scenarios = laneDefinition.scenarios;
+}
+
 // Every count is validated, not `Number()`-coerced. An unvalidated NaN does not throw anywhere
 // downstream — it silently runs a loop zero times and publishes an empty cell that looks like a
 // measurement. See benchmarks/harness/args.mjs.
@@ -88,6 +104,7 @@ const iterations = parseIntegerFlag(
   readArg('--iterations') ?? process.env.BENCH_ITERATIONS,
   { fallback: 10, max: 1_000 },
 );
+const warmups = readIntegerArg('--warmups', { fallback: 0, max: 100, min: 0 });
 const runLighthouse = !process.argv.includes('--skip-lighthouse');
 const lighthouseRepeats = readIntegerArg('--lighthouse-runs', {
   fallback: DEFAULT_LIGHTHOUSE_REPEATS,
@@ -114,10 +131,15 @@ const appFilter = readArg('--apps')
   ?.split(',')
   .map((id) => id.trim())
   .filter(Boolean);
-const apps = appFilter ? allApps.filter((app) => appFilter.includes(app.id)) : allApps;
+const apps = appFilter
+  ? allApps.filter((app) => appFilter.includes(app.id))
+  : lane === 'default'
+    ? allApps
+    : allApps.filter((app) => app.id === 'kovo' || app.id === 'nextjs');
 if (apps.length === 0) throw new Error(`No benchmark apps matched --apps ${readArg('--apps')}.`);
 
 const outDir = readArg('--out-dir') ? path.resolve(readArg('--out-dir')) : resultsDir;
+const resultFile = readArg('--result-file');
 
 // `--port-base 4810` shifts every entrant's listen port so two benchmark runs on the same machine
 // cannot silently measure each other's server. Without this, a stale listener on the default port
@@ -138,7 +160,15 @@ await mkdir(outDir, { recursive: true });
 
 if (!skipBuild) {
   for (const app of apps) {
-    await runCommand(app.build[0], app.build[1], { cwd: benchmarkRoot, label: `${app.id}:build` });
+    const generatedInputs = await snapshotGeneratedBuildInputs(app);
+    try {
+      await runCommand(app.build[0], app.build[1], {
+        cwd: benchmarkRoot,
+        label: `${app.id}:build`,
+      });
+    } finally {
+      await restoreGeneratedBuildInputs(generatedInputs);
+    }
   }
 }
 
@@ -160,11 +190,12 @@ for (const app of apps) {
   const serverLog = [];
   const server = spawn(app.start[0], app.start[1], {
     cwd: app.cwd,
+    detached: process.platform !== 'win32',
     env: {
       ...process.env,
       ...app.env,
-      HOST: '127.0.0.1',
-      HOSTNAME: '127.0.0.1',
+      HOST: 'localhost',
+      HOSTNAME: 'localhost',
       PORT: String(app.port),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -177,7 +208,7 @@ for (const app of apps) {
     process.stderr.write(`[${app.id}] ${serverExit}\n`);
   });
   try {
-    const origin = `http://127.0.0.1:${app.port}`;
+    const origin = `http://localhost:${app.port}`;
     await waitForHttp(origin, () => serverExit);
     app.posture = {
       attestation: app.id === 'kovo' ? 'synthesized-per-run' : 'not-required',
@@ -192,6 +223,7 @@ for (const app of apps) {
         lighthouseRepeats,
         origin,
         settle,
+        warmups,
       }),
     );
     if (serverExit) throw new Error(serverExit);
@@ -207,6 +239,7 @@ for (const app of apps) {
 const output = {
   generatedAt: new Date().toISOString(),
   iterations,
+  lane,
   lighthouseRepeats: runLighthouse ? lighthouseRepeats : 0,
   machine: {
     arch: os.arch(),
@@ -220,6 +253,7 @@ const output = {
   },
   runId,
   settle,
+  warmups,
   source: collectPerformanceProvenance({
     lockFiles: [
       'pnpm-lock.yaml',
@@ -233,6 +267,7 @@ const output = {
 const resultsPath = path.join(outDir, 'results.json');
 const reportPath = path.join(outDir, 'report.md');
 await writeFile(resultsPath, `${JSON.stringify(output, null, 2)}\n`);
+if (resultFile) await writeFile(path.resolve(resultFile), `${JSON.stringify(output, null, 2)}\n`);
 await writeReport(resultsPath, reportPath);
 process.stdout.write(`benchmark results written to ${path.relative(process.cwd(), reportPath)}\n`);
 
@@ -273,6 +308,13 @@ function assertMeasurementIntegrity(runs) {
   const problems = [];
   const notes = [];
   for (const run of runs) {
+    if (run.integrity?.complete !== true || (run.integrity?.errors?.length ?? 0) > 0) {
+      problems.push(
+        `${run.app}/browser-adapter: ${
+          run.integrity?.errors?.join('; ') || 'integrity verdict was absent or incomplete'
+        }.`,
+      );
+    }
     for (const [conditionName, condition] of Object.entries(run.conditions ?? {})) {
       for (const [scenarioName, scenario] of Object.entries(condition)) {
         for (const iteration of scenario?.iterations ?? []) {
@@ -314,6 +356,15 @@ function assertMeasurementIntegrity(runs) {
       }
       if (network.errorResponses > 0) {
         problems.push(`${where}: ${network.errorResponses} HTTP >=400 responses.`);
+      }
+      if (network.failedRequests > 0) {
+        problems.push(`${where}: ${network.failedRequests} transport failures.`);
+      }
+      if (network.pageErrors > 0) {
+        problems.push(`${where}: ${network.pageErrors} uncaught browser errors.`);
+      }
+      if (iteration.evidenceComplete !== true) {
+        problems.push(`${where}: history traversal evidence was incomplete.`);
       }
     }
 
@@ -358,6 +409,16 @@ async function ownPackageVersion(packagePath) {
   return JSON.parse(await readFile(packagePath, 'utf8')).version ?? 'n/a';
 }
 
+async function snapshotGeneratedBuildInputs(app) {
+  if (app.id !== 'nextjs') return [];
+  const generatedPath = path.join(app.cwd, 'next-env.d.ts');
+  return [{ body: await readFile(generatedPath), path: generatedPath }];
+}
+
+async function restoreGeneratedBuildInputs(snapshots) {
+  for (const snapshot of snapshots) await writeFile(snapshot.path, snapshot.body);
+}
+
 function runCommand(command, args, { cwd, label }) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { cwd, env: process.env, stdio: 'inherit' });
@@ -390,7 +451,7 @@ function portInUse(port) {
     const probe = createServer();
     probe.once('error', () => resolve(true));
     probe.once('listening', () => probe.close(() => resolve(false)));
-    probe.listen(port, '127.0.0.1');
+    probe.listen(port, 'localhost');
   });
 }
 
@@ -421,9 +482,18 @@ function stopServer(server) {
       return;
     }
     server.once('exit', () => resolve());
-    server.kill('SIGTERM');
+    killServerTree(server, 'SIGTERM');
     setTimeout(() => {
-      if (server.exitCode === null && server.signalCode === null) server.kill('SIGKILL');
+      if (server.exitCode === null && server.signalCode === null) killServerTree(server, 'SIGKILL');
     }, 5000).unref();
   });
+}
+
+function killServerTree(server, signal) {
+  try {
+    if (process.platform === 'win32') server.kill(signal);
+    else process.kill(-server.pid, signal);
+  } catch (error) {
+    if (error?.code !== 'ESRCH') throw error;
+  }
 }
