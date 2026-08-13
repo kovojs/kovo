@@ -539,6 +539,7 @@ export function pairedAnalysis(cells, { bootstrapIterations = 10_000, seed = 1 }
 }
 
 function rawMetricSeries(cell) {
+  if (cell.cell === 'server' && cell.report?.support?.status === 'unsupported') return [];
   if (cell.cell === 'browser') {
     const app = cell.report.apps?.[0];
     const output = [];
@@ -800,6 +801,11 @@ function sameSourceState(left, right) {
 
 async function comparatorIntegrity(cells, policy) {
   const reasons = [];
+  let serverMatrix = {
+    completeSupportedMatrix: true,
+    excludedUnsupported: [],
+    supported: [],
+  };
   const occurrenceCounts = splitAcrossOccurrences(policy.iterations);
   const warmupCounts = splitAcrossOccurrences(policy.warmups);
   const bfcacheCounts = splitAcrossOccurrences(policy.bfcacheIterations);
@@ -873,7 +879,10 @@ async function comparatorIntegrity(cells, policy) {
             skipLighthouse: policy.skipLighthouse,
             warmups: warmupCounts[occurrence.occurrence],
           });
-        } else if (cellSampleCount(occurrence) !== expectedSamples) {
+        } else if (
+          !(occurrence.cell === 'server' && occurrence.report?.support?.status === 'unsupported') &&
+          cellSampleCount(occurrence) !== expectedSamples
+        ) {
           reasons.push(
             `${key}/${framework}/${occurrence.occurrence} expected ${expectedSamples} raw samples`,
           );
@@ -908,6 +917,19 @@ async function comparatorIntegrity(cells, policy) {
   }
   if ([...keys.keys()].some((key) => !expected.includes(key)))
     reasons.push('unexpected comparator cell');
+
+  if (policy.cells.includes('server')) {
+    serverMatrix = classifyServerMatrixCells(cells, {
+      conditionKeys: serverConditions({
+        concurrencies: policy.serverConcurrencies,
+        encodings: policy.serverEncodings,
+        modes: policy.serverModes,
+        routes: policy.serverRoutes,
+      }).map((condition) => condition.key),
+      samples: policy.serverSamples,
+    });
+    reasons.push(...serverMatrix.findings);
+  }
 
   const corpusDigests = {};
   if (policy.cells.includes('dev') || policy.cells.includes('build')) {
@@ -1017,7 +1039,72 @@ async function comparatorIntegrity(cells, policy) {
       }
     }
   }
-  return { corpusDigests, matched: reasons.length === 0, reasons: [...new Set(reasons)].sort() };
+  return {
+    corpusDigests,
+    matched: reasons.length === 0,
+    reasons: [...new Set(reasons)].sort(),
+    serverMatrix,
+  };
+}
+
+/**
+ * Partition the server matrix into paired timing cells and authenticated capability exclusions.
+ * Unsupported cells remain in raw evidence but can never contribute numeric samples.
+ */
+export function classifyServerMatrixCells(cells, { conditionKeys, samples }) {
+  const findings = [];
+  const supported = [];
+  const excludedUnsupported = [];
+  for (const condition of conditionKeys) {
+    const statuses = {};
+    for (const framework of ['kovo', 'nextjs']) {
+      const occurrences = cells.filter(
+        (cell) =>
+          cell.cell === 'server' &&
+          cell.lane === 'matched-runtime' &&
+          cell.mode === condition &&
+          cell.framework === framework,
+      );
+      if (occurrences.length !== samples) {
+        findings.push(
+          `matched-runtime/server/${condition}/${framework} support census is incomplete`,
+        );
+        statuses[framework] = 'incomplete';
+        continue;
+      }
+      const observed = [
+        ...new Set(occurrences.map((cell) => cell.report?.support?.status ?? 'missing')),
+      ];
+      if (observed.length !== 1 || (observed[0] !== 'supported' && observed[0] !== 'unsupported')) {
+        findings.push(
+          `matched-runtime/server/${condition}/${framework} support status is inconsistent`,
+        );
+        statuses[framework] = 'incomplete';
+      } else {
+        statuses[framework] = observed[0];
+      }
+    }
+    if (statuses.kovo === 'supported' && statuses.nextjs === 'supported') {
+      supported.push(condition);
+    } else if (
+      (statuses.kovo === 'supported' || statuses.kovo === 'unsupported') &&
+      (statuses.nextjs === 'supported' || statuses.nextjs === 'unsupported') &&
+      (statuses.kovo === 'unsupported' || statuses.nextjs === 'unsupported')
+    ) {
+      excludedUnsupported.push({
+        condition,
+        unsupportedFrameworks: ['kovo', 'nextjs'].filter(
+          (framework) => statuses[framework] === 'unsupported',
+        ),
+      });
+    }
+  }
+  return {
+    completeSupportedMatrix: findings.length === 0,
+    excludedUnsupported,
+    findings,
+    supported,
+  };
 }
 
 function validateDevCell(cell, expected) {
@@ -1065,27 +1152,65 @@ export function validateServerCell(cell, expected) {
     expected.reasons.push(`${key} report identity mismatch`);
   if (report?.condition?.key !== cell.mode)
     expected.reasons.push(`${key} condition identity mismatch`);
-  if (report?.integrity?.complete !== true || report?.verdict?.status !== 'measured')
-    expected.reasons.push(`${key} report is unproven`);
-  if (
-    report?.integrity?.misses !== 0 ||
-    report?.samples?.length !== 1 ||
-    report.samples[0]?.misses !== 0 ||
-    report.samples[0]?.failedRequests !== 0 ||
-    !(report.samples[0]?.requests > 0) ||
-    !(report.samples[0]?.reusedSockets > 0)
-  ) {
-    expected.reasons.push(`${key} request integrity failure`);
-  }
-  if (
-    report?.correctness?.status !== (report?.condition?.mode === '304' ? 304 : 200) ||
-    !/^sha256:[0-9a-f]{64}$/u.test(report?.correctness?.bodySha256 ?? '') ||
-    !report?.correctness?.exactResponseHeaders ||
-    (report?.condition?.encoding === 'br' &&
-      report?.condition?.mode !== '304' &&
-      report?.correctness?.contentEncoding !== 'br')
-  ) {
-    expected.reasons.push(`${key} response proof failure`);
+  const unsupported = report?.support?.status === 'unsupported';
+  if (unsupported) {
+    const correctness = report?.correctness;
+    if (
+      cell.framework !== 'nextjs' ||
+      report?.condition?.encoding !== 'br' ||
+      report?.integrity?.complete !== true ||
+      report?.integrity?.timingExcluded !== true ||
+      report?.integrity?.misses !== 0 ||
+      (report?.integrity?.errors?.length ?? -1) !== 0 ||
+      report?.verdict?.status !== 'unsupported' ||
+      report?.samples?.length !== 0 ||
+      report?.support?.requestedContentEncoding !== 'br' ||
+      report?.support?.observedContentEncoding !== null ||
+      report?.support?.reason !== 'requested Brotli returned the identity representation' ||
+      correctness?.status !== 200 ||
+      correctness?.requestAcceptEncoding !== 'br' ||
+      correctness?.requestIfNoneMatch !== null ||
+      correctness?.contentEncoding !== null ||
+      correctness?.bodySha256 !== correctness?.wireBodySha256 ||
+      correctness?.bodyBytes !== correctness?.wireBodyBytes ||
+      !/^sha256:[0-9a-f]{64}$/u.test(correctness?.bodySha256 ?? '') ||
+      !correctness?.exactResponseHeaders ||
+      correctness?.identityResponse?.status !== 200 ||
+      correctness?.selectedResponse?.status !== 200 ||
+      correctness?.selectedResponse?.contentEncoding !== null ||
+      correctness?.selectedResponse?.bodySha256 !== correctness?.bodySha256
+    ) {
+      expected.reasons.push(`${key} unsupported response proof failure`);
+    }
+  } else {
+    if (
+      report?.support?.status !== 'supported' ||
+      report?.integrity?.complete !== true ||
+      report?.integrity?.timingExcluded !== false ||
+      report?.verdict?.status !== 'measured'
+    ) {
+      expected.reasons.push(`${key} report is unproven`);
+    }
+    if (
+      report?.integrity?.misses !== 0 ||
+      report?.samples?.length !== 1 ||
+      report.samples[0]?.misses !== 0 ||
+      report.samples[0]?.failedRequests !== 0 ||
+      !(report.samples[0]?.requests > 0) ||
+      !(report.samples[0]?.reusedSockets > 0)
+    ) {
+      expected.reasons.push(`${key} request integrity failure`);
+    }
+    if (
+      report?.correctness?.status !== (report?.condition?.mode === '304' ? 304 : 200) ||
+      !/^sha256:[0-9a-f]{64}$/u.test(report?.correctness?.bodySha256 ?? '') ||
+      !report?.correctness?.exactResponseHeaders ||
+      (report?.condition?.encoding === 'br' &&
+        report?.condition?.mode !== '304' &&
+        report?.correctness?.contentEncoding !== 'br')
+    ) {
+      expected.reasons.push(`${key} response proof failure`);
+    }
   }
   if (
     report?.condition?.concurrency !== cell.serverCondition?.concurrency ||
@@ -1096,12 +1221,13 @@ export function validateServerCell(cell, expected) {
     expected.reasons.push(`${key} scheduled condition mismatch`);
   }
   if (
-    report?.samples?.[0]?.durationMs < expected.policy.serverDurationMs ||
     report?.policy?.durationMs !== expected.policy.serverDurationMs ||
     report?.policy?.warmupMs !== expected.policy.serverWarmupMs ||
-    report?.samples?.[0]?.processTreeSamples < 1 ||
-    !(report?.samples?.[0]?.peakRssBytes > 0) ||
-    !Number.isFinite(report?.samples?.[0]?.serverCpuPercent)
+    (!unsupported &&
+      (report?.samples?.[0]?.durationMs < expected.policy.serverDurationMs ||
+        report?.samples?.[0]?.processTreeSamples < 1 ||
+        !(report?.samples?.[0]?.peakRssBytes > 0) ||
+        !Number.isFinite(report?.samples?.[0]?.serverCpuPercent)))
   ) {
     expected.reasons.push(`${key} timing/CPU/RSS evidence failure`);
   }

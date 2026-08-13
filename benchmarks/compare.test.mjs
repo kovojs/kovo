@@ -8,6 +8,7 @@ import { performanceHostFingerprint } from '../scripts/lib/perf-host.mjs';
 import {
   bootstrapMedianCi,
   browserReportIntegrityFindings,
+  classifyServerMatrixCells,
   comparisonVerdict,
   EXECUTION_ORDER,
   fixtureProof,
@@ -18,6 +19,7 @@ import {
   summarize,
   ttiInteractionProof,
   validateDevCell,
+  validateServerCell,
   validHostFingerprint,
 } from './compare.mjs';
 
@@ -156,6 +158,116 @@ describe('serialized comparison analysis', () => {
     expect(
       analysis['matched-runtime/server/hit-listing-identity-c1/requestsPerSecond'].pairedDifference,
     ).toMatchObject({ median: 10, samples: 7 });
+  });
+
+  it('excludes a consistently unsupported server capability while retaining a complete supported matrix', () => {
+    const cells = [];
+    for (let occurrence = 0; occurrence < 2; occurrence += 1) {
+      cells.push({
+        ...serverCell('kovo', occurrence, 100 + occurrence),
+        mode: 'hit-listing-br-c1',
+        report: {
+          samples: [{ requestsPerSecond: 100 + occurrence }],
+          support: { status: 'supported' },
+        },
+      });
+      cells.push({
+        ...serverCell('nextjs', occurrence, 0),
+        mode: 'hit-listing-br-c1',
+        report: { samples: [], support: { status: 'unsupported' } },
+      });
+    }
+    expect(
+      classifyServerMatrixCells(cells, {
+        conditionKeys: ['hit-listing-br-c1'],
+        samples: 2,
+      }),
+    ).toEqual({
+      completeSupportedMatrix: true,
+      excludedUnsupported: [{ condition: 'hit-listing-br-c1', unsupportedFrameworks: ['nextjs'] }],
+      findings: [],
+      supported: [],
+    });
+    expect(pairedAnalysis(cells, { bootstrapIterations: 100, seed: 9 })).toEqual({});
+  });
+
+  it('requires exact structured identity evidence before accepting an unsupported server cell', () => {
+    const host = performanceHostFingerprint();
+    const bodyDigest = `sha256:${'a'.repeat(64)}`;
+    const report = {
+      condition: {
+        concurrency: 1,
+        encoding: 'br',
+        key: 'hit-listing-br-c1',
+        mode: 'HIT',
+        path: '/matched/l0',
+        route: 'listing',
+      },
+      correctness: {
+        bodyBytes: 100,
+        bodySha256: bodyDigest,
+        contentEncoding: null,
+        exactResponseHeaders: { 'content-encoding': null },
+        identityResponse: { bodySha256: bodyDigest, status: 200 },
+        requestAcceptEncoding: 'br',
+        requestIfNoneMatch: null,
+        selectedResponse: {
+          bodySha256: bodyDigest,
+          contentEncoding: null,
+          exactResponseHeaders: { 'content-encoding': null },
+          status: 200,
+        },
+        status: 200,
+        wireBodyBytes: 100,
+        wireBodySha256: bodyDigest,
+      },
+      environment: { host },
+      framework: 'nextjs',
+      integrity: {
+        complete: true,
+        errors: [],
+        misses: 0,
+        sourceStable: true,
+        timingExcluded: true,
+      },
+      policy: { durationMs: 15_000, warmupMs: 5_000 },
+      samples: [],
+      schema: 'kovo-server-benchmark/v1',
+      source: { commit: 'a'.repeat(40), dirty: false, locks: {} },
+      sourceAfter: { commit: 'a'.repeat(40), dirty: false, locks: {} },
+      support: {
+        observedContentEncoding: null,
+        reason: 'requested Brotli returned the identity representation',
+        requestedContentEncoding: 'br',
+        status: 'unsupported',
+      },
+      verdict: { status: 'unsupported' },
+    };
+    const cell = {
+      cell: 'server',
+      framework: 'nextjs',
+      lane: 'matched-runtime',
+      mode: 'hit-listing-br-c1',
+      occurrence: 0,
+      report,
+      serverCondition: report.condition,
+    };
+    const reasons = [];
+    validateServerCell(cell, {
+      policy: { serverDurationMs: 15_000, serverWarmupMs: 5_000 },
+      reasons,
+    });
+    expect(reasons).toEqual([]);
+
+    report.correctness.contentEncoding = 'br';
+    const forgedReasons = [];
+    validateServerCell(cell, {
+      policy: { serverDurationMs: 15_000, serverWarmupMs: 5_000 },
+      reasons: forgedReasons,
+    });
+    expect(forgedReasons).toContain(
+      'matched-runtime/nextjs/hit-listing-br-c1 unsupported response proof failure',
+    );
   });
 
   it('marks provenance or comparator mismatches unproven', () => {
