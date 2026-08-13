@@ -23,23 +23,34 @@ import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 
+import { publicAccess } from './access.js';
 import { createApp, createRequestHandler } from './app.js';
-import { resolveRequestClientIp } from './app-load-shed.js';
+import { appRequestInFlightCount, resolveRequestClientIp } from './app-load-shed.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { csrfToken } from './csrf.js';
 import { domain } from './domain.js';
 import { endpoint } from './endpoint.js';
+import { installGeneratedCacheInfluenceManifestForCommand } from './generated-cache-influence-registry.js';
 import { mutation } from './mutation.js';
 import {
+  clearProvedDocumentCompressionCacheForTest,
   nodeRequestPreloadIngressRejection,
   nodeRequestToWebRequest,
+  provedDocumentCompressionCacheStatsForTest,
   toNodeHandler,
   type NodeHandlerOptions,
   writeWebResponseToNode,
 } from './node.js';
 import { query } from './query.js';
 import { endpointRequestWithoutSession, resolveKovoLifecycleRequest } from './response-posture.js';
-import { respond, routeOutcomeResponse, routeResponseToWebResponse } from './response.js';
+import {
+  frameworkProvedDocumentCompressionWitness,
+  markFrameworkProvedDocumentCompressionResponse,
+  respond,
+  routeOutcomeResponse,
+  routeResponseToWebResponse,
+  transferFrameworkProvedDocumentCompressionWitness,
+} from './response.js';
 import { route } from './route.js';
 import { s } from './schema.js';
 import { task } from './task.js';
@@ -920,6 +931,375 @@ describe('server node adapter', () => {
       );
     } finally {
       await server.close();
+    }
+  });
+
+  it('single-flights and reuses only compiler-proved document compression representations', async () => {
+    clearProvedDocumentCompressionCacheForTest();
+    const releaseManifest = installGeneratedCacheInfluenceManifestForCommand({
+      entries: [nodePublicProvedEntry('document:/')],
+      schema: 'kovo-cache-influence/v1',
+    });
+    let renders = 0;
+    const handler = createRequestHandler(
+      createApp({
+        routes: [
+          route('/', {
+            access: publicAccess('Node proved-document compression fixture'),
+            page: () => {
+              renders += 1;
+              return trustedHtml(`<main>${'proved-compression'.repeat(512)}</main>`, {
+                reason: 'framework Node compression cache fixture',
+              });
+            },
+          }),
+        ],
+      }),
+    );
+    const server = await serveWithNode(toNodeHandler(handler));
+
+    try {
+      const burst = await Promise.all(
+        Array.from({ length: 8 }, () =>
+          server.fetch('/', { headers: { 'Accept-Encoding': 'br' } }),
+        ),
+      );
+      for (const response of burst) {
+        expect(response.status).toBe(200);
+        expect(response.headers['content-encoding']).toBe('br');
+        expect(brotliDecompressSync(response.encodedBody).toString('utf8')).toContain(
+          'proved-compression',
+        );
+      }
+      expect(new Set(burst.map((response) => response.headers['kovo-pad'])).size).toBeGreaterThan(
+        1,
+      );
+      expect(provedDocumentCompressionCacheStatsForTest()).toMatchObject({
+        compressions: 1,
+        entries: 1,
+        hits: 7,
+        misses: 1,
+      });
+
+      const gzip = await server.fetch('/', {
+        headers: { 'Accept-Encoding': 'gzip;q=1, br;q=0' },
+      });
+      expect(gzip.headers['content-encoding']).toBe('gzip');
+      expect(gunzipSync(gzip.encodedBody).toString('utf8')).toContain('proved-compression');
+      expect(provedDocumentCompressionCacheStatsForTest()).toMatchObject({
+        compressions: 2,
+        entries: 2,
+        misses: 2,
+      });
+
+      const beforeRejectedRequests = provedDocumentCompressionCacheStatsForTest();
+      const head = await server.fetch('/', {
+        headers: { 'Accept-Encoding': 'br' },
+        method: 'HEAD',
+      });
+      expect(head.headers['content-encoding']).toBeUndefined();
+      const conditional = await server.fetch('/', {
+        headers: {
+          'Accept-Encoding': 'br',
+          'If-None-Match': String(burst[0]!.headers.etag),
+        },
+      });
+      expect(conditional.status).toBe(304);
+      expect(conditional.headers['content-encoding']).toBeUndefined();
+      for (const credentialHeaders of [
+        { Cookie: 'sid=secret' },
+        { Authorization: 'Bearer token' },
+      ]) {
+        const credentialed = await server.fetch('/', {
+          headers: { 'Accept-Encoding': 'br', ...credentialHeaders },
+        });
+        expect(credentialed.headers['content-encoding']).toBe('br');
+        expect(brotliDecompressSync(credentialed.encodedBody).toString('utf8')).toContain(
+          'proved-compression',
+        );
+      }
+      expect(provedDocumentCompressionCacheStatsForTest()).toEqual(beforeRejectedRequests);
+    } finally {
+      await server.close();
+      releaseManifest();
+      clearProvedDocumentCompressionCacheForTest();
+    }
+  });
+
+  it('does not derive the private compression witness from public validators or structural clones', async () => {
+    const releaseManifest = installGeneratedCacheInfluenceManifestForCommand({
+      entries: [nodePublicProvedEntry('document:/')],
+      schema: 'kovo-cache-influence/v1',
+    });
+    const handler = createRequestHandler(
+      createApp({
+        routes: [
+          route('/', {
+            access: publicAccess('private compression witness fixture'),
+            page: () => 'witnessed document',
+          }),
+        ],
+      }),
+    );
+
+    try {
+      const witnessed = await handler(new Request('https://cache.example.test/'));
+      expect(frameworkProvedDocumentCompressionWitness(witnessed)).toMatchObject({
+        bodyDigest: expect.any(String),
+        buildToken: expect.any(String),
+      });
+
+      const clone = witnessed.clone();
+      expect(frameworkProvedDocumentCompressionWitness(clone)).toBeUndefined();
+      const forged = new Response('witnessed document', {
+        headers: {
+          'Cache-Control': PROVED_DOCUMENT_CACHE_CONTROL_FOR_NODE_TEST,
+          ETag: witnessed.headers.get('etag')!,
+          'Kovo-Build': witnessed.headers.get('kovo-build')!,
+        },
+      });
+      expect(frameworkProvedDocumentCompressionWitness(forged)).toBeUndefined();
+      const target = new Response('target');
+      transferFrameworkProvedDocumentCompressionWitness(forged, target);
+      expect(frameworkProvedDocumentCompressionWitness(target)).toBeUndefined();
+    } finally {
+      releaseManifest();
+    }
+  });
+
+  it('cancels each unused witnessed source body on a compression-cache hit', async () => {
+    clearProvedDocumentCompressionCacheForTest();
+    let requests = 0;
+    const body = 'cancelled-cache-hit'.repeat(256);
+    const witnessedResponse = () => {
+      requests += 1;
+      const source = requests === 1 ? body : new ReadableStream<Uint8Array>();
+      return markFrameworkProvedDocumentCompressionResponse(
+        new Response(source, {
+          headers: {
+            'Cache-Control': PROVED_DOCUMENT_CACHE_CONTROL_FOR_NODE_TEST,
+            'Content-Type': 'text/html; charset=utf-8',
+          },
+        }),
+        'cancel-build-token',
+        body,
+      );
+    };
+    const server = await serveWithNode(toNodeHandler(async () => witnessedResponse()));
+
+    try {
+      const first = await server.fetch('/', { headers: { 'Accept-Encoding': 'br' } });
+      const second = await server.fetch('/', { headers: { 'Accept-Encoding': 'br' } });
+      expect(brotliDecompressSync(first.encodedBody).toString('utf8')).toBe(body);
+      expect(second.encodedBody).toEqual(first.encodedBody);
+      await vi.waitFor(() =>
+        expect(provedDocumentCompressionCacheStatsForTest()).toMatchObject({
+          cancellations: 1,
+          compressions: 1,
+          hits: 1,
+        }),
+      );
+    } finally {
+      await server.close();
+      clearProvedDocumentCompressionCacheForTest();
+    }
+  });
+
+  it('releases request occupancy when a cached representation discards its wrapped body', async () => {
+    clearProvedDocumentCompressionCacheForTest();
+    const releaseManifest = installGeneratedCacheInfluenceManifestForCommand({
+      entries: [nodePublicProvedEntry('document:/')],
+      schema: 'kovo-cache-influence/v1',
+    });
+    const app = createApp({
+      requestLimits: { maxInFlight: 1 },
+      routes: [
+        route('/', {
+          access: publicAccess('proved compression occupancy fixture'),
+          page: () => 'occupancy-release'.repeat(256),
+        }),
+      ],
+    });
+    const server = await serveWithNode(toNodeHandler(createRequestHandler(app)));
+
+    try {
+      const first = await server.fetch('/', { headers: { 'Accept-Encoding': 'br' } });
+      const second = await server.fetch('/', { headers: { 'Accept-Encoding': 'br' } });
+      expect(second.status).toBe(200);
+      expect(second.encodedBody).toEqual(first.encodedBody);
+      await vi.waitFor(() => expect(appRequestInFlightCount(app)).toBe(0));
+      const reacquired = await server.fetch('/', { headers: { 'Accept-Encoding': 'br' } });
+      expect(reacquired.status).toBe(200);
+      expect(provedDocumentCompressionCacheStatsForTest()).toMatchObject({
+        cancellations: 2,
+        compressions: 1,
+        hits: 2,
+      });
+    } finally {
+      await server.close();
+      releaseManifest();
+      clearProvedDocumentCompressionCacheForTest();
+    }
+  });
+
+  it('keys proved compression by build token, body digest, and encoding', async () => {
+    clearProvedDocumentCompressionCacheForTest();
+    const cases = new Map<string, { body: string; token: string }>([
+      ['/base', { body: 'body-a'.repeat(256), token: 'build-a' }],
+      ['/body-change', { body: 'body-b'.repeat(256), token: 'build-a' }],
+      ['/build-change', { body: 'body-a'.repeat(256), token: 'build-b' }],
+    ]);
+    const server = await serveWithNode(
+      toNodeHandler(async (request) => {
+        const selected = cases.get(new URL(request.url).pathname)!;
+        return markFrameworkProvedDocumentCompressionResponse(
+          new Response(selected.body, {
+            headers: {
+              'Cache-Control': PROVED_DOCUMENT_CACHE_CONTROL_FOR_NODE_TEST,
+              'Content-Type': 'text/html; charset=utf-8',
+            },
+          }),
+          selected.token,
+          selected.body,
+        );
+      }),
+    );
+
+    try {
+      for (const pathname of cases.keys()) {
+        await server.fetch(pathname, { headers: { 'Accept-Encoding': 'br' } });
+      }
+      expect(provedDocumentCompressionCacheStatsForTest()).toMatchObject({
+        compressions: 3,
+        entries: 3,
+        misses: 3,
+      });
+      await server.fetch('/base', { headers: { 'Accept-Encoding': 'gzip;q=1, br;q=0' } });
+      expect(provedDocumentCompressionCacheStatsForTest()).toMatchObject({
+        compressions: 4,
+        entries: 4,
+        misses: 4,
+      });
+    } finally {
+      await server.close();
+      clearProvedDocumentCompressionCacheForTest();
+    }
+  });
+
+  it('rejects mutable or credential-bearing response posture from the proved compression cache', async () => {
+    clearProvedDocumentCompressionCacheForTest();
+    const headersByPath: Record<string, Record<string, string>> = {
+      '/clear-site-data': { 'Clear-Site-Data': '"cookies"' },
+      '/no-store': { 'Cache-Control': 'no-store' },
+      '/no-transform': { 'Cache-Control': 'public, no-transform' },
+      '/private': { 'Cache-Control': 'private, no-store' },
+      '/set-cookie': { 'Set-Cookie': 'sid=secret; Path=/; HttpOnly' },
+    };
+    const server = await serveWithNode(
+      toNodeHandler(async (request) => {
+        const path = new URL(request.url).pathname;
+        const body = `ineligible-${path}`.repeat(128);
+        return markFrameworkProvedDocumentCompressionResponse(
+          new Response(body, {
+            headers: {
+              'Cache-Control': PROVED_DOCUMENT_CACHE_CONTROL_FOR_NODE_TEST,
+              'Content-Type': 'text/html; charset=utf-8',
+              ...headersByPath[path],
+            },
+          }),
+          'ineligible-build',
+          body,
+        );
+      }),
+    );
+
+    try {
+      for (const pathname of Object.keys(headersByPath)) {
+        const response = await server.fetch(pathname, {
+          headers: { 'Accept-Encoding': 'br' },
+        });
+        if (pathname === '/no-transform') {
+          expect(response.headers['content-encoding']).toBeUndefined();
+        } else {
+          expect(response.headers['content-encoding']).toBe('br');
+        }
+      }
+      expect(provedDocumentCompressionCacheStatsForTest()).toEqual({
+        bytes: 0,
+        cancellations: 0,
+        compressions: 0,
+        entries: 0,
+        hits: 0,
+        misses: 0,
+      });
+    } finally {
+      await server.close();
+      clearProvedDocumentCompressionCacheForTest();
+    }
+  });
+
+  it('bounds proved compression entries and evicts the least-recently-used representation', async () => {
+    clearProvedDocumentCompressionCacheForTest();
+    const server = await serveWithNode(
+      toNodeHandler(async (request) => {
+        const body = `bounded-${new URL(request.url).pathname}`.repeat(64);
+        return markFrameworkProvedDocumentCompressionResponse(
+          new Response(body, {
+            headers: {
+              'Cache-Control': PROVED_DOCUMENT_CACHE_CONTROL_FOR_NODE_TEST,
+              'Content-Type': 'text/html; charset=utf-8',
+            },
+          }),
+          'bounded-build',
+          body,
+        );
+      }),
+    );
+
+    try {
+      for (let index = 0; index < 130; index += 1) {
+        await server.fetch(`/entry-${index}`, { headers: { 'Accept-Encoding': 'br' } });
+      }
+      expect(provedDocumentCompressionCacheStatsForTest()).toMatchObject({
+        compressions: 130,
+        entries: 128,
+        misses: 130,
+      });
+      await server.fetch('/entry-0', { headers: { 'Accept-Encoding': 'br' } });
+      expect(provedDocumentCompressionCacheStatsForTest()).toMatchObject({
+        compressions: 131,
+        entries: 128,
+        misses: 131,
+      });
+    } finally {
+      await server.close();
+      clearProvedDocumentCompressionCacheForTest();
+    }
+  });
+
+  it('does not mint compression-cache authority for an oversized proved document', async () => {
+    const releaseManifest = installGeneratedCacheInfluenceManifestForCommand({
+      entries: [nodePublicProvedEntry('document:/')],
+      schema: 'kovo-cache-influence/v1',
+    });
+    const handler = createRequestHandler(
+      createApp({
+        routes: [
+          route('/', {
+            access: publicAccess('oversized proved document fixture'),
+            page: () => 'x'.repeat(4_194_305),
+          }),
+        ],
+      }),
+    );
+
+    try {
+      const response = await handler(new Request('https://cache.example.test/'));
+      expect(response.status).toBe(200);
+      expect(frameworkProvedDocumentCompressionWitness(response)).toBeUndefined();
+      await response.body?.cancel();
+    } finally {
+      releaseManifest();
     }
   });
 
@@ -2954,6 +3334,23 @@ interface NodeTestRequestOptions {
   body?: string;
   headers?: Record<string, string>;
   method?: string;
+}
+
+const PROVED_DOCUMENT_CACHE_CONTROL_FOR_NODE_TEST = 'public, max-age=0, must-revalidate';
+
+function nodePublicProvedEntry(root: string) {
+  return {
+    authored: { posture: 'public' as const },
+    axes: [
+      { kind: 'url-path' as const, role: 'cache-key' as const },
+      { kind: 'url-search' as const, role: 'cache-key' as const },
+    ],
+    closedReasons: [],
+    root,
+    surface: 'document' as const,
+    vary: [],
+    verdict: 'public-proved' as const,
+  };
 }
 
 function formBody(fields: Record<string, string>): string {

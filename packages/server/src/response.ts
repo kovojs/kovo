@@ -48,6 +48,7 @@ import {
   securityStringStartsWith,
   securityStringToLowerCase,
   securityStringTrim,
+  securitySha256Base64Url,
   securityTextEncode,
   securityUint8ArrayFromArrayBuffer,
   securityUint8ArraySlice,
@@ -217,6 +218,16 @@ interface RouteResponseOutcomeSnapshot {
 const routeResponseOutcomeSnapshots = createWitnessWeakMap<object, RouteResponseOutcomeSnapshot>();
 const routePageResponseOutcomes = createWitnessWeakSet<object>();
 const frameworkDocumentResponseBuildTokens = createWitnessWeakMap<object, string>();
+const frameworkProvedDocumentCompressionWitnesses = createWitnessWeakMap<
+  object,
+  FrameworkProvedDocumentCompressionWitness
+>();
+
+/** @internal Private transport proof for one exact compiler-proved buffered document body. */
+export interface FrameworkProvedDocumentCompressionWitness {
+  readonly bodyDigest: string;
+  readonly buildToken: string;
+}
 
 /** @internal Mark a framework-assembled document response with its trusted build proof. */
 export function markFrameworkDocumentResponse<Response extends object>(
@@ -232,6 +243,48 @@ export function frameworkDocumentResponseBuildToken(response: unknown): string |
   return typeof response === 'object' && response !== null
     ? witnessWeakMapGet(frameworkDocumentResponseBuildTokens, response)
     : undefined;
+}
+
+/**
+ * @internal Mint compression-cache authority only for the compiler-proved document tier.
+ * Callers must have already enforced the credential-neutral buffered-200 floor (SPEC §9.5).
+ */
+export function markFrameworkProvedDocumentCompressionResponse<Response extends object>(
+  response: Response,
+  buildToken: string,
+  body: string,
+): Response {
+  markFrameworkDocumentResponse(response, buildToken);
+  witnessWeakMapSet(
+    frameworkProvedDocumentCompressionWitnesses,
+    response,
+    witnessFreeze({ bodyDigest: securitySha256Base64Url(body), buildToken }),
+  );
+  return response;
+}
+
+/** @internal Read exact response identity; public headers and structural clones never suffice. */
+export function frameworkProvedDocumentCompressionWitness(
+  response: unknown,
+): FrameworkProvedDocumentCompressionWitness | undefined {
+  return typeof response === 'object' && response !== null
+    ? witnessWeakMapGet(frameworkProvedDocumentCompressionWitnesses, response)
+    : undefined;
+}
+
+/**
+ * @internal Preserve an already-minted compression proof across a framework-owned Response body
+ * wrapper. A structural/public source is a no-op and cannot acquire authority (SPEC §§2/9.5).
+ */
+export function transferFrameworkProvedDocumentCompressionWitness<Response extends object>(
+  source: unknown,
+  target: Response,
+): Response {
+  const witness = frameworkProvedDocumentCompressionWitness(source);
+  if (witness !== undefined) {
+    witnessWeakMapSet(frameworkProvedDocumentCompressionWitnesses, target, witness);
+  }
+  return target;
 }
 
 /** Options for `respond.file`: content type and optional filename/etag/headers. */
@@ -855,7 +908,11 @@ export const serverResponseToWebResponse = wireEmitter(
     request: Pick<Request, 'method'>,
   ): Response {
     const buildToken = frameworkDocumentResponseBuildToken(response);
+    const compressionWitness = frameworkProvedDocumentCompressionWitness(response);
     const finalized = finalizeServerResponse(response, request);
+    if (compressionWitness !== undefined) {
+      witnessWeakMapSet(frameworkProvedDocumentCompressionWitnesses, finalized, compressionWitness);
+    }
     return buildToken === undefined
       ? finalized
       : markFrameworkDocumentResponse(finalized, buildToken);

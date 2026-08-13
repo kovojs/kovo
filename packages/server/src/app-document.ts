@@ -45,6 +45,7 @@ import {
   appendResponseHeader,
   cloneResponseHeaders,
   markFrameworkDocumentResponse,
+  markFrameworkProvedDocumentCompressionResponse,
   readHeader,
   routeResponseToDocumentResponse,
   type ResponseHeaders,
@@ -709,9 +710,10 @@ export function provedDocumentCachedResponse(
       entry.buildToken,
     );
   }
-  return markFrameworkDocumentResponse(
+  return markFrameworkProvedDocumentCompressionResponse(
     { body: entry.body, headers: cloneResponseHeaders(entry.headers), status: 200 as const },
     entry.buildToken,
+    entry.body,
   );
 }
 
@@ -816,7 +818,15 @@ function applyProvedDocumentValidatorTier(
       options.buildToken,
     );
   }
-  const stamped = markFrameworkDocumentResponse({ ...response, headers }, options.buildToken);
+  const provedResponse = { ...response, headers };
+  const stamped =
+    response.body.length <= PROVED_DOCUMENT_CACHE_MAX_BODY_BYTES
+      ? markFrameworkProvedDocumentCompressionResponse(
+          provedResponse,
+          options.buildToken,
+          response.body,
+        )
+      : markFrameworkDocumentResponse(provedResponse, options.buildToken);
   witnessWeakSetAdd(provedDocumentTierResponses, stamped);
   return stamped;
 }
