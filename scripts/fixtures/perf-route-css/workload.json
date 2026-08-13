@@ -1,0 +1,55 @@
+{
+  "schema": "kovo-route-css-workload/v1",
+  "name": "matched-commerce-listing-detail",
+  "description": "The capability-matched commerce listing and detail routes, partitioned into shared shell/cart CSS and route-only CSS.",
+  "assets": [
+    {
+      "id": "shared",
+      "file": "shared.css",
+      "sourceFileName": "matched/shared.css",
+      "componentName": "matched-shared",
+      "className": "matched-shared",
+      "marker": "kovo-perf-route-css:shared"
+    },
+    {
+      "id": "listing",
+      "file": "listing.css",
+      "sourceFileName": "matched/listing.css",
+      "componentName": "matched-listing",
+      "className": "matched-listing",
+      "marker": "kovo-perf-route-css:listing"
+    },
+    {
+      "id": "detail",
+      "file": "detail.css",
+      "sourceFileName": "matched/detail.css",
+      "componentName": "matched-detail",
+      "className": "matched-detail",
+      "marker": "kovo-perf-route-css:detail"
+    }
+  ],
+  "routes": [
+    {
+      "id": "listing",
+      "path": "/matched/l0",
+      "assets": ["shared", "listing"],
+      "requiredMarkers": ["kovo-perf-route-css:shared", "kovo-perf-route-css:listing"]
+    },
+    {
+      "id": "detail",
+      "path": "/matched/l0/product/linen-field-jacket",
+      "assets": ["shared", "detail"],
+      "requiredMarkers": ["kovo-perf-route-css:shared", "kovo-perf-route-css:detail"]
+    }
+  ],
+  "sessions": [
+    {
+      "id": "listing-to-detail",
+      "routes": ["listing", "detail"]
+    },
+    {
+      "id": "detail-to-listing",
+      "routes": ["detail", "listing"]
+    }
+  ]
+}
