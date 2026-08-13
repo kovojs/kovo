@@ -296,7 +296,11 @@ function baselineBuildReportFindings(baseline, entries, corpusSize) {
     }
   }
   if (findings.length === 0) {
-    const reratified = ratifyPerformanceBaseline(entries, baseline.policy);
+    const entriesByDigest = new Map(entries.map((entry) => [entry.contentDigest, entry]));
+    const orderedEntries = baseline.reports.map((report) =>
+      entriesByDigest.get(report.contentDigest),
+    );
+    const reratified = ratifyPerformanceBaseline(orderedEntries, baseline.policy);
     for (const field of ['identity', 'metrics', 'policy', 'reports', 'subject', 'verdict']) {
       if (canonicalJson(reratified[field]) !== canonicalJson(baseline[field])) {
         findings.push(`baseline ${field} is not reproduced by its linked raw reports`);

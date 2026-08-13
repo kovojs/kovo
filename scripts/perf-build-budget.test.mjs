@@ -52,6 +52,9 @@ describe('ratified production-build performance budgets', () => {
       });
       expect(budget.metrics[wall].medianMaximum).toBeCloseTo(527.1);
       expect(buildBudgetFindings(budget)).toEqual([]);
+      expect(
+        deriveBuildPerformanceBudget(baseline, { baselineEntries: [...entries].reverse() }).digest,
+      ).toBe(budget.digest);
       expect(result.schema).toBe(PERF_BUILD_EVALUATION_SCHEMA);
       expect(result.candidate.sourceCommit).toBe('b'.repeat(40));
       expect(result.verdict).toEqual({ failures: [], reasons: [], status: 'pass' });
