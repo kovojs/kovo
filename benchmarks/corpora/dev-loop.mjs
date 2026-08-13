@@ -947,6 +947,9 @@ export async function loadCorpusManifest(manifestPathValue) {
   if (!/^[0-9a-f]{64}$/u.test(manifest.shapeDigest)) {
     throw new TypeError('Corpus manifest shapeDigest is invalid.');
   }
+  if (sha256(JSON.stringify(manifest.workload)).slice('sha256:'.length) !== manifest.shapeDigest) {
+    throw new TypeError('Corpus manifest shapeDigest does not authenticate workload.');
+  }
   if (!/^sha256:[0-9a-f]{64}$/u.test(manifest.sourceDigest)) {
     throw new TypeError('Corpus manifest sourceDigest is invalid.');
   }
@@ -955,8 +958,9 @@ export async function loadCorpusManifest(manifestPathValue) {
     throw new TypeError('Corpus manifest sourceDigest does not authenticate sourceFiles.');
   }
   validateDevContract(manifest.dev);
-  if (!Array.isArray(manifest.build?.outputs)) {
-    throw new TypeError('Corpus manifest build outputs are absent.');
+  validateBuildOutputContract(manifest.build?.outputs);
+  if (manifest.workload?.buildOutputContract !== 'required-nonempty-and-cleanup-absent/v1') {
+    throw new TypeError('Corpus workload does not authenticate the build output contract.');
   }
   const appRoot = path.dirname(manifestPath);
   await assertGeneratedCorpusOwner(appRoot, manifest);
@@ -1078,6 +1082,31 @@ function validateDevContract(dev) {
   }
 }
 
+function validateBuildOutputContract(outputs) {
+  const keys = Object.keys(outputs ?? {}).sort();
+  if (JSON.stringify(keys) !== JSON.stringify(['absent', 'requiredNonempty'])) {
+    throw new TypeError('Corpus manifest build outputs have an unexpected shape.');
+  }
+  if (!Array.isArray(outputs.requiredNonempty) || outputs.requiredNonempty.length === 0) {
+    throw new TypeError('Corpus manifest required build outputs are absent.');
+  }
+  if (!Array.isArray(outputs.absent)) {
+    throw new TypeError('Corpus manifest absent build outputs are missing.');
+  }
+  const values = [...outputs.requiredNonempty, ...outputs.absent];
+  const unique = new Set();
+  for (const output of values) {
+    if (typeof output !== 'string' || output.length === 0 || unique.has(output)) {
+      throw new TypeError('Corpus manifest build outputs must be unique non-empty strings.');
+    }
+    assertSafeRelativePath(output.replace(/\*$/u, 'sentinel'), 'build output');
+    if (output.includes('*') && !output.endsWith('*')) {
+      throw new TypeError('Corpus manifest build output permits only a trailing wildcard.');
+    }
+    unique.add(output);
+  }
+}
+
 function materializeCommand(contract, appRoot, port) {
   const argv = contract.argv.map((part) => (part === '{port}' ? String(port) : part));
   if (argv.some((part) => typeof part !== 'string' || part.length === 0)) {
@@ -1092,7 +1121,7 @@ function materializeCommand(contract, appRoot, port) {
 }
 
 async function cleanGeneratedOutputs(appRoot, outputs) {
-  for (const output of outputs) {
+  for (const output of [...outputs.requiredNonempty, ...outputs.absent]) {
     assertSafeRelativePath(output.replace(/\*$/u, 'sentinel'), 'build output');
     if (output.endsWith('*')) {
       const prefix = output.slice(0, -1);

@@ -27,9 +27,13 @@ import { measureProcessTreeCommand } from './lib/process-tree-rss.mjs';
 
 export const BUILD_BENCHMARK_SCHEMA = 'kovo-build-benchmark/v1';
 const CORPUS_SCHEMA = 'kovo-dev-corpus/v1';
+const CORPUS_OWNER_FILE = '.kovo-benchmark-corpus-owner.json';
+const CORPUS_OWNER_SCHEMA = 'kovo-benchmark-corpus-owner/v1';
+const BUILD_OUTPUT_CONTRACT = 'required-nonempty-and-cleanup-absent/v1';
 const KOVO_SOURCE_PHASE_SCHEMA = 'kovo-build-source-phase-census/v1';
 const KOVO_WORKER_PHASE_SCHEMA = 'kovo-build-worker-phase-census/v1';
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1_000;
+const IGNORED_CORPUS_NAMES = new Set([CORPUS_OWNER_FILE, 'manifest.json', 'node_modules']);
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 
 export function parseBuildPhaseCensus(output) {
@@ -51,6 +55,41 @@ export function artifactBytesForOutputs(root, outputs) {
   }
   for (const target of targets) bytes += artifactPathBytes(target);
   return bytes;
+}
+
+export function inspectBuildOutputContract(root, outputs) {
+  const contract = validateBuildOutputContract(outputs);
+  const resolvedRoot = path.resolve(root);
+  const requiredNonempty = contract.requiredNonempty.map((output) => {
+    const targets = resolveDeclaredOutputTargets(resolvedRoot, output);
+    return {
+      bytes: artifactBytesForOutputs(resolvedRoot, [output]),
+      output,
+      targets: targets.map((target) => portableRelativePath(resolvedRoot, target)),
+    };
+  });
+  const absent = contract.absent.map((output) => ({
+    matches: resolveDeclaredOutputTargets(resolvedRoot, output).map((target) =>
+      portableRelativePath(resolvedRoot, target),
+    ),
+    output,
+  }));
+  return {
+    absent,
+    complete:
+      requiredNonempty.every((entry) => entry.bytes > 0) &&
+      absent.every((entry) => entry.matches.length === 0),
+    requiredNonempty,
+    totalBytes: artifactBytesForOutputs(resolvedRoot, contract.requiredNonempty),
+  };
+}
+
+export function sameSourceState(left, right) {
+  return (
+    left?.commit === right?.commit &&
+    JSON.stringify(left?.dirtyPaths) === JSON.stringify(right?.dirtyPaths) &&
+    JSON.stringify(left?.locks) === JSON.stringify(right?.locks)
+  );
 }
 
 export function applyBuildBenchmarkEdit(root, edit, revision) {
@@ -114,7 +153,8 @@ export function runBuildBenchmark(options) {
     true,
   );
   const argv = stringArray(command.argv, 'build.command.argv');
-  const outputs = stringArray(manifest.build.outputs, 'build.outputs');
+  const outputs = validateBuildOutputContract(manifest.build.outputs);
+  const outputPatterns = [...outputs.requiredNonempty, ...outputs.absent];
   const commandEnv = stringRecord(command.env, 'build.command.env');
   const edit = manifest.build.edit;
   const originalEditSource =
@@ -126,6 +166,15 @@ export function runBuildBenchmark(options) {
       : undefined;
   const samples = [];
   const errors = [];
+  const manifestDigest = `sha256:${createHash('sha256').update(manifestText).digest('hex')}`;
+  const corpusBefore = captureCorpusState({
+    corpusRoot,
+    manifest,
+    manifestDigest,
+    manifestPath,
+    outputs,
+  });
+  assertCorpusMatchesManifest(corpusBefore, manifest, 'pre-run');
   const source = collectPerformanceProvenance({
     lockFiles: [
       'pnpm-lock.yaml',
@@ -145,18 +194,62 @@ export function runBuildBenchmark(options) {
       timeoutMs,
     });
 
+  const guardedRun = (scope) => {
+    let before;
+    try {
+      before = captureCorpusState({
+        corpusRoot,
+        manifest,
+        manifestDigest,
+        manifestPath,
+        outputs,
+      });
+    } catch (error) {
+      errors.push(`${scope} pre-command corpus integrity: ${errorMessage(error)}`);
+      return null;
+    }
+    let measured;
+    try {
+      measured = run();
+    } catch (error) {
+      errors.push(`${scope} command execution: ${errorMessage(error)}`);
+      return null;
+    }
+    let after;
+    try {
+      after = captureCorpusState({
+        corpusRoot,
+        manifest,
+        manifestDigest,
+        manifestPath,
+        outputs,
+      });
+    } catch (error) {
+      errors.push(`${scope} post-command corpus integrity: ${errorMessage(error)}`);
+      return { after: null, before, measured, stable: false };
+    }
+    const stable = before.digest === after.digest;
+    if (!stable) errors.push(`${scope} changed the authenticated corpus source state`);
+    return { after, before, measured, stable };
+  };
+
+  let corpusAfter = null;
+  let sourceAfter = null;
+
   try {
-    cleanDeclaredOutputs(corpusRoot, outputs);
+    cleanDeclaredOutputs(corpusRoot, outputPatterns);
     for (let index = 0; index < warmups; index += 1) {
-      if (mode === 'clean') cleanDeclaredOutputs(corpusRoot, outputs);
-      const warmup = run();
+      if (mode === 'clean') cleanDeclaredOutputs(corpusRoot, outputPatterns);
+      const guarded = guardedRun(`warmup ${String(index + 1)}`);
+      if (guarded === null) break;
+      const warmup = guarded.measured;
       if (warmup.exitCode !== 0 || warmup.error !== null) {
         errors.push(`warmup ${String(index + 1)} failed: ${commandFailure(warmup)}`);
         break;
       }
     }
     for (let index = 0; errors.length === 0 && index < iterations; index += 1) {
-      if (mode === 'clean') cleanDeclaredOutputs(corpusRoot, outputs);
+      if (mode === 'clean') cleanDeclaredOutputs(corpusRoot, outputPatterns);
       if (mode === 'edit') {
         writeFileSync(
           confinedPath(corpusRoot, requiredString(edit.file, 'build.edit.file')),
@@ -168,13 +261,33 @@ export function runBuildBenchmark(options) {
         applyBuildBenchmarkEdit(corpusRoot, edit, (index % 2) + 1);
       }
       const beforeLoadAverage = loadavg()[0];
-      const measured = run();
+      const guarded = guardedRun(`sample ${String(index + 1)}`);
+      if (guarded === null) break;
+      const measured = guarded.measured;
       const combinedOutput = `${measured.stdout}\n${measured.stderr}`;
+      let outputCensus;
+      try {
+        outputCensus = inspectBuildOutputContract(corpusRoot, outputs);
+      } catch (error) {
+        outputCensus = {
+          absent: [],
+          complete: false,
+          error: errorMessage(error),
+          requiredNonempty: [],
+          totalBytes: 0,
+        };
+      }
       const sample = {
-        artifactBytes: artifactBytesForOutputs(corpusRoot, outputs),
+        artifactBytes: outputCensus.totalBytes,
+        corpus: {
+          afterDigest: guarded.after?.digest ?? null,
+          beforeDigest: guarded.before.digest,
+          stable: guarded.stable,
+        },
         durationMs: measured.durationMs,
         exitCode: measured.exitCode,
         loadAverage: beforeLoadAverage,
+        outputCensus,
         peakRssBytes: measured.peakRssBytes,
         phaseCensus: framework === 'kovo' ? parseBuildPhaseCensus(combinedOutput) : null,
       };
@@ -182,9 +295,26 @@ export function runBuildBenchmark(options) {
       const sampleNumber = String(index + 1);
       if (measured.exitCode !== 0 || measured.error !== null) {
         errors.push(`sample ${sampleNumber} failed: ${commandFailure(measured)}`);
-      } else if (sample.artifactBytes === 0) {
-        errors.push(`sample ${sampleNumber} produced no bytes in its declared outputs`);
-      } else if (framework === 'kovo' && sample.phaseCensus?.source?.complete !== true) {
+      } else {
+        for (const output of outputCensus.requiredNonempty) {
+          if (output.bytes === 0) {
+            errors.push(
+              `sample ${sampleNumber} required output ${output.output} was empty or missing`,
+            );
+          }
+        }
+        for (const output of outputCensus.absent) {
+          if (output.matches.length > 0) {
+            errors.push(
+              `sample ${sampleNumber} left forbidden output ${output.output}: ${output.matches.join(', ')}`,
+            );
+          }
+        }
+        if (outputCensus.error !== undefined) {
+          errors.push(`sample ${sampleNumber} output census: ${outputCensus.error}`);
+        }
+      }
+      if (framework === 'kovo' && sample.phaseCensus?.source?.complete !== true) {
         errors.push(`sample ${sampleNumber} omitted a complete Kovo source-phase census`);
       } else if (framework === 'kovo' && sample.phaseCensus?.workers?.complete !== true) {
         errors.push(`sample ${sampleNumber} omitted a complete Kovo worker-phase census`);
@@ -198,22 +328,56 @@ export function runBuildBenchmark(options) {
         originalEditSource,
       );
     }
+    try {
+      corpusAfter = captureCorpusState({
+        corpusRoot,
+        manifest,
+        manifestDigest,
+        manifestPath,
+        outputs,
+      });
+      assertCorpusMatchesManifest(corpusAfter, manifest, 'post-run');
+      if (corpusAfter.digest !== corpusBefore.digest) {
+        errors.push('post-run corpus source state differs from pre-run state');
+      }
+    } catch (error) {
+      errors.push(`post-run corpus integrity: ${errorMessage(error)}`);
+    }
+    try {
+      sourceAfter = collectPerformanceProvenance({
+        lockFiles: ['pnpm-lock.yaml', 'benchmarks/nextjs/pnpm-lock.yaml'],
+        repoRoot,
+      });
+      if (!sameSourceState(source, sourceAfter)) {
+        errors.push('repository source provenance changed during measurement');
+      }
+    } catch (error) {
+      errors.push(`post-run source provenance: ${errorMessage(error)}`);
+    }
   }
 
   const validSamples = samples.filter(
     (sample) =>
       sample.exitCode === 0 &&
-      sample.artifactBytes > 0 &&
+      sample.outputCensus?.complete === true &&
+      sample.corpus?.stable === true &&
       (framework !== 'kovo' ||
         (sample.phaseCensus?.source?.complete === true &&
           sample.phaseCensus?.workers?.complete === true)),
   ).length;
   const misses = iterations - validSamples;
-  const complete = samples.length === iterations && errors.length === 0 && misses === 0;
+  const corpusStable = corpusAfter?.digest === corpusBefore.digest;
+  const sourceStable = sameSourceState(source, sourceAfter);
+  const complete =
+    samples.length === iterations &&
+    errors.length === 0 &&
+    misses === 0 &&
+    corpusStable &&
+    sourceStable;
   return {
     corpus: {
       approximateLoc: manifest.approximateLoc,
-      manifestDigest: `sha256:${createHash('sha256').update(manifestText).digest('hex')}`,
+      manifestDigest,
       manifestPath: portableRelativePath(repoRoot, manifestPath),
       modules: manifest.modules,
       routes: manifest.routes,
@@ -226,16 +390,19 @@ export function runBuildBenchmark(options) {
     integrity: {
       command: { argv, cwd: path.relative(corpusRoot, commandCwd) || '.' },
       complete,
+      corpus: { after: corpusAfter, before: corpusBefore, stable: corpusStable },
       errors,
       iterations,
       misses,
       outputRoots: outputs,
+      source: { after: sourceAfter, before: source, stable: sourceStable },
       warmups,
     },
     mode,
     samples,
     schema: BUILD_BENCHMARK_SCHEMA,
     source,
+    sourceAfter,
     summary: summarizeBuildSamples(samples),
   };
 }
@@ -258,11 +425,12 @@ function validateCorpusManifest(manifest, framework) {
   if (!/^[0-9a-f]{64}$/u.test(shapeDigest)) {
     throw new TypeError('shapeDigest must be one lowercase SHA-256 digest');
   }
-  if (
-    manifest.sourceDigest !== undefined &&
-    !/^sha256:[0-9a-f]{64}$/u.test(requiredString(manifest.sourceDigest, 'sourceDigest'))
-  ) {
+  if (!/^sha256:[0-9a-f]{64}$/u.test(requiredString(manifest.sourceDigest, 'sourceDigest'))) {
     throw new TypeError('sourceDigest must be one prefixed lowercase SHA-256 digest');
+  }
+  validateSourceFiles(manifest.sourceFiles);
+  if (sha256(JSON.stringify(manifest.sourceFiles)) !== manifest.sourceDigest) {
+    throw new TypeError('sourceDigest does not authenticate sourceFiles');
   }
   if (
     !manifest.workload ||
@@ -282,10 +450,143 @@ function validateCorpusManifest(manifest, framework) {
   if (
     manifest.workload.componentImportFanout !== modules ||
     manifest.workload.workloadModules !== modules ||
-    manifest.workload.routes !== routes
+    manifest.workload.routes !== routes ||
+    manifest.workload.buildOutputContract !== BUILD_OUTPUT_CONTRACT
   ) {
     throw new TypeError('corpus size metadata does not match the authenticated workload');
   }
+  validateBuildOutputContract(manifest.build.outputs);
+}
+
+function validateBuildOutputContract(value) {
+  const keys = Object.keys(value ?? {}).sort();
+  if (JSON.stringify(keys) !== JSON.stringify(['absent', 'requiredNonempty'])) {
+    throw new TypeError('build.outputs must contain only absent and requiredNonempty');
+  }
+  const requiredNonempty = stringArray(value.requiredNonempty, 'build.outputs.requiredNonempty');
+  if (!Array.isArray(value.absent)) {
+    throw new TypeError('build.outputs.absent must be an array');
+  }
+  const absent = value.absent.map((entry) => requiredString(entry, 'build.outputs.absent'));
+  const unique = new Set();
+  for (const output of [...requiredNonempty, ...absent]) {
+    validateOutputPattern(output);
+    if (unique.has(output)) throw new TypeError(`build output is duplicated: ${output}`);
+    unique.add(output);
+  }
+  return { absent, requiredNonempty };
+}
+
+function validateOutputPattern(output) {
+  const star = output.indexOf('*');
+  if (star >= 0 && (star !== output.length - 1 || output.indexOf('*', star + 1) >= 0)) {
+    throw new TypeError('build output permits only one trailing * wildcard');
+  }
+  const pathValue = star < 0 ? output : `${output.slice(0, -1)}sentinel`;
+  confinedPath('.', pathValue);
+  if (star >= 0 && path.basename(output.slice(0, -1)).length < 2) {
+    throw new TypeError('build output wildcard prefix is too broad');
+  }
+}
+
+function validateSourceFiles(value) {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new TypeError('sourceFiles must be a non-empty array');
+  }
+  let prior = '';
+  for (const entry of value) {
+    const keys = Object.keys(entry ?? {}).sort();
+    if (JSON.stringify(keys) !== JSON.stringify(['bytes', 'file', 'sha256'])) {
+      throw new TypeError('sourceFiles entry has an unexpected shape');
+    }
+    const file = requiredString(entry.file, 'sourceFiles.file');
+    confinedPath('.', file);
+    if (file <= prior) throw new TypeError('sourceFiles must be unique and sorted');
+    if (!Number.isSafeInteger(entry.bytes) || entry.bytes < 0) {
+      throw new TypeError(`sourceFiles byte count is invalid for ${file}`);
+    }
+    if (!/^sha256:[0-9a-f]{64}$/u.test(entry.sha256)) {
+      throw new TypeError(`sourceFiles digest is invalid for ${file}`);
+    }
+    prior = file;
+  }
+}
+
+function captureCorpusState({ corpusRoot, manifest, manifestDigest, manifestPath, outputs }) {
+  const manifestBytes = readFileSync(manifestPath);
+  const observedManifestDigest = sha256(manifestBytes);
+  if (observedManifestDigest !== manifestDigest) {
+    throw new TypeError('corpus manifest bytes changed during measurement');
+  }
+  const ownerPath = confinedPath(corpusRoot, CORPUS_OWNER_FILE);
+  const ownerBytes = readFileSync(ownerPath);
+  const owner = JSON.parse(ownerBytes.toString('utf8'));
+  const ownerKeys = Object.keys(owner ?? {}).sort();
+  if (
+    JSON.stringify(ownerKeys) !== JSON.stringify(['appRoot', 'framework', 'modules', 'schema']) ||
+    owner.schema !== CORPUS_OWNER_SCHEMA ||
+    path.resolve(owner.appRoot ?? '') !== corpusRoot ||
+    owner.framework !== manifest.framework ||
+    owner.modules !== manifest.modules
+  ) {
+    throw new TypeError('corpus ownership sentinel does not authenticate this app root');
+  }
+
+  const expectedPaths = new Set();
+  const sourceFiles = [];
+  for (const entry of manifest.sourceFiles) {
+    expectedPaths.add(entry.file);
+    const filePath = confinedPath(corpusRoot, entry.file);
+    const metadata = lstatSync(filePath);
+    if (!metadata.isFile() || metadata.isSymbolicLink()) {
+      throw new TypeError(`corpus source ${entry.file} is not a regular file`);
+    }
+    const bytes = readFileSync(filePath);
+    sourceFiles.push({ bytes: bytes.byteLength, file: entry.file, sha256: sha256(bytes) });
+  }
+  const unexpected = listCorpusSourcePaths(corpusRoot, outputs).filter(
+    (file) => !expectedPaths.has(file),
+  );
+  if (unexpected.length > 0) {
+    throw new TypeError(`corpus contains unmanifested source files: ${unexpected.join(', ')}`);
+  }
+  const sourceDigest = sha256(JSON.stringify(sourceFiles));
+  const state = {
+    manifestDigest: observedManifestDigest,
+    ownerDigest: sha256(ownerBytes),
+    sourceDigest,
+  };
+  return { ...state, digest: sha256(JSON.stringify(state)) };
+}
+
+function assertCorpusMatchesManifest(state, manifest, phase) {
+  if (state.sourceDigest !== manifest.sourceDigest) {
+    throw new TypeError(`${phase} corpus sourceDigest does not match current source bytes`);
+  }
+}
+
+function listCorpusSourcePaths(root, outputs, relative = '') {
+  const result = [];
+  for (const name of readdirSync(path.join(root, relative))) {
+    if (relative === '' && IGNORED_CORPUS_NAMES.has(name)) continue;
+    const child = relative === '' ? name : `${relative}/${name}`;
+    if (relative === '' && outputPatternMatchesName(outputs, name)) continue;
+    const target = path.join(root, child);
+    const metadata = lstatSync(target);
+    if (metadata.isSymbolicLink()) throw new TypeError(`unexpected corpus symlink ${child}`);
+    if (metadata.isDirectory()) result.push(...listCorpusSourcePaths(root, outputs, child));
+    else if (metadata.isFile()) result.push(child);
+  }
+  return result.sort((left, right) => (left < right ? -1 : left > right ? 1 : 0));
+}
+
+function outputPatternMatchesName(outputs, name) {
+  for (const output of [...outputs.requiredNonempty, ...outputs.absent]) {
+    if (path.dirname(output) !== '.') continue;
+    const base = path.basename(output);
+    if (base.endsWith('*') ? name.startsWith(base.slice(0, -1)) : name === base) return true;
+  }
+  return false;
 }
 
 function cleanDeclaredOutputs(root, outputs) {
@@ -376,6 +677,14 @@ function stringRecord(value, label) {
 function requiredString(value, label) {
   if (typeof value !== 'string' || value.length === 0) throw new TypeError(`${label} is required`);
   return value;
+}
+
+function sha256(value) {
+  return `sha256:${createHash('sha256').update(value).digest('hex')}`;
+}
+
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function positiveInteger(value, label) {

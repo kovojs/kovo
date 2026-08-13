@@ -32,6 +32,7 @@ describe('equal-shape developer corpus generator', () => {
     expect(kovo.shapeDigest).toBe(next.shapeDigest);
     expect(kovo.shapeDigest).toMatch(/^[0-9a-f]{64}$/u);
     expect(kovo.workload).toEqual(next.workload);
+    expect(kovo.workload.buildOutputContract).toBe('required-nonempty-and-cleanup-absent/v1');
     expect(kovo.sourceDigest).toMatch(/^sha256:[0-9a-f]{64}$/u);
     expect(next.sourceDigest).toMatch(/^sha256:[0-9a-f]{64}$/u);
     expect(kovo.sourceFiles).toHaveLength(size + 6);
@@ -49,6 +50,11 @@ describe('equal-shape developer corpus generator', () => {
     expect(kovo.build.edit).toEqual(next.build.edit);
     expect(kovo.build.command.argv).toContain('build');
     expect(next.build.command.argv).toContain('build');
+    expect(kovo.build.outputs).toEqual({
+      absent: ['.kovo-build-stage-*'],
+      requiredNonempty: ['.kovo', 'dist'],
+    });
+    expect(next.build.outputs).toEqual({ absent: [], requiredNonempty: ['.next'] });
     expect(kovo.dev.command.argv).toContain('localhost');
     expect(next.dev.command.argv).toContain('localhost');
     expect(kovo.dev.command.argv).not.toContain('127.0.0.1');

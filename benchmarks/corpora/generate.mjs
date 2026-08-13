@@ -97,12 +97,19 @@ function buildContract(framework, bin) {
       replacementTemplate: 'data-revision="build-{revision}"',
       search: 'data-revision="leaf-r0"',
     },
-    outputs: framework === 'kovo' ? ['.kovo', '.kovo-build-stage-*', 'dist'] : ['.next'],
+    outputs:
+      framework === 'kovo'
+        ? {
+            absent: ['.kovo-build-stage-*'],
+            requiredNonempty: ['.kovo', 'dist'],
+          }
+        : { absent: [], requiredNonempty: ['.next'] },
   };
 }
 
 function corpusShape(modules) {
   return {
+    buildOutputContract: 'required-nonempty-and-cleanup-absent/v1',
     componentImportFanout: modules,
     editClasses: ['leaf', 'entry', 'data', 'syntaxError', 'recovery'],
     routes: 4,
