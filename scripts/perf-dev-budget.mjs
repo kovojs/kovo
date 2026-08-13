@@ -5,6 +5,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { executionIdentityFindings } from './lib/perf-execution.mjs';
+import { ratifyPerformanceBaseline } from './perf-baseline-ratify.mjs';
 import {
   canonicalJson,
   hostFingerprintFindings,
@@ -49,7 +50,7 @@ const AVAILABILITY_METRICS = Object.freeze([
  */
 export function deriveDevPerformanceBudget(baseline, options = {}) {
   const maxRegressionPct = finitePercentage(options.maxRegressionPct, 5, 'maxRegressionPct');
-  const findings = devBudgetBaselineFindings(baseline);
+  const findings = devBudgetBaselineFindings(baseline, options.baselineEntries);
   if (findings.length > 0) {
     throw new TypeError(`Dev performance baseline is unproven:\n${findings.join('\n')}`);
   }
@@ -221,7 +222,7 @@ export function evaluateDevPerformanceBudget(budget, candidate) {
   };
 }
 
-export function devBudgetBaselineFindings(baseline) {
+export function devBudgetBaselineFindings(baseline, baselineEntries) {
   if (!ownRecord(baseline) || baseline.schema !== PERF_BASELINE_SCHEMA) {
     return [`baseline is not ${PERF_BASELINE_SCHEMA}`];
   }
@@ -288,8 +289,75 @@ export function devBudgetBaselineFindings(baseline) {
         findings.push(`baseline ${key} does not prove exact Kovo availability`);
       }
     }
+    findings.push(...baselineDevReportFindings(baseline, baselineEntries, corpusSize));
   }
   return [...new Set(findings)].sort();
+}
+
+function baselineDevReportFindings(baseline, entries, corpusSize) {
+  if (!Array.isArray(entries) || entries.length !== baseline.reports?.length) {
+    return ['baseline raw dev reports are unavailable'];
+  }
+  const findings = [];
+  const linkedByDigest = new Map(baseline.reports.map((report) => [report.contentDigest, report]));
+  const seen = new Set();
+  for (const [index, entry] of entries.entries()) {
+    const label = `baseline report[${String(index)}]`;
+    let parsedMatches = false;
+    try {
+      parsedMatches =
+        typeof entry?.rawText === 'string' &&
+        canonicalJson(JSON.parse(entry.rawText)) === canonicalJson(entry.report);
+    } catch {
+      parsedMatches = false;
+    }
+    const textDigest = typeof entry?.rawText === 'string' ? sha256Bytes(entry.rawText) : null;
+    const linked = linkedByDigest.get(entry?.contentDigest);
+    if (
+      !DIGEST_PATTERN.test(entry?.contentDigest ?? '') ||
+      textDigest !== entry.contentDigest ||
+      !parsedMatches ||
+      seen.has(entry.contentDigest) ||
+      linked === undefined ||
+      linked.location !== entry.location ||
+      linked.execution !== entry.report?.execution?.digest ||
+      linked.runUrl !== entry.report?.execution?.github?.runUrl
+    ) {
+      findings.push(`${label} does not match its ratified content/link identity`);
+    }
+    seen.add(entry?.contentDigest);
+    findings.push(
+      ...performanceReportFindings(entry?.report, label, {
+        maxLoadPerCpu: baseline.policy.maxLoadPerCpu,
+        minSamples: baseline.policy.minSamples,
+      }),
+      ...executionIdentityFindings(entry?.report?.execution, {
+        requireProvider: 'github-actions',
+      }).map((finding) => `${label} ${finding}`),
+      ...devRawEvidenceFindings(entry?.report, corpusSize).map((finding) => `${label} ${finding}`),
+    );
+    if (
+      entry?.report?.source?.commit !== baseline.subject?.sourceCommit ||
+      entry?.report?.host?.digest !== baseline.subject?.host?.digest ||
+      canonicalJson(entry?.report?.source?.locks) !== canonicalJson(baseline.subject?.locks) ||
+      entry?.report?.workloadIdentity?.digest !== baseline.subject?.workloadIdentity?.digest
+    ) {
+      findings.push(`${label} does not match the ratified baseline subject`);
+    }
+  }
+  if (findings.length === 0) {
+    const entriesByDigest = new Map(entries.map((entry) => [entry.contentDigest, entry]));
+    const orderedEntries = baseline.reports.map((report) =>
+      entriesByDigest.get(report.contentDigest),
+    );
+    const reratified = ratifyPerformanceBaseline(orderedEntries, baseline.policy);
+    for (const field of ['identity', 'metrics', 'policy', 'reports', 'subject', 'verdict']) {
+      if (canonicalJson(reratified[field]) !== canonicalJson(baseline[field])) {
+        findings.push(`baseline ${field} is not reproduced by its linked raw reports`);
+      }
+    }
+  }
+  return findings;
 }
 
 export function devBudgetFindings(budget) {
@@ -675,15 +743,35 @@ function sha256Canonical(value) {
   return `sha256:${createHash('sha256').update(canonicalJson(value)).digest('hex')}`;
 }
 
+function sha256Bytes(value) {
+  return `sha256:${createHash('sha256').update(value).digest('hex')}`;
+}
+
 async function main(args) {
   const command = args[0];
-  const options = parseOptions(args.slice(1));
+  const options = parseOptions(args.slice(1), new Set(['--report']));
   if (command === 'derive') {
-    assertKnownOptions(options, ['--baseline', '--max-regression-pct', '--out']);
+    assertKnownOptions(options, ['--baseline', '--max-regression-pct', '--out', '--report']);
     const baseline = JSON.parse(
       await readFile(path.resolve(requiredOption(options, '--baseline'))),
     );
+    const linkedReports = new Map(
+      (baseline?.reports ?? []).map((report) => [report?.contentDigest, report]),
+    );
+    const baselineEntries = await Promise.all(
+      repeatedOption(options, '--report').map(async (reportPath) => {
+        const rawText = await readFile(path.resolve(reportPath), 'utf8');
+        const contentDigest = sha256Bytes(rawText);
+        return {
+          contentDigest,
+          location: linkedReports.get(contentDigest)?.location ?? null,
+          rawText,
+          report: JSON.parse(rawText),
+        };
+      }),
+    );
     const budget = deriveDevPerformanceBudget(baseline, {
+      baselineEntries,
       maxRegressionPct:
         options['--max-regression-pct'] === undefined
           ? undefined
@@ -723,18 +811,28 @@ function assertKnownOptions(options, allowed) {
   }
 }
 
-function parseOptions(args) {
+function parseOptions(args, repeatable = new Set()) {
   if (args.length % 2 !== 0) throw new TypeError(`incomplete option ${String(args.at(-1))}`);
   const options = {};
   for (let index = 0; index < args.length; index += 2) {
     const key = args[index];
     const value = args[index + 1];
-    if (!key.startsWith('--') || value.startsWith('--') || Object.hasOwn(options, key)) {
+    if (!key.startsWith('--') || value.startsWith('--')) {
       throw new TypeError(`invalid or duplicate option ${String(key)}`);
     }
-    options[key] = value;
+    if (repeatable.has(key)) {
+      options[key] = [...(options[key] ?? []), value];
+    } else {
+      if (Object.hasOwn(options, key)) throw new TypeError(`invalid or duplicate option ${key}`);
+      options[key] = value;
+    }
   }
   return options;
+}
+
+function repeatedOption(options, key) {
+  const values = options[key];
+  return Array.isArray(values) ? values : [];
 }
 
 function requiredOption(options, key) {

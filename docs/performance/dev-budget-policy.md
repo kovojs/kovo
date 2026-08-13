@@ -34,11 +34,18 @@ Each `--location` must be the canonical artifact URL from the corresponding repo
 Actions run. Supply one for every `--report` when the summary will be committed. Omitting all
 locations retains the local report paths and is intended only for scratch ratification.
 
-Then derive a reviewable budget without authoring timing or RSS numbers:
+Then derive a reviewable budget without authoring timing or RSS numbers. Supply the same five raw
+downloads again; derivation re-hashes them, recovers each durable artifact URL by content digest,
+validates the raw dev cells, and reproduces the ratified summary before creating a budget:
 
 ```sh
 node scripts/perf-dev-budget.mjs derive \
   --baseline reports/dev-n24-baseline.json \
+  --report artifacts/run-1/comparison.json \
+  --report artifacts/run-2/comparison.json \
+  --report artifacts/run-3/comparison.json \
+  --report artifacts/run-4/comparison.json \
+  --report artifacts/run-5/comparison.json \
   --out reports/dev-n24-budget.json
 ```
 

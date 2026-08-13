@@ -1,4 +1,9 @@
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
@@ -36,13 +41,13 @@ describe('ratified developer performance budgets', () => {
   it.each([24, 216])(
     'derives data-backed N=%s ceilings and evaluates a distinct clean source commit',
     (corpusSize) => {
-      const baseline = ratifiedBaseline(corpusSize);
-      const budget = deriveDevPerformanceBudget(baseline);
+      const { baseline, entries } = ratifiedBaseline(corpusSize);
+      const budget = deriveDevPerformanceBudget(baseline, { baselineEntries: entries });
       const candidate = comparisonReport({ corpusSize, run: 5, sourceCommit: 'b'.repeat(40) });
       const result = evaluateDevPerformanceBudget(budget, candidate);
       const leaf = metricKey(corpusSize, 'edit.leafMs');
 
-      expect(devBudgetBaselineFindings(baseline)).toEqual([]);
+      expect(devBudgetBaselineFindings(baseline, entries)).toEqual([]);
       expect(budget).toMatchObject({
         policy: {
           maxRegressionPct: 5,
@@ -85,8 +90,8 @@ describe('ratified developer performance budgets', () => {
   );
 
   it('reports latency, p95, RSS, and plan-target regressions independently', () => {
-    const baseline = ratifiedBaseline(24);
-    const budget = deriveDevPerformanceBudget(baseline);
+    const { baseline, entries } = ratifiedBaseline(24);
+    const budget = deriveDevPerformanceBudget(baseline, { baselineEntries: entries });
     const candidate = comparisonReport({ corpusSize: 24, run: 30, sourceCommit: 'b'.repeat(40) });
     candidate.analysis[metricKey(24, 'edit.leafMs')].kovo.median = 108;
     candidate.analysis[metricKey(24, 'edit.leafMs')].kovo.p95 = 119;
@@ -110,8 +115,8 @@ describe('ratified developer performance budgets', () => {
   });
 
   it('fails closed on tampering, identity drift, or raw state/diagnostic loss', () => {
-    const baseline = ratifiedBaseline(24);
-    const budget = deriveDevPerformanceBudget(baseline);
+    const { baseline, entries } = ratifiedBaseline(24);
+    const budget = deriveDevPerformanceBudget(baseline, { baselineEntries: entries });
     const candidate = comparisonReport({ corpusSize: 24, run: 40, sourceCommit: 'b'.repeat(40) });
     candidate.source.locks['pnpm-lock.yaml'] = digest('drift');
     candidate.rawCells[0].report.samples[0].leafStateSurvived = false;
@@ -134,28 +139,91 @@ describe('ratified developer performance budgets', () => {
   });
 
   it('refuses to derive ceilings from short or incomplete baseline evidence', () => {
-    const baseline = ratifiedBaseline(24);
+    const { baseline, entries } = ratifiedBaseline(24);
     baseline.verdict.status = 'unproven';
     delete baseline.metrics[metricKey(24, 'ready.peakRssBytes')];
 
-    expect(() => deriveDevPerformanceBudget(baseline)).toThrow(
+    expect(() => deriveDevPerformanceBudget(baseline, { baselineEntries: entries })).toThrow(
       /ready\.peakRssBytes[\s\S]*baseline verdict is not ratified/u,
     );
   });
+
+  it('refuses missing, byte-tampered, or summary-tampered raw baseline evidence', () => {
+    const first = ratifiedBaseline(24);
+    expect(() => deriveDevPerformanceBudget(first.baseline)).toThrow(
+      /baseline raw dev reports are unavailable/u,
+    );
+
+    first.entries[0].rawText = `${first.entries[0].rawText} `;
+    expect(() =>
+      deriveDevPerformanceBudget(first.baseline, { baselineEntries: first.entries }),
+    ).toThrow(/does not match its ratified content\/link identity/u);
+
+    const second = ratifiedBaseline(24);
+    second.baseline.metrics[metricKey(24, 'edit.leafMs')].kovo.median += 1;
+    expect(() =>
+      deriveDevPerformanceBudget(second.baseline, { baselineEntries: second.entries }),
+    ).toThrow(/baseline metrics is not reproduced by its linked raw reports/u);
+  });
+
+  it('derives through the CLI from local downloads linked to durable artifact URLs', () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'kovo-dev-budget-cli-'));
+    try {
+      const { baseline, entries } = ratifiedBaseline(24, { durableLocations: true });
+      const baselinePath = path.join(root, 'baseline.json');
+      const outputPath = path.join(root, 'budget.json');
+      writeFileSync(baselinePath, `${JSON.stringify(baseline)}\n`);
+      const reportPaths = entries.map((entry, index) => {
+        const reportPath = path.join(root, `download-${String(index)}.json`);
+        writeFileSync(reportPath, entry.rawText);
+        return reportPath;
+      });
+      const script = fileURLToPath(new URL('./perf-dev-budget.mjs', import.meta.url));
+      const result = spawnSync(
+        process.execPath,
+        [
+          script,
+          'derive',
+          '--baseline',
+          baselinePath,
+          ...reportPaths.flatMap((reportPath) => ['--report', reportPath]),
+          '--out',
+          outputPath,
+        ],
+        { encoding: 'utf8' },
+      );
+
+      expect(result).toMatchObject({ status: 0, stderr: '' });
+      const budget = JSON.parse(readFileSync(outputPath, 'utf8'));
+      expect(budget.schema).toBe(PERF_DEV_BUDGET_SCHEMA);
+      expect(budget.baseline.reports.map(({ location }) => location)).toEqual(
+        baseline.reports.map(({ location }) => location),
+      );
+      expect(budget.baseline.reports.every(({ location }) => location.startsWith('https://'))).toBe(
+        true,
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
 });
 
-function ratifiedBaseline(corpusSize) {
+function ratifiedBaseline(corpusSize, { durableLocations = false } = {}) {
   const entries = Array.from({ length: 5 }, (_, run) => {
     const report = comparisonReport({ corpusSize, run, sourceCommit: 'a'.repeat(40) });
+    const rawText = JSON.stringify(report);
     return {
-      contentDigest: digest(JSON.stringify(report)),
-      location: `artifacts/dev-n${String(corpusSize)}-run-${String(run)}/comparison.json`,
+      contentDigest: digest(rawText),
+      location: durableLocations
+        ? `https://github.com/kovojs/kovo/actions/runs/${String(corpusSize)}${String(run + 1)}/artifacts/${String(corpusSize)}${String(run + 101)}`
+        : `artifacts/dev-n${String(corpusSize)}-run-${String(run)}/comparison.json`,
+      rawText,
       report,
     };
   });
   const baseline = ratifyPerformanceBaseline(entries);
   expect(baseline.verdict.status).toBe('ratified');
-  return baseline;
+  return { baseline, entries };
 }
 
 function comparisonReport({ corpusSize, run, sourceCommit }) {
