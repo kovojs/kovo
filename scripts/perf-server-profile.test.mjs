@@ -145,6 +145,46 @@ describe('forced-dynamic SSR profile', () => {
     expect(analyzeCpuProfile(profile).census.activeSamples).toBeGreaterThan(0);
   });
 
+  it('preserves file-entry main-module identity while profiling an imported server', async () => {
+    const root = await temporaryRoot();
+    const profilePath = path.join(root, 'main-entry.cpuprofile');
+    const entryPath = path.join(root, 'server.mjs');
+    await writeFile(
+      entryPath,
+      [
+        "import { realpath } from 'node:fs/promises';",
+        "import { pathToFileURL } from 'node:url';",
+        'if (pathToFileURL(await realpath(process.argv[1])).href === import.meta.url) {',
+        '  setInterval(() => { let total = 0; for (let index = 0; index < 200000; index += 1) total += index; }, 1);',
+        '}',
+      ].join('\n'),
+    );
+    const launcherPath = new URL('./lib/perf-cpu-profile-launcher.mjs', import.meta.url);
+    const child = spawn(process.execPath, [launcherPath.pathname, entryPath], {
+      env: {
+        ...process.env,
+        KOVO_PERF_CPU_PROFILE_INTERVAL_US: '500',
+        KOVO_PERF_CPU_PROFILE_PATH: profilePath,
+      },
+      stdio: ['ignore', 'ignore', 'pipe'],
+    });
+    let stderr = '';
+    child.stderr.on('data', (chunk) => {
+      stderr += String(chunk);
+    });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(child.exitCode, stderr).toBe(null);
+    child.kill('SIGTERM');
+    const exit = await new Promise((resolve, reject) => {
+      child.once('error', reject);
+      child.once('exit', (code, signal) => resolve({ code, signal }));
+    });
+
+    expect(exit, stderr).toEqual({ code: 0, signal: null });
+    const profile = JSON.parse(await readFile(profilePath, 'utf8'));
+    expect(profile.samples.length).toBeGreaterThan(0);
+  });
+
   it('emits a source-bound diagnostic report without profiler-perturbed timing claims', async () => {
     const root = await temporaryRoot();
     const profilePath = path.join(root, 'forced-dynamic.cpuprofile');
