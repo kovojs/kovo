@@ -21,7 +21,6 @@ import {
 import { canonicalJson } from './perf-regression-check.mjs';
 
 const BUILD_MODES = ['clean', 'unchanged', 'edit'];
-const METRIC_SUFFIXES = ['durationMs', 'peakRssBytes', 'artifactBytes'];
 
 describe('ratified production-build performance budgets', () => {
   it.each([24, 216])(
