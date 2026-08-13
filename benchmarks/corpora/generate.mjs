@@ -66,6 +66,7 @@ export async function generateCorpus({ framework, outDir, size }) {
       : path.join('node_modules', '.bin', name);
 
   const shape = corpusShape(moduleCount);
+  const sourceFiles = sourceFileEvidence(files);
   const manifest = {
     approximateLoc: lineCount(files),
     build: buildContract(framework, bin),
@@ -75,6 +76,8 @@ export async function generateCorpus({ framework, outDir, size }) {
     routes: shape.routes,
     schema: CORPUS_SCHEMA,
     shapeDigest: digest(shape),
+    sourceDigest: sha256(JSON.stringify(sourceFiles)),
+    sourceFiles,
     workload: shape,
   };
   const manifestPath = path.join(appRoot, 'manifest.json');
@@ -295,6 +298,13 @@ export default function Layout({ children }: { children: ReactNode }) {
 `,
     'app/page.tsx': `export { Page as default } from '../src/page';\n`,
     'next.config.mjs': `export default { output: 'standalone' };\n`,
+    'next-env.d.ts': `/// <reference types="next" />
+/// <reference types="next/image-types/global" />
+import './.next/types/routes.d.ts';
+
+// NOTE: This file should not be edited
+// see https://nextjs.org/docs/app/api-reference/config/typescript for more information.
+`,
     'package.json': `${JSON.stringify({ name: `next-benchmark-corpus-${size}`, private: true, type: 'module' }, null, 2)}\n`,
     'src/counter-island.tsx': `'use client';
 import { useState } from 'react';
@@ -329,15 +339,29 @@ ${componentElements}
     'tsconfig.json': `${JSON.stringify(
       {
         compilerOptions: {
-          jsx: 'preserve',
-          lib: ['dom', 'dom.iterable', 'esnext'],
+          allowJs: true,
+          esModuleInterop: true,
+          incremental: true,
+          isolatedModules: true,
+          jsx: 'react-jsx',
+          lib: ['dom', 'dom.iterable', 'es2022'],
           module: 'esnext',
           moduleResolution: 'bundler',
+          noEmit: true,
+          plugins: [{ name: 'next' }],
+          resolveJsonModule: true,
           skipLibCheck: true,
           strict: true,
-          target: 'ES2024',
+          target: 'es2022',
         },
-        include: ['app/**/*.ts', 'app/**/*.tsx', 'src/**/*.ts', 'src/**/*.tsx'],
+        include: [
+          'next-env.d.ts',
+          '**/*.ts',
+          '**/*.tsx',
+          '.next/types/**/*.ts',
+          '.next/dev/types/**/*.ts',
+        ],
+        exclude: ['node_modules'],
       },
       null,
       2,
@@ -393,6 +417,20 @@ function pad(value) {
 
 function digest(value) {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+}
+
+function sha256(value) {
+  return `sha256:${createHash('sha256').update(value).digest('hex')}`;
+}
+
+function sourceFileEvidence(files) {
+  return Object.entries(files)
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+    .map(([file, source]) => ({
+      bytes: Buffer.byteLength(source),
+      file,
+      sha256: sha256(source),
+    }));
 }
 
 function lineCount(files) {

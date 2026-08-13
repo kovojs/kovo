@@ -30,7 +30,18 @@ describe('equal-shape developer corpus generator', () => {
     expect(kovo.routes).toBe(4);
     expect(next.routes).toBe(4);
     expect(kovo.shapeDigest).toBe(next.shapeDigest);
+    expect(kovo.shapeDigest).toMatch(/^[0-9a-f]{64}$/u);
     expect(kovo.workload).toEqual(next.workload);
+    expect(kovo.sourceDigest).toMatch(/^sha256:[0-9a-f]{64}$/u);
+    expect(next.sourceDigest).toMatch(/^sha256:[0-9a-f]{64}$/u);
+    expect(kovo.sourceFiles).toHaveLength(size + 6);
+    expect(next.sourceFiles).toHaveLength(size + 10);
+    expect(kovo.sourceFiles[0]).toEqual(
+      expect.objectContaining({ bytes: expect.any(Number), file: 'package.json' }),
+    );
+    expect(kovo.sourceFiles.every((entry) => /^sha256:[0-9a-f]{64}$/u.test(entry.sha256))).toBe(
+      true,
+    );
     expect(Math.abs(kovo.approximateLoc - next.approximateLoc) / kovo.approximateLoc).toBeLessThan(
       0.1,
     );
