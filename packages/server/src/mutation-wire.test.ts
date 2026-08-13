@@ -9,6 +9,7 @@ import {
 import {
   MAX_MUTATION_WIRE_TARGET_HEADER_CHARACTERS,
   MAX_MUTATION_WIRE_TARGETS,
+  bindViteDevelopmentLiveTargetAttestationSecret,
   createLiveTargetAttestation,
   mutationWireRequestFromHeaders,
   readMutationWireHeaders,
@@ -28,6 +29,27 @@ function liveTargetHeader(
 }
 
 describe('mutation wire headers', () => {
+  it.each([
+    { label: 'empty', secret: '' },
+    { label: 'short', secret: 'a'.repeat(42) },
+    { label: 'long', secret: 'a'.repeat(44) },
+    { label: 'padded', secret: `${'a'.repeat(42)}=` },
+    { label: 'non-base64url', secret: `${'a'.repeat(42)}+` },
+  ])('rejects a $label Vite development live-target secret before binding', ({ secret }) => {
+    expect(() => bindViteDevelopmentLiveTargetAttestationSecret(secret)).toThrow(
+      /43-character unpadded base64url text/u,
+    );
+  });
+
+  it('pins one Vite development live-target secret and rejects a generation-local rotation', () => {
+    const secret = 'a'.repeat(43);
+    expect(() => bindViteDevelopmentLiveTargetAttestationSecret(secret)).not.toThrow();
+    expect(() => bindViteDevelopmentLiveTargetAttestationSecret(secret)).not.toThrow();
+    expect(() => bindViteDevelopmentLiveTargetAttestationSecret('b'.repeat(43))).toThrow(
+      /changed within one SSR generation/u,
+    );
+  });
+
   it('reads enhanced mutation wire headers case-insensitively', () => {
     expect(
       readMutationWireHeaders({

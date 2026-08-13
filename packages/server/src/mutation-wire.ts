@@ -49,12 +49,54 @@ import {
 } from './security-witness-intrinsics.js';
 import {
   securityNumberIsInteger,
+  securityStringCharCodeAt,
   securityStringToLowerCase,
   securityStringTrim,
 } from './response-security-intrinsics.js';
 import { mutationWireJsonParse } from './mutation-wire-intrinsics.js';
 
 const developmentLiveTargetAttestationSecret = randomBytes(32).toString('base64url');
+let boundViteDevelopmentLiveTargetAttestationSecret: string | undefined;
+
+/**
+ * Pin the supported Vite runner's process-lifetime development secret into one fresh SSR graph.
+ *
+ * @internal The outer trusted plugin calls this before app import. Rebinding the same value is
+ * idempotent; a different value closes the candidate generation (SPEC §6.2.1/§6.6/§9.5.1).
+ */
+export function bindViteDevelopmentLiveTargetAttestationSecret(secret: unknown): void {
+  if (!isCanonicalDevelopmentLiveTargetAttestationSecret(secret)) {
+    throw new TypeError(
+      'Kovo Vite development live-target attestation secret must be 43-character unpadded base64url text.',
+    );
+  }
+  if (boundViteDevelopmentLiveTargetAttestationSecret === undefined) {
+    boundViteDevelopmentLiveTargetAttestationSecret = secret;
+    return;
+  }
+  if (boundViteDevelopmentLiveTargetAttestationSecret !== secret) {
+    throw new TypeError(
+      'Kovo Vite development live-target attestation secret changed within one SSR generation.',
+    );
+  }
+}
+
+function isCanonicalDevelopmentLiveTargetAttestationSecret(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length !== 43) return false;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = securityStringCharCodeAt(value, index);
+    if (
+      (code < 0x30 || code > 0x39) &&
+      (code < 0x41 || code > 0x5a) &&
+      code !== 0x5f &&
+      (code < 0x61 || code > 0x7a) &&
+      code !== 0x2d
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
 
 /**
  * @internal Mutation-wire protocol type (SPEC.md §9.1). Renderer for a fragment patched
@@ -704,7 +746,7 @@ function liveTargetAttestationSecret(): string {
     );
   }
 
-  return developmentLiveTargetAttestationSecret;
+  return boundViteDevelopmentLiveTargetAttestationSecret ?? developmentLiveTargetAttestationSecret;
 }
 
 function liveTargetAttestationPayload<Request>(

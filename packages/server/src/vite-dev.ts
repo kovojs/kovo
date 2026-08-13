@@ -3,6 +3,7 @@ import {
   type IncomingMessage,
   type ServerResponse,
 } from 'node:http';
+import { randomBytes } from 'node:crypto';
 import {
   assertRegisteredDiagnostic,
   createRegisteredDiagnostic,
@@ -65,7 +66,11 @@ import {
   type NodeRequestHandler,
 } from './node.js';
 import { renderLiveTargetChunks } from './mutation.js';
-import { mutationWireRequestFromHeaders, type LiveTargetRenderer } from './mutation-wire.js';
+import {
+  bindViteDevelopmentLiveTargetAttestationSecret,
+  mutationWireRequestFromHeaders,
+  type LiveTargetRenderer,
+} from './mutation-wire.js';
 import { readHeader, routeResponseToWebResponse, type RoutePageResponse } from './response.js';
 import { authorizeRouteRequest } from './route.js';
 import { matchShellDispatch } from './shell.js';
@@ -149,6 +154,7 @@ import { buildSecurityFunctionSource } from './build-security-intrinsics.js';
 const kovoHmrClientPath = '/@kovo/hmr-client';
 const kovoHmrRouteRefreshPath = '/@kovo/hmr/refresh/route';
 const kovoHmrLiveTargetRefreshPath = '/@kovo/hmr/refresh/live-targets';
+const kovoViteDevelopmentLiveTargetAttestationSecret = randomBytes(32).toString('base64url');
 const kovoHmrClientScript = `<script type="module" src="${kovoHmrClientPath}"></script>`;
 const kovoHmrWireInputGrammarSource = canonicalJsonStringify(FRAMEWORK_WIRE_INPUT_GRAMMAR);
 const kovoHmrWireTargetCodecSource = buildSecurityFunctionSource(createFrameworkWireTargetCodec);
@@ -851,6 +857,17 @@ export async function dispatchKovoAppShellViteDevRequest(
 }
 
 /**
+ * Bind the outer trusted Vite plugin's process-lifetime dev signing secret before app import.
+ *
+ * @internal A fresh SSR generation re-evaluates framework modules, so its module-local fallback
+ * cannot authenticate descriptors minted by the prior generation. The supported runner supplies
+ * one stable value through this framework-only export (SPEC §6.2.1/§6.6/§9.5.1).
+ */
+export function bindKovoAppShellViteDevLiveTargetAttestationSecret(secret: unknown): void {
+  bindViteDevelopmentLiveTargetAttestationSecret(secret);
+}
+
+/**
  * Eagerly prove one fresh runner generation before the broker can make it active.
  *
  * @internal SPEC §6.2.1: app import, single assembly, exact opaque-token adoption, and compiler
@@ -1170,6 +1187,7 @@ export function kovoAppShellViteDevPlugin(
   options: KovoAppShellViteDevPluginOptions = {},
 ): KovoAppShellViteDevPlugin {
   const moduleId = options.moduleId ?? '/src/app-shell.ts';
+  const liveTargetAttestationSecret = kovoViteDevelopmentLiveTargetAttestationSecret;
   let root = process.cwd();
   let stageRunnerGeneration: ((token: object) => Promise<void>) | undefined;
 
@@ -1302,6 +1320,11 @@ export function kovoAppShellViteDevPlugin(
         async validate(moduleServer: KovoViteDevRunnerModuleServer): Promise<void> {
           const serverModule =
             await moduleServer.ssrLoadModule<Record<string, unknown>>(appShellModuleId);
+          bindKovoAppShellViteDevGenerationLiveTargetAttestationSecret(
+            serverModule,
+            appShellModuleId,
+            liveTargetAttestationSecret,
+          );
           const prepareGeneration = viteDevModuleExportValue(
             serverModule,
             'prepareKovoAppShellViteDevGeneration',
@@ -1355,6 +1378,11 @@ export function kovoAppShellViteDevPlugin(
       }
       const serverModule =
         await moduleServer.ssrLoadModule<Record<string, unknown>>(appShellModuleId);
+      bindKovoAppShellViteDevGenerationLiveTargetAttestationSecret(
+        serverModule,
+        appShellModuleId,
+        liveTargetAttestationSecret,
+      );
       const dispatch = viteDevModuleExportValue(
         serverModule,
         'dispatchKovoAppShellViteDevRequest',
@@ -1428,6 +1456,24 @@ export function kovoAppShellViteDevPlugin(
     },
     name: options.name ?? 'kovo-app-shell-dev',
   };
+}
+
+function bindKovoAppShellViteDevGenerationLiveTargetAttestationSecret(
+  serverModule: Record<string, unknown>,
+  appShellModuleId: string,
+  secret: string,
+): void {
+  const bind = viteDevModuleExportValue(
+    serverModule,
+    'bindKovoAppShellViteDevLiveTargetAttestationSecret',
+    `${appShellModuleId} development live-target attestation binder`,
+  );
+  if (typeof bind !== 'function') {
+    throw new TypeError(
+      `${appShellModuleId} must export its development live-target attestation binder.`,
+    );
+  }
+  witnessReflectApply(bind, undefined, [secret]);
 }
 
 function requiredViteDevRunnerModuleId(

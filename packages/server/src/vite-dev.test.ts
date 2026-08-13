@@ -41,6 +41,7 @@ import { layout, route } from './route.js';
 import {
   createKovoAppShellDevDiagnosticLedger,
   createKovoAppShellViteDevIntegration,
+  bindKovoAppShellViteDevLiveTargetAttestationSecret,
   dispatchKovoAppShellViteDevRequest,
   kovoAppShellViteDevPlugin as createRawKovoAppShellViteDevPlugin,
   prepareKovoAppShellViteDevGeneration,
@@ -526,14 +527,22 @@ describe('server app shell Vite dev seam', () => {
 
   it('reloads the graph-local request dispatcher after Vite SSR invalidation', async () => {
     let middleware: KovoAppShellViteMiddleware | undefined;
+    const generationEvents: string[] = [];
+    const generationSecrets: string[] = [];
     const integration = createKovoAppShellViteDevIntegration({
       moduleId: '/src/app-shell.ts',
     });
     const firstDispatch = vi.fn(
-      async (...args: Parameters<typeof dispatchKovoAppShellViteDevRequest>) => args[4](),
+      async (...args: Parameters<typeof dispatchKovoAppShellViteDevRequest>) => {
+        generationEvents.push('first:dispatch');
+        args[4]();
+      },
     );
     const reloadedDispatch = vi.fn(
-      async (...args: Parameters<typeof dispatchKovoAppShellViteDevRequest>) => args[4](),
+      async (...args: Parameters<typeof dispatchKovoAppShellViteDevRequest>) => {
+        generationEvents.push('reloaded:dispatch');
+        args[4]();
+      },
     );
     let requestCount = 0;
     const server = {
@@ -545,9 +554,14 @@ describe('server app shell Vite dev seam', () => {
       },
       async ssrLoadModule(id: string) {
         expect(id).toBe('@kovojs/server/internal/app-shell-vite');
+        const generation = requestCount === 0 ? 'first' : 'reloaded';
+        const dispatch = requestCount++ === 0 ? firstDispatch : reloadedDispatch;
         return {
-          dispatchKovoAppShellViteDevRequest:
-            requestCount++ === 0 ? firstDispatch : reloadedDispatch,
+          bindKovoAppShellViteDevLiveTargetAttestationSecret(secret: string) {
+            generationEvents.push(`${generation}:bind`);
+            generationSecrets.push(secret);
+          },
+          dispatchKovoAppShellViteDevRequest: dispatch,
         };
       },
       ws: { send: vi.fn() },
@@ -574,6 +588,17 @@ describe('server app shell Vite dev seam', () => {
       devDiagnostics: integration.diagnostics,
       moduleId: '/src/app-shell.ts',
     });
+    // SPEC §9.5.1: the outer trusted plugin must carry one process-lifetime attestation secret
+    // into every fresh SSR generation before that generation can import or dispatch the app.
+    expect(generationEvents).toEqual([
+      'first:bind',
+      'first:dispatch',
+      'reloaded:bind',
+      'reloaded:dispatch',
+    ]);
+    expect(generationSecrets).toHaveLength(2);
+    expect(generationSecrets[0]).toMatch(/^[A-Za-z0-9_-]{43}$/u);
+    expect(generationSecrets[1]).toBe(generationSecrets[0]);
   });
 
   it('rejects a structural app clone after a simulated HMR module reload', async () => {
@@ -590,7 +615,10 @@ describe('server app shell Vite dev seam', () => {
       },
       async ssrLoadModule(id) {
         if (id === '@kovojs/server/internal/app-shell-vite') {
-          return { dispatchKovoAppShellViteDevRequest };
+          return {
+            bindKovoAppShellViteDevLiveTargetAttestationSecret,
+            dispatchKovoAppShellViteDevRequest,
+          };
         }
         if (id === '@kovojs/server') return {};
         expect(id).toBe('/src/app-shell.ts');
@@ -2542,7 +2570,10 @@ function viteDevSsrLoadModule(
 ): (id: string) => Promise<Record<string, unknown>> {
   return async (id) =>
     id === '@kovojs/server/internal/app-shell-vite'
-      ? { dispatchKovoAppShellViteDevRequest }
+      ? {
+          bindKovoAppShellViteDevLiveTargetAttestationSecret,
+          dispatchKovoAppShellViteDevRequest,
+        }
       : id === '@kovojs/server'
         ? {}
         : await loadAppModule(id);

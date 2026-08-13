@@ -11,6 +11,7 @@ import { guards } from './guards.js';
 import { renderedHtml } from './html.js';
 import { route } from './route.js';
 import {
+  bindKovoAppShellViteDevLiveTargetAttestationSecret,
   createKovoAppShellDevDiagnosticLedger,
   dispatchKovoAppShellViteDevRequest,
   kovoAppShellViteDevPlugin as createRawKovoAppShellViteDevPlugin,
@@ -337,7 +338,10 @@ describe('Vite-dev intrinsic closure', () => {
       async ssrLoadModule(id: string) {
         genuineLoads.push(id);
         return id === '@kovojs/server/internal/app-shell-vite'
-          ? { dispatchKovoAppShellViteDevRequest }
+          ? {
+              bindKovoAppShellViteDevLiveTargetAttestationSecret,
+              dispatchKovoAppShellViteDevRequest,
+            }
           : id === '@kovojs/server'
             ? {}
             : { default: app };
@@ -397,7 +401,10 @@ async function startDevServer(
     },
     ssrLoadModule: async (id) =>
       id === '@kovojs/server/internal/app-shell-vite'
-        ? { dispatchKovoAppShellViteDevRequest }
+        ? {
+            bindKovoAppShellViteDevLiveTargetAttestationSecret,
+            dispatchKovoAppShellViteDevRequest,
+          }
         : id === '@kovojs/server'
           ? {}
           : { default: app },
