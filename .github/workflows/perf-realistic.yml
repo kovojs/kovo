@@ -834,10 +834,11 @@ jobs:
           printf '%s\n' "$tool_bin" >> "$GITHUB_PATH"
       - name: Authenticate historical evidence and prepare exact candidate worktrees
         env:
-          KOVO_LOADER_BASELINE_SHA: ${{ inputs.loader_baseline_sha || '761d6d66e9a94a26841c127390cc4c7d56c0e8b4' }}
-          KOVO_LOADER_CANDIDATE_SHA: ${{ inputs.loader_candidate_sha || 'd1e9c50a497f6e7c7acd11f024178c1f0a14592a' }}
+          KOVO_LOADER_BASELINE_SHA: ${{ inputs.loader_baseline_sha || '3010e8df33869413727003c659bb555ac824d104' }}
+          KOVO_LOADER_CANDIDATE_SHA: ${{ inputs.loader_candidate_sha || 'd87b4a1320087c512e25f02a57e88920ae9b1777' }}
           KOVO_LOADER_HISTORICAL_COMMIT: e54c595b5906df9ab9b9b5e3fbf18e76c99e79b9
           KOVO_LOADER_HISTORICAL_REF: refs/heads/perf-spike/loader-memo-e54c595b5
+          KOVO_LOADER_PROFILED_PAIR_REF: refs/heads/perf-spike/loader-memo-profiled-pair-20260813
         run: |
           baseline_root="$RUNNER_TEMP/kovo-loader-runtime-memo-baseline"
           spike_root="$RUNNER_TEMP/kovo-loader-runtime-memo-spike"
@@ -851,9 +852,12 @@ jobs:
             *) echo 'loader_candidate_sha must be exactly 40 lowercase hexadecimal characters' >&2; exit 2 ;;
           esac
           git fetch --no-tags origin \
-            "+$KOVO_LOADER_HISTORICAL_REF:refs/perf-evidence/loader-memo-historical"
+            "+$KOVO_LOADER_HISTORICAL_REF:refs/perf-evidence/loader-memo-historical" \
+            "+$KOVO_LOADER_PROFILED_PAIR_REF:refs/perf-evidence/loader-memo-profiled-pair"
           resolved_historical="$(git rev-parse --verify refs/perf-evidence/loader-memo-historical^{commit})"
           test "$resolved_historical" = "$KOVO_LOADER_HISTORICAL_COMMIT"
+          resolved_profiled_pair="$(git rev-parse --verify refs/perf-evidence/loader-memo-profiled-pair^{commit})"
+          test "$resolved_profiled_pair" = "$KOVO_LOADER_CANDIDATE_SHA"
           baseline_commit="$(git rev-parse --verify "$KOVO_LOADER_BASELINE_SHA^{commit}")"
           candidate_commit="$(git rev-parse --verify "$KOVO_LOADER_CANDIDATE_SHA^{commit}")"
           test "$baseline_commit" = "$KOVO_LOADER_BASELINE_SHA"

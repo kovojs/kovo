@@ -335,10 +335,10 @@ describe('realistic performance CI policy', () => {
     const loaderMemo = decisionJob('loader-runtime-memo-decision');
     expect(loaderMemo).toContain('fetch-depth: 0');
     expect(loaderMemo).toContain(
-      "KOVO_LOADER_BASELINE_SHA: ${{ inputs.loader_baseline_sha || '761d6d66e9a94a26841c127390cc4c7d56c0e8b4' }}",
+      "KOVO_LOADER_BASELINE_SHA: ${{ inputs.loader_baseline_sha || '3010e8df33869413727003c659bb555ac824d104' }}",
     );
     expect(loaderMemo).toContain(
-      "KOVO_LOADER_CANDIDATE_SHA: ${{ inputs.loader_candidate_sha || 'd1e9c50a497f6e7c7acd11f024178c1f0a14592a' }}",
+      "KOVO_LOADER_CANDIDATE_SHA: ${{ inputs.loader_candidate_sha || 'd87b4a1320087c512e25f02a57e88920ae9b1777' }}",
     );
     expect(loaderMemo).toContain(
       'KOVO_LOADER_HISTORICAL_COMMIT: e54c595b5906df9ab9b9b5e3fbf18e76c99e79b9',
@@ -346,6 +346,13 @@ describe('realistic performance CI policy', () => {
     expect(loaderMemo).toContain(
       'KOVO_LOADER_HISTORICAL_REF: refs/heads/perf-spike/loader-memo-e54c595b5',
     );
+    expect(loaderMemo).toContain(
+      'KOVO_LOADER_PROFILED_PAIR_REF: refs/heads/perf-spike/loader-memo-profiled-pair-20260813',
+    );
+    expect(loaderMemo).toContain(
+      '"+$KOVO_LOADER_PROFILED_PAIR_REF:refs/perf-evidence/loader-memo-profiled-pair"',
+    );
+    expect(loaderMemo).toContain('test "$resolved_profiled_pair" = "$KOVO_LOADER_CANDIDATE_SHA"');
     expect(loaderMemo).toContain('git fetch --no-tags origin');
     expect(loaderMemo).toContain(
       '"+$KOVO_LOADER_HISTORICAL_REF:refs/perf-evidence/loader-memo-historical"',

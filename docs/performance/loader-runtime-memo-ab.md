@@ -16,6 +16,14 @@ The original spike is preserved by
 `3279995d3469d045ec8f37fe9ddbcff79f8230f8` and benchmark-only commit
 `e54c595b5906df9ab9b9b5e3fbf18e76c99e79b9`.
 
+The publishable rerun uses durable ref
+`refs/heads/perf-spike/loader-memo-profiled-pair-20260813`. Its tooling baseline is
+`3010e8df33869413727003c659bb555ac824d104`; its direct candidate is
+`d87b4a1320087c512e25f02a57e88920ae9b1777`. Both arms include the corrected CPU-profile launcher,
+and their only difference is the loader memo production patch. That patch retains stable patch ID
+`f06d58878c8997bca537fd61bb08d7896660d60c`, matching the previously authenticated current-tree
+candidate.
+
 The machine-readable origin manifest is
 `docs/performance/loader-runtime-memo-origin.json`. The runner authenticates its own pinned manifest
 digest, the commit-parent chain, the canonical binary patch SHA-256 and stable patch ID. When the
