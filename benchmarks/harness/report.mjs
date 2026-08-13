@@ -49,6 +49,16 @@ export async function writeReport(resultsPath, reportPath) {
     '',
     navigationTable(data.apps, 'mobile'),
     '',
+    '## Navigation attribution',
+    '',
+    'Server and transfer come from the selected click-window navigation response. Browser-parser construction, style, layout, and paint are named Chrome timeline events. `Unsupported` means Chromium does not expose a stable cross-framework boundary; it never means zero. `Unattributed` is the directly measured response-end-to-destination-marker envelope left after trace-native work, and may contain decode/read, document building or morphing, and main-thread queueing.',
+    '',
+    navigationAttributionTable(data.apps, 'desktop'),
+    '',
+    navigationAttributionTable(data.apps, 'mobile'),
+    '',
+    navigationAttributionNotes(data.apps),
+    '',
     '## Back/forward cache',
     '',
     bfcacheTable(data.apps),
@@ -76,6 +86,7 @@ export async function writeReport(resultsPath, reportPath) {
     '## Known limits of this instrument',
     '',
     '- **The destination-paint mark observes DOM readiness, then the trace selects the first later frame.** MutationObserver scheduling and compositor event availability can add a small common delay. Raw trace-derived samples and the destination-DOM column remain in the report so that delay is visible; the old asymmetric FCP-versus-two-rAF branch has been removed.',
+    '- **Attribution rows are evidence, not an additive synthetic waterfall.** Request timing and Chrome timeline events can overlap. Response read/decode and DOM morph/apply remain `unsupported` unless Chromium supplies a direct boundary; their time is retained in the unattributed client envelope instead of guessed from residual arithmetic.',
     '- **Wall-clock numbers are only comparable to numbers taken at a similar load.** The load average at the end of the run is recorded above; treat timings taken above roughly 1.0 per core as indicative only. Byte counts are unaffected.',
     '- **Mobile TTFB is not network-realistic.** CDP mobile emulation does not apply the emulated RTT to the first byte, so the mobile TTFB column understates a real mobile connection.',
     '- **The back/forward-cache probe uses a different browser build** than the timing scenarios: full Chromium with `--disable-back-forward-cache` removed. Playwright\'s default `chrome-headless-shell` cannot participate in the back/forward cache at all, so a probe sharing that browser could only ever report "not restored".',
@@ -230,6 +241,94 @@ function navigationTable(apps, condition) {
     );
   }
   return rows.join('\n');
+}
+
+function navigationAttributionTable(apps, condition) {
+  const phases = [
+    ['Server', 'server'],
+    ['Transfer', 'transfer'],
+    ['Read/decode', 'responseReadDecode'],
+    ['Document construct', 'documentConstruction'],
+    ['DOM morph/apply', 'domMorphApply'],
+    ['Style', 'style'],
+    ['Layout', 'layout'],
+    ['Paint', 'paint'],
+    ['Unattributed', 'unattributed'],
+  ];
+  const rows = [
+    `### ${title(condition)}`,
+    '',
+    `| App | Primary response | ${phases.map(([label]) => `${label} ms`).join(' | ')} |`,
+    `| --- | --- | ${phases.map(() => '---:').join(' | ')} |`,
+  ];
+  for (const app of apps) {
+    const scenario = app.conditions?.[condition]?.navigation ?? {};
+    const iterations = scenario.iterations ?? [];
+    const selections = [
+      ...new Set(
+        iterations.map((iteration) => {
+          const response = iteration.navAttribution?.primaryResponse;
+          return response?.status === 'observed'
+            ? response.selection
+            : response?.status === 'unsupported'
+              ? 'not observed'
+              : 'not measured';
+        }),
+      ),
+    ];
+    rows.push(
+      `| ${app.app} | ${selections.length === 0 ? 'not measured' : selections.join(', ')} | ${phases
+        .map(([, key]) => attributionPhaseCell(scenario, key))
+        .join(' | ')} |`,
+    );
+  }
+  return rows.join('\n');
+}
+
+function attributionPhaseCell(scenario, phaseName) {
+  const iterations = scenario.iterations ?? [];
+  const phases = iterations
+    .map((iteration) => iteration.navAttribution?.phases?.[phaseName])
+    .filter(Boolean);
+  if (phases.length === 0) return 'not measured';
+  const observed = phases.filter(
+    (phase) => phase.status === 'observed' && Number.isFinite(phase.durationMs),
+  );
+  if (observed.length === 0) return 'unsupported';
+  const aggregate = scenario.summary?.[`navAttribution.phases.${phaseName}.durationMs`];
+  const value = withSpread(aggregate);
+  return observed.length === phases.length
+    ? value
+    : `${value} (${observed.length}/${phases.length})`;
+}
+
+function navigationAttributionNotes(apps) {
+  const notes = [];
+  for (const app of apps) {
+    for (const condition of ['desktop', 'mobile']) {
+      const iterations = app.conditions?.[condition]?.navigation?.iterations ?? [];
+      for (const iteration of iterations) {
+        const response = iteration.navAttribution?.primaryResponse;
+        if (response?.status === 'unsupported') {
+          notes.push(`${app.app}/${condition}/primary response: ${response.reason}`);
+        }
+        for (const [phaseName, phase] of Object.entries(iteration.navAttribution?.phases ?? {})) {
+          if (phase?.status === 'unsupported') {
+            notes.push(`${app.app}/${condition}/${phaseName}: ${phase.reason}`);
+          }
+        }
+      }
+    }
+  }
+  const unique = [...new Set(notes)].sort();
+  if (unique.length === 0) {
+    return '_Every requested attribution phase was directly observed in this run._';
+  }
+  return [
+    '**Unsupported or unattributed boundaries (deduplicated):**',
+    '',
+    ...unique.map((note) => `- ${note}`),
+  ].join('\n');
 }
 
 function bfcacheTable(apps) {

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import { chromium } from 'playwright';
 
@@ -38,6 +38,15 @@ export const SETTLE_DEFAULTS = Object.freeze({ maxMs: 10_000, quietMs: 750 });
  * replacement, so its absence afterwards is proof the navigation destroyed the JS realm.
  */
 const NAV_SENTINEL = 'kovo-bench-nav-sentinel';
+
+export const NAVIGATION_ATTRIBUTION_SCHEMA = 'kovo-navigation-attribution/v1';
+
+const TRACE_PHASE_EVENTS = Object.freeze({
+  documentConstruction: Object.freeze(['ParseHTML']),
+  layout: Object.freeze(['Layout']),
+  paint: Object.freeze(['CompositeLayers', 'DrawFrame', 'Paint']),
+  style: Object.freeze(['RecalculateStyles', 'UpdateLayoutTree']),
+});
 
 export function percentile(values, pct) {
   if (values.length === 0) return null;
@@ -277,13 +286,16 @@ function createRequestTracker(page) {
         const [sizes, response] = await Promise.all([request.sizes(), request.response()]);
         const record = records.get(request);
         records.delete(request);
+        const timing = requestTimingSnapshot(request);
         return {
           bytes: sizes.responseBodySize + sizes.responseHeadersSize,
           headers: record?.headers ?? {},
           method: record?.method ?? request.method(),
           resourceType: request.resourceType(),
+          responseHeaders: await responseHeaderSnapshot(response),
           startedEpochMs: record?.startedEpochMs ?? Date.now(),
           status: response?.status() ?? 0,
+          timing,
           url: request.url(),
         };
       })().catch(() => null),
@@ -335,6 +347,36 @@ function createRequestTracker(page) {
       return result;
     },
   };
+}
+
+function normalizeRequestTiming(timing) {
+  if (!timing || !Number.isFinite(timing.startTime)) return null;
+  const result = { startTime: timing.startTime };
+  for (const field of ['requestStart', 'responseStart', 'responseEnd']) {
+    result[field] = Number.isFinite(timing[field]) && timing[field] >= 0 ? timing[field] : null;
+  }
+  return result;
+}
+
+function requestTimingSnapshot(request) {
+  try {
+    return normalizeRequestTiming(request.timing());
+  } catch {
+    return null;
+  }
+}
+
+async function responseHeaderSnapshot(response) {
+  if (!response) return {};
+  try {
+    return await response.allHeaders();
+  } catch {
+    try {
+      return response.headers();
+    } catch {
+      return {};
+    }
+  }
 }
 
 /**
@@ -517,6 +559,14 @@ async function navigationScenario(page, tracker, listingUrl, settle) {
       clickMark,
       destinationMark: destination.mark,
     });
+    const attribution = analyzeNavigationAttribution({
+      clickTsUs: traceResult.clickTsUs,
+      destinationMarkTsUs: traceResult.destinationMarkTsUs,
+      destinationPaintTsUs: traceResult.destinationPaintTsUs,
+      epochOffsetMs: trace.epochOffsetMs,
+      records: after.records,
+      traceEvents: trace.events,
+    });
     const phases = sessionBytePhases(after.records, {
       clickEpochMs: traceResult.clickEpochMs,
       destinationPaintEpochMs: traceResult.destinationPaintEpochMs,
@@ -539,6 +589,7 @@ async function navigationScenario(page, tracker, listingUrl, settle) {
       navFailedRequests: after.failedRequests - before.failedRequests,
       // The superseded metric. Do not quote it (plans/good-perf.md "Do not re-propose").
       navLegacyDomPresenceMs: legacyDomEpochMs - traceResult.clickEpochMs,
+      navAttribution: attribution,
       navPaintBoundary: traceResult.boundary,
       navRateLimitedResponses: after.rateLimitedResponses - before.rateLimitedResponses,
       navRequests: after.requests - before.requests,
@@ -676,8 +727,11 @@ async function stopNavigationTrace(trace, { clickMark, destinationMark }) {
   return {
     boundary: 'first-traced-frame-after-destination-marker',
     clickEpochMs,
+    clickTsUs: click.ts,
     destinationMarkEpochMs,
+    destinationMarkTsUs: mark.ts,
     destinationPaintEpochMs,
+    destinationPaintTsUs: paint.ts,
     durationMs: (paint.ts - click.ts) / 1_000,
   };
 }
@@ -715,6 +769,510 @@ async function closeNavigationTrace(trace) {
     await trace.cdp.detach().catch(() => undefined);
     trace.stopped = true;
   }
+}
+
+/**
+ * Turn one authenticated request/trace observation into an honest navigation waterfall.
+ *
+ * Chrome exposes request start/response start/response end and names style/layout/paint work in
+ * the DevTools timeline. It does NOT expose stable boundaries inside an entrant's JavaScript for
+ * response text consumption, structured-parts decoding, document building via createElement, or
+ * DOM morphing. Those rows therefore remain explicit `unsupported` facts unless a trace-native
+ * event (currently ParseHTML for browser parser construction) directly proves the phase.
+ */
+export function analyzeNavigationAttribution({
+  clickTsUs,
+  destinationMarkTsUs,
+  destinationPaintTsUs,
+  epochOffsetMs,
+  records,
+  traceEvents,
+}) {
+  for (const [name, value] of Object.entries({
+    clickTsUs,
+    destinationMarkTsUs,
+    destinationPaintTsUs,
+    epochOffsetMs,
+  })) {
+    if (!Number.isFinite(value)) throw new TypeError(`${name} must be finite.`);
+  }
+  if (!(clickTsUs <= destinationMarkTsUs && destinationMarkTsUs <= destinationPaintTsUs)) {
+    throw new TypeError('Navigation attribution trace boundaries are out of order.');
+  }
+  if (!Array.isArray(records) || !Array.isArray(traceEvents)) {
+    throw new TypeError('Navigation attribution requires request records and trace events.');
+  }
+
+  const clickEpochMs = traceEpochMs(clickTsUs, epochOffsetMs);
+  const destinationPaintEpochMs = traceEpochMs(destinationPaintTsUs, epochOffsetMs);
+  const responseSelection = selectPrimaryNavigationResponse(records, {
+    clickEpochMs,
+    destinationPaintEpochMs,
+  });
+  const primaryResponse = responseSelection.primaryResponse;
+  const responseTiming = responseSelection.responseTiming ?? null;
+  const responseStartTsUs = responseTiming
+    ? traceTimestampUs(responseTiming.responseStartEpochMs, epochOffsetMs)
+    : clickTsUs;
+  const responseEndTsUs = responseTiming
+    ? traceTimestampUs(responseTiming.responseEndEpochMs, epochOffsetMs)
+    : null;
+
+  const documentConstructionActivity = traceActivity(traceEvents, {
+    endTsUs: destinationMarkTsUs,
+    names: TRACE_PHASE_EVENTS.documentConstruction,
+    startTsUs: responseStartTsUs,
+  });
+  const styleActivity = traceActivity(traceEvents, {
+    endTsUs: destinationPaintTsUs,
+    names: TRACE_PHASE_EVENTS.style,
+    startTsUs: responseStartTsUs,
+  });
+  const layoutActivity = traceActivity(traceEvents, {
+    endTsUs: destinationPaintTsUs,
+    names: TRACE_PHASE_EVENTS.layout,
+    startTsUs: responseStartTsUs,
+  });
+  const paintBoundaryDurationUs = traceEvents.reduce((duration, event) => {
+    if (
+      TRACE_PHASE_EVENTS.paint.includes(event?.name) &&
+      event?.ts === destinationPaintTsUs &&
+      Number.isFinite(event?.dur) &&
+      event.dur >= 0
+    ) {
+      return Math.max(duration, event.dur);
+    }
+    return duration;
+  }, 0);
+  const paintActivity = traceActivity(traceEvents, {
+    endTsUs: destinationPaintTsUs + paintBoundaryDurationUs,
+    names: TRACE_PHASE_EVENTS.paint,
+    startTsUs: destinationMarkTsUs,
+  });
+  if (paintActivity.eventCount === 0) {
+    throw new Error('Navigation attribution lost the trace event that defines destination paint.');
+  }
+
+  const phases = {
+    server:
+      responseTiming === null
+        ? unsupportedPhase(primaryResponse.reason)
+        : observedPhase(
+            responseTiming.responseStartEpochMs - responseTiming.requestStartEpochMs,
+            'playwright-request-timing:requestStart-to-responseStart',
+          ),
+    transfer:
+      responseTiming === null
+        ? unsupportedPhase(primaryResponse.reason)
+        : observedPhase(
+            responseTiming.responseEndEpochMs - responseTiming.responseStartEpochMs,
+            'playwright-request-timing:responseStart-to-responseEnd',
+          ),
+    responseReadDecode: unsupportedPhase(
+      'Chromium exposes response completion but no stable cross-framework boundary for response ' +
+        'text consumption plus JSON/RSC decoding without instrumenting entrant code.',
+    ),
+    documentConstruction:
+      documentConstructionActivity.eventCount === 0
+        ? unsupportedPhase(
+            'No ParseHTML event identified document construction. createElement/React work is ' +
+              'indistinguishable from surrounding JavaScript without entrant instrumentation.',
+          )
+        : observedTracePhase(documentConstructionActivity),
+    domMorphApply: unsupportedPhase(
+      'The DevTools timeline does not expose a stable cross-framework DOM morph/apply boundary; ' +
+        'the destination MutationObserver proves completion but not the phase start.',
+    ),
+    style: observedTracePhase(styleActivity),
+    layout: observedTracePhase(layoutActivity),
+    paint: observedTracePhase(paintActivity),
+    unattributed: unattributedClientPhase({
+      destinationMarkTsUs,
+      directlyObservedIntervals: [
+        ...documentConstructionActivity.intervals,
+        ...styleActivity.intervals,
+        ...layoutActivity.intervals,
+      ],
+      responseEndTsUs,
+    }),
+  };
+
+  const facts = {
+    schema: NAVIGATION_ATTRIBUTION_SCHEMA,
+    observationBoundary: {
+      clock: 'chromium-monotonic-trace',
+      end: 'first-traced-frame-after-destination-marker',
+      start: 'capturing-click-timestamp',
+      clickTsUs: String(clickTsUs),
+      destinationMarkTsUs: String(destinationMarkTsUs),
+      destinationPaintTsUs: String(destinationPaintTsUs),
+    },
+    primaryResponse,
+    phases,
+    traceEvidence: {
+      categories:
+        'blink.console,devtools.timeline,disabled-by-default-devtools.timeline,disabled-by-default-devtools.timeline.frame',
+      eventCensus: traceEventCensus(traceEvents, [
+        ...TRACE_PHASE_EVENTS.documentConstruction,
+        ...TRACE_PHASE_EVENTS.style,
+        ...TRACE_PHASE_EVENTS.layout,
+        ...TRACE_PHASE_EVENTS.paint,
+      ]),
+      relevantEventCount: String(
+        documentConstructionActivity.eventCount +
+          styleActivity.eventCount +
+          layoutActivity.eventCount +
+          paintActivity.eventCount,
+      ),
+    },
+  };
+  const attribution = {
+    ...facts,
+    evidenceDigest: navigationAttributionDigest(facts),
+  };
+  const findings = navigationAttributionFindings(attribution);
+  if (findings.length > 0) {
+    throw new Error(`Navigation attribution evidence is invalid: ${findings.join('; ')}`);
+  }
+  return attribution;
+}
+
+export function navigationAttributionFindings(attribution) {
+  const findings = [];
+  if (!attribution || attribution.schema !== NAVIGATION_ATTRIBUTION_SCHEMA) {
+    return ['navigation attribution schema is unavailable'];
+  }
+  const { evidenceDigest, ...facts } = attribution;
+  if (evidenceDigest !== navigationAttributionDigest(facts)) {
+    findings.push('navigation attribution digest is not derived from its evidence');
+  }
+  const boundary = attribution.observationBoundary;
+  if (
+    boundary?.clock !== 'chromium-monotonic-trace' ||
+    boundary?.start !== 'capturing-click-timestamp' ||
+    boundary?.end !== 'first-traced-frame-after-destination-marker' ||
+    !finiteNumberText(boundary?.clickTsUs) ||
+    !finiteNumberText(boundary?.destinationMarkTsUs) ||
+    !finiteNumberText(boundary?.destinationPaintTsUs) ||
+    Number(boundary.clickTsUs) > Number(boundary.destinationMarkTsUs) ||
+    Number(boundary.destinationMarkTsUs) > Number(boundary.destinationPaintTsUs)
+  ) {
+    findings.push('navigation attribution boundary is invalid');
+  }
+  if (!validPrimaryResponse(attribution.primaryResponse)) {
+    findings.push('navigation attribution primary response is invalid');
+  }
+  const expectedPhases = [
+    'server',
+    'transfer',
+    'responseReadDecode',
+    'documentConstruction',
+    'domMorphApply',
+    'style',
+    'layout',
+    'paint',
+    'unattributed',
+  ];
+  if (
+    !attribution.phases ||
+    JSON.stringify(Object.keys(attribution.phases)) !== JSON.stringify(expectedPhases)
+  ) {
+    findings.push('navigation attribution phase census is invalid');
+  } else {
+    for (const [name, phase] of Object.entries(attribution.phases)) {
+      if (!validAttributionPhase(phase)) findings.push(`navigation attribution ${name} is invalid`);
+    }
+  }
+  if (
+    attribution.traceEvidence?.categories !==
+      'blink.console,devtools.timeline,disabled-by-default-devtools.timeline,disabled-by-default-devtools.timeline.frame' ||
+    !safeIntegerText(attribution.traceEvidence?.relevantEventCount, { min: 1 })
+  ) {
+    findings.push('navigation attribution trace evidence is invalid');
+  }
+  return findings;
+}
+
+function selectPrimaryNavigationResponse(records, { clickEpochMs, destinationPaintEpochMs }) {
+  const candidates = [];
+  for (const record of records) {
+    const timing = requestTimingEpochs(record.timing);
+    if (
+      timing === null ||
+      timing.requestStartEpochMs < clickEpochMs - 10 ||
+      timing.requestStartEpochMs > destinationPaintEpochMs + 10
+    ) {
+      continue;
+    }
+    const contentType = responseMediaType(record.responseHeaders);
+    const selection = navigationResponseSelection(record, contentType);
+    if (selection === null) continue;
+    candidates.push({ contentType, record, selection, timing });
+  }
+  candidates.sort(
+    (left, right) =>
+      left.selection.priority - right.selection.priority ||
+      left.timing.requestStartEpochMs - right.timing.requestStartEpochMs ||
+      left.record.url.localeCompare(right.record.url),
+  );
+  const selected = candidates[0];
+  if (!selected) {
+    return {
+      primaryResponse: {
+        candidateCount: '0',
+        durationMs: null,
+        reason:
+          'No document or navigation-data response with complete request timing began inside the ' +
+          'click-to-paint window; navigation may have consumed pre-click prefetched bytes.',
+        status: 'unsupported',
+      },
+    };
+  }
+  const timingFacts = {
+    requestStartEpochMs: String(selected.timing.requestStartEpochMs),
+    responseEndEpochMs: String(selected.timing.responseEndEpochMs),
+    responseStartEpochMs: String(selected.timing.responseStartEpochMs),
+    source: selected.timing.source,
+  };
+  const responseFacts = {
+    contentType: selected.contentType || null,
+    httpStatus: String(selected.record.status),
+    method: selected.record.method,
+    resourceType: selected.record.resourceType,
+    selection: selected.selection.name,
+    timing: timingFacts,
+    url: selected.record.url,
+  };
+  return {
+    primaryResponse: {
+      candidateCount: String(candidates.length),
+      identity: `sha256:${createHash('sha256').update(canonicalJson(responseFacts)).digest('hex')}`,
+      ...responseFacts,
+      status: 'observed',
+    },
+    responseTiming: selected.timing,
+  };
+}
+
+function requestTimingEpochs(timing) {
+  if (
+    !timing ||
+    !Number.isFinite(timing.startTime) ||
+    !Number.isFinite(timing.requestStart) ||
+    !Number.isFinite(timing.responseStart) ||
+    !Number.isFinite(timing.responseEnd) ||
+    timing.requestStart < 0 ||
+    timing.responseStart < timing.requestStart ||
+    timing.responseEnd < timing.responseStart
+  ) {
+    return null;
+  }
+  return {
+    requestStartEpochMs: timing.startTime + timing.requestStart,
+    responseEndEpochMs: timing.startTime + timing.responseEnd,
+    responseStartEpochMs: timing.startTime + timing.responseStart,
+    source: 'playwright-request-timing',
+  };
+}
+
+function navigationResponseSelection(record, contentType) {
+  if (contentType === 'application/vnd.kovo.document-parts+json') {
+    return { name: 'kovo-document-parts-media-type', priority: 0 };
+  }
+  if (contentType === 'text/x-component') {
+    return { name: 'react-server-component-media-type', priority: 1 };
+  }
+  if (record.resourceType === 'document') {
+    return { name: 'document-resource', priority: 2 };
+  }
+  const accept = String(headerValue(record.headers, 'accept') ?? '').toLowerCase();
+  if (
+    (record.resourceType === 'fetch' || record.resourceType === 'xhr') &&
+    (contentType === 'text/html' ||
+      contentType === 'application/json' ||
+      accept.includes('text/x-component') ||
+      accept.includes('application/vnd.kovo.document-parts+json'))
+  ) {
+    return { name: 'navigation-data-request', priority: 3 };
+  }
+  return null;
+}
+
+function responseMediaType(headers) {
+  const value = headerValue(headers, 'content-type');
+  if (typeof value !== 'string') return '';
+  return value.split(';', 1)[0].trim().toLowerCase();
+}
+
+function headerValue(headers, expected) {
+  if (!headers || typeof headers !== 'object') return undefined;
+  for (const [name, value] of Object.entries(headers)) {
+    if (name.toLowerCase() === expected) return value;
+  }
+  return undefined;
+}
+
+function traceActivity(events, { endTsUs, names, startTsUs }) {
+  const intervals = [];
+  const census = {};
+  let eventCount = 0;
+  for (const event of events) {
+    if (!names.includes(event?.name) || !Number.isFinite(event?.ts)) continue;
+    const durationUs = Number.isFinite(event.dur) && event.dur >= 0 ? event.dur : 0;
+    const eventEndTsUs = event.ts + durationUs;
+    if (event.ts > endTsUs || eventEndTsUs < startTsUs) continue;
+    eventCount += 1;
+    census[event.name] = (census[event.name] ?? 0) + 1;
+    intervals.push([Math.max(startTsUs, event.ts), Math.min(endTsUs, eventEndTsUs)]);
+  }
+  return {
+    durationMs: intervalUnionDurationUs(intervals) / 1_000,
+    eventCount,
+    eventNames: Object.keys(census).sort(),
+    intervals,
+  };
+}
+
+function traceEventCensus(events, names) {
+  const census = Object.fromEntries([...new Set(names)].sort().map((name) => [name, 0]));
+  for (const event of events) {
+    if (Object.hasOwn(census, event?.name)) census[event.name] += 1;
+  }
+  return Object.fromEntries(Object.entries(census).map(([name, count]) => [name, String(count)]));
+}
+
+function intervalUnionDurationUs(intervals) {
+  const sorted = intervals
+    .filter(([start, end]) => Number.isFinite(start) && Number.isFinite(end) && end >= start)
+    .sort((left, right) => left[0] - right[0] || left[1] - right[1]);
+  let total = 0;
+  let currentStart = null;
+  let currentEnd = null;
+  for (const [start, end] of sorted) {
+    if (currentStart === null) {
+      currentStart = start;
+      currentEnd = end;
+    } else if (start <= currentEnd) {
+      currentEnd = Math.max(currentEnd, end);
+    } else {
+      total += currentEnd - currentStart;
+      currentStart = start;
+      currentEnd = end;
+    }
+  }
+  return currentStart === null ? 0 : total + currentEnd - currentStart;
+}
+
+function observedPhase(durationMs, source, extra = {}) {
+  if (!Number.isFinite(durationMs) || durationMs < 0) {
+    throw new TypeError(`Observed navigation phase duration is invalid: ${String(durationMs)}.`);
+  }
+  return { durationMs, source, status: 'observed', ...extra };
+}
+
+function observedTracePhase(activity) {
+  return observedPhase(activity.durationMs, 'chromium-devtools-timeline', {
+    eventCount: String(activity.eventCount),
+    eventNames: activity.eventNames,
+  });
+}
+
+function unsupportedPhase(reason) {
+  return { durationMs: null, reason, status: 'unsupported' };
+}
+
+function unattributedClientPhase({
+  destinationMarkTsUs,
+  directlyObservedIntervals,
+  responseEndTsUs,
+}) {
+  if (!Number.isFinite(responseEndTsUs)) {
+    return unsupportedPhase('A click-window primary response was not directly observed.');
+  }
+  if (responseEndTsUs > destinationMarkTsUs) {
+    return unsupportedPhase(
+      'The destination marker preceded completion of the selected streaming response, so a ' +
+        'response-end-to-marker client envelope does not exist.',
+    );
+  }
+  const clipped = directlyObservedIntervals.map(([start, end]) => [
+    Math.max(responseEndTsUs, start),
+    Math.min(destinationMarkTsUs, end),
+  ]);
+  const envelopeUs = destinationMarkTsUs - responseEndTsUs;
+  const observedUs = Math.min(envelopeUs, intervalUnionDurationUs(clipped));
+  return observedPhase((envelopeUs - observedUs) / 1_000, 'trace-unattributed-envelope', {
+    scope: 'primary-response-end-to-destination-marker',
+    includes: ['response-read-decode', 'document-build-or-morph', 'main-thread-queueing'],
+  });
+}
+
+function validPrimaryResponse(response) {
+  if (!response || !['observed', 'unsupported'].includes(response.status)) return false;
+  if (response.status === 'unsupported') {
+    return response.durationMs === null && typeof response.reason === 'string' && !!response.reason;
+  }
+  const timing = response.timing;
+  return (
+    safeIntegerText(response.candidateCount, { min: 1 }) &&
+    /^sha256:[0-9a-f]{64}$/u.test(response.identity ?? '') &&
+    typeof response.url === 'string' &&
+    typeof response.method === 'string' &&
+    typeof response.resourceType === 'string' &&
+    typeof response.selection === 'string' &&
+    safeIntegerText(response.httpStatus, { max: 599, min: 100 }) &&
+    timing?.source === 'playwright-request-timing' &&
+    finiteNumberText(timing.requestStartEpochMs) &&
+    finiteNumberText(timing.responseStartEpochMs) &&
+    finiteNumberText(timing.responseEndEpochMs) &&
+    Number(timing.requestStartEpochMs) <= Number(timing.responseStartEpochMs) &&
+    Number(timing.responseStartEpochMs) <= Number(timing.responseEndEpochMs)
+  );
+}
+
+function validAttributionPhase(phase) {
+  if (!phase || !['observed', 'unsupported'].includes(phase.status)) return false;
+  return phase.status === 'observed'
+    ? Number.isFinite(phase.durationMs) && phase.durationMs >= 0 && typeof phase.source === 'string'
+    : phase.durationMs === null && typeof phase.reason === 'string' && !!phase.reason;
+}
+
+function finiteNumberText(value) {
+  return (
+    typeof value === 'string' &&
+    value.trim() === value &&
+    value !== '' &&
+    Number.isFinite(Number(value))
+  );
+}
+
+function safeIntegerText(value, { max = Number.MAX_SAFE_INTEGER, min = 0 } = {}) {
+  if (!finiteNumberText(value)) return false;
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number >= min && number <= max && String(number) === value;
+}
+
+function navigationAttributionDigest(facts) {
+  return `sha256:${createHash('sha256').update(canonicalJson(facts)).digest('hex')}`;
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function traceEpochMs(timestampUs, epochOffsetMs) {
+  return timestampUs / 1_000 + epochOffsetMs;
+}
+
+function traceTimestampUs(epochMs, epochOffsetMs) {
+  return (epochMs - epochOffsetMs) * 1_000;
 }
 
 export function sessionBytePhases(

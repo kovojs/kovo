@@ -20,6 +20,33 @@ import { writeReport } from './report.mjs';
 /** A probe whose HTTP statuses were readable and clean. */
 const TRACKED_CLEAN = { errorResponses: 0, rateLimitedResponses: 0, requests: 12, tracked: true };
 
+const ATTRIBUTION = {
+  primaryResponse: { selection: 'kovo-document-parts-media-type', status: 'observed' },
+  phases: {
+    server: { durationMs: 12, source: 'request timing', status: 'observed' },
+    transfer: { durationMs: 3, source: 'request timing', status: 'observed' },
+    responseReadDecode: {
+      durationMs: null,
+      reason: 'browser exposes no stable response decode boundary',
+      status: 'unsupported',
+    },
+    documentConstruction: {
+      durationMs: 8,
+      source: 'trace',
+      status: 'observed',
+    },
+    domMorphApply: {
+      durationMs: null,
+      reason: 'browser exposes no stable morph boundary',
+      status: 'unsupported',
+    },
+    style: { durationMs: 2, source: 'trace', status: 'observed' },
+    layout: { durationMs: 4, source: 'trace', status: 'observed' },
+    paint: { durationMs: 1, source: 'trace', status: 'observed' },
+    unattributed: { durationMs: 5, source: 'trace envelope', status: 'observed' },
+  },
+};
+
 const RESULTS = {
   generatedAt: '2026-08-07T00:00:00.000Z',
   iterations: 3,
@@ -89,11 +116,18 @@ const RESULTS = {
           },
           navigation: {
             iterations: [
-              { navDocumentReplaced: 1 },
-              { navDocumentReplaced: 1 },
-              { navDocumentReplaced: 1 },
+              { navAttribution: ATTRIBUTION, navDocumentReplaced: 1 },
+              { navAttribution: ATTRIBUTION, navDocumentReplaced: 1 },
+              { navAttribution: ATTRIBUTION, navDocumentReplaced: 1 },
             ],
             summary: {
+              'navAttribution.phases.documentConstruction.durationMs': { mad: 0, median: 8 },
+              'navAttribution.phases.layout.durationMs': { mad: 0, median: 4 },
+              'navAttribution.phases.paint.durationMs': { mad: 0, median: 1 },
+              'navAttribution.phases.server.durationMs': { mad: 1, median: 12 },
+              'navAttribution.phases.style.durationMs': { mad: 0, median: 2 },
+              'navAttribution.phases.transfer.durationMs': { mad: 0, median: 3 },
+              'navAttribution.phases.unattributed.durationMs': { mad: 0, median: 5 },
               navBytesSettled: { median: 152_537 },
               navLegacyDomPresenceMs: { median: 69 },
               navRequests: { median: 5 },
@@ -214,6 +248,20 @@ describe('benchmark report', () => {
     expect(report).toContain('| sameDoc | 124 (1) | n/a | n/a | n/a | 0/3 |');
   });
 
+  it('separates directly observed navigation phases from unsupported boundaries', async () => {
+    const report = await renderReport(RESULTS);
+    expect(report).toContain('## Navigation attribution');
+    expect(report).toContain(
+      '| replacer | kovo-document-parts-media-type | 12 (1) | 3 (0) | unsupported | 8 (0) | unsupported | 2 (0) | 4 (0) | 1 (0) | 5 (0) |',
+    );
+    expect(report).toContain(
+      '- replacer/desktop/responseReadDecode: browser exposes no stable response decode boundary',
+    );
+    expect(report).toContain(
+      '- replacer/desktop/domMorphApply: browser exposes no stable morph boundary',
+    );
+  });
+
   it('flags Lighthouse cells with null samples and reports the spread', async () => {
     const report = await renderReport(RESULTS);
     expect(report).toContain('80 (±19)');
@@ -276,6 +324,8 @@ describe('benchmark report', () => {
     expect(limits).toContain('destination-paint mark observes DOM readiness');
     expect(limits).toContain('first later frame');
     expect(limits).toContain('old asymmetric FCP-versus-two-rAF branch has been removed');
+    expect(limits).toContain('not an additive synthetic waterfall');
+    expect(limits).toContain('remain `unsupported`');
     expect(limits).not.toContain('errs in Kovo');
   });
 });

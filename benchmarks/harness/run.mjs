@@ -2,7 +2,7 @@
 import { readArg, readIntegerArg } from './args.mjs';
 import { bfcacheIterationFindings, runBfcacheProbe } from './bfcache.mjs';
 import { DEFAULT_LIGHTHOUSE_REPEATS, runLighthouse } from './lighthouse.mjs';
-import { runScenarios } from './scenarios.mjs';
+import { navigationAttributionFindings, runScenarios } from './scenarios.mjs';
 
 export async function runAppBenchmark({
   app,
@@ -104,6 +104,11 @@ export function summarizeAppBenchmarkIntegrity(
           errors.push(
             `${conditionName}/${scenarioName}[${String(index)}]: ${settleField} was not zero`,
           );
+        }
+        if (scenarioName === 'navigation') {
+          for (const finding of navigationAttributionFindings(sample.navAttribution)) {
+            errors.push(`${conditionName}/${scenarioName}[${String(index)}]: ${finding}`);
+          }
         }
       }
     }

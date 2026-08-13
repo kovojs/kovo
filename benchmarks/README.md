@@ -137,7 +137,12 @@ each iteration. It records:
   stays on that trace clock; timestamps are mapped to epoch time only to place
   requests into session-byte phases across document replacement. The report also
   records how many navigations replaced the document and what the superseded
-  DOM-presence probe would have reported;
+  DOM-presence probe would have reported. Navigation attribution uses the selected
+  click-window document/document-parts/RSC response for server and transfer time,
+  and Chrome timeline events for parser construction, style, layout, and paint. The
+  response read/decode and DOM morph/apply rows stay explicitly `unsupported` when
+  Chromium cannot identify their boundaries without entrant-specific production
+  instrumentation; that time remains in a measured unattributed client envelope;
 - back/forward cache: a separate probe in full Chromium with Playwright's
   `--disable-back-forward-cache` removed (the default `chrome-headless-shell`
   cannot participate in bfcache at all). Frameworks that navigate in-document are
@@ -169,6 +174,12 @@ rejected the Kovo entrant on every run, for doing the thing it is being measured
 A source whose statuses could not be read at all is printed as
 `[integrity] untracked: …` on stderr, named in the generated report, and never
 silently counted as clean.
+
+Each navigation attribution record carries a canonical SHA-256 digest over its
+request identity, trace boundary, trace-event census, and phase verdicts. The adapter
+recomputes that digest before returning a sample. This is tamper-evidence inside the
+source- and execution-authenticated comparison report, not a claim that a self-hash
+independently proves where the browser evidence came from.
 
 ### Rate limiting and iteration count
 
