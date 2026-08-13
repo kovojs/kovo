@@ -57,6 +57,9 @@ describe('equal-shape developer corpus generator', () => {
     expect(path.isAbsolute(next.dev.command.argv[0])).toBe(false);
     expect(kovo.dev.command.cwd).toBe('.');
     expect(next.dev.command.cwd).toBe('.');
+    expect(
+      await readFile(path.join(path.dirname(manifests[1]), 'next-env.d.ts'), 'utf8'),
+    ).toContain('import "./.next/types/routes.d.ts";');
   });
 
   it('uses entrant-local default roots so Turbopack dependency resolution stays inside its tree', async () => {
