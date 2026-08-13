@@ -19,7 +19,7 @@ describe('benchmark scenario analysis', () => {
     expect(summary.metric).toMatchObject({ mad: 1, median: 3, p95: 100, samples: 5 });
   });
 
-  it('separates initial, automatic-prefetch, click-to-paint, and post-click bytes', () => {
+  it('separates proven prefetch from unclassified pre-click background traffic', () => {
     const phases = sessionBytePhases(
       [
         request({ bytes: 100, resourceType: 'document', startedEpochMs: 1_000 }),
@@ -38,11 +38,11 @@ describe('benchmark scenario analysis', () => {
 
     expect(phases.initial).toMatchObject({ html: 100, requests: 1, total: 100 });
     expect(phases.automaticPrefetch).toMatchObject({
-      js: 200,
       other: 300,
-      requests: 2,
-      total: 500,
+      requests: 1,
+      total: 300,
     });
+    expect(phases.preClickBackground).toMatchObject({ js: 200, requests: 1, total: 200 });
     expect(phases.click).toMatchObject({ css: 400, requests: 1, total: 400 });
     expect(phases.postClick).toMatchObject({ img: 500, requests: 1, total: 500 });
     expect(phases.throughClick.total).toBe(600);

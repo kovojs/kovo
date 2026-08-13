@@ -1283,17 +1283,21 @@ export function sessionBytePhases(
     automaticPrefetch: emptyByteBucket(),
     click: emptyByteBucket(),
     initial: emptyByteBucket(),
+    preClickBackground: emptyByteBucket(),
     postClick: emptyByteBucket(),
   };
   for (const record of records) {
     const explicitPrefetch = isPrefetchRequest(record.headers);
-    // Requests without explicit prefetch headers are still automatic-prefetch traffic when they
-    // begin after the initial load event and before the captured user click.
+    // Only transport evidence may call traffic prefetch. Deferred runtimes, fonts, analytics, and
+    // other requests can also start after load but before the click; folding those into prefetch
+    // would manufacture a framework comparison from timing alone.
     const phase =
       record.startedEpochMs < clickEpochMs
-        ? explicitPrefetch || record.startedEpochMs >= initialEndEpochMs
+        ? explicitPrefetch
           ? 'automaticPrefetch'
-          : 'initial'
+          : record.startedEpochMs < initialEndEpochMs
+            ? 'initial'
+            : 'preClickBackground'
         : record.startedEpochMs <= destinationPaintEpochMs
           ? 'click'
           : 'postClick';
@@ -1302,9 +1306,14 @@ export function sessionBytePhases(
   phases.throughDestinationPaint = sumByteBuckets(
     phases.initial,
     phases.automaticPrefetch,
+    phases.preClickBackground,
     phases.click,
   );
-  phases.throughClick = sumByteBuckets(phases.initial, phases.automaticPrefetch);
+  phases.throughClick = sumByteBuckets(
+    phases.initial,
+    phases.automaticPrefetch,
+    phases.preClickBackground,
+  );
   phases.settledSession = sumByteBuckets(phases.throughDestinationPaint, phases.postClick);
   return phases;
 }

@@ -135,7 +135,10 @@ each iteration. It records:
   emits a trace timestamp when the destination marker appears; the first later
   compositor/paint frame is the reported destination paint. Click-to-paint duration
   stays on that trace clock; timestamps are mapped to epoch time only to place
-  requests into session-byte phases across document replacement. The report also
+  requests into session-byte phases across document replacement. Those phases keep
+  explicit prefetch-header traffic separate from unclassified background requests
+  that happen after load but before the click; timing alone is not called prefetch.
+  The report also
   records how many navigations replaced the document and what the superseded
   DOM-presence probe would have reported. Navigation attribution uses the selected
   click-window document/document-parts/RSC response for server and transfer time,
