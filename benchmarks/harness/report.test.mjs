@@ -34,6 +34,16 @@ const RESULTS = {
   },
   runId: 'testrun',
   settle: { maxMs: 10_000, quietMs: 750 },
+  source: {
+    commit: '0123456789abcdef0123456789abcdef01234567',
+    dirty: false,
+    dirtyPaths: [],
+    locks: {
+      'benchmarks/harness/pnpm-lock.yaml': 'sha256:harness',
+      'benchmarks/nextjs/pnpm-lock.yaml': 'sha256:next',
+      'pnpm-lock.yaml': 'sha256:root',
+    },
+  },
   apps: [
     {
       app: 'replacer',
@@ -176,6 +186,14 @@ describe('benchmark report', () => {
     const report = await renderReport(RESULTS);
     expect(report).toContain('darwin/arm64, 10 cores');
     expect(report).toContain('18.50 / 12.25 / 8.00');
+  });
+
+  it('binds the report to source, dirty state, and dependency locks', async () => {
+    const report = await renderReport(RESULTS);
+    expect(report).toContain('Source 0123456789abcdef0123456789abcdef01234567 (clean)');
+    expect(report).toContain('pnpm-lock.yaml=sha256:root');
+    expect(report).toContain('benchmarks/nextjs/pnpm-lock.yaml=sha256:next');
+    expect(report).toContain('benchmarks/harness/pnpm-lock.yaml=sha256:harness');
   });
 
   it('shows how far the superseded load-window byte collection understates the truth', async () => {

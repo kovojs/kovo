@@ -12,8 +12,10 @@ import { runAppBenchmark } from './harness/run.mjs';
 import { DEFAULT_LIGHTHOUSE_REPEATS } from './harness/lighthouse.mjs';
 import { SETTLE_DEFAULTS } from './harness/scenarios.mjs';
 import { writeReport } from './harness/report.mjs';
+import { collectPerformanceProvenance } from '../scripts/lib/perf-provenance.mjs';
 
 const benchmarkRoot = fileURLToPath(new URL('.', import.meta.url));
+const repoRoot = path.resolve(benchmarkRoot, '..');
 const resultsDir = path.join(benchmarkRoot, 'results');
 
 // Every entrant is started with NODE_ENV=production. Kovo additionally requires deployment
@@ -44,7 +46,7 @@ const allApps = [
     port: 4310,
     start: ['pnpm', ['run', 'start']],
     versions: {
-      kovo: await packageVersion(path.join(benchmarkRoot, 'kovo/package.json'), '@kovojs/server'),
+      kovo: await ownPackageVersion(path.join(repoRoot, 'packages/server/package.json')),
     },
   },
   {
@@ -218,6 +220,14 @@ const output = {
   },
   runId,
   settle,
+  source: collectPerformanceProvenance({
+    lockFiles: [
+      'pnpm-lock.yaml',
+      'benchmarks/nextjs/pnpm-lock.yaml',
+      'benchmarks/harness/pnpm-lock.yaml',
+    ],
+    repoRoot,
+  }),
   apps: results,
 };
 const resultsPath = path.join(outDir, 'results.json');
@@ -344,8 +354,8 @@ async function dependencyVersions(packagePath, names) {
   return Object.fromEntries(names.map((name) => [name, all[name] ?? 'n/a']));
 }
 
-async function packageVersion(packagePath, name) {
-  return (await dependencyVersions(packagePath, [name]))[name];
+async function ownPackageVersion(packagePath) {
+  return JSON.parse(await readFile(packagePath, 'utf8')).version ?? 'n/a';
 }
 
 function runCommand(command, args, { cwd, label }) {

@@ -11,12 +11,16 @@ import {
   fitLogLogExponent,
   marginalLogLogExponent,
   formatEvaluation,
+  loadGenerationIntegrityProblems,
   median,
   medianAbsoluteDeviation,
+  parseLadderOption,
+  parsePositiveIntegerOption,
   parseCheckPhaseCensus,
   phaseDurationMs,
   PERF_BUDGETS_SCHEMA,
   reportSuites,
+  wireResponseIntegrityProblems,
 } from './perf-gate.mjs';
 import {
   materializePerfWorkload,
@@ -165,6 +169,64 @@ describe('statistics', () => {
   it('reports median absolute deviation', () => {
     expect(medianAbsoluteDeviation([10, 10, 10])).toBe(0);
     expect(medianAbsoluteDeviation([1, 2, 3, 4, 100])).toBe(1);
+  });
+});
+
+describe('measurement input and response integrity', () => {
+  it('rejects malformed numeric options instead of silently producing an empty cell', () => {
+    expect(parsePositiveIntegerOption('samples', undefined, 5)).toBe(5);
+    expect(parsePositiveIntegerOption('samples', '7', 5)).toBe(7);
+    expect(() => parsePositiveIntegerOption('samples', 'many', 5)).toThrow('--samples');
+    expect(() => parsePositiveIntegerOption('samples', true, 5)).toThrow('requires');
+    expect(() => parsePositiveIntegerOption('port', '80', 43117, { min: 1024 })).toThrow('1024');
+  });
+
+  it('requires a usable, non-degenerate scaling ladder', () => {
+    expect(parseLadderOption('8,24,72,216')).toEqual([8, 24, 72, 216]);
+    expect(() => parseLadderOption('nope')).toThrow('--ladder');
+    expect(() => parseLadderOption('8')).toThrow('--ladder');
+    expect(() => parseLadderOption('8,8')).toThrow('--ladder');
+  });
+
+  it('refuses short or wrong-representation responses as byte wins', () => {
+    const healthy = {
+      contentEncoding: 'br',
+      headers: { 'content-type': 'text/html; charset=utf-8' },
+      status: 200,
+      wireBytes: 400,
+    };
+    expect(
+      wireResponseIntegrityProblems('document', healthy, {
+        allowedContentEncodings: ['br', 'gzip'],
+        contentTypePrefix: 'text/html',
+      }),
+    ).toEqual([]);
+    expect(
+      wireResponseIntegrityProblems(
+        'document',
+        { ...healthy, headers: { 'content-type': 'text/plain' }, status: 404, wireBytes: 9 },
+        { allowedContentEncodings: ['br'], contentTypePrefix: 'text/html' },
+      ).join(' '),
+    ).toMatch(/HTTP 200.*Content-Type/u);
+  });
+
+  it('refuses HTTP and transport failures as SSR throughput', () => {
+    expect(
+      loadGenerationIntegrityProblems('measurement', {
+        completed: 100,
+        requestErrors: 0,
+        responseErrors: 0,
+        statusCounts: { 200: 100 },
+      }),
+    ).toEqual([]);
+    expect(
+      loadGenerationIntegrityProblems('measurement', {
+        completed: 100,
+        requestErrors: 2,
+        responseErrors: 1,
+        statusCounts: { 200: 90, 500: 10 },
+      }).join(' '),
+    ).toMatch(/2 requests failed.*1 response streams failed.*HTTP 500/u);
   });
 });
 

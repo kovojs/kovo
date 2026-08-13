@@ -13,7 +13,7 @@ export async function writeReport(resultsPath, reportPath) {
     '',
     '## Methodology',
     '',
-    'Each app renders the same 24-product catalog, serves the same WebP assets, and exposes the same listing, product detail, cart dialog, and checkout confirmation flow. The custom harness uses fresh browser contexts, cache-cleared runs, Chromium CDP throttling for the mobile profile, request-size accounting to network quiescence, a cart-dialog TTI proxy, a navigation-to-paint probe, and a back/forward-cache probe. Lighthouse runs cover the listing and one product detail page for desktop and mobile presets.',
+    'Each app renders the same 24-product catalog and serves the same WebP assets, listing route, and product-detail route. The cart implementations are intentionally not capability-matched: Kovo uses a platform-native L0 popover whose confirmation text is already present, while the React entrants implement hydrated client cart state. The custom harness uses fresh browser contexts, Chromium CDP throttling for the mobile profile, request-size accounting to network quiescence, a cart-dialog readiness proxy, a navigation-to-paint probe, and a back/forward-cache probe. Lighthouse runs cover the listing and one product detail page for desktop and mobile presets.',
     '',
     'The headline comparison is architectural, not a claim that one implementation is the only possible tuning for each framework: Kovo is measured as a server-rendered MPA with a platform-native L0 cart dialog and no hydration, while Next.js App Router and TanStack Start are measured with hydrated client cart UI. All apps use plain `<img>` tags to isolate framework behavior from image optimizer behavior.',
     '',
@@ -90,10 +90,19 @@ function runProvenance(data) {
   const machine = data.machine;
   if (!machine) return '_No machine record: this report was produced by an older harness._';
   const load = (machine.loadAverage ?? []).map((value) => value.toFixed(2)).join(' / ');
+  const source = data.source;
+  const sourceSummary = source
+    ? ` Source ${source.commit ?? 'unknown'} (${source.dirty ? `dirty: ${(source.dirtyPaths ?? []).join(', ') || 'paths not recorded'}` : 'clean'}). Lock digests: ${
+        Object.entries(source.locks ?? {})
+          .map(([name, digest]) => `${name}=${digest ?? 'missing'}`)
+          .join(', ') || 'not recorded'
+      }.`
+    : ' Source commit, dirty state, and lock digests were not recorded.';
   return [
     `Run \`${data.runId ?? 'unknown'}\` on ${machine.platform}/${machine.arch}, ${machine.cpus} cores, `,
     `${(machine.totalMemoryBytes / 1024 ** 3).toFixed(1)} GiB, node ${machine.node}. `,
     `Load average at end of run (1/5/15 min): **${load}**.`,
+    sourceSummary,
   ].join('');
 }
 

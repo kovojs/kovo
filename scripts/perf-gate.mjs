@@ -31,6 +31,7 @@ import { performance } from 'node:perf_hooks';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { measureProcessTreeCommand } from './lib/process-tree-rss.mjs';
+import { collectPerformanceProvenance } from './lib/perf-provenance.mjs';
 import { materializePerfWorkload, perfWorkloadEditedComponent } from './perf-workload.mjs';
 
 export const PERF_REPORT_SCHEMA = 'kovo-perf-report/v1';
@@ -213,6 +214,91 @@ export function formatEvaluation(results) {
     `${String(failed)} failed, ${String(unproven)} unproven, ${String(results.length)} total`,
   );
   return `${lines.join('\n')}\n`;
+}
+
+export function parsePositiveIntegerOption(
+  name,
+  raw,
+  fallback,
+  { max = Number.MAX_SAFE_INTEGER, min = 1 } = {},
+) {
+  if (raw === undefined) return fallback;
+  if (raw === true) throw new Error(`--${name} requires an integer value`);
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new Error(
+      `--${name} must be an integer between ${String(min)} and ${String(max)}, got ${JSON.stringify(String(raw))}`,
+    );
+  }
+  return value;
+}
+
+export function parseLadderOption(raw = '8,24,72,216') {
+  if (raw === true) throw new Error('--ladder requires a comma-separated integer value');
+  const values = String(raw)
+    .split(',')
+    .map((value) => value.trim())
+    .map((value) => Number(value));
+  if (
+    values.length < 2 ||
+    values.some((value) => !Number.isInteger(value) || value < 1) ||
+    new Set(values).size !== values.length
+  ) {
+    throw new Error(
+      `--ladder must contain at least two distinct positive integers, got ${JSON.stringify(String(raw))}`,
+    );
+  }
+  return values;
+}
+
+export function wireResponseIntegrityProblems(
+  label,
+  response,
+  { allowedContentEncodings, contentTypePrefix, status = 200 } = {},
+) {
+  const problems = [];
+  if (response?.status !== status) {
+    problems.push(
+      `${label}: expected HTTP ${String(status)}, received ${String(response?.status)}`,
+    );
+  }
+  if (!Number.isFinite(response?.wireBytes) || response.wireBytes <= 0) {
+    problems.push(`${label}: response body carried no wire bytes`);
+  }
+  if (
+    contentTypePrefix !== undefined &&
+    !String(response?.headers?.['content-type'] ?? '').startsWith(contentTypePrefix)
+  ) {
+    problems.push(
+      `${label}: expected Content-Type ${contentTypePrefix}..., received ${String(response?.headers?.['content-type'] ?? 'missing')}`,
+    );
+  }
+  if (
+    allowedContentEncodings !== undefined &&
+    !allowedContentEncodings.includes(response?.contentEncoding)
+  ) {
+    problems.push(
+      `${label}: expected Content-Encoding ${allowedContentEncodings.map(String).join(' or ')}, received ${String(response?.contentEncoding ?? 'identity')}`,
+    );
+  }
+  return problems;
+}
+
+export function loadGenerationIntegrityProblems(label, result) {
+  const problems = [];
+  if ((result?.completed ?? 0) === 0) problems.push(`${label}: completed zero responses`);
+  if ((result?.requestErrors ?? 0) > 0) {
+    problems.push(`${label}: ${String(result.requestErrors)} requests failed before a response`);
+  }
+  if ((result?.responseErrors ?? 0) > 0) {
+    problems.push(`${label}: ${String(result.responseErrors)} response streams failed`);
+  }
+  for (const [status, count] of Object.entries(result?.statusCounts ?? {})) {
+    if (status !== '200' && count > 0) {
+      problems.push(`${label}: ${String(count)} responses returned HTTP ${status}`);
+    }
+  }
+  return problems;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -504,15 +590,36 @@ export async function runBytesSuite(options) {
     const compressed = { 'accept-encoding': 'br, gzip' };
     const document = await fetchWire(origin + '/', compressed);
     const identity = await fetchWire(origin + '/', { 'accept-encoding': 'identity' });
+    const integrityProblems = [
+      ...wireResponseIntegrityProblems('compressed document', document, {
+        allowedContentEncodings: ['br', 'gzip'],
+        contentTypePrefix: 'text/html',
+      }),
+      ...wireResponseIntegrityProblems('identity document', identity, {
+        allowedContentEncodings: [null],
+        contentTypePrefix: 'text/html',
+      }),
+    ];
 
     // Render-blocking closure: the document plus every stylesheet it links. Scripts are deferred by
     // construction in Kovo, so they are not on the critical path; a <link rel=stylesheet> is.
     const stylesheetHrefs = [
       ...(identity.text ?? '').matchAll(/<link[^>]+rel="stylesheet"[^>]*href="([^"]+)"/gu),
     ].map((match) => match[1]);
+    if (stylesheetHrefs.length === 0) {
+      integrityProblems.push(
+        "identity document linked no stylesheets; the critical-path metric would pass by omitting the workload's required CSS",
+      );
+    }
     let stylesheetWireBytes = 0;
     for (const href of stylesheetHrefs) {
       const asset = await fetchWire(new URL(href, origin).toString(), compressed);
+      integrityProblems.push(
+        ...wireResponseIntegrityProblems(`stylesheet ${href}`, asset, {
+          allowedContentEncodings: ['br', 'gzip'],
+          contentTypePrefix: 'text/css',
+        }),
+      );
       stylesheetWireBytes += asset.wireBytes;
     }
 
@@ -520,6 +627,12 @@ export async function runBytesSuite(options) {
       ...compressed,
       accept: 'application/vnd.kovo.document-parts+json',
     });
+    integrityProblems.push(
+      ...wireResponseIntegrityProblems('enhanced-navigation document', navigation, {
+        allowedContentEncodings: ['br', 'gzip'],
+        contentTypePrefix: 'application/vnd.kovo.document-parts+json',
+      }),
+    );
 
     const inlineScripts = [
       ...(identity.text ?? '').matchAll(/<script(?![^>]*\ssrc=)[^>]*>([\s\S]*?)<\/script>/gu),
@@ -528,6 +641,27 @@ export async function runBytesSuite(options) {
       (longest, candidate) => (candidate.length > longest.length ? candidate : longest),
       '',
     );
+    if (inlineBootstrap === '') {
+      integrityProblems.push(
+        'identity document carried no inline bootstrap; this workload is interactive, so zero bytes would be a functionality failure rather than a size win',
+      );
+    }
+
+    if (integrityProblems.length > 0) {
+      return {
+        detail: {
+          documentContentEncoding: document.contentEncoding,
+          documentStatus: document.status,
+          identityStatus: identity.status,
+          navigationContentType: navigation.headers['content-type'] ?? null,
+          navigationStatus: navigation.status,
+          stylesheetHrefs,
+        },
+        error: `bytes suite integrity check failed: ${integrityProblems.join('; ')}`,
+        metrics: {},
+        suite: 'bytes',
+      };
+    }
 
     return {
       detail: {
@@ -579,24 +713,42 @@ async function loadGenerate(origin, connections, durationMs) {
   const http = await import('node:http');
   const ttfbSamples = [];
   let completed = 0;
+  let requestErrors = 0;
+  let responseErrors = 0;
+  const statusCounts = {};
   const deadline = performance.now() + durationMs;
 
   async function oneRequest() {
     return new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
       const startedAt = performance.now();
       const request = http.get(
         `${origin}/`,
         { agent, headers: { 'accept-encoding': 'identity' } },
         (response) => {
+          const status = String(response.statusCode ?? 0);
+          statusCounts[status] = (statusCounts[status] ?? 0) + 1;
           ttfbSamples.push(performance.now() - startedAt);
           response.resume();
           response.on('end', () => {
             completed += 1;
-            resolve();
+            finish();
+          });
+          response.on('error', () => {
+            responseErrors += 1;
+            finish();
           });
         },
       );
-      request.on('error', () => resolve());
+      request.on('error', () => {
+        requestErrors += 1;
+        finish();
+      });
     });
   }
 
@@ -610,6 +762,9 @@ async function loadGenerate(origin, connections, durationMs) {
   agent.destroy();
   return {
     requestsPerSecond: (completed / elapsedMs) * 1000,
+    requestErrors,
+    responseErrors,
+    statusCounts,
     ttfbMedianMs: median(ttfbSamples),
     ttfbSampleCount: ttfbSamples.length,
   };
@@ -652,8 +807,26 @@ export async function runSsrSuite(options) {
         suite: 'ssr',
       };
     }
-    await loadGenerate(origin, options.connections, 2000);
+    const warmup = await loadGenerate(origin, options.connections, 2000);
+    const warmupProblems = loadGenerationIntegrityProblems('SSR warmup', warmup);
+    if (warmupProblems.length > 0) {
+      return {
+        detail: { warmup },
+        error: `SSR suite integrity check failed: ${warmupProblems.join('; ')}`,
+        metrics: {},
+        suite: 'ssr',
+      };
+    }
     const measured = await loadGenerate(origin, options.connections, options.durationMs);
+    const measurementProblems = loadGenerationIntegrityProblems('SSR measurement', measured);
+    if (measurementProblems.length > 0) {
+      return {
+        detail: { measured, warmup },
+        error: `SSR suite integrity check failed: ${measurementProblems.join('; ')}`,
+        metrics: {},
+        suite: 'ssr',
+      };
+    }
     return {
       detail: {
         ...measured,
@@ -661,6 +834,7 @@ export async function runSsrSuite(options) {
         // Diagnostic only: this is mostly the suite's own saturation, not contention.
         loadAverageDuringRun: observedLoadAverage(),
         preSuiteLoadAverage,
+        warmup,
       },
       metrics: {
         'production.ssr.requestsPerSecondFloor': {
@@ -971,25 +1145,28 @@ async function main(argv) {
   }
 
   const options = {
-    componentCount: Number(args.components ?? 24),
-    connections: Number(args.connections ?? 32),
+    componentCount: parsePositiveIntegerOption('components', args.components, 24, { max: 10_000 }),
+    connections: parsePositiveIntegerOption('connections', args.connections, 32, { max: 10_000 }),
     cpuProfDir: args['cpu-prof'] === undefined ? undefined : path.resolve(String(args['cpu-prof'])),
-    durationMs: Number(args.duration ?? 10_000),
-    editTimeoutMs: Number(args['edit-timeout'] ?? 240_000),
-    edits: Number(args.edits ?? 5),
+    durationMs: parsePositiveIntegerOption('duration', args.duration, 10_000, { max: 86_400_000 }),
+    editTimeoutMs: parsePositiveIntegerOption('edit-timeout', args['edit-timeout'], 240_000, {
+      max: 86_400_000,
+    }),
+    edits: parsePositiveIntegerOption('edits', args.edits, 5, { max: 10_000 }),
     heapProfDir:
       args['heap-prof'] === undefined ? undefined : path.resolve(String(args['heap-prof'])),
     // Default matches the span the budgets were calibrated on (the 72->216 marginal step). A
     // shorter default would compute the exponent over 24->72, where a genuinely quadratic workload
     // can still look linear — a gate that cannot see the regression it exists to catch.
-    ladder: String(args.ladder ?? '8,24,72,216')
-      .split(',')
-      .map((value) => Number(value.trim()))
-      .filter((value) => Number.isInteger(value) && value > 0),
-    port: Number(args.port ?? 43_117),
-    readyTimeoutMs: Number(args['ready-timeout'] ?? 300_000),
-    samples: Number(args.samples ?? 1),
-    timeoutMs: Number(args.timeout ?? 1_800_000),
+    ladder: parseLadderOption(args.ladder),
+    port: parsePositiveIntegerOption('port', args.port, 43_117, { max: 65_534, min: 1024 }),
+    readyTimeoutMs: parsePositiveIntegerOption('ready-timeout', args['ready-timeout'], 300_000, {
+      max: 86_400_000,
+    }),
+    samples: parsePositiveIntegerOption('samples', args.samples, 1, { max: 1_000 }),
+    timeoutMs: parsePositiveIntegerOption('timeout', args.timeout, 1_800_000, {
+      max: 86_400_000,
+    }),
   };
 
   const startedAt = new Date().toISOString();
@@ -999,6 +1176,14 @@ async function main(argv) {
     host: hostFacts(),
     options,
     schema: PERF_REPORT_SCHEMA,
+    source: collectPerformanceProvenance({
+      lockFiles: [
+        'pnpm-lock.yaml',
+        'benchmarks/nextjs/pnpm-lock.yaml',
+        'benchmarks/harness/pnpm-lock.yaml',
+      ],
+      repoRoot,
+    }),
     startedAt,
     ...result,
   };
