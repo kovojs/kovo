@@ -45,7 +45,14 @@ export async function runComparison(options = {}) {
   for (const cell of cells) assertMember('--cells', cell, defaultCells);
   if (new Set(cells).size !== cells.length) throw new Error('--cells must not contain duplicates.');
   assertMember('--corpus-size', options.corpusSize ?? 24, [24, 216]);
-  if (cells.includes('server')) assertServerMatrixOptions(options);
+  if (cells.includes('server')) {
+    if (options.skipBuild === true) {
+      throw new Error(
+        '--skip-build is unavailable when --cells includes server; each comparison must prepare fresh production artifacts.',
+      );
+    }
+    assertServerMatrixOptions(options);
+  }
   for (const lane of options.lanes ?? lanes) assertMember('--lanes', lane, lanes);
   for (const mode of options.buildModes ?? buildModes)
     assertMember('--build-modes', mode, buildModes);

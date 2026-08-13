@@ -13,6 +13,7 @@ import {
   fixtureProof,
   pairedAnalysis,
   performanceWorkloadIdentity,
+  runComparison,
   serverSampleSchedule,
   summarize,
   ttiInteractionProof,
@@ -21,6 +22,12 @@ import {
 } from './compare.mjs';
 
 describe('serialized comparison analysis', () => {
+  it('rejects stale production artifacts before a server comparison starts', async () => {
+    await expect(runComparison({ cells: ['server'], skipBuild: true })).rejects.toThrow(
+      /prepare fresh production artifacts/u,
+    );
+  });
+
   it('pins the alternating K,N,N,K execution order', () => {
     expect(EXECUTION_ORDER).toEqual(['kovo', 'nextjs', 'nextjs', 'kovo']);
   });
