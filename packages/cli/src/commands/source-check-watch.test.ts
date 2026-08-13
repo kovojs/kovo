@@ -2,11 +2,13 @@ import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { createInterface } from 'node:readline';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { snapshotKovoInvocationEnvironment } from '../invocation-environment.js';
+import { sourceCheckStylesheetPackageClosureDigestForTesting } from './build-export.js';
 import {
   KovoSourceCheckSessionFactCache,
   runKovoSourceCheckWatchCommand,
@@ -22,40 +24,36 @@ afterEach(() => {
 });
 
 describe('production source-check watch command', () => {
-  it('bounds digest-only session facts and destroys them when the session closes', () => {
+  it('re-exports the authenticated producer cache and destroys facts when it closes', () => {
     const enabled = new KovoSourceCheckSessionFactCache(true);
-    expect(enabled.observe('config-trust', digestA)).toBe(false);
-    expect(enabled.observe('config-trust', digestA)).toBe(true);
-    expect(enabled.observe('config-trust', digestB)).toBe(false);
-    expect(enabled.snapshot()).toEqual({
+    expect(enabled.consumeProducerFact('stylesheet', digestA)).toBeUndefined();
+    enabled.storeProducerFact('stylesheet', digestA, '{"passed":true}');
+    expect(enabled.consumeProducerFact('stylesheet', digestA)).toBe('{"passed":true}');
+    expect(enabled.consumeProducerFact('stylesheet', digestB)).toBeUndefined();
+    expect(enabled.snapshot()).toMatchObject({
       closed: false,
       enabled: true,
-      entries: 2,
+      entries: 1,
       hits: 1,
       misses: 2,
+      typescript: null,
     });
     enabled.close();
-    expect(enabled.snapshot()).toEqual({
+    expect(enabled.snapshot()).toMatchObject({
       closed: true,
       enabled: true,
       entries: 0,
       hits: 1,
       misses: 2,
+      payloadBytes: 0,
+      typescript: null,
     });
-    expect(() => enabled.observe('config-trust', digestA)).toThrow(/cache is closed/u);
-
-    const bounded = new KovoSourceCheckSessionFactCache(true);
-    for (let index = 0; index <= 512; index += 1) {
-      const digest = `sha256:${createHash('sha256').update(String(index)).digest('hex')}`;
-      expect(bounded.observe('app-source-trust', digest)).toBe(false);
-    }
-    expect(bounded.snapshot()).toMatchObject({ entries: 1, hits: 0, misses: 513 });
-    bounded.close();
+    expect(() => enabled.consumeProducerFact('stylesheet', digestA)).toThrow(/cache is closed/u);
 
     const disabled = new KovoSourceCheckSessionFactCache(false);
-    expect(disabled.observe('config-trust', digestA)).toBe(false);
-    expect(disabled.observe('config-trust', digestA)).toBe(false);
-    expect(disabled.snapshot()).toMatchObject({ enabled: false, entries: 0, hits: 0, misses: 2 });
+    disabled.storeProducerFact('stylesheet', digestA, '{"passed":true}');
+    expect(disabled.consumeProducerFact('stylesheet', digestA)).toBeUndefined();
+    expect(disabled.snapshot()).toMatchObject({ enabled: false, entries: 0, hits: 0, misses: 1 });
     disabled.close();
   });
 
@@ -254,15 +252,37 @@ describe('production source-check watch command', () => {
       } else {
         expect(edited.inputDigest, baseline.name).not.toBe(baseline.inputDigest);
       }
-      expect([baseline.status, edited.status, restored.status], baseline.name).not.toContain(
-        'reused-authenticated',
+      if (baseline.name === 'app-source-trust' || baseline.name === 'stylesheet') {
+        expect(baseline.status, baseline.name).toBe('executed');
+        expect(edited.status, baseline.name).toBe('executed');
+        expect(restored.status, baseline.name).toBe('reused-authenticated');
+      } else {
+        expect([baseline.status, edited.status, restored.status], baseline.name).not.toContain(
+          'reused-authenticated',
+        );
+      }
+    }
+    for (const record of records) {
+      const byName = new Map(
+        record.phaseCensus.phases.map((phase: { name: string; status: string }) => [
+          phase.name,
+          phase.status,
+        ]),
       );
+      for (const requiredFreshPhase of [
+        'session-authority',
+        'app-evaluation',
+        'build-check-graph',
+        'graph-diagnostics',
+      ]) {
+        expect(byName.get(requiredFreshPhase), requiredFreshPhase).toBe('executed');
+      }
     }
   }, 180_000);
 
-  it('republishes the accepted revision with reused-authenticated phases after a docs-only edit', async () => {
+  it('reuses only producer facts while freshly evaluating the app and rebuilding diagnostics', async () => {
     const root = fixtureRoot('session-reuse');
-    const appPath = join(root, 'src/app.tsx');
+    const stylesheetPath = join(root, 'src/styles.css');
     const notesPath = join(root, 'NOTES.md');
     writeSourceCheckFixture(root, sourceCheckApp('session reuse'));
     writeFileSync(notesPath, 'design notes\n', 'utf8');
@@ -279,7 +299,7 @@ describe('production source-check watch command', () => {
           const revision = JSON.parse(line).revision as number;
           if (revision === 0) writeFileSync(notesPath, 'design notes, expanded\n', 'utf8');
           if (revision === 1) {
-            writeFileSync(appPath, sourceCheckApp('session reuse, closure edit'), 'utf8');
+            writeFileSync(stylesheetPath, '.fixture { color: blue; }\n', 'utf8');
           }
         },
       },
@@ -296,44 +316,95 @@ describe('production source-check watch command', () => {
     expect(exit, lines.join('\n')).toBe(0);
     const [baseline, reused, edited] = records;
 
-    // Revision 1 (docs-only edit, plans/good-perf.md O11): the previous accepted result is
-    // republished under fresh byte evidence; every previously executed phase except the
-    // whole-project `typescript` phase reports `reused-authenticated` with zero duration.
+    // Revision 1 (docs-only edit): exact compiler producer facts may be reused, but SPEC §11.4
+    // still requires fresh app evaluation, runtime authority, graph assembly, and diagnostics.
     expect(reused.check.result.text).toBe(baseline.check.result.text);
     expect(reused.input).toEqual(baseline.input);
     expect(reused.phaseCensus.checkGraphDigest).toBe(baseline.phaseCensus.checkGraphDigest);
     expect(reused).not.toHaveProperty('continuity');
-    let reusedCount = 0;
-    for (let index = 0; index < baseline.phaseCensus.phases.length; index += 1) {
-      const before = baseline.phaseCensus.phases[index] as { name: string; status: string };
-      const after = reused.phaseCensus.phases[index] as { durationMs: number; status: string };
-      if (before.status !== 'executed') {
-        expect(after.status, before.name).toBe(before.status);
-        continue;
-      }
-      if (before.name === 'typescript') {
-        expect(after.status, before.name).toBe('executed');
-        continue;
-      }
-      expect(after.status, before.name).toBe('reused-authenticated');
-      expect(after.durationMs, before.name).toBe(0);
-      reusedCount += 1;
+    const reusedByName = new Map<string, { durationMs: number; status: string }>(
+      reused.phaseCensus.phases.map(
+        (phase: { durationMs: number; name: string; status: string }) => [
+          phase.name,
+          { durationMs: phase.durationMs, status: phase.status },
+        ],
+      ),
+    );
+    expect(reusedByName.get('app-source-trust')).toMatchObject({
+      durationMs: expect.any(Number),
+      status: 'reused-authenticated',
+    });
+    expect(reusedByName.get('app-source-trust')!.durationMs).toBeGreaterThan(0);
+    expect(reusedByName.get('stylesheet')).toMatchObject({
+      durationMs: expect.any(Number),
+      status: 'reused-authenticated',
+    });
+    expect(reusedByName.get('stylesheet')!.durationMs).toBeGreaterThan(0);
+    for (const requiredFreshPhase of [
+      'session-authority',
+      'app-evaluation',
+      'build-check-graph',
+      'graph-diagnostics',
+    ]) {
+      expect(reusedByName.get(requiredFreshPhase)?.status, requiredFreshPhase).toBe('executed');
     }
-    expect(reusedCount).toBeGreaterThan(0);
 
-    // Revision 2 (closure edit): reuse refuses and the complete fresh pipeline re-executes.
+    // Revision 2 (raw stylesheet edit): `preEvaluationApprovedBuildFiles` enrolls every stable
+    // src/**/*.css byte in the app-trust source digest, so neither trust nor style can reuse.
     expect(
       (edited.phaseCensus.phases as { status: string }[]).some(
         (phase) => phase.status === 'reused-authenticated',
       ),
     ).toBe(false);
-    expect(edited.input.projectDigest).not.toBe(baseline.input.projectDigest);
+    const editedByName = new Map<string, { status: string }>(
+      edited.phaseCensus.phases.map((phase: { name: string; status: string }) => [
+        phase.name,
+        { status: phase.status },
+      ]),
+    );
+    expect(editedByName.get('app-source-trust')?.status).toBe('executed');
+    expect(editedByName.get('stylesheet')?.status).toBe('executed');
     expect(
       (edited.phaseCensus.phases as { status: string }[]).filter(
         (phase) => phase.status === 'executed',
       ).length,
     ).toBeGreaterThan(0);
   }, 180_000);
+
+  it('binds stylesheet reuse to the UI implementation tree and raw vendored-source ledger', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-source-check-stylesheet-identity-'));
+    roots.push(root);
+    const packageRoot = join(root, 'node_modules/@kovojs/ui');
+    mkdirSync(join(packageRoot, 'src'), { recursive: true });
+    const appPath = join(root, 'src/app.tsx');
+    mkdirSync(join(root, 'src'), { recursive: true });
+    writeFileSync(appPath, 'export default {};\n', 'utf8');
+    const manifest = (authority: string) =>
+      JSON.stringify({
+        exports: { './button': './src/button.tsx' },
+        kovo: { authority, vendoredSource: true },
+        name: '@kovojs/ui',
+        type: 'module',
+        version: '0.3.0',
+      });
+    writeFileSync(join(packageRoot, 'package.json'), manifest('first'), 'utf8');
+    writeFileSync(join(packageRoot, 'src/button.tsx'), 'export const button = 1;\n', 'utf8');
+
+    const baseline = sourceCheckStylesheetPackageClosureDigestForTesting(appPath);
+    expect(baseline).toMatch(/^sha256:[0-9a-f]{64}$/u);
+    writeFileSync(join(packageRoot, 'src/button.tsx'), 'export const button = 2;\n', 'utf8');
+    const implementationChanged = sourceCheckStylesheetPackageClosureDigestForTesting(appPath);
+    expect(implementationChanged).toMatch(/^sha256:[0-9a-f]{64}$/u);
+    expect(implementationChanged).not.toBe(baseline);
+
+    // The generic capability fingerprint intentionally excludes package-specific `kovo` metadata;
+    // stylesheet extraction consumes its vendored-source hash ledger, so raw manifest bytes are a
+    // separate input and must invalidate reuse even at an unchanged package version.
+    writeFileSync(join(packageRoot, 'package.json'), manifest('second'), 'utf8');
+    const ledgerChanged = sourceCheckStylesheetPackageClosureDigestForTesting(appPath);
+    expect(ledgerChanged).toMatch(/^sha256:[0-9a-f]{64}$/u);
+    expect(ledgerChanged).not.toBe(implementationChanged);
+  });
 });
 
 function fixtureRoot(name: string): string {
@@ -361,6 +432,7 @@ function writeSourceCheckFixture(root: string, appSource: string): void {
     'utf8',
   );
   writeFileSync(join(root, 'src/client.ts'), 'export const client = true;\n', 'utf8');
+  writeFileSync(join(root, 'src/styles.css'), '.fixture { color: red; }\n', 'utf8');
 }
 
 function sourceCheckApp(reason: string): string {
