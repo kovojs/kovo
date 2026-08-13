@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   dynamicCachePostureFindings,
+  establishServerExpectation,
   responseFindings,
   runKeepAliveWindow,
   serverConditionKey,
@@ -121,5 +122,94 @@ describe('production server benchmark adapter', () => {
     } finally {
       agent.destroy();
     }
+  });
+
+  it('preserves Next.js identity-to-Brotli evidence as unsupported without a timing expectation', async () => {
+    const body = Buffer.from(
+      '<main data-benchmark-destination="listing">Field goods for everyday carry</main>',
+    );
+    const headers = {
+      'cache-control': 'public, max-age=0, must-revalidate',
+      'content-type': 'text/html; charset=utf-8',
+      etag: '"next-listing-v1"',
+      'x-nextjs-cache': 'HIT',
+    };
+    const requests = [];
+    const result = await establishServerExpectation({
+      agent: null,
+      condition: { concurrency: 1, encoding: 'br', mode: 'HIT', route: 'listing' },
+      framework: 'nextjs',
+      origin: 'http://localhost:1',
+      request: async ({ headers: requestHeaders }) => {
+        requests.push(requestHeaders);
+        return { body, headers, reusedSocket: true, statusCode: 200 };
+      },
+    });
+
+    expect(requests).toHaveLength(2);
+    expect(requests[1]['accept-encoding']).toBe('br');
+    expect(result).toMatchObject({
+      expectation: null,
+      requestEtag: null,
+      support: {
+        observedContentEncoding: null,
+        reason: 'requested Brotli returned the identity representation',
+        requestedContentEncoding: 'br',
+        status: 'unsupported',
+      },
+    });
+    expect(result.evidence).toMatchObject({
+      bodyBytes: body.byteLength,
+      contentEncoding: null,
+      requestAcceptEncoding: 'br',
+      selectedResponse: { bodyBytes: body.byteLength, contentEncoding: null, status: 200 },
+      status: 200,
+      wireBodyBytes: body.byteLength,
+    });
+    expect(result.evidence.bodySha256).toMatch(/^sha256:[0-9a-f]{64}$/u);
+    expect(result.evidence.selectedResponse.bodySha256).toBe(result.evidence.bodySha256);
+  });
+
+  it('does not downgrade Kovo or a non-identity encoding mismatch to unsupported', async () => {
+    const body = Buffer.from(
+      '<main data-benchmark-destination="listing">Field goods for everyday carry</main>',
+    );
+    const identity = {
+      body,
+      headers: {
+        'cache-control': 'public, max-age=0, must-revalidate',
+        'content-type': 'text/html',
+        etag: '"v1"',
+        'last-modified': 'Wed, 12 Aug 2026 00:00:00 GMT',
+      },
+      statusCode: 200,
+    };
+    const kovoResponses = [identity, identity];
+    await expect(
+      establishServerExpectation({
+        agent: null,
+        condition: { concurrency: 1, encoding: 'br', mode: 'HIT', route: 'listing' },
+        framework: 'kovo',
+        origin: 'http://localhost:1',
+        request: async () => kovoResponses.shift(),
+      }),
+    ).rejects.toThrow(/Content-Encoding: br/u);
+
+    const nextResponses = [
+      { ...identity, headers: { ...identity.headers, 'x-nextjs-cache': 'HIT' } },
+      {
+        ...identity,
+        headers: { ...identity.headers, 'content-encoding': 'gzip', 'x-nextjs-cache': 'HIT' },
+      },
+    ];
+    await expect(
+      establishServerExpectation({
+        agent: null,
+        condition: { concurrency: 1, encoding: 'br', mode: 'HIT', route: 'listing' },
+        framework: 'nextjs',
+        origin: 'http://localhost:1',
+        request: async () => nextResponses.shift(),
+      }),
+    ).rejects.toThrow(/Content-Encoding: br/u);
   });
 });

@@ -267,75 +267,86 @@ export async function runServerBenchmark(options, dependencies = {}) {
       timeout: 30_000,
     });
     try {
-      correctness = await establishExpectation({ agent, condition, framework, origin });
-      const requestHeaders = {
-        'accept-encoding': condition.encoding,
-        connection: 'keep-alive',
-        ...(correctness.requestEtag === null ? {} : { 'if-none-match': correctness.requestEtag }),
-      };
-      const warmup = await runKeepAliveWindow(
-        {
-          agent,
-          concurrency: condition.concurrency,
-          durationMs: warmupMs,
-          expectation: correctness.expectation,
-          headers: requestHeaders,
-          origin,
-          path: correctness.path,
-        },
-        dependencies,
-      );
-      if (warmup.failedRequests > 0 || warmup.misses > 0 || warmup.requests === 0) {
-        errors.push(
-          `warmup failed: requests=${String(warmup.requests)} errors=${String(warmup.failedRequests)} misses=${String(warmup.misses)}`,
+      correctness = await establishServerExpectation({
+        agent,
+        condition,
+        framework,
+        origin,
+        request: dependencies.request ?? requestOnce,
+      });
+      // A pinned comparator may truthfully lack a requested transport representation. Preserve the
+      // authenticated probe as `unsupported`, but never run an identity response through a Brotli
+      // timing cell or let it masquerade as one.
+      if (correctness.support.status === 'supported') {
+        const requestHeaders = {
+          'accept-encoding': condition.encoding,
+          connection: 'keep-alive',
+          ...(correctness.requestEtag === null ? {} : { 'if-none-match': correctness.requestEtag }),
+        };
+        const warmup = await runKeepAliveWindow(
+          {
+            agent,
+            concurrency: condition.concurrency,
+            durationMs: warmupMs,
+            expectation: correctness.expectation,
+            headers: requestHeaders,
+            origin,
+            path: correctness.path,
+          },
+          dependencies,
         );
-        errors.push(...warmup.errors);
-      } else {
-        const measured = await measureProcessTreeWindow(
-          server.child.pid,
-          () =>
-            runKeepAliveWindow(
-              {
-                agent,
-                concurrency: condition.concurrency,
-                durationMs,
-                expectation: correctness.expectation,
-                headers: requestHeaders,
-                origin,
-                path: correctness.path,
-              },
-              dependencies,
-            ),
-          { intervalMs: options.rssIntervalMs ?? 100 },
-        );
-        const load = measured.value;
-        const postflight = await requestOnce({
-          agent,
-          headers: requestHeaders,
-          origin,
-          path: correctness.path,
-          timeoutMs: 10_000,
-        });
-        const postflightFindings = responseFindings(postflight, correctness.expectation, {
-          kovoPads: new Set(),
-        });
-        errors.push(...load.errors, ...postflightFindings);
-        if (measured.metrics.samplingError)
-          errors.push(`RSS sampling: ${String(measured.metrics.samplingError)}`);
-        if (load.failedRequests > 0)
-          errors.push(`${String(load.failedRequests)} transport failures`);
-        if (load.misses > 0) errors.push(`${String(load.misses)} representation misses`);
-        if (load.requests === 0) errors.push('measurement completed zero requests');
-        if (load.reusedSockets === 0)
-          errors.push('keep-alive evidence observed zero reused sockets');
-        if (
-          correctness.expectation.kovoPad === 'required-fresh' &&
-          load.requests > 1 &&
-          load.kovoPadDistinct < 2
-        ) {
-          errors.push('Kovo-Pad did not vary across the measured response window');
+        if (warmup.failedRequests > 0 || warmup.misses > 0 || warmup.requests === 0) {
+          errors.push(
+            `warmup failed: requests=${String(warmup.requests)} errors=${String(warmup.failedRequests)} misses=${String(warmup.misses)}`,
+          );
+          errors.push(...warmup.errors);
+        } else {
+          const measured = await measureProcessTreeWindow(
+            server.child.pid,
+            () =>
+              runKeepAliveWindow(
+                {
+                  agent,
+                  concurrency: condition.concurrency,
+                  durationMs,
+                  expectation: correctness.expectation,
+                  headers: requestHeaders,
+                  origin,
+                  path: correctness.path,
+                },
+                dependencies,
+              ),
+            { intervalMs: options.rssIntervalMs ?? 100 },
+          );
+          const load = measured.value;
+          const postflight = await (dependencies.request ?? requestOnce)({
+            agent,
+            headers: requestHeaders,
+            origin,
+            path: correctness.path,
+            timeoutMs: 10_000,
+          });
+          const postflightFindings = responseFindings(postflight, correctness.expectation, {
+            kovoPads: new Set(),
+          });
+          errors.push(...load.errors, ...postflightFindings);
+          if (measured.metrics.samplingError)
+            errors.push(`RSS sampling: ${String(measured.metrics.samplingError)}`);
+          if (load.failedRequests > 0)
+            errors.push(`${String(load.failedRequests)} transport failures`);
+          if (load.misses > 0) errors.push(`${String(load.misses)} representation misses`);
+          if (load.requests === 0) errors.push('measurement completed zero requests');
+          if (load.reusedSockets === 0)
+            errors.push('keep-alive evidence observed zero reused sockets');
+          if (
+            correctness.expectation.kovoPad === 'required-fresh' &&
+            load.requests > 1 &&
+            load.kovoPadDistinct < 2
+          ) {
+            errors.push('Kovo-Pad did not vary across the measured response window');
+          }
+          sample = summarizeLoadSample(load, measured.metrics);
         }
-        sample = summarizeLoadSample(load, measured.metrics);
       }
     } finally {
       agent.destroy();
@@ -350,8 +361,16 @@ export async function runServerBenchmark(options, dependencies = {}) {
   const sourceAfter = collectPerformanceProvenance({ lockFiles: LOCK_FILES, repoRoot });
   const sourceStable = sameSourceState(source, sourceAfter);
   if (!sourceStable) errors.push('source provenance changed during sample');
+  const support = correctness?.support ?? {
+    reason: 'response support could not be established',
+    status: 'unproven',
+  };
   const misses = (sample?.misses ?? 0) + (sample?.failedRequests ?? 0);
-  const complete = errors.length === 0 && sample !== null && misses === 0 && correctness !== null;
+  const complete =
+    errors.length === 0 &&
+    misses === 0 &&
+    correctness !== null &&
+    (support.status === 'unsupported' || sample !== null);
   return {
     condition: {
       ...condition,
@@ -372,22 +391,40 @@ export async function runServerBenchmark(options, dependencies = {}) {
       processTreeSerialized: true,
       publishable: !source.dirty,
       sourceStable,
+      timingExcluded: support.status === 'unsupported',
     },
     policy: { durationMs, warmupMs },
     samples: sample === null ? [] : [sample],
     schema: SERVER_BENCHMARK_SCHEMA,
     source,
     sourceAfter,
+    support,
     verdict: {
-      reasons: [...(source.dirty ? ['source provenance is dirty'] : []), ...errors],
-      status: complete && !source.dirty ? 'measured' : 'unproven',
+      reasons: [
+        ...(source.dirty ? ['source provenance is dirty'] : []),
+        ...(support.status === 'unsupported' ? [support.reason] : []),
+        ...errors,
+      ],
+      status:
+        complete && !source.dirty
+          ? support.status === 'unsupported'
+            ? 'unsupported'
+            : 'measured'
+          : 'unproven',
     },
   };
 }
 
-async function establishExpectation({ agent, condition, framework, origin }) {
+/** Establish exact wire evidence before any timed request. */
+export async function establishServerExpectation({
+  agent,
+  condition,
+  framework,
+  origin,
+  request = requestOnce,
+}) {
   const pathValue = serverConditionPath(condition);
-  const identity = await requestOnce({
+  const identity = await request({
     agent,
     headers: { 'accept-encoding': 'identity', connection: 'keep-alive' },
     origin,
@@ -397,18 +434,36 @@ async function establishExpectation({ agent, condition, framework, origin }) {
   assertSuccessfulDocument(identity, condition);
   const identityDigest = sha256(identity.body);
   let selected = identity;
+  let support = { status: 'supported' };
   if (condition.encoding === 'br') {
-    selected = await requestOnce({
+    selected = await request({
       agent,
       headers: { 'accept-encoding': 'br', connection: 'keep-alive' },
       origin,
       path: pathValue,
       timeoutMs: 10_000,
     });
-    if (selected.statusCode !== 200 || headerValue(selected.headers, 'content-encoding') !== 'br') {
+    const observedEncoding = headerValue(selected.headers, 'content-encoding');
+    if (
+      framework === 'nextjs' &&
+      selected.statusCode === 200 &&
+      observedEncoding === null &&
+      selected.body.equals(identity.body)
+    ) {
+      assertSuccessfulDocument(selected, condition);
+      support = {
+        observedContentEncoding: null,
+        reason: 'requested Brotli returned the identity representation',
+        requestedContentEncoding: 'br',
+        status: 'unsupported',
+      };
+    } else if (selected.statusCode !== 200 || observedEncoding !== 'br') {
       throw new Error('Brotli prime did not return HTTP 200 with Content-Encoding: br');
     }
-    if (!brotliDecompressSync(selected.body).equals(identity.body)) {
+    if (
+      support.status === 'supported' &&
+      !brotliDecompressSync(selected.body).equals(identity.body)
+    ) {
       throw new Error('Brotli prime decoded to the wrong representation');
     }
   }
@@ -432,9 +487,9 @@ async function establishExpectation({ agent, condition, framework, origin }) {
   }
   let requestEtag = null;
   let primeRepresentation = selected;
-  if (condition.mode === '304') {
+  if (condition.mode === '304' && support.status === 'supported') {
     requestEtag = identityEtag;
-    primeRepresentation = await requestOnce({
+    primeRepresentation = await request({
       agent,
       headers: {
         'accept-encoding': condition.encoding,
@@ -475,6 +530,32 @@ async function establishExpectation({ agent, condition, framework, origin }) {
     }
   }
   const headers = selectedHeaders(primeRepresentation.headers);
+  if (support.status === 'unsupported') {
+    return {
+      evidence: {
+        bodyBytes: identity.body.byteLength,
+        bodySha256: identityDigest,
+        cacheControl,
+        contentEncoding: headerValue(primeRepresentation.headers, 'content-encoding'),
+        contentType: headerValue(identity.headers, 'content-type'),
+        etag: identityEtag,
+        exactResponseHeaders: headers,
+        identityResponse: responseEvidence(identity),
+        kovoPad: 'absent',
+        lastModified: headerValue(identity.headers, 'last-modified'),
+        requestAcceptEncoding: condition.encoding,
+        requestIfNoneMatch: null,
+        selectedResponse: responseEvidence(primeRepresentation),
+        status: primeRepresentation.statusCode,
+        wireBodyBytes: primeRepresentation.body.byteLength,
+        wireBodySha256: sha256(primeRepresentation.body),
+      },
+      expectation: null,
+      path: pathValue,
+      requestEtag: null,
+      support,
+    };
+  }
   const kovoPad =
     framework === 'kovo' && condition.encoding === 'br' && condition.mode !== '304'
       ? 'required-fresh'
@@ -511,6 +592,17 @@ async function establishExpectation({ agent, condition, framework, origin }) {
     expectation,
     path: pathValue,
     requestEtag,
+    support,
+  };
+}
+
+function responseEvidence(response) {
+  return {
+    bodyBytes: response.body.byteLength,
+    bodySha256: sha256(response.body),
+    contentEncoding: headerValue(response.headers, 'content-encoding'),
+    exactResponseHeaders: selectedHeaders(response.headers),
+    status: response.statusCode,
   };
 }
 
@@ -849,7 +941,8 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   await writeFile(path.resolve(output), `${JSON.stringify(report, null, 2)}\n`);
   if (
     report.integrity.complete !== true ||
-    (report.verdict?.status !== 'measured' && !process.argv.includes('--allow-dirty'))
+    (!['measured', 'unsupported'].includes(report.verdict?.status) &&
+      !process.argv.includes('--allow-dirty'))
   ) {
     process.stderr.write(`server benchmark is unproven: ${report.integrity.errors.join('; ')}\n`);
     process.exitCode = 2;
