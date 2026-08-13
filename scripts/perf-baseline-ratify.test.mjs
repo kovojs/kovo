@@ -303,6 +303,7 @@ function entryFixture(index, durationMs) {
 function githubEntryFixture(index, durationMs, runId) {
   const entry = entryFixture(index, durationMs);
   const github = {
+    eventSha: 'a'.repeat(40),
     job: 'performance-baselines',
     repository: 'kovojs/kovo',
     runAttempt: '1',

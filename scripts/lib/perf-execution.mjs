@@ -3,6 +3,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { canonicalJson } from './perf-host.mjs';
 
 export const PERF_EXECUTION_SCHEMA = 'kovo-performance-execution/v1';
+const commitPattern = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/u;
 
 /**
  * Identify one independent benchmark execution without pretending local metadata is CI authority.
@@ -41,7 +42,7 @@ export function executionIdentityFindings(execution, { requireProvider } = {}) {
   if (!execution || execution.schema !== PERF_EXECUTION_SCHEMA) {
     return ['execution identity is unavailable'];
   }
-  const { digest, schema, ...facts } = execution;
+  const { digest, schema: _schema, ...facts } = execution;
   const findings = [];
   if (digest !== sha256Canonical(facts)) {
     findings.push('execution digest is not derived from its facts');
@@ -59,6 +60,12 @@ export function executionIdentityFindings(execution, { requireProvider } = {}) {
       github.runUrl !== `${github.serverUrl}/${github.repository}/actions/runs/${github.runId}`
     ) {
       findings.push('GitHub execution URL is not derived from its facts');
+    }
+    if (!commitPattern.test(github?.eventSha ?? '')) {
+      findings.push('GitHub event SHA is malformed');
+    }
+    if (!commitPattern.test(github?.sha ?? '')) {
+      findings.push('GitHub source SHA is malformed');
     }
   } else if (
     execution.provider !== 'local' ||
@@ -81,15 +88,23 @@ function githubExecutionFacts(env) {
     'GITHUB_SHA',
     'GITHUB_WORKFLOW_REF',
   ];
-  if (!names.some((name) => nonEmptyString(env[name]))) return null;
-  const complete = names.every((name) => nonEmptyString(env[name]));
+  if (![...names, 'KOVO_PERF_SOURCE_SHA'].some((name) => nonEmptyString(env[name]))) {
+    return null;
+  }
+  const eventSha = env.GITHUB_SHA ?? null;
+  const sourceSha = nonEmptyString(env.KOVO_PERF_SOURCE_SHA) ? env.KOVO_PERF_SOURCE_SHA : eventSha;
+  const complete =
+    names.every((name) => nonEmptyString(env[name])) &&
+    commitPattern.test(eventSha ?? '') &&
+    commitPattern.test(sourceSha ?? '');
   const facts = {
+    eventSha,
     job: env.GITHUB_JOB ?? null,
     repository: env.GITHUB_REPOSITORY ?? null,
     runAttempt: env.GITHUB_RUN_ATTEMPT ?? null,
     runId: env.GITHUB_RUN_ID ?? null,
     serverUrl: env.GITHUB_SERVER_URL ?? null,
-    sha: env.GITHUB_SHA ?? null,
+    sha: sourceSha,
     workflowRef: env.GITHUB_WORKFLOW_REF ?? null,
   };
   facts.runUrl = complete
