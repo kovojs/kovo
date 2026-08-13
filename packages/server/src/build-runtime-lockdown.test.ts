@@ -444,7 +444,18 @@ function expectedHandlerPoisonProof(): unknown {
 }
 
 function inlineNodePoisonHandlerSource(): string {
-  return `${nodePoisonPackageSource()}
+  return `import { createRequire, syncBuiltinESMExports } from 'node:module';
+const kovoBuiltinRequire = createRequire(import.meta.url);
+const kovoBuiltinZlib = kovoBuiltinRequire('node:zlib');
+Reflect.set(kovoBuiltinZlib, 'createGzip', function poisonedCreateGzip() {
+  throw new Error('authored handler replaced createGzip before adapter capture');
+});
+Reflect.set(kovoBuiltinZlib, 'createBrotliCompress', function poisonedCreateBrotliCompress() {
+  throw new Error('authored handler replaced createBrotliCompress before adapter capture');
+});
+syncBuiltinESMExports();
+
+${nodePoisonPackageSource()}
 export default async function handler() {
   return new Response(JSON.stringify(await poisonResult()));
 }

@@ -324,6 +324,7 @@ let provedDocumentCompressionCacheCancellations = 0;
 let provedDocumentCompressionCacheCompressions = 0;
 let provedDocumentCompressionCacheHits = 0;
 let provedDocumentCompressionCacheMisses = 0;
+let provedDocumentCompressionCacheDisabledForBenchmark = false;
 
 interface ProvedDocumentCompressionEntry {
   readonly promise: Promise<Buffer>;
@@ -1539,7 +1540,13 @@ function provedDocumentCompressionCacheEligible(
   // SPEC §§2/9.5/14: the private witness is the positive proof. It is minted only after the
   // compiler manifest and credential-neutral request floor pass; Cookie/Authorization requests,
   // structural Response clones, and public ETags therefore arrive here without authority.
-  if (witness === undefined || method === 'HEAD') return false;
+  if (
+    provedDocumentCompressionCacheDisabledForBenchmark ||
+    witness === undefined ||
+    method === 'HEAD'
+  ) {
+    return false;
+  }
   if (response.status !== 200 || response.body === null) return false;
   if (
     hasHeader(response.headers, 'Set-Cookie') ||
@@ -1708,6 +1715,15 @@ export function provedDocumentCompressionCacheStatsForTest(): {
     hits: provedDocumentCompressionCacheHits,
     misses: provedDocumentCompressionCacheMisses,
   };
+}
+
+/**
+ * @internal Disable-only performance harness seam. It cannot mint or substitute the private
+ * SPEC §§2/9.5/14 Response witness and deliberately has no corresponding enable operation.
+ */
+export function disableProvedDocumentCompressionCacheForBenchmark(): void {
+  provedDocumentCompressionCacheDisabledForBenchmark = true;
+  clearProvedDocumentCompressionCacheForTest();
 }
 
 /** @internal Test-only reset; pending evicted work cannot repopulate the cache. */

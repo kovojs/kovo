@@ -359,7 +359,7 @@ async function emitNodePreset(
   }
   await writePresetDirectory(build.serverDir, outDir, 'server', 'node server');
   await stageNodeRootedFileRoots(build, outDir);
-  const nodeAdapterSource = nodeAdapterRuntimeSource();
+  const nodeAdapterSource = nodeAdapterRuntimeSource('./server/handler.mjs');
   const serverSource = nodeServerSource();
   validateGeneratedJavaScript(path.join(outDir, 'node-adapter.mjs'), nodeAdapterSource, 'module');
   validateGeneratedJavaScript(path.join(outDir, 'server.mjs'), serverSource, 'module');
@@ -459,7 +459,7 @@ async function emitVercelPreset(
   }
 
   await writePresetStaticFiles(build, outDir, 'static', 'vercel');
-  const nodeAdapterSource = nodeAdapterRuntimeSource();
+  const nodeAdapterSource = nodeAdapterRuntimeSource('./handler.mjs');
   const functionSource = vercelFunctionSource();
   validateGeneratedJavaScript(
     path.join(outDir, 'functions/kovo.func/node-adapter.mjs'),
@@ -1083,19 +1083,29 @@ function vercelStaticBuildOutputConfig(): unknown {
   };
 }
 
-function nodeAdapterRuntimeSource(): string {
-  return `import { randomBytes } from 'node:crypto';
+function nodeAdapterRuntimeSource(
+  handlerModulePath: './handler.mjs' | './server/handler.mjs',
+): string {
+  return `import { Buffer } from 'node:buffer';
+import { randomBytes } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { IncomingMessage, ServerResponse } from 'node:http';
 import { Http2ServerRequest } from 'node:http2';
 import { Socket } from 'node:net';
-import { constants as zlibConstants, createBrotliCompress, createGzip } from 'node:zlib';
+import {
+  brotliCompress,
+  constants as zlibConstants,
+  createBrotliCompress,
+  createGzip,
+  gzip,
+} from 'node:zlib';
 
 const NativeAbortController = globalThis.AbortController;
 const NativeAbortSignal = globalThis.AbortSignal;
 const NativeArray = globalThis.Array;
 const NativeHeaders = globalThis.Headers;
+const NativeMap = globalThis.Map;
 const NativeRequest = globalThis.Request;
 const NativeResponse = globalThis.Response;
 const NativeReadableStream = globalThis.ReadableStream;
@@ -1109,7 +1119,13 @@ const nativeObjectDefineProperty = Object.defineProperty;
 const nativeObjectFreeze = Object.freeze;
 const nativeObjectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const nativeObjectGetPrototypeOf = Object.getPrototypeOf;
+const nativeObjectIs = Object.is;
 const nativeObjectKeys = Object.keys;
+const nativeMapDelete = NativeMap.prototype.delete;
+const nativeMapForEach = NativeMap.prototype.forEach;
+const nativeMapGet = NativeMap.prototype.get;
+const nativeMapSet = NativeMap.prototype.set;
+const nativeMapSizeGetter = nativeObjectGetOwnPropertyDescriptor(NativeMap.prototype, 'size').get;
 const nativeWeakMapGet = NativeWeakMap.prototype.get;
 const nativeWeakMapSet = NativeWeakMap.prototype.set;
 const nativeWeakSetAdd = NativeWeakSet.prototype.add;
@@ -1129,6 +1145,9 @@ const nativeHeadersHas = NativeHeaders.prototype.has;
 const nativeHeadersSet = NativeHeaders.prototype.set;
 const nativeCreateBrotliCompress = createBrotliCompress;
 const nativeCreateGzip = createGzip;
+const nativeBrotliCompress = brotliCompress;
+const nativeGzip = gzip;
+const nativeBufferFrom = Buffer.from;
 const nativeRandomBytes = randomBytes;
 // SPEC §9.5 transport compression: brotli quality for per-request dynamic responses. Node's
 // default quality 11 costs ~163 ms per 225 KB document versus ~1.4 ms at quality 5 for a nearly
@@ -1138,6 +1157,7 @@ const brotliQualityParam = zlibConstants.BROTLI_PARAM_QUALITY;
 const brotliStreamFlush = zlibConstants.BROTLI_OPERATION_FLUSH;
 const gzipStreamFlush = zlibConstants.Z_SYNC_FLUSH;
 const nativeResponseBodyGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'body').get;
+const nativeResponseArrayBuffer = stablePrototypeFunction(NativeResponse.prototype, 'arrayBuffer');
 const nativeResponseHeadersGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'headers').get;
 const nativeResponseStatusGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'status').get;
 const nativeResponseStatusTextGetter = nativeObjectGetOwnPropertyDescriptor(NativeResponse.prototype, 'statusText').get;
@@ -1152,6 +1172,7 @@ const readableStreamControl = new NativeReadableStream();
 const readableStreamReaderControl = apply(nativeReadableStreamGetReader, readableStreamControl, []);
 const readableStreamReaderPrototype = apply(nativeObjectGetPrototypeOf, Object, [readableStreamReaderControl]);
 const nativeStreamReaderRead = stablePrototypeFunction(readableStreamReaderPrototype, 'read');
+const nativeStreamReaderCancel = stablePrototypeFunction(readableStreamReaderPrototype, 'cancel');
 const nativeStreamReaderReleaseLock = stablePrototypeFunction(readableStreamReaderPrototype, 'releaseLock');
 apply(nativeStreamReaderReleaseLock, readableStreamReaderControl, []);
 let readableStreamControllerControl;
@@ -1228,6 +1249,30 @@ const maxRequestUrlLength = ${MAX_REQUEST_URL_CHARACTERS};
 const maxRequestQueryEntries = ${MAX_REQUEST_QUERY_ENTRIES};
 const nodeRequestSnapshots = new NativeWeakMap();
 const preparedNodeIngressValues = new NativeWeakSet();
+const provedDocumentCompressionCacheMaxEntries = 128;
+const provedDocumentCompressionCacheMaxBytes = 32 * 1024 * 1024;
+const provedDocumentCompressionCache = new NativeMap();
+let provedDocumentCompressionCacheBytes = 0;
+let provedDocumentCompressionCacheCancellations = 0;
+let provedDocumentCompressionCacheCompressions = 0;
+let provedDocumentCompressionCacheHits = 0;
+let provedDocumentCompressionCacheMisses = 0;
+let provedDocumentCompressionCacheDisabledForBenchmark = false;
+
+// Import only after every Node and Web control above has been captured. A static dependency would
+// evaluate the authored handler first and let syncBuiltinESMExports() replace the adapter's Node
+// compression controls before capture. Top-level await preserves exact-module graph binding while
+// keeping SPEC §6.6 bootstrap order fail-closed.
+const generatedHandlerModule = await import(${buildSecuritySourceLiteral(handlerModulePath)});
+
+// Internal neutral-build tests may supply a hand-authored handler with no generated reader. That
+// fixture-compatibility path is strictly fail-closed: it returns no authority and cannot be
+// widened by a response header or write option. Real Node/Vercel production handlers always carry
+// the exact generated-only export above, tied to the Response witness WeakMap in their own bundle.
+const readGeneratedProvedDocumentCompressionWitness =
+  typeof generatedHandlerModule.__kovoReadProvedDocumentCompressionWitness === 'function'
+    ? generatedHandlerModule.__kovoReadProvedDocumentCompressionWitness
+    : () => undefined;
 
 export function nodeRequestToWebRequest(nodeRequest, options = {}, nodeResponse) {
   if (nodeResponse) pinNodeResponseTransport(nodeResponse);
@@ -1854,6 +1899,9 @@ function nodeResponseDestroyed(nodeResponse) {
 
 export async function writeWebResponseToNode(response, nodeResponse, method = 'GET', options = {}) {
   pinNodeResponseTransport(nodeResponse);
+  const provedDocumentWitness = apply(readGeneratedProvedDocumentCompressionWitness, undefined, [
+    response,
+  ]);
   // SPEC §6.6 rule 5: read the complete authored Response exactly once through boot-captured
   // accessors. The transport never consults its mutable prototype again after this snapshot.
   const pinnedResponse = snapshotWebResponse(response);
@@ -1861,6 +1909,16 @@ export async function writeWebResponseToNode(response, nodeResponse, method = 'G
   assertSafeTransportResponseHeaderEntries(transportResponseHeaderEntries(responseHeaders));
   stampBrowserStateResponseCacheFloor(responseHeaders);
   const compression = responseCompression(pinnedResponse, options, method);
+  const cachedCompressedBody =
+    compression === undefined ||
+    !provedDocumentCompressionCacheEligible(pinnedResponse, provedDocumentWitness, method)
+      ? undefined
+      : await compressedProvedDocumentBody(
+          response,
+          pinnedResponse.body,
+          provedDocumentWitness,
+          compression,
+        );
   if (
     options.httpVersion !== '2.0' &&
     (pinnedResponse.status >= 500 || nodeResponse.shouldKeepAlive === false)
@@ -1881,6 +1939,10 @@ export async function writeWebResponseToNode(response, nodeResponse, method = 'G
   nodeResponse.writeHead(pinnedResponse.status, pinnedResponse.statusText, headers);
   if (method === 'HEAD' || pinnedResponse.body === null) {
     nodeResponse.end();
+    return;
+  }
+  if (cachedCompressedBody !== undefined) {
+    nodeResponse.end(cachedCompressedBody);
     return;
   }
 
@@ -1910,6 +1972,177 @@ export async function writeWebResponseToNode(response, nodeResponse, method = 'G
     if (!isClientDisconnectStreamError(error)) throw error;
     nodeResponse.destroy();
   }
+}
+
+const provedDocumentCacheControl = 'public, max-age=0, must-revalidate';
+
+function provedDocumentCompressionCacheEligible(response, witness, method) {
+  // SPEC §§2/9.5/14: only the exact module-graph witness is positive proof. Cookie and
+  // Authorization requests never receive it from the generated handler; forged validators,
+  // structural clones, and all response-side personalization floors still fail closed here.
+  if (provedDocumentCompressionCacheDisabledForBenchmark || witness === undefined || method === 'HEAD') {
+    return false;
+  }
+  if (response.status !== 200 || response.body === null) return false;
+  if (
+    apply(nativeHeadersHas, response.headers, ['set-cookie']) ||
+    apply(nativeHeadersHas, response.headers, ['clear-site-data']) ||
+    apply(nativeHeadersHas, response.headers, ['content-encoding'])
+  ) {
+    return false;
+  }
+  const cacheControl = apply(nativeHeadersGet, response.headers, ['cache-control']) ?? '';
+  if (cacheControl !== provedDocumentCacheControl) return false;
+  return !cacheControlHasDirective(cacheControl, 'private') &&
+    !cacheControlHasDirective(cacheControl, 'no-store') &&
+    !cacheControlHasDirective(cacheControl, 'no-transform');
+}
+
+async function compressedProvedDocumentBody(response, pinnedBody, witness, encoding) {
+  const key = provedDocumentCompressionCacheKey(witness, encoding);
+  const existing = apply(nativeMapGet, provedDocumentCompressionCache, [key]);
+  if (existing !== undefined) {
+    provedDocumentCompressionCacheHits += 1;
+    // LRU-touch pending entries too so a concurrent cold burst shares one compression flight.
+    apply(nativeMapDelete, provedDocumentCompressionCache, [key]);
+    apply(nativeMapSet, provedDocumentCompressionCache, [key, existing]);
+    // The exact request body is no longer the compression source. Release its deadline/occupancy
+    // wrapper without awaiting an authored cancel hook; the authenticated cached bytes stand alone.
+    void cancelUnusedProvedDocumentBody(pinnedBody).catch(() => undefined);
+    return existing.promise;
+  }
+
+  provedDocumentCompressionCacheMisses += 1;
+  const promise = compressProvedDocumentResponse(response, encoding);
+  const entry = { promise, size: 0 };
+  apply(nativeMapSet, provedDocumentCompressionCache, [key, entry]);
+  trimProvedDocumentCompressionCache();
+  try {
+    const bytes = await promise;
+    if (apply(nativeObjectIs, Object, [
+      apply(nativeMapGet, provedDocumentCompressionCache, [key]),
+      entry,
+    ])) {
+      entry.size = bytes.byteLength;
+      provedDocumentCompressionCacheBytes += entry.size;
+      trimProvedDocumentCompressionCache();
+    }
+    return bytes;
+  } catch (error) {
+    deleteProvedDocumentCompressionEntry(key, entry);
+    throw error;
+  }
+}
+
+async function cancelUnusedProvedDocumentBody(body) {
+  let reader;
+  try {
+    reader = apply(nativeReadableStreamGetReader, body, []);
+  } catch {
+    return;
+  }
+  try {
+    await apply(nativeStreamReaderCancel, reader, [
+      'Kovo proved-document compressed representation cache hit',
+    ]);
+  } finally {
+    apply(nativeStreamReaderReleaseLock, reader, []);
+    provedDocumentCompressionCacheCancellations += 1;
+  }
+}
+
+function provedDocumentCompressionCacheKey(witness, encoding) {
+  return witness.buildToken.length + ':' + witness.buildToken +
+    witness.bodyDigest.length + ':' + witness.bodyDigest + ':' + encoding;
+}
+
+async function compressProvedDocumentResponse(response, encoding) {
+  provedDocumentCompressionCacheCompressions += 1;
+  const body = apply(nativeBufferFrom, Buffer, [
+    await apply(nativeResponseArrayBuffer, response, []),
+  ]);
+  return await new Promise((resolve, reject) => {
+    const callback = (error, compressed) => {
+      if (error !== null) reject(error);
+      else resolve(compressed);
+    };
+    if (encoding === 'br') {
+      nativeBrotliCompress(
+        body,
+        { params: { [brotliQualityParam]: brotliDynamicQuality } },
+        callback,
+      );
+    } else {
+      nativeGzip(body, { flush: gzipStreamFlush }, callback);
+    }
+  });
+}
+
+function trimProvedDocumentCompressionCache() {
+  while (
+    apply(nativeMapSizeGetter, provedDocumentCompressionCache, []) >
+      provedDocumentCompressionCacheMaxEntries ||
+    provedDocumentCompressionCacheBytes > provedDocumentCompressionCacheMaxBytes
+  ) {
+    let oldestKey;
+    let oldestEntry;
+    apply(nativeMapForEach, provedDocumentCompressionCache, [(entry, key) => {
+      if (oldestKey === undefined) {
+        oldestKey = key;
+        oldestEntry = entry;
+      }
+    }]);
+    if (oldestKey === undefined || oldestEntry === undefined) return;
+    deleteProvedDocumentCompressionEntry(oldestKey, oldestEntry);
+  }
+}
+
+function deleteProvedDocumentCompressionEntry(key, entry) {
+  if (!apply(nativeObjectIs, Object, [
+    apply(nativeMapGet, provedDocumentCompressionCache, [key]),
+    entry,
+  ])) return;
+  apply(nativeMapDelete, provedDocumentCompressionCache, [key]);
+  provedDocumentCompressionCacheBytes -= entry.size;
+}
+
+/** Internal benchmark seam: it can only remove the optimization, never grant cache authority. */
+export function disableProvedDocumentCompressionCacheForBenchmark() {
+  provedDocumentCompressionCacheDisabledForBenchmark = true;
+  clearProvedDocumentCompressionCacheForTest();
+}
+
+/** Internal emitted-adapter observation seam used by adversarial parity tests. */
+export function provedDocumentCompressionCacheStatsForTest() {
+  return {
+    bytes: provedDocumentCompressionCacheBytes,
+    cancellations: provedDocumentCompressionCacheCancellations,
+    compressions: provedDocumentCompressionCacheCompressions,
+    entries: apply(nativeMapSizeGetter, provedDocumentCompressionCache, []),
+    hits: provedDocumentCompressionCacheHits,
+    misses: provedDocumentCompressionCacheMisses,
+  };
+}
+
+/** Internal emitted-adapter proof-reader observation seam for graph-binding regression tests. */
+export function provedDocumentCompressionWitnessForTest(response) {
+  return apply(readGeneratedProvedDocumentCompressionWitness, undefined, [response]);
+}
+
+/** Internal emitted-adapter reset; pending evicted work cannot repopulate the cache. */
+export function clearProvedDocumentCompressionCacheForTest() {
+  const keys = [];
+  apply(nativeMapForEach, provedDocumentCompressionCache, [(_entry, key) => {
+    keys[keys.length] = key;
+  }]);
+  for (let index = 0; index < keys.length; index += 1) {
+    apply(nativeMapDelete, provedDocumentCompressionCache, [keys[index]]);
+  }
+  provedDocumentCompressionCacheBytes = 0;
+  provedDocumentCompressionCacheCancellations = 0;
+  provedDocumentCompressionCacheCompressions = 0;
+  provedDocumentCompressionCacheHits = 0;
+  provedDocumentCompressionCacheMisses = 0;
 }
 
 // SPEC §9.5 / O13: classify pipeline failures caused by the peer closing or the response
@@ -2516,6 +2749,9 @@ const nativeReflectApply = Reflect.apply;
 const nativeRegExpExec = NativeRegExp.prototype.exec;
 const nativeStringStartsWith = String.prototype.startsWith;
 const immutableAssetPathPattern = new NativeRegExp(${immutableAssetPathPatternSourceLiteral}, ${immutableAssetPathPatternFlagsLiteral});
+// Internal, disable-only performance harness switch; it never supplies cache proof authority.
+const disableProvedDocumentCompressionCacheForBenchmark =
+  process.env.KOVO_BENCHMARK_DISABLE_PROVED_DOCUMENT_COMPRESSION_CACHE === '1';
 let handlerPromise;
 let nodeAdapterPromise;
 
@@ -2564,7 +2800,12 @@ async function loadHandler() {
 }
 
 async function loadNodeAdapter() {
-  nodeAdapterPromise ||= import('./node-adapter.mjs');
+  nodeAdapterPromise ||= import('./node-adapter.mjs').then((adapter) => {
+    if (disableProvedDocumentCompressionCacheForBenchmark) {
+      adapter.disableProvedDocumentCompressionCacheForBenchmark();
+    }
+    return adapter;
+  });
   return nodeAdapterPromise;
 }
 function isImmutableStaticAssetPath(pathname) {
@@ -4286,16 +4527,10 @@ import {
 const lockRequestSafeRuntimeRealm = (${generatedRequestSafeRuntimeLockSource});
 lockRequestSafeRuntimeRealm(${generatedRequestSafeRuntimeInventorySource});
 
-const {
-  armIncompleteNodeRequestClose,
-  assertSafeTransportResponseHeaderEntries,
-  negotiateResponseCompression,
-  prepareNodeRequestIngress,
-  preparedNodeRequestToWebRequest,
-  preparedNodeRequestTransportMetadata,
-  rejectPreparedNodeRequestIngress,
-  writeWebResponseToNode,
-} = await import('./node-adapter.mjs');
+// Internal performance harness switch. Capture it before the adapter's static handler dependency
+// evaluates; the seam can only remove an optimization and cannot mint proof authority.
+const disableProvedDocumentCompressionCacheForBenchmark =
+  process.env.KOVO_BENCHMARK_DISABLE_PROVED_DOCUMENT_COMPRESSION_CACHE === '1';
 
 const NativeMap = globalThis.Map;
 const NativeObject = globalThis.Object;
@@ -4429,6 +4664,15 @@ const rootedFileCapabilities = new NativeMap();
 apply(nativeMapSet, rootedFileCapabilities, [clientRoot, await initializeRootedFileCapability(clientRoot)]);
 apply(nativeMapSet, rootedFileCapabilities, [staticRoot, await initializeRootedFileCapability(staticRoot)]);
 let handlerPromise;
+let nodeAdapterPromise;
+let armIncompleteNodeRequestClose;
+let assertSafeTransportResponseHeaderEntries;
+let negotiateResponseCompression;
+let prepareNodeRequestIngress;
+let preparedNodeRequestToWebRequest;
+let preparedNodeRequestTransportMetadata;
+let rejectPreparedNodeRequestIngress;
+let writeWebResponseToNode;
 
 function apply(fn, receiver, args) {
   return nativeReflectApply(fn, receiver, args);
@@ -4512,8 +4756,31 @@ function stablePrototypeGetter(prototype, property) {
 }
 
 async function importHandler() {
+  // node-adapter.mjs owns the static graph-bound witness-reader edge to this handler. Import the
+  // adapter only after this outer entry captured every Node authority above; its dependency then
+  // evaluates the authored graph without getting a chance to replace server transport controls.
+  await loadNodeAdapter();
   const module = await import('./server/handler.mjs');
   return module.default;
+}
+
+async function loadNodeAdapter() {
+  nodeAdapterPromise ||= (async () => {
+    const adapter = await import('./node-adapter.mjs');
+    if (disableProvedDocumentCompressionCacheForBenchmark) {
+      adapter.disableProvedDocumentCompressionCacheForBenchmark();
+    }
+    armIncompleteNodeRequestClose = adapter.armIncompleteNodeRequestClose;
+    assertSafeTransportResponseHeaderEntries = adapter.assertSafeTransportResponseHeaderEntries;
+    negotiateResponseCompression = adapter.negotiateResponseCompression;
+    prepareNodeRequestIngress = adapter.prepareNodeRequestIngress;
+    preparedNodeRequestToWebRequest = adapter.preparedNodeRequestToWebRequest;
+    preparedNodeRequestTransportMetadata = adapter.preparedNodeRequestTransportMetadata;
+    rejectPreparedNodeRequestIngress = adapter.rejectPreparedNodeRequestIngress;
+    writeWebResponseToNode = adapter.writeWebResponseToNode;
+    return adapter;
+  })();
+  return nodeAdapterPromise;
 }
 
 function loadHandler() {
@@ -4529,6 +4796,7 @@ export function createKovoNodeServer(options = {}) {
   const server = createNodeHttpServer(async (nodeRequest, nodeResponse) => {
     let diagnosticRequestUrl;
     try {
+      await loadNodeAdapter();
       const prepared = prepareNodeRequestIngress(nodeRequest, options);
       if (rejectPreparedNodeRequestIngress(prepared, nodeResponse)) return;
       const { acceptEncoding, httpVersion, method, target } =
@@ -4555,7 +4823,11 @@ export function createKovoNodeServer(options = {}) {
       if (apply(nativeServerResponseHeadersSentGetter, nodeResponse, [])) {
         apply(nativeServerResponseDestroy, nodeResponse, []);
       } else {
-        armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
+        // The adapter may itself be the failed import. In that bootstrap-failure case there is no
+        // captured teardown helper yet, but the outer server must still fail closed with a 500.
+        if (armIncompleteNodeRequestClose !== undefined) {
+          armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
+        }
         apply(nativeServerResponseWriteHead, nodeResponse, [500, {
           'content-type': 'text/plain; charset=utf-8',
         }]);

@@ -277,7 +277,8 @@ describe('proved-document validator tier and cache (SPEC §9.5, D9)', () => {
 
     const first = await handler(new Request('https://cache.example.test/'));
     const second = await handler(new Request('https://cache.example.test/'));
-    expect(first.headers.get('cache-control') ?? '').not.toContain('public');
+    expect(first.headers.get('cache-control')).toBe('private, no-store');
+    expect(first.headers.get('vary')).toContain('Cookie');
     expect(first.headers.get('etag')).toBeNull();
     expect(renders).toBe(2);
     expect(second.status).toBe(200);
@@ -303,7 +304,8 @@ describe('proved-document validator tier and cache (SPEC §9.5, D9)', () => {
     const first = await handler(new Request('https://cache.example.test/'));
     const second = await handler(new Request('https://cache.example.test/'));
     expect(first.status).toBe(200);
-    expect(first.headers.get('cache-control') ?? '').not.toContain('public');
+    expect(first.headers.get('cache-control')).toBe('private, no-store');
+    expect(first.headers.get('vary')).toContain('Cookie');
     expect(first.headers.get('etag')).toBeNull();
     expect(renders).toBe(2);
     expect(second.status).toBe(200);

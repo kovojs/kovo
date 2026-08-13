@@ -12152,9 +12152,11 @@ export function kovoServerHandlerEntrySource(
       runtimeTarget === 'cloudflare'
         ? ''
         : "import '@kovojs/server/internal/sql-parser-authority-bootstrap';",
-      `import { createRequestHandler, deriveClosedKovoApp, resolveKovoAppToken, runWithGeneratedLiveTargetRegistry } from ${stringifyBuildValue(
-        generatedHandlerRuntimeHref(),
-      )};`,
+      `import { createRequestHandler, deriveClosedKovoApp, resolveKovoAppToken, runWithGeneratedLiveTargetRegistry${
+        runtimeTarget === 'cloudflare'
+          ? ''
+          : ', readFrameworkProvedDocumentCompressionWitnessForGeneratedHandler'
+      } } from ${stringifyBuildValue(generatedHandlerRuntimeHref())};`,
       generatedClientModuleEntry === undefined
         ? ''
         : `import { claimGeneratedBuildClientModuleInstaller } from ${stringifyBuildValue(
@@ -12177,6 +12179,12 @@ export function kovoServerHandlerEntrySource(
       "const app = resolveKovoAppToken(appToken, 'generated production handler');",
       `const stylesheetAssets = ${stringifyBuildValue(stylesheetAssets)};`,
       'export default createRequestHandler(appWithBuildStylesheetAssets(app, stylesheetAssets));',
+      runtimeTarget === 'cloudflare'
+        ? ''
+        : '// SPEC §§2/9.5/14: generated-only, read-only proof bridge for the emitted adapter.',
+      runtimeTarget === 'cloudflare'
+        ? ''
+        : 'export const __kovoReadProvedDocumentCompressionWitness = readFrameworkProvedDocumentCompressionWitnessForGeneratedHandler;',
       '',
       'function appWithBuildStylesheetAssets(app, assets) {',
       '  const liveTargetRenderers = [];',

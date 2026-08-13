@@ -41,16 +41,21 @@ const generatedHandlerCreateAppPath = fileURLToPath(
 const generatedHandlerAppTokenPath = fileURLToPath(
   new URL('../../../server/src/app-token.ts', import.meta.url),
 );
+const generatedHandlerResponsePath = fileURLToPath(
+  new URL('../../../server/src/response.ts', import.meta.url),
+);
 
 async function executeGeneratedHandlerBundle(
   root: string,
   name: string,
   modules: Awaited<ReturnType<typeof compilerModules>>,
+  runtimeTarget: 'cloudflare' | 'node' = 'cloudflare',
 ) {
   const appPath = join(root, `${name}-app.mjs`);
   const entryPath = join(root, `${name}-handler.mjs`);
   const outputPath = join(root, `${name}-bundle.mjs`);
   const resultKey = `__kovo_generated_handler_${name}`;
+  const witnessKey = `${resultKey}_witness`;
   writeFileSync(join(root, 'runtime-registry.mjs'), '', 'utf8');
   writeFileSync(
     appPath,
@@ -58,6 +63,7 @@ async function executeGeneratedHandlerBundle(
       `import { createApp } from ${JSON.stringify(generatedHandlerCreateAppPath)};`,
       `import { createKovoAppToken } from ${JSON.stringify(generatedHandlerAppTokenPath)};`,
       `import { createMemoryVersionedClientModuleStore, snapshotVersionedClientModuleRegistry } from ${JSON.stringify(generatedHandlerClientModulesPath)};`,
+      `import { markFrameworkProvedDocumentCompressionResponse } from ${JSON.stringify(generatedHandlerResponsePath)};`,
       "const stale = [{ path: '/c/stale.client.js', source: 'export const stale = true;' }];",
       'const store = createMemoryVersionedClientModuleStore();',
       `store.replaceActiveSnapshot({ modules: stale, renderPlanFingerprint: ${JSON.stringify(
@@ -65,12 +71,13 @@ async function executeGeneratedHandlerBundle(
       )} });`,
       'const app = createApp({ clientModules: snapshotVersionedClientModuleRegistry(store), routes: [] });',
       `globalThis[${JSON.stringify(resultKey)}] = app;`,
+      `globalThis[${JSON.stringify(witnessKey)}] = markFrameworkProvedDocumentCompressionResponse(new Response('graph-bound'), 'generated-build-token', 'graph-bound');`,
       'export default createKovoAppToken(app);',
       '',
     ].join('\n'),
     'utf8',
   );
-  const emitted = kovoServerHandlerEntrySource(appPath, emptyStyles, 'cloudflare', modules, []);
+  const emitted = kovoServerHandlerEntrySource(appPath, emptyStyles, runtimeTarget, modules, []);
   const rewritten = emitted.replace(
     JSON.stringify(pathToFileURL(appPath).href),
     JSON.stringify(`./${name}-app.mjs`),
@@ -91,6 +98,9 @@ async function executeGeneratedHandlerBundle(
           build.onResolve({ filter: /^file:\/\// }, (args) => ({
             path: fileURLToPath(args.path),
           }));
+          build.onResolve({ filter: /^@kovojs\/server\// }, (args) => ({
+            path: fileURLToPath(import.meta.resolve(args.path)),
+          }));
         },
       },
     ],
@@ -108,9 +118,14 @@ async function executeGeneratedHandlerBundle(
         };
       }
     | undefined;
+  const witnessedResponse = (globalThis as Record<string, unknown>)[witnessKey] as
+    | Response
+    | undefined;
   delete (globalThis as Record<string, unknown>)[resultKey];
+  delete (globalThis as Record<string, unknown>)[witnessKey];
   if (!app) throw new Error('Generated handler app did not execute.');
-  return { app, exports };
+  if (!witnessedResponse) throw new Error('Generated handler witness fixture did not execute.');
+  return { app, exports, witnessedResponse };
 }
 
 describe('generated production handler client-module bootstrap', () => {
@@ -140,6 +155,7 @@ describe('generated production handler client-module bootstrap', () => {
     expect(source).not.toContain('export { claimGeneratedBuildClientModuleInstaller');
     expect(source.split('\n').filter((line) => line.startsWith('export '))).toEqual([
       'export default createRequestHandler(appWithBuildStylesheetAssets(app, stylesheetAssets));',
+      'export const __kovoReadProvedDocumentCompressionWitness = readFrameworkProvedDocumentCompressionWitnessForGeneratedHandler;',
     ]);
   });
 
@@ -185,6 +201,35 @@ describe('generated production handler client-module bootstrap', () => {
       expect(empty.app.clientModules.entries()).not.toContainEqual(
         expect.objectContaining({ path: '/c/stale.client.js' }),
       );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('exports a generated-only reader bound to the exact handler Response witness graph', async () => {
+    const root = mkdtempSync(join(process.cwd(), 'packages/cli/.tmp-generated-handler-witness-'));
+    try {
+      const generated = await executeGeneratedHandlerBundle(root, 'witness', [], 'node');
+      const reader = generated.exports.__kovoReadProvedDocumentCompressionWitness;
+      expect(reader).toBeTypeOf('function');
+      expect((reader as (response: Response) => unknown)(generated.witnessedResponse)).toEqual({
+        bodyDigest: expect.any(String),
+        buildToken: 'generated-build-token',
+      });
+      expect((reader as (response: Response) => unknown)(generated.witnessedResponse.clone())).toBe(
+        undefined,
+      );
+      expect(
+        (reader as (response: Response) => unknown)(
+          new Response('graph-bound', {
+            headers: {
+              'Cache-Control': 'public, max-age=0, must-revalidate',
+              ETag: '"forged"',
+              'Kovo-Build': 'generated-build-token',
+            },
+          }),
+        ),
+      ).toBeUndefined();
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
