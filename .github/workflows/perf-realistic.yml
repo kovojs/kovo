@@ -197,14 +197,14 @@ jobs:
           retention-days: 30
 
   dev-matrix:
-    name: N=${{ matrix.corpus-size }} developer loop
+    name: N=${{ matrix.corpus }} developer loop
     if: ${{ github.event_name != 'pull_request' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     strategy:
       fail-fast: false
       matrix:
-        corpus-size: [24, 216]
+        corpus: [24, 216]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -223,11 +223,11 @@ jobs:
           restore-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-
       - name: Generate the matched corpus
         env:
-          KOVO_PERF_CORPUS_SIZE: ${{ matrix.corpus-size }}
+          KOVO_PERF_CORPUS_SIZE: ${{ matrix.corpus }}
         run: vp exec node benchmarks/corpora/generate.mjs --sizes "$KOVO_PERF_CORPUS_SIZE"
       - name: Collect ready, edit, diagnostic, recovery and RSS evidence
         env:
-          KOVO_PERF_CORPUS_SIZE: ${{ matrix.corpus-size }}
+          KOVO_PERF_CORPUS_SIZE: ${{ matrix.corpus }}
         run: >-
           vp exec node benchmarks/compare.mjs
           --cells dev
@@ -240,19 +240,19 @@ jobs:
         if: always()
         with:
           if-no-files-found: warn
-          name: kovo-perf-dev-n${{ matrix.corpus-size }}
-          path: ${{ runner.temp }}/kovo-perf/dev-n${{ matrix.corpus-size }}
+          name: kovo-perf-dev-n${{ matrix.corpus }}
+          path: ${{ runner.temp }}/kovo-perf/dev-n${{ matrix.corpus }}
           retention-days: 30
 
   build-matrix:
-    name: N=${{ matrix.corpus-size }} production builds
+    name: N=${{ matrix.corpus }} production builds
     if: ${{ github.event_name != 'pull_request' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     strategy:
       fail-fast: false
       matrix:
-        corpus-size: [24, 216]
+        corpus: [24, 216]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -266,11 +266,11 @@ jobs:
         run: vp exec pnpm --dir benchmarks/nextjs install --ignore-workspace --frozen-lockfile
       - name: Generate the matched corpus
         env:
-          KOVO_PERF_CORPUS_SIZE: ${{ matrix.corpus-size }}
+          KOVO_PERF_CORPUS_SIZE: ${{ matrix.corpus }}
         run: vp exec node benchmarks/corpora/generate.mjs --sizes "$KOVO_PERF_CORPUS_SIZE"
       - name: Collect clean, unchanged and one-line-edit build evidence
         env:
-          KOVO_PERF_CORPUS_SIZE: ${{ matrix.corpus-size }}
+          KOVO_PERF_CORPUS_SIZE: ${{ matrix.corpus }}
         run: >-
           vp exec node benchmarks/compare.mjs
           --cells build
@@ -282,8 +282,8 @@ jobs:
         if: always()
         with:
           if-no-files-found: warn
-          name: kovo-perf-build-n${{ matrix.corpus-size }}
-          path: ${{ runner.temp }}/kovo-perf/build-n${{ matrix.corpus-size }}
+          name: kovo-perf-build-n${{ matrix.corpus }}
+          path: ${{ runner.temp }}/kovo-perf/build-n${{ matrix.corpus }}
           retention-days: 30
 
   server-matrix:
