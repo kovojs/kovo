@@ -139,6 +139,21 @@ describe('performance regression comparator', () => {
       'candidate corpus-n24/dev//edit.leafMs kovo summary is short or malformed',
     );
   });
+
+  it('uses the authenticated build total instead of the unrelated browser sample policy', () => {
+    const report = reportFixture();
+    report.workloadIdentity.identity.cells = ['build'];
+    report.workloadIdentity.identity.policies.browserSamples = 30;
+    report.workloadIdentity.identity.policies.buildSamples = 10;
+    report.workloadIdentity.digest = digest(canonicalJson(report.workloadIdentity.identity));
+    report.analysis = { 'corpus-n24/build/clean/durationMs': metricFixture(100, 10) };
+
+    expect(performanceReportFindings(report, 'candidate')).toEqual([]);
+    report.analysis['corpus-n24/build/clean/durationMs'] = metricFixture(100, 30);
+    expect(performanceReportFindings(report, 'candidate')).toContain(
+      'candidate corpus-n24/build/clean/durationMs kovo summary is short or malformed',
+    );
+  });
 });
 
 function reportFixture({

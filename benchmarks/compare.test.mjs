@@ -185,6 +185,18 @@ describe('serialized comparison analysis', () => {
     );
   });
 
+  it('authenticates build sample totals independently from the browser policy', async () => {
+    const workload = await performanceWorkloadIdentity(
+      { cells: ['build'], corpusSize: 24, iterations: 10 },
+      ['build'],
+    );
+    expect(workload.identity.policies).toMatchObject({
+      browserSamples: 10,
+      buildSamples: 10,
+      corpusSize: 24,
+    });
+  });
+
   it('recomputes host digests instead of trusting their presence', () => {
     const host = performanceHostFingerprint({ runnerImage: 'runner@sha256:fixture' });
     expect(validHostFingerprint(host)).toBe(true);

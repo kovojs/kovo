@@ -1727,6 +1727,7 @@ export async function performanceWorkloadIdentity(
     policies: {
       bfcacheIterations: options.bfcacheIterations ?? 10,
       browserSamples: options.iterations ?? 30,
+      buildSamples: options.iterations ?? 30,
       buildModes: [...(options.buildModes ?? buildModes)],
       corpusSize,
       devEditSamples: options.devIterations ?? 30,

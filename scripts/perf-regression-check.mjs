@@ -264,9 +264,14 @@ function expectedMetricSamples(metric, workloadIdentity) {
   const policies = workloadIdentity?.policies;
   const cell = metric.split('/')[1];
   if (!ownRecord(policies)) return null;
-  if (cell === 'browser' || cell === 'build') {
+  if (cell === 'browser') {
     return Number.isSafeInteger(policies.browserSamples) && policies.browserSamples > 0
       ? policies.browserSamples
+      : null;
+  }
+  if (cell === 'build') {
+    return Number.isSafeInteger(policies.buildSamples) && policies.buildSamples > 0
+      ? policies.buildSamples
       : null;
   }
   if (cell === 'server') {
