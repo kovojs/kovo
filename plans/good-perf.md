@@ -154,6 +154,12 @@ benchmarks/matched-fixtures.test.mjs --reporter=dot` passed 8/8 for both corpus 
 
 ## Phase 3 — production runtime
 
+- [ ] Highest priority: authenticate and reproduce the constant-module canonicalization/SHA-256
+      memoization candidate from its originating profile, raw report, throwaway worktree, and exact
+      commit. Decide it only from clean committed baseline/candidate worktrees in serialized
+      `baseline, spike, spike, baseline` order on forced-dynamic listing/detail routes at
+      c={1,8,32}; retain throughput, p50/p95/p99, CPU, peak RSS, byte-equivalence, and before/after
+      CPU profiles, and apply the plan's declared acceptance rule.
 - [ ] Run the matched L0/L1 browser matrix before changing navigation or runtime emission. Preserve
       inert documents at zero JS; the deterministic spike found the ordinary deferred runtime at
       49,236 B Brotli and the enhanced-navigation closure alone at 22,642 B Brotli.
