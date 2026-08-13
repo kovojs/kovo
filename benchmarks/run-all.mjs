@@ -40,19 +40,19 @@ const DEVELOPMENT_POSTURE_MARKERS = [' in development', 'development posture'];
 
 const allApps = [
   {
-    build: ['pnpm', ['--dir', path.join(benchmarkRoot, 'kovo'), 'run', 'build']],
+    build: ['vp', ['exec', 'pnpm', '--dir', path.join(benchmarkRoot, 'kovo'), 'run', 'build']],
     cwd: path.join(benchmarkRoot, 'kovo'),
     env: { NODE_ENV: 'production', ...kovoAttestation },
     framework: 'Kovo',
     id: 'kovo',
     port: 4310,
-    start: ['pnpm', ['run', 'start']],
+    start: [process.execPath, ['dist/server/server.mjs']],
     versions: {
       kovo: await ownPackageVersion(path.join(repoRoot, 'packages/server/package.json')),
     },
   },
   {
-    build: ['pnpm', ['--dir', path.join(benchmarkRoot, 'nextjs'), 'run', 'build']],
+    build: ['vp', ['exec', 'pnpm', '--dir', path.join(benchmarkRoot, 'nextjs'), 'run', 'build']],
     cwd: path.join(benchmarkRoot, 'nextjs'),
     env: { NODE_ENV: 'production' },
     framework: 'Next.js App Router',
@@ -66,13 +66,13 @@ const allApps = [
     ]),
   },
   {
-    build: ['pnpm', ['--dir', path.join(benchmarkRoot, 'tanstack'), 'run', 'build']],
+    build: ['vp', ['exec', 'pnpm', '--dir', path.join(benchmarkRoot, 'tanstack'), 'run', 'build']],
     cwd: path.join(benchmarkRoot, 'tanstack'),
     env: { NODE_ENV: 'production' },
     framework: 'TanStack Start',
     id: 'tanstack',
     port: 4312,
-    start: ['pnpm', ['run', 'start']],
+    start: [process.execPath, ['scripts/serve.mjs']],
     versions: await dependencyVersions(path.join(benchmarkRoot, 'tanstack/package.json'), [
       '@tanstack/react-start',
       '@tanstack/react-router',

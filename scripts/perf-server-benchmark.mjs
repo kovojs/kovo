@@ -603,7 +603,7 @@ async function entrantDefinition(framework, portValue) {
     return {
       appRoot,
       artifacts: [path.join(appRoot, 'dist/server/server.mjs')],
-      build: ['pnpm', ['--dir', appRoot, 'run', 'build']],
+      build: ['vp', ['exec', 'pnpm', '--dir', appRoot, 'run', 'build']],
       env: {
         KOVO_ATTESTATION_DEPLOYMENT_ID: deploymentId,
         KOVO_ATTESTATION_SECRET: randomBytes(32).toString('hex'),
@@ -619,7 +619,7 @@ async function entrantDefinition(framework, portValue) {
   return {
     appRoot,
     artifacts: [path.join(appRoot, '.next/standalone/benchmarks/nextjs/server.js')],
-    build: ['pnpm', ['--dir', appRoot, 'run', 'build']],
+    build: ['vp', ['exec', 'pnpm', '--dir', appRoot, 'run', 'build']],
     env: { NODE_ENV: 'production' },
     framework,
     port,
