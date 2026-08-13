@@ -1,7 +1,7 @@
 {
   "$comment": "Reviewer-authored closed membership for every manifest-public first-party runtime export and module initializer. New packages, subpaths, value exports, condition arms, or manifest targets fail the gate until explicitly classified. SPEC.md §6.6.",
   "schema": "kovo-framework-public-runtime-export-posture/v1",
-  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-29.1",
+  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-08-13.1",
   "emptyPublicPackages": [
     {
       "packageName": "@kovojs/compiler",
@@ -783,7 +783,7 @@
           "reason": "The diagnostic schema constant belongs to the build-time CLI package and is not request-handler authority."
         }
       ],
-      "sourceTreeSha256": "d05fca488f5192729804a2634967941e818166b7555f02b4684a63d24ec73af3"
+      "sourceTreeSha256": "2ac78313e26b5e6e10b36918165aee71780e2e69ea56cbb784fbdba5a62920fe"
     },
     {
       "manifestVariants": [
