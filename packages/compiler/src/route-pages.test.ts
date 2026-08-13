@@ -1270,4 +1270,215 @@ export const admin = route('/admin', {
     expect(result?.files[0]?.source).toContain('"guards":["authed"]');
     expect(poisonHits).toBe(0);
   });
+
+  // @kovo-security-classifier-corpus finite-security-operation-ir
+  // SPEC §8 / C13 superset: preserve every historical Speculation Rules refusal while keeping
+  // the normative default off. These cases reproduce the c478c52e4/1699f34f0 fail-open shapes.
+  it('fails closed for unproved explicit moderate-prefetch render shapes', () => {
+    const cases = [
+      {
+        name: 'out-of-line async page',
+        source: `
+import { publicAccess, route } from '@kovojs/server';
+const loadPage = async () => { await fetch('/inventory'); return <main>Inventory</main>; };
+export const inventory = route('/inventory', {
+  access: publicAccess('public inventory page'),
+  prefetch: 'moderate',
+  page: loadPage,
+});
+`,
+        reason: 'page is indirect',
+      },
+      {
+        name: 'shorthand page indirection',
+        source: `
+import { publicAccess, route } from '@kovojs/server';
+const page = async () => { await fetch('/inventory'); return <main>Inventory</main>; };
+export const inventory = route('/inventory', {
+  access: publicAccess('public inventory page'),
+  prefetch: 'moderate',
+  page,
+});
+`,
+        reason: 'page is indirect',
+      },
+      {
+        name: 'inline await',
+        source: `
+import { publicAccess, route } from '@kovojs/server';
+export const inventory = route('/inventory', {
+  access: publicAccess('public inventory page'),
+  prefetch: 'moderate',
+  page: async () => { await fetch('/inventory'); return <main>Inventory</main>; },
+});
+`,
+        reason: 'page is async',
+      },
+      {
+        name: 'inline helper call',
+        source: `
+import { publicAccess, route } from '@kovojs/server';
+const readClock = () => Date.now();
+export const inventory = route('/inventory', {
+  access: publicAccess('public inventory page'),
+  prefetch: 'moderate',
+  page: () => <main>{readClock()}</main>,
+});
+`,
+        reason: 'page contains a call',
+      },
+      {
+        name: 'out-of-line metadata',
+        source: `
+import { publicAccess, route } from '@kovojs/server';
+const meta = async () => ({ title: String(await fetch('/title')) });
+export const inventory = route('/inventory', {
+  access: publicAccess('public inventory page'),
+  meta,
+  prefetch: 'moderate',
+  page: () => <main>Inventory</main>,
+});
+`,
+        reason: 'meta is indirect',
+      },
+      {
+        name: 'guard hidden by a route spread',
+        source: `
+import { publicAccess, route } from '@kovojs/server';
+const inherited = { guard: () => ({ ok: true }) };
+export const inventory = route('/inventory', {
+  ...inherited,
+  access: publicAccess('public inventory page'),
+  prefetch: 'moderate',
+  page: () => <main>Inventory</main>,
+});
+`,
+        reason: 'route definition contains a spread',
+      },
+      {
+        name: 'inline layout guard',
+        source: `
+import { layout, publicAccess, route } from '@kovojs/server';
+const shell = layout({
+  access: publicAccess('public shell'),
+  guard: () => ({ ok: true }),
+  render: (_queries, _state, { children }) => <main>{children}</main>,
+});
+export const inventory = route('/inventory', {
+  layout: shell,
+  prefetch: 'moderate',
+  page: () => <section>Inventory</section>,
+});
+`,
+        reason: "layout 'shell' is guarded",
+      },
+      {
+        name: 'layout posture hidden by a spread',
+        source: `
+import { layout, publicAccess, route } from '@kovojs/server';
+const inherited = { guard: () => ({ ok: true }) };
+const shell = layout({
+  ...inherited,
+  access: publicAccess('public shell'),
+  render: (_queries, _state, { children }) => <main>{children}</main>,
+});
+export const inventory = route('/inventory', {
+  layout: shell,
+  prefetch: 'moderate',
+  page: () => <section>Inventory</section>,
+});
+`,
+        reason: "layout 'shell' contains a spread",
+      },
+      {
+        name: 'non-final layout binding',
+        source: `
+import { layout, publicAccess, route } from '@kovojs/server';
+let shell = layout({
+  access: publicAccess('public shell'),
+  render: (_queries, _state, { children }) => <main>{children}</main>,
+});
+shell = layout({
+  guard: () => ({ ok: true }),
+  render: (_queries, _state, { children }) => <main>{children}</main>,
+});
+export const inventory = route('/inventory', {
+  layout: shell,
+  prefetch: 'moderate',
+  page: () => <section>Inventory</section>,
+});
+`,
+        reason: "layout 'shell' binding is not one top-level const declaration",
+      },
+      {
+        name: 'mutable and shadowable page binding',
+        source: `
+import { publicAccess, route } from '@kovojs/server';
+let page = async () => { await fetch('/inventory'); return <main>Inventory</main>; };
+page = () => <main>Reassigned</main>;
+export const inventory = route('/inventory', {
+  access: publicAccess('public inventory page'),
+  prefetch: 'moderate',
+  page,
+});
+`,
+        reason: 'page is indirect',
+      },
+    ];
+
+    for (const fixture of cases) {
+      const result = compileRouteModule({
+        fileName: `src/${fixture.name.replaceAll(' ', '-')}.tsx`,
+        source: fixture.source,
+      });
+      const kv419 = result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV419');
+      expect(kv419, fixture.name).toHaveLength(1);
+      expect(kv419[0]?.message, fixture.name).toContain(fixture.reason);
+      expect(isRegisteredDiagnostic(kv419[0]), fixture.name).toBe(true);
+    }
+  });
+
+  it('accepts only a statically proved or explicitly justified moderate-prefetch route', () => {
+    const proved = compileRouteModule({
+      fileName: 'src/proved-prefetch.tsx',
+      source: `
+import { publicAccess, route } from '@kovojs/server';
+export const posts = route('/users/:id/posts', {
+  access: publicAccess('public posts page'),
+  meta: { title: 'Posts' },
+  prefetch: 'moderate',
+  page: ({ params }) => <main data-user={params.id}>Posts</main>,
+});
+`,
+    });
+    expect(proved.diagnostics.filter((diagnostic) => diagnostic.code === 'KV419')).toEqual([]);
+
+    const justified = compileRouteModule({
+      fileName: 'src/justified-prefetch.tsx',
+      source: `
+import { publicAccess, route } from '@kovojs/server';
+const indirectPage = async () => { await fetch('/posts'); return <main>Posts</main>; };
+export const posts = route('/users/:id/posts', {
+  access: publicAccess('public posts page'),
+  prefetch: 'moderate',
+  prefetchJustification: 'Reviewed read-only render; repeated credentialed GET is safe.',
+  page: indirectPage,
+});
+`,
+    });
+    expect(justified.diagnostics.filter((diagnostic) => diagnostic.code === 'KV419')).toEqual([]);
+
+    const off = compileRouteModule({
+      fileName: 'src/default-off-prefetch.tsx',
+      source: `
+import { publicAccess, route } from '@kovojs/server';
+const indirectPage = async () => { await fetch('/posts'); return <main>Posts</main>; };
+export const posts = route('/users/:id/posts', {
+  access: publicAccess('public posts page'),
+  page: indirectPage,
+});
+`,
+    });
+    expect(off.diagnostics.filter((diagnostic) => diagnostic.code === 'KV419')).toEqual([]);
+  });
 });

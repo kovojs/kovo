@@ -92,11 +92,13 @@ interface RoutePageHandler {
 
 interface RouteLayoutModel {
   access?: AccessDecisionFact;
+  definition: TS.ObjectLiteralExpression;
   guard?: string;
   localName: string;
   parent?: string;
   parentLength?: number;
   parentStart?: number;
+  prefetchBindingFinal: boolean;
   queries: readonly string[];
   start: number;
 }
@@ -247,6 +249,15 @@ function routePageFromCall(
     | undefined;
   if (!pathArg || !ts.isStringLiteralLike(pathArg)) return null;
   if (!definitionArg || !ts.isObjectLiteralExpression(definitionArg)) return null;
+
+  appendModeratePrefetchSafetyDiagnostics(
+    fileName,
+    source,
+    sourceFile,
+    definitionArg,
+    layouts,
+    diagnostics,
+  );
 
   const pageHandler = objectPageHandler(definitionArg, 'page', sourceFile);
   const regions = routeRegionFacts(
@@ -478,6 +489,407 @@ function appendRouteScopedKeyViolationDiagnostics(
       'Compiler route scoped-key diagnostics',
     );
   }
+}
+
+interface ModeratePrefetchMember {
+  readonly ambiguous: boolean;
+  readonly node?: TS.ObjectLiteralElementLike;
+  readonly value?: TS.Node;
+}
+
+/**
+ * SPEC §8 / KV419: an explicit `prefetch: 'moderate'` may execute a target route's server render
+ * for a navigation the user never completes. The runtime guard check is only a backstop: the
+ * compiler must also fail closed when page/meta/layout bodies are indirect or visibly effectful.
+ *
+ * This intentionally does not revive the rejected compiler-derived/default-on route-table proof
+ * from `perf/speculation-rules`. Explicit opt-in remains the only emission trigger. The analysis is
+ * route-local, consumes typed AST facts only (SPEC §5.2 rule 10), and treats every unresolved shape
+ * as unsafe unless the route carries the normative named justification.
+ */
+function appendModeratePrefetchSafetyDiagnostics(
+  fileName: string,
+  source: string,
+  sourceFile: TS.SourceFile,
+  definition: TS.ObjectLiteralExpression,
+  layouts: ReadonlyMap<string, RouteLayoutModel>,
+  diagnostics: CompilerDiagnostic[],
+): void {
+  const prefetch = moderatePrefetchMember(definition, 'prefetch');
+  if (!prefetch.node) return;
+  const prefetchValue = prefetch.value
+    ? unwrapExpression(prefetch.value as TS.Expression)
+    : undefined;
+  const isModerate =
+    prefetchValue !== undefined && ts.isStringLiteralLike(prefetchValue)
+      ? prefetchValue.text === 'moderate'
+      : prefetchValue?.kind === ts.SyntaxKind.FalseKeyword
+        ? false
+        : true;
+  if (!isModerate) return;
+
+  const justification = moderatePrefetchMember(definition, 'prefetchJustification');
+  if (
+    !prefetch.ambiguous &&
+    prefetchValue !== undefined &&
+    ts.isStringLiteralLike(prefetchValue) &&
+    prefetchValue.text === 'moderate' &&
+    !routeObjectHasSpread(definition) &&
+    !justification.ambiguous &&
+    justification.value
+  ) {
+    const value = unwrapExpression(justification.value as TS.Expression);
+    if (ts.isStringLiteralLike(value) && isCompilerAuditText(value.text)) return;
+  }
+
+  const reasons: string[] = [];
+  if (prefetch.ambiguous) {
+    appendModeratePrefetchReason(reasons, 'prefetch posture is not one final literal');
+  }
+  if (routeObjectHasSpread(definition)) {
+    appendModeratePrefetchReason(reasons, 'route definition contains a spread');
+  }
+
+  const guard = moderatePrefetchMember(definition, 'guard');
+  if (guard.node || guard.ambiguous) {
+    appendModeratePrefetchReason(reasons, 'route is guarded or its guard posture is ambiguous');
+  }
+
+  let publicAccess = moderatePrefetchAccessIsPublic(definition, sourceFile);
+
+  appendModeratePrefetchHandlerMemberReasons(definition, 'page', 'page', reasons);
+  appendModeratePrefetchMetaReasons(definition, reasons);
+  appendModeratePrefetchRegionsReasons(definition, reasons);
+
+  const layout = moderatePrefetchMember(definition, 'layout');
+  if (layout.node) {
+    const layoutExpression = layout.value
+      ? unwrapExpression(layout.value as TS.Expression)
+      : undefined;
+    if (!layoutExpression || !ts.isIdentifier(layoutExpression) || layout.ambiguous) {
+      appendModeratePrefetchReason(reasons, 'layout indirection is not statically final');
+    } else {
+      const seen = compilerCreateSet<string>();
+      let current: string | undefined = layoutExpression.text;
+      for (let depth = 0; current !== undefined && depth < 32; depth += 1) {
+        if (compilerSetHas(seen, current)) {
+          appendModeratePrefetchReason(reasons, 'layout chain is cyclic');
+          break;
+        }
+        compilerSetAdd(seen, current);
+        const model: RouteLayoutModel | undefined = compilerMapGet(layouts, current);
+        if (!model) {
+          appendModeratePrefetchReason(reasons, 'layout indirection does not resolve locally');
+          break;
+        }
+        if (!model.prefetchBindingFinal) {
+          appendModeratePrefetchReason(
+            reasons,
+            `layout '${current}' binding is not one top-level const declaration`,
+          );
+        }
+        if (routeObjectHasSpread(model.definition)) {
+          appendModeratePrefetchReason(reasons, `layout '${current}' contains a spread`);
+        }
+        const layoutGuard = moderatePrefetchMember(model.definition, 'guard');
+        if (layoutGuard.node || layoutGuard.ambiguous) {
+          appendModeratePrefetchReason(reasons, `layout '${current}' is guarded`);
+        }
+        if (!publicAccess && moderatePrefetchAccessIsPublic(model.definition, sourceFile)) {
+          publicAccess = true;
+        }
+        appendModeratePrefetchHandlerMemberReasons(
+          model.definition,
+          'render',
+          'layout render',
+          reasons,
+        );
+        appendModeratePrefetchMetaReasons(model.definition, reasons, `layout '${current}' meta`);
+        if (moderatePrefetchMember(model.definition, 'queries').node) {
+          appendModeratePrefetchReason(
+            reasons,
+            `layout '${current}' queries have no side-effect-free summary`,
+          );
+        }
+        const parent = moderatePrefetchMember(model.definition, 'parent');
+        if (parent.node && (parent.ambiguous || model.parent === undefined)) {
+          appendModeratePrefetchReason(
+            reasons,
+            `layout '${current}' parent is not statically final`,
+          );
+        }
+        current = model.parent;
+      }
+      if (current !== undefined && compilerSetHas(seen, current) === false) {
+        appendModeratePrefetchReason(reasons, 'layout chain exceeds the static depth bound');
+      }
+    }
+  }
+
+  if (!publicAccess) {
+    appendModeratePrefetchReason(reasons, 'route is not proven public/session-independent');
+  }
+
+  if (compilerArrayLength(reasons, 'Moderate prefetch safety reasons') === 0) return;
+  const anchor = prefetch.node;
+  const detail = compilerArrayJoin(reasons, '; ');
+  compilerArrayAppend(
+    diagnostics,
+    contextualizeCompilerDiagnostic(
+      diagnosticFor(
+        fileName,
+        'KV419',
+        source,
+        anchor.getStart(sourceFile),
+        anchor.getWidth(sourceFile),
+      ),
+      {
+        help: compilerArrayJoin(
+          [
+            diagnosticDefinitions.KV419.help,
+            'Fix: inline a public synchronous page/meta/layout shape the compiler can inspect, use conservative/false, or add a non-empty prefetchJustification after reviewing every server render/query effect.',
+          ],
+          '\n',
+        ),
+        message: `${diagnosticDefinitions.KV419.message} Unproved explicit opt-in: ${detail}.`,
+      },
+    ),
+    'Compiler route prefetch diagnostics',
+  );
+}
+
+function appendModeratePrefetchHandlerMemberReasons(
+  object: TS.ObjectLiteralExpression,
+  memberName: string,
+  label: string,
+  reasons: string[],
+): void {
+  const member = moderatePrefetchMember(object, memberName);
+  if (!member.node) return;
+  if (member.ambiguous || !member.value) {
+    appendModeratePrefetchReason(reasons, `${label} is ambiguous`);
+    return;
+  }
+  const value = unwrapExpression(member.value as TS.Expression);
+  if (
+    !ts.isArrowFunction(value) &&
+    !ts.isFunctionExpression(value) &&
+    !ts.isMethodDeclaration(value)
+  ) {
+    appendModeratePrefetchReason(reasons, `${label} is indirect`);
+    return;
+  }
+  appendModeratePrefetchCallableReasons(value, label, reasons);
+}
+
+function appendModeratePrefetchMetaReasons(
+  object: TS.ObjectLiteralExpression,
+  reasons: string[],
+  label = 'meta',
+): void {
+  const member = moderatePrefetchMember(object, 'meta');
+  if (!member.node) return;
+  if (member.ambiguous || !member.value) {
+    appendModeratePrefetchReason(reasons, `${label} is ambiguous`);
+    return;
+  }
+  const value = unwrapExpression(member.value as TS.Expression);
+  if (ts.isObjectLiteralExpression(value)) {
+    const resolve = moderatePrefetchMember(value, 'resolve');
+    const queries = moderatePrefetchMember(value, 'queries');
+    if (queries.node) {
+      appendModeratePrefetchReason(reasons, `${label} queries have no side-effect-free summary`);
+    }
+    if (resolve.node) {
+      if (resolve.ambiguous || !resolve.value) {
+        appendModeratePrefetchReason(reasons, `${label} resolver is ambiguous`);
+      } else {
+        const resolver = unwrapExpression(resolve.value as TS.Expression);
+        if (
+          ts.isArrowFunction(resolver) ||
+          ts.isFunctionExpression(resolver) ||
+          ts.isMethodDeclaration(resolver)
+        ) {
+          appendModeratePrefetchCallableReasons(resolver, `${label} resolver`, reasons);
+        } else {
+          appendModeratePrefetchReason(reasons, `${label} resolver is indirect`);
+        }
+      }
+    }
+    if (routeObjectHasSpread(value)) {
+      appendModeratePrefetchReason(reasons, `${label} object contains a spread`);
+    }
+    return;
+  }
+  if (
+    ts.isArrowFunction(value) ||
+    ts.isFunctionExpression(value) ||
+    ts.isMethodDeclaration(value)
+  ) {
+    appendModeratePrefetchCallableReasons(value, label, reasons);
+    return;
+  }
+  appendModeratePrefetchReason(reasons, `${label} is indirect`);
+}
+
+function appendModeratePrefetchRegionsReasons(
+  definition: TS.ObjectLiteralExpression,
+  reasons: string[],
+): void {
+  const regions = moderatePrefetchMember(definition, 'regions');
+  if (!regions.node) return;
+  if (regions.ambiguous || !regions.value) {
+    appendModeratePrefetchReason(reasons, 'regions are ambiguous');
+    return;
+  }
+  const value = unwrapExpression(regions.value as TS.Expression);
+  if (!ts.isObjectLiteralExpression(value) || routeObjectHasSpread(value)) {
+    appendModeratePrefetchReason(reasons, 'regions are indirect or spread');
+    return;
+  }
+  const count = compilerArrayLength(value.properties, 'Moderate prefetch regions');
+  for (let index = 0; index < count; index += 1) {
+    const property = compilerOwnDataValue(
+      value.properties,
+      index,
+      'Moderate prefetch regions',
+    ) as TS.ObjectLiteralElementLike;
+    if (ts.isPropertyAssignment(property)) {
+      const region = unwrapExpression(property.initializer);
+      if (ts.isArrowFunction(region) || ts.isFunctionExpression(region)) {
+        appendModeratePrefetchCallableReasons(region, 'region render', reasons);
+      } else {
+        appendModeratePrefetchReason(reasons, 'region render is indirect');
+      }
+    } else if (ts.isMethodDeclaration(property)) {
+      appendModeratePrefetchCallableReasons(property, 'region render', reasons);
+    } else {
+      appendModeratePrefetchReason(reasons, 'region render is ambiguous');
+    }
+  }
+}
+
+function appendModeratePrefetchCallableReasons(
+  callable: TS.FunctionLikeDeclaration,
+  label: string,
+  reasons: string[],
+): void {
+  const modifiers = callable.modifiers;
+  if (modifiers) {
+    const count = compilerArrayLength(modifiers, 'Moderate prefetch callable modifiers');
+    for (let index = 0; index < count; index += 1) {
+      const modifier = compilerOwnDataValue(
+        modifiers,
+        index,
+        'Moderate prefetch callable modifiers',
+      ) as TS.ModifierLike;
+      if (modifier.kind === ts.SyntaxKind.AsyncKeyword) {
+        appendModeratePrefetchReason(reasons, `${label} is async`);
+      }
+    }
+  }
+  if (!callable.body) {
+    appendModeratePrefetchReason(reasons, `${label} has no inspectable body`);
+    return;
+  }
+  let effect: string | undefined;
+  const visit = (node: TS.Node): void => {
+    if (effect !== undefined) return;
+    if (ts.isAwaitExpression(node)) effect = 'await';
+    else if (ts.isCallExpression(node)) effect = 'a call';
+    else if (ts.isNewExpression(node)) effect = 'construction';
+    else if (ts.isTaggedTemplateExpression(node)) effect = 'a tagged template';
+    else if (ts.isYieldExpression(node)) effect = 'yield';
+    else if (ts.isDeleteExpression(node)) effect = 'delete';
+    else if (ts.isPostfixUnaryExpression(node)) effect = 'mutation';
+    else if (
+      ts.isPrefixUnaryExpression(node) &&
+      (node.operator === ts.SyntaxKind.PlusPlusToken ||
+        node.operator === ts.SyntaxKind.MinusMinusToken)
+    ) {
+      effect = 'mutation';
+    } else if (
+      ts.isBinaryExpression(node) &&
+      moderatePrefetchAssignmentToken(node.operatorToken.kind)
+    ) {
+      effect = 'assignment';
+    }
+    if (effect === undefined) ts.forEachChild(node, visit);
+  };
+  visit(callable.body);
+  if (effect !== undefined) {
+    appendModeratePrefetchReason(reasons, `${label} contains ${effect}`);
+  }
+}
+
+function moderatePrefetchAssignmentToken(kind: TS.SyntaxKind): boolean {
+  return kind >= ts.SyntaxKind.FirstAssignment && kind <= ts.SyntaxKind.LastAssignment;
+}
+
+function moderatePrefetchAccessIsPublic(
+  object: TS.ObjectLiteralExpression,
+  sourceFile: TS.SourceFile,
+): boolean {
+  const access = moderatePrefetchMember(object, 'access');
+  if (access.ambiguous || !access.value) return false;
+  const expression = unwrapExpression(access.value as TS.Expression);
+  return (
+    ts.isCallExpression(expression) &&
+    isFrameworkAccessExpression(sourceFile, expression.expression, PUBLIC_ACCESS_IDENTITY)
+  );
+}
+
+function moderatePrefetchMember(
+  object: TS.ObjectLiteralExpression,
+  name: string,
+): ModeratePrefetchMember {
+  let node: TS.ObjectLiteralElementLike | undefined;
+  let value: TS.Node | undefined;
+  let ambiguous = false;
+  const count = compilerArrayLength(object.properties, 'Moderate prefetch object properties');
+  for (let index = 0; index < count; index += 1) {
+    const property = compilerOwnDataValue(
+      object.properties,
+      index,
+      'Moderate prefetch object properties',
+    ) as TS.ObjectLiteralElementLike;
+    if (!property.name || propertyNameText(property.name) !== name) continue;
+    if (node !== undefined) ambiguous = true;
+    node = property;
+    if (ts.isPropertyAssignment(property)) value = property.initializer;
+    else if (ts.isMethodDeclaration(property)) value = property;
+    else if (ts.isShorthandPropertyAssignment(property)) value = property.name;
+    else {
+      value = undefined;
+      ambiguous = true;
+    }
+  }
+  return {
+    ambiguous,
+    ...(node === undefined ? {} : { node }),
+    ...(value === undefined ? {} : { value }),
+  };
+}
+
+function routeObjectHasSpread(object: TS.ObjectLiteralExpression): boolean {
+  const count = compilerArrayLength(object.properties, 'Moderate prefetch object properties');
+  for (let index = 0; index < count; index += 1) {
+    const property = compilerOwnDataValue(
+      object.properties,
+      index,
+      'Moderate prefetch object properties',
+    ) as TS.ObjectLiteralElementLike;
+    if (ts.isSpreadAssignment(property)) return true;
+  }
+  return false;
+}
+
+function appendModeratePrefetchReason(reasons: string[], reason: string): void {
+  const count = compilerArrayLength(reasons, 'Moderate prefetch safety reasons');
+  for (let index = 0; index < count; index += 1) {
+    if (compilerOwnDataValue(reasons, index, 'Moderate prefetch safety reasons') === reason) return;
+  }
+  compilerArrayAppend(reasons, reason, 'Moderate prefetch safety reasons');
 }
 
 function uniqueRouteComponents(
@@ -732,16 +1144,26 @@ function routeLayoutModels(
         'Compiler layout call arguments',
       ) as TS.Expression | undefined;
       if (definition && ts.isObjectLiteralExpression(definition)) {
+        const declarationList = node.parent;
+        const statement = declarationList.parent;
+        const topLevelConst =
+          ts.isVariableDeclarationList(declarationList) &&
+          (declarationList.flags & ts.NodeFlags.Const) !== 0 &&
+          ts.isVariableStatement(statement) &&
+          statement.parent === sourceFile;
+        const previous = compilerMapGet(layouts, node.name.text);
         const parent = layoutParentName(definition);
         const access = accessDecisionFact(definition, sourceFile);
         const guard = namedInitializer(definition, 'guard', sourceFile)?.name;
         compilerMapSet(layouts, node.name.text, {
           ...(access === undefined ? {} : { access }),
+          definition,
           ...(guard === undefined ? {} : { guard }),
           localName: node.name.text,
           ...(parent === null
             ? {}
             : { parent: parent.name, parentLength: parent.length, parentStart: parent.start }),
+          prefetchBindingFinal: topLevelConst && previous === undefined,
           queries: layoutQueryNames(definition),
           start: node.name.getStart(sourceFile),
         });
