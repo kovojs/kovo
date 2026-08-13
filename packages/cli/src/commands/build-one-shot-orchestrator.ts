@@ -1,6 +1,7 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { performance } from 'node:perf_hooks';
 import type { Writable } from 'node:stream';
 import { pathToFileURL } from 'node:url';
 
@@ -13,8 +14,11 @@ import {
   readKovoBuildOneShotHandoff,
 } from './build-one-shot-handoff.js';
 import { KOVO_BUILD_ONE_SHOT_WORKER_TIMEOUT_MS } from './build-security-deadlines.js';
+import { kovoInvocationEnvironmentValue } from '../invocation-environment.js';
 
 const kovoBuildOneShotInputCloseTimeoutMs = 30_000;
+const kovoBuildPhaseCensusEnvironmentName = 'KOVO_DEVEX_BUILD_PHASE_CENSUS_SOURCE';
+const kovoBuildWorkerPhaseCensusSchema = 'kovo-build-worker-phase-census/v1';
 const capturedClearTimeout = globalThis.clearTimeout.bind(globalThis);
 const capturedSetTimeout = globalThis.setTimeout.bind(globalThis);
 const capturedProcessKill = process.kill.bind(process);
@@ -56,9 +60,23 @@ async function runKovoIsolatedOneShotInvocationAsync(
     args[0] === 'build' ? parseKovoCommandInvocation('build', args.slice(1)) : undefined;
   if (!build?.ok) return undefined;
 
+  const workerPhases: {
+    readonly durationMs: number;
+    readonly name: 'analyze' | 'client' | 'final' | 'server';
+    readonly status: number;
+  }[] = [];
+  const finishBuild = (status: number, complete: boolean): number => {
+    emitKovoBuildWorkerPhaseCensus(security, workerPhases, complete);
+    return status;
+  };
   try {
     const analysis = await runWorker(binPath, 'analyze', args.slice(1), security, undefined, true);
-    if (analysis.status !== 0) return analysis.status;
+    workerPhases.push({
+      durationMs: analysis.durationMs,
+      name: 'analyze',
+      status: analysis.status,
+    });
+    if (analysis.status !== 0) return finishBuild(analysis.status, false);
     if (!Buffer.isBuffer(analysis.control)) {
       throw new TypeError('Kovo build analysis worker omitted its private handoff.');
     }
@@ -73,7 +91,8 @@ async function runKovoIsolatedOneShotInvocationAsync(
         wire,
         true,
       );
-      if (result.status !== 0) return result.status;
+      workerPhases.push({ durationMs: result.durationMs, name: phase, status: result.status });
+      if (result.status !== 0) return finishBuild(result.status, false);
       if (!Buffer.isBuffer(result.control)) {
         throw new TypeError(`Kovo build ${phase} worker omitted its private handoff.`);
       }
@@ -83,16 +102,17 @@ async function runKovoIsolatedOneShotInvocationAsync(
       }
       wire = result.control;
     }
-    return (
-      await runWorker(
-        binPath,
-        'final',
-        [JSON.stringify(inspection.identity), ...args.slice(1)],
-        security,
-        wire,
-      )
-    ).status;
+    const final = await runWorker(
+      binPath,
+      'final',
+      [JSON.stringify(inspection.identity), ...args.slice(1)],
+      security,
+      wire,
+    );
+    workerPhases.push({ durationMs: final.durationMs, name: 'final', status: final.status });
+    return finishBuild(final.status, final.status === 0);
   } catch (error) {
+    emitKovoBuildWorkerPhaseCensus(security, workerPhases, false);
     process.stderr.write(
       `kovo build isolation failed: ${error instanceof Error ? error.message : String(error)}\n`,
     );
@@ -100,8 +120,38 @@ async function runKovoIsolatedOneShotInvocationAsync(
   }
 }
 
+function emitKovoBuildWorkerPhaseCensus(
+  security: KovoCommandSecurityDisposition,
+  phases: readonly {
+    readonly durationMs: number;
+    readonly name: 'analyze' | 'client' | 'final' | 'server';
+    readonly status: number;
+  }[],
+  complete: boolean,
+): void {
+  const sourcePath = kovoInvocationEnvironmentValue(
+    security.invocationEnv,
+    kovoBuildPhaseCensusEnvironmentName,
+  );
+  if (sourcePath === undefined) return;
+  let totalWorkerMs = 0;
+  for (let index = 0; index < phases.length; index += 1) {
+    totalWorkerMs += phases[index]!.durationMs;
+  }
+  process.stdout.write(
+    `${kovoBuildWorkerPhaseCensusSchema} ${JSON.stringify({
+      complete,
+      phases,
+      schema: kovoBuildWorkerPhaseCensusSchema,
+      sourcePath,
+      totalWorkerMs,
+    })}\n`,
+  );
+}
+
 interface OneShotWorkerResult {
   readonly control?: Buffer | string | null;
+  readonly durationMs: number;
   readonly status: number;
 }
 
@@ -240,6 +290,7 @@ function runBoundedOneShotWorkerProcess(
   const pinnedInput = options.input === undefined ? undefined : Buffer.from(options.input);
   if (pinnedInput !== undefined) inspectKovoBuildOneShotHandoff(pinnedInput);
 
+  const startedAt = performance.now();
   const child = spawn(options.executable, options.args, {
     cwd: options.cwd,
     detached: capturedProcessPlatform !== 'win32',
@@ -306,6 +357,7 @@ function runBoundedOneShotWorkerProcess(
       }
       resolveResult({
         ...(options.captureControl ? { control: Buffer.concat(chunks, total) } : {}),
+        durationMs: performance.now() - startedAt,
         status: status ?? 1,
       });
     });

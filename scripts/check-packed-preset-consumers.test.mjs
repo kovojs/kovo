@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   assertInstalledPackedSubject,
+  assertPackedCliDefaultPresetWitness,
   assertPackedPresetBuild,
   assertPackedPresetConfig,
   packedPresetConfig,
@@ -72,6 +73,42 @@ describe('packed deployment-preset consumers', () => {
     for (const removed of ['CF_PAGES', 'CLOUDFLARE', 'KOVO_PRESET', 'VERCEL']) {
       expect(environment).not.toHaveProperty(removed);
     }
+  });
+
+  it('requires the packed CLI default resolver to reach preset inspection', () => {
+    const appRoot = fixtureRoot('kovo-packed-default-preset-witness-');
+    const configPath = path.join(appRoot, 'kovo.config.ts');
+    const cliEntry = path.join(appRoot, 'fake-cli.mjs');
+    const configuredSource = 'export default { configured: true };\n';
+    writeFileSync(configPath, configuredSource, 'utf8');
+    writeFileSync(
+      cliEntry,
+      "process.stderr.write('ERROR KV417 retention proof required\\n'); process.exit(1);\n",
+    );
+
+    expect(() =>
+      assertPackedCliDefaultPresetWitness({
+        appRoot,
+        cliEntry,
+        configPath,
+        environment: packedPresetConsumerEnvironment(),
+      }),
+    ).not.toThrow();
+    expect(readFileSync(configPath, 'utf8')).toBe(configuredSource);
+
+    writeFileSync(
+      cliEntry,
+      "process.stderr.write('could not resolve framework-owned preset node\\n'); process.exit(1);\n",
+    );
+    expect(() =>
+      assertPackedCliDefaultPresetWitness({
+        appRoot,
+        cliEntry,
+        configPath,
+        environment: packedPresetConsumerEnvironment(),
+      }),
+    ).toThrow('default-preset witness failed');
+    expect(readFileSync(configPath, 'utf8')).toBe(configuredSource);
   });
 
   it('binds installed package files byte-for-byte to the authenticated tar subject', () => {

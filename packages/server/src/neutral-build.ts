@@ -15,7 +15,7 @@ import {
 } from '@kovojs/core/internal/filesystem';
 
 import type { KovoApp } from './app-types.js';
-import { rootedFilesBuildInventory } from './file.js';
+import { rootedFilesBuildInventory, stagedRootedFilesEntryName } from './file.js';
 import {
   buildOwnDataProperty,
   buildSecurityPathDirname,
@@ -119,10 +119,10 @@ export interface KovoNeutralBuild {
   /** Per-route Vite hints merged into the built app shell. */
   routeHints: readonly KovoAppShellRouteBuildHints[];
   /**
-   * `rootedFiles()` roots constructed while the app evaluated in this build's module graph
-   * (SPEC §14; plans/good-perf.md O16). Preset emitters stage the relative entries into the
-   * deploy artifact; recorded here because the emitting preset engine may live in a different
-   * module-graph instance than the app and cannot read the module-local inventory directly.
+   * Transaction-owned snapshots of relative `rootedFiles()` roots constructed while the app
+   * evaluated in this build's module graph (SPEC §14; plans/good-perf.md O16). Preset emitters
+   * copy only these sealed neutral-tree paths into the deploy artifact; absolute deploy-host
+   * roots need no build-time source path and are omitted.
    */
   rootedFileRoots?: readonly { readonly root: string; readonly spec: string }[];
   /** Absolute path to the neutral routes JSON file. */
@@ -325,6 +325,7 @@ export async function writeKovoNeutralBuild(
     manifestDistDir,
     neutralPathJoin(outDir, 'public'),
   );
+  const rootedFileRoots = await writeNeutralRootedFileRoots(outDir);
   if (staticOutput !== undefined) {
     await writeNeutralStylesheetAssets(stylesheetAssets, staticOutput.dir);
   }
@@ -341,7 +342,7 @@ export async function writeKovoNeutralBuild(
     routeHints: buildWithRegisteredClientModules.routeHints,
     // SPEC §14 / O16: capture the module-graph-local rootedFiles inventory here — this module
     // shares the app's graph, while the preset engine that stages the roots may not.
-    rootedFileRoots: rootedFilesBuildInventory(),
+    rootedFileRoots,
     routesPath,
     serverDir,
     ...(serverHandlerPath === undefined ? {} : { serverHandlerPath }),
@@ -479,19 +480,6 @@ function neutralBuildTasks(app: KovoApp): readonly { key: string }[] {
 function requiredNeutralString(value: object, property: PropertyKey, label: string): string {
   const field = buildOwnDataProperty(value, property, label);
   if (!field.present || typeof field.value !== 'string') {
-    throw new TypeError(`${label} must be a string.`);
-  }
-  return field.value;
-}
-
-function optionalNeutralString(
-  value: object,
-  property: PropertyKey,
-  label: string,
-): string | undefined {
-  const field = buildOwnDataProperty(value, property, label);
-  if (!field.present || field.value === undefined) return undefined;
-  if (typeof field.value !== 'string') {
     throw new TypeError(`${label} must be a string.`);
   }
   return field.value;
@@ -723,6 +711,77 @@ async function writeNeutralPublicAssets(
   const copied = await copyNeutralPublicAssetEntries(source, output);
   if (!copied) return undefined;
   return outDir;
+}
+
+async function writeNeutralRootedFileRoots(
+  outDir: string,
+): Promise<readonly { readonly root: string; readonly spec: string }[]> {
+  const rootedRoot = neutralPathJoin(outDir, 'rooted');
+  await createFrameworkOutputFileSystemBoundary(rootedRoot).removeTree();
+  const inventory = snapshotBuildArray(
+    rootedFilesBuildInventory(),
+    'neutral rooted files inventory',
+  );
+  const snapshots: { readonly root: string; readonly spec: string }[] = [];
+  const seen = createSecurityMap<string, true>();
+
+  for (let index = 0; index < inventory.length; index += 1) {
+    const entry = inventory[index];
+    if (typeof entry !== 'object' || entry === null) {
+      throw new TypeError('Neutral rooted files inventory entries must be objects.');
+    }
+    const root = requiredNeutralString(
+      entry,
+      'root',
+      `neutral rooted files inventory ${index}.root`,
+    );
+    const spec = requiredNeutralString(
+      entry,
+      'spec',
+      `neutral rooted files inventory ${index}.spec`,
+    );
+    // Absolute specs intentionally remain live deploy-host paths. Presets never read their
+    // build-machine resolution, so do not serialize ambient source authority into another worker.
+    if (neutralPathIsAbsolute(spec) || securityMapHas(seen, spec)) continue;
+    securityMapSet(seen, spec, true);
+
+    const snapshotRoot = neutralPathJoin(rootedRoot, stagedRootedFilesEntryName(spec));
+    const source = createFrameworkOutputFileSystemBoundary(root);
+    const output = createFrameworkOutputFileSystemBoundary(snapshotRoot);
+    await source.ensureDirectory();
+    await output.ensureDirectory();
+    await copyNeutralRootedFileEntries(source, output);
+    commitBuildArrayValue(
+      snapshots,
+      { root: snapshotRoot, spec },
+      'neutral rooted files snapshots',
+    );
+  }
+  return snapshotBuildArray(snapshots, 'pinned neutral rooted files snapshots');
+}
+
+async function copyNeutralRootedFileEntries(
+  source: FrameworkOutputFileSystemBoundary,
+  output: FrameworkOutputFileSystemBoundary,
+  directory?: ConfinedFileSystemEntry,
+): Promise<void> {
+  const entries = snapshotBuildArray(
+    directory === undefined ? await source.entries('.') : await source.entriesOf(directory),
+    'neutral rooted files directory entries',
+  );
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index]!;
+    if (entry.kind === 'directory') {
+      await copyNeutralRootedFileEntries(source, output, entry);
+      continue;
+    }
+    if (entry.kind !== 'file') {
+      throw new Error(
+        `KV229 neutral build refuses rooted file '${entry.relativePath}' because symlinks and non-regular filesystem entries are not deployable. SPEC §14 rooted files must be identity-bound files snapshotted beneath the neutral build root.`,
+      );
+    }
+    await output.writeFile(entry.relativePath, await source.fileBytesOf(entry));
+  }
 }
 
 async function copyNeutralPublicAssetEntries(

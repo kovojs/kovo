@@ -271,6 +271,12 @@ export function checkPackedPresetConsumers(argv = process.argv.slice(2)) {
     assertAuthenticatedPackageFile(packedPackages.get('@kovojs/cli'), cliEntry, 'dist/bin.mjs');
 
     const configPath = path.join(appRoot, 'kovo.config.ts');
+    assertPackedCliDefaultPresetWitness({
+      appRoot,
+      cliEntry,
+      configPath,
+      environment,
+    });
     for (const preset of SUPPORTED_PRESETS) {
       writeFileSync(configPath, packedPresetConfig(preset), 'utf8');
       assertPackedPresetConfig(readFileSync(configPath, 'utf8'), preset);
@@ -303,6 +309,54 @@ export function checkPackedPresetConsumers(argv = process.argv.slice(2)) {
     );
   } finally {
     rmSync(temporaryRoot, { force: true, recursive: true });
+  }
+}
+
+/**
+ * Exercise the packed CLI's config-free preset resolver, not merely the server package in
+ * isolation. Reaching the expected KV417 inspection diagnostic proves that the token factory and
+ * private WeakMap resolver imported by the packed final worker share one module witness realm.
+ */
+export function assertPackedCliDefaultPresetWitness({
+  appRoot,
+  cliEntry,
+  configPath,
+  environment,
+}) {
+  const configuredSource = readFileSync(configPath, 'utf8');
+  const outDir = path.join(appRoot, 'dist-default-preset-witness');
+  rmSync(configPath, { force: true });
+  try {
+    const result = spawnSync(
+      process.execPath,
+      [cliEntry, 'build', './src/app.tsx', '--out', outDir, '--check'],
+      {
+        cwd: appRoot,
+        encoding: 'utf8',
+        env: environment,
+        maxBuffer: MAX_COMMAND_OUTPUT_BYTES,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: BUILD_TIMEOUT_MS,
+      },
+    );
+    const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
+    if (
+      result.error ||
+      result.signal !== null ||
+      result.status !== 1 ||
+      !output.includes('KV417') ||
+      output.includes('could not resolve framework-owned preset') ||
+      existsSync(outDir)
+    ) {
+      throw new Error(
+        `Packed CLI default-preset witness failed: ${
+          result.error?.message ?? output.trim() ?? `exit ${String(result.status)}`
+        }`,
+      );
+    }
+  } finally {
+    rmSync(outDir, { force: true, recursive: true });
+    writeFileSync(configPath, configuredSource, 'utf8');
   }
 }
 

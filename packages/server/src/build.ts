@@ -16,7 +16,7 @@ import {
 import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 
 import { createContentDispositionWithFilename } from './content-disposition.js';
-import { rootedFilesBuildInventory, stagedRootedFilesEntryName } from './file.js';
+import { stagedRootedFilesEntryName } from './file.js';
 import {
   createSerializedHeaderSafetyAssertion,
   serializedHeaderSafetyTransition,
@@ -909,28 +909,25 @@ async function writePresetArtifacts(
  * Absolute roots intentionally stay live deploy-host paths and are not staged.
  */
 async function stageNodeRootedFileRoots(build: KovoNeutralBuild, outDir: string): Promise<void> {
-  // The neutral build records the inventory from the app's own module graph; the module-local
-  // inventory covers embedders that evaluated the app in this instance. Merge both, then
-  // validate every entry shape before it can influence a filesystem copy.
+  // Only transaction-owned snapshots recorded in the neutral build may influence filesystem
+  // copies here. The final one-shot worker can evaluate configuration/preset code, so consulting
+  // this realm's ambient rootedFiles inventory would admit post-seal paths outside `.kovo`.
   const recorded = witnessIsBuildArray(build.rootedFileRoots) ? build.rootedFileRoots : [];
-  const local = rootedFilesBuildInventory();
   const stagedEntryNames = createSecurityNullRecord<true>();
-  for (const inventory of [recorded, local]) {
-    const pinned = snapshotBuildArray(inventory, 'node rooted files inventory');
-    for (let index = 0; index < pinned.length; index += 1) {
-      const entry = pinned[index];
-      if (typeof entry !== 'object' || entry === null) continue;
-      const spec = (entry as { spec?: unknown }).spec;
-      const root = (entry as { root?: unknown }).root;
-      if (typeof spec !== 'string' || typeof root !== 'string') {
-        throw new TypeError('Node rooted files inventory entries must carry string spec/root.');
-      }
-      if (path.isAbsolute(spec)) continue;
-      const entryName = stagedRootedFilesEntryName(spec);
-      if (stagedEntryNames[entryName] === true) continue;
-      stagedEntryNames[entryName] = true;
-      await writePresetDirectory(root, outDir, `rooted/${entryName}`, `node rooted files ${spec}`);
+  const pinned = snapshotBuildArray(recorded, 'node rooted files inventory');
+  for (let index = 0; index < pinned.length; index += 1) {
+    const entry = pinned[index];
+    if (typeof entry !== 'object' || entry === null) continue;
+    const spec = (entry as { spec?: unknown }).spec;
+    const root = (entry as { root?: unknown }).root;
+    if (typeof spec !== 'string' || typeof root !== 'string') {
+      throw new TypeError('Node rooted files inventory entries must carry string spec/root.');
     }
+    if (path.isAbsolute(spec)) continue;
+    const entryName = stagedRootedFilesEntryName(spec);
+    if (stagedEntryNames[entryName] === true) continue;
+    stagedEntryNames[entryName] = true;
+    await writePresetDirectory(root, outDir, `rooted/${entryName}`, `node rooted files ${spec}`);
   }
 }
 
