@@ -50,6 +50,17 @@ describe('realistic performance CI policy', () => {
     for (const option of ['baselines', 'decisions', 'all']) {
       expect(workflow).toContain(`          - ${option}\n`);
     }
+    for (const input of [
+      'check_watch_baseline_sha',
+      'check_watch_candidate_sha',
+      'loader_baseline_sha',
+      'loader_candidate_sha',
+    ]) {
+      expect(workflow).toContain(`      ${input}:\n`);
+      expect(workflow.slice(workflow.indexOf(`      ${input}:\n`))).toMatch(
+        /^      [a-z_]+:\n        description: .+\n        required: true\n        type: string\n/mu,
+      );
+    }
     for (const job of ['browser-matrix', 'dev-matrix', 'build-matrix', 'server-matrix']) {
       const source = jobSource(job);
       for (const token of baselineScope) expect(source, job).toContain(token);
@@ -105,14 +116,59 @@ describe('realistic performance CI policy', () => {
     const source = decisionJob('check-watch-decision');
     expect(source).toContain('fetch-depth: 0');
     expect(source).toContain(
+      'KOVO_CHECK_WATCH_BASELINE_SHA: ${{ inputs.check_watch_baseline_sha }}',
+    );
+    expect(source).toContain(
+      'KOVO_CHECK_WATCH_CANDIDATE_SHA: ${{ inputs.check_watch_candidate_sha }}',
+    );
+    expect(source).toContain(
       'KOVO_CHECK_WATCH_CANDIDATE_COMMIT: eb1a1663b40826240a7bb5080fd54cb66bf4bab8',
     );
-    expect(source).toContain('git worktree add --detach "$baseline_root" "$GITHUB_SHA"');
-    expect(source).toContain("-c user.name='Kovo Performance CI'");
-    expect(source).toContain("-c user.email='performance-ci@kovo.invalid'");
-    expect(source).toContain('revert --no-edit "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT"');
+    expect(source).toContain(
+      'KOVO_CHECK_WATCH_BASELINE_COMMIT: cc475b3ab2d54ff8201de059e713cc1d7e54400c',
+    );
+    expect(source).toContain(
+      'KOVO_CHECK_WATCH_EVIDENCE_REF: refs/heads/perf-spike/check-watch-sealed-20260813',
+    );
+    expect(source).toContain(
+      'KOVO_CHECK_WATCH_CANDIDATE_PATCH_ID: 97a1cc7b8f0e46d6cbd44cb61d4708433f523aef',
+    );
+    expect(source).toContain('check_watch_baseline_sha must be exactly 40 lowercase hexadecimal');
+    expect(source).toContain('check_watch_candidate_sha must be exactly 40 lowercase hexadecimal');
+    expect(source).toContain('git fetch --no-tags origin');
+    expect(source).toContain(
+      '"+$KOVO_CHECK_WATCH_EVIDENCE_REF:refs/perf-evidence/check-watch-sealed"',
+    );
+    expect(source).toContain(
+      'candidate_commit="$(git rev-parse --verify refs/perf-evidence/check-watch-sealed^{commit})"',
+    );
+    expect(source).toContain(
+      'test "$(git rev-parse "$baseline_commit^")" = "$KOVO_CHECK_WATCH_BASELINE_COMMIT"',
+    );
+    expect(source).toContain('check-watch baseline seal changed unapproved path');
+    expect(source).toContain(
+      'test "$(git merge-base "$baseline_commit" "$candidate_commit")" = "$baseline_commit"',
+    );
+    expect(source).toContain('candidate_range_count="$(git rev-list --count');
+    expect(source).toContain('test "$candidate_range_count" = 2');
+    expect(source).toContain('test "$(git rev-parse "$candidate_commit^")" = "$production_commit"');
+    expect(source).toContain('git patch-id --stable');
+    expect(source).toContain('test "$production_patch_id" = "$KOVO_CHECK_WATCH_CANDIDATE_PATCH_ID"');
+    expect(source).toContain('check-watch candidate seal changed unapproved path');
+    expect(source).toContain('git worktree add --detach "$baseline_root" "$baseline_commit"');
+    expect(source).toContain('git worktree add --detach "$candidate_root" "$candidate_commit"');
+    expect(count(source, 'install --offline --frozen-lockfile --ignore-scripts')).toBe(2);
+    expect(source).toContain('KOVO_DEVEX_OS_IMAGE=github-actions/ubuntu-24.04@sha256:');
+    expect(source).toContain(
+      'KOVO_DEVEX_RUNNER_NAME=github-hosted-ubuntu-24.04-accepted',
+    );
+    expectPnpmBridge(source);
+    expect(source).not.toContain('revert --no-edit');
     expect(count(source, '--prepare-kovo-scenario')).toBe(2);
     expect(source).toContain('scripts/perf-check-watch-spike.mjs');
+    expect(source).toContain(
+      '--spike-repo "$RUNNER_TEMP/kovo-check-watch-candidate"',
+    );
     expect(source).toContain('--samples 30');
     expect(source).toContain('--warmups 3');
     expectRawArtifact(source, 'kovo-perf-check-watch-decision');
@@ -123,6 +179,7 @@ describe('realistic performance CI policy', () => {
     expect(source).toContain('corpus: [24, 216]');
     expect(source).toContain('fetch-depth: 0');
     expect(source).toContain('uses: ./.github/actions/playwright-install');
+    expectPnpmBridge(source);
     expect(source).toContain(
       'KOVO_DEV_GENERATION_CANDIDATE_COMMIT: 44da3f3449dcbac2cc29951604b89488c90faa6f',
     );
@@ -161,6 +218,7 @@ describe('realistic performance CI policy', () => {
 
     const cli = decisionJob('cli-startup-decision');
     expect(cli).toContain('scripts/perf-cli-startup-benchmark.mjs');
+    expectPnpmBridge(cli);
     expect(cli).not.toContain('--samples');
     expect(cli).not.toContain('--warmups');
     expect(cli).not.toContain('--quick-smoke');
@@ -190,23 +248,50 @@ describe('realistic performance CI policy', () => {
 
     const loaderMemo = decisionJob('loader-runtime-memo-decision');
     expect(loaderMemo).toContain('fetch-depth: 0');
-    expect(loaderMemo).toContain('git worktree add --detach "$baseline_root" "$GITHUB_SHA^"');
-    expect(loaderMemo).toContain('git worktree add --detach "$spike_root" "$GITHUB_SHA"');
-    expect(loaderMemo).toContain('candidate_parent="$(git rev-parse --verify "$GITHUB_SHA^")"');
+    expect(loaderMemo).toContain('KOVO_LOADER_BASELINE_SHA: ${{ inputs.loader_baseline_sha }}');
+    expect(loaderMemo).toContain('KOVO_LOADER_CANDIDATE_SHA: ${{ inputs.loader_candidate_sha }}');
     expect(loaderMemo).toContain(
-      'test "$(git -C "$baseline_root" rev-parse HEAD)" = "$candidate_parent"',
+      'KOVO_LOADER_HISTORICAL_COMMIT: e54c595b5906df9ab9b9b5e3fbf18e76c99e79b9',
     );
     expect(loaderMemo).toContain(
-      'test "$(git -C "$spike_root" rev-parse HEAD^)" = "$candidate_parent"',
+      'KOVO_LOADER_HISTORICAL_REF: refs/heads/perf-spike/loader-memo-e54c595b5',
     );
+    expect(loaderMemo).toContain('git fetch --no-tags origin');
+    expect(loaderMemo).toContain(
+      '"+$KOVO_LOADER_HISTORICAL_REF:refs/perf-evidence/loader-memo-historical"',
+    );
+    expect(loaderMemo).toContain(
+      'test "$resolved_historical" = "$KOVO_LOADER_HISTORICAL_COMMIT"',
+    );
+    expect(loaderMemo).toContain('loader_baseline_sha must be exactly 40 lowercase hexadecimal');
+    expect(loaderMemo).toContain('loader_candidate_sha must be exactly 40 lowercase hexadecimal');
+    expect(loaderMemo).toContain('git worktree add --detach "$baseline_root" "$baseline_commit"');
+    expect(loaderMemo).toContain('git worktree add --detach "$spike_root" "$candidate_commit"');
+    expect(loaderMemo).toContain(
+      'test "$(git rev-parse "$candidate_commit^")" = "$baseline_commit"',
+    );
+    expect(loaderMemo).toContain(
+      'test "$(git rev-list --count "$baseline_commit..$candidate_commit")" = 1',
+    );
+    expect(loaderMemo).toContain(
+      'git merge-base --is-ancestor "$candidate_commit" "$GITHUB_SHA"',
+    );
+    expectPnpmBridge(loaderMemo);
+    expect(count(loaderMemo, 'install --offline --frozen-lockfile --ignore-scripts')).toBe(2);
     expect(count(loaderMemo, 'scripts/perf-loader-runtime-memo-ab.mjs')).toBe(2);
     expect(loaderMemo).toContain('--prepare-only');
     expect(loaderMemo).toContain('--measure');
     expect(loaderMemo).toContain('--profile-dir');
-    expect(loaderMemo).not.toContain('--samples');
-    expect(loaderMemo).not.toContain('--warmup-ms');
-    expect(loaderMemo).not.toContain('--duration-ms');
-    expect(loaderMemo).not.toContain('--concurrencies');
+    for (const token of [
+      '--samples 7',
+      '--warmup-ms 5000',
+      '--duration-ms 15000',
+      '--concurrencies 1,8,32',
+      '--routes listing,detail',
+    ]) {
+      expect(loaderMemo).toContain(token);
+    }
+    expect(loaderMemo).not.toContain('$GITHUB_SHA^');
     expectRawArtifact(loaderMemo, 'kovo-perf-loader-runtime-memo-decision');
   });
 
@@ -236,6 +321,12 @@ function expectRawArtifact(source, name) {
 
 function count(source, token) {
   return source.split(token).length - 1;
+}
+
+function expectPnpmBridge(source) {
+  expect(source).toContain('Expose pnpm to authenticated benchmark subprocesses');
+  expect(source).toContain(`'exec vp exec pnpm "$@"'`);
+  expect(source).toContain('printf \'%s\\n\' "$tool_bin" >> "$GITHUB_PATH"');
 }
 
 function jobSource(name) {

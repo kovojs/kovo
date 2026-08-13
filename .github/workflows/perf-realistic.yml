@@ -29,6 +29,22 @@ on:
           - baselines
           - decisions
           - all
+      check_watch_baseline_sha:
+        description: Exact clean sealed baseline commit for the check-watch decision
+        required: true
+        type: string
+      check_watch_candidate_sha:
+        description: Exact clean sealed candidate commit for the check-watch decision
+        required: true
+        type: string
+      loader_baseline_sha:
+        description: Exact direct parent of the loader-runtime memo candidate
+        required: true
+        type: string
+      loader_candidate_sha:
+        description: Exact loader-runtime memo production candidate commit
+        required: true
+        type: string
       components:
         description: Component count for the byte suite
         required: false
@@ -366,27 +382,81 @@ jobs:
         run: |
           image_version_digest="$(printf '%s' "${ImageVersion:-unknown}" | sha256sum | cut -d' ' -f1)"
           printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "${ImageOS:-unknown}" "$image_version_digest" >> "$GITHUB_ENV"
-      - name: Prepare exact baseline and candidate scenarios
+          runner_digest="$({ printf '%s\n' "${ImageOS:-unknown}" "${ImageVersion:-unknown}"; cat /etc/os-release; } | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_DEVEX_OS_IMAGE=github-actions/ubuntu-24.04@sha256:%s\n' "$runner_digest" >> "$GITHUB_ENV"
+          printf 'KOVO_DEVEX_RUNNER_NAME=github-hosted-ubuntu-24.04-accepted\n' >> "$GITHUB_ENV"
+      - name: Expose pnpm to authenticated benchmark subprocesses
+        run: |
+          tool_bin="$RUNNER_TEMP/kovo-perf-tool-bin"
+          mkdir -p "$tool_bin"
+          printf '%s\n' '#!/usr/bin/env bash' 'exec vp exec pnpm "$@"' > "$tool_bin/pnpm"
+          chmod 755 "$tool_bin/pnpm"
+          printf '%s\n' "$tool_bin" >> "$GITHUB_PATH"
+      - name: Authenticate and prepare exact sealed baseline and candidate scenarios
         env:
+          KOVO_CHECK_WATCH_BASELINE_SHA: ${{ inputs.check_watch_baseline_sha }}
+          KOVO_CHECK_WATCH_CANDIDATE_SHA: ${{ inputs.check_watch_candidate_sha }}
+          KOVO_CHECK_WATCH_BASELINE_COMMIT: cc475b3ab2d54ff8201de059e713cc1d7e54400c
           KOVO_CHECK_WATCH_CANDIDATE_COMMIT: eb1a1663b40826240a7bb5080fd54cb66bf4bab8
+          KOVO_CHECK_WATCH_CANDIDATE_PATCH_ID: 97a1cc7b8f0e46d6cbd44cb61d4708433f523aef
+          KOVO_CHECK_WATCH_EVIDENCE_REF: refs/heads/perf-spike/check-watch-sealed-20260813
         run: |
           baseline_root="$RUNNER_TEMP/kovo-check-watch-baseline"
+          candidate_root="$RUNNER_TEMP/kovo-check-watch-candidate"
           mkdir -p "$RUNNER_TEMP/kovo-perf/check-watch"
-          git worktree add --detach "$baseline_root" "$GITHUB_SHA"
-          git -C "$baseline_root" \
-            -c user.name='Kovo Performance CI' \
-            -c user.email='performance-ci@kovo.invalid' \
-            -c commit.gpgsign=false \
-            revert --no-edit "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT"
+          case "$KOVO_CHECK_WATCH_BASELINE_SHA" in
+            [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+            *) echo 'check_watch_baseline_sha must be exactly 40 lowercase hexadecimal characters' >&2; exit 2 ;;
+          esac
+          case "$KOVO_CHECK_WATCH_CANDIDATE_SHA" in
+            [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+            *) echo 'check_watch_candidate_sha must be exactly 40 lowercase hexadecimal characters' >&2; exit 2 ;;
+          esac
+          git fetch --no-tags origin \
+            "+$KOVO_CHECK_WATCH_EVIDENCE_REF:refs/perf-evidence/check-watch-sealed"
+          baseline_commit="$(git rev-parse --verify "$KOVO_CHECK_WATCH_BASELINE_SHA^{commit}")"
+          candidate_commit="$(git rev-parse --verify refs/perf-evidence/check-watch-sealed^{commit})"
+          test "$baseline_commit" = "$KOVO_CHECK_WATCH_BASELINE_SHA"
+          test "$candidate_commit" = "$KOVO_CHECK_WATCH_CANDIDATE_SHA"
+          test "$(git rev-parse "$baseline_commit^")" = "$KOVO_CHECK_WATCH_BASELINE_COMMIT"
+          git diff-tree --no-commit-id --name-only -r "$baseline_commit" | while IFS= read -r seal_path; do
+            case "$seal_path" in
+              packages/compiler/src/security/framework-public-runtime-export-posture.generated.ts|scripts/pack-security.files.json|security/framework-public-runtime-export-posture.json|security/kovo-certificate-policy-v1.json|security/kovo-certificate-v1.json) ;;
+              *) echo "check-watch baseline seal changed unapproved path: $seal_path" >&2; exit 2 ;;
+            esac
+          done
+          test "$(git merge-base "$baseline_commit" "$candidate_commit")" = "$baseline_commit"
+          candidate_range_count="$(git rev-list --count "$baseline_commit..$candidate_commit")"
+          test "$candidate_range_count" = 2
+          production_commit="$(git rev-list --reverse "$baseline_commit..$candidate_commit" | head -n 1)"
+          test "$(git rev-parse "$production_commit^")" = "$baseline_commit"
+          test "$(git rev-parse "$candidate_commit^")" = "$production_commit"
+          production_patch_id="$(git show --pretty=format: --binary --no-ext-diff "$production_commit" | git patch-id --stable | cut -d' ' -f1)"
+          test "$production_patch_id" = "$KOVO_CHECK_WATCH_CANDIDATE_PATCH_ID"
+          test "$(git diff --name-only "$baseline_commit" "$production_commit")" = "$(git diff --name-only "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT^" "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT")"
+          while IFS= read -r production_path; do
+            test "$(git rev-parse "$baseline_commit:$production_path")" = "$(git rev-parse "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT^:$production_path")"
+            test "$(git rev-parse "$production_commit:$production_path")" = "$(git rev-parse "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT:$production_path")"
+          done < <(git diff --name-only "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT^" "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT")
+          git diff-tree --no-commit-id --name-only -r "$candidate_commit" | while IFS= read -r seal_path; do
+            case "$seal_path" in
+              packages/compiler/src/security/framework-public-runtime-export-posture.generated.ts|scripts/pack-security.files.json|security/framework-public-runtime-export-posture.json|security/kovo-certificate-policy-v1.json|security/kovo-certificate-v1.json) ;;
+              *) echo "check-watch candidate seal changed unapproved path: $seal_path" >&2; exit 2 ;;
+            esac
+          done
+          git worktree add --detach "$baseline_root" "$baseline_commit"
+          git worktree add --detach "$candidate_root" "$candidate_commit"
+          vp exec pnpm --dir "$baseline_root" install --offline --frozen-lockfile --ignore-scripts
+          vp exec pnpm --dir "$candidate_root" install --offline --frozen-lockfile --ignore-scripts
           vp exec node "$baseline_root/scripts/devex-benchmark.mjs" --prepare-kovo-scenario
-          vp exec node scripts/devex-benchmark.mjs --prepare-kovo-scenario
+          vp exec node "$candidate_root/scripts/devex-benchmark.mjs" --prepare-kovo-scenario
       - name: Run the full serialized check-watch decision
         run: >-
           vp exec node scripts/perf-check-watch-spike.mjs
           --baseline-scenario "$RUNNER_TEMP/kovo-check-watch-baseline/.release/devex/kovo-packed-scenario.json"
           --baseline-repo "$RUNNER_TEMP/kovo-check-watch-baseline"
-          --spike-scenario "$GITHUB_WORKSPACE/.release/devex/kovo-packed-scenario.json"
-          --spike-repo "$GITHUB_WORKSPACE"
+          --spike-scenario "$RUNNER_TEMP/kovo-check-watch-candidate/.release/devex/kovo-packed-scenario.json"
+          --spike-repo "$RUNNER_TEMP/kovo-check-watch-candidate"
           --samples 30
           --warmups 3
           --out "$RUNNER_TEMP/kovo-perf/check-watch/report.json"
@@ -424,6 +494,13 @@ jobs:
           browsers: chromium
           cache-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-${{ hashFiles('pnpm-lock.yaml') }}
           restore-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-
+      - name: Expose pnpm to authenticated benchmark subprocesses
+        run: |
+          tool_bin="$RUNNER_TEMP/kovo-perf-tool-bin"
+          mkdir -p "$tool_bin"
+          printf '%s\n' '#!/usr/bin/env bash' 'exec vp exec pnpm "$@"' > "$tool_bin/pnpm"
+          chmod 755 "$tool_bin/pnpm"
+          printf '%s\n' "$tool_bin" >> "$GITHUB_PATH"
       - name: Prepare exact baseline and historical candidate worktrees
         env:
           KOVO_DEV_GENERATION_CANDIDATE_COMMIT: 44da3f3449dcbac2cc29951604b89488c90faa6f
@@ -506,6 +583,13 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/kovo-setup
+      - name: Expose pnpm to authenticated benchmark subprocesses
+        run: |
+          tool_bin="$RUNNER_TEMP/kovo-perf-tool-bin"
+          mkdir -p "$tool_bin"
+          printf '%s\n' '#!/usr/bin/env bash' 'exec vp exec pnpm "$@"' > "$tool_bin/pnpm"
+          chmod 755 "$tool_bin/pnpm"
+          printf '%s\n' "$tool_bin" >> "$GITHUB_PATH"
       - name: Bind the report to the runner image
         run: |
           image_version_digest="$(printf '%s' "${ImageVersion:-unknown}" | sha256sum | cut -d' ' -f1)"
@@ -631,16 +715,49 @@ jobs:
         run: |
           image_version_digest="$(printf '%s' "${ImageVersion:-unknown}" | sha256sum | cut -d' ' -f1)"
           printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "${ImageOS:-unknown}" "$image_version_digest" >> "$GITHUB_ENV"
-      - name: Prepare exact adjacent baseline and candidate worktrees
+      - name: Expose pnpm to authenticated benchmark subprocesses
+        run: |
+          tool_bin="$RUNNER_TEMP/kovo-perf-tool-bin"
+          mkdir -p "$tool_bin"
+          printf '%s\n' '#!/usr/bin/env bash' 'exec vp exec pnpm "$@"' > "$tool_bin/pnpm"
+          chmod 755 "$tool_bin/pnpm"
+          printf '%s\n' "$tool_bin" >> "$GITHUB_PATH"
+      - name: Authenticate historical evidence and prepare exact candidate worktrees
+        env:
+          KOVO_LOADER_BASELINE_SHA: ${{ inputs.loader_baseline_sha }}
+          KOVO_LOADER_CANDIDATE_SHA: ${{ inputs.loader_candidate_sha }}
+          KOVO_LOADER_HISTORICAL_COMMIT: e54c595b5906df9ab9b9b5e3fbf18e76c99e79b9
+          KOVO_LOADER_HISTORICAL_REF: refs/heads/perf-spike/loader-memo-e54c595b5
         run: |
           baseline_root="$RUNNER_TEMP/kovo-loader-runtime-memo-baseline"
           spike_root="$RUNNER_TEMP/kovo-loader-runtime-memo-spike"
-          candidate_parent="$(git rev-parse --verify "$GITHUB_SHA^")"
-          git worktree add --detach "$baseline_root" "$GITHUB_SHA^"
-          git worktree add --detach "$spike_root" "$GITHUB_SHA"
-          test "$(git -C "$baseline_root" rev-parse HEAD)" = "$candidate_parent"
-          test "$(git -C "$spike_root" rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git -C "$spike_root" rev-parse HEAD^)" = "$candidate_parent"
+          mkdir -p "$RUNNER_TEMP/kovo-perf/loader-runtime-memo"
+          case "$KOVO_LOADER_BASELINE_SHA" in
+            [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+            *) echo 'loader_baseline_sha must be exactly 40 lowercase hexadecimal characters' >&2; exit 2 ;;
+          esac
+          case "$KOVO_LOADER_CANDIDATE_SHA" in
+            [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+            *) echo 'loader_candidate_sha must be exactly 40 lowercase hexadecimal characters' >&2; exit 2 ;;
+          esac
+          git fetch --no-tags origin \
+            "+$KOVO_LOADER_HISTORICAL_REF:refs/perf-evidence/loader-memo-historical"
+          resolved_historical="$(git rev-parse --verify refs/perf-evidence/loader-memo-historical^{commit})"
+          test "$resolved_historical" = "$KOVO_LOADER_HISTORICAL_COMMIT"
+          baseline_commit="$(git rev-parse --verify "$KOVO_LOADER_BASELINE_SHA^{commit}")"
+          candidate_commit="$(git rev-parse --verify "$KOVO_LOADER_CANDIDATE_SHA^{commit}")"
+          test "$baseline_commit" = "$KOVO_LOADER_BASELINE_SHA"
+          test "$candidate_commit" = "$KOVO_LOADER_CANDIDATE_SHA"
+          test "$(git rev-parse "$candidate_commit^")" = "$baseline_commit"
+          test "$(git merge-base "$baseline_commit" "$candidate_commit")" = "$baseline_commit"
+          test "$(git rev-list --count "$baseline_commit..$candidate_commit")" = 1
+          git merge-base --is-ancestor "$candidate_commit" "$GITHUB_SHA"
+          git worktree add --detach "$baseline_root" "$baseline_commit"
+          git worktree add --detach "$spike_root" "$candidate_commit"
+          test "$(git -C "$baseline_root" rev-parse HEAD)" = "$baseline_commit"
+          test "$(git -C "$spike_root" rev-parse HEAD)" = "$candidate_commit"
+          vp exec pnpm --dir "$baseline_root" install --offline --frozen-lockfile --ignore-scripts
+          vp exec pnpm --dir "$spike_root" install --offline --frozen-lockfile --ignore-scripts
           vp exec node scripts/perf-loader-runtime-memo-ab.mjs \
             --baseline-root "$baseline_root" \
             --spike-root "$spike_root" \
@@ -653,6 +770,11 @@ jobs:
           --baseline-root "$RUNNER_TEMP/kovo-loader-runtime-memo-baseline"
           --spike-root "$RUNNER_TEMP/kovo-loader-runtime-memo-spike"
           --measure
+          --samples 7
+          --warmup-ms 5000
+          --duration-ms 15000
+          --concurrencies 1,8,32
+          --routes listing,detail
           --profile-dir "$RUNNER_TEMP/kovo-perf/loader-runtime-memo/profiles"
           --out "$RUNNER_TEMP/kovo-perf/loader-runtime-memo/report.json"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
