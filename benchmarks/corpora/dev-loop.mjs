@@ -58,12 +58,14 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
     manifest,
     manifestDigest,
     manifestPath,
-    readyIterations: Math.max(1, Math.ceil(normalized.iterations / 2)),
+    readyIterations: normalized.readyIterations,
     source,
     startedAt,
     versions,
     warmups: normalized.warmups,
   });
+  report.integrity.corpus.beforeVerified = true;
+  for (const finding of sourceStabilityFindings(source)) report.integrity.errors.push(finding);
   const originalSources = await readOriginalSources(manifestEvidence);
   let browser;
 
@@ -82,6 +84,7 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
       });
       report.readySamples.push(observation);
       accumulateObservationIntegrity(report.integrity, observation, `ready[${iteration}]`);
+      accumulateBrowserIntegrity(report.integrity, observation.browser, `ready[${iteration}]`);
     }
 
     await cleanGeneratedOutputs(appRoot, manifest.build.outputs);
@@ -98,6 +101,10 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
     report.samples = editResult.samples;
     report.editSession = editResult.session;
     report.profile = profileEditToPaint(editResult.samples);
+    accumulateBrowserIntegrity(report.integrity, editResult.session.browser, 'edit-session');
+    if (editResult.session.error !== null) {
+      report.integrity.errors.push(`edit session: ${editResult.session.error}`);
+    }
     if (editResult.session.rssSamples < 1 || editResult.session.peakRssBytes <= 0) {
       report.integrity.errors.push('edit session did not produce process-tree RSS evidence');
     }
@@ -117,16 +124,37 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
     await restoreOriginalSources(appRoot, originalSources).catch((error) => {
       report.integrity.errors.push(`source restoration: ${errorMessage(error)}`);
     });
-    await verifyCorpusSources(manifestEvidence).catch((error) => {
-      report.integrity.errors.push(`post-run corpus integrity: ${errorMessage(error)}`);
-    });
+    await verifyCorpusSources(manifestEvidence)
+      .then(() => {
+        report.integrity.corpus.afterVerified = true;
+      })
+      .catch((error) => {
+        report.integrity.errors.push(`post-run corpus integrity: ${errorMessage(error)}`);
+      });
+    try {
+      report.sourceAfter = collectPerformanceProvenance({
+        lockFiles: ['pnpm-lock.yaml', 'benchmarks/nextjs/pnpm-lock.yaml'],
+        repoRoot,
+      });
+      report.integrity.source.after = report.sourceAfter;
+      const sourceFindings = sourceStabilityFindings(source, report.sourceAfter);
+      report.integrity.source.stable = sourceFindings.length === 0 && !source.dirty;
+      report.integrity.errors.push(...sourceFindings);
+    } catch (error) {
+      report.integrity.errors.push(`post-run source provenance: ${errorMessage(error)}`);
+    }
   }
 
+  const countFindings = exactSampleCountFindings(report);
+  report.integrity.errors.push(...countFindings);
   report.integrity.complete =
     report.integrity.errors.length === 0 &&
     report.integrity.misses === 0 &&
-    report.readySamples.length === report.integrity.readyIterations &&
-    report.samples.length === report.integrity.iterations;
+    report.integrity.browser.unexpectedErrorCount === 0 &&
+    report.integrity.corpus.beforeVerified &&
+    report.integrity.corpus.afterVerified &&
+    report.integrity.source.stable &&
+    countFindings.length === 0;
   report.summary = summarizeReport(report);
   report.environment.loadAverageAfter = os.loadavg();
   report.finishedAt = new Date().toISOString();
@@ -139,18 +167,24 @@ async function measureFreshReady({ appRoot, browser, command, iteration, manifes
   const session = startDevSession({ appRoot, command, spawnProcess });
   const rss = createProcessTreeRssSampler(session.pid);
   let context;
+  let browserEvidence = emptyBrowserEvidence();
+  let telemetry;
   try {
     context = await browser.newContext();
     const page = await context.newPage();
+    telemetry = collectPageTelemetry(page, command.origin);
     const paint = await waitForReadyPage({
       origin: command.origin,
       page,
       ready: manifest.dev.ready,
       session,
     });
+    telemetry.markReady();
+    browserEvidence = telemetry.snapshot();
     const rssEvidence = await rss.stop();
     const hasRss = rssEvidence.sampleCount > 0 && rssEvidence.peakRssBytes > 0;
     return {
+      browser: browserEvidence,
       durationMs: performance.now() - started,
       error: hasRss ? null : 'fresh ready did not produce process-tree RSS evidence',
       iteration,
@@ -161,7 +195,9 @@ async function measureFreshReady({ appRoot, browser, command, iteration, manifes
     };
   } catch (error) {
     const rssEvidence = await rss.stop();
+    browserEvidence = telemetry?.snapshot() ?? browserEvidence;
     return {
+      browser: browserEvidence,
       durationMs: null,
       error: errorMessage(error),
       iteration,
@@ -189,20 +225,22 @@ async function measureEditSession({
   const session = startDevSession({ appRoot, command, spawnProcess });
   const rss = createProcessTreeRssSampler(session.pid);
   let context;
-  let pageEvents = { consoleErrors: [], pageErrors: [] };
+  let fatalError = null;
+  let telemetry;
   let rssEvidence = { peakRssBytes: 0, sampleCount: 0 };
   const samples = Array.from({ length: iterations }, (_, iteration) => ({ iteration }));
   const observations = [];
   try {
     context = await browser.newContext();
     const page = await context.newPage();
-    pageEvents = collectPageErrors(page);
+    telemetry = collectPageTelemetry(page, command.origin);
     await waitForReadyPage({
       origin: command.origin,
       page,
       ready: manifest.dev.ready,
       session,
     });
+    telemetry.markReady();
     await establishState(page, manifest.dev.state);
 
     for (const editClass of EDIT_CLASSES) {
@@ -214,9 +252,10 @@ async function measureEditSession({
         page,
         session,
         state: manifest.dev.state,
+        telemetry,
         warmups,
       });
-      observations.push(...classObservations.measured);
+      observations.push(...classObservations.all);
       for (const observation of classObservations.measured) {
         assignEditSample(samples[observation.iteration], observation);
       }
@@ -231,12 +270,15 @@ async function measureEditSession({
       session,
       state: manifest.dev.state,
       syntaxError: manifest.dev.edits.syntaxError,
+      telemetry,
       warmups,
     });
-    observations.push(...syntaxObservations.measured);
+    observations.push(...syntaxObservations.all);
     for (const observation of syntaxObservations.measured) {
       assignEditSample(samples[observation.iteration], observation);
     }
+  } catch (error) {
+    fatalError = errorMessage(error);
   } finally {
     await context?.close().catch(() => undefined);
     await session.stop();
@@ -246,8 +288,8 @@ async function measureEditSession({
     observations,
     samples,
     session: {
-      browserConsoleErrors: pageEvents.consoleErrors,
-      browserPageErrors: pageEvents.pageErrors,
+      browser: telemetry?.snapshot() ?? emptyBrowserEvidence(),
+      error: fatalError,
       logTail: session.logTail(),
       peakRssBytes: rssEvidence.peakRssBytes,
       rssSamples: rssEvidence.sampleCount,
@@ -263,11 +305,13 @@ async function measureRevisionEditClass({
   page,
   session,
   state,
+  telemetry,
   warmups,
 }) {
   const filePath = safeCorpusPath(appRoot, contract.file);
   const original = await readFile(filePath, 'utf8');
   let currentLiteral = contract.search;
+  const all = [];
   const measured = [];
   try {
     for (let index = 0; index < warmups + iterations; index += 1) {
@@ -289,15 +333,25 @@ async function measureRevisionEditClass({
         session,
         source,
         state,
+        telemetry,
       });
       currentLiteral = nextLiteral;
+      all.push(observation);
       if (index >= warmups) measured.push(observation);
     }
   } finally {
-    await writeFile(filePath, original);
-    await waitForEvidence(page, contract.evidence, 'r0', EDIT_TIMEOUT_MS).catch(() => undefined);
+    telemetry.setPhase(`${editClass}-restore`);
+    try {
+      await writeFile(filePath, original);
+      await waitForEvidence(page, contract.evidence, 'r0', EDIT_TIMEOUT_MS);
+      if (!(await stateMatches(page, state))) {
+        throw new Error(`${editClass} baseline restoration lost browser state`);
+      }
+    } finally {
+      telemetry.setPhase('idle');
+    }
   }
-  return { measured };
+  return { all, measured };
 }
 
 async function measureSyntaxAndRecovery({
@@ -309,12 +363,14 @@ async function measureSyntaxAndRecovery({
   session,
   state,
   syntaxError,
+  telemetry,
   warmups,
 }) {
   if (typeof leafSource !== 'string')
     throw new TypeError('Syntax-error source evidence is absent.');
   const filePath = safeCorpusPath(appRoot, syntaxError.file);
   const brokenSource = replaceExactlyOnce(leafSource, syntaxError.search, syntaxError.replacement);
+  const all = [];
   const measured = [];
   for (let index = 0; index < warmups + iterations; index += 1) {
     await establishState(page, state);
@@ -325,6 +381,7 @@ async function measureSyntaxAndRecovery({
       session,
       source: brokenSource,
       state,
+      telemetry,
     });
     const recovered = await applyRecovery({
       evidence: recovery.evidence,
@@ -334,10 +391,12 @@ async function measureSyntaxAndRecovery({
       session,
       source: leafSource,
       state,
+      telemetry,
     });
+    all.push(syntax, recovered);
     if (index >= warmups) measured.push(syntax, recovered);
   }
-  return { measured };
+  return { all, measured };
 }
 
 async function applyVisibleEdit({
@@ -350,7 +409,9 @@ async function applyVisibleEdit({
   session,
   source,
   state,
+  telemetry,
 }) {
+  telemetry.setPhase(editClass);
   const logIndex = session.logCount();
   const started = performance.now();
   let writeMs = null;
@@ -373,10 +434,14 @@ async function applyVisibleEdit({
     };
   } catch (error) {
     return failedEditObservation({ editClass, error, iteration, writeMs });
+  } finally {
+    telemetry.setPhase('idle');
   }
 }
 
-async function applySyntaxError({ filePath, iteration, page, session, source, state }) {
+async function applySyntaxError({ filePath, iteration, page, session, source, state, telemetry }) {
+  telemetry.setPhase('syntaxError');
+  telemetry.setIntentionalSyntaxError(true);
   const logIndex = session.logCount();
   const started = performance.now();
   let writeMs = null;
@@ -403,7 +468,17 @@ async function applySyntaxError({ filePath, iteration, page, session, source, st
   }
 }
 
-async function applyRecovery({ evidence, filePath, iteration, page, session, source, state }) {
+async function applyRecovery({
+  evidence,
+  filePath,
+  iteration,
+  page,
+  session,
+  source,
+  state,
+  telemetry,
+}) {
+  telemetry.setPhase('recovery');
   const logIndex = session.logCount();
   const started = performance.now();
   let writeMs = null;
@@ -426,6 +501,9 @@ async function applyRecovery({ evidence, filePath, iteration, page, session, sou
     };
   } catch (error) {
     return failedEditObservation({ editClass: 'recovery', error, iteration, writeMs });
+  } finally {
+    telemetry.setIntentionalSyntaxError(false);
+    telemetry.setPhase('idle');
   }
 }
 
@@ -593,13 +671,123 @@ async function stateMatches(page, state) {
   }
 }
 
-function collectPageErrors(page) {
-  const evidence = { consoleErrors: [], pageErrors: [] };
+export function collectPageTelemetry(page, expectedOrigin) {
+  let intentionalSyntaxError = false;
+  let phase = 'ready';
+  let ready = false;
+  const evidence = emptyBrowserEvidence();
+  const classify = (issue) => {
+    const classification = !ready
+      ? 'startup-transient'
+      : intentionalSyntaxError
+        ? 'intentional-syntax-error'
+        : null;
+    const record = {
+      ...issue,
+      ...(classification === null ? {} : { classification }),
+      phase,
+    };
+    if (classification === null) evidence.unexpectedErrorCount += 1;
+    else evidence.expectedErrorCount += 1;
+    pushBoundedRecord(
+      classification === null ? evidence.unexpectedErrors : evidence.expectedErrors,
+      record,
+    );
+  };
   page.on('console', (message) => {
-    if (message.type() === 'error') boundedPush(evidence.consoleErrors, message.text());
+    if (message.type() === 'error') {
+      classify({ kind: 'console', message: String(message.text()).slice(0, 1_024) });
+    }
   });
-  page.on('pageerror', (error) => boundedPush(evidence.pageErrors, errorMessage(error)));
-  return evidence;
+  page.on('pageerror', (error) => {
+    classify({ kind: 'pageerror', message: errorMessage(error).slice(0, 1_024) });
+  });
+  page.on('requestfailed', (request) => {
+    evidence.requestFailedCount += 1;
+    classify({
+      kind: 'requestfailed',
+      message: String(request.failure()?.errorText ?? 'unknown request failure').slice(0, 1_024),
+      method: request.method(),
+      resourceType: request.resourceType(),
+      url: sanitizeBrowserUrl(request.url(), expectedOrigin),
+    });
+  });
+  page.on('response', (response) => {
+    evidence.responseCount += 1;
+    const status = response.status();
+    const key = String(status);
+    evidence.responseStatusCounts[key] = (evidence.responseStatusCounts[key] ?? 0) + 1;
+    if (status >= 400) {
+      classify({
+        kind: 'response',
+        message: `HTTP ${key}`,
+        method: response.request().method(),
+        resourceType: response.request().resourceType(),
+        status,
+        url: sanitizeBrowserUrl(response.url(), expectedOrigin),
+      });
+    }
+  });
+  return {
+    markReady() {
+      ready = true;
+      phase = 'idle';
+    },
+    setIntentionalSyntaxError(value) {
+      intentionalSyntaxError = value === true;
+    },
+    setPhase(value) {
+      phase = String(value);
+    },
+    snapshot() {
+      return structuredClone(evidence);
+    },
+  };
+}
+
+function emptyBrowserEvidence() {
+  return {
+    expectedErrorCount: 0,
+    expectedErrors: [],
+    requestFailedCount: 0,
+    responseCount: 0,
+    responseStatusCounts: {},
+    unexpectedErrorCount: 0,
+    unexpectedErrors: [],
+  };
+}
+
+function emptyBrowserIntegrity() {
+  return { ...emptyBrowserEvidence(), sessions: 0 };
+}
+
+function accumulateBrowserIntegrity(integrity, evidence, scope) {
+  integrity.browser.sessions += 1;
+  integrity.browser.expectedErrorCount += evidence.expectedErrorCount;
+  integrity.browser.requestFailedCount += evidence.requestFailedCount;
+  integrity.browser.responseCount += evidence.responseCount;
+  integrity.browser.unexpectedErrorCount += evidence.unexpectedErrorCount;
+  for (const [status, count] of Object.entries(evidence.responseStatusCounts)) {
+    integrity.browser.responseStatusCounts[status] =
+      (integrity.browser.responseStatusCounts[status] ?? 0) + count;
+  }
+  for (const issue of evidence.expectedErrors) {
+    pushBoundedRecord(integrity.browser.expectedErrors, { ...issue, scope });
+  }
+  for (const issue of evidence.unexpectedErrors) {
+    const scoped = { ...issue, scope };
+    pushBoundedRecord(integrity.browser.unexpectedErrors, scoped);
+    integrity.errors.push(`${scope}: unexpected browser ${issue.kind}: ${issue.message}`);
+  }
+}
+
+function sanitizeBrowserUrl(value, expectedOrigin) {
+  try {
+    const url = new URL(value);
+    return url.origin === expectedOrigin ? `${url.pathname}${url.search}` : url.href;
+  } catch {
+    return String(value).slice(0, 2_048);
+  }
 }
 
 function startDevSession({ appRoot, command, spawnProcess }) {
@@ -749,12 +937,26 @@ export async function loadCorpusManifest(manifestPathValue) {
     throw new TypeError('Corpus manifest build outputs are absent.');
   }
   const appRoot = path.dirname(manifestPath);
+  await assertGeneratedCorpusOwner(appRoot, manifest);
   return {
     appRoot,
     manifest,
     manifestDigest: sha256(manifestBytes),
     manifestPath,
   };
+}
+
+async function assertGeneratedCorpusOwner(appRoot, manifest) {
+  const ownerPath = path.join(appRoot, '.kovo-benchmark-corpus-owner.json');
+  const owner = JSON.parse(await readFile(ownerPath, 'utf8'));
+  if (
+    owner?.schema !== 'kovo-benchmark-corpus-owner/v1' ||
+    path.resolve(owner.appRoot ?? '') !== appRoot ||
+    owner.framework !== manifest.framework ||
+    owner.modules !== manifest.modules
+  ) {
+    throw new TypeError('Corpus ownership sentinel does not authenticate this app root.');
+  }
 }
 
 export async function verifyCorpusSources({ appRoot, manifest }) {
@@ -940,11 +1142,14 @@ function createReportSkeleton({
     integrity: {
       command: { argv: command.argv, cwd: command.cwd, origin: command.origin },
       complete: false,
+      browser: emptyBrowserIntegrity(),
+      corpus: { afterVerified: false, beforeVerified: false },
+      editCounts: Object.fromEntries(ALL_EDIT_CLASSES.map((editClass) => [editClass, 0])),
       errors: [],
       iterations,
       misses: 0,
       readyIterations,
-      source,
+      source: { after: null, before: source, stable: false },
       warmups,
     },
     profile: null,
@@ -952,6 +1157,7 @@ function createReportSkeleton({
     samples: [],
     schema: DEV_LOOP_REPORT_SCHEMA,
     source,
+    sourceAfter: null,
     startedAt,
     summary: null,
     verdict: { status: 'unproven' },
@@ -971,6 +1177,76 @@ async function collectEntrantVersions(appRoot, framework) {
     result[packageName] = packageJson.version;
   }
   return result;
+}
+
+export function sourceStabilityFindings(before, after) {
+  const findings = [];
+  if (after === undefined) {
+    if (before?.dirty !== false) findings.push('pre-run source provenance is dirty');
+    return findings;
+  }
+  if (after?.dirty !== false) findings.push('post-run source provenance is dirty');
+  if (before?.commit !== after?.commit) findings.push('source commit changed during measurement');
+  if (JSON.stringify(before?.locks) !== JSON.stringify(after?.locks)) {
+    findings.push('dependency lock digests changed during measurement');
+  }
+  if (JSON.stringify(before?.dirtyPaths) !== JSON.stringify(after?.dirtyPaths)) {
+    findings.push('source dirty paths changed during measurement');
+  }
+  return findings;
+}
+
+export function exactSampleCountFindings(report) {
+  const findings = [];
+  const counts = Object.fromEntries(ALL_EDIT_CLASSES.map((editClass) => [editClass, 0]));
+  if (report.readySamples.length !== report.integrity.readyIterations) {
+    findings.push(
+      `ready sample count ${String(report.readySamples.length)} did not equal ${String(report.integrity.readyIterations)}`,
+    );
+  }
+  for (let index = 0; index < report.readySamples.length; index += 1) {
+    const sample = report.readySamples[index];
+    if (
+      sample?.iteration !== index ||
+      sample.success !== true ||
+      !finiteNonNegative(sample.durationMs) ||
+      !finitePositive(sample.peakRssBytes)
+    ) {
+      findings.push(`ready sample ${String(index)} is incomplete`);
+    }
+  }
+  if (report.samples.length !== report.integrity.iterations) {
+    findings.push(
+      `edit sample count ${String(report.samples.length)} did not equal ${String(report.integrity.iterations)}`,
+    );
+  }
+  for (let index = 0; index < report.samples.length; index += 1) {
+    const sample = report.samples[index];
+    if (sample?.iteration !== index)
+      findings.push(`edit sample ${String(index)} has wrong identity`);
+    for (const editClass of ALL_EDIT_CLASSES) {
+      if (finiteNonNegative(sample?.[`${editClass}Ms`])) counts[editClass] += 1;
+      else findings.push(`edit sample ${String(index)} is missing ${editClass} timing`);
+      if (sample?.[`${editClass}StateSurvived`] !== true) {
+        findings.push(`edit sample ${String(index)} lost state during ${editClass}`);
+      }
+    }
+    if (
+      typeof sample?.syntaxErrorDiagnosticSignal !== 'string' ||
+      sample.syntaxErrorDiagnosticSignal.length === 0
+    ) {
+      findings.push(`edit sample ${String(index)} lacks syntax-error diagnostic evidence`);
+    }
+  }
+  report.integrity.editCounts = counts;
+  for (const editClass of ALL_EDIT_CLASSES) {
+    if (counts[editClass] !== report.integrity.iterations) {
+      findings.push(
+        `${editClass} sample count ${String(counts[editClass])} did not equal ${String(report.integrity.iterations)}`,
+      );
+    }
+  }
+  return findings;
 }
 
 function accumulateObservationIntegrity(integrity, observation, label) {
@@ -1041,17 +1317,25 @@ function normalizeOptions(options) {
     manifestPath: path.resolve(requiredString(options.manifestPath, 'manifest')),
     outPath: path.resolve(requiredString(options.outPath, 'out')),
     port: boundedInteger(options.port, 1_024, 65_535, 'port'),
+    readyIterations: boundedInteger(options.readyIterations, 1, 100, 'ready iterations'),
     warmups: boundedInteger(options.warmups, 0, 10, 'warmups'),
   };
 }
 
-function parseArgs(argv) {
+export function parseDevLoopArgs(argv) {
   const values = {};
   for (let index = 0; index < argv.length; index += 2) {
     const key = argv[index];
     const value = argv[index + 1];
     if (
-      !['--iterations', '--manifest', '--out', '--port', '--warmups'].includes(key) ||
+      ![
+        '--iterations',
+        '--manifest',
+        '--out',
+        '--port',
+        '--ready-iterations',
+        '--warmups',
+      ].includes(key) ||
       value === undefined
     ) {
       throw new TypeError(`Unknown or incomplete dev-loop option ${String(key)}.`);
@@ -1064,6 +1348,7 @@ function parseArgs(argv) {
     manifestPath: values['--manifest'],
     outPath: values['--out'],
     port: Number(values['--port']),
+    readyIterations: Number(values['--ready-iterations']),
     warmups: Number(values['--warmups']),
   });
 }
@@ -1080,12 +1365,15 @@ function failureReport(error, options) {
     corpus: { manifestPath: options?.manifestPath ?? null, modules: null, shapeDigest: null },
     framework: null,
     integrity: {
+      browser: emptyBrowserIntegrity(),
       command: null,
       complete: false,
+      corpus: { afterVerified: false, beforeVerified: false },
+      editCounts: Object.fromEntries(ALL_EDIT_CLASSES.map((editClass) => [editClass, 0])),
       errors: [errorMessage(error)],
       iterations: options?.iterations ?? null,
       misses: 1,
-      readyIterations: null,
+      readyIterations: options?.readyIterations ?? null,
       source: null,
       warmups: options?.warmups ?? null,
     },
@@ -1093,6 +1381,7 @@ function failureReport(error, options) {
     samples: [],
     schema: DEV_LOOP_REPORT_SCHEMA,
     source: null,
+    sourceAfter: null,
     verdict: { status: 'unproven' },
   };
 }
@@ -1151,13 +1440,21 @@ function boundedInteger(value, minimum, maximum, label) {
   return value;
 }
 
+function finiteNonNegative(value) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+function finitePositive(value) {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
 function requiredString(value, label) {
   if (typeof value !== 'string' || value.length === 0) throw new TypeError(`${label} is required.`);
   return value;
 }
 
-function boundedPush(values, value) {
-  if (values.length < 100) values.push(String(value).slice(0, 1_024));
+function pushBoundedRecord(values, value) {
+  if (values.length < 200) values.push(value);
 }
 
 function errorMessage(error) {
@@ -1172,7 +1469,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   let options;
   let report;
   try {
-    options = parseArgs(process.argv.slice(2));
+    options = parseDevLoopArgs(process.argv.slice(2));
     report = await runDevLoopBenchmark(options);
   } catch (error) {
     report = failureReport(error, options);

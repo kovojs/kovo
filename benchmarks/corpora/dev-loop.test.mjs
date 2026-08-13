@@ -7,10 +7,14 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  collectPageTelemetry,
   DEV_LOOP_REPORT_SCHEMA,
+  exactSampleCountFindings,
   loadCorpusManifest,
+  parseDevLoopArgs,
   profileEditToPaint,
   runDevLoopBenchmark,
+  sourceStabilityFindings,
   summarizeNumbers,
   verifyCorpusSources,
 } from './dev-loop.mjs';
@@ -55,9 +59,134 @@ describe('single-entrant developer-loop adapter', () => {
         manifestPath,
         outPath: path.join(path.dirname(manifestPath), 'result.json'),
         port: 49_120,
+        readyIterations: 1,
         warmups: 0,
       }),
     ).rejects.toThrow('--out must be outside the generated corpus root');
+  });
+
+  it('requires an independent exact fresh-ready sample count', () => {
+    expect(
+      parseDevLoopArgs([
+        '--manifest',
+        '/tmp/manifest.json',
+        '--iterations',
+        '30',
+        '--ready-iterations',
+        '15',
+        '--warmups',
+        '3',
+        '--port',
+        '49120',
+        '--out',
+        '/tmp/report.json',
+      ]),
+    ).toMatchObject({ iterations: 30, readyIterations: 15, warmups: 3 });
+    expect(() =>
+      parseDevLoopArgs([
+        '--manifest',
+        '/tmp/manifest.json',
+        '--iterations',
+        '30',
+        '--warmups',
+        '3',
+        '--port',
+        '49120',
+        '--out',
+        '/tmp/report.json',
+      ]),
+    ).toThrow('ready iterations must be an integer from 1 through 100');
+  });
+
+  it('fails publication evidence on dirty or changed source provenance', () => {
+    const clean = {
+      commit: 'a'.repeat(40),
+      dirty: false,
+      dirtyPaths: [],
+      locks: { 'pnpm-lock.yaml': 'sha256:one' },
+    };
+    expect(sourceStabilityFindings(clean)).toEqual([]);
+    expect(
+      sourceStabilityFindings({ ...clean, dirty: true, dirtyPaths: [' M source.ts'] }),
+    ).toEqual(['pre-run source provenance is dirty']);
+    expect(
+      sourceStabilityFindings(clean, {
+        ...clean,
+        commit: 'b'.repeat(40),
+        dirty: true,
+        dirtyPaths: ['?? output.json'],
+        locks: { 'pnpm-lock.yaml': 'sha256:two' },
+      }),
+    ).toEqual([
+      'post-run source provenance is dirty',
+      'source commit changed during measurement',
+      'dependency lock digests changed during measurement',
+      'source dirty paths changed during measurement',
+    ]);
+  });
+
+  it('requires every requested ready and edit cell with state and syntax evidence', () => {
+    const report = completeCountFixture();
+    expect(exactSampleCountFindings(report)).toEqual([]);
+    expect(report.integrity.editCounts).toEqual({
+      data: 2,
+      entry: 2,
+      leaf: 2,
+      recovery: 2,
+      syntaxError: 2,
+    });
+
+    report.samples[1].entryMs = null;
+    report.samples[0].dataStateSurvived = false;
+    report.samples[0].syntaxErrorDiagnosticSignal = '';
+    expect(exactSampleCountFindings(report)).toEqual(
+      expect.arrayContaining([
+        'edit sample 0 lost state during data',
+        'edit sample 0 lacks syntax-error diagnostic evidence',
+        'edit sample 1 is missing entry timing',
+        'entry sample count 1 did not equal 2',
+      ]),
+    );
+  });
+
+  it('records network failures and explicitly classifies intentional syntax diagnostics', () => {
+    const page = new FakePage();
+    const telemetry = collectPageTelemetry(page, 'http://localhost:49120');
+    page.emit(
+      'requestfailed',
+      requestEvidence({ failure: 'net::ERR_CONNECTION_REFUSED', url: 'http://localhost:49120/' }),
+    );
+    page.emit('response', responseEvidence({ status: 200, url: 'http://localhost:49120/' }));
+    telemetry.markReady();
+    page.emit('console', { text: () => 'unexpected runtime error', type: () => 'error' });
+    telemetry.setPhase('syntaxError');
+    telemetry.setIntentionalSyntaxError(true);
+    page.emit('pageerror', new Error('expected parser diagnostic'));
+    page.emit('response', responseEvidence({ status: 500, url: 'http://localhost:49120/' }));
+
+    expect(telemetry.snapshot()).toMatchObject({
+      expectedErrors: [
+        expect.objectContaining({
+          classification: 'startup-transient',
+          kind: 'requestfailed',
+        }),
+        expect.objectContaining({
+          classification: 'intentional-syntax-error',
+          kind: 'pageerror',
+        }),
+        expect.objectContaining({
+          classification: 'intentional-syntax-error',
+          kind: 'response',
+          status: 500,
+        }),
+      ],
+      requestFailedCount: 1,
+      responseCount: 2,
+      responseStatusCounts: { 200: 1, 500: 1 },
+      unexpectedErrors: [
+        expect.objectContaining({ kind: 'console', message: 'unexpected runtime error' }),
+      ],
+    });
   });
 
   it('summarizes raw cells and ranks only observed edit-to-paint spans', () => {
@@ -112,6 +241,8 @@ describe('single-entrant developer-loop adapter', () => {
         path.join(root, 'missing.json'),
         '--iterations',
         '1',
+        '--ready-iterations',
+        '1',
         '--warmups',
         '0',
         '--port',
@@ -130,6 +261,57 @@ describe('single-entrant developer-loop adapter', () => {
     expect(report.verdict.status).toBe('unproven');
   });
 });
+
+function completeCountFixture() {
+  const samples = [0, 1].map((iteration) => ({
+    dataMs: 10,
+    dataStateSurvived: true,
+    entryMs: 10,
+    entryStateSurvived: true,
+    iteration,
+    leafMs: 10,
+    leafStateSurvived: true,
+    recoveryMs: 10,
+    recoveryStateSurvived: true,
+    syntaxErrorDiagnosticSignal: 'vite-error-overlay:parser error',
+    syntaxErrorMs: 10,
+    syntaxErrorStateSurvived: true,
+  }));
+  return {
+    integrity: { editCounts: {}, iterations: 2, readyIterations: 1 },
+    readySamples: [{ durationMs: 10, iteration: 0, peakRssBytes: 1, success: true }],
+    samples,
+  };
+}
+
+class FakePage {
+  #listeners = new Map();
+
+  emit(event, value) {
+    for (const listener of this.#listeners.get(event) ?? []) listener(value);
+  }
+
+  on(event, listener) {
+    const listeners = this.#listeners.get(event) ?? [];
+    listeners.push(listener);
+    this.#listeners.set(event, listeners);
+  }
+}
+
+function requestEvidence({ failure = null, status = 200, url }) {
+  return {
+    failure: () => (failure === null ? null : { errorText: failure }),
+    method: () => 'GET',
+    resourceType: () => 'document',
+    status: () => status,
+    url: () => url,
+  };
+}
+
+function responseEvidence({ status, url }) {
+  const request = requestEvidence({ status, url });
+  return { request: () => request, status: () => status, url: () => url };
+}
 
 async function temporaryRoot() {
   const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-dev-loop-test-'));
