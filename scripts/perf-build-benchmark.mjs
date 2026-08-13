@@ -26,6 +26,21 @@ import { collectPerformanceProvenance } from './lib/perf-provenance.mjs';
 import { measureProcessTreeCommand } from './lib/process-tree-rss.mjs';
 
 export const BUILD_BENCHMARK_SCHEMA = 'kovo-build-benchmark/v1';
+export const KOVO_BUILD_PHASE_ATTRIBUTION_SCHEMA = 'kovo-build-phase-attribution/v1';
+export const KOVO_BUILD_SOURCE_PHASES = Object.freeze([
+  'lifecycle-policy',
+  'config-trust',
+  'typescript',
+  'project-quality',
+  'sound-subset',
+  'session-authority',
+  'app-source-trust',
+  'stylesheet',
+  'app-evaluation',
+  'build-check-graph',
+  'graph-diagnostics',
+]);
+export const KOVO_BUILD_WORKER_PHASES = Object.freeze(['analyze', 'client', 'server', 'final']);
 const CORPUS_SCHEMA = 'kovo-dev-corpus/v1';
 const CORPUS_OWNER_FILE = '.kovo-benchmark-corpus-owner.json';
 const CORPUS_OWNER_SCHEMA = 'kovo-benchmark-corpus-owner/v1';
@@ -41,6 +56,63 @@ export function parseBuildPhaseCensus(output) {
   return {
     source: parseLastProtocolLine(text, KOVO_SOURCE_PHASE_SCHEMA),
     workers: parseLastProtocolLine(text, KOVO_WORKER_PHASE_SCHEMA),
+  };
+}
+
+/**
+ * Attribute one Kovo build wall observation without adding overlapping clocks.
+ *
+ * The source-check census is nested inside the `analyze` worker. SPEC §5.2 rule 9 makes that
+ * current-source proof distinct from the later deploy-proof workers, so adding the source phase
+ * durations to the worker durations would double-count work and invent an attribution. The four
+ * worker durations are the only authenticated sequential envelope. Everything outside that
+ * envelope is reported as a measured CLI/startup residual.
+ */
+export function attributeKovoBuildWallTime({ durationMs, expectedSourcePath, phaseCensus }) {
+  const errors = [];
+  const source = phaseCensus?.source;
+  const workers = phaseCensus?.workers;
+  const wallDurationMs = finiteNonNegativeNumber(durationMs, 'wall duration', errors);
+  validateKovoBuildSourceCensus(source, expectedSourcePath, errors);
+  const workerEnvelopeMs = validateKovoBuildWorkerCensus(workers, expectedSourcePath, errors);
+  let residualMs = null;
+  if (wallDurationMs !== null && workerEnvelopeMs !== null) {
+    const candidate = wallDurationMs - workerEnvelopeMs;
+    if (!Number.isFinite(candidate) || candidate < 0) {
+      errors.push('worker phase envelope exceeds measured build wall time');
+    } else {
+      residualMs = candidate;
+    }
+  }
+  const complete = errors.length === 0 && residualMs !== null;
+  return {
+    cliStartupTail: {
+      durationMs: complete ? residualMs : null,
+      source: {
+        envelope: `${KOVO_WORKER_PHASE_SCHEMA}.totalWorkerMs`,
+        operation: 'wall-minus-sequential-worker-envelope',
+        wall: 'measureProcessTreeCommand.durationMs',
+      },
+      status: complete ? 'measured-residual' : 'unproven',
+    },
+    complete,
+    errors,
+    phaseEnvelope: {
+      durationMs: workerEnvelopeMs,
+      phases: [...KOVO_BUILD_WORKER_PHASES],
+      source: `${KOVO_WORKER_PHASE_SCHEMA}.totalWorkerMs`,
+      status: workerEnvelopeMs === null ? 'unproven' : 'authenticated-sequential',
+    },
+    schema: KOVO_BUILD_PHASE_ATTRIBUTION_SCHEMA,
+    sourceCheck: {
+      nestedWithin: 'analyze',
+      phases: [...KOVO_BUILD_SOURCE_PHASES],
+      source: KOVO_SOURCE_PHASE_SCHEMA,
+      status: errors.some((error) => error.startsWith('source census'))
+        ? 'unproven'
+        : 'authenticated-nested',
+    },
+    wallDurationMs,
   };
 }
 
@@ -123,11 +195,23 @@ export function summarizeBuildSamples(samples) {
   const deviations = durations
     .map((value) => Math.abs(value - median))
     .sort((left, right) => left - right);
+  const phaseEvidence = samples.flatMap((sample, index) =>
+    sample.phaseCensus === null || sample.phaseCensus === undefined
+      ? []
+      : [
+          {
+            attribution: sample.phaseAttribution ?? null,
+            census: sample.phaseCensus,
+            sample: index + 1,
+          },
+        ],
+  );
   return {
     artifactBytes: samples.at(-1)?.artifactBytes ?? 0,
     durationMadMs: quantile(deviations, 0.5),
     durationMedianMs: median,
     durationP95Ms: quantile(durations, 0.95),
+    ...(phaseEvidence.length === 0 ? {} : { phaseEvidence }),
     peakRssBytes: Math.max(0, ...samples.map((sample) => sample.peakRssBytes)),
   };
 }
@@ -156,6 +240,7 @@ export function runBuildBenchmark(options, dependencies = {}) {
   const outputs = validateBuildOutputContract(manifest.build.outputs);
   const outputPatterns = [...outputs.requiredNonempty, ...outputs.absent];
   const commandEnv = stringRecord(command.env, 'build.command.env');
+  const kovoPhaseCensusSource = framework === 'kovo' ? declaredKovoBuildSource(argv) : null;
   const edit = manifest.build.edit;
   const originalEditSource =
     mode === 'edit'
@@ -190,7 +275,9 @@ export function runBuildBenchmark(options, dependencies = {}) {
       cwd: commandCwd,
       env: {
         ...commandEnv,
-        ...(framework === 'kovo' ? { KOVO_DEVEX_BUILD_PHASE_CENSUS_SOURCE: 'src/app.tsx' } : {}),
+        ...(kovoPhaseCensusSource === null
+          ? {}
+          : { KOVO_DEVEX_BUILD_PHASE_CENSUS_SOURCE: kovoPhaseCensusSource }),
       },
       sampleIntervalMs: 50,
       timeoutMs,
@@ -279,6 +366,46 @@ export function runBuildBenchmark(options, dependencies = {}) {
           totalBytes: 0,
         };
       }
+      let phaseCensus = null;
+      let phaseAttribution = null;
+      if (framework === 'kovo') {
+        try {
+          phaseCensus = parseBuildPhaseCensus(combinedOutput);
+          phaseAttribution = attributeKovoBuildWallTime({
+            durationMs: measured.durationMs,
+            expectedSourcePath: kovoPhaseCensusSource,
+            phaseCensus,
+          });
+        } catch (error) {
+          phaseAttribution = {
+            cliStartupTail: {
+              durationMs: null,
+              source: {
+                envelope: `${KOVO_WORKER_PHASE_SCHEMA}.totalWorkerMs`,
+                operation: 'wall-minus-sequential-worker-envelope',
+                wall: 'measureProcessTreeCommand.durationMs',
+              },
+              status: 'unproven',
+            },
+            complete: false,
+            errors: [`phase census parse failed: ${errorMessage(error)}`],
+            phaseEnvelope: {
+              durationMs: null,
+              phases: [...KOVO_BUILD_WORKER_PHASES],
+              source: `${KOVO_WORKER_PHASE_SCHEMA}.totalWorkerMs`,
+              status: 'unproven',
+            },
+            schema: KOVO_BUILD_PHASE_ATTRIBUTION_SCHEMA,
+            sourceCheck: {
+              nestedWithin: 'analyze',
+              phases: [...KOVO_BUILD_SOURCE_PHASES],
+              source: KOVO_SOURCE_PHASE_SCHEMA,
+              status: 'unproven',
+            },
+            wallDurationMs: measured.durationMs,
+          };
+        }
+      }
       const sample = {
         artifactBytes: outputCensus.totalBytes,
         corpus: {
@@ -291,7 +418,8 @@ export function runBuildBenchmark(options, dependencies = {}) {
         loadAverage: beforeLoadAverage,
         outputCensus,
         peakRssBytes: measured.peakRssBytes,
-        phaseCensus: framework === 'kovo' ? parseBuildPhaseCensus(combinedOutput) : null,
+        phaseAttribution,
+        phaseCensus,
       };
       samples.push(sample);
       const sampleNumber = String(index + 1);
@@ -316,10 +444,12 @@ export function runBuildBenchmark(options, dependencies = {}) {
           errors.push(`sample ${sampleNumber} output census: ${outputCensus.error}`);
         }
       }
-      if (framework === 'kovo' && sample.phaseCensus?.source?.complete !== true) {
-        errors.push(`sample ${sampleNumber} omitted a complete Kovo source-phase census`);
-      } else if (framework === 'kovo' && sample.phaseCensus?.workers?.complete !== true) {
-        errors.push(`sample ${sampleNumber} omitted a complete Kovo worker-phase census`);
+      if (framework === 'kovo' && sample.phaseAttribution?.complete !== true) {
+        errors.push(
+          `sample ${sampleNumber} omitted authenticated Kovo build phase attribution: ${
+            sample.phaseAttribution?.errors?.join('; ') ?? 'phase attribution is unavailable'
+          }`,
+        );
       }
       if (measured.exitCode !== 0 || measured.error !== null) break;
     }
@@ -367,9 +497,7 @@ export function runBuildBenchmark(options, dependencies = {}) {
       sample.exitCode === 0 &&
       sample.outputCensus?.complete === true &&
       sample.corpus?.stable === true &&
-      (framework !== 'kovo' ||
-        (sample.phaseCensus?.source?.complete === true &&
-          sample.phaseCensus?.workers?.complete === true)),
+      (framework !== 'kovo' || sample.phaseAttribution?.complete === true),
   ).length;
   const misses = iterations - validSamples;
   const corpusStable = corpusAfter?.digest === corpusBefore.digest;
@@ -462,6 +590,118 @@ function validateCorpusManifest(manifest, framework) {
     throw new TypeError('corpus size metadata does not match the authenticated workload');
   }
   validateBuildOutputContract(manifest.build.outputs);
+}
+
+function declaredKovoBuildSource(argv) {
+  const buildIndex = argv.indexOf('build');
+  const declared = buildIndex < 0 ? undefined : argv[buildIndex + 1];
+  if (
+    typeof declared !== 'string' ||
+    declared.length === 0 ||
+    declared.startsWith('--') ||
+    path.isAbsolute(declared)
+  ) {
+    throw new TypeError('Kovo build command must declare one project-relative source entry');
+  }
+  const normalized = path.posix.normalize(declared.replaceAll('\\', '/')).replace(/^\.\//u, '');
+  if (normalized === '.' || normalized === '..' || normalized.startsWith('../')) {
+    throw new TypeError('Kovo build phase census source escapes the corpus root');
+  }
+  return normalized;
+}
+
+function validateKovoBuildSourceCensus(census, expectedSourcePath, errors) {
+  if (!ownRecord(census) || census.schema !== KOVO_SOURCE_PHASE_SCHEMA) {
+    errors.push(`source census is not ${KOVO_SOURCE_PHASE_SCHEMA}`);
+    return;
+  }
+  if (census.complete !== true) errors.push('source census is incomplete');
+  if (!digest(census.checkGraphDigest)) errors.push('source census checkGraphDigest is invalid');
+  if (!digest(census.sourceSetDigest)) errors.push('source census sourceSetDigest is invalid');
+  if (
+    !ownRecord(census.source) ||
+    census.source.path !== expectedSourcePath ||
+    census.source.encoding !== 'utf16le' ||
+    !Number.isSafeInteger(census.source.codeUnitLength) ||
+    census.source.codeUnitLength < 0 ||
+    !digest(census.source.contentHash)
+  ) {
+    errors.push('source census source identity is invalid');
+  }
+  validateExactPhaseSequence(census.phases, KOVO_BUILD_SOURCE_PHASES, 'source census', errors, {
+    statuses: new Set(['executed', 'not-applicable', 'reused-authenticated']),
+  });
+}
+
+function validateKovoBuildWorkerCensus(census, expectedSourcePath, errors) {
+  if (!ownRecord(census) || census.schema !== KOVO_WORKER_PHASE_SCHEMA) {
+    errors.push(`worker census is not ${KOVO_WORKER_PHASE_SCHEMA}`);
+    return null;
+  }
+  if (census.complete !== true) errors.push('worker census is incomplete');
+  if (census.sourcePath !== expectedSourcePath)
+    errors.push('worker census source identity is invalid');
+  const phaseDurations = validateExactPhaseSequence(
+    census.phases,
+    KOVO_BUILD_WORKER_PHASES,
+    'worker census',
+    errors,
+    { statuses: new Set([0]) },
+  );
+  const declaredTotal = finiteNonNegativeNumber(
+    census.totalWorkerMs,
+    'worker census totalWorkerMs',
+    errors,
+  );
+  if (phaseDurations === null || declaredTotal === null) return null;
+  const computedTotal = phaseDurations.reduce((sum, value) => sum + value, 0);
+  const tolerance = Math.max(1e-6, computedTotal * Number.EPSILON * 8);
+  if (Math.abs(computedTotal - declaredTotal) > tolerance) {
+    errors.push('worker census totalWorkerMs does not equal its sequential phase durations');
+    return null;
+  }
+  return declaredTotal;
+}
+
+function validateExactPhaseSequence(phases, expectedNames, label, errors, { statuses }) {
+  if (!Array.isArray(phases) || phases.length !== expectedNames.length) {
+    errors.push(`${label} does not contain the complete ordered phase set`);
+    return null;
+  }
+  const durations = [];
+  for (let index = 0; index < expectedNames.length; index += 1) {
+    const phase = phases[index];
+    if (!ownRecord(phase) || phase.name !== expectedNames[index]) {
+      errors.push(`${label} phase ${String(index + 1)} is not ${expectedNames[index]}`);
+      continue;
+    }
+    if (!statuses.has(phase.status)) {
+      errors.push(`${label} phase ${phase.name} has invalid status`);
+    }
+    const duration = finiteNonNegativeNumber(
+      phase.durationMs,
+      `${label} phase ${phase.name} duration`,
+      errors,
+    );
+    if (duration !== null) durations.push(duration);
+  }
+  return durations.length === expectedNames.length ? durations : null;
+}
+
+function finiteNonNegativeNumber(value, label, errors) {
+  if (!Number.isFinite(value) || value < 0) {
+    errors.push(`${label} must be finite and non-negative`);
+    return null;
+  }
+  return value;
+}
+
+function digest(value) {
+  return typeof value === 'string' && /^sha256:[0-9a-f]{64}$/u.test(value);
+}
+
+function ownRecord(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function validateBuildOutputContract(value) {
