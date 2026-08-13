@@ -454,7 +454,6 @@ jobs:
           KOVO_CHECK_WATCH_CANDIDATE_SHA: ${{ inputs.check_watch_candidate_sha || 'ce84925251200bbf6e7f79d8f83d74f335c7a572' }}
           KOVO_CHECK_WATCH_BASELINE_COMMIT: cc475b3ab2d54ff8201de059e713cc1d7e54400c
           KOVO_CHECK_WATCH_CANDIDATE_COMMIT: eb1a1663b40826240a7bb5080fd54cb66bf4bab8
-          KOVO_CHECK_WATCH_CANDIDATE_PATCH_ID: 97a1cc7b8f0e46d6cbd44cb61d4708433f523aef
           KOVO_CHECK_WATCH_EVIDENCE_REF: refs/heads/perf-spike/check-watch-sealed-20260813
         run: |
           baseline_root="$RUNNER_TEMP/kovo-check-watch-baseline"
@@ -496,8 +495,9 @@ jobs:
           production_commit="$(git rev-list --reverse "$baseline_commit..$candidate_commit" | head -n 1)"
           assert_equal 'production commit parent' "$baseline_commit" "$(git rev-parse "$production_commit^")"
           assert_equal 'candidate seal parent' "$production_commit" "$(git rev-parse "$candidate_commit^")"
+          original_patch_id="$(git show --pretty=format: --binary --no-ext-diff "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT" | git patch-id --stable | cut -d' ' -f1)"
           production_patch_id="$(git show --pretty=format: --binary --no-ext-diff "$production_commit" | git patch-id --stable | cut -d' ' -f1)"
-          assert_equal 'production patch id' "$KOVO_CHECK_WATCH_CANDIDATE_PATCH_ID" "$production_patch_id"
+          assert_equal 'production patch id matches original on this Git implementation' "$original_patch_id" "$production_patch_id"
           original_changed_paths="$(git diff --name-only "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT^" "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT")"
           sealed_changed_paths="$(git diff --name-only "$baseline_commit" "$production_commit")"
           assert_equal 'production changed-path census' "$original_changed_paths" "$sealed_changed_paths"

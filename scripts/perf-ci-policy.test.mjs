@@ -208,9 +208,7 @@ describe('realistic performance CI policy', () => {
     expect(source).toContain(
       'KOVO_CHECK_WATCH_EVIDENCE_REF: refs/heads/perf-spike/check-watch-sealed-20260813',
     );
-    expect(source).toContain(
-      'KOVO_CHECK_WATCH_CANDIDATE_PATCH_ID: 97a1cc7b8f0e46d6cbd44cb61d4708433f523aef',
-    );
+    expect(source).not.toContain('KOVO_CHECK_WATCH_CANDIDATE_PATCH_ID');
     expect(source).toContain('check_watch_baseline_sha must be exactly 40 lowercase hexadecimal');
     expect(source).toContain('check_watch_candidate_sha must be exactly 40 lowercase hexadecimal');
     expect(source).toContain('git fetch --no-tags origin');
@@ -231,7 +229,12 @@ describe('realistic performance CI policy', () => {
     expect(source).toContain("assert_equal 'candidate sealed range commit count' 2");
     expect(source).toContain("assert_equal 'candidate seal parent'");
     expect(source).toContain('git patch-id --stable');
-    expect(source).toContain("assert_equal 'production patch id'");
+    expect(source).toContain(
+      'original_patch_id="$(git show --pretty=format: --binary --no-ext-diff "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT"',
+    );
+    expect(source).toContain(
+      "assert_equal 'production patch id matches original on this Git implementation'",
+    );
     expect(source).toContain("assert_equal 'production changed-path census'");
     expect(source).toContain('assert_equal "baseline blob for $production_path"');
     expect(source).toContain('assert_equal "candidate blob for $production_path"');
