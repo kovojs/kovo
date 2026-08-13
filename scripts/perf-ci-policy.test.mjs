@@ -19,14 +19,13 @@ describe('realistic performance CI policy', () => {
     expect(smoke).toContain(
       'vp exec pnpm --dir benchmarks/nextjs install --ignore-workspace --frozen-lockfile',
     );
-    expect(smoke).toContain('vp exec pnpm --dir benchmarks/kovo run build');
-    expect(smoke).toContain('vp exec pnpm --dir benchmarks/nextjs run build');
     expect(smoke).toContain('vp exec node benchmarks/compare.mjs');
     expect(smoke).toContain('--lanes matched-l0,matched-l1');
     expect(smoke).toContain('--iterations 2');
     expect(smoke).toContain('--warmups 0');
     expect(smoke).toContain('--skip-lighthouse');
     expect(smoke).toContain('--bfcache-iterations 2');
+    expect(smoke).not.toContain('--skip-build');
     expect(smoke.indexOf('playwright-install')).toBeLessThan(
       smoke.indexOf('benchmarks/compare.mjs'),
     );
@@ -53,6 +52,7 @@ describe('realistic performance CI policy', () => {
     for (const token of ['--lighthouse-runs 5', '--bfcache-iterations 10']) {
       expect(jobSource('browser-matrix')).toContain(token);
     }
+    expect(jobSource('browser-matrix')).not.toContain('--skip-build');
     for (const token of [
       '--corpus-size 216',
       '--dev-ready-iterations 15',

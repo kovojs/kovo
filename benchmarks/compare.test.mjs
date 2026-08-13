@@ -22,9 +22,12 @@ import {
 } from './compare.mjs';
 
 describe('serialized comparison analysis', () => {
-  it('rejects stale production artifacts before a server comparison starts', async () => {
+  it('rejects stale production artifacts before a browser/server comparison starts', async () => {
     await expect(runComparison({ cells: ['server'], skipBuild: true })).rejects.toThrow(
-      /prepare fresh production artifacts/u,
+      /prepares fresh production artifacts once/u,
+    );
+    await expect(runComparison({ cells: ['browser'], skipBuild: true })).rejects.toThrow(
+      /prepares fresh production artifacts once/u,
     );
   });
 

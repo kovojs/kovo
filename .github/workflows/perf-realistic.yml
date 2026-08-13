@@ -61,10 +61,6 @@ jobs:
           browsers: chromium
           cache-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-${{ hashFiles('pnpm-lock.yaml') }}
           restore-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-
-      - name: Build both matched entrants once
-        run: |
-          vp exec pnpm --dir benchmarks/kovo run build
-          vp exec pnpm --dir benchmarks/nextjs run build
       - name: Prove both emitted matched L0/L1 behaviors
         run: >-
           vp exec node benchmarks/compare.mjs
@@ -74,7 +70,6 @@ jobs:
           --warmups 0
           --skip-lighthouse
           --bfcache-iterations 2
-          --skip-build
           --out-dir "$RUNNER_TEMP/kovo-perf/correctness-smoke"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
@@ -184,10 +179,6 @@ jobs:
           browsers: chromium
           cache-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-${{ hashFiles('pnpm-lock.yaml', 'benchmarks/harness/pnpm-lock.yaml') }}
           restore-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-
-      - name: Build each browser entrant once
-        run: |
-          vp exec pnpm --dir benchmarks/kovo run build
-          vp exec pnpm --dir benchmarks/nextjs run build
       - name: Collect default and matched browser evidence
         run: >-
           vp exec node benchmarks/compare.mjs
@@ -196,7 +187,6 @@ jobs:
           --warmups 3
           --lighthouse-runs 5
           --bfcache-iterations 10
-          --skip-build
           --out-dir "$RUNNER_TEMP/kovo-perf/browser"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()

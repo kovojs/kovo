@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -30,6 +31,7 @@ import {
 } from '../scripts/perf-server-benchmark.mjs';
 
 export const COMPARE_SCHEMA = 'kovo-next-performance-comparison/v1';
+export const BROWSER_PREPARE_SCHEMA = 'kovo-browser-benchmark-prepare/v1';
 export const EXECUTION_ORDER = Object.freeze(['kovo', 'nextjs', 'nextjs', 'kovo']);
 export const WORKLOAD_IDENTITY_SCHEMA = 'kovo-performance-workload-identity/v1';
 
@@ -51,12 +53,12 @@ export async function runComparison(options = {}) {
   for (const cell of cells) assertMember('--cells', cell, defaultCells);
   if (new Set(cells).size !== cells.length) throw new Error('--cells must not contain duplicates.');
   assertMember('--corpus-size', options.corpusSize ?? 24, [24, 216]);
+  if ((cells.includes('browser') || cells.includes('server')) && options.skipBuild === true) {
+    throw new Error(
+      '--skip-build is unavailable for browser/server comparisons; each comparison prepares fresh production artifacts once.',
+    );
+  }
   if (cells.includes('server')) {
-    if (options.skipBuild === true) {
-      throw new Error(
-        '--skip-build is unavailable when --cells includes server; each comparison must prepare fresh production artifacts.',
-      );
-    }
     assertServerMatrixOptions(options);
   }
   for (const lane of options.lanes ?? lanes) assertMember('--lanes', lane, lanes);
@@ -73,6 +75,7 @@ export async function runComparison(options = {}) {
     await mkdir(outDir, { recursive: true });
     const report = {
       analysis: {},
+      browserPreparation: [],
       execution,
       generatedAt: new Date().toISOString(),
       host: performanceHostFingerprint(),
@@ -110,11 +113,23 @@ export async function runComparison(options = {}) {
   const lighthouseCounts = splitAcrossOccurrences(options.lighthouseRuns ?? 5);
   const hostSamples = [];
   const rawCells = [];
+  const browserPreparation = [];
   const serverPreparation = [];
   let executionError = null;
   await mkdir(outDir, { recursive: true });
   try {
     if (cells.includes('browser')) {
+      browserPreparation.push(...(await prepareBrowserEntrants()));
+      const incomplete = browserPreparation.filter((report) => report.integrity.complete !== true);
+      if (incomplete.length > 0) {
+        executionError = incomplete
+          .flatMap((report) =>
+            report.integrity.errors.map((error) => `${report.framework}: ${error}`),
+          )
+          .join('; ');
+      }
+    }
+    if (cells.includes('browser') && !executionError) {
       for (const lane of options.lanes ?? lanes) {
         assertMember('--lanes', lane, lanes);
         for (const [orderIndex, framework] of EXECUTION_ORDER.entries()) {
@@ -144,7 +159,7 @@ export async function runComparison(options = {}) {
                   : ['--lighthouse-runs', String(Math.max(1, lighthouseCounts[occurrence]))]),
                 '--bfcache-iterations',
                 String(Math.max(1, bfcacheCounts[occurrence])),
-                ...(options.skipBuild ? ['--skip-build'] : []),
+                '--skip-build',
                 '--out-dir',
                 path.join(scratch, `${lane}-${orderIndex}-browser-out`),
                 '--result-file',
@@ -376,6 +391,7 @@ export async function runComparison(options = {}) {
     const sourceStable = sameSourceState(provenance, finalProvenance);
     const report = {
       analysis,
+      browserPreparation,
       execution,
       generatedAt: new Date().toISOString(),
       host: performanceHostFingerprint({ browserVersions: observedBrowserVersions(rawCells) }),
@@ -384,6 +400,7 @@ export async function runComparison(options = {}) {
         alternatingOrder: EXECUTION_ORDER,
         cells,
         comparator: await comparatorIntegrity(rawCells, {
+          browserPreparation,
           cells,
           corpusSize: options.corpusSize ?? 24,
           bfcacheIterations: options.bfcacheIterations ?? 10,
@@ -673,8 +690,12 @@ function assertServerMatrixOptions(options) {
 }
 
 async function runAdapter({ args, cwd, label }) {
+  await runChildProcess({ args, command: process.execPath, cwd, label });
+}
+
+async function runChildProcess({ args, command, cwd, label }) {
   await new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, args, {
+    const child = spawn(command, args, {
       cwd,
       detached: process.platform !== 'win32',
       env: process.env,
@@ -697,6 +718,70 @@ async function runAdapter({ args, cwd, label }) {
       process.removeListener('SIGTERM', forward);
     });
   });
+}
+
+async function prepareBrowserEntrants() {
+  const definitions = [
+    {
+      artifacts: [path.join(repoRoot, 'benchmarks/kovo/dist/server/server.mjs')],
+      command: ['exec', 'pnpm', '--dir', 'benchmarks/kovo', 'run', 'build'],
+      framework: 'kovo',
+    },
+    {
+      artifacts: [
+        path.join(repoRoot, 'benchmarks/nextjs/.next/standalone/benchmarks/nextjs/server.js'),
+      ],
+      command: ['exec', 'pnpm', '--dir', 'benchmarks/nextjs', 'run', 'build'],
+      framework: 'nextjs',
+      generatedInput: path.join(repoRoot, 'benchmarks/nextjs/next-env.d.ts'),
+    },
+  ];
+  const reports = [];
+  for (const definition of definitions) {
+    const source = collectPerformanceProvenance({ lockFiles, repoRoot });
+    const errors = [];
+    const generatedSnapshot =
+      definition.generatedInput === undefined
+        ? undefined
+        : await readFile(definition.generatedInput);
+    try {
+      await runChildProcess({
+        args: definition.command,
+        command: 'vp',
+        cwd: repoRoot,
+        label: `browser/prepare/${definition.framework}`,
+      });
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
+    } finally {
+      if (definition.generatedInput !== undefined) {
+        await writeFile(definition.generatedInput, generatedSnapshot);
+      }
+    }
+    const sourceAfter = collectPerformanceProvenance({ lockFiles, repoRoot });
+    const missingArtifacts = definition.artifacts
+      .filter((artifact) => !existsSync(artifact))
+      .map((artifact) => path.relative(repoRoot, artifact));
+    const sourceStable = sameSourceState(source, sourceAfter);
+    if (!sourceStable) errors.push('source provenance changed during browser preparation');
+    if (missingArtifacts.length > 0) {
+      errors.push(`production artifacts are missing: ${missingArtifacts.join(', ')}`);
+    }
+    reports.push({
+      artifacts: definition.artifacts.map((artifact) => path.relative(repoRoot, artifact)),
+      framework: definition.framework,
+      integrity: {
+        complete: errors.length === 0 && !source.dirty,
+        errors,
+        publishable: !source.dirty,
+        sourceStable,
+      },
+      schema: BROWSER_PREPARE_SCHEMA,
+      source,
+      sourceAfter,
+    });
+  }
+  return reports;
 }
 
 function assertMember(flag, value, allowed) {
@@ -839,6 +924,27 @@ async function comparatorIntegrity(cells, policy) {
     }
     if (!corpusDigests.kovo || corpusDigests.kovo !== corpusDigests.nextjs) {
       reasons.push('Kovo/Next corpus shapeDigest mismatch');
+    }
+  }
+  if (policy.cells.includes('browser')) {
+    for (const framework of ['kovo', 'nextjs']) {
+      const preparation = policy.browserPreparation.filter(
+        (report) => report.framework === framework,
+      );
+      const report = preparation[0];
+      if (
+        preparation.length !== 1 ||
+        report?.schema !== BROWSER_PREPARE_SCHEMA ||
+        report?.integrity?.complete !== true ||
+        report?.source?.commit !== policy.source.commit ||
+        !requiredLocksMatch(report?.source?.locks, policy.source.locks) ||
+        report?.sourceAfter?.commit !== report?.source?.commit ||
+        JSON.stringify(report?.sourceAfter?.locks) !== JSON.stringify(report?.source?.locks) ||
+        report?.source?.dirty ||
+        report?.sourceAfter?.dirty
+      ) {
+        reasons.push(`browser/${framework} preparation evidence is incomplete`);
+      }
     }
   }
   if (policy.cells.includes('server')) {
@@ -1286,6 +1392,7 @@ export async function performanceWorkloadIdentity(
   const identity = {
     adapters: {
       browser: BROWSER_BENCHMARK_SCHEMA,
+      browserPrepare: BROWSER_PREPARE_SCHEMA,
       build: 'kovo-build-benchmark/v1',
       compare: COMPARE_SCHEMA,
       dev: 'kovo-dev-loop-report/v1',
