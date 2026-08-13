@@ -247,6 +247,8 @@ describe('realistic performance CI policy', () => {
     expectPnpmBridge(source);
     expect(source).not.toContain('revert --no-edit');
     expect(count(source, '--prepare-kovo-scenario')).toBe(2);
+    expect(source).toContain('KOVO_SOURCE_COMMIT="$baseline_commit"');
+    expect(source).toContain('KOVO_SOURCE_COMMIT="$candidate_commit"');
     expect(source).toContain('scripts/perf-check-watch-spike.mjs');
     expect(source).toContain('--spike-repo "$RUNNER_TEMP/kovo-check-watch-candidate"');
     expect(source).toContain('--samples 30');

@@ -566,6 +566,7 @@ describe('DevEx benchmark foundation', () => {
       "['install', '--offline', '--frozen-lockfile', '--ignore-scripts']",
     );
     expect(devexBenchmarkSource).toContain("['run', 'check:publish']");
+    expect(devexBenchmarkSource).toContain('KOVO_SOURCE_COMMIT: sourceCommit');
   });
 
   it('builds the benchmark browser bootstrap from exact compiler and graph facts', async () => {

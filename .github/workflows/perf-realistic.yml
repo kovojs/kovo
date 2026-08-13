@@ -515,8 +515,10 @@ jobs:
           git worktree add --detach "$candidate_root" "$candidate_commit"
           vp exec pnpm --dir "$baseline_root" install --offline --frozen-lockfile --ignore-scripts
           vp exec pnpm --dir "$candidate_root" install --offline --frozen-lockfile --ignore-scripts
-          vp exec node "$baseline_root/scripts/devex-benchmark.mjs" --prepare-kovo-scenario
-          vp exec node "$candidate_root/scripts/devex-benchmark.mjs" --prepare-kovo-scenario
+          KOVO_SOURCE_COMMIT="$baseline_commit" \
+            vp exec node "$baseline_root/scripts/devex-benchmark.mjs" --prepare-kovo-scenario
+          KOVO_SOURCE_COMMIT="$candidate_commit" \
+            vp exec node "$candidate_root/scripts/devex-benchmark.mjs" --prepare-kovo-scenario
       - name: Run the full serialized check-watch decision
         run: >-
           vp exec node scripts/perf-check-watch-spike.mjs

@@ -4372,6 +4372,12 @@ export function produceFreshKovoPackedRelease(options = {}) {
       ['run', 'check:publish'],
       sourceRoot,
       'fresh pack code-owned publish build',
+      {
+        ...process.env,
+        // The detached source is the artifact authority. An enclosing PR job's GITHUB_SHA names
+        // a different commit and must not leak into the authenticated docs snapshot.
+        KOVO_SOURCE_COMMIT: sourceCommit,
+      },
     );
     const trackedChanges = producerCommand(
       spawn,
