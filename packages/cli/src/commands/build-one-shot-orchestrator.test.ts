@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 
 import { describe, expect, it } from 'vitest';
@@ -18,7 +18,10 @@ import {
   KOVO_BUILD_ONE_SHOT_WORKER_TIMEOUT_MS,
   STATIC_TRUST_WORKER_TIMEOUT_MS,
 } from './build-security-deadlines.js';
-import { boundedKovoBuildOneShotWorkerForTesting } from './build-one-shot-orchestrator.js';
+import {
+  abortKovoBuildOneShotOutputForTesting,
+  boundedKovoBuildOneShotWorkerForTesting,
+} from './build-one-shot-orchestrator.js';
 
 const itIfPosix = process.platform === 'win32' ? it.skip : it;
 
@@ -235,26 +238,42 @@ describe('one-shot build worker orchestration', () => {
   );
 
   itIfPosix(
-    'leaves final output untouched while identifying unpromoted staging as timeout residue',
+    'removes only the authenticated stage while leaving final output and sibling builds untouched',
     async () => {
       const root = mkdtempSync(join(tmpdir(), 'kovo-one-shot-timeout-transaction-'));
       const finalOutDir = join(root, 'dist');
       writeFileSync(finalOutDir, 'last-good', 'utf8');
-      const script = [
-        "const { mkdtempSync, writeFileSync } = require('node:fs');",
-        "const { join } = require('node:path');",
-        `const stage = mkdtempSync(join(${JSON.stringify(root)}, '.kovo-build-stage-'));`,
-        "writeFileSync(join(stage, 'partial'), 'not-deploy');",
-        'setInterval(() => {}, 1000);',
-      ].join('\n');
+      const ownedStage = join(root, '.kovo-build-stage-owned');
+      const siblingStage = join(root, '.kovo-build-stage-sibling');
+      for (const stage of [ownedStage, siblingStage]) {
+        mkdirSync(stage);
+        writeFileSync(join(stage, 'partial'), 'not-deploy');
+      }
+      const script = ['setInterval(() => {}, 1000);'].join('\n');
       try {
         await expect(
-          boundedKovoBuildOneShotWorkerForTesting(process.execPath, ['-e', script], 500),
+          boundedKovoBuildOneShotWorkerForTesting(
+            process.execPath,
+            ['-e', script],
+            500,
+            undefined,
+            KOVO_BUILD_ONE_SHOT_MAX_WIRE_BYTES,
+            () =>
+              abortKovoBuildOneShotOutputForTesting(
+                {
+                  buildId: basename(ownedStage),
+                  finalOutDir,
+                  promoted: false,
+                  sealed: false,
+                  stagedOutDir: ownedStage,
+                },
+                finalOutDir,
+              ),
+          ),
         ).rejects.toThrow(/test worker exceeded its 500ms deadline/u);
         expect(readFileSync(finalOutDir, 'utf8')).toBe('last-good');
-        expect(
-          readdirSync(root).filter((entry) => entry.startsWith('.kovo-build-stage-')),
-        ).toHaveLength(1);
+        expect(existsSync(ownedStage)).toBe(false);
+        expect(readFileSync(join(siblingStage, 'partial'), 'utf8')).toBe('not-deploy');
       } finally {
         rmSync(root, { force: true, recursive: true });
       }

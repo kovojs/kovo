@@ -57,13 +57,14 @@ describe('one-shot build private handoff', () => {
       JSON.stringify({
         digest: `sha256:${'0'.repeat(64)}`,
         identity: identity(),
+        outputTransaction: null,
         payloadBytes: KOVO_BUILD_ONE_SHOT_MAX_WIRE_BYTES,
-        schema: 'kovo-build-one-shot-handoff/v2',
+        schema: 'kovo-build-one-shot-handoff/v3',
       }),
       'utf8',
     );
     const bytes = Buffer.concat([
-      Buffer.from('KOVO-BUILD-ONE-SHOT/2\n', 'ascii'),
+      Buffer.from('KOVO-BUILD-ONE-SHOT/3\n', 'ascii'),
       Buffer.from(`${header.byteLength.toString(16).padStart(8, '0')}\n`, 'ascii'),
       header,
     ]);
@@ -77,7 +78,7 @@ describe('one-shot build private handoff', () => {
     [
       'header',
       (bytes: Buffer) =>
-        bytes.subarray(0, Buffer.byteLength('KOVO-BUILD-ONE-SHOT/2\n', 'ascii') + 10),
+        bytes.subarray(0, Buffer.byteLength('KOVO-BUILD-ONE-SHOT/3\n', 'ascii') + 10),
     ],
     ['payload', (bytes: Buffer) => bytes.subarray(0, -1)],
   ])('rejects a truncated %s at channel EOF', (_label, truncate) => {
@@ -91,9 +92,9 @@ describe('one-shot build private handoff', () => {
 
   it('rejects malformed framed length and header bytes before payload allocation', () => {
     const length = Buffer.from(wire().bytes);
-    length[Buffer.byteLength('KOVO-BUILD-ONE-SHOT/2\n', 'ascii')] = 0x7a;
+    length[Buffer.byteLength('KOVO-BUILD-ONE-SHOT/3\n', 'ascii')] = 0x7a;
     const malformedHeader = Buffer.from(wire().bytes);
-    malformedHeader[Buffer.byteLength('KOVO-BUILD-ONE-SHOT/2\n', 'ascii') + 9] = 0x7a;
+    malformedHeader[Buffer.byteLength('KOVO-BUILD-ONE-SHOT/3\n', 'ascii') + 9] = 0x7a;
     for (const [bytes, pattern] of [
       [length, /header length/u],
       [malformedHeader, /header is malformed/u],
@@ -111,6 +112,7 @@ describe('one-shot build private handoff', () => {
     const handoff = wire();
     expect(inspectKovoBuildOneShotHandoff(handoff.bytes)).toEqual({
       identity: handoff.expectedIdentity,
+      outputTransaction: null,
     });
     const payload = readKovoBuildOneShotHandoff(handoff.bytes, handoff.expectedIdentity);
     expect(payload).toEqual({
@@ -123,6 +125,37 @@ describe('one-shot build private handoff', () => {
     expect([
       ...(payload.analysis as { checkGraph: { routes: readonly unknown[] } }).checkGraph.routes,
     ]).toEqual([]);
+  });
+
+  it('exposes only the authenticated output transaction without retaining the analysis graph', () => {
+    const expectedIdentity = identity();
+    const root = join(tmpdir(), 'kovo-one-shot-authenticated-stage');
+    const transaction = {
+      buildId: '.kovo-build-stage-owned',
+      finalOutDir: join(root, 'dist-a'),
+      promoted: false as const,
+      sealed: false as const,
+      stagedOutDir: join(root, '.kovo-build-stage-owned'),
+    };
+    const bytes = encodeKovoBuildOneShotHandoff({
+      analysis: {
+        analysis: { source: 'x'.repeat(2 * 1024 * 1024) },
+        clientPhase: { transaction },
+      },
+      identity: expectedIdentity,
+      schema: 'kovo-build-one-shot-analysis/v1',
+    });
+    expect(inspectKovoBuildOneShotHandoff(bytes)).toEqual({
+      identity: expectedIdentity,
+      outputTransaction: transaction,
+    });
+
+    const tampered = Buffer.from(bytes);
+    const finalName = Buffer.from('dist-a');
+    const finalNameOffset = tampered.indexOf(finalName);
+    expect(finalNameOffset).toBeGreaterThan(0);
+    tampered[finalNameOffset + finalName.byteLength - 1] = 'b'.charCodeAt(0);
+    expect(() => inspectKovoBuildOneShotHandoff(tampered)).toThrow(/unauthenticated/u);
   });
 
   it.each([
@@ -166,11 +199,12 @@ describe('one-shot build private handoff', () => {
 
   it('rejects incomplete payloads and over-limit input before parsing', () => {
     const expectedIdentity = identity();
-    const incomplete = encodeKovoBuildOneShotHandoff({
-      identity: expectedIdentity,
-      schema: 'kovo-build-one-shot-analysis/v1',
-    } as never);
-    expect(() => readKovoBuildOneShotHandoff(incomplete, expectedIdentity)).toThrow(/incomplete/u);
+    expect(() =>
+      encodeKovoBuildOneShotHandoff({
+        identity: expectedIdentity,
+        schema: 'kovo-build-one-shot-analysis/v1',
+      } as never),
+    ).toThrow(/incomplete/u);
 
     expect(() =>
       inspectKovoBuildOneShotHandoff(new Uint8Array(KOVO_BUILD_ONE_SHOT_MAX_WIRE_BYTES + 1)),

@@ -1,5 +1,5 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, lstatSync, rmSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import type { Writable } from 'node:stream';
@@ -12,6 +12,7 @@ import {
   KOVO_BUILD_ONE_SHOT_MAX_WIRE_BYTES,
   parseKovoBuildOneShotIdentity,
   readKovoBuildOneShotHandoff,
+  type KovoBuildOneShotOutputTransactionInspection,
 } from './build-one-shot-handoff.js';
 import { KOVO_BUILD_ONE_SHOT_WORKER_TIMEOUT_MS } from './build-security-deadlines.js';
 import { kovoInvocationEnvironmentValue } from '../invocation-environment.js';
@@ -69,6 +70,13 @@ async function runKovoIsolatedOneShotInvocationAsync(
     emitKovoBuildWorkerPhaseCensus(security, workerPhases, complete);
     return status;
   };
+  let outputTransaction: KovoBuildOneShotOutputTransactionInspection | undefined;
+  const abortOutputTransaction = (): void => {
+    if (outputTransaction === undefined) return;
+    const transaction = outputTransaction;
+    outputTransaction = undefined;
+    removeAuthenticatedKovoBuildStage(transaction);
+  };
   try {
     const analysis = await runWorker(binPath, 'analyze', args.slice(1), security, undefined, true);
     workerPhases.push({
@@ -90,15 +98,30 @@ async function runKovoIsolatedOneShotInvocationAsync(
         security,
         wire,
         true,
+        outputTransaction === undefined ? undefined : abortOutputTransaction,
       );
       workerPhases.push({ durationMs: result.durationMs, name: phase, status: result.status });
-      if (result.status !== 0) return finishBuild(result.status, false);
+      if (result.status !== 0) {
+        abortOutputTransaction();
+        return finishBuild(result.status, false);
+      }
       if (!Buffer.isBuffer(result.control)) {
         throw new TypeError(`Kovo build ${phase} worker omitted its private handoff.`);
       }
       const nextInspection = inspectKovoBuildOneShotHandoff(result.control);
       if (JSON.stringify(nextInspection.identity) !== JSON.stringify(inspection.identity)) {
         throw new TypeError(`Kovo build ${phase} worker changed the invocation identity.`);
+      }
+      if (phase === 'client') {
+        outputTransaction = requireExpectedKovoBuildOutputTransaction(
+          nextInspection.outputTransaction,
+          resolve(security.invocationCwd, build.value.options.out),
+        );
+      } else if (
+        outputTransaction === undefined ||
+        JSON.stringify(nextInspection.outputTransaction) !== JSON.stringify(outputTransaction)
+      ) {
+        throw new TypeError('Kovo build server worker changed the output transaction.');
       }
       wire = result.control;
     }
@@ -108,10 +131,22 @@ async function runKovoIsolatedOneShotInvocationAsync(
       [JSON.stringify(inspection.identity), ...args.slice(1)],
       security,
       wire,
+      false,
+      abortOutputTransaction,
     );
     workerPhases.push({ durationMs: final.durationMs, name: 'final', status: final.status });
+    if (final.status !== 0) {
+      abortOutputTransaction();
+      return finishBuild(final.status, false);
+    }
+    if (outputTransaction !== undefined && existsSync(outputTransaction.stagedOutDir)) {
+      abortOutputTransaction();
+      throw new TypeError('Kovo build final worker left an unpromoted output transaction.');
+    }
+    outputTransaction = undefined;
     return finishBuild(final.status, final.status === 0);
   } catch (error) {
+    abortOutputTransaction();
     emitKovoBuildWorkerPhaseCensus(security, workerPhases, false);
     process.stderr.write(
       `kovo build isolation failed: ${error instanceof Error ? error.message : String(error)}\n`,
@@ -230,6 +265,7 @@ function runWorker(
   security: KovoCommandSecurityDisposition,
   input?: Buffer,
   captureControl = false,
+  abortStaging?: () => void,
 ): Promise<OneShotWorkerResult> {
   const sourceMode = binPath.endsWith('.ts');
   const worker = sourceMode
@@ -260,10 +296,12 @@ function runWorker(
     maxControlBytes: KOVO_BUILD_ONE_SHOT_MAX_WIRE_BYTES,
     phase,
     timeoutMs: KOVO_BUILD_ONE_SHOT_WORKER_TIMEOUT_MS,
+    ...(abortStaging === undefined ? {} : { abortStaging }),
   });
 }
 
 interface OneShotWorkerProcessOptions {
+  readonly abortStaging?: () => void;
   readonly args: readonly string[];
   readonly captureControl: boolean;
   readonly cwd: string;
@@ -304,7 +342,7 @@ function runBoundedOneShotWorkerProcess(
     ],
     windowsHide: true,
   });
-  const removeParentCleanup = installOneShotWorkerParentCleanup(child);
+  const removeParentCleanup = installOneShotWorkerParentCleanup(child, options.abortStaging);
   return new Promise<OneShotWorkerResult>((resolveResult, reject) => {
     let settled = false;
     let terminalError: Error | undefined;
@@ -352,6 +390,7 @@ function runBoundedOneShotWorkerProcess(
       child.stdio[3]?.destroy();
       child.stdio[4]?.destroy();
       if (terminalError !== undefined) {
+        invokeStagingAbort(options.abortStaging);
         reject(terminalError);
         return;
       }
@@ -383,7 +422,10 @@ function runBoundedOneShotWorkerProcess(
   });
 }
 
-function installOneShotWorkerParentCleanup(child: ChildProcess): () => void {
+function installOneShotWorkerParentCleanup(
+  child: ChildProcess,
+  abortStaging?: () => void,
+): () => void {
   let removed = false;
   let terminated = false;
   const terminateSynchronously = (): void => {
@@ -392,6 +434,7 @@ function installOneShotWorkerParentCleanup(child: ChildProcess): () => void {
     child.stdio[3]?.destroy();
     child.stdio[4]?.destroy();
     terminateOneShotWorkerProcessTreeSynchronously(child);
+    invokeStagingAbort(abortStaging);
   };
   const onExit = (): void => terminateSynchronously();
   const signalHandlers = oneShotParentSignals.map((signal) => {
@@ -479,6 +522,7 @@ export function boundedKovoBuildOneShotWorkerForTesting(
   timeoutMs: number,
   input?: Buffer,
   maxControlBytes = KOVO_BUILD_ONE_SHOT_MAX_WIRE_BYTES,
+  abortStaging?: () => void,
 ): Promise<OneShotWorkerResult> {
   return runBoundedOneShotWorkerProcess({
     args,
@@ -490,7 +534,61 @@ export function boundedKovoBuildOneShotWorkerForTesting(
     maxControlBytes,
     phase: 'test',
     timeoutMs,
+    ...(abortStaging === undefined ? {} : { abortStaging }),
   });
+}
+
+function requireExpectedKovoBuildOutputTransaction(
+  transaction: KovoBuildOneShotOutputTransactionInspection | null,
+  expectedFinalOutDir: string,
+): KovoBuildOneShotOutputTransactionInspection {
+  if (
+    transaction === null ||
+    transaction.finalOutDir !== expectedFinalOutDir ||
+    resolve(transaction.finalOutDir) !== transaction.finalOutDir ||
+    resolve(transaction.stagedOutDir) !== transaction.stagedOutDir
+  ) {
+    throw new TypeError('Kovo build client worker returned an unexpected output transaction.');
+  }
+  return transaction;
+}
+
+function removeAuthenticatedKovoBuildStage(
+  transaction: KovoBuildOneShotOutputTransactionInspection,
+): void {
+  try {
+    const status = lstatSync(transaction.stagedOutDir);
+    if (!status.isDirectory() || status.isSymbolicLink()) {
+      throw new TypeError('Kovo build output staging residue is not a directory.');
+    }
+    rmSync(transaction.stagedOutDir, { force: true, recursive: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+    process.stderr.write(
+      `kovo build could not remove authenticated staging residue: ${
+        error instanceof Error ? error.message : String(error)
+      }\n`,
+    );
+  }
+}
+
+/** @internal Authenticate one exact cleanup subject for focused crash/timeout tests. */
+export function abortKovoBuildOneShotOutputForTesting(
+  transaction: KovoBuildOneShotOutputTransactionInspection | null,
+  expectedFinalOutDir: string,
+): void {
+  removeAuthenticatedKovoBuildStage(
+    requireExpectedKovoBuildOutputTransaction(transaction, expectedFinalOutDir),
+  );
+}
+
+function invokeStagingAbort(abortStaging: (() => void) | undefined): void {
+  if (abortStaging === undefined) return;
+  try {
+    abortStaging();
+  } catch {
+    // Promotion remains impossible; the caller reports the original worker failure or signal.
+  }
 }
 
 function resolveOneShotWorker(

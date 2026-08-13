@@ -1,11 +1,12 @@
 /* oxlint-disable typescript/unbound-method -- Boot-captured controls are invoked through pinned Reflect.apply or are receiver-free Node statics. */
 import { createHash } from 'node:crypto';
 import { readSync } from 'node:fs';
+import { basename, dirname } from 'node:path';
 import { isProxy } from 'node:util/types';
 
-export const KOVO_BUILD_ONE_SHOT_HANDOFF_SCHEMA = 'kovo-build-one-shot-handoff/v2';
+export const KOVO_BUILD_ONE_SHOT_HANDOFF_SCHEMA = 'kovo-build-one-shot-handoff/v3';
 export const KOVO_BUILD_ONE_SHOT_MAX_WIRE_BYTES = 128 * 1024 * 1024;
-const handoffMagic = Buffer.from('KOVO-BUILD-ONE-SHOT/2\n', 'ascii');
+const handoffMagic = Buffer.from('KOVO-BUILD-ONE-SHOT/3\n', 'ascii');
 const handoffHeaderMaxBytes = 16 * 1024;
 const handoffPreludeBytes = handoffMagic.byteLength + 9;
 const digestPattern = /^sha256:[0-9a-f]{64}$/u;
@@ -55,20 +56,36 @@ export interface KovoBuildOneShotPayload {
 interface KovoBuildOneShotHeader {
   readonly digest: string;
   readonly identity: KovoBuildOneShotIdentity;
+  readonly outputTransaction: KovoBuildOneShotOutputTransactionInspection | null;
   readonly payloadBytes: number;
   readonly schema: typeof KOVO_BUILD_ONE_SHOT_HANDOFF_SCHEMA;
 }
 
+export interface KovoBuildOneShotOutputTransactionInspection {
+  readonly buildId: string;
+  readonly finalOutDir: string;
+  readonly promoted: false;
+  readonly sealed: false;
+  readonly stagedOutDir: string;
+}
+
 export interface KovoBuildOneShotWireInspection {
   readonly identity: KovoBuildOneShotIdentity;
+  readonly outputTransaction: KovoBuildOneShotOutputTransactionInspection | null;
 }
 
 /** Encode one strict JSON-data payload as a bounded, authenticated private-channel envelope. */
 export function encodeKovoBuildOneShotHandoff(payload: KovoBuildOneShotPayload): Buffer {
   const payloadBytes = capturedBufferFrom(strictJsonStringify(payload, 'payload'), 'utf8');
+  const payloadDescriptor = capturedObjectGetOwnPropertyDescriptors(payload).analysis;
+  if (payloadDescriptor === undefined || !('value' in payloadDescriptor)) {
+    throw new NativeTypeError('Kovo build handoff payload is incomplete.');
+  }
+  const outputTransaction = outputTransactionFromAnalysis(payloadDescriptor.value);
   const header: KovoBuildOneShotHeader = {
-    digest: sha256(payloadBytes),
+    digest: wireDigest(payloadBytes, payload.identity, outputTransaction),
     identity: payload.identity,
+    outputTransaction,
     payloadBytes: payloadBytes.byteLength,
     schema: KOVO_BUILD_ONE_SHOT_HANDOFF_SCHEMA,
   };
@@ -84,12 +101,18 @@ export function encodeKovoBuildOneShotHandoff(payload: KovoBuildOneShotPayload):
 
 /**
  * Authenticate the bounded envelope in the thin parent without parsing or retaining the analysis
- * graph. Only the small duplicated invocation identity is reconstructed here.
+ * graph. Only the small duplicated invocation identity and transaction cleanup subject are
+ * reconstructed here. The latter lets the thin parent remove one exact stage after a downstream
+ * worker is killed without parsing or retaining the complete analysis graph.
  */
 export function inspectKovoBuildOneShotHandoff(wire: Uint8Array): KovoBuildOneShotWireInspection {
   const parsed = parseWire(wire);
   return capturedObjectFreeze({
     identity: immutableIdentity(parsed.header.identity),
+    outputTransaction:
+      parsed.header.outputTransaction === null
+        ? null
+        : immutableOutputTransaction(parsed.header.outputTransaction),
   });
 }
 
@@ -124,6 +147,14 @@ export function readKovoBuildOneShotHandoff(
     throw new NativeTypeError(
       'Kovo build handoff identity is stale or belongs to another invocation.',
     );
+  }
+  if (
+    !outputTransactionsEqual(
+      outputTransactionFromAnalysis(payload.analysis),
+      parsed.header.outputTransaction,
+    )
+  ) {
+    throw new NativeTypeError('Kovo build handoff output transaction is unauthenticated.');
   }
   return immutableJsonData(payload, 0) as KovoBuildOneShotPayload;
 }
@@ -187,7 +218,7 @@ function parseWire(wireInput: Uint8Array): {
   if (wire.byteLength !== declaredWireByteLength || payload.byteLength !== header.payloadBytes) {
     throw new NativeTypeError('Kovo build handoff payload length is invalid.');
   }
-  if (sha256(payload) !== header.digest) {
+  if (wireDigest(payload, header.identity, header.outputTransaction) !== header.digest) {
     throw new NativeTypeError('Kovo build handoff payload is unauthenticated.');
   }
   return capturedObjectFreeze({ header, payload });
@@ -223,7 +254,7 @@ function parseWireHeader(headerBytes: Buffer): KovoBuildOneShotHeader {
   } catch {
     throw new NativeTypeError('Kovo build handoff header is malformed.');
   }
-  if (!exactRecord(header, ['digest', 'identity', 'payloadBytes', 'schema'])) {
+  if (!exactRecord(header, ['digest', 'identity', 'outputTransaction', 'payloadBytes', 'schema'])) {
     throw new NativeTypeError('Kovo build handoff header is incomplete.');
   }
   if (
@@ -231,6 +262,7 @@ function parseWireHeader(headerBytes: Buffer): KovoBuildOneShotHeader {
     typeof header.digest !== 'string' ||
     !regExpTest(digestPattern, header.digest) ||
     !validIdentity(header.identity) ||
+    (header.outputTransaction !== null && !validOutputTransaction(header.outputTransaction)) ||
     typeof header.payloadBytes !== 'number' ||
     !capturedNumberIsSafeInteger(header.payloadBytes) ||
     header.payloadBytes < 2
@@ -383,6 +415,79 @@ function immutableIdentity(value: KovoBuildOneShotIdentity): KovoBuildOneShotIde
   return immutableJsonData(value, 0) as KovoBuildOneShotIdentity;
 }
 
+function immutableOutputTransaction(
+  value: KovoBuildOneShotOutputTransactionInspection,
+): KovoBuildOneShotOutputTransactionInspection {
+  return immutableJsonData(value, 0) as KovoBuildOneShotOutputTransactionInspection;
+}
+
+function outputTransactionFromAnalysis(
+  value: unknown,
+): KovoBuildOneShotOutputTransactionInspection | null {
+  if (value === null || typeof value !== 'object' || capturedArrayIsArray(value)) return null;
+  const phase = value as Record<string, unknown>;
+  const clientPhaseDescriptor = capturedObjectGetOwnPropertyDescriptors(phase).clientPhase;
+  if (clientPhaseDescriptor === undefined) return null;
+  if (!('value' in clientPhaseDescriptor)) {
+    throw new NativeTypeError('Kovo build handoff client phase is invalid.');
+  }
+  const clientPhase = clientPhaseDescriptor.value;
+  if (
+    clientPhase === null ||
+    typeof clientPhase !== 'object' ||
+    capturedArrayIsArray(clientPhase)
+  ) {
+    throw new NativeTypeError('Kovo build handoff client phase is invalid.');
+  }
+  const transactionDescriptor = capturedObjectGetOwnPropertyDescriptors(clientPhase).transaction;
+  if (transactionDescriptor === undefined || !('value' in transactionDescriptor)) {
+    throw new NativeTypeError('Kovo build handoff output transaction is invalid.');
+  }
+  const transaction = transactionDescriptor.value;
+  if (!validOutputTransaction(transaction)) {
+    throw new NativeTypeError('Kovo build handoff output transaction is invalid.');
+  }
+  return immutableOutputTransaction(transaction);
+}
+
+function validOutputTransaction(
+  value: unknown,
+): value is KovoBuildOneShotOutputTransactionInspection {
+  if (
+    !exactRecord(value, ['buildId', 'finalOutDir', 'promoted', 'sealed', 'stagedOutDir']) ||
+    typeof value.buildId !== 'string' ||
+    typeof value.finalOutDir !== 'string' ||
+    value.finalOutDir.length === 0 ||
+    value.promoted !== false ||
+    value.sealed !== false ||
+    typeof value.stagedOutDir !== 'string' ||
+    value.stagedOutDir.length === 0
+  ) {
+    return false;
+  }
+  return (
+    basename(value.stagedOutDir) === value.buildId &&
+    dirname(value.stagedOutDir) === dirname(value.finalOutDir) &&
+    regExpTest(/^\.kovo-build-stage-.+/u, value.buildId)
+  );
+}
+
+function outputTransactionsEqual(
+  left: KovoBuildOneShotOutputTransactionInspection | null,
+  right: KovoBuildOneShotOutputTransactionInspection | null,
+): boolean {
+  return (
+    (left === null && right === null) ||
+    (left !== null &&
+      right !== null &&
+      left.buildId === right.buildId &&
+      left.finalOutDir === right.finalOutDir &&
+      left.promoted === right.promoted &&
+      left.sealed === right.sealed &&
+      left.stagedOutDir === right.stagedOutDir)
+  );
+}
+
 function validIdentity(value: unknown): value is KovoBuildOneShotIdentity {
   return (
     exactRecord(value, [
@@ -449,9 +554,17 @@ function framedWireByteLength(headerLength: number, payloadBytes: number): numbe
   return prefixBytes + payloadBytes;
 }
 
-function sha256(value: Uint8Array): string {
+function wireDigest(
+  payload: Uint8Array,
+  identity: KovoBuildOneShotIdentity,
+  outputTransaction: KovoBuildOneShotOutputTransactionInspection | null,
+): string {
   const hash = createHash('sha256');
-  capturedReflectApply(capturedHashUpdate, hash, [value]);
+  capturedReflectApply(capturedHashUpdate, hash, [
+    strictJsonStringify({ identity, outputTransaction }, 'wire header authentication'),
+  ]);
+  capturedReflectApply(capturedHashUpdate, hash, ['\n']);
+  capturedReflectApply(capturedHashUpdate, hash, [payload]);
   return `sha256:${capturedReflectApply(capturedHashDigest, hash, ['hex']) as string}`;
 }
 

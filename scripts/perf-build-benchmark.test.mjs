@@ -117,8 +117,18 @@ describe('production build benchmark adapter', () => {
       mode: 'clean',
       warmups: 0,
     });
-    expect(report.integrity).toMatchObject({ complete: false, warmups: 0 });
+    expect(report.integrity).toMatchObject({
+      complete: false,
+      errors: ['sample 1 produced no bytes in its declared outputs'],
+      misses: 1,
+      warmups: 0,
+    });
     expect(report.samples).toMatchObject([{ artifactBytes: 0, exitCode: 0 }]);
+    expect(report.corpus.manifestPath).toMatch(/manifest\.json$/u);
+    expect(report.source.locks).toEqual({
+      'benchmarks/nextjs/pnpm-lock.yaml': expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
+      'pnpm-lock.yaml': expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
+    });
 
     writeFileSync(corpus, `${JSON.stringify({ ...manifest, shapeDigest: '0'.repeat(64) })}\n`);
     expect(() =>
@@ -130,6 +140,65 @@ describe('production build benchmark adapter', () => {
         warmups: 0,
       }),
     ).toThrow('does not authenticate');
+  });
+
+  it('alternates distinct same-width edit revisions and restores the original source', () => {
+    const root = temporaryRoot();
+    mkdirSync(path.join(root, 'src'));
+    const sourcePath = path.join(root, 'src/leaf.ts');
+    const observationsPath = path.join(root, 'observations');
+    const original = 'export const revision = 0;\n';
+    writeFileSync(sourcePath, original);
+    const commandSource = [
+      "const { appendFileSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs');",
+      "mkdirSync('dist', { recursive: true });",
+      "const source = readFileSync('src/leaf.ts', 'utf8');",
+      `appendFileSync(${JSON.stringify(observationsPath)}, source);`,
+      "writeFileSync('dist/out.js', source);",
+    ].join('\n');
+    const workload = {
+      componentImportFanout: 1,
+      editClasses: ['leaf'],
+      routes: 1,
+      stateSurface: 'local-counter',
+      workloadModules: 1,
+    };
+    const manifest = {
+      approximateLoc: 1,
+      build: {
+        command: { argv: [process.execPath, '-e', commandSource], cwd: '.', env: {} },
+        edit: {
+          file: 'src/leaf.ts',
+          replacementTemplate: 'export const revision = {revision};',
+          search: 'export const revision = 0;',
+        },
+        outputs: ['dist'],
+      },
+      framework: 'nextjs',
+      modules: 1,
+      routes: 1,
+      schema: 'kovo-dev-corpus/v1',
+      shapeDigest: createHash('sha256').update(JSON.stringify(workload)).digest('hex'),
+      workload,
+    };
+    const corpus = path.join(root, 'manifest.json');
+    writeFileSync(corpus, `${JSON.stringify(manifest)}\n`);
+
+    const report = runBuildBenchmark({
+      corpus,
+      framework: 'nextjs',
+      iterations: 3,
+      mode: 'edit',
+      warmups: 0,
+    });
+
+    expect(report.integrity).toMatchObject({ complete: true, errors: [], misses: 0 });
+    expect(readFileSync(observationsPath, 'utf8')).toBe(
+      'export const revision = 1;\n' +
+        'export const revision = 2;\n' +
+        'export const revision = 1;\n',
+    );
+    expect(readFileSync(sourcePath, 'utf8')).toBe(original);
   });
 
   it('reports median, MAD, interpolated p95, RSS, and final artifact bytes', () => {

@@ -20,8 +20,9 @@ import {
 } from 'node:fs';
 import { loadavg } from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import { collectPerformanceProvenance } from './lib/perf-provenance.mjs';
 import { measureProcessTreeCommand } from './lib/process-tree-rss.mjs';
 
 export const BUILD_BENCHMARK_SCHEMA = 'kovo-build-benchmark/v1';
@@ -29,6 +30,7 @@ const CORPUS_SCHEMA = 'kovo-dev-corpus/v1';
 const KOVO_SOURCE_PHASE_SCHEMA = 'kovo-build-source-phase-census/v1';
 const KOVO_WORKER_PHASE_SCHEMA = 'kovo-build-worker-phase-census/v1';
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1_000;
+const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 
 export function parseBuildPhaseCensus(output) {
   const text = String(output);
@@ -123,6 +125,11 @@ export function runBuildBenchmark(options) {
         )
       : undefined;
   const samples = [];
+  const errors = [];
+  const source = collectPerformanceProvenance({
+    lockFiles: ['pnpm-lock.yaml', 'benchmarks/nextjs/pnpm-lock.yaml'],
+    repoRoot,
+  });
   const run = () =>
     measureProcessTreeCommand(argv, {
       cwd: commandCwd,
@@ -140,10 +147,11 @@ export function runBuildBenchmark(options) {
       if (mode === 'clean') cleanDeclaredOutputs(corpusRoot, outputs);
       const warmup = run();
       if (warmup.exitCode !== 0 || warmup.error !== null) {
-        throw new Error(`build warmup failed: ${commandFailure(warmup)}`);
+        errors.push(`warmup ${String(index + 1)} failed: ${commandFailure(warmup)}`);
+        break;
       }
     }
-    for (let index = 0; index < iterations; index += 1) {
+    for (let index = 0; errors.length === 0 && index < iterations; index += 1) {
       if (mode === 'clean') cleanDeclaredOutputs(corpusRoot, outputs);
       if (mode === 'edit') {
         writeFileSync(
@@ -158,14 +166,25 @@ export function runBuildBenchmark(options) {
       const beforeLoadAverage = loadavg()[0];
       const measured = run();
       const combinedOutput = `${measured.stdout}\n${measured.stderr}`;
-      samples.push({
+      const sample = {
         artifactBytes: artifactBytesForOutputs(corpusRoot, outputs),
         durationMs: measured.durationMs,
         exitCode: measured.exitCode,
         loadAverage: beforeLoadAverage,
         peakRssBytes: measured.peakRssBytes,
         phaseCensus: framework === 'kovo' ? parseBuildPhaseCensus(combinedOutput) : null,
-      });
+      };
+      samples.push(sample);
+      const sampleNumber = String(index + 1);
+      if (measured.exitCode !== 0 || measured.error !== null) {
+        errors.push(`sample ${sampleNumber} failed: ${commandFailure(measured)}`);
+      } else if (sample.artifactBytes === 0) {
+        errors.push(`sample ${sampleNumber} produced no bytes in its declared outputs`);
+      } else if (framework === 'kovo' && sample.phaseCensus?.source?.complete !== true) {
+        errors.push(`sample ${sampleNumber} omitted a complete Kovo source-phase census`);
+      } else if (framework === 'kovo' && sample.phaseCensus?.workers?.complete !== true) {
+        errors.push(`sample ${sampleNumber} omitted a complete Kovo worker-phase census`);
+      }
       if (measured.exitCode !== 0 || measured.error !== null) break;
     }
   } finally {
@@ -177,37 +196,42 @@ export function runBuildBenchmark(options) {
     }
   }
 
-  const complete =
-    samples.length === iterations &&
-    samples.every(
-      (sample) =>
-        sample.exitCode === 0 &&
-        sample.artifactBytes > 0 &&
-        (framework !== 'kovo' ||
-          (sample.phaseCensus?.source?.complete === true &&
-            sample.phaseCensus?.workers?.complete === true)),
-    );
+  const validSamples = samples.filter(
+    (sample) =>
+      sample.exitCode === 0 &&
+      sample.artifactBytes > 0 &&
+      (framework !== 'kovo' ||
+        (sample.phaseCensus?.source?.complete === true &&
+          sample.phaseCensus?.workers?.complete === true)),
+  ).length;
+  const misses = iterations - validSamples;
+  const complete = samples.length === iterations && errors.length === 0 && misses === 0;
   return {
     corpus: {
       approximateLoc: manifest.approximateLoc,
       manifestDigest: `sha256:${createHash('sha256').update(manifestText).digest('hex')}`,
+      manifestPath: portableRelativePath(repoRoot, manifestPath),
       modules: manifest.modules,
       routes: manifest.routes,
       schema: manifest.schema,
       shapeDigest: manifest.shapeDigest,
+      ...(manifest.sourceDigest === undefined ? {} : { sourceDigest: manifest.sourceDigest }),
       workload: manifest.workload,
     },
     framework,
     integrity: {
       command: { argv, cwd: path.relative(corpusRoot, commandCwd) || '.' },
       complete,
+      errors,
       iterations,
+      misses,
       outputRoots: outputs,
       warmups,
     },
     mode,
     samples,
     schema: BUILD_BENCHMARK_SCHEMA,
+    source,
     summary: summarizeBuildSamples(samples),
   };
 }
@@ -229,6 +253,12 @@ function validateCorpusManifest(manifest, framework) {
   const shapeDigest = requiredString(manifest.shapeDigest, 'shapeDigest');
   if (!/^[0-9a-f]{64}$/u.test(shapeDigest)) {
     throw new TypeError('shapeDigest must be one lowercase SHA-256 digest');
+  }
+  if (
+    manifest.sourceDigest !== undefined &&
+    !/^sha256:[0-9a-f]{64}$/u.test(requiredString(manifest.sourceDigest, 'sourceDigest'))
+  ) {
+    throw new TypeError('sourceDigest must be one prefixed lowercase SHA-256 digest');
   }
   if (
     !manifest.workload ||
@@ -360,6 +390,10 @@ function nonNegativeInteger(value, label) {
 
 function commandFailure(measured) {
   return measured.error ?? measured.signal ?? `exit ${String(measured.exitCode)}`;
+}
+
+function portableRelativePath(root, filePath) {
+  return path.relative(root, filePath).split(path.sep).join('/');
 }
 
 function parseArgs(argv) {
