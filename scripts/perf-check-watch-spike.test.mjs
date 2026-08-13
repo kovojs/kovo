@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   CHECK_WATCH_SPIKE_ORDER,
   checkWatchSpikeSchedule,
+  packageDestination,
   pairedCheckWatchAnalysis,
   runCheckWatchSpikeComparison,
 } from './perf-check-watch-spike.mjs';
@@ -12,6 +13,20 @@ import {
 const digest = (seed) => `sha256:${seed.repeat(64).slice(0, 64)}`;
 
 describe('packed check-watch spike comparator', () => {
+  it('stages both scoped and unscoped authenticated product packages without path ambiguity', () => {
+    expect(packageDestination('/stage/node_modules', '@kovojs/cli')).toBe(
+      '/stage/node_modules/@kovojs/cli',
+    );
+    expect(packageDestination('/stage/node_modules', 'create-kovo')).toBe(
+      '/stage/node_modules/create-kovo',
+    );
+    for (const unsafe of ['../create-kovo', '@kovojs/../cli', '@kovojs/cli/extra', 'Create-Kovo']) {
+      expect(() => packageDestination('/stage/node_modules', unsafe)).toThrow(
+        /unsupported packed package name/u,
+      );
+    }
+  });
+
   it('uses the required serialized baseline, spike, spike, baseline schedule', () => {
     expect(checkWatchSpikeSchedule(5)).toEqual([
       { arm: 'baseline', occurrence: 0, samples: 3 },

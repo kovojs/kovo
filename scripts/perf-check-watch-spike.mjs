@@ -514,10 +514,12 @@ function linkExternalDependencies(repositoryRoot, nodeModules) {
   }
 }
 
-function packageDestination(nodeModules, name) {
-  const match = /^@([a-z0-9][a-z0-9._-]*)\/([a-z0-9][a-z0-9._-]*)$/u.exec(name);
+export function packageDestination(nodeModules, name) {
+  const match = /^(?:@([a-z0-9][a-z0-9._-]*)\/)?([a-z0-9][a-z0-9._-]*)$/u.exec(name);
   if (match === null) throw new TypeError(`unsupported packed package name ${String(name)}`);
-  return path.join(nodeModules, `@${match[1]}`, match[2]);
+  return match[1] === undefined
+    ? path.join(nodeModules, match[2])
+    : path.join(nodeModules, `@${match[1]}`, match[2]);
 }
 
 function copyRegularTree(source, destination) {
