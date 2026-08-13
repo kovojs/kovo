@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
 import { execFile, spawn } from 'node:child_process';
-import { lstat, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
@@ -88,7 +88,7 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
   const startedAt = new Date().toISOString();
   const source = await collectAuthenticatedSource();
   const command = materializeCommand(manifest.dev.command, appRoot, normalized.port);
-  const versions = await collectEntrantVersions(appRoot, manifest.framework);
+  const versions = await collectEntrantVersions(appRoot, manifest.framework, command);
   const report = createReportSkeleton({
     command,
     iterations: normalized.iterations,
@@ -1333,12 +1333,24 @@ function createReportSkeleton({
   };
 }
 
-async function collectEntrantVersions(appRoot, framework) {
+/**
+ * Read versions from the dependency root that owns the authenticated dev executable.
+ *
+ * Default corpora live below `benchmarks/{kovo,nextjs}/.corpora`, so their command deliberately
+ * reaches the entrant's ancestor `node_modules`. Custom output roots instead receive an app-local
+ * `node_modules` link. Do not silently pretend every corpus has the latter topology: that made the
+ * real default corpus fail before a dev process could start in CI.
+ */
+export async function collectEntrantVersions(appRoot, framework, command) {
   const packages =
     framework === 'kovo' ? ['@kovojs/cli', 'vite-plus'] : ['next', 'react', 'react-dom'];
+  const dependencyRoot = await dependencyRootForDevCommand(appRoot, framework, command);
   const result = {};
   for (const packageName of packages) {
-    const packageJsonPath = safeCorpusPath(appRoot, `node_modules/${packageName}/package.json`);
+    const packageJsonPath = path.resolve(dependencyRoot, packageName, 'package.json');
+    if (!isWithin(dependencyRoot, packageJsonPath)) {
+      throw new TypeError(`Dependency package ${packageName} escaped the authenticated root.`);
+    }
     const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
     if (typeof packageJson.version !== 'string' || packageJson.version.length === 0) {
       throw new TypeError(`Could not resolve ${packageName} version for the dev corpus.`);
@@ -1346,6 +1358,36 @@ async function collectEntrantVersions(appRoot, framework) {
     result[packageName] = packageJson.version;
   }
   return result;
+}
+
+export async function dependencyRootForDevCommand(appRoot, framework, command, dependencies = {}) {
+  const expectedExecutable = framework === 'kovo' ? 'kovo' : 'next';
+  const executable = path.resolve(command.cwd, command.argv[0]);
+  const binRoot = path.dirname(executable);
+  const dependencyRoot = path.dirname(binRoot);
+  if (
+    path.basename(executable) !== expectedExecutable ||
+    path.basename(binRoot) !== '.bin' ||
+    path.basename(dependencyRoot) !== 'node_modules'
+  ) {
+    throw new TypeError(
+      `Corpus ${framework} dev command does not use its expected node_modules/.bin/${expectedExecutable} executable.`,
+    );
+  }
+
+  const entrantRoot = path.join(repoRoot, 'benchmarks', framework === 'kovo' ? 'kovo' : 'nextjs');
+  const expectedDependencyRoot = path.join(entrantRoot, 'node_modules');
+  const allowedRoots = [path.join(appRoot, 'node_modules'), expectedDependencyRoot];
+  if (!allowedRoots.includes(dependencyRoot)) {
+    throw new TypeError('Corpus dev command dependency root is not app-local or entrant-local.');
+  }
+  const resolveRealpath = dependencies.realpath ?? realpath;
+  if ((await resolveRealpath(dependencyRoot)) !== (await resolveRealpath(expectedDependencyRoot))) {
+    throw new TypeError(
+      'Corpus dev command dependency root does not resolve to the entrant install.',
+    );
+  }
+  return dependencyRoot;
 }
 
 export function sourceStabilityFindings(before, after) {

@@ -275,6 +275,11 @@ describe('realistic performance CI policy', () => {
     expect(source).toContain("-c user.name='Kovo Performance CI'");
     expect(source).toContain('cherry-pick "$KOVO_DEV_GENERATION_CANDIDATE_COMMIT"');
     expect(source).toContain('scripts/perf-dev-generation-spike.mjs');
+    // The runner owns frozen installs and corpus generation in both exact worktrees. The shared
+    // dev-loop adapter must resolve each generated command's permitted entrant-local dependency
+    // root; adding a third workflow install would change the authenticated candidate topology.
+    expect(source).not.toContain('install --dir "$baseline_root/benchmarks/kovo"');
+    expect(source).not.toContain('install --dir "$spike_root/benchmarks/kovo"');
     for (const token of [
       '--size "$KOVO_PERF_CORPUS_SIZE"',
       '--ready-samples 15',
@@ -318,6 +323,7 @@ describe('realistic performance CI policy', () => {
     expect(devProfile).toContain('scripts/perf-dev-edit-profile.mjs owns these Inspector windows');
     expect(devProfile).toContain('benchmarks/corpora/generate.mjs');
     expect(devProfile).toContain('benchmarks/corpora/dev-loop.mjs');
+    expect(devProfile).not.toContain('pnpm --dir benchmarks/kovo install');
     expect(devProfile).toContain('--iterations 30');
     expect(devProfile).toContain('--ready-iterations 1');
     expect(devProfile).toContain('--warmups 3');

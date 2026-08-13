@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +8,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   collectPageTelemetry,
+  collectEntrantVersions,
+  dependencyRootForDevCommand,
   DEV_LOOP_REPORT_SCHEMA,
   diagnosticProfileFindings,
   exactSampleCountFindings,
@@ -85,6 +87,73 @@ describe('single-entrant developer-loop adapter', () => {
       ],
       executable: process.execPath,
     });
+  });
+
+  it.each([
+    ['kovo', 'kovo', 'kovo'],
+    ['nextjs', 'nextjs', 'next'],
+  ])(
+    'binds the default %s corpus to its entrant-local dependency root',
+    async (framework, entrantDirectory, executable) => {
+      const corpusRoot = path.resolve(
+        fileURLToPath(new URL(`../${entrantDirectory}/.corpora/${framework}/n24`, import.meta.url)),
+      );
+      const dependencyRoot = path.resolve(
+        fileURLToPath(new URL(`../${entrantDirectory}/node_modules`, import.meta.url)),
+      );
+      await expect(
+        dependencyRootForDevCommand(
+          corpusRoot,
+          framework,
+          {
+            argv: [`../../../node_modules/.bin/${executable}`],
+            cwd: corpusRoot,
+          },
+          { realpath: async (value) => value },
+        ),
+      ).resolves.toBe(dependencyRoot);
+    },
+  );
+
+  it('reads versions from the authenticated entrant dependency root', async () => {
+    const corpusRoot = path.resolve(
+      fileURLToPath(new URL('../kovo/.corpora/kovo/n24', import.meta.url)),
+    );
+    await expect(
+      collectEntrantVersions(corpusRoot, 'kovo', {
+        argv: ['../../../node_modules/.bin/kovo'],
+        cwd: corpusRoot,
+      }),
+    ).resolves.toEqual({ '@kovojs/cli': expect.any(String), 'vite-plus': expect.any(String) });
+  });
+
+  it('rejects a dev executable outside the app-local or entrant-local dependency root', async () => {
+    const root = await temporaryRoot();
+    const appRoot = path.join(root, 'corpus');
+    await mkdir(appRoot, { recursive: true });
+    await expect(
+      dependencyRootForDevCommand(appRoot, 'kovo', {
+        argv: ['../../untrusted/node_modules/.bin/kovo'],
+        cwd: appRoot,
+      }),
+    ).rejects.toThrow('dependency root is not app-local or entrant-local');
+  });
+
+  it('rejects an app-local dependency link that does not resolve to the entrant install', async () => {
+    const root = await temporaryRoot();
+    const appRoot = path.join(root, 'corpus');
+    await mkdir(appRoot, { recursive: true });
+    await expect(
+      dependencyRootForDevCommand(
+        appRoot,
+        'kovo',
+        { argv: ['node_modules/.bin/kovo'], cwd: appRoot },
+        {
+          realpath: async (value) =>
+            value === path.join(appRoot, 'node_modules') ? '/tmp/untrusted-node-modules' : value,
+        },
+      ),
+    ).rejects.toThrow('does not resolve to the entrant install');
   });
 
   it('requires an independent exact fresh-ready sample count', () => {
