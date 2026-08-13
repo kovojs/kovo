@@ -20,6 +20,15 @@ on:
     - cron: '41 5 * * *'
   workflow_dispatch:
     inputs:
+      measurement_scope:
+        description: Select publishable baseline matrices, candidate decisions, or both
+        required: true
+        default: baselines
+        type: choice
+        options:
+          - baselines
+          - decisions
+          - all
       components:
         description: Component count for the byte suite
         required: false
@@ -35,7 +44,10 @@ permissions:
   contents: read
 
 concurrency:
-  group: perf-realistic-${{ github.ref }}
+  # A manual run is an explicitly requested evidence sample, so five independent baseline
+  # dispatches must be able to occupy five runners at once. Schedule/PR runs retain the ref key and
+  # therefore serialize with an earlier run for that ref instead of adding host contention.
+  group: perf-realistic-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
   cancel-in-progress: false
 
 env:
@@ -118,7 +130,10 @@ jobs:
 
   check-scaling:
     name: Check scaling
-    if: ${{ github.event_name != 'pull_request' }}
+    if: >-
+      ${{ github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'baselines' || inputs.measurement_scope == 'all')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -158,7 +173,10 @@ jobs:
 
   browser-matrix:
     name: Browser matrix
-    if: ${{ github.event_name != 'pull_request' }}
+    if: >-
+      ${{ github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'baselines' || inputs.measurement_scope == 'all')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     steps:
@@ -198,7 +216,10 @@ jobs:
 
   dev-matrix:
     name: N=${{ matrix.corpus }} developer loop
-    if: ${{ github.event_name != 'pull_request' }}
+    if: >-
+      ${{ github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'baselines' || inputs.measurement_scope == 'all')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     strategy:
@@ -246,7 +267,10 @@ jobs:
 
   build-matrix:
     name: N=${{ matrix.corpus }} production builds
-    if: ${{ github.event_name != 'pull_request' }}
+    if: >-
+      ${{ github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'baselines' || inputs.measurement_scope == 'all')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     strategy:
@@ -288,7 +312,10 @@ jobs:
 
   server-matrix:
     name: Matched production throughput
-    if: ${{ github.event_name != 'pull_request' }}
+    if: >-
+      ${{ github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'baselines' || inputs.measurement_scope == 'all')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     steps:
@@ -320,4 +347,318 @@ jobs:
           if-no-files-found: warn
           name: kovo-perf-server-matrix
           path: ${{ runner.temp }}/kovo-perf/server
+          retention-days: 30
+
+  check-watch-decision:
+    name: Check-watch candidate decision
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/kovo-setup
+      - name: Bind the report to the runner image
+        run: |
+          image_version_digest="$(printf '%s' "${ImageVersion:-unknown}" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "${ImageOS:-unknown}" "$image_version_digest" >> "$GITHUB_ENV"
+      - name: Prepare exact baseline and candidate scenarios
+        env:
+          KOVO_CHECK_WATCH_CANDIDATE_COMMIT: eb1a1663b40826240a7bb5080fd54cb66bf4bab8
+        run: |
+          baseline_root="$RUNNER_TEMP/kovo-check-watch-baseline"
+          mkdir -p "$RUNNER_TEMP/kovo-perf/check-watch"
+          git worktree add --detach "$baseline_root" "$GITHUB_SHA"
+          git -C "$baseline_root" \
+            -c user.name='Kovo Performance CI' \
+            -c user.email='performance-ci@kovo.invalid' \
+            -c commit.gpgsign=false \
+            revert --no-edit "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT"
+          vp exec node "$baseline_root/scripts/devex-benchmark.mjs" --prepare-kovo-scenario
+          vp exec node scripts/devex-benchmark.mjs --prepare-kovo-scenario
+      - name: Run the full serialized check-watch decision
+        run: >-
+          vp exec node scripts/perf-check-watch-spike.mjs
+          --baseline-scenario "$RUNNER_TEMP/kovo-check-watch-baseline/.release/devex/kovo-packed-scenario.json"
+          --baseline-repo "$RUNNER_TEMP/kovo-check-watch-baseline"
+          --spike-scenario "$GITHUB_WORKSPACE/.release/devex/kovo-packed-scenario.json"
+          --spike-repo "$GITHUB_WORKSPACE"
+          --samples 30
+          --warmups 3
+          --out "$RUNNER_TEMP/kovo-perf/check-watch/report.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          if-no-files-found: warn
+          name: kovo-perf-check-watch-decision
+          path: ${{ runner.temp }}/kovo-perf/check-watch
+          retention-days: 30
+
+  dev-generation-decision:
+    name: N=${{ matrix.corpus }} fresh-generation candidate decision
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        corpus: [24, 216]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/kovo-setup
+      - name: Bind the report to the runner image
+        run: |
+          image_version_digest="$(printf '%s' "${ImageVersion:-unknown}" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "${ImageOS:-unknown}" "$image_version_digest" >> "$GITHUB_ENV"
+      - uses: ./.github/actions/playwright-install
+        with:
+          browsers: chromium
+          cache-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-
+      - name: Prepare exact baseline and historical candidate worktrees
+        env:
+          KOVO_DEV_GENERATION_CANDIDATE_COMMIT: 44da3f3449dcbac2cc29951604b89488c90faa6f
+          KOVO_DEV_GENERATION_CANDIDATE_REF: refs/heads/perf-spike/dev-generation-44da3f344
+          KOVO_PERF_CORPUS_SIZE: ${{ matrix.corpus }}
+        run: |
+          baseline_root="$RUNNER_TEMP/kovo-dev-generation-n$KOVO_PERF_CORPUS_SIZE-baseline"
+          spike_root="$RUNNER_TEMP/kovo-dev-generation-n$KOVO_PERF_CORPUS_SIZE-spike"
+          mkdir -p "$RUNNER_TEMP/kovo-perf/dev-generation-n$KOVO_PERF_CORPUS_SIZE"
+          git fetch --no-tags origin \
+            "+$KOVO_DEV_GENERATION_CANDIDATE_REF:refs/perf-evidence/dev-generation-candidate"
+          resolved_candidate="$(git rev-parse --verify refs/perf-evidence/dev-generation-candidate^{commit})"
+          test "$resolved_candidate" = "$KOVO_DEV_GENERATION_CANDIDATE_COMMIT"
+          git worktree add --detach "$baseline_root" "$GITHUB_SHA"
+          git worktree add --detach "$spike_root" "$GITHUB_SHA"
+          git -C "$spike_root" \
+            -c user.name='Kovo Performance CI' \
+            -c user.email='performance-ci@kovo.invalid' \
+            -c commit.gpgsign=false \
+            cherry-pick "$KOVO_DEV_GENERATION_CANDIDATE_COMMIT"
+      - name: Run the full browser-visible fresh-generation decision
+        env:
+          KOVO_PERF_CORPUS_SIZE: ${{ matrix.corpus }}
+        run: >-
+          vp exec node scripts/perf-dev-generation-spike.mjs
+          --baseline-root "$RUNNER_TEMP/kovo-dev-generation-n$KOVO_PERF_CORPUS_SIZE-baseline"
+          --spike-root "$RUNNER_TEMP/kovo-dev-generation-n$KOVO_PERF_CORPUS_SIZE-spike"
+          --size "$KOVO_PERF_CORPUS_SIZE"
+          --ready-samples 15
+          --edit-samples 30
+          --warmups 3
+          --measure
+          --out "$RUNNER_TEMP/kovo-perf/dev-generation-n$KOVO_PERF_CORPUS_SIZE/report.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          if-no-files-found: warn
+          name: kovo-perf-dev-generation-n${{ matrix.corpus }}
+          path: ${{ runner.temp }}/kovo-perf/dev-generation-n${{ matrix.corpus }}
+          retention-days: 30
+
+  compressed-cache-decision:
+    name: Proved-document compression-cache decision
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/kovo-setup
+      - name: Bind the report to the runner image
+        run: |
+          image_version_digest="$(printf '%s' "${ImageVersion:-unknown}" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "${ImageOS:-unknown}" "$image_version_digest" >> "$GITHUB_ENV"
+      - name: Run the full alternating compression-cache matrix
+        run: |
+          mkdir -p "$RUNNER_TEMP/kovo-perf/compressed-cache"
+          vp exec node scripts/perf-compressed-cache-ab.mjs \
+            --out "$RUNNER_TEMP/kovo-perf/compressed-cache/report.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          if-no-files-found: warn
+          name: kovo-perf-compressed-cache-decision
+          path: ${{ runner.temp }}/kovo-perf/compressed-cache
+          retention-days: 30
+
+  cli-startup-decision:
+    name: Packed CLI startup decision
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/kovo-setup
+      - name: Bind the report to the runner image
+        run: |
+          image_version_digest="$(printf '%s' "${ImageVersion:-unknown}" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "${ImageOS:-unknown}" "$image_version_digest" >> "$GITHUB_ENV"
+      - name: Run the full packed-versus-source startup measurement
+        run: |
+          mkdir -p "$RUNNER_TEMP/kovo-perf/cli-startup"
+          vp exec node scripts/perf-cli-startup-benchmark.mjs \
+            --out "$RUNNER_TEMP/kovo-perf/cli-startup/report.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          if-no-files-found: warn
+          name: kovo-perf-cli-startup-decision
+          path: ${{ runner.temp }}/kovo-perf/cli-startup
+          retention-days: 30
+
+  runtime-diagnostics:
+    name: Current forced-dynamic and route-CSS diagnostics
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/kovo-setup
+      - name: Bind the report to the runner image
+        run: |
+          image_version_digest="$(printf '%s' "${ImageVersion:-unknown}" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "${ImageOS:-unknown}" "$image_version_digest" >> "$GITHUB_ENV"
+      - name: Profile the current forced-dynamic listing route
+        run: |
+          mkdir -p "$RUNNER_TEMP/kovo-perf/runtime-diagnostics"
+          vp exec node scripts/perf-server-profile.mjs \
+            --route listing \
+            --warmup-ms 5000 \
+            --duration-ms 15000 \
+            --profile-out "$RUNNER_TEMP/kovo-perf/runtime-diagnostics/forced-dynamic.cpuprofile" \
+            --out "$RUNNER_TEMP/kovo-perf/runtime-diagnostics/forced-dynamic.json"
+      - name: Measure the deterministic route-CSS counterfactual
+        run: >-
+          vp exec node scripts/perf-route-css.mjs
+          --out "$RUNNER_TEMP/kovo-perf/runtime-diagnostics/route-css.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          if-no-files-found: warn
+          name: kovo-perf-runtime-diagnostics
+          path: ${{ runner.temp }}/kovo-perf/runtime-diagnostics
+          retention-days: 30
+
+  dev-edit-profile:
+    name: N=${{ matrix.corpus }} dev edit-to-paint diagnostic
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        corpus: [24, 216]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/kovo-setup
+      - name: Bind the report to the runner image
+        run: |
+          image_version_digest="$(printf '%s' "${ImageVersion:-unknown}" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "${ImageOS:-unknown}" "$image_version_digest" >> "$GITHUB_ENV"
+      - uses: ./.github/actions/playwright-install
+        with:
+          browsers: chromium
+          cache-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-
+      - name: Generate the authenticated Kovo corpus
+        env:
+          KOVO_PERF_CORPUS_SIZE: ${{ matrix.corpus }}
+        run: vp exec node benchmarks/corpora/generate.mjs --sizes "$KOVO_PERF_CORPUS_SIZE"
+      - name: Collect diagnostic-only CPU and allocation profiles
+        # scripts/perf-dev-edit-profile.mjs owns these Inspector windows. The profiled durations are
+        # deliberately not candidate-acceptance evidence; ordinary unprofiled matrices own latency.
+        env:
+          KOVO_PERF_CORPUS_SIZE: ${{ matrix.corpus }}
+        run: |
+          output_root="$RUNNER_TEMP/kovo-perf/dev-profile-n$KOVO_PERF_CORPUS_SIZE"
+          mkdir -p "$output_root/raw"
+          vp exec node benchmarks/corpora/dev-loop.mjs \
+            --manifest "$GITHUB_WORKSPACE/benchmarks/kovo/.corpora/kovo/n$KOVO_PERF_CORPUS_SIZE/manifest.json" \
+            --iterations 30 \
+            --ready-iterations 1 \
+            --warmups 3 \
+            --port 49120 \
+            --inspector-port 49121 \
+            --profile-dir "$output_root/raw" \
+            --out "$output_root/report.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          if-no-files-found: warn
+          name: kovo-perf-dev-profile-n${{ matrix.corpus }}
+          path: ${{ runner.temp }}/kovo-perf/dev-profile-n${{ matrix.corpus }}
+          retention-days: 30
+
+  loader-runtime-memo-decision:
+    name: Loader-runtime memo candidate decision
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/kovo-setup
+      - name: Bind the report to the runner image
+        run: |
+          image_version_digest="$(printf '%s' "${ImageVersion:-unknown}" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "${ImageOS:-unknown}" "$image_version_digest" >> "$GITHUB_ENV"
+      - name: Prepare exact adjacent baseline and candidate worktrees
+        run: |
+          baseline_root="$RUNNER_TEMP/kovo-loader-runtime-memo-baseline"
+          spike_root="$RUNNER_TEMP/kovo-loader-runtime-memo-spike"
+          candidate_parent="$(git rev-parse --verify "$GITHUB_SHA^")"
+          git worktree add --detach "$baseline_root" "$GITHUB_SHA^"
+          git worktree add --detach "$spike_root" "$GITHUB_SHA"
+          test "$(git -C "$baseline_root" rev-parse HEAD)" = "$candidate_parent"
+          test "$(git -C "$spike_root" rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C "$spike_root" rev-parse HEAD^)" = "$candidate_parent"
+          vp exec node scripts/perf-loader-runtime-memo-ab.mjs \
+            --baseline-root "$baseline_root" \
+            --spike-root "$spike_root" \
+            --prepare-only \
+            --profile-dir "$RUNNER_TEMP/kovo-perf/loader-runtime-memo/profiles" \
+            --out "$RUNNER_TEMP/kovo-perf/loader-runtime-memo/prepare.json"
+      - name: Run the full forced-dynamic loader-runtime decision and profiles
+        run: >-
+          vp exec node scripts/perf-loader-runtime-memo-ab.mjs
+          --baseline-root "$RUNNER_TEMP/kovo-loader-runtime-memo-baseline"
+          --spike-root "$RUNNER_TEMP/kovo-loader-runtime-memo-spike"
+          --measure
+          --profile-dir "$RUNNER_TEMP/kovo-perf/loader-runtime-memo/profiles"
+          --out "$RUNNER_TEMP/kovo-perf/loader-runtime-memo/report.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          if-no-files-found: warn
+          name: kovo-perf-loader-runtime-memo-decision
+          path: ${{ runner.temp }}/kovo-perf/loader-runtime-memo
           retention-days: 30

@@ -6,6 +6,15 @@ import { describe, expect, it } from 'vitest';
 
 const repoRoot = fileURLToPath(new URL('../', import.meta.url));
 const workflow = readFileSync(path.join(repoRoot, '.github/workflows/perf-realistic.yml'), 'utf8');
+const baselineScope = [
+  "github.event_name == 'schedule' ||",
+  "github.event_name == 'workflow_dispatch' &&",
+  "inputs.measurement_scope == 'baselines' || inputs.measurement_scope == 'all'",
+];
+const decisionScope = [
+  "github.event_name == 'workflow_dispatch' &&",
+  "inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all'",
+];
 
 describe('realistic performance CI policy', () => {
   it('keeps deterministic bytes and a bounded matched correctness smoke on every PR', () => {
@@ -31,11 +40,19 @@ describe('realistic performance CI policy', () => {
     );
   });
 
-  it('serializes each load-sensitive matrix on a pinned runner label with authenticated facts', () => {
+  it('keeps scheduled matrices serialized while independent manual evidence runs can overlap', () => {
     expect(workflow).toContain('cancel-in-progress: false');
+    expect(workflow).toContain(
+      "group: perf-realistic-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}",
+    );
+    expect(workflow).toContain('      measurement_scope:\n');
+    expect(workflow).toContain('        default: baselines\n');
+    for (const option of ['baselines', 'decisions', 'all']) {
+      expect(workflow).toContain(`          - ${option}\n`);
+    }
     for (const job of ['browser-matrix', 'dev-matrix', 'build-matrix', 'server-matrix']) {
       const source = jobSource(job);
-      expect(source, job).toContain("if: ${{ github.event_name != 'pull_request' }}");
+      for (const token of baselineScope) expect(source, job).toContain(token);
       expect(source, job).toContain('runs-on: ubuntu-24.04');
       expect(source, job).toContain('KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04');
       expect(source, job).toContain('vp exec node benchmarks/compare.mjs');
@@ -45,6 +62,7 @@ describe('realistic performance CI policy', () => {
       );
       expect(source, job).toContain('retention-days: 30');
     }
+    for (const token of baselineScope) expect(jobSource('check-scaling')).toContain(token);
   });
 
   it('retains the exact publishable sample policies in the scheduled commands', () => {
@@ -57,11 +75,7 @@ describe('realistic performance CI policy', () => {
       expect(jobSource(job)).toContain('corpus: [24, 216]');
       expect(jobSource(job)).toContain('--corpus-size "$KOVO_PERF_CORPUS_SIZE"');
     }
-    for (const token of [
-      '--dev-ready-iterations 15',
-      '--dev-iterations 30',
-      '--dev-warmups 3',
-    ]) {
+    for (const token of ['--dev-ready-iterations 15', '--dev-iterations 30', '--dev-warmups 3']) {
       expect(jobSource('dev-matrix')).toContain(token);
     }
     for (const token of ['--iterations 10', '--warmups 3']) {
@@ -86,7 +100,143 @@ describe('realistic performance CI policy', () => {
       expect(line).toMatch(/@[0-9a-f]{40}\s*$/u);
     }
   });
+
+  it('runs the authenticated full check-watch candidate decision from exact clean worktrees', () => {
+    const source = decisionJob('check-watch-decision');
+    expect(source).toContain('fetch-depth: 0');
+    expect(source).toContain(
+      'KOVO_CHECK_WATCH_CANDIDATE_COMMIT: eb1a1663b40826240a7bb5080fd54cb66bf4bab8',
+    );
+    expect(source).toContain('git worktree add --detach "$baseline_root" "$GITHUB_SHA"');
+    expect(source).toContain("-c user.name='Kovo Performance CI'");
+    expect(source).toContain("-c user.email='performance-ci@kovo.invalid'");
+    expect(source).toContain('revert --no-edit "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT"');
+    expect(count(source, '--prepare-kovo-scenario')).toBe(2);
+    expect(source).toContain('scripts/perf-check-watch-spike.mjs');
+    expect(source).toContain('--samples 30');
+    expect(source).toContain('--warmups 3');
+    expectRawArtifact(source, 'kovo-perf-check-watch-decision');
+  });
+
+  it('runs both full browser-visible historical fresh-generation decisions', () => {
+    const source = decisionJob('dev-generation-decision');
+    expect(source).toContain('corpus: [24, 216]');
+    expect(source).toContain('fetch-depth: 0');
+    expect(source).toContain('uses: ./.github/actions/playwright-install');
+    expect(source).toContain(
+      'KOVO_DEV_GENERATION_CANDIDATE_COMMIT: 44da3f3449dcbac2cc29951604b89488c90faa6f',
+    );
+    expect(source).toContain(
+      'KOVO_DEV_GENERATION_CANDIDATE_REF: refs/heads/perf-spike/dev-generation-44da3f344',
+    );
+    expect(source).toContain('git fetch --no-tags origin');
+    expect(source).toContain(
+      '"+$KOVO_DEV_GENERATION_CANDIDATE_REF:refs/perf-evidence/dev-generation-candidate"',
+    );
+    expect(source).toContain(
+      'test "$resolved_candidate" = "$KOVO_DEV_GENERATION_CANDIDATE_COMMIT"',
+    );
+    expect(count(source, 'git worktree add --detach')).toBe(2);
+    expect(source).toContain("-c user.name='Kovo Performance CI'");
+    expect(source).toContain('cherry-pick "$KOVO_DEV_GENERATION_CANDIDATE_COMMIT"');
+    expect(source).toContain('scripts/perf-dev-generation-spike.mjs');
+    for (const token of [
+      '--size "$KOVO_PERF_CORPUS_SIZE"',
+      '--ready-samples 15',
+      '--edit-samples 30',
+      '--warmups 3',
+      '--measure',
+    ]) {
+      expect(source).toContain(token);
+    }
+    expectRawArtifact(source, 'kovo-perf-dev-generation-n${{ matrix.corpus }}');
+  });
+
+  it('keeps the remaining decision measurements full-policy, parallel, and raw', () => {
+    const cache = decisionJob('compressed-cache-decision');
+    expect(cache).toContain('scripts/perf-compressed-cache-ab.mjs');
+    expect(cache).not.toContain('--samples');
+    expect(cache).not.toContain('--quick-smoke');
+    expectRawArtifact(cache, 'kovo-perf-compressed-cache-decision');
+
+    const cli = decisionJob('cli-startup-decision');
+    expect(cli).toContain('scripts/perf-cli-startup-benchmark.mjs');
+    expect(cli).not.toContain('--samples');
+    expect(cli).not.toContain('--warmups');
+    expect(cli).not.toContain('--quick-smoke');
+    expectRawArtifact(cli, 'kovo-perf-cli-startup-decision');
+
+    const diagnostics = decisionJob('runtime-diagnostics');
+    expect(diagnostics).toContain('scripts/perf-server-profile.mjs');
+    expect(diagnostics).toContain('--route listing');
+    expect(diagnostics).toContain('--warmup-ms 5000');
+    expect(diagnostics).toContain('--duration-ms 15000');
+    expect(diagnostics).toContain('forced-dynamic.cpuprofile');
+    expect(diagnostics).toContain('scripts/perf-route-css.mjs');
+    expectRawArtifact(diagnostics, 'kovo-perf-runtime-diagnostics');
+
+    const devProfile = decisionJob('dev-edit-profile');
+    expect(devProfile).toContain('corpus: [24, 216]');
+    expect(devProfile).toContain('uses: ./.github/actions/playwright-install');
+    expect(devProfile).toContain('scripts/perf-dev-edit-profile.mjs owns these Inspector windows');
+    expect(devProfile).toContain('benchmarks/corpora/generate.mjs');
+    expect(devProfile).toContain('benchmarks/corpora/dev-loop.mjs');
+    expect(devProfile).toContain('--iterations 30');
+    expect(devProfile).toContain('--ready-iterations 1');
+    expect(devProfile).toContain('--warmups 3');
+    expect(devProfile).toContain('--inspector-port 49121');
+    expect(devProfile).toContain('--profile-dir "$output_root/raw"');
+    expectRawArtifact(devProfile, 'kovo-perf-dev-profile-n${{ matrix.corpus }}');
+
+    const loaderMemo = decisionJob('loader-runtime-memo-decision');
+    expect(loaderMemo).toContain('fetch-depth: 0');
+    expect(loaderMemo).toContain('git worktree add --detach "$baseline_root" "$GITHUB_SHA^"');
+    expect(loaderMemo).toContain('git worktree add --detach "$spike_root" "$GITHUB_SHA"');
+    expect(loaderMemo).toContain('candidate_parent="$(git rev-parse --verify "$GITHUB_SHA^")"');
+    expect(loaderMemo).toContain(
+      'test "$(git -C "$baseline_root" rev-parse HEAD)" = "$candidate_parent"',
+    );
+    expect(loaderMemo).toContain(
+      'test "$(git -C "$spike_root" rev-parse HEAD^)" = "$candidate_parent"',
+    );
+    expect(count(loaderMemo, 'scripts/perf-loader-runtime-memo-ab.mjs')).toBe(2);
+    expect(loaderMemo).toContain('--prepare-only');
+    expect(loaderMemo).toContain('--measure');
+    expect(loaderMemo).toContain('--profile-dir');
+    expect(loaderMemo).not.toContain('--samples');
+    expect(loaderMemo).not.toContain('--warmup-ms');
+    expect(loaderMemo).not.toContain('--duration-ms');
+    expect(loaderMemo).not.toContain('--concurrencies');
+    expectRawArtifact(loaderMemo, 'kovo-perf-loader-runtime-memo-decision');
+  });
+
+  it('never interpolates dispatch inputs directly into a run script', () => {
+    expect(workflow).not.toMatch(/^\s+run:.*\$\{\{ inputs\./gmu);
+    for (const run of workflow.matchAll(/^\s+run:\s*(?:\||>-)\n((?: {10,}.*(?:\n|$))*)/gmu)) {
+      expect(run[1]).not.toContain('${{ inputs.');
+    }
+  });
 });
+
+function decisionJob(name) {
+  const source = jobSource(name);
+  for (const token of decisionScope) expect(source, name).toContain(token);
+  expect(source, name).toContain('runs-on: ubuntu-24.04');
+  expect(source, name).toContain('KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04');
+  return source;
+}
+
+function expectRawArtifact(source, name) {
+  expect(source).toContain('if: always()');
+  expect(source).toContain('if-no-files-found: warn');
+  expect(source).toContain(`name: ${name}`);
+  expect(source).toContain('actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02');
+  expect(source).toContain('retention-days: 30');
+}
+
+function count(source, token) {
+  return source.split(token).length - 1;
+}
 
 function jobSource(name) {
   const marker = `  ${name}:\n`;
