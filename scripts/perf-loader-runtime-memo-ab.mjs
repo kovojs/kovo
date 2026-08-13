@@ -1092,6 +1092,7 @@ function normalizeOptions(options) {
     samples: boundedInteger(options.samples ?? (quick ? 2 : DEFAULT_SAMPLES), 1, 100, '--samples'),
     scratchRoot,
     seed: boundedInteger(options.seed ?? 0x4c524d41, 0, 0xffff_ffff, '--seed'),
+    spikeRoot: canonicalDirectory(requiredString(options.spikeRoot, '--spike-root')),
     timingLockPath: path.resolve(
       options.timingLockPath ?? path.join(os.tmpdir(), 'kovo-performance-timing.lock'),
     ),

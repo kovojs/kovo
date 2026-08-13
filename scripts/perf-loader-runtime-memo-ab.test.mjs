@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -190,6 +190,26 @@ describe('loader-runtime memo authenticated A/B runner', () => {
     };
     const calls = [];
     const installWorktree = vi.fn(async () => ({ status: 'installed' }));
+    const authenticateRoots = vi.fn(() => ({
+      baseline: { commit: source.baseline.commit, root: baselineRoot },
+      historical: { status: 'authenticated-fixture' },
+      patch: {
+        bytes: 10,
+        paths: [
+          'packages/server/src/client-modules.ts',
+          'packages/server/src/client-modules.test.ts',
+          'packages/server/src/loader-runtime-client-module.ts',
+        ],
+        sha256: `sha256:${'c'.repeat(64)}`,
+        stablePatchId: 'd'.repeat(40),
+      },
+      schema: 'kovo-loader-runtime-memo-candidate/v1',
+      spike: {
+        commit: source.spike.commit,
+        parent: source.baseline.commit,
+        root: spikeRoot,
+      },
+    }));
     const report = await runLoaderRuntimeMemoAb(
       {
         baselineRoot,
@@ -201,26 +221,7 @@ describe('loader-runtime memo authenticated A/B runner', () => {
         timingLockPath: path.join(root, 'timing.lock'),
       },
       {
-        authenticateRoots: () => ({
-          baseline: { commit: source.baseline.commit, root: baselineRoot },
-          historical: { status: 'authenticated-fixture' },
-          patch: {
-            bytes: 10,
-            paths: [
-              'packages/server/src/client-modules.ts',
-              'packages/server/src/client-modules.test.ts',
-              'packages/server/src/loader-runtime-client-module.ts',
-            ],
-            sha256: `sha256:${'c'.repeat(64)}`,
-            stablePatchId: 'd'.repeat(40),
-          },
-          schema: 'kovo-loader-runtime-memo-candidate/v1',
-          spike: {
-            commit: source.spike.commit,
-            parent: source.baseline.commit,
-            root: spikeRoot,
-          },
-        }),
+        authenticateRoots,
         collectState: (laneRoot) =>
           structuredClone(laneRoot === baselineRoot ? source.baseline : source.spike),
         hostObservation: (label) => ({
@@ -275,6 +276,10 @@ describe('loader-runtime memo authenticated A/B runner', () => {
       },
     );
 
+    expect(authenticateRoots).toHaveBeenCalledWith({
+      baselineRoot: realpathSync(baselineRoot),
+      spikeRoot: realpathSync(spikeRoot),
+    });
     expect(installWorktree).toHaveBeenNthCalledWith(1, baselineRoot);
     expect(installWorktree).toHaveBeenNthCalledWith(2, spikeRoot);
     expect(calls).toHaveLength(30);
