@@ -105,6 +105,32 @@ describe('performance regression comparator', () => {
     expect(comparePerformanceReports(reportFixture(), report).verdict.status).toBe('unproven');
   });
 
+  it('uses the terminal server quiet-host admission without erasing earlier polls', () => {
+    const report = reportFixture();
+    report.hostSamples = [
+      {
+        attempt: 0,
+        context: 'dynamic-listing-identity-c1/kovo/0',
+        loadPerCpu: 1.1,
+        phase: 'server-quiet-host-settle',
+        waitedMs: 0,
+      },
+      {
+        attempt: 1,
+        context: 'dynamic-listing-identity-c1/kovo/0',
+        loadPerCpu: 0.2,
+        phase: 'server-quiet-host-settle',
+        waitedMs: 1_000,
+      },
+    ];
+
+    expect(performanceReportFindings(report, 'candidate')).toEqual([]);
+    report.hostSamples[1].loadPerCpu = 1.05;
+    expect(performanceReportFindings(report, 'candidate')).toContain(
+      'candidate host sample 1 exceeds the load ceiling',
+    );
+  });
+
   it('re-derives canonical host and workload digests instead of trusting labels', () => {
     const report = reportFixture();
     expect(hostFingerprintFindings(report.host)).toEqual([]);
@@ -153,6 +179,33 @@ describe('performance regression comparator', () => {
     expect(performanceReportFindings(report, 'candidate')).toContain(
       'candidate corpus-n24/build/clean/durationMs kovo summary is short or malformed',
     );
+  });
+
+  it('accepts signed trace-marker clock skew without treating its sign as a regression', () => {
+    const baseline = reportFixture();
+    baseline.workloadIdentity.identity.cells = ['browser'];
+    baseline.workloadIdentity.digest = digest(canonicalJson(baseline.workloadIdentity.identity));
+    baseline.analysis = {
+      'matched-l1/browser//mobile.navigation.traceMarkerEpochSkewMs': {
+        kovo: { mad: 0.1, median: -0.5, p95: 0.25, samples: 30 },
+        nextjs: { mad: 0.1, median: -0.25, p95: -0.05, samples: 30 },
+        pairedDifference: {
+          bootstrap95Ci: [-0.4, 0.1],
+          direction: 'kovo-minus-nextjs',
+          median: -0.25,
+          samples: 30,
+        },
+      },
+    };
+    const candidate = structuredClone(baseline);
+    candidate.execution = executionFixture('signed-skew-candidate');
+    candidate.analysis['matched-l1/browser//mobile.navigation.traceMarkerEpochSkewMs'].kovo.median =
+      0.5;
+
+    expect(performanceReportFindings(baseline, 'baseline')).toEqual([]);
+    const result = comparePerformanceReports(baseline, candidate);
+    expect(result.verdict).toEqual({ reasons: [], regressions: [], status: 'pass' });
+    expect(result.metrics).toEqual([]);
   });
 });
 

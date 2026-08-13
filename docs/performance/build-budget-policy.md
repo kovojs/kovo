@@ -13,8 +13,9 @@ integrity, and the unmodified nested Kovo phase census. Kovo's source-check phas
 nonnegative measured wall time minus the authenticated sequential worker envelope. This preserves
 the current-source/deploy-proof boundary required by SPEC §5.2 rule 9.
 
-After ratification, derive a budget while supplying the same five raw files and their original
-artifact-path spellings in the same subject:
+After ratification, derive a budget while supplying the same five raw files. The command re-hashes
+each local download and recovers its durable artifact URL from the ratified content digest, so the
+download directory does not need to reproduce any CI-side path:
 
 ```sh
 vp exec node scripts/perf-build-budget.mjs derive \

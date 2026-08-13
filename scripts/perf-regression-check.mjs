@@ -141,7 +141,10 @@ export function performanceReportFindings(report, label, policy = {}) {
       );
       if (!Number.isFinite(sample?.loadPerCpu) || sample.loadPerCpu < 0) {
         findings.push(`${label} host sample ${index} has no finite load evidence`);
-      } else if (sample.loadPerCpu > ceiling) {
+      } else if (
+        sample.loadPerCpu > ceiling &&
+        !isSupersededServerSettleSample(report.hostSamples, index)
+      ) {
         findings.push(`${label} host sample ${index} exceeds the load ceiling`);
       }
     }
@@ -156,11 +159,29 @@ export function performanceReportFindings(report, label, policy = {}) {
         findings.push(`${label} ${metric} sample policy is unavailable`);
       }
       findings.push(
-        ...metricAnalysisFindings(analysis, `${label} ${metric}`, minSamples, expectedSamples),
+        ...metricAnalysisFindings(analysis, `${label} ${metric}`, minSamples, expectedSamples, {
+          allowSigned: metric.endsWith('.traceMarkerEpochSkewMs'),
+        }),
       );
     }
   }
   return findings;
+}
+
+function isSupersededServerSettleSample(samples, index) {
+  const sample = samples[index];
+  if (
+    sample?.phase !== 'server-quiet-host-settle' ||
+    typeof sample.context !== 'string' ||
+    sample.context.length === 0
+  ) {
+    return false;
+  }
+  return samples
+    .slice(index + 1)
+    .some(
+      (later) => later?.phase === 'server-quiet-host-settle' && later.context === sample.context,
+    );
 }
 
 export function hostFingerprintFindings(host, label = 'report') {
@@ -220,7 +241,13 @@ function compareIdentity(findings, baseline, candidate) {
   }
 }
 
-function metricAnalysisFindings(analysis, label, minSamples, expectedSamples) {
+function metricAnalysisFindings(
+  analysis,
+  label,
+  minSamples,
+  expectedSamples,
+  { allowSigned = false } = {},
+) {
   if (!ownRecord(analysis)) return [`${label} analysis is unavailable`];
   const findings = [];
   // Some metrics, such as edit-session peak RSS, are deliberately sampled once per serialized
@@ -234,8 +261,8 @@ function metricAnalysisFindings(analysis, label, minSamples, expectedSamples) {
     if (
       !ownRecord(summary) ||
       !finiteNonNegative(summary.mad) ||
-      !finiteNonNegative(summary.median) ||
-      !finiteNonNegative(summary.p95) ||
+      !(allowSigned ? Number.isFinite(summary.median) : finiteNonNegative(summary.median)) ||
+      !(allowSigned ? Number.isFinite(summary.p95) : finiteNonNegative(summary.p95)) ||
       !Number.isSafeInteger(summary.samples) ||
       summary.samples < requiredSamples ||
       (expectedSamples !== null && summary.samples !== expectedSamples)
@@ -292,6 +319,9 @@ function expectedMetricSamples(metric, workloadIdentity) {
 }
 
 function metricDirection(metric) {
+  // This is a clock-domain diagnostic centered around zero, not a duration. Both signs are valid
+  // and neither "more negative" nor "more positive" is a performance improvement.
+  if (metric.endsWith('.traceMarkerEpochSkewMs')) return null;
   if (
     /(?:requestsPerSecond|requests\.perSecond|throughput|restoredRate|Available|StateSurvived)$/iu.test(
       metric,

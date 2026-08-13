@@ -1,4 +1,9 @@
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
@@ -147,15 +152,58 @@ describe('ratified production-build performance budgets', () => {
       deriveBuildPerformanceBudget(restored.baseline, { baselineEntries: restored.entries }),
     ).toThrow(/baseline metrics is not reproduced by its linked raw reports/u);
   });
+
+  it('derives through the CLI from local downloads linked to durable artifact URLs', () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'kovo-build-budget-cli-'));
+    try {
+      const { baseline, entries } = ratifiedBuildBaseline(24, { durableLocations: true });
+      const baselinePath = path.join(root, 'baseline.json');
+      const outputPath = path.join(root, 'budget.json');
+      writeFileSync(baselinePath, `${JSON.stringify(baseline)}\n`);
+      const reportPaths = entries.map((entry, index) => {
+        const reportPath = path.join(root, `download-${String(index)}.json`);
+        writeFileSync(reportPath, entry.rawText);
+        return reportPath;
+      });
+      const script = fileURLToPath(new URL('./perf-build-budget.mjs', import.meta.url));
+      const result = spawnSync(
+        process.execPath,
+        [
+          script,
+          'derive',
+          '--baseline',
+          baselinePath,
+          ...reportPaths.flatMap((reportPath) => ['--report', reportPath]),
+          '--out',
+          outputPath,
+        ],
+        { encoding: 'utf8' },
+      );
+
+      expect(result).toMatchObject({ status: 0, stderr: '' });
+      const budget = JSON.parse(readFileSync(outputPath, 'utf8'));
+      expect(budget.schema).toBe(PERF_BUILD_BUDGET_SCHEMA);
+      expect(budget.baseline.reports.map(({ location }) => location)).toEqual(
+        baseline.reports.map(({ location }) => location),
+      );
+      expect(budget.baseline.reports.every(({ location }) => location.startsWith('https://'))).toBe(
+        true,
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
 });
 
-function ratifiedBuildBaseline(corpusSize) {
+function ratifiedBuildBaseline(corpusSize, { durableLocations = false } = {}) {
   const entries = Array.from({ length: 5 }, (_, run) => {
     const report = comparisonReport({ corpusSize, run, sourceCommit: 'a'.repeat(40) });
     const rawText = JSON.stringify(report);
     return {
       contentDigest: digest(rawText),
-      location: `artifacts/build-n${String(corpusSize)}-run-${String(run)}/comparison.json`,
+      location: durableLocations
+        ? `https://github.com/kovojs/kovo/actions/runs/${String(corpusSize)}${String(run + 1)}/artifacts/${String(corpusSize)}${String(run + 101)}`
+        : `artifacts/build-n${String(corpusSize)}-run-${String(run)}/comparison.json`,
       rawText,
       report,
     };

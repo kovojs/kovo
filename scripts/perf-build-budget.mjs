@@ -685,12 +685,20 @@ async function main(args) {
     const baseline = JSON.parse(
       await readFile(path.resolve(requiredOption(options, '--baseline'))),
     );
+    const linkedReports = new Map(
+      (baseline?.reports ?? []).map((report) => [report?.contentDigest, report]),
+    );
     const baselineEntries = await Promise.all(
       repeatedOption(options, '--report').map(async (reportPath) => {
         const rawText = await readFile(path.resolve(reportPath), 'utf8');
+        const contentDigest = sha256Bytes(rawText);
         return {
-          contentDigest: sha256Bytes(rawText),
-          location: reportPath,
+          contentDigest,
+          // The local download path is not the evidence location committed by the ratifier. Bind
+          // the reloaded bytes back to that durable artifact URL through their exact content digest;
+          // baselineBuildReportFindings then verifies the execution/run URL and re-ratifies all
+          // fields before deriving a budget.
+          location: linkedReports.get(contentDigest)?.location ?? null,
           rawText,
           report: JSON.parse(rawText),
         };
