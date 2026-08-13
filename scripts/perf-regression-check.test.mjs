@@ -14,7 +14,12 @@ import {
 describe('performance regression comparator', () => {
   it('passes only same-subject reports within the reviewed regression ceiling', () => {
     const baseline = reportFixture();
-    const candidate = reportFixture({ durationMs: 104, requestsPerSecond: 980 });
+    const candidate = reportFixture({
+      durationMs: 104,
+      p95Ms: 104,
+      requestsPerSecond: 980,
+      serverCpuPercent: 104,
+    });
 
     const result = comparePerformanceReports(baseline, candidate);
 
@@ -33,6 +38,16 @@ describe('performance regression comparator', () => {
           metric: 'matched-runtime/server/hit.requestsPerSecond',
           regressionPct: 2,
           status: 'pass',
+        }),
+        expect.objectContaining({
+          direction: 'lower-is-better',
+          metric: 'matched-runtime/server/hit.p95Ms',
+          regressionPct: 4,
+        }),
+        expect.objectContaining({
+          direction: 'lower-is-better',
+          metric: 'matched-runtime/server/hit.serverCpuPercent',
+          regressionPct: 4,
         }),
       ]),
     );
@@ -106,7 +121,12 @@ describe('performance regression comparator', () => {
   });
 });
 
-function reportFixture({ durationMs = 100, requestsPerSecond = 1_000 } = {}) {
+function reportFixture({
+  durationMs = 100,
+  p95Ms = 100,
+  requestsPerSecond = 1_000,
+  serverCpuPercent = 100,
+} = {}) {
   const hostFacts = {
     arch: 'arm64',
     browsers: ['chromium 148'],
@@ -153,9 +173,14 @@ function reportFixture({ durationMs = 100, requestsPerSecond = 1_000 } = {}) {
   return {
     analysis: {
       'matched-runtime/server/dynamic.durationMs': metricFixture(durationMs),
+      'matched-runtime/server/hit.p95Ms': metricFixture(p95Ms),
       'matched-runtime/server/hit.requestsPerSecond': metricFixture(requestsPerSecond),
+      'matched-runtime/server/hit.serverCpuPercent': metricFixture(serverCpuPercent),
     },
     generatedAt: '2026-08-13T12:00:00.000Z',
+    execution: executionFixture(
+      `${String(durationMs)}:${String(p95Ms)}:${String(requestsPerSecond)}:${String(serverCpuPercent)}:${String(reportSequence++)}`,
+    ),
     host: {
       ...hostFacts,
       digest: digest(canonicalJson(hostFacts)),
@@ -171,6 +196,7 @@ function reportFixture({ durationMs = 100, requestsPerSecond = 1_000 } = {}) {
     ],
     integrity: {
       comparatorMatched: true,
+      executionAuthenticated: true,
       publishable: true,
       serialized: true,
       sourceStable: true,
@@ -196,6 +222,22 @@ function reportFixture({ durationMs = 100, requestsPerSecond = 1_000 } = {}) {
       identity: workloadFacts,
       schema: 'kovo-performance-workload-identity/v1',
     },
+  };
+}
+
+let reportSequence = 0;
+
+function executionFixture(seed) {
+  const facts = {
+    complete: true,
+    local: { nonce: digest(seed).slice('sha256:'.length, 'sha256:'.length + 32), pid: 42 },
+    provider: 'local',
+    startedAt: '2026-08-13T12:00:00.000Z',
+  };
+  return {
+    ...facts,
+    digest: digest(canonicalJson(facts)),
+    schema: 'kovo-performance-execution/v1',
   };
 }
 

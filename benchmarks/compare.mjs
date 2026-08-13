@@ -16,6 +16,10 @@ import {
 } from '../scripts/lib/perf-host.mjs';
 import { collectPerformanceProvenance } from '../scripts/lib/perf-provenance.mjs';
 import {
+  executionIdentityFindings,
+  performanceExecutionIdentity,
+} from '../scripts/lib/perf-execution.mjs';
+import {
   SERVER_BENCHMARK_SCHEMA,
   SERVER_CONCURRENCIES,
   SERVER_ENCODINGS,
@@ -41,6 +45,8 @@ const lockFiles = Object.freeze([
 ]);
 
 export async function runComparison(options = {}) {
+  const execution = performanceExecutionIdentity();
+  const executionAuthenticated = executionIdentityFindings(execution).length === 0;
   const cells = options.cells ?? defaultCells;
   for (const cell of cells) assertMember('--cells', cell, defaultCells);
   if (new Set(cells).size !== cells.length) throw new Error('--cells must not contain duplicates.');
@@ -67,6 +73,7 @@ export async function runComparison(options = {}) {
     await mkdir(outDir, { recursive: true });
     const report = {
       analysis: {},
+      execution,
       generatedAt: new Date().toISOString(),
       host: performanceHostFingerprint(),
       hostSamples: [],
@@ -74,6 +81,7 @@ export async function runComparison(options = {}) {
         alternatingOrder: EXECUTION_ORDER,
         cells,
         comparatorMatched: false,
+        executionAuthenticated,
         serialized: true,
         sourceStable: true,
         workloadAuthenticated: workloadIdentity.complete,
@@ -368,6 +376,7 @@ export async function runComparison(options = {}) {
     const sourceStable = sameSourceState(provenance, finalProvenance);
     const report = {
       analysis,
+      execution,
       generatedAt: new Date().toISOString(),
       host: performanceHostFingerprint({ browserVersions: observedBrowserVersions(rawCells) }),
       hostSamples,
@@ -398,6 +407,7 @@ export async function runComparison(options = {}) {
           warmups,
         }),
         comparatorMatched: false,
+        executionAuthenticated,
         executionError,
         hostLoadCeilingPerCpu: options.maxLoadPerCpu ?? 1,
         serialized: true,
@@ -453,6 +463,11 @@ export function comparisonVerdict(report) {
     reasons.push('comparator pairing is incomplete');
   for (const reason of report.integrity?.comparator?.reasons ?? []) reasons.push(reason);
   if (report.integrity?.executionError) reasons.push(report.integrity.executionError);
+  if (report.integrity?.executionAuthenticated !== true) {
+    reasons.push('execution identity is incomplete');
+  } else {
+    for (const reason of executionIdentityFindings(report.execution)) reasons.push(reason);
+  }
   if (report.integrity?.serialized !== true) reasons.push('cells were not serialized');
   if (report.integrity?.workloadAuthenticated !== true)
     reasons.push('workload identity is incomplete');

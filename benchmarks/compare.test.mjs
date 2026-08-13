@@ -166,6 +166,7 @@ describe('serialized comparison analysis', () => {
         'source provenance is dirty',
         'source provenance changed during run',
         'comparator pairing is incomplete',
+        'execution identity is incomplete',
         'workload identity is incomplete',
       ],
       status: 'unproven',

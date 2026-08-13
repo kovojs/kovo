@@ -4,6 +4,8 @@ import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import { executionIdentityFindings } from './lib/perf-execution.mjs';
+
 export const PERF_REGRESSION_SCHEMA = 'kovo-performance-regression/v1';
 const comparisonSchema = 'kovo-next-performance-comparison/v1';
 const hostSchema = 'kovo-performance-host/v1';
@@ -105,6 +107,7 @@ export function performanceReportFindings(report, label, policy = {}) {
   for (const [field, expected] of [
     ['sourceStable', true],
     ['comparatorMatched', true],
+    ['executionAuthenticated', true],
     ['serialized', true],
     ['publishable', true],
     ['workloadAuthenticated', true],
@@ -115,6 +118,15 @@ export function performanceReportFindings(report, label, policy = {}) {
   }
   if (report.verdict?.status !== 'measured') findings.push(`${label} verdict is not measured`);
 
+  for (const finding of executionIdentityFindings(report.execution)) {
+    findings.push(`${label} ${finding}`);
+  }
+  if (
+    report.execution?.provider === 'github-actions' &&
+    report.execution.github?.sha !== report.source?.commit
+  ) {
+    findings.push(`${label} GitHub execution SHA does not match source commit`);
+  }
   findings.push(...hostFingerprintFindings(report.host, label));
   findings.push(...workloadIdentityFindings(report.workloadIdentity, label));
 
@@ -189,6 +201,9 @@ export function canonicalJson(value) {
 function compareIdentity(findings, baseline, candidate) {
   if (baseline?.source?.commit !== candidate?.source?.commit) {
     findings.push('source commit identity differs');
+  }
+  if (baseline?.execution?.digest === candidate?.execution?.digest) {
+    findings.push('baseline and candidate reuse one execution identity');
   }
   if (canonicalJson(baseline?.source?.locks) !== canonicalJson(candidate?.source?.locks)) {
     findings.push('dependency lock identity differs');
@@ -268,9 +283,8 @@ function metricDirection(metric) {
     return 'higher-is-better';
   }
   if (
-    /(?:bytes|durationMs|latency|paintMs|readyMs|rssBytes|ttfbMs|fcpMs|lcpMs|tbtMs|interactiveMs)$/iu.test(
-      metric,
-    )
+    /(?:Bytes|Ms|cpuPercent)$/iu.test(metric) ||
+    /\.(?:bytes|sessionBytes)(?:\.[^.]+)*\.(?:css|html|img|js|other|total)$/iu.test(metric)
   ) {
     return 'lower-is-better';
   }
