@@ -9,10 +9,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   collectPageTelemetry,
   DEV_LOOP_REPORT_SCHEMA,
+  diagnosticProfileFindings,
   exactSampleCountFindings,
   loadCorpusManifest,
   parseDevLoopArgs,
   profileEditToPaint,
+  profiledDevInvocation,
   runDevLoopBenchmark,
   sourceStabilityFindings,
   summarizeNumbers,
@@ -65,6 +67,26 @@ describe('single-entrant developer-loop adapter', () => {
     ).rejects.toThrow('--out must be outside the generated corpus root');
   });
 
+  it('profiles the exact CLI process without changing the ordinary command lane', () => {
+    const command = {
+      argv: ['./node_modules/.bin/kovo', 'dev', './src/app.tsx'],
+      cwd: '/tmp/kovo-profile-app',
+    };
+    expect(profiledDevInvocation(command, null)).toEqual({
+      argv: ['dev', './src/app.tsx'],
+      executable: './node_modules/.bin/kovo',
+    });
+    expect(profiledDevInvocation(command, 49_121)).toEqual({
+      argv: [
+        '--inspect=127.0.0.1:49121',
+        '/tmp/kovo-profile-app/node_modules/.bin/kovo',
+        'dev',
+        './src/app.tsx',
+      ],
+      executable: process.execPath,
+    });
+  });
+
   it('requires an independent exact fresh-ready sample count', () => {
     expect(
       parseDevLoopArgs([
@@ -96,6 +118,49 @@ describe('single-entrant developer-loop adapter', () => {
         '/tmp/report.json',
       ]),
     ).toThrow('ready iterations must be an integer from 1 through 100');
+    expect(
+      parseDevLoopArgs([
+        '--manifest',
+        '/tmp/manifest.json',
+        '--iterations',
+        '1',
+        '--ready-iterations',
+        '1',
+        '--warmups',
+        '0',
+        '--port',
+        '49120',
+        '--profile-dir',
+        '/tmp/kovo-dev-profile',
+        '--inspector-port',
+        '49121',
+        '--out',
+        '/tmp/report.json',
+      ]),
+    ).toMatchObject({
+      diagnosticProfile: {
+        inspectorPort: 49_121,
+        profileDir: '/tmp/kovo-dev-profile',
+      },
+    });
+    expect(() =>
+      parseDevLoopArgs([
+        '--manifest',
+        '/tmp/manifest.json',
+        '--iterations',
+        '1',
+        '--ready-iterations',
+        '1',
+        '--warmups',
+        '0',
+        '--port',
+        '49120',
+        '--profile-dir',
+        '/tmp/kovo-dev-profile',
+        '--out',
+        '/tmp/report.json',
+      ]),
+    ).toThrow('inspector port must be an integer');
   });
 
   it('fails publication evidence on dirty or changed source provenance', () => {
@@ -123,6 +188,12 @@ describe('single-entrant developer-loop adapter', () => {
       'dependency lock digests changed during measurement',
       'source dirty paths changed during measurement',
     ]);
+    expect(
+      sourceStabilityFindings(
+        { ...clean, posture: { 'security/posture.json': 'sha256:one' } },
+        { ...clean, posture: { 'security/posture.json': 'sha256:two' } },
+      ),
+    ).toEqual(['framework security posture digests changed during measurement']);
   });
 
   it('requires every requested ready and edit cell with state and syntax evidence', () => {
@@ -236,6 +307,39 @@ describe('single-entrant developer-loop adapter', () => {
       'entry:edit-to-paint',
       'data:edit-to-paint',
     ]);
+    expect(profile.diagnostic).toBeNull();
+  });
+
+  it('fails closed unless every exact diagnostic window has authenticated raw artifacts', () => {
+    const windows = ['leaf', 'entry', 'data', 'syntaxError', 'recovery'].map((editClass) => ({
+      artifact: {
+        cpu: { bytes: 10, file: `${editClass}.cpuprofile`, sha256: `sha256:${'a'.repeat(64)}` },
+        heap: { bytes: 10, file: `${editClass}.heapprofile`, sha256: `sha256:${'b'.repeat(64)}` },
+      },
+      editClass,
+      iteration: 0,
+    }));
+    const report = {
+      integrity: { iterations: 1 },
+      profile: {
+        diagnostic: {
+          diagnosticOnly: { profilerPerturbsDurations: true, publishTimingClaims: false },
+          schema: 'kovo-dev-edit-profile/v1',
+          windowCount: 5,
+          windows,
+        },
+      },
+    };
+    expect(diagnosticProfileFindings(report, true)).toEqual([]);
+    report.profile.diagnostic.windows[0].artifact.cpu.sha256 = 'forged';
+    report.profile.diagnostic.windows[1].editClass = 'leaf';
+    expect(diagnosticProfileFindings(report, true)).toEqual(
+      expect.arrayContaining([
+        'diagnostic window leaf:0 has invalid raw profile evidence',
+        'duplicate diagnostic window leaf:0',
+        'missing diagnostic window entry:0',
+      ]),
+    );
   });
 
   it('writes a fail-closed report and exits nonzero when the manifest is unavailable', async () => {

@@ -28,6 +28,33 @@ const READY_TIMEOUT_MS = 120_000;
 const EDIT_TIMEOUT_MS = 60_000;
 const RSS_SAMPLE_INTERVAL_MS = 50;
 const repoRoot = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
+const PERFORMANCE_POSTURE_FILES = Object.freeze([
+  'packages/compiler/src/security/framework-public-runtime-export-posture.generated.ts',
+  'scripts/pack-security.files.json',
+  'security/framework-public-runtime-export-posture.json',
+]);
+
+async function collectAuthenticatedSource() {
+  const source = collectPerformanceProvenance({
+    lockFiles: [
+      'pnpm-lock.yaml',
+      'benchmarks/nextjs/pnpm-lock.yaml',
+      'benchmarks/harness/pnpm-lock.yaml',
+    ],
+    repoRoot,
+  });
+  return {
+    ...source,
+    posture: Object.fromEntries(
+      await Promise.all(
+        PERFORMANCE_POSTURE_FILES.map(async (relativePath) => {
+          const absolutePath = path.join(repoRoot, relativePath);
+          return [relativePath, sha256(await readFile(absolutePath))];
+        }),
+      ),
+    ),
+  };
+}
 
 /**
  * Measure exactly one generated entrant. `benchmarks/compare.mjs` owns alternating K,N,N,K
@@ -41,19 +68,25 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
   if (isWithin(appRoot, normalized.outPath)) {
     throw new TypeError('--out must be outside the generated corpus root.');
   }
+  if (
+    normalized.diagnosticProfile !== null &&
+    (isWithin(appRoot, normalized.diagnosticProfile.profileDir) ||
+      isWithin(repoRoot, normalized.diagnosticProfile.profileDir))
+  ) {
+    throw new TypeError('--profile-dir must be outside both the corpus and source worktree.');
+  }
+  if (
+    normalized.diagnosticProfile !== null &&
+    typeof dependencies.createDiagnosticProfiler !== 'function'
+  ) {
+    throw new TypeError('A diagnostic profiler factory is required for a profiled dev-loop run.');
+  }
   await verifyCorpusSources(manifestEvidence);
 
   const browserType = dependencies.browserType ?? chromium;
   const spawnProcess = dependencies.spawnProcess ?? spawn;
   const startedAt = new Date().toISOString();
-  const source = collectPerformanceProvenance({
-    lockFiles: [
-      'pnpm-lock.yaml',
-      'benchmarks/nextjs/pnpm-lock.yaml',
-      'benchmarks/harness/pnpm-lock.yaml',
-    ],
-    repoRoot,
-  });
+  const source = await collectAuthenticatedSource();
   const command = materializeCommand(manifest.dev.command, appRoot, normalized.port);
   const versions = await collectEntrantVersions(appRoot, manifest.framework);
   const report = createReportSkeleton({
@@ -96,6 +129,8 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
       appRoot,
       browser,
       command,
+      createDiagnosticProfiler: dependencies.createDiagnosticProfiler,
+      diagnosticProfile: normalized.diagnosticProfile,
       iterations: normalized.iterations,
       manifest,
       originalSources,
@@ -104,7 +139,7 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
     });
     report.samples = editResult.samples;
     report.editSession = editResult.session;
-    report.profile = profileEditToPaint(editResult.samples);
+    report.profile = profileEditToPaint(editResult.samples, editResult.diagnosticProfile);
     accumulateBrowserIntegrity(report.integrity, editResult.session.browser, 'edit-session');
     if (editResult.session.error !== null) {
       report.integrity.errors.push(`edit session: ${editResult.session.error}`);
@@ -136,14 +171,7 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
         report.integrity.errors.push(`post-run corpus integrity: ${errorMessage(error)}`);
       });
     try {
-      report.sourceAfter = collectPerformanceProvenance({
-        lockFiles: [
-          'pnpm-lock.yaml',
-          'benchmarks/nextjs/pnpm-lock.yaml',
-          'benchmarks/harness/pnpm-lock.yaml',
-        ],
-        repoRoot,
-      });
+      report.sourceAfter = await collectAuthenticatedSource();
       report.integrity.source.after = report.sourceAfter;
       const sourceFindings = sourceStabilityFindings(source, report.sourceAfter);
       report.integrity.source.stable = sourceFindings.length === 0 && !source.dirty;
@@ -154,7 +182,8 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
   }
 
   const countFindings = exactSampleCountFindings(report);
-  report.integrity.errors.push(...countFindings);
+  const profileFindings = diagnosticProfileFindings(report, normalized.diagnosticProfile !== null);
+  report.integrity.errors.push(...countFindings, ...profileFindings);
   report.integrity.complete =
     report.integrity.errors.length === 0 &&
     report.integrity.misses === 0 &&
@@ -162,11 +191,16 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
     report.integrity.corpus.beforeVerified &&
     report.integrity.corpus.afterVerified &&
     report.integrity.source.stable &&
-    countFindings.length === 0;
+    countFindings.length === 0 &&
+    profileFindings.length === 0;
   report.summary = summarizeReport(report);
   report.environment.loadAverageAfter = os.loadavg();
   report.finishedAt = new Date().toISOString();
-  report.verdict.status = report.integrity.complete ? 'measured' : 'unproven';
+  report.verdict.status = report.integrity.complete
+    ? normalized.diagnosticProfile === null
+      ? 'measured'
+      : 'diagnostic-only'
+    : 'unproven';
   return report;
 }
 
@@ -224,16 +258,25 @@ async function measureEditSession({
   appRoot,
   browser,
   command,
+  createDiagnosticProfiler,
+  diagnosticProfile,
   iterations,
   manifest,
   originalSources,
   spawnProcess,
   warmups,
 }) {
-  const session = startDevSession({ appRoot, command, spawnProcess });
+  const session = startDevSession({
+    appRoot,
+    command,
+    inspectorPort: diagnosticProfile?.inspectorPort ?? null,
+    spawnProcess,
+  });
   const rss = createProcessTreeRssSampler(session.pid);
   let context;
   let fatalError = null;
+  let profiler;
+  let profilerSummary = null;
   let telemetry;
   let rssEvidence = { peakRssBytes: 0, sampleCount: 0 };
   const samples = Array.from({ length: iterations }, (_, iteration) => ({ iteration }));
@@ -250,6 +293,16 @@ async function measureEditSession({
     });
     telemetry.markReady();
     await establishState(page, manifest.dev.state);
+    if (diagnosticProfile !== null) {
+      profiler = await createDiagnosticProfiler({
+        appRoot,
+        framework: manifest.framework,
+        inspectorPort: diagnosticProfile.inspectorPort,
+        modules: manifest.modules,
+        profileDir: diagnosticProfile.profileDir,
+        repoRoot,
+      });
+    }
 
     for (const editClass of EDIT_CLASSES) {
       const classObservations = await measureRevisionEditClass({
@@ -258,6 +311,7 @@ async function measureEditSession({
         editClass,
         iterations,
         page,
+        profiler,
         session,
         state: manifest.dev.state,
         telemetry,
@@ -274,6 +328,7 @@ async function measureEditSession({
       iterations,
       leafSource: originalSources.get(manifest.dev.edits.syntaxError.file),
       page,
+      profiler,
       recovery: manifest.dev.edits.recovery,
       session,
       state: manifest.dev.state,
@@ -288,11 +343,22 @@ async function measureEditSession({
   } catch (error) {
     fatalError = errorMessage(error);
   } finally {
+    if (profiler !== undefined) {
+      try {
+        profilerSummary = profiler.summary();
+        await profiler.close();
+      } catch (error) {
+        fatalError = [fatalError, `diagnostic profiler: ${errorMessage(error)}`]
+          .filter(Boolean)
+          .join('; ');
+      }
+    }
     await context?.close().catch(() => undefined);
     await session.stop();
     rssEvidence = await rss.stop();
   }
   return {
+    diagnosticProfile: profilerSummary,
     observations,
     samples,
     session: {
@@ -311,6 +377,7 @@ async function measureRevisionEditClass({
   editClass,
   iterations,
   page,
+  profiler,
   session,
   state,
   telemetry,
@@ -337,6 +404,7 @@ async function measureRevisionEditClass({
         filePath,
         iteration: index - warmups,
         page,
+        profiler: index >= warmups ? profiler : undefined,
         revision,
         session,
         source,
@@ -367,6 +435,7 @@ async function measureSyntaxAndRecovery({
   iterations,
   leafSource,
   page,
+  profiler,
   recovery,
   session,
   state,
@@ -386,6 +455,7 @@ async function measureSyntaxAndRecovery({
       filePath,
       iteration: index - warmups,
       page,
+      profiler: index >= warmups ? profiler : undefined,
       session,
       source: brokenSource,
       state,
@@ -396,6 +466,7 @@ async function measureSyntaxAndRecovery({
       filePath,
       iteration: index - warmups,
       page,
+      profiler: index >= warmups ? profiler : undefined,
       session,
       source: leafSource,
       state,
@@ -413,6 +484,7 @@ async function applyVisibleEdit({
   filePath,
   iteration,
   page,
+  profiler,
   revision,
   session,
   source,
@@ -421,15 +493,18 @@ async function applyVisibleEdit({
 }) {
   telemetry.setPhase(editClass);
   const logIndex = session.logCount();
-  const started = performance.now();
   let writeMs = null;
   try {
+    await profiler?.startWindow({ editClass, iteration });
+    const started = performance.now();
     await writeFile(filePath, source);
     writeMs = performance.now() - started;
     const paint = await waitForEvidence(page, evidence, revision, EDIT_TIMEOUT_MS);
     const durationMs = performance.now() - started;
+    const diagnosticProfile = await profiler?.stopWindow({ editClass, iteration });
     const stateSurvived = await stateMatches(page, state);
     return {
+      diagnosticProfile,
       durationMs,
       editClass,
       error: null,
@@ -441,27 +516,44 @@ async function applyVisibleEdit({
       writeMs,
     };
   } catch (error) {
+    await profiler?.abortWindow().catch(() => undefined);
     return failedEditObservation({ editClass, error, iteration, writeMs });
   } finally {
     telemetry.setPhase('idle');
   }
 }
 
-async function applySyntaxError({ filePath, iteration, page, session, source, state, telemetry }) {
+async function applySyntaxError({
+  filePath,
+  iteration,
+  page,
+  profiler,
+  session,
+  source,
+  state,
+  telemetry,
+}) {
   telemetry.setPhase('syntaxError');
   telemetry.setIntentionalSyntaxError(true);
   const logIndex = session.logCount();
-  const started = performance.now();
   let writeMs = null;
   try {
+    await profiler?.startWindow({ editClass: 'syntaxError', iteration });
+    const started = performance.now();
     await writeFile(filePath, source);
     writeMs = performance.now() - started;
     const signal = await waitForBrowserErrorOverlay(page, EDIT_TIMEOUT_MS);
     const paintFenceMs = await waitForPaint(page);
+    const durationMs = performance.now() - started;
+    const diagnosticProfile = await profiler?.stopWindow({
+      editClass: 'syntaxError',
+      iteration,
+    });
     const stateSurvived = await stateMatches(page, state);
     return {
+      diagnosticProfile,
       diagnosticSignal: signal,
-      durationMs: performance.now() - started,
+      durationMs,
       editClass: 'syntaxError',
       error: null,
       iteration,
@@ -472,6 +564,7 @@ async function applySyntaxError({ filePath, iteration, page, session, source, st
       writeMs,
     };
   } catch (error) {
+    await profiler?.abortWindow().catch(() => undefined);
     return failedEditObservation({ editClass: 'syntaxError', error, iteration, writeMs });
   }
 }
@@ -481,6 +574,7 @@ async function applyRecovery({
   filePath,
   iteration,
   page,
+  profiler,
   session,
   source,
   state,
@@ -488,16 +582,20 @@ async function applyRecovery({
 }) {
   telemetry.setPhase('recovery');
   const logIndex = session.logCount();
-  const started = performance.now();
   let writeMs = null;
   try {
+    await profiler?.startWindow({ editClass: 'recovery', iteration });
+    const started = performance.now();
     await writeFile(filePath, source);
     writeMs = performance.now() - started;
     await waitForOverlayToClear(page, EDIT_TIMEOUT_MS);
     const paint = await waitForEvidence(page, evidence, 'r0', EDIT_TIMEOUT_MS);
+    const durationMs = performance.now() - started;
+    const diagnosticProfile = await profiler?.stopWindow({ editClass: 'recovery', iteration });
     const stateSurvived = await stateMatches(page, state);
     return {
-      durationMs: performance.now() - started,
+      diagnosticProfile,
+      durationMs,
       editClass: 'recovery',
       error: null,
       iteration,
@@ -508,6 +606,7 @@ async function applyRecovery({
       writeMs,
     };
   } catch (error) {
+    await profiler?.abortWindow().catch(() => undefined);
     return failedEditObservation({ editClass: 'recovery', error, iteration, writeMs });
   } finally {
     telemetry.setIntentionalSyntaxError(false);
@@ -536,6 +635,9 @@ function assignEditSample(sample, observation) {
   sample[`${prefix}ServerGenerationMs`] = observation.serverGenerationMs;
   sample[`${prefix}StateSurvived`] = observation.stateSurvived;
   sample[`${prefix}WriteMs`] = observation.writeMs;
+  if (observation.diagnosticProfile !== undefined) {
+    sample[`${prefix}DiagnosticProfile`] = observation.diagnosticProfile;
+  }
   if (observation.diagnosticSignal !== undefined) {
     sample.syntaxErrorDiagnosticSignal = observation.diagnosticSignal;
   }
@@ -812,8 +914,9 @@ function sanitizeBrowserUrl(value, expectedOrigin) {
   }
 }
 
-function startDevSession({ appRoot, command, spawnProcess }) {
-  const child = spawnProcess(command.argv[0], command.argv.slice(1), {
+function startDevSession({ appRoot, command, inspectorPort = null, spawnProcess }) {
+  const invocation = profiledDevInvocation(command, inspectorPort);
+  const child = spawnProcess(invocation.executable, invocation.argv, {
     cwd: command.cwd,
     detached: process.platform !== 'win32',
     env: {
@@ -878,6 +981,21 @@ function startDevSession({ appRoot, command, spawnProcess }) {
         await Promise.race([exit, delay(2_000)]);
       }
     },
+  };
+}
+
+export function profiledDevInvocation(command, inspectorPort) {
+  if (inspectorPort === null) {
+    return { argv: command.argv.slice(1), executable: command.argv[0] };
+  }
+  boundedInteger(inspectorPort, 1_024, 65_535, 'inspector port');
+  return {
+    argv: [
+      `--inspect=127.0.0.1:${String(inspectorPort)}`,
+      path.resolve(command.cwd, command.argv[0]),
+      ...command.argv.slice(1),
+    ],
+    executable: process.execPath,
   };
 }
 
@@ -1241,6 +1359,9 @@ export function sourceStabilityFindings(before, after) {
   if (JSON.stringify(before?.locks) !== JSON.stringify(after?.locks)) {
     findings.push('dependency lock digests changed during measurement');
   }
+  if (JSON.stringify(before?.posture) !== JSON.stringify(after?.posture)) {
+    findings.push('framework security posture digests changed during measurement');
+  }
   if (JSON.stringify(before?.dirtyPaths) !== JSON.stringify(after?.dirtyPaths)) {
     findings.push('source dirty paths changed during measurement');
   }
@@ -1300,6 +1421,64 @@ export function exactSampleCountFindings(report) {
   return findings;
 }
 
+export function diagnosticProfileFindings(report, expected) {
+  const findings = [];
+  const diagnostic = report?.profile?.diagnostic;
+  if (!expected) {
+    if (diagnostic !== null && diagnostic !== undefined) {
+      findings.push('unrequested diagnostic profile evidence is present');
+    }
+    return findings;
+  }
+  const expectedWindows = (report?.integrity?.iterations ?? 0) * ALL_EDIT_CLASSES.length;
+  if (diagnostic?.schema !== 'kovo-dev-edit-profile/v1') {
+    findings.push('diagnostic edit profile schema is missing');
+  }
+  if (
+    diagnostic?.diagnosticOnly?.profilerPerturbsDurations !== true ||
+    diagnostic?.diagnosticOnly?.publishTimingClaims !== false
+  ) {
+    findings.push('diagnostic edit profile does not refuse timing claims');
+  }
+  if (
+    diagnostic?.windowCount !== expectedWindows ||
+    diagnostic?.windows?.length !== expectedWindows
+  ) {
+    findings.push(`diagnostic edit profile window count did not equal ${String(expectedWindows)}`);
+  }
+  const identities = new Set();
+  for (const observation of diagnostic?.windows ?? []) {
+    const identity = `${String(observation?.editClass)}:${String(observation?.iteration)}`;
+    if (
+      !ALL_EDIT_CLASSES.includes(observation?.editClass) ||
+      !Number.isSafeInteger(observation?.iteration) ||
+      observation.iteration < 0 ||
+      observation.iteration >= (report?.integrity?.iterations ?? 0)
+    ) {
+      findings.push(`invalid diagnostic window identity ${identity}`);
+    }
+    if (identities.has(identity)) findings.push(`duplicate diagnostic window ${identity}`);
+    identities.add(identity);
+    for (const artifact of [observation?.artifact?.cpu, observation?.artifact?.heap]) {
+      if (
+        typeof artifact?.file !== 'string' ||
+        !Number.isSafeInteger(artifact?.bytes) ||
+        artifact.bytes <= 0 ||
+        !/^sha256:[0-9a-f]{64}$/u.test(artifact?.sha256 ?? '')
+      ) {
+        findings.push(`diagnostic window ${identity} has invalid raw profile evidence`);
+      }
+    }
+  }
+  for (let iteration = 0; iteration < (report?.integrity?.iterations ?? 0); iteration += 1) {
+    for (const editClass of ALL_EDIT_CLASSES) {
+      const identity = `${editClass}:${String(iteration)}`;
+      if (!identities.has(identity)) findings.push(`missing diagnostic window ${identity}`);
+    }
+  }
+  return [...new Set(findings)];
+}
+
 function accumulateObservationIntegrity(integrity, observation, label) {
   if (observation.success) return;
   integrity.misses += 1;
@@ -1335,7 +1514,7 @@ export function summarizeNumbers(values) {
 }
 
 /** Rank the directly observed, overlapping edit-to-paint spans; no unobserved phase is invented. */
-export function profileEditToPaint(samples) {
+export function profileEditToPaint(samples, diagnosticProfile = null) {
   const spans = [];
   for (const editClass of ALL_EDIT_CLASSES) {
     for (const [id, suffix] of [
@@ -1350,6 +1529,7 @@ export function profileEditToPaint(samples) {
   }
   spans.sort((left, right) => right.median - left.median);
   return {
+    diagnostic: diagnosticProfile,
     note: 'Observed spans overlap. Server-generation is parsed from framework-owned diagnostics; missing phases remain unattributed.',
     topFive: spans.slice(0, 5),
   };
@@ -1363,7 +1543,14 @@ function percentile(values, percentage) {
 function normalizeOptions(options) {
   if (!options || typeof options !== 'object')
     throw new TypeError('Benchmark options are required.');
-  return {
+  const normalized = {
+    diagnosticProfile:
+      options.profileDir === undefined && options.inspectorPort === undefined
+        ? null
+        : {
+            inspectorPort: boundedInteger(options.inspectorPort, 1_024, 65_535, 'inspector port'),
+            profileDir: path.resolve(requiredString(options.profileDir, 'profile directory')),
+          },
     iterations: boundedInteger(options.iterations, 1, 100, 'iterations'),
     manifestPath: path.resolve(requiredString(options.manifestPath, 'manifest')),
     outPath: path.resolve(requiredString(options.outPath, 'out')),
@@ -1371,6 +1558,13 @@ function normalizeOptions(options) {
     readyIterations: boundedInteger(options.readyIterations, 1, 100, 'ready iterations'),
     warmups: boundedInteger(options.warmups, 0, 10, 'warmups'),
   };
+  if (
+    normalized.diagnosticProfile !== null &&
+    normalized.diagnosticProfile.inspectorPort === normalized.port
+  ) {
+    throw new TypeError('inspector port must differ from the dev server port.');
+  }
+  return normalized;
 }
 
 export function parseDevLoopArgs(argv) {
@@ -1384,6 +1578,8 @@ export function parseDevLoopArgs(argv) {
         '--manifest',
         '--out',
         '--port',
+        '--profile-dir',
+        '--inspector-port',
         '--ready-iterations',
         '--warmups',
       ].includes(key) ||
@@ -1396,9 +1592,12 @@ export function parseDevLoopArgs(argv) {
   }
   return normalizeOptions({
     iterations: Number(values['--iterations']),
+    inspectorPort:
+      values['--inspector-port'] === undefined ? undefined : Number(values['--inspector-port']),
     manifestPath: values['--manifest'],
     outPath: values['--out'],
     port: Number(values['--port']),
+    profileDir: values['--profile-dir'],
     readyIterations: Number(values['--ready-iterations']),
     warmups: Number(values['--warmups']),
   });
@@ -1521,7 +1720,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   let report;
   try {
     options = parseDevLoopArgs(process.argv.slice(2));
-    report = await runDevLoopBenchmark(options);
+    let createDiagnosticProfiler;
+    if (options.diagnosticProfile !== null) {
+      ({ createDevEditProfiler: createDiagnosticProfiler } =
+        await import('../../scripts/perf-dev-edit-profile.mjs'));
+    }
+    report = await runDevLoopBenchmark(options, { createDiagnosticProfiler });
   } catch (error) {
     report = failureReport(error, options);
   }
