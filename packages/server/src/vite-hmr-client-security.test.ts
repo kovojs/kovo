@@ -224,7 +224,10 @@ globalThis.__restoreHmrControls = () => {
     );
 
     try {
-      hotHandlers['kovo:component-render']?.({});
+      hotHandlers['kovo:component-render']?.({
+        impact: 'componentRefresh',
+        liveTargets: ['components/public/catalog'],
+      });
       await Promise.resolve();
       await Promise.resolve();
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -241,16 +244,11 @@ globalThis.__restoreHmrControls = () => {
     expect(request?.options.redirect).toBe('error');
     const live = request?.options.headers['Kovo-Live-Targets'] ?? '';
     const dependencies = request?.options.headers['Kovo-Targets'] ?? '';
-    expect(live.split('; ')).toHaveLength(63);
-    expect(live.split('; ')[0]).toBe(
+    expect(live).toBe(
       'catalog-panel#components%2Fpublic%2Fcatalog@tok_catalog:{"3":683,"013":{"x":1},"a":2,"del":"\\u007f","label":"\\ud83d\\ude00 \\u6f22\\u5b57","line":"\\u2028\\u2029"}',
     );
     expect(live).not.toContain('unattested-panel');
-    expect(dependencies.split('; ')).toHaveLength(64);
-    expect(dependencies.split('; ').slice(0, 2)).toEqual([
-      'catalog-panel=public inventory',
-      'unattested-panel=public',
-    ]);
+    expect(dependencies).toBe('catalog-panel=public inventory');
   });
 
   it('reloads once without advancing the build token when fragment apply fails focus verification', async () => {
@@ -318,7 +316,10 @@ globalThis.__restoreHmrControls = () => {
     );
     runInNewContext(source, context);
 
-    hotHandlers['kovo:component-render']?.({});
+    hotHandlers['kovo:component-render']?.({
+      impact: 'componentRefresh',
+      liveTargets: ['catalog-panel'],
+    });
     await Promise.resolve();
     await Promise.resolve();
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -383,8 +384,14 @@ globalThis.__restoreHmrControls = () => {
     );
     runInNewContext(source, context);
 
-    hotHandlers['kovo:component-render']?.({});
-    hotHandlers['kovo:component-render']?.({});
+    hotHandlers['kovo:component-render']?.({
+      impact: 'componentRefresh',
+      liveTargets: ['catalog-panel'],
+    });
+    hotHandlers['kovo:component-render']?.({
+      impact: 'componentRefresh',
+      liveTargets: ['catalog-panel'],
+    });
     await Promise.resolve();
     expect(pendingFetches).toHaveLength(1);
 
@@ -485,7 +492,10 @@ globalThis.__restoreHmrControls = () => {
     );
     runInNewContext(source, context);
 
-    hotHandlers['kovo:component-render']?.({});
+    hotHandlers['kovo:component-render']?.({
+      impact: 'componentRefresh',
+      liveTargets: ['catalog-panel'],
+    });
     await Promise.resolve();
     await Promise.resolve();
     await new Promise((resolve) => setTimeout(resolve, 0));

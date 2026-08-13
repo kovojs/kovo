@@ -2126,16 +2126,15 @@ const hmrTargetSnapshotReader = createHmrTargetSnapshotReader(
   frameworkWireTargetCodec,
 );
 const currentBuild = () => hmrTargetSnapshotReader.currentBuild(document);
-const liveTargets = () => hmrTargetSnapshotReader.liveTargets(document);
-const dependencyTargets = () => hmrTargetSnapshotReader.dependencyTargets(document);
 
-async function refreshLiveTargets() {
+async function refreshLiveTargets(event) {
   const apply = globalThis.__kovo_a;
   let live;
   let targets;
   try {
-    live = liveTargets();
-    targets = dependencyTargets();
+    const snapshot = hmrTargetSnapshotReader.componentRefreshSnapshot(event, document);
+    live = snapshot.liveTargets;
+    targets = snapshot.targets;
   } catch {
     return reload();
   }
@@ -2185,12 +2184,12 @@ async function refreshLiveTargets() {
 }
 
 let liveTargetRefreshRunning = false;
-async function scheduleLiveTargetRefresh() {
+async function scheduleLiveTargetRefresh(event) {
   if (liveTargetRefreshRunning) return;
 
   liveTargetRefreshRunning = true;
   try {
-    await refreshLiveTargets();
+    await refreshLiveTargets(event);
   } catch {
     reload();
   } finally {
@@ -2198,12 +2197,12 @@ async function scheduleLiveTargetRefresh() {
   }
 }
 
-hot.on("kovo:component-render", () => {
+hot.on("kovo:component-render", (event) => {
   // SPEC §9.5.1: one source invalidation can produce adjacent component-render notices.
   // Coalesce them while the server-owned refresh is pending so a duplicate cannot use the first
   // response's committed build with its already-consumed live-target attestation and force a
   // document reload that discards client-owned draft state.
-  void scheduleLiveTargetRefresh();
+  void scheduleLiveTargetRefresh(event);
 });
 // SPEC §5.2 rule 10: a whole-document refresh must re-enter the canonical server document sink.
 // Do not introduce a second raw HTML parser through document.write in the dev-only client.
