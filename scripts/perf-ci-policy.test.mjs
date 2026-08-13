@@ -220,20 +220,21 @@ describe('realistic performance CI policy', () => {
     expect(source).toContain(
       'candidate_commit="$(git rev-parse --verify refs/perf-evidence/check-watch-sealed^{commit})"',
     );
+    expect(source).toContain('assert_equal()');
+    expect(source).toContain('check-watch authentication failed: %s');
     expect(source).toContain(
-      'test "$(git rev-parse "$baseline_commit^")" = "$KOVO_CHECK_WATCH_BASELINE_COMMIT"',
+      'assert_equal \'baseline seal parent\' "$KOVO_CHECK_WATCH_BASELINE_COMMIT"',
     );
     expect(source).toContain('check-watch baseline seal changed unapproved path');
-    expect(source).toContain(
-      'test "$(git merge-base "$baseline_commit" "$candidate_commit")" = "$baseline_commit"',
-    );
+    expect(source).toContain("assert_equal 'candidate ancestry merge base'");
     expect(source).toContain('candidate_range_count="$(git rev-list --count');
-    expect(source).toContain('test "$candidate_range_count" = 2');
-    expect(source).toContain('test "$(git rev-parse "$candidate_commit^")" = "$production_commit"');
+    expect(source).toContain("assert_equal 'candidate sealed range commit count' 2");
+    expect(source).toContain("assert_equal 'candidate seal parent'");
     expect(source).toContain('git patch-id --stable');
-    expect(source).toContain(
-      'test "$production_patch_id" = "$KOVO_CHECK_WATCH_CANDIDATE_PATCH_ID"',
-    );
+    expect(source).toContain("assert_equal 'production patch id'");
+    expect(source).toContain("assert_equal 'production changed-path census'");
+    expect(source).toContain('assert_equal "baseline blob for $production_path"');
+    expect(source).toContain('assert_equal "candidate blob for $production_path"');
     expect(source).toContain('check-watch candidate seal changed unapproved path');
     expect(source).toContain('git worktree add --detach "$baseline_root" "$baseline_commit"');
     expect(source).toContain('git worktree add --detach "$candidate_root" "$candidate_commit"');

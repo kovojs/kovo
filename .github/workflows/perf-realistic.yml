@@ -459,6 +459,15 @@ jobs:
         run: |
           baseline_root="$RUNNER_TEMP/kovo-check-watch-baseline"
           candidate_root="$RUNNER_TEMP/kovo-check-watch-candidate"
+          assert_equal() {
+            check_label="$1"
+            expected="$2"
+            actual="$3"
+            if [ "$actual" != "$expected" ]; then
+              printf 'check-watch authentication failed: %s (expected <%s>, got <%s>)\n' "$check_label" "$expected" "$actual" >&2
+              exit 2
+            fi
+          }
           mkdir -p "$RUNNER_TEMP/kovo-perf/check-watch"
           case "$KOVO_CHECK_WATCH_BASELINE_SHA" in
             [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
@@ -472,28 +481,30 @@ jobs:
             "+$KOVO_CHECK_WATCH_EVIDENCE_REF:refs/perf-evidence/check-watch-sealed"
           baseline_commit="$(git rev-parse --verify "$KOVO_CHECK_WATCH_BASELINE_SHA^{commit}")"
           candidate_commit="$(git rev-parse --verify refs/perf-evidence/check-watch-sealed^{commit})"
-          test "$baseline_commit" = "$KOVO_CHECK_WATCH_BASELINE_SHA"
-          test "$candidate_commit" = "$KOVO_CHECK_WATCH_CANDIDATE_SHA"
-          test "$(git rev-parse "$baseline_commit^")" = "$KOVO_CHECK_WATCH_BASELINE_COMMIT"
+          assert_equal 'resolved baseline seal commit' "$KOVO_CHECK_WATCH_BASELINE_SHA" "$baseline_commit"
+          assert_equal 'resolved candidate evidence ref' "$KOVO_CHECK_WATCH_CANDIDATE_SHA" "$candidate_commit"
+          assert_equal 'baseline seal parent' "$KOVO_CHECK_WATCH_BASELINE_COMMIT" "$(git rev-parse "$baseline_commit^")"
           git diff-tree --no-commit-id --name-only -r "$baseline_commit" | while IFS= read -r seal_path; do
             case "$seal_path" in
               packages/compiler/src/security/framework-public-runtime-export-posture.generated.ts|scripts/pack-security.files.json|security/framework-public-runtime-export-posture.json|security/kovo-certificate-policy-v1.json|security/kovo-certificate-v1.json) ;;
               *) echo "check-watch baseline seal changed unapproved path: $seal_path" >&2; exit 2 ;;
             esac
           done
-          test "$(git merge-base "$baseline_commit" "$candidate_commit")" = "$baseline_commit"
+          assert_equal 'candidate ancestry merge base' "$baseline_commit" "$(git merge-base "$baseline_commit" "$candidate_commit")"
           candidate_range_count="$(git rev-list --count "$baseline_commit..$candidate_commit")"
-          test "$candidate_range_count" = 2
+          assert_equal 'candidate sealed range commit count' 2 "$candidate_range_count"
           production_commit="$(git rev-list --reverse "$baseline_commit..$candidate_commit" | head -n 1)"
-          test "$(git rev-parse "$production_commit^")" = "$baseline_commit"
-          test "$(git rev-parse "$candidate_commit^")" = "$production_commit"
+          assert_equal 'production commit parent' "$baseline_commit" "$(git rev-parse "$production_commit^")"
+          assert_equal 'candidate seal parent' "$production_commit" "$(git rev-parse "$candidate_commit^")"
           production_patch_id="$(git show --pretty=format: --binary --no-ext-diff "$production_commit" | git patch-id --stable | cut -d' ' -f1)"
-          test "$production_patch_id" = "$KOVO_CHECK_WATCH_CANDIDATE_PATCH_ID"
-          test "$(git diff --name-only "$baseline_commit" "$production_commit")" = "$(git diff --name-only "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT^" "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT")"
+          assert_equal 'production patch id' "$KOVO_CHECK_WATCH_CANDIDATE_PATCH_ID" "$production_patch_id"
+          original_changed_paths="$(git diff --name-only "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT^" "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT")"
+          sealed_changed_paths="$(git diff --name-only "$baseline_commit" "$production_commit")"
+          assert_equal 'production changed-path census' "$original_changed_paths" "$sealed_changed_paths"
           while IFS= read -r production_path; do
-            test "$(git rev-parse "$baseline_commit:$production_path")" = "$(git rev-parse "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT^:$production_path")"
-            test "$(git rev-parse "$production_commit:$production_path")" = "$(git rev-parse "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT:$production_path")"
-          done < <(git diff --name-only "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT^" "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT")
+            assert_equal "baseline blob for $production_path" "$(git rev-parse "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT^:$production_path")" "$(git rev-parse "$baseline_commit:$production_path")"
+            assert_equal "candidate blob for $production_path" "$(git rev-parse "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT:$production_path")" "$(git rev-parse "$production_commit:$production_path")"
+          done <<< "$original_changed_paths"
           git diff-tree --no-commit-id --name-only -r "$candidate_commit" | while IFS= read -r seal_path; do
             case "$seal_path" in
               packages/compiler/src/security/framework-public-runtime-export-posture.generated.ts|scripts/pack-security.files.json|security/framework-public-runtime-export-posture.json|security/kovo-certificate-policy-v1.json|security/kovo-certificate-v1.json) ;;
