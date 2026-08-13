@@ -20,6 +20,18 @@ describe('performance baseline ratification', () => {
       median: 104,
       p95: 108,
       runs: 5,
+      sampleP95: {
+        mad: 2,
+        median: 106,
+        p95: 110,
+        runs: 5,
+      },
+    });
+    expect(result.subject).toMatchObject({
+      host: { digest: result.identity.host },
+      locks: result.identity.locks,
+      sourceCommit: result.identity.source,
+      workloadIdentity: { digest: result.identity.workload },
     });
     expect(result.reports).toHaveLength(5);
   });

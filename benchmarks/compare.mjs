@@ -595,8 +595,8 @@ function devMetricSeries(report) {
   const readySamples = report?.readySamples ?? [];
   const editPeakRssBytes = report?.editSession?.peakRssBytes;
   return [
-    ...prefixedMetricSeries(editSamples, 'edit'),
-    ...prefixedMetricSeries(readySamples, 'ready'),
+    ...prefixedMetricSeries(editSamples, 'edit', { requireComplete: true }),
+    ...prefixedMetricSeries(readySamples, 'ready', { requireComplete: true }),
     ...DEV_EDIT_CLASSES.map((editClass) => ({
       name: `edit.${editClass}StateSurvived`,
       values: editSamples.map((sample) => (sample?.[`${editClass}StateSurvived`] === true ? 1 : 0)),
@@ -637,11 +637,13 @@ function devEditSampleAvailable(sample) {
   );
 }
 
-function prefixedMetricSeries(samples, prefix = '') {
-  return numericLeafNames(samples).map((name) => ({
-    name: prefix ? `${prefix}.${name}` : name,
-    values: samples.map((sample) => readLeaf(sample, name)).filter(Number.isFinite),
-  }));
+function prefixedMetricSeries(samples, prefix = '', { requireComplete = false } = {}) {
+  return numericLeafNames(samples)
+    .map((name) => ({
+      name: prefix ? `${prefix}.${name}` : name,
+      values: samples.map((sample) => readLeaf(sample, name)).filter(Number.isFinite),
+    }))
+    .filter((series) => !requireComplete || series.values.length === samples.length);
 }
 
 function numericLeafNames(values) {

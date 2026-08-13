@@ -285,6 +285,37 @@ describe('serialized comparison analysis', () => {
     });
   });
 
+  it('omits partially observed dev spans instead of presenting short analysis as a baseline', () => {
+    const cell = (framework, values) => ({
+      cell: 'dev',
+      framework,
+      lane: 'corpus-n24',
+      occurrence: 0,
+      report: {
+        readySamples: [],
+        samples: values.map(([leafMs, leafServerGenerationMs]) => ({
+          leafMs,
+          leafServerGenerationMs,
+        })),
+      },
+    });
+    const analysis = pairedAnalysis(
+      [
+        cell('kovo', [
+          [10, 5],
+          [11, null],
+        ]),
+        cell('nextjs', [
+          [20, 7],
+          [21, null],
+        ]),
+      ],
+      { bootstrapIterations: 100, seed: 6 },
+    );
+    expect(analysis['corpus-n24/dev//edit.leafMs'].kovo.samples).toBe(2);
+    expect(Object.hasOwn(analysis, 'corpus-n24/dev//edit.leafServerGenerationMs')).toBe(false);
+  });
+
   it('pairs all seven single-sample server occurrences', () => {
     const cells = [];
     for (let occurrence = 0; occurrence < 7; occurrence += 1) {
@@ -481,11 +512,20 @@ describe('serialized comparison analysis', () => {
   });
 
   it('requires exact dev ready/edit counts, stable source, and clean browser evidence', () => {
+    const schedule = {
+      editSamples: 30,
+      framework: 'kovo',
+      occurrence: 0,
+      readySamples: 15,
+      scheduleIndex: 0,
+      warmups: 3,
+    };
     const reasons = [];
     validateDevCell(
       {
         framework: 'kovo',
         lane: 'corpus-n24',
+        schedule,
         report: {
           framework: 'kovo',
           integrity: {
@@ -501,7 +541,7 @@ describe('serialized comparison analysis', () => {
           sourceAfter: { commit: 'abc', dirty: false, locks: { root: 'one' } },
         },
       },
-      { iterations: 30, readyIterations: 15, reasons, warmups: 3 },
+      { iterations: 30, readyIterations: 15, reasons, schedule, warmups: 3 },
     );
     expect(reasons).toEqual([]);
 
@@ -510,6 +550,7 @@ describe('serialized comparison analysis', () => {
       {
         framework: 'kovo',
         lane: 'corpus-n24',
+        schedule: { ...schedule, warmups: 2 },
         report: {
           framework: 'kovo',
           integrity: {
@@ -525,11 +566,18 @@ describe('serialized comparison analysis', () => {
           sourceAfter: { commit: 'def', dirty: true, locks: {} },
         },
       },
-      { iterations: 30, readyIterations: 15, reasons: mismatched, warmups: 3 },
+      {
+        iterations: 30,
+        readyIterations: 15,
+        reasons: mismatched,
+        schedule,
+        warmups: 3,
+      },
     );
     expect(mismatched).toContain('corpus-n24/kovo/dev ready iteration policy mismatch');
     expect(mismatched).toContain('corpus-n24/kovo/dev source stability failure');
     expect(mismatched).toContain('corpus-n24/kovo/dev browser error evidence');
+    expect(mismatched).toContain('corpus-n24/kovo/dev occurrence schedule mismatch');
   });
 });
 

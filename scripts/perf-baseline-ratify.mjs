@@ -36,9 +36,9 @@ export function ratifyPerformanceBaseline(entries, options = {}) {
         minSamples: policy.minSamples,
       }),
     );
-    for (const finding of executionIdentityFindings(entry?.report?.execution, {
-      ...(policy.requireProvider === 'any' ? {} : { requireProvider: policy.requireProvider }),
-    })) {
+    const executionPolicy =
+      policy.requireProvider === 'any' ? {} : { requireProvider: policy.requireProvider };
+    for (const finding of executionIdentityFindings(entry?.report?.execution, executionPolicy)) {
       findings.push(`${label} ${finding}`);
     }
     if (!digestPattern.test(entry?.contentDigest ?? '')) {
@@ -69,9 +69,9 @@ export function ratifyPerformanceBaseline(entries, options = {}) {
   if (findings.length === 0) {
     for (const metric of objectKeys(first?.analysis)) {
       metrics[metric] = {
-        kovo: summarizeRunMedians(entries, metric, 'kovo'),
-        nextjs: summarizeRunMedians(entries, metric, 'nextjs'),
-        pairedDifference: summarizeRunMedians(entries, metric, 'pairedDifference'),
+        kovo: summarizeRunEvidence(entries, metric, 'kovo'),
+        nextjs: summarizeRunEvidence(entries, metric, 'nextjs'),
+        pairedDifference: summarizeRunEvidence(entries, metric, 'pairedDifference'),
       };
     }
   }
@@ -94,12 +94,26 @@ export function ratifyPerformanceBaseline(entries, options = {}) {
       runUrl: entry?.report?.execution?.github?.runUrl ?? null,
     })),
     schema: PERF_BASELINE_SCHEMA,
+    subject: {
+      host: first?.host ?? null,
+      locks: first?.source?.locks ?? null,
+      sourceCommit: first?.source?.commit ?? null,
+      workloadIdentity: first?.workloadIdentity ?? null,
+    },
     verdict: { reasons, status: reasons.length === 0 ? 'ratified' : 'unproven' },
   };
 }
 
-function summarizeRunMedians(entries, metric, subject) {
-  const values = entries.map((entry) => entry.report.analysis[metric][subject].median);
+function summarizeRunEvidence(entries, metric, subject) {
+  const median = summarizeRunField(entries, metric, subject, 'median');
+  return {
+    ...median,
+    sampleP95: summarizeRunField(entries, metric, subject, 'p95'),
+  };
+}
+
+function summarizeRunField(entries, metric, subject, field) {
+  const values = entries.map((entry) => entry.report.analysis[metric][subject][field]);
   const median = percentile(values, 50);
   return {
     mad: percentile(
