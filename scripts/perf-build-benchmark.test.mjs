@@ -15,6 +15,20 @@ import {
 } from './perf-build-benchmark.mjs';
 
 const roots = [];
+const stableProvenance = Object.freeze({
+  commit: 'a'.repeat(40),
+  dirty: false,
+  dirtyPaths: Object.freeze([]),
+  locks: Object.freeze({
+    'benchmarks/harness/pnpm-lock.yaml': `sha256:${'b'.repeat(64)}`,
+    'benchmarks/nextjs/pnpm-lock.yaml': `sha256:${'c'.repeat(64)}`,
+    'pnpm-lock.yaml': `sha256:${'d'.repeat(64)}`,
+  }),
+});
+
+const stableDependencies = Object.freeze({
+  collectPerformanceProvenance: () => structuredClone(stableProvenance),
+});
 
 afterEach(() => {
   while (roots.length > 0) rmSync(roots.pop(), { force: true, recursive: true });
@@ -209,13 +223,16 @@ describe('production build benchmark adapter', () => {
       workload,
     };
     const corpus = writeCorpusManifest(root, manifest);
-    const report = runBuildBenchmark({
-      corpus,
-      framework: 'nextjs',
-      iterations: 1,
-      mode: 'clean',
-      warmups: 0,
-    });
+    const report = runBuildBenchmark(
+      {
+        corpus,
+        framework: 'nextjs',
+        iterations: 1,
+        mode: 'clean',
+        warmups: 0,
+      },
+      stableDependencies,
+    );
     expect(report.integrity).toMatchObject({
       complete: false,
       errors: ['sample 1 required output dist was empty or missing'],
@@ -232,13 +249,16 @@ describe('production build benchmark adapter', () => {
 
     writeFileSync(corpus, `${JSON.stringify({ ...manifest, shapeDigest: '0'.repeat(64) })}\n`);
     expect(() =>
-      runBuildBenchmark({
-        corpus,
-        framework: 'nextjs',
-        iterations: 1,
-        mode: 'clean',
-        warmups: 0,
-      }),
+      runBuildBenchmark(
+        {
+          corpus,
+          framework: 'nextjs',
+          iterations: 1,
+          mode: 'clean',
+          warmups: 0,
+        },
+        stableDependencies,
+      ),
     ).toThrow('does not authenticate');
   });
 
@@ -283,13 +303,16 @@ describe('production build benchmark adapter', () => {
     };
     const corpus = writeCorpusManifest(root, manifest);
 
-    const report = runBuildBenchmark({
-      corpus,
-      framework: 'nextjs',
-      iterations: 3,
-      mode: 'edit',
-      warmups: 0,
-    });
+    const report = runBuildBenchmark(
+      {
+        corpus,
+        framework: 'nextjs',
+        iterations: 3,
+        mode: 'edit',
+        warmups: 0,
+      },
+      stableDependencies,
+    );
 
     expect(report.integrity).toMatchObject({ complete: true, errors: [], misses: 0 });
     expect(report.integrity.corpus.stable).toBe(true);
@@ -323,13 +346,16 @@ describe('production build benchmark adapter', () => {
         requiredNonempty: ['dist', 'server-output'],
       }),
     );
-    const report = runBuildBenchmark({
-      corpus,
-      framework: 'nextjs',
-      iterations: 1,
-      mode: 'clean',
-      warmups: 0,
-    });
+    const report = runBuildBenchmark(
+      {
+        corpus,
+        framework: 'nextjs',
+        iterations: 1,
+        mode: 'clean',
+        warmups: 0,
+      },
+      stableDependencies,
+    );
     expect(report.samples[0]).toMatchObject({
       artifactBytes: 7,
       outputCensus: {
@@ -364,13 +390,16 @@ describe('production build benchmark adapter', () => {
         requiredNonempty: ['.next'],
       }),
     );
-    const report = runBuildBenchmark({
-      corpus,
-      framework: 'nextjs',
-      iterations: 1,
-      mode: 'clean',
-      warmups: 0,
-    });
+    const report = runBuildBenchmark(
+      {
+        corpus,
+        framework: 'nextjs',
+        iterations: 1,
+        mode: 'clean',
+        warmups: 0,
+      },
+      stableDependencies,
+    );
     expect(report.samples[0].outputCensus).toMatchObject({ complete: false });
     expect(report.integrity.errors).toContain(
       'sample 1 left forbidden output .kovo-build-stage-*: .kovo-build-stage-stale',
@@ -393,13 +422,16 @@ describe('production build benchmark adapter', () => {
       requiredNonempty: ['.next'],
     });
     const corpus = writeCorpusManifest(root, manifest, ['src/leaf.ts', 'src/other.ts']);
-    const report = runBuildBenchmark({
-      corpus,
-      framework: 'nextjs',
-      iterations: 1,
-      mode: 'clean',
-      warmups: 0,
-    });
+    const report = runBuildBenchmark(
+      {
+        corpus,
+        framework: 'nextjs',
+        iterations: 1,
+        mode: 'clean',
+        warmups: 0,
+      },
+      stableDependencies,
+    );
     expect(report.samples[0].corpus.stable).toBe(false);
     expect(report.integrity.errors).toContain(
       'sample 1 changed the authenticated corpus source state',
@@ -420,13 +452,16 @@ describe('production build benchmark adapter', () => {
       })}\n`,
     );
     expect(() =>
-      runBuildBenchmark({
-        corpus,
-        framework: 'nextjs',
-        iterations: 1,
-        mode: 'clean',
-        warmups: 0,
-      }),
+      runBuildBenchmark(
+        {
+          corpus,
+          framework: 'nextjs',
+          iterations: 1,
+          mode: 'clean',
+          warmups: 0,
+        },
+        stableDependencies,
+      ),
     ).toThrow('ownership sentinel does not authenticate');
   });
 

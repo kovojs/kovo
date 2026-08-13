@@ -132,7 +132,7 @@ export function summarizeBuildSamples(samples) {
   };
 }
 
-export function runBuildBenchmark(options) {
+export function runBuildBenchmark(options, dependencies = {}) {
   const manifestPath = path.resolve(requiredString(options.corpus, '--corpus'));
   const manifestText = readFileSync(manifestPath, 'utf8');
   const manifest = JSON.parse(manifestText);
@@ -175,7 +175,9 @@ export function runBuildBenchmark(options) {
     outputs,
   });
   assertCorpusMatchesManifest(corpusBefore, manifest, 'pre-run');
-  const source = collectPerformanceProvenance({
+  const collectProvenance =
+    dependencies.collectPerformanceProvenance ?? collectPerformanceProvenance;
+  const source = collectProvenance({
     lockFiles: [
       'pnpm-lock.yaml',
       'benchmarks/nextjs/pnpm-lock.yaml',
@@ -344,7 +346,7 @@ export function runBuildBenchmark(options) {
       errors.push(`post-run corpus integrity: ${errorMessage(error)}`);
     }
     try {
-      sourceAfter = collectPerformanceProvenance({
+      sourceAfter = collectProvenance({
         lockFiles: [
           'pnpm-lock.yaml',
           'benchmarks/nextjs/pnpm-lock.yaml',
