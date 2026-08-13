@@ -35,6 +35,8 @@ export const BROWSER_PREPARE_SCHEMA = 'kovo-browser-benchmark-prepare/v1';
 export const EXECUTION_ORDER = Object.freeze(['kovo', 'nextjs', 'nextjs', 'kovo']);
 export const WORKLOAD_IDENTITY_SCHEMA = 'kovo-performance-workload-identity/v1';
 
+const DEV_EDIT_CLASSES = Object.freeze(['leaf', 'entry', 'data', 'syntaxError', 'recovery']);
+
 const benchmarkRoot = fileURLToPath(new URL('.', import.meta.url));
 const repoRoot = path.resolve(benchmarkRoot, '..');
 const lanes = Object.freeze(['default', 'matched-l0', 'matched-l1']);
@@ -64,6 +66,13 @@ export async function runComparison(options = {}) {
   for (const lane of options.lanes ?? lanes) assertMember('--lanes', lane, lanes);
   for (const mode of options.buildModes ?? buildModes)
     assertMember('--build-modes', mode, buildModes);
+  const devSchedule = cells.includes('dev')
+    ? devSampleSchedule({
+        editSamples: options.devIterations ?? 30,
+        readySamples: options.devReadyIterations ?? 15,
+        warmups: options.devWarmups ?? 3,
+      })
+    : [];
   const workloadIdentity = await performanceWorkloadIdentity(options, cells);
   const provenance = collectPerformanceProvenance({
     lockFiles,
@@ -186,14 +195,14 @@ export async function runComparison(options = {}) {
 
     if (cells.includes('dev') && !executionError) {
       const corpusLane = `corpus-n${options.corpusSize ?? 24}`;
-      for (const [orderIndex, framework] of EXECUTION_ORDER.entries()) {
-        const occurrence = occurrenceIndex(orderIndex, framework);
+      for (const scheduled of devSchedule) {
+        const { framework, occurrence, scheduleIndex } = scheduled;
         const host = sampleHost(hostSamples, options.maxLoadPerCpu ?? 1);
         if (!host.comparable) {
           executionError = `host load ${host.loadPerCpu.toFixed(3)} per CPU exceeded ceiling ${host.ceiling}`;
           break;
         }
-        const resultFile = path.join(scratch, `${corpusLane}-${orderIndex}-dev.json`);
+        const resultFile = path.join(scratch, `${corpusLane}-${scheduleIndex}-dev.json`);
         try {
           await runAdapter({
             args: [
@@ -201,13 +210,13 @@ export async function runComparison(options = {}) {
               '--manifest',
               corpusManifest(framework, options.corpusSize ?? 24),
               '--iterations',
-              String(options.devIterations ?? 30),
+              String(scheduled.editSamples),
               '--ready-iterations',
-              String(options.devReadyIterations ?? 15),
+              String(scheduled.readySamples),
               '--warmups',
-              String(options.devWarmups ?? 3),
+              String(scheduled.warmups),
               '--port',
-              String((options.devPortBase ?? 49_700) + orderIndex),
+              String((options.devPortBase ?? 49_700) + scheduleIndex),
               '--out',
               resultFile,
             ],
@@ -224,6 +233,7 @@ export async function runComparison(options = {}) {
           lane: corpusLane,
           occurrence,
           report: JSON.parse(await readFile(resultFile, 'utf8')),
+          schedule: scheduled,
         });
       }
     }
@@ -413,6 +423,7 @@ export async function runComparison(options = {}) {
           corpusSize: options.corpusSize ?? 24,
           bfcacheIterations: options.bfcacheIterations ?? 10,
           devIterations: options.devIterations ?? 30,
+          devOccurrenceSchedule: devSchedule,
           devReadyIterations: options.devReadyIterations ?? 15,
           devWarmups: options.devWarmups ?? 3,
           iterations,
@@ -447,6 +458,8 @@ export async function runComparison(options = {}) {
         bootstrapIterations: options.bootstrapIterations ?? 10_000,
         browserSamples: iterations,
         devEditSamples: options.devIterations ?? 30,
+        devEditSessionSamples: devSchedule.filter(({ framework }) => framework === 'kovo').length,
+        devOccurrenceSchedule: devSchedule,
         devReadySamples: options.devReadyIterations ?? 15,
         devWarmups: options.devWarmups ?? 3,
         lighthouseRunsPerCell: options.lighthouseRuns ?? 5,
@@ -571,13 +584,57 @@ function rawMetricSeries(cell) {
     return output;
   }
   if (cell.cell === 'dev') {
-    return [
-      ...prefixedMetricSeries(cell.report.samples ?? [], 'edit'),
-      ...prefixedMetricSeries(cell.report.readySamples ?? [], 'ready'),
-    ];
+    return devMetricSeries(cell.report);
   }
   const samples = cell.report.samples ?? cell.report.rawSamples ?? [];
   return prefixedMetricSeries(samples);
+}
+
+function devMetricSeries(report) {
+  const editSamples = report?.samples ?? [];
+  const readySamples = report?.readySamples ?? [];
+  const editPeakRssBytes = report?.editSession?.peakRssBytes;
+  return [
+    ...prefixedMetricSeries(editSamples, 'edit'),
+    ...prefixedMetricSeries(readySamples, 'ready'),
+    ...DEV_EDIT_CLASSES.map((editClass) => ({
+      name: `edit.${editClass}StateSurvived`,
+      values: editSamples.map((sample) => (sample?.[`${editClass}StateSurvived`] === true ? 1 : 0)),
+    })),
+    {
+      name: 'edit.sampleAvailable',
+      values: editSamples.map((sample) => (devEditSampleAvailable(sample) ? 1 : 0)),
+    },
+    {
+      name: 'edit.syntaxErrorDiagnosticAvailable',
+      values: editSamples.map((sample) =>
+        typeof sample?.syntaxErrorDiagnosticSignal === 'string' &&
+        sample.syntaxErrorDiagnosticSignal.length > 0
+          ? 1
+          : 0,
+      ),
+    },
+    {
+      name: 'edit.peakRssBytes',
+      values: Number.isFinite(editPeakRssBytes) ? [editPeakRssBytes] : [],
+    },
+    {
+      name: 'ready.successAvailable',
+      values: readySamples.map((sample) => (sample?.success === true ? 1 : 0)),
+    },
+  ];
+}
+
+function devEditSampleAvailable(sample) {
+  return (
+    DEV_EDIT_CLASSES.every(
+      (editClass) =>
+        Number.isFinite(sample?.[`${editClass}Ms`]) &&
+        sample?.[`${editClass}StateSurvived`] === true,
+    ) &&
+    typeof sample?.syntaxErrorDiagnosticSignal === 'string' &&
+    sample.syntaxErrorDiagnosticSignal.length > 0
+  );
 }
 
 function prefixedMetricSeries(samples, prefix = '') {
@@ -653,6 +710,40 @@ function splitAcrossOccurrences(total) {
   if (!Number.isInteger(total) || total < 0)
     throw new Error(`Sample total must be >= 0, got ${total}.`);
   return [Math.ceil(total / 2), Math.floor(total / 2)];
+}
+
+/** Split declared dev totals across the serialized K,N,N,K occurrences exactly once. */
+export function devSampleSchedule({ editSamples, readySamples, warmups }) {
+  const editCounts = splitAcrossOccurrences(
+    boundedComparisonInteger(editSamples, 2, 100, 'dev edit samples'),
+  );
+  const readyCounts = splitAcrossOccurrences(
+    boundedComparisonInteger(readySamples, 2, 100, 'dev ready samples'),
+  );
+  const warmupCounts = splitAcrossOccurrences(
+    boundedComparisonInteger(warmups, 0, 10, 'dev warmups'),
+  );
+  const occurrences = { kovo: 0, nextjs: 0 };
+  return EXECUTION_ORDER.map((framework, scheduleIndex) => {
+    const occurrence = occurrences[framework]++;
+    return {
+      editSamples: editCounts[occurrence],
+      framework,
+      occurrence,
+      readySamples: readyCounts[occurrence],
+      scheduleIndex,
+      warmups: warmupCounts[occurrence],
+    };
+  });
+}
+
+function boundedComparisonInteger(value, minimum, maximum, label) {
+  if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
+    throw new TypeError(
+      `${label} must be an integer from ${String(minimum)} through ${String(maximum)}.`,
+    );
+  }
+  return value;
 }
 
 /** Repeat K,N,N,K and truncate only after both frameworks own the requested sample count. */
@@ -883,6 +974,13 @@ async function comparatorIntegrity(cells, policy) {
   const warmupCounts = splitAcrossOccurrences(policy.warmups);
   const bfcacheCounts = splitAcrossOccurrences(policy.bfcacheIterations);
   const lighthouseCounts = splitAcrossOccurrences(policy.lighthouseRuns);
+  const devSchedule = policy.cells.includes('dev')
+    ? devSampleSchedule({
+        editSamples: policy.devIterations,
+        readySamples: policy.devReadyIterations,
+        warmups: policy.devWarmups,
+      })
+    : [];
   const keys = new Map();
   for (const cell of cells) {
     const key = [cell.lane, cell.cell, cell.mode ?? ''].join('/');
@@ -937,9 +1035,12 @@ async function comparatorIntegrity(cells, policy) {
         reasons.push(`${key}/${framework} occurrence identities were incomplete`);
       }
       for (const occurrence of occurrences) {
+        const scheduledDev = devSchedule.find(
+          (entry) => entry.framework === framework && entry.occurrence === occurrence.occurrence,
+        );
         const expectedSamples =
           occurrence.cell === 'dev'
-            ? policy.devIterations
+            ? scheduledDev?.editSamples
             : occurrence.cell === 'server'
               ? 1
               : occurrenceCounts[occurrence.occurrence];
@@ -968,13 +1069,17 @@ async function comparatorIntegrity(cells, policy) {
           if (occurrence.report?.integrity?.warmups !== warmupCounts[occurrence.occurrence])
             reasons.push(`${key}/${framework} warmup policy mismatch`);
         } else if (occurrence.cell === 'dev') {
-          validateDevCell(occurrence, {
-            corpusDigest: null,
-            iterations: policy.devIterations,
-            readyIterations: policy.devReadyIterations,
-            reasons,
-            warmups: policy.devWarmups,
-          });
+          if (scheduledDev === undefined) {
+            reasons.push(`${key}/${framework}/${occurrence.occurrence} schedule is unavailable`);
+          } else {
+            validateDevCell(occurrence, {
+              iterations: scheduledDev.editSamples,
+              readyIterations: scheduledDev.readySamples,
+              reasons,
+              schedule: scheduledDev,
+              warmups: scheduledDev.warmups,
+            });
+          }
         } else if (occurrence.cell === 'server') {
           validateServerCell(occurrence, { policy, reasons });
         }
@@ -1193,6 +1298,9 @@ function validateDevCell(cell, expected) {
     expected.reasons.push(`${key} warmup policy mismatch`);
   if (report?.readySamples?.length !== expected.readyIterations)
     expected.reasons.push(`${key} ready sample count mismatch`);
+  if (JSON.stringify(cell.schedule) !== JSON.stringify(expected.schedule)) {
+    expected.reasons.push(`${key} occurrence schedule mismatch`);
+  }
   if (
     report?.sourceAfter?.commit !== report?.source?.commit ||
     JSON.stringify(report?.sourceAfter?.locks) !== JSON.stringify(report?.source?.locks) ||
@@ -1566,6 +1674,13 @@ export async function performanceWorkloadIdentity(
   cells = options.cells ?? defaultCells,
 ) {
   const corpusSize = options.corpusSize ?? 24;
+  const devSchedule = cells.includes('dev')
+    ? devSampleSchedule({
+        editSamples: options.devIterations ?? 30,
+        readySamples: options.devReadyIterations ?? 15,
+        warmups: options.devWarmups ?? 3,
+      })
+    : [];
   const corpus = {};
   let complete = true;
   if (cells.includes('dev') || cells.includes('build')) {
@@ -1613,6 +1728,8 @@ export async function performanceWorkloadIdentity(
       buildModes: [...(options.buildModes ?? buildModes)],
       corpusSize,
       devEditSamples: options.devIterations ?? 30,
+      devEditSessionSamples: devSchedule.filter(({ framework }) => framework === 'kovo').length,
+      devOccurrenceSchedule: devSchedule,
       devReadySamples: options.devReadyIterations ?? 15,
       devWarmups: options.devWarmups ?? 3,
       lighthouseRuns: options.lighthouseRuns ?? 5,

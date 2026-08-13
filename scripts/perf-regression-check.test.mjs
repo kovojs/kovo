@@ -119,6 +119,26 @@ describe('performance regression comparator', () => {
       'report workload digest is not derived from its facts',
     );
   });
+
+  it('treats dev sample declarations as totals and accepts two occurrence-level RSS peaks', () => {
+    const report = reportFixture();
+    report.workloadIdentity.identity.cells = ['dev'];
+    report.workloadIdentity.identity.policies.devEditSamples = 30;
+    report.workloadIdentity.identity.policies.devEditSessionSamples = 2;
+    report.workloadIdentity.identity.policies.devReadySamples = 15;
+    report.workloadIdentity.digest = digest(canonicalJson(report.workloadIdentity.identity));
+    report.analysis = {
+      'corpus-n24/dev//edit.leafMs': metricFixture(100, 30),
+      'corpus-n24/dev//edit.peakRssBytes': metricFixture(1_000, 2),
+      'corpus-n24/dev//ready.durationMs': metricFixture(500, 15),
+    };
+
+    expect(performanceReportFindings(report, 'candidate')).toEqual([]);
+    report.analysis['corpus-n24/dev//edit.leafMs'] = metricFixture(100, 60);
+    expect(performanceReportFindings(report, 'candidate')).toContain(
+      'candidate corpus-n24/dev//edit.leafMs kovo summary is short or malformed',
+    );
+  });
 });
 
 function reportFixture({
@@ -241,15 +261,15 @@ function executionFixture(seed) {
   };
 }
 
-function metricFixture(value) {
+function metricFixture(value, samples = 7) {
   return {
-    kovo: { mad: 1, median: value, p95: value + 2, samples: 7 },
-    nextjs: { mad: 1, median: value, p95: value + 2, samples: 7 },
+    kovo: { mad: 1, median: value, p95: value + 2, samples },
+    nextjs: { mad: 1, median: value, p95: value + 2, samples },
     pairedDifference: {
       bootstrap95Ci: [-1, 1],
       direction: 'kovo-minus-nextjs',
       median: 0,
-      samples: 7,
+      samples,
     },
   };
 }

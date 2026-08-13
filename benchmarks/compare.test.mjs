@@ -10,6 +10,7 @@ import {
   browserReportIntegrityFindings,
   classifyServerMatrixCells,
   comparisonVerdict,
+  devSampleSchedule,
   EXECUTION_ORDER,
   fixtureProof,
   pairedAnalysis,
@@ -36,6 +37,53 @@ describe('serialized comparison analysis', () => {
 
   it('pins the alternating K,N,N,K execution order', () => {
     expect(EXECUTION_ORDER).toEqual(['kovo', 'nextjs', 'nextjs', 'kovo']);
+  });
+
+  it('splits each declared dev total once across K,N,N,K occurrences', () => {
+    const schedule = devSampleSchedule({ editSamples: 30, readySamples: 15, warmups: 3 });
+    expect(schedule).toEqual([
+      {
+        editSamples: 15,
+        framework: 'kovo',
+        occurrence: 0,
+        readySamples: 8,
+        scheduleIndex: 0,
+        warmups: 2,
+      },
+      {
+        editSamples: 15,
+        framework: 'nextjs',
+        occurrence: 0,
+        readySamples: 8,
+        scheduleIndex: 1,
+        warmups: 2,
+      },
+      {
+        editSamples: 15,
+        framework: 'nextjs',
+        occurrence: 1,
+        readySamples: 7,
+        scheduleIndex: 2,
+        warmups: 1,
+      },
+      {
+        editSamples: 15,
+        framework: 'kovo',
+        occurrence: 1,
+        readySamples: 7,
+        scheduleIndex: 3,
+        warmups: 1,
+      },
+    ]);
+    for (const framework of ['kovo', 'nextjs']) {
+      const occurrences = schedule.filter((entry) => entry.framework === framework);
+      expect(occurrences.reduce((total, entry) => total + entry.editSamples, 0)).toBe(30);
+      expect(occurrences.reduce((total, entry) => total + entry.readySamples, 0)).toBe(15);
+      expect(occurrences.reduce((total, entry) => total + entry.warmups, 0)).toBe(3);
+    }
+    expect(() => devSampleSchedule({ editSamples: 1, readySamples: 15, warmups: 3 })).toThrow(
+      /dev edit samples must be an integer from 2 through 100/u,
+    );
   });
 
   it('extends K,N,N,K to seven paired server occurrences without concurrency', () => {
@@ -180,6 +228,59 @@ describe('serialized comparison analysis', () => {
     });
     expect(analysis['corpus-n24/dev//ready.durationMs'].pairedDifference).toMatchObject({
       median: -100,
+      samples: 2,
+    });
+  });
+
+  it('surfaces dev state, diagnostic availability, and edit-session RSS as measured series', () => {
+    const complete = (framework, occurrence, base) => ({
+      cell: 'dev',
+      framework,
+      lane: 'corpus-n24',
+      occurrence,
+      report: {
+        editSession: { peakRssBytes: base * 1_000 },
+        readySamples: [{ durationMs: base * 10, peakRssBytes: base * 100, success: true }],
+        samples: [
+          {
+            dataMs: base,
+            dataStateSurvived: true,
+            entryMs: base,
+            entryStateSurvived: true,
+            leafMs: base,
+            leafStateSurvived: true,
+            recoveryMs: base,
+            recoveryStateSurvived: true,
+            syntaxErrorDiagnosticSignal: 'overlay:parse error',
+            syntaxErrorMs: base,
+            syntaxErrorStateSurvived: true,
+          },
+        ],
+      },
+    });
+    const analysis = pairedAnalysis(
+      [
+        complete('kovo', 0, 10),
+        complete('nextjs', 0, 20),
+        complete('nextjs', 1, 40),
+        complete('kovo', 1, 30),
+      ],
+      { bootstrapIterations: 100, seed: 5 },
+    );
+    expect(analysis['corpus-n24/dev//edit.peakRssBytes'].kovo).toMatchObject({
+      median: 10_000,
+      samples: 2,
+    });
+    expect(analysis['corpus-n24/dev//edit.leafStateSurvived'].kovo).toMatchObject({
+      median: 1,
+      samples: 2,
+    });
+    expect(analysis['corpus-n24/dev//edit.syntaxErrorDiagnosticAvailable'].kovo).toMatchObject({
+      median: 1,
+      samples: 2,
+    });
+    expect(analysis['corpus-n24/dev//ready.successAvailable'].kovo).toMatchObject({
+      median: 1,
       samples: 2,
     });
   });

@@ -223,6 +223,12 @@ function compareIdentity(findings, baseline, candidate) {
 function metricAnalysisFindings(analysis, label, minSamples, expectedSamples) {
   if (!ownRecord(analysis)) return [`${label} analysis is unavailable`];
   const findings = [];
+  // Some metrics, such as edit-session peak RSS, are deliberately sampled once per serialized
+  // occurrence rather than once per edit. The authenticated workload policy owns that smaller exact
+  // count; applying the generic five-sample floor would make honest process-peak evidence impossible
+  // to ratify.
+  const requiredSamples =
+    expectedSamples === null ? minSamples : Math.min(minSamples, expectedSamples);
   for (const framework of ['kovo', 'nextjs']) {
     const summary = analysis[framework];
     if (
@@ -231,7 +237,7 @@ function metricAnalysisFindings(analysis, label, minSamples, expectedSamples) {
       !finiteNonNegative(summary.median) ||
       !finiteNonNegative(summary.p95) ||
       !Number.isSafeInteger(summary.samples) ||
-      summary.samples < minSamples ||
+      summary.samples < requiredSamples ||
       (expectedSamples !== null && summary.samples !== expectedSamples)
     ) {
       findings.push(`${label} ${framework} summary is short or malformed`);
@@ -243,7 +249,7 @@ function metricAnalysisFindings(analysis, label, minSamples, expectedSamples) {
     paired.direction !== 'kovo-minus-nextjs' ||
     !Number.isFinite(paired.median) ||
     !Number.isSafeInteger(paired.samples) ||
-    paired.samples < minSamples ||
+    paired.samples < requiredSamples ||
     (expectedSamples !== null && paired.samples !== expectedSamples) ||
     !Array.isArray(paired.bootstrap95Ci) ||
     paired.bootstrap95Ci.length !== 2 ||
@@ -270,16 +276,22 @@ function expectedMetricSamples(metric, workloadIdentity) {
   }
   if (cell === 'dev') {
     const leaf = metric.split('/').slice(3).join('/');
-    const perOccurrence = leaf.startsWith('ready.')
+    const total = leaf.startsWith('ready.')
       ? policies.devReadySamples
-      : policies.devEditSamples;
-    return Number.isSafeInteger(perOccurrence) && perOccurrence > 0 ? perOccurrence * 2 : null;
+      : leaf === 'edit.peakRssBytes'
+        ? policies.devEditSessionSamples
+        : policies.devEditSamples;
+    return Number.isSafeInteger(total) && total > 0 ? total : null;
   }
   return null;
 }
 
 function metricDirection(metric) {
-  if (/(?:requestsPerSecond|requests\.perSecond|throughput|restoredRate)$/iu.test(metric)) {
+  if (
+    /(?:requestsPerSecond|requests\.perSecond|throughput|restoredRate|Available|StateSurvived)$/iu.test(
+      metric,
+    )
+  ) {
     return 'higher-is-better';
   }
   if (
