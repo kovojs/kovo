@@ -30,20 +30,20 @@ on:
           - decisions
           - all
       check_watch_baseline_sha:
-        description: Exact clean sealed baseline commit for the check-watch decision
-        required: true
+        description: Exact clean sealed baseline commit; required when decisions run
+        required: false
         type: string
       check_watch_candidate_sha:
-        description: Exact clean sealed candidate commit for the check-watch decision
-        required: true
+        description: Exact clean sealed candidate commit; required when decisions run
+        required: false
         type: string
       loader_baseline_sha:
-        description: Exact direct parent of the loader-runtime memo candidate
-        required: true
+        description: Exact loader candidate parent; required when decisions run
+        required: false
         type: string
       loader_candidate_sha:
-        description: Exact loader-runtime memo production candidate commit
-        required: true
+        description: Exact loader production candidate; required when decisions run
+        required: false
         type: string
       components:
         description: Component count for the byte suite

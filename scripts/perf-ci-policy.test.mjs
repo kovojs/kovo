@@ -56,10 +56,10 @@ describe('realistic performance CI policy', () => {
       'loader_baseline_sha',
       'loader_candidate_sha',
     ]) {
-      expect(workflow).toContain(`      ${input}:\n`);
-      expect(workflow.slice(workflow.indexOf(`      ${input}:\n`))).toMatch(
-        /^      [a-z_]+:\n        description: .+\n        required: true\n        type: string\n/mu,
-      );
+      const source = dispatchInputSource(input);
+      expect(source).toMatch(/^        description: .+; required when decisions run$/mu);
+      expect(source).toContain('        required: false\n');
+      expect(source).toContain('        type: string\n');
     }
     for (const job of ['browser-matrix', 'dev-matrix', 'build-matrix', 'server-matrix']) {
       const source = jobSource(job);
@@ -73,6 +73,7 @@ describe('realistic performance CI policy', () => {
       );
       expect(source, job).toContain('retention-days: 30');
     }
+    expect(count(jobSource('dev-matrix'), 'timeout-minutes:')).toBe(1);
     for (const token of baselineScope) expect(jobSource('check-scaling')).toContain(token);
   });
 
@@ -329,5 +330,14 @@ function jobSource(name) {
   if (start === -1) throw new Error(`missing workflow job ${name}`);
   const tail = workflow.slice(start + marker.length);
   const next = /^  [a-z0-9-]+:\n/gmu.exec(tail);
+  return next === null ? tail : tail.slice(0, next.index);
+}
+
+function dispatchInputSource(name) {
+  const marker = `      ${name}:\n`;
+  const start = workflow.indexOf(marker);
+  if (start === -1) throw new Error(`missing workflow dispatch input ${name}`);
+  const tail = workflow.slice(start + marker.length);
+  const next = /^      [a-z_]+:\n/gmu.exec(tail);
   return next === null ? tail : tail.slice(0, next.index);
 }
