@@ -53,15 +53,18 @@ describe('realistic performance CI policy', () => {
       expect(jobSource('browser-matrix')).toContain(token);
     }
     expect(jobSource('browser-matrix')).not.toContain('--skip-build');
+    for (const job of ['dev-matrix', 'build-matrix']) {
+      expect(jobSource(job)).toContain('corpus-size: [24, 216]');
+      expect(jobSource(job)).toContain('--corpus-size "$KOVO_PERF_CORPUS_SIZE"');
+    }
     for (const token of [
-      '--corpus-size 216',
       '--dev-ready-iterations 15',
       '--dev-iterations 30',
       '--dev-warmups 3',
     ]) {
       expect(jobSource('dev-matrix')).toContain(token);
     }
-    for (const token of ['--corpus-size 216', '--iterations 10', '--warmups 3']) {
+    for (const token of ['--iterations 10', '--warmups 3']) {
       expect(jobSource('build-matrix')).toContain(token);
     }
     for (const token of [
