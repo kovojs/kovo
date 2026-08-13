@@ -25,6 +25,7 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import ts from 'typescript';
 
 import { bootstrapMedianCi, summarize } from '../benchmarks/compare.mjs';
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
@@ -88,6 +89,8 @@ const HISTORICAL_PATCH_COMMAND = Object.freeze([
 ]);
 const MAX_CAPTURE_BYTES = 1024 * 1024;
 const MAX_REPORT_BYTES = 64 * 1024 * 1024;
+const DEFERRED_RUNTIME_SOURCE_FILE = 'packages/browser/src/inline-loader.ts';
+const DEFERRED_RUNTIME_SOURCE_EXPORT = 'kovoDeferredRuntimeModuleSource';
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 
 const METRICS = Object.freeze([
@@ -268,8 +271,54 @@ export function authenticateHistoricalOrigin(dependencies = {}) {
   return {
     ...HISTORICAL_LOADER_RUNTIME_MEMO,
     ...observed,
+    authenticatedExploratoryFacts: manifest.authenticatedExploratoryFacts,
     commitObjects,
     scratchpad,
+  };
+}
+
+/**
+ * Authenticate the exact constant source whose repeated canonicalization/hash is under test.
+ * Parsing the reviewed TS declaration avoids evaluating framework code or trusting generated
+ * benchmark output. A substitution-bearing template or duplicate declaration fails closed.
+ */
+export function loaderRuntimeModuleSourceEvidence(root = repoRoot) {
+  const sourcePath = path.join(root, DEFERRED_RUNTIME_SOURCE_FILE);
+  const sourceText = readFileSync(sourcePath, 'utf8');
+  const sourceFile = ts.createSourceFile(
+    sourcePath,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const matches = [];
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        ts.isIdentifier(declaration.name) &&
+        declaration.name.text === DEFERRED_RUNTIME_SOURCE_EXPORT
+      ) {
+        matches.push(declaration.initializer);
+      }
+    }
+  }
+  if (
+    matches.length !== 1 ||
+    matches[0] === undefined ||
+    !ts.isNoSubstitutionTemplateLiteral(matches[0])
+  ) {
+    throw new Error(
+      `${DEFERRED_RUNTIME_SOURCE_FILE} must declare one constant no-substitution ${DEFERRED_RUNTIME_SOURCE_EXPORT}`,
+    );
+  }
+  const bytes = Buffer.from(matches[0].text, 'utf8');
+  return {
+    bytes: bytes.byteLength,
+    exportName: DEFERRED_RUNTIME_SOURCE_EXPORT,
+    path: DEFERRED_RUNTIME_SOURCE_FILE,
+    sha256: sha256(bytes),
   };
 }
 
@@ -1012,12 +1061,20 @@ function workloadIdentity(binding, source) {
   }
   if (canonicalJson(arms.baseline) !== canonicalJson(arms.spike))
     throw new Error('baseline/spike benchmark tooling differs');
+  const repeatedModule = {
+    baseline: loaderRuntimeModuleSourceEvidence(binding.baseline.root),
+    spike: loaderRuntimeModuleSourceEvidence(binding.spike.root),
+  };
+  if (canonicalJson(repeatedModule.baseline) !== canonicalJson(repeatedModule.spike)) {
+    throw new Error('baseline/spike repeated loader-runtime module differs');
+  }
   const facts = {
     adapterSchema: ADAPTER_SCHEMA,
     concurrencies: [...LOADER_RUNTIME_MEMO_CONCURRENCIES],
     encoding: 'identity',
     locks: source.baseline.locks,
     mode: 'dynamic',
+    repeatedModule: repeatedModule.baseline,
     routes: [...LOADER_RUNTIME_MEMO_ROUTES],
     schema: 'kovo-loader-runtime-memo-workload/v1',
     tooling: arms.baseline,

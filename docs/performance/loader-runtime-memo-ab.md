@@ -56,6 +56,13 @@ node scripts/perf-loader-runtime-memo-ab.mjs \
   --out /path/to/artifacts/prepare.json
 ```
 
+Before either build, the runner parses (without evaluating) the reviewed
+`kovoDeferredRuntimeModuleSource` declaration in each clean worktree. It requires one
+no-substitution constant, requires both arms to have the same bytes, and records the source path,
+byte count, and SHA-256 in the workload identity. The current committed pair independently
+re-authenticates the historical 276,420-byte input; a future size or content change remains valid
+evidence only when it is reported explicitly rather than inheriting that historical number.
+
 The full decision run is:
 
 ```sh

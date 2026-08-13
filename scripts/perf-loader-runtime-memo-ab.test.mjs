@@ -13,6 +13,7 @@ import {
   evaluateLoaderRuntimeMemoAcceptance,
   HISTORICAL_LOADER_RUNTIME_MEMO,
   loaderRuntimeMemoConditions,
+  loaderRuntimeModuleSourceEvidence,
   loaderRuntimeMemoSchedule,
   LOADER_RUNTIME_MEMO_ORDER,
   parseLoaderRuntimeMemoArgs,
@@ -43,6 +44,7 @@ describe('loader-runtime memo authenticated A/B runner', () => {
     expect(['authenticated', 'unavailable-in-current-clone']).toContain(
       origin.commitObjects.status,
     );
+    expect(origin.authenticatedExploratoryFacts.repeatedModuleSourceBytes).toBe(276_420);
     if (origin.scratchpad.status === 'authenticated') {
       expect(origin.scratchpad.artifacts).toHaveLength(13);
     } else {
@@ -71,6 +73,15 @@ describe('loader-runtime memo authenticated A/B runner', () => {
     expect(() => authenticateHistoricalScratchpad(manifest)).toThrow(
       /historical scratchpad artifact differs/u,
     );
+  });
+
+  it('re-authenticates the exact constant runtime module source under test', () => {
+    expect(loaderRuntimeModuleSourceEvidence()).toEqual({
+      bytes: 276_420,
+      exportName: 'kovoDeferredRuntimeModuleSource',
+      path: 'packages/browser/src/inline-loader.ts',
+      sha256: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
+    });
   });
 
   it('uses the exact repeated B,S,S,B schedule with seven occurrences per arm', () => {
