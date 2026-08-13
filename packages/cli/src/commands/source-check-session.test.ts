@@ -414,7 +414,7 @@ describe('foreground source-check session', () => {
     ).toBe(true);
   });
 
-  it('rejects resumed, nonzero reused, or passing rejected phase evidence', () => {
+  it('rejects resumed or passing rejected evidence while admitting measured reuse work', () => {
     const valid = revisionResult();
     expect(() =>
       formatKovoSourceCheckWatchRecord(0, {
@@ -431,7 +431,7 @@ describe('foreground source-check session', () => {
         },
       }),
     ).toThrow(/resumed/u);
-    expect(() =>
+    const reusedRecord = JSON.parse(
       formatKovoSourceCheckWatchRecord(0, {
         ...valid,
         census: {
@@ -441,7 +441,11 @@ describe('foreground source-check session', () => {
           ),
         },
       }),
-    ).toThrow(/nonzero skipped phase/u);
+    );
+    expect(reusedRecord.phaseCensus.phases[1]).toMatchObject({
+      durationMs: 1,
+      status: 'reused-authenticated',
+    });
 
     const rejected = createRejectedKovoSourceCheckInputProof('src/app.tsx', digest, 'missing');
     expect(() =>
