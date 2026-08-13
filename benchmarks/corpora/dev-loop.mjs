@@ -679,9 +679,11 @@ export function collectPageTelemetry(page, expectedOrigin) {
   const classify = (issue) => {
     const classification = !ready
       ? 'startup-transient'
-      : intentionalSyntaxError
-        ? 'intentional-syntax-error'
-        : null;
+      : incidentalBrowserIssue(issue, expectedOrigin)
+        ? 'browser-incidental'
+        : intentionalSyntaxError
+          ? 'intentional-syntax-error'
+          : null;
     const record = {
       ...issue,
       ...(classification === null ? {} : { classification }),
@@ -743,6 +745,18 @@ export function collectPageTelemetry(page, expectedOrigin) {
       return structuredClone(evidence);
     },
   };
+}
+
+function incidentalBrowserIssue(issue, expectedOrigin) {
+  if (issue.kind !== 'response' || issue.status !== 404 || issue.resourceType !== 'other') {
+    return false;
+  }
+  try {
+    const url = new URL(issue.url, expectedOrigin);
+    return url.origin === expectedOrigin && url.pathname === '/favicon.ico';
+  } catch {
+    return false;
+  }
 }
 
 function emptyBrowserEvidence() {

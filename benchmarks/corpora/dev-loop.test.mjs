@@ -158,6 +158,10 @@ describe('single-entrant developer-loop adapter', () => {
     );
     page.emit('response', responseEvidence({ status: 200, url: 'http://localhost:49120/' }));
     telemetry.markReady();
+    page.emit(
+      'response',
+      responseEvidence({ status: 404, url: 'http://localhost:49120/favicon.ico' }),
+    );
     page.emit('console', { text: () => 'unexpected runtime error', type: () => 'error' });
     telemetry.setPhase('syntaxError');
     telemetry.setIntentionalSyntaxError(true);
@@ -171,6 +175,11 @@ describe('single-entrant developer-loop adapter', () => {
           kind: 'requestfailed',
         }),
         expect.objectContaining({
+          classification: 'browser-incidental',
+          kind: 'response',
+          status: 404,
+        }),
+        expect.objectContaining({
           classification: 'intentional-syntax-error',
           kind: 'pageerror',
         }),
@@ -181,8 +190,8 @@ describe('single-entrant developer-loop adapter', () => {
         }),
       ],
       requestFailedCount: 1,
-      responseCount: 2,
-      responseStatusCounts: { 200: 1, 500: 1 },
+      responseCount: 3,
+      responseStatusCounts: { 200: 1, 404: 1, 500: 1 },
       unexpectedErrors: [
         expect.objectContaining({ kind: 'console', message: 'unexpected runtime error' }),
       ],
@@ -309,7 +318,10 @@ function requestEvidence({ failure = null, status = 200, url }) {
 }
 
 function responseEvidence({ status, url }) {
-  const request = requestEvidence({ status, url });
+  const request = {
+    ...requestEvidence({ status, url }),
+    resourceType: () => (new URL(url).pathname === '/favicon.ico' ? 'other' : 'document'),
+  };
   return { request: () => request, status: () => status, url: () => url };
 }
 
