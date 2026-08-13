@@ -94,12 +94,18 @@ scripts/perf-gate.test.mjs --reporter=dot` passed 63/63, syntax checks passed, a
   - Evidence: `node benchmarks/run-all.mjs --apps kovo,nextjs --iterations 3
 --lighthouse-runs 3 --bfcache-iterations 3 --port-base 49400`; summary and limits are in
     `reports/perf-comparison-spike-2026-08-13.md`.
-- [ ] Add a matched L0 fixture: identical server-rendered native controls, full-document navigation,
+- [x] Add a matched L0 fixture: identical server-rendered native controls, full-document navigation,
       no framework client state, and identical content/assets in Kovo and Next.
-- [ ] Add a matched L1 fixture: real mutable cart/email/order state and confirmation in both
+  - Evidence: `e396f9788`, `39bfcc8a4`; `node benchmarks/matched-fixture-gate.mjs` proved
+    content parity and a zero-script/action Kovo L0 document.
+- [x] Add a matched L1 fixture: real mutable cart/email/order state and confirmation in both
       frameworks, with Kovo query/state interaction and enhanced navigation actually installed.
-- [ ] Add generated equal-shape developer corpora at 24 and 216 modules with the same route count,
+  - Evidence: `node benchmarks/matched-fixture-gate.mjs` exercised mutable cart/email/order state
+    and document-parts navigation in both entrants with zero gate errors.
+- [x] Add generated equal-shape developer corpora at 24 and 216 modules with the same route count,
       approximate LOC, import fan-out, and leaf/entry/data edits.
+  - Evidence: `pnpm exec vitest --run benchmarks/corpora/generate.test.mjs
+benchmarks/matched-fixtures.test.mjs --reporter=dot` passed 8/8 for both corpus sizes.
 - [ ] Implement `benchmarks/compare.mjs` as the single serialized orchestrator for browser, dev,
       build, and server cells; include alternating order, warmups, sample policy, per-cell provenance,
       and paired analysis.
