@@ -310,6 +310,24 @@ export function snapshotVersionedClientModuleStaging(
   });
 }
 
+/**
+ * @internal Publish-epoch token for one framework-closed registry facade.
+ *
+ * The returned object is the control's current active-manifest map. `publishActiveSnapshot` is the
+ * only writer of the active set, the compiler role map, and the render-plan fingerprint, and it
+ * always installs freshly constructed maps (SPEC §5.2.1/§14), so token identity changes exactly
+ * when a successful publication changes anything a per-render registry read can observe. Staging
+ * mutations (`put`, mandatory registration) deliberately do not move the token: they are invisible
+ * to `entries()` until the next publication. Callers may use token identity to memoize pure
+ * recomputation over the active set; an unchanged token proves the recomputation's inputs are
+ * content-identical to the previous call. Throws for poisoned or non-framework facades.
+ */
+export function versionedClientModulePublishEpoch(
+  registry: VersionedClientModuleRegistry,
+): object {
+  return registryControl(registry).activeByHref;
+}
+
 /** @internal Return the server-private role proven for one exact active module representation. */
 export function compilerOwnedVersionedClientModuleRole(
   registry: VersionedClientModuleRegistry,

@@ -15,6 +15,7 @@ import {
 import {
   compilerOwnedVersionedClientModuleRole,
   registerMandatoryVersionedClientModule,
+  versionedClientModulePublishEpoch,
   type VersionedClientModuleInput,
   type VersionedClientModuleRegistry,
 } from './client-modules.js';
@@ -26,6 +27,28 @@ import {
 } from './security-witness-intrinsics.js';
 
 const registeredRuntimeHrefs = createWitnessWeakMap<VersionedClientModuleRegistry, string>();
+
+interface LoaderRuntimeHrefMemo {
+  /** Publish-epoch token captured when `href` was last proven for this registry. */
+  epoch: object;
+  href: string;
+}
+
+/**
+ * Per-registry memo over the full selection/validation pass below. The active set, compiler role
+ * map, and render-plan fingerprint — everything the pass reads — are replaced only by a successful
+ * active-snapshot publication, and every publication installs a fresh epoch token
+ * (`versionedClientModulePublishEpoch`). An unchanged (registry, epoch) pair therefore proves the
+ * pass would re-read byte-identical inputs and re-derive the identical href, so skipping it cannot
+ * skip a validation outcome that could differ: any publication — including one that republishes
+ * byte-identical modules under different compiler provenance roles — moves the epoch and forces
+ * the complete pass, including the generated-runtime identity checks, to run again. Refusal paths
+ * are never memoized; a refused registry re-runs and re-throws on every call (fail-closed).
+ */
+const loaderRuntimeHrefMemo = createWitnessWeakMap<
+  VersionedClientModuleRegistry,
+  LoaderRuntimeHrefMemo
+>();
 const GENERATED_APP_RUNTIME_PATH = '/c/generated/app.client.js';
 
 /**
@@ -39,6 +62,12 @@ const GENERATED_APP_RUNTIME_PATH = '/c/generated/app.client.js';
 export function ensureKovoLoaderRuntimeClientModule(
   registry: VersionedClientModuleRegistry,
 ): string {
+  // Epoch first: this throws for poisoned/non-framework registries, so the memoized fast path
+  // keeps the exact refusal behavior of the `registry.entries()` call it short-circuits.
+  const epoch = versionedClientModulePublishEpoch(registry);
+  const memoized = witnessWeakMapGet(loaderRuntimeHrefMemo, registry);
+  if (memoized !== undefined && memoized.epoch === epoch) return memoized.href;
+
   const entries = registry.entries();
   const appRuntimes: VersionedClientModuleInput[] = [];
   const generatedRuntimes: VersionedClientModuleInput[] = [];
@@ -89,10 +118,12 @@ export function ensureKovoLoaderRuntimeClientModule(
         'Kovo generated app runtime identity does not match its active compiler snapshot.',
       );
     }
-    return versionedClientModuleHref(
+    const appRuntimeHref = versionedClientModuleHref(
       appRuntime.path,
       clientModuleRepresentationDigest(appRuntime.source),
     );
+    witnessWeakMapSet(loaderRuntimeHrefMemo, registry, { epoch, href: appRuntimeHref });
+    return appRuntimeHref;
   }
   if (hasOptimisticPlans) {
     throw new Error(
@@ -101,12 +132,18 @@ export function ensureKovoLoaderRuntimeClientModule(
   }
 
   const existing = witnessWeakMapGet(registeredRuntimeHrefs, registry);
-  if (existing !== undefined) return existing;
+  if (existing !== undefined) {
+    // Mandatory registration is staging-only and does not move the publish epoch, so the memo
+    // stored here also proves nothing publication-visible changed since this validation pass.
+    witnessWeakMapSet(loaderRuntimeHrefMemo, registry, { epoch, href: existing });
+    return existing;
+  }
 
   const href = registerMandatoryVersionedClientModule(registry, {
     path: kovoDeferredRuntimeModulePath,
     source: kovoDeferredRuntimeModuleSource,
   });
   witnessWeakMapSet(registeredRuntimeHrefs, registry, href);
+  witnessWeakMapSet(loaderRuntimeHrefMemo, registry, { epoch, href });
   return href;
 }
