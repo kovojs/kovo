@@ -16,9 +16,19 @@ describe('realistic performance CI policy', () => {
     expect(bytes).toContain('scripts/perf-gate.mjs');
     expect(bytes).toContain('--suite bytes');
     expect(smoke).toContain('uses: ./.github/actions/playwright-install');
-    expect(smoke).toContain('vp exec node benchmarks/matched-fixture-gate.mjs');
+    expect(smoke).toContain(
+      'vp exec pnpm --dir benchmarks/nextjs install --ignore-workspace --frozen-lockfile',
+    );
+    expect(smoke).toContain('vp exec pnpm --dir benchmarks/kovo run build');
+    expect(smoke).toContain('vp exec pnpm --dir benchmarks/nextjs run build');
+    expect(smoke).toContain('vp exec node benchmarks/compare.mjs');
+    expect(smoke).toContain('--lanes matched-l0,matched-l1');
+    expect(smoke).toContain('--iterations 2');
+    expect(smoke).toContain('--warmups 0');
+    expect(smoke).toContain('--skip-lighthouse');
+    expect(smoke).toContain('--bfcache-iterations 2');
     expect(smoke.indexOf('playwright-install')).toBeLessThan(
-      smoke.indexOf('matched-fixture-gate.mjs'),
+      smoke.indexOf('benchmarks/compare.mjs'),
     );
   });
 
@@ -31,15 +41,15 @@ describe('realistic performance CI policy', () => {
       expect(source, job).toContain('KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04');
       expect(source, job).toContain('vp exec node benchmarks/compare.mjs');
       expect(source, job).toContain('if: always()');
-      expect(source, job).toContain('actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02');
+      expect(source, job).toContain(
+        'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+      );
       expect(source, job).toContain('retention-days: 30');
     }
   });
 
   it('retains the exact publishable sample policies in the scheduled commands', () => {
-    expect(jobSource('browser-matrix')).toEqual(
-      expect.stringContaining('--iterations 30'),
-    );
+    expect(jobSource('browser-matrix')).toEqual(expect.stringContaining('--iterations 30'));
     for (const token of ['--lighthouse-runs 5', '--bfcache-iterations 10']) {
       expect(jobSource('browser-matrix')).toContain(token);
     }
@@ -61,7 +71,7 @@ describe('realistic performance CI policy', () => {
       '--server-concurrencies 1,8,32',
       '--server-routes listing,detail',
       '--server-encodings identity,br',
-      '--server-modes hit,304,dynamic',
+      '--server-modes HIT,304,dynamic',
     ]) {
       expect(jobSource('server-matrix')).toContain(token);
     }

@@ -55,11 +55,7 @@ export function comparePerformanceReports(baseline, candidate, options = {}) {
       }
       const direction = metricDirection(metric);
       if (direction === null) continue;
-      const regressionPct = metricRegressionPct(
-        before.kovo.median,
-        after.kovo.median,
-        direction,
-      );
+      const regressionPct = metricRegressionPct(before.kovo.median, after.kovo.median, direction);
       metrics.push({
         baseline: before.kovo.median,
         candidate: after.kovo.median,
@@ -148,12 +144,7 @@ export function performanceReportFindings(report, label, policy = {}) {
         findings.push(`${label} ${metric} sample policy is unavailable`);
       }
       findings.push(
-        ...metricAnalysisFindings(
-          analysis,
-          `${label} ${metric}`,
-          minSamples,
-          expectedSamples,
-        ),
+        ...metricAnalysisFindings(analysis, `${label} ${metric}`, minSamples, expectedSamples),
       );
     }
   }
@@ -290,7 +281,8 @@ function metricDirection(metric) {
 }
 
 function metricRegressionPct(baseline, candidate, direction) {
-  if (!finiteNonNegative(baseline) || !finiteNonNegative(candidate)) return Number.POSITIVE_INFINITY;
+  if (!finiteNonNegative(baseline) || !finiteNonNegative(candidate))
+    return Number.POSITIVE_INFINITY;
   if (baseline === 0) return candidate === 0 ? 0 : Number.POSITIVE_INFINITY;
   return (
     ((direction === 'higher-is-better' ? baseline - candidate : candidate - baseline) / baseline) *
@@ -368,12 +360,15 @@ async function main(args) {
     minSamples: Number(readFlag(args, '--min-samples', '5')),
   });
   await writeFile(outputPath, `${JSON.stringify(result, null, 2)}\n`, { flag: 'w' });
-  process.stdout.write(`${result.schema} ${result.verdict.status} metrics=${result.metrics.length}\n`);
+  process.stdout.write(
+    `${result.schema} ${result.verdict.status} metrics=${result.metrics.length}\n`,
+  );
   for (const reason of result.verdict.reasons) process.stdout.write(`UNPROVEN ${reason}\n`);
   for (const metric of result.metrics.filter((entry) => entry.status === 'regression')) {
     process.stdout.write(`REGRESSION ${metric.metric} ${metric.regressionPct.toFixed(2)}%\n`);
   }
-  process.exitCode = result.verdict.status === 'pass' ? 0 : result.verdict.status === 'regression' ? 1 : 2;
+  process.exitCode =
+    result.verdict.status === 'pass' ? 0 : result.verdict.status === 'regression' ? 1 : 2;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

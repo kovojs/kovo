@@ -52,13 +52,37 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/kovo-setup
+      - name: Install isolated benchmark dependencies
+        run: |
+          vp exec pnpm --dir benchmarks/nextjs install --ignore-workspace --frozen-lockfile
+          vp exec pnpm --dir benchmarks/harness install --ignore-workspace --frozen-lockfile
       - uses: ./.github/actions/playwright-install
         with:
           browsers: chromium
           cache-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-${{ hashFiles('pnpm-lock.yaml') }}
           restore-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-
-      - name: Prove emitted matched L0/L1 behavior
-        run: vp exec node benchmarks/matched-fixture-gate.mjs
+      - name: Build both matched entrants once
+        run: |
+          vp exec pnpm --dir benchmarks/kovo run build
+          vp exec pnpm --dir benchmarks/nextjs run build
+      - name: Prove both emitted matched L0/L1 behaviors
+        run: >-
+          vp exec node benchmarks/compare.mjs
+          --cells browser
+          --lanes matched-l0,matched-l1
+          --iterations 2
+          --warmups 0
+          --skip-lighthouse
+          --bfcache-iterations 2
+          --skip-build
+          --out-dir "$RUNNER_TEMP/kovo-perf/correctness-smoke"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          if-no-files-found: warn
+          name: kovo-perf-correctness-smoke
+          path: ${{ runner.temp }}/kovo-perf/correctness-smoke
+          retention-days: 14
 
   bytes:
     name: Production bytes
@@ -282,7 +306,7 @@ jobs:
           --server-concurrencies 1,8,32
           --server-routes listing,detail
           --server-encodings identity,br
-          --server-modes hit,304,dynamic
+          --server-modes HIT,304,dynamic
           --out-dir "$RUNNER_TEMP/kovo-perf/server"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
