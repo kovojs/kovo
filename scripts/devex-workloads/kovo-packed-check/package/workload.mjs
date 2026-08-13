@@ -11,7 +11,7 @@ const PROCESS_TREE_SAMPLE_INTERVAL_MS = 20;
 const CHECK_PHASES = Object.freeze([
   ['lifecycle-policy', 'not-applicable'],
   ['config-trust', 'executed'],
-  ['typescript', 'not-applicable'],
+  ['typescript', 'executed'],
   ['project-quality', 'not-applicable'],
   ['sound-subset', 'not-applicable'],
   ['session-authority', 'executed'],
@@ -22,11 +22,13 @@ const CHECK_PHASES = Object.freeze([
   ['graph-diagnostics', 'executed'],
 ]);
 const ALWAYS_EXECUTED_INCREMENTAL_PHASES = new Set([
+  'session-authority',
   'app-evaluation',
   'build-check-graph',
   'graph-diagnostics',
 ]);
 const EDIT_DEPENDENT_PHASES = new Set([
+  'typescript',
   'session-authority',
   'app-source-trust',
   'stylesheet',
@@ -37,7 +39,6 @@ const EDIT_DEPENDENT_PHASES = new Set([
 const EDIT_INVARIANT_PHASES = new Set([
   'lifecycle-policy',
   'config-trust',
-  'typescript',
   'project-quality',
   'sound-subset',
 ]);
@@ -553,8 +554,7 @@ function validateWatchPhases(phases, evidence, revision, sourceRevision) {
       !allowedStatuses.includes(phase?.status) ||
       !Number.isFinite(phase?.durationMs) ||
       phase.durationMs < 0 ||
-      ((phase.status === 'not-applicable' || phase.status === 'reused-authenticated') &&
-        phase.durationMs !== 0) ||
+      (phase.status === 'not-applicable' && phase.durationMs !== 0) ||
       !/^sha256:[0-9a-f]{64}$/u.test(phase?.inputDigest ?? '')
     ) {
       throw new Error(`packed Kovo incremental check did not prove diagnostic phase ${name}`);
@@ -563,20 +563,31 @@ function validateWatchPhases(phases, evidence, revision, sourceRevision) {
       throw new Error(`packed Kovo incremental check reused empty-session phase ${name}`);
     }
     const previousDigest = evidence.previousDigests.get(name);
-    if (phase.status === 'reused-authenticated' && previousDigest !== phase.inputDigest) {
-      throw new Error(`packed Kovo incremental check reused changed-input phase ${name}`);
+    const sourceKey = `${name}\0${sourceRevision}`;
+    const sourceDigest = evidence.digestsBySourceRevision.get(sourceKey);
+    // Serializable producer facts can be reused when an alternating edit restores an earlier exact
+    // input; TypeScript's semantic BuilderProgram can additionally reuse unchanged compiler facts
+    // while producing diagnostics for a genuinely changed current input. Both remain bound to the
+    // current phase digest, so immediate-predecessor equality is not a valid reuse requirement.
+    if (
+      phase.status === 'reused-authenticated' &&
+      name !== 'typescript' &&
+      sourceDigest === undefined &&
+      previousDigest !== phase.inputDigest
+    ) {
+      throw new Error(`packed Kovo incremental check reused an unauthenticated phase ${name}`);
     }
     if (
       expectedStatus === 'executed' &&
       previousDigest !== undefined &&
       previousDigest !== phase.inputDigest &&
-      phase.status !== 'executed'
+      phase.status !== 'executed' &&
+      name !== 'typescript' &&
+      sourceDigest !== phase.inputDigest
     ) {
       throw new Error(`packed Kovo incremental check skipped changed-input phase ${name}`);
     }
     evidence.previousDigests.set(name, phase.inputDigest);
-    const sourceKey = `${name}\0${sourceRevision}`;
-    const sourceDigest = evidence.digestsBySourceRevision.get(sourceKey);
     if (sourceDigest !== undefined && sourceDigest !== phase.inputDigest) {
       throw new Error(
         `packed Kovo incremental check mapped ${name} source revision ${sourceRevision} to inconsistent input digests`,

@@ -714,13 +714,31 @@ describe('DevEx benchmark foundation', () => {
       validateIncrementalSessionMarkerForTesting(withIncrementalSessionDigest(reusedGraph), 5),
     ).toThrow(/build-check-graph=executed/u);
 
+    const measuredReuse = structuredClone(evidence);
+    measuredReuse.observations[1].diagnosticPhases[2].status = 'reused-authenticated';
+    measuredReuse.observations[1].diagnosticPhases[2].durationMs = 0.75;
+    measuredReuse.observations[2].diagnosticPhases[6].status = 'reused-authenticated';
+    measuredReuse.observations[2].diagnosticPhases[6].durationMs = 0.5;
+    measuredReuse.observations[2].diagnosticPhases[7].status = 'reused-authenticated';
+    measuredReuse.observations[2].diagnosticPhases[7].durationMs = 0.25;
+    expect(
+      validateIncrementalSessionMarkerForTesting(withIncrementalSessionDigest(measuredReuse), 5),
+    ).toEqual(withIncrementalSessionDigest(measuredReuse));
+
+    const reusedAuthority = structuredClone(evidence);
+    reusedAuthority.observations[1].diagnosticPhases[5].status = 'reused-authenticated';
+    reusedAuthority.observations[1].diagnosticPhases[5].durationMs = 0.5;
+    expect(() =>
+      validateIncrementalSessionMarkerForTesting(withIncrementalSessionDigest(reusedAuthority), 5),
+    ).toThrow(/session-authority=executed/u);
+
     const changedReuse = structuredClone(evidence);
     changedReuse.observations[1].diagnosticPhases[1].status = 'reused-authenticated';
     changedReuse.observations[1].diagnosticPhases[1].durationMs = 0;
     changedReuse.observations[1].diagnosticPhases[1].inputDigest = `sha256:${'8'.repeat(64)}`;
     expect(() =>
       validateIncrementalSessionMarkerForTesting(withIncrementalSessionDigest(changedReuse), 5),
-    ).toThrow(/reused facts for a changed input digest|unrelated source edit/u);
+    ).toThrow(/reused unauthenticated facts|unrelated source edit/u);
   });
 
   it('sums one sampled process tree without counting an unrelated sibling', () => {
@@ -1775,14 +1793,13 @@ function fixturePackedCheckPhases(
   const invariant = new Set([
     'lifecycle-policy',
     'config-trust',
-    'typescript',
     'project-quality',
     'sound-subset',
   ]);
   return [
     ['lifecycle-policy', 'not-applicable'],
     ['config-trust', 'executed'],
-    ['typescript', 'not-applicable'],
+    ['typescript', 'executed'],
     ['project-quality', 'not-applicable'],
     ['sound-subset', 'not-applicable'],
     ['session-authority', 'executed'],
