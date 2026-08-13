@@ -345,7 +345,11 @@ export function runBuildBenchmark(options) {
     }
     try {
       sourceAfter = collectPerformanceProvenance({
-        lockFiles: ['pnpm-lock.yaml', 'benchmarks/nextjs/pnpm-lock.yaml'],
+        lockFiles: [
+          'pnpm-lock.yaml',
+          'benchmarks/nextjs/pnpm-lock.yaml',
+          'benchmarks/harness/pnpm-lock.yaml',
+        ],
         repoRoot,
       });
       if (!sameSourceState(source, sourceAfter)) {

@@ -770,7 +770,7 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
 
     expect(response.body).not.toContain('<meta name="kovo-session"');
     expect(response.body).toContain('<meta name="kovo-session-dependent" content="true">');
-    expect(headerValue(response.headers, 'cache-control')).toBe('no-store');
+    expect(headerValue(response.headers, 'cache-control')).toBe('private, no-store');
     expect(headerValue(response.headers, 'vary')).toContain('Cookie');
   });
 
@@ -1727,7 +1727,7 @@ describe('server app document boundary', () => {
 
       expect(response.status).toBe(status);
       expect(response.body).toContain('victim-user');
-      expect(headerValue(response.headers, 'cache-control')).toBe('no-store');
+      expect(headerValue(response.headers, 'cache-control')).toBe('private, no-store');
       expect(headerValue(response.headers, 'vary')).toBe('Cookie');
     },
   );
@@ -2167,7 +2167,7 @@ describe('rolling-session Set-Cookie forces no-store on unguarded GET documents 
     expect(response.status).toBe(200);
     expect(lifecycleRequest).toBeInstanceOf(Request);
     expect(response.headers['Set-Cookie']).toBeUndefined();
-    expect(response.headers['Cache-Control']).toBe('no-store');
+    expect(response.headers['Cache-Control']).toBe('private, no-store');
     // plans/good-perf.md O2 Vary symmetry: 200 documents carry the Accept dimension too.
     expect(response.headers.Vary).toBe('Cookie, Accept');
   });
@@ -2208,7 +2208,7 @@ describe('rolling-session Set-Cookie forces no-store on unguarded GET documents 
     }
 
     expect(response.status).toBe(200);
-    expect(response.headers['Cache-Control']).toBe('no-store');
+    expect(response.headers['Cache-Control']).toBe('private, no-store');
     // plans/good-perf.md O2 Vary symmetry: 200 documents carry the Accept dimension too.
     expect(response.headers.Vary).toBe('Cookie, Accept');
   });
