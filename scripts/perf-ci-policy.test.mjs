@@ -28,6 +28,16 @@ const decisionFocusByJob = new Map([
   ['dev-edit-profile', 'dev-profile'],
   ['loader-runtime-memo-decision', 'loader'],
 ]);
+const measurementJobs = [
+  'correctness-smoke',
+  'bytes',
+  'check-scaling',
+  'browser-matrix',
+  'dev-matrix',
+  'build-matrix',
+  'server-matrix',
+  ...decisionFocusByJob.keys(),
+];
 
 describe('realistic performance CI policy', () => {
   it('keeps deterministic bytes and a bounded matched correctness smoke on every PR', () => {
@@ -161,6 +171,25 @@ describe('realistic performance CI policy', () => {
     }
   });
 
+  it('checks out and authenticates one workflow-controlled source commit in every job', () => {
+    expect(workflow).toContain(
+      "KOVO_PERF_SOURCE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}",
+    );
+    for (const job of measurementJobs) {
+      const source = jobSource(job);
+      expect(count(source, 'uses: actions/checkout@'), job).toBe(1);
+      expect(count(source, 'ref: ${{ env.KOVO_PERF_SOURCE_SHA }}'), job).toBe(1);
+      expect(count(source, 'Authenticate checked-out performance source'), job).toBe(1);
+      expect(count(source, 'test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"'), job).toBe(1);
+      expect(source.indexOf('ref: ${{ env.KOVO_PERF_SOURCE_SHA }}'), job).toBeLessThan(
+        source.indexOf('uses: ./.github/actions/kovo-setup'),
+      );
+    }
+    expect(count(workflow, 'uses: actions/checkout@')).toBe(measurementJobs.length);
+    expect(count(workflow, 'ref: ${{ env.KOVO_PERF_SOURCE_SHA }}')).toBe(measurementJobs.length);
+    expect(workflow).not.toContain('"$GITHUB_SHA"');
+  });
+
   it('runs the authenticated full check-watch candidate decision from exact clean worktrees', () => {
     const source = decisionJob('check-watch-decision');
     expect(source).toContain('fetch-depth: 0');
@@ -241,6 +270,8 @@ describe('realistic performance CI policy', () => {
       'test "$resolved_candidate" = "$KOVO_DEV_GENERATION_CANDIDATE_COMMIT"',
     );
     expect(count(source, 'git worktree add --detach')).toBe(2);
+    expect(source).toContain('git worktree add --detach "$baseline_root" "$KOVO_PERF_SOURCE_SHA"');
+    expect(source).toContain('git worktree add --detach "$spike_root" "$KOVO_PERF_SOURCE_SHA"');
     expect(source).toContain("-c user.name='Kovo Performance CI'");
     expect(source).toContain('cherry-pick "$KOVO_DEV_GENERATION_CANDIDATE_COMMIT"');
     expect(source).toContain('scripts/perf-dev-generation-spike.mjs');
@@ -322,7 +353,9 @@ describe('realistic performance CI policy', () => {
     expect(loaderMemo).toContain(
       'test "$(git rev-list --count "$baseline_commit..$candidate_commit")" = 1',
     );
-    expect(loaderMemo).toContain('git merge-base --is-ancestor "$candidate_commit" "$GITHUB_SHA"');
+    expect(loaderMemo).toContain(
+      'git merge-base --is-ancestor "$candidate_commit" "$KOVO_PERF_SOURCE_SHA"',
+    );
     expectPnpmBridge(loaderMemo);
     expect(count(loaderMemo, 'install --offline --frozen-lockfile --ignore-scripts')).toBe(2);
     expect(count(loaderMemo, 'scripts/perf-loader-runtime-memo-ab.mjs')).toBe(2);

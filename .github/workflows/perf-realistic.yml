@@ -82,6 +82,9 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  # pull_request's github.sha is the synthetic merge commit. Measurements instead execute the
+  # immutable feature-head subject while retaining GITHUB_SHA separately as the event identity.
+  KOVO_PERF_SOURCE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
   NODE_OPTIONS: --experimental-transform-types --disable-warning=ExperimentalWarning
   PLAYWRIGHT_VERSION: 1.60.0
 
@@ -94,6 +97,9 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
       - uses: ./.github/actions/kovo-setup
       - name: Install isolated benchmark dependencies
         run: |
@@ -130,6 +136,9 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
       - uses: ./.github/actions/kovo-setup
       - name: Measure critical-path, navigation and bootstrap bytes
         # Dispatch inputs reach the command through env, never through direct `${{ }}`
@@ -173,6 +182,9 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
       - uses: ./.github/actions/kovo-setup
       # The gated statistic is the growth exponent between the two largest rungs, which is a ratio
       # taken within a single session, so it survives a contended runner far better than any
@@ -218,6 +230,9 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
@@ -267,6 +282,9 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
@@ -320,6 +338,9 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
@@ -363,6 +384,9 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
@@ -406,6 +430,9 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
@@ -517,6 +544,9 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
@@ -547,8 +577,8 @@ jobs:
             "+$KOVO_DEV_GENERATION_CANDIDATE_REF:refs/perf-evidence/dev-generation-candidate"
           resolved_candidate="$(git rev-parse --verify refs/perf-evidence/dev-generation-candidate^{commit})"
           test "$resolved_candidate" = "$KOVO_DEV_GENERATION_CANDIDATE_COMMIT"
-          git worktree add --detach "$baseline_root" "$GITHUB_SHA"
-          git worktree add --detach "$spike_root" "$GITHUB_SHA"
+          git worktree add --detach "$baseline_root" "$KOVO_PERF_SOURCE_SHA"
+          git worktree add --detach "$spike_root" "$KOVO_PERF_SOURCE_SHA"
           git -C "$spike_root" \
             -c user.name='Kovo Performance CI' \
             -c user.email='performance-ci@kovo.invalid' \
@@ -590,6 +620,9 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
@@ -623,6 +656,9 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
       - uses: ./.github/actions/kovo-setup
       - name: Expose pnpm to authenticated benchmark subprocesses
         run: |
@@ -663,6 +699,9 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
@@ -708,6 +747,9 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
@@ -763,6 +805,9 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
@@ -804,7 +849,7 @@ jobs:
           test "$(git rev-parse "$candidate_commit^")" = "$baseline_commit"
           test "$(git merge-base "$baseline_commit" "$candidate_commit")" = "$baseline_commit"
           test "$(git rev-list --count "$baseline_commit..$candidate_commit")" = 1
-          git merge-base --is-ancestor "$candidate_commit" "$GITHUB_SHA"
+          git merge-base --is-ancestor "$candidate_commit" "$KOVO_PERF_SOURCE_SHA"
           git worktree add --detach "$baseline_root" "$baseline_commit"
           git worktree add --detach "$spike_root" "$candidate_commit"
           test "$(git -C "$baseline_root" rev-parse HEAD)" = "$baseline_commit"
