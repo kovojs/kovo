@@ -153,22 +153,20 @@ describe('realistic performance CI policy', () => {
     expect(source).toContain('test "$candidate_range_count" = 2');
     expect(source).toContain('test "$(git rev-parse "$candidate_commit^")" = "$production_commit"');
     expect(source).toContain('git patch-id --stable');
-    expect(source).toContain('test "$production_patch_id" = "$KOVO_CHECK_WATCH_CANDIDATE_PATCH_ID"');
+    expect(source).toContain(
+      'test "$production_patch_id" = "$KOVO_CHECK_WATCH_CANDIDATE_PATCH_ID"',
+    );
     expect(source).toContain('check-watch candidate seal changed unapproved path');
     expect(source).toContain('git worktree add --detach "$baseline_root" "$baseline_commit"');
     expect(source).toContain('git worktree add --detach "$candidate_root" "$candidate_commit"');
     expect(count(source, 'install --offline --frozen-lockfile --ignore-scripts')).toBe(2);
     expect(source).toContain('KOVO_DEVEX_OS_IMAGE=github-actions/ubuntu-24.04@sha256:');
-    expect(source).toContain(
-      'KOVO_DEVEX_RUNNER_NAME=github-hosted-ubuntu-24.04-accepted',
-    );
+    expect(source).toContain('KOVO_DEVEX_RUNNER_NAME=github-hosted-ubuntu-24.04-accepted');
     expectPnpmBridge(source);
     expect(source).not.toContain('revert --no-edit');
     expect(count(source, '--prepare-kovo-scenario')).toBe(2);
     expect(source).toContain('scripts/perf-check-watch-spike.mjs');
-    expect(source).toContain(
-      '--spike-repo "$RUNNER_TEMP/kovo-check-watch-candidate"',
-    );
+    expect(source).toContain('--spike-repo "$RUNNER_TEMP/kovo-check-watch-candidate"');
     expect(source).toContain('--samples 30');
     expect(source).toContain('--warmups 3');
     expectRawArtifact(source, 'kovo-perf-check-watch-decision');
@@ -260,9 +258,7 @@ describe('realistic performance CI policy', () => {
     expect(loaderMemo).toContain(
       '"+$KOVO_LOADER_HISTORICAL_REF:refs/perf-evidence/loader-memo-historical"',
     );
-    expect(loaderMemo).toContain(
-      'test "$resolved_historical" = "$KOVO_LOADER_HISTORICAL_COMMIT"',
-    );
+    expect(loaderMemo).toContain('test "$resolved_historical" = "$KOVO_LOADER_HISTORICAL_COMMIT"');
     expect(loaderMemo).toContain('loader_baseline_sha must be exactly 40 lowercase hexadecimal');
     expect(loaderMemo).toContain('loader_candidate_sha must be exactly 40 lowercase hexadecimal');
     expect(loaderMemo).toContain('git worktree add --detach "$baseline_root" "$baseline_commit"');
@@ -273,9 +269,7 @@ describe('realistic performance CI policy', () => {
     expect(loaderMemo).toContain(
       'test "$(git rev-list --count "$baseline_commit..$candidate_commit")" = 1',
     );
-    expect(loaderMemo).toContain(
-      'git merge-base --is-ancestor "$candidate_commit" "$GITHUB_SHA"',
-    );
+    expect(loaderMemo).toContain('git merge-base --is-ancestor "$candidate_commit" "$GITHUB_SHA"');
     expectPnpmBridge(loaderMemo);
     expect(count(loaderMemo, 'install --offline --frozen-lockfile --ignore-scripts')).toBe(2);
     expect(count(loaderMemo, 'scripts/perf-loader-runtime-memo-ab.mjs')).toBe(2);
