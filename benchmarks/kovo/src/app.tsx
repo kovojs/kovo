@@ -3,6 +3,8 @@ import { trustedUrl } from '@kovojs/browser';
 import { defineKovo, stylesheet } from '@kovojs/server';
 import { rootedFiles } from '@kovojs/server/files';
 
+import { MatchedL1Shell } from './matched-l1-shell.js';
+
 // Authoring notes for this benchmark entrant (SPEC §4.8, §5.2 rule 10, §6.6, §9.1):
 //
 //  * The catalog is authored as a module-scope literal instead of `import ... from
@@ -31,6 +33,8 @@ const catalog = [
     id: 'p01',
     slug: 'linen-field-jacket',
     href: '/product/linen-field-jacket',
+    matchedL0Href: '/matched/l0/product/linen-field-jacket',
+    matchedL1Href: '/matched/l1/product/linen-field-jacket',
     name: 'Linen Field Jacket',
     viewLabel: 'View Linen Field Jacket',
     price: 148,
@@ -43,6 +47,8 @@ const catalog = [
     id: 'p02',
     slug: 'canvas-weekender',
     href: '/product/canvas-weekender',
+    matchedL0Href: '/matched/l0/product/canvas-weekender',
+    matchedL1Href: '/matched/l1/product/canvas-weekender',
     name: 'Canvas Weekender',
     viewLabel: 'View Canvas Weekender',
     price: 186,
@@ -54,6 +60,8 @@ const catalog = [
     id: 'p03',
     slug: 'wool-trail-overshirt',
     href: '/product/wool-trail-overshirt',
+    matchedL0Href: '/matched/l0/product/wool-trail-overshirt',
+    matchedL1Href: '/matched/l1/product/wool-trail-overshirt',
     name: 'Wool Trail Overshirt',
     viewLabel: 'View Wool Trail Overshirt',
     price: 132,
@@ -65,6 +73,8 @@ const catalog = [
     id: 'p04',
     slug: 'alpine-ceramic-mug',
     href: '/product/alpine-ceramic-mug',
+    matchedL0Href: '/matched/l0/product/alpine-ceramic-mug',
+    matchedL1Href: '/matched/l1/product/alpine-ceramic-mug',
     name: 'Alpine Ceramic Mug',
     viewLabel: 'View Alpine Ceramic Mug',
     price: 32,
@@ -76,6 +86,8 @@ const catalog = [
     id: 'p05',
     slug: 'waxed-cotton-cap',
     href: '/product/waxed-cotton-cap',
+    matchedL0Href: '/matched/l0/product/waxed-cotton-cap',
+    matchedL1Href: '/matched/l1/product/waxed-cotton-cap',
     name: 'Waxed Cotton Cap',
     viewLabel: 'View Waxed Cotton Cap',
     price: 44,
@@ -87,6 +99,8 @@ const catalog = [
     id: 'p06',
     slug: 'ribbed-camp-socks',
     href: '/product/ribbed-camp-socks',
+    matchedL0Href: '/matched/l0/product/ribbed-camp-socks',
+    matchedL1Href: '/matched/l1/product/ribbed-camp-socks',
     name: 'Ribbed Camp Socks',
     viewLabel: 'View Ribbed Camp Socks',
     price: 24,
@@ -98,6 +112,8 @@ const catalog = [
     id: 'p07',
     slug: 'market-tote',
     href: '/product/market-tote',
+    matchedL0Href: '/matched/l0/product/market-tote',
+    matchedL1Href: '/matched/l1/product/market-tote',
     name: 'Market Tote',
     viewLabel: 'View Market Tote',
     price: 58,
@@ -109,6 +125,8 @@ const catalog = [
     id: 'p08',
     slug: 'walnut-desk-tray',
     href: '/product/walnut-desk-tray',
+    matchedL0Href: '/matched/l0/product/walnut-desk-tray',
+    matchedL1Href: '/matched/l1/product/walnut-desk-tray',
     name: 'Walnut Desk Tray',
     viewLabel: 'View Walnut Desk Tray',
     price: 74,
@@ -120,6 +138,8 @@ const catalog = [
     id: 'p09',
     slug: 'selvedge-denim',
     href: '/product/selvedge-denim',
+    matchedL0Href: '/matched/l0/product/selvedge-denim',
+    matchedL1Href: '/matched/l1/product/selvedge-denim',
     name: 'Selvedge Denim',
     viewLabel: 'View Selvedge Denim',
     price: 168,
@@ -131,6 +151,8 @@ const catalog = [
     id: 'p10',
     slug: 'brass-key-hook',
     href: '/product/brass-key-hook',
+    matchedL0Href: '/matched/l0/product/brass-key-hook',
+    matchedL1Href: '/matched/l1/product/brass-key-hook',
     name: 'Brass Key Hook',
     viewLabel: 'View Brass Key Hook',
     price: 38,
@@ -142,6 +164,8 @@ const catalog = [
     id: 'p11',
     slug: 'paper-notebook-set',
     href: '/product/paper-notebook-set',
+    matchedL0Href: '/matched/l0/product/paper-notebook-set',
+    matchedL1Href: '/matched/l1/product/paper-notebook-set',
     name: 'Paper Notebook Set',
     viewLabel: 'View Paper Notebook Set',
     price: 28,
@@ -153,6 +177,8 @@ const catalog = [
     id: 'p12',
     slug: 'merino-watch-cap',
     href: '/product/merino-watch-cap',
+    matchedL0Href: '/matched/l0/product/merino-watch-cap',
+    matchedL1Href: '/matched/l1/product/merino-watch-cap',
     name: 'Merino Watch Cap',
     viewLabel: 'View Merino Watch Cap',
     price: 48,
@@ -164,6 +190,8 @@ const catalog = [
     id: 'p13',
     slug: 'campfire-blanket',
     href: '/product/campfire-blanket',
+    matchedL0Href: '/matched/l0/product/campfire-blanket',
+    matchedL1Href: '/matched/l1/product/campfire-blanket',
     name: 'Campfire Blanket',
     viewLabel: 'View Campfire Blanket',
     price: 118,
@@ -175,6 +203,8 @@ const catalog = [
     id: 'p14',
     slug: 'stainless-bottle',
     href: '/product/stainless-bottle',
+    matchedL0Href: '/matched/l0/product/stainless-bottle',
+    matchedL1Href: '/matched/l1/product/stainless-bottle',
     name: 'Stainless Bottle',
     viewLabel: 'View Stainless Bottle',
     price: 42,
@@ -186,6 +216,8 @@ const catalog = [
     id: 'p15',
     slug: 'cotton-rugby-shirt',
     href: '/product/cotton-rugby-shirt',
+    matchedL0Href: '/matched/l0/product/cotton-rugby-shirt',
+    matchedL1Href: '/matched/l1/product/cotton-rugby-shirt',
     name: 'Cotton Rugby Shirt',
     viewLabel: 'View Cotton Rugby Shirt',
     price: 96,
@@ -197,6 +229,8 @@ const catalog = [
     id: 'p16',
     slug: 'leather-card-case',
     href: '/product/leather-card-case',
+    matchedL0Href: '/matched/l0/product/leather-card-case',
+    matchedL1Href: '/matched/l1/product/leather-card-case',
     name: 'Leather Card Case',
     viewLabel: 'View Leather Card Case',
     price: 68,
@@ -208,6 +242,8 @@ const catalog = [
     id: 'p17',
     slug: 'hemp-apron',
     href: '/product/hemp-apron',
+    matchedL0Href: '/matched/l0/product/hemp-apron',
+    matchedL1Href: '/matched/l1/product/hemp-apron',
     name: 'Hemp Apron',
     viewLabel: 'View Hemp Apron',
     price: 84,
@@ -219,6 +255,8 @@ const catalog = [
     id: 'p18',
     slug: 'cedar-shoe-blocks',
     href: '/product/cedar-shoe-blocks',
+    matchedL0Href: '/matched/l0/product/cedar-shoe-blocks',
+    matchedL1Href: '/matched/l1/product/cedar-shoe-blocks',
     name: 'Cedar Shoe Blocks',
     viewLabel: 'View Cedar Shoe Blocks',
     price: 54,
@@ -230,6 +268,8 @@ const catalog = [
     id: 'p19',
     slug: 'canvas-chore-coat',
     href: '/product/canvas-chore-coat',
+    matchedL0Href: '/matched/l0/product/canvas-chore-coat',
+    matchedL1Href: '/matched/l1/product/canvas-chore-coat',
     name: 'Canvas Chore Coat',
     viewLabel: 'View Canvas Chore Coat',
     price: 154,
@@ -241,6 +281,8 @@ const catalog = [
     id: 'p20',
     slug: 'enamel-pin-set',
     href: '/product/enamel-pin-set',
+    matchedL0Href: '/matched/l0/product/enamel-pin-set',
+    matchedL1Href: '/matched/l1/product/enamel-pin-set',
     name: 'Enamel Pin Set',
     viewLabel: 'View Enamel Pin Set',
     price: 18,
@@ -252,6 +294,8 @@ const catalog = [
     id: 'p21',
     slug: 'recycled-fleece',
     href: '/product/recycled-fleece',
+    matchedL0Href: '/matched/l0/product/recycled-fleece',
+    matchedL1Href: '/matched/l1/product/recycled-fleece',
     name: 'Recycled Fleece',
     viewLabel: 'View Recycled Fleece',
     price: 112,
@@ -263,6 +307,8 @@ const catalog = [
     id: 'p22',
     slug: 'beech-coffee-scoop',
     href: '/product/beech-coffee-scoop',
+    matchedL0Href: '/matched/l0/product/beech-coffee-scoop',
+    matchedL1Href: '/matched/l1/product/beech-coffee-scoop',
     name: 'Beech Coffee Scoop',
     viewLabel: 'View Beech Coffee Scoop',
     price: 22,
@@ -274,6 +320,8 @@ const catalog = [
     id: 'p23',
     slug: 'ripstop-packable-shell',
     href: '/product/ripstop-packable-shell',
+    matchedL0Href: '/matched/l0/product/ripstop-packable-shell',
+    matchedL1Href: '/matched/l1/product/ripstop-packable-shell',
     name: 'Ripstop Packable Shell',
     viewLabel: 'View Ripstop Packable Shell',
     price: 128,
@@ -285,6 +333,8 @@ const catalog = [
     id: 'p24',
     slug: 'maple-cutting-board',
     href: '/product/maple-cutting-board',
+    matchedL0Href: '/matched/l0/product/maple-cutting-board',
+    matchedL1Href: '/matched/l1/product/maple-cutting-board',
     name: 'Maple Cutting Board',
     viewLabel: 'View Maple Cutting Board',
     price: 92,
@@ -497,6 +547,181 @@ function ProductPage({
   );
 }
 
+function MatchedProductCard({
+  blurb,
+  href,
+  img,
+  name,
+  priceLabel,
+  viewLabel,
+}: {
+  blurb: string;
+  href: string;
+  img: string;
+  name: string;
+  priceLabel: string;
+  viewLabel: string;
+}): string {
+  return (
+    <article class="card">
+      <a href={href} aria-label={viewLabel}>
+        <img
+          src={trustedUrl(img, { reason: 'same-origin benchmark catalog image path' })}
+          width="640"
+          height="480"
+          loading="lazy"
+          alt=""
+        />
+      </a>
+      <h2>{name}</h2>
+      <p>{blurb}</p>
+      <span class="price">{priceLabel}</span>
+      <div class="card-actions">
+        <a class="secondary-button" href={href}>
+          Details
+        </a>
+      </div>
+    </article>
+  );
+}
+
+function MatchedL0ListingPage(): string {
+  return (
+    <main data-benchmark-destination="listing">
+      <section class="hero">
+        <h1>Field goods for everyday carry</h1>
+        <p>A 24-product capability-matched commerce benchmark.</p>
+      </section>
+      <section class="grid" aria-label="Products">
+        {catalog.map(({ blurb, img, matchedL0Href, name, priceLabel, viewLabel }) => (
+          <MatchedProductCard
+            blurb={blurb}
+            href={matchedL0Href}
+            img={img}
+            name={name}
+            priceLabel={priceLabel}
+            viewLabel={viewLabel}
+          />
+        ))}
+      </section>
+    </main>
+  );
+}
+
+function MatchedL1ListingPage(): string {
+  return (
+    <main data-benchmark-destination="listing">
+      <section class="hero">
+        <h1>Field goods for everyday carry</h1>
+        <p>A 24-product capability-matched commerce benchmark.</p>
+      </section>
+      <section class="grid" aria-label="Products">
+        {catalog.map(({ blurb, img, matchedL1Href, name, priceLabel, viewLabel }) => (
+          <MatchedProductCard
+            blurb={blurb}
+            href={matchedL1Href}
+            img={img}
+            name={name}
+            priceLabel={priceLabel}
+            viewLabel={viewLabel}
+          />
+        ))}
+      </section>
+    </main>
+  );
+}
+
+function MatchedProductPage({
+  blurb,
+  img,
+  name,
+  priceLabel,
+}: {
+  blurb: string;
+  img: string;
+  name: string;
+  priceLabel: string;
+}): string {
+  return (
+    <main class="detail" data-benchmark-destination="detail">
+      <div class="detail-media">
+        <img
+          src={trustedUrl(img, { reason: 'same-origin benchmark catalog image path' })}
+          width="640"
+          height="480"
+          loading="eager"
+          alt=""
+        />
+      </div>
+      <section class="detail-copy">
+        <h1>{name}</h1>
+        <p>{blurb}</p>
+        <span class="price">{priceLabel}</span>
+        <label class="qty-row">
+          Qty
+          <input type="number" min="1" value="1" />
+        </label>
+      </section>
+    </main>
+  );
+}
+
+function MatchedL0Shell({ children }: { children: unknown }): string {
+  return (
+    <div class="shell" data-benchmark-lane="matched-l0">
+      <nav class="nav">
+        <a class="brand" href="/matched/l0">
+          Benchmark Supply
+        </a>
+        <button
+          class="cart-button"
+          type="button"
+          aria-label="Open cart with 0 items"
+          popovertarget="matched-l0-cart"
+        >
+          Cart (0)
+        </button>
+      </nav>
+      {children}
+      <div
+        id="matched-l0-cart"
+        class="cart-dialog"
+        role="dialog"
+        aria-labelledby="matched-l0-cart-title"
+        popover=""
+      >
+        <header>
+          <div>
+            <h2 id="matched-l0-cart-title">Review cart</h2>
+            <p>Native cart controls require no framework client state.</p>
+          </div>
+          <button
+            class="secondary-button"
+            type="button"
+            popovertarget="matched-l0-cart"
+            popovertargetaction="hide"
+          >
+            Close
+          </button>
+        </header>
+        <form class="checkout" action="/matched/l0" method="get">
+          <label>
+            Name
+            <input name="name" autocomplete="name" />
+          </label>
+          <label>
+            Email
+            <input name="email" type="email" autocomplete="email" />
+          </label>
+          <button class="primary-button" type="submit">
+            Continue with native navigation
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function Shell({ children }: { children: unknown }): string {
   return (
     <div class="shell">
@@ -526,6 +751,56 @@ const productRoute = app.route('/product/:slug', {
   stylesheets: benchmarkStylesheets,
 });
 
+const matchedL0HomeRoute = app.route('/matched/l0', {
+  access: app.publicAccess('public capability-matched L0 benchmark catalog'),
+  meta: { title: 'Matched L0 Supply Benchmark' },
+  page: () => (
+    <MatchedL0Shell>
+      <MatchedL0ListingPage />
+    </MatchedL0Shell>
+  ),
+  stylesheets: benchmarkStylesheets,
+});
+
+const matchedL0ProductRoute = app.route('/matched/l0/product/:slug', {
+  access: app.publicAccess('public capability-matched L0 benchmark product'),
+  meta: { title: 'Matched L0 Supply Product' },
+  page: (context) => {
+    const { blurb, img, name, priceLabel } = productForSlug(context.params.slug);
+    return (
+      <MatchedL0Shell>
+        <MatchedProductPage blurb={blurb} img={img} name={name} priceLabel={priceLabel} />
+      </MatchedL0Shell>
+    );
+  },
+  stylesheets: benchmarkStylesheets,
+});
+
+const matchedL1HomeRoute = app.route('/matched/l1', {
+  access: app.publicAccess('public capability-matched L1 benchmark catalog'),
+  meta: { title: 'Matched L1 Supply Benchmark' },
+  page: () => (
+    <MatchedL1Shell>
+      <MatchedL1ListingPage />
+    </MatchedL1Shell>
+  ),
+  stylesheets: benchmarkStylesheets,
+});
+
+const matchedL1ProductRoute = app.route('/matched/l1/product/:slug', {
+  access: app.publicAccess('public capability-matched L1 benchmark product'),
+  meta: { title: 'Matched L1 Supply Product' },
+  page: (context) => {
+    const { blurb, img, name, priceLabel } = productForSlug(context.params.slug);
+    return (
+      <MatchedL1Shell>
+        <MatchedProductPage blurb={blurb} img={img} name={name} priceLabel={priceLabel} />
+      </MatchedL1Shell>
+    );
+  },
+  stylesheets: benchmarkStylesheets,
+});
+
 const imageRoute = app.route('/images/:name', {
   access: app.publicAccess('public immutable benchmark images'),
   page: (context) =>
@@ -537,5 +812,13 @@ const imageRoute = app.route('/images/:name', {
 });
 
 export default app.assemble({
-  routes: [homeRoute, productRoute, imageRoute],
+  routes: [
+    homeRoute,
+    productRoute,
+    matchedL0HomeRoute,
+    matchedL0ProductRoute,
+    matchedL1HomeRoute,
+    matchedL1ProductRoute,
+    imageRoute,
+  ],
 });

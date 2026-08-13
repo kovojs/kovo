@@ -1,0 +1,20 @@
+{
+  "schema": "kovo-benchmark-matched-fixture/v1",
+  "catalogItems": 24,
+  "listingHeading": "Field goods for everyday carry",
+  "listingDescription": "A 24-product capability-matched commerce benchmark.",
+  "brand": "Benchmark Supply",
+  "detailBackLabel": "Back to listing",
+  "l0": {
+    "cartDescription": "Native cart controls require no framework client state.",
+    "cartLabel": "Open cart with 0 items",
+    "cartText": "Cart (0)"
+  },
+  "l1": {
+    "cartDescription": "Mutable cart, email, and order state are owned by this client island.",
+    "alternateEmail": "alternate@example.test",
+    "initialEmail": "checkout@example.test",
+    "itemLabel": "Benchmark item",
+    "itemPrice": "$148.00"
+  }
+}

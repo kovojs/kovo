@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
-import catalog from '../../../../shared/catalog.json';
+import catalog from '../../../../../shared/catalog.json';
 import { AddToCartButton, CartButton, type Product } from '../../components/cart';
 
 function price(value: number): string {

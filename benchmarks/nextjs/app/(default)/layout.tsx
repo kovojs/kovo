@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import { CartButton, CartProvider } from './components/cart';
-import './globals.css';
+import '../globals.css';
 
 export const metadata: Metadata = {
   description: 'Kovo benchmark comparison Next.js entrant.',

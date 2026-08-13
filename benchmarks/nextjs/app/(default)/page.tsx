@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-import catalog from '../../shared/catalog.json';
+import catalog from '../../../shared/catalog.json';
 import { AddToCartButton, type Product } from './components/cart';
 
 function price(value: number): string {
