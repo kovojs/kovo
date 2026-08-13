@@ -355,6 +355,13 @@ const imageFiles = await rootedFiles('../shared/images');
 const app = defineKovo({
   appId: '38652956-30bb-4fbb-b8a7-585f4734b6b1',
   document: { lang: 'en-US' },
+  // The production server matrix launches a fresh process for every 20-second warmup/measurement
+  // window. Keep its localhost generator below an explicit benchmark-only admission ceiling so a
+  // throughput improvement cannot turn into KV433 429s near the default global limit.
+  requestLimits: {
+    global: { max: 1_000_000, windowMs: 60_000 },
+    perIp: { max: 1_000_000, windowMs: 60_000 },
+  },
   renderRoute(value) {
     return typeof value === 'string' ? value : String(value ?? '');
   },
