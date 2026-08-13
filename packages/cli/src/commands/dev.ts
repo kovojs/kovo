@@ -697,14 +697,15 @@ async function preloadDevSecurityProfile(
     root,
   );
   await server.ssrLoadModule(serverBuildModuleId);
-  const appShellModuleId = viteSsrModuleId(
-    requireFromApp.resolve('@kovojs/server/internal/app-shell-vite'),
-    root,
-  );
   const securityProfileModuleId = viteSsrModuleId(
     requireFromApp.resolve('@kovojs/server/internal/vite-security-profile'),
     root,
   );
+  // SPEC §6.2.1 requires a fresh app contract and closed graph for every accepted HMR
+  // generation, but it does not require evaluating production build/static-export modules in that
+  // graph. The trusted profile already loads before authored code and now owns the three runner
+  // controls, so reuse its exact module id instead of the broad internal/app-shell-vite barrel.
+  const appShellModuleId = securityProfileModuleId;
   const module = await server.ssrLoadModule(securityProfileModuleId);
   // The complete trusted graph captures descriptor-based Web/Node controls first. Lock the realm
   // at the last trusted boundary, immediately before constructing the framework plugin and loading

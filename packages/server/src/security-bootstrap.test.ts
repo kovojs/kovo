@@ -86,6 +86,26 @@ describe('server security bootstrap census', () => {
     expect(appLoad).toBeGreaterThan(rootLoad);
   });
 
+  it('keeps fresh dev generations off the production app-shell build barrel', () => {
+    const profile = readFileSync(
+      new URL('./internal/vite-security-profile.ts', import.meta.url),
+      'utf8',
+    );
+    const runner = readFileSync(
+      new URL('../../cli/src/commands/dev.ts', import.meta.url),
+      'utf8',
+    );
+    const preloadStart = runner.indexOf('async function preloadDevSecurityProfile(');
+    const preloadEnd = runner.indexOf('\nfunction viteSsrModuleId(', preloadStart);
+    const preload = runner.slice(preloadStart, preloadEnd);
+
+    expect(profile).toContain('dispatchKovoAppShellViteDevRequest');
+    expect(profile).toContain('prepareKovoAppShellViteDevGeneration');
+    expect(profile).toContain('runWithGeneratedLiveTargetRegistry');
+    expect(preload).toContain('const appShellModuleId = securityProfileModuleId;');
+    expect(preload).not.toContain("requireFromApp.resolve('@kovojs/server/internal/app-shell-vite')");
+  });
+
   it('keeps build/check SSR preload ordered and omits the post-proof AST analyzer', () => {
     const source = readFileSync(
       new URL('../../cli/src/commands/build-export.ts', import.meta.url),

@@ -3,9 +3,21 @@ import type { ServerResponse } from 'node:http';
 import type { KovoVitePlugin, KovoVitePluginOptions } from '../vite.js';
 import type { KovoApp } from '../app-types.js';
 import { frameworkManagedDbProviderDevelopmentPosture } from '../guards.js';
+import { runWithGeneratedLiveTargetRegistry } from '../live-target-registry.js';
 import { bindServerLoopbackDevelopmentOrigin } from '../runtime-environment-authority.js';
 import { kovo } from '../vite.js';
-import { createKovoAppShellViteDevIntegration } from '../vite-dev.js';
+import {
+  createKovoAppShellViteDevIntegration,
+  dispatchKovoAppShellViteDevRequest,
+  prepareKovoAppShellViteDevGeneration,
+} from '../vite-dev.js';
+export {
+  claimCompilerClientModuleViteInstaller,
+  compilerClientModuleViteEpoch,
+  type CompilerClientModuleViteInstaller,
+  type CompilerClientModuleViteRecord,
+  type CompilerClientModuleViteSnapshotInstaller,
+} from '../compiler-client-module-provenance-vite.js';
 export { nodeRequestPreloadIngressRejection, rejectNodeRequestPreloadIngress } from '../node.js';
 import {
   trustedViteSecurityProfileIntegrationSentinel,
@@ -14,6 +26,15 @@ import {
   trustedViteSecurityProfileRunnerGenerationsSentinel,
   trustedViteSecurityProfileSentinel,
 } from './vite-security-sentinel.js';
+
+// The supported runner imports this already-authenticated profile in every fresh HMR generation.
+// Keep its generation-only controls here so SPEC §6.2.1's fresh closed graph does not also link
+// the production build/static-export surface from the broad internal/app-shell-vite barrel.
+export {
+  dispatchKovoAppShellViteDevRequest,
+  prepareKovoAppShellViteDevGeneration,
+  runWithGeneratedLiveTargetRegistry,
+};
 
 interface TrustedKovoViteRunnerGenerationBroker {
   activateInitial(): Promise<void>;
