@@ -12,6 +12,7 @@ import {
   dependencyRootForDevCommand,
   DEV_LOOP_REPORT_SCHEMA,
   diagnosticProfileFindings,
+  establishState,
   exactSampleCountFindings,
   loadCorpusManifest,
   parseDevLoopArgs,
@@ -154,6 +155,37 @@ describe('single-entrant developer-loop adapter', () => {
         },
       ),
     ).rejects.toThrow('does not resolve to the entrant install');
+  });
+
+  it('awaits the single captured setup click becoming browser-visible', async () => {
+    let value = 'Count 0';
+    let clicks = 0;
+    const locator = {
+      click: async () => {
+        clicks += 1;
+        setTimeout(() => {
+          value = 'Count 1';
+        }, 20);
+      },
+      first: () => locator,
+      textContent: async () => value,
+    };
+    const page = { locator: () => locator };
+
+    await expect(
+      establishState(
+        page,
+        {
+          property: 'textContent',
+          selector: '[data-benchmark-state]',
+          setup: { action: 'click' },
+          value: 'Count 1',
+        },
+        200,
+      ),
+    ).resolves.toBeUndefined();
+    expect(clicks).toBe(1);
+    expect(value).toBe('Count 1');
   });
 
   it('requires an independent exact fresh-ready sample count', () => {

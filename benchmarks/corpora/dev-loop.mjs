@@ -759,7 +759,7 @@ async function waitForPaint(page) {
   return performance.now() - started;
 }
 
-async function establishState(page, state) {
+export async function establishState(page, state, timeoutMs = EDIT_TIMEOUT_MS) {
   if (await stateMatches(page, state)) return;
   const locator = page.locator(state.selector).first();
   const value = (await locator[state.property]())?.trim();
@@ -767,9 +767,15 @@ async function establishState(page, state) {
     throw new Error(`could not establish benchmark state from ${String(value)}`);
   }
   await locator.click();
-  if (!(await stateMatches(page, state))) {
-    throw new Error('benchmark state setup did not become browser-visible');
+  const deadline = performance.now() + timeoutMs;
+  while (performance.now() < deadline) {
+    if (await stateMatches(page, state)) return;
+    // Kovo's inline bootstrap deliberately defers the full client runtime import. The first
+    // authored click is captured synchronously and replayed after that import, so readiness must
+    // await the one click's browser-visible result without issuing a second, state-changing click.
+    await delay(10);
   }
+  throw new Error('benchmark state setup did not become browser-visible');
 }
 
 async function stateMatches(page, state) {
