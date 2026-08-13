@@ -105,15 +105,23 @@ export function ratifyPerformanceBaseline(entries, options = {}) {
 }
 
 function summarizeRunEvidence(entries, metric, subject) {
-  const median = summarizeRunField(entries, metric, subject, 'median');
-  return {
-    ...median,
-    sampleP95: summarizeRunField(entries, metric, subject, 'p95'),
-  };
+  const evidence = summarizeRunField(entries, metric, subject, 'median');
+  const p95Values = runFieldValues(entries, metric, subject, 'p95');
+  if (p95Values.every(Number.isFinite)) {
+    evidence.sampleP95 = summarizeValues(p95Values);
+  }
+  return evidence;
 }
 
 function summarizeRunField(entries, metric, subject, field) {
-  const values = entries.map((entry) => entry.report.analysis[metric][subject][field]);
+  return summarizeValues(runFieldValues(entries, metric, subject, field));
+}
+
+function runFieldValues(entries, metric, subject, field) {
+  return entries.map((entry) => entry.report.analysis[metric][subject][field]);
+}
+
+function summarizeValues(values) {
   const median = percentile(values, 50);
   return {
     mad: percentile(
@@ -184,11 +192,88 @@ function readFlag(args, flag, fallback) {
   return values[0];
 }
 
+/**
+ * Resolve report paths to summary locations. Explicit locations are deliberately restricted to
+ * canonical GitHub Actions artifact URLs: run and artifact numeric identities remain linkable in a
+ * committed summary without embedding an expiring signed download URL.
+ */
+export function resolvePerformanceReportLocations(reportPaths, suppliedLocations = []) {
+  if (!Array.isArray(reportPaths) || !Array.isArray(suppliedLocations)) {
+    throw new TypeError('report paths and locations must be arrays');
+  }
+  if (suppliedLocations.length === 0) return [...reportPaths];
+  if (suppliedLocations.length !== reportPaths.length) {
+    throw new TypeError(
+      `--location count ${String(suppliedLocations.length)} must equal --report count ${String(reportPaths.length)}`,
+    );
+  }
+  const locations = suppliedLocations.map(validatePerformanceReportLocation);
+  if (new Set(locations).size !== locations.length) {
+    throw new TypeError('--location values must be unique');
+  }
+  return locations;
+}
+
+export async function loadPerformanceReportEntries(reportPaths, suppliedLocations = []) {
+  const locations = resolvePerformanceReportLocations(reportPaths, suppliedLocations);
+  return Promise.all(
+    reportPaths.map(async (reportPath, index) => {
+      const absolute = path.resolve(reportPath);
+      const bytes = await readFile(absolute);
+      const report = JSON.parse(bytes.toString('utf8'));
+      if (suppliedLocations.length > 0) {
+        const runUrl = report?.execution?.github?.runUrl;
+        if (typeof runUrl !== 'string' || !locations[index].startsWith(`${runUrl}/artifacts/`)) {
+          throw new TypeError(
+            `--location[${String(index)}] does not identify an artifact from its report's GitHub Actions run`,
+          );
+        }
+      }
+      return {
+        contentDigest: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
+        location: locations[index],
+        report,
+      };
+    }),
+  );
+}
+
+function validatePerformanceReportLocation(value) {
+  if (typeof value !== 'string' || value.length === 0 || value.trim() !== value) {
+    throw new TypeError('--location must be a non-empty canonical URL');
+  }
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new TypeError(`--location is not a valid URL: ${value}`);
+  }
+  const githubArtifactPath =
+    /^\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/actions\/runs\/[1-9][0-9]*\/artifacts\/[1-9][0-9]*$/u;
+  if (
+    url.protocol !== 'https:' ||
+    url.hostname !== 'github.com' ||
+    url.port !== '' ||
+    url.username !== '' ||
+    url.password !== '' ||
+    url.search !== '' ||
+    url.hash !== '' ||
+    !githubArtifactPath.test(url.pathname) ||
+    url.href !== value
+  ) {
+    throw new TypeError(
+      '--location must be a canonical https://github.com/<owner>/<repo>/actions/runs/<run>/artifacts/<artifact> URL',
+    );
+  }
+  return value;
+}
+
 async function main(args) {
   const valueFlags = new Set([
     '--max-load-per-cpu',
     '--min-runs',
     '--min-samples',
+    '--location',
     '--out',
     '--report',
     '--require-provider',
@@ -199,17 +284,8 @@ async function main(args) {
     }
   }
   const paths = readRepeatedFlag(args, '--report');
-  const entries = await Promise.all(
-    paths.map(async (reportPath) => {
-      const absolute = path.resolve(reportPath);
-      const bytes = await readFile(absolute);
-      return {
-        contentDigest: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
-        location: reportPath,
-        report: JSON.parse(bytes.toString('utf8')),
-      };
-    }),
-  );
+  const locations = readRepeatedFlag(args, '--location');
+  const entries = await loadPerformanceReportEntries(paths, locations);
   const result = ratifyPerformanceBaseline(entries, {
     maxLoadPerCpu: Number(readFlag(args, '--max-load-per-cpu', '1')),
     minRuns: Number(readFlag(args, '--min-runs', '5')),

@@ -18,12 +18,21 @@ corpus size. Ratify their linked raw reports:
 ```sh
 node scripts/perf-baseline-ratify.mjs \
   --report artifacts/run-1/comparison.json \
+  --location https://github.com/kovojs/kovo/actions/runs/1001/artifacts/2001 \
   --report artifacts/run-2/comparison.json \
+  --location https://github.com/kovojs/kovo/actions/runs/1002/artifacts/2002 \
   --report artifacts/run-3/comparison.json \
+  --location https://github.com/kovojs/kovo/actions/runs/1003/artifacts/2003 \
   --report artifacts/run-4/comparison.json \
+  --location https://github.com/kovojs/kovo/actions/runs/1004/artifacts/2004 \
   --report artifacts/run-5/comparison.json \
+  --location https://github.com/kovojs/kovo/actions/runs/1005/artifacts/2005 \
   --out reports/dev-n24-baseline.json
 ```
+
+Each `--location` must be the canonical artifact URL from the corresponding report's authenticated
+Actions run. Supply one for every `--report` when the summary will be committed. Omitting all
+locations retains the local report paths and is intended only for scratch ratification.
 
 Then derive a reviewable budget without authoring timing or RSS numbers:
 
