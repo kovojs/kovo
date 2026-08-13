@@ -6,19 +6,34 @@ import { describe, expect, it } from 'vitest';
 
 const repoRoot = fileURLToPath(new URL('../', import.meta.url));
 const workflow = readFileSync(path.join(repoRoot, '.github/workflows/perf-realistic.yml'), 'utf8');
-const baselineScope = [
+const baselineDispatchScope = [
   "github.event_name == 'schedule' ||",
   "github.event_name == 'workflow_dispatch' &&",
   "inputs.measurement_scope == 'baselines' || inputs.measurement_scope == 'all'",
 ];
-const decisionScope = [
+const baselineLabelScope = [
+  "github.event_name == 'pull_request' && github.event.action == 'labeled'",
+  "github.event.label.name == 'perf-measure-baselines'",
+];
+const decisionDispatchScope = [
   "github.event_name == 'workflow_dispatch' &&",
   "inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all'",
 ];
+const decisionFocusByJob = new Map([
+  ['check-watch-decision', 'check-watch'],
+  ['dev-generation-decision', 'dev-generation'],
+  ['compressed-cache-decision', 'compressed-cache'],
+  ['cli-startup-decision', 'cli-startup'],
+  ['runtime-diagnostics', 'runtime-diagnostics'],
+  ['dev-edit-profile', 'dev-profile'],
+  ['loader-runtime-memo-decision', 'loader'],
+]);
 
 describe('realistic performance CI policy', () => {
   it('keeps deterministic bytes and a bounded matched correctness smoke on every PR', () => {
-    expect(workflow).toContain('  pull_request:\n');
+    expect(workflow).toContain(
+      '  pull_request:\n    types: [opened, synchronize, reopened, labeled]\n',
+    );
     const bytes = jobSource('bytes');
     const smoke = jobSource('correctness-smoke');
     expect(bytes).not.toContain("github.event_name != 'pull_request'");
@@ -43,12 +58,17 @@ describe('realistic performance CI policy', () => {
   it('keeps scheduled matrices serialized while independent manual evidence runs can overlap', () => {
     expect(workflow).toContain('cancel-in-progress: false');
     expect(workflow).toContain(
-      "group: perf-realistic-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}",
+      "group: perf-realistic-${{ (github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action == 'labeled' && startsWith(github.event.label.name, 'perf-measure-'))) && github.run_id || github.ref }}",
     );
     expect(workflow).toContain('      measurement_scope:\n');
     expect(workflow).toContain('        default: baselines\n');
     for (const option of ['baselines', 'decisions', 'all']) {
       expect(workflow).toContain(`          - ${option}\n`);
+    }
+    expect(workflow).toContain('      decision_focus:\n');
+    expect(workflow).toContain('        default: all\n');
+    for (const option of ['all', ...decisionFocusByJob.values()]) {
+      expect(dispatchInputSource('decision_focus')).toContain(`          - ${option}\n`);
     }
     for (const input of [
       'check_watch_baseline_sha',
@@ -63,7 +83,9 @@ describe('realistic performance CI policy', () => {
     }
     for (const job of ['browser-matrix', 'dev-matrix', 'build-matrix', 'server-matrix']) {
       const source = jobSource(job);
-      for (const token of baselineScope) expect(source, job).toContain(token);
+      for (const token of [...baselineDispatchScope, ...baselineLabelScope]) {
+        expect(source, job).toContain(token);
+      }
       expect(source, job).toContain('runs-on: ubuntu-24.04');
       expect(source, job).toContain('KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04');
       expect(source, job).toContain('vp exec node benchmarks/compare.mjs');
@@ -74,7 +96,33 @@ describe('realistic performance CI policy', () => {
       expect(source, job).toContain('retention-days: 30');
     }
     expect(count(jobSource('dev-matrix'), 'timeout-minutes:')).toBe(1);
-    for (const token of baselineScope) expect(jobSource('check-scaling')).toContain(token);
+    expect(count(jobSource('dev-matrix'), 'name: kovo-perf-dev-n${{ matrix.corpus }}')).toBe(1);
+    for (const token of [...baselineDispatchScope, ...baselineLabelScope]) {
+      expect(jobSource('check-scaling')).toContain(token);
+    }
+  });
+
+  it('runs sustained PR evidence only for an explicit maintainer-applied measurement label', () => {
+    for (const job of [
+      'check-scaling',
+      'browser-matrix',
+      'dev-matrix',
+      'build-matrix',
+      'server-matrix',
+    ]) {
+      const source = jobSource(job);
+      expect(source, job).toContain("github.event.action == 'labeled'");
+      expect(source, job).toContain("github.event.label.name == 'perf-measure-baselines'");
+    }
+    for (const [job, focus] of decisionFocusByJob) {
+      const source = jobSource(job);
+      expect(source, job).toContain("github.event.action == 'labeled'");
+      expect(source, job).toContain("github.event.label.name == 'perf-measure-decisions'");
+      expect(source, job).toContain(`github.event.label.name == 'perf-measure-${focus}'`);
+      expect(source, job).toContain(
+        `inputs.decision_focus == 'all' || inputs.decision_focus == '${focus}'`,
+      );
+    }
   });
 
   it('retains the exact publishable sample policies in the scheduled commands', () => {
@@ -117,10 +165,10 @@ describe('realistic performance CI policy', () => {
     const source = decisionJob('check-watch-decision');
     expect(source).toContain('fetch-depth: 0');
     expect(source).toContain(
-      'KOVO_CHECK_WATCH_BASELINE_SHA: ${{ inputs.check_watch_baseline_sha }}',
+      "KOVO_CHECK_WATCH_BASELINE_SHA: ${{ inputs.check_watch_baseline_sha || 'e3a78ca901035ada82a564943db808255c94ac82' }}",
     );
     expect(source).toContain(
-      'KOVO_CHECK_WATCH_CANDIDATE_SHA: ${{ inputs.check_watch_candidate_sha }}',
+      "KOVO_CHECK_WATCH_CANDIDATE_SHA: ${{ inputs.check_watch_candidate_sha || 'ce84925251200bbf6e7f79d8f83d74f335c7a572' }}",
     );
     expect(source).toContain(
       'KOVO_CHECK_WATCH_CANDIDATE_COMMIT: eb1a1663b40826240a7bb5080fd54cb66bf4bab8',
@@ -247,8 +295,12 @@ describe('realistic performance CI policy', () => {
 
     const loaderMemo = decisionJob('loader-runtime-memo-decision');
     expect(loaderMemo).toContain('fetch-depth: 0');
-    expect(loaderMemo).toContain('KOVO_LOADER_BASELINE_SHA: ${{ inputs.loader_baseline_sha }}');
-    expect(loaderMemo).toContain('KOVO_LOADER_CANDIDATE_SHA: ${{ inputs.loader_candidate_sha }}');
+    expect(loaderMemo).toContain(
+      "KOVO_LOADER_BASELINE_SHA: ${{ inputs.loader_baseline_sha || '761d6d66e9a94a26841c127390cc4c7d56c0e8b4' }}",
+    );
+    expect(loaderMemo).toContain(
+      "KOVO_LOADER_CANDIDATE_SHA: ${{ inputs.loader_candidate_sha || 'd1e9c50a497f6e7c7acd11f024178c1f0a14592a' }}",
+    );
     expect(loaderMemo).toContain(
       'KOVO_LOADER_HISTORICAL_COMMIT: e54c595b5906df9ab9b9b5e3fbf18e76c99e79b9',
     );
@@ -300,7 +352,15 @@ describe('realistic performance CI policy', () => {
 
 function decisionJob(name) {
   const source = jobSource(name);
-  for (const token of decisionScope) expect(source, name).toContain(token);
+  const focus = decisionFocusByJob.get(name);
+  if (focus === undefined) throw new Error(`missing decision focus mapping for ${name}`);
+  for (const token of decisionDispatchScope) expect(source, name).toContain(token);
+  expect(source, name).toContain(
+    `inputs.decision_focus == 'all' || inputs.decision_focus == '${focus}'`,
+  );
+  expect(source, name).toContain("github.event.action == 'labeled'");
+  expect(source, name).toContain("github.event.label.name == 'perf-measure-decisions'");
+  expect(source, name).toContain(`github.event.label.name == 'perf-measure-${focus}'`);
   expect(source, name).toContain('runs-on: ubuntu-24.04');
   expect(source, name).toContain('KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04');
   return source;

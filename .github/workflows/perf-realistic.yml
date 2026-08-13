@@ -16,6 +16,7 @@ name: Perf Realistic Tier
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
   schedule:
     - cron: '41 5 * * *'
   workflow_dispatch:
@@ -29,6 +30,20 @@ on:
           - baselines
           - decisions
           - all
+      decision_focus:
+        description: Select one candidate decision, or all candidate decisions
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - check-watch
+          - loader
+          - dev-generation
+          - compressed-cache
+          - cli-startup
+          - runtime-diagnostics
+          - dev-profile
       check_watch_baseline_sha:
         description: Exact clean sealed baseline commit; required when decisions run
         required: false
@@ -60,10 +75,10 @@ permissions:
   contents: read
 
 concurrency:
-  # A manual run is an explicitly requested evidence sample, so five independent baseline
-  # dispatches must be able to occupy five runners at once. Schedule/PR runs retain the ref key and
-  # therefore serialize with an earlier run for that ref instead of adding host contention.
-  group: perf-realistic-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
+  # A manual dispatch or maintainer-applied perf-measure label is an explicitly requested evidence
+  # sample, so independent samples use their run IDs. Schedule and ordinary PR runs retain the ref
+  # key and therefore serialize with an earlier run for that ref instead of adding host contention.
+  group: perf-realistic-${{ (github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action == 'labeled' && startsWith(github.event.label.name, 'perf-measure-'))) && github.run_id || github.ref }}
   cancel-in-progress: false
 
 env:
@@ -149,7 +164,9 @@ jobs:
     if: >-
       ${{ github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' &&
-      (inputs.measurement_scope == 'baselines' || inputs.measurement_scope == 'all')) }}
+      (inputs.measurement_scope == 'baselines' || inputs.measurement_scope == 'all')) ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      github.event.label.name == 'perf-measure-baselines') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -192,7 +209,9 @@ jobs:
     if: >-
       ${{ github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' &&
-      (inputs.measurement_scope == 'baselines' || inputs.measurement_scope == 'all')) }}
+      (inputs.measurement_scope == 'baselines' || inputs.measurement_scope == 'all')) ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      github.event.label.name == 'perf-measure-baselines') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     steps:
@@ -235,7 +254,9 @@ jobs:
     if: >-
       ${{ github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' &&
-      (inputs.measurement_scope == 'baselines' || inputs.measurement_scope == 'all')) }}
+      (inputs.measurement_scope == 'baselines' || inputs.measurement_scope == 'all')) ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      github.event.label.name == 'perf-measure-baselines') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     strategy:
@@ -286,7 +307,9 @@ jobs:
     if: >-
       ${{ github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' &&
-      (inputs.measurement_scope == 'baselines' || inputs.measurement_scope == 'all')) }}
+      (inputs.measurement_scope == 'baselines' || inputs.measurement_scope == 'all')) ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      github.event.label.name == 'perf-measure-baselines') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     strategy:
@@ -331,7 +354,9 @@ jobs:
     if: >-
       ${{ github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' &&
-      (inputs.measurement_scope == 'baselines' || inputs.measurement_scope == 'all')) }}
+      (inputs.measurement_scope == 'baselines' || inputs.measurement_scope == 'all')) ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      github.event.label.name == 'perf-measure-baselines') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     steps:
@@ -368,8 +393,12 @@ jobs:
   check-watch-decision:
     name: Check-watch candidate decision
     if: >-
-      ${{ github.event_name == 'workflow_dispatch' &&
-      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') }}
+      ${{ (github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') &&
+      (inputs.decision_focus == 'all' || inputs.decision_focus == 'check-watch')) ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      (github.event.label.name == 'perf-measure-decisions' ||
+      github.event.label.name == 'perf-measure-check-watch')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     steps:
@@ -394,8 +423,8 @@ jobs:
           printf '%s\n' "$tool_bin" >> "$GITHUB_PATH"
       - name: Authenticate and prepare exact sealed baseline and candidate scenarios
         env:
-          KOVO_CHECK_WATCH_BASELINE_SHA: ${{ inputs.check_watch_baseline_sha }}
-          KOVO_CHECK_WATCH_CANDIDATE_SHA: ${{ inputs.check_watch_candidate_sha }}
+          KOVO_CHECK_WATCH_BASELINE_SHA: ${{ inputs.check_watch_baseline_sha || 'e3a78ca901035ada82a564943db808255c94ac82' }}
+          KOVO_CHECK_WATCH_CANDIDATE_SHA: ${{ inputs.check_watch_candidate_sha || 'ce84925251200bbf6e7f79d8f83d74f335c7a572' }}
           KOVO_CHECK_WATCH_BASELINE_COMMIT: cc475b3ab2d54ff8201de059e713cc1d7e54400c
           KOVO_CHECK_WATCH_CANDIDATE_COMMIT: eb1a1663b40826240a7bb5080fd54cb66bf4bab8
           KOVO_CHECK_WATCH_CANDIDATE_PATCH_ID: 97a1cc7b8f0e46d6cbd44cb61d4708433f523aef
@@ -471,8 +500,12 @@ jobs:
   dev-generation-decision:
     name: N=${{ matrix.corpus }} fresh-generation candidate decision
     if: >-
-      ${{ github.event_name == 'workflow_dispatch' &&
-      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') }}
+      ${{ (github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') &&
+      (inputs.decision_focus == 'all' || inputs.decision_focus == 'dev-generation')) ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      (github.event.label.name == 'perf-measure-decisions' ||
+      github.event.label.name == 'perf-measure-dev-generation')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     strategy:
@@ -545,8 +578,12 @@ jobs:
   compressed-cache-decision:
     name: Proved-document compression-cache decision
     if: >-
-      ${{ github.event_name == 'workflow_dispatch' &&
-      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') }}
+      ${{ (github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') &&
+      (inputs.decision_focus == 'all' || inputs.decision_focus == 'compressed-cache')) ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      (github.event.label.name == 'perf-measure-decisions' ||
+      github.event.label.name == 'perf-measure-compressed-cache')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     steps:
@@ -574,8 +611,12 @@ jobs:
   cli-startup-decision:
     name: Packed CLI startup decision
     if: >-
-      ${{ github.event_name == 'workflow_dispatch' &&
-      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') }}
+      ${{ (github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') &&
+      (inputs.decision_focus == 'all' || inputs.decision_focus == 'cli-startup')) ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      (github.event.label.name == 'perf-measure-decisions' ||
+      github.event.label.name == 'perf-measure-cli-startup')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
@@ -610,8 +651,12 @@ jobs:
   runtime-diagnostics:
     name: Current forced-dynamic and route-CSS diagnostics
     if: >-
-      ${{ github.event_name == 'workflow_dispatch' &&
-      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') }}
+      ${{ (github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') &&
+      (inputs.decision_focus == 'all' || inputs.decision_focus == 'runtime-diagnostics')) ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      (github.event.label.name == 'perf-measure-decisions' ||
+      github.event.label.name == 'perf-measure-runtime-diagnostics')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
@@ -647,8 +692,12 @@ jobs:
   dev-edit-profile:
     name: N=${{ matrix.corpus }} dev edit-to-paint diagnostic
     if: >-
-      ${{ github.event_name == 'workflow_dispatch' &&
-      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') }}
+      ${{ (github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') &&
+      (inputs.decision_focus == 'all' || inputs.decision_focus == 'dev-profile')) ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      (github.event.label.name == 'perf-measure-decisions' ||
+      github.event.label.name == 'perf-measure-dev-profile')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     strategy:
@@ -701,8 +750,12 @@ jobs:
   loader-runtime-memo-decision:
     name: Loader-runtime memo candidate decision
     if: >-
-      ${{ github.event_name == 'workflow_dispatch' &&
-      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') }}
+      ${{ (github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') &&
+      (inputs.decision_focus == 'all' || inputs.decision_focus == 'loader')) ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      (github.event.label.name == 'perf-measure-decisions' ||
+      github.event.label.name == 'perf-measure-loader')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     steps:
@@ -724,8 +777,8 @@ jobs:
           printf '%s\n' "$tool_bin" >> "$GITHUB_PATH"
       - name: Authenticate historical evidence and prepare exact candidate worktrees
         env:
-          KOVO_LOADER_BASELINE_SHA: ${{ inputs.loader_baseline_sha }}
-          KOVO_LOADER_CANDIDATE_SHA: ${{ inputs.loader_candidate_sha }}
+          KOVO_LOADER_BASELINE_SHA: ${{ inputs.loader_baseline_sha || '761d6d66e9a94a26841c127390cc4c7d56c0e8b4' }}
+          KOVO_LOADER_CANDIDATE_SHA: ${{ inputs.loader_candidate_sha || 'd1e9c50a497f6e7c7acd11f024178c1f0a14592a' }}
           KOVO_LOADER_HISTORICAL_COMMIT: e54c595b5906df9ab9b9b5e3fbf18e76c99e79b9
           KOVO_LOADER_HISTORICAL_REF: refs/heads/perf-spike/loader-memo-e54c595b5
         run: |
