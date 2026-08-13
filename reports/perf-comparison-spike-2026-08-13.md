@@ -15,16 +15,16 @@ These figures describe the frameworks as the fixtures currently ship, not equiva
 Three browser iterations per condition and three Lighthouse runs per cell, production posture,
 Chromium 148, load average 2.23/2.79/2.86 at completion:
 
-| Metric | Kovo 0.3.0 | Next.js 16.2.9 | Reading |
-| --- | ---: | ---: | --- |
-| Desktop cold-session bytes | 8,186 B | 203,039 B | Kovo 24.8x smaller |
-| Mobile cold-session bytes | 8,190 B | 175,266 B | Kovo 21.4x smaller |
-| JavaScript bytes | 0 B | 152,515 B | Expected from unequal L0/L1 fixtures |
-| Mobile FCP/LCP | 388/388 ms | 400/400 ms | Approximately tied |
-| Mobile navigation to paint | 535 ms | 100 ms | Kovo 5.34x slower; it replaced the document 3/3 |
-| Mobile cart-readiness proxy | 211 ms | 1,219 ms | Not comparable until the cart is capability-matched |
-| Lighthouse mobile `/` LCP | 770 ms | 2,154 ms | Kovo 2.80x faster on the default fixtures |
-| bfcache | 3/3 restored | n/a, same-document | Both behaved correctly for their navigation model |
+| Metric                      |   Kovo 0.3.0 |     Next.js 16.2.9 | Reading                                             |
+| --------------------------- | -----------: | -----------------: | --------------------------------------------------- |
+| Desktop cold-session bytes  |      8,186 B |          203,039 B | Kovo 24.8x smaller                                  |
+| Mobile cold-session bytes   |      8,190 B |          175,266 B | Kovo 21.4x smaller                                  |
+| JavaScript bytes            |          0 B |          152,515 B | Expected from unequal L0/L1 fixtures                |
+| Mobile FCP/LCP              |   388/388 ms |         400/400 ms | Approximately tied                                  |
+| Mobile navigation to paint  |       535 ms |             100 ms | Kovo 5.34x slower; it replaced the document 3/3     |
+| Mobile cart-readiness proxy |       211 ms |           1,219 ms | Not comparable until the cart is capability-matched |
+| Lighthouse mobile `/` LCP   |       770 ms |           2,154 ms | Kovo 2.80x faster on the default fixtures           |
+| bfcache                     | 3/3 restored | n/a, same-document | Both behaved correctly for their navigation model   |
 
 The navigation instrument favours document replacement, so the 5.34x mobile Kovo loss is, if
 anything, conservative. Small desktop navigation differences are not reportable with this probe.
@@ -37,10 +37,10 @@ identity bootstrap (`node scripts/perf-gate.mjs --suite bytes --components 24`).
 
 Back-to-back warm-ish production builds of the current default fixtures:
 
-| Metric | Kovo | Next.js | Ratio |
-| --- | ---: | ---: | ---: |
-| Build wall | 30.87 s | 3.22 s | Kovo 9.59x slower |
-| Peak process RSS | 1,754 MB | 617 MB | Kovo 2.84x higher |
+| Metric           |     Kovo | Next.js |             Ratio |
+| ---------------- | -------: | ------: | ----------------: |
+| Build wall       |  30.87 s |  3.22 s | Kovo 9.59x slower |
+| Peak process RSS | 1,754 MB |  617 MB | Kovo 2.84x higher |
 
 This is an as-shipped comparison, not yet the required 10-sample equal-shape matrix. Next printed
 843 ms compile, 756 ms TypeScript, and 206 ms static generation; Kovo needs its phase census carried

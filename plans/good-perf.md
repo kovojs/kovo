@@ -19,15 +19,15 @@ Browser cells used three iterations and three Lighthouse repeats; build is one b
 Source, dirty paths, versions, and lock digests were recorded. Treat timing as indicative until the
 clean serialized matrix below is complete. Detailed evidence: `reports/perf-comparison-spike-2026-08-13.md`.
 
-| Default/as-shipped metric | Kovo | Next.js | Current reading |
-| --- | ---: | ---: | --- |
-| Mobile cold-session bytes | 8,190 B | 175,266 B | Kovo 21.4x smaller |
-| JavaScript bytes | 0 B | 152,515 B | Fixtures are unequal L0 versus L1 |
-| Mobile FCP / LCP | 388 / 388 ms | 400 / 400 ms | Approximately tied |
-| Mobile navigation to paint | 535 ms | 100 ms | Kovo 5.34x slower; 3/3 document replacements |
-| Lighthouse mobile `/` LCP | 770 ms | 2,154 ms | Kovo 2.80x faster on unequal default fixtures |
-| Production build wall | 30.87 s | 3.22 s | Kovo 9.59x slower |
-| Production build peak RSS | 1,754 MB | 617 MB | Kovo 2.84x higher |
+| Default/as-shipped metric  |         Kovo |      Next.js | Current reading                               |
+| -------------------------- | -----------: | -----------: | --------------------------------------------- |
+| Mobile cold-session bytes  |      8,190 B |    175,266 B | Kovo 21.4x smaller                            |
+| JavaScript bytes           |          0 B |    152,515 B | Fixtures are unequal L0 versus L1             |
+| Mobile FCP / LCP           | 388 / 388 ms | 400 / 400 ms | Approximately tied                            |
+| Mobile navigation to paint |       535 ms |       100 ms | Kovo 5.34x slower; 3/3 document replacements  |
+| Lighthouse mobile `/` LCP  |       770 ms |     2,154 ms | Kovo 2.80x faster on unequal default fixtures |
+| Production build wall      |      30.87 s |       3.22 s | Kovo 9.59x slower                             |
+| Production build peak RSS  |     1,754 MB |       617 MB | Kovo 2.84x higher                             |
 
 The current commerce fixtures are not capability-matched: Kovo's cart is an inert native popover
 whose confirmation text is already in the document; Next's cart owns mutable client state. The
@@ -52,7 +52,7 @@ Rules for every accepted baseline and spike:
 - Use clean committed worktrees from the same base SHA and frozen lockfiles. Reports must record SHA,
   dirty paths, framework/browser/Node versions, lock digests, host facts, and pre/post load.
 - Run one process tree at a time. Alternate `Kovo, Next, Next, Kovo` or `baseline, spike, spike,
-  baseline`; never benchmark concurrent worktrees.
+baseline`; never benchmark concurrent worktrees.
 - Use `localhost` for both dev-browser entrants so Turbopack HMR has a valid websocket.
 - Report median, MAD, p95, sample count, zero/miss/error counts, process-tree peak RSS, and paired
   bootstrap 95% confidence intervals. Retain raw per-sample data outside the active plan.
@@ -70,120 +70,120 @@ Rules for every accepted baseline and spike:
 
 ## Targets
 
-| Area | First milestone | Competitive target |
-| --- | --- | --- |
-| Dev cold ready | ≥30% better than current Kovo | ≤2x matched Next |
-| Leaf edit to paint | miss rate 0; ≥20% better | ≤2x matched Next; state survives 100% |
-| Entry edit to paint | miss rate 0; ≥20% better | ≤3x matched Next; documented reload posture |
-| Syntax error / recovery | p95 ≤1 s / ≤2 s | no silent or lost revision |
-| `check --watch` closure edit | ≤5 s | ≤2 s, current authenticated target |
-| Production build | ≤6x Next, RSS ≤2x | ≤2x Next, RSS ≤1.5x |
-| Default critical path | keep ≤7 KB | no >5% FCP/LCP regression |
-| Matched L1 session bytes | establish baseline | ≤50% of Next |
-| Matched L1 mobile navigation | ≤2x Next | parity within paired noise |
-| Cached Brotli throughput | ≥10% better than current Kovo | within 10% of Next HIT |
-| Forced-dynamic throughput | ≥10% better than current Kovo | within 1.25x of Next dynamic |
+| Area                         | First milestone               | Competitive target                          |
+| ---------------------------- | ----------------------------- | ------------------------------------------- |
+| Dev cold ready               | ≥30% better than current Kovo | ≤2x matched Next                            |
+| Leaf edit to paint           | miss rate 0; ≥20% better      | ≤2x matched Next; state survives 100%       |
+| Entry edit to paint          | miss rate 0; ≥20% better      | ≤3x matched Next; documented reload posture |
+| Syntax error / recovery      | p95 ≤1 s / ≤2 s               | no silent or lost revision                  |
+| `check --watch` closure edit | ≤5 s                          | ≤2 s, current authenticated target          |
+| Production build             | ≤6x Next, RSS ≤2x             | ≤2x Next, RSS ≤1.5x                         |
+| Default critical path        | keep ≤7 KB                    | no >5% FCP/LCP regression                   |
+| Matched L1 session bytes     | establish baseline            | ≤50% of Next                                |
+| Matched L1 mobile navigation | ≤2x Next                      | parity within paired noise                  |
+| Cached Brotli throughput     | ≥10% better than current Kovo | within 10% of Next HIT                      |
+| Forced-dynamic throughput    | ≥10% better than current Kovo | within 1.25x of Next dynamic                |
 
 ## Phase 0 — make the comparison authoritative
 
 - [x] Bind every browser/perf-gate report to source and dependencies and fail closed on fake wins.
   - Evidence: `c661a9ff5`; `pnpm exec vitest --run benchmarks/harness/report.test.mjs
-    scripts/perf-gate.test.mjs --reporter=dot` passed 63/63, syntax checks passed, and malformed
+scripts/perf-gate.test.mjs --reporter=dot` passed 63/63, syntax checks passed, and malformed
     `--components` exits 1.
 - [x] Rebuild and measure the current default Kovo/Next fixtures in production posture.
   - Evidence: `node benchmarks/run-all.mjs --apps kovo,nextjs --iterations 3
-    --lighthouse-runs 3 --bfcache-iterations 3 --port-base 49400`; summary and limits are in
+--lighthouse-runs 3 --bfcache-iterations 3 --port-base 49400`; summary and limits are in
     `reports/perf-comparison-spike-2026-08-13.md`.
 - [ ] Add a matched L0 fixture: identical server-rendered native controls, full-document navigation,
-  no framework client state, and identical content/assets in Kovo and Next.
+      no framework client state, and identical content/assets in Kovo and Next.
 - [ ] Add a matched L1 fixture: real mutable cart/email/order state and confirmation in both
-  frameworks, with Kovo query/state interaction and enhanced navigation actually installed.
+      frameworks, with Kovo query/state interaction and enhanced navigation actually installed.
 - [ ] Add generated equal-shape developer corpora at 24 and 216 modules with the same route count,
-  approximate LOC, import fan-out, and leaf/entry/data edits.
+      approximate LOC, import fan-out, and leaf/entry/data edits.
 - [ ] Implement `benchmarks/compare.mjs` as the single serialized orchestrator for browser, dev,
-  build, and server cells; include alternating order, warmups, sample policy, per-cell provenance,
-  and paired analysis.
+      build, and server cells; include alternating order, warmups, sample policy, per-cell provenance,
+      and paired analysis.
 - [ ] Replace the mixed navigation clock with trace-based destination-paint evidence that uses the
-  same observation boundary for document-replacing and same-document paths.
+      same observation boundary for document-replacing and same-document paths.
 - [ ] Record total session bytes through destination paint, separating initial, automatic prefetch,
-  click, and post-click transfer so a zero-byte click cannot hide prefetch cost.
+      click, and post-click transfer so a zero-byte click cannot hide prefetch cost.
 - [ ] Produce the first clean publishable default and matched baselines with 30 browser samples,
-  5 Lighthouse runs per cell, and 10 bfcache traversals.
+      5 Lighthouse runs per cell, and 10 bfcache traversals.
 
 ## Phase 1 — developer loop
 
 - [ ] Ratify current-head dev ready/edit/error/recovery/RSS baselines against matched Next at N=24
-  and N=216; use 15 fresh starts and 30 measured edits after three warmups per edit class.
+      and N=216; use 15 fresh starts and 30 measured edits after three warmups per edit class.
 - [ ] Re-run the narrow fresh-generation spike `04a976394` in alternating quiet-host cycles.
   - Spike evidence: its bundle proxy removes 25/177 modules and 788,308/2,034,129 emitted bytes
     (38.8%); four 7-edit runs landed 28/28, but medians reversed with host load, so latency is
     unresolved and the branch must not merge on current evidence.
 - [ ] Profile exact edit-to-paint windows after the matched baseline and rank self time, allocation,
-  module evaluation, Vite transform, SSR generation, and asynchronous proof convergence. Retire any
-  hypothesis not present in the current top five.
+      module evaluation, Vite transform, SSR generation, and asynchronous proof convergence. Retire any
+      hypothesis not present in the current top five.
 - [ ] Spike authenticated in-session closure reuse for `kovo check --watch` by exposing serializable
-  producer seams for trust/static/style facts in `build-export.ts`.
+      producer seams for trust/static/style facts in `build-export.ts`.
   - SPEC §11.4 constraints: always freshly evaluate app modules and rebuild runtime/app objects;
     never retain diagnostics, partial graphs, `LoadedBuildAppModule`, or unauthenticated disk state;
     ambiguity executes the full producer.
 - [ ] Spike a TypeScript semantic `BuilderProgram` plus changed-file/reverse-dependent analysis for
-  the watch session, with exact source/config/package/version digests in every reused fact.
+      the watch session, with exact source/config/package/version digests in every reused fact.
 - [ ] Measure packed CLI versus source-checkout CLI startup. If packed users are already fast, treat
-  source transformation/prebuilt CLI work as maintainer performance rather than product DevEx.
+      source transformation/prebuilt CLI work as maintainer performance rather than product DevEx.
 - [ ] Add browser-visible dev budgets for leaf/entry edit-to-paint, diagnostic, recovery, miss rate,
-  state preservation, ready time, and process-tree RSS at both workload sizes.
+      state preservation, ready time, and process-tree RSS at both workload sizes.
 
 ## Phase 2 — check and production build
 
 - [ ] Establish 10-sample clean, unchanged, and one-line-edit build baselines on equal-shape N=24
-  and N=216 corpora, with phase census, artifact bytes, and peak process-tree RSS.
+      and N=216 corpora, with phase census, artifact bytes, and peak process-tree RSS.
 - [ ] Carry the complete source-check phase census into paired build reports and account for the
-  currently unattributed CLI/startup tail before changing implementation.
+      currently unattributed CLI/startup tail before changing implementation.
 - [ ] Remove duplicated one-shot work only when the source-proof and deploy-proof boundaries remain
-  explicit (SPEC §5.2 rule 9); preserve sequential heap isolation between analyzer phases.
+      explicit (SPEC §5.2 rule 9); preserve sequential heap isolation between analyzer phases.
 - [ ] Design a persistent foreground build/watch session if warm cross-invocation reuse is still
-  required. Do not reintroduce the retired unauthenticated on-disk compiler cache.
+      required. Do not reintroduce the retired unauthenticated on-disk compiler cache.
 - [ ] Gate build wall, p95, RSS, and artifact size on the realistic corpus; reach the first milestone
-  before attempting the competitive target.
+      before attempting the competitive target.
 
 ## Phase 3 — production runtime
 
 - [ ] Run the matched L0/L1 browser matrix before changing navigation or runtime emission. Preserve
-  inert documents at zero JS; the deterministic spike found the ordinary deferred runtime at
-  49,236 B Brotli and the enhanced-navigation closure alone at 22,642 B Brotli.
+      inert documents at zero JS; the deterministic spike found the ordinary deferred runtime at
+      49,236 B Brotli and the enhanced-navigation closure alone at 22,642 B Brotli.
 - [ ] Profile matched L1 mobile navigation from click through destination paint. Attribute server,
-  transfer, document-parts decode/build, morph, style, layout, and paint separately.
+      transfer, document-parts decode/build, morph, style, layout, and paint separately.
 - [ ] Revisit opt-in Speculation Rules only after repairing the rejected spike's compiler/runtime
-  pattern disagreement and fail-open page indirection. `spec/07-navigation.md` default-off remains
-  normative until a SPEC change is reviewed; never merge the historical branch as-is.
+      pattern disagreement and fail-open page indirection. `spec/07-navigation.md` default-off remains
+      normative until a SPEC change is reviewed; never merge the historical branch as-is.
 - [ ] Implement a switchable compressed proved-document cache spike with a module-private witness
-  carrying build token and body digest, bounded `{token,digest,encoding}` entries, and single-flight
-  compression across live Node and emitted Node/Vercel adapters.
+      carrying build token and body digest, bounded `{token,digest,encoding}` entries, and single-flight
+      compression across live Node and emitted Node/Vercel adapters.
   - Required floors: public ETags cannot mint identity; cookie/authorization/Set-Cookie/
     Clear-Site-Data/private/no-store/no-transform/HEAD/304 bypass; `Kovo-Pad` is fresh on every hit;
     build changes and eviction cannot substitute bodies.
 - [ ] Measure the compressed-cache spike in seven alternating 15-second samples after 5-second
-  warmups at c={1,8,32}, routes={listing,detail}, encodings={identity,br}, and modes={HIT,304,dynamic};
-  report req/s, p50/p95/p99, CPU, and RSS with the validated repo generator.
+      warmups at c={1,8,32}, routes={listing,detail}, encodings={identity,br}, and modes={HIT,304,dynamic};
+      report req/s, p50/p95/p99, CPU, and RSS with the validated repo generator.
 - [ ] Measure per-route stylesheet splitting on the matched multi-route fixtures; implement only if
-  it saves at least 10% route critical-path bytes without duplicating enough shared CSS to regress
-  total session bytes.
+      it saves at least 10% route critical-path bytes without duplicating enough shared CSS to regress
+      total session bytes.
 - [ ] Profile current forced-dynamic SSR before proposing hot-path work. The 2026-08-08 profile
-  refuted JSX lowering, HKDF/HMAC, request proxy, head serialization, CSP rescan, and the claimed
-  38% `Reflect.apply` opportunity; do not revive them without current contradictory evidence.
+      refuted JSX lowering, HKDF/HMAC, request proxy, head serialization, CSP rescan, and the claimed
+      38% `Reflect.apply` opportunity; do not revive them without current contradictory evidence.
 
 ## Phase 4 — continuous budgets and publication
 
 - [ ] Run deterministic bytes and a short correctness smoke per PR; schedule N=216 check scaling,
-  matched dev edits, browser cells, builds, and throughput on a quiet pinned nightly runner.
+      matched dev edits, browser cells, builds, and throughput on a quiet pinned nightly runner.
 - [ ] Store raw reports as CI artifacts and commit only a clean reviewed baseline summary. A dirty,
-  null, load-shed, wrong-posture, or integrity-failed run cannot update budgets.
+      null, load-shed, wrong-posture, or integrity-failed run cannot update budgets.
 - [ ] Ratify budgets from at least five independent baseline runs on the pinned runner using median,
-  MAD, p95, and the acceptance rules above; replace rationale-only sample arrays with linked reports.
+      MAD, p95, and the acceptance rules above; replace rationale-only sample arrays with linked reports.
 - [ ] Add a regression comparator that requires matching source/lock/workload identities and reports
-  `unproven` rather than pass when load, sample count, or identity is outside policy.
+      `unproven` rather than pass when load, sample count, or identity is outside policy.
 - [ ] Publish Kovo-vs-Next claims only after both default and capability-matched lanes pass; describe
-  architectural differences beside the numbers and link the exact report and fixture sources.
+      architectural differences beside the numbers and link the exact report and fixture sources.
 
 ## Standing constraints
 
@@ -202,9 +202,9 @@ Rules for every accepted baseline and spike:
 ## Latest verification
 
 - `pnpm exec vitest --run benchmarks/harness/report.test.mjs scripts/perf-gate.test.mjs
-  --reporter=dot` — 63 passed.
+--reporter=dot` — 63 passed.
 - `node --check benchmarks/run-all.mjs && node --check scripts/perf-gate.mjs && node --check
-  scripts/lib/perf-provenance.mjs` — passed.
+scripts/lib/perf-provenance.mjs` — passed.
 - `node scripts/perf-gate.mjs --evaluate /tmp/kovo-perf-bytes-20260813.json` — 5/5 byte gates passed.
 - Browser run integrity: zero page errors, zero rate limits, zero null Lighthouse samples, and HTTP
   statuses observed for every probe; two browser-originated favicon 404s were separately disclosed.
