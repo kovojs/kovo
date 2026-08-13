@@ -127,7 +127,11 @@ export function runBuildBenchmark(options) {
   const samples = [];
   const errors = [];
   const source = collectPerformanceProvenance({
-    lockFiles: ['pnpm-lock.yaml', 'benchmarks/nextjs/pnpm-lock.yaml'],
+    lockFiles: [
+      'pnpm-lock.yaml',
+      'benchmarks/nextjs/pnpm-lock.yaml',
+      'benchmarks/harness/pnpm-lock.yaml',
+    ],
     repoRoot,
   });
   const run = () =>

@@ -1,4 +1,9 @@
+import { createHash } from 'node:crypto';
+
 import { describe, expect, it } from 'vitest';
+
+import { canonicalJson } from '../scripts/lib/perf-host.mjs';
+import { performanceHostFingerprint } from '../scripts/lib/perf-host.mjs';
 
 import {
   bootstrapMedianCi,
@@ -7,14 +12,87 @@ import {
   EXECUTION_ORDER,
   fixtureProof,
   pairedAnalysis,
+  performanceWorkloadIdentity,
+  serverSampleSchedule,
   summarize,
   ttiInteractionProof,
   validateDevCell,
+  validHostFingerprint,
 } from './compare.mjs';
 
 describe('serialized comparison analysis', () => {
   it('pins the alternating K,N,N,K execution order', () => {
     expect(EXECUTION_ORDER).toEqual(['kovo', 'nextjs', 'nextjs', 'kovo']);
+  });
+
+  it('extends K,N,N,K to seven paired server occurrences without concurrency', () => {
+    const schedule = serverSampleSchedule(7);
+    expect(schedule.map((entry) => entry.framework)).toEqual([
+      'kovo',
+      'nextjs',
+      'nextjs',
+      'kovo',
+      'kovo',
+      'nextjs',
+      'nextjs',
+      'kovo',
+      'kovo',
+      'nextjs',
+      'nextjs',
+      'kovo',
+      'kovo',
+      'nextjs',
+    ]);
+    expect(
+      schedule.filter((entry) => entry.framework === 'kovo').map((entry) => entry.occurrence),
+    ).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(
+      schedule.filter((entry) => entry.framework === 'nextjs').map((entry) => entry.occurrence),
+    ).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(() => serverSampleSchedule(0)).toThrow(/between 1 and 100/u);
+  });
+
+  it('authenticates a server-only workload without requiring generated dev corpora', async () => {
+    const workload = await performanceWorkloadIdentity(
+      {
+        serverConcurrencies: [1],
+        serverDurationMs: 25,
+        serverEncodings: ['identity'],
+        serverModes: ['HIT'],
+        serverRoutes: ['listing'],
+        serverSamples: 1,
+        serverWarmupMs: 25,
+      },
+      ['server'],
+    );
+    expect(workload).toMatchObject({
+      complete: true,
+      schema: 'kovo-performance-workload-identity/v1',
+      identity: {
+        cells: ['server'],
+        policies: {
+          server: {
+            concurrencies: [1],
+            durationMs: 25,
+            encodings: ['identity'],
+            modes: ['HIT'],
+            routes: ['listing'],
+            samples: 1,
+            warmupMs: 25,
+          },
+        },
+      },
+    });
+    expect(workload.digest).toMatch(/^sha256:[0-9a-f]{64}$/u);
+    expect(workload.digest).toBe(
+      `sha256:${createHash('sha256').update(canonicalJson(workload.identity)).digest('hex')}`,
+    );
+  });
+
+  it('recomputes host digests instead of trusting their presence', () => {
+    const host = performanceHostFingerprint({ runnerImage: 'runner@sha256:fixture' });
+    expect(validHostFingerprint(host)).toBe(true);
+    expect(validHostFingerprint({ ...host, node: 'v0.0.0' })).toBe(false);
   });
 
   it('reports raw-summary statistics without dropping sample counts', () => {
@@ -58,6 +136,18 @@ describe('serialized comparison analysis', () => {
     });
   });
 
+  it('pairs all seven single-sample server occurrences', () => {
+    const cells = [];
+    for (let occurrence = 0; occurrence < 7; occurrence += 1) {
+      cells.push(serverCell('kovo', occurrence, 100 + occurrence));
+      cells.push(serverCell('nextjs', occurrence, 90 + occurrence));
+    }
+    const analysis = pairedAnalysis(cells, { bootstrapIterations: 100, seed: 8 });
+    expect(
+      analysis['matched-runtime/server/hit-listing-identity-c1/requestsPerSecond'].pairedDifference,
+    ).toMatchObject({ median: 10, samples: 7 });
+  });
+
   it('marks provenance or comparator mismatches unproven', () => {
     expect(
       comparisonVerdict({
@@ -69,6 +159,7 @@ describe('serialized comparison analysis', () => {
         'source provenance is dirty',
         'source provenance changed during run',
         'comparator pairing is incomplete',
+        'workload identity is incomplete',
       ],
       status: 'unproven',
     });
@@ -188,6 +279,7 @@ function browserCell(framework, occurrence, values) {
     lane: 'matched-l1',
     occurrence,
     report: {
+      schema: 'kovo-browser-benchmark/v1',
       apps: [
         {
           conditions: {
@@ -211,5 +303,16 @@ function devCell(framework, occurrence, editValues, readyValues) {
       readySamples: readyValues.map((durationMs) => ({ durationMs })),
       samples: editValues.map((leafMs) => ({ leafMs })),
     },
+  };
+}
+
+function serverCell(framework, occurrence, requestsPerSecond) {
+  return {
+    cell: 'server',
+    framework,
+    lane: 'matched-runtime',
+    mode: 'hit-listing-identity-c1',
+    occurrence,
+    report: { samples: [{ requestsPerSecond }] },
   };
 }

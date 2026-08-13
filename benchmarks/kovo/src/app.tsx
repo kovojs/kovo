@@ -801,6 +801,39 @@ const matchedL1ProductRoute = app.route('/matched/l1/product/:slug', {
   stylesheets: benchmarkStylesheets,
 });
 
+// Forced-dynamic counterparts for the server matrix in plans/good-perf.md Phase 3. The ignored
+// clock read is intentionally request-reachable: SPEC §9.4 classifies ambient time as
+// `shared-cache-closed`, while the rendered representation stays byte-stable and capability-matched
+// with the Next.js fixture so the load generator can reject every representation miss.
+const matchedDynamicHomeRoute = app.route('/matched/runtime/dynamic', {
+  access: app.publicAccess('public forced-dynamic benchmark catalog'),
+  meta: { title: 'Matched Dynamic Supply Benchmark' },
+  page: () => {
+    Date.now();
+    return (
+      <MatchedL0Shell>
+        <MatchedL0ListingPage />
+      </MatchedL0Shell>
+    );
+  },
+  stylesheets: benchmarkStylesheets,
+});
+
+const matchedDynamicProductRoute = app.route('/matched/runtime/dynamic/product/:slug', {
+  access: app.publicAccess('public forced-dynamic benchmark product'),
+  meta: { title: 'Matched Dynamic Supply Product' },
+  page: (context) => {
+    Date.now();
+    const { blurb, img, name, priceLabel } = productForSlug(context.params.slug);
+    return (
+      <MatchedL0Shell>
+        <MatchedProductPage blurb={blurb} img={img} name={name} priceLabel={priceLabel} />
+      </MatchedL0Shell>
+    );
+  },
+  stylesheets: benchmarkStylesheets,
+});
+
 const imageRoute = app.route('/images/:name', {
   access: app.publicAccess('public immutable benchmark images'),
   page: (context) =>
@@ -819,6 +852,8 @@ export default app.assemble({
     matchedL0ProductRoute,
     matchedL1HomeRoute,
     matchedL1ProductRoute,
+    matchedDynamicHomeRoute,
+    matchedDynamicProductRoute,
     imageRoute,
   ],
 });

@@ -12,6 +12,8 @@ import { runAppBenchmark } from './harness/run.mjs';
 import { DEFAULT_LIGHTHOUSE_REPEATS } from './harness/lighthouse.mjs';
 import { SETTLE_DEFAULTS } from './harness/scenarios.mjs';
 import { writeReport } from './harness/report.mjs';
+import { assertMeasurementIntegrity } from './harness/integrity.mjs';
+import { BROWSER_BENCHMARK_SCHEMA } from './harness/schema.mjs';
 import { collectPerformanceProvenance } from '../scripts/lib/perf-provenance.mjs';
 
 const benchmarkRoot = fileURLToPath(new URL('.', import.meta.url));
@@ -252,6 +254,7 @@ const output = {
     totalMemoryBytes: os.totalmem(),
   },
   runId,
+  schema: BROWSER_BENCHMARK_SCHEMA,
   settle,
   warmups,
   source: collectPerformanceProvenance({
@@ -286,115 +289,6 @@ function assertPostureMatched(app, serverLog) {
     throw new Error(
       `${app.id} was started with NODE_ENV=production but reported development posture:\n` +
         offending.map((line) => `  ${line}`).join('\n'),
-    );
-  }
-}
-
-/**
- * Refuses to publish a run whose numbers were shaped by load shedding, server errors, or traffic
- * that never completed at the network layer.
- *
- * Kovo's DEFAULT_PER_IP_RATE is 600 requests/minute for every source IP, and the whole benchmark
- * arrives from 127.0.0.1 (plans/good-perf.md O13). A shed run looks fast and plausible; without
- * this check it would be indistinguishable from a healthy one.
- *
- * Covers ALL THREE traffic sources, not just the custom scenarios: the custom scenario iterations,
- * the Lighthouse cells (4 per entrant x `--lighthouse-runs` page loads, previously untracked), and
- * the back/forward-cache probe (2 document loads per iteration in its own browser, previously
- * untracked). A probe whose status could not be observed is reported as untracked rather than
- * counted as clean.
- */
-function assertMeasurementIntegrity(runs) {
-  const problems = [];
-  const notes = [];
-  for (const run of runs) {
-    if (run.integrity?.complete !== true || (run.integrity?.errors?.length ?? 0) > 0) {
-      problems.push(
-        `${run.app}/browser-adapter: ${
-          run.integrity?.errors?.join('; ') || 'integrity verdict was absent or incomplete'
-        }.`,
-      );
-    }
-    for (const [conditionName, condition] of Object.entries(run.conditions ?? {})) {
-      for (const [scenarioName, scenario] of Object.entries(condition)) {
-        for (const iteration of scenario?.iterations ?? []) {
-          const where = `${run.app}/${conditionName}/${scenarioName}`;
-          if (iteration.rateLimitedResponses > 0) {
-            problems.push(
-              `${where}: ${iteration.rateLimitedResponses} HTTP 429 responses — the server shed ` +
-                `load, so these timings are not comparable.`,
-            );
-          }
-          if (iteration.errorResponses > 0) {
-            problems.push(`${where}: ${iteration.errorResponses} HTTP >=400 responses.`);
-          }
-          // A request that never produced an HTTP response carries no status at all, so neither
-          // check above can see it. Harness-caused aborts are excluded in scenarios.mjs.
-          if (iteration.failedRequests > 0) {
-            problems.push(
-              `${where}: ${iteration.failedRequests} requests failed at the network layer ` +
-                `(${(iteration.failureReasons ?? []).join(', ') || 'no reason reported'}) — the ` +
-                `page did not receive the bytes this iteration claims to have measured.`,
-            );
-          }
-        }
-      }
-    }
-
-    for (const cell of run.lighthouse ?? []) {
-      const where = `${run.app}/lighthouse/${cell.formFactor}${cell.path}`;
-      const network = cell.network;
-      if (!network || network.tracked !== true) {
-        notes.push(`${where}: HTTP statuses were not observable for this cell.`);
-        continue;
-      }
-      if (network.rateLimitedResponses > 0) {
-        problems.push(
-          `${where}: ${network.rateLimitedResponses} HTTP 429 responses across ${cell.repeats} ` +
-            `Lighthouse repeats — the server shed load while Lighthouse was scoring it.`,
-        );
-      }
-      if (network.errorResponses > 0) {
-        problems.push(`${where}: ${network.errorResponses} HTTP >=400 responses.`);
-      }
-      if (network.failedRequests > 0) {
-        problems.push(`${where}: ${network.failedRequests} transport failures.`);
-      }
-      if (network.pageErrors > 0) {
-        problems.push(`${where}: ${network.pageErrors} uncaught browser errors.`);
-      }
-      if (iteration.evidenceComplete !== true) {
-        problems.push(`${where}: history traversal evidence was incomplete.`);
-      }
-    }
-
-    for (const [index, iteration] of (run.bfcache?.iterations ?? []).entries()) {
-      const where = `${run.app}/bfcache/${index}`;
-      const network = iteration.network;
-      if (!network) {
-        notes.push(`${where}: HTTP statuses were not observable for this probe iteration.`);
-        continue;
-      }
-      if (network.rateLimitedResponses > 0) {
-        problems.push(
-          `${where}: ${network.rateLimitedResponses} HTTP 429 responses — the back/forward-cache ` +
-            `verdict was taken against a shedding server.`,
-        );
-      }
-      if (network.errorResponses > 0) {
-        problems.push(`${where}: ${network.errorResponses} HTTP >=400 responses.`);
-      }
-    }
-  }
-  for (const note of [...new Set(notes)]) {
-    process.stderr.write(`[integrity] untracked: ${note}\n`);
-  }
-  if (problems.length > 0) {
-    const unique = [...new Set(problems)];
-    throw new Error(
-      `Benchmark run rejected — the measurement was not clean:\n${unique
-        .map((problem) => `  ${problem}`)
-        .join('\n')}`,
     );
   }
 }

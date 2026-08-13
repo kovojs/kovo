@@ -126,6 +126,7 @@ describe('production build benchmark adapter', () => {
     expect(report.samples).toMatchObject([{ artifactBytes: 0, exitCode: 0 }]);
     expect(report.corpus.manifestPath).toMatch(/manifest\.json$/u);
     expect(report.source.locks).toEqual({
+      'benchmarks/harness/pnpm-lock.yaml': expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
       'benchmarks/nextjs/pnpm-lock.yaml': expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
       'pnpm-lock.yaml': expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
     });

@@ -47,7 +47,11 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
   const spawnProcess = dependencies.spawnProcess ?? spawn;
   const startedAt = new Date().toISOString();
   const source = collectPerformanceProvenance({
-    lockFiles: ['pnpm-lock.yaml', 'benchmarks/nextjs/pnpm-lock.yaml'],
+    lockFiles: [
+      'pnpm-lock.yaml',
+      'benchmarks/nextjs/pnpm-lock.yaml',
+      'benchmarks/harness/pnpm-lock.yaml',
+    ],
     repoRoot,
   });
   const command = materializeCommand(manifest.dev.command, appRoot, normalized.port);
@@ -133,7 +137,11 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
       });
     try {
       report.sourceAfter = collectPerformanceProvenance({
-        lockFiles: ['pnpm-lock.yaml', 'benchmarks/nextjs/pnpm-lock.yaml'],
+        lockFiles: [
+          'pnpm-lock.yaml',
+          'benchmarks/nextjs/pnpm-lock.yaml',
+          'benchmarks/harness/pnpm-lock.yaml',
+        ],
         repoRoot,
       });
       report.integrity.source.after = report.sourceAfter;

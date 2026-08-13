@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -7,19 +8,50 @@ import { fileURLToPath } from 'node:url';
 
 import { readArg, readIntegerArg } from './harness/args.mjs';
 import { bfcacheIterationFindings } from './harness/bfcache.mjs';
+import { BROWSER_BENCHMARK_SCHEMA } from './harness/schema.mjs';
+import {
+  canonicalJson,
+  PERF_HOST_SCHEMA,
+  performanceHostFingerprint,
+} from '../scripts/lib/perf-host.mjs';
 import { collectPerformanceProvenance } from '../scripts/lib/perf-provenance.mjs';
+import {
+  SERVER_BENCHMARK_SCHEMA,
+  SERVER_CONCURRENCIES,
+  SERVER_ENCODINGS,
+  SERVER_MODES,
+  SERVER_PREPARE_SCHEMA,
+  SERVER_ROUTES,
+  serverConditions,
+} from '../scripts/perf-server-benchmark.mjs';
 
 export const COMPARE_SCHEMA = 'kovo-next-performance-comparison/v1';
 export const EXECUTION_ORDER = Object.freeze(['kovo', 'nextjs', 'nextjs', 'kovo']);
+export const WORKLOAD_IDENTITY_SCHEMA = 'kovo-performance-workload-identity/v1';
 
 const benchmarkRoot = fileURLToPath(new URL('.', import.meta.url));
 const repoRoot = path.resolve(benchmarkRoot, '..');
 const lanes = Object.freeze(['default', 'matched-l0', 'matched-l1']);
 const buildModes = Object.freeze(['clean', 'unchanged', 'edit']);
+const defaultCells = Object.freeze(['browser', 'dev', 'build', 'server']);
+const lockFiles = Object.freeze([
+  'pnpm-lock.yaml',
+  'benchmarks/nextjs/pnpm-lock.yaml',
+  'benchmarks/harness/pnpm-lock.yaml',
+]);
 
 export async function runComparison(options = {}) {
+  const cells = options.cells ?? defaultCells;
+  for (const cell of cells) assertMember('--cells', cell, defaultCells);
+  if (new Set(cells).size !== cells.length) throw new Error('--cells must not contain duplicates.');
+  assertMember('--corpus-size', options.corpusSize ?? 24, [24, 216]);
+  if (cells.includes('server')) assertServerMatrixOptions(options);
+  for (const lane of options.lanes ?? lanes) assertMember('--lanes', lane, lanes);
+  for (const mode of options.buildModes ?? buildModes)
+    assertMember('--build-modes', mode, buildModes);
+  const workloadIdentity = await performanceWorkloadIdentity(options, cells);
   const provenance = collectPerformanceProvenance({
-    lockFiles: ['pnpm-lock.yaml', 'benchmarks/nextjs/pnpm-lock.yaml'],
+    lockFiles,
     repoRoot,
   });
   const dirtyOverride = provenance.dirty && options.allowDirty === true;
@@ -29,17 +61,21 @@ export async function runComparison(options = {}) {
     const report = {
       analysis: {},
       generatedAt: new Date().toISOString(),
+      host: performanceHostFingerprint(),
       hostSamples: [],
       integrity: {
         alternatingOrder: EXECUTION_ORDER,
-        cells: options.cells ?? ['browser', 'dev', 'build'],
+        cells,
         comparatorMatched: false,
         serialized: true,
         sourceStable: true,
+        workloadAuthenticated: workloadIdentity.complete,
       },
       rawCells: [],
       schema: COMPARE_SCHEMA,
+      serverPreparation: [],
       source: provenance,
+      workloadIdentity,
     };
     report.verdict = comparisonVerdict(report);
     const output = path.join(outDir, 'comparison.json');
@@ -50,10 +86,6 @@ export async function runComparison(options = {}) {
   }
 
   const outDir = path.resolve(options.outDir ?? path.join(benchmarkRoot, 'results'));
-  const cells = options.cells ?? ['browser', 'dev', 'build'];
-  for (const cell of cells) assertMember('--cells', cell, ['browser', 'dev', 'build']);
-  if (new Set(cells).size !== cells.length) throw new Error('--cells must not contain duplicates.');
-  assertMember('--corpus-size', options.corpusSize ?? 24, [24, 216]);
   const scratch = await mkdtemp(path.join(os.tmpdir(), 'kovo-next-compare-'));
   const iterations = options.iterations ?? 30;
   const warmups = options.warmups ?? 3;
@@ -63,6 +95,7 @@ export async function runComparison(options = {}) {
   const lighthouseCounts = splitAcrossOccurrences(options.lighthouseRuns ?? 5);
   const hostSamples = [];
   const rawCells = [];
+  const serverPreparation = [];
   let executionError = null;
   await mkdir(outDir, { recursive: true });
   try {
@@ -217,18 +250,119 @@ export async function runComparison(options = {}) {
       }
     }
 
+    if (cells.includes('server') && !executionError) {
+      for (const [frameworkIndex, framework] of ['kovo', 'nextjs'].entries()) {
+        const host = sampleHost(hostSamples, options.maxLoadPerCpu ?? 1);
+        if (!host.comparable) {
+          executionError = `host load ${host.loadPerCpu.toFixed(3)} per CPU exceeded ceiling ${host.ceiling}`;
+          break;
+        }
+        const resultFile = path.join(scratch, `server-prepare-${framework}.json`);
+        try {
+          await runAdapter({
+            args: [
+              path.join(repoRoot, 'scripts/perf-server-benchmark.mjs'),
+              '--framework',
+              framework,
+              '--prepare-only',
+              '--port',
+              String((options.serverPortBase ?? 50_310) + frameworkIndex),
+              ...(options.skipBuild ? ['--skip-build'] : []),
+              ...(options.allowDirty ? ['--allow-dirty'] : []),
+              '--out',
+              resultFile,
+            ],
+            cwd: repoRoot,
+            label: `server/prepare/${framework}`,
+          });
+        } catch (error) {
+          executionError = error instanceof Error ? error.message : String(error);
+          break;
+        }
+        serverPreparation.push(JSON.parse(await readFile(resultFile, 'utf8')));
+      }
+
+      const matrix = serverConditions({
+        concurrencies: options.serverConcurrencies ?? SERVER_CONCURRENCIES,
+        encodings: options.serverEncodings ?? SERVER_ENCODINGS,
+        modes: options.serverModes ?? SERVER_MODES,
+        routes: options.serverRoutes ?? SERVER_ROUTES,
+      });
+      for (const condition of matrix) {
+        if (executionError) break;
+        const schedule = serverSampleSchedule(options.serverSamples ?? 7);
+        for (const [scheduleIndex, scheduled] of schedule.entries()) {
+          const host = sampleHost(hostSamples, options.maxLoadPerCpu ?? 1);
+          if (!host.comparable) {
+            executionError = `host load ${host.loadPerCpu.toFixed(3)} per CPU exceeded ceiling ${host.ceiling}`;
+            break;
+          }
+          const frameworkIndex = scheduled.framework === 'kovo' ? 0 : 1;
+          const resultFile = path.join(
+            scratch,
+            `server-${condition.key}-${String(scheduleIndex)}-${scheduled.framework}.json`,
+          );
+          try {
+            await runAdapter({
+              args: [
+                path.join(repoRoot, 'scripts/perf-server-benchmark.mjs'),
+                '--framework',
+                scheduled.framework,
+                '--mode',
+                condition.mode,
+                '--route',
+                condition.route,
+                '--encoding',
+                condition.encoding,
+                '--concurrency',
+                String(condition.concurrency),
+                '--warmup-ms',
+                String(options.serverWarmupMs ?? 5_000),
+                '--duration-ms',
+                String(options.serverDurationMs ?? 15_000),
+                '--port',
+                String((options.serverPortBase ?? 50_310) + frameworkIndex),
+                '--skip-build',
+                ...(options.allowDirty ? ['--allow-dirty'] : []),
+                '--out',
+                resultFile,
+              ],
+              cwd: repoRoot,
+              label: `matched-runtime/${condition.key}/${scheduled.framework}/${String(
+                scheduled.occurrence,
+              )}`,
+            });
+          } catch (error) {
+            executionError = error instanceof Error ? error.message : String(error);
+            break;
+          }
+          rawCells.push({
+            cell: 'server',
+            framework: scheduled.framework,
+            lane: 'matched-runtime',
+            mode: condition.key,
+            occurrence: scheduled.occurrence,
+            report: JSON.parse(await readFile(resultFile, 'utf8')),
+            scheduleIndex,
+            serverCondition: condition,
+          });
+        }
+      }
+    }
+
     const analysis = pairedAnalysis(rawCells, {
       bootstrapIterations: options.bootstrapIterations ?? 10_000,
       seed: options.seed ?? 0x4b4f564f,
     });
     const finalProvenance = collectPerformanceProvenance({
-      lockFiles: ['pnpm-lock.yaml', 'benchmarks/nextjs/pnpm-lock.yaml'],
+      lockFiles,
       repoRoot,
     });
     const sourceStable = sameSourceState(provenance, finalProvenance);
     const report = {
       analysis,
       generatedAt: new Date().toISOString(),
+      host: performanceHostFingerprint({ browserVersions: observedBrowserVersions(rawCells) }),
       hostSamples,
       integrity: {
         alternatingOrder: EXECUTION_ORDER,
@@ -244,6 +378,14 @@ export async function runComparison(options = {}) {
           lanes: options.lanes ?? lanes,
           lighthouseRuns: options.lighthouseRuns ?? 5,
           modes: options.buildModes ?? buildModes,
+          serverConcurrencies: options.serverConcurrencies ?? SERVER_CONCURRENCIES,
+          serverDurationMs: options.serverDurationMs ?? 15_000,
+          serverEncodings: options.serverEncodings ?? SERVER_ENCODINGS,
+          serverModes: options.serverModes ?? SERVER_MODES,
+          serverPreparation,
+          serverRoutes: options.serverRoutes ?? SERVER_ROUTES,
+          serverSamples: options.serverSamples ?? 7,
+          serverWarmupMs: options.serverWarmupMs ?? 5_000,
           skipLighthouse: options.skipLighthouse === true,
           source: provenance,
           warmups,
@@ -254,6 +396,7 @@ export async function runComparison(options = {}) {
         serialized: true,
         sourceStable,
         publishable: !dirtyOverride,
+        workloadAuthenticated: workloadIdentity.complete,
       },
       policy: {
         bfcacheIterations: options.bfcacheIterations ?? 10,
@@ -263,11 +406,22 @@ export async function runComparison(options = {}) {
         devReadySamples: options.devReadyIterations ?? 15,
         devWarmups: options.devWarmups ?? 3,
         lighthouseRunsPerCell: options.lighthouseRuns ?? 5,
+        server: {
+          concurrencies: options.serverConcurrencies ?? SERVER_CONCURRENCIES,
+          durationMs: options.serverDurationMs ?? 15_000,
+          encodings: options.serverEncodings ?? SERVER_ENCODINGS,
+          modes: options.serverModes ?? SERVER_MODES,
+          routes: options.serverRoutes ?? SERVER_ROUTES,
+          samplesPerFrameworkCondition: options.serverSamples ?? 7,
+          warmupMs: options.serverWarmupMs ?? 5_000,
+        },
         warmups,
       },
       rawCells,
       schema: COMPARE_SCHEMA,
+      serverPreparation,
       source: provenance,
+      workloadIdentity,
     };
     report.integrity.comparatorMatched = report.integrity.comparator.matched;
     report.verdict = comparisonVerdict(report);
@@ -293,6 +447,8 @@ export function comparisonVerdict(report) {
   for (const reason of report.integrity?.comparator?.reasons ?? []) reasons.push(reason);
   if (report.integrity?.executionError) reasons.push(report.integrity.executionError);
   if (report.integrity?.serialized !== true) reasons.push('cells were not serialized');
+  if (report.integrity?.workloadAuthenticated !== true)
+    reasons.push('workload identity is incomplete');
   return {
     reasons: [...new Set(reasons)],
     status: reasons.length === 0 ? 'measured' : 'unproven',
@@ -314,7 +470,10 @@ export function pairedAnalysis(cells, { bootstrapIterations = 10_000, seed = 1 }
     const pairs = [];
     const kovo = [];
     const nextjs = [];
-    for (const occurrence of [0, 1]) {
+    const occurrences = [...group.kovo.keys()]
+      .filter((occurrence) => group.nextjs.has(occurrence))
+      .sort((left, right) => left - right);
+    for (const occurrence of occurrences) {
       const kovoValues = group.kovo.get(occurrence) ?? [];
       const nextValues = group.nextjs.get(occurrence) ?? [];
       const samples = Math.min(kovoValues.length, nextValues.length);
@@ -444,6 +603,23 @@ function splitAcrossOccurrences(total) {
   return [Math.ceil(total / 2), Math.floor(total / 2)];
 }
 
+/** Repeat K,N,N,K and truncate only after both frameworks own the requested sample count. */
+export function serverSampleSchedule(samples = 7) {
+  if (!Number.isSafeInteger(samples) || samples < 1 || samples > 100) {
+    throw new Error(`Server samples must be an integer between 1 and 100, got ${String(samples)}.`);
+  }
+  const counts = { kovo: 0, nextjs: 0 };
+  const schedule = [];
+  while (counts.kovo < samples || counts.nextjs < samples) {
+    for (const framework of EXECUTION_ORDER) {
+      if (counts[framework] >= samples) continue;
+      schedule.push({ framework, occurrence: counts[framework] });
+      counts[framework] += 1;
+    }
+  }
+  return schedule;
+}
+
 function occurrenceIndex(orderIndex, framework) {
   return EXECUTION_ORDER.slice(0, orderIndex + 1).filter((value) => value === framework).length - 1;
 }
@@ -460,6 +636,18 @@ function sampleHost(samples, ceiling) {
   };
   samples.push(sample);
   return { ...sample, ceiling, comparable: sample.loadPerCpu <= ceiling };
+}
+
+function assertServerMatrixOptions(options) {
+  for (const concurrency of options.serverConcurrencies ?? SERVER_CONCURRENCIES)
+    assertMember('--server-concurrencies', concurrency, SERVER_CONCURRENCIES);
+  for (const encoding of options.serverEncodings ?? SERVER_ENCODINGS)
+    assertMember('--server-encodings', encoding, SERVER_ENCODINGS);
+  for (const mode of options.serverModes ?? SERVER_MODES)
+    assertMember('--server-modes', mode, SERVER_MODES);
+  for (const route of options.serverRoutes ?? SERVER_ROUTES)
+    assertMember('--server-routes', route, SERVER_ROUTES);
+  serverSampleSchedule(options.serverSamples ?? 7);
 }
 
 async function runAdapter({ args, cwd, label }) {
@@ -518,35 +706,57 @@ async function comparatorIntegrity(cells, policy) {
   }
   const expected = [];
   for (const cell of policy.cells) {
-    const cellLanes = cell === 'browser' ? policy.lanes : [`corpus-n${policy.corpusSize}`];
+    const cellLanes =
+      cell === 'browser'
+        ? policy.lanes
+        : cell === 'server'
+          ? ['matched-runtime']
+          : [`corpus-n${policy.corpusSize}`];
     for (const lane of cellLanes) {
-      for (const mode of cell === 'build' ? policy.modes : ['']) {
+      const modes =
+        cell === 'build'
+          ? policy.modes
+          : cell === 'server'
+            ? serverConditions({
+                concurrencies: policy.serverConcurrencies,
+                encodings: policy.serverEncodings,
+                modes: policy.serverModes,
+                routes: policy.serverRoutes,
+              }).map((condition) => condition.key)
+            : [''];
+      for (const mode of modes) {
         expected.push([lane, cell, mode].join('/'));
       }
     }
   }
   for (const key of expected) {
+    const expectedCell = key.split('/')[1];
     const relevant = cells.filter(
       (cell) => [cell.lane, cell.cell, cell.mode ?? ''].join('/') === key,
     );
     for (const framework of ['kovo', 'nextjs']) {
       const occurrences = relevant.filter((cell) => cell.framework === framework);
-      if (occurrences.length !== 2)
-        reasons.push(`${key}/${framework} did not produce two occurrences`);
+      const expectedOccurrences = expectedCell === 'server' ? policy.serverSamples : 2;
+      if (occurrences.length !== expectedOccurrences)
+        reasons.push(
+          `${key}/${framework} did not produce ${String(expectedOccurrences)} occurrences`,
+        );
       if (
-        occurrences.length === 2 &&
+        occurrences.length === expectedOccurrences &&
         occurrences
           .map((cell) => cell.occurrence)
-          .sort()
-          .join(',') !== '0,1'
+          .sort((left, right) => left - right)
+          .join(',') !== Array.from({ length: expectedOccurrences }, (_, index) => index).join(',')
       ) {
-        reasons.push(`${key}/${framework} occurrence identities did not match 0,1`);
+        reasons.push(`${key}/${framework} occurrence identities were incomplete`);
       }
       for (const occurrence of occurrences) {
         const expectedSamples =
           occurrence.cell === 'dev'
             ? policy.devIterations
-            : occurrenceCounts[occurrence.occurrence];
+            : occurrence.cell === 'server'
+              ? 1
+              : occurrenceCounts[occurrence.occurrence];
         if (occurrence.cell === 'browser') {
           validateBrowserCell(occurrence, {
             bfcache: Math.max(1, bfcacheCounts[occurrence.occurrence]),
@@ -576,30 +786,60 @@ async function comparatorIntegrity(cells, policy) {
             reasons,
             warmups: policy.devWarmups,
           });
+        } else if (occurrence.cell === 'server') {
+          validateServerCell(occurrence, { policy, reasons });
         }
       }
     }
-    if (relevant.map((cell) => cell.framework).join(',') !== EXECUTION_ORDER.join(',')) {
-      reasons.push(`${key} execution order did not match ${EXECUTION_ORDER.join(',')}`);
+    const expectedOrder =
+      expectedCell === 'server'
+        ? serverSampleSchedule(policy.serverSamples).map((value) => value.framework)
+        : EXECUTION_ORDER;
+    if (relevant.map((cell) => cell.framework).join(',') !== expectedOrder.join(',')) {
+      reasons.push(`${key} execution order did not match ${expectedOrder.join(',')}`);
     }
   }
   if ([...keys.keys()].some((key) => !expected.includes(key)))
     reasons.push('unexpected comparator cell');
 
   const corpusDigests = {};
-  for (const framework of ['kovo', 'nextjs']) {
-    try {
-      const manifest = JSON.parse(
-        await readFile(corpusManifest(framework, policy.corpusSize), 'utf8'),
-      );
-      corpusDigests[framework] = manifest.shapeDigest;
-    } catch {
-      corpusDigests[framework] = null;
-      reasons.push(`${framework} corpus manifest is unavailable`);
+  if (policy.cells.includes('dev') || policy.cells.includes('build')) {
+    for (const framework of ['kovo', 'nextjs']) {
+      try {
+        const manifest = JSON.parse(
+          await readFile(corpusManifest(framework, policy.corpusSize), 'utf8'),
+        );
+        corpusDigests[framework] = manifest.shapeDigest;
+      } catch {
+        corpusDigests[framework] = null;
+        reasons.push(`${framework} corpus manifest is unavailable`);
+      }
+    }
+    if (!corpusDigests.kovo || corpusDigests.kovo !== corpusDigests.nextjs) {
+      reasons.push('Kovo/Next corpus shapeDigest mismatch');
     }
   }
-  if (!corpusDigests.kovo || corpusDigests.kovo !== corpusDigests.nextjs) {
-    reasons.push('Kovo/Next corpus shapeDigest mismatch');
+  if (policy.cells.includes('server')) {
+    for (const framework of ['kovo', 'nextjs']) {
+      const preparation = policy.serverPreparation.filter(
+        (report) => report.framework === framework,
+      );
+      const report = preparation[0];
+      if (
+        preparation.length !== 1 ||
+        report?.schema !== SERVER_PREPARE_SCHEMA ||
+        report?.integrity?.complete !== true ||
+        report?.source?.commit !== policy.source.commit ||
+        !requiredLocksMatch(report?.source?.locks, policy.source.locks) ||
+        !validHostFingerprint(report?.host) ||
+        report?.sourceAfter?.commit !== report?.source?.commit ||
+        JSON.stringify(report?.sourceAfter?.locks) !== JSON.stringify(report?.source?.locks) ||
+        report?.source?.dirty ||
+        report?.sourceAfter?.dirty
+      ) {
+        reasons.push(`server/${framework} preparation evidence is incomplete`);
+      }
+    }
   }
 
   for (const cell of cells) {
@@ -688,7 +928,71 @@ function validateDevCell(cell, expected) {
   }
 }
 
+export function validateServerCell(cell, expected) {
+  const report = cell.report;
+  const key = `${cell.lane}/${cell.framework}/${cell.mode}`;
+  if (report?.schema !== SERVER_BENCHMARK_SCHEMA)
+    expected.reasons.push(`${key} report schema mismatch`);
+  if (report?.framework !== cell.framework)
+    expected.reasons.push(`${key} report identity mismatch`);
+  if (report?.condition?.key !== cell.mode)
+    expected.reasons.push(`${key} condition identity mismatch`);
+  if (report?.integrity?.complete !== true || report?.verdict?.status !== 'measured')
+    expected.reasons.push(`${key} report is unproven`);
+  if (
+    report?.integrity?.misses !== 0 ||
+    report?.samples?.length !== 1 ||
+    report.samples[0]?.misses !== 0 ||
+    report.samples[0]?.failedRequests !== 0 ||
+    !(report.samples[0]?.requests > 0) ||
+    !(report.samples[0]?.reusedSockets > 0)
+  ) {
+    expected.reasons.push(`${key} request integrity failure`);
+  }
+  if (
+    report?.correctness?.status !== (report?.condition?.mode === '304' ? 304 : 200) ||
+    !/^sha256:[0-9a-f]{64}$/u.test(report?.correctness?.bodySha256 ?? '') ||
+    !report?.correctness?.exactResponseHeaders ||
+    (report?.condition?.encoding === 'br' &&
+      report?.condition?.mode !== '304' &&
+      report?.correctness?.contentEncoding !== 'br')
+  ) {
+    expected.reasons.push(`${key} response proof failure`);
+  }
+  if (
+    report?.condition?.concurrency !== cell.serverCondition?.concurrency ||
+    report?.condition?.encoding !== cell.serverCondition?.encoding ||
+    report?.condition?.mode !== cell.serverCondition?.mode ||
+    report?.condition?.route !== cell.serverCondition?.route
+  ) {
+    expected.reasons.push(`${key} scheduled condition mismatch`);
+  }
+  if (
+    report?.samples?.[0]?.durationMs < expected.policy.serverDurationMs ||
+    report?.policy?.durationMs !== expected.policy.serverDurationMs ||
+    report?.policy?.warmupMs !== expected.policy.serverWarmupMs ||
+    report?.samples?.[0]?.processTreeSamples < 1 ||
+    !(report?.samples?.[0]?.peakRssBytes > 0) ||
+    !Number.isFinite(report?.samples?.[0]?.serverCpuPercent)
+  ) {
+    expected.reasons.push(`${key} timing/CPU/RSS evidence failure`);
+  }
+  if (
+    report?.sourceAfter?.commit !== report?.source?.commit ||
+    JSON.stringify(report?.sourceAfter?.locks) !== JSON.stringify(report?.source?.locks) ||
+    report?.sourceAfter?.dirty ||
+    report?.integrity?.sourceStable !== true
+  ) {
+    expected.reasons.push(`${key} source stability failure`);
+  }
+  if (!validHostFingerprint(report?.environment?.host)) {
+    expected.reasons.push(`${key} host fingerprint failure`);
+  }
+}
+
 function validateBrowserCell(cell, expected) {
+  if (cell.report?.schema !== BROWSER_BENCHMARK_SCHEMA)
+    expected.reasons.push(`${cell.lane}/${cell.framework} browser report schema mismatch`);
   if (cell.report.apps?.length !== 1)
     expected.reasons.push(`${cell.lane}/${cell.framework} expected exactly one app report`);
   const app = cell.report.apps?.[0];
@@ -895,9 +1199,113 @@ export function ttiInteractionProof(sample, lane) {
 }
 
 function requiredLocksMatch(actual, expected) {
-  return ['pnpm-lock.yaml', 'benchmarks/nextjs/pnpm-lock.yaml'].every(
-    (name) => actual?.[name] && actual[name] === expected?.[name],
+  return lockFiles.every((name) => actual?.[name] && actual[name] === expected?.[name]);
+}
+
+function observedBrowserVersions(cells) {
+  const versions = [];
+  for (const cell of cells) {
+    const bfcacheVersion = cell.report?.apps?.[0]?.bfcache?.browser;
+    if (typeof bfcacheVersion === 'string') versions.push(bfcacheVersion);
+    const devVersion = cell.report?.environment?.browser?.version;
+    if (typeof devVersion === 'string') versions.push(devVersion);
+  }
+  return versions;
+}
+
+export function validHostFingerprint(host) {
+  if (
+    !host ||
+    host.schema !== PERF_HOST_SCHEMA ||
+    !/^sha256:[0-9a-f]{64}$/u.test(host.digest ?? '')
+  ) {
+    return false;
+  }
+  const { digest, schema, ...facts } = host;
+  return (
+    schema === PERF_HOST_SCHEMA &&
+    digest === `sha256:${createHash('sha256').update(canonicalJson(facts)).digest('hex')}`
   );
+}
+
+export async function performanceWorkloadIdentity(
+  options = {},
+  cells = options.cells ?? defaultCells,
+) {
+  const corpusSize = options.corpusSize ?? 24;
+  const corpus = {};
+  let complete = true;
+  if (cells.includes('dev') || cells.includes('build')) {
+    for (const framework of ['kovo', 'nextjs']) {
+      try {
+        const bytes = await readFile(corpusManifest(framework, corpusSize));
+        const manifest = JSON.parse(bytes.toString('utf8'));
+        const shapeDigest = `sha256:${createHash('sha256')
+          .update(JSON.stringify(manifest.workload))
+          .digest('hex')}`;
+        corpus[framework] = {
+          manifestDigest: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
+          shapeDigest: manifest.shapeDigest ? `sha256:${manifest.shapeDigest}` : null,
+          sourceDigest: manifest.sourceDigest ?? null,
+        };
+        if (
+          !/^sha256:[0-9a-f]{64}$/u.test(corpus[framework].shapeDigest ?? '') ||
+          !/^sha256:[0-9a-f]{64}$/u.test(corpus[framework].sourceDigest ?? '') ||
+          corpus[framework].shapeDigest !== shapeDigest
+        ) {
+          complete = false;
+        }
+      } catch {
+        complete = false;
+        corpus[framework] = null;
+      }
+    }
+  }
+  const identity = {
+    adapters: {
+      browser: BROWSER_BENCHMARK_SCHEMA,
+      build: 'kovo-build-benchmark/v1',
+      compare: COMPARE_SCHEMA,
+      dev: 'kovo-dev-loop-report/v1',
+      server: SERVER_BENCHMARK_SCHEMA,
+      serverPrepare: SERVER_PREPARE_SCHEMA,
+    },
+    cells: [...cells],
+    corpus,
+    lanes: [...(options.lanes ?? lanes)],
+    policies: {
+      bfcacheIterations: options.bfcacheIterations ?? 10,
+      browserSamples: options.iterations ?? 30,
+      buildModes: [...(options.buildModes ?? buildModes)],
+      corpusSize,
+      devEditSamples: options.devIterations ?? 30,
+      devReadySamples: options.devReadyIterations ?? 15,
+      devWarmups: options.devWarmups ?? 3,
+      lighthouseRuns: options.lighthouseRuns ?? 5,
+      server: {
+        concurrencies: [...(options.serverConcurrencies ?? SERVER_CONCURRENCIES)],
+        durationMs: options.serverDurationMs ?? 15_000,
+        encodings: [...(options.serverEncodings ?? SERVER_ENCODINGS)],
+        modes: [...(options.serverModes ?? SERVER_MODES)],
+        routes: [...(options.serverRoutes ?? SERVER_ROUTES)],
+        samples: options.serverSamples ?? 7,
+        warmupMs: options.serverWarmupMs ?? 5_000,
+      },
+      warmups: options.warmups ?? 3,
+    },
+  };
+  if (
+    (cells.includes('dev') || cells.includes('build')) &&
+    corpus.kovo?.shapeDigest !== corpus.nextjs?.shapeDigest
+  ) {
+    complete = false;
+  }
+  return {
+    complete,
+    digest: `sha256:${createHash('sha256').update(canonicalJson(identity)).digest('hex')}`,
+    identity,
+    schema: WORKLOAD_IDENTITY_SCHEMA,
+  };
 }
 
 function browserSamples(cell) {
@@ -912,7 +1320,7 @@ function cellSampleCount(cell) {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const cells = (readArg('--cells') ?? 'browser,dev,build').split(',').filter(Boolean);
+  const cells = (readArg('--cells') ?? defaultCells.join(',')).split(',').filter(Boolean);
   const laneList = (readArg('--lanes') ?? lanes.join(',')).split(',').filter(Boolean);
   const { output } = await runComparison({
     allowDirty: process.argv.includes('--allow-dirty'),
@@ -937,6 +1345,33 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     outDir: readArg('--out-dir'),
     skipBuild: process.argv.includes('--skip-build'),
     skipLighthouse: process.argv.includes('--skip-lighthouse'),
+    serverConcurrencies: (readArg('--server-concurrencies') ?? SERVER_CONCURRENCIES.join(','))
+      .split(',')
+      .filter(Boolean)
+      .map((value) => Number(value)),
+    serverDurationMs: readIntegerArg('--server-duration-ms', {
+      fallback: 15_000,
+      max: 60_000,
+      min: 25,
+    }),
+    serverEncodings: (readArg('--server-encodings') ?? SERVER_ENCODINGS.join(','))
+      .split(',')
+      .filter(Boolean),
+    serverModes: (readArg('--server-modes') ?? SERVER_MODES.join(',')).split(',').filter(Boolean),
+    serverPortBase: readIntegerArg('--server-port-base', {
+      fallback: 50_310,
+      max: 65_500,
+      min: 1_024,
+    }),
+    serverRoutes: (readArg('--server-routes') ?? SERVER_ROUTES.join(','))
+      .split(',')
+      .filter(Boolean),
+    serverSamples: readIntegerArg('--server-samples', { fallback: 7, max: 100 }),
+    serverWarmupMs: readIntegerArg('--server-warmup-ms', {
+      fallback: 5_000,
+      max: 60_000,
+      min: 25,
+    }),
     warmups: readIntegerArg('--warmups', { fallback: 3, max: 100, min: 0 }),
   });
   process.stdout.write(`comparison written to ${output}\n`);
