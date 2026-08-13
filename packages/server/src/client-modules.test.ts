@@ -21,6 +21,7 @@ import {
 import { compilerOwnedClientModuleRole } from './compiler-client-module-provenance.js';
 import {
   computeRenderPlanFingerprint,
+  commitVersionedClientModuleStaging,
   createMemoryVersionedClientModuleStore,
   createMemoryVersionedClientModuleRegistry,
   finalizeVersionedClientModuleBuild,
@@ -29,6 +30,7 @@ import {
   replaceVersionedClientModuleBuildSnapshot,
   snapshotVersionedClientModuleRegistry,
   snapshotVersionedClientModuleStaging,
+  versionedClientModulePublishEpoch,
   versionedClientModuleHref,
   type VersionedClientModuleInput,
   type VersionedClientModuleActiveSnapshot,
@@ -303,6 +305,37 @@ describe('render-plan and app-build identities', () => {
     expect(new Set(registry.entries().map(clientHref))).toEqual(new Set(modules.map(clientHref)));
   });
 
+  it('invalidates selection after a byte-identical republish with fresh compiler provenance', async () => {
+    const registry = createRegistry();
+    const first = await genuineCompilerRuntimeModules();
+    const second = await genuineCompilerRuntimeModules();
+    expect(second).not.toBe(first);
+    expect(second).toEqual(first);
+    expect(second.every((module, index) => module !== first[index])).toBe(true);
+
+    replaceVersionedClientModuleBuildSnapshot(
+      registry,
+      {
+        modules: first,
+        renderPlanFingerprint: first[0]!.renderPlanFingerprint!,
+      },
+      first,
+    );
+    const firstEpoch = versionedClientModulePublishEpoch(registry);
+    const firstHref = ensureKovoLoaderRuntimeClientModule(registry);
+
+    replaceVersionedClientModuleBuildSnapshot(
+      registry,
+      {
+        modules: second,
+        renderPlanFingerprint: second[0]!.renderPlanFingerprint!,
+      },
+      second,
+    );
+    expect(versionedClientModulePublishEpoch(registry)).not.toBe(firstEpoch);
+    expect(ensureKovoLoaderRuntimeClientModule(registry)).toBe(firstHref);
+  });
+
   it('pins only an exact genuine compiler record across the build-only provenance bridge', async () => {
     const modules = await genuineCompilerOutput();
     const runtime = modules.find(
@@ -459,8 +492,48 @@ describe('render-plan and app-build identities', () => {
       [...appRuntimes, deferredRuntime],
     );
 
+    const failures: unknown[] = [];
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        ensureKovoLoaderRuntimeClientModule(registry);
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+    expect(failures).toHaveLength(2);
+    expect(failures[0]).not.toBe(failures[1]);
+    expect(
+      failures.every((error) =>
+        /multiple active compiler-generated app runtimes/u.test(String(error)),
+      ),
+    ).toBe(true);
+  });
+
+  it('does not let a cached selection bypass a later poisoned publication', () => {
+    const backing = createMemoryVersionedClientModuleStore();
+    let corruptReadback = false;
+    const registry = snapshotVersionedClientModuleRegistry({
+      readActiveSnapshot() {
+        const snapshot = backing.readActiveSnapshot();
+        return corruptReadback
+          ? { modules: [], renderPlanFingerprint: snapshot.renderPlanFingerprint }
+          : snapshot;
+      },
+      replaceActiveSnapshot(snapshot) {
+        backing.replaceActiveSnapshot(snapshot);
+        corruptReadback = true;
+      },
+      retain: (module) => backing.retain(module),
+      resolve: (href) => backing.resolve(href),
+    });
+    const cachedHref = ensureKovoLoaderRuntimeClientModule(registry);
+    expect(cachedHref).toMatch(/^\/c\/__v\/[0-9a-f]{64}\//u);
+
+    expect(() => commitVersionedClientModuleStaging(registry)).toThrow(
+      /KV417.*permanently closed/u,
+    );
     expect(() => ensureKovoLoaderRuntimeClientModule(registry)).toThrow(
-      /multiple active compiler-generated app runtimes/u,
+      /KV417.*permanently closed/u,
     );
   });
 
