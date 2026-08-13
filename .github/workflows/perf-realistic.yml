@@ -675,6 +675,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/kovo-perf/cli-startup"
           vp exec node scripts/perf-cli-startup-benchmark.mjs \
+            --packed-fast-budget-ms 1000 \
             --out "$RUNNER_TEMP/kovo-perf/cli-startup/report.json"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()

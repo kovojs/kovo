@@ -296,6 +296,7 @@ describe('realistic performance CI policy', () => {
 
     const cli = decisionJob('cli-startup-decision');
     expect(cli).toContain('scripts/perf-cli-startup-benchmark.mjs');
+    expect(cli).toContain('--packed-fast-budget-ms 1000');
     expectPnpmBridge(cli);
     expect(cli).not.toContain('--samples');
     expect(cli).not.toContain('--warmups');

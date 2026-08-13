@@ -71,12 +71,21 @@ dirty tree, a load-shed run, an incomplete sample schedule, or changed source/lo
 ## Interpreting ownership
 
 The packed lane is always product DevEx and the source-checkout lane is always maintainer
-performance. The tool deliberately has no invented default for “fast.” Pass a separately reviewed
-absolute budget with `--packed-fast-budget-ms N` when one has been ratified:
+performance. The tool deliberately has no invented default for “fast.” The CI decision lane now
+passes a reviewed absolute budget of **1,000 ms p95** with `--packed-fast-budget-ms 1000`.
+
+That ceiling was fixed before measuring the short-circuit candidate. The workload is a deterministic
+root `--version` meta command: it reads no app, opens no network or database, and does no compiler
+work. One second is intentionally generous for Node startup, an authenticated adjacent package
+manifest read, and process-tree observation on the pinned four-vCPU runner; exceeding it means an
+ordinary installed meta command is loading product subsystems it does not need. The ceiling is not
+derived from the candidate's observed value and does not classify heavier app-owning commands.
+
+When an absolute budget is supplied:
 
 - if the complete packed p95 is within that budget, source transformation or a prebuilt checkout
   command is classified as maintainer-only work;
-- if the packed median exceeds it, packed startup remains product-priority work; and
+- if the packed p95 exceeds it, packed startup remains product-priority work; and
 - without a budget, the report says `budget-required` rather than treating a relative win as proof
   that users are already fast.
 
