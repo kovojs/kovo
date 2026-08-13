@@ -11,7 +11,6 @@ import {
   type KovoDiagnosticCommandResult,
   type KovoDiagnosticRecord,
 } from '../diagnostic.js';
-import { type KovoBuildOneShotIdentity } from './build-one-shot-handoff.js';
 import { type CliCommandResult } from '../shared.js';
 import {
   buildApply,
@@ -179,28 +178,9 @@ export interface KovoSourceCheckPhaseCensusV2 {
   readonly schema: typeof phaseCensusProtocol;
 }
 
-/**
- * @internal Complete retained evidence from a session's latest accepted revision. It is the
- * authenticated payload behind `reused-authenticated` (plans/good-perf.md O11): a later
- * revision may republish `result` only after re-proving, from fresh byte digests, that every
- * closure input is unchanged and after re-executing the whole-project `typescript` phase.
- */
-export interface KovoSourceCheckSessionContinuity {
-  readonly census: KovoSourceCheckPhaseCensusV2;
-  /** Exact admitted app+config closure text, retained for the reuse reference scan. */
-  readonly closureSources: readonly KovoSourceCheckInputFile[];
-  readonly graphDigest: string;
-  readonly identity: KovoBuildOneShotIdentity;
-  readonly input: KovoAcceptedSourceCheckInputProof;
-  readonly result: CliCommandResult;
-  readonly trigger: KovoSourceCheckWatchSnapshot;
-}
-
 /** @internal Result returned by the exact one-shot source-proof pipeline per revision. */
 export interface KovoSourceCheckRevisionResult {
   readonly census: KovoSourceCheckPhaseCensusV2;
-  /** @internal Session-retained reuse evidence; never serialized into the JSONL record. */
-  readonly continuity?: KovoSourceCheckSessionContinuity;
   readonly input: KovoSourceCheckInputProof;
   readonly result: CliCommandResult;
 }
@@ -1100,9 +1080,7 @@ function validateRevisionResult(checked: KovoSourceCheckRevisionResult): void {
       throw new NativeTypeError(`Source-check revision returned invalid phase ${phase.name}.`);
     }
     if (
-      (phase.status === 'not-applicable' ||
-        phase.status === 'not-reached' ||
-        phase.status === 'reused-authenticated') &&
+      (phase.status === 'not-applicable' || phase.status === 'not-reached') &&
       phase.durationMs !== 0
     ) {
       throw new NativeTypeError(

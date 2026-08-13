@@ -1,209 +1,419 @@
-/**
- * Authenticated in-session reuse for `kovo check source --watch` (plans/good-perf.md O11).
- *
- * A watch session may republish its previous accepted revision only when it can re-prove, from
- * exact per-file content digests taken by the same bounded scanner that schedules revisions,
- * that no input any diagnostic-producing phase consumed has changed — and the sole phase whose
- * conservative input key spans the whole project (`typescript`, because a tsconfig `extends`
- * chain may name any file) is re-executed, never assumed. Everything else refuses reuse and
- * falls back to the complete fresh pipeline: SPEC §11.4 checking stays fail-closed, and there
- * is deliberately no disk cache (plans/compiler-refactoring.md FN3 / commit cab4b4b84 record
- * why an on-disk store cannot authenticate entries against same-UID authored config).
- *
- * The eligibility rules are byte-evidence over the session's own scans, not heuristics:
- *
- * - files added, removed, or renamed refuse reuse (module and config resolution can change
- *   without any retained byte changing);
- * - a changed file inside the previously admitted app/config closure refuses reuse;
- * - a changed file is otherwise reusable only when its name proves it outside every module,
- *   config, stylesheet, and asset surface the check pipeline can consume (documentation-shaped
- *   allowlist below), and no closure source even mentions its name (so `?raw`-style asset
- *   imports of an allowlisted file refuse), and no closure source uses `import.meta.glob`
- *   (whose patterns can match files without naming them);
- * - strict-lifecycle projects (`lifecycle-policy`/`project-quality`/`sound-subset` executed)
- *   always refuse: those analyzers are whole-project by contract.
- */
-import { execFile } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+/* oxlint-disable typescript/no-unsafe-type-assertion -- TypeScript is resolved from the app package. */
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { readFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { tmpdir } from 'node:os';
-import { dirname, join, relative } from 'node:path';
-import { performance } from 'node:perf_hooks';
-import { promisify } from 'node:util';
-
-import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
 import { findNearestFile } from '../tooling.js';
-import {
-  KOVO_SOURCE_CHECK_PHASES,
-  type KovoSourceCheckSessionContinuity,
-  type KovoSourceCheckWatchSnapshot,
-} from './source-check-session.js';
+import { kovoBuildOneShotDigest } from './build-one-shot-handoff.js';
+import type { KovoSourceCheckProducerFactSession } from './build-export.js';
 
-const execFileAsync = promisify(execFile);
-const wholeProjectPhaseIndexes = [0, 3, 4] as const; // lifecycle-policy, project-quality, sound-subset
+type TypeScriptApi = typeof import('typescript');
+type SemanticBuilderProgram = import('typescript').SemanticDiagnosticsBuilderProgram;
 
-/**
- * Basenames and extensions that no source-check phase can consume. The list is deliberately
- * documentation-shaped and closed: anything a compiler, TypeScript, Vite, stylesheet, config,
- * or manifest surface could ever read (source modules, JSON, HTML, CSS, env files, lockfiles,
- * configs) is absent, so it refuses reuse by construction.
- */
-const reusableChangedExtensions: ReadonlySet<string> = new Set([
-  '.adoc',
-  '.asciidoc',
-  '.log',
-  '.markdown',
-  '.md',
-  '.mdown',
-  '.rst',
-  '.text',
-  '.txt',
-]);
-const reusableChangedBasenames: ReadonlySet<string> = new Set([
-  '.DS_Store',
-  '.editorconfig',
-  '.gitattributes',
-  '.gitignore',
-  '.gitkeep',
-  'AUTHORS',
-  'CODEOWNERS',
-  'LICENCE',
-  'LICENSE',
-  'NOTICE',
-]);
+const factDigestPattern = /^sha256:[0-9a-f]{64}$/u;
+const factSchema = 'kovo-check-session-producer-fact/v1';
+const typeScriptFactSchema = 'kovo-check-typescript-semantic-fact/v1';
+const maximumFactEntries = 32;
+const maximumFactPayloadBytes = 64 * 1024 * 1024;
+const maximumFactTotalBytes = 256 * 1024 * 1024;
 
-/** @internal Exact eligibility outcome; refusals carry the reason for tests and diagnostics. */
-export type KovoSourceCheckSessionReusePlan =
-  | { readonly changedPaths: readonly string[]; readonly eligible: true }
-  | { readonly eligible: false; readonly reason: string };
+type SerializableProducerPhase = 'app-source-trust' | 'config-trust' | 'stylesheet';
 
-/**
- * Decide, from byte evidence alone, whether the candidate trigger may republish the previous
- * accepted revision after a fresh `typescript` re-execution. Every uncertain branch refuses.
- */
-export function planKovoSourceCheckSessionReuse(
-  previous: KovoSourceCheckSessionContinuity | undefined,
-  candidate: KovoSourceCheckWatchSnapshot,
-): KovoSourceCheckSessionReusePlan {
-  if (previous === undefined) return refuse('no accepted previous revision');
-  const previousDigests = previous.trigger.fileDigests;
-  const candidateDigests = candidate.fileDigests;
-  if (previousDigests === undefined || candidateDigests === undefined) {
-    return refuse('per-file digest evidence is unavailable');
-  }
-  if (previous.trigger.symlinks.length > 0 || candidate.symlinks.length > 0) {
-    return refuse('project symlinks make the input closure ambiguous');
-  }
-  if (previous.input.status !== 'accepted') return refuse('previous input proof was rejected');
-  if (previous.result.exitCode !== 0 && previous.result.exitCode !== 1) {
-    return refuse('previous revision did not complete its proof');
-  }
-  if (previous.census.phases.length !== KOVO_SOURCE_CHECK_PHASES.length) {
-    return refuse('previous phase census is incomplete');
-  }
-  for (const index of wholeProjectPhaseIndexes) {
-    if (previous.census.phases[index]!.status !== 'not-applicable') {
-      return refuse('strict lifecycle projects re-prove whole-project analyzers every revision');
-    }
-  }
-  for (const phase of previous.census.phases) {
-    if (phase.status === 'not-reached')
-      return refuse('previous revision did not reach every phase');
-  }
-  if (candidateDigests.size !== previousDigests.size) return refuse('files were added or removed');
-  const changedPaths: string[] = [];
-  for (const [path, digest] of candidateDigests) {
-    const previousDigest = previousDigests.get(path);
-    if (previousDigest === undefined) return refuse('files were added or removed');
-    if (previousDigest !== digest) changedPaths.push(path);
-  }
-  if (changedPaths.length === 0) return refuse('no content change was observed');
-  const closurePaths = new Set<string>();
-  for (const row of previous.input.closure) closurePaths.add(row.path);
-  for (const path of changedPaths) {
-    if (closurePaths.has(path)) return refuse(`closure input changed: ${path}`);
-    if (!isReusableChangedPath(path)) return refuse(`changed file may be a check input: ${path}`);
-  }
-  for (const file of previous.closureSources) {
-    if (file.source.includes('import.meta.glob')) {
-      return refuse('closure uses import.meta.glob, whose patterns can match unnamed files');
-    }
-    for (const path of changedPaths) {
-      const basename = path.slice(path.lastIndexOf('/') + 1);
-      if (file.source.includes(basename) || file.source.includes(path)) {
-        return refuse(`closure source references changed file: ${path}`);
-      }
-    }
-  }
-  return Object.freeze({ changedPaths: Object.freeze(changedPaths), eligible: true });
+interface AuthenticatedProducerFact {
+  readonly authentication: Buffer;
+  readonly bytes: number;
+  readonly payload: string;
+}
+
+interface TypeScriptBuilderState {
+  readonly builder: SemanticBuilderProgram;
+  readonly compatibilityDigest: string;
+  readonly modulePath: string;
+  readonly sourceFiles: ReadonlyMap<string, string>;
+  readonly typescript: TypeScriptApi;
+}
+
+/** @internal Observable evidence for focused lifecycle and performance tests. */
+export interface KovoSourceCheckSessionFactCacheSnapshot {
+  readonly closed: boolean;
+  readonly enabled: boolean;
+  readonly entries: number;
+  readonly hits: number;
+  readonly misses: number;
+  readonly payloadBytes: number;
+  readonly typescript: {
+    readonly changedFiles: number;
+    readonly inputDigest: string;
+    readonly programFiles: number;
+    readonly reusedFiles: number;
+  } | null;
 }
 
 /**
- * Re-execute the exact `typescript` preflight the one-shot producer runs (same tsc resolution,
- * flags, and SPEC §10.6-confined `.kovo/cache` build-info handling as
- * `build-export.ts` `runTypeScriptBuildPreflight`). `undefined` refuses reuse: the complete
- * fresh pipeline then owns error reporting, so a type error is never reported from this path.
+ * Session-confined compiler fact store for `kovo check source --watch`.
+ *
+ * Static/style payloads remain inert JSON strings authenticated with a process-random HMAC key.
+ * TypeScript keeps only the compiler-owned semantic BuilderProgram in memory. Nothing is written
+ * to `.kovo/cache`, and closing the foreground session destroys every retained value.
  */
-export async function revalidateKovoCheckTypeScriptPreflight(
-  entryAbsolute: string,
-  invocationRoot: string,
-  invocationEnv: NodeJS.ProcessEnv,
-): Promise<{ readonly durationMs: number; readonly executed: boolean } | undefined> {
-  const relativeAppPath = relative(invocationRoot, entryAbsolute);
-  if (relativeAppPath.split(/[\\/]/u).some((part) => part.startsWith('.'))) {
-    return { durationMs: 0, executed: false };
+export class KovoSourceCheckSessionFactCache implements KovoSourceCheckProducerFactSession {
+  readonly #enabled: boolean;
+  readonly #facts = new Map<string, AuthenticatedProducerFact>();
+  readonly #authenticationKey = randomBytes(32);
+  #closed = false;
+  #hits = 0;
+  #misses = 0;
+  #payloadBytes = 0;
+  #typescriptState: TypeScriptBuilderState | undefined;
+  #typescriptSnapshot: KovoSourceCheckSessionFactCacheSnapshot['typescript'] = null;
+
+  constructor(enabled: boolean) {
+    if (typeof enabled !== 'boolean') {
+      throw new TypeError('Source-check session cache posture must be boolean.');
+    }
+    this.#enabled = enabled;
   }
-  const tsconfigPath = findNearestFile(dirname(entryAbsolute), 'tsconfig.json', {
+
+  consumeProducerFact(phase: SerializableProducerPhase, inputDigest: string): string | undefined {
+    this.#assertOpen();
+    const key = this.#factKey(phase, inputDigest);
+    if (!this.#enabled) {
+      this.#misses += 1;
+      return undefined;
+    }
+    const fact = this.#facts.get(key);
+    if (fact === undefined) {
+      this.#misses += 1;
+      return undefined;
+    }
+    const expected = this.#authenticate(key, fact.payload);
+    if (
+      expected.byteLength !== fact.authentication.byteLength ||
+      !timingSafeEqual(expected, fact.authentication)
+    ) {
+      this.#deleteFact(key, fact);
+      this.#misses += 1;
+      return undefined;
+    }
+    this.#hits += 1;
+    return fact.payload;
+  }
+
+  storeProducerFact(phase: SerializableProducerPhase, inputDigest: string, payload: string): void {
+    this.#assertOpen();
+    const key = this.#factKey(phase, inputDigest);
+    if (typeof payload !== 'string') {
+      throw new TypeError('Source-check producer fact payload must be a string.');
+    }
+    if (!this.#enabled) return;
+    const bytes = Buffer.byteLength(payload, 'utf8');
+    if (bytes > maximumFactPayloadBytes) {
+      throw new TypeError('Source-check producer fact payload exceeds its byte limit.');
+    }
+    const previous = this.#facts.get(key);
+    if (previous !== undefined) this.#deleteFact(key, previous);
+    while (
+      this.#facts.size >= maximumFactEntries ||
+      this.#payloadBytes + bytes > maximumFactTotalBytes
+    ) {
+      const oldestKey = this.#facts.keys().next().value as string | undefined;
+      if (oldestKey === undefined) break;
+      const oldest = this.#facts.get(oldestKey);
+      if (oldest === undefined) break;
+      this.#deleteFact(oldestKey, oldest);
+    }
+    this.#facts.set(key, {
+      authentication: this.#authenticate(key, payload),
+      bytes,
+      payload,
+    });
+    this.#payloadBytes += bytes;
+  }
+
+  async runTypeScriptPreflight(input: {
+    readonly appModulePath: string;
+    readonly invocationEnv: NodeJS.ProcessEnv;
+    readonly invocationRoot: string;
+  }): Promise<
+    | {
+        readonly executed: boolean;
+        readonly inputDigest: string | null;
+        readonly reusedAuthenticated: boolean;
+      }
+    | undefined
+  > {
+    this.#assertOpen();
+    const relativeAppPath = relative(input.invocationRoot, input.appModulePath);
+    if (
+      isAbsolute(relativeAppPath) ||
+      relativeAppPath.split(/[\\/]/u).some((part) => part.startsWith('.'))
+    ) {
+      return { executed: false, inputDigest: null, reusedAuthenticated: false };
+    }
+    const tsconfigPath = findNearestFile(dirname(input.appModulePath), 'tsconfig.json', {
+      stopDir: input.invocationRoot,
+    });
+    if (tsconfigPath === undefined) {
+      return { executed: false, inputDigest: null, reusedAuthenticated: false };
+    }
+
+    try {
+      const projectDir = dirname(tsconfigPath);
+      const projectRequire = createRequire(join(projectDir, 'package.json'));
+      const modulePath = realpathSync(projectRequire.resolve('typescript'));
+      const typescript = projectRequire(modulePath) as TypeScriptApi;
+      const configReads = new Map<string, string>();
+      const packageReads = new Map<string, string>();
+      const rootConfigText = readFileSync(tsconfigPath, 'utf8');
+      configReads.set(realpathOrResolved(tsconfigPath), rootConfigText);
+      const config = typescript.parseConfigFileTextToJson(tsconfigPath, rootConfigText);
+      if (config.error !== undefined) return undefined;
+      const parseHost: import('typescript').ParseConfigHost = {
+        fileExists: (path) => typescript.sys.fileExists(path),
+        readDirectory: (path, extensions, excludes, includes, depth) =>
+          typescript.sys.readDirectory(path, extensions, excludes, includes, depth),
+        readFile(path) {
+          const source = typescript.sys.readFile(path);
+          if (source !== undefined) recordCompilerRead(path, source, configReads, packageReads);
+          return source;
+        },
+        useCaseSensitiveFileNames: typescript.sys.useCaseSensitiveFileNames,
+      };
+      const parsed = typescript.parseJsonConfigFileContent(
+        config.config,
+        parseHost,
+        projectDir,
+        {
+          allowImportingTsExtensions: true,
+          incremental: true,
+          noEmit: true,
+        },
+        tsconfigPath,
+      );
+      if (parsed.errors.length > 0) return undefined;
+      const { tsBuildInfoFile: _discardedBuildInfoPath, ...parsedOptions } = parsed.options;
+      const compilerOptions: import('typescript').CompilerOptions = {
+        ...parsedOptions,
+        allowImportingTsExtensions: true,
+        incremental: true,
+        noEmit: true,
+      };
+      const compatibilityDigest = kovoBuildOneShotDigest({
+        compilerOptions,
+        fileNames: parsed.fileNames,
+        modulePath,
+        projectReferences: parsed.projectReferences ?? [],
+        schema: typeScriptFactSchema,
+        tsconfigPath,
+        typescriptVersion: typescript.version,
+      });
+      const previous =
+        this.#enabled &&
+        this.#typescriptState?.modulePath === modulePath &&
+        this.#typescriptState.compatibilityDigest === compatibilityDigest
+          ? this.#typescriptState
+          : undefined;
+      const host = typescript.createIncrementalCompilerHost(compilerOptions);
+      // A BuilderProgram may reuse its prior module-resolution cache even when package exports or
+      // an installed dependency changed without an authored importer edit. The watch session can
+      // retain semantic/source facts, but resolution itself must be refreshed on every revision so
+      // the new Program is bound to the currently installed package graph (SPEC §11.4).
+      host.hasInvalidatedResolutions = () => true;
+      const readFile = host.readFile.bind(host);
+      host.readFile = (path: string): string | undefined => {
+        const source = readFile(path);
+        if (source !== undefined) recordCompilerRead(path, source, configReads, packageReads);
+        return source;
+      };
+      host.writeFile = () => {
+        throw new TypeError('Kovo foreground TypeScript preflight attempted to write output.');
+      };
+      const builder = typescript.createSemanticDiagnosticsBuilderProgram(
+        parsed.fileNames,
+        compilerOptions,
+        host,
+        previous?.builder,
+        parsed.errors,
+        parsed.projectReferences,
+      );
+      const diagnosticCount =
+        builder.getConfigFileParsingDiagnostics().length +
+        builder.getOptionsDiagnostics().length +
+        builder.getGlobalDiagnostics().length +
+        builder.getSyntacticDiagnostics().length +
+        builder.getSemanticDiagnostics().length +
+        (compilerOptions.declaration || compilerOptions.composite
+          ? builder.getDeclarationDiagnostics().length
+          : 0);
+      if (diagnosticCount > 0) return undefined;
+
+      const sourceRows = builder
+        .getSourceFiles()
+        .map((sourceFile) => ({
+          digest: sha256(sourceFile.text),
+          path: realpathOrResolved(sourceFile.fileName),
+        }))
+        .sort(comparePathRows);
+      appendNearestPackageInputs(input.appModulePath, input.invocationRoot, packageReads);
+      const typescriptManifest = findNearestFile(dirname(modulePath), 'package.json');
+      if (typescriptManifest !== undefined) {
+        const source = readFileSync(typescriptManifest, 'utf8');
+        packageReads.set(realpathOrResolved(typescriptManifest), source);
+      }
+      const identity = {
+        configDigest: digestCompilerReads(configReads),
+        packageDigest: digestCompilerReads(packageReads),
+        schema: typeScriptFactSchema,
+        sourceDigest: kovoBuildOneShotDigest(sourceRows),
+        versionDigest: kovoBuildOneShotDigest({
+          modulePath,
+          node: process.version,
+          typescript: typescript.version,
+        }),
+      } as const;
+      const inputDigest = kovoBuildOneShotDigest(identity);
+      const sourceFiles = new Map<string, string>();
+      let reusedFiles = 0;
+      for (const sourceFile of builder.getSourceFiles()) {
+        const digest = sha256(sourceFile.text);
+        sourceFiles.set(sourceFile.fileName, digest);
+        if (previous?.sourceFiles.get(sourceFile.fileName) === digest) reusedFiles += 1;
+      }
+      const programFiles = sourceFiles.size;
+      const changedFiles = programFiles - reusedFiles;
+      const reusedAuthenticated = previous !== undefined && reusedFiles > 0;
+      this.#typescriptSnapshot = {
+        changedFiles,
+        inputDigest,
+        programFiles,
+        reusedFiles,
+      };
+      if (this.#enabled) {
+        this.#typescriptState = {
+          builder,
+          compatibilityDigest,
+          modulePath,
+          sourceFiles,
+          typescript,
+        };
+      }
+      if (reusedAuthenticated) this.#hits += 1;
+      else this.#misses += 1;
+      return { executed: true, inputDigest, reusedAuthenticated };
+    } catch {
+      // Any loader/config/program ambiguity falls back to the ordinary one-shot tsc producer,
+      // which owns the canonical diagnostic text and exit class.
+      return undefined;
+    }
+  }
+
+  close(): void {
+    if (this.#closed) return;
+    this.#facts.clear();
+    this.#payloadBytes = 0;
+    this.#typescriptState = undefined;
+    this.#typescriptSnapshot = null;
+    this.#authenticationKey.fill(0);
+    this.#closed = true;
+  }
+
+  snapshot(): KovoSourceCheckSessionFactCacheSnapshot {
+    return Object.freeze({
+      closed: this.#closed,
+      enabled: this.#enabled,
+      entries: this.#facts.size,
+      hits: this.#hits,
+      misses: this.#misses,
+      payloadBytes: this.#payloadBytes,
+      typescript: this.#typescriptSnapshot,
+    });
+  }
+
+  #assertOpen(): void {
+    if (this.#closed) throw new TypeError('Source-check session cache is closed.');
+  }
+
+  #authenticate(key: string, payload: string): Buffer {
+    return createHmac('sha256', this.#authenticationKey)
+      .update(key, 'utf8')
+      .update('\0', 'utf8')
+      .update(payload, 'utf8')
+      .digest();
+  }
+
+  #deleteFact(key: string, fact: AuthenticatedProducerFact): void {
+    this.#facts.delete(key);
+    this.#payloadBytes -= fact.bytes;
+  }
+
+  #factKey(phase: SerializableProducerPhase, inputDigest: string): string {
+    if (
+      (phase !== 'app-source-trust' && phase !== 'config-trust' && phase !== 'stylesheet') ||
+      typeof inputDigest !== 'string' ||
+      !factDigestPattern.test(inputDigest)
+    ) {
+      throw new TypeError('Source-check producer fact key is invalid.');
+    }
+    return kovoBuildOneShotDigest({ inputDigest, phase, schema: factSchema });
+  }
+}
+
+function recordCompilerRead(
+  path: string,
+  source: string,
+  configReads: Map<string, string>,
+  packageReads: Map<string, string>,
+): void {
+  const name = path.slice(path.lastIndexOf('/') + 1).toLowerCase();
+  const canonical = realpathOrResolved(path);
+  if (name === 'package.json' || name.endsWith('.lock') || name.endsWith('-lock.yaml')) {
+    packageReads.set(canonical, source);
+  }
+  if (/^(?:.*\/)?(?:jsconfig|tsconfig)(?:\.[^/]*)?\.json$/iu.test(path.replaceAll('\\', '/'))) {
+    configReads.set(canonical, source);
+  }
+}
+
+function appendNearestPackageInputs(
+  appModulePath: string,
+  invocationRoot: string,
+  packageReads: Map<string, string>,
+): void {
+  const manifest = findNearestFile(dirname(appModulePath), 'package.json', {
     stopDir: invocationRoot,
   });
-  if (tsconfigPath === undefined) return { durationMs: 0, executed: false };
-  const startedAt = performance.now();
-  const projectDir = dirname(tsconfigPath);
-  let tscBin: string;
-  try {
-    tscBin = createRequire(`${projectDir}/package.json`).resolve('typescript/bin/tsc');
-  } catch {
-    return undefined;
+  if (manifest !== undefined) {
+    packageReads.set(realpathOrResolved(manifest), readFileSync(manifest, 'utf8'));
   }
-  const projectOutput = createFrameworkOutputFileSystemBoundary(projectDir);
-  const projectBuildInfoFile = '.kovo/cache/tsc-preflight.tsbuildinfo';
-  const tempDir = mkdtempSync(join(tmpdir(), 'kovo-tsc-preflight-'));
-  const buildInfoFile = join(tempDir, 'tsc-preflight.tsbuildinfo');
-  try {
-    const previousBuildInfo = await projectOutput.fileBytes(projectBuildInfoFile);
-    if (previousBuildInfo !== undefined) writeFileSync(buildInfoFile, previousBuildInfo);
-    await execFileAsync(
-      process.execPath,
-      [
-        tscBin,
-        '--noEmit',
-        '--allowImportingTsExtensions',
-        '--incremental',
-        '--tsBuildInfoFile',
-        buildInfoFile,
-        '--project',
-        tsconfigPath,
-      ],
-      { cwd: projectDir, encoding: 'utf8', env: invocationEnv },
-    );
-    await projectOutput.writeFile(projectBuildInfoFile, readFileSync(buildInfoFile));
-    return { durationMs: performance.now() - startedAt, executed: true };
-  } catch {
-    return undefined;
-  } finally {
-    rmSync(tempDir, { force: true, recursive: true });
+  const lockfile = findNearestFile(dirname(appModulePath), 'pnpm-lock.yaml');
+  if (lockfile !== undefined) {
+    packageReads.set(realpathOrResolved(lockfile), readFileSync(lockfile, 'utf8'));
   }
 }
 
-function isReusableChangedPath(path: string): boolean {
-  const basename = path.slice(path.lastIndexOf('/') + 1);
-  if (reusableChangedBasenames.has(basename)) return true;
-  const dot = basename.lastIndexOf('.');
-  if (dot <= 0) return false;
-  return reusableChangedExtensions.has(basename.slice(dot).toLowerCase());
+function digestCompilerReads(reads: ReadonlyMap<string, string>): string {
+  const rows = [...reads.entries()]
+    .map(([path, source]) => ({ digest: sha256(source), path }))
+    .sort(comparePathRows);
+  return kovoBuildOneShotDigest(rows);
 }
 
-function refuse(reason: string): KovoSourceCheckSessionReusePlan {
-  return Object.freeze({ eligible: false, reason });
+function comparePathRows(
+  left: { readonly path: string },
+  right: { readonly path: string },
+): number {
+  return left.path < right.path ? -1 : left.path > right.path ? 1 : 0;
+}
+
+function realpathOrResolved(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return resolve(path);
+  }
+}
+
+function sha256(source: string): string {
+  return `sha256:${createHash('sha256').update(source, 'utf8').digest('hex')}`;
 }
