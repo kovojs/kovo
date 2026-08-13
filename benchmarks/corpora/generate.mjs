@@ -1,27 +1,32 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
-import { mkdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const CORPUS_SCHEMA = 'kovo-dev-corpus/v1';
 export const SUPPORTED_SIZES = Object.freeze([24, 216]);
 
+const CORPUS_OWNER_FILE = '.kovo-benchmark-corpus-owner.json';
+const CORPUS_OWNER_SCHEMA = 'kovo-benchmark-corpus-owner/v1';
+
 const corporaRoot = fileURLToPath(new URL('.', import.meta.url));
 const benchmarkRoot = path.resolve(corporaRoot, '..');
 const repoRoot = path.resolve(benchmarkRoot, '..');
 
-export async function generateCorpora({
-  outDir = path.join(corporaRoot, '.work'),
-  sizes = SUPPORTED_SIZES,
-} = {}) {
-  const resolvedOut = path.resolve(outDir);
-  assertSafeOutputRoot(resolvedOut);
+export async function generateCorpora({ outDir, sizes = SUPPORTED_SIZES } = {}) {
+  const resolvedOut = outDir === undefined ? undefined : path.resolve(outDir);
+  if (resolvedOut !== undefined) assertSafeOutputRoot(resolvedOut);
   const normalizedSizes = [...new Set(sizes.map(validateSize))].sort((left, right) => left - right);
   const manifests = [];
   for (const size of normalizedSizes) {
     for (const framework of ['kovo', 'nextjs']) {
-      manifests.push(await generateCorpus({ framework, outDir: resolvedOut, size }));
+      // Keep runnable corpora below each entrant by default. Turbopack deliberately rejects a
+      // project-local node_modules symlink that leaves its filesystem root, whereas placing the
+      // temporary app below benchmarks/nextjs lets ordinary ancestor resolution find the real
+      // install without a symlink. Kovo uses the same layout so the corpus topology stays matched.
+      const frameworkOut = resolvedOut ?? path.join(benchmarkRoot, framework, '.corpora');
+      manifests.push(await generateCorpus({ framework, outDir: frameworkOut, size }));
     }
   }
   return manifests;
@@ -37,7 +42,7 @@ export async function generateCorpus({ framework, outDir, size }) {
   const appRoot = path.join(outputRoot, framework, `n${moduleCount}`);
   if (!appRoot.startsWith(`${outputRoot}${path.sep}`))
     throw new TypeError('Corpus path escaped output root.');
-  await rm(appRoot, { force: true, recursive: true });
+  await prepareOwnedAppRoot({ appRoot, framework, modules: moduleCount });
   await mkdir(path.join(appRoot, 'src', 'components'), { recursive: true });
 
   const files = framework === 'kovo' ? kovoFiles(moduleCount) : nextFiles(moduleCount);
@@ -51,13 +56,20 @@ export async function generateCorpus({ framework, outDir, size }) {
     framework === 'kovo'
       ? path.join(benchmarkRoot, 'kovo', 'node_modules')
       : path.join(benchmarkRoot, 'nextjs', 'node_modules');
-  await symlink(dependencyRoot, path.join(appRoot, 'node_modules'), 'dir');
+  const usesAncestorDependencies = isPathWithin(path.dirname(dependencyRoot), appRoot);
+  if (!usesAncestorDependencies) {
+    await symlink(dependencyRoot, path.join(appRoot, 'node_modules'), 'dir');
+  }
+  const bin = (name) =>
+    usesAncestorDependencies
+      ? path.relative(appRoot, path.join(dependencyRoot, '.bin', name))
+      : path.join('node_modules', '.bin', name);
 
   const shape = corpusShape(moduleCount);
   const manifest = {
     approximateLoc: lineCount(files),
-    build: buildContract(framework),
-    dev: devContract(framework),
+    build: buildContract(framework, bin),
+    dev: devContract(framework, bin),
     framework,
     modules: moduleCount,
     routes: shape.routes,
@@ -70,13 +82,10 @@ export async function generateCorpus({ framework, outDir, size }) {
   return manifestPath;
 }
 
-function buildContract(framework) {
+function buildContract(framework, bin) {
   return {
     command: {
-      argv:
-        framework === 'kovo'
-          ? ['node_modules/.bin/kovo', 'build', './src/app.tsx']
-          : ['node_modules/.bin/next', 'build'],
+      argv: framework === 'kovo' ? [bin('kovo'), 'build', './src/app.tsx'] : [bin('next'), 'build'],
       cwd: '.',
       env: {},
     },
@@ -99,22 +108,22 @@ function corpusShape(modules) {
   };
 }
 
-function devContract(framework) {
+function devContract(framework, bin) {
   return {
     command: {
       argv:
         framework === 'kovo'
           ? [
-              'node_modules/.bin/kovo',
+              bin('kovo'),
               'dev',
               './src/app.tsx',
               '--host',
-              '127.0.0.1',
+              'localhost',
               '--strict-port',
               '--port',
               '{port}',
             ]
-          : ['node_modules/.bin/next', 'dev', '--hostname', '127.0.0.1', '--port', '{port}'],
+          : [bin('next'), 'dev', '--hostname', 'localhost', '--port', '{port}'],
       cwd: '.',
       env: {},
     },
@@ -405,6 +414,52 @@ function assertSafeOutputRoot(outputRoot) {
   if (outputRoot === root || outputRoot === repoRoot || outputRoot === benchmarkRoot) {
     throw new TypeError(`Refusing unsafe corpus output root ${outputRoot}.`);
   }
+}
+
+function isPathWithin(root, candidate) {
+  const relative = path.relative(root, candidate);
+  return (
+    relative !== '' &&
+    relative !== '..' &&
+    !relative.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relative)
+  );
+}
+
+async function prepareOwnedAppRoot({ appRoot, framework, modules }) {
+  const ownership = {
+    appRoot,
+    framework,
+    modules,
+    schema: CORPUS_OWNER_SCHEMA,
+  };
+  let existing;
+  try {
+    existing = await lstat(appRoot);
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+
+  if (existing) {
+    if (existing.isSymbolicLink() || !existing.isDirectory()) {
+      throw new TypeError(`Refusing to replace non-directory corpus path ${appRoot}.`);
+    }
+    let owner;
+    try {
+      owner = JSON.parse(await readFile(path.join(appRoot, CORPUS_OWNER_FILE), 'utf8'));
+    } catch (error) {
+      if (error?.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error;
+    }
+    if (JSON.stringify(owner) !== JSON.stringify(ownership)) {
+      throw new TypeError(
+        `Refusing to replace unowned corpus directory ${appRoot}; remove it explicitly or choose a fresh --out root.`,
+      );
+    }
+    await rm(appRoot, { recursive: true });
+  }
+
+  await mkdir(appRoot, { recursive: true });
+  await writeFile(path.join(appRoot, CORPUS_OWNER_FILE), `${JSON.stringify(ownership, null, 2)}\n`);
 }
 
 function readOption(name) {

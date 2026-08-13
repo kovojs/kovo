@@ -1,6 +1,7 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -37,6 +38,37 @@ describe('equal-shape developer corpus generator', () => {
     expect(kovo.build.edit).toEqual(next.build.edit);
     expect(kovo.build.command.argv).toContain('build');
     expect(next.build.command.argv).toContain('build');
+    expect(kovo.dev.command.argv).toContain('localhost');
+    expect(next.dev.command.argv).toContain('localhost');
+    expect(kovo.dev.command.argv).not.toContain('127.0.0.1');
+    expect(next.dev.command.argv).not.toContain('127.0.0.1');
+    expect(path.isAbsolute(kovo.dev.command.argv[0])).toBe(false);
+    expect(path.isAbsolute(next.dev.command.argv[0])).toBe(false);
+    expect(kovo.dev.command.cwd).toBe('.');
+    expect(next.dev.command.cwd).toBe('.');
+  });
+
+  it('uses entrant-local default roots so Turbopack dependency resolution stays inside its tree', async () => {
+    const manifests = await generateCorpora({ sizes: [24] });
+    const corpusRoot = path.dirname(fileURLToPath(import.meta.url));
+    expect(manifests).toEqual([
+      path.join(corpusRoot, '..', 'kovo', '.corpora', 'kovo', 'n24', 'manifest.json'),
+      path.join(corpusRoot, '..', 'nextjs', '.corpora', 'nextjs', 'n24', 'manifest.json'),
+    ]);
+  });
+
+  it('refuses to recursively replace an output directory it did not generate', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-corpus-adversarial-'));
+    roots.push(root);
+    const unrelated = path.join(root, 'kovo', 'n24');
+    const evidence = path.join(unrelated, 'do-not-delete.txt');
+    await mkdir(unrelated, { recursive: true });
+    await writeFile(evidence, 'owned by the caller\n');
+
+    await expect(generateCorpora({ outDir: root, sizes: [24] })).rejects.toThrow(
+      'Refusing to replace unowned corpus directory',
+    );
+    expect(await readFile(evidence, 'utf8')).toBe('owned by the caller\n');
   });
 
   it('refuses unsupported sizes instead of publishing a silently different workload', async () => {

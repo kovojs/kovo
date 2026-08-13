@@ -52,6 +52,26 @@ For a faster local smoke run:
 node benchmarks/run-all.mjs --iterations 2 --skip-lighthouse --out-dir /tmp/kovo-bench
 ```
 
+Before comparing the matched lanes, compile Kovo and exercise the actual emitted L0/L1 runtime in
+Chromium. This gate proves L0 stays script-free, L1 state transitions work, and L1 navigation uses
+the structured-parts protocol rather than merely matching source strings:
+
+```sh
+node benchmarks/matched-fixture-gate.mjs
+```
+
+Generate the equal-shape developer/build corpora with:
+
+```sh
+node benchmarks/corpora/generate.mjs
+```
+
+The generated manifests live at
+`benchmarks/<framework>/.corpora/<framework>/n{24,216}/manifest.json`. They are ignored,
+sentinel-owned scratch apps; regeneration refuses to replace a directory that was not created by
+the generator. The manifest commands bind development servers to literal `localhost`, including
+Next.js Turbopack, so its HMR websocket origin matches the benchmark URL exactly.
+
 Useful flags: `--apps kovo,nextjs`, `--port-base 4820` (so two runs on one machine
 cannot measure each other's server), `--lighthouse-runs N`, `--bfcache-iterations N`,
 `--settle-quiet-ms` / `--settle-max-ms`. Every numeric flag is validated and rejects
