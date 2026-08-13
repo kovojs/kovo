@@ -305,6 +305,12 @@ const imageFiles = await rootedFiles('../shared/images');
 const app = defineKovo({
   appId: '38652956-30bb-4fbb-b8a7-585f4734b6b1',
   document: { lang: 'en-US' },
+  // spike/loader-memo: raise the default global/per-IP admission rates (20k/600 per 60s) so a
+  // localhost load generator can sustain >333 rps without KV433 429s. Identical in both A/B builds.
+  requestLimits: {
+    global: { max: 1_000_000, windowMs: 60_000 },
+    perIp: { max: 1_000_000, windowMs: 60_000 },
+  },
   renderRoute(value) {
     return typeof value === 'string' ? value : String(value ?? '');
   },
