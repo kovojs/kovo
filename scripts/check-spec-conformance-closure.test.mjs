@@ -85,7 +85,7 @@ describe('SPEC↔implementation diagnostic conformance closure (SPEC §2/§11)',
       errorCodes: 72,
       findings: [],
       ok: true,
-      sites: 204,
+      sites: 205,
     });
   }, 600_000);
 
@@ -324,7 +324,7 @@ function unreviewedDiagnostic(code, severity) {
         ),
     );
     const result = evaluate({ productionFiles });
-    expect(result.sites).toBe(204);
+    expect(result.sites).toBe(205);
     expect(result.findings.join('\n')).toContain(
       'production diagnostic emission site manifest drifted',
     );
@@ -343,7 +343,7 @@ function unreviewedDiagnostic(code, severity) {
         text.replace(exact, replacement),
       );
       const result = evaluate({ productionFiles });
-      expect(result.sites).toBe(204);
+      expect(result.sites).toBe(205);
       expect(result.findings.join('\n')).toContain(
         'production diagnostic emission site manifest drifted',
       );
@@ -370,7 +370,7 @@ function unreviewedDiagnostic(code, severity) {
         ),
     );
     const result = evaluate({ productionFiles });
-    expect(result.sites).toBe(204);
+    expect(result.sites).toBe(205);
     expect(result.findings.join('\n')).toContain(
       'reviewed validator registry and dispatch summary drifted',
     );
