@@ -812,6 +812,8 @@ function buildSessionProfileFindings(entry, budget) {
       (finding) => `profile ${finding}`,
     ),
   );
+  findings.push(...hostFingerprintFindings(report.host, 'profile'));
+  findings.push(...workloadIdentityFindings(report.workloadIdentity, 'profile'));
   if (
     report.source?.commit !== budget.baseline.sourceCommit ||
     report.source?.dirty !== false ||
@@ -822,10 +824,13 @@ function buildSessionProfileFindings(entry, budget) {
     findings.push('profile source identity is not current, clean, and stable');
   }
   if (
-    canonicalJson(report.host) !== canonicalJson(budget.subject.host) ||
+    // Host v2 deliberately retains raw RAM while its digest defines the normalized cohort. A
+    // separately scheduled diagnostic need not observe byte-identical hypervisor-reserved memory.
+    report.host?.digest !== budget.subject.host?.digest ||
     report.subject?.corpusSize !== 216 ||
     !WARM_BUILD_MODES.includes(report.subject?.mode) ||
-    report.subject?.baselineWorkloadDigest !== budget.subject.workloadIdentity.digest
+    report.subject?.baselineWorkloadDigest !== budget.subject.workloadIdentity.digest ||
+    report.workloadIdentity?.digest !== budget.subject.workloadIdentity.digest
   ) {
     findings.push('profile host or N=216 warm workload differs from the ratified budget');
   }

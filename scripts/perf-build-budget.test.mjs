@@ -8,7 +8,10 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { performanceExecutionIdentity } from './lib/perf-execution.mjs';
-import { performanceHostFingerprint } from './lib/perf-host.mjs';
+import {
+  performanceHostFingerprint,
+  performanceHostFingerprintFindings,
+} from './lib/perf-host.mjs';
 import { ratifyPerformanceBaseline } from './perf-baseline-ratify.mjs';
 import {
   PERF_BUILD_BUDGET_SCHEMA,
@@ -413,6 +416,42 @@ describe('ratified production-build performance budgets', () => {
     ).toEqual([]);
   });
 
+  it('matches current profiles to the normalized host cohort instead of raw memory bytes', () => {
+    const { n24Budget, n216Budget } = pairedBuildBudgets();
+    setWarmCell(n216Budget, 'unchanged', {
+      residualRatio: 0.1,
+      wallRatio: 6.1,
+    });
+    const profileEntries = [
+      buildProfileEntry(n216Budget, 'unchanged', ['typescript']),
+      buildProfileEntry(n216Budget, 'edit', []),
+    ];
+    for (const entry of profileEntries) {
+      const baselineHost = n216Budget.subject.host;
+      entry.report.host.totalMemoryBytes =
+        baselineHost.totalMemoryBytes === baselineHost.memoryCapacityClassBytes
+          ? baselineHost.totalMemoryBytes + 1
+          : baselineHost.memoryCapacityClassBytes;
+      expect(entry.report.host.totalMemoryBytes).not.toBe(baselineHost.totalMemoryBytes);
+      expect(entry.report.host.digest).toBe(baselineHost.digest);
+      expect(performanceHostFingerprintFindings(entry.report.host)).toEqual([]);
+      resealProfileEntry(entry);
+    }
+
+    const assessment = assessBuildForegroundSession({
+      n24Budget,
+      n216Budget,
+      profileEntries,
+    });
+
+    expect(assessment.verdict).toMatchObject({
+      findings: [],
+      outcome: 'warranted',
+      rationale: 'n216-miss-upper-residual-and-session-eligible-top-five-proven',
+      status: 'decided',
+    });
+  });
+
   it('stays unproven when current profiles do not prove an eligible top-five cause', () => {
     const { n24Budget, n216Budget } = pairedBuildBudgets();
     setWarmCell(n216Budget, 'edit', { residualRatio: 0.25, rssRatio: 2.1 });
@@ -520,6 +559,18 @@ describe('ratified production-build performance budgets', () => {
       finding: 'profile source phase posture is unavailable or malformed',
       mutate: (report) => {
         report.sourcePhasePosture.phases[1].status = 'skipped';
+      },
+    },
+    {
+      finding: 'profile host digest is not derived from normalized cohort facts',
+      mutate: (report) => {
+        report.host.digest = digest('different-host');
+      },
+    },
+    {
+      finding: 'profile workload digest is not derived from its facts',
+      mutate: (report) => {
+        report.workloadIdentity.identity.cells.push('server');
       },
     },
   ])('rejects malformed raw build profile evidence: $finding', ({ finding, mutate }) => {
