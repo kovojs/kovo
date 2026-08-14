@@ -413,9 +413,9 @@ jobs:
       - name: Install the isolated Next.js benchmark
         run: vp exec pnpm --dir benchmarks/nextjs install --ignore-workspace --frozen-lockfile
       - name: Collect the complete alternating server matrix
-        # The 504 fixed measurement windows consume 168 minutes. A five-second quiet-host settle
-        # ceiling keeps the declared envelope near 210 minutes, while the outer timeout leaves
-        # thirty minutes for artifact upload before the job-level 360-minute cap.
+        # The 504 fixed measurement windows consume 168 minutes. One 30-second quiet-host settle
+        # budget is shared by the whole suite; it cannot multiply per window. The outer timeout
+        # leaves thirty minutes for artifact upload before the job-level 360-minute cap.
         run: >-
           timeout --signal=TERM --kill-after=30s 330m
           vp exec node benchmarks/compare.mjs
@@ -423,7 +423,7 @@ jobs:
           --server-samples 7
           --server-warmup-ms 5000
           --server-duration-ms 15000
-          --server-host-settle-max-ms 5000
+          --server-host-settle-max-ms 30000
           --server-concurrencies 1,8,32
           --server-routes listing,detail
           --server-encodings identity,br

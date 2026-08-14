@@ -188,7 +188,7 @@ describe('realistic performance CI policy', () => {
       '--server-samples 7',
       '--server-warmup-ms 5000',
       '--server-duration-ms 15000',
-      '--server-host-settle-max-ms 5000',
+      '--server-host-settle-max-ms 30000',
       '--server-concurrencies 1,8,32',
       '--server-routes listing,detail',
       '--server-encodings identity,br',
