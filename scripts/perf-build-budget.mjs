@@ -12,6 +12,10 @@ import {
 } from './perf-build-benchmark.mjs';
 import { ratifyPerformanceBaseline } from './perf-baseline-ratify.mjs';
 import {
+  buildProfileConfigStaticTrustRequired,
+  PERF_BUILD_PROFILE_REQUIRED_ROLES,
+} from './lib/perf-build-profile-classifier.mjs';
+import {
   canonicalJson,
   hostFingerprintFindings,
   performanceReportFindings,
@@ -53,17 +57,7 @@ const BUILD_PROFILE_CAUSES = Object.freeze([
   'unattributed',
 ]);
 const BUILD_PROFILE_INTERVAL_US = 10_000;
-const BUILD_PROFILE_PROCESS_ROLES = Object.freeze([
-  'bootstrap',
-  'orchestrator',
-  'analyze',
-  'typescript',
-  'config-static-trust',
-  'app-static-trust',
-  'client',
-  'server',
-  'final',
-]);
+const BUILD_PROFILE_PROCESS_ROLES = Object.freeze([...PERF_BUILD_PROFILE_REQUIRED_ROLES]);
 const BUILD_PROFILE_PROCESS_CENSUS_SCHEMA = 'kovo-build-process-census/v1';
 const BUILD_PROFILE_PROCESS_CPU_SCHEMA = 'kovo-build-process-tree-cpu/v1';
 const BUILD_PROFILE_PROCESS_ROLE_CLASSIFIER = 'kovo-build-exec-argv-role/v1';
@@ -891,6 +885,18 @@ function buildProfileProcessEvidenceFindings(report) {
   const processCensus = capture?.processCensus;
   const processCpu = capture?.processCpu;
   const analysis = capture?.profileSetAnalysis;
+  let requiredProcessRoles;
+  try {
+    requiredProcessRoles = [
+      ...BUILD_PROFILE_PROCESS_ROLES,
+      ...(buildProfileConfigStaticTrustRequired(report?.sourcePhasePosture)
+        ? ['config-static-trust']
+        : []),
+    ];
+  } catch {
+    findings.push('profile source phase posture is unavailable or malformed');
+    return findings;
+  }
   if (
     report?.buildInvocation?.adapter !== BUILD_BENCHMARK_SCHEMA ||
     report.buildInvocation.mode !== mode ||
@@ -908,7 +914,7 @@ function buildProfileProcessEvidenceFindings(report) {
   }
   if (
     !Array.isArray(artifacts) ||
-    artifacts.length !== BUILD_PROFILE_PROCESS_ROLES.length ||
+    artifacts.length !== requiredProcessRoles.length ||
     !ownRecord(capture) ||
     capture.complete !== true ||
     capture.inputProfiles !== artifacts?.length ||
@@ -925,7 +931,7 @@ function buildProfileProcessEvidenceFindings(report) {
   for (const artifact of artifacts) {
     const expectedMember = `raw-${String(mode)}-${String(artifact?.role)}-pid-${String(artifact?.pid)}.cpuprofile`;
     if (
-      !BUILD_PROFILE_PROCESS_ROLES.includes(artifact?.role) ||
+      !requiredProcessRoles.includes(artifact?.role) ||
       !Number.isSafeInteger(artifact?.pid) ||
       artifact.pid < 1 ||
       artifactPids.has(artifact.pid) ||
@@ -949,7 +955,7 @@ function buildProfileProcessEvidenceFindings(report) {
   }
   if (
     canonicalJson([...artifactRoles].sort((left, right) => left.localeCompare(right))) !==
-    canonicalJson([...BUILD_PROFILE_PROCESS_ROLES].sort((left, right) => left.localeCompare(right)))
+    canonicalJson([...requiredProcessRoles].sort((left, right) => left.localeCompare(right)))
   ) {
     findings.push('profile original-process role census differs');
   }
@@ -981,9 +987,7 @@ function buildProfileProcessEvidenceFindings(report) {
   ) {
     findings.push('profile process census is incomplete');
   } else {
-    const nodeProcesses = censusProcesses.filter(({ role }) =>
-      BUILD_PROFILE_PROCESS_ROLES.includes(role),
-    );
+    const nodeProcesses = censusProcesses.filter(({ role }) => requiredProcessRoles.includes(role));
     const nodeKeys = nodeProcesses
       .map(({ pid, role }) => `${String(pid)}:${String(role)}`)
       .sort((left, right) => left.localeCompare(right));
@@ -1000,13 +1004,10 @@ function buildProfileProcessEvidenceFindings(report) {
         (process) =>
           !Number.isSafeInteger(process?.pid) ||
           process.pid < 1 ||
-          !['collector-time', 'native-one-shot', ...BUILD_PROFILE_PROCESS_ROLES].includes(
-            process?.role,
-          ) ||
+          !['collector-time', 'native-one-shot', ...requiredProcessRoles].includes(process?.role) ||
           !nonEmptyString(process?.roleEvidence) ||
           !executableEvidence(process?.executable) ||
-          (BUILD_PROFILE_PROCESS_ROLES.includes(process?.role) &&
-            !executableEvidence(process?.entry)),
+          (requiredProcessRoles.includes(process?.role) && !executableEvidence(process?.entry)),
       ) ||
       censusProcesses.filter(({ role }) => role === 'collector-time').length !== 1 ||
       processPids.size !== censusProcesses.length ||

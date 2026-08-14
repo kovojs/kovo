@@ -1,8 +1,11 @@
+import { KOVO_BUILD_SOURCE_PHASES } from '../perf-build-benchmark.mjs';
+
 const MAX_PROFILE_NODES = 1_000_000;
 const MAX_PROFILE_SAMPLES = 10_000_000;
 const MAX_PROFILE_DOCUMENTS = 64;
 
 export const PERF_BUILD_PROFILE_CLASSIFIER = 'kovo-build-session-eligibility/phase-v1';
+export const PERF_BUILD_PROFILE_SOURCE_PHASE_POSTURE_SCHEMA = 'kovo-build-source-phase-posture/v1';
 export const PERF_BUILD_PROFILE_ELIGIBLE_CAUSES = Object.freeze([
   'config-trust',
   'typescript',
@@ -96,6 +99,63 @@ const ROLE_FALLBACK_CAUSES = Object.freeze({
   server: 'server',
   typescript: 'typescript',
 });
+const SOURCE_PHASE_STATUSES = new Set(['executed', 'not-applicable', 'reused-authenticated']);
+
+/** Derive the bounded non-timing posture that owns the optional config worker role. */
+export function deriveBuildProfileSourcePhasePosture(sourceCensus) {
+  if (
+    !ownRecord(sourceCensus) ||
+    sourceCensus.schema !== 'kovo-build-source-phase-census/v1' ||
+    sourceCensus.complete !== true ||
+    !Array.isArray(sourceCensus.phases) ||
+    sourceCensus.phases.length !== KOVO_BUILD_SOURCE_PHASES.length
+  ) {
+    throw new TypeError('profiled build source phase census is unavailable or incomplete');
+  }
+  const phases = sourceCensus.phases.map((phase, index) => {
+    if (
+      !ownRecord(phase) ||
+      phase.name !== KOVO_BUILD_SOURCE_PHASES[index] ||
+      !SOURCE_PHASE_STATUSES.has(phase.status) ||
+      !Number.isFinite(phase.durationMs) ||
+      phase.durationMs < 0
+    ) {
+      throw new TypeError('profiled build source phase census is malformed or unordered');
+    }
+    return { name: phase.name, status: phase.status };
+  });
+  return {
+    complete: true,
+    phases,
+    schema: PERF_BUILD_PROFILE_SOURCE_PHASE_POSTURE_SCHEMA,
+  };
+}
+
+/** Validate the persisted exact posture and decide whether the ninth config profile is required. */
+export function buildProfileConfigStaticTrustRequired(posture) {
+  if (
+    !ownRecord(posture) ||
+    JSON.stringify(Object.keys(posture).sort()) !==
+      JSON.stringify(['complete', 'phases', 'schema']) ||
+    posture.schema !== PERF_BUILD_PROFILE_SOURCE_PHASE_POSTURE_SCHEMA ||
+    posture.complete !== true ||
+    !Array.isArray(posture.phases) ||
+    posture.phases.length !== KOVO_BUILD_SOURCE_PHASES.length
+  ) {
+    throw new TypeError('build profile source phase posture is unavailable or incomplete');
+  }
+  for (const [index, phase] of posture.phases.entries()) {
+    if (
+      !ownRecord(phase) ||
+      JSON.stringify(Object.keys(phase).sort()) !== JSON.stringify(['name', 'status']) ||
+      phase.name !== KOVO_BUILD_SOURCE_PHASES[index] ||
+      !SOURCE_PHASE_STATUSES.has(phase.status)
+    ) {
+      throw new TypeError('build profile source phase posture is malformed or unordered');
+    }
+  }
+  return posture.phases.find(({ name }) => name === 'config-trust').status === 'executed';
+}
 
 /**
  * Derive the fixed build-session cause ranking from raw V8 CPU-profile samples. A stack receives a

@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildProfileConfigStaticTrustRequired,
   deriveBuildProfileSetAnalysis,
+  deriveBuildProfileSourcePhasePosture,
   deriveBuildProfileTopFive,
 } from './perf-build-profile-classifier.mjs';
+import { KOVO_BUILD_SOURCE_PHASES } from '../perf-build-benchmark.mjs';
 
 describe('build CPU profile classifier', () => {
   it('ranks only exact reviewed phase markers and retains unknown stacks as unattributed', () => {
@@ -236,6 +239,76 @@ describe('build CPU profile classifier', () => {
     ).not.toThrow();
   });
 
+  it('binds the optional config profile exactly to the authenticated source phase posture', () => {
+    const baseProfiles = processRoleProfiles();
+    const configProfile = authenticatedRoleProfile(
+      'config-static-trust',
+      'runPreEvaluationBuildConfigTrustPreflight',
+    );
+    const executed = deriveBuildProfileSourcePhasePosture(sourcePhaseCensus('executed'));
+    const skipped = deriveBuildProfileSourcePhasePosture(sourcePhaseCensus('not-applicable'));
+
+    expect(executed).toEqual({
+      complete: true,
+      phases: KOVO_BUILD_SOURCE_PHASES.map((name) => ({ name, status: 'executed' })),
+      schema: 'kovo-build-source-phase-posture/v1',
+    });
+    expect(JSON.stringify(executed)).not.toContain('durationMs');
+    expect(buildProfileConfigStaticTrustRequired(executed)).toBe(true);
+    expect(() =>
+      deriveBuildProfileSetAnalysis(baseProfiles, {
+        requireConfigStaticTrust: buildProfileConfigStaticTrustRequired(executed),
+      }),
+    ).toThrow('role census differs');
+    expect(() =>
+      deriveBuildProfileSetAnalysis([...baseProfiles, configProfile], {
+        requireConfigStaticTrust: buildProfileConfigStaticTrustRequired(executed),
+      }),
+    ).not.toThrow();
+
+    expect(buildProfileConfigStaticTrustRequired(skipped)).toBe(false);
+    expect(() =>
+      deriveBuildProfileSetAnalysis(baseProfiles, {
+        requireConfigStaticTrust: buildProfileConfigStaticTrustRequired(skipped),
+      }),
+    ).not.toThrow();
+    expect(() =>
+      deriveBuildProfileSetAnalysis([...baseProfiles, configProfile], {
+        requireConfigStaticTrust: buildProfileConfigStaticTrustRequired(skipped),
+      }),
+    ).toThrow('role census differs');
+  });
+
+  it('fails closed on missing, duplicate, invalid, or timing-bearing persisted posture', () => {
+    const valid = deriveBuildProfileSourcePhasePosture(sourcePhaseCensus('executed'));
+    const malformed = [
+      undefined,
+      { ...structuredClone(valid), phases: valid.phases.slice(0, -1) },
+      {
+        ...structuredClone(valid),
+        phases: valid.phases.map((phase, index) =>
+          index === 1 ? { ...phase, name: valid.phases[0].name } : phase,
+        ),
+      },
+      {
+        ...structuredClone(valid),
+        phases: valid.phases.map((phase, index) =>
+          index === 1 ? { ...phase, status: 'skipped' } : phase,
+        ),
+      },
+      {
+        ...structuredClone(valid),
+        phases: valid.phases.map((phase, index) =>
+          index === 1 ? { ...phase, durationMs: 1 } : phase,
+        ),
+      },
+    ];
+
+    for (const posture of malformed) {
+      expect(() => buildProfileConfigStaticTrustRequired(posture)).toThrow(/source phase posture/u);
+    }
+  });
+
   it('trusts the exec census for an idle orchestrator but rejects exclusive role contradictions', () => {
     const profiles = processRoleProfiles();
     profiles[1] = authenticatedRoleProfile(
@@ -281,6 +354,18 @@ function processRoleProfiles() {
     authenticatedRoleProfile('server', 'produceKovoBuildOneShotServerPhase'),
     authenticatedRoleProfile('final', 'finishKovoBuildOneShot'),
   ];
+}
+
+function sourcePhaseCensus(configStatus) {
+  return {
+    complete: true,
+    phases: KOVO_BUILD_SOURCE_PHASES.map((name) => ({
+      durationMs: 1,
+      name,
+      status: name === 'config-trust' ? configStatus : 'executed',
+    })),
+    schema: 'kovo-build-source-phase-census/v1',
+  };
 }
 
 function authenticatedRoleProfile(role, functionName, url = buildExportUrl(), extraGroups = []) {

@@ -40,8 +40,11 @@ import {
   PERF_BUILD_SESSION_PROFILE_CLASSIFIER,
 } from './perf-build-budget.mjs';
 import {
+  buildProfileConfigStaticTrustRequired,
   deriveBuildProfileSetAnalysis,
+  deriveBuildProfileSourcePhasePosture,
   PERF_BUILD_PROFILE_CLASSIFIER,
+  PERF_BUILD_PROFILE_REQUIRED_ROLES,
 } from './lib/perf-build-profile-classifier.mjs';
 import { executionIdentityFindings, performanceExecutionIdentity } from './lib/perf-execution.mjs';
 import {
@@ -156,6 +159,7 @@ export async function produceBuildSessionProfiles(options = {}, dependencies = {
         throw new TypeError(`${mode} profiled build: ${profileFindings.join('; ')}`);
       }
       requireProfiledCaptureConsistency(capture);
+      const sourcePhasePosture = profiledSourcePhasePosture(capture.report);
 
       const rawProfiles = capture.profileInputs
         .map((entry) => ({
@@ -168,7 +172,7 @@ export async function produceBuildSessionProfiles(options = {}, dependencies = {
         rawProfiles.map(({ bytes, role }) => ({ bytes, role })),
         {
           nativeOrUnprofiledSamples: capture.processCpu.cause.equivalentSamples,
-          requireConfigStaticTrust: profiledConfigTrustExecuted(capture.report),
+          requireConfigStaticTrust: buildProfileConfigStaticTrustRequired(sourcePhasePosture),
         },
       );
       const topFive = profileSetAnalysis.topFive;
@@ -211,6 +215,7 @@ export async function produceBuildSessionProfiles(options = {}, dependencies = {
         rawFileName,
         source,
         sourceAfter,
+        sourcePhasePosture,
         topFive,
         workloadIdentity,
       });
@@ -402,6 +407,7 @@ export function createBuildSessionProfileReport({
   rawFileName,
   source,
   sourceAfter,
+  sourcePhasePosture,
   topFive,
   workloadIdentity,
 }) {
@@ -412,6 +418,7 @@ export function createBuildSessionProfileReport({
   if (PERF_BUILD_SESSION_PROFILE_CLASSIFIER !== PERF_BUILD_PROFILE_CLASSIFIER) {
     throw new TypeError('build profile classifier contract differs from the persistence assessor');
   }
+  requireExactProfileRoles(profileArtifacts, sourcePhasePosture);
   const sourceStable = sameSourceState(source, sourceAfter);
   if (
     capture?.complete !== true ||
@@ -482,6 +489,7 @@ export function createBuildSessionProfileReport({
     schema: PERF_BUILD_SESSION_PROFILE_SCHEMA,
     source,
     sourceAfter,
+    sourcePhasePosture,
     subject: {
       baselineWorkloadDigest: workloadIdentity.digest,
       corpusSize: BUILD_PROFILE_CORPUS_SIZE,
@@ -539,74 +547,14 @@ async function defaultProfiledBuild({ corpusManifest, mode, scratchRoot }) {
     requireExecutable(ENV_PATH, 'env'),
   ]);
   const existingNodeOptions = process.env.NODE_OPTIONS ?? '';
-  if (CPU_PROFILE_FLAG_PATTERN.test(existingNodeOptions)) {
-    throw new TypeError('NODE_OPTIONS already contains --cpu-prof; profile ownership is ambiguous');
-  }
-  const profilerOptions = [
-    '--cpu-prof',
-    `--cpu-prof-dir=${JSON.stringify(profilerDir)}`,
-    `--cpu-prof-interval=${String(BUILD_PROFILE_SAMPLING_INTERVAL_US)}`,
-  ].join(' ');
-  const profiledNodeOptions = `${existingNodeOptions} ${profilerOptions}`.trim();
-  let measuredCommands = 0;
-  const report = runBuildBenchmark(
-    {
-      corpus: corpusManifest,
-      framework: 'kovo',
-      iterations: 1,
-      mode,
-      timeoutMs: BUILD_PROFILE_TIMEOUT_MS,
-      // Keep the warmups and profiled sample inside one adapter invocation. The adapter clears
-      // declared build outputs once at invocation start, so a separate warmup invocation would be
-      // erased before profiling and silently turn both warm modes into clean builds.
-      warmups: BUILD_PROFILE_WARMUPS,
-    },
-    {
-      measureProcessTreeCommand(command, commandOptions) {
-        measuredCommands += 1;
-        if (measuredCommands <= BUILD_PROFILE_WARMUPS) {
-          return measureProcessTreeCommand(command, commandOptions);
-        }
-        if (measuredCommands !== BUILD_PROFILE_WARMUPS + 1) {
-          throw new TypeError('profiled build attempted more than one measured command');
-        }
-        return measureProcessTreeCommand(
-          [
-            STRACE_PATH,
-            '-f',
-            '-qq',
-            '-s',
-            String(MAX_STRACE_STRING_BYTES),
-            '-e',
-            'trace=process',
-            '-o',
-            tracePath,
-            TIME_PATH,
-            '-f',
-            `kovo-build-process-cpu/v1 interval=${String(BUILD_PROFILE_SAMPLING_INTERVAL_US)} user=%U system=%S exit=%x`,
-            '-o',
-            processCpuPath,
-            ENV_PATH,
-            `NODE_OPTIONS=${profiledNodeOptions}`,
-            ...command,
-          ],
-          {
-            ...commandOptions,
-            // The RSS supervisor is evidence infrastructure, not part of the build process tree.
-            // Only /usr/bin/env below time/strace receives the profiling flags.
-            env: {
-              ...commandOptions.env,
-              LC_ALL: 'C',
-              NODE_OPTIONS: existingNodeOptions,
-            },
-          },
-        );
-      },
-    },
-  );
-  if (measuredCommands !== BUILD_PROFILE_WARMUPS + 1) {
-    throw new TypeError('profiled build command census is incomplete');
-  }
+  const report = runProfiledBuildBenchmarkAdapter({
+    corpusManifest,
+    existingNodeOptions,
+    mode,
+    processCpuPath,
+    profilerDir,
+    tracePath,
+  });
   const processCpuBytes = await readFile(processCpuPath);
   const entries = await readdir(profilerDir, { withFileTypes: true });
   if (entries.some((entry) => !entry.isFile() || !entry.name.endsWith('.cpuprofile'))) {
@@ -653,7 +601,11 @@ async function defaultProfiledBuild({ corpusManifest, mode, scratchRoot }) {
   let { profileInputs } = authenticated;
   const inspectedProfiles = deriveBuildProfileSetAnalysis(
     profileInputs.map(({ bytes, role }) => ({ bytes, role })),
-    { requireConfigStaticTrust: profiledConfigTrustExecuted(report) },
+    {
+      requireConfigStaticTrust: buildProfileConfigStaticTrustRequired(
+        profiledSourcePhasePosture(report),
+      ),
+    },
   );
   profileInputs = profileInputs.map((entry, index) => {
     const census = inspectedProfiles.profileCensus[index];
@@ -687,6 +639,84 @@ async function defaultProfiledBuild({ corpusManifest, mode, scratchRoot }) {
     profileInputs,
     report,
   };
+}
+
+/** Keep warmups and the sole profiled command inside one build-adapter invocation. */
+export function runProfiledBuildBenchmarkAdapter(
+  { corpusManifest, existingNodeOptions, mode, processCpuPath, profilerDir, tracePath },
+  dependencies = {},
+) {
+  if (CPU_PROFILE_FLAG_PATTERN.test(existingNodeOptions)) {
+    throw new TypeError('NODE_OPTIONS already contains --cpu-prof; profile ownership is ambiguous');
+  }
+  const profilerOptions = [
+    '--cpu-prof',
+    `--cpu-prof-dir=${JSON.stringify(profilerDir)}`,
+    `--cpu-prof-interval=${String(BUILD_PROFILE_SAMPLING_INTERVAL_US)}`,
+  ].join(' ');
+  const profiledNodeOptions = `${existingNodeOptions} ${profilerOptions}`.trim();
+  let measuredCommands = 0;
+  const runBenchmark = dependencies.runBuildBenchmark ?? runBuildBenchmark;
+  const measureCommand = dependencies.measureProcessTreeCommand ?? measureProcessTreeCommand;
+  const report = runBenchmark(
+    {
+      corpus: corpusManifest,
+      framework: 'kovo',
+      iterations: 1,
+      mode,
+      timeoutMs: BUILD_PROFILE_TIMEOUT_MS,
+      // Keep the warmups and profiled sample inside one adapter invocation. The adapter clears
+      // declared build outputs once at invocation start, so a separate warmup invocation would be
+      // erased before profiling and silently turn both warm modes into clean builds.
+      warmups: BUILD_PROFILE_WARMUPS,
+    },
+    {
+      measureProcessTreeCommand(command, commandOptions) {
+        measuredCommands += 1;
+        if (measuredCommands <= BUILD_PROFILE_WARMUPS) {
+          return measureCommand(command, commandOptions);
+        }
+        if (measuredCommands !== BUILD_PROFILE_WARMUPS + 1) {
+          throw new TypeError('profiled build attempted more than one measured command');
+        }
+        return measureCommand(
+          [
+            STRACE_PATH,
+            '-f',
+            '-qq',
+            '-s',
+            String(MAX_STRACE_STRING_BYTES),
+            '-e',
+            'trace=process',
+            '-o',
+            tracePath,
+            TIME_PATH,
+            '-f',
+            `kovo-build-process-cpu/v1 interval=${String(BUILD_PROFILE_SAMPLING_INTERVAL_US)} user=%U system=%S exit=%x`,
+            '-o',
+            processCpuPath,
+            ENV_PATH,
+            `NODE_OPTIONS=${profiledNodeOptions}`,
+            ...command,
+          ],
+          {
+            ...commandOptions,
+            // The RSS supervisor is evidence infrastructure, not part of the build process tree.
+            // Only /usr/bin/env below time/strace receives the profiling flags.
+            env: {
+              ...commandOptions.env,
+              LC_ALL: 'C',
+              NODE_OPTIONS: existingNodeOptions,
+            },
+          },
+        );
+      },
+    },
+  );
+  if (measuredCommands !== BUILD_PROFILE_WARMUPS + 1) {
+    throw new TypeError('profiled build command census is incomplete');
+  }
+  return report;
 }
 
 /** Parse strace process events into bounded non-secret PID/executable/entry-role facts only. */
@@ -894,7 +924,7 @@ async function authenticateBuildProcessCensus({ profileInputs, report, sanitized
       throw new TypeError('raw CPU profile PID is absent from the complete process trace');
     }
   }
-  requireExactProfileRoles(authenticatedProfiles, report);
+  requireExactProfileRoles(authenticatedProfiles, profiledSourcePhasePosture(report));
   if (!processes.some(({ role }) => role === 'collector-time')) {
     throw new TypeError('recursive CPU collector process is absent from the process trace');
   }
@@ -922,24 +952,11 @@ async function authenticateBuildProcessCensus({ profileInputs, report, sanitized
   };
 }
 
-function requireExactProfileRoles(profileInputs, report) {
-  const sourcePhases = new Map(
-    (report?.samples?.[0]?.phaseCensus?.source?.phases ?? []).map((phase) => [
-      phase.name,
-      phase.status,
-    ]),
-  );
+function requireExactProfileRoles(profileInputs, sourcePhasePosture) {
   const expected = [
-    'bootstrap',
-    'orchestrator',
-    'analyze',
-    'app-static-trust',
-    'client',
-    'server',
-    'final',
+    ...PERF_BUILD_PROFILE_REQUIRED_ROLES,
+    ...(buildProfileConfigStaticTrustRequired(sourcePhasePosture) ? ['config-static-trust'] : []),
   ];
-  if (sourcePhases.get('typescript') === 'executed') expected.push('typescript');
-  if (sourcePhases.get('config-trust') === 'executed') expected.push('config-static-trust');
   const actual = profileInputs
     .map(({ role }) => role)
     .sort((left, right) => left.localeCompare(right));
@@ -976,7 +993,7 @@ function requireProfiledCaptureConsistency(capture) {
       throw new TypeError('profiled build process profile census differs from its raw bytes');
     }
   }
-  requireExactProfileRoles(capture.profileInputs, capture.report);
+  requireExactProfileRoles(capture.profileInputs, profiledSourcePhasePosture(capture.report));
 
   const processCensus = capture.processCensus;
   const processes = processCensus?.processes;
@@ -1092,22 +1109,12 @@ function sameExecutableIdentity(left, right) {
   );
 }
 
-function profiledConfigTrustExecuted(report) {
+function profiledSourcePhasePosture(report) {
   const samples = report?.samples;
   if (!Array.isArray(samples) || samples.length !== 1) {
     throw new TypeError('profiled build phase census is unavailable');
   }
-  const phases = samples[0]?.phaseCensus?.source?.phases;
-  if (!Array.isArray(phases))
-    throw new TypeError('profiled build source phase census is unavailable');
-  const config = phases.filter(({ name }) => name === 'config-trust');
-  if (
-    config.length !== 1 ||
-    (config[0].status !== 'executed' && config[0].status !== 'not-applicable')
-  ) {
-    throw new TypeError('profiled build config-trust phase posture is unavailable');
-  }
-  return config[0].status === 'executed';
+  return deriveBuildProfileSourcePhasePosture(samples[0]?.phaseCensus?.source);
 }
 
 function parseSuccessfulExecve(event, cwd) {

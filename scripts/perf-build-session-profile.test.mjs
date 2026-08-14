@@ -15,8 +15,10 @@ import {
   mergeBuildProcessProfiles,
   parseBuildProfileArgs,
   produceBuildSessionProfiles,
+  runProfiledBuildBenchmarkAdapter,
   sanitizeBuildProcessTrace,
 } from './perf-build-session-profile.mjs';
+import { KOVO_BUILD_SOURCE_PHASES } from './perf-build-benchmark.mjs';
 import { performanceExecutionIdentity } from './lib/perf-execution.mjs';
 import { canonicalJson, performanceHostFingerprint } from './lib/perf-host.mjs';
 
@@ -154,6 +156,120 @@ describe('N=216 build profile producer', () => {
     });
   });
 
+  it.each(BUILD_PROFILE_MODES)(
+    'keeps %s warmups and the sole strace profile in one adapter invocation',
+    (mode) => {
+      const originalCommand = ['/workspace/node_modules/.bin/kovo', 'build', './src/app.tsx'];
+      const commandOptions = {
+        cwd: '/workspace/corpus',
+        env: { KOVO_DEVEX_BUILD_PHASE_CENSUS_SOURCE: 'src/app.tsx' },
+        timeoutMs: 123_456,
+      };
+      const observed = [];
+      const adapterOptions = [];
+      let adapterCalls = 0;
+      const report = runProfiledBuildBenchmarkAdapter(
+        {
+          corpusManifest: '/workspace/corpus/manifest.json',
+          existingNodeOptions: '--experimental-transform-types',
+          mode,
+          processCpuPath: '/tmp/process-cpu.txt',
+          profilerDir: '/tmp/process-profiles',
+          tracePath: '/tmp/process.trace',
+        },
+        {
+          measureProcessTreeCommand(command, options) {
+            observed.push({ command, options });
+            return { exitCode: 0 };
+          },
+          runBuildBenchmark(options, dependencies) {
+            adapterCalls += 1;
+            adapterOptions.push(options);
+            for (let index = 0; index < BUILD_PROFILE_WARMUPS + 1; index += 1) {
+              dependencies.measureProcessTreeCommand(originalCommand, commandOptions);
+            }
+            return { mode, sentinel: 'adapter-report' };
+          },
+        },
+      );
+
+      expect(adapterCalls).toBe(1);
+      expect(adapterOptions).toEqual([
+        expect.objectContaining({
+          corpus: '/workspace/corpus/manifest.json',
+          framework: 'kovo',
+          iterations: 1,
+          mode,
+          warmups: BUILD_PROFILE_WARMUPS,
+        }),
+      ]);
+      expect(report).toEqual({ mode, sentinel: 'adapter-report' });
+      expect(observed).toHaveLength(BUILD_PROFILE_WARMUPS + 1);
+      expect(observed.slice(0, BUILD_PROFILE_WARMUPS)).toEqual(
+        Array.from({ length: BUILD_PROFILE_WARMUPS }, () => ({
+          command: originalCommand,
+          options: commandOptions,
+        })),
+      );
+      const profiled = observed.at(-1);
+      expect(profiled.command).toEqual([
+        '/usr/bin/strace',
+        '-f',
+        '-qq',
+        '-s',
+        '16384',
+        '-e',
+        'trace=process',
+        '-o',
+        '/tmp/process.trace',
+        '/usr/bin/time',
+        '-f',
+        `kovo-build-process-cpu/v1 interval=${String(BUILD_PROFILE_SAMPLING_INTERVAL_US)} user=%U system=%S exit=%x`,
+        '-o',
+        '/tmp/process-cpu.txt',
+        '/usr/bin/env',
+        `NODE_OPTIONS=--experimental-transform-types --cpu-prof --cpu-prof-dir="/tmp/process-profiles" --cpu-prof-interval=${String(BUILD_PROFILE_SAMPLING_INTERVAL_US)}`,
+        ...originalCommand,
+      ]);
+      expect(profiled.options).toEqual({
+        ...commandOptions,
+        env: {
+          ...commandOptions.env,
+          LC_ALL: 'C',
+          NODE_OPTIONS: '--experimental-transform-types',
+        },
+      });
+      expect(
+        observed.filter(({ command }) =>
+          command.some((argument) => argument.includes('--cpu-prof')),
+        ),
+      ).toHaveLength(1);
+    },
+  );
+
+  it('rejects an adapter that attempts a second profiled command', () => {
+    expect(() =>
+      runProfiledBuildBenchmarkAdapter(
+        {
+          corpusManifest: '/workspace/corpus/manifest.json',
+          existingNodeOptions: '',
+          mode: 'unchanged',
+          processCpuPath: '/tmp/process-cpu.txt',
+          profilerDir: '/tmp/process-profiles',
+          tracePath: '/tmp/process.trace',
+        },
+        {
+          measureProcessTreeCommand: () => ({ exitCode: 0 }),
+          runBuildBenchmark(_options, dependencies) {
+            for (let index = 0; index < BUILD_PROFILE_WARMUPS + 2; index += 1) {
+              dependencies.measureProcessTreeCommand(['kovo', 'build'], { env: {} });
+            }
+          },
+        },
+      ),
+    ).toThrow('attempted more than one measured command');
+  });
+
   it('rejects negative, uncertain, wrong-interval, and unsupported native residuals', () => {
     const profileInputs = [profileFacts(10, 0)];
     const derive = (line, processes = []) =>
@@ -238,6 +354,12 @@ describe('N=216 build profile producer', () => {
       expect(report.execution).toEqual(fixture.execution);
       expect(report.host).toEqual(fixture.host);
       expect(report.integrity).toMatchObject({ complete: true, sourceStable: true });
+      expect(report.sourcePhasePosture).toEqual({
+        complete: true,
+        phases: KOVO_BUILD_SOURCE_PHASES.map((name) => ({ name, status: 'executed' })),
+        schema: 'kovo-build-source-phase-posture/v1',
+      });
+      expect(JSON.stringify(report.sourcePhasePosture)).not.toContain('duration');
       expect(report.profileArtifacts).toHaveLength(9);
       expect(
         report.capture.processCensus.processes.filter(({ role }) => role !== 'collector-time'),
@@ -500,10 +622,13 @@ function buildReport({ iterations, manifest, mode, source, warmups }) {
       phaseAttribution: { complete: true },
       phaseCensus: {
         source: {
-          phases: [
-            { name: 'typescript', status: 'executed' },
-            { name: 'config-trust', status: 'executed' },
-          ],
+          complete: true,
+          phases: KOVO_BUILD_SOURCE_PHASES.map((name) => ({
+            durationMs: 1,
+            name,
+            status: 'executed',
+          })),
+          schema: 'kovo-build-source-phase-census/v1',
         },
       },
     })),

@@ -504,6 +504,24 @@ describe('ratified production-build performance budgets', () => {
         report.capture.processCpu.fixedProfilerIntervalMicros = 500;
       },
     },
+    {
+      finding: 'profile source phase posture is unavailable or malformed',
+      mutate: (report) => {
+        delete report.sourcePhasePosture;
+      },
+    },
+    {
+      finding: 'profile source phase posture is unavailable or malformed',
+      mutate: (report) => {
+        report.sourcePhasePosture.phases[1].name = report.sourcePhasePosture.phases[0].name;
+      },
+    },
+    {
+      finding: 'profile source phase posture is unavailable or malformed',
+      mutate: (report) => {
+        report.sourcePhasePosture.phases[1].status = 'skipped';
+      },
+    },
   ])('rejects malformed raw build profile evidence: $finding', ({ finding, mutate }) => {
     const { n24Budget, n216Budget } = pairedBuildBudgets();
     setWarmCell(n216Budget, 'unchanged', { residualRatio: 0.2, wallRatio: 6.2 });
@@ -520,6 +538,56 @@ describe('ratified production-build performance budgets', () => {
       rationale: 'malformed-profile-evidence',
     });
     expect(assessment.verdict.findings.join('\n')).toContain(finding);
+  });
+
+  it('accepts an eight-role skipped-config profile and rejects either posture/role contradiction', () => {
+    const { n24Budget, n216Budget } = pairedBuildBudgets();
+    setWarmCell(n216Budget, 'unchanged', { residualRatio: 0.2, wallRatio: 6.2 });
+    const profileEntries = [
+      buildProfileEntry(n216Budget, 'unchanged', ['typescript'], {
+        configStatus: 'not-applicable',
+      }),
+      buildProfileEntry(n216Budget, 'edit', [], { configStatus: 'not-applicable' }),
+    ];
+    expect(
+      assessBuildForegroundSession({ n24Budget, n216Budget, profileEntries }).verdict,
+    ).toMatchObject({ outcome: 'warranted', status: 'decided' });
+
+    const forbiddenConfig = buildProfileEntry(n216Budget, 'unchanged', ['typescript']);
+    forbiddenConfig.report.sourcePhasePosture.phases.find(
+      ({ name }) => name === 'config-trust',
+    ).status = 'not-applicable';
+    resealProfileEntry(forbiddenConfig);
+    const forbiddenAssessment = assessBuildForegroundSession({
+      n24Budget,
+      n216Budget,
+      profileEntries: [forbiddenConfig, profileEntries[1]],
+    });
+    expect(forbiddenAssessment.verdict).toMatchObject({
+      outcome: 'unproven',
+      rationale: 'malformed-profile-evidence',
+    });
+    expect(forbiddenAssessment.verdict.findings.join('\n')).toContain(
+      'profile original-process artifact census is incomplete',
+    );
+
+    const requiredConfig = buildProfileEntry(n216Budget, 'unchanged', ['typescript']);
+    requiredConfig.report.profileArtifacts = requiredConfig.report.profileArtifacts.filter(
+      ({ role }) => role !== 'config-static-trust',
+    );
+    resealProfileEntry(requiredConfig);
+    const requiredAssessment = assessBuildForegroundSession({
+      n24Budget,
+      n216Budget,
+      profileEntries: [requiredConfig, buildProfileEntry(n216Budget, 'edit', [])],
+    });
+    expect(requiredAssessment.verdict).toMatchObject({
+      outcome: 'unproven',
+      rationale: 'malformed-profile-evidence',
+    });
+    expect(requiredAssessment.verdict.findings.join('\n')).toContain(
+      'profile original-process artifact census is incomplete',
+    );
   });
 
   it('accepts mutable API response bytes only when all authority projections still match', () => {
@@ -982,7 +1050,7 @@ function resealProfileEntry(entry) {
   entry.custody.reportContentDigest = entry.contentDigest;
 }
 
-function buildProfileEntry(budget, mode, eligibleCauses) {
+function buildProfileEntry(budget, mode, eligibleCauses, { configStatus = 'executed' } = {}) {
   const runId = mode === 'unchanged' ? 990_001 : 990_002;
   const artifactId = mode === 'unchanged' ? 880_001 : 880_002;
   const source = {
@@ -1022,12 +1090,18 @@ function buildProfileEntry(budget, mode, eligibleCauses) {
     'app-static-trust',
     'bootstrap',
     'client',
-    'config-static-trust',
+    ...(configStatus === 'executed' ? ['config-static-trust'] : []),
     'final',
     'orchestrator',
     'server',
     'typescript',
   ];
+  const activeSamples = roles.length * 10;
+  const idleSamples = roles.length;
+  const waitSamples = 5;
+  const uncertaintyMicros = 20_000 + 2 * roles.length * 10_000;
+  const residualMicros = uncertaintyMicros + 90 * 10_000;
+  const totalMicros = activeSamples * 10_000 + residualMicros;
   const profileArtifacts = roles.map((role, index) => {
     const pid = 1_000 + index;
     const waitSamples = role === 'bootstrap' ? 5 : 0;
@@ -1104,21 +1178,21 @@ function buildProfileEntry(budget, mode, eligibleCauses) {
     collector: { recursive: true, tool: '/usr/bin/time' },
     complete: true,
     fixedProfilerIntervalMicros: 10_000,
-    idleV8Samples: 9,
-    profiledActiveMicros: 900_000,
-    profiledActiveV8Samples: 90,
-    residualMicros: 1_100_000,
+    idleV8Samples: idleSamples,
+    profiledActiveMicros: activeSamples * 10_000,
+    profiledActiveV8Samples: activeSamples,
+    residualMicros,
     schema: 'kovo-build-process-tree-cpu/v1',
     systemMicros: 100_000,
-    totalMicros: 2_000_000,
+    totalMicros,
     uncertainty: {
       policy: 'gnu-time-resolution-plus-two-profiler-intervals-per-process/v1',
       systemResolutionMicros: 10_000,
-      totalMicros: 200_000,
+      totalMicros: uncertaintyMicros,
       userResolutionMicros: 10_000,
     },
-    userMicros: 1_900_000,
-    waitV8Samples: 5,
+    userMicros: totalMicros - 100_000,
+    waitV8Samples: waitSamples,
   };
   const processCpuArtifact = {
     bytes: 91,
@@ -1157,10 +1231,10 @@ function buildProfileEntry(budget, mode, eligibleCauses) {
     capture: {
       complete: true,
       excludedNonKovoProfiles: 0,
-      includedProfiles: 9,
-      inputProfiles: 9,
+      includedProfiles: roles.length,
+      inputProfiles: roles.length,
       mergedNodes: 200,
-      mergedSamples: 104,
+      mergedSamples: activeSamples + idleSamples + waitSamples,
       merger: 'lossless-node-id-remap-with-synthetic-root/v1',
       processCensus,
       processCpu,
@@ -1171,12 +1245,12 @@ function buildProfileEntry(budget, mode, eligibleCauses) {
         complete: true,
         profileCensus,
         sampleCensus: {
-          active: 90,
-          idle: 9,
+          active: activeSamples,
+          idle: idleSamples,
           nativeOrUnprofiled: 90,
           negativeTimeDeltas: 0,
-          total: 104,
-          wait: 5,
+          total: activeSamples + idleSamples + waitSamples,
+          wait: waitSamples,
           zeroTimeDeltas: 0,
         },
         topFive,
@@ -1201,6 +1275,14 @@ function buildProfileEntry(budget, mode, eligibleCauses) {
     schema: PERF_BUILD_SESSION_PROFILE_SCHEMA,
     source,
     sourceAfter: structuredClone(source),
+    sourcePhasePosture: {
+      complete: true,
+      phases: KOVO_BUILD_SOURCE_PHASES.map((name) => ({
+        name,
+        status: name === 'config-trust' ? configStatus : 'executed',
+      })),
+      schema: 'kovo-build-source-phase-posture/v1',
+    },
     subject: {
       baselineWorkloadDigest: budget.subject.workloadIdentity.digest,
       corpusSize: 216,
