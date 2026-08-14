@@ -13,6 +13,7 @@ import { createHash } from 'node:crypto';
 import {
   chmodSync,
   copyFileSync,
+  existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -39,6 +40,7 @@ import {
   readPackageTarballSnapshot,
   validatedPackageTarballEntries,
 } from './lib/deterministic-tarball.mjs';
+import { releasePackages } from './release-packages.mjs';
 
 export const CHECK_WATCH_SPIKE_SCHEMA = 'kovo-check-watch-spike-comparison/v1';
 export const CHECK_WATCH_SPIKE_ORDER = Object.freeze(['baseline', 'spike', 'spike', 'baseline']);
@@ -389,6 +391,7 @@ function preparePackedArm(arm, options) {
     }
     copyFileSync(commonLockPath, path.join(stageRoot, 'benchmark-lock.yaml'));
     const packageDigests = [];
+    const packedManifests = [];
     const nodeModules = path.join(stageRoot, 'node_modules');
     mkdirSync(path.join(nodeModules, '@kovojs'), { recursive: true });
     for (const artifact of manifest.artifacts) {
@@ -407,6 +410,15 @@ function preparePackedArm(arm, options) {
         throw new Error(`${arm} artifact file census mismatch for ${artifact.name}`);
       }
       if (artifact.role !== 'package') continue;
+      const packageManifestEntry = entries.find((entry) => entry.name === 'package/package.json');
+      if (packageManifestEntry === undefined) {
+        throw new Error(`${arm} artifact ${artifact.name} omitted package/package.json`);
+      }
+      const packageManifest = JSON.parse(packageManifestEntry.data.toString('utf8'));
+      if (packageManifest?.name !== artifact.name) {
+        throw new Error(`${arm} artifact package name mismatch for ${artifact.name}`);
+      }
+      packedManifests.push({ manifest: packageManifest, name: artifact.name });
       const destination = packageDestination(nodeModules, artifact.name);
       mkdirSync(destination, { recursive: true });
       for (const entry of entries) {
@@ -421,6 +433,12 @@ function preparePackedArm(arm, options) {
     // The product packages vary by arm; every third-party dependency comes from one shared,
     // frozen-lock install so divergent worktree installs cannot manufacture an arm difference.
     linkExternalDependencies(repoRoot, nodeModules);
+    linkDeclaredExternalDependenciesForTesting(
+      repoRoot,
+      nodeModules,
+      new Set(packageDigests.map(({ name }) => name)),
+      packedManifests,
+    );
     const workloadDigest = treeDigest(stageRoot, (relative) => {
       return relative !== 'benchmark-lock.yaml' && !relative.startsWith('node_modules/');
     });
@@ -512,6 +530,43 @@ function linkExternalDependencies(repositoryRoot, nodeModules) {
     const destination = path.join(nodeModules, entry.name);
     symlinkSync(realpathSync(path.join(source, entry.name)), destination, 'dir');
   }
+}
+
+export function linkDeclaredExternalDependenciesForTesting(
+  repositoryRoot,
+  nodeModules,
+  packedNames,
+  packedManifests,
+) {
+  const sourcePackages = new Map(releasePackages().map((pkg) => [pkg.name, pkg.dirPath]));
+  for (const { manifest, name } of packedManifests) {
+    for (const dependencyName of declaredDependencyNames(manifest)) {
+      if (packedNames.has(dependencyName)) continue;
+      const destination = packageDestination(nodeModules, dependencyName);
+      if (existsSync(destination)) continue;
+      const packageSource = sourcePackages.get(name);
+      const candidates = [
+        packageSource
+          ? path.join(packageSource, 'node_modules', ...dependencyName.split('/'))
+          : null,
+        path.join(repositoryRoot, 'node_modules', ...dependencyName.split('/')),
+      ].filter(Boolean);
+      const source = candidates.find((candidate) => existsSync(candidate));
+      if (source === undefined) {
+        throw new Error(`${name}: frozen comparator install cannot resolve ${dependencyName}`);
+      }
+      mkdirSync(path.dirname(destination), { recursive: true });
+      symlinkSync(realpathSync(source), destination, 'dir');
+    }
+  }
+}
+
+function declaredDependencyNames(manifest) {
+  const names = new Set();
+  for (const field of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
+    for (const name of Object.keys(manifest[field] ?? {})) names.add(name);
+  }
+  return [...names];
 }
 
 export function packageDestination(nodeModules, name) {

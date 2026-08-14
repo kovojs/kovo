@@ -1,10 +1,14 @@
 import { createHash } from 'node:crypto';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
 import {
   CHECK_WATCH_SPIKE_ORDER,
   checkWatchSpikeSchedule,
+  linkDeclaredExternalDependenciesForTesting,
   packageDestination,
   pairedCheckWatchAnalysis,
   runCheckWatchSpikeComparison,
@@ -24,6 +28,32 @@ describe('packed check-watch spike comparator', () => {
       expect(() => packageDestination('/stage/node_modules', unsafe)).toThrow(
         /unsupported packed package name/u,
       );
+    }
+  });
+
+  it('links a packed package external dependency from the one frozen comparator install', () => {
+    const stage = mkdtempSync(path.join(os.tmpdir(), 'kovo-check-watch-dependency-test-'));
+    try {
+      const nodeModules = path.join(stage, 'node_modules');
+      mkdirSync(nodeModules, { recursive: true });
+      linkDeclaredExternalDependenciesForTesting(
+        process.cwd(),
+        nodeModules,
+        new Set(['@kovojs/style']),
+        [
+          {
+            manifest: {
+              dependencies: { '@material/material-color-utilities': '0.3.0' },
+            },
+            name: '@kovojs/style',
+          },
+        ],
+      );
+      expect(realpathSync(path.join(nodeModules, '@material/material-color-utilities'))).toBe(
+        realpathSync('packages/style/node_modules/@material/material-color-utilities'),
+      );
+    } finally {
+      rmSync(stage, { force: true, recursive: true });
     }
   });
 
