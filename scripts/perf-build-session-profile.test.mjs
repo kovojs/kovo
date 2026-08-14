@@ -7,10 +7,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   BUILD_PROFILE_ARTIFACT_NAME,
+  BUILD_PROFILE_MAX_PROCESS_TRACE_BYTES,
   BUILD_PROFILE_MODES,
   BUILD_PROFILE_PROCESS_ROLE_CLASSIFIER,
   BUILD_PROFILE_SAMPLING_INTERVAL_US,
   BUILD_PROFILE_WARMUPS,
+  assertBuildProcessTraceSize,
   deriveBuildProcessCpuEvidence,
   mergeBuildProcessProfiles,
   parseBuildProfileArgs,
@@ -99,6 +101,16 @@ describe('N=216 build profile producer', () => {
     expect(error).toBeInstanceOf(TypeError);
     expect(error.message).not.toContain(sentinel);
     expect(error.message).not.toContain('authenticationKey');
+  });
+
+  it('admits the prior greater-than-16-MiB trace class through the exact private bound', () => {
+    const priorCeiling = 16 * 1024 * 1024;
+
+    expect(() => assertBuildProcessTraceSize(priorCeiling + 1)).not.toThrow();
+    expect(() => assertBuildProcessTraceSize(BUILD_PROFILE_MAX_PROCESS_TRACE_BYTES)).not.toThrow();
+    expect(() => assertBuildProcessTraceSize(BUILD_PROFILE_MAX_PROCESS_TRACE_BYTES + 1)).toThrow(
+      `exceeds its ${String(BUILD_PROFILE_MAX_PROCESS_TRACE_BYTES)}-byte private capture limit (observed ${String(BUILD_PROFILE_MAX_PROCESS_TRACE_BYTES + 1)} bytes)`,
+    );
   });
 
   it('retains native launcher execs and compresses fork-only shell ancestry', () => {
@@ -219,7 +231,7 @@ describe('N=216 build profile producer', () => {
         '-s',
         '16384',
         '-e',
-        'trace=process',
+        'trace=clone,clone3,fork,vfork,execve',
         '-o',
         '/tmp/process.trace',
         '/usr/bin/time',

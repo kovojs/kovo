@@ -68,10 +68,14 @@ export const BUILD_PROFILE_WARMUPS = 3;
 // coarser 10ms interval completed all four one-shot workers and produced all nine expected Node
 // profiles; profiled durations remain diagnostic-only.
 export const BUILD_PROFILE_SAMPLING_INTERVAL_US = 10_000;
+// The first hosted N=216 profiled build crossed the original 16 MiB ceiling. Keep the raw,
+// secret-bearing trace private and bounded with fourfold headroom; the exact syscall filter below
+// also removes events the sanitizer never consumes. The parser still applies its independent
+// per-exec argument, process-count, and profile bounds before any evidence can be published.
+export const BUILD_PROFILE_MAX_PROCESS_TRACE_BYTES = 64 * 1024 * 1024;
 
 const BUILD_PROFILE_BUILD_SAMPLES = 10;
 const BUILD_PROFILE_TIMEOUT_MS = 30 * 60 * 1_000;
-const MAX_PROCESS_TRACE_BYTES = 16 * 1024 * 1024;
 const MAX_STRACE_STRING_BYTES = 16 * 1024;
 const MAX_INPUT_PROFILE_BYTES = 128 * 1024 * 1024;
 const MAX_AGGREGATE_PROFILE_BYTES = 512 * 1024 * 1024;
@@ -142,7 +146,9 @@ export async function produceBuildSessionProfiles(options = {}, dependencies = {
   try {
     for (const mode of BUILD_PROFILE_MODES) {
       const modeRoot = path.join(scratchRoot, mode);
-      await mkdir(modeRoot, { recursive: true });
+      // Raw CPU profiles and strace argv can contain framework-owned authentication material.
+      // Keep every mode capture below a fresh mode-0700 ancestor until it has been sanitized.
+      await mkdir(modeRoot, { mode: 0o700 });
       const capture = await (dependencies.runProfiledBuild ?? defaultProfiledBuild)({
         corpusManifest,
         mode,
@@ -581,9 +587,7 @@ async function defaultProfiledBuild({ corpusManifest, mode, scratchRoot }) {
   let sanitizedTrace;
   try {
     const traceMetadata = await stat(tracePath);
-    if (traceMetadata.size < 1 || traceMetadata.size > MAX_PROCESS_TRACE_BYTES) {
-      throw new TypeError('build process trace has an invalid bounded size');
-    }
+    assertBuildProcessTraceSize(traceMetadata.size);
     sanitizedTrace = sanitizeBuildProcessTrace(await readFile(tracePath), {
       cwd: path.dirname(corpusManifest),
     });
@@ -687,7 +691,9 @@ export function runProfiledBuildBenchmarkAdapter(
             '-s',
             String(MAX_STRACE_STRING_BYTES),
             '-e',
-            'trace=process',
+            // The sanitizer consumes only process creation and successful exec events. Excluding
+            // wait/exit/kill noise keeps the private trace proportional to its bounded census.
+            'trace=clone,clone3,fork,vfork,execve',
             '-o',
             tracePath,
             TIME_PATH,
@@ -721,12 +727,10 @@ export function runProfiledBuildBenchmarkAdapter(
 
 /** Parse strace process events into bounded non-secret PID/executable/entry-role facts only. */
 export function sanitizeBuildProcessTrace(traceBytes, { cwd = repoRoot } = {}) {
-  if (!Buffer.isBuffer(traceBytes) || traceBytes.length < 1) {
+  if (!Buffer.isBuffer(traceBytes)) {
     throw new TypeError('build process trace is unavailable');
   }
-  if (traceBytes.length > MAX_PROCESS_TRACE_BYTES) {
-    throw new TypeError('build process trace exceeds its byte limit');
-  }
+  assertBuildProcessTraceSize(traceBytes.length);
   const parentByPid = new Map();
   const processChildren = new Set();
   const pendingCloneByPid = new Map();
@@ -793,6 +797,18 @@ export function sanitizeBuildProcessTrace(traceBytes, { cwd = repoRoot } = {}) {
     processes,
     schema: BUILD_PROFILE_PROCESS_CENSUS_SCHEMA,
   };
+}
+
+/** Validate the private raw-trace boundary without reflecting secret-bearing trace contents. */
+export function assertBuildProcessTraceSize(size) {
+  if (!Number.isSafeInteger(size) || size < 1) {
+    throw new TypeError('build process trace is unavailable');
+  }
+  if (size > BUILD_PROFILE_MAX_PROCESS_TRACE_BYTES) {
+    throw new TypeError(
+      `build process trace exceeds its ${String(BUILD_PROFILE_MAX_PROCESS_TRACE_BYTES)}-byte private capture limit (observed ${String(size)} bytes)`,
+    );
+  }
 }
 
 export function deriveBuildProcessCpuEvidence({ processCensus, processCpuBytes, profileInputs }) {
