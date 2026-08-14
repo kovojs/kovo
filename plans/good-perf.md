@@ -272,11 +272,20 @@ packages/server/src/node.test.ts --reporter=dot` passed 88/88 and covers private
       matched dev edits, browser cells, builds, and throughput on a quiet pinned nightly runner.
   - Evidence: `faf00c5de`; `pnpm exec vitest --run scripts/perf-ci-policy.test.mjs
 --reporter=dot` passed and proves PR smoke plus labeled/scheduled realistic matrices.
+- [ ] Authenticate one exact-final-source `Production bytes` job and its one-member
+      `kovo-perf-bytes` artifact as a required publication sidecar. Re-evaluate the exact five
+      deterministic metrics against the measured commit's `perf-budgets.json`; publication must
+      block on any failed byte budget and remain unproven on missing, malformed, dirty,
+      source-unstable, wrong-lock, wrong-workload, or wrong-producer evidence. This is not an eighth
+      statistically ratified family.
 - [ ] Store raw reports as CI artifacts and commit only a clean reviewed baseline summary. A dirty,
       null, load-shed, wrong-posture, or integrity-failed run cannot update budgets.
 - [ ] Ratify budgets from at least five independent baseline runs in one exact normalized hosted-runner
       cohort using median, MAD, p95, and the acceptance rules above; replace rationale-only sample
-      arrays with linked reports.
+      arrays for the realistic seven-family tier with the 21 linked derived baseline, budget, and
+      holdout-evaluation documents. The separate deterministic `perf-budgets.json` tier remains
+      authoritative for the five exact production-byte gates and is linked through the required
+      publication sidecar above.
 - [x] Add a regression comparator that requires matching source/lock/workload identities and reports
       `unproven` rather than pass when load, sample count, or identity is outside policy.
   - Evidence: `faf00c5de`, `49f83a2a9`, `3aabc77ae`; comparator/ratifier tests passed 26/26 and
