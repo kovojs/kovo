@@ -51,7 +51,14 @@ describe('ratified production-build performance budgets', () => {
       });
       expect(Object.keys(budget.metrics)).toHaveLength(9);
       expect(budget.metrics[wall]).toMatchObject({
-        baseline: { median: 502, p95: 522, runs: 5 },
+        baseline: {
+          median: 502,
+          nextMedian: 102,
+          nextP95: 122,
+          pairedMedian: 400,
+          p95: 522,
+          runs: 5,
+        },
         p95Maximum: 548.1,
       });
       expect(budget.metrics[wall].medianMaximum).toBeCloseTo(527.1);

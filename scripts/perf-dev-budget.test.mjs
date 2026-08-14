@@ -63,7 +63,14 @@ describe('ratified developer performance budgets', () => {
         subject: { corpusSize },
       });
       expect(budget.metrics[leaf]).toMatchObject({
-        baseline: { median: 102, p95: 112, runs: 5 },
+        baseline: {
+          median: 102,
+          nextMedian: 77,
+          nextP95: 87,
+          pairedMedian: 25,
+          p95: 112,
+          runs: 5,
+        },
         p95Maximum: 117.60000000000001,
       });
       expect(budget.metrics[leaf].medianMaximum).toBeCloseTo(107.1);

@@ -58,6 +58,8 @@ node scripts/perf-dev-budget.mjs derive \
 Repeat with the N=216 reports. Each timing and RSS ceiling is the ratified median statistic plus
 the plan's 5% regression allowance. Ratification retains both run medians and the distribution of
 each run's p95, so a p95 ceiling is not inferred from medians.
+The derived budget also retains the matched Next median/p95 and paired median for each metric, so a
+reviewed publication can report the comparison without copying numbers from raw files.
 
 ## Evaluate a later commit
 

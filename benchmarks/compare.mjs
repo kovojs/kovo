@@ -582,6 +582,34 @@ function rawMetricSeries(cell) {
         }
       }
     }
+    for (const lighthouse of app?.lighthouse ?? []) {
+      const route = lighthouse.path === app?.integrity?.policy?.listingPath ? 'listing' : 'detail';
+      for (const name of numericLeafNames(lighthouse.samples ?? [])) {
+        output.push({
+          name: `lighthouse.${lighthouse.formFactor}.${route}.${name}`,
+          values: lighthouse.samples
+            .map((sample) => readLeaf(sample, name))
+            .filter(Number.isFinite),
+        });
+      }
+    }
+    const bfcache = app?.bfcache?.iterations ?? [];
+    if (bfcache.length > 0) {
+      output.push(
+        {
+          name: 'bfcache.applicable',
+          values: bfcache.map((sample) => (sample?.applicable === true ? 1 : 0)),
+        },
+        {
+          name: 'bfcache.evidenceComplete',
+          values: bfcache.map((sample) => (sample?.evidenceComplete === true ? 1 : 0)),
+        },
+        {
+          name: 'bfcache.restored',
+          values: bfcache.map((sample) => (sample?.restored === true ? 1 : 0)),
+        },
+      );
+    }
     return output;
   }
   if (cell.cell === 'dev') {
@@ -1726,6 +1754,7 @@ export async function performanceWorkloadIdentity(
       devReadySamples: options.devReadyIterations ?? 15,
       devWarmups: options.devWarmups ?? 3,
       lighthouseRuns: options.lighthouseRuns ?? 5,
+      skipLighthouse: options.skipLighthouse === true,
       server: {
         concurrencies: [...(options.serverConcurrencies ?? SERVER_CONCURRENCIES)],
         durationMs: options.serverDurationMs ?? 15_000,

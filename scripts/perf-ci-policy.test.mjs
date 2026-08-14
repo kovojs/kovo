@@ -110,6 +110,10 @@ describe('realistic performance CI policy', () => {
     for (const token of [...baselineDispatchScope, ...baselineLabelScope]) {
       expect(jobSource('check-scaling')).toContain(token);
     }
+    expect(jobSource('check-scaling')).toContain(
+      'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04',
+    );
+    expect(jobSource('check-scaling')).toContain('--samples 1');
   });
 
   it('runs sustained PR evidence only for an explicit maintainer-applied measurement label', () => {

@@ -55,7 +55,7 @@ export function comparePerformanceReports(baseline, candidate, options = {}) {
         findings.push(`${metric} Kovo sample count differs`);
         continue;
       }
-      const direction = metricDirection(metric);
+      const direction = performanceMetricDirection(metric);
       if (direction === null) continue;
       const regressionPct = metricRegressionPct(before.kovo.median, after.kovo.median, direction);
       metrics.push({
@@ -288,6 +288,17 @@ function expectedMetricSamples(metric, workloadIdentity) {
   const cell = metric.split('/')[1];
   if (!ownRecord(policies)) return null;
   if (cell === 'browser') {
+    const leaf = metric.split('/').slice(3).join('/');
+    if (leaf.startsWith('lighthouse.')) {
+      return Number.isSafeInteger(policies.lighthouseRuns) && policies.lighthouseRuns > 0
+        ? policies.lighthouseRuns
+        : null;
+    }
+    if (leaf.startsWith('bfcache.')) {
+      return Number.isSafeInteger(policies.bfcacheIterations) && policies.bfcacheIterations > 0
+        ? policies.bfcacheIterations
+        : null;
+    }
     return Number.isSafeInteger(policies.browserSamples) && policies.browserSamples > 0
       ? policies.browserSamples
       : null;
@@ -314,12 +325,12 @@ function expectedMetricSamples(metric, workloadIdentity) {
   return null;
 }
 
-function metricDirection(metric) {
+export function performanceMetricDirection(metric) {
   // This is a clock-domain diagnostic centered around zero, not a duration. Both signs are valid
   // and neither "more negative" nor "more positive" is a performance improvement.
   if (metric.endsWith('.traceMarkerEpochSkewMs')) return null;
   if (
-    /(?:requestsPerSecond|requests\.perSecond|throughput|restoredRate|Available|StateSurvived)$/iu.test(
+    /(?:requestsPerSecond|requests\.perSecond|throughput|restoredRate|bfcache\.restored|performanceScore|Available|StateSurvived|evidenceComplete)$/iu.test(
       metric,
     )
   ) {

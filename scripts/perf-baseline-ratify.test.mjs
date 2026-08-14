@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   PERF_BASELINE_SCHEMA,
+  checkPerformanceReportFindings,
   ratifyPerformanceBaseline,
   resolvePerformanceReportLocations,
 } from './perf-baseline-ratify.mjs';
@@ -184,6 +185,29 @@ describe('performance baseline ratification', () => {
     );
   });
 
+  it('requires five distinct GitHub Actions runs rather than five rerun attempts', () => {
+    const entries = [0, 1, 2, 3, 4].map((index) => checkEntryFixture(index));
+    const repeated = entries[4];
+    const originalGithub = entries[0].report.execution.github;
+    const facts = {
+      complete: true,
+      github: { ...originalGithub, runAttempt: '2' },
+      provider: 'github-actions',
+      startedAt: repeated.report.execution.startedAt,
+    };
+    repeated.report.execution = {
+      ...facts,
+      digest: digest(canonicalJson(facts)),
+      schema: 'kovo-performance-execution/v1',
+    };
+    repeated.location = `${originalGithub.runUrl}/artifacts/9999`;
+    repeated.contentDigest = digest(JSON.stringify(repeated.report));
+
+    expect(ratifyPerformanceBaseline(entries).verdict.reasons).toContain(
+      'duplicate GitHub Actions run',
+    );
+  });
+
   it('preserves report paths only with no locations and rejects malformed location sets', () => {
     const paths = ['/tmp/report-one.json', '/tmp/report-two.json'];
     const first = 'https://github.com/kovojs/kovo/actions/runs/1001/artifacts/2001';
@@ -209,6 +233,56 @@ describe('performance baseline ratification', () => {
         /--location/u,
       );
     }
+  });
+
+  it('ratifies five authenticated check-scaling reports without inventing a Next.js subject', () => {
+    const entries = [0, 1, 2, 3, 4].map((index) => checkEntryFixture(index));
+
+    const result = ratifyPerformanceBaseline(entries);
+
+    expect(result).toMatchObject({
+      kind: 'check-scaling',
+      policy: { minRuns: 5, minSamples: 1 },
+      schema: PERF_BASELINE_SCHEMA,
+      verdict: { reasons: [], status: 'ratified' },
+    });
+    expect(result.metrics['check.appSourceTrust.marginalScalingExponent'].kovo).toMatchObject({
+      median: 1.02,
+      p95: 1.04,
+      runs: 5,
+    });
+    expect(result.metrics['check.appSourceTrust.marginalScalingExponent'].kovo.mad).toBeCloseTo(
+      0.01,
+      12,
+    );
+    expect(result.metrics['check.peakRssBytes'].kovo.runs).toBe(5);
+    expect(result.metrics['check.appSourceTrust.marginalScalingExponent']).not.toHaveProperty(
+      'nextjs',
+    );
+  });
+
+  it('rejects busy or structurally unauthenticated check-scaling reports', () => {
+    const entry = checkEntryFixture(0);
+    entry.report.hostSamples[0].loadAverage = [4.4];
+    entry.report.hostSamples[0].loadPerCpu = 1.1;
+    entry.report.detail.rungs[0].samples[0].loadAverage = 4.4;
+    entry.report.detail.rungs[3].samples[0].censusComplete = false;
+
+    expect(checkPerformanceReportFindings(entry.report)).toEqual(
+      expect.arrayContaining([
+        'report host sample 0 exceeds the load ceiling',
+        'report N=216 raw samples are incomplete',
+      ]),
+    );
+    expect(ratifyPerformanceBaseline([entry]).verdict.status).toBe('unproven');
+  });
+
+  it('enforces an explicitly stronger per-rung sample floor for check scaling', () => {
+    const entries = [0, 1, 2, 3, 4].map((index) => checkEntryFixture(index));
+
+    expect(ratifyPerformanceBaseline(entries, { minSamples: 2 }).verdict.reasons).toContain(
+      'report[0] check-scaling workload policy is malformed',
+    );
   });
 });
 
@@ -328,6 +402,117 @@ function githubEntryFixture(index, durationMs, runId) {
   return entry;
 }
 
+function checkEntryFixture(index) {
+  const runId = String(3001 + index);
+  const source = {
+    commit: 'c'.repeat(40),
+    dirty: false,
+    dirtyPaths: [],
+    locks: {
+      'benchmarks/harness/pnpm-lock.yaml': digest('harness lock'),
+      'benchmarks/nextjs/pnpm-lock.yaml': digest('next lock'),
+      'pnpm-lock.yaml': digest('root lock'),
+    },
+  };
+  const hostFacts = {
+    arch: 'x64',
+    browsers: [],
+    cpu: { count: 4, model: 'Fixture CPU' },
+    memoryCapacityClassBytes: 16 * 1024 ** 3,
+    node: 'v24.19.0',
+    platform: 'linux',
+    release: '6.11.0',
+    runnerImage: 'github-actions/ubuntu-24.04 ImageVersionDigest=sha256:fixture',
+  };
+  const workloadFacts = {
+    adapters: {
+      perfGate: 'kovo-perf-report/v1',
+      workload: 'kovo-realistic-workload/v1',
+    },
+    cells: ['check-scaling'],
+    policies: { ladder: [8, 24, 72, 216], samplesPerRung: 1 },
+  };
+  const github = {
+    eventSha: 'c'.repeat(40),
+    job: 'check-scaling',
+    repository: 'kovojs/kovo',
+    runAttempt: '1',
+    runId,
+    runUrl: `https://github.com/kovojs/kovo/actions/runs/${runId}`,
+    serverUrl: 'https://github.com',
+    sha: 'c'.repeat(40),
+    workflowRef: `kovojs/kovo/.github/workflows/perf-realistic.yml@${'c'.repeat(40)}`,
+  };
+  const executionFacts = {
+    complete: true,
+    github,
+    provider: 'github-actions',
+    startedAt: `2026-08-14T00:00:0${String(index)}.000Z`,
+  };
+  const rungs = [8, 24, 72, 216].map((componentCount) => ({
+    appSourceTrustMedianMs: componentCount * 10,
+    componentCount,
+    durationMedianMs: componentCount * 20,
+    peakRssBytes: 1_000_000 + componentCount,
+    samples: [
+      {
+        appSourceTrustMs: componentCount * 10,
+        censusComplete: true,
+        durationMs: componentCount * 20,
+        exitCode: 0,
+        loadAverage: 0.2,
+        peakRssBytes: 1_000_000 + componentCount,
+      },
+    ],
+  }));
+  const report = {
+    detail: { rungs },
+    execution: {
+      ...executionFacts,
+      digest: digest(canonicalJson(executionFacts)),
+      schema: 'kovo-performance-execution/v1',
+    },
+    host: {
+      ...hostFacts,
+      digest: digest(canonicalJson(hostFacts)),
+      schema: 'kovo-performance-host/v2',
+      totalMemoryBytes: 16 * 1024 ** 3,
+    },
+    hostSamples: checkHostSamples(),
+    integrity: {
+      complete: true,
+      executionAuthenticated: true,
+      publishable: true,
+      serialized: true,
+      sourceStable: true,
+      workloadAuthenticated: true,
+    },
+    metrics: {
+      'check.appSourceTrust.marginalScalingExponent': { value: 1 + index / 100 },
+      'check.peakRssBytes': { value: 2_000_000_000 + index },
+      'check.total.marginalScalingExponent': { value: 0.7 + index / 100 },
+    },
+    options: { ladder: [8, 24, 72, 216], samples: 1 },
+    schema: 'kovo-perf-report/v1',
+    source,
+    sourceAfter: structuredClone(source),
+    suite: 'check-scaling',
+    verdict: { reasons: [], status: 'measured' },
+    workloadIdentity: {
+      complete: true,
+      digest: digest(canonicalJson(workloadFacts)),
+      identity: workloadFacts,
+      schema: 'kovo-performance-workload-identity/v1',
+    },
+  };
+  const text = JSON.stringify(report);
+  return {
+    contentDigest: digest(text),
+    location: `https://github.com/kovojs/kovo/actions/runs/${runId}/artifacts/${String(4001 + index)}`,
+    report,
+  };
+}
+
 function metricFixture(value) {
   return {
     kovo: { mad: 1, median: value, p95: value + 2, samples: 7 },
@@ -339,6 +524,25 @@ function metricFixture(value) {
       samples: 7,
     },
   };
+}
+
+function checkHostSamples() {
+  return [
+    ...[8, 24, 72, 216].map((componentCount) => ({
+      ceiling: 1,
+      context: `N=${String(componentCount)}/sample=0`,
+      loadAverage: [0.2, 0.2, 0.2],
+      loadPerCpu: 0.05,
+      phase: 'check-scaling',
+    })),
+    {
+      ceiling: 1,
+      context: 'check-scaling',
+      loadAverage: [0.2, 0.2, 0.2],
+      loadPerCpu: 0.05,
+      phase: 'suite-complete',
+    },
+  ];
 }
 
 function digest(value) {

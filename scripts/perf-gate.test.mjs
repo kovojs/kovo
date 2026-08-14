@@ -17,6 +17,8 @@ import {
   parseLadderOption,
   parsePositiveIntegerOption,
   parseCheckPhaseCensus,
+  performanceGateHostSamples,
+  performanceGateWorkloadIdentity,
   phaseDurationMs,
   PERF_BUDGETS_SCHEMA,
   reportSuites,
@@ -169,6 +171,63 @@ describe('statistics', () => {
   it('reports median absolute deviation', () => {
     expect(medianAbsoluteDeviation([10, 10, 10])).toBe(0);
     expect(medianAbsoluteDeviation([1, 2, 3, 4, 100])).toBe(1);
+  });
+});
+
+describe('ratifiable report identity', () => {
+  it('authenticates the exact check-scaling ladder and per-rung sample policy', () => {
+    const workload = performanceGateWorkloadIdentity('check-scaling', {
+      ladder: [8, 24, 72, 216],
+      samples: 1,
+    });
+
+    expect(workload).toMatchObject({
+      complete: true,
+      identity: {
+        cells: ['check-scaling'],
+        policies: { ladder: [8, 24, 72, 216], samplesPerRung: 1 },
+      },
+      schema: 'kovo-performance-workload-identity/v1',
+    });
+    expect(workload.digest).toMatch(/^sha256:[0-9a-f]{64}$/u);
+    expect(
+      performanceGateWorkloadIdentity('check-scaling', { ladder: [8], samples: 0 }).complete,
+    ).toBe(false);
+  });
+
+  it('derives normalized pre/post host evidence from scalar rung load samples', () => {
+    const samples = performanceGateHostSamples(
+      {
+        detail: {
+          rungs: [
+            { componentCount: 8, samples: [{ loadAverage: 2 }] },
+            { componentCount: 24, samples: [{ loadAverage: 1 }] },
+          ],
+        },
+        suite: 'check-scaling',
+      },
+      { cpu: { count: 4 } },
+    );
+
+    expect(samples.slice(0, 2)).toEqual([
+      {
+        at: null,
+        ceiling: 1,
+        context: 'N=8/sample=0',
+        loadAverage: [2],
+        loadPerCpu: 0.5,
+        phase: 'check-scaling',
+      },
+      {
+        at: null,
+        ceiling: 1,
+        context: 'N=24/sample=0',
+        loadAverage: [1],
+        loadPerCpu: 0.25,
+        phase: 'check-scaling',
+      },
+    ]);
+    expect(samples.at(-1)).toMatchObject({ phase: 'suite-complete' });
   });
 });
 

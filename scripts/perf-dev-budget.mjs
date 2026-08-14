@@ -62,6 +62,9 @@ export function deriveDevPerformanceBudget(baseline, options = {}) {
     metrics[key] = {
       baseline: {
         median: evidence.median,
+        nextMedian: baseline.metrics[key].nextjs.median,
+        nextP95: baseline.metrics[key].nextjs.sampleP95.median,
+        pairedMedian: baseline.metrics[key].pairedDifference.median,
         p95: evidence.sampleP95.median,
         runs: evidence.runs,
       },
@@ -73,7 +76,16 @@ export function deriveDevPerformanceBudget(baseline, options = {}) {
   }
   for (const suffix of AVAILABILITY_METRICS) {
     const key = devMetricKey(corpusSize, suffix);
+    const evidence = baseline.metrics[key];
     metrics[key] = {
+      baseline: {
+        median: evidence.kovo.median,
+        nextMedian: evidence.nextjs.median,
+        nextP95: evidence.nextjs.sampleP95.median,
+        pairedMedian: evidence.pairedDifference.median,
+        p95: evidence.kovo.sampleP95.median,
+        runs: evidence.kovo.runs,
+      },
       direction: 'higher-is-better',
       kind: 'exact-availability-floor',
       minimum: 1,
@@ -428,6 +440,9 @@ export function devBudgetFindings(budget) {
         metric?.kind !== 'ratified-regression-ceiling' ||
         metric.direction !== 'lower-is-better' ||
         !finiteNonNegative(metric.baseline?.median) ||
+        !finiteNonNegative(metric.baseline?.nextMedian) ||
+        !finiteNonNegative(metric.baseline?.nextP95) ||
+        !Number.isFinite(metric.baseline?.pairedMedian) ||
         !finiteNonNegative(metric.baseline?.p95) ||
         !Number.isSafeInteger(metric.baseline?.runs) ||
         metric.baseline.runs < 5 ||
@@ -444,6 +459,13 @@ export function devBudgetFindings(budget) {
       if (
         metric?.kind !== 'exact-availability-floor' ||
         metric.direction !== 'higher-is-better' ||
+        !finiteNonNegative(metric.baseline?.median) ||
+        !finiteNonNegative(metric.baseline?.nextMedian) ||
+        !finiteNonNegative(metric.baseline?.nextP95) ||
+        !Number.isFinite(metric.baseline?.pairedMedian) ||
+        !finiteNonNegative(metric.baseline?.p95) ||
+        !Number.isSafeInteger(metric.baseline?.runs) ||
+        metric.baseline.runs < 5 ||
         metric.minimum !== 1
       ) {
         findings.push(`budget ${key} availability floor is invalid`);

@@ -226,6 +226,69 @@ describe('serialized comparison analysis', () => {
     });
   });
 
+  it('surfaces raw Lighthouse and bfcache samples in browser analysis', () => {
+    const cell = (framework, occurrence, base, count) => ({
+      ...browserCell(
+        framework,
+        occurrence,
+        Array.from({ length: count }, () => base),
+      ),
+      report: {
+        apps: [
+          {
+            bfcache: {
+              iterations: Array.from({ length: count }, (_, index) => ({
+                applicable: framework === 'kovo',
+                evidenceComplete: true,
+                restored: framework === 'kovo' && index % 2 === 0,
+              })),
+            },
+            conditions: {
+              desktop: {
+                navigation: {
+                  iterations: Array.from({ length: count }, () => ({ navToPaintMs: base })),
+                },
+              },
+            },
+            integrity: { policy: { listingPath: '/matched/l1' } },
+            lighthouse: [
+              {
+                formFactor: 'mobile',
+                path: '/matched/l1',
+                samples: Array.from({ length: count }, (_, index) => ({
+                  fcpMs: base + index,
+                  lcpMs: base + 10 + index,
+                })),
+              },
+            ],
+          },
+        ],
+      },
+    });
+    const analysis = pairedAnalysis(
+      [
+        cell('kovo', 0, 100, 3),
+        cell('nextjs', 0, 200, 3),
+        cell('nextjs', 1, 400, 2),
+        cell('kovo', 1, 300, 2),
+      ],
+      { bootstrapIterations: 100, seed: 31 },
+    );
+
+    expect(analysis['matched-l1/browser//lighthouse.mobile.listing.fcpMs'].kovo).toMatchObject({
+      median: 102,
+      samples: 5,
+    });
+    expect(analysis['matched-l1/browser//bfcache.evidenceComplete'].kovo).toMatchObject({
+      median: 1,
+      samples: 5,
+    });
+    expect(analysis['matched-l1/browser//bfcache.applicable'].nextjs).toMatchObject({
+      median: 0,
+      samples: 5,
+    });
+  });
+
   it('pairs dev edit and independent fresh-ready samples', () => {
     const cells = [
       devCell('kovo', 0, [10, 12], [100]),

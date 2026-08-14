@@ -181,6 +181,26 @@ describe('performance regression comparator', () => {
     );
   });
 
+  it('uses the separately authenticated Lighthouse and bfcache sample totals', () => {
+    const report = reportFixture();
+    report.workloadIdentity.identity.cells = ['browser'];
+    report.workloadIdentity.identity.policies.browserSamples = 30;
+    report.workloadIdentity.identity.policies.lighthouseRuns = 5;
+    report.workloadIdentity.identity.policies.bfcacheIterations = 10;
+    report.workloadIdentity.digest = digest(canonicalJson(report.workloadIdentity.identity));
+    report.analysis = {
+      'matched-l1/browser//mobile.navigation.navToPaintMs': metricFixture(100, 30),
+      'matched-l1/browser//lighthouse.mobile.listing.lcpMs': metricFixture(200, 5),
+      'matched-l1/browser//bfcache.evidenceComplete': metricFixture(1, 10),
+    };
+
+    expect(performanceReportFindings(report, 'candidate')).toEqual([]);
+    report.analysis['matched-l1/browser//lighthouse.mobile.listing.lcpMs'] = metricFixture(200, 30);
+    expect(performanceReportFindings(report, 'candidate')).toContain(
+      'candidate matched-l1/browser//lighthouse.mobile.listing.lcpMs kovo summary is short or malformed',
+    );
+  });
+
   it('accepts signed trace-marker clock skew without treating its sign as a regression', () => {
     const baseline = reportFixture();
     baseline.workloadIdentity.identity.cells = ['browser'];

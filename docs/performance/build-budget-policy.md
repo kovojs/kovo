@@ -32,6 +32,8 @@ The derivation re-hashes, parses, validates, and re-ratifies all five reports. I
 median and within-run p95 ceilings for wall time, RSS, and artifact bytes in every build mode. The
 default regression envelope is 5%. The plan-declared first milestone remains explicit and
 separate: Kovo wall median at most 6× Next and peak-RSS median at most 2× Next.
+Matched Next median/p95 and paired-median evidence remain embedded beside each derived Kovo
+ceiling, so the reviewed summary does not depend on copied raw-report numbers.
 
 Evaluate a new clean comparison report with:
 

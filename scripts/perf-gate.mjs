@@ -22,20 +22,24 @@
  *  - The scaling-exponent metric is a RATIO across rungs of the same ladder in the same session, so
  *    it survives contention far better than any absolute duration, and is gated unconditionally.
  */
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { loadavg } from 'node:os';
+import { cpus, loadavg } from 'node:os';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { measureProcessTreeCommand } from './lib/process-tree-rss.mjs';
+import { executionIdentityFindings, performanceExecutionIdentity } from './lib/perf-execution.mjs';
+import { canonicalJson, performanceHostFingerprint } from './lib/perf-host.mjs';
 import { collectPerformanceProvenance } from './lib/perf-provenance.mjs';
 import { materializePerfWorkload, perfWorkloadEditedComponent } from './perf-workload.mjs';
 
 export const PERF_REPORT_SCHEMA = 'kovo-perf-report/v1';
 export const PERF_BUDGETS_SCHEMA = 'kovo-perf-budgets/v1';
+export const PERF_GATE_WORKLOAD_SCHEMA = 'kovo-performance-workload-identity/v1';
 
 const repoRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const CHECK_CENSUS_SCHEMA = 'kovo-check-phase-census/v1';
@@ -1069,15 +1073,61 @@ function parseArgs(argv) {
   return args;
 }
 
-function hostFacts() {
-  return {
-    arch: process.arch,
-    cpuCount:
-      (spawnSync('sysctl', ['-n', 'hw.ncpu'], { encoding: 'utf8' }).stdout ?? '').trim() || null,
-    loadAverage: loadavg(),
-    node: process.version,
-    platform: process.platform,
+export function performanceGateWorkloadIdentity(suite, options) {
+  const identity = {
+    adapters: { perfGate: PERF_REPORT_SCHEMA, workload: 'kovo-realistic-workload/v1' },
+    cells: [suite],
+    policies:
+      suite === 'check-scaling'
+        ? { ladder: [...options.ladder], samplesPerRung: options.samples }
+        : { componentCount: options.componentCount },
   };
+  return {
+    complete:
+      typeof suite === 'string' &&
+      suite.length > 0 &&
+      (suite !== 'check-scaling' ||
+        (Array.isArray(options.ladder) &&
+          options.ladder.length >= 2 &&
+          Number.isSafeInteger(options.samples) &&
+          options.samples > 0)),
+    digest: `sha256:${createHash('sha256').update(canonicalJson(identity)).digest('hex')}`,
+    identity,
+    schema: PERF_GATE_WORKLOAD_SCHEMA,
+  };
+}
+
+export function performanceGateHostSamples(result, host, ceiling = 1) {
+  const samples =
+    result?.suite === 'check-scaling'
+      ? (result.detail?.rungs ?? []).flatMap((rung) =>
+          (rung.samples ?? []).map((sample, index) => {
+            const oneMinuteLoad = Array.isArray(sample.loadAverage)
+              ? sample.loadAverage[0]
+              : sample.loadAverage;
+            return {
+              at: null,
+              ceiling,
+              context: `N=${String(rung.componentCount)}/sample=${String(index)}`,
+              loadAverage: [oneMinuteLoad],
+              loadPerCpu: oneMinuteLoad / host.cpu.count,
+              phase: 'check-scaling',
+            };
+          }),
+        )
+      : [];
+  const observed = loadavg();
+  return [
+    ...samples,
+    {
+      at: new Date().toISOString(),
+      ceiling,
+      context: result?.suite ?? 'unknown',
+      loadAverage: observed,
+      loadPerCpu: observed[0] / cpus().length,
+      phase: 'suite-complete',
+    },
+  ];
 }
 
 async function main(argv) {
@@ -1170,21 +1220,57 @@ async function main(argv) {
   };
 
   const startedAt = new Date().toISOString();
+  const source = collectPerformanceProvenance({
+    lockFiles: [
+      'pnpm-lock.yaml',
+      'benchmarks/nextjs/pnpm-lock.yaml',
+      'benchmarks/harness/pnpm-lock.yaml',
+    ],
+    repoRoot,
+  });
+  const execution = performanceExecutionIdentity({ startedAt });
   const result = await suite(options);
+  const sourceAfter = collectPerformanceProvenance({
+    lockFiles: [
+      'pnpm-lock.yaml',
+      'benchmarks/nextjs/pnpm-lock.yaml',
+      'benchmarks/harness/pnpm-lock.yaml',
+    ],
+    repoRoot,
+  });
+  const host = performanceHostFingerprint();
+  const workloadIdentity = performanceGateWorkloadIdentity(suiteName, options);
+  const sourceStable = canonicalJson(source) === canonicalJson(sourceAfter);
+  const verdictReasons = [];
+  if (result.error !== undefined) verdictReasons.push(result.error);
+  if (source.dirty || sourceAfter.dirty) verdictReasons.push('source provenance is dirty');
+  if (!sourceStable) verdictReasons.push('source provenance changed during run');
+  for (const finding of executionIdentityFindings(execution)) verdictReasons.push(finding);
+  if (!workloadIdentity.complete) verdictReasons.push('workload identity is incomplete');
   const report = {
+    execution,
     finishedAt: new Date().toISOString(),
-    host: hostFacts(),
+    generatedAt: new Date().toISOString(),
+    host,
+    hostSamples: performanceGateHostSamples(result, host),
+    integrity: {
+      complete: result.error === undefined,
+      executionAuthenticated: executionIdentityFindings(execution).length === 0,
+      publishable: source.dirty === false && sourceAfter.dirty === false,
+      serialized: true,
+      sourceStable,
+      workloadAuthenticated: workloadIdentity.complete,
+    },
     options,
     schema: PERF_REPORT_SCHEMA,
-    source: collectPerformanceProvenance({
-      lockFiles: [
-        'pnpm-lock.yaml',
-        'benchmarks/nextjs/pnpm-lock.yaml',
-        'benchmarks/harness/pnpm-lock.yaml',
-      ],
-      repoRoot,
-    }),
+    source,
+    sourceAfter,
     startedAt,
+    verdict: {
+      reasons: [...new Set(verdictReasons)].sort(),
+      status: verdictReasons.length === 0 ? 'measured' : 'unproven',
+    },
+    workloadIdentity,
     ...result,
   };
   const outPath = args.out === undefined ? null : path.resolve(String(args.out));
