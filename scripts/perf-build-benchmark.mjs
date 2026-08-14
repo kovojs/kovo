@@ -863,9 +863,10 @@ function resolveDeclaredOutputTargets(root, output) {
 function artifactPathBytes(target) {
   if (!existsSync(target)) return 0;
   const metadata = lstatSync(target);
-  if (metadata.isSymbolicLink()) {
-    throw new TypeError(`artifact census refuses symbolic link ${target}`);
-  }
+  // Standalone framework outputs legitimately contain dependency symlinks. The artifact census
+  // measures owned regular-file bytes only: never follow a link (which could escape the declared
+  // output root), and do not let a safe package-manager layout make the comparison unavailable.
+  if (metadata.isSymbolicLink()) return 0;
   if (metadata.isFile()) return statSync(target).size;
   if (!metadata.isDirectory()) return 0;
   let bytes = 0;

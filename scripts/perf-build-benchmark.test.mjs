@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -229,6 +229,8 @@ describe('production build benchmark adapter', () => {
     mkdirSync(path.join(root, 'dist/nested'), { recursive: true });
     writeFileSync(path.join(root, 'dist/a'), '1234');
     writeFileSync(path.join(root, 'dist/nested/b'), '567');
+    writeFileSync(path.join(root, 'outside'), 'must-not-be-counted');
+    symlinkSync(path.join(root, 'outside'), path.join(root, 'dist/nested/link'));
     expect(artifactBytesForOutputs(root, ['dist', 'dist'])).toBe(7);
   });
 
