@@ -68,7 +68,6 @@ const ROLE_MARKERS = Object.freeze([
     [
       '/node_modules/typescript/lib/_tsc.js',
       '/node_modules/typescript/lib/tsc.js',
-      '/node_modules/typescript/lib/typescript.js',
     ],
     3,
   ),

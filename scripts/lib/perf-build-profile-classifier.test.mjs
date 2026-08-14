@@ -141,11 +141,11 @@ describe('build CPU profile classifier', () => {
       'final',
     ]);
     expect(result.sampleCensus).toMatchObject({
-      active: 32,
+      active: 33,
       idle: 8,
       nativeOrUnprofiled: 20,
       negativeTimeDeltas: 1,
-      total: 40,
+      total: 41,
     });
     expect(result.topFive[0]).toEqual({
       cause: 'native-or-unprofiled',
@@ -188,7 +188,14 @@ function processRoleProfiles() {
       'runKovoIsolatedOneShotInvocationAsync',
       'file:///workspace/packages/cli/src/commands/build-one-shot-orchestrator.ts',
     ),
-    roleProfile('produceKovoBuildOneShotAnalysis'),
+    roleProfile('produceKovoBuildOneShotAnalysis', buildExportUrl(), [
+      marker(
+        'loaded-typescript-library',
+        'createProgram',
+        1,
+        'file:///workspace/node_modules/typescript/lib/typescript.js',
+      ),
+    ]),
     roleProfile('executeCommandLine', 'file:///workspace/node_modules/typescript/lib/_tsc.js'),
     roleProfile('runPreEvaluationStaticTrustPreflight'),
     roleProfile('produceKovoBuildOneShotClientPhase'),
@@ -197,10 +204,14 @@ function processRoleProfiles() {
   ];
 }
 
-function roleProfile(functionName, url = buildExportUrl()) {
+function roleProfile(functionName, url = buildExportUrl(), extraGroups = []) {
   return Buffer.from(
     JSON.stringify(
-      cpuProfile([marker('role', functionName, 4, url), marker('idle', '(idle)', 1, '')]),
+      cpuProfile([
+        marker('role', functionName, 4, url),
+        ...extraGroups,
+        marker('idle', '(idle)', 1, ''),
+      ]),
     ),
   );
 }
