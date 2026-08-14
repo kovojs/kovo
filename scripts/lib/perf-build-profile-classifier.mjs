@@ -1,11 +1,22 @@
 const MAX_PROFILE_NODES = 1_000_000;
 const MAX_PROFILE_SAMPLES = 10_000_000;
+const MAX_PROFILE_DOCUMENTS = 64;
 
 export const PERF_BUILD_PROFILE_CLASSIFIER = 'kovo-build-session-eligibility/phase-v1';
 export const PERF_BUILD_PROFILE_ELIGIBLE_CAUSES = Object.freeze([
   'config-trust',
   'typescript',
   'stylesheet',
+]);
+export const PERF_BUILD_PROFILE_REQUIRED_ROLES = Object.freeze([
+  'bootstrap',
+  'orchestrator',
+  'analyze',
+  'typescript',
+  'app-static-trust',
+  'client',
+  'server',
+  'final',
 ]);
 
 const BUILD_EXPORT_MODULES = cliModules('commands/build-export.ts', 'commands/build-export.js');
@@ -44,6 +55,53 @@ const MARKERS = Object.freeze([
   phaseMarker('worker-launch-transport', 'runPreEvaluationBuildConfigTrustPreflightInWorker'),
   phaseMarker('worker-launch-transport', 'runPreEvaluationStaticTrustPreflightInWorker'),
 ]);
+const ROLE_MARKERS = Object.freeze([
+  roleFunction(
+    'config-static-trust',
+    'runPreEvaluationBuildConfigTrustPreflight',
+    BUILD_EXPORT_MODULES,
+    4,
+  ),
+  roleFunction('app-static-trust', 'runPreEvaluationStaticTrustPreflight', BUILD_EXPORT_MODULES, 4),
+  roleModule(
+    'typescript',
+    [
+      '/node_modules/typescript/lib/_tsc.js',
+      '/node_modules/typescript/lib/tsc.js',
+      '/node_modules/typescript/lib/typescript.js',
+    ],
+    3,
+  ),
+  roleFunction('analyze', 'produceKovoBuildOneShotAnalysis', BUILD_EXPORT_MODULES, 2),
+  roleFunction('client', 'produceKovoBuildOneShotClientPhase', BUILD_EXPORT_MODULES, 2),
+  roleFunction('server', 'produceKovoBuildOneShotServerPhase', BUILD_EXPORT_MODULES, 2),
+  roleFunction('final', 'finishKovoBuildOneShot', BUILD_EXPORT_MODULES, 2),
+  roleFunction(
+    'orchestrator',
+    'runKovoIsolatedOneShotInvocationAsync',
+    cliModules(
+      'commands/build-one-shot-orchestrator.ts',
+      'commands/build-one-shot-orchestrator.js',
+    ),
+    1,
+  ),
+  roleModule(
+    'bootstrap',
+    cliModules('bin.ts', 'bin.js').map((suffix) => suffix.replace('/commands/', '/')),
+    0,
+  ),
+]);
+const ROLE_FALLBACK_CAUSES = Object.freeze({
+  analyze: 'analyze',
+  'app-static-trust': 'app-source-trust',
+  bootstrap: 'cli-startup-tail',
+  client: 'client',
+  'config-static-trust': 'config-trust',
+  final: 'final',
+  orchestrator: 'worker-launch-transport',
+  server: 'server',
+  typescript: 'typescript',
+});
 
 /**
  * Derive the fixed build-session cause ranking from raw V8 CPU-profile samples. A stack receives a
@@ -52,6 +110,111 @@ const MARKERS = Object.freeze([
  * closed instead of turning wall-clock phase labels into invented CPU attribution.
  */
 export function deriveBuildProfileTopFive(profileBytes) {
+  const inspected = inspectBuildProfile(profileBytes);
+  if (inspected.exactMarkerSamples === 0) {
+    throw new TypeError('raw build CPU profile contains no exact reviewed build marker sample');
+  }
+  return rankCauseCounts(inspected.causeCounts);
+}
+
+/**
+ * Aggregate the original process-local V8 profiles without rewriting their node graphs. Process
+ * identity supplies only a conservative fallback cause; exact phase markers still win, and idle
+ * samples are retained in the census but never presented as CPU work. A separately proven native
+ * residual may be added only as the fixed ineligible `native-or-unprofiled` cause.
+ */
+export function deriveBuildProfileSetAnalysis(
+  profileDocuments,
+  { nativeOrUnprofiledSamples = 0, requireConfigStaticTrust = false } = {},
+) {
+  if (
+    !Array.isArray(profileDocuments) ||
+    profileDocuments.length < 1 ||
+    profileDocuments.length > MAX_PROFILE_DOCUMENTS
+  ) {
+    throw new TypeError('build CPU profile set has an invalid process census');
+  }
+  if (!Number.isSafeInteger(nativeOrUnprofiledSamples) || nativeOrUnprofiledSamples < 0) {
+    throw new TypeError('native-or-unprofiled sample equivalent must be a non-negative integer');
+  }
+  if (typeof requireConfigStaticTrust !== 'boolean') {
+    throw new TypeError('config static-trust role posture must be boolean');
+  }
+
+  const profiles = profileDocuments.map((bytes) => {
+    const inspected = inspectBuildProfile(bytes);
+    const role = profileRole(inspected.nodes);
+    const fallbackCause = ROLE_FALLBACK_CAUSES[role];
+    const causeCounts = new Map(inspected.causeCounts);
+    if (inspected.unattributedSamples > 0) {
+      causeCounts.delete('unattributed');
+      causeCounts.set(
+        fallbackCause,
+        (causeCounts.get(fallbackCause) ?? 0) + inspected.unattributedSamples,
+      );
+    }
+    return {
+      activeSamples: inspected.activeSamples,
+      causeCounts,
+      exactMarkerSamples: inspected.exactMarkerSamples,
+      idleSamples: inspected.idleSamples,
+      negativeTimeDeltas: inspected.negativeTimeDeltas,
+      nodes: inspected.nodes.length,
+      role,
+      samples: inspected.samples,
+      zeroTimeDeltas: inspected.zeroTimeDeltas,
+    };
+  });
+  const roles = profiles.map(({ role }) => role);
+  const expectedRoles = [
+    ...PERF_BUILD_PROFILE_REQUIRED_ROLES,
+    ...(requireConfigStaticTrust ? ['config-static-trust'] : []),
+  ].sort((left, right) => left.localeCompare(right));
+  if (
+    JSON.stringify([...roles].sort((left, right) => left.localeCompare(right))) !==
+    JSON.stringify(expectedRoles)
+  ) {
+    throw new TypeError(
+      `build CPU profile role census differs: observed ${roles.sort().join(', ')}, expected ${expectedRoles.join(', ')}`,
+    );
+  }
+
+  const causeCounts = new Map();
+  for (const profile of profiles) {
+    for (const [cause, samples] of profile.causeCounts) {
+      causeCounts.set(cause, (causeCounts.get(cause) ?? 0) + samples);
+    }
+  }
+  if (nativeOrUnprofiledSamples > 0) {
+    causeCounts.set(
+      'native-or-unprofiled',
+      (causeCounts.get('native-or-unprofiled') ?? 0) + nativeOrUnprofiledSamples,
+    );
+  }
+  const topFive = rankCauseCounts(causeCounts);
+  return {
+    causeCensus: causeCountEntries(causeCounts).sort((left, right) =>
+      left.cause.localeCompare(right.cause),
+    ),
+    profileCensus: profiles.map(({ causeCounts: profileCauseCounts, ...profile }) => ({
+      ...profile,
+      causeCensus: causeCountEntries(profileCauseCounts).sort((left, right) =>
+        left.cause.localeCompare(right.cause),
+      ),
+    })),
+    sampleCensus: {
+      active: profiles.reduce((sum, profile) => sum + profile.activeSamples, 0),
+      idle: profiles.reduce((sum, profile) => sum + profile.idleSamples, 0),
+      nativeOrUnprofiled: nativeOrUnprofiledSamples,
+      negativeTimeDeltas: profiles.reduce((sum, profile) => sum + profile.negativeTimeDeltas, 0),
+      total: profiles.reduce((sum, profile) => sum + profile.samples, 0),
+      zeroTimeDeltas: profiles.reduce((sum, profile) => sum + profile.zeroTimeDeltas, 0),
+    },
+    topFive,
+  };
+}
+
+function inspectBuildProfile(profileBytes) {
   if (!Buffer.isBuffer(profileBytes) || profileBytes.length === 0) {
     throw new TypeError('raw build CPU profile must be non-empty bytes');
   }
@@ -107,27 +270,38 @@ export function deriveBuildProfileTopFive(profileBytes) {
     }
   }
 
-  const counts = new Map();
-  let recognizedSamples = 0;
+  const causeCounts = new Map();
+  let activeSamples = 0;
+  let exactMarkerSamples = 0;
+  let idleSamples = 0;
   for (const sampleId of samples) {
     if (!Number.isSafeInteger(sampleId) || !nodesById.has(sampleId)) {
       throw new TypeError('raw build CPU profile sample references an unavailable node');
     }
+    if (exactIdleSample(sampleId, nodesById)) {
+      idleSamples += 1;
+      continue;
+    }
+    activeSamples += 1;
     const cause = sampleCause(sampleId, nodesById, parentById);
-    if (cause !== 'unattributed') recognizedSamples += 1;
-    counts.set(cause, (counts.get(cause) ?? 0) + 1);
+    if (cause !== 'unattributed') exactMarkerSamples += 1;
+    causeCounts.set(cause, (causeCounts.get(cause) ?? 0) + 1);
   }
-  if (recognizedSamples === 0) {
-    throw new TypeError('raw build CPU profile contains no exact reviewed build marker sample');
-  }
-  const ranking = [...counts]
-    .map(([cause, selfSamples]) => ({
-      cause,
-      selfSamples,
-      sessionEligibility: PERF_BUILD_PROFILE_ELIGIBLE_CAUSES.includes(cause)
-        ? 'session-eligible'
-        : 'one-shot-or-ineligible',
-    }))
+  return {
+    activeSamples,
+    causeCounts,
+    exactMarkerSamples,
+    idleSamples,
+    negativeTimeDeltas: timeDeltas.filter((delta) => delta < 0).length,
+    nodes,
+    samples: samples.length,
+    unattributedSamples: causeCounts.get('unattributed') ?? 0,
+    zeroTimeDeltas: timeDeltas.filter((delta) => delta === 0).length,
+  };
+}
+
+function rankCauseCounts(counts) {
+  const ranking = causeCountEntries(counts)
     .sort(
       (left, right) =>
         right.selfSamples - left.selfSamples || left.cause.localeCompare(right.cause),
@@ -138,6 +312,42 @@ export function deriveBuildProfileTopFive(profileBytes) {
     throw new TypeError('raw build CPU profile does not yield five positive ranked causes');
   }
   return ranking;
+}
+
+function causeCountEntries(counts) {
+  return [...counts].map(([cause, selfSamples]) => ({
+    cause,
+    selfSamples,
+    sessionEligibility: PERF_BUILD_PROFILE_ELIGIBLE_CAUSES.includes(cause)
+      ? 'session-eligible'
+      : 'one-shot-or-ineligible',
+  }));
+}
+
+function exactIdleSample(sampleId, nodesById) {
+  const callFrame = nodesById.get(sampleId)?.callFrame;
+  return callFrame?.functionName === '(idle)' && callFrame.url === '';
+}
+
+function profileRole(nodes) {
+  const matches = ROLE_MARKERS.filter((marker) =>
+    nodes.some(
+      ({ callFrame }) =>
+        (marker.functionName === null || callFrame.functionName === marker.functionName) &&
+        marker.moduleSuffixes.some((suffix) => callFrame.url.endsWith(suffix)),
+    ),
+  );
+  if (matches.length === 0) {
+    throw new TypeError('raw build CPU profile has no exact reviewed process role marker');
+  }
+  const priority = Math.max(...matches.map((marker) => marker.priority));
+  const roles = new Set(
+    matches.filter((marker) => marker.priority === priority).map((marker) => marker.role),
+  );
+  if (roles.size !== 1) {
+    throw new TypeError('raw build CPU profile has ambiguous reviewed process role markers');
+  }
+  return [...roles][0];
 }
 
 function sampleCause(sampleId, nodesById, parentById) {
@@ -175,6 +385,14 @@ function phaseMarker(cause, functionName, moduleSuffixes = BUILD_EXPORT_MODULES)
 
 function workerMarker(cause, functionName) {
   return Object.freeze({ cause, functionName, moduleSuffixes: BUILD_EXPORT_MODULES, priority: 1 });
+}
+
+function roleFunction(role, functionName, moduleSuffixes, priority) {
+  return Object.freeze({ functionName, moduleSuffixes, priority, role });
+}
+
+function roleModule(role, moduleSuffixes, priority) {
+  return roleFunction(role, null, Object.freeze(moduleSuffixes), priority);
 }
 
 function cliModules(sourceRelative, distributionRelative) {

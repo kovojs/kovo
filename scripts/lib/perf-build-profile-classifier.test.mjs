@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { deriveBuildProfileTopFive } from './perf-build-profile-classifier.mjs';
+import {
+  deriveBuildProfileSetAnalysis,
+  deriveBuildProfileTopFive,
+} from './perf-build-profile-classifier.mjs';
 
 describe('build CPU profile classifier', () => {
   it('ranks only exact reviewed phase markers and retains unknown stacks as unattributed', () => {
@@ -116,7 +119,91 @@ describe('build CPU profile classifier', () => {
       'no exact reviewed build marker sample',
     );
   });
+
+  it('aggregates the exact process-role census, excludes idle, and ranks native residuals', () => {
+    const profiles = processRoleProfiles();
+    const typescript = JSON.parse(profiles[3].toString('utf8'));
+    typescript.timeDeltas[0] = -57;
+    profiles[3] = Buffer.from(JSON.stringify(typescript));
+
+    const result = deriveBuildProfileSetAnalysis(profiles, {
+      nativeOrUnprofiledSamples: 20,
+    });
+
+    expect(result.profileCensus.map(({ role }) => role)).toEqual([
+      'bootstrap',
+      'orchestrator',
+      'analyze',
+      'typescript',
+      'app-static-trust',
+      'client',
+      'server',
+      'final',
+    ]);
+    expect(result.sampleCensus).toMatchObject({
+      active: 32,
+      idle: 8,
+      nativeOrUnprofiled: 20,
+      negativeTimeDeltas: 1,
+      total: 40,
+    });
+    expect(result.topFive[0]).toEqual({
+      cause: 'native-or-unprofiled',
+      rank: 1,
+      selfSamples: 20,
+      sessionEligibility: 'one-shot-or-ineligible',
+    });
+    expect(result.causeCensus).toContainEqual({
+      cause: 'typescript',
+      selfSamples: 4,
+      sessionEligibility: 'session-eligible',
+    });
+  });
+
+  it('fails closed when a required process role is absent, duplicated, or unexpectedly added', () => {
+    const profiles = processRoleProfiles();
+    expect(() => deriveBuildProfileSetAnalysis(profiles.slice(1))).toThrow('role census differs');
+    expect(() => deriveBuildProfileSetAnalysis([...profiles, profiles[0]])).toThrow(
+      'role census differs',
+    );
+    expect(() =>
+      deriveBuildProfileSetAnalysis([
+        ...profiles,
+        roleProfile('runPreEvaluationBuildConfigTrustPreflight'),
+      ]),
+    ).toThrow('role census differs');
+    expect(() =>
+      deriveBuildProfileSetAnalysis(
+        [...profiles, roleProfile('runPreEvaluationBuildConfigTrustPreflight')],
+        { requireConfigStaticTrust: true },
+      ),
+    ).not.toThrow();
+  });
 });
+
+function processRoleProfiles() {
+  return [
+    roleProfile('', 'file:///workspace/packages/cli/src/bin.ts'),
+    roleProfile(
+      'runKovoIsolatedOneShotInvocationAsync',
+      'file:///workspace/packages/cli/src/commands/build-one-shot-orchestrator.ts',
+    ),
+    roleProfile('produceKovoBuildOneShotAnalysis'),
+    roleProfile('executeCommandLine', 'file:///workspace/node_modules/typescript/lib/_tsc.js'),
+    roleProfile('runPreEvaluationStaticTrustPreflight'),
+    roleProfile('produceKovoBuildOneShotClientPhase'),
+    roleProfile('produceKovoBuildOneShotServerPhase'),
+    roleProfile('finishKovoBuildOneShot'),
+  ];
+}
+
+function roleProfile(functionName, url = buildExportUrl()) {
+  return Buffer.from(
+    JSON.stringify(
+      cpuProfile([marker('role', functionName, 4, url), marker('idle', '(idle)', 1, '')]),
+    ),
+  );
+}
 
 function cpuProfile(groups) {
   const nodes = [
