@@ -20,6 +20,7 @@ const sources = {
   ),
   nextL0: await readFile(new URL('./nextjs/app/_matched/l0-shell.tsx', import.meta.url), 'utf8'),
   nextL1: await readFile(new URL('./nextjs/app/_matched/l1-shell.tsx', import.meta.url), 'utf8'),
+  scenarios: await readFile(new URL('./harness/scenarios.mjs', import.meta.url), 'utf8'),
   sharedCss: await readFile(new URL('./shared/styles.css', import.meta.url), 'utf8'),
 };
 
@@ -148,6 +149,21 @@ describe('capability-matched benchmark fixtures', () => {
     }
     expect(sources.kovoL1).toContain('onClick={() =>');
     expect(sources.nextL1).toContain('onClick={() =>');
+  });
+
+  it('authenticates the initial TTI fixture before mutating matched-L1 state', () => {
+    const start = sources.scenarios.indexOf('async function ttiScenario(');
+    const end = sources.scenarios.indexOf('\n/**\n * Measures an in-app navigation', start);
+    const scenario = sources.scenarios.slice(start, end);
+    const dialogReady = scenario.indexOf("const dialog = page.getByRole('dialog');");
+    const fixtureCapture = scenario.indexOf('const fixture = await fixtureIntegrity(');
+    const cartMutation = scenario.indexOf("name: 'Add benchmark item'");
+    const orderMutation = scenario.indexOf("name: 'Place order'");
+
+    expect(dialogReady).toBeGreaterThanOrEqual(0);
+    expect(fixtureCapture).toBeGreaterThan(dialogReady);
+    expect(cartMutation).toBeGreaterThan(fixtureCapture);
+    expect(orderMutation).toBeGreaterThan(fixtureCapture);
   });
 });
 

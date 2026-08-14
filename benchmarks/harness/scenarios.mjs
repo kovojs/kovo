@@ -499,6 +499,11 @@ async function ttiScenario(page, tracker, listingUrl, settle, expectedFramework,
     throw new Error('Timed out waiting for cart dialog to open.');
   });
   const dialog = page.getByRole('dialog');
+  // Authenticate the initial rendered fixture after the cart becomes interactive but before this
+  // probe deliberately mutates cart/email/order state. The rendered contract describes the shared
+  // starting document; hashing the successful checkout state against that contract would turn a
+  // correct matched-L1 interaction into an integrity failure.
+  const fixture = await fixtureIntegrity(page, { expectedFramework, expectedLane });
   let stateMutationConfirmed = 0;
   const lane = await page.evaluate(
     () =>
@@ -521,7 +526,6 @@ async function ttiScenario(page, tracker, listingUrl, settle, expectedFramework,
   const settled = await settleNetwork(page, tracker, settle);
   const perf = await performanceMetrics(page);
   const network = await tracker.collect();
-  const fixture = await fixtureIntegrity(page, { expectedFramework, expectedLane });
   return {
     ...fixture,
     ...perf,
