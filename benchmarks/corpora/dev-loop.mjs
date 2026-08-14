@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
 import { execFile, spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { lstat, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -1024,21 +1025,42 @@ export function profiledDevInvocation(command, inspectorPort) {
     return { argv: command.argv.slice(1), executable: command.argv[0] };
   }
   boundedInteger(inspectorPort, 1_024, 65_535, 'inspector port');
-  const inheritedNodeOptions = command.env?.NODE_OPTIONS ?? process.env.NODE_OPTIONS ?? '';
-  if (/(?:^|\s)--inspect(?:-brk)?(?:=|\s|$)/u.test(inheritedNodeOptions)) {
-    throw new TypeError('profiled dev command already declares a Node Inspector option');
-  }
-  const inspectorOption = `--inspect=127.0.0.1:${String(inspectorPort)}`;
+  const entrypoint = resolveProfiledKovoEntrypoint(command);
   return {
-    argv: command.argv.slice(1),
-    env: {
-      NODE_OPTIONS:
-        inheritedNodeOptions.length === 0
-          ? inspectorOption
-          : `${inheritedNodeOptions} ${inspectorOption}`,
-    },
-    executable: command.argv[0],
+    argv: [
+      `--inspect=127.0.0.1:${String(inspectorPort)}`,
+      '--disable-warning=ExperimentalWarning',
+      '--experimental-transform-types',
+      entrypoint,
+      ...command.argv.slice(1),
+    ],
+    executable: process.execPath,
   };
+}
+
+export function resolveProfiledKovoEntrypoint(command) {
+  const executable = path.resolve(command.cwd, requiredString(command.argv?.[0], 'dev executable'));
+  const binDirectory = path.dirname(executable);
+  if (path.basename(binDirectory) !== '.bin') {
+    throw new TypeError('profiled Kovo executable must come from a node_modules/.bin directory');
+  }
+  const dependencyRoot = path.dirname(binDirectory);
+  const packageRoot = path.join(dependencyRoot, '@kovojs', 'cli');
+  const packageJsonPath = path.join(packageRoot, 'package.json');
+  let packageJson;
+  try {
+    packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+  } catch (error) {
+    throw new TypeError(`profiled Kovo package metadata is unavailable: ${errorMessage(error)}`);
+  }
+  const bin = typeof packageJson.bin === 'string' ? packageJson.bin : packageJson.bin?.kovo;
+  const relative = requiredString(bin, '@kovojs/cli kovo bin').replace(/^\.\//u, '');
+  assertSafeRelativePath(relative, '@kovojs/cli kovo bin');
+  const entrypoint = path.resolve(packageRoot, relative);
+  if (!isWithin(packageRoot, entrypoint)) {
+    throw new TypeError('profiled Kovo entrypoint escaped its package root');
+  }
+  return entrypoint;
 }
 
 function createProcessTreeRssSampler(rootPid) {

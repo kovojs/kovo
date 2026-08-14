@@ -99,23 +99,36 @@ describe('single-entrant developer-loop adapter', () => {
     ).rejects.toThrow('--out must be outside the generated corpus root');
   });
 
-  it('profiles the exact CLI process without changing the ordinary command lane', () => {
+  it('profiles the exact CLI process without changing the ordinary command lane', async () => {
+    const root = await temporaryRoot();
+    const packageRoot = path.join(root, 'node_modules/@kovojs/cli');
+    await mkdir(packageRoot, { recursive: true });
+    await writeFile(
+      path.join(packageRoot, 'package.json'),
+      `${JSON.stringify({ bin: { kovo: './src/bin.ts' } })}\n`,
+    );
     const command = {
       argv: ['./node_modules/.bin/kovo', 'dev', './src/app.tsx'],
-      cwd: '/tmp/kovo-profile-app',
+      cwd: root,
     };
     expect(profiledDevInvocation(command, null)).toEqual({
       argv: ['dev', './src/app.tsx'],
       executable: './node_modules/.bin/kovo',
     });
     expect(profiledDevInvocation(command, 49_121)).toEqual({
-      argv: ['dev', './src/app.tsx'],
-      env: { NODE_OPTIONS: '--inspect=127.0.0.1:49121' },
-      executable: './node_modules/.bin/kovo',
+      argv: [
+        '--inspect=127.0.0.1:49121',
+        '--disable-warning=ExperimentalWarning',
+        '--experimental-transform-types',
+        path.join(packageRoot, 'src/bin.ts'),
+        'dev',
+        './src/app.tsx',
+      ],
+      executable: process.execPath,
     });
     expect(() =>
-      profiledDevInvocation({ ...command, env: { NODE_OPTIONS: '--inspect-brk' } }, 49_121),
-    ).toThrow('already declares a Node Inspector option');
+      profiledDevInvocation({ ...command, argv: ['./outside/kovo', 'dev'] }, 49_121),
+    ).toThrow('must come from a node_modules/.bin directory');
   });
 
   it('preserves diagnostic options when parsed CLI options cross the benchmark boundary', () => {
