@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { readFile, stat } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { lstat, open, readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { inflateRawSync } from 'node:zlib';
@@ -55,6 +56,9 @@ export async function authenticatePerformanceArtifactEvidence(
   evidence,
   {
     baseDirectory = process.cwd(),
+    descriptorCustody,
+    descriptorCustodyShare = {},
+    descriptorReadHook,
     expectedArtifactName,
     allowedProducerJobConclusions = ['success'],
     allowedProducerFailureStep = null,
@@ -95,18 +99,49 @@ export async function authenticatePerformanceArtifactEvidence(
     allowedProducerFailureStep,
     requiredProducerSuccessSteps,
   );
-
-  const apiPath = path.resolve(baseDirectory, evidence.apiMetadata);
-  const archivePath = path.resolve(baseDirectory, evidence.archive);
-  const jobsApiPath = path.resolve(baseDirectory, evidence.jobsApiMetadata);
-  const reportPath = path.resolve(baseDirectory, evidence.report);
-  const runApiPath = path.resolve(baseDirectory, evidence.runApiMetadata);
+  const custody =
+    descriptorCustody ?? (await createPerformanceArtifactDescriptorCustody({ baseDirectory }));
   const [apiBytes, archiveBytes, jobsApiBytes, reportBytes, runApiBytes] = await Promise.all([
-    readBoundedRegularFile(apiPath, MAX_API_RESPONSE_BYTES, 'artifact API metadata'),
-    readBoundedRegularFile(archivePath, MAX_ARCHIVE_BYTES, 'artifact ZIP'),
-    readBoundedRegularFile(jobsApiPath, MAX_API_RESPONSE_BYTES, 'workflow jobs API metadata'),
-    readBoundedRegularFile(reportPath, MAX_REPORT_BYTES, 'extracted performance report'),
-    readBoundedRegularFile(runApiPath, MAX_API_RESPONSE_BYTES, 'workflow run API metadata'),
+    readPerformanceArtifactCustodyFile(evidence.apiMetadata, {
+      custody,
+      descriptorKey: 'apiMetadata',
+      label: 'artifact API metadata',
+      maximumBytes: MAX_API_RESPONSE_BYTES,
+      readHook: descriptorReadHook,
+      shareGroup: descriptorCustodyShare.apiMetadata,
+    }),
+    readPerformanceArtifactCustodyFile(evidence.archive, {
+      custody,
+      descriptorKey: 'archive',
+      label: 'artifact ZIP',
+      maximumBytes: MAX_ARCHIVE_BYTES,
+      readHook: descriptorReadHook,
+      shareGroup: descriptorCustodyShare.archive,
+    }),
+    readPerformanceArtifactCustodyFile(evidence.jobsApiMetadata, {
+      custody,
+      descriptorKey: 'jobsApiMetadata',
+      label: 'workflow jobs API metadata',
+      maximumBytes: MAX_API_RESPONSE_BYTES,
+      readHook: descriptorReadHook,
+      shareGroup: descriptorCustodyShare.jobsApiMetadata,
+    }),
+    readPerformanceArtifactCustodyFile(evidence.report, {
+      custody,
+      descriptorKey: 'report',
+      label: 'extracted performance report',
+      maximumBytes: MAX_REPORT_BYTES,
+      readHook: descriptorReadHook,
+      shareGroup: descriptorCustodyShare.report,
+    }),
+    readPerformanceArtifactCustodyFile(evidence.runApiMetadata, {
+      custody,
+      descriptorKey: 'runApiMetadata',
+      label: 'workflow run API metadata',
+      maximumBytes: MAX_API_RESPONSE_BYTES,
+      readHook: descriptorReadHook,
+      shareGroup: descriptorCustodyShare.runApiMetadata,
+    }),
   ]);
   const metadata = parseJsonBytes(apiBytes, 'artifact API metadata');
   const jobsMetadata = parseJsonBytes(jobsApiBytes, 'workflow jobs API metadata');
@@ -391,6 +426,29 @@ export async function fetchGitHubWorkflowRunApiResponse({ repository, workflowRu
   return fetchGitHubApiResponse(
     `repos/${repository}/actions/runs/${String(workflowRunId)}`,
     'workflow run',
+  );
+}
+
+/** Fetch the complete one-page artifact census for one campaign run. */
+export async function fetchGitHubWorkflowArtifactsApiResponse({ repository, workflowRunId }) {
+  validateWorkflowRunFetchIdentity(repository, workflowRunId);
+  return fetchGitHubApiResponse(
+    `repos/${repository}/actions/runs/${String(workflowRunId)}/artifacts?per_page=100`,
+    'workflow artifacts',
+  );
+}
+
+/** Fetch the exact-source workflow-run census that seals a preregistered campaign boundary. */
+export async function fetchGitHubCampaignWorkflowRunsApiResponse({ repository, sourceSha }) {
+  if (!REPOSITORY_PATTERN.test(repository ?? '')) {
+    throw new TypeError('repository must be an exact owner/name identity');
+  }
+  if (!COMMIT_PATTERN.test(sourceSha ?? '')) {
+    throw new TypeError('campaign source SHA is unavailable');
+  }
+  return fetchGitHubApiResponse(
+    `repos/${repository}/actions/workflows/perf-realistic.yml/runs?head_sha=${sourceSha}&per_page=100`,
+    'campaign workflow runs',
   );
 }
 
@@ -1322,6 +1380,167 @@ function validateExpectedArchiveMembers(value, expectedReportMember) {
   }
 }
 
+/**
+ * One gate invocation owns one registry. Every descriptor path and inode is single-use except the
+ * explicitly named build-profile ZIP, which is intentionally read once for each member report.
+ */
+export async function createPerformanceArtifactDescriptorCustody({
+  baseDirectory = process.cwd(),
+} = {}) {
+  const requestedRoot = path.resolve(baseDirectory);
+  const [facts, resolvedRoot] = await Promise.all([lstat(requestedRoot), realpath(requestedRoot)]);
+  if (!facts.isDirectory() || facts.isSymbolicLink()) {
+    throw new TypeError('artifact custody base directory must be one real directory');
+  }
+  return {
+    baseDirectory: resolvedRoot,
+    inodes: new Map(),
+    paths: new Map(),
+  };
+}
+
+export async function readPerformanceArtifactCustodyFile(
+  relativePath,
+  { custody, descriptorKey, label, maximumBytes = MAX_API_RESPONSE_BYTES, readHook, shareGroup },
+) {
+  if (!validDescriptorRelativePath(relativePath)) {
+    throw new TypeError(`${String(descriptorKey)} is not a canonical safe relative path`);
+  }
+  if (
+    !ownRecord(custody) ||
+    !nonEmptyString(custody.baseDirectory) ||
+    !(custody.paths instanceof Map) ||
+    !(custody.inodes instanceof Map)
+  ) {
+    throw new TypeError('shared artifact descriptor custody registry is required');
+  }
+  if (!nonEmptyString(descriptorKey) || !nonEmptyString(label)) {
+    throw new TypeError('artifact descriptor key and label are required');
+  }
+  if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 1) {
+    throw new TypeError('artifact custody byte bound is invalid');
+  }
+  if (
+    shareGroup !== undefined &&
+    (descriptorKey !== 'archive' || shareGroup !== 'build-profile-archive')
+  ) {
+    throw new TypeError('only the exact build-profile archive may use shared descriptor custody');
+  }
+  const file = path.resolve(custody.baseDirectory, ...relativePath.split('/'));
+  if (!containedBy(custody.baseDirectory, file)) {
+    throw new TypeError(`${label} escapes its custody root`);
+  }
+  const beforePath = await lstat(file);
+  if (
+    !beforePath.isFile() ||
+    beforePath.isSymbolicLink() ||
+    beforePath.nlink !== 1 ||
+    beforePath.size < 1 ||
+    beforePath.size > maximumBytes
+  ) {
+    throw new TypeError(`${label} is not a bounded regular file with unique inode custody`);
+  }
+  let handle;
+  try {
+    handle = await open(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+    const [beforeHandle, resolvedPath] = await Promise.all([handle.stat(), realpath(file)]);
+    if (
+      resolvedPath !== file ||
+      !sameStableFile(beforePath, beforeHandle) ||
+      beforeHandle.nlink !== 1
+    ) {
+      throw new TypeError(`${label} changed, aliases another inode, or is reached through a link`);
+    }
+    const bytes = await handle.readFile();
+    if (bytes.length !== beforeHandle.size || bytes.length < 1 || bytes.length > maximumBytes) {
+      throw new TypeError(`${label} changed or exceeded its bound while being read`);
+    }
+    if (readHook !== undefined) {
+      if (typeof readHook !== 'function') throw new TypeError('descriptor read hook is invalid');
+      await readHook({ descriptorKey, file, relativePath });
+    }
+    const [afterHandle, afterPath, afterResolvedPath] = await Promise.all([
+      handle.stat(),
+      lstat(file),
+      realpath(file),
+    ]);
+    if (
+      afterResolvedPath !== file ||
+      afterPath.isSymbolicLink() ||
+      afterPath.nlink !== 1 ||
+      !sameStableFile(beforeHandle, afterHandle) ||
+      !sameStableFile(beforeHandle, afterPath)
+    ) {
+      throw new TypeError(`${label} changed while being read`);
+    }
+    registerDescriptorCustody(custody, {
+      descriptorKey,
+      file,
+      inode: `${String(afterHandle.dev)}:${String(afterHandle.ino)}`,
+      shareGroup,
+    });
+    return bytes;
+  } finally {
+    await handle?.close();
+  }
+}
+
+function registerDescriptorCustody(custody, facts) {
+  const byPath = custody.paths.get(facts.file);
+  const byInode = custody.inodes.get(facts.inode);
+  if (byPath === undefined && byInode === undefined) {
+    const entry = { ...facts, uses: 1 };
+    custody.paths.set(facts.file, entry);
+    custody.inodes.set(facts.inode, entry);
+    return;
+  }
+  if (
+    byPath === undefined ||
+    byInode === undefined ||
+    byPath !== byInode ||
+    byPath.descriptorKey !== 'archive' ||
+    facts.descriptorKey !== 'archive' ||
+    byPath.shareGroup !== 'build-profile-archive' ||
+    facts.shareGroup !== 'build-profile-archive' ||
+    byPath.uses !== 1
+  ) {
+    throw new TypeError('artifact descriptor path or inode aliases another custody file');
+  }
+  byPath.uses += 1;
+}
+
+function sameStableFile(left, right) {
+  return (
+    left.dev === right.dev &&
+    left.ino === right.ino &&
+    left.mode === right.mode &&
+    left.nlink === right.nlink &&
+    left.size === right.size &&
+    left.mtimeMs === right.mtimeMs &&
+    left.ctimeMs === right.ctimeMs
+  );
+}
+
+function containedBy(parent, child) {
+  const relative = path.relative(parent, child);
+  return (
+    relative === '' ||
+    (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative))
+  );
+}
+
+function validDescriptorRelativePath(value) {
+  return (
+    nonEmptyString(value) &&
+    value.trim() === value &&
+    !path.isAbsolute(value) &&
+    !value.includes('\\') &&
+    !value.includes('\0') &&
+    value.split('/').every((part) => part !== '' && part !== '.' && part !== '..') &&
+    path.posix.normalize(value) === value
+  );
+}
+
 async function readBoundedRegularFile(file, maximumBytes, label) {
   const facts = await stat(file);
   if (!facts.isFile() || facts.size < 1 || facts.size > maximumBytes) {
@@ -1448,9 +1667,12 @@ function validateEvidenceDescriptor(value) {
     );
   }
   for (const key of expected) {
-    if (!nonEmptyString(value[key]) || value[key].trim() !== value[key]) {
-      throw new TypeError(`${key} must be a non-empty path`);
+    if (!validDescriptorRelativePath(value[key])) {
+      throw new TypeError(`${key} is not a canonical safe relative path`);
     }
+  }
+  if (new Set(expected.map((key) => value[key])).size !== expected.length) {
+    throw new TypeError('artifact evidence descriptor paths must be distinct');
   }
 }
 

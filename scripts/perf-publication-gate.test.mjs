@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   PERF_PUBLICATION_INPUT_SCHEMA,
+  authenticatePerformancePublicationCampaign,
   authenticatePerformancePublicationInput,
   buildProfilePublicationFindings,
   derivePerformancePublication,
@@ -17,6 +18,7 @@ import {
   renderPerformancePublicationMarkdown,
   writePerformancePublicationOutputs,
 } from './perf-publication-gate.mjs';
+import { createPerformanceArtifactDescriptorCustody } from './lib/perf-artifact-custody.mjs';
 import { deriveBuildProfileSetAnalysis } from './lib/perf-build-profile-classifier.mjs';
 import {
   deriveBuildProcessCpuEvidence,
@@ -48,6 +50,61 @@ afterEach(() => {
 });
 
 describe('seven-family performance publication gate', () => {
+  it('live-reauthenticates the complete preregistered campaign and earliest bytes candidate', async () => {
+    const fixture = writeCampaignAuthenticationFixture();
+    const result = await authenticatePerformancePublicationCampaign(fixture.campaign, {
+      custody: await createPerformanceArtifactDescriptorCustody({
+        baseDirectory: fixture.directory,
+      }),
+      fetchCampaignWorkflowRunsApi: async () => fixture.liveWorkflowRunsBytes,
+      fetchWorkflowArtifactsApi: async ({ workflowRunId }) =>
+        fixture.liveArtifactsByRun.get(workflowRunId),
+      fetchWorkflowRunApi: async ({ workflowRunId }) => fixture.liveRunById.get(workflowRunId),
+      productionBytes: fixture.productionBytes,
+      repository: 'kovojs/kovo',
+    });
+
+    expect(result.runs).toHaveLength(3);
+    expect(result.productionBytes.map(({ artifactId }) => artifactId)).toEqual([
+      20_001, 20_002, 20_003,
+    ]);
+
+    for (const mutate of [
+      (value) => {
+        value.campaign.runs.splice(1, 1);
+      },
+      (value) => {
+        value.campaign.productionBytes.shift();
+      },
+      (value) => {
+        value.campaign.runs[0].runCreatedAt = '2026-08-13T00:00:30.000Z';
+      },
+      (value) => {
+        value.liveArtifactsByRun.set(
+          10_001,
+          Buffer.from(`${JSON.stringify({ artifacts: [], total_count: 0 })}\n`),
+        );
+      },
+    ]) {
+      const adversarial = writeCampaignAuthenticationFixture();
+      mutate(adversarial);
+      await expect(
+        authenticatePerformancePublicationCampaign(adversarial.campaign, {
+          custody: await createPerformanceArtifactDescriptorCustody({
+            baseDirectory: adversarial.directory,
+          }),
+          fetchCampaignWorkflowRunsApi: async () => adversarial.liveWorkflowRunsBytes,
+          fetchWorkflowArtifactsApi: async ({ workflowRunId }) =>
+            adversarial.liveArtifactsByRun.get(workflowRunId),
+          fetchWorkflowRunApi: async ({ workflowRunId }) =>
+            adversarial.liveRunById.get(workflowRunId),
+          productionBytes: adversarial.productionBytes,
+          repository: 'kovojs/kovo',
+        }),
+      ).rejects.toThrow(/omits|chronology|created_at|artifact census/u);
+    }
+  });
+
   it('publishes only after five ratified reports and one independent passing holdout per family', () => {
     const authenticated = authenticatedFixture();
     const options = fixtureDerivationOptions();
@@ -74,6 +131,12 @@ describe('seven-family performance publication gate', () => {
       status: 'pass',
     });
     expect(result.publication.productionBytes.metricVerdicts).toHaveLength(5);
+    const chronologyTamper = structuredClone(result.publication);
+    chronologyTamper.campaign.productionBytes = [];
+    resealPublication(chronologyTamper);
+    expect(performancePublicationFindings(chronologyTamper)).toContain(
+      'Production bytes chronology or earliest selection is malformed',
+    );
     for (const familyName of FAMILY_NAMES) {
       expect(result.publication.families[familyName]).toMatchObject({
         status: 'pass',
@@ -154,6 +217,24 @@ describe('seven-family performance publication gate', () => {
       },
       (entry) => {
         delete entry.report.metrics['production.inlineBootstrap.gzipBytes'];
+      },
+      (entry) => {
+        entry.report.host.schema = 'kovo-performance-host/v1';
+      },
+      (entry) => {
+        entry.report.workloadIdentity.identity.adapters.foreign = 'v1';
+        entry.report.workloadIdentity.digest = canonicalDigest(
+          entry.report.workloadIdentity.identity,
+        );
+      },
+      (entry) => {
+        entry.report.workloadIdentity.foreign = true;
+      },
+      (entry) => {
+        entry.report.workloadIdentity.identity.policies.foreign = true;
+        entry.report.workloadIdentity.digest = canonicalDigest(
+          entry.report.workloadIdentity.identity,
+        );
       },
     ]) {
       const authenticated = authenticatedFixture();
@@ -323,6 +404,7 @@ describe('seven-family performance publication gate', () => {
 
   it('refuses a short or incomplete seven-family input before reading any path', async () => {
     const input = {
+      campaign: campaignManifestStub(),
       families: Object.fromEntries(
         FAMILY_NAMES.map((name) => [
           name,
@@ -347,6 +429,7 @@ describe('seven-family performance publication gate', () => {
 
     const profileInput = {
       buildProfiles: { unchanged: {} },
+      campaign: campaignManifestStub(),
       families: Object.fromEntries(
         FAMILY_NAMES.map((name) => [
           name,
@@ -359,6 +442,21 @@ describe('seven-family performance publication gate', () => {
     };
     await expect(authenticatePerformancePublicationInput(profileInput)).rejects.toThrow(
       'buildProfiles must contain exactly unchanged and edit evidence',
+    );
+
+    const shared = {
+      apiMetadata: 'profile/artifact.api.json',
+      archive: 'profile/artifact.zip',
+      jobsApiMetadata: 'profile/jobs.api.json',
+      report: 'profile/unchanged.json',
+      runApiMetadata: 'profile/run.api.json',
+    };
+    profileInput.buildProfiles = {
+      edit: { ...shared, report: 'profile/edit.json' },
+      unchanged: shared,
+    };
+    await expect(authenticatePerformancePublicationInput(profileInput)).rejects.toThrow(
+      'may share only one exact archive',
     );
 
     delete profileInput.buildProfiles;
@@ -979,6 +1077,33 @@ function fixtureDerivationOptions() {
   };
 }
 
+function campaignManifestStub() {
+  const reference = (pathValue) => ({
+    byteLength: 1,
+    contentDigest: digest(pathValue),
+    path: pathValue,
+  });
+  const selectedProductionBytes = {
+    artifactId: 1,
+    runCreatedAt: '2026-08-13T00:00:00Z',
+    runId: 1,
+  };
+  return {
+    boundary: { firstRunId: 1, lastRunId: 1 },
+    productionBytes: [selectedProductionBytes],
+    runs: [
+      {
+        artifactsApiMetadata: reference('campaign/artifacts.api.json'),
+        runApiMetadata: reference('campaign/run.api.json'),
+        runCreatedAt: selectedProductionBytes.runCreatedAt,
+        runId: 1,
+      },
+    ],
+    selectedProductionBytes,
+    workflowRunsApiMetadata: reference('campaign/workflow-runs.api.json'),
+  };
+}
+
 function fixturePersistenceAssessment(
   n24Budget,
   n216Budget,
@@ -1406,13 +1531,15 @@ function authenticatedFixture() {
     });
     families[familyName] = { baseline: entries.slice(0, 5), holdout: entries[5] };
   }
+  const productionBytes = productionBytesAuthenticatedFixture({
+    artifactId: artifactId + 1,
+    locks,
+    sourceCommit,
+  });
   return {
+    campaign: authenticatedCampaignFixture(productionBytes),
     families,
-    productionBytes: productionBytesAuthenticatedFixture({
-      artifactId: artifactId + 1,
-      locks,
-      sourceCommit,
-    }),
+    productionBytes,
     repository: 'kovojs/kovo',
   };
 }
@@ -1479,7 +1606,7 @@ function productionBytesAuthenticatedFixture({ artifactId, locks, sourceCommit }
       identity: workloadFacts,
       schema: 'kovo-performance-workload-identity/v1',
     },
-    host: { digest: digest('production-bytes-host') },
+    host: hostFingerprintFixture(),
   };
   const budgets = {
     metrics: Object.fromEntries(
@@ -1593,6 +1720,57 @@ function productionBytesAuthenticatedFixture({ artifactId, locks, sourceCommit }
   };
 }
 
+function hostFingerprintFixture() {
+  const facts = {
+    arch: 'x64',
+    browsers: [],
+    cpu: { count: 4, model: 'Fixture CPU' },
+    memoryCapacityClassBytes: 16 * 1024 ** 3,
+    node: 'v24.19.0',
+    platform: 'linux',
+    release: '6.11.0',
+    runnerImage: 'ubuntu24@fixture',
+  };
+  return {
+    ...facts,
+    digest: canonicalDigest(facts),
+    schema: 'kovo-performance-host/v2',
+    totalMemoryBytes: 16 * 1024 ** 3,
+  };
+}
+
+function authenticatedCampaignFixture(productionBytes) {
+  const runId = productionBytes.custody.workflowRunId;
+  const runCreatedAt = '2026-08-13T00:00:00Z';
+  const selectedProductionBytes = {
+    artifactId: productionBytes.custody.artifactId,
+    runCreatedAt,
+    runId,
+  };
+  return {
+    boundary: { firstRunId: runId, lastRunId: runId },
+    liveWorkflowRunsApiResponseDigest: digest('campaign-live-runs'),
+    productionBytes: [selectedProductionBytes],
+    runs: [
+      {
+        artifactsApiAuthorityDigest: digest('campaign-artifacts-authority'),
+        artifactsApiResponseDigest: digest('campaign-artifacts-response'),
+        liveArtifactsApiResponseDigest: digest('campaign-live-artifacts-response'),
+        publicationArtifacts: [
+          { artifactId: productionBytes.custody.artifactId, kind: 'production-bytes' },
+        ],
+        runApiAuthorityDigest: digest('campaign-run-authority'),
+        runApiResponseDigest: digest('campaign-run-response'),
+        runCreatedAt,
+        runId,
+      },
+    ],
+    selectedProductionBytes,
+    workflowRunsApiAuthorityDigest: digest('campaign-runs-authority'),
+    workflowRunsApiResponseDigest: digest('campaign-runs-response'),
+  };
+}
+
 function productionBytesMetricIds() {
   return [
     'production.criticalPath.wireBytes',
@@ -1601,6 +1779,75 @@ function productionBytesMetricIds() {
     'production.inlineBootstrap.identityBytes',
     'production.navigation.wireBytes',
   ];
+}
+
+function writeCampaignAuthenticationFixture() {
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'kovo-perf-campaign-gate-'));
+  temporaryDirectories.push(directory);
+  const sourceCommit = 'a'.repeat(40);
+  const runIds = [10_001, 10_002, 10_003];
+  const liveRunById = new Map();
+  const liveArtifactsByRun = new Map();
+  const writeReference = (relativePath, value) => {
+    const file = path.join(directory, relativePath);
+    mkdirSync(path.dirname(file), { recursive: true });
+    const bytes = Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
+    writeFileSync(file, bytes);
+    return { byteLength: bytes.length, contentDigest: digest(bytes), path: relativePath };
+  };
+  const workflowRuns = [];
+  const runs = [];
+  const productionBytes = [];
+  for (const [index, runId] of runIds.entries()) {
+    const runCreatedAt = `2026-08-13T00:0${String(index)}:00.000Z`;
+    const apiUrl = `https://api.github.com/repos/kovojs/kovo/actions/runs/${String(runId)}`;
+    const run = {
+      artifacts_url: `${apiUrl}/artifacts`,
+      conclusion: 'success',
+      created_at: runCreatedAt,
+      event: 'pull_request',
+      head_sha: sourceCommit,
+      id: runId,
+      name: 'Perf Realistic Tier',
+      path: '.github/workflows/perf-realistic.yml',
+      run_attempt: 1,
+      status: 'completed',
+      url: apiUrl,
+    };
+    const artifactId = 20_001 + index;
+    const artifacts = { artifacts: [{ id: artifactId, name: 'kovo-perf-bytes' }], total_count: 1 };
+    workflowRuns.push(run);
+    const runBytes = Buffer.from(`${JSON.stringify(run, null, 2)}\n`);
+    const artifactBytes = Buffer.from(`${JSON.stringify(artifacts, null, 2)}\n`);
+    liveRunById.set(runId, runBytes);
+    liveArtifactsByRun.set(runId, artifactBytes);
+    runs.push({
+      artifactsApiMetadata: writeReference(`campaign/${String(runId)}-artifacts.json`, artifacts),
+      runApiMetadata: writeReference(`campaign/${String(runId)}-run.json`, run),
+      runCreatedAt,
+      runId,
+    });
+    productionBytes.push({ artifactId, runCreatedAt, runId });
+  }
+  const workflowRunsDocument = { total_count: workflowRuns.length, workflow_runs: workflowRuns };
+  const selectedProductionBytes = productionBytes[0];
+  return {
+    campaign: {
+      boundary: { firstRunId: runIds[0], lastRunId: runIds.at(-1) },
+      productionBytes,
+      runs,
+      selectedProductionBytes,
+      workflowRunsApiMetadata: writeReference('campaign/workflow-runs.json', workflowRunsDocument),
+    },
+    directory,
+    liveArtifactsByRun,
+    liveRunById,
+    liveWorkflowRunsBytes: Buffer.from(`${JSON.stringify(workflowRunsDocument, null, 2)}\n`),
+    productionBytes: {
+      custody: { artifactId: selectedProductionBytes.artifactId, workflowRunId: runIds[0] },
+      report: { source: { commit: sourceCommit } },
+    },
+  };
 }
 
 function digest(value) {

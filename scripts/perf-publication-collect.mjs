@@ -24,10 +24,11 @@ import {
   packedKovoProductIdentityFindings,
 } from './lib/perf-packed-kovo-product.mjs';
 import { canonicalJson, performanceHostFingerprintFindings } from './lib/perf-host.mjs';
+import { performanceGateWorkloadIdentity } from './perf-gate.mjs';
 import { workloadIdentityFindings } from './perf-regression-check.mjs';
 
-export const PERF_PUBLICATION_COLLECTION_SCHEMA = 'kovo-performance-publication-collection/v2';
-export const PERF_PUBLICATION_INPUT_SCHEMA = 'kovo-performance-publication-input/v2';
+export const PERF_PUBLICATION_COLLECTION_SCHEMA = 'kovo-performance-publication-collection/v3';
+export const PERF_PUBLICATION_INPUT_SCHEMA = 'kovo-performance-publication-input/v3';
 export const PERF_PUBLICATION_REPOSITORY = 'kovojs/kovo';
 
 const PERF_REALISTIC_WORKFLOW_NAME = 'Perf Realistic Tier';
@@ -40,6 +41,7 @@ const MAX_API_BYTES = 1024 * 1024;
 const MAX_ARCHIVE_BYTES = 512 * 1024 * 1024;
 const MAX_REPORT_BYTES = 128 * 1024 * 1024;
 const MAX_RUNS = 10_000;
+const MAX_CAMPAIGN_RUNS = 100;
 const execFileAsync = promisify(execFile);
 
 const REQUIRED_LOCKS = Object.freeze([
@@ -160,6 +162,8 @@ const EVIDENCE_KEYS = Object.freeze([
  * The final directory does not appear until every selected artifact has been validated and saved.
  */
 export async function collectPerformancePublicationRuns({
+  campaignFirstRunId,
+  campaignLastRunId,
   checkoutDirectory,
   operations = defaultCollectionOperations(),
   outDirectory,
@@ -169,6 +173,10 @@ export async function collectPerformancePublicationRuns({
 }) {
   validateCommonOptions({ checkoutDirectory, outDirectory, repository, sourceSha });
   const normalizedRunIds = validateRunIds(runIds);
+  const campaignBoundary = validateCampaignBoundary({
+    firstRunId: campaignFirstRunId,
+    lastRunId: campaignLastRunId,
+  });
   requireOperation(operations, 'inspectCheckout');
   const boundary = await externalOutputBoundary({
     checkoutDirectory,
@@ -180,9 +188,28 @@ export async function collectPerformancePublicationRuns({
   const observedNow = validNow(operations.now?.() ?? new Date().toISOString());
 
   return publishAtomicDirectory(boundary, 'collect', async (stagingDirectory) => {
+    const workflowRunsApiBytes = await fetchBoundedApi(
+      operations,
+      campaignRunsApiPath(repository, sourceSha),
+      MAX_API_BYTES,
+      'campaign workflow-runs API',
+    );
+    const workflowRuns = parseJsonBytes(workflowRunsApiBytes, 'campaign workflow-runs API');
+    const campaignRunIds = validateCampaignRunCensus(workflowRuns, {
+      boundary: campaignBoundary,
+      requestedRunIds: normalizedRunIds,
+      sourceSha,
+    });
+    const workflowRunsApiMetadata = await writeContentAddressedCustodyFile(
+      stagingDirectory,
+      'campaign/workflow-runs.api.json',
+      workflowRunsApiBytes,
+    );
     const candidates = [];
     const productionBytes = [];
-    for (const runId of normalizedRunIds) {
+    const campaignRuns = [];
+    const campaignArtifactListings = new Map();
+    for (const runId of campaignRunIds) {
       const runApiEndpoint = runApiPath(repository, runId);
       const jobsApiEndpoint = `${runApiEndpoint}/jobs?filter=all&per_page=100`;
       const artifactsApiEndpoint = `${runApiEndpoint}/artifacts?per_page=100`;
@@ -196,10 +223,30 @@ export async function collectPerformancePublicationRuns({
       const jobsMetadata = parseJsonBytes(jobsApiBytes, 'all-attempt jobs API');
       validateJobsCensus(jobsMetadata);
       const artifactListing = parseJsonBytes(artifactsApiBytes, 'run artifacts API');
+      campaignArtifactListings.set(runId, artifactListing);
       const publicationArtifacts = enumeratePublicationArtifacts(artifactListing, runId);
       if (publicationArtifacts.length === 0) {
         throw new TypeError(`workflow run ${String(runId)} has no literal publication artifact`);
       }
+      const campaignRoot = path.posix.join('campaign', 'runs', String(runId));
+      const [runApiMetadata, artifactsApiMetadata] = await Promise.all([
+        writeContentAddressedCustodyFile(
+          stagingDirectory,
+          path.posix.join(campaignRoot, 'run.api.json'),
+          runApiBytes,
+        ),
+        writeContentAddressedCustodyFile(
+          stagingDirectory,
+          path.posix.join(campaignRoot, 'artifacts.api.json'),
+          artifactsApiBytes,
+        ),
+      ]);
+      campaignRuns.push({
+        artifactsApiMetadata,
+        runApiMetadata,
+        runCreatedAt: runMetadata.created_at,
+        runId,
+      });
 
       for (const { artifactId, familyName, kind } of publicationArtifacts) {
         const artifactApiEndpoint = artifactApiPath(repository, artifactId);
@@ -271,11 +318,20 @@ export async function collectPerformancePublicationRuns({
     validateCrossInventoryDistinctness(candidates, productionBytes);
     candidates.sort(candidateInventoryOrder);
     productionBytes.sort(candidateChronologyOrder);
+    const campaign = {
+      boundary: campaignBoundary,
+      runs: campaignRuns.sort(campaignRunOrder),
+      workflowRunsApiMetadata,
+    };
+    validateCampaignCandidateInventory(campaignRuns, candidates, productionBytes, {
+      artifactListings: campaignArtifactListings,
+    });
     const ledger = {
+      campaign,
       candidates,
       productionBytes,
       repository,
-      runIds: normalizedRunIds,
+      runIds: campaignRunIds,
       schema: PERF_PUBLICATION_COLLECTION_SCHEMA,
       sourceCommit: sourceSha,
     };
@@ -288,8 +344,8 @@ export async function collectPerformancePublicationRuns({
 }
 
 /**
- * Read one or more atomic custody pools, select one exact six-run cohort per family without using
- * performance metrics, and publish a self-contained final gate manifest and its 215 raw files.
+ * Read one complete campaign custody pool, select one exact six-run cohort per family without
+ * using performance metrics, and publish a self-contained final gate manifest plus chronology.
  */
 export async function createPerformancePublicationManifest({
   checkoutDirectory,
@@ -344,7 +400,13 @@ export async function createPerformancePublicationManifest({
       PERF_PUBLICATION_PRODUCTION_BYTES.reportMember,
       { topLevel: true },
     );
+    const campaign = await copyCampaignCustody(
+      stagingDirectory,
+      inventory.campaign,
+      productionBytes,
+    );
     const manifest = {
+      campaign,
       families,
       productionBytes: productionBytesDescriptor,
       repository,
@@ -614,11 +676,8 @@ export async function loadPerformancePublicationCollections({
   repository,
   sourceSha,
 }) {
-  if (!Array.isArray(collectionDirectories) || collectionDirectories.length === 0) {
-    throw new TypeError('at least one --collection directory is required');
-  }
-  if (collectionDirectories.length > MAX_RUNS) {
-    throw new TypeError('collection directory census exceeds the safety bound');
+  if (!Array.isArray(collectionDirectories) || collectionDirectories.length !== 1) {
+    throw new TypeError('exactly one complete campaign --collection directory is required');
   }
   const normalizedCheckoutRoot = await realpath(path.resolve(checkoutRoot));
   const normalizedManifestOutput =
@@ -643,11 +702,18 @@ export async function loadPerformancePublicationCollections({
   const productionBytes = [];
   const seenFiles = new Set();
   const seenInodes = new Set();
+  let campaign;
   for (const root of roots) {
     const ledgerPath = path.join(root, 'collection.json');
     const ledgerFacts = await boundedRegularFile(ledgerPath, MAX_API_BYTES, 'collection ledger');
     const ledger = parseJsonBytes(ledgerFacts.bytes, 'collection ledger');
     validateCollectionLedger(ledger, { repository, sourceSha });
+    campaign = await loadCollectedCampaign(root, ledger.campaign, {
+      repository,
+      seenFiles,
+      seenInodes,
+      sourceSha,
+    });
     for (const entry of ledger.candidates) {
       const loaded = await loadCollectedCandidate(root, entry, {
         repository,
@@ -670,7 +736,10 @@ export async function loadPerformancePublicationCollections({
   validateCandidateDistinctness(candidates, { allowSharedRunAcrossFamilies: true });
   validateProductionBytesCandidateDistinctness(productionBytes);
   validateCrossInventoryDistinctness(candidates, productionBytes);
-  return { candidates, productionBytes };
+  validateCampaignCandidateInventory(campaign.runs, candidates, productionBytes, {
+    artifactListings: campaign.artifactListings,
+  });
+  return { campaign, candidates, productionBytes };
 }
 
 function familyPolicy({
@@ -1233,6 +1302,11 @@ function validateProductionBytesReport(report, { repository, run, runId, sourceS
       (finding) => `Production bytes ${finding}`,
     ),
   );
+  findings.push(
+    ...performanceHostFingerprintFindings(report?.host).map(
+      (finding) => `Production bytes host ${finding}`,
+    ),
+  );
   const github = report?.execution?.github;
   const runUrl = `https://github.com/${repository}/actions/runs/${String(runId)}`;
   const workflowRefPrefix = `${repository}/${PERF_REALISTIC_WORKFLOW_PATH}@`;
@@ -1252,15 +1326,18 @@ function validateProductionBytesReport(report, { repository, run, runId, sourceS
   ) {
     findings.push('Production bytes report execution differs from its workflow run and job');
   }
-  if (
-    report?.suite !== policy.cell ||
-    report?.options?.componentCount !== policy.componentCount ||
-    canonicalJson(report?.workloadIdentity?.identity?.cells) !== canonicalJson([policy.cell]) ||
-    report?.workloadIdentity?.identity?.policies?.componentCount !== policy.componentCount
-  ) {
+  if (report?.suite !== policy.cell || report?.options?.componentCount !== policy.componentCount) {
     findings.push('Production bytes suite or component-count identity differs');
   }
   findings.push(...workloadIdentityFindings(report?.workloadIdentity, 'Production bytes'));
+  if (
+    canonicalJson(report?.workloadIdentity) !==
+    canonicalJson(
+      performanceGateWorkloadIdentity(policy.cell, { componentCount: policy.componentCount }),
+    )
+  ) {
+    findings.push('Production bytes workload differs from the exact gate wrapper and policy');
+  }
   const expectedIntegrityKeys = [
     'complete',
     'executionAuthenticated',
@@ -1342,8 +1419,147 @@ async function writeExclusive(file, bytes) {
   await writeFile(file, bytes, { flag: 'wx', mode: 0o600 });
 }
 
+async function writeContentAddressedCustodyFile(stagingDirectory, relativePath, bytes) {
+  await mkdir(path.dirname(path.join(stagingDirectory, ...relativePath.split('/'))), {
+    mode: 0o700,
+    recursive: true,
+  });
+  await writeExclusive(path.join(stagingDirectory, ...relativePath.split('/')), bytes);
+  return {
+    byteLength: bytes.length,
+    contentDigest: sha256(bytes),
+    path: relativePath,
+  };
+}
+
+function validateCampaignBoundary(boundary) {
+  const firstRunId = campaignBoundaryRunId(boundary?.firstRunId, 'campaign first run id');
+  const lastRunId = campaignBoundaryRunId(boundary?.lastRunId, 'campaign last run id');
+  if (firstRunId > lastRunId) {
+    throw new TypeError('campaign first run ID must not exceed its last run ID');
+  }
+  return { firstRunId, lastRunId };
+}
+
+function campaignBoundaryRunId(value, label) {
+  const text = String(value ?? '');
+  if (!/^[1-9][0-9]*$/u.test(text)) throw new TypeError(`${label} is unavailable`);
+  const runId = Number(text);
+  if (!Number.isSafeInteger(runId)) throw new TypeError(`${label} is unsafe`);
+  return runId;
+}
+
+function validateCampaignRunCensus(listing, { boundary, requestedRunIds, sourceSha }) {
+  if (
+    !ownRecord(listing) ||
+    !Number.isSafeInteger(listing.total_count) ||
+    listing.total_count < 1 ||
+    listing.total_count > MAX_CAMPAIGN_RUNS ||
+    !Array.isArray(listing.workflow_runs) ||
+    listing.total_count !== listing.workflow_runs.length
+  ) {
+    throw new TypeError('campaign workflow-runs API census is incomplete or exceeds one page');
+  }
+  const allIds = listing.workflow_runs.map((run) => run?.id);
+  if (
+    allIds.some((runId) => !Number.isSafeInteger(runId) || runId < 1) ||
+    new Set(allIds).size !== allIds.length ||
+    listing.workflow_runs.some(
+      (run) =>
+        run?.head_sha !== sourceSha ||
+        run?.name !== PERF_REALISTIC_WORKFLOW_NAME ||
+        run?.path !== PERF_REALISTIC_WORKFLOW_PATH ||
+        !validTimestamp(run?.created_at),
+    )
+  ) {
+    throw new TypeError('campaign workflow-runs API contains foreign or malformed run identity');
+  }
+  const runIds = listing.workflow_runs
+    .filter((run) => run.id >= boundary.firstRunId && run.id <= boundary.lastRunId)
+    .map((run) => run.id)
+    .sort(numericOrder);
+  if (
+    !runIds.includes(boundary.firstRunId) ||
+    !runIds.includes(boundary.lastRunId) ||
+    canonicalJson(runIds) !== canonicalJson([...requestedRunIds].sort(numericOrder))
+  ) {
+    throw new TypeError(
+      'requested run IDs must equal the complete preregistered campaign boundary census',
+    );
+  }
+  return runIds;
+}
+
+function validateContentAddressedCustodyReference(value, label) {
+  if (
+    !ownRecord(value) ||
+    canonicalJson(Object.keys(value).sort()) !==
+      canonicalJson(['byteLength', 'contentDigest', 'path']) ||
+    !Number.isSafeInteger(value.byteLength) ||
+    value.byteLength < 1 ||
+    !DIGEST_PATTERN.test(value.contentDigest ?? '') ||
+    !safeRelativePath(value.path)
+  ) {
+    throw new TypeError(`${label} content-addressed custody reference is malformed`);
+  }
+}
+
+function validateCampaignLedger(campaign, runIds) {
+  if (
+    !ownRecord(campaign) ||
+    canonicalJson(Object.keys(campaign).sort()) !==
+      canonicalJson(['boundary', 'runs', 'workflowRunsApiMetadata'])
+  ) {
+    throw new TypeError('collection campaign field census differs');
+  }
+  const boundary = validateCampaignBoundary(campaign.boundary);
+  if (boundary.firstRunId !== Math.min(...runIds) || boundary.lastRunId !== Math.max(...runIds)) {
+    throw new TypeError('collection run census differs from its preregistered campaign boundary');
+  }
+  validateContentAddressedCustodyReference(
+    campaign.workflowRunsApiMetadata,
+    'campaign workflow-runs API',
+  );
+  if (!Array.isArray(campaign.runs) || campaign.runs.length !== runIds.length) {
+    throw new TypeError('collection campaign run chronology is incomplete');
+  }
+  for (const run of campaign.runs) {
+    if (
+      !ownRecord(run) ||
+      canonicalJson(Object.keys(run).sort()) !==
+        canonicalJson(['artifactsApiMetadata', 'runApiMetadata', 'runCreatedAt', 'runId']) ||
+      !runIds.includes(run.runId) ||
+      !validTimestamp(run.runCreatedAt)
+    ) {
+      throw new TypeError('collection campaign run identity is malformed');
+    }
+    validateContentAddressedCustodyReference(
+      run.artifactsApiMetadata,
+      `campaign run ${String(run.runId)} artifacts API`,
+    );
+    validateContentAddressedCustodyReference(
+      run.runApiMetadata,
+      `campaign run ${String(run.runId)} run API`,
+    );
+  }
+  if (
+    new Set(campaign.runs.map((run) => run.runId)).size !== runIds.length ||
+    canonicalJson([...campaign.runs].sort(campaignRunOrder)) !== canonicalJson(campaign.runs)
+  ) {
+    throw new TypeError('collection campaign chronology is duplicated or not canonical');
+  }
+}
+
 function validateCollectionLedger(ledger, { repository, sourceSha }) {
-  const keys = ['candidates', 'productionBytes', 'repository', 'runIds', 'schema', 'sourceCommit'];
+  const keys = [
+    'campaign',
+    'candidates',
+    'productionBytes',
+    'repository',
+    'runIds',
+    'schema',
+    'sourceCommit',
+  ];
   if (
     !ownRecord(ledger) ||
     ledger.schema !== PERF_PUBLICATION_COLLECTION_SCHEMA ||
@@ -1354,6 +1570,7 @@ function validateCollectionLedger(ledger, { repository, sourceSha }) {
     throw new TypeError('collection ledger identity or field census differs');
   }
   validateRunIds(ledger.runIds);
+  validateCampaignLedger(ledger.campaign, ledger.runIds);
   if (
     !Array.isArray(ledger.candidates) ||
     ledger.candidates.length > PERF_PUBLICATION_FAMILY_NAMES.length * ledger.runIds.length
@@ -1433,6 +1650,152 @@ function validateEvidenceDescriptor(descriptor) {
   }
   if (new Set(EVIDENCE_KEYS.map((key) => descriptor[key])).size !== EVIDENCE_KEYS.length) {
     throw new TypeError('custody descriptor paths alias one another');
+  }
+}
+
+async function loadCollectedCampaign(
+  collectionRoot,
+  campaign,
+  { repository, seenFiles, seenInodes, sourceSha },
+) {
+  const workflowRunsApi = await loadContentAddressedCustodyReference(
+    collectionRoot,
+    campaign.workflowRunsApiMetadata,
+    'campaign workflow-runs API',
+    { seenFiles, seenInodes },
+  );
+  const listing = parseJsonBytes(workflowRunsApi.bytes, 'campaign workflow-runs API');
+  const expectedRunIds = campaign.runs.map((run) => run.runId).sort(numericOrder);
+  const authenticatedRunIds = validateCampaignRunCensus(listing, {
+    boundary: campaign.boundary,
+    requestedRunIds: expectedRunIds,
+    sourceSha,
+  });
+  const artifactListings = new Map();
+  const runs = [];
+  for (const run of campaign.runs) {
+    const [runApi, artifactsApi] = await Promise.all([
+      loadContentAddressedCustodyReference(
+        collectionRoot,
+        run.runApiMetadata,
+        `campaign run ${String(run.runId)} run API`,
+        { seenFiles, seenInodes },
+      ),
+      loadContentAddressedCustodyReference(
+        collectionRoot,
+        run.artifactsApiMetadata,
+        `campaign run ${String(run.runId)} artifacts API`,
+        { seenFiles, seenInodes },
+      ),
+    ]);
+    const runMetadata = parseJsonBytes(runApi.bytes, 'campaign workflow run API');
+    validateRunMetadata(runMetadata, {
+      repository,
+      runId: run.runId,
+      sourceSha,
+    });
+    if (runMetadata.created_at !== run.runCreatedAt) {
+      throw new TypeError('campaign run created_at differs from raw run authority');
+    }
+    const artifactListing = parseJsonBytes(artifactsApi.bytes, 'campaign run artifacts API');
+    enumeratePublicationArtifacts(artifactListing, run.runId);
+    artifactListings.set(run.runId, artifactListing);
+    runs.push({
+      ...run,
+      artifactsApiFile: artifactsApi.fileFacts,
+      runApiFile: runApi.fileFacts,
+    });
+  }
+  if (canonicalJson(authenticatedRunIds) !== canonicalJson(expectedRunIds)) {
+    throw new TypeError('campaign run chronology differs from its workflow-runs authority');
+  }
+  return {
+    boundary: campaign.boundary,
+    artifactListings,
+    runs,
+    workflowRunsApiFile: workflowRunsApi.fileFacts,
+    workflowRunsApiMetadata: campaign.workflowRunsApiMetadata,
+  };
+}
+
+async function loadContentAddressedCustodyReference(
+  root,
+  reference,
+  label,
+  { seenFiles, seenInodes },
+) {
+  validateContentAddressedCustodyReference(reference, label);
+  const file = path.resolve(root, ...reference.path.split('/'));
+  if (!containedBy(root, file)) throw new TypeError(`${label} escapes its collection root`);
+  const facts = await boundedRegularFile(file, MAX_API_BYTES, label);
+  if (
+    facts.realPath !== file ||
+    facts.linkCount !== 1 ||
+    facts.bytes.length !== reference.byteLength ||
+    sha256(facts.bytes) !== reference.contentDigest
+  ) {
+    throw new TypeError(`${label} differs from its content-addressed custody reference`);
+  }
+  const inode = `${String(facts.device)}:${String(facts.inode)}`;
+  if (seenFiles.has(file) || seenInodes.has(inode)) {
+    throw new TypeError(`${label} aliases another collection custody file`);
+  }
+  seenFiles.add(file);
+  seenInodes.add(inode);
+  return {
+    bytes: facts.bytes,
+    fileFacts: {
+      byteLength: facts.bytes.length,
+      contentDigest: sha256(facts.bytes),
+      device: facts.device,
+      file,
+      inode: facts.inode,
+    },
+  };
+}
+
+function validateCampaignCandidateInventory(
+  runs,
+  candidates,
+  productionBytes,
+  { artifactListings },
+) {
+  const expectedFamilies = [];
+  const expectedProduction = [];
+  for (const run of runs) {
+    const listing = artifactListings.get(run.runId);
+    if (listing === undefined) {
+      throw new TypeError(`campaign run ${String(run.runId)} artifact listing is unavailable`);
+    }
+    for (const artifact of enumeratePublicationArtifacts(listing, run.runId)) {
+      if (artifact.kind === 'family') {
+        expectedFamilies.push({
+          artifactId: artifact.artifactId,
+          family: artifact.familyName,
+          runId: run.runId,
+        });
+      } else {
+        expectedProduction.push({ artifactId: artifact.artifactId, runId: run.runId });
+      }
+    }
+  }
+  const actualFamilies = candidates.map(({ artifactId, family, runId }) => ({
+    artifactId,
+    family,
+    runId,
+  }));
+  const actualProduction = productionBytes.map(({ artifactId, runId }) => ({ artifactId, runId }));
+  const order = (left, right) =>
+    numericOrder(left.runId, right.runId) ||
+    numericOrder(left.artifactId, right.artifactId) ||
+    String(left.family ?? '').localeCompare(String(right.family ?? ''));
+  if (
+    canonicalJson(expectedFamilies.sort(order)) !== canonicalJson(actualFamilies.sort(order)) ||
+    canonicalJson(expectedProduction.sort(order)) !== canonicalJson(actualProduction.sort(order))
+  ) {
+    throw new TypeError(
+      'collection candidate inventory omits or invents a campaign artifact-listing candidate',
+    );
   }
 }
 
@@ -1750,6 +2113,85 @@ async function copyCandidateCustody(
   return descriptor;
 }
 
+async function copyCampaignCustody(stagingDirectory, campaign, selectedProductionBytes) {
+  if (!ownRecord(campaign) || !Array.isArray(campaign.runs)) {
+    throw new TypeError('authenticated campaign custody is unavailable');
+  }
+  const workflowRunsApiMetadata = await copyContentAddressedCustodyFile(
+    stagingDirectory,
+    'campaign/workflow-runs.api.json',
+    campaign.workflowRunsApiFile,
+    'campaign workflow-runs API',
+  );
+  const runs = [];
+  for (const run of campaign.runs) {
+    const relativeRoot = path.posix.join('campaign', 'runs', String(run.runId));
+    const [runApiMetadata, artifactsApiMetadata] = await Promise.all([
+      copyContentAddressedCustodyFile(
+        stagingDirectory,
+        path.posix.join(relativeRoot, 'run.api.json'),
+        run.runApiFile,
+        `campaign run ${String(run.runId)} run API`,
+      ),
+      copyContentAddressedCustodyFile(
+        stagingDirectory,
+        path.posix.join(relativeRoot, 'artifacts.api.json'),
+        run.artifactsApiFile,
+        `campaign run ${String(run.runId)} artifacts API`,
+      ),
+    ]);
+    runs.push({
+      artifactsApiMetadata,
+      runApiMetadata,
+      runCreatedAt: run.runCreatedAt,
+      runId: run.runId,
+    });
+  }
+  const productionBytes = [];
+  for (const run of runs) {
+    const listing = campaign.artifactListings.get(run.runId);
+    for (const artifact of enumeratePublicationArtifacts(listing, run.runId)) {
+      if (artifact.kind === 'production-bytes') {
+        productionBytes.push({
+          artifactId: artifact.artifactId,
+          runCreatedAt: run.runCreatedAt,
+          runId: run.runId,
+        });
+      }
+    }
+  }
+  productionBytes.sort(candidateChronologyOrder);
+  const selected = {
+    artifactId: selectedProductionBytes.artifactId,
+    runCreatedAt: selectedProductionBytes.runCreatedAt,
+    runId: selectedProductionBytes.runId,
+  };
+  if (canonicalJson(productionBytes[0]) !== canonicalJson(selected)) {
+    throw new TypeError('selected Production bytes sidecar is not first in campaign chronology');
+  }
+  return {
+    boundary: campaign.boundary,
+    productionBytes,
+    runs,
+    selectedProductionBytes: selected,
+    workflowRunsApiMetadata,
+  };
+}
+
+async function copyContentAddressedCustodyFile(stagingDirectory, relativePath, source, label) {
+  if (!ownRecord(source)) throw new TypeError(`${label} source is unavailable`);
+  const current = await boundedRegularFile(source.file, MAX_API_BYTES, label);
+  if (
+    current.device !== source.device ||
+    current.inode !== source.inode ||
+    current.bytes.length !== source.byteLength ||
+    sha256(current.bytes) !== source.contentDigest
+  ) {
+    throw new TypeError(`${label} changed after campaign authentication`);
+  }
+  return writeContentAddressedCustodyFile(stagingDirectory, relativePath, current.bytes);
+}
+
 function selectedInventory(selected) {
   return Object.fromEntries(
     PERF_PUBLICATION_FAMILY_NAMES.map((familyName) => [
@@ -1768,6 +2210,10 @@ function selectedInventory(selected) {
 function candidateChronologyOrder(left, right) {
   const timestamp = Date.parse(left.runCreatedAt) - Date.parse(right.runCreatedAt);
   return timestamp === 0 ? numericOrder(left.runId, right.runId) : timestamp;
+}
+
+function campaignRunOrder(left, right) {
+  return candidateChronologyOrder(left, right);
 }
 
 function candidateInventoryOrder(left, right) {
@@ -1850,6 +2296,10 @@ function sha256(value) {
 
 function runApiPath(repository, runId) {
   return `repos/${repository}/actions/runs/${String(runId)}`;
+}
+
+function campaignRunsApiPath(repository, sourceSha) {
+  return `repos/${repository}/actions/workflows/perf-realistic.yml/runs?head_sha=${sourceSha}&per_page=100`;
 }
 
 function runApiUrl(repository, runId) {
@@ -1938,7 +2388,16 @@ function parseCli(args) {
     }
     if (repeated.has(key)) {
       repeated.get(key).push(value);
-    } else if (['--checkout', '--out', '--repository', '--source'].includes(key)) {
+    } else if (
+      [
+        '--campaign-first-run',
+        '--campaign-last-run',
+        '--checkout',
+        '--out',
+        '--repository',
+        '--source',
+      ].includes(key)
+    ) {
       if (values.has(key)) throw new TypeError(`duplicate option ${key}`);
       values.set(key, value);
     } else {
@@ -1955,10 +2414,19 @@ function parseCli(args) {
     if (repeated.get('--collection').length > 0 || repeated.get('--cohort').length > 0) {
       throw new TypeError('collect mode accepts --run, not --collection or --cohort');
     }
-    return { ...common, mode, runIds: repeated.get('--run') };
+    return {
+      ...common,
+      campaignFirstRunId: requiredCliValue(values, '--campaign-first-run'),
+      campaignLastRunId: requiredCliValue(values, '--campaign-last-run'),
+      mode,
+      runIds: repeated.get('--run'),
+    };
   }
   if (repeated.get('--run').length > 0) {
     throw new TypeError('manifest mode accepts --collection, not --run');
+  }
+  if (values.has('--campaign-first-run') || values.has('--campaign-last-run')) {
+    throw new TypeError('campaign boundaries are preregistered in collect mode, not manifest mode');
   }
   const cohortSelections = new Map();
   for (const selection of repeated.get('--cohort')) {

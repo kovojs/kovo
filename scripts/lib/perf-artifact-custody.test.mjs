@@ -1,6 +1,17 @@
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, truncateSync, writeFileSync } from 'node:fs';
+import {
+  linkSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  truncateSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -8,6 +19,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   authenticatePerformanceArtifactEvidence,
+  createPerformanceArtifactDescriptorCustody,
   loadLocalTrustedPerformanceWorkflow,
   readZipMember,
 } from './perf-artifact-custody.mjs';
@@ -41,6 +53,59 @@ afterEach(() => {
 });
 
 describe('performance artifact custody', () => {
+  it('rejects absolute, traversal, and within-descriptor path aliases before parsing', async () => {
+    const fixture = writeArtifactFixture();
+    for (const mutate of [
+      (evidence) => {
+        evidence.report = fixture.reportPath;
+      },
+      (evidence) => {
+        evidence.report = '../report.json';
+      },
+      (evidence) => {
+        evidence.report = evidence.runApiMetadata;
+      },
+    ]) {
+      const evidence = structuredClone(fixture.evidence);
+      mutate(evidence);
+      await expect(authenticateFixture({ ...fixture, evidence })).rejects.toThrow(
+        /canonical safe relative path|paths must be distinct/u,
+      );
+    }
+  });
+
+  it('rejects symlink, hardlink, cross-descriptor, and read-swap aliases', async () => {
+    for (const kind of ['symlink', 'hardlink']) {
+      const fixture = writeArtifactFixture();
+      unlinkSync(fixture.reportPath);
+      if (kind === 'symlink') symlinkSync(fixture.runApiPath, fixture.reportPath);
+      else linkSync(fixture.runApiPath, fixture.reportPath);
+      await expect(authenticateFixture(fixture)).rejects.toThrow(/regular file|link|inode/u);
+    }
+
+    const shared = writeArtifactFixture();
+    const descriptorCustody = await createPerformanceArtifactDescriptorCustody({
+      baseDirectory: shared.directory,
+    });
+    await expect(authenticateFixture(shared, { descriptorCustody })).resolves.toBeDefined();
+    await expect(authenticateFixture(shared, { descriptorCustody })).rejects.toThrow(
+      'aliases another custody file',
+    );
+
+    const swapped = writeArtifactFixture();
+    let swappedOnce = false;
+    await expect(
+      authenticateFixture(swapped, {
+        descriptorReadHook({ descriptorKey, file }) {
+          if (descriptorKey !== 'report' || swappedOnce) return;
+          swappedOnce = true;
+          renameSync(file, `${file}.original`);
+          writeFileSync(file, swapped.reportText);
+        },
+      }),
+    ).rejects.toThrow('changed while being read');
+  });
+
   it('binds the API record, ZIP digest, exact member, report, run, repository, and source', async () => {
     const fixture = writeArtifactFixture();
 

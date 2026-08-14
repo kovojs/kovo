@@ -228,13 +228,24 @@ unzip -p "$kovo_perf_custody/run-1/browser.zip" comparison.json \
   > "$kovo_perf_custody/run-1/comparison.json"
 ```
 
-The input manifest is `kovo-performance-publication-input/v2`. This abridged, non-runnable example
+The input manifest is `kovo-performance-publication-input/v3`. This abridged, non-runnable example
 shows one family's shape:
 
 ```json
 {
-  "schema": "kovo-performance-publication-input/v2",
+  "schema": "kovo-performance-publication-input/v3",
   "repository": "kovojs/kovo",
+  "campaign": {
+    "boundary": { "firstRunId": 1001, "lastRunId": 1006 },
+    "workflowRunsApiMetadata": {
+      "path": "campaign/workflow-runs.api.json",
+      "byteLength": 1234,
+      "contentDigest": "sha256:<64-lowercase-hex>"
+    },
+    "runs": ["one content-addressed run API and artifact-list API pair per boundary run"],
+    "productionBytes": ["complete created_at/run-ID chronology"],
+    "selectedProductionBytes": { "artifactId": 9001, "runCreatedAt": "...", "runId": 1001 }
+  },
   "productionBytes": {
     "apiMetadata": "run-1/bytes.api.json",
     "archive": "run-1/bytes.zip",
@@ -295,14 +306,18 @@ shows one family's shape:
 
 The example expands only `browser` for readability. A real manifest must contain that exact
 five-plus-one shape for `browser`, `dev-n24`, `dev-n216`, `build-n24`, `build-n216`, `server`, and
-`check`, plus exactly one top-level `productionBytes` descriptor. Missing or additional families,
-or a missing sidecar, fail before any file is read. Paths are resolved relative to the input
-manifest.
+`check`, plus exactly one top-level `productionBytes` descriptor and the complete campaign custody
+object. Missing or additional families, a missing sidecar, or an omitted campaign run/candidate fail
+before publication. Every path is canonical and relative to the manifest directory. The gate opens
+only contained, non-symlink, single-link regular files, checks read stability, and rejects path or
+inode reuse across descriptors.
 
 If the build-persistence predicate returns `profile-required`, add the two current N=216 profile
-reports under the optional top-level `buildProfiles` object. Each descriptor uses the same exact
-five-file local custody shape because the raw diagnostic members remain inside the authenticated
-ZIP. The artifact must be named `kovo-perf-build-profile-n216`. For each mode it contains the
+reports under the optional top-level `buildProfiles` object. The two descriptors may share only the
+one exact archive path, through the gate's narrow `build-profile-archive` policy. Their artifact API,
+jobs API, run API, and report paths must be distinct regular files even when the API bytes are
+identical. The raw diagnostic members remain inside the authenticated ZIP. The artifact must be named
+`kovo-perf-build-profile-n216`. For each mode it contains the
 `profile-<mode>.json` report, a derived `build-<mode>.cpuprofile` convenience merge, the numeric-only
 `process-cpu-<mode>.txt` recursive CPU record, and every original process profile as
 `raw-<mode>-<role>-pid-<pid>.cpuprofile`. The convenience merge is not publication authority; the
@@ -321,10 +336,10 @@ or duplicate members fail closed:
       "report": "build-profile/profile-unchanged.json"
     },
     "edit": {
-      "apiMetadata": "build-profile/profile.api.json",
+      "apiMetadata": "build-profile/profile-edit.api.json",
       "archive": "build-profile/profile.zip",
-      "jobsApiMetadata": "build-profile/profile.jobs.api.json",
-      "runApiMetadata": "build-profile/profile.run.api.json",
+      "jobsApiMetadata": "build-profile/profile-edit.jobs.api.json",
+      "runApiMetadata": "build-profile/profile-edit.run.api.json",
       "report": "build-profile/profile-edit.json"
     }
   }
@@ -347,7 +362,8 @@ vp exec node scripts/perf-publication-gate.mjs \
   --markdown-out "$kovo_perf_custody/publication/performance-publication.md"
 ```
 
-The CLI completes all 42 baseline/holdout custody calls, the Production-bytes custody call, and both optional build-profile calls before
+The CLI completes all 42 baseline/holdout custody calls, the Production-bytes custody call, live
+reauthentication of the complete campaign workflow-run and artifact-list chronology, and both optional build-profile calls before
 it creates an evidence, JSON, Markdown, staging, or output path. A requested in-repository output is
 therefore created only after the whole measured checkout has passed every clean-source check; using
 the external directory above avoids coupling collection and publication to repository state.
@@ -355,7 +371,9 @@ the external directory above avoids coupling collection and publication to repos
 The evidence directory receives the re-ratified baseline, derived budget, and independent holdout
 evaluation for every family. The aggregate JSON content-addresses those 21 files and retains every
 canonical artifact page, API URL, API-response digest, artifact ZIP digest, report digest, execution,
-source, lock, host, and workload identity. Its Markdown surfaces baseline and holdout target
+source, lock, host, and workload identity. The aggregate also retains the preregistered boundary,
+every authenticated run and literal publication-artifact identity, the complete Production-bytes
+chronology, and the earliest selected candidate. Its Markdown surfaces baseline and holdout target
 assessments for all seven families, links exact fixture sources at the measured commit, and preserves
 the architectural lane warning beside each subject. It also embeds and renders the cross-corpus
 foreground build-session assessment, including its four milestone/residual cells and any

@@ -68,6 +68,11 @@ describe('metrics-blind performance publication collection', () => {
       };
       candidate.report.metrics = { invented: { value: -candidate.runId } };
       candidate.report.rawCells = [{ durationMs: Number.MAX_SAFE_INTEGER - candidate.runId }];
+      candidate.report.budgets = { arbitrary: candidate.runId % 2 === 0 ? 0 : 999_999 };
+      candidate.report.verdict = {
+        failures: candidate.runId % 2 === 0 ? ['invented'] : [],
+        status: candidate.runId % 2 === 0 ? 'blocked' : 'pass',
+      };
     }
     const after = selectedIds(selectPerformancePublicationCohorts(candidates));
 
@@ -93,6 +98,8 @@ describe('metrics-blind performance publication collection', () => {
           { value: candidate.runId === 1 ? Number.MAX_SAFE_INTEGER : 0 },
         ]),
       );
+      candidate.report.budgets = { maximum: candidate.runId === 1 ? 0 : Number.MAX_SAFE_INTEGER };
+      candidate.report.verdict = { status: candidate.runId === 1 ? 'blocked' : 'pass' };
     }
     const after = selectPerformancePublicationProductionBytes(candidates).runId;
 
@@ -136,6 +143,7 @@ describe('metrics-blind performance publication collection', () => {
     const before = await directorySnapshot(checkout);
 
     const result = await collectPerformancePublicationRuns({
+      ...campaignBoundary(campaign),
       checkoutDirectory: checkout,
       operations: fixtureOperations(campaign, checkout),
       outDirectory: out,
@@ -183,6 +191,7 @@ describe('metrics-blind performance publication collection', () => {
     );
 
     const result = await collectPerformancePublicationRuns({
+      ...campaignBoundary(campaign),
       checkoutDirectory: checkout,
       operations: fixtureOperations(campaign, checkout),
       outDirectory: path.join(root, 'bytes-only'),
@@ -214,6 +223,7 @@ describe('metrics-blind performance publication collection', () => {
 
     await expect(
       collectPerformancePublicationRuns({
+        ...campaignBoundary(campaign),
         checkoutDirectory: checkout,
         operations,
         outDirectory: out,
@@ -226,6 +236,61 @@ describe('metrics-blind performance publication collection', () => {
     expect((await readdir(root)).filter((name) => name.includes('staging'))).toEqual([]);
   });
 
+  it('rejects omitted campaign runs, candidates, raw listings, and altered run chronology', async () => {
+    const root = await temporaryRoot();
+    const checkout = await realDirectory(path.join(root, 'checkout'));
+    const campaign = campaignFixture(
+      [1001, 1002, 1003].map((runId) => ({
+        family: 'browser',
+        productionBytes: true,
+        runId,
+      })),
+    );
+    const collection = path.join(root, 'complete-campaign');
+    await collectPerformancePublicationRuns({
+      ...campaignBoundary(campaign),
+      checkoutDirectory: checkout,
+      operations: fixtureOperations(campaign, checkout),
+      outDirectory: collection,
+      repository: REPOSITORY,
+      runIds: [1001, 1002, 1003],
+      sourceSha: SOURCE,
+    });
+    const ledgerPath = path.join(collection, 'collection.json');
+    const original = JSON.parse(await readFile(ledgerPath, 'utf8'));
+
+    const omittedCandidate = structuredClone(original);
+    omittedCandidate.productionBytes.shift();
+    await writeFile(ledgerPath, `${JSON.stringify(omittedCandidate, null, 2)}\n`);
+    await expect(loadOneCollection(checkout, collection)).rejects.toThrow(
+      'omits or invents a campaign artifact-listing candidate',
+    );
+
+    const omittedRun = structuredClone(original);
+    omittedRun.runIds.splice(1, 1);
+    omittedRun.campaign.runs.splice(1, 1);
+    omittedRun.candidates = omittedRun.candidates.filter(({ runId }) => runId !== 1002);
+    omittedRun.productionBytes = omittedRun.productionBytes.filter(({ runId }) => runId !== 1002);
+    await writeFile(ledgerPath, `${JSON.stringify(omittedRun, null, 2)}\n`);
+    await expect(loadOneCollection(checkout, collection)).rejects.toThrow(
+      /complete preregistered campaign boundary census|workflow-runs authority/u,
+    );
+
+    const alteredCreatedAt = structuredClone(original);
+    alteredCreatedAt.campaign.runs[0].runCreatedAt = '2026-08-13T00:00:30.000Z';
+    await writeFile(ledgerPath, `${JSON.stringify(alteredCreatedAt, null, 2)}\n`);
+    await expect(loadOneCollection(checkout, collection)).rejects.toThrow(
+      'created_at differs from raw run authority',
+    );
+
+    await writeFile(ledgerPath, `${JSON.stringify(original, null, 2)}\n`);
+    const listingReference = original.campaign.runs[0].artifactsApiMetadata;
+    await writeFile(path.join(collection, listingReference.path), '{}\n');
+    await expect(loadOneCollection(checkout, collection)).rejects.toThrow(
+      'content-addressed custody reference',
+    );
+  });
+
   it('rejects missing and ambiguous literal family artifacts before publishing', async () => {
     const root = await temporaryRoot();
     const checkout = await realDirectory(path.join(root, 'checkout'));
@@ -236,6 +301,7 @@ describe('metrics-blind performance publication collection', () => {
     );
     await expect(
       collectPerformancePublicationRuns({
+        ...campaignBoundary(missing),
         checkoutDirectory: checkout,
         operations: fixtureOperations(missing, checkout),
         outDirectory: path.join(root, 'missing'),
@@ -258,6 +324,7 @@ describe('metrics-blind performance publication collection', () => {
     );
     await expect(
       collectPerformancePublicationRuns({
+        ...campaignBoundary(ambiguous),
         checkoutDirectory: checkout,
         operations: fixtureOperations(ambiguous, checkout),
         outDirectory: path.join(root, 'ambiguous'),
@@ -403,6 +470,40 @@ describe('metrics-blind performance publication collection', () => {
         },
       ],
       [
+        'host-v2',
+        (fixture) => {
+          fixture.report.host.schema = 'kovo-performance-host/v1';
+          resealProductionBytesFixture(fixture);
+        },
+      ],
+      [
+        'foreign workload adapter',
+        (fixture) => {
+          fixture.report.workloadIdentity.identity.adapters.foreign = 'v1';
+          fixture.report.workloadIdentity.digest = digest(
+            canonicalJson(fixture.report.workloadIdentity.identity),
+          );
+          resealProductionBytesFixture(fixture);
+        },
+      ],
+      [
+        'foreign workload wrapper',
+        (fixture) => {
+          fixture.report.workloadIdentity.foreign = true;
+          resealProductionBytesFixture(fixture);
+        },
+      ],
+      [
+        'foreign workload policy',
+        (fixture) => {
+          fixture.report.workloadIdentity.identity.policies.foreign = true;
+          fixture.report.workloadIdentity.digest = digest(
+            canonicalJson(fixture.report.workloadIdentity.identity),
+          );
+          resealProductionBytesFixture(fixture);
+        },
+      ],
+      [
         'metric census',
         (fixture) => {
           delete fixture.report.metrics['production.navigation.wireBytes'];
@@ -437,6 +538,7 @@ describe('metrics-blind performance publication collection', () => {
 
     await expect(
       collectPerformancePublicationRuns({
+        ...campaignBoundary(campaign),
         checkoutDirectory: checkout,
         operations: fixtureOperations(campaign, checkout),
         outDirectory: path.join(root, 'duplicate-bytes'),
@@ -475,6 +577,7 @@ describe('metrics-blind performance publication collection', () => {
     const collection = path.join(root, 'collection');
     const campaign = campaignFixture([{ family: 'browser', runId: 1001 }]);
     const result = await collectPerformancePublicationRuns({
+      ...campaignBoundary(campaign),
       checkoutDirectory: checkout,
       operations: fixtureOperations(campaign, checkout),
       outDirectory: collection,
@@ -484,6 +587,7 @@ describe('metrics-blind performance publication collection', () => {
     });
     await expect(
       collectPerformancePublicationRuns({
+        ...campaignBoundary(campaign),
         checkoutDirectory: checkout,
         operations: fixtureOperations(campaign, checkout),
         outDirectory: path.join(checkout, 'forbidden'),
@@ -531,11 +635,12 @@ describe('metrics-blind performance publication collection', () => {
         repository: REPOSITORY,
         sourceSha: SOURCE,
       }),
-    ).rejects.toThrow('pairwise disjoint');
+    ).rejects.toThrow('exactly one complete campaign');
 
     const campaign = campaignFixture([{ family: 'browser', runId: 1001 }]);
     const collection = path.join(root, 'collection');
     await collectPerformancePublicationRuns({
+      ...campaignBoundary(campaign),
       checkoutDirectory: checkout,
       operations: fixtureOperations(campaign, checkout),
       outDirectory: collection,
@@ -574,6 +679,7 @@ describe('metrics-blind performance publication collection', () => {
     const campaign = campaignFixture(assignments);
     const collection = path.join(root, 'collection');
     await collectPerformancePublicationRuns({
+      ...campaignBoundary(campaign),
       checkoutDirectory: checkout,
       operations: fixtureOperations(campaign, checkout),
       outDirectory: collection,
@@ -593,6 +699,7 @@ describe('metrics-blind performance publication collection', () => {
 
     expect(result.manifest.schema).toBe(PERF_PUBLICATION_INPUT_SCHEMA);
     expect(Object.keys(result.manifest)).toEqual([
+      'campaign',
       'families',
       'productionBytes',
       'repository',
@@ -1087,6 +1194,13 @@ function markProductionBudgetFailure(fixture) {
 function fixtureOperations(campaign, checkout) {
   return {
     async fetchApi(endpoint) {
+      if (
+        endpoint ===
+        `repos/${REPOSITORY}/actions/workflows/perf-realistic.yml/runs?head_sha=${SOURCE}&per_page=100`
+      ) {
+        const workflowRuns = [...campaign.byRun.values()].map((fixture) => fixture.run);
+        return jsonBytes({ total_count: workflowRuns.length, workflow_runs: workflowRuns });
+      }
       const value = campaign.endpoints.get(endpoint);
       if (value === undefined) throw new Error(`unexpected API endpoint ${endpoint}`);
       return Buffer.from(value);
@@ -1097,6 +1211,14 @@ function fixtureOperations(campaign, checkout) {
     now() {
       return '2026-08-14T00:00:00.000Z';
     },
+  };
+}
+
+function campaignBoundary(campaign) {
+  const runIds = [...campaign.byRun.keys()];
+  return {
+    campaignFirstRunId: Math.min(...runIds),
+    campaignLastRunId: Math.max(...runIds),
   };
 }
 

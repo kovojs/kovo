@@ -9,6 +9,11 @@ import { promisify } from 'node:util';
 import {
   PERF_REALISTIC_WORKFLOW_PATH,
   authenticatePerformanceArtifactEvidence,
+  createPerformanceArtifactDescriptorCustody,
+  fetchGitHubCampaignWorkflowRunsApiResponse,
+  fetchGitHubWorkflowArtifactsApiResponse,
+  fetchGitHubWorkflowRunApiResponse,
+  readPerformanceArtifactCustodyFile,
 } from './lib/perf-artifact-custody.mjs';
 import { executionIdentityFindings } from './lib/perf-execution.mjs';
 import {
@@ -54,15 +59,22 @@ import {
 } from './perf-dev-budget.mjs';
 import { packedComparisonProductEvidenceFindings } from './lib/perf-packed-kovo-product.mjs';
 import { canonicalJson } from './perf-regression-check.mjs';
-import { evaluateReport, PERF_BUDGETS_SCHEMA } from './perf-gate.mjs';
+import { performanceHostFingerprintFindings } from './lib/perf-host.mjs';
+import {
+  evaluateReport,
+  PERF_BUDGETS_SCHEMA,
+  performanceGateWorkloadIdentity,
+} from './perf-gate.mjs';
 
-export const PERF_PUBLICATION_INPUT_SCHEMA = 'kovo-performance-publication-input/v2';
-export const PERF_PUBLICATION_SCHEMA = 'kovo-performance-publication/v2';
+export const PERF_PUBLICATION_INPUT_SCHEMA = 'kovo-performance-publication-input/v3';
+export const PERF_PUBLICATION_SCHEMA = 'kovo-performance-publication/v3';
 export const PERF_PUBLICATION_REPOSITORY = 'kovojs/kovo';
 
 const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const COMMIT_PATTERN = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/u;
 const GIT_BLOB_PATTERN = /^[0-9a-f]{40}$/u;
+const MAX_API_RESPONSE_BYTES = 1024 * 1024;
+const MAX_CAMPAIGN_RUNS = 100;
 const execFileAsync = promisify(execFile);
 const REQUIRED_LOCKS = Object.freeze([
   'pnpm-lock.yaml',
@@ -280,7 +292,10 @@ export async function authenticatePerformancePublicationInput(
   input,
   {
     baseDirectory = process.cwd(),
+    descriptorReadHook,
+    fetchCampaignWorkflowRunsApi = fetchGitHubCampaignWorkflowRunsApiResponse,
     fetchArtifactApi,
+    fetchWorkflowArtifactsApi = fetchGitHubWorkflowArtifactsApiResponse,
     fetchWorkflowFileApi,
     fetchWorkflowJobsApi,
     fetchWorkflowRunApi,
@@ -292,6 +307,7 @@ export async function authenticatePerformancePublicationInput(
 ) {
   validateInputManifest(input);
   validateBuildProfileEvidencePair(input.buildProfiles);
+  const descriptorCustody = await createPerformanceArtifactDescriptorCustody({ baseDirectory });
   const families = {};
   for (const familyName of FAMILY_NAMES) {
     const config = FAMILY_CONFIG[familyName];
@@ -302,6 +318,8 @@ export async function authenticatePerformancePublicationInput(
         baseline.push(
           await authenticatePerformanceArtifactEvidence(evidence, {
             baseDirectory,
+            descriptorCustody,
+            descriptorReadHook,
             expectedArtifactName: config.artifactName,
             expectedArchiveMembers: [config.reportMember],
             expectedReportMember: config.reportMember,
@@ -324,6 +342,8 @@ export async function authenticatePerformancePublicationInput(
     try {
       holdout = await authenticatePerformanceArtifactEvidence(descriptor.holdout, {
         baseDirectory,
+        descriptorCustody,
+        descriptorReadHook,
         expectedArtifactName: config.artifactName,
         expectedArchiveMembers: [config.reportMember],
         expectedReportMember: config.reportMember,
@@ -348,6 +368,9 @@ export async function authenticatePerformancePublicationInput(
     try {
       const entry = await authenticatePerformanceArtifactEvidence(input.buildProfiles[mode], {
         baseDirectory,
+        descriptorCustody,
+        descriptorCustodyShare: { archive: 'build-profile-archive' },
+        descriptorReadHook,
         expectedArtifactName: BUILD_PROFILE_ARTIFACT_NAME,
         expectedAuxiliaryMemberGroup: {
           prefix: `raw-${mode}-`,
@@ -383,6 +406,8 @@ export async function authenticatePerformancePublicationInput(
       allowedProducerFailureStep: PRODUCTION_BYTES_CONFIG.budgetFailureStep,
       requiredProducerSuccessSteps: PRODUCTION_BYTES_CONFIG.budgetFailureSuccessSteps,
       baseDirectory,
+      descriptorCustody,
+      descriptorReadHook,
       expectedArtifactName: PRODUCTION_BYTES_CONFIG.artifactName,
       expectedArchiveMembers: [PRODUCTION_BYTES_CONFIG.reportMember],
       expectedReportMember: PRODUCTION_BYTES_CONFIG.reportMember,
@@ -409,19 +434,418 @@ export async function authenticatePerformancePublicationInput(
   } catch (error) {
     throw contextualError('Production bytes', error);
   }
-  return { buildProfiles, families, productionBytes, repository: input.repository };
+  let campaign;
+  try {
+    campaign = await authenticatePerformancePublicationCampaign(input.campaign, {
+      custody: descriptorCustody,
+      descriptorReadHook,
+      fetchCampaignWorkflowRunsApi,
+      fetchWorkflowArtifactsApi,
+      fetchWorkflowRunApi: fetchWorkflowRunApi ?? fetchGitHubWorkflowRunApiResponse,
+      productionBytes,
+      repository: input.repository,
+    });
+  } catch (error) {
+    throw contextualError('campaign chronology', error);
+  }
+  return { buildProfiles, campaign, families, productionBytes, repository: input.repository };
 }
 
 function validateBuildProfileEvidencePair(descriptors) {
   if (descriptors === undefined) return;
-  const sharedFields = ['apiMetadata', 'archive', 'jobsApiMetadata', 'runApiMetadata'];
+  const distinctFields = ['apiMetadata', 'jobsApiMetadata', 'report', 'runApiMetadata'];
   if (
-    sharedFields.some((field) => descriptors.unchanged?.[field] !== descriptors.edit?.[field]) ||
-    descriptors.unchanged?.report === descriptors.edit?.report
+    descriptors.unchanged?.archive !== descriptors.edit?.archive ||
+    distinctFields.some((field) => descriptors.unchanged?.[field] === descriptors.edit?.[field])
   ) {
     throw new TypeError(
-      'build profile modes must share one artifact/run custody set and distinct reports',
+      'build profile modes may share only one exact archive; all other custody files must be distinct',
     );
+  }
+}
+
+export async function authenticatePerformancePublicationCampaign(
+  campaign,
+  {
+    custody,
+    descriptorReadHook,
+    fetchCampaignWorkflowRunsApi,
+    fetchWorkflowArtifactsApi,
+    fetchWorkflowRunApi,
+    productionBytes,
+    repository,
+  },
+) {
+  validateCampaignManifest(campaign);
+  for (const [label, operation] of [
+    ['campaign workflow-runs', fetchCampaignWorkflowRunsApi],
+    ['campaign workflow artifacts', fetchWorkflowArtifactsApi],
+    ['campaign workflow run', fetchWorkflowRunApi],
+  ]) {
+    if (typeof operation !== 'function') throw new TypeError(`live ${label} API fetch is required`);
+  }
+  const sourceSha = productionBytes?.report?.source?.commit;
+  if (!COMMIT_PATTERN.test(sourceSha ?? '')) {
+    throw new TypeError('campaign source commit is unavailable');
+  }
+  const savedWorkflowRunsBytes = await readCampaignCustodyReference(
+    campaign.workflowRunsApiMetadata,
+    'campaign workflow-runs API',
+    { custody, descriptorReadHook },
+  );
+  const liveWorkflowRunsBytes = await fetchCampaignWorkflowRunsApi({ repository, sourceSha });
+  const savedWorkflowRuns = parseCampaignJson(savedWorkflowRunsBytes, 'campaign workflow-runs API');
+  const liveWorkflowRuns = parseCampaignJson(
+    liveWorkflowRunsBytes,
+    'live campaign workflow-runs API',
+  );
+  const savedRunCensus = campaignWorkflowRunsAuthorityProjection(savedWorkflowRuns, {
+    boundary: campaign.boundary,
+    sourceSha,
+  });
+  const liveRunCensus = campaignWorkflowRunsAuthorityProjection(liveWorkflowRuns, {
+    boundary: campaign.boundary,
+    sourceSha,
+  });
+  if (canonicalJson(savedRunCensus) !== canonicalJson(liveRunCensus)) {
+    throw new TypeError('saved campaign workflow-runs authority differs from the live response');
+  }
+  const manifestRunIds = campaign.runs.map((run) => run.runId);
+  if (canonicalJson(manifestRunIds) !== canonicalJson(savedRunCensus.map((run) => run.runId))) {
+    throw new TypeError('campaign manifest omits or invents a preregistered workflow run');
+  }
+  const runs = [];
+  const derivedProductionBytes = [];
+  for (const run of campaign.runs) {
+    const [savedRunBytes, savedArtifactsBytes, liveRunBytes, liveArtifactsBytes] =
+      await Promise.all([
+        readCampaignCustodyReference(
+          run.runApiMetadata,
+          `campaign run ${String(run.runId)} run API`,
+          { custody, descriptorReadHook },
+        ),
+        readCampaignCustodyReference(
+          run.artifactsApiMetadata,
+          `campaign run ${String(run.runId)} artifacts API`,
+          { custody, descriptorReadHook },
+        ),
+        fetchWorkflowRunApi({ repository, workflowRunId: run.runId }),
+        fetchWorkflowArtifactsApi({ repository, workflowRunId: run.runId }),
+      ]);
+    const savedRun = parseCampaignJson(savedRunBytes, 'campaign workflow run API');
+    const liveRun = parseCampaignJson(liveRunBytes, 'live campaign workflow run API');
+    const savedRunAuthority = campaignRunAuthorityProjection(savedRun, {
+      repository,
+      runId: run.runId,
+      sourceSha,
+    });
+    const liveRunAuthority = campaignRunAuthorityProjection(liveRun, {
+      repository,
+      runId: run.runId,
+      sourceSha,
+    });
+    if (canonicalJson(savedRunAuthority) !== canonicalJson(liveRunAuthority)) {
+      throw new TypeError(
+        `campaign run ${String(run.runId)} saved authority differs from the live response`,
+      );
+    }
+    if (run.runCreatedAt !== savedRunAuthority.runCreatedAt) {
+      throw new TypeError(`campaign run ${String(run.runId)} created_at differs from authority`);
+    }
+    const savedArtifacts = campaignArtifactsAuthorityProjection(
+      parseCampaignJson(savedArtifactsBytes, 'campaign workflow artifacts API'),
+      run.runId,
+    );
+    const liveArtifacts = campaignArtifactsAuthorityProjection(
+      parseCampaignJson(liveArtifactsBytes, 'live campaign workflow artifacts API'),
+      run.runId,
+    );
+    if (canonicalJson(savedArtifacts) !== canonicalJson(liveArtifacts)) {
+      throw new TypeError(
+        `campaign run ${String(run.runId)} artifact census differs from the live response`,
+      );
+    }
+    for (const artifact of savedArtifacts.publicationArtifacts) {
+      if (artifact.kind === 'production-bytes') {
+        derivedProductionBytes.push({
+          artifactId: artifact.artifactId,
+          runCreatedAt: run.runCreatedAt,
+          runId: run.runId,
+        });
+      }
+    }
+    runs.push({
+      artifactsApiAuthorityDigest: sha256Canonical(savedArtifacts.authority),
+      artifactsApiResponseDigest: sha256Bytes(savedArtifactsBytes),
+      liveArtifactsApiResponseDigest: sha256Bytes(liveArtifactsBytes),
+      publicationArtifacts: savedArtifacts.publicationArtifacts,
+      runApiAuthorityDigest: sha256Canonical(savedRunAuthority),
+      runApiResponseDigest: sha256Bytes(savedRunBytes),
+      runCreatedAt: run.runCreatedAt,
+      runId: run.runId,
+    });
+  }
+  derivedProductionBytes.sort(campaignChronologyOrder);
+  if (canonicalJson(campaign.productionBytes) !== canonicalJson(derivedProductionBytes)) {
+    throw new TypeError('campaign Production bytes chronology omits or invents a listed candidate');
+  }
+  const selected = derivedProductionBytes[0];
+  if (
+    canonicalJson(campaign.selectedProductionBytes) !== canonicalJson(selected) ||
+    selected?.artifactId !== productionBytes?.custody?.artifactId ||
+    selected?.runId !== productionBytes?.custody?.workflowRunId
+  ) {
+    throw new TypeError('Production bytes evidence is not the earliest campaign candidate');
+  }
+  return {
+    boundary: campaign.boundary,
+    productionBytes: derivedProductionBytes,
+    runs,
+    selectedProductionBytes: selected,
+    workflowRunsApiAuthorityDigest: sha256Canonical(savedRunCensus),
+    workflowRunsApiResponseDigest: sha256Bytes(savedWorkflowRunsBytes),
+    liveWorkflowRunsApiResponseDigest: sha256Bytes(liveWorkflowRunsBytes),
+  };
+}
+
+async function readCampaignCustodyReference(reference, label, { custody, descriptorReadHook }) {
+  validateCampaignCustodyReference(reference, label);
+  const bytes = await readPerformanceArtifactCustodyFile(reference.path, {
+    custody,
+    descriptorKey: `campaign:${label}`,
+    label,
+    maximumBytes: MAX_API_RESPONSE_BYTES,
+    readHook: descriptorReadHook,
+  });
+  if (bytes.length !== reference.byteLength || sha256Bytes(bytes) !== reference.contentDigest) {
+    throw new TypeError(`${label} differs from its content-addressed manifest reference`);
+  }
+  return bytes;
+}
+
+function validateCampaignManifest(campaign) {
+  if (
+    !ownRecord(campaign) ||
+    canonicalJson(Object.keys(campaign).sort()) !==
+      canonicalJson([
+        'boundary',
+        'productionBytes',
+        'runs',
+        'selectedProductionBytes',
+        'workflowRunsApiMetadata',
+      ])
+  ) {
+    throw new TypeError('manifest campaign field census differs');
+  }
+  const firstRunId = campaign?.boundary?.firstRunId;
+  const lastRunId = campaign?.boundary?.lastRunId;
+  if (
+    !ownRecord(campaign.boundary) ||
+    canonicalJson(Object.keys(campaign.boundary).sort()) !==
+      canonicalJson(['firstRunId', 'lastRunId']) ||
+    !Number.isSafeInteger(firstRunId) ||
+    !Number.isSafeInteger(lastRunId) ||
+    firstRunId < 1 ||
+    firstRunId > lastRunId
+  ) {
+    throw new TypeError('manifest campaign boundary is malformed');
+  }
+  validateCampaignCustodyReference(campaign.workflowRunsApiMetadata, 'campaign workflow-runs API');
+  if (
+    !Array.isArray(campaign.runs) ||
+    campaign.runs.length < 1 ||
+    campaign.runs.length > MAX_CAMPAIGN_RUNS
+  ) {
+    throw new TypeError('manifest campaign run census is unavailable');
+  }
+  for (const run of campaign.runs) {
+    if (
+      !ownRecord(run) ||
+      canonicalJson(Object.keys(run).sort()) !==
+        canonicalJson(['artifactsApiMetadata', 'runApiMetadata', 'runCreatedAt', 'runId']) ||
+      !Number.isSafeInteger(run.runId) ||
+      run.runId < firstRunId ||
+      run.runId > lastRunId ||
+      !validExactTimestamp(run.runCreatedAt)
+    ) {
+      throw new TypeError('manifest campaign run identity is malformed');
+    }
+    validateCampaignCustodyReference(
+      run.runApiMetadata,
+      `campaign run ${String(run.runId)} run API`,
+    );
+    validateCampaignCustodyReference(
+      run.artifactsApiMetadata,
+      `campaign run ${String(run.runId)} artifacts API`,
+    );
+  }
+  if (
+    new Set(campaign.runs.map((run) => run.runId)).size !== campaign.runs.length ||
+    canonicalJson([...campaign.runs].sort(campaignChronologyOrder)) !== canonicalJson(campaign.runs)
+  ) {
+    throw new TypeError('manifest campaign run chronology is duplicated or non-canonical');
+  }
+  for (const [label, value] of [
+    ['Production bytes chronology', campaign.productionBytes],
+    ['selected Production bytes', [campaign.selectedProductionBytes]],
+  ]) {
+    if (
+      !Array.isArray(value) ||
+      value.length < 1 ||
+      value.some(
+        (candidate) =>
+          !ownRecord(candidate) ||
+          canonicalJson(Object.keys(candidate).sort()) !==
+            canonicalJson(['artifactId', 'runCreatedAt', 'runId']) ||
+          !Number.isSafeInteger(candidate.artifactId) ||
+          candidate.artifactId < 1 ||
+          !Number.isSafeInteger(candidate.runId) ||
+          !validExactTimestamp(candidate.runCreatedAt),
+      )
+    ) {
+      throw new TypeError(`manifest campaign ${label} is malformed`);
+    }
+  }
+}
+
+function validateCampaignCustodyReference(reference, label) {
+  if (
+    !ownRecord(reference) ||
+    canonicalJson(Object.keys(reference).sort()) !==
+      canonicalJson(['byteLength', 'contentDigest', 'path']) ||
+    !Number.isSafeInteger(reference.byteLength) ||
+    reference.byteLength < 1 ||
+    !DIGEST_PATTERN.test(reference.contentDigest ?? '') ||
+    !nonEmptyString(reference.path)
+  ) {
+    throw new TypeError(`${label} content-addressed reference is malformed`);
+  }
+}
+
+function campaignWorkflowRunsAuthorityProjection(listing, { boundary, sourceSha }) {
+  if (
+    !ownRecord(listing) ||
+    !Number.isSafeInteger(listing.total_count) ||
+    listing.total_count < 1 ||
+    listing.total_count > MAX_CAMPAIGN_RUNS ||
+    !Array.isArray(listing.workflow_runs) ||
+    listing.workflow_runs.length !== listing.total_count
+  ) {
+    throw new TypeError('campaign workflow-runs API census is incomplete or exceeds one page');
+  }
+  const ids = listing.workflow_runs.map((run) => run?.id);
+  if (ids.some((id) => !Number.isSafeInteger(id) || id < 1) || new Set(ids).size !== ids.length) {
+    throw new TypeError('campaign workflow-runs API identities are missing or duplicated');
+  }
+  const runs = listing.workflow_runs
+    .filter((run) => run.id >= boundary.firstRunId && run.id <= boundary.lastRunId)
+    .map((run) => {
+      if (
+        run?.head_sha !== sourceSha ||
+        run?.name !== 'Perf Realistic Tier' ||
+        run?.path !== PERF_REALISTIC_WORKFLOW_PATH ||
+        !validExactTimestamp(run?.created_at)
+      ) {
+        throw new TypeError('campaign workflow-runs API contains foreign run identity');
+      }
+      return {
+        conclusion: run.conclusion ?? null,
+        event: run.event,
+        runCreatedAt: run.created_at,
+        runId: run.id,
+        runAttempt: run.run_attempt,
+        status: run.status,
+      };
+    })
+    .sort(campaignChronologyOrder);
+  if (
+    runs.length < 1 ||
+    !runs.some((run) => run.runId === boundary.firstRunId) ||
+    !runs.some((run) => run.runId === boundary.lastRunId)
+  ) {
+    throw new TypeError('campaign boundary endpoints are absent from workflow-runs authority');
+  }
+  return runs;
+}
+
+function campaignRunAuthorityProjection(run, { repository, runId, sourceSha }) {
+  const apiUrl = `https://api.github.com/repos/${repository}/actions/runs/${String(runId)}`;
+  if (
+    !ownRecord(run) ||
+    run.id !== runId ||
+    run.head_sha !== sourceSha ||
+    run.name !== 'Perf Realistic Tier' ||
+    run.path !== PERF_REALISTIC_WORKFLOW_PATH ||
+    run.url !== apiUrl ||
+    run.artifacts_url !== `${apiUrl}/artifacts` ||
+    !validExactTimestamp(run.created_at)
+  ) {
+    throw new TypeError(`campaign run ${String(runId)} authority is malformed`);
+  }
+  return {
+    conclusion: run.conclusion ?? null,
+    event: run.event,
+    runAttempt: run.run_attempt,
+    runCreatedAt: run.created_at,
+    runId,
+    status: run.status,
+  };
+}
+
+function campaignArtifactsAuthorityProjection(listing, runId) {
+  if (
+    !ownRecord(listing) ||
+    !Number.isSafeInteger(listing.total_count) ||
+    listing.total_count < 0 ||
+    listing.total_count > MAX_CAMPAIGN_RUNS ||
+    !Array.isArray(listing.artifacts) ||
+    listing.artifacts.length !== listing.total_count
+  ) {
+    throw new TypeError(`campaign run ${String(runId)} artifact census is incomplete`);
+  }
+  const ids = listing.artifacts.map((artifact) => artifact?.id);
+  if (ids.some((id) => !Number.isSafeInteger(id) || id < 1) || new Set(ids).size !== ids.length) {
+    throw new TypeError(`campaign run ${String(runId)} artifact identities are duplicated`);
+  }
+  const byArtifactName = new Map(
+    Object.entries(FAMILY_CONFIG).map(([family, config]) => [config.artifactName, family]),
+  );
+  const publicationArtifacts = [];
+  for (const artifact of listing.artifacts) {
+    const family = byArtifactName.get(artifact?.name);
+    if (family !== undefined) {
+      publicationArtifacts.push({ artifactId: artifact.id, family, kind: 'family' });
+    } else if (artifact?.name === PRODUCTION_BYTES_CONFIG.artifactName) {
+      publicationArtifacts.push({ artifactId: artifact.id, kind: 'production-bytes' });
+    }
+  }
+  const roles = publicationArtifacts.map((artifact) => artifact.family ?? artifact.kind);
+  if (new Set(roles).size !== roles.length) {
+    throw new TypeError(`campaign run ${String(runId)} has ambiguous publication artifacts`);
+  }
+  publicationArtifacts.sort((left, right) => left.artifactId - right.artifactId);
+  return {
+    authority: listing.artifacts
+      .map((artifact) => structuredClone(artifact))
+      .sort((left, right) => left.id - right.id),
+    publicationArtifacts,
+    totalCount: listing.total_count,
+  };
+}
+
+function campaignChronologyOrder(left, right) {
+  const timestamp = Date.parse(left.runCreatedAt) - Date.parse(right.runCreatedAt);
+  return timestamp === 0 ? left.runId - right.runId : timestamp;
+}
+
+function parseCampaignJson(bytes, label) {
+  if (!Buffer.isBuffer(bytes) || bytes.length < 1 || bytes.length > MAX_API_RESPONSE_BYTES) {
+    throw new TypeError(`${label} bytes are unavailable`);
+  }
+  try {
+    return JSON.parse(bytes.toString('utf8'));
+  } catch {
+    throw new TypeError(`${label} is not valid JSON`);
   }
 }
 
@@ -552,6 +976,9 @@ export function productionBytesReportFindings(report) {
   findings.push(
     ...executionIdentityFindings(report?.execution, { requireProvider: 'github-actions' }),
   );
+  findings.push(
+    ...performanceHostFingerprintFindings(report?.host).map((finding) => `host ${finding}`),
+  );
   const expectedIntegrity = [
     'complete',
     'executionAuthenticated',
@@ -567,21 +994,17 @@ export function productionBytesReportFindings(report) {
   ) {
     findings.push('integrity census is malformed or incomplete');
   }
+  const expectedWorkload = performanceGateWorkloadIdentity('bytes', {
+    componentCount: PRODUCTION_BYTES_CONFIG.componentCount,
+  });
   if (
     report?.suite !== 'bytes' ||
-    report?.options?.componentCount !== PRODUCTION_BYTES_CONFIG.componentCount ||
-    canonicalJson(report?.workloadIdentity?.identity?.cells) !== canonicalJson(['bytes']) ||
-    report?.workloadIdentity?.identity?.policies?.componentCount !==
-      PRODUCTION_BYTES_CONFIG.componentCount
+    report?.options?.componentCount !== PRODUCTION_BYTES_CONFIG.componentCount
   ) {
     findings.push('suite or componentCount differs from the exact Production bytes policy');
   }
-  if (
-    report?.workloadIdentity?.schema !== 'kovo-performance-workload-identity/v1' ||
-    report?.workloadIdentity?.complete !== true ||
-    report?.workloadIdentity?.digest !== sha256Canonical(report?.workloadIdentity?.identity ?? null)
-  ) {
-    findings.push('workload identity is malformed or not derived from its facts');
+  if (canonicalJson(report?.workloadIdentity) !== canonicalJson(expectedWorkload)) {
+    findings.push('workload identity differs from the exact Production bytes wrapper and policy');
   }
   if (
     !ownRecord(report?.metrics) ||
@@ -843,6 +1266,7 @@ export function derivePerformancePublication(
         : 'publishable';
   const facts = {
     buildPersistenceAssessment,
+    campaign: authenticated?.campaign ?? null,
     families,
     fixtureSources: fixtureSources(sourceCommit),
     generatedAt,
@@ -974,6 +1398,7 @@ export function performancePublicationFindings(publication) {
   if (publication.repository !== PERF_PUBLICATION_REPOSITORY) {
     findings.push('publication repository is not the canonical Kovo repository');
   }
+  findings.push(...campaignPublicationFindings(publication.campaign, publication));
   if (!COMMIT_PATTERN.test(publication.identity?.sourceCommit ?? '')) {
     findings.push('publication source commit is unavailable');
   }
@@ -2451,6 +2876,7 @@ function validateInputManifest(input) {
   }
   const expectedKeys = [
     ...(input.buildProfiles === undefined ? [] : ['buildProfiles']),
+    'campaign',
     'families',
     'productionBytes',
     'repository',
@@ -2458,12 +2884,13 @@ function validateInputManifest(input) {
   ].sort((left, right) => left.localeCompare(right));
   if (canonicalJson(Object.keys(input).sort()) !== canonicalJson(expectedKeys)) {
     throw new TypeError(
-      'manifest must contain only schema, repository, families, productionBytes, and optional buildProfiles',
+      'manifest must contain only schema, repository, campaign, families, productionBytes, and optional buildProfiles',
     );
   }
   if (input.repository !== PERF_PUBLICATION_REPOSITORY) {
     throw new TypeError(`manifest repository must be ${PERF_PUBLICATION_REPOSITORY}`);
   }
+  validateCampaignManifest(input.campaign);
   if (
     canonicalJson(Object.keys(input.families ?? {}).sort()) !==
     canonicalJson([...FAMILY_NAMES].sort())
@@ -2492,6 +2919,109 @@ function validateInputManifest(input) {
   ) {
     throw new TypeError('buildProfiles must contain exactly unchanged and edit evidence');
   }
+}
+
+function campaignPublicationFindings(campaign, publication) {
+  if (!ownRecord(campaign)) return ['chronology is unavailable'];
+  const findings = [];
+  const boundary = campaign.boundary;
+  if (
+    !ownRecord(boundary) ||
+    !Number.isSafeInteger(boundary.firstRunId) ||
+    !Number.isSafeInteger(boundary.lastRunId) ||
+    boundary.firstRunId < 1 ||
+    boundary.firstRunId > boundary.lastRunId
+  ) {
+    findings.push('boundary is malformed');
+  }
+  if (
+    !Array.isArray(campaign.runs) ||
+    campaign.runs.length < 1 ||
+    campaign.runs.length > MAX_CAMPAIGN_RUNS ||
+    new Set(campaign.runs.map((run) => run?.runId)).size !== campaign.runs.length ||
+    canonicalJson([...campaign.runs].sort(campaignChronologyOrder)) !== canonicalJson(campaign.runs)
+  ) {
+    findings.push('run chronology is incomplete, duplicated, or non-canonical');
+  }
+  if (
+    Array.isArray(campaign.runs) &&
+    (!campaign.runs.some((run) => run?.runId === boundary?.firstRunId) ||
+      !campaign.runs.some((run) => run?.runId === boundary?.lastRunId))
+  ) {
+    findings.push('run chronology does not retain both campaign boundary endpoints');
+  }
+  const derivedProductionBytes = [];
+  const artifactIds = new Set();
+  for (const run of campaign.runs ?? []) {
+    for (const artifact of run?.publicationArtifacts ?? []) {
+      const expectedKeys =
+        artifact?.kind === 'family' ? ['artifactId', 'family', 'kind'] : ['artifactId', 'kind'];
+      if (
+        !ownRecord(artifact) ||
+        canonicalJson(Object.keys(artifact).sort()) !== canonicalJson(expectedKeys) ||
+        !Number.isSafeInteger(artifact.artifactId) ||
+        artifact.artifactId < 1 ||
+        !['family', 'production-bytes'].includes(artifact.kind) ||
+        (artifact.kind === 'family' && !FAMILY_NAMES.includes(artifact.family)) ||
+        artifactIds.has(artifact.artifactId)
+      ) {
+        findings.push(`run ${String(run?.runId)} publication artifact census is malformed`);
+        continue;
+      }
+      artifactIds.add(artifact.artifactId);
+      if (artifact.kind === 'production-bytes') {
+        derivedProductionBytes.push({
+          artifactId: artifact.artifactId,
+          runCreatedAt: run.runCreatedAt,
+          runId: run.runId,
+        });
+      }
+    }
+  }
+  derivedProductionBytes.sort(campaignChronologyOrder);
+  if (
+    !Array.isArray(campaign.productionBytes) ||
+    campaign.productionBytes.length < 1 ||
+    canonicalJson([...campaign.productionBytes].sort(campaignChronologyOrder)) !==
+      canonicalJson(campaign.productionBytes) ||
+    canonicalJson(campaign.selectedProductionBytes) !==
+      canonicalJson(campaign.productionBytes[0]) ||
+    canonicalJson(campaign.productionBytes) !== canonicalJson(derivedProductionBytes)
+  ) {
+    findings.push('Production bytes chronology or earliest selection is malformed');
+  }
+  const selected = campaign.selectedProductionBytes;
+  const evidence = publication?.productionBytes?.evidence;
+  if (
+    ownRecord(evidence) &&
+    (selected?.artifactId !== evidence.artifactId || selected?.runId !== evidence.workflowRunId)
+  ) {
+    findings.push('earliest Production bytes selection differs from publication evidence');
+  }
+  for (const digestField of [
+    'workflowRunsApiAuthorityDigest',
+    'workflowRunsApiResponseDigest',
+    'liveWorkflowRunsApiResponseDigest',
+  ]) {
+    if (!DIGEST_PATTERN.test(campaign[digestField] ?? '')) {
+      findings.push(`${digestField} is unavailable`);
+    }
+  }
+  for (const run of campaign.runs ?? []) {
+    if (
+      !Number.isSafeInteger(run?.runId) ||
+      !validExactTimestamp(run?.runCreatedAt) ||
+      !Array.isArray(run?.publicationArtifacts) ||
+      !DIGEST_PATTERN.test(run?.artifactsApiAuthorityDigest ?? '') ||
+      !DIGEST_PATTERN.test(run?.artifactsApiResponseDigest ?? '') ||
+      !DIGEST_PATTERN.test(run?.liveArtifactsApiResponseDigest ?? '') ||
+      !DIGEST_PATTERN.test(run?.runApiAuthorityDigest ?? '') ||
+      !DIGEST_PATTERN.test(run?.runApiResponseDigest ?? '')
+    ) {
+      findings.push(`run ${String(run?.runId)} authenticated chronology is malformed`);
+    }
+  }
+  return [...new Set(findings)].sort();
 }
 
 function authenticatedInputFindings(authenticated) {
@@ -2526,6 +3056,17 @@ function authenticatedInputFindings(authenticated) {
       ).map((finding) => `Production bytes ${finding}`),
     );
   }
+  findings.push(
+    ...campaignPublicationFindings(authenticated?.campaign, {
+      identity: { sourceCommit: authenticated?.productionBytes?.report?.source?.commit },
+      productionBytes: {
+        evidence: {
+          artifactId: authenticated?.productionBytes?.custody?.artifactId,
+          workflowRunId: authenticated?.productionBytes?.custody?.workflowRunId,
+        },
+      },
+    }).map((finding) => `campaign ${finding}`),
+  );
   return findings;
 }
 
