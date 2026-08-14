@@ -1373,6 +1373,24 @@ export const inventory = route('/inventory', {
         reason: "layout 'shell' is guarded",
       },
       {
+        name: 'route access overrides public layout',
+        source: `
+import { layout, publicAccess, route } from '@kovojs/server';
+const sessionAccess = { kind: 'session-dependent' };
+const shell = layout({
+  access: publicAccess('public shell'),
+  render: (_queries, _state, { children }) => <main>{children}</main>,
+});
+export const inventory = route('/inventory', {
+  access: sessionAccess,
+  layout: shell,
+  prefetch: 'moderate',
+  page: () => <section>Inventory</section>,
+});
+`,
+        reason: 'route is not proven public/session-independent',
+      },
+      {
         name: 'layout posture hidden by a spread',
         source: `
 import { layout, publicAccess, route } from '@kovojs/server';

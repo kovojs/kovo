@@ -555,6 +555,8 @@ function appendModeratePrefetchSafetyDiagnostics(
     appendModeratePrefetchReason(reasons, 'route is guarded or its guard posture is ambiguous');
   }
 
+  const routeAccess = moderatePrefetchMember(definition, 'access');
+  let accessResolved = routeAccess.node !== undefined;
   let publicAccess = moderatePrefetchAccessIsPublic(definition, sourceFile);
 
   appendModeratePrefetchHandlerMemberReasons(definition, 'page', 'page', reasons);
@@ -595,8 +597,10 @@ function appendModeratePrefetchSafetyDiagnostics(
         if (layoutGuard.node || layoutGuard.ambiguous) {
           appendModeratePrefetchReason(reasons, `layout '${current}' is guarded`);
         }
-        if (!publicAccess && moderatePrefetchAccessIsPublic(model.definition, sourceFile)) {
-          publicAccess = true;
+        const layoutAccess = moderatePrefetchMember(model.definition, 'access');
+        if (!accessResolved && layoutAccess.node) {
+          accessResolved = true;
+          publicAccess = moderatePrefetchAccessIsPublic(model.definition, sourceFile);
         }
         appendModeratePrefetchHandlerMemberReasons(
           model.definition,

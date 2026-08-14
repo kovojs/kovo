@@ -87,12 +87,18 @@ The measurement arms are separate throwaway worktrees and must not be integrated
 | Default off       | `/Users/mini/kovo-spike-speculation-default-off-20260813` | `e666ee49ee017b4bc6b9a1dee4b27123e0c20c4f` |
 | Explicit moderate | `/Users/mini/kovo-spike-speculation-opt-in-20260813`      | `55bdd900900606255654399d341fe912f2891d69` |
 
-Both descend from `af567b131`, contain the same repair and sanctioned generated-posture reseal, use
-the same frozen locks, and pass `node benchmarks/matched-fixture-gate.mjs`. Their complete source
-diff is six added lines in `benchmarks/kovo/src/app.tsx`: `prefetch: 'moderate'` plus the same named
-read-only benchmark justification on the matched-L1 listing and detail routes. The binary diff
-SHA-256 is `111dab70a942ec961d2c41319c52cbe42f04d2e5c3f09786e1004798ccb38a4e`;
-no framework, security posture, lock, or harness file differs.
+Both descend from `af567b131`, contain the same pre-measurement repair revision and sanctioned
+generated-posture reseal, use the same frozen locks, and pass
+`node benchmarks/matched-fixture-gate.mjs`. The final integration repair `01f4efc24` adds one further
+compiler-only refusal after these runs: route access must override inherited public layout access.
+That hardening changes no benchmark fixture or runtime artifact, and the explicitly justified
+counterfactual route does not take the static-proof branch.
+
+The arms' complete source diff is six added lines in `benchmarks/kovo/src/app.tsx`:
+`prefetch: 'moderate'` plus the same named read-only benchmark justification on the matched-L1
+listing and detail routes. The binary diff SHA-256 is
+`111dab70a942ec961d2c41319c52cbe42f04d2e5c3f09786e1004798ccb38a4e`; no framework, security
+posture, lock, or harness file differs.
 
 The serialized order was baseline, spike, spike, baseline. Each occurrence used two warmups and
 seven recorded samples for both desktop and emulated mobile:
