@@ -406,7 +406,11 @@ describe('single-entrant developer-loop adapter', () => {
     let groupChecks = 0;
     let portChecks = 0;
     const result = await stopDevProcessTree(
-      { origin: 'http://localhost:49120', pid: 1234 },
+      {
+        marker: 'KOVO_PERF_DEV_SESSION_TEST_GRACEFUL',
+        origin: 'http://localhost:49120',
+        pid: 1234,
+      },
       {
         ...clock,
         portAvailability: async (origin) => {
@@ -419,6 +423,7 @@ describe('single-entrant developer-loop adapter', () => {
           groupChecks += 1;
           return groupChecks === 1;
         },
+        signalMarkedProcesses: emptyMarkedProcessCensus,
         terminateProcessGroup: (pid, signal) => signals.push([pid, signal]),
       },
     );
@@ -427,6 +432,7 @@ describe('single-entrant developer-loop adapter', () => {
       complete: true,
       error: null,
       origin: 'http://localhost:49120',
+      ownedProcesses: { checks: 2, maxSurvivors: 0, quiescent: true },
       port: {
         addresses: [
           {
@@ -467,7 +473,11 @@ describe('single-entrant developer-loop adapter', () => {
     const clock = fakeLifecycleClock();
     let portChecks = 0;
     const result = await stopDevProcessTree(
-      { origin: 'http://localhost:49120', pid: 1235 },
+      {
+        marker: 'KOVO_PERF_DEV_SESSION_TEST_REBIND',
+        origin: 'http://localhost:49120',
+        pid: 1235,
+      },
       {
         ...clock,
         portAvailability: async () => {
@@ -476,6 +486,7 @@ describe('single-entrant developer-loop adapter', () => {
         },
         portStabilityWindowMs: 100,
         processGroupAlive: async () => false,
+        signalMarkedProcesses: emptyMarkedProcessCensus,
         terminateProcessGroup: () => undefined,
       },
     );
@@ -504,7 +515,11 @@ describe('single-entrant developer-loop adapter', () => {
     const clock = fakeLifecycleClock();
     let portChecks = 0;
     const result = await stopDevProcessTree(
-      { origin: 'http://localhost:49120', pid: 1236 },
+      {
+        marker: 'KOVO_PERF_DEV_SESSION_TEST_BOTH_FAMILIES',
+        origin: 'http://localhost:49120',
+        pid: 1236,
+      },
       {
         ...clock,
         portAvailability: async () => {
@@ -515,6 +530,7 @@ describe('single-entrant developer-loop adapter', () => {
         },
         portStabilityWindowMs: 100,
         processGroupAlive: async () => false,
+        signalMarkedProcesses: emptyMarkedProcessCensus,
         terminateProcessGroup: () => undefined,
       },
     );
@@ -568,13 +584,18 @@ describe('single-entrant developer-loop adapter', () => {
   it('records an unavailable IPv6 stack without treating it as a port collision', async () => {
     const clock = fakeLifecycleClock();
     const result = await stopDevProcessTree(
-      { origin: 'http://localhost:49120', pid: 1237 },
+      {
+        marker: 'KOVO_PERF_DEV_SESSION_TEST_IPV6_UNAVAILABLE',
+        origin: 'http://localhost:49120',
+        pid: 1237,
+      },
       {
         ...clock,
         portAvailability: async () =>
           dualStackPortObservation({ ipv6ErrorCode: 'EAFNOSUPPORT', ipv6Supported: false }),
         portStabilityWindowMs: 100,
         processGroupAlive: async () => false,
+        signalMarkedProcesses: emptyMarkedProcessCensus,
         terminateProcessGroup: () => undefined,
       },
     );
@@ -602,7 +623,11 @@ describe('single-entrant developer-loop adapter', () => {
     const signals = [];
     let killed = false;
     const result = await stopDevProcessTree(
-      { origin: 'http://localhost:49120', pid: 2345 },
+      {
+        marker: 'KOVO_PERF_DEV_SESSION_TEST_FORCE',
+        origin: 'http://localhost:49120',
+        pid: 2345,
+      },
       {
         ...clock,
         forceTimeoutMs: 20,
@@ -611,6 +636,7 @@ describe('single-entrant developer-loop adapter', () => {
         portAvailability: async () => dualStackPortObservation(),
         portStabilityWindowMs: 20,
         processGroupAlive: async () => !killed,
+        signalMarkedProcesses: emptyMarkedProcessCensus,
         terminateProcessGroup: (_pid, signal) => {
           signals.push(signal);
           if (signal === 'SIGKILL') killed = true;
@@ -623,11 +649,102 @@ describe('single-entrant developer-loop adapter', () => {
     expect(signals).toEqual(['SIGTERM', 'SIGKILL']);
   });
 
+  it('cleans a detached marked descendant after its original process group is quiescent', async () => {
+    const clock = fakeLifecycleClock();
+    const markerSignals = [];
+    let markerChecks = 0;
+    const result = await stopDevProcessTree(
+      {
+        marker: 'KOVO_PERF_DEV_SESSION_TEST_DETACHED',
+        origin: 'http://localhost:49120',
+        pid: 3345,
+      },
+      {
+        ...clock,
+        pollIntervalMs: 10,
+        portAvailability: async () => dualStackPortObservation(),
+        portStabilityWindowMs: 20,
+        processGroupAlive: async () => false,
+        signalMarkedProcesses: async (_marker, signal) => {
+          markerChecks += 1;
+          const observed = markerChecks === 1 ? [markedProcess(7788)] : [];
+          const signaled = observed.map(({ pid }) => pid);
+          markerSignals.push(...signaled.map((pid) => [pid, signal]));
+          return { observed, signaled };
+        },
+        terminateProcessGroup: () => undefined,
+      },
+    );
+
+    expect(result).toMatchObject({
+      complete: true,
+      ownedProcesses: {
+        checks: 3,
+        maxSurvivors: 1,
+        quiescent: true,
+        signalAttempts: 1,
+        waitedMs: 20,
+      },
+      processGroup: { checks: 1, quiescent: true },
+    });
+    expect(markerSignals).toEqual([[7788, 'SIGTERM']]);
+  });
+
+  it('fails closed when a detached marked descendant survives TERM and KILL', async () => {
+    const clock = fakeLifecycleClock();
+    const markerSignals = [];
+    const result = await stopDevProcessTree(
+      {
+        marker: 'KOVO_PERF_DEV_SESSION_TEST_MARKER_LEAK',
+        origin: 'http://localhost:49120',
+        pid: 3445,
+      },
+      {
+        ...clock,
+        forceTimeoutMs: 20,
+        gracefulTimeoutMs: 20,
+        pollIntervalMs: 10,
+        portAvailability: async () => dualStackPortObservation(),
+        portStabilityWindowMs: 20,
+        processGroupAlive: async () => false,
+        signalMarkedProcesses: async (_marker, signal) => {
+          markerSignals.push(signal);
+          return { observed: [markedProcess(8899)], signaled: [8899] };
+        },
+        terminateProcessGroup: () => undefined,
+      },
+    );
+
+    expect(result).toMatchObject({
+      complete: false,
+      ownedProcesses: {
+        checks: 6,
+        maxSurvivors: 1,
+        quiescent: false,
+        signalAttempts: 6,
+        waitedMs: 40,
+      },
+    });
+    expect(result.error).toContain('inherited-marker process tree remained alive');
+    expect(markerSignals).toEqual([
+      'SIGTERM',
+      'SIGTERM',
+      'SIGTERM',
+      'SIGKILL',
+      'SIGKILL',
+      'SIGKILL',
+    ]);
+  });
+
   it('fails closed with process-group and strict-port diagnostics when teardown leaks', async () => {
     const clock = fakeLifecycleClock();
     const probedOrigins = [];
     const result = await stopDevProcessTree(
-      { origin: 'http://localhost:49120', pid: 3456 },
+      {
+        marker: 'KOVO_PERF_DEV_SESSION_TEST_LEAK',
+        origin: 'http://localhost:49120',
+        pid: 3456,
+      },
       {
         ...clock,
         forceTimeoutMs: 20,
@@ -640,6 +757,7 @@ describe('single-entrant developer-loop adapter', () => {
         portStabilityWindowMs: 10,
         portTimeoutMs: 20,
         processGroupAlive: async () => true,
+        signalMarkedProcesses: emptyMarkedProcessCensus,
         terminateProcessGroup: () => undefined,
       },
     );
@@ -894,6 +1012,14 @@ function dualStackPortObservation({
     addresses,
     available: supported.length > 0 && supported.every((address) => address.available),
   };
+}
+
+async function emptyMarkedProcessCensus() {
+  return { observed: [], signaled: [] };
+}
+
+function markedProcess(pid) {
+  return { pgid: pid + 1, pid, ppid: 1, state: 'S' };
 }
 
 class FakePage {

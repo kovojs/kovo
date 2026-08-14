@@ -20,6 +20,11 @@ import {
   DEV_EDIT_PROFILE_CLASSIFIER,
   DEV_EDIT_PROFILE_SCHEMA,
 } from '../../scripts/perf-dev-edit-profile.mjs';
+import {
+  createDevProcessMarker,
+  markedDevProcessEnvironment,
+  signalMarkedDevProcesses,
+} from './dev-process-marker.mjs';
 import { CORPUS_SCHEMA, EDIT_REFRESH_SURFACES, EDIT_STATE_POSTURE } from './generate.mjs';
 
 export const DEV_LOOP_REPORT_SCHEMA = 'kovo-dev-loop-report/v1';
@@ -985,17 +990,21 @@ function sanitizeBrowserUrl(value, expectedOrigin) {
 
 function startDevSession({ appRoot, command, inspectorPort = null, spawnProcess }) {
   const invocation = profiledDevInvocation(command, inspectorPort);
+  const processMarker = createDevProcessMarker();
   const child = spawnProcess(invocation.executable, invocation.argv, {
     cwd: command.cwd,
     detached: process.platform !== 'win32',
-    env: {
-      ...process.env,
-      ...command.env,
-      ...invocation.env,
-      FORCE_COLOR: '0',
-      NEXT_TELEMETRY_DISABLED: '1',
-      NO_COLOR: '1',
-    },
+    env: markedDevProcessEnvironment(
+      {
+        ...process.env,
+        ...command.env,
+        ...invocation.env,
+        FORCE_COLOR: '0',
+        NEXT_TELEMETRY_DISABLED: '1',
+        NO_COLOR: '1',
+      },
+      processMarker,
+    ),
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   if (!Number.isSafeInteger(child.pid) || child.pid <= 0) {
@@ -1038,9 +1047,11 @@ function startDevSession({ appRoot, command, inspectorPort = null, spawnProcess 
     logTail: () => tail.slice(-8_192),
     pid: child.pid,
     async stop() {
-      stopPromise ??= stopDevProcessTree({ origin: command.origin, pid: child.pid }).catch(
-        (error) => failedDevSessionStop(command.origin, child.pid, error),
-      );
+      stopPromise ??= stopDevProcessTree({
+        marker: processMarker,
+        origin: command.origin,
+        pid: child.pid,
+      }).catch((error) => failedDevSessionStop(command.origin, child.pid, error));
       return stopPromise;
     },
   };
@@ -1051,14 +1062,18 @@ function startDevSession({ appRoot, command, inspectorPort = null, spawnProcess 
  * remains bindable for a bounded stability window. A launcher exit is insufficient: its
  * descendants may still own or late-rebind the listening socket.
  */
-export async function stopDevProcessTree({ origin, pid }, dependencies = {}) {
+export async function stopDevProcessTree({ marker, origin, pid }, dependencies = {}) {
   boundedInteger(pid, 1, Number.MAX_SAFE_INTEGER, 'dev process PID');
+  if (typeof marker !== 'string' || !marker.startsWith('KOVO_PERF_DEV_SESSION_')) {
+    throw new TypeError('dev process teardown requires its inherited process marker');
+  }
   const canonicalOrigin = new URL(requiredString(origin, 'dev origin')).origin;
   const now = dependencies.now ?? (() => performance.now());
   const pause = dependencies.delay ?? delay;
   const terminate = dependencies.terminateProcessGroup ?? terminateProcessGroup;
   const processGroupAlive = dependencies.processGroupAlive ?? isProcessGroupAlive;
   const portAvailability = dependencies.portAvailability ?? probeOriginPortAvailability;
+  const signalMarkedProcesses = dependencies.signalMarkedProcesses ?? signalMarkedDevProcesses;
   const gracefulTimeoutMs = dependencies.gracefulTimeoutMs ?? DEV_PROCESS_GRACEFUL_STOP_TIMEOUT_MS;
   const forceTimeoutMs = dependencies.forceTimeoutMs ?? DEV_PROCESS_FORCE_STOP_TIMEOUT_MS;
   const portTimeoutMs = dependencies.portTimeoutMs ?? DEV_PORT_RELEASE_TIMEOUT_MS;
@@ -1114,6 +1129,45 @@ export async function stopDevProcessTree({ origin, pid }, dependencies = {}) {
     errors.push(`dev process group ${String(pid)} teardown failed: ${errorMessage(error)}`);
   }
 
+  let ownedProcesses = {
+    checks: 0,
+    maxSurvivors: 0,
+    quiescent: false,
+    signalAttempts: 0,
+    waitedMs: 0,
+  };
+  try {
+    const graceful = await waitForMarkedDevProcessQuiescence({
+      marker,
+      now,
+      pause,
+      pollIntervalMs,
+      signal: 'SIGTERM',
+      signalMarkedProcesses,
+      timeoutMs: gracefulTimeoutMs,
+    });
+    ownedProcesses = mergeMarkedDevProcessEvidence(ownedProcesses, graceful);
+    if (!ownedProcesses.quiescent) {
+      const forced = await waitForMarkedDevProcessQuiescence({
+        marker,
+        now,
+        pause,
+        pollIntervalMs,
+        signal: 'SIGKILL',
+        signalMarkedProcesses,
+        timeoutMs: forceTimeoutMs,
+      });
+      ownedProcesses = mergeMarkedDevProcessEvidence(ownedProcesses, forced);
+    }
+    if (!ownedProcesses.quiescent) {
+      errors.push(
+        `dev inherited-marker process tree remained alive after SIGTERM and SIGKILL (${String(ownedProcesses.waitedMs)}ms)`,
+      );
+    }
+  } catch (error) {
+    errors.push(`dev inherited-marker process-tree census failed: ${errorMessage(error)}`);
+  }
+
   let port = emptyPortStabilityEvidence(portStabilityWindowMs);
   try {
     port = await waitForStablePortAvailability({
@@ -1139,6 +1193,7 @@ export async function stopDevProcessTree({ origin, pid }, dependencies = {}) {
     error: errors.length === 0 ? null : errors.join('; '),
     origin: canonicalOrigin,
     pid,
+    ownedProcesses,
     port: {
       addresses: port.addresses,
       available: port.satisfied,
@@ -1317,6 +1372,13 @@ function failedDevSessionStop(origin, pid, error) {
     error: message,
     origin,
     pid,
+    ownedProcesses: {
+      checks: 0,
+      maxSurvivors: 0,
+      quiescent: false,
+      signalAttempts: 0,
+      waitedMs: 0,
+    },
     port: {
       addresses: [],
       available: false,
@@ -1330,6 +1392,46 @@ function failedDevSessionStop(origin, pid, error) {
     processGroup: { checks: 0, quiescent: false, waitedMs: 0 },
     schema: DEV_SESSION_STOP_SCHEMA,
     signals: [],
+  };
+}
+
+async function waitForMarkedDevProcessQuiescence({
+  marker,
+  now,
+  pause,
+  pollIntervalMs,
+  signal,
+  signalMarkedProcesses,
+  timeoutMs,
+}) {
+  let maxSurvivors = 0;
+  let signalAttempts = 0;
+  const result = await waitForLifecycleCondition({
+    check: async () => {
+      const observation = await signalMarkedProcesses(marker, signal);
+      if (!Array.isArray(observation?.observed) || !Array.isArray(observation?.signaled)) {
+        throw new TypeError('dev inherited-marker census returned invalid evidence');
+      }
+      maxSurvivors = Math.max(maxSurvivors, observation.observed.length);
+      signalAttempts += observation.signaled.length;
+      return observation.observed.length === 0;
+    },
+    consecutiveSuccesses: 2,
+    now,
+    pause,
+    pollIntervalMs,
+    timeoutMs,
+  });
+  return { ...result, maxSurvivors, signalAttempts };
+}
+
+function mergeMarkedDevProcessEvidence(previous, current) {
+  return {
+    checks: previous.checks + current.checks,
+    maxSurvivors: Math.max(previous.maxSurvivors, current.maxSurvivors),
+    quiescent: current.satisfied,
+    signalAttempts: previous.signalAttempts + current.signalAttempts,
+    waitedMs: previous.waitedMs + current.waitedMs,
   };
 }
 
