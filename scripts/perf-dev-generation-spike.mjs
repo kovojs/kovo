@@ -12,8 +12,10 @@ import { createHash } from 'node:crypto';
 import {
   closeSync,
   lstatSync,
+  mkdirSync,
   mkdtempSync,
   openSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -46,6 +48,7 @@ const CORPUS_SCHEMA = 'kovo-dev-corpus/v1';
 const DEFAULT_BOOTSTRAP_ITERATIONS = 10_000;
 const DEFAULT_EDIT_SAMPLES = 30;
 const DEFAULT_READY_SAMPLES = 15;
+const DEFAULT_READY_TIMEOUT_MS = 10 * 60 * 1_000;
 const DEFAULT_WARMUPS = 3;
 const EDIT_CLASSES = Object.freeze(['leaf', 'entry', 'data', 'syntaxError', 'recovery']);
 const LOCK_FILES = Object.freeze([
@@ -527,7 +530,10 @@ export async function runDevGenerationSpike(options = {}, dependencies = {}) {
   const hostSamples = [];
   const cells = [];
   const errors = [];
-  const scratch = mkdtempSync(path.join(os.tmpdir(), 'kovo-dev-generation-ab-'));
+  const ephemeralScratch = policy.adapterEvidenceRoot === null;
+  const scratch = ephemeralScratch
+    ? mkdtempSync(path.join(os.tmpdir(), 'kovo-dev-generation-ab-'))
+    : prepareAdapterEvidenceRoot(policy.adapterEvidenceRoot);
   try {
     const schedule = devGenerationSchedule(policy);
     const initialHost = sampleHost('pre-timing', policy.maxLoadPerCpu);
@@ -577,6 +583,7 @@ export async function runDevGenerationSpike(options = {}, dependencies = {}) {
             outPath: resultFile,
             port,
             readySamples: scheduled.readySamples,
+            readyTimeoutMs: policy.readyTimeoutMs,
             root,
             timeoutMs: policy.timeoutMs,
             warmups: scheduled.warmups,
@@ -669,7 +676,7 @@ export async function runDevGenerationSpike(options = {}, dependencies = {}) {
       },
     };
   } finally {
-    rmSync(scratch, { force: true, recursive: true });
+    if (ephemeralScratch) rmSync(scratch, { force: true, recursive: true });
   }
 }
 
@@ -685,6 +692,7 @@ export function parseDevGenerationSpikeArgs(argv) {
     '--out',
     '--port-base',
     '--ready-samples',
+    '--ready-timeout-ms',
     '--seed',
     '--size',
     '--spike-root',
@@ -860,12 +868,15 @@ function preparationEvidence(prepared) {
 
 function reportPolicy(policy) {
   return {
+    adapterTimeoutMs: policy.timeoutMs,
     bootstrapIterations: policy.bootstrapIterations,
     editSamplesPerLane: policy.editSamples,
     maxLoadPerCpu: policy.maxLoadPerCpu,
     order: [...SCHEDULE_LANES],
     portBase: policy.portBase,
     readySamplesPerLane: policy.readySamples,
+    readyTimeoutMs: policy.readyTimeoutMs,
+    rawAdapterEvidence: policy.adapterEvidenceRoot === null ? 'ephemeral' : '<out-dir>/raw',
     size: policy.size,
     timingAuthorization: policy.prepareOnly ? 'prepare-only' : 'explicit-measure',
     timingLock: '<os-temp>/kovo-performance-timing.lock',
@@ -885,7 +896,9 @@ function normalizeOptions(options) {
   const size = Number(options.size ?? 24);
   if (!SUPPORTED_SIZES.includes(size)) throw new TypeError('--size must be 24 or 216');
   const portBase = boundedInteger(options.portBase ?? 49_750, 1_024, 65_532, '--port-base');
+  const outPath = options.out === undefined ? null : path.resolve(options.out);
   return {
+    adapterEvidenceRoot: outPath === null ? null : path.join(path.dirname(outPath), 'raw'),
     baselineRoot,
     bootstrapIterations: boundedInteger(
       options.bootstrapIterations ?? (quick ? 500 : DEFAULT_BOOTSTRAP_ITERATIONS),
@@ -915,6 +928,12 @@ function normalizeOptions(options) {
       100,
       '--ready-samples',
     ),
+    readyTimeoutMs: boundedInteger(
+      options.readyTimeoutMs ?? DEFAULT_READY_TIMEOUT_MS,
+      1_000,
+      30 * 60 * 1_000,
+      '--ready-timeout-ms',
+    ),
     seed: boundedInteger(options.seed ?? 1, 0, 0xffff_ffff, '--seed'),
     size,
     spikeRoot,
@@ -942,6 +961,8 @@ async function runDevLoopAdapter(options) {
       String(options.editSamples),
       '--ready-iterations',
       String(options.readySamples),
+      '--ready-timeout-ms',
+      String(options.readyTimeoutMs),
       '--warmups',
       String(options.warmups),
       '--port',
@@ -958,21 +979,81 @@ async function runDevLoopAdapter(options) {
       timeout: options.timeoutMs,
     },
   );
+  const adapterEvidence = readAdapterEvidence(options.outPath);
   if (result.error || result.signal || result.status !== 0) {
     const output = `${String(result.stdout ?? '')}\n${String(result.stderr ?? '')}`.trim();
     throw new Error(
       `dev-loop adapter failed: ${boundedDiagnostic(
-        result.error?.message ||
-          output ||
-          `exit ${String(result.status)} signal ${String(result.signal)}`,
+        [
+          adapterProcessExit(result),
+          adapterEvidence.failureDiagnostic,
+          result.error?.message,
+          output,
+        ]
+          .filter(nonEmptyString)
+          .join('; '),
       )}`,
     );
   }
-  const bytes = readFileSync(options.outPath);
-  if (bytes.byteLength === 0 || bytes.byteLength > MAX_REPORT_BYTES) {
-    throw new Error('dev-loop adapter report is empty or exceeds its evidence bound');
+  if (adapterEvidence.error !== null) throw new Error(adapterEvidence.error);
+  return adapterEvidence.report;
+}
+
+function prepareAdapterEvidenceRoot(root) {
+  mkdirSync(root, { mode: 0o700, recursive: true });
+  const stat = lstatSync(root);
+  if (!stat.isDirectory() || stat.isSymbolicLink()) {
+    throw new TypeError('raw adapter evidence root must be a non-symlink directory');
   }
-  return JSON.parse(bytes.toString('utf8'));
+  if (readdirSync(root).length > 0) {
+    throw new Error('raw adapter evidence root must be empty before measurement');
+  }
+  return realpathSync(root);
+}
+
+function readAdapterEvidence(outPath) {
+  let bytes;
+  try {
+    bytes = readFileSync(outPath);
+  } catch (error) {
+    const message = `dev-loop adapter report is unavailable: ${errorMessage(error)}`;
+    return { error: message, failureDiagnostic: message, report: null };
+  }
+  if (bytes.byteLength === 0 || bytes.byteLength > MAX_REPORT_BYTES) {
+    const message = 'dev-loop adapter report is empty or exceeds its evidence bound';
+    return { error: message, failureDiagnostic: message, report: null };
+  }
+  let report;
+  try {
+    report = JSON.parse(bytes.toString('utf8'));
+  } catch (error) {
+    const message = `dev-loop adapter report is invalid JSON: ${errorMessage(error)}`;
+    return { error: message, failureDiagnostic: message, report: null };
+  }
+  return {
+    error: null,
+    failureDiagnostic: JSON.stringify(summarizeFailedAdapterReport(report, bytes)),
+    report,
+  };
+}
+
+export function summarizeFailedAdapterReport(report, bytes) {
+  return {
+    editSessionError: report?.editSession?.error ?? null,
+    integrityErrors: (report?.integrity?.errors ?? []).slice(0, 12),
+    readyFailures: (report?.readySamples ?? [])
+      .filter((sample) => sample?.success !== true)
+      .slice(0, 12)
+      .map((sample) => ({ error: sample?.error ?? null, iteration: sample?.iteration ?? null })),
+    reportBytes: bytes.byteLength,
+    reportSha256: sha256(bytes),
+    schema: report?.schema ?? null,
+    verdict: report?.verdict?.status ?? null,
+  };
+}
+
+function adapterProcessExit(result) {
+  return `exit ${String(result.status)} signal ${String(result.signal)}`;
 }
 
 function collectWorktreeState(root) {

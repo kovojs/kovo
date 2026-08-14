@@ -13,6 +13,7 @@ import {
   pairedBootstrapImprovementCi,
   parseDevGenerationSpikeArgs,
   runDevGenerationSpike,
+  summarizeFailedAdapterReport,
   summarizeDevMetric,
   validateDevGenerationCell,
 } from './perf-dev-generation-spike.mjs';
@@ -75,6 +76,34 @@ describe('dev-generation candidate comparator', () => {
       pairedBootstrapImprovementCi([100, 100, 100], [75, 75, 75], { iterations: 500 }),
     ).toEqual([25, 25]);
     expect(() => pairedBootstrapImprovementCi([1], [1, 2])).toThrow(/identical sample counts/u);
+  });
+
+  it('retains bounded child-report diagnostics when an adapter exits nonzero', () => {
+    const errors = Array.from({ length: 14 }, (_, index) => `failure-${String(index)}`);
+    const bytes = Buffer.from('{"authenticated":"raw-child-report"}');
+    expect(
+      summarizeFailedAdapterReport(
+        {
+          editSession: { error: 'edit session failed' },
+          integrity: { errors },
+          readySamples: [
+            { error: 'ready timed out', iteration: 0, success: false },
+            { error: null, iteration: 1, success: true },
+          ],
+          schema: 'kovo-dev-loop-report/v1',
+          verdict: { status: 'unproven' },
+        },
+        bytes,
+      ),
+    ).toEqual({
+      editSessionError: 'edit session failed',
+      integrityErrors: errors.slice(0, 12),
+      readyFailures: [{ error: 'ready timed out', iteration: 0 }],
+      reportBytes: bytes.byteLength,
+      reportSha256: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
+      schema: 'kovo-dev-loop-report/v1',
+      verdict: 'unproven',
+    });
   });
 
   it('authenticates an exact clean one-commit historical patch binding', () => {
@@ -263,7 +292,12 @@ describe('dev-generation candidate comparator', () => {
         prepare: async () => prepared,
         runAdapter: async (options) => {
           const lane = options.root === baselineRoot ? 'baseline' : 'spike';
-          calls.push({ lane, port: options.port });
+          calls.push({
+            lane,
+            port: options.port,
+            readyTimeoutMs: options.readyTimeoutMs,
+            timeoutMs: options.timeoutMs,
+          });
           const state = prepared.source.before[lane];
           return fakeAdapterReport({
             commit: state.commit,
@@ -291,10 +325,10 @@ describe('dev-generation candidate comparator', () => {
     );
 
     expect(calls).toEqual([
-      { lane: 'baseline', port: 49_750 },
-      { lane: 'spike', port: 49_751 },
-      { lane: 'spike', port: 49_752 },
-      { lane: 'baseline', port: 49_753 },
+      { lane: 'baseline', port: 49_750, readyTimeoutMs: 600_000, timeoutMs: 1_800_000 },
+      { lane: 'spike', port: 49_751, readyTimeoutMs: 600_000, timeoutMs: 1_800_000 },
+      { lane: 'spike', port: 49_752, readyTimeoutMs: 600_000, timeoutMs: 1_800_000 },
+      { lane: 'baseline', port: 49_753, readyTimeoutMs: 600_000, timeoutMs: 1_800_000 },
     ]);
     expect(released).toBe(true);
     expect(report.integrity).toMatchObject({
@@ -337,9 +371,13 @@ describe('dev-generation candidate comparator', () => {
         spikeRoot,
         '--size',
         '216',
+        '--ready-timeout-ms',
+        '600000',
+        '--timeout-ms',
+        '3600000',
         '--measure',
       ]),
-    ).toMatchObject({ measure: true, size: 216 });
+    ).toMatchObject({ measure: true, readyTimeoutMs: 600_000, size: 216, timeoutMs: 3_600_000 });
   });
 
   it('refuses a loaded host before taking the timing lock or launching an adapter', async () => {

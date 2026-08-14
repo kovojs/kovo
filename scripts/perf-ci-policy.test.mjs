@@ -308,8 +308,10 @@ describe('realistic performance CI policy', () => {
     for (const token of [
       '--size "$KOVO_PERF_CORPUS_SIZE"',
       '--ready-samples 15',
+      '--ready-timeout-ms 600000',
       '--edit-samples 30',
       '--warmups 3',
+      '--timeout-ms 3600000',
       '--measure',
     ]) {
       expect(source).toContain(token);
