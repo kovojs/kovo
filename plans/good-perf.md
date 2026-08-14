@@ -106,13 +106,18 @@ scripts/perf-gate.test.mjs --reporter=dot` passed 63/63, syntax checks passed, a
       approximate LOC, import fan-out, and leaf/entry/data edits.
   - Evidence: `pnpm exec vitest --run benchmarks/corpora/generate.test.mjs
 benchmarks/matched-fixtures.test.mjs --reporter=dot` passed 8/8 for both corpus sizes.
-- [ ] Implement `benchmarks/compare.mjs` as the single serialized orchestrator for browser, dev,
+- [x] Implement `benchmarks/compare.mjs` as the single serialized orchestrator for browser, dev,
       build, and server cells; include alternating order, warmups, sample policy, per-cell provenance,
       and paired analysis.
-- [ ] Replace the mixed navigation clock with trace-based destination-paint evidence that uses the
+  - Evidence: `5cd4df9cb`; `pnpm exec vitest --run benchmarks/compare.test.mjs
+benchmarks/harness/{report,run,scenarios}.test.mjs --reporter=dot` passed 41/41.
+- [x] Replace the mixed navigation clock with trace-based destination-paint evidence that uses the
       same observation boundary for document-replacing and same-document paths.
-- [ ] Record total session bytes through destination paint, separating initial, automatic prefetch,
+  - Evidence: `55299dcc8`; the same 41-test harness gate covers trace-window validation and refuses
+    missing destination paint.
+- [x] Record total session bytes through destination paint, separating initial, automatic prefetch,
       click, and post-click transfer so a zero-byte click cannot hide prefetch cost.
+  - Evidence: `a6fba38df`; the harness gate covers phase totals and authenticated pre-click bytes.
 - [ ] Produce the first clean publishable default and matched baselines with 30 browser samples,
       5 Lighthouse runs per cell, and 10 bfcache traversals.
 
@@ -127,6 +132,9 @@ benchmarks/matched-fixtures.test.mjs --reporter=dot` passed 8/8 for both corpus 
 - [ ] Profile exact edit-to-paint windows after the matched baseline and rank self time, allocation,
       module evaluation, Vite transform, SSR generation, and asynchronous proof convergence. Retire any
       hypothesis not present in the current top five.
+  - Evidence: `7f306a501`; `pnpm exec vitest --run scripts/perf-dev-edit-profile.test.mjs
+benchmarks/corpora/dev-loop.test.mjs --reporter=dot` passed 39/39. Current-head N=24/N=216
+    diagnostic artifacts remain pending and own the ranking.
 - [ ] Spike authenticated in-session closure reuse for `kovo check --watch` by exposing serializable
       producer seams for trust/static/style facts in `build-export.ts`.
   - SPEC §11.4 constraints: always freshly evaluate app modules and rebuild runtime/app objects;
@@ -134,8 +142,12 @@ benchmarks/matched-fixtures.test.mjs --reporter=dot` passed 8/8 for both corpus 
     ambiguity executes the full producer.
 - [ ] Spike a TypeScript semantic `BuilderProgram` plus changed-file/reverse-dependent analysis for
       the watch session, with exact source/config/package/version digests in every reused fact.
-- [ ] Measure packed CLI versus source-checkout CLI startup. If packed users are already fast, treat
+- [x] Measure packed CLI versus source-checkout CLI startup. If packed users are already fast, treat
       source transformation/prebuilt CLI work as maintainer performance rather than product DevEx.
+  - Evidence: [run `31753246698`, artifact
+    `9201780300`](https://github.com/kovojs/kovo/actions/runs/31753246698/artifacts/9201780300):
+    15 samples/lane plus three warmups, packed median/p95 46.57/58.40 ms versus source
+    114.20/124.26 ms; packed p95 passed the preregistered 1,000 ms product ceiling.
 - [ ] Add browser-visible dev budgets for leaf/entry edit-to-paint, diagnostic, recovery, miss rate,
       state preservation, ready time, and process-tree RSS at both workload sizes.
 
@@ -143,10 +155,14 @@ benchmarks/matched-fixtures.test.mjs --reporter=dot` passed 8/8 for both corpus 
 
 - [ ] Establish 10-sample clean, unchanged, and one-line-edit build baselines on equal-shape N=24
       and N=216 corpora, with phase census, artifact bytes, and peak process-tree RSS.
-- [ ] Carry the complete source-check phase census into paired build reports and account for the
+- [x] Carry the complete source-check phase census into paired build reports and account for the
       currently unattributed CLI/startup tail before changing implementation.
-- [ ] Remove duplicated one-shot work only when the source-proof and deploy-proof boundaries remain
+  - Evidence: `f73738975`; `scripts/perf-build-benchmark.mjs` validates the exact source/worker
+    phase sequence and derives the CLI residual from the authenticated wall-time envelope.
+- [x] Remove duplicated one-shot work only when the source-proof and deploy-proof boundaries remain
       explicit (SPEC §5.2 rule 9); preserve sequential heap isolation between analyzer phases.
+  - Evidence: `f73738975`; focused build/finalization, server build, packed-preset, and phase-census
+    tests passed and retain separate source-proof/deploy-proof workers with sequential boundaries.
 - [ ] Design a persistent foreground build/watch session if warm cross-invocation reuse is still
       required. Do not reintroduce the retired unauthenticated on-disk compiler cache.
 - [ ] Gate build wall, p95, RSS, and artifact size on the realistic corpus; reach the first milestone
@@ -163,8 +179,12 @@ benchmarks/matched-fixtures.test.mjs --reporter=dot` passed 8/8 for both corpus 
 - [ ] Run the matched L0/L1 browser matrix before changing navigation or runtime emission. Preserve
       inert documents at zero JS; the deterministic spike found the ordinary deferred runtime at
       49,236 B Brotli and the enhanced-navigation closure alone at 22,642 B Brotli.
+  - Evidence: `node benchmarks/matched-fixture-gate.mjs` passed before runtime candidates were
+    integrated and proved the matched L0 document carries zero script/action capability.
 - [ ] Profile matched L1 mobile navigation from click through destination paint. Attribute server,
       transfer, document-parts decode/build, morph, style, layout, and paint separately.
+  - Evidence: `55299dcc8`; the trace schema now reports server, transfer, response processing,
+    document-parts decode/build, DOM apply, style/layout, and destination paint with one boundary.
 - [ ] Revisit opt-in Speculation Rules only after repairing the rejected spike's compiler/runtime
       pattern disagreement and fail-open page indirection. `spec/07-navigation.md` default-off remains
       normative until a SPEC change is reviewed; never merge the historical branch as-is.
@@ -177,23 +197,33 @@ benchmarks/matched-fixtures.test.mjs --reporter=dot` passed 8/8 for both corpus 
 - [ ] Measure the compressed-cache spike in seven alternating 15-second samples after 5-second
       warmups at c={1,8,32}, routes={listing,detail}, encodings={identity,br}, and modes={HIT,304,dynamic};
       report req/s, p50/p95/p99, CPU, and RSS with the validated repo generator.
-- [ ] Measure per-route stylesheet splitting on the matched multi-route fixtures; implement only if
+- [x] Measure per-route stylesheet splitting on the matched multi-route fixtures; implement only if
       it saves at least 10% route critical-path bytes without duplicating enough shared CSS to regress
       total session bytes.
-- [ ] Profile current forced-dynamic SSR before proposing hot-path work. The 2026-08-08 profile
+  - Evidence: `402b0138b`; authenticated counterfactual rejected splitting: listing/detail Brotli
+    regressed 2.83%/1.60% and the full session regressed 24.62%, so production remains unsplit.
+- [x] Profile current forced-dynamic SSR before proposing hot-path work. The 2026-08-08 profile
       refuted JSX lowering, HKDF/HMAC, request proxy, head serialization, CSP rescan, and the claimed
       38% `Reflect.apply` opportunity; do not revive them without current contradictory evidence.
+  - Evidence: [run `31753234275`, artifact
+    `9201789476`](https://github.com/kovojs/kovo/actions/runs/31753234275/artifacts/9201789476):
+    clean 15-second c=32 profile attributed 52.74% to generated server work and 22.23% to form
+    property snapshotting; all five retired hypotheses remained outside the current top five.
 
 ## Phase 4 — continuous budgets and publication
 
-- [ ] Run deterministic bytes and a short correctness smoke per PR; schedule N=216 check scaling,
+- [x] Run deterministic bytes and a short correctness smoke per PR; schedule N=216 check scaling,
       matched dev edits, browser cells, builds, and throughput on a quiet pinned nightly runner.
+  - Evidence: `faf00c5de`; `pnpm exec vitest --run scripts/perf-ci-policy.test.mjs
+--reporter=dot` passed and proves PR smoke plus labeled/scheduled realistic matrices.
 - [ ] Store raw reports as CI artifacts and commit only a clean reviewed baseline summary. A dirty,
       null, load-shed, wrong-posture, or integrity-failed run cannot update budgets.
 - [ ] Ratify budgets from at least five independent baseline runs on the pinned runner using median,
       MAD, p95, and the acceptance rules above; replace rationale-only sample arrays with linked reports.
-- [ ] Add a regression comparator that requires matching source/lock/workload identities and reports
+- [x] Add a regression comparator that requires matching source/lock/workload identities and reports
       `unproven` rather than pass when load, sample count, or identity is outside policy.
+  - Evidence: `faf00c5de`, `49f83a2a9`, `3aabc77ae`; comparator/ratifier tests passed 26/26 and
+    reject dirty, short, busy, duplicate-execution, or identity-mismatched evidence.
 - [ ] Publish Kovo-vs-Next claims only after both default and capability-matched lanes pass; describe
       architectural differences beside the numbers and link the exact report and fixture sources.
 
@@ -218,5 +248,10 @@ benchmarks/matched-fixtures.test.mjs --reporter=dot` passed 8/8 for both corpus 
 - `node --check benchmarks/run-all.mjs && node --check scripts/perf-gate.mjs && node --check
 scripts/lib/perf-provenance.mjs` — passed.
 - `node scripts/perf-gate.mjs --evaluate /tmp/kovo-perf-bytes-20260813.json` — 5/5 byte gates passed.
+- `pnpm exec vitest --run benchmarks/compare.test.mjs benchmarks/harness/{report,run,scenarios}.test.mjs
+scripts/perf-{baseline-ratify,regression-check,ci-policy}.test.mjs --reporter=dot` — 67 passed.
+- `pnpm exec vitest --run packages/server/src/{mutation-wire,vite-dev,vite-hmr-client-security,
+vite-dev-intrinsics,vite-dev-middleware,vite}.test.ts --reporter=dot` — 102 passed; generated-app
+  replay without `KOVO_LIVE_TARGET_SECRET` returned HMR 200 and preserved component/navigation state.
 - Browser run integrity: zero page errors, zero rate limits, zero null Lighthouse samples, and HTTP
   statuses observed for every probe; two browser-originated favicon 404s were separately disclosed.
