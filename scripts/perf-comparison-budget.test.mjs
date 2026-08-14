@@ -1,4 +1,9 @@
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
@@ -93,6 +98,124 @@ describe('browser/server comparison budgets', () => {
       'does not match its ratified content/link identity',
     );
   });
+
+  it('refuses shortened browser evidence and a partial server matrix', () => {
+    const browserEntries = Array.from({ length: 5 }, (_, index) => reportEntry(index, 'browser'));
+    for (const entry of browserEntries) {
+      entry.report.workloadIdentity.identity.policies.skipLighthouse = true;
+      refreshEntry(entry);
+    }
+    const browserBaseline = ratifyPerformanceBaseline(browserEntries);
+    expect(browserBaseline.verdict.status).toBe('ratified');
+    expect(() =>
+      deriveComparisonPerformanceBudget(browserBaseline, { baselineEntries: browserEntries }),
+    ).toThrow(/browser workload is not 30 samples, 5 Lighthouse runs, 10 bfcache traversals/u);
+
+    const missingBfcache = Array.from({ length: 5 }, (_, index) => reportEntry(index, 'browser'));
+    for (const entry of missingBfcache) {
+      delete entry.report.analysis['matched-l0/browser//bfcache.evidenceComplete'];
+      refreshEntry(entry);
+    }
+    const missingBaseline = ratifyPerformanceBaseline(missingBfcache);
+    expect(missingBaseline.verdict.status).toBe('ratified');
+    expect(() =>
+      deriveComparisonPerformanceBudget(missingBaseline, { baselineEntries: missingBfcache }),
+    ).toThrow(/matched-l0\/browser\/\/bfcache\.evidenceComplete is unavailable/u);
+
+    const serverEntries = Array.from({ length: 5 }, (_, index) => reportEntry(index, 'server'));
+    for (const entry of serverEntries) {
+      entry.report.workloadIdentity.identity.policies.server.routes = ['listing'];
+      refreshEntry(entry);
+    }
+    const serverBaseline = ratifyPerformanceBaseline(serverEntries);
+    expect(serverBaseline.verdict.status).toBe('ratified');
+    expect(() =>
+      deriveComparisonPerformanceBudget(serverBaseline, { baselineEntries: serverEntries }),
+    ).toThrow(
+      /server workload is not the full 7-sample route\/encoding\/mode\/concurrency matrix/u,
+    );
+  });
+
+  it.each(['browser', 'server'])(
+    'executes the documented %s ratify and derive commands against five Actions runs',
+    (subject) => {
+      const root = mkdtempSync(path.join(os.tmpdir(), `kovo-${subject}-publication-cli-`));
+      try {
+        const entries = Array.from({ length: 5 }, (_, index) => reportEntry(index, subject));
+        const reportPaths = entries.map((entry, index) => {
+          const reportPath = path.join(root, `run-${String(index)}-comparison.json`);
+          writeFileSync(reportPath, entry.rawText);
+          return reportPath;
+        });
+        const baselinePath = path.join(root, `${subject}-baseline.json`);
+        const budgetPath = path.join(root, `${subject}-budget.json`);
+        const markdownPath = path.join(root, `${subject}-baseline.md`);
+        const ratifier = fileURLToPath(new URL('./perf-baseline-ratify.mjs', import.meta.url));
+        const ratification = spawnSync(
+          process.execPath,
+          [
+            ratifier,
+            ...reportPaths.flatMap((reportPath, index) => [
+              '--report',
+              reportPath,
+              '--location',
+              entries[index].location,
+            ]),
+            '--out',
+            baselinePath,
+          ],
+          { encoding: 'utf8' },
+        );
+        expect(ratification).toMatchObject({ status: 0, stderr: '' });
+        const baseline = JSON.parse(readFileSync(baselinePath, 'utf8'));
+        expect(new Set(baseline.reports.map(({ runUrl }) => runUrl)).size).toBe(5);
+        expect(baseline.identity).toMatchObject({
+          host: entries[0].report.host.digest,
+          locks: entries[0].report.source.locks,
+          source: entries[0].report.source.commit,
+          workload: entries[0].report.workloadIdentity.digest,
+        });
+
+        const derivation = spawnSync(
+          process.execPath,
+          [
+            fileURLToPath(new URL('./perf-comparison-budget.mjs', import.meta.url)),
+            'derive',
+            '--baseline',
+            baselinePath,
+            ...reportPaths.flatMap((reportPath) => ['--report', reportPath]),
+            '--out',
+            budgetPath,
+            '--markdown-out',
+            markdownPath,
+          ],
+          { encoding: 'utf8' },
+        );
+        expect(derivation).toMatchObject({ status: 0, stderr: '' });
+        expect(JSON.parse(readFileSync(budgetPath, 'utf8')).subject.kind).toBe(subject);
+        expect(readFileSync(markdownPath, 'utf8')).toContain(entries[0].location);
+
+        writeFileSync(reportPaths[0], `${entries[0].rawText} `);
+        const hostile = spawnSync(
+          process.execPath,
+          [
+            fileURLToPath(new URL('./perf-comparison-budget.mjs', import.meta.url)),
+            'derive',
+            '--baseline',
+            baselinePath,
+            ...reportPaths.flatMap((reportPath) => ['--report', reportPath]),
+            '--out',
+            budgetPath,
+          ],
+          { encoding: 'utf8' },
+        );
+        expect(hostile.status).toBe(2);
+        expect(hostile.stderr).toContain('does not match its ratified content/link identity');
+      } finally {
+        rmSync(root, { force: true, recursive: true });
+      }
+    },
+  );
 });
 
 function reportEntry(index, subject) {
@@ -127,7 +250,9 @@ function reportEntry(index, subject) {
           devEditSamples: 30,
           devReadySamples: 15,
           lighthouseRuns: 5,
-          server: { samples: 7 },
+          server: serverPolicy(),
+          skipLighthouse: false,
+          warmups: 3,
         }
       : {
           bfcacheIterations: 10,
@@ -137,7 +262,9 @@ function reportEntry(index, subject) {
           devEditSamples: 30,
           devReadySamples: 15,
           lighthouseRuns: 5,
-          server: { samples: 7 },
+          server: serverPolicy(),
+          skipLighthouse: false,
+          warmups: 3,
         };
   const workloadFacts = {
     adapters: { compare: 'kovo-next-performance-comparison/v1' },
@@ -165,14 +292,7 @@ function reportEntry(index, subject) {
   };
   const analysis =
     subject === 'browser'
-      ? {
-          'matched-l1/browser//bfcache.applicable': booleanMetric(0, 1, 10),
-          'matched-l1/browser//bfcache.evidenceComplete': booleanMetric(1, 1, 10),
-          'matched-l1/browser//bfcache.restored': booleanMetric(1, 0, 10),
-          'matched-l1/browser//lighthouse.mobile.listing.lcpMs': metric(200 + index, 300, 5),
-          'matched-l1/browser//lighthouse.mobile.listing.performanceScore': metric(0.9, 0.8, 5),
-          'matched-l1/browser//mobile.navigation.navToPaintMs': metric(100 + index, 120, 30),
-        }
+      ? browserAnalysis(index)
       : {
           'matched-runtime/server/dynamic-listing-identity-c1/p95Ms': metric(
             10 + index / 10,
@@ -226,6 +346,49 @@ function reportEntry(index, subject) {
     rawText,
     report,
   };
+}
+
+function browserAnalysis(index) {
+  const analysis = {
+    'matched-l1/browser//lighthouse.mobile.listing.lcpMs': metric(200 + index, 300, 5),
+    'matched-l1/browser//mobile.navigation.navToPaintMs': metric(100 + index, 120, 30),
+  };
+  for (const lane of ['default', 'matched-l0', 'matched-l1']) {
+    analysis[`${lane}/browser//bfcache.applicable`] = booleanMetric(0, 1, 10);
+    analysis[`${lane}/browser//bfcache.evidenceComplete`] = booleanMetric(1, 1, 10);
+    analysis[`${lane}/browser//bfcache.restored`] = booleanMetric(1, 0, 10);
+    for (const formFactor of ['desktop', 'mobile']) {
+      for (const route of ['listing', 'detail']) {
+        analysis[`${lane}/browser//lighthouse.${formFactor}.${route}.performanceScore`] = metric(
+          0.9,
+          0.8,
+          5,
+        );
+      }
+    }
+  }
+  return analysis;
+}
+
+function serverPolicy() {
+  return {
+    concurrencies: [1, 8, 32],
+    durationMs: 15_000,
+    encodings: ['identity', 'br'],
+    hostSettleMaxMs: 30_000,
+    hostSettlePollMs: 1_000,
+    modes: ['HIT', '304', 'dynamic'],
+    routes: ['listing', 'detail'],
+    samples: 7,
+    warmupMs: 5_000,
+  };
+}
+
+function refreshEntry(entry) {
+  const workload = entry.report.workloadIdentity;
+  workload.digest = digest(canonicalJson(workload.identity));
+  entry.rawText = `${JSON.stringify(entry.report)}\n`;
+  entry.contentDigest = digest(entry.rawText);
 }
 
 function metric(kovo, nextjs, samples) {

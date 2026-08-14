@@ -166,6 +166,7 @@ describe('serialized comparison analysis', () => {
       schema: 'kovo-performance-workload-identity/v1',
       identity: {
         cells: ['server'],
+        lanes: ['matched-runtime'],
         policies: {
           server: {
             concurrencies: [1],
@@ -195,6 +196,7 @@ describe('serialized comparison analysis', () => {
       buildSamples: 10,
       corpusSize: 24,
     });
+    expect(workload.identity.lanes).toEqual(['corpus-n24']);
   });
 
   it('recomputes host digests instead of trusting their presence', () => {

@@ -41,8 +41,8 @@ Actions run. Supply one for every `--report` when the summary will be committed.
 locations retains the local report paths and is intended only for scratch ratification.
 
 Then derive a reviewable budget without authoring timing or RSS numbers. Supply the same five raw
-downloads again; derivation re-hashes them, recovers each durable artifact URL by content digest,
-validates the raw dev cells, and reproduces the ratified summary before creating a budget:
+downloads again; derivation re-hashes them, recovers each retained canonical artifact URL by content
+digest, validates the raw dev cells, and reproduces the ratified summary before creating a budget:
 
 ```sh
 node scripts/perf-dev-budget.mjs derive \

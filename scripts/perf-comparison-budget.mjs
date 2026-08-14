@@ -29,6 +29,12 @@ const REQUIRED_LOCKS = Object.freeze([
   'benchmarks/harness/pnpm-lock.yaml',
 ]);
 const SUPPORTED_SUBJECTS = Object.freeze(['browser', 'server']);
+const BROWSER_LANES = Object.freeze(['default', 'matched-l0', 'matched-l1']);
+const SERVER_LANES = Object.freeze(['matched-runtime']);
+const SERVER_CONCURRENCIES = Object.freeze([1, 8, 32]);
+const SERVER_ENCODINGS = Object.freeze(['identity', 'br']);
+const SERVER_MODES = Object.freeze(['HIT', '304', 'dynamic']);
+const SERVER_ROUTES = Object.freeze(['listing', 'detail']);
 
 /** Derive browser/server regression budgets and a reviewable Kovo-vs-Next summary. */
 export function deriveComparisonPerformanceBudget(baseline, options = {}) {
@@ -233,6 +239,12 @@ export function comparisonBudgetBaselineFindings(baseline, entries) {
     findings.push('baseline runner image identity is unavailable');
   }
   findings.push(...workloadIdentityFindings(baseline.subject?.workloadIdentity, 'baseline'));
+  findings.push(
+    ...publicationComparisonWorkloadFindings(
+      baseline.subject?.workloadIdentity?.identity,
+      'baseline',
+    ),
+  );
   for (const lock of REQUIRED_LOCKS) {
     if (!DIGEST_PATTERN.test(baseline.subject?.locks?.[lock] ?? '')) {
       findings.push(`baseline ${lock} digest is unavailable`);
@@ -243,6 +255,9 @@ export function comparisonBudgetBaselineFindings(baseline, entries) {
     findings.push('baseline is not an isolated browser or server subject');
   }
   if (Object.keys(baseline.metrics ?? {}).length === 0) findings.push('baseline metrics are empty');
+  if (cells?.[0] === 'browser') {
+    findings.push(...browserPublicationMetricFindings(baseline.metrics, 'baseline'));
+  }
   for (const [metric, evidence] of Object.entries(baseline.metrics ?? {})) {
     for (const subject of ['kovo', 'nextjs']) {
       if (!ratifiedEvidence(evidence?.[subject], true)) {
@@ -285,6 +300,9 @@ export function comparisonBudgetFindings(budget) {
   }
   findings.push(...hostFingerprintFindings(budget.subject?.host, 'budget'));
   findings.push(...workloadIdentityFindings(budget.subject?.workloadIdentity, 'budget'));
+  findings.push(
+    ...publicationComparisonWorkloadFindings(budget.subject?.workloadIdentity?.identity, 'budget'),
+  );
   if (
     canonicalJson(budget.subject?.workloadIdentity?.identity?.cells) !==
     canonicalJson([budget.subject?.kind])
@@ -302,6 +320,9 @@ export function comparisonBudgetFindings(budget) {
   }
   if (!ownRecord(budget.metrics) || Object.keys(budget.metrics).length === 0) {
     findings.push('budget metrics are empty');
+  }
+  if (budget.subject?.kind === 'browser') {
+    findings.push(...browserPublicationMetricFindings(budget.metrics, 'budget'));
   }
   for (const [metric, entry] of Object.entries(budget.metrics ?? {})) {
     if (!ratifiedBudgetBaseline(entry?.baseline)) {
@@ -403,6 +424,71 @@ function linkedRawReportFindings(baseline, entries) {
     for (const field of ['identity', 'metrics', 'policy', 'reports', 'subject', 'verdict']) {
       if (canonicalJson(reratified[field]) !== canonicalJson(baseline[field])) {
         findings.push(`baseline ${field} is not reproduced by its linked raw reports`);
+      }
+    }
+  }
+  return findings;
+}
+
+/** Keep the seven-family publication ceremony bound to the exact Phase 0/3 workloads. */
+function publicationComparisonWorkloadFindings(identity, label) {
+  const findings = [];
+  const cells = identity?.cells;
+  const subject = Array.isArray(cells) && cells.length === 1 ? cells[0] : null;
+  const policies = identity?.policies;
+  if (!SUPPORTED_SUBJECTS.includes(subject)) return findings;
+  if (subject === 'browser') {
+    if (canonicalJson(identity?.lanes) !== canonicalJson(BROWSER_LANES)) {
+      findings.push(`${label} browser workload does not include the exact default/L0/L1 lanes`);
+    }
+    if (
+      policies?.browserSamples !== 30 ||
+      policies?.lighthouseRuns !== 5 ||
+      policies?.bfcacheIterations !== 10 ||
+      policies?.warmups !== 3 ||
+      policies?.skipLighthouse !== false
+    ) {
+      findings.push(
+        `${label} browser workload is not 30 samples, 5 Lighthouse runs, 10 bfcache traversals, and 3 warmups`,
+      );
+    }
+    return findings;
+  }
+  if (canonicalJson(identity?.lanes) !== canonicalJson(SERVER_LANES)) {
+    findings.push(`${label} server workload does not use the isolated matched-runtime lane`);
+  }
+  const server = policies?.server;
+  if (
+    canonicalJson(server?.concurrencies) !== canonicalJson(SERVER_CONCURRENCIES) ||
+    canonicalJson(server?.encodings) !== canonicalJson(SERVER_ENCODINGS) ||
+    canonicalJson(server?.modes) !== canonicalJson(SERVER_MODES) ||
+    canonicalJson(server?.routes) !== canonicalJson(SERVER_ROUTES) ||
+    server?.samples !== 7 ||
+    server?.warmupMs !== 5_000 ||
+    server?.durationMs !== 15_000
+  ) {
+    findings.push(
+      `${label} server workload is not the full 7-sample route/encoding/mode/concurrency matrix`,
+    );
+  }
+  return findings;
+}
+
+function browserPublicationMetricFindings(metrics, label) {
+  const findings = [];
+  for (const lane of BROWSER_LANES) {
+    for (const formFactor of ['desktop', 'mobile']) {
+      for (const route of ['listing', 'detail']) {
+        const metric = `${lane}/browser//lighthouse.${formFactor}.${route}.performanceScore`;
+        if (!ownRecord(metrics?.[metric])) {
+          findings.push(`${label} required browser metric ${metric} is unavailable`);
+        }
+      }
+    }
+    for (const metricName of ['applicable', 'evidenceComplete', 'restored']) {
+      const metric = `${lane}/browser//bfcache.${metricName}`;
+      if (!ownRecord(metrics?.[metric])) {
+        findings.push(`${label} required browser metric ${metric} is unavailable`);
       }
     }
   }

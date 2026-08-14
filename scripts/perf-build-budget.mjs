@@ -26,6 +26,8 @@ const COMPARISON_SCHEMA = 'kovo-next-performance-comparison/v1';
 const BUILD_BENCHMARK_SCHEMA = 'kovo-build-benchmark/v1';
 const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const COMMIT_PATTERN = /^[0-9a-f]{40,64}$/u;
+const ARTIFACT_PATTERN =
+  /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/actions\/runs\/[1-9][0-9]*\/artifacts\/[1-9][0-9]*$/u;
 const REQUIRED_LOCKS = Object.freeze([
   'pnpm-lock.yaml',
   'benchmarks/nextjs/pnpm-lock.yaml',
@@ -394,11 +396,14 @@ function buildWorkloadFindings(identity) {
   const findings = [];
   const policies = identity?.policies;
   const corpusSize = policies?.corpusSize;
-  if (!Array.isArray(identity?.cells) || !identity.cells.includes('build')) {
-    findings.push('workload does not include the build cell');
+  if (canonicalJson(identity?.cells) !== canonicalJson(['build'])) {
+    findings.push('workload is not the isolated build cell');
   }
   if (!SUPPORTED_CORPUS_SIZES.includes(corpusSize)) {
     findings.push('workload corpus size is not N=24 or N=216');
+  }
+  if (canonicalJson(identity?.lanes) !== canonicalJson([`corpus-n${String(corpusSize)}`])) {
+    findings.push('workload does not use the isolated generated-corpus lane');
   }
   if (policies?.buildSamples !== 10 || policies?.warmups !== 3) {
     findings.push('workload does not declare 10 build samples and 3 warmups');
@@ -606,21 +611,25 @@ function validLinkedReports(reports) {
   const digests = new Set();
   const executions = new Set();
   const locations = new Set();
+  const runUrls = new Set();
   for (const report of reports) {
     if (
       !DIGEST_PATTERN.test(report?.contentDigest ?? '') ||
       !DIGEST_PATTERN.test(report?.execution ?? '') ||
-      !nonEmptyString(report?.location) ||
+      !ARTIFACT_PATTERN.test(report?.location ?? '') ||
       !nonEmptyString(report?.runUrl) ||
+      !report.location.startsWith(`${report.runUrl}/artifacts/`) ||
       digests.has(report.contentDigest) ||
       executions.has(report.execution) ||
-      locations.has(report.location)
+      locations.has(report.location) ||
+      runUrls.has(report.runUrl)
     ) {
       return false;
     }
     digests.add(report.contentDigest);
     executions.add(report.execution);
     locations.add(report.location);
+    runUrls.add(report.runUrl);
   }
   return true;
 }

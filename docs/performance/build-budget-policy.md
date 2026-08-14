@@ -14,8 +14,8 @@ nonnegative measured wall time minus the authenticated sequential worker envelop
 the current-source/deploy-proof boundary required by SPEC §5.2 rule 9.
 
 After ratification, derive a budget while supplying the same five raw files. The command re-hashes
-each local download and recovers its durable artifact URL from the ratified content digest, so the
-download directory does not need to reproduce any CI-side path:
+each local download and recovers its retained canonical artifact URL from the ratified content
+digest, so the download directory does not need to reproduce any CI-side path:
 
 ```sh
 vp exec node scripts/perf-build-budget.mjs derive \

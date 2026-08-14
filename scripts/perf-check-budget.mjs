@@ -39,6 +39,7 @@ const TARGETS = Object.freeze({
   'check.peakRssBytes': 3 * 1024 ** 3,
   'check.total.marginalScalingExponent': 1,
 });
+const PUBLICATION_LADDER = Object.freeze([8, 24, 72, 216]);
 
 export function deriveCheckPerformanceBudget(baseline, options = {}) {
   const maxRegressionPct = finitePercentage(options.maxRegressionPct, 5, 'maxRegressionPct');
@@ -187,6 +188,9 @@ export function checkBudgetBaselineFindings(baseline, entries) {
   ) {
     findings.push('baseline workload is not check-scaling');
   }
+  findings.push(
+    ...checkPublicationWorkloadFindings(baseline.subject?.workloadIdentity?.identity, 'baseline'),
+  );
   if (
     canonicalJson(Object.keys(baseline.metrics ?? {}).sort()) !== canonicalJson([...METRICS].sort())
   ) {
@@ -234,6 +238,9 @@ export function checkBudgetFindings(budget) {
   ) {
     findings.push('budget workload is not check-scaling');
   }
+  findings.push(
+    ...checkPublicationWorkloadFindings(budget.subject?.workloadIdentity?.identity, 'budget'),
+  );
   for (const lock of REQUIRED_LOCKS) {
     if (!DIGEST_PATTERN.test(budget.subject?.locks?.[lock] ?? '')) {
       findings.push(`budget ${lock} digest is unavailable`);
@@ -339,6 +346,16 @@ function linkedRawFindings(baseline, entries) {
     }
   }
   return findings;
+}
+
+function checkPublicationWorkloadFindings(identity, label) {
+  if (
+    canonicalJson(identity?.policies?.ladder) !== canonicalJson(PUBLICATION_LADDER) ||
+    identity?.policies?.samplesPerRung !== 1
+  ) {
+    return [`${label} check workload is not the exact N=8,24,72,216 one-sample ladder`];
+  }
+  return [];
 }
 
 function validLinkedReports(reports) {

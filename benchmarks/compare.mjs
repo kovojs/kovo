@@ -1741,7 +1741,7 @@ export async function performanceWorkloadIdentity(
     },
     cells: [...cells],
     corpus,
-    lanes: [...(options.lanes ?? lanes)],
+    lanes: workloadLanes(options, cells, corpusSize),
     policies: {
       bfcacheIterations: options.bfcacheIterations ?? 10,
       browserSamples: options.iterations ?? 30,
@@ -1781,6 +1781,16 @@ export async function performanceWorkloadIdentity(
     identity,
     schema: WORKLOAD_IDENTITY_SCHEMA,
   };
+}
+
+function workloadLanes(options, cells, corpusSize) {
+  const selected = [];
+  if (cells.includes('browser')) selected.push(...(options.lanes ?? lanes));
+  if (cells.includes('dev') || cells.includes('build')) {
+    selected.push(`corpus-n${String(corpusSize)}`);
+  }
+  if (cells.includes('server')) selected.push('matched-runtime');
+  return [...new Set(selected)];
 }
 
 function browserSamples(cell) {

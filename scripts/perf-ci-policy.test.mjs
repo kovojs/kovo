@@ -103,7 +103,7 @@ describe('realistic performance CI policy', () => {
       expect(source, job).toContain(
         'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
       );
-      expect(source, job).toContain('retention-days: 30');
+      expect(source, job).toContain('retention-days: 90');
     }
     expect(count(jobSource('dev-matrix'), 'timeout-minutes:')).toBe(1);
     expect(count(jobSource('dev-matrix'), 'name: kovo-perf-dev-n${{ matrix.corpus }}')).toBe(1);
@@ -114,6 +114,7 @@ describe('realistic performance CI policy', () => {
       'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04',
     );
     expect(jobSource('check-scaling')).toContain('--samples 1');
+    expect(jobSource('check-scaling')).toContain('retention-days: 90');
   });
 
   it('runs sustained PR evidence only for an explicit maintainer-applied measurement label', () => {
@@ -166,6 +167,27 @@ describe('realistic performance CI policy', () => {
     ]) {
       expect(jobSource('server-matrix')).toContain(token);
     }
+  });
+
+  it('keeps all seven publication artifact families and their ratifier report paths', () => {
+    expect(jobSource('check-scaling')).toContain('name: kovo-perf-check-scaling');
+    expect(jobSource('check-scaling')).toContain(
+      'path: ${{ runner.temp }}/kovo-perf/check-scaling.json',
+    );
+    expect(jobSource('browser-matrix')).toContain('name: kovo-perf-browser-matrix');
+    expect(jobSource('browser-matrix')).toContain('path: ${{ runner.temp }}/kovo-perf/browser');
+    expect(jobSource('dev-matrix')).toContain('corpus: [24, 216]');
+    expect(jobSource('dev-matrix')).toContain('name: kovo-perf-dev-n${{ matrix.corpus }}');
+    expect(jobSource('dev-matrix')).toContain(
+      'path: ${{ runner.temp }}/kovo-perf/dev-n${{ matrix.corpus }}',
+    );
+    expect(jobSource('build-matrix')).toContain('corpus: [24, 216]');
+    expect(jobSource('build-matrix')).toContain('name: kovo-perf-build-n${{ matrix.corpus }}');
+    expect(jobSource('build-matrix')).toContain(
+      'path: ${{ runner.temp }}/kovo-perf/build-n${{ matrix.corpus }}',
+    );
+    expect(jobSource('server-matrix')).toContain('name: kovo-perf-server-matrix');
+    expect(jobSource('server-matrix')).toContain('path: ${{ runner.temp }}/kovo-perf/server');
   });
 
   it('uses the setup-provided vp command and pins every remote action by commit', () => {

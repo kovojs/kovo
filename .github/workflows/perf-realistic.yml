@@ -219,7 +219,7 @@ jobs:
           if-no-files-found: warn
           name: kovo-perf-check-scaling
           path: ${{ runner.temp }}/kovo-perf/check-scaling.json
-          retention-days: 14
+          retention-days: 90
 
   browser-matrix:
     name: Browser matrix
@@ -267,7 +267,7 @@ jobs:
           if-no-files-found: warn
           name: kovo-perf-browser-matrix
           path: ${{ runner.temp }}/kovo-perf/browser
-          retention-days: 30
+          retention-days: 90
 
   dev-matrix:
     name: N=${{ matrix.corpus }} developer loop
@@ -323,7 +323,7 @@ jobs:
           if-no-files-found: warn
           name: kovo-perf-dev-n${{ matrix.corpus }}
           path: ${{ runner.temp }}/kovo-perf/dev-n${{ matrix.corpus }}
-          retention-days: 30
+          retention-days: 90
 
   build-matrix:
     name: N=${{ matrix.corpus }} production builds
@@ -373,7 +373,7 @@ jobs:
           if-no-files-found: warn
           name: kovo-perf-build-n${{ matrix.corpus }}
           path: ${{ runner.temp }}/kovo-perf/build-n${{ matrix.corpus }}
-          retention-days: 30
+          retention-days: 90
 
   server-matrix:
     name: Matched production throughput
@@ -417,7 +417,7 @@ jobs:
           if-no-files-found: warn
           name: kovo-perf-server-matrix
           path: ${{ runner.temp }}/kovo-perf/server
-          retention-days: 30
+          retention-days: 90
 
   check-watch-decision:
     name: Check-watch candidate decision

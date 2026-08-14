@@ -20,6 +20,8 @@ const PERF_BASELINE_SCHEMA = 'kovo-performance-baseline/v1';
 const COMPARISON_SCHEMA = 'kovo-next-performance-comparison/v1';
 const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const COMMIT_PATTERN = /^[0-9a-f]{40,64}$/u;
+const ARTIFACT_PATTERN =
+  /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/actions\/runs\/[1-9][0-9]*\/artifacts\/[1-9][0-9]*$/u;
 const DEV_EDIT_CLASSES = Object.freeze(['leaf', 'entry', 'data', 'syntaxError', 'recovery']);
 const REQUIRED_LOCKS = Object.freeze([
   'pnpm-lock.yaml',
@@ -479,11 +481,14 @@ function devWorkloadFindings(identity) {
   const findings = [];
   const policies = identity?.policies;
   const corpusSize = policies?.corpusSize;
-  if (!Array.isArray(identity?.cells) || !identity.cells.includes('dev')) {
-    findings.push('workload does not include the dev cell');
+  if (canonicalJson(identity?.cells) !== canonicalJson(['dev'])) {
+    findings.push('workload is not the isolated dev cell');
   }
   if (!SUPPORTED_CORPUS_SIZES.includes(corpusSize)) {
     findings.push('workload corpus size is not N=24 or N=216');
+  }
+  if (canonicalJson(identity?.lanes) !== canonicalJson([`corpus-n${String(corpusSize)}`])) {
+    findings.push('workload does not use the isolated generated-corpus lane');
   }
   if (
     policies?.devEditSamples !== 30 ||
@@ -683,23 +688,25 @@ function uniqueReportEvidence(reports) {
   const digests = new Set();
   const executions = new Set();
   const locations = new Set();
+  const runUrls = new Set();
   for (const report of reports) {
     if (
       !DIGEST_PATTERN.test(report?.contentDigest ?? '') ||
       !DIGEST_PATTERN.test(report?.execution ?? '') ||
-      typeof report?.location !== 'string' ||
-      report.location.length === 0 ||
-      typeof report?.runUrl !== 'string' ||
-      report.runUrl.length === 0 ||
+      !ARTIFACT_PATTERN.test(report?.location ?? '') ||
+      !nonEmptyString(report?.runUrl) ||
+      !report.location.startsWith(`${report.runUrl}/artifacts/`) ||
       digests.has(report.contentDigest) ||
       executions.has(report.execution) ||
-      locations.has(report.location)
+      locations.has(report.location) ||
+      runUrls.has(report.runUrl)
     ) {
       return false;
     }
     digests.add(report.contentDigest);
     executions.add(report.execution);
     locations.add(report.location);
+    runUrls.add(report.runUrl);
   }
   return true;
 }
@@ -759,6 +766,10 @@ function finiteNonNegative(value) {
 
 function ownRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function nonEmptyString(value) {
+  return typeof value === 'string' && value.length > 0;
 }
 
 function sha256Canonical(value) {

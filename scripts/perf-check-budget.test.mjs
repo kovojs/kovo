@@ -1,4 +1,9 @@
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
@@ -50,6 +55,101 @@ describe('check-scaling budget derivation', () => {
     expect(() => deriveCheckPerformanceBudget(baseline, { baselineEntries: entries })).toThrow(
       'does not match its ratified content/link identity',
     );
+  });
+
+  it('refuses a ratified but shortened check ladder as publication evidence', () => {
+    const entries = Array.from({ length: 5 }, (_, index) => entryFixture(index));
+    for (const entry of entries) {
+      entry.report.workloadIdentity.identity.policies.ladder = [24, 216];
+      entry.report.options.ladder = [24, 216];
+      entry.report.detail.rungs = entry.report.detail.rungs.filter(({ componentCount }) =>
+        [24, 216].includes(componentCount),
+      );
+      entry.report.hostSamples = checkHostSamples([24, 216]);
+      entry.report.workloadIdentity.digest = digest(
+        canonicalJson(entry.report.workloadIdentity.identity),
+      );
+      entry.rawText = `${JSON.stringify(entry.report)}\n`;
+      entry.contentDigest = digest(entry.rawText);
+    }
+    const baseline = ratifyPerformanceBaseline(entries);
+    expect(baseline.verdict.status).toBe('ratified');
+    expect(() => deriveCheckPerformanceBudget(baseline, { baselineEntries: entries })).toThrow(
+      /check workload is not the exact N=8,24,72,216 one-sample ladder/u,
+    );
+  });
+
+  it('executes the documented check ratify and derive commands against five Actions runs', () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'kovo-check-publication-cli-'));
+    try {
+      const entries = Array.from({ length: 5 }, (_, index) => entryFixture(index));
+      const reportPaths = entries.map((entry, index) => {
+        const reportPath = path.join(root, `run-${String(index)}-check-scaling.json`);
+        writeFileSync(reportPath, entry.rawText);
+        return reportPath;
+      });
+      const baselinePath = path.join(root, 'check-baseline.json');
+      const budgetPath = path.join(root, 'check-budget.json');
+      const ratification = spawnSync(
+        process.execPath,
+        [
+          fileURLToPath(new URL('./perf-baseline-ratify.mjs', import.meta.url)),
+          ...reportPaths.flatMap((reportPath, index) => [
+            '--report',
+            reportPath,
+            '--location',
+            entries[index].location,
+          ]),
+          '--out',
+          baselinePath,
+        ],
+        { encoding: 'utf8' },
+      );
+      expect(ratification).toMatchObject({ status: 0, stderr: '' });
+      const baseline = JSON.parse(readFileSync(baselinePath, 'utf8'));
+      expect(new Set(baseline.reports.map(({ runUrl }) => runUrl)).size).toBe(5);
+      expect(baseline.identity).toMatchObject({
+        host: entries[0].report.host.digest,
+        locks: entries[0].report.source.locks,
+        source: entries[0].report.source.commit,
+        workload: entries[0].report.workloadIdentity.digest,
+      });
+
+      const derivation = spawnSync(
+        process.execPath,
+        [
+          fileURLToPath(new URL('./perf-check-budget.mjs', import.meta.url)),
+          'derive',
+          '--baseline',
+          baselinePath,
+          ...reportPaths.flatMap((reportPath) => ['--report', reportPath]),
+          '--out',
+          budgetPath,
+        ],
+        { encoding: 'utf8' },
+      );
+      expect(derivation).toMatchObject({ status: 0, stderr: '' });
+      expect(JSON.parse(readFileSync(budgetPath, 'utf8')).schema).toBe(PERF_CHECK_BUDGET_SCHEMA);
+
+      writeFileSync(reportPaths[0], `${entries[0].rawText} `);
+      const hostile = spawnSync(
+        process.execPath,
+        [
+          fileURLToPath(new URL('./perf-check-budget.mjs', import.meta.url)),
+          'derive',
+          '--baseline',
+          baselinePath,
+          ...reportPaths.flatMap((reportPath) => ['--report', reportPath]),
+          '--out',
+          budgetPath,
+        ],
+        { encoding: 'utf8' },
+      );
+      expect(hostile.status).toBe(2);
+      expect(hostile.stderr).toContain('does not match its ratified content/link identity');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
   });
 });
 
@@ -169,9 +269,9 @@ function digest(value) {
   return `sha256:${createHash('sha256').update(value).digest('hex')}`;
 }
 
-function checkHostSamples() {
+function checkHostSamples(ladder = [8, 24, 72, 216]) {
   return [
-    ...[8, 24, 72, 216].map((componentCount) => ({
+    ...ladder.map((componentCount) => ({
       ceiling: 1,
       context: `N=${String(componentCount)}/sample=0`,
       loadAverage: [0.2, 0.2, 0.2],

@@ -29,6 +29,10 @@ samples per cell, and ten bfcache traversals. The check report uses the same aut
 source/lock, normalized host-v2, quiet-host, and workload identities as the comparison reports.
 A dirty, busy, incomplete, duplicate, or identity-mismatched report produces `unproven`.
 
+Baseline jobs request 90-day Actions retention. Finish review and commit the summary/budgets before
+the effective repository retention window closes; the canonical artifact-page URL is stable during
+retention, but it is not permanent storage.
+
 ## Ratify each subject
 
 For each row above, supply the five downloaded report paths and their matching artifact URLs:
@@ -46,6 +50,12 @@ vp exec node scripts/perf-baseline-ratify.mjs \
 Do not combine N=24 with N=216 or browser with server: each is a different authenticated workload
 digest. If fewer than five reports share a host cohort, collect more independent runs rather than
 relaxing the identity check.
+
+Publication derivation additionally requires the exact scheduled subject profile: isolated dev or
+build cells, the full browser default/L0/L1 matrix (30/5/10 plus three warmups), the full server
+route/encoding/mode/concurrency matrix (seven 15-second samples after five-second warmups), or the
+N={8,24,72,216} one-sample check ladder. A generic scratch ratification with local file locations,
+skipped Lighthouse, missing bfcache metrics, or shortened matrix cannot produce a budget.
 
 ## Derive reviewed budgets
 
