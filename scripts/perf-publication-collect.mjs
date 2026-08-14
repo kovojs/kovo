@@ -28,8 +28,23 @@ import { performanceGateWorkloadIdentity } from './perf-gate.mjs';
 import { workloadIdentityFindings } from './perf-regression-check.mjs';
 
 export const PERF_PUBLICATION_COLLECTION_SCHEMA = 'kovo-performance-publication-collection/v3';
-export const PERF_PUBLICATION_INPUT_SCHEMA = 'kovo-performance-publication-input/v3';
+export const PERF_PUBLICATION_INPUT_SCHEMA = 'kovo-performance-publication-input/v4';
 export const PERF_PUBLICATION_REPOSITORY = 'kovojs/kovo';
+
+/** Raw regular files emitted beside the manifest: selected evidence + campaign authority/candidates. */
+export function performancePublicationManifestRawFileCount({ candidateCount, runCount }) {
+  if (
+    !Number.isSafeInteger(candidateCount?.families) ||
+    candidateCount.families < 42 ||
+    !Number.isSafeInteger(candidateCount?.productionBytes) ||
+    candidateCount.productionBytes < 1 ||
+    !Number.isSafeInteger(runCount) ||
+    runCount < 1
+  ) {
+    throw new TypeError('publication raw-file count requires valid candidate and run censuses');
+  }
+  return 216 + 2 * runCount + 5 * (candidateCount.families + candidateCount.productionBytes);
+}
 
 const PERF_REALISTIC_WORKFLOW_NAME = 'Perf Realistic Tier';
 const PERF_REALISTIC_WORKFLOW_PATH = '.github/workflows/perf-realistic.yml';
@@ -400,11 +415,12 @@ export async function createPerformancePublicationManifest({
       PERF_PUBLICATION_PRODUCTION_BYTES.reportMember,
       { topLevel: true },
     );
-    const campaign = await copyCampaignCustody(
-      stagingDirectory,
-      inventory.campaign,
-      productionBytes,
-    );
+    const campaign = await copyCampaignCustody(stagingDirectory, inventory.campaign, {
+      candidates: inventory.candidates,
+      cohortSelections: selections,
+      productionBytesCandidates: inventory.productionBytes,
+      selectedProductionBytes: productionBytes,
+    });
     const manifest = {
       campaign,
       families,
@@ -488,6 +504,11 @@ export function selectPerformancePublicationCohorts(
     const requested = selections.get(familyName);
     let eligible = qualifying;
     if (requested !== undefined) {
+      if (qualifying.length === 1) {
+        throw new TypeError(
+          `${familyName} cohort selector is unnecessary for one qualifying cohort`,
+        );
+      }
       eligible = qualifying.filter(
         ([digest, members]) => digest === requested || members[0]?.hostDigest === requested,
       );
@@ -2078,12 +2099,12 @@ async function copyCandidateCustody(
   slot,
   candidate,
   reportMember,
-  { topLevel = false } = {},
+  { relativeRoot: requestedRelativeRoot, topLevel = false } = {},
 ) {
   const member = reportMember ?? requiredFamilyPolicy(familyName).reportMember;
-  const relativeRoot = topLevel
-    ? path.posix.join(familyName, slot)
-    : path.posix.join('families', familyName, slot);
+  const relativeRoot =
+    requestedRelativeRoot ??
+    (topLevel ? path.posix.join(familyName, slot) : path.posix.join('families', familyName, slot));
   const targetRoot = path.join(stagingDirectory, ...relativeRoot.split('/'));
   await mkdir(targetRoot, { mode: 0o700, recursive: true });
   const descriptor = {
@@ -2113,9 +2134,19 @@ async function copyCandidateCustody(
   return descriptor;
 }
 
-async function copyCampaignCustody(stagingDirectory, campaign, selectedProductionBytes) {
+async function copyCampaignCustody(
+  stagingDirectory,
+  campaign,
+  { candidates, cohortSelections, productionBytesCandidates, selectedProductionBytes },
+) {
   if (!ownRecord(campaign) || !Array.isArray(campaign.runs)) {
     throw new TypeError('authenticated campaign custody is unavailable');
+  }
+  if (!Array.isArray(candidates)) {
+    throw new TypeError('complete family candidate custody is unavailable');
+  }
+  if (!Array.isArray(productionBytesCandidates)) {
+    throw new TypeError('complete Production bytes candidate custody is unavailable');
   }
   const workflowRunsApiMetadata = await copyContentAddressedCustodyFile(
     stagingDirectory,
@@ -2161,6 +2192,57 @@ async function copyCampaignCustody(stagingDirectory, campaign, selectedProductio
     }
   }
   productionBytes.sort(candidateChronologyOrder);
+  const familyCandidates = [];
+  for (const candidate of [...candidates].sort(candidateInventoryOrder)) {
+    const relativeRoot = path.posix.join(
+      'campaign',
+      'candidates',
+      candidate.family,
+      `${String(candidate.runId)}-${String(candidate.artifactId)}`,
+    );
+    const descriptor = await copyCandidateCustody(
+      stagingDirectory,
+      candidate.family,
+      'campaign-candidate',
+      candidate,
+      undefined,
+      { relativeRoot },
+    );
+    familyCandidates.push({
+      artifactId: candidate.artifactId,
+      cohortDigest: candidate.cohortDigest,
+      descriptor,
+      executionDigest: candidate.executionDigest,
+      family: candidate.family,
+      hostDigest: candidate.hostDigest,
+      runCreatedAt: candidate.runCreatedAt,
+      runId: candidate.runId,
+    });
+  }
+  const productionBytesCandidateCustody = [];
+  for (const candidate of [...productionBytesCandidates].sort(candidateChronologyOrder)) {
+    const relativeRoot = path.posix.join(
+      'campaign',
+      'candidates',
+      'production-bytes',
+      `${String(candidate.runId)}-${String(candidate.artifactId)}`,
+    );
+    const descriptor = await copyCandidateCustody(
+      stagingDirectory,
+      'production-bytes',
+      'campaign-candidate',
+      candidate,
+      PERF_PUBLICATION_PRODUCTION_BYTES.reportMember,
+      { relativeRoot },
+    );
+    productionBytesCandidateCustody.push({
+      artifactId: candidate.artifactId,
+      descriptor,
+      executionDigest: candidate.executionDigest,
+      runCreatedAt: candidate.runCreatedAt,
+      runId: candidate.runId,
+    });
+  }
   const selected = {
     artifactId: selectedProductionBytes.artifactId,
     runCreatedAt: selectedProductionBytes.runCreatedAt,
@@ -2171,7 +2253,12 @@ async function copyCampaignCustody(stagingDirectory, campaign, selectedProductio
   }
   return {
     boundary: campaign.boundary,
+    cohortSelections: Object.fromEntries(
+      [...cohortSelections].sort(([left], [right]) => left.localeCompare(right)),
+    ),
+    familyCandidates,
     productionBytes,
+    productionBytesCandidates: productionBytesCandidateCustody,
     runs,
     selectedProductionBytes: selected,
     workflowRunsApiMetadata,

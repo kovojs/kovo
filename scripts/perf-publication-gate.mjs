@@ -57,8 +57,12 @@ import {
   devBudgetFindings,
   evaluateDevPerformanceBudget,
 } from './perf-dev-budget.mjs';
-import { packedComparisonProductEvidenceFindings } from './lib/perf-packed-kovo-product.mjs';
-import { canonicalJson } from './perf-regression-check.mjs';
+import {
+  PACKED_KOVO_PRODUCT_WORKLOAD_POLICY,
+  packedComparisonProductEvidenceFindings,
+  packedKovoProductIdentityFindings,
+} from './lib/perf-packed-kovo-product.mjs';
+import { canonicalJson, workloadIdentityFindings } from './perf-regression-check.mjs';
 import { performanceHostFingerprintFindings } from './lib/perf-host.mjs';
 import {
   evaluateReport,
@@ -66,8 +70,8 @@ import {
   performanceGateWorkloadIdentity,
 } from './perf-gate.mjs';
 
-export const PERF_PUBLICATION_INPUT_SCHEMA = 'kovo-performance-publication-input/v3';
-export const PERF_PUBLICATION_SCHEMA = 'kovo-performance-publication/v3';
+export const PERF_PUBLICATION_INPUT_SCHEMA = 'kovo-performance-publication-input/v4';
+export const PERF_PUBLICATION_SCHEMA = 'kovo-performance-publication/v4';
 export const PERF_PUBLICATION_REPOSITORY = 'kovojs/kovo';
 
 const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/u;
@@ -301,13 +305,32 @@ export async function authenticatePerformancePublicationInput(
     fetchWorkflowRunApi,
     loadPerformanceBudgets = loadCommittedPerformanceBudgets,
     loadTrustedWorkflow,
+    manifestPath = path.join(baseDirectory, 'performance-publication-input.json'),
     now = new Date().toISOString(),
     repositoryDirectory = process.cwd(),
   } = {},
 ) {
   validateInputManifest(input);
   validateBuildProfileEvidencePair(input.buildProfiles);
+  validateCampaignManifest(input.campaign);
   const descriptorCustody = await createPerformanceArtifactDescriptorCustody({ baseDirectory });
+  const manifestRelativePath = await authenticateManifestFilesystemCensus(input, {
+    baseDirectory: descriptorCustody.baseDirectory,
+    manifestPath,
+  });
+  const manifestBytes = await readPerformanceArtifactCustodyFile(manifestRelativePath, {
+    custody: descriptorCustody,
+    descriptorKey: 'manifest',
+    label: 'performance publication manifest',
+    maximumBytes: MAX_API_RESPONSE_BYTES,
+    readHook: descriptorReadHook,
+  });
+  if (
+    canonicalJson(parseCampaignJson(manifestBytes, 'performance publication manifest')) !==
+    canonicalJson(input)
+  ) {
+    throw new TypeError('parsed manifest differs from its stable on-disk custody bytes');
+  }
   const families = {};
   for (const familyName of FAMILY_NAMES) {
     const config = FAMILY_CONFIG[familyName];
@@ -437,16 +460,32 @@ export async function authenticatePerformancePublicationInput(
   let campaign;
   try {
     campaign = await authenticatePerformancePublicationCampaign(input.campaign, {
+      authenticateArtifactEvidence: authenticatePerformanceArtifactEvidence,
+      baseDirectory,
       custody: descriptorCustody,
       descriptorReadHook,
+      fetchArtifactApi,
       fetchCampaignWorkflowRunsApi,
+      fetchWorkflowFileApi,
       fetchWorkflowArtifactsApi,
+      fetchWorkflowJobsApi,
       fetchWorkflowRunApi: fetchWorkflowRunApi ?? fetchGitHubWorkflowRunApiResponse,
-      productionBytes,
+      loadTrustedWorkflow,
+      now,
       repository: input.repository,
+      repositoryDirectory,
+      selectedFamilies: families,
+      selectedProductionBytes: productionBytes,
     });
   } catch (error) {
     throw contextualError('campaign chronology', error);
+  }
+  const closingManifestRelativePath = await authenticateManifestFilesystemCensus(input, {
+    baseDirectory: descriptorCustody.baseDirectory,
+    manifestPath,
+  });
+  if (closingManifestRelativePath !== manifestRelativePath) {
+    throw new TypeError('performance publication manifest path changed during authentication');
   }
   return { buildProfiles, campaign, families, productionBytes, repository: input.repository };
 }
@@ -464,16 +503,221 @@ function validateBuildProfileEvidencePair(descriptors) {
   }
 }
 
+export async function authenticateManifestFilesystemCensus(input, { baseDirectory, manifestPath }) {
+  const resolvedBaseDirectory = await realpath(path.resolve(baseDirectory));
+  const requestedManifest = path.resolve(manifestPath);
+  const manifestFacts = await lstat(requestedManifest);
+  if (!manifestFacts.isFile() || manifestFacts.isSymbolicLink() || manifestFacts.nlink !== 1) {
+    throw new TypeError('performance publication manifest must be one unique regular file');
+  }
+  const resolvedManifest = await realpath(requestedManifest);
+  const manifestRelativePath = manifestRelativeFile(
+    resolvedBaseDirectory,
+    resolvedManifest,
+    'manifest',
+  );
+  const references = manifestCustodyReferences(input);
+  references.push({ kind: 'manifest', path: manifestRelativePath });
+  const pathUses = new Map();
+  for (const reference of references) {
+    if (!safeManifestRelativePath(reference.path)) {
+      throw new TypeError(`${reference.kind} is not a canonical safe relative path`);
+    }
+    const uses = pathUses.get(reference.path) ?? [];
+    uses.push(reference.kind);
+    pathUses.set(reference.path, uses);
+  }
+  for (const [relativePath, uses] of pathUses) {
+    const allowedBuildArchiveShare =
+      uses.length === 2 && uses.every((kind) => kind === 'build-profile archive');
+    if (uses.length !== 1 && !allowedBuildArchiveShare) {
+      throw new TypeError(`${relativePath} is referenced by multiple manifest custody roles`);
+    }
+  }
+  const expectedFiles = new Set(pathUses.keys());
+  const expectedDirectories = new Set();
+  for (const relativePath of expectedFiles) {
+    const parts = relativePath.split('/');
+    for (let index = 1; index < parts.length; index += 1) {
+      expectedDirectories.add(parts.slice(0, index).join('/'));
+    }
+  }
+  const seenFiles = new Set();
+  const seenInodes = new Set();
+  await walkManifestCustodyDirectory(resolvedBaseDirectory, '', {
+    expectedDirectories,
+    expectedFiles,
+    seenFiles,
+    seenInodes,
+  });
+  if (
+    seenFiles.size !== expectedFiles.size ||
+    [...expectedFiles].some((relativePath) => !seenFiles.has(relativePath))
+  ) {
+    throw new TypeError('manifest custody directory is missing one or more referenced files');
+  }
+  return manifestRelativePath;
+}
+
+async function walkManifestCustodyDirectory(
+  absoluteDirectory,
+  relativeDirectory,
+  { expectedDirectories, expectedFiles, seenFiles, seenInodes },
+) {
+  const before = await lstat(absoluteDirectory);
+  if (!before.isDirectory() || before.isSymbolicLink()) {
+    throw new TypeError('manifest custody traversal encountered a non-directory or symlink');
+  }
+  const entries = (await readdir(absoluteDirectory)).sort((left, right) =>
+    left.localeCompare(right),
+  );
+  for (const name of entries) {
+    const relativePath = relativeDirectory === '' ? name : `${relativeDirectory}/${name}`;
+    const absolutePath = path.join(absoluteDirectory, name);
+    const facts = await lstat(absolutePath);
+    if (facts.isSymbolicLink()) {
+      throw new TypeError(`${relativePath} is an untrusted symlink in manifest custody`);
+    }
+    if (facts.isDirectory()) {
+      if (!expectedDirectories.has(relativePath)) {
+        throw new TypeError(`${relativePath} is an unreferenced manifest custody directory`);
+      }
+      await walkManifestCustodyDirectory(absolutePath, relativePath, {
+        expectedDirectories,
+        expectedFiles,
+        seenFiles,
+        seenInodes,
+      });
+      continue;
+    }
+    if (!facts.isFile() || facts.nlink !== 1) {
+      throw new TypeError(`${relativePath} is not a unique regular manifest custody file`);
+    }
+    if (!expectedFiles.has(relativePath)) {
+      throw new TypeError(`${relativePath} is an unreferenced manifest custody file`);
+    }
+    const inode = `${String(facts.dev)}:${String(facts.ino)}`;
+    if (seenInodes.has(inode)) {
+      throw new TypeError(`${relativePath} hardlink-aliases another manifest custody file`);
+    }
+    seenInodes.add(inode);
+    seenFiles.add(relativePath);
+  }
+  const after = await lstat(absoluteDirectory);
+  if (
+    after.dev !== before.dev ||
+    after.ino !== before.ino ||
+    after.mode !== before.mode ||
+    after.mtimeMs !== before.mtimeMs ||
+    after.ctimeMs !== before.ctimeMs
+  ) {
+    throw new TypeError('manifest custody directory changed while it was enumerated');
+  }
+}
+
+function manifestCustodyReferences(input) {
+  const references = [];
+  const addDescriptor = (descriptor, prefix, { buildProfile = false } = {}) => {
+    validateManifestEvidenceDescriptor(descriptor, prefix);
+    for (const key of ['apiMetadata', 'archive', 'jobsApiMetadata', 'report', 'runApiMetadata']) {
+      references.push({
+        kind: buildProfile && key === 'archive' ? 'build-profile archive' : `${prefix} ${key}`,
+        path: descriptor[key],
+      });
+    }
+  };
+  for (const familyName of FAMILY_NAMES) {
+    const family = input.families[familyName];
+    for (const [index, descriptor] of family.baseline.entries()) {
+      addDescriptor(descriptor, `${familyName} baseline[${String(index)}]`);
+    }
+    addDescriptor(family.holdout, `${familyName} holdout`);
+  }
+  addDescriptor(input.productionBytes, 'Production bytes');
+  references.push({
+    kind: 'campaign workflow-runs API',
+    path: input.campaign.workflowRunsApiMetadata.path,
+  });
+  for (const run of input.campaign.runs) {
+    references.push(
+      {
+        kind: `campaign run ${String(run.runId)} artifacts API`,
+        path: run.artifactsApiMetadata.path,
+      },
+      { kind: `campaign run ${String(run.runId)} run API`, path: run.runApiMetadata.path },
+    );
+  }
+  for (const candidate of input.campaign.familyCandidates) {
+    addDescriptor(
+      candidate.descriptor,
+      `campaign ${candidate.family} candidate ${String(candidate.artifactId)}`,
+    );
+  }
+  for (const candidate of input.campaign.productionBytesCandidates) {
+    addDescriptor(
+      candidate.descriptor,
+      `campaign Production bytes candidate ${String(candidate.artifactId)}`,
+    );
+  }
+  if (input.buildProfiles !== undefined) {
+    for (const mode of BUILD_PROFILE_MODES) {
+      addDescriptor(input.buildProfiles[mode], `build profile ${mode}`, { buildProfile: true });
+    }
+  }
+  return references;
+}
+
+function validateManifestEvidenceDescriptor(descriptor, label) {
+  const keys = ['apiMetadata', 'archive', 'jobsApiMetadata', 'report', 'runApiMetadata'];
+  if (
+    !ownRecord(descriptor) ||
+    canonicalJson(Object.keys(descriptor).sort()) !== canonicalJson(keys) ||
+    keys.some((key) => !safeManifestRelativePath(descriptor[key])) ||
+    new Set(keys.map((key) => descriptor[key])).size !== keys.length
+  ) {
+    throw new TypeError(`${label} evidence descriptor is malformed or aliases itself`);
+  }
+}
+
+function manifestRelativeFile(root, file, label) {
+  const relative = path.relative(root, file).split(path.sep).join('/');
+  if (!safeManifestRelativePath(relative)) {
+    throw new TypeError(`${label} is outside the manifest custody directory`);
+  }
+  return relative;
+}
+
+function safeManifestRelativePath(value) {
+  return (
+    nonEmptyString(value) &&
+    value.trim() === value &&
+    !path.isAbsolute(value) &&
+    !value.includes('\\') &&
+    !value.includes('\0') &&
+    value.split('/').every((part) => part !== '' && part !== '.' && part !== '..') &&
+    path.posix.normalize(value) === value
+  );
+}
+
 export async function authenticatePerformancePublicationCampaign(
   campaign,
   {
+    authenticateArtifactEvidence = authenticatePerformanceArtifactEvidence,
+    baseDirectory = process.cwd(),
     custody,
     descriptorReadHook,
+    fetchArtifactApi,
     fetchCampaignWorkflowRunsApi,
+    fetchWorkflowFileApi,
     fetchWorkflowArtifactsApi,
+    fetchWorkflowJobsApi,
     fetchWorkflowRunApi,
-    productionBytes,
+    loadTrustedWorkflow,
+    now,
     repository,
+    repositoryDirectory,
+    selectedFamilies,
+    selectedProductionBytes,
   },
 ) {
   validateCampaignManifest(campaign);
@@ -484,7 +728,10 @@ export async function authenticatePerformancePublicationCampaign(
   ]) {
     if (typeof operation !== 'function') throw new TypeError(`live ${label} API fetch is required`);
   }
-  const sourceSha = productionBytes?.report?.source?.commit;
+  if (typeof authenticateArtifactEvidence !== 'function') {
+    throw new TypeError('campaign artifact authenticator is required');
+  }
+  const sourceSha = selectedProductionBytes?.report?.source?.commit;
   if (!COMMIT_PATTERN.test(sourceSha ?? '')) {
     throw new TypeError('campaign source commit is unavailable');
   }
@@ -589,22 +836,431 @@ export async function authenticatePerformancePublicationCampaign(
   if (canonicalJson(campaign.productionBytes) !== canonicalJson(derivedProductionBytes)) {
     throw new TypeError('campaign Production bytes chronology omits or invents a listed candidate');
   }
-  const selected = derivedProductionBytes[0];
+  const authenticatedCandidates = await authenticateCampaignCandidates(campaign, {
+    authenticateArtifactEvidence,
+    baseDirectory,
+    custody,
+    descriptorReadHook,
+    fetchArtifactApi,
+    fetchWorkflowFileApi,
+    fetchWorkflowJobsApi,
+    fetchWorkflowRunApi,
+    loadTrustedWorkflow,
+    now,
+    repository,
+    repositoryDirectory,
+    runAuthorities: savedRunCensus,
+    runs,
+    sourceSha,
+  });
+  const selectedFamilyCandidates = selectGateCampaignFamilyCandidates(
+    authenticatedCandidates.familyCandidates,
+    campaign.cohortSelections,
+  );
+  assertSelectedFamilyDescriptors(selectedFamilyCandidates, selectedFamilies);
+  const selected = authenticatedCandidates.productionBytesCandidates[0];
   if (
-    canonicalJson(campaign.selectedProductionBytes) !== canonicalJson(selected) ||
-    selected?.artifactId !== productionBytes?.custody?.artifactId ||
-    selected?.runId !== productionBytes?.custody?.workflowRunId
+    canonicalJson(campaign.selectedProductionBytes) !==
+      canonicalJson(candidateChronologyIdentity(selected)) ||
+    selected?.artifactId !== selectedProductionBytes?.custody?.artifactId ||
+    selected?.runId !== selectedProductionBytes?.custody?.workflowRunId ||
+    selected?.executionDigest !== selectedProductionBytes?.report?.execution?.digest ||
+    selected?.contentDigest !== selectedProductionBytes?.contentDigest
   ) {
     throw new TypeError('Production bytes evidence is not the earliest campaign candidate');
   }
   return {
     boundary: campaign.boundary,
+    cohortSelections: campaign.cohortSelections,
+    familyCandidates: authenticatedCandidates.familyCandidates.map(campaignCandidateReference),
     productionBytes: derivedProductionBytes,
+    productionBytesCandidates: authenticatedCandidates.productionBytesCandidates.map(
+      campaignCandidateReference,
+    ),
     runs,
-    selectedProductionBytes: selected,
+    selectedFamilies: Object.fromEntries(
+      FAMILY_NAMES.map((familyName) => [
+        familyName,
+        selectedFamilyCandidates[familyName].map(campaignCandidateReference),
+      ]),
+    ),
+    selectedProductionBytes: candidateChronologyIdentity(selected),
     workflowRunsApiAuthorityDigest: sha256Canonical(savedRunCensus),
     workflowRunsApiResponseDigest: sha256Bytes(savedWorkflowRunsBytes),
     liveWorkflowRunsApiResponseDigest: sha256Bytes(liveWorkflowRunsBytes),
+  };
+}
+
+async function authenticateCampaignCandidates(
+  campaign,
+  {
+    authenticateArtifactEvidence,
+    baseDirectory,
+    custody,
+    descriptorReadHook,
+    fetchArtifactApi,
+    fetchWorkflowFileApi,
+    fetchWorkflowJobsApi,
+    fetchWorkflowRunApi,
+    loadTrustedWorkflow,
+    now,
+    repository,
+    repositoryDirectory,
+    runAuthorities,
+    runs,
+    sourceSha,
+  },
+) {
+  const listed = new Map();
+  for (const run of runs) {
+    for (const artifact of run.publicationArtifacts) {
+      if (listed.has(artifact.artifactId)) {
+        throw new TypeError('campaign artifact listing identities are duplicated across runs');
+      }
+      listed.set(artifact.artifactId, {
+        ...artifact,
+        runCreatedAt: run.runCreatedAt,
+        runId: run.runId,
+      });
+    }
+  }
+  const expectedFamilyListing = [...listed.values()]
+    .filter((artifact) => artifact.kind === 'family')
+    .map(({ artifactId, family, runCreatedAt, runId }) => ({
+      artifactId,
+      family,
+      runCreatedAt,
+      runId,
+    }))
+    .sort(campaignCandidateInventoryOrder);
+  const declaredFamilyListing = campaign.familyCandidates
+    .map(({ artifactId, family, runCreatedAt, runId }) => ({
+      artifactId,
+      family,
+      runCreatedAt,
+      runId,
+    }))
+    .sort(campaignCandidateInventoryOrder);
+  if (canonicalJson(expectedFamilyListing) !== canonicalJson(declaredFamilyListing)) {
+    throw new TypeError('campaign family candidate custody omits or invents a listed artifact');
+  }
+  const expectedProductionListing = [...listed.values()]
+    .filter((artifact) => artifact.kind === 'production-bytes')
+    .map(({ artifactId, runCreatedAt, runId }) => ({ artifactId, runCreatedAt, runId }))
+    .sort(campaignChronologyOrder);
+  const declaredProductionListing = campaign.productionBytesCandidates
+    .map(({ artifactId, runCreatedAt, runId }) => ({ artifactId, runCreatedAt, runId }))
+    .sort(campaignChronologyOrder);
+  if (canonicalJson(expectedProductionListing) !== canonicalJson(declaredProductionListing)) {
+    throw new TypeError(
+      'campaign Production bytes candidate custody omits or invents a listed artifact',
+    );
+  }
+
+  const common = {
+    baseDirectory,
+    descriptorCustody: custody,
+    descriptorReadHook,
+    fetchArtifactApi,
+    fetchWorkflowFileApi,
+    fetchWorkflowJobsApi,
+    fetchWorkflowRunApi,
+    loadTrustedWorkflow,
+    now,
+    repository,
+    repositoryDirectory,
+  };
+  const familyCandidates = [];
+  for (const candidate of campaign.familyCandidates) {
+    const config = FAMILY_CONFIG[candidate.family];
+    const authenticated = await authenticateArtifactEvidence(candidate.descriptor, {
+      ...common,
+      expectedArtifactName: config.artifactName,
+      expectedArchiveMembers: [config.reportMember],
+      expectedReportMember: config.reportMember,
+      expectedWorkflowJob: config.workflowJob,
+    });
+    const run = runAuthorities.find((entry) => entry.runId === candidate.runId);
+    const findings = campaignFamilyCandidateFindings(candidate, authenticated, sourceSha, {
+      repository,
+      run,
+    });
+    if (findings.length > 0) {
+      throw new TypeError(
+        `${candidate.family} campaign candidate ${String(candidate.artifactId)}: ${findings.join('\n')}`,
+      );
+    }
+    familyCandidates.push({ ...candidate, ...authenticated });
+  }
+  const productionBytesCandidates = [];
+  for (const candidate of campaign.productionBytesCandidates) {
+    const authenticated = await authenticateArtifactEvidence(candidate.descriptor, {
+      ...common,
+      allowedProducerJobConclusions: ['failure', 'success'],
+      allowedProducerFailureStep: PRODUCTION_BYTES_CONFIG.budgetFailureStep,
+      requiredProducerSuccessSteps: PRODUCTION_BYTES_CONFIG.budgetFailureSuccessSteps,
+      expectedArtifactName: PRODUCTION_BYTES_CONFIG.artifactName,
+      expectedArchiveMembers: [PRODUCTION_BYTES_CONFIG.reportMember],
+      expectedReportMember: PRODUCTION_BYTES_CONFIG.reportMember,
+      expectedWorkflowJob: PRODUCTION_BYTES_CONFIG.workflowJob,
+    });
+    const findings = [
+      ...productionBytesReportFindings(authenticated.report),
+      ...(authenticated.custody?.artifactId !== candidate.artifactId ||
+      authenticated.custody?.workflowRunId !== candidate.runId ||
+      authenticated.report?.execution?.digest !== candidate.executionDigest
+        ? ['candidate identity differs from authenticated artifact/report custody']
+        : []),
+      ...(authenticated.report?.source?.commit !== sourceSha
+        ? ['candidate source differs from campaign source']
+        : []),
+    ];
+    if (findings.length > 0) {
+      throw new TypeError(
+        `Production bytes campaign candidate ${String(candidate.artifactId)}: ${findings.join('\n')}`,
+      );
+    }
+    productionBytesCandidates.push({ ...candidate, ...authenticated });
+  }
+  productionBytesCandidates.sort(campaignChronologyOrder);
+  return { familyCandidates, productionBytesCandidates };
+}
+
+function campaignFamilyCandidateFindings(candidate, authenticated, sourceSha, { repository, run }) {
+  const findings = [];
+  const report = authenticated?.report;
+  const familyName = candidate.family;
+  const policy = FAMILY_CONFIG[familyName];
+  const comparison = familyName !== 'check';
+  const packedProduct = familyName.startsWith('dev-') || familyName.startsWith('build-');
+  const expectedSchema = comparison ? 'kovo-next-performance-comparison/v1' : 'kovo-perf-report/v1';
+  if (!ownRecord(report) || report.schema !== expectedSchema) {
+    findings.push(`${familyName} report schema differs`);
+  }
+  if (
+    authenticated?.custody?.artifactId !== candidate.artifactId ||
+    authenticated?.custody?.workflowRunId !== candidate.runId ||
+    report?.execution?.digest !== candidate.executionDigest ||
+    report?.host?.digest !== candidate.hostDigest ||
+    report?.source?.commit !== sourceSha
+  ) {
+    findings.push('selection identity differs from authenticated artifact/report custody');
+  }
+  if (
+    report?.source?.commit !== sourceSha ||
+    report?.source?.dirty !== false ||
+    canonicalJson(report?.source?.dirtyPaths) !== canonicalJson([])
+  ) {
+    findings.push(`${familyName} report source is wrong or dirty`);
+  }
+  if (
+    !ownRecord(report?.source?.locks) ||
+    REQUIRED_LOCKS.some((lock) => !DIGEST_PATTERN.test(report.source.locks[lock] ?? ''))
+  ) {
+    findings.push(`${familyName} report dependency-lock identity is incomplete`);
+  }
+  findings.push(
+    ...performanceHostFingerprintFindings(report?.host).map(
+      (finding) => `${familyName} ${finding}`,
+    ),
+  );
+  findings.push(...workloadIdentityFindings(report?.workloadIdentity, familyName));
+  findings.push(
+    ...executionIdentityFindings(report?.execution, { requireProvider: 'github-actions' }).map(
+      (finding) => `${familyName} ${finding}`,
+    ),
+  );
+  const github = report?.execution?.github;
+  const runUrl = `https://github.com/${repository}/actions/runs/${String(candidate.runId)}`;
+  const workflowRefPrefix = `${repository}/${PERF_REALISTIC_WORKFLOW_PATH}@`;
+  if (
+    github?.repository !== repository ||
+    github?.serverUrl !== 'https://github.com' ||
+    github?.runUrl !== runUrl ||
+    String(github?.runId ?? '') !== String(candidate.runId) ||
+    String(github?.runAttempt ?? '') !== String(run?.runAttempt) ||
+    github?.sha !== sourceSha ||
+    github?.job !== policy.workflowJob.key ||
+    !nonEmptyString(github?.workflowRef) ||
+    !github.workflowRef.startsWith(workflowRefPrefix) ||
+    !COMMIT_PATTERN.test(github?.eventSha ?? '') ||
+    !COMMIT_PATTERN.test(github?.workflowSha ?? '') ||
+    (run?.event === 'pull_request'
+      ? github.eventSha !== github.workflowSha
+      : github.eventSha !== sourceSha || github.workflowSha !== sourceSha)
+  ) {
+    findings.push(`${familyName} report execution differs from its workflow run and job`);
+  }
+  const expectedCell = campaignFamilyCell(candidate.family);
+  const expectedCorpus = policy.corpusSize;
+  if (
+    canonicalJson(report?.workloadIdentity?.identity?.cells) !== canonicalJson([expectedCell]) ||
+    (Number.isSafeInteger(expectedCorpus) &&
+      report?.workloadIdentity?.identity?.policies?.corpusSize !== expectedCorpus)
+  ) {
+    findings.push(`${familyName} report carries the wrong family workload`);
+  }
+  for (const field of [
+    'executionAuthenticated',
+    'publishable',
+    'serialized',
+    'sourceStable',
+    'workloadAuthenticated',
+  ]) {
+    if (report?.integrity?.[field] !== true) {
+      findings.push(`${familyName} integrity.${field} is not true`);
+    }
+  }
+  if (comparison) {
+    if (report?.integrity?.comparatorMatched !== true) {
+      findings.push(`${familyName} comparator integrity is incomplete`);
+    }
+  } else if (report?.integrity?.complete !== true || report?.suite !== 'check-scaling') {
+    findings.push('check report completeness or suite identity differs');
+  }
+  if (report?.verdict?.status !== 'measured') {
+    findings.push(`${familyName} report is not measured`);
+  }
+  if (packedProduct) {
+    if (
+      canonicalJson(report?.workloadIdentity?.identity?.productArtifactPolicy) !==
+      canonicalJson(PACKED_KOVO_PRODUCT_WORKLOAD_POLICY)
+    ) {
+      findings.push(`${familyName} packed product policy differs`);
+    }
+    findings.push(
+      ...packedKovoProductIdentityFindings(report?.productArtifact, report?.source).map(
+        (finding) => `${familyName} ${finding}`,
+      ),
+    );
+  } else if (comparison && report?.productArtifact !== null) {
+    findings.push(`${familyName} unexpectedly carries packed product identity`);
+  }
+  const cohortDigest = campaignFamilyCohortDigest(report, candidate.family);
+  if (candidate.cohortDigest !== cohortDigest) {
+    findings.push('cohort digest differs from authenticated metrics-blind selection inputs');
+  }
+  return [...new Set(findings)];
+}
+
+function selectGateCampaignFamilyCandidates(candidates, cohortSelections) {
+  const result = {};
+  for (const familyName of FAMILY_NAMES) {
+    const groups = new Map();
+    for (const candidate of candidates.filter((entry) => entry.family === familyName)) {
+      const digest = campaignFamilyCohortDigest(candidate.report, familyName);
+      const members = groups.get(digest) ?? [];
+      members.push(candidate);
+      groups.set(digest, members);
+    }
+    const qualifying = [...groups.entries()]
+      .map(([digest, members]) => [digest, [...members].sort(campaignChronologyOrder)])
+      .filter(([, members]) => members.length >= 6)
+      .sort(([left], [right]) => left.localeCompare(right));
+    if (qualifying.length === 0) {
+      throw new TypeError(`${familyName} has no authenticated six-run campaign cohort`);
+    }
+    const selector = cohortSelections[familyName];
+    if (qualifying.length === 1 && selector !== undefined) {
+      throw new TypeError(`${familyName} cohort selector is unnecessary for one qualifying cohort`);
+    }
+    if (qualifying.length > 1 && selector === undefined) {
+      throw new TypeError(`${familyName} has multiple qualifying cohorts without explicit choice`);
+    }
+    const eligible =
+      selector === undefined
+        ? qualifying
+        : qualifying.filter(
+            ([digest, members]) => digest === selector || members[0]?.hostDigest === selector,
+          );
+    if (eligible.length !== 1) {
+      throw new TypeError(`${familyName} cohort selector does not identify one qualifying cohort`);
+    }
+    result[familyName] = eligible[0][1].slice(0, 6);
+  }
+  return result;
+}
+
+function assertSelectedFamilyDescriptors(selectedCandidates, selectedFamilies) {
+  for (const familyName of FAMILY_NAMES) {
+    const selectedEvidence = [
+      ...(selectedFamilies?.[familyName]?.baseline ?? []),
+      selectedFamilies?.[familyName]?.holdout,
+    ];
+    const candidates = selectedCandidates[familyName] ?? [];
+    if (selectedEvidence.length !== 6 || candidates.length !== 6) {
+      throw new TypeError(`${familyName} selected descriptor census is not exactly five plus one`);
+    }
+    for (let index = 0; index < 6; index += 1) {
+      const evidence = selectedEvidence[index];
+      const candidate = candidates[index];
+      if (
+        evidence?.custody?.artifactId !== candidate.artifactId ||
+        evidence?.custody?.workflowRunId !== candidate.runId ||
+        evidence?.report?.execution?.digest !== candidate.executionDigest ||
+        evidence?.contentDigest !== candidate.contentDigest
+      ) {
+        throw new TypeError(
+          `${familyName} selected descriptor[${String(index)}] differs from gate-derived campaign selection`,
+        );
+      }
+    }
+  }
+}
+
+function campaignFamilyCohortDigest(report, familyName) {
+  return sha256Canonical({
+    host: report?.host?.digest ?? null,
+    locks: report?.source?.locks ?? null,
+    sourceCommit: report?.source?.commit ?? null,
+    workload: report?.workloadIdentity ?? null,
+    ...(familyName.startsWith('dev-') || familyName.startsWith('build-')
+      ? {
+          product: {
+            artifact: report?.productArtifact ?? null,
+            policy: report?.workloadIdentity?.identity?.productArtifactPolicy ?? null,
+          },
+        }
+      : {}),
+  });
+}
+
+function campaignFamilyCell(familyName) {
+  if (familyName.startsWith('dev-')) return 'dev';
+  if (familyName.startsWith('build-')) return 'build';
+  return familyName === 'check' ? 'check-scaling' : familyName;
+}
+
+function campaignCandidateInventoryOrder(left, right) {
+  return (
+    campaignChronologyOrder(left, right) ||
+    FAMILY_NAMES.indexOf(left.family) - FAMILY_NAMES.indexOf(right.family) ||
+    left.artifactId - right.artifactId
+  );
+}
+
+function candidateChronologyIdentity(candidate) {
+  return {
+    artifactId: candidate.artifactId,
+    runCreatedAt: candidate.runCreatedAt,
+    runId: candidate.runId,
+  };
+}
+
+function campaignCandidateReference(candidate) {
+  return {
+    artifactId: candidate.artifactId,
+    ...(candidate.family === undefined
+      ? {}
+      : {
+          cohortDigest: candidate.cohortDigest,
+          family: candidate.family,
+          hostDigest: candidate.hostDigest,
+        }),
+    contentDigest: candidate.contentDigest,
+    executionDigest: candidate.executionDigest,
+    runCreatedAt: candidate.runCreatedAt,
+    runId: candidate.runId,
   };
 }
 
@@ -629,7 +1285,10 @@ function validateCampaignManifest(campaign) {
     canonicalJson(Object.keys(campaign).sort()) !==
       canonicalJson([
         'boundary',
+        'cohortSelections',
+        'familyCandidates',
         'productionBytes',
+        'productionBytesCandidates',
         'runs',
         'selectedProductionBytes',
         'workflowRunsApiMetadata',
@@ -651,6 +1310,16 @@ function validateCampaignManifest(campaign) {
     throw new TypeError('manifest campaign boundary is malformed');
   }
   validateCampaignCustodyReference(campaign.workflowRunsApiMetadata, 'campaign workflow-runs API');
+  if (
+    !ownRecord(campaign.cohortSelections) ||
+    Object.keys(campaign.cohortSelections).some(
+      (family) =>
+        !FAMILY_NAMES.includes(family) ||
+        !DIGEST_PATTERN.test(campaign.cohortSelections[family] ?? ''),
+    )
+  ) {
+    throw new TypeError('manifest campaign cohort selections are malformed');
+  }
   if (
     !Array.isArray(campaign.runs) ||
     campaign.runs.length < 1 ||
@@ -684,6 +1353,103 @@ function validateCampaignManifest(campaign) {
     canonicalJson([...campaign.runs].sort(campaignChronologyOrder)) !== canonicalJson(campaign.runs)
   ) {
     throw new TypeError('manifest campaign run chronology is duplicated or non-canonical');
+  }
+  if (!Array.isArray(campaign.familyCandidates) || campaign.familyCandidates.length < 42) {
+    throw new TypeError('manifest campaign family candidate census is incomplete');
+  }
+  const familyCandidateArtifacts = new Set();
+  const familyCandidateExecutions = new Set();
+  const familyCandidateRuns = new Set();
+  const manifestRuns = new Map(campaign.runs.map((run) => [run.runId, run]));
+  for (const candidate of campaign.familyCandidates) {
+    if (
+      !ownRecord(candidate) ||
+      canonicalJson(Object.keys(candidate).sort()) !==
+        canonicalJson([
+          'artifactId',
+          'cohortDigest',
+          'descriptor',
+          'executionDigest',
+          'family',
+          'hostDigest',
+          'runCreatedAt',
+          'runId',
+        ]) ||
+      !FAMILY_NAMES.includes(candidate.family) ||
+      !Number.isSafeInteger(candidate.artifactId) ||
+      candidate.artifactId < 1 ||
+      !Number.isSafeInteger(candidate.runId) ||
+      !DIGEST_PATTERN.test(candidate.cohortDigest ?? '') ||
+      !DIGEST_PATTERN.test(candidate.executionDigest ?? '') ||
+      !DIGEST_PATTERN.test(candidate.hostDigest ?? '') ||
+      !validExactTimestamp(candidate.runCreatedAt) ||
+      manifestRuns.get(candidate.runId)?.runCreatedAt !== candidate.runCreatedAt
+    ) {
+      throw new TypeError('manifest campaign family candidate identity is malformed');
+    }
+    validateManifestEvidenceDescriptor(
+      candidate.descriptor,
+      `campaign ${candidate.family} candidate ${String(candidate.artifactId)}`,
+    );
+    const runFamily = `${String(candidate.runId)}:${candidate.family}`;
+    if (
+      familyCandidateArtifacts.has(candidate.artifactId) ||
+      familyCandidateExecutions.has(candidate.executionDigest) ||
+      familyCandidateRuns.has(runFamily)
+    ) {
+      throw new TypeError('manifest campaign family candidate identities are duplicated');
+    }
+    familyCandidateArtifacts.add(candidate.artifactId);
+    familyCandidateExecutions.add(candidate.executionDigest);
+    familyCandidateRuns.add(runFamily);
+  }
+  if (
+    canonicalJson([...campaign.familyCandidates].sort(campaignCandidateInventoryOrder)) !==
+    canonicalJson(campaign.familyCandidates)
+  ) {
+    throw new TypeError('manifest campaign family candidate chronology is non-canonical');
+  }
+  if (
+    !Array.isArray(campaign.productionBytesCandidates) ||
+    campaign.productionBytesCandidates.length < 1
+  ) {
+    throw new TypeError('manifest campaign Production bytes candidate census is incomplete');
+  }
+  const productionCandidateArtifacts = new Set();
+  const productionCandidateExecutions = new Set();
+  const productionCandidateRuns = new Set();
+  for (const candidate of campaign.productionBytesCandidates) {
+    if (
+      !ownRecord(candidate) ||
+      canonicalJson(Object.keys(candidate).sort()) !==
+        canonicalJson(['artifactId', 'descriptor', 'executionDigest', 'runCreatedAt', 'runId']) ||
+      !Number.isSafeInteger(candidate.artifactId) ||
+      candidate.artifactId < 1 ||
+      !Number.isSafeInteger(candidate.runId) ||
+      !DIGEST_PATTERN.test(candidate.executionDigest ?? '') ||
+      !validExactTimestamp(candidate.runCreatedAt) ||
+      manifestRuns.get(candidate.runId)?.runCreatedAt !== candidate.runCreatedAt ||
+      familyCandidateArtifacts.has(candidate.artifactId) ||
+      familyCandidateExecutions.has(candidate.executionDigest) ||
+      productionCandidateArtifacts.has(candidate.artifactId) ||
+      productionCandidateExecutions.has(candidate.executionDigest) ||
+      productionCandidateRuns.has(candidate.runId)
+    ) {
+      throw new TypeError('manifest campaign Production bytes candidate identity is malformed');
+    }
+    validateManifestEvidenceDescriptor(
+      candidate.descriptor,
+      `campaign Production bytes candidate ${String(candidate.artifactId)}`,
+    );
+    productionCandidateArtifacts.add(candidate.artifactId);
+    productionCandidateExecutions.add(candidate.executionDigest);
+    productionCandidateRuns.add(candidate.runId);
+  }
+  if (
+    canonicalJson([...campaign.productionBytesCandidates].sort(campaignChronologyOrder)) !==
+    canonicalJson(campaign.productionBytesCandidates)
+  ) {
+    throw new TypeError('manifest campaign Production bytes candidate chronology is non-canonical');
   }
   for (const [label, value] of [
     ['Production bytes chronology', campaign.productionBytes],
@@ -2890,7 +3656,6 @@ function validateInputManifest(input) {
   if (input.repository !== PERF_PUBLICATION_REPOSITORY) {
     throw new TypeError(`manifest repository must be ${PERF_PUBLICATION_REPOSITORY}`);
   }
-  validateCampaignManifest(input.campaign);
   if (
     canonicalJson(Object.keys(input.families ?? {}).sort()) !==
     canonicalJson([...FAMILY_NAMES].sort())
@@ -2924,6 +3689,22 @@ function validateInputManifest(input) {
 function campaignPublicationFindings(campaign, publication) {
   if (!ownRecord(campaign)) return ['chronology is unavailable'];
   const findings = [];
+  const expectedCampaignKeys = [
+    'boundary',
+    'cohortSelections',
+    'familyCandidates',
+    'liveWorkflowRunsApiResponseDigest',
+    'productionBytes',
+    'productionBytesCandidates',
+    'runs',
+    'selectedFamilies',
+    'selectedProductionBytes',
+    'workflowRunsApiAuthorityDigest',
+    'workflowRunsApiResponseDigest',
+  ];
+  if (canonicalJson(Object.keys(campaign).sort()) !== canonicalJson(expectedCampaignKeys.sort())) {
+    findings.push('field census differs from the authenticated campaign aggregate');
+  }
   const boundary = campaign.boundary;
   if (
     !ownRecord(boundary) ||
@@ -2950,6 +3731,7 @@ function campaignPublicationFindings(campaign, publication) {
   ) {
     findings.push('run chronology does not retain both campaign boundary endpoints');
   }
+  const derivedFamilyCandidates = [];
   const derivedProductionBytes = [];
   const artifactIds = new Set();
   for (const run of campaign.runs ?? []) {
@@ -2969,7 +3751,14 @@ function campaignPublicationFindings(campaign, publication) {
         continue;
       }
       artifactIds.add(artifact.artifactId);
-      if (artifact.kind === 'production-bytes') {
+      if (artifact.kind === 'family') {
+        derivedFamilyCandidates.push({
+          artifactId: artifact.artifactId,
+          family: artifact.family,
+          runCreatedAt: run.runCreatedAt,
+          runId: run.runId,
+        });
+      } else {
         derivedProductionBytes.push({
           artifactId: artifact.artifactId,
           runCreatedAt: run.runCreatedAt,
@@ -2978,7 +3767,114 @@ function campaignPublicationFindings(campaign, publication) {
       }
     }
   }
+  derivedFamilyCandidates.sort(campaignCandidateInventoryOrder);
   derivedProductionBytes.sort(campaignChronologyOrder);
+  const familyCandidates = campaign.familyCandidates;
+  if (
+    !Array.isArray(familyCandidates) ||
+    familyCandidates.length < 42 ||
+    canonicalJson([...familyCandidates].sort(campaignCandidateInventoryOrder)) !==
+      canonicalJson(familyCandidates)
+  ) {
+    findings.push('family candidate census is incomplete or non-canonical');
+  }
+  const familyCandidateArtifacts = new Set();
+  const familyCandidateExecutions = new Set();
+  const familyCandidateRuns = new Set();
+  for (const candidate of familyCandidates ?? []) {
+    const expectedKeys = [
+      'artifactId',
+      'cohortDigest',
+      'contentDigest',
+      'executionDigest',
+      'family',
+      'hostDigest',
+      'runCreatedAt',
+      'runId',
+    ];
+    const runFamily = `${String(candidate?.runId)}:${String(candidate?.family)}`;
+    if (
+      !ownRecord(candidate) ||
+      canonicalJson(Object.keys(candidate).sort()) !== canonicalJson(expectedKeys) ||
+      !FAMILY_NAMES.includes(candidate.family) ||
+      !Number.isSafeInteger(candidate.artifactId) ||
+      candidate.artifactId < 1 ||
+      !Number.isSafeInteger(candidate.runId) ||
+      !validExactTimestamp(candidate.runCreatedAt) ||
+      !DIGEST_PATTERN.test(candidate.cohortDigest ?? '') ||
+      !DIGEST_PATTERN.test(candidate.contentDigest ?? '') ||
+      !DIGEST_PATTERN.test(candidate.executionDigest ?? '') ||
+      !DIGEST_PATTERN.test(candidate.hostDigest ?? '') ||
+      familyCandidateArtifacts.has(candidate.artifactId) ||
+      familyCandidateExecutions.has(candidate.executionDigest) ||
+      familyCandidateRuns.has(runFamily)
+    ) {
+      findings.push('family candidate reference census is malformed or duplicated');
+      continue;
+    }
+    familyCandidateArtifacts.add(candidate.artifactId);
+    familyCandidateExecutions.add(candidate.executionDigest);
+    familyCandidateRuns.add(runFamily);
+  }
+  const familyCandidateListing = (familyCandidates ?? [])
+    .map(({ artifactId, family, runCreatedAt, runId }) => ({
+      artifactId,
+      family,
+      runCreatedAt,
+      runId,
+    }))
+    .sort(campaignCandidateInventoryOrder);
+  if (canonicalJson(familyCandidateListing) !== canonicalJson(derivedFamilyCandidates)) {
+    findings.push('family candidate references omit or invent a campaign artifact');
+  }
+  const productionBytesCandidates = campaign.productionBytesCandidates;
+  if (
+    !Array.isArray(productionBytesCandidates) ||
+    productionBytesCandidates.length < 1 ||
+    canonicalJson([...productionBytesCandidates].sort(campaignChronologyOrder)) !==
+      canonicalJson(productionBytesCandidates)
+  ) {
+    findings.push('Production bytes candidate census is incomplete or non-canonical');
+  }
+  const productionCandidateArtifacts = new Set();
+  const productionCandidateExecutions = new Set();
+  const productionCandidateRuns = new Set();
+  for (const candidate of productionBytesCandidates ?? []) {
+    const expectedKeys = [
+      'artifactId',
+      'contentDigest',
+      'executionDigest',
+      'runCreatedAt',
+      'runId',
+    ];
+    if (
+      !ownRecord(candidate) ||
+      canonicalJson(Object.keys(candidate).sort()) !== canonicalJson(expectedKeys) ||
+      !Number.isSafeInteger(candidate.artifactId) ||
+      candidate.artifactId < 1 ||
+      !Number.isSafeInteger(candidate.runId) ||
+      !validExactTimestamp(candidate.runCreatedAt) ||
+      !DIGEST_PATTERN.test(candidate.contentDigest ?? '') ||
+      !DIGEST_PATTERN.test(candidate.executionDigest ?? '') ||
+      familyCandidateArtifacts.has(candidate.artifactId) ||
+      familyCandidateExecutions.has(candidate.executionDigest) ||
+      productionCandidateArtifacts.has(candidate.artifactId) ||
+      productionCandidateExecutions.has(candidate.executionDigest) ||
+      productionCandidateRuns.has(candidate.runId)
+    ) {
+      findings.push('Production bytes candidate reference census is malformed or duplicated');
+      continue;
+    }
+    productionCandidateArtifacts.add(candidate.artifactId);
+    productionCandidateExecutions.add(candidate.executionDigest);
+    productionCandidateRuns.add(candidate.runId);
+  }
+  const productionCandidateListing = (productionBytesCandidates ?? []).map(
+    candidateChronologyIdentity,
+  );
+  if (canonicalJson(productionCandidateListing) !== canonicalJson(derivedProductionBytes)) {
+    findings.push('Production bytes candidate references omit or invent a campaign artifact');
+  }
   if (
     !Array.isArray(campaign.productionBytes) ||
     campaign.productionBytes.length < 1 ||
@@ -2990,6 +3886,61 @@ function campaignPublicationFindings(campaign, publication) {
   ) {
     findings.push('Production bytes chronology or earliest selection is malformed');
   }
+  if (
+    !ownRecord(campaign.cohortSelections) ||
+    Object.entries(campaign.cohortSelections).some(
+      ([family, selector]) =>
+        !FAMILY_NAMES.includes(family) || !DIGEST_PATTERN.test(selector ?? ''),
+    )
+  ) {
+    findings.push('cohort selections are malformed');
+  }
+  let derivedFamilySelection;
+  try {
+    derivedFamilySelection = selectAggregateCampaignFamilies(
+      familyCandidates ?? [],
+      campaign.cohortSelections ?? {},
+    );
+  } catch (error) {
+    findings.push(error instanceof Error ? error.message : String(error));
+  }
+  if (
+    !ownRecord(campaign.selectedFamilies) ||
+    canonicalJson(Object.keys(campaign.selectedFamilies).sort()) !==
+      canonicalJson([...FAMILY_NAMES].sort())
+  ) {
+    findings.push('selected family census is incomplete');
+  }
+  for (const familyName of FAMILY_NAMES) {
+    const selectedCandidates = campaign.selectedFamilies?.[familyName];
+    if (
+      !Array.isArray(selectedCandidates) ||
+      selectedCandidates.length !== 6 ||
+      canonicalJson(selectedCandidates) !== canonicalJson(derivedFamilySelection?.[familyName])
+    ) {
+      findings.push(`${familyName} selection is not the campaign-derived first five plus sixth`);
+      continue;
+    }
+    const evidence = publication?.families?.[familyName]?.evidence;
+    if (ownRecord(evidence)) {
+      const selectedEvidence = [
+        ...(Array.isArray(evidence.baseline) ? evidence.baseline : []),
+        evidence.holdout,
+      ];
+      for (let index = 0; index < 6; index += 1) {
+        const candidate = selectedCandidates[index];
+        const reference = selectedEvidence[index];
+        if (
+          candidate.artifactId !== reference?.artifactId ||
+          candidate.runId !== reference?.workflowRunId ||
+          candidate.executionDigest !== reference?.execution ||
+          candidate.contentDigest !== reference?.reportContentDigest
+        ) {
+          findings.push(`${familyName} selected evidence differs from campaign candidate custody`);
+        }
+      }
+    }
+  }
   const selected = campaign.selectedProductionBytes;
   const evidence = publication?.productionBytes?.evidence;
   if (
@@ -2997,6 +3948,18 @@ function campaignPublicationFindings(campaign, publication) {
     (selected?.artifactId !== evidence.artifactId || selected?.runId !== evidence.workflowRunId)
   ) {
     findings.push('earliest Production bytes selection differs from publication evidence');
+  }
+  if (
+    ownRecord(evidence) &&
+    productionBytesCandidates?.[0]?.executionDigest !== evidence.execution
+  ) {
+    findings.push('Production bytes candidate execution differs from publication evidence');
+  }
+  if (
+    ownRecord(evidence) &&
+    productionBytesCandidates?.[0]?.contentDigest !== evidence.reportContentDigest
+  ) {
+    findings.push('Production bytes candidate content differs from publication evidence');
   }
   for (const digestField of [
     'workflowRunsApiAuthorityDigest',
@@ -3022,6 +3985,43 @@ function campaignPublicationFindings(campaign, publication) {
     }
   }
   return [...new Set(findings)].sort();
+}
+
+function selectAggregateCampaignFamilies(candidates, cohortSelections) {
+  const result = {};
+  for (const familyName of FAMILY_NAMES) {
+    const groups = new Map();
+    for (const candidate of candidates.filter((entry) => entry.family === familyName)) {
+      const members = groups.get(candidate.cohortDigest) ?? [];
+      members.push(candidate);
+      groups.set(candidate.cohortDigest, members);
+    }
+    const qualifying = [...groups.entries()]
+      .map(([digest, members]) => [digest, [...members].sort(campaignChronologyOrder)])
+      .filter(([, members]) => members.length >= 6)
+      .sort(([left], [right]) => left.localeCompare(right));
+    const selector = cohortSelections[familyName];
+    if (qualifying.length === 0) {
+      throw new TypeError(`${familyName} has no authenticated six-run campaign cohort`);
+    }
+    if (qualifying.length === 1 && selector !== undefined) {
+      throw new TypeError(`${familyName} cohort selector is unnecessary for one qualifying cohort`);
+    }
+    if (qualifying.length > 1 && selector === undefined) {
+      throw new TypeError(`${familyName} has multiple qualifying cohorts without explicit choice`);
+    }
+    const eligible =
+      selector === undefined
+        ? qualifying
+        : qualifying.filter(
+            ([digest, members]) => digest === selector || members[0]?.hostDigest === selector,
+          );
+    if (eligible.length !== 1) {
+      throw new TypeError(`${familyName} cohort selector does not identify one qualifying cohort`);
+    }
+    result[familyName] = eligible[0][1].slice(0, 6);
+  }
+  return result;
 }
 
 function authenticatedInputFindings(authenticated) {
@@ -3058,10 +4058,27 @@ function authenticatedInputFindings(authenticated) {
   }
   findings.push(
     ...campaignPublicationFindings(authenticated?.campaign, {
+      families: Object.fromEntries(
+        FAMILY_NAMES.map((familyName) => [
+          familyName,
+          {
+            evidence: {
+              baseline: (authenticated?.families?.[familyName]?.baseline ?? []).map(
+                evidenceReference,
+              ),
+              holdout: ownRecord(authenticated?.families?.[familyName]?.holdout)
+                ? evidenceReference(authenticated.families[familyName].holdout)
+                : null,
+            },
+          },
+        ]),
+      ),
       identity: { sourceCommit: authenticated?.productionBytes?.report?.source?.commit },
       productionBytes: {
         evidence: {
           artifactId: authenticated?.productionBytes?.custody?.artifactId,
+          execution: authenticated?.productionBytes?.report?.execution?.digest,
+          reportContentDigest: authenticated?.productionBytes?.contentDigest,
           workflowRunId: authenticated?.productionBytes?.custody?.workflowRunId,
         },
       },
@@ -3831,6 +4848,7 @@ async function main(args) {
   const input = JSON.parse(await readFile(manifestPath, 'utf8'));
   const authenticated = await authenticatePerformancePublicationInput(input, {
     baseDirectory: path.dirname(manifestPath),
+    manifestPath,
   });
   const result = derivePerformancePublication(authenticated);
   assertPerformancePublicationResult(result, { authenticated });

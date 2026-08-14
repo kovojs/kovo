@@ -228,12 +228,12 @@ unzip -p "$kovo_perf_custody/run-1/browser.zip" comparison.json \
   > "$kovo_perf_custody/run-1/comparison.json"
 ```
 
-The input manifest is `kovo-performance-publication-input/v3`. This abridged, non-runnable example
+The input manifest is `kovo-performance-publication-input/v4`. This abridged, non-runnable example
 shows one family's shape:
 
 ```json
 {
-  "schema": "kovo-performance-publication-input/v3",
+  "schema": "kovo-performance-publication-input/v4",
   "repository": "kovojs/kovo",
   "campaign": {
     "boundary": { "firstRunId": 1001, "lastRunId": 1006 },
@@ -242,8 +242,13 @@ shows one family's shape:
       "byteLength": 1234,
       "contentDigest": "sha256:<64-lowercase-hex>"
     },
+    "cohortSelections": {},
     "runs": ["one content-addressed run API and artifact-list API pair per boundary run"],
+    "familyCandidates": ["every literal family candidate and its five-file descriptor"],
     "productionBytes": ["complete created_at/run-ID chronology"],
+    "productionBytesCandidates": [
+      "every literal Production-bytes candidate and its five-file descriptor"
+    ],
     "selectedProductionBytes": { "artifactId": 9001, "runCreatedAt": "...", "runId": 1001 }
   },
   "productionBytes": {
@@ -310,7 +315,9 @@ five-plus-one shape for `browser`, `dev-n24`, `dev-n216`, `build-n24`, `build-n2
 object. Missing or additional families, a missing sidecar, or an omitted campaign run/candidate fail
 before publication. Every path is canonical and relative to the manifest directory. The gate opens
 only contained, non-symlink, single-link regular files, checks read stability, and rejects path or
-inode reuse across descriptors.
+inode reuse across descriptors. Before live API access and again after all descriptor
+authentication, it recursively requires the directory to equal the manifest references exactly;
+extra or missing files/directories and non-regular nodes fail closed.
 
 If the build-persistence predicate returns `profile-required`, add the two current N=216 profile
 reports under the optional top-level `buildProfiles` object. The two descriptors may share only the
@@ -362,8 +369,10 @@ vp exec node scripts/perf-publication-gate.mjs \
   --markdown-out "$kovo_perf_custody/publication/performance-publication.md"
 ```
 
-The CLI completes all 42 baseline/holdout custody calls, the Production-bytes custody call, live
-reauthentication of the complete campaign workflow-run and artifact-list chronology, and both optional build-profile calls before
+The CLI completes all 42 selected baseline/holdout custody calls, the selected Production-bytes
+custody call, every carried family and Production-bytes candidate custody call, live
+reauthentication of the complete campaign workflow-run and artifact-list chronology, and both
+optional build-profile calls before
 it creates an evidence, JSON, Markdown, staging, or output path. A requested in-repository output is
 therefore created only after the whole measured checkout has passed every clean-source check; using
 the external directory above avoids coupling collection and publication to repository state.
@@ -373,7 +382,8 @@ evaluation for every family. The aggregate JSON content-addresses those 21 files
 canonical artifact page, API URL, API-response digest, artifact ZIP digest, report digest, execution,
 source, lock, host, and workload identity. The aggregate also retains the preregistered boundary,
 every authenticated run and literal publication-artifact identity, the complete Production-bytes
-chronology, and the earliest selected candidate. Its Markdown surfaces baseline and holdout target
+chronology, every authenticated family/byte candidate reference, the independently re-derived
+cohort selection, and the earliest selected candidate. Its Markdown surfaces baseline and holdout target
 assessments for all seven families, links exact fixture sources at the measured commit, and preserves
 the architectural lane warning beside each subject. It also embeds and renders the cross-corpus
 foreground build-session assessment, including its four milestone/residual cells and any

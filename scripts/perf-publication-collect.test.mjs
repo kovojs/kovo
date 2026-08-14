@@ -1,4 +1,7 @@
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { createServer } from 'node:net';
 import {
   link,
   lstat,
@@ -24,12 +27,17 @@ import {
   collectPerformancePublicationRuns,
   createPerformancePublicationManifest,
   loadPerformancePublicationCollections,
+  performancePublicationManifestRawFileCount,
   performancePublicationCohortDigest,
   selectPerformancePublicationCohorts,
   selectPerformancePublicationProductionBytes,
   validateCollectedCandidateBytes,
   validateCollectedProductionBytesCandidateBytes,
 } from './perf-publication-collect.mjs';
+import {
+  authenticateManifestFilesystemCensus,
+  authenticatePerformancePublicationInput,
+} from './perf-publication-gate.mjs';
 import {
   PACKED_KOVO_PRODUCT_WORKLOAD_POLICY,
   fixturePackedKovoProductIdentity,
@@ -109,6 +117,13 @@ describe('metrics-blind performance publication collection', () => {
 
   it('fails closed on multiple qualifying cohorts unless an exact cohort or unique host is selected', () => {
     const candidates = selectionCandidates();
+    expect(() =>
+      selectPerformancePublicationCohorts(candidates, {
+        cohortSelections: new Map([
+          ['browser', performancePublicationCohortDigest(candidates[0].report, 'browser')],
+        ]),
+      }),
+    ).toThrow('selector is unnecessary');
     const second = Array.from({ length: 6 }, (_, index) =>
       selectionCandidate('browser', 50_000 + index, {
         hostDigest: digest('browser-second-host'),
@@ -668,10 +683,10 @@ describe('metrics-blind performance publication collection', () => {
     const assignments = [];
     let runId = 10_000;
     for (const family of PERF_PUBLICATION_FAMILY_NAMES) {
-      for (let index = 0; index < 6; index += 1) {
+      for (let index = 0; index < 7; index += 1) {
         assignments.push({
           family,
-          productionBytes: assignments.length === 0,
+          productionBytes: assignments.length < 2,
           runId: runId++,
         });
       }
@@ -725,8 +740,234 @@ describe('metrics-blind performance publication collection', () => {
     for (const relative of Object.values(result.manifest.productionBytes)) {
       await expect(readFile(path.join(publication, relative))).resolves.not.toHaveLength(0);
     }
+    expect(result.manifest.campaign.familyCandidates).toHaveLength(49);
+    expect(result.manifest.campaign.productionBytesCandidates).toHaveLength(2);
+    for (const candidate of [
+      ...result.manifest.campaign.familyCandidates,
+      ...result.manifest.campaign.productionBytesCandidates,
+    ]) {
+      for (const relative of Object.values(candidate.descriptor)) {
+        await expect(readFile(path.join(publication, relative))).resolves.not.toHaveLength(0);
+      }
+    }
+    expect((await regularFileCensus(publication)).length - 1).toBe(
+      performancePublicationManifestRawFileCount({
+        candidateCount: {
+          families: result.manifest.campaign.familyCandidates.length,
+          productionBytes: result.manifest.campaign.productionBytesCandidates.length,
+        },
+        runCount: result.manifest.campaign.runs.length,
+      }),
+    );
+    const manifestPath = path.join(publication, 'performance-publication-input.json');
+    await expect(
+      authenticateManifestFilesystemCensus(result.manifest, {
+        baseDirectory: publication,
+        manifestPath,
+      }),
+    ).resolves.toBe('performance-publication-input.json');
+
+    const extra = path.join(publication, 'unused.bin');
+    await writeFile(extra, 'unused');
+    await expectManifestCensusFailure(result.manifest, publication, /unreferenced/u);
+    await unlink(extra);
+
+    const nestedExtra = path.join(publication, 'unused', 'nested.bin');
+    await mkdir(path.dirname(nestedExtra), { recursive: true });
+    await writeFile(nestedExtra, 'unused');
+    await expectManifestCensusFailure(result.manifest, publication, /unreferenced/u);
+    await rm(path.join(publication, 'unused'), { recursive: true });
+
+    const symlinkPath = path.join(publication, 'unused-link');
+    await symlink('performance-publication-input.json', symlinkPath);
+    await expectManifestCensusFailure(result.manifest, publication, /symlink/u);
+    await unlink(symlinkPath);
+
+    const fifoPath = path.join(publication, 'unused-fifo');
+    execFileSync('mkfifo', [fifoPath]);
+    await expectManifestCensusFailure(result.manifest, publication, /regular/u);
+    await unlink(fifoPath);
+
+    const socketPath = path.join(publication, 'unused.sock');
+    const server = createServer();
+    const originalWorkingDirectory = process.cwd();
+    let serverListening = false;
+    process.chdir(publication);
+    try {
+      await new Promise((resolve, reject) => {
+        server.once('error', reject);
+        server.listen('unused.sock', resolve);
+      });
+      serverListening = true;
+      await expectManifestCensusFailure(result.manifest, publication, /regular/u);
+    } finally {
+      if (serverListening) {
+        await new Promise((resolve, reject) =>
+          server.close((error) => (error ? reject(error) : resolve())),
+        );
+      }
+      process.chdir(originalWorkingDirectory);
+      await rm(socketPath, { force: true });
+    }
+
+    const reportRelative = result.manifest.campaign.familyCandidates[0].descriptor.report;
+    const reportPath = path.join(publication, reportRelative);
+    const reportBytes = await readFile(reportPath);
+    await unlink(reportPath);
+    await expectManifestCensusFailure(result.manifest, publication, /missing/u);
+    await writeFile(reportPath, reportBytes);
+
+    const otherReport = path.join(
+      publication,
+      result.manifest.campaign.familyCandidates[1].descriptor.report,
+    );
+    await unlink(reportPath);
+    await link(otherReport, reportPath);
+    await expectManifestCensusFailure(result.manifest, publication, /hardlink|unique regular/u);
+    await unlink(reportPath);
+    await writeFile(reportPath, reportBytes);
+
+    await unlink(reportPath);
+    await mkdir(reportPath);
+    await expectManifestCensusFailure(result.manifest, publication, /non-directory|directory/u);
+    await rm(reportPath, { recursive: true });
+    await writeFile(reportPath, reportBytes);
+
+    const traversal = structuredClone(result.manifest);
+    traversal.campaign.familyCandidates[0].descriptor.report = '../outside.json';
+    await expectManifestCensusFailure(
+      traversal,
+      publication,
+      /canonical safe relative path|malformed/u,
+    );
+
+    let networkCalls = 0;
+    const gateOperations = performanceGateFixtureOperations(campaign, () => {
+      networkCalls += 1;
+    });
+    await writeFile(extra, 'present-before-authentication');
+    await expect(
+      authenticatePerformancePublicationInput(result.manifest, {
+        ...gateOperations,
+        baseDirectory: publication,
+        manifestPath,
+      }),
+    ).rejects.toThrow(/unreferenced/u);
+    expect(networkCalls).toBe(0);
+    await unlink(extra);
+
+    let injected = false;
+    await expect(
+      authenticatePerformancePublicationInput(result.manifest, {
+        ...gateOperations,
+        baseDirectory: publication,
+        async descriptorReadHook({ descriptorKey }) {
+          if (descriptorKey !== 'manifest' || injected) return;
+          injected = true;
+          await writeFile(extra, 'added-after-opening-manifest');
+        },
+        manifestPath,
+      }),
+    ).rejects.toThrow(/unreferenced/u);
+    expect(injected).toBe(true);
+    expect(networkCalls).toBeGreaterThan(0);
+    await unlink(extra);
   });
 });
+
+async function expectManifestCensusFailure(manifest, directory, expectation) {
+  await expect(
+    authenticateManifestFilesystemCensus(manifest, {
+      baseDirectory: directory,
+      manifestPath: path.join(directory, 'performance-publication-input.json'),
+    }),
+  ).rejects.toThrow(expectation);
+}
+
+async function regularFileCensus(directory, relative = '') {
+  const result = [];
+  for (const entry of await readdir(path.join(directory, relative), { withFileTypes: true })) {
+    const child = relative === '' ? entry.name : path.join(relative, entry.name);
+    if (entry.isDirectory()) result.push(...(await regularFileCensus(directory, child)));
+    else if (entry.isFile()) result.push(child);
+  }
+  return result;
+}
+
+function performanceGateFixtureOperations(campaign, onNetwork) {
+  const workflowBytes = readFileSync(path.resolve('.github/workflows/perf-realistic.yml'));
+  const workflowBlobSha = createHash('sha1')
+    .update(`blob ${String(workflowBytes.length)}\0`)
+    .update(workflowBytes)
+    .digest('hex');
+  const workflowApiBytes = jsonBytes({
+    content: workflowBytes.toString('base64'),
+    download_url: `https://raw.githubusercontent.com/${REPOSITORY}/${SOURCE}/.github/workflows/perf-realistic.yml`,
+    encoding: 'base64',
+    git_url: `https://api.github.com/repos/${REPOSITORY}/git/blobs/${workflowBlobSha}`,
+    html_url: `https://github.com/${REPOSITORY}/blob/${SOURCE}/.github/workflows/perf-realistic.yml`,
+    name: 'perf-realistic.yml',
+    path: '.github/workflows/perf-realistic.yml',
+    sha: workflowBlobSha,
+    size: workflowBytes.length,
+    type: 'file',
+    url: `https://api.github.com/repos/${REPOSITORY}/contents/.github/workflows/perf-realistic.yml?ref=${SOURCE}`,
+  });
+  const tracked = (value) => {
+    onNetwork();
+    return Buffer.from(value);
+  };
+  const workflowRuns = [...campaign.byRun.values()].map((fixture) => fixture.run);
+  const budgets = {
+    metrics: Object.fromEntries(
+      [
+        'production.criticalPath.wireBytes',
+        'production.document.wireBytes',
+        'production.inlineBootstrap.gzipBytes',
+        'production.inlineBootstrap.identityBytes',
+        'production.navigation.wireBytes',
+      ].map((metricId) => [metricId, { loadSensitive: false, max: 1_000_000, unit: 'bytes' }]),
+    ),
+    schema: 'kovo-perf-budgets/v1',
+  };
+  const budgetBytes = jsonBytes(budgets);
+  return {
+    fetchArtifactApi: async ({ artifactId }) =>
+      tracked(
+        campaign.endpoints.get(`repos/${REPOSITORY}/actions/artifacts/${String(artifactId)}`),
+      ),
+    fetchCampaignWorkflowRunsApi: async () =>
+      tracked(jsonBytes({ total_count: workflowRuns.length, workflow_runs: workflowRuns })),
+    fetchWorkflowArtifactsApi: async ({ workflowRunId }) =>
+      tracked(
+        campaign.endpoints.get(
+          `repos/${REPOSITORY}/actions/runs/${String(workflowRunId)}/artifacts?per_page=100`,
+        ),
+      ),
+    fetchWorkflowFileApi: async () => tracked(workflowApiBytes),
+    fetchWorkflowJobsApi: async ({ workflowRunId }) =>
+      tracked(
+        campaign.endpoints.get(
+          `repos/${REPOSITORY}/actions/runs/${String(workflowRunId)}/jobs?filter=all&per_page=100`,
+        ),
+      ),
+    fetchWorkflowRunApi: async ({ workflowRunId }) =>
+      tracked(campaign.endpoints.get(`repos/${REPOSITORY}/actions/runs/${String(workflowRunId)}`)),
+    loadPerformanceBudgets: async () => ({
+      budgetBytes,
+      budgetIdentity: {
+        byteLength: budgetBytes.length,
+        contentDigest: digest(budgetBytes),
+        path: 'perf-budgets.json',
+        schema: budgets.schema,
+        sourceCommit: SOURCE,
+      },
+      budgets,
+    }),
+    loadTrustedWorkflow: async () => ({ bytes: workflowBytes, headSha: SOURCE }),
+    now: '2026-08-14T00:00:00.000Z',
+  };
+}
 
 function selectionCandidates() {
   let runId = 1_000;
@@ -820,6 +1061,7 @@ function campaignFixture(assignments) {
   for (const [index, assignment] of assignments.entries()) {
     const fixture = reportFixture({
       artifactId: 20_000 + assignment.runId,
+      event: assignment.productionBytes === true ? 'pull_request' : 'workflow_dispatch',
       familyName: assignment.family,
       index,
       locks,
@@ -828,8 +1070,6 @@ function campaignFixture(assignments) {
     });
     let bytesFixture = null;
     if (assignment.productionBytes === true) {
-      fixture.run.event = 'pull_request';
-      fixture.runApiBytes = jsonBytes(fixture.run);
       bytesFixture = productionBytesReportFixture({
         artifactId: 120_000 + assignment.runId,
         familyFixture: fixture,
@@ -871,7 +1111,15 @@ function campaignFixture(assignments) {
   return { byRun, endpoints };
 }
 
-function reportFixture({ artifactId, familyName, index, locks, productArtifact, runId }) {
+function reportFixture({
+  artifactId,
+  event = 'workflow_dispatch',
+  familyName,
+  index,
+  locks,
+  productArtifact,
+  runId,
+}) {
   const policy = PERF_PUBLICATION_FAMILIES[familyName];
   const repositoryId = 777;
   const runCreatedAt = new Date(Date.UTC(2026, 7, 13, 0, index, 0)).toISOString();
@@ -886,7 +1134,7 @@ function reportFixture({ artifactId, familyName, index, locks, productArtifact, 
     artifacts_url: `${runApiUrl}/artifacts`,
     conclusion: 'failure',
     created_at: runCreatedAt,
-    event: 'workflow_dispatch',
+    event,
     head_branch: 'agent/perf-baselines',
     head_commit: { id: SOURCE },
     head_repository: { full_name: REPOSITORY, id: repositoryId },
@@ -896,6 +1144,7 @@ function reportFixture({ artifactId, familyName, index, locks, productArtifact, 
     jobs_url: `${runApiUrl}/jobs`,
     name: 'Perf Realistic Tier',
     path: '.github/workflows/perf-realistic.yml',
+    ...(event === 'pull_request' ? { pull_requests: [{ number: 7 }] } : {}),
     repository: { full_name: REPOSITORY, id: repositoryId },
     run_attempt: 1,
     status: 'completed',
@@ -958,7 +1207,10 @@ function reportFixture({ artifactId, familyName, index, locks, productArtifact, 
     runUrl,
     serverUrl: 'https://github.com',
     sha: SOURCE,
-    workflowRef: `${REPOSITORY}/.github/workflows/perf-realistic.yml@refs/heads/agent/perf-baselines`,
+    workflowRef:
+      event === 'pull_request'
+        ? `${REPOSITORY}/.github/workflows/perf-realistic.yml@refs/pull/7/merge`
+        : `${REPOSITORY}/.github/workflows/perf-realistic.yml@refs/heads/agent/perf-baselines`,
     workflowSha: SOURCE,
   };
   const executionFacts = {

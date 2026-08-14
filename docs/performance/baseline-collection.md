@@ -13,6 +13,13 @@ cross-checks repeated `--run` values against GitHub's complete exact-source work
 fails closed when the census exceeds one 100-run API page. Focused runs may contain one family; an
 all-family run may contain several:
 
+The one-page limit is an invalidation boundary, not an implicit truncation policy. If the
+exact-source census grows beyond 100 runs, do not collect or publish from it. Before preregistering
+the boundary, an operator may delete obsolete exploratory runs until the complete census fits one
+page, then record that cleanup and preregister the retained endpoints out of band. GitHub deletion
+history and the timing of preregistration remain procedural facts; this repository does not claim
+to prove either one cryptographically.
+
 ```sh
 vp exec node scripts/perf-publication-collect.mjs collect \
   --checkout /absolute/path/to/clean/measured-checkout \
@@ -59,6 +66,8 @@ The cohort key contains the exact source, dependency locks, workload identity, f
 and, for dev/build, concrete packed-product policy and identity. Analysis values and raw benchmark
 timings never enter grouping or ordering. Within the one qualifying cohort, immutable workflow-run
 `created_at` then run ID chooses the first five baselines and the sixth holdout.
+Passing `--cohort` when only one cohort qualifies is rejected as unnecessary; an explicit selector
+is accepted only to resolve multiple qualifying cohorts.
 
 The manifest also selects exactly one authenticated Production-bytes sidecar by the same immutable
 `created_at`, run-ID chronology, choosing the earliest candidate in the complete campaign. Metric
@@ -72,9 +81,20 @@ one exact cohort digest, or a host digest that uniquely identifies one qualifyin
   --cohort dev-n216=sha256:<64-lowercase-hex>
 ```
 
-The result is `performance-publication-input.json` plus `216 + 2R` raw custody files for `R` campaign
-runs: 210 for the 42 family reports, five for the selected Production-bytes sidecar, one exact-source
-workflow-run census, and one run API plus one artifact-list API response per campaign run. Run
+The result is `performance-publication-input.json` plus `216 + 2R + 5F + 5B` raw custody files,
+excluding optional build profiles, where `R` is the campaign-run count, `F` is every authenticated
+literal family candidate, and `B` is every authenticated literal Production-bytes candidate. The
+fixed 216 comprises 210 files for the selected 42 family reports, five for the selected top-level
+Production-bytes sidecar, and one exact-source workflow-run census. Campaign authority contributes
+two files per run, and complete candidate custody contributes five files per family or byte
+candidate. Unselected seventh-or-later family reports and later byte candidates are retained.
+
+Before any live GitHub request, and again after every descriptor has been read and authenticated,
+the gate recursively enumerates the manifest directory without following symlinks. The observed
+tree must equal the manifest plus all referenced raw files exactly. Missing or extra files and
+directories, traversal, symlinks, hardlinks, FIFOs, sockets, devices, and file/directory
+substitution fail closed. This is an exact local custody boundary at both observations, not a claim
+that inert files are cryptographically timestamped between them. Run
 `scripts/perf-publication-gate.mjs` from the same clean measured checkout; that gate remains the
 authority for live GitHub/workflow authentication, re-ratification, budget derivation, holdout
 evaluation, and the final publishable/blocked/unproven verdict. Optional N=216 build-profile
