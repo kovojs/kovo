@@ -13,7 +13,7 @@ replacement boundary, as required by SPEC §4.1/§4.9/§9.5.1 and KV420, so a pa
 means the edited surface preserved unrelated browser state rather than reconstructing it.
 
 The profile classifies directly observed self samples into module evaluation, Vite transform, SSR
-generation, and asynchronous proof convergence. The stack-v2 classifier attributes a leaf sample
+generation, and asynchronous proof convergence. The stack-v3 classifier attributes a leaf sample
 only from functions observed in its complete Inspector ancestry; a generic TypeScript scanner below
 Kovo's asynchronous project-analysis frame therefore remains proof-convergence work, while the same
 scanner under another stack does not. Allocation uses the same ancestry rule. Categories are ranked
@@ -21,6 +21,18 @@ by their larger observed CPU/allocation share, never by comparing microseconds w
 category receives an explicit ruling: present in the current top five, observed outside it, or
 retired because it was absent. Work that matches no reviewed classifier stays in the raw profiles and
 the census as unattributed; it is never assigned by guess.
+
+Inspector keeps one `timeDeltas` integer for every sample; the first delta is relative to profile
+start and later deltas are between adjacent samples. Under load V8 can serialize a small signed delta
+when sample timestamps arrive out of order. Following Chromium's
+[`CPUProfileDataModel`](https://chromium.googlesource.com/devtools/devtools-frontend/+/main/front_end/models/cpu_profile/CPUProfileDataModel.ts),
+Kovo reconstructs timestamps and stably sorts only the derived timestamp/sample pairs before
+attribution. It never rewrites the retained `.cpuprofile`. Validation still requires exact
+sample/delta cardinality, safe-integer deltas and timestamps, every cumulative timestamp inside the
+authenticated `[startTime, endTime]` range, and a valid node graph with known sample and child IDs.
+The report calls the exact anomaly count `negativeCpuTimeDeltas`; it does not mislabel that count as
+the number of samples moved by sorting. The stack-v3 identity prevents summaries produced by the old
+nonnegative-delta rule from passing the current audit.
 
 The hosted diagnostic census is three measured windows per edit class after three warmups (15 raw
 CPU/heap pairs per corpus). A clean N=24 calibration at `8afdec2c9` retained 379 MiB for only one
@@ -30,6 +42,33 @@ SSD ([runner reference](https://docs.github.com/en/actions/reference/runners/git
 so a 30-window profile census is not fail-closed evidence. The separate unprofiled comparison keeps
 30 measured edits per class and owns every latency claim; the bounded profile census owns only the
 current ranking and hypothesis retirements.
+
+## Current hosted evidence
+
+Run [`31766167951`](https://github.com/kovojs/kovo/actions/runs/31766167951) checked out clean commit
+`dae339e930dde6bc0526894b69ec7312ca20f576`. Its N=216
+[artifact `9206701075`](https://github.com/kovojs/kovo/actions/runs/31766167951/artifacts/9206701075)
+expires on 2026-09-13 and authenticates as follows:
+
+- downloaded ZIP SHA-256 (also the Actions API digest):
+  `0d4f662cc5285d858b2c7520cf5ce67883d5c831ddfb4eb15895573b89f23100`
+- `report.json` SHA-256:
+  `a89d28b195b9dd2bfea6a477402100584d8e736733bd44328a4a779ebff59799`
+- `audit.json` SHA-256:
+  `8e971dd09395710414a50a7b9fd91212a44e3451fbaf1d61946c26e853c179b0`
+
+The artifact retained all 15 requested CPU/heap pairs: eight passed the former validator and seven
+were quarantined with their original bytes. All 30 raw files match their declared byte counts and
+SHA-256 digests. Every CPU profile has equal sample/delta counts, valid graph and sample identities,
+safe-integer values, and reconstructed timestamps within its profile range. The seven quarantined
+profiles contain 13 negative deltas from -1 through -57 microseconds and no second structural defect.
+
+Replaying those exact 1.4 GiB of raw evidence through stack-v3 accepted 15/15 windows and then
+reproduced the summary by re-reading 30/30 authenticated files. The resulting audit bound the set as
+`sha256:3d532cfe624b7c08162c502ac61e212baecbfa20d1861eabbb1dc4caa85e0243` and the summary as
+`sha256:c3e1513e2e9860674dfeace2d80fb50e8c20e4495549f1104f1e1d7d3f8f012c`, with
+`negativeCpuTimeDeltas: 13`. The original hosted report remains unproven; this replay authenticates
+the repair but does not substitute for a clean hosted N=24/N=216 rerun.
 
 ## Run
 

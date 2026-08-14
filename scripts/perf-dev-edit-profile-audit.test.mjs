@@ -108,7 +108,7 @@ function syntheticProfiles() {
   });
   return {
     cpu: {
-      endTime: 20,
+      endTime: 2_000,
       nodes: [
         { callFrame: frame('(root)', ''), children: [2], hitCount: 0, id: 1 },
         {

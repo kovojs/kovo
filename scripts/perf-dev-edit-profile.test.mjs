@@ -120,7 +120,7 @@ describe('exact dev edit-to-paint diagnostics', () => {
   it('attributes generic leaf work through its sampled CPU and heap ancestry', () => {
     const analysis = analyzeDevEditProfiles({
       cpu: {
-        endTime: 20,
+        endTime: 2_000,
         nodes: [
           frameNode(1, '(root)', '', [2]),
           frameNode(
@@ -181,6 +181,76 @@ describe('exact dev edit-to-paint diagnostics', () => {
     });
   });
 
+  it('stably orders the sample/timestamp pairs without mutating signed Inspector evidence', () => {
+    const cpu = {
+      endTime: 300,
+      nodes: [
+        frameNode(1, '(root)', '', [2, 3]),
+        frameNode(2, 'evaluateModule', 'file:///repo/node_modules/vite/module-runner.js'),
+        frameNode(3, 'transformRequest', 'file:///repo/node_modules/vite/chunk.js'),
+      ],
+      samples: [2, 3, 2],
+      startTime: 0,
+      timeDeltas: [100, 100, -50],
+    };
+    const rawBefore = JSON.stringify(cpu);
+    const analysis = analyzeDevEditProfiles({ cpu, heap: syntheticProfiles().heap });
+
+    expect(JSON.stringify(cpu)).toBe(rawBefore);
+    expect(analysis.census).toMatchObject({
+      negativeCpuTimeDeltas: 1,
+      totalCpuSamples: 3,
+      totalCpuSelfMicros: 200,
+    });
+    expect(category(analysis, 'module-evaluation')).toMatchObject({
+      cpuSelfSamples: 2,
+      selfTimeMicros: 150,
+    });
+    expect(category(analysis, 'vite-transform')).toMatchObject({
+      cpuSelfSamples: 1,
+      selfTimeMicros: 50,
+    });
+  });
+
+  it('accepts every signed-delta magnitude retained by the N=216 hosted profile', async () => {
+    const root = await temporaryRoot();
+    const profiles = syntheticProfiles();
+    const observedNegativeDeltas = [-57, -2, -6, -1, -5, -3, -3, -3, -4, -3, -4, -2, -7];
+    const timeDeltas = [...observedNegativeDeltas.flatMap((delta) => [100, delta]), 100];
+    const cpu = {
+      ...profiles.cpu,
+      endTime: 2_500,
+      samples: timeDeltas.map((_delta, index) => (index % 2 === 0 ? 2 : 3)),
+      startTime: 1_000,
+      timeDeltas,
+    };
+    const exactCpuBytes = `${JSON.stringify(cpu)}\n`;
+    const session = {
+      close() {},
+      async send(method) {
+        if (method === 'Profiler.stop') return { profile: cpu };
+        if (method === 'HeapProfiler.stopSampling') return { profile: profiles.heap };
+        return {};
+      },
+    };
+    const profiler = await createDevEditProfiler(
+      { framework: 'kovo', inspectorPort: 49_204, modules: 216, profileDir: root },
+      { connectInspector: async () => session },
+    );
+
+    await profiler.startWindow({ editClass: 'leaf', iteration: 0 });
+    const observation = await profiler.stopWindow({ editClass: 'leaf', iteration: 0 });
+    const summary = profiler.summary();
+    await profiler.close();
+
+    expect(await readFile(path.join(root, 'leaf-000.cpuprofile'), 'utf8')).toBe(exactCpuBytes);
+    expect(observation.negativeCpuTimeDeltas).toBe(observedNegativeDeltas.length);
+    expect(summary.census.negativeCpuTimeDeltas).toBe(observedNegativeDeltas.length);
+    await expect(
+      auditDevEditProfileArtifacts({ diagnostic: summary, profileDir: root }),
+    ).resolves.toMatchObject({ complete: true, windowCount: 1 });
+  });
+
   it('fails closed on mismatched windows and malformed Inspector evidence', async () => {
     const root = await temporaryRoot();
     const profiles = syntheticProfiles();
@@ -206,6 +276,73 @@ describe('exact dev edit-to-paint diagnostics', () => {
     expect(() =>
       analyzeDevEditProfiles({ cpu: { nodes: [], samples: [] }, heap: profiles.heap }),
     ).toThrow('CPU profile must contain nodes');
+    expect(() =>
+      analyzeDevEditProfiles({
+        cpu: { ...profiles.cpu, timeDeltas: [500.5, ...profiles.cpu.timeDeltas.slice(1)] },
+        heap: profiles.heap,
+      }),
+    ).toThrow('safe-integer signed time delta');
+    expect(() =>
+      analyzeDevEditProfiles({
+        cpu: {
+          ...profiles.cpu,
+          startTime: 10,
+          timeDeltas: [-1, ...profiles.cpu.timeDeltas.slice(1)],
+        },
+        heap: profiles.heap,
+      }),
+    ).toThrow('outside the profile time range');
+    expect(() =>
+      analyzeDevEditProfiles({
+        cpu: {
+          ...profiles.cpu,
+          endTime: 20,
+          timeDeltas: [11, ...profiles.cpu.timeDeltas.slice(1)],
+        },
+        heap: profiles.heap,
+      }),
+    ).toThrow('outside the profile time range');
+    expect(() =>
+      analyzeDevEditProfiles({
+        cpu: { ...profiles.cpu, endTime: profiles.cpu.startTime - 1 },
+        heap: profiles.heap,
+      }),
+    ).toThrow('safe-integer ordered time range');
+    expect(() =>
+      analyzeDevEditProfiles({
+        cpu: { ...profiles.cpu, samples: [999, ...profiles.cpu.samples.slice(1)] },
+        heap: profiles.heap,
+      }),
+    ).toThrow('unknown sample or child nodes');
+    expect(() =>
+      analyzeDevEditProfiles({
+        cpu: {
+          endTime: 2,
+          nodes: [
+            frameNode(1, '(root)', '', [2, 3]),
+            frameNode(2, 'left', '', [4]),
+            frameNode(3, 'right', '', [4]),
+            frameNode(4, 'leaf', ''),
+          ],
+          samples: [4],
+          startTime: 0,
+          timeDeltas: [1],
+        },
+        heap: profiles.heap,
+      }),
+    ).toThrow('multiple parents');
+    expect(() =>
+      analyzeDevEditProfiles({
+        cpu: {
+          endTime: 2,
+          nodes: [frameNode(1, '(root)', '', [2]), frameNode(2, 'cycle', '', [1])],
+          samples: [2],
+          startTime: 0,
+          timeDeltas: [1],
+        },
+        heap: profiles.heap,
+      }),
+    ).toThrow('parent graph contains a cycle');
     expect(() => summarizeProfileWindows([])).toThrow('at least one exact edit profile window');
   });
 
@@ -264,7 +401,7 @@ function category(analysis, id) {
 function syntheticProfiles() {
   return {
     cpu: {
-      endTime: 20,
+      endTime: 8_000,
       nodes: [
         frameNode(1, '(root)', ''),
         frameNode(2, 'evaluateModule', 'file:///repo/node_modules/vite/dist/module-runner.js'),

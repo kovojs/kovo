@@ -11,7 +11,7 @@ import { lstat, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 export const DEV_EDIT_PROFILE_SCHEMA = 'kovo-dev-edit-profile/v1';
-export const DEV_EDIT_PROFILE_CLASSIFIER = 'kovo-dev-edit-profile-classifier/stack-v2';
+export const DEV_EDIT_PROFILE_CLASSIFIER = 'kovo-dev-edit-profile-classifier/stack-v3';
 export const DEV_EDIT_PROFILE_AUDIT_SCHEMA = 'kovo-dev-edit-profile-audit/v1';
 export const DEV_EDIT_PROFILE_CATEGORIES = Object.freeze([
   'self-time',
@@ -83,13 +83,13 @@ export async function createDevEditProfiler(options, dependencies = {}) {
     // Both Inspector samplers have stopped before their payloads are validated. Clear the active
     // marker now so a validation failure cannot issue a second, misleading pair of stop commands.
     active = null;
+    let analysis;
     try {
-      validateRawWindow(raw);
+      analysis = analyzeDevEditProfiles(raw);
     } catch (error) {
       await retainRejectedWindow({ error, identity: normalized, profileDir, raw });
       throw error;
     }
-    const analysis = analyzeDevEditProfiles(raw);
     const fileStem = `${normalized.editClass}-${String(normalized.iteration).padStart(3, '0')}`;
     const cpuBytes = Buffer.from(`${JSON.stringify(raw.cpu)}\n`);
     const heapBytes = Buffer.from(`${JSON.stringify(raw.heap)}\n`);
@@ -110,6 +110,7 @@ export async function createDevEditProfiler(options, dependencies = {}) {
       artifact,
       editClass: normalized.editClass,
       iteration: normalized.iteration,
+      negativeCpuTimeDeltas: analysis.census.negativeCpuTimeDeltas,
       topAllocationFrames: analysis.topAllocationFrames,
       topFive: analysis.topFive,
       topSelfFrames: analysis.topSelfFrames,
@@ -158,9 +159,9 @@ export async function createDevEditProfiler(options, dependencies = {}) {
 }
 
 export function analyzeDevEditProfiles({ cpu, heap }) {
-  validateCpuProfile(cpu);
+  const cpuTimeline = validateCpuProfile(cpu);
   validateHeapProfile(heap);
-  const cpuFrames = cpuFrameSamples(cpu);
+  const cpuFrames = cpuFrameSamples(cpu, cpuTimeline);
   const activeCpuSamples = cpuFrames.reduce((total, entry) => total + entry.samples, 0);
   const totalCpuMicros = cpuFrames.reduce((total, entry) => total + entry.selfTimeMicros, 0);
   if (activeCpuSamples === 0) throw new TypeError('CPU profile contains zero active samples');
@@ -247,6 +248,7 @@ export function analyzeDevEditProfiles({ cpu, heap }) {
       allocatedBytes,
       cpuNodes: cpu.nodes.length,
       heapNodes: countHeapNodes(heap.head),
+      negativeCpuTimeDeltas: cpuTimeline.negativeTimeDeltas,
       totalCpuSamples: cpu.samples.length,
       totalCpuSelfMicros: totalCpuMicros,
       unknownAllocationBytes: unknownAllocation.bytes,
@@ -274,6 +276,7 @@ export function summarizeProfileWindows(windows, options = {}) {
   );
   let activeCpuSamples = 0;
   let allocatedBytes = 0;
+  let negativeCpuTimeDeltas = 0;
   let totalCpuSelfMicros = 0;
   for (const window of windows) {
     for (const category of window.analysis.categories) {
@@ -287,6 +290,7 @@ export function summarizeProfileWindows(windows, options = {}) {
     }
     activeCpuSamples += window.analysis.census.activeCpuSamples;
     allocatedBytes += window.analysis.census.allocatedBytes;
+    negativeCpuTimeDeltas += window.analysis.census.negativeCpuTimeDeltas;
     totalCpuSelfMicros += window.analysis.census.totalCpuSelfMicros;
   }
   const ranking = [...aggregate]
@@ -309,7 +313,7 @@ export function summarizeProfileWindows(windows, options = {}) {
             : 'observed-outside-current-top-five',
       topFiveRank: topFive.find((candidate) => candidate.category === entry.category)?.rank ?? null,
     })),
-    census: { activeCpuSamples, allocatedBytes, totalCpuSelfMicros },
+    census: { activeCpuSamples, allocatedBytes, negativeCpuTimeDeltas, totalCpuSelfMicros },
     diagnosticOnly: {
       profilerPerturbsDurations: true,
       publishTimingClaims: false,
@@ -425,6 +429,7 @@ export async function auditDevEditProfileArtifacts({ diagnostic, profileDir }) {
       artifact: expected.artifact,
       editClass: identity.editClass,
       iteration: identity.iteration,
+      negativeCpuTimeDeltas: analysis.census.negativeCpuTimeDeltas,
       topAllocationFrames: analysis.topAllocationFrames,
       topFive: analysis.topFive,
       topSelfFrames: analysis.topSelfFrames,
@@ -487,27 +492,69 @@ function classifyFrame(frame) {
   return categories;
 }
 
-function cpuFrameSamples(profile) {
+function cpuFrameSamples(profile, timeline) {
   const nodes = new Map(profile.nodes.map((node) => [node.id, node]));
-  const parents = cpuNodeParents(profile.nodes);
   const categoryCache = new Map();
   const counts = new Map();
-  for (let index = 0; index < profile.samples.length; index += 1) {
-    const nodeId = profile.samples[index];
+  for (const { nodeId, selfTimeMicros } of timeline.samples) {
     const node = nodes.get(nodeId);
     const frame = node === undefined ? undefined : normalizedFrame(node.callFrame);
     if (frame === undefined || isIdleFrame(frame)) continue;
-    const categories = cpuStackCategories(nodeId, nodes, parents, categoryCache);
+    const categories = cpuStackCategories(nodeId, nodes, timeline.parents, categoryCache);
     const key = JSON.stringify([frame, categories]);
     const prior = counts.get(key);
     counts.set(key, {
       categories,
       frame,
       samples: (prior?.samples ?? 0) + 1,
-      selfTimeMicros: (prior?.selfTimeMicros ?? 0) + profile.timeDeltas[index],
+      selfTimeMicros: (prior?.selfTimeMicros ?? 0) + selfTimeMicros,
     });
   }
   return [...counts.values()];
+}
+
+/**
+ * CDP time deltas are signed protocol integers. V8 can emit a small negative delta when samples
+ * arrive out of timestamp order, and Chromium reconstructs the timestamps before sorting the
+ * timestamp/sample pairs. Keep the Inspector arrays untouched and normalize only this derived
+ * analysis view.
+ */
+function normalizedCpuTimeline(profile) {
+  let timestamp = profile.startTime;
+  let negativeTimeDeltas = 0;
+  const samples = profile.samples.map((nodeId, originalIndex) => {
+    const delta = profile.timeDeltas[originalIndex];
+    if (!Number.isSafeInteger(delta)) {
+      throw new TypeError(
+        `CPU profile time delta ${String(originalIndex)} is not a safe integer: ${String(delta)}`,
+      );
+    }
+    if (delta < 0) negativeTimeDeltas += 1;
+    timestamp += delta;
+    if (!Number.isSafeInteger(timestamp)) {
+      throw new TypeError(
+        `CPU profile sample timestamp ${String(originalIndex)} is not a safe integer`,
+      );
+    }
+    if (timestamp < profile.startTime || timestamp > profile.endTime) {
+      throw new TypeError(
+        `CPU profile sample timestamp ${String(originalIndex)} is outside the profile time range (${String(timestamp)} not in [${String(profile.startTime)}, ${String(profile.endTime)}])`,
+      );
+    }
+    return { nodeId, originalIndex, timestamp };
+  });
+  samples.sort(
+    (left, right) => left.timestamp - right.timestamp || left.originalIndex - right.originalIndex,
+  );
+  let previousTimestamp = profile.startTime;
+  return {
+    negativeTimeDeltas,
+    samples: samples.map((sample) => {
+      const selfTimeMicros = sample.timestamp - previousTimestamp;
+      previousTimestamp = sample.timestamp;
+      return { nodeId: sample.nodeId, selfTimeMicros };
+    }),
+  };
 }
 
 function heapFrameAllocations(profile) {
@@ -539,6 +586,23 @@ function cpuNodeParents(nodes) {
     }
   }
   return parents;
+}
+
+function validateCpuParentGraph(ids, parents) {
+  const resolved = new Set();
+  for (const id of ids) {
+    if (resolved.has(id)) continue;
+    const visiting = new Set();
+    let cursor = id;
+    while (cursor !== undefined && !resolved.has(cursor)) {
+      if (visiting.has(cursor)) {
+        throw new TypeError('CPU profile parent graph contains a cycle');
+      }
+      visiting.add(cursor);
+      cursor = parents.get(cursor);
+    }
+    for (const visited of visiting) resolved.add(visited);
+  }
 }
 
 function cpuStackCategories(nodeId, nodes, parents, cache) {
@@ -626,12 +690,6 @@ function compareCategoryEvidence(left, right) {
   );
 }
 
-function validateRawWindow(raw) {
-  validateCpuProfile(raw?.cpu);
-  validateHeapProfile(raw?.heap);
-  return raw;
-}
-
 function validateCpuProfile(profile) {
   if (!Array.isArray(profile?.nodes) || profile.nodes.length === 0) {
     throw new TypeError('CPU profile must contain nodes');
@@ -639,8 +697,16 @@ function validateCpuProfile(profile) {
   if (!Array.isArray(profile.samples) || profile.samples.length === 0) {
     throw new TypeError('CPU profile must contain samples');
   }
+  if (
+    !Number.isSafeInteger(profile.startTime) ||
+    !Number.isSafeInteger(profile.endTime) ||
+    profile.endTime < profile.startTime ||
+    !Number.isSafeInteger(profile.endTime - profile.startTime)
+  ) {
+    throw new TypeError('CPU profile must contain a safe-integer ordered time range');
+  }
   const invalidTimeDelta = Array.isArray(profile.timeDeltas)
-    ? profile.timeDeltas.findIndex((value) => !Number.isFinite(value) || value < 0)
+    ? profile.timeDeltas.findIndex((value) => !Number.isSafeInteger(value))
     : -1;
   if (
     !Array.isArray(profile.timeDeltas) ||
@@ -653,7 +719,7 @@ function validateCpuProfile(profile) {
         ? 'none'
         : `${String(invalidTimeDelta)}:${String(profile.timeDeltas[invalidTimeDelta])}`;
     throw new TypeError(
-      `CPU profile must contain one finite time delta per sample (samples=${String(profile.samples.length)}, timeDeltas=${String(timeDeltaCount)}, invalid=${invalidDetail})`,
+      `CPU profile must contain one safe-integer signed time delta per sample (samples=${String(profile.samples.length)}, timeDeltas=${String(timeDeltaCount)}, invalid=${invalidDetail})`,
     );
   }
   const ids = new Set();
@@ -662,6 +728,7 @@ function validateCpuProfile(profile) {
       !Number.isSafeInteger(node?.id) ||
       node?.callFrame === undefined ||
       (node.children !== undefined && !Array.isArray(node.children)) ||
+      (Array.isArray(node.children) && new Set(node.children).size !== node.children.length) ||
       ids.has(node.id)
     ) {
       throw new TypeError('CPU profile contains invalid or duplicate nodes');
@@ -674,6 +741,9 @@ function validateCpuProfile(profile) {
   ) {
     throw new TypeError('CPU profile contains unknown sample or child nodes');
   }
+  const parents = cpuNodeParents(profile.nodes);
+  validateCpuParentGraph(ids, parents);
+  return { ...normalizedCpuTimeline(profile), parents };
 }
 
 async function retainRejectedWindow({ error, identity, profileDir, raw }) {

@@ -135,6 +135,11 @@ benchmarks/harness/{report,run,scenarios}.test.mjs --reporter=dot` passed 41/41.
   - Evidence: `7f306a501`; `pnpm exec vitest --run scripts/perf-dev-edit-profile.test.mjs
 benchmarks/corpora/dev-loop.test.mjs --reporter=dot` passed 39/39. Current-head N=24/N=216
     diagnostic artifacts remain pending and own the ranking.
+  - Repair evidence: [run `31766167951`, N=216 artifact
+    `9206701075`](https://github.com/kovojs/kovo/actions/runs/31766167951/artifacts/9206701075)
+    retained all 15 raw pairs. Seven otherwise-valid CPU profiles contained 13 signed deltas from
+    -1 to -57 microseconds; an exact stack-v3 replay accepted 15/15 and re-audited all 30 files as
+    `sha256:3d532cfe624b7c08162c502ac61e212baecbfa20d1861eabbb1dc4caa85e0243`.
 - [x] Spike authenticated in-session closure reuse for `kovo check --watch` by exposing serializable
       producer seams for trust/static/style facts in `build-export.ts`.
   - SPEC §11.4 constraints: always freshly evaluate app modules and rebuild runtime/app objects;
