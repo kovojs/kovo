@@ -499,6 +499,11 @@ async function ttiScenario(page, tracker, listingUrl, settle, expectedFramework,
     throw new Error('Timed out waiting for cart dialog to open.');
   });
   const dialog = page.getByRole('dialog');
+  // `ttiProxyMs` is already captured at the successful interaction boundary above. Under the
+  // throttled mobile condition that boundary can precede the stylesheet response, so authenticate
+  // the rendered fixture only after the initial document reaches `load`; otherwise a correct fast
+  // native control is falsely rejected for observing browser-default CSS during the download.
+  await page.waitForLoadState('load');
   // Authenticate the initial rendered fixture after the cart becomes interactive but before this
   // probe deliberately mutates cart/email/order state. The rendered contract describes the shared
   // starting document; hashing the successful checkout state against that contract would turn a
