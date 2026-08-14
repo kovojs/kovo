@@ -119,6 +119,7 @@ function cleanNavigationScenario() {
       destinationPaintTsUs: 3,
       epochOffsetMs: 0,
       mainFrameId: 'main-frame',
+      networkEvents: [],
       records: [],
       targetPath: '/matched/l1/product/a',
       traceEvents: [{ name: 'Paint', ts: 3 }],

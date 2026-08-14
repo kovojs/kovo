@@ -586,6 +586,7 @@ async function navigationScenario(page, tracker, listingUrl, settle) {
       destinationPaintTsUs: traceResult.destinationPaintTsUs,
       epochOffsetMs: trace.epochOffsetMs,
       mainFrameId: trace.mainFrameId,
+      networkEvents: trace.networkRequests,
       records: after.records,
       targetPath,
       traceEvents: trace.events,
@@ -694,6 +695,9 @@ async function startNavigationTrace(page) {
   const cdp = await context.newCDPSession(page);
   try {
     const events = [];
+    const networkRequests = [];
+    await cdp.send('Network.enable');
+    cdp.on('Network.requestWillBeSent', (event) => networkRequests.push(event));
     await cdp.send('Performance.enable');
     const { metrics } = await cdp.send('Performance.getMetrics');
     const timestamp = metrics.find((metric) => metric.name === 'Timestamp')?.value;
@@ -718,6 +722,7 @@ async function startNavigationTrace(page) {
       epochOffsetMs,
       events,
       mainFrameId,
+      networkRequests,
       page,
       stopped: false,
     };
@@ -816,6 +821,7 @@ export function analyzeNavigationAttribution({
   destinationPaintTsUs,
   epochOffsetMs,
   mainFrameId,
+  networkEvents,
   records,
   targetPath,
   traceEvents,
@@ -831,8 +837,10 @@ export function analyzeNavigationAttribution({
   if (!(clickTsUs <= destinationMarkTsUs && destinationMarkTsUs <= destinationPaintTsUs)) {
     throw new TypeError('Navigation attribution trace boundaries are out of order.');
   }
-  if (!Array.isArray(records) || !Array.isArray(traceEvents)) {
-    throw new TypeError('Navigation attribution requires request records and trace events.');
+  if (!Array.isArray(records) || !Array.isArray(traceEvents) || !Array.isArray(networkEvents)) {
+    throw new TypeError(
+      'Navigation attribution requires Playwright records, Network events, and trace events.',
+    );
   }
   if (!validTargetPath(targetPath) || typeof mainFrameId !== 'string' || mainFrameId.length === 0) {
     throw new TypeError(
@@ -840,7 +848,7 @@ export function analyzeNavigationAttribution({
     );
   }
 
-  const responseSelection = selectPrimaryNavigationResponse(records, traceEvents, {
+  const responseSelection = selectPrimaryNavigationResponse(records, networkEvents, traceEvents, {
     clickTsUs,
     destinationPaintTsUs,
     epochOffsetMs,
@@ -1143,6 +1151,7 @@ function observedPhaseMatches(phase, durationMs, source) {
 
 function selectPrimaryNavigationResponse(
   records,
+  networkEvents,
   traceEvents,
   { clickTsUs, destinationPaintTsUs, epochOffsetMs, mainFrameId, targetPath },
 ) {
@@ -1151,7 +1160,7 @@ function selectPrimaryNavigationResponse(
     destinationPaintEpochMs: traceEpochMs(destinationPaintTsUs, epochOffsetMs),
     targetPath,
   });
-  const traceCandidates = navigationTraceResponseCandidates(traceEvents, {
+  const traceCandidates = navigationTraceResponseCandidates(networkEvents, traceEvents, {
     clickTsUs,
     destinationPaintTsUs,
     mainFrameId,
@@ -1169,7 +1178,8 @@ function selectPrimaryNavigationResponse(
       throw new Error(
         'Navigation attribution observed a click-window primary response in Playwright but ' +
           'Chromium did not retain its complete ResourceSendRequest/ResourceReceiveResponse/' +
-          'ResourceFinish trace witness.',
+          'ResourceFinish trace witness. ' +
+          `Bounded target-trace diagnostics: ${targetTraceDiagnostics(traceEvents, targetPath)}`,
       );
     }
     return {
@@ -1263,6 +1273,30 @@ function selectPrimaryNavigationResponse(
   };
 }
 
+function targetTraceDiagnostics(traceEvents, targetPath) {
+  const facts = [];
+  for (const event of traceEvents) {
+    if (event?.name !== 'ResourceSendRequest') continue;
+    const data = event.args?.data;
+    if (requestUrlPath(data?.url) !== targetPath) continue;
+    facts.push({
+      frame: typeof data?.frame === 'string' ? data.frame : null,
+      initiatorFetchType:
+        typeof data?.initiator?.fetchType === 'string' ? data.initiator.fetchType : null,
+      initiatorType: typeof data?.initiator?.type === 'string' ? data.initiator.type : null,
+      keys:
+        data && typeof data === 'object' && !Array.isArray(data)
+          ? Object.keys(data).sort().slice(0, 32)
+          : [],
+      loaderId: typeof data?.loaderId === 'string' ? data.loaderId : null,
+      requestId: typeof data?.requestId === 'string' ? data.requestId : null,
+      resourceType: typeof data?.resourceType === 'string' ? data.resourceType : null,
+    });
+    if (facts.length >= 4) break;
+  }
+  return JSON.stringify(facts);
+}
+
 function navigationRecordCandidates(
   records,
   { clickEpochMs, destinationPaintEpochMs, targetPath },
@@ -1301,9 +1335,21 @@ function navigationRecordCandidates(
 }
 
 function navigationTraceResponseCandidates(
+  networkEvents,
   traceEvents,
   { clickTsUs, destinationPaintTsUs, mainFrameId, targetPath },
 ) {
+  const networkRequests = new Map();
+  for (const event of networkEvents) {
+    const requestId = event?.requestId;
+    if (typeof requestId !== 'string' || requestId.length === 0) continue;
+    const existing = networkRequests.get(requestId);
+    if (existing !== undefined) {
+      existing.duplicate = true;
+      continue;
+    }
+    networkRequests.set(requestId, { duplicate: false, event });
+  }
   const requests = new Map();
   for (const event of traceEvents) {
     if (!TRACE_RESOURCE_EVENTS.includes(event?.name)) continue;
@@ -1323,6 +1369,8 @@ function navigationTraceResponseCandidates(
 
   const candidates = [];
   for (const [requestId, events] of requests) {
+    const network = networkRequests.get(requestId);
+    const networkEvent = network?.event;
     const sendData = events.send?.args?.data;
     const responseData = events.response?.args?.data;
     const finishData = events.finish?.args?.data;
@@ -1345,6 +1393,8 @@ function navigationTraceResponseCandidates(
       !Number.isFinite(responseStartTsUs) ||
       !Number.isFinite(responseEndTsUs) ||
       events.duplicate === true ||
+      network?.duplicate === true ||
+      !networkEvent ||
       requestStartTsUs < clickTsUs - 10_000 ||
       events.send.ts < clickTsUs ||
       events.send.ts > destinationPaintTsUs ||
@@ -1355,9 +1405,12 @@ function navigationTraceResponseCandidates(
       typeof sendData?.url !== 'string' ||
       typeof sendData?.requestMethod !== 'string' ||
       sendData?.frame !== mainFrameId ||
-      typeof sendData?.loaderId !== 'string' ||
-      sendData.loaderId.length === 0 ||
       requestUrlPath(sendData.url) !== targetPath ||
+      networkEvent.frameId !== mainFrameId ||
+      typeof networkEvent.loaderId !== 'string' ||
+      networkEvent.loaderId.length === 0 ||
+      networkEvent.request?.url !== sendData.url ||
+      networkEvent.request?.method !== sendData.requestMethod ||
       !Number.isInteger(responseData?.statusCode)
     ) {
       continue;
@@ -1369,8 +1422,16 @@ function navigationTraceResponseCandidates(
     };
     const selection = navigationResponseSelection(recordShape, contentType);
     if (selection === null) continue;
-    const initiator = traceInitiatorFacts(sendData.initiator);
-    if (initiator === null) continue;
+    const traceInitiator = traceInitiatorFacts(sendData.initiator);
+    const networkInitiator = traceInitiatorFacts(networkEvent.initiator);
+    if (
+      networkInitiator === null ||
+      (traceInitiator === null
+        ? recordShape.resourceType !== 'document'
+        : traceInitiator.type !== networkInitiator.type)
+    ) {
+      continue;
+    }
     candidates.push({
       contentType,
       httpStatus: responseData.statusCode,
@@ -1380,9 +1441,10 @@ function navigationTraceResponseCandidates(
       selection,
       traceContext: {
         frameId: sendData.frame,
-        initiator,
-        loaderId: sendData.loaderId,
+        initiator: networkInitiator,
+        loaderId: networkEvent.loaderId,
         scope: 'top-level-frame',
+        source: 'Network.requestWillBeSent+ResourceSendRequest',
         targetPath,
       },
       timing: {
@@ -1629,6 +1691,7 @@ function validPrimaryResponse(response) {
     Number(timing.requestStartTsUs) <= Number(timing.responseStartTsUs) &&
     Number(timing.responseStartTsUs) <= Number(timing.responseEndTsUs) &&
     traceContext?.scope === 'top-level-frame' &&
+    traceContext?.source === 'Network.requestWillBeSent+ResourceSendRequest' &&
     typeof traceContext?.frameId === 'string' &&
     traceContext.frameId.length > 0 &&
     typeof traceContext?.loaderId === 'string' &&

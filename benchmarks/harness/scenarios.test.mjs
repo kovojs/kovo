@@ -60,6 +60,7 @@ describe('benchmark scenario analysis', () => {
       destinationPaintTsUs: 1_120_000,
       epochOffsetMs: 1_000,
       mainFrameId: MAIN_FRAME_ID,
+      networkEvents: [networkRequest({ url: 'http://localhost:4820/matched/l1/product/a' })],
       records: [
         request({
           headers: { accept: 'application/vnd.kovo.document-parts+json' },
@@ -148,6 +149,7 @@ describe('benchmark scenario analysis', () => {
       destinationPaintTsUs: 1_060_000,
       epochOffsetMs: 1_000,
       mainFrameId: MAIN_FRAME_ID,
+      networkEvents: [],
       records: [],
       targetPath: TARGET_PATH,
       traceEvents: [{ name: 'DrawFrame', ts: 1_060_000 }],
@@ -188,13 +190,17 @@ describe('benchmark scenario analysis', () => {
     });
     // Real Chromium Next.js traces dispatch the document ResourceSendRequest event after the
     // requestTime/sendStart and can even dispatch it after the response-headers timing boundary.
+    // The timeline event also omits initiator facts for top-level documents; the joined Network
+    // event owns that fact.
     events[0].ts = 1_008_000;
+    delete events[0].args.data.initiator;
     const attribution = analyzeNavigationAttribution({
       clickTsUs: 990_000,
       destinationMarkTsUs: 1_020_000,
       destinationPaintTsUs: 1_030_000,
       epochOffsetMs: 1_000,
       mainFrameId: MAIN_FRAME_ID,
+      networkEvents: [networkRequest({ resourceType: 'Document', url })],
       records: [
         request({
           isNavigationRequest: true,
@@ -230,6 +236,9 @@ describe('benchmark scenario analysis', () => {
         destinationPaintTsUs: 1_120_000,
         epochOffsetMs: 1_000,
         mainFrameId: MAIN_FRAME_ID,
+        networkEvents: [
+          networkRequest({ url: 'http://localhost:4820/matched/l1/product/a?_rsc=one' }),
+        ],
         records: [
           request({
             method: 'GET',
@@ -257,6 +266,7 @@ describe('benchmark scenario analysis', () => {
         destinationPaintTsUs: 1_060_000,
         epochOffsetMs: 1_000,
         mainFrameId: MAIN_FRAME_ID,
+        networkEvents: [networkRequest({ url })],
         records: [
           request({
             headers: { accept: 'application/vnd.kovo.document-parts+json' },
@@ -294,6 +304,18 @@ describe('benchmark scenario analysis', () => {
       destinationPaintTsUs: 1_100_000,
       epochOffsetMs: 1_000,
       mainFrameId: MAIN_FRAME_ID,
+      networkEvents: [
+        networkRequest({
+          frameId: 'iframe',
+          requestId: 'iframe-request',
+          url: iframeUrl,
+        }),
+        networkRequest({
+          requestId: 'main-request',
+          resourceType: 'Document',
+          url: targetUrl,
+        }),
+      ],
       records: [
         request({
           frameScope: 'subframe',
@@ -354,6 +376,7 @@ describe('benchmark scenario analysis', () => {
         destinationPaintTsUs: 3,
         epochOffsetMs: 0,
         mainFrameId: MAIN_FRAME_ID,
+        networkEvents: [],
         records: [],
         targetPath: TARGET_PATH,
         traceEvents: [],
@@ -368,6 +391,7 @@ describe('benchmark scenario analysis', () => {
         destinationPaintTsUs: 1_030_000,
         epochOffsetMs: 1_000,
         mainFrameId: MAIN_FRAME_ID,
+        networkEvents: [networkRequest({ resourceType: 'Document', url })],
         records: [
           request({
             isNavigationRequest: true,
@@ -400,6 +424,7 @@ describe('benchmark scenario analysis', () => {
       destinationPaintTsUs: 3,
       epochOffsetMs: 0,
       mainFrameId: MAIN_FRAME_ID,
+      networkEvents: [],
       records: [],
       targetPath: TARGET_PATH,
       traceEvents: [{ name: 'Paint', ts: 3 }],
@@ -420,6 +445,25 @@ function request(overrides) {
     resourceType: 'other',
     startedEpochMs: 0,
     ...overrides,
+  };
+}
+
+function networkRequest({
+  frameId = MAIN_FRAME_ID,
+  requestId = 'trace-request-1',
+  resourceType = 'Fetch',
+  url,
+}) {
+  return {
+    frameId,
+    initiator:
+      resourceType.toLowerCase() === 'document'
+        ? { type: 'other' }
+        : { fetchType: 'fetch', type: 'script' },
+    loaderId: 'main-loader',
+    request: { method: 'GET', url },
+    requestId,
+    type: resourceType,
   };
 }
 

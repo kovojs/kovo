@@ -37,7 +37,7 @@ Chrome's relevant evidence is:
 
 | Fact                               | Trace source                                                      |
 | ---------------------------------- | ----------------------------------------------------------------- |
-| Request identity/window            | `ResourceSendRequest`                                             |
+| Request identity/window            | `Network.requestWillBeSent` + `ResourceSendRequest`               |
 | Request start and response headers | `ResourceReceiveResponse.args.data.timing`                        |
 | Response completion                | `ResourceFinish.args.data.finishTime`                             |
 | Destination DOM ready              | harness `TimeStamp` emitted by the destination `MutationObserver` |
@@ -54,7 +54,10 @@ timestamp.
 
 The `kovo-navigation-attribution/v3` record selects a complete Chrome
 `ResourceSendRequest`/`ResourceReceiveResponse`/`ResourceFinish` triplet inside the click-to-paint
-window, bound to the clicked destination path and the CDP-authenticated top-level frame. It then
+window, bound to the clicked destination path and the CDP-authenticated top-level frame. Chrome's
+timeline event does not expose `loaderId`, so the contract joins the identical request id, URL, and
+method to `Network.requestWillBeSent` and retains that event's frame, loader, and initiator facts; a
+missing, redirected/duplicate, or divergent join fails closed. It then
 requires exactly one Playwright request record from that same top-level frame with the same URL,
 method, status, media type, response class, and navigation-request posture. The two observations'
 request start, response start, and response end clocks must agree within 25 ms. More than one
