@@ -21,6 +21,11 @@ import {
   performanceReportFindings,
   workloadIdentityFindings,
 } from './perf-regression-check.mjs';
+import {
+  packedComparisonProductEvidenceFindings,
+  packedKovoProductIdentityFindings,
+  packedKovoProductWorkloadPolicyFindings,
+} from './lib/perf-packed-kovo-product.mjs';
 
 export const PERF_BUILD_BUDGET_SCHEMA = 'kovo-build-performance-budget/v1';
 export const PERF_BUILD_EVALUATION_SCHEMA = 'kovo-build-performance-evaluation/v1';
@@ -128,6 +133,7 @@ export function deriveBuildPerformanceBudget(baseline, options = {}) {
       corpusSize,
       host: baseline.subject.host,
       locks: baseline.subject.locks,
+      productArtifact: options.baselineEntries[0].report.productArtifact,
       workloadIdentity: baseline.subject.workloadIdentity,
     },
   };
@@ -171,7 +177,11 @@ export function evaluateBuildPerformanceBudget(budget, candidate) {
       reasons.push(`candidate required build metric ${metric} is unavailable`);
     }
   }
-  reasons.push(...buildRawEvidenceFindings(candidate, budget?.subject?.corpusSize));
+  reasons.push(
+    ...buildRawEvidenceFindings(candidate, budget?.subject?.corpusSize, {
+      productLabel: 'candidate',
+    }),
+  );
 
   const checks = [];
   if (reasons.length === 0) {
@@ -1286,6 +1296,9 @@ function baselineBuildReportFindings(baseline, entries, corpusSize) {
       findings.push(`${label} does not match the ratified baseline subject`);
     }
   }
+  if (new Set(entries.map((entry) => canonicalJson(entry?.report?.productArtifact))).size !== 1) {
+    findings.push('baseline packed product identity differs across raw build reports');
+  }
   if (
     seen.size !== BUILD_BASELINE_REPORTS ||
     baseline.reports.some(({ contentDigest }) => !seen.has(contentDigest))
@@ -1330,6 +1343,14 @@ export function buildBudgetFindings(budget) {
     findings.push('budget runner image identity is unavailable');
   }
   findings.push(...workloadIdentityFindings(budget.subject?.workloadIdentity, 'budget'));
+  findings.push(
+    ...packedKovoProductIdentityFindings(budget.subject?.productArtifact, {
+      commit: budget.baseline?.sourceCommit,
+      dirty: false,
+      dirtyPaths: [],
+      locks: budget.subject?.locks,
+    }).map((finding) => `budget ${finding}`),
+  );
   for (const lock of REQUIRED_LOCKS) {
     if (!DIGEST_PATTERN.test(budget.subject?.locks?.[lock] ?? '')) {
       findings.push(`budget ${lock} digest is unavailable`);
@@ -1507,6 +1528,7 @@ function buildWorkloadFindings(identity) {
   if (canonicalJson(identity?.cells) !== canonicalJson(['build'])) {
     findings.push('workload is not the isolated build cell');
   }
+  findings.push(...packedKovoProductWorkloadPolicyFindings(identity?.productArtifactPolicy));
   if (!SUPPORTED_CORPUS_SIZES.includes(corpusSize)) {
     findings.push('workload corpus size is not N=24 or N=216');
   }
@@ -1535,9 +1557,9 @@ function buildWorkloadFindings(identity) {
   return findings;
 }
 
-function buildRawEvidenceFindings(report, corpusSize) {
+function buildRawEvidenceFindings(report, corpusSize, { productLabel = '' } = {}) {
   if (!SUPPORTED_CORPUS_SIZES.includes(corpusSize)) return ['budget corpus size is unavailable'];
-  const findings = [];
+  const findings = packedComparisonProductEvidenceFindings(report, productLabel);
   for (const mode of BUILD_MODES) {
     const cells = (report?.rawCells ?? []).filter(
       (cell) =>

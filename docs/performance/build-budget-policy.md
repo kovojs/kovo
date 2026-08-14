@@ -6,6 +6,14 @@ GitHub Actions comparison reports for one exact host, dependency-lock, workload,
 subject. A six-run (or larger) ratified cohort is not interchangeable with this declared build
 predicate. Keep the exact five raw reports as linked CI artifacts.
 
+The build workload digest fixes the packed-product policy, not one commit's tarball digest. Each
+report authenticates its concrete Kovo artifact against that report's clean commit and locks,
+repeats it exactly in every Kovo build cell, and requires exact null product evidence in every Next
+cell. All five baseline reports must share one concrete artifact and the derived budget retains it.
+A later clean candidate authenticates its own, normally different artifact while preserving the
+same workload policy. Raw-report, baseline, budget, candidate, and publication validators each
+recheck this boundary.
+
 Each report must contain ten serialized samples per framework for both N=24 and N=216 as separate
 workload subjects, covering `clean`, `unchanged`, and one-line `edit` builds in Kovo, Next, Next,
 Kovo order. Every sample carries wall time, peak process-tree RSS, artifact bytes, output and source
@@ -54,10 +62,10 @@ vp exec node scripts/perf-build-budget.mjs evaluate \
   --out artifacts/candidate/build-evaluation.json
 ```
 
-The candidate may have a newer source commit, but its runner, locks, and workload must match the
-ratified subject exactly. Missing phase evidence, changed locks, busy-host evidence, short samples,
-wrong corpus or mode, reused execution identity, or a forged/negative CLI residual yields
-`unproven`, never a pass.
+The candidate may have a newer source commit and a different authenticated packed artifact, but its
+runner, locks, and workload must match the ratified subject exactly. Missing phase or product
+evidence, changed locks, busy-host evidence, short samples, wrong corpus or mode, reused execution
+identity, or a forged/negative CLI residual yields `unproven`, never a pass.
 
 Once both N=24 and N=216 budgets exist, run the mechanical session decision:
 

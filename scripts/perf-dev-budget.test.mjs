@@ -19,6 +19,10 @@ import {
   evaluateDevPerformanceBudget,
 } from './perf-dev-budget.mjs';
 import { canonicalJson } from './perf-regression-check.mjs';
+import {
+  fixturePackedKovoProductIdentity,
+  PACKED_KOVO_PRODUCT_WORKLOAD_POLICY,
+} from './fixtures/perf-packed-product-identity.mjs';
 
 const EDIT_CLASSES = ['leaf', 'entry', 'data', 'syntaxError', 'recovery'];
 const PERFORMANCE_SUFFIXES = [
@@ -75,6 +79,8 @@ describe('ratified developer performance budgets', () => {
       });
       expect(budget.metrics[leaf].medianMaximum).toBeCloseTo(107.1);
       expect(devBudgetFindings(budget)).toEqual([]);
+      expect(candidate.workloadIdentity).toEqual(budget.subject.workloadIdentity);
+      expect(candidate.productArtifact.digest).not.toBe(budget.subject.productArtifact.digest);
       expect(result.schema).toBe(PERF_DEV_EVALUATION_SCHEMA);
       expect(result.candidate.sourceCommit).toBe('b'.repeat(40));
       expect(result.verdict).toEqual({ failures: [], reasons: [], status: 'pass' });
@@ -119,6 +125,50 @@ describe('ratified developer performance budgets', () => {
         `${metricKey(24, 'edit.recoveryMs')}.p95-target`,
       ]),
     );
+  });
+
+  it('rejects missing Kovo, contaminated Next, and drifted budget product evidence', () => {
+    const { baseline, entries } = ratifiedBaseline(24);
+    const budget = deriveDevPerformanceBudget(baseline, { baselineEntries: entries });
+
+    const driftedArtifact = fixturePackedKovoProductIdentity({
+      locks: entries[1].report.source.locks,
+      seed: 'baseline-drift',
+      sourceCommit: entries[1].report.source.commit,
+    });
+    entries[1].report.productArtifact = driftedArtifact;
+    for (const cell of entries[1].report.rawCells.filter(({ framework }) => framework === 'kovo')) {
+      cell.report.productArtifact = driftedArtifact;
+    }
+    expect(devBudgetBaselineFindings(baseline, entries)).toContain(
+      'baseline packed product identity differs across raw dev reports',
+    );
+
+    const missing = comparisonReport({ corpusSize: 24, run: 17, sourceCommit: 'b'.repeat(40) });
+    missing.productArtifact = null;
+    expect(evaluateDevPerformanceBudget(budget, missing).verdict.reasons).toContain(
+      'candidate packed product identity is malformed',
+    );
+
+    const contaminated = comparisonReport({
+      corpusSize: 24,
+      run: 18,
+      sourceCommit: 'b'.repeat(40),
+    });
+    const next = contaminated.rawCells.find(({ framework }) => framework === 'nextjs');
+    next.report.integrity.productArtifact = {
+      afterVerified: true,
+      beforeVerified: true,
+      required: true,
+    };
+    expect(evaluateDevPerformanceBudget(budget, contaminated).verdict.reasons).toContain(
+      'candidate corpus-n24/nextjs/dev carried Kovo product evidence',
+    );
+
+    budget.subject.productArtifact = null;
+    const { digest: _oldDigest, ...facts } = budget;
+    budget.digest = digest(canonicalJson(facts));
+    expect(devBudgetFindings(budget)).toContain('budget packed product identity is malformed');
   });
 
   it('fails closed on tampering, identity drift, or raw state/diagnostic loss', () => {
@@ -356,6 +406,7 @@ function comparisonReport({ corpusSize, run, sourceCommit }) {
     'benchmarks/nextjs/pnpm-lock.yaml': digest('next-lock'),
     'pnpm-lock.yaml': digest('root-lock'),
   };
+  const productArtifact = fixturePackedKovoProductIdentity({ locks, sourceCommit });
   const execution = performanceExecutionIdentity({
     env: {
       GITHUB_JOB: 'dev-performance',
@@ -402,8 +453,10 @@ function comparisonReport({ corpusSize, run, sourceCommit }) {
       workloadAuthenticated: true,
     },
     policy: workloadFacts.policies,
+    productArtifact,
     rawCells: rawDevCells(corpusSize, {
       locks,
+      productArtifact,
       shapeDigest: workloadFacts.corpus.kovo.shapeDigest.slice('sha256:'.length),
       sourceCommit,
     }),
@@ -433,6 +486,7 @@ function workloadIdentity(corpusSize) {
       },
     },
     lanes: [`corpus-n${String(corpusSize)}`],
+    productArtifactPolicy: PACKED_KOVO_PRODUCT_WORKLOAD_POLICY,
     policies: {
       bfcacheIterations: 10,
       browserSamples: 30,
@@ -453,7 +507,7 @@ function workloadIdentity(corpusSize) {
   };
 }
 
-function rawDevCells(corpusSize, { locks, shapeDigest, sourceCommit }) {
+function rawDevCells(corpusSize, { locks, productArtifact, shapeDigest, sourceCommit }) {
   return devSchedule().map((schedule) => {
     const basePort = 49_700 + schedule.scheduleIndex * 128;
     const samples = Array.from({ length: schedule.editSamples }, (_, iteration) => ({
@@ -510,6 +564,10 @@ function rawDevCells(corpusSize, { locks, shapeDigest, sourceCommit }) {
             Array.from({ length: schedule.readySamples + 1 }, (_, index) => basePort + index),
           ),
           readyIterations: schedule.readySamples,
+          productArtifact:
+            schedule.framework === 'kovo'
+              ? { afterVerified: true, beforeVerified: true, required: true }
+              : { afterVerified: true, beforeVerified: false, required: false },
           source: { stable: true },
           warmups: schedule.warmups,
         },
@@ -517,6 +575,7 @@ function rawDevCells(corpusSize, { locks, shapeDigest, sourceCommit }) {
           ...sample,
           lifecycle: completeStop(basePort + index),
         })),
+        productArtifact: schedule.framework === 'kovo' ? productArtifact : null,
         samples,
         source: { commit: sourceCommit, dirty: false, dirtyPaths: [], locks },
         sourceAfter: { commit: sourceCommit, dirty: false, dirtyPaths: [], locks },

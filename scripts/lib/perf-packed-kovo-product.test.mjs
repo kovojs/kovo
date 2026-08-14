@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
 import {
   existsSync,
   mkdirSync,
@@ -21,6 +22,7 @@ import {
 } from './deterministic-tarball.mjs';
 import {
   assertCorpusBinding,
+  assertPackedCorpusIsolation,
   createPackedKovoProductFixture,
   materializePackedKovoCommand,
   normalizedPackedKovoCommand,
@@ -86,16 +88,31 @@ describe('authenticated packed Kovo product fixture', () => {
     expect(() => assertCorpusBinding(appRoot, first.consumerRoot)).toThrow();
   });
 
-  it('binds and cleans a real generated Kovo corpus that uses ancestor resolution', async () => {
+  it('rejects workspace ancestry and binds an externally isolated generated Kovo corpus', async () => {
     const test = productFixture('generated-corpus');
     const benchmarkKovoRoot = path.resolve(
       new URL('../../benchmarks/kovo/', import.meta.url).pathname,
     );
     const outputRoot = mkdtempSync(path.join(benchmarkKovoRoot, '.packed-product-test-'));
     roots.push(outputRoot);
-    const manifestPath = await generateCorpus({ framework: 'kovo', outDir: outputRoot, size: 24 });
+    const workspaceManifest = await generateCorpus({
+      framework: 'kovo',
+      outDir: outputRoot,
+      size: 24,
+    });
+    expect(() => test.fixture.bindCorpus(workspaceManifest)).toThrow(/outside the repository/u);
+
+    const isolatedRoot = mkdtempSync(path.join(tmpdir(), 'kovo-packed-corpus-isolated-'));
+    roots.push(isolatedRoot);
+    const manifestPath = await generateCorpus({
+      dependencyMode: 'deferred',
+      framework: 'kovo',
+      outDir: isolatedRoot,
+      size: 24,
+    });
     const appRoot = path.dirname(manifestPath);
     expect(existsSync(path.join(appRoot, 'node_modules'))).toBe(false);
+    expect(() => assertPackedCorpusIsolation(appRoot)).not.toThrow();
     await expect(
       verifyCorpusSources(await loadCorpusManifest(manifestPath)),
     ).resolves.toBeUndefined();
@@ -106,6 +123,9 @@ describe('authenticated packed Kovo product fixture', () => {
     await expect(
       verifyCorpusSources(await loadCorpusManifest(manifestPath)),
     ).resolves.toBeUndefined();
+    expect(() =>
+      createRequire(path.join(appRoot, 'resolution-proof.mjs')).resolve('@kovojs/test'),
+    ).toThrow(/Cannot find module/u);
     test.fixture.cleanup();
     expect(existsSync(path.join(appRoot, 'node_modules'))).toBe(false);
     await expect(

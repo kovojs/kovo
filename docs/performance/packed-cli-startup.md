@@ -96,17 +96,28 @@ and paired bootstrap 95% confidence intervals for `packed - source-checkout` wal
 
 The ordinary `benchmarks/compare.mjs --cells dev,build` Kovo lane reuses the same preparation
 contract. It builds and packs once before host admission, resolves then frozen-reinstalls the
-isolated consumer, proves the first and frozen installed trees agree, and binds the generated Kovo
-corpus to that consumer only for the serialized adapter cells. Pack, install, and binding work is
-never inside a timed ready/edit/build sample. Next.js continues to use its independently frozen
-entrant install.
+isolated consumer, proves the first and frozen installed trees agree, and generates a second,
+shape-authenticated Kovo corpus under the comparator's OS-temporary root. The measured app is
+outside the repository, and every ancestor up to the filesystem root must lack `node_modules`.
+Only then does the comparator create the app-local dependency link to the isolated consumer. This
+prevents Node's ancestor search from silently falling back to `benchmarks/kovo/node_modules` and
+workspace source. Pack, install, corpus generation, and binding are outside every timed
+ready/edit/build sample. Next.js continues to use its independently frozen entrant install.
 
-The comparator workload identity carries a path-independent digest over the clean commit, the
-root/Next/harness lock digests, canonical tarball manifests and content, frozen consumer lock,
-installed package census, exact `dist/bin.mjs`, and the installed TypeScript package used by app
-commands. The private descriptor retains temporary paths solely as execution capabilities. Each
-Kovo adapter reopens and re-authenticates the descriptor, tarballs, installed Kovo closure,
-TypeScript tree, CLI entry, and app-local dependency link before timing and after teardown. Missing
-evidence, source checkout fallback, a mismatched lock/source, path substitution, or any changed byte
-makes the cell unproven. Corpus source capture ignores only the existing generated dependency link;
-it never follows that link or treats packed output as app-authored TSX (SPEC §5.2 rules 7 and 9).
+The workload digest records the stable comparison policy: Kovo must carry a report-bound packed
+artifact, Next must not, preparation precedes quiet-host admission, and the corpus has the external
+ancestor-isolation posture. Concrete tarball and installed-byte identity is deliberately not part
+of workload equality because a later clean candidate commit must have different artifact bytes.
+Instead, each report binds its concrete identity at the top level and repeats it exactly in every
+Kovo raw cell. The identity covers the clean commit, root/Next/harness lock digests, canonical
+tarball manifests and content, frozen consumer lock, installed package census, exact
+`dist/bin.mjs`, and installed TypeScript package. Next cells must carry exact `null` product
+identity plus `afterVerified: true`, `beforeVerified: false`, and `required: false`.
+
+The private descriptor retains temporary paths solely as execution capabilities. Each Kovo adapter
+reopens and re-authenticates the descriptor, tarballs, installed Kovo closure, TypeScript tree, CLI
+entry, and app-local dependency link before timing and after teardown. Raw-report, baseline,
+budget, candidate, and publication validators independently reject missing or mismatched Kovo
+identity and any Kovo identity on Next. Corpus source capture ignores only the generated dependency
+link; it never follows that link or treats packed output as app-authored TSX (SPEC §5.2 rules 7 and
+9).

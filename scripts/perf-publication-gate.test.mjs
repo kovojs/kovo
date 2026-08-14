@@ -23,6 +23,10 @@ import {
 import { KOVO_BUILD_SOURCE_PHASES } from './perf-build-benchmark.mjs';
 import { canonicalJson } from './perf-regression-check.mjs';
 import { comparisonTargetCheckSpecifications } from './perf-comparison-budget.mjs';
+import {
+  PACKED_KOVO_PRODUCT_WORKLOAD_POLICY,
+  fixturePackedKovoProductIdentity,
+} from './fixtures/perf-packed-product-identity.mjs';
 
 const FAMILY_NAMES = [
   'browser',
@@ -126,6 +130,40 @@ describe('seven-family performance publication gate', () => {
       'server holdout reuses a baseline workflow run',
     );
     expect(result.publication.families.server.status).toBe('unproven');
+  });
+
+  it('reports dev/build publication as unproven when report-bound product evidence is absent or leaks into Next', () => {
+    const missing = authenticatedFixture();
+    missing.families['dev-n24'].holdout.report.productArtifact = null;
+
+    const missingResult = derivePerformancePublication(missing, fixtureDerivationOptions());
+
+    expect(missingResult.publication.verdict.status).toBe('unproven');
+    expect(missingResult.publication.verdict.reasons.join('\n')).toContain(
+      'dev-n24 packed product evidence is invalid',
+    );
+    expect(missingResult.publication.families['dev-n24'].status).toBe('unproven');
+
+    const contaminated = authenticatedFixture();
+    const nextCell = contaminated.families['build-n216'].holdout.report.rawCells.find(
+      (cell) => cell.framework === 'nextjs',
+    );
+    nextCell.report.integrity.productArtifact = {
+      afterVerified: true,
+      beforeVerified: true,
+      required: true,
+    };
+
+    const contaminatedResult = derivePerformancePublication(
+      contaminated,
+      fixtureDerivationOptions(),
+    );
+
+    expect(contaminatedResult.publication.verdict.status).toBe('unproven');
+    expect(contaminatedResult.publication.verdict.reasons.join('\n')).toContain(
+      'holdout packed-next/nextjs/build carried Kovo product evidence',
+    );
+    expect(contaminatedResult.publication.families['build-n216'].status).toBe('unproven');
   });
 
   it('reports unproven for cross-family source, lock, execution, or custody divergence', () => {
@@ -813,6 +851,11 @@ function authenticatedFixture() {
     'benchmarks/nextjs/pnpm-lock.yaml': digest('next-lock'),
     'pnpm-lock.yaml': digest('root-lock'),
   };
+  const productArtifact = fixturePackedKovoProductIdentity({
+    locks,
+    seed: 'publication',
+    sourceCommit,
+  });
   let artifactId = 2_000;
   const families = {};
   for (const familyName of FAMILY_NAMES) {
@@ -827,6 +870,11 @@ function authenticatedFixture() {
       const location = `${runUrl}/artifacts/${String(artifactId)}`;
       const job = workflowJob(familyName);
       const jobId = artifactId + 20_000;
+      const productCell = familyName.startsWith('dev-')
+        ? 'dev'
+        : familyName.startsWith('build-')
+          ? 'build'
+          : null;
       return {
         contentDigest,
         custody: {
@@ -913,8 +961,55 @@ function authenticatedFixture() {
             github: { runUrl, sha: sourceCommit },
           },
           host: { digest: digest(`${familyName}-host`) },
-          source: { commit: sourceCommit, locks },
-          workloadIdentity: { digest: digest(`${familyName}-workload`) },
+          ...(productCell === null
+            ? {}
+            : {
+                productArtifact,
+                rawCells: [
+                  {
+                    cell: productCell,
+                    framework: 'kovo',
+                    lane: 'packed-kovo',
+                    report: {
+                      integrity: {
+                        productArtifact: {
+                          afterVerified: true,
+                          beforeVerified: true,
+                          required: true,
+                        },
+                      },
+                      productArtifact,
+                    },
+                  },
+                  {
+                    cell: productCell,
+                    framework: 'nextjs',
+                    lane: 'packed-next',
+                    report: {
+                      integrity: {
+                        productArtifact: {
+                          afterVerified: true,
+                          beforeVerified: false,
+                          required: false,
+                        },
+                      },
+                      productArtifact: null,
+                    },
+                  },
+                ],
+              }),
+          source: { commit: sourceCommit, dirty: false, dirtyPaths: [], locks },
+          workloadIdentity: {
+            digest: digest(`${familyName}-workload`),
+            ...(productCell === null
+              ? {}
+              : {
+                  identity: {
+                    cells: [productCell],
+                    productArtifactPolicy: PACKED_KOVO_PRODUCT_WORKLOAD_POLICY,
+                  },
+                }),
+          },
         },
       };
     });

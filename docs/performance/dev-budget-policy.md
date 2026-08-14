@@ -16,6 +16,14 @@ This policy follows the honesty boundary in SPEC §1.1: a missing diagnostic, lo
 partial sample series, dirty source, changed lock, mismatched corpus, busy host, or reused execution
 identity is `unproven`, not a passing budget result.
 
+The dev workload identity also fixes a stable packed-product policy rather than one commit's
+tarball digest. Each raw report separately authenticates its concrete Kovo artifact against that
+report's clean commit and locks, repeats it exactly in every Kovo dev cell, and requires exact null
+product evidence in every Next cell. All five baseline reports must share one concrete artifact;
+the derived budget retains it. A later candidate must authenticate its own artifact, which normally
+differs on a newer commit, while preserving the same workload policy. These checks are repeated at
+raw-report, baseline, budget, candidate, and publication boundaries.
+
 ## Ratify and derive
 
 Collect five independent comparison reports for one exact source, host, lock set, workload, and
@@ -70,8 +78,9 @@ node scripts/perf-dev-budget.mjs evaluate \
   --out artifacts/candidate/dev-n24-evaluation.json
 ```
 
-The candidate may be a new clean source commit, but it must preserve the exact ratified host, locks,
-and workload identity. The evaluator covers leaf and entry edit-to-paint latency, syntax-diagnostic
+The candidate may be a new clean source commit with a different authenticated packed artifact, but
+it must preserve the exact ratified host, locks, and workload identity. The evaluator covers leaf
+and entry edit-to-paint latency, syntax-diagnostic
 latency and availability, recovery latency, ready latency, fresh-ready and edit-session process-tree
 RSS, every edit class's browser-state survival, and exact sample availability. In addition to the
 data-derived regression ceilings, it enforces the declared plan targets: ready and leaf medians at

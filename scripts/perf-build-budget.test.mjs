@@ -33,6 +33,10 @@ import {
   KOVO_BUILD_WORKER_PHASES,
 } from './perf-build-benchmark.mjs';
 import { canonicalJson } from './perf-regression-check.mjs';
+import {
+  fixturePackedKovoProductIdentity,
+  PACKED_KOVO_PRODUCT_WORKLOAD_POLICY,
+} from './fixtures/perf-packed-product-identity.mjs';
 
 const BUILD_MODES = ['clean', 'unchanged', 'edit'];
 
@@ -88,6 +92,8 @@ describe('ratified production-build performance budgets', () => {
       });
       expect(budget.metrics[wall].medianMaximum).toBeCloseTo(527.1);
       expect(buildBudgetFindings(budget)).toEqual([]);
+      expect(candidate.workloadIdentity).toEqual(budget.subject.workloadIdentity);
+      expect(candidate.productArtifact.digest).not.toBe(budget.subject.productArtifact.digest);
       expect(
         deriveBuildPerformanceBudget(baseline, { baselineEntries: [...entries].reverse() }).digest,
       ).toBe(budget.digest);
@@ -140,6 +146,50 @@ describe('ratified production-build performance budgets', () => {
         'corpus-n24/build/clean/peakRssBytes.median-vs-next',
       ]),
     );
+  });
+
+  it('rejects missing Kovo, contaminated Next, and drifted budget product evidence', () => {
+    const { baseline, entries } = ratifiedBuildBaseline(24);
+    const budget = deriveBuildPerformanceBudget(baseline, { baselineEntries: entries });
+
+    const driftedArtifact = fixturePackedKovoProductIdentity({
+      locks: entries[1].report.source.locks,
+      seed: 'baseline-drift',
+      sourceCommit: entries[1].report.source.commit,
+    });
+    entries[1].report.productArtifact = driftedArtifact;
+    for (const cell of entries[1].report.rawCells.filter(({ framework }) => framework === 'kovo')) {
+      cell.report.productArtifact = driftedArtifact;
+    }
+    expect(buildBudgetBaselineFindings(baseline, entries)).toContain(
+      'baseline packed product identity differs across raw build reports',
+    );
+
+    const missing = comparisonReport({ corpusSize: 24, run: 17, sourceCommit: 'b'.repeat(40) });
+    missing.productArtifact = null;
+    expect(evaluateBuildPerformanceBudget(budget, missing).verdict.reasons).toContain(
+      'candidate packed product identity is malformed',
+    );
+
+    const contaminated = comparisonReport({
+      corpusSize: 24,
+      run: 18,
+      sourceCommit: 'b'.repeat(40),
+    });
+    const next = contaminated.rawCells.find(({ framework }) => framework === 'nextjs');
+    next.report.integrity.productArtifact = {
+      afterVerified: true,
+      beforeVerified: true,
+      required: true,
+    };
+    expect(evaluateBuildPerformanceBudget(budget, contaminated).verdict.reasons).toContain(
+      'candidate corpus-n24/nextjs/clean carried Kovo product evidence',
+    );
+
+    budget.subject.productArtifact = null;
+    const { digest: _oldDigest, ...facts } = budget;
+    budget.digest = digest(canonicalJson(facts));
+    expect(buildBudgetFindings(budget)).toContain('budget packed product identity is malformed');
   });
 
   it('fails closed on lock drift, missing phase census, or forged CLI/startup subtraction', () => {
@@ -815,6 +865,7 @@ function comparisonReport({ corpusSize, run, sourceCommit }) {
     'benchmarks/nextjs/pnpm-lock.yaml': digest('next-lock'),
     'pnpm-lock.yaml': digest('root-lock'),
   };
+  const productArtifact = fixturePackedKovoProductIdentity({ locks, sourceCommit });
   const execution = performanceExecutionIdentity({
     env: {
       GITHUB_JOB: 'build-performance',
@@ -849,8 +900,10 @@ function comparisonReport({ corpusSize, run, sourceCommit }) {
       workloadAuthenticated: true,
     },
     policy: workloadFacts.policies,
+    productArtifact,
     rawCells: rawBuildCells(corpusSize, {
       locks,
+      productArtifact,
       shapeDigest: workloadFacts.corpus.kovo.shapeDigest.slice('sha256:'.length),
       sourceCommit,
     }),
@@ -882,6 +935,7 @@ function workloadIdentity(corpusSize) {
       },
     },
     lanes: [`corpus-n${String(corpusSize)}`],
+    productArtifactPolicy: PACKED_KOVO_PRODUCT_WORKLOAD_POLICY,
     policies: {
       bfcacheIterations: 10,
       browserSamples: 30,
@@ -898,7 +952,7 @@ function workloadIdentity(corpusSize) {
   };
 }
 
-function rawBuildCells(corpusSize, { locks, shapeDigest, sourceCommit }) {
+function rawBuildCells(corpusSize, { locks, productArtifact, shapeDigest, sourceCommit }) {
   return BUILD_MODES.flatMap((mode) =>
     buildSchedule().map(({ framework, occurrence, samples, warmups }) => ({
       cell: 'build',
@@ -910,6 +964,7 @@ function rawBuildCells(corpusSize, { locks, shapeDigest, sourceCommit }) {
         framework,
         locks,
         mode,
+        productArtifact,
         samples,
         shapeDigest,
         sourceCommit,
@@ -919,7 +974,16 @@ function rawBuildCells(corpusSize, { locks, shapeDigest, sourceCommit }) {
   );
 }
 
-function buildReport({ framework, locks, mode, samples, shapeDigest, sourceCommit, warmups }) {
+function buildReport({
+  framework,
+  locks,
+  mode,
+  productArtifact,
+  samples,
+  shapeDigest,
+  sourceCommit,
+  warmups,
+}) {
   const observed = Array.from({ length: samples }, (_, iteration) => {
     const durationMs = framework === 'kovo' ? 500 + iteration : 100 + iteration;
     return {
@@ -945,10 +1009,15 @@ function buildReport({ framework, locks, mode, samples, shapeDigest, sourceCommi
       errors: [],
       iterations: samples,
       misses: 0,
+      productArtifact:
+        framework === 'kovo'
+          ? { afterVerified: true, beforeVerified: true, required: true }
+          : { afterVerified: true, beforeVerified: false, required: false },
       source: { stable: true },
       warmups,
     },
     mode,
+    productArtifact: framework === 'kovo' ? productArtifact : null,
     samples: observed,
     schema: 'kovo-build-benchmark/v1',
     source,

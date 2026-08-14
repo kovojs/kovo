@@ -47,13 +47,16 @@ export async function generateCorpora({ outDir, sizes = SUPPORTED_SIZES } = {}) 
   return manifests;
 }
 
-export async function generateCorpus({ framework, outDir, size }) {
+export async function generateCorpus({ dependencyMode = 'auto', framework, outDir, size }) {
   if (framework !== 'kovo' && framework !== 'nextjs') {
     throw new TypeError(`Unsupported corpus framework ${String(framework)}.`);
   }
   const moduleCount = validateSize(size);
   const outputRoot = path.resolve(outDir);
   assertSafeOutputRoot(outputRoot);
+  if (dependencyMode !== 'auto' && dependencyMode !== 'deferred') {
+    throw new TypeError('Corpus dependency mode must be auto or deferred.');
+  }
   const appRoot = path.join(outputRoot, framework, `n${moduleCount}`);
   if (!appRoot.startsWith(`${outputRoot}${path.sep}`))
     throw new TypeError('Corpus path escaped output root.');
@@ -71,8 +74,9 @@ export async function generateCorpus({ framework, outDir, size }) {
     framework === 'kovo'
       ? path.join(benchmarkRoot, 'kovo', 'node_modules')
       : path.join(benchmarkRoot, 'nextjs', 'node_modules');
-  const usesAncestorDependencies = isPathWithin(path.dirname(dependencyRoot), appRoot);
-  if (!usesAncestorDependencies) {
+  const usesAncestorDependencies =
+    dependencyMode === 'auto' && isPathWithin(path.dirname(dependencyRoot), appRoot);
+  if (dependencyMode === 'auto' && !usesAncestorDependencies) {
     await symlink(dependencyRoot, path.join(appRoot, 'node_modules'), 'dir');
   }
   const bin = (name) =>

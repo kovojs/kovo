@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import {
+  existsSync,
   lstatSync,
   readFileSync,
   realpathSync,
@@ -8,6 +9,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { canonicalJson } from './perf-host.mjs';
 import {
@@ -21,6 +23,16 @@ import {
 
 export const PACKED_KOVO_PRODUCT_DESCRIPTOR_SCHEMA = 'kovo-packed-product-descriptor/v1';
 export const PACKED_KOVO_PRODUCT_IDENTITY_SCHEMA = 'kovo-packed-product-identity/v1';
+export const PACKED_KOVO_PRODUCT_WORKLOAD_POLICY_SCHEMA = 'kovo-packed-product-workload-policy/v1';
+
+export const PACKED_KOVO_PRODUCT_WORKLOAD_POLICY = Object.freeze({
+  concreteIdentity: 'report-bound',
+  corpusIsolation: 'external-root-without-ancestor-node-modules',
+  kovo: 'required',
+  nextjs: 'forbidden',
+  preparationTiming: 'before-quiet-host-admission-and-outside-samples',
+  schema: PACKED_KOVO_PRODUCT_WORKLOAD_POLICY_SCHEMA,
+});
 
 const LOCK_FILES = Object.freeze([
   'pnpm-lock.yaml',
@@ -30,6 +42,7 @@ const LOCK_FILES = Object.freeze([
 const DESCRIPTOR_FILE = '.kovo-perf-packed-product.json';
 const PRODUCT_CLI_ENTRY = 'node_modules/@kovojs/cli/dist/bin.mjs';
 const MAX_DESCRIPTOR_BYTES = 4 * 1024 * 1024;
+const workspaceRoot = fileURLToPath(new URL('../..', import.meta.url));
 
 /**
  * Seal the path-bearing result of the shared packed-CLI preparation for dev/build adapters.
@@ -125,6 +138,7 @@ export function createPackedKovoProductFixture({ prepared, source, sourceAfter }
     bindCorpus(manifestPath) {
       if (cleaned) throw new Error('packed product fixture is already cleaned');
       const appRoot = path.dirname(path.resolve(manifestPath));
+      assertPackedCorpusIsolation(appRoot);
       const link = path.join(appRoot, 'node_modules');
       let current;
       try {
@@ -335,6 +349,38 @@ export function materializePackedKovoCommand(command, fixture, appRoot) {
   };
 }
 
+/**
+ * The measured app must not have the repository's workspace install anywhere in its Node ancestor
+ * search chain. An app-local consumer link alone is insufficient: Node continues walking parents
+ * whenever one dependency is absent, which can silently turn a packed-product lane back into a
+ * source-checkout lane.
+ */
+export function assertPackedCorpusIsolation(appRootValue) {
+  const appRoot = realpathSync(path.resolve(requiredString(appRootValue, 'packed corpus root')));
+  const relativeToWorkspace = path.relative(realpathSync(workspaceRoot), appRoot);
+  if (
+    relativeToWorkspace === '' ||
+    (!relativeToWorkspace.startsWith(`..${path.sep}`) &&
+      relativeToWorkspace !== '..' &&
+      !path.isAbsolute(relativeToWorkspace))
+  ) {
+    throw new Error('packed Kovo corpus must execute outside the repository workspace');
+  }
+  let ancestor = path.dirname(appRoot);
+  while (true) {
+    const dependencyRoot = path.join(ancestor, 'node_modules');
+    if (existsSync(dependencyRoot)) {
+      throw new Error(
+        `packed Kovo corpus ancestor dependency root is not isolated: ${dependencyRoot}`,
+      );
+    }
+    const parent = path.dirname(ancestor);
+    if (parent === ancestor) break;
+    ancestor = parent;
+  }
+  return appRoot;
+}
+
 export function normalizedPackedKovoCommand(command, appRoot) {
   if (command?.packedProduct === undefined) {
     return {
@@ -352,6 +398,7 @@ export function normalizedPackedKovoCommand(command, appRoot) {
 }
 
 export function assertCorpusBinding(appRoot, consumerRoot) {
+  assertPackedCorpusIsolation(appRoot);
   const link = path.join(appRoot, 'node_modules');
   const stat = lstatSync(link);
   if (!stat.isSymbolicLink()) {
@@ -361,6 +408,75 @@ export function assertCorpusBinding(appRoot, consumerRoot) {
   if (realpathSync(link) !== expected) {
     throw new Error('packed Kovo corpus node_modules resolves outside the authenticated consumer');
   }
+}
+
+export function packedKovoProductWorkloadPolicyFindings(value) {
+  return canonicalJson(value) === canonicalJson(PACKED_KOVO_PRODUCT_WORKLOAD_POLICY)
+    ? []
+    : ['packed product workload policy is incomplete'];
+}
+
+/** Independently validate report-bound packed evidence at budget/publication boundaries. */
+export function packedComparisonProductEvidenceFindings(
+  report,
+  label = 'report',
+  { required = false } = {},
+) {
+  const findings = [];
+  const prefix = label.length === 0 ? '' : `${label} `;
+  const identity = report?.workloadIdentity?.identity;
+  const declared = Array.isArray(identity?.cells)
+    ? identity.cells.some((cell) => cell === 'dev' || cell === 'build')
+    : false;
+  if (!required && !declared) return findings;
+  if (!declared) findings.push(`${prefix}workload does not select packed-product measurement`);
+  findings.push(
+    ...packedKovoProductWorkloadPolicyFindings(identity?.productArtifactPolicy).map(
+      (finding) => `${prefix}${finding}`,
+    ),
+  );
+  const source = report?.source;
+  findings.push(
+    ...packedKovoProductIdentityFindings(report?.productArtifact, source).map(
+      (finding) => `${prefix}${finding}`,
+    ),
+  );
+  const expected = report?.productArtifact;
+  const cells = Array.isArray(report?.rawCells)
+    ? report.rawCells.filter((cell) => cell?.cell === 'dev' || cell?.cell === 'build')
+    : [];
+  if (cells.length === 0) findings.push(`${prefix}packed product raw cell census is unavailable`);
+  for (const framework of ['kovo', 'nextjs']) {
+    if (!cells.some((cell) => cell?.framework === framework)) {
+      findings.push(`${prefix}packed product ${framework} raw cell evidence is unavailable`);
+    }
+  }
+  for (const cell of cells) {
+    const cellLabel = `${prefix}${cell?.lane ?? 'unknown'}/${cell?.framework ?? 'unknown'}/${
+      cell?.mode ?? cell?.cell ?? 'unknown'
+    }`;
+    const integrity = cell?.report?.integrity?.productArtifact;
+    if (cell?.framework === 'kovo') {
+      if (
+        canonicalJson(cell?.report?.productArtifact) !== canonicalJson(expected) ||
+        canonicalJson(integrity) !==
+          canonicalJson({ afterVerified: true, beforeVerified: true, required: true })
+      ) {
+        findings.push(`${cellLabel} packed product evidence is incomplete`);
+      }
+    } else if (cell?.framework === 'nextjs') {
+      if (
+        cell?.report?.productArtifact !== null ||
+        canonicalJson(integrity) !==
+          canonicalJson({ afterVerified: true, beforeVerified: false, required: false })
+      ) {
+        findings.push(`${cellLabel} carried Kovo product evidence`);
+      }
+    } else {
+      findings.push(`${cellLabel} has an unknown entrant identity`);
+    }
+  }
+  return [...new Set(findings)];
 }
 
 export function packedKovoProductIdentityFindings(value, source = null) {

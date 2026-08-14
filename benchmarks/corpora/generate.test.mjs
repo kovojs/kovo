@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,6 +14,7 @@ import {
   EDIT_REFRESH_SURFACES,
   EDIT_SAVE_POSTURE,
   EDIT_STATE_POSTURE,
+  generateCorpus,
   generateCorpora,
 } from './generate.mjs';
 
@@ -175,6 +176,25 @@ describe('equal-shape developer corpus generator', () => {
       path.join(corpusRoot, '..', 'kovo', '.corpora', 'kovo', 'n24', 'manifest.json'),
       path.join(corpusRoot, '..', 'nextjs', '.corpora', 'nextjs', 'n24', 'manifest.json'),
     ]);
+  });
+
+  it('can defer dependency binding for an externally isolated packed-product corpus', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-corpus-deferred-dependencies-'));
+    roots.push(root);
+    const manifestPath = await generateCorpus({
+      dependencyMode: 'deferred',
+      framework: 'kovo',
+      outDir: root,
+      size: 24,
+    });
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+    expect(manifest.build.command.argv[0]).toBe('node_modules/.bin/kovo');
+    expect(manifest.dev.command.argv[0]).toBe('node_modules/.bin/kovo');
+    await expect(
+      lstat(path.join(path.dirname(manifestPath), 'node_modules')),
+    ).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
   });
 
   it('refuses to recursively replace an output directory it did not generate', async () => {

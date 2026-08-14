@@ -16,7 +16,11 @@ import {
   BROWSER_FIXTURE_RENDERED_EVIDENCE_SCHEMA,
   browserFixtureIdentity,
 } from './browser-fixture-identity.mjs';
-import { DEV_PORT_ALLOCATION_POSTURE, DEV_SESSION_PORT_STRIDE } from './corpora/generate.mjs';
+import {
+  DEV_PORT_ALLOCATION_POSTURE,
+  DEV_SESSION_PORT_STRIDE,
+  generateCorpus,
+} from './corpora/generate.mjs';
 import { DEFAULT_DEV_PORT_BASE } from './harness/dev-port-allocation.mjs';
 import {
   MATCHED_SERVER_SEMANTIC_CONTRACT_SCHEMA,
@@ -34,7 +38,9 @@ import {
 import { collectPerformanceProvenance } from '../scripts/lib/perf-provenance.mjs';
 import {
   createPackedKovoProductFixture,
+  PACKED_KOVO_PRODUCT_WORKLOAD_POLICY,
   packedKovoProductIdentityFindings,
+  packedKovoProductWorkloadPolicyFindings,
 } from '../scripts/lib/perf-packed-kovo-product.mjs';
 import { devSessionHandoffFindings } from '../scripts/lib/perf-dev-session-evidence.mjs';
 import {
@@ -148,6 +154,7 @@ export async function runComparison(options = {}) {
         sourceStable: true,
         workloadAuthenticated: workloadIdentity.complete,
       },
+      productArtifact: null,
       rawCells: [],
       schema: COMPARE_SCHEMA,
       serverPreparation: [],
@@ -175,6 +182,7 @@ export async function runComparison(options = {}) {
   const browserPreparation = [];
   const serverPreparation = [];
   let packedProductFixture = null;
+  let packedKovoCorpusManifest = null;
   const quietHost = createQuietHostAdmission({
     ceiling: options.maxLoadPerCpu ?? 1,
     maxWaitMs: quietHostPolicy.maxWaitMs,
@@ -194,7 +202,13 @@ export async function runComparison(options = {}) {
           source: provenance,
           sourceAfter: sourceAfterPreparation,
         });
-        packedProductFixture.bindCorpus(corpusManifest('kovo', options.corpusSize ?? 24));
+        packedKovoCorpusManifest = await generateCorpus({
+          dependencyMode: 'deferred',
+          framework: 'kovo',
+          outDir: path.join(scratch, 'packed-kovo-corpus'),
+          size: options.corpusSize ?? 24,
+        });
+        packedProductFixture.bindCorpus(packedKovoCorpusManifest);
       } catch (error) {
         if (packedProductFixture === null) prepared.cleanup();
         else {
@@ -205,8 +219,10 @@ export async function runComparison(options = {}) {
       }
       workloadOptions = {
         ...options,
-        packedProductIdentity: packedProductFixture.identity,
-        requirePackedProductArtifact: true,
+        corpusManifests: {
+          kovo: packedKovoCorpusManifest,
+          nextjs: corpusManifest('nextjs', options.corpusSize ?? 24),
+        },
       };
     }
     const workloadIdentity = await performanceWorkloadIdentity(workloadOptions, cells);
@@ -297,7 +313,11 @@ export async function runComparison(options = {}) {
             args: [
               path.join(benchmarkRoot, 'corpora/dev-loop.mjs'),
               '--manifest',
-              corpusManifest(framework, options.corpusSize ?? 24),
+              comparisonCorpusManifest(
+                framework,
+                options.corpusSize ?? 24,
+                packedKovoCorpusManifest,
+              ),
               '--iterations',
               String(scheduled.editSamples),
               '--ready-iterations',
@@ -356,7 +376,11 @@ export async function runComparison(options = {}) {
             break;
           }
           quietHost.markBenchmarkWork();
-          const manifest = corpusManifest(framework, options.corpusSize ?? 24);
+          const manifest = comparisonCorpusManifest(
+            framework,
+            options.corpusSize ?? 24,
+            packedKovoCorpusManifest,
+          );
           const resultFile = path.join(scratch, `${corpusLane}-${orderIndex}-build-${mode}.json`);
           try {
             await runAdapter({
@@ -543,7 +567,8 @@ export async function runComparison(options = {}) {
           lanes: options.lanes ?? lanes,
           lighthouseRuns: options.lighthouseRuns ?? 5,
           modes: options.buildModes ?? buildModes,
-          productArtifact: workloadIdentity.identity.productArtifact,
+          corpusManifests: workloadOptions.corpusManifests,
+          productArtifact: packedProductFixture?.identity ?? null,
           serverConcurrencies: options.serverConcurrencies ?? SERVER_CONCURRENCIES,
           serverDurationMs: options.serverDurationMs ?? 15_000,
           serverEncodings: options.serverEncodings ?? SERVER_ENCODINGS,
@@ -558,6 +583,7 @@ export async function runComparison(options = {}) {
           skipLighthouse: options.skipLighthouse === true,
           source: provenance,
           warmups,
+          workloadIdentity,
         }),
         comparatorMatched: false,
         executionAuthenticated,
@@ -600,6 +626,7 @@ export async function runComparison(options = {}) {
         },
         warmups,
       },
+      productArtifact: packedProductFixture?.identity ?? null,
       rawCells,
       schema: COMPARE_SCHEMA,
       serverPreparation,
@@ -927,6 +954,14 @@ function occurrenceIndex(orderIndex, framework) {
 
 function corpusManifest(framework, size) {
   return path.join(benchmarkRoot, framework, '.corpora', framework, `n${size}`, 'manifest.json');
+}
+
+function comparisonCorpusManifest(framework, size, packedKovoManifest) {
+  if (framework !== 'kovo') return corpusManifest(framework, size);
+  if (typeof packedKovoManifest !== 'string' || packedKovoManifest.length === 0) {
+    throw new TypeError('packed Kovo corpus manifest is unavailable');
+  }
+  return packedKovoManifest;
 }
 
 /**
@@ -1569,14 +1604,17 @@ async function comparatorIntegrity(cells, policy) {
 
   const corpusDigests = {};
   if (policy.cells.includes('dev') || policy.cells.includes('build')) {
+    for (const finding of packedKovoProductWorkloadPolicyFindings(
+      policy.workloadIdentity?.identity?.productArtifactPolicy,
+    )) {
+      reasons.push(finding);
+    }
     if (packedKovoProductIdentityFindings(policy.productArtifact, policy.source).length > 0) {
       reasons.push('packed Kovo product-artifact workload identity is incomplete');
     }
     for (const framework of ['kovo', 'nextjs']) {
       try {
-        const manifest = JSON.parse(
-          await readFile(corpusManifest(framework, policy.corpusSize), 'utf8'),
-        );
+        const manifest = JSON.parse(await readFile(policy.corpusManifests?.[framework], 'utf8'));
         corpusDigests[framework] = manifest.shapeDigest;
       } catch {
         corpusDigests[framework] = null;
@@ -1704,7 +1742,11 @@ export function productArtifactCellFindings(cell, expected) {
     cell?.mode ?? cell?.cell ?? 'unknown'
   }`;
   if (cell?.framework === 'nextjs') {
-    return cell.report?.productArtifact == null ? [] : [`${label} carried Kovo product evidence`];
+    return cell.report?.productArtifact === null &&
+      canonicalJson(cell.report?.integrity?.productArtifact) ===
+        canonicalJson({ afterVerified: true, beforeVerified: false, required: false })
+      ? []
+      : [`${label} carried Kovo product evidence`];
   }
   if (cell?.framework !== 'kovo') return [`${label} has an unknown entrant identity`];
   return canonicalJson(cell.report?.productArtifact) === canonicalJson(expected) &&
@@ -2475,7 +2517,9 @@ export async function performanceWorkloadIdentity(
   if (cells.includes('dev') || cells.includes('build')) {
     for (const framework of ['kovo', 'nextjs']) {
       try {
-        const bytes = await readFile(corpusManifest(framework, corpusSize));
+        const bytes = await readFile(
+          options.corpusManifests?.[framework] ?? corpusManifest(framework, corpusSize),
+        );
         const manifest = JSON.parse(bytes.toString('utf8'));
         const shapeDigest = `sha256:${createHash('sha256')
           .update(JSON.stringify(manifest.workload))
@@ -2512,9 +2556,9 @@ export async function performanceWorkloadIdentity(
     corpus,
     fixture,
     lanes: workloadLanes(options, cells, corpusSize),
-    ...(options.packedProductIdentity === undefined
-      ? {}
-      : { productArtifact: options.packedProductIdentity }),
+    ...(cells.includes('dev') || cells.includes('build')
+      ? { productArtifactPolicy: PACKED_KOVO_PRODUCT_WORKLOAD_POLICY }
+      : {}),
     policies: {
       bfcacheIterations: options.bfcacheIterations ?? 10,
       browserSamples: options.iterations ?? 30,
@@ -2559,9 +2603,8 @@ export async function performanceWorkloadIdentity(
     complete = false;
   }
   if (
-    options.requirePackedProductArtifact === true &&
     (cells.includes('dev') || cells.includes('build')) &&
-    packedKovoProductIdentityFindings(identity.productArtifact).length > 0
+    packedKovoProductWorkloadPolicyFindings(identity.productArtifactPolicy).length > 0
   ) {
     complete = false;
   }

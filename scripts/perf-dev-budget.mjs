@@ -11,6 +11,11 @@ import {
 import { executionIdentityFindings } from './lib/perf-execution.mjs';
 import { devSessionHandoffFindings } from './lib/perf-dev-session-evidence.mjs';
 import { validReadyRouteProbe } from './lib/perf-ready-route.mjs';
+import {
+  packedComparisonProductEvidenceFindings,
+  packedKovoProductIdentityFindings,
+  packedKovoProductWorkloadPolicyFindings,
+} from './lib/perf-packed-kovo-product.mjs';
 import { ratifyPerformanceBaseline } from './perf-baseline-ratify.mjs';
 import {
   canonicalJson,
@@ -130,6 +135,7 @@ export function deriveDevPerformanceBudget(baseline, options = {}) {
       corpusSize,
       host: baseline.subject.host,
       locks: baseline.subject.locks,
+      productArtifact: options.baselineEntries[0].report.productArtifact,
       workloadIdentity: baseline.subject.workloadIdentity,
     },
   };
@@ -174,7 +180,11 @@ export function evaluateDevPerformanceBudget(budget, candidate) {
       reasons.push(`candidate required dev metric ${metric} is unavailable`);
     }
   }
-  reasons.push(...devRawEvidenceFindings(candidate, budget?.subject?.corpusSize));
+  reasons.push(
+    ...devRawEvidenceFindings(candidate, budget?.subject?.corpusSize, {
+      productLabel: 'candidate',
+    }),
+  );
 
   const checks = [];
   if (reasons.length === 0) {
@@ -365,6 +375,9 @@ function baselineDevReportFindings(baseline, entries, corpusSize) {
       findings.push(`${label} does not match the ratified baseline subject`);
     }
   }
+  if (new Set(entries.map((entry) => canonicalJson(entry?.report?.productArtifact))).size !== 1) {
+    findings.push('baseline packed product identity differs across raw dev reports');
+  }
   if (findings.length === 0) {
     const entriesByDigest = new Map(entries.map((entry) => [entry.contentDigest, entry]));
     const orderedEntries = baseline.reports.map((report) =>
@@ -410,6 +423,14 @@ export function devBudgetFindings(budget) {
     findings.push('budget runner image identity is unavailable');
   }
   findings.push(...workloadIdentityFindings(budget.subject?.workloadIdentity, 'budget'));
+  findings.push(
+    ...packedKovoProductIdentityFindings(budget.subject?.productArtifact, {
+      commit: budget.baseline?.sourceCommit,
+      dirty: false,
+      dirtyPaths: [],
+      locks: budget.subject?.locks,
+    }).map((finding) => `budget ${finding}`),
+  );
   for (const lock of REQUIRED_LOCKS) {
     if (!DIGEST_PATTERN.test(budget.subject?.locks?.[lock] ?? '')) {
       findings.push(`budget ${lock} digest is unavailable`);
@@ -490,6 +511,7 @@ function devWorkloadFindings(identity) {
   if (canonicalJson(identity?.cells) !== canonicalJson(['dev'])) {
     findings.push('workload is not the isolated dev cell');
   }
+  findings.push(...packedKovoProductWorkloadPolicyFindings(identity?.productArtifactPolicy));
   if (!SUPPORTED_CORPUS_SIZES.includes(corpusSize)) {
     findings.push('workload corpus size is not N=24 or N=216');
   }
@@ -532,8 +554,8 @@ function devWorkloadFindings(identity) {
   return findings;
 }
 
-function devRawEvidenceFindings(report, corpusSize) {
-  const findings = [];
+function devRawEvidenceFindings(report, corpusSize, { productLabel = '' } = {}) {
+  const findings = packedComparisonProductEvidenceFindings(report, productLabel);
   if (!SUPPORTED_CORPUS_SIZES.includes(corpusSize)) return ['budget corpus size is unavailable'];
   const rawCells = Array.isArray(report?.rawCells) ? report.rawCells : [];
   if (!Array.isArray(report?.rawCells)) {

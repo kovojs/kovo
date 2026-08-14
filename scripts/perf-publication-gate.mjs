@@ -49,6 +49,7 @@ import {
   devBudgetFindings,
   evaluateDevPerformanceBudget,
 } from './perf-dev-budget.mjs';
+import { packedComparisonProductEvidenceFindings } from './lib/perf-packed-kovo-product.mjs';
 import { canonicalJson } from './perf-regression-check.mjs';
 
 export const PERF_PUBLICATION_INPUT_SCHEMA = 'kovo-performance-publication-input/v1';
@@ -381,6 +382,18 @@ export function derivePerformancePublication(
       continue;
     }
     try {
+      if (familyName.startsWith('dev-') || familyName.startsWith('build-')) {
+        const productFindings = [...evidence.baseline, evidence.holdout].flatMap((entry, index) =>
+          packedComparisonProductEvidenceFindings(
+            entry.report,
+            `${index < evidence.baseline.length ? `baseline[${String(index)}]` : 'holdout'}`,
+            { required: true },
+          ),
+        );
+        if (productFindings.length > 0) {
+          throw new TypeError(`packed product evidence is invalid: ${productFindings.join('; ')}`);
+        }
+      }
       const baseline = { ...ratify(evidence.baseline), generatedAt };
       if (baseline?.verdict?.status !== 'ratified') {
         throw new TypeError(

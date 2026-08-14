@@ -13,6 +13,7 @@ import {
   BROWSER_FIXTURE_RENDERED_EVIDENCE_SCHEMA,
   browserFixtureIdentity,
 } from './browser-fixture-identity.mjs';
+import { generateCorpus } from './corpora/generate.mjs';
 import {
   MATCHED_SERVER_SEMANTIC_SOURCE,
   matchedServerSemanticContract,
@@ -263,6 +264,62 @@ describe('serialized comparison analysis', () => {
       corpusSize: 24,
     });
     expect(workload.identity.lanes).toEqual(['corpus-n24']);
+    expect(workload.identity.productArtifactPolicy).toMatchObject({
+      concreteIdentity: 'report-bound',
+      schema: 'kovo-packed-product-workload-policy/v1',
+    });
+    const laterCommitArtifact = await performanceWorkloadIdentity(
+      {
+        cells: ['build'],
+        corpusSize: 24,
+        iterations: 10,
+        packedProductIdentity: { digest: `sha256:${'f'.repeat(64)}` },
+      },
+      ['build'],
+    );
+    expect(laterCommitArtifact.digest).toBe(workload.digest);
+
+    const firstRoot = await mkdtemp(path.join(os.tmpdir(), 'kovo-packed-workload-first-'));
+    const secondRoot = await mkdtemp(path.join(os.tmpdir(), 'kovo-packed-workload-second-'));
+    try {
+      const firstManifest = await generateCorpus({
+        dependencyMode: 'deferred',
+        framework: 'kovo',
+        outDir: firstRoot,
+        size: 24,
+      });
+      const secondManifest = await generateCorpus({
+        dependencyMode: 'deferred',
+        framework: 'kovo',
+        outDir: secondRoot,
+        size: 24,
+      });
+      const firstExternal = await performanceWorkloadIdentity(
+        {
+          cells: ['build'],
+          corpusManifests: { kovo: firstManifest },
+          corpusSize: 24,
+          iterations: 10,
+        },
+        ['build'],
+      );
+      const secondExternal = await performanceWorkloadIdentity(
+        {
+          cells: ['build'],
+          corpusManifests: { kovo: secondManifest },
+          corpusSize: 24,
+          iterations: 10,
+        },
+        ['build'],
+      );
+      expect(firstExternal.complete).toBe(true);
+      expect(secondExternal.digest).toBe(firstExternal.digest);
+    } finally {
+      await Promise.all([
+        rm(firstRoot, { force: true, recursive: true }),
+        rm(secondRoot, { force: true, recursive: true }),
+      ]);
+    }
   });
 
   it('requires packed product evidence only on Kovo dev/build cells', () => {
@@ -285,11 +342,32 @@ describe('serialized comparison analysis', () => {
           cell: 'dev',
           framework: 'nextjs',
           lane: 'corpus-n24',
-          report: { productArtifact: null },
+          report: {
+            integrity: {
+              productArtifact: { afterVerified: true, beforeVerified: false, required: false },
+            },
+            productArtifact: null,
+          },
         },
         productArtifact,
       ),
     ).toEqual([]);
+    expect(
+      productArtifactCellFindings(
+        {
+          cell: 'dev',
+          framework: 'nextjs',
+          lane: 'corpus-n24',
+          report: {
+            integrity: {
+              productArtifact: { afterVerified: true, beforeVerified: true, required: true },
+            },
+            productArtifact: null,
+          },
+        },
+        productArtifact,
+      ),
+    ).toEqual(['corpus-n24/nextjs/dev carried Kovo product evidence']);
     expect(
       productArtifactCellFindings(
         { cell: 'dev', framework: 'nextjs', lane: 'corpus-n24', report },
