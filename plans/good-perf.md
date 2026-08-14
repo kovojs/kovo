@@ -135,13 +135,21 @@ benchmarks/harness/{report,run,scenarios}.test.mjs --reporter=dot` passed 41/41.
   - Evidence: `7f306a501`; `pnpm exec vitest --run scripts/perf-dev-edit-profile.test.mjs
 benchmarks/corpora/dev-loop.test.mjs --reporter=dot` passed 39/39. Current-head N=24/N=216
     diagnostic artifacts remain pending and own the ranking.
-- [ ] Spike authenticated in-session closure reuse for `kovo check --watch` by exposing serializable
+- [x] Spike authenticated in-session closure reuse for `kovo check --watch` by exposing serializable
       producer seams for trust/static/style facts in `build-export.ts`.
   - SPEC §11.4 constraints: always freshly evaluate app modules and rebuild runtime/app objects;
     never retain diagnostics, partial graphs, `LoadedBuildAppModule`, or unauthenticated disk state;
     ambiguity executes the full producer.
-- [ ] Spike a TypeScript semantic `BuilderProgram` plus changed-file/reverse-dependent analysis for
+  - Evidence: [run `31759466475`, artifact
+    `9204437112`](https://github.com/kovojs/kovo/actions/runs/31759466475/artifacts/9204437112)
+    completed 30 clean B,S,S,B edits/arm with zero misses; config/style facts reused only with exact
+    digests while static trust, app evaluation, graph construction, and diagnostics stayed fresh.
+- [x] Spike a TypeScript semantic `BuilderProgram` plus changed-file/reverse-dependent analysis for
       the watch session, with exact source/config/package/version digests in every reused fact.
+  - Evidence: the same authenticated report measured 11,605.65 to 9,390.72 ms median (19.08%) with
+    paired 95% CI `[19.05%, 20.83%]`; TypeScript was `reused-authenticated` in 30/30 candidate edits.
+    The disclosed median RSS increase was 15.72%; details are in
+    `docs/performance/check-watch-reuse-decision.md`.
 - [x] Measure packed CLI versus source-checkout CLI startup. If packed users are already fast, treat
       source transformation/prebuilt CLI work as maintainer performance rather than product DevEx.
   - Evidence: [run `31753246698`, artifact
