@@ -92,6 +92,7 @@ env:
 jobs:
   correctness-smoke:
     name: Matched fixture correctness
+    if: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -131,6 +132,7 @@ jobs:
 
   bytes:
     name: Production bytes
+    if: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -189,8 +191,10 @@ jobs:
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
-          image_version_digest="$(printf '%s' "${ImageVersion:-unknown}" | sha256sum | cut -d' ' -f1)"
-          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "${ImageOS:-unknown}" "$image_version_digest" >> "$GITHUB_ENV"
+          : "${ImageOS:?GitHub hosted runner did not expose ImageOS}"
+          : "${ImageVersion:?GitHub hosted runner did not expose ImageVersion}"
+          image_version_digest="$(printf '%s' "$ImageVersion" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "$ImageOS" "$image_version_digest" >> "$GITHUB_ENV"
       # The gated statistic is the growth exponent between the two largest rungs, which is a ratio
       # taken within a single session, so it survives a contended runner far better than any
       # absolute duration would. Peak RSS is also collected here and has the least headroom of any
@@ -242,8 +246,10 @@ jobs:
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
-          image_version_digest="$(printf '%s' "${ImageVersion:-unknown}" | sha256sum | cut -d' ' -f1)"
-          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "${ImageOS:-unknown}" "$image_version_digest" >> "$GITHUB_ENV"
+          : "${ImageOS:?GitHub hosted runner did not expose ImageOS}"
+          : "${ImageVersion:?GitHub hosted runner did not expose ImageVersion}"
+          image_version_digest="$(printf '%s' "$ImageVersion" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "$ImageOS" "$image_version_digest" >> "$GITHUB_ENV"
       - name: Install isolated benchmark dependencies
         run: |
           vp exec pnpm --dir benchmarks/nextjs install --ignore-workspace --frozen-lockfile
@@ -294,8 +300,10 @@ jobs:
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
-          image_version_digest="$(printf '%s' "${ImageVersion:-unknown}" | sha256sum | cut -d' ' -f1)"
-          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "${ImageOS:-unknown}" "$image_version_digest" >> "$GITHUB_ENV"
+          : "${ImageOS:?GitHub hosted runner did not expose ImageOS}"
+          : "${ImageVersion:?GitHub hosted runner did not expose ImageVersion}"
+          image_version_digest="$(printf '%s' "$ImageVersion" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "$ImageOS" "$image_version_digest" >> "$GITHUB_ENV"
       - name: Install the isolated Next.js benchmark
         run: vp exec pnpm --dir benchmarks/nextjs install --ignore-workspace --frozen-lockfile
       - uses: ./.github/actions/playwright-install
@@ -350,8 +358,10 @@ jobs:
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
-          image_version_digest="$(printf '%s' "${ImageVersion:-unknown}" | sha256sum | cut -d' ' -f1)"
-          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "${ImageOS:-unknown}" "$image_version_digest" >> "$GITHUB_ENV"
+          : "${ImageOS:?GitHub hosted runner did not expose ImageOS}"
+          : "${ImageVersion:?GitHub hosted runner did not expose ImageVersion}"
+          image_version_digest="$(printf '%s' "$ImageVersion" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "$ImageOS" "$image_version_digest" >> "$GITHUB_ENV"
       - name: Install the isolated Next.js benchmark
         run: vp exec pnpm --dir benchmarks/nextjs install --ignore-workspace --frozen-lockfile
       - name: Generate the matched corpus
@@ -396,17 +406,24 @@ jobs:
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
-          image_version_digest="$(printf '%s' "${ImageVersion:-unknown}" | sha256sum | cut -d' ' -f1)"
-          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "${ImageOS:-unknown}" "$image_version_digest" >> "$GITHUB_ENV"
+          : "${ImageOS:?GitHub hosted runner did not expose ImageOS}"
+          : "${ImageVersion:?GitHub hosted runner did not expose ImageVersion}"
+          image_version_digest="$(printf '%s' "$ImageVersion" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "$ImageOS" "$image_version_digest" >> "$GITHUB_ENV"
       - name: Install the isolated Next.js benchmark
         run: vp exec pnpm --dir benchmarks/nextjs install --ignore-workspace --frozen-lockfile
       - name: Collect the complete alternating server matrix
+        # The 504 fixed measurement windows consume 168 minutes. A five-second quiet-host settle
+        # ceiling keeps the declared envelope near 210 minutes, while the outer timeout leaves
+        # thirty minutes for artifact upload before the job-level 360-minute cap.
         run: >-
+          timeout --signal=TERM --kill-after=30s 330m
           vp exec node benchmarks/compare.mjs
           --cells server
           --server-samples 7
           --server-warmup-ms 5000
           --server-duration-ms 15000
+          --server-host-settle-max-ms 5000
           --server-concurrencies 1,8,32
           --server-routes listing,detail
           --server-encodings identity,br
@@ -442,9 +459,11 @@ jobs:
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
-          image_version_digest="$(printf '%s' "${ImageVersion:-unknown}" | sha256sum | cut -d' ' -f1)"
-          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "${ImageOS:-unknown}" "$image_version_digest" >> "$GITHUB_ENV"
-          runner_digest="$({ printf '%s\n' "${ImageOS:-unknown}" "${ImageVersion:-unknown}"; cat /etc/os-release; } | sha256sum | cut -d' ' -f1)"
+          : "${ImageOS:?GitHub hosted runner did not expose ImageOS}"
+          : "${ImageVersion:?GitHub hosted runner did not expose ImageVersion}"
+          image_version_digest="$(printf '%s' "$ImageVersion" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "$ImageOS" "$image_version_digest" >> "$GITHUB_ENV"
+          runner_digest="$({ printf '%s\n' "$ImageOS" "$ImageVersion"; cat /etc/os-release; } | sha256sum | cut -d' ' -f1)"
           printf 'KOVO_DEVEX_OS_IMAGE=github-actions/ubuntu-24.04@sha256:%s\n' "$runner_digest" >> "$GITHUB_ENV"
           printf 'KOVO_DEVEX_RUNNER_NAME=github-hosted-ubuntu-24.04-accepted\n' >> "$GITHUB_ENV"
       - name: Expose pnpm to authenticated benchmark subprocesses
@@ -568,8 +587,10 @@ jobs:
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
-          image_version_digest="$(printf '%s' "${ImageVersion:-unknown}" | sha256sum | cut -d' ' -f1)"
-          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "${ImageOS:-unknown}" "$image_version_digest" >> "$GITHUB_ENV"
+          : "${ImageOS:?GitHub hosted runner did not expose ImageOS}"
+          : "${ImageVersion:?GitHub hosted runner did not expose ImageVersion}"
+          image_version_digest="$(printf '%s' "$ImageVersion" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "$ImageOS" "$image_version_digest" >> "$GITHUB_ENV"
       - uses: ./.github/actions/playwright-install
         with:
           browsers: chromium
@@ -646,8 +667,10 @@ jobs:
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
-          image_version_digest="$(printf '%s' "${ImageVersion:-unknown}" | sha256sum | cut -d' ' -f1)"
-          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "${ImageOS:-unknown}" "$image_version_digest" >> "$GITHUB_ENV"
+          : "${ImageOS:?GitHub hosted runner did not expose ImageOS}"
+          : "${ImageVersion:?GitHub hosted runner did not expose ImageVersion}"
+          image_version_digest="$(printf '%s' "$ImageVersion" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "$ImageOS" "$image_version_digest" >> "$GITHUB_ENV"
       - name: Run the full alternating compression-cache matrix
         run: |
           mkdir -p "$RUNNER_TEMP/kovo-perf/compressed-cache"
@@ -689,8 +712,10 @@ jobs:
           printf '%s\n' "$tool_bin" >> "$GITHUB_PATH"
       - name: Bind the report to the runner image
         run: |
-          image_version_digest="$(printf '%s' "${ImageVersion:-unknown}" | sha256sum | cut -d' ' -f1)"
-          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "${ImageOS:-unknown}" "$image_version_digest" >> "$GITHUB_ENV"
+          : "${ImageOS:?GitHub hosted runner did not expose ImageOS}"
+          : "${ImageVersion:?GitHub hosted runner did not expose ImageVersion}"
+          image_version_digest="$(printf '%s' "$ImageVersion" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "$ImageOS" "$image_version_digest" >> "$GITHUB_ENV"
       - name: Run the full packed-versus-source startup measurement
         run: |
           mkdir -p "$RUNNER_TEMP/kovo-perf/cli-startup"
@@ -726,8 +751,10 @@ jobs:
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
-          image_version_digest="$(printf '%s' "${ImageVersion:-unknown}" | sha256sum | cut -d' ' -f1)"
-          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "${ImageOS:-unknown}" "$image_version_digest" >> "$GITHUB_ENV"
+          : "${ImageOS:?GitHub hosted runner did not expose ImageOS}"
+          : "${ImageVersion:?GitHub hosted runner did not expose ImageVersion}"
+          image_version_digest="$(printf '%s' "$ImageVersion" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "$ImageOS" "$image_version_digest" >> "$GITHUB_ENV"
       - name: Profile the current forced-dynamic listing route
         run: |
           mkdir -p "$RUNNER_TEMP/kovo-perf/runtime-diagnostics"
@@ -774,8 +801,10 @@ jobs:
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
-          image_version_digest="$(printf '%s' "${ImageVersion:-unknown}" | sha256sum | cut -d' ' -f1)"
-          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "${ImageOS:-unknown}" "$image_version_digest" >> "$GITHUB_ENV"
+          : "${ImageOS:?GitHub hosted runner did not expose ImageOS}"
+          : "${ImageVersion:?GitHub hosted runner did not expose ImageVersion}"
+          image_version_digest="$(printf '%s' "$ImageVersion" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "$ImageOS" "$image_version_digest" >> "$GITHUB_ENV"
       - uses: ./.github/actions/playwright-install
         with:
           browsers: chromium
@@ -854,8 +883,10 @@ jobs:
           test "$(command -v strace)" = /usr/bin/strace
       - name: Bind the report to the runner image
         run: |
-          image_version_digest="$(printf '%s' "${ImageVersion:-unknown}" | sha256sum | cut -d' ' -f1)"
-          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "${ImageOS:-unknown}" "$image_version_digest" >> "$GITHUB_ENV"
+          : "${ImageOS:?GitHub hosted runner did not expose ImageOS}"
+          : "${ImageVersion:?GitHub hosted runner did not expose ImageVersion}"
+          image_version_digest="$(printf '%s' "$ImageVersion" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "$ImageOS" "$image_version_digest" >> "$GITHUB_ENV"
       - name: Generate the authenticated N=216 Kovo corpus
         run: vp exec node benchmarks/corpora/generate.mjs --sizes 216
       - name: Collect diagnostic-only warm-build process profiles
@@ -896,8 +927,10 @@ jobs:
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
-          image_version_digest="$(printf '%s' "${ImageVersion:-unknown}" | sha256sum | cut -d' ' -f1)"
-          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "${ImageOS:-unknown}" "$image_version_digest" >> "$GITHUB_ENV"
+          : "${ImageOS:?GitHub hosted runner did not expose ImageOS}"
+          : "${ImageVersion:?GitHub hosted runner did not expose ImageVersion}"
+          image_version_digest="$(printf '%s' "$ImageVersion" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "$ImageOS" "$image_version_digest" >> "$GITHUB_ENV"
       - name: Expose pnpm to authenticated benchmark subprocesses
         run: |
           tool_bin="$RUNNER_TEMP/kovo-perf-tool-bin"

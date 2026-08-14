@@ -1608,7 +1608,6 @@ function buildProfileAuthorityDigestFindings(custody, mode) {
     workflow.name !== 'Perf Realistic Tier' ||
     workflow.path !== PERF_REALISTIC_WORKFLOW_PATH ||
     workflow.status !== 'completed' ||
-    workflow.conclusion !== 'success' ||
     !COMMIT_PATTERN.test(workflow.headSha ?? '') ||
     !COMMIT_PATTERN.test(workflow.sourceSha ?? '') ||
     !COMMIT_PATTERN.test(workflow.workflowSha ?? '') ||
@@ -2338,7 +2337,6 @@ function evidenceReferenceFindings(value, label, config, publication, family) {
     workflow.name !== 'Perf Realistic Tier' ||
     workflow.path !== PERF_REALISTIC_WORKFLOW_PATH ||
     workflow.status !== 'completed' ||
-    workflow.conclusion !== 'success' ||
     workflow.triggerPolicy !== 'baseline' ||
     workflow.sourceSha !== value.sourceCommit ||
     !COMMIT_PATTERN.test(workflow.headSha ?? '') ||

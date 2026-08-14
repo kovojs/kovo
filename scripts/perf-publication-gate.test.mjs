@@ -216,6 +216,21 @@ describe('seven-family performance publication gate', () => {
     }
   });
 
+  it('accepts a completed failed workflow run when the referenced producer job succeeded', () => {
+    const authenticated = authenticatedFixture();
+    authenticated.families.browser.baseline[0].custody.workflow.conclusion = 'failure';
+
+    const result = derivePerformancePublication(authenticated, fixtureDerivationOptions());
+
+    expect(result.publication.verdict.status).toBe('publishable');
+    expect(performancePublicationFindings(result.publication)).toEqual([]);
+    expect(result.publication.families.browser.evidence.baseline[0].workflow).toMatchObject({
+      conclusion: 'failure',
+      job: { conclusion: 'success', name: 'Browser matrix' },
+      status: 'completed',
+    });
+  });
+
   it('rejects a readback directory containing evidence outside the exact 21-file census', async () => {
     const directory = mkdtempSync(path.join(os.tmpdir(), 'kovo-perf-publication-extra-'));
     temporaryDirectories.push(directory);
@@ -381,6 +396,13 @@ describe('seven-family performance publication gate', () => {
     const entry = buildProfileEntryFixture('unchanged');
 
     expect(entry.report.profileArtifacts.map(({ role }) => role)).toContain('config-static-trust');
+    expect(buildProfilePublicationFindings(entry, 'unchanged')).toEqual([]);
+  });
+
+  it('accepts a build profile from a completed failed run when its producer job succeeded', () => {
+    const entry = buildProfileEntryFixture('unchanged');
+    entry.custody.workflow.conclusion = 'failure';
+
     expect(buildProfilePublicationFindings(entry, 'unchanged')).toEqual([]);
   });
 

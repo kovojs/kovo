@@ -148,7 +148,7 @@ describe('performance artifact custody', () => {
 
   it.each([
     ['alternate workflow', (run) => ({ ...run, path: '.github/workflows/other.yml' })],
-    ['failed run', (run) => ({ ...run, conclusion: 'failure' })],
+    ['incomplete run', (run) => ({ ...run, conclusion: null, status: 'in_progress' })],
     ['mismatched head commit', (run) => ({ ...run, head_commit: { id: 'c'.repeat(40) } })],
     ['non-baseline trigger', (run) => ({ ...run, event: 'push' })],
     ['different attempt', (run) => ({ ...run, run_attempt: 2 })],
@@ -157,6 +157,55 @@ describe('performance artifact custody', () => {
     replaceRunApiFixture(fixture, mutate(fixture.runMetadata));
 
     await expect(authenticateFixture(fixture)).rejects.toThrow();
+  });
+
+  it('accepts a completed failed run when the unique artifact producer job succeeded', async () => {
+    const fixture = writeArtifactFixture();
+    const producer = fixture.jobsMetadata.jobs[0];
+    replaceRunApiFixture(fixture, { ...fixture.runMetadata, conclusion: 'failure' });
+    replaceJobsApiFixture(fixture, {
+      jobs: [
+        producer,
+        {
+          ...producer,
+          conclusion: 'failure',
+          id: 3002,
+          name: 'Production bytes',
+          url: 'https://api.github.com/repos/kovojs/kovo/actions/jobs/3002',
+        },
+      ],
+      total_count: 2,
+    });
+
+    await expect(authenticateFixture(fixture)).resolves.toMatchObject({
+      custody: {
+        workflow: {
+          conclusion: 'failure',
+          job: { conclusion: 'success', id: 3001, name: 'Browser matrix' },
+          status: 'completed',
+        },
+      },
+    });
+  });
+
+  it('rejects a completed run with more than one exact artifact producer job', async () => {
+    const fixture = writeArtifactFixture();
+    const producer = fixture.jobsMetadata.jobs[0];
+    replaceJobsApiFixture(fixture, {
+      jobs: [
+        producer,
+        {
+          ...producer,
+          id: 3002,
+          url: 'https://api.github.com/repos/kovojs/kovo/actions/jobs/3002',
+        },
+      ],
+      total_count: 2,
+    });
+
+    await expect(authenticateFixture(fixture)).rejects.toThrow(
+      'workflow jobs API has 2 exact Browser matrix jobs for run attempt 1; expected one',
+    );
   });
 
   it('binds a pull-request baseline to the immutable run head and ignores the mutable PR head', async () => {

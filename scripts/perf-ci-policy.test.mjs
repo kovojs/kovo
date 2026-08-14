@@ -44,6 +44,14 @@ const measurementJobs = [
   'server-matrix',
   ...decisionFocusByJob.keys(),
 ];
+const publishableMeasurementJobs = [
+  'check-scaling',
+  'browser-matrix',
+  'dev-matrix',
+  'build-matrix',
+  'server-matrix',
+  ...decisionFocusByJob.keys(),
+];
 
 describe('realistic performance CI policy', () => {
   it('keeps deterministic bytes and a bounded matched correctness smoke on every PR', () => {
@@ -52,7 +60,9 @@ describe('realistic performance CI policy', () => {
     );
     const bytes = jobSource('bytes');
     const smoke = jobSource('correctness-smoke');
-    expect(bytes).not.toContain("github.event_name != 'pull_request'");
+    for (const source of [bytes, smoke]) {
+      expect(count(source, "if: ${{ github.event_name == 'pull_request' }}")).toBe(1);
+    }
     expect(bytes).toContain('scripts/perf-gate.mjs');
     expect(bytes).toContain('--suite bytes');
     expect(smoke).toContain('uses: ./.github/actions/playwright-install');
@@ -146,6 +156,18 @@ describe('realistic performance CI policy', () => {
     }
   });
 
+  it('keeps dispatch baseline producers independent from the per-PR smoke and byte jobs', () => {
+    for (const job of [
+      'check-scaling',
+      'browser-matrix',
+      'dev-matrix',
+      'build-matrix',
+      'server-matrix',
+    ]) {
+      expect(jobSource(job), job).not.toMatch(/^    needs:/mu);
+    }
+  });
+
   it('retains the exact publishable sample policies in the scheduled commands', () => {
     expect(jobSource('browser-matrix')).toEqual(expect.stringContaining('--iterations 30'));
     for (const token of ['--lighthouse-runs 5', '--bfcache-iterations 10']) {
@@ -166,12 +188,30 @@ describe('realistic performance CI policy', () => {
       '--server-samples 7',
       '--server-warmup-ms 5000',
       '--server-duration-ms 15000',
+      '--server-host-settle-max-ms 5000',
       '--server-concurrencies 1,8,32',
       '--server-routes listing,detail',
       '--server-encodings identity,br',
       '--server-modes HIT,304,dynamic',
     ]) {
       expect(jobSource('server-matrix')).toContain(token);
+    }
+    expect(jobSource('server-matrix')).toContain('timeout --signal=TERM --kill-after=30s 330m');
+    expect(jobSource('server-matrix')).toContain('timeout-minutes: 360');
+  });
+
+  it('fails closed when a publishable measurement lacks hosted-runner identity', () => {
+    for (const job of publishableMeasurementJobs) {
+      const source = jobSource(job);
+      expect(
+        count(source, ': "${ImageOS:?GitHub hosted runner did not expose ImageOS}"'),
+        job,
+      ).toBe(1);
+      expect(
+        count(source, ': "${ImageVersion:?GitHub hosted runner did not expose ImageVersion}"'),
+        job,
+      ).toBe(1);
+      expect(source, job).not.toContain(':-unknown');
     }
   });
 

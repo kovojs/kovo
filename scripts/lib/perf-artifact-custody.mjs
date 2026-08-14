@@ -542,8 +542,8 @@ function authenticateWorkflowAuthority({
   if (!Number.isSafeInteger(runAttempt) || runAttempt < 1) {
     findings.push('workflow run attempt is unavailable');
   }
-  if (runMetadata?.status !== 'completed' || runMetadata?.conclusion !== 'success') {
-    findings.push('workflow run is not completed successfully');
+  if (runMetadata?.status !== 'completed') {
+    findings.push('workflow run is not completed');
   }
   if (triggerScope === null) {
     findings.push(`workflow run event ${String(event)} is not a reviewed trigger`);
