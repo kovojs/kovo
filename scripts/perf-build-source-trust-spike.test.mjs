@@ -1,6 +1,14 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -15,10 +23,13 @@ import {
   BUILD_SOURCE_TRUST_CANDIDATE,
   BUILD_SOURCE_TRUST_CANDIDATE_BINDING_SCHEMA,
   BUILD_SOURCE_TRUST_SPIKE_SCHEMA,
+  bindBuildSourceTrustArtifactProvenanceLock,
+  buildSourceTrustAdapterFailure,
   buildSourceTrustBoundaryPolicyFindings,
   buildSourceTrustNonTimingDiagnostics,
   buildSourceTrustSchedule,
   createBuildSourceTrustHostAdmission,
+  executeBuildSourceTrustCell,
   gitPatchId,
   inspectBuildSourceTrustArtifact,
   inspectExternalKovoCorpus,
@@ -66,6 +77,7 @@ describe('build source-trust candidate decision', () => {
       'kovo-build-source-trust-boundary-policy/v1',
     );
     expect(BUILD_SOURCE_TRUST_BOUNDARY_POLICY).toEqual({
+      artifactProvenanceLock: 'measured-source-root-copy-manifest-bound',
       concreteIdentity: 'report-bound-per-arm',
       corpusIsolation: 'external-root-without-ancestor-node-modules',
       hostAdmission: 'before-preparation-and-before-every-measured-block',
@@ -310,6 +322,129 @@ describe('build source-trust candidate decision', () => {
     expect(second.digest).not.toBe(first.digest);
   });
 
+  it('copies the measured source lock into the external corpus and reseals its source manifest', () => {
+    const root = temporaryDirectory('kovo-build-source-provenance-lock-');
+    const sourceRoot = path.join(root, 'source');
+    const corpusRoot = path.join(root, 'corpus');
+    const lockBytes = Buffer.from('lockfileVersion: 9\n# authenticated source lock\n');
+    mkdirSync(sourceRoot);
+    mkdirSync(corpusRoot);
+    writeFileSync(path.join(sourceRoot, 'pnpm-lock.yaml'), lockBytes);
+    writeFileSync(path.join(corpusRoot, 'package.json'), '{}\n');
+    const packageEvidence = {
+      bytes: 3,
+      file: 'package.json',
+      sha256: sha256(Buffer.from('{}\n')),
+    };
+    const manifestPath = path.join(corpusRoot, 'manifest.json');
+    writeFileSync(
+      manifestPath,
+      `${JSON.stringify({ sourceDigest: digest('old'), sourceFiles: [packageEvidence] })}\n`,
+    );
+
+    const evidence = bindBuildSourceTrustArtifactProvenanceLock({
+      expectedSha256: sha256(lockBytes),
+      manifestPath,
+      sourceRoot,
+    });
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    expect(evidence).toEqual({
+      bytes: lockBytes.byteLength,
+      path: 'pnpm-lock.yaml',
+      sha256: sha256(lockBytes),
+      source: 'measured-source-root-lock',
+    });
+    expect(readFileSync(path.join(corpusRoot, 'pnpm-lock.yaml'))).toEqual(lockBytes);
+    expect(manifest.sourceFiles).toEqual([
+      packageEvidence,
+      { bytes: lockBytes.byteLength, file: 'pnpm-lock.yaml', sha256: sha256(lockBytes) },
+    ]);
+    expect(manifest.sourceDigest).toBe(sha256(Buffer.from(JSON.stringify(manifest.sourceFiles))));
+    expect(() =>
+      bindBuildSourceTrustArtifactProvenanceLock({
+        expectedSha256: sha256(lockBytes),
+        manifestPath,
+        sourceRoot,
+      }),
+    ).toThrow(/already contains/u);
+  });
+
+  it('retains actionable adapter diagnostics instead of masking failure as an empty artifact', async () => {
+    const root = temporaryDirectory('kovo-build-source-adapter-failure-');
+    const scriptsRoot = path.join(root, 'scripts');
+    const corpusRoot = path.join(root, 'corpus');
+    const rawRoot = path.join(root, 'raw');
+    mkdirSync(scriptsRoot);
+    mkdirSync(corpusRoot);
+    mkdirSync(rawRoot);
+    const manifestPath = path.join(corpusRoot, 'manifest.json');
+    writeFileSync(manifestPath, '{}\n');
+    writeFileSync(
+      path.join(scriptsRoot, 'perf-build-benchmark.mjs'),
+      [
+        "import { writeFileSync } from 'node:fs';",
+        "const out = process.argv[process.argv.indexOf('--out') + 1];",
+        "const diagnostic = { bytes: 45, sha256: 'sha256:' + 'a'.repeat(64), text: 'ERROR exact packed build root cause', truncated: false };",
+        "writeFileSync(out, JSON.stringify({ integrity: { errors: ['sample 1 failed: exit 1: ERROR exact packed build root cause'], outputRoots: { absent: ['.kovo-build-stage-*'], requiredNonempty: ['.kovo', 'dist'] } }, samples: [{ commandDiagnostics: { schema: 'kovo-build-command-diagnostics/v1', stderr: diagnostic, stdout: { ...diagnostic, text: '' } } }] }));",
+        'process.exitCode = 1;',
+      ].join('\n'),
+    );
+    const cell = await executeBuildSourceTrustCell({
+      lane: 'baseline',
+      laneEvidence: {
+        descriptorPath: path.join(root, 'descriptor.json'),
+        manifestPath,
+        product: { digest: digest('product') },
+        root,
+      },
+      occurrence: 0,
+      position: 0,
+      rawPath: path.join(rawRoot, '00-baseline.json'),
+      repetition: 0,
+      scheduleIndex: 0,
+      timeoutMs: 60_000,
+    });
+    expect(cell.artifact).toBeNull();
+    expect(cell.processFailure).toMatchObject({
+      exitCode: 1,
+      message: expect.stringContaining('ERROR exact packed build root cause'),
+      signal: null,
+      stage: 'build-adapter',
+    });
+    expect(cell.processFailure.message).not.toContain('build artifact tree is empty');
+    expect(cell.raw.retained).toBe(true);
+    const envelope = JSON.parse(
+      readFileSync(path.join(rawRoot, '00-baseline.failure.json'), 'utf8'),
+    );
+    expect(envelope).toMatchObject({
+      error: expect.stringContaining('ERROR exact packed build root cause'),
+      rawReport: { path: 'raw/00-baseline.json', retained: true },
+      schema: 'kovo-build-source-trust-spike-failure/v1',
+    });
+  });
+
+  it('summarizes raw build diagnostics ahead of generic adapter output', () => {
+    const failure = buildSourceTrustAdapterFailure(
+      { error: undefined, signal: null, status: 1, stderr: '' },
+      {
+        integrity: { errors: ['sample 1 failed'] },
+        samples: [
+          {
+            commandDiagnostics: {
+              stderr: { text: 'ERROR retained root cause' },
+              stdout: { text: 'protocol output' },
+            },
+          },
+        ],
+      },
+    );
+    expect(failure).toMatchObject({
+      exitCode: 1,
+      message: expect.stringContaining('ERROR retained root cause'),
+      stage: 'build-adapter',
+    });
+  });
+
   it('normalizes only non-timing phase diagnostics while retaining exact names and statuses', () => {
     const first = syntheticReport({ durationMs: 100, lane: 'baseline', rss: 1_000 });
     const second = syntheticReport({ durationMs: 80, lane: 'spike', rss: 900 });
@@ -360,6 +495,16 @@ describe('build source-trust candidate decision', () => {
     expect(() =>
       inspectExternalKovoCorpus({
         ...fixture.options,
+        expectedArtifactProvenanceLock: {
+          ...fixture.options.expectedArtifactProvenanceLock,
+          sha256: digest('changed-lock'),
+        },
+      }),
+    ).toThrow(/artifact-provenance lock is not source-bound and manifest-bound/u);
+
+    expect(() =>
+      inspectExternalKovoCorpus({
+        ...fixture.options,
         product: {
           ...fixture.options.product,
           consumerDependencyRoot: fixture.rogueDependencyRoot,
@@ -386,6 +531,7 @@ describe('build source-trust candidate decision', () => {
 
   it('rejects every ordering field in the structured A/B boundary policy', () => {
     for (const [field, value] of [
+      ['artifactProvenanceLock', 'implicit-ancestor-lock'],
       ['hostAdmission', 'after-preparation-only'],
       ['preparationTiming', 'before-host-admission'],
       ['timedWarmups', 1],
@@ -745,6 +891,12 @@ function syntheticCorpus(lane = 'baseline') {
       actualCommand: '<packed-consumer>/node_modules/@kovojs/cli/dist/bin.mjs',
       actualCommandSha256: digest(`${lane}-cli`),
       appRoot: '<external-corpus>',
+      artifactProvenanceLock: {
+        bytes: 100,
+        path: 'pnpm-lock.yaml',
+        sha256: digest('root-lock'),
+        source: 'measured-source-root-lock',
+      },
       declaredCommandEntry: '<packed-consumer>/node_modules/.bin/kovo',
       declaredCommandEntrySha256: digest(`${lane}-wrapper`),
       normalizedCommand: {
@@ -822,6 +974,7 @@ function externalCommandBoundaryFixture() {
   const rogueDependencyRoot = path.join(root, 'rogue-dependencies');
   const rogueCli = path.join(root, 'rogue-cli.mjs');
   const cliBytes = Buffer.from('export default "packed-cli";\n');
+  const lockBytes = Buffer.from('lockfileVersion: 9\n');
   const wrapperBytes = Buffer.from('#!/bin/sh\nexec ../@kovojs/cli/dist/bin.mjs "$@"\n');
   mkdirSync(path.dirname(cliEntry), { recursive: true });
   mkdirSync(path.dirname(wrapper), { recursive: true });
@@ -830,8 +983,12 @@ function externalCommandBoundaryFixture() {
   mkdirSync(rogueDependencyRoot);
   writeFileSync(cliEntry, cliBytes);
   writeFileSync(wrapper, wrapperBytes);
+  writeFileSync(path.join(corpusRoot, 'pnpm-lock.yaml'), lockBytes);
   writeFileSync(rogueCli, 'export default "rogue";\n');
   symlinkSync(consumerDependencyRoot, path.join(corpusRoot, 'node_modules'), 'dir');
+  const sourceFiles = [
+    { bytes: lockBytes.byteLength, file: 'pnpm-lock.yaml', sha256: sha256(lockBytes) },
+  ];
   const manifest = {
     approximateLoc: 100,
     build: {
@@ -843,7 +1000,8 @@ function externalCommandBoundaryFixture() {
     routes: 4,
     schema: 'kovo-dev-corpus/v1',
     shapeDigest: digest('shape'),
-    sourceDigest: digest('source'),
+    sourceDigest: sha256(Buffer.from(JSON.stringify(sourceFiles))),
+    sourceFiles,
     workload: {
       buildOutputContract: 'required-nonempty-and-cleanup-absent/v1',
       componentImportFanout: 24,
@@ -866,6 +1024,12 @@ function externalCommandBoundaryFixture() {
     cliBytes,
     options: {
       corpusRoot,
+      expectedArtifactProvenanceLock: {
+        bytes: lockBytes.byteLength,
+        path: 'pnpm-lock.yaml',
+        sha256: sha256(lockBytes),
+        source: 'measured-source-root-lock',
+      },
       manifestPath,
       product,
       roots: [sourceRoot],

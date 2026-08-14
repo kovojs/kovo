@@ -6,9 +6,11 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  BUILD_COMMAND_DIAGNOSTICS_SCHEMA,
   applyBuildBenchmarkEdit,
   artifactBytesForOutputs,
   attributeKovoBuildWallTime,
+  buildCommandDiagnostics,
   inspectBuildOutputContract,
   KOVO_BUILD_PHASE_ATTRIBUTION_SCHEMA,
   KOVO_BUILD_SOURCE_PHASES,
@@ -110,6 +112,48 @@ function nextManifest(commandSource, outputs) {
 }
 
 describe('production build benchmark adapter', () => {
+  it('retains bounded authenticated subprocess diagnostics for failed builds', () => {
+    const root = temporaryRoot();
+    mkdirSync(path.join(root, 'src'));
+    writeFileSync(path.join(root, 'src/leaf.ts'), 'revision-0\n');
+    const stderr = `kovo-build/v1\nERROR actionable packed build failure\n${'x'.repeat(20_000)}`;
+    const stdout = 'kovo-build-worker-phase-census/v1 {"complete":false}\n';
+    const corpus = writeCorpusManifest(
+      root,
+      nextManifest(
+        `process.stderr.write(${JSON.stringify(stderr)}); process.stdout.write(${JSON.stringify(
+          stdout,
+        )}); process.exit(7);`,
+        { absent: [], requiredNonempty: ['dist'] },
+      ),
+    );
+    const report = runBuildBenchmark(
+      { corpus, framework: 'nextjs', iterations: 1, mode: 'clean', warmups: 0 },
+      stableDependencies,
+    );
+    const diagnostics = report.samples[0].commandDiagnostics;
+    expect(report.integrity.errors[0]).toContain('exit 7: ERROR actionable packed build failure');
+    expect(diagnostics.schema).toBe(BUILD_COMMAND_DIAGNOSTICS_SCHEMA);
+    expect(diagnostics.stderr).toMatchObject({
+      bytes: Buffer.byteLength(stderr),
+      sha256: `sha256:${createHash('sha256').update(stderr).digest('hex')}`,
+      truncated: true,
+    });
+    expect(diagnostics.stderr.text).toContain('ERROR actionable packed build failure');
+    expect(diagnostics.stderr.text).toContain('[bounded diagnostic truncated]');
+    expect(diagnostics.stdout).toEqual({
+      bytes: Buffer.byteLength(stdout),
+      sha256: `sha256:${createHash('sha256').update(stdout).digest('hex')}`,
+      text: stdout,
+      truncated: false,
+    });
+    expect(buildCommandDiagnostics({ stderr: '', stdout: '' })).toMatchObject({
+      schema: BUILD_COMMAND_DIAGNOSTICS_SCHEMA,
+      stderr: { bytes: 0, truncated: false },
+      stdout: { bytes: 0, truncated: false },
+    });
+  });
+
   it('requires paired packed-product descriptor arguments', () => {
     const digest = `sha256:${'a'.repeat(64)}`;
     expect(packedBuildProductOptions({})).toEqual({});

@@ -55,12 +55,18 @@ Each generated Kovo corpus lives in a fresh operating-system temporary directory
 Git worktrees. Corpus generation uses deferred dependency binding, so it never creates a workspace
 dependency link. The shared packed-product isolation guard rejects any ancestor `node_modules`, and
 the packed fixture binds the app-local dependency root. The shared command materializer then
-requires the declared `node_modules/.bin/kovo` command to resolve to the authenticated packed CLI
-inside that consumer.
+authenticates the declared `node_modules/.bin/kovo` wrapper inside that consumer and executes the
+authenticated packed CLI entry directly.
 Therefore a missing package cannot climb an app ancestor into either workspace. Every raw adapter
 report must contain exact packed Kovo evidence with `required`, `beforeVerified`, and
 `afterVerified` all true. This candidate decision has exactly zero Next.js cells and records the
 Next.js product artifact as `null`.
+
+An external app also cannot inherit the measured repository's `pnpm-lock.yaml` ancestor. Before
+binding the packed product, the runner copies the exact source-provenance-authenticated root lock
+into the app and reseals the generated manifest's file census and source digest around those bytes.
+The build therefore receives the lock required for `SPEC.md` §5.2.3 artifact provenance without
+weakening external-root isolation or inventing a different dependency identity.
 
 The A/B boundary has its own exact structured policy because its order is deliberately stricter
 than the general comparison policy: one timing lock starts before a quiet-host admission, packed
@@ -83,6 +89,8 @@ Ubuntu 24.04 jobs, one for N=24 and one for N=216. Each job:
    sample and zero timed warmups, yielding exactly 10 samples per arm.
 5. Retains every raw adapter report or bounded failure envelope and records total wall time, peak
    process-tree RSS, the exact output tree/content digest, and raw source/worker phase censuses.
+   Failed commands retain bounded stdout/stderr text plus full-stream byte counts and SHA-256
+   digests, so a framework refusal cannot be masked by the necessarily empty output tree.
 
 Preparation, artifact hashing, and host settling are outside the adapter's timed build window. A
 later block cannot start unless its immediate host admission passes.

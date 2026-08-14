@@ -31,6 +31,7 @@ import {
 import { measureProcessTreeCommand } from './lib/process-tree-rss.mjs';
 
 export const BUILD_BENCHMARK_SCHEMA = 'kovo-build-benchmark/v1';
+export const BUILD_COMMAND_DIAGNOSTICS_SCHEMA = 'kovo-build-command-diagnostics/v1';
 export const KOVO_BUILD_PHASE_ATTRIBUTION_SCHEMA = 'kovo-build-phase-attribution/v1';
 export const KOVO_BUILD_SOURCE_PHASES = Object.freeze([
   'lifecycle-policy',
@@ -53,6 +54,7 @@ const BUILD_OUTPUT_CONTRACT = 'required-nonempty-and-cleanup-absent/v1';
 const KOVO_SOURCE_PHASE_SCHEMA = 'kovo-build-source-phase-census/v1';
 const KOVO_WORKER_PHASE_SCHEMA = 'kovo-build-worker-phase-census/v1';
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1_000;
+const MAX_COMMAND_DIAGNOSTIC_TEXT_BYTES = 16 * 1024;
 const IGNORED_CORPUS_NAMES = new Set([CORPUS_OWNER_FILE, 'manifest.json', 'node_modules']);
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 
@@ -436,6 +438,9 @@ export function runBuildBenchmark(options, dependencies = {}) {
       }
       const sample = {
         artifactBytes: outputCensus.totalBytes,
+        ...(measured.exitCode !== 0 || measured.error !== null
+          ? { commandDiagnostics: buildCommandDiagnostics(measured) }
+          : {}),
         corpus: {
           afterDigest: guarded.after?.digest ?? null,
           beforeDigest: guarded.before.digest,
@@ -995,7 +1000,55 @@ function nonNegativeInteger(value, label) {
 }
 
 function commandFailure(measured) {
-  return measured.error ?? measured.signal ?? `exit ${String(measured.exitCode)}`;
+  const outcome = measured.error ?? measured.signal ?? `exit ${String(measured.exitCode)}`;
+  const detail = commandFailureDetail(measured.stderr) ?? commandFailureDetail(measured.stdout);
+  return detail === null ? outcome : `${outcome}: ${detail}`;
+}
+
+export function buildCommandDiagnostics(measured) {
+  return {
+    schema: BUILD_COMMAND_DIAGNOSTICS_SCHEMA,
+    stderr: boundedCommandStream(measured?.stderr),
+    stdout: boundedCommandStream(measured?.stdout),
+  };
+}
+
+function boundedCommandStream(value) {
+  const text = String(value ?? '');
+  const bytes = Buffer.from(text);
+  if (bytes.byteLength <= MAX_COMMAND_DIAGNOSTIC_TEXT_BYTES) {
+    return {
+      bytes: bytes.byteLength,
+      sha256: sha256(bytes),
+      text,
+      truncated: false,
+    };
+  }
+  const marker = '\n...[bounded diagnostic truncated]...\n';
+  const retainedBytes = MAX_COMMAND_DIAGNOSTIC_TEXT_BYTES - Buffer.byteLength(marker);
+  const headBytes = Math.floor(retainedBytes / 2);
+  const tailBytes = retainedBytes - headBytes;
+  return {
+    bytes: bytes.byteLength,
+    sha256: sha256(bytes),
+    text: `${bytes.subarray(0, headBytes).toString('utf8')}${marker}${bytes
+      .subarray(bytes.byteLength - tailBytes)
+      .toString('utf8')}`,
+    truncated: true,
+  };
+}
+
+function commandFailureDetail(value) {
+  const lines = String(value ?? '')
+    .split(/\r?\n/u)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  const line =
+    lines.find((entry) => /^ERROR(?:\s|$)/u.test(entry)) ??
+    lines.find((entry) => !/^kovo-[a-z0-9-]+\/v[0-9]+$/u.test(entry)) ??
+    lines[0];
+  if (line === undefined) return null;
+  return line.length <= 1_024 ? line : `${line.slice(0, 1_024)}...[truncated]`;
 }
 
 function portableRelativePath(root, filePath) {

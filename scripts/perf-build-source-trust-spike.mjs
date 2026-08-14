@@ -47,6 +47,7 @@ export const BUILD_SOURCE_TRUST_ARTIFACT_SCHEMA = 'kovo-build-output-tree/v1';
 export const BUILD_SOURCE_TRUST_BOUNDARY_POLICY_SCHEMA =
   'kovo-build-source-trust-boundary-policy/v1';
 export const BUILD_SOURCE_TRUST_BOUNDARY_POLICY = Object.freeze({
+  artifactProvenanceLock: 'measured-source-root-copy-manifest-bound',
   concreteIdentity: 'report-bound-per-arm',
   corpusIsolation: PACKED_KOVO_PRODUCT_WORKLOAD_POLICY.corpusIsolation,
   hostAdmission: 'before-preparation-and-before-every-measured-block',
@@ -293,6 +294,68 @@ export function inspectBuildSourceTrustArtifact(corpusRootValue, outputContract)
     totalBytes,
   };
   return { ...identity, digest: sha256(Buffer.from(canonicalJson(identity))) };
+}
+
+/**
+ * Give an externally rooted benchmark app the same authenticated lock bytes as its measured
+ * source worktree, then reseal the generated corpus manifest before any benchmark custody begins.
+ * Kovo build requires a nearest pnpm lock for SPEC §5.2.3 artifact provenance; an external corpus
+ * cannot implicitly inherit the repository ancestor used by ordinary in-tree benchmark apps.
+ */
+export function bindBuildSourceTrustArtifactProvenanceLock({
+  expectedSha256,
+  manifestPath,
+  sourceRoot,
+}) {
+  if (!digest(expectedSha256)) throw new TypeError('expected source lock digest is invalid');
+  const canonicalSourceRoot = canonicalDirectory(sourceRoot);
+  const resolvedManifest = path.resolve(manifestPath);
+  const corpusRoot = path.dirname(resolvedManifest);
+  const sourceLock = path.join(canonicalSourceRoot, 'pnpm-lock.yaml');
+  const targetLock = path.join(corpusRoot, 'pnpm-lock.yaml');
+  const sourceMetadata = lstatSync(sourceLock);
+  if (!sourceMetadata.isFile() || sourceMetadata.isSymbolicLink()) {
+    throw new Error('measured source pnpm lock must be a regular non-symlink file');
+  }
+  const lockBytes = readFileSync(sourceLock);
+  const lockSha256 = sha256(lockBytes);
+  if (lockSha256 !== expectedSha256) {
+    throw new Error('measured source pnpm lock differs from authenticated source provenance');
+  }
+  if (existsSync(targetLock)) {
+    throw new Error('external corpus already contains a pnpm artifact-provenance lock');
+  }
+  const manifestBytes = readFileSync(resolvedManifest);
+  const manifest = JSON.parse(manifestBytes.toString('utf8'));
+  if (
+    !Array.isArray(manifest?.sourceFiles) ||
+    manifest.sourceFiles.some((entry) => entry?.file === 'pnpm-lock.yaml')
+  ) {
+    throw new Error(
+      'external corpus source manifest cannot enroll its provenance lock exactly once',
+    );
+  }
+  const lockEvidence = {
+    bytes: lockBytes.byteLength,
+    file: 'pnpm-lock.yaml',
+    sha256: lockSha256,
+  };
+  manifest.sourceFiles = [...manifest.sourceFiles, lockEvidence].sort((left, right) =>
+    bytewise(left.file, right.file),
+  );
+  manifest.sourceDigest = sha256(Buffer.from(JSON.stringify(manifest.sourceFiles)));
+  writeFileSync(targetLock, lockBytes, { flag: 'wx', mode: 0o600 });
+  writeFileSync(resolvedManifest, `${JSON.stringify(manifest, null, 2)}\n`, {
+    encoding: 'utf8',
+    flag: 'w',
+    mode: 0o600,
+  });
+  return {
+    bytes: lockBytes.byteLength,
+    path: 'pnpm-lock.yaml',
+    sha256: lockSha256,
+    source: 'measured-source-root-lock',
+  };
 }
 
 export function sameBuildSourceTrustCorpusWorkload(left, right) {
@@ -619,6 +682,11 @@ export async function prepareBuildSourceTrustSpike(options, dependencies = {}) {
           size: options.size,
         });
         const corpusRoot = path.dirname(manifestPath);
+        const artifactProvenanceLock = bindBuildSourceTrustArtifactProvenanceLock({
+          expectedSha256: source.locks['pnpm-lock.yaml'],
+          manifestPath,
+          sourceRoot: root,
+        });
         fixture.bindCorpus(manifestPath);
         const verifiedProduct = modules.verifyPackedFixture(
           fixture.descriptorPath,
@@ -627,6 +695,7 @@ export async function prepareBuildSourceTrustSpike(options, dependencies = {}) {
         );
         const corpus = inspectExternalKovoCorpus({
           corpusRoot,
+          expectedArtifactProvenanceLock: artifactProvenanceLock,
           manifestPath,
           product: verifiedProduct,
           roots: Object.values(roots),
@@ -1098,7 +1167,7 @@ function aggregatePhaseMetrics(cells) {
   return result;
 }
 
-async function executeBuildSourceTrustCell({
+export async function executeBuildSourceTrustCell({
   lane,
   laneEvidence,
   occurrence,
@@ -1140,24 +1209,40 @@ async function executeBuildSourceTrustCell({
       timeout: timeoutMs + 60_000,
     },
   );
-  const raw = readRetainedReport(rawPath);
+  let raw;
+  try {
+    raw = readRetainedReport(rawPath);
+  } catch (error) {
+    throw new Error(
+      `build adapter did not retain a readable raw report: ${errorMessage(
+        error,
+      )}; ${buildSourceTrustAdapterFailure(result, null).message}`,
+    );
+  }
   const report = raw.report;
-  const artifact = inspectBuildSourceTrustArtifact(
-    path.dirname(laneEvidence.manifestPath),
-    report?.integrity?.outputRoots,
-  );
   const processFailure =
     result.error || result.signal || result.status !== 0
-      ? {
-          exitCode: result.status,
-          message: boundedDiagnostic(
-            result.error?.message ??
-              `${String(result.stdout ?? '')}\n${String(result.stderr ?? '')}`.trim() ??
-              `signal ${String(result.signal)}`,
-          ),
-          signal: result.signal,
-        }
+      ? buildSourceTrustAdapterFailure(result, report)
       : null;
+  const artifact =
+    processFailure === null
+      ? inspectBuildSourceTrustArtifact(
+          path.dirname(laneEvidence.manifestPath),
+          report?.integrity?.outputRoots,
+        )
+      : null;
+  if (processFailure !== null) {
+    processFailure.failureEnvelope = writeFailureEnvelope(
+      path.dirname(rawPath),
+      `${String(scheduleIndex).padStart(2, '0')}-${lane}.failure.json`,
+      {
+        error: processFailure.message,
+        rawReport: raw.evidence,
+        schema: BUILD_SOURCE_TRUST_FAILURE_SCHEMA,
+        schedule: { lane, occurrence, position, repetition, scheduleIndex },
+      },
+    );
+  }
   return {
     artifact,
     lane,
@@ -1168,6 +1253,28 @@ async function executeBuildSourceTrustCell({
     repetition,
     report,
     scheduleIndex,
+  };
+}
+
+export function buildSourceTrustAdapterFailure(result, report) {
+  const diagnostics = report?.samples?.at(-1)?.commandDiagnostics;
+  const messages = [
+    result?.error?.message,
+    result?.signal ? `adapter signal ${String(result.signal)}` : null,
+    Number.isSafeInteger(result?.status) ? `adapter exit ${String(result.status)}` : null,
+    ...(Array.isArray(report?.integrity?.errors) ? report.integrity.errors.slice(0, 8) : []),
+    nonEmptyString(diagnostics?.stderr?.text) ? `build stderr:\n${diagnostics.stderr.text}` : null,
+    nonEmptyString(diagnostics?.stdout?.text) ? `build stdout:\n${diagnostics.stdout.text}` : null,
+    nonEmptyString(result?.stderr) ? `adapter stderr:\n${String(result.stderr)}` : null,
+    report === null && nonEmptyString(result?.stdout)
+      ? `adapter stdout:\n${String(result.stdout)}`
+      : null,
+  ].filter(nonEmptyString);
+  return {
+    exitCode: Number.isSafeInteger(result?.status) ? result.status : null,
+    message: boundedDiagnostic(messages.join('\n') || 'build adapter failed without diagnostics'),
+    signal: typeof result?.signal === 'string' ? result.signal : null,
+    stage: 'build-adapter',
   };
 }
 
@@ -1272,6 +1379,7 @@ async function loadRootModules(root) {
 
 export function inspectExternalKovoCorpus({
   corpusRoot,
+  expectedArtifactProvenanceLock,
   manifestPath,
   product,
   roots,
@@ -1295,6 +1403,34 @@ export function inspectExternalKovoCorpus({
     manifest.workload?.buildOutputContract !== 'required-nonempty-and-cleanup-absent/v1'
   ) {
     throw new Error('external generated Kovo corpus contract is invalid');
+  }
+  const provenanceLockPath = path.join(realCorpusRoot, 'pnpm-lock.yaml');
+  const provenanceLockMetadata = lstatSync(provenanceLockPath);
+  const provenanceLockBytes = readFileSync(provenanceLockPath);
+  const provenanceLockEvidence = {
+    bytes: provenanceLockBytes.byteLength,
+    path: 'pnpm-lock.yaml',
+    sha256: sha256(provenanceLockBytes),
+    source: 'measured-source-root-lock',
+  };
+  const manifestLockEvidence = manifest.sourceFiles?.find(
+    (entry) => entry?.file === 'pnpm-lock.yaml',
+  );
+  if (
+    !provenanceLockMetadata.isFile() ||
+    provenanceLockMetadata.isSymbolicLink() ||
+    canonicalJson(provenanceLockEvidence) !== canonicalJson(expectedArtifactProvenanceLock) ||
+    canonicalJson(manifestLockEvidence) !==
+      canonicalJson({
+        bytes: provenanceLockEvidence.bytes,
+        file: provenanceLockEvidence.path,
+        sha256: provenanceLockEvidence.sha256,
+      }) ||
+    manifest.sourceDigest !== sha256(Buffer.from(JSON.stringify(manifest.sourceFiles)))
+  ) {
+    throw new Error(
+      'external corpus artifact-provenance lock is not source-bound and manifest-bound',
+    );
   }
   const argv = manifest?.build?.command?.argv;
   if (
@@ -1343,6 +1479,7 @@ export function inspectExternalKovoCorpus({
       actualCommand: '<packed-consumer>/node_modules/@kovojs/cli/dist/bin.mjs',
       actualCommandSha256: sha256(readFileSync(actualCommand)),
       appRoot: '<external-corpus>',
+      artifactProvenanceLock: provenanceLockEvidence,
       declaredCommandEntry: '<packed-consumer>/node_modules/.bin/kovo',
       declaredCommandEntrySha256: sha256(readFileSync(declaredCommandEntry)),
       normalizedCommand,
@@ -1571,6 +1708,7 @@ function crossArmCorpusIdentity(corpus) {
     boundary: {
       actualCommand: reported.boundary.actualCommand,
       appRoot: reported.boundary.appRoot,
+      artifactProvenanceLock: reported.boundary.artifactProvenanceLock,
       declaredCommandEntry: reported.boundary.declaredCommandEntry,
       normalizedCommand: {
         argv: normalizedCommand?.argv,
