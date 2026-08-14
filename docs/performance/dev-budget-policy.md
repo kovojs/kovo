@@ -63,9 +63,12 @@ node scripts/perf-dev-budget.mjs derive \
   --out reports/dev-n24-budget.json
 ```
 
-Repeat with the N=216 reports. Each timing and RSS ceiling is the ratified median statistic plus
-the plan's 5% regression allowance. Ratification retains both run medians and the distribution of
-each run's p95, so a p95 ceiling is not inferred from medians.
+Repeat with the N=216 reports. Each leaf, entry, **data-plane**, syntax-error, recovery, ready, and
+process-tree RSS ceiling is the ratified median statistic plus the plan's 5% regression allowance.
+Ratification retains both run medians and the distribution of each run's p95, so a p95 ceiling is
+not inferred from medians. `edit.dataMs` is an independently required timing metric; a report or
+budget that predates that census fails validation under the existing `v1` schema instead of being
+silently accepted as a smaller historical shape.
 The derived budget also retains the matched Next median/p95 and paired median for each metric, so a
 reviewed publication can report the comparison without copying numbers from raw files.
 
@@ -79,10 +82,12 @@ node scripts/perf-dev-budget.mjs evaluate \
 ```
 
 The candidate may be a new clean source commit with a different authenticated packed artifact, but
-it must preserve the exact ratified host, locks, and workload identity. The evaluator covers leaf
-and entry edit-to-paint latency, syntax-diagnostic
-latency and availability, recovery latency, ready latency, fresh-ready and edit-session process-tree
-RSS, every edit class's browser-state survival, and exact sample availability. In addition to the
-data-derived regression ceilings, it enforces the declared plan targets: ready and leaf medians at
-most 2x matched Next, entry median at most 3x matched Next, syntax-error p95 at most one second, and
-recovery p95 at most two seconds.
+it must preserve the exact ratified host, locks, and workload identity. The evaluator covers leaf,
+entry, and data-plane edit-to-paint latency, syntax-diagnostic latency and availability, recovery
+latency, ready latency, fresh-ready and edit-session process-tree RSS, every edit class's
+browser-state survival, and exact sample availability. The aggregate publication retains an exact
+baseline/holdout census of the median and p95 regression checks for every timing/RSS metric,
+including both `edit.dataMs` rows; deleting either row makes the aggregate invalid. In addition to
+the data-derived regression ceilings, it enforces the declared plan targets: ready and leaf medians
+at most 2x matched Next, entry median at most 3x matched Next, syntax-error p95 at most one second,
+and recovery p95 at most two seconds.

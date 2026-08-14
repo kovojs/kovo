@@ -28,6 +28,7 @@ const EDIT_CLASSES = ['leaf', 'entry', 'data', 'syntaxError', 'recovery'];
 const PERFORMANCE_SUFFIXES = [
   'edit.leafMs',
   'edit.entryMs',
+  'edit.dataMs',
   'edit.syntaxErrorMs',
   'edit.recoveryMs',
   'edit.peakRssBytes',
@@ -50,6 +51,7 @@ describe('ratified developer performance budgets', () => {
       const candidate = comparisonReport({ corpusSize, run: 5, sourceCommit: 'b'.repeat(40) });
       const result = evaluateDevPerformanceBudget(budget, candidate);
       const leaf = metricKey(corpusSize, 'edit.leafMs');
+      const data = metricKey(corpusSize, 'edit.dataMs');
 
       expect(devBudgetBaselineFindings(baseline, entries)).toEqual([]);
       expect(budget).toMatchObject({
@@ -78,6 +80,17 @@ describe('ratified developer performance budgets', () => {
         p95Maximum: 117.60000000000001,
       });
       expect(budget.metrics[leaf].medianMaximum).toBeCloseTo(107.1);
+      expect(budget.metrics[data]).toMatchObject({
+        baseline: {
+          median: 127,
+          nextMedian: 92,
+          nextP95: 102,
+          pairedMedian: 35,
+          p95: 137,
+          runs: 5,
+        },
+      });
+      expect(budget.metrics[data].medianMaximum).toBeCloseTo(133.35);
       expect(devBudgetFindings(budget)).toEqual([]);
       expect(candidate.workloadIdentity).toEqual(budget.subject.workloadIdentity);
       expect(candidate.productArtifact.digest).not.toBe(budget.subject.productArtifact.digest);
@@ -87,6 +100,7 @@ describe('ratified developer performance budgets', () => {
       expect(result.checks).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ id: `${leaf}.median`, status: 'pass' }),
+          expect.objectContaining({ id: `${data}.p95`, status: 'pass' }),
           expect.objectContaining({
             id: `${metricKey(corpusSize, 'edit.syntaxErrorMs')}.p95-target`,
             limit: 1_000,
@@ -108,6 +122,8 @@ describe('ratified developer performance budgets', () => {
     const candidate = comparisonReport({ corpusSize: 24, run: 30, sourceCommit: 'b'.repeat(40) });
     candidate.analysis[metricKey(24, 'edit.leafMs')].kovo.median = 108;
     candidate.analysis[metricKey(24, 'edit.leafMs')].kovo.p95 = 119;
+    candidate.analysis[metricKey(24, 'edit.dataMs')].kovo.median = 134;
+    candidate.analysis[metricKey(24, 'edit.dataMs')].kovo.p95 = 145;
     candidate.analysis[metricKey(24, 'edit.peakRssBytes')].kovo.p95 = 1_200;
     candidate.analysis[metricKey(24, 'edit.syntaxErrorMs')].kovo.p95 = 1_001;
     candidate.analysis[metricKey(24, 'edit.recoveryMs')].kovo.p95 = 2_001;
@@ -120,6 +136,8 @@ describe('ratified developer performance budgets', () => {
       expect.arrayContaining([
         `${metricKey(24, 'edit.leafMs')}.median`,
         `${metricKey(24, 'edit.leafMs')}.p95`,
+        `${metricKey(24, 'edit.dataMs')}.median`,
+        `${metricKey(24, 'edit.dataMs')}.p95`,
         `${metricKey(24, 'edit.peakRssBytes')}.p95`,
         `${metricKey(24, 'edit.syntaxErrorMs')}.p95-target`,
         `${metricKey(24, 'edit.recoveryMs')}.p95-target`,
@@ -260,6 +278,37 @@ describe('ratified developer performance budgets', () => {
     expect(() => deriveDevPerformanceBudget(baseline, { baselineEntries: entries })).toThrow(
       /ready\.peakRssBytes[\s\S]*baseline verdict is not ratified/u,
     );
+  });
+
+  it('fails closed when ratified or holdout data-plane timing evidence is absent', () => {
+    const missingBaseline = ratifiedBaseline(24);
+    delete missingBaseline.baseline.metrics[metricKey(24, 'edit.dataMs')];
+
+    expect(() =>
+      deriveDevPerformanceBudget(missingBaseline.baseline, {
+        baselineEntries: missingBaseline.entries,
+      }),
+    ).toThrow(/edit\.dataMs kovo evidence is unavailable/u);
+
+    const { baseline, entries } = ratifiedBaseline(24);
+    const budget = deriveDevPerformanceBudget(baseline, { baselineEntries: entries });
+    const legacyBudget = structuredClone(budget);
+    delete legacyBudget.metrics[metricKey(24, 'edit.dataMs')];
+    const { digest: _legacyDigest, ...legacyFacts } = legacyBudget;
+    legacyBudget.digest = digest(canonicalJson(legacyFacts));
+    expect(devBudgetFindings(legacyBudget)).toContain(
+      'budget corpus-n24/dev//edit.dataMs is not derived from ratified evidence',
+    );
+
+    const candidate = comparisonReport({ corpusSize: 24, run: 44, sourceCommit: 'b'.repeat(40) });
+    delete candidate.analysis[metricKey(24, 'edit.dataMs')];
+
+    const result = evaluateDevPerformanceBudget(budget, candidate);
+    expect(result.verdict.status).toBe('unproven');
+    expect(result.verdict.reasons).toContain(
+      'candidate required dev metric corpus-n24/dev//edit.dataMs is unavailable',
+    );
+    expect(result.checks).toEqual([]);
   });
 
   it('refuses missing, byte-tampered, or summary-tampered raw baseline evidence', () => {
@@ -422,6 +471,7 @@ function comparisonReport({ corpusSize, run, sourceCommit }) {
   });
   const analysis = {};
   const values = {
+    'edit.dataMs': [125 + run, 90 + run],
     'edit.entryMs': [150 + run, 75 + run],
     'edit.leafMs': [100 + run, 75 + run],
     'edit.peakRssBytes': [1_000 + run, 900 + run],

@@ -43,6 +43,7 @@ const SUPPORTED_CORPUS_SIZES = Object.freeze([24, 216]);
 const PERFORMANCE_METRICS = Object.freeze([
   'edit.leafMs',
   'edit.entryMs',
+  'edit.dataMs',
   'edit.syntaxErrorMs',
   'edit.recoveryMs',
   'edit.peakRssBytes',
