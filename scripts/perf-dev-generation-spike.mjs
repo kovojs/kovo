@@ -27,12 +27,19 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import {
+  DEV_PORT_ALLOCATION_POSTURE,
+  DEV_SESSION_PORT_STRIDE as DEV_GENERATION_CELL_PORT_STRIDE,
+} from '../benchmarks/corpora/generate.mjs';
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
+import { devSessionHandoffFindings } from './lib/perf-dev-session-evidence.mjs';
 import { performanceHostFingerprint } from './lib/perf-host.mjs';
 import { validReadyRouteProbe } from './lib/perf-ready-route.mjs';
 
 export const DEV_GENERATION_SPIKE_SCHEMA = 'kovo-dev-generation-spike-comparison/v1';
 export const DEV_GENERATION_SPIKE_PREPARE_SCHEMA = 'kovo-dev-generation-spike-prepare/v1';
+export const DEV_GENERATION_ADAPTER_FAILURE_SCHEMA = 'kovo-dev-generation-adapter-failure/v1';
+export { DEV_GENERATION_CELL_PORT_STRIDE };
 export const REPAIRED_GENERATION_CANDIDATE = Object.freeze({
   commit: '7a20bf6664c6b601a07a4525d90570bcefb9c55c',
   parent: '9618120c2f3bc779168c10e927dac4118b9f2ed1',
@@ -218,6 +225,7 @@ export function inspectGeneratedDevCorpus(manifestPath, root) {
     manifest.workload?.workloadModules !== manifest.modules ||
     manifest.workload?.routes !== manifest.routes ||
     manifest.workload?.buildOutputContract !== 'required-nonempty-and-cleanup-absent/v1' ||
+    manifest.workload?.devPortAllocationPosture !== DEV_PORT_ALLOCATION_POSTURE ||
     manifest.workload?.editSavePosture !== EDIT_SAVE_POSTURE ||
     !sameStrings(manifest.workload?.editClasses ?? [], expectedEdits) ||
     manifest.workload?.stateSurface !== 'local-counter'
@@ -248,6 +256,7 @@ export function inspectGeneratedDevCorpus(manifestPath, root) {
   }
   return {
     editClasses: [...manifest.workload.editClasses],
+    devPortAllocationPosture: manifest.workload.devPortAllocationPosture,
     editSavePosture: manifest.workload.editSavePosture,
     manifestDigest: sha256(bytes),
     manifestPath: path.relative(expectedRoot, absolute).split(path.sep).join('/'),
@@ -292,6 +301,7 @@ export function validateDevGenerationCell(cell, expected) {
     report?.corpus?.routes !== expected.corpus.routes ||
     report?.corpus?.manifestDigest !== expected.corpus.manifestDigest ||
     report?.corpus?.editSavePosture !== expected.corpus.editSavePosture ||
+    report?.corpus?.devPortAllocationPosture !== expected.corpus.devPortAllocationPosture ||
     `sha256:${report?.corpus?.shapeDigest ?? ''}` !== expected.corpus.shapeDigest ||
     report?.corpus?.sourceDigest !== expected.corpus.sourceDigest
   ) {
@@ -323,6 +333,12 @@ export function validateDevGenerationCell(cell, expected) {
   ) {
     findings.push(`${key} adapter correctness failure`);
   }
+  findings.push(
+    ...devSessionHandoffFindings(report, {
+      basePort: cell.port,
+      readyIterations: cell.readySamples,
+    }).map((finding) => `${key} ${finding}`),
+  );
   if (
     !Array.isArray(report?.readySamples) ||
     report.readySamples.length !== cell.readySamples ||
@@ -377,33 +393,38 @@ export function validateDevGenerationCell(cell, expected) {
 export function aggregateDevGenerationCells(cells, policy) {
   const metrics = {};
   let seed = policy.seed;
-  metrics.readyMs = analyzePairedMetric(cells, (report) => report.readySamples, 'durationMs', {
-    bootstrapIterations: policy.bootstrapIterations,
-    seed: seed++,
-  });
+  metrics.readyMs = analyzePairedMetric(
+    cells,
+    (report) => report?.readySamples ?? [],
+    'durationMs',
+    {
+      bootstrapIterations: policy.bootstrapIterations,
+      seed: seed++,
+    },
+  );
   metrics.readyPeakRssBytes = analyzePairedMetric(
     cells,
-    (report) => report.readySamples,
+    (report) => report?.readySamples ?? [],
     'peakRssBytes',
     { bootstrapIterations: policy.bootstrapIterations, seed: seed++ },
   );
   for (const editClass of EDIT_CLASSES) {
     metrics[`${editClass}Ms`] = analyzePairedMetric(
       cells,
-      (report) => report.samples,
+      (report) => report?.samples ?? [],
       `${editClass}Ms`,
       { bootstrapIterations: policy.bootstrapIterations, seed: seed++ },
     );
     metrics[`${editClass}ServerGenerationMs`] = analyzePairedMetric(
       cells,
-      (report) => report.samples,
+      (report) => report?.samples ?? [],
       `${editClass}ServerGenerationMs`,
       { bootstrapIterations: policy.bootstrapIterations, seed: seed++, optional: true },
     );
   }
   metrics.editPeakRssBytes = analyzePairedMetric(
     cells,
-    (report) => [report.editSession],
+    (report) => (report?.editSession === undefined ? [] : [report.editSession]),
     'peakRssBytes',
     { bootstrapIterations: policy.bootstrapIterations, seed: seed++ },
   );
@@ -580,7 +601,7 @@ export async function runDevGenerationSpike(options = {}, dependencies = {}) {
           errors.push(...stateFindings);
           break;
         }
-        const port = policy.portBase + scheduled.scheduleIndex;
+        const port = policy.portBase + scheduled.scheduleIndex * DEV_GENERATION_CELL_PORT_STRIDE;
         const resultFile = path.join(
           scratch,
           `${String(scheduled.scheduleIndex)}-${scheduled.lane}.json`,
@@ -599,6 +620,15 @@ export async function runDevGenerationSpike(options = {}, dependencies = {}) {
             warmups: scheduled.warmups,
           });
         } catch (error) {
+          const retainedFailure = retainedAdapterFailure(error);
+          if (retainedFailure !== null) {
+            cells.push({
+              ...scheduled,
+              adapterFailure: retainedFailure.evidence,
+              port,
+              report: retainedFailure.report,
+            });
+          }
           errors.push(
             `block ${String(scheduled.scheduleIndex)} ${scheduled.lane}: ${errorMessage(error)}`,
           );
@@ -790,15 +820,34 @@ function correctnessSummary(cells) {
     EDIT_CLASSES.map((editClass) => [editClass, { survived: 0, total: 0 }]),
   );
   let adapterErrors = 0;
+  let adapterProcessFailures = 0;
+  let adapterUnproven = 0;
   let browserRequestFailures = 0;
   let browserUnexpectedErrors = 0;
   let misses = 0;
   let syntaxDiagnostics = 0;
   for (const cell of cells) {
-    adapterErrors += cell.report?.integrity?.errors?.length ?? 0;
-    misses += cell.report?.integrity?.misses ?? 0;
-    browserRequestFailures += cell.report?.integrity?.browser?.requestFailedCount ?? 0;
-    browserUnexpectedErrors += cell.report?.integrity?.browser?.unexpectedErrorCount ?? 0;
+    adapterErrors += Array.isArray(cell.report?.integrity?.errors)
+      ? cell.report.integrity.errors.length
+      : 0;
+    adapterProcessFailures += cell.adapterFailure === undefined ? 0 : 1;
+    adapterUnproven +=
+      cell.report?.integrity?.complete === true && cell.report?.verdict?.status === 'measured'
+        ? 0
+        : 1;
+    misses += Number.isSafeInteger(cell.report?.integrity?.misses)
+      ? cell.report.integrity.misses
+      : 0;
+    browserRequestFailures += Number.isSafeInteger(
+      cell.report?.integrity?.browser?.requestFailedCount,
+    )
+      ? cell.report.integrity.browser.requestFailedCount
+      : 0;
+    browserUnexpectedErrors += Number.isSafeInteger(
+      cell.report?.integrity?.browser?.unexpectedErrorCount,
+    )
+      ? cell.report.integrity.browser.unexpectedErrorCount
+      : 0;
     for (const sample of cell.report?.samples ?? []) {
       for (const editClass of EDIT_CLASSES) {
         state[editClass].total += 1;
@@ -815,17 +864,33 @@ function correctnessSummary(cells) {
     (total, cell) => total + (cell.report?.samples?.length ?? 0),
     0,
   );
+  const completeSchedule =
+    cells.length === SCHEDULE_LANES.length &&
+    cells.every(
+      (cell, index) =>
+        cell.scheduleIndex === index &&
+        cell.lane === SCHEDULE_LANES[index] &&
+        cell.occurrence === (index < 2 ? 0 : 1),
+    );
   return {
     adapterErrors,
+    adapterProcessFailures,
+    adapterUnproven,
     browserRequestFailures,
     browserUnexpectedErrors,
     complete:
+      completeSchedule &&
       adapterErrors === 0 &&
+      adapterProcessFailures === 0 &&
+      adapterUnproven === 0 &&
       misses === 0 &&
       browserRequestFailures === 0 &&
       browserUnexpectedErrors === 0 &&
       stateLost === 0 &&
       syntaxDiagnostics === expectedSyntaxDiagnostics,
+    completeSchedule,
+    expectedCells: SCHEDULE_LANES.length,
+    observedCells: cells.length,
     misses,
     state,
     stateLost,
@@ -884,6 +949,7 @@ function reportPolicy(policy) {
     maxLoadPerCpu: policy.maxLoadPerCpu,
     order: [...SCHEDULE_LANES],
     portBase: policy.portBase,
+    portStride: DEV_GENERATION_CELL_PORT_STRIDE,
     readySamplesPerLane: policy.readySamples,
     readyTimeoutMs: policy.readyTimeoutMs,
     rawAdapterEvidence: policy.adapterEvidenceRoot === null ? 'ephemeral' : '<out-dir>/raw',
@@ -905,7 +971,7 @@ function normalizeOptions(options) {
   const spikeRoot = canonicalDirectory(requiredString(options.spikeRoot, '--spike-root'));
   const size = Number(options.size ?? 24);
   if (!SUPPORTED_SIZES.includes(size)) throw new TypeError('--size must be 24 or 216');
-  const portBase = boundedInteger(options.portBase ?? 49_750, 1_024, 65_532, '--port-base');
+  const portBase = boundedInteger(options.portBase ?? 49_750, 1_024, 65_024, '--port-base');
   const outPath = options.out === undefined ? null : path.resolve(options.out);
   return {
     adapterEvidenceRoot: outPath === null ? null : path.join(path.dirname(outPath), 'raw'),
@@ -992,7 +1058,7 @@ async function runDevLoopAdapter(options) {
   const adapterEvidence = readAdapterEvidence(options.outPath);
   if (result.error || result.signal || result.status !== 0) {
     const output = `${String(result.stdout ?? '')}\n${String(result.stderr ?? '')}`.trim();
-    throw new Error(
+    const error = new Error(
       `dev-loop adapter failed: ${boundedDiagnostic(
         [
           adapterProcessExit(result),
@@ -1004,8 +1070,14 @@ async function runDevLoopAdapter(options) {
           .join('; '),
       )}`,
     );
+    error.adapterFailure = createAdapterFailureEvidence(result, adapterEvidence);
+    throw error;
   }
-  if (adapterEvidence.error !== null) throw new Error(adapterEvidence.error);
+  if (adapterEvidence.error !== null) {
+    const error = new Error(adapterEvidence.error);
+    error.adapterFailure = createAdapterFailureEvidence(result, adapterEvidence);
+    throw error;
+  }
   return adapterEvidence.report;
 }
 
@@ -1027,39 +1099,133 @@ function readAdapterEvidence(outPath) {
     bytes = readFileSync(outPath);
   } catch (error) {
     const message = `dev-loop adapter report is unavailable: ${errorMessage(error)}`;
-    return { error: message, failureDiagnostic: message, report: null };
+    return {
+      custody: { available: false, reportBytes: null, reportSha256: null },
+      error: message,
+      failureDiagnostic: message,
+      report: null,
+      summary: null,
+    };
   }
+  const custody = {
+    available: true,
+    reportBytes: bytes.byteLength,
+    reportSha256: sha256(bytes),
+  };
   if (bytes.byteLength === 0 || bytes.byteLength > MAX_REPORT_BYTES) {
     const message = 'dev-loop adapter report is empty or exceeds its evidence bound';
-    return { error: message, failureDiagnostic: message, report: null };
+    return { custody, error: message, failureDiagnostic: message, report: null, summary: null };
   }
   let report;
   try {
     report = JSON.parse(bytes.toString('utf8'));
   } catch (error) {
     const message = `dev-loop adapter report is invalid JSON: ${errorMessage(error)}`;
-    return { error: message, failureDiagnostic: message, report: null };
+    return { custody, error: message, failureDiagnostic: message, report: null, summary: null };
   }
+  const summary = summarizeFailedAdapterReport(report, bytes);
   return {
+    custody,
     error: null,
-    failureDiagnostic: JSON.stringify(summarizeFailedAdapterReport(report, bytes)),
+    failureDiagnostic: JSON.stringify(summary),
     report,
+    summary,
   };
 }
 
 export function summarizeFailedAdapterReport(report, bytes) {
   return {
-    editSessionError: report?.editSession?.error ?? null,
-    integrityErrors: (report?.integrity?.errors ?? []).slice(0, 12),
+    browserRequestFailures: report?.integrity?.browser?.requestFailedCount ?? null,
+    browserUnexpectedErrors: report?.integrity?.browser?.unexpectedErrorCount ?? null,
+    editSessionError:
+      report?.editSession?.error === null || report?.editSession?.error === undefined
+        ? null
+        : boundedDiagnostic(String(report.editSession.error)),
+    integrityErrors: (report?.integrity?.errors ?? [])
+      .slice(0, 12)
+      .map((error) => boundedDiagnostic(String(error))),
+    misses: report?.integrity?.misses ?? null,
     readyFailures: (report?.readySamples ?? [])
       .filter((sample) => sample?.success !== true)
       .slice(0, 12)
-      .map((sample) => ({ error: sample?.error ?? null, iteration: sample?.iteration ?? null })),
+      .map((sample) => ({
+        error:
+          sample?.error === null || sample?.error === undefined
+            ? null
+            : boundedDiagnostic(String(sample.error)),
+        iteration: sample?.iteration ?? null,
+      })),
     reportBytes: bytes.byteLength,
     reportSha256: sha256(bytes),
     schema: report?.schema ?? null,
     verdict: report?.verdict?.status ?? null,
   };
+}
+
+function createAdapterFailureEvidence(result, adapterEvidence) {
+  return {
+    evidence: validateAdapterFailureEvidence({
+      process: {
+        error: result.error === undefined ? null : boundedDiagnostic(errorMessage(result.error)),
+        signal: result.signal == null ? null : String(result.signal),
+        status: Number.isSafeInteger(result.status) ? result.status : null,
+      },
+      rawReport: {
+        ...adapterEvidence.custody,
+        schema: adapterEvidence.report?.schema ?? null,
+        verdict: adapterEvidence.report?.verdict?.status ?? null,
+      },
+      schema: DEV_GENERATION_ADAPTER_FAILURE_SCHEMA,
+      summary: adapterEvidence.summary,
+    }),
+    report: adapterEvidence.report,
+  };
+}
+
+function retainedAdapterFailure(error) {
+  const value = error?.adapterFailure;
+  if (value === null || typeof value !== 'object') return null;
+  return {
+    evidence: validateAdapterFailureEvidence(value.evidence),
+    report: value.report ?? null,
+  };
+}
+
+function validateAdapterFailureEvidence(value) {
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    value.schema !== DEV_GENERATION_ADAPTER_FAILURE_SCHEMA ||
+    value.process === null ||
+    typeof value.process !== 'object' ||
+    !(value.process.error === null || nonEmptyString(value.process.error)) ||
+    !(value.process.signal === null || nonEmptyString(value.process.signal)) ||
+    !(value.process.status === null || Number.isSafeInteger(value.process.status)) ||
+    value.rawReport === null ||
+    typeof value.rawReport !== 'object' ||
+    typeof value.rawReport.available !== 'boolean'
+  ) {
+    throw new TypeError('failed dev-loop adapter evidence is malformed');
+  }
+  if (
+    !(
+      value.summary === null ||
+      (typeof value.summary === 'object' && !Array.isArray(value.summary))
+    ) ||
+    Buffer.byteLength(JSON.stringify(value.summary ?? null)) > 64 * 1024
+  ) {
+    throw new TypeError('failed dev-loop adapter summary exceeds its evidence bound');
+  }
+  if (
+    value.rawReport.available
+      ? !Number.isSafeInteger(value.rawReport.reportBytes) ||
+        value.rawReport.reportBytes < 0 ||
+        !/^sha256:[0-9a-f]{64}$/u.test(value.rawReport.reportSha256 ?? '')
+      : value.rawReport.reportBytes !== null || value.rawReport.reportSha256 !== null
+  ) {
+    throw new TypeError('failed dev-loop raw report custody is malformed');
+  }
+  return structuredClone(value);
 }
 
 function adapterProcessExit(result) {
@@ -1140,6 +1306,7 @@ function toolingEvidence(root) {
 
 function sameCorpus(left, right) {
   const comparable = (value) => ({
+    devPortAllocationPosture: value.devPortAllocationPosture,
     editClasses: value.editClasses,
     editSavePosture: value.editSavePosture,
     manifestDigest: value.manifestDigest,
@@ -1360,6 +1527,10 @@ function isWithin(root, candidate) {
 
 function finitePositive(value) {
   return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
+function finiteNonNegative(value) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
 }
 
 function finitePositiveNumber(value, label) {

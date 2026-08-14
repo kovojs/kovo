@@ -111,8 +111,11 @@ describe('dev-generation candidate comparator', () => {
         bytes,
       ),
     ).toEqual({
+      browserRequestFailures: null,
+      browserUnexpectedErrors: null,
       editSessionError: 'edit session failed',
       integrityErrors: errors.slice(0, 12),
+      misses: null,
       readyFailures: [{ error: 'ready timed out', iteration: 0 }],
       reportBytes: bytes.byteLength,
       reportSha256: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
@@ -182,6 +185,7 @@ describe('dev-generation candidate comparator', () => {
     const workload = {
       buildOutputContract: 'required-nonempty-and-cleanup-absent/v1',
       componentImportFanout: 24,
+      devPortAllocationPosture: 'unique-exact-port-per-session/v1',
       editClasses: EDIT_CLASSES,
       editSavePosture: 'posix-sibling-temp-write-rename/v1',
       routes: 4,
@@ -211,6 +215,7 @@ describe('dev-generation candidate comparator', () => {
     writeFileSync(manifestPath, `${JSON.stringify(manifest)}\n`);
 
     expect(inspectGeneratedDevCorpus(manifestPath, root)).toMatchObject({
+      devPortAllocationPosture: 'unique-exact-port-per-session/v1',
       editClasses: EDIT_CLASSES,
       editSavePosture: 'posix-sibling-temp-write-rename/v1',
       modules: 24,
@@ -371,9 +376,9 @@ describe('dev-generation candidate comparator', () => {
 
     expect(calls).toEqual([
       { lane: 'baseline', port: 49_750, readyTimeoutMs: 600_000, timeoutMs: 1_800_000 },
-      { lane: 'spike', port: 49_751, readyTimeoutMs: 600_000, timeoutMs: 1_800_000 },
-      { lane: 'spike', port: 49_752, readyTimeoutMs: 600_000, timeoutMs: 1_800_000 },
-      { lane: 'baseline', port: 49_753, readyTimeoutMs: 600_000, timeoutMs: 1_800_000 },
+      { lane: 'spike', port: 49_878, readyTimeoutMs: 600_000, timeoutMs: 1_800_000 },
+      { lane: 'spike', port: 50_006, readyTimeoutMs: 600_000, timeoutMs: 1_800_000 },
+      { lane: 'baseline', port: 50_134, readyTimeoutMs: 600_000, timeoutMs: 1_800_000 },
     ]);
     expect(released).toBe(true);
     expect(report.integrity).toMatchObject({
@@ -383,6 +388,81 @@ describe('dev-generation candidate comparator', () => {
       sourceStable: true,
     });
     expect(report.verdict).toMatchObject({ reasons: [], status: 'accept' });
+  });
+
+  it('retains a failed raw adapter cell and cannot claim correctness from a short schedule', async () => {
+    const baselineRoot = temporaryDirectory('kovo-dev-generation-failed-baseline-');
+    const spikeRoot = temporaryDirectory('kovo-dev-generation-failed-spike-');
+    const prepared = preparedFixture(baselineRoot, spikeRoot);
+    const state = prepared.source.before.baseline;
+    const failedReport = fakeAdapterReport({
+      commit: state.commit,
+      corpus: prepared.corpus.baseline,
+      editSamples: 1,
+      latency: 100,
+      locks: state.locks,
+      port: 49_750,
+      readySamples: 1,
+    });
+    failedReport.integrity.complete = false;
+    failedReport.integrity.errors = ['ready lifecycle failed', 'raw adapter failure'];
+    failedReport.integrity.misses = 3;
+    failedReport.integrity.browser.requestFailedCount = 4;
+    failedReport.verdict.status = 'unproven';
+    const adapterError = new Error('adapter exited nonzero');
+    adapterError.adapterFailure = {
+      evidence: {
+        process: { error: null, signal: null, status: 1 },
+        rawReport: {
+          available: true,
+          reportBytes: 1_234,
+          reportSha256: digest('b'),
+          schema: 'kovo-dev-loop-report/v1',
+          verdict: 'unproven',
+        },
+        schema: 'kovo-dev-generation-adapter-failure/v1',
+        summary: { integrityErrors: failedReport.integrity.errors },
+      },
+      report: failedReport,
+    };
+
+    const report = await runDevGenerationSpike(
+      { baselineRoot, measure: true, quickSmoke: true, spikeRoot },
+      {
+        acquireLock: () => ({ release: () => undefined }),
+        collectState: (root) =>
+          prepared.source.before[root === baselineRoot ? 'baseline' : 'spike'],
+        hostFingerprint: () => ({ schema: 'test-host/v1' }),
+        prepare: async () => prepared,
+        runAdapter: async () => {
+          throw adapterError;
+        },
+        sampleHost: comparableHostSample,
+      },
+    );
+
+    expect(report.cells).toHaveLength(1);
+    expect(report.cells[0]).toMatchObject({
+      adapterFailure: {
+        rawReport: { reportBytes: 1_234, reportSha256: digest('b') },
+        schema: 'kovo-dev-generation-adapter-failure/v1',
+      },
+      report: failedReport,
+    });
+    expect(report.analysis.correctness).toMatchObject({
+      adapterErrors: 2,
+      adapterProcessFailures: 1,
+      adapterUnproven: 1,
+      browserRequestFailures: 4,
+      complete: false,
+      completeSchedule: false,
+      expectedCells: 4,
+      misses: 3,
+      observedCells: 1,
+    });
+    expect(report.analysis.acceptance.candidateAccepted).toBe(false);
+    expect(report.integrity.complete).toBe(false);
+    expect(report.verdict.status).toBe('unproven');
   });
 
   it('supports authentication-only preparation and refuses implicit timing', async () => {
@@ -571,7 +651,7 @@ function comparisonCells() {
         editSamples: 1,
         latency: lane === 'baseline' ? 100 : 75,
         locks: state.locks,
-        port: 49_750 + scheduleIndex,
+        port: 49_750 + scheduleIndex * 128,
         readyLatency: lane === 'baseline' ? 100 : 95,
         readySamples: 1,
         rss: 1_000,
@@ -622,6 +702,7 @@ function fakeAdapterReport({
   }));
   return {
     corpus: {
+      devPortAllocationPosture: corpus.devPortAllocationPosture,
       editSavePosture: corpus.editSavePosture,
       manifestDigest: corpus.manifestDigest,
       modules: corpus.modules,
@@ -631,6 +712,7 @@ function fakeAdapterReport({
     },
     editSession: {
       browserContextClosed: true,
+      lifecycle: completeStop(port + readySamples),
       peakRssBytes: rss,
       readinessProbe: readyRouteProbe(),
       rssSamples: 2,
@@ -649,8 +731,16 @@ function fakeAdapterReport({
       complete: true,
       editCounts: Object.fromEntries(EDIT_CLASSES.map((editClass) => [editClass, editSamples])),
       errors: [],
+      handoffs: Array.from({ length: readySamples + 1 }, (_, index) =>
+        completeHandoff(port + index, index, readySamples),
+      ),
       iterations: editSamples,
       misses: 0,
+      portAllocation: {
+        basePort: port,
+        ports: Array.from({ length: readySamples + 1 }, (_, index) => port + index),
+        posture: 'unique-exact-port-per-session/v1',
+      },
       readyIterations: readySamples,
       source: { stable: true },
       warmups,
@@ -659,6 +749,7 @@ function fakeAdapterReport({
       browserContextClosed: true,
       durationMs: readyLatency,
       iteration,
+      lifecycle: completeStop(port + iteration),
       peakRssBytes: rss,
       readinessProbe: readyRouteProbe(),
       rssSamples: 2,
@@ -693,6 +784,7 @@ function sourceState(commit) {
 
 function corpusIdentity() {
   return {
+    devPortAllocationPosture: 'unique-exact-port-per-session/v1',
     editClasses: EDIT_CLASSES,
     editSavePosture: 'posix-sibling-temp-write-rename/v1',
     manifestDigest: digest('4'),
@@ -703,6 +795,64 @@ function corpusIdentity() {
     shapeDigest: digest('5'),
     sourceDigest: digest('6'),
     stateSurface: 'local-counter',
+  };
+}
+
+function completeHandoff(port, index, readySamples) {
+  const target = index === readySamples ? 'edit-session' : `ready[${String(index)}]`;
+  const from =
+    index === 0
+      ? null
+      : index === readySamples
+        ? `ready[${String(index - 1)}]`
+        : `ready[${String(index - 1)}]`;
+  return {
+    attribution: {
+      from,
+      priorMarkerSha256: index === 0 ? null : digest('a'),
+      to: target,
+    },
+    available: true,
+    check: {
+      addresses: [
+        {
+          address: '127.0.0.1',
+          available: true,
+          errorCode: null,
+          family: 4,
+          supported: true,
+        },
+      ],
+      checkedAt: '2026-08-13T00:00:00.000Z',
+      durationMs: 1,
+      probeError: null,
+      sequence: 1,
+    },
+    complete: true,
+    error: null,
+    origin: `http://localhost:${String(port)}`,
+    schema: 'kovo-dev-session-handoff/v1',
+    socketEvidence: null,
+  };
+}
+
+function completeStop(port) {
+  return {
+    complete: true,
+    origin: `http://localhost:${String(port)}`,
+    schema: 'kovo-dev-session-stop/v3',
+  };
+}
+
+function comparableHostSample(label, ceiling) {
+  return {
+    at: '2026-08-13T00:00:00.000Z',
+    ceiling,
+    comparable: true,
+    cpuCount: 10,
+    label,
+    loadAverage: [0.1, 0.1, 0.1],
+    loadPerCpu: 0.01,
   };
 }
 

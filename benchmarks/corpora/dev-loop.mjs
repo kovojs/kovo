@@ -3,7 +3,18 @@ import { createHash } from 'node:crypto';
 import { execFile, spawn } from 'node:child_process';
 import { lookup } from 'node:dns/promises';
 import { readFileSync } from 'node:fs';
-import { lstat, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises';
+import {
+  lstat,
+  mkdir,
+  open,
+  readFile,
+  readdir,
+  readlink,
+  realpath,
+  rename,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import { get as httpGet } from 'node:http';
 import { get as httpsGet } from 'node:https';
 import { createServer, isIP } from 'node:net';
@@ -30,12 +41,15 @@ import {
 } from './dev-process-marker.mjs';
 import {
   CORPUS_SCHEMA,
+  DEV_PORT_ALLOCATION_POSTURE,
   EDIT_REFRESH_SURFACES,
   EDIT_SAVE_POSTURE,
   EDIT_STATE_POSTURE,
 } from './generate.mjs';
 
 export const DEV_LOOP_REPORT_SCHEMA = 'kovo-dev-loop-report/v1';
+export const DEV_SESSION_HANDOFF_SCHEMA = 'kovo-dev-session-handoff/v1';
+export const DEV_SOCKET_OWNER_EVIDENCE_SCHEMA = 'kovo-dev-socket-owner-evidence/v1';
 
 const EDIT_CLASSES = Object.freeze(['leaf', 'entry', 'data']);
 const ALL_EDIT_CLASSES = Object.freeze([...EDIT_CLASSES, 'syntaxError', 'recovery']);
@@ -54,6 +68,10 @@ const DEV_PROCESS_FORCE_STOP_TIMEOUT_MS = 2_000;
 const DEV_PORT_RELEASE_TIMEOUT_MS = 5_000;
 const DEV_PORT_STABILITY_WINDOW_MS = 500;
 const DEV_LIFECYCLE_POLL_INTERVAL_MS = 50;
+const DEV_SOCKET_EVIDENCE_MAX_BYTES = 1024 * 1024;
+const DEV_SOCKET_EVIDENCE_MAX_FDS = 65_536;
+const DEV_SOCKET_EVIDENCE_MAX_PROCESSES = 4_096;
+const DEV_SOCKET_EVIDENCE_MAX_RECORDS = 256;
 export const DEV_SESSION_STOP_SCHEMA = 'kovo-dev-session-stop/v3';
 let atomicCorpusSourceWrite = 0;
 let paintFenceSequence = 0;
@@ -115,10 +133,15 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
 
   const browserType = dependencies.browserType ?? chromium;
   const spawnProcess = dependencies.spawnProcess ?? spawn;
+  const handoffDependencies = dependencies.handoffDependencies ?? {};
   const startedAt = new Date().toISOString();
   const source = await collectAuthenticatedSource();
   const execution = performanceExecutionIdentity({ startedAt });
-  const command = materializeCommand(manifest.dev.command, appRoot, normalized.port);
+  const sessionPorts = Array.from(
+    { length: normalized.readyIterations + 1 },
+    (_, index) => normalized.port + index,
+  );
+  const command = materializeCommand(manifest.dev.command, appRoot, sessionPorts[0]);
   const versions = await collectEntrantVersions(appRoot, manifest.framework, command);
   const report = createReportSkeleton({
     command,
@@ -134,72 +157,127 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
     versions,
     warmups: normalized.warmups,
   });
+  report.integrity.portAllocation = {
+    basePort: normalized.port,
+    ports: sessionPorts,
+    posture: DEV_PORT_ALLOCATION_POSTURE,
+  };
   report.integrity.corpus.beforeVerified = true;
   for (const finding of sourceStabilityFindings(source)) report.integrity.errors.push(finding);
   const originalSources = await readOriginalSources(manifestEvidence);
   let browser;
-  let freshSeriesTeardownComplete = true;
+  let priorProcessMarker = null;
+  let priorSession = null;
+  let sessionSeriesAborted = false;
 
   try {
     browser = await browserType.launch({ headless: true });
     report.environment.browser = { name: 'chromium', version: browser.version() };
     for (let iteration = 0; iteration < report.integrity.readyIterations; iteration += 1) {
       await cleanGeneratedOutputs(appRoot, manifest.build.outputs);
+      const targetSession = `ready[${String(iteration)}]`;
+      const sessionCommand = materializeCommand(
+        manifest.dev.command,
+        appRoot,
+        sessionPorts[iteration],
+      );
+      const launch = await launchDevSessionAfterHandoff(
+        {
+          appRoot,
+          command: sessionCommand,
+          priorProcessMarker,
+          priorSession,
+          spawnProcess,
+          targetSession,
+        },
+        handoffDependencies,
+      );
+      report.integrity.handoffs.push(launch.handoff);
+      if (launch.session === null) {
+        report.integrity.errors.push(launch.handoff.error);
+        sessionSeriesAborted = true;
+        break;
+      }
       const observation = await measureFreshReady({
         appRoot,
         browser,
-        command,
+        command: sessionCommand,
         iteration,
         manifest,
         readyTimeoutMs: normalized.readyTimeoutMs,
-        spawnProcess,
+        session: launch.session,
+        started: launch.started,
       });
       report.readySamples.push(observation);
       accumulateObservationIntegrity(report.integrity, observation, `ready[${iteration}]`);
       accumulateBrowserIntegrity(report.integrity, observation.browser, `ready[${iteration}]`);
       if (!freshReadySeriesCanContinue(observation)) {
-        freshSeriesTeardownComplete = false;
+        sessionSeriesAborted = true;
         report.integrity.errors.push(
           `ready[${String(iteration)}]: later fresh starts skipped after incomplete teardown`,
         );
         break;
       }
+      priorProcessMarker = launch.session.processMarker;
+      priorSession = targetSession;
     }
 
-    if (!freshSeriesTeardownComplete) {
-      throw new Error('fresh-ready teardown was incomplete; edit session was not started');
-    }
-
-    await cleanGeneratedOutputs(appRoot, manifest.build.outputs);
-    const editResult = await measureEditSession({
-      appRoot,
-      browser,
-      command,
-      createDiagnosticProfiler: dependencies.createDiagnosticProfiler,
-      diagnosticProfile: normalized.diagnosticProfile,
-      iterations: normalized.iterations,
-      manifest,
-      originalSources,
-      readyTimeoutMs: normalized.readyTimeoutMs,
-      spawnProcess,
-      warmups: normalized.warmups,
-    });
-    report.samples = editResult.samples;
-    report.editSession = editResult.session;
-    report.profile = profileEditToPaint(editResult.samples, editResult.diagnosticProfile);
-    accumulateBrowserIntegrity(report.integrity, editResult.session.browser, 'edit-session');
-    if (editResult.session.error !== null) {
-      report.integrity.errors.push(`edit session: ${editResult.session.error}`);
-    }
-    if (editResult.session.rssSamples < 1 || editResult.session.peakRssBytes <= 0) {
-      report.integrity.errors.push('edit session did not produce process-tree RSS evidence');
-    }
-    for (const observation of editResult.observations) {
-      accumulateObservationIntegrity(
-        report.integrity,
-        observation,
-        `edit.${observation.editClass}[${observation.iteration}]`,
+    if (!sessionSeriesAborted) {
+      await cleanGeneratedOutputs(appRoot, manifest.build.outputs);
+      const editCommand = materializeCommand(
+        manifest.dev.command,
+        appRoot,
+        sessionPorts[normalized.readyIterations],
       );
+      const launch = await launchDevSessionAfterHandoff(
+        {
+          appRoot,
+          command: editCommand,
+          inspectorPort: normalized.diagnosticProfile?.inspectorPort ?? null,
+          priorProcessMarker,
+          priorSession,
+          spawnProcess,
+          targetSession: 'edit-session',
+        },
+        handoffDependencies,
+      );
+      report.integrity.handoffs.push(launch.handoff);
+      if (launch.session === null) {
+        report.integrity.errors.push(launch.handoff.error);
+        sessionSeriesAborted = true;
+      } else {
+        const editResult = await measureEditSession({
+          appRoot,
+          browser,
+          command: editCommand,
+          createDiagnosticProfiler: dependencies.createDiagnosticProfiler,
+          diagnosticProfile: normalized.diagnosticProfile,
+          iterations: normalized.iterations,
+          manifest,
+          originalSources,
+          readyTimeoutMs: normalized.readyTimeoutMs,
+          session: launch.session,
+          started: launch.started,
+          warmups: normalized.warmups,
+        });
+        report.samples = editResult.samples;
+        report.editSession = editResult.session;
+        report.profile = profileEditToPaint(editResult.samples, editResult.diagnosticProfile);
+        accumulateBrowserIntegrity(report.integrity, editResult.session.browser, 'edit-session');
+        if (editResult.session.error !== null) {
+          report.integrity.errors.push(`edit session: ${editResult.session.error}`);
+        }
+        if (editResult.session.rssSamples < 1 || editResult.session.peakRssBytes <= 0) {
+          report.integrity.errors.push('edit session did not produce process-tree RSS evidence');
+        }
+        for (const observation of editResult.observations) {
+          accumulateObservationIntegrity(
+            report.integrity,
+            observation,
+            `edit.${observation.editClass}[${observation.iteration}]`,
+          );
+        }
+      }
     }
   } catch (error) {
     report.integrity.errors.push(errorMessage(error));
@@ -281,15 +359,28 @@ export function devLoopVerdictStatus(integrityComplete, diagnosticProfileRequest
 }
 
 export async function measureFreshReady(
-  { appRoot, browser, command, iteration, manifest, readyTimeoutMs, spawnProcess },
+  {
+    appRoot,
+    browser,
+    command,
+    iteration,
+    manifest,
+    readyTimeoutMs,
+    session: suppliedSession,
+    spawnProcess,
+    started: suppliedStarted,
+  },
   dependencies = {},
 ) {
   const now = dependencies.now ?? (() => performance.now());
   const createRssSampler = dependencies.createRssSampler ?? createProcessTreeRssSampler;
   const createSession = dependencies.startDevSession ?? startDevSession;
   const waitForReady = dependencies.waitForReadyPage ?? waitForReadyPage;
-  const started = now();
-  const session = createSession({ appRoot, command, spawnProcess });
+  // The deadline begins immediately before spawn. A caller that already ran the handoff fence
+  // supplies that timestamp and session so the fence remains outside the timing sample without
+  // moving the measurement boundary later.
+  const started = suppliedStarted ?? now();
+  const session = suppliedSession ?? createSession({ appRoot, command, spawnProcess });
   const rss = createRssSampler(session.pid);
   let context;
   let browserEvidence = emptyBrowserEvidence();
@@ -395,15 +486,10 @@ async function measureEditSession({
   manifest,
   originalSources,
   readyTimeoutMs,
-  spawnProcess,
+  session,
+  started,
   warmups,
 }) {
-  const session = startDevSession({
-    appRoot,
-    command,
-    inspectorPort: diagnosticProfile?.inspectorPort ?? null,
-    spawnProcess,
-  });
   const rss = createProcessTreeRssSampler(session.pid);
   let context;
   let fatalError = null;
@@ -424,6 +510,7 @@ async function measureEditSession({
       intentionalSyntaxErrorFile: manifest.dev.edits.syntaxError.file,
     });
     const readyObservation = await waitForReadyPage({
+      deadlineMs: started + readyTimeoutMs,
       origin: command.origin,
       page,
       ready: manifest.dev.ready,
@@ -1288,6 +1375,602 @@ function sanitizeBrowserUrl(value, expectedOrigin) {
   }
 }
 
+/**
+ * Recheck the exact dual-stack origin immediately before a dev-process spawn. This is a handoff
+ * fence, not a cleanup mechanism: a listener seen here may be unrelated to the benchmark, so the
+ * only safe action is to retain bounded evidence and refuse to spawn.
+ */
+export async function launchDevSessionAfterHandoff(options, dependencies = {}) {
+  const now = dependencies.now ?? (() => performance.now());
+  const handoff = await inspectDevSessionHandoff(options, dependencies);
+  if (!handoff.complete) return { handoff, session: null, started: null };
+  const started = now();
+  const startSession = dependencies.startSession ?? startDevSession;
+  const session = startSession({
+    appRoot: options.appRoot,
+    command: options.command,
+    inspectorPort: options.inspectorPort ?? null,
+    spawnProcess: options.spawnProcess,
+  });
+  return { handoff, session, started };
+}
+
+export async function inspectDevSessionHandoff(options, dependencies = {}) {
+  const origin = new URL(requiredString(options?.command?.origin, 'dev origin')).origin;
+  const attribution = validateHandoffAttribution({
+    from: options.priorSession ?? null,
+    priorMarkerSha256:
+      options.priorProcessMarker === null || options.priorProcessMarker === undefined
+        ? null
+        : sha256(validateProcessMarker(options.priorProcessMarker)),
+    to: options.targetSession,
+  });
+  const now = dependencies.now ?? (() => performance.now());
+  const wallNow = dependencies.wallNow ?? (() => new Date().toISOString());
+  const portAvailability = dependencies.portAvailability ?? probeOriginPortAvailability;
+  const collectSocketEvidence =
+    dependencies.collectSocketEvidence ?? collectLinuxSocketOwnerEvidence;
+  const started = now();
+  const checkedAt = validateIsoTimestamp(wallNow(), 'dev handoff check timestamp');
+  let addresses = [];
+  let available = false;
+  let probeError = null;
+  try {
+    const observation = validatePortAvailabilityObservation(await portAvailability(origin));
+    addresses = observation.addresses;
+    available = observation.available;
+  } catch (error) {
+    probeError = boundedEvidenceMessage(errorMessage(error));
+  }
+  const durationMs = Math.max(0, now() - started);
+  const busyAddresses = addresses.filter(
+    (address) => address.supported && address.available === false,
+  );
+  let socketEvidence = null;
+  let socketEvidenceError = null;
+  if (busyAddresses.length > 0) {
+    try {
+      socketEvidence = validateSocketOwnerEvidence(
+        await collectSocketEvidence(
+          {
+            busyAddresses,
+            origin,
+            priorProcessMarker: options.priorProcessMarker ?? null,
+          },
+          dependencies.socketEvidenceDependencies ?? {},
+        ),
+      );
+    } catch (error) {
+      socketEvidenceError = boundedEvidenceMessage(errorMessage(error));
+    }
+  }
+  const unavailableReason =
+    probeError !== null
+      ? `port probe failed: ${probeError}`
+      : busyAddresses.length > 0
+        ? `busy ${busyAddresses.map((address) => `${address.address}/${String(address.family)}`).join(', ')}`
+        : 'no supported origin address was proven available';
+  const diagnosticSuffix =
+    socketEvidenceError === null
+      ? ''
+      : `; socket evidence failed validation: ${socketEvidenceError}`;
+  const evidence = {
+    attribution,
+    available,
+    check: {
+      addresses,
+      checkedAt,
+      durationMs,
+      probeError,
+      sequence: 1,
+    },
+    complete: available && probeError === null,
+    error:
+      available && probeError === null
+        ? null
+        : `dev pre-spawn handoff ${attribution.from ?? 'initial'} -> ${attribution.to} refused: ${unavailableReason}; no process was spawned${diagnosticSuffix}`,
+    origin,
+    schema: DEV_SESSION_HANDOFF_SCHEMA,
+    socketEvidence,
+  };
+  return validateDevSessionHandoffEvidence(evidence);
+}
+
+export function validateDevSessionHandoffEvidence(value) {
+  if (value === null || typeof value !== 'object' || value.schema !== DEV_SESSION_HANDOFF_SCHEMA) {
+    throw new TypeError('dev pre-spawn handoff evidence has an unsupported schema');
+  }
+  const attribution = validateHandoffAttribution(value.attribution);
+  const origin = new URL(requiredString(value.origin, 'dev handoff origin')).origin;
+  if (origin !== value.origin) throw new TypeError('dev handoff origin must be canonical');
+  const check = value.check;
+  if (
+    check === null ||
+    typeof check !== 'object' ||
+    check.sequence !== 1 ||
+    !finiteNonNegative(check.durationMs) ||
+    !(check.probeError === null || boundedEvidenceString(check.probeError)) ||
+    !Array.isArray(check.addresses)
+  ) {
+    throw new TypeError('dev pre-spawn handoff check evidence is malformed');
+  }
+  validateIsoTimestamp(check.checkedAt, 'dev handoff check timestamp');
+  let observation;
+  if (check.probeError === null) {
+    observation = validatePortAvailabilityObservation({
+      addresses: check.addresses,
+      available: value.available,
+    });
+  } else {
+    if (check.addresses.length !== 0 || value.available !== false) {
+      throw new TypeError('failed dev handoff probe cannot claim address availability');
+    }
+    observation = { addresses: [], available: false };
+  }
+  if (typeof value.complete !== 'boolean' || value.complete !== observation.available) {
+    throw new TypeError('dev pre-spawn handoff completion disagrees with its address evidence');
+  }
+  if (
+    (value.complete && value.error !== null) ||
+    (!value.complete && !boundedEvidenceString(value.error))
+  ) {
+    throw new TypeError('dev pre-spawn handoff error posture is malformed');
+  }
+  const socketEvidence =
+    value.socketEvidence === null ? null : validateSocketOwnerEvidence(value.socketEvidence);
+  if (
+    socketEvidence !== null &&
+    !sameAddressIdentities(
+      socketEvidence.busyAddresses,
+      observation.addresses.filter((address) => address.supported && !address.available),
+    )
+  ) {
+    throw new TypeError('socket-owner evidence does not match the busy handoff addresses');
+  }
+  return {
+    attribution,
+    available: observation.available,
+    check: {
+      addresses: observation.addresses,
+      checkedAt: check.checkedAt,
+      durationMs: check.durationMs,
+      probeError: check.probeError,
+      sequence: 1,
+    },
+    complete: value.complete,
+    error: value.error,
+    origin,
+    schema: DEV_SESSION_HANDOFF_SCHEMA,
+    socketEvidence,
+  };
+}
+
+/** Collect bounded Linux kernel socket state and correlate its inode with safe process identity. */
+export async function collectLinuxSocketOwnerEvidence(options, dependencies = {}) {
+  const platform = dependencies.platform ?? process.platform;
+  const origin = new URL(requiredString(options.origin, 'socket evidence origin')).origin;
+  const port = Number(new URL(origin).port || (new URL(origin).protocol === 'https:' ? 443 : 80));
+  const busyAddresses = options.busyAddresses.map((address) => ({
+    address: address.address,
+    errorCode: address.errorCode,
+    family: address.family,
+  }));
+  if (platform !== 'linux') {
+    return validateSocketOwnerEvidence({
+      busyAddresses,
+      census: { fdLinksInspected: 0, processesInspected: 0, socketRecords: 0 },
+      complete: false,
+      limitations: [`socket owner census is unavailable on ${boundedEvidenceMessage(platform)}`],
+      origin,
+      platform,
+      schema: DEV_SOCKET_OWNER_EVIDENCE_SCHEMA,
+      sockets: [],
+    });
+  }
+
+  const readBounded = dependencies.readBoundedFile ?? readBoundedFile;
+  const listDirectory = dependencies.listDirectory ?? ((target) => readdir(target));
+  const readLink = dependencies.readLink ?? readlink;
+  const limitations = new Set();
+  const sockets = [];
+  for (const [family, target] of [
+    [4, '/proc/net/tcp'],
+    [6, '/proc/net/tcp6'],
+  ]) {
+    try {
+      const snapshot = await readBounded(target, DEV_SOCKET_EVIDENCE_MAX_BYTES);
+      if (snapshot.truncated) limitations.add(`${target} exceeded the bounded evidence read`);
+      sockets.push(...parseLinuxSocketTable(snapshot.bytes.toString('utf8'), family, port));
+    } catch (error) {
+      limitations.add(
+        `${target} could not be read: ${boundedEvidenceMessage(errorMessage(error))}`,
+      );
+    }
+  }
+  sockets.sort(compareSocketEvidence);
+  if (sockets.length > DEV_SOCKET_EVIDENCE_MAX_RECORDS) {
+    sockets.length = DEV_SOCKET_EVIDENCE_MAX_RECORDS;
+    limitations.add('matching kernel socket records exceeded the evidence bound');
+  }
+  if (sockets.length === 0) {
+    limitations.add('no matching kernel socket row remained after the busy bind check');
+  }
+
+  const relevantInodes = new Set(
+    sockets.map((socket) => socket.inode).filter((inode) => inode !== '0'),
+  );
+  const owners = new Map([...relevantInodes].map((inode) => [inode, []]));
+  let fdLinksInspected = 0;
+  let processesInspected = 0;
+  if (relevantInodes.size > 0) {
+    let processNames = [];
+    try {
+      processNames = (await listDirectory('/proc'))
+        .filter((entry) => /^\d+$/u.test(entry))
+        .sort((left, right) => Number(left) - Number(right));
+    } catch (error) {
+      limitations.add(
+        `process census could not be listed: ${boundedEvidenceMessage(errorMessage(error))}`,
+      );
+    }
+    if (processNames.length > DEV_SOCKET_EVIDENCE_MAX_PROCESSES) {
+      processNames.length = DEV_SOCKET_EVIDENCE_MAX_PROCESSES;
+      limitations.add('process census exceeded the evidence bound');
+    }
+    for (const processName of processNames) {
+      processesInspected += 1;
+      let descriptorNames;
+      try {
+        descriptorNames = await listDirectory(`/proc/${processName}/fd`);
+      } catch (error) {
+        if (!transientProcError(error)) {
+          limitations.add(`PID ${processName} descriptors were not observable`);
+        }
+        continue;
+      }
+      for (const descriptorName of descriptorNames) {
+        if (fdLinksInspected >= DEV_SOCKET_EVIDENCE_MAX_FDS) {
+          limitations.add('file-descriptor census exceeded the evidence bound');
+          break;
+        }
+        fdLinksInspected += 1;
+        let link;
+        try {
+          link = await readLink(`/proc/${processName}/fd/${descriptorName}`);
+        } catch (error) {
+          if (!transientProcError(error)) {
+            limitations.add(`PID ${processName} descriptor identity was not observable`);
+          }
+          continue;
+        }
+        const match = /^socket:\[(\d+)\]$/u.exec(link);
+        if (match === null || !relevantInodes.has(match[1])) continue;
+        const owner = await readSafeSocketOwner(
+          Number(processName),
+          options.priorProcessMarker ?? null,
+          { limitations, readBounded },
+        );
+        const list = owners.get(match[1]);
+        if (
+          list.length < DEV_SOCKET_EVIDENCE_MAX_RECORDS &&
+          !list.some((candidate) => candidate.pid === owner.pid)
+        ) {
+          list.push(owner);
+        }
+      }
+      if (fdLinksInspected >= DEV_SOCKET_EVIDENCE_MAX_FDS) break;
+    }
+  }
+  for (const socket of sockets) {
+    socket.owners = (owners.get(socket.inode) ?? []).toSorted(
+      (left, right) => left.pid - right.pid,
+    );
+  }
+  const evidence = {
+    busyAddresses,
+    census: { fdLinksInspected, processesInspected, socketRecords: sockets.length },
+    complete: limitations.size === 0,
+    limitations: [...limitations].slice(0, 32),
+    origin,
+    platform,
+    schema: DEV_SOCKET_OWNER_EVIDENCE_SCHEMA,
+    sockets,
+  };
+  return validateSocketOwnerEvidence(evidence);
+}
+
+export function parseLinuxSocketTable(source, family, port) {
+  if (![4, 6].includes(family)) throw new TypeError('Linux socket table family must be 4 or 6');
+  boundedInteger(port, 1, 65_535, 'Linux socket table port');
+  const records = [];
+  for (const line of String(source).split(/\r?\n/u).slice(1)) {
+    const fields = line.trim().split(/\s+/u);
+    if (fields.length < 10) continue;
+    const local = /^([0-9A-Fa-f]+):([0-9A-Fa-f]{4})$/u.exec(fields[1]);
+    if (local === null || Number.parseInt(local[2], 16) !== port) continue;
+    const stateCode = fields[3].toUpperCase();
+    const uid = Number(fields[7]);
+    const inode = fields[9];
+    if (!/^[0-9A-F]+$/u.test(stateCode) || !/^\d+$/u.test(inode)) continue;
+    records.push({
+      family,
+      inode,
+      localAddressHex: local[1].toUpperCase(),
+      localPort: port,
+      owners: [],
+      state: linuxSocketState(stateCode),
+      stateCode,
+      uid: Number.isSafeInteger(uid) && uid >= 0 ? uid : null,
+    });
+  }
+  return records;
+}
+
+export function validateSocketOwnerEvidence(value) {
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    value.schema !== DEV_SOCKET_OWNER_EVIDENCE_SCHEMA ||
+    !boundedEvidenceString(value.platform) ||
+    !Array.isArray(value.busyAddresses) ||
+    !Array.isArray(value.limitations) ||
+    !Array.isArray(value.sockets) ||
+    typeof value.complete !== 'boolean'
+  ) {
+    throw new TypeError('dev socket-owner evidence is malformed');
+  }
+  const origin = new URL(requiredString(value.origin, 'socket evidence origin')).origin;
+  if (
+    origin !== value.origin ||
+    value.busyAddresses.length < 1 ||
+    value.busyAddresses.length > 16
+  ) {
+    throw new TypeError('dev socket-owner origin/address evidence is malformed');
+  }
+  const busyAddresses = value.busyAddresses.map((address) => {
+    if (
+      address === null ||
+      typeof address !== 'object' ||
+      ![4, 6].includes(address.family) ||
+      !boundedEvidenceString(address.address) ||
+      !boundedEvidenceString(address.errorCode)
+    ) {
+      throw new TypeError('dev socket-owner busy address is malformed');
+    }
+    return { address: address.address, errorCode: address.errorCode, family: address.family };
+  });
+  const limitations = value.limitations.map((limitation) => {
+    if (!boundedEvidenceString(limitation)) {
+      throw new TypeError('dev socket-owner limitation is malformed');
+    }
+    return limitation;
+  });
+  if (limitations.length > 32 || (value.complete && limitations.length > 0)) {
+    throw new TypeError('dev socket-owner completeness disagrees with its limitations');
+  }
+  const census = value.census;
+  if (
+    census === null ||
+    typeof census !== 'object' ||
+    ![census.fdLinksInspected, census.processesInspected, census.socketRecords].every(
+      (number) => Number.isSafeInteger(number) && number >= 0,
+    ) ||
+    census.socketRecords !== value.sockets.length
+  ) {
+    throw new TypeError('dev socket-owner census is malformed');
+  }
+  if (value.sockets.length > DEV_SOCKET_EVIDENCE_MAX_RECORDS) {
+    throw new TypeError('dev socket-owner records exceed their evidence bound');
+  }
+  const sockets = value.sockets.map((socket) => validateSocketRecord(socket));
+  return {
+    busyAddresses,
+    census: { ...census },
+    complete: value.complete,
+    limitations,
+    origin,
+    platform: value.platform,
+    schema: DEV_SOCKET_OWNER_EVIDENCE_SCHEMA,
+    sockets,
+  };
+}
+
+function validateSocketRecord(socket) {
+  if (
+    socket === null ||
+    typeof socket !== 'object' ||
+    ![4, 6].includes(socket.family) ||
+    !/^\d{1,32}$/u.test(socket.inode ?? '') ||
+    !/^[0-9A-F]{8,32}$/u.test(socket.localAddressHex ?? '') ||
+    !Number.isSafeInteger(socket.localPort) ||
+    socket.localPort < 1 ||
+    socket.localPort > 65_535 ||
+    !/^[0-9A-F]{2}$/u.test(socket.stateCode ?? '') ||
+    !boundedEvidenceString(socket.state) ||
+    !(socket.uid === null || (Number.isSafeInteger(socket.uid) && socket.uid >= 0)) ||
+    !Array.isArray(socket.owners) ||
+    socket.owners.length > DEV_SOCKET_EVIDENCE_MAX_RECORDS
+  ) {
+    throw new TypeError('dev kernel socket record is malformed');
+  }
+  return {
+    family: socket.family,
+    inode: socket.inode,
+    localAddressHex: socket.localAddressHex,
+    localPort: socket.localPort,
+    owners: socket.owners.map((owner) => {
+      if (
+        owner === null ||
+        typeof owner !== 'object' ||
+        !Number.isSafeInteger(owner.pid) ||
+        owner.pid <= 0 ||
+        !boundedEvidenceString(owner.command) ||
+        ![true, false, null].includes(owner.priorSessionMarkerMatched)
+      ) {
+        throw new TypeError('dev socket owner identity is malformed');
+      }
+      return {
+        command: owner.command,
+        pid: owner.pid,
+        priorSessionMarkerMatched: owner.priorSessionMarkerMatched,
+      };
+    }),
+    state: socket.state,
+    stateCode: socket.stateCode,
+    uid: socket.uid,
+  };
+}
+
+async function readSafeSocketOwner(pid, priorProcessMarker, { limitations, readBounded }) {
+  let command = '<unavailable>';
+  try {
+    const snapshot = await readBounded(`/proc/${String(pid)}/comm`, 256);
+    if (snapshot.truncated)
+      limitations.add(`PID ${String(pid)} command exceeded its evidence bound`);
+    command = sanitizeProcessCommand(snapshot.bytes.toString('utf8'));
+  } catch (error) {
+    if (!transientProcError(error)) limitations.add(`PID ${String(pid)} command was unavailable`);
+  }
+  let priorSessionMarkerMatched = null;
+  if (priorProcessMarker !== null) {
+    validateProcessMarker(priorProcessMarker);
+    try {
+      const snapshot = await readBounded(`/proc/${String(pid)}/environ`, 256 * 1024);
+      if (snapshot.truncated) {
+        limitations.add(`PID ${String(pid)} environment exceeded the marker-check bound`);
+      } else {
+        priorSessionMarkerMatched = snapshot.bytes
+          .toString('utf8')
+          .split('\0')
+          .includes(`${priorProcessMarker}=1`);
+      }
+    } catch (error) {
+      if (!transientProcError(error)) {
+        limitations.add(`PID ${String(pid)} prior-session marker was not observable`);
+      }
+    }
+  }
+  return { command, pid, priorSessionMarkerMatched };
+}
+
+async function readBoundedFile(target, maximumBytes) {
+  boundedInteger(maximumBytes, 1, DEV_SOCKET_EVIDENCE_MAX_BYTES, 'bounded evidence bytes');
+  const handle = await open(target, 'r');
+  try {
+    const buffer = Buffer.alloc(maximumBytes + 1);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.byteLength, 0);
+    return {
+      bytes: buffer.subarray(0, Math.min(bytesRead, maximumBytes)),
+      truncated: bytesRead > maximumBytes,
+    };
+  } finally {
+    await handle.close();
+  }
+}
+
+function validateHandoffAttribution(value) {
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    !(value.from === null || validSessionLabel(value.from)) ||
+    !validSessionLabel(value.to) ||
+    !(value.priorMarkerSha256 === null || /^sha256:[0-9a-f]{64}$/u.test(value.priorMarkerSha256))
+  ) {
+    throw new TypeError('dev handoff attribution is malformed');
+  }
+  return {
+    from: value.from,
+    priorMarkerSha256: value.priorMarkerSha256,
+    to: value.to,
+  };
+}
+
+function validSessionLabel(value) {
+  return (
+    value === 'edit-session' || (typeof value === 'string' && /^ready\[\d{1,3}\]$/u.test(value))
+  );
+}
+
+function validateProcessMarker(value) {
+  if (typeof value !== 'string' || !/^KOVO_PERF_DEV_SESSION_[A-Z0-9_]+$/u.test(value)) {
+    throw new TypeError('prior dev-process marker is malformed');
+  }
+  return value;
+}
+
+function validateIsoTimestamp(value, label) {
+  if (
+    typeof value !== 'string' ||
+    value.length > 64 ||
+    !Number.isFinite(Date.parse(value)) ||
+    new Date(value).toISOString() !== value
+  ) {
+    throw new TypeError(`${label} is malformed`);
+  }
+  return value;
+}
+
+function boundedEvidenceString(value) {
+  return (
+    typeof value === 'string' && value.length > 0 && value.length <= 256 && !/[\r\n\0]/u.test(value)
+  );
+}
+
+function boundedEvidenceMessage(value) {
+  return (
+    String(value)
+      .replace(/[\r\n\0]+/gu, ' ')
+      .slice(0, 256) || '<empty>'
+  );
+}
+
+function sanitizeProcessCommand(value) {
+  return boundedEvidenceMessage(
+    String(value)
+      .trim()
+      .replace(/[^\p{L}\p{N}._:@+ -]/gu, '?'),
+  ).slice(0, 128);
+}
+
+function transientProcError(error) {
+  // A disappearing process or descriptor is an unavoidable census race. Permission failures are
+  // materially different: they mean owner identity was not observable and must remain explicit.
+  return ['ENOENT', 'ESRCH'].includes(error?.code);
+}
+
+function sameAddressIdentities(left, right) {
+  const identity = (address) =>
+    `${String(address.family)}:${address.address}:${String(address.errorCode)}`;
+  return JSON.stringify(left.map(identity).sort()) === JSON.stringify(right.map(identity).sort());
+}
+
+function compareSocketEvidence(left, right) {
+  return (
+    left.family - right.family ||
+    left.localAddressHex.localeCompare(right.localAddressHex) ||
+    left.inode.localeCompare(right.inode)
+  );
+}
+
+function linuxSocketState(code) {
+  return (
+    {
+      '01': 'ESTABLISHED',
+      '02': 'SYN_SENT',
+      '03': 'SYN_RECV',
+      '04': 'FIN_WAIT1',
+      '05': 'FIN_WAIT2',
+      '06': 'TIME_WAIT',
+      '07': 'CLOSE',
+      '08': 'CLOSE_WAIT',
+      '09': 'LAST_ACK',
+      '0A': 'LISTEN',
+      '0B': 'CLOSING',
+      '0C': 'NEW_SYN_RECV',
+    }[code] ?? `UNKNOWN_${code}`
+  );
+}
+
 function startDevSession({ appRoot, command, inspectorPort = null, spawnProcess }) {
   const invocation = profiledDevInvocation(command, inspectorPort);
   const processMarker = createDevProcessMarker();
@@ -1346,6 +2029,7 @@ function startDevSession({ appRoot, command, inspectorPort = null, spawnProcess 
     logCount: () => events.length,
     logTail: () => tail.slice(-8_192),
     pid: child.pid,
+    processMarker,
     async stop() {
       stopPromise ??= stopDevProcessTree({
         marker: processMarker,
@@ -2085,6 +2769,9 @@ function validateDevContract(dev) {
 }
 
 function validateEditStatePosture(manifest) {
+  if (manifest.workload?.devPortAllocationPosture !== DEV_PORT_ALLOCATION_POSTURE) {
+    throw new TypeError('Corpus workload does not authenticate unique per-session dev ports.');
+  }
   if (manifest.workload?.editSavePosture !== EDIT_SAVE_POSTURE) {
     throw new TypeError('Corpus workload does not authenticate the atomic edit/save posture.');
   }
@@ -2227,6 +2914,7 @@ function createReportSkeleton({
       editRefreshSurfaces: manifest.workload.editRefreshSurfaces,
       editSavePosture: manifest.workload.editSavePosture,
       editStatePosture: manifest.workload.editStatePosture,
+      devPortAllocationPosture: manifest.workload.devPortAllocationPosture,
       manifestDigest,
       manifestPath,
       modules: manifest.modules,
@@ -2259,6 +2947,7 @@ function createReportSkeleton({
       corpus: { afterVerified: false, beforeVerified: false },
       editCounts: Object.fromEntries(ALL_EDIT_CLASSES.map((editClass) => [editClass, 0])),
       errors: [],
+      handoffs: [],
       iterations,
       misses: 0,
       readyIterations,
@@ -2358,6 +3047,51 @@ export function sourceStabilityFindings(before, after) {
 export function exactSampleCountFindings(report) {
   const findings = [];
   const counts = Object.fromEntries(ALL_EDIT_CLASSES.map((editClass) => [editClass, 0]));
+  const expectedHandoffTargets = [
+    ...Array.from(
+      { length: report.integrity.readyIterations },
+      (_, iteration) => `ready[${String(iteration)}]`,
+    ),
+    'edit-session',
+  ];
+  const allocation = report.integrity.portAllocation;
+  const expectedPorts = Array.from(
+    { length: expectedHandoffTargets.length },
+    (_, index) => allocation?.basePort + index,
+  );
+  if (
+    allocation?.posture !== DEV_PORT_ALLOCATION_POSTURE ||
+    !Number.isSafeInteger(allocation?.basePort) ||
+    JSON.stringify(allocation?.ports) !== JSON.stringify(expectedPorts) ||
+    new Set(expectedPorts).size !== expectedPorts.length
+  ) {
+    findings.push('per-session dev port allocation is incomplete');
+  }
+  if (report.integrity.handoffs?.length !== expectedHandoffTargets.length) {
+    findings.push(
+      `pre-spawn handoff count ${String(report.integrity.handoffs?.length ?? 0)} did not equal ${String(expectedHandoffTargets.length)}`,
+    );
+  }
+  for (const [index, target] of expectedHandoffTargets.entries()) {
+    const raw = report.integrity.handoffs?.[index];
+    try {
+      const handoff = validateDevSessionHandoffEvidence(raw);
+      const expectedFrom = index === 0 ? null : expectedHandoffTargets[index - 1];
+      if (
+        handoff.complete !== true ||
+        Number(new URL(handoff.origin).port) !== expectedPorts[index] ||
+        handoff.attribution.from !== expectedFrom ||
+        handoff.attribution.to !== target ||
+        (index === 0
+          ? handoff.attribution.priorMarkerSha256 !== null
+          : handoff.attribution.priorMarkerSha256 === null)
+      ) {
+        findings.push(`pre-spawn handoff ${target} is incomplete or misattributed`);
+      }
+    } catch {
+      findings.push(`pre-spawn handoff ${target} is malformed`);
+    }
+  }
   if (report.readySamples.length !== report.integrity.readyIterations) {
     findings.push(
       `ready sample count ${String(report.readySamples.length)} did not equal ${String(report.integrity.readyIterations)}`,
@@ -2373,7 +3107,8 @@ export function exactSampleCountFindings(report) {
       sample.browserContextClosed !== true ||
       !validReadyRouteProbe(sample.readinessProbe) ||
       sample.lifecycle?.schema !== DEV_SESSION_STOP_SCHEMA ||
-      sample.lifecycle.complete !== true
+      sample.lifecycle.complete !== true ||
+      originPortOrNull(sample.lifecycle?.origin) !== expectedPorts[index]
     ) {
       findings.push(`ready sample ${String(index)} is incomplete`);
     }
@@ -2382,7 +3117,8 @@ export function exactSampleCountFindings(report) {
     report.editSession?.lifecycle?.schema !== DEV_SESSION_STOP_SCHEMA ||
     report.editSession.lifecycle.complete !== true ||
     report.editSession.browserContextClosed !== true ||
-    !validReadyRouteProbe(report.editSession.readinessProbe)
+    !validReadyRouteProbe(report.editSession.readinessProbe) ||
+    originPortOrNull(report.editSession.lifecycle.origin) !== expectedPorts.at(-1)
   ) {
     findings.push('edit session readiness or lifecycle is incomplete');
   }
@@ -2602,11 +3338,15 @@ export function normalizeDevLoopOptions(options) {
     ),
     warmups: boundedInteger(options.warmups, 0, 10, 'warmups'),
   };
+  if (normalized.port + normalized.readyIterations > 65_535) {
+    throw new TypeError('port range cannot allocate one exact port per dev session.');
+  }
   if (
     normalized.diagnosticProfile !== null &&
-    normalized.diagnosticProfile.inspectorPort === normalized.port
+    normalized.diagnosticProfile.inspectorPort >= normalized.port &&
+    normalized.diagnosticProfile.inspectorPort <= normalized.port + normalized.readyIterations
   ) {
-    throw new TypeError('inspector port must differ from the dev server port.');
+    throw new TypeError('inspector port must differ from every per-session dev server port.');
   }
   return normalized;
 }
@@ -2668,8 +3408,10 @@ function failureReport(error, options) {
       corpus: { afterVerified: false, beforeVerified: false },
       editCounts: Object.fromEntries(ALL_EDIT_CLASSES.map((editClass) => [editClass, 0])),
       errors: [errorMessage(error)],
+      handoffs: [],
       iterations: options?.iterations ?? null,
       misses: 1,
+      portAllocation: null,
       readyIterations: options?.readyIterations ?? null,
       source: null,
       warmups: options?.warmups ?? null,
@@ -2735,6 +3477,15 @@ function boundedInteger(value, minimum, maximum, label) {
     throw new TypeError(`${label} must be an integer from ${minimum} through ${maximum}.`);
   }
   return value;
+}
+
+function originPortOrNull(value) {
+  try {
+    const port = Number(new URL(value).port);
+    return Number.isSafeInteger(port) && port > 0 ? port : null;
+  } catch {
+    return null;
+  }
 }
 
 function finiteNonNegative(value) {

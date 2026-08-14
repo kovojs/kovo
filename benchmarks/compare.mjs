@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { readArg, readIntegerArg } from './harness/args.mjs';
 import { bfcacheIterationFindings } from './harness/bfcache.mjs';
 import { BROWSER_BENCHMARK_SCHEMA } from './harness/schema.mjs';
+import { DEV_PORT_ALLOCATION_POSTURE, DEV_SESSION_PORT_STRIDE } from './corpora/generate.mjs';
 import {
   canonicalJson,
   PERF_HOST_SCHEMA,
@@ -17,6 +18,7 @@ import {
   validPerformanceHostFingerprint,
 } from '../scripts/lib/perf-host.mjs';
 import { collectPerformanceProvenance } from '../scripts/lib/perf-provenance.mjs';
+import { devSessionHandoffFindings } from '../scripts/lib/perf-dev-session-evidence.mjs';
 import {
   executionIdentityFindings,
   performanceExecutionIdentity,
@@ -74,6 +76,18 @@ export async function runComparison(options = {}) {
         warmups: options.devWarmups ?? 3,
       })
     : [];
+  const devPortBase = options.devPortBase ?? 49_700;
+  if (!Number.isSafeInteger(devPortBase) || devPortBase < 1_024) {
+    throw new TypeError('dev port base must be an integer at or above 1024');
+  }
+  if (
+    devSchedule.some(
+      ({ readySamples, scheduleIndex }) =>
+        devPortBase + scheduleIndex * DEV_SESSION_PORT_STRIDE + readySamples > 65_535,
+    )
+  ) {
+    throw new TypeError('dev port ranges exceed 65535');
+  }
   const workloadIdentity = await performanceWorkloadIdentity(options, cells);
   const provenance = collectPerformanceProvenance({
     lockFiles,
@@ -217,7 +231,7 @@ export async function runComparison(options = {}) {
               '--warmups',
               String(scheduled.warmups),
               '--port',
-              String((options.devPortBase ?? 49_700) + scheduleIndex),
+              String(devPortBase + scheduleIndex * DEV_SESSION_PORT_STRIDE),
               '--out',
               resultFile,
             ],
@@ -425,6 +439,7 @@ export async function runComparison(options = {}) {
           bfcacheIterations: options.bfcacheIterations ?? 10,
           devIterations: options.devIterations ?? 30,
           devOccurrenceSchedule: devSchedule,
+          devPortBase,
           devReadyIterations: options.devReadyIterations ?? 15,
           devWarmups: options.devWarmups ?? 3,
           iterations,
@@ -461,6 +476,9 @@ export async function runComparison(options = {}) {
         devEditSamples: options.devIterations ?? 30,
         devEditSessionSamples: devSchedule.filter(({ framework }) => framework === 'kovo').length,
         devOccurrenceSchedule: devSchedule,
+        devPortAllocationPosture: DEV_PORT_ALLOCATION_POSTURE,
+        devPortBase,
+        devPortStride: DEV_SESSION_PORT_STRIDE,
         devReadySamples: options.devReadyIterations ?? 15,
         devWarmups: options.devWarmups ?? 3,
         lighthouseRunsPerCell: options.lighthouseRuns ?? 5,
@@ -1105,6 +1123,7 @@ async function comparatorIntegrity(cells, policy) {
           } else {
             validateDevCell(occurrence, {
               iterations: scheduledDev.editSamples,
+              devPortBase: policy.devPortBase,
               readyIterations: scheduledDev.readySamples,
               reasons,
               schedule: scheduledDev,
@@ -1321,6 +1340,9 @@ function validateDevCell(cell, expected) {
   const key = `${cell.lane}/${cell.framework}/dev`;
   if (report?.framework !== cell.framework)
     expected.reasons.push(`${key} report identity mismatch`);
+  if (report?.integrity?.complete !== true || report?.verdict?.status !== 'measured') {
+    expected.reasons.push(`${key} adapter evidence is unproven`);
+  }
   if (report?.integrity?.iterations !== expected.iterations)
     expected.reasons.push(`${key} iteration policy mismatch`);
   if (report?.integrity?.readyIterations !== expected.readyIterations)
@@ -1332,6 +1354,13 @@ function validateDevCell(cell, expected) {
   if (JSON.stringify(cell.schedule) !== JSON.stringify(expected.schedule)) {
     expected.reasons.push(`${key} occurrence schedule mismatch`);
   }
+  const basePort = expected.devPortBase + expected.schedule.scheduleIndex * DEV_SESSION_PORT_STRIDE;
+  expected.reasons.push(
+    ...devSessionHandoffFindings(report, {
+      basePort,
+      readyIterations: expected.readyIterations,
+    }).map((finding) => `${key} ${finding}`),
+  );
   if (
     report?.sourceAfter?.commit !== report?.source?.commit ||
     JSON.stringify(report?.sourceAfter?.locks) !== JSON.stringify(report?.source?.locks) ||
@@ -1751,6 +1780,9 @@ export async function performanceWorkloadIdentity(
       devEditSamples: options.devIterations ?? 30,
       devEditSessionSamples: devSchedule.filter(({ framework }) => framework === 'kovo').length,
       devOccurrenceSchedule: devSchedule,
+      devPortAllocationPosture: DEV_PORT_ALLOCATION_POSTURE,
+      devPortBase: options.devPortBase ?? 49_700,
+      devPortStride: DEV_SESSION_PORT_STRIDE,
       devReadySamples: options.devReadyIterations ?? 15,
       devWarmups: options.devWarmups ?? 3,
       lighthouseRuns: options.lighthouseRuns ?? 5,
@@ -1819,7 +1851,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     devIterations: readIntegerArg('--dev-iterations', { fallback: 30, max: 100 }),
     devPortBase: readIntegerArg('--dev-port-base', {
       fallback: 49_700,
-      max: 65_500,
+      max: 65_024,
       min: 1_024,
     }),
     devReadyIterations: readIntegerArg('--dev-ready-iterations', { fallback: 15, max: 100 }),

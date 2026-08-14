@@ -4,7 +4,12 @@ import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import {
+  DEV_PORT_ALLOCATION_POSTURE,
+  DEV_SESSION_PORT_STRIDE,
+} from '../benchmarks/corpora/generate.mjs';
 import { executionIdentityFindings } from './lib/perf-execution.mjs';
+import { devSessionHandoffFindings } from './lib/perf-dev-session-evidence.mjs';
 import { validReadyRouteProbe } from './lib/perf-ready-route.mjs';
 import { ratifyPerformanceBaseline } from './perf-baseline-ratify.mjs';
 import {
@@ -502,6 +507,15 @@ function devWorkloadFindings(identity) {
   if (canonicalJson(policies?.devOccurrenceSchedule) !== canonicalJson(expectedDevSchedule())) {
     findings.push('workload dev occurrence schedule is not the exact K,N,N,K split');
   }
+  if (
+    policies?.devPortAllocationPosture !== DEV_PORT_ALLOCATION_POSTURE ||
+    policies?.devPortStride !== DEV_SESSION_PORT_STRIDE ||
+    !Number.isSafeInteger(policies?.devPortBase) ||
+    policies.devPortBase < 1_024 ||
+    policies.devPortBase + 3 * DEV_SESSION_PORT_STRIDE + 100 > 65_535
+  ) {
+    findings.push('workload unique per-session dev port policy is incomplete');
+  }
   const kovoCorpus = identity?.corpus?.kovo;
   const nextCorpus = identity?.corpus?.nextjs;
   if (
@@ -539,6 +553,20 @@ function devRawEvidenceFindings(report, corpusSize) {
     if (canonicalJson(cell.schedule) !== canonicalJson(expectedSchedule)) {
       findings.push(
         `candidate ${String(cell.framework)} dev occurrence ${String(cell.occurrence)} schedule is invalid`,
+      );
+    }
+    if (expectedSchedule !== undefined) {
+      const expectedBasePort =
+        report?.workloadIdentity?.identity?.policies?.devPortBase +
+        expectedSchedule.scheduleIndex * DEV_SESSION_PORT_STRIDE;
+      findings.push(
+        ...devSessionHandoffFindings(devReport, {
+          basePort: expectedBasePort,
+          readyIterations: expectedSchedule.readySamples,
+        }).map(
+          (finding) =>
+            `candidate ${cell.framework} dev occurrence ${String(cell.occurrence)} ${finding}`,
+        ),
       );
     }
     const frameworkTotals = totals[cell.framework];

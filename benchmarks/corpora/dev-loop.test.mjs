@@ -7,27 +7,32 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   assertBrowserErrorOverlayAbsent,
   atomicReplaceCorpusSource,
   collectPageTelemetry,
+  collectLinuxSocketOwnerEvidence,
   collectEntrantVersions,
   dependencyRootForDevCommand,
   devLoopIntegrityComplete,
   devLoopVerdictStatus,
   DEV_LOOP_REPORT_SCHEMA,
+  DEV_SESSION_HANDOFF_SCHEMA,
   DEV_SESSION_STOP_SCHEMA,
+  DEV_SOCKET_OWNER_EVIDENCE_SCHEMA,
   diagnosticProfileFindings,
   establishState,
   exactSampleCountFindings,
   freshReadySeriesCanContinue,
   loadCorpusManifest,
+  launchDevSessionAfterHandoff,
   measureFreshReady,
   measureSyntaxAndRecovery,
   normalizeDevLoopOptions,
   parseDevLoopArgs,
+  parseLinuxSocketTable,
   profileEditToPaint,
   probeOriginPortAvailability,
   profiledDevInvocation,
@@ -35,6 +40,8 @@ import {
   sourceStabilityFindings,
   stopDevProcessTree,
   summarizeNumbers,
+  validateDevSessionHandoffEvidence,
+  validateSocketOwnerEvidence,
   verifyCorpusSources,
   waitForReadyPage,
 } from './dev-loop.mjs';
@@ -371,7 +378,7 @@ describe('single-entrant developer-loop adapter', () => {
       '--profile-dir',
       '/tmp/kovo-dev-profile',
       '--inspector-port',
-      '49121',
+      '49122',
       '--out',
       '/tmp/report.json',
     ]);
@@ -533,13 +540,13 @@ describe('single-entrant developer-loop adapter', () => {
         '--profile-dir',
         '/tmp/kovo-dev-profile',
         '--inspector-port',
-        '49121',
+        '49122',
         '--out',
         '/tmp/report.json',
       ]),
     ).toMatchObject({
       diagnosticProfile: {
-        inspectorPort: 49_121,
+        inspectorPort: 49_122,
         profileDir: '/tmp/kovo-dev-profile',
       },
     });
@@ -647,6 +654,267 @@ describe('single-entrant developer-loop adapter', () => {
     integrity.browser.requestFailedCount = 1;
     expect(devLoopIntegrityComplete(integrity)).toBe(false);
     expect(devLoopVerdictStatus(devLoopIntegrityComplete(integrity), false)).toBe('unproven');
+  });
+
+  it('refuses a spawn when IPv6 becomes busy immediately after a stable teardown', async () => {
+    const teardownClock = fakeLifecycleClock();
+    const lifecycle = await stopDevProcessTree(
+      {
+        marker: 'KOVO_PERF_DEV_SESSION_PRIOR',
+        origin: 'http://localhost:49120',
+        pid: 9_001,
+      },
+      {
+        ...teardownClock,
+        portAvailability: async () => dualStackPortObservation(),
+        portStabilityWindowMs: 500,
+        processGroupAlive: async () => false,
+        signalMarkedProcesses: emptyMarkedProcessCensus,
+        terminateProcessGroup: () => undefined,
+      },
+    );
+    expect(lifecycle.port).toMatchObject({ available: true, stableMs: 500 });
+
+    const spawnProcess = vi.fn();
+    const launch = await launchDevSessionAfterHandoff(
+      handoffLaunchOptions({
+        origin: 'http://localhost:49120',
+        priorProcessMarker: 'KOVO_PERF_DEV_SESSION_PRIOR',
+        priorSession: 'ready[0]',
+        spawnProcess,
+        targetSession: 'ready[1]',
+      }),
+      {
+        collectSocketEvidence: async () => socketOwnerEvidenceFixture(),
+        now: monotonicTestClock(),
+        portAvailability: async () => dualStackPortObservation({ ipv6Available: false }),
+        wallNow: () => '2026-08-13T00:00:00.000Z',
+      },
+    );
+
+    expect(spawnProcess).not.toHaveBeenCalled();
+    expect(launch).toMatchObject({
+      handoff: {
+        attribution: { from: 'ready[0]', to: 'ready[1]' },
+        available: false,
+        complete: false,
+        schema: DEV_SESSION_HANDOFF_SCHEMA,
+        socketEvidence: {
+          complete: true,
+          sockets: [
+            expect.objectContaining({
+              state: 'LISTEN',
+              owners: [expect.objectContaining({ priorSessionMarkerMatched: true })],
+            }),
+          ],
+        },
+      },
+      session: null,
+      started: null,
+    });
+    expect(launch.handoff.error).toContain('no process was spawned');
+  });
+
+  it('attributes first-start collisions without killing or launching an arbitrary owner', async () => {
+    const spawnProcess = vi.fn();
+    const launch = await launchDevSessionAfterHandoff(
+      handoffLaunchOptions({
+        origin: 'http://localhost:49130',
+        priorProcessMarker: null,
+        priorSession: null,
+        spawnProcess,
+        targetSession: 'ready[0]',
+      }),
+      {
+        collectSocketEvidence: async () =>
+          socketOwnerEvidenceFixture({ origin: 'http://localhost:49130' }),
+        now: monotonicTestClock(),
+        portAvailability: async () => dualStackPortObservation({ ipv6Available: false }),
+        wallNow: () => '2026-08-13T00:00:00.000Z',
+      },
+    );
+
+    expect(spawnProcess).not.toHaveBeenCalled();
+    expect(launch.handoff.attribution).toEqual({
+      from: null,
+      priorMarkerSha256: null,
+      to: 'ready[0]',
+    });
+    expect(launch.handoff.error).toContain('initial -> ready[0]');
+  });
+
+  it('uses a new exact port so a prior late rebind cannot collide with the next session', async () => {
+    const startedOrigins = [];
+    const busyPorts = new Set();
+    const dependencies = {
+      now: monotonicTestClock(),
+      portAvailability: async (origin) => {
+        const port = Number(new URL(origin).port);
+        return dualStackPortObservation({
+          ipv4Available: !busyPorts.has(port),
+          ipv6Available: !busyPorts.has(port),
+        });
+      },
+      startSession: ({ command }) => {
+        startedOrigins.push(command.origin);
+        return { pid: 7_001, processMarker: 'KOVO_PERF_DEV_SESSION_NEW' };
+      },
+      wallNow: () => '2026-08-13T00:00:00.000Z',
+    };
+    const first = await launchDevSessionAfterHandoff(
+      handoffLaunchOptions({ origin: 'http://localhost:49140', targetSession: 'ready[0]' }),
+      dependencies,
+    );
+    expect(first.session).not.toBeNull();
+    busyPorts.add(49_140);
+    const second = await launchDevSessionAfterHandoff(
+      handoffLaunchOptions({
+        origin: 'http://localhost:49141',
+        priorProcessMarker: first.session.processMarker,
+        priorSession: 'ready[0]',
+        targetSession: 'ready[1]',
+      }),
+      dependencies,
+    );
+
+    expect(second.session).not.toBeNull();
+    expect(startedOrigins).toEqual(['http://localhost:49140', 'http://localhost:49141']);
+  });
+
+  it('allows an unavailable IPv6 stack but fails closed on probe errors', async () => {
+    const startSession = vi.fn(() => ({
+      pid: 7_002,
+      processMarker: 'KOVO_PERF_DEV_SESSION_SUPPORTED',
+    }));
+    const supported = await launchDevSessionAfterHandoff(
+      handoffLaunchOptions({ origin: 'http://localhost:49150', targetSession: 'ready[0]' }),
+      {
+        now: monotonicTestClock(),
+        portAvailability: async () =>
+          dualStackPortObservation({ ipv6ErrorCode: 'EAFNOSUPPORT', ipv6Supported: false }),
+        startSession,
+        wallNow: () => '2026-08-13T00:00:00.000Z',
+      },
+    );
+    expect(supported.handoff.complete).toBe(true);
+    expect(startSession).toHaveBeenCalledOnce();
+
+    startSession.mockClear();
+    const failed = await launchDevSessionAfterHandoff(
+      handoffLaunchOptions({ origin: 'http://localhost:49151', targetSession: 'ready[0]' }),
+      {
+        now: monotonicTestClock(),
+        portAvailability: async () => {
+          throw new Error('synthetic probe failure');
+        },
+        startSession,
+        wallNow: () => '2026-08-13T00:00:00.000Z',
+      },
+    );
+    expect(failed.session).toBeNull();
+    expect(failed.handoff.check).toMatchObject({
+      addresses: [],
+      probeError: 'synthetic probe failure',
+    });
+    expect(startSession).not.toHaveBeenCalled();
+  });
+
+  it('validates bounded kernel socket state and owner identity without retaining argv or env', async () => {
+    const table = [
+      '  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode',
+      '   0: 00000000000000000000000001000000:BFF0 00000000000000000000000000000000:0000 0A 00000000:00000000 00:00000000 00000000  501 0 424242 1 0000000000000000 100 0 0 10 0',
+    ].join('\n');
+    expect(parseLinuxSocketTable(table, 6, 49_136)).toEqual([
+      expect.objectContaining({ family: 6, inode: '424242', state: 'LISTEN', stateCode: '0A' }),
+    ]);
+
+    const priorMarker = 'KOVO_PERF_DEV_SESSION_OWNER';
+    const evidence = await collectLinuxSocketOwnerEvidence(
+      {
+        busyAddresses: [
+          { address: '::1', available: false, errorCode: 'EADDRINUSE', family: 6, supported: true },
+        ],
+        origin: 'http://localhost:49136',
+        priorProcessMarker: priorMarker,
+      },
+      {
+        listDirectory: async (target) => {
+          if (target === '/proc') return ['8100'];
+          if (target === '/proc/8100/fd') return ['7'];
+          throw new Error(`unexpected directory ${target}`);
+        },
+        platform: 'linux',
+        readBoundedFile: async (target) => {
+          if (target === '/proc/net/tcp')
+            return { bytes: Buffer.from('header\n'), truncated: false };
+          if (target === '/proc/net/tcp6') return { bytes: Buffer.from(table), truncated: false };
+          if (target === '/proc/8100/comm')
+            return { bytes: Buffer.from('node\n'), truncated: false };
+          if (target === '/proc/8100/environ') {
+            return { bytes: Buffer.from(`SAFE=1\0${priorMarker}=1\0`), truncated: false };
+          }
+          throw new Error(`unexpected file ${target}`);
+        },
+        readLink: async () => 'socket:[424242]',
+      },
+    );
+    expect(evidence).toMatchObject({
+      complete: true,
+      schema: DEV_SOCKET_OWNER_EVIDENCE_SCHEMA,
+      sockets: [
+        {
+          owners: [{ command: 'node', pid: 8_100, priorSessionMarkerMatched: true }],
+          state: 'LISTEN',
+        },
+      ],
+    });
+    expect(JSON.stringify(evidence)).not.toContain('SAFE=1');
+    expect(JSON.stringify(evidence)).not.toContain(priorMarker);
+
+    const malformed = socketOwnerEvidenceFixture();
+    malformed.sockets[0].owners[0].priorSessionMarkerMatched = 'yes';
+    expect(() => validateSocketOwnerEvidence(malformed)).toThrow('socket owner identity');
+    const handoff = completeHandoffFixture(49_120, 0, 1);
+    handoff.available = false;
+    expect(() => validateDevSessionHandoffEvidence(handoff)).toThrow('summary disagrees');
+  });
+
+  it('records Linux owner-census permission failures as explicit limitations', async () => {
+    const table = [
+      '  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode',
+      '   0: 0100007F:BFF1 00000000:0000 0A 00000000:00000000 00:00000000 00000000  501 0 424243',
+    ].join('\n');
+    const denied = Object.assign(new Error('denied'), { code: 'EACCES' });
+    const evidence = await collectLinuxSocketOwnerEvidence(
+      {
+        busyAddresses: [
+          {
+            address: '127.0.0.1',
+            available: false,
+            errorCode: 'EADDRINUSE',
+            family: 4,
+            supported: true,
+          },
+        ],
+        origin: 'http://localhost:49137',
+        priorProcessMarker: 'KOVO_PERF_DEV_SESSION_OWNER_DENIED',
+      },
+      {
+        listDirectory: async (target) => {
+          if (target === '/proc') return ['8101'];
+          if (target === '/proc/8101/fd') throw denied;
+          throw new Error(`unexpected directory ${target}`);
+        },
+        platform: 'linux',
+        readBoundedFile: async (target) => ({
+          bytes: Buffer.from(target === '/proc/net/tcp' ? table : 'header\n'),
+          truncated: false,
+        }),
+      },
+    );
+
+    expect(evidence).toMatchObject({ complete: false, sockets: [expect.any(Object)] });
+    expect(evidence.limitations).toContain('PID 8101 descriptors were not observable');
   });
 
   it('proves graceful quiescence and a stable dual-stack exact-port window', async () => {
@@ -1555,16 +1823,26 @@ function completeCountFixture() {
   return {
     editSession: {
       browserContextClosed: true,
-      lifecycle: completeLifecycleFixture(),
+      lifecycle: completeLifecycleFixture(49_121),
       readinessProbe: completeReadinessProbe(),
     },
-    integrity: { editCounts: {}, iterations: 2, readyIterations: 1 },
+    integrity: {
+      editCounts: {},
+      handoffs: [completeHandoffFixture(49_120, 0, 1), completeHandoffFixture(49_121, 1, 1)],
+      iterations: 2,
+      portAllocation: {
+        basePort: 49_120,
+        ports: [49_120, 49_121],
+        posture: 'unique-exact-port-per-session/v1',
+      },
+      readyIterations: 1,
+    },
     readySamples: [
       {
         durationMs: 10,
         browserContextClosed: true,
         iteration: 0,
-        lifecycle: completeLifecycleFixture(),
+        lifecycle: completeLifecycleFixture(49_120),
         peakRssBytes: 1,
         readinessProbe: completeReadinessProbe(),
         success: true,
@@ -1578,9 +1856,10 @@ function completeReadinessProbe() {
   return { attempts: 2, path: '/', status: 200, transientFailures: 1 };
 }
 
-function completeLifecycleFixture() {
+function completeLifecycleFixture(port = 49_120) {
   return {
     complete: true,
+    origin: `http://localhost:${String(port)}`,
     schema: DEV_SESSION_STOP_SCHEMA,
   };
 }
@@ -1613,6 +1892,83 @@ function freshReadyMeasurementOptions({
     readyTimeoutMs: 1_000,
     spawnProcess: () => undefined,
   };
+}
+
+function completeHandoffFixture(port, index, readyIterations) {
+  return {
+    attribution: {
+      from: index === 0 ? null : `ready[${String(index - 1)}]`,
+      priorMarkerSha256: index === 0 ? null : `sha256:${'a'.repeat(64)}`,
+      to: index === readyIterations ? 'edit-session' : `ready[${String(index)}]`,
+    },
+    available: true,
+    check: {
+      addresses: [
+        {
+          address: '127.0.0.1',
+          available: true,
+          errorCode: null,
+          family: 4,
+          supported: true,
+        },
+      ],
+      checkedAt: '2026-08-13T00:00:00.000Z',
+      durationMs: 1,
+      probeError: null,
+      sequence: 1,
+    },
+    complete: true,
+    error: null,
+    origin: `http://localhost:${String(port)}`,
+    schema: 'kovo-dev-session-handoff/v1',
+    socketEvidence: null,
+  };
+}
+
+function handoffLaunchOptions({
+  origin,
+  priorProcessMarker = null,
+  priorSession = null,
+  spawnProcess = vi.fn(),
+  targetSession,
+}) {
+  return {
+    appRoot: '/tmp/kovo-handoff-test',
+    command: { argv: ['dev'], cwd: '/tmp/kovo-handoff-test', env: {}, origin },
+    priorProcessMarker,
+    priorSession,
+    spawnProcess,
+    targetSession,
+  };
+}
+
+function socketOwnerEvidenceFixture({ origin = 'http://localhost:49120' } = {}) {
+  return {
+    busyAddresses: [{ address: '::1', errorCode: 'EADDRINUSE', family: 6 }],
+    census: { fdLinksInspected: 1, processesInspected: 1, socketRecords: 1 },
+    complete: true,
+    limitations: [],
+    origin,
+    platform: 'linux',
+    schema: DEV_SOCKET_OWNER_EVIDENCE_SCHEMA,
+    sockets: [
+      {
+        family: 6,
+        inode: '424242',
+        localAddressHex: '00000000000000000000000001000000',
+        localPort: Number(new URL(origin).port),
+        owners: [{ command: 'node', pid: 8_100, priorSessionMarkerMatched: true }],
+        state: 'LISTEN',
+        stateCode: '0A',
+        uid: 501,
+      },
+    ],
+  };
+}
+
+function monotonicTestClock() {
+  let value = 0;
+  return () => value++;
 }
 
 function fakeLifecycleClock() {

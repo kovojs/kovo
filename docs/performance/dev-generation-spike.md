@@ -109,9 +109,11 @@ node scripts/perf-dev-generation-spike.mjs \
 
 The runner samples host load before every block, enforces literal `localhost`, and verifies source
 and lock stability before and after every adapter run. Raw adapter reports remain embedded in the
-comparison report and, when `--out` is used, persist beside it under `raw/`. A nonzero child report
-retains its SHA-256, byte count, schema, verdict, readiness failures, and first integrity errors so
-an outer `unproven` result remains diagnosable.
+comparison report and, when `--out` is used, persist beside it under `raw/`. A failed adapter remains
+an explicit failed schedule cell instead of disappearing from the report. The cell retains child
+process status, raw-report custody (availability, byte count, SHA-256, schema, and verdict), and a
+bounded error summary. The outer result is `unproven` unless all four serialized `B,S,S,B` cells are
+present, measured, and correct.
 
 The generated workload also authenticates `editSavePosture` as
 `posix-sibling-temp-write-rename/v1`. Every measured edit and source restoration is written to a
@@ -138,13 +140,34 @@ from older producers cannot enter a current decision.
 Every fresh-ready and edit session also has a fail-closed lifecycle fence. Teardown signals the
 entire detached dev process group, escalates to `SIGKILL` when necessary, and globally censuses an
 unforgeable inherited session marker to catch detached or reparented descendants. Two empty marker
-censuses are required before the runner repeatedly reserves both `127.0.0.1` and `::1` on the same
-authenticated `localhost` port. Every supported address must remain available throughout a sampled
-500 ms stability window; a busy sample resets that window, and an unavailable IPv6 stack is recorded
-explicitly rather than mistaken for a collision. Reports retain per-address availability,
-unsupported-stack, rebind, and owned-process evidence. A lingering process group or marked
-descendant, an unavailable strict port, or an unexpected census/bind error makes the adapter and
-outer report `unproven`; the runner never substitutes another port to conceal a leak.
+censuses are required before the runner repeatedly reserves both `127.0.0.1` and `::1` on the
+session's authenticated `localhost` port. Every supported address must remain available throughout a
+sampled 500 ms stability window; a busy sample resets that window, and an unavailable IPv6 stack is
+recorded explicitly rather than mistaken for a collision.
+
+Each session receives a distinct exact port from a declared range reserved to its outer schedule
+cell. The allocation is fixed before measurement (`unique-exact-port-per-session/v1`, stride 128),
+so a late rebind on an old session's port cannot collide with a later session. Immediately before a
+spawn, a dual-stack handoff check verifies the new exact port. A busy address or unexpected probe
+error prevents the spawn, attributes the boundary to the prior or initial session, aborts the
+remaining adapter samples without recording timing, and makes the result `unproven`. On Linux, busy
+handoffs retain bounded `/proc/net/tcp` and `/proc/net/tcp6` socket-state evidence plus inode-owner
+PID and safe `comm` metadata, including an exact prior-marker match. The report never retains owner
+arguments or environment. Non-Linux hosts and collection races, permission failures, truncation, or
+parse errors are recorded as explicit evidence limitations; the runner does not guess at ownership
+or kill an arbitrary port owner.
+
+This fence was motivated by authenticated hosted failures, not a synthetic-only scenario. In the
+N24 run (Actions run `31767622596`, job `94666624722`, artifact `9207456779`), the outer report
+SHA-256 is `143827c75e658eb869f41e9b29e35927e54536ab09af498217082eefbc17bb1e`, raw baseline block 0 is
+`4236d4fbddae84327dae1819e1e1c0812b70d96c60d94727e6d6d3015e99a5b8`, and the artifact ZIP is
+`22ca9aae6e7511e2e6eab7d529606474e89cf9118dd50276046a002bdb2a444a`: teardown was stably clear for
+about 506 ms, then the next fresh-ready boundary found IPv4 free while IPv6 remained busy for all
+100 probes over five seconds. N216 artifact `9207802527` independently reproduced the boundary in
+fresh-ready iterations 1 and 7 after stable roughly 503--505 ms teardowns; its outer report is
+`b62cf50f6da3a30c88b76d169c20491b90ad53f059313073f9bc5a1262ba56b9`, raw baseline block 0 is
+`c13be49bdfba090aca36f11b04b1da15cd19e1d426cb8d941ee31695243eb289`, and artifact ZIP is
+`b217b913c5f90e140903f3120555694b6e670e8860ada8648f42cd9665deeb10`.
 
 ## Decision rule
 

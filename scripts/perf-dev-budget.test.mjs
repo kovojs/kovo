@@ -128,6 +128,7 @@ describe('ratified developer performance budgets', () => {
     candidate.source.locks['pnpm-lock.yaml'] = digest('drift');
     candidate.rawCells[0].report.samples[0].leafStateSurvived = false;
     candidate.rawCells[0].report.samples[0].syntaxErrorDiagnosticSignal = '';
+    candidate.rawCells[0].report.integrity.handoffs[0].complete = false;
 
     const result = evaluateDevPerformanceBudget(budget, candidate);
 
@@ -137,6 +138,7 @@ describe('ratified developer performance budgets', () => {
         'candidate dependency lock identity differs from the ratified budget',
         'candidate kovo leaf state survival is incomplete',
         'candidate kovo syntax-error diagnostic availability is incomplete',
+        'candidate kovo dev occurrence 0 pre-spawn dev handoff ready[0] is incomplete',
       ]),
     );
     expect(result.checks).toEqual([]);
@@ -406,6 +408,9 @@ function workloadIdentity(corpusSize) {
       devEditSamples: 30,
       devEditSessionSamples: 2,
       devOccurrenceSchedule: schedule,
+      devPortAllocationPosture: 'unique-exact-port-per-session/v1',
+      devPortBase: 49_700,
+      devPortStride: 128,
       devReadySamples: 15,
       devWarmups: 3,
       lighthouseRuns: 5,
@@ -417,6 +422,7 @@ function workloadIdentity(corpusSize) {
 
 function rawDevCells(corpusSize, { locks, shapeDigest, sourceCommit }) {
   return devSchedule().map((schedule) => {
+    const basePort = 49_700 + schedule.scheduleIndex * 128;
     const samples = Array.from({ length: schedule.editSamples }, (_, iteration) => ({
       dataMs: 100,
       dataStateSurvived: true,
@@ -449,6 +455,7 @@ function rawDevCells(corpusSize, { locks, shapeDigest, sourceCommit }) {
         corpus: { shapeDigest },
         editSession: {
           browserContextClosed: true,
+          lifecycle: completeStop(basePort + schedule.readySamples),
           peakRssBytes: 1_000,
           readinessProbe: readyRouteProbe(),
           rssSamples: 10,
@@ -460,13 +467,27 @@ function rawDevCells(corpusSize, { locks, shapeDigest, sourceCommit }) {
           editCounts: Object.fromEntries(
             EDIT_CLASSES.map((editClass) => [editClass, schedule.editSamples]),
           ),
+          handoffs: Array.from({ length: schedule.readySamples + 1 }, (_, index) =>
+            completeHandoff(basePort + index, index, schedule.readySamples),
+          ),
           iterations: schedule.editSamples,
           misses: 0,
+          portAllocation: {
+            basePort,
+            ports: Array.from(
+              { length: schedule.readySamples + 1 },
+              (_, index) => basePort + index,
+            ),
+            posture: 'unique-exact-port-per-session/v1',
+          },
           readyIterations: schedule.readySamples,
           source: { stable: true },
           warmups: schedule.warmups,
         },
-        readySamples,
+        readySamples: readySamples.map((sample, index) => ({
+          ...sample,
+          lifecycle: completeStop(basePort + index),
+        })),
         samples,
         source: { commit: sourceCommit, dirty: false, dirtyPaths: [], locks },
         sourceAfter: { commit: sourceCommit, dirty: false, dirtyPaths: [], locks },
@@ -492,6 +513,45 @@ function devSchedule() {
 
 function scheduleEntry(framework, occurrence, scheduleIndex, editSamples, readySamples, warmups) {
   return { editSamples, framework, occurrence, readySamples, scheduleIndex, warmups };
+}
+
+function completeHandoff(port, index, readySamples) {
+  return {
+    attribution: {
+      from: index === 0 ? null : `ready[${String(index - 1)}]`,
+      priorMarkerSha256: index === 0 ? null : digest('marker'),
+      to: index === readySamples ? 'edit-session' : `ready[${String(index)}]`,
+    },
+    available: true,
+    check: {
+      addresses: [
+        {
+          address: '127.0.0.1',
+          available: true,
+          errorCode: null,
+          family: 4,
+          supported: true,
+        },
+      ],
+      checkedAt: '2026-08-13T00:00:00.000Z',
+      durationMs: 1,
+      probeError: null,
+      sequence: 1,
+    },
+    complete: true,
+    error: null,
+    origin: `http://localhost:${String(port)}`,
+    schema: 'kovo-dev-session-handoff/v1',
+    socketEvidence: null,
+  };
+}
+
+function completeStop(port) {
+  return {
+    complete: true,
+    origin: `http://localhost:${String(port)}`,
+    schema: 'kovo-dev-session-stop/v3',
+  };
 }
 
 function metricSummary(kovo, nextjs, samples, { p95Offset = 10 } = {}) {

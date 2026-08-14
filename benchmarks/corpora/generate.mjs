@@ -8,6 +8,8 @@ export const CORPUS_SCHEMA = 'kovo-dev-corpus/v1';
 export const SUPPORTED_SIZES = Object.freeze([24, 216]);
 export const EDIT_SAVE_POSTURE = 'posix-sibling-temp-write-rename/v1';
 export const EDIT_STATE_POSTURE = 'refresh-surfaces-sibling-to-local-state/v1';
+export const DEV_PORT_ALLOCATION_POSTURE = 'unique-exact-port-per-session/v1';
+export const DEV_SESSION_PORT_STRIDE = 128;
 export const EDIT_REFRESH_SURFACES = Object.freeze({
   data: Object.freeze({ file: 'src/data.tsx', selector: '[data-benchmark-data]' }),
   entry: Object.freeze({ file: 'src/page.tsx', selector: '[data-benchmark-entry]' }),
@@ -121,6 +123,7 @@ function corpusShape(modules) {
   return {
     buildOutputContract: 'required-nonempty-and-cleanup-absent/v1',
     componentImportFanout: modules,
+    devPortAllocationPosture: DEV_PORT_ALLOCATION_POSTURE,
     editClasses: ['leaf', 'entry', 'data', 'syntaxError', 'recovery'],
     editRefreshSurfaces: EDIT_REFRESH_SURFACES,
     editSavePosture: EDIT_SAVE_POSTURE,

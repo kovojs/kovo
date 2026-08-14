@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { canonicalJson } from '../scripts/lib/perf-host.mjs';
 import { performanceHostFingerprint } from '../scripts/lib/perf-host.mjs';
+import { devSessionHandoffFindings } from '../scripts/lib/perf-dev-session-evidence.mjs';
 
 import {
   bootstrapMedianCi,
@@ -603,24 +604,58 @@ describe('serialized comparison analysis', () => {
         framework: 'kovo',
         lane: 'corpus-n24',
         schedule,
-        report: {
-          framework: 'kovo',
-          integrity: {
-            browser: { requestFailedCount: 0, responseCount: 1, unexpectedErrorCount: 0 },
-            editCounts: { data: 30, entry: 30, leaf: 30, recovery: 30, syntaxError: 30 },
-            iterations: 30,
-            readyIterations: 15,
-            source: { stable: true },
-            warmups: 3,
-          },
-          readySamples: Array.from({ length: 15 }, () => ({})),
-          source: { commit: 'abc', dirty: false, locks: { root: 'one' } },
-          sourceAfter: { commit: 'abc', dirty: false, locks: { root: 'one' } },
-        },
+        report: completeDevValidationReport({ basePort: 49_700, readyIterations: 15 }),
       },
-      { iterations: 30, readyIterations: 15, reasons, schedule, warmups: 3 },
+      {
+        devPortBase: 49_700,
+        iterations: 30,
+        readyIterations: 15,
+        reasons,
+        schedule,
+        warmups: 3,
+      },
     );
     expect(reasons).toEqual([]);
+
+    const handoffTampered = completeDevValidationReport({
+      basePort: 49_700,
+      readyIterations: 15,
+    });
+    handoffTampered.integrity.portAllocation.ports[1] = 49_700;
+    handoffTampered.integrity.handoffs[0].complete = false;
+    handoffTampered.readySamples[0].lifecycle.complete = false;
+    handoffTampered.readySamples[0].browserContextClosed = false;
+    delete handoffTampered.readySamples[1].readinessProbe;
+    handoffTampered.editSession.lifecycle.origin = 'http://localhost:49999';
+    delete handoffTampered.editSession.browserContextClosed;
+    const handoffReasons = [];
+    validateDevCell(
+      {
+        framework: 'kovo',
+        lane: 'corpus-n24',
+        report: handoffTampered,
+        schedule,
+      },
+      {
+        devPortBase: 49_700,
+        iterations: 30,
+        readyIterations: 15,
+        reasons: handoffReasons,
+        schedule,
+        warmups: 3,
+      },
+    );
+    expect(handoffReasons).toEqual(
+      expect.arrayContaining([
+        'corpus-n24/kovo/dev unique per-session dev port allocation is incomplete',
+        'corpus-n24/kovo/dev pre-spawn dev handoff ready[0] is incomplete',
+        'corpus-n24/kovo/dev ready[0] dev readiness/browser-context evidence is incomplete',
+        'corpus-n24/kovo/dev ready[1] dev readiness/browser-context evidence is incomplete',
+        'corpus-n24/kovo/dev ready[0] dev lifecycle is incomplete',
+        'corpus-n24/kovo/dev edit-session dev readiness/browser-context evidence is incomplete',
+        'corpus-n24/kovo/dev edit-session dev lifecycle is incomplete',
+      ]),
+    );
 
     const mismatched = [];
     validateDevCell(
@@ -644,6 +679,7 @@ describe('serialized comparison analysis', () => {
         },
       },
       {
+        devPortBase: 49_700,
         iterations: 30,
         readyIterations: 15,
         reasons: mismatched,
@@ -656,7 +692,93 @@ describe('serialized comparison analysis', () => {
     expect(mismatched).toContain('corpus-n24/kovo/dev browser error evidence');
     expect(mismatched).toContain('corpus-n24/kovo/dev occurrence schedule mismatch');
   });
+
+  it.each([
+    ['a non-array', 'invalid'],
+    ['a duplicate', [49_700, 49_700, 49_702]],
+    ['an overflowing value', [49_700, 49_701, 65_536]],
+  ])('fails closed without throwing for %s declared session-port list', (_label, ports) => {
+    const report = completeDevValidationReport({ basePort: 49_700, readyIterations: 2 });
+    report.integrity.portAllocation.ports = ports;
+
+    expect(devSessionHandoffFindings(report, { basePort: 49_700, readyIterations: 2 })).toContain(
+      'unique per-session dev port allocation is incomplete',
+    );
+  });
 });
+
+function completeDevValidationReport({ basePort, readyIterations }) {
+  const readinessProbe = () => ({
+    attempts: 2,
+    path: '/',
+    status: 200,
+    transientFailures: 1,
+  });
+  const lifecycle = (port) => ({
+    complete: true,
+    origin: `http://localhost:${String(port)}`,
+    schema: 'kovo-dev-session-stop/v3',
+  });
+  const handoffs = Array.from({ length: readyIterations + 1 }, (_, index) => ({
+    attribution: {
+      from: index === 0 ? null : `ready[${String(index - 1)}]`,
+      priorMarkerSha256: index === 0 ? null : `sha256:${'a'.repeat(64)}`,
+      to: index === readyIterations ? 'edit-session' : `ready[${String(index)}]`,
+    },
+    available: true,
+    check: {
+      addresses: [
+        {
+          address: '127.0.0.1',
+          available: true,
+          errorCode: null,
+          family: 4,
+          supported: true,
+        },
+      ],
+      checkedAt: '2026-08-13T00:00:00.000Z',
+      durationMs: 1,
+      probeError: null,
+      sequence: 1,
+    },
+    complete: true,
+    error: null,
+    origin: `http://localhost:${String(basePort + index)}`,
+    schema: 'kovo-dev-session-handoff/v1',
+    socketEvidence: null,
+  }));
+  return {
+    editSession: {
+      browserContextClosed: true,
+      lifecycle: lifecycle(basePort + readyIterations),
+      readinessProbe: readinessProbe(),
+    },
+    framework: 'kovo',
+    integrity: {
+      browser: { requestFailedCount: 0, responseCount: 1, unexpectedErrorCount: 0 },
+      complete: true,
+      editCounts: { data: 30, entry: 30, leaf: 30, recovery: 30, syntaxError: 30 },
+      handoffs,
+      iterations: 30,
+      portAllocation: {
+        basePort,
+        ports: Array.from({ length: readyIterations + 1 }, (_, index) => basePort + index),
+        posture: 'unique-exact-port-per-session/v1',
+      },
+      readyIterations,
+      source: { stable: true },
+      warmups: 3,
+    },
+    readySamples: Array.from({ length: readyIterations }, (_, index) => ({
+      browserContextClosed: true,
+      lifecycle: lifecycle(basePort + index),
+      readinessProbe: readinessProbe(),
+    })),
+    source: { commit: 'abc', dirty: false, locks: { root: 'one' } },
+    sourceAfter: { commit: 'abc', dirty: false, locks: { root: 'one' } },
+    verdict: { status: 'measured' },
+  };
+}
 
 function browserCell(framework, occurrence, values) {
   return {
