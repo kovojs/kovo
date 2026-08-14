@@ -146,16 +146,22 @@ sampled 500 ms stability window; a busy sample resets that window, and an unavai
 recorded explicitly rather than mistaken for a collision.
 
 Each session receives a distinct exact port from a declared range reserved to its outer schedule
-cell. The allocation is fixed before measurement (`unique-exact-port-per-session/v1`, stride 128),
-so a late rebind on an old session's port cannot collide with a later session. Immediately before a
-spawn, a dual-stack handoff check verifies the new exact port. A busy address or unexpected probe
-error prevents the spawn, attributes the boundary to the prior or initial session, aborts the
-remaining adapter samples without recording timing, and makes the result `unproven`. On Linux, busy
-handoffs retain bounded `/proc/net/tcp` and `/proc/net/tcp6` socket-state evidence plus inode-owner
-PID and safe `comm` metadata, including an exact prior-marker match. The report never retains owner
-arguments or environment. Non-Linux hosts and collection races, permission failures, truncation, or
-parse errors are recorded as explicit evidence limitations; the runner does not guess at ownership
-or kill an arbitrary port owner.
+cell. Before host-load sampling or timing, the runner authenticates the host's kernel-owned TCP
+ephemeral ranges and rejects an incomplete probe, a range overlap, a duplicate server/Inspector
+port, or a `basePort` that does not equal the first derived session port
+(`unique-exact-port-outside-host-ephemeral/v2`, stride 128). Linux reads the bounded
+`/proc/sys/net/ipv4/ip_local_port_range` source used by both IPv4 and IPv6; macOS reads the bounded
+default, high, and low `net.inet.ip.portrange` sysctls. The portable default starts at port 20000.
+
+Immediately before a spawn, a dual-stack handoff check verifies the new exact port. A busy address
+or unexpected probe error prevents the spawn, attributes the boundary to the prior or initial
+session, aborts the remaining adapter samples without recording timing, and makes the result
+`unproven`. A failed start or post-teardown busy address retains bounded socket-owner evidence. On
+Linux that is `/proc/net/tcp` and `/proc/net/tcp6` socket state plus inode-owner PID and safe `comm`
+metadata, including an exact prior-marker match. The report never retains owner arguments or
+environment, never signals an observed third-party owner, and limits termination to the benchmark's
+own process group and inherited marker. Non-Linux hosts and collection races, permission failures,
+truncation, or parse errors are explicit evidence limitations; the runner does not guess ownership.
 
 This fence was motivated by authenticated hosted failures, not a synthetic-only scenario. In the
 N24 run (Actions run `31767622596`, job `94666624722`, artifact `9207456779`), the outer report
@@ -168,6 +174,27 @@ fresh-ready iterations 1 and 7 after stable roughly 503--505 ms teardowns; its o
 `b62cf50f6da3a30c88b76d169c20491b90ad53f059313073f9bc5a1262ba56b9`, raw baseline block 0 is
 `c13be49bdfba090aca36f11b04b1da15cd19e1d426cb8d941ee31695243eb289`, and artifact ZIP is
 `b217b913c5f90e140903f3120555694b6e670e8860ada8648f42cd9665deeb10`.
+
+The next authenticated run exposed both remaining failure modes on clean source commit
+`25ae96f9c799650523cc00b92660c4caccf9b0e6` (Actions run `31772345248`). N216 artifact
+`9208843223` has ZIP SHA-256 `f82f024059361aefcc04947a240284cb65542411c404b112a2a48dac22adcaaa`,
+outer-report SHA-256 `c895931ec6e97165d557dd4c55c1447d14835bf8bd97f24e5a39179b2b551fb1`,
+and raw baseline-0 SHA-256 `0d8cb735e4fa1b9bdc1a8dd30bf2150de11ba3bf71a9ac2a086c593de786e7fb`.
+Its exact port 49754 was available on both families immediately before spawn, the strict server then
+reported that port busy, and teardown found the owned process group and marker tree quiescent while
+IPv4 was free and `::1` returned `EADDRINUSE` in all 100 checks over 5001 ms. This is the source for
+the kernel-range preflight and post-teardown owner evidence above.
+
+N24 artifact `9208903776` from the same run has ZIP SHA-256
+`78fd7d6e65f7afc76c633f5291724c615a395463a42b7e042525e3f3fc02a248`, outer-report SHA-256
+`0d8b0028adde87e81df0713e86652e130ab3f980fb62169c3e0f04aa0b573ac1`, and raw baseline-0 SHA-256
+`2fba670459ecc1829a598fb252d65505b8c2e82379a8de11340640b39e11c4e0`. It completed fresh ready
+and all 15 leaf, entry, and data edits, then captured the browser's exact strict-CSP rejection of
+Vite's inline error-overlay style (`sha256-lYN9swPPxuGaiKk0VmHFE+KQB3O54rTETtIxyNAtJz8=`) and
+failed recovery because the overlay never cleared. Kovo development documents now mint a fresh
+128-bit nonce per response, publish it through Vite's `meta[property=csp-nonce]` contract as the
+first head child, and add only the matching nonce to the existing `style-src`; production behavior,
+`unsafe-inline`, and telemetry exemptions remain unchanged.
 
 ## Decision rule
 

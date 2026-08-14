@@ -115,7 +115,9 @@ import {
   securityNumberIsInteger,
   securityPromiseResolve,
   securityPromiseThen,
+  securityRandomBytes,
   securityRegExpReplace,
+  securityRegExpReplaceMatches,
   securityResponseBody,
   securityResponseHeaders,
   securityResponseStatus,
@@ -124,6 +126,7 @@ import {
   securitySetAdd,
   securitySetHas,
   securityString,
+  securityStringEndsWith,
   securityStringIncludes,
   securityStringIndexOf,
   securityStringReplaceAll,
@@ -133,6 +136,7 @@ import {
   securityStringToLowerCase,
   securityStringTrim,
 } from './response-security-intrinsics.js';
+import { replaceDocumentHeader } from './document-core.js';
 import {
   createWitnessWeakMap,
   witnessDefineProperty,
@@ -156,6 +160,7 @@ const kovoHmrRouteRefreshPath = '/@kovo/hmr/refresh/route';
 const kovoHmrLiveTargetRefreshPath = '/@kovo/hmr/refresh/live-targets';
 const kovoViteDevelopmentLiveTargetAttestationSecret = randomBytes(32).toString('base64url');
 const kovoHmrClientScript = `<script type="module" src="${kovoHmrClientPath}"></script>`;
+const kovoViteDevStyleDirective = /(^|;)([ \t]*style-src(?:[ \t]+[^;,]*)?)/giu;
 const kovoHmrWireInputGrammarSource = canonicalJsonStringify(FRAMEWORK_WIRE_INPUT_GRAMMAR);
 const kovoHmrWireTargetCodecSource = buildSecurityFunctionSource(createFrameworkWireTargetCodec);
 const kovoHmrTargetSnapshotReaderSource = buildSecurityFunctionSource(
@@ -1956,18 +1961,25 @@ function exactHmrPreviousBuildToken(
 function injectKovoHmrScriptIntoRouteResponse(response: RoutePageResponse): RoutePageResponse {
   if (
     typeof response.body !== 'string' ||
-    !shouldInjectKovoHmrScript(
-      response.status,
-      readHeader(response.headers, 'Content-Type'),
-      response.body,
-    )
+    !shouldInjectKovoHmrScript(response.status, readHeader(response.headers, 'Content-Type'))
   ) {
     return response;
   }
 
+  const nonce = createKovoViteDevCspNonce();
+  const policy = readHeader(response.headers, 'Content-Security-Policy');
+
   return {
     ...response,
-    body: injectKovoHmrScript(response.body),
+    body: injectKovoHmrScript(response.body, nonce),
+    headers:
+      policy === undefined
+        ? response.headers
+        : replaceDocumentHeader(
+            response.headers,
+            'Content-Security-Policy',
+            admitKovoViteDevStyleNonce(policy, nonce),
+          ),
   };
 }
 
@@ -1975,12 +1987,21 @@ async function injectKovoHmrScriptIntoWebResponse(response: Response): Promise<R
   const responseHeaders = securityResponseHeaders(response);
   const contentType = securityHeadersGet(responseHeaders, 'Content-Type');
   const status = securityResponseStatus(response);
-  if (!shouldInjectKovoHmrScript(status, contentType, null)) return response;
+  if (!shouldInjectKovoHmrScript(status, contentType)) return response;
 
   const headers = createSecurityHeaders(responseHeaders);
   securityHeadersDelete(headers, 'content-length');
+  const nonce = createKovoViteDevCspNonce();
+  const policy = securityHeadersGet(headers, 'Content-Security-Policy');
+  if (policy !== null) {
+    securityHeadersSet(
+      headers,
+      'Content-Security-Policy',
+      admitKovoViteDevStyleNonce(policy, nonce),
+    );
+  }
 
-  return createSecurityResponse(injectKovoHmrScript(await securityResponseText(response)), {
+  return createSecurityResponse(injectKovoHmrScript(await securityResponseText(response), nonce), {
     headers,
     status,
     statusText: securityResponseStatusText(response),
@@ -2067,11 +2088,21 @@ function injectKovoHmrScriptIntoNodeResponse(
       );
       const status = response.statusCode;
       const body = securityBufferToString(securityBufferConcat(chunks), 'utf8');
-      const nextBody = shouldInjectKovoHmrScript(status, contentType, body)
-        ? injectKovoHmrScript(body)
-        : body;
-      if (nextBody !== body) {
+      const inject = shouldInjectKovoHmrScript(status, contentType);
+      const nonce = inject ? createKovoViteDevCspNonce() : null;
+      const nextBody = nonce === null ? body : injectKovoHmrScript(body, nonce);
+      if (nonce !== null && nextBody !== body) {
         witnessReflectApply(viteDevNodeResponseRemoveHeader, response, ['Content-Length']);
+        const policy = witnessReflectApply<unknown>(viteDevNodeResponseGetHeader, response, [
+          'Content-Security-Policy',
+        ]);
+        const admittedPolicy = admitKovoViteDevStyleNonceHeader(policy, nonce);
+        if (admittedPolicy !== null) {
+          witnessReflectApply(viteDevNodeResponseSetHeader, response, [
+            'Content-Security-Policy',
+            admittedPolicy,
+          ]);
+        }
       }
 
       if (typeof encodingOrCallback === 'function') {
@@ -2126,10 +2157,8 @@ function appendNodeResponseChunk(
 function shouldInjectKovoHmrScript(
   status: number,
   contentType: string | null | undefined,
-  body: unknown,
 ): boolean {
   if (status < 200 || status >= 600) return false;
-  if (typeof body === 'string' && securityStringIncludes(body, kovoHmrClientPath)) return false;
   return securityStringIncludes(securityStringToLowerCase(contentType ?? ''), 'text/html');
 }
 
@@ -2145,14 +2174,57 @@ function isKovoFragmentOrQueryReadRequest(request: IncomingMessage): boolean {
   );
 }
 
-function injectKovoHmrScript(html: string): string {
-  if (securityStringIncludes(html, kovoHmrClientPath)) return html;
+function injectKovoHmrScript(html: string, nonce: string): string {
+  const hasHmrClient = securityStringIncludes(html, kovoHmrClientPath);
+  const nonceMeta = `<meta property="csp-nonce" nonce="${nonce}">`;
+  const openingHead = '<head>';
+  const openingHeadIndex = securityStringIndexOf(html, openingHead);
   const closingHead = '</head>';
   const closingHeadIndex = securityStringIndexOf(html, closingHead);
   if (closingHeadIndex >= 0) {
-    return `${securityStringSlice(html, 0, closingHeadIndex)}${kovoHmrClientScript}${securityStringSlice(html, closingHeadIndex)}`;
+    const withNonce =
+      openingHeadIndex >= 0 && openingHeadIndex < closingHeadIndex
+        ? `${securityStringSlice(html, 0, openingHeadIndex + openingHead.length)}${nonceMeta}${securityStringSlice(html, openingHeadIndex + openingHead.length)}`
+        : `${nonceMeta}${html}`;
+    if (hasHmrClient) return withNonce;
+    const adjustedClosingHeadIndex = securityStringIndexOf(withNonce, closingHead);
+    return `${securityStringSlice(withNonce, 0, adjustedClosingHeadIndex)}${kovoHmrClientScript}${securityStringSlice(withNonce, adjustedClosingHeadIndex)}`;
   }
-  return `${kovoHmrClientScript}${html}`;
+  return `${nonceMeta}${hasHmrClient ? '' : kovoHmrClientScript}${html}`;
+}
+
+function createKovoViteDevCspNonce(): string {
+  // Vite reads this exact value from meta[property=csp-nonce] for its runtime error-overlay and
+  // CSS style nodes. It must be fresh per response; a static development nonce would turn the
+  // strict CSP floor into reusable inline-style authority (SPEC §6.6 rule 3 / §9.5.1).
+  return securityBufferToString(securityRandomBytes(16), 'base64');
+}
+
+function admitKovoViteDevStyleNonce(policy: string, nonce: string): string {
+  const source = `'nonce-${nonce}'`;
+  if (securityStringIncludes(policy, source)) return policy;
+  const rewritten = securityRegExpReplaceMatches(policy, kovoViteDevStyleDirective, (match) => {
+    return `${match[1] ?? ''}${match[2] ?? ''} ${source}`;
+  });
+  if (rewritten !== policy) return rewritten;
+  const trimmed = securityStringTrim(policy);
+  const separator = trimmed.length === 0 || securityStringEndsWith(trimmed, ';') ? '' : ';';
+  return `${trimmed}${separator} style-src ${source}`;
+}
+
+function admitKovoViteDevStyleNonceHeader(
+  policy: unknown,
+  nonce: string,
+): string | readonly string[] | null {
+  if (typeof policy === 'string') return admitKovoViteDevStyleNonce(policy, nonce);
+  if (!securityArrayIsArray(policy)) return null;
+  const admitted: string[] = [];
+  for (let index = 0; index < policy.length; index += 1) {
+    const member = witnessReflectGet(policy, index);
+    if (typeof member !== 'string') return null;
+    securityArrayPush(admitted, admitKovoViteDevStyleNonce(member, nonce));
+  }
+  return admitted;
 }
 
 /** @internal Exact dev-client source; exported for in-repo security execution tests. */

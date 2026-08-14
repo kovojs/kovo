@@ -1289,6 +1289,10 @@ describe('single-entrant developer-loop adapter', () => {
   it('fails closed with process-group and strict-port diagnostics when teardown leaks', async () => {
     const clock = fakeLifecycleClock();
     const probedOrigins = [];
+    const terminateProcessGroup = vi.fn();
+    const collectSocketEvidence = vi.fn(async ({ busyAddresses, origin }) =>
+      socketOwnerEvidenceFixture({ busyAddresses, origin }),
+    );
     const result = await stopDevProcessTree(
       {
         marker: 'KOVO_PERF_DEV_SESSION_TEST_LEAK',
@@ -1297,6 +1301,7 @@ describe('single-entrant developer-loop adapter', () => {
       },
       {
         ...clock,
+        collectSocketEvidence,
         forceTimeoutMs: 20,
         gracefulTimeoutMs: 20,
         pollIntervalMs: 10,
@@ -1308,7 +1313,7 @@ describe('single-entrant developer-loop adapter', () => {
         portTimeoutMs: 20,
         processGroupAlive: async () => true,
         signalMarkedProcesses: emptyMarkedProcessCensus,
-        terminateProcessGroup: () => undefined,
+        terminateProcessGroup,
       },
     );
 
@@ -1318,12 +1323,25 @@ describe('single-entrant developer-loop adapter', () => {
       port: { available: false },
       processGroup: { quiescent: false },
       signals: ['SIGTERM', 'SIGKILL'],
+      socketEvidence: {
+        busyAddresses: [
+          { address: '127.0.0.1', errorCode: 'EADDRINUSE', family: 4 },
+          { address: '::1', errorCode: 'EADDRINUSE', family: 6 },
+        ],
+        complete: true,
+      },
     });
     expect(result.error).toContain('process group 3456 remained alive');
     expect(result.error).toContain(
       'http://localhost:49120 did not remain available across all resolved addresses',
     );
     expect(new Set(probedOrigins)).toEqual(new Set(['http://localhost:49120']));
+    expect(collectSocketEvidence).toHaveBeenCalledOnce();
+    expect(terminateProcessGroup.mock.calls).toEqual([
+      [3456, 'SIGTERM'],
+      [3456, 'SIGKILL'],
+    ]);
+    expect(JSON.stringify(result.socketEvidence)).not.toMatch(/argv|environ/u);
   });
 
   it('does not navigate the instrumented browser until the Node readiness probe succeeds', async () => {
@@ -1860,14 +1878,11 @@ function completeCountFixture() {
       readinessProbe: completeReadinessProbe(),
     },
     integrity: {
+      command: { origin: 'http://localhost:49120' },
       editCounts: {},
       handoffs: [completeHandoffFixture(49_120, 0, 1), completeHandoffFixture(49_121, 1, 1)],
       iterations: 2,
-      portAllocation: {
-        basePort: 49_120,
-        ports: [49_120, 49_121],
-        posture: 'unique-exact-port-per-session/v1',
-      },
+      portAllocation: completePortAllocationFixture(49_120, [49_120, 49_121]),
       readyIterations: 1,
     },
     readySamples: [
@@ -1894,6 +1909,34 @@ function completeLifecycleFixture(port = 49_120) {
     complete: true,
     origin: `http://localhost:${String(port)}`,
     schema: DEV_SESSION_STOP_SCHEMA,
+    socketEvidence: null,
+  };
+}
+
+function completePortAllocationFixture(basePort, ports, inspectorPorts = []) {
+  return {
+    basePort,
+    complete: true,
+    errors: [],
+    hostEphemeral: {
+      complete: true,
+      error: null,
+      platform: 'linux',
+      probe: {
+        bytes: 12,
+        kind: 'procfs',
+        locator: '/proc/sys/net/ipv4/ip_local_port_range',
+        sha256: `sha256:${'e'.repeat(64)}`,
+      },
+      ranges: [{ label: 'default', maximum: 65_535, minimum: 60_000 }],
+      schema: 'kovo-host-ephemeral-port-ranges/v1',
+      scope: 'tcp-loopback-v4-v6/v1',
+    },
+    inspectorPorts,
+    overlaps: [],
+    ports,
+    posture: 'unique-exact-port-outside-host-ephemeral/v2',
+    schema: 'kovo-dev-port-allocation/v1',
   };
 }
 
@@ -1975,9 +2018,12 @@ function handoffLaunchOptions({
   };
 }
 
-function socketOwnerEvidenceFixture({ origin = 'http://localhost:49120' } = {}) {
+function socketOwnerEvidenceFixture({
+  busyAddresses = [{ address: '::1', errorCode: 'EADDRINUSE', family: 6 }],
+  origin = 'http://localhost:49120',
+} = {}) {
   return {
-    busyAddresses: [{ address: '::1', errorCode: 'EADDRINUSE', family: 6 }],
+    busyAddresses,
     census: { fdLinksInspected: 1, processesInspected: 1, socketRecords: 1 },
     complete: true,
     limitations: [],

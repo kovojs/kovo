@@ -871,7 +871,8 @@ function completeDevValidationReport({ basePort, readyIterations }) {
   const lifecycle = (port) => ({
     complete: true,
     origin: `http://localhost:${String(port)}`,
-    schema: 'kovo-dev-session-stop/v3',
+    schema: 'kovo-dev-session-stop/v4',
+    socketEvidence: null,
   });
   const handoffs = Array.from({ length: readyIterations + 1 }, (_, index) => ({
     attribution: {
@@ -921,11 +922,10 @@ function completeDevValidationReport({ basePort, readyIterations }) {
       editCounts: { data: 30, entry: 30, leaf: 30, recovery: 30, syntaxError: 30 },
       handoffs,
       iterations: 30,
-      portAllocation: {
+      portAllocation: completePortAllocation(
         basePort,
-        ports: Array.from({ length: readyIterations + 1 }, (_, index) => basePort + index),
-        posture: 'unique-exact-port-per-session/v1',
-      },
+        Array.from({ length: readyIterations + 1 }, (_, index) => basePort + index),
+      ),
       readyIterations,
       source: { stable: true },
       warmups: 3,
@@ -938,6 +938,33 @@ function completeDevValidationReport({ basePort, readyIterations }) {
     source: { commit: 'abc', dirty: false, locks: { root: 'one' } },
     sourceAfter: { commit: 'abc', dirty: false, locks: { root: 'one' } },
     verdict: { status: 'measured' },
+  };
+}
+
+function completePortAllocation(basePort, ports, inspectorPorts = []) {
+  return {
+    basePort,
+    complete: true,
+    errors: [],
+    hostEphemeral: {
+      complete: true,
+      error: null,
+      platform: 'linux',
+      probe: {
+        bytes: 12,
+        kind: 'procfs',
+        locator: '/proc/sys/net/ipv4/ip_local_port_range',
+        sha256: `sha256:${'e'.repeat(64)}`,
+      },
+      ranges: [{ label: 'default', maximum: 65_535, minimum: 60_000 }],
+      schema: 'kovo-host-ephemeral-port-ranges/v1',
+      scope: 'tcp-loopback-v4-v6/v1',
+    },
+    inspectorPorts,
+    overlaps: [],
+    ports,
+    posture: 'unique-exact-port-outside-host-ephemeral/v2',
+    schema: 'kovo-dev-port-allocation/v1',
   };
 }
 

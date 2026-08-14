@@ -31,6 +31,11 @@ import {
   DEV_PORT_ALLOCATION_POSTURE,
   DEV_SESSION_PORT_STRIDE as DEV_GENERATION_CELL_PORT_STRIDE,
 } from '../benchmarks/corpora/generate.mjs';
+import {
+  DEFAULT_DEV_PORT_BASE,
+  inspectDevPortAllocation,
+  validateDevPortAllocationEvidence,
+} from '../benchmarks/harness/dev-port-allocation.mjs';
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { devSessionHandoffFindings } from './lib/perf-dev-session-evidence.mjs';
 import { performanceHostFingerprint } from './lib/perf-host.mjs';
@@ -562,107 +567,131 @@ export async function runDevGenerationSpike(options = {}, dependencies = {}) {
   const hostSamples = [];
   const cells = [];
   const errors = [];
+  const schedule = devGenerationSchedule(policy);
+  const allocatedPorts = schedule.flatMap((scheduled) => {
+    const base = policy.portBase + scheduled.scheduleIndex * DEV_GENERATION_CELL_PORT_STRIDE;
+    return Array.from({ length: scheduled.readySamples + 1 }, (_, index) => base + index);
+  });
+  const portAllocation = validateDevPortAllocationEvidence(
+    await (dependencies.inspectPortAllocation ?? inspectDevPortAllocation)(
+      { basePort: policy.portBase, inspectorPorts: [], ports: allocatedPorts },
+      dependencies.portAllocationDependencies ?? {},
+    ),
+    { basePort: policy.portBase, inspectorPorts: [], ports: allocatedPorts },
+  );
+  if (!portAllocation.complete) {
+    errors.push(...portAllocation.errors.map((error) => `dev port allocation preflight: ${error}`));
+  }
   const ephemeralScratch = policy.adapterEvidenceRoot === null;
   const scratch = ephemeralScratch
     ? mkdtempSync(path.join(os.tmpdir(), 'kovo-dev-generation-ab-'))
     : prepareAdapterEvidenceRoot(policy.adapterEvidenceRoot);
   try {
-    const schedule = devGenerationSchedule(policy);
-    const initialHost = sampleHost('pre-timing', policy.maxLoadPerCpu);
-    hostSamples.push(initialHost);
-    if (!initialHost.comparable) {
-      throw new Error(
-        `host load ${initialHost.loadPerCpu.toFixed(3)} per CPU exceeds ceiling ${String(
-          policy.maxLoadPerCpu,
-        )}; no timing process was started`,
-      );
-    }
-    const acquireLock = dependencies.acquireLock ?? acquireTimingLock;
-    const timingLock = acquireLock(policy.timingLockPath);
-    try {
-      for (const scheduled of schedule) {
-        const host = sampleHost(
-          `block-${String(scheduled.scheduleIndex)}-${scheduled.lane}`,
-          policy.maxLoadPerCpu,
-        );
-        hostSamples.push(host);
-        if (!host.comparable) {
-          errors.push(
-            `block ${String(scheduled.scheduleIndex)} load ${host.loadPerCpu.toFixed(
-              3,
-            )} per CPU exceeded ceiling ${String(policy.maxLoadPerCpu)}`,
-          );
-          break;
-        }
-        const root = prepared.roots[scheduled.lane];
-        const beforeBlock = collectState(root);
-        const expectedState = prepared.source.before[scheduled.lane];
-        const stateFindings = worktreeStabilityFindings(expectedState, beforeBlock, scheduled.lane);
-        if (stateFindings.length > 0) {
-          errors.push(...stateFindings);
-          break;
-        }
-        const port = policy.portBase + scheduled.scheduleIndex * DEV_GENERATION_CELL_PORT_STRIDE;
-        const resultFile = path.join(
-          scratch,
-          `${String(scheduled.scheduleIndex)}-${scheduled.lane}.json`,
-        );
-        let report;
-        try {
-          report = await runAdapter({
-            editSamples: scheduled.editSamples,
-            manifestPath: prepared.manifestPaths[scheduled.lane],
-            outPath: resultFile,
-            port,
-            readySamples: scheduled.readySamples,
-            readyTimeoutMs: policy.readyTimeoutMs,
-            root,
-            timeoutMs: policy.timeoutMs,
-            warmups: scheduled.warmups,
-          });
-        } catch (error) {
-          const retainedFailure = retainedAdapterFailure(error);
-          if (retainedFailure !== null) {
-            cells.push({
-              ...scheduled,
-              adapterFailure: retainedFailure.evidence,
-              port,
-              report: retainedFailure.report,
-            });
-          }
-          errors.push(
-            `block ${String(scheduled.scheduleIndex)} ${scheduled.lane}: ${errorMessage(error)}`,
-          );
-          break;
-        }
-        const cell = { ...scheduled, port, report };
-        const findings = validateDevGenerationCell(cell, {
-          commit: expectedState.commit,
-          corpus: prepared.corpus[scheduled.lane],
-          locks: expectedState.locks,
-        });
-        cells.push(cell);
-        if (findings.length > 0) {
-          errors.push(...findings);
-          break;
-        }
-        const afterBlock = collectState(root);
-        const afterFindings = worktreeStabilityFindings(expectedState, afterBlock, scheduled.lane);
-        if (afterFindings.length > 0) {
-          errors.push(...afterFindings);
-          break;
-        }
-      }
-    } finally {
-      timingLock.release();
-      const postHost = sampleHost('post-timing', policy.maxLoadPerCpu);
-      hostSamples.push(postHost);
-      if (!postHost.comparable) {
-        errors.push(
-          `post-timing load ${postHost.loadPerCpu.toFixed(3)} per CPU exceeded ceiling ${String(
+    if (portAllocation.complete) {
+      const initialHost = sampleHost('pre-timing', policy.maxLoadPerCpu);
+      hostSamples.push(initialHost);
+      if (!initialHost.comparable) {
+        throw new Error(
+          `host load ${initialHost.loadPerCpu.toFixed(3)} per CPU exceeds ceiling ${String(
             policy.maxLoadPerCpu,
-          )}`,
+          )}; no timing process was started`,
         );
+      }
+      const acquireLock = dependencies.acquireLock ?? acquireTimingLock;
+      const timingLock = acquireLock(policy.timingLockPath);
+      try {
+        for (const scheduled of schedule) {
+          const host = sampleHost(
+            `block-${String(scheduled.scheduleIndex)}-${scheduled.lane}`,
+            policy.maxLoadPerCpu,
+          );
+          hostSamples.push(host);
+          if (!host.comparable) {
+            errors.push(
+              `block ${String(scheduled.scheduleIndex)} load ${host.loadPerCpu.toFixed(
+                3,
+              )} per CPU exceeded ceiling ${String(policy.maxLoadPerCpu)}`,
+            );
+            break;
+          }
+          const root = prepared.roots[scheduled.lane];
+          const beforeBlock = collectState(root);
+          const expectedState = prepared.source.before[scheduled.lane];
+          const stateFindings = worktreeStabilityFindings(
+            expectedState,
+            beforeBlock,
+            scheduled.lane,
+          );
+          if (stateFindings.length > 0) {
+            errors.push(...stateFindings);
+            break;
+          }
+          const port = policy.portBase + scheduled.scheduleIndex * DEV_GENERATION_CELL_PORT_STRIDE;
+          const resultFile = path.join(
+            scratch,
+            `${String(scheduled.scheduleIndex)}-${scheduled.lane}.json`,
+          );
+          let report;
+          try {
+            report = await runAdapter({
+              editSamples: scheduled.editSamples,
+              manifestPath: prepared.manifestPaths[scheduled.lane],
+              outPath: resultFile,
+              port,
+              readySamples: scheduled.readySamples,
+              readyTimeoutMs: policy.readyTimeoutMs,
+              root,
+              timeoutMs: policy.timeoutMs,
+              warmups: scheduled.warmups,
+            });
+          } catch (error) {
+            const retainedFailure = retainedAdapterFailure(error);
+            if (retainedFailure !== null) {
+              cells.push({
+                ...scheduled,
+                adapterFailure: retainedFailure.evidence,
+                port,
+                report: retainedFailure.report,
+              });
+            }
+            errors.push(
+              `block ${String(scheduled.scheduleIndex)} ${scheduled.lane}: ${errorMessage(error)}`,
+            );
+            break;
+          }
+          const cell = { ...scheduled, port, report };
+          const findings = validateDevGenerationCell(cell, {
+            commit: expectedState.commit,
+            corpus: prepared.corpus[scheduled.lane],
+            locks: expectedState.locks,
+          });
+          cells.push(cell);
+          if (findings.length > 0) {
+            errors.push(...findings);
+            break;
+          }
+          const afterBlock = collectState(root);
+          const afterFindings = worktreeStabilityFindings(
+            expectedState,
+            afterBlock,
+            scheduled.lane,
+          );
+          if (afterFindings.length > 0) {
+            errors.push(...afterFindings);
+            break;
+          }
+        }
+      } finally {
+        timingLock.release();
+        const postHost = sampleHost('post-timing', policy.maxLoadPerCpu);
+        hostSamples.push(postHost);
+        if (!postHost.comparable) {
+          errors.push(
+            `post-timing load ${postHost.loadPerCpu.toFixed(3)} per CPU exceeded ceiling ${String(
+              policy.maxLoadPerCpu,
+            )}`,
+          );
+        }
       }
     }
 
@@ -698,6 +727,7 @@ export async function runDevGenerationSpike(options = {}, dependencies = {}) {
         sourceStable: sourceFindings.length === 0,
       },
       policy: reportPolicy(policy),
+      portAllocation,
       preparation: preparationEvidence(prepared),
       schema: DEV_GENERATION_SPIKE_SCHEMA,
       sourceAfter,
@@ -963,7 +993,12 @@ function normalizeOptions(options) {
   const spikeRoot = canonicalDirectory(requiredString(options.spikeRoot, '--spike-root'));
   const size = Number(options.size ?? 24);
   if (!SUPPORTED_SIZES.includes(size)) throw new TypeError('--size must be 24 or 216');
-  const portBase = boundedInteger(options.portBase ?? 49_750, 1_024, 65_024, '--port-base');
+  const portBase = boundedInteger(
+    options.portBase ?? DEFAULT_DEV_PORT_BASE,
+    1_024,
+    65_024,
+    '--port-base',
+  );
   const outPath = options.out === undefined ? null : path.resolve(options.out);
   return {
     adapterEvidenceRoot: outPath === null ? null : path.join(path.dirname(outPath), 'raw'),

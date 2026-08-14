@@ -31,6 +31,10 @@ import { performanceHostFingerprint } from '../../scripts/lib/perf-host.mjs';
 import { validReadyRouteProbe } from '../../scripts/lib/perf-ready-route.mjs';
 import { processTreeRssBytes } from '../../scripts/lib/process-tree-rss.mjs';
 import {
+  inspectDevPortAllocation,
+  validateDevPortAllocationEvidence,
+} from '../harness/dev-port-allocation.mjs';
+import {
   DEV_EDIT_PROFILE_CLASSIFIER,
   DEV_EDIT_PROFILE_SCHEMA,
 } from '../../scripts/perf-dev-edit-profile.mjs';
@@ -72,7 +76,7 @@ const DEV_SOCKET_EVIDENCE_MAX_BYTES = 1024 * 1024;
 const DEV_SOCKET_EVIDENCE_MAX_FDS = 65_536;
 const DEV_SOCKET_EVIDENCE_MAX_PROCESSES = 4_096;
 const DEV_SOCKET_EVIDENCE_MAX_RECORDS = 256;
-export const DEV_SESSION_STOP_SCHEMA = 'kovo-dev-session-stop/v3';
+export const DEV_SESSION_STOP_SCHEMA = 'kovo-dev-session-stop/v4';
 let atomicCorpusSourceWrite = 0;
 let paintFenceSequence = 0;
 const repoRoot = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
@@ -157,11 +161,17 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
     versions,
     warmups: normalized.warmups,
   });
-  report.integrity.portAllocation = {
-    basePort: normalized.port,
-    ports: sessionPorts,
-    posture: DEV_PORT_ALLOCATION_POSTURE,
-  };
+  report.integrity.portAllocation = await (
+    dependencies.inspectPortAllocation ?? inspectDevPortAllocation
+  )(
+    {
+      basePort: normalized.port,
+      inspectorPorts:
+        normalized.diagnosticProfile === null ? [] : [normalized.diagnosticProfile.inspectorPort],
+      ports: sessionPorts,
+    },
+    dependencies.portAllocationDependencies ?? {},
+  );
   report.integrity.corpus.beforeVerified = true;
   for (const finding of sourceStabilityFindings(source)) report.integrity.errors.push(finding);
   const originalSources = await readOriginalSources(manifestEvidence);
@@ -171,6 +181,11 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
   let sessionSeriesAborted = false;
 
   try {
+    if (!report.integrity.portAllocation.complete) {
+      throw new Error(
+        `dev port allocation preflight refused timing: ${report.integrity.portAllocation.errors.join('; ')}`,
+      );
+    }
     browser = await browserType.launch({ headless: true });
     report.environment.browser = { name: 'chromium', version: browser.version() };
     for (let iteration = 0; iteration < report.integrity.readyIterations; iteration += 1) {
@@ -2085,6 +2100,8 @@ export async function stopDevProcessTree({ marker, origin, pid }, dependencies =
   const terminate = dependencies.terminateProcessGroup ?? terminateProcessGroup;
   const processGroupAlive = dependencies.processGroupAlive ?? isProcessGroupAlive;
   const portAvailability = dependencies.portAvailability ?? probeOriginPortAvailability;
+  const collectSocketEvidence =
+    dependencies.collectSocketEvidence ?? collectLinuxSocketOwnerEvidence;
   const signalMarkedProcesses = dependencies.signalMarkedProcesses ?? signalMarkedDevProcesses;
   const gracefulTimeoutMs = dependencies.gracefulTimeoutMs ?? DEV_PROCESS_GRACEFUL_STOP_TIMEOUT_MS;
   const forceTimeoutMs = dependencies.forceTimeoutMs ?? DEV_PROCESS_FORCE_STOP_TIMEOUT_MS;
@@ -2181,6 +2198,7 @@ export async function stopDevProcessTree({ marker, origin, pid }, dependencies =
   }
 
   let port = emptyPortStabilityEvidence(portStabilityWindowMs);
+  let socketEvidence = null;
   try {
     port = await waitForStablePortAvailability({
       now,
@@ -2198,6 +2216,28 @@ export async function stopDevProcessTree({ marker, origin, pid }, dependencies =
     }
   } catch (error) {
     errors.push(`dev origin ${canonicalOrigin} release probe failed: ${errorMessage(error)}`);
+  }
+
+  if (!port.satisfied) {
+    const busyAddresses = port.addresses
+      .filter((address) => address.supported && address.lastAvailable === false)
+      .map((address) => ({
+        address: address.address,
+        errorCode: address.lastErrorCode ?? 'UNKNOWN_BUSY',
+        family: address.family,
+      }));
+    if (busyAddresses.length > 0) {
+      try {
+        socketEvidence = validateSocketOwnerEvidence(
+          await collectSocketEvidence(
+            { busyAddresses, origin: canonicalOrigin, priorProcessMarker: marker },
+            dependencies.socketEvidenceDependencies ?? {},
+          ),
+        );
+      } catch (error) {
+        errors.push(`dev origin socket-owner evidence failed: ${errorMessage(error)}`);
+      }
+    }
   }
 
   return {
@@ -2223,6 +2263,7 @@ export async function stopDevProcessTree({ marker, origin, pid }, dependencies =
     },
     schema: DEV_SESSION_STOP_SCHEMA,
     signals,
+    socketEvidence,
   };
 }
 
@@ -2253,11 +2294,13 @@ async function waitForStablePortAvailability({
         busyChecks: 0,
         checks: 0,
         family: address.family,
+        lastAvailable: address.available,
         lastErrorCode: null,
         supported: address.supported,
         unsupportedChecks: 0,
       };
       aggregate.checks += 1;
+      aggregate.lastAvailable = address.available;
       aggregate.lastErrorCode = address.errorCode;
       aggregate.supported ||= address.supported;
       if (!address.supported) aggregate.unsupportedChecks += 1;
@@ -2404,6 +2447,7 @@ function failedDevSessionStop(origin, pid, error) {
     processGroup: { checks: 0, quiescent: false, waitedMs: 0 },
     schema: DEV_SESSION_STOP_SCHEMA,
     signals: [],
+    socketEvidence: null,
   };
 }
 
@@ -3083,16 +3127,22 @@ export function exactSampleCountFindings(report) {
     'edit-session',
   ];
   const allocation = report.integrity.portAllocation;
+  let expectedBasePort = Number.NaN;
+  try {
+    expectedBasePort = Number(new URL(report.integrity.command.origin).port);
+  } catch {
+    // The allocation validator below owns the single fail-closed finding for this cross-field bind.
+  }
   const expectedPorts = Array.from(
     { length: expectedHandoffTargets.length },
-    (_, index) => allocation?.basePort + index,
+    (_, index) => expectedBasePort + index,
   );
-  if (
-    allocation?.posture !== DEV_PORT_ALLOCATION_POSTURE ||
-    !Number.isSafeInteger(allocation?.basePort) ||
-    JSON.stringify(allocation?.ports) !== JSON.stringify(expectedPorts) ||
-    new Set(expectedPorts).size !== expectedPorts.length
-  ) {
+  try {
+    validateDevPortAllocationEvidence(allocation, {
+      basePort: expectedBasePort,
+      ports: expectedPorts,
+    });
+  } catch {
     findings.push('per-session dev port allocation is incomplete');
   }
   if (report.integrity.handoffs?.length !== expectedHandoffTargets.length) {
@@ -3136,6 +3186,7 @@ export function exactSampleCountFindings(report) {
       !validReadyRouteProbe(sample.readinessProbe) ||
       sample.lifecycle?.schema !== DEV_SESSION_STOP_SCHEMA ||
       sample.lifecycle.complete !== true ||
+      sample.lifecycle.socketEvidence !== null ||
       originPortOrNull(sample.lifecycle?.origin) !== expectedPorts[index]
     ) {
       findings.push(`ready sample ${String(index)} is incomplete`);
@@ -3144,6 +3195,7 @@ export function exactSampleCountFindings(report) {
   if (
     report.editSession?.lifecycle?.schema !== DEV_SESSION_STOP_SCHEMA ||
     report.editSession.lifecycle.complete !== true ||
+    report.editSession.lifecycle.socketEvidence !== null ||
     report.editSession.browserContextClosed !== true ||
     !validReadyRouteProbe(report.editSession.readinessProbe) ||
     originPortOrNull(report.editSession.lifecycle.origin) !== expectedPorts.at(-1)

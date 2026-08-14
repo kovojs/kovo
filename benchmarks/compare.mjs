@@ -11,6 +11,7 @@ import { readArg, readIntegerArg } from './harness/args.mjs';
 import { bfcacheIterationFindings } from './harness/bfcache.mjs';
 import { BROWSER_BENCHMARK_SCHEMA } from './harness/schema.mjs';
 import { DEV_PORT_ALLOCATION_POSTURE, DEV_SESSION_PORT_STRIDE } from './corpora/generate.mjs';
+import { DEFAULT_DEV_PORT_BASE } from './harness/dev-port-allocation.mjs';
 import {
   canonicalJson,
   PERF_HOST_SCHEMA,
@@ -79,7 +80,7 @@ export async function runComparison(options = {}) {
         warmups: options.devWarmups ?? 3,
       })
     : [];
-  const devPortBase = options.devPortBase ?? 49_700;
+  const devPortBase = options.devPortBase ?? DEFAULT_DEV_PORT_BASE;
   if (!Number.isSafeInteger(devPortBase) || devPortBase < 1_024) {
     throw new TypeError('dev port base must be an integer at or above 1024');
   }
@@ -1979,7 +1980,7 @@ export async function performanceWorkloadIdentity(
       devEditSessionSamples: devSchedule.filter(({ framework }) => framework === 'kovo').length,
       devOccurrenceSchedule: devSchedule,
       devPortAllocationPosture: DEV_PORT_ALLOCATION_POSTURE,
-      devPortBase: options.devPortBase ?? 49_700,
+      devPortBase: options.devPortBase ?? DEFAULT_DEV_PORT_BASE,
       devPortStride: DEV_SESSION_PORT_STRIDE,
       devReadySamples: options.devReadyIterations ?? 15,
       devWarmups: options.devWarmups ?? 3,

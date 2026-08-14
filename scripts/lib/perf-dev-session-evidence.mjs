@@ -1,8 +1,8 @@
-import { DEV_PORT_ALLOCATION_POSTURE } from '../../benchmarks/corpora/generate.mjs';
+import { validateDevPortAllocationEvidence } from '../../benchmarks/harness/dev-port-allocation.mjs';
 import { validReadyRouteProbe } from './perf-ready-route.mjs';
 
 export const DEV_SESSION_HANDOFF_SCHEMA = 'kovo-dev-session-handoff/v1';
-export const DEV_SESSION_STOP_SCHEMA = 'kovo-dev-session-stop/v3';
+export const DEV_SESSION_STOP_SCHEMA = 'kovo-dev-session-stop/v4';
 
 const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 
@@ -32,15 +32,9 @@ export function devSessionHandoffFindings(report, options) {
   ];
   const ports = targets.map((_, index) => basePort + index);
   const allocation = report?.integrity?.portAllocation;
-  const declaredPorts = Array.isArray(allocation?.ports) ? allocation.ports : null;
-  if (
-    allocation?.posture !== DEV_PORT_ALLOCATION_POSTURE ||
-    allocation?.basePort !== basePort ||
-    declaredPorts === null ||
-    declaredPorts.length !== ports.length ||
-    ports.some((port, index) => declaredPorts[index] !== port) ||
-    new Set(declaredPorts).size !== ports.length
-  ) {
+  try {
+    validateDevPortAllocationEvidence(allocation, { basePort, ports });
+  } catch {
     findings.push('unique per-session dev port allocation is incomplete');
   }
   const handoffs = report?.integrity?.handoffs;
@@ -85,6 +79,7 @@ export function devSessionHandoffFindings(report, options) {
     if (
       lifecycle?.schema !== DEV_SESSION_STOP_SCHEMA ||
       lifecycle?.complete !== true ||
+      lifecycle?.socketEvidence !== null ||
       !exactLocalhostOrigin(lifecycle?.origin, ports[index])
     ) {
       findings.push(`ready[${String(index)}] dev lifecycle is incomplete`);
@@ -101,6 +96,7 @@ export function devSessionHandoffFindings(report, options) {
   if (
     editLifecycle?.schema !== DEV_SESSION_STOP_SCHEMA ||
     editLifecycle?.complete !== true ||
+    editLifecycle?.socketEvidence !== null ||
     !exactLocalhostOrigin(editLifecycle?.origin, ports.at(-1))
   ) {
     findings.push('edit-session dev lifecycle is incomplete');

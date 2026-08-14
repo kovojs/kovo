@@ -185,7 +185,7 @@ describe('dev-generation candidate comparator', () => {
     const workload = {
       buildOutputContract: 'required-nonempty-and-cleanup-absent/v1',
       componentImportFanout: 24,
-      devPortAllocationPosture: 'unique-exact-port-per-session/v1',
+      devPortAllocationPosture: 'unique-exact-port-outside-host-ephemeral/v2',
       editClasses: EDIT_CLASSES,
       editSavePosture: 'posix-sibling-temp-write-rename/v1',
       routes: 4,
@@ -215,7 +215,7 @@ describe('dev-generation candidate comparator', () => {
     writeFileSync(manifestPath, `${JSON.stringify(manifest)}\n`);
 
     expect(inspectGeneratedDevCorpus(manifestPath, root)).toMatchObject({
-      devPortAllocationPosture: 'unique-exact-port-per-session/v1',
+      devPortAllocationPosture: 'unique-exact-port-outside-host-ephemeral/v2',
       editClasses: EDIT_CLASSES,
       editSavePosture: 'posix-sibling-temp-write-rename/v1',
       modules: 24,
@@ -375,10 +375,10 @@ describe('dev-generation candidate comparator', () => {
     );
 
     expect(calls).toEqual([
-      { lane: 'baseline', port: 49_750, readyTimeoutMs: 600_000, timeoutMs: 1_800_000 },
-      { lane: 'spike', port: 49_878, readyTimeoutMs: 600_000, timeoutMs: 1_800_000 },
-      { lane: 'spike', port: 50_006, readyTimeoutMs: 600_000, timeoutMs: 1_800_000 },
-      { lane: 'baseline', port: 50_134, readyTimeoutMs: 600_000, timeoutMs: 1_800_000 },
+      { lane: 'baseline', port: 20_000, readyTimeoutMs: 600_000, timeoutMs: 1_800_000 },
+      { lane: 'spike', port: 20_128, readyTimeoutMs: 600_000, timeoutMs: 1_800_000 },
+      { lane: 'spike', port: 20_256, readyTimeoutMs: 600_000, timeoutMs: 1_800_000 },
+      { lane: 'baseline', port: 20_384, readyTimeoutMs: 600_000, timeoutMs: 1_800_000 },
     ]);
     expect(released).toBe(true);
     expect(report.integrity).toMatchObject({
@@ -587,6 +587,57 @@ describe('dev-generation candidate comparator', () => {
     expect(acquireLock).not.toHaveBeenCalled();
     expect(runAdapter).not.toHaveBeenCalled();
   });
+
+  it('records an unproven host range and refuses every timing control before launch', async () => {
+    const baselineRoot = temporaryDirectory('kovo-dev-generation-range-baseline-');
+    const spikeRoot = temporaryDirectory('kovo-dev-generation-range-spike-');
+    const prepared = preparedFixture(baselineRoot, spikeRoot);
+    const acquireLock = vi.fn();
+    const runAdapter = vi.fn();
+    const sampleHost = vi.fn();
+    const report = await runDevGenerationSpike(
+      { baselineRoot, measure: true, quickSmoke: true, spikeRoot },
+      {
+        acquireLock,
+        collectState: (root) =>
+          prepared.source.before[root === baselineRoot ? 'baseline' : 'spike'],
+        inspectPortAllocation: async ({ basePort, inspectorPorts, ports }) => ({
+          basePort,
+          complete: false,
+          errors: ['host ephemeral port range is unproven: unsupported host'],
+          hostEphemeral: {
+            complete: false,
+            error: 'unsupported host',
+            platform: 'aix',
+            probe: null,
+            ranges: [],
+            schema: 'kovo-host-ephemeral-port-ranges/v1',
+            scope: 'tcp-loopback-v4-v6/v1',
+          },
+          inspectorPorts,
+          overlaps: [],
+          ports,
+          posture: 'unique-exact-port-outside-host-ephemeral/v2',
+          schema: 'kovo-dev-port-allocation/v1',
+        }),
+        prepare: async () => prepared,
+        runAdapter,
+        sampleHost,
+      },
+    );
+
+    expect(sampleHost).not.toHaveBeenCalled();
+    expect(acquireLock).not.toHaveBeenCalled();
+    expect(runAdapter).not.toHaveBeenCalled();
+    expect(report).toMatchObject({
+      integrity: {
+        complete: false,
+        errors: [expect.stringContaining('host ephemeral port range is unproven')],
+      },
+      portAllocation: { complete: false, hostEphemeral: { platform: 'aix' } },
+      verdict: { status: 'unproven' },
+    });
+  });
 });
 
 function candidateFixture({ spikeStatus = '' } = {}) {
@@ -789,11 +840,10 @@ function fakeAdapterReport({
       ),
       iterations: editSamples,
       misses: 0,
-      portAllocation: {
-        basePort: port,
-        ports: Array.from({ length: readySamples + 1 }, (_, index) => port + index),
-        posture: 'unique-exact-port-per-session/v1',
-      },
+      portAllocation: completePortAllocation(
+        port,
+        Array.from({ length: readySamples + 1 }, (_, index) => port + index),
+      ),
       readyIterations: readySamples,
       source: { stable: true },
       warmups,
@@ -837,7 +887,7 @@ function sourceState(commit) {
 
 function corpusIdentity() {
   return {
-    devPortAllocationPosture: 'unique-exact-port-per-session/v1',
+    devPortAllocationPosture: 'unique-exact-port-outside-host-ephemeral/v2',
     editClasses: EDIT_CLASSES,
     editSavePosture: 'posix-sibling-temp-write-rename/v1',
     manifestDigest: digest('4'),
@@ -900,7 +950,35 @@ function completeStop(port) {
   return {
     complete: true,
     origin: `http://localhost:${String(port)}`,
-    schema: 'kovo-dev-session-stop/v3',
+    schema: 'kovo-dev-session-stop/v4',
+    socketEvidence: null,
+  };
+}
+
+function completePortAllocation(basePort, ports, inspectorPorts = []) {
+  return {
+    basePort,
+    complete: true,
+    errors: [],
+    hostEphemeral: {
+      complete: true,
+      error: null,
+      platform: 'linux',
+      probe: {
+        bytes: 12,
+        kind: 'procfs',
+        locator: '/proc/sys/net/ipv4/ip_local_port_range',
+        sha256: digest('e'),
+      },
+      ranges: [{ label: 'default', maximum: 65_535, minimum: 60_000 }],
+      schema: 'kovo-host-ephemeral-port-ranges/v1',
+      scope: 'tcp-loopback-v4-v6/v1',
+    },
+    inspectorPorts,
+    overlaps: [],
+    ports,
+    posture: 'unique-exact-port-outside-host-ephemeral/v2',
+    schema: 'kovo-dev-port-allocation/v1',
   };
 }
 

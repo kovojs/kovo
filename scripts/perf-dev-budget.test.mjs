@@ -440,7 +440,7 @@ function workloadIdentity(corpusSize) {
       devEditSamples: 30,
       devEditSessionSamples: 2,
       devOccurrenceSchedule: schedule,
-      devPortAllocationPosture: 'unique-exact-port-per-session/v1',
+      devPortAllocationPosture: 'unique-exact-port-outside-host-ephemeral/v2',
       devPortBase: 49_700,
       devPortStride: 128,
       devReadySamples: 15,
@@ -504,14 +504,10 @@ function rawDevCells(corpusSize, { locks, shapeDigest, sourceCommit }) {
           ),
           iterations: schedule.editSamples,
           misses: 0,
-          portAllocation: {
+          portAllocation: completePortAllocation(
             basePort,
-            ports: Array.from(
-              { length: schedule.readySamples + 1 },
-              (_, index) => basePort + index,
-            ),
-            posture: 'unique-exact-port-per-session/v1',
-          },
+            Array.from({ length: schedule.readySamples + 1 }, (_, index) => basePort + index),
+          ),
           readyIterations: schedule.readySamples,
           source: { stable: true },
           warmups: schedule.warmups,
@@ -589,7 +585,35 @@ function completeStop(port) {
   return {
     complete: true,
     origin: `http://localhost:${String(port)}`,
-    schema: 'kovo-dev-session-stop/v3',
+    schema: 'kovo-dev-session-stop/v4',
+    socketEvidence: null,
+  };
+}
+
+function completePortAllocation(basePort, ports, inspectorPorts = []) {
+  return {
+    basePort,
+    complete: true,
+    errors: [],
+    hostEphemeral: {
+      complete: true,
+      error: null,
+      platform: 'linux',
+      probe: {
+        bytes: 12,
+        kind: 'procfs',
+        locator: '/proc/sys/net/ipv4/ip_local_port_range',
+        sha256: digest('ephemeral'),
+      },
+      ranges: [{ label: 'default', maximum: 65_535, minimum: 60_000 }],
+      schema: 'kovo-host-ephemeral-port-ranges/v1',
+      scope: 'tcp-loopback-v4-v6/v1',
+    },
+    inspectorPorts,
+    overlaps: [],
+    ports,
+    posture: 'unique-exact-port-outside-host-ephemeral/v2',
+    schema: 'kovo-dev-port-allocation/v1',
   };
 }
 
