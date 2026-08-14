@@ -31,6 +31,12 @@ const WORKFLOW_TRIGGER_POLICIES = Object.freeze({
         'workflow-dispatch:measurement_scope=decisions-or-all;decision_focus=all-or-build-profile',
     }),
   }),
+  'production-bytes': Object.freeze({
+    condition: "${{ github.event_name == 'pull_request' }}",
+    scopes: Object.freeze({
+      pull_request: 'pull-request:every-event',
+    }),
+  }),
 });
 const MAX_ZIP_ENTRIES = 10_000;
 const MAX_API_RESPONSE_BYTES = 1024 * 1024;
@@ -50,6 +56,9 @@ export async function authenticatePerformanceArtifactEvidence(
   {
     baseDirectory = process.cwd(),
     expectedArtifactName,
+    allowedProducerJobConclusions = ['success'],
+    allowedProducerFailureStep = null,
+    requiredProducerSuccessSteps = [],
     expectedArchiveMembers,
     expectedAuxiliaryMember,
     expectedAuxiliaryMemberGroup,
@@ -81,6 +90,11 @@ export async function authenticatePerformanceArtifactEvidence(
   });
   validateExpectedArchiveMembers(expectedArchiveMembers, expectedReportMember);
   validateExpectedWorkflowJob(expectedWorkflowJob);
+  validateAllowedProducerJobConclusions(
+    allowedProducerJobConclusions,
+    allowedProducerFailureStep,
+    requiredProducerSuccessSteps,
+  );
 
   const apiPath = path.resolve(baseDirectory, evidence.apiMetadata);
   const archivePath = path.resolve(baseDirectory, evidence.archive);
@@ -228,6 +242,9 @@ export async function authenticatePerformanceArtifactEvidence(
   }
   const workflowAuthority = authenticateWorkflowAuthority({
     artifactMetadata: metadata,
+    allowedProducerJobConclusions,
+    allowedProducerFailureStep,
+    requiredProducerSuccessSteps,
     expectedArtifactName,
     expectedWorkflowJob,
     jobsApiUrl,
@@ -467,6 +484,9 @@ async function fetchGitHubApiResponse(endpoint, label) {
 
 function authenticateWorkflowAuthority({
   artifactMetadata,
+  allowedProducerJobConclusions,
+  allowedProducerFailureStep,
+  requiredProducerSuccessSteps,
   expectedArtifactName,
   expectedWorkflowJob,
   jobsApiUrl,
@@ -594,6 +614,35 @@ function authenticateWorkflowAuthority({
   }
   const job = matchingJobs[0] ?? null;
   const jobId = job?.id;
+  const steps = Array.isArray(job?.steps) ? job.steps : [];
+  const failedSteps = steps.filter((step) => step?.conclusion === 'failure');
+  const failureStepMatches = steps.filter((step) => step?.name === allowedProducerFailureStep);
+  const requiredSuccessStepMatches = requiredProducerSuccessSteps.map((name) =>
+    steps.filter((step) => step?.name === name),
+  );
+  const authorizedFailureStep = failureStepMatches[0] ?? null;
+  const authorizedRequiredSuccessSteps = requiredSuccessStepMatches.map(
+    ([requiredStep]) => requiredStep,
+  );
+  const authorizedFailure =
+    job?.conclusion === 'failure' &&
+    requiredProducerSuccessSteps.length === 2 &&
+    failedSteps.length === 1 &&
+    failureStepMatches.length === 1 &&
+    authorizedFailureStep?.conclusion === 'failure' &&
+    authorizedFailureStep?.status === 'completed' &&
+    Number.isSafeInteger(authorizedFailureStep?.number) &&
+    authorizedFailureStep.number > 0 &&
+    requiredSuccessStepMatches.every(
+      (matches) =>
+        matches.length === 1 &&
+        matches[0]?.conclusion === 'success' &&
+        matches[0]?.status === 'completed' &&
+        Number.isSafeInteger(matches[0]?.number) &&
+        matches[0].number > 0,
+    ) &&
+    authorizedRequiredSuccessSteps[0].number < authorizedFailureStep.number &&
+    authorizedFailureStep.number < authorizedRequiredSuccessSteps[1].number;
   if (
     job !== null &&
     (!Number.isSafeInteger(jobId) ||
@@ -602,10 +651,11 @@ function authenticateWorkflowAuthority({
       job.run_attempt !== runAttempt ||
       job.head_sha !== runHeadSha ||
       job.status !== 'completed' ||
-      job.conclusion !== 'success' ||
+      !allowedProducerJobConclusions.includes(job.conclusion) ||
+      (job.conclusion === 'failure' && !authorizedFailure) ||
       job.url !== `https://api.github.com/repos/${repository}/actions/jobs/${String(jobId)}`)
   ) {
-    findings.push('expected workflow family job is not an exact successful job in the live run');
+    findings.push('expected workflow artifact producer job is not authorized in the live run');
   }
   const jobStartedAt = validTimestamp(job?.started_at, 'workflow job started_at', findings);
   const jobCompletedAt = validTimestamp(job?.completed_at, 'workflow job completed_at', findings);
@@ -629,9 +679,25 @@ function authenticateWorkflowAuthority({
             : null,
         completedAt: job?.completed_at ?? null,
         conclusion: job?.conclusion ?? null,
+        failureStep: !authorizedFailure
+          ? null
+          : {
+              conclusion: authorizedFailureStep.conclusion,
+              name: authorizedFailureStep.name,
+              number: authorizedFailureStep.number,
+              status: authorizedFailureStep.status,
+            },
         id: jobId ?? null,
         key: expectedWorkflowJob.key,
         name: expectedWorkflowJob.name,
+        requiredSuccessSteps: !authorizedFailure
+          ? []
+          : authorizedRequiredSuccessSteps.map((step) => ({
+              conclusion: step.conclusion,
+              name: step.name,
+              number: step.number,
+              status: step.status,
+            })),
         runAttempt: job?.run_attempt ?? null,
         startedAt: job?.started_at ?? null,
         status: job?.status ?? null,
@@ -752,11 +818,14 @@ function decodeGitHubFileContent(metadata, findings) {
 
 function workflowJobCondition(workflow, jobKey) {
   const job = workflowJobBlock(workflow, jobKey);
-  const match = /^    if: >-\n((?:      .*\n)+)/gmu.exec(job);
-  if (match === null || job.slice(match.index + match[0].length).includes('\n    if:')) {
-    throw new TypeError(`workflow job ${jobKey} has no unique folded if condition`);
+  const folded = /^    if: >-\n((?:      .*\n)+)/gmu.exec(job);
+  const literal = /^    if: (\$\{\{ [^\r\n]+ \}\})$/gmu.exec(job);
+  const conditions = [...job.matchAll(/^    if:/gmu)];
+  if (conditions.length !== 1 || (folded === null && literal === null)) {
+    throw new TypeError(`workflow job ${jobKey} has no unique supported if condition`);
   }
-  return match[1]
+  if (literal !== null) return literal[1];
+  return folded[1]
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
@@ -910,6 +979,32 @@ function validateExpectedWorkflowJob(value) {
   }
 }
 
+function validateAllowedProducerJobConclusions(value, failureStep, requiredSuccessSteps) {
+  if (
+    !Array.isArray(value) ||
+    value.length < 1 ||
+    value.length > 2 ||
+    new Set(value).size !== value.length ||
+    value.some((conclusion) => !['failure', 'success'].includes(conclusion)) ||
+    (value.includes('failure')
+      ? !nonEmptyString(failureStep) ||
+        failureStep.trim() !== failureStep ||
+        !Array.isArray(requiredSuccessSteps) ||
+        requiredSuccessSteps.length !== 2 ||
+        new Set(requiredSuccessSteps).size !== requiredSuccessSteps.length ||
+        requiredSuccessSteps.some(
+          (step) => !nonEmptyString(step) || step.trim() !== step || step === failureStep,
+        )
+      : failureStep !== null ||
+        !Array.isArray(requiredSuccessSteps) ||
+        requiredSuccessSteps.length !== 0)
+  ) {
+    throw new TypeError(
+      'allowed producer conclusions and ordered failure-step authorization are malformed',
+    );
+  }
+}
+
 function validateWorkflowRunFetchIdentity(repository, workflowRunId) {
   if (!REPOSITORY_PATTERN.test(repository ?? '')) {
     throw new TypeError('repository must be an exact owner/name identity');
@@ -1007,6 +1102,18 @@ function workflowJobsAuthorityProjection(value) {
         node_id: job?.node_id ?? null,
         run_attempt: job?.run_attempt ?? null,
         run_id: job?.run_id ?? null,
+        steps: Array.isArray(job?.steps)
+          ? job.steps
+              .map((step) => ({
+                completed_at: step?.completed_at ?? null,
+                conclusion: step?.conclusion ?? null,
+                name: step?.name ?? null,
+                number: step?.number ?? null,
+                started_at: step?.started_at ?? null,
+                status: step?.status ?? null,
+              }))
+              .sort((left, right) => Number(left.number) - Number(right.number))
+          : null,
         started_at: job?.started_at ?? null,
         status: job?.status ?? null,
         url: job?.url ?? null,

@@ -93,6 +93,11 @@ selector is present, `perf-baseline-focus-build-n216`) before applying
 | build N=216   | `kovo-perf-build-n216`     | `comparison.json`          |                5 |
 | server        | `kovo-perf-server-matrix`  | `comparison.json`          |                5 |
 
+The separate `kovo-perf-bytes` / `bytes.json` artifact contributes one Production-bytes sidecar,
+not another five-report family. It is emitted only by the PR-only `bytes` / `Production bytes` job.
+The metrics-blind collector retains every such artifact in the selected runs and chooses the
+earliest authenticated candidate by immutable run chronology for the final manifest.
+
 Use the canonical artifact page URL, not a signed download URL, for every `--location`:
 
 ```text
@@ -104,9 +109,9 @@ samples per cell, and ten bfcache traversals. The check report uses the same aut
 source/lock, normalized host-v2, quiet-host, and workload identities as the comparison reports.
 A dirty, busy, incomplete, duplicate, or identity-mismatched report produces `unproven`.
 
-Baseline jobs request 90-day Actions retention. Finish review and commit the summary/budgets before
-the effective repository retention window closes; the canonical artifact-page URL is stable during
-retention, but it is not permanent storage.
+Baseline jobs request 90-day Actions retention, while the PR-only Production-bytes artifact requests
+14 days. Collect and publish the selected sidecar before that shorter window closes. The canonical
+artifact-page URL is stable during retention, but it is not permanent storage.
 
 ## Ratify each subject
 
@@ -190,9 +195,11 @@ in their linked Actions artifacts; local download paths are not evidence locatio
 
 Individual budgets are not permission to publish a Kovo-vs-Next claim. The aggregate gate requires
 all seven subjects together, re-runs the existing ratifier and family-specific budget derivation on
-exactly five reports, and evaluates a sixth report as an independent holdout. The browser, dev,
-build, and server families are Kovo-vs-Next subjects. Check scaling is deliberately Kovo-only; the
-aggregate must not manufacture a Next.js check result.
+exactly five reports, and evaluates a sixth report as an independent holdout. It additionally
+requires one exact-final-source Production-bytes sidecar; this deterministic regression check is
+not ratified as an eighth family. The browser, dev, build, and server families are Kovo-vs-Next
+subjects. Check scaling is deliberately Kovo-only; the aggregate must not manufacture a Next.js
+check result.
 
 For each report, retain five local files from the same artifact and workflow run:
 
@@ -221,13 +228,20 @@ unzip -p "$kovo_perf_custody/run-1/browser.zip" comparison.json \
   > "$kovo_perf_custody/run-1/comparison.json"
 ```
 
-The input manifest is `kovo-performance-publication-input/v1`. This abridged, non-runnable example
+The input manifest is `kovo-performance-publication-input/v2`. This abridged, non-runnable example
 shows one family's shape:
 
 ```json
 {
-  "schema": "kovo-performance-publication-input/v1",
+  "schema": "kovo-performance-publication-input/v2",
   "repository": "kovojs/kovo",
+  "productionBytes": {
+    "apiMetadata": "run-1/bytes.api.json",
+    "archive": "run-1/bytes.zip",
+    "jobsApiMetadata": "run-1/bytes.jobs.api.json",
+    "runApiMetadata": "run-1/bytes.run.api.json",
+    "report": "run-1/bytes.json"
+  },
   "families": {
     "browser": {
       "baseline": [
@@ -281,8 +295,9 @@ shows one family's shape:
 
 The example expands only `browser` for readability. A real manifest must contain that exact
 five-plus-one shape for `browser`, `dev-n24`, `dev-n216`, `build-n24`, `build-n216`, `server`, and
-`check`; missing or additional families fail before any file is read. Paths are resolved relative to
-the input manifest.
+`check`, plus exactly one top-level `productionBytes` descriptor. Missing or additional families,
+or a missing sidecar, fail before any file is read. Paths are resolved relative to the input
+manifest.
 
 If the build-persistence predicate returns `profile-required`, add the two current N=216 profile
 reports under the optional top-level `buildProfiles` object. Each descriptor uses the same exact
@@ -332,7 +347,7 @@ vp exec node scripts/perf-publication-gate.mjs \
   --markdown-out "$kovo_perf_custody/publication/performance-publication.md"
 ```
 
-The CLI completes all 42 baseline/holdout custody calls and both optional build-profile calls before
+The CLI completes all 42 baseline/holdout custody calls, the Production-bytes custody call, and both optional build-profile calls before
 it creates an evidence, JSON, Markdown, staging, or output path. A requested in-repository output is
 therefore created only after the whole measured checkout has passed every clean-source check; using
 the external directory above avoids coupling collection and publication to repository state.
@@ -344,7 +359,11 @@ source, lock, host, and workload identity. Its Markdown surfaces baseline and ho
 assessments for all seven families, links exact fixture sources at the measured commit, and preserves
 the architectural lane warning beside each subject. It also embeds and renders the cross-corpus
 foreground build-session assessment, including its four milestone/residual cells and any
-custody-authenticated profile references.
+custody-authenticated profile references. The same aggregate JSON and Markdown retain the selected
+Production-bytes artifact custody, the exact `perf-budgets.json` byte length and SHA-256 from the
+clean measured-source checkout, all five observed values and budget maxima, and the derived
+pass/blocked/unproven sidecar status. The derived family evidence directory remains exactly 21
+files; the sidecar does not create a synthetic baseline/budget/evaluation family document.
 
 For each dev family, the rendered baseline and holdout target assessments include the exact median
 and p95 regression census for leaf, entry, data-plane, syntax-error, recovery, ready, and
@@ -366,16 +385,22 @@ response digests for audit, then canonicalizes only their reviewed immutable fie
 saved/live authority digests to match. Whole-response equality is deliberately not authority: an
 old run's embedded `pull_requests[].head.sha` follows the current PR head after the measured run.
 The run must be completed, use `.github/workflows/perf-realistic.yml`, belong to `kovojs/kovo`, and
-retain the exact immutable head/source SHA, run attempt, and expected successful family job. A
-failed unrelated sibling job does not invalidate that producer's artifact; the uniquely bound
-producer job, report, ZIP, and workflow authority remain the evidence boundary.
+retain the exact immutable head/source SHA, run attempt, and expected producer job. Every ratified
+family producer must succeed. The Production-bytes producer may conclude `failure` only when the
+all-attempt jobs API proves this ordered step outcome: measurement succeeded, the separate budget
+evaluation was the sole failed step, and the later commit-pinned `always()` upload succeeded. These
+step facts participate in saved/live authority equality and remain in the publication reference. A
+skipped, cancelled, failed, duplicated, or out-of-order measurement/upload is rejected; the report
+must also remain complete, measured, clean, and byte-authenticated. A failed unrelated sibling job
+does not invalidate an accepted producer's artifact.
 
 The report separately retains `GITHUB_WORKFLOW_SHA`, the commit whose workflow GitHub evaluated.
 For a pull request it is the synthetic merge/event SHA; for other reviewed triggers it equals the
 run head and measured source. The gate fetches the workflow file from GitHub's Contents API at that
 evaluated workflow SHA, verifies its Git blob and bytes against the clean local workflow, and
 requires local checkout `HEAD` to equal the measured source SHA and the whole checkout to be clean.
-It then extracts the exact folded job `if` expression and requires one uniquely owned, commit-pinned
+It then extracts the exact reviewed job `if` expression (folded for baseline/profile producers and
+the literal PR-only condition for Production bytes) and requires one uniquely owned, commit-pinned
 `actions/upload-artifact` step with the reviewed literal name template and path. A successful family
 job therefore authenticates the scheduled baseline scope, `measurement_scope=baselines|all`, or the
 exact `perf-measure-baselines` labeled-PR condition instead of trusting an event name alone. The
@@ -387,15 +412,22 @@ download-receipt field, so the gate does not invent one. The gate requires the Z
 census to equal the reviewed family contract, safely reads and CRC-checks each expected member, then
 requires the extracted report to be byte-identical. It
 also requires an unexpired retention record, five distinct baseline workflow runs, and a sixth run
-not used by that family's baseline. All 42 reports must share the exact source and dependency locks;
-each holdout must match its family's ratified host and workload.
+not used by that family's baseline. All 42 reports and the Production-bytes sidecar must share the
+exact source and dependency locks; each holdout must match its family's ratified host and workload.
+The sidecar additionally requires the exact `kovo-perf-report/v1` source/sourceAfter, execution,
+integrity, `suite=bytes`, `componentCount=24`, and five-metric census.
 
 Before writing, the aggregate gate re-ratifies every baseline from its five authenticated raw
 reports, re-derives each family budget, and re-evaluates each holdout. It recomputes the exact target
 assessment and the byte and semantic digests for all 21 baseline/budget/evaluation documents. After
 writing, it reads those 21 files and the aggregate JSON back, verifies canonical bytes and digests,
 and repeats the result-level validation. A self-consistently edited target, evaluation, or document
-plus a recomputed aggregate self-hash therefore cannot produce exit status 0. The same result gate
+plus a recomputed aggregate self-hash therefore cannot produce exit status 0. It also reloads
+`perf-budgets.json` from a clean checkout whose `HEAD` equals the measured source, requires disk
+bytes to equal `git show HEAD:perf-budgets.json`, evaluates exactly the five deterministic byte
+metrics, and canonically reproduces the sidecar assessment during result and readback validation.
+Every metric must be `pass`; a `fail` blocks publication, while any missing, unbudgeted, malformed,
+or otherwise undecidable value is unproven. The same result gate
 re-derives the foreground-build assessment from the exact N=24/N=216 budgets and authenticated
 profiles. For each optional mode it reads every mode-prefixed original `.cpuprofile` directly from
 the authenticated ZIP and checks each report-declared member, PID, role, byte length, and SHA-256.
@@ -433,7 +465,7 @@ artifact, run, all-attempt jobs, and commit-addressed workflow-file endpoint. Th
 responses must produce the same canonical immutable authority projections as their saved `gh api`
 outputs; their raw digests remain audit facts and may differ when GitHub updates a mutable field. The
 workflow response must decode to the exact clean local workflow bytes. An offline run, stale
-authority projection, API error, incomplete run, failed producer job, wrong workflow/scope, dirty
+authority projection, API error, incomplete run, disallowed producer conclusion, wrong workflow/scope, dirty
 checkout, or expired artifact is unproven. API responses and extracted reports are bounded to 1 MiB and 128 MiB,
 respectively, and an artifact ZIP is rejected before reading or parsing when it exceeds 512 MiB. The
 gate's bounded claim is that live GitHub authority, GitHub's published archive digest, exact ZIP

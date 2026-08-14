@@ -1,13 +1,16 @@
 #!/usr/bin/env node
+import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { promisify } from 'node:util';
 
 import {
   PERF_REALISTIC_WORKFLOW_PATH,
   authenticatePerformanceArtifactEvidence,
 } from './lib/perf-artifact-custody.mjs';
+import { executionIdentityFindings } from './lib/perf-execution.mjs';
 import {
   buildProfileConfigStaticTrustRequired,
   deriveBuildProfileSetAnalysis,
@@ -51,14 +54,16 @@ import {
 } from './perf-dev-budget.mjs';
 import { packedComparisonProductEvidenceFindings } from './lib/perf-packed-kovo-product.mjs';
 import { canonicalJson } from './perf-regression-check.mjs';
+import { evaluateReport, PERF_BUDGETS_SCHEMA } from './perf-gate.mjs';
 
-export const PERF_PUBLICATION_INPUT_SCHEMA = 'kovo-performance-publication-input/v1';
-export const PERF_PUBLICATION_SCHEMA = 'kovo-performance-publication/v1';
+export const PERF_PUBLICATION_INPUT_SCHEMA = 'kovo-performance-publication-input/v2';
+export const PERF_PUBLICATION_SCHEMA = 'kovo-performance-publication/v2';
 export const PERF_PUBLICATION_REPOSITORY = 'kovojs/kovo';
 
 const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const COMMIT_PATTERN = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/u;
 const GIT_BLOB_PATTERN = /^[0-9a-f]{40}$/u;
+const execFileAsync = promisify(execFile);
 const REQUIRED_LOCKS = Object.freeze([
   'pnpm-lock.yaml',
   'benchmarks/nextjs/pnpm-lock.yaml',
@@ -97,6 +102,35 @@ const BUILD_PROFILE_TRIGGER_SCOPES = Object.freeze({
   pull_request: 'pull-request:labeled/perf-measure-decisions-or-build-profile',
   workflow_dispatch:
     'workflow-dispatch:measurement_scope=decisions-or-all;decision_focus=all-or-build-profile',
+});
+const PRODUCTION_BYTES_TRIGGER_SCOPES = Object.freeze({
+  pull_request: 'pull-request:every-event',
+});
+const PRODUCTION_BYTES_METRICS = Object.freeze([
+  'production.criticalPath.wireBytes',
+  'production.document.wireBytes',
+  'production.inlineBootstrap.gzipBytes',
+  'production.inlineBootstrap.identityBytes',
+  'production.navigation.wireBytes',
+]);
+const PRODUCTION_BYTES_CONFIG = Object.freeze({
+  artifactName: 'kovo-perf-bytes',
+  budgetFailureStep: 'Evaluate against perf-budgets.json',
+  budgetFailureSuccessSteps: Object.freeze([
+    'Measure critical-path, navigation and bootstrap bytes',
+    'Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+  ]),
+  componentCount: 24,
+  reportMember: 'bytes.json',
+  workflowJob: Object.freeze({
+    artifact: Object.freeze({
+      name: 'kovo-perf-bytes',
+      path: '${{ runner.temp }}/kovo-perf/bytes.json',
+    }),
+    key: 'bytes',
+    name: 'Production bytes',
+    triggerPolicy: 'production-bytes',
+  }),
 });
 const FAMILY_NAMES = Object.freeze([
   'browser',
@@ -241,7 +275,7 @@ const FAMILY_CONFIG = Object.freeze({
   }),
 });
 
-/** Authenticate all 42 report paths (five baselines and one holdout for seven families). */
+/** Authenticate all 42 family reports plus the separate deterministic Production-bytes sidecar. */
 export async function authenticatePerformancePublicationInput(
   input,
   {
@@ -250,6 +284,7 @@ export async function authenticatePerformancePublicationInput(
     fetchWorkflowFileApi,
     fetchWorkflowJobsApi,
     fetchWorkflowRunApi,
+    loadPerformanceBudgets = loadCommittedPerformanceBudgets,
     loadTrustedWorkflow,
     now = new Date().toISOString(),
     repositoryDirectory = process.cwd(),
@@ -341,7 +376,40 @@ export async function authenticatePerformancePublicationInput(
   if (buildProfileFindings.length > 0) {
     throw new TypeError(`build profile evidence: ${buildProfileFindings.join('\n')}`);
   }
-  return { buildProfiles, families, repository: input.repository };
+  let productionBytes;
+  try {
+    productionBytes = await authenticatePerformanceArtifactEvidence(input.productionBytes, {
+      allowedProducerJobConclusions: ['failure', 'success'],
+      allowedProducerFailureStep: PRODUCTION_BYTES_CONFIG.budgetFailureStep,
+      requiredProducerSuccessSteps: PRODUCTION_BYTES_CONFIG.budgetFailureSuccessSteps,
+      baseDirectory,
+      expectedArtifactName: PRODUCTION_BYTES_CONFIG.artifactName,
+      expectedArchiveMembers: [PRODUCTION_BYTES_CONFIG.reportMember],
+      expectedReportMember: PRODUCTION_BYTES_CONFIG.reportMember,
+      expectedWorkflowJob: PRODUCTION_BYTES_CONFIG.workflowJob,
+      fetchArtifactApi,
+      fetchWorkflowFileApi,
+      fetchWorkflowJobsApi,
+      fetchWorkflowRunApi,
+      loadTrustedWorkflow,
+      now,
+      repository: input.repository,
+      repositoryDirectory,
+    });
+    const reportFindings = productionBytesReportFindings(productionBytes.report);
+    if (reportFindings.length > 0) throw new TypeError(reportFindings.join('\n'));
+    if (typeof loadPerformanceBudgets !== 'function') {
+      throw new TypeError('committed performance budget loader is unavailable');
+    }
+    const trustedBudgets = await loadPerformanceBudgets({
+      repositoryDirectory,
+      sourceSha: productionBytes.report.source.commit,
+    });
+    productionBytes = { ...productionBytes, ...trustedBudgets };
+  } catch (error) {
+    throw contextualError('Production bytes', error);
+  }
+  return { buildProfiles, families, productionBytes, repository: input.repository };
 }
 
 function validateBuildProfileEvidencePair(descriptors) {
@@ -355,6 +423,246 @@ function validateBuildProfileEvidencePair(descriptors) {
       'build profile modes must share one artifact/run custody set and distinct reports',
     );
   }
+}
+
+/** Read perf-budgets.json only from the exact clean measured-source checkout. */
+export async function loadCommittedPerformanceBudgets({ repositoryDirectory, sourceSha }) {
+  if (!COMMIT_PATTERN.test(sourceSha ?? '')) {
+    throw new TypeError('performance budget source SHA is unavailable');
+  }
+  const requestedRoot = await realpath(path.resolve(repositoryDirectory ?? process.cwd()));
+  const { stdout: rootOutput } = await execFileAsync('git', ['rev-parse', '--show-toplevel'], {
+    cwd: requestedRoot,
+    encoding: 'utf8',
+    maxBuffer: 1024 * 1024,
+    timeout: 30_000,
+  });
+  const root = await realpath(rootOutput.trim());
+  if (root !== requestedRoot) {
+    throw new TypeError('performance budget checkout must be the exact Git worktree root');
+  }
+  const budgetPath = path.join(root, 'perf-budgets.json');
+  const [facts, resolvedBudgetPath] = await Promise.all([lstat(budgetPath), realpath(budgetPath)]);
+  if (
+    !facts.isFile() ||
+    facts.isSymbolicLink() ||
+    resolvedBudgetPath !== budgetPath ||
+    facts.size < 1 ||
+    facts.size > 1024 * 1024
+  ) {
+    throw new TypeError('committed perf-budgets.json is not a bounded regular file');
+  }
+  const [{ stdout: headOutput }, { stdout: statusOutput }, { stdout: committedBytes }, bytes] =
+    await Promise.all([
+      execFileAsync('git', ['rev-parse', '--verify', 'HEAD^{commit}'], {
+        cwd: root,
+        encoding: 'utf8',
+        maxBuffer: 1024 * 1024,
+        timeout: 30_000,
+      }),
+      execFileAsync('git', ['status', '--porcelain=v1', '--untracked-files=all'], {
+        cwd: root,
+        encoding: 'utf8',
+        maxBuffer: 1024 * 1024,
+        timeout: 30_000,
+      }),
+      execFileAsync('git', ['show', 'HEAD:perf-budgets.json'], {
+        cwd: root,
+        encoding: 'buffer',
+        maxBuffer: 1024 * 1024,
+        timeout: 30_000,
+      }),
+      readFile(budgetPath),
+    ]);
+  const after = await lstat(budgetPath);
+  if (
+    !after.isFile() ||
+    after.isSymbolicLink() ||
+    after.dev !== facts.dev ||
+    after.ino !== facts.ino ||
+    after.size !== facts.size ||
+    after.mtimeMs !== facts.mtimeMs ||
+    bytes.length !== facts.size
+  ) {
+    throw new TypeError('perf-budgets.json changed while it was authenticated');
+  }
+  if (headOutput.trim() !== sourceSha) {
+    throw new TypeError('performance budget checkout HEAD differs from the measured source SHA');
+  }
+  if (statusOutput !== '') {
+    throw new TypeError('performance budget checkout has uncommitted or untracked changes');
+  }
+  if (!Buffer.isBuffer(committedBytes) || !bytes.equals(committedBytes)) {
+    throw new TypeError('perf-budgets.json differs from committed measured-source bytes');
+  }
+  const budgets = parseOutputJson(bytes, 'committed perf-budgets.json');
+  const budgetFindings = productionBytesBudgetFindings(budgets);
+  if (budgetFindings.length > 0) {
+    throw new TypeError(budgetFindings.join('\n'));
+  }
+  return {
+    budgetBytes: Buffer.from(bytes),
+    budgetIdentity: {
+      byteLength: bytes.length,
+      contentDigest: sha256Bytes(bytes),
+      path: 'perf-budgets.json',
+      schema: budgets.schema,
+      sourceCommit: sourceSha,
+    },
+    budgets,
+  };
+}
+
+export function productionBytesReportFindings(report) {
+  const findings = [];
+  if (!ownRecord(report) || report.schema !== 'kovo-perf-report/v1') {
+    findings.push('report schema must be kovo-perf-report/v1');
+  }
+  const expectedSourceKeys = ['commit', 'dirty', 'dirtyPaths', 'locks'];
+  for (const [label, source] of [
+    ['source', report?.source],
+    ['sourceAfter', report?.sourceAfter],
+  ]) {
+    if (
+      !ownRecord(source) ||
+      canonicalJson(Object.keys(source).sort()) !== canonicalJson(expectedSourceKeys) ||
+      !COMMIT_PATTERN.test(source.commit ?? '') ||
+      source.dirty !== false ||
+      canonicalJson(source.dirtyPaths) !== canonicalJson([]) ||
+      !ownRecord(source.locks) ||
+      canonicalJson(Object.keys(source.locks).sort()) !==
+        canonicalJson([...REQUIRED_LOCKS].sort()) ||
+      REQUIRED_LOCKS.some((lock) => !DIGEST_PATTERN.test(source.locks[lock] ?? ''))
+    ) {
+      findings.push(`${label} and dependency-lock identity are malformed`);
+    }
+  }
+  if (canonicalJson(report?.source) !== canonicalJson(report?.sourceAfter)) {
+    findings.push('sourceAfter differs from source');
+  }
+  if (
+    report?.execution?.provider !== 'github-actions' ||
+    report?.execution?.complete !== true ||
+    !DIGEST_PATTERN.test(report?.execution?.digest ?? '') ||
+    report?.execution?.github?.job !== PRODUCTION_BYTES_CONFIG.workflowJob.key ||
+    report?.execution?.github?.sha !== report?.source?.commit
+  ) {
+    findings.push('execution identity is malformed or belongs to the wrong job/source');
+  }
+  findings.push(
+    ...executionIdentityFindings(report?.execution, { requireProvider: 'github-actions' }),
+  );
+  const expectedIntegrity = [
+    'complete',
+    'executionAuthenticated',
+    'publishable',
+    'serialized',
+    'sourceStable',
+    'workloadAuthenticated',
+  ];
+  if (
+    !ownRecord(report?.integrity) ||
+    canonicalJson(Object.keys(report.integrity).sort()) !== canonicalJson(expectedIntegrity) ||
+    expectedIntegrity.some((field) => report.integrity[field] !== true)
+  ) {
+    findings.push('integrity census is malformed or incomplete');
+  }
+  if (
+    report?.suite !== 'bytes' ||
+    report?.options?.componentCount !== PRODUCTION_BYTES_CONFIG.componentCount ||
+    canonicalJson(report?.workloadIdentity?.identity?.cells) !== canonicalJson(['bytes']) ||
+    report?.workloadIdentity?.identity?.policies?.componentCount !==
+      PRODUCTION_BYTES_CONFIG.componentCount
+  ) {
+    findings.push('suite or componentCount differs from the exact Production bytes policy');
+  }
+  if (
+    report?.workloadIdentity?.schema !== 'kovo-performance-workload-identity/v1' ||
+    report?.workloadIdentity?.complete !== true ||
+    report?.workloadIdentity?.digest !== sha256Canonical(report?.workloadIdentity?.identity ?? null)
+  ) {
+    findings.push('workload identity is malformed or not derived from its facts');
+  }
+  if (
+    !ownRecord(report?.metrics) ||
+    canonicalJson(Object.keys(report.metrics).sort()) !==
+      canonicalJson([...PRODUCTION_BYTES_METRICS].sort())
+  ) {
+    findings.push('metric census is not the exact five Production bytes metrics');
+  } else {
+    for (const metricId of PRODUCTION_BYTES_METRICS) {
+      const observation = report.metrics[metricId];
+      if (
+        !ownRecord(observation) ||
+        canonicalJson(Object.keys(observation)) !== canonicalJson(['value']) ||
+        !Number.isSafeInteger(observation.value) ||
+        observation.value < 0
+      ) {
+        findings.push(`${metricId} observation is malformed`);
+      }
+    }
+  }
+  if (
+    report?.verdict?.status !== 'measured' ||
+    canonicalJson(report?.verdict?.reasons) !== canonicalJson([])
+  ) {
+    findings.push('report verdict is not measured');
+  }
+  return [...new Set(findings)].sort();
+}
+
+function productionBytesBudgetFindings(budgets) {
+  const findings = [];
+  if (!ownRecord(budgets) || budgets.schema !== PERF_BUDGETS_SCHEMA) {
+    findings.push(`perf budgets schema must be ${PERF_BUDGETS_SCHEMA}`);
+    return findings;
+  }
+  for (const metricId of PRODUCTION_BYTES_METRICS) {
+    const budget = budgets.metrics?.[metricId];
+    if (
+      !ownRecord(budget) ||
+      budget.unit !== 'bytes' ||
+      budget.loadSensitive !== false ||
+      !Number.isSafeInteger(budget.max) ||
+      budget.max < 0
+    ) {
+      findings.push(`${metricId} committed deterministic byte budget is unavailable`);
+    }
+  }
+  return findings;
+}
+
+function productionBytesBudgetCustodyFindings(entry, sourceCommit) {
+  const findings = [];
+  const bytes = entry?.budgetBytes;
+  const identity = entry?.budgetIdentity;
+  if (!Buffer.isBuffer(bytes) || bytes.length < 1 || bytes.length > 1024 * 1024) {
+    return ['committed perf-budgets.json bytes are unavailable'];
+  }
+  const text = bytes.toString('utf8');
+  if (!Buffer.from(text, 'utf8').equals(bytes)) {
+    findings.push('committed perf-budgets.json bytes are not canonical UTF-8');
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    findings.push('committed perf-budgets.json bytes are not valid JSON');
+  }
+  if (parsed !== undefined && canonicalJson(parsed) !== canonicalJson(entry?.budgets)) {
+    findings.push('parsed perf-budgets.json differs from the retained budget document');
+  }
+  if (
+    !ownRecord(identity) ||
+    identity.path !== 'perf-budgets.json' ||
+    identity.schema !== PERF_BUDGETS_SCHEMA ||
+    identity.sourceCommit !== sourceCommit ||
+    identity.byteLength !== bytes.length ||
+    identity.contentDigest !== sha256Bytes(bytes)
+  ) {
+    findings.push('perf-budgets.json byte identity is malformed or unbound');
+  }
+  return findings;
 }
 
 /**
@@ -481,6 +789,13 @@ export function derivePerformancePublication(
     }
   }
 
+  const productionBytes = deriveProductionBytesAssessment(
+    authenticated?.productionBytes,
+    sourceCommit,
+    locks,
+  );
+  reasons.push(...productionBytes.reasons.map((reason) => `production bytes ${reason}`));
+
   let buildPersistenceAssessment;
   try {
     if (typeof assessBuildPersistence !== 'function') {
@@ -510,15 +825,20 @@ export function derivePerformancePublication(
     reasons.push(...buildPersistencePublicationReasons(buildPersistenceAssessment));
   }
 
-  const uniqueReasons = [...new Set(reasons)].sort();
+  const uniqueReasons = [...new Set(reasons)].sort((left, right) => left.localeCompare(right));
   const failures = [
     ...blockingFailures(families),
     ...buildPersistenceBlockingFailures(buildPersistenceAssessment),
+    ...productionBytes.failures.map((failure) => `production-bytes:${failure}`),
   ].sort((left, right) => left.localeCompare(right));
   const status =
-    uniqueReasons.length > 0 || FAMILY_NAMES.some((name) => families[name]?.status === 'unproven')
+    uniqueReasons.length > 0 ||
+    productionBytes.status === 'unproven' ||
+    FAMILY_NAMES.some((name) => families[name]?.status === 'unproven')
       ? 'unproven'
-      : failures.length > 0 || FAMILY_NAMES.some((name) => families[name]?.status !== 'pass')
+      : failures.length > 0 ||
+          productionBytes.status !== 'pass' ||
+          FAMILY_NAMES.some((name) => families[name]?.status !== 'pass')
         ? 'blocked'
         : 'publishable';
   const facts = {
@@ -527,6 +847,7 @@ export function derivePerformancePublication(
     fixtureSources: fixtureSources(sourceCommit),
     generatedAt,
     identity: { locks, sourceCommit },
+    productionBytes,
     repository: authenticated?.repository ?? null,
     schema: PERF_PUBLICATION_SCHEMA,
     verdict: { failures, reasons: uniqueReasons, status },
@@ -604,6 +925,14 @@ export function performancePublicationResultFindings(
         'build persistence assessment differs from its exact budgets and profile evidence',
       );
     }
+    if (
+      canonicalJson(publication?.productionBytes) !==
+      canonicalJson(reproduced.publication?.productionBytes)
+    ) {
+      findings.push(
+        'Production bytes assessment differs from authenticated report and committed budget reproduction',
+      );
+    }
     if (canonicalJson(publication) !== canonicalJson(reproduced.publication)) {
       findings.push('aggregate publication differs from authenticated raw-evidence reproduction');
     }
@@ -665,6 +994,7 @@ export function performancePublicationFindings(publication) {
   ) {
     findings.push('publication family census is incomplete');
   }
+  findings.push(...productionBytesAssessmentFindings(publication.productionBytes, publication));
   findings.push(
     ...buildPersistenceAssessmentFindings(publication.buildPersistenceAssessment).map(
       (finding) => `build persistence ${finding}`,
@@ -780,9 +1110,22 @@ export function performancePublicationFindings(publication) {
   ) {
     findings.push('publication verdict does not retain the unproven build persistence findings');
   }
+  const requiredProductionBytesReasons = (publication.productionBytes?.reasons ?? []).map(
+    (reason) => `production bytes ${String(reason)}`,
+  );
+  if (
+    requiredProductionBytesReasons.some(
+      (reason) => !Array.isArray(verdictReasons) || !verdictReasons.includes(reason),
+    )
+  ) {
+    findings.push('publication verdict does not retain the unproven Production bytes findings');
+  }
   const expectedFailures = [
     ...blockingFailures(publication.families ?? {}),
     ...buildPersistenceBlockingFailures(publication.buildPersistenceAssessment),
+    ...(publication.productionBytes?.failures ?? []).map(
+      (failure) => `production-bytes:${String(failure)}`,
+    ),
   ].sort((left, right) => left.localeCompare(right));
   if (canonicalJson(publication.verdict?.failures) !== canonicalJson(expectedFailures)) {
     findings.push(
@@ -791,15 +1134,17 @@ export function performancePublicationFindings(publication) {
   }
   const expectedStatus =
     (verdictReasons?.length ?? 0) > 0 ||
+    publication.productionBytes?.status === 'unproven' ||
     publication.buildPersistenceAssessment?.verdict?.status === 'unproven' ||
     FAMILY_NAMES.some((name) => publication.families?.[name]?.status === 'unproven')
       ? 'unproven'
       : expectedFailures.length > 0 ||
+          publication.productionBytes?.status !== 'pass' ||
           FAMILY_NAMES.some((name) => publication.families?.[name]?.status !== 'pass')
         ? 'blocked'
         : 'publishable';
   if (publication.verdict?.status !== expectedStatus) {
-    findings.push('publication verdict is not derived from its family census');
+    findings.push('publication verdict is not derived from its family and sidecar census');
   }
   return [...new Set(findings)].sort();
 }
@@ -824,6 +1169,33 @@ export function renderPerformancePublicationMarkdown(publication) {
     lines.push(
       `| ${familyName} | ${family.comparisonPosture} | ${code(family.host)} | ${code(family.workload)} | ${family.targetAssessment?.baseline?.status ?? 'unproven'} | ${family.targetAssessment?.holdout?.status ?? 'unproven'} | ${family.status} |`,
     );
+  }
+  const productionBytes = publication.productionBytes;
+  lines.push(
+    '',
+    '## Production bytes sidecar',
+    '',
+    `Outcome: **${productionBytes.status}** at componentCount=${String(productionBytes.componentCount)}.`,
+  );
+  if (productionBytes.budget !== null) {
+    lines.push(
+      '',
+      `Committed budget: \`${productionBytes.budget.path}\` (${String(productionBytes.budget.byteLength)} bytes, \`${productionBytes.budget.contentDigest}\`).`,
+    );
+  }
+  if (productionBytes.evidence?.location) {
+    lines.push(
+      '',
+      `[Authenticated Production bytes artifact ${productionBytes.evidence.artifactId}](${productionBytes.evidence.location})`,
+    );
+  }
+  if (productionBytes.metricVerdicts.length > 0) {
+    lines.push('', '| Metric | Observed | Maximum | Verdict |', '| --- | ---: | ---: | --- |');
+    for (const metric of productionBytes.metricVerdicts) {
+      lines.push(
+        `| ${metric.metricId} | ${formatNumber(metric.value)} | ${formatNumber(metric.budget)} | ${metric.status} |`,
+      );
+    }
   }
   const persistence = publication.buildPersistenceAssessment;
   lines.push(
@@ -1295,6 +1667,76 @@ function exactPublicationIdentityFindings(entries) {
     }
   }
   return [...new Set(findings)].sort();
+}
+
+function deriveProductionBytesAssessment(entry, sourceCommit, locks) {
+  const reasons = [];
+  if (!ownRecord(entry)) {
+    reasons.push('authenticated sidecar is unavailable');
+  }
+  reasons.push(...productionBytesReportFindings(entry?.report));
+  reasons.push(...productionBytesBudgetFindings(entry?.budgets));
+  reasons.push(...productionBytesBudgetCustodyFindings(entry, sourceCommit));
+  if (
+    entry?.report?.source?.commit !== sourceCommit ||
+    entry?.report?.sourceAfter?.commit !== sourceCommit ||
+    canonicalJson(entry?.report?.source?.locks) !== canonicalJson(locks) ||
+    canonicalJson(entry?.report?.sourceAfter?.locks) !== canonicalJson(locks)
+  ) {
+    reasons.push('source or dependency locks differ from the 42-family publication identity');
+  }
+  const budget = entry?.budgetIdentity;
+  if (
+    !ownRecord(budget) ||
+    budget.path !== 'perf-budgets.json' ||
+    budget.schema !== PERF_BUDGETS_SCHEMA ||
+    budget.sourceCommit !== sourceCommit ||
+    !Number.isSafeInteger(budget.byteLength) ||
+    budget.byteLength < 1 ||
+    !DIGEST_PATTERN.test(budget.contentDigest ?? '')
+  ) {
+    reasons.push('committed perf-budgets.json byte identity is unavailable or unbound');
+  }
+  let metricVerdicts = [];
+  if (reasons.length === 0) {
+    metricVerdicts = evaluateReport(entry.budgets, entry.report).map((result) => ({
+      budget: result.budget ?? null,
+      metricId: result.metricId,
+      reason: result.reason ?? null,
+      status: result.status,
+      value: result.value,
+    }));
+    if (
+      canonicalJson(metricVerdicts.map(({ metricId }) => metricId)) !==
+      canonicalJson([...PRODUCTION_BYTES_METRICS].sort())
+    ) {
+      reasons.push('evaluated metric census differs from the exact five metrics');
+    }
+  }
+  const failures = metricVerdicts
+    .filter(({ status }) => status === 'fail')
+    .map(({ metricId }) => metricId)
+    .sort();
+  const nonDecisions = metricVerdicts.filter(
+    ({ status }) => status !== 'pass' && status !== 'fail',
+  );
+  if (nonDecisions.length > 0) {
+    reasons.push(
+      ...nonDecisions.map(({ metricId, status }) => `${metricId} evaluated as ${String(status)}`),
+    );
+  }
+  const uniqueReasons = [...new Set(reasons)].sort();
+  return {
+    budget: ownRecord(budget) ? { ...budget } : null,
+    componentCount: PRODUCTION_BYTES_CONFIG.componentCount,
+    evidence: ownRecord(entry) ? evidenceReference(entry) : null,
+    failures,
+    host: entry?.report?.host?.digest ?? null,
+    metricVerdicts,
+    reasons: uniqueReasons,
+    status: uniqueReasons.length > 0 ? 'unproven' : failures.length > 0 ? 'blocked' : 'pass',
+    workload: entry?.report?.workloadIdentity?.digest ?? null,
+  };
 }
 
 function evidenceReference(entry) {
@@ -2004,15 +2446,19 @@ function validateInputManifest(input) {
   if (!ownRecord(input) || input.schema !== PERF_PUBLICATION_INPUT_SCHEMA) {
     throw new TypeError(`manifest must be ${PERF_PUBLICATION_INPUT_SCHEMA}`);
   }
+  if (!ownRecord(input.productionBytes)) {
+    throw new TypeError('manifest must contain one Production bytes evidence descriptor');
+  }
   const expectedKeys = [
     ...(input.buildProfiles === undefined ? [] : ['buildProfiles']),
     'families',
+    'productionBytes',
     'repository',
     'schema',
   ].sort((left, right) => left.localeCompare(right));
   if (canonicalJson(Object.keys(input).sort()) !== canonicalJson(expectedKeys)) {
     throw new TypeError(
-      'manifest must contain only schema, repository, families, and optional buildProfiles',
+      'manifest must contain only schema, repository, families, productionBytes, and optional buildProfiles',
     );
   }
   if (input.repository !== PERF_PUBLICATION_REPOSITORY) {
@@ -2063,6 +2509,22 @@ function authenticatedInputFindings(authenticated) {
     if (!validAuthenticatedFamily(authenticated?.families?.[familyName])) {
       findings.push(`${familyName} authenticated evidence is incomplete`);
     }
+  }
+  if (!ownRecord(authenticated?.productionBytes)) {
+    findings.push('authenticated Production bytes evidence is unavailable');
+  } else {
+    findings.push(
+      ...productionBytesReportFindings(authenticated.productionBytes.report).map(
+        (finding) => `Production bytes ${finding}`,
+      ),
+      ...productionBytesBudgetFindings(authenticated.productionBytes.budgets).map(
+        (finding) => `Production bytes ${finding}`,
+      ),
+      ...productionBytesBudgetCustodyFindings(
+        authenticated.productionBytes,
+        authenticated.productionBytes.report?.source?.commit,
+      ).map((finding) => `Production bytes ${finding}`),
+    );
   }
   return findings;
 }
@@ -2404,7 +2866,115 @@ function evaluationReferenceFindings(value, familyName) {
   return findings;
 }
 
-function evidenceReferenceFindings(value, label, config, publication, family) {
+function productionBytesAssessmentFindings(value, publication) {
+  if (!ownRecord(value)) return ['Production bytes assessment is unavailable'];
+  const findings = [];
+  const expectedKeys = [
+    'budget',
+    'componentCount',
+    'evidence',
+    'failures',
+    'host',
+    'metricVerdicts',
+    'reasons',
+    'status',
+    'workload',
+  ];
+  if (canonicalJson(Object.keys(value).sort()) !== canonicalJson(expectedKeys)) {
+    findings.push('Production bytes assessment field census differs');
+  }
+  if (value.componentCount !== PRODUCTION_BYTES_CONFIG.componentCount) {
+    findings.push('Production bytes componentCount differs from policy');
+  }
+  const reasons = value.reasons;
+  if (
+    !Array.isArray(reasons) ||
+    reasons.some((reason) => !nonEmptyString(reason)) ||
+    canonicalJson(reasons) !== canonicalJson(sortedUniqueStrings(reasons ?? []))
+  ) {
+    findings.push('Production bytes reasons are malformed');
+  }
+  const metrics = Array.isArray(value.metricVerdicts) ? value.metricVerdicts : [];
+  const metricIds = metrics.map(({ metricId }) => metricId);
+  const exactMetricCensus =
+    canonicalJson(metricIds) === canonicalJson([...PRODUCTION_BYTES_METRICS].sort());
+  if ((reasons?.length ?? 0) === 0 && !exactMetricCensus) {
+    findings.push('Production bytes verdict does not contain the exact five metrics');
+  }
+  for (const metric of metrics) {
+    if (
+      !ownRecord(metric) ||
+      canonicalJson(Object.keys(metric).sort()) !==
+        canonicalJson(['budget', 'metricId', 'reason', 'status', 'value']) ||
+      !PRODUCTION_BYTES_METRICS.includes(metric.metricId) ||
+      !Number.isSafeInteger(metric.budget) ||
+      metric.budget < 0 ||
+      !Number.isSafeInteger(metric.value) ||
+      metric.value < 0 ||
+      metric.reason !== null ||
+      metric.status !== (metric.value <= metric.budget ? 'pass' : 'fail')
+    ) {
+      findings.push(`Production bytes metric ${String(metric?.metricId)} verdict is malformed`);
+    }
+  }
+  const expectedFailures = metrics
+    .filter(({ status }) => status === 'fail')
+    .map(({ metricId }) => metricId)
+    .sort();
+  if (canonicalJson(value.failures) !== canonicalJson(expectedFailures)) {
+    findings.push('Production bytes failures are not derived from metric verdicts');
+  }
+  const expectedStatus =
+    (reasons?.length ?? 0) > 0 ? 'unproven' : expectedFailures.length > 0 ? 'blocked' : 'pass';
+  if (value.status !== expectedStatus) {
+    findings.push('Production bytes status is not derived from its evidence and metrics');
+  }
+  if (value.status !== 'unproven') {
+    if (
+      !ownRecord(value.budget) ||
+      value.budget.path !== 'perf-budgets.json' ||
+      value.budget.schema !== PERF_BUDGETS_SCHEMA ||
+      value.budget.sourceCommit !== publication.identity?.sourceCommit ||
+      !Number.isSafeInteger(value.budget.byteLength) ||
+      value.budget.byteLength < 1 ||
+      !DIGEST_PATTERN.test(value.budget.contentDigest ?? '')
+    ) {
+      findings.push('Production bytes committed budget identity is malformed or unbound');
+    }
+    findings.push(
+      ...evidenceReferenceFindings(
+        value.evidence,
+        'Production bytes',
+        PRODUCTION_BYTES_CONFIG,
+        publication,
+        value,
+        {
+          allowedJobConclusions: ['failure', 'success'],
+          allowedJobFailureStep: PRODUCTION_BYTES_CONFIG.budgetFailureStep,
+          requiredJobSuccessSteps: PRODUCTION_BYTES_CONFIG.budgetFailureSuccessSteps,
+          triggerPolicy: 'production-bytes',
+          triggerScopes: PRODUCTION_BYTES_TRIGGER_SCOPES,
+        },
+      ),
+    );
+  }
+  return [...new Set(findings)].sort();
+}
+
+function evidenceReferenceFindings(
+  value,
+  label,
+  config,
+  publication,
+  family,
+  {
+    allowedJobConclusions = ['success'],
+    allowedJobFailureStep = null,
+    requiredJobSuccessSteps = [],
+    triggerPolicy = 'baseline',
+    triggerScopes = BASELINE_TRIGGER_SCOPES,
+  } = {},
+) {
   if (!ownRecord(value)) return [`${label} evidence reference is unavailable`];
   const findings = [];
   for (const field of [
@@ -2484,14 +3054,14 @@ function evidenceReferenceFindings(value, label, config, publication, family) {
     findings.push(`${label} ZIP member census differs from the exact report artifact`);
   }
   const workflow = value.workflow;
-  const expectedTriggerScope = BASELINE_TRIGGER_SCOPES[workflow?.event] ?? null;
+  const expectedTriggerScope = triggerScopes[workflow?.event] ?? null;
   const workflowApiUrl = `https://api.github.com/repos/${PERF_PUBLICATION_REPOSITORY}/contents/${PERF_REALISTIC_WORKFLOW_PATH}?ref=${String(workflow?.workflowSha)}`;
   if (
     !ownRecord(workflow) ||
     workflow.name !== 'Perf Realistic Tier' ||
     workflow.path !== PERF_REALISTIC_WORKFLOW_PATH ||
     workflow.status !== 'completed' ||
-    workflow.triggerPolicy !== 'baseline' ||
+    workflow.triggerPolicy !== triggerPolicy ||
     workflow.sourceSha !== value.sourceCommit ||
     !COMMIT_PATTERN.test(workflow.headSha ?? '') ||
     workflow.headSha !== value.sourceCommit ||
@@ -2514,15 +3084,51 @@ function evidenceReferenceFindings(value, label, config, publication, family) {
     expectedTriggerScope === null ||
     workflow.triggerScope !== expectedTriggerScope
   ) {
-    findings.push(`${label} live workflow authority differs from baseline policy`);
+    findings.push(`${label} live workflow authority differs from ${triggerPolicy} policy`);
   }
   const job = workflow?.job;
+  const requiredSuccessSteps = Array.isArray(job?.requiredSuccessSteps)
+    ? job.requiredSuccessSteps
+    : [];
+  const validRequiredSuccessSteps =
+    requiredSuccessSteps.length === requiredJobSuccessSteps.length &&
+    requiredSuccessSteps.every(
+      (step, index) =>
+        ownRecord(step) &&
+        canonicalJson(Object.keys(step).sort()) ===
+          canonicalJson(['conclusion', 'name', 'number', 'status']) &&
+        step.conclusion === 'success' &&
+        step.name === requiredJobSuccessSteps[index] &&
+        Number.isSafeInteger(step.number) &&
+        step.number > 0 &&
+        step.status === 'completed',
+    );
+  const validFailureStep =
+    job?.conclusion === 'failure' &&
+    ownRecord(job?.failureStep) &&
+    canonicalJson(Object.keys(job.failureStep).sort()) ===
+      canonicalJson(['conclusion', 'name', 'number', 'status']) &&
+    job.failureStep.conclusion === 'failure' &&
+    job.failureStep.name === allowedJobFailureStep &&
+    Number.isSafeInteger(job.failureStep.number) &&
+    job.failureStep.number > 0 &&
+    job.failureStep.status === 'completed' &&
+    validRequiredSuccessSteps &&
+    requiredSuccessSteps.length === 2 &&
+    requiredSuccessSteps[0].number < job.failureStep.number &&
+    job.failureStep.number < requiredSuccessSteps[1].number;
   if (
     !ownRecord(job) ||
     job.key !== config.workflowJob.key ||
     job.name !== config.workflowJob.name ||
     job.status !== 'completed' ||
-    job.conclusion !== 'success' ||
+    !allowedJobConclusions.includes(job.conclusion) ||
+    (job.conclusion === 'failure' && !validFailureStep) ||
+    (job.conclusion === 'success' &&
+      allowedJobFailureStep !== null &&
+      (job.failureStep !== null ||
+        !Array.isArray(job.requiredSuccessSteps) ||
+        requiredSuccessSteps.length !== 0)) ||
     job.runAttempt !== workflow?.runAttempt ||
     !Number.isSafeInteger(job.id) ||
     job.id < 1 ||

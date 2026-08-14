@@ -26,7 +26,9 @@ import {
   loadPerformancePublicationCollections,
   performancePublicationCohortDigest,
   selectPerformancePublicationCohorts,
+  selectPerformancePublicationProductionBytes,
   validateCollectedCandidateBytes,
+  validateCollectedProductionBytesCandidateBytes,
 } from './perf-publication-collect.mjs';
 import {
   PACKED_KOVO_PRODUCT_WORKLOAD_POLICY,
@@ -36,6 +38,11 @@ import { canonicalJson } from './lib/perf-host.mjs';
 
 const REPOSITORY = 'kovojs/kovo';
 const SOURCE = 'a'.repeat(40);
+const PRODUCTION_BYTES_BUDGET_FAILURE_STEP = 'Evaluate against perf-budgets.json';
+const PRODUCTION_BYTES_REQUIRED_SUCCESS_STEPS = [
+  'Measure critical-path, navigation and bootstrap bytes',
+  'Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+];
 const temporaryDirectories = [];
 
 afterEach(async () => {
@@ -74,6 +81,23 @@ describe('metrics-blind performance publication collection', () => {
           .map((candidate) => candidate.runId),
       );
     }
+  });
+
+  it('selects the earliest Production bytes sidecar without observing its metrics', () => {
+    const candidates = [3, 1, 2].map((runId) => productionBytesSelectionCandidate(runId));
+    const before = selectPerformancePublicationProductionBytes(candidates).runId;
+    for (const candidate of candidates) {
+      candidate.report.metrics = Object.fromEntries(
+        Object.keys(candidate.report.metrics).map((metric) => [
+          metric,
+          { value: candidate.runId === 1 ? Number.MAX_SAFE_INTEGER : 0 },
+        ]),
+      );
+    }
+    const after = selectPerformancePublicationProductionBytes(candidates).runId;
+
+    expect(before).toBe(1);
+    expect(after).toBe(before);
   });
 
   it('fails closed on multiple qualifying cohorts unless an exact cohort or unique host is selected', () => {
@@ -145,6 +169,32 @@ describe('metrics-blind performance publication collection', () => {
     );
   });
 
+  it('retains a qualifying Production bytes artifact even when the selected run has no family artifact', async () => {
+    const root = await temporaryRoot();
+    const checkout = await realDirectory(path.join(root, 'checkout'));
+    const campaign = campaignFixture([{ family: 'browser', productionBytes: true, runId: 1001 }]);
+    const fixture = campaign.byRun.get(1001);
+    campaign.endpoints.set(
+      `repos/${REPOSITORY}/actions/runs/1001/artifacts?per_page=100`,
+      jsonBytes({
+        artifacts: [{ id: fixture.productionBytes.artifact.id, name: 'kovo-perf-bytes' }],
+        total_count: 1,
+      }),
+    );
+
+    const result = await collectPerformancePublicationRuns({
+      checkoutDirectory: checkout,
+      operations: fixtureOperations(campaign, checkout),
+      outDirectory: path.join(root, 'bytes-only'),
+      repository: REPOSITORY,
+      runIds: [1001],
+      sourceSha: SOURCE,
+    });
+
+    expect(result.ledger.candidates).toEqual([]);
+    expect(result.ledger.productionBytes).toHaveLength(1);
+  });
+
   it('never publishes a partial collection after a later authenticated API call fails', async () => {
     const root = await temporaryRoot();
     const checkout = await realDirectory(path.join(root, 'checkout'));
@@ -193,7 +243,7 @@ describe('metrics-blind performance publication collection', () => {
         runIds: [1001],
         sourceSha: SOURCE,
       }),
-    ).rejects.toThrow('no literal baseline-family artifact');
+    ).rejects.toThrow('no literal publication artifact');
 
     const ambiguous = campaignFixture([{ family: 'browser', runId: 1002 }]);
     ambiguous.endpoints.set(
@@ -250,6 +300,151 @@ describe('metrics-blind performance publication collection', () => {
       mutate(fixture);
       expect(() => validateFixture(fixture), label).toThrow();
     }
+  });
+
+  it('authenticates the exact Production bytes report and rejects every identity/census drift', () => {
+    const make = () =>
+      campaignFixture([{ family: 'browser', productionBytes: true, runId: 1001 }]).byRun.get(1001)
+        .productionBytes;
+    expect(() => validateProductionBytesFixture(make())).not.toThrow();
+    const failedBudgetJob = make();
+    markProductionBudgetFailure(failedBudgetJob);
+    expect(() => validateProductionBytesFixture(failedBudgetJob)).not.toThrow();
+    const cases = [
+      ['artifact', (fixture) => updateArtifact(fixture, { name: 'kovo-perf-not-bytes' })],
+      [
+        'producer',
+        (fixture) => {
+          fixture.jobs.jobs.find(({ name }) => name === 'Production bytes').name = 'Other';
+          fixture.jobsApiBytes = jsonBytes(fixture.jobs);
+        },
+      ],
+      [
+        'wrong failed producer step',
+        (fixture) => {
+          markProductionBudgetFailure(fixture);
+          const producer = fixture.jobs.jobs.find(({ name }) => name === 'Production bytes');
+          producer.steps.find(({ name }) => name === PRODUCTION_BYTES_BUDGET_FAILURE_STEP).name =
+            'Other failed step';
+          fixture.jobsApiBytes = jsonBytes(fixture.jobs);
+        },
+      ],
+      [
+        'skipped measurement on failed producer',
+        (fixture) => {
+          markProductionBudgetFailure(fixture);
+          fixture.jobs.jobs
+            .find(({ name }) => name === 'Production bytes')
+            .steps.find(
+              ({ name }) => name === PRODUCTION_BYTES_REQUIRED_SUCCESS_STEPS[0],
+            ).conclusion = 'skipped';
+          fixture.jobsApiBytes = jsonBytes(fixture.jobs);
+        },
+      ],
+      [
+        'failed upload on failed producer',
+        (fixture) => {
+          markProductionBudgetFailure(fixture);
+          fixture.jobs.jobs
+            .find(({ name }) => name === 'Production bytes')
+            .steps.find(
+              ({ name }) => name === PRODUCTION_BYTES_REQUIRED_SUCCESS_STEPS[1],
+            ).conclusion = 'failure';
+          fixture.jobsApiBytes = jsonBytes(fixture.jobs);
+        },
+      ],
+      [
+        'source',
+        (fixture) => {
+          fixture.report.source.commit = 'b'.repeat(40);
+          resealProductionBytesFixture(fixture);
+        },
+      ],
+      [
+        'sourceAfter',
+        (fixture) => {
+          fixture.report.sourceAfter.commit = 'b'.repeat(40);
+          resealProductionBytesFixture(fixture);
+        },
+      ],
+      [
+        'lock',
+        (fixture) => {
+          fixture.report.sourceAfter.locks['pnpm-lock.yaml'] = digest('wrong-lock');
+          resealProductionBytesFixture(fixture);
+        },
+      ],
+      [
+        'execution',
+        (fixture) => {
+          fixture.report.execution.github.job = 'server-matrix';
+          resealProductionBytesExecution(fixture);
+        },
+      ],
+      [
+        'integrity',
+        (fixture) => {
+          fixture.report.integrity.complete = false;
+          resealProductionBytesFixture(fixture);
+        },
+      ],
+      [
+        'suite',
+        (fixture) => {
+          fixture.report.suite = 'ssr';
+          resealProductionBytesFixture(fixture);
+        },
+      ],
+      [
+        'components',
+        (fixture) => {
+          fixture.report.options.componentCount = 23;
+          resealProductionBytesFixture(fixture);
+        },
+      ],
+      [
+        'metric census',
+        (fixture) => {
+          delete fixture.report.metrics['production.navigation.wireBytes'];
+          fixture.report.metrics.invented = { value: 1 };
+          resealProductionBytesFixture(fixture);
+        },
+      ],
+    ];
+    for (const [label, mutate] of cases) {
+      const fixture = make();
+      mutate(fixture);
+      expect(() => validateProductionBytesFixture(fixture), label).toThrow();
+    }
+  });
+
+  it('rejects duplicate Production bytes artifacts in one workflow run', async () => {
+    const root = await temporaryRoot();
+    const checkout = await realDirectory(path.join(root, 'checkout'));
+    const campaign = campaignFixture([{ family: 'browser', productionBytes: true, runId: 1001 }]);
+    const fixture = campaign.byRun.get(1001);
+    campaign.endpoints.set(
+      `repos/${REPOSITORY}/actions/runs/1001/artifacts?per_page=100`,
+      jsonBytes({
+        artifacts: [
+          { id: fixture.artifact.id, name: fixture.artifact.name },
+          { id: fixture.productionBytes.artifact.id, name: 'kovo-perf-bytes' },
+          { id: 999_999, name: 'kovo-perf-bytes' },
+        ],
+        total_count: 3,
+      }),
+    );
+
+    await expect(
+      collectPerformancePublicationRuns({
+        checkoutDirectory: checkout,
+        operations: fixtureOperations(campaign, checkout),
+        outDirectory: path.join(root, 'duplicate-bytes'),
+        repository: REPOSITORY,
+        runIds: [1001],
+        sourceSha: SOURCE,
+      }),
+    ).rejects.toThrow('ambiguous Production bytes artifacts');
   });
 
   it('rejects unsafe and duplicate ZIP member paths through the shared bounded parser', () => {
@@ -368,7 +563,13 @@ describe('metrics-blind performance publication collection', () => {
     const assignments = [];
     let runId = 10_000;
     for (const family of PERF_PUBLICATION_FAMILY_NAMES) {
-      for (let index = 0; index < 6; index += 1) assignments.push({ family, runId: runId++ });
+      for (let index = 0; index < 6; index += 1) {
+        assignments.push({
+          family,
+          productionBytes: assignments.length === 0,
+          runId: runId++,
+        });
+      }
     }
     const campaign = campaignFixture(assignments);
     const collection = path.join(root, 'collection');
@@ -391,7 +592,12 @@ describe('metrics-blind performance publication collection', () => {
     });
 
     expect(result.manifest.schema).toBe(PERF_PUBLICATION_INPUT_SCHEMA);
-    expect(Object.keys(result.manifest)).toEqual(['families', 'repository', 'schema']);
+    expect(Object.keys(result.manifest)).toEqual([
+      'families',
+      'productionBytes',
+      'repository',
+      'schema',
+    ]);
     expect(Object.keys(result.manifest.families)).toEqual(PERF_PUBLICATION_FAMILY_NAMES);
     for (const familyName of PERF_PUBLICATION_FAMILY_NAMES) {
       const family = result.manifest.families[familyName];
@@ -405,6 +611,12 @@ describe('metrics-blind performance publication collection', () => {
           await expect(readFile(path.join(publication, relative))).resolves.not.toHaveLength(0);
         }
       }
+    }
+    expect(Object.keys(result.manifest.productionBytes).sort()).toEqual(
+      ['apiMetadata', 'archive', 'jobsApiMetadata', 'report', 'runApiMetadata'].sort(),
+    );
+    for (const relative of Object.values(result.manifest.productionBytes)) {
+      await expect(readFile(path.join(publication, relative))).resolves.not.toHaveLength(0);
     }
   });
 });
@@ -454,6 +666,27 @@ function selectionCandidate(familyName, runId, { hostDigest = digest(`${familyNa
   return candidate;
 }
 
+function productionBytesSelectionCandidate(runId) {
+  return {
+    artifactId: 200_000 + runId,
+    executionDigest: digest(`bytes-execution:${String(runId)}`),
+    report: {
+      execution: { digest: digest(`bytes-execution:${String(runId)}`) },
+      metrics: Object.fromEntries(
+        [
+          'production.criticalPath.wireBytes',
+          'production.document.wireBytes',
+          'production.inlineBootstrap.gzipBytes',
+          'production.inlineBootstrap.identityBytes',
+          'production.navigation.wireBytes',
+        ].map((metric) => [metric, { value: runId }]),
+      ),
+    },
+    runCreatedAt: timestamp(runId),
+    runId,
+  };
+}
+
 function selectedIds(selected) {
   return Object.fromEntries(
     PERF_PUBLICATION_FAMILY_NAMES.map((familyName) => [
@@ -486,6 +719,23 @@ function campaignFixture(assignments) {
       productArtifact,
       runId: assignment.runId,
     });
+    let bytesFixture = null;
+    if (assignment.productionBytes === true) {
+      fixture.run.event = 'pull_request';
+      fixture.runApiBytes = jsonBytes(fixture.run);
+      bytesFixture = productionBytesReportFixture({
+        artifactId: 120_000 + assignment.runId,
+        familyFixture: fixture,
+        index,
+        locks,
+      });
+      fixture.jobs.jobs.push(bytesFixture.jobs.jobs[0]);
+      fixture.jobs.total_count = fixture.jobs.jobs.length;
+      fixture.jobsApiBytes = jsonBytes(fixture.jobs);
+      bytesFixture.jobs = fixture.jobs;
+      bytesFixture.jobsApiBytes = fixture.jobsApiBytes;
+    }
+    fixture.productionBytes = bytesFixture;
     byRun.set(assignment.runId, fixture);
     const runPath = `repos/${REPOSITORY}/actions/runs/${String(assignment.runId)}`;
     const artifactPath = `repos/${REPOSITORY}/actions/artifacts/${String(fixture.artifact.id)}`;
@@ -494,12 +744,22 @@ function campaignFixture(assignments) {
     endpoints.set(
       `${runPath}/artifacts?per_page=100`,
       jsonBytes({
-        artifacts: [{ id: fixture.artifact.id, name: fixture.artifact.name }],
-        total_count: 1,
+        artifacts: [
+          { id: fixture.artifact.id, name: fixture.artifact.name },
+          ...(bytesFixture === null
+            ? []
+            : [{ id: bytesFixture.artifact.id, name: bytesFixture.artifact.name }]),
+        ],
+        total_count: bytesFixture === null ? 1 : 2,
       }),
     );
     endpoints.set(artifactPath, fixture.artifactApiBytes);
     endpoints.set(`${artifactPath}/zip`, fixture.archiveBytes);
+    if (bytesFixture !== null) {
+      const bytesArtifactPath = `repos/${REPOSITORY}/actions/artifacts/${String(bytesFixture.artifact.id)}`;
+      endpoints.set(bytesArtifactPath, bytesFixture.artifactApiBytes);
+      endpoints.set(`${bytesArtifactPath}/zip`, bytesFixture.archiveBytes);
+    }
   }
   return { byRun, endpoints };
 }
@@ -667,6 +927,163 @@ function reportFixture({ artifactId, familyName, index, locks, productArtifact, 
   };
 }
 
+function productionBytesReportFixture({ artifactId, familyFixture, index, locks }) {
+  const { run } = familyFixture;
+  const runId = run.id;
+  const runUrl = run.html_url;
+  const jobStartedAt = new Date(Date.parse(run.created_at) + 2_000).toISOString();
+  const jobCompletedAt = new Date(Date.parse(run.created_at) + 18_000).toISOString();
+  const github = {
+    eventSha: SOURCE,
+    job: 'bytes',
+    repository: REPOSITORY,
+    runAttempt: '1',
+    runId: String(runId),
+    runUrl,
+    serverUrl: 'https://github.com',
+    sha: SOURCE,
+    workflowRef: `${REPOSITORY}/.github/workflows/perf-realistic.yml@refs/pull/7/merge`,
+    workflowSha: SOURCE,
+  };
+  const executionFacts = {
+    complete: true,
+    github,
+    provider: 'github-actions',
+    startedAt: jobStartedAt,
+  };
+  const source = { commit: SOURCE, dirty: false, dirtyPaths: [], locks };
+  const workloadFacts = {
+    adapters: { perfGate: 'kovo-perf-report/v1', workload: 'kovo-realistic-workload/v1' },
+    cells: ['bytes'],
+    policies: { componentCount: 24 },
+  };
+  const report = {
+    execution: {
+      ...executionFacts,
+      digest: digest(canonicalJson(executionFacts)),
+      schema: 'kovo-performance-execution/v1',
+    },
+    generatedAt: jobCompletedAt,
+    host: familyFixture.report.host,
+    integrity: {
+      complete: true,
+      executionAuthenticated: true,
+      publishable: true,
+      serialized: true,
+      sourceStable: true,
+      workloadAuthenticated: true,
+    },
+    metrics: Object.fromEntries(
+      [
+        'production.criticalPath.wireBytes',
+        'production.document.wireBytes',
+        'production.inlineBootstrap.gzipBytes',
+        'production.inlineBootstrap.identityBytes',
+        'production.navigation.wireBytes',
+      ].map((metric, metricIndex) => [metric, { value: 100 + index + metricIndex }]),
+    ),
+    options: { componentCount: 24 },
+    schema: 'kovo-perf-report/v1',
+    source,
+    sourceAfter: structuredClone(source),
+    suite: 'bytes',
+    verdict: { reasons: [], status: 'measured' },
+    workloadIdentity: {
+      complete: true,
+      digest: digest(canonicalJson(workloadFacts)),
+      identity: workloadFacts,
+      schema: 'kovo-performance-workload-identity/v1',
+    },
+  };
+  const reportBytes = jsonBytes(report);
+  const archiveBytes = storedZip([{ bytes: reportBytes, name: 'bytes.json' }]);
+  const apiUrl = `https://api.github.com/repos/${REPOSITORY}/actions/artifacts/${String(artifactId)}`;
+  const artifact = {
+    archive_download_url: `${apiUrl}/zip`,
+    created_at: new Date(Date.parse(run.created_at) + 10_000).toISOString(),
+    digest: digest(archiveBytes),
+    expired: false,
+    expires_at: '2099-11-11T00:00:00Z',
+    id: artifactId,
+    name: 'kovo-perf-bytes',
+    size_in_bytes: archiveBytes.length,
+    updated_at: new Date(Date.parse(run.created_at) + 15_000).toISOString(),
+    url: apiUrl,
+    workflow_run: {
+      head_branch: run.head_branch,
+      head_repository_id: run.head_repository.id,
+      head_sha: SOURCE,
+      id: runId,
+      repository_id: run.repository.id,
+    },
+  };
+  const jobId = 130_000 + runId;
+  const jobs = {
+    jobs: [
+      {
+        completed_at: jobCompletedAt,
+        conclusion: 'success',
+        head_sha: SOURCE,
+        id: jobId,
+        name: 'Production bytes',
+        run_attempt: 1,
+        run_id: runId,
+        steps: [
+          {
+            completed_at: new Date(Date.parse(run.created_at) + 7_000).toISOString(),
+            conclusion: 'success',
+            name: PRODUCTION_BYTES_REQUIRED_SUCCESS_STEPS[0],
+            number: 1,
+            started_at: new Date(Date.parse(run.created_at) + 3_000).toISOString(),
+            status: 'completed',
+          },
+          {
+            completed_at: new Date(Date.parse(run.created_at) + 12_000).toISOString(),
+            conclusion: 'success',
+            name: PRODUCTION_BYTES_BUDGET_FAILURE_STEP,
+            number: 2,
+            started_at: new Date(Date.parse(run.created_at) + 8_000).toISOString(),
+            status: 'completed',
+          },
+          {
+            completed_at: new Date(Date.parse(run.created_at) + 17_000).toISOString(),
+            conclusion: 'success',
+            name: PRODUCTION_BYTES_REQUIRED_SUCCESS_STEPS[1],
+            number: 3,
+            started_at: new Date(Date.parse(run.created_at) + 13_000).toISOString(),
+            status: 'completed',
+          },
+        ],
+        started_at: jobStartedAt,
+        status: 'completed',
+        url: `https://api.github.com/repos/${REPOSITORY}/actions/jobs/${String(jobId)}`,
+      },
+    ],
+    total_count: 1,
+  };
+  return {
+    archiveBytes,
+    artifact,
+    artifactApiBytes: jsonBytes(artifact),
+    jobs,
+    jobsApiBytes: jsonBytes(jobs),
+    report,
+    reportBytes,
+    run,
+    runApiBytes: jsonBytes(run),
+  };
+}
+
+function markProductionBudgetFailure(fixture) {
+  const producer = fixture.jobs.jobs.find(({ name }) => name === 'Production bytes');
+  producer.conclusion = 'failure';
+  producer.steps.find(({ name }) => name === PRODUCTION_BYTES_BUDGET_FAILURE_STEP).conclusion =
+    'failure';
+  fixture.jobsApiBytes = jsonBytes(fixture.jobs);
+  fixture.run.conclusion = 'failure';
+  fixture.runApiBytes = jsonBytes(fixture.run);
+}
+
 function fixtureOperations(campaign, checkout) {
   return {
     async fetchApi(endpoint) {
@@ -698,6 +1115,20 @@ function validateFixture(fixture) {
   });
 }
 
+function validateProductionBytesFixture(fixture) {
+  return validateCollectedProductionBytesCandidateBytes({
+    archiveBytes: fixture.archiveBytes,
+    artifactApiBytes: fixture.artifactApiBytes,
+    expectedArtifactId: fixture.artifact.id,
+    jobsApiBytes: fixture.jobsApiBytes,
+    now: '2026-08-14T00:00:00.000Z',
+    reportBytes: fixture.reportBytes,
+    repository: REPOSITORY,
+    runApiBytes: fixture.runApiBytes,
+    sourceSha: SOURCE,
+  });
+}
+
 function updateArtifact(fixture, fields) {
   Object.assign(fixture.artifact, fields);
   fixture.artifactApiBytes = jsonBytes(fixture.artifact);
@@ -719,6 +1150,21 @@ function resealWorkloadAndArchive(fixture) {
       name: PERF_PUBLICATION_FAMILIES[fixture.familyName].reportMember,
     },
   ]);
+  updateArtifact(fixture, {
+    digest: digest(fixture.archiveBytes),
+    size_in_bytes: fixture.archiveBytes.length,
+  });
+}
+
+function resealProductionBytesExecution(fixture) {
+  const { digest: _digest, schema: _schema, ...facts } = fixture.report.execution;
+  fixture.report.execution.digest = digest(canonicalJson(facts));
+  resealProductionBytesFixture(fixture);
+}
+
+function resealProductionBytesFixture(fixture) {
+  fixture.reportBytes = jsonBytes(fixture.report);
+  fixture.archiveBytes = storedZip([{ bytes: fixture.reportBytes, name: 'bytes.json' }]);
   updateArtifact(fixture, {
     digest: digest(fixture.archiveBytes),
     size_in_bytes: fixture.archiveBytes.length,

@@ -26,8 +26,8 @@ import {
 import { canonicalJson, performanceHostFingerprintFindings } from './lib/perf-host.mjs';
 import { workloadIdentityFindings } from './perf-regression-check.mjs';
 
-export const PERF_PUBLICATION_COLLECTION_SCHEMA = 'kovo-performance-publication-collection/v1';
-export const PERF_PUBLICATION_INPUT_SCHEMA = 'kovo-performance-publication-input/v1';
+export const PERF_PUBLICATION_COLLECTION_SCHEMA = 'kovo-performance-publication-collection/v2';
+export const PERF_PUBLICATION_INPUT_SCHEMA = 'kovo-performance-publication-input/v2';
 export const PERF_PUBLICATION_REPOSITORY = 'kovojs/kovo';
 
 const PERF_REALISTIC_WORKFLOW_NAME = 'Perf Realistic Tier';
@@ -47,6 +47,27 @@ const REQUIRED_LOCKS = Object.freeze([
   'benchmarks/nextjs/pnpm-lock.yaml',
   'benchmarks/harness/pnpm-lock.yaml',
 ]);
+export const PERF_PUBLICATION_PRODUCTION_BYTES_METRICS = Object.freeze([
+  'production.criticalPath.wireBytes',
+  'production.document.wireBytes',
+  'production.inlineBootstrap.gzipBytes',
+  'production.inlineBootstrap.identityBytes',
+  'production.navigation.wireBytes',
+]);
+export const PERF_PUBLICATION_PRODUCTION_BYTES = Object.freeze({
+  artifactName: 'kovo-perf-bytes',
+  budgetFailureStep: 'Evaluate against perf-budgets.json',
+  budgetFailureSuccessSteps: Object.freeze([
+    'Measure critical-path, navigation and bootstrap bytes',
+    'Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+  ]),
+  cell: 'bytes',
+  componentCount: 24,
+  reportMember: 'bytes.json',
+  reportSchema: CHECK_REPORT_SCHEMA,
+  workflowJobKey: 'bytes',
+  workflowJobName: 'Production bytes',
+});
 
 export const PERF_PUBLICATION_FAMILY_NAMES = Object.freeze([
   'browser',
@@ -160,6 +181,7 @@ export async function collectPerformancePublicationRuns({
 
   return publishAtomicDirectory(boundary, 'collect', async (stagingDirectory) => {
     const candidates = [];
+    const productionBytes = [];
     for (const runId of normalizedRunIds) {
       const runApiEndpoint = runApiPath(repository, runId);
       const jobsApiEndpoint = `${runApiEndpoint}/jobs?filter=all&per_page=100`;
@@ -174,14 +196,12 @@ export async function collectPerformancePublicationRuns({
       const jobsMetadata = parseJsonBytes(jobsApiBytes, 'all-attempt jobs API');
       validateJobsCensus(jobsMetadata);
       const artifactListing = parseJsonBytes(artifactsApiBytes, 'run artifacts API');
-      const familyArtifacts = enumerateFamilyArtifacts(artifactListing, runId);
-      if (familyArtifacts.length === 0) {
-        throw new TypeError(
-          `workflow run ${String(runId)} has no literal baseline-family artifact`,
-        );
+      const publicationArtifacts = enumeratePublicationArtifacts(artifactListing, runId);
+      if (publicationArtifacts.length === 0) {
+        throw new TypeError(`workflow run ${String(runId)} has no literal publication artifact`);
       }
 
-      for (const { artifactId, familyName } of familyArtifacts) {
+      for (const { artifactId, familyName, kind } of publicationArtifacts) {
         const artifactApiEndpoint = artifactApiPath(repository, artifactId);
         const [artifactApiBytes, archiveBytes] = await Promise.all([
           fetchBoundedApi(operations, artifactApiEndpoint, MAX_API_BYTES, 'artifact API'),
@@ -192,35 +212,68 @@ export async function collectPerformancePublicationRuns({
             'artifact ZIP',
           ),
         ]);
-        const policy = PERF_PUBLICATION_FAMILIES[familyName];
+        const policy =
+          kind === 'family'
+            ? PERF_PUBLICATION_FAMILIES[familyName]
+            : PERF_PUBLICATION_PRODUCTION_BYTES;
         const reportBytes = readOnlyZipMember(archiveBytes, policy.reportMember);
-        const validated = validateCollectedCandidateBytes({
+        const common = {
           archiveBytes,
           artifactApiBytes,
-          expectedArtifactId: artifactId,
-          familyName,
           jobsApiBytes,
           now: observedNow,
           reportBytes,
           repository,
           runApiBytes,
           sourceSha,
-        });
-        const descriptor = await writeCollectedCandidate(stagingDirectory, validated.summary, {
-          archiveBytes,
-          artifactApiBytes,
-          jobsApiBytes,
-          reportBytes,
-          runApiBytes,
-        });
-        candidates.push({ ...validated.summary, descriptor });
+        };
+        if (kind === 'family') {
+          const validated = validateCollectedCandidateBytes({
+            ...common,
+            expectedArtifactId: artifactId,
+            familyName,
+          });
+          const descriptor = await writeCollectedEvidence(
+            stagingDirectory,
+            path.posix.join(
+              'runs',
+              String(validated.summary.runId),
+              validated.summary.family,
+              String(validated.summary.artifactId),
+            ),
+            policy.reportMember,
+            common,
+          );
+          candidates.push({ ...validated.summary, descriptor });
+        } else {
+          const validated = validateCollectedProductionBytesCandidateBytes({
+            ...common,
+            expectedArtifactId: artifactId,
+          });
+          const descriptor = await writeCollectedEvidence(
+            stagingDirectory,
+            path.posix.join(
+              'runs',
+              String(validated.summary.runId),
+              'production-bytes',
+              String(validated.summary.artifactId),
+            ),
+            policy.reportMember,
+            common,
+          );
+          productionBytes.push({ ...validated.summary, descriptor });
+        }
       }
     }
 
     validateCandidateDistinctness(candidates, { allowSharedRunAcrossFamilies: true });
+    validateProductionBytesCandidateDistinctness(productionBytes);
+    validateCrossInventoryDistinctness(candidates, productionBytes);
     candidates.sort(candidateInventoryOrder);
+    productionBytes.sort(candidateChronologyOrder);
     const ledger = {
       candidates,
+      productionBytes,
       repository,
       runIds: normalizedRunIds,
       schema: PERF_PUBLICATION_COLLECTION_SCHEMA,
@@ -236,7 +289,7 @@ export async function collectPerformancePublicationRuns({
 
 /**
  * Read one or more atomic custody pools, select one exact six-run cohort per family without using
- * performance metrics, and publish a self-contained final gate manifest and its 210 raw files.
+ * performance metrics, and publish a self-contained final gate manifest and its 215 raw files.
  */
 export async function createPerformancePublicationManifest({
   checkoutDirectory,
@@ -256,17 +309,18 @@ export async function createPerformancePublicationManifest({
     sourceSha,
   });
   const selections = validateCohortSelections(cohortSelections);
-  const candidates = await loadPerformancePublicationCollections({
+  const inventory = await loadPerformancePublicationCollections({
     checkoutRoot: boundary.checkoutRoot,
     collectionDirectories,
     manifestOutput: boundary.output,
     repository,
     sourceSha,
   });
-  const selected = selectPerformancePublicationCohorts(candidates, {
+  const selected = selectPerformancePublicationCohorts(inventory.candidates, {
     cohortSelections: selections,
   });
-  validateSelectedPublicationIdentity(selected, sourceSha);
+  const productionBytes = selectPerformancePublicationProductionBytes(inventory.productionBytes);
+  validateSelectedPublicationIdentity(selected, productionBytes, sourceSha);
 
   return publishAtomicDirectory(boundary, 'manifest', async (stagingDirectory) => {
     const families = {};
@@ -282,8 +336,17 @@ export async function createPerformancePublicationManifest({
         holdout: descriptors[5],
       };
     }
+    const productionBytesDescriptor = await copyCandidateCustody(
+      stagingDirectory,
+      'production-bytes',
+      'selected',
+      productionBytes,
+      PERF_PUBLICATION_PRODUCTION_BYTES.reportMember,
+      { topLevel: true },
+    );
     const manifest = {
       families,
+      productionBytes: productionBytesDescriptor,
       repository,
       schema: PERF_PUBLICATION_INPUT_SCHEMA,
     };
@@ -291,7 +354,17 @@ export async function createPerformancePublicationManifest({
       path.join(stagingDirectory, 'performance-publication-input.json'),
       Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, 'utf8'),
     );
-    return { manifest, selected: selectedInventory(selected) };
+    return {
+      manifest,
+      selected: {
+        families: selectedInventory(selected),
+        productionBytes: {
+          artifactId: productionBytes.artifactId,
+          runCreatedAt: productionBytes.runCreatedAt,
+          runId: productionBytes.runId,
+        },
+      },
+    };
   });
 }
 
@@ -375,6 +448,18 @@ export function selectPerformancePublicationCohorts(
   return result;
 }
 
+/** Select the one Production-bytes sidecar solely by immutable run chronology. */
+export function selectPerformancePublicationProductionBytes(candidates) {
+  if (!Array.isArray(candidates)) {
+    throw new TypeError('production bytes candidates must be an array');
+  }
+  validateProductionBytesCandidateDistinctness(candidates);
+  if (candidates.length === 0) {
+    throw new TypeError('no authenticated Production bytes sidecar is available');
+  }
+  return [...candidates].sort(candidateChronologyOrder)[0];
+}
+
 /** Testable byte boundary shared by network collection and offline manifest revalidation. */
 export function validateCollectedCandidateBytes({
   archiveBytes,
@@ -449,6 +534,79 @@ export function validateCollectedCandidateBytes({
   };
 }
 
+/** Authenticate the deterministic Production-bytes sidecar before it enters immutable custody. */
+export function validateCollectedProductionBytesCandidateBytes({
+  archiveBytes,
+  artifactApiBytes,
+  expectedArtifactId,
+  jobsApiBytes,
+  now,
+  reportBytes,
+  repository,
+  runApiBytes,
+  sourceSha,
+}) {
+  const policy = PERF_PUBLICATION_PRODUCTION_BYTES;
+  validateRepository(repository);
+  validateSourceSha(sourceSha);
+  const observedNow = validNow(now ?? new Date().toISOString());
+  const boundedArchive = boundedBytes(archiveBytes, MAX_ARCHIVE_BYTES, 'artifact ZIP');
+  const boundedArtifactApi = boundedBytes(artifactApiBytes, MAX_API_BYTES, 'artifact API metadata');
+  const boundedJobsApi = boundedBytes(jobsApiBytes, MAX_API_BYTES, 'all-attempt jobs API');
+  const boundedReport = boundedBytes(reportBytes, MAX_REPORT_BYTES, 'extracted report');
+  const boundedRunApi = boundedBytes(runApiBytes, MAX_API_BYTES, 'workflow run API metadata');
+  const artifact = parseJsonBytes(boundedArtifactApi, 'artifact API metadata');
+  const jobs = parseJsonBytes(boundedJobsApi, 'all-attempt jobs API');
+  const report = parseJsonBytes(boundedReport, 'extracted report');
+  const run = parseJsonBytes(boundedRunApi, 'workflow run API metadata');
+  const runId = positiveInteger(run?.id, 'workflow run id');
+  validateRunMetadata(run, { repository, runId, sourceSha });
+  if (run.event !== 'pull_request') {
+    throw new TypeError('Production bytes workflow run must use the PR-only trigger');
+  }
+  validateJobsCensus(jobs);
+
+  const artifactId = positiveInteger(artifact?.id, 'artifact id');
+  if (expectedArtifactId !== undefined && artifactId !== expectedArtifactId) {
+    throw new TypeError('artifact API identity differs from the run artifact listing');
+  }
+  validateArtifactMetadata(artifact, {
+    archiveBytes: boundedArchive,
+    artifactId,
+    now: observedNow,
+    policy,
+    repository,
+    run,
+    runId,
+    sourceSha,
+  });
+  validateExpectedJob(jobs, {
+    allowedConclusions: ['failure', 'success'],
+    allowedFailureStep: policy.budgetFailureStep,
+    requiredSuccessSteps: policy.budgetFailureSuccessSteps,
+    policy,
+    repository,
+    run,
+    runId,
+    sourceSha,
+  });
+  const archiveReport = readOnlyZipMember(boundedArchive, policy.reportMember);
+  if (!archiveReport.equals(boundedReport)) {
+    throw new TypeError(`saved report bytes differ from ZIP member ${policy.reportMember}`);
+  }
+  validateProductionBytesReport(report, { repository, run, runId, sourceSha });
+
+  return {
+    report,
+    summary: {
+      artifactId,
+      executionDigest: report.execution.digest,
+      runCreatedAt: run.created_at,
+      runId,
+    },
+  };
+}
+
 export async function loadPerformancePublicationCollections({
   checkoutRoot,
   collectionDirectories,
@@ -482,6 +640,7 @@ export async function loadPerformancePublicationCollections({
   }
 
   const candidates = [];
+  const productionBytes = [];
   const seenFiles = new Set();
   const seenInodes = new Set();
   for (const root of roots) {
@@ -498,9 +657,20 @@ export async function loadPerformancePublicationCollections({
       });
       candidates.push(loaded);
     }
+    for (const entry of ledger.productionBytes) {
+      const loaded = await loadCollectedProductionBytesCandidate(root, entry, {
+        repository,
+        seenFiles,
+        seenInodes,
+        sourceSha,
+      });
+      productionBytes.push(loaded);
+    }
   }
   validateCandidateDistinctness(candidates, { allowSharedRunAcrossFamilies: true });
-  return candidates;
+  validateProductionBytesCandidateDistinctness(productionBytes);
+  validateCrossInventoryDistinctness(candidates, productionBytes);
+  return { candidates, productionBytes };
 }
 
 function familyPolicy({
@@ -765,7 +935,7 @@ function validateJobsCensus(jobs) {
   }
 }
 
-function enumerateFamilyArtifacts(listing, runId) {
+function enumeratePublicationArtifacts(listing, runId) {
   if (
     !ownRecord(listing) ||
     !Array.isArray(listing.artifacts) ||
@@ -780,21 +950,29 @@ function enumerateFamilyArtifacts(listing, runId) {
   if (ids.some((id) => !Number.isSafeInteger(id) || id < 1) || new Set(ids).size !== ids.length) {
     throw new TypeError('run artifacts API contains missing or duplicate artifact identities');
   }
-  const selected = listing.artifacts
+  const familyArtifacts = listing.artifacts
     .filter((artifact) => FAMILY_BY_ARTIFACT.has(artifact?.name))
     .map((artifact) => ({
       artifactId: artifact.id,
       familyName: FAMILY_BY_ARTIFACT.get(artifact.name),
+      kind: 'family',
     }));
-  const familyNames = selected.map(({ familyName }) => familyName);
+  const familyNames = familyArtifacts.map(({ familyName }) => familyName);
   if (new Set(familyNames).size !== familyNames.length) {
     throw new TypeError(`workflow run ${String(runId)} has ambiguous baseline-family artifacts`);
   }
-  return selected.sort(
+  const productionBytes = listing.artifacts
+    .filter((artifact) => artifact?.name === PERF_PUBLICATION_PRODUCTION_BYTES.artifactName)
+    .map((artifact) => ({ artifactId: artifact.id, familyName: null, kind: 'production-bytes' }));
+  if (productionBytes.length > 1) {
+    throw new TypeError(`workflow run ${String(runId)} has ambiguous Production bytes artifacts`);
+  }
+  familyArtifacts.sort(
     (left, right) =>
       PERF_PUBLICATION_FAMILY_NAMES.indexOf(left.familyName) -
       PERF_PUBLICATION_FAMILY_NAMES.indexOf(right.familyName),
   );
+  return [...familyArtifacts, ...productionBytes];
 }
 
 function validateArtifactMetadata(
@@ -847,7 +1025,32 @@ function validateArtifactMetadata(
   if (findings.length > 0) throw new TypeError(findings.join('\n'));
 }
 
-function validateExpectedJob(jobsMetadata, { policy, repository, run, runId, sourceSha }) {
+function validateExpectedJob(
+  jobsMetadata,
+  {
+    allowedConclusions = ['success'],
+    allowedFailureStep = null,
+    requiredSuccessSteps = [],
+    policy,
+    repository,
+    run,
+    runId,
+    sourceSha,
+  },
+) {
+  if (
+    allowedConclusions.includes('failure') &&
+    (!nonEmptyString(allowedFailureStep) ||
+      allowedFailureStep.trim() !== allowedFailureStep ||
+      !Array.isArray(requiredSuccessSteps) ||
+      requiredSuccessSteps.length !== 2 ||
+      new Set(requiredSuccessSteps).size !== requiredSuccessSteps.length ||
+      requiredSuccessSteps.some(
+        (step) => !nonEmptyString(step) || step.trim() !== step || step === allowedFailureStep,
+      ))
+  ) {
+    throw new TypeError('failed producer authorization requires exact ordered workflow steps');
+  }
   const matches = jobsMetadata.jobs.filter(
     (job) => job?.name === policy.workflowJobName && job?.run_attempt === run.run_attempt,
   );
@@ -858,18 +1061,46 @@ function validateExpectedJob(jobsMetadata, { policy, repository, run, runId, sou
   }
   const job = matches[0];
   const jobId = positiveInteger(job?.id, 'workflow job id');
+  const steps = Array.isArray(job?.steps) ? job.steps : [];
+  const failedSteps = steps.filter((step) => step?.conclusion === 'failure');
+  const failureStepMatches = steps.filter((step) => step?.name === allowedFailureStep);
+  const requiredSuccessStepMatches = requiredSuccessSteps.map((name) =>
+    steps.filter((step) => step?.name === name),
+  );
+  const failureStep = failureStepMatches[0];
+  const matchedSuccessSteps = requiredSuccessStepMatches.map(([step]) => step);
+  const authorizedFailure =
+    job?.conclusion === 'failure' &&
+    requiredSuccessSteps.length === 2 &&
+    failedSteps.length === 1 &&
+    failureStepMatches.length === 1 &&
+    failureStep?.conclusion === 'failure' &&
+    failureStep?.status === 'completed' &&
+    Number.isSafeInteger(failureStep?.number) &&
+    failureStep.number > 0 &&
+    requiredSuccessStepMatches.every(
+      (matches) =>
+        matches.length === 1 &&
+        matches[0]?.conclusion === 'success' &&
+        matches[0]?.status === 'completed' &&
+        Number.isSafeInteger(matches[0]?.number) &&
+        matches[0].number > 0,
+    ) &&
+    matchedSuccessSteps[0].number < failureStep.number &&
+    failureStep.number < matchedSuccessSteps[1].number;
   if (
     job?.run_id !== runId ||
     job?.run_attempt !== run.run_attempt ||
     job?.head_sha !== sourceSha ||
     job?.status !== 'completed' ||
-    job?.conclusion !== 'success' ||
+    !allowedConclusions.includes(job?.conclusion) ||
+    (job?.conclusion === 'failure' && !authorizedFailure) ||
     job?.url !== `https://api.github.com/repos/${repository}/actions/jobs/${String(jobId)}` ||
     !validTimestamp(job?.started_at) ||
     !validTimestamp(job?.completed_at) ||
     Date.parse(job.started_at) > Date.parse(job.completed_at)
   ) {
-    throw new TypeError('expected family producer is not one exact successful workflow job');
+    throw new TypeError('expected artifact producer is not one exact authorized workflow job');
   }
 }
 
@@ -969,21 +1200,120 @@ function validateFamilyReport(report, { familyName, policy, repository, run, run
   if (findings.length > 0) throw new TypeError([...new Set(findings)].join('\n'));
 }
 
-async function writeCollectedCandidate(stagingDirectory, summary, bytes) {
-  const policy = requiredFamilyPolicy(summary.family);
-  const relativeRoot = path.posix.join(
-    'runs',
-    String(summary.runId),
-    summary.family,
-    String(summary.artifactId),
+function validateProductionBytesReport(report, { repository, run, runId, sourceSha }) {
+  const policy = PERF_PUBLICATION_PRODUCTION_BYTES;
+  const findings = [];
+  if (!ownRecord(report) || report.schema !== policy.reportSchema) {
+    findings.push('Production bytes report schema differs');
+  }
+  const expectedSourceKeys = ['commit', 'dirty', 'dirtyPaths', 'locks'];
+  for (const [label, source] of [
+    ['source', report?.source],
+    ['sourceAfter', report?.sourceAfter],
+  ]) {
+    if (
+      !ownRecord(source) ||
+      canonicalJson(Object.keys(source).sort()) !== canonicalJson(expectedSourceKeys) ||
+      source.commit !== sourceSha ||
+      source.dirty !== false ||
+      canonicalJson(source.dirtyPaths) !== canonicalJson([]) ||
+      !ownRecord(source.locks) ||
+      canonicalJson(Object.keys(source.locks).sort()) !==
+        canonicalJson([...REQUIRED_LOCKS].sort()) ||
+      REQUIRED_LOCKS.some((lock) => !DIGEST_PATTERN.test(source.locks[lock] ?? ''))
+    ) {
+      findings.push(`Production bytes report ${label} or dependency locks differ`);
+    }
+  }
+  if (canonicalJson(report?.source) !== canonicalJson(report?.sourceAfter)) {
+    findings.push('Production bytes report source changed during measurement');
+  }
+  findings.push(
+    ...executionIdentityFindings(report?.execution, { requireProvider: 'github-actions' }).map(
+      (finding) => `Production bytes ${finding}`,
+    ),
   );
+  const github = report?.execution?.github;
+  const runUrl = `https://github.com/${repository}/actions/runs/${String(runId)}`;
+  const workflowRefPrefix = `${repository}/${PERF_REALISTIC_WORKFLOW_PATH}@`;
+  if (
+    github?.repository !== repository ||
+    github?.serverUrl !== 'https://github.com' ||
+    github?.runUrl !== runUrl ||
+    String(github?.runId ?? '') !== String(runId) ||
+    String(github?.runAttempt ?? '') !== String(run.run_attempt) ||
+    github?.sha !== sourceSha ||
+    github?.job !== policy.workflowJobKey ||
+    !nonEmptyString(github?.workflowRef) ||
+    !github.workflowRef.startsWith(workflowRefPrefix) ||
+    !COMMIT_PATTERN.test(github?.eventSha ?? '') ||
+    !COMMIT_PATTERN.test(github?.workflowSha ?? '') ||
+    github.eventSha !== github.workflowSha
+  ) {
+    findings.push('Production bytes report execution differs from its workflow run and job');
+  }
+  if (
+    report?.suite !== policy.cell ||
+    report?.options?.componentCount !== policy.componentCount ||
+    canonicalJson(report?.workloadIdentity?.identity?.cells) !== canonicalJson([policy.cell]) ||
+    report?.workloadIdentity?.identity?.policies?.componentCount !== policy.componentCount
+  ) {
+    findings.push('Production bytes suite or component-count identity differs');
+  }
+  findings.push(...workloadIdentityFindings(report?.workloadIdentity, 'Production bytes'));
+  const expectedIntegrityKeys = [
+    'complete',
+    'executionAuthenticated',
+    'publishable',
+    'serialized',
+    'sourceStable',
+    'workloadAuthenticated',
+  ];
+  if (
+    !ownRecord(report?.integrity) ||
+    canonicalJson(Object.keys(report.integrity).sort()) !==
+      canonicalJson(expectedIntegrityKeys.sort()) ||
+    expectedIntegrityKeys.some((field) => report.integrity[field] !== true)
+  ) {
+    findings.push('Production bytes report integrity census is incomplete');
+  }
+  const metricNames = Object.keys(report?.metrics ?? {}).sort();
+  if (
+    !ownRecord(report?.metrics) ||
+    canonicalJson(metricNames) !==
+      canonicalJson([...PERF_PUBLICATION_PRODUCTION_BYTES_METRICS].sort())
+  ) {
+    findings.push('Production bytes report must contain the exact five metric census');
+  } else {
+    for (const metricName of PERF_PUBLICATION_PRODUCTION_BYTES_METRICS) {
+      const observation = report.metrics[metricName];
+      if (
+        !ownRecord(observation) ||
+        canonicalJson(Object.keys(observation)) !== canonicalJson(['value']) ||
+        !Number.isSafeInteger(observation.value) ||
+        observation.value < 0
+      ) {
+        findings.push(`Production bytes metric ${metricName} is malformed`);
+      }
+    }
+  }
+  if (
+    report?.verdict?.status !== 'measured' ||
+    canonicalJson(report?.verdict?.reasons) !== canonicalJson([])
+  ) {
+    findings.push('Production bytes report verdict is not measured');
+  }
+  if (findings.length > 0) throw new TypeError([...new Set(findings)].join('\n'));
+}
+
+async function writeCollectedEvidence(stagingDirectory, relativeRoot, reportMember, bytes) {
   const absoluteRoot = path.join(stagingDirectory, ...relativeRoot.split('/'));
   await mkdir(absoluteRoot, { mode: 0o700, recursive: true });
   const descriptor = {
     apiMetadata: path.posix.join(relativeRoot, 'artifact.api.json'),
     archive: path.posix.join(relativeRoot, 'artifact.zip'),
     jobsApiMetadata: path.posix.join(relativeRoot, 'jobs.api.json'),
-    report: path.posix.join(relativeRoot, policy.reportMember),
+    report: path.posix.join(relativeRoot, reportMember),
     runApiMetadata: path.posix.join(relativeRoot, 'run.api.json'),
   };
   await Promise.all([
@@ -1013,7 +1343,7 @@ async function writeExclusive(file, bytes) {
 }
 
 function validateCollectionLedger(ledger, { repository, sourceSha }) {
-  const keys = ['candidates', 'repository', 'runIds', 'schema', 'sourceCommit'];
+  const keys = ['candidates', 'productionBytes', 'repository', 'runIds', 'schema', 'sourceCommit'];
   if (
     !ownRecord(ledger) ||
     ledger.schema !== PERF_PUBLICATION_COLLECTION_SCHEMA ||
@@ -1026,12 +1356,23 @@ function validateCollectionLedger(ledger, { repository, sourceSha }) {
   validateRunIds(ledger.runIds);
   if (
     !Array.isArray(ledger.candidates) ||
-    ledger.candidates.length < 1 ||
     ledger.candidates.length > PERF_PUBLICATION_FAMILY_NAMES.length * ledger.runIds.length
   ) {
-    throw new TypeError('collection candidate census is empty or exceeds its run boundary');
+    throw new TypeError('collection family candidate census exceeds its run boundary');
   }
   for (const entry of ledger.candidates) validateLedgerCandidate(entry, ledger.runIds);
+  if (
+    !Array.isArray(ledger.productionBytes) ||
+    ledger.productionBytes.length > ledger.runIds.length
+  ) {
+    throw new TypeError('collection Production bytes census exceeds its run boundary');
+  }
+  for (const entry of ledger.productionBytes) {
+    validateProductionBytesLedgerCandidate(entry, ledger.runIds);
+  }
+  if (ledger.candidates.length === 0 && ledger.productionBytes.length === 0) {
+    throw new TypeError('collection candidate census is empty');
+  }
 }
 
 function validateLedgerCandidate(entry, runIds) {
@@ -1062,6 +1403,22 @@ function validateLedgerCandidate(entry, runIds) {
   validateEvidenceDescriptor(entry.descriptor);
 }
 
+function validateProductionBytesLedgerCandidate(entry, runIds) {
+  const keys = ['artifactId', 'descriptor', 'executionDigest', 'runCreatedAt', 'runId'];
+  if (
+    !ownRecord(entry) ||
+    canonicalJson(Object.keys(entry).sort()) !== canonicalJson(keys.sort()) ||
+    !runIds.includes(entry.runId) ||
+    !Number.isSafeInteger(entry.artifactId) ||
+    entry.artifactId < 1 ||
+    !DIGEST_PATTERN.test(entry.executionDigest ?? '') ||
+    !validTimestamp(entry.runCreatedAt)
+  ) {
+    throw new TypeError('collection Production bytes identity or field census differs');
+  }
+  validateEvidenceDescriptor(entry.descriptor);
+}
+
 function validateEvidenceDescriptor(descriptor) {
   if (
     !ownRecord(descriptor) ||
@@ -1084,39 +1441,12 @@ async function loadCollectedCandidate(
   ledgerEntry,
   { repository, seenFiles, seenInodes, sourceSha },
 ) {
-  const files = {};
-  const bytes = {};
-  const limits = {
-    apiMetadata: MAX_API_BYTES,
-    archive: MAX_ARCHIVE_BYTES,
-    jobsApiMetadata: MAX_API_BYTES,
-    report: MAX_REPORT_BYTES,
-    runApiMetadata: MAX_API_BYTES,
-  };
-  for (const key of EVIDENCE_KEYS) {
-    const file = path.resolve(collectionRoot, ...ledgerEntry.descriptor[key].split('/'));
-    if (!containedBy(collectionRoot, file)) {
-      throw new TypeError(`${ledgerEntry.family} ${key} escapes its collection root`);
-    }
-    const facts = await boundedRegularFile(file, limits[key], `${ledgerEntry.family} ${key}`);
-    if (facts.realPath !== file || facts.linkCount !== 1) {
-      throw new TypeError(`${ledgerEntry.family} ${key} is a symlink or hardlink alias`);
-    }
-    const inode = `${String(facts.device)}:${String(facts.inode)}`;
-    if (seenFiles.has(file) || seenInodes.has(inode)) {
-      throw new TypeError(`${ledgerEntry.family} custody files alias another candidate`);
-    }
-    seenFiles.add(file);
-    seenInodes.add(inode);
-    files[key] = {
-      byteLength: facts.bytes.length,
-      contentDigest: sha256(facts.bytes),
-      device: facts.device,
-      file,
-      inode: facts.inode,
-    };
-    bytes[key] = facts.bytes;
-  }
+  const { bytes, files } = await loadCollectedEvidenceFiles(
+    collectionRoot,
+    ledgerEntry.descriptor,
+    ledgerEntry.family,
+    { seenFiles, seenInodes },
+  );
   const validated = validateCollectedCandidateBytes({
     archiveBytes: bytes.archive,
     artifactApiBytes: bytes.apiMetadata,
@@ -1133,6 +1463,76 @@ async function loadCollectedCandidate(
     throw new TypeError(`${ledgerEntry.family} collection ledger differs from raw custody bytes`);
   }
   return { ...validated.summary, descriptorFiles: files, report: validated.report };
+}
+
+async function loadCollectedProductionBytesCandidate(
+  collectionRoot,
+  ledgerEntry,
+  { repository, seenFiles, seenInodes, sourceSha },
+) {
+  const { bytes, files } = await loadCollectedEvidenceFiles(
+    collectionRoot,
+    ledgerEntry.descriptor,
+    'Production bytes',
+    { seenFiles, seenInodes },
+  );
+  const validated = validateCollectedProductionBytesCandidateBytes({
+    archiveBytes: bytes.archive,
+    artifactApiBytes: bytes.apiMetadata,
+    expectedArtifactId: ledgerEntry.artifactId,
+    jobsApiBytes: bytes.jobsApiMetadata,
+    reportBytes: bytes.report,
+    repository,
+    runApiBytes: bytes.runApiMetadata,
+    sourceSha,
+  });
+  const expectedLedgerFacts = { ...validated.summary, descriptor: ledgerEntry.descriptor };
+  if (canonicalJson(expectedLedgerFacts) !== canonicalJson(ledgerEntry)) {
+    throw new TypeError('Production bytes collection ledger differs from raw custody bytes');
+  }
+  return { ...validated.summary, descriptorFiles: files, report: validated.report };
+}
+
+async function loadCollectedEvidenceFiles(
+  collectionRoot,
+  descriptor,
+  label,
+  { seenFiles, seenInodes },
+) {
+  const files = {};
+  const bytes = {};
+  const limits = {
+    apiMetadata: MAX_API_BYTES,
+    archive: MAX_ARCHIVE_BYTES,
+    jobsApiMetadata: MAX_API_BYTES,
+    report: MAX_REPORT_BYTES,
+    runApiMetadata: MAX_API_BYTES,
+  };
+  for (const key of EVIDENCE_KEYS) {
+    const file = path.resolve(collectionRoot, ...descriptor[key].split('/'));
+    if (!containedBy(collectionRoot, file)) {
+      throw new TypeError(`${label} ${key} escapes its collection root`);
+    }
+    const facts = await boundedRegularFile(file, limits[key], `${label} ${key}`);
+    if (facts.realPath !== file || facts.linkCount !== 1) {
+      throw new TypeError(`${label} ${key} is a symlink or hardlink alias`);
+    }
+    const inode = `${String(facts.device)}:${String(facts.inode)}`;
+    if (seenFiles.has(file) || seenInodes.has(inode)) {
+      throw new TypeError(`${label} custody files alias another candidate`);
+    }
+    seenFiles.add(file);
+    seenInodes.add(inode);
+    files[key] = {
+      byteLength: facts.bytes.length,
+      contentDigest: sha256(facts.bytes),
+      device: facts.device,
+      file,
+      inode: facts.inode,
+    };
+    bytes[key] = facts.bytes;
+  }
+  return { bytes, files };
 }
 
 async function boundedRegularFile(file, maximumBytes, label) {
@@ -1189,6 +1589,53 @@ function validateCandidateDistinctness(candidates, { allowSharedRunAcrossFamilie
   }
 }
 
+function validateProductionBytesCandidateDistinctness(candidates) {
+  const artifacts = new Set();
+  const executions = new Set();
+  const runs = new Set();
+  for (const candidate of candidates) {
+    if (
+      !ownRecord(candidate) ||
+      !Number.isSafeInteger(candidate.artifactId) ||
+      candidate.artifactId < 1 ||
+      !Number.isSafeInteger(candidate.runId) ||
+      candidate.runId < 1 ||
+      !DIGEST_PATTERN.test(candidate.executionDigest ?? '') ||
+      !validTimestamp(candidate.runCreatedAt) ||
+      (candidate.report !== undefined &&
+        candidate.report?.execution?.digest !== candidate.executionDigest)
+    ) {
+      throw new TypeError('Production bytes candidate identity facts are incomplete');
+    }
+    if (artifacts.has(candidate.artifactId)) {
+      throw new TypeError('duplicate Production bytes artifact identity');
+    }
+    if (executions.has(candidate.executionDigest)) {
+      throw new TypeError('duplicate Production bytes execution identity');
+    }
+    if (runs.has(candidate.runId)) {
+      throw new TypeError('duplicate Production bytes workflow run');
+    }
+    artifacts.add(candidate.artifactId);
+    executions.add(candidate.executionDigest);
+    runs.add(candidate.runId);
+  }
+}
+
+function validateCrossInventoryDistinctness(candidates, productionBytes) {
+  const familyArtifacts = new Set(candidates.map((candidate) => candidate.artifactId));
+  const familyExecutions = new Set(candidates.map((candidate) => candidate.executionDigest));
+  if (
+    productionBytes.some(
+      (candidate) =>
+        familyArtifacts.has(candidate.artifactId) ||
+        familyExecutions.has(candidate.executionDigest),
+    )
+  ) {
+    throw new TypeError('Production bytes custody aliases a ratified family artifact or execution');
+  }
+}
+
 function validateBasicCandidateFacts(candidate, familyName) {
   requiredFamilyPolicy(familyName);
   if (
@@ -1230,7 +1677,7 @@ function requireSixDistinct(candidates, familyName) {
   }
 }
 
-function validateSelectedPublicationIdentity(selected, sourceSha) {
+function validateSelectedPublicationIdentity(selected, productionBytes, sourceSha) {
   const all = PERF_PUBLICATION_FAMILY_NAMES.flatMap((familyName) => selected[familyName] ?? []);
   if (all.length !== 42) throw new TypeError('selected publication census is not 42 reports');
   const locks = all.map((candidate) => canonicalJson(candidate.report?.source?.locks));
@@ -1240,6 +1687,16 @@ function validateSelectedPublicationIdentity(selected, sourceSha) {
   if (all.some((candidate) => candidate.report?.source?.commit !== sourceSha)) {
     throw new TypeError('selected families do not share the exact requested source');
   }
+  if (
+    productionBytes?.report?.source?.commit !== sourceSha ||
+    productionBytes?.report?.sourceAfter?.commit !== sourceSha ||
+    canonicalJson(productionBytes?.report?.source?.locks) !== locks[0] ||
+    canonicalJson(productionBytes?.report?.sourceAfter?.locks) !== locks[0]
+  ) {
+    throw new TypeError(
+      'selected Production bytes sidecar does not share the exact source and dependency locks',
+    );
+  }
   const packed = all.filter(
     (candidate) => PERF_PUBLICATION_FAMILIES[candidate.family].packedProduct,
   );
@@ -1248,18 +1705,29 @@ function validateSelectedPublicationIdentity(selected, sourceSha) {
     throw new TypeError('selected dev/build families do not share one concrete packed product');
   }
   validateCandidateDistinctness(all, { allowSharedRunAcrossFamilies: true });
+  validateProductionBytesCandidateDistinctness([productionBytes]);
+  validateCrossInventoryDistinctness(all, [productionBytes]);
 }
 
-async function copyCandidateCustody(stagingDirectory, familyName, slot, candidate) {
-  const policy = requiredFamilyPolicy(familyName);
-  const relativeRoot = path.posix.join('families', familyName, slot);
+async function copyCandidateCustody(
+  stagingDirectory,
+  familyName,
+  slot,
+  candidate,
+  reportMember,
+  { topLevel = false } = {},
+) {
+  const member = reportMember ?? requiredFamilyPolicy(familyName).reportMember;
+  const relativeRoot = topLevel
+    ? path.posix.join(familyName, slot)
+    : path.posix.join('families', familyName, slot);
   const targetRoot = path.join(stagingDirectory, ...relativeRoot.split('/'));
   await mkdir(targetRoot, { mode: 0o700, recursive: true });
   const descriptor = {
     apiMetadata: path.posix.join(relativeRoot, 'artifact.api.json'),
     archive: path.posix.join(relativeRoot, 'artifact.zip'),
     jobsApiMetadata: path.posix.join(relativeRoot, 'jobs.api.json'),
-    report: path.posix.join(relativeRoot, policy.reportMember),
+    report: path.posix.join(relativeRoot, member),
     runApiMetadata: path.posix.join(relativeRoot, 'run.api.json'),
   };
   for (const key of EVIDENCE_KEYS) {

@@ -28,6 +28,11 @@ const buildProfileCondition = [
   "(github.event.label.name == 'perf-measure-decisions' ||",
   "github.event.label.name == 'perf-measure-build-profile')) }}",
 ];
+const productionBytesBudgetFailureStep = 'Evaluate against perf-budgets.json';
+const productionBytesRequiredSuccessSteps = [
+  'Measure critical-path, navigation and bootstrap bytes',
+  'Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+];
 
 afterEach(() => {
   for (const directory of temporaryDirectories.splice(0)) {
@@ -262,6 +267,120 @@ describe('performance artifact custody', () => {
       triggerPolicy: 'build-profile',
       triggerScope: 'pull-request:labeled/perf-measure-decisions-or-build-profile',
     });
+  });
+
+  it('binds Production bytes to its exact PR-only trigger and authenticated upload', async () => {
+    const options = {
+      expectedArtifactName: 'kovo-perf-bytes',
+      jobKey: 'bytes',
+      jobName: 'Production bytes',
+      triggerPolicy: 'production-bytes',
+      workflowArtifactName: 'kovo-perf-bytes',
+      workflowArtifactPath: '${{ runner.temp }}/kovo-perf/bytes.json',
+    };
+    const fixture = writeArtifactFixture({ ...options, event: 'pull_request' });
+    const workflow = readFileSync(path.resolve('.github/workflows/perf-realistic.yml'), 'utf8');
+    replaceWorkflowApiFixture(fixture, workflow);
+    fixture.trustedWorkflow = { bytes: Buffer.from(workflow), headSha: fixture.sourceCommit };
+
+    const authenticated = await authenticateFixture(fixture);
+
+    expect(authenticated.custody.workflow).toMatchObject({
+      artifactUpload: {
+        action: 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+        concreteName: 'kovo-perf-bytes',
+        job: 'bytes',
+        name: 'kovo-perf-bytes',
+        path: '${{ runner.temp }}/kovo-perf/bytes.json',
+      },
+      event: 'pull_request',
+      job: { key: 'bytes', name: 'Production bytes' },
+      triggerPolicy: 'production-bytes',
+      triggerScope: 'pull-request:every-event',
+    });
+
+    replaceRunApiFixture(fixture, { ...fixture.runMetadata, conclusion: 'failure' });
+    replaceJobsApiFixture(fixture, {
+      ...fixture.jobsMetadata,
+      jobs: fixture.jobsMetadata.jobs.map((job) => ({
+        ...job,
+        conclusion: 'failure',
+        steps: job.steps.map((step) =>
+          step.name === productionBytesBudgetFailureStep
+            ? { ...step, conclusion: 'failure' }
+            : step,
+        ),
+      })),
+    });
+    await expect(
+      authenticateFixture(fixture, {
+        allowedProducerJobConclusions: ['failure', 'success'],
+        allowedProducerFailureStep: productionBytesBudgetFailureStep,
+        requiredProducerSuccessSteps: productionBytesRequiredSuccessSteps,
+      }),
+    ).resolves.toMatchObject({
+      custody: {
+        workflow: {
+          job: {
+            conclusion: 'failure',
+            failureStep: {
+              conclusion: 'failure',
+              name: productionBytesBudgetFailureStep,
+              number: 2,
+              status: 'completed',
+            },
+            requiredSuccessSteps: [
+              {
+                conclusion: 'success',
+                name: productionBytesRequiredSuccessSteps[0],
+                number: 1,
+                status: 'completed',
+              },
+              {
+                conclusion: 'success',
+                name: productionBytesRequiredSuccessSteps[1],
+                number: 3,
+                status: 'completed',
+              },
+            ],
+          },
+        },
+      },
+    });
+    await expect(authenticateFixture(fixture)).rejects.toThrow(
+      'expected workflow artifact producer job is not authorized',
+    );
+
+    const authorizedJobs = structuredClone(fixture.jobsMetadata);
+    for (const mutate of [
+      (job) => {
+        job.steps.find(({ name }) => name === productionBytesBudgetFailureStep).name =
+          'Some other failed step';
+      },
+      (job) => {
+        job.steps.find(({ name }) => name === productionBytesRequiredSuccessSteps[0]).conclusion =
+          'skipped';
+      },
+      (job) => {
+        job.steps.find(({ name }) => name === productionBytesRequiredSuccessSteps[1]).conclusion =
+          'failure';
+      },
+    ]) {
+      const wrongFailure = structuredClone(authorizedJobs);
+      mutate(wrongFailure.jobs[0]);
+      replaceJobsApiFixture(fixture, wrongFailure);
+      await expect(
+        authenticateFixture(fixture, {
+          allowedProducerJobConclusions: ['failure', 'success'],
+          allowedProducerFailureStep: productionBytesBudgetFailureStep,
+          requiredProducerSuccessSteps: productionBytesRequiredSuccessSteps,
+        }),
+      ).rejects.toThrow('expected workflow artifact producer job is not authorized');
+    }
+
+    await expect(authenticateFixture(writeArtifactFixture(options))).rejects.toThrow(
+      'workflow run event workflow_dispatch is not a reviewed trigger',
+    );
   });
 
   it('rejects a PR report that conflates the measured head with the evaluated merge workflow', async () => {
@@ -763,6 +882,7 @@ function writeArtifactFixture({
         name: jobName,
         run_attempt: 1,
         run_id: 1001,
+        ...(triggerPolicy === 'production-bytes' ? { steps: productionBytesJobSteps() } : {}),
         started_at: '2026-08-13T22:00:00Z',
         status: 'completed',
         url: 'https://api.github.com/repos/kovojs/kovo/actions/jobs/3001',
@@ -817,6 +937,35 @@ function writeArtifactFixture({
   };
 }
 
+function productionBytesJobSteps() {
+  return [
+    {
+      completed_at: '2026-08-13T22:01:00Z',
+      conclusion: 'success',
+      name: productionBytesRequiredSuccessSteps[0],
+      number: 1,
+      started_at: '2026-08-13T22:00:00Z',
+      status: 'completed',
+    },
+    {
+      completed_at: '2026-08-13T22:02:00Z',
+      conclusion: 'success',
+      name: productionBytesBudgetFailureStep,
+      number: 2,
+      started_at: '2026-08-13T22:01:00Z',
+      status: 'completed',
+    },
+    {
+      completed_at: '2026-08-13T22:03:00Z',
+      conclusion: 'success',
+      name: productionBytesRequiredSuccessSteps[1],
+      number: 3,
+      started_at: '2026-08-13T22:02:00Z',
+      status: 'completed',
+    },
+  ];
+}
+
 function authenticateFixture(fixture, overrides = {}) {
   return authenticatePerformanceArtifactEvidence(fixture.evidence, {
     baseDirectory: fixture.directory,
@@ -851,15 +1000,23 @@ function workflowFixtureSource(
     path: '${{ runner.temp }}/kovo-perf/browser',
   },
 ) {
-  const condition = triggerPolicy === 'build-profile' ? buildProfileCondition : baselineCondition;
+  const condition =
+    triggerPolicy === 'build-profile'
+      ? buildProfileCondition
+      : triggerPolicy === 'production-bytes'
+        ? ["${{ github.event_name == 'pull_request' }}"]
+        : baselineCondition;
+  const conditionLines =
+    triggerPolicy === 'production-bytes'
+      ? [`    if: ${condition[0]}`]
+      : ['    if: >-', ...condition.map((line) => `      ${line}`)];
   return [
     'name: Perf Realistic Tier',
     '',
     'jobs:',
     `  ${jobKey}:`,
     `    name: ${jobName}`,
-    '    if: >-',
-    ...condition.map((line) => `      ${line}`),
+    ...conditionLines,
     '    runs-on: ubuntu-24.04',
     '    steps:',
     '      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',

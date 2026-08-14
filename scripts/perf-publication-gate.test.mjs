@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -10,6 +11,7 @@ import {
   authenticatePerformancePublicationInput,
   buildProfilePublicationFindings,
   derivePerformancePublication,
+  loadCommittedPerformanceBudgets,
   performancePublicationFindings,
   performancePublicationResultFindings,
   renderPerformancePublicationMarkdown,
@@ -66,6 +68,12 @@ describe('seven-family performance publication gate', () => {
       }),
     ).toEqual([]);
     expect(Object.keys(result.documents)).toEqual(FAMILY_NAMES);
+    expect(result.publication.productionBytes).toMatchObject({
+      componentCount: 24,
+      failures: [],
+      status: 'pass',
+    });
+    expect(result.publication.productionBytes.metricVerdicts).toHaveLength(5);
     for (const familyName of FAMILY_NAMES) {
       expect(result.publication.families[familyName]).toMatchObject({
         status: 'pass',
@@ -82,6 +90,143 @@ describe('seven-family performance publication gate', () => {
     expect(markdown).toContain('independent holdout');
     expect(markdown).toContain('Kovo-only');
     expect(markdown).toContain('https://github.com/kovojs/kovo/tree/');
+    expect(markdown).toContain('Production bytes sidecar');
+    expect(markdown).toContain('perf-budgets.json');
+  });
+
+  it('makes any deterministic byte-budget failure publication-blocking', () => {
+    const authenticated = authenticatedFixture();
+    const metricId = 'production.navigation.wireBytes';
+    authenticated.productionBytes.report.metrics[metricId].value = 1_001;
+    authenticated.productionBytes.custody.workflow.conclusion = 'failure';
+    authenticated.productionBytes.custody.workflow.job.conclusion = 'failure';
+    authenticated.productionBytes.custody.workflow.job.failureStep = {
+      conclusion: 'failure',
+      name: 'Evaluate against perf-budgets.json',
+      number: 2,
+      status: 'completed',
+    };
+    authenticated.productionBytes.custody.workflow.job.requiredSuccessSteps = [
+      {
+        conclusion: 'success',
+        name: 'Measure critical-path, navigation and bootstrap bytes',
+        number: 1,
+        status: 'completed',
+      },
+      {
+        conclusion: 'success',
+        name: 'Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+        number: 3,
+        status: 'completed',
+      },
+    ];
+
+    const result = derivePerformancePublication(authenticated, fixtureDerivationOptions());
+
+    expect(result.publication.productionBytes).toMatchObject({
+      failures: [metricId],
+      status: 'blocked',
+    });
+    expect(result.publication.verdict).toMatchObject({
+      failures: [`production-bytes:${metricId}`],
+      status: 'blocked',
+    });
+    expect(performancePublicationFindings(result.publication)).toEqual([]);
+
+    result.publication.productionBytes.evidence.workflow.job.requiredSuccessSteps[1].conclusion =
+      'skipped';
+    resealPublication(result.publication);
+    expect(performancePublicationFindings(result.publication)).toContain(
+      'Production bytes live workflow family job differs from policy',
+    );
+  });
+
+  it('keeps malformed, unbudgeted, or sourceAfter-drifted byte evidence unproven', () => {
+    for (const mutate of [
+      (entry) => {
+        entry.budgets.metrics['production.document.wireBytes'].max = null;
+      },
+      (entry) => {
+        entry.budgets.metrics['production.document.wireBytes'].max = -1;
+      },
+      (entry) => {
+        entry.report.sourceAfter.commit = 'b'.repeat(40);
+      },
+      (entry) => {
+        delete entry.report.metrics['production.inlineBootstrap.gzipBytes'];
+      },
+    ]) {
+      const authenticated = authenticatedFixture();
+      mutate(authenticated.productionBytes);
+      const result = derivePerformancePublication(authenticated, fixtureDerivationOptions());
+      expect(result.publication.productionBytes.status).toBe('unproven');
+      expect(result.publication.verdict.status).toBe('unproven');
+      expect(performancePublicationFindings(result.publication)).toEqual([]);
+    }
+  });
+
+  it('reproduces the Production bytes assessment canonically from report and budget evidence', () => {
+    const authenticated = authenticatedFixture();
+    const options = fixtureDerivationOptions();
+    const result = derivePerformancePublication(authenticated, options);
+    result.publication.productionBytes.metricVerdicts[0].value += 1;
+    resealPublication(result.publication);
+
+    expect(
+      performancePublicationResultFindings(result, {
+        assessBuildPersistence: options.assessBuildPersistence,
+        authenticated,
+        operations: options.operations,
+        ratify: (entries) => options.ratify(entries),
+      }),
+    ).toContain(
+      'Production bytes assessment differs from authenticated report and committed budget reproduction',
+    );
+  });
+
+  it('binds perf-budgets.json bytes to the exact clean measured-source commit', async () => {
+    const repository = mkdtempSync(path.join(os.tmpdir(), 'kovo-perf-budget-custody-'));
+    temporaryDirectories.push(repository);
+    const budgets = authenticatedFixture().productionBytes.budgets;
+    const bytes = Buffer.from(`${JSON.stringify(budgets, null, 2)}\n`);
+    writeFileSync(path.join(repository, 'perf-budgets.json'), bytes);
+    execFileSync('git', ['init', '--quiet'], { cwd: repository });
+    execFileSync('git', ['add', 'perf-budgets.json'], { cwd: repository });
+    execFileSync(
+      'git',
+      [
+        '-c',
+        'user.name=Kovo Test',
+        '-c',
+        'user.email=kovo-test@example.invalid',
+        'commit',
+        '--quiet',
+        '-m',
+        'fixture',
+      ],
+      { cwd: repository },
+    );
+    const sourceSha = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: repository,
+      encoding: 'utf8',
+    }).trim();
+
+    await expect(
+      loadCommittedPerformanceBudgets({ repositoryDirectory: repository, sourceSha }),
+    ).resolves.toMatchObject({
+      budgetIdentity: {
+        byteLength: bytes.length,
+        contentDigest: digest(bytes),
+        path: 'perf-budgets.json',
+        sourceCommit: sourceSha,
+      },
+      budgets,
+    });
+
+    writeFileSync(path.join(repository, 'perf-budgets.json'), `${bytes.toString('utf8')} `);
+    await expect(
+      loadCommittedPerformanceBudgets({ repositoryDirectory: repository, sourceSha }),
+    ).rejects.toThrow('uncommitted or untracked changes');
   });
 
   it('blocks publication when a measured family misses either baseline or holdout targets', () => {
@@ -187,6 +332,7 @@ describe('seven-family performance publication gate', () => {
           },
         ]),
       ),
+      productionBytes: {},
       repository: 'kovojs/kovo',
       schema: PERF_PUBLICATION_INPUT_SCHEMA,
     };
@@ -207,11 +353,18 @@ describe('seven-family performance publication gate', () => {
           { baseline: Array.from({ length: 5 }, () => ({})), holdout: {} },
         ]),
       ),
+      productionBytes: {},
       repository: 'kovojs/kovo',
       schema: PERF_PUBLICATION_INPUT_SCHEMA,
     };
     await expect(authenticatePerformancePublicationInput(profileInput)).rejects.toThrow(
       'buildProfiles must contain exactly unchanged and edit evidence',
+    );
+
+    delete profileInput.buildProfiles;
+    delete profileInput.productionBytes;
+    await expect(authenticatePerformancePublicationInput(profileInput)).rejects.toThrow(
+      'one Production bytes evidence descriptor',
     );
   });
 
@@ -368,7 +521,7 @@ describe('seven-family performance publication gate', () => {
     expect(performancePublicationFindings(forged)).toEqual(
       expect.arrayContaining([
         'publication verdict does not retain the unproven build persistence findings',
-        'publication verdict is not derived from its family census',
+        'publication verdict is not derived from its family and sidecar census',
       ]),
     );
     expect(() => renderPerformancePublicationMarkdown(forged)).toThrow(
@@ -421,7 +574,7 @@ describe('seven-family performance publication gate', () => {
     expect(performancePublicationFindings(forged)).toEqual(
       expect.arrayContaining([
         'publication blocking failures are not derived from its families and build persistence decision',
-        'publication verdict is not derived from its family census',
+        'publication verdict is not derived from its family and sidecar census',
       ]),
     );
     expect(() => renderPerformancePublicationMarkdown(forged)).toThrow(
@@ -1253,7 +1406,201 @@ function authenticatedFixture() {
     });
     families[familyName] = { baseline: entries.slice(0, 5), holdout: entries[5] };
   }
-  return { families, repository: 'kovojs/kovo' };
+  return {
+    families,
+    productionBytes: productionBytesAuthenticatedFixture({
+      artifactId: artifactId + 1,
+      locks,
+      sourceCommit,
+    }),
+    repository: 'kovojs/kovo',
+  };
+}
+
+function productionBytesAuthenticatedFixture({ artifactId, locks, sourceCommit }) {
+  const runId = artifactId + 10_000;
+  const jobId = artifactId + 20_000;
+  const runUrl = `https://github.com/kovojs/kovo/actions/runs/${String(runId)}`;
+  const runApiUrl = `https://api.github.com/repos/kovojs/kovo/actions/runs/${String(runId)}`;
+  const jobsApiUrl = `${runApiUrl}/jobs?filter=all&per_page=100`;
+  const apiUrl = `https://api.github.com/repos/kovojs/kovo/actions/artifacts/${String(artifactId)}`;
+  const contentDigest = digest('production-bytes-report');
+  const archiveDigest = digest('production-bytes-archive');
+  const source = { commit: sourceCommit, dirty: false, dirtyPaths: [], locks };
+  const github = {
+    eventSha: sourceCommit,
+    job: 'bytes',
+    repository: 'kovojs/kovo',
+    runAttempt: '1',
+    runId: String(runId),
+    runUrl,
+    serverUrl: 'https://github.com',
+    sha: sourceCommit,
+    workflowRef: 'kovojs/kovo/.github/workflows/perf-realistic.yml@refs/pull/7/merge',
+    workflowSha: sourceCommit,
+  };
+  const executionFacts = {
+    complete: true,
+    github,
+    provider: 'github-actions',
+    startedAt: '2026-08-13T00:00:00Z',
+  };
+  const workloadFacts = {
+    adapters: { perfGate: 'kovo-perf-report/v1', workload: 'kovo-realistic-workload/v1' },
+    cells: ['bytes'],
+    policies: { componentCount: 24 },
+  };
+  const report = {
+    execution: {
+      ...executionFacts,
+      digest: canonicalDigest(executionFacts),
+      schema: 'kovo-performance-execution/v1',
+    },
+    integrity: {
+      complete: true,
+      executionAuthenticated: true,
+      publishable: true,
+      serialized: true,
+      sourceStable: true,
+      workloadAuthenticated: true,
+    },
+    metrics: Object.fromEntries(
+      productionBytesMetricIds().map((metricId, index) => [metricId, { value: 100 + index }]),
+    ),
+    options: { componentCount: 24 },
+    schema: 'kovo-perf-report/v1',
+    source,
+    sourceAfter: structuredClone(source),
+    suite: 'bytes',
+    verdict: { reasons: [], status: 'measured' },
+    workloadIdentity: {
+      complete: true,
+      digest: canonicalDigest(workloadFacts),
+      identity: workloadFacts,
+      schema: 'kovo-performance-workload-identity/v1',
+    },
+    host: { digest: digest('production-bytes-host') },
+  };
+  const budgets = {
+    metrics: Object.fromEntries(
+      productionBytesMetricIds().map((metricId) => [
+        metricId,
+        { loadSensitive: false, max: 1_000, unit: 'bytes' },
+      ]),
+    ),
+    schema: 'kovo-perf-budgets/v1',
+  };
+  const budgetBytes = Buffer.from(`${JSON.stringify(budgets, null, 2)}\n`);
+  const workflow = {
+    artifactUpload: {
+      action: 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+      concreteName: 'kovo-perf-bytes',
+      job: 'bytes',
+      name: 'kovo-perf-bytes',
+      path: '${{ runner.temp }}/kovo-perf/bytes.json',
+    },
+    conclusion: 'success',
+    event: 'pull_request',
+    headSha: sourceCommit,
+    job: {
+      apiUrl: `https://api.github.com/repos/kovojs/kovo/actions/jobs/${String(jobId)}`,
+      completedAt: '2026-08-13T00:01:00Z',
+      conclusion: 'success',
+      failureStep: null,
+      id: jobId,
+      key: 'bytes',
+      name: 'Production bytes',
+      requiredSuccessSteps: [],
+      runAttempt: 1,
+      startedAt: '2026-08-13T00:00:00Z',
+      status: 'completed',
+    },
+    jobsApiUrl,
+    name: 'Perf Realistic Tier',
+    path: '.github/workflows/perf-realistic.yml',
+    runApiUrl,
+    runAttempt: 1,
+    sourceSha: sourceCommit,
+    status: 'completed',
+    triggerPolicy: 'production-bytes',
+    triggerScope: 'pull-request:every-event',
+    workflowApiUrl: `https://api.github.com/repos/kovojs/kovo/contents/.github/workflows/perf-realistic.yml?ref=${sourceCommit}`,
+    workflowContentDigest: digest('trusted-workflow'),
+    workflowGitBlobSha: 'f'.repeat(40),
+    workflowHeadSha: sourceCommit,
+    workflowRef: 'kovojs/kovo/.github/workflows/perf-realistic.yml@refs/pull/7/merge',
+    workflowSha: sourceCommit,
+  };
+  return {
+    budgetBytes,
+    budgetIdentity: {
+      byteLength: budgetBytes.length,
+      contentDigest: digest(budgetBytes),
+      path: 'perf-budgets.json',
+      schema: 'kovo-perf-budgets/v1',
+      sourceCommit,
+    },
+    budgets,
+    contentDigest,
+    custody: {
+      apiAuthorityDigest: digest('production-bytes-artifact-authority'),
+      apiResponseDigest: digest('production-bytes-api'),
+      apiUrl,
+      archiveByteLength: 123,
+      archiveDigest,
+      archiveDownloadUrl: `${apiUrl}/zip`,
+      archiveMembers: [
+        {
+          byteLength: 3,
+          compressedByteLength: 3,
+          compressionMethod: 0,
+          contentDigest,
+          crc32: 'crc32:00000000',
+          member: 'bytes.json',
+        },
+      ],
+      artifactDigest: archiveDigest,
+      artifactId,
+      artifactName: 'kovo-perf-bytes',
+      artifactSizeInBytes: 123,
+      createdAt: '2026-08-13T00:00:00Z',
+      expiresAt: '2026-11-11T00:00:00Z',
+      jobsApiAuthorityDigest: digest('production-bytes-jobs-authority'),
+      jobsApiResponseDigest: digest('production-bytes-jobs-api'),
+      jobsApiUrl,
+      liveApiAuthorityDigest: digest('production-bytes-artifact-authority'),
+      liveApiResponseDigest: digest('production-bytes-live-api'),
+      liveApiVerifiedAt: '2026-08-13T23:59:00Z',
+      liveJobsApiAuthorityDigest: digest('production-bytes-jobs-authority'),
+      liveJobsApiResponseDigest: digest('production-bytes-live-jobs-api'),
+      liveRunApiAuthorityDigest: digest('production-bytes-run-authority'),
+      liveRunApiResponseDigest: digest('production-bytes-live-run-api'),
+      location: `${runUrl}/artifacts/${String(artifactId)}`,
+      reportContentDigest: contentDigest,
+      reportMember: 'bytes.json',
+      runApiAuthorityDigest: digest('production-bytes-run-authority'),
+      runApiResponseDigest: digest('production-bytes-run-api'),
+      runApiUrl,
+      runUrl,
+      updatedAt: '2026-08-13T00:01:00Z',
+      workflow,
+      workflowApiResponseDigest: digest('production-bytes-workflow-api'),
+      workflowRunId: runId,
+    },
+    location: `${runUrl}/artifacts/${String(artifactId)}`,
+    rawText: '{}\n',
+    report,
+  };
+}
+
+function productionBytesMetricIds() {
+  return [
+    'production.criticalPath.wireBytes',
+    'production.document.wireBytes',
+    'production.inlineBootstrap.gzipBytes',
+    'production.inlineBootstrap.identityBytes',
+    'production.navigation.wireBytes',
+  ];
 }
 
 function digest(value) {
