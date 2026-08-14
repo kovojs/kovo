@@ -39,7 +39,7 @@ export const SETTLE_DEFAULTS = Object.freeze({ maxMs: 10_000, quietMs: 750 });
  */
 const NAV_SENTINEL = 'kovo-bench-nav-sentinel';
 
-export const NAVIGATION_ATTRIBUTION_SCHEMA = 'kovo-navigation-attribution/v2';
+export const NAVIGATION_ATTRIBUTION_SCHEMA = 'kovo-navigation-attribution/v3';
 
 const NAVIGATION_TRACE_CATEGORIES =
   'blink.console,devtools.timeline,disabled-by-default-devtools.timeline,disabled-by-default-devtools.timeline.frame';
@@ -272,6 +272,8 @@ function createRequestTracker(page) {
     lastActivityAt = Date.now();
     records.set(request, {
       headers: request.headers(),
+      frameScope: requestFrameScope(request, page),
+      isNavigationRequest: request.isNavigationRequest(),
       method: request.method(),
       resourceType: request.resourceType(),
       startedEpochMs: Date.now(),
@@ -298,7 +300,9 @@ function createRequestTracker(page) {
         const timing = requestTimingSnapshot(request);
         return {
           bytes: sizes.responseBodySize + sizes.responseHeadersSize,
+          frameScope: record?.frameScope ?? requestFrameScope(request, page),
           headers: record?.headers ?? {},
+          isNavigationRequest: record?.isNavigationRequest ?? request.isNavigationRequest(),
           method: record?.method ?? request.method(),
           resourceType: request.resourceType(),
           responseHeaders: await responseHeaderSnapshot(response),
@@ -356,6 +360,14 @@ function createRequestTracker(page) {
       return result;
     },
   };
+}
+
+function requestFrameScope(request, page) {
+  try {
+    return request.frame() === page.mainFrame() ? 'top-level' : 'subframe';
+  } catch {
+    return request.serviceWorker() === null ? 'unavailable' : 'service-worker';
+  }
 }
 
 function normalizeRequestTiming(timing) {
@@ -573,7 +585,9 @@ async function navigationScenario(page, tracker, listingUrl, settle) {
       destinationMarkTsUs: traceResult.destinationMarkTsUs,
       destinationPaintTsUs: traceResult.destinationPaintTsUs,
       epochOffsetMs: trace.epochOffsetMs,
+      mainFrameId: trace.mainFrameId,
       records: after.records,
+      targetPath,
       traceEvents: trace.events,
     });
     const phases = sessionBytePhases(after.records, {
@@ -685,6 +699,11 @@ async function startNavigationTrace(page) {
     const timestamp = metrics.find((metric) => metric.name === 'Timestamp')?.value;
     if (!Number.isFinite(timestamp)) throw new Error('CDP Performance.Timestamp was unavailable.');
     const epochOffsetMs = Date.now() - timestamp * 1_000;
+    const { frameTree } = await cdp.send('Page.getFrameTree');
+    const mainFrameId = frameTree?.frame?.id;
+    if (typeof mainFrameId !== 'string' || mainFrameId.length === 0) {
+      throw new Error('CDP top-level frame identity was unavailable.');
+    }
     cdp.on('Tracing.dataCollected', ({ value }) => events.push(...value));
     const complete = new Promise((resolve) => cdp.once('Tracing.tracingComplete', resolve));
     await cdp.send('Tracing.start', {
@@ -698,6 +717,7 @@ async function startNavigationTrace(page) {
       endRequested: false,
       epochOffsetMs,
       events,
+      mainFrameId,
       page,
       stopped: false,
     };
@@ -795,7 +815,9 @@ export function analyzeNavigationAttribution({
   destinationMarkTsUs,
   destinationPaintTsUs,
   epochOffsetMs,
+  mainFrameId,
   records,
+  targetPath,
   traceEvents,
 }) {
   for (const [name, value] of Object.entries({
@@ -812,11 +834,18 @@ export function analyzeNavigationAttribution({
   if (!Array.isArray(records) || !Array.isArray(traceEvents)) {
     throw new TypeError('Navigation attribution requires request records and trace events.');
   }
+  if (!validTargetPath(targetPath) || typeof mainFrameId !== 'string' || mainFrameId.length === 0) {
+    throw new TypeError(
+      'Navigation attribution requires an exact destination path and top-level frame identity.',
+    );
+  }
 
   const responseSelection = selectPrimaryNavigationResponse(records, traceEvents, {
     clickTsUs,
     destinationPaintTsUs,
     epochOffsetMs,
+    mainFrameId,
+    targetPath,
   });
   const primaryResponse = responseSelection.primaryResponse;
   const responseTiming = responseSelection.traceTiming ?? null;
@@ -1032,6 +1061,12 @@ function navigationPhaseContractFindings(attribution) {
     const responseStartTsUs = Number(primary.timing?.responseStartTsUs);
     const responseEndTsUs = Number(primary.timing?.responseEndTsUs);
     const destinationMarkTsUs = Number(attribution.observationBoundary?.destinationMarkTsUs);
+    const destinationPaintTsUs = Number(attribution.observationBoundary?.destinationPaintTsUs);
+    if (responseEndTsUs > destinationPaintTsUs) {
+      findings.push(
+        'navigation attribution primary response completed outside the click-to-paint window',
+      );
+    }
     if (
       !observedPhaseMatches(
         phases.server,
@@ -1109,16 +1144,25 @@ function observedPhaseMatches(phase, durationMs, source) {
 function selectPrimaryNavigationResponse(
   records,
   traceEvents,
-  { clickTsUs, destinationPaintTsUs, epochOffsetMs },
+  { clickTsUs, destinationPaintTsUs, epochOffsetMs, mainFrameId, targetPath },
 ) {
   const recordCandidates = navigationRecordCandidates(records, {
     clickEpochMs: traceEpochMs(clickTsUs, epochOffsetMs),
     destinationPaintEpochMs: traceEpochMs(destinationPaintTsUs, epochOffsetMs),
+    targetPath,
   });
   const traceCandidates = navigationTraceResponseCandidates(traceEvents, {
     clickTsUs,
     destinationPaintTsUs,
+    mainFrameId,
+    targetPath,
   });
+  if (traceCandidates.length > 1) {
+    throw new Error(
+      `Navigation attribution found ${String(traceCandidates.length)} top-level destination ` +
+        'response triplets; exactly one is required.',
+    );
+  }
   const selected = traceCandidates[0];
   if (!selected) {
     if (recordCandidates.length > 0) {
@@ -1170,6 +1214,8 @@ function selectPrimaryNavigationResponse(
     httpStatus: String(record.record.status),
     method: record.record.method,
     resourceType: record.record.resourceType,
+    frameScope: record.record.frameScope,
+    isNavigationRequest: record.record.isNavigationRequest,
     timing: {
       requestStartEpochMs: String(record.timing.requestStartEpochMs),
       responseEndEpochMs: String(record.timing.responseEndEpochMs),
@@ -1193,6 +1239,7 @@ function selectPrimaryNavigationResponse(
     },
     resourceType: selected.resourceType,
     selection: selected.selection.name,
+    traceContext: selected.traceContext,
     timing: {
       clock: 'chromium-monotonic-trace',
       requestStartTsUs: String(traceTiming.requestStartTsUs),
@@ -1216,7 +1263,10 @@ function selectPrimaryNavigationResponse(
   };
 }
 
-function navigationRecordCandidates(records, { clickEpochMs, destinationPaintEpochMs }) {
+function navigationRecordCandidates(
+  records,
+  { clickEpochMs, destinationPaintEpochMs, targetPath },
+) {
   const candidates = [];
   for (const record of records) {
     const timing = requestTimingEpochs(record.timing);
@@ -1227,9 +1277,19 @@ function navigationRecordCandidates(records, { clickEpochMs, destinationPaintEpo
     ) {
       continue;
     }
+    if (
+      requestUrlPath(record.url) !== targetPath ||
+      record.frameScope !== 'top-level' ||
+      typeof record.isNavigationRequest !== 'boolean'
+    ) {
+      continue;
+    }
     const contentType = responseMediaType(record.responseHeaders);
     const selection = navigationResponseSelection(record, contentType);
     if (selection === null) continue;
+    if ((record.resourceType === 'document') !== record.isNavigationRequest) {
+      continue;
+    }
     candidates.push({ contentType, record, selection, timing });
   }
   return candidates.sort(
@@ -1240,7 +1300,10 @@ function navigationRecordCandidates(records, { clickEpochMs, destinationPaintEpo
   );
 }
 
-function navigationTraceResponseCandidates(traceEvents, { clickTsUs, destinationPaintTsUs }) {
+function navigationTraceResponseCandidates(
+  traceEvents,
+  { clickTsUs, destinationPaintTsUs, mainFrameId, targetPath },
+) {
   const requests = new Map();
   for (const event of traceEvents) {
     if (!TRACE_RESOURCE_EVENTS.includes(event?.name)) continue;
@@ -1287,9 +1350,14 @@ function navigationTraceResponseCandidates(traceEvents, { clickTsUs, destination
       events.send.ts > destinationPaintTsUs ||
       responseStartTsUs < requestStartTsUs ||
       responseEndTsUs < responseStartTsUs ||
+      responseEndTsUs > destinationPaintTsUs ||
       finishData?.didFail !== false ||
       typeof sendData?.url !== 'string' ||
       typeof sendData?.requestMethod !== 'string' ||
+      sendData?.frame !== mainFrameId ||
+      typeof sendData?.loaderId !== 'string' ||
+      sendData.loaderId.length === 0 ||
+      requestUrlPath(sendData.url) !== targetPath ||
       !Number.isInteger(responseData?.statusCode)
     ) {
       continue;
@@ -1301,6 +1369,8 @@ function navigationTraceResponseCandidates(traceEvents, { clickTsUs, destination
     };
     const selection = navigationResponseSelection(recordShape, contentType);
     if (selection === null) continue;
+    const initiator = traceInitiatorFacts(sendData.initiator);
+    if (initiator === null) continue;
     candidates.push({
       contentType,
       httpStatus: responseData.statusCode,
@@ -1308,6 +1378,13 @@ function navigationTraceResponseCandidates(traceEvents, { clickTsUs, destination
       requestId,
       resourceType: recordShape.resourceType,
       selection,
+      traceContext: {
+        frameId: sendData.frame,
+        initiator,
+        loaderId: sendData.loaderId,
+        scope: 'top-level-frame',
+        targetPath,
+      },
       timing: {
         requestStartTsUs,
         responseEndTsUs,
@@ -1323,6 +1400,40 @@ function navigationTraceResponseCandidates(traceEvents, { clickTsUs, destination
       left.url.localeCompare(right.url) ||
       left.requestId.localeCompare(right.requestId),
   );
+}
+
+function traceInitiatorFacts(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const type = value.type;
+  const fetchType = value.fetchType ?? null;
+  if (
+    typeof type !== 'string' ||
+    type.length === 0 ||
+    type.length > 64 ||
+    (fetchType !== null &&
+      (typeof fetchType !== 'string' || fetchType.length === 0 || fetchType.length > 64))
+  ) {
+    return null;
+  }
+  return { fetchType, type };
+}
+
+function validTargetPath(value) {
+  return (
+    typeof value === 'string' &&
+    value.startsWith('/') &&
+    !value.includes('?') &&
+    !value.includes('#') &&
+    requestUrlPath(`http://kovo.invalid${value}`) === value
+  );
+}
+
+function requestUrlPath(value) {
+  try {
+    return new URL(value).pathname;
+  } catch {
+    return null;
+  }
 }
 
 function requestTimingEpochs(timing) {
@@ -1495,6 +1606,7 @@ function validPrimaryResponse(response) {
   }
   const timing = response.timing;
   const networkWitness = response.networkWitness;
+  const traceContext = response.traceContext;
   const { identity, status: _status, ...responseIdentityFacts } = response;
   const witnessFacts = networkWitness?.facts;
   return (
@@ -1516,6 +1628,14 @@ function validPrimaryResponse(response) {
     finiteNumberText(timing.responseEndTsUs) &&
     Number(timing.requestStartTsUs) <= Number(timing.responseStartTsUs) &&
     Number(timing.responseStartTsUs) <= Number(timing.responseEndTsUs) &&
+    traceContext?.scope === 'top-level-frame' &&
+    typeof traceContext?.frameId === 'string' &&
+    traceContext.frameId.length > 0 &&
+    typeof traceContext?.loaderId === 'string' &&
+    traceContext.loaderId.length > 0 &&
+    validTargetPath(traceContext?.targetPath) &&
+    requestUrlPath(response.url) === traceContext.targetPath &&
+    traceInitiatorFacts(traceContext?.initiator) !== null &&
     safeIntegerText(networkWitness?.candidateCount, { min: 1 }) &&
     witnessFacts !== null &&
     typeof witnessFacts === 'object' &&
@@ -1538,6 +1658,9 @@ function validPlaywrightResponseWitness(facts, response) {
     facts?.httpStatus === response.httpStatus &&
     facts?.contentType === response.contentType &&
     facts?.resourceType === response.resourceType &&
+    facts?.frameScope === 'top-level' &&
+    typeof facts?.isNavigationRequest === 'boolean' &&
+    (facts.resourceType === 'document') === facts.isNavigationRequest &&
     timing?.source === 'playwright-request-timing' &&
     finiteNumberText(timing.requestStartEpochMs) &&
     finiteNumberText(timing.responseStartEpochMs) &&

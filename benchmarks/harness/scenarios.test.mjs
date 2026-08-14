@@ -7,6 +7,9 @@ import {
   summarizeIterations,
 } from './scenarios.mjs';
 
+const MAIN_FRAME_ID = 'main-frame';
+const TARGET_PATH = '/matched/l1/product/a';
+
 describe('benchmark scenario analysis', () => {
   it('reports median, MAD, p95, and sample count from raw iterations', () => {
     const summary = summarizeIterations([
@@ -56,6 +59,7 @@ describe('benchmark scenario analysis', () => {
       destinationMarkTsUs: 1_100_000,
       destinationPaintTsUs: 1_120_000,
       epochOffsetMs: 1_000,
+      mainFrameId: MAIN_FRAME_ID,
       records: [
         request({
           headers: { accept: 'application/vnd.kovo.document-parts+json' },
@@ -69,6 +73,7 @@ describe('benchmark scenario analysis', () => {
           url: 'http://localhost:4820/matched/l1/product/a',
         }),
       ],
+      targetPath: TARGET_PATH,
       traceEvents: [
         ...traceResponse({
           contentType: 'application/vnd.kovo.document-parts+json',
@@ -142,7 +147,9 @@ describe('benchmark scenario analysis', () => {
       destinationMarkTsUs: 1_050_000,
       destinationPaintTsUs: 1_060_000,
       epochOffsetMs: 1_000,
+      mainFrameId: MAIN_FRAME_ID,
       records: [],
+      targetPath: TARGET_PATH,
       traceEvents: [{ name: 'DrawFrame', ts: 1_060_000 }],
     });
 
@@ -187,8 +194,10 @@ describe('benchmark scenario analysis', () => {
       destinationMarkTsUs: 1_020_000,
       destinationPaintTsUs: 1_030_000,
       epochOffsetMs: 1_000,
+      mainFrameId: MAIN_FRAME_ID,
       records: [
         request({
+          isNavigationRequest: true,
           method: 'GET',
           resourceType: 'document',
           responseHeaders: { 'content-type': 'text/html; charset=utf-8' },
@@ -197,6 +206,7 @@ describe('benchmark scenario analysis', () => {
           url,
         }),
       ],
+      targetPath: TARGET_PATH,
       traceEvents: [...events, { name: 'Paint', ts: 1_030_000 }],
     });
 
@@ -219,6 +229,7 @@ describe('benchmark scenario analysis', () => {
         destinationMarkTsUs: 1_100_000,
         destinationPaintTsUs: 1_120_000,
         epochOffsetMs: 1_000,
+        mainFrameId: MAIN_FRAME_ID,
         records: [
           request({
             method: 'GET',
@@ -229,11 +240,110 @@ describe('benchmark scenario analysis', () => {
             url: 'http://localhost:4820/matched/l1/product/a?_rsc=one',
           }),
         ],
+        targetPath: TARGET_PATH,
         traceEvents: [{ name: 'Paint', ts: 1_120_000 }],
       }),
     ).toThrow(
       'did not retain its complete ResourceSendRequest/ResourceReceiveResponse/ResourceFinish',
     );
+  });
+
+  it('rejects a response whose authenticated finish time falls after destination paint', () => {
+    const url = 'http://localhost:4820/matched/l1/product/a';
+    expect(() =>
+      analyzeNavigationAttribution({
+        clickTsUs: 1_000_000,
+        destinationMarkTsUs: 1_050_000,
+        destinationPaintTsUs: 1_060_000,
+        epochOffsetMs: 1_000,
+        mainFrameId: MAIN_FRAME_ID,
+        records: [
+          request({
+            headers: { accept: 'application/vnd.kovo.document-parts+json' },
+            method: 'GET',
+            resourceType: 'fetch',
+            responseHeaders: {
+              'content-type': 'application/vnd.kovo.document-parts+json',
+            },
+            status: 200,
+            timing: { requestStart: 10, responseEnd: 1_010, responseStart: 30, startTime: 1_990 },
+            url,
+          }),
+        ],
+        targetPath: TARGET_PATH,
+        traceEvents: [
+          ...traceResponse({
+            contentType: 'application/vnd.kovo.document-parts+json',
+            requestStartTsUs: 1_000_000,
+            responseEndTsUs: 2_000_000,
+            responseStartTsUs: 1_020_000,
+            url,
+          }),
+          { name: 'Paint', ts: 1_060_000 },
+        ],
+      }),
+    ).toThrow('complete ResourceSendRequest/ResourceReceiveResponse/ResourceFinish trace witness');
+  });
+
+  it('binds the selected response to the clicked path and top-level frame', () => {
+    const targetUrl = 'http://localhost:4820/matched/l1/product/a';
+    const iframeUrl = 'http://localhost:4820/matched/l1/product/a?iframe=1';
+    const attribution = analyzeNavigationAttribution({
+      clickTsUs: 1_000_000,
+      destinationMarkTsUs: 1_080_000,
+      destinationPaintTsUs: 1_100_000,
+      epochOffsetMs: 1_000,
+      mainFrameId: MAIN_FRAME_ID,
+      records: [
+        request({
+          frameScope: 'subframe',
+          headers: { accept: 'application/vnd.kovo.document-parts+json' },
+          method: 'GET',
+          resourceType: 'fetch',
+          responseHeaders: { 'content-type': 'application/vnd.kovo.document-parts+json' },
+          status: 200,
+          timing: { requestStart: 1, responseEnd: 20, responseStart: 10, startTime: 2_000 },
+          url: iframeUrl,
+        }),
+        request({
+          isNavigationRequest: true,
+          method: 'GET',
+          resourceType: 'document',
+          responseHeaders: { 'content-type': 'text/html' },
+          status: 200,
+          timing: { requestStart: 20, responseEnd: 50, responseStart: 35, startTime: 1_990 },
+          url: targetUrl,
+        }),
+      ],
+      targetPath: TARGET_PATH,
+      traceEvents: [
+        ...traceResponse({
+          contentType: 'application/vnd.kovo.document-parts+json',
+          frameId: 'iframe',
+          requestId: 'iframe-request',
+          requestStartTsUs: 1_001_000,
+          responseEndTsUs: 1_020_000,
+          responseStartTsUs: 1_010_000,
+          url: iframeUrl,
+        }),
+        ...traceResponse({
+          contentType: 'text/html',
+          requestId: 'main-request',
+          requestStartTsUs: 1_010_000,
+          resourceType: 'Document',
+          responseEndTsUs: 1_040_000,
+          responseStartTsUs: 1_025_000,
+          url: targetUrl,
+        }),
+        { name: 'Paint', ts: 1_100_000 },
+      ],
+    });
+
+    expect(attribution.primaryResponse).toMatchObject({
+      selection: 'document-resource',
+      traceRequestId: 'main-request',
+      traceContext: { frameId: MAIN_FRAME_ID, scope: 'top-level-frame' },
+    });
   });
 
   it('fails closed when trace boundaries or digested evidence are changed', () => {
@@ -243,7 +353,9 @@ describe('benchmark scenario analysis', () => {
         destinationMarkTsUs: 1,
         destinationPaintTsUs: 3,
         epochOffsetMs: 0,
+        mainFrameId: MAIN_FRAME_ID,
         records: [],
+        targetPath: TARGET_PATH,
         traceEvents: [],
       }),
     ).toThrow('trace boundaries are out of order');
@@ -255,8 +367,10 @@ describe('benchmark scenario analysis', () => {
         destinationMarkTsUs: 1_015_000,
         destinationPaintTsUs: 1_030_000,
         epochOffsetMs: 1_000,
+        mainFrameId: MAIN_FRAME_ID,
         records: [
           request({
+            isNavigationRequest: true,
             method: 'GET',
             resourceType: 'document',
             responseHeaders: { 'content-type': 'text/html' },
@@ -265,6 +379,7 @@ describe('benchmark scenario analysis', () => {
             url,
           }),
         ],
+        targetPath: '/matched/l1/product/late',
         traceEvents: [
           ...traceResponse({
             contentType: 'text/html',
@@ -284,7 +399,9 @@ describe('benchmark scenario analysis', () => {
       destinationMarkTsUs: 2,
       destinationPaintTsUs: 3,
       epochOffsetMs: 0,
+      mainFrameId: MAIN_FRAME_ID,
       records: [],
+      targetPath: TARGET_PATH,
       traceEvents: [{ name: 'Paint', ts: 3 }],
     });
     attribution.phases.paint.durationMs = 999;
@@ -295,23 +412,37 @@ describe('benchmark scenario analysis', () => {
 });
 
 function request(overrides) {
-  return { bytes: 0, headers: {}, resourceType: 'other', startedEpochMs: 0, ...overrides };
+  return {
+    bytes: 0,
+    frameScope: 'top-level',
+    headers: {},
+    isNavigationRequest: false,
+    resourceType: 'other',
+    startedEpochMs: 0,
+    ...overrides,
+  };
 }
 
 function traceResponse({
   contentType,
+  frameId = MAIN_FRAME_ID,
+  requestId = 'trace-request-1',
   requestStartTsUs,
   resourceType = 'Other',
   responseEndTsUs,
   responseStartTsUs,
   url,
 }) {
-  const requestId = 'trace-request-1';
   return [
     {
       args: {
         data: {
-          initiator: { fetchType: 'fetch' },
+          frame: frameId,
+          initiator:
+            resourceType.toLowerCase() === 'document'
+              ? { type: 'other' }
+              : { fetchType: 'fetch', type: 'script' },
+          loaderId: 'main-loader',
           requestId,
           requestMethod: 'GET',
           resourceType,

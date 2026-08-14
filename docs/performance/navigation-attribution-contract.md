@@ -52,17 +52,20 @@ timestamp.
 
 ## Authentication and failure posture
 
-The `kovo-navigation-attribution/v2` record selects a complete Chrome
+The `kovo-navigation-attribution/v3` record selects a complete Chrome
 `ResourceSendRequest`/`ResourceReceiveResponse`/`ResourceFinish` triplet inside the click-to-paint
-window, then requires exactly one Playwright request record with the same URL, method, status,
-media type, and response class. The two observations' request start, response start, and response
-end clocks must agree within 25 ms. A Playwright candidate with no complete trace triplet, an
-ambiguous Playwright match, a failed trace request, an invalid event order, or excess clock skew
-aborts the sample.
+window, bound to the clicked destination path and the CDP-authenticated top-level frame. It then
+requires exactly one Playwright request record from that same top-level frame with the same URL,
+method, status, media type, response class, and navigation-request posture. The two observations'
+request start, response start, and response end clocks must agree within 25 ms. More than one
+eligible destination triplet, a Playwright candidate with no complete trace triplet, a subframe or
+service-worker candidate, a failed trace request, an invalid event order, a response whose
+`ResourceFinish.finishTime` falls after destination paint, or excess clock skew aborts the sample.
 
 The serialized evidence retains:
 
 - the trace request id and monotonic request/response timestamps;
+- the exact destination path, top-level frame id, loader id, and bounded initiator classification;
 - a SHA-256 identity for the matching Playwright request facts;
 - the maximum observed clock-bridge skew and its fixed tolerance;
 - the exact trace category string and event census;
@@ -79,14 +82,16 @@ style, layout, and paint rows to locate browser work inside and after that envel
 rows together, and do not describe the combined duration as decode time or morph time.
 
 If Chromium later provides stable cross-framework decode or DOM-apply boundaries, the schema must
-change again and the baseline must be recollected. Existing v2 reports must not be retrofitted with
-derived phase labels.
+change again and the baseline must be recollected. Existing v2 reports predate the top-level-frame
+and response-finish closure; they must not be published as v3 or retrofitted with derived phase
+labels.
 
-## Current-fixture smoke
+## Superseded v2 fixture smoke
 
 On 2026-08-14, a production-build smoke ran one desktop and one mobile matched-L1 sample for each
-entrant with Lighthouse disabled. All four navigation attribution records validated, and both app
-adapter integrity verdicts were complete:
+entrant with Lighthouse disabled. All four v2 navigation attribution records validated, and both
+app adapter integrity verdicts were complete. This is diagnostic history only: it did not retain
+the v3 frame, loader, initiator, or response-finish closure and cannot ratify a v3 publication.
 
 - Kovo selected exactly one `application/vnd.kovo.document-parts+json` fetch trace triplet. The
   Playwright/trace maximum clock skew was 0.615 ms on desktop and 2.130 ms on mobile.
