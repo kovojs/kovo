@@ -108,6 +108,13 @@ const relative = builtinRelative;
 const resolve = builtinResolve;
 const runInNewContext = builtinRunInNewContext;
 const URL = BuiltinURL;
+const VitePromise = globalThis.Promise;
+const viteSetTimeout = globalThis.setTimeout;
+
+// Vite 8's Linux watcher coalesces repeated `change` events for the same path across a fixed 50ms
+// window. A diagnostic frame that paints inside that window is otherwise a false recovery fence:
+// saving valid source immediately after seeing it can be swallowed while the stale overlay remains.
+const VITE_DIAGNOSTIC_WATCHER_SETTLE_MS = 60;
 
 /**
  * The Vite plugin object produced by createKovoVitePlugin (and the `kovoVitePlugin` barrel
@@ -1460,6 +1467,11 @@ function createBoundKovoVitePlugin(
               fileName,
               compilerFreeze({ issue: hotUpdateCompileIssue, message: diagnosticMessage }),
             );
+            // SPEC §9.5.1: once the teaching overlay is browser-visible, a developer must be able
+            // to repair and save immediately. Keep presentation behind Vite's watcher coalescing
+            // window so the overlay is also a truthful recovery-ready fence on Linux.
+            await waitForViteDiagnosticWatcherSettlement();
+            if (!isCurrent()) return [];
             sendViteOverlayPrimer(context.server);
             if (!isCurrent()) return [];
             sendKovoDiagnosticHmrEvent(context.server, previous, fileName, errorDiagnostics);
@@ -3767,6 +3779,12 @@ function sendKovoDiagnosticHmrEvent(
  */
 function sendViteOverlayPrimer(server: KovoViteDevServer): void {
   sendViteEmptyUpdate(server);
+}
+
+function waitForViteDiagnosticWatcherSettlement(): Promise<void> {
+  return new VitePromise<void>((resolveDelay) => {
+    viteSetTimeout(resolveDelay, VITE_DIAGNOSTIC_WATCHER_SETTLE_MS);
+  });
 }
 
 /** Empty native Vite update: clears only Vite's overlay and carries no module/DOM mutation. */

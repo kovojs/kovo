@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer as createHttpServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -3633,6 +3633,58 @@ export const RegionB = component({
     expect(ws.send).not.toHaveBeenCalledWith({ type: 'full-reload' });
   });
 
+  it('settles diagnostic presentation through the boot-captured timer after late poisoning', async () => {
+    const diagnostic = compilerDiagnostic('KV201', {
+      fileName: 'src/counter.tsx',
+      message: kv201.message,
+    });
+    const plugin = createKovoVitePlugin(
+      vi
+        .fn()
+        .mockReturnValueOnce(
+          compileResult(hmrMetadata({ factHash: 'before' }), 'export const before = true;'),
+        )
+        .mockReturnValueOnce({
+          diagnostics: [diagnostic],
+          files: [],
+          hmrImpact: null,
+          renderPlanFingerprint: null,
+          renderPlanFingerprintInput: {},
+        }),
+    );
+    const ws = { send: vi.fn() };
+    const server = {
+      config: { root: '/workspace/app' },
+      middlewares: { use() {} },
+      ws,
+    };
+    plugin.configureServer?.(server);
+    await plugin.transform('component(initial)', '/workspace/app/src/counter.tsx');
+
+    const nativeSetTimeout = globalThis.setTimeout;
+    let poisonHits = 0;
+    try {
+      globalThis.setTimeout = (() => {
+        poisonHits += 1;
+        throw new Error('late setTimeout replacement ran');
+      }) as typeof setTimeout;
+      await plugin.handleHotUpdate?.({
+        file: '/workspace/app/src/counter.tsx',
+        read: async () => 'component(broken)',
+        server,
+      });
+    } finally {
+      globalThis.setTimeout = nativeSetTimeout;
+    }
+
+    expect(poisonHits).toBe(0);
+    expect(ws.send.mock.calls.map(([payload]) => payload.type)).toEqual([
+      'update',
+      'custom',
+      'error',
+    ]);
+  });
+
   it('serializes native diagnostic frames without inherited toJSON authority', async () => {
     const injectedMessage = 'broken syntax\n"},"type":"full-reload","data":{"forged":true}';
     const diagnostic = compilerDiagnostic('KV201', {
@@ -4021,6 +4073,125 @@ export const RegionB = component({
         },
         { type: 'full-reload' },
       ]);
+    } finally {
+      socket?.close();
+      await server.close();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('lets the real Vite watcher observe a recovery saved as soon as its diagnostic paints', async () => {
+    // SPEC §9.5.1: a browser-visible diagnostic must leave the next valid save observable so
+    // the native overlay can clear and the recovered generation can reach the browser.
+    const root = mkdtempSync(join(tmpdir(), 'kovo-vite-diagnostic-recovery-watch-'));
+    const sourceDirectory = join(root, 'src');
+    const sourceFile = join(sourceDirectory, 'counter.tsx');
+    mkdirSync(sourceDirectory, { recursive: true });
+    writeFileSync(sourceFile, 'component(initial)', 'utf8');
+
+    const diagnostic = compilerDiagnostic('KV201', {
+      fileName: 'src/counter.tsx',
+      message: kv201.message,
+    });
+    const compile = vi
+      .fn()
+      .mockReturnValueOnce(
+        compileResult(hmrMetadata({ factHash: 'initial' }), 'export const initial = true;'),
+      )
+      .mockReturnValueOnce({
+        diagnostics: [diagnostic],
+        files: [],
+        hmrImpact: null,
+        renderPlanFingerprint: null,
+        renderPlanFingerprintInput: {},
+      })
+      .mockReturnValueOnce(
+        compileResult(
+          hmrMetadata({
+            clientHref: '/c/__v/22222222/src/counter.client.js',
+            factHash: 'recovered',
+          }),
+          'export const recovered = true;',
+        ),
+      );
+    const plugin = createKovoVitePlugin(compile);
+    const portProbe = createHttpServer();
+    await new Promise<void>((resolveListen, rejectListen) => {
+      portProbe.once('error', rejectListen);
+      portProbe.listen(0, '127.0.0.1', () => {
+        portProbe.off('error', rejectListen);
+        resolveListen();
+      });
+    });
+    const address = portProbe.address();
+    if (address === null || typeof address === 'string') {
+      throw new Error('Vite diagnostic-recovery port probe did not bind a TCP address.');
+    }
+    const port = address.port;
+    await new Promise<void>((resolveClose, rejectClose) => {
+      portProbe.close((error) => (error ? rejectClose(error) : resolveClose()));
+    });
+
+    const { createServer } = await import('vite-plus');
+    const server = await createServer({
+      configFile: false,
+      plugins: [plugin],
+      root,
+      server: { host: '127.0.0.1', port, strictPort: true },
+    });
+    let socket: WebSocket | undefined;
+    let replacement = 0;
+    let watcherChanges = 0;
+    const frames: Array<{ event?: string; type?: string }> = [];
+    const replaceSource = (source: string): void => {
+      replacement += 1;
+      const temporary = join(sourceDirectory, `.counter-${String(replacement)}.tsx.tmp`);
+      writeFileSync(temporary, source, 'utf8');
+      renameSync(temporary, sourceFile);
+    };
+    try {
+      server.watcher.on('change', (file) => {
+        if (file === sourceFile) watcherChanges += 1;
+      });
+      await server.listen();
+      socket = new WebSocket(
+        `ws://127.0.0.1:${port}/?token=${server.config.webSocketToken}`,
+        'vite-hmr',
+      );
+      socket.addEventListener('message', (event) => {
+        if (typeof event.data !== 'string') return;
+        const frame = JSON.parse(event.data) as { event?: string; type?: string };
+        frames.push(frame);
+        if (frame.type === 'error' && replacement === 1) {
+          // Match the benchmark: restore exact valid bytes immediately after the browser-visible
+          // diagnostic, using one sibling-temp rename rather than a truncate/write window.
+          replaceSource('component(recovered)');
+        }
+      });
+      await new Promise<void>((resolveOpen, rejectOpen) => {
+        socket?.addEventListener('open', () => resolveOpen(), { once: true });
+        socket?.addEventListener('error', () => rejectOpen(new Error('Vite HMR socket failed.')), {
+          once: true,
+        });
+      });
+      await vi.waitFor(() => expect(frames).toEqual([{ type: 'connected' }]));
+
+      await plugin.transform('component(initial)', sourceFile);
+      replaceSource('component(broken)');
+
+      await vi.waitFor(
+        () => {
+          expect(watcherChanges).toBe(2);
+          expect(compile).toHaveBeenCalledTimes(3);
+          expect(frames).toContainEqual(
+            expect.objectContaining({
+              event: 'kovo:component-render',
+              type: 'custom',
+            }),
+          );
+        },
+        { timeout: 5_000 },
+      );
     } finally {
       socket?.close();
       await server.close();
