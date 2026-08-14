@@ -231,3 +231,39 @@ regress by more than 5% at the median.
 `bundleBytes`, `emittedBytes`, and `moduleCount` are explicitly excluded from acceptance. A complete
 run that misses the performance threshold is `reject`; incomplete, load-shed, unstable, or incorrect
 evidence is `unproven`. Neither result authorizes merging the production patch.
+
+## Final decision
+
+The repaired candidate is **rejected** and was not integrated. Pull-request run
+[`31794370562`](https://github.com/kovojs/kovo/actions/runs/31794370562) authenticated clean source
+`89b39c999de6a7c60f3091831916ddb2c4c5037c`, the exact `7a20bf666` patch identity above, and
+separate committed baseline/candidate worktrees. The N=24 artifact
+[`9218520651`](https://github.com/kovojs/kovo/actions/runs/31794370562/artifacts/9218520651)
+has ZIP SHA-256 `ac16a4c442ff11712b87ce54f48bdc84ecd88aa6fcaa8e523eb7dcca78ca2111`
+and report SHA-256 `460b19bd300e3c73d2121f015b87d20d8b10b78a0c0bf4ccaa1f53a154590781`.
+All four quiet-host `baseline, spike, spike, baseline` cells and their retained raw reports
+authenticated: 15 ready samples and 30 edits per class and lane completed with zero timing misses,
+adapter errors, unexpected browser errors, request failures, or state losses; all 60 state checks
+per edit class survived and all 60 syntax samples surfaced diagnostics.
+
+| N=24 metric         | Baseline median | Candidate median | Improvement | Paired 95% CI, absolute ms |
+| ------------------- | --------------: | ---------------: | ----------: | -------------------------: |
+| Leaf edit to paint  |    11,429.84 ms |     11,249.82 ms |     +1.575% |          `[84.57, 349.79]` |
+| Entry edit to paint |    11,263.53 ms |     11,313.69 ms |     -0.445% |        `[-184.19, 116.88]` |
+| Data edit to paint  |    11,483.41 ms |     11,429.27 ms |     +0.471% |         `[-50.27, 184.05]` |
+| Syntax error        |       112.92 ms |        113.30 ms |     -0.335% |            `[-1.80, 1.01]` |
+| Recovery            |     5,281.72 ms |      5,197.78 ms |     +1.589% |           `[33.62, 99.96]` |
+
+No required edit reached the 10% floor. Fresh-ready improved only 0.719%, while ready RSS was flat
+(-0.086%) and edit-session peak RSS regressed from 3,802,378,240 to 4,061,036,544 bytes (6.803%),
+also violating the 5% guardrail.
+
+The same run's N=216 artifact
+[`9218826640`](https://github.com/kovojs/kovo/actions/runs/31794370562/artifacts/9218826640)
+has ZIP SHA-256 `01952f3ca577619bf8dd59b5b521eff1e69056ee0352398e401d5f5ecb1d4f42`
+and report SHA-256 `d7eac1facb9f4829409f2ff6223296000dfc8fc2caae9844802b65ace903a04b`.
+It authenticated two retained cells, then correctly became `unproven` when an ENOENT watcher read
+of an atomic-save sibling left a stale Vite overlay and failed the correctness gate. Its partial
+leaf/entry/data medians ranged from -0.814% to -0.118% and cannot authorize a timing claim. The
+complete N=24 rejection independently disqualifies the candidate, so neither candidate commit was
+merged.

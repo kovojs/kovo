@@ -127,12 +127,15 @@ benchmarks/harness/{report,run,scenarios}.test.mjs --reporter=dot` passed 41/41.
 
 - [ ] Ratify current-head dev ready/edit/error/recovery/RSS baselines against matched Next at N=24
       and N=216; use 15 fresh starts and 30 measured edits after three warmups per edit class.
-- [ ] Run repaired fresh-generation candidate `7a20bf666` (the correctness-complete descendant of
+- [x] Run repaired fresh-generation candidate `7a20bf666` (the correctness-complete descendant of
       the exploratory `04a976394` idea) in alternating quiet-host cycles.
-  - Historical spike evidence: the original bundle proxy removed 25/177 modules and
-    788,308/2,034,129 emitted bytes (38.8%); four 7-edit runs landed 28/28, but medians reversed with
-    host load. Only the exact repaired candidate's full browser-visible decision can authorize a
-    merge.
+  - Evidence: [run `31794370562`, N=24 artifact
+    `9218520651`](https://github.com/kovojs/kovo/actions/runs/31794370562/artifacts/9218520651)
+    authenticated all four quiet-host B,S,S,B cells, 15 ready samples and 30 edits/class/lane with
+    zero misses or state loss. No edit improved 10%; edit RSS regressed 6.80%, so the candidate was
+    rejected. N=216 artifact `9218826640` became correctly `unproven` after an atomic-save watcher
+    miss; it cannot reverse the complete N=24 rejection. Exact metrics and digests are in
+    `docs/performance/dev-generation-spike.md`.
 - [ ] Profile exact edit-to-paint windows after the matched baseline and rank self time, allocation,
       module evaluation, Vite transform, SSR generation, and asynchronous proof convergence. Retire any
       hypothesis not present in the current top five.
