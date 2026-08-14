@@ -2522,6 +2522,17 @@
       "expressionSha256": "66fe38977dda484df820b56ec689d3afb44096b67259890aba75efa1cf4e4649"
     },
     {
+      "id": "packages/server/src/neutral-build.ts#throw#KV229#734121211757622024e1317b5e0b687931217c732d2aa8dece43e195cd4a72f3#0",
+      "code": "KV229",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "analysis",
+      "channel": "throw",
+      "file": "packages/server/src/neutral-build.ts",
+      "owner": "copyNeutralRootedFileEntries",
+      "expressionSha256": "734121211757622024e1317b5e0b687931217c732d2aa8dece43e195cd4a72f3"
+    },
+    {
       "id": "packages/server/src/postgres-authorization-correspondence.ts#throw#KV414#eaa30642901dce8e8585a164f9822a3b4c76c7871ab2331a4ef1e546672e6d58#0",
       "code": "KV414",
       "enforcementClass": "compile-error",

@@ -352,14 +352,13 @@ function ratifiableIncrementalPhases(revision) {
   const invariant = new Set([
     'lifecycle-policy',
     'config-trust',
-    'typescript',
     'project-quality',
     'sound-subset',
   ]);
   return [
     ['lifecycle-policy', 'not-applicable'],
     ['config-trust', 'executed'],
-    ['typescript', 'not-applicable'],
+    ['typescript', 'executed'],
     ['project-quality', 'not-applicable'],
     ['sound-subset', 'not-applicable'],
     ['session-authority', 'executed'],

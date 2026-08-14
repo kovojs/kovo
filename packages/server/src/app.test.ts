@@ -524,7 +524,7 @@ describe('server createApp request shell', () => {
         }),
       );
       expect(authorized.status, path).toBe(200);
-      expect(authorized.headers.get('cache-control'), path).toBe('no-store');
+      expect(authorized.headers.get('cache-control'), path).toBe('private, no-store');
       expect(authorized.headers.get('vary'), path).toContain('Cookie');
       await expect(authorized.text()).resolves.toBe('PRIVATE:victim');
 
@@ -537,7 +537,7 @@ describe('server createApp request shell', () => {
         }),
       );
       expect(notModified.status, path).toBe(304);
-      expect(notModified.headers.get('cache-control'), path).toBe('no-store');
+      expect(notModified.headers.get('cache-control'), path).toBe('private, no-store');
       expect(notModified.headers.get('vary'), path).toContain('Cookie');
       await expect(notModified.text()).resolves.toBe('');
     }
@@ -1513,7 +1513,7 @@ describe('server createApp request shell', () => {
     expect(enhanced.headers.get('content-type')).toBe(
       'application/vnd.kovo.document-parts+json; charset=utf-8',
     );
-    expect(enhanced.headers.get('vary')).toBe('Accept');
+    expect(enhanced.headers.get('vary')).toBe('Accept, Cookie');
     expect(full.headers.get('vary')).toContain('Accept');
 
     const fullBody = await full.text();

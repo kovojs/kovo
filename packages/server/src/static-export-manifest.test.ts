@@ -64,6 +64,11 @@ const staticExportReportingHeaders = {
   // negotiated on Accept (the kovo-document-parts/v1 variant), exports included.
   vary: 'Accept',
 };
+const staticExportCookiePersonalizedHeaders = {
+  'cache-control': 'private, no-store',
+  ...staticExportReportingHeaders,
+  vary: 'Accept, Cookie',
+};
 
 describe('server static export', () => {
   it('summarizes dry-run route, client module, and asset inventory in write order', async () => {
@@ -104,7 +109,7 @@ describe('server static export', () => {
           'cross-origin-opener-policy': 'same-origin-allow-popups; report-to="kovo-csp"',
           'permissions-policy':
             'camera=();report-to=kovo-csp, microphone=();report-to=kovo-csp, geolocation=();report-to=kovo-csp, payment=();report-to=kovo-csp, usb=();report-to=kovo-csp',
-          ...staticExportReportingHeaders,
+          ...staticExportCookiePersonalizedHeaders,
           'x-frame-options': 'DENY',
           'x-content-type-options': 'nosniff',
         },
@@ -291,7 +296,7 @@ describe('server static export', () => {
             'cross-origin-opener-policy': 'same-origin-allow-popups; report-to="kovo-csp"',
             'permissions-policy':
               'camera=();report-to=kovo-csp, microphone=();report-to=kovo-csp, geolocation=();report-to=kovo-csp, payment=();report-to=kovo-csp, usb=();report-to=kovo-csp',
-            ...staticExportReportingHeaders,
+            ...staticExportCookiePersonalizedHeaders,
             'x-frame-options': 'DENY',
             'x-content-type-options': 'nosniff',
           },
@@ -309,7 +314,7 @@ describe('server static export', () => {
             'cross-origin-opener-policy': 'same-origin-allow-popups; report-to="kovo-csp"',
             'permissions-policy':
               'camera=();report-to=kovo-csp, microphone=();report-to=kovo-csp, geolocation=();report-to=kovo-csp, payment=();report-to=kovo-csp, usb=();report-to=kovo-csp',
-            ...staticExportReportingHeaders,
+            ...staticExportCookiePersonalizedHeaders,
             'x-frame-options': 'DENY',
             'x-content-type-options': 'nosniff',
           },
@@ -349,7 +354,7 @@ describe('server static export', () => {
             'cross-origin-opener-policy': 'same-origin-allow-popups; report-to="kovo-csp"',
             'permissions-policy':
               'camera=();report-to=kovo-csp, microphone=();report-to=kovo-csp, geolocation=();report-to=kovo-csp, payment=();report-to=kovo-csp, usb=();report-to=kovo-csp',
-            ...staticExportReportingHeaders,
+            ...staticExportCookiePersonalizedHeaders,
             'x-frame-options': 'DENY',
             'x-content-type-options': 'nosniff',
           },
@@ -366,7 +371,7 @@ describe('server static export', () => {
             'cross-origin-opener-policy': 'same-origin-allow-popups; report-to="kovo-csp"',
             'permissions-policy':
               'camera=();report-to=kovo-csp, microphone=();report-to=kovo-csp, geolocation=();report-to=kovo-csp, payment=();report-to=kovo-csp, usb=();report-to=kovo-csp',
-            ...staticExportReportingHeaders,
+            ...staticExportCookiePersonalizedHeaders,
             'x-frame-options': 'DENY',
             'x-content-type-options': 'nosniff',
           },
