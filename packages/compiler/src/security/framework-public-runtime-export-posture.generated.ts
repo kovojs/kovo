@@ -5517,7 +5517,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./vite",["default"]],
       ["./webhooks",["default"]],
       ["./write-safety",["default"]],
-    ], ["kovo-source-tree-sha256:872cf1aae32b74e08928c98a0d3cad010aed7d916a0939d010a5c4265ede91ec"]],
+    ], ["kovo-source-tree-sha256:e671a15eed85dc6ce1410d9d74ce9b1ba3161a51ca0cccc8dac4a50614788e09"]],
     ["sha256:9d6bb2c12a61d1dced1583ddabf99ce78d6bbfa73605fa6a9f0843eb0d6ca00e", [
       [".",["default","types"]],
       ["./agent",["default","types"]],
