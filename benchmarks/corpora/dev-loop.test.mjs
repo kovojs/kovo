@@ -16,6 +16,7 @@ import {
   establishState,
   exactSampleCountFindings,
   loadCorpusManifest,
+  normalizeDevLoopOptions,
   parseDevLoopArgs,
   profileEditToPaint,
   profiledDevInvocation,
@@ -108,14 +109,39 @@ describe('single-entrant developer-loop adapter', () => {
       executable: './node_modules/.bin/kovo',
     });
     expect(profiledDevInvocation(command, 49_121)).toEqual({
-      argv: [
-        '--inspect=127.0.0.1:49121',
-        '/tmp/kovo-profile-app/node_modules/.bin/kovo',
-        'dev',
-        './src/app.tsx',
-      ],
-      executable: process.execPath,
+      argv: ['dev', './src/app.tsx'],
+      env: { NODE_OPTIONS: '--inspect=127.0.0.1:49121' },
+      executable: './node_modules/.bin/kovo',
     });
+    expect(() =>
+      profiledDevInvocation({ ...command, env: { NODE_OPTIONS: '--inspect-brk' } }, 49_121),
+    ).toThrow('already declares a Node Inspector option');
+  });
+
+  it('preserves diagnostic options when parsed CLI options cross the benchmark boundary', () => {
+    const parsed = parseDevLoopArgs([
+      '--manifest',
+      '/tmp/manifest.json',
+      '--iterations',
+      '1',
+      '--ready-iterations',
+      '1',
+      '--warmups',
+      '0',
+      '--port',
+      '49120',
+      '--profile-dir',
+      '/tmp/kovo-dev-profile',
+      '--inspector-port',
+      '49121',
+      '--out',
+      '/tmp/report.json',
+    ]);
+
+    expect(normalizeDevLoopOptions(parsed)).toEqual(parsed);
+    expect(() =>
+      normalizeDevLoopOptions({ ...parsed, profileDir: '/tmp/ambiguous-profile' }),
+    ).toThrow('must use one representation');
   });
 
   it.each([

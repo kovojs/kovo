@@ -10,6 +10,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 
 import { collectPerformanceProvenance } from '../../scripts/lib/perf-provenance.mjs';
+import { performanceExecutionIdentity } from '../../scripts/lib/perf-execution.mjs';
+import { performanceHostFingerprint } from '../../scripts/lib/perf-host.mjs';
 import { processTreeRssBytes } from '../../scripts/lib/process-tree-rss.mjs';
 import { CORPUS_SCHEMA, EDIT_REFRESH_SURFACES, EDIT_STATE_POSTURE } from './generate.mjs';
 
@@ -62,7 +64,7 @@ async function collectAuthenticatedSource() {
  * tree from contaminating either timing or RSS evidence.
  */
 export async function runDevLoopBenchmark(options, dependencies = {}) {
-  const normalized = normalizeOptions(options);
+  const normalized = normalizeDevLoopOptions(options);
   const manifestEvidence = await loadCorpusManifest(normalized.manifestPath);
   const { appRoot, manifest, manifestDigest, manifestPath } = manifestEvidence;
   if (isWithin(appRoot, normalized.outPath)) {
@@ -87,10 +89,12 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
   const spawnProcess = dependencies.spawnProcess ?? spawn;
   const startedAt = new Date().toISOString();
   const source = await collectAuthenticatedSource();
+  const execution = performanceExecutionIdentity({ startedAt });
   const command = materializeCommand(manifest.dev.command, appRoot, normalized.port);
   const versions = await collectEntrantVersions(appRoot, manifest.framework, command);
   const report = createReportSkeleton({
     command,
+    execution,
     iterations: normalized.iterations,
     manifest,
     manifestDigest,
@@ -198,6 +202,16 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
     profileFindings.length === 0;
   report.summary = summarizeReport(report);
   report.environment.loadAverageAfter = os.loadavg();
+  report.host = performanceHostFingerprint({
+    browserVersions:
+      report.environment.browser === null
+        ? []
+        : [`${report.environment.browser.name}@${report.environment.browser.version}`],
+  });
+  report.hostSamples = [
+    { label: 'before', loadAverage: report.environment.loadAverageBefore },
+    { label: 'after', loadAverage: report.environment.loadAverageAfter },
+  ];
   report.finishedAt = new Date().toISOString();
   report.verdict.status = report.integrity.complete
     ? normalized.diagnosticProfile === null
@@ -942,6 +956,7 @@ function startDevSession({ appRoot, command, inspectorPort = null, spawnProcess 
     env: {
       ...process.env,
       ...command.env,
+      ...invocation.env,
       FORCE_COLOR: '0',
       NEXT_TELEMETRY_DISABLED: '1',
       NO_COLOR: '1',
@@ -1009,13 +1024,20 @@ export function profiledDevInvocation(command, inspectorPort) {
     return { argv: command.argv.slice(1), executable: command.argv[0] };
   }
   boundedInteger(inspectorPort, 1_024, 65_535, 'inspector port');
+  const inheritedNodeOptions = command.env?.NODE_OPTIONS ?? process.env.NODE_OPTIONS ?? '';
+  if (/(?:^|\s)--inspect(?:-brk)?(?:=|\s|$)/u.test(inheritedNodeOptions)) {
+    throw new TypeError('profiled dev command already declares a Node Inspector option');
+  }
+  const inspectorOption = `--inspect=127.0.0.1:${String(inspectorPort)}`;
   return {
-    argv: [
-      `--inspect=127.0.0.1:${String(inspectorPort)}`,
-      path.resolve(command.cwd, command.argv[0]),
-      ...command.argv.slice(1),
-    ],
-    executable: process.execPath,
+    argv: command.argv.slice(1),
+    env: {
+      NODE_OPTIONS:
+        inheritedNodeOptions.length === 0
+          ? inspectorOption
+          : `${inheritedNodeOptions} ${inspectorOption}`,
+    },
+    executable: command.argv[0],
   };
 }
 
@@ -1310,6 +1332,7 @@ async function restoreOriginalSources(appRoot, sources) {
 
 function createReportSkeleton({
   command,
+  execution,
   iterations,
   manifest,
   manifestDigest,
@@ -1335,6 +1358,7 @@ function createReportSkeleton({
       sourceDigest: manifest.sourceDigest,
     },
     editSession: null,
+    execution,
     environment: {
       arch: process.arch,
       browser: null,
@@ -1349,6 +1373,8 @@ function createReportSkeleton({
     },
     finishedAt: null,
     framework: manifest.framework,
+    host: null,
+    hostSamples: [],
     integrity: {
       command: { argv: command.argv, cwd: command.cwd, origin: command.origin },
       complete: false,
@@ -1624,16 +1650,40 @@ function percentile(values, percentage) {
   return sorted[Math.min(sorted.length - 1, Math.ceil((percentage / 100) * sorted.length) - 1)];
 }
 
-function normalizeOptions(options) {
+export function normalizeDevLoopOptions(options) {
   if (!options || typeof options !== 'object')
     throw new TypeError('Benchmark options are required.');
+  const hasFlatDiagnosticOptions =
+    options.profileDir !== undefined || options.inspectorPort !== undefined;
+  const hasNormalizedDiagnosticOptions = options.diagnosticProfile !== undefined;
+  if (hasFlatDiagnosticOptions && hasNormalizedDiagnosticOptions) {
+    throw new TypeError('Diagnostic profile options must use one representation.');
+  }
+  const diagnosticOptions = hasNormalizedDiagnosticOptions
+    ? options.diagnosticProfile
+    : hasFlatDiagnosticOptions
+      ? { inspectorPort: options.inspectorPort, profileDir: options.profileDir }
+      : null;
+  if (
+    diagnosticOptions !== null &&
+    (typeof diagnosticOptions !== 'object' || Array.isArray(diagnosticOptions))
+  ) {
+    throw new TypeError('diagnostic profile options must be an object or null.');
+  }
   const normalized = {
     diagnosticProfile:
-      options.profileDir === undefined && options.inspectorPort === undefined
+      diagnosticOptions === null
         ? null
         : {
-            inspectorPort: boundedInteger(options.inspectorPort, 1_024, 65_535, 'inspector port'),
-            profileDir: path.resolve(requiredString(options.profileDir, 'profile directory')),
+            inspectorPort: boundedInteger(
+              diagnosticOptions.inspectorPort,
+              1_024,
+              65_535,
+              'inspector port',
+            ),
+            profileDir: path.resolve(
+              requiredString(diagnosticOptions.profileDir, 'profile directory'),
+            ),
           },
     iterations: boundedInteger(options.iterations, 1, 100, 'iterations'),
     manifestPath: path.resolve(requiredString(options.manifestPath, 'manifest')),
@@ -1681,7 +1731,7 @@ export function parseDevLoopArgs(argv) {
     if (Object.hasOwn(values, key)) throw new TypeError(`Duplicate dev-loop option ${key}.`);
     values[key] = value;
   }
-  return normalizeOptions({
+  return normalizeDevLoopOptions({
     iterations: Number(values['--iterations']),
     inspectorPort:
       values['--inspector-port'] === undefined ? undefined : Number(values['--inspector-port']),
