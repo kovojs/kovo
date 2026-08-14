@@ -11,7 +11,6 @@ import {
   authenticateHistoricalOrigin,
   authenticateHistoricalScratchpad,
   evaluateLoaderRuntimeMemoAcceptance,
-  HISTORICAL_LOADER_RUNTIME_MEMO,
   loaderRuntimeMemoConditions,
   loaderRuntimeModuleSourceEvidence,
   loaderRuntimeMemoSchedule,

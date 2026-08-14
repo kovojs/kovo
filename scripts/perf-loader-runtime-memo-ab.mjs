@@ -24,7 +24,7 @@ import {
 } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 
 import { bootstrapMedianCi, summarize } from '../benchmarks/compare.mjs';
@@ -350,7 +350,9 @@ export function analyzeLoaderRuntimeMemoSamples(
   { bootstrapIterations = DEFAULT_BOOTSTRAP_ITERATIONS, seed = 0x4c524d41 } = {},
 ) {
   const analysis = {};
-  for (const key of [...new Set(rawSamples.map((cell) => cell.condition.key))].sort()) {
+  for (const key of [...new Set(rawSamples.map((cell) => cell.condition.key))].sort(
+    compareStrings,
+  )) {
     const cells = rawSamples.filter((cell) => cell.condition.key === key);
     const pairs = pairedSamples(cells);
     const metrics = {};
@@ -401,7 +403,9 @@ export function evaluateLoaderRuntimeMemoAcceptance(
   { bootstrapIterations = DEFAULT_BOOTSTRAP_ITERATIONS, seed = 0x4c524d41 } = {},
 ) {
   const expected = loaderRuntimeMemoConditions().map((condition) => condition.key);
-  const observedKeys = [...new Set(rawSamples.map((cell) => cell.condition.key))].sort();
+  const observedKeys = [...new Set(rawSamples.map((cell) => cell.condition.key))].sort(
+    compareStrings,
+  );
   const throughputImprovements = [];
   const p95RegressionByCondition = {};
   const rssRegressionByCondition = {};
@@ -441,7 +445,7 @@ export function evaluateLoaderRuntimeMemoAcceptance(
     }
   }
   const reasons = [];
-  if (canonicalJson(observedKeys) !== canonicalJson([...expected].sort())) {
+  if (canonicalJson(observedKeys) !== canonicalJson([...expected].sort(compareStrings))) {
     reasons.push('forced-dynamic listing/detail c=1,8,32 condition census is incomplete');
   }
   if (throughputImprovements.length === 0) {
@@ -1403,6 +1407,9 @@ function sameSource(left, right) {
 
 function sha256(bytes) {
   return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+}
+function compareStrings(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 function isSha256(value) {
   return /^sha256:[0-9a-f]{64}$/u.test(String(value ?? ''));
