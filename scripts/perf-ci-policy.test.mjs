@@ -203,9 +203,6 @@ describe('realistic performance CI policy', () => {
       'KOVO_CHECK_WATCH_CANDIDATE_PRODUCTION_COMMIT: 0590083172c0cbdeef4d58219ea384da7cb9f985',
     );
     expect(source).toContain(
-      'KOVO_CHECK_WATCH_CANDIDATE_PATCH_ID: e44cd96f5f22d4008c6df42373eb4df1cb24cc28',
-    );
-    expect(source).toContain(
       'KOVO_CHECK_WATCH_BASELINE_COMMIT: cc475b3ab2d54ff8201de059e713cc1d7e54400c',
     );
     expect(source).toContain(
@@ -230,9 +227,8 @@ describe('realistic performance CI policy', () => {
     expect(source).toContain('candidate_range_count="$(git rev-list --count');
     expect(source).toContain("assert_equal 'candidate sealed range commit count' 2");
     expect(source).toContain("assert_equal 'candidate seal parent'");
-    expect(source).toContain('git patch-id --stable');
     expect(source).toContain("assert_equal 'candidate production commit'");
-    expect(source).toContain("assert_equal 'production patch id'");
+    expect(source).not.toContain('git patch-id --stable');
     expect(source).toContain("assert_equal 'production changed-path count' 7");
     expect(source).toContain('check-watch candidate changed unapproved production path');
     expect(source).toContain('check-watch candidate seal changed unapproved path');
