@@ -170,12 +170,17 @@ benchmarks/corpora/dev-loop.test.mjs --reporter=dot` passed 39/39. Current-head 
 
 ## Phase 3 — production runtime
 
-- [ ] Highest priority: authenticate and reproduce the constant-module canonicalization/SHA-256
+- [x] Highest priority: authenticate and reproduce the constant-module canonicalization/SHA-256
       memoization candidate from its originating profile, raw report, throwaway worktree, and exact
       commit. Decide it only from clean committed baseline/candidate worktrees in serialized
       `baseline, spike, spike, baseline` order on forced-dynamic listing/detail routes at
       c={1,8,32}; retain throughput, p50/p95/p99, CPU, peak RSS, byte-equivalence, and before/after
       CPU profiles, and apply the plan's declared acceptance rule.
+  - Evidence: [run `31754297930`, artifact
+    `9203129430`](https://github.com/kovojs/kovo/actions/runs/31754297930/artifacts/9203129430)
+    authenticated `3010e8df3…d87b4a132`, 84 windows/42 B,S,S,B pairs and four profiles; zero
+    misses, +29.08% median throughput with paired 95% CI `[+26.07%, +30.23%]`, all p95 cells
+    improved, byte-identical bodies, and loader profile share fell from 14.89%/21.57% to 0.02%.
 - [ ] Run the matched L0/L1 browser matrix before changing navigation or runtime emission. Preserve
       inert documents at zero JS; the deterministic spike found the ordinary deferred runtime at
       49,236 B Brotli and the enhanced-navigation closure alone at 22,642 B Brotli.

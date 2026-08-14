@@ -109,6 +109,40 @@ Non-default `--quick-smoke` or matrix/timing overrides can verify wiring but alw
 `smoke`; they cannot produce an acceptance verdict. The durable GitHub Actions decision job owns
 the quiet-host full run and uploads the report plus all four raw profiles.
 
+## Fresh decision result
+
+[Run `31754297930`](https://github.com/kovojs/kovo/actions/runs/31754297930) completed on
+2026-08-14 with [artifact `9203129430`](https://github.com/kovojs/kovo/actions/runs/31754297930/artifacts/9203129430).
+The runner independently authenticated clean commits `3010e8df33869413727003c659bb555ac824d104`
+and `d87b4a1320087c512e25f02a57e88920ae9b1777`, the one-path patch, stable patch ID
+`f06d58878c8997bca537fd61bb08d7896660d60c`, frozen locks, and the identical 276,420-byte module
+with SHA-256 `4d82afe10bceef7fa903d218472a2e2d7f6ccba8500050ede7878ecdf841af4b`.
+The 84 raw windows formed 42 exact baseline/spike pairs in the declared order and served 307,428
+successful requests with zero status, representation, content, transport, or source-integrity
+misses. Maximum admitted load was 0.6125 per CPU, below the 0.75 ceiling.
+
+The table reports medians; CPU is process-tree CPU percentage and RSS is process-tree MiB.
+
+| Forced-dynamic cell | req/s baseline → memo | p50 ms baseline → memo | p95 ms baseline → memo | p99 ms baseline → memo | CPU % baseline → memo | RSS MiB baseline → memo |
+| ------------------- | --------------------: | ---------------------: | ---------------------: | ---------------------: | --------------------: | ----------------------: |
+| listing c=1         |       158.44 → 196.92 |            5.79 → 4.69 |            9.29 → 7.85 |          13.89 → 11.14 |       106.65 → 106.65 |         330.09 → 320.83 |
+| listing c=8         |       179.95 → 222.74 |          37.43 → 30.32 |          80.59 → 64.93 |          85.17 → 68.76 |       113.03 → 113.09 |         397.82 → 358.42 |
+| listing c=32        |       181.29 → 228.65 |        169.82 → 134.69 |        191.09 → 152.46 |        342.73 → 272.22 |       112.03 → 112.31 |         362.87 → 347.30 |
+| detail c=1          |       246.13 → 322.16 |            3.78 → 2.90 |            6.07 → 4.87 |            8.80 → 5.77 |        99.99 → 100.00 |         333.23 → 327.24 |
+| detail c=8          |       250.74 → 340.09 |          27.22 → 20.03 |          55.53 → 41.70 |          62.12 → 45.55 |       113.08 → 113.15 |         376.78 → 340.74 |
+| detail c=32         |       255.03 → 338.39 |         121.51 → 90.93 |        137.81 → 107.64 |        244.80 → 183.59 |       112.39 → 112.66 |         342.01 → 354.23 |
+
+Overall paired throughput improved 29.0848%, with bootstrap 95% CI
+`[26.0654%, 30.2256%]`; every cell's median p95 improved by 13.98–24.02%. CPU stayed effectively
+flat. Five RSS cells improved and detail c=32 regressed 7.37%; criterion A accepts independently of
+the criterion-B RSS guardrail because throughput exceeded 10% with a strictly positive paired CI.
+
+The raw CPU profiles independently reproduced the causal attribution. The loader-selection subtree
+fell from 4,970/33,389 busy samples (14.8851%) to 7/33,116 (0.0211%) on listing and from
+7,204/33,393 (21.5734%) to 8/33,404 (0.0240%) on detail. Listing and detail response bodies remained
+byte-identical across every arm and window. The publishable verdict is therefore **accept,
+criterion A**; the memoization candidate remains in production.
+
 ## Candidate safety contract
 
 The production change remains private to `@kovojs/server`. Its cache key is the closed registry
