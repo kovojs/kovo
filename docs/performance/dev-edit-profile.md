@@ -5,6 +5,13 @@ measured source-write-to-destination-paint window. This is diagnostic evidence, 
 the report sets `verdict.status` to `diagnostic-only`, preserves all ordinary corpus/state/browser/
 RSS/source-integrity gates, and refuses timing claims because both samplers perturb the process.
 
+The authenticated corpus posture is
+`refresh-surfaces-sibling-to-local-state/v1`: leaf, entry, and data are separate component roots,
+and the local counter is their sibling. Kovo measures query-backed inferred live-target refreshes;
+Next.js measures the matching Fast Refresh component topology. This keeps `Count 1` outside every
+replacement boundary, as required by SPEC §4.1/§4.9/§9.5.1 and KV420, so a passing state gate
+means the edited surface preserved unrelated browser state rather than reconstructing it.
+
 The profile classifies directly observed self samples into module evaluation, Vite transform, SSR
 generation, and asynchronous proof convergence. Allocation is collected from the same window with
 Inspector's sampling heap profiler. Every category receives an explicit ruling: present in the

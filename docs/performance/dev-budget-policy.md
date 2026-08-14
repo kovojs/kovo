@@ -6,6 +6,12 @@ comparison declares 30 measured edits, 15 fresh-ready starts, and three warmups 
 occurrences as 15/15 edits, 8/7 starts, and 2/1 warmups. The occurrence schedule is part of the
 workload digest and every raw cell repeats its assigned slice.
 
+That workload digest authenticates
+`editStatePosture: refresh-surfaces-sibling-to-local-state/v1`: leaf, entry, and data are explicit
+component refresh roots in both entrants, while the `Count 1` local-state island is their sibling.
+For Kovo those roots are query-backed inferred live targets under SPEC §4.1/§4.9/§9.5.1; this
+avoids the KV420-invalid and benchmark-invalid shape where a server morph encloses the state gate.
+
 This policy follows the honesty boundary in SPEC §1.1: a missing diagnostic, lost browser state,
 partial sample series, dirty source, changed lock, mismatched corpus, busy host, or reused execution
 identity is `unproven`, not a passing budget result.

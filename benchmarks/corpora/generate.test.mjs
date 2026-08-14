@@ -5,7 +5,14 @@ import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { CORPUS_SCHEMA, generateCorpora } from './generate.mjs';
+import { classifyHmrImpact, compileComponentModule } from '../../packages/compiler/src/index.ts';
+
+import {
+  CORPUS_SCHEMA,
+  EDIT_REFRESH_SURFACES,
+  EDIT_STATE_POSTURE,
+  generateCorpora,
+} from './generate.mjs';
 
 const roots = [];
 
@@ -33,10 +40,12 @@ describe('equal-shape developer corpus generator', () => {
     expect(kovo.shapeDigest).toMatch(/^[0-9a-f]{64}$/u);
     expect(kovo.workload).toEqual(next.workload);
     expect(kovo.workload.buildOutputContract).toBe('required-nonempty-and-cleanup-absent/v1');
+    expect(kovo.workload.editRefreshSurfaces).toEqual(EDIT_REFRESH_SURFACES);
+    expect(kovo.workload.editStatePosture).toBe(EDIT_STATE_POSTURE);
     expect(kovo.sourceDigest).toMatch(/^sha256:[0-9a-f]{64}$/u);
     expect(next.sourceDigest).toMatch(/^sha256:[0-9a-f]{64}$/u);
-    expect(kovo.sourceFiles).toHaveLength(size + 6);
-    expect(next.sourceFiles).toHaveLength(size + 10);
+    expect(kovo.sourceFiles).toHaveLength(size + 8);
+    expect(next.sourceFiles).toHaveLength(size + 11);
     expect(kovo.sourceFiles[0]).toEqual(
       expect.objectContaining({ bytes: expect.any(Number), file: 'package.json' }),
     );
@@ -47,6 +56,12 @@ describe('equal-shape developer corpus generator', () => {
       0.1,
     );
     expect(kovo.dev.edits).toEqual(next.dev.edits);
+    for (const [editClass, surface] of Object.entries(EDIT_REFRESH_SURFACES)) {
+      expect(kovo.dev.edits[editClass]).toMatchObject({
+        evidence: { selector: surface.selector },
+        file: surface.file,
+      });
+    }
     expect(kovo.build.edit).toEqual(next.build.edit);
     expect(kovo.build.command.argv).toContain('build');
     expect(next.build.command.argv).toContain('build');
@@ -66,6 +81,66 @@ describe('equal-shape developer corpus generator', () => {
     expect(
       await readFile(path.join(path.dirname(manifests[1]), 'next-env.d.ts'), 'utf8'),
     ).toContain('import "./.next/types/routes.d.ts";');
+
+    const [kovoShell, nextShell] = await Promise.all(
+      manifests.map((manifestPath) =>
+        readFile(path.join(path.dirname(manifestPath), 'src/shell.tsx'), 'utf8'),
+      ),
+    );
+    expect(observableShellMarkup(kovoShell)).toBe(observableShellMarkup(nextShell));
+    const expectedSiblings = [
+      'EntryRefreshSurface',
+      'DataRefreshSurface',
+      ...Array.from(
+        { length: size },
+        (_, index) => `CorpusComponent${String(index).padStart(3, '0')}`,
+      ),
+      'CounterIsland',
+    ];
+    expect(directComponentChildren(kovoShell)).toEqual(expectedSiblings);
+    expect(directComponentChildren(nextShell)).toEqual(expectedSiblings);
+
+    for (const relativePath of Object.values(EDIT_REFRESH_SURFACES).map(({ file }) => file)) {
+      const [kovoSurface, nextSurface] = await Promise.all(
+        manifests.map((manifestPath) =>
+          readFile(path.join(path.dirname(manifestPath), relativePath), 'utf8'),
+        ),
+      );
+      expect(kovoSurface).toContain('queries: { refresh: benchmarkRefreshQuery }');
+      expect(kovoSurface).not.toContain('<CounterIsland');
+      expect(nextSurface).not.toContain('<CounterIsland');
+    }
+    expect(kovoShell.match(/<CounterIsland \/>/gu)).toHaveLength(1);
+    expect(nextShell.match(/<CounterIsland \/>/gu)).toHaveLength(1);
+  });
+
+  it('proves every Kovo edit root is a component-refresh HMR target', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-corpus-hmr-target-test-'));
+    roots.push(root);
+    const [manifestPath] = await generateCorpora({ outDir: root, sizes: [24] });
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+    const appRoot = path.dirname(manifestPath);
+
+    for (const editClass of ['leaf', 'entry', 'data']) {
+      const edit = manifest.dev.edits[editClass];
+      const source = await readFile(path.join(appRoot, edit.file), 'utf8');
+      const changed = source.replace(
+        edit.search,
+        edit.replacementTemplate.replace('{revision}', `${editClass}-proof`),
+      );
+      const before = compileComponentModule({ fileName: edit.file, source });
+      const after = compileComponentModule({ fileName: edit.file, source: changed });
+
+      expect(before.diagnostics.filter(({ severity }) => severity === 'error')).toEqual([]);
+      expect(after.diagnostics.filter(({ severity }) => severity === 'error')).toEqual([]);
+      expect(before.hmrImpact?.liveTargetFacts.length, editClass).toBeGreaterThan(0);
+      expect(after.hmrImpact?.liveTargetFactsHash, editClass).toBe(
+        before.hmrImpact?.liveTargetFactsHash,
+      );
+      expect(classifyHmrImpact(before.hmrImpact, after.hmrImpact), editClass).toMatchObject({
+        impact: 'componentRefresh',
+      });
+    }
   });
 
   it('uses entrant-local default roots so Turbopack dependency resolution stays inside its tree', async () => {
@@ -99,3 +174,16 @@ describe('equal-shape developer corpus generator', () => {
     );
   });
 });
+
+function observableShellMarkup(source) {
+  const match = /<main\b[\s\S]*?<\/main>/u.exec(source);
+  if (!match) throw new TypeError('Generated shell has no main element.');
+  return match[0]
+    .replace(/\{\/\*[\s\S]*?\*\/\}/gu, '')
+    .replace(/\s+/gu, ' ')
+    .trim();
+}
+
+function directComponentChildren(source) {
+  return [...source.matchAll(/^ {6}<([A-Z][A-Za-z0-9]+) \/>$/gmu)].map((match) => match[1]);
+}

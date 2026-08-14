@@ -41,6 +41,12 @@ in each worktree, and proves matching root/Next.js/harness lock digests, package
 corpus source/shape/manifest digests, and byte-identical generator/dev-loop adapters. It launches no
 timed development process.
 
+The shape digest binds the matched `refresh-surfaces-sibling-to-local-state/v1` posture. Leaf,
+entry, and data edits are distinct component refresh surfaces, Kovo's sources compile to proven
+query-backed live targets, and the stateful counter is a sibling outside all three targets (SPEC
+§4.1/§4.9/§9.5.1, KV420). Reports from the former document-refresh topology have a different
+shape digest and cannot be reused.
+
 ```sh
 node scripts/perf-dev-generation-spike.mjs \
   --baseline-root ../kovo-perf-devgen-baseline \
@@ -95,7 +101,7 @@ comparison report.
 The report aggregates baseline and spike median, MAD, p95, sample count, and paired bootstrap 95%
 confidence intervals for:
 
-- leaf, route-entry, data-plane, syntax-error, and recovery edit-to-paint latency
+- leaf, entry-surface, data-surface, syntax-error, and recovery edit-to-paint latency
 - optional framework-owned server-generation spans for those edit classes
 - fresh-ready latency and process-tree peak RSS
 - edit-session process-tree peak RSS

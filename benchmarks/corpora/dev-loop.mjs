@@ -11,7 +11,7 @@ import { chromium } from 'playwright';
 
 import { collectPerformanceProvenance } from '../../scripts/lib/perf-provenance.mjs';
 import { processTreeRssBytes } from '../../scripts/lib/process-tree-rss.mjs';
-import { CORPUS_SCHEMA } from './generate.mjs';
+import { CORPUS_SCHEMA, EDIT_REFRESH_SURFACES, EDIT_STATE_POSTURE } from './generate.mjs';
 
 export const DEV_LOOP_REPORT_SCHEMA = 'kovo-dev-loop-report/v1';
 
@@ -1096,6 +1096,7 @@ export async function loadCorpusManifest(manifestPathValue) {
     throw new TypeError('Corpus manifest sourceDigest does not authenticate sourceFiles.');
   }
   validateDevContract(manifest.dev);
+  validateEditStatePosture(manifest);
   validateBuildOutputContract(manifest.build?.outputs);
   if (manifest.workload?.buildOutputContract !== 'required-nonempty-and-cleanup-absent/v1') {
     throw new TypeError('Corpus workload does not authenticate the build output contract.');
@@ -1220,6 +1221,23 @@ function validateDevContract(dev) {
   }
 }
 
+function validateEditStatePosture(manifest) {
+  if (manifest.workload?.editStatePosture !== EDIT_STATE_POSTURE) {
+    throw new TypeError('Corpus workload does not authenticate the edit/state posture.');
+  }
+  if (
+    JSON.stringify(manifest.workload?.editRefreshSurfaces) !== JSON.stringify(EDIT_REFRESH_SURFACES)
+  ) {
+    throw new TypeError('Corpus workload does not authenticate all edit refresh surfaces.');
+  }
+  for (const [editClass, surface] of Object.entries(EDIT_REFRESH_SURFACES)) {
+    const edit = manifest.dev?.edits?.[editClass];
+    if (edit?.file !== surface.file || edit?.evidence?.selector !== surface.selector) {
+      throw new TypeError(`Corpus dev edit ${editClass} drifts from its refresh surface.`);
+    }
+  }
+}
+
 function validateBuildOutputContract(outputs) {
   const keys = Object.keys(outputs ?? {}).sort();
   if (JSON.stringify(keys) !== JSON.stringify(['absent', 'requiredNonempty'])) {
@@ -1307,6 +1325,8 @@ function createReportSkeleton({
   return {
     command: { argv: command.argv, cwd: command.cwd, env: command.env },
     corpus: {
+      editRefreshSurfaces: manifest.workload.editRefreshSurfaces,
+      editStatePosture: manifest.workload.editStatePosture,
       manifestDigest,
       manifestPath,
       modules: manifest.modules,

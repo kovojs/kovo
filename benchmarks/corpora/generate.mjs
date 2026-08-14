@@ -6,6 +6,15 @@ import { fileURLToPath } from 'node:url';
 
 export const CORPUS_SCHEMA = 'kovo-dev-corpus/v1';
 export const SUPPORTED_SIZES = Object.freeze([24, 216]);
+export const EDIT_STATE_POSTURE = 'refresh-surfaces-sibling-to-local-state/v1';
+export const EDIT_REFRESH_SURFACES = Object.freeze({
+  data: Object.freeze({ file: 'src/data.tsx', selector: '[data-benchmark-data]' }),
+  entry: Object.freeze({ file: 'src/page.tsx', selector: '[data-benchmark-entry]' }),
+  leaf: Object.freeze({
+    file: 'src/components/component-000.tsx',
+    selector: '[data-module="000"]',
+  }),
+});
 
 const CORPUS_OWNER_FILE = '.kovo-benchmark-corpus-owner.json';
 const CORPUS_OWNER_SCHEMA = 'kovo-benchmark-corpus-owner/v1';
@@ -112,6 +121,8 @@ function corpusShape(modules) {
     buildOutputContract: 'required-nonempty-and-cleanup-absent/v1',
     componentImportFanout: modules,
     editClasses: ['leaf', 'entry', 'data', 'syntaxError', 'recovery'],
+    editRefreshSurfaces: EDIT_REFRESH_SURFACES,
+    editStatePosture: EDIT_STATE_POSTURE,
     routes: 4,
     stateSurface: 'local-counter',
     workloadModules: modules,
@@ -140,7 +151,7 @@ function devContract(framework, bin) {
     edits: {
       data: {
         evidence: { expectedTemplate: 'data-{revision}', selector: '[data-benchmark-data]' },
-        file: 'src/data.ts',
+        file: EDIT_REFRESH_SURFACES.data.file,
         replacementTemplate: "'data-{revision}'",
         search: "'data-r0'",
       },
@@ -148,9 +159,9 @@ function devContract(framework, bin) {
         evidence: {
           attribute: 'data-entry-revision',
           expectedTemplate: 'entry-{revision}',
-          selector: 'main',
+          selector: EDIT_REFRESH_SURFACES.entry.selector,
         },
-        file: framework === 'kovo' ? 'src/page.tsx' : 'src/page.tsx',
+        file: EDIT_REFRESH_SURFACES.entry.file,
         replacementTemplate: 'data-entry-revision="entry-{revision}"',
         search: 'data-entry-revision="entry-r0"',
       },
@@ -160,7 +171,7 @@ function devContract(framework, bin) {
           expectedTemplate: 'leaf-{revision}',
           selector: '[data-module="000"]',
         },
-        file: 'src/components/component-000.tsx',
+        file: EDIT_REFRESH_SURFACES.leaf.file,
         replacementTemplate: 'data-revision="leaf-{revision}"',
         search: 'data-revision="leaf-r0"',
       },
@@ -198,31 +209,28 @@ function kovoFiles(size) {
     .map((name, index) => `import { ${name} } from './components/component-${pad(index)}.js';`)
     .join('\n');
   const componentElements = componentNames(size)
-    .map((name) => `        <${name} />`)
+    .map((name) => `      <${name} />`)
     .join('\n');
   const routeDefinitions = ['/', '/route-a', '/route-b', '/route-c']
     .map(
       (route, index) => `const route${index} = app.route('${route}', {
   access: app.publicAccess('generated equal-shape performance corpus'),
-  page: () => <Page />,
+  page: () => <CorpusPage />,
 });`,
     )
     .join('\n\n');
   return {
     'package.json': `${JSON.stringify({ name: `kovo-benchmark-corpus-${size}`, private: true, type: 'module' }, null, 2)}\n`,
     'src/app.tsx': `/** @jsxImportSource @kovojs/server */
-import { defineKovo } from '@kovojs/server';
-import { Page } from './page.js';
-
-const app = defineKovo({
-  appId: '03a0649a-09f2-4f3a-881b-${String(size).padStart(12, '0')}',
-  document: { lang: 'en-US' },
-  renderRoute(value) { return typeof value === 'string' ? value : String(value ?? ''); },
-});
+import { app, benchmarkRefreshQuery } from './kovo.js';
+import { CorpusPage } from './shell.js';
 
 ${routeDefinitions}
 
-export default app.assemble({ routes: [${['0', '1', '2', '3'].map((value) => `route${value}`).join(', ')}] });
+export default app.assemble({
+  queries: [benchmarkRefreshQuery],
+  routes: [${['0', '1', '2', '3'].map((value) => `route${value}`).join(', ')}],
+});
 `,
     'src/counter-island.tsx': `/** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
@@ -236,21 +244,73 @@ export const CounterIsland = component({
   ),
 });
 `,
-    'src/data.ts': "export const benchmarkDataLabel = 'data-r0';\n",
+    'src/data.tsx': `/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+
+import { benchmarkRefreshQuery } from './kovo.js';
+
+export const benchmarkDataLabel = 'data-r0';
+
+export const DataRefreshSurface = component({
+  queries: { refresh: benchmarkRefreshQuery },
+  render: ({ refresh }: { refresh: { label: string } }) => (
+    <p
+      data-benchmark-data="true"
+      data-benchmark-surface="data"
+      data-refresh-ready={refresh.label}
+    >
+      {benchmarkDataLabel}
+    </p>
+  ),
+});
+`,
+    'src/kovo.ts': `import { defineKovo, s } from '@kovojs/server';
+
+export const app = defineKovo({
+  appId: '03a0649a-09f2-4f3a-881b-${String(size).padStart(12, '0')}',
+  document: { lang: 'en-US' },
+  renderRoute(value) { return typeof value === 'string' ? value : String(value ?? ''); },
+});
+
+export const benchmarkRefreshQuery = app.query({
+  access: app.publicAccess('generated equal-shape refresh-surface query'),
+  load: () => ({ label: 'ready' }),
+  output: s.object({ label: s.string() }),
+});
+`,
     'src/page.tsx': `/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+
+import { benchmarkRefreshQuery } from './kovo.js';
+
+export const EntryRefreshSurface = component({
+  queries: { refresh: benchmarkRefreshQuery },
+  render: ({ refresh }: { refresh: { label: string } }) => (
+    <header
+      data-benchmark-entry="true"
+      data-benchmark-surface="entry"
+      data-entry-revision="entry-r0"
+      data-refresh-ready={refresh.label}
+    >
+      <h1>Equal-shape ${size}-module corpus</h1>
+    </header>
+  ),
+});
+`,
+    'src/shell.tsx': `/** @jsxImportSource @kovojs/server */
 ${componentImports}
 import { CounterIsland } from './counter-island.js';
-import { benchmarkDataLabel } from './data.js';
+import { DataRefreshSurface } from './data.js';
+import { EntryRefreshSurface } from './page.js';
 
-export function Page(): string {
+export function CorpusPage(): string {
   return (
-    <main data-benchmark-ready="true" data-entry-revision="entry-r0">
-      <h1>Equal-shape ${size}-module corpus</h1>
-      <p data-benchmark-data="true">{benchmarkDataLabel}</p>
-      <CounterIsland />
-      <section>
+    <main data-benchmark-ready="true">
+      {/* SPEC §4.1/§4.9/§9.5.1 + KV420: every measured refresh target is a sibling of local state. */}
+      <EntryRefreshSurface />
+      <DataRefreshSurface />
 ${componentElements}
-      </section>
+      <CounterIsland />
     </main>
   );
 }
@@ -286,16 +346,16 @@ function nextFiles(size) {
     .map((name, index) => `import { ${name} } from './components/component-${pad(index)}';`)
     .join('\n');
   const componentElements = componentNames(size)
-    .map((name) => `        <${name} />`)
+    .map((name) => `      <${name} />`)
     .join('\n');
   return {
-    'app/[route]/page.tsx': `import { Page } from '../../src/page';
+    'app/[route]/page.tsx': `import { CorpusPage } from '../../src/shell';
 
 export function generateStaticParams() {
   return [{ route: 'route-a' }, { route: 'route-b' }, { route: 'route-c' }];
 }
 
-export default Page;
+export default CorpusPage;
 `,
     'app/layout.tsx': `import type { ReactNode } from 'react';
 
@@ -303,7 +363,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   return <html lang="en-US"><body>{children}</body></html>;
 }
 `,
-    'app/page.tsx': `export { Page as default } from '../src/page';\n`,
+    'app/page.tsx': `export { CorpusPage as default } from '../src/shell';\n`,
     'next.config.mjs': `export default { output: 'standalone' };\n`,
     'next-env.d.ts': `/// <reference types="next" />
 /// <reference types="next/image-types/global" />
@@ -325,20 +385,46 @@ export function CounterIsland() {
   );
 }
 `,
-    'src/data.ts': "export const benchmarkDataLabel = 'data-r0';\n",
-    'src/page.tsx': `${componentImports}
-import { CounterIsland } from './counter-island';
-import { benchmarkDataLabel } from './data';
+    'src/data.tsx': `export const benchmarkDataLabel = 'data-r0';
 
-export function Page() {
+export function DataRefreshSurface() {
   return (
-    <main data-benchmark-ready="true" data-entry-revision="entry-r0">
+    <p
+      data-benchmark-data="true"
+      data-benchmark-surface="data"
+      data-refresh-ready="ready"
+    >
+      {benchmarkDataLabel}
+    </p>
+  );
+}
+`,
+    'src/page.tsx': `export function EntryRefreshSurface() {
+  return (
+    <header
+      data-benchmark-entry="true"
+      data-benchmark-surface="entry"
+      data-entry-revision="entry-r0"
+      data-refresh-ready="ready"
+    >
       <h1>Equal-shape ${size}-module corpus</h1>
-      <p data-benchmark-data="true">{benchmarkDataLabel}</p>
-      <CounterIsland />
-      <section>
+    </header>
+  );
+}
+`,
+    'src/shell.tsx': `${componentImports}
+import { CounterIsland } from './counter-island';
+import { DataRefreshSurface } from './data';
+import { EntryRefreshSurface } from './page';
+
+export function CorpusPage() {
+  return (
+    <main data-benchmark-ready="true">
+      {/* Matched refresh surfaces stay siblings of local state so Fast Refresh preserves it. */}
+      <EntryRefreshSurface />
+      <DataRefreshSurface />
 ${componentElements}
-      </section>
+      <CounterIsland />
     </main>
   );
 }
@@ -384,12 +470,24 @@ ${componentElements}
 
 function kovoComponent(name, index) {
   const id = pad(index);
+  const refreshImport = index === 0 ? "\nimport { benchmarkRefreshQuery } from '../kovo.js';" : '';
+  const refreshContract =
+    index === 0
+      ? `  queries: { refresh: benchmarkRefreshQuery },\n  render: ({ refresh }: { refresh: { label: string } }) => (`
+      : '  render: () => (';
+  const refreshAttribute =
+    index === 0
+      ? '\n      data-benchmark-surface="leaf"\n      data-refresh-ready={refresh.label}'
+      : '';
   return `/** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component } from '@kovojs/core';${refreshImport}
 
 export const ${name} = component({
-  render: () => (
-    <article data-module="${id}" data-revision="${index === 0 ? 'leaf-r0' : 'stable'}">
+${refreshContract}
+    <article
+      data-module="${id}"
+      data-revision="${index === 0 ? 'leaf-r0' : 'stable'}"${refreshAttribute}
+    >
       <h2>Module ${id}</h2>
       <p>Shared workload line ${id}.</p>
     </article>
@@ -400,12 +498,17 @@ export const ${name} = component({
 
 function nextComponent(name, index) {
   const id = pad(index);
+  const refreshAttribute =
+    index === 0 ? '\n      data-benchmark-surface="leaf"\n      data-refresh-ready="ready"' : '';
   return `// Equal-shape module ${id}.
 // The comment padding keeps authored workload LOC aligned with Kovo.
 // Both entrants render the same observable element and text.
 export function ${name}() {
   return (
-    <article data-module="${id}" data-revision="${index === 0 ? 'leaf-r0' : 'stable'}">
+    <article
+      data-module="${id}"
+      data-revision="${index === 0 ? 'leaf-r0' : 'stable'}"${refreshAttribute}
+    >
       <h2>Module ${id}</h2>
       <p>Shared workload line ${id}.</p>
     </article>

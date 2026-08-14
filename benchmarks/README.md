@@ -72,6 +72,14 @@ sentinel-owned scratch apps; regeneration refuses to replace a directory that wa
 the generator. The manifest commands bind development servers to literal `localhost`, including
 Next.js Turbopack, so its HMR websocket origin matches the benchmark URL exactly.
 
+The corpus shape digest also authenticates
+`editStatePosture: refresh-surfaces-sibling-to-local-state/v1`. Leaf, entry, and data edits each
+land in a distinct component refresh surface. Kovo's three edited components are query-backed
+inferred live targets (SPEC §4.1, §4.9, and §9.5.1); Next.js mirrors the same observable
+component/DOM topology. The stateful counter is a direct sibling of every edited surface, never a
+child of a Kovo morph target (KV420). The dev adapter rejects any manifest whose edit files or
+selectors drift from those authenticated roots and requires `Count 1` to survive every edit.
+
 Useful flags: `--apps kovo,nextjs`, `--lane default|matched-l0|matched-l1`,
 `--warmups N`, `--port-base 4820` (so two runs on one machine cannot measure each
 other's server), `--lighthouse-runs N`, `--bfcache-iterations N`,

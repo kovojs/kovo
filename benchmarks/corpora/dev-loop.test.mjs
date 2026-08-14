@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -41,7 +42,7 @@ describe('single-entrant developer-loop adapter', () => {
     expect(evidence.manifest.sourceDigest).toMatch(/^sha256:[0-9a-f]{64}$/u);
     expect(evidence.manifestDigest).toMatch(/^sha256:[0-9a-f]{64}$/u);
 
-    const target = path.join(evidence.appRoot, 'src/data.ts');
+    const target = path.join(evidence.appRoot, 'src/data.tsx');
     const original = await readFile(target, 'utf8');
     await writeFile(target, `${original}// changed\n`);
     await expect(verifyCorpusSources(evidence)).rejects.toThrow(
@@ -52,6 +53,33 @@ describe('single-entrant developer-loop adapter', () => {
     await writeFile(path.join(evidence.appRoot, 'src/unmanifested.ts'), 'export {};\n');
     await expect(verifyCorpusSources(evidence)).rejects.toThrow(
       'Corpus contains unmanifested source files: src/unmanifested.ts',
+    );
+  });
+
+  it('rejects a re-digested manifest that weakens the sibling refresh-surface posture', async () => {
+    const root = await temporaryRoot();
+    const [manifestPath] = await generateCorpora({ outDir: root, sizes: [24] });
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+    manifest.workload.editStatePosture = 'document-refresh-may-replace-local-state/v1';
+    manifest.shapeDigest = createHash('sha256')
+      .update(JSON.stringify(manifest.workload))
+      .digest('hex');
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+    await expect(loadCorpusManifest(manifestPath)).rejects.toThrow(
+      'Corpus workload does not authenticate the edit/state posture',
+    );
+  });
+
+  it('rejects a dev edit root that drifts from its authenticated refresh surface', async () => {
+    const root = await temporaryRoot();
+    const [manifestPath] = await generateCorpora({ outDir: root, sizes: [24] });
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+    manifest.dev.edits.entry.evidence.selector = 'main';
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+    await expect(loadCorpusManifest(manifestPath)).rejects.toThrow(
+      'Corpus dev edit entry drifts from its refresh surface',
     );
   });
 
