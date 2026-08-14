@@ -187,7 +187,10 @@ the input manifest.
 If the build-persistence predicate returns `profile-required`, add the two current N=216 profile
 reports under the optional top-level `buildProfiles` object. Each descriptor uses the same
 `apiMetadata`/`archive`/`report` custody shape; the artifact must be named
-`kovo-perf-build-profile-n216` and contain `profile-unchanged.json` and `profile-edit.json`:
+`kovo-perf-build-profile-n216`. Its exact member census includes `profile-unchanged.json` and
+`profile-edit.json`, both derived `build-*.cpuprofile` views, both `process-cpu-*.txt` members, and
+every report-declared original `raw-*-<role>-pid-<pid>.cpuprofile`. Undeclared, missing,
+digest-mismatched, or duplicate members fail closed:
 
 ```json
 {

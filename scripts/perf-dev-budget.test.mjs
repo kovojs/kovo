@@ -365,6 +365,7 @@ function comparisonReport({ corpusSize, run, sourceCommit }) {
       GITHUB_SERVER_URL: 'https://github.com',
       GITHUB_SHA: sourceCommit,
       GITHUB_WORKFLOW_REF: `kovojs/kovo/.github/workflows/perf-realistic.yml@${sourceCommit}`,
+      GITHUB_WORKFLOW_SHA: sourceCommit,
     },
     startedAt: `2026-08-13T12:00:${String(run).padStart(2, '0')}.000Z`,
   });

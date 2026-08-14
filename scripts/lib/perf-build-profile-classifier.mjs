@@ -65,10 +65,7 @@ const ROLE_MARKERS = Object.freeze([
   roleFunction('app-static-trust', 'runPreEvaluationStaticTrustPreflight', BUILD_EXPORT_MODULES, 4),
   roleModule(
     'typescript',
-    [
-      '/node_modules/typescript/lib/_tsc.js',
-      '/node_modules/typescript/lib/tsc.js',
-    ],
+    ['/node_modules/typescript/lib/_tsc.js', '/node_modules/typescript/lib/tsc.js'],
     3,
   ),
   roleFunction('analyze', 'produceKovoBuildOneShotAnalysis', BUILD_EXPORT_MODULES, 2),
@@ -84,12 +81,10 @@ const ROLE_MARKERS = Object.freeze([
     ),
     1,
   ),
-  roleModule(
-    'bootstrap',
-    cliModules('bin.ts', 'bin.js').map((suffix) => suffix.replace('/commands/', '/')),
-    0,
-  ),
 ]);
+const BOOTSTRAP_MODULES = Object.freeze(
+  cliModules('bin.ts', 'bin.js').map((suffix) => suffix.replace('/commands/', '/')),
+);
 const ROLE_FALLBACK_CAUSES = Object.freeze({
   analyze: 'analyze',
   'app-static-trust': 'app-source-trust',
@@ -123,13 +118,13 @@ export function deriveBuildProfileTopFive(profileBytes) {
  * residual may be added only as the fixed ineligible `native-or-unprofiled` cause.
  */
 export function deriveBuildProfileSetAnalysis(
-  profileDocuments,
+  profileEntries,
   { nativeOrUnprofiledSamples = 0, requireConfigStaticTrust = false } = {},
 ) {
   if (
-    !Array.isArray(profileDocuments) ||
-    profileDocuments.length < 1 ||
-    profileDocuments.length > MAX_PROFILE_DOCUMENTS
+    !Array.isArray(profileEntries) ||
+    profileEntries.length < 1 ||
+    profileEntries.length > MAX_PROFILE_DOCUMENTS
   ) {
     throw new TypeError('build CPU profile set has an invalid process census');
   }
@@ -140,9 +135,16 @@ export function deriveBuildProfileSetAnalysis(
     throw new TypeError('config static-trust role posture must be boolean');
   }
 
-  const profiles = profileDocuments.map((bytes) => {
-    const inspected = inspectBuildProfile(bytes);
-    const role = profileRole(inspected.nodes);
+  const profiles = profileEntries.map((entry) => {
+    if (!ownRecord(entry) || !Buffer.isBuffer(entry.bytes) || typeof entry.role !== 'string') {
+      throw new TypeError('build CPU profile set requires authenticated bytes and process roles');
+    }
+    const role = entry.role;
+    if (!Object.hasOwn(ROLE_FALLBACK_CAUSES, role)) {
+      throw new TypeError('build CPU profile set contains an unsupported authenticated role');
+    }
+    const inspected = inspectBuildProfile(entry.bytes);
+    authenticateProfileRole(role, inspected.nodes);
     const fallbackCause = ROLE_FALLBACK_CAUSES[role];
     const causeCounts = new Map(inspected.causeCounts);
     if (inspected.unattributedSamples > 0) {
@@ -161,6 +163,7 @@ export function deriveBuildProfileSetAnalysis(
       nodes: inspected.nodes.length,
       role,
       samples: inspected.samples,
+      waitSamples: inspected.waitSamples,
       zeroTimeDeltas: inspected.zeroTimeDeltas,
     };
   });
@@ -174,7 +177,7 @@ export function deriveBuildProfileSetAnalysis(
     JSON.stringify(expectedRoles)
   ) {
     throw new TypeError(
-      `build CPU profile role census differs: observed ${roles.sort().join(', ')}, expected ${expectedRoles.join(', ')}`,
+      `build CPU profile role census differs: observed ${roles.sort((left, right) => left.localeCompare(right)).join(', ')}, expected ${expectedRoles.join(', ')}`,
     );
   }
 
@@ -192,6 +195,8 @@ export function deriveBuildProfileSetAnalysis(
   }
   const topFive = rankCauseCounts(causeCounts);
   return {
+    classifier: PERF_BUILD_PROFILE_CLASSIFIER,
+    complete: true,
     causeCensus: causeCountEntries(causeCounts).sort((left, right) =>
       left.cause.localeCompare(right.cause),
     ),
@@ -207,6 +212,7 @@ export function deriveBuildProfileSetAnalysis(
       nativeOrUnprofiled: nativeOrUnprofiledSamples,
       negativeTimeDeltas: profiles.reduce((sum, profile) => sum + profile.negativeTimeDeltas, 0),
       total: profiles.reduce((sum, profile) => sum + profile.samples, 0),
+      wait: profiles.reduce((sum, profile) => sum + profile.waitSamples, 0),
       zeroTimeDeltas: profiles.reduce((sum, profile) => sum + profile.zeroTimeDeltas, 0),
     },
     topFive,
@@ -273,12 +279,17 @@ function inspectBuildProfile(profileBytes) {
   let activeSamples = 0;
   let exactMarkerSamples = 0;
   let idleSamples = 0;
+  let waitSamples = 0;
   for (const sampleId of samples) {
     if (!Number.isSafeInteger(sampleId) || !nodesById.has(sampleId)) {
       throw new TypeError('raw build CPU profile sample references an unavailable node');
     }
     if (exactIdleSample(sampleId, nodesById)) {
       idleSamples += 1;
+      continue;
+    }
+    if (exactSynchronousWaitSample(sampleId, nodesById, parentById)) {
+      waitSamples += 1;
       continue;
     }
     activeSamples += 1;
@@ -295,6 +306,7 @@ function inspectBuildProfile(profileBytes) {
     nodes,
     samples: samples.length,
     unattributedSamples: causeCounts.get('unattributed') ?? 0,
+    waitSamples,
     zeroTimeDeltas: timeDeltas.filter((delta) => delta === 0).length,
   };
 }
@@ -328,7 +340,25 @@ function exactIdleSample(sampleId, nodesById) {
   return callFrame?.functionName === '(idle)' && callFrame.url === '';
 }
 
-function profileRole(nodes) {
+function exactSynchronousWaitSample(sampleId, nodesById, parentById) {
+  const visited = new Set();
+  let nodeId = sampleId;
+  while (nodeId !== undefined) {
+    if (visited.has(nodeId)) throw new TypeError('raw build CPU profile parent graph is cyclic');
+    visited.add(nodeId);
+    const callFrame = nodesById.get(nodeId)?.callFrame;
+    if (
+      callFrame?.functionName === 'spawnSync' &&
+      callFrame.url === 'node:internal/child_process'
+    ) {
+      return true;
+    }
+    nodeId = parentById.get(nodeId);
+  }
+  return false;
+}
+
+function exclusiveProfileRole(nodes) {
   const matches = ROLE_MARKERS.filter((marker) =>
     nodes.some(
       ({ callFrame }) =>
@@ -336,9 +366,7 @@ function profileRole(nodes) {
         marker.moduleSuffixes.some((suffix) => callFrame.url.endsWith(suffix)),
     ),
   );
-  if (matches.length === 0) {
-    throw new TypeError('raw build CPU profile has no exact reviewed process role marker');
-  }
+  if (matches.length === 0) return null;
   const priority = Math.max(...matches.map((marker) => marker.priority));
   const roles = new Set(
     matches.filter((marker) => marker.priority === priority).map((marker) => marker.role),
@@ -347,6 +375,24 @@ function profileRole(nodes) {
     throw new TypeError('raw build CPU profile has ambiguous reviewed process role markers');
   }
   return [...roles][0];
+}
+
+function authenticateProfileRole(role, nodes) {
+  const exclusiveRole = exclusiveProfileRole(nodes);
+  if (exclusiveRole !== null && exclusiveRole !== role) {
+    throw new TypeError('raw build CPU profile contradicts its authenticated process role');
+  }
+  if (exclusiveRole !== null) return;
+  if (role !== 'bootstrap' && role !== 'orchestrator') {
+    throw new TypeError('raw build CPU profile lacks its exclusive authenticated role marker');
+  }
+  if (
+    !nodes.some(({ callFrame }) =>
+      BOOTSTRAP_MODULES.some((suffix) => callFrame.url.endsWith(suffix)),
+    )
+  ) {
+    throw new TypeError('raw build CPU profile lacks the shared CLI bootstrap marker');
+  }
 }
 
 function sampleCause(sampleId, nodesById, parentById) {

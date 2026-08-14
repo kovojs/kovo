@@ -262,6 +262,7 @@ export function runBuildBenchmark(options, dependencies = {}) {
   assertCorpusMatchesManifest(corpusBefore, manifest, 'pre-run');
   const collectProvenance =
     dependencies.collectPerformanceProvenance ?? collectPerformanceProvenance;
+  const measureCommand = dependencies.measureProcessTreeCommand ?? measureProcessTreeCommand;
   const source = collectProvenance({
     lockFiles: [
       'pnpm-lock.yaml',
@@ -271,7 +272,7 @@ export function runBuildBenchmark(options, dependencies = {}) {
     repoRoot,
   });
   const run = () =>
-    measureProcessTreeCommand(argv, {
+    measureCommand(argv, {
       cwd: commandCwd,
       env: {
         ...commandEnv,

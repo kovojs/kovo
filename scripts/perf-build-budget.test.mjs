@@ -479,6 +479,78 @@ describe('ratified production-build performance budgets', () => {
     );
   });
 
+  it.each([
+    {
+      finding: 'profile declared artifact member census differs',
+      mutate: (report) => {
+        report.artifactMembers.push('undeclared-extra.bin');
+      },
+    },
+    {
+      finding: 'profile original-process artifact identity is malformed or duplicated',
+      mutate: (report) => {
+        report.profileArtifacts[0].waitSamples = report.profileArtifacts[0].samples;
+      },
+    },
+    {
+      finding: 'profile process PID/role/executable census is malformed',
+      mutate: (report) => {
+        report.capture.processCensus.processes[1].pid += 50_000;
+      },
+    },
+    {
+      finding: 'profile recursive CPU residual evidence is incomplete',
+      mutate: (report) => {
+        report.capture.processCpu.fixedProfilerIntervalMicros = 500;
+      },
+    },
+  ])('rejects malformed raw build profile evidence: $finding', ({ finding, mutate }) => {
+    const { n24Budget, n216Budget } = pairedBuildBudgets();
+    setWarmCell(n216Budget, 'unchanged', { residualRatio: 0.2, wallRatio: 6.2 });
+    const unchanged = buildProfileEntry(n216Budget, 'unchanged', ['typescript']);
+    mutate(unchanged.report);
+    resealProfileEntry(unchanged);
+    const assessment = assessBuildForegroundSession({
+      n24Budget,
+      n216Budget,
+      profileEntries: [unchanged, buildProfileEntry(n216Budget, 'edit', [])],
+    });
+    expect(assessment.verdict).toMatchObject({
+      outcome: 'unproven',
+      rationale: 'malformed-profile-evidence',
+    });
+    expect(assessment.verdict.findings.join('\n')).toContain(finding);
+  });
+
+  it('accepts mutable API response bytes only when all authority projections still match', () => {
+    const { n24Budget, n216Budget } = pairedBuildBudgets();
+    setWarmCell(n216Budget, 'unchanged', { residualRatio: 0.2, wallRatio: 6.2 });
+    const profileEntries = [
+      buildProfileEntry(n216Budget, 'unchanged', ['typescript']),
+      buildProfileEntry(n216Budget, 'edit', []),
+    ];
+    expect(profileEntries[0].custody.liveApiResponseDigest).not.toBe(
+      profileEntries[0].custody.apiResponseDigest,
+    );
+    expect(
+      assessBuildForegroundSession({ n24Budget, n216Budget, profileEntries }).verdict.outcome,
+    ).toBe('warranted');
+
+    profileEntries[0].custody.liveJobsApiAuthorityDigest = digest('changed-jobs-authority');
+    const assessment = assessBuildForegroundSession({
+      n24Budget,
+      n216Budget,
+      profileEntries,
+    });
+    expect(assessment.verdict).toMatchObject({
+      outcome: 'unproven',
+      rationale: 'malformed-profile-evidence',
+    });
+    expect(assessment.verdict.findings.join('\n')).toContain(
+      'profile artifact custody is incomplete or mismatched',
+    );
+  });
+
   it.each([49, 51])('rejects a %s-sample warm-mode census', (sampleCount) => {
     const baseline = ratifiedBuildBaseline(216);
     const budget = deriveBuildPerformanceBudget(baseline.baseline, {
@@ -633,6 +705,7 @@ function comparisonReport({ corpusSize, run, sourceCommit }) {
       GITHUB_SERVER_URL: 'https://github.com',
       GITHUB_SHA: sourceCommit,
       GITHUB_WORKFLOW_REF: `kovojs/kovo/.github/workflows/perf-realistic.yml@${sourceCommit}`,
+      GITHUB_WORKFLOW_SHA: sourceCommit,
     },
     startedAt: `2026-08-13T12:00:${String(run).padStart(2, '0')}.000Z`,
   });
@@ -902,6 +975,13 @@ function resealDocument(document) {
   document.digest = digest(canonicalJson(facts));
 }
 
+function resealProfileEntry(entry) {
+  resealDocument(entry.report);
+  entry.rawText = JSON.stringify(entry.report);
+  entry.contentDigest = digest(entry.rawText);
+  entry.custody.reportContentDigest = entry.contentDigest;
+}
+
 function buildProfileEntry(budget, mode, eligibleCauses) {
   const runId = mode === 'unchanged' ? 990_001 : 990_002;
   const artifactId = mode === 'unchanged' ? 880_001 : 880_002;
@@ -920,6 +1000,7 @@ function buildProfileEntry(budget, mode, eligibleCauses) {
       GITHUB_SERVER_URL: 'https://github.com',
       GITHUB_SHA: source.commit,
       GITHUB_WORKFLOW_REF: `kovojs/kovo/.github/workflows/perf-realistic.yml@${source.commit}`,
+      GITHUB_WORKFLOW_SHA: source.commit,
     },
     startedAt: `2026-08-14T12:00:0${mode === 'unchanged' ? '1' : '2'}.000Z`,
   });
@@ -928,7 +1009,180 @@ function buildProfileEntry(budget, mode, eligibleCauses) {
     ...eligibleCauses,
     ...defaultCauses.filter((cause) => !eligibleCauses.includes(cause)),
   ].slice(0, 5);
+  const topFive = causes.map((cause, index) => ({
+    cause,
+    rank: index + 1,
+    selfSamples: 100 - index,
+    sessionEligibility: ['config-trust', 'typescript', 'stylesheet'].includes(cause)
+      ? 'session-eligible'
+      : 'one-shot-or-ineligible',
+  }));
+  const roles = [
+    'analyze',
+    'app-static-trust',
+    'bootstrap',
+    'client',
+    'config-static-trust',
+    'final',
+    'orchestrator',
+    'server',
+    'typescript',
+  ];
+  const profileArtifacts = roles.map((role, index) => {
+    const pid = 1_000 + index;
+    const waitSamples = role === 'bootstrap' ? 5 : 0;
+    return {
+      activeSamples: 10,
+      bytes: 1_000 + index,
+      idleSamples: 1,
+      member: `raw-${mode}-${role}-pid-${String(pid)}.cpuprofile`,
+      negativeTimeDeltas: 0,
+      nodes: 20 + index,
+      pid,
+      role,
+      samples: 11 + waitSamples,
+      sha256: digest(`${mode}-${role}-profile`),
+      waitSamples,
+    };
+  });
+  const profileCensus = profileArtifacts.map((profile) => ({
+    activeSamples: profile.activeSamples,
+    causeCensus: [],
+    exactMarkerSamples: 1,
+    idleSamples: profile.idleSamples,
+    negativeTimeDeltas: profile.negativeTimeDeltas,
+    nodes: profile.nodes,
+    role: profile.role,
+    samples: profile.samples,
+    waitSamples: profile.waitSamples,
+    zeroTimeDeltas: 0,
+  }));
+  const processProfiles = profileArtifacts.map((profile) => ({ ...profile }));
+  const executable = (name) => ({
+    bytes: 1_024,
+    path: `/usr/bin/${name}`,
+    realPath: `/usr/bin/${name}`,
+    sha256: digest(`executable-${name}`),
+  });
+  const nodeExecutable = executable('node');
+  const processCensus = {
+    classifier: 'kovo-build-exec-argv-role/v1',
+    complete: true,
+    forkOnlyProcesses: 0,
+    processes: [
+      {
+        entry: null,
+        executable: executable('time'),
+        parentPid: null,
+        pid: 900,
+        role: 'collector-time',
+        roleEvidence: 'gnu-time-exec/v1',
+      },
+      ...profileArtifacts.map((profile) => ({
+        entry: executable(`entry-${profile.role}`),
+        executable: nodeExecutable,
+        parentPid: 900,
+        pid: profile.pid,
+        role: profile.role,
+        roleEvidence: `${profile.role}-entry-exec/v1`,
+      })),
+    ],
+    schema: 'kovo-build-process-census/v1',
+    tools: {
+      env: executable('env'),
+      node: nodeExecutable,
+      strace: executable('strace'),
+      time: executable('time'),
+    },
+  };
+  const processCpu = {
+    cause: {
+      cause: 'native-or-unprofiled',
+      equivalentSamples: 90,
+      sessionEligibility: 'one-shot-or-ineligible',
+    },
+    collector: { recursive: true, tool: '/usr/bin/time' },
+    complete: true,
+    fixedProfilerIntervalMicros: 10_000,
+    idleV8Samples: 9,
+    profiledActiveMicros: 900_000,
+    profiledActiveV8Samples: 90,
+    residualMicros: 1_100_000,
+    schema: 'kovo-build-process-tree-cpu/v1',
+    systemMicros: 100_000,
+    totalMicros: 2_000_000,
+    uncertainty: {
+      policy: 'gnu-time-resolution-plus-two-profiler-intervals-per-process/v1',
+      systemResolutionMicros: 10_000,
+      totalMicros: 200_000,
+      userResolutionMicros: 10_000,
+    },
+    userMicros: 1_900_000,
+    waitV8Samples: 5,
+  };
+  const processCpuArtifact = {
+    bytes: 91,
+    fileName: `process-cpu-${mode}.txt`,
+    sha256: digest(`process-cpu-${mode}`),
+  };
+  const profileArtifact = {
+    bytes: 12_345,
+    fileName: `build-${mode}.cpuprofile`,
+    sha256: digest(`raw-profile-${mode}`),
+  };
+  const artifactMembers = [
+    profileArtifact.fileName,
+    processCpuArtifact.fileName,
+    `profile-${mode}.json`,
+    ...profileArtifacts.map(({ member }) => member),
+  ].sort((left, right) => left.localeCompare(right));
   const facts = {
+    artifactMembers,
+    buildInvocation: {
+      adapter: 'kovo-build-benchmark/v1',
+      argv: ['../../../node_modules/.bin/kovo', 'build', './src/app.tsx'],
+      cwd: '.',
+      env: {},
+      manifest: {
+        bytes: 1_000,
+        path: 'benchmarks/kovo/.corpora/kovo/n216/manifest.json',
+        sha256: digest('manifest'),
+        shapeDigest: digest('shape'),
+        sourceDigest: digest('source'),
+      },
+      mode,
+      profiledIterations: 1,
+      warmups: 3,
+    },
+    capture: {
+      complete: true,
+      excludedNonKovoProfiles: 0,
+      includedProfiles: 9,
+      inputProfiles: 9,
+      mergedNodes: 200,
+      mergedSamples: 104,
+      merger: 'lossless-node-id-remap-with-synthetic-root/v1',
+      processCensus,
+      processCpu,
+      processProfiles,
+      profileSetAnalysis: {
+        causeCensus: [],
+        classifier: PERF_BUILD_SESSION_PROFILE_CLASSIFIER,
+        complete: true,
+        profileCensus,
+        sampleCensus: {
+          active: 90,
+          idle: 9,
+          nativeOrUnprofiled: 90,
+          negativeTimeDeltas: 0,
+          total: 104,
+          wait: 5,
+          zeroTimeDeltas: 0,
+        },
+        topFive,
+      },
+      schema: 'kovo-build-cpu-profile-capture/v1',
+    },
     classifier: PERF_BUILD_SESSION_PROFILE_CLASSIFIER,
     diagnosticOnly: { profilerPerturbsDurations: true, publishTimingClaims: false },
     execution,
@@ -937,13 +1191,13 @@ function buildProfileEntry(budget, mode, eligibleCauses) {
       complete: true,
       errors: [],
       profileFlushedBeforeExit: true,
+      processCensusComplete: true,
+      processCpuComplete: true,
       sourceStable: true,
     },
-    profileArtifact: {
-      bytes: 12_345,
-      fileName: `build-${mode}.cpuprofile`,
-      sha256: digest(`raw-profile-${mode}`),
-    },
+    processCpuArtifact,
+    profileArtifact,
+    profileArtifacts,
     schema: PERF_BUILD_SESSION_PROFILE_SCHEMA,
     source,
     sourceAfter: structuredClone(source),
@@ -952,36 +1206,46 @@ function buildProfileEntry(budget, mode, eligibleCauses) {
       corpusSize: 216,
       mode,
     },
-    topFive: causes.map((cause, index) => ({
-      cause,
-      rank: index + 1,
-      selfSamples: 100 - index,
-      sessionEligibility: ['config-trust', 'typescript', 'stylesheet'].includes(cause)
-        ? 'session-eligible'
-        : 'one-shot-or-ineligible',
-    })),
+    topFive,
     verdict: { reasons: [], status: 'diagnostic' },
+    workloadIdentity: structuredClone(budget.subject.workloadIdentity),
   };
   const report = { ...facts, digest: digest(canonicalJson(facts)) };
   const rawText = JSON.stringify(report);
   const contentDigest = digest(rawText);
   const runUrl = execution.github.runUrl;
   const location = `${runUrl}/artifacts/${String(artifactId)}`;
-  const apiResponseDigest = digest(`api-${mode}`);
   const apiUrl = `https://api.github.com/repos/kovojs/kovo/actions/artifacts/${String(artifactId)}`;
+  const apiAuthorityDigest = digest(`api-authority-${mode}`);
+  const jobsApiAuthorityDigest = digest(`jobs-authority-${mode}`);
+  const runApiAuthorityDigest = digest(`run-authority-${mode}`);
+  const archiveDigest = digest(`archive-${mode}`);
   return {
     contentDigest,
     custody: {
-      apiResponseDigest,
+      apiAuthorityDigest,
+      apiResponseDigest: digest(`saved-api-${mode}`),
       apiUrl,
-      archiveDigest: digest(`archive-${mode}`),
+      archiveByteLength: 12_345,
+      archiveDigest,
       archiveDownloadUrl: `${apiUrl}/zip`,
       artifactId,
+      artifactDigest: archiveDigest,
       artifactName: 'kovo-perf-build-profile-n216',
-      liveApiResponseDigest: apiResponseDigest,
+      artifactSizeInBytes: 12_345,
+      jobsApiAuthorityDigest,
+      jobsApiResponseDigest: digest(`saved-jobs-api-${mode}`),
+      liveApiAuthorityDigest: apiAuthorityDigest,
+      liveApiResponseDigest: digest(`live-api-${mode}`),
+      liveJobsApiAuthorityDigest: jobsApiAuthorityDigest,
+      liveJobsApiResponseDigest: digest(`live-jobs-api-${mode}`),
+      liveRunApiAuthorityDigest: runApiAuthorityDigest,
+      liveRunApiResponseDigest: digest(`live-run-api-${mode}`),
       location,
       reportContentDigest: contentDigest,
       reportMember: `profile-${mode}.json`,
+      runApiAuthorityDigest,
+      runApiResponseDigest: digest(`saved-run-api-${mode}`),
       runUrl,
       workflowRunId: runId,
     },

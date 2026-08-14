@@ -122,9 +122,9 @@ describe('build CPU profile classifier', () => {
 
   it('aggregates the exact process-role census, excludes idle, and ranks native residuals', () => {
     const profiles = processRoleProfiles();
-    const typescript = JSON.parse(profiles[3].toString('utf8'));
+    const typescript = JSON.parse(profiles[3].bytes.toString('utf8'));
     typescript.timeDeltas[0] = -57;
-    profiles[3] = Buffer.from(JSON.stringify(typescript));
+    profiles[3] = { ...profiles[3], bytes: Buffer.from(JSON.stringify(typescript)) };
 
     const result = deriveBuildProfileSetAnalysis(profiles, {
       nativeOrUnprofiledSamples: 20,
@@ -146,6 +146,7 @@ describe('build CPU profile classifier', () => {
       nativeOrUnprofiled: 20,
       negativeTimeDeltas: 1,
       total: 41,
+      wait: 0,
     });
     expect(result.topFive[0]).toEqual({
       cause: 'native-or-unprofiled',
@@ -160,6 +161,52 @@ describe('build CPU profile classifier', () => {
     });
   });
 
+  it('retains exact synchronous bootstrap waits without inventing CPU work', () => {
+    const profiles = processRoleProfiles();
+    profiles[0] = {
+      bytes: Buffer.from(
+        JSON.stringify(
+          cpuProfile([
+            marker('role', '', 2, 'file:///workspace/packages/cli/src/bin.ts'),
+            {
+              count: 100,
+              frames: [
+                frame('', 'file:///workspace/packages/cli/src/bin.ts'),
+                frame('spawnSync', 'node:internal/child_process'),
+              ],
+            },
+            marker('idle', '(idle)', 1, ''),
+          ]),
+        ),
+      ),
+      role: 'bootstrap',
+    };
+
+    const result = deriveBuildProfileSetAnalysis(profiles);
+    expect(result.profileCensus[0]).toMatchObject({
+      activeSamples: 2,
+      idleSamples: 1,
+      waitSamples: 100,
+    });
+    expect(result.sampleCensus).toMatchObject({ active: 31, idle: 8, total: 139, wait: 100 });
+    expect(result.sampleCensus.active + result.sampleCensus.idle + result.sampleCensus.wait).toBe(
+      result.sampleCensus.total,
+    );
+    expect(result.causeCensus).toContainEqual({
+      cause: 'cli-startup-tail',
+      selfSamples: 2,
+      sessionEligibility: 'one-shot-or-ineligible',
+    });
+
+    profiles[0] = authenticatedRoleProfile(
+      'bootstrap',
+      'spawnSync',
+      'file:///workspace/packages/cli/src/bin.ts',
+    );
+    const nearMiss = deriveBuildProfileSetAnalysis(profiles);
+    expect(nearMiss.profileCensus[0]).toMatchObject({ activeSamples: 4, waitSamples: 0 });
+  });
+
   it('fails closed when a required process role is absent, duplicated, or unexpectedly added', () => {
     const profiles = processRoleProfiles();
     expect(() => deriveBuildProfileSetAnalysis(profiles.slice(1))).toThrow('role census differs');
@@ -169,26 +216,54 @@ describe('build CPU profile classifier', () => {
     expect(() =>
       deriveBuildProfileSetAnalysis([
         ...profiles,
-        roleProfile('runPreEvaluationBuildConfigTrustPreflight'),
+        authenticatedRoleProfile(
+          'config-static-trust',
+          'runPreEvaluationBuildConfigTrustPreflight',
+        ),
       ]),
     ).toThrow('role census differs');
     expect(() =>
       deriveBuildProfileSetAnalysis(
-        [...profiles, roleProfile('runPreEvaluationBuildConfigTrustPreflight')],
+        [
+          ...profiles,
+          authenticatedRoleProfile(
+            'config-static-trust',
+            'runPreEvaluationBuildConfigTrustPreflight',
+          ),
+        ],
         { requireConfigStaticTrust: true },
       ),
     ).not.toThrow();
+  });
+
+  it('trusts the exec census for an idle orchestrator but rejects exclusive role contradictions', () => {
+    const profiles = processRoleProfiles();
+    profiles[1] = authenticatedRoleProfile(
+      'orchestrator',
+      '',
+      'file:///workspace/packages/cli/src/bin.ts',
+    );
+    expect(() => deriveBuildProfileSetAnalysis(profiles)).not.toThrow();
+
+    profiles[1] = authenticatedRoleProfile('orchestrator', 'finishKovoBuildOneShot');
+    expect(() => deriveBuildProfileSetAnalysis(profiles)).toThrow(
+      'contradicts its authenticated process role',
+    );
+    expect(() => deriveBuildProfileSetAnalysis(profiles.map(({ bytes }) => bytes))).toThrow(
+      'requires authenticated bytes and process roles',
+    );
   });
 });
 
 function processRoleProfiles() {
   return [
-    roleProfile('', 'file:///workspace/packages/cli/src/bin.ts'),
-    roleProfile(
+    authenticatedRoleProfile('bootstrap', '', 'file:///workspace/packages/cli/src/bin.ts'),
+    authenticatedRoleProfile(
+      'orchestrator',
       'runKovoIsolatedOneShotInvocationAsync',
       'file:///workspace/packages/cli/src/commands/build-one-shot-orchestrator.ts',
     ),
-    roleProfile('produceKovoBuildOneShotAnalysis', buildExportUrl(), [
+    authenticatedRoleProfile('analyze', 'produceKovoBuildOneShotAnalysis', buildExportUrl(), [
       marker(
         'loaded-typescript-library',
         'createProgram',
@@ -196,12 +271,20 @@ function processRoleProfiles() {
         'file:///workspace/node_modules/typescript/lib/typescript.js',
       ),
     ]),
-    roleProfile('executeCommandLine', 'file:///workspace/node_modules/typescript/lib/_tsc.js'),
-    roleProfile('runPreEvaluationStaticTrustPreflight'),
-    roleProfile('produceKovoBuildOneShotClientPhase'),
-    roleProfile('produceKovoBuildOneShotServerPhase'),
-    roleProfile('finishKovoBuildOneShot'),
+    authenticatedRoleProfile(
+      'typescript',
+      'executeCommandLine',
+      'file:///workspace/node_modules/typescript/lib/_tsc.js',
+    ),
+    authenticatedRoleProfile('app-static-trust', 'runPreEvaluationStaticTrustPreflight'),
+    authenticatedRoleProfile('client', 'produceKovoBuildOneShotClientPhase'),
+    authenticatedRoleProfile('server', 'produceKovoBuildOneShotServerPhase'),
+    authenticatedRoleProfile('final', 'finishKovoBuildOneShot'),
   ];
+}
+
+function authenticatedRoleProfile(role, functionName, url = buildExportUrl(), extraGroups = []) {
+  return { bytes: roleProfile(functionName, url, extraGroups), role };
 }
 
 function roleProfile(functionName, url = buildExportUrl(), extraGroups = []) {

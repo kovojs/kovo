@@ -44,6 +44,7 @@ on:
           - cli-startup
           - runtime-diagnostics
           - dev-profile
+          - build-profile
       check_watch_baseline_sha:
         description: Exact clean sealed baseline commit; required when decisions run
         required: false
@@ -825,6 +826,52 @@ jobs:
           if-no-files-found: warn
           name: kovo-perf-dev-profile-n${{ matrix.corpus }}
           path: ${{ runner.temp }}/kovo-perf/dev-profile-n${{ matrix.corpus }}
+          retention-days: 30
+
+  build-profile:
+    name: N=216 build CPU profiles
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' &&
+      (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') &&
+      (inputs.decision_focus == 'all' || inputs.decision_focus == 'build-profile')) ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      (github.event.label.name == 'perf-measure-decisions' ||
+      github.event.label.name == 'perf-measure-build-profile')) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+          ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
+      - name: Authenticate checked-out performance source
+        run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
+      - uses: ./.github/actions/kovo-setup
+      - name: Provision the process-tree tracer
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends strace
+          test "$(command -v strace)" = /usr/bin/strace
+      - name: Bind the report to the runner image
+        run: |
+          image_version_digest="$(printf '%s' "${ImageVersion:-unknown}" | sha256sum | cut -d' ' -f1)"
+          printf 'KOVO_PERF_RUNNER_IMAGE=github-actions/ubuntu-24.04 ImageOS=%s ImageVersionDigest=sha256:%s\n' "${ImageOS:-unknown}" "$image_version_digest" >> "$GITHUB_ENV"
+      - name: Generate the authenticated N=216 Kovo corpus
+        run: vp exec node benchmarks/corpora/generate.mjs --sizes 216
+      - name: Collect diagnostic-only warm-build process profiles
+        # SPEC §5.2 rule 9: this runs the ordinary one-shot build for every warmup and profiled
+        # sample. Profiled durations are intentionally absent from the report and decision policy.
+        run: >-
+          vp exec node scripts/perf-build-session-profile.mjs
+          --corpus "$GITHUB_WORKSPACE/benchmarks/kovo/.corpora/kovo/n216/manifest.json"
+          --out-dir "$RUNNER_TEMP/kovo-perf/build-profile-n216"
+          --require-provider github-actions
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          if-no-files-found: warn
+          name: kovo-perf-build-profile-n216
+          path: ${{ runner.temp }}/kovo-perf/build-profile-n216
           retention-days: 30
 
   loader-runtime-memo-decision:

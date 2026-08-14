@@ -386,6 +386,7 @@ function githubEntryFixture(index, durationMs, runId) {
     serverUrl: 'https://github.com',
     sha: 'a'.repeat(40),
     workflowRef: `kovojs/kovo/.github/workflows/perf-realistic.yml@${'a'.repeat(40)}`,
+    workflowSha: 'a'.repeat(40),
   };
   const facts = {
     complete: true,
@@ -442,6 +443,7 @@ function checkEntryFixture(index) {
     serverUrl: 'https://github.com',
     sha: 'c'.repeat(40),
     workflowRef: `kovojs/kovo/.github/workflows/perf-realistic.yml@${'c'.repeat(40)}`,
+    workflowSha: 'c'.repeat(40),
   };
   const executionFacts = {
     complete: true,

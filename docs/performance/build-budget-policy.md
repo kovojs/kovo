@@ -77,3 +77,25 @@ before passing those exact inputs to the same assessor. A profile must match the
 exact source, locks, host, and workload, retain the raw profile digest, and classify five ranked
 causes with `kovo-build-session-eligibility/phase-v1`. Missing, stale, partial, misclassified, or
 malformed profiles remain unproven.
+
+The diagnostic producer runs only in the exact `build-profile` GitHub Actions job, selected by a
+manual `decisions`/`build-profile` dispatch or the `perf-measure-decisions` /
+`perf-measure-build-profile` PR label. It performs three ordinary warm builds, then one profiled
+build for each of `unchanged` and `edit`:
+
+```sh
+vp exec node scripts/perf-build-session-profile.mjs \
+  --corpus benchmarks/kovo/.corpora/kovo/n216/manifest.json \
+  --out-dir "$RUNNER_TEMP/kovo-perf/build-profile-n216" \
+  --require-provider github-actions
+```
+
+`strace` authenticates the complete exec/PID role census and GNU time supplies recursive process
+CPU. The secret-bearing raw trace exists only in a mode-0700 temporary directory, is bounded,
+reduced to non-secret executable/entry role facts, and deleted before any report or artifact write.
+Every original per-PID V8 profile and the numeric GNU-time line is retained with its byte count and
+SHA-256 digest; a merged `.cpuprofile` is only a convenience view. Exact `(idle)` samples and exact
+Node `spawnSync` child-wait samples are retained in separate censuses and excluded from CPU-work
+ranking. The fixed 10 ms interval and GNU-time decimal resolution conservatively bound any
+`native-or-unprofiled` residual, which is always ineligible for session persistence. Profiled wall
+durations are never a performance claim.

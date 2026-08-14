@@ -193,6 +193,7 @@ function entryFixture(index) {
     serverUrl: 'https://github.com',
     sha: 'e'.repeat(40),
     workflowRef: `kovojs/kovo/.github/workflows/perf-realistic.yml@${'e'.repeat(40)}`,
+    workflowSha: 'e'.repeat(40),
   };
   const executionFacts = {
     complete: true,

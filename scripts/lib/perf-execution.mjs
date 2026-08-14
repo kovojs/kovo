@@ -67,6 +67,9 @@ export function executionIdentityFindings(execution, { requireProvider } = {}) {
     if (!commitPattern.test(github?.sha ?? '')) {
       findings.push('GitHub source SHA is malformed');
     }
+    if (!commitPattern.test(github?.workflowSha ?? '')) {
+      findings.push('GitHub workflow SHA is malformed');
+    }
   } else if (
     execution.provider !== 'local' ||
     !/^[0-9a-f]{32}$/u.test(execution.local?.nonce ?? '') ||
@@ -87,6 +90,7 @@ function githubExecutionFacts(env) {
     'GITHUB_SERVER_URL',
     'GITHUB_SHA',
     'GITHUB_WORKFLOW_REF',
+    'GITHUB_WORKFLOW_SHA',
   ];
   if (![...names, 'KOVO_PERF_SOURCE_SHA'].some((name) => nonEmptyString(env[name]))) {
     return null;
@@ -96,7 +100,8 @@ function githubExecutionFacts(env) {
   const complete =
     names.every((name) => nonEmptyString(env[name])) &&
     commitPattern.test(eventSha ?? '') &&
-    commitPattern.test(sourceSha ?? '');
+    commitPattern.test(sourceSha ?? '') &&
+    commitPattern.test(env.GITHUB_WORKFLOW_SHA ?? '');
   const facts = {
     eventSha,
     job: env.GITHUB_JOB ?? null,
@@ -106,6 +111,7 @@ function githubExecutionFacts(env) {
     serverUrl: env.GITHUB_SERVER_URL ?? null,
     sha: sourceSha,
     workflowRef: env.GITHUB_WORKFLOW_REF ?? null,
+    workflowSha: env.GITHUB_WORKFLOW_SHA ?? null,
   };
   facts.runUrl = complete
     ? `${facts.serverUrl}/${facts.repository}/actions/runs/${facts.runId}`

@@ -31,6 +31,7 @@ const decisionFocusByJob = new Map([
   ['cli-startup-decision', 'cli-startup'],
   ['runtime-diagnostics', 'runtime-diagnostics'],
   ['dev-edit-profile', 'dev-profile'],
+  ['build-profile', 'build-profile'],
   ['loader-runtime-memo-decision', 'loader'],
 ]);
 const measurementJobs = [
@@ -172,6 +173,21 @@ describe('realistic performance CI policy', () => {
     ]) {
       expect(jobSource('server-matrix')).toContain(token);
     }
+  });
+
+  it('runs the N=216 build profile only as a diagnostic decision with complete raw custody', () => {
+    const source = decisionJob('build-profile');
+    expect(source).toContain('name: N=216 build CPU profiles');
+    expect(source).toContain('sudo apt-get install --yes --no-install-recommends strace');
+    expect(source).toContain('test "$(command -v strace)" = /usr/bin/strace');
+    expect(source).toContain('benchmarks/corpora/generate.mjs --sizes 216');
+    expect(source).toContain('scripts/perf-build-session-profile.mjs');
+    expect(source).toContain('--require-provider github-actions');
+    expect(source).toContain('name: kovo-perf-build-profile-n216');
+    expect(source).toContain('path: ${{ runner.temp }}/kovo-perf/build-profile-n216');
+    expect(source).toContain('Profiled durations are intentionally absent');
+    expect(source).not.toContain('--duration');
+    expectRawArtifact(source, 'kovo-perf-build-profile-n216');
   });
 
   it('keeps all seven publication artifact families and their ratifier report paths', () => {

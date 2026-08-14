@@ -283,6 +283,7 @@ function reportEntry(index, subject) {
     serverUrl: 'https://github.com',
     sha: 'd'.repeat(40),
     workflowRef: `kovojs/kovo/.github/workflows/perf-realistic.yml@${'d'.repeat(40)}`,
+    workflowSha: 'd'.repeat(40),
   };
   const executionFacts = {
     complete: true,

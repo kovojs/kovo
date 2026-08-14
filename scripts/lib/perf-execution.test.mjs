@@ -13,6 +13,7 @@ describe('performance execution identity', () => {
         GITHUB_SERVER_URL: 'https://github.example',
         GITHUB_SHA: 'a'.repeat(40),
         GITHUB_WORKFLOW_REF: 'example/kovo/.github/workflows/perf-realistic.yml@refs/heads/main',
+        GITHUB_WORKFLOW_SHA: 'c'.repeat(40),
         KOVO_PERF_SOURCE_SHA: 'b'.repeat(40),
       },
       startedAt: '2026-08-13T12:00:00.000Z',
@@ -25,6 +26,7 @@ describe('performance execution identity', () => {
         job: 'browser-matrix',
         runUrl: 'https://github.example/example/kovo/actions/runs/1234',
         sha: 'b'.repeat(40),
+        workflowSha: 'c'.repeat(40),
       },
       provider: 'github-actions',
       schema: 'kovo-performance-execution/v1',
@@ -63,6 +65,17 @@ describe('performance execution identity', () => {
     });
     expect(executionIdentityFindings(malformedEvent)).toEqual(
       expect.arrayContaining(['execution identity is incomplete', 'GitHub event SHA is malformed']),
+    );
+
+    const malformedWorkflow = performanceExecutionIdentity({
+      env: { ...githubEnvironment(), GITHUB_WORKFLOW_SHA: 'short' },
+      startedAt: '2026-08-13T12:00:00.000Z',
+    });
+    expect(executionIdentityFindings(malformedWorkflow)).toEqual(
+      expect.arrayContaining([
+        'execution identity is incomplete',
+        'GitHub workflow SHA is malformed',
+      ]),
     );
 
     const complete = performanceExecutionIdentity({
@@ -116,5 +129,6 @@ function githubEnvironment() {
     GITHUB_SERVER_URL: 'https://github.example',
     GITHUB_SHA: 'a'.repeat(40),
     GITHUB_WORKFLOW_REF: 'example/kovo/.github/workflows/perf-realistic.yml@refs/heads/main',
+    GITHUB_WORKFLOW_SHA: 'c'.repeat(40),
   };
 }

@@ -49,8 +49,24 @@ const BUILD_PROFILE_CAUSES = Object.freeze([
   ...KOVO_BUILD_WORKER_PHASES,
   'cli-startup-tail',
   'worker-launch-transport',
+  'native-or-unprofiled',
   'unattributed',
 ]);
+const BUILD_PROFILE_INTERVAL_US = 10_000;
+const BUILD_PROFILE_PROCESS_ROLES = Object.freeze([
+  'bootstrap',
+  'orchestrator',
+  'analyze',
+  'typescript',
+  'config-static-trust',
+  'app-static-trust',
+  'client',
+  'server',
+  'final',
+]);
+const BUILD_PROFILE_PROCESS_CENSUS_SCHEMA = 'kovo-build-process-census/v1';
+const BUILD_PROFILE_PROCESS_CPU_SCHEMA = 'kovo-build-process-tree-cpu/v1';
+const BUILD_PROFILE_PROCESS_ROLE_CLASSIFIER = 'kovo-build-exec-argv-role/v1';
 const PERSISTENCE_UPPER_WALL_MINIMUM_RATIO = 0.1;
 
 /**
@@ -189,7 +205,7 @@ export function evaluateBuildPerformanceBudget(budget, candidate) {
     }
   }
 
-  const uniqueReasons = [...new Set(reasons)].sort();
+  const uniqueReasons = [...new Set(reasons)].sort((left, right) => left.localeCompare(right));
   const failures = checks.filter(({ status }) => status === 'fail').map(({ id }) => id);
   return {
     budget: budget?.digest ?? null,
@@ -481,9 +497,7 @@ export function buildPersistenceAssessmentFindings(assessment, inputs) {
         profile?.artifactName !== 'kovo-perf-build-profile-n216' ||
         profile?.reportMember !== `profile-${String(profile?.mode)}.json` ||
         profile?.reportContentDigest !== profile?.contentDigest ||
-        !DIGEST_PATTERN.test(profile?.archiveDigest ?? '') ||
-        !DIGEST_PATTERN.test(profile?.apiResponseDigest ?? '') ||
-        profile?.liveApiResponseDigest !== profile?.apiResponseDigest ||
+        !validProfileArtifactCustodyEvidence(profile) ||
         !Number.isSafeInteger(profile?.artifactId) ||
         profile.artifactId < 1 ||
         !Number.isSafeInteger(profile?.workflowRunId) ||
@@ -587,7 +601,7 @@ export function buildPersistenceAssessmentFindings(assessment, inputs) {
       findings.push('assessment is not reproduced from its budgets and profile evidence');
     }
   }
-  return [...new Set(findings)].sort();
+  return [...new Set(findings)].sort((left, right) => left.localeCompare(right));
 }
 
 function deriveBuildPersistenceEvidence({ baseline, baselineEntries, corpusSize }) {
@@ -787,9 +801,7 @@ function buildSessionProfileFindings(entry, budget) {
     custody?.archiveDownloadUrl !== `${custodyApiUrl}/zip` ||
     custody?.runUrl !== custodyRunUrl ||
     custody?.location !== `${custodyRunUrl}/artifacts/${String(custody?.artifactId)}` ||
-    !DIGEST_PATTERN.test(custody?.archiveDigest ?? '') ||
-    !DIGEST_PATTERN.test(custody?.apiResponseDigest ?? '') ||
-    custody?.liveApiResponseDigest !== custody?.apiResponseDigest
+    !validProfileArtifactCustodyEvidence(custody)
   ) {
     findings.push('profile artifact custody is incomplete or mismatched');
   }
@@ -828,6 +840,8 @@ function buildSessionProfileFindings(entry, budget) {
     report.diagnosticOnly?.publishTimingClaims !== false ||
     report.integrity?.complete !== true ||
     report.integrity?.profileFlushedBeforeExit !== true ||
+    report.integrity?.processCensusComplete !== true ||
+    report.integrity?.processCpuComplete !== true ||
     report.integrity?.sourceStable !== true ||
     canonicalJson(report.integrity?.errors) !== canonicalJson([]) ||
     report.verdict?.status !== 'diagnostic' ||
@@ -843,6 +857,7 @@ function buildSessionProfileFindings(entry, budget) {
   ) {
     findings.push('raw CPU profile artifact identity is unavailable');
   }
+  findings.push(...buildProfileProcessEvidenceFindings(report));
   if (!Array.isArray(report.topFive) || report.topFive.length !== 5) {
     findings.push('profile top-five cause census is incomplete');
   } else {
@@ -866,6 +881,286 @@ function buildSessionProfileFindings(entry, budget) {
     }
   }
   return [...new Set(findings)];
+}
+
+function buildProfileProcessEvidenceFindings(report) {
+  const findings = [];
+  const mode = report?.subject?.mode;
+  const artifacts = report?.profileArtifacts;
+  const capture = report?.capture;
+  const processCensus = capture?.processCensus;
+  const processCpu = capture?.processCpu;
+  const analysis = capture?.profileSetAnalysis;
+  if (
+    report?.buildInvocation?.adapter !== BUILD_BENCHMARK_SCHEMA ||
+    report.buildInvocation.mode !== mode ||
+    report.buildInvocation.profiledIterations !== 1 ||
+    report.buildInvocation.warmups !== 3 ||
+    !Array.isArray(report.buildInvocation.argv) ||
+    report.buildInvocation.argv.length < 1 ||
+    !nonEmptyString(report.buildInvocation.cwd) ||
+    !ownRecord(report.buildInvocation.env) ||
+    !DIGEST_PATTERN.test(report.buildInvocation.manifest?.sha256 ?? '') ||
+    !DIGEST_PATTERN.test(report.buildInvocation.manifest?.shapeDigest ?? '') ||
+    !DIGEST_PATTERN.test(report.buildInvocation.manifest?.sourceDigest ?? '')
+  ) {
+    findings.push('profile build invocation is incomplete');
+  }
+  if (
+    !Array.isArray(artifacts) ||
+    artifacts.length !== BUILD_PROFILE_PROCESS_ROLES.length ||
+    !ownRecord(capture) ||
+    capture.complete !== true ||
+    capture.inputProfiles !== artifacts?.length ||
+    capture.includedProfiles !== artifacts?.length ||
+    capture.excludedNonKovoProfiles !== 0 ||
+    capture.merger !== 'lossless-node-id-remap-with-synthetic-root/v1'
+  ) {
+    findings.push('profile original-process artifact census is incomplete');
+    return findings;
+  }
+  const artifactRoles = [];
+  const artifactPids = new Set();
+  const artifactMembers = new Set();
+  for (const artifact of artifacts) {
+    const expectedMember = `raw-${String(mode)}-${String(artifact?.role)}-pid-${String(artifact?.pid)}.cpuprofile`;
+    if (
+      !BUILD_PROFILE_PROCESS_ROLES.includes(artifact?.role) ||
+      !Number.isSafeInteger(artifact?.pid) ||
+      artifact.pid < 1 ||
+      artifactPids.has(artifact.pid) ||
+      artifact?.member !== expectedMember ||
+      artifactMembers.has(artifact.member) ||
+      !DIGEST_PATTERN.test(artifact?.sha256 ?? '') ||
+      !positiveSafeInteger(artifact?.bytes) ||
+      !positiveSafeInteger(artifact?.nodes) ||
+      !positiveSafeInteger(artifact?.samples) ||
+      !nonNegativeSafeInteger(artifact?.activeSamples) ||
+      !nonNegativeSafeInteger(artifact?.idleSamples) ||
+      !nonNegativeSafeInteger(artifact?.waitSamples) ||
+      artifact.activeSamples + artifact.idleSamples + artifact.waitSamples !== artifact.samples ||
+      !nonNegativeSafeInteger(artifact?.negativeTimeDeltas)
+    ) {
+      findings.push('profile original-process artifact identity is malformed or duplicated');
+    }
+    artifactRoles.push(artifact?.role);
+    artifactPids.add(artifact?.pid);
+    artifactMembers.add(artifact?.member);
+  }
+  if (
+    canonicalJson([...artifactRoles].sort((left, right) => left.localeCompare(right))) !==
+    canonicalJson([...BUILD_PROFILE_PROCESS_ROLES].sort((left, right) => left.localeCompare(right)))
+  ) {
+    findings.push('profile original-process role census differs');
+  }
+  const expectedMembers = [
+    `build-${String(mode)}.cpuprofile`,
+    `process-cpu-${String(mode)}.txt`,
+    `profile-${String(mode)}.json`,
+    ...artifacts.map(({ member }) => member),
+  ].sort((left, right) => left.localeCompare(right));
+  if (canonicalJson(report?.artifactMembers) !== canonicalJson(expectedMembers)) {
+    findings.push('profile declared artifact member census differs');
+  }
+  if (
+    !ownRecord(report.processCpuArtifact) ||
+    report.processCpuArtifact.fileName !== `process-cpu-${String(mode)}.txt` ||
+    !DIGEST_PATTERN.test(report.processCpuArtifact.sha256 ?? '') ||
+    !positiveSafeInteger(report.processCpuArtifact.bytes)
+  ) {
+    findings.push('profile recursive CPU artifact identity is unavailable');
+  }
+  const censusProcesses = processCensus?.processes;
+  if (
+    processCensus?.schema !== BUILD_PROFILE_PROCESS_CENSUS_SCHEMA ||
+    processCensus?.classifier !== BUILD_PROFILE_PROCESS_ROLE_CLASSIFIER ||
+    processCensus?.complete !== true ||
+    !nonNegativeSafeInteger(processCensus?.forkOnlyProcesses) ||
+    !Array.isArray(censusProcesses) ||
+    !ownRecord(processCensus?.tools)
+  ) {
+    findings.push('profile process census is incomplete');
+  } else {
+    const nodeProcesses = censusProcesses.filter(({ role }) =>
+      BUILD_PROFILE_PROCESS_ROLES.includes(role),
+    );
+    const nodeKeys = nodeProcesses
+      .map(({ pid, role }) => `${String(pid)}:${String(role)}`)
+      .sort((left, right) => left.localeCompare(right));
+    const artifactKeys = artifacts
+      .map(({ pid, role }) => `${String(pid)}:${String(role)}`)
+      .sort((left, right) => left.localeCompare(right));
+    const processPids = new Set(censusProcesses.map(({ pid }) => pid));
+    const processRoots = censusProcesses.filter(
+      ({ parentPid }) => parentPid === null || !processPids.has(parentPid),
+    );
+    if (
+      canonicalJson(nodeKeys) !== canonicalJson(artifactKeys) ||
+      censusProcesses.some(
+        (process) =>
+          !Number.isSafeInteger(process?.pid) ||
+          process.pid < 1 ||
+          !['collector-time', 'native-one-shot', ...BUILD_PROFILE_PROCESS_ROLES].includes(
+            process?.role,
+          ) ||
+          !nonEmptyString(process?.roleEvidence) ||
+          !executableEvidence(process?.executable) ||
+          (BUILD_PROFILE_PROCESS_ROLES.includes(process?.role) &&
+            !executableEvidence(process?.entry)),
+      ) ||
+      censusProcesses.filter(({ role }) => role === 'collector-time').length !== 1 ||
+      processPids.size !== censusProcesses.length ||
+      processRoots.length !== 1 ||
+      processRoots[0]?.role !== 'collector-time' ||
+      censusProcesses.some(
+        ({ parentPid, pid }) =>
+          parentPid !== null && (parentPid === pid || !processPids.has(parentPid)),
+      ) ||
+      !['env', 'node', 'strace', 'time'].every((tool) =>
+        executableEvidence(processCensus.tools[tool]),
+      )
+    ) {
+      findings.push('profile process PID/role/executable census is malformed');
+    }
+  }
+  const processProfiles = capture?.processProfiles;
+  if (
+    !Array.isArray(processProfiles) ||
+    canonicalJson(processProfiles?.map(profileProcessIdentity)) !==
+      canonicalJson(artifacts.map(profileProcessIdentity))
+  ) {
+    findings.push('profile merged-view process census differs from original artifacts');
+  }
+  if (
+    analysis?.classifier !== PERF_BUILD_SESSION_PROFILE_CLASSIFIER ||
+    analysis?.complete !== true ||
+    !Array.isArray(analysis?.profileCensus) ||
+    analysis.profileCensus.length !== artifacts.length ||
+    canonicalJson(analysis.topFive) !== canonicalJson(report.topFive) ||
+    analysis.profileCensus.some((profile, index) => {
+      const artifact = artifacts[index];
+      return (
+        profile?.role !== artifact.role ||
+        profile?.nodes !== artifact.nodes ||
+        profile?.samples !== artifact.samples ||
+        profile?.activeSamples !== artifact.activeSamples ||
+        profile?.idleSamples !== artifact.idleSamples ||
+        profile?.waitSamples !== artifact.waitSamples ||
+        profile?.negativeTimeDeltas !== artifact.negativeTimeDeltas
+      );
+    })
+  ) {
+    findings.push('profile classifier census differs from original artifacts');
+  }
+  const active = artifacts.reduce((sum, artifact) => sum + artifact.activeSamples, 0);
+  const idle = artifacts.reduce((sum, artifact) => sum + artifact.idleSamples, 0);
+  const wait = artifacts.reduce((sum, artifact) => sum + artifact.waitSamples, 0);
+  const uncertainty = processCpu?.uncertainty;
+  const expectedUncertainty =
+    uncertainty?.userResolutionMicros +
+    uncertainty?.systemResolutionMicros +
+    2 * artifacts.length * BUILD_PROFILE_INTERVAL_US;
+  const expectedResidual = processCpu?.totalMicros - active * BUILD_PROFILE_INTERVAL_US;
+  const expectedEquivalent =
+    expectedResidual === 0
+      ? 0
+      : Math.floor((expectedResidual - expectedUncertainty) / BUILD_PROFILE_INTERVAL_US);
+  if (
+    processCpu?.schema !== BUILD_PROFILE_PROCESS_CPU_SCHEMA ||
+    processCpu?.complete !== true ||
+    processCpu?.fixedProfilerIntervalMicros !== BUILD_PROFILE_INTERVAL_US ||
+    processCpu?.profiledActiveV8Samples !== active ||
+    processCpu?.idleV8Samples !== idle ||
+    processCpu?.waitV8Samples !== wait ||
+    processCpu?.profiledActiveMicros !== active * BUILD_PROFILE_INTERVAL_US ||
+    processCpu?.cause?.cause !== 'native-or-unprofiled' ||
+    processCpu?.cause?.sessionEligibility !== 'one-shot-or-ineligible' ||
+    !nonNegativeSafeInteger(processCpu?.cause?.equivalentSamples) ||
+    processCpu?.collector?.recursive !== true ||
+    processCpu?.collector?.tool !== '/usr/bin/time' ||
+    uncertainty?.policy !== 'gnu-time-resolution-plus-two-profiler-intervals-per-process/v1' ||
+    !decimalResolutionMicros(uncertainty?.userResolutionMicros) ||
+    !decimalResolutionMicros(uncertainty?.systemResolutionMicros) ||
+    uncertainty?.totalMicros !== expectedUncertainty ||
+    !nonNegativeSafeInteger(processCpu?.userMicros) ||
+    !nonNegativeSafeInteger(processCpu?.systemMicros) ||
+    processCpu?.totalMicros !== processCpu?.userMicros + processCpu?.systemMicros ||
+    processCpu?.residualMicros !== expectedResidual ||
+    expectedResidual < 0 ||
+    (expectedResidual > 0 && expectedResidual <= expectedUncertainty) ||
+    processCpu?.cause?.equivalentSamples !== expectedEquivalent ||
+    (censusProcesses?.some(({ role }) => role === 'native-one-shot') && expectedEquivalent === 0) ||
+    analysis?.sampleCensus?.active !== active ||
+    analysis?.sampleCensus?.idle !== idle ||
+    analysis?.sampleCensus?.wait !== wait ||
+    analysis?.sampleCensus?.total !== active + idle + wait ||
+    analysis?.sampleCensus?.nativeOrUnprofiled !== expectedEquivalent
+  ) {
+    findings.push('profile recursive CPU residual evidence is incomplete');
+  }
+  return findings;
+}
+
+function profileProcessIdentity(profile) {
+  return {
+    activeSamples: profile?.activeSamples,
+    bytes: profile?.bytes,
+    idleSamples: profile?.idleSamples,
+    member: profile?.member,
+    negativeTimeDeltas: profile?.negativeTimeDeltas,
+    nodes: profile?.nodes,
+    pid: profile?.pid,
+    role: profile?.role,
+    samples: profile?.samples,
+    sha256: profile?.sha256,
+    waitSamples: profile?.waitSamples,
+  };
+}
+
+function executableEvidence(value) {
+  return (
+    ownRecord(value) &&
+    nonEmptyString(value.path) &&
+    nonEmptyString(value.realPath) &&
+    positiveSafeInteger(value.bytes) &&
+    DIGEST_PATTERN.test(value.sha256 ?? '')
+  );
+}
+
+function validProfileArtifactCustodyEvidence(value) {
+  const responseDigests = [
+    value?.apiResponseDigest,
+    value?.liveApiResponseDigest,
+    value?.jobsApiResponseDigest,
+    value?.liveJobsApiResponseDigest,
+    value?.runApiResponseDigest,
+    value?.liveRunApiResponseDigest,
+  ];
+  const authorityPairs = [
+    [value?.apiAuthorityDigest, value?.liveApiAuthorityDigest],
+    [value?.jobsApiAuthorityDigest, value?.liveJobsApiAuthorityDigest],
+    [value?.runApiAuthorityDigest, value?.liveRunApiAuthorityDigest],
+  ];
+  return (
+    responseDigests.every((digest) => DIGEST_PATTERN.test(digest ?? '')) &&
+    authorityPairs.every(([saved, live]) => DIGEST_PATTERN.test(saved ?? '') && saved === live) &&
+    DIGEST_PATTERN.test(value?.archiveDigest ?? '') &&
+    value.archiveDigest === value?.artifactDigest &&
+    positiveSafeInteger(value?.archiveByteLength) &&
+    value.archiveByteLength === value?.artifactSizeInBytes
+  );
+}
+
+function positiveSafeInteger(value) {
+  return Number.isSafeInteger(value) && value > 0;
+}
+
+function nonNegativeSafeInteger(value) {
+  return Number.isSafeInteger(value) && value >= 0;
+}
+
+function decimalResolutionMicros(value) {
+  return [1, 10, 100, 1_000, 10_000, 100_000].includes(value);
 }
 
 export function buildBudgetBaselineFindings(baseline, baselineEntries) {
@@ -926,7 +1221,7 @@ export function buildBudgetBaselineFindings(baseline, baselineEntries) {
     }
     findings.push(...baselineBuildReportFindings(baseline, baselineEntries, corpusSize));
   }
-  return [...new Set(findings)].sort();
+  return [...new Set(findings)].sort((left, right) => left.localeCompare(right));
 }
 
 function baselineBuildReportFindings(baseline, entries, corpusSize) {
@@ -1081,7 +1376,7 @@ export function buildBudgetFindings(budget) {
       }
     }
   }
-  return [...new Set(findings)].sort();
+  return [...new Set(findings)].sort((left, right) => left.localeCompare(right));
 }
 
 function buildPersistenceEvidenceFindings(evidence, budget) {
@@ -1117,8 +1412,9 @@ function buildPersistenceEvidenceFindings(evidence, budget) {
     findings.push('budget persistence evidence policy differs from the decision contract');
   }
   if (
-    canonicalJson(Object.keys(evidence.modes ?? {}).sort()) !==
-    canonicalJson([...WARM_BUILD_MODES].sort())
+    canonicalJson(
+      Object.keys(evidence.modes ?? {}).sort((left, right) => left.localeCompare(right)),
+    ) !== canonicalJson([...WARM_BUILD_MODES].sort((left, right) => left.localeCompare(right)))
   ) {
     findings.push('budget persistence evidence warm-mode census is incomplete');
     return findings;
