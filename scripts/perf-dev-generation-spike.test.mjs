@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
@@ -8,11 +9,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   aggregateDevGenerationCells,
   authenticateGenerationCandidateRoots,
+  DEV_CRITICAL_PATH_CANDIDATE,
+  DEV_GENERATION_ADAPTER_FAILURE_SCHEMA,
+  DEV_GENERATION_CANDIDATE_BINDING_SCHEMA,
+  DEV_GENERATION_SPIKE_PREPARE_SCHEMA,
+  DEV_GENERATION_SPIKE_SCHEMA,
   devGenerationSchedule,
   inspectGeneratedDevCorpus,
   pairedBootstrapImprovementCi,
   parseDevGenerationSpikeArgs,
-  REPAIRED_GENERATION_CANDIDATE,
+  prepareDevGenerationSpike,
   runDevGenerationSpike,
   summarizeFailedAdapterReport,
   summarizeDevMetric,
@@ -28,17 +34,30 @@ afterEach(() => {
 });
 
 describe('dev-generation candidate comparator', () => {
-  it('binds the correctness-complete repaired candidate identity', () => {
-    expect(REPAIRED_GENERATION_CANDIDATE).toEqual({
-      commit: '7a20bf6664c6b601a07a4525d90570bcefb9c55c',
-      parent: '9618120c2f3bc779168c10e927dac4118b9f2ed1',
-      patchId: '3621461f4e7d8ae3ff1724ed3a85413cb32d1281',
-      patchSha256: 'sha256:50c335d49c910d861656cacbb77c071907e120e6ab1f52c3728a5682f65fb1ee',
+  it('versions the report, binding, and retained-failure evidence independently of v1', () => {
+    expect(DEV_GENERATION_SPIKE_SCHEMA).toBe('kovo-dev-generation-spike-comparison/v2');
+    expect(DEV_GENERATION_SPIKE_PREPARE_SCHEMA).toBe('kovo-dev-generation-spike-prepare/v2');
+    expect(DEV_GENERATION_CANDIDATE_BINDING_SCHEMA).toBe(
+      'kovo-dev-generation-candidate-binding/v2',
+    );
+    expect(DEV_GENERATION_ADAPTER_FAILURE_SCHEMA).toBe('kovo-dev-generation-adapter-failure/v2');
+  });
+
+  it('binds the profile-driven development critical-path candidate identity', () => {
+    expect(DEV_CRITICAL_PATH_CANDIDATE).toEqual({
+      commit: '336925d40e11024b54206908997dbdfe0f43a391',
+      parent: 'eb16f11734a2ab635a8207f2e6ece4612713f248',
+      patchId: '5e5fb7c71081a556bf8c83824ab3858637714547',
+      patchSha256: 'sha256:766a13947b40a065b67013ae4b357c24b036bfb2a0f373cb5f9b93658989b913',
       paths: [
-        'packages/cli/src/commands/dev.ts',
-        'packages/server/src/internal/vite-security-profile.ts',
-        'packages/server/src/security-bootstrap.test.ts',
+        'packages/compiler/src/query-runtime-identities.test.ts',
+        'packages/compiler/src/scan/query-runtime-identities.ts',
+        'packages/compiler/src/vite.test.ts',
+        'packages/compiler/src/vite.ts',
+        'packages/server/src/vite-data-plane-gate.test.ts',
+        'packages/server/src/vite.ts',
       ],
+      tree: 'a0fe15cde24918aad0ce69a759441586bfd1663b',
     });
   });
 
@@ -124,7 +143,7 @@ describe('dev-generation candidate comparator', () => {
     });
   });
 
-  it('authenticates an exact clean one-commit repaired patch binding', () => {
+  it('authenticates an exact clean one-commit profile-driven patch binding', () => {
     const fixture = candidateFixture();
     const binding = authenticateGenerationCandidateRoots(
       {
@@ -147,7 +166,38 @@ describe('dev-generation candidate comparator', () => {
     });
   });
 
-  it('rejects patch drift and dirty candidate roots', () => {
+  it('applies the exact candidate patch atop a newer unrelated clean source commit', () => {
+    const fixture = realRebasedCandidateFixture();
+    const binding = authenticateGenerationCandidateRoots({
+      baselineRoot: fixture.baseline,
+      candidate: fixture.candidate,
+      candidateRepository: fixture.repository,
+      spikeRoot: fixture.spike,
+    });
+
+    expect(binding).toMatchObject({
+      baseline: { commit: fixture.sourceCommit },
+      candidate: fixture.candidate,
+      schema: 'kovo-dev-generation-candidate-binding/v2',
+      spike: { parent: fixture.sourceCommit },
+    });
+    expect(fixture.sourceCommit).not.toBe(fixture.candidate.parent);
+  });
+
+  it('rejects candidate identity drift, patch drift, and dirty roots', () => {
+    const identityDrift = candidateFixture();
+    expect(() =>
+      authenticateGenerationCandidateRoots(
+        {
+          baselineRoot: identityDrift.baseline,
+          candidate: { ...identityDrift.candidate, tree: 'f'.repeat(40) },
+          candidateRepository: identityDrift.repository,
+          spikeRoot: identityDrift.spike,
+        },
+        identityDrift.dependencies,
+      ),
+    ).toThrow(/object identity/u);
+
     const drift = candidateFixture();
     expect(() =>
       authenticateGenerationCandidateRoots(
@@ -178,6 +228,20 @@ describe('dev-generation candidate comparator', () => {
         dirty.dependencies,
       ),
     ).toThrow(/must be clean/u);
+  });
+
+  it('rejects a prior-schema candidate binding before preparation can reinterpret it', async () => {
+    await expect(
+      prepareDevGenerationSpike(
+        { baselineRoot: '/unused-baseline', size: 24, spikeRoot: '/unused-spike' },
+        {
+          authenticateRoots: () => ({
+            ...preparedFixture('/unused-baseline', '/unused-spike').candidateBinding,
+            schema: 'kovo-dev-generation-candidate-binding/v1',
+          }),
+        },
+      ),
+    ).rejects.toThrow(/prior evidence cannot be reinterpreted/u);
   });
 
   it('authenticates a generated N=24 corpus and enforces literal localhost', () => {
@@ -289,34 +353,129 @@ describe('dev-generation candidate comparator', () => {
     ).toEqual(expect.arrayContaining([expect.stringMatching(/lost state during data/u)]));
   });
 
-  it('accepts only all-cell browser wins with positive CI and ignores bundle proxies', () => {
+  it('accepts four causal wins while syntax stays flat, correct, and below its p95 target', () => {
     const cells = comparisonCells();
     for (const cell of cells) cell.report.bundleBytes = cell.lane === 'spike' ? 1_000_000 : 1;
-    const result = aggregateDevGenerationCells(cells, { bootstrapIterations: 500, seed: 1 });
+    const result = aggregateDevGenerationCells(cells, decisionPolicy());
 
     expect(result.correctness).toMatchObject({ complete: true, misses: 0, stateLost: 0 });
     expect(result.metrics.leafMs).toMatchObject({
-      baseline: { mad: 0, median: 100, p95: 100, samples: 2 },
-      pairedImprovement: { bootstrap95Ci: [25, 25], median: 25, samples: 2 },
+      baseline: { mad: 0, median: 100, p95: 100, samples: 30 },
+      pairedImprovement: { bootstrap95Ci: [25, 25], median: 25, samples: 30 },
       spike: { median: 75 },
       spikeMedianImprovementPercent: 25,
+      spikeP95ImprovementPercent: 25,
     });
     expect(result.acceptance).toMatchObject({
       candidateAccepted: true,
+      candidateP95Targets: {
+        recoveryMs: { maximumMs: 2_000, observedMs: 75, passed: true },
+        syntaxErrorMs: { maximumMs: 1_000, observedMs: 100, passed: true },
+      },
+      decisionSamplePolicy: { complete: true },
       excludedProxyEvidence: ['bundleBytes', 'emittedBytes', 'moduleCount'],
+      guardrails: {
+        editPeakRssBytes: { passed: true },
+        readyMs: { passed: true },
+        readyPeakRssBytes: { passed: true },
+        syntaxErrorMs: {
+          median: { observedImprovementPercent: 0, passed: true },
+          p95: { observedImprovementPercent: 0, passed: true },
+          passed: true,
+        },
+      },
+      requiredBrowserVisibleMetrics: ['leafMs', 'entryMs', 'dataMs', 'recoveryMs'],
+      rule: 'profiled-causal-edit-wins-and-noncausal-target-guardrails/v2',
     });
-    expect(Object.values(result.acceptance.metricAcceptance).every((metric) => metric.passed)).toBe(
-      true,
-    );
+    expect(
+      Object.values(result.acceptance.causalMetricAcceptance).every((metric) => metric.passed),
+    ).toBe(true);
 
     cells[0].report.samples[0].syntaxErrorDiagnosticSignal = '';
-    expect(
-      aggregateDevGenerationCells(cells, { bootstrapIterations: 500, seed: 1 }).acceptance
-        .candidateAccepted,
-    ).toBe(false);
+    const incorrect = aggregateDevGenerationCells(cells, decisionPolicy());
+    expect(incorrect.correctness.complete).toBe(false);
+    expect(incorrect.acceptance.candidateAccepted).toBe(false);
   });
 
-  it('serializes the real-adapter seam as B,S,S,B and emits accepted smoke evidence', async () => {
+  it('rejects causal median, p95-regression, and absolute-target failures', () => {
+    const medianMiss = comparisonCells();
+    for (const cell of medianMiss.filter((value) => value.lane === 'spike')) {
+      for (const sample of cell.report.samples) sample.leafMs = 91;
+    }
+    expect(
+      aggregateDevGenerationCells(medianMiss, decisionPolicy()).acceptance.causalMetricAcceptance
+        .leafMs,
+    ).toMatchObject({ improvementAtLeast10Percent: false, passed: false });
+
+    const p95Regression = comparisonCells();
+    for (const cell of p95Regression.filter((value) => value.lane === 'spike')) {
+      cell.report.samples.at(-1).syntaxErrorMs = 106;
+    }
+    expect(
+      aggregateDevGenerationCells(p95Regression, decisionPolicy()).acceptance.guardrails
+        .syntaxErrorMs,
+    ).toMatchObject({
+      median: { observedImprovementPercent: 0, passed: true },
+      p95: { observedImprovementPercent: -6, passed: false },
+      passed: false,
+    });
+
+    const syntaxTarget = comparisonCells({
+      baselineSyntaxLatency: 1_100,
+      spikeSyntaxLatency: 1_100,
+    });
+    expect(
+      aggregateDevGenerationCells(syntaxTarget, decisionPolicy()).acceptance.candidateP95Targets
+        .syntaxErrorMs,
+    ).toEqual({ maximumMs: 1_000, observedMs: 1_100, passed: false });
+
+    const recoveryTarget = comparisonCells({
+      baselineCausalLatency: 3_000,
+      spikeCausalLatency: 2_500,
+    });
+    const recoveryResult = aggregateDevGenerationCells(recoveryTarget, decisionPolicy());
+    expect(recoveryResult.acceptance.causalMetricAcceptance.recoveryMs.passed).toBe(true);
+    expect(recoveryResult.acceptance.candidateP95Targets.recoveryMs).toEqual({
+      maximumMs: 2_000,
+      observedMs: 2_500,
+      passed: false,
+    });
+    expect(recoveryResult.acceptance.candidateAccepted).toBe(false);
+  });
+
+  it('requires median and p95 guardrails plus the full preregistered sample policy', () => {
+    const readyP95Regression = comparisonCells();
+    for (const cell of readyP95Regression.filter((value) => value.lane === 'spike')) {
+      cell.report.readySamples.at(-1).durationMs = 106;
+    }
+    const p95 = aggregateDevGenerationCells(readyP95Regression, decisionPolicy());
+    expect(p95.acceptance.guardrails.readyMs).toMatchObject({
+      median: { passed: true },
+      p95: { observedImprovementPercent: -6, passed: false },
+      passed: false,
+    });
+
+    const editRssMedianRegression = comparisonCells();
+    for (const cell of editRssMedianRegression.filter((value) => value.lane === 'spike')) {
+      cell.report.editSession.peakRssBytes = 1_060;
+    }
+    expect(
+      aggregateDevGenerationCells(editRssMedianRegression, decisionPolicy()).acceptance.guardrails
+        .editPeakRssBytes,
+    ).toMatchObject({
+      median: { observedImprovementPercent: -6, passed: false },
+      p95: { observedImprovementPercent: -6, passed: false },
+      passed: false,
+    });
+
+    const short = comparisonCells();
+    const shortPolicy = { ...decisionPolicy(), editSamples: 2, readySamples: 2, warmups: 0 };
+    expect(
+      aggregateDevGenerationCells(short, shortPolicy).acceptance.decisionSamplePolicy,
+    ).toMatchObject({ complete: false, declaredComplete: false });
+  });
+
+  it('serializes the real-adapter seam as B,S,S,B and keeps smoke evidence unproven', async () => {
     const baselineRoot = temporaryDirectory('kovo-dev-generation-baseline-');
     const spikeRoot = temporaryDirectory('kovo-dev-generation-spike-');
     const prepared = preparedFixture(baselineRoot, spikeRoot);
@@ -433,13 +592,72 @@ describe('dev-generation candidate comparator', () => {
         posture: 'post-timing',
       }),
     ]);
+    expect(report.analysis.acceptance.decisionSamplePolicy).toMatchObject({
+      complete: false,
+      declaredComplete: false,
+    });
     expect(report.integrity).toMatchObject({
-      complete: true,
-      errors: [],
+      complete: false,
+      errors: [expect.stringContaining('v2 decision sample policy')],
       serialized: true,
       sourceStable: true,
     });
-    expect(report.verdict).toMatchObject({ reasons: [], status: 'accept' });
+    expect(report.verdict).toMatchObject({
+      reasons: [expect.stringContaining('v2 decision sample policy')],
+      status: 'unproven',
+    });
+  });
+
+  it('classifies a complete full-policy threshold miss as reject, not unproven', async () => {
+    const baselineRoot = temporaryDirectory('kovo-dev-generation-reject-baseline-');
+    const spikeRoot = temporaryDirectory('kovo-dev-generation-reject-spike-');
+    const prepared = preparedFixture(baselineRoot, spikeRoot);
+    const report = await runDevGenerationSpike(
+      {
+        baselineRoot,
+        bootstrapIterations: 500,
+        hostSettleMaxMs: 10,
+        hostSettlePollMs: 10,
+        measure: true,
+        spikeRoot,
+      },
+      {
+        acquireLock: () => ({ release: () => undefined }),
+        collectState: (root) =>
+          prepared.source.before[root === baselineRoot ? 'baseline' : 'spike'],
+        hostFingerprint: () => ({ schema: 'test-host/v1' }),
+        prepare: async () => prepared,
+        runAdapter: async (options) => {
+          const lane = options.root === baselineRoot ? 'baseline' : 'spike';
+          const state = prepared.source.before[lane];
+          return fakeAdapterReport({
+            commit: state.commit,
+            corpus: prepared.corpus[lane],
+            editSamples: options.editSamples,
+            latencies: {
+              data: lane === 'baseline' ? 100 : 75,
+              entry: lane === 'baseline' ? 100 : 75,
+              leaf: lane === 'baseline' ? 100 : 91,
+              recovery: lane === 'baseline' ? 100 : 75,
+              syntaxError: 100,
+            },
+            locks: state.locks,
+            port: options.port,
+            readyLatency: 100,
+            readySamples: options.readySamples,
+            warmups: options.warmups,
+          });
+        },
+        sampleHost: comparableHostSample,
+      },
+    );
+
+    expect(report.integrity).toMatchObject({ complete: true, errors: [] });
+    expect(report.analysis.acceptance.causalMetricAcceptance.leafMs.passed).toBe(false);
+    expect(report.verdict).toMatchObject({
+      reasons: [expect.stringContaining('did not satisfy every v2 causal win')],
+      status: 'reject',
+    });
   });
 
   it('retains a failed raw adapter cell and cannot claim correctness from a short schedule', async () => {
@@ -472,7 +690,7 @@ describe('dev-generation candidate comparator', () => {
           schema: 'kovo-dev-loop-report/v1',
           verdict: 'unproven',
         },
-        schema: 'kovo-dev-generation-adapter-failure/v1',
+        schema: 'kovo-dev-generation-adapter-failure/v2',
         summary: { integrityErrors: failedReport.integrity.errors },
       },
       report: failedReport,
@@ -497,7 +715,7 @@ describe('dev-generation candidate comparator', () => {
     expect(report.cells[0]).toMatchObject({
       adapterFailure: {
         rawReport: { reportBytes: 1_234, reportSha256: digest('b') },
-        schema: 'kovo-dev-generation-adapter-failure/v1',
+        schema: 'kovo-dev-generation-adapter-failure/v2',
       },
       report: failedReport,
     });
@@ -548,7 +766,7 @@ describe('dev-generation candidate comparator', () => {
     };
     const cells = [
       {
-        adapterFailure: { schema: 'kovo-dev-generation-adapter-failure/v1' },
+        adapterFailure: { schema: 'kovo-dev-generation-adapter-failure/v2' },
         lane: 'baseline',
         occurrence: 0,
         report,
@@ -771,6 +989,7 @@ function candidateFixture({ spikeStatus = '' } = {}) {
     patchId: 'd'.repeat(40),
     patchSha256: `sha256:${createHash('sha256').update(patch).digest('hex')}`,
     paths: ['one.ts', 'two.ts'],
+    tree: 'e'.repeat(40),
   };
   const command = (directory, args) => `${directory}|${args.join(' ')}`;
   const answers = new Map([
@@ -785,6 +1004,7 @@ function candidateFixture({ spikeStatus = '' } = {}) {
     [command(spike, ['rev-list', '--count', `${baselineCommit}..${spikeCommit}`]), '1'],
     [command(repository, ['rev-parse', `${candidate.commit}^{commit}`]), candidate.commit],
     [command(repository, ['rev-parse', `${candidate.commit}^`]), candidate.parent],
+    [command(repository, ['rev-parse', `${candidate.commit}^{tree}`]), candidate.tree],
     [
       command(spike, ['diff', '--name-status', '--no-renames', baselineCommit, spikeCommit]),
       'M\tone.ts\nM\ttwo.ts',
@@ -810,6 +1030,85 @@ function candidateFixture({ spikeStatus = '' } = {}) {
   };
 }
 
+function realRebasedCandidateFixture() {
+  const container = temporaryDirectory('kovo-dev-generation-rebased-candidate-');
+  const repository = path.join(container, 'repository');
+  const baseline = path.join(container, 'baseline');
+  const spike = path.join(container, 'spike');
+  mkdirSync(repository);
+  const git = (cwd, args, options = {}) =>
+    execFileSync('git', args, {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      ...options,
+    });
+  git(repository, ['init', '--quiet']);
+  git(repository, ['config', 'user.name', 'Kovo test']);
+  git(repository, ['config', 'user.email', 'kovo-test@invalid.example']);
+  writeFileSync(path.join(repository, 'one.ts'), 'export const one = 1;\n');
+  writeFileSync(path.join(repository, 'two.ts'), 'export const two = 2;\n');
+  writeFileSync(path.join(repository, 'unrelated.md'), 'base\n');
+  git(repository, ['add', '.']);
+  git(repository, ['commit', '--quiet', '-m', 'base']);
+  const parent = git(repository, ['rev-parse', 'HEAD']).trim();
+  git(repository, ['branch', 'candidate']);
+  git(repository, ['checkout', '--quiet', 'candidate']);
+  writeFileSync(path.join(repository, 'one.ts'), 'export const one = 11;\n');
+  writeFileSync(path.join(repository, 'two.ts'), 'export const two = 22;\n');
+  git(repository, ['add', 'one.ts', 'two.ts']);
+  git(repository, ['commit', '--quiet', '-m', 'candidate']);
+  const commit = git(repository, ['rev-parse', 'HEAD']).trim();
+  const tree = git(repository, ['rev-parse', 'HEAD^{tree}']).trim();
+  const patch = execFileSync('git', [
+    '-C',
+    repository,
+    'diff',
+    '--binary',
+    '--full-index',
+    '--no-ext-diff',
+    parent,
+    commit,
+  ]);
+  const patchIdInput = execFileSync('git', [
+    '-C',
+    repository,
+    'show',
+    '--pretty=format:',
+    '--binary',
+    '--no-ext-diff',
+    commit,
+  ]);
+  const patchId = execFileSync('git', ['patch-id', '--stable'], { input: patchIdInput })
+    .toString('utf8')
+    .trim()
+    .split(/\s+/u)[0];
+  git(repository, ['checkout', '--quiet', '-b', 'source', parent]);
+  writeFileSync(path.join(repository, 'unrelated.md'), 'newer unrelated source\n');
+  git(repository, ['add', 'unrelated.md']);
+  git(repository, ['commit', '--quiet', '-m', 'newer unrelated source']);
+  const sourceCommit = git(repository, ['rev-parse', 'HEAD']).trim();
+  git(repository, ['checkout', '--quiet', 'candidate']);
+  git(repository, ['worktree', 'add', '--quiet', baseline, 'source']);
+  git(repository, ['worktree', 'add', '--quiet', '-b', 'spike', spike, 'source']);
+  git(spike, ['cherry-pick', '--quiet', commit]);
+
+  return {
+    baseline,
+    candidate: {
+      commit,
+      parent,
+      patchId,
+      patchSha256: `sha256:${createHash('sha256').update(patch).digest('hex')}`,
+      paths: ['one.ts', 'two.ts'],
+      tree,
+    },
+    repository,
+    sourceCommit,
+    spike,
+  };
+}
+
 function preparedFixture(baselineRoot, spikeRoot) {
   const baseline = sourceState('a'.repeat(40));
   const spike = sourceState('b'.repeat(40));
@@ -818,6 +1117,7 @@ function preparedFixture(baselineRoot, spikeRoot) {
     candidateBinding: {
       baseline: { commit: baseline.commit, root: baselineRoot },
       candidate: { commit: 'c'.repeat(40), patchId: 'd'.repeat(40), patchSha256: digest('e') },
+      schema: 'kovo-dev-generation-candidate-binding/v2',
       spike: { commit: spike.commit, parent: baseline.commit, root: spikeRoot },
     },
     corpus: { baseline: corpus, spike: corpus },
@@ -851,29 +1151,53 @@ function preparedFixture(baselineRoot, spikeRoot) {
   };
 }
 
-function comparisonCells() {
+function comparisonCells({
+  baselineCausalLatency = 100,
+  baselineSyntaxLatency = 100,
+  spikeCausalLatency = 75,
+  spikeSyntaxLatency = 100,
+} = {}) {
   const corpus = corpusIdentity();
   const states = { baseline: sourceState('a'.repeat(40)), spike: sourceState('b'.repeat(40)) };
-  return ['baseline', 'spike', 'spike', 'baseline'].map((lane, scheduleIndex) => {
-    const occurrence = scheduleIndex === 0 || scheduleIndex === 1 ? 0 : 1;
-    const state = states[lane];
-    return scheduledCell(
-      lane,
-      occurrence,
-      fakeAdapterReport({
-        commit: state.commit,
-        corpus,
-        editSamples: 1,
-        latency: lane === 'baseline' ? 100 : 75,
-        locks: state.locks,
-        port: 49_750 + scheduleIndex * 128,
-        readyLatency: lane === 'baseline' ? 100 : 95,
-        readySamples: 1,
-        rss: 1_000,
-      }),
-      scheduleIndex,
-    );
-  });
+  return devGenerationSchedule({ editSamples: 30, readySamples: 15, warmups: 3 }).map(
+    (scheduled) => {
+      const { lane, occurrence, scheduleIndex } = scheduled;
+      const state = states[lane];
+      return scheduledCell(
+        lane,
+        occurrence,
+        fakeAdapterReport({
+          commit: state.commit,
+          corpus,
+          editSamples: scheduled.editSamples,
+          latencies: {
+            data: lane === 'baseline' ? baselineCausalLatency : spikeCausalLatency,
+            entry: lane === 'baseline' ? baselineCausalLatency : spikeCausalLatency,
+            leaf: lane === 'baseline' ? baselineCausalLatency : spikeCausalLatency,
+            recovery: lane === 'baseline' ? baselineCausalLatency : spikeCausalLatency,
+            syntaxError: lane === 'baseline' ? baselineSyntaxLatency : spikeSyntaxLatency,
+          },
+          locks: state.locks,
+          port: 49_750 + scheduleIndex * 128,
+          readyLatency: 100,
+          readySamples: scheduled.readySamples,
+          rss: 1_000,
+          warmups: scheduled.warmups,
+        }),
+        scheduleIndex,
+      );
+    },
+  );
+}
+
+function decisionPolicy() {
+  return {
+    bootstrapIterations: 500,
+    editSamples: 30,
+    readySamples: 15,
+    seed: 1,
+    warmups: 3,
+  };
 }
 
 function scheduledCell(lane, occurrence, report, scheduleIndex = 0) {
@@ -894,6 +1218,7 @@ function fakeAdapterReport({
   corpus,
   editSamples,
   latency,
+  latencies = {},
   locks,
   port,
   readyLatency = latency,
@@ -905,9 +1230,9 @@ function fakeAdapterReport({
   const samples = Array.from({ length: editSamples }, (_, iteration) => ({
     ...Object.fromEntries(
       EDIT_CLASSES.flatMap((editClass) => [
-        [`${editClass}Ms`, latency],
+        [`${editClass}Ms`, latencies[editClass] ?? latency],
         [`${editClass}PaintFenceMs`, 1],
-        [`${editClass}ServerGenerationMs`, latency / 2],
+        [`${editClass}ServerGenerationMs`, (latencies[editClass] ?? latency) / 2],
         [`${editClass}StateSurvived`, true],
         [`${editClass}WriteMs`, 1],
       ]),

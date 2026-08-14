@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Authenticated serialized A/B runner for the reviewed, correctness-complete fresh-generation
+ * Authenticated serialized A/B runner for the reviewed profile-driven development critical-path
  * candidate.
  *
  * The real browser-visible adapter owns edit observation and process-tree RSS. This runner owns
@@ -41,20 +41,25 @@ import { devSessionHandoffFindings } from './lib/perf-dev-session-evidence.mjs';
 import { performanceHostFingerprint } from './lib/perf-host.mjs';
 import { validReadyRouteProbe } from './lib/perf-ready-route.mjs';
 
-export const DEV_GENERATION_SPIKE_SCHEMA = 'kovo-dev-generation-spike-comparison/v1';
-export const DEV_GENERATION_SPIKE_PREPARE_SCHEMA = 'kovo-dev-generation-spike-prepare/v1';
-export const DEV_GENERATION_ADAPTER_FAILURE_SCHEMA = 'kovo-dev-generation-adapter-failure/v1';
+export const DEV_GENERATION_SPIKE_SCHEMA = 'kovo-dev-generation-spike-comparison/v2';
+export const DEV_GENERATION_SPIKE_PREPARE_SCHEMA = 'kovo-dev-generation-spike-prepare/v2';
+export const DEV_GENERATION_ADAPTER_FAILURE_SCHEMA = 'kovo-dev-generation-adapter-failure/v2';
+export const DEV_GENERATION_CANDIDATE_BINDING_SCHEMA = 'kovo-dev-generation-candidate-binding/v2';
 export { DEV_GENERATION_CELL_PORT_STRIDE };
-export const REPAIRED_GENERATION_CANDIDATE = Object.freeze({
-  commit: '7a20bf6664c6b601a07a4525d90570bcefb9c55c',
-  parent: '9618120c2f3bc779168c10e927dac4118b9f2ed1',
-  patchId: '3621461f4e7d8ae3ff1724ed3a85413cb32d1281',
-  patchSha256: 'sha256:50c335d49c910d861656cacbb77c071907e120e6ab1f52c3728a5682f65fb1ee',
+export const DEV_CRITICAL_PATH_CANDIDATE = Object.freeze({
+  commit: '336925d40e11024b54206908997dbdfe0f43a391',
+  parent: 'eb16f11734a2ab635a8207f2e6ece4612713f248',
+  patchId: '5e5fb7c71081a556bf8c83824ab3858637714547',
+  patchSha256: 'sha256:766a13947b40a065b67013ae4b357c24b036bfb2a0f373cb5f9b93658989b913',
   paths: Object.freeze([
-    'packages/cli/src/commands/dev.ts',
-    'packages/server/src/internal/vite-security-profile.ts',
-    'packages/server/src/security-bootstrap.test.ts',
+    'packages/compiler/src/query-runtime-identities.test.ts',
+    'packages/compiler/src/scan/query-runtime-identities.ts',
+    'packages/compiler/src/vite.test.ts',
+    'packages/compiler/src/vite.ts',
+    'packages/server/src/vite-data-plane-gate.test.ts',
+    'packages/server/src/vite.ts',
   ]),
+  tree: 'a0fe15cde24918aad0ce69a759441586bfd1663b',
 });
 
 const ADAPTER_SCHEMA = 'kovo-dev-loop-report/v1';
@@ -68,6 +73,7 @@ const DEFAULT_READY_SAMPLES = 15;
 const DEFAULT_READY_TIMEOUT_MS = 10 * 60 * 1_000;
 const DEFAULT_WARMUPS = 3;
 const EDIT_CLASSES = Object.freeze(['leaf', 'entry', 'data', 'syntaxError', 'recovery']);
+const CAUSAL_EDIT_METRICS = Object.freeze(['leafMs', 'entryMs', 'dataMs', 'recoveryMs']);
 const LOCK_FILES = Object.freeze([
   'pnpm-lock.yaml',
   'benchmarks/nextjs/pnpm-lock.yaml',
@@ -76,7 +82,9 @@ const LOCK_FILES = Object.freeze([
 const MAX_COMMAND_OUTPUT_BYTES = 16 * 1024 * 1024;
 const MAX_HOST_SETTLE_MAX_MS = 60_000;
 const MAX_REPORT_BYTES = 64 * 1024 * 1024;
-const PRIMARY_METRICS = Object.freeze(EDIT_CLASSES.map((editClass) => `${editClass}Ms`));
+const DECISION_EDIT_SAMPLES = 30;
+const DECISION_READY_SAMPLES = 15;
+const DECISION_WARMUPS = 3;
 const SCHEDULE_LANES = Object.freeze(['baseline', 'spike', 'spike', 'baseline']);
 const SUPPORTED_SIZES = Object.freeze([24, 216]);
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
@@ -146,7 +154,7 @@ export function authenticateGenerationCandidateRoots(options, dependencies = {})
   const git = dependencies.git ?? gitOutput;
   const patch = dependencies.patch ?? gitPatchBytes;
   const patchId = dependencies.patchId ?? gitPatchId;
-  const candidate = options.candidate ?? REPAIRED_GENERATION_CANDIDATE;
+  const candidate = options.candidate ?? DEV_CRITICAL_PATH_CANDIDATE;
   const candidateRepository = canonicalDirectory(options.candidateRepository ?? repoRoot);
   const baselineRoot = canonicalGitRoot(options.baselineRoot, git);
   const spikeRoot = canonicalGitRoot(options.spikeRoot, git);
@@ -175,8 +183,13 @@ export function authenticateGenerationCandidateRoots(options, dependencies = {})
 
   const candidateCommit = git(candidateRepository, ['rev-parse', `${candidate.commit}^{commit}`]);
   const candidateParent = git(candidateRepository, ['rev-parse', `${candidate.commit}^`]);
-  if (candidateCommit !== candidate.commit || candidateParent !== candidate.parent) {
-    throw new Error('repaired candidate object identity is unavailable or unexpected');
+  const candidateTree = git(candidateRepository, ['rev-parse', `${candidate.commit}^{tree}`]);
+  if (
+    candidateCommit !== candidate.commit ||
+    candidateParent !== candidate.parent ||
+    candidateTree !== candidate.tree
+  ) {
+    throw new Error('profile-driven candidate object identity is unavailable or unexpected');
   }
   const expectedPatch = patch(candidateRepository, candidate.parent, candidate.commit);
   const observedPatch = patch(spikeRoot, baselineCommit, spikeCommit);
@@ -199,7 +212,7 @@ export function authenticateGenerationCandidateRoots(options, dependencies = {})
   const observedPaths = changedPaths(spikeRoot, baselineCommit, spikeCommit, git);
   if (!sameStrings(observedPaths, expectedPaths)) {
     throw new Error(
-      `spike path census differs from repaired candidate: ${observedPaths.join(', ')}`,
+      `spike path census differs from profile-driven candidate: ${observedPaths.join(', ')}`,
     );
   }
   return {
@@ -211,8 +224,9 @@ export function authenticateGenerationCandidateRoots(options, dependencies = {})
       patchId: candidate.patchId,
       patchSha256: candidate.patchSha256,
       paths: [...candidate.paths],
+      tree: candidate.tree,
     },
-    schema: 'kovo-dev-generation-candidate-binding/v1',
+    schema: DEV_GENERATION_CANDIDATE_BINDING_SCHEMA,
     spike: { commit: spikeCommit, parent: baselineCommit, root: spikeRoot },
   };
 }
@@ -439,26 +453,36 @@ export function aggregateDevGenerationCells(cells, policy) {
   );
 
   const correctness = correctnessSummary(cells);
-  const metricAcceptance = Object.fromEntries(
-    PRIMARY_METRICS.map((name) => [name, metricAcceptanceResult(metrics[name])]),
+  const causalMetricAcceptance = Object.fromEntries(
+    CAUSAL_EDIT_METRICS.map((name) => [name, metricAcceptanceResult(metrics[name])]),
   );
-  const guardrailMetrics = ['readyMs', 'readyPeakRssBytes', 'editPeakRssBytes'];
+  const guardrailMetrics = ['syntaxErrorMs', 'readyMs', 'readyPeakRssBytes', 'editPeakRssBytes'];
   const guardrails = Object.fromEntries(
-    guardrailMetrics.map((name) => [name, noMedianRegressionOver(metrics[name], 5)]),
+    guardrailMetrics.map((name) => [name, noMedianAndP95RegressionOver(metrics[name], 5)]),
   );
+  const candidateP95Targets = {
+    recoveryMs: candidateP95AtMost(metrics.recoveryMs, 2_000),
+    syntaxErrorMs: candidateP95AtMost(metrics.syntaxErrorMs, 1_000),
+  };
+  const decisionSamplePolicy = inspectDecisionSamplePolicy(cells, policy);
   const candidateAccepted =
     correctness.complete &&
-    Object.values(metricAcceptance).every((value) => value.passed) &&
-    Object.values(guardrails).every((value) => value.passed);
+    decisionSamplePolicy.complete &&
+    Object.values(causalMetricAcceptance).every((value) => value.passed) &&
+    Object.values(guardrails).every((value) => value.passed) &&
+    Object.values(candidateP95Targets).every((value) => value.passed);
   return {
     acceptance: {
       candidateAccepted,
+      candidateP95Targets,
+      causalMetricAcceptance,
       correctnessRequired: true,
+      decisionSamplePolicy,
       excludedProxyEvidence: ['bundleBytes', 'emittedBytes', 'moduleCount'],
       guardrails,
-      metricAcceptance,
-      requiredBrowserVisibleMetrics: [...PRIMARY_METRICS],
-      rule: 'each-required-metric>=10%-median-and-paired-ci-lower>0/v1',
+      requiredBrowserVisibleMetrics: [...CAUSAL_EDIT_METRICS],
+      rule: 'profiled-causal-edit-wins-and-noncausal-target-guardrails/v2',
+      syntaxErrorPosture: 'correctness-and-p95-guardrail-not-profiled-win/v2',
     },
     correctness,
     metrics,
@@ -473,6 +497,11 @@ export async function prepareDevGenerationSpike(options, dependencies = {}) {
       spikeRoot: options.spikeRoot,
     },
   );
+  if (candidateBinding?.schema !== DEV_GENERATION_CANDIDATE_BINDING_SCHEMA) {
+    throw new Error(
+      `candidate binding schema must be ${DEV_GENERATION_CANDIDATE_BINDING_SCHEMA}; prior evidence cannot be reinterpreted`,
+    );
+  }
   const collectState = dependencies.collectState ?? collectWorktreeState;
   const inspectCorpus = dependencies.inspectCorpus ?? verifyGeneratedDevCorpus;
   const run = dependencies.runCommand ?? runCheckedCommand;
@@ -717,10 +746,14 @@ export async function runDevGenerationSpike(options = {}, dependencies = {}) {
     );
     errors.push(...sourceFindings);
     const analysis = aggregateDevGenerationCells(cells, policy);
+    if (errors.length === 0 && !analysis.acceptance.decisionSamplePolicy.complete) {
+      errors.push('measurement does not satisfy the preregistered v2 decision sample policy');
+    }
     const complete =
       errors.length === 0 &&
       cells.length === schedule.length &&
       analysis.correctness.complete === true &&
+      analysis.acceptance.decisionSamplePolicy.complete === true &&
       hostSamples.every((sample) => sample.comparable);
     return {
       analysis,
@@ -748,7 +781,7 @@ export async function runDevGenerationSpike(options = {}, dependencies = {}) {
         reasons: [
           ...errors,
           ...(complete && !analysis.acceptance.candidateAccepted
-            ? ['candidate did not satisfy every browser-visible acceptance cell and guardrail']
+            ? ['candidate did not satisfy every v2 causal win, p95 target, and guardrail']
             : []),
         ],
         status: !complete
@@ -844,6 +877,10 @@ function analyzePairedMetric(cells, selectRows, key, options) {
     baselineSummary.median === null || spikeSummary.median === null
       ? null
       : ((baselineSummary.median - spikeSummary.median) / baselineSummary.median) * 100;
+  const p95ImprovementPercent =
+    baselineSummary.p95 === null || spikeSummary.p95 === null
+      ? null
+      : ((baselineSummary.p95 - spikeSummary.p95) / baselineSummary.p95) * 100;
   return {
     baseline: baselineSummary,
     pairedImprovement: {
@@ -857,6 +894,7 @@ function analyzePairedMetric(cells, selectRows, key, options) {
     },
     spike: spikeSummary,
     spikeMedianImprovementPercent: improvementPercent,
+    spikeP95ImprovementPercent: p95ImprovementPercent,
   };
 }
 
@@ -945,12 +983,69 @@ function metricAcceptanceResult(metric) {
   };
 }
 
-function noMedianRegressionOver(metric, percent) {
-  const improvement = metric?.spikeMedianImprovementPercent;
+function noMedianAndP95RegressionOver(metric, percent) {
+  const medianImprovement = metric?.spikeMedianImprovementPercent;
+  const p95Improvement = metric?.spikeP95ImprovementPercent;
   return {
     maximumRegressionPercent: percent,
-    observedImprovementPercent: improvement,
-    passed: Number.isFinite(improvement) && improvement >= -percent,
+    median: {
+      observedImprovementPercent: medianImprovement,
+      passed: Number.isFinite(medianImprovement) && medianImprovement >= -percent,
+    },
+    p95: {
+      observedImprovementPercent: p95Improvement,
+      passed: Number.isFinite(p95Improvement) && p95Improvement >= -percent,
+    },
+    passed:
+      Number.isFinite(medianImprovement) &&
+      medianImprovement >= -percent &&
+      Number.isFinite(p95Improvement) &&
+      p95Improvement >= -percent,
+  };
+}
+
+function candidateP95AtMost(metric, maximumMs) {
+  const observedMs = metric?.spike?.p95;
+  return {
+    maximumMs,
+    observedMs,
+    passed: Number.isFinite(observedMs) && observedMs <= maximumMs,
+  };
+}
+
+function inspectDecisionSamplePolicy(cells, policy) {
+  const expected = {
+    editSamplesPerLane: DECISION_EDIT_SAMPLES,
+    readySamplesPerLane: DECISION_READY_SAMPLES,
+    warmupsPerLane: DECISION_WARMUPS,
+  };
+  const declared = {
+    editSamplesPerLane: policy.editSamples ?? null,
+    readySamplesPerLane: policy.readySamples ?? null,
+    warmupsPerLane: policy.warmups ?? null,
+  };
+  const expectedSchedule = devGenerationSchedule({
+    editSamples: DECISION_EDIT_SAMPLES,
+    readySamples: DECISION_READY_SAMPLES,
+    warmups: DECISION_WARMUPS,
+  });
+  const observedSchedule = cells.map((cell) => ({
+    editSamples: cell.editSamples,
+    lane: cell.lane,
+    occurrence: cell.occurrence,
+    readySamples: cell.readySamples,
+    scheduleIndex: cell.scheduleIndex,
+    warmups: cell.warmups,
+  }));
+  const declaredComplete = sameJson(declared, expected);
+  const observedComplete = sameJson(observedSchedule, expectedSchedule);
+  return {
+    complete: declaredComplete && observedComplete,
+    declared,
+    declaredComplete,
+    expected,
+    observedComplete,
+    order: [...SCHEDULE_LANES],
   };
 }
 

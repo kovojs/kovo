@@ -336,17 +336,17 @@ describe('realistic performance CI policy', () => {
     expectRawArtifact(source, 'kovo-perf-check-watch-decision');
   });
 
-  it('runs both full browser-visible repaired fresh-generation decisions', () => {
+  it('runs both full browser-visible profile-driven critical-path decisions', () => {
     const source = decisionJob('dev-generation-decision');
     expect(source).toContain('corpus: [24, 216]');
     expect(source).toContain('fetch-depth: 0');
     expect(source).toContain('uses: ./.github/actions/playwright-install');
     expectPnpmBridge(source);
     expect(source).toContain(
-      'KOVO_DEV_GENERATION_CANDIDATE_COMMIT: 7a20bf6664c6b601a07a4525d90570bcefb9c55c',
+      'KOVO_DEV_GENERATION_CANDIDATE_COMMIT: 336925d40e11024b54206908997dbdfe0f43a391',
     );
     expect(source).toContain(
-      'KOVO_DEV_GENERATION_CANDIDATE_REF: refs/heads/perf-spike/dev-generation-profile-repaired-20260814',
+      'KOVO_DEV_GENERATION_CANDIDATE_REF: refs/heads/perf-spike/dev-critical-path-profile-20260814',
     );
     expect(source).toContain('git fetch --no-tags origin');
     expect(source).toContain(
@@ -360,6 +360,10 @@ describe('realistic performance CI policy', () => {
     expect(source).toContain('git worktree add --detach "$spike_root" "$KOVO_PERF_SOURCE_SHA"');
     expect(source).toContain("-c user.name='Kovo Performance CI'");
     expect(source).toContain('cherry-pick "$KOVO_DEV_GENERATION_CANDIDATE_COMMIT"');
+    expect(source).toContain('git -C "$spike_root" rev-parse HEAD^');
+    expect(source).toContain('git -C "$spike_root" rev-list --count "$KOVO_PERF_SOURCE_SHA..HEAD"');
+    expect(source).toContain('git -C "$baseline_root" status --porcelain=v1 --untracked-files=all');
+    expect(source).toContain('git -C "$spike_root" status --porcelain=v1 --untracked-files=all');
     expect(source).toContain('scripts/perf-dev-generation-spike.mjs');
     // The runner owns frozen installs and corpus generation in both exact worktrees. The shared
     // dev-loop adapter must resolve each generated command's permitted entrant-local dependency
