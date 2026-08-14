@@ -14,13 +14,13 @@ handed out a conventional win an order of magnitude larger than Wasm's whole the
 
 No, and this was tested rather than asserted.
 
-| Path | Result |
-| --- | --- |
-| **AssemblyScript** | Rejects Kovo source on its first line; fails 17 of 21 core TS constructs. It is a TS-*like* language with its own type system, not a TS compiler. A hand-optimized AssemblyScript `escapeHtml` came out **6.89x slower** than Kovo's existing JS — and still 1.36x slower with marshalling artificially removed. |
-| **Porffor** (AOT JS/TS → Wasm) | Research project, ~61% of test262. Cannot host a real server. |
-| **Javy / QuickJS-in-Wasm** | Runs JS *inside* a Wasm interpreter. Slower than V8 by construction — a portability and sandboxing play, not a performance one. |
-| **Static Hermes** | Research-stage and native-only. |
-| **Rust/Zig/C for hot paths** | Technically viable, and the only real option — but see the boundary model and the falsification spike below. |
+| Path                           | Result                                                                                                                                                                                                                                                                                                           |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **AssemblyScript**             | Rejects Kovo source on its first line; fails 17 of 21 core TS constructs. It is a TS-_like_ language with its own type system, not a TS compiler. A hand-optimized AssemblyScript `escapeHtml` came out **6.89x slower** than Kovo's existing JS — and still 1.36x slower with marshalling artificially removed. |
+| **Porffor** (AOT JS/TS → Wasm) | Research project, ~61% of test262. Cannot host a real server.                                                                                                                                                                                                                                                    |
+| **Javy / QuickJS-in-Wasm**     | Runs JS _inside_ a Wasm interpreter. Slower than V8 by construction — a portability and sandboxing play, not a performance one.                                                                                                                                                                                  |
+| **Static Hermes**              | Research-stage and native-only.                                                                                                                                                                                                                                                                                  |
+| **Rust/Zig/C for hot paths**   | Technically viable, and the only real option — but see the boundary model and the falsification spike below.                                                                                                                                                                                                     |
 
 The deeper reason is structural: Kovo's hottest render work is `Object.defineProperty` / `freeze` /
 `getOwnPropertyDescriptor` over live JS objects (the per-prop own-data snapshotting that enforces
@@ -34,17 +34,17 @@ call sites.
 
 Wasm **calls** are nearly free — 1.1 ns over a JS call. Moving **data** is not:
 
-| Input | encode into linear memory | decode back | round trip | the whole JS answer |
-| ---: | ---: | ---: | ---: | ---: |
-| 64 B | 35 ns | 77 ns | 103 ns | 22 ns |
-| 1 KB | 57 ns | 125 ns | 165 ns | 44 ns |
-| 16 KB | 320 ns | 644 ns | 969 ns | 552 ns |
-| 256 KB | 6,430 ns | 28,604 ns | 34,557 ns | 8,700 ns |
+|  Input | encode into linear memory | decode back | round trip | the whole JS answer |
+| -----: | ------------------------: | ----------: | ---------: | ------------------: |
+|   64 B |                     35 ns |       77 ns |     103 ns |               22 ns |
+|   1 KB |                     57 ns |      125 ns |     165 ns |               44 ns |
+|  16 KB |                    320 ns |      644 ns |     969 ns |              552 ns |
+| 256 KB |                  6,430 ns |   28,604 ns |  34,557 ns |            8,700 ns |
 
 The round trip alone exceeds the entire JS answer at every size. For anything that takes a JS string
 and returns a JS string, no Wasm implementation can win — the computation would have to take
 negative time. The asymmetry is worth remembering: `encodeInto` is cheap, `decode` is the expensive
-half, so Wasm *can* win when it scans a large buffer and returns a small scalar, and cannot when it
+half, so Wasm _can_ win when it scans a large buffer and returns a small scalar, and cannot when it
 transforms text. HTML escaping, attribute serialization and document assembly are all the latter.
 
 A caution for anyone re-running this: the first version of this benchmark compared hand-optimized
@@ -67,12 +67,12 @@ Replayed on that real corpus, after proving all implementations output-identical
 differential checks (empty, all-escapable, lone surrogates, astral plane, 100 K strings, 10 K fuzz
 rounds):
 
-| Implementation | ns/op | vs current |
-| --- | ---: | ---: |
-| current `replaceAll` chain | 122.4 | 1.0x |
-| zero-copy Wasm (js-string builtins) | 23.2 | 5.3x |
-| tuned single-pass JS | 20.5 | 6.0x |
-| **regex-probe JS** | **13.0** | **9.4x** |
+| Implementation                      |    ns/op | vs current |
+| ----------------------------------- | -------: | ---------: |
+| current `replaceAll` chain          |    122.4 |       1.0x |
+| zero-copy Wasm (js-string builtins) |     23.2 |       5.3x |
+| tuned single-pass JS                |     20.5 |       6.0x |
+| **regex-probe JS**                  | **13.0** |   **9.4x** |
 
 **Wasm loses to the best JS by 1.79x while paying no marshalling at all.** The builtins genuinely
 removed the toll; Wasm still lost on compute, because V8's native string scanners run at ~0.05
@@ -115,20 +115,20 @@ Every document render re-canonicalized (`Buffer.from` → `toString`) and re-SHA
 276,420-byte** generated client runtime. The registry is immutable per deploy, so the digest is a
 constant being recomputed per request.
 
-| Metric | before | after |
-| --- | ---: | ---: |
-| `/product` forced render, c=1 | 623.7 req/s | 854.3 (**1.37x**) |
-| c=8 | 712.5 | 946.8 (**1.33x**) |
-| c=32 | 758.0 | 1006.8 (**1.33x**), p50 −25% |
-| subtree share of busy CPU | 26.16% | **0.00%** |
-| cached `/` path | — | ~1.0x (unaffected, as predicted) |
+| Metric                        |      before |                            after |
+| ----------------------------- | ----------: | -------------------------------: |
+| `/product` forced render, c=1 | 623.7 req/s |                854.3 (**1.37x**) |
+| c=8                           |       712.5 |                946.8 (**1.33x**) |
+| c=32                          |       758.0 |     1006.8 (**1.33x**), p50 −25% |
+| subtree share of busy CPU     |      26.16% |                        **0.00%** |
+| cached `/` path               |           — | ~1.0x (unaffected, as predicted) |
 
 Served documents are byte-identical across builds. The memo is keyed on the registry facade plus a
 publish-epoch token, so any republication — including a byte-identical one under different compiler
 provenance — invalidates it and re-runs the identity checks; refusal paths are never memoized.
 
 Recon's branch attribution was **wrong** and the spike corrected it: the cost is in the per-entry
-role/href loop reached by the *fallback* branch, not the app-runtime branch.
+role/href loop reached by the _fallback_ branch, not the app-runtime branch.
 
 ### Available, cheap — regex-probe escape fast path (~9.4x on the escape path)
 
@@ -141,11 +141,11 @@ small in absolute terms — take it if the escape path is ever touched anyway.
 The direct counterexample to "compile the compiler to Wasm": the same compiler as a native Go
 binary, already vendored. **The isolated speedup is 5.5–9.3x and it does not convert.**
 
-| | warm | cold |
-| --- | ---: | ---: |
-| isolated preflight | 7.0–9.3x | 5.5–8.6x |
+|                         |                        warm |       cold |
+| ----------------------- | --------------------------: | ---------: |
+| isolated preflight      |                    7.0–9.3x |   5.5–8.6x |
 | end-to-end `kovo check` | **2.5–7.9%** (median ~3.6%) | 12.5–19.3% |
-| end-to-end `kovo build` | **1.5%** | 8.4–10.9% |
+| end-to-end `kovo build` |                    **1.5%** |  8.4–10.9% |
 
 Pass-through was verified 1:1 (typescript phase 858 → 117 ms, paired wall delta 747 ms) — nothing is
 being lost to overlap. The preflight is simply only 2–5% of a warm run, and the warm loop is the one
