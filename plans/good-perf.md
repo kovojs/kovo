@@ -1,16 +1,19 @@
 # Competitive performance: Kovo vs Next.js
 
-Updated 2026-08-13. Owner: performance. This is the single active performance ledger. Framework
+Updated 2026-08-14. Owner: performance. This is the single active performance ledger. Framework
 behaviour remains governed by `SPEC.md`; especially §1.1 goal 3, §4.4, §5.2, §8, §9.5, and §11.4.
 The full 2026-08-07/08 investigation remains in git history through `f6e2256af` and its calibrated
 Kovo-only baseline remains in `reports/perf-baseline-2026-08-08.json`.
 
 ## Outcome
 
-Make Kovo competitive with pinned Next.js on both developer and production performance without
-weakening Kovo's proof model. Every claimed improvement must come from a committed throwaway-worktree
-spike, an alternating serialized A/B measurement, and a correctness gate. A smaller or faster result
-that omits required behaviour is a failure, not a win.
+Move Kovo toward the competitive targets below with an authoritative pinned-Next.js comparison and
+verified developer and production improvements, without weakening Kovo's proof model. This plan's
+completion floor is the explicitly named **first milestone** in each open item; the stronger
+competitive targets remain follow-on targets and must be reported separately rather than implied by
+a publishable first-milestone result. Every claimed improvement must come from a committed
+throwaway-worktree spike, an alternating serialized A/B measurement, and a correctness gate. A
+smaller or faster result that omits required behaviour is a failure, not a win.
 
 ## Current measured snapshot
 
@@ -146,6 +149,12 @@ benchmarks/harness/{report,run,scenarios}.test.mjs --reporter=dot` passed 41/41.
     ranked async proof convergence first for ordinary edits (52% N=24 and 66% N=216 CPU) and query
     identity resolution first for recovery (75%/68%); Vite transform and SSR generation stayed
     below 1%. Custody and the complete ranking are in `docs/performance/dev-edit-profile.md`.
+- [ ] Decide the profile-driven dev critical-path candidate at the packed-product boundary for both
+      N=24 and N=216, and integrate it only if both reports satisfy the preregistered causal,
+      correctness, absolute-latency, and RSS rules.
+  - Current evidence: exact source `1e1300962bcb2862d29a65d7c6bf5ab2bfd67b52` is running in
+    [workflow `31821573222`](https://github.com/kovojs/kovo/actions/runs/31821573222); no result may
+    be recorded until both `kovo-perf-dev-generation-n24` and `-n216` artifacts authenticate.
 - [x] Spike authenticated in-session closure reuse for `kovo check --watch` by exposing serializable
       producer seams for trust/static/style facts in `build-export.ts`.
   - SPEC §11.4 constraints: always freshly evaluate app modules and rebuild runtime/app objects;
@@ -182,6 +191,12 @@ benchmarks/harness/{report,run,scenarios}.test.mjs --reporter=dot` passed 41/41.
       explicit (SPEC §5.2 rule 9); preserve sequential heap isolation between analyzer phases.
   - Evidence: `f73738975`; focused build/finalization, server build, packed-preset, and phase-census
     tests passed and retain separate source-proof/deploy-proof workers with sequential boundaries.
+- [ ] Decide the profile-driven lexical source-trust candidate from clean packed Kovo builds at
+      N=24 and N=216, and integrate it only if both reports satisfy the preregistered wall, p95, RSS,
+      artifact-identity, and correctness rules.
+  - Current evidence: exact source `1e1300962bcb2862d29a65d7c6bf5ab2bfd67b52` is running in
+    [workflow `31821610014`](https://github.com/kovojs/kovo/actions/runs/31821610014); no result may
+    be recorded until both `kovo-perf-build-source-trust-n24` and `-n216` artifacts authenticate.
 - [ ] Design a persistent foreground build/watch session if warm cross-invocation reuse is still
       required. Do not reintroduce the retired unauthenticated on-disk compiler cache.
 - [ ] Gate build wall, p95, RSS, and artifact size on the realistic corpus; reach the first milestone
@@ -259,8 +274,9 @@ packages/server/src/node.test.ts --reporter=dot` passed 88/88 and covers private
 --reporter=dot` passed and proves PR smoke plus labeled/scheduled realistic matrices.
 - [ ] Store raw reports as CI artifacts and commit only a clean reviewed baseline summary. A dirty,
       null, load-shed, wrong-posture, or integrity-failed run cannot update budgets.
-- [ ] Ratify budgets from at least five independent baseline runs on the pinned runner using median,
-      MAD, p95, and the acceptance rules above; replace rationale-only sample arrays with linked reports.
+- [ ] Ratify budgets from at least five independent baseline runs in one exact normalized hosted-runner
+      cohort using median, MAD, p95, and the acceptance rules above; replace rationale-only sample
+      arrays with linked reports.
 - [x] Add a regression comparator that requires matching source/lock/workload identities and reports
       `unproven` rather than pass when load, sample count, or identity is outside policy.
   - Evidence: `faf00c5de`, `49f83a2a9`, `3aabc77ae`; comparator/ratifier tests passed 26/26 and
