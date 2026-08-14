@@ -88,28 +88,19 @@ describe('seven-family performance publication gate', () => {
     const options = fixtureDerivationOptions();
     options.operations['dev-n216'] = {
       ...options.operations['dev-n216'],
-      evaluate: (budget, candidate) => ({
-        budget: budget.digest,
-        candidate: { execution: candidate.execution.digest, sourceCommit: candidate.source.commit },
-        checks: [
-          {
-            id: 'corpus-n216/dev//ready.durationMs.median-vs-next',
-            kind: 'competitive-target',
-            limit: 2,
-            status: 'fail',
-            value: 2.5,
-          },
-        ],
-        schema: 'fixture-evaluation/v1',
-        verdict: {
-          failures: ['corpus-n216/dev//ready.durationMs.median-vs-next'],
-          reasons: [],
-          status: 'regression',
-        },
-      }),
+      evaluate: (budget, candidate) => {
+        const evaluation = fixtureEvaluation('dev-n216', budget, candidate);
+        const id = 'corpus-n216/dev//ready.durationMs.median-vs-next';
+        const check = evaluation.checks.find((entry) => entry.id === id);
+        check.status = 'fail';
+        check.value = 2.5;
+        evaluation.verdict = { failures: [id], reasons: [], status: 'regression' };
+        return evaluation;
+      },
     };
 
-    const result = derivePerformancePublication(authenticatedFixture(), options);
+    const authenticated = authenticatedFixture();
+    const result = derivePerformancePublication(authenticated, options);
 
     expect(result.publication.verdict.status).toBe('blocked');
     expect(result.publication.families['dev-n216'].targetAssessment.holdout.status).toBe('fail');
@@ -325,7 +316,8 @@ describe('seven-family performance publication gate', () => {
         rationale: 'current-profile-required',
       });
 
-    const result = derivePerformancePublication(authenticatedFixture(), options);
+    const authenticated = authenticatedFixture();
+    const result = derivePerformancePublication(authenticated, options);
 
     expect(result.publication.buildPersistenceAssessment.verdict).toMatchObject({
       outcome: 'profile-required',
@@ -336,8 +328,178 @@ describe('seven-family performance publication gate', () => {
       'build persistence current authenticated N=216 unchanged and edit CPU profiles are required',
     );
     expect(performancePublicationFindings(result.publication)).toEqual([]);
+    expect(
+      performancePublicationResultFindings(result, {
+        assessBuildPersistence: options.assessBuildPersistence,
+        authenticated,
+        operations: options.operations,
+        ratify: (entries) => options.ratify(entries),
+      }),
+    ).toEqual([]);
     expect(renderPerformancePublicationMarkdown(result.publication)).toContain(
       'Outcome: **profile-required** (current-profile-required).',
+    );
+  });
+
+  it('keeps an unresolved build-session predicate unproven rather than blocking or publishing', () => {
+    const options = fixtureDerivationOptions();
+    const finding =
+      'mixed warm-cell evidence satisfies neither not-warranted shortcut nor the N=216 warrant predicate';
+    options.assessBuildPersistence = ({ n24Budget, n216Budget }) =>
+      fixturePersistenceAssessment(n24Budget, n216Budget, {
+        findings: [finding],
+        outcome: 'unproven',
+        rationale: 'mixed-evidence-unresolved',
+      });
+
+    const authenticated = authenticatedFixture();
+    const result = derivePerformancePublication(authenticated, options);
+
+    expect(result.publication.verdict).toEqual({
+      failures: [],
+      reasons: [`build persistence ${finding}`],
+      status: 'unproven',
+    });
+    expect(performancePublicationFindings(result.publication)).toEqual([]);
+
+    const forged = structuredClone(result.publication);
+    forged.verdict = { failures: [], reasons: [], status: 'publishable' };
+    resealPublication(forged);
+    expect(performancePublicationFindings(forged)).toEqual(
+      expect.arrayContaining([
+        'publication verdict does not retain the unproven build persistence findings',
+        'publication verdict is not derived from its family census',
+      ]),
+    );
+    expect(() => renderPerformancePublicationMarkdown(forged)).toThrow(
+      /unproven build persistence findings/u,
+    );
+  });
+
+  it('requires a measured foreground-session decision when the authenticated predicate warrants it', () => {
+    const options = fixtureDerivationOptions();
+    const profileEntries = buildProfileEntryPairFixture();
+    options.assessBuildPersistence = ({ n24Budget, n216Budget }) =>
+      fixturePersistenceAssessment(n24Budget, n216Budget, {
+        outcome: 'warranted',
+        profileEntries,
+        rationale: 'n216-miss-upper-residual-and-session-eligible-top-five-proven',
+      });
+
+    const authenticated = authenticatedFixture();
+    const result = derivePerformancePublication(authenticated, options);
+    const requiredFailure =
+      'build-persistence:foreground-session-implementation-and-measured-decision-required';
+
+    expect(result.publication.buildPersistenceAssessment.verdict).toMatchObject({
+      findings: [],
+      outcome: 'warranted',
+      status: 'decided',
+    });
+    expect(result.publication.verdict).toMatchObject({
+      failures: [requiredFailure],
+      reasons: [],
+      status: 'blocked',
+    });
+    expect(performancePublicationFindings(result.publication)).toEqual([]);
+    expect(
+      performancePublicationResultFindings(result, {
+        assessBuildPersistence: options.assessBuildPersistence,
+        authenticated,
+        operations: options.operations,
+        ratify: (entries) => options.ratify(entries),
+      }),
+    ).toEqual([]);
+    expect(renderPerformancePublicationMarkdown(result.publication)).toContain(
+      `- ${requiredFailure}`,
+    );
+
+    const forged = structuredClone(result.publication);
+    forged.verdict = { failures: [], reasons: [], status: 'publishable' };
+    resealPublication(forged);
+
+    expect(performancePublicationFindings(forged)).toEqual(
+      expect.arrayContaining([
+        'publication blocking failures are not derived from its families and build persistence decision',
+        'publication verdict is not derived from its family census',
+      ]),
+    );
+    expect(() => renderPerformancePublicationMarkdown(forged)).toThrow(
+      /publication blocking failures are not derived/u,
+    );
+  });
+
+  it('retains data-plane regression checks in the exact dev publication census', () => {
+    const result = derivePerformancePublication(authenticatedFixture(), fixtureDerivationOptions());
+    const dataP95 = 'corpus-n24/dev//edit.dataMs.p95';
+
+    for (const phase of ['baseline', 'holdout']) {
+      expect(result.publication.families['dev-n24'].targetAssessment[phase].checks).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: dataP95, kind: 'regression' })]),
+      );
+    }
+    expect(renderPerformancePublicationMarkdown(result.publication)).toContain(dataP95);
+
+    const forged = structuredClone(result.publication);
+    for (const phase of ['baseline', 'holdout']) {
+      forged.families['dev-n24'].targetAssessment[phase].checks = forged.families[
+        'dev-n24'
+      ].targetAssessment[phase].checks.filter(({ id }) => id !== dataP95);
+    }
+    resealPublication(forged);
+
+    expect(performancePublicationFindings(forged)).toEqual(
+      expect.arrayContaining([
+        'dev-n24 baseline target check census differs from policy',
+        'dev-n24 holdout target check census differs from policy',
+      ]),
+    );
+    expect(() => renderPerformancePublicationMarkdown(forged)).toThrow(
+      /dev-n24 baseline target check census differs from policy/u,
+    );
+  });
+
+  it('blocks the aggregate when an otherwise measured dev holdout regresses on dataMs', () => {
+    const options = fixtureDerivationOptions();
+    options.operations['dev-n24'] = {
+      ...options.operations['dev-n24'],
+      evaluate: (budget, candidate) => {
+        const evaluation = fixtureEvaluation('dev-n24', budget, candidate);
+        const id = 'corpus-n24/dev//edit.dataMs.p95';
+        const check = evaluation.checks.find((entry) => entry.id === id);
+        check.status = 'fail';
+        check.value = check.limit + 1;
+        evaluation.verdict = { failures: [id], reasons: [], status: 'regression' };
+        return evaluation;
+      },
+    };
+
+    const result = derivePerformancePublication(authenticatedFixture(), options);
+
+    expect(result.publication.families['dev-n24']).toMatchObject({
+      holdoutEvaluation: {
+        failures: ['corpus-n24/dev//edit.dataMs.p95'],
+        status: 'regression',
+      },
+      status: 'blocked',
+      targetAssessment: {
+        holdout: {
+          failures: ['corpus-n24/dev//edit.dataMs.p95'],
+          status: 'fail',
+        },
+        status: 'fail',
+      },
+    });
+    expect(result.publication.verdict).toMatchObject({
+      failures: [
+        'dev-n24:corpus-n24/dev//edit.dataMs.p95',
+        'dev-n24:holdout:corpus-n24/dev//edit.dataMs.p95',
+      ],
+      status: 'blocked',
+    });
+    expect(performancePublicationFindings(result.publication)).toEqual([]);
+    expect(renderPerformancePublicationMarkdown(result.publication)).toContain(
+      'holdout corpus-n24/dev//edit.dataMs.p95',
     );
   });
 
@@ -670,6 +832,7 @@ function fixturePersistenceAssessment(
   {
     findings = [],
     outcome = 'not-warranted',
+    profileEntries = [],
     rationale = 'all-warm-cells-meet-first-milestone',
   } = {},
 ) {
@@ -678,7 +841,7 @@ function fixturePersistenceAssessment(
     cells: [n24Budget, n216Budget].flatMap((budget) =>
       ['unchanged', 'edit'].map((mode) => {
         const profileBranch =
-          outcome === 'profile-required' &&
+          ['profile-required', 'warranted'].includes(outcome) &&
           budget.subject.corpusSize === 216 &&
           mode === 'unchanged';
         return {
@@ -705,7 +868,16 @@ function fixturePersistenceAssessment(
       sessionEligiblePhases: ['config-trust', 'typescript', 'stylesheet'],
       upperWallMinimumRatio: 0.1,
     },
-    profiles: [],
+    profiles: profileEntries.map((entry) => ({
+      ...entry.custody,
+      contentDigest: entry.contentDigest,
+      execution: entry.report.execution.digest,
+      location: entry.location,
+      mode: entry.report.subject.mode,
+      profileArtifact: entry.report.profileArtifact,
+      reportDigest: entry.report.digest,
+      topFive: entry.report.topFive,
+    })),
     schema: 'kovo-build-persistence-assessment/v1',
     verdict: {
       findings,
@@ -758,14 +930,21 @@ function fixtureBudget(familyName, baseline) {
     };
     common.metrics = Object.fromEntries(
       [
-        'ready.durationMs',
         'edit.leafMs',
         'edit.entryMs',
+        'edit.dataMs',
         'edit.syntaxErrorMs',
         'edit.recoveryMs',
+        'edit.peakRssBytes',
+        'ready.durationMs',
+        'ready.peakRssBytes',
       ].map((suffix) => [
         `${prefix}${suffix}`,
-        { baseline: { median: 100, nextMedian: 100, p95: 200 } },
+        {
+          baseline: { median: 100, nextMedian: 100, p95: 200 },
+          medianMaximum: 105,
+          p95Maximum: 210,
+        },
       ]),
     );
     return common;
@@ -807,15 +986,17 @@ function fixtureEvaluation(familyName, budget, candidate) {
           status: 'pass',
           value: passingTargetObservation(specification),
         }))
-      : [
-          {
-            id: `${familyName}.target`,
-            kind,
-            limit: 2,
-            status: 'pass',
-            value: 1,
-          },
-        ];
+      : familyName.startsWith('dev-')
+        ? fixtureDevEvaluationChecks(budget)
+        : [
+            {
+              id: `${familyName}.target`,
+              kind,
+              limit: 2,
+              status: 'pass',
+              value: 1,
+            },
+          ];
   return {
     budget: budget.digest,
     candidate: { execution: candidate.execution.digest, sourceCommit: candidate.source.commit },
@@ -823,6 +1004,63 @@ function fixtureEvaluation(familyName, budget, candidate) {
     schema: `fixture-${familyName}-evaluation/v1`,
     verdict: { failures: [], reasons: [], status: 'pass' },
   };
+}
+
+function fixtureDevEvaluationChecks(budget) {
+  const prefix = `corpus-n${String(budget.subject.corpusSize)}/dev//`;
+  return [
+    ...Object.entries(budget.metrics).flatMap(([metric, entry]) => [
+      {
+        id: `${metric}.median`,
+        kind: 'regression',
+        limit: entry.medianMaximum,
+        status: 'pass',
+        value: entry.baseline.median,
+      },
+      {
+        id: `${metric}.p95`,
+        kind: 'regression',
+        limit: entry.p95Maximum,
+        status: 'pass',
+        value: entry.baseline.p95,
+      },
+    ]),
+    {
+      id: `${prefix}ready.durationMs.median-vs-next`,
+      kind: 'competitive-target',
+      limit: 2,
+      status: 'pass',
+      value: 1,
+    },
+    {
+      id: `${prefix}edit.leafMs.median-vs-next`,
+      kind: 'competitive-target',
+      limit: 2,
+      status: 'pass',
+      value: 1,
+    },
+    {
+      id: `${prefix}edit.entryMs.median-vs-next`,
+      kind: 'competitive-target',
+      limit: 3,
+      status: 'pass',
+      value: 1,
+    },
+    {
+      id: `${prefix}edit.syntaxErrorMs.p95-target`,
+      kind: 'target',
+      limit: 1_000,
+      status: 'pass',
+      value: 200,
+    },
+    {
+      id: `${prefix}edit.recoveryMs.p95-target`,
+      kind: 'target',
+      limit: 2_000,
+      status: 'pass',
+      value: 200,
+    },
+  ];
 }
 
 function fixtureComparisonTargetChecks(familyName) {
@@ -839,7 +1077,7 @@ function passingTargetObservation(specification) {
 }
 
 function targetKinds(familyName) {
-  if (familyName.startsWith('dev-')) return ['competitive-target', 'target'];
+  if (familyName.startsWith('dev-')) return ['competitive-target', 'regression', 'target'];
   if (familyName.startsWith('build-')) return ['milestone'];
   return ['target'];
 }

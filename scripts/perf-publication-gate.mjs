@@ -66,6 +66,18 @@ const REQUIRED_LOCKS = Object.freeze([
 ]);
 const BUILD_MODES = Object.freeze(['clean', 'unchanged', 'edit']);
 const BUILD_PROFILE_MODES = Object.freeze(['unchanged', 'edit']);
+const DEV_PERFORMANCE_METRICS = Object.freeze([
+  'edit.leafMs',
+  'edit.entryMs',
+  'edit.dataMs',
+  'edit.syntaxErrorMs',
+  'edit.recoveryMs',
+  'edit.peakRssBytes',
+  'ready.durationMs',
+  'ready.peakRssBytes',
+]);
+const BUILD_PERSISTENCE_DECISION_REQUIRED_FAILURE =
+  'build-persistence:foreground-session-implementation-and-measured-decision-required';
 const BUILD_PROFILE_ARTIFACT_NAME = 'kovo-perf-build-profile-n216';
 const BUILD_PROFILE_WORKFLOW_JOB = Object.freeze({
   artifact: Object.freeze({
@@ -126,7 +138,7 @@ const FAMILY_CONFIG = Object.freeze({
     derive: deriveDevPerformanceBudget,
     evaluate: evaluateDevPerformanceBudget,
     reportMember: 'comparison.json',
-    targetKinds: ['competitive-target', 'target'],
+    targetKinds: ['competitive-target', 'regression', 'target'],
     workflowJob: workflowJob({
       artifactName: 'kovo-perf-dev-n${{ matrix.corpus }}',
       artifactPath: '${{ runner.temp }}/kovo-perf/dev-n${{ matrix.corpus }}',
@@ -145,7 +157,7 @@ const FAMILY_CONFIG = Object.freeze({
     derive: deriveDevPerformanceBudget,
     evaluate: evaluateDevPerformanceBudget,
     reportMember: 'comparison.json',
-    targetKinds: ['competitive-target', 'target'],
+    targetKinds: ['competitive-target', 'regression', 'target'],
     workflowJob: workflowJob({
       artifactName: 'kovo-perf-dev-n${{ matrix.corpus }}',
       artifactPath: '${{ runner.temp }}/kovo-perf/dev-n${{ matrix.corpus }}',
@@ -491,25 +503,22 @@ export function derivePerformancePublication(
     if (assessmentFindings.length > 0) {
       throw new TypeError(assessmentFindings.join('; '));
     }
-    if (buildPersistenceAssessment.verdict.status === 'unproven') {
-      const persistenceFindings = buildPersistenceAssessment.verdict.findings;
-      reasons.push(
-        ...(persistenceFindings.length > 0
-          ? persistenceFindings.map((finding) => `build persistence ${finding}`)
-          : [`build persistence is ${buildPersistenceAssessment.verdict.outcome}`]),
-      );
-    }
+    reasons.push(...buildPersistencePublicationReasons(buildPersistenceAssessment));
   } catch (error) {
     reasons.push(`build persistence ${error instanceof Error ? error.message : String(error)}`);
     buildPersistenceAssessment = assessBuildForegroundSession({});
+    reasons.push(...buildPersistencePublicationReasons(buildPersistenceAssessment));
   }
 
   const uniqueReasons = [...new Set(reasons)].sort();
-  const failures = blockingFailures(families);
+  const failures = [
+    ...blockingFailures(families),
+    ...buildPersistenceBlockingFailures(buildPersistenceAssessment),
+  ].sort((left, right) => left.localeCompare(right));
   const status =
     uniqueReasons.length > 0 || FAMILY_NAMES.some((name) => families[name]?.status === 'unproven')
       ? 'unproven'
-      : FAMILY_NAMES.some((name) => families[name]?.status !== 'pass')
+      : failures.length > 0 || FAMILY_NAMES.some((name) => families[name]?.status !== 'pass')
         ? 'blocked'
         : 'publishable';
   const facts = {
@@ -761,15 +770,32 @@ export function performancePublicationFindings(publication) {
   ) {
     findings.push('publication verdict reasons are malformed');
   }
-  const expectedFailures = blockingFailures(publication.families ?? {});
+  const requiredPersistenceReasons = buildPersistencePublicationReasons(
+    publication.buildPersistenceAssessment,
+  );
+  if (
+    requiredPersistenceReasons.some(
+      (reason) => !Array.isArray(verdictReasons) || !verdictReasons.includes(reason),
+    )
+  ) {
+    findings.push('publication verdict does not retain the unproven build persistence findings');
+  }
+  const expectedFailures = [
+    ...blockingFailures(publication.families ?? {}),
+    ...buildPersistenceBlockingFailures(publication.buildPersistenceAssessment),
+  ].sort((left, right) => left.localeCompare(right));
   if (canonicalJson(publication.verdict?.failures) !== canonicalJson(expectedFailures)) {
-    findings.push('publication blocking failures are not derived from its families');
+    findings.push(
+      'publication blocking failures are not derived from its families and build persistence decision',
+    );
   }
   const expectedStatus =
     (verdictReasons?.length ?? 0) > 0 ||
+    publication.buildPersistenceAssessment?.verdict?.status === 'unproven' ||
     FAMILY_NAMES.some((name) => publication.families?.[name]?.status === 'unproven')
       ? 'unproven'
-      : FAMILY_NAMES.some((name) => publication.families?.[name]?.status !== 'pass')
+      : expectedFailures.length > 0 ||
+          FAMILY_NAMES.some((name) => publication.families?.[name]?.status !== 'pass')
         ? 'blocked'
         : 'publishable';
   if (publication.verdict?.status !== expectedStatus) {
@@ -993,7 +1019,20 @@ function devBaselineTargetAssessment(budget) {
   const size = budget.subject?.corpusSize;
   const prefix = `corpus-n${String(size)}/dev//`;
   const targets = budget.policy?.targets;
-  const checks = [
+  const checks = DEV_PERFORMANCE_METRICS.flatMap((suffix) => {
+    const metric = `${prefix}${suffix}`;
+    const entry = budget.metrics?.[metric];
+    return [
+      upperTargetCheck(
+        `${metric}.median`,
+        entry?.baseline?.median,
+        entry?.medianMaximum,
+        'regression',
+      ),
+      upperTargetCheck(`${metric}.p95`, entry?.baseline?.p95, entry?.p95Maximum, 'regression'),
+    ];
+  });
+  checks.push(
     ratioBudgetCheck(
       `${prefix}ready.durationMs.median-vs-next`,
       budget.metrics?.[`${prefix}ready.durationMs`]?.baseline,
@@ -1024,7 +1063,7 @@ function devBaselineTargetAssessment(budget) {
       targets?.recoveryP95MaximumMs,
       'target',
     ),
-  ];
+  );
   return assessmentFromChecks(checks);
 }
 
@@ -1279,6 +1318,22 @@ function evaluationReference(evaluation) {
     reasons: sortedUniqueStrings(evaluation?.verdict?.reasons ?? []),
     status: evaluation?.verdict?.status ?? null,
   };
+}
+
+function buildPersistencePublicationReasons(assessment) {
+  if (assessment?.verdict?.status !== 'unproven') return [];
+  const persistenceFindings = Array.isArray(assessment.verdict.findings)
+    ? assessment.verdict.findings
+    : [];
+  return persistenceFindings.length > 0
+    ? persistenceFindings.map((finding) => `build persistence ${String(finding)}`)
+    : [`build persistence is ${String(assessment.verdict.outcome)}`];
+}
+
+function buildPersistenceBlockingFailures(assessment) {
+  return assessment?.verdict?.outcome === 'warranted'
+    ? [BUILD_PERSISTENCE_DECISION_REQUIRED_FAILURE]
+    : [];
 }
 
 function blockingFailures(families) {
@@ -2222,6 +2277,26 @@ function targetAssessmentFindings(value, familyName) {
       if (canonicalJson(observedCensus) !== canonicalJson(expectedCensus)) {
         findings.push(`${familyName} ${phase} target check census differs from policy`);
       }
+    } else if (familyName.startsWith('dev-')) {
+      const expectedCensus = devTargetCheckSpecifications(familyName);
+      const observedCensus = assessment.checks.map((check) => ({
+        id: check?.id,
+        kind: check?.kind,
+        operator: check?.operator,
+      }));
+      if (
+        canonicalJson(observedCensus) !==
+        canonicalJson(expectedCensus.map(({ id, kind, operator }) => ({ id, kind, operator })))
+      ) {
+        findings.push(`${familyName} ${phase} target check census differs from policy`);
+      }
+      for (const specification of expectedCensus) {
+        if (!Number.isFinite(specification.limit)) continue;
+        const observed = assessment.checks.find((check) => check?.id === specification.id);
+        if (observed?.limit !== specification.limit) {
+          findings.push(`${familyName} ${phase} target check limits differ from policy`);
+        }
+      }
     }
     const expectedPhaseStatus = expectedFailures.length === 0 ? 'pass' : 'fail';
     if (
@@ -2251,6 +2326,50 @@ function targetAssessmentFindings(value, familyName) {
     }
   }
   return findings;
+}
+
+function devTargetCheckSpecifications(familyName) {
+  const corpusSize = familyName === 'dev-n24' ? 24 : familyName === 'dev-n216' ? 216 : null;
+  const prefix = `corpus-n${String(corpusSize)}/dev//`;
+  return [
+    ...DEV_PERFORMANCE_METRICS.flatMap((suffix) => {
+      const metric = `${prefix}${suffix}`;
+      return [
+        { id: `${metric}.median`, kind: 'regression', operator: '<=' },
+        { id: `${metric}.p95`, kind: 'regression', operator: '<=' },
+      ];
+    }),
+    {
+      id: `${prefix}ready.durationMs.median-vs-next`,
+      kind: 'competitive-target',
+      limit: 2,
+      operator: '<=',
+    },
+    {
+      id: `${prefix}edit.leafMs.median-vs-next`,
+      kind: 'competitive-target',
+      limit: 2,
+      operator: '<=',
+    },
+    {
+      id: `${prefix}edit.entryMs.median-vs-next`,
+      kind: 'competitive-target',
+      limit: 3,
+      operator: '<=',
+    },
+    {
+      id: `${prefix}edit.syntaxErrorMs.p95-target`,
+      kind: 'target',
+      limit: 1_000,
+      operator: '<=',
+    },
+    {
+      id: `${prefix}edit.recoveryMs.p95-target`,
+      kind: 'target',
+      limit: 2_000,
+      operator: '<=',
+    },
+  ];
 }
 
 function evaluationReferenceFindings(value, familyName) {

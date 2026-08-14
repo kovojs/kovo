@@ -75,6 +75,15 @@ all agree. Even then, `app-source-trust`, worker/deployment phases, launch/trans
 unattributed stacks remain one-shot or ineligible. This is the source/deploy honesty boundary from
 SPEC §5.2 rule 9, expressed as data rather than reviewer convention.
 
+The publication boundary distinguishes a decided predicate from a finished production decision.
+`not-warranted` is decided and does not block an otherwise passing seven-family publication.
+`profile-required` and `unproven` keep the publication unproven. `warranted` is also a decided
+predicate, but it means the implementation and its serialized foreground-versus-one-shot
+measurement have not happened yet, so the aggregate is `blocked` with the explicit failure
+`build-persistence:foreground-session-implementation-and-measured-decision-required`. A warranted
+predicate must never be rendered or validated as `publishable` merely because its assessment
+status is `decided`.
+
 The standalone `assess-persistence` command accepts the exact N=24/N=216 budgets and validates its
 derived assessment against those inputs before writing it, but it does not accept `--profile`.
 Caller-authored JSON cannot prove custody. Until profile authentication is shared, only the

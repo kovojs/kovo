@@ -340,6 +340,20 @@ the architectural lane warning beside each subject. It also embeds and renders t
 foreground build-session assessment, including its four milestone/residual cells and any
 custody-authenticated profile references.
 
+For each dev family, the rendered baseline and holdout target assessments include the exact median
+and p95 regression census for leaf, entry, data-plane, syntax-error, recovery, ready, and
+process-tree RSS metrics, followed by the fixed competitive/latency targets. `edit.dataMs` is not an
+optional diagnostic: a missing row makes the publication malformed, and a measured data-plane
+regression blocks the aggregate even when every other developer-loop row passes.
+
+The foreground-session assessment has three distinct aggregate effects. `not-warranted` is a
+complete decision and adds no publication failure. `profile-required` and `unproven` leave the
+aggregate unproven. A valid `warranted` outcome is also a complete predicate decision, but it proves
+that implementation and serialized baseline/candidate measurement are still required; the
+aggregate is therefore `blocked` and retains
+`build-persistence:foreground-session-implementation-and-measured-decision-required` until that
+production decision has been completed and represented by a reviewed gate contract.
+
 The gate derives the API and artifact-page URLs from the repository-scoped artifact and run IDs;
 there is no user-supplied evidence URL. It retains the saved and live artifact, run, and job API
 response digests for audit, then canonicalizes only their reviewed immutable fields and requires the
@@ -405,8 +419,9 @@ descendant census, unauthenticated executable, negative CPU residual, or positiv
 the uncertainty bound makes the diagnostic unproven. Phase-clock durations are never converted
 into CPU samples.
 
-Exit status is `0` only for `publishable`, `1` for measured evidence blocked by a target or regression,
-and `2` for unproven custody, identity, workload, or integrity. The command must run from the clean
+Exit status is `0` only for `publishable`, `1` for measured evidence blocked by a target, regression,
+or warranted-but-not-yet-measured foreground-session implementation, and `2` for unproven custody,
+identity, workload, or integrity. The command must run from the clean
 measured-source checkout with authenticated `gh` network access. It live-fetches every canonical
 artifact, run, all-attempt jobs, and commit-addressed workflow-file endpoint. The first three live
 responses must produce the same canonical immutable authority projections as their saved `gh api`
