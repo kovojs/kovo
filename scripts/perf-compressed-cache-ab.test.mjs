@@ -229,6 +229,56 @@ describe('compressed proved-document cache A/B runner', () => {
     expect(report.environment.hostSamples.every((sample) => sample.phase)).toBe(true);
   });
 
+  it('rejects a truthy placeholder in place of exact response headers', async () => {
+    const source = sourceFixture();
+    const report = await runCompressedCacheAb(
+      {
+        bootstrapIterations: 100,
+        concurrencies: [1],
+        durationMs: 25,
+        encodings: ['br'],
+        hostSettleMaxMs: 100,
+        hostSettlePollMs: 10,
+        maxLoadPerCpu: 0.5,
+        modes: ['HIT'],
+        routes: ['listing'],
+        samples: 1,
+        warmupMs: 25,
+      },
+      {
+        collectProvenance: () => structuredClone(source),
+        executeAdapter: async ({ args, env }) => {
+          if (args.includes('--prepare-only')) {
+            return { processError: null, report: preparationFixture(source) };
+          }
+          const arm =
+            env[PROVED_DOCUMENT_COMPRESSION_CACHE_DISABLE_ENV] === '1' ? 'baseline' : 'spike';
+          const adapter = adapterFixture({
+            arm,
+            condition: conditionFromArgs(args),
+            occurrence: 0,
+            source,
+          });
+          adapter.correctness.exactResponseHeaders = true;
+          return { processError: null, report: adapter };
+        },
+        identifyWorkload: () => ({ digest: digest('f'), schema: 'fixture-workload/v1' }),
+        sampleHost: () => ({
+          at: '2026-08-13T00:00:00.000Z',
+          cpuCount: 8,
+          loadAverage: [0.8, 0.7, 0.6],
+          loadPerCpu: 0.1,
+        }),
+      },
+    );
+
+    expect(report.integrity.complete).toBe(false);
+    expect(report.integrity.errors).toEqual(
+      expect.arrayContaining([expect.stringContaining('wire correctness evidence is incomplete')]),
+    );
+    expect(report.verdict.status).toBe('unproven');
+  });
+
   it('waits only to the configured host bound and runs no adapter while load stays high', async () => {
     const source = sourceFixture();
     const executeAdapter = vi.fn();

@@ -688,12 +688,15 @@ function validateCacheCell(report, expected) {
     expected.condition.encoding === 'br' && expected.condition.mode !== '304'
       ? 'required-fresh'
       : 'absent';
+  const exactResponseHeaders = correctness?.exactResponseHeaders;
   if (
     correctness?.status !== expectedStatus ||
     correctness?.requestAcceptEncoding !== expected.condition.encoding ||
     correctness?.kovoPad !== expectedPad ||
     !/^sha256:[0-9a-f]{64}$/u.test(correctness?.bodySha256 ?? '') ||
-    !correctness?.exactResponseHeaders ||
+    exactResponseHeaders === null ||
+    typeof exactResponseHeaders !== 'object' ||
+    Array.isArray(exactResponseHeaders) ||
     (expected.condition.encoding === 'identity' && correctness?.contentEncoding !== null) ||
     (expected.condition.encoding === 'br' &&
       expected.condition.mode !== '304' &&

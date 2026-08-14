@@ -205,15 +205,24 @@ benchmarks/corpora/dev-loop.test.mjs --reporter=dot` passed 39/39. Current-head 
     precedence; authenticated B,S,S,B evidence in
     `docs/performance/speculation-rules-repair-and-decision.md` rejected opt-in because desktop's
     +1.51% CI crossed zero and mobile regressed 7.61% with CI excluding zero. Default-off remains.
-- [ ] Implement a switchable compressed proved-document cache spike with a module-private witness
+- [x] Implement a switchable compressed proved-document cache spike with a module-private witness
       carrying build token and body digest, bounded `{token,digest,encoding}` entries, and single-flight
       compression across live Node and emitted Node/Vercel adapters.
   - Required floors: public ETags cannot mint identity; cookie/authorization/Set-Cookie/
     Clear-Site-Data/private/no-store/no-transform/HEAD/304 bypass; `Kovo-Pad` is fresh on every hit;
     build changes and eviction cannot substitute bodies.
-- [ ] Measure the compressed-cache spike in seven alternating 15-second samples after 5-second
+  - Evidence: `f2da7687e`; `pnpm exec vitest --run scripts/perf-compressed-cache-ab.test.mjs
+scripts/perf-server-benchmark.test.mjs packages/server/src/build-compressed-document-cache.test.ts
+packages/server/src/node.test.ts --reporter=dot` passed 88/88 and covers private authority,
+    exact identity, bypass floors, single-flight, LRU bounds, and disable-only parity.
+- [x] Measure the compressed-cache spike in seven alternating 15-second samples after 5-second
       warmups at c={1,8,32}, routes={listing,detail}, encodings={identity,br}, and modes={HIT,304,dynamic};
       report req/s, p50/p95/p99, CPU, and RSS with the validated repo generator.
+  - Evidence: [run `31751766130`, artifact
+    `9205286040`](https://github.com/kovojs/kovo/actions/runs/31751766130/artifacts/9205286040)
+    authenticated 504/504 clean B,S,S,B windows and accepted criterion A at +48.84% median
+    throughput, paired 95% CI `[46.86%, 51.39%]`; full cells and custody are in
+    `docs/performance-compressed-cache-ab.md`.
 - [x] Measure per-route stylesheet splitting on the matched multi-route fixtures; implement only if
       it saves at least 10% route critical-path bytes without duplicating enough shared CSS to regress
       total session bytes.
