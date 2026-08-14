@@ -14,6 +14,10 @@ import { collectPerformanceProvenance } from '../../scripts/lib/perf-provenance.
 import { performanceExecutionIdentity } from '../../scripts/lib/perf-execution.mjs';
 import { performanceHostFingerprint } from '../../scripts/lib/perf-host.mjs';
 import { processTreeRssBytes } from '../../scripts/lib/process-tree-rss.mjs';
+import {
+  DEV_EDIT_PROFILE_CLASSIFIER,
+  DEV_EDIT_PROFILE_SCHEMA,
+} from '../../scripts/perf-dev-edit-profile.mjs';
 import { CORPUS_SCHEMA, EDIT_REFRESH_SURFACES, EDIT_STATE_POSTURE } from './generate.mjs';
 
 export const DEV_LOOP_REPORT_SCHEMA = 'kovo-dev-loop-report/v1';
@@ -1563,8 +1567,11 @@ export function diagnosticProfileFindings(report, expected) {
     return findings;
   }
   const expectedWindows = (report?.integrity?.iterations ?? 0) * ALL_EDIT_CLASSES.length;
-  if (diagnostic?.schema !== 'kovo-dev-edit-profile/v1') {
+  if (diagnostic?.schema !== DEV_EDIT_PROFILE_SCHEMA) {
     findings.push('diagnostic edit profile schema is missing');
+  }
+  if (diagnostic?.classifier !== DEV_EDIT_PROFILE_CLASSIFIER) {
+    findings.push('diagnostic edit profile classifier is stale or missing');
   }
   if (
     diagnostic?.diagnosticOnly?.profilerPerturbsDurations !== true ||
@@ -1577,6 +1584,18 @@ export function diagnosticProfileFindings(report, expected) {
     diagnostic?.windows?.length !== expectedWindows
   ) {
     findings.push(`diagnostic edit profile window count did not equal ${String(expectedWindows)}`);
+  }
+  if (
+    JSON.stringify(diagnostic?.profileArtifacts) !==
+    JSON.stringify(
+      (diagnostic?.windows ?? []).map(({ artifact, editClass, iteration }) => ({
+        artifact,
+        editClass,
+        iteration,
+      })),
+    )
+  ) {
+    findings.push('diagnostic raw profile artifact census differs from exact windows');
   }
   const identities = new Set();
   for (const observation of diagnostic?.windows ?? []) {

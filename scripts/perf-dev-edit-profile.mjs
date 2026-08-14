@@ -7,10 +7,12 @@
  * through the destination paint fence. Profile-perturbed wall/RSS values remain diagnostic-only.
  */
 import { createHash } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 export const DEV_EDIT_PROFILE_SCHEMA = 'kovo-dev-edit-profile/v1';
+export const DEV_EDIT_PROFILE_CLASSIFIER = 'kovo-dev-edit-profile-classifier/stack-v2';
+export const DEV_EDIT_PROFILE_AUDIT_SCHEMA = 'kovo-dev-edit-profile-audit/v1';
 export const DEV_EDIT_PROFILE_CATEGORIES = Object.freeze([
   'self-time',
   'allocation',
@@ -33,7 +35,10 @@ export async function createDevEditProfiler(options, dependencies = {}) {
   const modules = boundedInteger(options.modules, 1, 10_000, 'modules');
   const profileDir = path.resolve(requiredString(options.profileDir, 'profileDir'));
   const workload = {
+    classifier: DEV_EDIT_PROFILE_CLASSIFIER,
+    cpuSamplingIntervalMicros: CPU_SAMPLING_INTERVAL_US,
     framework,
+    heapSamplingIntervalBytes: HEAP_SAMPLING_INTERVAL_BYTES,
     modules,
     profileScope: 'measured-source-write-through-destination-paint',
     schema: 'kovo-dev-edit-profile-workload/v1',
@@ -126,11 +131,19 @@ export async function createDevEditProfiler(options, dependencies = {}) {
     stopWindow,
     summary() {
       if (active !== null) throw new Error('cannot summarize an active diagnostic edit window');
+      const editWindowCounts = {};
+      for (const { identity } of rawWindows) {
+        editWindowCounts[identity.editClass] = (editWindowCounts[identity.editClass] ?? 0) + 1;
+      }
+      const authenticatedWorkload = { ...workload, editWindowCounts };
       return summarizeProfileWindows(rawWindows, {
         cpuSamplingIntervalMicros: CPU_SAMPLING_INTERVAL_US,
         heapSamplingIntervalBytes: HEAP_SAMPLING_INTERVAL_BYTES,
         observations,
-        workload: { ...workload, digest: sha256(JSON.stringify(workload)) },
+        workload: {
+          ...authenticatedWorkload,
+          digest: sha256(JSON.stringify(authenticatedWorkload)),
+        },
       });
     },
   };
@@ -156,53 +169,34 @@ export function analyzeDevEditProfiles({ cpu, heap }) {
   const unknownAllocation = { bytes: 0 };
 
   for (const entry of cpuFrames) {
-    const categories = classifyFrame(entry.frame);
     categoryMap.get('self-time').cpuSamples += entry.samples;
     categoryMap.get('self-time').selfTimeMicros += entry.selfTimeMicros;
-    if (categories.length === 0) {
+    if (entry.categories.length === 0) {
       unknownCpu.samples += entry.samples;
       unknownCpu.selfTimeMicros += entry.selfTimeMicros;
     }
-    for (const category of categories) {
+    for (const category of entry.categories) {
       categoryMap.get(category).cpuSamples += entry.samples;
       categoryMap.get(category).selfTimeMicros += entry.selfTimeMicros;
     }
   }
   for (const entry of allocationFrames) {
     categoryMap.get('allocation').allocationBytes += entry.bytes;
-    if (classifyFrame(entry.frame).length === 0) unknownAllocation.bytes += entry.bytes;
+    if (entry.categories.length === 0) unknownAllocation.bytes += entry.bytes;
+    for (const category of entry.categories) {
+      categoryMap.get(category).allocationBytes += entry.bytes;
+    }
   }
 
-  const topFive = [...categoryMap]
-    .map(([category, counts]) => ({
-      allocationBytes: counts.allocationBytes,
-      allocationPercent:
-        allocatedBytes === 0 ? null : percent(counts.allocationBytes, allocatedBytes),
-      category,
-      cpuSelfPercent: percent(counts.selfTimeMicros, totalCpuMicros),
-      cpuSelfSamples: counts.cpuSamples,
-      selfTimeMicros: counts.selfTimeMicros,
-      evidence:
-        category === 'allocation'
-          ? 'Inspector HeapProfiler sampling within exact edit-to-paint window'
-          : 'Inspector CPU self time from sampled time deltas within exact edit-to-paint window',
-      status:
-        category === 'allocation' && allocatedBytes === 0
-          ? 'unavailable'
-          : counts.cpuSamples === 0 && counts.allocationBytes === 0
-            ? 'absent'
-            : 'observed',
-    }))
-    .sort(
-      (left, right) =>
-        right.selfTimeMicros - left.selfTimeMicros ||
-        right.allocationBytes - left.allocationBytes ||
-        left.category.localeCompare(right.category),
-    )
+  const rankedCategories = [...categoryMap].map(([category, counts]) =>
+    categoryEvidence(category, counts, { allocatedBytes, totalCpuMicros }),
+  );
+  const topFive = rankedCategories
+    .sort(compareCategoryEvidence)
     .filter((entry) => entry.cpuSelfSamples > 0 || entry.allocationBytes > 0)
     .slice(0, 5)
     .map((entry, index) => ({ ...entry, rank: index + 1 }));
-  const topSelfFrames = cpuFrames
+  const topSelfFrames = aggregateCpuFrames(cpuFrames)
     .sort(
       (left, right) =>
         right.selfTimeMicros - left.selfTimeMicros ||
@@ -216,7 +210,7 @@ export function analyzeDevEditProfiles({ cpu, heap }) {
       selfSamples: entry.samples,
       selfTimeMicros: entry.selfTimeMicros,
     }));
-  const topAllocationFrames = allocationFrames
+  const topAllocationFrames = aggregateAllocationFrames(allocationFrames)
     .sort(
       (left, right) =>
         right.bytes - left.bytes || frameKey(left.frame).localeCompare(frameKey(right.frame)),
@@ -229,14 +223,9 @@ export function analyzeDevEditProfiles({ cpu, heap }) {
       const ranked = topFive.find((entry) => entry.category === category);
       const counts = categoryMap.get(category);
       const observed = counts.cpuSamples > 0 || counts.allocationBytes > 0;
+      const evidence = categoryEvidence(category, counts, { allocatedBytes, totalCpuMicros });
       return {
-        allocationBytes: counts.allocationBytes,
-        allocationPercent:
-          allocatedBytes === 0 ? null : percent(counts.allocationBytes, allocatedBytes),
-        category,
-        cpuSelfPercent: percent(counts.selfTimeMicros, totalCpuMicros),
-        cpuSelfSamples: counts.cpuSamples,
-        selfTimeMicros: counts.selfTimeMicros,
+        ...evidence,
         ruling: ranked
           ? 'present-in-current-top-five'
           : observed
@@ -257,6 +246,7 @@ export function analyzeDevEditProfiles({ cpu, heap }) {
       unknownCpuSelfMicros: unknownCpu.selfTimeMicros,
     },
     note: 'Category evidence can overlap. Unknown frames remain unattributed; CPU and heap samples are never converted into invented phase durations.',
+    classifier: DEV_EDIT_PROFILE_CLASSIFIER,
     topAllocationFrames,
     topFive,
     topSelfFrames,
@@ -292,21 +282,10 @@ export function summarizeProfileWindows(windows, options = {}) {
     totalCpuSelfMicros += window.analysis.census.totalCpuSelfMicros;
   }
   const ranking = [...aggregate]
-    .map(([category, counts]) => ({
-      allocationBytes: counts.allocationBytes,
-      allocationPercent:
-        allocatedBytes === 0 ? null : percent(counts.allocationBytes, allocatedBytes),
-      category,
-      cpuSelfPercent: percent(counts.selfTimeMicros, totalCpuSelfMicros),
-      cpuSelfSamples: counts.cpuSamples,
-      selfTimeMicros: counts.selfTimeMicros,
-    }))
-    .sort(
-      (left, right) =>
-        right.selfTimeMicros - left.selfTimeMicros ||
-        right.allocationBytes - left.allocationBytes ||
-        left.category.localeCompare(right.category),
-    );
+    .map(([category, counts]) =>
+      categoryEvidence(category, counts, { allocatedBytes, totalCpuMicros: totalCpuSelfMicros }),
+    )
+    .sort(compareCategoryEvidence);
   const topFive = ranking
     .filter((entry) => entry.cpuSelfSamples > 0 || entry.allocationBytes > 0)
     .slice(0, 5)
@@ -329,6 +308,7 @@ export function summarizeProfileWindows(windows, options = {}) {
       reason:
         'Inspector CPU and heap samplers perturb edit-to-paint duration and RSS; only ranked self/allocation evidence is diagnostic.',
     },
+    classifier: DEV_EDIT_PROFILE_CLASSIFIER,
     profileArtifacts: windows.map(({ artifact, identity }) => ({ artifact, ...identity })),
     sampling: {
       cpuIntervalMicros: options.cpuSamplingIntervalMicros ?? CPU_SAMPLING_INTERVAL_US,
@@ -342,32 +322,155 @@ export function summarizeProfileWindows(windows, options = {}) {
   };
 }
 
+/** Re-read every retained Inspector file and reproduce the report summary from those exact bytes. */
+export async function auditDevEditProfileArtifacts({ diagnostic, profileDir }) {
+  if (diagnostic?.schema !== DEV_EDIT_PROFILE_SCHEMA) {
+    throw new TypeError(`diagnostic report must use ${DEV_EDIT_PROFILE_SCHEMA}`);
+  }
+  if (diagnostic.classifier !== DEV_EDIT_PROFILE_CLASSIFIER) {
+    throw new TypeError(`diagnostic report must use ${DEV_EDIT_PROFILE_CLASSIFIER}`);
+  }
+  if (!Array.isArray(diagnostic.windows) || diagnostic.windows.length === 0) {
+    throw new TypeError('diagnostic report must retain exact profile windows');
+  }
+  const { digest: workloadDigest, ...workloadFacts } = diagnostic.workload ?? {};
+  if (
+    workloadDigest !== sha256(JSON.stringify(workloadFacts)) ||
+    workloadFacts.classifier !== DEV_EDIT_PROFILE_CLASSIFIER ||
+    workloadFacts.cpuSamplingIntervalMicros !== diagnostic.sampling?.cpuIntervalMicros ||
+    workloadFacts.heapSamplingIntervalBytes !== diagnostic.sampling?.heapIntervalBytes
+  ) {
+    throw new TypeError('diagnostic workload identity is invalid');
+  }
+  const root = path.resolve(requiredString(profileDir, 'profile directory'));
+  const expectedFiles = new Map();
+  const editWindowCounts = {};
+  const rawWindows = [];
+  const observations = [];
+  for (const expected of diagnostic.windows) {
+    const identity = normalizeWindowIdentity(expected);
+    editWindowCounts[identity.editClass] = (editWindowCounts[identity.editClass] ?? 0) + 1;
+    const stem = `${identity.editClass}-${String(identity.iteration).padStart(3, '0')}`;
+    const artifact = expected.artifact;
+    for (const [kind, extension] of [
+      ['cpu', 'cpuprofile'],
+      ['heap', 'heapprofile'],
+    ]) {
+      const reference = artifact?.[kind];
+      const expectedFile = `${stem}.${extension}`;
+      if (
+        reference?.file !== expectedFile ||
+        !Number.isSafeInteger(reference?.bytes) ||
+        reference.bytes <= 0 ||
+        !/^sha256:[0-9a-f]{64}$/u.test(reference?.sha256 ?? '') ||
+        expectedFiles.has(expectedFile)
+      ) {
+        throw new TypeError(`diagnostic ${kind} artifact is invalid for ${stem}`);
+      }
+      expectedFiles.set(expectedFile, reference);
+    }
+  }
+  if (JSON.stringify(editWindowCounts) !== JSON.stringify(workloadFacts.editWindowCounts)) {
+    throw new TypeError('diagnostic workload window census differs from retained windows');
+  }
+  const entries = await readdir(root, { withFileTypes: true });
+  const observedFiles = entries
+    .map((entry) => entry.name)
+    .sort((left, right) => left.localeCompare(right));
+  const expectedNames = [...expectedFiles.keys()].sort((left, right) => left.localeCompare(right));
+  if (JSON.stringify(observedFiles) !== JSON.stringify(expectedNames)) {
+    throw new Error('raw profile file census differs from the diagnostic report');
+  }
+  const authenticatedFiles = [];
+  for (const expected of diagnostic.windows) {
+    const identity = normalizeWindowIdentity(expected);
+    const raw = {};
+    for (const kind of ['cpu', 'heap']) {
+      const reference = expected.artifact[kind];
+      const absolutePath = path.join(root, reference.file);
+      const stat = await lstat(absolutePath);
+      if (!stat.isFile() || stat.isSymbolicLink()) {
+        throw new Error(`raw profile artifact is not a regular file: ${reference.file}`);
+      }
+      const bytes = await readFile(absolutePath);
+      const digest = sha256(bytes);
+      if (bytes.byteLength !== reference.bytes || digest !== reference.sha256) {
+        throw new Error(`raw profile artifact digest differs: ${reference.file}`);
+      }
+      try {
+        raw[kind] = JSON.parse(bytes.toString('utf8'));
+      } catch (error) {
+        throw new TypeError(
+          `raw profile artifact is not JSON: ${reference.file}: ${errorMessage(error)}`,
+        );
+      }
+      authenticatedFiles.push({
+        bytes: bytes.byteLength,
+        file: reference.file,
+        sha256: digest,
+      });
+    }
+    const analysis = analyzeDevEditProfiles(raw);
+    const observation = {
+      activeCpuSamples: analysis.census.activeCpuSamples,
+      allocatedBytes: analysis.census.allocatedBytes,
+      artifact: expected.artifact,
+      editClass: identity.editClass,
+      iteration: identity.iteration,
+      topAllocationFrames: analysis.topAllocationFrames,
+      topFive: analysis.topFive,
+      topSelfFrames: analysis.topSelfFrames,
+    };
+    observations.push(observation);
+    rawWindows.push({ analysis, artifact: expected.artifact, identity });
+  }
+  const reproduced = summarizeProfileWindows(rawWindows, {
+    cpuSamplingIntervalMicros: diagnostic.sampling?.cpuIntervalMicros,
+    heapSamplingIntervalBytes: diagnostic.sampling?.heapIntervalBytes,
+    observations,
+    workload: diagnostic.workload,
+  });
+  if (JSON.stringify(reproduced) !== JSON.stringify(diagnostic)) {
+    throw new Error('raw profile analysis does not reproduce the diagnostic report');
+  }
+  authenticatedFiles.sort((left, right) => left.file.localeCompare(right.file));
+  return {
+    authenticatedFiles,
+    classifier: DEV_EDIT_PROFILE_CLASSIFIER,
+    complete: true,
+    profileSetSha256: sha256(JSON.stringify(authenticatedFiles)),
+    schema: DEV_EDIT_PROFILE_AUDIT_SCHEMA,
+    summarySha256: sha256(JSON.stringify(diagnostic)),
+    windowCount: diagnostic.windowCount,
+  };
+}
+
 function classifyFrame(frame) {
   const text = `${frame.functionName} ${frame.url ?? ''}`;
   const categories = [];
   if (
-    /\b(?:ModuleRunner|ESModulesEvaluator|evaluateModule|runInlinedModule|ssrLoadModule|runnerImport|import)\b/iu.test(
+    /(?:(?:ModuleRunner|ESModulesEvaluator|evaluateModule|runInlinedModule|ssrLoadModule|runnerImport)[\w$]*|\bimport\b)/iu.test(
       text,
     )
   ) {
     categories.push('module-evaluation');
   }
   if (
-    /(?:node_modules\/vite|vite\/(?:dist|src)|\b(?:transformRequest|transformWithEsbuild|pluginContainer|environmentModuleGraph)\b)/iu.test(
+    /(?:transformRequest|transformWithEsbuild|pluginContainer|environmentModuleGraph|loadAndTransform|doTransform)[\w$]*/iu.test(
       text,
     )
   ) {
     categories.push('vite-transform');
   }
   if (
-    /\b(?:renderDocument|renderAppDocument|renderRoute|renderJsx|renderNode|renderChildren|renderComponent|ssrRender)\b/iu.test(
+    /(?:renderDocument|renderAppDocument|renderRoute|renderJsx|renderNode|renderChildren|renderComponent|ssrRender)[\w$]*/iu.test(
       text,
     )
   ) {
     categories.push('ssr-generation');
   }
   if (
-    /\b(?:validateGeneration|stage|prepareBuildApp|analy[sz]e|prove|proof|diagnostic|conformance|security)\b/iu.test(
+    /(?:validateGeneration|stage|prepareBuildApp|analy[sz](?:e|is)|prove|proof|diagnostic|conformance|security)[\w$]*/iu.test(
       text,
     )
   ) {
@@ -377,15 +480,20 @@ function classifyFrame(frame) {
 }
 
 function cpuFrameSamples(profile) {
-  const frames = new Map(profile.nodes.map((node) => [node.id, normalizedFrame(node.callFrame)]));
+  const nodes = new Map(profile.nodes.map((node) => [node.id, node]));
+  const parents = cpuNodeParents(profile.nodes);
+  const categoryCache = new Map();
   const counts = new Map();
   for (let index = 0; index < profile.samples.length; index += 1) {
     const nodeId = profile.samples[index];
-    const frame = frames.get(nodeId);
+    const node = nodes.get(nodeId);
+    const frame = node === undefined ? undefined : normalizedFrame(node.callFrame);
     if (frame === undefined || isIdleFrame(frame)) continue;
-    const key = JSON.stringify(frame);
+    const categories = cpuStackCategories(nodeId, nodes, parents, categoryCache);
+    const key = JSON.stringify([frame, categories]);
     const prior = counts.get(key);
     counts.set(key, {
+      categories,
       frame,
       samples: (prior?.samples ?? 0) + 1,
       selfTimeMicros: (prior?.selfTimeMicros ?? 0) + profile.timeDeltas[index],
@@ -396,18 +504,118 @@ function cpuFrameSamples(profile) {
 
 function heapFrameAllocations(profile) {
   const counts = new Map();
-  function visit(node) {
+  function visit(node, ancestorCategories = []) {
     const frame = normalizedFrame(node.callFrame);
+    const categories = mergeCategories(ancestorCategories, classifyFrame(node.callFrame));
     const bytes = node.selfSize ?? 0;
     if (bytes > 0) {
-      const key = JSON.stringify(frame);
+      const key = JSON.stringify([frame, categories]);
       const prior = counts.get(key);
-      counts.set(key, { bytes: (prior?.bytes ?? 0) + bytes, frame });
+      counts.set(key, { bytes: (prior?.bytes ?? 0) + bytes, categories, frame });
     }
-    for (const child of node.children ?? []) visit(child);
+    for (const child of node.children ?? []) visit(child, categories);
   }
   visit(profile.head);
   return [...counts.values()];
+}
+
+function cpuNodeParents(nodes) {
+  const parents = new Map();
+  for (const node of nodes) {
+    for (const child of node.children ?? []) {
+      const prior = parents.get(child);
+      if (prior !== undefined && prior !== node.id) {
+        throw new TypeError(`CPU profile node ${String(child)} has multiple parents`);
+      }
+      parents.set(child, node.id);
+    }
+  }
+  return parents;
+}
+
+function cpuStackCategories(nodeId, nodes, parents, cache) {
+  const cached = cache.get(nodeId);
+  if (cached !== undefined) return cached;
+  const visiting = new Set();
+  let cursor = nodeId;
+  let categories = [];
+  while (cursor !== undefined) {
+    if (visiting.has(cursor)) throw new TypeError('CPU profile parent graph contains a cycle');
+    visiting.add(cursor);
+    const node = nodes.get(cursor);
+    if (node === undefined) break;
+    categories = mergeCategories(categories, classifyFrame(node.callFrame));
+    cursor = parents.get(cursor);
+  }
+  cache.set(nodeId, categories);
+  return categories;
+}
+
+function mergeCategories(left, right) {
+  const observed = new Set([...left, ...right]);
+  return DEV_EDIT_PROFILE_CATEGORIES.filter(
+    (category) => category !== 'self-time' && category !== 'allocation' && observed.has(category),
+  );
+}
+
+function aggregateCpuFrames(frames) {
+  const counts = new Map();
+  for (const entry of frames) {
+    const key = frameKey(entry.frame);
+    const prior = counts.get(key);
+    counts.set(key, {
+      frame: entry.frame,
+      samples: (prior?.samples ?? 0) + entry.samples,
+      selfTimeMicros: (prior?.selfTimeMicros ?? 0) + entry.selfTimeMicros,
+    });
+  }
+  return [...counts.values()];
+}
+
+function aggregateAllocationFrames(frames) {
+  const counts = new Map();
+  for (const entry of frames) {
+    const key = frameKey(entry.frame);
+    const prior = counts.get(key);
+    counts.set(key, { bytes: (prior?.bytes ?? 0) + entry.bytes, frame: entry.frame });
+  }
+  return [...counts.values()];
+}
+
+function categoryEvidence(category, counts, { allocatedBytes, totalCpuMicros }) {
+  const allocationPercent =
+    allocatedBytes === 0 ? null : percent(counts.allocationBytes, allocatedBytes);
+  const cpuSelfPercent = percent(counts.selfTimeMicros, totalCpuMicros);
+  return {
+    allocationBytes: counts.allocationBytes,
+    allocationPercent,
+    category,
+    cpuSelfPercent,
+    cpuSelfSamples: counts.cpuSamples,
+    dominantPercent: Math.max(cpuSelfPercent, allocationPercent ?? 0),
+    evidence:
+      category === 'allocation'
+        ? 'Inspector HeapProfiler sampling within exact edit-to-paint window'
+        : category === 'self-time'
+          ? 'Inspector CPU self time from sampled time deltas within exact edit-to-paint window'
+          : 'Stack-attributed Inspector CPU self time and HeapProfiler sampling within exact edit-to-paint window',
+    selfTimeMicros: counts.selfTimeMicros,
+    status:
+      category === 'allocation' && allocatedBytes === 0
+        ? 'unavailable'
+        : counts.cpuSamples === 0 && counts.allocationBytes === 0
+          ? 'absent'
+          : 'observed',
+  };
+}
+
+function compareCategoryEvidence(left, right) {
+  return (
+    right.dominantPercent - left.dominantPercent ||
+    right.cpuSelfPercent - left.cpuSelfPercent ||
+    (right.allocationPercent ?? -1) - (left.allocationPercent ?? -1) ||
+    left.category.localeCompare(right.category)
+  );
 }
 
 function validateRawWindow(raw) {
@@ -432,13 +640,21 @@ function validateCpuProfile(profile) {
   }
   const ids = new Set();
   for (const node of profile.nodes) {
-    if (!Number.isSafeInteger(node?.id) || node?.callFrame === undefined || ids.has(node.id)) {
+    if (
+      !Number.isSafeInteger(node?.id) ||
+      node?.callFrame === undefined ||
+      (node.children !== undefined && !Array.isArray(node.children)) ||
+      ids.has(node.id)
+    ) {
       throw new TypeError('CPU profile contains invalid or duplicate nodes');
     }
     ids.add(node.id);
   }
-  if (profile.samples.some((id) => !ids.has(id))) {
-    throw new TypeError('CPU profile contains unknown sample nodes');
+  if (
+    profile.samples.some((id) => !ids.has(id)) ||
+    profile.nodes.some((node) => (node.children ?? []).some((id) => !ids.has(id)))
+  ) {
+    throw new TypeError('CPU profile contains unknown sample or child nodes');
   }
 }
 
@@ -537,13 +753,20 @@ function normalizedFrame(frame) {
 }
 
 function portableUrl(value) {
+  let candidate = value;
   try {
     const url = new URL(value);
-    if (url.protocol === 'file:') return path.basename(url.pathname);
+    if (url.protocol === 'file:') candidate = decodeURIComponent(url.pathname);
   } catch {
     // Preserve Inspector's node: and synthetic URLs below.
   }
-  return value.length > 256 ? `${value.slice(0, 253)}...` : value;
+  const normalized = candidate.replaceAll('\\', '/');
+  for (const marker of ['/packages/', '/benchmarks/', '/node_modules/']) {
+    const index = normalized.lastIndexOf(marker);
+    if (index !== -1) return normalized.slice(index + 1).slice(-256);
+  }
+  if (path.isAbsolute(candidate)) return path.basename(candidate);
+  return normalized.length > 256 ? `...${normalized.slice(-253)}` : normalized;
 }
 
 function isIdleFrame(frame) {

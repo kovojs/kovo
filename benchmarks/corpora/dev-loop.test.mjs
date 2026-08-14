@@ -26,6 +26,7 @@ import {
   verifyCorpusSources,
 } from './dev-loop.mjs';
 import { generateCorpora } from './generate.mjs';
+import { DEV_EDIT_PROFILE_CLASSIFIER } from '../../scripts/perf-dev-edit-profile.mjs';
 
 const roots = [];
 
@@ -498,7 +499,13 @@ describe('single-entrant developer-loop adapter', () => {
       integrity: { iterations: 1 },
       profile: {
         diagnostic: {
+          classifier: DEV_EDIT_PROFILE_CLASSIFIER,
           diagnosticOnly: { profilerPerturbsDurations: true, publishTimingClaims: false },
+          profileArtifacts: windows.map(({ artifact, editClass, iteration }) => ({
+            artifact,
+            editClass,
+            iteration,
+          })),
           schema: 'kovo-dev-edit-profile/v1',
           windowCount: 5,
           windows,

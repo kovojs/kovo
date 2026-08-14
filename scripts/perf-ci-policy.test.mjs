@@ -351,7 +351,8 @@ describe('realistic performance CI policy', () => {
     expect(devProfile).toContain('benchmarks/corpora/generate.mjs');
     expect(devProfile).toContain('benchmarks/corpora/dev-loop.mjs');
     expect(devProfile).not.toContain('pnpm --dir benchmarks/kovo install');
-    expect(devProfile).toContain('--iterations 30');
+    expect(devProfile).toContain('--iterations 3');
+    expect(devProfile).not.toContain('--iterations 30');
     expect(devProfile).toContain('--ready-iterations 1');
     expect(devProfile).toContain('--warmups 3');
     expect(devProfile).toContain('24) dev_port=54124; inspector_port=55124');
@@ -360,6 +361,11 @@ describe('realistic performance CI policy', () => {
     expect(devProfile).toContain('--inspector-port "$inspector_port"');
     expect(devProfile).toContain('--ready-timeout-ms 600000');
     expect(devProfile).toContain('--profile-dir "$output_root/raw"');
+    expect(devProfile).toContain('scripts/perf-dev-edit-profile-audit.mjs');
+    expect(devProfile).toContain('--out "$output_root/audit.json"');
+    expect(devProfile).toContain('--require-provider github-actions');
+    expect(devProfile).toContain('test "$benchmark_status" -eq 0');
+    expect(devProfile).toContain('test "$audit_status" -eq 0');
     expectRawArtifact(devProfile, 'kovo-perf-dev-profile-n${{ matrix.corpus }}');
 
     const loaderMemo = decisionJob('loader-runtime-memo-decision');

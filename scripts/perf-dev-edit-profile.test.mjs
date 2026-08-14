@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -6,7 +6,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   analyzeDevEditProfiles,
+  auditDevEditProfileArtifacts,
   createDevEditProfiler,
+  DEV_EDIT_PROFILE_AUDIT_SCHEMA,
   DEV_EDIT_PROFILE_CATEGORIES,
   DEV_EDIT_PROFILE_SCHEMA,
   summarizeProfileWindows,
@@ -97,9 +99,86 @@ describe('exact dev edit-to-paint diagnostics', () => {
       schema: DEV_EDIT_PROFILE_SCHEMA,
       windowCount: 1,
     });
-    expect(summary.categories.map((entry) => entry.category).sort()).toEqual(
-      [...DEV_EDIT_PROFILE_CATEGORIES].sort(),
-    );
+    expect(
+      summary.categories
+        .map((entry) => entry.category)
+        .sort((left, right) => left.localeCompare(right)),
+    ).toEqual([...DEV_EDIT_PROFILE_CATEGORIES].sort((left, right) => left.localeCompare(right)));
+    await expect(
+      auditDevEditProfileArtifacts({ diagnostic: summary, profileDir: root }),
+    ).resolves.toMatchObject({
+      complete: true,
+      schema: DEV_EDIT_PROFILE_AUDIT_SCHEMA,
+      windowCount: 1,
+    });
+    await writeFile(path.join(root, 'leaf-000.cpuprofile'), '{}\n');
+    await expect(
+      auditDevEditProfileArtifacts({ diagnostic: summary, profileDir: root }),
+    ).rejects.toThrow('digest differs');
+  });
+
+  it('attributes generic leaf work through its sampled CPU and heap ancestry', () => {
+    const analysis = analyzeDevEditProfiles({
+      cpu: {
+        endTime: 20,
+        nodes: [
+          frameNode(1, '(root)', '', [2]),
+          frameNode(
+            2,
+            'runDevWholeProjectAnalysis',
+            'file:///repo/packages/server/src/vite.ts',
+            [3],
+          ),
+          frameNode(3, 'scan', 'file:///repo/node_modules/typescript/lib/typescript.js'),
+        ],
+        samples: [3, 3, 3],
+        startTime: 10,
+        timeDeltas: [500, 500, 500],
+      },
+      heap: {
+        head: {
+          callFrame: callFrame('(root)', ''),
+          children: [
+            {
+              callFrame: callFrame(
+                'runDevWholeProjectAnalysis',
+                'file:///repo/packages/server/src/vite.ts',
+              ),
+              children: [
+                {
+                  callFrame: callFrame(
+                    'scan',
+                    'file:///repo/node_modules/typescript/lib/typescript.js',
+                  ),
+                  children: [],
+                  id: 3,
+                  selfSize: 65_536,
+                },
+              ],
+              id: 2,
+              selfSize: 0,
+            },
+          ],
+          id: 1,
+          selfSize: 0,
+        },
+        samples: [],
+      },
+    });
+
+    expect(category(analysis, 'asynchronous-proof-convergence')).toMatchObject({
+      allocationBytes: 65_536,
+      cpuSelfSamples: 3,
+      ruling: 'present-in-current-top-five',
+    });
+    expect(analysis.census).toMatchObject({
+      unknownAllocationBytes: 0,
+      unknownCpuSamples: 0,
+    });
+    expect(analysis.topSelfFrames[0]).toMatchObject({
+      functionName: 'scan',
+      url: 'node_modules/typescript/lib/typescript.js',
+    });
   });
 
   it('fails closed on mismatched windows and malformed Inspector evidence', async () => {
@@ -178,8 +257,8 @@ function syntheticProfiles() {
   };
 }
 
-function frameNode(id, functionName, url) {
-  return { callFrame: callFrame(functionName, url), hitCount: 0, id };
+function frameNode(id, functionName, url, children = []) {
+  return { callFrame: callFrame(functionName, url), children, hitCount: 0, id };
 }
 
 function callFrame(functionName, url) {
