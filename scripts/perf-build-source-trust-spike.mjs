@@ -357,25 +357,31 @@ export function bindBuildSourceTrustArtifactProvenanceLock({
   );
   manifest.sourceDigest = sha256(Buffer.from(JSON.stringify(manifest.sourceFiles)));
   writeFileSync(targetLock, lockBytes, { flag: 'wx', mode: 0o600 });
+  const resealedManifestBytes = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
   const resealedManifestPath = path.join(
     corpusRoot,
     `.${path.basename(resolvedManifest)}.reseal-${String(process.pid)}`,
   );
+  let resealCreated = false;
   try {
-    writeFileSync(resealedManifestPath, `${JSON.stringify(manifest, null, 2)}\n`, {
+    writeFileSync(resealedManifestPath, resealedManifestBytes, {
       encoding: 'utf8',
       flag: 'wx',
       mode: 0o600,
     });
+    resealCreated = true;
     renameSync(resealedManifestPath, resolvedManifest);
+    resealCreated = false;
   } catch (error) {
-    try {
-      unlinkSync(resealedManifestPath);
-    } catch (cleanupError) {
-      if (cleanupError?.code !== 'ENOENT') {
-        throw new Error(
-          `${errorMessage(error)}; manifest reseal cleanup failed: ${errorMessage(cleanupError)}`,
-        );
+    if (resealCreated) {
+      try {
+        unlinkSync(resealedManifestPath);
+      } catch (cleanupError) {
+        if (cleanupError?.code !== 'ENOENT') {
+          throw new Error(
+            `${errorMessage(error)}; manifest reseal cleanup failed: ${errorMessage(cleanupError)}`,
+          );
+        }
       }
     }
     throw error;
@@ -385,7 +391,8 @@ export function bindBuildSourceTrustArtifactProvenanceLock({
     !resealedMetadata.isFile() ||
     resealedMetadata.isSymbolicLink() ||
     resealedMetadata.nlink !== 1 ||
-    path.dirname(realpathSync(resolvedManifest)) !== corpusRoot
+    path.dirname(realpathSync(resolvedManifest)) !== corpusRoot ||
+    !readFileSync(resolvedManifest).equals(resealedManifestBytes)
   ) {
     throw new Error('resealed external corpus manifest custody is invalid');
   }

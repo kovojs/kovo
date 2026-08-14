@@ -362,6 +362,7 @@ describe('build source-trust candidate decision', () => {
       { bytes: lockBytes.byteLength, file: 'pnpm-lock.yaml', sha256: sha256(lockBytes) },
     ]);
     expect(manifest.sourceDigest).toBe(sha256(Buffer.from(JSON.stringify(manifest.sourceFiles))));
+    expect(readFileSync(manifestPath, 'utf8')).toBe(`${JSON.stringify(manifest, null, 2)}\n`);
     expect(() =>
       bindBuildSourceTrustArtifactProvenanceLock({
         expectedSha256: sha256(lockBytes),
@@ -420,6 +421,32 @@ describe('build source-trust candidate decision', () => {
         sourceRoot,
       }),
     ).toThrow(/source pnpm lock must be a single-link regular non-symlink file/u);
+
+    const collisionRoot = temporaryDirectory('kovo-build-source-reseal-collision-');
+    const collisionSource = path.join(collisionRoot, 'source');
+    const collisionCorpus = path.join(collisionRoot, 'corpus');
+    const collisionManifest = path.join(collisionCorpus, 'manifest.json');
+    const collisionTemp = path.join(
+      collisionCorpus,
+      `.manifest.json.reseal-${String(process.pid)}`,
+    );
+    const collisionBytes = Buffer.from('unowned collision\n');
+    mkdirSync(collisionSource);
+    mkdirSync(collisionCorpus);
+    writeFileSync(path.join(collisionSource, 'pnpm-lock.yaml'), lockBytes);
+    writeFileSync(
+      collisionManifest,
+      `${JSON.stringify({ sourceDigest: digest('old'), sourceFiles: [] })}\n`,
+    );
+    writeFileSync(collisionTemp, collisionBytes);
+    expect(() =>
+      bindBuildSourceTrustArtifactProvenanceLock({
+        expectedSha256: sha256(lockBytes),
+        manifestPath: collisionManifest,
+        sourceRoot: collisionSource,
+      }),
+    ).toThrow(/EEXIST/u);
+    expect(readFileSync(collisionTemp)).toEqual(collisionBytes);
   });
 
   it('retains actionable adapter diagnostics instead of masking failure as an empty artifact', async () => {
