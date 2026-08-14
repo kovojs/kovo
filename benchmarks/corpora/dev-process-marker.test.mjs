@@ -22,6 +22,7 @@ describe('dev process marker census', () => {
       `104 1 104 Z node app.js ${marker}=1`,
       `105 1 105 S node app.js --label=${marker}=1`,
       `106 1 106 S node app.js TOKEN=x ${marker}=1`,
+      `0 1 0 S node app.js TOKEN=x ${marker}=1`,
     ].join('\n');
 
     expect(parseMarkedDevProcessCensus(census, marker)).toEqual([

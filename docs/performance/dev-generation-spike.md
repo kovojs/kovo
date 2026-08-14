@@ -114,13 +114,15 @@ retains its SHA-256, byte count, schema, verdict, readiness failures, and first 
 an outer `unproven` result remains diagnosable.
 
 Every fresh-ready and edit session also has a fail-closed lifecycle fence. Teardown signals the
-entire detached dev process group, escalates to `SIGKILL` when necessary, and then repeatedly reserves
-both `127.0.0.1` and `::1` on the same authenticated `localhost` port. Every supported address must
-remain available for a continuous 500 ms stability window; a late rebind resets that window, and an
-unavailable IPv6 stack is recorded explicitly rather than mistaken for a collision. Reports retain
-per-address availability, unsupported-stack, and rebind evidence. A lingering process group, an
-unavailable strict port, or an unexpected bind error makes the adapter and outer report `unproven`;
-the runner never substitutes another port to conceal a leak.
+entire detached dev process group, escalates to `SIGKILL` when necessary, and globally censuses an
+unforgeable inherited session marker to catch detached or reparented descendants. Two empty marker
+censuses are required before the runner repeatedly reserves both `127.0.0.1` and `::1` on the same
+authenticated `localhost` port. Every supported address must remain available throughout a sampled
+500 ms stability window; a busy sample resets that window, and an unavailable IPv6 stack is recorded
+explicitly rather than mistaken for a collision. Reports retain per-address availability,
+unsupported-stack, rebind, and owned-process evidence. A lingering process group or marked
+descendant, an unavailable strict port, or an unexpected census/bind error makes the adapter and
+outer report `unproven`; the runner never substitutes another port to conceal a leak.
 
 ## Decision rule
 

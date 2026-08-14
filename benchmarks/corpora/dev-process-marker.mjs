@@ -39,8 +39,9 @@ export async function snapshotMarkedDevProcesses(marker, dependencies = {}) {
 }
 
 /**
- * Signal only identities that still carry the marker in a fresh census. The second census prevents
- * a PID recycled after the first observation from turning cleanup into an unrelated-process kill.
+ * Signal only identities that still carry the marker in a fresh census. The second census narrows
+ * the PID-reuse race between observation and signaling; the inherited marker is the ownership
+ * boundary, while the final census-to-kill interval remains an unavoidable operating-system race.
  */
 export async function signalMarkedDevProcesses(marker, signal, dependencies = {}) {
   assertDevProcessMarker(marker);
@@ -74,7 +75,9 @@ export function parseMarkedDevProcessCensus(output, marker) {
     const ppid = Number(match[2]);
     const pgid = Number(match[3]);
     if (
-      ![pid, ppid, pgid].every((value) => Number.isSafeInteger(value) && value >= 0) ||
+      !Number.isSafeInteger(pid) ||
+      pid <= 0 ||
+      ![ppid, pgid].every((value) => Number.isSafeInteger(value) && value >= 0) ||
       match[4].startsWith('Z')
     ) {
       continue;

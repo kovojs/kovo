@@ -46,7 +46,7 @@ const DEV_PROCESS_FORCE_STOP_TIMEOUT_MS = 2_000;
 const DEV_PORT_RELEASE_TIMEOUT_MS = 5_000;
 const DEV_PORT_STABILITY_WINDOW_MS = 500;
 const DEV_LIFECYCLE_POLL_INTERVAL_MS = 50;
-export const DEV_SESSION_STOP_SCHEMA = 'kovo-dev-session-stop/v2';
+export const DEV_SESSION_STOP_SCHEMA = 'kovo-dev-session-stop/v3';
 const repoRoot = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const PERFORMANCE_POSTURE_FILES = Object.freeze([
   'packages/compiler/src/security/framework-public-runtime-export-posture.generated.ts',
@@ -1058,9 +1058,9 @@ function startDevSession({ appRoot, command, inspectorPort = null, spawnProcess 
 }
 
 /**
- * Stop the detached dev process group, then prove every address behind the exact strict origin
- * remains bindable for a bounded stability window. A launcher exit is insufficient: its
- * descendants may still own or late-rebind the listening socket.
+ * Stop the detached dev process group and any inherited-marker descendants, then sample every
+ * address behind the exact strict origin across a bounded stability window. A launcher exit is
+ * insufficient: its descendants may still own or late-rebind the listening socket.
  */
 export async function stopDevProcessTree({ marker, origin, pid }, dependencies = {}) {
   boundedInteger(pid, 1, Number.MAX_SAFE_INTEGER, 'dev process PID');
