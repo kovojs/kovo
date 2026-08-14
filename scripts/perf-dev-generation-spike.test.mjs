@@ -1,6 +1,15 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  linkSync,
+  mkdtempSync,
+  mkdirSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -344,47 +353,74 @@ describe('dev-generation candidate comparator', () => {
     expect(cleanup.spike).toHaveBeenCalledOnce();
   });
 
-  it('rejects two arms that alias one authenticated consumer descriptor', async () => {
-    const baselineRoot = temporaryDirectory('kovo-dev-generation-alias-baseline-');
-    const spikeRoot = temporaryDirectory('kovo-dev-generation-alias-spike-');
-    const states = {
-      baseline: sourceState('a'.repeat(40)),
-      spike: sourceState('b'.repeat(40)),
-    };
-    const products = {
-      baseline: productCapability(states.baseline, 'alias-baseline'),
-      spike: productCapability(states.spike, 'alias-spike'),
-    };
-    products.spike.consumerRoot = products.baseline.consumerRoot;
-    products.spike.descriptorPath = products.baseline.descriptorPath;
-    const binding = {
-      baseline: { commit: states.baseline.commit, root: baselineRoot },
-      candidate: { commit: 'c'.repeat(40), patchId: 'd'.repeat(40), patchSha256: digest('e') },
-      schema: DEV_GENERATION_CANDIDATE_BINDING_SCHEMA,
-      spike: { commit: states.spike.commit, parent: states.baseline.commit, root: spikeRoot },
-    };
+  it.each([
+    {
+      expected: /separate packed product consumers\/descriptors/u,
+      label: 'the same path',
+      mutate(products) {
+        products.spike.consumerRoot = products.baseline.consumerRoot;
+        products.spike.descriptorPath = products.baseline.descriptorPath;
+      },
+    },
+    {
+      expected: /separate packed product consumers\/descriptors/u,
+      label: 'distinct hard-linked paths',
+      mutate(products) {
+        unlinkSync(products.spike.descriptorPath);
+        linkSync(products.baseline.descriptorPath, products.spike.descriptorPath);
+      },
+    },
+    {
+      expected: /descriptor is not a regular file/u,
+      label: 'a symlinked path',
+      mutate(products) {
+        unlinkSync(products.spike.descriptorPath);
+        symlinkSync(products.baseline.descriptorPath, products.spike.descriptorPath);
+      },
+    },
+  ])(
+    'rejects two arms that alias one authenticated consumer descriptor through $label',
+    async ({ expected, mutate }) => {
+      const baselineRoot = temporaryDirectory('kovo-dev-generation-alias-baseline-');
+      const spikeRoot = temporaryDirectory('kovo-dev-generation-alias-spike-');
+      const states = {
+        baseline: sourceState('a'.repeat(40)),
+        spike: sourceState('b'.repeat(40)),
+      };
+      const products = {
+        baseline: productCapability(states.baseline, 'alias-baseline'),
+        spike: productCapability(states.spike, 'alias-spike'),
+      };
+      mutate(products);
+      const binding = {
+        baseline: { commit: states.baseline.commit, root: baselineRoot },
+        candidate: { commit: 'c'.repeat(40), patchId: 'd'.repeat(40), patchSha256: digest('e') },
+        schema: DEV_GENERATION_CANDIDATE_BINDING_SCHEMA,
+        spike: { commit: states.spike.commit, parent: states.baseline.commit, root: spikeRoot },
+      };
 
-    await expect(
-      prepareDevGenerationSpike(
-        { baselineRoot, installTimeoutMs: 600_000, size: 24, spikeRoot },
-        {
-          authenticateRoots: () => binding,
-          collectState: (root) => (root === baselineRoot ? states.baseline : states.spike),
-          preparePackedLane: async ({ lane, source }) => ({
-            cleanup() {},
-            consumerRoot: products[lane].consumerRoot,
-            corpus: corpusIdentity(),
-            descriptorPath: products[lane].descriptorPath,
-            externalRoot: products[lane].externalRoot,
-            identity: products[lane].identity,
-            manifestPath: products[lane].manifestPath,
-            sourceAfter: source,
-            tooling: toolingIdentity(),
-          }),
-        },
-      ),
-    ).rejects.toThrow(/separate packed product consumers\/descriptors/u);
-  });
+      await expect(
+        prepareDevGenerationSpike(
+          { baselineRoot, installTimeoutMs: 600_000, size: 24, spikeRoot },
+          {
+            authenticateRoots: () => binding,
+            collectState: (root) => (root === baselineRoot ? states.baseline : states.spike),
+            preparePackedLane: async ({ lane, source }) => ({
+              cleanup() {},
+              consumerRoot: products[lane].consumerRoot,
+              corpus: corpusIdentity(),
+              descriptorPath: products[lane].descriptorPath,
+              externalRoot: products[lane].externalRoot,
+              identity: products[lane].identity,
+              manifestPath: products[lane].manifestPath,
+              sourceAfter: source,
+              tooling: toolingIdentity(),
+            }),
+          },
+        ),
+      ).rejects.toThrow(expected);
+    },
+  );
 
   it('authenticates a generated N=24 corpus and enforces literal localhost', () => {
     const root = temporaryDirectory('kovo-dev-generation-corpus-');
