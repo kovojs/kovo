@@ -6,6 +6,48 @@ locks, workload digest, and normalized host digest. Jobs from one workflow run c
 different machines; cohorts are selected per subject, not by assuming all seven jobs shared a host.
 Five attempts of one Actions run do not count: every accepted report has a distinct run ID.
 
+## Collect one host cohort without repeating completed families
+
+Manual dispatch accepts two optional collection controls. `baseline_focus` selects `all`, `check`,
+`browser`, `dev-n24`, `dev-n216`, `build-n24`, `build-n216`, or `server`. The selected dev or build
+focus reduces that job's matrix to the exact corpus size. The five publication-authenticated job
+conditions remain unchanged: an early admission step stops every non-selected producer before Kovo
+setup, isolated dependency installs, browser installation, corpus generation, or measurement. Those
+expected non-selected jobs fail without an artifact; their failure does not invalidate the selected
+successful producer. Use another focused dispatch for each family still missing a report instead of
+rerunning already-complete three-hour families.
+
+`baseline_cpu_model_sha256` optionally admits only runners whose exact UTF-8 Node
+`os.cpus()[0].model` string has the requested SHA-256. The value must be exactly 64 lowercase
+hexadecimal characters with no `sha256:` prefix. An empty value remains allowed for schedules,
+label-triggered runs, and unconstrained manual collection. Invalid or mismatched values fail before
+setup and print the observed model digest so the operator can retry without paying measurement cost.
+
+For example, the currently observed `AMD EPYC 7763 64-Core Processor` model hashes to
+`f56edd1ddb32e98359af80267bba52d80fedc60bf40440adea1c3ea0e0f429c7`:
+
+```sh
+gh workflow run perf-realistic.yml \
+  --ref <collection-branch> \
+  -f measurement_scope=baselines \
+  -f baseline_focus=dev-n216 \
+  -f baseline_cpu_model_sha256=f56edd1ddb32e98359af80267bba52d80fedc60bf40440adea1c3ea0e0f429c7
+```
+
+That AMD digest is a collection-time operator choice based on the current hosted-runner cohort, not
+a permanent default or a portable hardware requirement. CPU admission only reduces wasted retries.
+It does not replace or weaken the report's normalized `kovo-performance-host/v2` facts, and the
+ratifier/publication gate still requires the exact full `host.digest` for each cohort. CPU count,
+memory capacity class, Node version, OS release, runner image, and browser versions can therefore
+still separate two reports that passed the same CPU-model admission.
+
+After a mismatch, rerun only the affected `baseline_focus` until the family has five independent
+baseline run IDs plus its sixth holdout. If the build-persistence decision requires the optional
+N=216 build profile, dispatch `measurement_scope=decisions` with
+`decision_focus=build-profile` and the same `baseline_cpu_model_sha256`; the profile producer uses
+the same early CPU admission, while publication still requires its exact host identity to match the
+build-N=216 evidence.
+
 ## Artifact map
 
 | Subject       | Artifact                   | Report inside the artifact | Required reports |

@@ -30,6 +30,24 @@ on:
           - baselines
           - decisions
           - all
+      baseline_focus:
+        description: Select one baseline family for a retry, or all baseline families
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - check
+          - browser
+          - dev-n24
+          - dev-n216
+          - build-n24
+          - build-n216
+          - server
+      baseline_cpu_model_sha256:
+        description: Optional exact lowercase SHA-256 of Node os.cpus()[0].model
+        required: false
+        type: string
       decision_focus:
         description: Select one candidate decision, or all candidate decisions
         required: true
@@ -189,6 +207,12 @@ jobs:
           ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
       - name: Authenticate checked-out performance source
         run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
+      - name: Admit requested baseline CPU model
+        uses: ./.github/actions/kovo-perf-baseline-cpu-admission
+        env:
+          KOVO_PERF_BASELINE_FAMILY: check
+          KOVO_PERF_BASELINE_FOCUS: ${{ inputs.baseline_focus || 'all' }}
+          KOVO_PERF_BASELINE_CPU_MODEL_SHA256: ${{ inputs.baseline_cpu_model_sha256 || '' }}
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
@@ -244,6 +268,12 @@ jobs:
           ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
       - name: Authenticate checked-out performance source
         run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
+      - name: Admit requested baseline CPU model
+        uses: ./.github/actions/kovo-perf-baseline-cpu-admission
+        env:
+          KOVO_PERF_BASELINE_FAMILY: browser
+          KOVO_PERF_BASELINE_FOCUS: ${{ inputs.baseline_focus || 'all' }}
+          KOVO_PERF_BASELINE_CPU_MODEL_SHA256: ${{ inputs.baseline_cpu_model_sha256 || '' }}
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
@@ -290,7 +320,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        corpus: [24, 216]
+        corpus: ${{ fromJSON(inputs.baseline_focus == 'dev-n24' && '[24]' || inputs.baseline_focus == 'dev-n216' && '[216]' || '[24,216]') }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -298,6 +328,12 @@ jobs:
           ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
       - name: Authenticate checked-out performance source
         run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
+      - name: Admit requested baseline CPU model
+        uses: ./.github/actions/kovo-perf-baseline-cpu-admission
+        env:
+          KOVO_PERF_BASELINE_FAMILY: dev-n${{ matrix.corpus }}
+          KOVO_PERF_BASELINE_FOCUS: ${{ inputs.baseline_focus || 'all' }}
+          KOVO_PERF_BASELINE_CPU_MODEL_SHA256: ${{ inputs.baseline_cpu_model_sha256 || '' }}
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
@@ -348,7 +384,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        corpus: [24, 216]
+        corpus: ${{ fromJSON(inputs.baseline_focus == 'build-n24' && '[24]' || inputs.baseline_focus == 'build-n216' && '[216]' || '[24,216]') }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -356,6 +392,12 @@ jobs:
           ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
       - name: Authenticate checked-out performance source
         run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
+      - name: Admit requested baseline CPU model
+        uses: ./.github/actions/kovo-perf-baseline-cpu-admission
+        env:
+          KOVO_PERF_BASELINE_FAMILY: build-n${{ matrix.corpus }}
+          KOVO_PERF_BASELINE_FOCUS: ${{ inputs.baseline_focus || 'all' }}
+          KOVO_PERF_BASELINE_CPU_MODEL_SHA256: ${{ inputs.baseline_cpu_model_sha256 || '' }}
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
@@ -404,6 +446,12 @@ jobs:
           ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
       - name: Authenticate checked-out performance source
         run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
+      - name: Admit requested baseline CPU model
+        uses: ./.github/actions/kovo-perf-baseline-cpu-admission
+        env:
+          KOVO_PERF_BASELINE_FAMILY: server
+          KOVO_PERF_BASELINE_FOCUS: ${{ inputs.baseline_focus || 'all' }}
+          KOVO_PERF_BASELINE_CPU_MODEL_SHA256: ${{ inputs.baseline_cpu_model_sha256 || '' }}
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
@@ -965,6 +1013,10 @@ jobs:
           ref: ${{ env.KOVO_PERF_SOURCE_SHA }}
       - name: Authenticate checked-out performance source
         run: test "$(git rev-parse HEAD)" = "$KOVO_PERF_SOURCE_SHA"
+      - name: Admit requested baseline CPU model
+        uses: ./.github/actions/kovo-perf-baseline-cpu-admission
+        env:
+          KOVO_PERF_BASELINE_CPU_MODEL_SHA256: ${{ inputs.baseline_cpu_model_sha256 || '' }}
       - uses: ./.github/actions/kovo-setup
       - name: Provision the process-tree tracer
         run: |

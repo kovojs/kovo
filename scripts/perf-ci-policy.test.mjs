@@ -8,11 +8,20 @@ import {
   inspectDevPortAllocation,
   inspectHostEphemeralPortRanges,
 } from '../benchmarks/harness/dev-port-allocation.mjs';
+import {
+  baselineCpuModelAdmission,
+  baselineFamilyAdmission,
+  runBaselineCpuModelAdmission,
+} from '../.github/actions/kovo-perf-baseline-cpu-admission/check.mjs';
 
 const repoRoot = fileURLToPath(new URL('../', import.meta.url));
 const workflow = readFileSync(path.join(repoRoot, '.github/workflows/perf-realistic.yml'), 'utf8');
 const devGenerationRunner = readFileSync(
   path.join(repoRoot, 'scripts/perf-dev-generation-spike.mjs'),
+  'utf8',
+);
+const baselineCpuAdmissionAction = readFileSync(
+  path.join(repoRoot, '.github/actions/kovo-perf-baseline-cpu-admission/action.yml'),
   'utf8',
 );
 const baselineDispatchScope = [
@@ -24,6 +33,21 @@ const baselineLabelScope = [
   "github.event_name == 'pull_request' && github.event.action == 'labeled'",
   "github.event.label.name == 'perf-measure-baselines'",
 ];
+const baselineProducerFamiliesByJob = new Map([
+  ['check-scaling', 'check'],
+  ['browser-matrix', 'browser'],
+  ['dev-matrix', 'dev-n${{ matrix.corpus }}'],
+  ['build-matrix', 'build-n${{ matrix.corpus }}'],
+  ['server-matrix', 'server'],
+]);
+const publicationAuthenticatedBaselineIf = [
+  '    if: >-\n',
+  "      ${{ github.event_name == 'schedule' ||\n",
+  "      (github.event_name == 'workflow_dispatch' &&\n",
+  "      (inputs.measurement_scope == 'baselines' || inputs.measurement_scope == 'all')) ||\n",
+  "      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&\n",
+  "      github.event.label.name == 'perf-measure-baselines') }}\n",
+].join('');
 const decisionDispatchScope = [
   "github.event_name == 'workflow_dispatch' &&",
   "inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all'",
@@ -96,6 +120,26 @@ describe('realistic performance CI policy', () => {
     for (const option of ['baselines', 'decisions', 'all']) {
       expect(workflow).toContain(`          - ${option}\n`);
     }
+    const baselineFocus = dispatchInputSource('baseline_focus');
+    expect(baselineFocus).toContain('        default: all\n');
+    for (const option of [
+      'all',
+      'check',
+      'browser',
+      'dev-n24',
+      'dev-n216',
+      'build-n24',
+      'build-n216',
+      'server',
+    ]) {
+      expect(baselineFocus).toContain(`          - ${option}\n`);
+    }
+    const baselineCpu = dispatchInputSource('baseline_cpu_model_sha256');
+    expect(baselineCpu).toContain(
+      '        description: Optional exact lowercase SHA-256 of Node os.cpus()[0].model\n',
+    );
+    expect(baselineCpu).toContain('        required: false\n');
+    expect(baselineCpu).toContain('        type: string\n');
     expect(workflow).toContain('      decision_focus:\n');
     expect(workflow).toContain('        default: all\n');
     for (const option of ['all', ...decisionFocusByJob.values()]) {
@@ -173,6 +217,97 @@ describe('realistic performance CI policy', () => {
     }
   });
 
+  it('preserves publication-authenticated job conditions while targeting retries before setup', () => {
+    for (const [job, family] of baselineProducerFamiliesByJob) {
+      const source = jobSource(job);
+      expect(jobIfSource(source), job).toBe(publicationAuthenticatedBaselineIf);
+      expect(count(source, 'uses: ./.github/actions/kovo-perf-baseline-cpu-admission'), job).toBe(
+        1,
+      );
+      expect(count(source, `KOVO_PERF_BASELINE_FAMILY: ${family}`), job).toBe(1);
+      expect(
+        count(source, "KOVO_PERF_BASELINE_FOCUS: ${{ inputs.baseline_focus || 'all' }}"),
+        job,
+      ).toBe(1);
+      expect(
+        count(
+          source,
+          "KOVO_PERF_BASELINE_CPU_MODEL_SHA256: ${{ inputs.baseline_cpu_model_sha256 || '' }}",
+        ),
+        job,
+      ).toBe(1);
+      const admission = source.indexOf('uses: ./.github/actions/kovo-perf-baseline-cpu-admission');
+      expect(admission, job).toBeGreaterThan(
+        source.indexOf('Authenticate checked-out performance source'),
+      );
+      expect(admission, job).toBeLessThan(source.indexOf('uses: ./.github/actions/kovo-setup'));
+    }
+
+    const dev = jobSource('dev-matrix');
+    expect(count(dev, 'corpus: ${{ fromJSON(')).toBe(1);
+    expect(dev).toContain("inputs.baseline_focus == 'dev-n24' && '[24]'");
+    expect(dev).toContain("inputs.baseline_focus == 'dev-n216' && '[216]'");
+    expect(dev).toContain("|| '[24,216]') }}");
+    const build = jobSource('build-matrix');
+    expect(count(build, 'corpus: ${{ fromJSON(')).toBe(1);
+    expect(build).toContain("inputs.baseline_focus == 'build-n24' && '[24]'");
+    expect(build).toContain("inputs.baseline_focus == 'build-n216' && '[216]'");
+    expect(build).toContain("|| '[24,216]') }}");
+
+    const buildProfile = jobSource('build-profile');
+    expect(count(buildProfile, 'uses: ./.github/actions/kovo-perf-baseline-cpu-admission')).toBe(1);
+    expect(buildProfile).not.toContain('KOVO_PERF_BASELINE_FOCUS:');
+    expect(buildProfile).not.toContain('KOVO_PERF_BASELINE_FAMILY:');
+    expect(buildProfile.indexOf('kovo-perf-baseline-cpu-admission')).toBeLessThan(
+      buildProfile.indexOf('uses: ./.github/actions/kovo-setup'),
+    );
+    expect(count(workflow, 'inputs.baseline_cpu_model_sha256')).toBe(6);
+    expect(count(workflow, 'inputs.baseline_focus')).toBe(9);
+    expect(baselineCpuAdmissionAction).toContain("        NODE_OPTIONS: ''");
+    expect(baselineCpuAdmissionAction).toContain('run: node "$GITHUB_ACTION_PATH/check.mjs"');
+    expect(baselineCpuAdmissionAction).not.toContain('${{ inputs.');
+  });
+
+  it('admits only an exact lowercase CPU-model digest and the selected baseline family', () => {
+    const amdModel = 'AMD EPYC 7763 64-Core Processor';
+    const amdSha256 = 'f56edd1ddb32e98359af80267bba52d80fedc60bf40440adea1c3ea0e0f429c7';
+    expect(
+      baselineCpuModelAdmission({ cpuModel: amdModel, expectedSha256: amdSha256 }),
+    ).toMatchObject({ actualSha256: amdSha256, admitted: true, constrained: true });
+    expect(baselineCpuModelAdmission({ cpuModel: undefined, expectedSha256: '' })).toEqual({
+      admitted: true,
+      constrained: false,
+    });
+    for (const malformed of [amdSha256.slice(0, -5), amdSha256.toUpperCase(), ` ${amdSha256}`]) {
+      expect(() =>
+        baselineCpuModelAdmission({ cpuModel: amdModel, expectedSha256: malformed }),
+      ).toThrow('exactly 64 lowercase hexadecimal');
+    }
+    expect(() =>
+      baselineCpuModelAdmission({ cpuModel: amdModel, expectedSha256: '0'.repeat(64) }),
+    ).toThrow('baseline CPU model mismatch');
+    expect(baselineFamilyAdmission({ family: 'dev-n24', focus: 'dev-n24' })).toMatchObject({
+      admitted: true,
+      constrained: true,
+    });
+    expect(() => baselineFamilyAdmission({ family: 'dev-n216', focus: 'dev-n24' })).toThrow(
+      'stopping before setup',
+    );
+    expect(() => baselineFamilyAdmission({ family: 'server', focus: 'not-a-family' })).toThrow(
+      'unsupported baseline_focus',
+    );
+    expect(() =>
+      runBaselineCpuModelAdmission({
+        cpus: [{ model: amdModel }],
+        env: {
+          KOVO_PERF_BASELINE_CPU_MODEL_SHA256: amdSha256.slice(0, -5),
+          KOVO_PERF_BASELINE_FAMILY: 'server',
+          KOVO_PERF_BASELINE_FOCUS: 'browser',
+        },
+      }),
+    ).toThrow('exactly 64 lowercase hexadecimal');
+  });
+
   it('retains the exact publishable sample policies in the scheduled commands', () => {
     expect(jobSource('browser-matrix')).toEqual(expect.stringContaining('--iterations 30'));
     for (const token of ['--lighthouse-runs 5', '--bfcache-iterations 10']) {
@@ -180,7 +315,7 @@ describe('realistic performance CI policy', () => {
     }
     expect(jobSource('browser-matrix')).not.toContain('--skip-build');
     for (const job of ['dev-matrix', 'build-matrix']) {
-      expect(jobSource(job)).toContain('corpus: [24, 216]');
+      expect(jobSource(job)).toContain("|| '[24,216]') }}");
       expect(jobSource(job)).toContain('--corpus-size "$KOVO_PERF_CORPUS_SIZE"');
     }
     for (const token of ['--dev-ready-iterations 15', '--dev-iterations 30', '--dev-warmups 3']) {
@@ -242,12 +377,12 @@ describe('realistic performance CI policy', () => {
     );
     expect(jobSource('browser-matrix')).toContain('name: kovo-perf-browser-matrix');
     expect(jobSource('browser-matrix')).toContain('path: ${{ runner.temp }}/kovo-perf/browser');
-    expect(jobSource('dev-matrix')).toContain('corpus: [24, 216]');
+    expect(jobSource('dev-matrix')).toContain("inputs.baseline_focus == 'dev-n24' && '[24]'");
     expect(jobSource('dev-matrix')).toContain('name: kovo-perf-dev-n${{ matrix.corpus }}');
     expect(jobSource('dev-matrix')).toContain(
       'path: ${{ runner.temp }}/kovo-perf/dev-n${{ matrix.corpus }}',
     );
-    expect(jobSource('build-matrix')).toContain('corpus: [24, 216]');
+    expect(jobSource('build-matrix')).toContain("inputs.baseline_focus == 'build-n24' && '[24]'");
     expect(jobSource('build-matrix')).toContain('name: kovo-perf-build-n${{ matrix.corpus }}');
     expect(jobSource('build-matrix')).toContain(
       'path: ${{ runner.temp }}/kovo-perf/build-n${{ matrix.corpus }}',
@@ -624,6 +759,13 @@ function jobSource(name) {
   const tail = workflow.slice(start + marker.length);
   const next = /^  [a-z0-9-]+:\n/gmu.exec(tail);
   return next === null ? tail : tail.slice(0, next.index);
+}
+
+function jobIfSource(source) {
+  const start = source.indexOf('    if: >-\n');
+  const end = source.indexOf('    runs-on:', start);
+  if (start === -1 || end === -1) throw new Error('missing job if expression');
+  return source.slice(start, end);
 }
 
 function dispatchInputSource(name) {

@@ -1,0 +1,13 @@
+name: Kovo performance baseline CPU admission
+description: Admit an optional exact Node CPU-model SHA-256 before a baseline job installs tools.
+
+runs:
+  using: composite
+  steps:
+    - name: Authenticate requested CPU model
+      shell: bash
+      # This action deliberately runs before kovo-setup. Do not pass the repository's Node-24-only
+      # transform flag to the hosted image's preinstalled Node binary.
+      env:
+        NODE_OPTIONS: ''
+      run: node "$GITHUB_ACTION_PATH/check.mjs"
