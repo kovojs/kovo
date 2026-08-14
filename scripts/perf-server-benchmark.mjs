@@ -21,6 +21,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { brotliDecompressSync } from 'node:zlib';
 
 import { readArg, readIntegerArg } from '../benchmarks/harness/args.mjs';
+import {
+  MATCHED_SERVER_DETAIL_SLUG,
+  validateMatchedServerDocument,
+} from '../benchmarks/shared/server-semantic-contract.mjs';
 import { performanceHostFingerprint } from './lib/perf-host.mjs';
 import { collectPerformanceProvenance } from './lib/perf-provenance.mjs';
 import { measureProcessTreeWindow } from './lib/process-tree-metrics.mjs';
@@ -40,7 +44,6 @@ const LOCK_FILES = Object.freeze([
 const DEFAULT_DURATION_MS = 15_000;
 const DEFAULT_WARMUP_MS = 5_000;
 const MAX_ERROR_EVIDENCE = 20;
-const PRODUCT_SLUG = 'linen-field-jacket';
 export const PROVED_DOCUMENT_COMPRESSION_CACHE_DISABLE_ENV =
   'KOVO_BENCHMARK_DISABLE_PROVED_DOCUMENT_COMPRESSION_CACHE';
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
@@ -54,7 +57,7 @@ export function serverConditionKey(condition) {
 
 export function serverConditionPath({ mode, route }) {
   const base = mode === 'dynamic' ? '/matched/runtime/dynamic' : '/matched/l0';
-  return route === 'detail' ? `${base}/product/${PRODUCT_SLUG}` : base;
+  return route === 'detail' ? `${base}/product/${MATCHED_SERVER_DETAIL_SLUG}` : base;
 }
 
 export function serverConditions(options = {}) {
@@ -441,8 +444,11 @@ export async function establishServerExpectation({
     path: pathValue,
     timeoutMs: 10_000,
   });
-  assertSuccessfulDocument(identity, condition);
+  const semanticContent = assertSuccessfulDocument(identity, condition);
   const identityDigest = sha256(identity.body);
+  if (semanticContent.identityBodySha256 !== identityDigest) {
+    throw new Error('semantic evidence did not bind the primed identity body');
+  }
   let selected = identity;
   let support = { status: 'supported' };
   if (condition.encoding === 'br') {
@@ -556,6 +562,7 @@ export async function establishServerExpectation({
         requestAcceptEncoding: condition.encoding,
         requestIfNoneMatch: null,
         selectedResponse: responseEvidence(primeRepresentation),
+        semanticContent,
         status: primeRepresentation.statusCode,
         wireBodyBytes: primeRepresentation.body.byteLength,
         wireBodySha256: sha256(primeRepresentation.body),
@@ -595,6 +602,7 @@ export async function establishServerExpectation({
       kovoPad,
       requestAcceptEncoding: condition.encoding,
       requestIfNoneMatch: requestEtag,
+      semanticContent,
       status: expectation.statusCode,
       wireBodyBytes: primeRepresentation.body.byteLength,
       wireBodySha256: sha256(primeRepresentation.body),
@@ -625,18 +633,7 @@ function assertSuccessfulDocument(response, condition) {
   if (!/^text\/html(?:;|$)/iu.test(headerValue(response.headers, 'content-type') ?? '')) {
     throw new Error('identity prime did not return text/html');
   }
-  const marker = `data-benchmark-destination="${condition.route}"`;
-  if (!response.body.includes(Buffer.from(marker)))
-    throw new Error(`identity prime omitted ${marker}`);
-  if (
-    !response.body.includes(Buffer.from('Field goods for everyday carry')) &&
-    condition.route === 'listing'
-  ) {
-    throw new Error('listing prime omitted matched catalog content');
-  }
-  if (!response.body.includes(Buffer.from('Linen Field Jacket')) && condition.route === 'detail') {
-    throw new Error('detail prime omitted matched product content');
-  }
+  return validateMatchedServerDocument(response.body, { route: condition.route });
 }
 
 function summarizeLoadSample(load, processTree) {

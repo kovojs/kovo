@@ -5,6 +5,45 @@
   "listingDescription": "A 24-product capability-matched commerce benchmark.",
   "brand": "Benchmark Supply",
   "detailBackLabel": "Back to listing",
+  "serverSemantic": {
+    "basePath": "/matched/l0",
+    "lane": "matched-l0",
+    "detailProductSlug": "linen-field-jacket",
+    "productsLabel": "Products",
+    "viewLabelPrefix": "View ",
+    "detailsLabel": "Details",
+    "image": {
+      "width": "640",
+      "height": "480",
+      "listingLoading": "lazy",
+      "detailLoading": "eager",
+      "alt": ""
+    },
+    "quantity": {
+      "label": "Qty",
+      "minimum": "1",
+      "value": "1"
+    },
+    "shell": {
+      "cartDialogId": "matched-l0-cart",
+      "cartTitleId": "matched-l0-cart-title",
+      "cartTitle": "Review cart",
+      "closeLabel": "Close",
+      "nameLabel": "Name",
+      "nameField": {
+        "name": "name",
+        "autocomplete": "name"
+      },
+      "emailLabel": "Email",
+      "emailField": {
+        "name": "email",
+        "type": "email",
+        "autocomplete": "email"
+      },
+      "checkoutMethod": "get",
+      "submitLabel": "Continue with native navigation"
+    }
+  },
   "l0": {
     "cartDescription": "Native cart controls require no framework client state.",
     "cartLabel": "Open cart with 0 items",
