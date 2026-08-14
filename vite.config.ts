@@ -90,6 +90,10 @@ export default defineConfig({
       // absent from the workspace path and are authenticated + installed only inside
       // scripts/devex-benchmark.mjs before the fixture is typechecked, checked, and built.
       'scripts/devex-workloads/kovo-packed-check/package/**',
+      // This representative app is deliberately absent from the workspace. The Metric E gate
+      // installs only its exact local framework links, runs Kovo's TypeScript preflight, and
+      // asserts the preflight artifact before accepting the production-build census.
+      'security/fixtures/escape-census-real-app/**',
       'site/tutorial/steps/**',
       'tests/**',
       // These benchmark entrants are intentionally isolated from the root workspace

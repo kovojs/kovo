@@ -11,7 +11,7 @@ const commandArgs = process.argv.slice(2);
 const fastVersionOutput = fastCliVersionOutput(commandArgs, import.meta.url);
 
 if (fastVersionOutput !== null) {
-  await new Promise((resolve) => process.stdout.write(fastVersionOutput, () => resolve()));
+  await new Promise((resolve) => process.stdout.write(fastVersionOutput, () => resolve(undefined)));
   process.exit(0);
 }
 
