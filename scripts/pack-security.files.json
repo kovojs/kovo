@@ -8545,6 +8545,8 @@
       "dist/vite-client-module-output.d.mts.map",
       "dist/vite-client-module-output.mjs",
       "dist/vite-client-module-output.mjs.map",
+      "dist/vite-dev-csp.mjs",
+      "dist/vite-dev-csp.mjs.map",
       "dist/vite-dev.d.mts",
       "dist/vite-dev.d.mts.map",
       "dist/vite-dev.mjs",

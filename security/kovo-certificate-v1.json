@@ -398,6 +398,7 @@
     "@kovojs/server/dist/vite-build-output.mjs",
     "@kovojs/server/dist/vite-build.mjs",
     "@kovojs/server/dist/vite-client-module-output.mjs",
+    "@kovojs/server/dist/vite-dev-csp.mjs",
     "@kovojs/server/dist/vite-dev.mjs",
     "@kovojs/server/dist/vite-manifest.mjs",
     "@kovojs/server/dist/vite-plugin-build.mjs",
@@ -1905,6 +1906,9 @@
       "crypto-acquisition",
       "digest",
       "filesystem"
+    ],
+    "@kovojs/server/dist/vite-dev-csp.mjs": [
+      "crypto-acquisition"
     ],
     "@kovojs/server/dist/vite-dev.mjs": [
       "crypto-acquisition",
@@ -10167,6 +10171,14 @@
       "@kovojs/server/dist/vite-manifest.mjs"
     ],
     [
+      "@kovojs/server/dist/vite-dev-csp.mjs",
+      "@kovojs/server/dist/response-security-intrinsics.mjs"
+    ],
+    [
+      "@kovojs/server/dist/vite-dev-csp.mjs",
+      "@kovojs/server/dist/security-witness-intrinsics.mjs"
+    ],
+    [
       "@kovojs/server/dist/vite-dev.mjs",
       "@kovojs/browser/dist/internal/hmr-target-snapshot.mjs"
     ],
@@ -10221,6 +10233,10 @@
     [
       "@kovojs/server/dist/vite-dev.mjs",
       "@kovojs/server/dist/compiler-client-module-provenance.mjs"
+    ],
+    [
+      "@kovojs/server/dist/vite-dev.mjs",
+      "@kovojs/server/dist/document-core.mjs"
     ],
     [
       "@kovojs/server/dist/vite-dev.mjs",
@@ -10293,6 +10309,10 @@
     [
       "@kovojs/server/dist/vite-dev.mjs",
       "@kovojs/server/dist/source-document-headers.mjs"
+    ],
+    [
+      "@kovojs/server/dist/vite-dev.mjs",
+      "@kovojs/server/dist/vite-dev-csp.mjs"
     ],
     [
       "@kovojs/server/dist/vite-dev.mjs",
@@ -10889,7 +10909,7 @@
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     }
   ],
-  "policySha512": "sha512-XMZg0+qdLnYaXqgPyT6lmch+BTGUzDzUqsMtmSNwPVD5dRL7ZdYdpIYi00taeObgilHz2KOX/kLKN7FDlrEPJg==",
+  "policySha512": "sha512-d5yMPf/d9Mz9V6Ht6rrCB0qJj5mN6NpwwkxdTDTOorPReJJZ4HDJa0KSAhkp9vw8BmkRXckCVswo5J2Im1G2KA==",
   "roots": [
     {
       "module": "@kovojs/better-auth/dist/index.mjs",

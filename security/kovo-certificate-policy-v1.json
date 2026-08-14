@@ -190,7 +190,7 @@
     },
     {
       "path": "@kovojs/compiler/dist/internal.mjs",
-      "sha512": "sha512-VvdWiyTpeqHYtSieHeq/2mgjQUx0Z5L71HWkTh9oBtGwvujLARz+9b5oUor7ke/raDHA3qlYnmjB6gQ+J83Rpg=="
+      "sha512": "sha512-IOoPEWc4Nd6wBdRvNlIjbC/Il11cIvYLQKZbqURBcMgds5MdAPbsS2IpKVPAVFVh4x6SCiuShBpf90iFWYkhRA=="
     },
     {
       "path": "@kovojs/compiler/dist/internal/graph.mjs",
@@ -678,7 +678,7 @@
     },
     {
       "path": "@kovojs/server/dist/document-core.mjs",
-      "sha512": "sha512-exidmwcxDgXSMgCHr+YKaLvKoh8tG8fLd43e2yyiaxd8Ih2HofnAqhzB7wmMnUT/WkOgSVpzW3Q+c35Wr+WpNQ=="
+      "sha512": "sha512-45QKUkWWTMqBRl5kI3PU3DLJJxnIuh7Dkh0LGsEXTljzSKhOsbKJDfGRsk689jX2CNEsHei5+ZVCvOR4ygjC0Q=="
     },
     {
       "path": "@kovojs/server/dist/document-diagnostics.mjs",
@@ -1593,8 +1593,12 @@
       "sha512": "sha512-3X6jp+eb2RoZ/65WknSfm7jbGvquukAVZNT42qoONV67t1F8CuIkIrXN9bbR7M6mrIUiE0wXX7XXBk0wQzE0MQ=="
     },
     {
+      "path": "@kovojs/server/dist/vite-dev-csp.mjs",
+      "sha512": "sha512-d3SUJS4AcFuSBxhROxveYrRZbN+p6Ol1IRKm3Vf0Mgx1hMXSI1UJK84gDiHxf1qahFuw+IuRy3FhTeha0DyxfA=="
+    },
+    {
       "path": "@kovojs/server/dist/vite-dev.mjs",
-      "sha512": "sha512-1HEc2up2zSA5EUAEP12ubGoiKjLXX1vKgh89q87oQpeYtwOmoOPwHvhO+6Ob+D603Uv+XyO6zPZHBNZp+dY/bw=="
+      "sha512": "sha512-vQNgzi9Rc8b80tIE7RvcI+cFNDar0leEkZqJX/v/C8iLFLkpcW11QX6+T3bSnyq3Ma69eDWOu6CFC4C6I0GxZA=="
     },
     {
       "path": "@kovojs/server/dist/vite-manifest.mjs",
