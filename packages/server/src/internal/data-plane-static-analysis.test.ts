@@ -639,10 +639,30 @@ export const status = query({
           queries: [
             {
               query: 'snapshotQuery',
+              reads: ['snapshot-domain'],
               shape: 'string',
               site: 'src/schema.ts:2',
             },
           ],
+          runtimeTableSecurityManifest: {
+            tables: [
+              {
+                authorizationClassifications: ['public'],
+                columns: [{ key: 'id', name: 'id' }],
+                dialect: 'postgres',
+                domain: 'snapshot-domain',
+                governedColumnKeys: ['id'],
+                key: {
+                  columnKey: 'id',
+                  columnName: 'id',
+                  uniqueness: 'primary',
+                },
+                name: 'snapshot_table',
+                secretColumnKeys: [],
+                secretDeclared: false,
+              },
+            ],
+          },
           sqlSafetyDiagnostics: [
             analyzerDiagnostic(
               diagnosticRegistrar,
@@ -652,7 +672,19 @@ export const status = query({
             ),
           ],
           toctouFacts: [],
-          touchGraph: {},
+          touchGraph: {
+            snapshotMutation: {
+              touches: [
+                {
+                  domain: 'snapshot-domain',
+                  keys: null,
+                  site: 'src/schema.ts:3',
+                  via: 'insert',
+                },
+              ],
+              unresolved: [],
+            },
+          },
         };
       },
     );
@@ -681,6 +713,22 @@ export const status = query({
           source: 'src/schema.ts:2',
         },
       ]);
+      expect(snapshot.runtimeRegistryFacts).toMatchObject({
+        browserPosture: {
+          externalOrigins: [],
+          isolationBlockers: [],
+          opaqueExternalUrls: [],
+          operations: [],
+          schema: 'kovo-browser-posture/v1',
+        },
+        mutationTouches: {
+          snapshotMutation: [{ domain: 'snapshot-domain', keys: null }],
+        },
+        queryReads: [{ domains: ['snapshot-domain'], query: 'snapshotQuery' }],
+        tableSecurity: {
+          tables: [expect.objectContaining({ domain: 'snapshot-domain', name: 'snapshot_table' })],
+        },
+      });
       expect(currentViteDataPlaneSourceIdentity({ appSourceDir: srcDir, root })).not.toBe(
         snapshot.sourceIdentity,
       );

@@ -117,15 +117,16 @@ export interface DataPlaneAnalysis {
 /**
  * @internal One immutable Vite consumer view derived from one exact source census.
  *
- * Query facts, diagnostics, and downstream mutation-registry inputs must all consume `files` from
- * this carrier. `sourceIdentity` lets the caller re-census immediately before publication without
- * rerunning the expensive analyzers (SPEC §5.2 / §9.5.1).
+ * Query facts, diagnostics, runtime-registry facts, and downstream mutation-registry inputs must
+ * all consume `files` from this carrier. `sourceIdentity` lets the caller re-census immediately
+ * before publication without rerunning the expensive analyzers (SPEC §5.2 / §9.5.1).
  */
 export interface ViteDataPlaneAnalysisSnapshot {
-  diagnostics: readonly DataPlaneDiagnostic[];
-  files: readonly DataPlaneSourceFile[];
-  queryShapeFacts: readonly QueryShapeFact[];
-  sourceIdentity: string;
+  readonly diagnostics: readonly DataPlaneDiagnostic[];
+  readonly files: readonly DataPlaneSourceFile[];
+  readonly queryShapeFacts: readonly QueryShapeFact[];
+  readonly runtimeRegistryFacts: DataPlaneRuntimeRegistryFacts;
+  readonly sourceIdentity: string;
 }
 
 /** @internal Structural view of Drizzle query-read facts used by CLI graph derivation. */
@@ -343,6 +344,7 @@ export async function collectViteDataPlaneAnalysisSnapshot(options: {
       analysis.staticFacts.queries,
       analysis.outputQueryShapeFacts,
     ),
+    runtimeRegistryFacts: runtimeRegistryFactsFromAnalysis(analysis),
     sourceIdentity,
   };
 }
@@ -481,6 +483,13 @@ export async function collectRuntimeRegistryFacts(options: {
   disposition?: DataPlaneAnalysisDisposition;
 }): Promise<DataPlaneRuntimeRegistryFacts> {
   const analysis = await collectDataPlaneAnalysis(options);
+  return runtimeRegistryFactsFromAnalysis(analysis);
+}
+
+/** Project every Vite/runtime registry consumer from one already-authenticated source census. */
+function runtimeRegistryFactsFromAnalysis(
+  analysis: DataPlaneAnalysis,
+): DataPlaneRuntimeRegistryFacts {
   if (analysis.files.length === 0) {
     return {
       browserPosture: deriveBrowserPostureManifestFromSourceFiles([]),

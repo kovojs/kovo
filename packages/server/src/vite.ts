@@ -49,7 +49,6 @@ import { isParanoidSecurityAdvisoryCode } from '@kovojs/core/internal/security-m
 import {
   collectViteDataPlaneAnalysisSnapshot as collectViteDataPlaneAnalysisSnapshotAdapter,
   currentViteDataPlaneSourceIdentity as currentViteDataPlaneSourceIdentityAdapter,
-  collectRuntimeRegistryFacts as collectRuntimeRegistryFactsAdapter,
   isDataPlaneSourceFile,
   sourceFilesHaveDataPlaneMarkers,
   type DataPlaneSourceFile,
@@ -364,8 +363,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   let root = process.cwd();
   let compilerPluginValue: KovoCompilerVitePlugin | undefined;
   let externalCompilerPlugin: KovoCompilerVitePlugin | undefined;
-  let compilerQueryShapeFacts: readonly CompilerViteQueryShapeFact[] | undefined;
-  let compilerProjectMutationFacts: ProjectMutationRegistryFacts | undefined;
+  let committedProjectAnalysis: CommittedViteProjectAnalysisSnapshot | undefined;
   let appShellPlugin: KovoAppShellDevPlugin | undefined;
   let onModuleDiagnostics: ((report: unknown) => void) | undefined;
   let onServerModuleDiagnostics: ((report: unknown) => void) | undefined;
@@ -394,7 +392,6 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   let devServer: KovoViteDevServer | undefined;
   let devAnalysisRunning = false;
   let devAnalysisQueuedEpoch: number | undefined;
-  let devAnalysisFailureReportedFile: string | undefined;
   let pendingDevFactsConvergence:
     | {
         convergenceSettled: boolean;
@@ -403,15 +400,15 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
         snapshot: ViteProjectAnalysisSnapshot;
       }
     | undefined;
-  let committedProjectFactsDigest: string | undefined;
 
   let projectFactsDigestFallback = 0;
-  const projectFactsDigest = (
-    queryFacts: readonly CompilerViteQueryShapeFact[],
-    mutationFacts: ProjectMutationRegistryFacts,
-  ): string => {
+  const projectFactsDigest = (snapshot: ViteProjectAnalysisSnapshot): string => {
     try {
-      return staticAnalysisCanonicalJson({ mutationFacts, queryFacts });
+      return staticAnalysisCanonicalJson({
+        mutationFacts: snapshot.mutationFacts,
+        queryFacts: snapshot.queryFacts,
+        runtimeRegistryFacts: snapshot.runtimeRegistryFacts,
+      });
     } catch {
       // An unserializable fact set can never prove "unchanged"; fall back to a unique token so
       // the comparison conservatively reports a change instead of failing the caller.
@@ -420,9 +417,19 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
     }
   };
 
+  const commitProjectAnalysisSnapshot = (
+    snapshot: ViteProjectAnalysisSnapshot,
+    digest = projectFactsDigest(snapshot),
+  ): CommittedViteProjectAnalysisSnapshot => {
+    const committed = witnessFreeze({ digest, snapshot });
+    // SPEC §9.5.1: one assignment publishes every compiler/runtime-registry consumer together.
+    committedProjectAnalysis = committed;
+    return committed;
+  };
+
   // D5-d convergence: fresh facts differ from the facts already-served transforms consumed, so
   // every derived module is suspect. Invalidate coarsely and reload; this branch is rare (facts
-  // change only when a query/mutation contract changes, not on ordinary component edits).
+  // change only when a compiler contract or generated runtime posture changes).
   const publishDevFactsConvergence = (): boolean => {
     const server = devServer;
     if (server === undefined) return false;
@@ -475,12 +482,13 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
     }
   };
 
-  // SPEC.md §9.5.1 / plans/good-perf.md D5-d: re-derive whole-project query/mutation facts
-  // asynchronously after an edit, never blocking HMR staging on them. Kovo proves security
+  // SPEC.md §9.5.1 / plans/good-perf.md D5-d: re-derive the complete whole-project compiler and
+  // runtime-registry snapshot asynchronously after an edit, never blocking HMR staging on it.
+  // Kovo proves security
   // posture per commit (`kovo check`/`kovo build` are unchanged and fail-closed); the dev-served
   // page is explicitly marked dev-unproven via the `Kovo-Dev-Posture` response header. Analyzer
-  // failures keep the last-good facts and never take down the dev server; the data-plane gate
-  // owns surfacing them as teaching diagnostics.
+  // operational failures keep the last-good facts and never take down the dev server; analyzer
+  // findings surface only through their producer-owned registered diagnostics.
   const devAnalysisSourceEpochIsCurrent = (epoch: number): boolean =>
     epoch === devAnalysisSourceEpoch;
 
@@ -562,60 +570,11 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
           source: sourceFromDevAnalysisSnapshot(snapshot, absFileName, analysisRoot) ?? '',
         });
       }
-      if (
-        devAnalysisFailureReportedFile !== undefined &&
-        !reportedNow.has(devAnalysisFailureReportedFile)
-      ) {
-        emit({
-          diagnostics: [],
-          fileName: devAnalysisFailureReportedFile,
-          source:
-            sourceFromDevAnalysisSnapshot(snapshot, devAnalysisFailureReportedFile, analysisRoot) ??
-            '',
-        });
-      }
       if (!epochIsCurrent()) return false;
-      devAnalysisFailureReportedFile = undefined;
       devDataPlaneReportedFiles = reportedNow;
       return true;
     } catch {
       return false;
-    }
-  };
-
-  const publishDevAnalysisFailure = (
-    analysisEpoch: number,
-    analysisRoot: string,
-    requireSettlement = true,
-  ): void => {
-    if (
-      !(requireSettlement
-        ? devAnalysisEpochIsCurrent(analysisEpoch)
-        : devAnalysisSourceEpochIsCurrent(analysisEpoch))
-    ) {
-      return;
-    }
-    const emit = onServerModuleDiagnostics;
-    if (emit === undefined) return;
-    const fileName = appEntryFileName(app, analysisRoot);
-    try {
-      emit({
-        diagnostics: [
-          createRegisteredDiagnostic(
-            'KV245',
-            { fileName, start: { column: 1, line: 1 } },
-            {
-              message:
-                'TypeScript/TSX parse or whole-project source analysis could not settle. Kovo retained the last-good snapshot; dev retries within its bounded settlement budget or after the next data-plane edit.',
-            },
-          ),
-        ],
-        fileName,
-        source: readSourceSafe(fileName),
-      });
-      devAnalysisFailureReportedFile = fileName;
-    } catch {
-      // A broken optional teaching sink cannot turn the dev-unproven HMR outcome into a crash.
     }
   };
 
@@ -627,15 +586,10 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       return false;
     }
     if (!pending.convergenceSettled) {
-      if (!publishDevFactsConvergence()) {
-        requestDevWholeProjectAnalysisRetry();
-        return false;
-      }
       let sourceIsCurrent = false;
       try {
         sourceIsCurrent = viteProjectAnalysisSnapshotIsCurrent(pending.snapshot, root, app);
       } catch {
-        publishDevAnalysisFailure(analysisEpoch, root);
         requestDevWholeProjectAnalysisRetry();
         return false;
       }
@@ -644,9 +598,22 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
         requestDevWholeProjectAnalysisRetry();
         return false;
       }
-      compilerProjectMutationFacts = pending.snapshot.mutationFacts;
-      compilerQueryShapeFacts = pending.snapshot.queryFacts;
-      committedProjectFactsDigest = pending.digest;
+      if (!publishDevFactsConvergence()) {
+        requestDevWholeProjectAnalysisRetry();
+        return false;
+      }
+      try {
+        sourceIsCurrent = viteProjectAnalysisSnapshotIsCurrent(pending.snapshot, root, app);
+      } catch {
+        requestDevWholeProjectAnalysisRetry();
+        return false;
+      }
+      if (!sourceIsCurrent) {
+        pendingDevFactsConvergence = undefined;
+        requestDevWholeProjectAnalysisRetry();
+        return false;
+      }
+      commitProjectAnalysisSnapshot(pending.snapshot, pending.digest);
       pending.convergenceSettled = true;
     }
     if (!publishDevDataPlaneDiagnostics(pending.snapshot, analysisEpoch, root)) {
@@ -658,10 +625,10 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
     return true;
   };
 
-  // One whole-project dev analysis pass: refresh the compiler's project facts, then surface the
-  // gate's teaching diagnostics. Both consumers read the same content-keyed analysis memo, so the
-  // pass runs the underlying analyzers once. Single-flight epoch tracking ensures a save landing
-  // while a pass runs invalidates its publication and coalesces into a pass over newest content.
+  // One whole-project dev analysis pass: refresh the compiler/runtime-registry project facts, then
+  // surface the gate's teaching diagnostics. Every consumer reads the same content-keyed analysis
+  // memo, so the pass runs the underlying analyzers once. Single-flight epoch tracking ensures a
+  // save landing while a pass runs invalidates its publication and coalesces into newest content.
   const runDevWholeProjectAnalysis = async (requestedEpoch: number): Promise<void> => {
     if (devAnalysisRunning) {
       devAnalysisQueuedEpoch = requestedEpoch;
@@ -685,7 +652,6 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
                   root,
                 });
           } catch {
-            publishDevAnalysisFailure(analysisEpoch, root);
             requestDevWholeProjectAnalysisRetry();
             return;
           }
@@ -712,9 +678,9 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
           // Async whole-project analysis is a sole-owner optimization only. Split ownership keeps
           // source proof on the synchronous HMR path (SPEC §5.2 / §9.5.1).
           if (externalCompilerPlugin !== undefined) return;
-          const digest = projectFactsDigest(snapshot.queryFacts, snapshot.mutationFacts);
+          const digest = projectFactsDigest(snapshot);
           if (!devAnalysisEpochIsCurrent(analysisEpoch)) return;
-          if (digest !== committedProjectFactsDigest) {
+          if (digest !== committedProjectAnalysis?.digest) {
             pendingDevFactsConvergence = {
               convergenceSettled: false,
               digest,
@@ -723,14 +689,17 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
             };
             publishPendingDevFactsConvergence(analysisEpoch);
             return;
-          } else if (!publishDevDataPlaneDiagnostics(snapshot, analysisEpoch, analysisRoot)) {
+          }
+          // The consumed facts are byte-for-byte unchanged, so no reload is necessary; still
+          // advance the complete carrier rather than retaining unrelated fields from older bytes.
+          commitProjectAnalysisSnapshot(snapshot, digest);
+          if (!publishDevDataPlaneDiagnostics(snapshot, analysisEpoch, analysisRoot)) {
             requestDevWholeProjectAnalysisRetry();
           } else {
             devAnalysisAutomaticRetriesRemaining = DEV_ANALYSIS_MAX_AUTOMATIC_RETRIES;
           }
         } catch {
           if (!devAnalysisEpochIsCurrent(analysisEpoch)) return;
-          publishDevAnalysisFailure(analysisEpoch, analysisRoot);
           requestDevWholeProjectAnalysisRetry();
           return;
         }
@@ -740,7 +709,6 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       } while (devAnalysisEpochIsCurrent(analysisEpoch));
     } catch {
       if (devAnalysisEpochIsCurrent(analysisEpoch)) {
-        publishDevAnalysisFailure(analysisEpoch, root);
         requestDevWholeProjectAnalysisRetry();
       }
     } finally {
@@ -795,10 +763,10 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
           onModuleDiagnostics?.(report);
         },
         queryShapeFacts() {
-          return compilerQueryShapeFacts;
+          return committedProjectAnalysis?.snapshot.queryFacts;
         },
         registryFacts() {
-          return compilerProjectMutationFacts;
+          return committedProjectAnalysis?.snapshot.mutationFacts;
         },
       }) as KovoCompilerVitePlugin;
       if (stageCompilerGeneration !== undefined) {
@@ -832,13 +800,13 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       devAnalysisAutomaticRetriesRemaining = DEV_ANALYSIS_MAX_AUTOMATIC_RETRIES;
       devAnalysisQueuedEpoch = undefined;
       pendingDevFactsConvergence = undefined;
+      committedProjectAnalysis = undefined;
       advanceDevAnalysisSourceEpoch();
       viteConfigurationEpoch += 1;
       if (viteConfigurationEpoch > viteMaximumSafeInteger) {
         throw new RangeError('Kovo Vite configuration epoch exceeded the safe integer limit.');
       }
       const activeConfigurationEpoch = viteConfigurationEpoch;
-      devAnalysisFailureReportedFile = undefined;
       devDataPlaneReportedFiles = new Set<string>();
       devServer = undefined;
       onModuleDiagnostics = undefined;
@@ -866,18 +834,13 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
           'Kovo Vite configuration source changed during whole-project analysis; retry configuration from one stable source snapshot.',
         );
       }
-      compilerQueryShapeFacts = projectSnapshot.queryFacts;
-      compilerProjectMutationFacts = projectSnapshot.mutationFacts;
-      committedProjectFactsDigest = projectFactsDigest(
-        compilerQueryShapeFacts,
-        compilerProjectMutationFacts,
-      );
       const configuredCompiler = configuredExternalCompilerPlugin(config, plugin, app, root);
       assertExternalCompilerHasNoDerivedFacts(
         configuredCompiler,
-        compilerQueryShapeFacts,
-        compilerProjectMutationFacts,
+        projectSnapshot.queryFacts,
+        projectSnapshot.mutationFacts,
       );
+      commitProjectAnalysisSnapshot(projectSnapshot);
       externalCompilerPlugin = configuredCompiler;
       if (externalCompilerPlugin !== undefined && stageCompilerGeneration !== undefined) {
         bindFrameworkKovoViteDevGenerationStage(externalCompilerPlugin, stageCompilerGeneration);
@@ -901,23 +864,16 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
           'Kovo Vite build source changed during whole-project analysis; retry the build from one stable source snapshot.',
         );
       }
-      compilerQueryShapeFacts = projectSnapshot.queryFacts;
-      compilerProjectMutationFacts = projectSnapshot.mutationFacts;
-      committedProjectFactsDigest = projectFactsDigest(
-        compilerQueryShapeFacts,
-        compilerProjectMutationFacts,
-      );
       assertExternalCompilerHasNoDerivedFacts(
         externalCompilerPlugin,
-        compilerQueryShapeFacts,
-        compilerProjectMutationFacts,
+        projectSnapshot.queryFacts,
+        projectSnapshot.mutationFacts,
       );
+      commitProjectAnalysisSnapshot(projectSnapshot);
       if (viteCommand === 'serve') {
         // Dev disposition: surface as teaching diagnostics in the ledger; never crash HMR.
         const buildStartEpoch = devAnalysisSourceEpoch;
-        if (!publishDevDataPlaneDiagnostics(projectSnapshot, buildStartEpoch, root)) {
-          publishDevAnalysisFailure(buildStartEpoch, root);
-        }
+        publishDevDataPlaneDiagnostics(projectSnapshot, buildStartEpoch, root);
         return;
       }
       // Build disposition: warnings remain visible and non-blocking; only error-severity
@@ -957,8 +913,8 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
             devAnalysisAutomaticRetriesRemaining = DEV_ANALYSIS_MAX_AUTOMATIC_RETRIES;
             devAnalysisQueuedEpoch = undefined;
             pendingDevFactsConvergence = undefined;
+            committedProjectAnalysis = undefined;
             advanceDevAnalysisSourceEpoch();
-            devAnalysisFailureReportedFile = undefined;
             devDataPlaneReportedFiles = new Set<string>();
             root = rootProperty.value;
           }
@@ -1064,9 +1020,13 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
     },
     async load(id) {
       if (id === runtimeRegistryResolvedId) {
-        return serializeRuntimeRegistryWireModule(
-          await collectRuntimeRegistry(root, app, dataPlaneDisposition()),
-        );
+        const committed = committedProjectAnalysis;
+        if (committed === undefined) {
+          throw new Error(
+            'Kovo runtime registry was requested before a whole-project analysis snapshot was committed.',
+          );
+        }
+        return serializeRuntimeRegistryWireModule(committed.snapshot.runtimeRegistryFacts);
       }
       if (externalCompilerPlugin !== undefined) return null;
       return (await compilerPlugin()).load?.(id) ?? null;
@@ -1119,8 +1079,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
         if (
           (hotUpdateIsDataPlane && externalCompilerPlugin === undefined) ||
           devAnalysisRunning ||
-          pendingDevFactsConvergence !== undefined ||
-          devAnalysisFailureReportedFile !== undefined
+          pendingDevFactsConvergence !== undefined
         ) {
           devWholeProjectAnalysisRequested = true;
         }
@@ -1128,12 +1087,12 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
         // a prior data-plane intent while preventing its timer from maturing under this update.
         cancelDevWholeProjectAnalysisSettlement();
       }
-      // plans/good-perf.md O5/D5-d (SPEC.md §9.5.1): whole-project analysis — the compiler's
-      // query/mutation fact snapshot AND the data-plane teaching gate — is OFF the HMR blocking
-      // path. The edit is staged and served immediately against the last-committed facts; the
-      // scheduled pass re-derives the whole-project snapshot asynchronously, surfaces gate
-      // diagnostics when they land, and publishes an invalidate + full reload only when the
-      // fresh facts differ. Dev responses are explicitly marked `Kovo-Dev-Posture: dev-unproven`;
+      // plans/good-perf.md O5/D5-d (SPEC.md §9.5.1): whole-project analysis — compiler facts,
+      // runtime-registry facts, and the data-plane teaching gate — is OFF the HMR blocking path.
+      // The edit is staged and served immediately against the last-committed snapshot; the
+      // scheduled pass re-derives it asynchronously, surfaces gate diagnostics when they land,
+      // and publishes an invalidate + full reload only when consumed facts differ. Dev responses
+      // are explicitly marked `Kovo-Dev-Posture: dev-unproven`;
       // `kovo check` and `kovo build` still derive these facts synchronously and fail closed
       // (SPEC §5.2 rule 10 posture is proven per commit, not per keystroke).
       try {
@@ -1165,17 +1124,10 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
             projectSnapshot.queryFacts,
             projectSnapshot.mutationFacts,
           );
-          compilerProjectMutationFacts = projectSnapshot.mutationFacts;
-          compilerQueryShapeFacts = projectSnapshot.queryFacts;
-          committedProjectFactsDigest = projectFactsDigest(
-            compilerQueryShapeFacts,
-            compilerProjectMutationFacts,
-          );
+          commitProjectAnalysisSnapshot(projectSnapshot);
           // Split ownership cannot consume server-derived facts after the HMR boundary, so its
           // project analysis and teaching diagnostics both settle synchronously here.
-          if (!publishDevDataPlaneDiagnostics(projectSnapshot, hotUpdateSourceEpoch, root, false)) {
-            publishDevAnalysisFailure(hotUpdateSourceEpoch, root, false);
-          }
+          publishDevDataPlaneDiagnostics(projectSnapshot, hotUpdateSourceEpoch, root, false);
         }
 
         // App-shell HMR owns route-shell event selection, but it must not publish the update before
@@ -1578,8 +1530,8 @@ function slashPath(value: string): string {
 // ---------------------------------------------------------------------------
 // Project-level data-plane safety gate (SPEC.md §11.4 / §10.2 / §10.3 / §9.5.1)
 //
-// Vite dev/build and CLI build/export share resolver, cache, query-shape derivation,
-// diagnostics, and the build-only query-shape bridge through the internal adapter.
+// Vite dev/build and CLI build/export share resolver, cache, query-shape/runtime-registry
+// derivation, diagnostics, and the build-only query-shape bridge through the internal adapter.
 // ---------------------------------------------------------------------------
 
 /**
@@ -1596,7 +1548,13 @@ interface ViteProjectAnalysisSnapshot {
   readonly files: readonly DataPlaneSourceFile[];
   readonly mutationFacts: ProjectMutationRegistryFacts;
   readonly queryFacts: readonly CompilerViteQueryShapeFact[];
+  readonly runtimeRegistryFacts: RuntimeRegistryFacts;
   readonly sourceIdentity: string;
+}
+
+interface CommittedViteProjectAnalysisSnapshot {
+  readonly digest: string;
+  readonly snapshot: ViteProjectAnalysisSnapshot;
 }
 
 async function collectViteProjectAnalysisSnapshot(
@@ -1610,13 +1568,14 @@ async function collectViteProjectAnalysisSnapshot(
   );
   const mutationSourceFiles =
     disposition === 'dev' && !sourceFilesHaveDataPlaneMarkers(analysis.files) ? [] : analysis.files;
-  const snapshot: ViteProjectAnalysisSnapshot = {
+  const snapshot: ViteProjectAnalysisSnapshot = witnessFreeze({
     diagnostics: analysis.diagnostics,
     files: analysis.files,
     mutationFacts: compilerOwnedProjectMutationRegistryFactsFromFiles(mutationSourceFiles, root),
     queryFacts: compilerViteQueryShapeFacts(analysis.queryShapeFacts),
+    runtimeRegistryFacts: analysis.runtimeRegistryFacts,
     sourceIdentity: analysis.sourceIdentity,
-  };
+  });
   assertViteProjectAnalysisDiagnosticSources(snapshot, root);
   return snapshot;
 }
@@ -1660,18 +1619,6 @@ function viteProjectAnalysisSnapshotIsCurrent(
       root,
     })
   );
-}
-
-async function collectRuntimeRegistry(
-  root: string,
-  app: string,
-  disposition: DataPlaneAnalysisDisposition,
-): Promise<RuntimeRegistryFacts> {
-  return collectRuntimeRegistryFactsAdapter({
-    appSourceDir: buildSecurityPathDirname(appEntryFileName(app, root)),
-    disposition,
-    root,
-  });
 }
 
 function compilerViteQueryShapeFacts(

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { kovoVitePlugin as compilerKovoVitePlugin } from '@kovojs/compiler/vite';
 
 import { kovo } from './vite.js';
 import { withKovoBuildContext } from './internal/build-context.js';
@@ -18,7 +19,11 @@ import { trustedKovoVitePlugin } from './internal/vite-security-profile.js';
 /** Structural view of the hooks the public Kovo Vite plugin exposes for the data-plane gate. */
 interface DataPlaneGatePlugin {
   buildStart(): void | Promise<void>;
-  configResolved(config: { command?: 'build' | 'serve'; root: string }): void | Promise<void>;
+  configResolved(config: {
+    command?: 'build' | 'serve';
+    plugins?: readonly unknown[];
+    root: string;
+  }): void | Promise<void>;
   configureServer(server: DataPlaneGateMockServer): void | Promise<void>;
   handleHotUpdate(context: {
     file: string;
@@ -198,6 +203,30 @@ const DRIZZLE_RUNTIME_REGISTRY_SOURCE = [
   '  },',
   '});',
 ].join('\n');
+
+const DRIZZLE_RUNTIME_REGISTRY_CHANGED_SOURCE = DRIZZLE_RUNTIME_REGISTRY_SOURCE.replace(
+  'domain: "contact"',
+  'domain: "archive"',
+)
+  .replace('query("contacts"', 'query("archivedContacts"')
+  .replace('mutation("addContact"', 'mutation("archiveContact"');
+
+const BROWSER_RUNTIME_REGISTRY_SOURCE_A = [
+  'import { component } from "@kovojs/core";',
+  'export const RegistryImage = component({',
+  '  render: () => <img src="https://a.example.test/a.png" alt="A" external />,',
+  '});',
+].join('\n');
+
+const BROWSER_RUNTIME_REGISTRY_SOURCE_B = BROWSER_RUNTIME_REGISTRY_SOURCE_A.replaceAll(
+  'a.example.test/a.png',
+  'b.example.test/b.png',
+).replace('alt="A"', 'alt="B"');
+
+const BROWSER_RUNTIME_REGISTRY_SOURCE_C = BROWSER_RUNTIME_REGISTRY_SOURCE_A.replaceAll(
+  'a.example.test/a.png',
+  'c.example.test/c.png',
+).replace('alt="A"', 'alt="C"');
 
 const DRIZZLE_QUERY_SHAPE_TYPES = [
   'import "drizzle-orm/pg-core";',
@@ -734,6 +763,157 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     );
   });
 
+  it('keeps registry A committed until async dev convergence atomically publishes registry B', async () => {
+    const root = await fixture({
+      'src/components/registry-image.tsx': BROWSER_RUNTIME_REGISTRY_SOURCE_A,
+      'src/contacts.ts': DRIZZLE_RUNTIME_REGISTRY_SOURCE,
+      'src/drizzle-types.d.ts': DRIZZLE_RUNTIME_REGISTRY_TYPES,
+    });
+    const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+    const captured: CapturedReport[] = [];
+    await plugin.configResolved({ command: 'serve', root });
+    const server = await configureDevServer(plugin, root, captured);
+    const contactsPath = join(root, 'src/contacts.ts');
+    const browserPath = join(root, 'src/components/registry-image.tsx');
+    const registryId = await plugin.resolveId(
+      'virtual:kovo-runtime-registry:/src/app.tsx',
+      join(root, 'src/app.tsx'),
+    );
+    expect(registryId).toBe('\0virtual:kovo-runtime-registry:/src/app.tsx');
+
+    const registryA = await plugin.load(registryId as string);
+    expect(registryA).toContain('https://a.example.test');
+    expect(registryA).toContain(
+      `registerGeneratedQueryReadRegistry([{"domains":["contact"],"query":"contacts"}]);`,
+    );
+    expect(registryA).toContain(
+      `registerGeneratedMutationTouchRegistry({"addContact":[{"domain":"contact","keys":null}]});`,
+    );
+    expect(registryA).toContain('"domain":"contact"');
+
+    let reportReload: (() => void) | undefined;
+    const reload = new Promise<void>((resolveReload) => {
+      reportReload = resolveReload;
+    });
+    let hmrReturned = false;
+    server.ws!.send = (payload: unknown) => {
+      if (
+        hmrReturned &&
+        typeof payload === 'object' &&
+        payload !== null &&
+        'type' in payload &&
+        payload.type === 'full-reload'
+      ) {
+        reportReload?.();
+      }
+    };
+    await Promise.all([
+      writeFile(contactsPath, DRIZZLE_RUNTIME_REGISTRY_CHANGED_SOURCE, 'utf8'),
+      writeFile(browserPath, BROWSER_RUNTIME_REGISTRY_SOURCE_B, 'utf8'),
+    ]);
+    await plugin.handleHotUpdate({
+      file: browserPath,
+      modules: [],
+      read: async () => BROWSER_RUNTIME_REGISTRY_SOURCE_B,
+      server,
+    });
+    hmrReturned = true;
+
+    // HMR has returned, but the 1.5s whole-project settle has not run. Every virtual-registry
+    // field must remain paired with the same committed A facts consumed by transforms.
+    const registryBeforeSettle = await plugin.load(registryId as string);
+    expect(registryBeforeSettle).toBe(registryA);
+    expect(registryBeforeSettle).not.toContain('https://b.example.test');
+    expect(registryBeforeSettle).not.toContain('archivedContacts');
+    expect(registryBeforeSettle).not.toContain('archiveContact');
+
+    await reload;
+    const registryB = await plugin.load(registryId as string);
+    expect(registryB).toContain('https://b.example.test');
+    expect(registryB).toContain(
+      `registerGeneratedQueryReadRegistry([{"domains":["archive"],"query":"archivedContacts"}]);`,
+    );
+    expect(registryB).toContain(
+      `registerGeneratedMutationTouchRegistry({"archiveContact":[{"domain":"archive","keys":null}]});`,
+    );
+    expect(registryB).toContain(
+      `registerGeneratedTableSecurityManifest({"tables":[{"authzPolicy":{"kind":"sql","sql":"TRUE"},"authorizationClassifications":["authzPolicy"],"columns":[{"key":"id","name":"id"}],"dialect":"postgres","domain":"archive","governedColumnKeys":["id"],"key":{"columnKey":"id","columnName":"id","uniqueness":"primary"},"name":"contacts","secretColumnKeys":[],"secretDeclared":false}]});`,
+    );
+    expect(registryB).not.toContain('https://a.example.test');
+    expect(registryB).not.toContain('"query":"contacts"');
+    expect(registryB).not.toContain('"addContact"');
+  });
+
+  it('serializes only snapshots synchronously committed by config and buildStart', async () => {
+    const root = await fixture({
+      'src/components/registry-image.tsx': BROWSER_RUNTIME_REGISTRY_SOURCE_A,
+      'src/contacts.ts': DRIZZLE_RUNTIME_REGISTRY_SOURCE,
+      'src/drizzle-types.d.ts': DRIZZLE_RUNTIME_REGISTRY_TYPES,
+    });
+    const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+    await plugin.configResolved({ command: 'build', root });
+    const registryId = await plugin.resolveId(
+      'virtual:kovo-runtime-registry:/src/app.tsx',
+      join(root, 'src/app.tsx'),
+    );
+    const configuredRegistry = await plugin.load(registryId as string);
+    expect(configuredRegistry).toContain('https://a.example.test');
+    expect(configuredRegistry).toContain('"query":"contacts"');
+
+    await Promise.all([
+      writeFile(join(root, 'src/contacts.ts'), DRIZZLE_RUNTIME_REGISTRY_CHANGED_SOURCE, 'utf8'),
+      writeFile(
+        join(root, 'src/components/registry-image.tsx'),
+        BROWSER_RUNTIME_REGISTRY_SOURCE_B,
+        'utf8',
+      ),
+    ]);
+    expect(await plugin.load(registryId as string)).toBe(configuredRegistry);
+
+    await plugin.buildStart();
+    const buildRegistry = await plugin.load(registryId as string);
+    expect(buildRegistry).toContain('https://b.example.test');
+    expect(buildRegistry).toContain('"query":"archivedContacts"');
+    expect(buildRegistry).toContain('"archiveContact"');
+    expect(buildRegistry).toContain('"domain":"archive"');
+    expect(buildRegistry).not.toContain('https://a.example.test');
+  });
+
+  it('commits a complete registry synchronously on the split-owner HMR path', async () => {
+    const root = await fixture({
+      'src/components/registry-image.tsx': BROWSER_RUNTIME_REGISTRY_SOURCE_A,
+    });
+    const compiler = compilerKovoVitePlugin({ include: ['src'] });
+    const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+    await compiler.configResolved?.({ command: 'serve', root });
+    await plugin.configResolved({ command: 'serve', plugins: [compiler, plugin], root });
+    const registryId = await plugin.resolveId(
+      'virtual:kovo-runtime-registry:/src/app.tsx',
+      join(root, 'src/app.tsx'),
+    );
+    expect(await plugin.load(registryId as string)).toContain('https://a.example.test');
+
+    const browserPath = join(root, 'src/components/registry-image.tsx');
+    await writeFile(browserPath, BROWSER_RUNTIME_REGISTRY_SOURCE_B, 'utf8');
+    const server: DataPlaneGateMockServer = {
+      middlewares: { use() {} },
+      async ssrLoadModule() {
+        throw new Error('split-owner HMR does not load the app-shell integration');
+      },
+      ws: { send() {} },
+    };
+    await plugin.handleHotUpdate({
+      file: browserPath,
+      modules: [],
+      read: async () => BROWSER_RUNTIME_REGISTRY_SOURCE_B,
+      server,
+    });
+
+    const registryB = await plugin.load(registryId as string);
+    expect(registryB).toContain('https://b.example.test');
+    expect(registryB).not.toContain('https://a.example.test');
+  });
+
   it('injects the runtime registry after exact app-contract source authentication', async () => {
     const root = await fixture({ 'src/app.tsx': APP_CONTRACT_SOURCE });
     await mkdir(join(root, 'node_modules/@kovojs'), { recursive: true });
@@ -1161,6 +1341,7 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
 
   it('keeps one project snapshot pending until convergence and diagnostics both settle', async () => {
     const root = await fixture({
+      'src/components/registry-image.tsx': BROWSER_RUNTIME_REGISTRY_SOURCE_A,
       'src/components/status-form.tsx': DEV_PROJECT_FACTS_COMPONENT,
       'src/contracts.ts': DEV_PROJECT_FACTS_INITIAL_SOURCE,
     });
@@ -1193,8 +1374,14 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
       }
       captured.push(report);
     });
+    const browserPath = join(root, 'src/components/registry-image.tsx');
     const componentPath = join(root, 'src/components/status-form.tsx');
     const contractsPath = join(root, 'src/contracts.ts');
+    const registryId = await plugin.resolveId(
+      'virtual:kovo-runtime-registry:/src/app.tsx',
+      join(root, 'src/app.tsx'),
+    );
+    expect(await plugin.load(registryId as string)).toContain('https://a.example.test');
     await expect(plugin.transform(DEV_PROJECT_FACTS_COMPONENT, componentPath)).resolves.toEqual(
       expect.objectContaining({ map: null }),
     );
@@ -1225,7 +1412,10 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
       secondReloadAttempt?.();
     };
 
-    await writeFile(contractsPath, DEV_PROJECT_FACTS_CHANGED_SOURCE, 'utf8');
+    await Promise.all([
+      writeFile(contractsPath, DEV_PROJECT_FACTS_CHANGED_SOURCE, 'utf8'),
+      writeFile(browserPath, BROWSER_RUNTIME_REGISTRY_SOURCE_B, 'utf8'),
+    ]);
     failNextProjectDiagnostic = true;
     await plugin.handleHotUpdate({
       file: contractsPath,
@@ -1237,8 +1427,10 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     await firstReload;
     expect(reloadAttempts).toBe(1);
     expect(diagnosticAttempts).toBe(0);
-    // The first reload publication failed. Neither half of the pending source snapshot may become
-    // active: the old query field and old mutation input contract must still compile together.
+    // The first reload publication failed. No field of the pending source snapshot may become
+    // active: compiler facts and the generated registry must remain one committed A generation.
+    expect(await plugin.load(registryId as string)).toContain('https://a.example.test');
+    expect(await plugin.load(registryId as string)).not.toContain('https://b.example.test');
     await expect(plugin.transform(DEV_PROJECT_FACTS_COMPONENT, componentPath)).resolves.toEqual(
       expect.objectContaining({ map: null }),
     );
@@ -1249,6 +1441,8 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     expect(diagnosticAttempts).toBe(1);
     await secondDiagnostic;
     expect(diagnosticAttempts).toBe(2);
+    expect(await plugin.load(registryId as string)).toContain('https://b.example.test');
+    expect(await plugin.load(registryId as string)).not.toContain('https://a.example.test');
     await expect(plugin.transform(DEV_PROJECT_FACTS_COMPONENT, componentPath)).rejects.toThrow(
       /KV242[\s\S]*KV302|KV302[\s\S]*KV242/u,
     );
@@ -1705,6 +1899,7 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     });
     vi.resetModules();
     const root = await fixture({
+      'src/components/registry-image.tsx': BROWSER_RUNTIME_REGISTRY_SOURCE_A,
       'src/components/status-form.tsx': DEV_PROJECT_FACTS_COMPONENT,
       'src/contracts.ts': DEV_PROJECT_FACTS_INITIAL_SOURCE,
     });
@@ -1716,7 +1911,13 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
       await plugin.configResolved({ command: 'serve', root });
       const server = await configureDevServer(plugin, root, captured);
       const componentPath = join(root, 'src/components/status-form.tsx');
+      const browserPath = join(root, 'src/components/registry-image.tsx');
       const contractsPath = join(root, 'src/contracts.ts');
+      const registryId = await plugin.resolveId(
+        'virtual:kovo-runtime-registry:/src/app.tsx',
+        join(root, 'src/app.tsx'),
+      );
+      expect(await plugin.load(registryId as string)).toContain('https://a.example.test');
       let reportReload: (() => void) | undefined;
       const reload = new Promise<void>((resolveReload) => {
         reportReload = resolveReload;
@@ -1727,7 +1928,10 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
         reportReload?.();
       };
 
-      await writeFile(contractsPath, DEV_PROJECT_FACTS_CHANGED_SOURCE, 'utf8');
+      await Promise.all([
+        writeFile(contractsPath, DEV_PROJECT_FACTS_CHANGED_SOURCE, 'utf8'),
+        writeFile(browserPath, BROWSER_RUNTIME_REGISTRY_SOURCE_B, 'utf8'),
+      ]);
       pauseNextProjectSnapshot = true;
       await plugin.handleHotUpdate({
         file: contractsPath,
@@ -1737,21 +1941,32 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
       });
       await new Promise((resolveWait) => setTimeout(resolveWait, 1_650));
       await pausedCollection;
-      await writeFile(
-        contractsPath,
-        `${DEV_PROJECT_FACTS_CHANGED_SOURCE}\n// second source generation\n`,
-        'utf8',
-      );
+      await Promise.all([
+        writeFile(
+          contractsPath,
+          `${DEV_PROJECT_FACTS_CHANGED_SOURCE}\n// second source generation\n`,
+          'utf8',
+        ),
+        writeFile(browserPath, BROWSER_RUNTIME_REGISTRY_SOURCE_C, 'utf8'),
+      ]);
       releaseProjectSnapshot?.();
       await new Promise((resolveWait) => setTimeout(resolveWait, 50));
 
       expect(reloads).toBe(0);
+      const registryAfterDrift = await plugin.load(registryId as string);
+      expect(registryAfterDrift).toContain('https://a.example.test');
+      expect(registryAfterDrift).not.toContain('https://b.example.test');
+      expect(registryAfterDrift).not.toContain('https://c.example.test');
       await expect(plugin.transform(DEV_PROJECT_FACTS_COMPONENT, componentPath)).resolves.toEqual(
         expect.objectContaining({ map: null }),
       );
 
       await reload;
       expect(reloads).toBe(1);
+      const registryAfterRetry = await plugin.load(registryId as string);
+      expect(registryAfterRetry).toContain('https://c.example.test');
+      expect(registryAfterRetry).not.toContain('https://a.example.test');
+      expect(registryAfterRetry).not.toContain('https://b.example.test');
       await expect(plugin.transform(DEV_PROJECT_FACTS_COMPONENT, componentPath)).rejects.toThrow(
         /KV242[\s\S]*KV302|KV302[\s\S]*KV242/u,
       );
@@ -1761,8 +1976,12 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     }
   });
 
-  it('surfaces KV245, retains last-good facts, and retries a failed async analysis', async () => {
+  it('does not repurpose KV245, retains last-good facts, and retries a failed async analysis', async () => {
     let failNextProjectSnapshot = false;
+    let reportFailure: (() => void) | undefined;
+    const failure = new Promise<void>((resolveFailure) => {
+      reportFailure = resolveFailure;
+    });
     vi.doMock('./internal/data-plane-static-analysis.ts', async () => {
       const actual = await vi.importActual<
         typeof import('./internal/data-plane-static-analysis.ts')
@@ -1774,6 +1993,7 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
         ) {
           if (failNextProjectSnapshot) {
             failNextProjectSnapshot = false;
+            reportFailure?.();
             throw new Error('synthetic whole-project analyzer failure');
           }
           return actual.collectViteDataPlaneAnalysisSnapshot(options);
@@ -1808,22 +2028,12 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
         read: async () => DEV_PROJECT_FACTS_CHANGED_SOURCE,
         server,
       });
-      const failureDeadline = Date.now() + 30_000;
-      while (
-        Date.now() < failureDeadline &&
-        !captured.some((report) => report.diagnostics.some((d) => d.code === 'KV245'))
-      ) {
-        await new Promise((resolveWait) => setTimeout(resolveWait, 50));
-      }
-      const failure = captured.find((report) =>
-        report.diagnostics.some((diagnostic) => diagnostic.code === 'KV245'),
-      );
-      expect(failure?.diagnostics).toEqual([
-        expect.objectContaining({
-          code: 'KV245',
-          message: expect.stringContaining('retained the last-good snapshot'),
-        }),
-      ]);
+      await failure;
+      expect(
+        captured.some((report) =>
+          report.diagnostics.some((diagnostic) => diagnostic.code === 'KV245'),
+        ),
+      ).toBe(false);
       await expect(plugin.transform(DEV_PROJECT_FACTS_COMPONENT, componentPath)).resolves.toEqual(
         expect.objectContaining({ map: null }),
       );
@@ -1833,8 +2043,10 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
         /KV242[\s\S]*KV302|KV302[\s\S]*KV242/u,
       );
       expect(
-        captured.some(
-          (report) => report.fileName.endsWith('app.tsx') && report.diagnostics.length === 0,
+        captured.some((report) =>
+          report.diagnostics.some(
+            (diagnostic) => diagnostic.code === 'KV242' || diagnostic.code === 'KV302',
+          ),
         ),
       ).toBe(true);
     } finally {
@@ -1907,7 +2119,7 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
         captured.some((report) =>
           report.diagnostics.some((diagnostic) => diagnostic.code === 'KV245'),
         ),
-      ).toBe(true);
+      ).toBe(false);
 
       await retry;
       await new Promise((resolveWait) => setTimeout(resolveWait, 50));
