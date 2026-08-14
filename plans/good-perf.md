@@ -161,10 +161,18 @@ benchmarks/harness/{report,run,scenarios}.test.mjs --reporter=dot` passed 41/41.
     guardrails passed, but N=216 fresh-ready p95 regressed 5.4069% (155,835.58 → 164,261.47 ms)
     against the 5% limit; full hashes and metrics are in
     `docs/performance/dev-critical-path-spike.md`.
-- [ ] Decide the newly sealed ready-neutral refinement that avoids eager initial-compile reuse-fact
-      construction and charging on fresh-ready. Run the same full packed-product N=24 and N=216
-      contract independently; do not rerun the identical rejected patch to fish for a different
-      result.
+- [x] Decide the sealed ready-neutral refinement that avoided eager initial-compile reuse-fact
+      construction and charging on fresh-ready.
+  - Rejected before measurement; do not push or integrate `2da4640f1`. Independent review proved
+    that a same-file watcher token could reuse and publish a stale imported query identity when a
+    dependency notification was delayed or absent. The candidate's own focused test reproduced the
+    stale generated `queryNames` crossing the bound generation stage, contrary to SPEC §4.1's
+    source-derived, fail-closed identity boundary. Commit/tree/patch custody and the repro are in
+    `docs/performance/dev-critical-path-spike.md`.
+- [ ] Decide a fail-closed async-analysis-only refinement. Retain the profiled ordinary-edit win
+      from moving whole-project teaching/proof convergence off the HMR blocking path, but do not
+      cache or reuse dependency-sensitive query identities. Run the same full packed-product N=24
+      and N=216 contract independently before integration.
 - [x] Spike authenticated in-session closure reuse for `kovo check --watch` by exposing serializable
       producer seams for trust/static/style facts in `build-export.ts`.
   - SPEC §11.4 constraints: always freshly evaluate app modules and rebuild runtime/app objects;

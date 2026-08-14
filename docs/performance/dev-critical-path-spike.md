@@ -173,7 +173,25 @@ rejection, not missing evidence, and an identical rerun cannot authorize integra
 
 ## Ready-neutral follow-up
 
-The next candidate may retain the causal edit-path work while avoiding eager construction of
-reuse facts during initial compilation and avoiding charging that work to fresh-ready latency. It
-is a new sealed candidate, not a retry of `336925d40`, and must independently pass the same full
-packed-product N=24 and N=216 contract before integration.
+The first ready-neutral refinement was sealed as commit
+`2da4640f18af0dd37ae851658dddace5c3fa96c5`, parent
+`eb16f11734a2ab635a8207f2e6ece4612713f248`, tree
+`600ac33b324f411586039b6739628bb340ebbf76`, stable patch ID
+`d32a93bfd31cd1b8d0b4d8fd696a0d421e126987`, and full-index binary patch SHA-256
+`206cd87527a7d32d636af69fb9de6fb1e03ee45e93831b0c3b82b5a509c96241` over the same six paths.
+Its focused compiler/server suite passed 165/165, but independent adversarial review rejected it
+before push or measurement.
+
+The candidate retained one path-only `watchChange(update)` token and allowed a matching component
+HMR to reuse query names without authenticating imported declarations, barrels, package/config
+resolution, or their byte identities. Its own test changed an imported Kovo query to a structural
+forgery without delivering that dependency event, delivered the real component watcher/HMR pair,
+and observed stale generated `queryNames` after the bound generation stage ran. Vite does not
+provide a global cross-file notification fence that could make the component event authoritative
+for those dependencies. That is a concrete fail-closed/source-derived identity violation under
+SPEC §4.1, so `2da4640f1` must not be pushed, measured, or integrated.
+
+The next candidate keeps only the separately profiled async whole-project analysis settlement for
+ordinary edits and removes dependency-sensitive query reuse entirely. It is a new sealed candidate,
+not a retry of either rejected patch, and must independently pass the same full packed-product N=24
+and N=216 contract before integration.
