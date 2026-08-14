@@ -44,11 +44,7 @@ describe('performance artifact custody', () => {
       expectedArtifactName: 'kovo-perf-browser-matrix',
       expectedArchiveMembers: fixture.archiveMembers,
       expectedReportMember: 'comparison.json',
-      expectedWorkflowJob: {
-        key: 'browser-matrix',
-        name: 'Browser matrix',
-        triggerPolicy: 'baseline',
-      },
+      expectedWorkflowJob: fixture.expectedWorkflowJob,
       fetchArtifactApi: async () => fixture.liveApiBytes,
       fetchWorkflowFileApi: async () => fixture.liveWorkflowApiBytes,
       fetchWorkflowJobsApi: async () => fixture.liveJobsApiBytes,
@@ -70,6 +66,13 @@ describe('performance artifact custody', () => {
       reportMember: 'comparison.json',
       runUrl: 'https://github.com/kovojs/kovo/actions/runs/1001',
       workflow: {
+        artifactUpload: {
+          action: 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+          concreteName: 'kovo-perf-browser-matrix',
+          job: 'browser-matrix',
+          name: 'kovo-perf-browser-matrix',
+          path: '${{ runner.temp }}/kovo-perf/browser',
+        },
         event: 'workflow_dispatch',
         path: '.github/workflows/perf-realistic.yml',
         triggerScope: 'workflow-dispatch:measurement_scope=baselines-or-all',
@@ -107,11 +110,7 @@ describe('performance artifact custody', () => {
         expectedArtifactName: 'kovo-perf-browser-matrix',
         expectedArchiveMembers: fixture.archiveMembers,
         expectedReportMember: 'comparison.json',
-        expectedWorkflowJob: {
-          key: 'browser-matrix',
-          name: 'Browser matrix',
-          triggerPolicy: 'baseline',
-        },
+        expectedWorkflowJob: fixture.expectedWorkflowJob,
         fetchArtifactApi: async () => fixture.liveApiBytes,
         fetchWorkflowFileApi: async () => fixture.liveWorkflowApiBytes,
         fetchWorkflowJobsApi: async () => fixture.liveJobsApiBytes,
@@ -311,6 +310,118 @@ describe('performance artifact custody', () => {
     );
   });
 
+  it('rejects an expected artifact upload routed through a different workflow job', async () => {
+    const fixture = writeArtifactFixture();
+    const misrouted = `${workflowFixtureSource('browser-matrix').replace(
+      '          name: kovo-perf-browser-matrix',
+      '          name: kovo-perf-unrelated',
+    )}${foreignUploadJob({
+      name: 'kovo-perf-browser-matrix',
+      path: '${{ runner.temp }}/kovo-perf/browser',
+    })}`;
+    replaceWorkflowApiFixture(fixture, misrouted);
+    fixture.trustedWorkflow = { bytes: Buffer.from(misrouted), headSha: fixture.sourceCommit };
+
+    await expect(authenticateFixture(fixture)).rejects.toThrow(
+      'workflow job browser-matrix does not uniquely own the reviewed kovo-perf-browser-matrix upload',
+    );
+  });
+
+  it('rejects a foreign concrete upload that collides with an expected matrix template', async () => {
+    const fixture = writeArtifactFixture({
+      expectedArtifactName: 'kovo-perf-dev-n24',
+      jobKey: 'dev-matrix',
+      jobName: 'N=24 developer loop',
+      workflowArtifactName: 'kovo-perf-dev-n${{ matrix.corpus }}',
+      workflowArtifactPath: '${{ runner.temp }}/kovo-perf/dev-n${{ matrix.corpus }}',
+    });
+    const overlapping = `${fixture.workflowText}${foreignUploadJob({
+      name: 'kovo-perf-dev-n24',
+      path: '${{ runner.temp }}/forged',
+    })}`;
+    replaceWorkflowApiFixture(fixture, overlapping);
+    fixture.trustedWorkflow = { bytes: Buffer.from(overlapping), headSha: fixture.sourceCommit };
+
+    await expect(authenticateFixture(fixture)).rejects.toThrow(
+      'workflow job dev-matrix does not uniquely own the reviewed kovo-perf-dev-n${{ matrix.corpus }} upload',
+    );
+  });
+
+  it('rejects an unpinned or wrong-path upload step in the expected workflow job', async () => {
+    const fixture = writeArtifactFixture();
+    const wrongUpload = fixture.workflowText
+      .replace(
+        'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+        `actions/upload-artifact@${'0'.repeat(40)}`,
+      )
+      .replace(
+        '          path: ${{ runner.temp }}/kovo-perf/browser',
+        '          path: ${{ runner.temp }}/kovo-perf/other',
+      );
+    replaceWorkflowApiFixture(fixture, wrongUpload);
+    fixture.trustedWorkflow = { bytes: Buffer.from(wrongUpload), headSha: fixture.sourceCommit };
+
+    await expect(authenticateFixture(fixture)).rejects.toThrow(
+      'workflow job browser-matrix does not uniquely own the reviewed kovo-perf-browser-matrix upload',
+    );
+  });
+
+  it.each([
+    [
+      'check-scaling',
+      'Check scaling',
+      'kovo-perf-check-scaling',
+      'kovo-perf-check-scaling',
+      '${{ runner.temp }}/kovo-perf/check-scaling.json',
+    ],
+    [
+      'browser-matrix',
+      'Browser matrix',
+      'kovo-perf-browser-matrix',
+      'kovo-perf-browser-matrix',
+      '${{ runner.temp }}/kovo-perf/browser',
+    ],
+    [
+      'dev-matrix',
+      'N=24 developer loop',
+      'kovo-perf-dev-n24',
+      'kovo-perf-dev-n${{ matrix.corpus }}',
+      '${{ runner.temp }}/kovo-perf/dev-n${{ matrix.corpus }}',
+    ],
+    [
+      'build-matrix',
+      'N=24 production builds',
+      'kovo-perf-build-n24',
+      'kovo-perf-build-n${{ matrix.corpus }}',
+      '${{ runner.temp }}/kovo-perf/build-n${{ matrix.corpus }}',
+    ],
+    [
+      'server-matrix',
+      'Matched production throughput',
+      'kovo-perf-server-matrix',
+      'kovo-perf-server-matrix',
+      '${{ runner.temp }}/kovo-perf/server',
+    ],
+  ])(
+    'authenticates the real %s job upload contract',
+    async (jobKey, jobName, expectedArtifactName, workflowArtifactName, workflowArtifactPath) => {
+      const fixture = writeArtifactFixture({
+        expectedArtifactName,
+        jobKey,
+        jobName,
+        workflowArtifactName,
+        workflowArtifactPath,
+      });
+      const workflow = readFileSync(path.resolve('.github/workflows/perf-realistic.yml'), 'utf8');
+      replaceWorkflowApiFixture(fixture, workflow);
+      fixture.trustedWorkflow = { bytes: Buffer.from(workflow), headSha: fixture.sourceCommit };
+
+      await expect(authenticateFixture(fixture)).resolves.toMatchObject({
+        custody: { artifactName: expectedArtifactName },
+      });
+    },
+  );
+
   it.each([
     ['wrong family job', (job) => ({ ...job, name: 'Matched production throughput' })],
     ['failed family job', (job) => ({ ...job, conclusion: 'failure' })],
@@ -351,11 +462,7 @@ describe('performance artifact custody', () => {
         expectedArtifactName: 'kovo-perf-browser-matrix',
         expectedArchiveMembers: fixture.archiveMembers,
         expectedReportMember: 'comparison.json',
-        expectedWorkflowJob: {
-          key: 'browser-matrix',
-          name: 'Browser matrix',
-          triggerPolicy: 'baseline',
-        },
+        expectedWorkflowJob: fixture.expectedWorkflowJob,
         fetchArtifactApi: async () => fixture.liveApiBytes,
         fetchWorkflowFileApi: async () => fixture.liveWorkflowApiBytes,
         fetchWorkflowJobsApi: async () => fixture.liveJobsApiBytes,
@@ -398,11 +505,7 @@ describe('performance artifact custody', () => {
         expectedArtifactName: 'kovo-perf-browser-matrix',
         expectedArchiveMembers: fixture.archiveMembers,
         expectedReportMember: 'comparison.json',
-        expectedWorkflowJob: {
-          key: 'browser-matrix',
-          name: 'Browser matrix',
-          triggerPolicy: 'baseline',
-        },
+        expectedWorkflowJob: fixture.expectedWorkflowJob,
         fetchArtifactApi: async () => fixture.liveApiBytes,
         fetchWorkflowFileApi: async () => fixture.liveWorkflowApiBytes,
         fetchWorkflowJobsApi: async () => fixture.liveJobsApiBytes,
@@ -496,11 +599,14 @@ function writeArtifactFixture({
   auxiliary,
   auxiliaries = [],
   event = 'workflow_dispatch',
+  expectedArtifactName = 'kovo-perf-browser-matrix',
   jobKey = 'browser-matrix',
   jobName = 'Browser matrix',
   reportedWorkflowRef,
   reportedWorkflowSha,
   triggerPolicy = 'baseline',
+  workflowArtifactName = expectedArtifactName,
+  workflowArtifactPath = '${{ runner.temp }}/kovo-perf/browser',
 } = {}) {
   const directory = mkdtempSync(path.join(os.tmpdir(), 'kovo-perf-custody-'));
   temporaryDirectories.push(directory);
@@ -542,7 +648,7 @@ function writeArtifactFixture({
     expired: false,
     expires_at: '2026-11-11T23:00:00Z',
     id: 2001,
-    name: 'kovo-perf-browser-matrix',
+    name: expectedArtifactName,
     size_in_bytes: archive.length,
     updated_at: '2026-08-13T23:01:00Z',
     url: 'https://api.github.com/repos/kovojs/kovo/actions/artifacts/2001',
@@ -599,7 +705,8 @@ function writeArtifactFixture({
     ],
     total_count: 1,
   };
-  const workflowText = workflowFixtureSource(jobKey, jobName, triggerPolicy);
+  const workflowArtifact = { name: workflowArtifactName, path: workflowArtifactPath };
+  const workflowText = workflowFixtureSource(jobKey, jobName, triggerPolicy, workflowArtifact);
   const workflowMetadata = workflowFileMetadata(workflowText, eventSha);
   const apiPath = path.join(directory, 'artifact.api.json');
   const archivePath = path.join(directory, 'artifact.zip');
@@ -631,7 +738,8 @@ function writeArtifactFixture({
     liveRunApiBytes: Buffer.from(`${JSON.stringify(runMetadata, null, 2)}\n`),
     liveWorkflowApiBytes: Buffer.from(`${JSON.stringify(workflowMetadata, null, 2)}\n`),
     metadata,
-    expectedWorkflowJob: { key: jobKey, name: jobName, triggerPolicy },
+    expectedArtifactName,
+    expectedWorkflowJob: { artifact: workflowArtifact, key: jobKey, name: jobName, triggerPolicy },
     report,
     reportPath,
     reportText,
@@ -640,13 +748,14 @@ function writeArtifactFixture({
     sourceCommit,
     trustedWorkflow: { bytes: Buffer.from(workflowText), headSha: sourceCommit },
     workflowMetadata,
+    workflowText,
   };
 }
 
 function authenticateFixture(fixture, overrides = {}) {
   return authenticatePerformanceArtifactEvidence(fixture.evidence, {
     baseDirectory: fixture.directory,
-    expectedArtifactName: 'kovo-perf-browser-matrix',
+    expectedArtifactName: fixture.expectedArtifactName,
     expectedArchiveMembers: fixture.archiveMembers,
     expectedReportMember: 'comparison.json',
     expectedWorkflowJob: fixture.expectedWorkflowJob,
@@ -668,7 +777,15 @@ function replaceWorkflowApiFixture(fixture, workflowText) {
   );
 }
 
-function workflowFixtureSource(jobKey, jobName = 'Browser matrix', triggerPolicy = 'baseline') {
+function workflowFixtureSource(
+  jobKey,
+  jobName = 'Browser matrix',
+  triggerPolicy = 'baseline',
+  artifact = {
+    name: 'kovo-perf-browser-matrix',
+    path: '${{ runner.temp }}/kovo-perf/browser',
+  },
+) {
   const condition = triggerPolicy === 'build-profile' ? buildProfileCondition : baselineCondition;
   return [
     'name: Perf Realistic Tier',
@@ -679,6 +796,31 @@ function workflowFixtureSource(jobKey, jobName = 'Browser matrix', triggerPolicy
     '    if: >-',
     ...condition.map((line) => `      ${line}`),
     '    runs-on: ubuntu-24.04',
+    '    steps:',
+    '      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+    '        if: always()',
+    '        with:',
+    '          if-no-files-found: warn',
+    `          name: ${artifact.name}`,
+    `          path: ${artifact.path}`,
+    '          retention-days: 90',
+    '',
+  ].join('\n');
+}
+
+function foreignUploadJob({ name, path: artifactPath }) {
+  return [
+    '  foreign-uploader:',
+    '    name: Foreign uploader',
+    '    runs-on: ubuntu-24.04',
+    '    steps:',
+    '      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+    '        if: always()',
+    '        with:',
+    '          if-no-files-found: warn',
+    `          name: ${name}`,
+    `          path: ${artifactPath}`,
+    '          retention-days: 90',
     '',
   ].join('\n');
 }

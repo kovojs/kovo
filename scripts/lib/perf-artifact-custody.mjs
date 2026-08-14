@@ -11,6 +11,7 @@ const COMMIT_PATTERN = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/u;
 const GIT_BLOB_PATTERN = /^[0-9a-f]{40}$/u;
 export const PERF_REALISTIC_WORKFLOW_PATH = '.github/workflows/perf-realistic.yml';
 const PERF_REALISTIC_WORKFLOW_NAME = 'Perf Realistic Tier';
+const UPLOAD_ARTIFACT_ACTION = 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02';
 const WORKFLOW_TRIGGER_POLICIES = Object.freeze({
   baseline: Object.freeze({
     condition:
@@ -227,6 +228,7 @@ export async function authenticatePerformanceArtifactEvidence(
   }
   const workflowAuthority = authenticateWorkflowAuthority({
     artifactMetadata: metadata,
+    expectedArtifactName,
     expectedWorkflowJob,
     jobsApiUrl,
     jobsMetadata,
@@ -465,6 +467,7 @@ async function fetchGitHubApiResponse(endpoint, label) {
 
 function authenticateWorkflowAuthority({
   artifactMetadata,
+  expectedArtifactName,
   expectedWorkflowJob,
   jobsApiUrl,
   jobsMetadata,
@@ -489,6 +492,7 @@ function authenticateWorkflowAuthority({
   const runHeadSha = runMetadata?.head_sha;
   const sourceSha = report?.source?.commit;
   const workflowDefinition = authenticateWorkflowDefinition({
+    expectedArtifactName,
     expectedWorkflowJob,
     repository,
     sourceSha,
@@ -641,6 +645,7 @@ function authenticateWorkflowAuthority({
       status: runMetadata?.status ?? null,
       triggerPolicy: expectedWorkflowJob.triggerPolicy,
       triggerScope,
+      artifactUpload: workflowDefinition.facts.artifactUpload,
       workflowApiUrl: workflowDefinition.facts.apiUrl,
       workflowContentDigest: workflowDefinition.facts.contentDigest,
       workflowGitBlobSha: workflowDefinition.facts.gitBlobSha,
@@ -653,6 +658,7 @@ function authenticateWorkflowAuthority({
 }
 
 function authenticateWorkflowDefinition({
+  expectedArtifactName,
   expectedWorkflowJob,
   repository,
   sourceSha,
@@ -699,9 +705,20 @@ function authenticateWorkflowDefinition({
   } catch (error) {
     findings.push(error instanceof Error ? error.message : String(error));
   }
+  let artifactUpload = null;
+  try {
+    artifactUpload = authenticateWorkflowArtifactUpload(
+      workflowBytes.toString('utf8'),
+      expectedWorkflowJob,
+      expectedArtifactName,
+    );
+  } catch (error) {
+    findings.push(error instanceof Error ? error.message : String(error));
+  }
   return {
     facts: {
       apiUrl,
+      artifactUpload,
       contentDigest: sha256Bytes(workflowBytes),
       gitBlobSha: metadata?.sha ?? null,
       workflowSha: workflowSha ?? null,
@@ -734,6 +751,19 @@ function decodeGitHubFileContent(metadata, findings) {
 }
 
 function workflowJobCondition(workflow, jobKey) {
+  const job = workflowJobBlock(workflow, jobKey);
+  const match = /^    if: >-\n((?:      .*\n)+)/gmu.exec(job);
+  if (match === null || job.slice(match.index + match[0].length).includes('\n    if:')) {
+    throw new TypeError(`workflow job ${jobKey} has no unique folded if condition`);
+  }
+  return match[1]
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(' ');
+}
+
+function workflowJobBlock(workflow, jobKey) {
   if (workflow.includes('\t') || workflow.includes('\r')) {
     throw new TypeError('trusted workflow uses unsupported indentation');
   }
@@ -744,16 +774,85 @@ function workflowJobCondition(workflow, jobKey) {
   }
   const tail = workflow.slice(start + marker.length);
   const next = /^  [A-Za-z0-9_-]+:\n/gmu.exec(tail);
-  const job = next === null ? tail : tail.slice(0, next.index);
-  const match = /^    if: >-\n((?:      .*\n)+)/gmu.exec(job);
-  if (match === null || job.slice(match.index + match[0].length).includes('\n    if:')) {
-    throw new TypeError(`workflow job ${jobKey} has no unique folded if condition`);
+  return next === null ? tail : tail.slice(0, next.index);
+}
+
+function authenticateWorkflowArtifactUpload(workflow, expectedWorkflowJob, expectedArtifactName) {
+  const blocks = workflowJobBlocks(workflow);
+  const uploads = blocks.flatMap(({ job, source }) =>
+    workflowUploadArtifactSteps(source).map((upload) => ({ ...upload, job })),
+  );
+  const candidates = uploads.filter(
+    ({ name }) => name === expectedWorkflowJob.artifact.name || name === expectedArtifactName,
+  );
+  const exact = candidates.filter(
+    ({ action, always, job, name, path: artifactPath }) =>
+      action === UPLOAD_ARTIFACT_ACTION &&
+      always === true &&
+      job === expectedWorkflowJob.key &&
+      name === expectedWorkflowJob.artifact.name &&
+      artifactPath === expectedWorkflowJob.artifact.path,
+  );
+  if (exact.length !== 1 || candidates.length !== 1) {
+    throw new TypeError(
+      `workflow job ${expectedWorkflowJob.key} does not uniquely own the reviewed ${expectedWorkflowJob.artifact.name} upload`,
+    );
   }
-  return match[1]
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .join(' ');
+  return {
+    action: exact[0].action,
+    concreteName: expectedArtifactName,
+    job: exact[0].job,
+    name: exact[0].name,
+    path: exact[0].path,
+  };
+}
+
+function workflowJobBlocks(workflow) {
+  const marker = '\njobs:\n';
+  const start = workflow.indexOf(marker);
+  if (start === -1 || workflow.indexOf(marker, start + marker.length) !== -1) {
+    throw new TypeError('trusted workflow has no unique jobs mapping');
+  }
+  const tail = workflow.slice(start + marker.length);
+  const nextTopLevel = /^[A-Za-z0-9_-]+:\n/gmu.exec(tail);
+  const jobsSource = nextTopLevel === null ? tail : tail.slice(0, nextTopLevel.index);
+  const matches = [...jobsSource.matchAll(/^  ([A-Za-z0-9_-]+):\n/gmu)];
+  if (matches.length < 1) throw new TypeError('trusted workflow job census is empty');
+  return matches.map((match, index) => ({
+    job: match[1],
+    source: jobsSource.slice(
+      match.index + match[0].length,
+      matches[index + 1]?.index ?? jobsSource.length,
+    ),
+  }));
+}
+
+function workflowUploadArtifactSteps(jobSource) {
+  const starts = [...jobSource.matchAll(/^      - /gmu)];
+  const uploads = [];
+  for (const [index, start] of starts.entries()) {
+    const step = jobSource.slice(start.index, starts[index + 1]?.index ?? jobSource.length);
+    const actionMatches = [
+      ...step.matchAll(/^(?:      - uses|        uses): (actions\/upload-artifact@\S+)$/gmu),
+    ];
+    const mentions = [...step.matchAll(/^\s+(?:- )?uses: actions\/upload-artifact@\S+$/gmu)];
+    if (mentions.length === 0) continue;
+    if (mentions.length !== 1 || actionMatches.length !== 1) {
+      throw new TypeError('trusted workflow uses an unsupported upload-artifact step shape');
+    }
+    const names = [...step.matchAll(/^          name: (\S.*)$/gmu)];
+    const paths = [...step.matchAll(/^          path: (\S.*)$/gmu)];
+    if (names.length !== 1 || paths.length !== 1) {
+      throw new TypeError('trusted workflow upload-artifact step has no unique name and path');
+    }
+    uploads.push({
+      action: actionMatches[0][1],
+      always: /^        if: always\(\)$/mu.test(step),
+      name: names[0][1],
+      path: paths[0][1],
+    });
+  }
+  return uploads;
 }
 
 function gitBlobDigest(bytes) {
@@ -794,13 +893,19 @@ function validateExpectedWorkflowJob(value) {
   if (
     !ownRecord(value) ||
     JSON.stringify(Object.keys(value).sort()) !==
-      JSON.stringify(['key', 'name', 'triggerPolicy']) ||
+      JSON.stringify(['artifact', 'key', 'name', 'triggerPolicy']) ||
     !/^[a-z0-9-]+$/u.test(value.key ?? '') ||
     !nonEmptyString(value.name) ||
-    !Object.hasOwn(WORKFLOW_TRIGGER_POLICIES, value.triggerPolicy)
+    !Object.hasOwn(WORKFLOW_TRIGGER_POLICIES, value.triggerPolicy) ||
+    !ownRecord(value.artifact) ||
+    JSON.stringify(Object.keys(value.artifact).sort()) !== JSON.stringify(['name', 'path']) ||
+    !nonEmptyString(value.artifact.name) ||
+    !nonEmptyString(value.artifact.path) ||
+    value.artifact.name.trim() !== value.artifact.name ||
+    value.artifact.path.trim() !== value.artifact.path
   ) {
     throw new TypeError(
-      'expected workflow job must contain exact key, name, and reviewed triggerPolicy fields',
+      'expected workflow job must contain exact artifact, key, name, and reviewed triggerPolicy fields',
     );
   }
 }
