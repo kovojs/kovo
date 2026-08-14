@@ -242,17 +242,18 @@ export async function preparePackedCliBenchmark(options = {}, dependencies = {})
         `file:../tarballs/${path.basename(artifact.tarballPath)}`,
       ]),
     );
-    const consumerManifest = {
+    const typescriptVersion = requiredNonEmptyString(
+      rootManifest.devDependencies?.typescript,
+      'root TypeScript version',
+    );
+    const consumerManifest = packedCliConsumerManifest({
       // Declare the whole authenticated closure directly as well as overriding transitive edges.
       // pnpm auto-installs non-optional peers as root dependencies; direct file subjects prevent
       // that peer materialization from silently falling back to an older public registry version.
-      dependencies: tarballSpecs,
-      name: 'kovo-cli-startup-consumer',
       packageManager: rootManifest.packageManager,
-      pnpm: { overrides: tarballSpecs },
-      private: true,
-      version: '0.0.0',
-    };
+      tarballSpecs,
+      typescriptVersion,
+    });
     const consumerManifestBytes = `${JSON.stringify(consumerManifest, null, 2)}\n`;
     writeFileSync(path.join(consumerRoot, 'package.json'), consumerManifestBytes, {
       encoding: 'utf8',
@@ -420,9 +421,10 @@ export function installedDependencySnapshot(consumerRoot, packageName) {
   const nodeModules = path.join(consumerRoot, 'node_modules');
   assertNonSymlinkDirectory(nodeModules, 'isolated consumer node_modules');
   const realNodeModules = realpathSync(nodeModules);
-  const cliRoot = realpathSync(packagePath(nodeModules, '@kovojs/cli'));
-  const cliResolutionRoot = path.dirname(path.dirname(cliRoot));
-  const packageRoot = realpathSync(packagePath(cliResolutionRoot, packageName));
+  // Build preflights resolve toolchain packages from the app root, not from the CLI package's
+  // pnpm-local peer scope. Require the frozen consumer to expose the authenticated dependency at
+  // its top level so an external app bound to this node_modules tree sees the same package.
+  const packageRoot = realpathSync(packagePath(nodeModules, packageName));
   assertContainedPath(realNodeModules, packageRoot, `installed ${packageName}`);
   const files = regularFileCensus(packageRoot);
   if (files.length === 0) throw new Error(`installed ${packageName} package is empty`);
@@ -449,6 +451,33 @@ export function installedDependencySnapshot(consumerRoot, packageName) {
     name: packageName,
     version: manifest.version,
   };
+}
+
+export function packedCliConsumerManifest({ packageManager, tarballSpecs, typescriptVersion }) {
+  const manager = requiredNonEmptyString(packageManager, 'consumer package manager');
+  const typescript = requiredNonEmptyString(typescriptVersion, 'consumer TypeScript version');
+  if (tarballSpecs === null || typeof tarballSpecs !== 'object' || Array.isArray(tarballSpecs)) {
+    throw new TypeError('consumer tarball specs must be an object');
+  }
+  if (Object.hasOwn(tarballSpecs, 'typescript')) {
+    throw new TypeError('packed Kovo tarball closure must not substitute TypeScript');
+  }
+  const dependencies = { ...tarballSpecs, typescript };
+  return {
+    dependencies,
+    name: 'kovo-cli-startup-consumer',
+    packageManager: manager,
+    pnpm: { overrides: dependencies },
+    private: true,
+    version: '0.0.0',
+  };
+}
+
+function requiredNonEmptyString(value, label) {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new TypeError(`${label} must be a non-empty string`);
+  }
+  return value;
 }
 
 export function assertInstalledPackedPackages(consumerRoot, artifacts) {

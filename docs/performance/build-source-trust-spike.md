@@ -54,9 +54,11 @@ package bytes.
 Each generated Kovo corpus lives in a fresh operating-system temporary directory external to both
 Git worktrees. Corpus generation uses deferred dependency binding, so it never creates a workspace
 dependency link. The shared packed-product isolation guard rejects any ancestor `node_modules`, and
-the packed fixture binds the app-local dependency root. The shared command materializer then
-authenticates the declared `node_modules/.bin/kovo` wrapper inside that consumer and executes the
-authenticated packed CLI entry directly.
+the packed fixture binds the app-local dependency root. That frozen consumer declares the root
+lock's exact TypeScript version directly, because Kovo's preflight resolves the compiler from the
+app root rather than from the CLI package's pnpm-local peer scope. The shared command materializer
+then authenticates the declared `node_modules/.bin/kovo` wrapper inside that consumer and executes
+the authenticated packed CLI entry directly.
 Therefore a missing package cannot climb an app ancestor into either workspace. Every raw adapter
 report must contain exact packed Kovo evidence with `required`, `beforeVerified`, and
 `afterVerified` all true. This candidate decision has exactly zero Next.js cells and records the

@@ -11,6 +11,7 @@ import {
   classifyCliStartup,
   cliStartupSchedule,
   pairedBootstrapConfidenceInterval,
+  packedCliConsumerManifest,
   parseCliStartupArgs,
   runCliStartupBenchmark,
   runPackedResolutionProof,
@@ -78,6 +79,37 @@ function lowLoad(label, ceiling) {
 }
 
 describe('packed versus source-checkout CLI startup benchmark', () => {
+  it('declares TypeScript as a direct frozen-consumer toolchain dependency', () => {
+    const manifest = packedCliConsumerManifest({
+      packageManager: 'pnpm@10.12.1',
+      tarballSpecs: { '@kovojs/cli': 'file:../tarballs/kovojs-cli.tgz' },
+      typescriptVersion: '6.0.3',
+    });
+    expect(manifest).toEqual({
+      dependencies: {
+        '@kovojs/cli': 'file:../tarballs/kovojs-cli.tgz',
+        typescript: '6.0.3',
+      },
+      name: 'kovo-cli-startup-consumer',
+      packageManager: 'pnpm@10.12.1',
+      pnpm: {
+        overrides: {
+          '@kovojs/cli': 'file:../tarballs/kovojs-cli.tgz',
+          typescript: '6.0.3',
+        },
+      },
+      private: true,
+      version: '0.0.0',
+    });
+    expect(() =>
+      packedCliConsumerManifest({
+        packageManager: 'pnpm@10.12.1',
+        tarballSpecs: { typescript: 'file:typescript.tgz' },
+        typescriptVersion: '6.0.3',
+      }),
+    ).toThrow(/must not substitute TypeScript/u);
+  });
+
   it('uses a balanced baseline, spike, spike, baseline schedule', () => {
     expect(cliStartupSchedule(2)).toEqual([
       { lane: 'source-checkout', occurrence: 0 },
