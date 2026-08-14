@@ -3,7 +3,7 @@ import { app as app } from '../src/kovo.js';
 export { publicAccess } from '@kovojs/server';
 export const __kovoGeneratedContract = Object.freeze({
   appId: '00000000-0000-4000-8000-000000000006',
-  compilerSourceSha256: 'eaaf31002514101abc59b854de332216eb81ccb5b00fc0fe4e6be35c9a4cfdad',
+  compilerSourceSha256: '18f720b1f2129ae78d4dcdd6c7605dda25c1469a863c9dc7bf2c4c81d446a2cc',
   ownerKey: 'd1v6:8e1ad46ea269b622b40f91319d6436083a67660aac22933d52ef75b086274fd1',
   providerExportBinding: 'contactsProvider',
   providerImportSpecifier: './provider.js',
