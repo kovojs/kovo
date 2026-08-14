@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import { createServer as createHttpServer } from 'node:http';
 import { createServer } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -14,12 +15,16 @@ import {
   collectPageTelemetry,
   collectEntrantVersions,
   dependencyRootForDevCommand,
+  devLoopIntegrityComplete,
+  devLoopVerdictStatus,
   DEV_LOOP_REPORT_SCHEMA,
   DEV_SESSION_STOP_SCHEMA,
   diagnosticProfileFindings,
   establishState,
   exactSampleCountFindings,
+  freshReadySeriesCanContinue,
   loadCorpusManifest,
+  measureFreshReady,
   measureSyntaxAndRecovery,
   normalizeDevLoopOptions,
   parseDevLoopArgs,
@@ -31,6 +36,7 @@ import {
   stopDevProcessTree,
   summarizeNumbers,
   verifyCorpusSources,
+  waitForReadyPage,
 } from './dev-loop.mjs';
 import { generateCorpora } from './generate.mjs';
 import { DEV_EDIT_PROFILE_CLASSIFIER } from '../../scripts/perf-dev-edit-profile.mjs';
@@ -614,6 +620,35 @@ describe('single-entrant developer-loop adapter', () => {
     );
   });
 
+  it('requires independently proven browser-context teardown for every raw session', () => {
+    const report = completeCountFixture();
+    report.readySamples[0].browserContextClosed = false;
+    delete report.editSession.browserContextClosed;
+
+    expect(exactSampleCountFindings(report)).toEqual(
+      expect.arrayContaining([
+        'ready sample 0 is incomplete',
+        'edit session readiness or lifecycle is incomplete',
+      ]),
+    );
+  });
+
+  it('cannot mark adapter integrity measured when any browser request failed', () => {
+    const integrity = {
+      browser: { requestFailedCount: 0, unexpectedErrorCount: 0 },
+      corpus: { afterVerified: true, beforeVerified: true },
+      errors: [],
+      misses: 0,
+      source: { stable: true },
+    };
+    expect(devLoopIntegrityComplete(integrity)).toBe(true);
+    expect(devLoopVerdictStatus(devLoopIntegrityComplete(integrity), false)).toBe('measured');
+
+    integrity.browser.requestFailedCount = 1;
+    expect(devLoopIntegrityComplete(integrity)).toBe(false);
+    expect(devLoopVerdictStatus(devLoopIntegrityComplete(integrity), false)).toBe('unproven');
+  });
+
   it('proves graceful quiescence and a stable dual-stack exact-port window', async () => {
     const clock = fakeLifecycleClock();
     const signals = [];
@@ -990,31 +1025,348 @@ describe('single-entrant developer-loop adapter', () => {
     expect(new Set(probedOrigins)).toEqual(new Set(['http://localhost:49120']));
   });
 
-  it('records network failures and explicitly classifies intentional syntax diagnostics', () => {
+  it('does not navigate the instrumented browser until the Node readiness probe succeeds', async () => {
+    const events = [];
+    let attempts = 0;
+    const page = {
+      goto: async () => {
+        events.push('browser:goto');
+        return { status: () => 200 };
+      },
+      locator: () => ({
+        first: () => ({ getAttribute: async () => 'ready' }),
+      }),
+    };
+    const result = await waitForReadyPage(
+      {
+        origin: 'http://localhost:49120',
+        page,
+        ready: { attribute: 'data-ready', expected: 'ready', path: '/', selector: 'main' },
+        session: { exited: () => false, logTail: () => '' },
+        timeoutMs: 1_000,
+      },
+      {
+        delay: async () => undefined,
+        requestReadyRoute: async () => {
+          attempts += 1;
+          events.push(`probe:${String(attempts)}`);
+          if (attempts === 1) throw new Error('connect ECONNREFUSED');
+          return { status: attempts === 2 ? 503 : 200 };
+        },
+        waitForPaint: async (_page, timeoutMs) => {
+          expect(timeoutMs).toBeGreaterThan(0);
+          events.push('browser:paint');
+          return 1;
+        },
+      },
+    );
+
+    expect(events).toEqual(['probe:1', 'probe:2', 'probe:3', 'browser:goto', 'browser:paint']);
+    expect(result.readinessProbe).toEqual({
+      attempts: 3,
+      path: '/',
+      status: 200,
+      transientFailures: 2,
+    });
+  });
+
+  it('never navigates the browser when the dev process exits during Node readiness polling', async () => {
+    let exited = false;
+    let navigations = 0;
+    await expect(
+      waitForReadyPage(
+        {
+          origin: 'http://localhost:49120',
+          page: {
+            goto: async () => {
+              navigations += 1;
+              return null;
+            },
+          },
+          ready: { attribute: 'data-ready', expected: 'ready', path: '/', selector: 'main' },
+          session: { exited: () => exited, logTail: () => 'exited' },
+          timeoutMs: 1_000,
+        },
+        {
+          delay: async () => undefined,
+          requestReadyRoute: async () => {
+            exited = true;
+            throw new Error('connect ECONNREFUSED');
+          },
+        },
+      ),
+    ).rejects.toThrow('dev process exited before ready: exited');
+    expect(navigations).toBe(0);
+  });
+
+  it('bounds Node response bodies with an absolute readiness deadline even when they trickle', async () => {
+    const intervals = new Set();
+    const server = createHttpServer((_request, response) => {
+      response.writeHead(200, { 'content-length': '100000', 'content-type': 'text/plain' });
+      const interval = setInterval(() => response.write('x'), 5);
+      intervals.add(interval);
+      response.once('close', () => {
+        clearInterval(interval);
+        intervals.delete(interval);
+      });
+    });
+    await new Promise((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, '127.0.0.1', resolve);
+    });
+    const address = server.address();
+    if (address === null || typeof address === 'string')
+      throw new Error('missing test server port');
+    let navigations = 0;
+    const startedAt = Date.now();
+    try {
+      await expect(
+        waitForReadyPage({
+          origin: `http://127.0.0.1:${String(address.port)}`,
+          page: {
+            goto: async () => {
+              navigations += 1;
+              return null;
+            },
+          },
+          ready: { attribute: 'data-ready', expected: 'ready', path: '/', selector: 'main' },
+          session: { exited: () => false, logTail: () => '' },
+          timeoutMs: 75,
+        }),
+      ).rejects.toThrow('dev ready route probe timed out');
+    } finally {
+      for (const interval of intervals) clearInterval(interval);
+      await new Promise((resolve) => server.close(resolve));
+    }
+    expect(Date.now() - startedAt).toBeLessThan(1_000);
+    expect(navigations).toBe(0);
+  });
+
+  it.each(['selector', 'paint'])(
+    'rejects a fake-clock deadline crossing during %s',
+    async (stage) => {
+      let clock = 0;
+      let paintCalls = 0;
+      let selectorTimeoutMs = null;
+      let paintTimeoutMs = null;
+      await expect(
+        waitForReadyPage(
+          {
+            origin: 'http://localhost:49120',
+            page: {
+              goto: async () => {
+                clock = 20;
+                return { status: () => 200 };
+              },
+              locator: () => ({
+                first: () => ({
+                  getAttribute: async (_attribute, options) => {
+                    selectorTimeoutMs = options.timeout;
+                    if (stage === 'selector') clock = 100;
+                    return 'ready';
+                  },
+                }),
+              }),
+            },
+            ready: { attribute: 'data-ready', expected: 'ready', path: '/', selector: 'main' },
+            session: { exited: () => false, logTail: () => '' },
+            timeoutMs: 100,
+          },
+          {
+            delay: async () => undefined,
+            now: () => clock,
+            requestReadyRoute: async () => ({ status: 200 }),
+            waitForPaint: async (_page, timeoutMs) => {
+              paintCalls += 1;
+              paintTimeoutMs = timeoutMs;
+              clock = 100;
+              return 1;
+            },
+          },
+        ),
+      ).rejects.toThrow('dev ready timed out: dev ready shared deadline expired');
+
+      expect(selectorTimeoutMs).toBe(80);
+      expect(paintCalls).toBe(stage === 'paint' ? 1 : 0);
+      if (stage === 'paint') expect(paintTimeoutMs).toBe(80);
+    },
+  );
+
+  it('snapshots fresh-ready duration before delayed RSS shutdown work', async () => {
+    let clock = 0;
+    let lifecycleStops = 0;
+    const observation = await measureFreshReady(
+      freshReadyMeasurementOptions({
+        beforeNewContext: async () => {
+          clock = 40;
+        },
+        closeContext: async () => undefined,
+      }),
+      {
+        createRssSampler: () => ({
+          stop: async () => {
+            clock = 900;
+            return { peakRssBytes: 1_024, sampleCount: 2 };
+          },
+        }),
+        now: () => clock,
+        startDevSession: () => {
+          clock = 20;
+          return {
+            pid: 123,
+            stop: async () => {
+              lifecycleStops += 1;
+              return completeLifecycleFixture();
+            },
+          };
+        },
+        waitForReadyPage: async ({ deadlineMs }) => {
+          expect(clock).toBe(40);
+          expect(deadlineMs).toBe(1_000);
+          clock = 125;
+          return { paintFenceMs: 2, readinessProbe: completeReadinessProbe() };
+        },
+      },
+    );
+
+    expect(observation).toMatchObject({
+      browserContextClosed: true,
+      durationMs: 125,
+      success: true,
+    });
+    expect(lifecycleStops).toBe(1);
+  });
+
+  it('fails the observation and stops later starts when browser-context teardown rejects', async () => {
+    let lifecycleStops = 0;
+    const observation = await measureFreshReady(
+      freshReadyMeasurementOptions({
+        closeContext: async () => {
+          throw new Error('context still busy');
+        },
+      }),
+      {
+        createRssSampler: () => ({
+          stop: async () => ({ peakRssBytes: 1_024, sampleCount: 2 }),
+        }),
+        now: () => 10,
+        startDevSession: () => ({
+          pid: 123,
+          stop: async () => {
+            lifecycleStops += 1;
+            return completeLifecycleFixture();
+          },
+        }),
+        waitForReadyPage: async () => ({
+          paintFenceMs: 2,
+          readinessProbe: completeReadinessProbe(),
+        }),
+      },
+    );
+
+    expect(observation).toMatchObject({
+      browserContextClosed: false,
+      error: expect.stringContaining('browser context close: context still busy'),
+      lifecycle: { complete: true },
+      success: false,
+    });
+    expect(lifecycleStops).toBe(1);
+    expect(freshReadySeriesCanContinue(observation)).toBe(false);
+  });
+
+  it('retains a request failure emitted while a successful browser context closes', async () => {
     const page = new FakePage();
-    const telemetry = collectPageTelemetry(page, 'http://localhost:49120');
+    const observation = await measureFreshReady(
+      freshReadyMeasurementOptions({
+        closeContext: async () => {
+          page.emit(
+            'requestfailed',
+            requestEvidence({ failure: 'net::ERR_ABORTED', url: 'http://localhost:49120/late.js' }),
+          );
+        },
+        page,
+      }),
+      {
+        createRssSampler: () => ({
+          stop: async () => ({ peakRssBytes: 1_024, sampleCount: 2 }),
+        }),
+        now: () => 10,
+        startDevSession: () => ({ pid: 123, stop: async () => completeLifecycleFixture() }),
+        waitForReadyPage: async () => ({
+          paintFenceMs: 2,
+          readinessProbe: completeReadinessProbe(),
+        }),
+      },
+    );
+
+    expect(observation).toMatchObject({
+      browser: { requestFailedCount: 1, unexpectedErrorCount: 1 },
+      browserContextClosed: true,
+      error: expect.stringContaining('browser telemetry recorded 1 request failures'),
+      success: false,
+    });
+    const integrity = {
+      browser: observation.browser,
+      corpus: { afterVerified: true, beforeVerified: true },
+      errors: [],
+      misses: 0,
+      source: { stable: true },
+    };
+    expect(devLoopIntegrityComplete(integrity)).toBe(false);
+    expect(devLoopVerdictStatus(devLoopIntegrityComplete(integrity), false)).toBe('unproven');
+  });
+
+  it('fails closed on browser errors outside one exact intentional compiler console', () => {
+    const page = new FakePage();
+    const telemetry = collectPageTelemetry(page, 'http://localhost:49120', {
+      framework: 'nextjs',
+      intentionalSyntaxErrorFile: 'src/components/component-000.tsx',
+    });
+    page.emit('console', { text: () => 'startup runtime error', type: () => 'error' });
+    page.emit('pageerror', new Error('startup page error'));
+    page.emit('response', responseEvidence({ status: 500, url: 'http://localhost:49120/' }));
     page.emit(
       'requestfailed',
-      requestEvidence({ failure: 'net::ERR_CONNECTION_REFUSED', url: 'http://localhost:49120/' }),
+      requestEvidence({
+        failure: 'net::ERR_CONNECTION_REFUSED',
+        resourceType: 'script',
+        url: 'https://cdn.example.invalid/startup.js',
+      }),
     );
-    page.emit('response', responseEvidence({ status: 200, url: 'http://localhost:49120/' }));
-    telemetry.markReady();
     page.emit(
       'response',
       responseEvidence({ status: 404, url: 'http://localhost:49120/favicon.ico' }),
     );
-    page.emit('console', { text: () => 'unexpected runtime error', type: () => 'error' });
+    telemetry.markReady();
     telemetry.setPhase('syntaxError');
     telemetry.setIntentionalSyntaxError(true);
+    page.emit('console', {
+      text: () =>
+        './src/components/component-000.tsx\nParsing ecmascript source code failed\nExpected expression',
+      type: () => 'error',
+    });
+    page.emit('console', {
+      text: () => './src/components/component-001.tsx\nModule parse failed: Unexpected token',
+      type: () => 'error',
+    });
+    page.emit('console', {
+      text: () => './src/components/component-000.tsx runtime invariant failed',
+      type: () => 'error',
+    });
+    page.emit(
+      'requestfailed',
+      requestEvidence({ failure: 'net::ERR_ABORTED', url: 'http://localhost:49120/' }),
+    );
     page.emit('pageerror', new Error('expected parser diagnostic'));
     page.emit('response', responseEvidence({ status: 500, url: 'http://localhost:49120/' }));
+    telemetry.setPhase('recovery');
+    page.emit('console', {
+      text: () => './src/components/component-000.tsx\nModule parse failed: Unexpected token',
+      type: () => 'error',
+    });
 
     expect(telemetry.snapshot()).toMatchObject({
       expectedErrors: [
-        expect.objectContaining({
-          classification: 'startup-transient',
-          kind: 'requestfailed',
-        }),
         expect.objectContaining({
           classification: 'browser-incidental',
           kind: 'response',
@@ -1022,20 +1374,54 @@ describe('single-entrant developer-loop adapter', () => {
         }),
         expect.objectContaining({
           classification: 'intentional-syntax-error',
-          kind: 'pageerror',
+          kind: 'console',
+          phase: 'syntaxError',
         }),
         expect.objectContaining({
           classification: 'intentional-syntax-error',
-          kind: 'response',
-          status: 500,
+          kind: 'console',
+          phase: 'recovery',
         }),
       ],
-      requestFailedCount: 1,
+      expectedErrorCount: 3,
+      requestFailedCount: 2,
       responseCount: 3,
-      responseStatusCounts: { 200: 1, 404: 1, 500: 1 },
-      unexpectedErrors: [
-        expect.objectContaining({ kind: 'console', message: 'unexpected runtime error' }),
-      ],
+      responseStatusCounts: { 404: 1, 500: 2 },
+      unexpectedErrorCount: 9,
+      unexpectedErrors: expect.arrayContaining([
+        expect.objectContaining({ kind: 'console', message: 'startup runtime error' }),
+        expect.objectContaining({ kind: 'pageerror', message: 'startup page error' }),
+        expect.objectContaining({ kind: 'response', phase: 'ready', status: 500 }),
+        expect.objectContaining({ kind: 'requestfailed', resourceType: 'script' }),
+        expect.objectContaining({
+          kind: 'console',
+          message: expect.stringContaining('component-001.tsx'),
+        }),
+        expect.objectContaining({ kind: 'requestfailed', phase: 'syntaxError' }),
+        expect.objectContaining({ kind: 'pageerror', phase: 'syntaxError' }),
+        expect.objectContaining({ kind: 'response', phase: 'syntaxError', status: 500 }),
+      ]),
+    });
+  });
+
+  it('does not exempt the same compiler console for Kovo', () => {
+    const page = new FakePage();
+    const telemetry = collectPageTelemetry(page, 'http://localhost:49120', {
+      framework: 'kovo',
+      intentionalSyntaxErrorFile: 'src/components/component-000.tsx',
+    });
+    telemetry.setPhase('syntaxError');
+    telemetry.setIntentionalSyntaxError(true);
+    page.emit('console', {
+      text: () =>
+        './src/components/component-000.tsx\nParsing ecmascript source code failed\nExpected expression',
+      type: () => 'error',
+    });
+
+    expect(telemetry.snapshot()).toMatchObject({
+      expectedErrorCount: 0,
+      unexpectedErrorCount: 1,
+      unexpectedErrors: [expect.objectContaining({ kind: 'console', phase: 'syntaxError' })],
     });
   });
 
@@ -1167,14 +1553,20 @@ function completeCountFixture() {
     syntaxErrorStateSurvived: true,
   }));
   return {
-    editSession: { lifecycle: completeLifecycleFixture() },
+    editSession: {
+      browserContextClosed: true,
+      lifecycle: completeLifecycleFixture(),
+      readinessProbe: completeReadinessProbe(),
+    },
     integrity: { editCounts: {}, iterations: 2, readyIterations: 1 },
     readySamples: [
       {
         durationMs: 10,
+        browserContextClosed: true,
         iteration: 0,
         lifecycle: completeLifecycleFixture(),
         peakRssBytes: 1,
+        readinessProbe: completeReadinessProbe(),
         success: true,
       },
     ],
@@ -1182,10 +1574,44 @@ function completeCountFixture() {
   };
 }
 
+function completeReadinessProbe() {
+  return { attempts: 2, path: '/', status: 200, transientFailures: 1 };
+}
+
 function completeLifecycleFixture() {
   return {
     complete: true,
     schema: DEV_SESSION_STOP_SCHEMA,
+  };
+}
+
+function freshReadyMeasurementOptions({
+  beforeNewContext = async () => undefined,
+  closeContext,
+  page = new FakePage(),
+}) {
+  return {
+    appRoot: '/tmp/kovo-fresh-ready-fixture',
+    browser: {
+      newContext: async () => {
+        await beforeNewContext();
+        return {
+          close: closeContext,
+          newPage: async () => page,
+        };
+      },
+    },
+    command: { origin: 'http://localhost:49120' },
+    iteration: 0,
+    manifest: {
+      framework: 'kovo',
+      dev: {
+        edits: { syntaxError: { file: 'src/components/component-000.tsx' } },
+        ready: { attribute: 'data-ready', expected: 'ready', path: '/', selector: 'main' },
+      },
+    },
+    readyTimeoutMs: 1_000,
+    spawnProcess: () => undefined,
   };
 }
 
@@ -1284,11 +1710,11 @@ class FakePage {
   }
 }
 
-function requestEvidence({ failure = null, status = 200, url }) {
+function requestEvidence({ failure = null, resourceType = 'document', status = 200, url }) {
   return {
     failure: () => (failure === null ? null : { errorText: failure }),
     method: () => 'GET',
-    resourceType: () => 'document',
+    resourceType: () => resourceType,
     status: () => status,
     url: () => url,
   };

@@ -145,6 +145,29 @@ describe('ratified developer performance budgets', () => {
     expect(devBudgetFindings(budget)).toContain('budget digest is not derived from its facts');
   });
 
+  it('rejects missing readiness probes and false or missing browser teardown in raw cells', () => {
+    const { baseline, entries } = ratifiedBaseline(24);
+    const budget = deriveDevPerformanceBudget(baseline, { baselineEntries: entries });
+    const candidate = comparisonReport({ corpusSize: 24, run: 41, sourceCommit: 'b'.repeat(40) });
+    delete candidate.rawCells[0].report.readySamples[0].readinessProbe;
+    candidate.rawCells[1].report.readySamples[0].browserContextClosed = false;
+    delete candidate.rawCells[2].report.editSession.browserContextClosed;
+    delete candidate.rawCells[3].report.editSession.readinessProbe;
+
+    const result = evaluateDevPerformanceBudget(budget, candidate);
+
+    expect(result.verdict.status).toBe('unproven');
+    expect(result.verdict.reasons).toEqual(
+      expect.arrayContaining([
+        'candidate kovo ready availability, readiness, teardown, or RSS evidence is incomplete',
+        'candidate nextjs ready availability, readiness, teardown, or RSS evidence is incomplete',
+        'candidate nextjs dev occurrence 1 lacks edit readiness, teardown, or RSS evidence',
+        'candidate kovo dev occurrence 1 lacks edit readiness, teardown, or RSS evidence',
+      ]),
+    );
+    expect(result.checks).toEqual([]);
+  });
+
   it('refuses to derive ceilings from short or incomplete baseline evidence', () => {
     const { baseline, entries } = ratifiedBaseline(24);
     baseline.verdict.status = 'unproven';
@@ -409,9 +432,11 @@ function rawDevCells(corpusSize, { locks, shapeDigest, sourceCommit }) {
       syntaxErrorStateSurvived: true,
     }));
     const readySamples = Array.from({ length: schedule.readySamples }, (_, iteration) => ({
+      browserContextClosed: true,
       durationMs: 100,
       iteration,
       peakRssBytes: 1_000,
+      readinessProbe: readyRouteProbe(),
       rssSamples: 10,
       success: true,
     }));
@@ -422,7 +447,12 @@ function rawDevCells(corpusSize, { locks, shapeDigest, sourceCommit }) {
       occurrence: schedule.occurrence,
       report: {
         corpus: { shapeDigest },
-        editSession: { peakRssBytes: 1_000, rssSamples: 10 },
+        editSession: {
+          browserContextClosed: true,
+          peakRssBytes: 1_000,
+          readinessProbe: readyRouteProbe(),
+          rssSamples: 10,
+        },
         framework: schedule.framework,
         integrity: {
           browser: { requestFailedCount: 0, responseCount: 10, unexpectedErrorCount: 0 },
@@ -445,6 +475,10 @@ function rawDevCells(corpusSize, { locks, shapeDigest, sourceCommit }) {
       schedule,
     };
   });
+}
+
+function readyRouteProbe() {
+  return { attempts: 1, path: '/', status: 200, transientFailures: 0 };
 }
 
 function devSchedule() {

@@ -244,16 +244,44 @@ describe('dev-generation candidate comparator', () => {
       validateDevGenerationCell(cell, { commit: state.commit, corpus, locks: state.locks }),
     ).toEqual([]);
 
-    cell.report.samples[0].dataStateSurvived = false;
+    // A browser request failure remains blocking even if the adapter classified its surrounding
+    // syntax-error phase as expected. Startup polling now happens outside the browser instead.
     cell.report.integrity.browser.requestFailedCount = 1;
+    expect(
+      validateDevGenerationCell(cell, { commit: state.commit, corpus, locks: state.locks }),
+    ).toEqual(expect.arrayContaining([expect.stringMatching(/adapter correctness failure/u)]));
+
+    cell.report.integrity.browser.requestFailedCount = 0;
+    cell.report.readySamples[0].readinessProbe.transientFailures = 99;
+    expect(
+      validateDevGenerationCell(cell, { commit: state.commit, corpus, locks: state.locks }),
+    ).toEqual(
+      expect.arrayContaining([expect.stringMatching(/fresh-ready evidence is incomplete/u)]),
+    );
+
+    cell.report.readySamples[0].readinessProbe.transientFailures = 0;
+    cell.report.readySamples[0].browserContextClosed = false;
+    expect(
+      validateDevGenerationCell(cell, { commit: state.commit, corpus, locks: state.locks }),
+    ).toEqual(
+      expect.arrayContaining([expect.stringMatching(/fresh-ready evidence is incomplete/u)]),
+    );
+
+    cell.report.readySamples[0].browserContextClosed = true;
+    delete cell.report.editSession.browserContextClosed;
     expect(
       validateDevGenerationCell(cell, { commit: state.commit, corpus, locks: state.locks }),
     ).toEqual(
       expect.arrayContaining([
-        expect.stringMatching(/adapter correctness failure/u),
-        expect.stringMatching(/lost state during data/u),
+        expect.stringMatching(/edit-session readiness or RSS evidence is incomplete/u),
       ]),
     );
+
+    cell.report.editSession.browserContextClosed = true;
+    cell.report.samples[0].dataStateSurvived = false;
+    expect(
+      validateDevGenerationCell(cell, { commit: state.commit, corpus, locks: state.locks }),
+    ).toEqual(expect.arrayContaining([expect.stringMatching(/lost state during data/u)]));
   });
 
   it('accepts only all-cell browser wins with positive CI and ignores bundle proxies', () => {
@@ -514,8 +542,16 @@ function preparedFixture(baselineRoot, spikeRoot) {
       stable: true,
     },
     tooling: {
-      baseline: { corpusGeneratorSha256: digest('f'), devLoopAdapterSha256: digest('0') },
-      spike: { corpusGeneratorSha256: digest('f'), devLoopAdapterSha256: digest('0') },
+      baseline: {
+        corpusGeneratorSha256: digest('f'),
+        devLoopAdapterSha256: digest('0'),
+        readyRouteValidatorSha256: digest('1'),
+      },
+      spike: {
+        corpusGeneratorSha256: digest('f'),
+        devLoopAdapterSha256: digest('0'),
+        readyRouteValidatorSha256: digest('1'),
+      },
     },
   };
 }
@@ -593,7 +629,12 @@ function fakeAdapterReport({
       shapeDigest: corpus.shapeDigest.slice('sha256:'.length),
       sourceDigest: corpus.sourceDigest,
     },
-    editSession: { peakRssBytes: rss, rssSamples: 2 },
+    editSession: {
+      browserContextClosed: true,
+      peakRssBytes: rss,
+      readinessProbe: readyRouteProbe(),
+      rssSamples: 2,
+    },
     framework: 'kovo',
     integrity: {
       browser: {
@@ -615,9 +656,11 @@ function fakeAdapterReport({
       warmups,
     },
     readySamples: Array.from({ length: readySamples }, (_, iteration) => ({
+      browserContextClosed: true,
       durationMs: readyLatency,
       iteration,
       peakRssBytes: rss,
+      readinessProbe: readyRouteProbe(),
       rssSamples: 2,
       success: true,
     })),
@@ -627,6 +670,10 @@ function fakeAdapterReport({
     sourceAfter: source,
     verdict: { status: 'measured' },
   };
+}
+
+function readyRouteProbe() {
+  return { attempts: 1, path: '/', status: 200, transientFailures: 0 };
 }
 
 function sourceState(commit) {

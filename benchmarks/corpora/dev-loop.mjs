@@ -4,6 +4,8 @@ import { execFile, spawn } from 'node:child_process';
 import { lookup } from 'node:dns/promises';
 import { readFileSync } from 'node:fs';
 import { lstat, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises';
+import { get as httpGet } from 'node:http';
+import { get as httpsGet } from 'node:https';
 import { createServer, isIP } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -15,6 +17,7 @@ import { chromium } from 'playwright';
 import { collectPerformanceProvenance } from '../../scripts/lib/perf-provenance.mjs';
 import { performanceExecutionIdentity } from '../../scripts/lib/perf-execution.mjs';
 import { performanceHostFingerprint } from '../../scripts/lib/perf-host.mjs';
+import { validReadyRouteProbe } from '../../scripts/lib/perf-ready-route.mjs';
 import { processTreeRssBytes } from '../../scripts/lib/process-tree-rss.mjs';
 import {
   DEV_EDIT_PROFILE_CLASSIFIER,
@@ -53,6 +56,7 @@ const DEV_PORT_STABILITY_WINDOW_MS = 500;
 const DEV_LIFECYCLE_POLL_INTERVAL_MS = 50;
 export const DEV_SESSION_STOP_SCHEMA = 'kovo-dev-session-stop/v3';
 let atomicCorpusSourceWrite = 0;
+let paintFenceSequence = 0;
 const repoRoot = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const PERFORMANCE_POSTURE_FILES = Object.freeze([
   'packages/compiler/src/security/framework-public-runtime-export-posture.generated.ts',
@@ -134,6 +138,7 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
   for (const finding of sourceStabilityFindings(source)) report.integrity.errors.push(finding);
   const originalSources = await readOriginalSources(manifestEvidence);
   let browser;
+  let freshSeriesTeardownComplete = true;
 
   try {
     browser = await browserType.launch({ headless: true });
@@ -152,6 +157,17 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
       report.readySamples.push(observation);
       accumulateObservationIntegrity(report.integrity, observation, `ready[${iteration}]`);
       accumulateBrowserIntegrity(report.integrity, observation.browser, `ready[${iteration}]`);
+      if (!freshReadySeriesCanContinue(observation)) {
+        freshSeriesTeardownComplete = false;
+        report.integrity.errors.push(
+          `ready[${String(iteration)}]: later fresh starts skipped after incomplete teardown`,
+        );
+        break;
+      }
+    }
+
+    if (!freshSeriesTeardownComplete) {
+      throw new Error('fresh-ready teardown was incomplete; edit session was not started');
     }
 
     await cleanGeneratedOutputs(appRoot, manifest.build.outputs);
@@ -215,15 +231,10 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
   const countFindings = exactSampleCountFindings(report);
   const profileFindings = diagnosticProfileFindings(report, normalized.diagnosticProfile !== null);
   report.integrity.errors.push(...countFindings, ...profileFindings);
-  report.integrity.complete =
-    report.integrity.errors.length === 0 &&
-    report.integrity.misses === 0 &&
-    report.integrity.browser.unexpectedErrorCount === 0 &&
-    report.integrity.corpus.beforeVerified &&
-    report.integrity.corpus.afterVerified &&
-    report.integrity.source.stable &&
-    countFindings.length === 0 &&
-    profileFindings.length === 0;
+  report.integrity.complete = devLoopIntegrityComplete(report.integrity, {
+    countFindings,
+    profileFindings,
+  });
   report.summary = summarizeReport(report);
   report.environment.loadAverageAfter = os.loadavg();
   report.host = performanceHostFingerprint({
@@ -237,52 +248,83 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
     { label: 'after', loadAverage: report.environment.loadAverageAfter },
   ];
   report.finishedAt = new Date().toISOString();
-  report.verdict.status = report.integrity.complete
-    ? normalized.diagnosticProfile === null
-      ? 'measured'
-      : 'diagnostic-only'
-    : 'unproven';
+  report.verdict.status = devLoopVerdictStatus(
+    report.integrity.complete,
+    normalized.diagnosticProfile !== null,
+  );
   return report;
 }
 
-async function measureFreshReady({
-  appRoot,
-  browser,
-  command,
-  iteration,
-  manifest,
-  readyTimeoutMs,
-  spawnProcess,
-}) {
-  const started = performance.now();
-  const session = startDevSession({ appRoot, command, spawnProcess });
-  const rss = createProcessTreeRssSampler(session.pid);
+export function devLoopIntegrityComplete(
+  integrity,
+  { countFindings = [], profileFindings = [] } = {},
+) {
+  return (
+    integrity?.errors?.length === 0 &&
+    integrity?.misses === 0 &&
+    integrity?.browser?.unexpectedErrorCount === 0 &&
+    integrity?.browser?.requestFailedCount === 0 &&
+    integrity?.corpus?.beforeVerified === true &&
+    integrity?.corpus?.afterVerified === true &&
+    integrity?.source?.stable === true &&
+    countFindings.length === 0 &&
+    profileFindings.length === 0
+  );
+}
+
+export function devLoopVerdictStatus(integrityComplete, diagnosticProfileRequested) {
+  return integrityComplete
+    ? diagnosticProfileRequested
+      ? 'diagnostic-only'
+      : 'measured'
+    : 'unproven';
+}
+
+export async function measureFreshReady(
+  { appRoot, browser, command, iteration, manifest, readyTimeoutMs, spawnProcess },
+  dependencies = {},
+) {
+  const now = dependencies.now ?? (() => performance.now());
+  const createRssSampler = dependencies.createRssSampler ?? createProcessTreeRssSampler;
+  const createSession = dependencies.startDevSession ?? startDevSession;
+  const waitForReady = dependencies.waitForReadyPage ?? waitForReadyPage;
+  const started = now();
+  const session = createSession({ appRoot, command, spawnProcess });
+  const rss = createRssSampler(session.pid);
   let context;
   let browserEvidence = emptyBrowserEvidence();
   let observation;
+  let readinessProbe = null;
   let telemetry;
   try {
     context = await browser.newContext();
     const page = await context.newPage();
-    telemetry = collectPageTelemetry(page, command.origin);
-    const paint = await waitForReadyPage({
+    telemetry = collectPageTelemetry(page, command.origin, {
+      framework: manifest.framework,
+      intentionalSyntaxErrorFile: manifest.dev.edits.syntaxError.file,
+    });
+    const paint = await waitForReady({
+      deadlineMs: started + readyTimeoutMs,
       origin: command.origin,
       page,
       ready: manifest.dev.ready,
       timeoutMs: readyTimeoutMs,
       session,
     });
+    const durationMs = now() - started;
+    readinessProbe = paint.readinessProbe;
     telemetry.markReady();
     browserEvidence = telemetry.snapshot();
     const rssEvidence = await rss.stop();
     const hasRss = rssEvidence.sampleCount > 0 && rssEvidence.peakRssBytes > 0;
     observation = {
       browser: browserEvidence,
-      durationMs: performance.now() - started,
+      durationMs,
       error: hasRss ? null : 'fresh ready did not produce process-tree RSS evidence',
       iteration,
       paintFenceMs: paint.paintFenceMs,
       peakRssBytes: rssEvidence.peakRssBytes,
+      readinessProbe,
       rssSamples: rssEvidence.sampleCount,
       success: hasRss,
     };
@@ -296,12 +338,14 @@ async function measureFreshReady({
       iteration,
       paintFenceMs: null,
       peakRssBytes: rssEvidence.peakRssBytes,
+      readinessProbe,
       rssSamples: rssEvidence.sampleCount,
       success: false,
     };
   } finally {
-    await context?.close().catch(() => undefined);
+    const contextCloseError = await browserContextCloseError(context);
     const lifecycle = await session.stop();
+    browserEvidence = telemetry?.snapshot() ?? browserEvidence;
     observation ??= {
       browser: browserEvidence,
       durationMs: null,
@@ -309,9 +353,25 @@ async function measureFreshReady({
       iteration,
       paintFenceMs: null,
       peakRssBytes: 0,
+      readinessProbe,
       rssSamples: 0,
       success: false,
     };
+    observation.browser = browserEvidence;
+    observation.browserContextClosed = contextCloseError === null;
+    if (contextCloseError !== null) {
+      observation.error = [observation.error, contextCloseError].filter(Boolean).join('; ');
+      observation.success = false;
+    }
+    if (browserEvidence.requestFailedCount > 0 || browserEvidence.unexpectedErrorCount > 0) {
+      observation.error = [
+        observation.error,
+        `browser telemetry recorded ${String(browserEvidence.requestFailedCount)} request failures and ${String(browserEvidence.unexpectedErrorCount)} unexpected errors`,
+      ]
+        .filter(Boolean)
+        .join('; ');
+      observation.success = false;
+    }
     observation.lifecycle = lifecycle;
     if (!lifecycle.complete) {
       observation.error = [observation.error, lifecycle.error].filter(Boolean).join('; ');
@@ -319,6 +379,10 @@ async function measureFreshReady({
     }
   }
   return observation;
+}
+
+export function freshReadySeriesCanContinue(observation) {
+  return observation?.browserContextClosed === true && observation?.lifecycle?.complete === true;
 }
 
 async function measureEditSession({
@@ -345,7 +409,9 @@ async function measureEditSession({
   let fatalError = null;
   let profiler;
   let profilerSummary = null;
+  let readinessProbe = null;
   let lifecycle = null;
+  let contextCloseFailure = null;
   let telemetry;
   let rssEvidence = { peakRssBytes: 0, sampleCount: 0 };
   const samples = Array.from({ length: iterations }, (_, iteration) => ({ iteration }));
@@ -353,14 +419,18 @@ async function measureEditSession({
   try {
     context = await browser.newContext();
     const page = await context.newPage();
-    telemetry = collectPageTelemetry(page, command.origin);
-    await waitForReadyPage({
+    telemetry = collectPageTelemetry(page, command.origin, {
+      framework: manifest.framework,
+      intentionalSyntaxErrorFile: manifest.dev.edits.syntaxError.file,
+    });
+    const readyObservation = await waitForReadyPage({
       origin: command.origin,
       page,
       ready: manifest.dev.ready,
       timeoutMs: readyTimeoutMs,
       session,
     });
+    readinessProbe = readyObservation.readinessProbe;
     telemetry.markReady();
     await establishState(page, manifest.dev.state);
     if (diagnosticProfile !== null) {
@@ -423,7 +493,10 @@ async function measureEditSession({
           .join('; ');
       }
     }
-    await context?.close().catch(() => undefined);
+    contextCloseFailure = await browserContextCloseError(context);
+    if (contextCloseFailure !== null) {
+      fatalError = [fatalError, contextCloseFailure].filter(Boolean).join('; ');
+    }
     lifecycle = await session.stop();
     if (!lifecycle.complete) {
       fatalError = [fatalError, lifecycle.error].filter(Boolean).join('; ');
@@ -436,13 +509,25 @@ async function measureEditSession({
     samples,
     session: {
       browser: telemetry?.snapshot() ?? emptyBrowserEvidence(),
+      browserContextClosed: contextCloseFailure === null,
       error: fatalError,
       lifecycle,
       logTail: session.logTail(),
       peakRssBytes: rssEvidence.peakRssBytes,
+      readinessProbe,
       rssSamples: rssEvidence.sampleCount,
     },
   };
+}
+
+async function browserContextCloseError(context) {
+  if (context === undefined) return null;
+  try {
+    await context.close();
+    return null;
+  } catch (error) {
+    return `browser context close: ${errorMessage(error)}`;
+  }
 }
 
 async function measureRevisionEditClass({
@@ -767,33 +852,142 @@ function assignEditSample(sample, observation) {
   }
 }
 
-async function waitForReadyPage({ origin, page, ready, session, timeoutMs }) {
-  const deadline = performance.now() + timeoutMs;
+export async function waitForReadyPage(
+  { deadlineMs, origin, page, ready, session, timeoutMs },
+  dependencies = {},
+) {
+  const now = dependencies.now ?? (() => performance.now());
+  const paintFence = dependencies.waitForPaint ?? waitForPaint;
+  const pause = dependencies.delay ?? delay;
+  const requestReadyRoute = dependencies.requestReadyRoute ?? requestReadyRouteResponse;
+  const deadline = Number.isFinite(deadlineMs) ? deadlineMs : now() + timeoutMs;
+  const readinessProbe = await waitForReadyRouteResponse({
+    deadline,
+    now,
+    origin,
+    pause,
+    path: ready.path,
+    requestReadyRoute,
+    session,
+  });
   let lastError = 'server did not answer';
-  while (performance.now() < deadline) {
+  while (now() < deadline) {
     if (session.exited()) {
       throw new Error(`dev process exited before ready: ${session.logTail()}`);
     }
     try {
+      const navigationTimeoutMs = remainingTimeoutMs(deadline, now);
       const response = await page.goto(new URL(ready.path, origin).href, {
-        timeout: 2_000,
+        timeout: Math.min(2_000, navigationTimeoutMs),
         waitUntil: 'domcontentloaded',
       });
+      assertBeforeDeadline(deadline, now, 'browser navigation');
       if (response !== null && response.status() >= 400) {
         lastError = `HTTP ${String(response.status())}`;
       } else {
         const locator = page.locator(ready.selector).first();
-        if ((await locator.getAttribute(ready.attribute)) === ready.expected) {
-          return { paintFenceMs: await waitForPaint(page) };
+        const actual = await locator.getAttribute(ready.attribute, {
+          timeout: remainingTimeoutMs(deadline, now),
+        });
+        assertBeforeDeadline(deadline, now, 'ready selector');
+        if (actual === ready.expected) {
+          const paintFenceMs = await paintFence(page, remainingTimeoutMs(deadline, now));
+          assertBeforeDeadline(deadline, now, 'two-frame paint fence');
+          return { paintFenceMs, readinessProbe };
         }
         lastError = `missing ready evidence ${ready.selector}`;
       }
     } catch (error) {
       lastError = errorMessage(error);
     }
-    await delay(25);
+    if (now() < deadline) await pause(Math.min(25, Math.max(0, deadline - now())));
   }
   throw new Error(`dev ready timed out: ${lastError}; log tail: ${session.logTail()}`);
+}
+
+function remainingTimeoutMs(deadline, now) {
+  const remainingMs = Math.ceil(deadline - now());
+  if (remainingMs <= 0) throw new Error('dev ready shared deadline expired');
+  return remainingMs;
+}
+
+function assertBeforeDeadline(deadline, now, stage) {
+  if (now() >= deadline) throw new Error(`dev ready shared deadline expired during ${stage}`);
+}
+
+async function waitForReadyRouteResponse({
+  deadline,
+  now,
+  origin,
+  path: routePath,
+  pause,
+  requestReadyRoute,
+  session,
+}) {
+  const url = new URL(routePath, origin);
+  let attempts = 0;
+  let lastError = 'server did not answer';
+  let transientFailures = 0;
+  while (now() < deadline) {
+    if (session.exited()) {
+      throw new Error(`dev process exited before ready: ${session.logTail()}`);
+    }
+    attempts += 1;
+    try {
+      const remainingMs = Math.max(1, Math.ceil(deadline - now()));
+      const response = await requestReadyRoute(url, Math.min(2_000, remainingMs));
+      const status = response?.status;
+      if (Number.isSafeInteger(status) && status >= 200 && status < 300) {
+        return {
+          attempts,
+          path: `${url.pathname}${url.search}`,
+          status,
+          transientFailures,
+        };
+      }
+      lastError = `HTTP ${String(status)}`;
+    } catch (error) {
+      lastError = errorMessage(error);
+    }
+    transientFailures += 1;
+    if (now() < deadline) await pause(Math.min(25, Math.max(0, deadline - now())));
+  }
+  throw new Error(`dev ready route probe timed out: ${lastError}; log tail: ${session.logTail()}`);
+}
+
+function requestReadyRouteResponse(url, timeoutMs) {
+  const get = url.protocol === 'https:' ? httpsGet : httpGet;
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let timer;
+    const settle = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      callback(value);
+    };
+    let request;
+    try {
+      request = get(url, { headers: { connection: 'close' } }, (response) => {
+        const status = response.statusCode;
+        response.once('end', () => settle(resolve, { status }));
+        response.once('aborted', () =>
+          settle(reject, new Error('dev ready route probe response aborted')),
+        );
+        response.once('error', (error) => settle(reject, error));
+        response.resume();
+      });
+    } catch (error) {
+      settle(reject, error);
+      return;
+    }
+    request.once('error', (error) => settle(reject, error));
+    timer = setTimeout(() => {
+      const error = new Error('dev ready route probe request timed out');
+      settle(reject, error);
+      request.destroy(error);
+    }, timeoutMs);
+  });
 }
 
 async function waitForEvidence(page, evidence, revision, timeoutMs) {
@@ -888,13 +1082,28 @@ async function browserErrorOverlaySignal(page) {
   });
 }
 
-async function waitForPaint(page) {
+export async function waitForPaint(page, timeoutMs = EDIT_TIMEOUT_MS) {
   const started = performance.now();
-  await page.evaluate(
-    () =>
-      new Promise((resolve) => {
-        requestAnimationFrame(() => requestAnimationFrame(resolve));
-      }),
+  const attribute = 'data-kovo-perf-paint-fence';
+  const pendingAttribute = 'data-kovo-perf-paint-fence-pending';
+  const expected = `paint-${String((paintFenceSequence += 1))}`;
+  await page.waitForFunction(
+    ({ attribute: marker, expected: value, pendingAttribute: pending }) => {
+      const root = document.documentElement;
+      if (root.getAttribute(marker) === value) return true;
+      if (root.getAttribute(pending) !== value) {
+        root.setAttribute(pending, value);
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            root.setAttribute(marker, value);
+            root.removeAttribute(pending);
+          }),
+        );
+      }
+      return false;
+    },
+    { attribute, expected, pendingAttribute },
+    { polling: 'raf', timeout: Math.max(1, Math.ceil(timeoutMs)) },
   );
   return performance.now() - started;
 }
@@ -927,19 +1136,19 @@ async function stateMatches(page, state) {
   }
 }
 
-export function collectPageTelemetry(page, expectedOrigin) {
+export function collectPageTelemetry(page, expectedOrigin, options = {}) {
   let intentionalSyntaxError = false;
   let phase = 'ready';
-  let ready = false;
+  const framework = options.framework ?? null;
+  const intentionalSyntaxErrorFile = options.intentionalSyntaxErrorFile ?? null;
   const evidence = emptyBrowserEvidence();
   const classify = (issue) => {
-    const classification = !ready
-      ? 'startup-transient'
-      : incidentalBrowserIssue(issue, expectedOrigin)
-        ? 'browser-incidental'
-        : intentionalSyntaxError
-          ? 'intentional-syntax-error'
-          : null;
+    const classification = incidentalBrowserIssue(issue, expectedOrigin)
+      ? 'browser-incidental'
+      : intentionalSyntaxError &&
+          intentionalSyntaxCompilerConsole(issue, framework, phase, intentionalSyntaxErrorFile)
+        ? 'intentional-syntax-error'
+        : null;
     const record = {
       ...issue,
       ...(classification === null ? {} : { classification }),
@@ -988,7 +1197,6 @@ export function collectPageTelemetry(page, expectedOrigin) {
   });
   return {
     markReady() {
-      ready = true;
       phase = 'idle';
     },
     setIntentionalSyntaxError(value) {
@@ -1001,6 +1209,26 @@ export function collectPageTelemetry(page, expectedOrigin) {
       return structuredClone(evidence);
     },
   };
+}
+
+function intentionalSyntaxCompilerConsole(issue, framework, phase, sourceFile) {
+  if (
+    issue.kind !== 'console' ||
+    framework !== 'nextjs' ||
+    !['syntaxError', 'recovery'].includes(phase) ||
+    typeof sourceFile !== 'string' ||
+    sourceFile.length === 0
+  ) {
+    return false;
+  }
+  const normalizedFile = sourceFile.replace(/\\/gu, '/');
+  const normalizedMessage = String(issue.message).replace(/\\/gu, '/');
+  return (
+    normalizedMessage.includes(normalizedFile) &&
+    /\b(?:failed to compile|failed to parse source code|module parse failed|parsing ecmascript source code failed)\b/iu.test(
+      normalizedMessage,
+    )
+  );
 }
 
 function incidentalBrowserIssue(issue, expectedOrigin) {
@@ -2142,6 +2370,8 @@ export function exactSampleCountFindings(report) {
       sample.success !== true ||
       !finiteNonNegative(sample.durationMs) ||
       !finitePositive(sample.peakRssBytes) ||
+      sample.browserContextClosed !== true ||
+      !validReadyRouteProbe(sample.readinessProbe) ||
       sample.lifecycle?.schema !== DEV_SESSION_STOP_SCHEMA ||
       sample.lifecycle.complete !== true
     ) {
@@ -2150,9 +2380,11 @@ export function exactSampleCountFindings(report) {
   }
   if (
     report.editSession?.lifecycle?.schema !== DEV_SESSION_STOP_SCHEMA ||
-    report.editSession.lifecycle.complete !== true
+    report.editSession.lifecycle.complete !== true ||
+    report.editSession.browserContextClosed !== true ||
+    !validReadyRouteProbe(report.editSession.readinessProbe)
   ) {
-    findings.push('edit session lifecycle is incomplete');
+    findings.push('edit session readiness or lifecycle is incomplete');
   }
   if (report.samples.length !== report.integrity.iterations) {
     findings.push(

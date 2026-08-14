@@ -5,6 +5,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { executionIdentityFindings } from './lib/perf-execution.mjs';
+import { validReadyRouteProbe } from './lib/perf-ready-route.mjs';
 import { ratifyPerformanceBaseline } from './perf-baseline-ratify.mjs';
 import {
   canonicalJson,
@@ -586,10 +587,12 @@ function devRawEvidenceFindings(report, corpusSize) {
       !Number.isFinite(devReport?.editSession?.peakRssBytes) ||
       devReport.editSession.peakRssBytes <= 0 ||
       !Number.isSafeInteger(devReport?.editSession?.rssSamples) ||
-      devReport.editSession.rssSamples < 1
+      devReport.editSession.rssSamples < 1 ||
+      devReport?.editSession?.browserContextClosed !== true ||
+      !validReadyRouteProbe(devReport?.editSession?.readinessProbe)
     ) {
       findings.push(
-        `candidate ${cell.framework} dev occurrence ${String(cell.occurrence)} lacks edit RSS`,
+        `candidate ${cell.framework} dev occurrence ${String(cell.occurrence)} lacks edit readiness, teardown, or RSS evidence`,
       );
     }
     for (const sample of devReport?.samples ?? []) {
@@ -616,9 +619,13 @@ function devRawEvidenceFindings(report, corpusSize) {
         !Number.isFinite(sample.peakRssBytes) ||
         sample.peakRssBytes <= 0 ||
         !Number.isSafeInteger(sample.rssSamples) ||
-        sample.rssSamples < 1
+        sample.rssSamples < 1 ||
+        sample.browserContextClosed !== true ||
+        !validReadyRouteProbe(sample.readinessProbe)
       ) {
-        findings.push(`candidate ${cell.framework} ready availability/RSS evidence is incomplete`);
+        findings.push(
+          `candidate ${cell.framework} ready availability, readiness, teardown, or RSS evidence is incomplete`,
+        );
       }
     }
   }

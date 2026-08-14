@@ -123,6 +123,18 @@ any survivor. The hosted decision lane is pinned to Ubuntu, and macOS provides t
 same-filesystem rename guarantee; this declaration makes no Windows atomicity claim. Both Kovo and
 Next.js consume the identical generated save posture and adapter.
 
+Fresh-ready timing begins before the dev process starts. The adapter first polls the authenticated
+ready route from Node, within that same process-to-paint duration and deadline, and records the
+attempt count, transient failures, final 2xx status, and route path. It creates the instrumented
+browser page before the probe but does not call `page.goto` until the Node probe succeeds. Startup
+connection refusals therefore stay disclosed as probe evidence instead of becoming browser
+telemetry; any browser `requestfailed` event after the probe still violates the zero-request-failure
+acceptance rule.
+
+This additive evidence stays in `kovo-dev-loop-report/v1`: the comparison authenticates the exact
+adapter/tooling bytes, while current comparison and budget validators require the probe, so reports
+from older producers cannot enter a current decision.
+
 Every fresh-ready and edit session also has a fail-closed lifecycle fence. Teardown signals the
 entire detached dev process group, escalates to `SIGKILL` when necessary, and globally censuses an
 unforgeable inherited session marker to catch detached or reparented descendants. Two empty marker

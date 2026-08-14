@@ -29,6 +29,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { performanceHostFingerprint } from './lib/perf-host.mjs';
+import { validReadyRouteProbe } from './lib/perf-ready-route.mjs';
 
 export const DEV_GENERATION_SPIKE_SCHEMA = 'kovo-dev-generation-spike-comparison/v1';
 export const DEV_GENERATION_SPIKE_PREPARE_SCHEMA = 'kovo-dev-generation-spike-prepare/v1';
@@ -331,6 +332,8 @@ export function validateDevGenerationCell(cell, expected) {
         sample.success !== true ||
         !finitePositive(sample.durationMs) ||
         !finitePositive(sample.peakRssBytes) ||
+        sample.browserContextClosed !== true ||
+        !validReadyRouteProbe(sample.readinessProbe) ||
         !(sample.rssSamples > 0),
     )
   ) {
@@ -357,9 +360,11 @@ export function validateDevGenerationCell(cell, expected) {
   }
   if (
     !finitePositive(report?.editSession?.peakRssBytes) ||
-    !(report?.editSession?.rssSamples > 0)
+    !(report?.editSession?.rssSamples > 0) ||
+    report?.editSession?.browserContextClosed !== true ||
+    !validReadyRouteProbe(report?.editSession?.readinessProbe)
   ) {
-    findings.push(`${key} edit-session RSS evidence is incomplete`);
+    findings.push(`${key} edit-session readiness or RSS evidence is incomplete`);
   }
   for (const editClass of EDIT_CLASSES) {
     if (report?.integrity?.editCounts?.[editClass] !== cell.editSamples) {
@@ -1127,6 +1132,9 @@ function toolingEvidence(root) {
     corpusGeneratorSha256: sha256(readFileSync(path.join(root, 'benchmarks/corpora/generate.mjs'))),
     devLoopAdapterSha256: sha256(readFileSync(path.join(root, 'benchmarks/corpora/dev-loop.mjs'))),
     devLoopSchema: ADAPTER_SCHEMA,
+    readyRouteValidatorSha256: sha256(
+      readFileSync(path.join(root, 'scripts/lib/perf-ready-route.mjs')),
+    ),
   };
 }
 
