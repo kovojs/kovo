@@ -6,6 +6,7 @@ import { createRegisteredDiagnostic, type DiagnosticCode } from '@kovojs/core/in
 import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
 import { route } from '@kovojs/server';
 import {
+  bindKovoAppShellViteDevLiveTargetAttestationSecret,
   createKovoAppShellDevDiagnosticLedger,
   dispatchKovoAppShellViteDevRequest,
   kovoAppShellViteDevPlugin,
@@ -134,7 +135,10 @@ async function serveWithViteMiddleware(
   const middlewares: KovoAppShellViteMiddleware[] = [];
   const loadModule = async (id: string): Promise<Record<string, unknown>> => {
     if (id === '@kovojs/server/internal/app-shell-vite') {
-      return { dispatchKovoAppShellViteDevRequest };
+      return {
+        bindKovoAppShellViteDevLiveTargetAttestationSecret,
+        dispatchKovoAppShellViteDevRequest,
+      };
     }
     return { default: app };
   };
