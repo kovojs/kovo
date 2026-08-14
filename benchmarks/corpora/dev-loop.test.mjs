@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,6 +9,8 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  assertBrowserErrorOverlayAbsent,
+  atomicReplaceCorpusSource,
   collectPageTelemetry,
   collectEntrantVersions,
   dependencyRootForDevCommand,
@@ -18,6 +20,7 @@ import {
   establishState,
   exactSampleCountFindings,
   loadCorpusManifest,
+  measureSyntaxAndRecovery,
   normalizeDevLoopOptions,
   parseDevLoopArgs,
   profileEditToPaint,
@@ -39,6 +42,197 @@ afterEach(async () => {
 });
 
 describe('single-entrant developer-loop adapter', () => {
+  it('publishes watched source saves only after complete sibling bytes exist', async () => {
+    const root = await temporaryRoot();
+    const target = path.join(root, 'component.tsx');
+    const original = 'export const revision = "before";\n';
+    const replacement = 'export const revision = "after-complete";\n';
+    await writeFile(target, original);
+    let temporaryPath;
+
+    await atomicReplaceCorpusSource(target, replacement, {
+      async rename(from, to) {
+        expect(await readFile(target, 'utf8')).toBe(original);
+        await rename(from, to);
+      },
+      async writeFile(file, source, options) {
+        temporaryPath = file;
+        const split = Math.floor(source.length / 2);
+        await writeFile(file, source.slice(0, split), options);
+        // Even a deliberately paused partial temporary write never truncates the watched target.
+        expect(await readFile(target, 'utf8')).toBe(original);
+        await writeFile(file, source.slice(split), { encoding: 'utf8', flag: 'a' });
+      },
+    });
+
+    expect(path.dirname(temporaryPath)).toBe(root);
+    expect(path.extname(temporaryPath)).toBe('.tmp');
+    expect(await readFile(target, 'utf8')).toBe(replacement);
+    expect((await readdir(root)).filter((entry) => entry.endsWith('.tmp'))).toEqual([]);
+  });
+
+  it('removes the sibling temporary file when atomic replacement fails', async () => {
+    const root = await temporaryRoot();
+    const target = path.join(root, 'component.tsx');
+    const original = 'export const revision = "before";\n';
+    await writeFile(target, original);
+
+    await expect(
+      atomicReplaceCorpusSource(target, 'export const revision = "after";\n', {
+        rename: async () => {
+          throw new Error('expected rename failure');
+        },
+      }),
+    ).rejects.toThrow('expected rename failure');
+
+    expect(await readFile(target, 'utf8')).toBe(original);
+    expect((await readdir(root)).filter((entry) => entry.endsWith('.tmp'))).toEqual([]);
+  });
+
+  it('rejects a stale diagnostic overlay before starting a syntax sample', async () => {
+    await expect(
+      assertBrowserErrorOverlayAbsent({ evaluate: async () => null }),
+    ).resolves.toBeUndefined();
+    await expect(
+      assertBrowserErrorOverlayAbsent({
+        evaluate: async () => 'vite-error-overlay:previous parser diagnostic',
+      }),
+    ).rejects.toThrow('syntax error measurement found a stale browser error overlay');
+  });
+
+  it('aborts the syntax/recovery sequence after the first failed observation', async () => {
+    const root = await temporaryRoot();
+    await mkdir(path.join(root, 'src'), { recursive: true });
+    const leafSource = 'export const node = <div data-revision="leaf-r0" />;\n';
+    const page = statePreservingPage();
+    const telemetryTransitions = [];
+    const telemetry = {
+      setIntentionalSyntaxError: (value) =>
+        telemetryTransitions.push(`intentional:${String(value)}`),
+      setPhase: (value) => telemetryTransitions.push(`phase:${String(value)}`),
+    };
+    const options = {
+      appRoot: root,
+      iterations: 3,
+      leafSource,
+      page,
+      profiler: undefined,
+      recovery: { evidence: {} },
+      session: {},
+      state: { property: 'textContent', selector: '[data-state]', value: 'Count 1' },
+      syntaxError: {
+        file: 'src/component.tsx',
+        replacement: 'data-revision={',
+        search: 'data-revision="leaf-r0"',
+      },
+      telemetry,
+      warmups: 0,
+    };
+    let recoveryCalls = 0;
+    const restored = [];
+    const syntaxFailure = await measureSyntaxAndRecovery(options, {
+      applyRecovery: async () => {
+        recoveryCalls += 1;
+        return successfulEditObservation('recovery', 0);
+      },
+      applySyntaxError: async ({ iteration }) => {
+        telemetry.setPhase('syntaxError');
+        telemetry.setIntentionalSyntaxError(true);
+        return failedEditObservationForTest('syntaxError', iteration);
+      },
+      replaceSource: async () => {
+        throw new Error('expected restore failure');
+      },
+    });
+
+    expect(syntaxFailure.all).toHaveLength(1);
+    expect(syntaxFailure.measured).toHaveLength(1);
+    expect(syntaxFailure.all[0].error).toBe(
+      'expected test failure; source restoration: expected restore failure',
+    );
+    expect(recoveryCalls).toBe(0);
+    expect(restored).toEqual([]);
+    expect(telemetryTransitions).toEqual([
+      'phase:syntaxError',
+      'intentional:true',
+      'intentional:false',
+      'phase:idle',
+    ]);
+
+    let syntaxCalls = 0;
+    recoveryCalls = 0;
+    restored.length = 0;
+    telemetryTransitions.length = 0;
+    const recoveryFailure = await measureSyntaxAndRecovery(options, {
+      applyRecovery: async ({ iteration }) => {
+        recoveryCalls += 1;
+        return failedEditObservationForTest('recovery', iteration);
+      },
+      applySyntaxError: async ({ iteration }) => {
+        syntaxCalls += 1;
+        return successfulEditObservation('syntaxError', iteration);
+      },
+      replaceSource: async (file, source) => restored.push({ file, source }),
+    });
+
+    expect(recoveryFailure.all).toHaveLength(2);
+    expect(recoveryFailure.measured).toHaveLength(2);
+    expect(syntaxCalls).toBe(1);
+    expect(recoveryCalls).toBe(1);
+    expect(restored).toEqual([{ file: path.join(root, 'src/component.tsx'), source: leafSource }]);
+  });
+
+  it('retains exact syntax and recovery counts for a short successful sequence', async () => {
+    const root = await temporaryRoot();
+    await mkdir(path.join(root, 'src'), { recursive: true });
+    const leafSource = 'export const node = <div data-revision="leaf-r0" />;\n';
+    let syntaxCalls = 0;
+    let recoveryCalls = 0;
+    let restoreCalls = 0;
+    const result = await measureSyntaxAndRecovery(
+      {
+        appRoot: root,
+        iterations: 2,
+        leafSource,
+        page: statePreservingPage(),
+        profiler: undefined,
+        recovery: { evidence: {} },
+        session: {},
+        state: { property: 'textContent', selector: '[data-state]', value: 'Count 1' },
+        syntaxError: {
+          file: 'src/component.tsx',
+          replacement: 'data-revision={',
+          search: 'data-revision="leaf-r0"',
+        },
+        telemetry: {},
+        warmups: 0,
+      },
+      {
+        applyRecovery: async ({ iteration }) => {
+          recoveryCalls += 1;
+          return successfulEditObservation('recovery', iteration);
+        },
+        applySyntaxError: async ({ iteration }) => {
+          syntaxCalls += 1;
+          return successfulEditObservation('syntaxError', iteration);
+        },
+        replaceSource: async () => {
+          restoreCalls += 1;
+        },
+      },
+    );
+
+    expect(
+      result.all.map(({ editClass, iteration }) => `${editClass}:${String(iteration)}`),
+    ).toEqual(['syntaxError:0', 'recovery:0', 'syntaxError:1', 'recovery:1']);
+    expect(result.measured).toEqual(result.all);
+    expect({ recoveryCalls, restoreCalls, syntaxCalls }).toEqual({
+      recoveryCalls: 2,
+      restoreCalls: 0,
+      syntaxCalls: 2,
+    });
+  });
+
   it('authenticates every generated source byte and rejects changed or additional sources', async () => {
     const root = await temporaryRoot();
     const [manifestPath] = await generateCorpora({ outDir: root, sizes: [24] });
@@ -50,6 +244,11 @@ describe('single-entrant developer-loop adapter', () => {
 
     const target = path.join(evidence.appRoot, 'src/data.tsx');
     const original = await readFile(target, 'utf8');
+    await atomicReplaceCorpusSource(target, original);
+    await expect(verifyCorpusSources(evidence)).resolves.toBeUndefined();
+    expect((await readdir(path.dirname(target))).filter((entry) => entry.endsWith('.tmp'))).toEqual(
+      [],
+    );
     await writeFile(target, `${original}// changed\n`);
     await expect(verifyCorpusSources(evidence)).rejects.toThrow(
       'Corpus source integrity mismatch for src/data.ts',
@@ -74,6 +273,21 @@ describe('single-entrant developer-loop adapter', () => {
 
     await expect(loadCorpusManifest(manifestPath)).rejects.toThrow(
       'Corpus workload does not authenticate the edit/state posture',
+    );
+  });
+
+  it('rejects a re-digested manifest that changes the atomic edit/save posture', async () => {
+    const root = await temporaryRoot();
+    const [manifestPath] = await generateCorpora({ outDir: root, sizes: [24] });
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+    manifest.workload.editSavePosture = 'direct-truncate-write/v1';
+    manifest.shapeDigest = createHash('sha256')
+      .update(JSON.stringify(manifest.workload))
+      .digest('hex');
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+    await expect(loadCorpusManifest(manifestPath)).rejects.toThrow(
+      'Corpus workload does not authenticate the atomic edit/save posture',
     );
   });
 
@@ -1020,6 +1234,40 @@ async function emptyMarkedProcessCensus() {
 
 function markedProcess(pid) {
   return { pgid: pid + 1, pid, ppid: 1, state: 'S' };
+}
+
+function statePreservingPage() {
+  return {
+    locator: () => ({ first: () => ({ textContent: async () => 'Count 1' }) }),
+  };
+}
+
+function successfulEditObservation(editClass, iteration) {
+  return {
+    durationMs: 1,
+    editClass,
+    error: null,
+    iteration,
+    paintFenceMs: 1,
+    serverGenerationMs: 1,
+    stateSurvived: true,
+    success: true,
+    writeMs: 1,
+  };
+}
+
+function failedEditObservationForTest(editClass, iteration) {
+  return {
+    durationMs: null,
+    editClass,
+    error: 'expected test failure',
+    iteration,
+    paintFenceMs: null,
+    serverGenerationMs: null,
+    stateSurvived: false,
+    success: false,
+    writeMs: 1,
+  };
 }
 
 class FakePage {

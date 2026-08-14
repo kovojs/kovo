@@ -46,6 +46,7 @@ export const REPAIRED_GENERATION_CANDIDATE = Object.freeze({
 
 const ADAPTER_SCHEMA = 'kovo-dev-loop-report/v1';
 const CORPUS_SCHEMA = 'kovo-dev-corpus/v1';
+const EDIT_SAVE_POSTURE = 'posix-sibling-temp-write-rename/v1';
 const DEFAULT_BOOTSTRAP_ITERATIONS = 10_000;
 const DEFAULT_EDIT_SAMPLES = 30;
 const DEFAULT_READY_SAMPLES = 15;
@@ -216,6 +217,7 @@ export function inspectGeneratedDevCorpus(manifestPath, root) {
     manifest.workload?.workloadModules !== manifest.modules ||
     manifest.workload?.routes !== manifest.routes ||
     manifest.workload?.buildOutputContract !== 'required-nonempty-and-cleanup-absent/v1' ||
+    manifest.workload?.editSavePosture !== EDIT_SAVE_POSTURE ||
     !sameStrings(manifest.workload?.editClasses ?? [], expectedEdits) ||
     manifest.workload?.stateSurface !== 'local-counter'
   ) {
@@ -245,6 +247,7 @@ export function inspectGeneratedDevCorpus(manifestPath, root) {
   }
   return {
     editClasses: [...manifest.workload.editClasses],
+    editSavePosture: manifest.workload.editSavePosture,
     manifestDigest: sha256(bytes),
     manifestPath: path.relative(expectedRoot, absolute).split(path.sep).join('/'),
     modules: manifest.modules,
@@ -287,6 +290,7 @@ export function validateDevGenerationCell(cell, expected) {
     report?.corpus?.modules !== expected.corpus.modules ||
     report?.corpus?.routes !== expected.corpus.routes ||
     report?.corpus?.manifestDigest !== expected.corpus.manifestDigest ||
+    report?.corpus?.editSavePosture !== expected.corpus.editSavePosture ||
     `sha256:${report?.corpus?.shapeDigest ?? ''}` !== expected.corpus.shapeDigest ||
     report?.corpus?.sourceDigest !== expected.corpus.sourceDigest
   ) {
@@ -1129,6 +1133,7 @@ function toolingEvidence(root) {
 function sameCorpus(left, right) {
   const comparable = (value) => ({
     editClasses: value.editClasses,
+    editSavePosture: value.editSavePosture,
     manifestDigest: value.manifestDigest,
     modules: value.modules,
     routes: value.routes,

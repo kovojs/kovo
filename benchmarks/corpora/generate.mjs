@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 export const CORPUS_SCHEMA = 'kovo-dev-corpus/v1';
 export const SUPPORTED_SIZES = Object.freeze([24, 216]);
+export const EDIT_SAVE_POSTURE = 'posix-sibling-temp-write-rename/v1';
 export const EDIT_STATE_POSTURE = 'refresh-surfaces-sibling-to-local-state/v1';
 export const EDIT_REFRESH_SURFACES = Object.freeze({
   data: Object.freeze({ file: 'src/data.tsx', selector: '[data-benchmark-data]' }),
@@ -122,6 +123,7 @@ function corpusShape(modules) {
     componentImportFanout: modules,
     editClasses: ['leaf', 'entry', 'data', 'syntaxError', 'recovery'],
     editRefreshSurfaces: EDIT_REFRESH_SURFACES,
+    editSavePosture: EDIT_SAVE_POSTURE,
     editStatePosture: EDIT_STATE_POSTURE,
     routes: 4,
     stateSurface: 'local-counter',

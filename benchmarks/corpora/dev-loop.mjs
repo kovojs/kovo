@@ -25,7 +25,12 @@ import {
   markedDevProcessEnvironment,
   signalMarkedDevProcesses,
 } from './dev-process-marker.mjs';
-import { CORPUS_SCHEMA, EDIT_REFRESH_SURFACES, EDIT_STATE_POSTURE } from './generate.mjs';
+import {
+  CORPUS_SCHEMA,
+  EDIT_REFRESH_SURFACES,
+  EDIT_SAVE_POSTURE,
+  EDIT_STATE_POSTURE,
+} from './generate.mjs';
 
 export const DEV_LOOP_REPORT_SCHEMA = 'kovo-dev-loop-report/v1';
 
@@ -47,6 +52,7 @@ const DEV_PORT_RELEASE_TIMEOUT_MS = 5_000;
 const DEV_PORT_STABILITY_WINDOW_MS = 500;
 const DEV_LIFECYCLE_POLL_INTERVAL_MS = 50;
 export const DEV_SESSION_STOP_SCHEMA = 'kovo-dev-session-stop/v3';
+let atomicCorpusSourceWrite = 0;
 const repoRoot = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const PERFORMANCE_POSTURE_FILES = Object.freeze([
   'packages/compiler/src/security/framework-public-runtime-export-posture.generated.ts',
@@ -486,7 +492,7 @@ async function measureRevisionEditClass({
   } finally {
     telemetry.setPhase(`${editClass}-restore`);
     try {
-      await writeFile(filePath, original);
+      await atomicReplaceCorpusSource(filePath, original);
       await waitForEvidence(page, contract.evidence, 'r0', EDIT_TIMEOUT_MS);
       if (!(await stateMatches(page, state))) {
         throw new Error(`${editClass} baseline restoration lost browser state`);
@@ -498,28 +504,34 @@ async function measureRevisionEditClass({
   return { all, measured };
 }
 
-async function measureSyntaxAndRecovery({
-  appRoot,
-  iterations,
-  leafSource,
-  page,
-  profiler,
-  recovery,
-  session,
-  state,
-  syntaxError,
-  telemetry,
-  warmups,
-}) {
+export async function measureSyntaxAndRecovery(
+  {
+    appRoot,
+    iterations,
+    leafSource,
+    page,
+    profiler,
+    recovery,
+    session,
+    state,
+    syntaxError,
+    telemetry,
+    warmups,
+  },
+  dependencies = {},
+) {
   if (typeof leafSource !== 'string')
     throw new TypeError('Syntax-error source evidence is absent.');
   const filePath = safeCorpusPath(appRoot, syntaxError.file);
   const brokenSource = replaceExactlyOnce(leafSource, syntaxError.search, syntaxError.replacement);
+  const observeSyntaxError = dependencies.applySyntaxError ?? applySyntaxError;
+  const observeRecovery = dependencies.applyRecovery ?? applyRecovery;
+  const replaceSource = dependencies.replaceSource ?? atomicReplaceCorpusSource;
   const all = [];
   const measured = [];
   for (let index = 0; index < warmups + iterations; index += 1) {
     await establishState(page, state);
-    const syntax = await applySyntaxError({
+    let syntax = await observeSyntaxError({
       filePath,
       iteration: index - warmups,
       page,
@@ -529,7 +541,29 @@ async function measureSyntaxAndRecovery({
       state,
       telemetry,
     });
-    const recovered = await applyRecovery({
+    if (!syntax.success) {
+      // A failed syntax observation may have replaced the source successfully but missed the
+      // corresponding fresh overlay. Restore exact authenticated bytes atomically, then abort:
+      // accepting the still-mounted overlay in a later iteration would turn one miss into a row
+      // of false syntax successes and byte-identical recovery writes that emit no useful event.
+      try {
+        await replaceSource(filePath, leafSource);
+      } catch (error) {
+        syntax = appendObservationError(syntax, `source restoration: ${errorMessage(error)}`);
+      } finally {
+        // applySyntaxError intentionally keeps this classification live for the paired recovery.
+        // A terminal syntax miss skips that recovery, so reset both controls even when restoring
+        // source bytes fails; otherwise later browser evidence could be misclassified as expected.
+        telemetry.setIntentionalSyntaxError(false);
+        telemetry.setPhase('idle');
+      }
+      all.push(syntax);
+      if (index >= warmups) measured.push(syntax);
+      break;
+    }
+    all.push(syntax);
+    if (index >= warmups) measured.push(syntax);
+    let recovered = await observeRecovery({
       evidence: recovery.evidence,
       filePath,
       iteration: index - warmups,
@@ -540,8 +574,21 @@ async function measureSyntaxAndRecovery({
       state,
       telemetry,
     });
-    all.push(syntax, recovered);
-    if (index >= warmups) measured.push(syntax, recovered);
+    if (!recovered.success) {
+      // Recovery failures are terminal for this session. Replacing the last-good bytes again is
+      // intentional: rename gives the watcher a fresh atomic event even when the failed recovery
+      // had already written byte-identical content, while the report remains fail-closed.
+      try {
+        await replaceSource(filePath, leafSource);
+      } catch (error) {
+        recovered = appendObservationError(recovered, `source restoration: ${errorMessage(error)}`);
+      }
+      all.push(recovered);
+      if (index >= warmups) measured.push(recovered);
+      break;
+    }
+    all.push(recovered);
+    if (index >= warmups) measured.push(recovered);
   }
   return { all, measured };
 }
@@ -565,7 +612,7 @@ async function applyVisibleEdit({
   try {
     await profiler?.startWindow({ editClass, iteration });
     const started = performance.now();
-    await writeFile(filePath, source);
+    await atomicReplaceCorpusSource(filePath, source);
     writeMs = performance.now() - started;
     const paint = await waitForEvidence(page, evidence, revision, EDIT_TIMEOUT_MS);
     const durationMs = performance.now() - started;
@@ -606,9 +653,10 @@ async function applySyntaxError({
   const logIndex = session.logCount();
   let writeMs = null;
   try {
+    await assertBrowserErrorOverlayAbsent(page);
     await profiler?.startWindow({ editClass: 'syntaxError', iteration });
     const started = performance.now();
-    await writeFile(filePath, source);
+    await atomicReplaceCorpusSource(filePath, source);
     writeMs = performance.now() - started;
     const signal = await waitForBrowserErrorOverlay(page, EDIT_TIMEOUT_MS);
     const paintFenceMs = await waitForPaint(page);
@@ -654,7 +702,7 @@ async function applyRecovery({
   try {
     await profiler?.startWindow({ editClass: 'recovery', iteration });
     const started = performance.now();
-    await writeFile(filePath, source);
+    await atomicReplaceCorpusSource(filePath, source);
     writeMs = performance.now() - started;
     await waitForOverlayToClear(page, EDIT_TIMEOUT_MS);
     const paint = await waitForEvidence(page, evidence, 'r0', EDIT_TIMEOUT_MS);
@@ -693,6 +741,14 @@ function failedEditObservation({ editClass, error, iteration, writeMs }) {
     stateSurvived: false,
     success: false,
     writeMs,
+  };
+}
+
+function appendObservationError(observation, error) {
+  return {
+    ...observation,
+    error: [observation.error, error].filter(Boolean).join('; '),
+    success: false,
   };
 }
 
@@ -777,6 +833,17 @@ async function waitForBrowserErrorOverlay(page, timeoutMs) {
   throw new Error('syntax error did not produce a browser-visible error overlay');
 }
 
+/**
+ * Fence each syntax sample against a prior overlay. A non-null signal here is not evidence for the
+ * upcoming write and therefore cannot be admitted as fresh edit-to-paint telemetry.
+ */
+export async function assertBrowserErrorOverlayAbsent(page) {
+  const signal = await browserErrorOverlaySignal(page);
+  if (signal !== null) {
+    throw new Error(`syntax error measurement found a stale browser error overlay: ${signal}`);
+  }
+}
+
 async function waitForOverlayToClear(page, timeoutMs) {
   const deadline = performance.now() + timeoutMs;
   while (performance.now() < deadline) {
@@ -792,23 +859,28 @@ async function waitForOverlayToClear(page, timeoutMs) {
 
 async function browserErrorOverlaySignal(page) {
   return page.evaluate(() => {
-    const selectors = [
-      'vite-error-overlay',
-      'nextjs-portal',
-      '[data-nextjs-dialog-overlay]',
-      '[data-next-badge-root]',
-    ];
     const visibleText = (root) => {
-      const text = root?.textContent ?? root?.shadowRoot?.textContent ?? '';
+      const text = root?.textContent ?? '';
       return String(text).trim();
     };
-    for (const selector of selectors) {
+    for (const selector of ['vite-error-overlay', '[data-nextjs-dialog-overlay]']) {
       for (const element of document.querySelectorAll(selector)) {
         const text = visibleText(element);
         if (text.length > 0) return `${selector}:${text.slice(0, 160)}`;
-        if (element.shadowRoot) {
-          const shadowText = visibleText(element.shadowRoot);
-          if (shadowText.length > 0) return `${selector}:${shadowText.slice(0, 160)}`;
+        const shadowText = visibleText(element.shadowRoot);
+        if (shadowText.length > 0) return `${selector}:${shadowText.slice(0, 160)}`;
+      }
+    }
+    // Next.js mounts nextjs-portal permanently for its devtools badge and injects extensive CSS
+    // into that shadow root even when no error exists. Only an actual dialog overlay inside the
+    // shadow tree is diagnostic evidence; the portal or badge itself is never sufficient.
+    for (const portal of document.querySelectorAll('nextjs-portal')) {
+      const shadowRoot = portal.shadowRoot;
+      if (shadowRoot === null) continue;
+      for (const selector of ['[data-nextjs-dialog-overlay]', '[data-nextjs-dialog-root]']) {
+        for (const element of shadowRoot.querySelectorAll(selector)) {
+          const text = visibleText(element);
+          if (text.length > 0) return `${selector}:${text.slice(0, 160)}`;
         }
       }
     }
@@ -1785,6 +1857,9 @@ function validateDevContract(dev) {
 }
 
 function validateEditStatePosture(manifest) {
+  if (manifest.workload?.editSavePosture !== EDIT_SAVE_POSTURE) {
+    throw new TypeError('Corpus workload does not authenticate the atomic edit/save posture.');
+  }
   if (manifest.workload?.editStatePosture !== EDIT_STATE_POSTURE) {
     throw new TypeError('Corpus workload does not authenticate the edit/state posture.');
   }
@@ -1867,8 +1942,40 @@ async function readOriginalSources({ appRoot, manifest }) {
 
 async function restoreOriginalSources(appRoot, sources) {
   await Promise.all(
-    [...sources].map(([file, source]) => writeFile(safeCorpusPath(appRoot, file), source)),
+    [...sources].map(([file, source]) =>
+      atomicReplaceCorpusSource(safeCorpusPath(appRoot, file), source),
+    ),
   );
+}
+
+/**
+ * Publish one complete authored-source revision with the manifest-authenticated POSIX sibling-temp
+ * write/rename posture. Writing directly to the watched target exposes a truncate/partial-write
+ * window to Vite; a single partial parse can retain the diagnostic overlay while the completed
+ * bytes produce no second watch event. The performance workflow is pinned to Ubuntu; macOS uses
+ * the same same-filesystem rename guarantee, while this adapter makes no Windows atomicity claim.
+ */
+export async function atomicReplaceCorpusSource(filePath, source, dependencies = {}) {
+  if (typeof filePath !== 'string' || filePath.length === 0) {
+    throw new TypeError('Atomic corpus source replacement requires a file path.');
+  }
+  if (typeof source !== 'string') {
+    throw new TypeError('Atomic corpus source replacement requires string source.');
+  }
+  atomicCorpusSourceWrite += 1;
+  const temporaryPath = path.join(
+    path.dirname(filePath),
+    `.${path.basename(filePath)}.kovo-perf-save-${String(process.pid)}-${String(atomicCorpusSourceWrite)}.tmp`,
+  );
+  const writeTemporary = dependencies.writeFile ?? writeFile;
+  const replace = dependencies.rename ?? rename;
+  const removeTemporary = dependencies.rm ?? rm;
+  try {
+    await writeTemporary(temporaryPath, source, { encoding: 'utf8', flag: 'wx' });
+    await replace(temporaryPath, filePath);
+  } finally {
+    await removeTemporary(temporaryPath, { force: true });
+  }
 }
 
 function createReportSkeleton({
@@ -1890,6 +1997,7 @@ function createReportSkeleton({
     command: { argv: command.argv, cwd: command.cwd, env: command.env },
     corpus: {
       editRefreshSurfaces: manifest.workload.editRefreshSurfaces,
+      editSavePosture: manifest.workload.editSavePosture,
       editStatePosture: manifest.workload.editStatePosture,
       manifestDigest,
       manifestPath,

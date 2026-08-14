@@ -10,6 +10,7 @@ import { classifyHmrImpact, compileComponentModule } from '../../packages/compil
 import {
   CORPUS_SCHEMA,
   EDIT_REFRESH_SURFACES,
+  EDIT_SAVE_POSTURE,
   EDIT_STATE_POSTURE,
   generateCorpora,
 } from './generate.mjs';
@@ -41,6 +42,7 @@ describe('equal-shape developer corpus generator', () => {
     expect(kovo.workload).toEqual(next.workload);
     expect(kovo.workload.buildOutputContract).toBe('required-nonempty-and-cleanup-absent/v1');
     expect(kovo.workload.editRefreshSurfaces).toEqual(EDIT_REFRESH_SURFACES);
+    expect(kovo.workload.editSavePosture).toBe(EDIT_SAVE_POSTURE);
     expect(kovo.workload.editStatePosture).toBe(EDIT_STATE_POSTURE);
     expect(kovo.sourceDigest).toMatch(/^sha256:[0-9a-f]{64}$/u);
     expect(next.sourceDigest).toMatch(/^sha256:[0-9a-f]{64}$/u);

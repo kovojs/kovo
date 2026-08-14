@@ -183,6 +183,7 @@ describe('dev-generation candidate comparator', () => {
       buildOutputContract: 'required-nonempty-and-cleanup-absent/v1',
       componentImportFanout: 24,
       editClasses: EDIT_CLASSES,
+      editSavePosture: 'posix-sibling-temp-write-rename/v1',
       routes: 4,
       stateSurface: 'local-counter',
       workloadModules: 24,
@@ -211,6 +212,7 @@ describe('dev-generation candidate comparator', () => {
 
     expect(inspectGeneratedDevCorpus(manifestPath, root)).toMatchObject({
       editClasses: EDIT_CLASSES,
+      editSavePosture: 'posix-sibling-temp-write-rename/v1',
       modules: 24,
       routes: 4,
       shapeDigest: `sha256:${manifest.shapeDigest}`,
@@ -584,6 +586,7 @@ function fakeAdapterReport({
   }));
   return {
     corpus: {
+      editSavePosture: corpus.editSavePosture,
       manifestDigest: corpus.manifestDigest,
       modules: corpus.modules,
       routes: corpus.routes,
@@ -644,6 +647,7 @@ function sourceState(commit) {
 function corpusIdentity() {
   return {
     editClasses: EDIT_CLASSES,
+    editSavePosture: 'posix-sibling-temp-write-rename/v1',
     manifestDigest: digest('4'),
     manifestPath: 'benchmarks/kovo/.corpora/kovo/n24/manifest.json',
     modules: 24,

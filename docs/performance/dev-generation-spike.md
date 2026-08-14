@@ -113,6 +113,16 @@ comparison report and, when `--out` is used, persist beside it under `raw/`. A n
 retains its SHA-256, byte count, schema, verdict, readiness failures, and first integrity errors so
 an outer `unproven` result remains diagnosable.
 
+The generated workload also authenticates `editSavePosture` as
+`posix-sibling-temp-write-rename/v1`. Every measured edit and source restoration is written to a
+unique sibling `.tmp` file and renamed over the watched target only after all bytes exist. This
+removes the truncate/partial-write observation window without changing the write-to-paint timing
+boundary: measured write time includes both the temporary write and rename. Temporary files use a
+non-source suffix and are removed on success or failure; the post-run source census still rejects
+any survivor. The hosted decision lane is pinned to Ubuntu, and macOS provides the same
+same-filesystem rename guarantee; this declaration makes no Windows atomicity claim. Both Kovo and
+Next.js consume the identical generated save posture and adapter.
+
 Every fresh-ready and edit session also has a fail-closed lifecycle fence. Teardown signals the
 entire detached dev process group, escalates to `SIGKILL` when necessary, and globally censuses an
 unforgeable inherited session marker to catch detached or reparented descendants. Two empty marker
