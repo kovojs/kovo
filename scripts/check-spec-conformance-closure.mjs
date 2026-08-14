@@ -133,7 +133,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
     'packages/cli/src/capability-closure-packages.ts',
     'e27f8372435ccd68c5ad554bfc52579bf105ab8dde2cac1101e037b3f203f978',
   ],
-  ['packages/cli/src/bin.ts', '80db33b560a100010fd4fc4d607eb1653bcb6eb5d21efaa3ce07e14dc47eb1fd'],
+  ['packages/cli/src/bin.ts', 'a5e27897ba54f7a2234b9323f235d3976b3766cff86a22a5a7470436123c9555'],
   [
     'packages/cli/src/commands/build-export.ts',
     '463c6bf4013e84ceb3a6b93e9974b46974eeb809db68c24f5ff4dd9b448ede9f',
