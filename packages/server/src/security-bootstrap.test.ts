@@ -3,6 +3,25 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
+import {
+  claimCompilerClientModuleViteInstaller,
+  compilerClientModuleViteEpoch,
+} from './compiler-client-module-provenance-vite.js';
+import {
+  bindKovoAppShellViteDevLiveTargetAttestationSecret as profileBindLiveTargetSecret,
+  claimCompilerClientModuleViteInstaller as profileClaimCompilerInstaller,
+  compilerClientModuleViteEpoch as profileCompilerEpoch,
+  dispatchKovoAppShellViteDevRequest as profileDispatchRequest,
+  prepareKovoAppShellViteDevGeneration as profilePrepareGeneration,
+  runWithGeneratedLiveTargetRegistry as profileRunWithLiveTargetRegistry,
+} from './internal/vite-security-profile.js';
+import { runWithGeneratedLiveTargetRegistry } from './live-target-registry.js';
+import {
+  bindKovoAppShellViteDevLiveTargetAttestationSecret,
+  dispatchKovoAppShellViteDevRequest,
+  prepareKovoAppShellViteDevGeneration,
+} from './vite-dev.js';
+
 const sourceDirectory = fileURLToPath(new URL('.', import.meta.url));
 
 describe('server security bootstrap census', () => {
@@ -84,6 +103,35 @@ describe('server security bootstrap census', () => {
 
     expect(rootLoad).toBeGreaterThan(0);
     expect(appLoad).toBeGreaterThan(rootLoad);
+  });
+
+  it('keeps fresh dev generations off the production app-shell build barrel', () => {
+    const profileSource = readFileSync(
+      new URL('./internal/vite-security-profile.ts', import.meta.url),
+      'utf8',
+    );
+    const runner = readFileSync(new URL('../../cli/src/commands/dev.ts', import.meta.url), 'utf8');
+    const preloadStart = runner.indexOf('async function preloadDevSecurityProfile(');
+    const preloadEnd = runner.indexOf('\nfunction viteSsrModuleId(', preloadStart);
+    const preload = runner.slice(preloadStart, preloadEnd);
+
+    expect(profileSource).toContain('bindKovoAppShellViteDevLiveTargetAttestationSecret');
+    expect(profileSource).toContain('dispatchKovoAppShellViteDevRequest');
+    expect(profileSource).toContain('prepareKovoAppShellViteDevGeneration');
+    expect(profileSource).toContain('runWithGeneratedLiveTargetRegistry');
+    expect(preload).toContain('const appShellModuleId = securityProfileModuleId;');
+    expect(preload).not.toContain(
+      "requireFromApp.resolve('@kovojs/server/internal/app-shell-vite')",
+    );
+
+    // SPEC §6.2.1/§9.5.1: the narrowed module is loaded before app evaluation and must retain
+    // every graph-local control required to prepare, authenticate, and dispatch one closed graph.
+    expect(profileBindLiveTargetSecret).toBe(bindKovoAppShellViteDevLiveTargetAttestationSecret);
+    expect(profileDispatchRequest).toBe(dispatchKovoAppShellViteDevRequest);
+    expect(profilePrepareGeneration).toBe(prepareKovoAppShellViteDevGeneration);
+    expect(profileRunWithLiveTargetRegistry).toBe(runWithGeneratedLiveTargetRegistry);
+    expect(profileClaimCompilerInstaller).toBe(claimCompilerClientModuleViteInstaller);
+    expect(profileCompilerEpoch).toBe(compilerClientModuleViteEpoch);
   });
 
   it('keeps build/check SSR preload ordered and omits the post-proof AST analyzer', () => {
