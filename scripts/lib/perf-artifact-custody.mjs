@@ -449,9 +449,13 @@ function authenticateWorkflowAuthority({
     !Number.isSafeInteger(repositoryId) ||
     repositoryId < 1 ||
     !Number.isSafeInteger(headRepositoryId) ||
-    headRepositoryId < 1
+    headRepositoryId < 1 ||
+    headRepositoryId !== repositoryId
   ) {
     findings.push('workflow run repository or head repository is not canonical');
+  }
+  if (runMetadata?.head_commit?.id !== runHeadSha) {
+    findings.push('workflow run head commit identity differs from its immutable head SHA');
   }
   if (
     artifactMetadata?.workflow_run?.repository_id !== repositoryId ||

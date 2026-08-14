@@ -145,6 +145,7 @@ describe('performance artifact custody', () => {
   it.each([
     ['alternate workflow', (run) => ({ ...run, path: '.github/workflows/other.yml' })],
     ['failed run', (run) => ({ ...run, conclusion: 'failure' })],
+    ['mismatched head commit', (run) => ({ ...run, head_commit: { id: 'c'.repeat(40) } })],
     ['non-baseline trigger', (run) => ({ ...run, event: 'push' })],
     ['different attempt', (run) => ({ ...run, run_attempt: 2 })],
   ])('rejects live authority from an %s', async (_label, mutate) => {
@@ -442,6 +443,7 @@ function writeArtifactFixture({
     conclusion: 'success',
     event,
     head_branch: 'main',
+    head_commit: { id: sourceCommit },
     head_repository: { full_name: 'kovojs/kovo', id: 101 },
     head_sha: sourceCommit,
     html_url: 'https://github.com/kovojs/kovo/actions/runs/1001',
