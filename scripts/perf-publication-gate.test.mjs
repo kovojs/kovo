@@ -22,6 +22,7 @@ import {
 } from './perf-build-session-profile.mjs';
 import { KOVO_BUILD_SOURCE_PHASES } from './perf-build-benchmark.mjs';
 import { canonicalJson } from './perf-regression-check.mjs';
+import { comparisonTargetCheckSpecifications } from './perf-comparison-budget.mjs';
 
 const FAMILY_NAMES = [
   'browser',
@@ -314,7 +315,9 @@ describe('seven-family performance publication gate', () => {
     result.publication.families.browser.targetAssessment.holdout.checks[0].limit = 1_000_000;
     resealPublication(result.publication);
 
-    expect(performancePublicationFindings(result.publication)).toEqual([]);
+    expect(performancePublicationFindings(result.publication)).toContain(
+      'browser holdout target check census differs from policy',
+    );
     const findings = performancePublicationResultFindings(result, {
       assessBuildPersistence: options.assessBuildPersistence,
       authenticated,
@@ -336,6 +339,29 @@ describe('seven-family performance publication gate', () => {
         ratify: (entries) => options.ratify(entries),
       }),
     ).rejects.toThrow('Performance publication result is invalid');
+  });
+
+  it('rejects resealed missing checks and a fabricated paired Brotli target', () => {
+    const missing = derivePerformancePublication(
+      authenticatedFixture(),
+      fixtureDerivationOptions(),
+    ).publication;
+    missing.families.browser.targetAssessment.baseline.checks.pop();
+    resealPublication(missing);
+    expect(performancePublicationFindings(missing)).toContain(
+      'browser baseline target check census differs from policy',
+    );
+
+    const fabricated = derivePerformancePublication(
+      authenticatedFixture(),
+      fixtureDerivationOptions(),
+    ).publication;
+    fabricated.families.server.targetAssessment.holdout.checks[0].id =
+      'matched-runtime/server/hit-listing-br-c1/requestsPerSecond.median-vs-next';
+    resealPublication(fabricated);
+    expect(performancePublicationFindings(fabricated)).toContain(
+      'server holdout target check census differs from policy',
+    );
   });
 
   it('rejects a resealed deletion of one complete family document set', () => {
@@ -665,7 +691,7 @@ function fixtureBudget(familyName, baseline) {
     return {
       ...common,
       targetAssessment: {
-        checks: [{ id: 'browser.navigation', limit: 2, observed: 1.5, status: 'pass' }],
+        checks: fixtureComparisonTargetChecks('browser'),
         failures: [],
         status: 'pass',
       },
@@ -675,7 +701,7 @@ function fixtureBudget(familyName, baseline) {
     return {
       ...common,
       targetAssessment: {
-        checks: [{ id: 'server.requestsPerSecond', limit: 0.8, observed: 1, status: 'pass' }],
+        checks: fixtureComparisonTargetChecks('server'),
         failures: [],
         status: 'pass',
       },
@@ -734,22 +760,44 @@ function fixtureBudget(familyName, baseline) {
 
 function fixtureEvaluation(familyName, budget, candidate) {
   const kind = targetKinds(familyName)[0];
-  const server = familyName === 'server';
+  const checks =
+    familyName === 'browser' || familyName === 'server'
+      ? comparisonTargetCheckSpecifications(familyName).map((specification) => ({
+          id: specification.id,
+          kind: specification.kind,
+          limit: specification.limit,
+          status: 'pass',
+          value: passingTargetObservation(specification),
+        }))
+      : [
+          {
+            id: `${familyName}.target`,
+            kind,
+            limit: 2,
+            status: 'pass',
+            value: 1,
+          },
+        ];
   return {
     budget: budget.digest,
     candidate: { execution: candidate.execution.digest, sourceCommit: candidate.source.commit },
-    checks: [
-      {
-        id: server ? 'server/requestsPerSecond.median-vs-next' : `${familyName}.target`,
-        kind,
-        limit: server ? 0.8 : 2,
-        status: 'pass',
-        value: 1,
-      },
-    ],
+    checks,
     schema: `fixture-${familyName}-evaluation/v1`,
     verdict: { failures: [], reasons: [], status: 'pass' },
   };
+}
+
+function fixtureComparisonTargetChecks(familyName) {
+  return comparisonTargetCheckSpecifications(familyName).map((specification) => ({
+    id: specification.id,
+    limit: specification.limit,
+    observed: passingTargetObservation(specification),
+    status: 'pass',
+  }));
+}
+
+function passingTargetObservation(specification) {
+  return specification.operator === '<=' ? specification.limit / 2 : specification.limit + 0.1;
 }
 
 function targetKinds(familyName) {

@@ -35,6 +35,48 @@ const SERVER_CONCURRENCIES = Object.freeze([1, 8, 32]);
 const SERVER_ENCODINGS = Object.freeze(['identity', 'br']);
 const SERVER_MODES = Object.freeze(['HIT', '304', 'dynamic']);
 const SERVER_ROUTES = Object.freeze(['listing', 'detail']);
+const BROWSER_FORM_FACTORS = Object.freeze(['desktop', 'mobile']);
+const BROWSER_ROUTES = Object.freeze(['listing', 'detail']);
+const BROWSER_NAVIGATION_ATTRIBUTION_PHASES = Object.freeze([
+  'server',
+  'transfer',
+  'responseProcessingDomApply',
+  'style',
+  'layout',
+  'paint',
+]);
+const BROWSER_SESSION_BYTE_PHASES = Object.freeze([
+  'initial',
+  'automaticPrefetch',
+  'preClickBackground',
+  'click',
+  'postClick',
+  'throughClick',
+  'throughDestinationPaint',
+  'settledSession',
+]);
+const BROWSER_TARGETS = Object.freeze({
+  matchedL1MobileNavigationMaximumRatio: 2,
+  matchedL1TotalSessionBytesMaximumRatio: 0.5,
+});
+const SERVER_TARGETS = Object.freeze({
+  cachedThroughputMinimumRatio: 0.9,
+  forcedDynamicThroughputMinimumRatio: 0.8,
+});
+const SERVER_REPRESENTATION_POLICY = Object.freeze({
+  cachedComparisonEncoding: 'identity',
+  forcedDynamicComparisonEncoding: 'identity',
+  kovoBrotliPosture: 'required-raw-measurement-not-a-paired-next-target',
+  nextBrotliPosture: 'unsupported',
+});
+
+/** Fixed competitive checks; callers may not discover a smaller claim from present metrics. */
+export function comparisonTargetCheckSpecifications(subject) {
+  return targetCheckSpecifications(
+    subject,
+    subject === 'browser' ? BROWSER_TARGETS : subject === 'server' ? SERVER_TARGETS : null,
+  );
+}
 
 /** Derive browser/server regression budgets and a reviewable Kovo-vs-Next summary. */
 export function deriveComparisonPerformanceBudget(baseline, options = {}) {
@@ -88,13 +130,10 @@ export function deriveComparisonPerformanceBudget(baseline, options = {}) {
   const policy = {
     maxLoadPerCpu: baseline.policy.maxLoadPerCpu,
     maxRegressionPct,
-    targets:
-      subject === 'browser'
-        ? { matchedL1MobileNavigationMaximumRatio: 2 }
-        : {
-            cachedThroughputMinimumRatio: 0.9,
-            forcedDynamicThroughputMinimumRatio: 0.8,
-          },
+    ...(subject === 'server' ? { representations: { ...SERVER_REPRESENTATION_POLICY } } : {}),
+    targets: {
+      ...(subject === 'browser' ? BROWSER_TARGETS : SERVER_TARGETS),
+    },
   };
   const facts = {
     baseline: {
@@ -135,6 +174,12 @@ export function evaluateComparisonPerformanceBudget(budget, candidate) {
   ];
   if (candidate?.schema !== COMPARISON_SCHEMA) {
     reasons.push(`candidate is not ${COMPARISON_SCHEMA}`);
+  }
+  if (budget?.subject?.kind === 'browser') {
+    reasons.push(...browserPublicationMetricFindings(candidate?.analysis, 'candidate'));
+  } else if (budget?.subject?.kind === 'server') {
+    reasons.push(...serverPublicationMetricFindings(candidate?.analysis, 'candidate'));
+    reasons.push(...serverBrotliRawEvidenceFindings(candidate, 'candidate'));
   }
   if (budget?.subject?.host?.digest !== candidate?.host?.digest) {
     reasons.push('candidate host identity differs from the ratified budget');
@@ -187,7 +232,7 @@ export function evaluateComparisonPerformanceBudget(budget, candidate) {
     checks.push(...targetChecks(budget, candidate));
   }
 
-  const uniqueReasons = [...new Set(reasons)].sort();
+  const uniqueReasons = [...new Set(reasons)].sort((left, right) => left.localeCompare(right));
   const failures = checks.filter(({ status }) => status === 'fail').map(({ id }) => id);
   return {
     budget: budget?.digest ?? null,
@@ -257,6 +302,8 @@ export function comparisonBudgetBaselineFindings(baseline, entries) {
   if (Object.keys(baseline.metrics ?? {}).length === 0) findings.push('baseline metrics are empty');
   if (cells?.[0] === 'browser') {
     findings.push(...browserPublicationMetricFindings(baseline.metrics, 'baseline'));
+  } else if (cells?.[0] === 'server') {
+    findings.push(...serverPublicationMetricFindings(baseline.metrics, 'baseline'));
   }
   for (const [metric, evidence] of Object.entries(baseline.metrics ?? {})) {
     for (const subject of ['kovo', 'nextjs']) {
@@ -275,7 +322,7 @@ export function comparisonBudgetBaselineFindings(baseline, entries) {
     }
   }
   findings.push(...linkedRawReportFindings(baseline, entries));
-  return [...new Set(findings)].sort();
+  return [...new Set(findings)].sort((left, right) => left.localeCompare(right));
 }
 
 export function comparisonBudgetFindings(budget) {
@@ -323,6 +370,23 @@ export function comparisonBudgetFindings(budget) {
   }
   if (budget.subject?.kind === 'browser') {
     findings.push(...browserPublicationMetricFindings(budget.metrics, 'budget'));
+  } else if (budget.subject?.kind === 'server') {
+    findings.push(...serverPublicationMetricFindings(budget.metrics, 'budget'));
+  }
+  const expectedTargets =
+    budget.subject?.kind === 'browser'
+      ? BROWSER_TARGETS
+      : budget.subject?.kind === 'server'
+        ? SERVER_TARGETS
+        : null;
+  if (canonicalJson(budget.policy?.targets) !== canonicalJson(expectedTargets)) {
+    findings.push('budget competitive target policy differs from the declared target census');
+  }
+  if (
+    budget.subject?.kind === 'server' &&
+    canonicalJson(budget.policy?.representations) !== canonicalJson(SERVER_REPRESENTATION_POLICY)
+  ) {
+    findings.push('budget server representation policy is unavailable');
   }
   for (const [metric, entry] of Object.entries(budget.metrics ?? {})) {
     if (!ratifiedBudgetBaseline(entry?.baseline)) {
@@ -362,7 +426,7 @@ export function comparisonBudgetFindings(budget) {
   ) {
     findings.push('budget target assessment is not derived from ratified evidence');
   }
-  return [...new Set(findings)].sort();
+  return [...new Set(findings)].sort((left, right) => left.localeCompare(right));
 }
 
 function linkedRawReportFindings(baseline, entries) {
@@ -403,6 +467,9 @@ function linkedRawReportFindings(baseline, entries) {
         minSamples: baseline.policy.minSamples,
       }),
     );
+    if (baseline.subject?.workloadIdentity?.identity?.cells?.[0] === 'server') {
+      findings.push(...serverBrotliRawEvidenceFindings(entry?.report, label));
+    }
     for (const finding of executionIdentityFindings(entry?.report?.execution, {
       requireProvider: 'github-actions',
     })) {
@@ -476,62 +543,179 @@ function publicationComparisonWorkloadFindings(identity, label) {
 
 function browserPublicationMetricFindings(metrics, label) {
   const findings = [];
-  for (const lane of BROWSER_LANES) {
-    for (const formFactor of ['desktop', 'mobile']) {
-      for (const route of ['listing', 'detail']) {
-        const metric = `${lane}/browser//lighthouse.${formFactor}.${route}.performanceScore`;
-        if (!ownRecord(metrics?.[metric])) {
-          findings.push(`${label} required browser metric ${metric} is unavailable`);
-        }
-      }
-    }
-    for (const metricName of ['applicable', 'evidenceComplete', 'restored']) {
-      const metric = `${lane}/browser//bfcache.${metricName}`;
-      if (!ownRecord(metrics?.[metric])) {
-        findings.push(`${label} required browser metric ${metric} is unavailable`);
-      }
+  for (const metric of requiredBrowserPublicationMetrics()) {
+    if (!ownRecord(metrics?.[metric])) {
+      findings.push(`${label} required browser metric ${metric} is unavailable`);
     }
   }
   return findings;
 }
 
-function targetChecks(budget, candidate) {
-  const checks = [];
-  if (budget.subject.kind === 'browser') {
-    const metric = 'matched-l1/browser//mobile.navigation.navToPaintMs';
-    if (candidate.analysis[metric]) {
-      checks.push(
-        ratioCheck(
-          `${metric}.median-vs-next`,
-          candidate.analysis[metric],
-          budget.policy.targets.matchedL1MobileNavigationMaximumRatio,
-          'target',
-        ),
+function requiredBrowserPublicationMetrics() {
+  const metrics = [];
+  for (const lane of BROWSER_LANES) {
+    for (const formFactor of BROWSER_FORM_FACTORS) {
+      for (const leaf of ['fcpMs', 'lcpMs']) {
+        metrics.push(`${lane}/browser//${formFactor}.coldLoad.${leaf}`);
+      }
+      metrics.push(`${lane}/browser//${formFactor}.navigation.navToPaintMs`);
+      for (const phase of BROWSER_NAVIGATION_ATTRIBUTION_PHASES) {
+        metrics.push(
+          `${lane}/browser//${formFactor}.navigation.navAttribution.phases.${phase}.durationMs`,
+        );
+      }
+      for (const phase of BROWSER_SESSION_BYTE_PHASES) {
+        metrics.push(`${lane}/browser//${formFactor}.navigation.sessionBytes.${phase}.total`);
+      }
+      for (const route of BROWSER_ROUTES) {
+        for (const leaf of ['fcpMs', 'lcpMs', 'performanceScore']) {
+          metrics.push(`${lane}/browser//lighthouse.${formFactor}.${route}.${leaf}`);
+        }
+      }
+    }
+    for (const metricName of ['applicable', 'evidenceComplete', 'restored']) {
+      metrics.push(`${lane}/browser//bfcache.${metricName}`);
+    }
+  }
+  return metrics;
+}
+
+function serverPublicationMetricFindings(metrics, label) {
+  const findings = [];
+  for (const { metric } of targetCheckSpecifications('server', SERVER_TARGETS)) {
+    if (!ownRecord(metrics?.[metric])) {
+      findings.push(`${label} required server target metric ${metric} is unavailable`);
+    }
+  }
+  for (const metric of Object.keys(metrics ?? {})) {
+    if (
+      /^matched-runtime\/server\/(?:hit|304|dynamic)-(?:listing|detail)-br-c(?:1|8|32)\//u.test(
+        metric,
+      )
+    ) {
+      findings.push(
+        `${label} ${metric} fabricates a paired Brotli comparison; Next Brotli is unsupported`,
       );
     }
-  } else {
-    for (const [metric, analysis] of Object.entries(candidate.analysis)) {
-      if (!metric.endsWith('/requestsPerSecond')) continue;
-      if (metric.includes('/dynamic-')) {
-        checks.push(
-          inverseRatioCheck(
-            `${metric}.median-vs-next`,
-            analysis,
-            budget.policy.targets.forcedDynamicThroughputMinimumRatio,
-          ),
+  }
+  return findings;
+}
+
+function serverBrotliRawEvidenceFindings(report, label) {
+  const findings = [];
+  const samples = report?.workloadIdentity?.identity?.policies?.server?.samples;
+  if (samples !== 7) return [`${label} Kovo Brotli raw sample policy is unavailable`];
+  const rawCells = Array.isArray(report?.rawCells) ? report.rawCells : [];
+  const expectedConditions = serverConditionKeys('br');
+  const brotliCells = rawCells.filter(
+    (cell) => cell?.cell === 'server' && cell?.report?.condition?.encoding === 'br',
+  );
+  if (brotliCells.length !== expectedConditions.length * samples * 2) {
+    findings.push(`${label} Kovo/Next Brotli raw cell census is incomplete`);
+  }
+  for (const condition of expectedConditions) {
+    for (const framework of ['kovo', 'nextjs']) {
+      const occurrences = brotliCells
+        .filter(
+          (cell) =>
+            cell.framework === framework &&
+            cell.lane === 'matched-runtime' &&
+            cell.mode === condition,
+        )
+        .sort((left, right) => left.occurrence - right.occurrence);
+      if (
+        occurrences.length !== samples ||
+        canonicalJson(occurrences.map((cell) => cell.occurrence)) !==
+          canonicalJson(Array.from({ length: samples }, (_, index) => index))
+      ) {
+        findings.push(
+          `${label} ${condition}/${framework} raw Brotli occurrence census is incomplete`,
         );
-      } else if (metric.includes('/hit-') && metric.includes('-br-')) {
-        checks.push(
-          inverseRatioCheck(
-            `${metric}.median-vs-next`,
-            analysis,
-            budget.policy.targets.cachedThroughputMinimumRatio,
-          ),
-        );
+        continue;
+      }
+      for (const cell of occurrences) {
+        const raw = cell.report;
+        if (
+          raw?.condition?.key !== condition ||
+          raw?.framework !== framework ||
+          raw?.condition?.encoding !== 'br'
+        ) {
+          findings.push(`${label} ${condition}/${framework} raw Brotli identity is malformed`);
+          break;
+        }
+        if (framework === 'kovo') {
+          if (
+            raw?.support?.status !== 'supported' ||
+            raw?.verdict?.status !== 'measured' ||
+            raw?.samples?.length !== 1 ||
+            !Number.isFinite(raw.samples[0]?.requestsPerSecond) ||
+            raw.samples[0].requestsPerSecond <= 0 ||
+            (raw.condition.mode !== '304' && raw?.correctness?.contentEncoding !== 'br')
+          ) {
+            findings.push(`${label} ${condition}/kovo raw Brotli measurement is unavailable`);
+            break;
+          }
+        } else if (
+          raw?.support?.status !== 'unsupported' ||
+          raw?.verdict?.status !== 'unsupported' ||
+          raw?.samples?.length !== 0 ||
+          raw?.correctness?.contentEncoding !== null
+        ) {
+          findings.push(`${label} ${condition}/nextjs unsupported Brotli proof is unavailable`);
+          break;
+        }
       }
     }
   }
-  return checks;
+  const matrix = report?.integrity?.comparator?.serverMatrix;
+  const supported = Array.isArray(matrix?.supported)
+    ? [...matrix.supported].sort((left, right) => left.localeCompare(right))
+    : [];
+  const excluded = Array.isArray(matrix?.excludedUnsupported)
+    ? matrix.excludedUnsupported
+        .map(
+          (entry) =>
+            `${String(entry?.condition)}:${(entry?.unsupportedFrameworks ?? []).join(',')}`,
+        )
+        .sort((left, right) => left.localeCompare(right))
+    : [];
+  if (
+    matrix?.completeSupportedMatrix !== true ||
+    canonicalJson(matrix?.findings) !== canonicalJson([]) ||
+    canonicalJson(supported) !==
+      canonicalJson(
+        serverConditionKeys('identity').sort((left, right) => left.localeCompare(right)),
+      ) ||
+    canonicalJson(excluded) !==
+      canonicalJson(
+        serverConditionKeys('br')
+          .map((condition) => `${condition}:nextjs`)
+          .sort((left, right) => left.localeCompare(right)),
+      )
+  ) {
+    findings.push(`${label} server representation support census is incomplete`);
+  }
+  return findings;
+}
+
+function serverConditionKeys(encoding) {
+  const keys = [];
+  for (const concurrency of SERVER_CONCURRENCIES) {
+    for (const route of SERVER_ROUTES) {
+      for (const mode of SERVER_MODES) {
+        keys.push(`${mode.toLowerCase()}-${route}-${encoding}-c${String(concurrency)}`);
+      }
+    }
+  }
+  return keys;
+}
+
+function targetChecks(budget, candidate) {
+  return targetCheckSpecifications(budget.subject.kind, budget.policy.targets).map((spec) =>
+    spec.operator === '<='
+      ? ratioCheck(spec.id, candidate.analysis[spec.metric], spec.limit, spec.kind)
+      : inverseRatioCheck(spec.id, candidate.analysis[spec.metric], spec.limit),
+  );
 }
 
 export function renderComparisonBudgetMarkdown(budget) {
@@ -541,7 +725,7 @@ export function renderComparisonBudgetMarkdown(budget) {
   const architecture =
     budget.subject.kind === 'browser'
       ? 'Default/as-shipped and capability-matched lanes remain separate; default L0/L1 architecture differences must be described beside any selected claim. A bfcache restore is only scored when `bfcache.applicable` is 1; same-document navigation has no cross-document entry to restore.'
-      : 'Server cells keep proved HIT, conditional 304, and forced-dynamic posture separate; unsupported cells are not converted into zero-cost wins.';
+      : 'Server cells keep proved HIT, conditional 304, and forced-dynamic posture separate. Competitive HIT and forced-dynamic checks compare the identity representation because Next does not serve Brotli here; Kovo Brotli remains required raw measurement evidence, never a fabricated paired win.';
   const rows = Object.entries(budget.metrics).map(([metric, entry]) =>
     [
       metric.replaceAll('|', '\\|'),
@@ -577,40 +761,73 @@ export function renderComparisonBudgetMarkdown(budget) {
 }
 
 function baselineTargetAssessment(subject, metrics, targets) {
-  const checks = [];
-  if (subject === 'browser') {
-    const metric = 'matched-l1/browser//mobile.navigation.navToPaintMs';
-    const evidence = metrics[metric]?.baseline;
-    const ratio = ratioFromBudgetEvidence(evidence);
-    checks.push({
-      id: `${metric}.median-vs-next`,
-      limit: targets?.matchedL1MobileNavigationMaximumRatio,
+  const checks = targetCheckSpecifications(subject, targets).map((spec) => {
+    const ratio = ratioFromBudgetEvidence(metrics[spec.metric]?.baseline);
+    return {
+      id: spec.id,
+      limit: spec.limit,
       observed: ratio,
       status:
-        Number.isFinite(ratio) && ratio <= targets?.matchedL1MobileNavigationMaximumRatio
-          ? 'pass'
+        Number.isFinite(ratio) && Number.isFinite(spec.limit)
+          ? spec.operator === '<='
+            ? ratio <= spec.limit
+              ? 'pass'
+              : 'fail'
+            : ratio >= spec.limit
+              ? 'pass'
+              : 'fail'
           : 'fail',
-    });
-  } else if (subject === 'server') {
-    for (const [metric, entry] of Object.entries(metrics)) {
-      if (!metric.endsWith('/requestsPerSecond')) continue;
-      const minimum = metric.includes('/dynamic-')
-        ? targets?.forcedDynamicThroughputMinimumRatio
-        : metric.includes('/hit-') && metric.includes('-br-')
-          ? targets?.cachedThroughputMinimumRatio
-          : null;
-      if (!Number.isFinite(minimum)) continue;
-      const ratio = ratioFromBudgetEvidence(entry.baseline);
-      checks.push({
-        id: `${metric}.median-vs-next`,
-        limit: minimum,
-        observed: ratio,
-        status: Number.isFinite(ratio) && ratio >= minimum ? 'pass' : 'fail',
-      });
-    }
-  }
+    };
+  });
   const failures = checks.filter(({ status }) => status === 'fail').map(({ id }) => id);
   return { checks, failures, status: failures.length === 0 && checks.length > 0 ? 'pass' : 'fail' };
+}
+
+function targetCheckSpecifications(subject, targets) {
+  if (subject === 'browser') {
+    return [
+      targetCheckSpecification(
+        'matched-l1/browser//mobile.navigation.navToPaintMs',
+        targets?.matchedL1MobileNavigationMaximumRatio,
+        '<=',
+      ),
+      targetCheckSpecification(
+        'matched-l1/browser//mobile.navigation.sessionBytes.throughDestinationPaint.total',
+        targets?.matchedL1TotalSessionBytesMaximumRatio,
+        '<=',
+      ),
+    ];
+  }
+  if (subject !== 'server') return [];
+  const specifications = [];
+  for (const mode of ['dynamic', 'hit']) {
+    for (const route of SERVER_ROUTES) {
+      for (const concurrency of SERVER_CONCURRENCIES) {
+        specifications.push(
+          targetCheckSpecification(
+            `matched-runtime/server/${mode}-${route}-identity-c${String(
+              concurrency,
+            )}/requestsPerSecond`,
+            mode === 'dynamic'
+              ? targets?.forcedDynamicThroughputMinimumRatio
+              : targets?.cachedThroughputMinimumRatio,
+            '>=',
+          ),
+        );
+      }
+    }
+  }
+  return specifications;
+}
+
+function targetCheckSpecification(metric, limit, operator) {
+  return {
+    id: `${metric}.median-vs-next`,
+    kind: 'target',
+    limit,
+    metric,
+    operator,
+  };
 }
 
 function ratioFromBudgetEvidence(evidence) {

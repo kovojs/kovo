@@ -23,6 +23,7 @@ import { ratifyPerformanceBaseline } from './perf-baseline-ratify.mjs';
 import {
   comparisonBudgetBaselineFindings,
   comparisonBudgetFindings,
+  comparisonTargetCheckSpecifications,
   deriveComparisonPerformanceBudget,
   evaluateComparisonPerformanceBudget,
 } from './perf-comparison-budget.mjs';
@@ -191,7 +192,7 @@ const FAMILY_CONFIG = Object.freeze({
   }),
   server: familyConfig({
     architecture:
-      'Proved HIT, conditional 304, and forced-dynamic cells remain separate across route, encoding, and concurrency. Unsupported postures cannot become zero-cost wins.',
+      'Proved HIT, conditional 304, and forced-dynamic cells remain separate across route, encoding, and concurrency. Competitive HIT and forced-dynamic checks use representation-matched identity responses; Kovo Brotli remains required raw measurement evidence because Next Brotli is unsupported, never a fabricated paired win.',
     artifactName: 'kovo-perf-server-matrix',
     baselineFindings: comparisonBudgetBaselineFindings,
     budgetFindings: comparisonBudgetFindings,
@@ -407,6 +408,13 @@ export function derivePerformancePublication(
       const baselineAssessment = baselineTargetAssessment(familyName, budget);
       const holdoutAssessment = holdoutTargetAssessment(config, evaluation);
       const targetAssessment = combineTargetAssessments(baselineAssessment, holdoutAssessment);
+      const targetFindings =
+        targetAssessment.status === 'unproven'
+          ? []
+          : targetAssessmentFindings(targetAssessment, familyName);
+      if (targetFindings.length > 0) {
+        throw new TypeError(`target assessment is invalid: ${targetFindings.join('; ')}`);
+      }
       const evaluationStatus = evaluation?.verdict?.status;
       const familyStatus =
         evaluationStatus === 'unproven'
@@ -2187,6 +2195,20 @@ function targetAssessmentFindings(value, familyName) {
         findings.push(`${familyName} ${phase} target check ${check.id} status is not derived`);
       }
       if (expectedStatus === 'fail') expectedFailures.push(check.id);
+    }
+    if (familyName === 'browser' || familyName === 'server') {
+      const expectedCensus = comparisonTargetCheckSpecifications(familyName).map(
+        ({ id, kind, limit, operator }) => ({ id, kind, limit, operator }),
+      );
+      const observedCensus = assessment.checks.map((check) => ({
+        id: check?.id,
+        kind: check?.kind,
+        limit: check?.limit,
+        operator: check?.operator,
+      }));
+      if (canonicalJson(observedCensus) !== canonicalJson(expectedCensus)) {
+        findings.push(`${familyName} ${phase} target check census differs from policy`);
+      }
     }
     const expectedPhaseStatus = expectedFailures.length === 0 ? 'pass' : 'fail';
     if (
