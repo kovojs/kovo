@@ -35,6 +35,8 @@ import {
 } from './hints.js';
 import {
   DOCUMENT_HSTS_VALUE,
+  blessRedirectResponse,
+  isBlessedRedirectResponse,
   isRoutePageResponseOutcome,
   markFrameworkDocumentResponse,
   readHeader,
@@ -676,9 +678,9 @@ function stampPerPrincipalRouteOutcomeFloor(
  * @internal
  */
 export function stampCredentialBearingResponseCacheFloor<
-  Response extends { headers: ResponseHeaders },
+  Response extends ServerResponseBase<unknown, ResponseHeaders>,
 >(response: Response): Response {
-  return {
+  const stamped: Response = {
     ...response,
     headers: mergeVaryHeader(
       {
@@ -688,6 +690,10 @@ export function stampCredentialBearingResponseCacheFloor<
       'Cookie',
     ),
   };
+  // SPEC §6.4/§6.6: cache-floor strengthening must retain the module-private redirect sink
+  // witness. Reconstructing a blessed 3xx response without re-blessing it makes the final
+  // response boundary correctly neutralize its Location to `/` (KV236).
+  return isBlessedRedirectResponse(response) ? blessRedirectResponse(stamped) : stamped;
 }
 
 /**

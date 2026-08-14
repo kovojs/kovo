@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 import { component } from '@kovojs/core';
 
-import { createApp } from './app.js';
+import { createApp, createRequestHandler } from './app.js';
 import { renderAppErrorDocumentResponse, renderAppRouteDocumentResponse } from './app-document.js';
 import { Defer, defer } from './deferred-region.js';
 import { Document, Head, InlineScript, Meta } from './document-structured.js';
@@ -60,6 +60,29 @@ function expectDocumentSecurityFloor(headers: Record<string, string | readonly s
   expect(headerValue(headers, 'x-content-type-options')).toBe('nosniff');
   expect(headerValue(headers, 'cache-control')).toBe('private, no-store');
 }
+
+describe('document response provenance', () => {
+  it('retains a blessed auth redirect while strengthening its credential cache floor', async () => {
+    type SessionRequest = Request & { session?: { user: { id: string } } | null };
+    const account = route('/account', {
+      guard: guards.authed<SessionRequest>(),
+      page: () => renderedHtml('<main>private</main>'),
+    });
+    const handler = createRequestHandler(
+      createApp({
+        routes: [account],
+        sessionProvider: () => null,
+      }),
+    );
+
+    const response = await handler(new Request('https://shop.example.test/account?mode=anonymous'));
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get('location')).toBe('/login?next=%2Faccount%3Fmode%3Danonymous');
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('vary')).toContain('Cookie');
+  });
+});
 
 describe('component query document hydration', () => {
   it('serializes first-paint query truth with the canonical href and keyed identity', async () => {
