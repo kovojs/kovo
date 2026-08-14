@@ -12,6 +12,7 @@ import {
   collectEntrantVersions,
   dependencyRootForDevCommand,
   DEV_LOOP_REPORT_SCHEMA,
+  DEV_SESSION_STOP_SCHEMA,
   diagnosticProfileFindings,
   establishState,
   exactSampleCountFindings,
@@ -22,6 +23,7 @@ import {
   profiledDevInvocation,
   runDevLoopBenchmark,
   sourceStabilityFindings,
+  stopDevProcessTree,
   summarizeNumbers,
   verifyCorpusSources,
 } from './dev-loop.mjs';
@@ -396,6 +398,97 @@ describe('single-entrant developer-loop adapter', () => {
     );
   });
 
+  it('proves graceful dev-process quiescence and two consecutive exact-port binds', async () => {
+    const clock = fakeLifecycleClock();
+    const signals = [];
+    let groupChecks = 0;
+    let portChecks = 0;
+    const result = await stopDevProcessTree(
+      { origin: 'http://localhost:49120', pid: 1234 },
+      {
+        ...clock,
+        portAvailable: async (origin) => {
+          expect(origin).toBe('http://localhost:49120');
+          portChecks += 1;
+          return portChecks >= 2;
+        },
+        processGroupAlive: async () => {
+          groupChecks += 1;
+          return groupChecks === 1;
+        },
+        terminateProcessGroup: (pid, signal) => signals.push([pid, signal]),
+      },
+    );
+
+    expect(result).toMatchObject({
+      complete: true,
+      error: null,
+      origin: 'http://localhost:49120',
+      port: { available: true, checks: 3 },
+      processGroup: { checks: 2, quiescent: true },
+      schema: DEV_SESSION_STOP_SCHEMA,
+      signals: ['SIGTERM'],
+    });
+    expect(signals).toEqual([[1234, 'SIGTERM']]);
+  });
+
+  it('escalates a surviving dev process group to SIGKILL before releasing the port', async () => {
+    const clock = fakeLifecycleClock();
+    const signals = [];
+    let killed = false;
+    const result = await stopDevProcessTree(
+      { origin: 'http://localhost:49120', pid: 2345 },
+      {
+        ...clock,
+        forceTimeoutMs: 20,
+        gracefulTimeoutMs: 20,
+        pollIntervalMs: 10,
+        portAvailable: async () => true,
+        processGroupAlive: async () => !killed,
+        terminateProcessGroup: (_pid, signal) => {
+          signals.push(signal);
+          if (signal === 'SIGKILL') killed = true;
+        },
+      },
+    );
+
+    expect(result.complete).toBe(true);
+    expect(result.processGroup.quiescent).toBe(true);
+    expect(signals).toEqual(['SIGTERM', 'SIGKILL']);
+  });
+
+  it('fails closed with process-group and strict-port diagnostics when teardown leaks', async () => {
+    const clock = fakeLifecycleClock();
+    const probedOrigins = [];
+    const result = await stopDevProcessTree(
+      { origin: 'http://localhost:49120', pid: 3456 },
+      {
+        ...clock,
+        forceTimeoutMs: 20,
+        gracefulTimeoutMs: 20,
+        pollIntervalMs: 10,
+        portAvailable: async (origin) => {
+          probedOrigins.push(origin);
+          return false;
+        },
+        portTimeoutMs: 20,
+        processGroupAlive: async () => true,
+        terminateProcessGroup: () => undefined,
+      },
+    );
+
+    expect(result).toMatchObject({
+      complete: false,
+      origin: 'http://localhost:49120',
+      port: { available: false },
+      processGroup: { quiescent: false },
+      signals: ['SIGTERM', 'SIGKILL'],
+    });
+    expect(result.error).toContain('process group 3456 remained alive');
+    expect(result.error).toContain('http://localhost:49120 remained unavailable');
+    expect(new Set(probedOrigins)).toEqual(new Set(['http://localhost:49120']));
+  });
+
   it('records network failures and explicitly classifies intentional syntax diagnostics', () => {
     const page = new FakePage();
     const telemetry = collectPageTelemetry(page, 'http://localhost:49120');
@@ -573,9 +666,35 @@ function completeCountFixture() {
     syntaxErrorStateSurvived: true,
   }));
   return {
+    editSession: { lifecycle: completeLifecycleFixture() },
     integrity: { editCounts: {}, iterations: 2, readyIterations: 1 },
-    readySamples: [{ durationMs: 10, iteration: 0, peakRssBytes: 1, success: true }],
+    readySamples: [
+      {
+        durationMs: 10,
+        iteration: 0,
+        lifecycle: completeLifecycleFixture(),
+        peakRssBytes: 1,
+        success: true,
+      },
+    ],
     samples,
+  };
+}
+
+function completeLifecycleFixture() {
+  return {
+    complete: true,
+    schema: DEV_SESSION_STOP_SCHEMA,
+  };
+}
+
+function fakeLifecycleClock() {
+  let value = 0;
+  return {
+    delay: async (ms) => {
+      value += ms;
+    },
+    now: () => value,
   };
 }
 

@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { execFile, spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { lstat, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
@@ -34,6 +35,11 @@ const MAX_LOG_BYTES = 1024 * 1024;
 const READY_TIMEOUT_MS = 120_000;
 const EDIT_TIMEOUT_MS = 60_000;
 const RSS_SAMPLE_INTERVAL_MS = 50;
+const DEV_PROCESS_GRACEFUL_STOP_TIMEOUT_MS = 3_000;
+const DEV_PROCESS_FORCE_STOP_TIMEOUT_MS = 2_000;
+const DEV_PORT_RELEASE_TIMEOUT_MS = 5_000;
+const DEV_LIFECYCLE_POLL_INTERVAL_MS = 50;
+export const DEV_SESSION_STOP_SCHEMA = 'kovo-dev-session-stop/v1';
 const repoRoot = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const PERFORMANCE_POSTURE_FILES = Object.freeze([
   'packages/compiler/src/security/framework-public-runtime-export-posture.generated.ts',
@@ -240,6 +246,7 @@ async function measureFreshReady({
   const rss = createProcessTreeRssSampler(session.pid);
   let context;
   let browserEvidence = emptyBrowserEvidence();
+  let observation;
   let telemetry;
   try {
     context = await browser.newContext();
@@ -256,7 +263,7 @@ async function measureFreshReady({
     browserEvidence = telemetry.snapshot();
     const rssEvidence = await rss.stop();
     const hasRss = rssEvidence.sampleCount > 0 && rssEvidence.peakRssBytes > 0;
-    return {
+    observation = {
       browser: browserEvidence,
       durationMs: performance.now() - started,
       error: hasRss ? null : 'fresh ready did not produce process-tree RSS evidence',
@@ -269,7 +276,7 @@ async function measureFreshReady({
   } catch (error) {
     const rssEvidence = await rss.stop();
     browserEvidence = telemetry?.snapshot() ?? browserEvidence;
-    return {
+    observation = {
       browser: browserEvidence,
       durationMs: null,
       error: errorMessage(error),
@@ -281,8 +288,24 @@ async function measureFreshReady({
     };
   } finally {
     await context?.close().catch(() => undefined);
-    await session.stop();
+    const lifecycle = await session.stop();
+    observation ??= {
+      browser: browserEvidence,
+      durationMs: null,
+      error: 'fresh ready did not produce an observation',
+      iteration,
+      paintFenceMs: null,
+      peakRssBytes: 0,
+      rssSamples: 0,
+      success: false,
+    };
+    observation.lifecycle = lifecycle;
+    if (!lifecycle.complete) {
+      observation.error = [observation.error, lifecycle.error].filter(Boolean).join('; ');
+      observation.success = false;
+    }
   }
+  return observation;
 }
 
 async function measureEditSession({
@@ -309,6 +332,7 @@ async function measureEditSession({
   let fatalError = null;
   let profiler;
   let profilerSummary = null;
+  let lifecycle = null;
   let telemetry;
   let rssEvidence = { peakRssBytes: 0, sampleCount: 0 };
   const samples = Array.from({ length: iterations }, (_, iteration) => ({ iteration }));
@@ -387,7 +411,10 @@ async function measureEditSession({
       }
     }
     await context?.close().catch(() => undefined);
-    await session.stop();
+    lifecycle = await session.stop();
+    if (!lifecycle.complete) {
+      fatalError = [fatalError, lifecycle.error].filter(Boolean).join('; ');
+    }
     rssEvidence = await rss.stop();
   }
   return {
@@ -397,6 +424,7 @@ async function measureEditSession({
     session: {
       browser: telemetry?.snapshot() ?? emptyBrowserEvidence(),
       error: fatalError,
+      lifecycle,
       logTail: session.logTail(),
       peakRssBytes: rssEvidence.peakRssBytes,
       rssSamples: rssEvidence.sampleCount,
@@ -972,7 +1000,7 @@ function startDevSession({ appRoot, command, inspectorPort = null, spawnProcess 
     throw new Error(`dev process for ${appRoot} did not expose a PID`);
   }
   let exited = false;
-  let stopped = false;
+  let stopPromise;
   let tail = '';
   const events = [];
   let pending = '';
@@ -986,16 +1014,12 @@ function startDevSession({ appRoot, command, inspectorPort = null, spawnProcess 
   };
   child.stdout?.on('data', onChunk);
   child.stderr?.on('data', onChunk);
-  const exit = new Promise((resolve) => {
-    child.once('error', (error) => {
-      exited = true;
-      onChunk(`\nspawn error: ${errorMessage(error)}\n`);
-      resolve();
-    });
-    child.once('exit', () => {
-      exited = true;
-      resolve();
-    });
+  child.once('error', (error) => {
+    exited = true;
+    onChunk(`\nspawn error: ${errorMessage(error)}\n`);
+  });
+  child.once('exit', () => {
+    exited = true;
   });
   return {
     generationDurationSince(index) {
@@ -1012,15 +1036,152 @@ function startDevSession({ appRoot, command, inspectorPort = null, spawnProcess 
     logTail: () => tail.slice(-8_192),
     pid: child.pid,
     async stop() {
-      if (stopped) return exit;
-      stopped = true;
-      terminateProcessGroup(child.pid, 'SIGTERM');
-      await Promise.race([exit, delay(3_000)]);
-      if (!exited) {
-        terminateProcessGroup(child.pid, 'SIGKILL');
-        await Promise.race([exit, delay(2_000)]);
-      }
+      stopPromise ??= stopDevProcessTree({ origin: command.origin, pid: child.pid }).catch(
+        (error) => failedDevSessionStop(command.origin, child.pid, error),
+      );
+      return stopPromise;
     },
+  };
+}
+
+/**
+ * Stop the detached dev process group, then prove the exact strict port can be bound again.
+ * A launcher exit is insufficient: its descendants may still own the listening socket.
+ */
+export async function stopDevProcessTree({ origin, pid }, dependencies = {}) {
+  boundedInteger(pid, 1, Number.MAX_SAFE_INTEGER, 'dev process PID');
+  const canonicalOrigin = new URL(requiredString(origin, 'dev origin')).origin;
+  const now = dependencies.now ?? (() => performance.now());
+  const pause = dependencies.delay ?? delay;
+  const terminate = dependencies.terminateProcessGroup ?? terminateProcessGroup;
+  const processGroupAlive = dependencies.processGroupAlive ?? isProcessGroupAlive;
+  const portAvailable = dependencies.portAvailable ?? probeOriginPortAvailable;
+  const gracefulTimeoutMs = dependencies.gracefulTimeoutMs ?? DEV_PROCESS_GRACEFUL_STOP_TIMEOUT_MS;
+  const forceTimeoutMs = dependencies.forceTimeoutMs ?? DEV_PROCESS_FORCE_STOP_TIMEOUT_MS;
+  const portTimeoutMs = dependencies.portTimeoutMs ?? DEV_PORT_RELEASE_TIMEOUT_MS;
+  const pollIntervalMs = dependencies.pollIntervalMs ?? DEV_LIFECYCLE_POLL_INTERVAL_MS;
+  for (const [value, label] of [
+    [gracefulTimeoutMs, 'graceful stop timeout'],
+    [forceTimeoutMs, 'forced stop timeout'],
+    [portTimeoutMs, 'port release timeout'],
+    [pollIntervalMs, 'lifecycle poll interval'],
+  ]) {
+    boundedInteger(value, 1, 60_000, label);
+  }
+
+  const errors = [];
+  const signals = [];
+  let group = { checks: 0, satisfied: false, waitedMs: 0 };
+  try {
+    terminate(pid, 'SIGTERM');
+    signals.push('SIGTERM');
+    group = await waitForLifecycleCondition({
+      check: async () => !(await processGroupAlive(pid)),
+      consecutiveSuccesses: 1,
+      now,
+      pause,
+      pollIntervalMs,
+      timeoutMs: gracefulTimeoutMs,
+    });
+    if (!group.satisfied) {
+      terminate(pid, 'SIGKILL');
+      signals.push('SIGKILL');
+      const forced = await waitForLifecycleCondition({
+        check: async () => !(await processGroupAlive(pid)),
+        consecutiveSuccesses: 1,
+        now,
+        pause,
+        pollIntervalMs,
+        timeoutMs: forceTimeoutMs,
+      });
+      group = {
+        checks: group.checks + forced.checks,
+        satisfied: forced.satisfied,
+        waitedMs: group.waitedMs + forced.waitedMs,
+      };
+    }
+    if (!group.satisfied) {
+      errors.push(
+        `dev process group ${String(pid)} remained alive after SIGTERM and SIGKILL (${String(group.waitedMs)}ms)`,
+      );
+    }
+  } catch (error) {
+    errors.push(`dev process group ${String(pid)} teardown failed: ${errorMessage(error)}`);
+  }
+
+  let port = { checks: 0, satisfied: false, waitedMs: 0 };
+  try {
+    port = await waitForLifecycleCondition({
+      check: () => portAvailable(canonicalOrigin),
+      consecutiveSuccesses: 2,
+      now,
+      pause,
+      pollIntervalMs,
+      timeoutMs: portTimeoutMs,
+    });
+    if (!port.satisfied) {
+      errors.push(
+        `dev origin ${canonicalOrigin} remained unavailable after teardown (${String(port.waitedMs)}ms)`,
+      );
+    }
+  } catch (error) {
+    errors.push(`dev origin ${canonicalOrigin} release probe failed: ${errorMessage(error)}`);
+  }
+
+  return {
+    complete: errors.length === 0,
+    error: errors.length === 0 ? null : errors.join('; '),
+    origin: canonicalOrigin,
+    pid,
+    port: {
+      available: port.satisfied,
+      checks: port.checks,
+      waitedMs: port.waitedMs,
+    },
+    processGroup: {
+      checks: group.checks,
+      quiescent: group.satisfied,
+      waitedMs: group.waitedMs,
+    },
+    schema: DEV_SESSION_STOP_SCHEMA,
+    signals,
+  };
+}
+
+async function waitForLifecycleCondition({
+  check,
+  consecutiveSuccesses,
+  now,
+  pause,
+  pollIntervalMs,
+  timeoutMs,
+}) {
+  const started = now();
+  let checks = 0;
+  let successes = 0;
+  while (true) {
+    checks += 1;
+    successes = (await check()) ? successes + 1 : 0;
+    const waitedMs = Math.max(0, Math.round(now() - started));
+    if (successes >= consecutiveSuccesses) {
+      return { checks, satisfied: true, waitedMs };
+    }
+    if (waitedMs >= timeoutMs) return { checks, satisfied: false, waitedMs };
+    await pause(Math.min(pollIntervalMs, timeoutMs - waitedMs));
+  }
+}
+
+function failedDevSessionStop(origin, pid, error) {
+  const message = `dev lifecycle verification failed: ${errorMessage(error)}`;
+  return {
+    complete: false,
+    error: message,
+    origin,
+    pid,
+    port: { available: false, checks: 0, waitedMs: 0 },
+    processGroup: { checks: 0, quiescent: false, waitedMs: 0 },
+    schema: DEV_SESSION_STOP_SCHEMA,
+    signals: [],
   };
 }
 
@@ -1116,6 +1277,33 @@ function terminateProcessGroup(pid, signal) {
   } catch (error) {
     if (error?.code !== 'ESRCH') throw error;
   }
+}
+
+function isProcessGroupAlive(pid) {
+  try {
+    process.kill(process.platform === 'win32' ? pid : -pid, 0);
+    return true;
+  } catch (error) {
+    if (error?.code === 'ESRCH') return false;
+    if (error?.code === 'EPERM') return true;
+    throw error;
+  }
+}
+
+function probeOriginPortAvailable(origin) {
+  const url = new URL(origin);
+  const port = Number(url.port || (url.protocol === 'https:' ? 443 : 80));
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.unref();
+    server.once('error', (error) => {
+      if (error?.code === 'EADDRINUSE') resolve(false);
+      else reject(error);
+    });
+    server.listen({ exclusive: true, host: url.hostname, port }, () => {
+      server.close((error) => (error ? reject(error) : resolve(true)));
+    });
+  });
 }
 
 export async function loadCorpusManifest(manifestPathValue) {
@@ -1518,10 +1706,18 @@ export function exactSampleCountFindings(report) {
       sample?.iteration !== index ||
       sample.success !== true ||
       !finiteNonNegative(sample.durationMs) ||
-      !finitePositive(sample.peakRssBytes)
+      !finitePositive(sample.peakRssBytes) ||
+      sample.lifecycle?.schema !== DEV_SESSION_STOP_SCHEMA ||
+      sample.lifecycle.complete !== true
     ) {
       findings.push(`ready sample ${String(index)} is incomplete`);
     }
+  }
+  if (
+    report.editSession?.lifecycle?.schema !== DEV_SESSION_STOP_SCHEMA ||
+    report.editSession.lifecycle.complete !== true
+  ) {
+    findings.push('edit session lifecycle is incomplete');
   }
   if (report.samples.length !== report.integrity.iterations) {
     findings.push(

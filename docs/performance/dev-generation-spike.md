@@ -113,6 +113,12 @@ comparison report and, when `--out` is used, persist beside it under `raw/`. A n
 retains its SHA-256, byte count, schema, verdict, readiness failures, and first integrity errors so
 an outer `unproven` result remains diagnosable.
 
+Every fresh-ready and edit session also has a fail-closed lifecycle fence. Teardown signals the
+entire detached dev process group, escalates to `SIGKILL` when necessary, and then requires two
+consecutive successful binds of the same authenticated `localhost` port. A lingering process group,
+an unavailable strict port, or an unexpected bind error makes the adapter and outer report
+`unproven`; the runner never substitutes another port to conceal a leak.
+
 ## Decision rule
 
 The report aggregates baseline and spike median, MAD, p95, sample count, and paired bootstrap 95%
