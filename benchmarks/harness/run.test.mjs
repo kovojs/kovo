@@ -100,9 +100,16 @@ function cleanResult() {
 }
 
 function cleanScenario() {
+  const digest = `sha256:${'a'.repeat(64)}`;
   return {
     errorResponses: 0,
     failedRequests: 0,
+    fcpMs: 10,
+    fixtureEvidenceDigest: digest,
+    fixtureEvidenceValid: 1,
+    fixtureIdentityDigest: digest,
+    fixtureRenderedContractDigest: digest,
+    lcpMs: 20,
     pageErrors: 0,
     rateLimitedResponses: 0,
     settleTimedOut: 0,
@@ -124,8 +131,25 @@ function cleanNavigationScenario() {
       targetPath: '/matched/l1/product/a',
       traceEvents: [{ name: 'Paint', ts: 3 }],
     }),
+    sessionBytes: emptySessionBytes(),
     navSettleTimedOut: 0,
     pageErrors: 0,
     rateLimitedResponses: 0,
   };
+}
+
+function emptySessionBytes() {
+  const bucket = () => ({ css: 0, html: 0, img: 0, js: 0, other: 0, requests: 0, total: 0 });
+  return Object.fromEntries(
+    [
+      'initial',
+      'automaticPrefetch',
+      'preClickBackground',
+      'click',
+      'postClick',
+      'throughClick',
+      'throughDestinationPaint',
+      'settledSession',
+    ].map((name) => [name, bucket()]),
+  );
 }

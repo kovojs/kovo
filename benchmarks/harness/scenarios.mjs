@@ -2,6 +2,11 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import { chromium } from 'playwright';
 
+import {
+  browserFixtureRuntimeContract,
+  renderedBrowserFixtureEvidence,
+} from '../browser-fixture-identity.mjs';
+
 const MOBILE_NETWORK = {
   downloadThroughput: Math.round((1.6 * 1024 * 1024) / 8),
   latency: 150,
@@ -1855,6 +1860,68 @@ export function sessionBytePhases(
   return phases;
 }
 
+const SESSION_BYTE_BUCKETS = Object.freeze([
+  'initial',
+  'automaticPrefetch',
+  'preClickBackground',
+  'click',
+  'postClick',
+  'throughClick',
+  'throughDestinationPaint',
+  'settledSession',
+]);
+const SESSION_BYTE_FIELDS = Object.freeze(['css', 'html', 'img', 'js', 'other', 'requests', 'total']);
+
+/**
+ * Validate the complete byte-accounting census. A missing leaf must not disappear from generic
+ * numeric discovery and turn a short report into an apparently valid baseline.
+ */
+export function sessionBytePhaseFindings(phases) {
+  const findings = [];
+  for (const bucketName of SESSION_BYTE_BUCKETS) {
+    const bucket = phases?.[bucketName];
+    if (!bucket || typeof bucket !== 'object' || Array.isArray(bucket)) {
+      findings.push(`session byte phase ${bucketName} is absent`);
+      continue;
+    }
+    for (const field of SESSION_BYTE_FIELDS) {
+      if (!Number.isSafeInteger(bucket[field]) || bucket[field] < 0) {
+        findings.push(`session byte phase ${bucketName}.${field} is not a non-negative integer`);
+      }
+    }
+    if (
+      SESSION_BYTE_FIELDS.slice(0, 5).every((field) => Number.isSafeInteger(bucket[field])) &&
+      bucket.total !==
+        bucket.css + bucket.html + bucket.img + bucket.js + bucket.other
+    ) {
+      findings.push(`session byte phase ${bucketName}.total is not derived from resource bytes`);
+    }
+  }
+  const derived = [
+    ['throughClick', ['initial', 'automaticPrefetch', 'preClickBackground']],
+    [
+      'throughDestinationPaint',
+      ['initial', 'automaticPrefetch', 'preClickBackground', 'click'],
+    ],
+    [
+      'settledSession',
+      ['initial', 'automaticPrefetch', 'preClickBackground', 'click', 'postClick'],
+    ],
+  ];
+  for (const [target, sources] of derived) {
+    for (const field of SESSION_BYTE_FIELDS) {
+      const operands = sources.map((name) => phases?.[name]?.[field]);
+      if (
+        operands.every(Number.isSafeInteger) &&
+        phases?.[target]?.[field] !== operands.reduce((sum, value) => sum + value, 0)
+      ) {
+        findings.push(`session byte phase ${target}.${field} is not derived from its phase split`);
+      }
+    }
+  }
+  return [...new Set(findings)];
+}
+
 function isPrefetchRequest(headers = {}) {
   return ['purpose', 'sec-purpose', 'next-router-prefetch'].some((name) => {
     const value = headers[name];
@@ -1925,25 +1992,88 @@ async function performanceMetrics(page) {
 }
 
 async function fixtureIntegrity(page, { expectedFramework, expectedLane }) {
-  return page.evaluate(
+  const contract = await browserFixtureRuntimeContract();
+  if (!contract.identity.complete) {
+    throw new Error(
+      `Browser fixture identity is incomplete: ${contract.identity.findings.join('; ')}`,
+    );
+  }
+  const observed = await page.evaluate(
     ({ expectedFramework, expectedLane }) => {
       const lane =
         document.querySelector('[data-benchmark-lane]')?.getAttribute('data-benchmark-lane') ??
         'default';
-      const cards = document.querySelectorAll('main .card').length;
+      const cards = [...document.querySelectorAll('main .card')];
       const linkedStyles = document.querySelectorAll('link[rel="stylesheet"]').length;
       const scripts = document.scripts.length;
       const cartControl = document.querySelector('button[aria-label^="Open cart"]');
       const expectsScripts = expectedFramework !== 'kovo' || expectedLane === 'matched-l1';
+      const firstCard = cards[0];
+      const firstImage = firstCard?.querySelector('img');
+      const nav = document.querySelector('.nav');
+      const urlPath = (value) => {
+        try {
+          return new URL(value, location.href).pathname;
+        } catch {
+          return null;
+        }
+      };
       return {
         fixtureBootstrapValid: Number(expectsScripts ? scripts > 0 : scripts === 0),
-        fixtureContentValid: Number(cards === 24),
+        fixtureContentValid: Number(cards.length === 24),
         fixtureControlsValid: Number(cartControl !== null),
         fixtureCssValid: Number(linkedStyles > 0),
         fixtureLaneValid: Number(lane === expectedLane),
         fixtureScriptCount: scripts,
+        projection: {
+          css: {
+            bodyBackground: getComputedStyle(document.body).backgroundColor,
+            bodyColor: getComputedStyle(document.body).color,
+            cardDisplay: firstCard === undefined ? null : getComputedStyle(firstCard).display,
+            cardImageAspectRatio:
+              firstImage === null || firstImage === undefined
+                ? null
+                : getComputedStyle(firstImage).aspectRatio,
+            navPosition: nav === null ? null : getComputedStyle(nav).position,
+          },
+          description: document.querySelector('.hero p')?.textContent?.trim() ?? null,
+          heading: document.querySelector('.hero h1')?.textContent?.trim() ?? null,
+          lane,
+          products: cards.map((card) => {
+            const primaryLink = card.querySelector('a[aria-label^="View "]');
+            const image = card.querySelector('img');
+            return {
+              blurb: card.querySelector('p')?.textContent?.trim() ?? null,
+              href: urlPath(primaryLink?.getAttribute('href')),
+              img: urlPath(image?.getAttribute('src')),
+              name: card.querySelector('h2, h3')?.textContent?.trim() ?? null,
+              price: card.querySelector('.price')?.textContent?.trim() ?? null,
+              viewLabel: primaryLink?.getAttribute('aria-label') ?? null,
+            };
+          }),
+          shell: {
+            brand: document.querySelector('.brand')?.textContent?.trim() ?? null,
+            cartDescription:
+              document.querySelector('[role="dialog"] header p')?.textContent?.trim() ?? null,
+            cartLabel: cartControl?.getAttribute('aria-label') ?? null,
+            cartText: cartControl?.textContent?.trim() ?? null,
+          },
+        },
       };
     },
     { expectedFramework, expectedLane },
   );
+  const evidence = renderedBrowserFixtureEvidence(observed.projection, contract, {
+    lane: expectedLane,
+  });
+  const { projection: _projection, ...scalars } = observed;
+  return {
+    ...scalars,
+    fixtureEvidenceDigest: evidence.observedDigest,
+    fixtureEvidenceValid: Number(evidence.validated),
+    fixtureIdentityDigest: contract.identity.digest,
+    fixtureIdentitySchema: contract.identity.schema,
+    fixtureRenderedContractDigest: evidence.expectedDigest,
+    fixtureRenderedEvidenceSchema: evidence.schema,
+  };
 }

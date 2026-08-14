@@ -8,9 +8,19 @@ import { describe, expect, it } from 'vitest';
 import { canonicalJson } from '../scripts/lib/perf-host.mjs';
 import { performanceHostFingerprint } from '../scripts/lib/perf-host.mjs';
 import { devSessionHandoffFindings } from '../scripts/lib/perf-dev-session-evidence.mjs';
+import { analyzeNavigationAttribution, sessionBytePhases } from './harness/scenarios.mjs';
+import {
+  BROWSER_FIXTURE_RENDERED_EVIDENCE_SCHEMA,
+  browserFixtureIdentity,
+} from './browser-fixture-identity.mjs';
+import {
+  MATCHED_SERVER_SEMANTIC_SOURCE,
+  matchedServerSemanticContract,
+} from './shared/server-semantic-contract.mjs';
 
 import {
   bootstrapMedianCi,
+  browserRawMetricCensusFindings,
   browserReportIntegrityFindings,
   classifyServerMatrixCells,
   COMPARE_ADAPTER_FAILURE_SCHEMA,
@@ -24,6 +34,9 @@ import {
   runComparison,
   runDevComparisonAdapterCell,
   serverSampleSchedule,
+  serverRawMetricCensusFindings,
+  serverSemanticEvidenceFindings,
+  serverSemanticMatrixFindings,
   summarize,
   ttiInteractionProof,
   validateDevCell,
@@ -222,6 +235,17 @@ describe('serialized comparison analysis', () => {
       },
     });
     expect(workload.digest).toMatch(/^sha256:[0-9a-f]{64}$/u);
+    expect(workload.identity.fixture).toMatchObject({
+      digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
+      schema: 'kovo-browser-fixture-identity/v1',
+    });
+    expect(workload.identity.serverSemantic).toMatchObject({
+      contracts: {
+        detail: { sha256: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u) },
+        listing: { sha256: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u) },
+      },
+      source: MATCHED_SERVER_SEMANTIC_SOURCE,
+    });
     expect(workload.digest).toBe(
       `sha256:${createHash('sha256').update(canonicalJson(workload.identity)).digest('hex')}`,
     );
@@ -497,6 +521,7 @@ describe('serialized comparison analysis', () => {
         identityResponse: { bodySha256: bodyDigest, status: 200 },
         requestAcceptEncoding: 'br',
         requestIfNoneMatch: null,
+        semanticContent: serverSemanticEvidence(bodyDigest, 'listing'),
         selectedResponse: {
           bodySha256: bodyDigest,
           contentEncoding: null,
@@ -596,6 +621,39 @@ describe('serialized comparison analysis', () => {
     ).toBe(true);
   });
 
+  it('binds cold fixture proof to the exact workload and rendered-contract digests', async () => {
+    const fixture = await browserFixtureIdentity();
+    const lane = 'matched-l1';
+    const digest = fixture.identity.renderedContracts[lane].digest;
+    const sample = {
+      fixtureBootstrapValid: 1,
+      fixtureContentValid: 1,
+      fixtureControlsValid: 1,
+      fixtureCssValid: 1,
+      fixtureEvidenceDigest: digest,
+      fixtureEvidenceValid: 1,
+      fixtureIdentityDigest: fixture.digest,
+      fixtureIdentitySchema: fixture.schema,
+      fixtureLaneValid: 1,
+      fixtureRenderedContractDigest: digest,
+      fixtureRenderedEvidenceSchema: BROWSER_FIXTURE_RENDERED_EVIDENCE_SCHEMA,
+      fixtureScriptCount: 1,
+    };
+    const workloadFixture = {
+      digest: fixture.digest,
+      identity: fixture.identity,
+      schema: fixture.schema,
+    };
+    expect(fixtureProof(sample, { framework: 'kovo', lane }, workloadFixture)).toBe(true);
+    expect(
+      fixtureProof(
+        { ...sample, fixtureEvidenceDigest: `sha256:${'0'.repeat(64)}` },
+        { framework: 'kovo', lane },
+        workloadFixture,
+      ),
+    ).toBe(false);
+  });
+
   it('accepts native default checkout without inventing matched-L1 state evidence', () => {
     expect(
       ttiInteractionProof({ checkoutConfirmed: 1, stateMutationConfirmed: 0 }, 'default'),
@@ -627,6 +685,125 @@ describe('serialized comparison analysis', () => {
       'browser integrity errors are present or unavailable',
       'browser integrity policy iterations mismatch',
     ]);
+  });
+
+  it('rejects a browser raw census with a missing cold vital or byte-phase leaf', () => {
+    const coldApp = rawBrowserCensusApp({ scenarios: ['coldLoad'] });
+    expect(
+      browserRawMetricCensusFindings(coldApp, browserCensusPolicy({ scenarios: ['coldLoad'] })),
+    ).toEqual([]);
+    delete coldApp.conditions.mobile.coldLoad.iterations[0].lcpMs;
+    expect(
+      browserRawMetricCensusFindings(coldApp, browserCensusPolicy({ scenarios: ['coldLoad'] })),
+    ).toContain('mobile/coldLoad[0] cold FCP/LCP census is incomplete');
+
+    const navigationApp = rawBrowserCensusApp({ scenarios: ['navigation'] });
+    expect(
+      browserRawMetricCensusFindings(
+        navigationApp,
+        browserCensusPolicy({ scenarios: ['navigation'] }),
+      ),
+    ).toEqual([]);
+    delete navigationApp.conditions.desktop.navigation.iterations[0].sessionBytes.click.js;
+    expect(
+      browserRawMetricCensusFindings(
+        navigationApp,
+        browserCensusPolicy({ scenarios: ['navigation'] }),
+      ),
+    ).toContain(
+      'desktop/navigation[0] session byte phase click.js is not a non-negative integer',
+    );
+  });
+
+  it('requires every raw Lighthouse metric in every declared repeat', () => {
+    const app = rawBrowserCensusApp({ lighthouseRepeats: 2, scenarios: [] });
+    const policy = browserCensusPolicy({ lighthouseRepeats: 2, scenarios: [], skipLighthouse: false });
+    expect(browserRawMetricCensusFindings(app, policy)).toEqual([]);
+    delete app.lighthouse[2].samples[1].lcpMs;
+    expect(browserRawMetricCensusFindings(app, policy)).toContain(
+      'Lighthouse[2].lcpMs raw metric census is incomplete',
+    );
+  });
+
+  it('requires every supported server throughput/latency/CPU/RSS metric and exact sample count', () => {
+    const report = {
+      samples: [
+        {
+          p50Ms: 1,
+          p95Ms: 2,
+          p99Ms: 3,
+          peakRssBytes: 10,
+          requests: 100,
+          requestsPerSecond: 50,
+          serverCpuMs: 20,
+          serverCpuPercent: 10,
+        },
+      ],
+      support: { status: 'supported' },
+    };
+    expect(
+      serverRawMetricCensusFindings(report, { samples: 1, support: 'supported' }),
+    ).toEqual([]);
+    delete report.samples[0].p99Ms;
+    expect(
+      serverRawMetricCensusFindings(report, { samples: 1, support: 'supported' }),
+    ).toContain('samples[0].p99Ms is absent');
+    expect(
+      serverRawMetricCensusFindings(
+        { samples: [], support: { status: 'unsupported' } },
+        { samples: 0, support: 'unsupported' },
+      ),
+    ).toEqual([]);
+  });
+
+  it('rejects forged server semantic evidence and cross-entrant contract drift', async () => {
+    const bodyDigest = `sha256:${'b'.repeat(64)}`;
+    const semantic = serverSemanticEvidence(bodyDigest, 'listing');
+    expect(serverSemanticEvidenceFindings({ bodySha256: bodyDigest, semanticContent: semantic }, 'listing')).toEqual([]);
+    semantic.contract.sha256 = `sha256:${'c'.repeat(64)}`;
+    expect(
+      serverSemanticEvidenceFindings({ bodySha256: bodyDigest, semanticContent: semantic }, 'listing'),
+    ).toContain('semantic contract/evidence digest is incomplete');
+
+    const fixture = await browserFixtureIdentity();
+    const workloadFixture = { digest: fixture.digest, identity: fixture.identity, schema: fixture.schema };
+    const cell = (framework, contractDigest) => {
+      const evidence = serverSemanticEvidence(bodyDigest, 'listing');
+      evidence.contract.sha256 = contractDigest;
+      evidence.evidence.sha256 = contractDigest;
+      return {
+        cell: 'server',
+        framework,
+        report: { condition: { route: 'listing' }, correctness: { semanticContent: evidence } },
+      };
+    };
+    const workload = await performanceWorkloadIdentity(
+      {
+        serverConcurrencies: [1],
+        serverDurationMs: 25,
+        serverEncodings: ['identity'],
+        serverModes: ['HIT'],
+        serverRoutes: ['listing'],
+        serverSamples: 1,
+        serverWarmupMs: 25,
+      },
+      ['server'],
+    );
+    const expectedDigest = workload.identity.serverSemantic.contracts.listing.sha256;
+    expect(
+      serverSemanticMatrixFindings(
+        [cell('kovo', expectedDigest), cell('nextjs', expectedDigest)],
+        workloadFixture,
+        { routes: ['listing'], serverSemanticIdentity: workload.identity.serverSemantic },
+      ),
+    ).toEqual([]);
+    expect(
+      serverSemanticMatrixFindings(
+        [cell('kovo', `sha256:${'d'.repeat(64)}`), cell('nextjs', `sha256:${'e'.repeat(64)}`)],
+        workloadFixture,
+        { routes: ['listing'], serverSemanticIdentity: workload.identity.serverSemantic },
+      ),
+    ).toContain('matched-runtime/server/listing cross-entrant semantic contract mismatch');
   });
 
   it('requires exact dev ready/edit counts, stable source, and clean browser evidence', () => {
@@ -1048,5 +1225,98 @@ function serverCell(framework, occurrence, requestsPerSecond) {
     mode: 'hit-listing-identity-c1',
     occurrence,
     report: { samples: [{ requestsPerSecond }] },
+  };
+}
+
+function browserCensusPolicy({ lighthouseRepeats = 0, scenarios, skipLighthouse = true }) {
+  return {
+    bfcacheIterations: 1,
+    iterations: 1,
+    lighthouseRepeats,
+    scenarios,
+    skipLighthouse,
+  };
+}
+
+function rawBrowserCensusApp({ lighthouseRepeats = 0, scenarios }) {
+  const scenario = (name) => {
+    if (!scenarios.includes(name)) return { iterations: [] };
+    if (name === 'coldLoad') return { iterations: [{ fcpMs: 10, lcpMs: 20 }] };
+    if (name === 'ttiProbe') return { iterations: [{}] };
+    return { iterations: [rawNavigationCensusSample()] };
+  };
+  const lighthouseMetrics = {
+    bytes: 100,
+    fcpMs: 10,
+    lcpMs: 20,
+    performanceScore: 1,
+    speedIndexMs: 12,
+    tbtMs: 0,
+    ttiMs: 25,
+  };
+  return {
+    bfcache: { available: true, iterations: [{}] },
+    conditions: Object.fromEntries(
+      ['desktop', 'mobile'].map((condition) => [
+        condition,
+        {
+          coldLoad: scenario('coldLoad'),
+          navigation: scenario('navigation'),
+          ttiProbe: scenario('ttiProbe'),
+        },
+      ]),
+    ),
+    lighthouse:
+      lighthouseRepeats === 0
+        ? []
+        : Array.from({ length: 4 }, () => ({
+            metrics: { ...lighthouseMetrics },
+            nullSamples: Object.fromEntries(Object.keys(lighthouseMetrics).map((name) => [name, 0])),
+            repeats: lighthouseRepeats,
+            samples: Array.from({ length: lighthouseRepeats }, () => ({ ...lighthouseMetrics })),
+            spread: Object.fromEntries(Object.keys(lighthouseMetrics).map((name) => [name, 0])),
+          })),
+  };
+}
+
+function rawNavigationCensusSample() {
+  return {
+    navAttribution: analyzeNavigationAttribution({
+      clickTsUs: 1,
+      destinationMarkTsUs: 2,
+      destinationPaintTsUs: 3,
+      epochOffsetMs: 0,
+      mainFrameId: 'main-frame',
+      networkEvents: [],
+      records: [],
+      targetPath: '/matched/l1/product/a',
+      traceEvents: [{ name: 'Paint', ts: 3 }],
+    }),
+    navPaintBoundary: 'first-traced-frame-after-destination-marker',
+    navToPaintMs: 2,
+    sessionBytes: sessionBytePhases([], {
+      clickEpochMs: 1,
+      destinationPaintEpochMs: 2,
+      initialEndEpochMs: 0,
+    }),
+  };
+}
+
+function serverSemanticEvidence(bodySha256, route) {
+  const contractDigest = `sha256:${createHash('sha256')
+    .update(canonicalJson(matchedServerSemanticContract(route)))
+    .digest('hex')}`;
+  return {
+    contract: {
+      schema: 'kovo-matched-server-semantic-contract/v1',
+      sha256: contractDigest,
+      tokenCount: 1,
+    },
+    evidence: { sha256: contractDigest, tokenCount: 1 },
+    identityBodySha256: bodySha256,
+    route,
+    schema: 'kovo-matched-server-semantic-evidence/v1',
+    source: structuredClone(MATCHED_SERVER_SEMANTIC_SOURCE),
+    validated: true,
   };
 }

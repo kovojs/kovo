@@ -2,7 +2,21 @@
 import { readArg, readIntegerArg } from './args.mjs';
 import { bfcacheIterationFindings, runBfcacheProbe } from './bfcache.mjs';
 import { DEFAULT_LIGHTHOUSE_REPEATS, runLighthouse } from './lighthouse.mjs';
-import { navigationAttributionFindings, runScenarios } from './scenarios.mjs';
+import {
+  navigationAttributionFindings,
+  runScenarios,
+  sessionBytePhaseFindings,
+} from './scenarios.mjs';
+
+const LIGHTHOUSE_METRIC_KEYS = Object.freeze([
+  'bytes',
+  'fcpMs',
+  'lcpMs',
+  'performanceScore',
+  'speedIndexMs',
+  'tbtMs',
+  'ttiMs',
+]);
 
 export async function runAppBenchmark({
   app,
@@ -109,6 +123,27 @@ export function summarizeAppBenchmarkIntegrity(
           for (const finding of navigationAttributionFindings(sample.navAttribution)) {
             errors.push(`${conditionName}/${scenarioName}[${String(index)}]: ${finding}`);
           }
+          for (const finding of sessionBytePhaseFindings(sample.sessionBytes)) {
+            errors.push(`${conditionName}/${scenarioName}[${String(index)}]: ${finding}`);
+          }
+        } else {
+          if (
+            sample.fixtureEvidenceValid !== 1 ||
+            !/^sha256:[0-9a-f]{64}$/u.test(sample.fixtureIdentityDigest ?? '') ||
+            sample.fixtureEvidenceDigest !== sample.fixtureRenderedContractDigest
+          ) {
+            errors.push(
+              `${conditionName}/${scenarioName}[${String(index)}]: fixture identity proof is incomplete`,
+            );
+          }
+          if (
+            scenarioName === 'coldLoad' &&
+            (!Number.isFinite(sample.fcpMs) || !Number.isFinite(sample.lcpMs))
+          ) {
+            errors.push(
+              `${conditionName}/${scenarioName}[${String(index)}]: cold FCP/LCP metric is absent`,
+            );
+          }
         }
       }
     }
@@ -146,10 +181,21 @@ export function summarizeAppBenchmarkIntegrity(
     if (cell.repeats !== lighthouseRepeats || cell.samples?.length !== lighthouseRepeats) {
       errors.push(`lighthouse[${String(index)}]: repeat policy mismatch`);
     }
-    if (Object.values(cell.nullSamples ?? {}).some((value) => value !== 0)) {
+    if (
+      Object.keys(cell.nullSamples ?? {}).sort().join(',') !==
+        [...LIGHTHOUSE_METRIC_KEYS].sort().join(',') ||
+      LIGHTHOUSE_METRIC_KEYS.some((name) => cell.nullSamples?.[name] !== 0)
+    ) {
       errors.push(`lighthouse[${String(index)}]: null metric samples were observed`);
     }
-    if (Object.values(cell.metrics ?? {}).some((value) => !Number.isFinite(value))) {
+    if (
+      LIGHTHOUSE_METRIC_KEYS.some(
+        (name) =>
+          !Number.isFinite(cell.metrics?.[name]) ||
+          !Number.isFinite(cell.spread?.[name]) ||
+          (cell.samples ?? []).some((sample) => !Number.isFinite(sample?.[name])),
+      )
+    ) {
       errors.push(`lighthouse[${String(index)}]: aggregate metric is absent`);
     }
     if (

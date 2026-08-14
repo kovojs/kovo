@@ -10,8 +10,24 @@ import { fileURLToPath } from 'node:url';
 import { parseIntegerFlag, readArg, readIntegerArg } from './harness/args.mjs';
 import { bfcacheIterationFindings } from './harness/bfcache.mjs';
 import { BROWSER_BENCHMARK_SCHEMA } from './harness/schema.mjs';
+import {
+  navigationAttributionFindings,
+  sessionBytePhaseFindings,
+} from './harness/scenarios.mjs';
+import {
+  BROWSER_FIXTURE_IDENTITY_SCHEMA,
+  BROWSER_FIXTURE_RENDERED_EVIDENCE_SCHEMA,
+  browserFixtureIdentity,
+} from './browser-fixture-identity.mjs';
 import { DEV_PORT_ALLOCATION_POSTURE, DEV_SESSION_PORT_STRIDE } from './corpora/generate.mjs';
 import { DEFAULT_DEV_PORT_BASE } from './harness/dev-port-allocation.mjs';
+import {
+  MATCHED_SERVER_SEMANTIC_CONTRACT_SCHEMA,
+  MATCHED_SERVER_SEMANTIC_EVIDENCE_SCHEMA,
+  MATCHED_SERVER_SEMANTIC_SOURCE,
+  MATCHED_SERVER_SEMANTIC_SOURCE_SCHEMA,
+  matchedServerSemanticContract,
+} from './shared/server-semantic-contract.mjs';
 import {
   canonicalJson,
   PERF_HOST_SCHEMA,
@@ -42,6 +58,15 @@ export const WORKLOAD_IDENTITY_SCHEMA = 'kovo-performance-workload-identity/v1';
 
 const DEV_EDIT_CLASSES = Object.freeze(['leaf', 'entry', 'data', 'syntaxError', 'recovery']);
 const DEV_LOOP_REPORT_SCHEMA = 'kovo-dev-loop-report/v1';
+const LIGHTHOUSE_METRIC_KEYS = Object.freeze([
+  'bytes',
+  'fcpMs',
+  'lcpMs',
+  'performanceScore',
+  'speedIndexMs',
+  'tbtMs',
+  'ttiMs',
+]);
 const MAX_COMPARISON_RAW_REPORT_BYTES = 64 * 1024 * 1024;
 const DEFAULT_HOST_SETTLE_MAX_MS = 30_000;
 const DEFAULT_HOST_SETTLE_POLL_MS = 1_000;
@@ -468,6 +493,7 @@ export async function runComparison(options = {}) {
           devPortBase,
           devReadyIterations: options.devReadyIterations ?? 15,
           devWarmups: options.devWarmups ?? 3,
+          fixtureIdentity: workloadIdentity.identity.fixture,
           iterations,
           lanes: options.lanes ?? lanes,
           lighthouseRuns: options.lighthouseRuns ?? 5,
@@ -481,6 +507,7 @@ export async function runComparison(options = {}) {
           serverPreparation,
           serverRoutes: options.serverRoutes ?? SERVER_ROUTES,
           serverSamples: options.serverSamples ?? 7,
+          serverSemanticIdentity: workloadIdentity.identity.serverSemantic,
           serverWarmupMs: options.serverWarmupMs ?? 5_000,
           skipLighthouse: options.skipLighthouse === true,
           source: provenance,
@@ -1422,6 +1449,7 @@ async function comparatorIntegrity(cells, policy) {
             bfcache: Math.max(1, bfcacheCounts[occurrence.occurrence]),
             lighthouse: Math.max(1, lighthouseCounts[occurrence.occurrence]),
             measured: expectedSamples,
+            fixtureIdentity: policy.fixtureIdentity,
             reasons,
             skipLighthouse: policy.skipLighthouse,
             warmups: warmupCounts[occurrence.occurrence],
@@ -1481,6 +1509,12 @@ async function comparatorIntegrity(cells, policy) {
       samples: policy.serverSamples,
     });
     reasons.push(...serverMatrix.findings);
+    reasons.push(
+      ...serverSemanticMatrixFindings(cells, policy.fixtureIdentity, {
+        routes: policy.serverRoutes,
+        serverSemanticIdentity: policy.serverSemanticIdentity,
+      }),
+    );
   }
 
   const corpusDigests = {};
@@ -1498,6 +1532,15 @@ async function comparatorIntegrity(cells, policy) {
     }
     if (!corpusDigests.kovo || corpusDigests.kovo !== corpusDigests.nextjs) {
       reasons.push('Kovo/Next corpus shapeDigest mismatch');
+    }
+  }
+  if (policy.cells.includes('browser') || policy.cells.includes('server')) {
+    if (
+      policy.fixtureIdentity?.schema !== BROWSER_FIXTURE_IDENTITY_SCHEMA ||
+      policy.fixtureIdentity?.identity?.schema !== BROWSER_FIXTURE_IDENTITY_SCHEMA ||
+      policy.fixtureIdentity?.digest !== comparisonSha256(canonicalJson(policy.fixtureIdentity?.identity))
+    ) {
+      reasons.push('capability-matched fixture workload identity is incomplete');
     }
   }
   if (policy.cells.includes('browser')) {
@@ -1721,6 +1764,18 @@ export function validateServerCell(cell, expected) {
   if (report?.condition?.key !== cell.mode)
     expected.reasons.push(`${key} condition identity mismatch`);
   const unsupported = report?.support?.status === 'unsupported';
+  for (const finding of serverRawMetricCensusFindings(report, {
+    samples: unsupported ? 0 : 1,
+    support: unsupported ? 'unsupported' : 'supported',
+  })) {
+    expected.reasons.push(`${key} ${finding}`);
+  }
+  for (const finding of serverSemanticEvidenceFindings(
+    report?.correctness,
+    report?.condition?.route,
+  )) {
+    expected.reasons.push(`${key} ${finding}`);
+  }
   if (unsupported) {
     const correctness = report?.correctness;
     if (
@@ -1818,6 +1873,140 @@ export function validateServerCell(cell, expected) {
   }
 }
 
+/** Fail closed when a supported server occurrence omits any plan-owned metric. */
+export function serverRawMetricCensusFindings(report, expected) {
+  const findings = [];
+  if (report?.support?.status !== expected.support) {
+    findings.push(`support posture must be explicit ${expected.support}`);
+  }
+  if (!Array.isArray(report?.samples) || report.samples.length !== expected.samples) {
+    findings.push(`raw metric census expected ${String(expected.samples)} samples`);
+    return findings;
+  }
+  if (expected.support === 'unsupported') return findings;
+  for (const [index, sample] of report.samples.entries()) {
+    const where = `samples[${String(index)}]`;
+    for (const name of [
+      'requestsPerSecond',
+      'p50Ms',
+      'p95Ms',
+      'p99Ms',
+      'serverCpuMs',
+      'serverCpuPercent',
+      'peakRssBytes',
+    ]) {
+      if (!finiteNonNegative(sample?.[name])) findings.push(`${where}.${name} is absent`);
+    }
+    if (!(sample?.peakRssBytes > 0)) findings.push(`${where}.peakRssBytes is not positive`);
+    if (!(sample?.requests > 0)) findings.push(`${where}.requests is not positive`);
+    if (
+      finiteNonNegative(sample?.p50Ms) &&
+      finiteNonNegative(sample?.p95Ms) &&
+      finiteNonNegative(sample?.p99Ms) &&
+      !(sample.p50Ms <= sample.p95Ms && sample.p95Ms <= sample.p99Ms)
+    ) {
+      findings.push(`${where} latency quantiles are not monotone`);
+    }
+  }
+  return [...new Set(findings)];
+}
+
+export function serverSemanticEvidenceFindings(correctness, route) {
+  const semantic = correctness?.semanticContent;
+  const findings = [];
+  let expectedContractDigest = null;
+  try {
+    expectedContractDigest = comparisonSha256(canonicalJson(matchedServerSemanticContract(route)));
+  } catch {
+    findings.push('semantic route identity is unsupported');
+  }
+  if (
+    semantic?.schema !== MATCHED_SERVER_SEMANTIC_EVIDENCE_SCHEMA ||
+    semantic?.validated !== true ||
+    semantic?.route !== route ||
+    semantic?.identityBodySha256 !== correctness?.bodySha256
+  ) {
+    findings.push('semantic identity-body evidence is incomplete');
+  }
+  if (
+    semantic?.contract?.schema !== MATCHED_SERVER_SEMANTIC_CONTRACT_SCHEMA ||
+    !validSha256(semantic?.contract?.sha256) ||
+    semantic?.contract?.sha256 !== expectedContractDigest ||
+    !Number.isSafeInteger(semantic?.contract?.tokenCount) ||
+    semantic.contract.tokenCount < 1 ||
+    semantic?.evidence?.sha256 !== semantic?.contract?.sha256 ||
+    semantic?.evidence?.tokenCount !== semantic?.contract?.tokenCount
+  ) {
+    findings.push('semantic contract/evidence digest is incomplete');
+  }
+  const sourceFiles = semantic?.source?.files;
+  const expectedPaths = [
+    'benchmarks/shared/catalog.json',
+    'benchmarks/shared/matched-fixture.json',
+    'benchmarks/shared/server-semantic-contract.mjs',
+  ];
+  if (
+    semantic?.source?.schema !== MATCHED_SERVER_SEMANTIC_SOURCE_SCHEMA ||
+    !Array.isArray(sourceFiles) ||
+    sourceFiles.map((file) => file?.path).join(',') !== expectedPaths.join(',') ||
+    sourceFiles.some(
+      (file) =>
+        !Number.isSafeInteger(file?.bytes) || file.bytes < 1 || !validSha256(file?.sha256),
+    ) ||
+    semantic?.source?.sha256 !== comparisonSha256(canonicalJson(sourceFiles)) ||
+    canonicalJson(semantic?.source) !== canonicalJson(MATCHED_SERVER_SEMANTIC_SOURCE)
+  ) {
+    findings.push('semantic source identity is incomplete');
+  }
+  return findings;
+}
+
+export function serverSemanticMatrixFindings(
+  cells,
+  fixtureIdentity,
+  { routes = ['listing', 'detail'], serverSemanticIdentity } = {},
+) {
+  const findings = [];
+  const serverCells = cells.filter((cell) => cell.cell === 'server');
+  if (serverCells.length === 0) return findings;
+  const sourceDigests = new Set();
+  for (const route of routes) {
+    const routeCells = serverCells.filter((cell) => cell.report?.condition?.route === route);
+    const contracts = new Set();
+    for (const cell of routeCells) {
+      const semantic = cell.report?.correctness?.semanticContent;
+      if (validSha256(semantic?.contract?.sha256)) contracts.add(semantic.contract.sha256);
+      if (validSha256(semantic?.source?.sha256)) sourceDigests.add(semantic.source.sha256);
+    }
+    if (
+      routeCells.length === 0 ||
+      contracts.size !== 1 ||
+      !contracts.has(serverSemanticIdentity?.contracts?.[route]?.sha256)
+    ) {
+      findings.push(`matched-runtime/server/${route} cross-entrant semantic contract mismatch`);
+    }
+  }
+  if (
+    sourceDigests.size !== 1 ||
+    !sourceDigests.has(serverSemanticIdentity?.source?.sha256) ||
+    canonicalJson(serverSemanticIdentity?.source) !== canonicalJson(MATCHED_SERVER_SEMANTIC_SOURCE)
+  ) {
+    findings.push('matched-runtime/server semantic source identity mismatch');
+  }
+  const firstSource = serverCells[0]?.report?.correctness?.semanticContent?.source?.files;
+  const fixtureFiles = fixtureIdentity?.identity?.authority;
+  if (
+    !Array.isArray(firstSource) ||
+    firstSource.find(({ path: filePath }) => filePath === 'benchmarks/shared/catalog.json')
+      ?.sha256 !== fixtureFiles?.['shared/catalog.json']?.sha256 ||
+    firstSource.find(({ path: filePath }) => filePath === 'benchmarks/shared/matched-fixture.json')
+      ?.sha256 !== fixtureFiles?.['shared/matched-fixture.json']?.sha256
+  ) {
+    findings.push('matched-runtime/server semantic source does not match workload fixture identity');
+  }
+  return findings;
+}
+
 function validateBrowserCell(cell, expected) {
   if (cell.report?.schema !== BROWSER_BENCHMARK_SCHEMA)
     expected.reasons.push(`${cell.lane}/${cell.framework} browser report schema mismatch`);
@@ -1853,6 +2042,15 @@ function validateBrowserCell(cell, expected) {
   })) {
     expected.reasons.push(`${cell.lane}/${cell.framework} ${finding}`);
   }
+  for (const finding of browserRawMetricCensusFindings(app, {
+    bfcacheIterations: expected.bfcache,
+    iterations: expected.measured,
+    lighthouseRepeats: expected.skipLighthouse ? 0 : expected.lighthouse,
+    scenarios: selectedScenarios,
+    skipLighthouse: expected.skipLighthouse,
+  })) {
+    expected.reasons.push(`${cell.lane}/${cell.framework} ${finding}`);
+  }
   try {
     if (new URL(app?.origin).hostname !== 'localhost')
       expected.reasons.push(`${cell.lane}/${cell.framework} hostname mismatch`);
@@ -1877,7 +2075,10 @@ function validateBrowserCell(cell, expected) {
         );
         continue;
       }
-      if (scenarioName === 'coldLoad' && samples.some((sample) => !fixtureProof(sample, cell))) {
+      if (
+        scenarioName === 'coldLoad' &&
+        samples.some((sample) => !fixtureProof(sample, cell, expected.fixtureIdentity))
+      ) {
         expected.reasons.push(
           `${cell.lane}/${cell.framework}/${conditionName} fixture proof failed`,
         );
@@ -1898,6 +2099,8 @@ function validateBrowserCell(cell, expected) {
             !Number.isFinite(sample.navToPaintMs) ||
             !Number.isFinite(sample.traceMarkerEpochSkewMs) ||
             Math.abs(sample.traceMarkerEpochSkewMs) > 250 ||
+            navigationAttributionFindings(sample.navAttribution).length > 0 ||
+            sessionBytePhaseFindings(sample.sessionBytes).length > 0 ||
             !Number.isFinite(sample.sessionBytes?.throughClick?.total) ||
             !Number.isFinite(sample.sessionBytes?.throughDestinationPaint?.total),
         )
@@ -2001,24 +2204,125 @@ export function browserReportIntegrityFindings(app, expected) {
   return findings;
 }
 
+/**
+ * Exact raw browser metric census owned by plans/good-perf.md. Generic numeric flattening is for
+ * analysis only; it cannot establish that a required metric was measured in every raw sample.
+ */
+export function browserRawMetricCensusFindings(app, expected) {
+  const findings = [];
+  const selectedScenarios = new Set(expected.scenarios);
+  for (const conditionName of ['desktop', 'mobile']) {
+    const condition = app?.conditions?.[conditionName];
+    if (!condition) {
+      findings.push(`${conditionName} condition is absent from the raw metric census`);
+      continue;
+    }
+    for (const scenarioName of ['coldLoad', 'ttiProbe', 'navigation']) {
+      const samples = condition?.[scenarioName]?.iterations;
+      const expectedCount = selectedScenarios.has(scenarioName) ? expected.iterations : 0;
+      if (!Array.isArray(samples) || samples.length !== expectedCount) {
+        findings.push(
+          `${conditionName}/${scenarioName} raw metric census expected ${String(expectedCount)} samples`,
+        );
+        continue;
+      }
+      for (const [index, sample] of samples.entries()) {
+        const where = `${conditionName}/${scenarioName}[${String(index)}]`;
+        if (
+          scenarioName === 'coldLoad' &&
+          (!finiteNonNegative(sample?.fcpMs) || !finiteNonNegative(sample?.lcpMs))
+        ) {
+          findings.push(`${where} cold FCP/LCP census is incomplete`);
+        }
+        if (scenarioName === 'navigation') {
+          if (
+            sample?.navPaintBoundary !== 'first-traced-frame-after-destination-marker' ||
+            !finiteNonNegative(sample?.navToPaintMs)
+          ) {
+            findings.push(`${where} navigation-to-paint census is incomplete`);
+          }
+          for (const finding of navigationAttributionFindings(sample?.navAttribution)) {
+            findings.push(`${where} ${finding}`);
+          }
+          for (const finding of sessionBytePhaseFindings(sample?.sessionBytes)) {
+            findings.push(`${where} ${finding}`);
+          }
+        }
+      }
+    }
+  }
+
+  const lighthouse = app?.lighthouse;
+  if (expected.skipLighthouse) {
+    if (!Array.isArray(lighthouse) || lighthouse.length !== 0) {
+      findings.push('unexpected Lighthouse raw metric cells');
+    }
+  } else if (!Array.isArray(lighthouse) || lighthouse.length !== 4) {
+    findings.push('Lighthouse raw metric census expected four cells');
+  } else {
+    for (const [index, cell] of lighthouse.entries()) {
+      const where = `Lighthouse[${String(index)}]`;
+      if (cell?.repeats !== expected.lighthouseRepeats || cell?.samples?.length !== expected.lighthouseRepeats) {
+        findings.push(`${where} raw sample count mismatch`);
+        continue;
+      }
+      for (const name of LIGHTHOUSE_METRIC_KEYS) {
+        if (
+          !finiteNonNegative(cell.metrics?.[name]) ||
+          !finiteNonNegative(cell.spread?.[name]) ||
+          cell.nullSamples?.[name] !== 0 ||
+          cell.samples.some((sample) => !finiteNonNegative(sample?.[name]))
+        ) {
+          findings.push(`${where}.${name} raw metric census is incomplete`);
+        }
+      }
+    }
+  }
+  if (app?.bfcache?.available !== true || app?.bfcache?.iterations?.length !== expected.bfcacheIterations) {
+    findings.push(
+      `bfcache raw metric census expected ${String(expected.bfcacheIterations)} traversals`,
+    );
+  }
+  return [...new Set(findings)];
+}
+
 export { validateDevCell };
 
-function fixtureProof(sample, cell) {
+function fixtureProof(sample, cell, fixtureIdentity) {
   const expectedScripts =
     cell.framework === 'kovo' && cell.lane !== 'matched-l1'
       ? sample.fixtureScriptCount === 0
       : sample.fixtureScriptCount > 0;
+  const renderedContractDigest = fixtureIdentity?.identity?.renderedContracts?.[cell.lane]?.digest;
+  const identityProof =
+    fixtureIdentity === undefined ||
+    (fixtureIdentity?.schema === BROWSER_FIXTURE_IDENTITY_SCHEMA &&
+      sample.fixtureIdentitySchema === BROWSER_FIXTURE_IDENTITY_SCHEMA &&
+      sample.fixtureRenderedEvidenceSchema === BROWSER_FIXTURE_RENDERED_EVIDENCE_SCHEMA &&
+      sample.fixtureIdentityDigest === fixtureIdentity.digest &&
+      sample.fixtureEvidenceValid === 1 &&
+      sample.fixtureEvidenceDigest === renderedContractDigest &&
+      sample.fixtureRenderedContractDigest === renderedContractDigest);
   return (
     sample.fixtureBootstrapValid === 1 &&
     sample.fixtureContentValid === 1 &&
     sample.fixtureControlsValid === 1 &&
     sample.fixtureCssValid === 1 &&
     sample.fixtureLaneValid === 1 &&
-    expectedScripts
+    expectedScripts &&
+    identityProof
   );
 }
 
 export { fixtureProof };
+
+function finiteNonNegative(value) {
+  return Number.isFinite(value) && value >= 0;
+}
+
+function validSha256(value) {
+  return /^sha256:[0-9a-f]{64}$/u.test(value ?? '');
+}
 
 export function ttiInteractionProof(sample, lane) {
   return (
@@ -2060,6 +2364,34 @@ export async function performanceWorkloadIdentity(
     : [];
   const corpus = {};
   let complete = true;
+  const serverSemantic = cells.includes('server')
+    ? {
+        contracts: Object.fromEntries(
+          ['listing', 'detail'].map((route) => [
+            route,
+            {
+              schema: MATCHED_SERVER_SEMANTIC_CONTRACT_SCHEMA,
+              sha256: comparisonSha256(canonicalJson(matchedServerSemanticContract(route))),
+            },
+          ]),
+        ),
+        source: MATCHED_SERVER_SEMANTIC_SOURCE,
+      }
+    : null;
+  let fixture = null;
+  if (cells.includes('browser') || cells.includes('server')) {
+    try {
+      const fixtureResult = await browserFixtureIdentity();
+      fixture = {
+        digest: fixtureResult.digest,
+        identity: fixtureResult.identity,
+        schema: fixtureResult.schema,
+      };
+      if (!fixtureResult.complete) complete = false;
+    } catch {
+      complete = false;
+    }
+  }
   if (cells.includes('dev') || cells.includes('build')) {
     for (const framework of ['kovo', 'nextjs']) {
       try {
@@ -2098,6 +2430,7 @@ export async function performanceWorkloadIdentity(
     },
     cells: [...cells],
     corpus,
+    fixture,
     lanes: workloadLanes(options, cells, corpusSize),
     policies: {
       bfcacheIterations: options.bfcacheIterations ?? 10,
@@ -2134,10 +2467,30 @@ export async function performanceWorkloadIdentity(
       },
       warmups: options.warmups ?? 3,
     },
+    serverSemantic,
   };
   if (
     (cells.includes('dev') || cells.includes('build')) &&
     corpus.kovo?.shapeDigest !== corpus.nextjs?.shapeDigest
+  ) {
+    complete = false;
+  }
+  if (
+    cells.includes('server') &&
+    (canonicalJson(serverSemantic?.source) !== canonicalJson(MATCHED_SERVER_SEMANTIC_SOURCE) ||
+      ['listing', 'detail'].some(
+        (route) =>
+          serverSemantic?.contracts?.[route]?.sha256 !==
+          comparisonSha256(canonicalJson(matchedServerSemanticContract(route))),
+      ))
+  ) {
+    complete = false;
+  }
+  if (
+    (cells.includes('browser') || cells.includes('server')) &&
+    (fixture?.schema !== BROWSER_FIXTURE_IDENTITY_SCHEMA ||
+      !/^sha256:[0-9a-f]{64}$/u.test(fixture?.digest ?? '') ||
+      fixture?.identity?.schema !== BROWSER_FIXTURE_IDENTITY_SCHEMA)
   ) {
     complete = false;
   }

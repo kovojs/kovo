@@ -4,6 +4,7 @@ import {
   analyzeNavigationAttribution,
   navigationAttributionFindings,
   sessionBytePhases,
+  sessionBytePhaseFindings,
   summarizeIterations,
 } from './scenarios.mjs';
 
@@ -51,6 +52,24 @@ describe('benchmark scenario analysis', () => {
     expect(phases.throughClick.total).toBe(600);
     expect(phases.throughDestinationPaint.total).toBe(1_000);
     expect(phases.settledSession.total).toBe(1_500);
+    expect(sessionBytePhaseFindings(phases)).toEqual([]);
+  });
+
+  it('rejects omitted, non-finite, and non-derived session byte census leaves', () => {
+    const phases = sessionBytePhases(
+      [request({ bytes: 100, resourceType: 'document', startedEpochMs: 1_000 })],
+      { clickEpochMs: 2_000, destinationPaintEpochMs: 2_500, initialEndEpochMs: 1_500 },
+    );
+    delete phases.click.js;
+    phases.initial.total = 99;
+    phases.throughDestinationPaint.requests = 2;
+    expect(sessionBytePhaseFindings(phases)).toEqual(
+      expect.arrayContaining([
+        'session byte phase click.js is not a non-negative integer',
+        'session byte phase initial.total is not derived from resource bytes',
+        'session byte phase throughDestinationPaint.requests is not derived from its phase split',
+      ]),
+    );
   });
 
   it('attributes only request and trace phases that Chromium directly observes', () => {
