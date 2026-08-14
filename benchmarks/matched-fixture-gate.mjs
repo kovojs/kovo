@@ -18,7 +18,10 @@ const partsMediaType = 'application/vnd.kovo.document-parts+json';
  * links, assets, controls, CSS facts, state transitions, and detail routes actually survive each
  * framework's production pipeline.
  */
-export async function runMatchedFixtureGate({ build = true, frameworks = ['kovo', 'nextjs'] } = {}) {
+export async function runMatchedFixtureGate({
+  build = true,
+  frameworks = ['kovo', 'nextjs'],
+} = {}) {
   const contract = await browserFixtureRuntimeContract();
   if (!contract.identity.complete) {
     throw new Error(
@@ -78,7 +81,11 @@ async function exerciseEntrant(entrant, contract) {
       );
     }
     const l0Dialog = page.getByRole('dialog');
-    assertEqual(await l0Dialog.isVisible(), false, `${entrant.framework} matched L0 initial dialog`);
+    assertEqual(
+      await l0Dialog.isVisible(),
+      false,
+      `${entrant.framework} matched L0 initial dialog`,
+    );
     await page.getByRole('button', { name: contract.fixture.l0.cartLabel }).click();
     await l0Dialog.waitFor({ state: 'visible' });
     await page.getByRole('button', { name: 'Close' }).click();
@@ -207,7 +214,8 @@ async function assertListing(page, contract, { basePath, lane }) {
       bodyBackground: getComputedStyle(document.body).backgroundColor,
       bodyColor: getComputedStyle(document.body).color,
       cardDisplay: card === null ? null : getComputedStyle(card).display,
-      cardImageAspectRatio: image === null || image === undefined ? null : getComputedStyle(image).aspectRatio,
+      cardImageAspectRatio:
+        image === null || image === undefined ? null : getComputedStyle(image).aspectRatio,
       navPosition: nav === null ? null : getComputedStyle(nav).position,
     };
   });
@@ -225,7 +233,11 @@ async function assertDetail(page, product, basePath) {
     `${basePath} detail marker`,
   );
   assertEqual((await page.locator('main h1').textContent())?.trim(), product.name, 'detail name');
-  assertEqual((await page.locator('.detail-copy p').textContent())?.trim(), product.blurb, 'detail blurb');
+  assertEqual(
+    (await page.locator('.detail-copy p').textContent())?.trim(),
+    product.blurb,
+    'detail blurb',
+  );
   assertEqual(
     (await page.locator('.detail-copy .price').textContent())?.trim(),
     `$${product.price.toFixed(2)}`,
@@ -305,7 +317,9 @@ async function waitForHttp(url, server, framework) {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     if (server.child.exitCode !== null) {
-      throw new Error(`Matched ${framework} server exited before readiness:\n${server.output.join('')}`);
+      throw new Error(
+        `Matched ${framework} server exited before readiness:\n${server.output.join('')}`,
+      );
     }
     try {
       const response = await fetch(url);
@@ -344,7 +358,9 @@ async function runCommand(command, args, { cwd, label, timeoutMs }) {
   );
   clearTimeout(timeout);
   if (code !== 0) {
-    throw new Error(`${label} failed (code ${String(code)}, signal ${String(signal)}):\n${output.join('')}`);
+    throw new Error(
+      `${label} failed (code ${String(code)}, signal ${String(signal)}):\n${output.join('')}`,
+    );
   }
 }
 

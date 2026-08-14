@@ -182,8 +182,9 @@ export function summarizeAppBenchmarkIntegrity(
       errors.push(`lighthouse[${String(index)}]: repeat policy mismatch`);
     }
     if (
-      Object.keys(cell.nullSamples ?? {}).sort().join(',') !==
-        [...LIGHTHOUSE_METRIC_KEYS].sort().join(',') ||
+      Object.keys(cell.nullSamples ?? {})
+        .sort()
+        .join(',') !== [...LIGHTHOUSE_METRIC_KEYS].sort().join(',') ||
       LIGHTHOUSE_METRIC_KEYS.some((name) => cell.nullSamples?.[name] !== 0)
     ) {
       errors.push(`lighthouse[${String(index)}]: null metric samples were observed`);

@@ -710,14 +710,16 @@ describe('serialized comparison analysis', () => {
         navigationApp,
         browserCensusPolicy({ scenarios: ['navigation'] }),
       ),
-    ).toContain(
-      'desktop/navigation[0] session byte phase click.js is not a non-negative integer',
-    );
+    ).toContain('desktop/navigation[0] session byte phase click.js is not a non-negative integer');
   });
 
   it('requires every raw Lighthouse metric in every declared repeat', () => {
     const app = rawBrowserCensusApp({ lighthouseRepeats: 2, scenarios: [] });
-    const policy = browserCensusPolicy({ lighthouseRepeats: 2, scenarios: [], skipLighthouse: false });
+    const policy = browserCensusPolicy({
+      lighthouseRepeats: 2,
+      scenarios: [],
+      skipLighthouse: false,
+    });
     expect(browserRawMetricCensusFindings(app, policy)).toEqual([]);
     delete app.lighthouse[2].samples[1].lcpMs;
     expect(browserRawMetricCensusFindings(app, policy)).toContain(
@@ -741,13 +743,11 @@ describe('serialized comparison analysis', () => {
       ],
       support: { status: 'supported' },
     };
-    expect(
-      serverRawMetricCensusFindings(report, { samples: 1, support: 'supported' }),
-    ).toEqual([]);
+    expect(serverRawMetricCensusFindings(report, { samples: 1, support: 'supported' })).toEqual([]);
     delete report.samples[0].p99Ms;
-    expect(
-      serverRawMetricCensusFindings(report, { samples: 1, support: 'supported' }),
-    ).toContain('samples[0].p99Ms is absent');
+    expect(serverRawMetricCensusFindings(report, { samples: 1, support: 'supported' })).toContain(
+      'samples[0].p99Ms is absent',
+    );
     expect(
       serverRawMetricCensusFindings(
         { samples: [], support: { status: 'unsupported' } },
@@ -759,14 +759,26 @@ describe('serialized comparison analysis', () => {
   it('rejects forged server semantic evidence and cross-entrant contract drift', async () => {
     const bodyDigest = `sha256:${'b'.repeat(64)}`;
     const semantic = serverSemanticEvidence(bodyDigest, 'listing');
-    expect(serverSemanticEvidenceFindings({ bodySha256: bodyDigest, semanticContent: semantic }, 'listing')).toEqual([]);
+    expect(
+      serverSemanticEvidenceFindings(
+        { bodySha256: bodyDigest, semanticContent: semantic },
+        'listing',
+      ),
+    ).toEqual([]);
     semantic.contract.sha256 = `sha256:${'c'.repeat(64)}`;
     expect(
-      serverSemanticEvidenceFindings({ bodySha256: bodyDigest, semanticContent: semantic }, 'listing'),
+      serverSemanticEvidenceFindings(
+        { bodySha256: bodyDigest, semanticContent: semantic },
+        'listing',
+      ),
     ).toContain('semantic contract/evidence digest is incomplete');
 
     const fixture = await browserFixtureIdentity();
-    const workloadFixture = { digest: fixture.digest, identity: fixture.identity, schema: fixture.schema };
+    const workloadFixture = {
+      digest: fixture.digest,
+      identity: fixture.identity,
+      schema: fixture.schema,
+    };
     const cell = (framework, contractDigest) => {
       const evidence = serverSemanticEvidence(bodyDigest, 'listing');
       evidence.contract.sha256 = contractDigest;
@@ -1271,7 +1283,9 @@ function rawBrowserCensusApp({ lighthouseRepeats = 0, scenarios }) {
         ? []
         : Array.from({ length: 4 }, () => ({
             metrics: { ...lighthouseMetrics },
-            nullSamples: Object.fromEntries(Object.keys(lighthouseMetrics).map((name) => [name, 0])),
+            nullSamples: Object.fromEntries(
+              Object.keys(lighthouseMetrics).map((name) => [name, 0]),
+            ),
             repeats: lighthouseRepeats,
             samples: Array.from({ length: lighthouseRepeats }, () => ({ ...lighthouseMetrics })),
             spread: Object.fromEntries(Object.keys(lighthouseMetrics).map((name) => [name, 0])),

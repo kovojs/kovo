@@ -59,10 +59,9 @@ describe('capability-matched benchmark fixtures', () => {
   it('fails closed on catalog, CSS, and entrant-route mutations', async () => {
     const mutatedCatalog = await createBrowserFixtureIdentity({
       overrides: {
-        'shared/catalog.json': (await readFile(new URL('./shared/catalog.json', import.meta.url), 'utf8')).replace(
-          'Linen Field Jacket',
-          'Forged Field Jacket',
-        ),
+        'shared/catalog.json': (
+          await readFile(new URL('./shared/catalog.json', import.meta.url), 'utf8')
+        ).replace('Linen Field Jacket', 'Forged Field Jacket'),
       },
     });
     expect(mutatedCatalog.complete).toBe(false);
@@ -83,10 +82,12 @@ describe('capability-matched benchmark fixtures', () => {
     const nextRoutePath = 'nextjs/app/(matched-l1)/matched/l1/page.tsx';
     const mutatedRoute = await createBrowserFixtureIdentity({
       overrides: {
-        [nextRoutePath]: (await readFile(new URL(`./${nextRoutePath.replace('nextjs/', 'nextjs/')}`, import.meta.url), 'utf8')).replace(
-          "const basePath = '/matched/l1';",
-          "const basePath = '/forged';",
-        ),
+        [nextRoutePath]: (
+          await readFile(
+            new URL(`./${nextRoutePath.replace('nextjs/', 'nextjs/')}`, import.meta.url),
+            'utf8',
+          )
+        ).replace("const basePath = '/matched/l1';", "const basePath = '/forged';"),
       },
     });
     expect(mutatedRoute.complete).toBe(false);

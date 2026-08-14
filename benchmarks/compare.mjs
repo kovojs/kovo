@@ -10,10 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { parseIntegerFlag, readArg, readIntegerArg } from './harness/args.mjs';
 import { bfcacheIterationFindings } from './harness/bfcache.mjs';
 import { BROWSER_BENCHMARK_SCHEMA } from './harness/schema.mjs';
-import {
-  navigationAttributionFindings,
-  sessionBytePhaseFindings,
-} from './harness/scenarios.mjs';
+import { navigationAttributionFindings, sessionBytePhaseFindings } from './harness/scenarios.mjs';
 import {
   BROWSER_FIXTURE_IDENTITY_SCHEMA,
   BROWSER_FIXTURE_RENDERED_EVIDENCE_SCHEMA,
@@ -1538,7 +1535,8 @@ async function comparatorIntegrity(cells, policy) {
     if (
       policy.fixtureIdentity?.schema !== BROWSER_FIXTURE_IDENTITY_SCHEMA ||
       policy.fixtureIdentity?.identity?.schema !== BROWSER_FIXTURE_IDENTITY_SCHEMA ||
-      policy.fixtureIdentity?.digest !== comparisonSha256(canonicalJson(policy.fixtureIdentity?.identity))
+      policy.fixtureIdentity?.digest !==
+        comparisonSha256(canonicalJson(policy.fixtureIdentity?.identity))
     ) {
       reasons.push('capability-matched fixture workload identity is incomplete');
     }
@@ -1950,8 +1948,7 @@ export function serverSemanticEvidenceFindings(correctness, route) {
     !Array.isArray(sourceFiles) ||
     sourceFiles.map((file) => file?.path).join(',') !== expectedPaths.join(',') ||
     sourceFiles.some(
-      (file) =>
-        !Number.isSafeInteger(file?.bytes) || file.bytes < 1 || !validSha256(file?.sha256),
+      (file) => !Number.isSafeInteger(file?.bytes) || file.bytes < 1 || !validSha256(file?.sha256),
     ) ||
     semantic?.source?.sha256 !== comparisonSha256(canonicalJson(sourceFiles)) ||
     canonicalJson(semantic?.source) !== canonicalJson(MATCHED_SERVER_SEMANTIC_SOURCE)
@@ -2002,7 +1999,9 @@ export function serverSemanticMatrixFindings(
     firstSource.find(({ path: filePath }) => filePath === 'benchmarks/shared/matched-fixture.json')
       ?.sha256 !== fixtureFiles?.['shared/matched-fixture.json']?.sha256
   ) {
-    findings.push('matched-runtime/server semantic source does not match workload fixture identity');
+    findings.push(
+      'matched-runtime/server semantic source does not match workload fixture identity',
+    );
   }
   return findings;
 }
@@ -2262,7 +2261,10 @@ export function browserRawMetricCensusFindings(app, expected) {
   } else {
     for (const [index, cell] of lighthouse.entries()) {
       const where = `Lighthouse[${String(index)}]`;
-      if (cell?.repeats !== expected.lighthouseRepeats || cell?.samples?.length !== expected.lighthouseRepeats) {
+      if (
+        cell?.repeats !== expected.lighthouseRepeats ||
+        cell?.samples?.length !== expected.lighthouseRepeats
+      ) {
         findings.push(`${where} raw sample count mismatch`);
         continue;
       }
@@ -2278,7 +2280,10 @@ export function browserRawMetricCensusFindings(app, expected) {
       }
     }
   }
-  if (app?.bfcache?.available !== true || app?.bfcache?.iterations?.length !== expected.bfcacheIterations) {
+  if (
+    app?.bfcache?.available !== true ||
+    app?.bfcache?.iterations?.length !== expected.bfcacheIterations
+  ) {
     findings.push(
       `bfcache raw metric census expected ${String(expected.bfcacheIterations)} traversals`,
     );

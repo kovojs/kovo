@@ -1870,7 +1870,15 @@ const SESSION_BYTE_BUCKETS = Object.freeze([
   'throughDestinationPaint',
   'settledSession',
 ]);
-const SESSION_BYTE_FIELDS = Object.freeze(['css', 'html', 'img', 'js', 'other', 'requests', 'total']);
+const SESSION_BYTE_FIELDS = Object.freeze([
+  'css',
+  'html',
+  'img',
+  'js',
+  'other',
+  'requests',
+  'total',
+]);
 
 /**
  * Validate the complete byte-accounting census. A missing leaf must not disappear from generic
@@ -1891,18 +1899,14 @@ export function sessionBytePhaseFindings(phases) {
     }
     if (
       SESSION_BYTE_FIELDS.slice(0, 5).every((field) => Number.isSafeInteger(bucket[field])) &&
-      bucket.total !==
-        bucket.css + bucket.html + bucket.img + bucket.js + bucket.other
+      bucket.total !== bucket.css + bucket.html + bucket.img + bucket.js + bucket.other
     ) {
       findings.push(`session byte phase ${bucketName}.total is not derived from resource bytes`);
     }
   }
   const derived = [
     ['throughClick', ['initial', 'automaticPrefetch', 'preClickBackground']],
-    [
-      'throughDestinationPaint',
-      ['initial', 'automaticPrefetch', 'preClickBackground', 'click'],
-    ],
+    ['throughDestinationPaint', ['initial', 'automaticPrefetch', 'preClickBackground', 'click']],
     [
       'settledSession',
       ['initial', 'automaticPrefetch', 'preClickBackground', 'click', 'postClick'],

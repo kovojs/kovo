@@ -6,18 +6,10 @@ import { fileURLToPath } from 'node:url';
 import { canonicalJson } from '../scripts/lib/perf-host.mjs';
 
 export const BROWSER_FIXTURE_IDENTITY_SCHEMA = 'kovo-browser-fixture-identity/v1';
-export const BROWSER_FIXTURE_RENDERED_EVIDENCE_SCHEMA =
-  'kovo-browser-fixture-rendered-evidence/v1';
+export const BROWSER_FIXTURE_RENDERED_EVIDENCE_SCHEMA = 'kovo-browser-fixture-rendered-evidence/v1';
 
 const benchmarkRoot = fileURLToPath(new URL('.', import.meta.url));
-const CATALOG_FIELDS = Object.freeze([
-  'id',
-  'slug',
-  'name',
-  'price',
-  'blurb',
-  'img',
-]);
+const CATALOG_FIELDS = Object.freeze(['id', 'slug', 'name', 'price', 'blurb', 'img']);
 const CSS_FACTS = Object.freeze({
   bodyBackground: 'rgb(247, 247, 244)',
   bodyColor: 'rgb(32, 35, 31)',
@@ -90,16 +82,19 @@ export async function createBrowserFixtureIdentity({ overrides = {}, root = benc
   const relativeFiles = fixtureSourceFiles();
   const entries = await Promise.all(
     relativeFiles.map(async (relativePath) => {
-      const source =
-        Object.hasOwn(overrides, relativePath)
-          ? String(overrides[relativePath])
-          : await readFile(path.join(root, relativePath), 'utf8');
+      const source = Object.hasOwn(overrides, relativePath)
+        ? String(overrides[relativePath])
+        : await readFile(path.join(root, relativePath), 'utf8');
       return [relativePath, source];
     }),
   );
   const sources = Object.fromEntries(entries);
   const findings = [];
-  const fixture = parseJsonSource(sources['shared/matched-fixture.json'], 'matched fixture', findings);
+  const fixture = parseJsonSource(
+    sources['shared/matched-fixture.json'],
+    'matched fixture',
+    findings,
+  );
   const catalog = parseJsonSource(sources['shared/catalog.json'], 'catalog', findings);
   const normalizedCatalog = normalizeCatalog(catalog, findings);
 
@@ -195,8 +190,12 @@ export function renderedBrowserFixtureEvidence(observed, identity, { lane }) {
 
 export async function browserFixtureRuntimeContract() {
   const result = await browserFixtureIdentity();
-  const fixture = JSON.parse(await readFile(path.join(benchmarkRoot, 'shared/matched-fixture.json'), 'utf8'));
-  const catalog = JSON.parse(await readFile(path.join(benchmarkRoot, 'shared/catalog.json'), 'utf8'));
+  const fixture = JSON.parse(
+    await readFile(path.join(benchmarkRoot, 'shared/matched-fixture.json'), 'utf8'),
+  );
+  const catalog = JSON.parse(
+    await readFile(path.join(benchmarkRoot, 'shared/catalog.json'), 'utf8'),
+  );
   return {
     catalog: normalizeCatalog(catalog, []),
     fixture,
@@ -402,12 +401,17 @@ function validateEntrantSources({ findings, fixture, normalizedCatalog, sources 
   }
   for (const text of [fixture?.brand, fixture?.listingHeading, fixture?.listingDescription]) {
     if (typeof text !== 'string') continue;
-    if (!kovoApp.includes(text)) findings.push(`Kovo source omitted shared fact ${JSON.stringify(text)}`);
+    if (!kovoApp.includes(text))
+      findings.push(`Kovo source omitted shared fact ${JSON.stringify(text)}`);
     if (!(nextContent + nextL0 + nextL1).includes(text)) {
       findings.push(`Next.js source omitted shared fact ${JSON.stringify(text)}`);
     }
   }
-  for (const text of [fixture?.l0?.cartDescription, fixture?.l0?.cartLabel, fixture?.l0?.cartText]) {
+  for (const text of [
+    fixture?.l0?.cartDescription,
+    fixture?.l0?.cartLabel,
+    fixture?.l0?.cartText,
+  ]) {
     if (typeof text !== 'string') {
       findings.push('matched L0 control facts are incomplete');
       continue;
@@ -436,7 +440,8 @@ function validateEntrantSources({ findings, fixture, normalizedCatalog, sources 
     findings.push('Next.js matched L0 native/no-client source posture is absent');
   }
   for (const state of ['count', 'email', 'open', 'ordered']) {
-    if (!new RegExp(`\\b${state}:`, 'u').test(kovoL1)) findings.push(`Kovo L1 state ${state} is absent`);
+    if (!new RegExp(`\\b${state}:`, 'u').test(kovoL1))
+      findings.push(`Kovo L1 state ${state} is absent`);
     if (!new RegExp(`\\[${state}, set${capitalize(state)}\\]`, 'u').test(nextL1)) {
       findings.push(`Next.js L1 state ${state} is absent`);
     }
@@ -450,7 +455,8 @@ function validateEntrantSources({ findings, fixture, normalizedCatalog, sources 
       findings.push(`Next.js route projection ${spec.nextPage} is absent or misbound`);
     }
   }
-  if (normalizedCatalog.length !== 24) findings.push('browser fixture catalog does not contain 24 products');
+  if (normalizedCatalog.length !== 24)
+    findings.push('browser fixture catalog does not contain 24 products');
 }
 
 function sourceShapeProjection(sources) {
@@ -513,7 +519,9 @@ function renderedFixtureContract({ catalog, fixture, lane }) {
 
 function normalizeRenderedObservation(observed, lane) {
   const normalized = {
-    css: Object.fromEntries(Object.keys(CSS_FACTS).map((name) => [name, observed?.css?.[name] ?? null])),
+    css: Object.fromEntries(
+      Object.keys(CSS_FACTS).map((name) => [name, observed?.css?.[name] ?? null]),
+    ),
     heading: observed?.heading ?? null,
     lane: observed?.lane ?? null,
     products: Array.isArray(observed?.products)
