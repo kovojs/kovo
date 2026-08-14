@@ -87,6 +87,11 @@ const staticExportReportingHeaders = {
   // negotiated on Accept (the kovo-document-parts/v1 variant), exports included.
   vary: 'Accept',
 };
+const staticExportCookiePersonalizedHeaders = {
+  'cache-control': 'private, no-store',
+  ...staticExportReportingHeaders,
+  vary: 'Accept, Cookie',
+};
 const testRenderPlanFingerprint = computeRenderPlanFingerprint({
   test: 'field:id',
 });
@@ -955,7 +960,7 @@ export const CartButton = component({
             'origin-agent-cluster': '?1',
             'permissions-policy':
               'camera=();report-to=kovo-csp, microphone=();report-to=kovo-csp, geolocation=();report-to=kovo-csp, payment=();report-to=kovo-csp, usb=();report-to=kovo-csp',
-            ...staticExportReportingHeaders,
+            ...staticExportCookiePersonalizedHeaders,
             'x-frame-options': 'DENY',
             'x-content-type-options': 'nosniff',
           },
@@ -1376,7 +1381,7 @@ export const ManifestCard = component({
             'origin-agent-cluster': '?1',
             'permissions-policy':
               'camera=();report-to=kovo-csp, microphone=();report-to=kovo-csp, geolocation=();report-to=kovo-csp, payment=();report-to=kovo-csp, usb=();report-to=kovo-csp',
-            ...staticExportReportingHeaders,
+            ...staticExportCookiePersonalizedHeaders,
             'x-frame-options': 'DENY',
             'x-content-type-options': 'nosniff',
           },
@@ -1507,7 +1512,7 @@ export const ManifestCard = component({
               'origin-agent-cluster': '?1',
               'permissions-policy':
                 'camera=();report-to=kovo-csp, microphone=();report-to=kovo-csp, geolocation=();report-to=kovo-csp, payment=();report-to=kovo-csp, usb=();report-to=kovo-csp',
-              ...staticExportReportingHeaders,
+              ...staticExportCookiePersonalizedHeaders,
               'x-frame-options': 'DENY',
               'x-content-type-options': 'nosniff',
             },
@@ -1554,7 +1559,7 @@ export const ManifestCard = component({
               'origin-agent-cluster': '?1',
               'permissions-policy':
                 'camera=();report-to=kovo-csp, microphone=();report-to=kovo-csp, geolocation=();report-to=kovo-csp, payment=();report-to=kovo-csp, usb=();report-to=kovo-csp',
-              ...staticExportReportingHeaders,
+              ...staticExportCookiePersonalizedHeaders,
               'x-frame-options': 'DENY',
               'x-content-type-options': 'nosniff',
             },
