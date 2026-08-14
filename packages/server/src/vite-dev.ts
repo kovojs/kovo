@@ -117,7 +117,6 @@ import {
   securityPromiseThen,
   securityRandomBytes,
   securityRegExpReplace,
-  securityRegExpReplaceMatches,
   securityResponseBody,
   securityResponseHeaders,
   securityResponseStatus,
@@ -126,7 +125,6 @@ import {
   securitySetAdd,
   securitySetHas,
   securityString,
-  securityStringEndsWith,
   securityStringIncludes,
   securityStringIndexOf,
   securityStringReplaceAll,
@@ -154,13 +152,13 @@ import {
 import { createNativeRequest } from './request-carrier.js';
 import { sourceDocumentHeaderIsRetained } from './source-document-headers.js';
 import { buildSecurityFunctionSource } from './build-security-intrinsics.js';
+import { admitKovoViteDevStyleNonce, admitKovoViteDevStyleNonceHeader } from './vite-dev-csp.js';
 
 const kovoHmrClientPath = '/@kovo/hmr-client';
 const kovoHmrRouteRefreshPath = '/@kovo/hmr/refresh/route';
 const kovoHmrLiveTargetRefreshPath = '/@kovo/hmr/refresh/live-targets';
 const kovoViteDevelopmentLiveTargetAttestationSecret = randomBytes(32).toString('base64url');
 const kovoHmrClientScript = `<script type="module" src="${kovoHmrClientPath}"></script>`;
-const kovoViteDevStyleDirective = /(^|;)([ \t]*style-src(?:[ \t]+[^;,]*)?)/giu;
 const kovoHmrWireInputGrammarSource = canonicalJsonStringify(FRAMEWORK_WIRE_INPUT_GRAMMAR);
 const kovoHmrWireTargetCodecSource = buildSecurityFunctionSource(createFrameworkWireTargetCodec);
 const kovoHmrTargetSnapshotReaderSource = buildSecurityFunctionSource(
@@ -2198,33 +2196,6 @@ function createKovoViteDevCspNonce(): string {
   // CSS style nodes. It must be fresh per response; a static development nonce would turn the
   // strict CSP floor into reusable inline-style authority (SPEC §6.6 rule 3 / §9.5.1).
   return securityBufferToString(securityRandomBytes(16), 'base64');
-}
-
-function admitKovoViteDevStyleNonce(policy: string, nonce: string): string {
-  const source = `'nonce-${nonce}'`;
-  if (securityStringIncludes(policy, source)) return policy;
-  const rewritten = securityRegExpReplaceMatches(policy, kovoViteDevStyleDirective, (match) => {
-    return `${match[1] ?? ''}${match[2] ?? ''} ${source}`;
-  });
-  if (rewritten !== policy) return rewritten;
-  const trimmed = securityStringTrim(policy);
-  const separator = trimmed.length === 0 || securityStringEndsWith(trimmed, ';') ? '' : ';';
-  return `${trimmed}${separator} style-src ${source}`;
-}
-
-function admitKovoViteDevStyleNonceHeader(
-  policy: unknown,
-  nonce: string,
-): string | readonly string[] | null {
-  if (typeof policy === 'string') return admitKovoViteDevStyleNonce(policy, nonce);
-  if (!securityArrayIsArray(policy)) return null;
-  const admitted: string[] = [];
-  for (let index = 0; index < policy.length; index += 1) {
-    const member = witnessReflectGet(policy, index);
-    if (typeof member !== 'string') return null;
-    securityArrayPush(admitted, admitKovoViteDevStyleNonce(member, nonce));
-  }
-  return admitted;
 }
 
 /** @internal Exact dev-client source; exported for in-repo security execution tests. */

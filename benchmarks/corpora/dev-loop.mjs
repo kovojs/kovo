@@ -52,7 +52,7 @@ import {
 } from './generate.mjs';
 
 export const DEV_LOOP_REPORT_SCHEMA = 'kovo-dev-loop-report/v1';
-export const DEV_SESSION_HANDOFF_SCHEMA = 'kovo-dev-session-handoff/v1';
+export const DEV_SESSION_HANDOFF_SCHEMA = 'kovo-dev-session-handoff/v2';
 export const DEV_SOCKET_OWNER_EVIDENCE_SCHEMA = 'kovo-dev-socket-owner-evidence/v1';
 
 const EDIT_CLASSES = Object.freeze(['leaf', 'entry', 'data']);
@@ -149,6 +149,7 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
   const versions = await collectEntrantVersions(appRoot, manifest.framework, command);
   const report = createReportSkeleton({
     command,
+    inspectorPort: normalized.diagnosticProfile?.inspectorPort ?? null,
     execution,
     iterations: normalized.iterations,
     manifest,
@@ -161,17 +162,30 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
     versions,
     warmups: normalized.warmups,
   });
-  report.integrity.portAllocation = await (
-    dependencies.inspectPortAllocation ?? inspectDevPortAllocation
-  )(
+  const expectedInspectorPorts =
+    normalized.diagnosticProfile === null ? [] : [normalized.diagnosticProfile.inspectorPort];
+  const rawPortAllocation = await (dependencies.inspectPortAllocation ?? inspectDevPortAllocation)(
     {
       basePort: normalized.port,
-      inspectorPorts:
-        normalized.diagnosticProfile === null ? [] : [normalized.diagnosticProfile.inspectorPort],
+      inspectorPorts: expectedInspectorPorts,
       ports: sessionPorts,
     },
     dependencies.portAllocationDependencies ?? {},
   );
+  let portAllocationValidated = false;
+  try {
+    report.integrity.portAllocation = validateDevPortAllocationEvidence(rawPortAllocation, {
+      basePort: normalized.port,
+      inspectorPorts: expectedInspectorPorts,
+      ports: sessionPorts,
+    });
+    portAllocationValidated = true;
+  } catch (error) {
+    report.integrity.portAllocation = rawPortAllocation;
+    report.integrity.errors.push(
+      `dev port allocation evidence failed cross-field validation: ${errorMessage(error)}`,
+    );
+  }
   report.integrity.corpus.beforeVerified = true;
   for (const finding of sourceStabilityFindings(source)) report.integrity.errors.push(finding);
   const originalSources = await readOriginalSources(manifestEvidence);
@@ -181,7 +195,7 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
   let sessionSeriesAborted = false;
 
   try {
-    if (!report.integrity.portAllocation.complete) {
+    if (!portAllocationValidated || !report.integrity.portAllocation.complete) {
       throw new Error(
         `dev port allocation preflight refused timing: ${report.integrity.portAllocation.errors.join('; ')}`,
       );
@@ -538,9 +552,11 @@ async function measureEditSession({
     if (diagnosticProfile !== null) {
       profiler = await createDiagnosticProfiler({
         appRoot,
+        expectedPid: session.pid,
         framework: manifest.framework,
         inspectorPort: diagnosticProfile.inspectorPort,
         modules: manifest.modules,
+        processMarker: session.processMarker,
         profileDir: diagnosticProfile.profileDir,
         repoRoot,
       });
@@ -616,6 +632,8 @@ async function measureEditSession({
       lifecycle,
       logTail: session.logTail(),
       peakRssBytes: rssEvidence.peakRssBytes,
+      pid: session.pid,
+      processMarkerSha256: sha256(session.processMarker),
       readinessProbe,
       rssSamples: rssEvidence.sampleCount,
     },
@@ -1420,6 +1438,101 @@ export async function inspectDevSessionHandoff(options, dependencies = {}) {
         : sha256(validateProcessMarker(options.priorProcessMarker)),
     to: options.targetSession,
   });
+  const inspectorOrigin =
+    options.inspectorPort === null || options.inspectorPort === undefined
+      ? null
+      : `http://localhost:${String(
+          boundedInteger(options.inspectorPort, 1_024, 65_535, 'Inspector handoff port'),
+        )}`;
+  if (inspectorOrigin !== null && new URL(origin).port === new URL(inspectorOrigin).port) {
+    throw new TypeError('Inspector handoff port must differ from the dev origin port');
+  }
+  const [primary, inspector] = await Promise.all([
+    inspectPreSpawnPortFence(
+      { label: 'dev origin', origin, priorProcessMarker: options.priorProcessMarker ?? null },
+      dependencies,
+    ),
+    inspectorOrigin === null
+      ? null
+      : inspectPreSpawnPortFence(
+          {
+            label: 'Inspector',
+            origin: inspectorOrigin,
+            priorProcessMarker: options.priorProcessMarker ?? null,
+          },
+          dependencies,
+        ),
+  ]);
+  const complete = primary.complete && (inspector === null || inspector.complete);
+  const reasons = [primary, inspector]
+    .filter((fence) => fence !== null && !fence.complete)
+    .map((fence) => fence.error);
+  const evidence = {
+    attribution,
+    available: primary.available,
+    check: primary.check,
+    complete,
+    error: complete
+      ? null
+      : boundedEvidenceMessage(
+          `dev pre-spawn handoff ${attribution.from ?? 'initial'} -> ${attribution.to} refused: ${reasons.join('; ')}; no process was spawned`,
+        ),
+    inspector,
+    origin,
+    schema: DEV_SESSION_HANDOFF_SCHEMA,
+    socketEvidence: primary.socketEvidence,
+  };
+  return validateDevSessionHandoffEvidence(evidence);
+}
+
+export function validateDevSessionHandoffEvidence(value) {
+  if (value === null || typeof value !== 'object' || value.schema !== DEV_SESSION_HANDOFF_SCHEMA) {
+    throw new TypeError('dev pre-spawn handoff evidence has an unsupported schema');
+  }
+  const attribution = validateHandoffAttribution(value.attribution);
+  const primary = validatePreSpawnPortFence({
+    available: value.available,
+    check: value.check,
+    complete: value.available,
+    error: value.available ? null : 'primary handoff unavailable',
+    origin: value.origin,
+    socketEvidence: value.socketEvidence,
+  });
+  const inspector =
+    value.inspector === null ? null : validatePreSpawnPortFence(value.inspector, 'Inspector');
+  if (
+    inspector !== null &&
+    (new URL(inspector.origin).protocol !== 'http:' ||
+      new URL(inspector.origin).hostname !== 'localhost' ||
+      new URL(inspector.origin).port === new URL(primary.origin).port)
+  ) {
+    throw new TypeError('Inspector handoff origin is not the distinct exact loopback allocation');
+  }
+  const complete = primary.complete && (inspector === null || inspector.complete);
+  if (typeof value.complete !== 'boolean' || value.complete !== complete) {
+    throw new TypeError('dev pre-spawn handoff completion disagrees with its port fences');
+  }
+  if (
+    (value.complete && value.error !== null) ||
+    (!value.complete && !boundedEvidenceString(value.error))
+  ) {
+    throw new TypeError('dev pre-spawn handoff error posture is malformed');
+  }
+  return {
+    attribution,
+    available: primary.available,
+    check: primary.check,
+    complete: value.complete,
+    error: value.error,
+    inspector,
+    origin: primary.origin,
+    schema: DEV_SESSION_HANDOFF_SCHEMA,
+    socketEvidence: primary.socketEvidence,
+  };
+}
+
+async function inspectPreSpawnPortFence(options, dependencies) {
+  const origin = new URL(requiredString(options.origin, 'pre-spawn port-fence origin')).origin;
   const now = dependencies.now ?? (() => performance.now());
   const wallNow = dependencies.wallNow ?? (() => new Date().toISOString());
   const portAvailability = dependencies.portAvailability ?? probeOriginPortAvailability;
@@ -1450,7 +1563,7 @@ export async function inspectDevSessionHandoff(options, dependencies = {}) {
           {
             busyAddresses,
             origin,
-            priorProcessMarker: options.priorProcessMarker ?? null,
+            priorProcessMarker: options.priorProcessMarker,
           },
           dependencies.socketEvidenceDependencies ?? {},
         ),
@@ -1464,40 +1577,30 @@ export async function inspectDevSessionHandoff(options, dependencies = {}) {
       ? `port probe failed: ${probeError}`
       : busyAddresses.length > 0
         ? `busy ${busyAddresses.map((address) => `${address.address}/${String(address.family)}`).join(', ')}`
-        : 'no supported origin address was proven available';
+        : 'no supported address was proven available';
   const diagnosticSuffix =
     socketEvidenceError === null
       ? ''
       : `; socket evidence failed validation: ${socketEvidenceError}`;
-  const evidence = {
-    attribution,
-    available,
-    check: {
-      addresses,
-      checkedAt,
-      durationMs,
-      probeError,
-      sequence: 1,
+  return validatePreSpawnPortFence(
+    {
+      available,
+      check: { addresses, checkedAt, durationMs, probeError, sequence: 1 },
+      complete: available && probeError === null,
+      error:
+        available && probeError === null
+          ? null
+          : boundedEvidenceMessage(`${options.label} ${unavailableReason}${diagnosticSuffix}`),
+      origin,
+      socketEvidence,
     },
-    complete: available && probeError === null,
-    error:
-      available && probeError === null
-        ? null
-        : `dev pre-spawn handoff ${attribution.from ?? 'initial'} -> ${attribution.to} refused: ${unavailableReason}; no process was spawned${diagnosticSuffix}`,
-    origin,
-    schema: DEV_SESSION_HANDOFF_SCHEMA,
-    socketEvidence,
-  };
-  return validateDevSessionHandoffEvidence(evidence);
+    options.label,
+  );
 }
 
-export function validateDevSessionHandoffEvidence(value) {
-  if (value === null || typeof value !== 'object' || value.schema !== DEV_SESSION_HANDOFF_SCHEMA) {
-    throw new TypeError('dev pre-spawn handoff evidence has an unsupported schema');
-  }
-  const attribution = validateHandoffAttribution(value.attribution);
-  const origin = new URL(requiredString(value.origin, 'dev handoff origin')).origin;
-  if (origin !== value.origin) throw new TypeError('dev handoff origin must be canonical');
+function validatePreSpawnPortFence(value, label = 'dev origin') {
+  const origin = new URL(requiredString(value.origin, `${label} handoff origin`)).origin;
+  if (origin !== value.origin) throw new TypeError(`${label} handoff origin must be canonical`);
   const check = value.check;
   if (
     check === null ||
@@ -1507,9 +1610,9 @@ export function validateDevSessionHandoffEvidence(value) {
     !(check.probeError === null || boundedEvidenceString(check.probeError)) ||
     !Array.isArray(check.addresses)
   ) {
-    throw new TypeError('dev pre-spawn handoff check evidence is malformed');
+    throw new TypeError(`${label} pre-spawn handoff check evidence is malformed`);
   }
-  validateIsoTimestamp(check.checkedAt, 'dev handoff check timestamp');
+  validateIsoTimestamp(check.checkedAt, `${label} handoff check timestamp`);
   let observation;
   if (check.probeError === null) {
     observation = validatePortAvailabilityObservation({
@@ -1518,18 +1621,18 @@ export function validateDevSessionHandoffEvidence(value) {
     });
   } else {
     if (check.addresses.length !== 0 || value.available !== false) {
-      throw new TypeError('failed dev handoff probe cannot claim address availability');
+      throw new TypeError(`failed ${label} handoff probe cannot claim address availability`);
     }
     observation = { addresses: [], available: false };
   }
   if (typeof value.complete !== 'boolean' || value.complete !== observation.available) {
-    throw new TypeError('dev pre-spawn handoff completion disagrees with its address evidence');
+    throw new TypeError(`${label} handoff completion disagrees with its address evidence`);
   }
   if (
     (value.complete && value.error !== null) ||
     (!value.complete && !boundedEvidenceString(value.error))
   ) {
-    throw new TypeError('dev pre-spawn handoff error posture is malformed');
+    throw new TypeError(`${label} handoff error posture is malformed`);
   }
   const socketEvidence =
     value.socketEvidence === null ? null : validateSocketOwnerEvidence(value.socketEvidence);
@@ -1540,10 +1643,9 @@ export function validateDevSessionHandoffEvidence(value) {
       observation.addresses.filter((address) => address.supported && !address.available),
     )
   ) {
-    throw new TypeError('socket-owner evidence does not match the busy handoff addresses');
+    throw new TypeError(`socket-owner evidence does not match the busy ${label} addresses`);
   }
   return {
-    attribution,
     available: observation.available,
     check: {
       addresses: observation.addresses,
@@ -1555,7 +1657,6 @@ export function validateDevSessionHandoffEvidence(value) {
     complete: value.complete,
     error: value.error,
     origin,
-    schema: DEV_SESSION_HANDOFF_SCHEMA,
     socketEvidence,
   };
 }
@@ -2968,6 +3069,7 @@ export async function atomicReplaceCorpusSource(filePath, source, dependencies =
 function createReportSkeleton({
   command,
   execution,
+  inspectorPort,
   iterations,
   manifest,
   manifestDigest,
@@ -3021,6 +3123,7 @@ function createReportSkeleton({
       errors: [],
       handoffs: [],
       iterations,
+      inspectorPort,
       misses: 0,
       readyIterations,
       readyTimeoutMs,
@@ -3137,9 +3240,12 @@ export function exactSampleCountFindings(report) {
     { length: expectedHandoffTargets.length },
     (_, index) => expectedBasePort + index,
   );
+  const expectedInspectorPorts =
+    report.integrity.inspectorPort === null ? [] : [report.integrity.inspectorPort];
   try {
     validateDevPortAllocationEvidence(allocation, {
       basePort: expectedBasePort,
+      inspectorPorts: expectedInspectorPorts,
       ports: expectedPorts,
     });
   } catch {
@@ -3162,7 +3268,11 @@ export function exactSampleCountFindings(report) {
         handoff.attribution.to !== target ||
         (index === 0
           ? handoff.attribution.priorMarkerSha256 !== null
-          : handoff.attribution.priorMarkerSha256 === null)
+          : handoff.attribution.priorMarkerSha256 === null) ||
+        (target === 'edit-session' && expectedInspectorPorts.length === 1
+          ? handoff.inspector?.complete !== true ||
+            Number(new URL(handoff.inspector.origin).port) !== expectedInspectorPorts[0]
+          : handoff.inspector !== null)
       ) {
         findings.push(`pre-spawn handoff ${target} is incomplete or misattributed`);
       }
@@ -3257,6 +3367,17 @@ export function diagnosticProfileFindings(report, expected) {
     diagnostic?.diagnosticOnly?.publishTimingClaims !== false
   ) {
     findings.push('diagnostic edit profile does not refuse timing claims');
+  }
+  if (
+    !Number.isSafeInteger(diagnostic?.workload?.inspectorProcess?.pid) ||
+    diagnostic.workload.inspectorProcess.pid !== report?.editSession?.pid ||
+    !/^sha256:[0-9a-f]{64}$/u.test(
+      diagnostic?.workload?.inspectorProcess?.processMarkerSha256 ?? '',
+    ) ||
+    diagnostic.workload.inspectorProcess.processMarkerSha256 !==
+      report?.editSession?.processMarkerSha256
+  ) {
+    findings.push('diagnostic Inspector target is not bound to the edit-session process');
   }
   if (
     diagnostic?.windowCount !== expectedWindows ||

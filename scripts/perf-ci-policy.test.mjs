@@ -4,6 +4,11 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
+import {
+  inspectDevPortAllocation,
+  inspectHostEphemeralPortRanges,
+} from '../benchmarks/harness/dev-port-allocation.mjs';
+
 const repoRoot = fileURLToPath(new URL('../', import.meta.url));
 const workflow = readFileSync(path.join(repoRoot, '.github/workflows/perf-realistic.yml'), 'utf8');
 const baselineDispatchScope = [
@@ -319,7 +324,7 @@ describe('realistic performance CI policy', () => {
     expectRawArtifact(source, 'kovo-perf-dev-generation-n${{ matrix.corpus }}');
   });
 
-  it('keeps the remaining decision measurements full-policy, parallel, and raw', () => {
+  it('keeps the remaining decision measurements full-policy, parallel, and raw', async () => {
     const cache = decisionJob('compressed-cache-decision');
     expect(cache).toContain('scripts/perf-compressed-cache-ab.mjs');
     expect(cache).not.toContain('--samples');
@@ -355,8 +360,9 @@ describe('realistic performance CI policy', () => {
     expect(devProfile).not.toContain('--iterations 30');
     expect(devProfile).toContain('--ready-iterations 1');
     expect(devProfile).toContain('--warmups 3');
-    expect(devProfile).toContain('24) dev_port=54124; inspector_port=55124');
-    expect(devProfile).toContain('216) dev_port=54216; inspector_port=55216');
+    expect(devProfile).toContain('24|216) ;;');
+    expect(devProfile).toContain('dev_port=$((20000 + KOVO_PERF_CORPUS_SIZE))');
+    expect(devProfile).toContain('inspector_port=$((21000 + KOVO_PERF_CORPUS_SIZE))');
     expect(devProfile).toContain('--port "$dev_port"');
     expect(devProfile).toContain('--inspector-port "$inspector_port"');
     expect(devProfile).toContain('--ready-timeout-ms 600000');
@@ -367,6 +373,32 @@ describe('realistic performance CI policy', () => {
     expect(devProfile).toContain('test "$benchmark_status" -eq 0');
     expect(devProfile).toContain('test "$audit_status" -eq 0');
     expectRawArtifact(devProfile, 'kovo-perf-dev-profile-n${{ matrix.corpus }}');
+
+    const linux = await inspectHostEphemeralPortRanges({
+      platform: 'linux',
+      readLinuxRange: async () => Buffer.from('32768 60999\n'),
+    });
+    const darwin = await inspectHostEphemeralPortRanges({
+      platform: 'darwin',
+      readDarwinRanges: async () => Buffer.from('49152\n65535\n49152\n65535\n1023\n600\n'),
+    });
+    for (const corpus of [24, 216]) {
+      const devPort = 20_000 + corpus;
+      const inspectorPort = 21_000 + corpus;
+      expect(Math.max(devPort + 1, inspectorPort)).toBeLessThan(32_768);
+      for (const host of [linux, darwin]) {
+        await expect(
+          inspectDevPortAllocation(
+            {
+              basePort: devPort,
+              inspectorPorts: [inspectorPort],
+              ports: [devPort, devPort + 1],
+            },
+            { inspectHostRanges: async () => host },
+          ),
+        ).resolves.toMatchObject({ complete: true, overlaps: [] });
+      }
+    }
 
     const loaderMemo = decisionJob('loader-runtime-memo-decision');
     expect(loaderMemo).toContain('fetch-depth: 0');

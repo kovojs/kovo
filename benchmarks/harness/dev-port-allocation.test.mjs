@@ -25,6 +25,7 @@ describe('authenticated dev port allocation', () => {
       platform: 'linux',
       probe: {
         bytes: bytes.byteLength,
+        contentBase64: bytes.toString('base64'),
         kind: 'procfs',
         locator: '/proc/sys/net/ipv4/ip_local_port_range',
         sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
@@ -133,6 +134,31 @@ describe('authenticated dev port allocation', () => {
         basePort: 20_001,
       }),
     ).toThrow(/completeness disagrees/u);
+
+    expect(() =>
+      validateDevPortAllocationEvidence({
+        ...admitted,
+        hostEphemeral: {
+          ...admitted.hostEphemeral,
+          ranges: [{ label: 'default', maximum: 61_000, minimum: 32_768 }],
+        },
+      }),
+    ).toThrow(/differ from their retained kernel bytes/u);
+
+    const zeroBytes = Buffer.alloc(host.probe.bytes);
+    expect(() =>
+      validateDevPortAllocationEvidence({
+        ...admitted,
+        hostEphemeral: {
+          ...admitted.hostEphemeral,
+          probe: {
+            ...admitted.hostEphemeral.probe,
+            contentBase64: zeroBytes.toString('base64'),
+            sha256: `sha256:${createHash('sha256').update(zeroBytes).digest('hex')}`,
+          },
+        },
+      }),
+    ).toThrow(/non-integer range evidence/u);
   });
 
   it('never invokes a Darwin shell and bounds the platform reader seam', async () => {

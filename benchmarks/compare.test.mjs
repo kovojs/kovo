@@ -905,8 +905,9 @@ function completeDevValidationReport({ basePort, readyIterations }) {
     },
     complete: true,
     error: null,
+    inspector: null,
     origin: `http://localhost:${String(basePort + index)}`,
-    schema: 'kovo-dev-session-handoff/v1',
+    schema: 'kovo-dev-session-handoff/v2',
     socketEvidence: null,
   }));
   return {
@@ -918,6 +919,7 @@ function completeDevValidationReport({ basePort, readyIterations }) {
     framework: 'kovo',
     integrity: {
       browser: { requestFailedCount: 0, responseCount: 1, unexpectedErrorCount: 0 },
+      inspectorPort: null,
       complete: true,
       editCounts: { data: 30, entry: 30, leaf: 30, recovery: 30, syntaxError: 30 },
       handoffs,
@@ -952,9 +954,10 @@ function completePortAllocation(basePort, ports, inspectorPorts = []) {
       platform: 'linux',
       probe: {
         bytes: 12,
+        contentBase64: 'NjAwMDAgNjU1MzUK',
         kind: 'procfs',
         locator: '/proc/sys/net/ipv4/ip_local_port_range',
-        sha256: `sha256:${'e'.repeat(64)}`,
+        sha256: 'sha256:d57b94cd21854bf7ea2ebac4e57725b65b83a11ca7fab9ea7d1701cb6e73e5bf',
       },
       ranges: [{ label: 'default', maximum: 65_535, minimum: 60_000 }],
       schema: 'kovo-host-ephemeral-port-ranges/v1',

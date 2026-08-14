@@ -575,8 +575,9 @@ function completeHandoff(port, index, readySamples) {
     },
     complete: true,
     error: null,
+    inspector: null,
     origin: `http://localhost:${String(port)}`,
-    schema: 'kovo-dev-session-handoff/v1',
+    schema: 'kovo-dev-session-handoff/v2',
     socketEvidence: null,
   };
 }
@@ -601,9 +602,10 @@ function completePortAllocation(basePort, ports, inspectorPorts = []) {
       platform: 'linux',
       probe: {
         bytes: 12,
+        contentBase64: 'NjAwMDAgNjU1MzUK',
         kind: 'procfs',
         locator: '/proc/sys/net/ipv4/ip_local_port_range',
-        sha256: digest('ephemeral'),
+        sha256: 'sha256:d57b94cd21854bf7ea2ebac4e57725b65b83a11ca7fab9ea7d1701cb6e73e5bf',
       },
       ranges: [{ label: 'default', maximum: 65_535, minimum: 60_000 }],
       schema: 'kovo-host-ephemeral-port-ranges/v1',

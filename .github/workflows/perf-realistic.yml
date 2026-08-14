@@ -793,10 +793,13 @@ jobs:
           output_root="$RUNNER_TEMP/kovo-perf/dev-profile-n$KOVO_PERF_CORPUS_SIZE"
           mkdir -p "$output_root/raw"
           case "$KOVO_PERF_CORPUS_SIZE" in
-            24) dev_port=54124; inspector_port=55124 ;;
-            216) dev_port=54216; inspector_port=55216 ;;
+            24|216) ;;
             *) echo 'unsupported profiled corpus size' >&2; exit 2 ;;
           esac
+          # Derive globally distinct exact ports below Linux's default 32768 ephemeral floor. The
+          # adapter authenticates the actual Linux/macOS kernel ranges and refuses any overlap.
+          dev_port=$((20000 + KOVO_PERF_CORPUS_SIZE))
+          inspector_port=$((21000 + KOVO_PERF_CORPUS_SIZE))
           benchmark_status=0
           vp exec node benchmarks/corpora/dev-loop.mjs \
             --manifest "$GITHUB_WORKSPACE/benchmarks/kovo/.corpora/kovo/n$KOVO_PERF_CORPUS_SIZE/manifest.json" \

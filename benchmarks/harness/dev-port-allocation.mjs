@@ -18,6 +18,8 @@ const DARWIN_EPHEMERAL_RANGE_KEYS = Object.freeze([
   'net.inet.ip.portrange.lowlast',
 ]);
 const MAX_EPHEMERAL_RANGE_EVIDENCE_BYTES = 4_096;
+const MAX_EPHEMERAL_RANGE_EVIDENCE_BASE64_CHARS =
+  Math.ceil(MAX_EPHEMERAL_RANGE_EVIDENCE_BYTES / 3) * 4;
 
 // Linux deliberately exposes this TCP/UDP auto-bind range below `net.ipv4`; the kernel also uses
 // it for IPv6. The authenticated scope is therefore both loopback families, matching the harness's
@@ -176,9 +178,20 @@ export function validateHostEphemeralPortRangeEvidence(value) {
       !Number.isSafeInteger(value.probe.bytes) ||
       value.probe.bytes < 1 ||
       value.probe.bytes > MAX_EPHEMERAL_RANGE_EVIDENCE_BYTES ||
+      !boundedBase64String(value.probe.contentBase64) ||
       !/^sha256:[0-9a-f]{64}$/u.test(value.probe.sha256 ?? '')
     ) {
       throw new TypeError('host ephemeral port range probe evidence is malformed');
+    }
+    const bytes = Buffer.from(value.probe.contentBase64, 'base64');
+    if (
+      bytes.byteLength !== value.probe.bytes ||
+      bytes.byteLength < 1 ||
+      bytes.byteLength > MAX_EPHEMERAL_RANGE_EVIDENCE_BYTES ||
+      bytes.toString('base64') !== value.probe.contentBase64 ||
+      `sha256:${createHash('sha256').update(bytes).digest('hex')}` !== value.probe.sha256
+    ) {
+      throw new TypeError('host ephemeral port range probe bytes failed custody validation');
     }
     probe = { ...value.probe };
   }
@@ -229,6 +242,16 @@ export function validateHostEphemeralPortRangeEvidence(value) {
   }
   if (value.complete && value.platform !== 'linux' && value.platform !== 'darwin') {
     throw new TypeError('complete ephemeral range evidence uses an unsupported platform');
+  }
+  if (value.complete) {
+    const derivedRanges = rangesFromKernelBytes(
+      value.platform,
+      Buffer.from(probe.contentBase64, 'base64'),
+      probe.locator,
+    );
+    if (JSON.stringify(ranges) !== JSON.stringify(derivedRanges)) {
+      throw new TypeError('host ephemeral port ranges differ from their retained kernel bytes');
+    }
   }
   return {
     complete: value.complete,
@@ -350,10 +373,36 @@ function integerTokens(bytes, label) {
 function probeEvidence(kind, locator, bytes) {
   return {
     bytes: bytes.byteLength,
+    contentBase64: bytes.toString('base64'),
     kind,
     locator,
     sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
   };
+}
+
+function rangesFromKernelBytes(platform, bytes, label) {
+  const values = integerTokens(bytes, label);
+  if (platform === 'linux') {
+    if (values.length !== 2 || values[0] > values[1]) {
+      throw new TypeError('Linux ephemeral port range must contain one ascending pair.');
+    }
+    return [{ label: 'default', maximum: values[1], minimum: values[0] }];
+  }
+  if (platform === 'darwin') {
+    if (values.length !== DARWIN_EPHEMERAL_RANGE_KEYS.length) {
+      throw new TypeError('macOS ephemeral port sysctls returned an incomplete value census.');
+    }
+    const ranges = [];
+    for (let index = 0; index < values.length; index += 2) {
+      ranges.push({
+        label: index === 0 ? 'default' : index === 2 ? 'high' : 'low',
+        maximum: Math.max(values[index], values[index + 1]),
+        minimum: Math.min(values[index], values[index + 1]),
+      });
+    }
+    return ranges;
+  }
+  throw new TypeError(`unsupported performance host platform ${boundedMessage(platform)}`);
 }
 
 function exactPortList(value, label) {
@@ -387,6 +436,15 @@ function sameNumbers(left, right) {
 
 function boundedString(value) {
   return typeof value === 'string' && value.length > 0 && value.length <= 2_048;
+}
+
+function boundedBase64String(value) {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= MAX_EPHEMERAL_RANGE_EVIDENCE_BASE64_CHARS &&
+    /^[A-Za-z0-9+/]+={0,2}$/u.test(value)
+  );
 }
 
 function boundedMessage(value) {

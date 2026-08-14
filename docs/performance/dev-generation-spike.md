@@ -151,7 +151,12 @@ ephemeral ranges and rejects an incomplete probe, a range overlap, a duplicate s
 port, or a `basePort` that does not equal the first derived session port
 (`unique-exact-port-outside-host-ephemeral/v2`, stride 128). Linux reads the bounded
 `/proc/sys/net/ipv4/ip_local_port_range` source used by both IPv4 and IPv6; macOS reads the bounded
-default, high, and low `net.inet.ip.portrange` sysctls. The portable default starts at port 20000.
+default, high, and low `net.inet.ip.portrange` sysctls. Reports retain the exact bounded kernel
+bytes, byte count, source locator, and SHA-256; validators decode those bytes, recompute the hash,
+and derive the reported ranges again, so a range cannot float independently of its kernel source.
+The portable default starts at port 20000. Profiled CI cells derive app ports as `20000 + N` and
+Inspector ports as `21000 + N`; both N24 and N216 allocations remain below 32768 and are still
+checked against the authenticated Linux or macOS host posture before use.
 
 Immediately before a spawn, a dual-stack handoff check verifies the new exact port. A busy address
 or unexpected probe error prevents the spawn, attributes the boundary to the prior or initial
@@ -162,6 +167,11 @@ metadata, including an exact prior-marker match. The report never retains owner 
 environment, never signals an observed third-party owner, and limits termination to the benchmark's
 own process group and inherited marker. Non-Linux hosts and collection races, permission failures,
 truncation, or parse errors are explicit evidence limitations; the runner does not guess ownership.
+Profiled edit sessions apply the same immediate IPv4/IPv6 fence to the exact Inspector allocation
+before the timing boundary. Inspector discovery no longer accepts the first `/json/list` entry: it
+bounds and validates every loopback websocket target, evaluates its process identity, and accepts
+only the target whose PID and inherited session marker match the spawned dev process. An unrelated
+Inspector target is closed and cannot receive profiling commands.
 
 This fence was motivated by authenticated hosted failures, not a synthetic-only scenario. In the
 N24 run (Actions run `31767622596`, job `94666624722`, artifact `9207456779`), the outer report
@@ -193,8 +203,14 @@ and all 15 leaf, entry, and data edits, then captured the browser's exact strict
 Vite's inline error-overlay style (`sha256-lYN9swPPxuGaiKk0VmHFE+KQB3O54rTETtIxyNAtJz8=`) and
 failed recovery because the overlay never cleared. Kovo development documents now mint a fresh
 128-bit nonce per response, publish it through Vite's `meta[property=csp-nonce]` contract as the
-first head child, and add only the matching nonce to the existing `style-src`; production behavior,
-`unsafe-inline`, and telemetry exemptions remain unchanged.
+first head child, and add only the matching nonce to the effective style directives; production
+behavior, `unsafe-inline`, and telemetry exemptions remain unchanged. Nonce admission uses a
+bounded CSP policy/directive parser rather than substring or regular-expression rewriting. It
+handles every comma-separated enforced policy and Node repeated-header member independently,
+matches `style-src`, `style-src-elem`, and `style-src-attr` as exact names, leaves `style-src-attr`
+unchanged, and admits the nonce to explicit `style-src-elem`. When a policy has no `style-src`, the
+new directive preserves that policy's exact `default-src` sources before adding the nonce.
+Malformed, control-bearing, or over-bound policies fail closed.
 
 ## Decision rule
 

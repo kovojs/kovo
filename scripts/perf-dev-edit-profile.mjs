@@ -25,6 +25,8 @@ export const DEV_EDIT_PROFILE_CATEGORIES = Object.freeze([
 const CPU_SAMPLING_INTERVAL_US = 500;
 const HEAP_SAMPLING_INTERVAL_BYTES = 32_768;
 const CONNECTION_TIMEOUT_MS = 15_000;
+const INSPECTOR_TARGET_LIST_MAX_CHARS = 64 * 1024;
+const INSPECTOR_TARGET_LIST_MAX_ENTRIES = 64;
 
 export async function createDevEditProfiler(options, dependencies = {}) {
   const framework = requiredString(options.framework, 'framework');
@@ -32,6 +34,13 @@ export async function createDevEditProfiler(options, dependencies = {}) {
     throw new TypeError('Exact Inspector dev profiling currently supports only Kovo.');
   }
   const inspectorPort = boundedInteger(options.inspectorPort, 1_024, 65_535, 'inspectorPort');
+  const expectedPid = boundedInteger(
+    options.expectedPid,
+    1,
+    Number.MAX_SAFE_INTEGER,
+    'expectedPid',
+  );
+  const processMarker = requiredProcessMarker(options.processMarker);
   const modules = boundedInteger(options.modules, 1, 10_000, 'modules');
   const profileDir = path.resolve(requiredString(options.profileDir, 'profileDir'));
   const workload = {
@@ -39,12 +48,21 @@ export async function createDevEditProfiler(options, dependencies = {}) {
     cpuSamplingIntervalMicros: CPU_SAMPLING_INTERVAL_US,
     framework,
     heapSamplingIntervalBytes: HEAP_SAMPLING_INTERVAL_BYTES,
+    inspectorProcess: {
+      pid: expectedPid,
+      processMarkerSha256: sha256(processMarker),
+    },
     modules,
     profileScope: 'measured-source-write-through-destination-paint',
     schema: 'kovo-dev-edit-profile-workload/v1',
   };
   await mkdir(profileDir, { recursive: true, mode: 0o700 });
-  const session = await (dependencies.connectInspector ?? connectInspector)({ inspectorPort });
+  const session = await (dependencies.connectInspector ?? connectDevInspector)({
+    expectedPid,
+    inspectorPort,
+    processMarker,
+  });
+  validateInspectorIdentity(session.identity, { expectedPid, processMarker });
   const rawWindows = [];
   const observations = [];
   let active = null;
@@ -833,25 +851,63 @@ function validateHeapProfile(profile) {
   visit(profile.head);
 }
 
-async function connectInspector({ inspectorPort }) {
-  const deadline = Date.now() + CONNECTION_TIMEOUT_MS;
-  let target;
+export async function connectDevInspector(options, dependencies = {}) {
+  const inspectorPort = boundedInteger(options.inspectorPort, 1_024, 65_535, 'inspectorPort');
+  const expectedPid = boundedInteger(
+    options.expectedPid,
+    1,
+    Number.MAX_SAFE_INTEGER,
+    'expectedPid',
+  );
+  const processMarker = requiredProcessMarker(options.processMarker);
+  const fetchInspector = dependencies.fetch ?? fetch;
+  const openSession = dependencies.openSession ?? openInspectorSession;
+  const now = dependencies.now ?? (() => Date.now());
+  const pause =
+    dependencies.delay ??
+    ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
+  const timeoutMs = boundedInteger(
+    dependencies.timeoutMs ?? CONNECTION_TIMEOUT_MS,
+    1,
+    60_000,
+    'Inspector connection timeout',
+  );
+  const deadline = now() + timeoutMs;
   let lastError = 'Inspector did not answer';
-  while (Date.now() < deadline) {
+  while (now() < deadline) {
     try {
-      const response = await fetch(`http://127.0.0.1:${String(inspectorPort)}/json/list`);
+      const response = await fetchInspector(`http://127.0.0.1:${String(inspectorPort)}/json/list`);
       if (!response.ok) throw new Error(`Inspector returned HTTP ${String(response.status)}`);
-      const list = await response.json();
-      target = list.find((entry) => typeof entry?.webSocketDebuggerUrl === 'string');
-      if (target !== undefined) break;
-      lastError = 'Inspector did not expose a websocket target';
+      const targets = parseInspectorTargetList(await response.text(), inspectorPort);
+      for (const target of targets) {
+        let session;
+        try {
+          session = await openSession(target.webSocketDebuggerUrl);
+          const identity = await readInspectorIdentity(session, processMarker, target.id);
+          if (
+            identity.pid === expectedPid &&
+            identity.processMarkerMatched === true &&
+            identity.targetId === target.id
+          ) {
+            return { ...session, identity };
+          }
+          lastError = 'Inspector target did not belong to the spawned dev session';
+        } catch (error) {
+          lastError = error instanceof Error ? error.message : String(error);
+        }
+        session?.close();
+      }
+      if (targets.length === 0) lastError = 'Inspector did not expose a websocket target';
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
     }
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await pause(Math.max(1, Math.min(25, deadline - now())));
   }
-  if (target === undefined) throw new Error(lastError);
-  const socket = new WebSocket(target.webSocketDebuggerUrl);
+  throw new Error(lastError);
+}
+
+async function openInspectorSession(webSocketDebuggerUrl) {
+  const socket = new WebSocket(webSocketDebuggerUrl);
   await new Promise((resolve, reject) => {
     socket.addEventListener('open', resolve, { once: true });
     socket.addEventListener('error', reject, { once: true });
@@ -883,6 +939,103 @@ async function connectInspector({ inspectorPort }) {
       });
     },
   };
+}
+
+function parseInspectorTargetList(source, inspectorPort) {
+  if (
+    typeof source !== 'string' ||
+    source.length < 2 ||
+    source.length > INSPECTOR_TARGET_LIST_MAX_CHARS
+  ) {
+    throw new TypeError('Inspector target list exceeded its evidence bound');
+  }
+  let value;
+  try {
+    value = JSON.parse(source);
+  } catch {
+    throw new TypeError('Inspector target list was not valid JSON');
+  }
+  if (!Array.isArray(value) || value.length > INSPECTOR_TARGET_LIST_MAX_ENTRIES) {
+    throw new TypeError('Inspector target list had an invalid entry census');
+  }
+  const targets = [];
+  const ids = new Set();
+  for (const entry of value) {
+    if (
+      entry === null ||
+      typeof entry !== 'object' ||
+      typeof entry.id !== 'string' ||
+      entry.id.length < 1 ||
+      entry.id.length > 256 ||
+      ids.has(entry.id) ||
+      typeof entry.webSocketDebuggerUrl !== 'string'
+    ) {
+      throw new TypeError('Inspector target identity was malformed');
+    }
+    const url = new URL(entry.webSocketDebuggerUrl);
+    if (
+      url.protocol !== 'ws:' ||
+      url.hostname !== '127.0.0.1' ||
+      Number(url.port) !== inspectorPort ||
+      url.username !== '' ||
+      url.password !== '' ||
+      url.search !== '' ||
+      url.hash !== '' ||
+      url.pathname !== `/${entry.id}`
+    ) {
+      throw new TypeError('Inspector websocket target escaped the exact loopback endpoint');
+    }
+    ids.add(entry.id);
+    targets.push({ id: entry.id, webSocketDebuggerUrl: url.href });
+  }
+  return targets;
+}
+
+async function readInspectorIdentity(session, processMarker, targetId) {
+  const result = await session.send('Runtime.evaluate', {
+    expression: `({pid:globalThis.process?.pid??null,processMarkerMatched:globalThis.process?.env?.[${JSON.stringify(processMarker)}]==='1'})`,
+    returnByValue: true,
+  });
+  const value = result?.result?.value;
+  return validateInspectorIdentity(
+    {
+      pid: value?.pid,
+      processMarkerMatched: value?.processMarkerMatched,
+      processMarkerSha256: sha256(processMarker),
+      targetId,
+    },
+    { processMarker },
+  );
+}
+
+function validateInspectorIdentity(value, expected = {}) {
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    !Number.isSafeInteger(value.pid) ||
+    value.pid <= 0 ||
+    value.processMarkerMatched !== true ||
+    value.processMarkerSha256 !== sha256(requiredProcessMarker(expected.processMarker)) ||
+    typeof value.targetId !== 'string' ||
+    value.targetId.length < 1 ||
+    value.targetId.length > 256 ||
+    (expected.expectedPid !== undefined && value.pid !== expected.expectedPid)
+  ) {
+    throw new TypeError('Inspector target identity did not match the spawned dev session');
+  }
+  return {
+    pid: value.pid,
+    processMarkerMatched: true,
+    processMarkerSha256: value.processMarkerSha256,
+    targetId: value.targetId,
+  };
+}
+
+function requiredProcessMarker(value) {
+  if (typeof value !== 'string' || !/^KOVO_PERF_DEV_SESSION_[A-Z0-9_]+$/u.test(value)) {
+    throw new TypeError('Inspector process marker is malformed');
+  }
+  return value;
 }
 
 function normalizeWindowIdentity(value) {

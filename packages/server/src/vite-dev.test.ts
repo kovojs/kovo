@@ -1720,8 +1720,9 @@ describe('server app shell Vite dev seam', () => {
       const nonce = /<meta property="csp-nonce" nonce="([^"]+)">/u.exec(documentBody)?.[1];
       const csp = documentResponse.headers.get('content-security-policy');
       expect(nonce).toMatch(/^[A-Za-z0-9+/]{22}==$/u);
-      expect(csp).toContain(`default-src 'self'; style-src 'nonce-${String(nonce)}'`);
-      expect(csp).toContain(`style-src 'self' 'nonce-${String(nonce)}'`);
+      expect(
+        csp?.split(`default-src 'self'; style-src 'self' 'nonce-${String(nonce)}'`),
+      ).toHaveLength(3);
       expect(csp?.split(`nonce-${String(nonce)}`)).toHaveLength(3);
       expect(clientResponse.status).toBe(200);
       expect(clientResponse.headers.get('cache-control')).toBe('no-store');

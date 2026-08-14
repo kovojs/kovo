@@ -1,7 +1,7 @@
 import { validateDevPortAllocationEvidence } from '../../benchmarks/harness/dev-port-allocation.mjs';
 import { validReadyRouteProbe } from './perf-ready-route.mjs';
 
-export const DEV_SESSION_HANDOFF_SCHEMA = 'kovo-dev-session-handoff/v1';
+export const DEV_SESSION_HANDOFF_SCHEMA = 'kovo-dev-session-handoff/v2';
 export const DEV_SESSION_STOP_SCHEMA = 'kovo-dev-session-stop/v4';
 
 const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/u;
@@ -31,9 +31,11 @@ export function devSessionHandoffFindings(report, options) {
     'edit-session',
   ];
   const ports = targets.map((_, index) => basePort + index);
+  const inspectorPort = report?.integrity?.inspectorPort ?? null;
+  const inspectorPorts = inspectorPort === null ? [] : [inspectorPort];
   const allocation = report?.integrity?.portAllocation;
   try {
-    validateDevPortAllocationEvidence(allocation, { basePort, ports });
+    validateDevPortAllocationEvidence(allocation, { basePort, inspectorPorts, ports });
   } catch {
     findings.push('unique per-session dev port allocation is incomplete');
   }
@@ -61,7 +63,10 @@ export function devSessionHandoffFindings(report, options) {
         !finiteNonNegative(check?.durationMs) ||
         !validIsoTimestamp(check?.checkedAt) ||
         check?.probeError !== null ||
-        !validLocalhostHandoffAddresses(check?.addresses)
+        !validLocalhostHandoffAddresses(check?.addresses) ||
+        (targets[index] === 'edit-session' && inspectorPort !== null
+          ? !validInspectorFence(handoff?.inspector, inspectorPort)
+          : handoff?.inspector !== null)
       ) {
         findings.push(`pre-spawn dev handoff ${targets[index]} is incomplete`);
       }
@@ -102,6 +107,22 @@ export function devSessionHandoffFindings(report, options) {
     findings.push('edit-session dev lifecycle is incomplete');
   }
   return findings;
+}
+
+function validInspectorFence(value, expectedPort) {
+  const check = value?.check;
+  return (
+    value?.complete === true &&
+    value?.available === true &&
+    value?.error === null &&
+    value?.socketEvidence === null &&
+    exactLocalhostOrigin(value?.origin, expectedPort) &&
+    check?.sequence === 1 &&
+    finiteNonNegative(check?.durationMs) &&
+    validIsoTimestamp(check?.checkedAt) &&
+    check?.probeError === null &&
+    validLocalhostHandoffAddresses(check?.addresses)
+  );
 }
 
 function exactLocalhostOrigin(value, expectedPort) {

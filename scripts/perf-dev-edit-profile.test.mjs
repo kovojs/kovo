@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -7,6 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   analyzeDevEditProfiles,
   auditDevEditProfileArtifacts,
+  connectDevInspector,
   createDevEditProfiler,
   DEV_EDIT_PROFILE_AUDIT_SCHEMA,
   DEV_EDIT_PROFILE_CATEGORIES,
@@ -21,6 +23,50 @@ afterEach(async () => {
 });
 
 describe('exact dev edit-to-paint diagnostics', () => {
+  it('rejects an unrelated first /json/list target and binds the spawned PID/session target', async () => {
+    const closed = [];
+    const marker = 'KOVO_PERF_DEV_SESSION_OWNED';
+    const targets = [
+      {
+        id: 'unrelated',
+        webSocketDebuggerUrl: 'ws://127.0.0.1:21216/unrelated',
+      },
+      {
+        id: 'owned',
+        webSocketDebuggerUrl: 'ws://127.0.0.1:21216/owned',
+      },
+    ];
+    const session = await connectDevInspector(
+      { expectedPid: 9_999, inspectorPort: 21_216, processMarker: marker },
+      {
+        fetch: async () => ({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify(targets),
+        }),
+        openSession: async (url) => ({
+          close: () => closed.push(url),
+          async send(method) {
+            expect(method).toBe('Runtime.evaluate');
+            return {
+              result: {
+                value: {
+                  pid: url.endsWith('/owned') ? 9_999 : 7_777,
+                  processMarkerMatched: true,
+                },
+              },
+            };
+          },
+        }),
+      },
+    );
+
+    expect(session.identity).toMatchObject({ pid: 9_999, targetId: 'owned' });
+    expect(closed).toEqual(['ws://127.0.0.1:21216/unrelated']);
+    session.close();
+    expect(closed).toEqual(['ws://127.0.0.1:21216/unrelated', 'ws://127.0.0.1:21216/owned']);
+  });
+
   it('ranks directly sampled categories and retires absent hypotheses', () => {
     const analysis = analyzeDevEditProfiles(syntheticProfiles());
 
@@ -58,6 +104,7 @@ describe('exact dev edit-to-paint diagnostics', () => {
     const profiles = syntheticProfiles();
     const session = {
       close: () => commands.push('close'),
+      identity: inspectorIdentity(9_201, 'KOVO_PERF_DEV_SESSION_PROFILE_A'),
       async send(method) {
         commands.push(method);
         if (method === 'Profiler.stop') return { profile: profiles.cpu };
@@ -67,9 +114,11 @@ describe('exact dev edit-to-paint diagnostics', () => {
     };
     const profiler = await createDevEditProfiler(
       {
+        expectedPid: 9_201,
         framework: 'kovo',
         inspectorPort: 49_201,
         modules: 24,
+        processMarker: 'KOVO_PERF_DEV_SESSION_PROFILE_A',
         profileDir: root,
       },
       { connectInspector: async () => session },
@@ -227,6 +276,7 @@ describe('exact dev edit-to-paint diagnostics', () => {
     const exactCpuBytes = `${JSON.stringify(cpu)}\n`;
     const session = {
       close() {},
+      identity: inspectorIdentity(9_204, 'KOVO_PERF_DEV_SESSION_PROFILE_D'),
       async send(method) {
         if (method === 'Profiler.stop') return { profile: cpu };
         if (method === 'HeapProfiler.stopSampling') return { profile: profiles.heap };
@@ -234,7 +284,14 @@ describe('exact dev edit-to-paint diagnostics', () => {
       },
     };
     const profiler = await createDevEditProfiler(
-      { framework: 'kovo', inspectorPort: 49_204, modules: 216, profileDir: root },
+      {
+        expectedPid: 9_204,
+        framework: 'kovo',
+        inspectorPort: 49_204,
+        modules: 216,
+        processMarker: 'KOVO_PERF_DEV_SESSION_PROFILE_D',
+        profileDir: root,
+      },
       { connectInspector: async () => session },
     );
 
@@ -256,6 +313,7 @@ describe('exact dev edit-to-paint diagnostics', () => {
     const profiles = syntheticProfiles();
     const session = {
       close() {},
+      identity: inspectorIdentity(9_202, 'KOVO_PERF_DEV_SESSION_PROFILE_B'),
       async send(method) {
         if (method === 'Profiler.stop') return { profile: profiles.cpu };
         if (method === 'HeapProfiler.stopSampling') return { profile: profiles.heap };
@@ -263,7 +321,14 @@ describe('exact dev edit-to-paint diagnostics', () => {
       },
     };
     const profiler = await createDevEditProfiler(
-      { framework: 'kovo', inspectorPort: 49_202, modules: 24, profileDir: root },
+      {
+        expectedPid: 9_202,
+        framework: 'kovo',
+        inspectorPort: 49_202,
+        modules: 24,
+        processMarker: 'KOVO_PERF_DEV_SESSION_PROFILE_B',
+        profileDir: root,
+      },
       { connectInspector: async () => session },
     );
 
@@ -353,6 +418,7 @@ describe('exact dev edit-to-paint diagnostics', () => {
     const commands = [];
     const session = {
       close: () => commands.push('close'),
+      identity: inspectorIdentity(9_203, 'KOVO_PERF_DEV_SESSION_PROFILE_C'),
       async send(method) {
         commands.push(method);
         if (method === 'Profiler.stop') return { profile: rejectedCpu };
@@ -361,7 +427,14 @@ describe('exact dev edit-to-paint diagnostics', () => {
       },
     };
     const profiler = await createDevEditProfiler(
-      { framework: 'kovo', inspectorPort: 49_203, modules: 24, profileDir: root },
+      {
+        expectedPid: 9_203,
+        framework: 'kovo',
+        inspectorPort: 49_203,
+        modules: 24,
+        processMarker: 'KOVO_PERF_DEV_SESSION_PROFILE_C',
+        profileDir: root,
+      },
       { connectInspector: async () => session },
     );
 
@@ -396,6 +469,15 @@ describe('exact dev edit-to-paint diagnostics', () => {
 
 function category(analysis, id) {
   return analysis.categories.find((entry) => entry.category === id);
+}
+
+function inspectorIdentity(pid, processMarker, targetId = 'target-1') {
+  return {
+    pid,
+    processMarkerMatched: true,
+    processMarkerSha256: `sha256:${createHash('sha256').update(processMarker).digest('hex')}`,
+    targetId,
+  };
 }
 
 function syntheticProfiles() {

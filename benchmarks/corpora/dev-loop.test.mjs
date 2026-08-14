@@ -627,6 +627,16 @@ describe('single-entrant developer-loop adapter', () => {
     );
   });
 
+  it('cross-binds the requested Inspector port to the authenticated allocation', () => {
+    const report = completeCountFixture();
+    report.integrity.inspectorPort = 21_216;
+    report.integrity.portAllocation.inspectorPorts = [21_217];
+
+    expect(exactSampleCountFindings(report)).toContain(
+      'per-session dev port allocation is incomplete',
+    );
+  });
+
   it('requires independently proven browser-context teardown for every raw session', () => {
     const report = completeCountFixture();
     report.readySamples[0].browserContextClosed = false;
@@ -741,6 +751,44 @@ describe('single-entrant developer-loop adapter', () => {
       to: 'ready[0]',
     });
     expect(launch.handoff.error).toContain('initial -> ready[0]');
+  });
+
+  it('fences the exact Inspector port on both loopback families before profiled timing', async () => {
+    const spawnProcess = vi.fn();
+    const inspectedOrigins = [];
+    const launch = await launchDevSessionAfterHandoff(
+      handoffLaunchOptions({
+        inspectorPort: 21_216,
+        origin: 'http://localhost:20216',
+        spawnProcess,
+        targetSession: 'edit-session',
+      }),
+      {
+        collectSocketEvidence: async ({ busyAddresses, origin }) =>
+          socketOwnerEvidenceFixture({ busyAddresses, origin }),
+        now: monotonicTestClock(),
+        portAvailability: async (origin) => {
+          inspectedOrigins.push(origin);
+          return Number(new URL(origin).port) === 21_216
+            ? dualStackPortObservation({ ipv6Available: false })
+            : dualStackPortObservation();
+        },
+        wallNow: () => '2026-08-13T00:00:00.000Z',
+      },
+    );
+
+    expect(spawnProcess).not.toHaveBeenCalled();
+    expect(inspectedOrigins.sort()).toEqual(['http://localhost:20216', 'http://localhost:21216']);
+    expect(launch.handoff).toMatchObject({
+      complete: false,
+      inspector: {
+        available: false,
+        complete: false,
+        origin: 'http://localhost:21216',
+        socketEvidence: { complete: true },
+      },
+    });
+    expect(launch.handoff.error).toContain('Inspector busy ::1/6');
   });
 
   it('uses a new exact port so a prior late rebind cannot collide with the next session', async () => {
@@ -1795,6 +1843,10 @@ describe('single-entrant developer-loop adapter', () => {
       iteration: 0,
     }));
     const report = {
+      editSession: {
+        pid: 9_001,
+        processMarkerSha256: `sha256:${'c'.repeat(64)}`,
+      },
       integrity: { iterations: 1 },
       profile: {
         diagnostic: {
@@ -1808,14 +1860,22 @@ describe('single-entrant developer-loop adapter', () => {
           schema: 'kovo-dev-edit-profile/v1',
           windowCount: 5,
           windows,
+          workload: {
+            inspectorProcess: {
+              pid: 9_001,
+              processMarkerSha256: `sha256:${'c'.repeat(64)}`,
+            },
+          },
         },
       },
     };
     expect(diagnosticProfileFindings(report, true)).toEqual([]);
     report.profile.diagnostic.windows[0].artifact.cpu.sha256 = 'forged';
     report.profile.diagnostic.windows[1].editClass = 'leaf';
+    report.profile.diagnostic.workload.inspectorProcess.pid = 9_002;
     expect(diagnosticProfileFindings(report, true)).toEqual(
       expect.arrayContaining([
+        'diagnostic Inspector target is not bound to the edit-session process',
         'diagnostic window leaf:0 has invalid raw profile evidence',
         'duplicate diagnostic window leaf:0',
         'missing diagnostic window entry:0',
@@ -1881,6 +1941,7 @@ function completeCountFixture() {
       command: { origin: 'http://localhost:49120' },
       editCounts: {},
       handoffs: [completeHandoffFixture(49_120, 0, 1), completeHandoffFixture(49_121, 1, 1)],
+      inspectorPort: null,
       iterations: 2,
       portAllocation: completePortAllocationFixture(49_120, [49_120, 49_121]),
       readyIterations: 1,
@@ -1924,9 +1985,10 @@ function completePortAllocationFixture(basePort, ports, inspectorPorts = []) {
       platform: 'linux',
       probe: {
         bytes: 12,
+        contentBase64: 'NjAwMDAgNjU1MzUK',
         kind: 'procfs',
         locator: '/proc/sys/net/ipv4/ip_local_port_range',
-        sha256: `sha256:${'e'.repeat(64)}`,
+        sha256: 'sha256:d57b94cd21854bf7ea2ebac4e57725b65b83a11ca7fab9ea7d1701cb6e73e5bf',
       },
       ranges: [{ label: 'default', maximum: 65_535, minimum: 60_000 }],
       schema: 'kovo-host-ephemeral-port-ranges/v1',
@@ -1995,13 +2057,15 @@ function completeHandoffFixture(port, index, readyIterations) {
     },
     complete: true,
     error: null,
+    inspector: null,
     origin: `http://localhost:${String(port)}`,
-    schema: 'kovo-dev-session-handoff/v1',
+    schema: 'kovo-dev-session-handoff/v2',
     socketEvidence: null,
   };
 }
 
 function handoffLaunchOptions({
+  inspectorPort = null,
   origin,
   priorProcessMarker = null,
   priorSession = null,
@@ -2011,6 +2075,7 @@ function handoffLaunchOptions({
   return {
     appRoot: '/tmp/kovo-handoff-test',
     command: { argv: ['dev'], cwd: '/tmp/kovo-handoff-test', env: {}, origin },
+    inspectorPort,
     priorProcessMarker,
     priorSession,
     spawnProcess,

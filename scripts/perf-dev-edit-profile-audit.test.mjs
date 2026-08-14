@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -25,8 +26,15 @@ describe('dev edit profile artifact audit', () => {
     const root = await temporaryRoot();
     const profileDir = path.join(root, 'raw');
     const profiles = syntheticProfiles();
+    const processMarker = 'KOVO_PERF_DEV_SESSION_AUDIT';
     const session = {
       close() {},
+      identity: {
+        pid: 9_211,
+        processMarkerMatched: true,
+        processMarkerSha256: `sha256:${createHash('sha256').update(processMarker).digest('hex')}`,
+        targetId: 'audit-target',
+      },
       async send(method) {
         if (method === 'Profiler.stop') return { profile: profiles.cpu };
         if (method === 'HeapProfiler.stopSampling') return { profile: profiles.heap };
@@ -34,7 +42,14 @@ describe('dev edit profile artifact audit', () => {
       },
     };
     const profiler = await createDevEditProfiler(
-      { framework: 'kovo', inspectorPort: 49_211, modules: 24, profileDir },
+      {
+        expectedPid: 9_211,
+        framework: 'kovo',
+        inspectorPort: 49_211,
+        modules: 24,
+        processMarker,
+        profileDir,
+      },
       { connectInspector: async () => session },
     );
     for (const editClass of ['leaf', 'entry', 'data', 'syntaxError', 'recovery']) {
@@ -51,6 +66,10 @@ describe('dev edit profile artifact audit', () => {
     };
     const report = {
       corpus: { modules: 24 },
+      editSession: {
+        pid: 9_211,
+        processMarkerSha256: session.identity.processMarkerSha256,
+      },
       execution: performanceExecutionIdentity({
         env: {},
         nonce: 'c'.repeat(32),
