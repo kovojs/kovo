@@ -138,6 +138,19 @@ Packed-product v3 status: **unproven**. No full authenticated N=24 and N=216 pac
 has run for this exact candidate. The production branch's one-iteration correctness smokes are not
 statistical evidence and cannot satisfy this contract.
 
+The first full hosted v3 attempt is also **unproven**, not a candidate result. Hosted run
+[`31816648411`](https://github.com/kovojs/kovo/actions/runs/31816648411), exact clean baseline
+`c8f81a285dfe7dc5347d7c34535ce2491b15a673`, stopped in its first N=24 baseline cell. Artifact
+`9225949775`, `kovo-perf-dev-generation-n24`, is 34,509 compressed bytes; its ZIP SHA-256 is
+`f9943de2a53ad12a471e637dc26e4751e152b74f6e5afdf7eda185bcbce52dbe`, its outer-report SHA-256 is
+`a03a62ead289b8a99693d700cba716c8e993a33cf3f1dccc0aa7d0756be57bc7`, and its retained raw-cell
+SHA-256 is `6c7150326996588158033015874c411746a3726816b0b36d9b31ec8581ec2672`. The authenticated raw
+report found a transient Vite overlay trying to read the already-renamed staging file
+`.component-000.tsx.kovo-perf-save-5601-12.tmp`: all 15 leaf, entry, and data edits survived, but
+syntax-error and recovery samples were both 0/15. There were zero browser request failures and zero
+unexpected browser errors. This is a fail-closed harness save/watcher race; it neither supersedes
+the v2 decision below nor becomes superseded itself until a complete packed v3 rerun exists.
+
 The earlier source-checkout v2 N=24 run is nevertheless authenticated as a genuine rejection, not
 discarded. Hosted run
 [`31807028892`](https://github.com/kovojs/kovo/actions/runs/31807028892) measured exact clean source
