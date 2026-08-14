@@ -15,6 +15,7 @@ import {
   classifyServerMatrixCells,
   COMPARE_ADAPTER_FAILURE_SCHEMA,
   comparisonVerdict,
+  createQuietHostAdmission,
   devSampleSchedule,
   EXECUTION_ORDER,
   fixtureProof,
@@ -28,7 +29,6 @@ import {
   validateDevCell,
   validateServerCell,
   validHostFingerprint,
-  waitForServerHost,
 } from './compare.mjs';
 
 describe('serialized comparison analysis', () => {
@@ -119,39 +119,74 @@ describe('serialized comparison analysis', () => {
     expect(() => serverSampleSchedule(0)).toThrow(/between 1 and 100/u);
   });
 
-  it('settles residual server load within a bound and preserves every rejected observation', async () => {
+  it('separates pre-existing admission from post-benchmark settling', async () => {
     const samples = [];
-    const loads = [4, 1];
-    let nowMs = 0;
-    const result = await waitForServerHost(samples, 0.5, {
-      context: 'hit-listing-br-c1/kovo/0',
+    const loads = [8, 2, 8, 2];
+    let waitedMs = 0;
+    const admission = createQuietHostAdmission({
+      ceiling: 1,
       maxWaitMs: 100,
-      now: () => nowMs,
       pollMs: 50,
       readLoad: () => ({ loadAverage: [loads.shift(), 0, 0], logicalCpuCount: 4 }),
+      samples,
       wait: async (milliseconds) => {
-        nowMs += milliseconds;
+        waitedMs += milliseconds;
       },
     });
-    expect(result).toMatchObject({ comparable: true, loadPerCpu: 0.25, waitedMs: 50 });
-    expect(samples).toMatchObject([
-      { attempt: 0, loadPerCpu: 1, phase: 'server-quiet-host-settle', waitedMs: 0 },
-      { attempt: 1, loadPerCpu: 0.25, phase: 'server-quiet-host-settle', waitedMs: 50 },
-    ]);
+    const initial = await admission.admit('suite-start');
+    admission.markBenchmarkWork();
+    const afterBenchmark = await admission.admit('matched-l1/browser/kovo/0');
 
-    const refused = [];
-    nowMs = 0;
-    const blocked = await waitForServerHost(refused, 0.5, {
+    expect(initial).toMatchObject({
+      comparable: true,
+      loadPerCpu: 0.5,
+      phase: 'quiet-host-admission',
+      posture: 'pre-benchmark',
+      settle: { rejectedObservations: 1, waitedMs: 50 },
+    });
+    expect(afterBenchmark).toMatchObject({
+      comparable: true,
+      loadPerCpu: 0.5,
+      phase: 'quiet-host-settle',
+      posture: 'post-benchmark',
+      settle: { rejectedObservations: 1, waitedMs: 50 },
+    });
+    expect(initial.settle.observations).toHaveLength(2);
+    expect(afterBenchmark.settle.observations).toHaveLength(2);
+    expect(samples).toHaveLength(2);
+    expect(waitedMs).toBe(100);
+    expect(admission.policy()).toMatchObject({ remainingWaitMs: 0, totalWaitedMs: 100 });
+  });
+
+  it('rejects a contaminated host after one total bounded wait across every cell', async () => {
+    const samples = [];
+    let waitedMs = 0;
+    const admission = createQuietHostAdmission({
+      ceiling: 0.5,
       maxWaitMs: 100,
-      now: () => nowMs,
       pollMs: 50,
       readLoad: () => ({ loadAverage: [4, 0, 0], logicalCpuCount: 4 }),
+      samples,
       wait: async (milliseconds) => {
-        nowMs += milliseconds;
+        waitedMs += milliseconds;
       },
     });
-    expect(blocked).toMatchObject({ comparable: false, waitedMs: 100 });
-    expect(refused).toHaveLength(3);
+    const blocked = await admission.admit('suite-start');
+    admission.markBenchmarkWork();
+    const noSecondBudget = await admission.admit('corpus-n216/build-clean/kovo/0');
+
+    expect(blocked).toMatchObject({
+      comparable: false,
+      phase: 'quiet-host-admission',
+      settle: { rejectedObservations: 3, waitedMs: 100 },
+    });
+    expect(noSecondBudget).toMatchObject({
+      comparable: false,
+      phase: 'quiet-host-settle',
+      settle: { maxWaitMs: 0, rejectedObservations: 1, waitedMs: 0 },
+    });
+    expect(waitedMs).toBe(100);
+    expect(samples).toHaveLength(2);
   });
 
   it('authenticates a server-only workload without requiring generated dev corpora', async () => {

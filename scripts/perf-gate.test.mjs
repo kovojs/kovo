@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   cpuProfileFileHits,
+  createPerformanceGateHostAdmission,
   evaluateMetric,
   evaluateReport,
   fitLogLogExponent,
@@ -195,7 +196,7 @@ describe('ratifiable report identity', () => {
     ).toBe(false);
   });
 
-  it('derives normalized pre/post host evidence from scalar rung load samples', () => {
+  it('ratifies from the last timed admission and retains a loaded post-suite diagnostic', () => {
     const samples = performanceGateHostSamples(
       {
         detail: {
@@ -203,6 +204,19 @@ describe('ratifiable report identity', () => {
             { componentCount: 8, samples: [{ loadAverage: 2 }] },
             { componentCount: 24, samples: [{ loadAverage: 1 }] },
           ],
+        },
+        hostAdmission: {
+          suiteComplete: {
+            at: '2026-08-14T12:00:00.000Z',
+            ceiling: 1,
+            comparable: false,
+            gatesTiming: false,
+            loadAverage: [8, 0, 0],
+            loadPerCpu: 2,
+            phase: 'host-diagnostic',
+            posture: 'post-timing',
+            settle: { rejectedObservations: 1, waitedMs: 0 },
+          },
         },
         suite: 'check-scaling',
       },
@@ -227,7 +241,72 @@ describe('ratifiable report identity', () => {
         phase: 'check-scaling',
       },
     ]);
-    expect(samples.at(-1)).toMatchObject({ phase: 'suite-complete' });
+    expect(samples.at(-1)).toMatchObject({
+      admissionContext: 'N=24/sample=0',
+      at: null,
+      loadAverage: [1],
+      loadPerCpu: 0.25,
+      phase: 'suite-complete',
+      posture: 'last-timed-admission',
+      ratificationBasis: 'last-pre-timing-admission',
+      postTimingDiagnostic: {
+        comparable: false,
+        gatesTiming: false,
+        loadAverage: [8, 0, 0],
+        loadPerCpu: 2,
+        phase: 'host-diagnostic',
+        posture: 'post-timing',
+      },
+    });
+  });
+
+  it('fails closed before timed rungs but keeps the final observation diagnostic', async () => {
+    const loads = [2, 8, 2, 8, 8, 8];
+    let waitedMs = 0;
+    const admission = createPerformanceGateHostAdmission({
+      ceiling: 1,
+      maxWaitMs: 20,
+      pollMs: 10,
+      readLoad: () => ({ loadAverage: [loads.shift(), 0, 0], logicalCpuCount: 4 }),
+      wait: async (milliseconds) => {
+        waitedMs += milliseconds;
+      },
+    });
+
+    const initial = await admission.admit('check-scaling/suite-start');
+    admission.markBenchmarkWork();
+    const settled = await admission.admit('check-scaling/N=8/sample=0');
+    const rejected = await admission.admit('check-scaling/N=24/sample=0');
+    const diagnostic = await admission.observe('check-scaling/suite-complete');
+
+    expect(initial).toMatchObject({
+      comparable: true,
+      phase: 'quiet-host-admission',
+      posture: 'pre-benchmark',
+      settle: { rejectedObservations: 0, waitedMs: 0 },
+    });
+    expect(settled).toMatchObject({
+      comparable: true,
+      phase: 'quiet-host-settle',
+      posture: 'post-benchmark',
+      settle: { rejectedObservations: 1, waitedMs: 10 },
+    });
+    expect(rejected).toMatchObject({
+      comparable: false,
+      gatesTiming: true,
+      phase: 'quiet-host-settle',
+      posture: 'post-benchmark',
+      settle: { rejectedObservations: 2, waitedMs: 10 },
+    });
+    expect(diagnostic).toMatchObject({
+      comparable: false,
+      gatesTiming: false,
+      phase: 'host-diagnostic',
+      posture: 'post-timing',
+      settle: { maxWaitMs: 0, rejectedObservations: 1, waitedMs: 0 },
+    });
+    expect(waitedMs).toBe(20);
+    expect(admission.policy()).toMatchObject({ remainingWaitMs: 0, totalWaitedMs: 20 });
   });
 });
 

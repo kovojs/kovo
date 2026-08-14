@@ -321,27 +321,36 @@ describe('dev-generation candidate comparator', () => {
     const spikeRoot = temporaryDirectory('kovo-dev-generation-spike-');
     const prepared = preparedFixture(baselineRoot, spikeRoot);
     const calls = [];
+    const events = [];
+    const sampleCounts = new Map();
     let released = false;
     const report = await runDevGenerationSpike(
       {
         baselineRoot,
         bootstrapIterations: 500,
+        hostSettleMaxMs: 10,
+        hostSettlePollMs: 10,
         measure: true,
         quickSmoke: true,
         spikeRoot,
       },
       {
-        acquireLock: () => ({
-          release: () => {
-            released = true;
-          },
-        }),
+        acquireLock: () => {
+          events.push('lock:acquire');
+          return {
+            release: () => {
+              events.push('lock:release');
+              released = true;
+            },
+          };
+        },
         collectState: (root) =>
           prepared.source.before[root === baselineRoot ? 'baseline' : 'spike'],
         hostFingerprint: () => ({ schema: 'test-host/v1' }),
         prepare: async () => prepared,
         runAdapter: async (options) => {
           const lane = options.root === baselineRoot ? 'baseline' : 'spike';
+          events.push(`adapter:${String(options.port)}`);
           calls.push({
             lane,
             port: options.port,
@@ -362,15 +371,25 @@ describe('dev-generation candidate comparator', () => {
             warmups: options.warmups,
           });
         },
-        sampleHost: (label, ceiling) => ({
-          at: '2026-08-13T00:00:00.000Z',
-          ceiling,
-          comparable: true,
-          cpuCount: 10,
-          label,
-          loadAverage: [0.1, 0.1, 0.1],
-          loadPerCpu: 0.01,
-        }),
+        sampleHost: (label, ceiling) => {
+          events.push(`host:${label}`);
+          const count = sampleCounts.get(label) ?? 0;
+          sampleCounts.set(label, count + 1);
+          const oneMinuteLoad =
+            label === 'post-timing' || (label === 'block-1-spike' && count === 0) ? 20 : 0.1;
+          return {
+            at: '2026-08-13T00:00:00.000Z',
+            ceiling,
+            comparable: oneMinuteLoad / 10 <= ceiling,
+            cpuCount: 10,
+            label,
+            loadAverage: [oneMinuteLoad, oneMinuteLoad, oneMinuteLoad],
+            loadPerCpu: oneMinuteLoad / 10,
+          };
+        },
+        waitForHost: async (milliseconds) => {
+          events.push(`wait:${String(milliseconds)}`);
+        },
       },
     );
 
@@ -380,7 +399,40 @@ describe('dev-generation candidate comparator', () => {
       { lane: 'spike', port: 20_256, readyTimeoutMs: 600_000, timeoutMs: 1_800_000 },
       { lane: 'baseline', port: 20_384, readyTimeoutMs: 600_000, timeoutMs: 1_800_000 },
     ]);
+    expect(events).toEqual([
+      'host:pre-preparation',
+      'lock:acquire',
+      'host:block-0-baseline',
+      'adapter:20000',
+      'host:block-1-spike',
+      'wait:10',
+      'host:block-1-spike',
+      'adapter:20128',
+      'host:block-2-spike',
+      'adapter:20256',
+      'host:block-3-baseline',
+      'adapter:20384',
+      'host:post-timing',
+      'lock:release',
+    ]);
     expect(released).toBe(true);
+    expect(report.hostSamples).toHaveLength(5);
+    expect(report.hostSamples.every((sample) => sample.comparable)).toBe(true);
+    expect(report.hostSamples[2]).toMatchObject({
+      gatesTiming: true,
+      label: 'block-1-spike',
+      settle: { rejectedObservations: 1, waitedMs: 10 },
+    });
+    expect(report.hostDiagnostics).toEqual([
+      expect.objectContaining({
+        comparable: false,
+        gatesTiming: false,
+        label: 'post-timing',
+        loadPerCpu: 2,
+        phase: 'host-diagnostic',
+        posture: 'post-timing',
+      }),
+    ]);
     expect(report.integrity).toMatchObject({
       complete: true,
       errors: [],
@@ -567,7 +619,13 @@ describe('dev-generation candidate comparator', () => {
 
     await expect(
       runDevGenerationSpike(
-        { baselineRoot, measure: true, quickSmoke: true, spikeRoot },
+        {
+          baselineRoot,
+          hostSettleMaxMs: 0,
+          measure: true,
+          quickSmoke: true,
+          spikeRoot,
+        },
         {
           acquireLock,
           prepare: async () => prepared,
@@ -586,6 +644,59 @@ describe('dev-generation candidate comparator', () => {
     ).rejects.toThrow(/no timing process was started/u);
     expect(acquireLock).not.toHaveBeenCalled();
     expect(runAdapter).not.toHaveBeenCalled();
+  });
+
+  it('fails closed on a loaded pre-block admission without timing that block', async () => {
+    const baselineRoot = temporaryDirectory('kovo-dev-generation-block-load-baseline-');
+    const spikeRoot = temporaryDirectory('kovo-dev-generation-block-load-spike-');
+    const prepared = preparedFixture(baselineRoot, spikeRoot);
+    const release = vi.fn();
+    const runAdapter = vi.fn();
+
+    const report = await runDevGenerationSpike(
+      {
+        baselineRoot,
+        hostSettleMaxMs: 0,
+        measure: true,
+        quickSmoke: true,
+        spikeRoot,
+      },
+      {
+        acquireLock: () => ({ release }),
+        collectState: (root) =>
+          prepared.source.before[root === baselineRoot ? 'baseline' : 'spike'],
+        hostFingerprint: () => ({ schema: 'test-host/v1' }),
+        prepare: async () => prepared,
+        runAdapter,
+        sampleHost: (label, ceiling) => {
+          const oneMinuteLoad = label === 'pre-preparation' ? 0.1 : 20;
+          return {
+            at: '2026-08-13T00:00:00.000Z',
+            ceiling,
+            comparable: oneMinuteLoad / 10 <= ceiling,
+            cpuCount: 10,
+            label,
+            loadAverage: [oneMinuteLoad, oneMinuteLoad, oneMinuteLoad],
+            loadPerCpu: oneMinuteLoad / 10,
+          };
+        },
+      },
+    );
+
+    expect(runAdapter).not.toHaveBeenCalled();
+    expect(release).toHaveBeenCalledOnce();
+    expect(report.hostSamples).toHaveLength(2);
+    expect(report.hostSamples[1]).toMatchObject({
+      comparable: false,
+      gatesTiming: true,
+      label: 'block-0-baseline',
+      posture: 'post-benchmark',
+    });
+    expect(report.hostDiagnostics).toEqual([]);
+    expect(report.integrity).toMatchObject({
+      complete: false,
+      errors: [expect.stringContaining('block 0: post-benchmark host load')],
+    });
   });
 
   it('records an unproven host range and refuses every timing control before launch', async () => {

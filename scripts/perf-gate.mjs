@@ -44,6 +44,9 @@ export const PERF_GATE_WORKLOAD_SCHEMA = 'kovo-performance-workload-identity/v1'
 const repoRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const CHECK_CENSUS_SCHEMA = 'kovo-check-phase-census/v1';
 const CHECK_CENSUS_INCOMPLETE_SCHEMA = 'kovo-check-phase-census-incomplete/v1';
+const DEFAULT_HOST_SETTLE_MAX_MS = 30_000;
+const DEFAULT_HOST_SETTLE_POLL_MS = 1_000;
+const MAX_HOST_SETTLE_MAX_MS = 60_000;
 
 // ---------------------------------------------------------------------------------------------
 // Pure helpers (exported for scripts/perf-gate.test.mjs)
@@ -313,6 +316,142 @@ function observedLoadAverage() {
   return loadavg()[0];
 }
 
+/**
+ * One bounded quiet-host budget for an entire suite. The first admission is explicitly before
+ * benchmark work; after `markBenchmarkWork()` timed admissions are labeled as post-benchmark
+ * settling. `observe()` records the final load tail as a non-gating diagnostic because that tail
+ * cannot establish contention before an already-completed timed rung.
+ */
+export function createPerformanceGateHostAdmission({
+  ceiling = 1,
+  maxWaitMs = DEFAULT_HOST_SETTLE_MAX_MS,
+  pollMs = DEFAULT_HOST_SETTLE_POLL_MS,
+  readLoad = () => ({ loadAverage: loadavg(), logicalCpuCount: cpus().length }),
+  timestamp = () => new Date().toISOString(),
+  wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+} = {}) {
+  assertPerformanceGateHostPolicy({ ceiling, maxWaitMs, pollMs });
+  const budget = { remainingWaitMs: maxWaitMs, totalWaitedMs: 0 };
+  let benchmarkWorkStarted = false;
+  async function sample(context, { gatesTiming }) {
+    if (
+      typeof context !== 'string' ||
+      context.length === 0 ||
+      context.length > 512 ||
+      context.includes('\r') ||
+      context.includes('\n') ||
+      context.includes('\0')
+    ) {
+      throw new TypeError('quiet-host context is invalid');
+    }
+    const availableWaitMs = gatesTiming ? budget.remainingWaitMs : 0;
+    const observations = [];
+    let attempt = 0;
+    let waitedMs = 0;
+    while (true) {
+      const observed = readLoad();
+      const loadAverage = observed.loadAverage;
+      const logicalCpuCount = observed.logicalCpuCount;
+      const loadPerCpu =
+        Array.isArray(loadAverage) &&
+        Number.isFinite(loadAverage[0]) &&
+        Number.isSafeInteger(logicalCpuCount) &&
+        logicalCpuCount > 0
+          ? loadAverage[0] / logicalCpuCount
+          : null;
+      const observation = {
+        at: timestamp(),
+        attempt,
+        context,
+        gatesTiming,
+        loadAverage,
+        loadPerCpu,
+        logicalCpuCount,
+        phase: gatesTiming
+          ? benchmarkWorkStarted
+            ? 'quiet-host-settle'
+            : 'quiet-host-admission'
+          : 'host-diagnostic',
+        posture: gatesTiming
+          ? benchmarkWorkStarted
+            ? 'post-benchmark'
+            : 'pre-benchmark'
+          : 'post-timing',
+        waitedMs,
+      };
+      observations.push(observation);
+      const comparable = Number.isFinite(loadPerCpu) && loadPerCpu >= 0 && loadPerCpu <= ceiling;
+      if (comparable || !gatesTiming || waitedMs >= availableWaitMs) {
+        return {
+          ...observation,
+          ceiling,
+          comparable,
+          settle: {
+            maxWaitMs: availableWaitMs,
+            observations,
+            pollMs,
+            rejectedObservations: observations.filter(
+              (entry) =>
+                !Number.isFinite(entry.loadPerCpu) ||
+                entry.loadPerCpu < 0 ||
+                entry.loadPerCpu > ceiling,
+            ).length,
+            totalBudgetRemainingMs: budget.remainingWaitMs,
+            waitedMs,
+          },
+        };
+      }
+      const waitMs = Math.min(pollMs, availableWaitMs - waitedMs);
+      await wait(waitMs);
+      waitedMs += waitMs;
+      budget.remainingWaitMs = Math.max(0, budget.remainingWaitMs - waitMs);
+      budget.totalWaitedMs += waitMs;
+      attempt += 1;
+    }
+  }
+  return {
+    admit(context) {
+      return sample(context, { gatesTiming: true });
+    },
+    markBenchmarkWork() {
+      benchmarkWorkStarted = true;
+    },
+    observe(context) {
+      return sample(context, { gatesTiming: false });
+    },
+    policy() {
+      return {
+        ceiling,
+        maxTotalWaitMs: maxWaitMs,
+        pollMs,
+        remainingWaitMs: budget.remainingWaitMs,
+        totalWaitedMs: budget.totalWaitedMs,
+      };
+    },
+  };
+}
+
+function assertPerformanceGateHostPolicy({ ceiling, maxWaitMs, pollMs }) {
+  if (!Number.isFinite(ceiling) || ceiling <= 0) throw new TypeError('host ceiling is invalid');
+  if (!Number.isSafeInteger(maxWaitMs) || maxWaitMs < 0 || maxWaitMs > MAX_HOST_SETTLE_MAX_MS) {
+    throw new TypeError(
+      `quiet-host total settle max must be between 0 and ${String(MAX_HOST_SETTLE_MAX_MS)}ms`,
+    );
+  }
+  if (!Number.isSafeInteger(pollMs) || pollMs < 10 || pollMs > 60_000) {
+    throw new TypeError('quiet-host settle poll must be between 10 and 60000ms');
+  }
+}
+
+function quietHostFailure(sample) {
+  const observed = Number.isFinite(sample.loadPerCpu)
+    ? sample.loadPerCpu.toFixed(3)
+    : 'unavailable';
+  return `${sample.posture} host load ${observed} per CPU exceeded ceiling ${String(
+    sample.ceiling,
+  )} after bounded ${String(sample.settle?.waitedMs ?? 0)}ms quiet-host admission`;
+}
+
 function kovoCliArgv(args) {
   return [
     '--disable-warning=ExperimentalWarning',
@@ -376,13 +515,35 @@ function profileCensus(directory) {
  */
 export async function runCheckScalingSuite(options) {
   const rungs = [];
-  for (const componentCount of options.ladder) {
+  const quietHost = createPerformanceGateHostAdmission({
+    ceiling: options.maxLoadPerCpu ?? 1,
+    maxWaitMs: options.hostSettleMaxMs ?? DEFAULT_HOST_SETTLE_MAX_MS,
+    pollMs: options.hostSettlePollMs ?? DEFAULT_HOST_SETTLE_POLL_MS,
+  });
+  const hostAdmission = {
+    initial: await quietHost.admit('check-scaling/suite-start'),
+    policy: quietHost.policy(),
+    suiteComplete: null,
+  };
+  let admissionError = hostAdmission.initial.comparable
+    ? null
+    : quietHostFailure(hostAdmission.initial);
+
+  rungLoop: for (const componentCount of options.ladder) {
+    if (admissionError !== null) break;
     const root = path.join(repoRoot, `.tmp-kovo-perf-scaling-${String(componentCount)}`);
-    const workload = materializePerfWorkload({ componentCount, repoRoot, root });
     const samples = [];
     try {
+      quietHost.markBenchmarkWork();
+      const workload = materializePerfWorkload({ componentCount, repoRoot, root });
       for (let sample = 0; sample < options.samples; sample += 1) {
-        const loadAverage = observedLoadAverage();
+        const admission = await quietHost.admit(
+          `check-scaling/N=${String(componentCount)}/sample=${String(sample)}`,
+        );
+        if (!admission.comparable) {
+          admissionError = quietHostFailure(admission);
+          break;
+        }
         const measured = measureProcessTreeCommand(
           [process.execPath, ...kovoCliArgv(['check', '--no-cache'])],
           {
@@ -401,7 +562,8 @@ export async function runCheckScalingSuite(options) {
           censusComplete: census?.complete ?? false,
           durationMs: measured.durationMs,
           exitCode: measured.exitCode,
-          loadAverage,
+          hostAdmission: admission,
+          loadAverage: admission.loadAverage[0],
           peakRssBytes: measured.peakRssBytes,
           phases: census?.evidence?.phases ?? [],
         });
@@ -413,11 +575,21 @@ export async function runCheckScalingSuite(options) {
     rungs.push({
       appSourceTrustMedianMs: trustSamples.length === 0 ? null : median(trustSamples),
       componentCount,
-      durationMedianMs: median(samples.map((sample) => sample.durationMs ?? 0)),
-      peakRssBytes: Math.max(...samples.map((sample) => sample.peakRssBytes ?? 0)),
+      durationMedianMs:
+        samples.length === 0 ? null : median(samples.map((sample) => sample.durationMs ?? 0)),
+      peakRssBytes:
+        samples.length === 0
+          ? null
+          : Math.max(...samples.map((sample) => sample.peakRssBytes ?? 0)),
       samples,
     });
+    if (admissionError !== null) break rungLoop;
   }
+
+  // This observation is after every timed rung. It describes the suite's own load tail and cannot
+  // retroactively establish pre-existing contention, so retain it without gating the ladder.
+  hostAdmission.suiteComplete = await quietHost.observe('check-scaling/suite-complete');
+  hostAdmission.policy = quietHost.policy();
 
   // Rung integrity gates the whole suite. A rung whose `kovo check` exited non-zero, or whose phase
   // census came back incomplete, did not measure the thing these metrics claim to measure — and a
@@ -433,10 +605,25 @@ export async function runCheckScalingSuite(options) {
           })`,
       ),
   );
-  if (brokenRungs.length > 0) {
+  const incompleteLadder =
+    rungs.length !== options.ladder.length ||
+    rungs.some((rung) => rung.samples.length !== options.samples);
+  if (admissionError !== null || brokenRungs.length > 0 || incompleteLadder) {
+    const reasons = [];
+    if (admissionError !== null) reasons.push(admissionError);
+    if (incompleteLadder) reasons.push('quiet-host admission prevented the complete ladder');
+    if (brokenRungs.length > 0) {
+      reasons.push(`check-scaling ladder did not complete cleanly: ${brokenRungs.join('; ')}`);
+    }
     return {
       detail: { rungs },
-      error: `check-scaling ladder did not complete cleanly: ${brokenRungs.join('; ')}`,
+      error: reasons.join('; '),
+      hostAdmission,
+      profiles: {
+        cpu: profileCensus(options.cpuProfDir),
+        heap: profileCensus(options.heapProfDir),
+      },
+      suite: 'check-scaling',
     };
   }
 
@@ -471,6 +658,7 @@ export async function runCheckScalingSuite(options) {
       cpu: profileCensus(options.cpuProfDir),
       heap: profileCensus(options.heapProfDir),
     },
+    hostAdmission,
     suite: 'check-scaling',
   };
 }
@@ -1079,7 +1267,13 @@ export function performanceGateWorkloadIdentity(suite, options) {
     cells: [suite],
     policies:
       suite === 'check-scaling'
-        ? { ladder: [...options.ladder], samplesPerRung: options.samples }
+        ? {
+            hostLoadCeilingPerCpu: options.maxLoadPerCpu ?? 1,
+            hostSettleMaxTotalMs: options.hostSettleMaxMs ?? DEFAULT_HOST_SETTLE_MAX_MS,
+            hostSettlePollMs: options.hostSettlePollMs ?? DEFAULT_HOST_SETTLE_POLL_MS,
+            ladder: [...options.ladder],
+            samplesPerRung: options.samples,
+          }
         : { componentCount: options.componentCount },
   };
   return {
@@ -1098,7 +1292,7 @@ export function performanceGateWorkloadIdentity(suite, options) {
 }
 
 export function performanceGateHostSamples(result, host, ceiling = 1) {
-  const samples =
+  const timedSamples =
     result?.suite === 'check-scaling'
       ? (result.detail?.rungs ?? []).flatMap((rung) =>
           (rung.samples ?? []).map((sample, index) => {
@@ -1106,26 +1300,52 @@ export function performanceGateHostSamples(result, host, ceiling = 1) {
               ? sample.loadAverage[0]
               : sample.loadAverage;
             return {
-              at: null,
-              ceiling,
+              at: sample.hostAdmission?.at ?? null,
+              ceiling: sample.hostAdmission?.ceiling ?? ceiling,
               context: `N=${String(rung.componentCount)}/sample=${String(index)}`,
               loadAverage: [oneMinuteLoad],
               loadPerCpu: oneMinuteLoad / host.cpu.count,
               phase: 'check-scaling',
+              ...(sample.hostAdmission === undefined
+                ? {}
+                : {
+                    posture: sample.hostAdmission.posture,
+                    settle: sample.hostAdmission.settle,
+                  }),
             };
           }),
         )
       : [];
-  const observed = loadavg();
+  const initialAdmission = result?.hostAdmission?.initial;
+  const lastTimedAdmission = timedSamples.at(-1);
+  const authority =
+    lastTimedAdmission ??
+    (initialAdmission === undefined
+      ? null
+      : {
+          at: initialAdmission.at,
+          ceiling: initialAdmission.ceiling,
+          context: initialAdmission.context,
+          loadAverage: initialAdmission.loadAverage,
+          loadPerCpu: initialAdmission.loadPerCpu,
+          posture: initialAdmission.posture,
+          settle: initialAdmission.settle,
+        });
+  const observed = authority?.loadAverage ?? loadavg();
+  const postTimingDiagnostic = result?.hostAdmission?.suiteComplete ?? null;
   return [
-    ...samples,
+    ...timedSamples,
     {
-      at: new Date().toISOString(),
-      ceiling,
+      admissionContext: authority?.context ?? null,
+      at: authority === null ? new Date().toISOString() : authority.at,
+      ceiling: authority?.ceiling ?? ceiling,
       context: result?.suite ?? 'unknown',
       loadAverage: observed,
-      loadPerCpu: observed[0] / cpus().length,
+      loadPerCpu: authority?.loadPerCpu ?? observed[0] / host.cpu.count,
       phase: 'suite-complete',
+      postTimingDiagnostic,
+      ratificationBasis: authority === null ? 'unavailable' : 'last-pre-timing-admission',
+      ...(authority === null ? {} : { posture: 'last-timed-admission', settle: authority.settle }),
     },
   ];
 }
@@ -1187,6 +1407,7 @@ async function main(argv) {
         '       node scripts/perf-gate.mjs --evaluate report.json [--evaluate other.json]\n' +
         'options: --ladder 8,24,72,216  --samples 1  --components 24  --port 43117\n' +
         '         --connections 32  --duration 10000  --edits 5\n' +
+        '         --host-settle-max-ms 30000  --host-settle-poll-ms 1000\n' +
         '         --cpu-prof <dir>  --heap-prof <dir>\n' +
         '       node scripts/perf-gate.mjs --profile-summary <dir>\n',
     );
@@ -1205,6 +1426,18 @@ async function main(argv) {
     edits: parsePositiveIntegerOption('edits', args.edits, 5, { max: 10_000 }),
     heapProfDir:
       args['heap-prof'] === undefined ? undefined : path.resolve(String(args['heap-prof'])),
+    hostSettleMaxMs: parsePositiveIntegerOption(
+      'host-settle-max-ms',
+      args['host-settle-max-ms'],
+      DEFAULT_HOST_SETTLE_MAX_MS,
+      { max: MAX_HOST_SETTLE_MAX_MS, min: 0 },
+    ),
+    hostSettlePollMs: parsePositiveIntegerOption(
+      'host-settle-poll-ms',
+      args['host-settle-poll-ms'],
+      DEFAULT_HOST_SETTLE_POLL_MS,
+      { max: 60_000, min: 10 },
+    ),
     // Default matches the span the budgets were calibrated on (the 72->216 marginal step). A
     // shorter default would compute the exponent over 24->72, where a genuinely quadratic workload
     // can still look linear — a gate that cannot see the regression it exists to catch.
@@ -1252,6 +1485,8 @@ async function main(argv) {
     finishedAt: new Date().toISOString(),
     generatedAt: new Date().toISOString(),
     host,
+    hostDiagnostics:
+      result.hostAdmission?.suiteComplete === undefined ? [] : [result.hostAdmission.suiteComplete],
     hostSamples: performanceGateHostSamples(result, host),
     integrity: {
       complete: result.error === undefined,

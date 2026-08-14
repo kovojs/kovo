@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { readArg, readIntegerArg } from './harness/args.mjs';
+import { parseIntegerFlag, readArg, readIntegerArg } from './harness/args.mjs';
 import { bfcacheIterationFindings } from './harness/bfcache.mjs';
 import { BROWSER_BENCHMARK_SCHEMA } from './harness/schema.mjs';
 import { DEV_PORT_ALLOCATION_POSTURE, DEV_SESSION_PORT_STRIDE } from './corpora/generate.mjs';
@@ -43,6 +43,9 @@ export const WORKLOAD_IDENTITY_SCHEMA = 'kovo-performance-workload-identity/v1';
 const DEV_EDIT_CLASSES = Object.freeze(['leaf', 'entry', 'data', 'syntaxError', 'recovery']);
 const DEV_LOOP_REPORT_SCHEMA = 'kovo-dev-loop-report/v1';
 const MAX_COMPARISON_RAW_REPORT_BYTES = 64 * 1024 * 1024;
+const DEFAULT_HOST_SETTLE_MAX_MS = 30_000;
+const DEFAULT_HOST_SETTLE_POLL_MS = 1_000;
+const MAX_HOST_SETTLE_MAX_MS = 60_000;
 
 const benchmarkRoot = fileURLToPath(new URL('.', import.meta.url));
 const repoRoot = path.resolve(benchmarkRoot, '..');
@@ -70,6 +73,7 @@ export async function runComparison(options = {}) {
   if (cells.includes('server')) {
     assertServerMatrixOptions(options);
   }
+  const quietHostPolicy = comparisonQuietHostPolicy(options);
   for (const lane of options.lanes ?? lanes) assertMember('--lanes', lane, lanes);
   for (const mode of options.buildModes ?? buildModes)
     assertMember('--build-modes', mode, buildModes);
@@ -143,10 +147,20 @@ export async function runComparison(options = {}) {
   const rawCells = [];
   const browserPreparation = [];
   const serverPreparation = [];
+  const quietHost = createQuietHostAdmission({
+    ceiling: options.maxLoadPerCpu ?? 1,
+    maxWaitMs: quietHostPolicy.maxWaitMs,
+    pollMs: quietHostPolicy.pollMs,
+    samples: hostSamples,
+  });
   let executionError = null;
   await mkdir(outDir, { recursive: true });
   try {
-    if (cells.includes('browser')) {
+    const initialHost = await quietHost.admit('suite-start');
+    if (!initialHost.comparable) executionError = quietHostFailure(initialHost);
+
+    if (cells.includes('browser') && !executionError) {
+      quietHost.markBenchmarkWork();
       browserPreparation.push(...(await prepareBrowserEntrants()));
       const incomplete = browserPreparation.filter((report) => report.integrity.complete !== true);
       if (incomplete.length > 0) {
@@ -164,9 +178,9 @@ export async function runComparison(options = {}) {
           const occurrence = occurrenceIndex(orderIndex, framework);
           const sampleCount = occurrenceCounts[occurrence];
           const warmupCount = warmupCounts[occurrence];
-          const host = sampleHost(hostSamples, options.maxLoadPerCpu ?? 1);
+          const host = await quietHost.admit(`${lane}/browser/${framework}/${String(occurrence)}`);
           if (!host.comparable) {
-            executionError = `host load ${host.loadPerCpu.toFixed(3)} per CPU exceeded ceiling ${host.ceiling}`;
+            executionError = quietHostFailure(host);
             break;
           }
           const resultFile = path.join(scratch, `${lane}-${orderIndex}-browser.json`);
@@ -216,11 +230,12 @@ export async function runComparison(options = {}) {
       const corpusLane = `corpus-n${options.corpusSize ?? 24}`;
       for (const scheduled of devSchedule) {
         const { framework, occurrence, scheduleIndex } = scheduled;
-        const host = sampleHost(hostSamples, options.maxLoadPerCpu ?? 1);
+        const host = await quietHost.admit(`${corpusLane}/dev/${framework}/${String(occurrence)}`);
         if (!host.comparable) {
-          executionError = `host load ${host.loadPerCpu.toFixed(3)} per CPU exceeded ceiling ${host.ceiling}`;
+          executionError = quietHostFailure(host);
           break;
         }
+        quietHost.markBenchmarkWork();
         const resultFile = path.join(scratch, `${corpusLane}-${scheduleIndex}-dev.json`);
         const retainedReference = `raw/${corpusLane}-${String(scheduleIndex)}-${framework}-failed.json`;
         const captured = await runDevComparisonAdapterCell({
@@ -271,11 +286,14 @@ export async function runComparison(options = {}) {
           const occurrence = occurrenceIndex(orderIndex, framework);
           const sampleCount = occurrenceCounts[occurrence];
           const warmupCount = warmupCounts[occurrence];
-          const host = sampleHost(hostSamples, options.maxLoadPerCpu ?? 1);
+          const host = await quietHost.admit(
+            `${corpusLane}/build-${mode}/${framework}/${String(occurrence)}`,
+          );
           if (!host.comparable) {
-            executionError = `host load ${host.loadPerCpu.toFixed(3)} per CPU exceeded ceiling ${host.ceiling}`;
+            executionError = quietHostFailure(host);
             break;
           }
+          quietHost.markBenchmarkWork();
           const manifest = corpusManifest(framework, options.corpusSize ?? 24);
           const resultFile = path.join(scratch, `${corpusLane}-${orderIndex}-build-${mode}.json`);
           try {
@@ -317,15 +335,12 @@ export async function runComparison(options = {}) {
 
     if (cells.includes('server') && !executionError) {
       for (const [frameworkIndex, framework] of ['kovo', 'nextjs'].entries()) {
-        const host = await waitForServerHost(hostSamples, options.maxLoadPerCpu ?? 1, {
-          context: `prepare/${framework}`,
-          maxWaitMs: options.serverHostSettleMaxMs ?? 30_000,
-          pollMs: options.serverHostSettlePollMs ?? 1_000,
-        });
+        const host = await quietHost.admit(`server/prepare/${framework}`);
         if (!host.comparable) {
-          executionError = `host load ${host.loadPerCpu.toFixed(3)} per CPU exceeded ceiling ${host.ceiling}`;
+          executionError = quietHostFailure(host);
           break;
         }
+        quietHost.markBenchmarkWork();
         const resultFile = path.join(scratch, `server-prepare-${framework}.json`);
         try {
           await runAdapter({
@@ -361,15 +376,16 @@ export async function runComparison(options = {}) {
         if (executionError) break;
         const schedule = serverSampleSchedule(options.serverSamples ?? 7);
         for (const [scheduleIndex, scheduled] of schedule.entries()) {
-          const host = await waitForServerHost(hostSamples, options.maxLoadPerCpu ?? 1, {
-            context: `${condition.key}/${scheduled.framework}/${String(scheduled.occurrence)}`,
-            maxWaitMs: options.serverHostSettleMaxMs ?? 30_000,
-            pollMs: options.serverHostSettlePollMs ?? 1_000,
-          });
+          const host = await quietHost.admit(
+            `matched-runtime/${condition.key}/${scheduled.framework}/${String(
+              scheduled.occurrence,
+            )}`,
+          );
           if (!host.comparable) {
-            executionError = `host load ${host.loadPerCpu.toFixed(3)} per CPU exceeded ceiling ${host.ceiling}`;
+            executionError = quietHostFailure(host);
             break;
           }
+          quietHost.markBenchmarkWork();
           const frameworkIndex = scheduled.framework === 'kovo' ? 0 : 1;
           const resultFile = path.join(
             scratch,
@@ -459,8 +475,8 @@ export async function runComparison(options = {}) {
           serverConcurrencies: options.serverConcurrencies ?? SERVER_CONCURRENCIES,
           serverDurationMs: options.serverDurationMs ?? 15_000,
           serverEncodings: options.serverEncodings ?? SERVER_ENCODINGS,
-          serverHostSettleMaxMs: options.serverHostSettleMaxMs ?? 30_000,
-          serverHostSettlePollMs: options.serverHostSettlePollMs ?? 1_000,
+          serverHostSettleMaxMs: quietHostPolicy.maxWaitMs,
+          serverHostSettlePollMs: quietHostPolicy.pollMs,
           serverModes: options.serverModes ?? SERVER_MODES,
           serverPreparation,
           serverRoutes: options.serverRoutes ?? SERVER_ROUTES,
@@ -492,12 +508,18 @@ export async function runComparison(options = {}) {
         devReadySamples: options.devReadyIterations ?? 15,
         devWarmups: options.devWarmups ?? 3,
         lighthouseRunsPerCell: options.lighthouseRuns ?? 5,
+        quietHost: {
+          ceilingPerCpu: options.maxLoadPerCpu ?? 1,
+          maxTotalWaitMs: quietHostPolicy.maxWaitMs,
+          pollMs: quietHostPolicy.pollMs,
+          posture: 'pre-benchmark-admission-then-post-benchmark-settle',
+        },
         server: {
           concurrencies: options.serverConcurrencies ?? SERVER_CONCURRENCIES,
           durationMs: options.serverDurationMs ?? 15_000,
           encodings: options.serverEncodings ?? SERVER_ENCODINGS,
-          hostSettleMaxMs: options.serverHostSettleMaxMs ?? 30_000,
-          hostSettlePollMs: options.serverHostSettlePollMs ?? 1_000,
+          hostSettleMaxMs: quietHostPolicy.maxWaitMs,
+          hostSettlePollMs: quietHostPolicy.pollMs,
           modes: options.serverModes ?? SERVER_MODES,
           routes: options.serverRoutes ?? SERVER_ROUTES,
           samplesPerFrameworkCondition: options.serverSamples ?? 7,
@@ -830,65 +852,181 @@ function corpusManifest(framework, size) {
   return path.join(benchmarkRoot, framework, '.corpora', framework, `n${size}`, 'manifest.json');
 }
 
-function sampleHost(samples, ceiling) {
-  const sample = {
-    at: new Date().toISOString(),
-    loadAverage: os.loadavg(),
-    loadPerCpu: os.loadavg()[0] / os.cpus().length,
+/**
+ * Admit a quiet host before any benchmark work, then classify later admissions as bounded
+ * post-benchmark settling. One total wait budget is shared by the whole comparison, so adding more
+ * cells cannot multiply the worst-case delay. Rejected observations stay nested under the final
+ * admission record: ratifiers evaluate the load that actually admitted the cell without losing the
+ * evidence that settling was required.
+ */
+export function createQuietHostAdmission({
+  ceiling = 1,
+  maxWaitMs = DEFAULT_HOST_SETTLE_MAX_MS,
+  pollMs = DEFAULT_HOST_SETTLE_POLL_MS,
+  readLoad = () => ({ loadAverage: os.loadavg(), logicalCpuCount: os.cpus().length }),
+  samples = [],
+  timestamp = () => new Date().toISOString(),
+  wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+} = {}) {
+  if (!Array.isArray(samples)) throw new TypeError('host samples must be an array');
+  assertQuietHostPolicy({ ceiling, maxWaitMs, pollMs });
+  const budget = { remainingWaitMs: maxWaitMs, totalWaitedMs: 0 };
+  let benchmarkWorkStarted = false;
+  return {
+    admit(context) {
+      return waitForQuietHost(samples, ceiling, {
+        budget,
+        context,
+        maxWaitMs,
+        phase: benchmarkWorkStarted ? 'quiet-host-settle' : 'quiet-host-admission',
+        pollMs,
+        posture: benchmarkWorkStarted ? 'post-benchmark' : 'pre-benchmark',
+        readLoad,
+        timestamp,
+        wait,
+      });
+    },
+    markBenchmarkWork() {
+      benchmarkWorkStarted = true;
+    },
+    policy() {
+      return {
+        ceiling,
+        maxTotalWaitMs: maxWaitMs,
+        pollMs,
+        remainingWaitMs: budget.remainingWaitMs,
+        totalWaitedMs: budget.totalWaitedMs,
+      };
+    },
   };
-  samples.push(sample);
-  return { ...sample, ceiling, comparable: sample.loadPerCpu <= ceiling };
 }
 
-/**
- * Wait only between serialized server cells, preserving every rejected load sample. This prevents
- * the previous build/sample's one-minute load average from becoming an immediate false abort while
- * retaining a hard upper bound on settling.
- */
-export async function waitForServerHost(
+export async function waitForQuietHost(
   samples,
   ceiling,
   {
+    budget,
     context = 'server',
-    maxWaitMs = 30_000,
-    now = Date.now,
-    pollMs = 1_000,
+    maxWaitMs = DEFAULT_HOST_SETTLE_MAX_MS,
+    phase = 'quiet-host-settle',
+    pollMs = DEFAULT_HOST_SETTLE_POLL_MS,
+    posture = 'post-benchmark',
     readLoad = () => ({ loadAverage: os.loadavg(), logicalCpuCount: os.cpus().length }),
+    timestamp = () => new Date().toISOString(),
     wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
   } = {},
 ) {
-  if (!Number.isFinite(ceiling) || ceiling <= 0) throw new TypeError('host ceiling is invalid');
-  if (!Number.isSafeInteger(maxWaitMs) || maxWaitMs < 0 || maxWaitMs > 300_000)
-    throw new TypeError('server host settle max wait must be between 0 and 300000ms');
-  if (!Number.isSafeInteger(pollMs) || pollMs < 10 || pollMs > 60_000)
-    throw new TypeError('server host settle poll must be between 10 and 60000ms');
-  const startedAt = now();
+  if (!Array.isArray(samples)) throw new TypeError('host samples must be an array');
+  assertQuietHostPolicy({ ceiling, maxWaitMs, pollMs });
+  if (
+    budget !== undefined &&
+    (!Number.isFinite(budget.remainingWaitMs) ||
+      budget.remainingWaitMs < 0 ||
+      !Number.isFinite(budget.totalWaitedMs) ||
+      budget.totalWaitedMs < 0)
+  ) {
+    throw new TypeError('quiet-host total wait budget is invalid');
+  }
+  if (!boundedComparisonLabel(context)) throw new TypeError('quiet-host context is invalid');
+  const availableWaitMs = Math.min(maxWaitMs, budget?.remainingWaitMs ?? maxWaitMs);
+  const observations = [];
+  let waitedMs = 0;
   let attempt = 0;
   while (true) {
     const observed = readLoad();
     const loadAverage = observed.loadAverage;
     const logicalCpuCount = observed.logicalCpuCount;
-    const loadPerCpu = loadAverage?.[0] / logicalCpuCount;
-    const waitedMs = Math.max(0, now() - startedAt);
-    const sample = {
-      at: new Date().toISOString(),
+    const loadPerCpu =
+      Array.isArray(loadAverage) &&
+      Number.isFinite(loadAverage[0]) &&
+      Number.isSafeInteger(logicalCpuCount) &&
+      logicalCpuCount > 0
+        ? loadAverage[0] / logicalCpuCount
+        : null;
+    const observation = {
+      at: timestamp(),
       attempt,
       context,
       loadAverage,
       loadPerCpu,
       logicalCpuCount,
-      phase: 'server-quiet-host-settle',
+      phase,
+      posture,
       waitedMs,
     };
-    samples.push(sample);
-    if (Number.isFinite(loadPerCpu) && loadPerCpu >= 0 && loadPerCpu <= ceiling) {
-      return { ...sample, ceiling, comparable: true };
+    observations.push(observation);
+    const comparable = Number.isFinite(loadPerCpu) && loadPerCpu >= 0 && loadPerCpu <= ceiling;
+    if (comparable || waitedMs >= availableWaitMs) {
+      const sample = {
+        ...observation,
+        ceiling,
+        comparable,
+        settle: {
+          maxWaitMs: availableWaitMs,
+          observations,
+          pollMs,
+          rejectedObservations: observations.filter(
+            (entry) =>
+              !Number.isFinite(entry.loadPerCpu) ||
+              entry.loadPerCpu < 0 ||
+              entry.loadPerCpu > ceiling,
+          ).length,
+          totalBudgetRemainingMs: budget?.remainingWaitMs ?? Math.max(0, maxWaitMs - waitedMs),
+          waitedMs,
+        },
+      };
+      samples.push(sample);
+      return sample;
     }
-    if (waitedMs >= maxWaitMs) return { ...sample, ceiling, comparable: false };
-    const remainingMs = maxWaitMs - waitedMs;
-    await wait(Math.min(pollMs, remainingMs));
+    const remainingMs = availableWaitMs - waitedMs;
+    const waitMs = Math.min(pollMs, remainingMs);
+    await wait(waitMs);
+    waitedMs += waitMs;
+    if (budget !== undefined) {
+      budget.remainingWaitMs = Math.max(0, budget.remainingWaitMs - waitMs);
+      budget.totalWaitedMs += waitMs;
+    }
     attempt += 1;
   }
+}
+
+/** Compatibility export for focused consumers of the former server-only settling helper. */
+export function waitForServerHost(samples, ceiling, options = {}) {
+  return waitForQuietHost(samples, ceiling, {
+    ...options,
+    phase: 'server-quiet-host-settle',
+    posture: 'post-benchmark',
+  });
+}
+
+function quietHostFailure(sample) {
+  const observed = Number.isFinite(sample.loadPerCpu)
+    ? sample.loadPerCpu.toFixed(3)
+    : 'unavailable';
+  return `${sample.posture} host load ${observed} per CPU exceeded ceiling ${String(
+    sample.ceiling,
+  )} after bounded ${String(sample.settle?.waitedMs ?? 0)}ms quiet-host admission`;
+}
+
+function assertQuietHostPolicy({ ceiling, maxWaitMs, pollMs }) {
+  if (!Number.isFinite(ceiling) || ceiling <= 0) throw new TypeError('host ceiling is invalid');
+  if (!Number.isSafeInteger(maxWaitMs) || maxWaitMs < 0 || maxWaitMs > MAX_HOST_SETTLE_MAX_MS) {
+    throw new TypeError(
+      `quiet-host total settle max must be between 0 and ${String(MAX_HOST_SETTLE_MAX_MS)}ms`,
+    );
+  }
+  if (!Number.isSafeInteger(pollMs) || pollMs < 10 || pollMs > 60_000) {
+    throw new TypeError('quiet-host settle poll must be between 10 and 60000ms');
+  }
+}
+
+function comparisonQuietHostPolicy(options) {
+  const maxWaitMs =
+    options.hostSettleMaxMs ?? options.serverHostSettleMaxMs ?? DEFAULT_HOST_SETTLE_MAX_MS;
+  const pollMs =
+    options.hostSettlePollMs ?? options.serverHostSettlePollMs ?? DEFAULT_HOST_SETTLE_POLL_MS;
+  assertQuietHostPolicy({ ceiling: options.maxLoadPerCpu ?? 1, maxWaitMs, pollMs });
+  return { maxWaitMs, pollMs };
 }
 
 function assertServerMatrixOptions(options) {
@@ -901,16 +1039,6 @@ function assertServerMatrixOptions(options) {
   for (const route of options.serverRoutes ?? SERVER_ROUTES)
     assertMember('--server-routes', route, SERVER_ROUTES);
   serverSampleSchedule(options.serverSamples ?? 7);
-  boundedServerSettleOption(options.serverHostSettleMaxMs ?? 30_000, 0, 300_000, 'max');
-  boundedServerSettleOption(options.serverHostSettlePollMs ?? 1_000, 10, 60_000, 'poll');
-}
-
-function boundedServerSettleOption(value, min, max, label) {
-  if (!Number.isSafeInteger(value) || value < min || value > max) {
-    throw new TypeError(
-      `server host settle ${label} must be between ${String(min)} and ${String(max)}ms`,
-    );
-  }
 }
 
 async function runAdapter({ args, cwd, label }) {
@@ -1922,6 +2050,7 @@ export async function performanceWorkloadIdentity(
   cells = options.cells ?? defaultCells,
 ) {
   const corpusSize = options.corpusSize ?? 24;
+  const quietHostPolicy = comparisonQuietHostPolicy(options);
   const devSchedule = cells.includes('dev')
     ? devSampleSchedule({
         editSamples: options.devIterations ?? 30,
@@ -1985,13 +2114,19 @@ export async function performanceWorkloadIdentity(
       devReadySamples: options.devReadyIterations ?? 15,
       devWarmups: options.devWarmups ?? 3,
       lighthouseRuns: options.lighthouseRuns ?? 5,
+      quietHost: {
+        ceilingPerCpu: options.maxLoadPerCpu ?? 1,
+        maxTotalWaitMs: quietHostPolicy.maxWaitMs,
+        pollMs: quietHostPolicy.pollMs,
+        posture: 'pre-benchmark-admission-then-post-benchmark-settle',
+      },
       skipLighthouse: options.skipLighthouse === true,
       server: {
         concurrencies: [...(options.serverConcurrencies ?? SERVER_CONCURRENCIES)],
         durationMs: options.serverDurationMs ?? 15_000,
         encodings: [...(options.serverEncodings ?? SERVER_ENCODINGS)],
-        hostSettleMaxMs: options.serverHostSettleMaxMs ?? 30_000,
-        hostSettlePollMs: options.serverHostSettlePollMs ?? 1_000,
+        hostSettleMaxMs: quietHostPolicy.maxWaitMs,
+        hostSettlePollMs: quietHostPolicy.pollMs,
         modes: [...(options.serverModes ?? SERVER_MODES)],
         routes: [...(options.serverRoutes ?? SERVER_ROUTES)],
         samples: options.serverSamples ?? 7,
@@ -2038,6 +2173,15 @@ function cellSampleCount(cell) {
   return (cell.report.samples ?? cell.report.rawSamples ?? []).length;
 }
 
+function readAliasedIntegerArg(primary, legacy, options) {
+  const primaryValue = readArg(primary);
+  const legacyValue = readArg(legacy);
+  if (primaryValue !== undefined && legacyValue !== undefined) {
+    throw new Error(`${primary} and legacy ${legacy} cannot be supplied together.`);
+  }
+  return parseIntegerFlag(primary, primaryValue ?? legacyValue, options);
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const cells = (readArg('--cells') ?? defaultCells.join(',')).split(',').filter(Boolean);
   const laneList = (readArg('--lanes') ?? lanes.join(',')).split(',').filter(Boolean);
@@ -2076,16 +2220,20 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     serverEncodings: (readArg('--server-encodings') ?? SERVER_ENCODINGS.join(','))
       .split(',')
       .filter(Boolean),
-    serverHostSettleMaxMs: readIntegerArg('--server-host-settle-max-ms', {
-      fallback: 30_000,
-      max: 300_000,
+    hostSettleMaxMs: readAliasedIntegerArg('--host-settle-max-ms', '--server-host-settle-max-ms', {
+      fallback: DEFAULT_HOST_SETTLE_MAX_MS,
+      max: MAX_HOST_SETTLE_MAX_MS,
       min: 0,
     }),
-    serverHostSettlePollMs: readIntegerArg('--server-host-settle-poll-ms', {
-      fallback: 1_000,
-      max: 60_000,
-      min: 10,
-    }),
+    hostSettlePollMs: readAliasedIntegerArg(
+      '--host-settle-poll-ms',
+      '--server-host-settle-poll-ms',
+      {
+        fallback: DEFAULT_HOST_SETTLE_POLL_MS,
+        max: 60_000,
+        min: 10,
+      },
+    ),
     serverModes: (readArg('--server-modes') ?? SERVER_MODES.join(',')).split(',').filter(Boolean),
     serverPortBase: readIntegerArg('--server-port-base', {
       fallback: 50_310,

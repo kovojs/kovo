@@ -62,6 +62,8 @@ const CORPUS_SCHEMA = 'kovo-dev-corpus/v1';
 const EDIT_SAVE_POSTURE = 'posix-sibling-temp-write-rename/v1';
 const DEFAULT_BOOTSTRAP_ITERATIONS = 10_000;
 const DEFAULT_EDIT_SAMPLES = 30;
+const DEFAULT_HOST_SETTLE_MAX_MS = 30_000;
+const DEFAULT_HOST_SETTLE_POLL_MS = 1_000;
 const DEFAULT_READY_SAMPLES = 15;
 const DEFAULT_READY_TIMEOUT_MS = 10 * 60 * 1_000;
 const DEFAULT_WARMUPS = 3;
@@ -72,6 +74,7 @@ const LOCK_FILES = Object.freeze([
   'benchmarks/harness/pnpm-lock.yaml',
 ]);
 const MAX_COMMAND_OUTPUT_BYTES = 16 * 1024 * 1024;
+const MAX_HOST_SETTLE_MAX_MS = 60_000;
 const MAX_REPORT_BYTES = 64 * 1024 * 1024;
 const PRIMARY_METRICS = Object.freeze(EDIT_CLASSES.map((editClass) => `${editClass}Ms`));
 const SCHEDULE_LANES = Object.freeze(['baseline', 'spike', 'spike', 'baseline']);
@@ -557,13 +560,16 @@ export async function prepareDevGenerationSpike(options, dependencies = {}) {
 export async function runDevGenerationSpike(options = {}, dependencies = {}) {
   const policy = normalizeOptions(options);
   const prepare = dependencies.prepare ?? prepareDevGenerationSpike;
-  const prepared = await prepare(policy, dependencies.preparationDependencies ?? {});
-  if (policy.prepareOnly) return prepareReport(prepared, policy, dependencies);
+  if (policy.prepareOnly) {
+    const prepared = await prepare(policy, dependencies.preparationDependencies ?? {});
+    return prepareReport(prepared, policy, dependencies);
+  }
 
   const hostFingerprint = (dependencies.hostFingerprint ?? performanceHostFingerprint)();
   const sampleHost = dependencies.sampleHost ?? sampleHostLoad;
   const collectState = dependencies.collectState ?? collectWorktreeState;
   const runAdapter = dependencies.runAdapter ?? runDevLoopAdapter;
+  const hostDiagnostics = [];
   const hostSamples = [];
   const cells = [];
   const errors = [];
@@ -582,35 +588,43 @@ export async function runDevGenerationSpike(options = {}, dependencies = {}) {
   if (!portAllocation.complete) {
     errors.push(...portAllocation.errors.map((error) => `dev port allocation preflight: ${error}`));
   }
+  const hostAdmission = portAllocation.complete
+    ? createDevGenerationHostAdmission({
+        ceiling: policy.maxLoadPerCpu,
+        maxWaitMs: policy.hostSettleMaxMs,
+        pollMs: policy.hostSettlePollMs,
+        sampleHost,
+        wait: dependencies.waitForHost,
+      })
+    : null;
+  if (hostAdmission !== null) {
+    const initialHost = await hostAdmission.admit('pre-preparation');
+    hostSamples.push(initialHost);
+    if (!initialHost.comparable) {
+      throw new Error(`${devGenerationHostFailure(initialHost)}; no timing process was started`);
+    }
+    hostAdmission.markBenchmarkWork();
+  }
+
+  const prepared = await prepare(policy, dependencies.preparationDependencies ?? {});
   const ephemeralScratch = policy.adapterEvidenceRoot === null;
   const scratch = ephemeralScratch
     ? mkdtempSync(path.join(os.tmpdir(), 'kovo-dev-generation-ab-'))
     : prepareAdapterEvidenceRoot(policy.adapterEvidenceRoot);
   try {
-    if (portAllocation.complete) {
-      const initialHost = sampleHost('pre-timing', policy.maxLoadPerCpu);
-      hostSamples.push(initialHost);
-      if (!initialHost.comparable) {
-        throw new Error(
-          `host load ${initialHost.loadPerCpu.toFixed(3)} per CPU exceeds ceiling ${String(
-            policy.maxLoadPerCpu,
-          )}; no timing process was started`,
-        );
-      }
+    if (portAllocation.complete && hostAdmission !== null) {
       const acquireLock = dependencies.acquireLock ?? acquireTimingLock;
       const timingLock = acquireLock(policy.timingLockPath);
+      let adapterStarted = false;
       try {
         for (const scheduled of schedule) {
-          const host = sampleHost(
+          const host = await hostAdmission.admit(
             `block-${String(scheduled.scheduleIndex)}-${scheduled.lane}`,
-            policy.maxLoadPerCpu,
           );
           hostSamples.push(host);
           if (!host.comparable) {
             errors.push(
-              `block ${String(scheduled.scheduleIndex)} load ${host.loadPerCpu.toFixed(
-                3,
-              )} per CPU exceeded ceiling ${String(policy.maxLoadPerCpu)}`,
+              `block ${String(scheduled.scheduleIndex)}: ${devGenerationHostFailure(host)}`,
             );
             break;
           }
@@ -633,6 +647,7 @@ export async function runDevGenerationSpike(options = {}, dependencies = {}) {
           );
           let report;
           try {
+            adapterStarted = true;
             report = await runAdapter({
               editSamples: scheduled.editSamples,
               manifestPath: prepared.manifestPaths[scheduled.lane],
@@ -681,17 +696,13 @@ export async function runDevGenerationSpike(options = {}, dependencies = {}) {
             break;
           }
         }
+        if (adapterStarted) {
+          // This is after every timed block. Keep the suite's own load tail, but do not use it to
+          // retroactively reject blocks whose pre-timing admissions were quiet.
+          hostDiagnostics.push(await hostAdmission.observe('post-timing'));
+        }
       } finally {
         timingLock.release();
-        const postHost = sampleHost('post-timing', policy.maxLoadPerCpu);
-        hostSamples.push(postHost);
-        if (!postHost.comparable) {
-          errors.push(
-            `post-timing load ${postHost.loadPerCpu.toFixed(3)} per CPU exceeded ceiling ${String(
-              policy.maxLoadPerCpu,
-            )}`,
-          );
-        }
       }
     }
 
@@ -717,6 +728,7 @@ export async function runDevGenerationSpike(options = {}, dependencies = {}) {
       cells,
       finishedAt: new Date().toISOString(),
       host: hostFingerprint,
+      hostDiagnostics,
       hostSamples,
       integrity: {
         complete,
@@ -758,6 +770,8 @@ export function parseDevGenerationSpikeArgs(argv) {
     '--baseline-root',
     '--bootstrap-iterations',
     '--edit-samples',
+    '--host-settle-max-ms',
+    '--host-settle-poll-ms',
     '--install-timeout-ms',
     '--max-load-per-cpu',
     '--out',
@@ -968,6 +982,9 @@ function reportPolicy(policy) {
     adapterTimeoutMs: policy.timeoutMs,
     bootstrapIterations: policy.bootstrapIterations,
     editSamplesPerLane: policy.editSamples,
+    hostAdmission: 'pre-preparation-and-pre-block-admission-with-post-timing-diagnostic/v1',
+    hostSettleMaxTotalMs: policy.hostSettleMaxMs,
+    hostSettlePollMs: policy.hostSettlePollMs,
     maxLoadPerCpu: policy.maxLoadPerCpu,
     order: [...SCHEDULE_LANES],
     portBase: policy.portBase,
@@ -978,6 +995,7 @@ function reportPolicy(policy) {
     size: policy.size,
     timingAuthorization: policy.prepareOnly ? 'prepare-only' : 'explicit-measure',
     timingLock: '<os-temp>/kovo-performance-timing.lock',
+    timingLockCoverage: 'pre-block-admission-through-post-timing-diagnostic/v1',
     warmupsPerLane: policy.warmups,
   };
 }
@@ -1014,6 +1032,18 @@ function normalizeOptions(options) {
       2,
       100,
       '--edit-samples',
+    ),
+    hostSettleMaxMs: boundedInteger(
+      options.hostSettleMaxMs ?? DEFAULT_HOST_SETTLE_MAX_MS,
+      0,
+      MAX_HOST_SETTLE_MAX_MS,
+      '--host-settle-max-ms',
+    ),
+    hostSettlePollMs: boundedInteger(
+      options.hostSettlePollMs ?? DEFAULT_HOST_SETTLE_POLL_MS,
+      10,
+      60_000,
+      '--host-settle-poll-ms',
     ),
     installTimeoutMs: boundedInteger(
       options.installTimeoutMs ?? 10 * 60 * 1_000,
@@ -1271,7 +1301,12 @@ function optionalEvidenceLabel(value) {
 
 function boundedEvidenceLabel(value) {
   return (
-    typeof value === 'string' && value.length > 0 && value.length <= 256 && !/[\r\n\0]/u.test(value)
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= 256 &&
+    !value.includes('\r') &&
+    !value.includes('\n') &&
+    !value.includes('\0')
   );
 }
 
@@ -1485,6 +1520,121 @@ function cleanBenchmarkEnvironment(base) {
   env.NO_COLOR = '1';
   env.TZ = 'UTC';
   return env;
+}
+
+/**
+ * Admit the host once before preparation, then settle preparation and prior-block load outside each
+ * adapter's timing window. A single wait budget covers the entire B,S,S,B run, preventing either an
+ * unbounded delay or a per-block timeout multiplier. Post-timing load is observed without waiting
+ * or gating because it cannot establish contention before a completed timed block.
+ */
+export function createDevGenerationHostAdmission({
+  ceiling,
+  maxWaitMs = DEFAULT_HOST_SETTLE_MAX_MS,
+  pollMs = DEFAULT_HOST_SETTLE_POLL_MS,
+  sampleHost = sampleHostLoad,
+  wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+} = {}) {
+  assertDevGenerationHostPolicy({ ceiling, maxWaitMs, pollMs });
+  const budget = { remainingWaitMs: maxWaitMs, totalWaitedMs: 0 };
+  let benchmarkWorkStarted = false;
+  async function sample(label, { gatesTiming }) {
+    if (!boundedEvidenceLabel(label)) {
+      throw new TypeError('quiet-host label is invalid');
+    }
+    const availableWaitMs = gatesTiming ? budget.remainingWaitMs : 0;
+    const observations = [];
+    let attempt = 0;
+    let waitedMs = 0;
+    while (true) {
+      const raw = sampleHost(label, ceiling);
+      const loadAverage = raw?.loadAverage;
+      const cpuCount = raw?.cpuCount;
+      const loadPerCpu =
+        Array.isArray(loadAverage) &&
+        Number.isFinite(loadAverage[0]) &&
+        Number.isSafeInteger(cpuCount) &&
+        cpuCount > 0
+          ? loadAverage[0] / cpuCount
+          : null;
+      const comparable = Number.isFinite(loadPerCpu) && loadPerCpu >= 0 && loadPerCpu <= ceiling;
+      const observation = {
+        ...raw,
+        attempt,
+        ceiling,
+        comparable,
+        gatesTiming,
+        label,
+        loadPerCpu,
+        phase: gatesTiming
+          ? benchmarkWorkStarted
+            ? 'quiet-host-settle'
+            : 'quiet-host-admission'
+          : 'host-diagnostic',
+        posture: gatesTiming
+          ? benchmarkWorkStarted
+            ? 'post-benchmark'
+            : 'pre-benchmark'
+          : 'post-timing',
+        waitedMs,
+      };
+      observations.push(observation);
+      if (comparable || !gatesTiming || waitedMs >= availableWaitMs) {
+        return {
+          ...observation,
+          settle: {
+            maxWaitMs: availableWaitMs,
+            observations,
+            pollMs,
+            rejectedObservations: observations.filter((entry) => !entry.comparable).length,
+            totalBudgetRemainingMs: budget.remainingWaitMs,
+            waitedMs,
+          },
+        };
+      }
+      const waitMs = Math.min(pollMs, availableWaitMs - waitedMs);
+      await wait(waitMs);
+      waitedMs += waitMs;
+      budget.remainingWaitMs = Math.max(0, budget.remainingWaitMs - waitMs);
+      budget.totalWaitedMs += waitMs;
+      attempt += 1;
+    }
+  }
+  return {
+    admit(label) {
+      return sample(label, { gatesTiming: true });
+    },
+    markBenchmarkWork() {
+      benchmarkWorkStarted = true;
+    },
+    observe(label) {
+      return sample(label, { gatesTiming: false });
+    },
+    policy() {
+      return {
+        ceiling,
+        maxTotalWaitMs: maxWaitMs,
+        pollMs,
+        remainingWaitMs: budget.remainingWaitMs,
+        totalWaitedMs: budget.totalWaitedMs,
+      };
+    },
+  };
+}
+
+function assertDevGenerationHostPolicy({ ceiling, maxWaitMs, pollMs }) {
+  finitePositiveNumber(ceiling, '--max-load-per-cpu');
+  boundedInteger(maxWaitMs, 0, MAX_HOST_SETTLE_MAX_MS, '--host-settle-max-ms');
+  boundedInteger(pollMs, 10, 60_000, '--host-settle-poll-ms');
+}
+
+function devGenerationHostFailure(sample) {
+  const observed = Number.isFinite(sample.loadPerCpu)
+    ? sample.loadPerCpu.toFixed(3)
+    : 'unavailable';
+  return `${sample.posture} host load ${observed} per CPU exceeded ceiling ${String(
+    sample.ceiling,
+  )} after bounded ${String(sample.settle?.waitedMs ?? 0)}ms quiet-host admission`;
 }
 
 function sampleHostLoad(label, ceiling) {
