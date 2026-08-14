@@ -80,6 +80,21 @@ block receives another quiet-host admission. Policy-schema, isolation-schema, or
 Kovo-only, and report-bound-per-arm fields are authenticated during preparation and again at the
 cell/report boundary; policy drift makes the result unproven.
 
+Cold Kovo builds also produce one invocation-local incremental file,
+`.kovo/cache/tsc-preflight.tsbuildinfo`. It embeds absolute packed-consumer and app-root paths, so it
+is a derived source-check cache under `SPEC.md` §5.2 rule 9 rather than deploy output under
+§5.2.3/§5.2.4: path-independent deploy provenance lives in `dist/.kovo/graph.json`, and the staged,
+promoted `dist` tree is the deploy artifact. The decision runner does not normalize, filter, or
+silently subtract those bytes.
+After the adapter returns and timing has ended, it first authenticates that `.kovo/cache` contains
+exactly one regular, single-link `tsc-preflight.tsbuildinfo`, retaining its byte count and SHA-256.
+It then unlinks that exact file, removes the now-empty cache directory, and proves `.kovo` remains
+present and empty. A read-only `dist` digest/census taken before removal must equal one taken after.
+Only then does the official compared-artifact census run over retained non-cache `.kovo` plus
+`dist`, with `.kovo/cache` required absent. Raw adapter bytes must equal compared-artifact bytes plus
+the authenticated removed-cache bytes. Any extra entry, alias, accounting mismatch, cache residue,
+or `dist` change makes the cell unproven.
+
 ## Hosted protocol
 
 The `perf-measure-build-source-trust` pull-request label starts two independent GitHub-hosted
@@ -93,7 +108,8 @@ Ubuntu 24.04 jobs, one for N=24 and one for N=216. Each job:
 4. Runs five serialized `B,S,S,B` repetitions. Every block is one clean Kovo build with one measured
    sample and zero timed warmups, yielding exactly 10 samples per arm.
 5. Retains every raw adapter report or bounded failure envelope and records total wall time, peak
-   process-tree RSS, the exact output tree/content digest, and raw source/worker phase censuses.
+   process-tree RSS, the exact post-cache-custody `.kovo` plus `dist` tree/content digest, removed
+   cache custody/accounting, and raw source/worker phase censuses.
    Failed commands retain bounded stdout/stderr text plus full-stream byte counts and SHA-256
    digests, so a framework refusal cannot be masked by the necessarily empty output tree.
 
@@ -103,9 +119,10 @@ later block cannot start unless its immediate host admission passes.
 ## Preregistered decision rule
 
 Both corpora require 10/10 valid samples per arm, zero adapter errors or misses, clean stable source
-and locks, exact packed-product verification, byte-identical application output trees/content, and
-identical non-timing diagnostics plus exact phase order across all 20 cells. Incomplete, dirty,
-unquiet, identity-mismatched, or short evidence is **unproven** rather than a rejection.
+and locks, exact packed-product verification, byte-identical post-custody non-cache `.kovo` plus
+`dist` output trees/content, exact raw-to-compared cache byte accounting, and identical non-timing
+diagnostics plus exact phase order across all 20 cells. Incomplete, dirty, unquiet,
+identity-mismatched, or short evidence is **unproven** rather than a rejection.
 
 For N=216, acceptance requires:
 

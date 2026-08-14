@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
+  existsSync,
   linkSync,
   mkdirSync,
   mkdtempSync,
@@ -25,6 +26,7 @@ import {
   BUILD_SOURCE_TRUST_CANDIDATE,
   BUILD_SOURCE_TRUST_CANDIDATE_BINDING_SCHEMA,
   BUILD_SOURCE_TRUST_SPIKE_SCHEMA,
+  BUILD_SOURCE_TRUST_TRANSIENT_CACHE_SCHEMA,
   bindBuildSourceTrustArtifactProvenanceLock,
   buildSourceTrustAdapterFailure,
   buildSourceTrustBoundaryPolicyFindings,
@@ -35,6 +37,7 @@ import {
   gitPatchId,
   inspectBuildSourceTrustArtifact,
   inspectExternalKovoCorpus,
+  removeBuildSourceTrustColdTransientCache,
   pairedBuildSourceTrustBootstrap,
   parseBuildSourceTrustArgs,
   prepareBuildSourceTrustSpike,
@@ -80,6 +83,9 @@ describe('build source-trust candidate decision', () => {
     );
     expect(BUILD_SOURCE_TRUST_BOUNDARY_POLICY).toEqual({
       artifactProvenanceLock: 'measured-source-root-copy-manifest-bound',
+      coldBuildTransientCache:
+        'required-single-tsbuildinfo-removed-after-adapter-before-compared-artifact-census',
+      comparedArtifact: 'byte-exact-non-cache-.kovo-and-dist-after-transient-cache-custody',
       concreteIdentity: 'report-bound-per-arm',
       corpusIsolation: 'external-root-without-ancestor-node-modules',
       hostAdmission: 'before-preparation-and-before-every-measured-block',
@@ -324,6 +330,105 @@ describe('build source-trust candidate decision', () => {
     expect(second.digest).not.toBe(first.digest);
   });
 
+  it('removes only the exact cold TypeScript cache and retains authenticated byte custody', () => {
+    const root = temporaryDirectory('kovo-build-source-cold-cache-');
+    const cacheRoot = path.join(root, '.kovo/cache');
+    const cachePath = path.join(cacheRoot, 'tsc-preflight.tsbuildinfo');
+    const cacheBytes = Buffer.from('{"root":"/invocation/path"}\n');
+    mkdirSync(cacheRoot, { recursive: true });
+    writeFileSync(cachePath, cacheBytes);
+    const custody = removeBuildSourceTrustColdTransientCache(root);
+    expect(custody).toMatchObject({
+      absentAfter: true,
+      before: {
+        entries: [
+          { path: '.kovo/cache', type: 'directory' },
+          {
+            bytes: cacheBytes.byteLength,
+            path: '.kovo/cache/tsc-preflight.tsbuildinfo',
+            sha256: sha256(cacheBytes),
+            type: 'file',
+          },
+        ],
+        totalBytes: cacheBytes.byteLength,
+      },
+      complete: true,
+      mutation: {
+        confinedTo: '.kovo/cache',
+        operations: ['unlink:tsc-preflight.tsbuildinfo', 'rmdir:.kovo/cache'],
+      },
+      outsideTiming: true,
+      parent: { emptyAfter: true, path: '.kovo', retainedAfter: true },
+      path: '.kovo/cache',
+      schema: BUILD_SOURCE_TRUST_TRANSIENT_CACHE_SCHEMA,
+      stage: 'after-adapter-return-before-compared-artifact-census',
+    });
+    expect(custody.before.digest).toBe(
+      sha256(
+        Buffer.from(
+          JSON.stringify({
+            entries: custody.before.entries,
+            totalBytes: custody.before.totalBytes,
+          }),
+        ),
+      ),
+    );
+    expect(existsSync(cacheRoot)).toBe(false);
+    expect(existsSync(path.join(root, '.kovo'))).toBe(true);
+  });
+
+  it('refuses extra, symlinked, or hardlinked cold-cache entries without deleting them', () => {
+    const extraRoot = temporaryDirectory('kovo-build-source-cold-cache-extra-');
+    const extraCache = path.join(extraRoot, '.kovo/cache');
+    mkdirSync(extraCache, { recursive: true });
+    writeFileSync(path.join(extraCache, 'tsc-preflight.tsbuildinfo'), 'cache\n');
+    writeFileSync(path.join(extraCache, 'unexpected'), 'retain me\n');
+    expect(() => removeBuildSourceTrustColdTransientCache(extraRoot)).toThrow(
+      /only tsc-preflight/u,
+    );
+    expect(readFileSync(path.join(extraCache, 'unexpected'), 'utf8')).toBe('retain me\n');
+
+    for (const alias of ['symlink', 'hardlink']) {
+      const root = temporaryDirectory(`kovo-build-source-cold-cache-${alias}-`);
+      const cacheRoot = path.join(root, '.kovo/cache');
+      const cachePath = path.join(cacheRoot, 'tsc-preflight.tsbuildinfo');
+      const outside = path.join(root, 'outside-cache');
+      mkdirSync(cacheRoot, { recursive: true });
+      writeFileSync(outside, 'outside\n');
+      if (alias === 'symlink') symlinkSync(outside, cachePath);
+      else linkSync(outside, cachePath);
+      expect(() => removeBuildSourceTrustColdTransientCache(root)).toThrow(
+        alias === 'symlink' ? /contains symlink/u : /contains hardlink/u,
+      );
+      expect(readFileSync(outside, 'utf8')).toBe('outside\n');
+    }
+
+    const rootAlias = temporaryDirectory('kovo-build-source-cold-cache-root-alias-');
+    const outsideKovo = path.join(rootAlias, 'outside-kovo');
+    mkdirSync(path.join(outsideKovo, 'cache'), { recursive: true });
+    writeFileSync(path.join(outsideKovo, 'cache/tsc-preflight.tsbuildinfo'), 'outside root\n');
+    symlinkSync(outsideKovo, path.join(rootAlias, '.kovo'));
+    expect(() => removeBuildSourceTrustColdTransientCache(rootAlias)).toThrow(
+      /.kovo root must be a regular non-symlink directory/u,
+    );
+    expect(readFileSync(path.join(outsideKovo, 'cache/tsc-preflight.tsbuildinfo'), 'utf8')).toBe(
+      'outside root\n',
+    );
+
+    const directoryAlias = temporaryDirectory('kovo-build-source-cold-cache-dir-alias-');
+    const outsideCache = path.join(directoryAlias, 'outside-cache');
+    mkdirSync(path.join(directoryAlias, '.kovo'));
+    mkdirSync(outsideCache);
+    writeFileSync(path.join(outsideCache, 'tsc-preflight.tsbuildinfo'), 'outside directory\n');
+    symlinkSync(outsideCache, path.join(directoryAlias, '.kovo/cache'));
+    expect(() => removeBuildSourceTrustColdTransientCache(directoryAlias)).toThrow(
+      /contains symlink .kovo\/cache/u,
+    );
+    expect(readFileSync(path.join(outsideCache, 'tsc-preflight.tsbuildinfo'), 'utf8')).toBe(
+      'outside directory\n',
+    );
+  });
+
   it('copies the measured source lock into the external corpus and reseals its source manifest', () => {
     const root = temporaryDirectory('kovo-build-source-provenance-lock-');
     const sourceRoot = path.join(root, 'source');
@@ -503,6 +608,75 @@ describe('build source-trust candidate decision', () => {
     });
   });
 
+  it('orders successful adapter return before cache custody and the final compared census', async () => {
+    const root = temporaryDirectory('kovo-build-source-adapter-success-');
+    const scriptsRoot = path.join(root, 'scripts');
+    const corpusRoot = path.join(root, 'corpus');
+    const rawRoot = path.join(root, 'raw');
+    mkdirSync(scriptsRoot);
+    mkdirSync(corpusRoot);
+    mkdirSync(rawRoot);
+    const manifestPath = path.join(corpusRoot, 'manifest.json');
+    writeFileSync(manifestPath, '{}\n');
+    writeFileSync(
+      path.join(scriptsRoot, 'perf-build-benchmark.mjs'),
+      [
+        "import { mkdirSync, writeFileSync } from 'node:fs';",
+        "import path from 'node:path';",
+        'const value = (name) => process.argv[process.argv.indexOf(name) + 1];',
+        "const corpusRoot = path.dirname(value('--corpus'));",
+        "const cache = Buffer.from('cache-bytes');",
+        "const dist = Buffer.from('dist-bytes');",
+        "mkdirSync(path.join(corpusRoot, '.kovo/cache'), { recursive: true });",
+        "mkdirSync(path.join(corpusRoot, 'dist'), { recursive: true });",
+        "writeFileSync(path.join(corpusRoot, '.kovo/cache/tsc-preflight.tsbuildinfo'), cache);",
+        "writeFileSync(path.join(corpusRoot, 'dist/index.mjs'), dist);",
+        "const report = { integrity: { outputRoots: { absent: ['.kovo-build-stage-*'], requiredNonempty: ['.kovo', 'dist'] } }, samples: [{ artifactBytes: cache.byteLength + dist.byteLength, outputCensus: { complete: true, requiredNonempty: [{ bytes: cache.byteLength, output: '.kovo', targets: ['.kovo'] }, { bytes: dist.byteLength, output: 'dist', targets: ['dist'] }] } }], summary: { artifactBytes: cache.byteLength + dist.byteLength } };",
+        "writeFileSync(value('--out'), JSON.stringify(report));",
+      ].join('\n'),
+    );
+    const cell = await executeBuildSourceTrustCell({
+      lane: 'baseline',
+      laneEvidence: {
+        descriptorPath: path.join(root, 'descriptor.json'),
+        manifestPath,
+        product: { digest: digest('product') },
+        root,
+      },
+      occurrence: 0,
+      position: 0,
+      rawPath: path.join(rawRoot, '00-baseline.json'),
+      repetition: 0,
+      scheduleIndex: 0,
+      timeoutMs: 60_000,
+    });
+    expect(cell.processFailure).toBeNull();
+    expect(cell.report.samples[0].artifactBytes).toBe(Buffer.byteLength('cache-bytesdist-bytes'));
+    expect(cell.artifact).toMatchObject({
+      entries: [
+        { path: '.kovo', type: 'directory' },
+        { path: 'dist', type: 'directory' },
+        { bytes: Buffer.byteLength('dist-bytes'), path: 'dist/index.mjs', type: 'file' },
+      ],
+      requiredOutputs: ['.kovo', 'dist'],
+      totalBytes: Buffer.byteLength('dist-bytes'),
+    });
+    expect(cell.artifact.entries.some((entry) => entry.path.startsWith('.kovo/cache'))).toBe(false);
+    expect(cell.transientCache).toMatchObject({
+      absentAfter: true,
+      before: { totalBytes: Buffer.byteLength('cache-bytes') },
+      complete: true,
+      distIntegrityDiagnostic: {
+        outsideTiming: true,
+        unchanged: true,
+      },
+      outsideTiming: true,
+      parent: { emptyAfter: true, path: '.kovo', retainedAfter: true },
+    });
+    expect(existsSync(path.join(corpusRoot, '.kovo/cache'))).toBe(false);
+    expect(readFileSync(path.join(corpusRoot, 'dist/index.mjs'), 'utf8')).toBe('dist-bytes');
+  });
+
   it('summarizes raw build diagnostics ahead of generic adapter output', () => {
     const failure = buildSourceTrustAdapterFailure(
       { error: undefined, signal: null, status: 1, stderr: '' },
@@ -629,6 +803,8 @@ describe('build source-trust candidate decision', () => {
   it('rejects every ordering field in the structured A/B boundary policy', () => {
     for (const [field, value] of [
       ['artifactProvenanceLock', 'implicit-ancestor-lock'],
+      ['coldBuildTransientCache', 'normalized-after-census'],
+      ['comparedArtifact', 'dist-only'],
       ['hostAdmission', 'after-preparation-only'],
       ['preparationTiming', 'before-host-admission'],
       ['timedWarmups', 1],
@@ -674,6 +850,30 @@ describe('build source-trust candidate decision', () => {
     processFailure.processFailure = { signal: 'SIGKILL' };
     expect(validateBuildSourceTrustCell(processFailure, expected)).toContain(
       '0:baseline measured sample is incomplete',
+    );
+    const cacheDrift = structuredClone(cell);
+    cacheDrift.transientCache.before.entries[1].sha256 = digest('changed-cache');
+    expect(validateBuildSourceTrustCell(cacheDrift, expected)).toContain(
+      '0:baseline cold build transient cache custody is incomplete',
+    );
+    const distDrift = structuredClone(cell);
+    distDrift.transientCache.distIntegrityDiagnostic.after.digest = digest('changed-dist');
+    expect(validateBuildSourceTrustCell(distDrift, expected)).toContain(
+      '0:baseline dist changed during transient cache removal or final .kovo is not exactly empty',
+    );
+    const retainedKovoEntry = structuredClone(cell);
+    retainedKovoEntry.artifact.entries.splice(1, 0, {
+      mode: 0o700,
+      path: '.kovo/unexpected',
+      type: 'directory',
+    });
+    expect(validateBuildSourceTrustCell(retainedKovoEntry, expected)).toContain(
+      '0:baseline dist changed during transient cache removal or final .kovo is not exactly empty',
+    );
+    const accountingDrift = structuredClone(cell);
+    accountingDrift.report.samples[0].artifactBytes += 1;
+    expect(validateBuildSourceTrustCell(accountingDrift, expected)).toContain(
+      '0:baseline exact output tree evidence is incomplete',
     );
   });
 
@@ -864,6 +1064,7 @@ function syntheticCell({
     repetition,
     report: syntheticReport({ durationMs, lane, rss }),
     scheduleIndex,
+    transientCache: syntheticTransientCache(),
   };
 }
 
@@ -929,10 +1130,20 @@ function syntheticReport({ durationMs, lane, rss }) {
     productArtifact: product,
     samples: [
       {
-        artifactBytes: syntheticArtifact().totalBytes,
+        artifactBytes: syntheticArtifact().totalBytes + syntheticTransientCache().before.totalBytes,
         durationMs,
         exitCode: 0,
-        outputCensus: { complete: true },
+        outputCensus: {
+          complete: true,
+          requiredNonempty: [
+            {
+              bytes: syntheticTransientCache().before.totalBytes,
+              output: '.kovo',
+              targets: ['.kovo'],
+            },
+            { bytes: syntheticArtifact().totalBytes, output: 'dist', targets: ['dist'] },
+          ],
+        },
         peakRssBytes: rss,
         phaseAttribution: {
           cliStartupTail: {
@@ -967,7 +1178,9 @@ function syntheticReport({ durationMs, lane, rss }) {
     schema: 'kovo-build-benchmark/v1',
     source,
     sourceAfter: source,
-    summary: { artifactBytes: syntheticArtifact().totalBytes },
+    summary: {
+      artifactBytes: syntheticArtifact().totalBytes + syntheticTransientCache().before.totalBytes,
+    },
   };
 }
 
@@ -1045,14 +1258,73 @@ function syntheticSource(lane) {
 }
 
 function syntheticArtifact() {
-  return {
-    digest: digest('artifact'),
+  const identity = {
     entries: [
-      { bytes: 10, mode: 0o644, path: 'dist/index.mjs', sha256: digest('file'), type: 'file' },
+      { mode: 0o700, path: '.kovo', type: 'directory' },
+      { mode: 0o755, path: 'dist', type: 'directory' },
+      {
+        bytes: 10,
+        mode: 0o644,
+        path: 'dist/index.mjs',
+        sha256: digest('file'),
+        type: 'file',
+      },
     ],
     requiredOutputs: ['.kovo', 'dist'],
     schema: BUILD_SOURCE_TRUST_ARTIFACT_SCHEMA,
     totalBytes: 10,
+  };
+  return { ...identity, digest: sha256(Buffer.from(JSON.stringify(identity))) };
+}
+
+function syntheticTransientCache() {
+  const entries = [
+    { mode: 0o700, path: '.kovo/cache', type: 'directory' },
+    {
+      bytes: 4,
+      mode: 0o600,
+      path: '.kovo/cache/tsc-preflight.tsbuildinfo',
+      sha256: digest('cache'),
+      type: 'file',
+    },
+  ];
+  const beforeIdentity = { entries, totalBytes: 4 };
+  const distEntries = syntheticArtifact().entries.filter(
+    (entry) => entry.path === 'dist' || entry.path.startsWith('dist/'),
+  );
+  const distIdentity = {
+    entries: distEntries,
+    requiredOutputs: ['dist'],
+    schema: BUILD_SOURCE_TRUST_ARTIFACT_SCHEMA,
+    totalBytes: 10,
+  };
+  const distSummary = {
+    digest: sha256(Buffer.from(JSON.stringify(distIdentity))),
+    entries: distEntries.length,
+    totalBytes: 10,
+  };
+  return {
+    absentAfter: true,
+    before: {
+      ...beforeIdentity,
+      digest: sha256(Buffer.from(JSON.stringify(beforeIdentity))),
+    },
+    complete: true,
+    distIntegrityDiagnostic: {
+      after: distSummary,
+      before: { ...distSummary },
+      outsideTiming: true,
+      unchanged: true,
+    },
+    mutation: {
+      confinedTo: '.kovo/cache',
+      operations: ['unlink:tsc-preflight.tsbuildinfo', 'rmdir:.kovo/cache'],
+    },
+    outsideTiming: true,
+    parent: { emptyAfter: true, path: '.kovo', retainedAfter: true },
+    path: '.kovo/cache',
+    schema: BUILD_SOURCE_TRUST_TRANSIENT_CACHE_SCHEMA,
+    stage: 'after-adapter-return-before-compared-artifact-census',
   };
 }
 

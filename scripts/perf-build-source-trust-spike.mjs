@@ -23,6 +23,7 @@ import {
   realpathSync,
   renameSync,
   rmSync,
+  rmdirSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -45,10 +46,15 @@ export const BUILD_SOURCE_TRUST_FAILURE_SCHEMA = 'kovo-build-source-trust-spike-
 export const BUILD_SOURCE_TRUST_CANDIDATE_BINDING_SCHEMA =
   'kovo-build-source-trust-candidate-binding/v1';
 export const BUILD_SOURCE_TRUST_ARTIFACT_SCHEMA = 'kovo-build-output-tree/v1';
+export const BUILD_SOURCE_TRUST_TRANSIENT_CACHE_SCHEMA =
+  'kovo-build-source-trust-transient-cache/v1';
 export const BUILD_SOURCE_TRUST_BOUNDARY_POLICY_SCHEMA =
   'kovo-build-source-trust-boundary-policy/v1';
 export const BUILD_SOURCE_TRUST_BOUNDARY_POLICY = Object.freeze({
   artifactProvenanceLock: 'measured-source-root-copy-manifest-bound',
+  coldBuildTransientCache:
+    'required-single-tsbuildinfo-removed-after-adapter-before-compared-artifact-census',
+  comparedArtifact: 'byte-exact-non-cache-.kovo-and-dist-after-transient-cache-custody',
   concreteIdentity: 'report-bound-per-arm',
   corpusIsolation: PACKED_KOVO_PRODUCT_WORKLOAD_POLICY.corpusIsolation,
   hostAdmission: 'before-preparation-and-before-every-measured-block',
@@ -107,6 +113,19 @@ const SCHEDULE_PATTERN = Object.freeze(['baseline', 'spike', 'spike', 'baseline'
 const SUPPORTED_SIZES = Object.freeze([24, 216]);
 const DECISION_REPETITIONS = 5;
 const DECISION_SAMPLES_PER_ARM = 10;
+const COMPARED_OUTPUT_CONTRACT = Object.freeze({
+  absent: Object.freeze(['.kovo/cache', '.kovo-build-stage-*']),
+  requiredNonempty: Object.freeze(['.kovo', 'dist']),
+});
+const DIST_INTEGRITY_DIAGNOSTIC_CONTRACT = Object.freeze({
+  absent: Object.freeze(['.kovo-build-stage-*']),
+  requiredNonempty: Object.freeze(['dist']),
+});
+const COLD_TRANSIENT_CACHE_PATH = '.kovo/cache';
+const COLD_TRANSIENT_CACHE_ENTRIES = Object.freeze([
+  '.kovo/cache',
+  '.kovo/cache/tsc-preflight.tsbuildinfo',
+]);
 const DEFAULT_BOOTSTRAP_ITERATIONS = 10_000;
 const DEFAULT_HOST_SETTLE_MAX_MS = 30_000;
 const DEFAULT_HOST_SETTLE_POLL_MS = 1_000;
@@ -404,6 +423,72 @@ export function bindBuildSourceTrustArtifactProvenanceLock({
   };
 }
 
+/**
+ * Remove the one invocation-root-dependent TypeScript preflight cache after the timed adapter has
+ * returned but before the candidate artifact census. The raw adapter report retains the original
+ * production-plus-cache byte total; this evidence retains the exact removed bytes so validation
+ * can account for the subtraction without normalizing or ignoring any file. SPEC §5.2.3/§5.2.4
+ * place path-independent deploy provenance under dist/.kovo and define promoted dist as the deploy
+ * artifact; this invocation-root cache is outside that artifact.
+ */
+export function removeBuildSourceTrustColdTransientCache(corpusRootValue) {
+  const corpusRoot = canonicalDirectory(corpusRootValue);
+  const kovoRoot = path.join(corpusRoot, '.kovo');
+  const cacheRoot = path.join(corpusRoot, COLD_TRANSIENT_CACHE_PATH);
+  const kovoMetadata = lstatSync(kovoRoot);
+  if (!kovoMetadata.isDirectory() || kovoMetadata.isSymbolicLink()) {
+    throw new Error('cold build .kovo root must be a regular non-symlink directory');
+  }
+  const entries = [];
+  collectColdTransientCacheEntries(corpusRoot, cacheRoot, entries);
+  entries.sort((left, right) => bytewise(left.path, right.path));
+  if (
+    canonicalJson(entries.map((entry) => entry.path)) !==
+      canonicalJson(COLD_TRANSIENT_CACHE_ENTRIES) ||
+    entries[0]?.type !== 'directory' ||
+    entries[1]?.type !== 'file'
+  ) {
+    throw new Error(
+      'cold build transient cache must contain only tsc-preflight.tsbuildinfo before removal',
+    );
+  }
+  const totalBytes = entries.reduce(
+    (total, entry) => total + (entry.type === 'file' ? entry.bytes : 0),
+    0,
+  );
+  if (!finitePositive(totalBytes)) {
+    throw new Error('cold build transient cache is empty');
+  }
+  const beforeIdentity = { entries, totalBytes };
+  const before = {
+    ...beforeIdentity,
+    digest: sha256(Buffer.from(canonicalJson(beforeIdentity))),
+  };
+  unlinkSync(path.join(cacheRoot, 'tsc-preflight.tsbuildinfo'));
+  rmdirSync(cacheRoot);
+  if (existsSync(cacheRoot)) throw new Error('cold build transient cache remains after removal');
+  const remaining = readdirSync(kovoRoot).sort(bytewise);
+  if (remaining.length > 0) {
+    throw new Error(
+      `cold build .kovo root contains non-cache entries after removal: ${remaining.join(', ')}`,
+    );
+  }
+  return {
+    absentAfter: true,
+    before,
+    complete: true,
+    outsideTiming: true,
+    parent: { emptyAfter: true, path: '.kovo', retainedAfter: true },
+    path: COLD_TRANSIENT_CACHE_PATH,
+    schema: BUILD_SOURCE_TRUST_TRANSIENT_CACHE_SCHEMA,
+    stage: 'after-adapter-return-before-compared-artifact-census',
+    mutation: {
+      confinedTo: COLD_TRANSIENT_CACHE_PATH,
+      operations: ['unlink:tsc-preflight.tsbuildinfo', 'rmdir:.kovo/cache'],
+    },
+  };
+}
+
 export function sameBuildSourceTrustCorpusWorkload(left, right) {
   return (
     canonicalJson(crossArmCorpusIdentity(left)) === canonicalJson(crossArmCorpusIdentity(right))
@@ -540,10 +625,31 @@ export function validateBuildSourceTrustCell(cell, expected) {
   ) {
     findings.push(`${label} measured sample is incomplete`);
   }
+  const transientCacheFindings = buildSourceTrustTransientCacheFindings(cell);
+  findings.push(...transientCacheFindings.map((finding) => `${label} ${finding}`));
+  const removedCacheBytes = cell?.transientCache?.before?.totalBytes;
+  const artifactEntriesValue = cell?.artifact?.entries;
+  const computedArtifactBytes = Array.isArray(artifactEntriesValue)
+    ? artifactEntriesValue.reduce(
+        (total, entry) => total + (entry?.type === 'file' ? entry.bytes : 0),
+        0,
+      )
+    : null;
+  const artifactIdentity = {
+    entries: artifactEntriesValue,
+    requiredOutputs: cell?.artifact?.requiredOutputs,
+    schema: cell?.artifact?.schema,
+    totalBytes: cell?.artifact?.totalBytes,
+  };
   if (
     cell?.artifact?.schema !== BUILD_SOURCE_TRUST_ARTIFACT_SCHEMA ||
-    cell?.artifact?.totalBytes !== report?.samples?.[0]?.artifactBytes ||
-    cell?.artifact?.totalBytes !== report?.summary?.artifactBytes ||
+    canonicalJson(cell?.artifact?.requiredOutputs) !==
+      canonicalJson(COMPARED_OUTPUT_CONTRACT.requiredNonempty) ||
+    computedArtifactBytes !== cell?.artifact?.totalBytes ||
+    cell?.artifact?.digest !== sha256(Buffer.from(canonicalJson(artifactIdentity))) ||
+    !Number.isSafeInteger(removedCacheBytes) ||
+    cell?.artifact?.totalBytes + removedCacheBytes !== report?.samples?.[0]?.artifactBytes ||
+    cell?.artifact?.totalBytes + removedCacheBytes !== report?.summary?.artifactBytes ||
     !digest(cell?.artifact?.digest)
   ) {
     findings.push(`${label} exact output tree evidence is incomplete`);
@@ -572,6 +678,97 @@ export function validateBuildSourceTrustCell(cell, expected) {
     !nonEmptyString(cell?.raw?.path)
   ) {
     findings.push(`${label} raw adapter report was not retained`);
+  }
+  return findings;
+}
+
+function buildSourceTrustTransientCacheFindings(cell) {
+  const findings = [];
+  const custody = cell?.transientCache;
+  const before = custody?.before;
+  const entries = before?.entries;
+  const fileEntry = Array.isArray(entries) ? entries[1] : null;
+  const beforeIdentity = { entries, totalBytes: before?.totalBytes };
+  if (
+    custody?.schema !== BUILD_SOURCE_TRUST_TRANSIENT_CACHE_SCHEMA ||
+    custody?.path !== COLD_TRANSIENT_CACHE_PATH ||
+    custody?.stage !== 'after-adapter-return-before-compared-artifact-census' ||
+    custody?.complete !== true ||
+    custody?.outsideTiming !== true ||
+    custody?.absentAfter !== true ||
+    canonicalJson(custody?.parent) !==
+      canonicalJson({ emptyAfter: true, path: '.kovo', retainedAfter: true }) ||
+    canonicalJson(custody?.mutation) !==
+      canonicalJson({
+        confinedTo: COLD_TRANSIENT_CACHE_PATH,
+        operations: ['unlink:tsc-preflight.tsbuildinfo', 'rmdir:.kovo/cache'],
+      }) ||
+    !Array.isArray(entries) ||
+    canonicalJson(entries.map((entry) => entry?.path)) !==
+      canonicalJson(COLD_TRANSIENT_CACHE_ENTRIES) ||
+    entries[0]?.type !== 'directory' ||
+    fileEntry?.type !== 'file' ||
+    !finitePositive(fileEntry?.bytes) ||
+    !digest(fileEntry?.sha256) ||
+    before?.totalBytes !== fileEntry?.bytes ||
+    before?.digest !== sha256(Buffer.from(canonicalJson(beforeIdentity)))
+  ) {
+    findings.push('cold build transient cache custody is incomplete');
+  }
+  const distDiagnostic = custody?.distIntegrityDiagnostic;
+  const distAfter = distDiagnostic?.after;
+  const finalDistEntries = Array.isArray(cell?.artifact?.entries)
+    ? cell.artifact.entries.filter(
+        (entry) => entry?.path === 'dist' || entry?.path?.startsWith('dist/'),
+      )
+    : [];
+  const finalKovoEntries = Array.isArray(cell?.artifact?.entries)
+    ? cell.artifact.entries.filter(
+        (entry) => entry?.path === '.kovo' || entry?.path?.startsWith('.kovo/'),
+      )
+    : [];
+  const finalDistTotalBytes = finalDistEntries.reduce(
+    (total, entry) => total + (entry?.type === 'file' ? entry.bytes : 0),
+    0,
+  );
+  const finalDistIdentity = {
+    entries: finalDistEntries,
+    requiredOutputs: ['dist'],
+    schema: BUILD_SOURCE_TRUST_ARTIFACT_SCHEMA,
+    totalBytes: finalDistTotalBytes,
+  };
+  const finalDistSummary = {
+    digest: sha256(Buffer.from(canonicalJson(finalDistIdentity))),
+    entries: finalDistEntries.length,
+    totalBytes: finalDistTotalBytes,
+  };
+  if (
+    distDiagnostic?.outsideTiming !== true ||
+    distDiagnostic?.unchanged !== true ||
+    canonicalJson(distDiagnostic?.before) !== canonicalJson(distAfter) ||
+    canonicalJson(distAfter) !== canonicalJson(finalDistSummary) ||
+    finalKovoEntries.length !== 1 ||
+    finalKovoEntries[0]?.path !== '.kovo' ||
+    finalKovoEntries[0]?.type !== 'directory'
+  ) {
+    findings.push(
+      'dist changed during transient cache removal or final .kovo is not exactly empty',
+    );
+  }
+  const rawOutputs = cell?.report?.samples?.[0]?.outputCensus?.requiredNonempty;
+  const rawKovo = Array.isArray(rawOutputs)
+    ? rawOutputs.find((entry) => entry?.output === '.kovo')
+    : null;
+  const rawDist = Array.isArray(rawOutputs)
+    ? rawOutputs.find((entry) => entry?.output === 'dist')
+    : null;
+  if (
+    rawOutputs?.length !== 2 ||
+    rawKovo?.bytes !== before?.totalBytes ||
+    rawDist?.bytes !== finalDistSummary.totalBytes ||
+    cell?.report?.samples?.[0]?.artifactBytes !== rawKovo?.bytes + rawDist?.bytes
+  ) {
+    findings.push('raw production-plus-cache byte accounting is inexact');
   }
   return findings;
 }
@@ -1270,13 +1467,35 @@ export async function executeBuildSourceTrustCell({
     result.error || result.signal || result.status !== 0
       ? buildSourceTrustAdapterFailure(result, report)
       : null;
-  const artifact =
-    processFailure === null
-      ? inspectBuildSourceTrustArtifact(
-          path.dirname(laneEvidence.manifestPath),
-          report?.integrity?.outputRoots,
-        )
-      : null;
+  let artifact = null;
+  let transientCache = null;
+  if (processFailure === null) {
+    const corpusRoot = path.dirname(laneEvidence.manifestPath);
+    const distBefore = inspectBuildSourceTrustArtifact(
+      corpusRoot,
+      DIST_INTEGRITY_DIAGNOSTIC_CONTRACT,
+    );
+    transientCache = removeBuildSourceTrustColdTransientCache(corpusRoot);
+    artifact = inspectBuildSourceTrustArtifact(corpusRoot, COMPARED_OUTPUT_CONTRACT);
+    const distAfter = inspectBuildSourceTrustArtifact(
+      corpusRoot,
+      DIST_INTEGRITY_DIAGNOSTIC_CONTRACT,
+    );
+    if (canonicalJson(distBefore) !== canonicalJson(distAfter)) {
+      throw new Error('cold build transient cache removal changed the dist integrity diagnostic');
+    }
+    const distSummary = {
+      digest: distAfter.digest,
+      entries: distAfter.entries.length,
+      totalBytes: distAfter.totalBytes,
+    };
+    transientCache.distIntegrityDiagnostic = {
+      after: distSummary,
+      before: { ...distSummary },
+      outsideTiming: true,
+      unchanged: true,
+    };
+  }
   if (processFailure !== null) {
     processFailure.failureEnvelope = writeFailureEnvelope(
       path.dirname(rawPath),
@@ -1299,6 +1518,7 @@ export async function executeBuildSourceTrustCell({
     repetition,
     report,
     scheduleIndex,
+    transientCache,
   };
 }
 
@@ -1631,6 +1851,7 @@ function reportCellEvidence(cell) {
       phaseCensus: cell.report?.samples?.[0]?.phaseCensus ?? null,
       productArtifactDigest: cell.report?.productArtifact?.digest ?? null,
     },
+    transientCache: cell.transientCache ?? null,
   };
 }
 
@@ -1822,6 +2043,35 @@ function artifactEntries(root, target, entries) {
   entries.push({ mode: metadata.mode & 0o777, path: relative, type: 'directory' });
   for (const name of readdirSync(target).sort(bytewise)) {
     artifactEntries(root, path.join(target, name), entries);
+  }
+}
+
+function collectColdTransientCacheEntries(root, target, entries) {
+  const metadata = lstatSync(target);
+  const relative = portablePath(root, target);
+  if (metadata.isSymbolicLink()) {
+    throw new Error(`cold build transient cache contains symlink ${relative}`);
+  }
+  if (metadata.isFile()) {
+    if (metadata.nlink !== 1) {
+      throw new Error(`cold build transient cache contains hardlink ${relative}`);
+    }
+    const bytes = readFileSync(target);
+    entries.push({
+      bytes: bytes.byteLength,
+      mode: metadata.mode & 0o777,
+      path: relative,
+      sha256: sha256(bytes),
+      type: 'file',
+    });
+    return;
+  }
+  if (!metadata.isDirectory()) {
+    throw new Error(`cold build transient cache contains unsupported entry ${relative}`);
+  }
+  entries.push({ mode: metadata.mode & 0o777, path: relative, type: 'directory' });
+  for (const name of readdirSync(target).sort(bytewise)) {
+    collectColdTransientCacheEntries(root, path.join(target, name), entries);
   }
 }
 
