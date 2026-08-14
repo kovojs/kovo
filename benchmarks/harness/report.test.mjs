@@ -25,6 +25,11 @@ const ATTRIBUTION = {
   phases: {
     server: { durationMs: 12, source: 'request timing', status: 'observed' },
     transfer: { durationMs: 3, source: 'request timing', status: 'observed' },
+    responseProcessingDomApply: {
+      durationMs: 81,
+      source: 'trace envelope',
+      status: 'observed',
+    },
     responseReadDecode: {
       durationMs: null,
       reason: 'browser exposes no stable response decode boundary',
@@ -43,7 +48,6 @@ const ATTRIBUTION = {
     style: { durationMs: 2, source: 'trace', status: 'observed' },
     layout: { durationMs: 4, source: 'trace', status: 'observed' },
     paint: { durationMs: 1, source: 'trace', status: 'observed' },
-    unattributed: { durationMs: 5, source: 'trace envelope', status: 'observed' },
   },
 };
 
@@ -124,10 +128,13 @@ const RESULTS = {
               'navAttribution.phases.documentConstruction.durationMs': { mad: 0, median: 8 },
               'navAttribution.phases.layout.durationMs': { mad: 0, median: 4 },
               'navAttribution.phases.paint.durationMs': { mad: 0, median: 1 },
+              'navAttribution.phases.responseProcessingDomApply.durationMs': {
+                mad: 2,
+                median: 81,
+              },
               'navAttribution.phases.server.durationMs': { mad: 1, median: 12 },
               'navAttribution.phases.style.durationMs': { mad: 0, median: 2 },
               'navAttribution.phases.transfer.durationMs': { mad: 0, median: 3 },
-              'navAttribution.phases.unattributed.durationMs': { mad: 0, median: 5 },
               navBytesSettled: { median: 152_537 },
               navLegacyDomPresenceMs: { median: 69 },
               navRequests: { median: 5 },
@@ -252,7 +259,7 @@ describe('benchmark report', () => {
     const report = await renderReport(RESULTS);
     expect(report).toContain('## Navigation attribution');
     expect(report).toContain(
-      '| replacer | kovo-document-parts-media-type | 12 (1) | 3 (0) | unsupported | 8 (0) | unsupported | 2 (0) | 4 (0) | 1 (0) | 5 (0) |',
+      '| replacer | kovo-document-parts-media-type | 12 (1) | 3 (0) | 81 (2) | unsupported | 8 (0) | unsupported | 2 (0) | 4 (0) | 1 (0) |',
     );
     expect(report).toContain(
       '- replacer/desktop/responseReadDecode: browser exposes no stable response decode boundary',

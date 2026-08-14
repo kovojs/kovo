@@ -39,7 +39,16 @@ export const SETTLE_DEFAULTS = Object.freeze({ maxMs: 10_000, quietMs: 750 });
  */
 const NAV_SENTINEL = 'kovo-bench-nav-sentinel';
 
-export const NAVIGATION_ATTRIBUTION_SCHEMA = 'kovo-navigation-attribution/v1';
+export const NAVIGATION_ATTRIBUTION_SCHEMA = 'kovo-navigation-attribution/v2';
+
+const NAVIGATION_TRACE_CATEGORIES =
+  'blink.console,devtools.timeline,disabled-by-default-devtools.timeline,disabled-by-default-devtools.timeline.frame';
+const TRACE_NETWORK_CLOCK_TOLERANCE_MS = 25;
+const TRACE_RESOURCE_EVENTS = Object.freeze([
+  'ResourceFinish',
+  'ResourceReceiveResponse',
+  'ResourceSendRequest',
+]);
 
 const TRACE_PHASE_EVENTS = Object.freeze({
   documentConstruction: Object.freeze(['ParseHTML']),
@@ -679,8 +688,7 @@ async function startNavigationTrace(page) {
     cdp.on('Tracing.dataCollected', ({ value }) => events.push(...value));
     const complete = new Promise((resolve) => cdp.once('Tracing.tracingComplete', resolve));
     await cdp.send('Tracing.start', {
-      categories:
-        'blink.console,devtools.timeline,disabled-by-default-devtools.timeline,disabled-by-default-devtools.timeline.frame',
+      categories: NAVIGATION_TRACE_CATEGORIES,
       options: 'record-as-much-as-possible',
       transferMode: 'ReportEvents',
     });
@@ -776,9 +784,11 @@ async function closeNavigationTrace(trace) {
  *
  * Chrome exposes request start/response start/response end and names style/layout/paint work in
  * the DevTools timeline. It does NOT expose stable boundaries inside an entrant's JavaScript for
- * response text consumption, structured-parts decoding, document building via createElement, or
- * DOM morphing. Those rows therefore remain explicit `unsupported` facts unless a trace-native
- * event (currently ParseHTML for browser parser construction) directly proves the phase.
+ * response text consumption, structured-parts/RSC decoding, document building via createElement,
+ * or DOM morphing. Those rows therefore remain explicit `unsupported` facts. The directly
+ * observed response-headers-to-destination-marker interval is retained as one combined envelope;
+ * it is the smallest common boundary that covers streaming delivery, processing, and DOM apply
+ * without asymmetric framework instrumentation or invented residual arithmetic.
  */
 export function analyzeNavigationAttribution({
   clickTsUs,
@@ -803,20 +813,20 @@ export function analyzeNavigationAttribution({
     throw new TypeError('Navigation attribution requires request records and trace events.');
   }
 
-  const clickEpochMs = traceEpochMs(clickTsUs, epochOffsetMs);
-  const destinationPaintEpochMs = traceEpochMs(destinationPaintTsUs, epochOffsetMs);
-  const responseSelection = selectPrimaryNavigationResponse(records, {
-    clickEpochMs,
-    destinationPaintEpochMs,
+  const responseSelection = selectPrimaryNavigationResponse(records, traceEvents, {
+    clickTsUs,
+    destinationPaintTsUs,
+    epochOffsetMs,
   });
   const primaryResponse = responseSelection.primaryResponse;
-  const responseTiming = responseSelection.responseTiming ?? null;
-  const responseStartTsUs = responseTiming
-    ? traceTimestampUs(responseTiming.responseStartEpochMs, epochOffsetMs)
-    : clickTsUs;
-  const responseEndTsUs = responseTiming
-    ? traceTimestampUs(responseTiming.responseEndEpochMs, epochOffsetMs)
-    : null;
+  const responseTiming = responseSelection.traceTiming ?? null;
+  const responseStartTsUs = responseTiming?.responseStartTsUs ?? clickTsUs;
+  if (responseTiming !== null && responseStartTsUs > destinationMarkTsUs) {
+    throw new Error(
+      'Navigation attribution selected a primary response whose headers arrived after the ' +
+        'destination marker.',
+    );
+  }
 
   const documentConstructionActivity = traceActivity(traceEvents, {
     endTsUs: destinationMarkTsUs,
@@ -858,19 +868,35 @@ export function analyzeNavigationAttribution({
       responseTiming === null
         ? unsupportedPhase(primaryResponse.reason)
         : observedPhase(
-            responseTiming.responseStartEpochMs - responseTiming.requestStartEpochMs,
-            'playwright-request-timing:requestStart-to-responseStart',
+            (responseTiming.responseStartTsUs - responseTiming.requestStartTsUs) / 1_000,
+            'chromium-devtools-timeline:request-send-to-response-headers',
           ),
     transfer:
       responseTiming === null
         ? unsupportedPhase(primaryResponse.reason)
         : observedPhase(
-            responseTiming.responseEndEpochMs - responseTiming.responseStartEpochMs,
-            'playwright-request-timing:responseStart-to-responseEnd',
+            (responseTiming.responseEndTsUs - responseTiming.responseStartTsUs) / 1_000,
+            'chromium-devtools-timeline:response-headers-to-ResourceFinish.finishTime',
+          ),
+    responseProcessingDomApply:
+      responseTiming === null
+        ? unsupportedPhase('A trace-authenticated click-window primary response was not observed.')
+        : observedPhase(
+            (destinationMarkTsUs - responseStartTsUs) / 1_000,
+            'chromium-monotonic-trace:response-headers-to-destination-marker',
+            {
+              includes: [
+                'response-transfer-and-stream-consumption',
+                'response-read-decode',
+                'document-build-or-morph',
+                'main-thread-queueing',
+              ],
+              scope: 'primary-response-headers-to-destination-marker',
+            },
           ),
     responseReadDecode: unsupportedPhase(
-      'Chromium exposes response completion but no stable cross-framework boundary for response ' +
-        'text consumption plus JSON/RSC decoding without instrumenting entrant code.',
+      'Chromium exposes the enclosing response-processing/DOM-apply interval but no stable ' +
+        'cross-framework boundary for response text or stream consumption plus JSON/RSC decoding.',
     ),
     documentConstruction:
       documentConstructionActivity.eventCount === 0
@@ -886,15 +912,6 @@ export function analyzeNavigationAttribution({
     style: observedTracePhase(styleActivity),
     layout: observedTracePhase(layoutActivity),
     paint: observedTracePhase(paintActivity),
-    unattributed: unattributedClientPhase({
-      destinationMarkTsUs,
-      directlyObservedIntervals: [
-        ...documentConstructionActivity.intervals,
-        ...styleActivity.intervals,
-        ...layoutActivity.intervals,
-      ],
-      responseEndTsUs,
-    }),
   };
 
   const facts = {
@@ -910,16 +927,17 @@ export function analyzeNavigationAttribution({
     primaryResponse,
     phases,
     traceEvidence: {
-      categories:
-        'blink.console,devtools.timeline,disabled-by-default-devtools.timeline,disabled-by-default-devtools.timeline.frame',
+      categories: NAVIGATION_TRACE_CATEGORIES,
       eventCensus: traceEventCensus(traceEvents, [
+        ...TRACE_RESOURCE_EVENTS,
         ...TRACE_PHASE_EVENTS.documentConstruction,
         ...TRACE_PHASE_EVENTS.style,
         ...TRACE_PHASE_EVENTS.layout,
         ...TRACE_PHASE_EVENTS.paint,
       ]),
       relevantEventCount: String(
-        documentConstructionActivity.eventCount +
+        responseSelection.traceEventCount +
+          documentConstructionActivity.eventCount +
           styleActivity.eventCount +
           layoutActivity.eventCount +
           paintActivity.eventCount,
@@ -965,13 +983,13 @@ export function navigationAttributionFindings(attribution) {
   const expectedPhases = [
     'server',
     'transfer',
+    'responseProcessingDomApply',
     'responseReadDecode',
     'documentConstruction',
     'domMorphApply',
     'style',
     'layout',
     'paint',
-    'unattributed',
   ];
   if (
     !attribution.phases ||
@@ -982,18 +1000,223 @@ export function navigationAttributionFindings(attribution) {
     for (const [name, phase] of Object.entries(attribution.phases)) {
       if (!validAttributionPhase(phase)) findings.push(`navigation attribution ${name} is invalid`);
     }
+    if (!validResponseProcessingDomApplyPhase(attribution.phases.responseProcessingDomApply)) {
+      findings.push('navigation attribution responseProcessingDomApply contract is invalid');
+    }
+    findings.push(...navigationPhaseContractFindings(attribution));
   }
   if (
-    attribution.traceEvidence?.categories !==
-      'blink.console,devtools.timeline,disabled-by-default-devtools.timeline,disabled-by-default-devtools.timeline.frame' ||
+    attribution.traceEvidence?.categories !== NAVIGATION_TRACE_CATEGORIES ||
+    !validTraceEventCensus(attribution.traceEvidence?.eventCensus) ||
     !safeIntegerText(attribution.traceEvidence?.relevantEventCount, { min: 1 })
   ) {
     findings.push('navigation attribution trace evidence is invalid');
   }
+  if (
+    attribution.primaryResponse?.status === 'observed' &&
+    TRACE_RESOURCE_EVENTS.some(
+      (name) => !safeIntegerText(attribution.traceEvidence?.eventCensus?.[name], { min: 1 }),
+    )
+  ) {
+    findings.push('navigation attribution primary response trace census is incomplete');
+  }
   return findings;
 }
 
-function selectPrimaryNavigationResponse(records, { clickEpochMs, destinationPaintEpochMs }) {
+function navigationPhaseContractFindings(attribution) {
+  const findings = [];
+  const phases = attribution.phases;
+  const primary = attribution.primaryResponse;
+  if (primary?.status === 'observed') {
+    const requestStartTsUs = Number(primary.timing?.requestStartTsUs);
+    const responseStartTsUs = Number(primary.timing?.responseStartTsUs);
+    const responseEndTsUs = Number(primary.timing?.responseEndTsUs);
+    const destinationMarkTsUs = Number(attribution.observationBoundary?.destinationMarkTsUs);
+    if (
+      !observedPhaseMatches(
+        phases.server,
+        (responseStartTsUs - requestStartTsUs) / 1_000,
+        'chromium-devtools-timeline:request-send-to-response-headers',
+      )
+    ) {
+      findings.push('navigation attribution server phase does not match its trace boundaries');
+    }
+    if (
+      !observedPhaseMatches(
+        phases.transfer,
+        (responseEndTsUs - responseStartTsUs) / 1_000,
+        'chromium-devtools-timeline:response-headers-to-ResourceFinish.finishTime',
+      )
+    ) {
+      findings.push('navigation attribution transfer phase does not match its trace boundaries');
+    }
+    if (
+      !observedPhaseMatches(
+        phases.responseProcessingDomApply,
+        (destinationMarkTsUs - responseStartTsUs) / 1_000,
+        'chromium-monotonic-trace:response-headers-to-destination-marker',
+      )
+    ) {
+      findings.push(
+        'navigation attribution responseProcessingDomApply phase does not match its trace boundaries',
+      );
+    }
+  } else if (
+    [phases.server, phases.transfer, phases.responseProcessingDomApply].some(
+      (phase) => phase?.status !== 'unsupported',
+    )
+  ) {
+    findings.push(
+      'navigation attribution response-dependent phase was observed without a response',
+    );
+  }
+
+  if (
+    phases.responseReadDecode?.status !== 'unsupported' ||
+    phases.domMorphApply?.status !== 'unsupported'
+  ) {
+    findings.push('navigation attribution invented a JS-internal phase boundary');
+  }
+  if (
+    phases.documentConstruction?.status === 'observed' &&
+    phases.documentConstruction.source !== 'chromium-devtools-timeline'
+  ) {
+    findings.push('navigation attribution document construction source is invalid');
+  }
+  for (const name of ['style', 'layout', 'paint']) {
+    if (
+      phases[name]?.status !== 'observed' ||
+      phases[name].source !== 'chromium-devtools-timeline'
+    ) {
+      findings.push(`navigation attribution ${name} trace phase is invalid`);
+    }
+  }
+  if (!safeIntegerText(phases.paint?.eventCount, { min: 1 })) {
+    findings.push('navigation attribution paint trace event is unavailable');
+  }
+  return findings;
+}
+
+function observedPhaseMatches(phase, durationMs, source) {
+  return (
+    phase?.status === 'observed' &&
+    phase.source === source &&
+    Number.isFinite(durationMs) &&
+    Math.abs(phase.durationMs - durationMs) <= 1e-9
+  );
+}
+
+function selectPrimaryNavigationResponse(
+  records,
+  traceEvents,
+  { clickTsUs, destinationPaintTsUs, epochOffsetMs },
+) {
+  const recordCandidates = navigationRecordCandidates(records, {
+    clickEpochMs: traceEpochMs(clickTsUs, epochOffsetMs),
+    destinationPaintEpochMs: traceEpochMs(destinationPaintTsUs, epochOffsetMs),
+  });
+  const traceCandidates = navigationTraceResponseCandidates(traceEvents, {
+    clickTsUs,
+    destinationPaintTsUs,
+  });
+  const selected = traceCandidates[0];
+  if (!selected) {
+    if (recordCandidates.length > 0) {
+      throw new Error(
+        'Navigation attribution observed a click-window primary response in Playwright but ' +
+          'Chromium did not retain its complete ResourceSendRequest/ResourceReceiveResponse/' +
+          'ResourceFinish trace witness.',
+      );
+    }
+    return {
+      primaryResponse: {
+        candidateCount: '0',
+        durationMs: null,
+        reason:
+          'No trace-authenticated document or navigation-data response began inside the ' +
+          'click-to-paint window; navigation may have consumed pre-click prefetched bytes.',
+        status: 'unsupported',
+      },
+      traceEventCount: 0,
+    };
+  }
+
+  const matchingRecords = recordCandidates.filter(
+    (candidate) =>
+      candidate.record.url === selected.url &&
+      candidate.record.method === selected.method &&
+      candidate.record.status === selected.httpStatus &&
+      candidate.contentType === selected.contentType &&
+      candidate.selection.name === selected.selection.name,
+  );
+  if (matchingRecords.length !== 1) {
+    throw new Error(
+      `Navigation attribution trace response ${selected.requestId} matched ` +
+        `${String(matchingRecords.length)} Playwright request records; exactly one is required.`,
+    );
+  }
+  const record = matchingRecords[0];
+  const traceTiming = selected.timing;
+  const skewFacts = traceNetworkClockSkew(record.timing, traceTiming, epochOffsetMs);
+  if (skewFacts.maxAbsoluteSkewMs > TRACE_NETWORK_CLOCK_TOLERANCE_MS) {
+    throw new Error(
+      `Navigation attribution trace/Playwright request clocks diverged by ` +
+        `${String(skewFacts.maxAbsoluteSkewMs)} ms.`,
+    );
+  }
+
+  const playwrightWitnessFacts = {
+    contentType: record.contentType || null,
+    httpStatus: String(record.record.status),
+    method: record.record.method,
+    resourceType: record.record.resourceType,
+    timing: {
+      requestStartEpochMs: String(record.timing.requestStartEpochMs),
+      responseEndEpochMs: String(record.timing.responseEndEpochMs),
+      responseStartEpochMs: String(record.timing.responseStartEpochMs),
+      source: record.timing.source,
+    },
+    url: record.record.url,
+  };
+  const responseFacts = {
+    candidateCount: String(traceCandidates.length),
+    contentType: selected.contentType || null,
+    httpStatus: String(selected.httpStatus),
+    method: selected.method,
+    networkWitness: {
+      candidateCount: String(recordCandidates.length),
+      facts: playwrightWitnessFacts,
+      identity: sha256Canonical(playwrightWitnessFacts),
+      maxAbsoluteSkewMs: String(skewFacts.maxAbsoluteSkewMs),
+      source: 'playwright-request-timing',
+      toleranceMs: String(TRACE_NETWORK_CLOCK_TOLERANCE_MS),
+    },
+    resourceType: selected.resourceType,
+    selection: selected.selection.name,
+    timing: {
+      clock: 'chromium-monotonic-trace',
+      requestStartTsUs: String(traceTiming.requestStartTsUs),
+      responseEndTsUs: String(traceTiming.responseEndTsUs),
+      responseStartTsUs: String(traceTiming.responseStartTsUs),
+      source:
+        'ResourceSendRequest+ResourceReceiveResponse.args.data.timing/' +
+        'ResourceFinish.args.data.finishTime',
+    },
+    traceRequestId: selected.requestId,
+    url: selected.url,
+  };
+  return {
+    primaryResponse: {
+      ...responseFacts,
+      identity: sha256Canonical(responseFacts),
+      status: 'observed',
+    },
+    traceEventCount: TRACE_RESOURCE_EVENTS.length,
+    traceTiming,
+  };
+}
+
+function navigationRecordCandidates(records, { clickEpochMs, destinationPaintEpochMs }) {
   const candidates = [];
   for (const record of records) {
     const timing = requestTimingEpochs(record.timing);
@@ -1009,49 +1232,97 @@ function selectPrimaryNavigationResponse(records, { clickEpochMs, destinationPai
     if (selection === null) continue;
     candidates.push({ contentType, record, selection, timing });
   }
-  candidates.sort(
+  return candidates.sort(
     (left, right) =>
       left.selection.priority - right.selection.priority ||
       left.timing.requestStartEpochMs - right.timing.requestStartEpochMs ||
       left.record.url.localeCompare(right.record.url),
   );
-  const selected = candidates[0];
-  if (!selected) {
-    return {
-      primaryResponse: {
-        candidateCount: '0',
-        durationMs: null,
-        reason:
-          'No document or navigation-data response with complete request timing began inside the ' +
-          'click-to-paint window; navigation may have consumed pre-click prefetched bytes.',
-        status: 'unsupported',
-      },
-    };
+}
+
+function navigationTraceResponseCandidates(traceEvents, { clickTsUs, destinationPaintTsUs }) {
+  const requests = new Map();
+  for (const event of traceEvents) {
+    if (!TRACE_RESOURCE_EVENTS.includes(event?.name)) continue;
+    const requestId = event.args?.data?.requestId;
+    if (typeof requestId !== 'string' || !requestId) continue;
+    const entry = requests.get(requestId) ?? {};
+    const key =
+      event.name === 'ResourceSendRequest'
+        ? 'send'
+        : event.name === 'ResourceReceiveResponse'
+          ? 'response'
+          : 'finish';
+    if (entry[key] !== undefined) entry.duplicate = true;
+    entry[key] = event;
+    requests.set(requestId, entry);
   }
-  const timingFacts = {
-    requestStartEpochMs: String(selected.timing.requestStartEpochMs),
-    responseEndEpochMs: String(selected.timing.responseEndEpochMs),
-    responseStartEpochMs: String(selected.timing.responseStartEpochMs),
-    source: selected.timing.source,
-  };
-  const responseFacts = {
-    contentType: selected.contentType || null,
-    httpStatus: String(selected.record.status),
-    method: selected.record.method,
-    resourceType: selected.record.resourceType,
-    selection: selected.selection.name,
-    timing: timingFacts,
-    url: selected.record.url,
-  };
-  return {
-    primaryResponse: {
-      candidateCount: String(candidates.length),
-      identity: `sha256:${createHash('sha256').update(canonicalJson(responseFacts)).digest('hex')}`,
-      ...responseFacts,
-      status: 'observed',
-    },
-    responseTiming: selected.timing,
-  };
+
+  const candidates = [];
+  for (const [requestId, events] of requests) {
+    const sendData = events.send?.args?.data;
+    const responseData = events.response?.args?.data;
+    const finishData = events.finish?.args?.data;
+    const resourceTiming = responseData?.timing;
+    const requestTime = Number(resourceTiming?.requestTime);
+    const sendStartMs = Number(resourceTiming?.sendStart);
+    const receiveHeadersEndMs = Number(resourceTiming?.receiveHeadersEnd);
+    const requestStartTsUs = (requestTime + sendStartMs / 1_000) * 1_000_000;
+    const responseStartTsUs = (requestTime + receiveHeadersEndMs / 1_000) * 1_000_000;
+    const responseEndTsUs = Number(finishData?.finishTime) * 1_000_000;
+    if (
+      !Number.isFinite(events.send?.ts) ||
+      !Number.isFinite(events.response?.ts) ||
+      !Number.isFinite(requestTime) ||
+      !Number.isFinite(sendStartMs) ||
+      sendStartMs < 0 ||
+      !Number.isFinite(receiveHeadersEndMs) ||
+      receiveHeadersEndMs < sendStartMs ||
+      !Number.isFinite(requestStartTsUs) ||
+      !Number.isFinite(responseStartTsUs) ||
+      !Number.isFinite(responseEndTsUs) ||
+      events.duplicate === true ||
+      requestStartTsUs < clickTsUs - 10_000 ||
+      events.send.ts < clickTsUs ||
+      events.send.ts > destinationPaintTsUs ||
+      responseStartTsUs < requestStartTsUs ||
+      responseEndTsUs < responseStartTsUs ||
+      finishData?.didFail !== false ||
+      typeof sendData?.url !== 'string' ||
+      typeof sendData?.requestMethod !== 'string' ||
+      !Number.isInteger(responseData?.statusCode)
+    ) {
+      continue;
+    }
+    const contentType = traceResponseMediaType(responseData);
+    const recordShape = {
+      headers: traceRequestHeaders(sendData),
+      resourceType: traceResourceType(sendData),
+    };
+    const selection = navigationResponseSelection(recordShape, contentType);
+    if (selection === null) continue;
+    candidates.push({
+      contentType,
+      httpStatus: responseData.statusCode,
+      method: sendData.requestMethod,
+      requestId,
+      resourceType: recordShape.resourceType,
+      selection,
+      timing: {
+        requestStartTsUs,
+        responseEndTsUs,
+        responseStartTsUs,
+      },
+      url: sendData.url,
+    });
+  }
+  return candidates.sort(
+    (left, right) =>
+      left.selection.priority - right.selection.priority ||
+      left.timing.requestStartTsUs - right.timing.requestStartTsUs ||
+      left.url.localeCompare(right.url) ||
+      left.requestId.localeCompare(right.requestId),
+  );
 }
 
 function requestTimingEpochs(timing) {
@@ -1106,10 +1377,46 @@ function responseMediaType(headers) {
 
 function headerValue(headers, expected) {
   if (!headers || typeof headers !== 'object') return undefined;
+  if (Array.isArray(headers)) {
+    const found = headers.find(
+      (header) =>
+        typeof header?.name === 'string' && header.name.toLowerCase() === expected.toLowerCase(),
+    );
+    return found?.value;
+  }
   for (const [name, value] of Object.entries(headers)) {
-    if (name.toLowerCase() === expected) return value;
+    if (name.toLowerCase() === expected.toLowerCase()) return value;
   }
   return undefined;
+}
+
+function traceRequestHeaders(data) {
+  return data?.requestHeaders ?? data?.headers ?? {};
+}
+
+function traceResourceType(data) {
+  const resourceType = String(data?.resourceType ?? '').toLowerCase();
+  if (resourceType === 'document') return 'document';
+  if (resourceType === 'xhr') return 'xhr';
+  if (resourceType === 'fetch' || data?.initiator?.fetchType === 'fetch') return 'fetch';
+  return resourceType || 'other';
+}
+
+function traceResponseMediaType(data) {
+  const fromHeader = responseMediaType(data?.headers);
+  if (fromHeader) return fromHeader;
+  return typeof data?.mimeType === 'string'
+    ? data.mimeType.split(';', 1)[0].trim().toLowerCase()
+    : '';
+}
+
+function traceNetworkClockSkew(recordTiming, traceTiming, epochOffsetMs) {
+  const deltas = [
+    [recordTiming.requestStartEpochMs, traceTiming.requestStartTsUs],
+    [recordTiming.responseStartEpochMs, traceTiming.responseStartTsUs],
+    [recordTiming.responseEndEpochMs, traceTiming.responseEndTsUs],
+  ].map(([epochMs, timestampUs]) => Math.abs(epochMs - traceEpochMs(timestampUs, epochOffsetMs)));
+  return { maxAbsoluteSkewMs: Math.max(...deltas) };
 }
 
 function traceActivity(events, { endTsUs, names, startTsUs }) {
@@ -1181,46 +1488,56 @@ function unsupportedPhase(reason) {
   return { durationMs: null, reason, status: 'unsupported' };
 }
 
-function unattributedClientPhase({
-  destinationMarkTsUs,
-  directlyObservedIntervals,
-  responseEndTsUs,
-}) {
-  if (!Number.isFinite(responseEndTsUs)) {
-    return unsupportedPhase('A click-window primary response was not directly observed.');
-  }
-  if (responseEndTsUs > destinationMarkTsUs) {
-    return unsupportedPhase(
-      'The destination marker preceded completion of the selected streaming response, so a ' +
-        'response-end-to-marker client envelope does not exist.',
-    );
-  }
-  const clipped = directlyObservedIntervals.map(([start, end]) => [
-    Math.max(responseEndTsUs, start),
-    Math.min(destinationMarkTsUs, end),
-  ]);
-  const envelopeUs = destinationMarkTsUs - responseEndTsUs;
-  const observedUs = Math.min(envelopeUs, intervalUnionDurationUs(clipped));
-  return observedPhase((envelopeUs - observedUs) / 1_000, 'trace-unattributed-envelope', {
-    scope: 'primary-response-end-to-destination-marker',
-    includes: ['response-read-decode', 'document-build-or-morph', 'main-thread-queueing'],
-  });
-}
-
 function validPrimaryResponse(response) {
   if (!response || !['observed', 'unsupported'].includes(response.status)) return false;
   if (response.status === 'unsupported') {
     return response.durationMs === null && typeof response.reason === 'string' && !!response.reason;
   }
   const timing = response.timing;
+  const networkWitness = response.networkWitness;
+  const { identity, status: _status, ...responseIdentityFacts } = response;
+  const witnessFacts = networkWitness?.facts;
   return (
     safeIntegerText(response.candidateCount, { min: 1 }) &&
-    /^sha256:[0-9a-f]{64}$/u.test(response.identity ?? '') &&
+    identity === sha256Canonical(responseIdentityFacts) &&
     typeof response.url === 'string' &&
     typeof response.method === 'string' &&
     typeof response.resourceType === 'string' &&
     typeof response.selection === 'string' &&
+    typeof response.traceRequestId === 'string' &&
+    response.traceRequestId.length > 0 &&
     safeIntegerText(response.httpStatus, { max: 599, min: 100 }) &&
+    timing?.clock === 'chromium-monotonic-trace' &&
+    timing?.source ===
+      'ResourceSendRequest+ResourceReceiveResponse.args.data.timing/' +
+        'ResourceFinish.args.data.finishTime' &&
+    finiteNumberText(timing.requestStartTsUs) &&
+    finiteNumberText(timing.responseStartTsUs) &&
+    finiteNumberText(timing.responseEndTsUs) &&
+    Number(timing.requestStartTsUs) <= Number(timing.responseStartTsUs) &&
+    Number(timing.responseStartTsUs) <= Number(timing.responseEndTsUs) &&
+    safeIntegerText(networkWitness?.candidateCount, { min: 1 }) &&
+    witnessFacts !== null &&
+    typeof witnessFacts === 'object' &&
+    !Array.isArray(witnessFacts) &&
+    networkWitness?.identity === sha256Canonical(witnessFacts) &&
+    networkWitness?.source === 'playwright-request-timing' &&
+    networkWitness?.toleranceMs === String(TRACE_NETWORK_CLOCK_TOLERANCE_MS) &&
+    finiteNumberText(networkWitness?.maxAbsoluteSkewMs) &&
+    Number(networkWitness.maxAbsoluteSkewMs) >= 0 &&
+    Number(networkWitness.maxAbsoluteSkewMs) <= TRACE_NETWORK_CLOCK_TOLERANCE_MS &&
+    validPlaywrightResponseWitness(witnessFacts, response)
+  );
+}
+
+function validPlaywrightResponseWitness(facts, response) {
+  const timing = facts?.timing;
+  return (
+    facts?.url === response.url &&
+    facts?.method === response.method &&
+    facts?.httpStatus === response.httpStatus &&
+    facts?.contentType === response.contentType &&
+    facts?.resourceType === response.resourceType &&
     timing?.source === 'playwright-request-timing' &&
     finiteNumberText(timing.requestStartEpochMs) &&
     finiteNumberText(timing.responseStartEpochMs) &&
@@ -1235,6 +1552,36 @@ function validAttributionPhase(phase) {
   return phase.status === 'observed'
     ? Number.isFinite(phase.durationMs) && phase.durationMs >= 0 && typeof phase.source === 'string'
     : phase.durationMs === null && typeof phase.reason === 'string' && !!phase.reason;
+}
+
+function validResponseProcessingDomApplyPhase(phase) {
+  if (!validAttributionPhase(phase) || phase.status === 'unsupported') return true;
+  return (
+    phase.source === 'chromium-monotonic-trace:response-headers-to-destination-marker' &&
+    phase.scope === 'primary-response-headers-to-destination-marker' &&
+    JSON.stringify(phase.includes) ===
+      JSON.stringify([
+        'response-transfer-and-stream-consumption',
+        'response-read-decode',
+        'document-build-or-morph',
+        'main-thread-queueing',
+      ])
+  );
+}
+
+function validTraceEventCensus(census) {
+  if (!census || typeof census !== 'object' || Array.isArray(census)) return false;
+  const expectedNames = [
+    ...new Set([
+      ...TRACE_RESOURCE_EVENTS,
+      ...TRACE_PHASE_EVENTS.documentConstruction,
+      ...TRACE_PHASE_EVENTS.style,
+      ...TRACE_PHASE_EVENTS.layout,
+      ...TRACE_PHASE_EVENTS.paint,
+    ]),
+  ].sort();
+  if (JSON.stringify(Object.keys(census)) !== JSON.stringify(expectedNames)) return false;
+  return Object.values(census).every((value) => safeIntegerText(value));
 }
 
 function finiteNumberText(value) {
@@ -1253,7 +1600,11 @@ function safeIntegerText(value, { max = Number.MAX_SAFE_INTEGER, min = 0 } = {})
 }
 
 function navigationAttributionDigest(facts) {
-  return `sha256:${createHash('sha256').update(canonicalJson(facts)).digest('hex')}`;
+  return sha256Canonical(facts);
+}
+
+function sha256Canonical(value) {
+  return `sha256:${createHash('sha256').update(canonicalJson(value)).digest('hex')}`;
 }
 
 function canonicalJson(value) {

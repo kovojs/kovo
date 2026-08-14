@@ -1,0 +1,113 @@
+# Matched-navigation attribution contract
+
+## Decision
+
+The matched L1 browser benchmark reports a directly observed combined
+`responseProcessingDomApply` interval. Its start is the selected navigation response's Chrome
+`ResourceReceiveResponse` response-headers timestamp. Its end is the destination marker emitted by
+the harness's `MutationObserver`. Both boundaries use Chromium's monotonic trace clock.
+
+The combined interval includes streaming delivery and consumption, response read/decode,
+document construction or morphing, and main-thread queueing. It overlaps the separately reported
+transfer, parser, style, and layout rows. The rows are evidence, not an additive waterfall.
+
+Exact `responseReadDecode` and `domMorphApply` values remain `unsupported`, never zero. Chromium
+does not expose stable start/end events for either operation across both entrants, and subtracting
+named trace work from a larger interval would only manufacture a label for the residual.
+
+## Why this is the common boundary
+
+The two current matched entrants take different navigation paths:
+
+- Kovo fetches `application/vnd.kovo.document-parts+json` and applies the structured document
+  parts through its enhanced-navigation runtime.
+- Next.js currently follows the fixture's plain anchor as a document request and parses
+  `text/html`. Its L1 capability is real client cart state, but that does not make this navigation
+  an RSC transition. The selector also recognizes a future `text/x-component` click-window
+  response, but it will not call one observed until Chrome and Playwright authenticate it.
+
+Both produce Chrome Resource trace events and both eventually mutate the same benchmark destination
+marker into the DOM. Their internal decode and apply functions are not a shared API surface. Adding
+framework-owned marks would time different implementation boundaries; wrapping `fetch`, stream
+readers, or DOM prototype methods would be incomplete and would add framework-sensitive work to the
+measured path. The harness therefore observes the narrowest complete interval that both browsers
+and entrants expose without changing production runtime code.
+
+Chrome's relevant evidence is:
+
+| Fact                               | Trace source                                                      |
+| ---------------------------------- | ----------------------------------------------------------------- |
+| Request identity/window            | `ResourceSendRequest`                                             |
+| Request start and response headers | `ResourceReceiveResponse.args.data.timing`                        |
+| Response completion                | `ResourceFinish.args.data.finishTime`                             |
+| Destination DOM ready              | harness `TimeStamp` emitted by the destination `MutationObserver` |
+| Style, layout, paint               | named DevTools timeline events                                    |
+
+The `ResourceSendRequest.ts` event is not used as the precise request-start clock. In a real Next.js
+document navigation Chromium emitted it after the response timing's request start; the associated
+`ResourceReceiveResponse.args.data.timing.requestTime + sendStart` is the trace-native boundary.
+Likewise, `ResourceFinish.ts` is not used as the response-completion clock. Chromium can dispatch
+that event after the bytes finished; `args.data.finishTime` is the actual monotonic completion
+timestamp.
+
+## Authentication and failure posture
+
+The `kovo-navigation-attribution/v2` record selects a complete Chrome
+`ResourceSendRequest`/`ResourceReceiveResponse`/`ResourceFinish` triplet inside the click-to-paint
+window, then requires exactly one Playwright request record with the same URL, method, status,
+media type, and response class. The two observations' request start, response start, and response
+end clocks must agree within 25 ms. A Playwright candidate with no complete trace triplet, an
+ambiguous Playwright match, a failed trace request, an invalid event order, or excess clock skew
+aborts the sample.
+
+The serialized evidence retains:
+
+- the trace request id and monotonic request/response timestamps;
+- a SHA-256 identity for the matching Playwright request facts;
+- the maximum observed clock-bridge skew and its fixed tolerance;
+- the exact trace category string and event census;
+- every observed or unsupported phase verdict; and
+- a canonical SHA-256 digest over the complete attribution record.
+
+The digest is tamper evidence within the comparison's source and execution provenance. It is not an
+independent claim that a self-hash proves the browser produced the evidence.
+
+## Interpretation
+
+Use `responseProcessingDomApply` to compare the common response-to-ready envelope. Use the named
+style, layout, and paint rows to locate browser work inside and after that envelope. Do not add the
+rows together, and do not describe the combined duration as decode time or morph time.
+
+If Chromium later provides stable cross-framework decode or DOM-apply boundaries, the schema must
+change again and the baseline must be recollected. Existing v2 reports must not be retrofitted with
+derived phase labels.
+
+## Current-fixture smoke
+
+On 2026-08-14, a production-build smoke ran one desktop and one mobile matched-L1 sample for each
+entrant with Lighthouse disabled. All four navigation attribution records validated, and both app
+adapter integrity verdicts were complete:
+
+- Kovo selected exactly one `application/vnd.kovo.document-parts+json` fetch trace triplet. The
+  Playwright/trace maximum clock skew was 0.615 ms on desktop and 2.130 ms on mobile.
+- Next.js selected exactly one `text/html` document trace triplet. The maximum clock skew was
+  0.868 ms on desktop and 0.297 ms on mobile.
+
+The smoke also exposed a Chromium field-shape detail now covered by a regression test: for the
+Next.js document navigation, `ResourceSendRequest.ts` was dispatched after the timing structure's
+request start. The v2 contract therefore authenticates identity with `ResourceSendRequest` but
+uses `ResourceReceiveResponse.args.data.timing.requestTime + sendStart` for the request-start
+clock.
+
+The proving command was:
+
+```sh
+node benchmarks/run-all.mjs --apps kovo,nextjs --lane matched-l1 --iterations 1 --warmups 0 \
+  --bfcache-iterations 1 --skip-lighthouse --skip-build --port-base 53600 \
+  --out-dir /tmp/kovo-nav-attribution.y1ykZz
+```
+
+The diagnostic `results.json` SHA-256 was
+`eab8200041b0ad2aa6bde637f6065573e455fa512076106b5253406232ce5d3a`. The run was deliberately
+dirty while validating this harness change, so it is smoke evidence, not a publishable performance
+baseline.

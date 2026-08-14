@@ -51,7 +51,7 @@ export async function writeReport(resultsPath, reportPath) {
     '',
     '## Navigation attribution',
     '',
-    'Server and transfer come from the selected click-window navigation response. Browser-parser construction, style, layout, and paint are named Chrome timeline events. `Unsupported` means Chromium does not expose a stable cross-framework boundary; it never means zero. `Unattributed` is the directly measured response-end-to-destination-marker envelope left after trace-native work, and may contain decode/read, document building or morphing, and main-thread queueing.',
+    "Server and transfer come from the selected click-window response's authenticated Chrome Resource trace triplet. `Response processing + DOM apply` is the directly observed response-headers-to-destination-marker envelope on the same monotonic trace clock. It intentionally includes streaming transfer, read/decode, document build or morph, and main-thread queueing, so it overlaps the transfer and named timeline rows and must not be added to them. Browser-parser construction, style, layout, and paint are named Chrome timeline events. `Unsupported` means Chromium does not expose a stable cross-framework boundary; it never means zero.",
     '',
     navigationAttributionTable(data.apps, 'desktop'),
     '',
@@ -86,7 +86,7 @@ export async function writeReport(resultsPath, reportPath) {
     '## Known limits of this instrument',
     '',
     '- **The destination-paint mark observes DOM readiness, then the trace selects the first later frame.** MutationObserver scheduling and compositor event availability can add a small common delay. Raw trace-derived samples and the destination-DOM column remain in the report so that delay is visible; the old asymmetric FCP-versus-two-rAF branch has been removed.',
-    '- **Attribution rows are evidence, not an additive synthetic waterfall.** Request timing and Chrome timeline events can overlap. Response read/decode and DOM morph/apply remain `unsupported` unless Chromium supplies a direct boundary; their time is retained in the unattributed client envelope instead of guessed from residual arithmetic.',
+    '- **Attribution rows are evidence, not an additive synthetic waterfall.** The response-processing/DOM-apply envelope starts at response headers, so it overlaps transfer, parser, style, and layout work. Response read/decode and DOM morph/apply remain `unsupported` because Chromium supplies no stable separate boundary; no residual is relabeled as either phase.',
     '- **Wall-clock numbers are only comparable to numbers taken at a similar load.** The load average at the end of the run is recorded above; treat timings taken above roughly 1.0 per core as indicative only. Byte counts are unaffected.',
     '- **Mobile TTFB is not network-realistic.** CDP mobile emulation does not apply the emulated RTT to the first byte, so the mobile TTFB column understates a real mobile connection.',
     '- **The back/forward-cache probe uses a different browser build** than the timing scenarios: full Chromium with `--disable-back-forward-cache` removed. Playwright\'s default `chrome-headless-shell` cannot participate in the back/forward cache at all, so a probe sharing that browser could only ever report "not restored".',
@@ -247,13 +247,13 @@ function navigationAttributionTable(apps, condition) {
   const phases = [
     ['Server', 'server'],
     ['Transfer', 'transfer'],
+    ['Response processing + DOM apply', 'responseProcessingDomApply'],
     ['Read/decode', 'responseReadDecode'],
     ['Document construct', 'documentConstruction'],
     ['DOM morph/apply', 'domMorphApply'],
     ['Style', 'style'],
     ['Layout', 'layout'],
     ['Paint', 'paint'],
-    ['Unattributed', 'unattributed'],
   ];
   const rows = [
     `### ${title(condition)}`,
@@ -325,7 +325,7 @@ function navigationAttributionNotes(apps) {
     return '_Every requested attribution phase was directly observed in this run._';
   }
   return [
-    '**Unsupported or unattributed boundaries (deduplicated):**',
+    '**Unsupported boundaries (deduplicated):**',
     '',
     ...unique.map((note) => `- ${note}`),
   ].join('\n');

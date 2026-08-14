@@ -70,6 +70,13 @@ describe('benchmark scenario analysis', () => {
         }),
       ],
       traceEvents: [
+        ...traceResponse({
+          contentType: 'application/vnd.kovo.document-parts+json',
+          requestStartTsUs: 1_000_000,
+          responseEndTsUs: 1_040_000,
+          responseStartTsUs: 1_020_000,
+          url: 'http://localhost:4820/matched/l1/product/a',
+        }),
         { dur: 10_000, name: 'ParseHTML', ts: 1_050_000 },
         { dur: 2_000, name: 'UpdateLayoutTree', ts: 1_100_000 },
         { dur: 3_000, name: 'Layout', ts: 1_103_000 },
@@ -86,6 +93,17 @@ describe('benchmark scenario analysis', () => {
     });
     expect(attribution.phases.server).toMatchObject({ durationMs: 20, status: 'observed' });
     expect(attribution.phases.transfer).toMatchObject({ durationMs: 20, status: 'observed' });
+    expect(attribution.phases.responseProcessingDomApply).toMatchObject({
+      durationMs: 80,
+      includes: [
+        'response-transfer-and-stream-consumption',
+        'response-read-decode',
+        'document-build-or-morph',
+        'main-thread-queueing',
+      ],
+      scope: 'primary-response-headers-to-destination-marker',
+      status: 'observed',
+    });
     expect(attribution.phases.documentConstruction).toMatchObject({
       durationMs: 10,
       eventCount: '1',
@@ -94,10 +112,6 @@ describe('benchmark scenario analysis', () => {
     expect(attribution.phases.style).toMatchObject({ durationMs: 2, status: 'observed' });
     expect(attribution.phases.layout).toMatchObject({ durationMs: 3, status: 'observed' });
     expect(attribution.phases.paint).toMatchObject({ durationMs: 4, status: 'observed' });
-    expect(attribution.phases.unattributed).toMatchObject({
-      durationMs: 50,
-      status: 'observed',
-    });
     expect(attribution.phases.responseReadDecode).toMatchObject({
       durationMs: null,
       status: 'unsupported',
@@ -108,6 +122,18 @@ describe('benchmark scenario analysis', () => {
     });
     expect(attribution.evidenceDigest).toMatch(/^sha256:[0-9a-f]{64}$/u);
     expect(navigationAttributionFindings(attribution)).toEqual([]);
+
+    const forgedNetworkIdentity = structuredClone(attribution);
+    forgedNetworkIdentity.primaryResponse.networkWitness.identity = `sha256:${'0'.repeat(64)}`;
+    expect(navigationAttributionFindings(forgedNetworkIdentity)).toContain(
+      'navigation attribution primary response is invalid',
+    );
+
+    const relabeledEnvelope = structuredClone(attribution);
+    relabeledEnvelope.phases.responseProcessingDomApply.source = 'derived-residual';
+    expect(navigationAttributionFindings(relabeledEnvelope)).toContain(
+      'navigation attribution responseProcessingDomApply contract is invalid',
+    );
   });
 
   it('keeps absent primary-response and JS-internal boundaries explicit instead of inventing zeroes', () => {
@@ -126,6 +152,10 @@ describe('benchmark scenario analysis', () => {
     });
     expect(attribution.phases.server).toMatchObject({ durationMs: null, status: 'unsupported' });
     expect(attribution.phases.transfer).toMatchObject({ durationMs: null, status: 'unsupported' });
+    expect(attribution.phases.responseProcessingDomApply).toMatchObject({
+      durationMs: null,
+      status: 'unsupported',
+    });
     expect(attribution.phases.documentConstruction).toMatchObject({
       durationMs: null,
       status: 'unsupported',
@@ -137,10 +167,73 @@ describe('benchmark scenario analysis', () => {
       eventCount: '1',
       status: 'observed',
     });
-    expect(attribution.phases.unattributed).toMatchObject({
-      durationMs: null,
-      status: 'unsupported',
+  });
+
+  it('uses trace resource timing when a document ResourceSendRequest event is dispatched late', () => {
+    const url = 'http://localhost:4821/matched/l1/product/a';
+    const events = traceResponse({
+      contentType: 'text/html',
+      requestStartTsUs: 1_000_000,
+      resourceType: 'Document',
+      responseEndTsUs: 1_010_000,
+      responseStartTsUs: 1_006_000,
+      url,
     });
+    // Real Chromium Next.js traces dispatch the document ResourceSendRequest event after the
+    // requestTime/sendStart and can even dispatch it after the response-headers timing boundary.
+    events[0].ts = 1_008_000;
+    const attribution = analyzeNavigationAttribution({
+      clickTsUs: 990_000,
+      destinationMarkTsUs: 1_020_000,
+      destinationPaintTsUs: 1_030_000,
+      epochOffsetMs: 1_000,
+      records: [
+        request({
+          method: 'GET',
+          resourceType: 'document',
+          responseHeaders: { 'content-type': 'text/html; charset=utf-8' },
+          status: 200,
+          timing: { requestStart: 0, responseEnd: 10, responseStart: 6, startTime: 2_000 },
+          url,
+        }),
+      ],
+      traceEvents: [...events, { name: 'Paint', ts: 1_030_000 }],
+    });
+
+    expect(attribution.primaryResponse).toMatchObject({
+      resourceType: 'document',
+      selection: 'document-resource',
+      timing: {
+        requestStartTsUs: '1000000',
+        responseStartTsUs: '1006000',
+      },
+    });
+    expect(attribution.phases.server.durationMs).toBe(6);
+    expect(attribution.phases.responseProcessingDomApply.durationMs).toBe(14);
+  });
+
+  it('fails closed when Playwright sees a primary response but its trace triplet is absent', () => {
+    expect(() =>
+      analyzeNavigationAttribution({
+        clickTsUs: 1_000_000,
+        destinationMarkTsUs: 1_100_000,
+        destinationPaintTsUs: 1_120_000,
+        epochOffsetMs: 1_000,
+        records: [
+          request({
+            method: 'GET',
+            resourceType: 'fetch',
+            responseHeaders: { 'content-type': 'text/x-component' },
+            status: 200,
+            timing: { requestStart: 10, responseEnd: 50, responseStart: 30, startTime: 1_990 },
+            url: 'http://localhost:4820/matched/l1/product/a?_rsc=one',
+          }),
+        ],
+        traceEvents: [{ name: 'Paint', ts: 1_120_000 }],
+      }),
+    ).toThrow(
+      'did not retain its complete ResourceSendRequest/ResourceReceiveResponse/ResourceFinish',
+    );
   });
 
   it('fails closed when trace boundaries or digested evidence are changed', () => {
@@ -154,6 +247,37 @@ describe('benchmark scenario analysis', () => {
         traceEvents: [],
       }),
     ).toThrow('trace boundaries are out of order');
+
+    const url = 'http://localhost:4820/matched/l1/product/late';
+    expect(() =>
+      analyzeNavigationAttribution({
+        clickTsUs: 1_000_000,
+        destinationMarkTsUs: 1_015_000,
+        destinationPaintTsUs: 1_030_000,
+        epochOffsetMs: 1_000,
+        records: [
+          request({
+            method: 'GET',
+            resourceType: 'document',
+            responseHeaders: { 'content-type': 'text/html' },
+            status: 200,
+            timing: { requestStart: 10, responseEnd: 40, responseStart: 30, startTime: 1_990 },
+            url,
+          }),
+        ],
+        traceEvents: [
+          ...traceResponse({
+            contentType: 'text/html',
+            requestStartTsUs: 1_000_000,
+            resourceType: 'Document',
+            responseEndTsUs: 1_030_000,
+            responseStartTsUs: 1_020_000,
+            url,
+          }),
+          { name: 'Paint', ts: 1_030_000 },
+        ],
+      }),
+    ).toThrow('headers arrived after the destination marker');
 
     const attribution = analyzeNavigationAttribution({
       clickTsUs: 1,
@@ -172,4 +296,58 @@ describe('benchmark scenario analysis', () => {
 
 function request(overrides) {
   return { bytes: 0, headers: {}, resourceType: 'other', startedEpochMs: 0, ...overrides };
+}
+
+function traceResponse({
+  contentType,
+  requestStartTsUs,
+  resourceType = 'Other',
+  responseEndTsUs,
+  responseStartTsUs,
+  url,
+}) {
+  const requestId = 'trace-request-1';
+  return [
+    {
+      args: {
+        data: {
+          initiator: { fetchType: 'fetch' },
+          requestId,
+          requestMethod: 'GET',
+          resourceType,
+          url,
+        },
+      },
+      name: 'ResourceSendRequest',
+      ts: requestStartTsUs,
+    },
+    {
+      args: {
+        data: {
+          headers: [{ name: 'Content-Type', value: contentType }],
+          mimeType: contentType,
+          requestId,
+          statusCode: 200,
+          timing: {
+            receiveHeadersEnd: (responseStartTsUs - requestStartTsUs) / 1_000,
+            requestTime: requestStartTsUs / 1_000_000,
+            sendStart: 0,
+          },
+        },
+      },
+      name: 'ResourceReceiveResponse',
+      ts: responseStartTsUs + 50,
+    },
+    {
+      args: {
+        data: {
+          didFail: false,
+          finishTime: responseEndTsUs / 1_000_000,
+          requestId,
+        },
+      },
+      name: 'ResourceFinish',
+      ts: responseEndTsUs + 50,
+    },
+  ];
 }

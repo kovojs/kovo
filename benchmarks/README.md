@@ -148,12 +148,15 @@ each iteration. It records:
   that happen after load but before the click; timing alone is not called prefetch.
   The report also
   records how many navigations replaced the document and what the superseded
-  DOM-presence probe would have reported. Navigation attribution uses the selected
-  click-window document/document-parts/RSC response for server and transfer time,
-  and Chrome timeline events for parser construction, style, layout, and paint. The
-  response read/decode and DOM morph/apply rows stay explicitly `unsupported` when
-  Chromium cannot identify their boundaries without entrant-specific production
-  instrumentation; that time remains in a measured unattributed client envelope;
+  DOM-presence probe would have reported. Navigation attribution authenticates the selected
+  click-window document/document-parts/RSC response against both Playwright request evidence and
+  Chrome's `ResourceSendRequest`/`ResourceReceiveResponse`/`ResourceFinish` trace triplet. Server,
+  transfer, and the combined response-headers-to-destination-marker processing/DOM-apply envelope
+  therefore use the same monotonic trace clock. Chrome timeline events separately report parser
+  construction, style, layout, and paint. The response read/decode and DOM morph/apply rows stay
+  explicitly `unsupported`: Chromium cannot separate them without entrant-specific
+  instrumentation, and the combined envelope is reported as overlapping evidence rather than
+  split by residual arithmetic;
 - back/forward cache: a separate probe in full Chromium with Playwright's
   `--disable-back-forward-cache` removed (the default `chrome-headless-shell`
   cannot participate in bfcache at all). Frameworks that navigate in-document are
@@ -186,11 +189,15 @@ A source whose statuses could not be read at all is printed as
 `[integrity] untracked: …` on stderr, named in the generated report, and never
 silently counted as clean.
 
-Each navigation attribution record carries a canonical SHA-256 digest over its
-request identity, trace boundary, trace-event census, and phase verdicts. The adapter
-recomputes that digest before returning a sample. This is tamper-evidence inside the
-source- and execution-authenticated comparison report, not a claim that a self-hash
-independently proves where the browser evidence came from.
+Each navigation attribution record carries a canonical SHA-256 digest over its request identity,
+Playwright/trace clock-agreement witness, trace boundary, trace-event census, and phase verdicts.
+The adapter recomputes that digest before returning a sample. A Playwright response without exactly
+one matching complete Chrome Resource trace triplet aborts the sample, as does more than 25 ms of
+clock-bridge divergence. This is tamper-evidence inside the source- and execution-authenticated
+comparison report, not a claim that a self-hash independently proves where the browser evidence
+came from. The exact boundary contract and why decode/build/morph cannot be split portably are
+recorded in
+[`docs/performance/navigation-attribution-contract.md`](../docs/performance/navigation-attribution-contract.md).
 
 ### Rate limiting and iteration count
 
