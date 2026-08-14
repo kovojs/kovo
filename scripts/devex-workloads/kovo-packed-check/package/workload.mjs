@@ -62,7 +62,7 @@ export const benchmarkQuery = app.query({
 export const CounterIsland = component({
   queries: { benchmark: benchmarkQuery },
   state: () => ({ count: 0 }),
-  render: ({ benchmark }, state) => (
+  render: ({ benchmark }: { benchmark: { label: string } }, state) => (
     <button
       aria-label="increment benchmark counter"
       data-revision="zero"
@@ -92,7 +92,7 @@ export const benchmarkQuery = app.query({
 export const CounterIsland = component({
   queries: { benchmark: benchmarkQuery },
   state: () => ({ count: 0 }),
-  render: ({ benchmark }, state) => (
+  render: ({ benchmark }: { benchmark: { label: string } }, state) => (
     <button
       aria-label="increment benchmark counter"
       data-revision="one"
@@ -162,7 +162,7 @@ export const benchmarkQuery = app.query({
 export const CounterIsland = component({
   queries: { benchmark: benchmarkQuery },
   state: () => ({ count: 0 }),
-  render: ({ benchmark }, state) =>
+  render: ({ benchmark }: { benchmark: { label: string } }, state) =>
     \`<button data-revision="diagnostic">\${benchmark.label}: \${state.count}</button>\`,
 });
 `;
@@ -489,26 +489,41 @@ async function nextWatchObservation(
   const editedSource = Array.isArray(record?.input?.closure)
     ? record.input.closure.find((file) => file?.path === SOURCE_PATH)
     : undefined;
-  if (
-    record?.version !== CHECK_WATCH_SCHEMA ||
-    record?.event !== 'revision' ||
-    record?.revision !== expectedRevision ||
-    record?.input?.schema !== 'kovo-check-input-proof/v1' ||
-    record?.input?.status !== 'accepted' ||
-    record?.input?.entry?.path !== APP_SOURCE_PATH ||
-    !/^sha256:[0-9a-f]{64}$/u.test(record?.input?.entry?.digest ?? '') ||
-    editedSource?.digest !== sourceByteDigest(source) ||
-    editedSource?.bytes !== Buffer.byteLength(source, 'utf8') ||
-    !/^sha256:[0-9a-f]{64}$/u.test(record?.input?.closureDigest ?? '') ||
-    !/^sha256:[0-9a-f]{64}$/u.test(record?.input?.projectDigest ?? '') ||
-    record?.phaseCensus?.schema !== CHECK_WATCH_CENSUS_SCHEMA ||
-    !/^sha256:[0-9a-f]{64}$/u.test(record?.phaseCensus?.checkGraphDigest ?? '') ||
-    record?.check?.version !== 'kovo-diagnostic/v1' ||
-    record?.check?.result?.protocol !== 'kovo-check/v1' ||
-    record?.check?.result?.exitCode !== 0 ||
-    !/^kovo-check\/v1\r?\n/mu.test(record?.check?.result?.text ?? '')
-  ) {
-    throw new Error(`packed Kovo incremental check returned wrong revision ${expectedRevision}`);
+  const mismatches = [
+    [record?.version === CHECK_WATCH_SCHEMA, 'watch protocol'],
+    [record?.event === 'revision', 'event'],
+    [record?.revision === expectedRevision, 'revision index'],
+    [record?.input?.schema === 'kovo-check-input-proof/v1', 'input proof schema'],
+    [record?.input?.status === 'accepted', `input proof status ${String(record?.input?.status)}`],
+    [record?.input?.entry?.path === APP_SOURCE_PATH, 'entry path'],
+    [/^sha256:[0-9a-f]{64}$/u.test(record?.input?.entry?.digest ?? ''), 'entry digest'],
+    [editedSource?.digest === sourceByteDigest(source), 'edited-source digest'],
+    [editedSource?.bytes === Buffer.byteLength(source, 'utf8'), 'edited-source byte count'],
+    [/^sha256:[0-9a-f]{64}$/u.test(record?.input?.closureDigest ?? ''), 'closure digest'],
+    [/^sha256:[0-9a-f]{64}$/u.test(record?.input?.projectDigest ?? ''), 'project digest'],
+    [record?.phaseCensus?.schema === CHECK_WATCH_CENSUS_SCHEMA, 'phase-census schema'],
+    [
+      /^sha256:[0-9a-f]{64}$/u.test(record?.phaseCensus?.checkGraphDigest ?? ''),
+      'check-graph digest',
+    ],
+    [record?.check?.version === 'kovo-diagnostic/v1', 'diagnostic protocol'],
+    [record?.check?.result?.protocol === 'kovo-check/v1', 'check protocol'],
+    [
+      record?.check?.result?.exitCode === 0,
+      `check exit ${String(record?.check?.result?.exitCode)}`,
+    ],
+    [/^kovo-check\/v1\r?\n/mu.test(record?.check?.result?.text ?? ''), 'check marker'],
+  ]
+    .filter(([matches]) => !matches)
+    .map(([, label]) => label);
+  if (mismatches.length > 0) {
+    const diagnostic =
+      record?.check?.result?.exitCode === 0
+        ? ''
+        : `; diagnostic ${JSON.stringify(record?.check?.result?.text ?? '')}`;
+    throw new Error(
+      `packed Kovo incremental check returned wrong revision ${expectedRevision}: ${mismatches.join(', ')}${diagnostic}`,
+    );
   }
   validateWatchPhases(
     record.phaseCensus.phases,

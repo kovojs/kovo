@@ -79,6 +79,10 @@ const kovoPackedComponentSource = readFileSync(
   ),
   'utf8',
 );
+const kovoPackedStyleTypesSource = readFileSync(
+  path.join(repoRoot, 'scripts/devex-workloads/kovo-packed-check/package/src/style.d.ts'),
+  'utf8',
+);
 const kovoPackedBrowserBuildSource = readFileSync(
   path.join(repoRoot, 'scripts/devex-workloads/kovo-packed-check/package/build-browser.mjs'),
   'utf8',
@@ -543,6 +547,13 @@ describe('DevEx benchmark foundation', () => {
     expect(kovoPackedWorkloadSource).toContain('kovo-check-phase-census/v1');
     expect(kovoPackedWorkloadSource).toContain("import { app } from '../kovo.js'");
     expect(kovoPackedWorkloadSource).toContain('app.query({');
+    expect(kovoPackedWorkloadSource).toContain(
+      'render: ({ benchmark }: { benchmark: { label: string } }, state)',
+    );
+    expect(kovoPackedComponentSource).toContain(
+      'render: ({ benchmark }: { benchmark: { label: string } }, state)',
+    );
+    expect(kovoPackedStyleTypesSource).toBe("declare module '*.css';\n");
     expect(kovoPackedWorkloadSource).not.toContain(
       "import { publicAccess, query, s } from '@kovojs/server'",
     );

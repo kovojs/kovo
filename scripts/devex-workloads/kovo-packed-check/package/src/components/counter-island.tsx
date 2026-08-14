@@ -14,7 +14,7 @@ export const benchmarkQuery = app.query({
 export const CounterIsland = component({
   queries: { benchmark: benchmarkQuery },
   state: () => ({ count: 0 }),
-  render: ({ benchmark }, state) => (
+  render: ({ benchmark }: { benchmark: { label: string } }, state) => (
     <button
       aria-label="increment benchmark counter"
       data-revision="zero"
