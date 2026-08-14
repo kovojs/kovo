@@ -13,6 +13,7 @@ import {
   KOVO_BUILD_PHASE_ATTRIBUTION_SCHEMA,
   KOVO_BUILD_SOURCE_PHASES,
   KOVO_BUILD_WORKER_PHASES,
+  packedBuildProductOptions,
   parseBuildPhaseCensus,
   runBuildBenchmark,
   summarizeBuildSamples,
@@ -109,6 +110,28 @@ function nextManifest(commandSource, outputs) {
 }
 
 describe('production build benchmark adapter', () => {
+  it('requires paired packed-product descriptor arguments', () => {
+    const digest = `sha256:${'a'.repeat(64)}`;
+    expect(packedBuildProductOptions({})).toEqual({});
+    expect(
+      packedBuildProductOptions({
+        'packed-product': '/tmp/consumer/.kovo-perf-packed-product.json',
+        'packed-product-digest': digest,
+      }),
+    ).toEqual({
+      packedProduct: {
+        descriptorPath: '/tmp/consumer/.kovo-perf-packed-product.json',
+        digest,
+      },
+    });
+    expect(() => packedBuildProductOptions({ 'packed-product': '/tmp/descriptor' })).toThrow(
+      /packed product digest/u,
+    );
+    expect(() => packedBuildProductOptions({ 'packed-product-digest': digest })).toThrow(
+      /packed product descriptor/u,
+    );
+  });
+
   it('extracts the complete nested Kovo source and worker censuses', () => {
     const source = {
       complete: true,
@@ -391,6 +414,12 @@ describe('production build benchmark adapter', () => {
     expect(report.integrity).toMatchObject({ complete: true, errors: [], misses: 0 });
     expect(report.integrity.corpus.stable).toBe(true);
     expect(report.integrity.source.stable).toBe(true);
+    expect(report.productArtifact).toBeNull();
+    expect(report.integrity.productArtifact).toEqual({
+      afterVerified: true,
+      beforeVerified: false,
+      required: false,
+    });
     expect(report.sourceAfter).toMatchObject({
       commit: report.source.commit,
       dirtyPaths: report.source.dirtyPaths,

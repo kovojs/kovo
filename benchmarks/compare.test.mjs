@@ -31,6 +31,7 @@ import {
   fixtureProof,
   pairedAnalysis,
   performanceWorkloadIdentity,
+  productArtifactCellFindings,
   runComparison,
   runDevComparisonAdapterCell,
   serverSampleSchedule,
@@ -262,6 +263,67 @@ describe('serialized comparison analysis', () => {
       corpusSize: 24,
     });
     expect(workload.identity.lanes).toEqual(['corpus-n24']);
+  });
+
+  it('requires packed product evidence only on Kovo dev/build cells', () => {
+    const productArtifact = { digest: `sha256:${'a'.repeat(64)}`, schema: 'fixture' };
+    const report = {
+      integrity: {
+        productArtifact: { afterVerified: true, beforeVerified: true, required: true },
+      },
+      productArtifact,
+    };
+    expect(
+      productArtifactCellFindings(
+        { cell: 'build', framework: 'kovo', lane: 'corpus-n24', mode: 'clean', report },
+        productArtifact,
+      ),
+    ).toEqual([]);
+    expect(
+      productArtifactCellFindings(
+        {
+          cell: 'dev',
+          framework: 'nextjs',
+          lane: 'corpus-n24',
+          report: { productArtifact: null },
+        },
+        productArtifact,
+      ),
+    ).toEqual([]);
+    expect(
+      productArtifactCellFindings(
+        { cell: 'dev', framework: 'nextjs', lane: 'corpus-n24', report },
+        productArtifact,
+      ),
+    ).toEqual(['corpus-n24/nextjs/dev carried Kovo product evidence']);
+    expect(
+      productArtifactCellFindings(
+        {
+          cell: 'build',
+          framework: 'kovo',
+          lane: 'corpus-n24',
+          mode: 'clean',
+          report: { productArtifact: null },
+        },
+        productArtifact,
+      ),
+    ).toEqual(['corpus-n24/kovo/clean packed product evidence is incomplete']);
+    expect(
+      productArtifactCellFindings(
+        {
+          cell: 'dev',
+          framework: 'kovo',
+          lane: 'corpus-n24',
+          report: {
+            ...report,
+            integrity: {
+              productArtifact: { ...report.integrity.productArtifact, afterVerified: false },
+            },
+          },
+        },
+        productArtifact,
+      ),
+    ).toEqual(['corpus-n24/kovo/dev packed product evidence is incomplete']);
   });
 
   it('recomputes host digests instead of trusting their presence', () => {

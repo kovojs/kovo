@@ -23,6 +23,11 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { collectPerformanceProvenance } from './lib/perf-provenance.mjs';
+import {
+  materializePackedKovoCommand,
+  normalizedPackedKovoCommand,
+  verifyPackedKovoProductFixture,
+} from './lib/perf-packed-kovo-product.mjs';
 import { measureProcessTreeCommand } from './lib/process-tree-rss.mjs';
 
 export const BUILD_BENCHMARK_SCHEMA = 'kovo-build-benchmark/v1';
@@ -236,11 +241,14 @@ export function runBuildBenchmark(options, dependencies = {}) {
     requiredString(command.cwd, 'build.command.cwd'),
     true,
   );
-  const argv = stringArray(command.argv, 'build.command.argv');
+  const declaredCommand = {
+    argv: stringArray(command.argv, 'build.command.argv'),
+    cwd: commandCwd,
+    env: stringRecord(command.env, 'build.command.env'),
+  };
   const outputs = validateBuildOutputContract(manifest.build.outputs);
   const outputPatterns = [...outputs.requiredNonempty, ...outputs.absent];
-  const commandEnv = stringRecord(command.env, 'build.command.env');
-  const kovoPhaseCensusSource = framework === 'kovo' ? declaredKovoBuildSource(argv) : null;
+  const commandEnv = declaredCommand.env;
   const edit = manifest.build.edit;
   const originalEditSource =
     mode === 'edit'
@@ -271,9 +279,27 @@ export function runBuildBenchmark(options, dependencies = {}) {
     ],
     repoRoot,
   });
+  let packedProduct = null;
+  if (options.packedProduct !== undefined && options.packedProduct !== null) {
+    if (framework !== 'kovo') {
+      throw new TypeError('packed Kovo product evidence cannot be attached to a Next.js build');
+    }
+    packedProduct = verifyPackedKovoProductFixture(
+      requiredString(options.packedProduct.descriptorPath, 'packed product descriptor'),
+      requiredString(options.packedProduct.digest, 'packed product digest'),
+      source,
+    );
+  }
+  const executableCommand =
+    packedProduct === null
+      ? declaredCommand
+      : materializePackedKovoCommand(declaredCommand, packedProduct, corpusRoot);
+  const argv = executableCommand.argv;
+  const kovoPhaseCensusSource =
+    framework === 'kovo' ? declaredKovoBuildSource(declaredCommand.argv) : null;
   const run = () =>
     measureCommand(argv, {
-      cwd: commandCwd,
+      cwd: executableCommand.cwd,
       env: {
         ...commandEnv,
         ...(kovoPhaseCensusSource === null
@@ -325,6 +351,7 @@ export function runBuildBenchmark(options, dependencies = {}) {
 
   let corpusAfter = null;
   let sourceAfter = null;
+  let packedProductAfterVerified = packedProduct === null;
 
   try {
     cleanDeclaredOutputs(corpusRoot, outputPatterns);
@@ -491,6 +518,18 @@ export function runBuildBenchmark(options, dependencies = {}) {
     } catch (error) {
       errors.push(`post-run source provenance: ${errorMessage(error)}`);
     }
+    if (packedProduct !== null) {
+      try {
+        verifyPackedKovoProductFixture(
+          options.packedProduct.descriptorPath,
+          options.packedProduct.digest,
+          sourceAfter ?? source,
+        );
+        packedProductAfterVerified = true;
+      } catch (error) {
+        errors.push(`post-run packed product integrity: ${errorMessage(error)}`);
+      }
+    }
   }
 
   const validSamples = samples.filter(
@@ -523,17 +562,23 @@ export function runBuildBenchmark(options, dependencies = {}) {
     },
     framework,
     integrity: {
-      command: { argv, cwd: path.relative(corpusRoot, commandCwd) || '.' },
+      command: normalizedPackedKovoCommand(executableCommand, corpusRoot),
       complete,
       corpus: { after: corpusAfter, before: corpusBefore, stable: corpusStable },
       errors,
       iterations,
       misses,
       outputRoots: outputs,
+      productArtifact: {
+        afterVerified: packedProductAfterVerified,
+        beforeVerified: packedProduct !== null,
+        required: packedProduct !== null,
+      },
       source: { after: sourceAfter, before: source, stable: sourceStable },
       warmups,
     },
     mode,
+    productArtifact: packedProduct?.identity ?? null,
     samples,
     schema: BUILD_BENCHMARK_SCHEMA,
     source,
@@ -971,6 +1016,17 @@ function parseArgs(argv) {
   return options;
 }
 
+export function packedBuildProductOptions(args) {
+  if (args['packed-product'] === undefined && args['packed-product-digest'] === undefined)
+    return {};
+  return {
+    packedProduct: {
+      descriptorPath: requiredString(args['packed-product'], 'packed product descriptor'),
+      digest: requiredString(args['packed-product-digest'], 'packed product digest'),
+    },
+  };
+}
+
 async function main(argv) {
   const args = parseArgs(argv);
   const report = runBuildBenchmark({
@@ -978,6 +1034,7 @@ async function main(argv) {
     framework: args.framework,
     iterations: args.iterations,
     mode: args.mode,
+    ...packedBuildProductOptions(args),
     warmups: args.warmups,
     ...(args.timeout === undefined ? {} : { timeoutMs: Number(args.timeout) }),
   });

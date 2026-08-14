@@ -322,8 +322,23 @@ describe('packed versus source-checkout CLI startup benchmark', () => {
     expect(proof).toMatchObject({
       confined: true,
       loadedFiles: ['@kovojs/cli/dist/bin.mjs', '@kovojs/cli/dist/chunk.mjs'],
+      normalizedTraceSha256: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
       workspaceSourceLoaded: false,
     });
+
+    const secondConsumer = temporaryRoot();
+    const secondPackageRoot = path.join(secondConsumer, 'node_modules', '@kovojs', 'cli');
+    mkdirSync(path.join(secondPackageRoot, 'dist'), { recursive: true });
+    writeFileSync(path.join(secondPackageRoot, 'package.json'), manifestBytes);
+    writeFileSync(path.join(secondPackageRoot, 'dist', 'bin.mjs'), binBytes);
+    writeFileSync(path.join(secondPackageRoot, 'dist', 'chunk.mjs'), chunkBytes);
+    const secondProof = runPackedResolutionProof({
+      consumerRoot: secondConsumer,
+      expectedStdout: 'kovo 0.0.0\n',
+      installedCli: path.join(secondPackageRoot, 'dist', 'bin.mjs'),
+    });
+    expect(secondProof.normalizedTraceSha256).toBe(proof.normalizedTraceSha256);
+    expect(secondProof.traceSha256).not.toBe(proof.traceSha256);
 
     writeFileSync(path.join(packageRoot, 'dist', 'bin.mjs'), 'tampered\n');
     expect(() => assertInstalledPackedPackages(consumerRoot, artifacts)).toThrow(

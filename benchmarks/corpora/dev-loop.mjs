@@ -26,6 +26,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 
 import { collectPerformanceProvenance } from '../../scripts/lib/perf-provenance.mjs';
+import {
+  materializePackedKovoCommand,
+  normalizedPackedKovoCommand,
+  verifyPackedKovoProductFixture,
+} from '../../scripts/lib/perf-packed-kovo-product.mjs';
 import { performanceExecutionIdentity } from '../../scripts/lib/perf-execution.mjs';
 import { performanceHostFingerprint } from '../../scripts/lib/perf-host.mjs';
 import { validReadyRouteProbe } from '../../scripts/lib/perf-ready-route.mjs';
@@ -140,12 +145,28 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
   const handoffDependencies = dependencies.handoffDependencies ?? {};
   const startedAt = new Date().toISOString();
   const source = await collectAuthenticatedSource();
+  let packedProduct = null;
+  if (normalized.packedProduct !== null) {
+    if (manifest.framework !== 'kovo') {
+      throw new TypeError('packed Kovo product evidence cannot be attached to a Next.js corpus');
+    }
+    packedProduct = verifyPackedKovoProductFixture(
+      normalized.packedProduct.descriptorPath,
+      normalized.packedProduct.digest,
+      source,
+    );
+  }
   const execution = performanceExecutionIdentity({ startedAt });
   const sessionPorts = Array.from(
     { length: normalized.readyIterations + 1 },
     (_, index) => normalized.port + index,
   );
-  const command = materializeCommand(manifest.dev.command, appRoot, sessionPorts[0]);
+  const command = materializeEntrantCommand(
+    manifest.dev.command,
+    appRoot,
+    sessionPorts[0],
+    packedProduct,
+  );
   const versions = await collectEntrantVersions(appRoot, manifest.framework, command);
   const report = createReportSkeleton({
     command,
@@ -155,6 +176,7 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
     manifest,
     manifestDigest,
     manifestPath,
+    packedProduct,
     readyIterations: normalized.readyIterations,
     readyTimeoutMs: normalized.readyTimeoutMs,
     source,
@@ -205,10 +227,11 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
     for (let iteration = 0; iteration < report.integrity.readyIterations; iteration += 1) {
       await cleanGeneratedOutputs(appRoot, manifest.build.outputs);
       const targetSession = `ready[${String(iteration)}]`;
-      const sessionCommand = materializeCommand(
+      const sessionCommand = materializeEntrantCommand(
         manifest.dev.command,
         appRoot,
         sessionPorts[iteration],
+        packedProduct,
       );
       const launch = await launchDevSessionAfterHandoff(
         {
@@ -253,10 +276,11 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
 
     if (!sessionSeriesAborted) {
       await cleanGeneratedOutputs(appRoot, manifest.build.outputs);
-      const editCommand = materializeCommand(
+      const editCommand = materializeEntrantCommand(
         manifest.dev.command,
         appRoot,
         sessionPorts[normalized.readyIterations],
+        packedProduct,
       );
       const launch = await launchDevSessionAfterHandoff(
         {
@@ -333,6 +357,18 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
     } catch (error) {
       report.integrity.errors.push(`post-run source provenance: ${errorMessage(error)}`);
     }
+    if (packedProduct !== null) {
+      try {
+        verifyPackedKovoProductFixture(
+          normalized.packedProduct.descriptorPath,
+          normalized.packedProduct.digest,
+          report.sourceAfter ?? source,
+        );
+        report.integrity.productArtifact.afterVerified = true;
+      } catch (error) {
+        report.integrity.errors.push(`post-run packed product integrity: ${errorMessage(error)}`);
+      }
+    }
   }
 
   const countFindings = exactSampleCountFindings(report);
@@ -373,6 +409,9 @@ export function devLoopIntegrityComplete(
     integrity?.browser?.requestFailedCount === 0 &&
     integrity?.corpus?.beforeVerified === true &&
     integrity?.corpus?.afterVerified === true &&
+    (integrity?.productArtifact?.required !== true ||
+      (integrity.productArtifact.beforeVerified === true &&
+        integrity.productArtifact.afterVerified === true)) &&
     integrity?.source?.stable === true &&
     countFindings.length === 0 &&
     profileFindings.length === 0
@@ -2597,6 +2636,21 @@ export function profiledDevInvocation(command, inspectorPort) {
     return { argv: command.argv.slice(1), executable: command.argv[0] };
   }
   boundedInteger(inspectorPort, 1_024, 65_535, 'inspector port');
+  if (command.packedProduct !== undefined) {
+    const entrypoint = command.packedProduct.cliEntry;
+    if (
+      command.argv[0] !== process.execPath ||
+      command.argv[1] !== entrypoint ||
+      path.extname(entrypoint) !== '.mjs' ||
+      path.basename(entrypoint) !== 'bin.mjs'
+    ) {
+      throw new TypeError('profiled packed Kovo command confused its authenticated dist entry');
+    }
+    return {
+      argv: [`--inspect=127.0.0.1:${String(inspectorPort)}`, entrypoint, ...command.argv.slice(2)],
+      executable: process.execPath,
+    };
+  }
   const entrypoint = resolveProfiledKovoEntrypoint(command);
   return {
     argv: [
@@ -3002,6 +3056,13 @@ function materializeCommand(contract, appRoot, port) {
   };
 }
 
+function materializeEntrantCommand(contract, appRoot, port, packedProduct) {
+  const declared = materializeCommand(contract, appRoot, port);
+  return packedProduct === null
+    ? declared
+    : materializePackedKovoCommand(declared, packedProduct, appRoot);
+}
+
 async function cleanGeneratedOutputs(appRoot, outputs) {
   for (const output of [...outputs.requiredNonempty, ...outputs.absent]) {
     assertSafeRelativePath(output.replace(/\*$/u, 'sentinel'), 'build output');
@@ -3074,6 +3135,7 @@ function createReportSkeleton({
   manifest,
   manifestDigest,
   manifestPath,
+  packedProduct,
   readyIterations,
   readyTimeoutMs,
   source,
@@ -3083,7 +3145,7 @@ function createReportSkeleton({
 }) {
   const cpu = os.cpus()[0];
   return {
-    command: { argv: command.argv, cwd: command.cwd, env: command.env },
+    command: normalizedPackedKovoCommand(command, path.dirname(manifestPath)),
     corpus: {
       editRefreshSurfaces: manifest.workload.editRefreshSurfaces,
       editSavePosture: manifest.workload.editSavePosture,
@@ -3115,7 +3177,10 @@ function createReportSkeleton({
     host: null,
     hostSamples: [],
     integrity: {
-      command: { argv: command.argv, cwd: command.cwd, origin: command.origin },
+      command: {
+        ...normalizedPackedKovoCommand(command, path.dirname(manifestPath)),
+        origin: command.origin,
+      },
       complete: false,
       browser: emptyBrowserIntegrity(),
       corpus: { afterVerified: false, beforeVerified: false },
@@ -3125,12 +3190,18 @@ function createReportSkeleton({
       iterations,
       inspectorPort,
       misses: 0,
+      productArtifact: {
+        afterVerified: packedProduct === null,
+        beforeVerified: packedProduct !== null,
+        required: packedProduct !== null,
+      },
       readyIterations,
       readyTimeoutMs,
       source: { after: null, before: source, stable: false },
       warmups,
     },
     profile: null,
+    productArtifact: packedProduct?.identity ?? null,
     readySamples: [],
     samples: [],
     schema: DEV_LOOP_REPORT_SCHEMA,
@@ -3150,10 +3221,15 @@ function createReportSkeleton({
  * `node_modules` link. Do not silently pretend every corpus has the latter topology: that made the
  * real default corpus fail before a dev process could start in CI.
  */
-export async function collectEntrantVersions(appRoot, framework, command) {
+export async function collectEntrantVersions(appRoot, framework, command, dependencies = {}) {
   const packages =
     framework === 'kovo' ? ['@kovojs/cli', 'vite-plus'] : ['next', 'react', 'react-dom'];
-  const dependencyRoot = await dependencyRootForDevCommand(appRoot, framework, command);
+  const dependencyRoot = await dependencyRootForDevCommand(
+    appRoot,
+    framework,
+    command,
+    dependencies,
+  );
   const result = {};
   for (const packageName of packages) {
     const packageJsonPath = path.resolve(dependencyRoot, packageName, 'package.json');
@@ -3170,6 +3246,35 @@ export async function collectEntrantVersions(appRoot, framework, command) {
 }
 
 export async function dependencyRootForDevCommand(appRoot, framework, command, dependencies = {}) {
+  if (command.packedProduct !== undefined) {
+    if (framework !== 'kovo') {
+      throw new TypeError('packed Kovo command cannot own a non-Kovo corpus');
+    }
+    const dependencyRoot = path.resolve(command.packedProduct.dependencyRoot);
+    const consumerDependencyRoot = path.resolve(command.packedProduct.consumerDependencyRoot);
+    const appDependencyRoot = path.join(appRoot, 'node_modules');
+    const resolveRealpath = dependencies.realpath ?? realpath;
+    const realConsumerDependencyRoot = await resolveRealpath(consumerDependencyRoot);
+    const realDependencyRoot = await resolveRealpath(dependencyRoot);
+    const realCliEntry = await resolveRealpath(command.packedProduct.cliEntry);
+    const expectedDependencyRoot = path.dirname(
+      path.dirname(path.dirname(path.dirname(realCliEntry))),
+    );
+    if (
+      command.argv[0] !== process.execPath ||
+      command.argv[1] !== command.packedProduct.cliEntry ||
+      path.resolve(consumerDependencyRoot, '@kovojs/cli/dist/bin.mjs') !==
+        path.resolve(command.packedProduct.cliEntry) ||
+      (await resolveRealpath(appDependencyRoot)) !== realConsumerDependencyRoot ||
+      realDependencyRoot !== (await resolveRealpath(expectedDependencyRoot)) ||
+      !isWithin(realConsumerDependencyRoot, realDependencyRoot)
+    ) {
+      throw new TypeError(
+        'packed Kovo command does not resolve from its authenticated app binding',
+      );
+    }
+    return dependencyRoot;
+  }
   const expectedExecutable = framework === 'kovo' ? 'kovo' : 'next';
   const executable = path.resolve(command.cwd, command.argv[0]);
   const binRoot = path.dirname(executable);
@@ -3511,6 +3616,26 @@ export function normalizeDevLoopOptions(options) {
   ) {
     throw new TypeError('diagnostic profile options must be an object or null.');
   }
+  const hasFlatPackedProduct =
+    options.packedProductDescriptor !== undefined || options.packedProductDigest !== undefined;
+  const hasNormalizedPackedProduct = options.packedProduct !== undefined;
+  if (hasFlatPackedProduct && hasNormalizedPackedProduct) {
+    throw new TypeError('Packed product options must use one representation.');
+  }
+  const packedProductOptions = hasNormalizedPackedProduct
+    ? options.packedProduct
+    : hasFlatPackedProduct
+      ? {
+          descriptorPath: options.packedProductDescriptor,
+          digest: options.packedProductDigest,
+        }
+      : null;
+  if (
+    packedProductOptions !== null &&
+    (typeof packedProductOptions !== 'object' || Array.isArray(packedProductOptions))
+  ) {
+    throw new TypeError('packed product options must be an object or null.');
+  }
   const normalized = {
     diagnosticProfile:
       diagnosticOptions === null
@@ -3529,6 +3654,15 @@ export function normalizeDevLoopOptions(options) {
     iterations: boundedInteger(options.iterations, 1, 100, 'iterations'),
     manifestPath: path.resolve(requiredString(options.manifestPath, 'manifest')),
     outPath: path.resolve(requiredString(options.outPath, 'out')),
+    packedProduct:
+      packedProductOptions === null
+        ? null
+        : {
+            descriptorPath: path.resolve(
+              requiredString(packedProductOptions.descriptorPath, 'packed product descriptor'),
+            ),
+            digest: requiredString(packedProductOptions.digest, 'packed product digest'),
+          },
     port: boundedInteger(options.port, 1_024, 65_535, 'port'),
     readyIterations: boundedInteger(options.readyIterations, 1, 100, 'ready iterations'),
     readyTimeoutMs: boundedInteger(
@@ -3562,6 +3696,8 @@ export function parseDevLoopArgs(argv) {
         '--iterations',
         '--manifest',
         '--out',
+        '--packed-product',
+        '--packed-product-digest',
         '--port',
         '--profile-dir',
         '--inspector-port',
@@ -3582,6 +3718,8 @@ export function parseDevLoopArgs(argv) {
       values['--inspector-port'] === undefined ? undefined : Number(values['--inspector-port']),
     manifestPath: values['--manifest'],
     outPath: values['--out'],
+    packedProductDescriptor: values['--packed-product'],
+    packedProductDigest: values['--packed-product-digest'],
     port: Number(values['--port']),
     profileDir: values['--profile-dir'],
     readyIterations: Number(values['--ready-iterations']),
@@ -3613,11 +3751,17 @@ function failureReport(error, options) {
       iterations: options?.iterations ?? null,
       misses: 1,
       portAllocation: null,
+      productArtifact: {
+        afterVerified: false,
+        beforeVerified: false,
+        required: options?.packedProduct != null,
+      },
       readyIterations: options?.readyIterations ?? null,
       source: null,
       warmups: options?.warmups ?? null,
     },
     readySamples: [],
+    productArtifact: null,
     samples: [],
     schema: DEV_LOOP_REPORT_SCHEMA,
     source: null,

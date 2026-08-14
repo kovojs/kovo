@@ -32,6 +32,10 @@ import {
   validPerformanceHostFingerprint,
 } from '../scripts/lib/perf-host.mjs';
 import { collectPerformanceProvenance } from '../scripts/lib/perf-provenance.mjs';
+import {
+  createPackedKovoProductFixture,
+  packedKovoProductIdentityFindings,
+} from '../scripts/lib/perf-packed-kovo-product.mjs';
 import { devSessionHandoffFindings } from '../scripts/lib/perf-dev-session-evidence.mjs';
 import {
   executionIdentityFindings,
@@ -46,6 +50,7 @@ import {
   SERVER_ROUTES,
   serverConditions,
 } from '../scripts/perf-server-benchmark.mjs';
+import { preparePackedCliBenchmark } from '../scripts/perf-cli-startup-benchmark.mjs';
 
 export const COMPARE_SCHEMA = 'kovo-next-performance-comparison/v1';
 export const BROWSER_PREPARE_SCHEMA = 'kovo-browser-benchmark-prepare/v1';
@@ -118,13 +123,13 @@ export async function runComparison(options = {}) {
   ) {
     throw new TypeError('dev port ranges exceed 65535');
   }
-  const workloadIdentity = await performanceWorkloadIdentity(options, cells);
   const provenance = collectPerformanceProvenance({
     lockFiles,
     repoRoot,
   });
   const dirtyOverride = provenance.dirty && options.allowDirty === true;
   if (provenance.dirty && !dirtyOverride) {
+    const workloadIdentity = await performanceWorkloadIdentity(options, cells);
     const outDir = path.resolve(options.outDir ?? path.join(benchmarkRoot, 'results'));
     await mkdir(outDir, { recursive: true });
     const report = {
@@ -169,6 +174,7 @@ export async function runComparison(options = {}) {
   const rawCells = [];
   const browserPreparation = [];
   const serverPreparation = [];
+  let packedProductFixture = null;
   const quietHost = createQuietHostAdmission({
     ceiling: options.maxLoadPerCpu ?? 1,
     maxWaitMs: quietHostPolicy.maxWaitMs,
@@ -178,6 +184,32 @@ export async function runComparison(options = {}) {
   let executionError = null;
   await mkdir(outDir, { recursive: true });
   try {
+    let workloadOptions = options;
+    if (cells.includes('dev') || cells.includes('build')) {
+      const prepared = await preparePackedCliBenchmark(options.packedProductPreparation ?? {});
+      try {
+        const sourceAfterPreparation = collectPerformanceProvenance({ lockFiles, repoRoot });
+        packedProductFixture = createPackedKovoProductFixture({
+          prepared,
+          source: provenance,
+          sourceAfter: sourceAfterPreparation,
+        });
+        packedProductFixture.bindCorpus(corpusManifest('kovo', options.corpusSize ?? 24));
+      } catch (error) {
+        if (packedProductFixture === null) prepared.cleanup();
+        else {
+          packedProductFixture.cleanup();
+          packedProductFixture = null;
+        }
+        throw error;
+      }
+      workloadOptions = {
+        ...options,
+        packedProductIdentity: packedProductFixture.identity,
+        requirePackedProductArtifact: true,
+      };
+    }
+    const workloadIdentity = await performanceWorkloadIdentity(workloadOptions, cells);
     const initialHost = await quietHost.admit('suite-start');
     if (!initialHost.comparable) executionError = quietHostFailure(initialHost);
 
@@ -276,6 +308,14 @@ export async function runComparison(options = {}) {
               String(devPortBase + scheduleIndex * DEV_SESSION_PORT_STRIDE),
               '--out',
               resultFile,
+              ...(framework === 'kovo'
+                ? [
+                    '--packed-product',
+                    packedProductFixture.descriptorPath,
+                    '--packed-product-digest',
+                    packedProductFixture.identity.digest,
+                  ]
+                : []),
             ],
             cwd: repoRoot,
             label: `${corpusLane}/${framework}/dev/${occurrence}`,
@@ -334,6 +374,14 @@ export async function runComparison(options = {}) {
                 String(warmupCount),
                 '--out',
                 resultFile,
+                ...(framework === 'kovo'
+                  ? [
+                      '--packed-product',
+                      packedProductFixture.descriptorPath,
+                      '--packed-product-digest',
+                      packedProductFixture.identity.digest,
+                    ]
+                  : []),
               ],
               cwd: repoRoot,
               label: `${corpusLane}/${framework}/build-${mode}/${occurrence}`,
@@ -495,6 +543,7 @@ export async function runComparison(options = {}) {
           lanes: options.lanes ?? lanes,
           lighthouseRuns: options.lighthouseRuns ?? 5,
           modes: options.buildModes ?? buildModes,
+          productArtifact: workloadIdentity.identity.productArtifact,
           serverConcurrencies: options.serverConcurrencies ?? SERVER_CONCURRENCIES,
           serverDurationMs: options.serverDurationMs ?? 15_000,
           serverEncodings: options.serverEncodings ?? SERVER_ENCODINGS,
@@ -568,7 +617,11 @@ export async function runComparison(options = {}) {
     }
     return { output, report };
   } finally {
-    await rm(scratch, { force: true, recursive: true });
+    try {
+      await rm(scratch, { force: true, recursive: true });
+    } finally {
+      packedProductFixture?.cleanup();
+    }
   }
 }
 
@@ -1516,6 +1569,9 @@ async function comparatorIntegrity(cells, policy) {
 
   const corpusDigests = {};
   if (policy.cells.includes('dev') || policy.cells.includes('build')) {
+    if (packedKovoProductIdentityFindings(policy.productArtifact, policy.source).length > 0) {
+      reasons.push('packed Kovo product-artifact workload identity is incomplete');
+    }
     for (const framework of ['kovo', 'nextjs']) {
       try {
         const manifest = JSON.parse(
@@ -1631,6 +1687,9 @@ async function comparatorIntegrity(cells, policy) {
         reasons.push(`${cell.lane}/${cell.framework}/dev corpus digest mismatch`);
       }
     }
+    if (cell.cell === 'dev' || cell.cell === 'build') {
+      reasons.push(...productArtifactCellFindings(cell, policy.productArtifact));
+    }
   }
   return {
     corpusDigests,
@@ -1638,6 +1697,22 @@ async function comparatorIntegrity(cells, policy) {
     reasons: [...new Set(reasons)].sort(),
     serverMatrix,
   };
+}
+
+export function productArtifactCellFindings(cell, expected) {
+  const label = `${cell?.lane ?? 'unknown'}/${cell?.framework ?? 'unknown'}/${
+    cell?.mode ?? cell?.cell ?? 'unknown'
+  }`;
+  if (cell?.framework === 'nextjs') {
+    return cell.report?.productArtifact == null ? [] : [`${label} carried Kovo product evidence`];
+  }
+  if (cell?.framework !== 'kovo') return [`${label} has an unknown entrant identity`];
+  return canonicalJson(cell.report?.productArtifact) === canonicalJson(expected) &&
+    cell.report?.integrity?.productArtifact?.required === true &&
+    cell.report?.integrity?.productArtifact?.beforeVerified === true &&
+    cell.report?.integrity?.productArtifact?.afterVerified === true
+    ? []
+    : [`${label} packed product evidence is incomplete`];
 }
 
 /**
@@ -2437,6 +2512,9 @@ export async function performanceWorkloadIdentity(
     corpus,
     fixture,
     lanes: workloadLanes(options, cells, corpusSize),
+    ...(options.packedProductIdentity === undefined
+      ? {}
+      : { productArtifact: options.packedProductIdentity }),
     policies: {
       bfcacheIterations: options.bfcacheIterations ?? 10,
       browserSamples: options.iterations ?? 30,
@@ -2477,6 +2555,13 @@ export async function performanceWorkloadIdentity(
   if (
     (cells.includes('dev') || cells.includes('build')) &&
     corpus.kovo?.shapeDigest !== corpus.nextjs?.shapeDigest
+  ) {
+    complete = false;
+  }
+  if (
+    options.requirePackedProductArtifact === true &&
+    (cells.includes('dev') || cells.includes('build')) &&
+    packedKovoProductIdentityFindings(identity.productArtifact).length > 0
   ) {
     complete = false;
   }

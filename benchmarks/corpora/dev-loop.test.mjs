@@ -1,6 +1,16 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath as fsRealpath,
+  rename,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { createServer as createHttpServer } from 'node:http';
 import { createServer } from 'node:net';
 import os from 'node:os';
@@ -361,6 +371,30 @@ describe('single-entrant developer-loop adapter', () => {
     expect(() =>
       profiledDevInvocation({ ...command, argv: ['./outside/kovo', 'dev'] }, 49_121),
     ).toThrow('must come from a node_modules/.bin directory');
+
+    const packedEntry = path.join(root, 'isolated/node_modules/@kovojs/cli/dist/bin.mjs');
+    const packedCommand = {
+      argv: [process.execPath, packedEntry, 'dev', './src/app.tsx'],
+      cwd: root,
+      packedProduct: {
+        cliEntry: packedEntry,
+        consumerDependencyRoot: path.join(root, 'isolated/node_modules'),
+        dependencyRoot: path.join(root, 'isolated/node_modules'),
+      },
+    };
+    expect(profiledDevInvocation(packedCommand, 49_121)).toEqual({
+      argv: ['--inspect=127.0.0.1:49121', packedEntry, 'dev', './src/app.tsx'],
+      executable: process.execPath,
+    });
+    expect(profiledDevInvocation(packedCommand, 49_121).argv).not.toContain(
+      '--experimental-transform-types',
+    );
+    expect(() =>
+      profiledDevInvocation(
+        { ...packedCommand, argv: [process.execPath, `${packedEntry}.ts`, 'dev'] },
+        49_121,
+      ),
+    ).toThrow(/confused its authenticated dist entry/u);
   });
 
   it('preserves diagnostic options when parsed CLI options cross the benchmark boundary', () => {
@@ -387,6 +421,38 @@ describe('single-entrant developer-loop adapter', () => {
     expect(() =>
       normalizeDevLoopOptions({ ...parsed, profileDir: '/tmp/ambiguous-profile' }),
     ).toThrow('must use one representation');
+  });
+
+  it('requires paired packed-product descriptor arguments', () => {
+    const base = [
+      '--manifest',
+      '/tmp/manifest.json',
+      '--iterations',
+      '1',
+      '--ready-iterations',
+      '1',
+      '--warmups',
+      '0',
+      '--port',
+      '49120',
+      '--out',
+      '/tmp/report.json',
+    ];
+    const parsed = parseDevLoopArgs([
+      ...base,
+      '--packed-product',
+      '/tmp/consumer/.kovo-perf-packed-product.json',
+      '--packed-product-digest',
+      `sha256:${'a'.repeat(64)}`,
+    ]);
+    expect(parsed.packedProduct).toEqual({
+      descriptorPath: '/tmp/consumer/.kovo-perf-packed-product.json',
+      digest: `sha256:${'a'.repeat(64)}`,
+    });
+    expect(normalizeDevLoopOptions(parsed)).toEqual(parsed);
+    expect(() => parseDevLoopArgs([...base, '--packed-product', '/tmp/descriptor'])).toThrow(
+      /packed product digest/u,
+    );
   });
 
   it.each([
@@ -425,6 +491,63 @@ describe('single-entrant developer-loop adapter', () => {
         cwd: corpusRoot,
       }),
     ).resolves.toEqual({ '@kovojs/cli': expect.any(String), 'vite-plus': expect.any(String) });
+  });
+
+  it('extends dependency-root authentication to the explicit packed consumer only', async () => {
+    const root = await temporaryRoot();
+    const appRoot = path.join(root, 'app');
+    const consumerDependencyRoot = path.join(root, 'consumer/node_modules');
+    const dependencyRoot = path.join(
+      consumerDependencyRoot,
+      '.pnpm/@kovojs+cli@file+fixture/node_modules',
+    );
+    const realCliEntry = path.join(dependencyRoot, '@kovojs/cli/dist/bin.mjs');
+    const cliEntry = path.join(consumerDependencyRoot, '@kovojs/cli/dist/bin.mjs');
+    await mkdir(path.dirname(realCliEntry), { recursive: true });
+    await writeFile(realCliEntry, 'export {}\n');
+    await mkdir(path.join(dependencyRoot, '@kovojs/cli'), { recursive: true });
+    await writeFile(
+      path.join(dependencyRoot, '@kovojs/cli/package.json'),
+      `${JSON.stringify({ name: '@kovojs/cli', version: '0.3.0' })}\n`,
+    );
+    await mkdir(path.join(dependencyRoot, 'vite-plus'), { recursive: true });
+    await writeFile(
+      path.join(dependencyRoot, 'vite-plus/package.json'),
+      `${JSON.stringify({ name: 'vite-plus', version: '0.1.24' })}\n`,
+    );
+    await mkdir(path.join(consumerDependencyRoot, '@kovojs'), { recursive: true });
+    await symlink(
+      path.join(dependencyRoot, '@kovojs/cli'),
+      path.join(consumerDependencyRoot, '@kovojs/cli'),
+      'dir',
+    );
+    await mkdir(appRoot, { recursive: true });
+    await symlink(consumerDependencyRoot, path.join(appRoot, 'node_modules'), 'dir');
+    const command = {
+      argv: [process.execPath, cliEntry, 'dev'],
+      cwd: appRoot,
+      packedProduct: { cliEntry, consumerDependencyRoot, dependencyRoot },
+    };
+    await expect(dependencyRootForDevCommand(appRoot, 'kovo', command)).resolves.toBe(
+      dependencyRoot,
+    );
+    await expect(collectEntrantVersions(appRoot, 'kovo', command)).resolves.toEqual({
+      '@kovojs/cli': '0.3.0',
+      'vite-plus': '0.1.24',
+    });
+    await expect(
+      dependencyRootForDevCommand(appRoot, 'nextjs', command, {
+        realpath: async (value) => value,
+      }),
+    ).rejects.toThrow(/cannot own a non-Kovo corpus/u);
+    await expect(
+      dependencyRootForDevCommand(appRoot, 'kovo', command, {
+        realpath: async (value) =>
+          value === path.join(appRoot, 'node_modules')
+            ? '/tmp/substituted'
+            : await fsRealpath(value),
+      }),
+    ).rejects.toThrow(/authenticated app binding/u);
   });
 
   it('rejects a dev executable outside the app-local or entrant-local dependency root', async () => {

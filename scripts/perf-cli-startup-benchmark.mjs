@@ -26,7 +26,7 @@ import {
 } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import {
@@ -236,17 +236,20 @@ export async function preparePackedCliBenchmark(options = {}, dependencies = {})
 
     const cliArtifact = runtimeArtifacts.find((artifact) => artifact.name === '@kovojs/cli');
     if (cliArtifact === undefined) throw new Error('packed closure omitted @kovojs/cli');
-    const tarballUrls = Object.fromEntries(
-      runtimeArtifacts.map((artifact) => [artifact.name, pathToFileURL(artifact.tarballPath).href]),
+    const tarballSpecs = Object.fromEntries(
+      runtimeArtifacts.map((artifact) => [
+        artifact.name,
+        `file:../tarballs/${path.basename(artifact.tarballPath)}`,
+      ]),
     );
     const consumerManifest = {
       // Declare the whole authenticated closure directly as well as overriding transitive edges.
       // pnpm auto-installs non-optional peers as root dependencies; direct file subjects prevent
       // that peer materialization from silently falling back to an older public registry version.
-      dependencies: tarballUrls,
+      dependencies: tarballSpecs,
       name: 'kovo-cli-startup-consumer',
       packageManager: rootManifest.packageManager,
-      pnpm: { overrides: tarballUrls },
+      pnpm: { overrides: tarballSpecs },
       private: true,
       version: '0.0.0',
     };
@@ -281,6 +284,8 @@ export async function preparePackedCliBenchmark(options = {}, dependencies = {})
     });
     const lockPath = path.join(consumerRoot, 'pnpm-lock.yaml');
     const lockBefore = sha256File(lockPath);
+    const resolutionInstallation = assertInstalledPackedPackages(consumerRoot, runtimeArtifacts);
+    const resolutionTypescript = installedDependencySnapshot(consumerRoot, 'typescript');
     rmSync(path.join(consumerRoot, 'node_modules'), { force: true, recursive: true });
     const frozenArgs = [
       'install',
@@ -305,6 +310,15 @@ export async function preparePackedCliBenchmark(options = {}, dependencies = {})
     }
 
     const installation = assertInstalledPackedPackages(consumerRoot, runtimeArtifacts);
+    const frozenTypescript = installedDependencySnapshot(consumerRoot, 'typescript');
+    if (
+      installation.installedCliSha256 !== resolutionInstallation.installedCliSha256 ||
+      installation.packageCensusMatched !== resolutionInstallation.packageCensusMatched ||
+      installation.packageFilesMatched !== resolutionInstallation.packageFilesMatched ||
+      JSON.stringify(frozenTypescript) !== JSON.stringify(resolutionTypescript)
+    ) {
+      throw new Error('frozen consumer reinstall changed the authenticated installed package tree');
+    }
     const expectedStdout = `kovo ${cliArtifact.version}\n`;
     const resolutionProof = runPackedResolutionProof(
       {
@@ -368,6 +382,7 @@ export async function preparePackedCliBenchmark(options = {}, dependencies = {})
         integrity: {
           artifactAuthenticated: true,
           consumerFrozen: true,
+          firstInstallMatchesFrozen: true,
           installedBytesMatchTarballs: true,
           packedResolutionConfined: resolutionProof.confined,
           workspaceSourceLoaded: resolutionProof.workspaceSourceLoaded,
@@ -382,13 +397,58 @@ export async function preparePackedCliBenchmark(options = {}, dependencies = {})
           version: cliArtifact.version,
         },
         resolutionProof,
+        typescript: frozenTypescript,
       },
       expectedStdout,
+      // Private, path-bearing preparation state. Reports must carry only `evidence` or a
+      // normalized product-artifact identity derived from it; temporary paths are execution
+      // capabilities, never workload identity.
+      internal: {
+        consumerRoot,
+        installedCli: installation.installedCli,
+        runtimeArtifacts,
+        temporaryRoot,
+      },
     };
   } catch (error) {
     rmSync(temporaryRoot, { force: true, recursive: true });
     throw error;
   }
+}
+
+export function installedDependencySnapshot(consumerRoot, packageName) {
+  const nodeModules = path.join(consumerRoot, 'node_modules');
+  assertNonSymlinkDirectory(nodeModules, 'isolated consumer node_modules');
+  const realNodeModules = realpathSync(nodeModules);
+  const cliRoot = realpathSync(packagePath(nodeModules, '@kovojs/cli'));
+  const cliResolutionRoot = path.dirname(path.dirname(cliRoot));
+  const packageRoot = realpathSync(packagePath(cliResolutionRoot, packageName));
+  assertContainedPath(realNodeModules, packageRoot, `installed ${packageName}`);
+  const files = regularFileCensus(packageRoot);
+  if (files.length === 0) throw new Error(`installed ${packageName} package is empty`);
+  const content = createHash('sha256');
+  let bytes = 0;
+  for (const relative of files) {
+    const file = path.join(packageRoot, ...relative.split('/'));
+    const data = readFileSync(file);
+    content.update(relative);
+    content.update('\0');
+    content.update(String(data.byteLength));
+    content.update('\0');
+    content.update(data);
+    bytes += data.byteLength;
+  }
+  const manifest = JSON.parse(readFileSync(path.join(packageRoot, 'package.json'), 'utf8'));
+  if (manifest.name !== packageName || typeof manifest.version !== 'string') {
+    throw new Error(`installed ${packageName} manifest identity is invalid`);
+  }
+  return {
+    bytes,
+    contentSha256: `sha256:${content.digest('hex')}`,
+    files: files.length,
+    name: packageName,
+    version: manifest.version,
+  };
 }
 
 export function assertInstalledPackedPackages(consumerRoot, artifacts) {
@@ -500,6 +560,12 @@ export function runPackedResolutionProof(options, dependencies = {}) {
     throw new Error('packed resolution proof emitted malformed trace evidence');
   }
   const loadedFiles = [...new Set(traceEntries.map((entry) => entry.path))].sort(bytewise);
+  for (const entry of traceEntries) {
+    const relative = relativeNodeModulesPath(options.consumerRoot, fileURLToPath(entry.url));
+    if (entry.path !== relative) {
+      throw new Error('packed resolution proof path disagrees with its confined file URL');
+    }
+  }
   if (!loadedFiles.includes(relativeNodeModulesPath(options.consumerRoot, options.installedCli))) {
     throw new Error('packed resolution proof did not observe the authenticated CLI entry');
   }
@@ -507,6 +573,7 @@ export function runPackedResolutionProof(options, dependencies = {}) {
     confined: true,
     loadedFileCount: loadedFiles.length,
     loadedFiles,
+    normalizedTraceSha256: sha256(Buffer.from(JSON.stringify(loadedFiles))),
     schema: 'kovo-packed-cli-resolution-proof/v1',
     traceSha256: sha256(traceBytes),
     workspaceSourceLoaded: traceEntries.some((entry) =>

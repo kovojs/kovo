@@ -91,3 +91,22 @@ When an absolute budget is supplied:
 
 Every complete report includes median, MAD, p95, sample count, raw samples, zero/miss/error counts,
 and paired bootstrap 95% confidence intervals for `packed - source-checkout` wall time and RSS.
+
+## Dev and build comparison boundary
+
+The ordinary `benchmarks/compare.mjs --cells dev,build` Kovo lane reuses the same preparation
+contract. It builds and packs once before host admission, resolves then frozen-reinstalls the
+isolated consumer, proves the first and frozen installed trees agree, and binds the generated Kovo
+corpus to that consumer only for the serialized adapter cells. Pack, install, and binding work is
+never inside a timed ready/edit/build sample. Next.js continues to use its independently frozen
+entrant install.
+
+The comparator workload identity carries a path-independent digest over the clean commit, the
+root/Next/harness lock digests, canonical tarball manifests and content, frozen consumer lock,
+installed package census, exact `dist/bin.mjs`, and the installed TypeScript package used by app
+commands. The private descriptor retains temporary paths solely as execution capabilities. Each
+Kovo adapter reopens and re-authenticates the descriptor, tarballs, installed Kovo closure,
+TypeScript tree, CLI entry, and app-local dependency link before timing and after teardown. Missing
+evidence, source checkout fallback, a mismatched lock/source, path substitution, or any changed byte
+makes the cell unproven. Corpus source capture ignores only the existing generated dependency link;
+it never follows that link or treats packed output as app-authored TSX (SPEC §5.2 rules 7 and 9).
