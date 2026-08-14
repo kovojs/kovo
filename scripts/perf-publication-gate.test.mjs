@@ -20,6 +20,7 @@ import {
   deriveBuildProcessCpuEvidence,
   mergeBuildProcessProfiles,
 } from './perf-build-session-profile.mjs';
+import { KOVO_BUILD_SOURCE_PHASES } from './perf-build-benchmark.mjs';
 import { canonicalJson } from './perf-regression-check.mjs';
 
 const FAMILY_NAMES = [
@@ -376,9 +377,70 @@ describe('seven-family performance publication gate', () => {
     ).toContain('build persistence assessment differs from its exact budgets and profile evidence');
   });
 
-  it('recomputes the build analysis, recursive CPU residual, and merged convenience profile', () => {
+  it('accepts the required config-static-trust profile when source posture executed it', () => {
     const entry = buildProfileEntryFixture('unchanged');
+
+    expect(entry.report.profileArtifacts.map(({ role }) => role)).toContain('config-static-trust');
     expect(buildProfilePublicationFindings(entry, 'unchanged')).toEqual([]);
+  });
+
+  it.each(['not-applicable', 'reused-authenticated'])(
+    'accepts the exact eight-role profile set when config trust is %s',
+    (configTrustStatus) => {
+      const entry = buildProfileEntryFixture('unchanged', {
+        configTrustStatus,
+      });
+
+      expect(entry.report.profileArtifacts.map(({ role }) => role)).not.toContain(
+        'config-static-trust',
+      );
+      expect(buildProfilePublicationFindings(entry, 'unchanged')).toEqual([]);
+    },
+  );
+
+  it('rejects a missing config-static-trust process when source posture executed it', () => {
+    const entry = buildProfileEntryFixture('unchanged');
+    entry.report.capture.processCensus.processes =
+      entry.report.capture.processCensus.processes.filter(
+        ({ role }) => role !== 'config-static-trust',
+      );
+    resealBuildProfileEntry(entry);
+
+    expect(buildProfilePublicationFindings(entry, 'unchanged').join('\n')).toContain(
+      'process PID/role census is incomplete or duplicated',
+    );
+  });
+
+  it('rejects a missing config-static-trust profile when source posture executed it', () => {
+    const entry = buildProfileEntryFixture('unchanged', {
+      configTrustStatus: 'not-applicable',
+    });
+    profileConfigTrustPhase(entry).status = 'executed';
+    resealBuildProfileEntry(entry);
+
+    expect(buildProfilePublicationFindings(entry, 'unchanged')).toContain(
+      'unchanged original-process profile census differs from policy',
+    );
+  });
+
+  it('rejects an extra config-static-trust profile when source posture did not execute it', () => {
+    const entry = buildProfileEntryFixture('unchanged');
+    profileConfigTrustPhase(entry).status = 'reused-authenticated';
+    resealBuildProfileEntry(entry);
+
+    expect(buildProfilePublicationFindings(entry, 'unchanged')).toContain(
+      'unchanged original-process profile census differs from policy',
+    );
+  });
+
+  it('rejects malformed or timing-bearing source phase posture before raw derivation', () => {
+    const entry = buildProfileEntryFixture('unchanged');
+    entry.report.sourcePhasePosture.phases[0].durationMs = 1;
+    resealBuildProfileEntry(entry);
+
+    expect(buildProfilePublicationFindings(entry, 'unchanged').join('\n')).toContain(
+      'unchanged build profile source phase posture is unavailable',
+    );
   });
 
   it('fails closed instead of throwing on malformed build-profile evidence', () => {
@@ -811,14 +873,15 @@ function resealDocument(document) {
   document.digest = canonicalDigest(facts);
 }
 
-function buildProfileEntryFixture(mode) {
+function buildProfileEntryFixture(mode, { configTrustStatus = 'executed' } = {}) {
   const sourceCommit = 'a'.repeat(40);
   const workflowRunId = 9_001;
   const artifactId = 9_002;
-  const rawInputs = buildRawProfileFixtures(mode);
+  const requireConfigStaticTrust = configTrustStatus === 'executed';
+  const rawInputs = buildRawProfileFixtures(mode, { requireConfigStaticTrust });
   const inspected = deriveBuildProfileSetAnalysis(
     rawInputs.map(({ bytes, role }) => ({ bytes, role })),
-    { nativeOrUnprofiledSamples: 0, requireConfigStaticTrust: false },
+    { nativeOrUnprofiledSamples: 0, requireConfigStaticTrust },
   );
   const profileInputs = rawInputs.map((entry, index) => ({
     ...entry,
@@ -844,7 +907,7 @@ function buildProfileEntryFixture(mode) {
     profileInputs.map(({ bytes, role }) => ({ bytes, role })),
     {
       nativeOrUnprofiledSamples: processCpu.cause.equivalentSamples,
-      requireConfigStaticTrust: false,
+      requireConfigStaticTrust,
     },
   );
   const merged = mergeBuildProcessProfiles(profileInputs);
@@ -917,6 +980,14 @@ function buildProfileEntryFixture(mode) {
     schema: 'kovo-build-session-cpu-profile/v1',
     source,
     sourceAfter: structuredClone(source),
+    sourcePhasePosture: {
+      complete: true,
+      phases: KOVO_BUILD_SOURCE_PHASES.map((name) => ({
+        name,
+        status: name === 'config-trust' ? configTrustStatus : 'executed',
+      })),
+      schema: 'kovo-build-source-phase-posture/v1',
+    },
     subject: {
       baselineWorkloadDigest: digest('build-profile-workload'),
       corpusSize: 216,
@@ -1053,7 +1124,7 @@ function buildProfileEntryPairFixture() {
   return entries;
 }
 
-function buildRawProfileFixtures(mode) {
+function buildRawProfileFixtures(mode, { requireConfigStaticTrust = false } = {}) {
   const specs = [
     {
       functionName: 'produceKovoBuildOneShotAnalysis',
@@ -1075,6 +1146,15 @@ function buildRawProfileFixtures(mode) {
       role: 'client',
       url: 'file:///workspace/packages/cli/src/commands/build-export.ts',
     },
+    ...(requireConfigStaticTrust
+      ? [
+          {
+            functionName: 'runPreEvaluationBuildConfigTrustPreflight',
+            role: 'config-static-trust',
+            url: 'file:///workspace/packages/cli/src/commands/build-export.ts',
+          },
+        ]
+      : []),
     {
       functionName: 'finishKovoBuildOneShot',
       role: 'final',
@@ -1155,6 +1235,7 @@ function buildProcessCensusFixture(profileInputs) {
     'app-static-trust': '/workspace/packages/cli/src/commands/build-static-trust-worker.ts',
     bootstrap: '/workspace/packages/cli/src/bin.ts',
     client: '/workspace/packages/cli/src/commands/build-one-shot-client-worker.ts',
+    'config-static-trust': '/workspace/packages/cli/src/commands/build-static-trust-worker.ts',
     final: '/workspace/packages/cli/src/commands/build-one-shot-final-worker.ts',
     orchestrator: '/workspace/packages/cli/src/bin.ts',
     server: '/workspace/packages/cli/src/commands/build-one-shot-server-worker.ts',
@@ -1165,6 +1246,7 @@ function buildProcessCensusFixture(profileInputs) {
     'app-static-trust': 'app-static-trust-worker-entry-exec/v1',
     bootstrap: 'bootstrap-source-bin-exec/v1',
     client: 'client-worker-entry-exec/v1',
+    'config-static-trust': 'config-static-trust-worker-entry-exec/v1',
     final: 'final-worker-entry-exec/v1',
     orchestrator: 'orchestrator-source-bin-exec/v1',
     server: 'server-worker-entry-exec/v1',
@@ -1253,6 +1335,12 @@ function resealBuildProfileEntry(entry) {
   archiveMember.byteLength = Buffer.byteLength(entry.rawText);
   archiveMember.compressedByteLength = archiveMember.byteLength;
   archiveMember.contentDigest = entry.contentDigest;
+}
+
+function profileConfigTrustPhase(entry) {
+  const phase = entry.report.sourcePhasePosture.phases.find(({ name }) => name === 'config-trust');
+  if (phase === undefined) throw new TypeError('fixture config-trust posture is unavailable');
+  return phase;
 }
 
 function artifactName(familyName) {

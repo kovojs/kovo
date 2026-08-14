@@ -309,15 +309,18 @@ plus a recomputed aggregate self-hash therefore cannot produce exit status 0. Th
 re-derives the foreground-build assessment from the exact N=24/N=216 budgets and authenticated
 profiles. For each optional mode it reads every mode-prefixed original `.cpuprofile` directly from
 the authenticated ZIP and checks each report-declared member, PID, role, byte length, and SHA-256.
-It validates the bounded sanitized exec/PID/parent census, its nonnegative fork-only count, exact
-executable hashes, and one raw profile for every required Node role. Exclusive reviewed V8
-function/module markers cross-check those authenticated roles. The gate then independently derives
-the per-profile sample census, complete cause census, `topFive`, and full profile-set analysis from
-the original bytes. Exact V8 `(idle)` and exact Node `spawnSync` child-wait samples remain separate
-diagnostic censuses and are excluded from CPU-work attribution; signed safe-integer time deltas
-remain evidence and do not weight the ranking. The gate also losslessly rebuilds the merged
-`build-<mode>.cpuprofile` and exact-compares it, but that file remains a convenience view rather than
-authority.
+It validates the bounded sanitized exec/PID/parent census, its nonnegative fork-only count, and exact
+executable hashes. The producer preserves an exact ordered source-phase posture from the profiled
+sample. The gate requires the eight unconditional Node roles plus `config-static-trust` if and only
+if that posture marks `config-trust` as `executed`; a missing required profile or an extra profile
+under either non-executed posture (`not-applicable` or `reused-authenticated`) fails closed. Exclusive
+reviewed V8 function/module markers cross-check those authenticated roles. The gate then
+independently derives the per-profile sample census, complete cause census, `topFive`, and full
+profile-set analysis from the original bytes using the same phase-derived eight-or-nine-role posture.
+Exact V8 `(idle)` and exact Node `spawnSync` child-wait samples remain separate diagnostic censuses
+and are excluded from CPU-work attribution; signed safe-integer time deltas remain evidence and do
+not weight the ranking. The gate also losslessly rebuilds the merged `build-<mode>.cpuprofile` and
+exact-compares it, but that file remains a convenience view rather than authority.
 
 The profile run also wraps the exact manifest-owned build in recursive GNU `time` accounting and a
 temporary process-exec trace. The raw trace can contain static-trust authentication material, so it

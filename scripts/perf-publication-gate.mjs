@@ -9,6 +9,7 @@ import {
   authenticatePerformanceArtifactEvidence,
 } from './lib/perf-artifact-custody.mjs';
 import {
+  buildProfileConfigStaticTrustRequired,
   deriveBuildProfileSetAnalysis,
   PERF_BUILD_PROFILE_REQUIRED_ROLES,
 } from './lib/perf-build-profile-classifier.mjs';
@@ -1361,15 +1362,25 @@ export function buildProfilePublicationFindings(entry, expectedMode) {
   findings.push(...buildProfileAuthorityDigestFindings(custody, expectedMode));
 
   const artifacts = Array.isArray(report?.profileArtifacts) ? report.profileArtifacts : [];
-  const expectedRoles = [...PERF_BUILD_PROFILE_REQUIRED_ROLES].sort((left, right) =>
-    left.localeCompare(right),
-  );
+  let requireConfigStaticTrust = null;
+  try {
+    requireConfigStaticTrust = buildProfileConfigStaticTrustRequired(report?.sourcePhasePosture);
+  } catch (error) {
+    findings.push(
+      `${expectedMode} build profile source phase posture is unavailable: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  const expectedRoles = [
+    ...PERF_BUILD_PROFILE_REQUIRED_ROLES,
+    ...(requireConfigStaticTrust === true ? ['config-static-trust'] : []),
+  ].sort((left, right) => left.localeCompare(right));
   const artifactRoles = artifacts
     .map((artifact) => artifact?.role)
     .sort((left, right) => String(left).localeCompare(String(right)));
   const artifactMembers = artifacts.map((artifact) => artifact?.member);
   if (
-    artifacts.length !== PERF_BUILD_PROFILE_REQUIRED_ROLES.length ||
+    requireConfigStaticTrust === null ||
+    artifacts.length !== expectedRoles.length ||
     canonicalJson(artifactRoles) !== canonicalJson(expectedRoles) ||
     new Set(artifactMembers).size !== artifacts.length ||
     canonicalJson(artifactMembers) !==
@@ -1449,9 +1460,12 @@ export function buildProfilePublicationFindings(entry, expectedMode) {
 
   if (rawInputs.length === artifacts.length && rawInputs.length > 0) {
     try {
+      if (requireConfigStaticTrust === null) {
+        throw new TypeError('config static-trust role posture is unavailable');
+      }
       const inspected = deriveBuildProfileSetAnalysis(
         rawInputs.map(({ bytes, role }) => ({ bytes, role })),
-        { nativeOrUnprofiledSamples: 0, requireConfigStaticTrust: false },
+        { nativeOrUnprofiledSamples: 0, requireConfigStaticTrust },
       );
       for (const [index, artifact] of artifacts.entries()) {
         const profile = inspected.profileCensus[index];
@@ -1482,6 +1496,7 @@ export function buildProfilePublicationFindings(entry, expectedMode) {
       const processCensusFindings = buildProfileProcessCensusFindings(
         report?.capture?.processCensus,
         artifacts,
+        expectedRoles,
       );
       findings.push(...processCensusFindings.map((finding) => `${expectedMode} ${finding}`));
       if (processCensusFindings.length === 0 && Buffer.isBuffer(cpuAuxiliary?.bytes)) {
@@ -1497,7 +1512,7 @@ export function buildProfilePublicationFindings(entry, expectedMode) {
           rawInputs.map(({ bytes, role }) => ({ bytes, role })),
           {
             nativeOrUnprofiledSamples: processCpu.cause.equivalentSamples,
-            requireConfigStaticTrust: false,
+            requireConfigStaticTrust,
           },
         );
         if (
@@ -1718,7 +1733,7 @@ function archiveMemberCensusFindings(members) {
   return findings;
 }
 
-function buildProfileProcessCensusFindings(processCensus, artifacts) {
+function buildProfileProcessCensusFindings(processCensus, artifacts, expectedNodeRoles) {
   if (
     !ownRecord(processCensus) ||
     processCensus.schema !== BUILD_PROFILE_PROCESS_CENSUS_SCHEMA ||
@@ -1727,6 +1742,7 @@ function buildProfileProcessCensusFindings(processCensus, artifacts) {
     !Number.isSafeInteger(processCensus.forkOnlyProcesses) ||
     processCensus.forkOnlyProcesses < 0 ||
     !Array.isArray(processCensus.processes) ||
+    !Array.isArray(expectedNodeRoles) ||
     !ownRecord(processCensus.tools) ||
     canonicalJson(Object.keys(processCensus).sort()) !==
       canonicalJson(['classifier', 'complete', 'forkOnlyProcesses', 'processes', 'schema', 'tools'])
@@ -1755,16 +1771,14 @@ function buildProfileProcessCensusFindings(processCensus, artifacts) {
   const processes = processCensus.processes;
   const processByPid = new Map(processes.map((process) => [process?.pid, process]));
   const artifactByPid = new Map(artifacts.map((artifact) => [artifact?.pid, artifact]));
-  const allowedRoles = new Set([
-    ...PERF_BUILD_PROFILE_REQUIRED_ROLES,
-    'collector-time',
-    'native-one-shot',
-  ]);
+  const expectedNodeRoleSet = new Set(expectedNodeRoles);
+  const allowedRoles = new Set([...expectedNodeRoles, 'collector-time', 'native-one-shot']);
   const roleEvidence = {
     analyze: 'analyze-worker-entry-exec/v1',
     'app-static-trust': 'app-static-trust-worker-entry-exec/v1',
     bootstrap: 'bootstrap-source-bin-exec/v1',
     client: 'client-worker-entry-exec/v1',
+    'config-static-trust': 'config-static-trust-worker-entry-exec/v1',
     'collector-time': 'gnu-time-exec/v1',
     final: 'final-worker-entry-exec/v1',
     'native-one-shot': ['esbuild-exec/v1', 'native-unprofiled-exec/v1'],
@@ -1777,7 +1791,7 @@ function buildProfileProcessCensusFindings(processCensus, artifacts) {
     const evidenceMatches = Array.isArray(expectedEvidence)
       ? expectedEvidence.includes(process?.roleEvidence)
       : process?.roleEvidence === expectedEvidence;
-    const nodeRole = PERF_BUILD_PROFILE_REQUIRED_ROLES.includes(process?.role);
+    const nodeRole = expectedNodeRoleSet.has(process?.role);
     if (
       !Number.isSafeInteger(process?.pid) ||
       process.pid < 1 ||
@@ -1826,8 +1840,8 @@ function buildProfileProcessCensusFindings(processCensus, artifacts) {
   if (
     processByPid.size !== processes.length ||
     processes.filter((process) => process?.role === 'collector-time').length !== 1 ||
-    processes.filter((process) => PERF_BUILD_PROFILE_REQUIRED_ROLES.includes(process?.role))
-      .length !== artifacts.length ||
+    processes.filter((process) => expectedNodeRoleSet.has(process?.role)).length !==
+      artifacts.length ||
     !processes.some((process) => process?.role === 'native-one-shot')
   ) {
     findings.push('process PID/role census is incomplete or duplicated');
@@ -1882,6 +1896,7 @@ function roleEntryPathMatches(role, value) {
     'app-static-trust': /\/build-static-trust-worker\.(?:ts|mjs)$/u,
     bootstrap: /\/(?:packages\/cli\/src|node_modules\/@kovojs\/cli\/src)\/bin\.ts$/u,
     client: /\/build-one-shot-client-worker\.(?:ts|mjs)$/u,
+    'config-static-trust': /\/build-static-trust-worker\.(?:ts|mjs)$/u,
     final: /\/build-one-shot-final-worker\.(?:ts|mjs)$/u,
     orchestrator:
       /\/(?:packages\/cli|node_modules\/@kovojs\/cli)\/(?:src\/bin\.ts|dist\/bin\.mjs)$/u,
