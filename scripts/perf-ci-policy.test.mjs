@@ -27,6 +27,7 @@ const decisionDispatchScope = [
 const decisionFocusByJob = new Map([
   ['check-watch-decision', 'check-watch'],
   ['dev-generation-decision', 'dev-generation'],
+  ['build-source-trust-decision', 'build-source-trust'],
   ['compressed-cache-decision', 'compressed-cache'],
   ['cli-startup-decision', 'cli-startup'],
   ['runtime-diagnostics', 'runtime-diagnostics'],
@@ -382,6 +383,48 @@ describe('realistic performance CI policy', () => {
       expect(source).toContain(token);
     }
     expectRawArtifact(source, 'kovo-perf-dev-generation-n${{ matrix.corpus }}');
+  });
+
+  it('runs the exact packed-product build source-trust decision on both corpora', () => {
+    const source = decisionJob('build-source-trust-decision');
+    expect(source).toContain('corpus: [24, 216]');
+    expect(source).toContain('fetch-depth: 0');
+    expect(source).not.toContain('playwright-install');
+    expectPnpmBridge(source);
+    expect(source).toContain(
+      'KOVO_BUILD_SOURCE_TRUST_CANDIDATE_COMMIT: c89e179a9e9b179dd75b0bebabd357f4aa9e36a6',
+    );
+    expect(source).toContain(
+      'KOVO_BUILD_SOURCE_TRUST_CANDIDATE_REF: refs/heads/perf-spike/build-source-trust-20260814',
+    );
+    expect(source).toContain('git fetch --no-tags origin');
+    expect(source).toContain(
+      '"+$KOVO_BUILD_SOURCE_TRUST_CANDIDATE_REF:refs/perf-evidence/build-source-trust-candidate"',
+    );
+    expect(source).toContain(
+      'test "$resolved_candidate" = "$KOVO_BUILD_SOURCE_TRUST_CANDIDATE_COMMIT"',
+    );
+    expect(count(source, 'git worktree add --detach')).toBe(2);
+    expect(source).toContain('git worktree add --detach "$baseline_root" "$KOVO_PERF_SOURCE_SHA"');
+    expect(source).toContain('git worktree add --detach "$spike_root" "$KOVO_PERF_SOURCE_SHA"');
+    expect(source).toContain("-c user.name='Kovo Performance CI'");
+    expect(source).toContain('cherry-pick "$KOVO_BUILD_SOURCE_TRUST_CANDIDATE_COMMIT"');
+    expect(source).toContain('git -C "$spike_root" rev-parse HEAD^');
+    expect(source).toContain('git -C "$spike_root" rev-list --count "$KOVO_PERF_SOURCE_SHA..HEAD"');
+    expect(source).toContain('git -C "$baseline_root" status --porcelain=v1 --untracked-files=all');
+    expect(source).toContain('git -C "$spike_root" status --porcelain=v1 --untracked-files=all');
+    expect(source).toContain('scripts/perf-build-source-trust-spike.mjs');
+    for (const token of [
+      '--size "$KOVO_PERF_CORPUS_SIZE"',
+      '--repetitions 5',
+      '--install-timeout-ms 600000',
+      '--timeout-ms 1800000',
+      '--measure',
+    ]) {
+      expect(source).toContain(token);
+    }
+    expect(source).not.toContain('--warmups');
+    expectRawArtifact(source, 'kovo-perf-build-source-trust-n${{ matrix.corpus }}');
   });
 
   it('keeps the remaining decision measurements full-policy, parallel, and raw', async () => {
