@@ -56,9 +56,10 @@ Git worktrees. Corpus generation uses deferred dependency binding, so it never c
 dependency link. The shared packed-product isolation guard rejects any ancestor `node_modules`, and
 the packed fixture binds the app-local dependency root. That frozen consumer declares the root
 lock's exact TypeScript version directly, because Kovo's preflight resolves the compiler from the
-app root rather than from the CLI package's pnpm-local peer scope. The shared command materializer
-then authenticates the declared `node_modules/.bin/kovo` wrapper inside that consumer and executes
-the authenticated packed CLI entry directly.
+app root rather than from the CLI package's pnpm-local peer scope. Its resolution and frozen-install
+snapshots must both equal the root-lock-authenticated TypeScript file census and digest. The shared
+command materializer then authenticates the declared `node_modules/.bin/kovo` wrapper inside that
+consumer and executes the authenticated packed CLI entry directly.
 Therefore a missing package cannot climb an app ancestor into either workspace. Every raw adapter
 report must contain exact packed Kovo evidence with `required`, `beforeVerified`, and
 `afterVerified` all true. This candidate decision has exactly zero Next.js cells and records the
@@ -69,6 +70,8 @@ binding the packed product, the runner copies the exact source-provenance-authen
 into the app and reseals the generated manifest's file census and source digest around those bytes.
 The build therefore receives the lock required for `SPEC.md` §5.2.3 artifact provenance without
 weakening external-root isolation or inventing a different dependency identity.
+The reseal rejects symlink and hardlink aliases and replaces the checked manifest atomically, so it
+cannot mutate a file outside the corpus through an aliased path.
 
 The A/B boundary has its own exact structured policy because its order is deliberately stricter
 than the general comparison policy: one timing lock starts before a quiet-host admission, packed

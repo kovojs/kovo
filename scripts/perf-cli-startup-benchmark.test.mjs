@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   CLI_STARTUP_BENCHMARK_SCHEMA,
   assertInstalledPackedPackages,
+  assertPackedTypescriptCustody,
   classifyCliStartup,
   cliStartupSchedule,
   pairedBootstrapConfidenceInterval,
@@ -79,6 +80,33 @@ function lowLoad(label, ceiling) {
 }
 
 describe('packed versus source-checkout CLI startup benchmark', () => {
+  it('binds packed TypeScript bytes to the root-lock-authenticated installation', () => {
+    const rootTypescript = {
+      bytes: 10,
+      contentSha256: `sha256:${'a'.repeat(64)}`,
+      files: 2,
+      name: 'typescript',
+      version: '6.0.3',
+    };
+    expect(
+      assertPackedTypescriptCustody({
+        frozenTypescript: { ...rootTypescript },
+        resolutionTypescript: { ...rootTypescript },
+        rootTypescript,
+      }),
+    ).toEqual(rootTypescript);
+    expect(() =>
+      assertPackedTypescriptCustody({
+        frozenTypescript: { ...rootTypescript },
+        resolutionTypescript: {
+          ...rootTypescript,
+          contentSha256: `sha256:${'b'.repeat(64)}`,
+        },
+        rootTypescript,
+      }),
+    ).toThrow(/root-lock-authenticated installation/u);
+  });
+
   it('declares TypeScript as a direct frozen-consumer toolchain dependency', () => {
     const manifest = packedCliConsumerManifest({
       packageManager: 'pnpm@10.12.1',

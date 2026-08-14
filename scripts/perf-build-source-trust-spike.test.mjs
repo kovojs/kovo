@@ -1,12 +1,14 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
+  linkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
   rmSync,
   symlinkSync,
+  unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import os from 'node:os';
@@ -369,6 +371,57 @@ describe('build source-trust candidate decision', () => {
     ).toThrow(/already contains/u);
   });
 
+  it('rejects source-lock and manifest aliases before resealing external corpus custody', () => {
+    for (const alias of ['symlink', 'hardlink']) {
+      const root = temporaryDirectory(`kovo-build-source-manifest-${alias}-`);
+      const sourceRoot = path.join(root, 'source');
+      const corpusRoot = path.join(root, 'corpus');
+      const outsideManifest = path.join(root, 'outside-manifest.json');
+      const manifestPath = path.join(corpusRoot, 'manifest.json');
+      const lockBytes = Buffer.from('lockfileVersion: 9\n');
+      const manifestBytes = Buffer.from(
+        `${JSON.stringify({ sourceDigest: digest('old'), sourceFiles: [] })}\n`,
+      );
+      mkdirSync(sourceRoot);
+      mkdirSync(corpusRoot);
+      writeFileSync(path.join(sourceRoot, 'pnpm-lock.yaml'), lockBytes);
+      writeFileSync(outsideManifest, manifestBytes);
+      if (alias === 'symlink') symlinkSync(outsideManifest, manifestPath);
+      else linkSync(outsideManifest, manifestPath);
+
+      expect(() =>
+        bindBuildSourceTrustArtifactProvenanceLock({
+          expectedSha256: sha256(lockBytes),
+          manifestPath,
+          sourceRoot,
+        }),
+      ).toThrow(/manifest must be a single-link regular file/u);
+      expect(readFileSync(outsideManifest)).toEqual(manifestBytes);
+    }
+
+    const root = temporaryDirectory('kovo-build-source-lock-symlink-');
+    const sourceRoot = path.join(root, 'source');
+    const corpusRoot = path.join(root, 'corpus');
+    const outsideLock = path.join(root, 'outside-lock.yaml');
+    const manifestPath = path.join(corpusRoot, 'manifest.json');
+    const lockBytes = Buffer.from('lockfileVersion: 9\n');
+    mkdirSync(sourceRoot);
+    mkdirSync(corpusRoot);
+    writeFileSync(outsideLock, lockBytes);
+    symlinkSync(outsideLock, path.join(sourceRoot, 'pnpm-lock.yaml'));
+    writeFileSync(
+      manifestPath,
+      `${JSON.stringify({ sourceDigest: digest('old'), sourceFiles: [] })}\n`,
+    );
+    expect(() =>
+      bindBuildSourceTrustArtifactProvenanceLock({
+        expectedSha256: sha256(lockBytes),
+        manifestPath,
+        sourceRoot,
+      }),
+    ).toThrow(/source pnpm lock must be a single-link regular non-symlink file/u);
+  });
+
   it('retains actionable adapter diagnostics instead of masking failure as an empty artifact', async () => {
     const root = temporaryDirectory('kovo-build-source-adapter-failure-');
     const scriptsRoot = path.join(root, 'scripts');
@@ -527,6 +580,23 @@ describe('build source-trust candidate decision', () => {
         },
       }),
     ).toThrow(/materialized command does not resolve to the authenticated packed CLI/u);
+  });
+
+  it('rejects symlinked and hardlinked manifests during external corpus inspection', () => {
+    for (const alias of ['symlink', 'hardlink']) {
+      const fixture = externalCommandBoundaryFixture();
+      const manifestPath = fixture.options.manifestPath;
+      const outsideManifest = path.join(path.dirname(path.dirname(manifestPath)), 'outside.json');
+      const manifestBytes = readFileSync(manifestPath);
+      writeFileSync(outsideManifest, manifestBytes);
+      unlinkSync(manifestPath);
+      if (alias === 'symlink') symlinkSync(outsideManifest, manifestPath);
+      else linkSync(outsideManifest, manifestPath);
+      expect(() => inspectExternalKovoCorpus(fixture.options)).toThrow(
+        /manifest must be a single-link regular file inside the canonical corpus root/u,
+      );
+      expect(readFileSync(outsideManifest)).toEqual(manifestBytes);
+    }
   });
 
   it('rejects every ordering field in the structured A/B boundary policy', () => {

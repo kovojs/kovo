@@ -21,6 +21,7 @@ import {
   readdirSync,
   readlinkSync,
   realpathSync,
+  renameSync,
   rmSync,
   unlinkSync,
   writeFileSync,
@@ -310,12 +311,23 @@ export function bindBuildSourceTrustArtifactProvenanceLock({
   if (!digest(expectedSha256)) throw new TypeError('expected source lock digest is invalid');
   const canonicalSourceRoot = canonicalDirectory(sourceRoot);
   const resolvedManifest = path.resolve(manifestPath);
-  const corpusRoot = path.dirname(resolvedManifest);
+  const manifestMetadata = lstatSync(resolvedManifest);
+  const corpusRoot = canonicalDirectory(path.dirname(resolvedManifest));
+  if (
+    !manifestMetadata.isFile() ||
+    manifestMetadata.isSymbolicLink() ||
+    manifestMetadata.nlink !== 1 ||
+    path.dirname(realpathSync(resolvedManifest)) !== corpusRoot
+  ) {
+    throw new Error(
+      'external corpus manifest must be a single-link regular file inside its canonical parent',
+    );
+  }
   const sourceLock = path.join(canonicalSourceRoot, 'pnpm-lock.yaml');
   const targetLock = path.join(corpusRoot, 'pnpm-lock.yaml');
   const sourceMetadata = lstatSync(sourceLock);
-  if (!sourceMetadata.isFile() || sourceMetadata.isSymbolicLink()) {
-    throw new Error('measured source pnpm lock must be a regular non-symlink file');
+  if (!sourceMetadata.isFile() || sourceMetadata.isSymbolicLink() || sourceMetadata.nlink !== 1) {
+    throw new Error('measured source pnpm lock must be a single-link regular non-symlink file');
   }
   const lockBytes = readFileSync(sourceLock);
   const lockSha256 = sha256(lockBytes);
@@ -345,11 +357,38 @@ export function bindBuildSourceTrustArtifactProvenanceLock({
   );
   manifest.sourceDigest = sha256(Buffer.from(JSON.stringify(manifest.sourceFiles)));
   writeFileSync(targetLock, lockBytes, { flag: 'wx', mode: 0o600 });
-  writeFileSync(resolvedManifest, `${JSON.stringify(manifest, null, 2)}\n`, {
-    encoding: 'utf8',
-    flag: 'w',
-    mode: 0o600,
-  });
+  const resealedManifestPath = path.join(
+    corpusRoot,
+    `.${path.basename(resolvedManifest)}.reseal-${String(process.pid)}`,
+  );
+  try {
+    writeFileSync(resealedManifestPath, `${JSON.stringify(manifest, null, 2)}\n`, {
+      encoding: 'utf8',
+      flag: 'wx',
+      mode: 0o600,
+    });
+    renameSync(resealedManifestPath, resolvedManifest);
+  } catch (error) {
+    try {
+      unlinkSync(resealedManifestPath);
+    } catch (cleanupError) {
+      if (cleanupError?.code !== 'ENOENT') {
+        throw new Error(
+          `${errorMessage(error)}; manifest reseal cleanup failed: ${errorMessage(cleanupError)}`,
+        );
+      }
+    }
+    throw error;
+  }
+  const resealedMetadata = lstatSync(resolvedManifest);
+  if (
+    !resealedMetadata.isFile() ||
+    resealedMetadata.isSymbolicLink() ||
+    resealedMetadata.nlink !== 1 ||
+    path.dirname(realpathSync(resolvedManifest)) !== corpusRoot
+  ) {
+    throw new Error('resealed external corpus manifest custody is invalid');
+  }
   return {
     bytes: lockBytes.byteLength,
     path: 'pnpm-lock.yaml',
@@ -1386,13 +1425,25 @@ export function inspectExternalKovoCorpus({
   size,
   tooling,
 }) {
-  const realCorpusRoot = realpathSync(corpusRoot);
+  const realCorpusRoot = canonicalDirectory(corpusRoot);
   if (roots.some((root) => containedOrEqual(realpathSync(root), realCorpusRoot))) {
     throw new Error('measurement corpus must be external to both source worktrees');
   }
   assertPackedCorpusIsolation(realCorpusRoot);
   tooling.assertCorpusIsolation(realCorpusRoot);
-  const manifestBytes = readFileSync(manifestPath);
+  const resolvedManifest = path.resolve(manifestPath);
+  const manifestMetadata = lstatSync(resolvedManifest);
+  if (
+    !manifestMetadata.isFile() ||
+    manifestMetadata.isSymbolicLink() ||
+    manifestMetadata.nlink !== 1 ||
+    path.dirname(realpathSync(resolvedManifest)) !== realCorpusRoot
+  ) {
+    throw new Error(
+      'external corpus manifest must be a single-link regular file inside the canonical corpus root',
+    );
+  }
+  const manifestBytes = readFileSync(resolvedManifest);
   const manifest = JSON.parse(manifestBytes.toString('utf8'));
   if (
     manifest?.schema !== CORPUS_SCHEMA ||
@@ -1419,6 +1470,8 @@ export function inspectExternalKovoCorpus({
   if (
     !provenanceLockMetadata.isFile() ||
     provenanceLockMetadata.isSymbolicLink() ||
+    provenanceLockMetadata.nlink !== 1 ||
+    path.dirname(realpathSync(provenanceLockPath)) !== realCorpusRoot ||
     canonicalJson(provenanceLockEvidence) !== canonicalJson(expectedArtifactProvenanceLock) ||
     canonicalJson(manifestLockEvidence) !==
       canonicalJson({

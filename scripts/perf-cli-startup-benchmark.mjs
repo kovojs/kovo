@@ -35,7 +35,7 @@ import {
   validatedPackageTarballEntries,
 } from './lib/deterministic-tarball.mjs';
 import { packWithoutLifecycleScripts } from './lib/pack-without-lifecycle.mjs';
-import { performanceHostFingerprint } from './lib/perf-host.mjs';
+import { canonicalJson, performanceHostFingerprint } from './lib/perf-host.mjs';
 import { collectPerformanceProvenance } from './lib/perf-provenance.mjs';
 import { measureProcessTreeCommand } from './lib/process-tree-rss.mjs';
 import {
@@ -204,6 +204,7 @@ export async function preparePackedCliBenchmark(options = {}, dependencies = {})
       label: 'frozen repository install',
       timeoutMs: options.installTimeoutMs ?? 10 * 60 * 1_000,
     });
+    const rootTypescript = installedDependencySnapshot(repoRoot, 'typescript');
     for (const pkg of packedPackages) {
       const args = ['--filter', pkg.name, 'run', 'build:dist'];
       runCheckedExec(exec, 'pnpm', args, {
@@ -315,11 +316,11 @@ export async function preparePackedCliBenchmark(options = {}, dependencies = {})
     if (
       installation.installedCliSha256 !== resolutionInstallation.installedCliSha256 ||
       installation.packageCensusMatched !== resolutionInstallation.packageCensusMatched ||
-      installation.packageFilesMatched !== resolutionInstallation.packageFilesMatched ||
-      JSON.stringify(frozenTypescript) !== JSON.stringify(resolutionTypescript)
+      installation.packageFilesMatched !== resolutionInstallation.packageFilesMatched
     ) {
       throw new Error('frozen consumer reinstall changed the authenticated installed package tree');
     }
+    assertPackedTypescriptCustody({ frozenTypescript, resolutionTypescript, rootTypescript });
     const expectedStdout = `kovo ${cliArtifact.version}\n`;
     const resolutionProof = runPackedResolutionProof(
       {
@@ -471,6 +472,22 @@ export function packedCliConsumerManifest({ packageManager, tarballSpecs, typesc
     private: true,
     version: '0.0.0',
   };
+}
+
+export function assertPackedTypescriptCustody({
+  frozenTypescript,
+  resolutionTypescript,
+  rootTypescript,
+}) {
+  if (
+    canonicalJson(rootTypescript) !== canonicalJson(resolutionTypescript) ||
+    canonicalJson(rootTypescript) !== canonicalJson(frozenTypescript)
+  ) {
+    throw new Error(
+      'packed consumer TypeScript bytes differ from the root-lock-authenticated installation',
+    );
+  }
+  return frozenTypescript;
 }
 
 function requiredNonEmptyString(value, label) {
