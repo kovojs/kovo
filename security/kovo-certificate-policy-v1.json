@@ -186,11 +186,11 @@
     },
     {
       "path": "@kovojs/compiler/dist/index.mjs",
-      "sha512": "sha512-QdkGtQ4XowiksCGIbCSwevV87RUvjb5HawGS37At6mUuXb8eAqxHRUYzhbIM7enk2BHn2hfqerTtprnSgt64rg=="
+      "sha512": "sha512-PW1vJOH4qeBVTbofOsolRsqhLQipAb817u6+OsIZAdggeo2ZKM/OAUU+jUc/EZ1gVjAMHXeYQD9j5FeNjxlMJg=="
     },
     {
       "path": "@kovojs/compiler/dist/internal.mjs",
-      "sha512": "sha512-qeev/O/1JJykdOwj/OPI+Q7L0AvSbY+ECG9VEXCoHgI/C+cDb+yfSSKJKpffvaoOQHED3iPDkVDmqaO+HCBfAQ=="
+      "sha512": "sha512-xo3JN5iJ2ZccNcEIFzGzEYNRnSoi2HZ7mEYFtYss8kbxgoi1CZWM0PR5S6+/U7BumO8etHTsvHJVcq013SWMmQ=="
     },
     {
       "path": "@kovojs/compiler/dist/internal/graph.mjs",
@@ -213,12 +213,12 @@
       "sha512": "sha512-9pmd1nNEa3vmxEoPpsso7rGmWa3eF+WnynYv/hMv9mvesAP9aLxFgrH1tLQMPPFCDW9mWTXOeWtRzGDPHF4bDQ=="
     },
     {
-      "path": "@kovojs/compiler/dist/vite-Cpwiw5wV.mjs",
-      "sha512": "sha512-gqcsc+gJ4lpZWrweqeGVVv4QJwkMMV3IlTzzRLH2pPokWlae4NbmzJ4L0P7muZCH9DyODA896JRw6HJy67wbzg=="
+      "path": "@kovojs/compiler/dist/vite-Che4iU7N.mjs",
+      "sha512": "sha512-JTEbb4np1AA+VHNIpQlcW+N1ISpubUoRGLG93y9h6TD5Jo4Dm9CtqZ7bnp29LfF1qtczVl6qIsY+YV16oF4dMQ=="
     },
     {
       "path": "@kovojs/compiler/dist/vite-config.mjs",
-      "sha512": "sha512-Oi/FhUhrduYiNUEOCkegsLH+3sANrukP95EyZ+kKvz35V6fO2s/sH7VRCLBH+1xDOSjktIYlSaD9HOh9UJ+zUg=="
+      "sha512": "sha512-7VhsOId0fexy3A0KaaZMUt2tABgXaYYDF+gZvM6h77U+S1pr3aZvIHetjPxC+D+Dms0tE3RZPEpeL35b5x9J6Q=="
     },
     {
       "path": "@kovojs/core/dist/audit-text-CmsLNB8H.mjs",
@@ -2690,11 +2690,11 @@
       "reason": "imports external module \"node:util\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/vite-Cpwiw5wV.mjs",
+      "module": "@kovojs/compiler/dist/vite-Che4iU7N.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/vite-Cpwiw5wV.mjs",
+      "module": "@kovojs/compiler/dist/vite-Che4iU7N.mjs",
       "reason": "imports external module \"node:url\" outside the nine-kind lexical capability domain"
     },
     {
