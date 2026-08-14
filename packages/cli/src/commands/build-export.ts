@@ -3805,13 +3805,15 @@ function sourceCheckProducerCommonIdentity(
   const manifestDigest =
     manifestPath === undefined
       ? null
-      : kovoBuildOneShotDigest(
+      : `sha256:${hash(
+          'sha256',
           readBoundedRegularFile(manifestPath, {
             label: 'Kovo source-check package manifest',
             limitMessage: 'Kovo source-check package manifest exceeds 1 MiB.',
             maxBytes: 1024 * 1024,
           }),
-        );
+          'hex',
+        )}`;
   return {
     optionsDigest: kovoBuildOneShotDigest({
       cache: options.cache,

@@ -95,6 +95,41 @@ describe('production source-check watch command', () => {
     ).toBe(true);
   });
 
+  it('digests nearest package-manifest bytes as data rather than private Buffer state', async () => {
+    const root = fixtureRoot('package-manifest-identity');
+    writeSourceCheckFixture(root, sourceCheckApp('package manifest identity'));
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({ name: 'source-check-watch-fixture', private: true, version: '0.0.0' }),
+      'utf8',
+    );
+    const lines: string[] = [];
+
+    const exit = await runKovoSourceCheckWatchCommand(
+      { appModulePath: './src/app.tsx', cache: true },
+      security(root),
+      {
+        maxRevisions: 1,
+        pollIntervalMs: 25,
+        write(line) {
+          lines.push(line);
+        },
+      },
+    );
+
+    expect(lines).toHaveLength(1);
+    const record = JSON.parse(lines[0]!);
+    expect(record.check.result.text).not.toContain('private prototype state');
+    if (exit === 1) {
+      expect(record.check.result.text).toContain(
+        'installed implementation digest does not match the reviewed source or packed implementation',
+      );
+    } else {
+      expect(exit, record.check.result.text).toBe(0);
+      expect(record.input.status).toBe('accepted');
+    }
+  }, 60_000);
+
   it('dispatches the long-lived JSONL form through the supported CLI bin', async () => {
     const root = fixtureRoot('bin-dispatch');
     const child = spawn(
