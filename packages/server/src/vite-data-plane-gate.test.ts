@@ -1,8 +1,9 @@
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { kovo } from './vite.js';
 import { withKovoBuildContext } from './internal/build-context.js';
@@ -43,6 +44,7 @@ interface DataPlaneGateMockServer {
 interface CapturedReport {
   diagnostics: readonly { code: string; message: string }[];
   fileName: string;
+  source: string;
 }
 
 const APP_ENTRY = '/src/app.tsx';
@@ -380,6 +382,53 @@ const NON_DRIZZLE_OUTPUT_INVALID_COMPONENT = [
   '      <span>{status.summary}</span>',
   '      <span>{status.missing}</span>',
   '    </article>',
+  '  ),',
+  '});',
+].join('\n');
+
+const DEV_PROJECT_FACTS_INITIAL_SOURCE = [
+  'import { mutation, query, s } from "@kovojs/server";',
+  '',
+  'export const status = query({',
+  '  reads: [],',
+  '  output: s.object({ summary: s.string() }),',
+  '  load: () => ({ summary: "ready" }),',
+  '});',
+  'export const save = mutation({',
+  '  input: s.object({ name: s.string() }),',
+  '  handler: (input) => input,',
+  '});',
+].join('\n');
+
+const DEV_PROJECT_FACTS_CHANGED_SOURCE = [
+  'import { mutation, query, s } from "@kovojs/server";',
+  '',
+  'export const status = query({',
+  '  reads: [],',
+  '  output: s.object({ generatedAt: s.string() }),',
+  '  load: () => ({ generatedAt: "now" }),',
+  '});',
+  'export const save = mutation({',
+  '  input: s.object({ name: s.string(), phone: s.string() }),',
+  '  handler: (input) => input,',
+  '});',
+  'export async function unsafe(input: { id: string }, db: any) {',
+  '  await db.execute("select * from products where id = " + input.id);',
+  '}',
+].join('\n');
+
+const DEV_PROJECT_FACTS_COMPONENT = [
+  'import { component } from "@kovojs/core";',
+  'import { save, status } from "../contracts";',
+  '',
+  'export const StatusForm = component({',
+  '  mutations: { save },',
+  '  queries: { status },',
+  '  render: ({ status }) => (',
+  '    <section>',
+  '      <span>{status.summary}</span>',
+  '      <form mutation={save}><input name="name" /></form>',
+  '    </section>',
   '  ),',
   '});',
 ].join('\n');
@@ -1071,6 +1120,808 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     expect(sqlite?.diagnostics).toHaveLength(2);
   });
 
+  it('clears prior findings with source bytes from the analyzed snapshot, not a later disk read', async () => {
+    const root = await fixture({
+      'src/queries/a.ts': KV422_INJECTION,
+      'src/queries/b.ts': KV422_INJECTION,
+    });
+    const captured: CapturedReport[] = [];
+    const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+    const aPath = join(root, 'src/queries/a.ts');
+    const bPath = join(root, 'src/queries/b.ts');
+    let mutateDuringClear = false;
+    let mutatedPath: string | undefined;
+
+    await plugin.configResolved({ command: 'serve', root });
+    await configureDevServer(plugin, root, captured, undefined, (report) => {
+      captured.push(report);
+      if (!mutateDuringClear || mutatedPath !== undefined || report.diagnostics.length !== 0)
+        return;
+      mutatedPath = report.fileName === aPath ? bPath : aPath;
+      writeFileSync(mutatedPath, '// edit after the clean analysis snapshot\n', 'utf8');
+    });
+    await plugin.buildStart();
+    expect(
+      captured.filter((report) => report.diagnostics.some((d) => d.code === 'KV422')),
+    ).toHaveLength(2);
+
+    await Promise.all([
+      writeFile(aPath, KV422_CLEAN, 'utf8'),
+      writeFile(bPath, KV422_CLEAN, 'utf8'),
+    ]);
+    captured.length = 0;
+    mutateDuringClear = true;
+    await plugin.buildStart();
+
+    expect(mutatedPath).toBeDefined();
+    const laterClear = captured.find((report) => report.fileName === mutatedPath);
+    expect(laterClear?.diagnostics).toEqual([]);
+    expect(laterClear?.source).toBe(KV422_CLEAN);
+  });
+
+  it('keeps one project snapshot pending until convergence and diagnostics both settle', async () => {
+    const root = await fixture({
+      'src/components/status-form.tsx': DEV_PROJECT_FACTS_COMPONENT,
+      'src/contracts.ts': DEV_PROJECT_FACTS_INITIAL_SOURCE,
+    });
+    const captured: CapturedReport[] = [];
+    const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+
+    await plugin.configResolved({ command: 'serve', root });
+    let failNextProjectDiagnostic = false;
+    let firstDiagnosticAttempt: (() => void) | undefined;
+    let secondDiagnosticAttempt: (() => void) | undefined;
+    const firstDiagnostic = new Promise<void>((resolveDiagnostic) => {
+      firstDiagnosticAttempt = resolveDiagnostic;
+    });
+    const secondDiagnostic = new Promise<void>((resolveDiagnostic) => {
+      secondDiagnosticAttempt = resolveDiagnostic;
+    });
+    let diagnosticAttempts = 0;
+    const server = await configureDevServer(plugin, root, captured, undefined, (report) => {
+      if (
+        failNextProjectDiagnostic &&
+        report.fileName.endsWith('contracts.ts') &&
+        report.diagnostics.some((diagnostic) => diagnostic.code === 'KV422')
+      ) {
+        diagnosticAttempts += 1;
+        if (diagnosticAttempts === 1) {
+          firstDiagnosticAttempt?.();
+          throw new Error('synthetic first diagnostic settlement failure');
+        }
+        secondDiagnosticAttempt?.();
+      }
+      captured.push(report);
+    });
+    const componentPath = join(root, 'src/components/status-form.tsx');
+    const contractsPath = join(root, 'src/contracts.ts');
+    await expect(plugin.transform(DEV_PROJECT_FACTS_COMPONENT, componentPath)).resolves.toEqual(
+      expect.objectContaining({ map: null }),
+    );
+
+    let firstReloadAttempt: (() => void) | undefined;
+    let secondReloadAttempt: (() => void) | undefined;
+    const firstReload = new Promise<void>((resolveReload) => {
+      firstReloadAttempt = resolveReload;
+    });
+    const secondReload = new Promise<void>((resolveReload) => {
+      secondReloadAttempt = resolveReload;
+    });
+    let reloadAttempts = 0;
+    server.ws!.send = (payload: unknown) => {
+      if (
+        typeof payload !== 'object' ||
+        payload === null ||
+        !('type' in payload) ||
+        payload.type !== 'full-reload'
+      ) {
+        return;
+      }
+      reloadAttempts += 1;
+      if (reloadAttempts === 1) {
+        firstReloadAttempt?.();
+        throw new Error('synthetic first convergence failure');
+      }
+      secondReloadAttempt?.();
+    };
+
+    await writeFile(contractsPath, DEV_PROJECT_FACTS_CHANGED_SOURCE, 'utf8');
+    failNextProjectDiagnostic = true;
+    await plugin.handleHotUpdate({
+      file: contractsPath,
+      modules: [],
+      read: async () => DEV_PROJECT_FACTS_CHANGED_SOURCE,
+      server,
+    });
+
+    await firstReload;
+    expect(reloadAttempts).toBe(1);
+    expect(diagnosticAttempts).toBe(0);
+    // The first reload publication failed. Neither half of the pending source snapshot may become
+    // active: the old query field and old mutation input contract must still compile together.
+    await expect(plugin.transform(DEV_PROJECT_FACTS_COMPONENT, componentPath)).resolves.toEqual(
+      expect.objectContaining({ map: null }),
+    );
+
+    await secondReload;
+    expect(reloadAttempts).toBe(2);
+    await firstDiagnostic;
+    expect(diagnosticAttempts).toBe(1);
+    await secondDiagnostic;
+    expect(diagnosticAttempts).toBe(2);
+    await expect(plugin.transform(DEV_PROJECT_FACTS_COMPONENT, componentPath)).rejects.toThrow(
+      /KV242[\s\S]*KV302|KV302[\s\S]*KV242/u,
+    );
+
+    // A successful automatic retry closes the wave; it does not arm an unbounded polling loop.
+    await new Promise((resolveWait) => setTimeout(resolveWait, 1_700));
+    expect(reloadAttempts).toBe(2);
+    expect(diagnosticAttempts).toBe(2);
+  });
+
+  it('does not reload until every ordered invalidation prerequisite succeeds', async () => {
+    const root = await fixture({
+      'src/components/status-form.tsx': DEV_PROJECT_FACTS_COMPONENT,
+      'src/contracts.ts': DEV_PROJECT_FACTS_INITIAL_SOURCE,
+    });
+    const captured: CapturedReport[] = [];
+    const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+
+    await plugin.configResolved({ command: 'serve', root });
+    const server = await configureDevServer(plugin, root, captured);
+    const componentPath = join(root, 'src/components/status-form.tsx');
+    const contractsPath = join(root, 'src/contracts.ts');
+    const calls: string[] = [];
+    let failLegacyInvalidation = true;
+    let reportFirstFailure: (() => void) | undefined;
+    let reportReload: (() => void) | undefined;
+    const firstFailure = new Promise<void>((resolveFailure) => {
+      reportFirstFailure = resolveFailure;
+    });
+    const reload = new Promise<void>((resolveReload) => {
+      reportReload = resolveReload;
+    });
+    const convergenceServer = server as DataPlaneGateMockServer & {
+      environments: {
+        ssr: {
+          moduleGraph: { invalidateAll(): void };
+          runner: { clearCache(): void };
+        };
+      };
+      moduleGraph: { invalidateAll(): void };
+    };
+    convergenceServer.environments = {
+      ssr: {
+        moduleGraph: { invalidateAll: () => void calls.push('environment-invalidate') },
+        runner: { clearCache: () => void calls.push('runner-clear') },
+      },
+    };
+    convergenceServer.moduleGraph = {
+      invalidateAll() {
+        calls.push('legacy-invalidate');
+        if (failLegacyInvalidation) {
+          failLegacyInvalidation = false;
+          reportFirstFailure?.();
+          throw new Error('synthetic invalidation failure');
+        }
+      },
+    };
+    server.ws!.send = () => {
+      calls.push('reload');
+      reportReload?.();
+    };
+
+    await writeFile(contractsPath, DEV_PROJECT_FACTS_CHANGED_SOURCE, 'utf8');
+    await plugin.handleHotUpdate({
+      file: contractsPath,
+      modules: [],
+      read: async () => DEV_PROJECT_FACTS_CHANGED_SOURCE,
+      server,
+    });
+
+    await firstFailure;
+    expect(calls).toEqual(['environment-invalidate', 'legacy-invalidate']);
+    await expect(plugin.transform(DEV_PROJECT_FACTS_COMPONENT, componentPath)).resolves.toEqual(
+      expect.objectContaining({ map: null }),
+    );
+
+    await reload;
+    expect(calls).toEqual([
+      'environment-invalidate',
+      'legacy-invalidate',
+      'environment-invalidate',
+      'legacy-invalidate',
+      'runner-clear',
+      'reload',
+    ]);
+  });
+
+  it('runs trusted CLI HMR before deferred analysis, then settles required runner controls', async () => {
+    let deferNextProjectSnapshot = false;
+    let analysisStarted = false;
+    let releaseProjectSnapshot: (() => void) | undefined;
+    let reportAnalysisStarted: (() => void) | undefined;
+    const projectSnapshotRelease = new Promise<void>((resolveRelease) => {
+      releaseProjectSnapshot = resolveRelease;
+    });
+    const reportedAnalysisStart = new Promise<void>((resolveStart) => {
+      reportAnalysisStarted = resolveStart;
+    });
+    vi.doMock('./internal/data-plane-static-analysis.ts', async () => {
+      const actual = await vi.importActual<
+        typeof import('./internal/data-plane-static-analysis.ts')
+      >('./internal/data-plane-static-analysis.ts');
+      return {
+        ...actual,
+        async collectViteDataPlaneAnalysisSnapshot(
+          options: Parameters<typeof actual.collectViteDataPlaneAnalysisSnapshot>[0],
+        ) {
+          if (!deferNextProjectSnapshot) {
+            return actual.collectViteDataPlaneAnalysisSnapshot(options);
+          }
+          deferNextProjectSnapshot = false;
+          analysisStarted = true;
+          reportAnalysisStarted?.();
+          await projectSnapshotRelease;
+          return actual.collectViteDataPlaneAnalysisSnapshot(options);
+        },
+      };
+    });
+    vi.resetModules();
+    const root = await fixture({
+      'src/components/status-form.tsx': DEV_PROJECT_FACTS_COMPONENT,
+      'src/contracts.ts': DEV_PROJECT_FACTS_INITIAL_SOURCE,
+    });
+    const captured: CapturedReport[] = [];
+
+    try {
+      const { trustedKovoVitePlugin: freshTrustedKovoVitePlugin } =
+        await import('./internal/vite-security-profile.js');
+      const runnerGenerations = {
+        async activateInitial() {},
+        bindOrigin() {},
+        async close() {},
+        configure() {},
+        async prepareInitial() {},
+        async stage() {},
+        async withLease<T>(operation: (server: object) => Promise<T>): Promise<T> {
+          return operation({});
+        },
+      } as unknown as NonNullable<
+        Parameters<typeof freshTrustedKovoVitePlugin>[0]['runnerGenerations']
+      >;
+      const plugin = freshTrustedKovoVitePlugin({
+        app: APP_ENTRY,
+        appShellModuleId: '/trusted/app-shell.ts',
+        nodeDataPlaneBootstrapModuleId: '/trusted/data-plane.ts',
+        paranoidStaticAdvisory: false,
+        runnerGenerations,
+        securityProfileModuleId: '/trusted/security-profile.ts',
+        serverRootModuleId: '/trusted/server-root.ts',
+      }) as unknown as DataPlaneGatePlugin;
+      await plugin.configResolved({ command: 'serve', root });
+      const calls: string[] = [];
+      let reportReload: (() => void) | undefined;
+      const reload = new Promise<void>((resolveReload) => {
+        reportReload = resolveReload;
+      });
+      const server = await configureDevServer(
+        plugin,
+        root,
+        captured,
+        undefined,
+        undefined,
+        (candidate) => {
+          const runnerServer = candidate as DataPlaneGateMockServer & {
+            environments: {
+              ssr: {
+                moduleGraph: { invalidateAll(): void };
+                runner: { clearCache(): void };
+              };
+            };
+          };
+          runnerServer.environments = {
+            ssr: {
+              moduleGraph: {
+                invalidateAll: () => void calls.push('environment-invalidate'),
+              },
+              runner: { clearCache: () => void calls.push('runner-clear') },
+            },
+          };
+          candidate.ws!.send = (payload: unknown) => {
+            if (
+              typeof payload === 'object' &&
+              payload !== null &&
+              'type' in payload &&
+              payload.type === 'full-reload'
+            ) {
+              calls.push('reload');
+              reportReload?.();
+            }
+          };
+        },
+      );
+      const contractsPath = join(root, 'src/contracts.ts');
+      await writeFile(contractsPath, DEV_PROJECT_FACTS_CHANGED_SOURCE, 'utf8');
+      deferNextProjectSnapshot = true;
+
+      await plugin.handleHotUpdate({
+        file: contractsPath,
+        modules: [],
+        read: async () => DEV_PROJECT_FACTS_CHANGED_SOURCE,
+        server,
+      });
+      expect(analysisStarted).toBe(false);
+      expect(calls).toEqual([]);
+
+      await reportedAnalysisStart;
+      expect(calls).toEqual([]);
+      releaseProjectSnapshot?.();
+      await reload;
+      expect(calls).toEqual(['environment-invalidate', 'runner-clear', 'reload']);
+    } finally {
+      vi.doUnmock('./internal/data-plane-static-analysis.ts');
+      vi.resetModules();
+    }
+  });
+
+  it('starts one analysis settle window only after every overlapping HMR outcome finishes', async () => {
+    const root = await fixture({
+      'src/components/card.css': '.card { display: block; }',
+      'src/queries/search.ts': KV422_INJECTION,
+    });
+    const captured: CapturedReport[] = [];
+    const appShellOutcomes: Array<Promise<readonly unknown[]>> = [];
+    const appShellHandleHotUpdate = vi.fn(
+      async (): Promise<readonly unknown[]> => (await appShellOutcomes.shift()) ?? [],
+    );
+
+    const wait = (milliseconds: number) =>
+      new Promise<void>((resolveWait) => setTimeout(resolveWait, milliseconds));
+
+    const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+    await plugin.configResolved({ command: 'serve', root });
+    const server = await configureDevServer(plugin, root, captured, appShellHandleHotUpdate);
+    const queryPath = join(root, 'src/queries/search.ts');
+    const cssPath = join(root, 'src/components/card.css');
+    const findingCount = () =>
+      captured.filter((report) =>
+        report.diagnostics.some((diagnostic) => diagnostic.code === 'KV422'),
+      ).length;
+    const waitForFinding = async () => {
+      const deadline = Date.now() + 30_000;
+      while (Date.now() < deadline && findingCount() !== 1) await wait(50);
+      expect(findingCount()).toBe(1);
+    };
+    const deferredOutcome = () => {
+      let resolveOutcome: ((value: readonly unknown[]) => void) | undefined;
+      const outcome = new Promise<readonly unknown[]>((resolve) => {
+        resolveOutcome = resolve;
+      });
+      return { outcome, resolve: () => resolveOutcome?.([]) };
+    };
+
+    // No timer exists until the app-shell/compile outcome has actually published and unwound.
+    const first = deferredOutcome();
+    appShellOutcomes.push(first.outcome);
+    const firstHmr = plugin.handleHotUpdate({
+      file: queryPath,
+      modules: [],
+      read: async () => KV422_INJECTION,
+      server,
+    });
+    await wait(1_650);
+    expect(findingCount()).toBe(0);
+    first.resolve();
+    await firstHmr;
+    await wait(1_300);
+    expect(findingCount()).toBe(0);
+    await waitForFinding();
+
+    // A later non-data edit cancels the old deadline without losing the data edit's intent.
+    captured.length = 0;
+    await plugin.handleHotUpdate({
+      file: queryPath,
+      modules: [],
+      read: async () => KV422_INJECTION,
+      server,
+    });
+    await wait(750);
+    const nonData = deferredOutcome();
+    appShellOutcomes.push(nonData.outcome);
+    const nonDataHmr = plugin.handleHotUpdate({
+      file: cssPath,
+      modules: [],
+      read: async () => '.card { display: grid; }',
+      server,
+    });
+    await wait(900);
+    expect(findingCount()).toBe(0);
+    nonData.resolve();
+    await nonDataHmr;
+    await wait(1_300);
+    expect(findingCount()).toBe(0);
+    await waitForFinding();
+
+    // Overlapping outcomes share one quiet-window boundary; the first completion cannot arm a
+    // timer underneath the second update, even when that update exceeds the settle duration.
+    captured.length = 0;
+    const overlappingFirst = deferredOutcome();
+    const overlappingSecond = deferredOutcome();
+    appShellOutcomes.push(overlappingFirst.outcome, overlappingSecond.outcome);
+    const overlappingFirstHmr = plugin.handleHotUpdate({
+      file: queryPath,
+      modules: [],
+      read: async () => KV422_INJECTION,
+      server,
+    });
+    const overlappingSecondHmr = plugin.handleHotUpdate({
+      file: queryPath,
+      modules: [],
+      read: async () => KV422_INJECTION,
+      server,
+    });
+    overlappingFirst.resolve();
+    await overlappingFirstHmr;
+    await wait(1_650);
+    expect(findingCount()).toBe(0);
+    overlappingSecond.resolve();
+    await overlappingSecondHmr;
+    await wait(1_300);
+    expect(findingCount()).toBe(0);
+    await waitForFinding();
+    expect(findingCount()).toBe(1);
+  });
+
+  it('discards an in-flight analysis when a newer HMR source epoch begins', async () => {
+    let pauseNextProjectSnapshot = false;
+    let releaseProjectSnapshot: (() => void) | undefined;
+    let reportPausedCollection: (() => void) | undefined;
+    const pausedCollection = new Promise<void>((resolvePaused) => {
+      reportPausedCollection = resolvePaused;
+    });
+    const collectionRelease = new Promise<void>((resolveCollection) => {
+      releaseProjectSnapshot = resolveCollection;
+    });
+    vi.doMock('./internal/data-plane-static-analysis.ts', async () => {
+      const actual = await vi.importActual<
+        typeof import('./internal/data-plane-static-analysis.ts')
+      >('./internal/data-plane-static-analysis.ts');
+      return {
+        ...actual,
+        async collectViteDataPlaneAnalysisSnapshot(
+          options: Parameters<typeof actual.collectViteDataPlaneAnalysisSnapshot>[0],
+        ) {
+          const snapshot = await actual.collectViteDataPlaneAnalysisSnapshot(options);
+          if (!pauseNextProjectSnapshot) return snapshot;
+          pauseNextProjectSnapshot = false;
+          reportPausedCollection?.();
+          await collectionRelease;
+          return snapshot;
+        },
+      };
+    });
+    vi.resetModules();
+    const root = await fixture({ 'src/queries/search.ts': KV422_INJECTION });
+    const captured: CapturedReport[] = [];
+    const appShellOutcomes: Array<Promise<readonly unknown[]>> = [];
+
+    try {
+      const { kovo: freshKovo } = await import('./vite.js');
+      const plugin = freshKovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+      await plugin.configResolved({ command: 'serve', root });
+      const server = await configureDevServer(
+        plugin,
+        root,
+        captured,
+        async () => (await appShellOutcomes.shift()) ?? [],
+      );
+      const wsSend = vi.spyOn(server.ws!, 'send');
+      const queryPath = join(root, 'src/queries/search.ts');
+
+      pauseNextProjectSnapshot = true;
+      await plugin.handleHotUpdate({
+        file: queryPath,
+        modules: [],
+        read: async () => KV422_INJECTION,
+        server,
+      });
+      await new Promise((resolveWait) => setTimeout(resolveWait, 1_650));
+      await pausedCollection;
+
+      let releaseNewerHmr: ((value: readonly unknown[]) => void) | undefined;
+      appShellOutcomes.push(
+        new Promise<readonly unknown[]>((resolveOutcome) => {
+          releaseNewerHmr = resolveOutcome;
+        }),
+      );
+      const newerHmr = plugin.handleHotUpdate({
+        file: queryPath,
+        modules: [],
+        read: async () => KV422_INJECTION,
+        server,
+      });
+      releaseProjectSnapshot?.();
+      await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+
+      expect(captured).toEqual([]);
+      expect(wsSend).not.toHaveBeenCalled();
+      await new Promise((resolveWait) => setTimeout(resolveWait, 1_650));
+      expect(captured).toEqual([]);
+      expect(wsSend).not.toHaveBeenCalled();
+
+      releaseNewerHmr?.([]);
+      await newerHmr;
+      await new Promise((resolveWait) => setTimeout(resolveWait, 1_300));
+      expect(captured).toEqual([]);
+      const deadline = Date.now() + 30_000;
+      while (
+        Date.now() < deadline &&
+        !captured.some((report) =>
+          report.diagnostics.some((diagnostic) => diagnostic.code === 'KV422'),
+        )
+      ) {
+        await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+      }
+      expect(
+        captured.filter((report) =>
+          report.diagnostics.some((diagnostic) => diagnostic.code === 'KV422'),
+        ),
+      ).toHaveLength(1);
+      expect(wsSend).not.toHaveBeenCalled();
+    } finally {
+      vi.doUnmock('./internal/data-plane-static-analysis.ts');
+      vi.resetModules();
+    }
+  });
+
+  it('does not commit a snapshot whose source identity drifts before publication', async () => {
+    let pauseNextProjectSnapshot = false;
+    let releaseProjectSnapshot: (() => void) | undefined;
+    let reportPausedCollection: (() => void) | undefined;
+    const pausedCollection = new Promise<void>((resolvePaused) => {
+      reportPausedCollection = resolvePaused;
+    });
+    const collectionRelease = new Promise<void>((resolveCollection) => {
+      releaseProjectSnapshot = resolveCollection;
+    });
+    vi.doMock('./internal/data-plane-static-analysis.ts', async () => {
+      const actual = await vi.importActual<
+        typeof import('./internal/data-plane-static-analysis.ts')
+      >('./internal/data-plane-static-analysis.ts');
+      return {
+        ...actual,
+        async collectViteDataPlaneAnalysisSnapshot(
+          options: Parameters<typeof actual.collectViteDataPlaneAnalysisSnapshot>[0],
+        ) {
+          const snapshot = await actual.collectViteDataPlaneAnalysisSnapshot(options);
+          if (!pauseNextProjectSnapshot) return snapshot;
+          pauseNextProjectSnapshot = false;
+          reportPausedCollection?.();
+          await collectionRelease;
+          return snapshot;
+        },
+      };
+    });
+    vi.resetModules();
+    const root = await fixture({
+      'src/components/status-form.tsx': DEV_PROJECT_FACTS_COMPONENT,
+      'src/contracts.ts': DEV_PROJECT_FACTS_INITIAL_SOURCE,
+    });
+    const captured: CapturedReport[] = [];
+
+    try {
+      const { kovo: freshKovo } = await import('./vite.js');
+      const plugin = freshKovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+      await plugin.configResolved({ command: 'serve', root });
+      const server = await configureDevServer(plugin, root, captured);
+      const componentPath = join(root, 'src/components/status-form.tsx');
+      const contractsPath = join(root, 'src/contracts.ts');
+      let reportReload: (() => void) | undefined;
+      const reload = new Promise<void>((resolveReload) => {
+        reportReload = resolveReload;
+      });
+      let reloads = 0;
+      server.ws!.send = () => {
+        reloads += 1;
+        reportReload?.();
+      };
+
+      await writeFile(contractsPath, DEV_PROJECT_FACTS_CHANGED_SOURCE, 'utf8');
+      pauseNextProjectSnapshot = true;
+      await plugin.handleHotUpdate({
+        file: contractsPath,
+        modules: [],
+        read: async () => DEV_PROJECT_FACTS_CHANGED_SOURCE,
+        server,
+      });
+      await new Promise((resolveWait) => setTimeout(resolveWait, 1_650));
+      await pausedCollection;
+      await writeFile(
+        contractsPath,
+        `${DEV_PROJECT_FACTS_CHANGED_SOURCE}\n// second source generation\n`,
+        'utf8',
+      );
+      releaseProjectSnapshot?.();
+      await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+
+      expect(reloads).toBe(0);
+      await expect(plugin.transform(DEV_PROJECT_FACTS_COMPONENT, componentPath)).resolves.toEqual(
+        expect.objectContaining({ map: null }),
+      );
+
+      await reload;
+      expect(reloads).toBe(1);
+      await expect(plugin.transform(DEV_PROJECT_FACTS_COMPONENT, componentPath)).rejects.toThrow(
+        /KV242[\s\S]*KV302|KV302[\s\S]*KV242/u,
+      );
+    } finally {
+      vi.doUnmock('./internal/data-plane-static-analysis.ts');
+      vi.resetModules();
+    }
+  });
+
+  it('surfaces KV245, retains last-good facts, and retries a failed async analysis', async () => {
+    let failNextProjectSnapshot = false;
+    vi.doMock('./internal/data-plane-static-analysis.ts', async () => {
+      const actual = await vi.importActual<
+        typeof import('./internal/data-plane-static-analysis.ts')
+      >('./internal/data-plane-static-analysis.ts');
+      return {
+        ...actual,
+        async collectViteDataPlaneAnalysisSnapshot(
+          options: Parameters<typeof actual.collectViteDataPlaneAnalysisSnapshot>[0],
+        ) {
+          if (failNextProjectSnapshot) {
+            failNextProjectSnapshot = false;
+            throw new Error('synthetic whole-project analyzer failure');
+          }
+          return actual.collectViteDataPlaneAnalysisSnapshot(options);
+        },
+      };
+    });
+    vi.resetModules();
+    const root = await fixture({
+      'src/components/status-form.tsx': DEV_PROJECT_FACTS_COMPONENT,
+      'src/contracts.ts': DEV_PROJECT_FACTS_INITIAL_SOURCE,
+    });
+    const captured: CapturedReport[] = [];
+
+    try {
+      const { kovo: freshKovo } = await import('./vite.js');
+      const plugin = freshKovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+      await plugin.configResolved({ command: 'serve', root });
+      const server = await configureDevServer(plugin, root, captured);
+      const componentPath = join(root, 'src/components/status-form.tsx');
+      const contractsPath = join(root, 'src/contracts.ts');
+      let reportReload: (() => void) | undefined;
+      const reload = new Promise<void>((resolveReload) => {
+        reportReload = resolveReload;
+      });
+      server.ws!.send = () => reportReload?.();
+
+      await writeFile(contractsPath, DEV_PROJECT_FACTS_CHANGED_SOURCE, 'utf8');
+      failNextProjectSnapshot = true;
+      await plugin.handleHotUpdate({
+        file: contractsPath,
+        modules: [],
+        read: async () => DEV_PROJECT_FACTS_CHANGED_SOURCE,
+        server,
+      });
+      const failureDeadline = Date.now() + 30_000;
+      while (
+        Date.now() < failureDeadline &&
+        !captured.some((report) => report.diagnostics.some((d) => d.code === 'KV245'))
+      ) {
+        await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+      }
+      const failure = captured.find((report) =>
+        report.diagnostics.some((diagnostic) => diagnostic.code === 'KV245'),
+      );
+      expect(failure?.diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'KV245',
+          message: expect.stringContaining('retained the last-good snapshot'),
+        }),
+      ]);
+      await expect(plugin.transform(DEV_PROJECT_FACTS_COMPONENT, componentPath)).resolves.toEqual(
+        expect.objectContaining({ map: null }),
+      );
+
+      await reload;
+      await expect(plugin.transform(DEV_PROJECT_FACTS_COMPONENT, componentPath)).rejects.toThrow(
+        /KV242[\s\S]*KV302|KV302[\s\S]*KV242/u,
+      );
+      expect(
+        captured.some(
+          (report) => report.fileName.endsWith('app.tsx') && report.diagnostics.length === 0,
+        ),
+      ).toBe(true);
+    } finally {
+      vi.doUnmock('./internal/data-plane-static-analysis.ts');
+      vi.resetModules();
+    }
+  });
+
+  it('rejects a new diagnostic whose file is absent from its source census', async () => {
+    let mismatchNextProjectSnapshot = false;
+    let mismatchedSnapshotReturned = false;
+    let reportMismatch: (() => void) | undefined;
+    let reportRetry: (() => void) | undefined;
+    const mismatch = new Promise<void>((resolveMismatch) => {
+      reportMismatch = resolveMismatch;
+    });
+    const retry = new Promise<void>((resolveRetry) => {
+      reportRetry = resolveRetry;
+    });
+    vi.doMock('./internal/data-plane-static-analysis.ts', async () => {
+      const actual = await vi.importActual<
+        typeof import('./internal/data-plane-static-analysis.ts')
+      >('./internal/data-plane-static-analysis.ts');
+      return {
+        ...actual,
+        async collectViteDataPlaneAnalysisSnapshot(
+          options: Parameters<typeof actual.collectViteDataPlaneAnalysisSnapshot>[0],
+        ) {
+          const snapshot = await actual.collectViteDataPlaneAnalysisSnapshot(options);
+          if (!mismatchNextProjectSnapshot) {
+            if (mismatchedSnapshotReturned) reportRetry?.();
+            return snapshot;
+          }
+          mismatchNextProjectSnapshot = false;
+          mismatchedSnapshotReturned = true;
+          reportMismatch?.();
+          return {
+            ...snapshot,
+            files: [],
+          };
+        },
+      };
+    });
+    vi.resetModules();
+    const root = await fixture({ 'src/queries/search.ts': KV422_INJECTION });
+    const captured: CapturedReport[] = [];
+
+    try {
+      const { kovo: freshKovo } = await import('./vite.js');
+      const plugin = freshKovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+      await plugin.configResolved({ command: 'serve', root });
+      const server = await configureDevServer(plugin, root, captured);
+      const queryPath = join(root, 'src/queries/search.ts');
+      mismatchNextProjectSnapshot = true;
+      await plugin.handleHotUpdate({
+        file: queryPath,
+        modules: [],
+        read: async () => KV422_INJECTION,
+        server,
+      });
+
+      await mismatch;
+      await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+      expect(
+        captured.some((report) =>
+          report.diagnostics.some((diagnostic) => diagnostic.code === 'KV422'),
+        ),
+      ).toBe(false);
+      expect(
+        captured.some((report) =>
+          report.diagnostics.some((diagnostic) => diagnostic.code === 'KV245'),
+        ),
+      ).toBe(true);
+
+      await retry;
+      await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+      const sourceBackedFindings = captured.filter((report) =>
+        report.diagnostics.some((diagnostic) => diagnostic.code === 'KV422'),
+      );
+      expect(sourceBackedFindings).toHaveLength(1);
+      expect(sourceBackedFindings[0]?.source).toBe(KV422_INJECTION);
+    } finally {
+      vi.doUnmock('./internal/data-plane-static-analysis.ts');
+      vi.resetModules();
+    }
+  });
+
   it('re-evaluates (debounced) on a data-plane HMR change and clears the prior teaching record', async () => {
     const root = await fixture({ 'src/queries/search.ts': KV422_INJECTION });
     const captured: CapturedReport[] = [];
@@ -1111,6 +1962,9 @@ async function configureDevServer(
   plugin: DataPlaneGatePlugin,
   root: string,
   captured: CapturedReport[],
+  handleHotUpdate?: DataPlaneGatePlugin['handleHotUpdate'],
+  onDiagnosticReport?: (report: CapturedReport) => void,
+  prepareServer?: (server: DataPlaneGateMockServer) => void,
 ): Promise<DataPlaneGateMockServer> {
   const server: DataPlaneGateMockServer = {
     config: { root },
@@ -1122,9 +1976,13 @@ async function configureDevServer(
             return {
               diagnostics: {},
               onModuleDiagnostics(report: CapturedReport) {
-                captured.push(report);
+                if (onDiagnosticReport === undefined) captured.push(report);
+                else onDiagnosticReport(report);
               },
-              plugin: { configureServer() {} },
+              plugin: {
+                configureServer() {},
+                ...(handleHotUpdate === undefined ? {} : { handleHotUpdate }),
+              },
             };
           },
         };
@@ -1133,6 +1991,7 @@ async function configureDevServer(
     },
     ws: { send() {} },
   };
+  prepareServer?.(server);
   await plugin.configureServer(server);
   return server;
 }

@@ -114,6 +114,20 @@ export interface DataPlaneAnalysis {
   staticFacts: StaticBuildAnalysisFactsLike;
 }
 
+/**
+ * @internal One immutable Vite consumer view derived from one exact source census.
+ *
+ * Query facts, diagnostics, and downstream mutation-registry inputs must all consume `files` from
+ * this carrier. `sourceIdentity` lets the caller re-census immediately before publication without
+ * rerunning the expensive analyzers (SPEC §5.2 / §9.5.1).
+ */
+export interface ViteDataPlaneAnalysisSnapshot {
+  diagnostics: readonly DataPlaneDiagnostic[];
+  files: readonly DataPlaneSourceFile[];
+  queryShapeFacts: readonly QueryShapeFact[];
+  sourceIdentity: string;
+}
+
 /** @internal Structural view of Drizzle query-read facts used by CLI graph derivation. */
 export interface QueryReadFactLike {
   readOnlyDomains?: readonly string[];
@@ -305,6 +319,54 @@ export async function collectDataPlaneAnalysis(options: {
   disposition?: DataPlaneAnalysisDisposition;
 }): Promise<DataPlaneAnalysis> {
   const files = dataPlaneSourceFiles(options.appSourceDir, options.root);
+  return collectDataPlaneAnalysisFromFiles(options, files);
+}
+
+/**
+ * @internal Capture one source census and derive every Vite whole-project consumer from it.
+ */
+export async function collectViteDataPlaneAnalysisSnapshot(options: {
+  appSourceDir: string;
+  root: string;
+  disposition?: DataPlaneAnalysisDisposition;
+}): Promise<ViteDataPlaneAnalysisSnapshot> {
+  const files = dataPlaneSourceFiles(options.appSourceDir, options.root);
+  const sourceIdentity = viteDataPlaneSourceIdentity(options, files);
+  // This carrier also owns build diagnostics, so it always runs the complete static analyzer.
+  // Graph derivation may optimize a query-shape-only call, but it cannot erase the shared Vite
+  // safety gate from the snapshot consumed by buildStart (SPEC §5.2 rule 9 / §11.4).
+  const analysis = await collectDataPlaneAnalysisFromFiles(options, files);
+  return {
+    diagnostics: dataPlaneDiagnosticsFromStaticFacts(analysis.staticFacts, analysis.files),
+    files: analysis.files,
+    queryShapeFacts: mergeStaticAndOutputQueryShapeFacts(
+      analysis.staticFacts.queries,
+      analysis.outputQueryShapeFacts,
+    ),
+    sourceIdentity,
+  };
+}
+
+/** @internal Re-census the current source tree for pre-publication identity validation. */
+export function currentViteDataPlaneSourceIdentity(options: {
+  appSourceDir: string;
+  root: string;
+}): string {
+  return viteDataPlaneSourceIdentity(
+    options,
+    dataPlaneSourceFiles(options.appSourceDir, options.root),
+  );
+}
+
+async function collectDataPlaneAnalysisFromFiles(
+  options: {
+    appSourceDir: string;
+    root: string;
+    skipStaticFacts?: boolean;
+    disposition?: DataPlaneAnalysisDisposition;
+  },
+  files: readonly DataPlaneSourceFile[],
+): Promise<DataPlaneAnalysis> {
   if (options.disposition === 'dev' && !sourceFilesHaveDataPlaneMarkers(files)) {
     // Dev teaching disposition only: no source can contribute a data-plane fact or refusal, so
     // the empty analysis is exact and the whole-project TypeScript/ts-morph pass is skipped.
@@ -334,11 +396,7 @@ export async function collectDataPlaneAnalysis(options: {
   // full TypeScript Program (appContractStaticFacts) and canonical-JSON-serialised every source
   // byte, so a cache HIT cost nearly as much as a miss. The static facts are a pure function of
   // (files, root) and are now derived only on a miss, inside the cached preimage computation.
-  const identity = staticAnalysisCanonicalJson({
-    appSourceDir: options.appSourceDir,
-    root: options.root,
-    sources: dataPlaneAnalysisCacheIdentity(files),
-  });
+  const identity = viteDataPlaneSourceIdentity(options, files);
   let entry = dataPlaneAnalysisCacheEntry;
   if (entry?.identity !== identity) {
     entry = {
@@ -356,6 +414,17 @@ export async function collectDataPlaneAnalysis(options: {
     if (dataPlaneAnalysisCacheEntry === entry) dataPlaneAnalysisCacheEntry = undefined;
     throw error;
   }
+}
+
+function viteDataPlaneSourceIdentity(
+  options: { appSourceDir: string; root: string },
+  files: readonly DataPlaneSourceFile[],
+): string {
+  return staticAnalysisCanonicalJson({
+    appSourceDir: options.appSourceDir,
+    root: options.root,
+    sources: dataPlaneAnalysisCacheIdentity(files),
+  });
 }
 
 /** @internal Return every Vite build/dev diagnostic from shared data-plane facts. */

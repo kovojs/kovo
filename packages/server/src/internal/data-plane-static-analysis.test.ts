@@ -1,5 +1,5 @@
 import { mkdtemp, mkdir, readdir, rm, symlink, writeFile } from 'node:fs/promises';
-import { Stats } from 'node:fs';
+import { Stats, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -616,6 +616,74 @@ export const status = query({
       await expect(
         collectDataPlaneErrorDiagnostics({ appSourceDir: srcDir, root }),
       ).resolves.toEqual([expect.objectContaining({ code: 'KV422', site: 'src/schema.ts:4' })]);
+      expect(extractStaticBuildAnalysisFactsFromProject).toHaveBeenCalledTimes(1);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('derives every Vite consumer from one source census and exposes later disk drift', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-data-plane-vite-source-census-'));
+    const srcDir = join(root, 'src');
+    const sourcePath = join(srcDir, 'schema.ts');
+    await mkdir(srcDir, { recursive: true });
+    await writeFile(sourcePath, RELEVANT_DRIZZLE_SOURCE.source, 'utf8');
+    let mutatedDisk = false;
+    const extractStaticBuildAnalysisFactsFromProject = vi.fn(
+      (_options: unknown, diagnosticRegistrar: MockDiagnosticRegistrar) => {
+        if (!mutatedDisk) {
+          mutatedDisk = true;
+          writeFileSync(sourcePath, `${RELEVANT_DRIZZLE_SOURCE.source}\n// later edit\n`, 'utf8');
+        }
+        return {
+          queries: [
+            {
+              query: 'snapshotQuery',
+              shape: 'string',
+              site: 'src/schema.ts:2',
+            },
+          ],
+          sqlSafetyDiagnostics: [
+            analyzerDiagnostic(
+              diagnosticRegistrar,
+              'KV422',
+              'raw SQL input reaches the managed sink',
+              'src/schema.ts:4',
+            ),
+          ],
+          toctouFacts: [],
+          touchGraph: {},
+        };
+      },
+    );
+    vi.doMock('@kovojs/drizzle/internal/static', () => ({
+      deriveMutationTouchRegistry: () => ({}),
+      extractStaticBuildAnalysisFactsFromProject,
+    }));
+    const { collectViteDataPlaneAnalysisSnapshot, currentViteDataPlaneSourceIdentity } =
+      await loadSubject();
+
+    try {
+      const snapshot = await collectViteDataPlaneAnalysisSnapshot({
+        appSourceDir: srcDir,
+        disposition: 'dev',
+        root,
+      });
+
+      expect(snapshot.files).toEqual([RELEVANT_DRIZZLE_SOURCE]);
+      expect(snapshot.diagnostics).toEqual([
+        expect.objectContaining({ code: 'KV422', site: 'src/schema.ts:4' }),
+      ]);
+      expect(snapshot.queryShapeFacts).toEqual([
+        {
+          query: 'snapshotQuery',
+          shape: 'string',
+          source: 'src/schema.ts:2',
+        },
+      ]);
+      expect(currentViteDataPlaneSourceIdentity({ appSourceDir: srcDir, root })).not.toBe(
+        snapshot.sourceIdentity,
+      );
       expect(extractStaticBuildAnalysisFactsFromProject).toHaveBeenCalledTimes(1);
     } finally {
       await rm(root, { force: true, recursive: true });
