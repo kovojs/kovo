@@ -197,18 +197,20 @@ describe('realistic performance CI policy', () => {
       "KOVO_CHECK_WATCH_BASELINE_SHA: ${{ inputs.check_watch_baseline_sha || 'e3a78ca901035ada82a564943db808255c94ac82' }}",
     );
     expect(source).toContain(
-      "KOVO_CHECK_WATCH_CANDIDATE_SHA: ${{ inputs.check_watch_candidate_sha || 'ce84925251200bbf6e7f79d8f83d74f335c7a572' }}",
+      "KOVO_CHECK_WATCH_CANDIDATE_SHA: ${{ inputs.check_watch_candidate_sha || '2ce61f50b4df290796272e7ea836369e51537e22' }}",
     );
     expect(source).toContain(
-      'KOVO_CHECK_WATCH_CANDIDATE_COMMIT: eb1a1663b40826240a7bb5080fd54cb66bf4bab8',
+      'KOVO_CHECK_WATCH_CANDIDATE_PRODUCTION_COMMIT: 0590083172c0cbdeef4d58219ea384da7cb9f985',
+    );
+    expect(source).toContain(
+      'KOVO_CHECK_WATCH_CANDIDATE_PATCH_ID: e44cd96f5f22d4008c6df42373eb4df1cb24cc28',
     );
     expect(source).toContain(
       'KOVO_CHECK_WATCH_BASELINE_COMMIT: cc475b3ab2d54ff8201de059e713cc1d7e54400c',
     );
     expect(source).toContain(
-      'KOVO_CHECK_WATCH_EVIDENCE_REF: refs/heads/perf-spike/check-watch-sealed-20260813',
+      'KOVO_CHECK_WATCH_EVIDENCE_REF: refs/heads/perf-spike/check-watch-repaired-sealed-20260814',
     );
-    expect(source).not.toContain('KOVO_CHECK_WATCH_CANDIDATE_PATCH_ID');
     expect(source).toContain('check_watch_baseline_sha must be exactly 40 lowercase hexadecimal');
     expect(source).toContain('check_watch_candidate_sha must be exactly 40 lowercase hexadecimal');
     expect(source).toContain('git fetch --no-tags origin');
@@ -229,15 +231,10 @@ describe('realistic performance CI policy', () => {
     expect(source).toContain("assert_equal 'candidate sealed range commit count' 2");
     expect(source).toContain("assert_equal 'candidate seal parent'");
     expect(source).toContain('git patch-id --stable');
-    expect(source).toContain(
-      'original_patch_id="$(git show --pretty=format: --binary --no-ext-diff "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT"',
-    );
-    expect(source).toContain(
-      "assert_equal 'production patch id matches original on this Git implementation'",
-    );
-    expect(source).toContain("assert_equal 'production changed-path census'");
-    expect(source).toContain('assert_equal "baseline blob for $production_path"');
-    expect(source).toContain('assert_equal "candidate blob for $production_path"');
+    expect(source).toContain("assert_equal 'candidate production commit'");
+    expect(source).toContain("assert_equal 'production patch id'");
+    expect(source).toContain("assert_equal 'production changed-path count' 7");
+    expect(source).toContain('check-watch candidate changed unapproved production path');
     expect(source).toContain('check-watch candidate seal changed unapproved path');
     expect(source).toContain('git worktree add --detach "$baseline_root" "$baseline_commit"');
     expect(source).toContain('git worktree add --detach "$candidate_root" "$candidate_commit"');

@@ -451,10 +451,11 @@ jobs:
       - name: Authenticate and prepare exact sealed baseline and candidate scenarios
         env:
           KOVO_CHECK_WATCH_BASELINE_SHA: ${{ inputs.check_watch_baseline_sha || 'e3a78ca901035ada82a564943db808255c94ac82' }}
-          KOVO_CHECK_WATCH_CANDIDATE_SHA: ${{ inputs.check_watch_candidate_sha || 'ce84925251200bbf6e7f79d8f83d74f335c7a572' }}
+          KOVO_CHECK_WATCH_CANDIDATE_SHA: ${{ inputs.check_watch_candidate_sha || '2ce61f50b4df290796272e7ea836369e51537e22' }}
           KOVO_CHECK_WATCH_BASELINE_COMMIT: cc475b3ab2d54ff8201de059e713cc1d7e54400c
-          KOVO_CHECK_WATCH_CANDIDATE_COMMIT: eb1a1663b40826240a7bb5080fd54cb66bf4bab8
-          KOVO_CHECK_WATCH_EVIDENCE_REF: refs/heads/perf-spike/check-watch-sealed-20260813
+          KOVO_CHECK_WATCH_CANDIDATE_PRODUCTION_COMMIT: 0590083172c0cbdeef4d58219ea384da7cb9f985
+          KOVO_CHECK_WATCH_CANDIDATE_PATCH_ID: e44cd96f5f22d4008c6df42373eb4df1cb24cc28
+          KOVO_CHECK_WATCH_EVIDENCE_REF: refs/heads/perf-spike/check-watch-repaired-sealed-20260814
         run: |
           baseline_root="$RUNNER_TEMP/kovo-check-watch-baseline"
           candidate_root="$RUNNER_TEMP/kovo-check-watch-candidate"
@@ -493,18 +494,19 @@ jobs:
           candidate_range_count="$(git rev-list --count "$baseline_commit..$candidate_commit")"
           assert_equal 'candidate sealed range commit count' 2 "$candidate_range_count"
           production_commit="$(git rev-list --reverse "$baseline_commit..$candidate_commit" | head -n 1)"
+          assert_equal 'candidate production commit' "$KOVO_CHECK_WATCH_CANDIDATE_PRODUCTION_COMMIT" "$production_commit"
           assert_equal 'production commit parent' "$baseline_commit" "$(git rev-parse "$production_commit^")"
           assert_equal 'candidate seal parent' "$production_commit" "$(git rev-parse "$candidate_commit^")"
-          original_patch_id="$(git show --pretty=format: --binary --no-ext-diff "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT" | git patch-id --stable | cut -d' ' -f1)"
           production_patch_id="$(git show --pretty=format: --binary --no-ext-diff "$production_commit" | git patch-id --stable | cut -d' ' -f1)"
-          assert_equal 'production patch id matches original on this Git implementation' "$original_patch_id" "$production_patch_id"
-          original_changed_paths="$(git diff --name-only "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT^" "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT")"
+          assert_equal 'production patch id' "$KOVO_CHECK_WATCH_CANDIDATE_PATCH_ID" "$production_patch_id"
           sealed_changed_paths="$(git diff --name-only "$baseline_commit" "$production_commit")"
-          assert_equal 'production changed-path census' "$original_changed_paths" "$sealed_changed_paths"
+          assert_equal 'production changed-path count' 7 "$(printf '%s\n' "$sealed_changed_paths" | sed '/^$/d' | wc -l | tr -d ' ')"
           while IFS= read -r production_path; do
-            assert_equal "baseline blob for $production_path" "$(git rev-parse "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT^:$production_path")" "$(git rev-parse "$baseline_commit:$production_path")"
-            assert_equal "candidate blob for $production_path" "$(git rev-parse "$KOVO_CHECK_WATCH_CANDIDATE_COMMIT:$production_path")" "$(git rev-parse "$production_commit:$production_path")"
-          done <<< "$original_changed_paths"
+            case "$production_path" in
+              packages/cli/src/commands/build-export.ts|packages/cli/src/commands/check-session-reuse.test.ts|packages/cli/src/commands/check-session-reuse.ts|packages/cli/src/commands/source-check-session.test.ts|packages/cli/src/commands/source-check-session.ts|packages/cli/src/commands/source-check-watch.test.ts|packages/cli/src/commands/source-check-watch.ts) ;;
+              *) echo "check-watch candidate changed unapproved production path: $production_path" >&2; exit 2 ;;
+            esac
+          done <<< "$sealed_changed_paths"
           git diff-tree --no-commit-id --name-only -r "$candidate_commit" | while IFS= read -r seal_path; do
             case "$seal_path" in
               packages/compiler/src/security/framework-public-runtime-export-posture.generated.ts|scripts/pack-security.files.json|security/framework-public-runtime-export-posture.json|security/kovo-certificate-policy-v1.json|security/kovo-certificate-v1.json) ;;
