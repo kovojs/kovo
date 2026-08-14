@@ -1,9 +1,9 @@
 # Profile-driven development critical-path spike
 
-This is the preregistered decision contract for the candidate selected from the authenticated
-development edit profiles. It supersedes the rejected fresh-generation v1 comparison; a v1 outer
-report, preparation report, retained-failure envelope, candidate binding, or acceptance rule is not
-valid input to this decision.
+This is the packed-product v3 decision contract for the candidate selected from the authenticated
+development edit profiles. It supersedes the source-checkout v2 runner as well as the rejected
+fresh-generation v1 comparison. A v1 or v2 outer report, preparation report, retained-failure
+envelope, candidate binding, or product-boundary policy is not valid input to this decision.
 
 ## Causal basis
 
@@ -75,8 +75,30 @@ vp exec node scripts/perf-dev-generation-spike.mjs \
 ```
 
 Repeat with `--size 216` and a distinct output directory. `--quick-smoke` verifies only transport,
-lifecycle, and report shape; v2 marks it `unproven` because it does not meet the decision sample
+lifecycle, and report shape; v3 marks it `unproven` because it does not meet the decision sample
 policy.
+
+After the first quiet-host admission and before the timing lock, the runner independently performs
+the following preparation for the baseline and spike source worktrees:
+
+1. Run the exact worktree's frozen repository install, package builds, package closure pack, isolated
+   consumer lock resolution, and frozen consumer install.
+2. Authenticate that lane's tarballs, installed package census, CLI resolution trace, source commit,
+   and three lock digests as `kovo-packed-product-identity/v1`.
+3. Generate a new Kovo corpus with `dependencyMode: 'deferred'` below a lane-specific fresh
+   `os.tmpdir()` root, outside either repository worktree and without an ancestor `node_modules`.
+4. Bind that corpus to only the lane's authenticated consumer. The baseline and spike concrete
+   product digests are deliberately not required to be equal. Their regular descriptor files and
+   consumer roots must be distinct, and each descriptor must remain directly inside its own
+   consumer root.
+
+Every raw dev-loop report must then carry the exact product identity prepared for its own lane,
+declare the product required, verify it before and after the measured block, bind its normalized
+packed CLI command to the same digest, and report the exact external corpus manifest. Missing or
+drifted evidence is `unproven`. The exact A/B policy is
+`kovo-dev-generation-packed-product-policy/v3`; it deliberately differs from the general comparison
+policy because this preregistration admits the host before preparation as well as before every timed
+block. Product preparation remains outside every warmup and measured sample.
 
 When `--out` is present, every child adapter report remains under the adjacent `raw/` directory.
 Failed children retain bounded process status, report availability, byte count, SHA-256, schema,
@@ -84,9 +106,11 @@ verdict, and diagnostics. The outer report embeds every successful child report 
 locks, corpus shape and bytes, tool bytes, port allocation, host admission, and the exact candidate
 patch. Missing or extra cells cannot disappear into aggregation.
 
-## Preregistered v2 acceptance
+## Preregistered acceptance
 
-N=24 and N=216 must each pass independently. The four profile-causal edit-to-paint metrics are
+The numerical thresholds and correctness rules are unchanged from v2; v3 adds the mandatory packed
+product boundary above. N=24 and N=216 must each pass independently. The four profile-causal
+edit-to-paint metrics are
 `leafMs`, `entryMs`, `dataMs`, and `recoveryMs`. Every one must improve by at least 10% at the
 candidate median, and every paired bootstrap 95% confidence interval must have a lower bound above
 zero.
@@ -110,6 +134,36 @@ authorizes integration.
 
 ## Result
 
-Status: **unproven**. No full authenticated N=24 and N=216 decision has run for this exact
-candidate. The production branch's one-iteration correctness smokes are not statistical evidence
-and cannot satisfy this contract.
+Packed-product v3 status: **unproven**. No full authenticated N=24 and N=216 packed-product decision
+has run for this exact candidate. The production branch's one-iteration correctness smokes are not
+statistical evidence and cannot satisfy this contract.
+
+The earlier source-checkout v2 N=24 run is nevertheless authenticated as a genuine rejection, not
+discarded. Hosted run
+[`31807028892`](https://github.com/kovojs/kovo/actions/runs/31807028892) measured exact clean source
+`a12c7358414685d1bb9229a1d676d246d17a1a6b` against one direct rebased candidate commit
+`10c1d597a95db4f049e157b490c992ccd06bb141`. The candidate patch identity, patch byte count, path
+census, and original object all match the binding above. GitHub artifact `9223275214`,
+`kovo-perf-dev-generation-n24`, is 81,878 compressed bytes with API digest
+`sha256:7db1183dbd4644bf266575634ace2cd9dc0df6ada4b96928b98dfe353d0d9fed`. The downloaded outer
+report SHA-256 is `b4eb83f8325d446ac0a60665c3590bc6e3baac6a4023bd987df12087e2c53432`;
+its four retained raw B,S,S,B reports hash to, in order,
+`692703d81757864c27fd4b3ae1c3aee59f2932f6b3ef89d33fbd6ba703e71e6f`,
+`ea7561c35c4eaf60045616da05b3ebd34a0bda5c7f27f0d6a816028ab57204ae`,
+`f49baff3873b6b52224e032abec7c07108eb213ce713093d8cdcc2765d9423c3`, and
+`2a00dd838b111297b5e447cad987afb434cdb85a5b536f80d7f784209e83cfd7`.
+
+The v2 report is complete, quiet-admitted, fully sampled, source-stable, and has zero correctness
+errors or misses. All four causal metrics passed their 10% and positive paired-CI rules:
+
+| metric   | baseline median | candidate median | improvement | paired 95% CI, baseline - candidate | candidate p95 |
+| -------- | --------------: | ---------------: | ----------: | ----------------------------------: | ------------: |
+| leaf     |    11,130.41 ms |      3,397.15 ms |      69.48% |             [7,629.99, 7,782.36] ms |   3,730.93 ms |
+| entry    |    11,194.65 ms |      3,415.42 ms |      69.49% |             [7,566.21, 7,866.44] ms |   3,830.38 ms |
+| data     |    11,263.92 ms |      2,897.18 ms |      74.28% |             [8,267.34, 8,417.75] ms |   3,349.61 ms |
+| recovery |     5,231.83 ms |      2,898.58 ms |      44.60% |             [2,217.10, 2,449.73] ms |   3,348.32 ms |
+
+Every syntax, ready-latency, ready-RSS, and edit-RSS guardrail passed, but candidate recovery p95 was
+3,348.32 ms, above the preregistered 2,000 ms ceiling. The correct v2 verdict is therefore
+**reject**. That report measured source-checkout commands and contains no lane-specific packed
+product proof, so it does not accept or reject the candidate at the production package boundary.

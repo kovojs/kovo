@@ -12,10 +12,15 @@ import {
   DEV_CRITICAL_PATH_CANDIDATE,
   DEV_GENERATION_ADAPTER_FAILURE_SCHEMA,
   DEV_GENERATION_CANDIDATE_BINDING_SCHEMA,
+  DEV_GENERATION_PRODUCT_BOUNDARY_SCHEMA,
+  DEV_GENERATION_PRODUCT_POLICY,
+  DEV_GENERATION_PRODUCT_POLICY_SCHEMA,
   DEV_GENERATION_SPIKE_PREPARE_SCHEMA,
   DEV_GENERATION_SPIKE_SCHEMA,
+  devGenerationPackedCorpusOptions,
   devGenerationSchedule,
   inspectGeneratedDevCorpus,
+  inspectDevGenerationProductBoundary,
   pairedBootstrapImprovementCi,
   parseDevGenerationSpikeArgs,
   prepareDevGenerationSpike,
@@ -24,6 +29,7 @@ import {
   summarizeDevMetric,
   validateDevGenerationCell,
 } from './perf-dev-generation-spike.mjs';
+import { canonicalJson } from './lib/perf-host.mjs';
 
 const EDIT_CLASSES = ['leaf', 'entry', 'data', 'syntaxError', 'recovery'];
 const temporaryRoots = [];
@@ -34,13 +40,28 @@ afterEach(() => {
 });
 
 describe('dev-generation candidate comparator', () => {
-  it('versions the report, binding, and retained-failure evidence independently of v1', () => {
-    expect(DEV_GENERATION_SPIKE_SCHEMA).toBe('kovo-dev-generation-spike-comparison/v2');
-    expect(DEV_GENERATION_SPIKE_PREPARE_SCHEMA).toBe('kovo-dev-generation-spike-prepare/v2');
+  it('versions packed evidence so source-checkout v2 reports cannot be reinterpreted', () => {
+    expect(DEV_GENERATION_SPIKE_SCHEMA).toBe('kovo-dev-generation-spike-comparison/v3');
+    expect(DEV_GENERATION_SPIKE_PREPARE_SCHEMA).toBe('kovo-dev-generation-spike-prepare/v3');
     expect(DEV_GENERATION_CANDIDATE_BINDING_SCHEMA).toBe(
-      'kovo-dev-generation-candidate-binding/v2',
+      'kovo-dev-generation-candidate-binding/v3',
     );
-    expect(DEV_GENERATION_ADAPTER_FAILURE_SCHEMA).toBe('kovo-dev-generation-adapter-failure/v2');
+    expect(DEV_GENERATION_ADAPTER_FAILURE_SCHEMA).toBe('kovo-dev-generation-adapter-failure/v3');
+    expect(DEV_GENERATION_PRODUCT_BOUNDARY_SCHEMA).toBe(
+      'kovo-dev-generation-packed-product-boundary/v3',
+    );
+    expect(DEV_GENERATION_PRODUCT_POLICY).toEqual({
+      artifactIdentity: 'kovo-packed-product-identity/v1',
+      corpusGeneration: 'separate-per-lane-with-deferred-dependencies',
+      corpusIsolation: 'fresh-external-os-tmpdir-without-ancestor-node-modules',
+      laneIdentityComparison: 'concrete-identities-report-bound-but-not-required-equal',
+      liveDescriptorVerification:
+        'separate-regular-consumer-descriptor-plus-adapter-before-and-after',
+      preparationAdmission: 'quiet-host-before-preparation-and-before-each-timed-block',
+      preparationTiming: 'build-pack-frozen-install-and-corpus-generation-outside-samples',
+      rawReportBinding: 'exact-product-identity-required-before-and-after',
+      schema: DEV_GENERATION_PRODUCT_POLICY_SCHEMA,
+    });
   });
 
   it('binds the profile-driven development critical-path candidate identity', () => {
@@ -102,6 +123,17 @@ describe('dev-generation candidate comparator', () => {
       expect.objectContaining({ lane: 'spike', occurrence: 1, editSamples: 1, readySamples: 1 }),
       expect.objectContaining({ lane: 'baseline', occurrence: 1, editSamples: 1, readySamples: 1 }),
     ]);
+  });
+
+  it('pins each packed corpus to deferred dependency generation under its external root', () => {
+    const externalRoot = temporaryDirectory('kovo-dev-generation-deferred-corpus-');
+    expect(devGenerationPackedCorpusOptions(externalRoot, 216)).toEqual({
+      dependencyMode: 'deferred',
+      framework: 'kovo',
+      outDir: realpathSync(externalRoot),
+      size: 216,
+    });
+    expect(() => devGenerationPackedCorpusOptions(externalRoot, 25)).toThrow(/24 or 216/u);
   });
 
   it('reports median/MAD/p95 and deterministic paired bootstrap evidence', () => {
@@ -178,7 +210,7 @@ describe('dev-generation candidate comparator', () => {
     expect(binding).toMatchObject({
       baseline: { commit: fixture.sourceCommit },
       candidate: fixture.candidate,
-      schema: 'kovo-dev-generation-candidate-binding/v2',
+      schema: 'kovo-dev-generation-candidate-binding/v3',
       spike: { parent: fixture.sourceCommit },
     });
     expect(fixture.sourceCommit).not.toBe(fixture.candidate.parent);
@@ -237,11 +269,121 @@ describe('dev-generation candidate comparator', () => {
         {
           authenticateRoots: () => ({
             ...preparedFixture('/unused-baseline', '/unused-spike').candidateBinding,
-            schema: 'kovo-dev-generation-candidate-binding/v1',
+            schema: 'kovo-dev-generation-candidate-binding/v2',
           }),
         },
       ),
     ).rejects.toThrow(/prior evidence cannot be reinterpreted/u);
+  });
+
+  it('prepares and cleans separate report-bound products for baseline and spike', async () => {
+    const baselineRoot = temporaryDirectory('kovo-dev-generation-prepare-products-baseline-');
+    const spikeRoot = temporaryDirectory('kovo-dev-generation-prepare-products-spike-');
+    const baseline = sourceState('a'.repeat(40));
+    const spike = sourceState('b'.repeat(40));
+    const corpus = corpusIdentity();
+    const cleanup = { baseline: vi.fn(), spike: vi.fn() };
+    const preparePackedLane = vi.fn(async ({ lane, root, size, source }) => {
+      const product = productCapability(source, `separate-${lane}`);
+      return {
+        cleanup: cleanup[lane],
+        consumerRoot: product.consumerRoot,
+        corpus,
+        descriptorPath: product.descriptorPath,
+        externalRoot: product.externalRoot,
+        identity: product.identity,
+        manifestPath: product.manifestPath,
+        sourceAfter: source,
+        tooling: toolingIdentity(),
+      };
+    });
+    const binding = {
+      baseline: { commit: baseline.commit, root: baselineRoot },
+      candidate: { commit: 'c'.repeat(40), patchId: 'd'.repeat(40), patchSha256: digest('e') },
+      schema: DEV_GENERATION_CANDIDATE_BINDING_SCHEMA,
+      spike: { commit: spike.commit, parent: baseline.commit, root: spikeRoot },
+    };
+    const prepared = await prepareDevGenerationSpike(
+      {
+        baselineRoot,
+        installTimeoutMs: 600_000,
+        size: 24,
+        spikeRoot,
+      },
+      {
+        authenticateRoots: () => binding,
+        collectState: (root) => (root === baselineRoot ? baseline : spike),
+        preparePackedLane,
+      },
+    );
+
+    expect(preparePackedLane).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ lane: 'baseline', root: baselineRoot, size: 24, source: baseline }),
+      expect.any(Object),
+    );
+    expect(preparePackedLane).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ lane: 'spike', root: spikeRoot, size: 24, source: spike }),
+      expect.any(Object),
+    );
+    expect(prepared.products.baseline.externalRoot).not.toBe(prepared.products.spike.externalRoot);
+    expect(prepared.products.baseline.identity.digest).not.toBe(
+      prepared.products.spike.identity.digest,
+    );
+    expect(prepared.productBoundary).toMatchObject({
+      complete: true,
+      policy: DEV_GENERATION_PRODUCT_POLICY,
+      separateConsumersAndDescriptors: true,
+      separatePreparationRoots: true,
+    });
+
+    prepared.cleanup();
+    prepared.cleanup();
+    expect(cleanup.baseline).toHaveBeenCalledOnce();
+    expect(cleanup.spike).toHaveBeenCalledOnce();
+  });
+
+  it('rejects two arms that alias one authenticated consumer descriptor', async () => {
+    const baselineRoot = temporaryDirectory('kovo-dev-generation-alias-baseline-');
+    const spikeRoot = temporaryDirectory('kovo-dev-generation-alias-spike-');
+    const states = {
+      baseline: sourceState('a'.repeat(40)),
+      spike: sourceState('b'.repeat(40)),
+    };
+    const products = {
+      baseline: productCapability(states.baseline, 'alias-baseline'),
+      spike: productCapability(states.spike, 'alias-spike'),
+    };
+    products.spike.consumerRoot = products.baseline.consumerRoot;
+    products.spike.descriptorPath = products.baseline.descriptorPath;
+    const binding = {
+      baseline: { commit: states.baseline.commit, root: baselineRoot },
+      candidate: { commit: 'c'.repeat(40), patchId: 'd'.repeat(40), patchSha256: digest('e') },
+      schema: DEV_GENERATION_CANDIDATE_BINDING_SCHEMA,
+      spike: { commit: states.spike.commit, parent: states.baseline.commit, root: spikeRoot },
+    };
+
+    await expect(
+      prepareDevGenerationSpike(
+        { baselineRoot, installTimeoutMs: 600_000, size: 24, spikeRoot },
+        {
+          authenticateRoots: () => binding,
+          collectState: (root) => (root === baselineRoot ? states.baseline : states.spike),
+          preparePackedLane: async ({ lane, source }) => ({
+            cleanup() {},
+            consumerRoot: products[lane].consumerRoot,
+            corpus: corpusIdentity(),
+            descriptorPath: products[lane].descriptorPath,
+            externalRoot: products[lane].externalRoot,
+            identity: products[lane].identity,
+            manifestPath: products[lane].manifestPath,
+            sourceAfter: source,
+            tooling: toolingIdentity(),
+          }),
+        },
+      ),
+    ).rejects.toThrow(/separate packed product consumers\/descriptors/u);
   });
 
   it('authenticates a generated N=24 corpus and enforces literal localhost', () => {
@@ -296,6 +438,7 @@ describe('dev-generation candidate comparator', () => {
   it('validates browser-visible correctness, source identity, and RSS for each cell', () => {
     const state = sourceState('a'.repeat(40));
     const corpus = corpusIdentity();
+    const product = productCapability(state, 'cell-validation');
     const cell = scheduledCell(
       'baseline',
       0,
@@ -306,24 +449,42 @@ describe('dev-generation candidate comparator', () => {
         latency: 100,
         locks: state.locks,
         port: 49_750,
+        product,
         readySamples: 1,
       }),
+      0,
+      product,
     );
     expect(
-      validateDevGenerationCell(cell, { commit: state.commit, corpus, locks: state.locks }),
+      validateDevGenerationCell(cell, {
+        commit: state.commit,
+        corpus,
+        locks: state.locks,
+        product,
+      }),
     ).toEqual([]);
 
     // A browser request failure remains blocking even if the adapter classified its surrounding
     // syntax-error phase as expected. Startup polling now happens outside the browser instead.
     cell.report.integrity.browser.requestFailedCount = 1;
     expect(
-      validateDevGenerationCell(cell, { commit: state.commit, corpus, locks: state.locks }),
+      validateDevGenerationCell(cell, {
+        commit: state.commit,
+        corpus,
+        locks: state.locks,
+        product,
+      }),
     ).toEqual(expect.arrayContaining([expect.stringMatching(/adapter correctness failure/u)]));
 
     cell.report.integrity.browser.requestFailedCount = 0;
     cell.report.readySamples[0].readinessProbe.transientFailures = 99;
     expect(
-      validateDevGenerationCell(cell, { commit: state.commit, corpus, locks: state.locks }),
+      validateDevGenerationCell(cell, {
+        commit: state.commit,
+        corpus,
+        locks: state.locks,
+        product,
+      }),
     ).toEqual(
       expect.arrayContaining([expect.stringMatching(/fresh-ready evidence is incomplete/u)]),
     );
@@ -331,7 +492,12 @@ describe('dev-generation candidate comparator', () => {
     cell.report.readySamples[0].readinessProbe.transientFailures = 0;
     cell.report.readySamples[0].browserContextClosed = false;
     expect(
-      validateDevGenerationCell(cell, { commit: state.commit, corpus, locks: state.locks }),
+      validateDevGenerationCell(cell, {
+        commit: state.commit,
+        corpus,
+        locks: state.locks,
+        product,
+      }),
     ).toEqual(
       expect.arrayContaining([expect.stringMatching(/fresh-ready evidence is incomplete/u)]),
     );
@@ -339,7 +505,12 @@ describe('dev-generation candidate comparator', () => {
     cell.report.readySamples[0].browserContextClosed = true;
     delete cell.report.editSession.browserContextClosed;
     expect(
-      validateDevGenerationCell(cell, { commit: state.commit, corpus, locks: state.locks }),
+      validateDevGenerationCell(cell, {
+        commit: state.commit,
+        corpus,
+        locks: state.locks,
+        product,
+      }),
     ).toEqual(
       expect.arrayContaining([
         expect.stringMatching(/edit-session readiness or RSS evidence is incomplete/u),
@@ -349,8 +520,85 @@ describe('dev-generation candidate comparator', () => {
     cell.report.editSession.browserContextClosed = true;
     cell.report.samples[0].dataStateSurvived = false;
     expect(
-      validateDevGenerationCell(cell, { commit: state.commit, corpus, locks: state.locks }),
+      validateDevGenerationCell(cell, {
+        commit: state.commit,
+        corpus,
+        locks: state.locks,
+        product,
+      }),
     ).toEqual(expect.arrayContaining([expect.stringMatching(/lost state during data/u)]));
+  });
+
+  it('fails closed on per-arm product, CLI confinement, policy, and external-root drift', () => {
+    const baseline = sourceState('a'.repeat(40));
+    const spike = sourceState('b'.repeat(40));
+    const corpus = corpusIdentity();
+    const baselineProduct = productCapability(baseline, 'boundary-baseline');
+    const spikeProduct = productCapability(spike, 'boundary-spike');
+    const report = fakeAdapterReport({
+      commit: baseline.commit,
+      corpus,
+      editSamples: 1,
+      latency: 100,
+      locks: baseline.locks,
+      port: 49_750,
+      product: baselineProduct,
+      readySamples: 1,
+    });
+
+    expect(baselineProduct.identity.digest).not.toBe(spikeProduct.identity.digest);
+    expect(inspectDevGenerationProductBoundary(report, baselineProduct)).toMatchObject({
+      complete: true,
+      corpus: {
+        ancestorDependencyIsolationVerified: true,
+        reportBound: true,
+      },
+      productArtifact: {
+        reportBound: true,
+        verifiedBeforeAndAfter: true,
+      },
+    });
+
+    const wrongArm = structuredClone(report);
+    wrongArm.productArtifact = spikeProduct.identity;
+    expect(inspectDevGenerationProductBoundary(wrongArm, baselineProduct)).toMatchObject({
+      complete: false,
+      errors: expect.arrayContaining([expect.stringMatching(/differs from its prepared lane/u)]),
+    });
+
+    const workspaceCli = structuredClone(report);
+    workspaceCli.integrity.command.argv[1] = '/workspace/packages/cli/dist/bin.mjs';
+    expect(inspectDevGenerationProductBoundary(workspaceCli, baselineProduct)).toMatchObject({
+      complete: false,
+      errors: expect.arrayContaining([expect.stringMatching(/normalized packed Kovo CLI/u)]),
+    });
+
+    const missingAfterProof = structuredClone(report);
+    missingAfterProof.integrity.productArtifact.afterVerified = false;
+    expect(inspectDevGenerationProductBoundary(missingAfterProof, baselineProduct)).toMatchObject({
+      complete: false,
+      errors: expect.arrayContaining([expect.stringMatching(/before and after/u)]),
+    });
+
+    const policyDrift = {
+      ...baselineProduct,
+      policy: { ...DEV_GENERATION_PRODUCT_POLICY, schema: 'source-checkout-policy/v2' },
+    };
+    expect(inspectDevGenerationProductBoundary(report, policyDrift)).toMatchObject({
+      complete: false,
+      errors: expect.arrayContaining([expect.stringMatching(/policy drift/u)]),
+    });
+
+    const wrongExternalCorpus = structuredClone(report);
+    wrongExternalCorpus.corpus.manifestPath = spikeProduct.manifestPath;
+    expect(inspectDevGenerationProductBoundary(wrongExternalCorpus, baselineProduct)).toMatchObject(
+      {
+        complete: false,
+        errors: expect.arrayContaining([
+          expect.stringMatching(/differs from its prepared external corpus/u),
+        ]),
+      },
+    );
   });
 
   it('accepts four causal wins while syntax stays flat, correct, and below its p95 target', () => {
@@ -385,7 +633,7 @@ describe('dev-generation candidate comparator', () => {
         },
       },
       requiredBrowserVisibleMetrics: ['leafMs', 'entryMs', 'dataMs', 'recoveryMs'],
-      rule: 'profiled-causal-edit-wins-and-noncausal-target-guardrails/v2',
+      rule: 'profiled-causal-edit-wins-and-noncausal-target-guardrails/packed-v3',
     });
     expect(
       Object.values(result.acceptance.causalMetricAcceptance).every((metric) => metric.passed),
@@ -512,7 +760,9 @@ describe('dev-generation candidate comparator', () => {
           events.push(`adapter:${String(options.port)}`);
           calls.push({
             lane,
+            manifestPath: options.manifestPath,
             port: options.port,
+            productDigest: options.packedProduct.identity.digest,
             readyTimeoutMs: options.readyTimeoutMs,
             timeoutMs: options.timeoutMs,
           });
@@ -524,6 +774,7 @@ describe('dev-generation candidate comparator', () => {
             latency: lane === 'baseline' ? 100 : 75,
             locks: state.locks,
             port: options.port,
+            product: options.packedProduct,
             readyLatency: lane === 'baseline' ? 100 : 95,
             readySamples: options.readySamples,
             rss: 1_000,
@@ -553,10 +804,38 @@ describe('dev-generation candidate comparator', () => {
     );
 
     expect(calls).toEqual([
-      { lane: 'baseline', port: 20_000, readyTimeoutMs: 600_000, timeoutMs: 1_800_000 },
-      { lane: 'spike', port: 20_128, readyTimeoutMs: 600_000, timeoutMs: 1_800_000 },
-      { lane: 'spike', port: 20_256, readyTimeoutMs: 600_000, timeoutMs: 1_800_000 },
-      { lane: 'baseline', port: 20_384, readyTimeoutMs: 600_000, timeoutMs: 1_800_000 },
+      {
+        lane: 'baseline',
+        manifestPath: prepared.products.baseline.manifestPath,
+        port: 20_000,
+        productDigest: prepared.products.baseline.identity.digest,
+        readyTimeoutMs: 600_000,
+        timeoutMs: 1_800_000,
+      },
+      {
+        lane: 'spike',
+        manifestPath: prepared.products.spike.manifestPath,
+        port: 20_128,
+        productDigest: prepared.products.spike.identity.digest,
+        readyTimeoutMs: 600_000,
+        timeoutMs: 1_800_000,
+      },
+      {
+        lane: 'spike',
+        manifestPath: prepared.products.spike.manifestPath,
+        port: 20_256,
+        productDigest: prepared.products.spike.identity.digest,
+        readyTimeoutMs: 600_000,
+        timeoutMs: 1_800_000,
+      },
+      {
+        lane: 'baseline',
+        manifestPath: prepared.products.baseline.manifestPath,
+        port: 20_384,
+        productDigest: prepared.products.baseline.identity.digest,
+        readyTimeoutMs: 600_000,
+        timeoutMs: 1_800_000,
+      },
     ]);
     expect(events).toEqual([
       'host:pre-preparation',
@@ -598,12 +877,12 @@ describe('dev-generation candidate comparator', () => {
     });
     expect(report.integrity).toMatchObject({
       complete: false,
-      errors: [expect.stringContaining('v2 decision sample policy')],
+      errors: [expect.stringContaining('packed v3 decision sample policy')],
       serialized: true,
       sourceStable: true,
     });
     expect(report.verdict).toMatchObject({
-      reasons: [expect.stringContaining('v2 decision sample policy')],
+      reasons: [expect.stringContaining('packed v3 decision sample policy')],
       status: 'unproven',
     });
   });
@@ -643,6 +922,7 @@ describe('dev-generation candidate comparator', () => {
             },
             locks: state.locks,
             port: options.port,
+            product: options.packedProduct,
             readyLatency: 100,
             readySamples: options.readySamples,
             warmups: options.warmups,
@@ -655,7 +935,7 @@ describe('dev-generation candidate comparator', () => {
     expect(report.integrity).toMatchObject({ complete: true, errors: [] });
     expect(report.analysis.acceptance.causalMetricAcceptance.leafMs.passed).toBe(false);
     expect(report.verdict).toMatchObject({
-      reasons: [expect.stringContaining('did not satisfy every v2 causal win')],
+      reasons: [expect.stringContaining('did not satisfy every packed v3 causal win')],
       status: 'reject',
     });
   });
@@ -672,6 +952,7 @@ describe('dev-generation candidate comparator', () => {
       latency: 100,
       locks: state.locks,
       port: 49_750,
+      product: prepared.products.baseline,
       readySamples: 1,
     });
     failedReport.integrity.complete = false;
@@ -690,7 +971,7 @@ describe('dev-generation candidate comparator', () => {
           schema: 'kovo-dev-loop-report/v1',
           verdict: 'unproven',
         },
-        schema: 'kovo-dev-generation-adapter-failure/v2',
+        schema: 'kovo-dev-generation-adapter-failure/v3',
         summary: { integrityErrors: failedReport.integrity.errors },
       },
       report: failedReport,
@@ -715,7 +996,7 @@ describe('dev-generation candidate comparator', () => {
     expect(report.cells[0]).toMatchObject({
       adapterFailure: {
         rawReport: { reportBytes: 1_234, reportSha256: digest('b') },
-        schema: 'kovo-dev-generation-adapter-failure/v2',
+        schema: 'kovo-dev-generation-adapter-failure/v3',
       },
       report: failedReport,
     });
@@ -766,7 +1047,7 @@ describe('dev-generation candidate comparator', () => {
     };
     const cells = [
       {
-        adapterFailure: { schema: 'kovo-dev-generation-adapter-failure/v2' },
+        adapterFailure: { schema: 'kovo-dev-generation-adapter-failure/v3' },
         lane: 'baseline',
         occurrence: 0,
         report,
@@ -792,6 +1073,7 @@ describe('dev-generation candidate comparator', () => {
     const baselineRoot = temporaryDirectory('kovo-dev-generation-prepare-baseline-');
     const spikeRoot = temporaryDirectory('kovo-dev-generation-prepare-spike-');
     const prepared = preparedFixture(baselineRoot, spikeRoot);
+    prepared.cleanup = vi.fn();
     const runAdapter = vi.fn();
     const report = await runDevGenerationSpike(
       { baselineRoot, prepareOnly: true, quickSmoke: true, spikeRoot },
@@ -803,6 +1085,7 @@ describe('dev-generation candidate comparator', () => {
     );
 
     expect(runAdapter).not.toHaveBeenCalled();
+    expect(prepared.cleanup).toHaveBeenCalledOnce();
     expect(report).toMatchObject({
       integrity: { complete: true, matchedCorpus: true, sourceStable: true },
       mode: 'prepare-only',
@@ -826,6 +1109,33 @@ describe('dev-generation candidate comparator', () => {
         '--measure',
       ]),
     ).toMatchObject({ measure: true, readyTimeoutMs: 600_000, size: 216, timeoutMs: 3_600_000 });
+  });
+
+  it('marks source-checkout v2 preparation evidence unproven under the packed v3 boundary', async () => {
+    const baselineRoot = temporaryDirectory('kovo-dev-generation-v2-prepare-baseline-');
+    const spikeRoot = temporaryDirectory('kovo-dev-generation-v2-prepare-spike-');
+    const prepared = preparedFixture(baselineRoot, spikeRoot);
+    prepared.productBoundary.schema = 'kovo-dev-generation-packed-product-boundary/v2';
+
+    const report = await runDevGenerationSpike(
+      { baselineRoot, prepareOnly: true, quickSmoke: true, spikeRoot },
+      {
+        hostFingerprint: () => ({ schema: 'test-host/v1' }),
+        prepare: async () => prepared,
+      },
+    );
+
+    expect(report).toMatchObject({
+      integrity: {
+        complete: false,
+        errors: [expect.stringMatching(/packed v3 preparation boundary evidence/u)],
+      },
+      schema: DEV_GENERATION_SPIKE_PREPARE_SCHEMA,
+      verdict: {
+        reasons: [expect.stringMatching(/packed v3 preparation boundary evidence/u)],
+        status: 'unproven',
+      },
+    });
   });
 
   it('refuses a loaded host before taking the timing lock or launching an adapter', async () => {
@@ -913,7 +1223,10 @@ describe('dev-generation candidate comparator', () => {
     expect(report.hostDiagnostics).toEqual([]);
     expect(report.integrity).toMatchObject({
       complete: false,
-      errors: [expect.stringContaining('block 0: post-benchmark host load')],
+      errors: expect.arrayContaining([
+        expect.stringContaining('block 0: post-benchmark host load'),
+        expect.stringContaining('packed v3 product boundary evidence'),
+      ]),
     });
   });
 
@@ -961,7 +1274,10 @@ describe('dev-generation candidate comparator', () => {
     expect(report).toMatchObject({
       integrity: {
         complete: false,
-        errors: [expect.stringContaining('host ephemeral port range is unproven')],
+        errors: expect.arrayContaining([
+          expect.stringContaining('host ephemeral port range is unproven'),
+          expect.stringContaining('packed v3 product boundary evidence'),
+        ]),
       },
       portAllocation: { complete: false, hostEphemeral: { platform: 'aix' } },
       verdict: { status: 'unproven' },
@@ -1109,27 +1425,56 @@ function realRebasedCandidateFixture() {
   };
 }
 
+function toolingIdentity() {
+  return {
+    corpusGeneratorSha256: digest('f'),
+    devLoopAdapterSha256: digest('0'),
+    packedProductIdentitySchema: 'kovo-packed-product-identity/v1',
+    packedProductPreparationSha256: digest('7'),
+    packedProductVerifierSha256: digest('8'),
+    productPolicySchema: DEV_GENERATION_PRODUCT_POLICY_SCHEMA,
+    readyRouteValidatorSha256: digest('1'),
+  };
+}
+
 function preparedFixture(baselineRoot, spikeRoot) {
   const baseline = sourceState('a'.repeat(40));
   const spike = sourceState('b'.repeat(40));
   const corpus = corpusIdentity();
+  const products = {
+    baseline: productCapability(baseline, 'prepared-baseline'),
+    spike: productCapability(spike, 'prepared-spike'),
+  };
   return {
     candidateBinding: {
       baseline: { commit: baseline.commit, root: baselineRoot },
       candidate: { commit: 'c'.repeat(40), patchId: 'd'.repeat(40), patchSha256: digest('e') },
-      schema: 'kovo-dev-generation-candidate-binding/v2',
+      schema: 'kovo-dev-generation-candidate-binding/v3',
       spike: { commit: spike.commit, parent: baseline.commit, root: spikeRoot },
     },
+    cleanup() {},
     corpus: { baseline: corpus, spike: corpus },
     frozenInstall: {
-      argv: ['pnpm', 'install'],
-      packageManager: 'pnpm@10.12.1',
-      pnpmVersion: '10.12.1',
+      baseline: products.baseline.identity.identity.consumer.frozenInstall,
+      separatePerLane: true,
+      spike: products.spike.identity.identity.consumer.frozenInstall,
     },
     manifestPaths: {
-      baseline: path.join(baselineRoot, 'manifest.json'),
-      spike: path.join(spikeRoot, 'manifest.json'),
+      baseline: products.baseline.manifestPath,
+      spike: products.spike.manifestPath,
     },
+    productBoundary: {
+      complete: true,
+      identities: {
+        baseline: products.baseline.identity,
+        spike: products.spike.identity,
+      },
+      policy: DEV_GENERATION_PRODUCT_POLICY,
+      schema: DEV_GENERATION_PRODUCT_BOUNDARY_SCHEMA,
+      separateConsumersAndDescriptors: true,
+      separatePreparationRoots: true,
+    },
+    products,
     roots: { baseline: baselineRoot, spike: spikeRoot },
     source: {
       after: { baseline, spike },
@@ -1140,11 +1485,19 @@ function preparedFixture(baselineRoot, spikeRoot) {
       baseline: {
         corpusGeneratorSha256: digest('f'),
         devLoopAdapterSha256: digest('0'),
+        packedProductIdentitySchema: 'kovo-packed-product-identity/v1',
+        packedProductPreparationSha256: digest('7'),
+        packedProductVerifierSha256: digest('8'),
+        productPolicySchema: DEV_GENERATION_PRODUCT_POLICY_SCHEMA,
         readyRouteValidatorSha256: digest('1'),
       },
       spike: {
         corpusGeneratorSha256: digest('f'),
         devLoopAdapterSha256: digest('0'),
+        packedProductIdentitySchema: 'kovo-packed-product-identity/v1',
+        packedProductPreparationSha256: digest('7'),
+        packedProductVerifierSha256: digest('8'),
+        productPolicySchema: DEV_GENERATION_PRODUCT_POLICY_SCHEMA,
         readyRouteValidatorSha256: digest('1'),
       },
     },
@@ -1159,6 +1512,10 @@ function comparisonCells({
 } = {}) {
   const corpus = corpusIdentity();
   const states = { baseline: sourceState('a'.repeat(40)), spike: sourceState('b'.repeat(40)) };
+  const products = {
+    baseline: productCapability(states.baseline, 'comparison-baseline'),
+    spike: productCapability(states.spike, 'comparison-spike'),
+  };
   return devGenerationSchedule({ editSamples: 30, readySamples: 15, warmups: 3 }).map(
     (scheduled) => {
       const { lane, occurrence, scheduleIndex } = scheduled;
@@ -1179,12 +1536,14 @@ function comparisonCells({
           },
           locks: state.locks,
           port: 49_750 + scheduleIndex * 128,
+          product: products[lane],
           readyLatency: 100,
           readySamples: scheduled.readySamples,
           rss: 1_000,
           warmups: scheduled.warmups,
         }),
         scheduleIndex,
+        products[lane],
       );
     },
   );
@@ -1200,12 +1559,16 @@ function decisionPolicy() {
   };
 }
 
-function scheduledCell(lane, occurrence, report, scheduleIndex = 0) {
+function scheduledCell(lane, occurrence, report, scheduleIndex = 0, product = null) {
   return {
     editSamples: report.integrity.iterations,
     lane,
     occurrence,
     port: Number(new URL(report.integrity.command.origin).port),
+    productBoundary:
+      product === null
+        ? { complete: true, schema: DEV_GENERATION_PRODUCT_BOUNDARY_SCHEMA }
+        : inspectDevGenerationProductBoundary(report, product),
     readySamples: report.integrity.readyIterations,
     report,
     scheduleIndex,
@@ -1221,6 +1584,7 @@ function fakeAdapterReport({
   latencies = {},
   locks,
   port,
+  product,
   readyLatency = latency,
   readySamples,
   rss = 1_000,
@@ -1245,6 +1609,7 @@ function fakeAdapterReport({
       devPortAllocationPosture: corpus.devPortAllocationPosture,
       editSavePosture: corpus.editSavePosture,
       manifestDigest: corpus.manifestDigest,
+      manifestPath: product.manifestPath,
       modules: corpus.modules,
       routes: corpus.routes,
       shapeDigest: corpus.shapeDigest.slice('sha256:'.length),
@@ -1265,8 +1630,19 @@ function fakeAdapterReport({
         unexpectedErrorCount: 0,
       },
       command: {
-        argv: ['kovo', 'dev', '--host', 'localhost', '--port', String(port)],
+        argv: [
+          'node',
+          '<packed-kovo>/node_modules/@kovojs/cli/dist/bin.mjs',
+          'dev',
+          '--host',
+          'localhost',
+          '--port',
+          String(port),
+        ],
+        cwd: '.',
+        env: {},
         origin: `http://localhost:${String(port)}`,
+        productArtifactDigest: product.identity.digest,
       },
       complete: true,
       editCounts: Object.fromEntries(EDIT_CLASSES.map((editClass) => [editClass, editSamples])),
@@ -1281,6 +1657,7 @@ function fakeAdapterReport({
         Array.from({ length: readySamples + 1 }, (_, index) => port + index),
       ),
       readyIterations: readySamples,
+      productArtifact: { afterVerified: true, beforeVerified: true, required: true },
       source: { stable: true },
       warmups,
     },
@@ -1296,6 +1673,7 @@ function fakeAdapterReport({
     })),
     samples,
     schema: 'kovo-dev-loop-report/v1',
+    productArtifact: product.identity,
     source,
     sourceAfter: source,
     verdict: { status: 'measured' },
@@ -1304,6 +1682,106 @@ function fakeAdapterReport({
 
 function readyRouteProbe() {
   return { attempts: 1, path: '/', status: 200, transientFailures: 0 };
+}
+
+function productCapability(source, label) {
+  const externalRoot = realpathSync(temporaryDirectory(`kovo-dev-generation-product-${label}-`));
+  const productRoot = realpathSync(temporaryDirectory(`kovo-dev-generation-consumer-${label}-`));
+  const consumerRoot = path.join(productRoot, 'consumer');
+  mkdirSync(consumerRoot);
+  const descriptorPath = path.join(consumerRoot, '.kovo-perf-packed-product.json');
+  writeFileSync(descriptorPath, '{}\n');
+  const appRoot = path.join(externalRoot, 'kovo', 'n24');
+  mkdirSync(appRoot, { recursive: true });
+  const manifestPath = path.join(appRoot, 'manifest.json');
+  writeFileSync(manifestPath, '{}\n');
+  return {
+    consumerRoot,
+    descriptorPath,
+    externalRoot,
+    identity: packedProductIdentity(source, label),
+    manifestPath,
+    policy: DEV_GENERATION_PRODUCT_POLICY,
+  };
+}
+
+function packedProductIdentity(source, label) {
+  const hash = (value) =>
+    `sha256:${createHash('sha256').update(`${label}:${value}`).digest('hex')}`;
+  const loadedFiles = ['@kovojs/cli/dist/bin.mjs'];
+  const identity = {
+    artifacts: [
+      {
+        files: 2,
+        manifestSha256: hash('manifest'),
+        name: '@kovojs/cli',
+        packageContentSha256: hash('content'),
+        tarballBytes: 1_024,
+        tarballFile: 'kovojs-cli-0.3.0.tgz',
+        tarballSha256: hash('tarball'),
+        unpackedBytes: 2_048,
+        version: '0.3.0',
+      },
+    ],
+    build: {
+      commands: [],
+      packages: ['@kovojs/cli'],
+      rootFrozenInstall: { argv: ['pnpm', 'install', '--offline', '--frozen-lockfile'] },
+    },
+    consumer: {
+      frozenInstall: { argv: ['pnpm', 'install', '--frozen-lockfile'], lockSha256: hash('lock') },
+      lockResolution: { argv: ['pnpm', 'install'] },
+      manifestSha256: hash('consumer-manifest'),
+      packageCensusMatched: 1,
+      packageFilesMatched: 2,
+      packageManager: 'pnpm@10.12.1',
+      pnpmVersion: '10.12.1',
+      root: '<isolated-consumer>',
+    },
+    integrity: {
+      artifactAuthenticated: true,
+      consumerFrozen: true,
+      firstInstallMatchesFrozen: true,
+      installedBytesMatchTarballs: true,
+      packedResolutionConfined: true,
+      workspaceSourceLoaded: false,
+    },
+    pack: { commands: [] },
+    primaryCli: {
+      installedBin: 'node_modules/@kovojs/cli/dist/bin.mjs',
+      installedBinSha256: hash('bin'),
+      name: '@kovojs/cli',
+      packageContentSha256: hash('content'),
+      tarballSha256: hash('tarball'),
+      version: '0.3.0',
+    },
+    resolutionProof: {
+      confined: true,
+      loadedFileCount: loadedFiles.length,
+      loadedFiles,
+      normalizedTraceSha256: `sha256:${createHash('sha256')
+        .update(JSON.stringify(loadedFiles))
+        .digest('hex')}`,
+      schema: 'kovo-packed-cli-resolution-proof/v1',
+      workspaceSourceLoaded: false,
+    },
+    schema: 'kovo-packed-product-identity/v1',
+    source: { commit: source.commit, locks: source.locks },
+    typescript: {
+      bytes: 1_024,
+      contentSha256: hash('typescript'),
+      files: 2,
+      name: 'typescript',
+      version: '6.0.3',
+    },
+  };
+  return {
+    digest: `sha256:${createHash('sha256')
+      .update(Buffer.from(canonicalJson(identity)))
+      .digest('hex')}`,
+    identity,
+    schema: 'kovo-packed-product-identity/v1',
+  };
 }
 
 function sourceState(commit) {

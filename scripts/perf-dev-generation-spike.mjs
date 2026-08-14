@@ -4,9 +4,10 @@
  * candidate.
  *
  * The real browser-visible adapter owns edit observation and process-tree RSS. This runner owns
- * candidate identity, matched corpus/frozen-lock preparation, B,S,S,B serialization, quiet-host
- * admission, paired analysis, and the acceptance rule from plans/good-perf.md Phase 1. Bundle
- * bytes and module-count proxies are recorded nowhere in the acceptance path.
+ * candidate identity, separate packed-product/frozen-consumer preparation, matched external corpus
+ * generation, B,S,S,B serialization, quiet-host admission, paired analysis, and the acceptance
+ * rule from plans/good-perf.md Phase 1. Bundle bytes and module-count proxies are recorded nowhere
+ * in the acceptance path.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -38,13 +39,32 @@ import {
 } from '../benchmarks/harness/dev-port-allocation.mjs';
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { devSessionHandoffFindings } from './lib/perf-dev-session-evidence.mjs';
-import { performanceHostFingerprint } from './lib/perf-host.mjs';
+import { canonicalJson, performanceHostFingerprint } from './lib/perf-host.mjs';
+import {
+  assertPackedCorpusIsolation,
+  PACKED_KOVO_PRODUCT_IDENTITY_SCHEMA,
+  packedKovoProductIdentityFindings,
+} from './lib/perf-packed-kovo-product.mjs';
 import { validReadyRouteProbe } from './lib/perf-ready-route.mjs';
 
-export const DEV_GENERATION_SPIKE_SCHEMA = 'kovo-dev-generation-spike-comparison/v2';
-export const DEV_GENERATION_SPIKE_PREPARE_SCHEMA = 'kovo-dev-generation-spike-prepare/v2';
-export const DEV_GENERATION_ADAPTER_FAILURE_SCHEMA = 'kovo-dev-generation-adapter-failure/v2';
-export const DEV_GENERATION_CANDIDATE_BINDING_SCHEMA = 'kovo-dev-generation-candidate-binding/v2';
+export const DEV_GENERATION_SPIKE_SCHEMA = 'kovo-dev-generation-spike-comparison/v3';
+export const DEV_GENERATION_SPIKE_PREPARE_SCHEMA = 'kovo-dev-generation-spike-prepare/v3';
+export const DEV_GENERATION_ADAPTER_FAILURE_SCHEMA = 'kovo-dev-generation-adapter-failure/v3';
+export const DEV_GENERATION_CANDIDATE_BINDING_SCHEMA = 'kovo-dev-generation-candidate-binding/v3';
+export const DEV_GENERATION_PRODUCT_BOUNDARY_SCHEMA =
+  'kovo-dev-generation-packed-product-boundary/v3';
+export const DEV_GENERATION_PRODUCT_POLICY_SCHEMA = 'kovo-dev-generation-packed-product-policy/v3';
+export const DEV_GENERATION_PRODUCT_POLICY = Object.freeze({
+  artifactIdentity: PACKED_KOVO_PRODUCT_IDENTITY_SCHEMA,
+  corpusGeneration: 'separate-per-lane-with-deferred-dependencies',
+  corpusIsolation: 'fresh-external-os-tmpdir-without-ancestor-node-modules',
+  laneIdentityComparison: 'concrete-identities-report-bound-but-not-required-equal',
+  liveDescriptorVerification: 'separate-regular-consumer-descriptor-plus-adapter-before-and-after',
+  preparationAdmission: 'quiet-host-before-preparation-and-before-each-timed-block',
+  preparationTiming: 'build-pack-frozen-install-and-corpus-generation-outside-samples',
+  rawReportBinding: 'exact-product-identity-required-before-and-after',
+  schema: DEV_GENERATION_PRODUCT_POLICY_SCHEMA,
+});
 export { DEV_GENERATION_CELL_PORT_STRIDE };
 export const DEV_CRITICAL_PATH_CANDIDATE = Object.freeze({
   commit: '336925d40e11024b54206908997dbdfe0f43a391',
@@ -105,6 +125,16 @@ export function devGenerationSchedule({ editSamples, readySamples, warmups }) {
       warmups: warmupCounts[occurrence],
     };
   });
+}
+
+export function devGenerationPackedCorpusOptions(externalRoot, size) {
+  if (!SUPPORTED_SIZES.includes(size)) throw new TypeError('packed corpus size must be 24 or 216');
+  return {
+    dependencyMode: 'deferred',
+    framework: 'kovo',
+    outDir: canonicalDirectory(externalRoot),
+    size,
+  };
 }
 
 export function summarizeDevMetric(values) {
@@ -234,7 +264,9 @@ export function authenticateGenerationCandidateRoots(options, dependencies = {})
 export function inspectGeneratedDevCorpus(manifestPath, root) {
   const absolute = path.resolve(manifestPath);
   const expectedRoot = path.resolve(root);
-  if (!isWithin(expectedRoot, absolute)) throw new TypeError('corpus manifest escapes worktree');
+  if (!isWithin(expectedRoot, absolute)) {
+    throw new TypeError('corpus manifest escapes its fresh external preparation root');
+  }
   const bytes = readFileSync(absolute);
   const manifest = JSON.parse(bytes.toString('utf8'));
   const expectedEdits = EDIT_CLASSES;
@@ -291,6 +323,90 @@ export function inspectGeneratedDevCorpus(manifestPath, root) {
   };
 }
 
+export function inspectDevGenerationProductBoundary(report, expected) {
+  const findings = [];
+  if (canonicalJson(expected?.policy) !== canonicalJson(DEV_GENERATION_PRODUCT_POLICY)) {
+    findings.push('packed dev A/B policy drift');
+  }
+  const expectedIdentity = expected?.identity;
+  if (
+    expectedIdentity?.schema !== PACKED_KOVO_PRODUCT_IDENTITY_SCHEMA ||
+    expectedIdentity?.identity?.schema !== PACKED_KOVO_PRODUCT_IDENTITY_SCHEMA
+  ) {
+    findings.push('prepared packed product identity schema mismatch');
+  }
+  findings.push(
+    ...packedKovoProductIdentityFindings(report?.productArtifact, report?.source).map(
+      (finding) => `raw report packed product ${finding}`,
+    ),
+  );
+  if (canonicalJson(report?.productArtifact) !== canonicalJson(expectedIdentity)) {
+    findings.push('raw report product identity differs from its prepared lane');
+  }
+  if (
+    canonicalJson(report?.integrity?.productArtifact) !==
+    canonicalJson({ afterVerified: true, beforeVerified: true, required: true })
+  ) {
+    findings.push('raw report did not verify its required product before and after measurement');
+  }
+  if (report?.integrity?.command?.productArtifactDigest !== expectedIdentity?.digest) {
+    findings.push('raw report command is not bound to its product digest');
+  }
+  const commandArgv = report?.integrity?.command?.argv;
+  if (
+    !Array.isArray(commandArgv) ||
+    commandArgv[0] !== 'node' ||
+    commandArgv[1] !== '<packed-kovo>/node_modules/@kovojs/cli/dist/bin.mjs'
+  ) {
+    findings.push('raw report command is not the normalized packed Kovo CLI');
+  }
+
+  const expectedManifest = path.resolve(String(expected?.manifestPath ?? ''));
+  const expectedExternalRoot = path.resolve(String(expected?.externalRoot ?? ''));
+  let reportManifest = null;
+  try {
+    reportManifest = path.resolve(requiredString(report?.corpus?.manifestPath, 'report manifest'));
+    if (reportManifest !== expectedManifest) {
+      findings.push('raw report corpus manifest differs from its prepared external corpus');
+    }
+    if (
+      expectedExternalRoot === path.parse(expectedExternalRoot).root ||
+      !isWithin(expectedExternalRoot, reportManifest)
+    ) {
+      findings.push('raw report corpus is outside its fresh external preparation root');
+    }
+    assertPackedCorpusIsolation(path.dirname(reportManifest));
+  } catch (error) {
+    findings.push(`raw report external corpus isolation: ${errorMessage(error)}`);
+  }
+
+  return {
+    complete: findings.length === 0,
+    corpus: {
+      ancestorDependencyIsolationVerified: findings.every(
+        (finding) => !finding.startsWith('raw report external corpus isolation:'),
+      ),
+      externalRoot: '<fresh-os-tmpdir>',
+      manifest:
+        reportManifest === null || !isWithin(expectedExternalRoot, reportManifest)
+          ? null
+          : path.relative(expectedExternalRoot, reportManifest).split(path.sep).join('/'),
+      reportBound: reportManifest === expectedManifest,
+    },
+    errors: [...new Set(findings)],
+    policy: DEV_GENERATION_PRODUCT_POLICY,
+    productArtifact: {
+      digest: expectedIdentity?.digest ?? null,
+      reportBound: canonicalJson(report?.productArtifact) === canonicalJson(expectedIdentity),
+      schema: expectedIdentity?.schema ?? null,
+      verifiedBeforeAndAfter:
+        canonicalJson(report?.integrity?.productArtifact) ===
+        canonicalJson({ afterVerified: true, beforeVerified: true, required: true }),
+    },
+    schema: DEV_GENERATION_PRODUCT_BOUNDARY_SCHEMA,
+  };
+}
+
 export function validateDevGenerationCell(cell, expected) {
   const report = cell.report;
   const findings = [];
@@ -318,6 +434,8 @@ export function validateDevGenerationCell(cell, expected) {
   ) {
     findings.push(`${key} source/lock stability failure`);
   }
+  const productBoundary = inspectDevGenerationProductBoundary(report, expected.product);
+  findings.push(...productBoundary.errors.map((finding) => `${key} ${finding}`));
   if (
     report?.corpus?.modules !== expected.corpus.modules ||
     report?.corpus?.routes !== expected.corpus.routes ||
@@ -473,6 +591,7 @@ export function aggregateDevGenerationCells(cells, policy) {
     Object.values(candidateP95Targets).every((value) => value.passed);
   return {
     acceptance: {
+      boundaryRequired: DEV_GENERATION_PRODUCT_BOUNDARY_SCHEMA,
       candidateAccepted,
       candidateP95Targets,
       causalMetricAcceptance,
@@ -481,8 +600,8 @@ export function aggregateDevGenerationCells(cells, policy) {
       excludedProxyEvidence: ['bundleBytes', 'emittedBytes', 'moduleCount'],
       guardrails,
       requiredBrowserVisibleMetrics: [...CAUSAL_EDIT_METRICS],
-      rule: 'profiled-causal-edit-wins-and-noncausal-target-guardrails/v2',
-      syntaxErrorPosture: 'correctness-and-p95-guardrail-not-profiled-win/v2',
+      rule: 'profiled-causal-edit-wins-and-noncausal-target-guardrails/packed-v3',
+      syntaxErrorPosture: 'correctness-and-p95-guardrail-not-profiled-win/packed-v3',
     },
     correctness,
     metrics,
@@ -503,8 +622,7 @@ export async function prepareDevGenerationSpike(options, dependencies = {}) {
     );
   }
   const collectState = dependencies.collectState ?? collectWorktreeState;
-  const inspectCorpus = dependencies.inspectCorpus ?? verifyGeneratedDevCorpus;
-  const run = dependencies.runCommand ?? runCheckedCommand;
+  const preparePackedLane = dependencies.preparePackedLane ?? preparePackedDevGenerationLane;
   const roots = {
     baseline: candidateBinding.baseline.root,
     spike: candidateBinding.spike.root,
@@ -514,76 +632,126 @@ export async function prepareDevGenerationSpike(options, dependencies = {}) {
     spike: collectState(roots.spike),
   };
   validatePreparedSourcePair(before, candidateBinding);
-  for (const lane of ['baseline', 'spike']) {
-    const root = roots[lane];
-    const packageManager = JSON.parse(
-      readFileSync(path.join(root, 'package.json'), 'utf8'),
-    ).packageManager;
-    const pnpmVersion = String(run('pnpm', ['--version'], { cwd: root })).trim();
-    if (packageManager !== `pnpm@${pnpmVersion}`) {
+  const lanes = {};
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    const errors = [];
+    for (const lane of ['spike', 'baseline']) {
+      try {
+        lanes[lane]?.cleanup?.();
+      } catch (error) {
+        errors.push(`${lane}: ${errorMessage(error)}`);
+      }
+    }
+    if (errors.length > 0) {
+      throw new Error(`packed dev A/B cleanup failed: ${errors.join('; ')}`);
+    }
+  };
+  try {
+    for (const lane of ['baseline', 'spike']) {
+      lanes[lane] = await preparePackedLane(
+        {
+          installTimeoutMs: options.installTimeoutMs,
+          lane,
+          root: roots[lane],
+          size: options.size,
+          source: before[lane],
+        },
+        {
+          collectState,
+          inspectCorpus: dependencies.inspectCorpus ?? verifyGeneratedDevCorpus,
+        },
+      );
+      validatePreparedPackedLane(lanes[lane], { lane, root: roots[lane], size: options.size });
+    }
+    if (
+      canonicalDirectory(lanes.baseline.externalRoot) ===
+      canonicalDirectory(lanes.spike.externalRoot)
+    ) {
+      throw new Error('baseline and spike must use separate fresh external corpus roots');
+    }
+    if (
+      canonicalDirectory(lanes.baseline.consumerRoot) ===
+        canonicalDirectory(lanes.spike.consumerRoot) ||
+      realpathSync(lanes.baseline.descriptorPath) === realpathSync(lanes.spike.descriptorPath) ||
+      sameFileIdentity(
+        lstatSync(lanes.baseline.descriptorPath),
+        lstatSync(lanes.spike.descriptorPath),
+      )
+    ) {
+      throw new Error('baseline and spike must use separate packed product consumers/descriptors');
+    }
+    const corpus = {
+      baseline: lanes.baseline.corpus,
+      spike: lanes.spike.corpus,
+    };
+    if (
+      corpus.baseline.modules !== options.size ||
+      corpus.spike.modules !== options.size ||
+      !sameCorpus(corpus.baseline, corpus.spike)
+    ) {
+      throw new Error('baseline and spike generated corpus identities differ');
+    }
+    const tooling = {
+      baseline: lanes.baseline.tooling,
+      spike: lanes.spike.tooling,
+    };
+    if (!sameJson(tooling.baseline, tooling.spike)) {
       throw new Error(
-        `${lane} active pnpm ${pnpmVersion} does not match ${String(packageManager)}`,
+        'baseline and spike do not use byte-identical packed-product, corpus, and dev-loop tooling',
       );
     }
-    run('pnpm', ['install', '--offline', '--frozen-lockfile', '--ignore-scripts'], {
-      cwd: root,
-      timeoutMs: options.installTimeoutMs,
-    });
-    run(
-      process.execPath,
-      [path.join(root, 'benchmarks/corpora/generate.mjs'), '--sizes', String(options.size)],
-      { cwd: root, timeoutMs: options.installTimeoutMs },
-    );
+    const after = {
+      baseline: collectState(roots.baseline),
+      spike: collectState(roots.spike),
+    };
+    const stabilityFindings = sourcePairStabilityFindings(before, after, candidateBinding);
+    if (stabilityFindings.length > 0) {
+      throw new Error(`source changed during preparation: ${stabilityFindings.join('; ')}`);
+    }
+    const productBoundary = {
+      complete: true,
+      identities: {
+        baseline: lanes.baseline.identity,
+        spike: lanes.spike.identity,
+      },
+      policy: DEV_GENERATION_PRODUCT_POLICY,
+      schema: DEV_GENERATION_PRODUCT_BOUNDARY_SCHEMA,
+      separateConsumersAndDescriptors: true,
+      separatePreparationRoots: true,
+    };
+    return {
+      candidateBinding,
+      cleanup,
+      corpus,
+      frozenInstall: {
+        baseline: lanes.baseline.identity.identity.consumer.frozenInstall,
+        separatePerLane: true,
+        spike: lanes.spike.identity.identity.consumer.frozenInstall,
+      },
+      manifestPaths: {
+        baseline: lanes.baseline.manifestPath,
+        spike: lanes.spike.manifestPath,
+      },
+      productBoundary,
+      products: {
+        baseline: packedLaneCapability(lanes.baseline),
+        spike: packedLaneCapability(lanes.spike),
+      },
+      roots,
+      source: { after, before, stable: true },
+      tooling,
+    };
+  } catch (error) {
+    try {
+      cleanup();
+    } catch (cleanupError) {
+      throw new Error(`${errorMessage(error)}; ${errorMessage(cleanupError)}`);
+    }
+    throw error;
   }
-  const manifest = (root) =>
-    path.join(
-      root,
-      'benchmarks',
-      'kovo',
-      '.corpora',
-      'kovo',
-      `n${String(options.size)}`,
-      'manifest.json',
-    );
-  const corpus = {
-    baseline: await inspectCorpus(manifest(roots.baseline), roots.baseline),
-    spike: await inspectCorpus(manifest(roots.spike), roots.spike),
-  };
-  if (
-    corpus.baseline.modules !== options.size ||
-    corpus.spike.modules !== options.size ||
-    !sameCorpus(corpus.baseline, corpus.spike)
-  ) {
-    throw new Error('baseline and spike generated corpus identities differ');
-  }
-  const tooling = {
-    baseline: toolingEvidence(roots.baseline),
-    spike: toolingEvidence(roots.spike),
-  };
-  if (!sameJson(tooling.baseline, tooling.spike)) {
-    throw new Error('baseline and spike do not use byte-identical corpus/dev-loop adapters');
-  }
-  const after = {
-    baseline: collectState(roots.baseline),
-    spike: collectState(roots.spike),
-  };
-  const stabilityFindings = sourcePairStabilityFindings(before, after, candidateBinding);
-  if (stabilityFindings.length > 0) {
-    throw new Error(`source changed during preparation: ${stabilityFindings.join('; ')}`);
-  }
-  return {
-    candidateBinding,
-    corpus,
-    frozenInstall: {
-      argv: ['pnpm', 'install', '--offline', '--frozen-lockfile', '--ignore-scripts'],
-      packageManager: before.baseline.packageManager,
-      pnpmVersion: before.baseline.pnpmVersion,
-    },
-    manifestPaths: { baseline: manifest(roots.baseline), spike: manifest(roots.spike) },
-    roots,
-    source: { after, before, stable: true },
-    tooling,
-  };
 }
 
 export async function runDevGenerationSpike(options = {}, dependencies = {}) {
@@ -591,7 +759,11 @@ export async function runDevGenerationSpike(options = {}, dependencies = {}) {
   const prepare = dependencies.prepare ?? prepareDevGenerationSpike;
   if (policy.prepareOnly) {
     const prepared = await prepare(policy, dependencies.preparationDependencies ?? {});
-    return prepareReport(prepared, policy, dependencies);
+    try {
+      return prepareReport(prepared, policy, dependencies);
+    } finally {
+      prepared.cleanup?.();
+    }
   }
 
   const hostFingerprint = (dependencies.hostFingerprint ?? performanceHostFingerprint)();
@@ -681,6 +853,7 @@ export async function runDevGenerationSpike(options = {}, dependencies = {}) {
               editSamples: scheduled.editSamples,
               manifestPath: prepared.manifestPaths[scheduled.lane],
               outPath: resultFile,
+              packedProduct: prepared.products[scheduled.lane],
               port,
               readySamples: scheduled.readySamples,
               readyTimeoutMs: policy.readyTimeoutMs,
@@ -691,10 +864,15 @@ export async function runDevGenerationSpike(options = {}, dependencies = {}) {
           } catch (error) {
             const retainedFailure = retainedAdapterFailure(error);
             if (retainedFailure !== null) {
+              const productBoundary = inspectDevGenerationProductBoundary(
+                retainedFailure.report,
+                prepared.products[scheduled.lane],
+              );
               cells.push({
                 ...scheduled,
                 adapterFailure: retainedFailure.evidence,
                 port,
+                productBoundary,
                 report: retainedFailure.report,
               });
             }
@@ -703,11 +881,16 @@ export async function runDevGenerationSpike(options = {}, dependencies = {}) {
             );
             break;
           }
-          const cell = { ...scheduled, port, report };
+          const productBoundary = inspectDevGenerationProductBoundary(
+            report,
+            prepared.products[scheduled.lane],
+          );
+          const cell = { ...scheduled, port, productBoundary, report };
           const findings = validateDevGenerationCell(cell, {
             commit: expectedState.commit,
             corpus: prepared.corpus[scheduled.lane],
             locks: expectedState.locks,
+            product: prepared.products[scheduled.lane],
           });
           cells.push(cell);
           if (findings.length > 0) {
@@ -747,13 +930,23 @@ export async function runDevGenerationSpike(options = {}, dependencies = {}) {
     errors.push(...sourceFindings);
     const analysis = aggregateDevGenerationCells(cells, policy);
     if (errors.length === 0 && !analysis.acceptance.decisionSamplePolicy.complete) {
-      errors.push('measurement does not satisfy the preregistered v2 decision sample policy');
+      errors.push(
+        'measurement does not satisfy the preregistered packed v3 decision sample policy',
+      );
+    }
+    const productBoundaryComplete =
+      preparedProductBoundaryComplete(prepared) &&
+      cells.length === schedule.length &&
+      cells.every((cell) => cell.productBoundary?.complete === true);
+    if (!productBoundaryComplete && !errors.some((error) => error.includes('packed product'))) {
+      errors.push('packed v3 product boundary evidence is missing or drifted');
     }
     const complete =
       errors.length === 0 &&
       cells.length === schedule.length &&
       analysis.correctness.complete === true &&
       analysis.acceptance.decisionSamplePolicy.complete === true &&
+      productBoundaryComplete &&
       hostSamples.every((sample) => sample.comparable);
     return {
       analysis,
@@ -768,6 +961,11 @@ export async function runDevGenerationSpike(options = {}, dependencies = {}) {
         errors,
         matchedCorpus: sameCorpus(prepared.corpus.baseline, prepared.corpus.spike),
         misses: analysis.correctness.misses,
+        productBoundary: {
+          complete: productBoundaryComplete,
+          policy: DEV_GENERATION_PRODUCT_POLICY,
+          verifiedCells: cells.filter((cell) => cell.productBoundary?.complete === true).length,
+        },
         serialized: true,
         sourceStable: sourceFindings.length === 0,
       },
@@ -781,7 +979,7 @@ export async function runDevGenerationSpike(options = {}, dependencies = {}) {
         reasons: [
           ...errors,
           ...(complete && !analysis.acceptance.candidateAccepted
-            ? ['candidate did not satisfy every v2 causal win, p95 target, and guardrail']
+            ? ['candidate did not satisfy every packed v3 causal win, p95 target, and guardrail']
             : []),
         ],
         status: !complete
@@ -792,7 +990,11 @@ export async function runDevGenerationSpike(options = {}, dependencies = {}) {
       },
     };
   } finally {
-    if (ephemeralScratch) rmSync(scratch, { force: true, recursive: true });
+    try {
+      if (ephemeralScratch) rmSync(scratch, { force: true, recursive: true });
+    } finally {
+      prepared.cleanup?.();
+    }
   }
 }
 
@@ -908,6 +1110,7 @@ function correctnessSummary(cells) {
   let browserRequestFailures = 0;
   let browserUnexpectedErrors = 0;
   let misses = 0;
+  let productBoundaryFailures = 0;
   let syntaxDiagnostics = 0;
   for (const cell of cells) {
     const integrityErrors = cell.report?.integrity?.errors;
@@ -922,6 +1125,7 @@ function correctnessSummary(cells) {
       safeEvidenceCount(cell.report?.integrity?.browser?.requestFailedCount) ?? 1;
     browserUnexpectedErrors +=
       safeEvidenceCount(cell.report?.integrity?.browser?.unexpectedErrorCount) ?? 1;
+    productBoundaryFailures += cell.productBoundary?.complete === true ? 0 : 1;
     for (const sample of evidenceRows(cell.report?.samples)) {
       for (const editClass of EDIT_CLASSES) {
         state[editClass].total += 1;
@@ -960,12 +1164,14 @@ function correctnessSummary(cells) {
       misses === 0 &&
       browserRequestFailures === 0 &&
       browserUnexpectedErrors === 0 &&
+      productBoundaryFailures === 0 &&
       stateLost === 0 &&
       syntaxDiagnostics === expectedSyntaxDiagnostics,
     completeSchedule,
     expectedCells: SCHEDULE_LANES.length,
     observedCells: cells.length,
     misses,
+    productBoundaryFailures,
     state,
     stateLost,
     syntaxDiagnostics,
@@ -1050,23 +1256,51 @@ function inspectDecisionSamplePolicy(cells, policy) {
 }
 
 function prepareReport(prepared, policy, dependencies) {
-  const complete = prepared.source.stable === true;
+  const errors = [
+    ...(prepared.source.stable === true ? [] : ['source changed during packed v3 preparation']),
+    ...(preparedProductBoundaryComplete(prepared)
+      ? []
+      : ['packed v3 preparation boundary evidence is missing or drifted']),
+  ];
+  const complete = errors.length === 0;
   return {
     candidate: prepared.candidateBinding,
     host: (dependencies.hostFingerprint ?? performanceHostFingerprint)(),
-    integrity: { complete, matchedCorpus: true, sourceStable: true },
+    integrity: {
+      complete,
+      errors,
+      matchedCorpus: true,
+      productBoundary: prepared.productBoundary,
+      sourceStable: true,
+    },
     mode: 'prepare-only',
     policy: reportPolicy(policy),
     preparation: preparationEvidence(prepared),
     schema: DEV_GENERATION_SPIKE_PREPARE_SCHEMA,
-    verdict: { reasons: [], status: complete ? 'prepared' : 'unproven' },
+    verdict: { reasons: errors, status: complete ? 'prepared' : 'unproven' },
   };
+}
+
+function preparedProductBoundaryComplete(prepared) {
+  return (
+    prepared.productBoundary?.complete === true &&
+    prepared.productBoundary?.schema === DEV_GENERATION_PRODUCT_BOUNDARY_SCHEMA &&
+    prepared.productBoundary?.separateConsumersAndDescriptors === true &&
+    prepared.productBoundary?.separatePreparationRoots === true &&
+    canonicalJson(prepared.productBoundary?.policy) ===
+      canonicalJson(DEV_GENERATION_PRODUCT_POLICY) &&
+    canonicalJson(prepared.productBoundary?.identities?.baseline) ===
+      canonicalJson(prepared.products?.baseline?.identity) &&
+    canonicalJson(prepared.productBoundary?.identities?.spike) ===
+      canonicalJson(prepared.products?.spike?.identity)
+  );
 }
 
 function preparationEvidence(prepared) {
   return {
     corpus: prepared.corpus,
     frozenInstall: prepared.frozenInstall,
+    productBoundary: prepared.productBoundary,
     source: prepared.source,
     tooling: prepared.tooling,
   };
@@ -1087,6 +1321,7 @@ function reportPolicy(policy) {
     readySamplesPerLane: policy.readySamples,
     readyTimeoutMs: policy.readyTimeoutMs,
     rawAdapterEvidence: policy.adapterEvidenceRoot === null ? 'ephemeral' : '<out-dir>/raw',
+    productBoundary: DEV_GENERATION_PRODUCT_POLICY,
     size: policy.size,
     timingAuthorization: policy.prepareOnly ? 'prepare-only' : 'explicit-measure',
     timingLock: '<os-temp>/kovo-performance-timing.lock',
@@ -1197,6 +1432,10 @@ async function runDevLoopAdapter(options) {
       String(options.port),
       '--out',
       options.outPath,
+      '--packed-product',
+      options.packedProduct.descriptorPath,
+      '--packed-product-digest',
+      options.packedProduct.identity.digest,
     ],
     {
       cwd: options.root,
@@ -1475,6 +1714,14 @@ function toolingEvidence(root) {
     corpusGeneratorSha256: sha256(readFileSync(path.join(root, 'benchmarks/corpora/generate.mjs'))),
     devLoopAdapterSha256: sha256(readFileSync(path.join(root, 'benchmarks/corpora/dev-loop.mjs'))),
     devLoopSchema: ADAPTER_SCHEMA,
+    packedProductIdentitySchema: PACKED_KOVO_PRODUCT_IDENTITY_SCHEMA,
+    packedProductPreparationSha256: sha256(
+      readFileSync(path.join(root, 'scripts/perf-cli-startup-benchmark.mjs')),
+    ),
+    packedProductVerifierSha256: sha256(
+      readFileSync(path.join(root, 'scripts/lib/perf-packed-kovo-product.mjs')),
+    ),
+    productPolicySchema: DEV_GENERATION_PRODUCT_POLICY_SCHEMA,
     readyRouteValidatorSha256: sha256(
       readFileSync(path.join(root, 'scripts/lib/perf-ready-route.mjs')),
     ),
@@ -1513,12 +1760,155 @@ function canonicalDirectory(value) {
   return realpathSync(absolute);
 }
 
-async function verifyGeneratedDevCorpus(manifestPath, root) {
+async function preparePackedDevGenerationLane(options, dependencies = {}) {
+  const collectState = dependencies.collectState ?? collectWorktreeState;
+  const inspectCorpus = dependencies.inspectCorpus ?? verifyGeneratedDevCorpus;
+  const externalRoot = realpathSync(
+    mkdtempSync(path.join(os.tmpdir(), `kovo-dev-generation-packed-${options.lane}-`)),
+  );
+  let prepared = null;
+  let fixture = null;
+  try {
+    const preparationModule = await import(
+      pathToFileURL(path.join(options.root, 'scripts/perf-cli-startup-benchmark.mjs')).href
+    );
+    const packedModule = await import(
+      pathToFileURL(path.join(options.root, 'scripts/lib/perf-packed-kovo-product.mjs')).href
+    );
+    const generatorModule = await import(
+      pathToFileURL(path.join(options.root, 'benchmarks/corpora/generate.mjs')).href
+    );
+    if (
+      packedModule.PACKED_KOVO_PRODUCT_IDENTITY_SCHEMA !== PACKED_KOVO_PRODUCT_IDENTITY_SCHEMA ||
+      typeof preparationModule.preparePackedCliBenchmark !== 'function' ||
+      typeof packedModule.createPackedKovoProductFixture !== 'function' ||
+      typeof generatorModule.generateCorpus !== 'function'
+    ) {
+      throw new Error(`${options.lane} packed-product tooling schema or API drift`);
+    }
+    prepared = await preparationModule.preparePackedCliBenchmark({
+      installTimeoutMs: options.installTimeoutMs,
+    });
+    const sourceAfterPreparation = collectState(options.root);
+    fixture = packedModule.createPackedKovoProductFixture({
+      prepared,
+      source: options.source,
+      sourceAfter: sourceAfterPreparation,
+    });
+    const verifiedProduct = packedModule.verifyPackedKovoProductFixture(
+      fixture.descriptorPath,
+      fixture.identity.digest,
+      sourceAfterPreparation,
+    );
+    const manifestPath = await generatorModule.generateCorpus(
+      devGenerationPackedCorpusOptions(externalRoot, options.size),
+    );
+    packedModule.assertPackedCorpusIsolation(path.dirname(manifestPath));
+    fixture.bindCorpus(manifestPath);
+    const corpus = await inspectCorpus(manifestPath, options.root, externalRoot);
+    let cleaned = false;
+    return {
+      cleanup() {
+        if (cleaned) return;
+        cleaned = true;
+        const errors = [];
+        try {
+          fixture.cleanup();
+        } catch (error) {
+          errors.push(errorMessage(error));
+        }
+        try {
+          rmSync(externalRoot, { force: true, recursive: true });
+        } catch (error) {
+          errors.push(errorMessage(error));
+        }
+        if (errors.length > 0) throw new Error(errors.join('; '));
+      },
+      consumerRoot: verifiedProduct.consumerRoot,
+      corpus,
+      descriptorPath: fixture.descriptorPath,
+      externalRoot,
+      identity: fixture.identity,
+      manifestPath,
+      sourceAfter: sourceAfterPreparation,
+      tooling: toolingEvidence(options.root),
+    };
+  } catch (error) {
+    try {
+      if (fixture !== null) fixture.cleanup();
+      else prepared?.cleanup();
+    } finally {
+      rmSync(externalRoot, { force: true, recursive: true });
+    }
+    throw error;
+  }
+}
+
+function validatePreparedPackedLane(value, expected) {
+  if (
+    typeof value?.cleanup !== 'function' ||
+    !nonEmptyString(value?.consumerRoot) ||
+    !nonEmptyString(value?.descriptorPath) ||
+    !nonEmptyString(value?.manifestPath) ||
+    value?.corpus?.modules !== expected.size
+  ) {
+    throw new Error(`${expected.lane} packed product preparation is incomplete`);
+  }
+  const externalRoot = canonicalDirectory(value.externalRoot);
+  const manifestPath = realpathSync(value.manifestPath);
+  const consumerRoot = canonicalDirectory(value.consumerRoot);
+  const descriptorPath = path.resolve(value.descriptorPath);
+  const descriptorStat = lstatSync(descriptorPath);
+  if (
+    !descriptorStat.isFile() ||
+    descriptorStat.isSymbolicLink() ||
+    path.dirname(realpathSync(descriptorPath)) !== consumerRoot
+  ) {
+    throw new Error(
+      `${expected.lane} packed product descriptor is not a regular file in its own consumer root`,
+    );
+  }
+  if (!isWithin(externalRoot, manifestPath)) {
+    throw new Error(`${expected.lane} corpus does not live below its fresh external root`);
+  }
+  assertPackedCorpusIsolation(path.dirname(manifestPath));
+  const identityFindings = packedKovoProductIdentityFindings(value.identity, value.sourceAfter);
+  if (identityFindings.length > 0) {
+    throw new Error(`${expected.lane} packed product identity: ${identityFindings.join('; ')}`);
+  }
+  if (
+    value.tooling?.packedProductIdentitySchema !== PACKED_KOVO_PRODUCT_IDENTITY_SCHEMA ||
+    value.tooling?.productPolicySchema !== DEV_GENERATION_PRODUCT_POLICY_SCHEMA
+  ) {
+    throw new Error(`${expected.lane} packed product tooling policy drift`);
+  }
+}
+
+function packedLaneCapability(lane) {
+  return {
+    descriptorPath: lane.descriptorPath,
+    externalRoot: lane.externalRoot,
+    identity: lane.identity,
+    manifestPath: lane.manifestPath,
+    policy: DEV_GENERATION_PRODUCT_POLICY,
+  };
+}
+
+function sameFileIdentity(left, right) {
+  return (
+    Number.isSafeInteger(left?.dev) &&
+    Number.isSafeInteger(left?.ino) &&
+    left.dev === right?.dev &&
+    left.ino === right?.ino
+  );
+}
+
+async function verifyGeneratedDevCorpus(manifestPath, root, containmentRoot = root) {
   const adapterPath = path.join(root, 'benchmarks', 'corpora', 'dev-loop.mjs');
   const adapter = await import(pathToFileURL(adapterPath).href);
   const loaded = await adapter.loadCorpusManifest(manifestPath);
   await adapter.verifyCorpusSources(loaded);
-  return inspectGeneratedDevCorpus(manifestPath, root);
+  return inspectGeneratedDevCorpus(manifestPath, containmentRoot);
 }
 
 function gitOutput(root, args) {

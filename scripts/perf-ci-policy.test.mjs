@@ -11,6 +11,10 @@ import {
 
 const repoRoot = fileURLToPath(new URL('../', import.meta.url));
 const workflow = readFileSync(path.join(repoRoot, '.github/workflows/perf-realistic.yml'), 'utf8');
+const devGenerationRunner = readFileSync(
+  path.join(repoRoot, 'scripts/perf-dev-generation-spike.mjs'),
+  'utf8',
+);
 const baselineDispatchScope = [
   "github.event_name == 'schedule' ||",
   "github.event_name == 'workflow_dispatch' &&",
@@ -339,6 +343,7 @@ describe('realistic performance CI policy', () => {
 
   it('runs both full browser-visible profile-driven critical-path decisions', () => {
     const source = decisionJob('dev-generation-decision');
+    expect(source).toContain('packed-product dev critical-path candidate decision');
     expect(source).toContain('corpus: [24, 216]');
     expect(source).toContain('fetch-depth: 0');
     expect(source).toContain('uses: ./.github/actions/playwright-install');
@@ -366,11 +371,20 @@ describe('realistic performance CI policy', () => {
     expect(source).toContain('git -C "$baseline_root" status --porcelain=v1 --untracked-files=all');
     expect(source).toContain('git -C "$spike_root" status --porcelain=v1 --untracked-files=all');
     expect(source).toContain('scripts/perf-dev-generation-spike.mjs');
-    // The runner owns frozen installs and corpus generation in both exact worktrees. The shared
-    // dev-loop adapter must resolve each generated command's permitted entrant-local dependency
-    // root; adding a third workflow install would change the authenticated candidate topology.
+    expect(source).toContain('Run the full packed-product browser-visible critical-path decision');
+    // The v3 runner owns separate build/pack/frozen-install and deferred external-corpus
+    // preparation for both exact worktrees. Workflow-side corpus generation or links would change
+    // the authenticated product topology before the runner can attest it.
     expect(source).not.toContain('install --dir "$baseline_root/benchmarks/kovo"');
     expect(source).not.toContain('install --dir "$spike_root/benchmarks/kovo"');
+    expect(source).not.toContain('benchmarks/corpora/generate.mjs');
+    expect(source).not.toContain('benchmarks/kovo/.corpora');
+    expect(devGenerationRunner).toContain(
+      "export const DEV_GENERATION_SPIKE_SCHEMA = 'kovo-dev-generation-spike-comparison/v3'",
+    );
+    expect(devGenerationRunner).toContain("dependencyMode: 'deferred'");
+    expect(devGenerationRunner).toContain("'--packed-product'");
+    expect(devGenerationRunner).toContain("'--packed-product-digest'");
     for (const token of [
       '--size "$KOVO_PERF_CORPUS_SIZE"',
       '--ready-samples 15',

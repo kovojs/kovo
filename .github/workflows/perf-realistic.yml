@@ -563,7 +563,7 @@ jobs:
           retention-days: 30
 
   dev-generation-decision:
-    name: N=${{ matrix.corpus }} dev critical-path candidate decision
+    name: N=${{ matrix.corpus }} packed-product dev critical-path candidate decision
     if: >-
       ${{ (github.event_name == 'workflow_dispatch' &&
       (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') &&
@@ -604,7 +604,7 @@ jobs:
           printf '%s\n' '#!/usr/bin/env bash' 'exec vp exec pnpm "$@"' > "$tool_bin/pnpm"
           chmod 755 "$tool_bin/pnpm"
           printf '%s\n' "$tool_bin" >> "$GITHUB_PATH"
-      - name: Prepare exact baseline and profile-driven candidate worktrees
+      - name: Prepare exact baseline and profile-driven candidate source worktrees
         env:
           KOVO_DEV_GENERATION_CANDIDATE_COMMIT: 336925d40e11024b54206908997dbdfe0f43a391
           KOVO_DEV_GENERATION_CANDIDATE_REF: refs/heads/perf-spike/dev-critical-path-profile-20260814
@@ -628,7 +628,10 @@ jobs:
           test "$(git -C "$spike_root" rev-list --count "$KOVO_PERF_SOURCE_SHA..HEAD")" = 1
           test -z "$(git -C "$baseline_root" status --porcelain=v1 --untracked-files=all)"
           test -z "$(git -C "$spike_root" status --porcelain=v1 --untracked-files=all)"
-      - name: Run the full browser-visible critical-path decision
+      # The v3 runner prepares/builds/packs/frozen-installs one exact product per source worktree,
+      # then generates and binds a separate deferred-dependency corpus under a fresh external temp
+      # root before any timed block. The workflow must not pre-generate or link a checkout corpus.
+      - name: Run the full packed-product browser-visible critical-path decision
         env:
           KOVO_PERF_CORPUS_SIZE: ${{ matrix.corpus }}
         run: >-
