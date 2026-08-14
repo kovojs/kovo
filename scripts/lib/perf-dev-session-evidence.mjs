@@ -38,7 +38,7 @@ export function devSessionHandoffFindings(report, options) {
     allocation?.basePort !== basePort ||
     declaredPorts === null ||
     declaredPorts.length !== ports.length ||
-    declaredPorts.some((port, index) => port !== ports[index]) ||
+    ports.some((port, index) => declaredPorts[index] !== port) ||
     new Set(declaredPorts).size !== ports.length
   ) {
     findings.push('unique per-session dev port allocation is incomplete');
@@ -49,26 +49,25 @@ export function devSessionHandoffFindings(report, options) {
   } else {
     for (const [index, handoff] of handoffs.entries()) {
       const expectedFrom = index === 0 ? null : targets[index - 1];
-      const addresses = handoff?.check?.addresses;
-      const supported = Array.isArray(addresses)
-        ? addresses.filter((address) => address?.supported === true)
-        : [];
+      const check = handoff?.check;
       if (
         handoff?.schema !== DEV_SESSION_HANDOFF_SCHEMA ||
         handoff?.complete !== true ||
         handoff?.available !== true ||
         handoff?.error !== null ||
+        handoff?.socketEvidence !== null ||
         handoff?.attribution?.from !== expectedFrom ||
         handoff?.attribution?.to !== targets[index] ||
         (index === 0
           ? handoff?.attribution?.priorMarkerSha256 !== null
-          : !DIGEST_PATTERN.test(handoff?.attribution?.priorMarkerSha256 ?? '')) ||
-        originPort(handoff?.origin) !== ports[index] ||
-        handoff?.check?.sequence !== 1 ||
-        !finiteNonNegative(handoff?.check?.durationMs) ||
-        handoff?.check?.probeError !== null ||
-        supported.length < 1 ||
-        supported.some((address) => address.available !== true || address.errorCode !== null)
+          : typeof handoff?.attribution?.priorMarkerSha256 !== 'string' ||
+            !DIGEST_PATTERN.test(handoff.attribution.priorMarkerSha256)) ||
+        !exactLocalhostOrigin(handoff?.origin, ports[index]) ||
+        check?.sequence !== 1 ||
+        !finiteNonNegative(check?.durationMs) ||
+        !validIsoTimestamp(check?.checkedAt) ||
+        check?.probeError !== null ||
+        !validLocalhostHandoffAddresses(check?.addresses)
       ) {
         findings.push(`pre-spawn dev handoff ${targets[index]} is incomplete`);
       }
@@ -86,7 +85,7 @@ export function devSessionHandoffFindings(report, options) {
     if (
       lifecycle?.schema !== DEV_SESSION_STOP_SCHEMA ||
       lifecycle?.complete !== true ||
-      originPort(lifecycle?.origin) !== ports[index]
+      !exactLocalhostOrigin(lifecycle?.origin, ports[index])
     ) {
       findings.push(`ready[${String(index)}] dev lifecycle is incomplete`);
     }
@@ -102,20 +101,65 @@ export function devSessionHandoffFindings(report, options) {
   if (
     editLifecycle?.schema !== DEV_SESSION_STOP_SCHEMA ||
     editLifecycle?.complete !== true ||
-    originPort(editLifecycle?.origin) !== ports.at(-1)
+    !exactLocalhostOrigin(editLifecycle?.origin, ports.at(-1))
   ) {
     findings.push('edit-session dev lifecycle is incomplete');
   }
   return findings;
 }
 
-function originPort(value) {
+function exactLocalhostOrigin(value, expectedPort) {
   try {
-    const port = Number(new URL(value).port);
-    return Number.isSafeInteger(port) && port > 0 ? port : null;
+    const url = new URL(value);
+    return (
+      url.origin === value &&
+      url.protocol === 'http:' &&
+      url.hostname === 'localhost' &&
+      Number(url.port) === expectedPort
+    );
   } catch {
-    return null;
+    return false;
   }
+}
+
+function validLocalhostHandoffAddresses(value) {
+  if (!Array.isArray(value) || value.length !== 2) return false;
+  const [ipv4, ipv6] = value;
+  if (
+    !exactAddressKeys(ipv4) ||
+    ipv4.address !== '127.0.0.1' ||
+    ipv4.family !== 4 ||
+    ipv4.supported !== true ||
+    ipv4.available !== true ||
+    ipv4.errorCode !== null ||
+    !exactAddressKeys(ipv6) ||
+    ipv6.address !== '::1' ||
+    ipv6.family !== 6 ||
+    ipv6.available !== true
+  ) {
+    return false;
+  }
+  return ipv6.supported === true
+    ? ipv6.errorCode === null
+    : ipv6.supported === false && ['EADDRNOTAVAIL', 'EAFNOSUPPORT'].includes(ipv6.errorCode);
+}
+
+function exactAddressKeys(value) {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    Object.keys(value).sort().join(',') === 'address,available,errorCode,family,supported'
+  );
+}
+
+function validIsoTimestamp(value) {
+  return (
+    typeof value === 'string' &&
+    value.length <= 64 &&
+    Number.isFinite(Date.parse(value)) &&
+    new Date(value).toISOString() === value
+  );
 }
 
 function finiteNonNegative(value) {

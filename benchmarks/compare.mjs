@@ -35,10 +35,13 @@ import {
 
 export const COMPARE_SCHEMA = 'kovo-next-performance-comparison/v1';
 export const BROWSER_PREPARE_SCHEMA = 'kovo-browser-benchmark-prepare/v1';
+export const COMPARE_ADAPTER_FAILURE_SCHEMA = 'kovo-comparison-adapter-failure/v1';
 export const EXECUTION_ORDER = Object.freeze(['kovo', 'nextjs', 'nextjs', 'kovo']);
 export const WORKLOAD_IDENTITY_SCHEMA = 'kovo-performance-workload-identity/v1';
 
 const DEV_EDIT_CLASSES = Object.freeze(['leaf', 'entry', 'data', 'syntaxError', 'recovery']);
+const DEV_LOOP_REPORT_SCHEMA = 'kovo-dev-loop-report/v1';
+const MAX_COMPARISON_RAW_REPORT_BYTES = 64 * 1024 * 1024;
 
 const benchmarkRoot = fileURLToPath(new URL('.', import.meta.url));
 const repoRoot = path.resolve(benchmarkRoot, '..');
@@ -218,8 +221,9 @@ export async function runComparison(options = {}) {
           break;
         }
         const resultFile = path.join(scratch, `${corpusLane}-${scheduleIndex}-dev.json`);
-        try {
-          await runAdapter({
+        const retainedReference = `raw/${corpusLane}-${String(scheduleIndex)}-${framework}-failed.json`;
+        const captured = await runDevComparisonAdapterCell({
+          adapter: {
             args: [
               path.join(benchmarkRoot, 'corpora/dev-loop.mjs'),
               '--manifest',
@@ -237,19 +241,24 @@ export async function runComparison(options = {}) {
             ],
             cwd: repoRoot,
             label: `${corpusLane}/${framework}/dev/${occurrence}`,
-          });
-        } catch (error) {
-          executionError = error instanceof Error ? error.message : String(error);
+          },
+          cell: {
+            cell: 'dev',
+            framework,
+            lane: corpusLane,
+            occurrence,
+            port: devPortBase + scheduleIndex * DEV_SESSION_PORT_STRIDE,
+            schedule: scheduled,
+          },
+          resultFile,
+          retainedFile: path.join(outDir, retainedReference),
+          retainedReference,
+        });
+        rawCells.push(captured.cell);
+        if (captured.error !== null) {
+          executionError = captured.error;
           break;
         }
-        rawCells.push({
-          cell: 'dev',
-          framework,
-          lane: corpusLane,
-          occurrence,
-          report: JSON.parse(await readFile(resultFile, 'utf8')),
-          schedule: scheduled,
-        });
       }
     }
 
@@ -638,8 +647,8 @@ function rawMetricSeries(cell) {
 }
 
 function devMetricSeries(report) {
-  const editSamples = report?.samples ?? [];
-  const readySamples = report?.readySamples ?? [];
+  const editSamples = Array.isArray(report?.samples) ? report.samples : [];
+  const readySamples = Array.isArray(report?.readySamples) ? report.readySamples : [];
   const editPeakRssBytes = report?.editSession?.peakRssBytes;
   return [
     ...prefixedMetricSeries(editSamples, 'edit', { requireComplete: true }),
@@ -907,6 +916,182 @@ async function runAdapter({ args, cwd, label }) {
   await runChildProcess({ args, command: process.execPath, cwd, label });
 }
 
+/**
+ * Keep a failed dev adapter as an explicit scheduled cell. In particular, a nonzero adapter often
+ * leaves the most useful lifecycle report behind; read and retain those exact bytes before the
+ * scratch directory is removed.
+ */
+export async function runDevComparisonAdapterCell(options, dependencies = {}) {
+  const executeAdapter = dependencies.runAdapter ?? runAdapter;
+  let processFailure = null;
+  try {
+    await executeAdapter(options.adapter);
+  } catch (error) {
+    processFailure = error;
+  }
+
+  const raw = await readComparisonAdapterReport(options.resultFile);
+  const reportFailure =
+    raw.error === null &&
+    (raw.report?.schema !== DEV_LOOP_REPORT_SCHEMA ||
+      raw.report?.integrity?.complete !== true ||
+      raw.report?.verdict?.status !== 'measured')
+      ? 'dev adapter report is not measured and complete'
+      : null;
+  const failed = processFailure !== null || raw.error !== null || reportFailure !== null;
+  const cell = { ...options.cell, report: raw.report };
+  if (!failed) return { cell, error: null };
+
+  let retainedPath = null;
+  let retentionError = null;
+  if (raw.bytes !== null) {
+    try {
+      await mkdir(path.dirname(options.retainedFile), { recursive: true });
+      await writeFile(options.retainedFile, raw.bytes);
+      retainedPath = options.retainedReference;
+    } catch (error) {
+      retentionError = boundedComparisonDiagnostic(errorMessage(error));
+    }
+  }
+  cell.adapterFailure = validateComparisonAdapterFailure({
+    process: comparisonProcessEvidence(processFailure),
+    rawReport: {
+      available: raw.custody.available,
+      parseError: raw.parseError,
+      reportBytes: raw.custody.reportBytes,
+      reportSha256: raw.custody.reportSha256,
+      retainedPath,
+      retentionError,
+      schema: optionalComparisonLabel(raw.report?.schema),
+      verdict: optionalComparisonLabel(raw.report?.verdict?.status),
+    },
+    schema: COMPARE_ADAPTER_FAILURE_SCHEMA,
+  });
+  const reasons = [
+    processFailure === null ? null : errorMessage(processFailure),
+    raw.error,
+    reportFailure,
+    retentionError === null ? null : `failed adapter raw-report retention: ${retentionError}`,
+  ].filter((value) => typeof value === 'string' && value.length > 0);
+  return {
+    cell,
+    error: boundedComparisonDiagnostic(reasons.join('; ') || 'dev adapter evidence is incomplete'),
+  };
+}
+
+async function readComparisonAdapterReport(resultFile) {
+  let bytes;
+  try {
+    bytes = await readFile(resultFile);
+  } catch (error) {
+    const message = `dev adapter report is unavailable: ${errorMessage(error)}`;
+    return {
+      bytes: null,
+      custody: { available: false, reportBytes: null, reportSha256: null },
+      error: boundedComparisonDiagnostic(message),
+      parseError: null,
+      report: null,
+    };
+  }
+  const custody = {
+    available: true,
+    reportBytes: bytes.byteLength,
+    reportSha256: comparisonSha256(bytes),
+  };
+  if (bytes.byteLength === 0 || bytes.byteLength > MAX_COMPARISON_RAW_REPORT_BYTES) {
+    const message = 'dev adapter report is empty or exceeds its evidence bound';
+    return { bytes, custody, error: message, parseError: message, report: null };
+  }
+  try {
+    return {
+      bytes,
+      custody,
+      error: null,
+      parseError: null,
+      report: JSON.parse(bytes.toString('utf8')),
+    };
+  } catch (error) {
+    const message = boundedComparisonDiagnostic(
+      `dev adapter report is invalid JSON: ${errorMessage(error)}`,
+    );
+    return { bytes, custody, error: message, parseError: message, report: null };
+  }
+}
+
+function comparisonProcessEvidence(error) {
+  if (error === null) return { error: null, signal: null, status: 0 };
+  return {
+    error: boundedComparisonDiagnostic(errorMessage(error)),
+    signal: optionalComparisonLabel(error?.adapterExit?.signal),
+    status: Number.isSafeInteger(error?.adapterExit?.status) ? error.adapterExit.status : null,
+  };
+}
+
+function validateComparisonAdapterFailure(value) {
+  const raw = value?.rawReport;
+  const processEvidence = value?.process;
+  if (
+    value?.schema !== COMPARE_ADAPTER_FAILURE_SCHEMA ||
+    processEvidence === null ||
+    typeof processEvidence !== 'object' ||
+    !(processEvidence.error === null || boundedComparisonLabel(processEvidence.error)) ||
+    !(processEvidence.signal === null || boundedComparisonLabel(processEvidence.signal)) ||
+    !(processEvidence.status === null || Number.isSafeInteger(processEvidence.status)) ||
+    raw === null ||
+    typeof raw !== 'object' ||
+    typeof raw.available !== 'boolean' ||
+    !(raw.parseError === null || boundedComparisonLabel(raw.parseError)) ||
+    !(raw.retainedPath === null || boundedComparisonLabel(raw.retainedPath)) ||
+    !(raw.retentionError === null || boundedComparisonLabel(raw.retentionError)) ||
+    !(raw.schema === null || boundedComparisonLabel(raw.schema)) ||
+    !(raw.verdict === null || boundedComparisonLabel(raw.verdict))
+  ) {
+    throw new TypeError('comparison adapter failure evidence is malformed');
+  }
+  if (
+    raw.available
+      ? !Number.isSafeInteger(raw.reportBytes) ||
+        raw.reportBytes < 0 ||
+        !/^sha256:[0-9a-f]{64}$/u.test(raw.reportSha256 ?? '')
+      : raw.reportBytes !== null || raw.reportSha256 !== null || raw.retainedPath !== null
+  ) {
+    throw new TypeError('comparison adapter raw-report custody is malformed');
+  }
+  if ((raw.retainedPath === null) !== (raw.retentionError !== null || !raw.available)) {
+    throw new TypeError('comparison adapter raw-report retention is ambiguous');
+  }
+  return structuredClone(value);
+}
+
+function boundedComparisonDiagnostic(value) {
+  return (
+    String(value)
+      .replace(/[\r\n\0]+/gu, ' ')
+      .slice(0, 1_024) || '<empty>'
+  );
+}
+
+function boundedComparisonLabel(value) {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= 1_024 &&
+    !/[\r\n\0]/u.test(value)
+  );
+}
+
+function optionalComparisonLabel(value) {
+  return boundedComparisonLabel(value) ? value : null;
+}
+
+function comparisonSha256(value) {
+  return `sha256:${createHash('sha256').update(value).digest('hex')}`;
+}
+
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 async function runChildProcess({ args, command, cwd, label }) {
   await new Promise((resolve, reject) => {
     const child = spawn(command, args, {
@@ -915,10 +1100,20 @@ async function runChildProcess({ args, command, cwd, label }) {
       env: process.env,
       stdio: 'inherit',
     });
-    child.once('error', reject);
+    child.once('error', (error) => {
+      error.adapterExit = { signal: null, status: null };
+      reject(error);
+    });
     child.once('exit', (code, signal) => {
       if (code === 0) resolve();
-      else reject(new Error(`${label} failed (code ${code}, signal ${signal}).`));
+      else {
+        const error = new Error(`${label} failed (code ${code}, signal ${signal}).`);
+        error.adapterExit = {
+          signal: signal === null ? null : String(signal),
+          status: Number.isSafeInteger(code) ? code : null,
+        };
+        reject(error);
+      }
     });
     const forward = () => {
       if (child.exitCode !== null) return;
@@ -1338,6 +1533,9 @@ export function classifyServerMatrixCells(cells, { conditionKeys, samples }) {
 function validateDevCell(cell, expected) {
   const report = cell.report;
   const key = `${cell.lane}/${cell.framework}/dev`;
+  if (cell.adapterFailure !== undefined) {
+    expected.reasons.push(`${key} adapter process or report failed`);
+  }
   if (report?.framework !== cell.framework)
     expected.reasons.push(`${key} report identity mismatch`);
   if (report?.integrity?.complete !== true || report?.verdict?.status !== 'measured') {
@@ -1833,6 +2031,9 @@ function browserSamples(cell) {
 
 function cellSampleCount(cell) {
   if (cell.cell === 'browser') return browserSamples(cell).length;
+  if (cell.cell === 'dev') {
+    return Array.isArray(cell.report?.samples) ? cell.report.samples.length : 0;
+  }
   return (cell.report.samples ?? cell.report.rawSamples ?? []).length;
 }
 

@@ -325,7 +325,8 @@ export function validateDevGenerationCell(cell, expected) {
     findings.push(`${key} command did not preserve localhost`);
   }
   if (
-    report?.integrity?.errors?.length !== 0 ||
+    !Array.isArray(report?.integrity?.errors) ||
+    report.integrity.errors.length !== 0 ||
     report?.integrity?.misses !== 0 ||
     report?.integrity?.browser?.unexpectedErrorCount !== 0 ||
     report?.integrity?.browser?.requestFailedCount !== 0 ||
@@ -395,7 +396,7 @@ export function aggregateDevGenerationCells(cells, policy) {
   let seed = policy.seed;
   metrics.readyMs = analyzePairedMetric(
     cells,
-    (report) => report?.readySamples ?? [],
+    (report) => evidenceRows(report?.readySamples),
     'durationMs',
     {
       bootstrapIterations: policy.bootstrapIterations,
@@ -404,20 +405,20 @@ export function aggregateDevGenerationCells(cells, policy) {
   );
   metrics.readyPeakRssBytes = analyzePairedMetric(
     cells,
-    (report) => report?.readySamples ?? [],
+    (report) => evidenceRows(report?.readySamples),
     'peakRssBytes',
     { bootstrapIterations: policy.bootstrapIterations, seed: seed++ },
   );
   for (const editClass of EDIT_CLASSES) {
     metrics[`${editClass}Ms`] = analyzePairedMetric(
       cells,
-      (report) => report?.samples ?? [],
+      (report) => evidenceRows(report?.samples),
       `${editClass}Ms`,
       { bootstrapIterations: policy.bootstrapIterations, seed: seed++ },
     );
     metrics[`${editClass}ServerGenerationMs`] = analyzePairedMetric(
       cells,
-      (report) => report?.samples ?? [],
+      (report) => evidenceRows(report?.samples),
       `${editClass}ServerGenerationMs`,
       { bootstrapIterations: policy.bootstrapIterations, seed: seed++, optional: true },
     );
@@ -827,28 +828,19 @@ function correctnessSummary(cells) {
   let misses = 0;
   let syntaxDiagnostics = 0;
   for (const cell of cells) {
-    adapterErrors += Array.isArray(cell.report?.integrity?.errors)
-      ? cell.report.integrity.errors.length
-      : 0;
+    const integrityErrors = cell.report?.integrity?.errors;
+    adapterErrors += Array.isArray(integrityErrors) ? integrityErrors.length : 1;
     adapterProcessFailures += cell.adapterFailure === undefined ? 0 : 1;
     adapterUnproven +=
       cell.report?.integrity?.complete === true && cell.report?.verdict?.status === 'measured'
         ? 0
         : 1;
-    misses += Number.isSafeInteger(cell.report?.integrity?.misses)
-      ? cell.report.integrity.misses
-      : 0;
-    browserRequestFailures += Number.isSafeInteger(
-      cell.report?.integrity?.browser?.requestFailedCount,
-    )
-      ? cell.report.integrity.browser.requestFailedCount
-      : 0;
-    browserUnexpectedErrors += Number.isSafeInteger(
-      cell.report?.integrity?.browser?.unexpectedErrorCount,
-    )
-      ? cell.report.integrity.browser.unexpectedErrorCount
-      : 0;
-    for (const sample of cell.report?.samples ?? []) {
+    misses += safeEvidenceCount(cell.report?.integrity?.misses) ?? 1;
+    browserRequestFailures +=
+      safeEvidenceCount(cell.report?.integrity?.browser?.requestFailedCount) ?? 1;
+    browserUnexpectedErrors +=
+      safeEvidenceCount(cell.report?.integrity?.browser?.unexpectedErrorCount) ?? 1;
+    for (const sample of evidenceRows(cell.report?.samples)) {
       for (const editClass of EDIT_CLASSES) {
         state[editClass].total += 1;
         if (sample?.[`${editClass}StateSurvived`] === true) state[editClass].survived += 1;
@@ -861,7 +853,7 @@ function correctnessSummary(cells) {
     0,
   );
   const expectedSyntaxDiagnostics = cells.reduce(
-    (total, cell) => total + (cell.report?.samples?.length ?? 0),
+    (total, cell) => total + evidenceRows(cell.report?.samples).length,
     0,
   );
   const completeSchedule =
@@ -1134,18 +1126,18 @@ function readAdapterEvidence(outPath) {
 }
 
 export function summarizeFailedAdapterReport(report, bytes) {
+  const integrityErrors = Array.isArray(report?.integrity?.errors) ? report.integrity.errors : [];
+  const readySamples = Array.isArray(report?.readySamples) ? report.readySamples : [];
   return {
-    browserRequestFailures: report?.integrity?.browser?.requestFailedCount ?? null,
-    browserUnexpectedErrors: report?.integrity?.browser?.unexpectedErrorCount ?? null,
+    browserRequestFailures: safeEvidenceCount(report?.integrity?.browser?.requestFailedCount),
+    browserUnexpectedErrors: safeEvidenceCount(report?.integrity?.browser?.unexpectedErrorCount),
     editSessionError:
       report?.editSession?.error === null || report?.editSession?.error === undefined
         ? null
         : boundedDiagnostic(String(report.editSession.error)),
-    integrityErrors: (report?.integrity?.errors ?? [])
-      .slice(0, 12)
-      .map((error) => boundedDiagnostic(String(error))),
-    misses: report?.integrity?.misses ?? null,
-    readyFailures: (report?.readySamples ?? [])
+    integrityErrors: integrityErrors.slice(0, 12).map((error) => boundedDiagnostic(String(error))),
+    misses: safeEvidenceCount(report?.integrity?.misses),
+    readyFailures: readySamples
       .filter((sample) => sample?.success !== true)
       .slice(0, 12)
       .map((sample) => ({
@@ -1153,12 +1145,12 @@ export function summarizeFailedAdapterReport(report, bytes) {
           sample?.error === null || sample?.error === undefined
             ? null
             : boundedDiagnostic(String(sample.error)),
-        iteration: sample?.iteration ?? null,
+        iteration: Number.isSafeInteger(sample?.iteration) ? sample.iteration : null,
       })),
     reportBytes: bytes.byteLength,
     reportSha256: sha256(bytes),
-    schema: report?.schema ?? null,
-    verdict: report?.verdict?.status ?? null,
+    schema: optionalEvidenceLabel(report?.schema),
+    verdict: optionalEvidenceLabel(report?.verdict?.status),
   };
 }
 
@@ -1172,8 +1164,8 @@ function createAdapterFailureEvidence(result, adapterEvidence) {
       },
       rawReport: {
         ...adapterEvidence.custody,
-        schema: adapterEvidence.report?.schema ?? null,
-        verdict: adapterEvidence.report?.verdict?.status ?? null,
+        schema: optionalEvidenceLabel(adapterEvidence.report?.schema),
+        verdict: optionalEvidenceLabel(adapterEvidence.report?.verdict?.status),
       },
       schema: DEV_GENERATION_ADAPTER_FAILURE_SCHEMA,
       summary: adapterEvidence.summary,
@@ -1203,7 +1195,9 @@ function validateAdapterFailureEvidence(value) {
     !(value.process.status === null || Number.isSafeInteger(value.process.status)) ||
     value.rawReport === null ||
     typeof value.rawReport !== 'object' ||
-    typeof value.rawReport.available !== 'boolean'
+    typeof value.rawReport.available !== 'boolean' ||
+    !(value.rawReport.schema === null || boundedEvidenceLabel(value.rawReport.schema)) ||
+    !(value.rawReport.verdict === null || boundedEvidenceLabel(value.rawReport.verdict))
   ) {
     throw new TypeError('failed dev-loop adapter evidence is malformed');
   }
@@ -1226,6 +1220,24 @@ function validateAdapterFailureEvidence(value) {
     throw new TypeError('failed dev-loop raw report custody is malformed');
   }
   return structuredClone(value);
+}
+
+function safeEvidenceCount(value) {
+  return Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
+function evidenceRows(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function optionalEvidenceLabel(value) {
+  return boundedEvidenceLabel(value) ? value : null;
+}
+
+function boundedEvidenceLabel(value) {
+  return (
+    typeof value === 'string' && value.length > 0 && value.length <= 256 && !/[\r\n\0]/u.test(value)
+  );
 }
 
 function adapterProcessExit(result) {

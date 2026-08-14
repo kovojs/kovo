@@ -1,4 +1,7 @@
 import { createHash } from 'node:crypto';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -10,6 +13,7 @@ import {
   bootstrapMedianCi,
   browserReportIntegrityFindings,
   classifyServerMatrixCells,
+  COMPARE_ADAPTER_FAILURE_SCHEMA,
   comparisonVerdict,
   devSampleSchedule,
   EXECUTION_ORDER,
@@ -17,6 +21,7 @@ import {
   pairedAnalysis,
   performanceWorkloadIdentity,
   runComparison,
+  runDevComparisonAdapterCell,
   serverSampleSchedule,
   summarize,
   ttiInteractionProof,
@@ -705,6 +710,155 @@ describe('serialized comparison analysis', () => {
       'unique per-session dev port allocation is incomplete',
     );
   });
+
+  it('requires a timestamped exact localhost dual-stack handoff shape', () => {
+    const malformed = completeDevValidationReport({ basePort: 49_700, readyIterations: 2 });
+    malformed.integrity.handoffs[0].check.addresses = [
+      { available: true, errorCode: null, supported: true },
+    ];
+    delete malformed.integrity.handoffs[0].check.checkedAt;
+
+    expect(
+      devSessionHandoffFindings(malformed, { basePort: 49_700, readyIterations: 2 }),
+    ).toContain('pre-spawn dev handoff ready[0] is incomplete');
+
+    const unsupportedIpv6 = completeDevValidationReport({
+      basePort: 49_700,
+      readyIterations: 2,
+    });
+    unsupportedIpv6.integrity.handoffs[0].check.addresses[1] = {
+      address: '::1',
+      available: true,
+      errorCode: 'EAFNOSUPPORT',
+      family: 6,
+      supported: false,
+    };
+    expect(
+      devSessionHandoffFindings(unsupportedIpv6, { basePort: 49_700, readyIterations: 2 }),
+    ).toEqual([]);
+  });
+
+  it('retains nonzero dev adapter evidence and analyzes malformed row arrays fail-closed', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-compare-failed-dev-'));
+    try {
+      const resultFile = path.join(root, 'adapter.json');
+      const retainedFile = path.join(root, 'evidence', 'raw', 'adapter.json');
+      const report = {
+        integrity: { complete: false, errors: ['lifecycle failed'] },
+        readySamples: 'malformed',
+        samples: {},
+        schema: 'kovo-dev-loop-report/v1',
+        verdict: { status: 'unproven' },
+      };
+      const bytes = Buffer.from(JSON.stringify(report));
+      const failure = new Error('adapter exited one');
+      failure.adapterExit = { signal: null, status: 1 };
+      const captured = await runDevComparisonAdapterCell(
+        {
+          adapter: { args: [], cwd: root, label: 'corpus-n24/kovo/dev/0' },
+          cell: {
+            cell: 'dev',
+            framework: 'kovo',
+            lane: 'corpus-n24',
+            occurrence: 0,
+            port: 49_700,
+            schedule: {
+              editSamples: 15,
+              framework: 'kovo',
+              occurrence: 0,
+              readySamples: 8,
+              scheduleIndex: 0,
+              warmups: 2,
+            },
+          },
+          resultFile,
+          retainedFile,
+          retainedReference: 'raw/adapter.json',
+        },
+        {
+          runAdapter: async () => {
+            await writeFile(resultFile, bytes);
+            throw failure;
+          },
+        },
+      );
+
+      expect(captured.error).toContain('adapter exited one');
+      expect(captured.cell).toMatchObject({
+        adapterFailure: {
+          process: { signal: null, status: 1 },
+          rawReport: {
+            available: true,
+            reportBytes: bytes.byteLength,
+            reportSha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
+            retainedPath: 'raw/adapter.json',
+            schema: 'kovo-dev-loop-report/v1',
+            verdict: 'unproven',
+          },
+          schema: COMPARE_ADAPTER_FAILURE_SCHEMA,
+        },
+        report,
+      });
+      expect(await readFile(retainedFile)).toEqual(bytes);
+      expect(() =>
+        pairedAnalysis([captured.cell], { bootstrapIterations: 100, seed: 1 }),
+      ).not.toThrow();
+      const reasons = [];
+      validateDevCell(captured.cell, {
+        devPortBase: 49_700,
+        iterations: 15,
+        readyIterations: 8,
+        reasons,
+        schedule: captured.cell.schedule,
+        warmups: 2,
+      });
+      expect(reasons).toEqual(
+        expect.arrayContaining([
+          'corpus-n24/kovo/dev adapter process or report failed',
+          'corpus-n24/kovo/dev adapter evidence is unproven',
+        ]),
+      );
+      expect(
+        comparisonVerdict({
+          integrity: {
+            comparator: { reasons, matched: false },
+            executionAuthenticated: true,
+            executionError: captured.error,
+            sourceStable: true,
+            workloadAuthenticated: true,
+          },
+          source: { dirty: false },
+        }).status,
+      ).toBe('unproven');
+
+      const zeroExitResult = path.join(root, 'zero-exit.json');
+      const zeroExitRetained = path.join(root, 'evidence', 'raw', 'zero-exit.json');
+      const zeroExit = await runDevComparisonAdapterCell(
+        {
+          adapter: { args: [], cwd: root, label: 'corpus-n24/kovo/dev/0' },
+          cell: {
+            cell: 'dev',
+            framework: 'kovo',
+            lane: 'corpus-n24',
+            occurrence: 0,
+            schedule: captured.cell.schedule,
+          },
+          resultFile: zeroExitResult,
+          retainedFile: zeroExitRetained,
+          retainedReference: 'raw/zero-exit.json',
+        },
+        { runAdapter: async () => writeFile(zeroExitResult, bytes) },
+      );
+      expect(zeroExit.error).toContain('report is not measured and complete');
+      expect(zeroExit.cell.adapterFailure).toMatchObject({
+        process: { error: null, status: 0 },
+        rawReport: { retainedPath: 'raw/zero-exit.json' },
+      });
+      expect(await readFile(zeroExitRetained)).toEqual(bytes);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
 });
 
 function completeDevValidationReport({ basePort, readyIterations }) {
@@ -733,6 +887,13 @@ function completeDevValidationReport({ basePort, readyIterations }) {
           available: true,
           errorCode: null,
           family: 4,
+          supported: true,
+        },
+        {
+          address: '::1',
+          available: true,
+          errorCode: null,
+          family: 6,
           supported: true,
         },
       ],

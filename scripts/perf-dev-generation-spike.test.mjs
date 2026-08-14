@@ -465,6 +465,59 @@ describe('dev-generation candidate comparator', () => {
     expect(report.verdict.status).toBe('unproven');
   });
 
+  it('summarizes malformed-but-valid JSON adapter reports without losing raw custody', () => {
+    const bytes = Buffer.from('{"integrity":{"errors":{},"misses":"many"},"readySamples":{}}');
+
+    expect(() => summarizeFailedAdapterReport(JSON.parse(bytes), bytes)).not.toThrow();
+    expect(summarizeFailedAdapterReport(JSON.parse(bytes), bytes)).toEqual(
+      expect.objectContaining({
+        integrityErrors: [],
+        misses: null,
+        readyFailures: [],
+        reportBytes: bytes.byteLength,
+        reportSha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
+        schema: null,
+        verdict: null,
+      }),
+    );
+  });
+
+  it('aggregates a malformed retained adapter report as incomplete instead of throwing', () => {
+    const report = {
+      integrity: {
+        browser: { requestFailedCount: 'unknown', unexpectedErrorCount: null },
+        complete: false,
+        errors: {},
+        misses: 'unknown',
+      },
+      readySamples: {},
+      samples: {},
+      verdict: { status: 'unproven' },
+    };
+    const cells = [
+      {
+        adapterFailure: { schema: 'kovo-dev-generation-adapter-failure/v1' },
+        lane: 'baseline',
+        occurrence: 0,
+        report,
+        scheduleIndex: 0,
+      },
+    ];
+
+    expect(() =>
+      aggregateDevGenerationCells(cells, { bootstrapIterations: 100, seed: 1 }),
+    ).not.toThrow();
+    expect(
+      aggregateDevGenerationCells(cells, { bootstrapIterations: 100, seed: 1 }).correctness,
+    ).toMatchObject({
+      adapterErrors: 1,
+      adapterProcessFailures: 1,
+      complete: false,
+      completeSchedule: false,
+      misses: 1,
+    });
+  });
+
   it('supports authentication-only preparation and refuses implicit timing', async () => {
     const baselineRoot = temporaryDirectory('kovo-dev-generation-prepare-baseline-');
     const spikeRoot = temporaryDirectory('kovo-dev-generation-prepare-spike-');
@@ -820,6 +873,13 @@ function completeHandoff(port, index, readySamples) {
           available: true,
           errorCode: null,
           family: 4,
+          supported: true,
+        },
+        {
+          address: '::1',
+          available: true,
+          errorCode: null,
+          family: 6,
           supported: true,
         },
       ],

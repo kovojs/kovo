@@ -1577,13 +1577,21 @@ export async function collectLinuxSocketOwnerEvidence(options, dependencies = {}
     [4, '/proc/net/tcp'],
     [6, '/proc/net/tcp6'],
   ]) {
+    let snapshot;
     try {
-      const snapshot = await readBounded(target, DEV_SOCKET_EVIDENCE_MAX_BYTES);
+      snapshot = await readBounded(target, DEV_SOCKET_EVIDENCE_MAX_BYTES);
       if (snapshot.truncated) limitations.add(`${target} exceeded the bounded evidence read`);
-      sockets.push(...parseLinuxSocketTable(snapshot.bytes.toString('utf8'), family, port));
     } catch (error) {
       limitations.add(
         `${target} could not be read: ${boundedEvidenceMessage(errorMessage(error))}`,
+      );
+      continue;
+    }
+    try {
+      sockets.push(...parseLinuxSocketTable(snapshot.bytes.toString('utf8'), family, port));
+    } catch (error) {
+      limitations.add(
+        `${target} could not be parsed: ${boundedEvidenceMessage(errorMessage(error))}`,
       );
     }
   }
@@ -1665,6 +1673,11 @@ export async function collectLinuxSocketOwnerEvidence(options, dependencies = {}
     socket.owners = (owners.get(socket.inode) ?? []).toSorted(
       (left, right) => left.pid - right.pid,
     );
+    if (socket.inode !== '0' && socket.owners.length === 0) {
+      limitations.add(
+        `socket inode ${socket.inode} owner was not observable after the kernel/process census race`,
+      );
+    }
   }
   const evidence = {
     busyAddresses,
@@ -1682,16 +1695,26 @@ export async function collectLinuxSocketOwnerEvidence(options, dependencies = {}
 export function parseLinuxSocketTable(source, family, port) {
   if (![4, 6].includes(family)) throw new TypeError('Linux socket table family must be 4 or 6');
   boundedInteger(port, 1, 65_535, 'Linux socket table port');
+  if (typeof source !== 'string') throw new TypeError('Linux socket table must be text');
   const records = [];
-  for (const line of String(source).split(/\r?\n/u).slice(1)) {
+  for (const line of source.split(/\r?\n/u).slice(1)) {
+    if (line.trim().length === 0) continue;
     const fields = line.trim().split(/\s+/u);
-    if (fields.length < 10) continue;
+    if (fields.length < 10) throw new TypeError('Linux socket table row is truncated');
     const local = /^([0-9A-Fa-f]+):([0-9A-Fa-f]{4})$/u.exec(fields[1]);
-    if (local === null || Number.parseInt(local[2], 16) !== port) continue;
+    if (local === null) throw new TypeError('Linux socket table local address is malformed');
+    if (Number.parseInt(local[2], 16) !== port) continue;
     const stateCode = fields[3].toUpperCase();
     const uid = Number(fields[7]);
     const inode = fields[9];
-    if (!/^[0-9A-F]+$/u.test(stateCode) || !/^\d+$/u.test(inode)) continue;
+    if (
+      !/^[0-9A-F]{2}$/u.test(stateCode) ||
+      !/^\d{1,32}$/u.test(inode) ||
+      !Number.isSafeInteger(uid) ||
+      uid < 0
+    ) {
+      throw new TypeError('Linux socket table identity fields are malformed');
+    }
     records.push({
       family,
       inode,
@@ -1700,7 +1723,7 @@ export function parseLinuxSocketTable(source, family, port) {
       owners: [],
       state: linuxSocketState(stateCode),
       stateCode,
-      uid: Number.isSafeInteger(uid) && uid >= 0 ? uid : null,
+      uid,
     });
   }
   return records;
@@ -1720,6 +1743,8 @@ export function validateSocketOwnerEvidence(value) {
     throw new TypeError('dev socket-owner evidence is malformed');
   }
   const origin = new URL(requiredString(value.origin, 'socket evidence origin')).origin;
+  const originUrl = new URL(origin);
+  const originPort = Number(originUrl.port || (originUrl.protocol === 'https:' ? 443 : 80));
   if (
     origin !== value.origin ||
     value.busyAddresses.length < 1 ||
@@ -1745,7 +1770,7 @@ export function validateSocketOwnerEvidence(value) {
     }
     return limitation;
   });
-  if (limitations.length > 32 || (value.complete && limitations.length > 0)) {
+  if (limitations.length > 32 || value.complete !== (limitations.length === 0)) {
     throw new TypeError('dev socket-owner completeness disagrees with its limitations');
   }
   const census = value.census;
@@ -1763,6 +1788,9 @@ export function validateSocketOwnerEvidence(value) {
     throw new TypeError('dev socket-owner records exceed their evidence bound');
   }
   const sockets = value.sockets.map((socket) => validateSocketRecord(socket));
+  if (sockets.some((socket) => socket.localPort !== originPort)) {
+    throw new TypeError('dev socket-owner record does not match its origin port');
+  }
   return {
     busyAddresses,
     census: { ...census },

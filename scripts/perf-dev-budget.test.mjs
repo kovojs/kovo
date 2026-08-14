@@ -170,6 +170,38 @@ describe('ratified developer performance budgets', () => {
     expect(result.checks).toEqual([]);
   });
 
+  it('returns unproven instead of throwing when candidate rawCells is a non-array JSON value', () => {
+    const { baseline, entries } = ratifiedBaseline(24);
+    const budget = deriveDevPerformanceBudget(baseline, { baselineEntries: entries });
+    const candidate = comparisonReport({ corpusSize: 24, run: 42, sourceCommit: 'b'.repeat(40) });
+    candidate.rawCells = { malformed: true };
+
+    const result = evaluateDevPerformanceBudget(budget, candidate);
+
+    expect(result.verdict.status).toBe('unproven');
+    expect(result.verdict.reasons).toContain('candidate dev raw cells are unavailable');
+    expect(result.checks).toEqual([]);
+  });
+
+  it('returns unproven for non-array dev sample and ready-sample JSON values', () => {
+    const { baseline, entries } = ratifiedBaseline(24);
+    const budget = deriveDevPerformanceBudget(baseline, { baselineEntries: entries });
+    const candidate = comparisonReport({ corpusSize: 24, run: 43, sourceCommit: 'b'.repeat(40) });
+    candidate.rawCells[0].report.samples = {};
+    candidate.rawCells[1].report.readySamples = {};
+
+    const result = evaluateDevPerformanceBudget(budget, candidate);
+
+    expect(result.verdict.status).toBe('unproven');
+    expect(result.verdict.reasons).toEqual(
+      expect.arrayContaining([
+        'candidate kovo dev totals are not 30 edits, 15 ready starts, and 3 warmups',
+        'candidate nextjs dev totals are not 30 edits, 15 ready starts, and 3 warmups',
+      ]),
+    );
+    expect(result.checks).toEqual([]);
+  });
+
   it('refuses to derive ceilings from short or incomplete baseline evidence', () => {
     const { baseline, entries } = ratifiedBaseline(24);
     baseline.verdict.status = 'unproven';
@@ -530,6 +562,13 @@ function completeHandoff(port, index, readySamples) {
           available: true,
           errorCode: null,
           family: 4,
+          supported: true,
+        },
+        {
+          address: '::1',
+          available: true,
+          errorCode: null,
+          family: 6,
           supported: true,
         },
       ],

@@ -917,6 +917,39 @@ describe('single-entrant developer-loop adapter', () => {
     expect(evidence.limitations).toContain('PID 8101 descriptors were not observable');
   });
 
+  it('records kernel socket parse failures instead of silently dropping malformed rows', async () => {
+    const evidence = await collectLinuxSocketOwnerEvidence(
+      {
+        busyAddresses: [
+          {
+            address: '127.0.0.1',
+            available: false,
+            errorCode: 'EADDRINUSE',
+            family: 4,
+            supported: true,
+          },
+        ],
+        origin: 'http://localhost:49138',
+        priorProcessMarker: null,
+      },
+      {
+        platform: 'linux',
+        readBoundedFile: async (target) => ({
+          bytes: Buffer.from(target === '/proc/net/tcp' ? 'header\nmalformed row\n' : 'header\n'),
+          truncated: false,
+        }),
+      },
+    );
+
+    expect(evidence.complete).toBe(false);
+    expect(evidence.limitations).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('/proc/net/tcp could not be parsed'),
+        'no matching kernel socket row remained after the busy bind check',
+      ]),
+    );
+  });
+
   it('proves graceful quiescence and a stable dual-stack exact-port window', async () => {
     const clock = fakeLifecycleClock();
     const signals = [];

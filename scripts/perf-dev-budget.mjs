@@ -535,7 +535,11 @@ function devWorkloadFindings(identity) {
 function devRawEvidenceFindings(report, corpusSize) {
   const findings = [];
   if (!SUPPORTED_CORPUS_SIZES.includes(corpusSize)) return ['budget corpus size is unavailable'];
-  const cells = (report?.rawCells ?? []).filter(
+  const rawCells = Array.isArray(report?.rawCells) ? report.rawCells : [];
+  if (!Array.isArray(report?.rawCells)) {
+    findings.push('candidate dev raw cells are unavailable');
+  }
+  const cells = rawCells.filter(
     (cell) => cell?.cell === 'dev' && cell?.lane === `corpus-n${String(corpusSize)}`,
   );
   if (cells.map((cell) => cell.framework).join(',') !== 'kovo,nextjs,nextjs,kovo') {
@@ -547,6 +551,8 @@ function devRawEvidenceFindings(report, corpusSize) {
   };
   for (const cell of cells) {
     const devReport = cell.report;
+    const editSamples = Array.isArray(devReport?.samples) ? devReport.samples : [];
+    const readySamples = Array.isArray(devReport?.readySamples) ? devReport.readySamples : [];
     const expectedSchedule = expectedDevSchedule().find(
       (entry) => entry.framework === cell.framework && entry.occurrence === cell.occurrence,
     );
@@ -571,8 +577,8 @@ function devRawEvidenceFindings(report, corpusSize) {
     }
     const frameworkTotals = totals[cell.framework];
     if (frameworkTotals === undefined) continue;
-    frameworkTotals.edits += devReport?.samples?.length ?? 0;
-    frameworkTotals.ready += devReport?.readySamples?.length ?? 0;
+    frameworkTotals.edits += editSamples.length;
+    frameworkTotals.ready += readySamples.length;
     frameworkTotals.warmups += devReport?.integrity?.warmups ?? 0;
     if (
       devReport?.framework !== cell.framework ||
@@ -623,7 +629,7 @@ function devRawEvidenceFindings(report, corpusSize) {
         `candidate ${cell.framework} dev occurrence ${String(cell.occurrence)} lacks edit readiness, teardown, or RSS evidence`,
       );
     }
-    for (const sample of devReport?.samples ?? []) {
+    for (const sample of editSamples) {
       for (const editClass of DEV_EDIT_CLASSES) {
         if (!Number.isFinite(sample?.[`${editClass}Ms`])) {
           findings.push(`candidate ${cell.framework} ${editClass} timing is incomplete`);
@@ -641,7 +647,7 @@ function devRawEvidenceFindings(report, corpusSize) {
         );
       }
     }
-    for (const sample of devReport?.readySamples ?? []) {
+    for (const sample of readySamples) {
       if (
         sample?.success !== true ||
         !Number.isFinite(sample.peakRssBytes) ||

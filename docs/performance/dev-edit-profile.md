@@ -83,15 +83,17 @@ node benchmarks/corpora/dev-loop.mjs \
   --ready-iterations 1 \
   --warmups 3 \
   --port 49120 \
-  --inspector-port 49121 \
+  --inspector-port 50120 \
   --profile-dir /tmp/kovo-dev-profile-n24 \
   --out /tmp/kovo-dev-profile-n24.json
 ```
 
-Use distinct dev and Inspector ports. The adapter samples only the three measured edits per class;
-the three warmups remain unprofiled. Raw `.cpuprofile` and `.heapprofile` files are mode `0600` and
-each is bound into the report by name, byte count, and SHA-256. Re-read and reproduce the report from
-those retained bytes before publication:
+The dev port is the base of the adapter's exact per-session range: this example uses 49120 for its
+fresh-ready session and 49121 for its edit session. Keep the Inspector port outside that entire
+range. The adapter samples only the three measured edits per class; the three warmups remain
+unprofiled. Raw `.cpuprofile` and `.heapprofile` files are mode `0600` and each is bound into the
+report by name, byte count, and SHA-256. Re-read and reproduce the report from those retained bytes
+before publication:
 
 ```sh
 node scripts/perf-dev-edit-profile-audit.mjs \
