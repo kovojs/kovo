@@ -786,13 +786,19 @@ jobs:
         run: |
           output_root="$RUNNER_TEMP/kovo-perf/dev-profile-n$KOVO_PERF_CORPUS_SIZE"
           mkdir -p "$output_root/raw"
+          case "$KOVO_PERF_CORPUS_SIZE" in
+            24) dev_port=54124; inspector_port=55124 ;;
+            216) dev_port=54216; inspector_port=55216 ;;
+            *) echo 'unsupported profiled corpus size' >&2; exit 2 ;;
+          esac
           vp exec node benchmarks/corpora/dev-loop.mjs \
             --manifest "$GITHUB_WORKSPACE/benchmarks/kovo/.corpora/kovo/n$KOVO_PERF_CORPUS_SIZE/manifest.json" \
             --iterations 30 \
             --ready-iterations 1 \
             --warmups 3 \
-            --port 49120 \
-            --inspector-port 49121 \
+            --port "$dev_port" \
+            --inspector-port "$inspector_port" \
+            --ready-timeout-ms 600000 \
             --profile-dir "$output_root/raw" \
             --out "$output_root/report.json"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

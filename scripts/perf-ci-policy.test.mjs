@@ -333,7 +333,11 @@ describe('realistic performance CI policy', () => {
     expect(devProfile).toContain('--iterations 30');
     expect(devProfile).toContain('--ready-iterations 1');
     expect(devProfile).toContain('--warmups 3');
-    expect(devProfile).toContain('--inspector-port 49121');
+    expect(devProfile).toContain('24) dev_port=54124; inspector_port=55124');
+    expect(devProfile).toContain('216) dev_port=54216; inspector_port=55216');
+    expect(devProfile).toContain('--port "$dev_port"');
+    expect(devProfile).toContain('--inspector-port "$inspector_port"');
+    expect(devProfile).toContain('--ready-timeout-ms 600000');
     expect(devProfile).toContain('--profile-dir "$output_root/raw"');
     expectRawArtifact(devProfile, 'kovo-perf-dev-profile-n${{ matrix.corpus }}');
 

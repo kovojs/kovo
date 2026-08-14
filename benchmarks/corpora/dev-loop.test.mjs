@@ -197,6 +197,8 @@ describe('single-entrant developer-loop adapter', () => {
         '30',
         '--ready-iterations',
         '15',
+        '--ready-timeout-ms',
+        '600000',
         '--warmups',
         '3',
         '--port',
@@ -204,7 +206,12 @@ describe('single-entrant developer-loop adapter', () => {
         '--out',
         '/tmp/report.json',
       ]),
-    ).toMatchObject({ iterations: 30, readyIterations: 15, warmups: 3 });
+    ).toMatchObject({
+      iterations: 30,
+      readyIterations: 15,
+      readyTimeoutMs: 600_000,
+      warmups: 3,
+    });
     expect(() =>
       parseDevLoopArgs([
         '--manifest',

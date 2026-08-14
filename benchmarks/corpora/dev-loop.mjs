@@ -96,6 +96,7 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
     manifestDigest,
     manifestPath,
     readyIterations: normalized.readyIterations,
+    readyTimeoutMs: normalized.readyTimeoutMs,
     source,
     startedAt,
     versions,
@@ -117,6 +118,7 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
         command,
         iteration,
         manifest,
+        readyTimeoutMs: normalized.readyTimeoutMs,
         spawnProcess,
       });
       report.readySamples.push(observation);
@@ -134,6 +136,7 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
       iterations: normalized.iterations,
       manifest,
       originalSources,
+      readyTimeoutMs: normalized.readyTimeoutMs,
       spawnProcess,
       warmups: normalized.warmups,
     });
@@ -204,7 +207,15 @@ export async function runDevLoopBenchmark(options, dependencies = {}) {
   return report;
 }
 
-async function measureFreshReady({ appRoot, browser, command, iteration, manifest, spawnProcess }) {
+async function measureFreshReady({
+  appRoot,
+  browser,
+  command,
+  iteration,
+  manifest,
+  readyTimeoutMs,
+  spawnProcess,
+}) {
   const started = performance.now();
   const session = startDevSession({ appRoot, command, spawnProcess });
   const rss = createProcessTreeRssSampler(session.pid);
@@ -219,6 +230,7 @@ async function measureFreshReady({ appRoot, browser, command, iteration, manifes
       origin: command.origin,
       page,
       ready: manifest.dev.ready,
+      timeoutMs: readyTimeoutMs,
       session,
     });
     telemetry.markReady();
@@ -263,6 +275,7 @@ async function measureEditSession({
   iterations,
   manifest,
   originalSources,
+  readyTimeoutMs,
   spawnProcess,
   warmups,
 }) {
@@ -289,6 +302,7 @@ async function measureEditSession({
       origin: command.origin,
       page,
       ready: manifest.dev.ready,
+      timeoutMs: readyTimeoutMs,
       session,
     });
     telemetry.markReady();
@@ -643,8 +657,8 @@ function assignEditSample(sample, observation) {
   }
 }
 
-async function waitForReadyPage({ origin, page, ready, session }) {
-  const deadline = performance.now() + READY_TIMEOUT_MS;
+async function waitForReadyPage({ origin, page, ready, session, timeoutMs }) {
+  const deadline = performance.now() + timeoutMs;
   let lastError = 'server did not answer';
   while (performance.now() < deadline) {
     if (session.exited()) {
@@ -1283,6 +1297,7 @@ function createReportSkeleton({
   manifestDigest,
   manifestPath,
   readyIterations,
+  readyTimeoutMs,
   source,
   startedAt,
   versions,
@@ -1324,6 +1339,7 @@ function createReportSkeleton({
       iterations,
       misses: 0,
       readyIterations,
+      readyTimeoutMs,
       source: { after: null, before: source, stable: false },
       warmups,
     },
@@ -1604,6 +1620,12 @@ function normalizeOptions(options) {
     outPath: path.resolve(requiredString(options.outPath, 'out')),
     port: boundedInteger(options.port, 1_024, 65_535, 'port'),
     readyIterations: boundedInteger(options.readyIterations, 1, 100, 'ready iterations'),
+    readyTimeoutMs: boundedInteger(
+      options.readyTimeoutMs ?? READY_TIMEOUT_MS,
+      1_000,
+      1_800_000,
+      'ready timeout',
+    ),
     warmups: boundedInteger(options.warmups, 0, 10, 'warmups'),
   };
   if (
@@ -1629,6 +1651,7 @@ export function parseDevLoopArgs(argv) {
         '--profile-dir',
         '--inspector-port',
         '--ready-iterations',
+        '--ready-timeout-ms',
         '--warmups',
       ].includes(key) ||
       value === undefined
@@ -1647,6 +1670,8 @@ export function parseDevLoopArgs(argv) {
     port: Number(values['--port']),
     profileDir: values['--profile-dir'],
     readyIterations: Number(values['--ready-iterations']),
+    readyTimeoutMs:
+      values['--ready-timeout-ms'] === undefined ? undefined : Number(values['--ready-timeout-ms']),
     warmups: Number(values['--warmups']),
   });
 }
