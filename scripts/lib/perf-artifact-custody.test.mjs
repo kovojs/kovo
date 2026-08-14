@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync, truncateSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, truncateSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -7,6 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   authenticatePerformanceArtifactEvidence,
+  loadLocalTrustedPerformanceWorkflow,
   readZipMember,
 } from './perf-artifact-custody.mjs';
 
@@ -40,6 +42,7 @@ describe('performance artifact custody', () => {
     const authenticated = await authenticatePerformanceArtifactEvidence(fixture.evidence, {
       baseDirectory: fixture.directory,
       expectedArtifactName: 'kovo-perf-browser-matrix',
+      expectedArchiveMembers: fixture.archiveMembers,
       expectedReportMember: 'comparison.json',
       expectedWorkflowJob: {
         key: 'browser-matrix',
@@ -60,6 +63,7 @@ describe('performance artifact custody', () => {
     expect(authenticated.custody).toMatchObject({
       apiUrl: 'https://api.github.com/repos/kovojs/kovo/actions/artifacts/2001',
       archiveDownloadUrl: 'https://api.github.com/repos/kovojs/kovo/actions/artifacts/2001/zip',
+      archiveByteLength: readFileSync(fixture.archivePath).length,
       artifactId: 2001,
       artifactName: 'kovo-perf-browser-matrix',
       location: 'https://github.com/kovojs/kovo/actions/runs/1001/artifacts/2001',
@@ -71,6 +75,7 @@ describe('performance artifact custody', () => {
         triggerScope: 'workflow-dispatch:measurement_scope=baselines-or-all',
         workflowApiUrl:
           'https://api.github.com/repos/kovojs/kovo/contents/.github/workflows/perf-realistic.yml?ref=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        workflowSha: fixture.eventSha,
       },
       workflowRunId: 1001,
     });
@@ -82,7 +87,6 @@ describe('performance artifact custody', () => {
     ['archive digest', (fixture) => ({ ...fixture.metadata, digest: `sha256:${'0'.repeat(64)}` })],
     ['API URL', (fixture) => ({ ...fixture.metadata, url: `${fixture.metadata.url}/wrong` })],
     ['artifact name', (fixture) => ({ ...fixture.metadata, name: 'wrong-name' })],
-    ['download census', (fixture) => ({ ...fixture.metadata, download_count: 0 })],
     [
       'workflow source',
       (fixture) => ({
@@ -101,6 +105,7 @@ describe('performance artifact custody', () => {
       authenticatePerformanceArtifactEvidence(fixture.evidence, {
         baseDirectory: fixture.directory,
         expectedArtifactName: 'kovo-perf-browser-matrix',
+        expectedArchiveMembers: fixture.archiveMembers,
         expectedReportMember: 'comparison.json',
         expectedWorkflowJob: {
           key: 'browser-matrix',
@@ -118,28 +123,28 @@ describe('performance artifact custody', () => {
     ).rejects.toThrow();
   });
 
-  it('fails closed when the saved API response is not byte-identical to the live response', async () => {
+  it('accepts byte-different JSON encodings with the same immutable artifact authority', async () => {
     const fixture = writeArtifactFixture();
+    fixture.liveApiBytes = Buffer.from(JSON.stringify(fixture.metadata));
 
-    await expect(
-      authenticatePerformanceArtifactEvidence(fixture.evidence, {
-        baseDirectory: fixture.directory,
-        expectedArtifactName: 'kovo-perf-browser-matrix',
-        expectedReportMember: 'comparison.json',
-        expectedWorkflowJob: {
-          key: 'browser-matrix',
-          name: 'Browser matrix',
-          triggerPolicy: 'baseline',
-        },
-        fetchArtifactApi: async () => Buffer.from('{}\n'),
-        fetchWorkflowFileApi: async () => fixture.liveWorkflowApiBytes,
-        fetchWorkflowJobsApi: async () => fixture.liveJobsApiBytes,
-        fetchWorkflowRunApi: async () => fixture.liveRunApiBytes,
-        loadTrustedWorkflow: async () => fixture.trustedWorkflow,
-        now: '2026-08-14T00:00:00.000Z',
-        repository: 'kovojs/kovo',
-      }),
-    ).rejects.toThrow('differs byte-for-byte from the live response');
+    const authenticated = await authenticateFixture(fixture);
+    expect(authenticated.custody.liveApiResponseDigest).not.toBe(
+      authenticated.custody.apiResponseDigest,
+    );
+    expect(authenticated.custody.liveApiAuthorityDigest).toBe(
+      authenticated.custody.apiAuthorityDigest,
+    );
+  });
+
+  it('rejects a byte-valid live response whose immutable artifact authority changed', async () => {
+    const fixture = writeArtifactFixture();
+    fixture.liveApiBytes = Buffer.from(
+      JSON.stringify({ ...fixture.metadata, digest: `sha256:${'0'.repeat(64)}` }),
+    );
+
+    await expect(authenticateFixture(fixture)).rejects.toThrow(
+      'saved artifact API authority differs from the live response',
+    );
   });
 
   it.each([
@@ -157,20 +162,40 @@ describe('performance artifact custody', () => {
 
   it('binds a pull-request baseline to the immutable run head and ignores the mutable PR head', async () => {
     const fixture = writeArtifactFixture({ event: 'pull_request' });
+    let fetchedWorkflowSha = null;
     const advancedPullRequest = {
       ...fixture.runMetadata,
-      pull_requests: [{ head: { repo: { id: 101 }, sha: 'c'.repeat(40) } }],
+      pull_requests: fixture.runMetadata.pull_requests.map((pullRequest) => ({
+        ...pullRequest,
+        head: { ...pullRequest.head, sha: 'c'.repeat(40) },
+      })),
     };
-    replaceRunApiFixture(fixture, advancedPullRequest);
+    fixture.liveRunApiBytes = Buffer.from(`${JSON.stringify(advancedPullRequest)}\n`);
 
-    const authenticated = await authenticateFixture(fixture);
+    const authenticated = await authenticateFixture(fixture, {
+      fetchWorkflowFileApi: async ({ workflowSha }) => {
+        fetchedWorkflowSha = workflowSha;
+        return fixture.liveWorkflowApiBytes;
+      },
+    });
 
     expect(authenticated.custody.workflow).toMatchObject({
       event: 'pull_request',
       headSha: fixture.sourceCommit,
       sourceSha: fixture.sourceCommit,
       triggerScope: 'pull-request:labeled/perf-measure-baselines',
+      workflowHeadSha: fixture.eventSha,
+      workflowRef: 'kovojs/kovo/.github/workflows/perf-realistic.yml@refs/pull/7/merge',
+      workflowSha: fixture.eventSha,
     });
+    expect(fetchedWorkflowSha).toBe(fixture.eventSha);
+    expect(fetchedWorkflowSha).not.toBe(fixture.sourceCommit);
+    expect(authenticated.custody.liveRunApiResponseDigest).not.toBe(
+      authenticated.custody.runApiResponseDigest,
+    );
+    expect(authenticated.custody.liveRunApiAuthorityDigest).toBe(
+      authenticated.custody.runApiAuthorityDigest,
+    );
   });
 
   it('binds the build-profile job to only its reviewed decision triggers', async () => {
@@ -189,6 +214,28 @@ describe('performance artifact custody', () => {
       triggerPolicy: 'build-profile',
       triggerScope: 'pull-request:labeled/perf-measure-decisions-or-build-profile',
     });
+  });
+
+  it('rejects a PR report that conflates the measured head with the evaluated merge workflow', async () => {
+    const fixture = writeArtifactFixture({
+      event: 'pull_request',
+      reportedWorkflowSha: 'a'.repeat(40),
+    });
+
+    await expect(authenticateFixture(fixture)).rejects.toThrow(
+      'report execution does not match the live workflow run and expected job',
+    );
+  });
+
+  it('rejects a workflow ref that is not the exact pull-request merge ref', async () => {
+    const fixture = writeArtifactFixture({
+      event: 'pull_request',
+      reportedWorkflowRef: 'kovojs/kovo/.github/workflows/perf-realistic.yml@refs/heads/main',
+    });
+
+    await expect(authenticateFixture(fixture)).rejects.toThrow(
+      'report execution does not match the live workflow run and expected job',
+    );
   });
 
   it('binds trigger scope to the exact workflow bytes and a clean measured-source checkout', async () => {
@@ -212,6 +259,44 @@ describe('performance artifact custody', () => {
     await expect(authenticateFixture(wrongCheckout)).rejects.toThrow(
       'trusted local workflow is not bound to the measured source checkout',
     );
+  });
+
+  it('requires raw evidence and output staging to remain outside the clean measured checkout', async () => {
+    const repository = mkdtempSync(path.join(os.tmpdir(), 'kovo-perf-custody-repository-'));
+    temporaryDirectories.push(repository);
+    const workflowDirectory = path.join(repository, '.github', 'workflows');
+    mkdirSync(workflowDirectory, { recursive: true });
+    const workflow = workflowFixtureSource('browser-matrix');
+    writeFileSync(path.join(workflowDirectory, 'perf-realistic.yml'), workflow);
+    execFileSync('git', ['init', '--quiet'], { cwd: repository });
+    execFileSync('git', ['add', '.github/workflows/perf-realistic.yml'], { cwd: repository });
+    execFileSync(
+      'git',
+      [
+        '-c',
+        'user.name=Kovo Test',
+        '-c',
+        'user.email=kovo-test@example.invalid',
+        'commit',
+        '--quiet',
+        '-m',
+        'fixture',
+      ],
+      { cwd: repository },
+    );
+    const sourceSha = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: repository,
+      encoding: 'utf8',
+    }).trim();
+
+    await expect(
+      loadLocalTrustedPerformanceWorkflow({ repositoryDirectory: repository, sourceSha }),
+    ).resolves.toMatchObject({ headSha: sourceSha });
+
+    writeFileSync(path.join(repository, 'raw-evidence.json'), '{}\n');
+    await expect(
+      loadLocalTrustedPerformanceWorkflow({ repositoryDirectory: repository, sourceSha }),
+    ).rejects.toThrow('publication checkout has uncommitted or untracked changes');
   });
 
   it('rejects workflow API bytes that differ from the locally reviewed workflow', async () => {
@@ -251,7 +336,7 @@ describe('performance artifact custody', () => {
           : { fetchWorkflowJobsApi: async () => Buffer.from('{}\n') };
 
       await expect(authenticateFixture(fixture, options)).rejects.toThrow(
-        `saved workflow ${kind} API response differs byte-for-byte`,
+        `saved workflow ${kind} API authority differs from the live response`,
       );
     },
   );
@@ -264,6 +349,7 @@ describe('performance artifact custody', () => {
       authenticatePerformanceArtifactEvidence(fixture.evidence, {
         baseDirectory: fixture.directory,
         expectedArtifactName: 'kovo-perf-browser-matrix',
+        expectedArchiveMembers: fixture.archiveMembers,
         expectedReportMember: 'comparison.json',
         expectedWorkflowJob: {
           key: 'browser-matrix',
@@ -281,6 +367,27 @@ describe('performance artifact custody', () => {
     ).rejects.toThrow('extracted report bytes differ');
   });
 
+  it('rejects an artifact with any member outside the exact expected census', async () => {
+    const fixture = writeArtifactFixture();
+
+    await expect(
+      authenticateFixture(fixture, { expectedArchiveMembers: ['comparison.json'] }),
+    ).rejects.toThrow('ZIP member census differs from the exact expected artifact members');
+  });
+
+  it('CRC-checks every member in the artifact, including an unselected auxiliary', () => {
+    const archive = storedZip([
+      { name: 'comparison.json', bytes: Buffer.from('{}') },
+      { name: 'unselected.txt', bytes: Buffer.from('untampered') },
+    ]);
+    const payloadOffset = archive.indexOf(Buffer.from('untampered'));
+    archive[payloadOffset] ^= 0xff;
+
+    expect(() => readZipMember(archive, 'comparison.json')).toThrow(
+      'ZIP member unselected.txt CRC-32 differs',
+    );
+  });
+
   it('rejects an oversized sparse artifact before reading or parsing its bytes', async () => {
     const fixture = writeArtifactFixture();
     truncateSync(fixture.archivePath, 512 * 1024 * 1024 + 1);
@@ -289,6 +396,7 @@ describe('performance artifact custody', () => {
       authenticatePerformanceArtifactEvidence(fixture.evidence, {
         baseDirectory: fixture.directory,
         expectedArtifactName: 'kovo-perf-browser-matrix',
+        expectedArchiveMembers: fixture.archiveMembers,
         expectedReportMember: 'comparison.json',
         expectedWorkflowJob: {
           key: 'browser-matrix',
@@ -390,6 +498,8 @@ function writeArtifactFixture({
   event = 'workflow_dispatch',
   jobKey = 'browser-matrix',
   jobName = 'Browser matrix',
+  reportedWorkflowRef,
+  reportedWorkflowSha,
   triggerPolicy = 'baseline',
 } = {}) {
   const directory = mkdtempSync(path.join(os.tmpdir(), 'kovo-perf-custody-'));
@@ -407,23 +517,28 @@ function writeArtifactFixture({
         runUrl: 'https://github.com/kovojs/kovo/actions/runs/1001',
         serverUrl: 'https://github.com',
         sha: sourceCommit,
-        workflowRef: 'kovojs/kovo/.github/workflows/perf-realistic.yml@refs/heads/main',
+        workflowRef:
+          reportedWorkflowRef ??
+          (event === 'pull_request'
+            ? 'kovojs/kovo/.github/workflows/perf-realistic.yml@refs/pull/7/merge'
+            : 'kovojs/kovo/.github/workflows/perf-realistic.yml@refs/heads/main'),
+        workflowSha: reportedWorkflowSha ?? eventSha,
       },
     },
     source: { commit: sourceCommit },
   };
   const reportText = `${JSON.stringify(report, null, 2)}\n`;
-  const archive = storedZip([
+  const archiveEntries = [
     { name: 'comparison.json', bytes: Buffer.from(reportText) },
     { name: 'raw/extra.json', bytes: Buffer.from('{"ok":true}\n') },
     ...(auxiliary === undefined ? [] : [auxiliary]),
     ...auxiliaries,
-  ]);
+  ];
+  const archive = storedZip(archiveEntries);
   const metadata = {
     archive_download_url: 'https://api.github.com/repos/kovojs/kovo/actions/artifacts/2001/zip',
     created_at: '2026-08-13T23:00:00Z',
     digest: digest(archive),
-    download_count: 1,
     expired: false,
     expires_at: '2026-11-11T23:00:00Z',
     id: 2001,
@@ -452,7 +567,16 @@ function writeArtifactFixture({
     name: 'Perf Realistic Tier',
     path: '.github/workflows/perf-realistic.yml',
     pull_requests:
-      event === 'pull_request' ? [{ head: { repo: { id: 101 }, sha: 'b'.repeat(40) } }] : [],
+      event === 'pull_request'
+        ? [
+            {
+              head: { repo: { id: 101 }, sha: 'b'.repeat(40) },
+              id: 7001,
+              number: 7,
+              url: 'https://api.github.com/repos/kovojs/kovo/pulls/7',
+            },
+          ]
+        : [],
     repository: { full_name: 'kovojs/kovo', id: 101 },
     run_attempt: 1,
     status: 'completed',
@@ -476,7 +600,7 @@ function writeArtifactFixture({
     total_count: 1,
   };
   const workflowText = workflowFixtureSource(jobKey, jobName, triggerPolicy);
-  const workflowMetadata = workflowFileMetadata(workflowText, sourceCommit);
+  const workflowMetadata = workflowFileMetadata(workflowText, eventSha);
   const apiPath = path.join(directory, 'artifact.api.json');
   const archivePath = path.join(directory, 'artifact.zip');
   const jobsApiPath = path.join(directory, 'jobs.api.json');
@@ -490,6 +614,7 @@ function writeArtifactFixture({
   return {
     apiPath,
     archivePath,
+    archiveMembers: archiveEntries.map(({ name }) => name),
     directory,
     eventSha,
     evidence: {
@@ -522,6 +647,7 @@ function authenticateFixture(fixture, overrides = {}) {
   return authenticatePerformanceArtifactEvidence(fixture.evidence, {
     baseDirectory: fixture.directory,
     expectedArtifactName: 'kovo-perf-browser-matrix',
+    expectedArchiveMembers: fixture.archiveMembers,
     expectedReportMember: 'comparison.json',
     expectedWorkflowJob: fixture.expectedWorkflowJob,
     fetchArtifactApi: async () => fixture.liveApiBytes,
@@ -536,7 +662,7 @@ function authenticateFixture(fixture, overrides = {}) {
 }
 
 function replaceWorkflowApiFixture(fixture, workflowText) {
-  fixture.workflowMetadata = workflowFileMetadata(workflowText, fixture.sourceCommit);
+  fixture.workflowMetadata = workflowFileMetadata(workflowText, fixture.eventSha);
   fixture.liveWorkflowApiBytes = Buffer.from(
     `${JSON.stringify(fixture.workflowMetadata, null, 2)}\n`,
   );

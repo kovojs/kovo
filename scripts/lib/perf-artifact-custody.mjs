@@ -49,6 +49,7 @@ export async function authenticatePerformanceArtifactEvidence(
   {
     baseDirectory = process.cwd(),
     expectedArtifactName,
+    expectedArchiveMembers,
     expectedAuxiliaryMember,
     expectedAuxiliaryMemberGroup,
     expectedAuxiliaryMembers,
@@ -77,6 +78,7 @@ export async function authenticatePerformanceArtifactEvidence(
     expectedAuxiliaryMembers,
     expectedReportMember,
   });
+  validateExpectedArchiveMembers(expectedArchiveMembers, expectedReportMember);
   validateExpectedWorkflowJob(expectedWorkflowJob);
 
   const apiPath = path.resolve(baseDirectory, evidence.apiMetadata);
@@ -98,16 +100,33 @@ export async function authenticatePerformanceArtifactEvidence(
 
   const archiveDigest = sha256Bytes(archiveBytes);
   const reportContentDigest = sha256Bytes(reportBytes);
-  const memberBytes = readZipMember(archiveBytes, expectedReportMember);
+  const archiveCensus = authenticateZipArchive(archiveBytes);
+  const archiveMemberNames = archiveCensus.map(({ member }) => member);
+  if (
+    expectedArchiveMembers !== undefined &&
+    JSON.stringify([...archiveMemberNames].sort((left, right) => left.localeCompare(right))) !==
+      JSON.stringify([...expectedArchiveMembers].sort((left, right) => left.localeCompare(right)))
+  ) {
+    throw new TypeError('ZIP member census differs from the exact expected artifact members');
+  }
+  const memberBytes = archiveCensus.find(({ member }) => member === expectedReportMember)?.bytes;
+  if (!Buffer.isBuffer(memberBytes)) {
+    throw new TypeError(`ZIP member ${expectedReportMember} is unavailable`);
+  }
   if (!memberBytes.equals(reportBytes)) {
     throw new TypeError(`extracted report bytes differ from ZIP member ${expectedReportMember}`);
   }
-  const auxiliaryNames = resolveExpectedAuxiliaryMembers(archiveBytes, {
+  const auxiliaryNames = resolveExpectedAuxiliaryMembers(archiveCensus, {
     expectedAuxiliaryMember,
     expectedAuxiliaryMemberGroup,
     expectedAuxiliaryMembers,
   });
-  const auxiliaries = readZipMembers(archiveBytes, auxiliaryNames);
+  const archiveByMember = new Map(archiveCensus.map((entry) => [entry.member, entry]));
+  const auxiliaries = auxiliaryNames.map((member) => {
+    const entry = archiveByMember.get(member);
+    if (entry === undefined) throw new TypeError(`ZIP member ${member} is unavailable`);
+    return { bytes: entry.bytes, member };
+  });
 
   const artifactId = positiveInteger(metadata?.id, 'artifact API id');
   for (const [label, fetchApi] of [
@@ -124,8 +143,11 @@ export async function authenticatePerformanceArtifactEvidence(
     throw new TypeError('clean local workflow checkout authentication is required');
   }
   const workflowRunId = positiveInteger(metadata?.workflow_run?.id, 'artifact workflow run id');
-  const workflowHeadSha = runMetadata?.head_sha;
+  const workflowSha = report?.execution?.github?.workflowSha;
   const sourceSha = report?.source?.commit;
+  if (!COMMIT_PATTERN.test(workflowSha ?? '')) {
+    throw new TypeError('report workflow SHA is unavailable');
+  }
   let liveApiBytes;
   let liveWorkflowApiBytes;
   let liveJobsApiBytes;
@@ -137,7 +159,7 @@ export async function authenticatePerformanceArtifactEvidence(
         fetchLiveApiBytes(fetchArtifactApi, { artifactId, repository }),
         fetchLiveApiBytes(fetchWorkflowFileApi, {
           repository,
-          workflowHeadSha,
+          workflowSha,
         }),
         fetchLiveApiBytes(fetchWorkflowJobsApi, { repository, workflowRunId }),
         fetchLiveApiBytes(fetchWorkflowRunApi, { repository, workflowRunId }),
@@ -148,15 +170,29 @@ export async function authenticatePerformanceArtifactEvidence(
       `live GitHub API verification failed: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
-  for (const [label, liveBytes, savedBytes] of [
-    ['artifact', liveApiBytes, apiBytes],
-    ['workflow jobs', liveJobsApiBytes, jobsApiBytes],
-    ['workflow run', liveRunApiBytes, runApiBytes],
-  ]) {
-    if (!liveBytes.equals(savedBytes)) {
-      throw new TypeError(
-        `saved ${label} API response differs byte-for-byte from the live response`,
-      );
+  const liveMetadata = parseJsonBytes(liveApiBytes, 'live artifact API metadata');
+  const liveJobsMetadata = parseJsonBytes(liveJobsApiBytes, 'live workflow jobs API metadata');
+  const liveRunMetadata = parseJsonBytes(liveRunApiBytes, 'live workflow run API metadata');
+  const authorityPairs = [
+    {
+      label: 'artifact',
+      live: artifactAuthorityProjection(liveMetadata),
+      saved: artifactAuthorityProjection(metadata),
+    },
+    {
+      label: 'workflow jobs',
+      live: workflowJobsAuthorityProjection(liveJobsMetadata),
+      saved: workflowJobsAuthorityProjection(jobsMetadata),
+    },
+    {
+      label: 'workflow run',
+      live: workflowRunAuthorityProjection(liveRunMetadata),
+      saved: workflowRunAuthorityProjection(runMetadata),
+    },
+  ];
+  for (const { label, live, saved } of authorityPairs) {
+    if (JSON.stringify(saved) !== JSON.stringify(live)) {
+      throw new TypeError(`saved ${label} API authority differs from the live response`);
     }
   }
   const apiUrl = `https://api.github.com/repos/${repository}/actions/artifacts/${String(artifactId)}`;
@@ -174,9 +210,6 @@ export async function authenticatePerformanceArtifactEvidence(
     findings.push('artifact archive API URL is not derived from its identity');
   }
   if (metadata?.expired !== false) findings.push('artifact API record is expired');
-  if (!Number.isSafeInteger(metadata?.download_count) || metadata.download_count < 1) {
-    findings.push('artifact API record does not prove the retained ZIP was downloaded');
-  }
   if (metadata?.digest !== archiveDigest || !DIGEST_PATTERN.test(metadata?.digest ?? '')) {
     findings.push('downloaded artifact ZIP digest differs from the GitHub artifact API digest');
   }
@@ -204,7 +237,7 @@ export async function authenticatePerformanceArtifactEvidence(
     runUrl,
     trustedWorkflow,
     workflowApiBytes: liveWorkflowApiBytes,
-    workflowHeadSha,
+    workflowSha,
     workflowRunId,
   });
   findings.push(...workflowAuthority.findings);
@@ -219,6 +252,20 @@ export async function authenticatePerformanceArtifactEvidence(
   ) {
     findings.push('artifact API timestamps are not monotonic');
   }
+  const expectedJobStartedAt = Date.parse(workflowAuthority.facts.job.startedAt ?? '');
+  const expectedJobCompletedAt = Date.parse(workflowAuthority.facts.job.completedAt ?? '');
+  if (
+    Number.isFinite(createdAt) &&
+    Number.isFinite(updatedAt) &&
+    Number.isFinite(expectedJobStartedAt) &&
+    Number.isFinite(expectedJobCompletedAt) &&
+    (createdAt < expectedJobStartedAt ||
+      createdAt > expectedJobCompletedAt ||
+      updatedAt < expectedJobStartedAt ||
+      updatedAt > expectedJobCompletedAt)
+  ) {
+    findings.push('artifact timestamps fall outside the expected producer job');
+  }
   const observedNow =
     now instanceof Date ? now.getTime() : Date.parse(now ?? new Date().toISOString());
   if (!Number.isFinite(observedNow)) throw new TypeError('now must be a valid timestamp');
@@ -231,19 +278,29 @@ export async function authenticatePerformanceArtifactEvidence(
     contentDigest: reportContentDigest,
     custody: {
       apiResponseDigest: sha256Bytes(apiBytes),
+      apiAuthorityDigest: sha256Authority(artifactAuthorityProjection(metadata)),
       apiUrl,
+      archiveByteLength: archiveBytes.length,
       archiveDigest,
       archiveDownloadUrl,
+      archiveMembers: archiveCensus.map(({ bytes: _bytes, ...facts }) => facts),
       artifactId,
+      artifactDigest: metadata.digest,
       artifactName: metadata.name,
+      artifactSizeInBytes: metadata.size_in_bytes,
       createdAt: metadata.created_at,
-      downloadCount: metadata.download_count,
       expiresAt: metadata.expires_at,
       jobsApiResponseDigest: sha256Bytes(jobsApiBytes),
+      jobsApiAuthorityDigest: sha256Authority(workflowJobsAuthorityProjection(jobsMetadata)),
       jobsApiUrl,
       liveApiResponseDigest: sha256Bytes(liveApiBytes),
+      liveApiAuthorityDigest: sha256Authority(artifactAuthorityProjection(liveMetadata)),
       liveJobsApiResponseDigest: sha256Bytes(liveJobsApiBytes),
+      liveJobsApiAuthorityDigest: sha256Authority(
+        workflowJobsAuthorityProjection(liveJobsMetadata),
+      ),
       liveRunApiResponseDigest: sha256Bytes(liveRunApiBytes),
+      liveRunApiAuthorityDigest: sha256Authority(workflowRunAuthorityProjection(liveRunMetadata)),
       liveApiVerifiedAt: new Date(observedNow).toISOString(),
       location,
       ...(auxiliaries.length === 0
@@ -265,6 +322,7 @@ export async function authenticatePerformanceArtifactEvidence(
       reportContentDigest,
       reportMember: expectedReportMember,
       runApiResponseDigest: sha256Bytes(runApiBytes),
+      runApiAuthorityDigest: sha256Authority(workflowRunAuthorityProjection(runMetadata)),
       runApiUrl,
       runUrl,
       updatedAt: metadata.updated_at,
@@ -326,16 +384,16 @@ export async function fetchGitHubWorkflowJobsApiResponse({ repository, workflowR
   );
 }
 
-/** Fetch the exact workflow file at the workflow-run event SHA. */
-export async function fetchGitHubWorkflowFileApiResponse({ repository, workflowHeadSha }) {
+/** Fetch the exact workflow file at the runner-authenticated evaluated-workflow SHA. */
+export async function fetchGitHubWorkflowFileApiResponse({ repository, workflowSha }) {
   if (!REPOSITORY_PATTERN.test(repository ?? '')) {
     throw new TypeError('repository must be an exact owner/name identity');
   }
-  if (!COMMIT_PATTERN.test(workflowHeadSha ?? '')) {
-    throw new TypeError('workflow head SHA is unavailable');
+  if (!COMMIT_PATTERN.test(workflowSha ?? '')) {
+    throw new TypeError('evaluated workflow SHA is unavailable');
   }
   return fetchGitHubApiResponse(
-    `repos/${repository}/contents/${PERF_REALISTIC_WORKFLOW_PATH}?ref=${workflowHeadSha}`,
+    `repos/${repository}/contents/${PERF_REALISTIC_WORKFLOW_PATH}?ref=${workflowSha}`,
     'workflow file',
   );
 }
@@ -354,35 +412,41 @@ export async function loadLocalTrustedPerformanceWorkflow({ repositoryDirectory,
   });
   const root = rootOutput.trim();
   if (!nonEmptyString(root)) throw new TypeError('workflow checkout root is unavailable');
-  const [{ stdout: headOutput }, { stdout: statusOutput }, bytes] = await Promise.all([
-    execFileAsync('git', ['rev-parse', '--verify', 'HEAD^{commit}'], {
-      cwd: root,
-      encoding: 'utf8',
-      maxBuffer: MAX_API_RESPONSE_BYTES,
-      timeout: 30_000,
-    }),
-    execFileAsync(
-      'git',
-      ['status', '--porcelain=v1', '--untracked-files=all', '--', PERF_REALISTIC_WORKFLOW_PATH],
-      {
+  const [{ stdout: headOutput }, { stdout: statusOutput }, { stdout: committedBytes }, bytes] =
+    await Promise.all([
+      execFileAsync('git', ['rev-parse', '--verify', 'HEAD^{commit}'], {
         cwd: root,
         encoding: 'utf8',
         maxBuffer: MAX_API_RESPONSE_BYTES,
         timeout: 30_000,
-      },
-    ),
-    readBoundedRegularFile(
-      path.join(root, PERF_REALISTIC_WORKFLOW_PATH),
-      MAX_API_RESPONSE_BYTES,
-      'trusted local workflow',
-    ),
-  ]);
+      }),
+      execFileAsync('git', ['status', '--porcelain=v1', '--untracked-files=all'], {
+        cwd: root,
+        encoding: 'utf8',
+        maxBuffer: MAX_API_RESPONSE_BYTES,
+        timeout: 30_000,
+      }),
+      execFileAsync('git', ['show', `HEAD:${PERF_REALISTIC_WORKFLOW_PATH}`], {
+        cwd: root,
+        encoding: 'buffer',
+        maxBuffer: MAX_API_RESPONSE_BYTES,
+        timeout: 30_000,
+      }),
+      readBoundedRegularFile(
+        path.join(root, PERF_REALISTIC_WORKFLOW_PATH),
+        MAX_API_RESPONSE_BYTES,
+        'trusted local workflow',
+      ),
+    ]);
   const headSha = headOutput.trim();
   if (headSha !== sourceSha) {
     throw new TypeError('publication checkout HEAD differs from the measured source SHA');
   }
   if (statusOutput !== '') {
-    throw new TypeError('trusted local performance workflow has uncommitted changes');
+    throw new TypeError('publication checkout has uncommitted or untracked changes');
+  }
+  if (!Buffer.isBuffer(committedBytes) || !bytes.equals(committedBytes)) {
+    throw new TypeError('trusted local performance workflow differs from committed HEAD bytes');
   }
   return { bytes, headSha };
 }
@@ -411,7 +475,7 @@ function authenticateWorkflowAuthority({
   runUrl,
   trustedWorkflow,
   workflowApiBytes,
-  workflowHeadSha,
+  workflowSha,
   workflowRunId,
 }) {
   const findings = [];
@@ -430,7 +494,7 @@ function authenticateWorkflowAuthority({
     sourceSha,
     trustedWorkflow,
     workflowApiBytes,
-    workflowHeadSha,
+    workflowSha,
   });
   findings.push(...workflowDefinition.findings);
 
@@ -489,7 +553,11 @@ function authenticateWorkflowAuthority({
   }
   if (
     !COMMIT_PATTERN.test(github?.eventSha ?? '') ||
-    (event !== 'pull_request' && github?.eventSha !== runHeadSha) ||
+    !COMMIT_PATTERN.test(github?.workflowSha ?? '') ||
+    github?.workflowSha !== workflowSha ||
+    (event === 'pull_request'
+      ? github?.eventSha !== github?.workflowSha
+      : github?.eventSha !== runHeadSha || github?.workflowSha !== runHeadSha) ||
     github?.sha !== sourceSha ||
     github?.repository !== repository ||
     github?.serverUrl !== 'https://github.com' ||
@@ -497,7 +565,7 @@ function authenticateWorkflowAuthority({
     String(github?.runId ?? '') !== String(workflowRunId) ||
     String(github?.runAttempt ?? '') !== String(runAttempt) ||
     github?.job !== expectedWorkflowJob.key ||
-    !validWorkflowReference(github?.workflowRef, repository)
+    !validWorkflowReference(github?.workflowRef, repository, event, runMetadata)
   ) {
     findings.push('report execution does not match the live workflow run and expected job');
   }
@@ -576,7 +644,9 @@ function authenticateWorkflowAuthority({
       workflowApiUrl: workflowDefinition.facts.apiUrl,
       workflowContentDigest: workflowDefinition.facts.contentDigest,
       workflowGitBlobSha: workflowDefinition.facts.gitBlobSha,
-      workflowHeadSha: workflowDefinition.facts.headSha,
+      workflowHeadSha: workflowDefinition.facts.workflowSha,
+      workflowRef: github?.workflowRef ?? null,
+      workflowSha: workflowDefinition.facts.workflowSha,
     },
     findings,
   };
@@ -588,15 +658,15 @@ function authenticateWorkflowDefinition({
   sourceSha,
   trustedWorkflow,
   workflowApiBytes,
-  workflowHeadSha,
+  workflowSha,
 }) {
   const findings = [];
   const metadata = parseJsonBytes(workflowApiBytes, 'workflow file API metadata');
-  const apiUrl = `https://api.github.com/repos/${repository}/contents/${PERF_REALISTIC_WORKFLOW_PATH}?ref=${String(workflowHeadSha)}`;
+  const apiUrl = `https://api.github.com/repos/${repository}/contents/${PERF_REALISTIC_WORKFLOW_PATH}?ref=${String(workflowSha)}`;
   const workflowBytes = decodeGitHubFileContent(metadata, findings);
   const gitBlobSha = gitBlobDigest(workflowBytes);
-  const expectedRawUrl = `https://raw.githubusercontent.com/${repository}/${String(workflowHeadSha)}/${PERF_REALISTIC_WORKFLOW_PATH}`;
-  const expectedHtmlUrl = `https://github.com/${repository}/blob/${String(workflowHeadSha)}/${PERF_REALISTIC_WORKFLOW_PATH}`;
+  const expectedRawUrl = `https://raw.githubusercontent.com/${repository}/${String(workflowSha)}/${PERF_REALISTIC_WORKFLOW_PATH}`;
+  const expectedHtmlUrl = `https://github.com/${repository}/blob/${String(workflowSha)}/${PERF_REALISTIC_WORKFLOW_PATH}`;
   if (
     metadata?.type !== 'file' ||
     metadata?.encoding !== 'base64' ||
@@ -634,7 +704,7 @@ function authenticateWorkflowDefinition({
       apiUrl,
       contentDigest: sha256Bytes(workflowBytes),
       gitBlobSha: metadata?.sha ?? null,
-      headSha: workflowHeadSha ?? null,
+      workflowSha: workflowSha ?? null,
     },
     findings,
   };
@@ -698,9 +768,26 @@ function sourceCommitMatchesRun(run, sourceSha) {
   return run?.head_sha === sourceSha;
 }
 
-function validWorkflowReference(value, repository) {
+function validWorkflowReference(value, repository, event, runMetadata) {
   const prefix = `${repository}/${PERF_REALISTIC_WORKFLOW_PATH}@`;
-  return nonEmptyString(value) && value.startsWith(prefix) && value.length > prefix.length;
+  if (!nonEmptyString(value) || !value.startsWith(prefix)) return false;
+  const ref = value.slice(prefix.length);
+  if (event === 'pull_request') {
+    const pullRequests = Array.isArray(runMetadata?.pull_requests) ? runMetadata.pull_requests : [];
+    if (
+      pullRequests.length !== 1 ||
+      !Number.isSafeInteger(pullRequests[0]?.number) ||
+      pullRequests[0].number < 1
+    ) {
+      return false;
+    }
+    return ref === `refs/pull/${String(pullRequests[0].number)}/merge`;
+  }
+  if (!nonEmptyString(runMetadata?.head_branch)) return false;
+  return (
+    ref === `refs/heads/${runMetadata.head_branch}` ||
+    (event === 'workflow_dispatch' && ref === `refs/tags/${runMetadata.head_branch}`)
+  );
 }
 
 function validateExpectedWorkflowJob(value) {
@@ -733,6 +820,102 @@ function parseJsonBytes(bytes, label) {
   }
 }
 
+/**
+ * GitHub embeds mutable current-PR data in historical run responses. Custody compares only the
+ * immutable authority projection used by the gate while retaining the raw response digest for
+ * audit. This lets a later PR push change pull_requests[].head.sha without rewriting history.
+ */
+function artifactAuthorityProjection(value) {
+  return {
+    archive_download_url: value?.archive_download_url ?? null,
+    created_at: value?.created_at ?? null,
+    digest: value?.digest ?? null,
+    expired: value?.expired ?? null,
+    expires_at: value?.expires_at ?? null,
+    id: value?.id ?? null,
+    name: value?.name ?? null,
+    node_id: value?.node_id ?? null,
+    size_in_bytes: value?.size_in_bytes ?? null,
+    updated_at: value?.updated_at ?? null,
+    url: value?.url ?? null,
+    workflow_run: {
+      head_branch: value?.workflow_run?.head_branch ?? null,
+      head_repository_id: value?.workflow_run?.head_repository_id ?? null,
+      head_sha: value?.workflow_run?.head_sha ?? null,
+      id: value?.workflow_run?.id ?? null,
+      repository_id: value?.workflow_run?.repository_id ?? null,
+    },
+  };
+}
+
+function workflowRunAuthorityProjection(value) {
+  const pullRequests = Array.isArray(value?.pull_requests) ? value.pull_requests : [];
+  return {
+    conclusion: value?.conclusion ?? null,
+    created_at: value?.created_at ?? null,
+    event: value?.event ?? null,
+    head_branch: value?.head_branch ?? null,
+    head_commit: { id: value?.head_commit?.id ?? null },
+    head_repository: {
+      full_name: value?.head_repository?.full_name ?? null,
+      id: value?.head_repository?.id ?? null,
+    },
+    head_sha: value?.head_sha ?? null,
+    html_url: value?.html_url ?? null,
+    id: value?.id ?? null,
+    jobs_url: value?.jobs_url ?? null,
+    name: value?.name ?? null,
+    path: value?.path ?? null,
+    pull_requests: pullRequests
+      .map((pullRequest) => ({
+        id: pullRequest?.id ?? null,
+        number: pullRequest?.number ?? null,
+        url: pullRequest?.url ?? null,
+      }))
+      .sort((left, right) => Number(left.id) - Number(right.id)),
+    repository: {
+      full_name: value?.repository?.full_name ?? null,
+      id: value?.repository?.id ?? null,
+    },
+    run_attempt: value?.run_attempt ?? null,
+    run_number: value?.run_number ?? null,
+    run_started_at: value?.run_started_at ?? null,
+    status: value?.status ?? null,
+    updated_at: value?.updated_at ?? null,
+    url: value?.url ?? null,
+    workflow_id: value?.workflow_id ?? null,
+  };
+}
+
+function workflowJobsAuthorityProjection(value) {
+  const jobs = Array.isArray(value?.jobs) ? value.jobs : [];
+  return {
+    jobs: jobs
+      .map((job) => ({
+        completed_at: job?.completed_at ?? null,
+        conclusion: job?.conclusion ?? null,
+        head_branch: job?.head_branch ?? null,
+        head_sha: job?.head_sha ?? null,
+        html_url: job?.html_url ?? null,
+        id: job?.id ?? null,
+        name: job?.name ?? null,
+        node_id: job?.node_id ?? null,
+        run_attempt: job?.run_attempt ?? null,
+        run_id: job?.run_id ?? null,
+        started_at: job?.started_at ?? null,
+        status: job?.status ?? null,
+        url: job?.url ?? null,
+        workflow_name: job?.workflow_name ?? null,
+      }))
+      .sort((left, right) => Number(left.id) - Number(right.id)),
+    total_count: value?.total_count ?? null,
+  };
+}
+
+function sha256Authority(value) {
+  return sha256Bytes(Buffer.from(JSON.stringify(value), 'utf8'));
+}
+
 async function fetchLiveApiBytes(fetchApi, identity) {
   const bytes = Buffer.from(await fetchApi(identity));
   if (bytes.length < 1 || bytes.length > MAX_API_RESPONSE_BYTES) {
@@ -744,43 +927,31 @@ async function fetchLiveApiBytes(fetchApi, identity) {
 /** Read and authenticate one bounded regular-file member from a single-disk ZIP archive. */
 export function readZipMember(archiveBytes, memberName) {
   if (!safeZipPath(memberName)) throw new TypeError('ZIP member name is unsafe');
-  return readZipMembers(archiveBytes, [memberName])[0].bytes;
+  const entry = authenticateZipArchive(archiveBytes).find(({ member }) => member === memberName);
+  if (entry === undefined) throw new TypeError(`ZIP member ${memberName} is unavailable`);
+  return entry.bytes;
 }
 
-function readZipMembers(archiveBytes, memberNames) {
+function authenticateZipArchive(archiveBytes) {
   if (!Buffer.isBuffer(archiveBytes)) throw new TypeError('ZIP archive must be a Buffer');
   if (archiveBytes.length > MAX_ARCHIVE_BYTES) {
     throw new TypeError('ZIP archive exceeds the safety bound');
   }
-  if (
-    !Array.isArray(memberNames) ||
-    memberNames.length > MAX_AUXILIARY_MEMBERS ||
-    memberNames.some((memberName) => !safeZipPath(memberName)) ||
-    new Set(memberNames).size !== memberNames.length
-  ) {
-    throw new TypeError('ZIP member selection is unsafe or duplicated');
-  }
-  if (memberNames.length === 0) return [];
-  const selectedNames = new Set(memberNames);
   const entries = zipEntryCensus(archiveBytes);
-  const selected = entries.filter(({ name }) => selectedNames.has(name));
-  if (selected.length !== memberNames.length) {
-    const available = new Set(selected.map(({ name }) => name));
-    const missing = memberNames.find((memberName) => !available.has(memberName));
-    throw new TypeError(`ZIP member ${String(missing)} is unavailable`);
-  }
-  const uncompressedBytes = selected.reduce((sum, entry) => sum + entry.uncompressedSize, 0);
-  if (selected.some(({ uncompressedSize }) => uncompressedSize > MAX_REPORT_BYTES)) {
-    throw new TypeError('selected ZIP member exceeds the per-member size bound');
-  }
-  if (!Number.isSafeInteger(uncompressedBytes) || uncompressedBytes > MAX_ARCHIVE_BYTES) {
-    throw new TypeError('selected ZIP member census exceeds the aggregate size bound');
-  }
-  const selectedByName = new Map(selected.map((entry) => [entry.name, entry]));
-  return memberNames.map((member) => ({
-    bytes: inflateSelectedMember(archiveBytes, selectedByName.get(member)),
-    member,
-  }));
+  return entries
+    .map((entry) => {
+      const bytes = inflateSelectedMember(archiveBytes, entry);
+      return {
+        byteLength: bytes.length,
+        bytes,
+        compressedByteLength: entry.compressedSize,
+        compressionMethod: entry.method,
+        contentDigest: sha256Bytes(bytes),
+        crc32: `crc32:${entry.checksum.toString(16).padStart(8, '0')}`,
+        member: entry.name,
+      };
+    })
+    .sort((left, right) => left.member.localeCompare(right.member));
 }
 
 function zipEntryCensus(archiveBytes) {
@@ -846,18 +1017,25 @@ function zipEntryCensus(archiveBytes) {
     offset += recordLength;
   }
   if (offset !== eocdOffset) throw new TypeError('ZIP central directory census is inconsistent');
+  const uncompressedBytes = entries.reduce((sum, entry) => sum + entry.uncompressedSize, 0);
+  if (entries.some(({ uncompressedSize }) => uncompressedSize > MAX_REPORT_BYTES)) {
+    throw new TypeError('ZIP member exceeds the per-member size bound');
+  }
+  if (!Number.isSafeInteger(uncompressedBytes) || uncompressedBytes > MAX_ARCHIVE_BYTES) {
+    throw new TypeError('ZIP member census exceeds the aggregate uncompressed-size bound');
+  }
   return entries;
 }
 
 function resolveExpectedAuxiliaryMembers(
-  archiveBytes,
+  archiveCensus,
   { expectedAuxiliaryMember, expectedAuxiliaryMemberGroup, expectedAuxiliaryMembers },
 ) {
   if (expectedAuxiliaryMember !== undefined) return [expectedAuxiliaryMember];
   const fixed = expectedAuxiliaryMembers ?? [];
   if (expectedAuxiliaryMemberGroup === undefined) return [...fixed];
-  const matches = zipEntryCensus(archiveBytes)
-    .map(({ name }) => name)
+  const matches = archiveCensus
+    .map(({ member }) => member)
     .filter(
       (name) =>
         name.startsWith(expectedAuxiliaryMemberGroup.prefix) &&
@@ -913,6 +1091,22 @@ function validateExpectedAuxiliaryMembers({
       !safeZipMemberFragment(expectedAuxiliaryMemberGroup.suffix))
   ) {
     throw new TypeError('expected auxiliary member group must contain a safe prefix and suffix');
+  }
+}
+
+function validateExpectedArchiveMembers(value, expectedReportMember) {
+  if (value === undefined) return;
+  if (
+    !Array.isArray(value) ||
+    value.length < 1 ||
+    value.length > MAX_ZIP_ENTRIES ||
+    value.some((member) => !safeZipPath(member)) ||
+    new Set(value).size !== value.length ||
+    !value.includes(expectedReportMember)
+  ) {
+    throw new TypeError(
+      'expected archive members must be a distinct safe census containing the report member',
+    );
   }
 }
 
