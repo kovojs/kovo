@@ -4,7 +4,10 @@ import { dirname, join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { resolveComponentQueryRuntimeNames } from './scan/query-runtime-identities.js';
+import {
+  componentQueryRuntimeIdentityPreimage,
+  resolveComponentQueryRuntimeNames,
+} from './scan/query-runtime-identities.js';
 
 const roots: string[] = [];
 
@@ -13,6 +16,165 @@ afterEach(() => {
 });
 
 describe('compiler-owned query runtime identity project', () => {
+  it('admits only exact direct-import query bindings and ignores only render implementation bytes', () => {
+    const fileName = '/workspace/src/card.tsx';
+    const source = (
+      renderRevision: string,
+      options: { importPath?: string; queryBinding?: string; queryDeclaration?: string } = {},
+    ) =>
+      [
+        "import { component } from '@kovojs/core';",
+        `import { statusQuery } from '${options.importPath ?? './status.js'}';`,
+        options.queryDeclaration ?? "export const unrelatedLabel = 'revision-zero';",
+        'export const Card = component({',
+        `  queries: { status: ${options.queryBinding ?? 'statusQuery'} },`,
+        `  render: ({ status }) => <article data-revision="${renderRevision}">{status.label}</article>,`,
+        '});',
+        '',
+      ].join('\n');
+
+    const baseline = componentQueryRuntimeIdentityPreimage({ fileName, source: source('zero') });
+    expect(baseline).toBeDefined();
+    expect(componentQueryRuntimeIdentityPreimage({ fileName, source: source('one') })).toBe(
+      baseline,
+    );
+    expect(
+      componentQueryRuntimeIdentityPreimage({
+        fileName,
+        source: source('zero', { importPath: './forged.js' }),
+      }),
+    ).not.toBe(baseline);
+    expect(
+      componentQueryRuntimeIdentityPreimage({
+        fileName,
+        source: source('zero', { queryDeclaration: "export const unrelatedLabel = 'changed';" }),
+      }),
+    ).not.toBe(baseline);
+    expect(
+      componentQueryRuntimeIdentityPreimage({
+        fileName,
+        source: source('zero', { queryBinding: 'otherQuery' }),
+      }),
+    ).toBeUndefined();
+
+    const namespaceSource = source('zero')
+      .replace(
+        "import { statusQuery } from './status.js';",
+        "import * as queries from './status.js';",
+      )
+      .replace('status: statusQuery', 'status: queries.statusQuery');
+    expect(
+      componentQueryRuntimeIdentityPreimage({ fileName, source: namespaceSource }),
+    ).toBeUndefined();
+
+    const dynamicBaseline = source('zero').replace(
+      '<article data-revision="zero">',
+      "<article data-revision={void import('./render-a.js')}>",
+    );
+    expect(
+      componentQueryRuntimeIdentityPreimage({ fileName, source: dynamicBaseline }),
+    ).toBeUndefined();
+
+    const importTypeInRender = source('zero').replace(
+      'render: ({ status }) => <article data-revision="zero">{status.label}</article>',
+      [
+        'render: ({ status }) => {',
+        "    type RenderAugmentation = import('./render-augmentation.js').Value;",
+        '    return <article data-revision={null as unknown as RenderAugmentation}>{status.label}</article>;',
+        '  }',
+      ].join('\n'),
+    );
+    expect(
+      componentQueryRuntimeIdentityPreimage({ fileName, source: importTypeInRender }),
+    ).toBeUndefined();
+
+    const jsDocImportInRender = source('zero').replace(
+      'render: ({ status }) => <article data-revision="zero">{status.label}</article>',
+      [
+        'render: ({ status }) => {',
+        "    /** @type {import('./render-augmentation.js').Value} */",
+        '    const revision = null;',
+        '    return <article data-revision={revision}>{status.label}</article>;',
+        '  }',
+      ].join('\n'),
+    );
+    expect(
+      componentQueryRuntimeIdentityPreimage({ fileName, source: jsDocImportInRender }),
+    ).toBeUndefined();
+
+    const nestedQuery = source('zero').replace(
+      'render: ({ status }) => <article data-revision="zero">{status.label}</article>',
+      [
+        'render: ({ status }) => {',
+        '    const Nested = component({',
+        '      queries: { status: statusQuery },',
+        '      render: () => <span>{status.label}</span>,',
+        '    });',
+        '    return <Nested />;',
+        '  }',
+      ].join('\n'),
+    );
+    expect(
+      componentQueryRuntimeIdentityPreimage({ fileName, source: nestedQuery }),
+    ).toBeUndefined();
+    expect(
+      componentQueryRuntimeIdentityPreimage({
+        fileName,
+        source: source('zero').replace('</article>', '</article'),
+      }),
+    ).toBeUndefined();
+  });
+
+  it('derives reuse preimages through boot-captured compiler intrinsics after prototype poisoning', () => {
+    const fileName = '/workspace/src/status-card.tsx';
+    const source = [
+      "import { component } from '@kovojs/core';",
+      "import { statusQuery } from './status.js';",
+      'export const StatusCard = component({',
+      '  queries: { status: statusQuery },',
+      '  render: ({ status }) => <p>{status.label}</p>,',
+      '});',
+      '',
+    ].join('\n');
+    const expected = componentQueryRuntimeIdentityPreimage({ fileName, source });
+    const descriptors = {
+      arraySort: Object.getOwnPropertyDescriptor(Array.prototype, 'sort'),
+      getOwnPropertyDescriptor: Object.getOwnPropertyDescriptor(Object, 'getOwnPropertyDescriptor'),
+      setAdd: Object.getOwnPropertyDescriptor(Set.prototype, 'add'),
+      setHas: Object.getOwnPropertyDescriptor(Set.prototype, 'has'),
+    };
+    const defineProperty = Object.defineProperty;
+    const deleteProperty = Reflect.deleteProperty;
+    const poison = () => {
+      throw new Error('late prototype poison ran');
+    };
+    let actual: string | undefined;
+    try {
+      defineProperty(Array.prototype, 'sort', { configurable: true, value: poison });
+      defineProperty(Object, 'getOwnPropertyDescriptor', {
+        configurable: true,
+        value: poison,
+      });
+      defineProperty(Set.prototype, 'add', { configurable: true, value: poison });
+      defineProperty(Set.prototype, 'has', { configurable: true, value: poison });
+
+      actual = componentQueryRuntimeIdentityPreimage({ fileName, source });
+    } finally {
+      if (descriptors.arraySort === undefined) deleteProperty(Array.prototype, 'sort');
+      else defineProperty(Array.prototype, 'sort', descriptors.arraySort);
+      if (descriptors.getOwnPropertyDescriptor === undefined) {
+        deleteProperty(Object, 'getOwnPropertyDescriptor');
+      } else {
+        defineProperty(Object, 'getOwnPropertyDescriptor', descriptors.getOwnPropertyDescriptor);
+      }
+      if (descriptors.setAdd === undefined) deleteProperty(Set.prototype, 'add');
+      else defineProperty(Set.prototype, 'add', descriptors.setAdd);
+      if (descriptors.setHas === undefined) deleteProperty(Set.prototype, 'has');
+      else defineProperty(Set.prototype, 'has', descriptors.setHas);
+    }
+    expect(actual).toBe(expected);
+  });
+
   it('resolves shorthand bindings and extensionless free/namespace query declarations', () => {
     const root = projectRoot();
     const directSourceFile = join(root, 'src/components/direct-status-card.tsx');

@@ -81,7 +81,10 @@ import {
   parseDiagnosticsForSourceFile,
 } from './scan/parse.js';
 import { deriveRegistryIdentity } from './registry-identities.js';
-import { resolveComponentQueryRuntimeNames } from './scan/query-runtime-identities.js';
+import {
+  componentQueryRuntimeIdentityPreimage,
+  resolveComponentQueryRuntimeNames,
+} from './scan/query-runtime-identities.js';
 import { rewriteClientModuleRuntimeImportsForBrowser } from './emit/client.js';
 import { emitQueryPlanBootstrapModule, type QueryPlanBootstrapInput } from './emit/bootstrap.js';
 import { lowerStandaloneSourceDerivedRegistryDeclarations } from './source-derived-lowering.js';
@@ -533,6 +536,13 @@ interface ViteClientModuleHistory {
   previous?: ViteClientModuleVersion;
 }
 
+interface ViteQueryRuntimeIdentityReuseFact {
+  /** Exact canonical scanner preimage, including compiler-provided known-name facts. */
+  readonly preimage: string;
+  /** Result of a prior complete compiler-owned TypeScript Program resolution. */
+  readonly queryNames: Readonly<Record<string, string>>;
+}
+
 interface ViteDevFileState {
   clientHistory?: ViteClientModuleHistory;
   compiledClientModule?: KovoViteCompiledClientModule;
@@ -541,6 +551,7 @@ interface ViteDevFileState {
   hmrImpact?: HmrImpactMetadata;
   lastTouched: number;
   queryPlanBootstrapInput?: QueryPlanBootstrapInput;
+  queryRuntimeIdentityReuse?: ViteQueryRuntimeIdentityReuseFact;
   renderPlanFingerprintInput?: Readonly<Record<string, string>>;
   sourceUnits: number;
 }
@@ -867,6 +878,7 @@ function createBoundKovoVitePlugin(
   let stagedAppContractOperationsByFile: Map<string, boolean> | undefined;
   let stagedDevState: ViteDevStateStore | undefined;
   let viteDevMutationTail = compilerPromiseThen(undefined, () => undefined);
+  let pendingQueryRuntimeIdentityWatchFile: string | undefined;
   let pluginIdentity: KovoVitePlugin | undefined;
   const currentAppContractOperations = (): Map<string, boolean> =>
     stagedAppContractOperationsByFile ?? appContractOperationsByFile;
@@ -915,6 +927,7 @@ function createBoundKovoVitePlugin(
       activeHmrStateByFile = compilerCreateMap<string, ViteActiveHmrFileState>();
       stagedAppContractOperationsByFile = undefined;
       stagedDevState = undefined;
+      pendingQueryRuntimeIdentityWatchFile = undefined;
       const buildMode =
         config.command === undefined ? devState.buildMode : config.command === 'build';
       devState = createViteDevStateStore(buildMode, compilerOwnedProvenance);
@@ -930,6 +943,7 @@ function createBoundKovoVitePlugin(
       activeHmrStateByFile = compilerCreateMap<string, ViteActiveHmrFileState>();
       stagedAppContractOperationsByFile = undefined;
       stagedDevState = undefined;
+      pendingQueryRuntimeIdentityWatchFile = undefined;
       devState = createViteDevStateStore(false, compilerOwnedProvenance);
       root = server.config?.root ?? root;
       clientSourceFileSystems = viteClientSourceFileSystems(root, server.config?.server?.fs?.allow);
@@ -1119,6 +1133,9 @@ function createBoundKovoVitePlugin(
       return result;
     },
     transform(source: string, id: string) {
+      // Reuse authority is a one-shot Vite watchChange(update) -> handleHotUpdate handoff. Any
+      // intervening transform proves that this is not that lifecycle and closes the carry.
+      pendingQueryRuntimeIdentityWatchFile = undefined;
       // SPEC §2 / §5.2.1 / §6.1.1: compile identity must use one invocation-local root/fs carrier
       // across the asynchronous compiler boundary.
       const transformRoot = root;
@@ -1289,12 +1306,34 @@ function createBoundKovoVitePlugin(
       }
     },
     handleHotUpdate(context) {
+      const notificationRoot = root;
+      const notificationConfigurationEpoch = configurationEpoch;
+      const rawNotificationFile = compilerOwnDataValue(context, 'file', 'Vite hot-update context');
+      if (typeof rawNotificationFile !== 'string') {
+        throw new TypeError('Vite hot-update context.file must be an own string.');
+      }
+      const notificationFile = viteComponentFileName(rawNotificationFile, notificationRoot);
+      const preserveSameFileQueryRuntimeIdentity =
+        pendingQueryRuntimeIdentityWatchFile === notificationFile;
+      pendingQueryRuntimeIdentityWatchFile = undefined;
       return enqueueViteDevMutation(async () => {
-        // Capture before context.read(): the read itself is attacker/re-entry capable async code.
-        const hotUpdateRoot = root;
+        if (notificationConfigurationEpoch !== configurationEpoch || notificationRoot !== root) {
+          return [];
+        }
+        // Vite 8 awaits watchChange before it mutates the module graph and invokes HMR. Keep that
+        // lifecycle serialized with runner staging: eager supersession could let a staged runner
+        // swap while suppressing the matching compiler-state commit (SPEC §6.2.1/§9.5.1).
+        const hotUpdateRoot = notificationRoot;
         const hotUpdateSourceFileSystems = clientSourceFileSystems;
-        const hotUpdateConfigurationEpoch = configurationEpoch;
+        const hotUpdateConfigurationEpoch = notificationConfigurationEpoch;
         const activeDevState = devState;
+        const fileName = notificationFile;
+        // Only Vite's serialized matching update event can preserve this exact file's proof. Bare
+        // HMR calls and mismatches resolve from a fresh Program instead of inventing graph truth.
+        invalidateViteQueryRuntimeIdentityReuse(
+          activeDevState,
+          preserveSameFileQueryRuntimeIdentity ? fileName : undefined,
+        );
         const hotUpdateDevState = cloneViteDevStateStore(activeDevState);
         const hotUpdateAppContractOperations = cloneViteDevMap(appContractOperationsByFile);
         if (stagedDevState !== undefined || stagedAppContractOperationsByFile !== undefined) {
@@ -1306,7 +1345,6 @@ function createBoundKovoVitePlugin(
           pluginIdentity === undefined
             ? undefined
             : compilerWeakMapGet(frameworkViteDevGenerationStages, pluginIdentity);
-        const fileName = viteComponentFileName(context.file, hotUpdateRoot);
         compileIssue += 1;
         const hotUpdateCompileIssue = compileIssue;
         compilerMapSet(latestHotUpdateIssueByFile, fileName, hotUpdateCompileIssue);
@@ -1550,12 +1588,23 @@ function createBoundKovoVitePlugin(
       });
     },
     watchChange(id, change) {
+      const event = compilerOwnDataValue(change, 'event', 'Vite watch change');
+      if (event !== 'create' && event !== 'delete' && event !== 'update') {
+        throw new TypeError('Vite watch change event must be create, delete, or update.');
+      }
+      const notificationRoot = root;
+      const notificationConfigurationEpoch = configurationEpoch;
+      const fileName = viteComponentFileName(id, notificationRoot);
+      pendingQueryRuntimeIdentityWatchFile = undefined;
       return enqueueViteDevMutation(async () => {
-        const event = compilerOwnDataValue(change, 'event', 'Vite watch change');
-        if (event !== 'create' && event !== 'delete' && event !== 'update') {
-          throw new TypeError('Vite watch change event must be create, delete, or update.');
+        if (notificationConfigurationEpoch !== configurationEpoch || notificationRoot !== root) {
+          return;
         }
-        const fileName = viteComponentFileName(id, root);
+        invalidateViteQueryRuntimeIdentityReuse(
+          devState,
+          event === 'update' ? fileName : undefined,
+        );
+        pendingQueryRuntimeIdentityWatchFile = event === 'update' ? fileName : undefined;
         // Every watch event advances the source revision. Only deletion removes retained output,
         // but create/update must still retire older transform/load/HMR settlements for this file.
         compileIssue += 1;
@@ -1901,6 +1950,59 @@ function cloneViteDevMap<Key, Value>(source: Map<Key, Value>): Map<Key, Value> {
     compilerMapSet(clone, key, value);
   });
   return clone;
+}
+
+/**
+ * A watcher/HMR event for one file is the complete authority for same-file reuse. Preserve only
+ * that file's prior Program proof on an ordinary update; every other cached proof loses its
+ * dependency freshness immediately. Create/delete events preserve none. The proof lives inside
+ * the bounded dev store, so eviction and configuration replacement clear it automatically.
+ */
+function invalidateViteQueryRuntimeIdentityReuse(
+  store: ViteDevStateStore,
+  preservedFileName: string | undefined,
+): void {
+  const replacements: Array<readonly [string, ViteDevFileState]> = [];
+  compilerMapForEach(store.files, (state, fileName) => {
+    const reuse = state.queryRuntimeIdentityReuse;
+    if (reuse === undefined || fileName === preservedFileName) return;
+    const reuseSourceUnits = viteQueryRuntimeIdentityReuseSourceUnits(reuse);
+    const sourceUnits = state.sourceUnits - reuseSourceUnits;
+    if (sourceUnits < 0) {
+      throw new RangeError('Kovo Vite query identity reuse exceeded its owning source budget.');
+    }
+    compilerArrayAppend(
+      replacements,
+      [
+        fileName,
+        {
+          ...(state.clientHistory === undefined ? {} : { clientHistory: state.clientHistory }),
+          ...(state.compiledClientModule === undefined
+            ? {}
+            : { compiledClientModule: state.compiledClientModule }),
+          ...(state.cssAssets === undefined ? {} : { cssAssets: state.cssAssets }),
+          ...(state.hasOptimisticModule === undefined
+            ? {}
+            : { hasOptimisticModule: state.hasOptimisticModule }),
+          ...(state.hmrImpact === undefined ? {} : { hmrImpact: state.hmrImpact }),
+          lastTouched: state.lastTouched,
+          ...(state.queryPlanBootstrapInput === undefined
+            ? {}
+            : { queryPlanBootstrapInput: state.queryPlanBootstrapInput }),
+          ...(state.renderPlanFingerprintInput === undefined
+            ? {}
+            : { renderPlanFingerprintInput: state.renderPlanFingerprintInput }),
+          sourceUnits,
+        },
+      ],
+      'Vite query identity reuse invalidations',
+    );
+    store.sourceUnits -= reuseSourceUnits;
+  });
+  for (let index = 0; index < replacements.length; index += 1) {
+    const replacement = replacements[index]!;
+    compilerMapSet(store.files, replacement[0], replacement[1]);
+  }
 }
 
 function commitViteDevStateStore(active: ViteDevStateStore, candidate: ViteDevStateStore): void {
@@ -2797,22 +2899,32 @@ function queryPlanBootstrapInputForComponent(
   source: string,
   importPath: string,
   metadata: NonNullable<ViteCompileMetadata['queryPlanBootstrapMetadata']>,
-): QueryPlanBootstrapInput {
-  const queryNames = resolveViteComponentQueryRuntimeNames(
+  priorReuse: ViteQueryRuntimeIdentityReuseFact | undefined,
+  retainReuse: boolean,
+): {
+  input: QueryPlanBootstrapInput;
+  reuse?: ViteQueryRuntimeIdentityReuseFact;
+} {
+  const resolution = resolveViteComponentQueryRuntimeNames(
     rootDirectory,
     fileName,
     source,
     metadata.queryNames,
+    priorReuse,
+    retainReuse,
   );
-  return compilerFreeze({
-    ...(metadata.clockExportName === undefined
-      ? {}
-      : { clockExportName: metadata.clockExportName }),
-    componentName: metadata.componentName,
-    exportName: metadata.exportName,
-    importPath,
-    queryNames,
-  });
+  return {
+    input: compilerFreeze({
+      ...(metadata.clockExportName === undefined
+        ? {}
+        : { clockExportName: metadata.clockExportName }),
+      componentName: metadata.componentName,
+      exportName: metadata.exportName,
+      importPath,
+      queryNames: resolution.queryNames,
+    }),
+    ...(resolution.reuse === undefined ? {} : { reuse: resolution.reuse }),
+  };
 }
 
 function resolveViteComponentQueryRuntimeNames(
@@ -2820,14 +2932,69 @@ function resolveViteComponentQueryRuntimeNames(
   fileName: string,
   source: string,
   knownNames?: Readonly<Record<string, string>>,
-): Readonly<Record<string, string>> {
+  priorReuse?: ViteQueryRuntimeIdentityReuseFact,
+  retainReuse = false,
+): {
+  queryNames: Readonly<Record<string, string>>;
+  reuse?: ViteQueryRuntimeIdentityReuseFact;
+} {
   const programFileName = isAbsolute(fileName) ? fileName : resolve(rootDirectory, fileName);
-  return resolveComponentQueryRuntimeNames({
+  const resolveFresh = (): Readonly<Record<string, string>> =>
+    resolveComponentQueryRuntimeNames({
+      fileName: programFileName,
+      ...(knownNames === undefined ? {} : { knownNames }),
+      rootDirectory,
+      source,
+    });
+  if (!retainReuse) return { queryNames: resolveFresh() };
+
+  const sourcePreimage = componentQueryRuntimeIdentityPreimage({
     fileName: programFileName,
     ...(knownNames === undefined ? {} : { knownNames }),
-    rootDirectory,
     source,
   });
+  if (sourcePreimage === undefined) return { queryNames: resolveFresh() };
+  const preimage = canonicalJson({
+    // Fresh resolution copies known names in own-key enumeration order, and emitted bootstrap
+    // bytes preserve that order. Canonicalizing a record would sort away an observable change.
+    knownNames: orderedViteQueryRuntimeNames(knownNames),
+    source: sourcePreimage,
+  });
+  if (priorReuse?.preimage === preimage) {
+    return { queryNames: priorReuse.queryNames, reuse: priorReuse };
+  }
+
+  const queryNames = resolveFresh();
+  const reuse = compilerFreeze({
+    preimage,
+    queryNames,
+  });
+  return { queryNames, reuse };
+}
+
+function orderedViteQueryRuntimeNames(
+  names: Readonly<Record<string, string>> | undefined,
+): Array<readonly [string, string]> {
+  if (names === undefined) return [];
+  const keys = compilerObjectKeys(names);
+  const entries: Array<readonly [string, string]> = [];
+  const keyLength = compilerArrayLength(keys, 'Vite ordered query runtime name keys');
+  for (let index = 0; index < keyLength; index += 1) {
+    const key = compilerOwnDataValue(keys, index, 'Vite ordered query runtime name keys');
+    if (typeof key !== 'string') {
+      throw new TypeError(`Vite ordered query runtime name keys[${index}] must be a string.`);
+    }
+    const value = compilerOwnDataValue(names, key, 'Vite ordered query runtime names');
+    if (typeof value !== 'string') {
+      throw new TypeError(`Vite ordered query runtime name ${key} must be a string.`);
+    }
+    compilerArrayAppend(
+      entries,
+      compilerFreeze([key, value] as const),
+      'Vite ordered query runtime names',
+    );
+  }
+  return entries;
 }
 
 function snapshotViteQueryShapeFact(
@@ -3397,22 +3564,26 @@ function recordViteCompileResult(
   let clientHistory: ViteClientModuleHistory | undefined;
   let compiledClientModule: KovoViteCompiledClientModule | undefined;
   let queryPlanBootstrapInput: QueryPlanBootstrapInput | undefined;
+  let queryRuntimeIdentityReuse: ViteQueryRuntimeIdentityReuseFact | undefined;
   if (clientSource !== undefined) {
     const finalSource = rewriteClientModuleRuntimeImportsForBrowser(clientSource);
     const href = clientModuleHrefForSourceFile(
       fileName,
       clientModuleRepresentationDigest(finalSource),
     );
-    queryPlanBootstrapInput =
-      metadata.queryPlanBootstrapMetadata === undefined
-        ? undefined
-        : queryPlanBootstrapInputForComponent(
-            rootDirectory,
-            fileName,
-            source,
-            href,
-            metadata.queryPlanBootstrapMetadata,
-          );
+    if (metadata.queryPlanBootstrapMetadata !== undefined) {
+      const queryPlan = queryPlanBootstrapInputForComponent(
+        rootDirectory,
+        fileName,
+        source,
+        href,
+        metadata.queryPlanBootstrapMetadata,
+        existing?.queryRuntimeIdentityReuse,
+        !store.buildMode && store.compilerOwnedProvenance !== undefined,
+      );
+      queryPlanBootstrapInput = queryPlan.input;
+      queryRuntimeIdentityReuse = queryPlan.reuse;
+    }
     clientHistory = nextViteClientModuleHistory(existing?.clientHistory, href, finalSource);
     const target = parseVersionedClientModuleTarget(href);
     if (
@@ -3458,6 +3629,7 @@ function recordViteCompileResult(
     hmrImpact,
     optimisticModule !== undefined,
     queryPlanBootstrapInput,
+    queryRuntimeIdentityReuse,
     metadata.renderPlanFingerprintInput,
   );
   if (
@@ -3473,6 +3645,7 @@ function recordViteCompileResult(
       hmrImpact,
       optimisticModule !== undefined,
       queryPlanBootstrapInput,
+      queryRuntimeIdentityReuse,
       metadata.renderPlanFingerprintInput,
     );
   }
@@ -3513,6 +3686,7 @@ function recordViteCompileResult(
     ...(hmrImpact === undefined ? {} : { hmrImpact }),
     lastTouched: store.touch,
     ...(queryPlanBootstrapInput === undefined ? {} : { queryPlanBootstrapInput }),
+    ...(queryRuntimeIdentityReuse === undefined ? {} : { queryRuntimeIdentityReuse }),
     ...(compilerObjectKeys(metadata.renderPlanFingerprintInput).length === 0
       ? {}
       : { renderPlanFingerprintInput: metadata.renderPlanFingerprintInput }),
@@ -3625,6 +3799,7 @@ function viteDevFileSourceUnits(
   hmrImpact: HmrImpactMetadata | undefined,
   hasOptimisticModule: boolean,
   queryPlanBootstrapInput: QueryPlanBootstrapInput | undefined,
+  queryRuntimeIdentityReuse: ViteQueryRuntimeIdentityReuseFact | undefined,
   renderPlanFingerprintInput: Readonly<Record<string, string>>,
 ): number {
   return (
@@ -3639,8 +3814,20 @@ function viteDevFileSourceUnits(
       ...(compilerObjectKeys(renderPlanFingerprintInput).length === 0
         ? {}
         : { renderPlanFingerprintInput }),
-    }).length
+    }).length +
+    (queryRuntimeIdentityReuse === undefined
+      ? 0
+      : viteQueryRuntimeIdentityReuseSourceUnits(queryRuntimeIdentityReuse))
   );
+}
+
+function viteQueryRuntimeIdentityReuseSourceUnits(
+  reuse: ViteQueryRuntimeIdentityReuseFact,
+): number {
+  // The owning file-state record is always non-empty. Exact marginal JSON size is therefore the
+  // one-property object (including the field name) minus one byte: replace its two braces with the
+  // comma that joins this field to the existing record. Use the same charge for invalidation.
+  return canonicalJson({ queryRuntimeIdentityReuse: reuse }).length - 1;
 }
 
 function classifyViteHmrImpact(

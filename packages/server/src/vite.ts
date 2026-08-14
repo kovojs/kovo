@@ -379,6 +379,9 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   const dataPlaneDisposition = (): DataPlaneAnalysisDisposition =>
     viteCommand === 'serve' ? 'dev' : 'build';
   let devDataPlaneDebounce: ReturnType<typeof setTimeout> | undefined;
+  let devWholeProjectAnalysisRequested = false;
+  let devHotUpdatesInFlight = 0;
+  let devAnalysisSourceEpoch = 0;
   // Files for which the data-plane gate last surfaced dev teaching diagnostics, so a follow-up
   // re-evaluation can clear records for files that became clean (SPEC.md §9.5.1).
   let devDataPlaneReportedFiles = new Set<string>();
@@ -387,7 +390,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   // actually differ from the facts the last transforms used.
   let devServer: KovoViteDevServer | undefined;
   let devAnalysisRunning = false;
-  let devAnalysisDirty = false;
+  let devAnalysisQueuedEpoch: number | undefined;
   let committedProjectFactsDigest: string | undefined;
 
   let projectFactsDigestFallback = 0;
@@ -427,40 +430,60 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   // page is explicitly marked dev-unproven via the `Kovo-Dev-Posture` response header. Analyzer
   // failures keep the last-good facts and never take down the dev server; the data-plane gate
   // owns surfacing them as teaching diagnostics.
-  const runDevProjectFactsRefresh = async (): Promise<void> => {
+  const devAnalysisEpochIsCurrent = (epoch: number): boolean =>
+    epoch === devAnalysisSourceEpoch && devHotUpdatesInFlight === 0;
+
+  const advanceDevAnalysisSourceEpoch = (): number => {
+    const next = devAnalysisSourceEpoch + 1;
+    if (next > viteMaximumSafeInteger) {
+      throw new RangeError('Kovo dev analysis source epoch exceeded the safe integer limit.');
+    }
+    devAnalysisSourceEpoch = next;
+    return next;
+  };
+
+  const runDevProjectFactsRefresh = async (analysisEpoch: number): Promise<boolean> => {
+    if (!devAnalysisEpochIsCurrent(analysisEpoch)) return false;
     try {
       const mutationFacts = collectCompilerProjectMutationFacts(root, app, dataPlaneDisposition());
       const queryFacts = snapshotBuildArray(
         await collectCompilerQueryShapeFacts(root, app, dataPlaneDisposition()),
         'compiler query-shape facts',
       );
+      if (!devAnalysisEpochIsCurrent(analysisEpoch)) return false;
       const digest = projectFactsDigest(queryFacts, mutationFacts);
-      if (digest === committedProjectFactsDigest) return;
+      if (!devAnalysisEpochIsCurrent(analysisEpoch)) return false;
+      if (digest === committedProjectFactsDigest) return true;
       // The async refresh only runs under sole compiler ownership (see handleHotUpdate); this
       // assert is defense-in-depth and returns immediately for an undefined external owner.
       assertExternalCompilerHasNoDerivedFacts(externalCompilerPlugin, queryFacts, mutationFacts);
+      if (!devAnalysisEpochIsCurrent(analysisEpoch)) return false;
       compilerProjectMutationFacts = mutationFacts;
       compilerQueryShapeFacts = queryFacts;
       committedProjectFactsDigest = digest;
       publishDevFactsConvergence();
+      return true;
     } catch {
       // Keep serving with the last-good facts (dev-unproven posture). Dev never crashes HMR.
+      return devAnalysisEpochIsCurrent(analysisEpoch);
     }
   };
 
   // SPEC.md §11.4 / §10.2 / §10.3: re-run the project-level data-plane gate and surface its
   // findings as dev teaching diagnostics in the existing ledger. Never throws — dev must not
   // crash HMR. Records are keyed per file so a later clean run clears the prior teaching page.
-  const runDevDataPlaneGate = async (): Promise<void> => {
+  const runDevDataPlaneGate = async (analysisEpoch?: number): Promise<boolean> => {
     const emit = onServerModuleDiagnostics;
-    if (!emit) return;
+    if (analysisEpoch !== undefined && !devAnalysisEpochIsCurrent(analysisEpoch)) return false;
+    if (!emit) return true;
     let diagnostics: readonly DataPlaneDiagnostic[];
     try {
       diagnostics = await collectDataPlaneDiagnostics(root, app, dataPlaneDisposition());
     } catch {
       // A transient analyzer/parse failure must not take down the dev server.
-      return;
+      return analysisEpoch === undefined || devAnalysisEpochIsCurrent(analysisEpoch);
     }
+    if (analysisEpoch !== undefined && !devAnalysisEpochIsCurrent(analysisEpoch)) return false;
     logDevDataPlaneWarnings(diagnostics);
 
     const byFile = new Map<string, DataPlaneDiagnostic[]>();
@@ -472,36 +495,50 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
 
     const reportedNow = new Set<string>();
     for (const [fileName, fileDiagnostics] of byFile) {
+      if (analysisEpoch !== undefined && !devAnalysisEpochIsCurrent(analysisEpoch)) return false;
       const absFileName = slashPath(buildSecurityPathResolve(root, fileName));
       reportedNow.add(absFileName);
       emit(dataPlaneLedgerReport(absFileName, fileDiagnostics));
     }
     for (const absFileName of devDataPlaneReportedFiles) {
+      if (analysisEpoch !== undefined && !devAnalysisEpochIsCurrent(analysisEpoch)) return false;
       if (reportedNow.has(absFileName)) continue;
       // Clear the prior teaching record for a file that is now clean.
       emit({ diagnostics: [], fileName: absFileName, source: readSourceSafe(absFileName) });
     }
+    if (analysisEpoch !== undefined && !devAnalysisEpochIsCurrent(analysisEpoch)) return false;
     devDataPlaneReportedFiles = reportedNow;
+    return true;
   };
 
   // One whole-project dev analysis pass: refresh the compiler's project facts, then surface the
   // gate's teaching diagnostics. Both consumers read the same content-keyed analysis memo, so the
   // pass runs the underlying analyzers once. Single-flight with a dirty bit: a save landing while
   // a pass runs coalesces into exactly one follow-up pass over the newest content (D5-d).
-  const runDevWholeProjectAnalysis = async (): Promise<void> => {
+  const runDevWholeProjectAnalysis = async (requestedEpoch: number): Promise<void> => {
     if (devAnalysisRunning) {
-      devAnalysisDirty = true;
+      devAnalysisQueuedEpoch = requestedEpoch;
       return;
     }
     devAnalysisRunning = true;
+    let analysisEpoch = requestedEpoch;
     try {
       do {
-        devAnalysisDirty = false;
-        await runDevProjectFactsRefresh();
-        await runDevDataPlaneGate();
-      } while (devAnalysisDirty);
+        devAnalysisQueuedEpoch = undefined;
+        if (!devAnalysisEpochIsCurrent(analysisEpoch)) return;
+        if (!(await runDevProjectFactsRefresh(analysisEpoch))) return;
+        if (!(await runDevDataPlaneGate(analysisEpoch))) return;
+        const queuedEpoch = devAnalysisQueuedEpoch;
+        if (queuedEpoch === undefined) return;
+        analysisEpoch = queuedEpoch;
+      } while (devAnalysisEpochIsCurrent(analysisEpoch));
     } finally {
       devAnalysisRunning = false;
+      const queuedEpoch = devAnalysisQueuedEpoch;
+      devAnalysisQueuedEpoch = undefined;
+      if (queuedEpoch !== undefined && devAnalysisEpochIsCurrent(queuedEpoch)) {
+        void runDevWholeProjectAnalysis(queuedEpoch);
+      }
     }
   };
 
@@ -510,16 +547,30 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   // never on the HMR blocking path. The settle window deliberately exceeds a typical post-edit
   // reload round trip so the re-rendered page wins the event loop before the analyzers (which
   // contain long synchronous stretches) start (plans/good-perf.md D5-d).
-  const scheduleDevWholeProjectAnalysis = (file: string): void => {
-    if (viteCommand !== 'serve') return;
-    if (!isDataPlaneSourceFile(file, root)) {
+  const cancelDevWholeProjectAnalysisSettlement = (): void => {
+    if (devDataPlaneDebounce === undefined) return;
+    viteClearTimeout(devDataPlaneDebounce);
+    devDataPlaneDebounce = undefined;
+  };
+
+  const scheduleDevWholeProjectAnalysisSettlement = (): void => {
+    if (
+      viteCommand !== 'serve' ||
+      !devWholeProjectAnalysisRequested ||
+      devHotUpdatesInFlight !== 0 ||
+      devDataPlaneDebounce !== undefined
+    ) {
       return;
     }
-    if (devDataPlaneDebounce) viteClearTimeout(devDataPlaneDebounce);
-    devDataPlaneDebounce = viteSetTimeout(() => {
-      void runDevWholeProjectAnalysis();
+    const pending = viteSetTimeout(() => {
+      if (devDataPlaneDebounce !== pending) return;
+      devDataPlaneDebounce = undefined;
+      if (devHotUpdatesInFlight !== 0) return;
+      devWholeProjectAnalysisRequested = false;
+      void runDevWholeProjectAnalysis(devAnalysisSourceEpoch);
     }, DEV_ANALYSIS_SETTLE_MS);
-    devDataPlaneDebounce.unref?.();
+    devDataPlaneDebounce = pending;
+    pending.unref?.();
   };
 
   const compilerPlugin = async (): Promise<KovoCompilerVitePlugin> => {
@@ -563,6 +614,9 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   const plugin: KovoViteRuntimePlugin = {
     enforce: 'pre',
     async configResolved(config) {
+      cancelDevWholeProjectAnalysisSettlement();
+      devWholeProjectAnalysisRequested = false;
+      advanceDevAnalysisSourceEpoch();
       const rootProperty = buildOwnDataProperty(config, 'root', 'Vite resolved root');
       if (rootProperty.present) {
         if (typeof rootProperty.value !== 'string') {
@@ -785,6 +839,28 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       return null;
     },
     async handleHotUpdate(context) {
+      const fileProperty = buildOwnDataProperty(context, 'file', 'Vite hot-update context');
+      if (!fileProperty.present || typeof fileProperty.value !== 'string') {
+        throw new TypeError('Vite hot-update context.file must be an own string.');
+      }
+      const hotUpdateFile = fileProperty.value;
+      const tracksDevAnalysisSettlement = viteCommand === 'serve';
+      const hotUpdateIsDataPlane =
+        tracksDevAnalysisSettlement && isDataPlaneSourceFile(hotUpdateFile, root);
+      if (tracksDevAnalysisSettlement) {
+        advanceDevAnalysisSourceEpoch();
+        const nextInFlight = devHotUpdatesInFlight + 1;
+        if (nextInFlight > viteMaximumSafeInteger) {
+          throw new RangeError('Kovo dev HMR settlement depth exceeded the safe integer limit.');
+        }
+        devHotUpdatesInFlight = nextInFlight;
+        if (hotUpdateIsDataPlane || devAnalysisRunning) {
+          devWholeProjectAnalysisRequested = true;
+        }
+        // Any HMR outcome, including a non-data-plane edit, owns the quiet-window boundary. Keep
+        // a prior data-plane intent while preventing its timer from maturing under this update.
+        cancelDevWholeProjectAnalysisSettlement();
+      }
       // plans/good-perf.md O5/D5-d (SPEC.md §9.5.1): whole-project analysis — the compiler's
       // query/mutation fact snapshot AND the data-plane teaching gate — is OFF the HMR blocking
       // path. The edit is staged and served immediately against the last-committed facts; the
@@ -793,44 +869,56 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       // fresh facts differ. Dev responses are explicitly marked `Kovo-Dev-Posture: dev-unproven`;
       // `kovo check` and `kovo build` still derive these facts synchronously and fail closed
       // (SPEC §5.2 rule 10 posture is proven per commit, not per keystroke).
-      scheduleDevWholeProjectAnalysis(context.file);
-      if (externalCompilerPlugin !== undefined && isDataPlaneSourceFile(context.file, root)) {
-        // Split-ownership embedding (separately configured compiler owner): the adopted owner
-        // cannot receive server-derived facts, so fact derivation stays synchronous here and
-        // the empty-fact adoption is revoked fail-closed the moment facts appear. Only the
-        // supported sole-ownership `kovo dev` path takes the D5-d async pass.
-        compilerProjectMutationFacts = collectCompilerProjectMutationFacts(
-          root,
-          app,
-          dataPlaneDisposition(),
-        );
-        compilerQueryShapeFacts = snapshotBuildArray(
-          await collectCompilerQueryShapeFacts(root, app, dataPlaneDisposition()),
-          'compiler query-shape facts',
-        );
-        committedProjectFactsDigest = projectFactsDigest(
-          compilerQueryShapeFacts,
-          compilerProjectMutationFacts,
-        );
-        assertExternalCompilerHasNoDerivedFacts(
-          externalCompilerPlugin,
-          compilerQueryShapeFacts,
-          compilerProjectMutationFacts,
-        );
-      }
+      try {
+        if (externalCompilerPlugin !== undefined && isDataPlaneSourceFile(hotUpdateFile, root)) {
+          // Split-ownership embedding (separately configured compiler owner): the adopted owner
+          // cannot receive server-derived facts, so fact derivation stays synchronous here and
+          // the empty-fact adoption is revoked fail-closed the moment facts appear. Only the
+          // supported sole-ownership `kovo dev` path takes the D5-d async pass.
+          compilerProjectMutationFacts = collectCompilerProjectMutationFacts(
+            root,
+            app,
+            dataPlaneDisposition(),
+          );
+          compilerQueryShapeFacts = snapshotBuildArray(
+            await collectCompilerQueryShapeFacts(root, app, dataPlaneDisposition()),
+            'compiler query-shape facts',
+          );
+          committedProjectFactsDigest = projectFactsDigest(
+            compilerQueryShapeFacts,
+            compilerProjectMutationFacts,
+          );
+          assertExternalCompilerHasNoDerivedFacts(
+            externalCompilerPlugin,
+            compilerQueryShapeFacts,
+            compilerProjectMutationFacts,
+          );
+        }
 
-      // App-shell HMR owns route-shell event selection, but it must not publish the update before
-      // the compiler has staged the fresh, fully assembled runner generation (SPEC §6.2.1/§9.5.1).
-      const errorRevisionBeforeCompile = compilerErrorDiagnosticRevision;
-      const compilerResult =
-        externalCompilerPlugin === undefined
-          ? await (await compilerPlugin()).handleHotUpdate?.(context)
-          : undefined;
-      if (compilerErrorDiagnosticRevision !== errorRevisionBeforeCompile) {
-        return compilerResult ?? [];
+        // App-shell HMR owns route-shell event selection, but it must not publish the update before
+        // the compiler has staged the fresh, fully assembled runner generation (SPEC §6.2.1/§9.5.1).
+        const errorRevisionBeforeCompile = compilerErrorDiagnosticRevision;
+        const compilerResult =
+          externalCompilerPlugin === undefined
+            ? await (await compilerPlugin()).handleHotUpdate?.(context)
+            : undefined;
+        if (compilerErrorDiagnosticRevision !== errorRevisionBeforeCompile) {
+          return compilerResult ?? [];
+        }
+        const appShellResult = await appShellPlugin?.handleHotUpdate?.(context);
+        return appShellResult ?? compilerResult ?? context.modules ?? [];
+      } finally {
+        if (tracksDevAnalysisSettlement) {
+          devHotUpdatesInFlight -= 1;
+          // Begin the settle window only after every overlapping success, diagnostic, or thrown
+          // HMR outcome has unwound. Scheduling is nonfatal and must not mask that outcome.
+          try {
+            scheduleDevWholeProjectAnalysisSettlement();
+          } catch {
+            // The dev-unproven server retains the last-good facts; the next edit can retry.
+          }
+        }
       }
-      const appShellResult = await appShellPlugin?.handleHotUpdate?.(context);
-      return appShellResult ?? compilerResult ?? context.modules ?? [];
     },
     name: 'kovo',
   };

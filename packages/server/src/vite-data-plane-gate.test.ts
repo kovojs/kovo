@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { kovo } from './vite.js';
 import { withKovoBuildContext } from './internal/build-context.js';
@@ -1071,6 +1071,223 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     expect(sqlite?.diagnostics).toHaveLength(2);
   });
 
+  it('starts one analysis settle window only after every overlapping HMR outcome finishes', async () => {
+    const root = await fixture({
+      'src/components/card.css': '.card { display: block; }',
+      'src/queries/search.ts': KV422_INJECTION,
+    });
+    const captured: CapturedReport[] = [];
+    const appShellOutcomes: Array<Promise<readonly unknown[]>> = [];
+    const appShellHandleHotUpdate = vi.fn(
+      async (): Promise<readonly unknown[]> => (await appShellOutcomes.shift()) ?? [],
+    );
+
+    const wait = (milliseconds: number) =>
+      new Promise<void>((resolveWait) => setTimeout(resolveWait, milliseconds));
+
+    const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+    await plugin.configResolved({ command: 'serve', root });
+    const server = await configureDevServer(plugin, root, captured, appShellHandleHotUpdate);
+    const queryPath = join(root, 'src/queries/search.ts');
+    const cssPath = join(root, 'src/components/card.css');
+    const findingCount = () =>
+      captured.filter((report) =>
+        report.diagnostics.some((diagnostic) => diagnostic.code === 'KV422'),
+      ).length;
+    const waitForFinding = async () => {
+      const deadline = Date.now() + 30_000;
+      while (Date.now() < deadline && findingCount() !== 1) await wait(50);
+      expect(findingCount()).toBe(1);
+    };
+    const deferredOutcome = () => {
+      let resolveOutcome: ((value: readonly unknown[]) => void) | undefined;
+      const outcome = new Promise<readonly unknown[]>((resolve) => {
+        resolveOutcome = resolve;
+      });
+      return { outcome, resolve: () => resolveOutcome?.([]) };
+    };
+
+    // No timer exists until the app-shell/compile outcome has actually published and unwound.
+    const first = deferredOutcome();
+    appShellOutcomes.push(first.outcome);
+    const firstHmr = plugin.handleHotUpdate({
+      file: queryPath,
+      modules: [],
+      read: async () => KV422_INJECTION,
+      server,
+    });
+    await wait(1_650);
+    expect(findingCount()).toBe(0);
+    first.resolve();
+    await firstHmr;
+    await wait(1_300);
+    expect(findingCount()).toBe(0);
+    await waitForFinding();
+
+    // A later non-data edit cancels the old deadline without losing the data edit's intent.
+    captured.length = 0;
+    await plugin.handleHotUpdate({
+      file: queryPath,
+      modules: [],
+      read: async () => KV422_INJECTION,
+      server,
+    });
+    await wait(750);
+    const nonData = deferredOutcome();
+    appShellOutcomes.push(nonData.outcome);
+    const nonDataHmr = plugin.handleHotUpdate({
+      file: cssPath,
+      modules: [],
+      read: async () => '.card { display: grid; }',
+      server,
+    });
+    await wait(900);
+    expect(findingCount()).toBe(0);
+    nonData.resolve();
+    await nonDataHmr;
+    await wait(1_300);
+    expect(findingCount()).toBe(0);
+    await waitForFinding();
+
+    // Overlapping outcomes share one quiet-window boundary; the first completion cannot arm a
+    // timer underneath the second update, even when that update exceeds the settle duration.
+    captured.length = 0;
+    const overlappingFirst = deferredOutcome();
+    const overlappingSecond = deferredOutcome();
+    appShellOutcomes.push(overlappingFirst.outcome, overlappingSecond.outcome);
+    const overlappingFirstHmr = plugin.handleHotUpdate({
+      file: queryPath,
+      modules: [],
+      read: async () => KV422_INJECTION,
+      server,
+    });
+    const overlappingSecondHmr = plugin.handleHotUpdate({
+      file: queryPath,
+      modules: [],
+      read: async () => KV422_INJECTION,
+      server,
+    });
+    overlappingFirst.resolve();
+    await overlappingFirstHmr;
+    await wait(1_650);
+    expect(findingCount()).toBe(0);
+    overlappingSecond.resolve();
+    await overlappingSecondHmr;
+    await wait(1_300);
+    expect(findingCount()).toBe(0);
+    await waitForFinding();
+    expect(findingCount()).toBe(1);
+  });
+
+  it('discards an in-flight analysis when a newer HMR source epoch begins', async () => {
+    let pauseNextQueryShapeCollection = false;
+    let releaseQueryShapeCollection: (() => void) | undefined;
+    let reportPausedCollection: (() => void) | undefined;
+    const pausedCollection = new Promise<void>((resolvePaused) => {
+      reportPausedCollection = resolvePaused;
+    });
+    const collectionRelease = new Promise<void>((resolveCollection) => {
+      releaseQueryShapeCollection = resolveCollection;
+    });
+    vi.doMock('./internal/data-plane-static-analysis.ts', async () => {
+      const actual = await vi.importActual<
+        typeof import('./internal/data-plane-static-analysis.ts')
+      >('./internal/data-plane-static-analysis.ts');
+      return {
+        ...actual,
+        async collectCompilerQueryShapeFacts(
+          options: Parameters<typeof actual.collectCompilerQueryShapeFacts>[0],
+        ) {
+          if (!pauseNextQueryShapeCollection) {
+            return actual.collectCompilerQueryShapeFacts(options);
+          }
+          pauseNextQueryShapeCollection = false;
+          reportPausedCollection?.();
+          await collectionRelease;
+          return [
+            {
+              query: 'stale-analysis-only',
+              shape: 'string' as const,
+              source: 'stale analysis test seam',
+            },
+          ];
+        },
+      };
+    });
+    vi.resetModules();
+    const root = await fixture({ 'src/queries/search.ts': KV422_INJECTION });
+    const captured: CapturedReport[] = [];
+    const appShellOutcomes: Array<Promise<readonly unknown[]>> = [];
+
+    try {
+      const { kovo: freshKovo } = await import('./vite.js');
+      const plugin = freshKovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+      await plugin.configResolved({ command: 'serve', root });
+      const server = await configureDevServer(
+        plugin,
+        root,
+        captured,
+        async () => (await appShellOutcomes.shift()) ?? [],
+      );
+      const wsSend = vi.spyOn(server.ws!, 'send');
+      const queryPath = join(root, 'src/queries/search.ts');
+
+      pauseNextQueryShapeCollection = true;
+      await plugin.handleHotUpdate({
+        file: queryPath,
+        modules: [],
+        read: async () => KV422_INJECTION,
+        server,
+      });
+      await new Promise((resolveWait) => setTimeout(resolveWait, 1_650));
+      await pausedCollection;
+
+      let releaseNewerHmr: ((value: readonly unknown[]) => void) | undefined;
+      appShellOutcomes.push(
+        new Promise<readonly unknown[]>((resolveOutcome) => {
+          releaseNewerHmr = resolveOutcome;
+        }),
+      );
+      const newerHmr = plugin.handleHotUpdate({
+        file: queryPath,
+        modules: [],
+        read: async () => KV422_INJECTION,
+        server,
+      });
+      releaseQueryShapeCollection?.();
+      await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+
+      expect(captured).toEqual([]);
+      expect(wsSend).not.toHaveBeenCalled();
+      await new Promise((resolveWait) => setTimeout(resolveWait, 1_650));
+      expect(captured).toEqual([]);
+      expect(wsSend).not.toHaveBeenCalled();
+
+      releaseNewerHmr?.([]);
+      await newerHmr;
+      await new Promise((resolveWait) => setTimeout(resolveWait, 1_300));
+      expect(captured).toEqual([]);
+      const deadline = Date.now() + 30_000;
+      while (
+        Date.now() < deadline &&
+        !captured.some((report) =>
+          report.diagnostics.some((diagnostic) => diagnostic.code === 'KV422'),
+        )
+      ) {
+        await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+      }
+      expect(
+        captured.filter((report) =>
+          report.diagnostics.some((diagnostic) => diagnostic.code === 'KV422'),
+        ),
+      ).toHaveLength(1);
+      expect(wsSend).not.toHaveBeenCalled();
+    } finally {
+      vi.doUnmock('./internal/data-plane-static-analysis.ts');
+      vi.resetModules();
+    }
+  });
+
   it('re-evaluates (debounced) on a data-plane HMR change and clears the prior teaching record', async () => {
     const root = await fixture({ 'src/queries/search.ts': KV422_INJECTION });
     const captured: CapturedReport[] = [];
@@ -1111,6 +1328,7 @@ async function configureDevServer(
   plugin: DataPlaneGatePlugin,
   root: string,
   captured: CapturedReport[],
+  handleHotUpdate?: DataPlaneGatePlugin['handleHotUpdate'],
 ): Promise<DataPlaneGateMockServer> {
   const server: DataPlaneGateMockServer = {
     config: { root },
@@ -1124,7 +1342,10 @@ async function configureDevServer(
               onModuleDiagnostics(report: CapturedReport) {
                 captured.push(report);
               },
-              plugin: { configureServer() {} },
+              plugin: {
+                configureServer() {},
+                ...(handleHotUpdate === undefined ? {} : { handleHotUpdate }),
+              },
             };
           },
         };

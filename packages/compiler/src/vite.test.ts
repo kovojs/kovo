@@ -28,7 +28,9 @@ import {
   compilerViteClientModuleRoleProtocol,
 } from './internal.js';
 import type { KovoViteMiddleware } from './internal.js';
+import { canonicalJson } from './canonical-json.js';
 import { kovoVitePlugin } from './index.js';
+import { componentQueryRuntimeIdentityPreimage } from './scan/query-runtime-identities.js';
 import { lowerStandaloneSourceDerivedRegistryDeclarations } from './source-derived-lowering.js';
 import { rewriteClientModuleRuntimeImportsForBrowser } from './emit/client.js';
 import {
@@ -1024,20 +1026,24 @@ export const orderPaid = webhook('/webhooks/order-paid', {
         '',
       ].join('\n'),
     );
-    writeFileSync(
-      join(src, 'queries.ts'),
-      [
-        "import { app } from './kovo.js';",
-        'export const counterQuery = app.query({ load() { return { count: 1 }; } });',
-        '',
-      ].join('\n'),
-    );
+    const queriesFile = join(src, 'queries.ts');
+    const validQuerySource = [
+      "import { app } from './kovo.js';",
+      'export const counterQuery = app.query({ load() { return { count: 1 }; } });',
+      '',
+    ].join('\n');
+    const forgedQuerySource = [
+      'const app = { query(value: unknown) { return value; } };',
+      'export const counterQuery = app.query({ load() { return { count: 1 }; } });',
+      '',
+    ].join('\n');
+    writeFileSync(queriesFile, validQuerySource);
     const entry = join(src, 'counter.tsx');
-    const source = (revision: string) =>
+    const source = (revision: string, importPath = './queries.js') =>
       [
         '/** @jsxImportSource @kovojs/server */',
         "import { component } from '@kovojs/core';",
-        "import { counterQuery } from './queries.js';",
+        `import { counterQuery } from '${importPath}';`,
         'export const Counter = component({',
         '  queries: { counter: counterQuery },',
         `  render: ({ counter }) => <button onClick={() => "${revision}"}>{counter.count}</button>,`,
@@ -1086,6 +1092,208 @@ export const orderPaid = webhook('/webhooks/order-paid', {
           ?.source,
       ).toContain('queryNames: {"counter":"queries/counter-query"}');
 
+      // The Vite watcher reports the same component update before HMR. A render-only preimage may
+      // keep the prior exact Program result; changing the dependency bytes without reporting a
+      // dependency event lets this assertion distinguish reuse from an accidental fresh resolve.
+      writeFileSync(queriesFile, forgedQuerySource);
+      writeFileSync(entry, source('two'));
+      await plugin.watchChange?.(entry, { event: 'update' });
+      await expect(
+        plugin.handleHotUpdate?.({
+          file: entry,
+          modules: ['vite-module'],
+          read: async () => source('two'),
+          server,
+        }),
+      ).resolves.toEqual([]);
+
+      // Any other watched file immediately revokes the proof. The next same-file edit must run a
+      // full resolver and reject the same-spelling structural lookalike fail-closed (SPEC §4.1).
+      await plugin.watchChange?.(queriesFile, { event: 'update' });
+      writeFileSync(entry, source('three'));
+      await expect(
+        plugin.handleHotUpdate?.({
+          file: entry,
+          modules: ['vite-module'],
+          read: async () => source('three'),
+          server,
+        }),
+      ).rejects.toThrow(/could not prove the exact runtime query identity/u);
+
+      writeFileSync(queriesFile, validQuerySource);
+      await plugin.watchChange?.(queriesFile, { event: 'update' });
+      writeFileSync(entry, source('four'));
+      await expect(
+        plugin.handleHotUpdate?.({
+          file: entry,
+          modules: ['vite-module'],
+          read: async () => source('four'),
+          server,
+        }),
+      ).resolves.toEqual([]);
+
+      // Vite 8 awaits watchChange before invalidating its module graph. Keep that event behind an
+      // in-flight runner stage: the staged compiler state must commit with its runner, then the
+      // queued dependency event revokes the proof before the next generation begins.
+      let releaseSerializedStage: (() => void) | undefined;
+      const serializedStage = new Promise<undefined>((resolveStage) => {
+        releaseSerializedStage = () => resolveStage(undefined);
+      });
+      stageGeneration.mockImplementationOnce(() => serializedStage);
+      const stageCallsBeforeSerialization = stageGeneration.mock.calls.length;
+      writeFileSync(entry, source('serialized-f'));
+      await plugin.watchChange?.(entry, { event: 'update' });
+      const stagedF = plugin.handleHotUpdate?.({
+        file: entry,
+        modules: ['vite-module'],
+        read: async () => source('serialized-f'),
+        server,
+      });
+      await vi.waitFor(() => {
+        expect(stageGeneration).toHaveBeenCalledTimes(stageCallsBeforeSerialization + 1);
+      });
+      writeFileSync(queriesFile, forgedQuerySource);
+      let dependencyWatchSettled = false;
+      const queuedDependencyWatch = Promise.resolve(
+        plugin.watchChange?.(queriesFile, { event: 'update' }),
+      ).then(() => {
+        dependencyWatchSettled = true;
+      });
+      await Promise.resolve();
+      expect(dependencyWatchSettled).toBe(false);
+      releaseSerializedStage?.();
+      await expect(stagedF).resolves.toEqual([]);
+      expect(
+        plugin.getClientModules?.().find((module) => module.path.includes('/counter.client.js'))
+          ?.source,
+      ).toMatch(/serialized-f/u);
+      await queuedDependencyWatch;
+      writeFileSync(entry, source('serialized-g'));
+      await expect(
+        plugin.handleHotUpdate?.({
+          file: entry,
+          modules: ['vite-module'],
+          read: async () => source('serialized-g'),
+          server,
+        }),
+      ).rejects.toThrow(/could not prove the exact runtime query identity/u);
+
+      writeFileSync(queriesFile, validQuerySource);
+      await plugin.watchChange?.(queriesFile, { event: 'update' });
+      writeFileSync(entry, source('four'));
+      await plugin.watchChange?.(entry, { event: 'update' });
+      await expect(
+        plugin.handleHotUpdate?.({
+          file: entry,
+          modules: ['vite-module'],
+          read: async () => source('four'),
+          server,
+        }),
+      ).resolves.toEqual([]);
+
+      // A fully resolved proof staged in a runner generation that later rejects must never enter
+      // the active store. Retrying the identical preimage after its dependency becomes forged has
+      // to resolve afresh and fail, not reuse the abandoned candidate's result.
+      const alternateQueriesFile = join(src, 'alternate-queries.ts');
+      writeFileSync(alternateQueriesFile, validQuerySource);
+      const alternateSource = source('candidate', './alternate-queries.js');
+      writeFileSync(entry, alternateSource);
+      await plugin.watchChange?.(entry, { event: 'update' });
+      stageGeneration.mockRejectedValueOnce(new Error('candidate generation rejected'));
+      await expect(
+        plugin.handleHotUpdate?.({
+          file: entry,
+          modules: ['vite-module'],
+          read: async () => alternateSource,
+          server,
+        }),
+      ).rejects.toThrow('candidate generation rejected');
+
+      writeFileSync(alternateQueriesFile, forgedQuerySource);
+      await plugin.watchChange?.(entry, { event: 'update' });
+      await expect(
+        plugin.handleHotUpdate?.({
+          file: entry,
+          modules: ['vite-module'],
+          read: async () => alternateSource,
+          server,
+        }),
+      ).rejects.toThrow(/could not prove the exact runtime query identity/u);
+
+      writeFileSync(entry, source('four'));
+      writeFileSync(queriesFile, validQuerySource);
+      await plugin.watchChange?.(queriesFile, { event: 'update' });
+      await expect(
+        plugin.handleHotUpdate?.({
+          file: entry,
+          modules: ['vite-module'],
+          read: async () => source('four'),
+          server,
+        }),
+      ).resolves.toEqual([]);
+
+      // A syntax diagnostic does not commit a candidate, but it also does not revoke a prior
+      // proof for the same file. Recovery with an unchanged query/import preimage can reuse it.
+      const brokenSource = source('broken').replace('</button>', '</button');
+      writeFileSync(entry, brokenSource);
+      await plugin.watchChange?.(entry, { event: 'update' });
+      await expect(
+        plugin.handleHotUpdate?.({
+          file: entry,
+          modules: ['vite-module'],
+          read: async () => brokenSource,
+          server,
+        }),
+      ).resolves.toEqual([]);
+      writeFileSync(queriesFile, forgedQuerySource);
+      writeFileSync(entry, source('recovered'));
+      await plugin.watchChange?.(entry, { event: 'update' });
+      await expect(
+        plugin.handleHotUpdate?.({
+          file: entry,
+          modules: ['vite-module'],
+          read: async () => source('recovered'),
+          server,
+        }),
+      ).resolves.toEqual([]);
+
+      // A creation can introduce a nearer resolution target, package boundary, or alias input, so
+      // it revokes every retained Program proof even when the created path is not yet imported.
+      const createdFile = join(src, 'created-query-boundary.ts');
+      writeFileSync(createdFile, 'export const created = true;\n');
+      await plugin.watchChange?.(createdFile, { event: 'create' });
+      await expect(plugin.transform(source('after-create'), entry)).rejects.toThrow(
+        /could not prove the exact runtime query identity/u,
+      );
+
+      // Deletion removes the owning bounded file state. Reintroducing identical bytes cannot
+      // resurrect its proof; the forged dependency must be observed by a fresh Program.
+      writeFileSync(queriesFile, validQuerySource);
+      await plugin.watchChange?.(queriesFile, { event: 'update' });
+      await expect(plugin.transform(source('before-delete'), entry)).resolves.toMatchObject({
+        map: null,
+      });
+      writeFileSync(queriesFile, forgedQuerySource);
+      await plugin.watchChange?.(entry, { event: 'delete' });
+      await expect(
+        Promise.resolve().then(() => plugin.transform(source('after-delete'), entry)),
+      ).rejects.toThrow(/could not prove the exact runtime query identity/u);
+
+      // Configuration/root epochs replace the complete dev store as well.
+      writeFileSync(queriesFile, validQuerySource);
+      await plugin.watchChange?.(queriesFile, { event: 'update' });
+      await expect(plugin.transform(source('before-config-reset'), entry)).resolves.toMatchObject({
+        map: null,
+      });
+      plugin.configResolved?.({ command: 'serve', root });
+      writeFileSync(queriesFile, forgedQuerySource);
+      await expect(
+        Promise.resolve().then(() => plugin.transform(source('after-config-reset'), entry)),
+      ).rejects.toThrow(/could not prove the exact runtime query identity/u);
+
+      writeFileSync(queriesFile, validQuerySource);
+      plugin.configResolved?.({ command: 'serve', root });
+
       writeFileSync(
         join(src, 'lookalike-queries.ts'),
         [
@@ -1119,6 +1327,183 @@ export const orderPaid = webhook('/webhooks/order-paid', {
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
+  });
+
+  it('resolves a genuine fresh HMR query proof after late realm-prototype poisoning', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-vite-query-proof-poison-'));
+    const src = join(root, 'src');
+    const serverScope = join(root, 'node_modules/@kovojs');
+    mkdirSync(src, { recursive: true });
+    mkdirSync(serverScope, { recursive: true });
+    symlinkSync(frameworkServerPackageRoot, join(serverScope, 'server'), 'dir');
+    writeFileSync(
+      join(src, 'kovo.ts'),
+      [
+        "import { defineKovo } from '@kovojs/server';",
+        'export const app = defineKovo({',
+        "  appId: '00000000-0000-4000-8000-000000000001',",
+        '});',
+        '',
+      ].join('\n'),
+    );
+    const queriesFile = join(src, 'queries.ts');
+    writeFileSync(
+      queriesFile,
+      [
+        "import { app } from './kovo.js';",
+        'export const counterQuery = app.query({ load() { return { count: 1 }; } });',
+        '',
+      ].join('\n'),
+    );
+    const entry = join(src, 'counter.tsx');
+    const source = (revision: string) =>
+      [
+        '/** @jsxImportSource @kovojs/server */',
+        "import { component } from '@kovojs/core';",
+        "import { counterQuery } from './queries.js';",
+        'export const Counter = component({',
+        '  queries: { counter: counterQuery },',
+        `  render: ({ counter }) => <button data-revision="${revision}">{counter.count}</button>,`,
+        '});',
+        '',
+      ].join('\n');
+    writeFileSync(entry, source('zero'));
+    const plugin = kovoVitePlugin({ include: ['src'] });
+    const server = {
+      config: { root },
+      environments: {
+        ssr: {
+          hot: { send() {} },
+          moduleGraph: { invalidateAll() {} },
+          runner: { clearCache() {}, import: vi.fn() },
+        },
+      },
+      middlewares: { use() {} },
+      moduleGraph: { invalidateAll() {} },
+      ws: { send() {} },
+    };
+    plugin.configureServer?.(server);
+
+    const getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+    const defineProperty = Object.defineProperty;
+    const descriptors = {
+      arrayFind: getOwnPropertyDescriptor(Array.prototype, 'find')!,
+      map: getOwnPropertyDescriptor(globalThis, 'Map')!,
+      objectDefineProperty: getOwnPropertyDescriptor(Object, 'defineProperty')!,
+      objectEntries: getOwnPropertyDescriptor(Object, 'entries')!,
+      objectFreeze: getOwnPropertyDescriptor(Object, 'freeze')!,
+      objectGetOwnPropertyDescriptor: getOwnPropertyDescriptor(Object, 'getOwnPropertyDescriptor')!,
+      set: getOwnPropertyDescriptor(globalThis, 'Set')!,
+      stringReplaceAll: getOwnPropertyDescriptor(String.prototype, 'replaceAll')!,
+    };
+    const reflectApply = Reflect.apply;
+    const reflectConstruct = Reflect.construct;
+    const targetsQueryProof = () => {
+      const frames = (new Error().stack ?? '').split('\n');
+      for (let index = 0; index < frames.length; index += 1) {
+        const frame = frames[index];
+        if (frame === undefined || frame === 'Error' || frame.includes('/vite.test.')) continue;
+        // TypeScript legitimately allocates Maps and dispatches through ordinary realm controls
+        // while its Program is below query-runtime-identities on the stack. Target only the first
+        // non-test caller: a Kovo-owned live dispatch would be forgeable, while a TypeScript-owned
+        // call remains part of the compiler API's implementation rather than Kovo's trust choice.
+        return frame.includes('/scan/query-runtime-identities.');
+      }
+      return false;
+    };
+    const rejectTargetedQueryProof = () => {
+      if (targetsQueryProof()) throw new Error('late query-proof realm poison ran');
+    };
+    const nativeMap = descriptors.map.value as MapConstructor;
+    const nativeSet = descriptors.set.value as SetConstructor;
+    function PoisonedMap(...args: unknown[]) {
+      rejectTargetedQueryProof();
+      return reflectConstruct(nativeMap, args, nativeMap);
+    }
+    function PoisonedSet(...args: unknown[]) {
+      rejectTargetedQueryProof();
+      return reflectConstruct(nativeSet, args, nativeSet);
+    }
+    defineProperty(PoisonedMap, 'prototype', { value: nativeMap.prototype });
+    defineProperty(PoisonedSet, 'prototype', { value: nativeSet.prototype });
+    let hotUpdateResult: readonly unknown[] | undefined;
+
+    try {
+      await plugin.transform(source('zero'), entry);
+      await plugin.watchChange?.(queriesFile, { event: 'update' });
+      writeFileSync(entry, source('one'));
+      defineProperty(Array.prototype, 'find', {
+        configurable: true,
+        value(this: unknown, ...args: readonly unknown[]) {
+          rejectTargetedQueryProof();
+          return reflectApply(descriptors.arrayFind.value, this, args);
+        },
+      });
+      defineProperty(globalThis, 'Map', { configurable: true, value: PoisonedMap });
+      defineProperty(globalThis, 'Set', { configurable: true, value: PoisonedSet });
+      defineProperty(String.prototype, 'replaceAll', {
+        configurable: true,
+        value(this: string, ...args: readonly unknown[]) {
+          rejectTargetedQueryProof();
+          return reflectApply(descriptors.stringReplaceAll.value, this, args);
+        },
+      });
+      defineProperty(Object, 'entries', {
+        configurable: true,
+        value(value: object) {
+          if (targetsQueryProof()) return [['counter', 'forged/query-identity']];
+          return reflectApply(descriptors.objectEntries.value, Object, [value]);
+        },
+      });
+      defineProperty(Object, 'freeze', {
+        configurable: true,
+        value(value: object) {
+          rejectTargetedQueryProof();
+          return reflectApply(descriptors.objectFreeze.value, Object, [value]);
+        },
+      });
+      defineProperty(Object, 'getOwnPropertyDescriptor', {
+        configurable: true,
+        value(value: object, property: PropertyKey) {
+          rejectTargetedQueryProof();
+          return getOwnPropertyDescriptor(value, property);
+        },
+      });
+      defineProperty(Object, 'defineProperty', {
+        configurable: true,
+        value(target: object, property: PropertyKey, descriptor: PropertyDescriptor) {
+          rejectTargetedQueryProof();
+          return defineProperty(target, property, descriptor);
+        },
+      });
+
+      hotUpdateResult = await plugin.handleHotUpdate?.({
+        file: entry,
+        modules: [],
+        read: async () => source('one'),
+        server,
+      });
+    } finally {
+      defineProperty(Object, 'defineProperty', descriptors.objectDefineProperty);
+      defineProperty(
+        Object,
+        'getOwnPropertyDescriptor',
+        descriptors.objectGetOwnPropertyDescriptor,
+      );
+      defineProperty(Object, 'freeze', descriptors.objectFreeze);
+      defineProperty(Object, 'entries', descriptors.objectEntries);
+      defineProperty(String.prototype, 'replaceAll', descriptors.stringReplaceAll);
+      defineProperty(globalThis, 'Set', descriptors.set);
+      defineProperty(globalThis, 'Map', descriptors.map);
+      defineProperty(Array.prototype, 'find', descriptors.arrayFind);
+      rmSync(root, { force: true, recursive: true });
+    }
+
+    expect(hotUpdateResult).toEqual([]);
+    expect(
+      plugin.getClientModules?.().find((module) => module.path === '/c/generated/app.client.js')
+        ?.source,
+    ).toContain('queryNames: {"counter":"queries/counter-query"}');
   });
 
   it('never destructively clears the active runner for closed-contract updates', async () => {
@@ -2638,6 +3023,127 @@ export const CartBadge = component({
     expect(plugin.getCssAssetManifest?.().stylesheets).toEqual([]);
   });
 
+  it('charges retained query-identity reuse preimages to the dev source budget', async () => {
+    const clientSource = 'export const Plans = {};\n';
+    let knownNames: Readonly<Record<string, string>> = {
+      first: 'queries/first',
+      second: 'queries/second',
+    };
+    vi.doMock('./framework-compile.js', () => ({
+      compileComponentModuleForFramework: () => ({
+        files: [{ kind: 'client', source: clientSource }],
+        queryPlanBootstrapMetadata: {
+          componentName: 'bounded-query-card',
+          exportName: 'Plans',
+          queryNames: knownNames,
+        },
+      }),
+    }));
+    vi.resetModules();
+
+    try {
+      const { createFrameworkKovoVitePlugin: createGenuinePlugin } = await import('./vite.js');
+      const plugin = createGenuinePlugin();
+      const root = '/workspace/app';
+      const fileName = `${root}/src/card.tsx`;
+      const stateFileName = 'src/card.tsx';
+      plugin.configureServer?.({
+        config: { root },
+        middlewares: { use() {} },
+        ws: { send() {} },
+      });
+      const source = (fillerLength: number, revision = 'zero') =>
+        [
+          '/** @jsxImportSource @kovojs/server */',
+          "import { component } from '@kovojs/core';",
+          'const firstQuery = {};',
+          'const secondQuery = {};',
+          `/* ${'x'.repeat(fillerLength)} */`,
+          'export const Card = component({',
+          '  queries: { first: firstQuery, second: secondQuery },',
+          `  render: ({ first }) => <p data-revision="${revision}">{first.label}</p>,`,
+          '});',
+        ].join('\n');
+      const finalClientSource = rewriteClientModuleRuntimeImportsForBrowser(clientSource);
+      const href = clientModuleHrefForSourceFile(
+        stateFileName,
+        clientModuleRepresentationDigest(finalClientSource),
+      );
+      const target = parseVersionedClientModuleTarget(href);
+      expect(target).not.toBeNull();
+
+      await expect(plugin.transform(source(0), fileName)).resolves.toMatchObject({ map: null });
+      knownNames = { second: 'queries/second', first: 'queries/first' };
+      await plugin.watchChange?.(fileName, { event: 'update' });
+      await expect(
+        plugin.handleHotUpdate?.({
+          file: fileName,
+          read: async () => source(0, 'one'),
+          server: { config: { root }, middlewares: { use() {} }, ws: { send() {} } },
+        }),
+      ).resolves.toEqual([]);
+      expect(
+        plugin.getClientModules?.().find((module) => module.path === '/c/generated/app.client.js')
+          ?.source,
+      ).toContain('queryNames: {"second":"queries/second","first":"queries/first"}');
+
+      const sourceUnits = (candidateSource: string): number => {
+        const sourcePreimage = componentQueryRuntimeIdentityPreimage({
+          fileName,
+          knownNames,
+          source: candidateSource,
+        });
+        expect(sourcePreimage).toBeDefined();
+        const reuse = {
+          preimage: canonicalJson({
+            knownNames: Object.entries(knownNames),
+            source: sourcePreimage,
+          }),
+          queryNames: knownNames,
+        };
+        return (
+          stateFileName.length +
+          canonicalJson({
+            clientHistory: {
+              current: { href, keys: [href], source: finalClientSource },
+            },
+            compiledClientModule: { path: target!.path, source: finalClientSource },
+            queryPlanBootstrapInput: {
+              componentName: 'bounded-query-card',
+              exportName: 'Plans',
+              importPath: href,
+              queryNames: knownNames,
+            },
+          }).length +
+          canonicalJson({ queryRuntimeIdentityReuse: reuse }).length -
+          1
+        );
+      };
+      const limit = 16 * 1024 * 1024;
+      const baseSource = source(0);
+      const exactFillerLength = limit - sourceUnits(baseSource);
+      expect(exactFillerLength).toBeGreaterThan(0);
+      const exactSource = source(exactFillerLength);
+      expect(sourceUnits(exactSource)).toBe(limit);
+
+      await expect(plugin.transform(exactSource, fileName)).resolves.toMatchObject({ map: null });
+
+      let overflow: unknown;
+      try {
+        await plugin.transform(source(exactFillerLength + 1), fileName);
+      } catch (error) {
+        overflow = error;
+      }
+      expect(overflow).toBeInstanceOf(RangeError);
+      expect(String((overflow as Error).message)).toMatch(
+        /one source file exceeds the bounded source limit/u,
+      );
+    } finally {
+      vi.doUnmock('./framework-compile.js');
+      vi.resetModules();
+    }
+  });
+
   it('removes stale client and CSS build outputs when a file no longer emits them', async () => {
     const clientSource = 'export const staleClient = true;';
     const clientHref = clientModuleHrefForSourceFile(
@@ -3553,6 +4059,75 @@ export const RegionB = component({
       'custom',
     ]);
     expect(ws.send).not.toHaveBeenCalledWith({ type: 'full-reload' });
+  });
+
+  it('captures queued HMR file and watch-event authority synchronously at hook entry', async () => {
+    let settleBlockingCompile: ((result: ReturnType<typeof compileResult>) => void) | undefined;
+    const blockingCompile = new Promise<ReturnType<typeof compileResult>>((resolveCompile) => {
+      settleBlockingCompile = resolveCompile;
+    });
+    const resultFor = (fileName: string, source: string) => {
+      const stem = fileName.endsWith('/a.tsx') ? 'a' : fileName.endsWith('/b.tsx') ? 'b' : 'other';
+      return {
+        ...compileResult(
+          hmrMetadata({
+            clientHref: `/c/__v/11111111/src/${stem}.client.js`,
+            factHash: source,
+            sourceFileName: fileName,
+          }),
+          `export const ${stem}Revision = ${JSON.stringify(source)};`,
+        ),
+        clientExports: [`${stem}Revision`],
+      };
+    };
+    const compile = vi.fn(({ fileName, source }: { fileName: string; source: string }) =>
+      source === 'component(block-a)' ? blockingCompile : resultFor(fileName, source),
+    );
+    const plugin = createKovoVitePlugin(compile);
+    const server = {
+      config: { root: '/workspace/app' },
+      middlewares: { use() {} },
+      ws: { send: vi.fn() },
+    };
+    plugin.configureServer?.(server);
+    await plugin.transform('component(initial-a)', '/workspace/app/src/a.tsx');
+    await plugin.transform('component(initial-b)', '/workspace/app/src/b.tsx');
+
+    const blockingHmr = plugin.handleHotUpdate?.({
+      file: '/workspace/app/src/a.tsx',
+      read: async () => 'component(block-a)',
+      server,
+    });
+    await vi.waitFor(() => {
+      expect(compile).toHaveBeenCalledWith(
+        expect.objectContaining({ fileName: 'src/a.tsx', source: 'component(block-a)' }),
+      );
+    });
+
+    const queuedContext = {
+      file: '/workspace/app/src/b.tsx',
+      read: async () => 'component(next-b)',
+      server,
+    };
+    const queuedHmr = plugin.handleHotUpdate?.(queuedContext);
+    queuedContext.file = '/workspace/app/src/retargeted.tsx';
+    const queuedChange: { event: 'delete' | 'update' } = { event: 'update' };
+    const queuedWatch = plugin.watchChange?.('/workspace/app/src/b.tsx', queuedChange);
+    queuedChange.event = 'delete';
+
+    settleBlockingCompile?.(resultFor('src/a.tsx', 'component(block-a)'));
+    await expect(blockingHmr).resolves.toEqual([]);
+    await expect(queuedHmr).resolves.toEqual([]);
+    await expect(queuedWatch).resolves.toBeUndefined();
+    expect(compile).toHaveBeenCalledWith(
+      expect.objectContaining({ fileName: 'src/b.tsx', source: 'component(next-b)' }),
+    );
+    expect(compile).not.toHaveBeenCalledWith(
+      expect.objectContaining({ fileName: 'src/retargeted.tsx' }),
+    );
+    expect(
+      plugin.getClientModules?.().some((module) => module.source.includes('component(next-b)')),
+    ).toBe(true);
   });
 
   it('does not retain a diagnostic result made stale by server reconfiguration', async () => {

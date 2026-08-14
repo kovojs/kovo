@@ -10,11 +10,33 @@ import {
 
 import { createCompilerOwnedAppContractProject } from '../app-contract-project.js';
 import { compilerOwnedAppContractFactoryEquals } from '../app-contract-resolver.js';
+import { canonicalJson } from '../canonical-json.js';
+import {
+  compilerArrayAppend,
+  compilerArrayLength,
+  compilerCreateMap,
+  compilerCreateNullRecord,
+  compilerCreateSet,
+  compilerDefineOwnDataProperty,
+  compilerFreeze,
+  compilerMapGet,
+  compilerMapSet,
+  compilerObjectKeys,
+  compilerOwnDataValue,
+  compilerPinnedStableMethod,
+  compilerRegExpTest,
+  compilerSetAdd,
+  compilerSetHas,
+  compilerStringReplaceAll,
+  compilerStringSlice,
+  compilerStringStartsWith,
+} from '../compiler-security-intrinsics.js';
 import { deriveRegistryIdentity } from '../registry-identities.js';
 import { typescriptRuntime as ts } from '../ts-api.js';
 import {
   allComponentOptionObjectEntries,
   parseComponentModule,
+  parseDiagnosticsForSourceFile,
   type CallExpressionModel,
   type ObjectLiteralEntry,
 } from './parse.js';
@@ -39,6 +61,258 @@ interface QueryRuntimeIdentityResolutionContext {
 }
 
 /**
+ * Build the exact same-file source preimage that can affect query-identity resolution.
+ *
+ * A component's parser-proven `render` initializer is a lexical child scope and cannot declare a
+ * binding visible to its sibling `queries` option. Its body is therefore omitted so ordinary JSX
+ * output edits can reuse a prior full Program proof. Everything else stays byte-exact: imports,
+ * query objects, module-scope/local aliases, declaration spelling, and component structure. Static
+ * module specifiers outside that scope remain byte-exact. Module-affecting syntax inside an
+ * omitted render scope refuses reuse: the parser's ordinary module-specifier inventory is not a
+ * complete proof of every TypeScript Program dependency (for example, ImportTypeNode). Any
+ * ambiguity therefore falls back to a fresh Program rather than widening reuse.
+ */
+export function componentQueryRuntimeIdentityPreimage(
+  options: Pick<QueryRuntimeIdentityProjectOptions, 'fileName' | 'knownNames' | 'source'>,
+): string | undefined {
+  const model = parseComponentModule(options.fileName, options.source);
+  if (parseDiagnosticsForSourceFile(model.sourceFile, options.source).length > 0) return undefined;
+  // Reuse is deliberately narrower than the resolver. Every identity the compiler did not
+  // already provide must be a bare identifier backed by one unambiguous direct named import.
+  // Namespace/member chains and local aliases keep using a fresh Program: proving their semantic
+  // dependency closure cheaply would otherwise risk turning spelling into authority (SPEC §4.1).
+  const queryEntries = allComponentOptionObjectEntries(model, 'queries');
+  const queryEntryLength = compilerArrayLength(queryEntries, 'Query identity preimage entries');
+  for (let entryIndex = 0; entryIndex < queryEntryLength; entryIndex += 1) {
+    const entry = compilerOwnDataValue(
+      queryEntries,
+      entryIndex,
+      'Query identity preimage entries',
+    ) as ObjectLiteralEntry | undefined;
+    if (!entry) throw new TypeError(`Query identity preimage entries[${entryIndex}] missing.`);
+    if (
+      options.knownNames !== undefined &&
+      compilerOwnDataValue(options.knownNames, entry.key, 'Known query runtime names') !== undefined
+    ) {
+      continue;
+    }
+    const binding = entry.queryBinding;
+    if (binding?.queryKeyExpression === undefined) continue;
+    const span = binding.queryKeySpan;
+    const node =
+      span === undefined ? undefined : exactNodeAtSpan(model.sourceFile, span.start, span.end);
+    if (node === undefined || !ts.isIdentifier(unwrapExpression(node))) return undefined;
+    let matchingImports = 0;
+    const namedImportLength = compilerArrayLength(
+      model.namedImports,
+      'Query identity preimage named imports',
+    );
+    for (let importIndex = 0; importIndex < namedImportLength; importIndex += 1) {
+      const imported = compilerOwnDataValue(
+        model.namedImports,
+        importIndex,
+        'Query identity preimage named imports',
+      ) as (typeof model.namedImports)[number] | undefined;
+      if (!imported) {
+        throw new TypeError(`Query identity preimage named imports[${importIndex}] missing.`);
+      }
+      if (imported.localName === binding.queryKeyExpression) matchingImports += 1;
+    }
+    if (matchingImports !== 1) return undefined;
+  }
+
+  const renderOptionSpans = compilerCreateSet<string>();
+  const componentLength = compilerArrayLength(model.components, 'Query preimage components');
+  for (let componentIndex = 0; componentIndex < componentLength; componentIndex += 1) {
+    const component = compilerOwnDataValue(
+      model.components,
+      componentIndex,
+      'Query preimage components',
+    ) as (typeof model.components)[number] | undefined;
+    if (!component) throw new TypeError(`Query preimage components[${componentIndex}] missing.`);
+    const optionLength = compilerArrayLength(component.options, 'Query preimage component options');
+    for (let optionIndex = 0; optionIndex < optionLength; optionIndex += 1) {
+      const option = compilerOwnDataValue(
+        component.options,
+        optionIndex,
+        'Query preimage component options',
+      ) as (typeof component.options)[number] | undefined;
+      if (!option) throw new TypeError(`Query preimage component options[${optionIndex}] missing.`);
+      if (option.key === 'render') {
+        compilerSetAdd(renderOptionSpans, `${option.start}:${option.end}`);
+      }
+    }
+  }
+
+  const omitted: Array<{ end: number; kind: number; start: number }> = [];
+  let moduleAffectingSyntaxInOmittedRender = false;
+  let nestedQueriesInOmittedRender = false;
+  const visit = (node: TS.Node): void => {
+    if (ts.isPropertyAssignment(node)) {
+      const nameStart = node.name.getStart(model.sourceFile);
+      const nameEnd = node.name.getEnd();
+      if (compilerSetHas(renderOptionSpans, `${nameStart}:${nameEnd}`)) {
+        const inspectOmittedInitializer = (candidate: TS.Node): void => {
+          if (
+            ts.isJSDocImportTag(candidate) ||
+            ts.isImportTypeNode(candidate) ||
+            ts.isImportEqualsDeclaration(candidate) ||
+            ts.isExternalModuleReference(candidate) ||
+            ts.isModuleDeclaration(candidate) ||
+            (ts.isCallExpression(candidate) &&
+              (candidate.expression.kind === ts.SyntaxKind.ImportKeyword ||
+                (ts.isIdentifier(candidate.expression) && candidate.expression.text === 'require')))
+          ) {
+            moduleAffectingSyntaxInOmittedRender = true;
+            return;
+          }
+          if (
+            (ts.isPropertyAssignment(candidate) || ts.isShorthandPropertyAssignment(candidate)) &&
+            ((ts.isIdentifier(candidate.name) && candidate.name.text === 'queries') ||
+              (ts.isStringLiteralLike(candidate.name) && candidate.name.text === 'queries'))
+          ) {
+            nestedQueriesInOmittedRender = true;
+            return;
+          }
+          const jsDoc = compilerOwnDataValue(
+            candidate,
+            'jsDoc',
+            'Query identity omitted render JSDoc',
+          );
+          if (jsDoc !== undefined) {
+            const jsDocLength = compilerArrayLength(
+              jsDoc as readonly TS.JSDoc[],
+              'Query identity omitted render JSDoc',
+            );
+            for (let jsDocIndex = 0; jsDocIndex < jsDocLength; jsDocIndex += 1) {
+              const document = compilerOwnDataValue(
+                jsDoc as readonly TS.JSDoc[],
+                jsDocIndex,
+                'Query identity omitted render JSDoc',
+              ) as TS.JSDoc | undefined;
+              if (!document) {
+                throw new TypeError(`Query identity omitted render JSDoc[${jsDocIndex}] missing.`);
+              }
+              inspectOmittedInitializer(document);
+            }
+          }
+          if (!nestedQueriesInOmittedRender && !moduleAffectingSyntaxInOmittedRender) {
+            ts.forEachChild(candidate, inspectOmittedInitializer);
+          }
+        };
+        inspectOmittedInitializer(node.initializer);
+        compilerArrayAppend(
+          omitted,
+          {
+            end: node.initializer.getEnd(),
+            kind: node.initializer.kind,
+            start: node.initializer.getStart(model.sourceFile),
+          },
+          'Query identity omitted render initializers',
+        );
+        return;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(model.sourceFile);
+  if (nestedQueriesInOmittedRender || moduleAffectingSyntaxInOmittedRender) return undefined;
+
+  // A nested component/query declaration inside an omitted outer render scope would make that
+  // scope semantically relevant. Refuse reuse rather than hiding any nested query alias bytes.
+  const omittedLength = compilerArrayLength(omitted, 'Query identity omitted render initializers');
+  for (let spanIndex = 0; spanIndex < omittedLength; spanIndex += 1) {
+    const span = compilerOwnDataValue(
+      omitted,
+      spanIndex,
+      'Query identity omitted render initializers',
+    ) as (typeof omitted)[number] | undefined;
+    if (!span)
+      throw new TypeError(`Query identity omitted render initializers[${spanIndex}] missing.`);
+    for (let componentIndex = 0; componentIndex < componentLength; componentIndex += 1) {
+      const component = compilerOwnDataValue(
+        model.components,
+        componentIndex,
+        'Query preimage components',
+      ) as (typeof model.components)[number] | undefined;
+      if (!component) throw new TypeError(`Query preimage components[${componentIndex}] missing.`);
+      const optionLength = compilerArrayLength(
+        component.options,
+        'Query preimage component options',
+      );
+      for (let optionIndex = 0; optionIndex < optionLength; optionIndex += 1) {
+        const option = compilerOwnDataValue(
+          component.options,
+          optionIndex,
+          'Query preimage component options',
+        ) as (typeof component.options)[number] | undefined;
+        if (!option) {
+          throw new TypeError(`Query preimage component options[${optionIndex}] missing.`);
+        }
+        if (option.key === 'queries' && option.start >= span.start && option.end <= span.end) {
+          return undefined;
+        }
+      }
+    }
+  }
+
+  const retainedSourceSegments: string[] = [];
+  const renderInitializerKinds: number[] = [];
+  let cursor = 0;
+  for (let spanIndex = 0; spanIndex < omittedLength; spanIndex += 1) {
+    const span = compilerOwnDataValue(
+      omitted,
+      spanIndex,
+      'Query identity omitted render initializers',
+    ) as (typeof omitted)[number] | undefined;
+    if (!span)
+      throw new TypeError(`Query identity omitted render initializers[${spanIndex}] missing.`);
+    if (span.start < cursor || span.end < span.start || span.end > options.source.length) {
+      throw new TypeError(
+        `Kovo query identity preimage refused overlapping render spans in ${options.fileName}.`,
+      );
+    }
+    compilerArrayAppend(
+      retainedSourceSegments,
+      compilerStringSlice(options.source, cursor, span.start),
+      'Query identity retained source segments',
+    );
+    compilerArrayAppend(
+      renderInitializerKinds,
+      span.kind,
+      'Query identity render initializer kinds',
+    );
+    cursor = span.end;
+  }
+  compilerArrayAppend(
+    retainedSourceSegments,
+    compilerStringSlice(options.source, cursor),
+    'Query identity retained source segments',
+  );
+
+  const moduleSpecifiers: string[] = [];
+  const moduleSpecifierLength = compilerArrayLength(
+    model.moduleSpecifiers,
+    'Query identity module specifiers',
+  );
+  for (let index = 0; index < moduleSpecifierLength; index += 1) {
+    const specifier = compilerOwnDataValue(
+      model.moduleSpecifiers,
+      index,
+      'Query identity module specifiers',
+    ) as (typeof model.moduleSpecifiers)[number] | undefined;
+    if (!specifier) throw new TypeError(`Query identity module specifiers[${index}] missing.`);
+    compilerArrayAppend(moduleSpecifiers, specifier.specifier, 'Query identity module specifiers');
+  }
+
+  return canonicalJson({
+    moduleSpecifiers,
+    renderInitializerKinds,
+    retainedSourceSegments,
+  });
+}
+
+/**
  * Resolve component-local query aliases through one exact compiler-owned TypeScript Program.
  * This is the Vite/build counterpart to SSR's runtime `.key` read: aliases, namespace members,
  * barrels, and tsconfig path mappings all resolve to the declaration that owns the wire identity.
@@ -48,7 +322,7 @@ export function resolveComponentQueryRuntimeNames(
 ): Readonly<Record<string, string>> {
   const fileName = resolve(options.fileName);
   const source = options.source;
-  if (source.length === 0) return Object.freeze(Object.create(null) as Record<string, string>);
+  if (source.length === 0) return compilerFreeze(compilerCreateNullRecord<string>());
 
   const compilerOptions = queryIdentityCompilerOptions(options.rootDirectory, fileName);
   const host = exactEntryCompilerHost(compilerOptions, fileName, source);
@@ -63,42 +337,50 @@ export function resolveComponentQueryRuntimeNames(
   const checker = program.getTypeChecker();
   const model = parseComponentModule(fileName, source);
   const entries = allComponentOptionObjectEntries(model, 'queries');
-  const result = Object.create(null) as Record<string, string>;
-  for (const [alias, runtimeName] of Object.entries(options.knownNames ?? {})) {
-    Object.defineProperty(result, alias, {
-      configurable: false,
-      enumerable: true,
-      value: runtimeName,
-      writable: false,
-    });
+  const result = compilerCreateNullRecord<string>();
+  const knownNames = options.knownNames;
+  if (knownNames !== undefined) {
+    const knownAliases = compilerObjectKeys(knownNames);
+    const knownAliasLength = compilerArrayLength(knownAliases, 'Known query runtime aliases');
+    for (let index = 0; index < knownAliasLength; index += 1) {
+      const alias = compilerOwnDataValue(knownAliases, index, 'Known query runtime aliases');
+      if (typeof alias !== 'string') {
+        throw new TypeError(`Known query runtime aliases[${index}] must be a string.`);
+      }
+      const runtimeName = compilerOwnDataValue(knownNames, alias, 'Known query runtime names');
+      if (typeof runtimeName !== 'string') {
+        throw new TypeError(`Known query runtime name ${alias} must be a string.`);
+      }
+      compilerDefineOwnDataProperty(result, alias, runtimeName);
+    }
   }
-  const models = new Map<string, ReturnType<typeof parseComponentModule>>([[fileName, model]]);
+  const models = compilerCreateMap<string, ReturnType<typeof parseComponentModule>>();
+  compilerMapSet(models, fileName, model);
   const context: QueryRuntimeIdentityResolutionContext = {
-    appContractProjects: new Map(),
+    appContractProjects: compilerCreateMap(),
     checker,
     models,
     rootDirectory: options.rootDirectory,
   };
 
-  for (let index = 0; index < entries.length; index += 1) {
-    const entry = entries[index]!;
-    const known = Object.getOwnPropertyDescriptor(result, entry.key);
+  const entryLength = compilerArrayLength(entries, 'Query runtime identity entries');
+  for (let index = 0; index < entryLength; index += 1) {
+    const entry = compilerOwnDataValue(entries, index, 'Query runtime identity entries') as
+      | ObjectLiteralEntry
+      | undefined;
+    if (!entry) throw new TypeError(`Query runtime identity entries[${index}] missing.`);
+    const known = compilerOwnDataValue(result, entry.key, 'Resolved query runtime names');
     if (known !== undefined) continue;
     const runtimeName = runtimeNameForQueryEntry(entry, sourceFile, context);
-    const descriptor = Object.getOwnPropertyDescriptor(result, entry.key);
-    if (descriptor && descriptor.value !== runtimeName) {
+    const existing = compilerOwnDataValue(result, entry.key, 'Resolved query runtime names');
+    if (existing !== undefined && existing !== runtimeName) {
       throw new TypeError(
         `Kovo query identity project resolved conflicting identities for component alias "${entry.key}".`,
       );
     }
-    Object.defineProperty(result, entry.key, {
-      configurable: false,
-      enumerable: true,
-      value: runtimeName,
-      writable: false,
-    });
+    if (existing === undefined) compilerDefineOwnDataProperty(result, entry.key, runtimeName);
   }
-  return Object.freeze(result);
+  return compilerFreeze(result);
 }
 
 function runtimeNameForQueryEntry(
@@ -114,7 +396,7 @@ function runtimeNameForQueryEntry(
   }
   const node = exactNodeAtSpan(sourceFile, span.start, span.end);
   const identity = node
-    ? runtimeNameForExpression(node, context, new Set<TS.Node>(), 0)
+    ? runtimeNameForExpression(node, context, compilerCreateSet<TS.Node>(), 0)
     : undefined;
   if (identity === undefined) {
     throw unresolvedQueryIdentity(entry.key, binding.queryKeyExpression);
@@ -128,8 +410,8 @@ function runtimeNameForExpression(
   seen: Set<TS.Node>,
   depth: number,
 ): string | undefined {
-  if (depth > 32 || seen.has(rawNode)) return undefined;
-  seen.add(rawNode);
+  if (depth > 32 || compilerSetHas(seen, rawNode)) return undefined;
+  compilerSetAdd(seen, rawNode);
   const node = unwrapExpression(rawNode);
   if (ts.isIdentifier(node)) {
     return runtimeNameForDeclaration(
@@ -180,8 +462,8 @@ function runtimeNameForDeclaration(
   seen: Set<TS.Node>,
   depth: number,
 ): string | undefined {
-  if (!declaration || seen.has(declaration)) return undefined;
-  seen.add(declaration);
+  if (!declaration || compilerSetHas(seen, declaration)) return undefined;
+  compilerSetAdd(seen, declaration);
   if (ts.isVariableDeclaration(declaration) && ts.isIdentifier(declaration.name)) {
     const direct = directQueryDeclarationIdentity(declaration, context);
     if (direct !== undefined) return direct;
@@ -217,7 +499,11 @@ function directQueryDeclarationIdentity(
     call = queryDeclarationCallWithAppContractResolution(declaration, context);
   }
   if (call === undefined) return undefined;
-  const explicitKey = call.argumentStaticValues[0];
+  const explicitKey = compilerOwnDataValue(
+    call.argumentStaticValues,
+    0,
+    'Query declaration static arguments',
+  );
   if (typeof explicitKey === 'string') return explicitKey;
   if (call.exportedConstName !== declaration.name.text) return undefined;
   return deriveRegistryIdentity(declaration.getSourceFile().fileName, declaration.name.text).key;
@@ -229,13 +515,13 @@ function queryDeclarationCallWithAppContractResolution(
 ): CallExpressionModel | undefined {
   const sourceFile = declaration.getSourceFile();
   const fileName = resolve(sourceFile.fileName);
-  let project = context.appContractProjects.get(fileName);
+  let project = compilerMapGet(context.appContractProjects, fileName);
   if (project === undefined) {
     project = createCompilerOwnedAppContractProject({
       rootDirectory: context.rootDirectory,
       rootNames: [fileName],
     });
-    context.appContractProjects.set(fileName, project);
+    compilerMapSet(context.appContractProjects, fileName, project);
   }
   return project.withEntryResolutions(fileName, (projectSource) => {
     if (projectSource !== sourceFile.text) {
@@ -259,19 +545,24 @@ function queryDeclarationCall(
   models: Map<string, ReturnType<typeof parseComponentModule>>,
 ): CallExpressionModel | undefined {
   const sourceFile = declaration.getSourceFile();
-  let model = models.get(sourceFile.fileName);
+  let model = compilerMapGet(models, sourceFile.fileName);
   if (model === undefined) {
     model = parseComponentModule(sourceFile.fileName, sourceFile.text);
-    models.set(sourceFile.fileName, model);
+    compilerMapSet(models, sourceFile.fileName, model);
   }
   const initializer = unwrapExpression(declaration.initializer!);
   if (!ts.isCallExpression(initializer)) return undefined;
   const start = initializer.getStart(sourceFile);
-  return model.calls.find((call) => {
-    if (call.start !== start || call.end !== initializer.end) return false;
-    if (call.frameworkFactory === 'query') return true;
+  const callLength = compilerArrayLength(model.calls, 'Query declaration calls');
+  for (let index = 0; index < callLength; index += 1) {
+    const call = compilerOwnDataValue(model.calls, index, 'Query declaration calls') as
+      | CallExpressionModel
+      | undefined;
+    if (!call) throw new TypeError(`Query declaration calls[${index}] missing.`);
+    if (call.start !== start || call.end !== initializer.end) continue;
+    if (call.frameworkFactory === 'query') return call;
     const astCall = callExpressionAtSpan(ts as FrameworkIdentityTypeScript, model.sourceFile, call);
-    return astCall
+    const matches = astCall
       ? compilerOwnedAppContractFactoryEquals(
           ts as FrameworkIdentityTypeScript,
           model.sourceFile,
@@ -279,7 +570,9 @@ function queryDeclarationCall(
           KOVO_QUERY_IDENTITY,
         )
       : false;
-  });
+    if (matches) return call;
+  }
+  return undefined;
 }
 
 function resolvedDeclaration(checker: TS.TypeChecker, node: TS.Node): TS.Declaration | undefined {
@@ -291,12 +584,27 @@ function resolvedSymbolDeclaration(
   initial: TS.Symbol | undefined,
 ): TS.Declaration | undefined {
   let symbol = initial;
-  const seen = new Set<TS.Symbol>();
-  while (symbol && (symbol.flags & ts.SymbolFlags.Alias) !== 0 && !seen.has(symbol)) {
-    seen.add(symbol);
+  const seen = compilerCreateSet<TS.Symbol>();
+  while (symbol && (symbol.flags & ts.SymbolFlags.Alias) !== 0 && !compilerSetHas(seen, symbol)) {
+    compilerSetAdd(seen, symbol);
     symbol = checker.getAliasedSymbol(symbol);
   }
-  return symbol?.valueDeclaration ?? symbol?.declarations?.[0];
+  if (symbol === undefined) return undefined;
+  const valueDeclaration = compilerOwnDataValue(
+    symbol,
+    'valueDeclaration',
+    'Resolved query symbol',
+  ) as TS.Declaration | undefined;
+  if (valueDeclaration !== undefined) return valueDeclaration;
+  const declarations = compilerOwnDataValue(symbol, 'declarations', 'Resolved query symbol') as
+    | readonly TS.Declaration[]
+    | undefined;
+  if (declarations === undefined) return undefined;
+  const declarationLength = compilerArrayLength(declarations, 'Resolved query declarations');
+  if (declarationLength === 0) return undefined;
+  return compilerOwnDataValue(declarations, 0, 'Resolved query declarations') as
+    | TS.Declaration
+    | undefined;
 }
 
 function exactNodeAtSpan(
@@ -338,22 +646,38 @@ function exactEntryCompilerHost(
   source: string,
 ): TS.CompilerHost {
   const host = ts.createCompilerHost(options);
-  const getSourceFile = host.getSourceFile.bind(host);
-  const readFile = host.readFile.bind(host);
-  const fileExists = host.fileExists.bind(host);
-  host.fileExists = (candidate) => sameFile(candidate, fileName) || fileExists(candidate);
-  host.readFile = (candidate) => (sameFile(candidate, fileName) ? source : readFile(candidate));
-  host.getSourceFile = (candidate, languageVersion, onError, shouldCreateNewSourceFile) =>
-    sameFile(candidate, fileName)
-      ? ts.createSourceFile(
-          candidate,
-          source,
-          languageVersion,
-          true,
-          scriptKindForFileName(candidate),
-        )
-      : getSourceFile(candidate, languageVersion, onError, shouldCreateNewSourceFile);
-  return host;
+  const getSourceFile = compilerPinnedStableMethod(
+    host,
+    'getSourceFile',
+    'Query identity compiler host.getSourceFile',
+  ) as TS.CompilerHost['getSourceFile'];
+  const readFile = compilerPinnedStableMethod(
+    host,
+    'readFile',
+    'Query identity compiler host.readFile',
+  ) as NonNullable<TS.CompilerHost['readFile']>;
+  const fileExists = compilerPinnedStableMethod(
+    host,
+    'fileExists',
+    'Query identity compiler host.fileExists',
+  ) as NonNullable<TS.CompilerHost['fileExists']>;
+  // Delegate through a distinct carrier. The pinned methods recheck their original host owner, so
+  // replacing that owner's properties would correctly look like tampering rather than wrapping.
+  return {
+    ...host,
+    fileExists: (candidate) => sameFile(candidate, fileName) || fileExists(candidate),
+    getSourceFile: (candidate, languageVersion, onError, shouldCreateNewSourceFile) =>
+      sameFile(candidate, fileName)
+        ? ts.createSourceFile(
+            candidate,
+            source,
+            languageVersion,
+            true,
+            scriptKindForFileName(candidate),
+          )
+        : getSourceFile(candidate, languageVersion, onError, shouldCreateNewSourceFile),
+    readFile: (candidate) => (sameFile(candidate, fileName) ? source : readFile(candidate)),
+  };
 }
 
 function queryIdentityCompilerOptions(rootDirectory: string, fileName: string): TS.CompilerOptions {
@@ -395,13 +719,26 @@ function boundedTsConfig(rootDirectory: string, startDirectory: string): string 
 
 function withinDirectory(parent: string, child: string): boolean {
   const path = relative(parent, child);
-  return path === '' || (!path.startsWith('..') && !isAbsolute(path));
+  return path === '' || (!compilerStringStartsWith(path, '..') && !isAbsolute(path));
 }
 
 function exactProgramSourceFile(program: TS.Program, fileName: string): TS.SourceFile {
-  const exact =
-    program.getSourceFile(fileName) ??
-    program.getSourceFiles().find((sourceFile) => sameFile(sourceFile.fileName, fileName));
+  let exact = program.getSourceFile(fileName);
+  if (exact === undefined) {
+    const sourceFiles = program.getSourceFiles();
+    const sourceFileLength = compilerArrayLength(sourceFiles, 'Query identity Program sources');
+    for (let index = 0; index < sourceFileLength; index += 1) {
+      const sourceFile = compilerOwnDataValue(
+        sourceFiles,
+        index,
+        'Query identity Program sources',
+      ) as TS.SourceFile | undefined;
+      if (!sourceFile) throw new TypeError(`Query identity Program sources[${index}] missing.`);
+      if (!sameFile(sourceFile.fileName, fileName)) continue;
+      exact = sourceFile;
+      break;
+    }
+  }
   if (exact === undefined) {
     throw new TypeError(`Kovo query identity project does not contain ${fileName}.`);
   }
@@ -409,14 +746,17 @@ function exactProgramSourceFile(program: TS.Program, fileName: string): TS.Sourc
 }
 
 function scriptKindForFileName(fileName: string): TS.ScriptKind {
-  if (/\.tsx$/iu.test(fileName)) return ts.ScriptKind.TSX;
-  if (/\.jsx$/iu.test(fileName)) return ts.ScriptKind.JSX;
-  if (/\.[cm]?js$/iu.test(fileName)) return ts.ScriptKind.JS;
+  if (compilerRegExpTest(/\.tsx$/iu, fileName)) return ts.ScriptKind.TSX;
+  if (compilerRegExpTest(/\.jsx$/iu, fileName)) return ts.ScriptKind.JSX;
+  if (compilerRegExpTest(/\.[cm]?js$/iu, fileName)) return ts.ScriptKind.JS;
   return ts.ScriptKind.TS;
 }
 
 function sameFile(left: string, right: string): boolean {
-  return resolve(left).replaceAll('\\', '/') === resolve(right).replaceAll('\\', '/');
+  return (
+    compilerStringReplaceAll(resolve(left), '\\', '/') ===
+    compilerStringReplaceAll(resolve(right), '\\', '/')
+  );
 }
 
 function unresolvedQueryIdentity(alias: string, expression: string): TypeError {
