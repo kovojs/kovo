@@ -37,9 +37,9 @@ const sealedArtifactNames = [
   'generated-app.ts',
 ] as const;
 const sealedArtifactSha256 = {
-  'compiler-packed.tgz': '1320916b720bf9f0d74630297ed6157748219a1f8c980c68d0a898286eaf46e6',
+  'compiler-packed.tgz': 'bd6301fe4555738773e8ec1aad32470e8199f62347924d8b3369bd9c533836f5',
   'config.ts': 'ef1ddc51c0246b6e4b510c25fc0f1c4ed5fc2335e144aa1de177fa232e39f761',
-  'generated-app.ts': '95a73ca0b651cf749d8048cbd97427795da53c6eb1bf35d36adb6b9a4c958ee4',
+  'generated-app.ts': 'cfa9974dc7b10bca9d09f915106e8da25d43ed8d5efa6c048d076c88087090bd',
   'provider.ts': '7fe04d65fad502f337b2fe85a40968d425aaaa712721233aae827c23001b8e8d',
   'server-overlay-packed.tgz': '4c2d6c5a81e8fa9a5dd380adeba6d2abed6a507d5b59f1285eb69941bd7bf8de',
 } as const satisfies Readonly<Record<(typeof sealedArtifactNames)[number], string>>;
