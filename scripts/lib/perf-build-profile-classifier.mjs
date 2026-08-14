@@ -15,7 +15,7 @@ const MARKERS = Object.freeze([
     'runLifecyclePolicyCheck',
     cliModules('commands/lifecycle-policy.ts', 'commands/lifecycle-policy.js'),
   ),
-  phaseMarker('config-trust', 'runPreEvaluationBuildConfigTrustPreflightInWorker'),
+  phaseMarker('config-trust', 'runPreEvaluationBuildConfigTrustPreflight'),
   phaseMarker('typescript', 'runTypeScriptBuildPreflight'),
   phaseMarker(
     'project-quality',
@@ -28,7 +28,7 @@ const MARKERS = Object.freeze([
     cliModules('commands/sound-subset.mjs', 'commands/sound-subset.mjs'),
   ),
   phaseMarker('session-authority', 'sessionAuthorityFactsFromEntry'),
-  phaseMarker('app-source-trust', 'runPreEvaluationStaticTrustPreflightInWorker'),
+  phaseMarker('app-source-trust', 'runPreEvaluationStaticTrustPreflight'),
   phaseMarker('stylesheet', 'kovoBuildStylesheetCss'),
   phaseMarker('app-evaluation', 'loadBuildAppModule'),
   phaseMarker('build-check-graph', 'buildCheckGraph'),
@@ -41,6 +41,8 @@ const MARKERS = Object.freeze([
   workerMarker('client', 'produceKovoBuildOneShotClientPhase'),
   workerMarker('server', 'produceKovoBuildOneShotServerPhase'),
   workerMarker('final', 'finishKovoBuildOneShot'),
+  phaseMarker('worker-launch-transport', 'runPreEvaluationBuildConfigTrustPreflightInWorker'),
+  phaseMarker('worker-launch-transport', 'runPreEvaluationStaticTrustPreflightInWorker'),
 ]);
 
 /**
@@ -69,7 +71,7 @@ export function deriveBuildProfileTopFive(profileBytes) {
     samples.length > MAX_PROFILE_SAMPLES ||
     !Array.isArray(timeDeltas) ||
     timeDeltas.length !== samples.length ||
-    timeDeltas.some((delta) => !Number.isSafeInteger(delta) || delta < 0)
+    timeDeltas.some((delta) => !Number.isSafeInteger(delta))
   ) {
     throw new TypeError('raw build CPU profile has an invalid node/sample/time-delta census');
   }
