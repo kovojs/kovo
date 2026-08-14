@@ -1244,6 +1244,26 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     ],
   },
   {
+    id: 'kv235-source-provenance',
+    marker: '@kovo-security-classifier-corpus kv235-source-provenance',
+    testFiles: ['packages/compiler/src/scan/lexical-scope-declaration-index.test.ts'],
+    verdictAnchors: [
+      {
+        id: 'exact-ast-lexical-scope-index-superset',
+        file: 'packages/compiler/src/scan/lexical-scope-declaration-index.test.ts',
+        snippets: [
+          'exact lexical-scope declaration index',
+          'preserves lexical boundaries, var hoisting, and direct function/class declarations',
+          'indexes parameters, destructuring, catch bindings, imports, and type-only imports exactly',
+          'preserves exact excluded-binding identity, including duplicate declarations',
+          'constructs one index per exact scope instead of walking it once per JSX identifier',
+          'keys reuse by exact AST identity and cannot be redirected by poisoned collection methods',
+          'expect(poisonHits).toBe(0)',
+        ],
+      },
+    ],
+  },
+  {
     id: 'kv418-request-authority',
     marker: '@kovo-security-classifier-corpus kv418-request-authority',
     testFiles: ['packages/compiler/src/scan/parse.test.ts'],
