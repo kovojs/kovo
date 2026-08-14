@@ -394,7 +394,7 @@ function writeArtifactFixture({
   const directory = mkdtempSync(path.join(os.tmpdir(), 'kovo-perf-custody-'));
   temporaryDirectories.push(directory);
   const sourceCommit = 'a'.repeat(40);
-  const eventSha = sourceCommit;
+  const eventSha = event === 'pull_request' ? 'd'.repeat(40) : sourceCommit;
   const report = {
     execution: {
       github: {
@@ -433,7 +433,7 @@ function writeArtifactFixture({
     workflow_run: {
       head_branch: 'main',
       head_repository_id: 101,
-      head_sha: eventSha,
+      head_sha: sourceCommit,
       id: 1001,
       repository_id: 101,
     },
@@ -443,7 +443,7 @@ function writeArtifactFixture({
     event,
     head_branch: 'main',
     head_repository: { full_name: 'kovojs/kovo', id: 101 },
-    head_sha: eventSha,
+    head_sha: sourceCommit,
     html_url: 'https://github.com/kovojs/kovo/actions/runs/1001',
     id: 1001,
     jobs_url: 'https://api.github.com/repos/kovojs/kovo/actions/runs/1001/jobs',
@@ -461,7 +461,7 @@ function writeArtifactFixture({
       {
         completed_at: '2026-08-13T23:02:00Z',
         conclusion: 'success',
-        head_sha: eventSha,
+        head_sha: sourceCommit,
         id: 3001,
         name: jobName,
         run_attempt: 1,
@@ -474,7 +474,7 @@ function writeArtifactFixture({
     total_count: 1,
   };
   const workflowText = workflowFixtureSource(jobKey, jobName, triggerPolicy);
-  const workflowMetadata = workflowFileMetadata(workflowText, eventSha);
+  const workflowMetadata = workflowFileMetadata(workflowText, sourceCommit);
   const apiPath = path.join(directory, 'artifact.api.json');
   const archivePath = path.join(directory, 'artifact.zip');
   const jobsApiPath = path.join(directory, 'jobs.api.json');
@@ -534,7 +534,7 @@ function authenticateFixture(fixture, overrides = {}) {
 }
 
 function replaceWorkflowApiFixture(fixture, workflowText) {
-  fixture.workflowMetadata = workflowFileMetadata(workflowText, fixture.eventSha);
+  fixture.workflowMetadata = workflowFileMetadata(workflowText, fixture.sourceCommit);
   fixture.liveWorkflowApiBytes = Buffer.from(
     `${JSON.stringify(fixture.workflowMetadata, null, 2)}\n`,
   );

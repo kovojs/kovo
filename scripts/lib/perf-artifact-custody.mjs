@@ -422,7 +422,7 @@ function authenticateWorkflowAuthority({
   const triggerScope = triggerPolicy?.scopes?.[event] ?? null;
   const repositoryId = runMetadata?.repository?.id;
   const headRepositoryId = runMetadata?.head_repository?.id;
-  const eventSha = runMetadata?.head_sha;
+  const runHeadSha = runMetadata?.head_sha;
   const sourceSha = report?.source?.commit;
   const workflowDefinition = authenticateWorkflowDefinition({
     expectedWorkflowJob,
@@ -457,7 +457,7 @@ function authenticateWorkflowAuthority({
     artifactMetadata?.workflow_run?.repository_id !== repositoryId ||
     artifactMetadata?.workflow_run?.head_repository_id !== headRepositoryId ||
     artifactMetadata?.workflow_run?.head_branch !== runMetadata?.head_branch ||
-    artifactMetadata?.workflow_run?.head_sha !== eventSha
+    artifactMetadata?.workflow_run?.head_sha !== runHeadSha
   ) {
     findings.push('artifact workflow identity differs from the live workflow run');
   }
@@ -476,13 +476,16 @@ function authenticateWorkflowAuthority({
   if (triggerScope === null) {
     findings.push(`workflow run event ${String(event)} is not a reviewed trigger`);
   }
-  if (!COMMIT_PATTERN.test(eventSha ?? '')) findings.push('workflow event SHA is unavailable');
+  if (!COMMIT_PATTERN.test(runHeadSha ?? '')) {
+    findings.push('workflow run head SHA is unavailable');
+  }
   if (!COMMIT_PATTERN.test(sourceSha ?? '')) findings.push('workflow source SHA is unavailable');
   if (!sourceCommitMatchesRun(runMetadata, sourceSha)) {
     findings.push('report source commit differs from the immutable workflow run head SHA');
   }
   if (
-    github?.eventSha !== eventSha ||
+    !COMMIT_PATTERN.test(github?.eventSha ?? '') ||
+    (event !== 'pull_request' && github?.eventSha !== runHeadSha) ||
     github?.sha !== sourceSha ||
     github?.repository !== repository ||
     github?.serverUrl !== 'https://github.com' ||
@@ -521,7 +524,7 @@ function authenticateWorkflowAuthority({
       jobId < 1 ||
       job.run_id !== workflowRunId ||
       job.run_attempt !== runAttempt ||
-      job.head_sha !== eventSha ||
+      job.head_sha !== runHeadSha ||
       job.status !== 'completed' ||
       job.conclusion !== 'success' ||
       job.url !== `https://api.github.com/repos/${repository}/actions/jobs/${String(jobId)}`)
@@ -542,7 +545,7 @@ function authenticateWorkflowAuthority({
     facts: {
       conclusion: runMetadata?.conclusion ?? null,
       event: event ?? null,
-      headSha: eventSha ?? null,
+      headSha: runHeadSha ?? null,
       job: {
         apiUrl:
           Number.isSafeInteger(jobId) && jobId > 0
