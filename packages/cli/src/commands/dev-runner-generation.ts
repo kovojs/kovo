@@ -8,6 +8,7 @@ const NativeWeakMap = globalThis.WeakMap;
 const nativeArrayPush = globalThis.Array.prototype.push;
 const nativeClearInterval = globalThis.clearInterval;
 const nativeDateNow = NativeDate.now;
+const nativeObjectDefineProperty = NativeObject.defineProperty;
 const nativeObjectFreeze = NativeObject.freeze;
 const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
 const nativeObjectGetPrototypeOf = NativeObject.getPrototypeOf;
@@ -24,10 +25,23 @@ const nativeWeakMapSet = NativeWeakMap.prototype.set;
 /** plans/good-perf.md O6: how long a staged edit may pend before the dev loop reports a stall. */
 const STAGE_PENDING_REPORT_INTERVAL_MS = 10_000;
 
+/**
+ * Vite's server-module transport otherwise aborts a single invoke after 60 seconds even while
+ * Kovo's staged-generation watchdog is still reporting valid progress for a large source graph.
+ */
+const RUNNER_TRANSPORT_INVOKE_TIMEOUT_MS = 600_000;
+
+interface ViteRunnerTransport {
+  timeout?: number;
+}
+
 interface ViteRunner {
   clearCache(): void;
   close(): Promise<void>;
   import<T = Record<string, unknown>>(id: string): Promise<T>;
+  readonly options: {
+    readonly transport: ViteRunnerTransport;
+  };
 }
 
 interface ViteModuleGraph {
@@ -354,6 +368,7 @@ function createKovoDevRunnerGenerationBroker(
     if (closed) throw new Error('Kovo dev runner generation broker is closed.');
     const environment = assertEnvironmentCurrent();
     const runner = authority.createServerModuleRunner(environment, { hmr: false });
+    pinRunnerTransportInvokeTimeout(runner);
     assertMethod(runner, authority.runnerImport, 'Vite ModuleRunner.import');
     assertMethod(runner, authority.runnerClearCache, 'Vite ModuleRunner.clearCache');
     assertMethod(runner, authority.runnerClose, 'Vite ModuleRunner.close');
@@ -687,6 +702,21 @@ function createKovoDevRunnerGenerationBroker(
     prepareInitial,
     stage,
     withLease,
+  });
+}
+
+function pinRunnerTransportInvokeTimeout(runner: ViteRunner): void {
+  const options = ownObject(runner, 'options', 'Vite ModuleRunner.options');
+  const transport = ownObject(
+    options,
+    'transport',
+    'Vite ModuleRunner.options.transport',
+  ) as ViteRunnerTransport;
+  nativeObjectDefineProperty(transport, 'timeout', {
+    configurable: false,
+    enumerable: true,
+    value: RUNNER_TRANSPORT_INVOKE_TIMEOUT_MS,
+    writable: false,
   });
 }
 
