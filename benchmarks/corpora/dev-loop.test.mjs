@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,6 +21,7 @@ import {
   normalizeDevLoopOptions,
   parseDevLoopArgs,
   profileEditToPaint,
+  probeOriginPortAvailability,
   profiledDevInvocation,
   runDevLoopBenchmark,
   sourceStabilityFindings,
@@ -398,7 +400,7 @@ describe('single-entrant developer-loop adapter', () => {
     );
   });
 
-  it('proves graceful dev-process quiescence and two consecutive exact-port binds', async () => {
+  it('proves graceful quiescence and a stable dual-stack exact-port window', async () => {
     const clock = fakeLifecycleClock();
     const signals = [];
     let groupChecks = 0;
@@ -407,11 +409,12 @@ describe('single-entrant developer-loop adapter', () => {
       { origin: 'http://localhost:49120', pid: 1234 },
       {
         ...clock,
-        portAvailable: async (origin) => {
+        portAvailability: async (origin) => {
           expect(origin).toBe('http://localhost:49120');
           portChecks += 1;
-          return portChecks >= 2;
+          return dualStackPortObservation();
         },
+        portStabilityWindowMs: 100,
         processGroupAlive: async () => {
           groupChecks += 1;
           return groupChecks === 1;
@@ -424,12 +427,174 @@ describe('single-entrant developer-loop adapter', () => {
       complete: true,
       error: null,
       origin: 'http://localhost:49120',
-      port: { available: true, checks: 3 },
+      port: {
+        addresses: [
+          {
+            address: '127.0.0.1',
+            availableChecks: 3,
+            busyChecks: 0,
+            checks: 3,
+            family: 4,
+            supported: true,
+            unsupportedChecks: 0,
+          },
+          {
+            address: '::1',
+            availableChecks: 3,
+            busyChecks: 0,
+            checks: 3,
+            family: 6,
+            supported: true,
+            unsupportedChecks: 0,
+          },
+        ],
+        available: true,
+        busyChecks: 0,
+        checks: 3,
+        rebinds: 0,
+        requiredStableMs: 100,
+        stableMs: 100,
+        waitedMs: 100,
+      },
       processGroup: { checks: 2, quiescent: true },
       schema: DEV_SESSION_STOP_SCHEMA,
       signals: ['SIGTERM'],
     });
     expect(signals).toEqual([[1234, 'SIGTERM']]);
+  });
+
+  it('resets the stability window when a descendant late-rebinds one address', async () => {
+    const clock = fakeLifecycleClock();
+    let portChecks = 0;
+    const result = await stopDevProcessTree(
+      { origin: 'http://localhost:49120', pid: 1235 },
+      {
+        ...clock,
+        portAvailability: async () => {
+          portChecks += 1;
+          return dualStackPortObservation({ ipv4Available: portChecks !== 3 });
+        },
+        portStabilityWindowMs: 100,
+        processGroupAlive: async () => false,
+        terminateProcessGroup: () => undefined,
+      },
+    );
+
+    expect(result.complete).toBe(true);
+    expect(result.port).toMatchObject({
+      available: true,
+      busyChecks: 1,
+      checks: 6,
+      rebinds: 1,
+      requiredStableMs: 100,
+      stableMs: 100,
+      waitedMs: 250,
+    });
+    expect(result.port.addresses).toEqual([
+      expect.objectContaining({
+        address: '127.0.0.1',
+        availableChecks: 5,
+        busyChecks: 1,
+      }),
+      expect.objectContaining({ address: '::1', availableChecks: 6, busyChecks: 0 }),
+    ]);
+  });
+
+  it('requires both IPv4 and IPv6 to be free before starting the stability window', async () => {
+    const clock = fakeLifecycleClock();
+    let portChecks = 0;
+    const result = await stopDevProcessTree(
+      { origin: 'http://localhost:49120', pid: 1236 },
+      {
+        ...clock,
+        portAvailability: async () => {
+          portChecks += 1;
+          if (portChecks === 1) return dualStackPortObservation({ ipv4Available: false });
+          if (portChecks === 2) return dualStackPortObservation({ ipv6Available: false });
+          return dualStackPortObservation();
+        },
+        portStabilityWindowMs: 100,
+        processGroupAlive: async () => false,
+        terminateProcessGroup: () => undefined,
+      },
+    );
+
+    expect(result.complete).toBe(true);
+    expect(result.port).toMatchObject({
+      available: true,
+      busyChecks: 2,
+      checks: 5,
+      rebinds: 0,
+      stableMs: 100,
+      waitedMs: 200,
+    });
+    expect(result.port.addresses).toEqual([
+      expect.objectContaining({ address: '127.0.0.1', busyChecks: 1 }),
+      expect.objectContaining({ address: '::1', busyChecks: 1 }),
+    ]);
+  });
+
+  it('detects an IPv4 localhost collision even when the IPv6 address is free', async () => {
+    const server = createServer();
+    await new Promise((resolve, reject) => {
+      server.once('error', reject);
+      server.listen({ exclusive: true, host: '127.0.0.1', port: 0 }, resolve);
+    });
+    try {
+      const address = server.address();
+      expect(address).not.toBeNull();
+      const observation = await probeOriginPortAvailability(
+        `http://localhost:${String(address.port)}`,
+      );
+
+      expect(observation.available).toBe(false);
+      expect(observation.addresses).toEqual([
+        {
+          address: '127.0.0.1',
+          available: false,
+          errorCode: 'EADDRINUSE',
+          family: 4,
+          supported: true,
+        },
+        expect.objectContaining({ address: '::1', family: 6 }),
+      ]);
+    } finally {
+      await new Promise((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
+  it('records an unavailable IPv6 stack without treating it as a port collision', async () => {
+    const clock = fakeLifecycleClock();
+    const result = await stopDevProcessTree(
+      { origin: 'http://localhost:49120', pid: 1237 },
+      {
+        ...clock,
+        portAvailability: async () =>
+          dualStackPortObservation({ ipv6ErrorCode: 'EAFNOSUPPORT', ipv6Supported: false }),
+        portStabilityWindowMs: 100,
+        processGroupAlive: async () => false,
+        terminateProcessGroup: () => undefined,
+      },
+    );
+
+    expect(result.complete).toBe(true);
+    expect(result.port).toMatchObject({ available: true, busyChecks: 0, checks: 3 });
+    expect(result.port.addresses).toEqual([
+      expect.objectContaining({
+        address: '127.0.0.1',
+        availableChecks: 3,
+        supported: true,
+      }),
+      expect.objectContaining({
+        address: '::1',
+        availableChecks: 0,
+        lastErrorCode: 'EAFNOSUPPORT',
+        supported: false,
+        unsupportedChecks: 3,
+      }),
+    ]);
   });
 
   it('escalates a surviving dev process group to SIGKILL before releasing the port', async () => {
@@ -443,7 +608,8 @@ describe('single-entrant developer-loop adapter', () => {
         forceTimeoutMs: 20,
         gracefulTimeoutMs: 20,
         pollIntervalMs: 10,
-        portAvailable: async () => true,
+        portAvailability: async () => dualStackPortObservation(),
+        portStabilityWindowMs: 20,
         processGroupAlive: async () => !killed,
         terminateProcessGroup: (_pid, signal) => {
           signals.push(signal);
@@ -467,10 +633,11 @@ describe('single-entrant developer-loop adapter', () => {
         forceTimeoutMs: 20,
         gracefulTimeoutMs: 20,
         pollIntervalMs: 10,
-        portAvailable: async (origin) => {
+        portAvailability: async (origin) => {
           probedOrigins.push(origin);
-          return false;
+          return dualStackPortObservation({ ipv4Available: false, ipv6Available: false });
         },
+        portStabilityWindowMs: 10,
         portTimeoutMs: 20,
         processGroupAlive: async () => true,
         terminateProcessGroup: () => undefined,
@@ -485,7 +652,9 @@ describe('single-entrant developer-loop adapter', () => {
       signals: ['SIGTERM', 'SIGKILL'],
     });
     expect(result.error).toContain('process group 3456 remained alive');
-    expect(result.error).toContain('http://localhost:49120 remained unavailable');
+    expect(result.error).toContain(
+      'http://localhost:49120 did not remain available across all resolved addresses',
+    );
     expect(new Set(probedOrigins)).toEqual(new Set(['http://localhost:49120']));
   });
 
@@ -695,6 +864,35 @@ function fakeLifecycleClock() {
       value += ms;
     },
     now: () => value,
+  };
+}
+
+function dualStackPortObservation({
+  ipv4Available = true,
+  ipv6Available = true,
+  ipv6ErrorCode = ipv6Available ? null : 'EADDRINUSE',
+  ipv6Supported = true,
+} = {}) {
+  const addresses = [
+    {
+      address: '127.0.0.1',
+      available: ipv4Available,
+      errorCode: ipv4Available ? null : 'EADDRINUSE',
+      family: 4,
+      supported: true,
+    },
+    {
+      address: '::1',
+      available: ipv6Available,
+      errorCode: ipv6ErrorCode,
+      family: 6,
+      supported: ipv6Supported,
+    },
+  ];
+  const supported = addresses.filter((address) => address.supported);
+  return {
+    addresses,
+    available: supported.length > 0 && supported.every((address) => address.available),
   };
 }
 

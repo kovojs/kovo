@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
 import { execFile, spawn } from 'node:child_process';
+import { lookup } from 'node:dns/promises';
 import { readFileSync } from 'node:fs';
 import { lstat, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises';
-import { createServer } from 'node:net';
+import { createServer, isIP } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
@@ -38,8 +39,9 @@ const RSS_SAMPLE_INTERVAL_MS = 50;
 const DEV_PROCESS_GRACEFUL_STOP_TIMEOUT_MS = 3_000;
 const DEV_PROCESS_FORCE_STOP_TIMEOUT_MS = 2_000;
 const DEV_PORT_RELEASE_TIMEOUT_MS = 5_000;
+const DEV_PORT_STABILITY_WINDOW_MS = 500;
 const DEV_LIFECYCLE_POLL_INTERVAL_MS = 50;
-export const DEV_SESSION_STOP_SCHEMA = 'kovo-dev-session-stop/v1';
+export const DEV_SESSION_STOP_SCHEMA = 'kovo-dev-session-stop/v2';
 const repoRoot = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const PERFORMANCE_POSTURE_FILES = Object.freeze([
   'packages/compiler/src/security/framework-public-runtime-export-posture.generated.ts',
@@ -1045,8 +1047,9 @@ function startDevSession({ appRoot, command, inspectorPort = null, spawnProcess 
 }
 
 /**
- * Stop the detached dev process group, then prove the exact strict port can be bound again.
- * A launcher exit is insufficient: its descendants may still own the listening socket.
+ * Stop the detached dev process group, then prove every address behind the exact strict origin
+ * remains bindable for a bounded stability window. A launcher exit is insufficient: its
+ * descendants may still own or late-rebind the listening socket.
  */
 export async function stopDevProcessTree({ origin, pid }, dependencies = {}) {
   boundedInteger(pid, 1, Number.MAX_SAFE_INTEGER, 'dev process PID');
@@ -1055,15 +1058,17 @@ export async function stopDevProcessTree({ origin, pid }, dependencies = {}) {
   const pause = dependencies.delay ?? delay;
   const terminate = dependencies.terminateProcessGroup ?? terminateProcessGroup;
   const processGroupAlive = dependencies.processGroupAlive ?? isProcessGroupAlive;
-  const portAvailable = dependencies.portAvailable ?? probeOriginPortAvailable;
+  const portAvailability = dependencies.portAvailability ?? probeOriginPortAvailability;
   const gracefulTimeoutMs = dependencies.gracefulTimeoutMs ?? DEV_PROCESS_GRACEFUL_STOP_TIMEOUT_MS;
   const forceTimeoutMs = dependencies.forceTimeoutMs ?? DEV_PROCESS_FORCE_STOP_TIMEOUT_MS;
   const portTimeoutMs = dependencies.portTimeoutMs ?? DEV_PORT_RELEASE_TIMEOUT_MS;
+  const portStabilityWindowMs = dependencies.portStabilityWindowMs ?? DEV_PORT_STABILITY_WINDOW_MS;
   const pollIntervalMs = dependencies.pollIntervalMs ?? DEV_LIFECYCLE_POLL_INTERVAL_MS;
   for (const [value, label] of [
     [gracefulTimeoutMs, 'graceful stop timeout'],
     [forceTimeoutMs, 'forced stop timeout'],
     [portTimeoutMs, 'port release timeout'],
+    [portStabilityWindowMs, 'port stability window'],
     [pollIntervalMs, 'lifecycle poll interval'],
   ]) {
     boundedInteger(value, 1, 60_000, label);
@@ -1109,19 +1114,20 @@ export async function stopDevProcessTree({ origin, pid }, dependencies = {}) {
     errors.push(`dev process group ${String(pid)} teardown failed: ${errorMessage(error)}`);
   }
 
-  let port = { checks: 0, satisfied: false, waitedMs: 0 };
+  let port = emptyPortStabilityEvidence(portStabilityWindowMs);
   try {
-    port = await waitForLifecycleCondition({
-      check: () => portAvailable(canonicalOrigin),
-      consecutiveSuccesses: 2,
+    port = await waitForStablePortAvailability({
       now,
+      origin: canonicalOrigin,
       pause,
       pollIntervalMs,
+      probe: portAvailability,
+      stabilityWindowMs: portStabilityWindowMs,
       timeoutMs: portTimeoutMs,
     });
     if (!port.satisfied) {
       errors.push(
-        `dev origin ${canonicalOrigin} remained unavailable after teardown (${String(port.waitedMs)}ms)`,
+        `dev origin ${canonicalOrigin} did not remain available across all resolved addresses for ${String(portStabilityWindowMs)}ms after teardown (${String(port.waitedMs)}ms)`,
       );
     }
   } catch (error) {
@@ -1134,8 +1140,13 @@ export async function stopDevProcessTree({ origin, pid }, dependencies = {}) {
     origin: canonicalOrigin,
     pid,
     port: {
+      addresses: port.addresses,
       available: port.satisfied,
+      busyChecks: port.busyChecks,
       checks: port.checks,
+      rebinds: port.rebinds,
+      requiredStableMs: port.requiredStableMs,
+      stableMs: port.stableMs,
       waitedMs: port.waitedMs,
     },
     processGroup: {
@@ -1146,6 +1157,134 @@ export async function stopDevProcessTree({ origin, pid }, dependencies = {}) {
     schema: DEV_SESSION_STOP_SCHEMA,
     signals,
   };
+}
+
+async function waitForStablePortAvailability({
+  now,
+  origin,
+  pause,
+  pollIntervalMs,
+  probe,
+  stabilityWindowMs,
+  timeoutMs,
+}) {
+  const started = now();
+  const addresses = new Map();
+  let busyChecks = 0;
+  let checks = 0;
+  let rebinds = 0;
+  let stableStartedAt = null;
+  let stableMs = 0;
+  while (true) {
+    checks += 1;
+    const observation = validatePortAvailabilityObservation(await probe(origin));
+    for (const address of observation.addresses) {
+      const key = `${String(address.family)}:${address.address}`;
+      const aggregate = addresses.get(key) ?? {
+        address: address.address,
+        availableChecks: 0,
+        busyChecks: 0,
+        checks: 0,
+        family: address.family,
+        lastErrorCode: null,
+        supported: address.supported,
+        unsupportedChecks: 0,
+      };
+      aggregate.checks += 1;
+      aggregate.lastErrorCode = address.errorCode;
+      aggregate.supported ||= address.supported;
+      if (!address.supported) aggregate.unsupportedChecks += 1;
+      else if (address.available) aggregate.availableChecks += 1;
+      else aggregate.busyChecks += 1;
+      addresses.set(key, aggregate);
+    }
+
+    const checkedAt = now();
+    const waitedMs = Math.max(0, Math.round(checkedAt - started));
+    if (observation.available) {
+      stableStartedAt ??= checkedAt;
+      stableMs = Math.max(0, Math.round(checkedAt - stableStartedAt));
+      if (stableMs >= stabilityWindowMs) {
+        return {
+          addresses: [...addresses.values()],
+          busyChecks,
+          checks,
+          rebinds,
+          requiredStableMs: stabilityWindowMs,
+          satisfied: true,
+          stableMs,
+          waitedMs,
+        };
+      }
+    } else {
+      busyChecks += 1;
+      if (stableStartedAt !== null) rebinds += 1;
+      stableStartedAt = null;
+      stableMs = 0;
+    }
+    if (waitedMs >= timeoutMs) {
+      return {
+        addresses: [...addresses.values()],
+        busyChecks,
+        checks,
+        rebinds,
+        requiredStableMs: stabilityWindowMs,
+        satisfied: false,
+        stableMs,
+        waitedMs,
+      };
+    }
+    await pause(Math.min(pollIntervalMs, timeoutMs - waitedMs));
+  }
+}
+
+function emptyPortStabilityEvidence(requiredStableMs) {
+  return {
+    addresses: [],
+    busyChecks: 0,
+    checks: 0,
+    rebinds: 0,
+    requiredStableMs,
+    satisfied: false,
+    stableMs: 0,
+    waitedMs: 0,
+  };
+}
+
+function validatePortAvailabilityObservation(value) {
+  if (value === null || typeof value !== 'object' || !Array.isArray(value.addresses)) {
+    throw new TypeError('port availability probe must return per-address evidence');
+  }
+  if (value.addresses.length < 1) {
+    throw new TypeError('port availability probe did not inspect an address');
+  }
+  const addresses = value.addresses.map((address) => {
+    if (
+      address === null ||
+      typeof address !== 'object' ||
+      ![4, 6].includes(address.family) ||
+      typeof address.address !== 'string' ||
+      address.address.length === 0 ||
+      typeof address.available !== 'boolean' ||
+      typeof address.supported !== 'boolean' ||
+      !(address.errorCode === null || typeof address.errorCode === 'string')
+    ) {
+      throw new TypeError('port availability probe returned malformed address evidence');
+    }
+    return {
+      address: address.address,
+      available: address.available,
+      errorCode: address.errorCode,
+      family: address.family,
+      supported: address.supported,
+    };
+  });
+  const supported = addresses.filter((address) => address.supported);
+  const available = supported.length > 0 && supported.every((address) => address.available);
+  if (value.available !== available) {
+    throw new TypeError('port availability probe summary disagrees with per-address evidence');
+  }
+  return { addresses, available };
 }
 
 async function waitForLifecycleCondition({
@@ -1178,7 +1317,16 @@ function failedDevSessionStop(origin, pid, error) {
     error: message,
     origin,
     pid,
-    port: { available: false, checks: 0, waitedMs: 0 },
+    port: {
+      addresses: [],
+      available: false,
+      busyChecks: 0,
+      checks: 0,
+      rebinds: 0,
+      requiredStableMs: DEV_PORT_STABILITY_WINDOW_MS,
+      stableMs: 0,
+      waitedMs: 0,
+    },
     processGroup: { checks: 0, quiescent: false, waitedMs: 0 },
     schema: DEV_SESSION_STOP_SCHEMA,
     signals: [],
@@ -1290,19 +1438,96 @@ function isProcessGroupAlive(pid) {
   }
 }
 
-function probeOriginPortAvailable(origin) {
+export async function probeOriginPortAvailability(origin) {
   const url = new URL(origin);
   const port = Number(url.port || (url.protocol === 'https:' ? 443 : 80));
-  return new Promise((resolve, reject) => {
+  const targets = await resolveOriginBindTargets(url.hostname);
+  const probes = targets.map((target) => probeAddressPort(target, port));
+  const observations = await Promise.all(probes);
+  const closeResults = await Promise.allSettled(
+    observations.map(({ server }) => (server.listening ? closeListeningServer(server) : undefined)),
+  );
+  const closeFailure = closeResults.find((result) => result.status === 'rejected');
+  if (closeFailure?.status === 'rejected') throw closeFailure.reason;
+  const unexpected = observations.find((observation) => observation.error !== null);
+  if (unexpected !== undefined) throw unexpected.error;
+  const addresses = observations.map(
+    ({ server: _server, error: _error, ...observation }) => observation,
+  );
+  const supported = addresses.filter((address) => address.supported);
+  return {
+    addresses,
+    available: supported.length > 0 && supported.every((address) => address.available),
+  };
+}
+
+async function resolveOriginBindTargets(hostnameValue) {
+  const hostname = hostnameValue.replace(/^\[|\]$/gu, '');
+  if (hostname.toLowerCase() === 'localhost') {
+    return [
+      { address: '127.0.0.1', family: 4 },
+      { address: '::1', family: 6 },
+    ];
+  }
+  const family = isIP(hostname);
+  if (family !== 0) return [{ address: hostname, family }];
+  const resolved = await lookup(hostname, { all: true, verbatim: true });
+  const unique = new Map();
+  for (const address of resolved) {
+    if (![4, 6].includes(address.family)) continue;
+    unique.set(`${String(address.family)}:${address.address}`, address);
+  }
+  if (unique.size === 0) throw new Error(`dev origin host ${hostname} resolved no IP addresses`);
+  return [...unique.values()];
+}
+
+function probeAddressPort({ address, family }, port) {
+  return new Promise((resolve) => {
     const server = createServer();
     server.unref();
     server.once('error', (error) => {
-      if (error?.code === 'EADDRINUSE') resolve(false);
-      else reject(error);
+      const errorCode = typeof error?.code === 'string' ? error.code : null;
+      if (errorCode === 'EADDRINUSE') {
+        resolve({
+          address,
+          available: false,
+          error: null,
+          errorCode,
+          family,
+          server,
+          supported: true,
+        });
+      } else if (family === 6 && ['EADDRNOTAVAIL', 'EAFNOSUPPORT'].includes(errorCode)) {
+        resolve({
+          address,
+          available: true,
+          error: null,
+          errorCode,
+          family,
+          server,
+          supported: false,
+        });
+      } else {
+        resolve({ address, available: false, error, errorCode, family, server, supported: true });
+      }
     });
-    server.listen({ exclusive: true, host: url.hostname, port }, () => {
-      server.close((error) => (error ? reject(error) : resolve(true)));
+    server.listen({ exclusive: true, host: address, ipv6Only: family === 6, port }, () => {
+      resolve({
+        address,
+        available: true,
+        error: null,
+        errorCode: null,
+        family,
+        server,
+        supported: true,
+      });
     });
+  });
+}
+
+function closeListeningServer(server) {
+  return new Promise((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve()));
   });
 }
 
