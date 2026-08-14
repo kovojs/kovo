@@ -2554,7 +2554,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     corpusSize: readIntegerArg('--corpus-size', { fallback: 24, max: 216 }),
     devIterations: readIntegerArg('--dev-iterations', { fallback: 30, max: 100 }),
     devPortBase: readIntegerArg('--dev-port-base', {
-      fallback: 49_700,
+      fallback: DEFAULT_DEV_PORT_BASE,
       max: 65_024,
       min: 1_024,
     }),
