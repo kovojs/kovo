@@ -581,10 +581,10 @@ jobs:
           printf '%s\n' '#!/usr/bin/env bash' 'exec vp exec pnpm "$@"' > "$tool_bin/pnpm"
           chmod 755 "$tool_bin/pnpm"
           printf '%s\n' "$tool_bin" >> "$GITHUB_PATH"
-      - name: Prepare exact baseline and historical candidate worktrees
+      - name: Prepare exact baseline and repaired candidate worktrees
         env:
-          KOVO_DEV_GENERATION_CANDIDATE_COMMIT: 44da3f3449dcbac2cc29951604b89488c90faa6f
-          KOVO_DEV_GENERATION_CANDIDATE_REF: refs/heads/perf-spike/dev-generation-44da3f344
+          KOVO_DEV_GENERATION_CANDIDATE_COMMIT: 7a20bf6664c6b601a07a4525d90570bcefb9c55c
+          KOVO_DEV_GENERATION_CANDIDATE_REF: refs/heads/perf-spike/dev-generation-profile-repaired-20260814
           KOVO_PERF_CORPUS_SIZE: ${{ matrix.corpus }}
         run: |
           baseline_root="$RUNNER_TEMP/kovo-dev-generation-n$KOVO_PERF_CORPUS_SIZE-baseline"

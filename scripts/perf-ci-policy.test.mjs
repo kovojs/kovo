@@ -275,17 +275,17 @@ describe('realistic performance CI policy', () => {
     expectRawArtifact(source, 'kovo-perf-check-watch-decision');
   });
 
-  it('runs both full browser-visible historical fresh-generation decisions', () => {
+  it('runs both full browser-visible repaired fresh-generation decisions', () => {
     const source = decisionJob('dev-generation-decision');
     expect(source).toContain('corpus: [24, 216]');
     expect(source).toContain('fetch-depth: 0');
     expect(source).toContain('uses: ./.github/actions/playwright-install');
     expectPnpmBridge(source);
     expect(source).toContain(
-      'KOVO_DEV_GENERATION_CANDIDATE_COMMIT: 44da3f3449dcbac2cc29951604b89488c90faa6f',
+      'KOVO_DEV_GENERATION_CANDIDATE_COMMIT: 7a20bf6664c6b601a07a4525d90570bcefb9c55c',
     );
     expect(source).toContain(
-      'KOVO_DEV_GENERATION_CANDIDATE_REF: refs/heads/perf-spike/dev-generation-44da3f344',
+      'KOVO_DEV_GENERATION_CANDIDATE_REF: refs/heads/perf-spike/dev-generation-profile-repaired-20260814',
     );
     expect(source).toContain('git fetch --no-tags origin');
     expect(source).toContain(

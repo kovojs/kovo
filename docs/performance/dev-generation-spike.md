@@ -1,6 +1,6 @@
 # Fresh-generation A/B spike
 
-This runner decides whether the historical narrow fresh-generation candidate improves Kovo's real
+This runner decides whether the reviewed narrow fresh-generation candidate improves Kovo's real
 browser-visible developer loop. It does not compare bundle-byte or module-count proxies, and it does
 not modify tracked source in either comparison worktree. Preparation writes the ignored dependency
 installation and generated corpus needed by the real adapter.
@@ -8,17 +8,30 @@ installation and generated corpus needed by the real adapter.
 ## Candidate binding
 
 `scripts/perf-dev-generation-spike.mjs` is deliberately bound to commit
-`44da3f3449dcbac2cc29951604b89488c90faa6f`:
+`7a20bf6664c6b601a07a4525d90570bcefb9c55c` on durable ref
+`refs/heads/perf-spike/dev-generation-profile-repaired-20260814`:
 
-- stable patch ID: `720cc725f5ef5707db3097d6d70476ff89710a66`
-- raw patch SHA-256: `e468dfbf2d7d2e0dca95db51a4c9fbd607316896a508db56f97b9d3eb5c4e5d4`
+- parent: `9618120c2f3bc779168c10e927dac4118b9f2ed1`
+- tree: `65e39bf38862ea4bab4dfc03d0d6abf2078117fe`
+- stable patch ID: `3621461f4e7d8ae3ff1724ed3a85413cb32d1281`
+- 7,191-byte raw binary/full-index patch SHA-256:
+  `50c335d49c910d861656cacbb77c071907e120e6ab1f52c3728a5682f65fb1ee`
 - changed files: `packages/cli/src/commands/dev.ts`,
   `packages/server/src/internal/vite-security-profile.ts`, and
   `packages/server/src/security-bootstrap.test.ts`
 
+The prior exact candidate `44da3f3449dcbac2cc29951604b89488c90faa6f` is retired as
+correctness-incomplete. Its narrowed trusted profile omitted
+`bindKovoAppShellViteDevLiveTargetAttestationSecret`, so fresh-generation validation could fail
+before app import. The repaired candidate retains that binder alongside the dispatcher, generation
+preparer, generated-live-target registry, compiler client-module installer, and compiler epoch
+identities. Runs `31755725077` and `31761498991` were already unproven due harness timeout defects;
+run `31763345652` was launched against the retired candidate and is diagnostic-only. No eventual
+status from that run can authorize the retired patch.
+
 The baseline and spike must be distinct clean committed worktree roots. Spike `HEAD` must be exactly
 one commit above baseline `HEAD`, with byte-identical patch content, the same stable patch ID, and
-the same simple-modification path census as the historical candidate. This permits rebasing the
+the same simple-modification path census as the repaired candidate. This permits rebasing the
 candidate onto the chosen baseline while preventing unrelated changes from entering the comparison.
 
 Create disposable worktrees from the baseline chosen by the performance owner, then apply only the
@@ -27,12 +40,12 @@ candidate:
 ```sh
 git worktree add ../kovo-perf-devgen-baseline -b spike/perf-devgen-baseline <baseline-sha>
 git worktree add ../kovo-perf-devgen-candidate -b spike/perf-devgen-candidate <baseline-sha>
-git -C ../kovo-perf-devgen-candidate cherry-pick 44da3f3449dcbac2cc29951604b89488c90faa6f
+git -C ../kovo-perf-devgen-candidate cherry-pick 7a20bf6664c6b601a07a4525d90570bcefb9c55c
 ```
 
 If the cherry-pick needs conflict resolution, do not measure it. The resolved patch would no longer
-be the authenticated historical candidate; select a compatible baseline or define and review a new
-candidate identity.
+be the authenticated candidate; select a compatible baseline or define and review a new candidate
+identity.
 
 ## Authenticate and prepare
 
@@ -88,13 +101,17 @@ node scripts/perf-dev-generation-spike.mjs \
   --baseline-root ../kovo-perf-devgen-baseline \
   --spike-root ../kovo-perf-devgen-candidate \
   --size 216 \
+  --ready-timeout-ms 600000 \
+  --timeout-ms 3600000 \
   --measure \
   --out /tmp/kovo-dev-generation-n216.json
 ```
 
 The runner samples host load before every block, enforces literal `localhost`, and verifies source
 and lock stability before and after every adapter run. Raw adapter reports remain embedded in the
-comparison report.
+comparison report and, when `--out` is used, persist beside it under `raw/`. A nonzero child report
+retains its SHA-256, byte count, schema, verdict, readiness failures, and first integrity errors so
+an outer `unproven` result remains diagnosable.
 
 ## Decision rule
 

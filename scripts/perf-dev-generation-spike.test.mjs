@@ -12,6 +12,7 @@ import {
   inspectGeneratedDevCorpus,
   pairedBootstrapImprovementCi,
   parseDevGenerationSpikeArgs,
+  REPAIRED_GENERATION_CANDIDATE,
   runDevGenerationSpike,
   summarizeFailedAdapterReport,
   summarizeDevMetric,
@@ -27,6 +28,20 @@ afterEach(() => {
 });
 
 describe('dev-generation candidate comparator', () => {
+  it('binds the correctness-complete repaired candidate identity', () => {
+    expect(REPAIRED_GENERATION_CANDIDATE).toEqual({
+      commit: '7a20bf6664c6b601a07a4525d90570bcefb9c55c',
+      parent: '9618120c2f3bc779168c10e927dac4118b9f2ed1',
+      patchId: '3621461f4e7d8ae3ff1724ed3a85413cb32d1281',
+      patchSha256: 'sha256:50c335d49c910d861656cacbb77c071907e120e6ab1f52c3728a5682f65fb1ee',
+      paths: [
+        'packages/cli/src/commands/dev.ts',
+        'packages/server/src/internal/vite-security-profile.ts',
+        'packages/server/src/security-bootstrap.test.ts',
+      ],
+    });
+  });
+
   it('uses B,S,S,B and splits full and smoke sample totals exactly', () => {
     expect(devGenerationSchedule({ editSamples: 30, readySamples: 15, warmups: 3 })).toEqual([
       {
@@ -106,7 +121,7 @@ describe('dev-generation candidate comparator', () => {
     });
   });
 
-  it('authenticates an exact clean one-commit historical patch binding', () => {
+  it('authenticates an exact clean one-commit repaired patch binding', () => {
     const fixture = candidateFixture();
     const binding = authenticateGenerationCandidateRoots(
       {

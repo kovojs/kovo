@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Authenticated serialized A/B runner for the historical narrow fresh-generation candidate.
+ * Authenticated serialized A/B runner for the reviewed, correctness-complete fresh-generation
+ * candidate.
  *
  * The real browser-visible adapter owns edit observation and process-tree RSS. This runner owns
  * candidate identity, matched corpus/frozen-lock preparation, B,S,S,B serialization, quiet-host
@@ -31,11 +32,11 @@ import { performanceHostFingerprint } from './lib/perf-host.mjs';
 
 export const DEV_GENERATION_SPIKE_SCHEMA = 'kovo-dev-generation-spike-comparison/v1';
 export const DEV_GENERATION_SPIKE_PREPARE_SCHEMA = 'kovo-dev-generation-spike-prepare/v1';
-export const HISTORICAL_GENERATION_CANDIDATE = Object.freeze({
-  commit: '44da3f3449dcbac2cc29951604b89488c90faa6f',
-  parent: 'f99e75db0ed556125fe3b5b1d78dcc11adf1fbc9',
-  patchId: '720cc725f5ef5707db3097d6d70476ff89710a66',
-  patchSha256: 'sha256:e468dfbf2d7d2e0dca95db51a4c9fbd607316896a508db56f97b9d3eb5c4e5d4',
+export const REPAIRED_GENERATION_CANDIDATE = Object.freeze({
+  commit: '7a20bf6664c6b601a07a4525d90570bcefb9c55c',
+  parent: '9618120c2f3bc779168c10e927dac4118b9f2ed1',
+  patchId: '3621461f4e7d8ae3ff1724ed3a85413cb32d1281',
+  patchSha256: 'sha256:50c335d49c910d861656cacbb77c071907e120e6ab1f52c3728a5682f65fb1ee',
   paths: Object.freeze([
     'packages/cli/src/commands/dev.ts',
     'packages/server/src/internal/vite-security-profile.ts',
@@ -128,7 +129,7 @@ export function authenticateGenerationCandidateRoots(options, dependencies = {})
   const git = dependencies.git ?? gitOutput;
   const patch = dependencies.patch ?? gitPatchBytes;
   const patchId = dependencies.patchId ?? gitPatchId;
-  const candidate = options.candidate ?? HISTORICAL_GENERATION_CANDIDATE;
+  const candidate = options.candidate ?? REPAIRED_GENERATION_CANDIDATE;
   const candidateRepository = canonicalDirectory(options.candidateRepository ?? repoRoot);
   const baselineRoot = canonicalGitRoot(options.baselineRoot, git);
   const spikeRoot = canonicalGitRoot(options.spikeRoot, git);
@@ -158,7 +159,7 @@ export function authenticateGenerationCandidateRoots(options, dependencies = {})
   const candidateCommit = git(candidateRepository, ['rev-parse', `${candidate.commit}^{commit}`]);
   const candidateParent = git(candidateRepository, ['rev-parse', `${candidate.commit}^`]);
   if (candidateCommit !== candidate.commit || candidateParent !== candidate.parent) {
-    throw new Error('historical candidate object identity is unavailable or unexpected');
+    throw new Error('repaired candidate object identity is unavailable or unexpected');
   }
   const expectedPatch = patch(candidateRepository, candidate.parent, candidate.commit);
   const observedPatch = patch(spikeRoot, baselineCommit, spikeCommit);
@@ -181,7 +182,7 @@ export function authenticateGenerationCandidateRoots(options, dependencies = {})
   const observedPaths = changedPaths(spikeRoot, baselineCommit, spikeCommit, git);
   if (!sameStrings(observedPaths, expectedPaths)) {
     throw new Error(
-      `spike path census differs from historical candidate: ${observedPaths.join(', ')}`,
+      `spike path census differs from repaired candidate: ${observedPaths.join(', ')}`,
     );
   }
   return {
