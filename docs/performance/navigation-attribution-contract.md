@@ -89,6 +89,24 @@ change again and the baseline must be recollected. Existing v2 reports predate t
 and response-finish closure; they must not be published as v3 or retrofitted with derived phase
 labels.
 
+## Current v3 fixture smoke
+
+A clean committed smoke at `03ab9174d01c3ea6b45e122822c02e32db6867f5` exercised one desktop
+and one mobile matched-L1 navigation for both entrants. All four v3 records were observed and both
+adapter integrity verdicts were complete. Kovo selected one top-level document-parts fetch in each
+cell; Next selected one top-level document response. All four authenticated response completions
+preceded destination paint, and the largest Playwright/trace clock skew was 1.192 ms.
+
+```sh
+node benchmarks/run-all.mjs --apps kovo,nextjs --lane matched-l1 --iterations 1 --warmups 0 \
+  --bfcache-iterations 1 --skip-lighthouse --skip-build --port-base 23050 \
+  --out-dir /tmp/kovo-nav-v3-clean.uDX16K
+```
+
+The exact `results.json` SHA-256 was
+`38c148db2702c1bf6bad4f12ad277a15406444477d5138f7d6426555034d1b5f`. This is a contract smoke,
+not one of the repeated publication baselines.
+
 ## Superseded v2 fixture smoke
 
 On 2026-08-14, a production-build smoke ran one desktop and one mobile matched-L1 sample for each
