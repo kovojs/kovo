@@ -276,9 +276,10 @@ there is no user-supplied evidence URL. It retains the saved and live artifact, 
 response digests for audit, then canonicalizes only their reviewed immutable fields and requires the
 saved/live authority digests to match. Whole-response equality is deliberately not authority: an
 old run's embedded `pull_requests[].head.sha` follows the current PR head after the measured run.
-The run must be completed successfully, use `.github/workflows/perf-realistic.yml`, belong to
-`kovojs/kovo`, and retain the exact immutable head/source SHA, run attempt, and expected successful
-family job.
+The run must be completed, use `.github/workflows/perf-realistic.yml`, belong to `kovojs/kovo`, and
+retain the exact immutable head/source SHA, run attempt, and expected successful family job. A
+failed unrelated sibling job does not invalidate that producer's artifact; the uniquely bound
+producer job, report, ZIP, and workflow authority remain the evidence boundary.
 
 The report separately retains `GITHUB_WORKFLOW_SHA`, the commit whose workflow GitHub evaluated.
 For a pull request it is the synthetic merge/event SHA; for other reviewed triggers it equals the
@@ -342,8 +343,8 @@ artifact, run, all-attempt jobs, and commit-addressed workflow-file endpoint. Th
 responses must produce the same canonical immutable authority projections as their saved `gh api`
 outputs; their raw digests remain audit facts and may differ when GitHub updates a mutable field. The
 workflow response must decode to the exact clean local workflow bytes. An offline run, stale
-authority projection, API error, failed run/job, wrong workflow/scope, dirty checkout, or expired
-artifact is unproven. API responses and extracted reports are bounded to 1 MiB and 128 MiB,
+authority projection, API error, incomplete run, failed producer job, wrong workflow/scope, dirty
+checkout, or expired artifact is unproven. API responses and extracted reports are bounded to 1 MiB and 128 MiB,
 respectively, and an artifact ZIP is rejected before reading or parsing when it exceeds 512 MiB. The
 gate's bounded claim is that live GitHub authority, GitHub's published archive digest, exact ZIP
 census, and report form one exact byte chain;
