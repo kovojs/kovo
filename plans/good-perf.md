@@ -191,12 +191,17 @@ benchmarks/harness/{report,run,scenarios}.test.mjs --reporter=dot` passed 41/41.
       explicit (SPEC §5.2 rule 9); preserve sequential heap isolation between analyzer phases.
   - Evidence: `f73738975`; focused build/finalization, server build, packed-preset, and phase-census
     tests passed and retain separate source-proof/deploy-proof workers with sequential boundaries.
-- [ ] Decide the profile-driven lexical source-trust candidate from clean packed Kovo builds at
+- [x] Decide the profile-driven lexical source-trust candidate from clean packed Kovo builds at
       N=24 and N=216, and integrate it only if both reports satisfy the preregistered wall, p95, RSS,
       artifact-identity, and correctness rules.
-  - Current evidence: exact source `1e1300962bcb2862d29a65d7c6bf5ab2bfd67b52` is running in
-    [workflow `31821610014`](https://github.com/kovojs/kovo/actions/runs/31821610014); no result may
-    be recorded until both `kovo-perf-build-source-trust-n24` and `-n216` artifacts authenticate.
+  - Evidence: [run `31821610014`](https://github.com/kovojs/kovo/actions/runs/31821610014) artifacts
+    [`9228047402`](https://github.com/kovojs/kovo/actions/runs/31821610014/artifacts/9228047402)
+    and
+    [`9229624306`](https://github.com/kovojs/kovo/actions/runs/31821610014/artifacts/9229624306)
+    authenticated 10 samples/arm with exact artifacts and accepted both corpora: N=216 wall median
+    improved 23.797% with paired 95% CI `[61,552.30, 68,376.15]` ms; N=24 improved 0.963% and all
+    p95/RSS guardrails passed. Integrated commit `135645d71` has sealed stable patch ID `c8be354…`;
+    full custody and hashes are in `docs/performance/build-source-trust-spike.md`.
 - [ ] Design a persistent foreground build/watch session if warm cross-invocation reuse is still
       required. Do not reintroduce the retired unauthenticated on-disk compiler cache.
 - [ ] Gate build wall, p95, RSS, and artifact size on the realistic corpus; reach the first milestone
