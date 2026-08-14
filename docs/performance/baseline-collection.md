@@ -3,7 +3,8 @@
 `scripts/perf-publication-collect.mjs` is the metrics-blind operator helper for the seven-family
 publication campaign. It never writes into the measured checkout. The checkout must be clean at
 the exact requested source commit, and each output must be a new directory whose parent already
-exists outside that checkout.
+exists outside that checkout. The checkout, every collection input, and the manifest output must
+be pairwise disjoint: no one may equal, contain, or be contained by another.
 
 Collect any completed baseline runs into an atomic custody pool. Focused runs may contain one
 family; an all-family run may contain several:

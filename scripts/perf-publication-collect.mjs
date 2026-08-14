@@ -259,6 +259,7 @@ export async function createPerformancePublicationManifest({
   const candidates = await loadPerformancePublicationCollections({
     checkoutRoot: boundary.checkoutRoot,
     collectionDirectories,
+    manifestOutput: boundary.output,
     repository,
     sourceSha,
   });
@@ -451,6 +452,7 @@ export function validateCollectedCandidateBytes({
 export async function loadPerformancePublicationCollections({
   checkoutRoot,
   collectionDirectories,
+  manifestOutput,
   repository,
   sourceSha,
 }) {
@@ -460,14 +462,29 @@ export async function loadPerformancePublicationCollections({
   if (collectionDirectories.length > MAX_RUNS) {
     throw new TypeError('collection directory census exceeds the safety bound');
   }
+  const normalizedCheckoutRoot = await realpath(path.resolve(checkoutRoot));
+  const normalizedManifestOutput =
+    manifestOutput === undefined ? undefined : path.resolve(manifestOutput);
   const roots = [];
+  for (const collectionDirectory of collectionDirectories) {
+    const root = await resolveExternalDirectory(
+      collectionDirectory,
+      normalizedCheckoutRoot,
+      'collection',
+    );
+    if (normalizedManifestOutput !== undefined && pathsOverlap(root, normalizedManifestOutput)) {
+      throw new TypeError('manifest output must be disjoint from every collection directory');
+    }
+    if (roots.some((existing) => pathsOverlap(existing, root))) {
+      throw new TypeError('collection directories must be pairwise disjoint');
+    }
+    roots.push(root);
+  }
+
   const candidates = [];
   const seenFiles = new Set();
   const seenInodes = new Set();
-  for (const collectionDirectory of collectionDirectories) {
-    const root = await resolveExternalDirectory(collectionDirectory, checkoutRoot, 'collection');
-    if (roots.includes(root)) throw new TypeError(`duplicate collection directory ${root}`);
-    roots.push(root);
+  for (const root of roots) {
     const ledgerPath = path.join(root, 'collection.json');
     const ledgerFacts = await boundedRegularFile(ledgerPath, MAX_API_BYTES, 'collection ledger');
     const ledger = parseJsonBytes(ledgerFacts.bytes, 'collection ledger');
@@ -1306,10 +1323,16 @@ async function resolveExternalDirectory(value, checkoutRoot, label) {
   if (!facts.isDirectory() || facts.isSymbolicLink()) {
     throw new TypeError(`${label} path is not a real directory`);
   }
-  if (containedBy(checkoutRoot, resolved)) {
-    throw new TypeError(`${label} directory must remain outside the measured checkout`);
+  if (pathsOverlap(checkoutRoot, resolved)) {
+    throw new TypeError(
+      `${label} directory must remain outside and disjoint from the measured checkout`,
+    );
   }
   return resolved;
+}
+
+function pathsOverlap(left, right) {
+  return containedBy(left, right) || containedBy(right, left);
 }
 
 function containedBy(parent, child) {

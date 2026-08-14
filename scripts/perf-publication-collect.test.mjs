@@ -318,6 +318,50 @@ describe('metrics-blind performance publication collection', () => {
     await expect(loadOneCollection(checkout, collection)).rejects.toThrow('hardlink alias');
   });
 
+  it('requires checkout, collection roots, and manifest output to be pairwise disjoint', async () => {
+    const root = await temporaryRoot();
+    const ancestorCollection = await realDirectory(path.join(root, 'ancestor-collection'));
+    const nestedCheckout = await realDirectory(path.join(ancestorCollection, 'checkout'));
+    await expect(loadOneCollection(nestedCheckout, ancestorCollection)).rejects.toThrow(
+      'outside and disjoint from the measured checkout',
+    );
+
+    const checkout = await realDirectory(path.join(root, 'checkout'));
+    const outerCollection = await realDirectory(path.join(root, 'outer-collection'));
+    const innerCollection = await realDirectory(path.join(outerCollection, 'inner-collection'));
+    await expect(
+      loadPerformancePublicationCollections({
+        checkoutRoot: checkout,
+        collectionDirectories: [outerCollection, innerCollection],
+        repository: REPOSITORY,
+        sourceSha: SOURCE,
+      }),
+    ).rejects.toThrow('pairwise disjoint');
+
+    const campaign = campaignFixture([{ family: 'browser', runId: 1001 }]);
+    const collection = path.join(root, 'collection');
+    await collectPerformancePublicationRuns({
+      checkoutDirectory: checkout,
+      operations: fixtureOperations(campaign, checkout),
+      outDirectory: collection,
+      repository: REPOSITORY,
+      runIds: [1001],
+      sourceSha: SOURCE,
+    });
+    const nestedOutput = path.join(collection, 'forbidden-publication');
+    await expect(
+      createPerformancePublicationManifest({
+        checkoutDirectory: checkout,
+        collectionDirectories: [collection],
+        operations: fixtureOperations(campaign, checkout),
+        outDirectory: nestedOutput,
+        repository: REPOSITORY,
+        sourceSha: SOURCE,
+      }),
+    ).rejects.toThrow('manifest output must be disjoint');
+    await expect(lstat(nestedOutput)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('emits the exact self-contained seven-family five-plus-one manifest', async () => {
     const root = await temporaryRoot();
     const checkout = await realDirectory(path.join(root, 'checkout'));

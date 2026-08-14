@@ -6,6 +6,12 @@ locks, workload digest, and normalized host digest. Jobs from one workflow run c
 different machines; cohorts are selected per subject, not by assuming all seven jobs shared a host.
 Five attempts of one Actions run do not count: every accepted report has a distinct run ID.
 
+Use the metrics-blind collection and five-plus-one holdout workflow in
+[`baseline-collection.md`](./baseline-collection.md) to preserve raw GitHub custody and select exact
+cohorts. The manual commands below describe the same individual ratification stages and remain
+useful for inspecting a selected family; they are not a substitute for the aggregate collector and
+publication gate.
+
 ## Collect one host cohort without repeating completed families
 
 Manual dispatch accepts two optional collection controls. `baseline_focus` selects `all`, `check`,
