@@ -100,47 +100,23 @@ export async function inspectDevPortAllocation(options, dependencies = {}) {
   const basePort = boundedPort(options?.basePort, 'dev port base');
   const ports = exactPortList(options?.ports, 'dev session ports');
   const inspectorPorts = exactPortList(options?.inspectorPorts ?? [], 'dev Inspector ports');
-  const allPorts = [...ports, ...inspectorPorts];
-  const errors = [];
-  if (new Set(allPorts).size !== allPorts.length) {
-    errors.push('dev server and Inspector ports are not globally unique');
-  }
-  if (ports.length === 0 || ports[0] !== basePort) {
-    errors.push('dev port base does not equal the first exact session port');
-  }
   const host = await (dependencies.inspectHostRanges ?? inspectHostEphemeralPortRanges)(
     dependencies.hostDependencies ?? {},
   );
   const validatedHost = validateHostEphemeralPortRangeEvidence(host);
-  if (!validatedHost.complete) {
-    errors.push(`host ephemeral port range is unproven: ${validatedHost.error}`);
-  }
-  const overlaps = [];
-  for (const [kind, values] of [
-    ['dev-session', ports],
-    ['inspector', inspectorPorts],
-  ]) {
-    for (const port of values) {
-      for (const range of validatedHost.ranges) {
-        if (port < range.minimum || port > range.maximum) continue;
-        overlaps.push({ kind, label: range.label, port });
-      }
-    }
-  }
-  if (overlaps.length > 0) {
-    errors.push(
-      `allocated ports overlap host ephemeral ranges: ${overlaps
-        .map(({ kind, label, port }) => `${kind}:${String(port)}@${label}`)
-        .join(', ')}`,
-    );
-  }
-  return validateDevPortAllocationEvidence({
+  const facts = deriveDevPortAllocationFacts({
     basePort,
-    complete: errors.length === 0,
-    errors,
     hostEphemeral: validatedHost,
     inspectorPorts,
-    overlaps,
+    ports,
+  });
+  return validateDevPortAllocationEvidence({
+    basePort,
+    complete: facts.complete,
+    errors: facts.errors,
+    hostEphemeral: validatedHost,
+    inspectorPorts,
+    overlaps: facts.overlaps,
     ports,
     posture: DEV_PORT_ALLOCATION_POSTURE,
     schema: DEV_PORT_ALLOCATION_SCHEMA,
@@ -280,6 +256,12 @@ export function validateDevPortAllocationEvidence(value, expected = {}) {
   const ports = exactPortList(value.ports, 'dev port allocation sessions');
   const inspectorPorts = exactPortList(value.inspectorPorts, 'dev port allocation Inspector ports');
   const hostEphemeral = validateHostEphemeralPortRangeEvidence(value.hostEphemeral);
+  const facts = deriveDevPortAllocationFacts({
+    basePort,
+    hostEphemeral,
+    inspectorPorts,
+    ports,
+  });
   const errors = value.errors.map((error) => {
     if (!boundedString(error)) throw new TypeError('dev port allocation error is malformed');
     return error;
@@ -303,16 +285,13 @@ export function validateDevPortAllocationEvidence(value, expected = {}) {
     }
     return { kind: overlap.kind, label: overlap.label, port: overlap.port };
   });
-  const globallyUnique =
-    new Set([...ports, ...inspectorPorts]).size === ports.length + inspectorPorts.length;
-  const derivedBaseMatches = ports.length > 0 && basePort === ports[0];
-  const complete =
-    hostEphemeral.complete &&
-    globallyUnique &&
-    derivedBaseMatches &&
-    overlaps.length === 0 &&
-    errors.length === 0;
-  if (value.complete !== complete) {
+  if (!sameOverlaps(overlaps, facts.overlaps)) {
+    throw new TypeError('dev port allocation overlaps differ from their canonical derivation');
+  }
+  if (!sameStrings(errors, facts.errors)) {
+    throw new TypeError('dev port allocation errors differ from their canonical derivation');
+  }
+  if (value.complete !== facts.complete) {
     throw new TypeError('dev port allocation completeness disagrees with its evidence');
   }
   if (expected.basePort !== undefined && basePort !== expected.basePort) {
@@ -329,7 +308,7 @@ export function validateDevPortAllocationEvidence(value, expected = {}) {
   }
   return {
     basePort,
-    complete,
+    complete: facts.complete,
     errors,
     hostEphemeral,
     inspectorPorts,
@@ -337,6 +316,53 @@ export function validateDevPortAllocationEvidence(value, expected = {}) {
     ports,
     posture: DEV_PORT_ALLOCATION_POSTURE,
     schema: DEV_PORT_ALLOCATION_SCHEMA,
+  };
+}
+
+function deriveDevPortAllocationFacts({ basePort, hostEphemeral, inspectorPorts, ports }) {
+  const allPorts = [...ports, ...inspectorPorts];
+  const globallyUnique = new Set(allPorts).size === allPorts.length;
+  const derivedBaseMatches = ports.length > 0 && ports[0] === basePort;
+  const overlaps = [];
+  for (const [kind, values] of [
+    ['dev-session', ports],
+    ['inspector', inspectorPorts],
+  ]) {
+    for (const port of values) {
+      for (const range of hostEphemeral.ranges) {
+        if (port < range.minimum || port > range.maximum) continue;
+        overlaps.push({ kind, label: range.label, port });
+      }
+    }
+  }
+
+  const errors = [];
+  if (!globallyUnique) {
+    errors.push('dev server and Inspector ports are not globally unique');
+  }
+  if (!derivedBaseMatches) {
+    errors.push('dev port base does not equal the first exact session port');
+  }
+  if (!hostEphemeral.complete) {
+    errors.push(`host ephemeral port range is unproven: ${hostEphemeral.error}`);
+  }
+  if (overlaps.length > 0) {
+    errors.push(
+      `allocated ports overlap host ephemeral ranges: ${overlaps
+        .map(({ kind, label, port }) => `${kind}:${String(port)}@${label}`)
+        .join(', ')}`,
+    );
+  }
+
+  return {
+    complete:
+      hostEphemeral.complete &&
+      globallyUnique &&
+      derivedBaseMatches &&
+      overlaps.length === 0 &&
+      errors.length === 0,
+    errors,
+    overlaps,
   };
 }
 
@@ -432,6 +458,22 @@ function sameNumbers(left, right) {
     left.length === right.length &&
     left.every((value, index) => value === right[index])
   );
+}
+
+function sameOverlaps(left, right) {
+  return (
+    left.length === right.length &&
+    left.every(
+      (value, index) =>
+        value.kind === right[index].kind &&
+        value.label === right[index].label &&
+        value.port === right[index].port,
+    )
+  );
+}
+
+function sameStrings(left, right) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function boundedString(value) {

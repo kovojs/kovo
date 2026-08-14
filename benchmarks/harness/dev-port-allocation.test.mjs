@@ -124,6 +124,13 @@ describe('authenticated dev port allocation', () => {
       }),
     ).toThrow(/completeness disagrees/u);
 
+    expect(() =>
+      validateDevPortAllocationEvidence({
+        ...duplicate,
+        errors: [],
+      }),
+    ).toThrow(/errors differ from their canonical derivation/u);
+
     const admitted = await inspectDevPortAllocation(
       { basePort: 20_000, inspectorPorts: [], ports: [20_000, 20_001] },
       { inspectHostRanges: async () => host },
@@ -133,7 +140,15 @@ describe('authenticated dev port allocation', () => {
         ...admitted,
         basePort: 20_001,
       }),
-    ).toThrow(/completeness disagrees/u);
+    ).toThrow(/errors differ from their canonical derivation/u);
+
+    expect(() =>
+      validateDevPortAllocationEvidence({
+        ...admitted,
+        complete: false,
+        errors: ['invented allocation failure'],
+      }),
+    ).toThrow(/errors differ from their canonical derivation/u);
 
     expect(() =>
       validateDevPortAllocationEvidence({
@@ -159,6 +174,108 @@ describe('authenticated dev port allocation', () => {
         },
       }),
     ).toThrow(/non-integer range evidence/u);
+  });
+
+  it('reconstructs exhaustive Linux overlaps instead of trusting a complete claim', async () => {
+    const host = await inspectHostEphemeralPortRanges({
+      platform: 'linux',
+      readLinuxRange: async () => Buffer.from('20000 21000\n'),
+    });
+    const overlap = await inspectDevPortAllocation(
+      { basePort: 20_024, inspectorPorts: [21_024], ports: [20_024, 20_025] },
+      { inspectHostRanges: async () => host },
+    );
+
+    expect(overlap).toMatchObject({
+      complete: false,
+      overlaps: [
+        { kind: 'dev-session', label: 'default', port: 20_024 },
+        { kind: 'dev-session', label: 'default', port: 20_025 },
+      ],
+    });
+    expect(() =>
+      validateDevPortAllocationEvidence({
+        ...overlap,
+        complete: true,
+        errors: [],
+        overlaps: [],
+      }),
+    ).toThrow(/overlaps differ from their canonical derivation/u);
+    expect(() =>
+      validateDevPortAllocationEvidence({
+        ...overlap,
+        errors: [],
+      }),
+    ).toThrow(/errors differ from their canonical derivation/u);
+  });
+
+  it('binds Inspector overlap identity, exhaustive membership, and canonical order', async () => {
+    const host = await inspectHostEphemeralPortRanges({
+      platform: 'linux',
+      readLinuxRange: async () => Buffer.from('20000 21000\n'),
+    });
+    const overlap = await inspectDevPortAllocation(
+      { basePort: 20_024, inspectorPorts: [21_000], ports: [20_024, 20_025] },
+      { inspectHostRanges: async () => host },
+    );
+
+    expect(overlap.overlaps).toEqual([
+      { kind: 'dev-session', label: 'default', port: 20_024 },
+      { kind: 'dev-session', label: 'default', port: 20_025 },
+      { kind: 'inspector', label: 'default', port: 21_000 },
+    ]);
+    expect(() =>
+      validateDevPortAllocationEvidence({
+        ...overlap,
+        overlaps: overlap.overlaps.slice(0, -1),
+      }),
+    ).toThrow(/overlaps differ from their canonical derivation/u);
+    expect(() =>
+      validateDevPortAllocationEvidence({
+        ...overlap,
+        overlaps: [
+          ...overlap.overlaps.slice(0, -1),
+          { ...overlap.overlaps.at(-1), kind: 'dev-session' },
+        ],
+      }),
+    ).toThrow(/overlap evidence is malformed/u);
+    expect(() =>
+      validateDevPortAllocationEvidence({
+        ...overlap,
+        overlaps: [...overlap.overlaps, overlap.overlaps[0]],
+      }),
+    ).toThrow(/overlaps differ from their canonical derivation/u);
+    expect(() =>
+      validateDevPortAllocationEvidence({
+        ...overlap,
+        overlaps: [...overlap.overlaps].reverse(),
+      }),
+    ).toThrow(/overlaps differ from their canonical derivation/u);
+  });
+
+  it('binds base and host-discovery failures into the canonical error ledger', async () => {
+    const host = await inspectHostEphemeralPortRanges({ platform: 'aix' });
+    const failed = await inspectDevPortAllocation(
+      { basePort: 20_025, inspectorPorts: [], ports: [20_024] },
+      { inspectHostRanges: async () => host },
+    );
+
+    expect(failed.errors).toEqual([
+      'dev port base does not equal the first exact session port',
+      expect.stringContaining('host ephemeral port range is unproven'),
+    ]);
+    expect(() =>
+      validateDevPortAllocationEvidence({
+        ...failed,
+        errors: failed.errors.slice(1),
+      }),
+    ).toThrow(/errors differ from their canonical derivation/u);
+    expect(() =>
+      validateDevPortAllocationEvidence({
+        ...failed,
+        errors: failed.errors.slice(0, 1),
+      }),
+    ).toThrow(/errors differ from their canonical derivation/u);
   });
 
   it('never invokes a Darwin shell and bounds the platform reader seam', async () => {
