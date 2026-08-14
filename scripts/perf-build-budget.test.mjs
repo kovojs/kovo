@@ -13,8 +13,14 @@ import { ratifyPerformanceBaseline } from './perf-baseline-ratify.mjs';
 import {
   PERF_BUILD_BUDGET_SCHEMA,
   PERF_BUILD_EVALUATION_SCHEMA,
+  PERF_BUILD_PERSISTENCE_ASSESSMENT_SCHEMA,
+  PERF_BUILD_PERSISTENCE_EVIDENCE_SCHEMA,
+  PERF_BUILD_SESSION_PROFILE_CLASSIFIER,
+  PERF_BUILD_SESSION_PROFILE_SCHEMA,
+  assessBuildForegroundSession,
   buildBudgetBaselineFindings,
   buildBudgetFindings,
+  buildPersistenceAssessmentFindings,
   deriveBuildPerformanceBudget,
   evaluateBuildPerformanceBudget,
 } from './perf-build-budget.mjs';
@@ -50,6 +56,22 @@ describe('ratified production-build performance budgets', () => {
         subject: { corpusSize },
       });
       expect(Object.keys(budget.metrics)).toHaveLength(9);
+      expect(budget.persistenceEvidence).toMatchObject({
+        corpusSize,
+        policy: {
+          appSourceTrustEligible: false,
+          diskCacheEligible: false,
+          sessionEligiblePhases: ['config-trust', 'typescript', 'stylesheet'],
+          upperWallMinimumRatio: 0.1,
+        },
+        schema: PERF_BUILD_PERSISTENCE_EVIDENCE_SCHEMA,
+      });
+      expect(budget.persistenceEvidence.modes.unchanged.residualUpper.samples).toHaveLength(50);
+      expect(
+        budget.persistenceEvidence.modes.unchanged.residualUpper.samples.every(
+          ({ eligibleDurationMs }) => eligibleDurationMs === 3,
+        ),
+      ).toBe(true);
       expect(budget.metrics[wall]).toMatchObject({
         baseline: {
           median: 502,
@@ -254,6 +276,219 @@ describe('ratified production-build performance budgets', () => {
       }
     },
   );
+
+  it('closes the persistence question when all four warm cells meet the first milestone', () => {
+    const { n24Budget, n216Budget } = pairedBuildBudgets();
+
+    const assessment = assessBuildForegroundSession({ n24Budget, n216Budget });
+
+    expect(assessment).toMatchObject({
+      schema: PERF_BUILD_PERSISTENCE_ASSESSMENT_SCHEMA,
+      verdict: {
+        findings: [],
+        outcome: 'not-warranted',
+        rationale: 'all-warm-cells-meet-first-milestone',
+        status: 'decided',
+      },
+    });
+    expect(buildPersistenceAssessmentFindings(assessment, { n24Budget, n216Budget })).toEqual([]);
+
+    assessment.verdict.outcome = 'warranted';
+    assessment.verdict.rationale = 'n216-miss-upper-residual-and-session-eligible-top-five-proven';
+    resealDocument(assessment);
+    expect(buildPersistenceAssessmentFindings(assessment)).toContain(
+      'assessment outcome is not derived from its warm cells and current profiles',
+    );
+  });
+
+  it('closes on both N=216 residual ceilings below 10% even when an N=24 cell misses', () => {
+    const { n24Budget, n216Budget } = pairedBuildBudgets();
+    setWarmCell(n24Budget, 'unchanged', { rssRatio: 2.1, wallRatio: 6.1 });
+    setWarmCell(n216Budget, 'unchanged', { residualRatio: 0.099 });
+    setWarmCell(n216Budget, 'edit', { residualRatio: 0.05 });
+
+    const assessment = assessBuildForegroundSession({ n24Budget, n216Budget });
+
+    expect(assessment.verdict).toMatchObject({
+      findings: [],
+      outcome: 'not-warranted',
+      rationale: 'both-n216-upper-residuals-below-ten-percent',
+      status: 'decided',
+    });
+  });
+
+  it('keeps mixed evidence unproven instead of inventing a third not-warranted shortcut', () => {
+    const { n24Budget, n216Budget } = pairedBuildBudgets();
+    setWarmCell(n24Budget, 'edit', { wallRatio: 6.5 });
+    setWarmCell(n216Budget, 'unchanged', { residualRatio: 0.2 });
+    setWarmCell(n216Budget, 'edit', { residualRatio: 0.2 });
+
+    const assessment = assessBuildForegroundSession({ n24Budget, n216Budget });
+
+    expect(assessment.verdict).toEqual({
+      findings: [
+        'mixed warm-cell evidence satisfies neither not-warranted shortcut nor the N=216 warrant predicate',
+      ],
+      outcome: 'unproven',
+      rationale: 'mixed-evidence-unresolved',
+      status: 'unproven',
+    });
+  });
+
+  it('reports profile-required at the inclusive 10% boundary and never infers a warrant', () => {
+    const { n24Budget, n216Budget } = pairedBuildBudgets();
+    setWarmCell(n216Budget, 'unchanged', {
+      residualRatio: 0.1,
+      rssRatio: 2.01,
+      wallRatio: 6.01,
+    });
+    setWarmCell(n216Budget, 'edit', { residualRatio: 0.05 });
+
+    const assessment = assessBuildForegroundSession({ n24Budget, n216Budget });
+
+    expect(assessment.verdict).toEqual({
+      findings: ['current authenticated N=216 unchanged and edit CPU profiles are required'],
+      outcome: 'profile-required',
+      rationale: 'current-profile-required',
+      status: 'unproven',
+    });
+  });
+
+  it('warrants a spike only when a qualifying current profile has an eligible top-five cause', () => {
+    const { n24Budget, n216Budget } = pairedBuildBudgets();
+    setWarmCell(n216Budget, 'unchanged', {
+      residualRatio: 0.1,
+      wallRatio: 6.1,
+    });
+    const profileEntries = [
+      buildProfileEntry(n216Budget, 'unchanged', ['typescript']),
+      buildProfileEntry(n216Budget, 'edit', []),
+    ];
+
+    const assessment = assessBuildForegroundSession({
+      n24Budget,
+      n216Budget,
+      profileEntries,
+    });
+
+    expect(assessment.verdict).toMatchObject({
+      findings: [],
+      outcome: 'warranted',
+      rationale: 'n216-miss-upper-residual-and-session-eligible-top-five-proven',
+      status: 'decided',
+    });
+    expect(assessment.profiles).toHaveLength(2);
+    expect(
+      buildPersistenceAssessmentFindings(assessment, {
+        n24Budget,
+        n216Budget,
+        profileEntries,
+      }),
+    ).toEqual([]);
+  });
+
+  it('stays unproven when current profiles do not prove an eligible top-five cause', () => {
+    const { n24Budget, n216Budget } = pairedBuildBudgets();
+    setWarmCell(n216Budget, 'edit', { residualRatio: 0.25, rssRatio: 2.1 });
+    const profileEntries = [
+      buildProfileEntry(n216Budget, 'unchanged', []),
+      buildProfileEntry(n216Budget, 'edit', []),
+    ];
+
+    const assessment = assessBuildForegroundSession({
+      n24Budget,
+      n216Budget,
+      profileEntries,
+    });
+
+    expect(assessment.verdict).toEqual({
+      findings: [
+        'current N=216 profiles do not prove session-eligible work in a qualifying top five',
+      ],
+      outcome: 'unproven',
+      rationale: 'current-profile-does-not-prove-warrant',
+      status: 'unproven',
+    });
+  });
+
+  it('fails closed on malformed budget samples, stale profiles, or a partial profile census', () => {
+    const malformedBudgets = pairedBuildBudgets();
+    malformedBudgets.n216Budget.persistenceEvidence.modes.edit.residualUpper.samples[0].upperWallRatio = 0.9;
+    resealBudget(malformedBudgets.n216Budget);
+    expect(assessBuildForegroundSession(malformedBudgets).verdict).toMatchObject({
+      outcome: 'unproven',
+      rationale: 'malformed-evidence',
+    });
+
+    const { n24Budget, n216Budget } = pairedBuildBudgets();
+    setWarmCell(n216Budget, 'edit', { residualRatio: 0.25, wallRatio: 6.2 });
+    expect(
+      assessBuildForegroundSession({ n24Budget, n216Budget, profileEntries: {} }).verdict,
+    ).toMatchObject({
+      findings: ['build CPU profile evidence must be an array'],
+      outcome: 'unproven',
+      rationale: 'malformed-profile-evidence',
+    });
+    const stale = buildProfileEntry(n216Budget, 'edit', ['stylesheet']);
+    stale.report.source.commit = 'f'.repeat(40);
+    expect(
+      assessBuildForegroundSession({
+        n24Budget,
+        n216Budget,
+        profileEntries: [buildProfileEntry(n216Budget, 'unchanged', []), stale],
+      }).verdict,
+    ).toMatchObject({ outcome: 'unproven', rationale: 'malformed-profile-evidence' });
+
+    expect(
+      assessBuildForegroundSession({
+        n24Budget,
+        n216Budget,
+        profileEntries: [buildProfileEntry(n216Budget, 'edit', ['stylesheet'])],
+      }).verdict.findings,
+    ).toEqual(
+      expect.arrayContaining([
+        'unchanged build CPU profile is unavailable',
+        'build CPU profile census must contain exactly unchanged and edit',
+      ]),
+    );
+  });
+
+  it('runs the documented cross-corpus persistence assessment CLI', () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'kovo-build-persistence-cli-'));
+    try {
+      const { n24Budget, n216Budget } = pairedBuildBudgets();
+      const n24Path = path.join(root, 'n24.json');
+      const n216Path = path.join(root, 'n216.json');
+      const out = path.join(root, 'assessment.json');
+      writeFileSync(n24Path, JSON.stringify(n24Budget));
+      writeFileSync(n216Path, JSON.stringify(n216Budget));
+      const script = fileURLToPath(new URL('./perf-build-budget.mjs', import.meta.url));
+
+      const result = spawnSync(
+        process.execPath,
+        [
+          script,
+          'assess-persistence',
+          '--n24-budget',
+          n24Path,
+          '--n216-budget',
+          n216Path,
+          '--out',
+          out,
+        ],
+        { encoding: 'utf8' },
+      );
+
+      expect(result).toMatchObject({ status: 0, stderr: '' });
+      expect(result.stdout).toContain('kovo-build-persistence-assessment/v1 not-warranted');
+      expect(JSON.parse(readFileSync(out, 'utf8')).verdict).toMatchObject({
+        outcome: 'not-warranted',
+        status: 'decided',
+      });
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
 });
 
 function ratifiedBuildBaseline(corpusSize, { durableLocations = true } = {}) {
@@ -517,6 +752,142 @@ function metricSummary(kovo, nextjs) {
 
 function metricKey(corpusSize, mode, suffix) {
   return `corpus-n${String(corpusSize)}/build/${mode}/${suffix}`;
+}
+
+function pairedBuildBudgets() {
+  const n24 = ratifiedBuildBaseline(24);
+  const n216 = ratifiedBuildBaseline(216);
+  return {
+    n24Budget: deriveBuildPerformanceBudget(n24.baseline, { baselineEntries: n24.entries }),
+    n216Budget: deriveBuildPerformanceBudget(n216.baseline, { baselineEntries: n216.entries }),
+  };
+}
+
+function setWarmCell(budget, mode, options) {
+  const size = budget.subject.corpusSize;
+  const duration = budget.metrics[metricKey(size, mode, 'durationMs')];
+  const rss = budget.metrics[metricKey(size, mode, 'peakRssBytes')];
+  const evidence = budget.persistenceEvidence.modes[mode];
+  const wallRatio = options.wallRatio ?? duration.baseline.median / duration.baseline.nextMedian;
+  const rssRatio = options.rssRatio ?? rss.baseline.median / rss.baseline.nextMedian;
+  duration.baseline.median = duration.baseline.nextMedian * wallRatio;
+  duration.medianMaximum = duration.baseline.median * (1 + budget.policy.maxRegressionPct / 100);
+  rss.baseline.median = rss.baseline.nextMedian * rssRatio;
+  rss.medianMaximum = rss.baseline.median * (1 + budget.policy.maxRegressionPct / 100);
+  evidence.wall.kovoMedianMs = duration.baseline.median;
+  evidence.milestone.wallMedianVsNextRatio = wallRatio;
+  evidence.milestone.peakRssMedianVsNextRatio = rssRatio;
+  evidence.milestone.status = wallRatio <= 6 && rssRatio <= 2 ? 'pass' : 'fail';
+  if (options.residualRatio !== undefined) {
+    for (const sample of evidence.residualUpper.samples) {
+      sample.wallDurationMs = 1_000;
+      sample.eligibleDurationMs = options.residualRatio * 1_000;
+      sample.cliStartupTailMs = 0;
+      sample.upperDurationMs = sample.eligibleDurationMs;
+      sample.upperWallRatio = options.residualRatio;
+    }
+    evidence.residualUpper.medianRatio = options.residualRatio;
+  }
+  resealBudget(budget);
+}
+
+function resealBudget(budget) {
+  resealDocument(budget);
+}
+
+function resealDocument(document) {
+  const { digest: ignored, ...facts } = document;
+  void ignored;
+  document.digest = digest(canonicalJson(facts));
+}
+
+function buildProfileEntry(budget, mode, eligibleCauses) {
+  const runId = mode === 'unchanged' ? 990_001 : 990_002;
+  const artifactId = mode === 'unchanged' ? 880_001 : 880_002;
+  const source = {
+    commit: budget.baseline.sourceCommit,
+    dirty: false,
+    dirtyPaths: [],
+    locks: structuredClone(budget.subject.locks),
+  };
+  const execution = performanceExecutionIdentity({
+    env: {
+      GITHUB_JOB: 'build-profile',
+      GITHUB_REPOSITORY: 'kovojs/kovo',
+      GITHUB_RUN_ATTEMPT: '1',
+      GITHUB_RUN_ID: String(runId),
+      GITHUB_SERVER_URL: 'https://github.com',
+      GITHUB_SHA: source.commit,
+      GITHUB_WORKFLOW_REF: `kovojs/kovo/.github/workflows/perf-realistic.yml@${source.commit}`,
+    },
+    startedAt: `2026-08-14T12:00:0${mode === 'unchanged' ? '1' : '2'}.000Z`,
+  });
+  const defaultCauses = ['client', 'server', 'final', 'app-source-trust', 'unattributed'];
+  const causes = [
+    ...eligibleCauses,
+    ...defaultCauses.filter((cause) => !eligibleCauses.includes(cause)),
+  ].slice(0, 5);
+  const facts = {
+    classifier: PERF_BUILD_SESSION_PROFILE_CLASSIFIER,
+    diagnosticOnly: { profilerPerturbsDurations: true, publishTimingClaims: false },
+    execution,
+    host: structuredClone(budget.subject.host),
+    integrity: {
+      complete: true,
+      errors: [],
+      profileFlushedBeforeExit: true,
+      sourceStable: true,
+    },
+    profileArtifact: {
+      bytes: 12_345,
+      fileName: `build-${mode}.cpuprofile`,
+      sha256: digest(`raw-profile-${mode}`),
+    },
+    schema: PERF_BUILD_SESSION_PROFILE_SCHEMA,
+    source,
+    sourceAfter: structuredClone(source),
+    subject: {
+      baselineWorkloadDigest: budget.subject.workloadIdentity.digest,
+      corpusSize: 216,
+      mode,
+    },
+    topFive: causes.map((cause, index) => ({
+      cause,
+      rank: index + 1,
+      selfSamples: 100 - index,
+      sessionEligibility: ['config-trust', 'typescript', 'stylesheet'].includes(cause)
+        ? 'session-eligible'
+        : 'one-shot-or-ineligible',
+    })),
+    verdict: { reasons: [], status: 'diagnostic' },
+  };
+  const report = { ...facts, digest: digest(canonicalJson(facts)) };
+  const rawText = JSON.stringify(report);
+  const contentDigest = digest(rawText);
+  const runUrl = execution.github.runUrl;
+  const location = `${runUrl}/artifacts/${String(artifactId)}`;
+  const apiResponseDigest = digest(`api-${mode}`);
+  const apiUrl = `https://api.github.com/repos/kovojs/kovo/actions/artifacts/${String(artifactId)}`;
+  return {
+    contentDigest,
+    custody: {
+      apiResponseDigest,
+      apiUrl,
+      archiveDigest: digest(`archive-${mode}`),
+      archiveDownloadUrl: `${apiUrl}/zip`,
+      artifactId,
+      artifactName: 'kovo-perf-build-profile-n216',
+      liveApiResponseDigest: apiResponseDigest,
+      location,
+      reportContentDigest: contentDigest,
+      reportMember: `profile-${mode}.json`,
+      runUrl,
+      workflowRunId: runId,
+    },
+    location,
+    rawText,
+    report,
+  };
 }
 
 function digest(value) {

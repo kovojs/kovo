@@ -35,6 +35,13 @@ separate: Kovo wall median at most 6× Next and peak-RSS median at most 2× Next
 Matched Next median/p95 and paired-median evidence remain embedded beside each derived Kovo
 ceiling, so the reviewed summary does not depend on copied raw-report numbers.
 
+The budget also retains the exact 50 Kovo samples for each warm mode (`unchanged` and `edit`) that
+feed the foreground-session predicate. For every sample it records the authenticated wall time,
+the sum of `config-trust`, `typescript`, and `stylesheet`, the measured CLI/startup tail, and the
+resulting upper/wall ratio. `app-source-trust` is excluded because no current spike proves an exact
+closure-bound reusable fact; disk state is never eligible. The budget validator re-derives every
+sample identity, sum, ratio, median, milestone, and five-report census.
+
 Evaluate a new clean comparison report with:
 
 ```sh
@@ -48,3 +55,21 @@ The candidate may have a newer source commit, but its runner, locks, and workloa
 ratified subject exactly. Missing phase evidence, changed locks, busy-host evidence, short samples,
 wrong corpus or mode, reused execution identity, or a forged/negative CLI residual yields
 `unproven`, never a pass.
+
+Once both N=24 and N=216 budgets exist, run the mechanical session decision:
+
+```sh
+vp exec node scripts/perf-build-budget.mjs assess-persistence \
+  --n24-budget reports/perf-build-budget-n24.json \
+  --n216-budget reports/perf-build-budget-n216.json \
+  --out reports/perf-build-persistence-assessment.json
+```
+
+The command exits 2 with `profile-required` when an N=216 warm cell misses the milestone and its
+authenticated upper/wall median is at least 10%. It does not infer a CPU ranking from phase-clock
+arithmetic. Supply exactly two custody-authenticated `kovo-build-session-cpu-profile/v1` entries
+with repeated `--profile` only after the matching unchanged/edit profiles have been retained. A
+profile must match the N=216 budget's exact source, locks, host, and workload, retain the raw profile
+digest, and classify five ranked causes with
+`kovo-build-session-eligibility/phase-v1`. Missing, stale, partial, misclassified, or malformed
+profiles remain unproven.

@@ -4,6 +4,12 @@ Status at `c57235748`: **deferred; no production implementation is justified yet
 Phase 2 plan item open until the final build cohort applies the predicate below. This is a decision
 gate, not evidence that a foreground session is faster.
 
+The gate is now executable in `scripts/perf-build-budget.mjs`. Each derived build budget carries
+the authenticated warm-sample upper-bound census, and `assess-persistence` combines the N=24 and
+N=216 budgets without weakening either corpus. The seven-family publication includes the resulting
+`kovo-build-persistence-assessment/v1` object and renders its four cells. Until the final cohort is
+available, that machinery is a fail-closed contract, not a completed decision.
+
 ## What the current evidence proves
 
 | Evidence                                                                                                  | What it establishes                                                                                                                                                                                       | Why it does not decide build/watch                                                                                                                                                                  |
@@ -59,6 +65,24 @@ The result is mechanical:
 
 The first clean baseline and its gate remain mandatory regardless of this decision. A foreground
 session is an incremental workflow; it is not a way to relabel cold production-build performance.
+
+The implemented evaluator uses an inclusive `>= 10%` warrant boundary and a strict `< 10%`
+not-warranted boundary for both N=216 cells. If the milestone/residual evidence reaches the profile
+branch but either current profile is absent, it returns `profile-required` with an `unproven`
+status. A profile is current only when GitHub artifact custody, clean source/lock identity, the
+ratified host/workload, raw profile digest, exact unchanged/edit census, and the fixed classifier
+all agree. Even then, `app-source-trust`, worker/deployment phases, launch/transport, and
+unattributed stacks remain one-shot or ineligible. This is the source/deploy honesty boundary from
+SPEC §5.2 rule 9, expressed as data rather than reviewer convention.
+
+A mixed result is not silently converted into a third shortcut. For example, an N=24 miss plus
+passing N=216 milestones and an N=216 upper bound above 10% satisfies neither declared
+not-warranted condition and cannot satisfy the N=216-miss warrant condition. The evaluator reports
+that state as `unproven` rather than guessing either decision.
+
+Likewise, a current profile with no session-eligible cause in the qualifying top five does not
+create another not-warranted shortcut. It disproves the warrant with that profile but does not
+satisfy either declared closure condition, so the mechanical outcome remains `unproven`.
 
 ## Implementation-ready spike boundary
 

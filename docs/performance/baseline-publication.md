@@ -184,6 +184,31 @@ five-plus-one shape for `browser`, `dev-n24`, `dev-n216`, `build-n24`, `build-n2
 `check`; missing or additional families fail before any file is read. Paths are resolved relative to
 the input manifest.
 
+If the build-persistence predicate returns `profile-required`, add the two current N=216 profile
+reports under the optional top-level `buildProfiles` object. Each descriptor uses the same
+`apiMetadata`/`archive`/`report` custody shape; the artifact must be named
+`kovo-perf-build-profile-n216` and contain `profile-unchanged.json` and `profile-edit.json`:
+
+```json
+{
+  "buildProfiles": {
+    "unchanged": {
+      "apiMetadata": "artifacts/build-profile/profile.api.json",
+      "archive": "artifacts/build-profile/profile.zip",
+      "report": "artifacts/build-profile/profile-unchanged.json"
+    },
+    "edit": {
+      "apiMetadata": "artifacts/build-profile/profile.api.json",
+      "archive": "artifacts/build-profile/profile.zip",
+      "report": "artifacts/build-profile/profile-edit.json"
+    }
+  }
+}
+```
+
+Supplying only one mode is invalid. Profiles are unnecessary when all four warm cells meet the
+first milestone or both N=216 upper/wall medians are below 10%.
+
 Run the aggregate gate after collecting one same-host/workload six-run cohort for every family:
 
 ```sh
@@ -199,7 +224,9 @@ evaluation for every family. The aggregate JSON content-addresses those 21 files
 canonical artifact page, API URL, API-response digest, artifact ZIP digest, report digest, execution,
 source, lock, host, and workload identity. Its Markdown surfaces baseline and holdout target
 assessments for all seven families, links exact fixture sources at the measured commit, and preserves
-the architectural lane warning beside each subject.
+the architectural lane warning beside each subject. It also embeds and renders the cross-corpus
+foreground build-session assessment, including its four milestone/residual cells and any
+custody-authenticated profile references.
 
 The gate derives the API and artifact-page URLs from the API response's repository-scoped artifact
 ID and workflow-run ID; there is no user-supplied evidence URL. It requires the GitHub API's SHA-256

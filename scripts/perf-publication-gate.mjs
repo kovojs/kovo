@@ -12,6 +12,8 @@ import {
   evaluateComparisonPerformanceBudget,
 } from './perf-comparison-budget.mjs';
 import {
+  assessBuildForegroundSession,
+  buildPersistenceAssessmentFindings,
   buildBudgetFindings,
   deriveBuildPerformanceBudget,
   evaluateBuildPerformanceBudget,
@@ -40,6 +42,8 @@ const REQUIRED_LOCKS = Object.freeze([
   'benchmarks/harness/pnpm-lock.yaml',
 ]);
 const BUILD_MODES = Object.freeze(['clean', 'unchanged', 'edit']);
+const BUILD_PROFILE_MODES = Object.freeze(['unchanged', 'edit']);
+const BUILD_PROFILE_ARTIFACT_NAME = 'kovo-perf-build-profile-n216';
 const FAMILY_NAMES = Object.freeze([
   'browser',
   'dev-n24',
@@ -176,7 +180,25 @@ export async function authenticatePerformancePublicationInput(
     }
     families[familyName] = { baseline, holdout };
   }
-  return { families, repository: input.repository };
+  const buildProfiles = [];
+  for (const mode of BUILD_PROFILE_MODES) {
+    if (input.buildProfiles === undefined) break;
+    try {
+      buildProfiles.push(
+        await authenticatePerformanceArtifactEvidence(input.buildProfiles[mode], {
+          baseDirectory,
+          expectedArtifactName: BUILD_PROFILE_ARTIFACT_NAME,
+          expectedReportMember: `profile-${mode}.json`,
+          fetchArtifactApi,
+          now,
+          repository: input.repository,
+        }),
+      );
+    } catch (error) {
+      throw contextualError(`build profile ${mode}`, error);
+    }
+  }
+  return { buildProfiles, families, repository: input.repository };
 }
 
 /**
@@ -186,6 +208,8 @@ export async function authenticatePerformancePublicationInput(
 export function derivePerformancePublication(
   authenticated,
   {
+    assessBuildPersistence = assessBuildForegroundSession,
+    buildProfileEntries,
     generatedAt = new Date().toISOString(),
     operations = FAMILY_CONFIG,
     ratify = ratifyPerformanceBaseline,
@@ -273,6 +297,33 @@ export function derivePerformancePublication(
     }
   }
 
+  let buildPersistenceAssessment;
+  try {
+    if (typeof assessBuildPersistence !== 'function') {
+      throw new TypeError('build persistence assessor is unavailable');
+    }
+    buildPersistenceAssessment = assessBuildPersistence({
+      n24Budget: documents['build-n24']?.budget,
+      n216Budget: documents['build-n216']?.budget,
+      profileEntries: buildProfileEntries ?? authenticated?.buildProfiles ?? [],
+    });
+    const assessmentFindings = buildPersistenceAssessmentFindings(buildPersistenceAssessment);
+    if (assessmentFindings.length > 0) {
+      throw new TypeError(assessmentFindings.join('; '));
+    }
+    if (buildPersistenceAssessment.verdict.status === 'unproven') {
+      const persistenceFindings = buildPersistenceAssessment.verdict.findings;
+      reasons.push(
+        ...(persistenceFindings.length > 0
+          ? persistenceFindings.map((finding) => `build persistence ${finding}`)
+          : [`build persistence is ${buildPersistenceAssessment.verdict.outcome}`]),
+      );
+    }
+  } catch (error) {
+    reasons.push(`build persistence ${error instanceof Error ? error.message : String(error)}`);
+    buildPersistenceAssessment = assessBuildForegroundSession({});
+  }
+
   const uniqueReasons = [...new Set(reasons)].sort();
   const failures = blockingFailures(families);
   const status =
@@ -282,6 +333,7 @@ export function derivePerformancePublication(
         ? 'blocked'
         : 'publishable';
   const facts = {
+    buildPersistenceAssessment,
     families,
     fixtureSources: fixtureSources(sourceCommit),
     generatedAt,
@@ -325,6 +377,21 @@ export function performancePublicationFindings(publication) {
     canonicalJson([...FAMILY_NAMES].sort())
   ) {
     findings.push('publication family census is incomplete');
+  }
+  findings.push(
+    ...buildPersistenceAssessmentFindings(publication.buildPersistenceAssessment).map(
+      (finding) => `build persistence ${finding}`,
+    ),
+  );
+  const publishedBuildBudgetDigests = {
+    n24: publication.families?.['build-n24']?.documents?.budget?.semanticDigest ?? null,
+    n216: publication.families?.['build-n216']?.documents?.budget?.semanticDigest ?? null,
+  };
+  if (
+    publication.buildPersistenceAssessment?.budgets?.n24 !== publishedBuildBudgetDigests.n24 ||
+    publication.buildPersistenceAssessment?.budgets?.n216 !== publishedBuildBudgetDigests.n216
+  ) {
+    findings.push('build persistence assessment differs from its published build budgets');
   }
   const retainedEvidence = [];
   for (const familyName of FAMILY_NAMES) {
@@ -453,6 +520,31 @@ export function renderPerformancePublicationMarkdown(publication) {
     lines.push(
       `| ${familyName} | ${family.comparisonPosture} | ${code(family.host)} | ${code(family.workload)} | ${family.targetAssessment?.baseline?.status ?? 'unproven'} | ${family.targetAssessment?.holdout?.status ?? 'unproven'} | ${family.status} |`,
     );
+  }
+  const persistence = publication.buildPersistenceAssessment;
+  lines.push(
+    '',
+    '## Foreground build-session decision',
+    '',
+    `Outcome: **${persistence.verdict.outcome}** (${persistence.verdict.rationale}).`,
+    '',
+    '| Corpus | Mode | Wall ratio | RSS ratio | Kovo p95 (ms) | Artifact p95 (bytes) | Upper / wall | Milestone |',
+    '| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |',
+  );
+  for (const cell of persistence.cells) {
+    lines.push(
+      `| N=${String(cell.corpusSize)} | ${cell.mode} | ${formatNumber(cell.milestone.wallMedianVsNextRatio)} | ${formatNumber(cell.milestone.peakRssMedianVsNextRatio)} | ${formatNumber(cell.wall.kovoP95Ms)} | ${formatNumber(cell.artifactBytes.kovoP95)} | ${formatNumber(cell.residualUpper.medianRatio)} | ${cell.milestone.status} |`,
+    );
+  }
+  if (persistence.verdict.findings.length > 0) {
+    lines.push('', 'Decision findings:', '');
+    for (const finding of persistence.verdict.findings) lines.push(`- ${finding}`);
+  }
+  if (persistence.profiles.length > 0) {
+    lines.push('', 'Authenticated N=216 CPU profiles:', '');
+    for (const profile of persistence.profiles) {
+      lines.push(`- [${profile.mode} ${profile.execution}](${profile.location})`);
+    }
   }
   lines.push('', '## Exact fixture sources', '');
   for (const [label, url] of Object.entries(publication.fixtureSources)) {
@@ -865,10 +957,16 @@ function validateInputManifest(input) {
   if (!ownRecord(input) || input.schema !== PERF_PUBLICATION_INPUT_SCHEMA) {
     throw new TypeError(`manifest must be ${PERF_PUBLICATION_INPUT_SCHEMA}`);
   }
-  if (
-    canonicalJson(Object.keys(input).sort()) !== canonicalJson(['families', 'repository', 'schema'])
-  ) {
-    throw new TypeError('manifest must contain only schema, repository, and families');
+  const expectedKeys = [
+    ...(input.buildProfiles === undefined ? [] : ['buildProfiles']),
+    'families',
+    'repository',
+    'schema',
+  ].sort((left, right) => left.localeCompare(right));
+  if (canonicalJson(Object.keys(input).sort()) !== canonicalJson(expectedKeys)) {
+    throw new TypeError(
+      'manifest must contain only schema, repository, families, and optional buildProfiles',
+    );
   }
   if (input.repository !== PERF_PUBLICATION_REPOSITORY) {
     throw new TypeError(`manifest repository must be ${PERF_PUBLICATION_REPOSITORY}`);
@@ -892,6 +990,14 @@ function validateInputManifest(input) {
         `${familyName} must contain exactly five baseline reports and one holdout`,
       );
     }
+  }
+  if (
+    input.buildProfiles !== undefined &&
+    (!ownRecord(input.buildProfiles) ||
+      canonicalJson(Object.keys(input.buildProfiles).sort()) !==
+        canonicalJson([...BUILD_PROFILE_MODES].sort()))
+  ) {
+    throw new TypeError('buildProfiles must contain exactly unchanged and edit evidence');
   }
 }
 

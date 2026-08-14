@@ -13,6 +13,7 @@ import {
   renderPerformancePublicationMarkdown,
   writePerformancePublicationOutputs,
 } from './perf-publication-gate.mjs';
+import { canonicalJson } from './perf-regression-check.mjs';
 
 const FAMILY_NAMES = [
   'browser',
@@ -150,6 +151,21 @@ describe('seven-family performance publication gate', () => {
     await expect(authenticatePerformancePublicationInput(input)).rejects.toThrow(
       'exact seven-family census',
     );
+
+    const profileInput = {
+      buildProfiles: { unchanged: {} },
+      families: Object.fromEntries(
+        FAMILY_NAMES.map((name) => [
+          name,
+          { baseline: Array.from({ length: 5 }, () => ({})), holdout: {} },
+        ]),
+      ),
+      repository: 'kovojs/kovo',
+      schema: PERF_PUBLICATION_INPUT_SCHEMA,
+    };
+    await expect(authenticatePerformancePublicationInput(profileInput)).rejects.toThrow(
+      'buildProfiles must contain exactly unchanged and edit evidence',
+    );
   });
 
   it('writes content-addressed family documents plus the aggregate JSON and Markdown', async () => {
@@ -181,10 +197,37 @@ describe('seven-family performance publication gate', () => {
       'publication digest is not derived from its facts',
     );
   });
+
+  it('publishes the build-session assessment and reports profile-required as unproven', () => {
+    const options = fixtureDerivationOptions();
+    options.assessBuildPersistence = ({ n24Budget, n216Budget }) =>
+      fixturePersistenceAssessment(n24Budget, n216Budget, {
+        findings: ['current authenticated N=216 unchanged and edit CPU profiles are required'],
+        outcome: 'profile-required',
+        rationale: 'current-profile-required',
+      });
+
+    const result = derivePerformancePublication(authenticatedFixture(), options);
+
+    expect(result.publication.buildPersistenceAssessment.verdict).toMatchObject({
+      outcome: 'profile-required',
+      status: 'unproven',
+    });
+    expect(result.publication.verdict.status).toBe('unproven');
+    expect(result.publication.verdict.reasons).toContain(
+      'build persistence current authenticated N=216 unchanged and edit CPU profiles are required',
+    );
+    expect(performancePublicationFindings(result.publication)).toEqual([]);
+    expect(renderPerformancePublicationMarkdown(result.publication)).toContain(
+      'Outcome: **profile-required** (current-profile-required).',
+    );
+  });
 });
 
 function fixtureDerivationOptions() {
   return {
+    assessBuildPersistence: ({ n24Budget, n216Budget }) =>
+      fixturePersistenceAssessment(n24Budget, n216Budget),
     generatedAt: '2026-08-14T00:00:00.000Z',
     operations: Object.fromEntries(
       FAMILY_NAMES.map((familyName) => [
@@ -226,6 +269,59 @@ function fixtureDerivationOptions() {
       };
     },
   };
+}
+
+function fixturePersistenceAssessment(
+  n24Budget,
+  n216Budget,
+  {
+    findings = [],
+    outcome = 'not-warranted',
+    rationale = 'all-warm-cells-meet-first-milestone',
+  } = {},
+) {
+  const facts = {
+    budgets: { n24: n24Budget.digest, n216: n216Budget.digest },
+    cells: [n24Budget, n216Budget].flatMap((budget) =>
+      ['unchanged', 'edit'].map((mode) => {
+        const profileBranch =
+          outcome === 'profile-required' &&
+          budget.subject.corpusSize === 216 &&
+          mode === 'unchanged';
+        return {
+          artifactBytes: { kovoMedian: 1_000, kovoP95: 1_010 },
+          corpusSize: budget.subject.corpusSize,
+          milestone: {
+            peakRssMedianVsNextRatio: 1,
+            status: profileBranch ? 'fail' : 'pass',
+            wallMedianVsNextRatio: profileBranch ? 6.1 : 1,
+          },
+          mode,
+          residualUpper: { medianRatio: profileBranch ? 0.1 : 0.05, samples: 50 },
+          wall: {
+            kovoMedianMs: profileBranch ? 610 : 100,
+            kovoP95Ms: profileBranch ? 620 : 110,
+            nextMedianMs: 100,
+          },
+        };
+      }),
+    ),
+    policy: {
+      appSourceTrustEligible: false,
+      diskCacheEligible: false,
+      sessionEligiblePhases: ['config-trust', 'typescript', 'stylesheet'],
+      upperWallMinimumRatio: 0.1,
+    },
+    profiles: [],
+    schema: 'kovo-build-persistence-assessment/v1',
+    verdict: {
+      findings,
+      outcome,
+      rationale,
+      status: ['profile-required', 'unproven'].includes(outcome) ? 'unproven' : 'decided',
+    },
+  };
+  return { ...facts, digest: digest(canonicalJson(facts)) };
 }
 
 function fixtureBudget(familyName, baseline) {
