@@ -34,6 +34,31 @@ gh workflow run perf-realistic.yml \
   -f baseline_cpu_model_sha256=f56edd1ddb32e98359af80267bba52d80fedc60bf40440adea1c3ea0e0f429c7
 ```
 
+When workflow dispatch is unavailable, a labeled pull request provides a closed fallback. The only
+CPU alias is `perf-baseline-cpu-amd-7763`, which resolves to the full digest above. The reviewed
+focus aliases are `perf-baseline-focus-check`, `perf-baseline-focus-browser`,
+`perf-baseline-focus-dev-n24`, `perf-baseline-focus-dev-n216`,
+`perf-baseline-focus-build-n24`, `perf-baseline-focus-build-n216`, and
+`perf-baseline-focus-server`. Apply at most one CPU alias and at most one focus alias, then apply
+`perf-measure-baselines` last:
+
+```sh
+gh pr edit <pr-number> \
+  --add-label perf-baseline-cpu-amd-7763 \
+  --add-label perf-baseline-focus-dev-n216
+gh pr edit <pr-number> --add-label perf-measure-baselines
+```
+
+The selector-label events do not pass the publication-authenticated producer condition; the final
+`perf-measure-baselines` labeled event does, and its pull-request label census carries both
+selectors into the env-only admission step. For another family, remove the old focus and trigger
+labels, add the next exact focus, then re-add `perf-measure-baselines`. With no selector labels the
+PR path remains all-family and CPU-unconstrained. More than one CPU/focus selector, malformed label
+JSON, or any unknown label beginning `perf-baseline-cpu` or `perf-baseline-focus` fails closed before
+setup. Workflow-dispatch inputs remain the primary, general API and take precedence over label
+aliases; pull-request jobs deliberately receive empty dispatch-input environment values so their
+reviewed labels can apply.
+
 That AMD digest is a collection-time operator choice based on the current hosted-runner cohort, not
 a permanent default or a portable hardware requirement. CPU admission only reduces wasted retries.
 It does not replace or weaken the report's normalized `kovo-performance-host/v2` facts, and the
@@ -46,7 +71,9 @@ baseline run IDs plus its sixth holdout. If the build-persistence decision requi
 N=216 build profile, dispatch `measurement_scope=decisions` with
 `decision_focus=build-profile` and the same `baseline_cpu_model_sha256`; the profile producer uses
 the same early CPU admission, while publication still requires its exact host identity to match the
-build-N=216 evidence.
+build-N=216 evidence. On the PR-label fallback, apply `perf-baseline-cpu-amd-7763` (and, if a focus
+selector is present, `perf-baseline-focus-build-n216`) before applying
+`perf-measure-build-profile`.
 
 ## Artifact map
 

@@ -2,15 +2,18 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   inspectDevPortAllocation,
   inspectHostEphemeralPortRanges,
 } from '../benchmarks/harness/dev-port-allocation.mjs';
 import {
+  BASELINE_CPU_LABEL_ALIASES,
+  BASELINE_FOCUS_LABEL_ALIASES,
   baselineCpuModelAdmission,
   baselineFamilyAdmission,
+  baselineSelectorsFromLabels,
   runBaselineCpuModelAdmission,
 } from '../.github/actions/kovo-perf-baseline-cpu-admission/check.mjs';
 
@@ -226,13 +229,23 @@ describe('realistic performance CI policy', () => {
       );
       expect(count(source, `KOVO_PERF_BASELINE_FAMILY: ${family}`), job).toBe(1);
       expect(
-        count(source, "KOVO_PERF_BASELINE_FOCUS: ${{ inputs.baseline_focus || 'all' }}"),
+        count(
+          source,
+          "KOVO_PERF_BASELINE_FOCUS: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_focus || '' }}",
+        ),
         job,
       ).toBe(1);
       expect(
         count(
           source,
-          "KOVO_PERF_BASELINE_CPU_MODEL_SHA256: ${{ inputs.baseline_cpu_model_sha256 || '' }}",
+          "KOVO_PERF_BASELINE_CPU_MODEL_SHA256: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_cpu_model_sha256 || '' }}",
+        ),
+        job,
+      ).toBe(1);
+      expect(
+        count(
+          source,
+          'KOVO_PERF_BASELINE_SELECTOR_LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}',
         ),
         job,
       ).toBe(1);
@@ -256,13 +269,19 @@ describe('realistic performance CI policy', () => {
 
     const buildProfile = jobSource('build-profile');
     expect(count(buildProfile, 'uses: ./.github/actions/kovo-perf-baseline-cpu-admission')).toBe(1);
-    expect(buildProfile).not.toContain('KOVO_PERF_BASELINE_FOCUS:');
-    expect(buildProfile).not.toContain('KOVO_PERF_BASELINE_FAMILY:');
+    expect(buildProfile).toContain('KOVO_PERF_BASELINE_FAMILY: build-n216');
+    expect(buildProfile).toContain(
+      "KOVO_PERF_BASELINE_FOCUS: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_focus || '' }}",
+    );
+    expect(buildProfile).toContain(
+      'KOVO_PERF_BASELINE_SELECTOR_LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}',
+    );
     expect(buildProfile.indexOf('kovo-perf-baseline-cpu-admission')).toBeLessThan(
       buildProfile.indexOf('uses: ./.github/actions/kovo-setup'),
     );
     expect(count(workflow, 'inputs.baseline_cpu_model_sha256')).toBe(6);
-    expect(count(workflow, 'inputs.baseline_focus')).toBe(9);
+    expect(count(workflow, 'inputs.baseline_focus')).toBe(10);
+    expect(count(workflow, 'toJSON(github.event.pull_request.labels.*.name)')).toBe(6);
     expect(baselineCpuAdmissionAction).toContain("        NODE_OPTIONS: ''");
     expect(baselineCpuAdmissionAction).toContain('run: node "$GITHUB_ACTION_PATH/check.mjs"');
     expect(baselineCpuAdmissionAction).not.toContain('${{ inputs.');
@@ -306,6 +325,84 @@ describe('realistic performance CI policy', () => {
         },
       }),
     ).toThrow('exactly 64 lowercase hexadecimal');
+  });
+
+  it('derives only the reviewed PR-label selectors and rejects ambiguity', () => {
+    const amdSha256 = 'f56edd1ddb32e98359af80267bba52d80fedc60bf40440adea1c3ea0e0f429c7';
+    expect(BASELINE_CPU_LABEL_ALIASES).toEqual({
+      'perf-baseline-cpu-amd-7763': amdSha256,
+    });
+    expect(BASELINE_FOCUS_LABEL_ALIASES).toEqual({
+      'perf-baseline-focus-browser': 'browser',
+      'perf-baseline-focus-build-n24': 'build-n24',
+      'perf-baseline-focus-build-n216': 'build-n216',
+      'perf-baseline-focus-check': 'check',
+      'perf-baseline-focus-dev-n24': 'dev-n24',
+      'perf-baseline-focus-dev-n216': 'dev-n216',
+      'perf-baseline-focus-server': 'server',
+    });
+    for (const empty of [undefined, '', 'null', '[]']) {
+      expect(baselineSelectorsFromLabels(empty)).toEqual({ cpuModelSha256: '', focus: '' });
+    }
+    expect(
+      baselineSelectorsFromLabels(
+        JSON.stringify([
+          'unrelated-label',
+          'perf-baseline-cpu-amd-7763',
+          'perf-baseline-focus-dev-n216',
+        ]),
+      ),
+    ).toEqual({ cpuModelSha256: amdSha256, focus: 'dev-n216' });
+    expect(() => baselineSelectorsFromLabels('{')).toThrow('not valid JSON');
+    expect(() => baselineSelectorsFromLabels(JSON.stringify({ label: 'not-an-array' }))).toThrow(
+      'JSON array of strings',
+    );
+    expect(() =>
+      baselineSelectorsFromLabels(JSON.stringify(['perf-baseline-cpu-unknown'])),
+    ).toThrow('unknown baseline CPU selector label');
+    expect(() => baselineSelectorsFromLabels(JSON.stringify(['perf-baseline-focus-all']))).toThrow(
+      'unknown baseline focus selector label',
+    );
+    expect(() =>
+      baselineSelectorsFromLabels(
+        JSON.stringify(['perf-baseline-cpu-amd-7763', 'perf-baseline-cpu-amd-7763']),
+      ),
+    ).toThrow('ambiguous baseline CPU selector labels');
+    expect(() =>
+      baselineSelectorsFromLabels(
+        JSON.stringify(['perf-baseline-focus-dev-n24', 'perf-baseline-focus-server']),
+      ),
+    ).toThrow('ambiguous baseline focus selector labels');
+
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      expect(
+        runBaselineCpuModelAdmission({
+          cpus: [{ model: 'AMD EPYC 7763 64-Core Processor' }],
+          env: {
+            KOVO_PERF_BASELINE_FAMILY: 'server',
+            KOVO_PERF_BASELINE_SELECTOR_LABELS_JSON: JSON.stringify([
+              'perf-baseline-cpu-amd-7763',
+              'perf-baseline-focus-server',
+            ]),
+          },
+        }),
+      ).toMatchObject({
+        cpu: { actualSha256: amdSha256, constrained: true },
+        family: { family: 'server', constrained: true },
+      });
+    } finally {
+      log.mockRestore();
+    }
+    expect(() =>
+      runBaselineCpuModelAdmission({
+        cpus: [{ model: 'AMD EPYC 7763 64-Core Processor' }],
+        env: {
+          KOVO_PERF_BASELINE_CPU_MODEL_SHA256: '0'.repeat(64),
+          KOVO_PERF_BASELINE_SELECTOR_LABELS_JSON: JSON.stringify(['perf-baseline-cpu-amd-7763']),
+        },
+      }),
+    ).toThrow('baseline CPU model mismatch');
   });
 
   it('retains the exact publishable sample policies in the scheduled commands', () => {
@@ -714,6 +811,7 @@ describe('realistic performance CI policy', () => {
     expect(workflow).not.toMatch(/^\s+run:.*\$\{\{ inputs\./gmu);
     for (const run of workflow.matchAll(/^\s+run:\s*(?:\||>-)\n((?: {10,}.*(?:\n|$))*)/gmu)) {
       expect(run[1]).not.toContain('${{ inputs.');
+      expect(run[1]).not.toContain('toJSON(github.event.pull_request.labels');
     }
   });
 });

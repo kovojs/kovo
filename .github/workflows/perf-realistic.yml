@@ -211,8 +211,9 @@ jobs:
         uses: ./.github/actions/kovo-perf-baseline-cpu-admission
         env:
           KOVO_PERF_BASELINE_FAMILY: check
-          KOVO_PERF_BASELINE_FOCUS: ${{ inputs.baseline_focus || 'all' }}
-          KOVO_PERF_BASELINE_CPU_MODEL_SHA256: ${{ inputs.baseline_cpu_model_sha256 || '' }}
+          KOVO_PERF_BASELINE_FOCUS: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_focus || '' }}
+          KOVO_PERF_BASELINE_CPU_MODEL_SHA256: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_cpu_model_sha256 || '' }}
+          KOVO_PERF_BASELINE_SELECTOR_LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
@@ -272,8 +273,9 @@ jobs:
         uses: ./.github/actions/kovo-perf-baseline-cpu-admission
         env:
           KOVO_PERF_BASELINE_FAMILY: browser
-          KOVO_PERF_BASELINE_FOCUS: ${{ inputs.baseline_focus || 'all' }}
-          KOVO_PERF_BASELINE_CPU_MODEL_SHA256: ${{ inputs.baseline_cpu_model_sha256 || '' }}
+          KOVO_PERF_BASELINE_FOCUS: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_focus || '' }}
+          KOVO_PERF_BASELINE_CPU_MODEL_SHA256: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_cpu_model_sha256 || '' }}
+          KOVO_PERF_BASELINE_SELECTOR_LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
@@ -332,8 +334,9 @@ jobs:
         uses: ./.github/actions/kovo-perf-baseline-cpu-admission
         env:
           KOVO_PERF_BASELINE_FAMILY: dev-n${{ matrix.corpus }}
-          KOVO_PERF_BASELINE_FOCUS: ${{ inputs.baseline_focus || 'all' }}
-          KOVO_PERF_BASELINE_CPU_MODEL_SHA256: ${{ inputs.baseline_cpu_model_sha256 || '' }}
+          KOVO_PERF_BASELINE_FOCUS: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_focus || '' }}
+          KOVO_PERF_BASELINE_CPU_MODEL_SHA256: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_cpu_model_sha256 || '' }}
+          KOVO_PERF_BASELINE_SELECTOR_LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
@@ -396,8 +399,9 @@ jobs:
         uses: ./.github/actions/kovo-perf-baseline-cpu-admission
         env:
           KOVO_PERF_BASELINE_FAMILY: build-n${{ matrix.corpus }}
-          KOVO_PERF_BASELINE_FOCUS: ${{ inputs.baseline_focus || 'all' }}
-          KOVO_PERF_BASELINE_CPU_MODEL_SHA256: ${{ inputs.baseline_cpu_model_sha256 || '' }}
+          KOVO_PERF_BASELINE_FOCUS: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_focus || '' }}
+          KOVO_PERF_BASELINE_CPU_MODEL_SHA256: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_cpu_model_sha256 || '' }}
+          KOVO_PERF_BASELINE_SELECTOR_LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
@@ -450,8 +454,9 @@ jobs:
         uses: ./.github/actions/kovo-perf-baseline-cpu-admission
         env:
           KOVO_PERF_BASELINE_FAMILY: server
-          KOVO_PERF_BASELINE_FOCUS: ${{ inputs.baseline_focus || 'all' }}
-          KOVO_PERF_BASELINE_CPU_MODEL_SHA256: ${{ inputs.baseline_cpu_model_sha256 || '' }}
+          KOVO_PERF_BASELINE_FOCUS: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_focus || '' }}
+          KOVO_PERF_BASELINE_CPU_MODEL_SHA256: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_cpu_model_sha256 || '' }}
+          KOVO_PERF_BASELINE_SELECTOR_LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
       - uses: ./.github/actions/kovo-setup
       - name: Bind the report to the runner image
         run: |
@@ -1016,7 +1021,10 @@ jobs:
       - name: Admit requested baseline CPU model
         uses: ./.github/actions/kovo-perf-baseline-cpu-admission
         env:
-          KOVO_PERF_BASELINE_CPU_MODEL_SHA256: ${{ inputs.baseline_cpu_model_sha256 || '' }}
+          KOVO_PERF_BASELINE_FAMILY: build-n216
+          KOVO_PERF_BASELINE_FOCUS: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_focus || '' }}
+          KOVO_PERF_BASELINE_CPU_MODEL_SHA256: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline_cpu_model_sha256 || '' }}
+          KOVO_PERF_BASELINE_SELECTOR_LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
       - uses: ./.github/actions/kovo-setup
       - name: Provision the process-tree tracer
         run: |
