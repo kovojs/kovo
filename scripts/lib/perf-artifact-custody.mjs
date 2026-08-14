@@ -8,26 +8,60 @@ import { inflateRawSync } from 'node:zlib';
 const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const REPOSITORY_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u;
 const COMMIT_PATTERN = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/u;
+const GIT_BLOB_PATTERN = /^[0-9a-f]{40}$/u;
+export const PERF_REALISTIC_WORKFLOW_PATH = '.github/workflows/perf-realistic.yml';
+const PERF_REALISTIC_WORKFLOW_NAME = 'Perf Realistic Tier';
+const WORKFLOW_TRIGGER_POLICIES = Object.freeze({
+  baseline: Object.freeze({
+    condition:
+      "${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && (inputs.measurement_scope == 'baselines' || inputs.measurement_scope == 'all')) || (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'perf-measure-baselines') }}",
+    scopes: Object.freeze({
+      pull_request: 'pull-request:labeled/perf-measure-baselines',
+      schedule: 'schedule:baseline-matrix',
+      workflow_dispatch: 'workflow-dispatch:measurement_scope=baselines-or-all',
+    }),
+  }),
+  'build-profile': Object.freeze({
+    condition:
+      "${{ (github.event_name == 'workflow_dispatch' && (inputs.measurement_scope == 'decisions' || inputs.measurement_scope == 'all') && (inputs.decision_focus == 'all' || inputs.decision_focus == 'build-profile')) || (github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name == 'perf-measure-decisions' || github.event.label.name == 'perf-measure-build-profile')) }}",
+    scopes: Object.freeze({
+      pull_request: 'pull-request:labeled/perf-measure-decisions-or-build-profile',
+      workflow_dispatch:
+        'workflow-dispatch:measurement_scope=decisions-or-all;decision_focus=all-or-build-profile',
+    }),
+  }),
+});
 const MAX_ZIP_ENTRIES = 10_000;
 const MAX_API_RESPONSE_BYTES = 1024 * 1024;
 const MAX_ARCHIVE_BYTES = 512 * 1024 * 1024;
 const MAX_REPORT_BYTES = 128 * 1024 * 1024;
+const MAX_AUXILIARY_MEMBERS = 128;
 const execFileAsync = promisify(execFile);
 
 /**
- * Authenticate one extracted performance report through the saved GitHub artifact API response,
- * the exact downloaded ZIP bytes, and the exact report member bytes. This is evidence custody, not
- * a claim that repository-controlled JSON can replace GitHub's external authority boundary.
+ * Authenticate one extracted performance report through byte-identical live GitHub artifact, run,
+ * and job API responses, the exact downloaded ZIP bytes, the exact report member bytes, and the
+ * workflow definition GitHub evaluated. This is evidence custody, not a claim that
+ * repository-controlled JSON can replace GitHub's external authority boundary.
  */
 export async function authenticatePerformanceArtifactEvidence(
   evidence,
   {
     baseDirectory = process.cwd(),
     expectedArtifactName,
+    expectedAuxiliaryMember,
+    expectedAuxiliaryMemberGroup,
+    expectedAuxiliaryMembers,
     expectedReportMember,
+    expectedWorkflowJob,
     fetchArtifactApi = fetchGitHubArtifactApiResponse,
+    fetchWorkflowFileApi = fetchGitHubWorkflowFileApiResponse,
+    fetchWorkflowJobsApi = fetchGitHubWorkflowJobsApiResponse,
+    fetchWorkflowRunApi = fetchGitHubWorkflowRunApiResponse,
+    loadTrustedWorkflow = loadLocalTrustedPerformanceWorkflow,
     now,
     repository,
+    repositoryDirectory = process.cwd(),
   },
 ) {
   validateEvidenceDescriptor(evidence);
@@ -37,27 +71,30 @@ export async function authenticatePerformanceArtifactEvidence(
   if (!nonEmptyString(expectedArtifactName) || !safeZipPath(expectedReportMember)) {
     throw new TypeError('expected artifact name and report member are required');
   }
+  validateExpectedAuxiliaryMembers({
+    expectedAuxiliaryMember,
+    expectedAuxiliaryMemberGroup,
+    expectedAuxiliaryMembers,
+    expectedReportMember,
+  });
+  validateExpectedWorkflowJob(expectedWorkflowJob);
 
   const apiPath = path.resolve(baseDirectory, evidence.apiMetadata);
   const archivePath = path.resolve(baseDirectory, evidence.archive);
+  const jobsApiPath = path.resolve(baseDirectory, evidence.jobsApiMetadata);
   const reportPath = path.resolve(baseDirectory, evidence.report);
-  const [apiBytes, archiveBytes, reportBytes] = await Promise.all([
+  const runApiPath = path.resolve(baseDirectory, evidence.runApiMetadata);
+  const [apiBytes, archiveBytes, jobsApiBytes, reportBytes, runApiBytes] = await Promise.all([
     readBoundedRegularFile(apiPath, MAX_API_RESPONSE_BYTES, 'artifact API metadata'),
     readBoundedRegularFile(archivePath, MAX_ARCHIVE_BYTES, 'artifact ZIP'),
+    readBoundedRegularFile(jobsApiPath, MAX_API_RESPONSE_BYTES, 'workflow jobs API metadata'),
     readBoundedRegularFile(reportPath, MAX_REPORT_BYTES, 'extracted performance report'),
+    readBoundedRegularFile(runApiPath, MAX_API_RESPONSE_BYTES, 'workflow run API metadata'),
   ]);
-  let metadata;
-  let report;
-  try {
-    metadata = JSON.parse(apiBytes.toString('utf8'));
-  } catch {
-    throw new TypeError('artifact API metadata is not valid JSON');
-  }
-  try {
-    report = JSON.parse(reportBytes.toString('utf8'));
-  } catch {
-    throw new TypeError('extracted performance report is not valid JSON');
-  }
+  const metadata = parseJsonBytes(apiBytes, 'artifact API metadata');
+  const jobsMetadata = parseJsonBytes(jobsApiBytes, 'workflow jobs API metadata');
+  const report = parseJsonBytes(reportBytes, 'extracted performance report');
+  const runMetadata = parseJsonBytes(runApiBytes, 'workflow run API metadata');
 
   const archiveDigest = sha256Bytes(archiveBytes);
   const reportContentDigest = sha256Bytes(reportBytes);
@@ -65,28 +102,67 @@ export async function authenticatePerformanceArtifactEvidence(
   if (!memberBytes.equals(reportBytes)) {
     throw new TypeError(`extracted report bytes differ from ZIP member ${expectedReportMember}`);
   }
+  const auxiliaryNames = resolveExpectedAuxiliaryMembers(archiveBytes, {
+    expectedAuxiliaryMember,
+    expectedAuxiliaryMemberGroup,
+    expectedAuxiliaryMembers,
+  });
+  const auxiliaries = readZipMembers(archiveBytes, auxiliaryNames);
 
   const artifactId = positiveInteger(metadata?.id, 'artifact API id');
-  if (typeof fetchArtifactApi !== 'function') {
-    throw new TypeError('live artifact API fetch is required');
+  for (const [label, fetchApi] of [
+    ['artifact', fetchArtifactApi],
+    ['workflow file', fetchWorkflowFileApi],
+    ['workflow jobs', fetchWorkflowJobsApi],
+    ['workflow run', fetchWorkflowRunApi],
+  ]) {
+    if (typeof fetchApi !== 'function') {
+      throw new TypeError(`live ${String(label)} API fetch is required`);
+    }
   }
-  let liveApiBytes;
-  try {
-    liveApiBytes = Buffer.from(await fetchArtifactApi({ artifactId, repository }));
-  } catch (error) {
-    throw new TypeError(
-      `live artifact API verification failed: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-  if (liveApiBytes.length > MAX_API_RESPONSE_BYTES) {
-    throw new TypeError('live artifact API response exceeds the safety bound');
-  }
-  if (!liveApiBytes.equals(apiBytes)) {
-    throw new TypeError('saved artifact API response differs byte-for-byte from the live response');
+  if (typeof loadTrustedWorkflow !== 'function') {
+    throw new TypeError('clean local workflow checkout authentication is required');
   }
   const workflowRunId = positiveInteger(metadata?.workflow_run?.id, 'artifact workflow run id');
+  const workflowHeadSha = runMetadata?.head_sha;
+  const sourceSha = report?.source?.commit;
+  let liveApiBytes;
+  let liveWorkflowApiBytes;
+  let liveJobsApiBytes;
+  let liveRunApiBytes;
+  let trustedWorkflow;
+  try {
+    [liveApiBytes, liveWorkflowApiBytes, liveJobsApiBytes, liveRunApiBytes, trustedWorkflow] =
+      await Promise.all([
+        fetchLiveApiBytes(fetchArtifactApi, { artifactId, repository }),
+        fetchLiveApiBytes(fetchWorkflowFileApi, {
+          repository,
+          workflowHeadSha,
+        }),
+        fetchLiveApiBytes(fetchWorkflowJobsApi, { repository, workflowRunId }),
+        fetchLiveApiBytes(fetchWorkflowRunApi, { repository, workflowRunId }),
+        loadTrustedWorkflow({ repositoryDirectory, sourceSha }),
+      ]);
+  } catch (error) {
+    throw new TypeError(
+      `live GitHub API verification failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  for (const [label, liveBytes, savedBytes] of [
+    ['artifact', liveApiBytes, apiBytes],
+    ['workflow jobs', liveJobsApiBytes, jobsApiBytes],
+    ['workflow run', liveRunApiBytes, runApiBytes],
+  ]) {
+    if (!liveBytes.equals(savedBytes)) {
+      throw new TypeError(
+        `saved ${label} API response differs byte-for-byte from the live response`,
+      );
+    }
+  }
   const apiUrl = `https://api.github.com/repos/${repository}/actions/artifacts/${String(artifactId)}`;
   const archiveDownloadUrl = `${apiUrl}/zip`;
+  const runApiUrl = `https://api.github.com/repos/${repository}/actions/runs/${String(workflowRunId)}`;
+  const jobsApiUrl = `${runApiUrl}/jobs?filter=all&per_page=100`;
   const runUrl = `https://github.com/${repository}/actions/runs/${String(workflowRunId)}`;
   const location = `${runUrl}/artifacts/${String(artifactId)}`;
   const findings = [];
@@ -98,6 +174,9 @@ export async function authenticatePerformanceArtifactEvidence(
     findings.push('artifact archive API URL is not derived from its identity');
   }
   if (metadata?.expired !== false) findings.push('artifact API record is expired');
+  if (!Number.isSafeInteger(metadata?.download_count) || metadata.download_count < 1) {
+    findings.push('artifact API record does not prove the retained ZIP was downloaded');
+  }
   if (metadata?.digest !== archiveDigest || !DIGEST_PATTERN.test(metadata?.digest ?? '')) {
     findings.push('downloaded artifact ZIP digest differs from the GitHub artifact API digest');
   }
@@ -113,15 +192,22 @@ export async function authenticatePerformanceArtifactEvidence(
   if (report?.execution?.github?.repository !== repository) {
     findings.push('report execution repository differs from the artifact repository');
   }
-  if (!COMMIT_PATTERN.test(metadata?.workflow_run?.head_sha ?? '')) {
-    findings.push('artifact workflow source commit is unavailable');
-  }
-  if (
-    metadata?.workflow_run?.head_sha !== report?.source?.commit ||
-    metadata?.workflow_run?.head_sha !== report?.execution?.github?.sha
-  ) {
-    findings.push('artifact workflow source commit differs from the report source identity');
-  }
+  const workflowAuthority = authenticateWorkflowAuthority({
+    artifactMetadata: metadata,
+    expectedWorkflowJob,
+    jobsApiUrl,
+    jobsMetadata,
+    report,
+    repository,
+    runApiUrl,
+    runMetadata,
+    runUrl,
+    trustedWorkflow,
+    workflowApiBytes: liveWorkflowApiBytes,
+    workflowHeadSha,
+    workflowRunId,
+  });
+  findings.push(...workflowAuthority.findings);
   const createdAt = validTimestamp(metadata?.created_at, 'artifact created_at', findings);
   const updatedAt = validTimestamp(metadata?.updated_at, 'artifact updated_at', findings);
   const expiresAt = validTimestamp(metadata?.expires_at, 'artifact expires_at', findings);
@@ -151,16 +237,59 @@ export async function authenticatePerformanceArtifactEvidence(
       artifactId,
       artifactName: metadata.name,
       createdAt: metadata.created_at,
+      downloadCount: metadata.download_count,
       expiresAt: metadata.expires_at,
+      jobsApiResponseDigest: sha256Bytes(jobsApiBytes),
+      jobsApiUrl,
       liveApiResponseDigest: sha256Bytes(liveApiBytes),
+      liveJobsApiResponseDigest: sha256Bytes(liveJobsApiBytes),
+      liveRunApiResponseDigest: sha256Bytes(liveRunApiBytes),
       liveApiVerifiedAt: new Date(observedNow).toISOString(),
       location,
+      ...(auxiliaries.length === 0
+        ? {}
+        : {
+            auxiliaryMembers: auxiliaries.map(({ bytes, member }) => ({
+              byteLength: bytes.length,
+              contentDigest: sha256Bytes(bytes),
+              member,
+            })),
+            ...(expectedAuxiliaryMember === undefined
+              ? {}
+              : {
+                  auxiliaryByteLength: auxiliaries[0].bytes.length,
+                  auxiliaryContentDigest: sha256Bytes(auxiliaries[0].bytes),
+                  auxiliaryMember: auxiliaries[0].member,
+                }),
+          }),
       reportContentDigest,
       reportMember: expectedReportMember,
+      runApiResponseDigest: sha256Bytes(runApiBytes),
+      runApiUrl,
       runUrl,
       updatedAt: metadata.updated_at,
+      workflow: workflowAuthority.facts,
+      workflowApiResponseDigest: sha256Bytes(liveWorkflowApiBytes),
       workflowRunId,
     },
+    ...(auxiliaries.length === 0
+      ? {}
+      : {
+          auxiliaries: auxiliaries.map(({ bytes, member }) => ({
+            bytes,
+            contentDigest: sha256Bytes(bytes),
+            member,
+          })),
+          ...(expectedAuxiliaryMember === undefined
+            ? {}
+            : {
+                auxiliary: {
+                  bytes: auxiliaries[0].bytes,
+                  contentDigest: sha256Bytes(auxiliaries[0].bytes),
+                  member: auxiliaries[0].member,
+                },
+              }),
+        }),
     location,
     rawText: reportBytes.toString('utf8'),
     report,
@@ -173,25 +302,481 @@ export async function fetchGitHubArtifactApiResponse({ artifactId, repository })
     throw new TypeError('repository must be an exact owner/name identity');
   }
   positiveInteger(artifactId, 'artifact API id');
-  const endpoint = `repos/${repository}/actions/artifacts/${String(artifactId)}`;
+  return fetchGitHubApiResponse(
+    `repos/${repository}/actions/artifacts/${String(artifactId)}`,
+    'artifact',
+  );
+}
+
+/** Fetch one canonical workflow-run record; callers cannot substitute an offline cache. */
+export async function fetchGitHubWorkflowRunApiResponse({ repository, workflowRunId }) {
+  validateWorkflowRunFetchIdentity(repository, workflowRunId);
+  return fetchGitHubApiResponse(
+    `repos/${repository}/actions/runs/${String(workflowRunId)}`,
+    'workflow run',
+  );
+}
+
+/** Fetch the bounded all-attempt job census used to prove the exact successful matrix job. */
+export async function fetchGitHubWorkflowJobsApiResponse({ repository, workflowRunId }) {
+  validateWorkflowRunFetchIdentity(repository, workflowRunId);
+  return fetchGitHubApiResponse(
+    `repos/${repository}/actions/runs/${String(workflowRunId)}/jobs?filter=all&per_page=100`,
+    'workflow jobs',
+  );
+}
+
+/** Fetch the exact workflow file at the workflow-run event SHA. */
+export async function fetchGitHubWorkflowFileApiResponse({ repository, workflowHeadSha }) {
+  if (!REPOSITORY_PATTERN.test(repository ?? '')) {
+    throw new TypeError('repository must be an exact owner/name identity');
+  }
+  if (!COMMIT_PATTERN.test(workflowHeadSha ?? '')) {
+    throw new TypeError('workflow head SHA is unavailable');
+  }
+  return fetchGitHubApiResponse(
+    `repos/${repository}/contents/${PERF_REALISTIC_WORKFLOW_PATH}?ref=${workflowHeadSha}`,
+    'workflow file',
+  );
+}
+
+/** Bind publication to a clean checkout of the measured source and its reviewed workflow bytes. */
+export async function loadLocalTrustedPerformanceWorkflow({ repositoryDirectory, sourceSha }) {
+  if (!COMMIT_PATTERN.test(sourceSha ?? '')) {
+    throw new TypeError('workflow source SHA is unavailable');
+  }
+  const directory = path.resolve(repositoryDirectory ?? process.cwd());
+  const { stdout: rootOutput } = await execFileAsync('git', ['rev-parse', '--show-toplevel'], {
+    cwd: directory,
+    encoding: 'utf8',
+    maxBuffer: MAX_API_RESPONSE_BYTES,
+    timeout: 30_000,
+  });
+  const root = rootOutput.trim();
+  if (!nonEmptyString(root)) throw new TypeError('workflow checkout root is unavailable');
+  const [{ stdout: headOutput }, { stdout: statusOutput }, bytes] = await Promise.all([
+    execFileAsync('git', ['rev-parse', '--verify', 'HEAD^{commit}'], {
+      cwd: root,
+      encoding: 'utf8',
+      maxBuffer: MAX_API_RESPONSE_BYTES,
+      timeout: 30_000,
+    }),
+    execFileAsync(
+      'git',
+      ['status', '--porcelain=v1', '--untracked-files=all', '--', PERF_REALISTIC_WORKFLOW_PATH],
+      {
+        cwd: root,
+        encoding: 'utf8',
+        maxBuffer: MAX_API_RESPONSE_BYTES,
+        timeout: 30_000,
+      },
+    ),
+    readBoundedRegularFile(
+      path.join(root, PERF_REALISTIC_WORKFLOW_PATH),
+      MAX_API_RESPONSE_BYTES,
+      'trusted local workflow',
+    ),
+  ]);
+  const headSha = headOutput.trim();
+  if (headSha !== sourceSha) {
+    throw new TypeError('publication checkout HEAD differs from the measured source SHA');
+  }
+  if (statusOutput !== '') {
+    throw new TypeError('trusted local performance workflow has uncommitted changes');
+  }
+  return { bytes, headSha };
+}
+
+async function fetchGitHubApiResponse(endpoint, label) {
   const { stdout } = await execFileAsync('gh', ['api', endpoint], {
     encoding: 'buffer',
     maxBuffer: MAX_API_RESPONSE_BYTES,
     timeout: 30_000,
   });
   if (!Buffer.isBuffer(stdout) || stdout.length === 0) {
-    throw new TypeError('GitHub artifact API returned no bytes');
+    throw new TypeError(`GitHub ${label} API returned no bytes`);
   }
   return stdout;
 }
 
+function authenticateWorkflowAuthority({
+  artifactMetadata,
+  expectedWorkflowJob,
+  jobsApiUrl,
+  jobsMetadata,
+  report,
+  repository,
+  runApiUrl,
+  runMetadata,
+  runUrl,
+  trustedWorkflow,
+  workflowApiBytes,
+  workflowHeadSha,
+  workflowRunId,
+}) {
+  const findings = [];
+  const github = report?.execution?.github;
+  const runAttempt = runMetadata?.run_attempt;
+  const event = runMetadata?.event;
+  const triggerPolicy = WORKFLOW_TRIGGER_POLICIES[expectedWorkflowJob.triggerPolicy];
+  const triggerScope = triggerPolicy?.scopes?.[event] ?? null;
+  const repositoryId = runMetadata?.repository?.id;
+  const headRepositoryId = runMetadata?.head_repository?.id;
+  const eventSha = runMetadata?.head_sha;
+  const sourceSha = report?.source?.commit;
+  const workflowDefinition = authenticateWorkflowDefinition({
+    expectedWorkflowJob,
+    repository,
+    sourceSha,
+    trustedWorkflow,
+    workflowApiBytes,
+    workflowHeadSha,
+  });
+  findings.push(...workflowDefinition.findings);
+
+  if (!ownRecord(runMetadata)) findings.push('workflow run API response is not an object');
+  if (runMetadata?.id !== workflowRunId) findings.push('workflow run API identity differs');
+  if (
+    runMetadata?.url !== runApiUrl ||
+    runMetadata?.html_url !== runUrl ||
+    runMetadata?.jobs_url !== `${runApiUrl}/jobs`
+  ) {
+    findings.push('workflow run API URLs are not derived from its identity');
+  }
+  if (
+    runMetadata?.repository?.full_name !== repository ||
+    runMetadata?.head_repository?.full_name !== repository ||
+    !Number.isSafeInteger(repositoryId) ||
+    repositoryId < 1 ||
+    !Number.isSafeInteger(headRepositoryId) ||
+    headRepositoryId < 1
+  ) {
+    findings.push('workflow run repository or head repository is not canonical');
+  }
+  if (
+    artifactMetadata?.workflow_run?.repository_id !== repositoryId ||
+    artifactMetadata?.workflow_run?.head_repository_id !== headRepositoryId ||
+    artifactMetadata?.workflow_run?.head_branch !== runMetadata?.head_branch ||
+    artifactMetadata?.workflow_run?.head_sha !== eventSha
+  ) {
+    findings.push('artifact workflow identity differs from the live workflow run');
+  }
+  if (
+    runMetadata?.name !== PERF_REALISTIC_WORKFLOW_NAME ||
+    runMetadata?.path !== PERF_REALISTIC_WORKFLOW_PATH
+  ) {
+    findings.push('workflow run did not originate from the realistic performance workflow');
+  }
+  if (!Number.isSafeInteger(runAttempt) || runAttempt < 1) {
+    findings.push('workflow run attempt is unavailable');
+  }
+  if (runMetadata?.status !== 'completed' || runMetadata?.conclusion !== 'success') {
+    findings.push('workflow run is not completed successfully');
+  }
+  if (triggerScope === null) {
+    findings.push(`workflow run event ${String(event)} is not a reviewed trigger`);
+  }
+  if (!COMMIT_PATTERN.test(eventSha ?? '')) findings.push('workflow event SHA is unavailable');
+  if (!COMMIT_PATTERN.test(sourceSha ?? '')) findings.push('workflow source SHA is unavailable');
+  if (!sourceCommitMatchesRun(runMetadata, sourceSha)) {
+    findings.push('report source commit differs from the immutable workflow run head SHA');
+  }
+  if (
+    github?.eventSha !== eventSha ||
+    github?.sha !== sourceSha ||
+    github?.repository !== repository ||
+    github?.serverUrl !== 'https://github.com' ||
+    github?.runUrl !== runUrl ||
+    String(github?.runId ?? '') !== String(workflowRunId) ||
+    String(github?.runAttempt ?? '') !== String(runAttempt) ||
+    github?.job !== expectedWorkflowJob.key ||
+    !validWorkflowReference(github?.workflowRef, repository)
+  ) {
+    findings.push('report execution does not match the live workflow run and expected job');
+  }
+
+  const jobs = Array.isArray(jobsMetadata?.jobs) ? jobsMetadata.jobs : [];
+  if (
+    !ownRecord(jobsMetadata) ||
+    !Number.isSafeInteger(jobsMetadata?.total_count) ||
+    jobsMetadata.total_count < 1 ||
+    jobsMetadata.total_count > 100 ||
+    jobsMetadata.total_count !== jobs.length
+  ) {
+    findings.push('workflow jobs API census is incomplete or exceeds the one-page bound');
+  }
+  const matchingJobs = jobs.filter(
+    (job) => job?.name === expectedWorkflowJob.name && job?.run_attempt === runAttempt,
+  );
+  if (matchingJobs.length !== 1) {
+    findings.push(
+      `workflow jobs API has ${String(matchingJobs.length)} exact ${expectedWorkflowJob.name} jobs for run attempt ${String(runAttempt)}; expected one`,
+    );
+  }
+  const job = matchingJobs[0] ?? null;
+  const jobId = job?.id;
+  if (
+    job !== null &&
+    (!Number.isSafeInteger(jobId) ||
+      jobId < 1 ||
+      job.run_id !== workflowRunId ||
+      job.run_attempt !== runAttempt ||
+      job.head_sha !== eventSha ||
+      job.status !== 'completed' ||
+      job.conclusion !== 'success' ||
+      job.url !== `https://api.github.com/repos/${repository}/actions/jobs/${String(jobId)}`)
+  ) {
+    findings.push('expected workflow family job is not an exact successful job in the live run');
+  }
+  const jobStartedAt = validTimestamp(job?.started_at, 'workflow job started_at', findings);
+  const jobCompletedAt = validTimestamp(job?.completed_at, 'workflow job completed_at', findings);
+  if (
+    Number.isFinite(jobStartedAt) &&
+    Number.isFinite(jobCompletedAt) &&
+    jobStartedAt > jobCompletedAt
+  ) {
+    findings.push('workflow job timestamps are not monotonic');
+  }
+
+  return {
+    facts: {
+      conclusion: runMetadata?.conclusion ?? null,
+      event: event ?? null,
+      headSha: eventSha ?? null,
+      job: {
+        apiUrl:
+          Number.isSafeInteger(jobId) && jobId > 0
+            ? `https://api.github.com/repos/${repository}/actions/jobs/${String(jobId)}`
+            : null,
+        completedAt: job?.completed_at ?? null,
+        conclusion: job?.conclusion ?? null,
+        id: jobId ?? null,
+        key: expectedWorkflowJob.key,
+        name: expectedWorkflowJob.name,
+        runAttempt: job?.run_attempt ?? null,
+        startedAt: job?.started_at ?? null,
+        status: job?.status ?? null,
+      },
+      jobsApiUrl,
+      name: runMetadata?.name ?? null,
+      path: runMetadata?.path ?? null,
+      runApiUrl,
+      runAttempt: runAttempt ?? null,
+      sourceSha: sourceSha ?? null,
+      status: runMetadata?.status ?? null,
+      triggerPolicy: expectedWorkflowJob.triggerPolicy,
+      triggerScope,
+      workflowApiUrl: workflowDefinition.facts.apiUrl,
+      workflowContentDigest: workflowDefinition.facts.contentDigest,
+      workflowGitBlobSha: workflowDefinition.facts.gitBlobSha,
+      workflowHeadSha: workflowDefinition.facts.headSha,
+    },
+    findings,
+  };
+}
+
+function authenticateWorkflowDefinition({
+  expectedWorkflowJob,
+  repository,
+  sourceSha,
+  trustedWorkflow,
+  workflowApiBytes,
+  workflowHeadSha,
+}) {
+  const findings = [];
+  const metadata = parseJsonBytes(workflowApiBytes, 'workflow file API metadata');
+  const apiUrl = `https://api.github.com/repos/${repository}/contents/${PERF_REALISTIC_WORKFLOW_PATH}?ref=${String(workflowHeadSha)}`;
+  const workflowBytes = decodeGitHubFileContent(metadata, findings);
+  const gitBlobSha = gitBlobDigest(workflowBytes);
+  const expectedRawUrl = `https://raw.githubusercontent.com/${repository}/${String(workflowHeadSha)}/${PERF_REALISTIC_WORKFLOW_PATH}`;
+  const expectedHtmlUrl = `https://github.com/${repository}/blob/${String(workflowHeadSha)}/${PERF_REALISTIC_WORKFLOW_PATH}`;
+  if (
+    metadata?.type !== 'file' ||
+    metadata?.encoding !== 'base64' ||
+    metadata?.name !== path.basename(PERF_REALISTIC_WORKFLOW_PATH) ||
+    metadata?.path !== PERF_REALISTIC_WORKFLOW_PATH ||
+    metadata?.size !== workflowBytes.length ||
+    metadata?.url !== apiUrl ||
+    metadata?.download_url !== expectedRawUrl ||
+    metadata?.html_url !== expectedHtmlUrl ||
+    !GIT_BLOB_PATTERN.test(metadata?.sha ?? '') ||
+    metadata?.sha !== gitBlobSha ||
+    metadata?.git_url !== `https://api.github.com/repos/${repository}/git/blobs/${gitBlobSha}`
+  ) {
+    findings.push('workflow file API identity or Git blob digest differs');
+  }
+  if (
+    !ownRecord(trustedWorkflow) ||
+    !Buffer.isBuffer(trustedWorkflow.bytes) ||
+    trustedWorkflow.headSha !== sourceSha
+  ) {
+    findings.push('trusted local workflow is not bound to the measured source checkout');
+  } else if (!workflowBytes.equals(trustedWorkflow.bytes)) {
+    findings.push('workflow run definition differs byte-for-byte from the reviewed local workflow');
+  }
+  try {
+    const condition = workflowJobCondition(workflowBytes.toString('utf8'), expectedWorkflowJob.key);
+    if (condition !== WORKFLOW_TRIGGER_POLICIES[expectedWorkflowJob.triggerPolicy]?.condition) {
+      findings.push('workflow family job condition differs from the exact reviewed trigger policy');
+    }
+  } catch (error) {
+    findings.push(error instanceof Error ? error.message : String(error));
+  }
+  return {
+    facts: {
+      apiUrl,
+      contentDigest: sha256Bytes(workflowBytes),
+      gitBlobSha: metadata?.sha ?? null,
+      headSha: workflowHeadSha ?? null,
+    },
+    findings,
+  };
+}
+
+function decodeGitHubFileContent(metadata, findings) {
+  const content = metadata?.content;
+  if (typeof content !== 'string') {
+    findings.push('workflow file API content is unavailable');
+    return Buffer.alloc(0);
+  }
+  const compact = content.replace(/[\r\n]/gu, '');
+  if (
+    compact.length === 0 ||
+    compact.length % 4 !== 0 ||
+    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(compact)
+  ) {
+    findings.push('workflow file API content is not canonical base64');
+    return Buffer.alloc(0);
+  }
+  const bytes = Buffer.from(compact, 'base64');
+  if (bytes.length > MAX_API_RESPONSE_BYTES || bytes.toString('base64') !== compact) {
+    findings.push('workflow file API content is non-canonical or exceeds the safety bound');
+    return Buffer.alloc(0);
+  }
+  return bytes;
+}
+
+function workflowJobCondition(workflow, jobKey) {
+  if (workflow.includes('\t') || workflow.includes('\r')) {
+    throw new TypeError('trusted workflow uses unsupported indentation');
+  }
+  const marker = `  ${jobKey}:\n`;
+  const start = workflow.indexOf(marker);
+  if (start === -1 || workflow.indexOf(marker, start + marker.length) !== -1) {
+    throw new TypeError(`workflow job ${jobKey} is unavailable or duplicated`);
+  }
+  const tail = workflow.slice(start + marker.length);
+  const next = /^  [A-Za-z0-9_-]+:\n/gmu.exec(tail);
+  const job = next === null ? tail : tail.slice(0, next.index);
+  const match = /^    if: >-\n((?:      .*\n)+)/gmu.exec(job);
+  if (match === null || job.slice(match.index + match[0].length).includes('\n    if:')) {
+    throw new TypeError(`workflow job ${jobKey} has no unique folded if condition`);
+  }
+  return match[1]
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(' ');
+}
+
+function gitBlobDigest(bytes) {
+  return createHash('sha1')
+    .update(`blob ${String(bytes.length)}\0`)
+    .update(bytes)
+    .digest('hex');
+}
+
+function sourceCommitMatchesRun(run, sourceSha) {
+  if (!COMMIT_PATTERN.test(sourceSha ?? '')) return false;
+  return run?.head_sha === sourceSha;
+}
+
+function validWorkflowReference(value, repository) {
+  const prefix = `${repository}/${PERF_REALISTIC_WORKFLOW_PATH}@`;
+  return nonEmptyString(value) && value.startsWith(prefix) && value.length > prefix.length;
+}
+
+function validateExpectedWorkflowJob(value) {
+  if (
+    !ownRecord(value) ||
+    JSON.stringify(Object.keys(value).sort()) !==
+      JSON.stringify(['key', 'name', 'triggerPolicy']) ||
+    !/^[a-z0-9-]+$/u.test(value.key ?? '') ||
+    !nonEmptyString(value.name) ||
+    !Object.hasOwn(WORKFLOW_TRIGGER_POLICIES, value.triggerPolicy)
+  ) {
+    throw new TypeError(
+      'expected workflow job must contain exact key, name, and reviewed triggerPolicy fields',
+    );
+  }
+}
+
+function validateWorkflowRunFetchIdentity(repository, workflowRunId) {
+  if (!REPOSITORY_PATTERN.test(repository ?? '')) {
+    throw new TypeError('repository must be an exact owner/name identity');
+  }
+  positiveInteger(workflowRunId, 'workflow run id');
+}
+
+function parseJsonBytes(bytes, label) {
+  try {
+    return JSON.parse(bytes.toString('utf8'));
+  } catch {
+    throw new TypeError(`${label} is not valid JSON`);
+  }
+}
+
+async function fetchLiveApiBytes(fetchApi, identity) {
+  const bytes = Buffer.from(await fetchApi(identity));
+  if (bytes.length < 1 || bytes.length > MAX_API_RESPONSE_BYTES) {
+    throw new TypeError('live API response is empty or exceeds the safety bound');
+  }
+  return bytes;
+}
+
 /** Read and authenticate one bounded regular-file member from a single-disk ZIP archive. */
 export function readZipMember(archiveBytes, memberName) {
+  if (!safeZipPath(memberName)) throw new TypeError('ZIP member name is unsafe');
+  return readZipMembers(archiveBytes, [memberName])[0].bytes;
+}
+
+function readZipMembers(archiveBytes, memberNames) {
   if (!Buffer.isBuffer(archiveBytes)) throw new TypeError('ZIP archive must be a Buffer');
   if (archiveBytes.length > MAX_ARCHIVE_BYTES) {
     throw new TypeError('ZIP archive exceeds the safety bound');
   }
-  if (!safeZipPath(memberName)) throw new TypeError('ZIP member name is unsafe');
+  if (
+    !Array.isArray(memberNames) ||
+    memberNames.length > MAX_AUXILIARY_MEMBERS ||
+    memberNames.some((memberName) => !safeZipPath(memberName)) ||
+    new Set(memberNames).size !== memberNames.length
+  ) {
+    throw new TypeError('ZIP member selection is unsafe or duplicated');
+  }
+  if (memberNames.length === 0) return [];
+  const selectedNames = new Set(memberNames);
+  const entries = zipEntryCensus(archiveBytes);
+  const selected = entries.filter(({ name }) => selectedNames.has(name));
+  if (selected.length !== memberNames.length) {
+    const available = new Set(selected.map(({ name }) => name));
+    const missing = memberNames.find((memberName) => !available.has(memberName));
+    throw new TypeError(`ZIP member ${String(missing)} is unavailable`);
+  }
+  const uncompressedBytes = selected.reduce((sum, entry) => sum + entry.uncompressedSize, 0);
+  if (selected.some(({ uncompressedSize }) => uncompressedSize > MAX_REPORT_BYTES)) {
+    throw new TypeError('selected ZIP member exceeds the per-member size bound');
+  }
+  if (!Number.isSafeInteger(uncompressedBytes) || uncompressedBytes > MAX_ARCHIVE_BYTES) {
+    throw new TypeError('selected ZIP member census exceeds the aggregate size bound');
+  }
+  const selectedByName = new Map(selected.map((entry) => [entry.name, entry]));
+  return memberNames.map((member) => ({
+    bytes: inflateSelectedMember(archiveBytes, selectedByName.get(member)),
+    member,
+  }));
+}
+
+function zipEntryCensus(archiveBytes) {
   const eocdOffset = findEndOfCentralDirectory(archiveBytes);
   const diskNumber = archiveBytes.readUInt16LE(eocdOffset + 4);
   const centralDisk = archiveBytes.readUInt16LE(eocdOffset + 6);
@@ -217,7 +802,7 @@ export function readZipMember(archiveBytes, memberName) {
   }
 
   const names = new Set();
-  let selected = null;
+  const entries = [];
   let offset = centralOffset;
   for (let index = 0; index < totalEntries; index += 1) {
     requireBounds(archiveBytes, offset, 46, 'ZIP central directory entry');
@@ -250,17 +835,78 @@ export function readZipMember(archiveBytes, memberName) {
     if (!safeZipPath(name)) throw new TypeError(`unsafe ZIP member path ${JSON.stringify(name)}`);
     if (names.has(name)) throw new TypeError(`duplicate ZIP member ${name}`);
     names.add(name);
-    if (name === memberName) {
-      selected = { checksum, compressedSize, flags, localOffset, method, name, uncompressedSize };
-    }
+    entries.push({ checksum, compressedSize, flags, localOffset, method, name, uncompressedSize });
     offset += recordLength;
   }
   if (offset !== eocdOffset) throw new TypeError('ZIP central directory census is inconsistent');
-  if (selected === null) throw new TypeError(`ZIP member ${memberName} is unavailable`);
-  if (selected.uncompressedSize > MAX_REPORT_BYTES) {
-    throw new TypeError(`ZIP member ${memberName} exceeds the report size bound`);
+  return entries;
+}
+
+function resolveExpectedAuxiliaryMembers(
+  archiveBytes,
+  { expectedAuxiliaryMember, expectedAuxiliaryMemberGroup, expectedAuxiliaryMembers },
+) {
+  if (expectedAuxiliaryMember !== undefined) return [expectedAuxiliaryMember];
+  const fixed = expectedAuxiliaryMembers ?? [];
+  if (expectedAuxiliaryMemberGroup === undefined) return [...fixed];
+  const matches = zipEntryCensus(archiveBytes)
+    .map(({ name }) => name)
+    .filter(
+      (name) =>
+        name.startsWith(expectedAuxiliaryMemberGroup.prefix) &&
+        name.endsWith(expectedAuxiliaryMemberGroup.suffix),
+    )
+    .sort((left, right) => left.localeCompare(right));
+  if (matches.length === 0) {
+    throw new TypeError('ZIP auxiliary member group is empty');
   }
-  return inflateSelectedMember(archiveBytes, selected);
+  const combined = [...fixed, ...matches];
+  if (combined.length > MAX_AUXILIARY_MEMBERS || new Set(combined).size !== combined.length) {
+    throw new TypeError('ZIP auxiliary member census is duplicated or exceeds the safety bound');
+  }
+  return combined;
+}
+
+function validateExpectedAuxiliaryMembers({
+  expectedAuxiliaryMember,
+  expectedAuxiliaryMemberGroup,
+  expectedAuxiliaryMembers,
+  expectedReportMember,
+}) {
+  const hasSingular = expectedAuxiliaryMember !== undefined;
+  const hasFixed = expectedAuxiliaryMembers !== undefined;
+  const hasGroup = expectedAuxiliaryMemberGroup !== undefined;
+  if (hasSingular && (hasFixed || hasGroup)) {
+    throw new TypeError('singular and grouped auxiliary ZIP member selection cannot be combined');
+  }
+  if (
+    hasSingular &&
+    (!safeZipPath(expectedAuxiliaryMember) || expectedAuxiliaryMember === expectedReportMember)
+  ) {
+    throw new TypeError('expected auxiliary member must be a distinct safe ZIP path');
+  }
+  if (
+    hasFixed &&
+    (!Array.isArray(expectedAuxiliaryMembers) ||
+      expectedAuxiliaryMembers.length < 1 ||
+      expectedAuxiliaryMembers.length > MAX_AUXILIARY_MEMBERS ||
+      expectedAuxiliaryMembers.some(
+        (member) => !safeZipPath(member) || member === expectedReportMember,
+      ) ||
+      new Set(expectedAuxiliaryMembers).size !== expectedAuxiliaryMembers.length)
+  ) {
+    throw new TypeError('expected auxiliary members must be distinct safe ZIP paths');
+  }
+  if (
+    hasGroup &&
+    (!ownRecord(expectedAuxiliaryMemberGroup) ||
+      JSON.stringify(Object.keys(expectedAuxiliaryMemberGroup).sort()) !==
+        JSON.stringify(['prefix', 'suffix']) ||
+      !safeZipMemberFragment(expectedAuxiliaryMemberGroup.prefix) ||
+      !safeZipMemberFragment(expectedAuxiliaryMemberGroup.suffix))
+  ) {
+    throw new TypeError('expected auxiliary member group must contain a safe prefix and suffix');
+  }
 }
 
 async function readBoundedRegularFile(file, maximumBytes, label) {
@@ -369,12 +1015,23 @@ function safeZipPath(value) {
   );
 }
 
+function safeZipMemberFragment(value) {
+  return (
+    nonEmptyString(value) &&
+    value.trim() === value &&
+    !value.includes('/') &&
+    !value.includes('\\') &&
+    !value.includes('\0') &&
+    !value.includes('..')
+  );
+}
+
 function validateEvidenceDescriptor(value) {
   if (!ownRecord(value)) throw new TypeError('artifact evidence descriptor must be an object');
-  const expected = ['apiMetadata', 'archive', 'report'];
+  const expected = ['apiMetadata', 'archive', 'jobsApiMetadata', 'report', 'runApiMetadata'];
   if (JSON.stringify(Object.keys(value).sort()) !== JSON.stringify(expected)) {
     throw new TypeError(
-      'artifact evidence descriptor must contain only apiMetadata, archive, report',
+      'artifact evidence descriptor must contain only apiMetadata, archive, jobsApiMetadata, report, runApiMetadata',
     );
   }
   for (const key of expected) {
