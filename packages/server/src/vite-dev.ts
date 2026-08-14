@@ -2252,7 +2252,11 @@ hot.on("kovo:component-render", (event) => {
 });
 // SPEC §5.2 rule 10: a whole-document refresh must re-enter the canonical server document sink.
 // Do not introduce a second raw HTML parser through document.write in the dev-only client.
-hot.on("kovo:diagnostics", reload);
+hot.on("kovo:diagnostics", () => {
+  // SPEC §9.5.1: this authenticated event is an observation, not DOM authority. The compiler
+  // follows it with Vite's native error frame and clears that native overlay only after every
+  // still-current diagnostic source recovers, preserving the retained document's local state.
+});
 hot.on("kovo:route-shell", reload);
 hot.on("kovo:full-reload", reload);
 `;

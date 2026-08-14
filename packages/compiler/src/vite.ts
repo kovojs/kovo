@@ -30,6 +30,7 @@ import { canonicalJson } from './canonical-json.js';
 import {
   compilerArrayAppend,
   compilerArrayIsArray,
+  compilerArrayJoin,
   compilerArrayLength,
   compilerCreateMap,
   compilerCreateNullRecord,
@@ -40,6 +41,7 @@ import {
   compilerMapDelete,
   compilerMapForEach,
   compilerMapGet,
+  compilerMapSize,
   compilerMapSet,
   compilerNumberIsSafeInteger,
   compilerObjectKeys,
@@ -58,7 +60,9 @@ import {
   compilerStringIndexOf,
   compilerStringReplaceAll,
   compilerStringSlice,
+  compilerStringSplit,
   compilerStringStartsWith,
+  compilerStringTrim,
   compilerWeakMapGet,
   compilerWeakMapSet,
 } from './compiler-security-intrinsics.js';
@@ -434,7 +438,20 @@ export type KovoViteWebSocketPayload =
       type: 'custom';
     }
   | {
+      err: {
+        id?: string;
+        message: string;
+        plugin?: string;
+        stack: string;
+      };
+      type: 'error';
+    }
+  | {
       type: 'full-reload';
+    }
+  | {
+      type: 'update';
+      updates: readonly [];
     };
 
 /** @internal Minimal structural Vite handleHotUpdate context. */
@@ -832,6 +849,7 @@ function createBoundKovoVitePlugin(
   let compileIssue = 0;
   let latestCompileIssueByFile = compilerCreateMap<string, number>();
   let latestHotUpdateIssueByFile = compilerCreateMap<string, number>();
+  let pendingHmrDiagnosticIssueByFile = compilerCreateMap<string, number>();
   let appContractOperationsByFile = compilerCreateMap<string, boolean>();
   let activeHmrStateByFile = compilerCreateMap<string, ViteActiveHmrFileState>();
   let stagedAppContractOperationsByFile: Map<string, boolean> | undefined;
@@ -880,6 +898,7 @@ function createBoundKovoVitePlugin(
       configurationEpoch += 1;
       latestCompileIssueByFile = compilerCreateMap<string, number>();
       latestHotUpdateIssueByFile = compilerCreateMap<string, number>();
+      pendingHmrDiagnosticIssueByFile = compilerCreateMap<string, number>();
       appContractOperationsByFile = compilerCreateMap<string, boolean>();
       activeHmrStateByFile = compilerCreateMap<string, ViteActiveHmrFileState>();
       stagedAppContractOperationsByFile = undefined;
@@ -894,6 +913,7 @@ function createBoundKovoVitePlugin(
       configurationEpoch += 1;
       latestCompileIssueByFile = compilerCreateMap<string, number>();
       latestHotUpdateIssueByFile = compilerCreateMap<string, number>();
+      pendingHmrDiagnosticIssueByFile = compilerCreateMap<string, number>();
       appContractOperationsByFile = compilerCreateMap<string, boolean>();
       activeHmrStateByFile = compilerCreateMap<string, ViteActiveHmrFileState>();
       stagedAppContractOperationsByFile = undefined;
@@ -1372,6 +1392,10 @@ function createBoundKovoVitePlugin(
             }
             if (!isCurrent()) return [];
             commitCandidate();
+            const recoveredDiagnostic = compilerMapDelete(
+              pendingHmrDiagnosticIssueByFile,
+              fileName,
+            );
             compilerMapSet(
               activeHmrStateByFile,
               fileName,
@@ -1390,6 +1414,14 @@ function createBoundKovoVitePlugin(
                 classification,
               );
               context.server.ws?.send({ type: 'full-reload' });
+            } else if (
+              recoveredDiagnostic &&
+              compilerMapSize(pendingHmrDiagnosticIssueByFile) === 0
+            ) {
+              // SPEC §9.5.1: a repaired file that no longer participates in the compiled graph
+              // still has to dismiss its native Vite diagnostic overlay without reloading the
+              // retained document (and therefore without discarding unrelated browser state).
+              sendViteOverlayClear(context.server);
             }
             return context.modules ?? [];
           }
@@ -1406,7 +1438,6 @@ function createBoundKovoVitePlugin(
             },
           );
           if (!isCurrent()) return [];
-          const emittedFiles = snapshotViteEmittedFiles(result);
           const errorDiagnostics = reportViteDiagnostics(
             result,
             options,
@@ -1414,17 +1445,26 @@ function createBoundKovoVitePlugin(
             source,
             hotUpdateDevState.compilerOwnedProvenance,
           );
-          const metadata = snapshotViteCompileMetadata(result);
-          const next = metadata.hmrImpact;
           if (!isCurrent()) return [];
 
           if (errorDiagnostics.length > 0) {
-            sendKovoHmrEvent(context.server, 'kovo:diagnostics', previous, next, {
-              impact: 'diagnosticError',
-              reasons: ['diagnostics'],
-            });
+            // SPEC §5.2 hard rule 5 / §9.5.1: an authenticated error diagnostic is a complete
+            // compile outcome. Parse-error results intentionally carry an empty render-plan input
+            // with no fingerprint, so success-only emitted-file/fingerprint validation must not
+            // replace the teaching diagnostic with an adapter TypeError.
+            compilerMapSet(pendingHmrDiagnosticIssueByFile, fileName, hotUpdateCompileIssue);
+            sendViteOverlayPrimer(context.server);
+            if (!isCurrent()) return [];
+            sendKovoDiagnosticHmrEvent(context.server, previous, fileName, errorDiagnostics);
+            if (!isCurrent()) return [];
+            sendViteDiagnosticOverlay(context.server, fileName, errorDiagnostics);
             return [];
           }
+
+          const emittedFiles = snapshotViteEmittedFiles(result);
+          const metadata = snapshotViteCompileMetadata(result);
+          const next = metadata.hmrImpact;
+          if (!isCurrent()) return [];
 
           recordViteAppContractOperations(
             hotUpdateAppContractOperations,
@@ -1445,6 +1485,11 @@ function createBoundKovoVitePlugin(
           await hotUpdateGenerationStage?.(context);
           if (!isCurrent()) return [];
           commitCandidate();
+          const pendingDiagnosticIssue = compilerMapGet(pendingHmrDiagnosticIssueByFile, fileName);
+          const recoveredDiagnostic =
+            pendingDiagnosticIssue !== undefined &&
+            pendingDiagnosticIssue < hotUpdateCompileIssue &&
+            compilerMapDelete(pendingHmrDiagnosticIssueByFile, fileName);
           const activeCompilerState = compilerMapGet(hotUpdateDevState.files, fileName);
           compilerMapSet(
             activeHmrStateByFile,
@@ -1457,6 +1502,16 @@ function createBoundKovoVitePlugin(
           );
           const classification = classifyViteHmrImpact(previous, next);
           const event = eventForHmrClassification(classification);
+          if (
+            classification.impact === 'componentRefresh' &&
+            recoveredDiagnostic &&
+            compilerMapSize(pendingHmrDiagnosticIssueByFile) === 0
+          ) {
+            // The Vite client clears its own overlay on an update frame. The empty update carries
+            // no module or DOM mutation; Kovo's authenticated component event below remains the
+            // sole owner of the state-preserving server-rendered refresh.
+            sendViteOverlayClear(context.server);
+          }
           sendKovoHmrEvent(context.server, event, previous, next, classification);
           if (classification.impact !== 'componentRefresh') {
             context.server.ws?.send({ type: 'full-reload' });
@@ -1535,6 +1590,7 @@ function createBoundKovoVitePlugin(
             appContractOperationsByFile = candidateAppContractOperations;
             stagedDevState = undefined;
             stagedAppContractOperationsByFile = undefined;
+            compilerMapDelete(pendingHmrDiagnosticIssueByFile, fileName);
             compilerMapSet(
               activeHmrStateByFile,
               fileName,
@@ -3667,6 +3723,130 @@ function sendKovoHmrEvent(
   });
 }
 
+/**
+ * Send the authenticated compiler-diagnostic event independently from success-only HMR metadata.
+ * Parse failures have no lowered HMR facts by definition, but SPEC §9.5.1 still requires the
+ * stable `kovo:diagnostics` event and its exact normalized source identity.
+ */
+function sendKovoDiagnosticHmrEvent(
+  server: KovoViteDevServer,
+  previous: HmrImpactMetadata | null,
+  sourceFile: string,
+  diagnostics: readonly CompilerDiagnostic[],
+): void {
+  const diagnosticFacts = viteHmrDiagnosticFacts(diagnostics);
+  const data = compilerCreateNullRecord<unknown>();
+  compilerDefineOwnDataProperty(data, 'diagnostics', diagnosticFacts);
+  compilerDefineOwnDataProperty(data, 'impact', 'diagnosticError');
+  compilerDefineOwnDataProperty(data, 'liveTargets', viteJsonWireArray<string>());
+  if (previous?.clientHref) {
+    compilerDefineOwnDataProperty(data, 'oldClientHref', previous.clientHref);
+  }
+  compilerDefineOwnDataProperty(data, 'reasons', viteJsonWireArray('diagnostics'));
+  compilerDefineOwnDataProperty(data, 'sourceFile', sourceFile);
+
+  const payload = compilerCreateNullRecord<unknown>();
+  compilerDefineOwnDataProperty(payload, 'data', compilerFreeze(data));
+  compilerDefineOwnDataProperty(payload, 'event', 'kovo:diagnostics');
+  compilerDefineOwnDataProperty(payload, 'type', 'custom');
+  server.ws?.send(compilerFreeze(payload) as unknown as KovoViteWebSocketPayload);
+}
+
+/**
+ * Vite reloads the document when its first update arrives while an error overlay is mounted.
+ * Prime that native state before mounting Kovo's diagnostic overlay so the later empty recovery
+ * update is guaranteed to dismiss the overlay without discarding browser-owned state.
+ */
+function sendViteOverlayPrimer(server: KovoViteDevServer): void {
+  sendViteEmptyUpdate(server);
+}
+
+/** Empty native Vite update: clears only Vite's overlay and carries no module/DOM mutation. */
+function sendViteOverlayClear(server: KovoViteDevServer): void {
+  sendViteEmptyUpdate(server);
+}
+
+function sendViteEmptyUpdate(server: KovoViteDevServer): void {
+  const payload = compilerCreateNullRecord<unknown>();
+  compilerDefineOwnDataProperty(payload, 'type', 'update');
+  compilerDefineOwnDataProperty(payload, 'updates', viteJsonWireArray<never>());
+  server.ws?.send(compilerFreeze(payload) as unknown as KovoViteWebSocketPayload);
+}
+
+function sendViteDiagnosticOverlay(
+  server: KovoViteDevServer,
+  sourceFile: string,
+  diagnostics: readonly CompilerDiagnostic[],
+): void {
+  const message = viteDiagnosticErrorMessage(diagnostics);
+  const error = compilerCreateNullRecord<unknown>();
+  compilerDefineOwnDataProperty(error, 'id', sourceFile);
+  compilerDefineOwnDataProperty(error, 'message', message);
+  compilerDefineOwnDataProperty(error, 'plugin', 'kovo');
+  compilerDefineOwnDataProperty(error, 'stack', '');
+  const payload = compilerCreateNullRecord<unknown>();
+  compilerDefineOwnDataProperty(payload, 'err', compilerFreeze(error));
+  compilerDefineOwnDataProperty(payload, 'type', 'error');
+  server.ws?.send(compilerFreeze(payload) as unknown as KovoViteWebSocketPayload);
+}
+
+/**
+ * JSON serialization consults inherited `toJSON`. Shadow it on every framework-created wire array
+ * so late app-realm prototype mutation cannot replace an authenticated HMR frame during transport.
+ */
+function viteJsonWireArray<Value>(...values: Value[]): readonly Value[] {
+  compilerDefineOwnDataProperty(values, 'toJSON', undefined, false);
+  return compilerFreeze(values);
+}
+
+function viteHmrDiagnosticFacts(
+  diagnostics: readonly CompilerDiagnostic[],
+): HmrImpactMetadata['diagnostics'] {
+  // The list must remain mutable while it is assembled, so stage into an ordinary compiler-owned
+  // dense array and seal its transport posture only after every registered diagnostic is copied.
+  const staged: {
+    code: CompilerDiagnostic['code'];
+    message: string;
+    severity: CompilerDiagnostic['severity'];
+  }[] = [];
+  const length = compilerArrayLength(diagnostics, 'Vite HMR compiler diagnostics');
+  for (let index = 0; index < length; index += 1) {
+    const diagnostic = compilerOwnDataValue(
+      diagnostics,
+      index,
+      'Vite HMR compiler diagnostics',
+    ) as CompilerDiagnostic;
+    const fact = compilerCreateNullRecord<unknown>();
+    compilerDefineOwnDataProperty(
+      fact,
+      'code',
+      compilerOwnDataValue(diagnostic, 'code', 'Vite HMR compiler diagnostic'),
+    );
+    compilerDefineOwnDataProperty(
+      fact,
+      'message',
+      compilerOwnDataValue(diagnostic, 'message', 'Vite HMR compiler diagnostic'),
+    );
+    compilerDefineOwnDataProperty(
+      fact,
+      'severity',
+      compilerOwnDataValue(diagnostic, 'severity', 'Vite HMR compiler diagnostic'),
+    );
+    compilerArrayAppend(
+      staged,
+      compilerFreeze(fact) as unknown as {
+        code: CompilerDiagnostic['code'];
+        message: string;
+        severity: CompilerDiagnostic['severity'];
+      },
+      'Compiler packages/compiler/src/vite.ts HMR diagnostic facts',
+    );
+  }
+  // Preserve the same inherited-serialization defense as all other native/custom frame arrays.
+  compilerDefineOwnDataProperty(staged, 'toJSON', undefined, false);
+  return compilerFreeze(staged);
+}
+
 function viteHmrLiveTargets(facts: HmrImpactMetadata['liveTargetFacts']): string[] {
   const targets: string[] = [];
   const length = compilerArrayLength(facts, 'Vite HMR live-target facts');
@@ -3685,36 +3865,73 @@ function viteHmrLiveTargets(facts: HmrImpactMetadata['liveTargetFacts']): string
 }
 
 function diagnosticSeverity(diagnostic: CompilerDiagnostic): CompilerDiagnostic['severity'] {
-  return diagnostic.severity;
+  return compilerOwnDataValue(
+    diagnostic,
+    'severity',
+    'Vite compiler diagnostic',
+  ) as CompilerDiagnostic['severity'];
 }
 
 function viteDiagnosticErrorMessage(diagnostics: readonly CompilerDiagnostic[]): string {
-  const plural = diagnostics.length === 1 ? '' : 's';
+  const length = compilerArrayLength(diagnostics, 'Vite error diagnostics');
+  const plural = length === 1 ? '' : 's';
+  const rendered: string[] = [];
+  for (let index = 0; index < length; index += 1) {
+    compilerArrayAppend(
+      rendered,
+      formatCompilerDiagnostic(diagnostics[index]!),
+      'Compiler packages/compiler/src/vite.ts diagnostic messages',
+    );
+  }
 
   // SPEC §5.2 hard rule 5: diagnostics are teaching errors, so Vite surfaces the
   // source site plus the compiler's lowering/fix help instead of a terse code.
-  return [
-    `Kovo Vite transform failed with ${diagnostics.length} error diagnostic${plural}.`,
-    diagnostics.map(formatCompilerDiagnostic).join('\n\n'),
-  ].join('\n\n');
+  return compilerArrayJoin(
+    [
+      `Kovo Vite transform failed with ${length} error diagnostic${plural}.`,
+      compilerArrayJoin(rendered, '\n\n'),
+    ],
+    '\n\n',
+  );
 }
 
 function formatCompilerDiagnostic(diagnostic: CompilerDiagnostic): string {
-  const help = diagnostic.help?.trim();
-  if (!help) return `${diagnostic.code} ${diagnosticSite(diagnostic)} ${diagnostic.message}`;
+  const code = compilerOwnDataValue(
+    diagnostic,
+    'code',
+    'Vite compiler diagnostic',
+  ) as CompilerDiagnostic['code'];
+  const message = compilerOwnDataValue(diagnostic, 'message', 'Vite compiler diagnostic') as string;
+  const rawHelp = compilerOwnDataValue(diagnostic, 'help', 'Vite compiler diagnostic');
+  const help = rawHelp === undefined ? undefined : compilerStringTrim(rawHelp as string);
+  if (!help) return `${code} ${diagnosticSite(diagnostic)} ${message}`;
 
-  return [
-    `${diagnostic.code} ${diagnosticSite(diagnostic)} ${diagnostic.message}`,
-    ...help.split('\n').map((line) => `  help: ${line}`),
-  ].join('\n');
+  const rendered = [`${code} ${diagnosticSite(diagnostic)} ${message}`];
+  const lines = compilerStringSplit(help, '\n');
+  const length = compilerArrayLength(lines, 'Vite diagnostic help lines');
+  for (let index = 0; index < length; index += 1) {
+    compilerArrayAppend(
+      rendered,
+      `  help: ${lines[index]!}`,
+      'Compiler packages/compiler/src/vite.ts diagnostic help',
+    );
+  }
+  return compilerArrayJoin(rendered, '\n');
 }
 
 function diagnosticSite(diagnostic: CompilerDiagnostic): string {
-  const line = diagnostic.start?.line;
-  const column = diagnostic.start?.column;
-  if (line === undefined || column === undefined) return diagnostic.fileName;
+  const fileName = compilerOwnDataValue(
+    diagnostic,
+    'fileName',
+    'Vite compiler diagnostic',
+  ) as string;
+  const start = compilerOwnDataValue(diagnostic, 'start', 'Vite compiler diagnostic');
+  if (typeof start !== 'object' || start === null) return fileName;
+  const line = compilerOwnDataValue(start, 'line', 'Vite compiler diagnostic start');
+  const column = compilerOwnDataValue(start, 'column', 'Vite compiler diagnostic start');
+  if (line === undefined || column === undefined) return fileName;
 
-  return `${diagnostic.fileName}:${line}:${column}`;
+  return `${fileName}:${line as number}:${column as number}`;
 }
 
 function lowerViteSourceDerivedRegistryDeclarations(

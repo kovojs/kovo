@@ -57,6 +57,64 @@ class FakeDocument {
 }
 
 describe('Vite HMR browser target producer security', () => {
+  it('observes authenticated diagnostics without reading the payload or mutating app state', () => {
+    const buildMeta = new FakeElement({ content: 'build-before', name: 'kovo-build' });
+    const document = new FakeDocument(buildMeta, []);
+    const hotHandlers = Object.create(null) as Record<string, (event: unknown) => void>;
+    let applyCalls = 0;
+    let fetchCalls = 0;
+    let reloads = 0;
+    const context = {
+      Document: FakeDocument,
+      Element: FakeElement,
+      NodeList: FakeNodeList,
+      URL,
+      __createHotContext: () => ({
+        on(name: string, handler: (event: unknown) => void) {
+          hotHandlers[name] = handler;
+        },
+      }),
+      __kovo_a() {
+        applyCalls += 1;
+      },
+      document,
+      async fetch() {
+        fetchCalls += 1;
+        throw new Error('diagnostic observation must not fetch');
+      },
+      location: {
+        origin: 'https://kovo.test',
+        pathname: '/catalog',
+        reload() {
+          reloads += 1;
+        },
+        search: '',
+      },
+    };
+    const source = kovoHmrClientSource().replace(
+      'import { createHotContext } from "/@vite/client";',
+      'const createHotContext = globalThis.__createHotContext;',
+    );
+    runInNewContext(source, context);
+    const poisonedEvent = new Proxy(Object.create(null) as object, {
+      get() {
+        throw new Error('diagnostic payload must remain inert');
+      },
+      getOwnPropertyDescriptor() {
+        throw new Error('diagnostic payload must remain inert');
+      },
+      ownKeys() {
+        throw new Error('diagnostic payload must remain inert');
+      },
+    });
+
+    expect(() => hotHandlers['kovo:diagnostics']?.(poisonedEvent)).not.toThrow();
+    expect(applyCalls).toBe(0);
+    expect(fetchCalls).toBe(0);
+    expect(reloads).toBe(0);
+    expect(buildMeta.getAttribute('content')).toBe('build-before');
+  });
+
   it('uses boot-captured dense controls after DOM, iterator, Array, and Set poisoning', async () => {
     const buildMeta = new FakeElement({ content: 'build-before', name: 'kovo-build' });
     const targets: FakeElement[] = [

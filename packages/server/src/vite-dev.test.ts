@@ -1701,7 +1701,7 @@ describe('server app shell Vite dev seam', () => {
       expect(clientBody).not.toBe(poisonedClient);
       expect(clientBody).toContain('createHotContext("/@kovo/hmr-client")');
       expect(clientBody).toContain('hot.on("kovo:component-render"');
-      expect(clientBody).toContain('hot.on("kovo:diagnostics", reload);');
+      expect(clientBody).toContain('hot.on("kovo:diagnostics", () => {');
       expect(clientBody).not.toContain('document.open()');
       expect(clientBody).not.toContain('document.write(');
       expect(clientBody).not.toContain('document.close()');
