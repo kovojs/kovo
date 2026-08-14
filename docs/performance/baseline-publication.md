@@ -35,16 +35,18 @@ retention, but it is not permanent storage.
 
 ## Ratify each subject
 
-For each row above, supply the five downloaded report paths and their matching artifact URLs:
+Create a custody directory outside the measured checkout, then supply the five downloaded report
+paths and their matching artifact URLs:
 
 ```sh
+kovo_perf_custody="$(mktemp -d)"
 vp exec node scripts/perf-baseline-ratify.mjs \
-  --report artifacts/run-1/<report>.json --location <artifact-url-1> \
-  --report artifacts/run-2/<report>.json --location <artifact-url-2> \
-  --report artifacts/run-3/<report>.json --location <artifact-url-3> \
-  --report artifacts/run-4/<report>.json --location <artifact-url-4> \
-  --report artifacts/run-5/<report>.json --location <artifact-url-5> \
-  --out reports/<subject>-baseline.json
+  --report "$kovo_perf_custody/run-1/<report>.json" --location <artifact-url-1> \
+  --report "$kovo_perf_custody/run-2/<report>.json" --location <artifact-url-2> \
+  --report "$kovo_perf_custody/run-3/<report>.json" --location <artifact-url-3> \
+  --report "$kovo_perf_custody/run-4/<report>.json" --location <artifact-url-4> \
+  --report "$kovo_perf_custody/run-5/<report>.json" --location <artifact-url-5> \
+  --out "$kovo_perf_custody/<subject>-baseline.json"
 ```
 
 Do not combine N=24 with N=216 or browser with server: each is a different authenticated workload
@@ -69,37 +71,37 @@ preserves the architectural lane/posture warning:
 
 ```sh
 vp exec node scripts/perf-comparison-budget.mjs derive \
-  --baseline reports/browser-baseline.json \
-  --report artifacts/run-1/browser/comparison.json \
-  --report artifacts/run-2/browser/comparison.json \
-  --report artifacts/run-3/browser/comparison.json \
-  --report artifacts/run-4/browser/comparison.json \
-  --report artifacts/run-5/browser/comparison.json \
-  --out reports/browser-budget.json \
-  --markdown-out reports/browser-baseline.md
+  --baseline "$kovo_perf_custody/browser-baseline.json" \
+  --report "$kovo_perf_custody/run-1/browser/comparison.json" \
+  --report "$kovo_perf_custody/run-2/browser/comparison.json" \
+  --report "$kovo_perf_custody/run-3/browser/comparison.json" \
+  --report "$kovo_perf_custody/run-4/browser/comparison.json" \
+  --report "$kovo_perf_custody/run-5/browser/comparison.json" \
+  --out "$kovo_perf_custody/browser-budget.json" \
+  --markdown-out "$kovo_perf_custody/browser-baseline.md"
 
 vp exec node scripts/perf-comparison-budget.mjs derive \
-  --baseline reports/server-baseline.json \
-  --report artifacts/run-1/server/comparison.json \
-  --report artifacts/run-2/server/comparison.json \
-  --report artifacts/run-3/server/comparison.json \
-  --report artifacts/run-4/server/comparison.json \
-  --report artifacts/run-5/server/comparison.json \
-  --out reports/server-budget.json \
-  --markdown-out reports/server-baseline.md
+  --baseline "$kovo_perf_custody/server-baseline.json" \
+  --report "$kovo_perf_custody/run-1/server/comparison.json" \
+  --report "$kovo_perf_custody/run-2/server/comparison.json" \
+  --report "$kovo_perf_custody/run-3/server/comparison.json" \
+  --report "$kovo_perf_custody/run-4/server/comparison.json" \
+  --report "$kovo_perf_custody/run-5/server/comparison.json" \
+  --out "$kovo_perf_custody/server-budget.json" \
+  --markdown-out "$kovo_perf_custody/server-baseline.md"
 ```
 
 Check scaling uses its Kovo-only derivation; it does not manufacture a Next.js subject:
 
 ```sh
 vp exec node scripts/perf-check-budget.mjs derive \
-  --baseline reports/check-baseline.json \
-  --report artifacts/run-1/check-scaling.json \
-  --report artifacts/run-2/check-scaling.json \
-  --report artifacts/run-3/check-scaling.json \
-  --report artifacts/run-4/check-scaling.json \
-  --report artifacts/run-5/check-scaling.json \
-  --out reports/check-budget.json
+  --baseline "$kovo_perf_custody/check-baseline.json" \
+  --report "$kovo_perf_custody/run-1/check-scaling.json" \
+  --report "$kovo_perf_custody/run-2/check-scaling.json" \
+  --report "$kovo_perf_custody/run-3/check-scaling.json" \
+  --report "$kovo_perf_custody/run-4/check-scaling.json" \
+  --report "$kovo_perf_custody/run-5/check-scaling.json" \
+  --out "$kovo_perf_custody/check-budget.json"
 ```
 
 Use `scripts/perf-dev-budget.mjs` and `scripts/perf-build-budget.mjs` for each corpus size as
@@ -117,20 +119,31 @@ exactly five reports, and evaluates a sixth report as an independent holdout. Th
 build, and server families are Kovo-vs-Next subjects. Check scaling is deliberately Kovo-only; the
 aggregate must not manufacture a Next.js check result.
 
-For each report, retain three local files from the same artifact:
+For each report, retain five local files from the same artifact and workflow run:
 
 1. The unmodified artifact API response from
    `GET /repos/kovojs/kovo/actions/artifacts/<artifact-id>`.
-2. The ZIP bytes returned by that response's `archive_download_url`.
-3. The expected report extracted from the ZIP (`comparison.json`, or `check-scaling.json` for the
+2. The unmodified workflow-run API response from
+   `GET /repos/kovojs/kovo/actions/runs/<run-id>`.
+3. The unmodified all-attempt job census from
+   `GET /repos/kovojs/kovo/actions/runs/<run-id>/jobs?filter=all&per_page=100`.
+4. The ZIP bytes returned by the artifact response's `archive_download_url`.
+5. The expected report extracted from the ZIP (`comparison.json`, or `check-scaling.json` for the
    check family).
 
-For example:
+These files and the publication manifest must remain outside the measured checkout. Custody checks
+the entire checkout, including untracked files, so placing even one input under the repository
+makes the source dirty. For example, continuing with the external `kovo_perf_custody` directory:
 
 ```sh
-gh api repos/kovojs/kovo/actions/artifacts/2001 > artifacts/run-1/browser.api.json
-gh api repos/kovojs/kovo/actions/artifacts/2001/zip > artifacts/run-1/browser.zip
-unzip -p artifacts/run-1/browser.zip comparison.json > artifacts/run-1/comparison.json
+mkdir -p "$kovo_perf_custody/run-1"
+gh api repos/kovojs/kovo/actions/artifacts/2001/zip > "$kovo_perf_custody/run-1/browser.zip"
+gh api repos/kovojs/kovo/actions/artifacts/2001 > "$kovo_perf_custody/run-1/browser.api.json"
+gh api repos/kovojs/kovo/actions/runs/1001 > "$kovo_perf_custody/run-1/browser.run.api.json"
+gh api 'repos/kovojs/kovo/actions/runs/1001/jobs?filter=all&per_page=100' \
+  > "$kovo_perf_custody/run-1/browser.jobs.api.json"
+unzip -p "$kovo_perf_custody/run-1/browser.zip" comparison.json \
+  > "$kovo_perf_custody/run-1/comparison.json"
 ```
 
 The input manifest is `kovo-performance-publication-input/v1`. This abridged, non-runnable example
@@ -144,35 +157,47 @@ shows one family's shape:
     "browser": {
       "baseline": [
         {
-          "apiMetadata": "artifacts/run-1/browser.api.json",
-          "archive": "artifacts/run-1/browser.zip",
-          "report": "artifacts/run-1/comparison.json"
+          "apiMetadata": "run-1/browser.api.json",
+          "archive": "run-1/browser.zip",
+          "jobsApiMetadata": "run-1/browser.jobs.api.json",
+          "runApiMetadata": "run-1/browser.run.api.json",
+          "report": "run-1/comparison.json"
         },
         {
-          "apiMetadata": "artifacts/run-2/browser.api.json",
-          "archive": "artifacts/run-2/browser.zip",
-          "report": "artifacts/run-2/comparison.json"
+          "apiMetadata": "run-2/browser.api.json",
+          "archive": "run-2/browser.zip",
+          "jobsApiMetadata": "run-2/browser.jobs.api.json",
+          "runApiMetadata": "run-2/browser.run.api.json",
+          "report": "run-2/comparison.json"
         },
         {
-          "apiMetadata": "artifacts/run-3/browser.api.json",
-          "archive": "artifacts/run-3/browser.zip",
-          "report": "artifacts/run-3/comparison.json"
+          "apiMetadata": "run-3/browser.api.json",
+          "archive": "run-3/browser.zip",
+          "jobsApiMetadata": "run-3/browser.jobs.api.json",
+          "runApiMetadata": "run-3/browser.run.api.json",
+          "report": "run-3/comparison.json"
         },
         {
-          "apiMetadata": "artifacts/run-4/browser.api.json",
-          "archive": "artifacts/run-4/browser.zip",
-          "report": "artifacts/run-4/comparison.json"
+          "apiMetadata": "run-4/browser.api.json",
+          "archive": "run-4/browser.zip",
+          "jobsApiMetadata": "run-4/browser.jobs.api.json",
+          "runApiMetadata": "run-4/browser.run.api.json",
+          "report": "run-4/comparison.json"
         },
         {
-          "apiMetadata": "artifacts/run-5/browser.api.json",
-          "archive": "artifacts/run-5/browser.zip",
-          "report": "artifacts/run-5/comparison.json"
+          "apiMetadata": "run-5/browser.api.json",
+          "archive": "run-5/browser.zip",
+          "jobsApiMetadata": "run-5/browser.jobs.api.json",
+          "runApiMetadata": "run-5/browser.run.api.json",
+          "report": "run-5/comparison.json"
         }
       ],
       "holdout": {
-        "apiMetadata": "artifacts/run-6/browser.api.json",
-        "archive": "artifacts/run-6/browser.zip",
-        "report": "artifacts/run-6/comparison.json"
+        "apiMetadata": "run-6/browser.api.json",
+        "archive": "run-6/browser.zip",
+        "jobsApiMetadata": "run-6/browser.jobs.api.json",
+        "runApiMetadata": "run-6/browser.run.api.json",
+        "report": "run-6/comparison.json"
       }
     }
   }
@@ -185,42 +210,57 @@ five-plus-one shape for `browser`, `dev-n24`, `dev-n216`, `build-n24`, `build-n2
 the input manifest.
 
 If the build-persistence predicate returns `profile-required`, add the two current N=216 profile
-reports under the optional top-level `buildProfiles` object. Each descriptor uses the same
-`apiMetadata`/`archive`/`report` custody shape; the artifact must be named
-`kovo-perf-build-profile-n216`. Its exact member census includes `profile-unchanged.json` and
-`profile-edit.json`, both derived `build-*.cpuprofile` views, both `process-cpu-*.txt` members, and
-every report-declared original `raw-*-<role>-pid-<pid>.cpuprofile`. Undeclared, missing,
-digest-mismatched, or duplicate members fail closed:
+reports under the optional top-level `buildProfiles` object. Each descriptor uses the same exact
+five-file local custody shape because the raw diagnostic members remain inside the authenticated
+ZIP. The artifact must be named `kovo-perf-build-profile-n216`. For each mode it contains the
+`profile-<mode>.json` report, a derived `build-<mode>.cpuprofile` convenience merge, the numeric-only
+`process-cpu-<mode>.txt` recursive CPU record, and every original process profile as
+`raw-<mode>-<role>-pid-<pid>.cpuprofile`. The convenience merge is not publication authority; the
+gate reclassifies the original process-local bytes. The union declared by both authenticated
+reports must equal the shared ZIP's complete member census; undeclared, missing, digest-mismatched,
+or duplicate members fail closed:
 
 ```json
 {
   "buildProfiles": {
     "unchanged": {
-      "apiMetadata": "artifacts/build-profile/profile.api.json",
-      "archive": "artifacts/build-profile/profile.zip",
-      "report": "artifacts/build-profile/profile-unchanged.json"
+      "apiMetadata": "build-profile/profile.api.json",
+      "archive": "build-profile/profile.zip",
+      "jobsApiMetadata": "build-profile/profile.jobs.api.json",
+      "runApiMetadata": "build-profile/profile.run.api.json",
+      "report": "build-profile/profile-unchanged.json"
     },
     "edit": {
-      "apiMetadata": "artifacts/build-profile/profile.api.json",
-      "archive": "artifacts/build-profile/profile.zip",
-      "report": "artifacts/build-profile/profile-edit.json"
+      "apiMetadata": "build-profile/profile.api.json",
+      "archive": "build-profile/profile.zip",
+      "jobsApiMetadata": "build-profile/profile.jobs.api.json",
+      "runApiMetadata": "build-profile/profile.run.api.json",
+      "report": "build-profile/profile-edit.json"
     }
   }
 }
 ```
 
 Supplying only one mode is invalid. Profiles are unnecessary when all four warm cells meet the
-first milestone or both N=216 upper/wall medians are below 10%.
+first milestone or both N=216 upper/wall medians are below 10%. Profile evidence must come from the
+exact successful `build-profile` / `N=216 build CPU profiles` job. Its trusted condition admits only
+a decision dispatch focused on `build-profile` (or `all`) or a labeled pull request carrying
+`perf-measure-decisions` or `perf-measure-build-profile`; it is not a scheduled timing sample.
 
 Run the aggregate gate after collecting one same-host/workload six-run cohort for every family:
 
 ```sh
 vp exec node scripts/perf-publication-gate.mjs \
-  --manifest artifacts/performance-publication-input.json \
-  --evidence-dir reports/performance-publication \
-  --out reports/performance-publication.json \
-  --markdown-out reports/performance-publication.md
+  --manifest "$kovo_perf_custody/performance-publication-input.json" \
+  --evidence-dir "$kovo_perf_custody/publication/evidence" \
+  --out "$kovo_perf_custody/publication/performance-publication.json" \
+  --markdown-out "$kovo_perf_custody/publication/performance-publication.md"
 ```
+
+The CLI completes all 42 baseline/holdout custody calls and both optional build-profile calls before
+it creates an evidence, JSON, Markdown, staging, or output path. A requested in-repository output is
+therefore created only after the whole measured checkout has passed every clean-source check; using
+the external directory above avoids coupling collection and publication to repository state.
 
 The evidence directory receives the re-ratified baseline, derived budget, and independent holdout
 evaluation for every family. The aggregate JSON content-addresses those 21 files and retains every
@@ -231,20 +271,77 @@ the architectural lane warning beside each subject. It also embeds and renders t
 foreground build-session assessment, including its four milestone/residual cells and any
 custody-authenticated profile references.
 
-The gate derives the API and artifact-page URLs from the API response's repository-scoped artifact
-ID and workflow-run ID; there is no user-supplied evidence URL. It requires the GitHub API's SHA-256
-artifact digest and byte size to match the downloaded ZIP, safely reads and CRC-checks the expected
-ZIP member, then requires the extracted report to be byte-identical. It also requires the API head
-SHA to match the report, an unexpired retention record, five distinct baseline workflow runs, and a
-sixth workflow run not used by that family's baseline. All 42 reports must share the exact source and
-dependency locks; each holdout must match its family's ratified host and workload.
+The gate derives the API and artifact-page URLs from the repository-scoped artifact and run IDs;
+there is no user-supplied evidence URL. It retains the saved and live artifact, run, and job API
+response digests for audit, then canonicalizes only their reviewed immutable fields and requires the
+saved/live authority digests to match. Whole-response equality is deliberately not authority: an
+old run's embedded `pull_requests[].head.sha` follows the current PR head after the measured run.
+The run must be completed successfully, use `.github/workflows/perf-realistic.yml`, belong to
+`kovojs/kovo`, and retain the exact immutable head/source SHA, run attempt, and expected successful
+family job.
+
+The report separately retains `GITHUB_WORKFLOW_SHA`, the commit whose workflow GitHub evaluated.
+For a pull request it is the synthetic merge/event SHA; for other reviewed triggers it equals the
+run head and measured source. The gate fetches the workflow file from GitHub's Contents API at that
+evaluated workflow SHA, verifies its Git blob and bytes against the clean local workflow, and
+requires local checkout `HEAD` to equal the measured source SHA and the whole checkout to be clean.
+It then extracts the exact folded job `if` expression and requires one uniquely owned, commit-pinned
+`actions/upload-artifact` step with the reviewed literal name template and path. A successful family
+job therefore authenticates the scheduled baseline scope, `measurement_scope=baselines|all`, or the
+exact `perf-measure-baselines` labeled-PR condition instead of trusting an event name alone. The
+measured source remains the immutable run/artifact/job `head_sha`; neither the synthetic merge
+identity nor the mutable PR object is substituted for it.
+
+The artifact API's SHA-256 digest and byte size must match the downloaded ZIP; GitHub exposes no
+download-receipt field, so the gate does not invent one. The gate requires the ZIP's complete member
+census to equal the reviewed family contract, safely reads and CRC-checks each expected member, then
+requires the extracted report to be byte-identical. It
+also requires an unexpired retention record, five distinct baseline workflow runs, and a sixth run
+not used by that family's baseline. All 42 reports must share the exact source and dependency locks;
+each holdout must match its family's ratified host and workload.
+
+Before writing, the aggregate gate re-ratifies every baseline from its five authenticated raw
+reports, re-derives each family budget, and re-evaluates each holdout. It recomputes the exact target
+assessment and the byte and semantic digests for all 21 baseline/budget/evaluation documents. After
+writing, it reads those 21 files and the aggregate JSON back, verifies canonical bytes and digests,
+and repeats the result-level validation. A self-consistently edited target, evaluation, or document
+plus a recomputed aggregate self-hash therefore cannot produce exit status 0. The same result gate
+re-derives the foreground-build assessment from the exact N=24/N=216 budgets and authenticated
+profiles. For each optional mode it reads every mode-prefixed original `.cpuprofile` directly from
+the authenticated ZIP and checks each report-declared member, PID, role, byte length, and SHA-256.
+It validates the bounded sanitized exec/PID/parent census, its nonnegative fork-only count, exact
+executable hashes, and one raw profile for every required Node role. Exclusive reviewed V8
+function/module markers cross-check those authenticated roles. The gate then independently derives
+the per-profile sample census, complete cause census, `topFive`, and full profile-set analysis from
+the original bytes. Exact V8 `(idle)` and exact Node `spawnSync` child-wait samples remain separate
+diagnostic censuses and are excluded from CPU-work attribution; signed safe-integer time deltas
+remain evidence and do not weight the ranking. The gate also losslessly rebuilds the merged
+`build-<mode>.cpuprofile` and exact-compares it, but that file remains a convenience view rather than
+authority.
+
+The profile run also wraps the exact manifest-owned build in recursive GNU `time` accounting and a
+temporary process-exec trace. The raw trace can contain static-trust authentication material, so it
+is held only in a mode-0700 scratch directory, parsed with bounded generic diagnostics into PID,
+parent, executable-identity, and role facts, and deleted; it is never uploaded or rendered. The
+numeric-only GNU-time member contains no argv or environment. The gate compares recursive user plus
+system CPU with active V8 sample weight at the fixed 10 ms profiler interval. The uncertainty bound
+is the two GNU-time decimal resolutions plus two profiler intervals per raw profile. A positive
+residual must exceed that bound before its conservatively floored equivalent samples are ranked as
+the one-shot/ineligible `native-or-unprofiled` cause. A missing process profile, incomplete role or
+descendant census, unauthenticated executable, negative CPU residual, or positive residual inside
+the uncertainty bound makes the diagnostic unproven. Phase-clock durations are never converted
+into CPU samples.
 
 Exit status is `0` only for `publishable`, `1` for measured evidence blocked by a target or regression,
-and `2` for unproven custody, identity, workload, or integrity. The command requires authenticated
-`gh` network access and live-fetches every canonical artifact API endpoint. Each live response must be
-byte-identical to the saved `gh api` output; an offline run, stale/pretty-printed response, API error,
-or expired artifact is unproven. API responses and extracted reports are bounded to 1 MiB and 128 MiB,
+and `2` for unproven custody, identity, workload, or integrity. The command must run from the clean
+measured-source checkout with authenticated `gh` network access. It live-fetches every canonical
+artifact, run, all-attempt jobs, and commit-addressed workflow-file endpoint. The first three live
+responses must produce the same canonical immutable authority projections as their saved `gh api`
+outputs; their raw digests remain audit facts and may differ when GitHub updates a mutable field. The
+workflow response must decode to the exact clean local workflow bytes. An offline run, stale
+authority projection, API error, failed run/job, wrong workflow/scope, dirty checkout, or expired
+artifact is unproven. API responses and extracted reports are bounded to 1 MiB and 128 MiB,
 respectively, and an artifact ZIP is rejected before reading or parsing when it exceeds 512 MiB. The
-gate's bounded claim is that a live GitHub response, GitHub-published archive digest, ZIP, and report
-form one exact byte chain; repository-controlled evidence does not replace GitHub's external
-authority.
+gate's bounded claim is that live GitHub authority, GitHub's published archive digest, exact ZIP
+census, and report form one exact byte chain;
+repository-controlled evidence does not replace GitHub's external authority.
