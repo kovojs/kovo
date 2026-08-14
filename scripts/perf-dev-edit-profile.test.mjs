@@ -208,6 +208,53 @@ describe('exact dev edit-to-paint diagnostics', () => {
     ).toThrow('CPU profile must contain nodes');
     expect(() => summarizeProfileWindows([])).toThrow('at least one exact edit profile window');
   });
+
+  it('quarantines malformed Inspector evidence without retrying stopped samplers', async () => {
+    const root = await temporaryRoot();
+    const profiles = syntheticProfiles();
+    const rejectedCpu = { ...profiles.cpu, timeDeltas: profiles.cpu.timeDeltas.slice(1) };
+    const commands = [];
+    const session = {
+      close: () => commands.push('close'),
+      async send(method) {
+        commands.push(method);
+        if (method === 'Profiler.stop') return { profile: rejectedCpu };
+        if (method === 'HeapProfiler.stopSampling') return { profile: profiles.heap };
+        return {};
+      },
+    };
+    const profiler = await createDevEditProfiler(
+      { framework: 'kovo', inspectorPort: 49_203, modules: 24, profileDir: root },
+      { connectInspector: async () => session },
+    );
+
+    await profiler.startWindow({ editClass: 'data', iteration: 2 });
+    await expect(profiler.stopWindow({ editClass: 'data', iteration: 2 })).rejects.toThrow(
+      'samples=15, timeDeltas=14, invalid=none',
+    );
+    await profiler.abortWindow();
+    await profiler.close();
+
+    expect(commands.filter((method) => method === 'Profiler.stop')).toHaveLength(1);
+    expect(commands.filter((method) => method === 'HeapProfiler.stopSampling')).toHaveLength(1);
+    expect(
+      JSON.parse(await readFile(path.join(root, 'rejected/data-002.cpuprofile'), 'utf8')),
+    ).toEqual(rejectedCpu);
+    expect(
+      JSON.parse(await readFile(path.join(root, 'rejected/data-002.heapprofile'), 'utf8')),
+    ).toEqual(profiles.heap);
+    expect(
+      JSON.parse(await readFile(path.join(root, 'rejected/data-002.rejection.json'), 'utf8')),
+    ).toMatchObject({
+      error: expect.stringContaining('samples=15, timeDeltas=14, invalid=none'),
+      identity: { editClass: 'data', iteration: 2 },
+      profileShape: {
+        cpu: { nodes: 5, samples: 15, timeDeltas: 14 },
+        heap: { hasHead: true, samples: 0 },
+      },
+      schema: 'kovo-dev-edit-profile-rejection/v1',
+    });
+  });
 });
 
 function category(analysis, id) {

@@ -79,7 +79,16 @@ export async function createDevEditProfiler(options, dependencies = {}) {
       session.send('Profiler.stop'),
       session.send('HeapProfiler.stopSampling'),
     ]);
-    const raw = validateRawWindow({ cpu: cpuResult?.profile, heap: heapResult?.profile });
+    const raw = { cpu: cpuResult?.profile, heap: heapResult?.profile };
+    // Both Inspector samplers have stopped before their payloads are validated. Clear the active
+    // marker now so a validation failure cannot issue a second, misleading pair of stop commands.
+    active = null;
+    try {
+      validateRawWindow(raw);
+    } catch (error) {
+      await retainRejectedWindow({ error, identity: normalized, profileDir, raw });
+      throw error;
+    }
     const analysis = analyzeDevEditProfiles(raw);
     const fileStem = `${normalized.editClass}-${String(normalized.iteration).padStart(3, '0')}`;
     const cpuBytes = Buffer.from(`${JSON.stringify(raw.cpu)}\n`);
@@ -106,7 +115,6 @@ export async function createDevEditProfiler(options, dependencies = {}) {
       topSelfFrames: analysis.topSelfFrames,
     };
     observations.push(observation);
-    active = null;
     return observation;
   }
 
@@ -631,12 +639,22 @@ function validateCpuProfile(profile) {
   if (!Array.isArray(profile.samples) || profile.samples.length === 0) {
     throw new TypeError('CPU profile must contain samples');
   }
+  const invalidTimeDelta = Array.isArray(profile.timeDeltas)
+    ? profile.timeDeltas.findIndex((value) => !Number.isFinite(value) || value < 0)
+    : -1;
   if (
     !Array.isArray(profile.timeDeltas) ||
     profile.timeDeltas.length !== profile.samples.length ||
-    profile.timeDeltas.some((value) => !Number.isFinite(value) || value < 0)
+    invalidTimeDelta !== -1
   ) {
-    throw new TypeError('CPU profile must contain one finite time delta per sample');
+    const timeDeltaCount = Array.isArray(profile.timeDeltas) ? profile.timeDeltas.length : 'absent';
+    const invalidDetail =
+      invalidTimeDelta === -1
+        ? 'none'
+        : `${String(invalidTimeDelta)}:${String(profile.timeDeltas[invalidTimeDelta])}`;
+    throw new TypeError(
+      `CPU profile must contain one finite time delta per sample (samples=${String(profile.samples.length)}, timeDeltas=${String(timeDeltaCount)}, invalid=${invalidDetail})`,
+    );
   }
   const ids = new Set();
   for (const node of profile.nodes) {
@@ -656,6 +674,71 @@ function validateCpuProfile(profile) {
   ) {
     throw new TypeError('CPU profile contains unknown sample or child nodes');
   }
+}
+
+async function retainRejectedWindow({ error, identity, profileDir, raw }) {
+  const stem = `${identity.editClass}-${String(identity.iteration).padStart(3, '0')}`;
+  const rejectionDir = path.join(profileDir, 'rejected');
+  await mkdir(rejectionDir, { recursive: true, mode: 0o700 });
+  const cpuBytes = exactJsonBytes(raw.cpu, 'rejected CPU profile');
+  const heapBytes = exactJsonBytes(raw.heap, 'rejected heap profile');
+  const artifacts = {
+    cpu: {
+      bytes: cpuBytes.byteLength,
+      file: `${stem}.cpuprofile`,
+      sha256: sha256(cpuBytes),
+    },
+    heap: {
+      bytes: heapBytes.byteLength,
+      file: `${stem}.heapprofile`,
+      sha256: sha256(heapBytes),
+    },
+  };
+  const rejection = {
+    artifacts,
+    error: errorMessage(error),
+    identity,
+    profileShape: {
+      cpu: inspectorCpuProfileShape(raw.cpu),
+      heap: inspectorHeapProfileShape(raw.heap),
+    },
+    schema: 'kovo-dev-edit-profile-rejection/v1',
+  };
+  await Promise.all([
+    writeFile(path.join(rejectionDir, artifacts.cpu.file), cpuBytes, { flag: 'wx', mode: 0o600 }),
+    writeFile(path.join(rejectionDir, artifacts.heap.file), heapBytes, {
+      flag: 'wx',
+      mode: 0o600,
+    }),
+    writeFile(
+      path.join(rejectionDir, `${stem}.rejection.json`),
+      Buffer.from(`${JSON.stringify(rejection, null, 2)}\n`),
+      { flag: 'wx', mode: 0o600 },
+    ),
+  ]);
+}
+
+function exactJsonBytes(value, label) {
+  const serialized = JSON.stringify(value);
+  if (typeof serialized !== 'string') throw new TypeError(`${label} is not JSON-serializable`);
+  return Buffer.from(`${serialized}\n`);
+}
+
+function inspectorCpuProfileShape(profile) {
+  return {
+    endTime: Number.isFinite(profile?.endTime) ? profile.endTime : null,
+    nodes: Array.isArray(profile?.nodes) ? profile.nodes.length : null,
+    samples: Array.isArray(profile?.samples) ? profile.samples.length : null,
+    startTime: Number.isFinite(profile?.startTime) ? profile.startTime : null,
+    timeDeltas: Array.isArray(profile?.timeDeltas) ? profile.timeDeltas.length : null,
+  };
+}
+
+function inspectorHeapProfileShape(profile) {
+  return {
+    hasHead: profile?.head !== null && typeof profile?.head === 'object',
+    samples: Array.isArray(profile?.samples) ? profile.samples.length : null,
+  };
 }
 
 function validateHeapProfile(profile) {
@@ -809,4 +892,8 @@ function boundedInteger(value, minimum, maximum, label) {
 function requiredString(value, label) {
   if (typeof value !== 'string' || value.length === 0) throw new TypeError(`${label} is required`);
   return value;
+}
+
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
 }
