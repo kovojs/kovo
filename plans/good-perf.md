@@ -190,9 +190,13 @@ benchmarks/corpora/dev-loop.test.mjs --reporter=dot` passed 39/39. Current-head 
       transfer, document-parts decode/build, morph, style, layout, and paint separately.
   - Evidence: `55299dcc8`; the trace schema now reports server, transfer, response processing,
     document-parts decode/build, DOM apply, style/layout, and destination paint with one boundary.
-- [ ] Revisit opt-in Speculation Rules only after repairing the rejected spike's compiler/runtime
+- [x] Revisit opt-in Speculation Rules only after repairing the rejected spike's compiler/runtime
       pattern disagreement and fail-open page indirection. `spec/07-navigation.md` default-off remains
       normative until a SPEC change is reviewed; never merge the historical branch as-is.
+  - Evidence: `3aba43d7d`, `1d93b92bf` fail closed on unproved moderate prefetch, including route-access
+    precedence; authenticated B,S,S,B evidence in
+    `docs/performance/speculation-rules-repair-and-decision.md` rejected opt-in because desktop's
+    +1.51% CI crossed zero and mobile regressed 7.61% with CI excluding zero. Default-off remains.
 - [ ] Implement a switchable compressed proved-document cache spike with a module-private witness
       carrying build token and body digest, bounded `{token,digest,encoding}` entries, and single-flight
       compression across live Node and emitted Node/Vercel adapters.
