@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -48,9 +49,9 @@ describe('equal-shape developer corpus generator', () => {
     expect(kovo.workload.editStatePosture).toBe(EDIT_STATE_POSTURE);
     expect(kovo.sourceDigest).toMatch(/^sha256:[0-9a-f]{64}$/u);
     expect(next.sourceDigest).toMatch(/^sha256:[0-9a-f]{64}$/u);
-    expect(kovo.sourceFiles).toHaveLength(size + 8);
+    expect(kovo.sourceFiles).toHaveLength(size + 10);
     expect(next.sourceFiles).toHaveLength(size + 11);
-    expect(kovo.sourceFiles[0]).toEqual(
+    expect(kovo.sourceFiles).toContainEqual(
       expect.objectContaining({ bytes: expect.any(Number), file: 'package.json' }),
     );
     expect(kovo.sourceFiles.every((entry) => /^sha256:[0-9a-f]{64}$/u.test(entry.sha256))).toBe(
@@ -85,6 +86,26 @@ describe('equal-shape developer corpus generator', () => {
     expect(
       await readFile(path.join(path.dirname(manifests[1]), 'next-env.d.ts'), 'utf8'),
     ).toContain('import "./.next/types/routes.d.ts";');
+
+    const kovoRoot = path.dirname(manifests[0]);
+    const kovoEntry = await readFile(path.join(kovoRoot, 'index.html'), 'utf8');
+    const kovoConfig = await readFile(path.join(kovoRoot, 'kovo.config.ts'), 'utf8');
+    expect(kovoEntry).toContain('<!doctype html>');
+    expect(kovoEntry).toContain('<body></body>');
+    expect(kovoConfig).toContain("from '@kovojs/server/build'");
+    expect(kovoConfig).toContain("immutableClientModules: 'retained'");
+    expect(kovoConfig).toContain("priorTokenQueryReads: 'retained'");
+    expect(kovo.sourceFiles.map(({ file }) => file)).toEqual(
+      expect.arrayContaining(['index.html', 'kovo.config.ts']),
+    );
+    for (const relativePath of ['index.html', 'kovo.config.ts']) {
+      const source = await readFile(path.join(kovoRoot, relativePath));
+      expect(kovo.sourceFiles).toContainEqual({
+        bytes: source.byteLength,
+        file: relativePath,
+        sha256: `sha256:${createHash('sha256').update(source).digest('hex')}`,
+      });
+    }
 
     const [kovoShell, nextShell] = await Promise.all(
       manifests.map((manifestPath) =>

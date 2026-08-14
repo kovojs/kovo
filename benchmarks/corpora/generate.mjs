@@ -228,6 +228,29 @@ function kovoFiles(size) {
     )
     .join('\n\n');
   return {
+    'index.html': `<!doctype html>
+<html lang="en-US">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kovo equal-shape performance corpus</title>
+  </head>
+  <body></body>
+</html>
+`,
+    'kovo.config.ts': `import { defineConfig, node } from '@kovojs/server/build';
+
+// SPEC §14: one immutable benchmark build is served for the lifetime of each isolated run.
+export default defineConfig({
+  preset: node({
+    retention: {
+      hours: 24,
+      immutableClientModules: 'retained',
+      priorTokenQueryReads: 'retained',
+    },
+  }),
+});
+`,
     'package.json': `${JSON.stringify({ name: `kovo-benchmark-corpus-${size}`, private: true, type: 'module' }, null, 2)}\n`,
     'src/app.tsx': `/** @jsxImportSource @kovojs/server */
 import { app, benchmarkRefreshQuery } from './kovo.js';
