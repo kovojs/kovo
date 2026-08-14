@@ -640,6 +640,7 @@ describe('known-failure register', () => {
       'unknown command check',
       'ERR_MODULE_NOT_FOUND',
       'permission denied',
+      'kovo build requires a pnpm-lock.yaml ancestor for artifact provenance',
     ]) {
       expect(
         packedCliContractOutcome('empty-check', {
