@@ -167,7 +167,7 @@ describe('ratified production-build performance budgets', () => {
   it('refuses short, unlinked, or metric-tampered baseline evidence', () => {
     const { baseline, entries } = ratifiedBuildBaseline(24);
     expect(() => deriveBuildPerformanceBudget(baseline)).toThrow(
-      /baseline raw build reports are unavailable/u,
+      /baseline raw build report census must contain exactly five linked reports/u,
     );
 
     entries[0].rawText = `${entries[0].rawText} `;
@@ -180,6 +180,32 @@ describe('ratified production-build performance budgets', () => {
     expect(() =>
       deriveBuildPerformanceBudget(restored.baseline, { baselineEntries: restored.entries }),
     ).toThrow(/baseline metrics is not reproduced by its linked raw reports/u);
+  });
+
+  it('requires exactly five ratified runs and one exact raw-entry census', () => {
+    const sixRun = ratifiedBuildBaseline(24, { runs: 6 });
+    expect(sixRun.baseline.policy.minRuns).toBe(5);
+    expect(sixRun.baseline.metrics[metricKey(24, 'clean', 'durationMs')].kovo.runs).toBe(6);
+    expect(() =>
+      deriveBuildPerformanceBudget(sixRun.baseline, { baselineEntries: sixRun.entries }),
+    ).toThrow(/exactly five|evidence is unavailable/u);
+
+    const wrongMinimum = ratifiedBuildBaseline(24);
+    wrongMinimum.baseline.policy.minRuns = 6;
+    expect(buildBudgetBaselineFindings(wrongMinimum.baseline, wrongMinimum.entries)).toContain(
+      'baseline policy must require exactly five runs',
+    );
+
+    const duplicate = ratifiedBuildBaseline(24);
+    duplicate.entries[4] = structuredClone(duplicate.entries[0]);
+    expect(buildBudgetBaselineFindings(duplicate.baseline, duplicate.entries)).toContain(
+      'baseline raw build report census does not exactly match the ratified reports',
+    );
+    expect(() =>
+      deriveBuildPerformanceBudget(duplicate.baseline, {
+        baselineEntries: duplicate.entries,
+      }),
+    ).toThrow(/raw build report census does not exactly match the ratified reports/u);
   });
 
   it('refuses to publish a budget from scratch paths or a mixed-cell workload', () => {
@@ -453,6 +479,24 @@ describe('ratified production-build performance budgets', () => {
     );
   });
 
+  it.each([49, 51])('rejects a %s-sample warm-mode census', (sampleCount) => {
+    const baseline = ratifiedBuildBaseline(216);
+    const budget = deriveBuildPerformanceBudget(baseline.baseline, {
+      baselineEntries: baseline.entries,
+    });
+    const samples = budget.persistenceEvidence.modes.unchanged.residualUpper.samples;
+    if (sampleCount === 49) {
+      samples.pop();
+    } else {
+      samples.push(structuredClone(samples[0]));
+    }
+    resealBudget(budget);
+
+    expect(buildBudgetFindings(budget)).toContain(
+      'budget persistence unchanged must contain exactly 50 residual samples',
+    );
+  });
+
   it('runs the documented cross-corpus persistence assessment CLI', () => {
     const root = mkdtempSync(path.join(os.tmpdir(), 'kovo-build-persistence-cli-'));
     try {
@@ -481,18 +525,75 @@ describe('ratified production-build performance budgets', () => {
 
       expect(result).toMatchObject({ status: 0, stderr: '' });
       expect(result.stdout).toContain('kovo-build-persistence-assessment/v1 not-warranted');
-      expect(JSON.parse(readFileSync(out, 'utf8')).verdict).toMatchObject({
+      const assessment = JSON.parse(readFileSync(out, 'utf8'));
+      expect(assessment.verdict).toMatchObject({
         outcome: 'not-warranted',
         status: 'decided',
       });
+      expect(
+        buildPersistenceAssessmentFindings(assessment, {
+          n24Budget,
+          n216Budget,
+          profileEntries: [],
+        }),
+      ).toEqual([]);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects caller-authored profile custody in the standalone assessment CLI', () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'kovo-build-persistence-forged-profile-cli-'));
+    try {
+      const { n24Budget, n216Budget } = pairedBuildBudgets();
+      setWarmCell(n216Budget, 'unchanged', { residualRatio: 0.2, wallRatio: 6.2 });
+      const n24Path = path.join(root, 'n24.json');
+      const n216Path = path.join(root, 'n216.json');
+      const unchangedProfilePath = path.join(root, 'forged-unchanged-profile.json');
+      const editProfilePath = path.join(root, 'forged-edit-profile.json');
+      const out = path.join(root, 'assessment.json');
+      writeFileSync(n24Path, JSON.stringify(n24Budget));
+      writeFileSync(n216Path, JSON.stringify(n216Budget));
+      writeFileSync(
+        unchangedProfilePath,
+        JSON.stringify(buildProfileEntry(n216Budget, 'unchanged', ['typescript'])),
+      );
+      writeFileSync(editProfilePath, JSON.stringify(buildProfileEntry(n216Budget, 'edit', [])));
+      const script = fileURLToPath(new URL('./perf-build-budget.mjs', import.meta.url));
+
+      const result = spawnSync(
+        process.execPath,
+        [
+          script,
+          'assess-persistence',
+          '--n24-budget',
+          n24Path,
+          '--n216-budget',
+          n216Path,
+          '--profile',
+          unchangedProfilePath,
+          '--profile',
+          editProfilePath,
+          '--out',
+          out,
+        ],
+        { encoding: 'utf8' },
+      );
+
+      expect(result.status).toBe(2);
+      expect(result.stdout).toBe('');
+      expect(result.stderr).toContain(
+        'standalone --profile is unavailable: authenticated profile decisions must use perf-publication-gate.mjs',
+      );
+      expect(() => readFileSync(out, 'utf8')).toThrow();
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
   });
 });
 
-function ratifiedBuildBaseline(corpusSize, { durableLocations = true } = {}) {
-  const entries = Array.from({ length: 5 }, (_, run) => {
+function ratifiedBuildBaseline(corpusSize, { durableLocations = true, runs = 5 } = {}) {
+  const entries = Array.from({ length: runs }, (_, run) => {
     const report = comparisonReport({ corpusSize, run, sourceCommit: 'a'.repeat(40) });
     const rawText = JSON.stringify(report);
     return {

@@ -41,6 +41,8 @@ const SUPPORTED_CORPUS_SIZES = Object.freeze([24, 216]);
 const BUILD_MODES = Object.freeze(['clean', 'unchanged', 'edit']);
 const WARM_BUILD_MODES = Object.freeze(['unchanged', 'edit']);
 const BUILD_METRIC_SUFFIXES = Object.freeze(['durationMs', 'peakRssBytes', 'artifactBytes']);
+const BUILD_BASELINE_REPORTS = 5;
+const BUILD_SAMPLES_PER_WARM_MODE = 50;
 const SESSION_ELIGIBLE_PHASES = Object.freeze(['config-trust', 'typescript', 'stylesheet']);
 const BUILD_PROFILE_CAUSES = Object.freeze([
   ...KOVO_BUILD_SOURCE_PHASES,
@@ -593,6 +595,14 @@ function deriveBuildPersistenceEvidence({ baseline, baselineEntries, corpusSize 
   const orderedEntries = baseline.reports.map(({ contentDigest }) =>
     entriesByDigest.get(contentDigest),
   );
+  if (
+    orderedEntries.length !== BUILD_BASELINE_REPORTS ||
+    orderedEntries.some((entry) => !ownRecord(entry))
+  ) {
+    throw new TypeError(
+      'Build performance baseline is unproven:\nbaseline raw build report census must contain exactly five linked reports',
+    );
+  }
   const modes = {};
   for (const mode of WARM_BUILD_MODES) {
     const samples = [];
@@ -632,6 +642,11 @@ function deriveBuildPersistenceEvidence({ baseline, baselineEntries, corpusSize 
           });
         }
       }
+    }
+    if (samples.length !== BUILD_SAMPLES_PER_WARM_MODE) {
+      throw new TypeError(
+        `Build performance baseline is unproven:\nN=${String(corpusSize)} ${mode} persistence evidence must contain exactly 50 samples`,
+      );
     }
     const duration = baseline.metrics[buildMetricKey(corpusSize, mode, 'durationMs')];
     const rss = baseline.metrics[buildMetricKey(corpusSize, mode, 'peakRssBytes')];
@@ -859,8 +874,8 @@ export function buildBudgetBaselineFindings(baseline, baselineEntries) {
   }
   const findings = [];
   if (baseline.verdict?.status !== 'ratified') findings.push('baseline verdict is not ratified');
-  if (!Number.isSafeInteger(baseline.policy?.minRuns) || baseline.policy.minRuns < 5) {
-    findings.push('baseline did not require at least five runs');
+  if (baseline.policy?.minRuns !== BUILD_BASELINE_REPORTS) {
+    findings.push('baseline policy must require exactly five runs');
   }
   if (!Number.isSafeInteger(baseline.policy?.minSamples) || baseline.policy.minSamples < 5) {
     findings.push('baseline did not require at least five samples');
@@ -915,8 +930,11 @@ export function buildBudgetBaselineFindings(baseline, baselineEntries) {
 }
 
 function baselineBuildReportFindings(baseline, entries, corpusSize) {
-  if (!Array.isArray(entries) || entries.length !== baseline.reports?.length) {
-    return ['baseline raw build reports are unavailable'];
+  if (!Array.isArray(entries) || entries.length !== BUILD_BASELINE_REPORTS) {
+    return ['baseline raw build report census must contain exactly five linked reports'];
+  }
+  if (!Array.isArray(baseline.reports) || baseline.reports.length !== BUILD_BASELINE_REPORTS) {
+    return ['baseline ratified report census must contain exactly five linked reports'];
   }
   const findings = [];
   const linkedByDigest = new Map(baseline.reports.map((report) => [report.contentDigest, report]));
@@ -966,6 +984,12 @@ function baselineBuildReportFindings(baseline, entries, corpusSize) {
     ) {
       findings.push(`${label} does not match the ratified baseline subject`);
     }
+  }
+  if (
+    seen.size !== BUILD_BASELINE_REPORTS ||
+    baseline.reports.some(({ contentDigest }) => !seen.has(contentDigest))
+  ) {
+    findings.push('baseline raw build report census does not exactly match the ratified reports');
   }
   if (findings.length === 0) {
     const entriesByDigest = new Map(entries.map((entry) => [entry.contentDigest, entry]));
@@ -1046,7 +1070,7 @@ export function buildBudgetFindings(budget) {
           !Number.isFinite(metric.baseline?.pairedMedian) ||
           !finiteNonNegative(metric.baseline?.p95) ||
           !Number.isSafeInteger(metric.baseline?.runs) ||
-          metric.baseline.runs < 5 ||
+          metric.baseline.runs !== BUILD_BASELINE_REPORTS ||
           metric.medianMaximum !==
             regressionCeiling(metric.baseline.median, budget.policy.maxRegressionPct) ||
           metric.p95Maximum !==
@@ -1074,6 +1098,13 @@ function buildPersistenceEvidenceFindings(evidence, budget) {
     canonicalJson(budget?.baseline?.reports?.map(({ contentDigest }) => contentDigest))
   ) {
     findings.push('budget persistence evidence report census differs from the ratified baseline');
+  }
+  if (
+    !Array.isArray(evidence.reports) ||
+    evidence.reports.length !== BUILD_BASELINE_REPORTS ||
+    new Set(evidence.reports).size !== BUILD_BASELINE_REPORTS
+  ) {
+    findings.push('budget persistence evidence must reference exactly five distinct reports');
   }
   if (
     evidence.policy?.appSourceTrustEligible !== false ||
@@ -1117,8 +1148,8 @@ function buildPersistenceEvidenceFindings(evidence, budget) {
       findings.push(`budget persistence ${mode} milestone or summary is not derived`);
     }
     const samples = value?.residualUpper?.samples;
-    if (!Array.isArray(samples) || samples.length !== (evidence.reports?.length ?? 0) * 10) {
-      findings.push(`budget persistence ${mode} residual sample census is incomplete`);
+    if (!Array.isArray(samples) || samples.length !== BUILD_SAMPLES_PER_WARM_MODE) {
+      findings.push(`budget persistence ${mode} must contain exactly 50 residual samples`);
       continue;
     }
     const identities = new Set();
@@ -1152,7 +1183,7 @@ function buildPersistenceEvidenceFindings(evidence, budget) {
       }
     }
     if (
-      occurrenceCensus.size !== (evidence.reports?.length ?? 0) * 2 ||
+      occurrenceCensus.size !== BUILD_BASELINE_REPORTS * 2 ||
       [...occurrenceCensus.values()].some((count) => count !== 5)
     ) {
       findings.push(`budget persistence ${mode} occurrence census is incomplete`);
@@ -1373,7 +1404,7 @@ function ratifiedMetricEvidence(value) {
     finiteNonNegative(value?.median) &&
     finiteNonNegative(value?.p95) &&
     Number.isSafeInteger(value?.runs) &&
-    value.runs >= 5 &&
+    value.runs === BUILD_BASELINE_REPORTS &&
     finiteNonNegative(value?.sampleP95?.mad) &&
     finiteNonNegative(value?.sampleP95?.median) &&
     finiteNonNegative(value?.sampleP95?.p95) &&
@@ -1382,7 +1413,7 @@ function ratifiedMetricEvidence(value) {
 }
 
 function validLinkedReports(reports) {
-  if (!Array.isArray(reports) || reports.length < 5) return false;
+  if (!Array.isArray(reports) || reports.length !== BUILD_BASELINE_REPORTS) return false;
   const digests = new Set();
   const executions = new Set();
   const locations = new Set();
@@ -1541,17 +1572,28 @@ async function main(args) {
   }
   if (command === 'assess-persistence') {
     assertKnownOptions(options, ['--n24-budget', '--n216-budget', '--out', '--profile']);
+    if (options['--profile'] !== undefined) {
+      throw new TypeError(
+        'standalone --profile is unavailable: authenticated profile decisions must use perf-publication-gate.mjs until shared artifact authentication lands',
+      );
+    }
     const [n24Budget, n216Budget] = await Promise.all(
       ['--n24-budget', '--n216-budget'].map(async (key) =>
         JSON.parse(await readFile(path.resolve(requiredOption(options, key)))),
       ),
     );
-    const profileEntries = await Promise.all(
-      (options['--profile'] ?? []).map(async (profilePath) =>
-        JSON.parse(await readFile(path.resolve(profilePath))),
-      ),
-    );
+    const profileEntries = [];
     const assessment = assessBuildForegroundSession({ n24Budget, n216Budget, profileEntries });
+    const assessmentFindings = buildPersistenceAssessmentFindings(assessment, {
+      n24Budget,
+      n216Budget,
+      profileEntries,
+    });
+    if (assessmentFindings.length > 0) {
+      throw new TypeError(
+        `Build persistence assessment failed exact-input validation:\n${assessmentFindings.join('\n')}`,
+      );
+    }
     await writeFile(
       path.resolve(requiredOption(options, '--out')),
       `${JSON.stringify(assessment, null, 2)}\n`,

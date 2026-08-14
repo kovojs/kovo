@@ -1,9 +1,10 @@
 # Production-build performance budgets
 
 Kovo's production-build budgets are derived from raw reports rather than typed in by hand. A
-budget is eligible only after `scripts/perf-baseline-ratify.mjs` has accepted five independent
+budget is eligible only after `scripts/perf-baseline-ratify.mjs` has accepted exactly five independent
 GitHub Actions comparison reports for one exact host, dependency-lock, workload, and source
-subject. Keep the five raw reports as linked CI artifacts.
+subject. A six-run (or larger) ratified cohort is not interchangeable with this declared build
+predicate. Keep the exact five raw reports as linked CI artifacts.
 
 Each report must contain ten serialized samples per framework for both N=24 and N=216 as separate
 workload subjects, covering `clean`, `unchanged`, and one-line `edit` builds in Kovo, Next, Next,
@@ -13,7 +14,7 @@ integrity, and the unmodified nested Kovo phase census. Kovo's source-check phas
 nonnegative measured wall time minus the authenticated sequential worker envelope. This preserves
 the current-source/deploy-proof boundary required by SPEC §5.2 rule 9.
 
-After ratification, derive a budget while supplying the same five raw files. The command re-hashes
+After ratification, derive a budget while supplying the same exact five raw files. The command re-hashes
 each local download and recovers its retained canonical artifact URL from the ratified content
 digest, so the download directory does not need to reproduce any CI-side path:
 
@@ -28,7 +29,8 @@ vp exec node scripts/perf-build-budget.mjs derive \
   --out reports/perf-build-budget-n24.json
 ```
 
-The derivation re-hashes, parses, validates, and re-ratifies all five reports. It then derives the
+The derivation re-hashes, parses, validates, and re-ratifies all five reports. Duplicate, missing,
+extra, or substituted baseline entries fail closed. It then derives the
 median and within-run p95 ceilings for wall time, RSS, and artifact bytes in every build mode. The
 default regression envelope is 5%. The plan-declared first milestone remains explicit and
 separate: Kovo wall median at most 6× Next and peak-RSS median at most 2× Next.
@@ -38,7 +40,8 @@ ceiling, so the reviewed summary does not depend on copied raw-report numbers.
 The budget also retains the exact 50 Kovo samples for each warm mode (`unchanged` and `edit`) that
 feed the foreground-session predicate. For every sample it records the authenticated wall time,
 the sum of `config-trust`, `typescript`, and `stylesheet`, the measured CLI/startup tail, and the
-resulting upper/wall ratio. `app-source-trust` is excluded because no current spike proves an exact
+resulting upper/wall ratio. A mode must contain exactly 50 samples: five reports, two Kovo
+occurrences per report, and five measured samples per occurrence. `app-source-trust` is excluded because no current spike proves an exact
 closure-bound reusable fact; disk state is never eligible. The budget validator re-derives every
 sample identity, sum, ratio, median, milestone, and five-report census.
 
@@ -67,9 +70,10 @@ vp exec node scripts/perf-build-budget.mjs assess-persistence \
 
 The command exits 2 with `profile-required` when an N=216 warm cell misses the milestone and its
 authenticated upper/wall median is at least 10%. It does not infer a CPU ranking from phase-clock
-arithmetic. Supply exactly two custody-authenticated `kovo-build-session-cpu-profile/v1` entries
-with repeated `--profile` only after the matching unchanged/edit profiles have been retained. A
-profile must match the N=216 budget's exact source, locks, host, and workload, retain the raw profile
-digest, and classify five ranked causes with
-`kovo-build-session-eligibility/phase-v1`. Missing, stale, partial, misclassified, or malformed
-profiles remain unproven.
+arithmetic. The standalone command is deliberately profile-free: it rejects `--profile` because a
+local JSON file cannot authenticate its own artifact custody. Profile-backed decisions must run
+through `scripts/perf-publication-gate.mjs`, which authenticates the unchanged/edit artifact pair
+before passing those exact inputs to the same assessor. A profile must match the N=216 budget's
+exact source, locks, host, and workload, retain the raw profile digest, and classify five ranked
+causes with `kovo-build-session-eligibility/phase-v1`. Missing, stale, partial, misclassified, or
+malformed profiles remain unproven.

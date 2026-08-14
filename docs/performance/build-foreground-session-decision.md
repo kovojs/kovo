@@ -30,7 +30,7 @@ retaining it would fit the production-build RSS target.
 ## Final-baseline predicate
 
 Apply this predicate only to reports admitted by `docs/performance/baseline-publication.md` and
-`docs/performance/build-budget-policy.md`: five distinct Actions run IDs for one exact source,
+`docs/performance/build-budget-policy.md`: exactly five distinct Actions run IDs for one exact source,
 lock/workload identity, normalized quiet host, and corpus; ten serialized Kovo/Next samples for
 each mode at N=24 and N=216; zero misses; complete output, source, worker, and source-phase evidence.
 
@@ -74,6 +74,11 @@ ratified host/workload, raw profile digest, exact unchanged/edit census, and the
 all agree. Even then, `app-source-trust`, worker/deployment phases, launch/transport, and
 unattributed stacks remain one-shot or ineligible. This is the source/deploy honesty boundary from
 SPEC §5.2 rule 9, expressed as data rather than reviewer convention.
+
+The standalone `assess-persistence` command accepts the exact N=24/N=216 budgets and validates its
+derived assessment against those inputs before writing it, but it does not accept `--profile`.
+Caller-authored JSON cannot prove custody. Until profile authentication is shared, only the
+publication gate may pass an authenticated unchanged/edit profile pair into the assessor.
 
 A mixed result is not silently converted into a third shortcut. For example, an N=24 miss plus
 passing N=216 milestones and an N=216 upper bound above 10% satisfies neither declared
