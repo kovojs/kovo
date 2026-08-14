@@ -45,30 +45,57 @@ current ranking and hypothesis retirements.
 
 ## Current hosted evidence
 
-Run [`31766167951`](https://github.com/kovojs/kovo/actions/runs/31766167951) checked out clean commit
-`dae339e930dde6bc0526894b69ec7312ca20f576`. Its N=216
-[artifact `9206701075`](https://github.com/kovojs/kovo/actions/runs/31766167951/artifacts/9206701075)
-expires on 2026-09-13 and authenticates as follows:
+Run [`31799441158`](https://github.com/kovojs/kovo/actions/runs/31799441158) checked out exact clean
+commit `89b39c999de6a7c60f3091831916ddb2c4c5037c`. Both jobs completed on the same hosted-runner
+cohort with stable lock and posture digests, corpus verification before and after, 15/15 windows
+(three per edit class), all 30 declared CPU/heap files, 46 successful browser responses, zero
+request or unexpected browser errors, zero edit misses, and exact non-ephemeral port evidence.
 
-- downloaded ZIP SHA-256 (also the Actions API digest):
-  `0d4f662cc5285d858b2c7520cf5ce67883d5c831ddfb4eb15895573b89f23100`
-- `report.json` SHA-256:
-  `a89d28b195b9dd2bfea6a477402100584d8e736733bd44328a4a779ebff59799`
-- `audit.json` SHA-256:
-  `8e971dd09395710414a50a7b9fd91212a44e3451fbaf1d61946c26e853c179b0`
+| Corpus | Job / artifact                                                                                               | ZIP SHA-256                                                        | `report.json` / `audit.json` SHA-256                                                                                                    |
+| ------ | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| N=24   | `94763687906` / [`9218931767`](https://github.com/kovojs/kovo/actions/runs/31799441158/artifacts/9218931767) | `7ba2f29517d68489dd8e3959e7785f0467f55f26d4ca0eb79d71894b47126e3e` | `e07e6535025d51b4dd477dd175c76d4b888191ac2941cb3fd7efc027b3fabd0d` / `9176bcf084df6a0f3304aa97397020a67da1093cd4fd5e6fb358e2a0d90a278f` |
+| N=216  | `94763687934` / [`9219104452`](https://github.com/kovojs/kovo/actions/runs/31799441158/artifacts/9219104452) | `4ec0d64e79099f3afb6a1144949af609b2b3e929d8a483f7b942f56e15a1db24` | `2667a6efe8bae8626c8d2fc25f0ddf3aea0d7e58c01fec0f5358415c5b38115f` / `6d77776cdb4fcd5eefaa71eee59c6179cfa46b8470a4629b2cd055ce5d3a3ccd` |
 
-The artifact retained all 15 requested CPU/heap pairs: eight passed the former validator and seven
-were quarantined with their original bytes. All 30 raw files match their declared byte counts and
-SHA-256 digests. Every CPU profile has equal sample/delta counts, valid graph and sample identities,
-safe-integer values, and reconstructed timestamps within its profile range. The seven quarantined
-profiles contain 13 negative deltas from -1 through -57 microseconds and no second structural defect.
+The N=24 and N=216 authenticated profile-set digests are respectively
+`4cc4185287ed571de6b05a0a3b12bf2848b14b48b3c31eb671c2357f57b3c052` and
+`6f51369cd21add66e25ed8388d78fdb1d897c978ee09a28f6e62096f6f2d5768`. A separate raw replay
+re-read both corpora, reproduced every census/category/integrity result, and bound the combined
+91,588-byte ranking as
+`sha256:50a29441af7bcd9f151029ee0b4f45f039ceb28e716f9d4347ae3e41a9163c2f`.
 
-Replaying those exact 1.4 GiB of raw evidence through stack-v3 accepted 15/15 windows and then
-reproduced the summary by re-reading 30/30 authenticated files. The resulting audit bound the set as
-`sha256:3d532cfe624b7c08162c502ac61e212baecbfa20d1861eabbb1dc4caa85e0243` and the summary as
-`sha256:c3e1513e2e9860674dfeace2d80fb50e8c20e4495549f1104f1e1d7d3f8f012c`, with
-`negativeCpuTimeDeltas: 13`. The original hosted report remains unproven; this replay authenticates
-the repair but does not substitute for a clean hosted N=24/N=216 rerun.
+## Current ranking and decision
+
+The percentages below are stack-attributed shares of each complete corpus profile. Self time and
+allocation are census totals rather than implementation hypotheses; the remaining rows are the
+reviewed categories ranked by the larger CPU/allocation share.
+
+| Category                       | N=24 CPU / allocation | N=216 CPU / allocation | Ruling                                  |
+| ------------------------------ | --------------------: | ---------------------: | --------------------------------------- |
+| Asynchronous proof convergence |       46.09% / 49.00% |        61.04% / 70.11% | Current top-five target                 |
+| Module evaluation              |         2.98% / 5.08% |          2.00% / 2.67% | Retain in ranking, not the first target |
+| Vite transform                 |       0.032% / 0.056% |        0.027% / 0.044% | Retire as an implementation hypothesis  |
+| SSR generation                 |       0.008% / 0.003% |        0.006% / 0.001% | Outside top five; retire                |
+
+Per-class replay makes the actionable boundary sharper. For ordinary leaf, entry, and data edits,
+whole-project analysis owns about 50% of N=24 CPU and 62--63% of N=216 CPU; the category reaches
+roughly 52%/55--56% CPU/allocation at N=24 and 66%/75.5% at N=216. The settle timer starts before
+HMR completes, so this nominally asynchronous work begins while the edit-to-paint window is still
+active. The next candidate must start convergence only after the HMR outcome has been published.
+
+Recovery is a distinct compiler hotspot. `recordViteCompileResult` through
+`resolveComponentQueryRuntimeNames` owns 75.03% of N=24 recovery CPU and 67.50% at N=216;
+`host.getSourceFile` alone owns 52.66% and 47.74%. The resolver constructs a fresh TypeScript
+program for the same unchanged query binding on each render-only edit. The next candidate may reuse
+that result only from a plugin-scoped exact binding preimage and must invalidate on dependency,
+configuration, or other-file change; ambiguity still executes the full resolver.
+
+Syntax-error windows are already a separate fast parser/diagnostic path with no module-evaluation or
+SSR attribution. They remain a correctness and p95 guardrail, not a target inferred from absent
+profile evidence. All durations in these profiled reports remain diagnostic-only.
+
+The earlier N=216 run `31766167951` remains useful only as validator-repair history: its retained raw
+profiles exposed 13 signed deltas from -1 through -57 microseconds, and stack-v3 replay proved the
+repair before this clean two-corpus rerun. It no longer owns the current ranking.
 
 ## Run
 

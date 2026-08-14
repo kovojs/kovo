@@ -136,17 +136,16 @@ benchmarks/harness/{report,run,scenarios}.test.mjs --reporter=dot` passed 41/41.
     rejected. N=216 artifact `9218826640` became correctly `unproven` after an atomic-save watcher
     miss; it cannot reverse the complete N=24 rejection. Exact metrics and digests are in
     `docs/performance/dev-generation-spike.md`.
-- [ ] Profile exact edit-to-paint windows after the matched baseline and rank self time, allocation,
+- [x] Profile exact edit-to-paint windows after the matched baseline and rank self time, allocation,
       module evaluation, Vite transform, SSR generation, and asynchronous proof convergence. Retire any
       hypothesis not present in the current top five.
-  - Evidence: `7f306a501`; `pnpm exec vitest --run scripts/perf-dev-edit-profile.test.mjs
-benchmarks/corpora/dev-loop.test.mjs --reporter=dot` passed 39/39. Current-head N=24/N=216
-    diagnostic artifacts remain pending and own the ranking.
-  - Repair evidence: [run `31766167951`, N=216 artifact
-    `9206701075`](https://github.com/kovojs/kovo/actions/runs/31766167951/artifacts/9206701075)
-    retained all 15 raw pairs. Seven otherwise-valid CPU profiles contained 13 signed deltas from
-    -1 to -57 microseconds; an exact stack-v3 replay accepted 15/15 and re-audited all 30 files as
-    `sha256:3d532cfe624b7c08162c502ac61e212baecbfa20d1861eabbb1dc4caa85e0243`.
+  - Evidence: [run `31799441158`, artifacts `9218931767` and
+    `9219104452`](https://github.com/kovojs/kovo/actions/runs/31799441158) authenticated clean
+    `89b39c999`, 15 windows and all 30 raw CPU/heap files per corpus with zero misses. Exact stack-v3
+    replay (`sha256:50a29441af7bcd9f151029ee0b4f45f039ceb28e716f9d4347ae3e41a9163c2f`)
+    ranked async proof convergence first for ordinary edits (52% N=24 and 66% N=216 CPU) and query
+    identity resolution first for recovery (75%/68%); Vite transform and SSR generation stayed
+    below 1%. Custody and the complete ranking are in `docs/performance/dev-edit-profile.md`.
 - [x] Spike authenticated in-session closure reuse for `kovo check --watch` by exposing serializable
       producer seams for trust/static/style facts in `build-export.ts`.
   - SPEC §11.4 constraints: always freshly evaluate app modules and rebuild runtime/app objects;
