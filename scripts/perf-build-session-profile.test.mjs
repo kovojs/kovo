@@ -10,6 +10,7 @@ import {
   BUILD_PROFILE_MODES,
   BUILD_PROFILE_PROCESS_ROLE_CLASSIFIER,
   BUILD_PROFILE_SAMPLING_INTERVAL_US,
+  BUILD_PROFILE_WARMUPS,
   deriveBuildProcessCpuEvidence,
   mergeBuildProcessProfiles,
   parseBuildProfileArgs,
@@ -217,7 +218,6 @@ describe('N=216 build profile producer', () => {
     expect(fixture.calls).toEqual({
       profile: [...BUILD_PROFILE_MODES],
       source: 4,
-      warm: [...BUILD_PROFILE_MODES],
     });
     const members = (await readdir(fixture.outDir)).sort((left, right) =>
       left.localeCompare(right),
@@ -269,6 +269,7 @@ describe('N=216 build profile producer', () => {
     ['source', 'source changed across the two-mode capture'],
     ['provider', 'execution provider is local'],
     ['census', 'process census differs from its raw profile custody'],
+    ['warmth', 'adapter integrity census is incomplete'],
   ])('refuses %s drift without publishing a partial artifact', async (drift, message) => {
     const fixture = await producerFixture({ drift });
 
@@ -379,7 +380,7 @@ async function producerFixture({ drift = null } = {}) {
     identity: workloadFacts,
     schema: 'kovo-performance-workload-identity/v1',
   };
-  const calls = { profile: [], source: 0, warm: [] };
+  const calls = { profile: [], source: 0 };
   const dependencies = {
     collectSource() {
       calls.source += 1;
@@ -392,15 +393,16 @@ async function producerFixture({ drift = null } = {}) {
     hostFingerprint: () => host,
     runProfiledBuild({ mode }) {
       calls.profile.push(mode);
-      const capture = profiledCapture({ manifest, mode, source });
+      const capture = profiledCapture({
+        manifest,
+        mode,
+        source,
+        warmups: drift === 'warmth' && mode === 'unchanged' ? 0 : BUILD_PROFILE_WARMUPS,
+      });
       if (drift === 'census' && mode === 'unchanged') {
         capture.processCensus.processes.find(({ role }) => role === 'final').pid += 50_000;
       }
       return capture;
-    },
-    runWarmBuild({ mode }) {
-      calls.warm.push(mode);
-      return buildReport({ iterations: 3, manifest, mode: 'unchanged', source });
     },
     workloadIdentity: () => workloadIdentity,
   };
@@ -416,7 +418,7 @@ async function producerFixture({ drift = null } = {}) {
   };
 }
 
-function profiledCapture({ manifest, mode, source }) {
+function profiledCapture({ manifest, mode, source, warmups }) {
   const roles = [
     'bootstrap',
     'orchestrator',
@@ -472,11 +474,11 @@ function profiledCapture({ manifest, mode, source }) {
     }),
     processCpuBytes,
     profileInputs,
-    report: buildReport({ iterations: 1, manifest, mode, source }),
+    report: buildReport({ iterations: 1, manifest, mode, source, warmups }),
   };
 }
 
-function buildReport({ iterations, manifest, mode, source }) {
+function buildReport({ iterations, manifest, mode, source, warmups }) {
   return {
     corpus: { modules: 216 },
     framework: 'kovo',
@@ -488,7 +490,7 @@ function buildReport({ iterations, manifest, mode, source }) {
       iterations,
       misses: 0,
       source: { stable: true },
-      warmups: 0,
+      warmups,
     },
     mode,
     samples: Array.from({ length: iterations }, () => ({

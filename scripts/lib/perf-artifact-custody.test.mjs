@@ -402,13 +402,29 @@ describe('performance artifact custody', () => {
       'kovo-perf-server-matrix',
       '${{ runner.temp }}/kovo-perf/server',
     ],
+    [
+      'build-profile',
+      'N=216 build CPU profiles',
+      'kovo-perf-build-profile-n216',
+      'kovo-perf-build-profile-n216',
+      '${{ runner.temp }}/kovo-perf/build-profile-n216',
+      'build-profile',
+    ],
   ])(
     'authenticates the real %s job upload contract',
-    async (jobKey, jobName, expectedArtifactName, workflowArtifactName, workflowArtifactPath) => {
+    async (
+      jobKey,
+      jobName,
+      expectedArtifactName,
+      workflowArtifactName,
+      workflowArtifactPath,
+      triggerPolicy = 'baseline',
+    ) => {
       const fixture = writeArtifactFixture({
         expectedArtifactName,
         jobKey,
         jobName,
+        triggerPolicy,
         workflowArtifactName,
         workflowArtifactPath,
       });

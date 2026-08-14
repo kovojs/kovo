@@ -140,21 +140,6 @@ export async function produceBuildSessionProfiles(options = {}, dependencies = {
     for (const mode of BUILD_PROFILE_MODES) {
       const modeRoot = path.join(scratchRoot, mode);
       await mkdir(modeRoot, { recursive: true });
-      const warmReport = await (dependencies.runWarmBuild ?? defaultWarmBuild)({
-        corpusManifest,
-        mode,
-        scratchRoot: modeRoot,
-      });
-      const warmFindings = buildBenchmarkFindings(warmReport, {
-        expectedCommand: manifest.build.command,
-        expectedIterations: BUILD_PROFILE_WARMUPS,
-        expectedMode: 'unchanged',
-        expectedSource: source,
-      });
-      if (warmFindings.length > 0) {
-        throw new TypeError(`${mode} build profile warmups: ${warmFindings.join('; ')}`);
-      }
-
       const capture = await (dependencies.runProfiledBuild ?? defaultProfiledBuild)({
         corpusManifest,
         mode,
@@ -165,6 +150,7 @@ export async function produceBuildSessionProfiles(options = {}, dependencies = {
         expectedIterations: 1,
         expectedMode: mode,
         expectedSource: source,
+        expectedWarmups: BUILD_PROFILE_WARMUPS,
       });
       if (profileFindings.length > 0) {
         throw new TypeError(`${mode} profiled build: ${profileFindings.join('; ')}`);
@@ -542,17 +528,6 @@ async function defaultBuildWorkloadIdentity() {
   );
 }
 
-function defaultWarmBuild({ corpusManifest }) {
-  return runBuildBenchmark({
-    corpus: corpusManifest,
-    framework: 'kovo',
-    iterations: BUILD_PROFILE_WARMUPS,
-    mode: 'unchanged',
-    timeoutMs: BUILD_PROFILE_TIMEOUT_MS,
-    warmups: 0,
-  });
-}
-
 async function defaultProfiledBuild({ corpusManifest, mode, scratchRoot }) {
   const profilerDir = path.join(scratchRoot, 'process-profiles');
   const tracePath = path.join(scratchRoot, 'process.trace');
@@ -581,12 +556,18 @@ async function defaultProfiledBuild({ corpusManifest, mode, scratchRoot }) {
       iterations: 1,
       mode,
       timeoutMs: BUILD_PROFILE_TIMEOUT_MS,
-      warmups: 0,
+      // Keep the warmups and profiled sample inside one adapter invocation. The adapter clears
+      // declared build outputs once at invocation start, so a separate warmup invocation would be
+      // erased before profiling and silently turn both warm modes into clean builds.
+      warmups: BUILD_PROFILE_WARMUPS,
     },
     {
       measureProcessTreeCommand(command, commandOptions) {
         measuredCommands += 1;
-        if (measuredCommands !== 1) {
+        if (measuredCommands <= BUILD_PROFILE_WARMUPS) {
+          return measureProcessTreeCommand(command, commandOptions);
+        }
+        if (measuredCommands !== BUILD_PROFILE_WARMUPS + 1) {
           throw new TypeError('profiled build attempted more than one measured command');
         }
         return measureProcessTreeCommand(
@@ -623,7 +604,9 @@ async function defaultProfiledBuild({ corpusManifest, mode, scratchRoot }) {
       },
     },
   );
-  if (measuredCommands !== 1) throw new TypeError('profiled build command census is incomplete');
+  if (measuredCommands !== BUILD_PROFILE_WARMUPS + 1) {
+    throw new TypeError('profiled build command census is incomplete');
+  }
   const processCpuBytes = await readFile(processCpuPath);
   const entries = await readdir(profilerDir, { withFileTypes: true });
   if (entries.some((entry) => !entry.isFile() || !entry.name.endsWith('.cpuprofile'))) {
@@ -1454,7 +1437,7 @@ async function readBuildManifest(manifestPath) {
 
 function buildBenchmarkFindings(
   report,
-  { expectedCommand, expectedIterations, expectedMode, expectedSource },
+  { expectedCommand, expectedIterations, expectedMode, expectedSource, expectedWarmups },
 ) {
   const findings = [];
   if (report?.schema !== BUILD_BENCHMARK_SCHEMA) findings.push('adapter schema differs');
@@ -1463,7 +1446,7 @@ function buildBenchmarkFindings(
   if (
     report?.integrity?.complete !== true ||
     report.integrity.iterations !== expectedIterations ||
-    report.integrity.warmups !== 0 ||
+    report.integrity.warmups !== expectedWarmups ||
     report.integrity.misses !== 0 ||
     canonicalJson(report.integrity.errors) !== canonicalJson([])
   ) {
