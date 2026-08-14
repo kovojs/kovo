@@ -113,6 +113,10 @@ the quiet-host full run and uploads the report plus all four raw profiles.
 
 [Run `31754297930`](https://github.com/kovojs/kovo/actions/runs/31754297930) completed on
 2026-08-14 with [artifact `9203129430`](https://github.com/kovojs/kovo/actions/runs/31754297930/artifacts/9203129430).
+The live GitHub artifact API records the downloaded ZIP as 899,959 bytes with SHA-256
+`f65c453f5a75fcd5717ae8f4465ae96a0e41017960fd6f234ce2f80712661ccd`; the ZIP's exact
+`report.json` member has SHA-256
+`752ec351e6dd8f124e2b48eb2f99d42460f18acb13a7146264c7ad4617e410ad`.
 The runner independently authenticated clean commits `3010e8df33869413727003c659bb555ac824d104`
 and `d87b4a1320087c512e25f02a57e88920ae9b1777`, the one-path patch, stable patch ID
 `f06d58878c8997bca537fd61bb08d7896660d60c`, frozen locks, and the identical 276,420-byte module
