@@ -134,49 +134,46 @@ authorizes integration.
 
 ## Result
 
-Packed-product v3 status: **unproven**. No full authenticated N=24 and N=216 packed-product decision
-has run for this exact candidate. The production branch's one-iteration correctness smokes are not
-statistical evidence and cannot satisfy this contract.
+Packed-product v3 status: **rejected; do not integrate candidate `336925d40`**.
 
-The first full hosted v3 attempt is also **unproven**, not a candidate result. Hosted run
-[`31816648411`](https://github.com/kovojs/kovo/actions/runs/31816648411), exact clean baseline
-`c8f81a285dfe7dc5347d7c34535ce2491b15a673`, stopped in its first N=24 baseline cell. Artifact
-`9225949775`, `kovo-perf-dev-generation-n24`, is 34,509 compressed bytes; its ZIP SHA-256 is
-`f9943de2a53ad12a471e637dc26e4751e152b74f6e5afdf7eda185bcbce52dbe`, its outer-report SHA-256 is
-`a03a62ead289b8a99693d700cba716c8e993a33cf3f1dccc0aa7d0756be57bc7`, and its retained raw-cell
-SHA-256 is `6c7150326996588158033015874c411746a3726816b0b36d9b31ec8581ec2672`. The authenticated raw
-report found a transient Vite overlay trying to read the already-renamed staging file
-`.component-000.tsx.kovo-perf-save-5601-12.tmp`: all 15 leaf, entry, and data edits survived, but
-syntax-error and recovery samples were both 0/15. There were zero browser request failures and zero
-unexpected browser errors. This is a fail-closed harness save/watcher race; it neither supersedes
-the v2 decision below nor becomes superseded itself until a complete packed v3 rerun exists.
+[Run `31821573222`](https://github.com/kovojs/kovo/actions/runs/31821573222) checked out exact clean
+source `1e1300962bcb2862d29a65d7c6bf5ab2bfd67b52` and authenticated the sealed candidate binding above
+in both independent hosted jobs. N=24
+[artifact `9228112748`](https://github.com/kovojs/kovo/actions/runs/31821573222/artifacts/9228112748)
+has ZIP SHA-256 `362dcb0f3f5d72b2214bfdeb0ef47fcb5f71c84ef0b2300211af52760eaada16`
+and unpacked report SHA-256
+`acc9a86e0709c8ed2a696b91d75a5f723d087e0e1b1529d9e54c4a368e3d977d`. N=216
+[artifact `9230349567`](https://github.com/kovojs/kovo/actions/runs/31821573222/artifacts/9230349567)
+has ZIP SHA-256 `606cf457bd10fe354dc5a85eef9754cd6bf67162085bb840be700d21ec312452`
+and unpacked report SHA-256
+`1ff42d2f31c26671f9259eaf5e9db15f201eb35cc492e97c1d4c948fbf8c3044`.
 
-The earlier source-checkout v2 N=24 run is nevertheless authenticated as a genuine rejection, not
-discarded. Hosted run
-[`31807028892`](https://github.com/kovojs/kovo/actions/runs/31807028892) measured exact clean source
-`a12c7358414685d1bb9229a1d676d246d17a1a6b` against one direct rebased candidate commit
-`10c1d597a95db4f049e157b490c992ccd06bb141`. The candidate patch identity, patch byte count, path
-census, and original object all match the binding above. GitHub artifact `9223275214`,
-`kovo-perf-dev-generation-n24`, is 81,878 compressed bytes with API digest
-`sha256:7db1183dbd4644bf266575634ace2cd9dc0df6ada4b96928b98dfe353d0d9fed`. The downloaded outer
-report SHA-256 is `b4eb83f8325d446ac0a60665c3590bc6e3baac6a4023bd987df12087e2c53432`;
-its four retained raw B,S,S,B reports hash to, in order,
-`692703d81757864c27fd4b3ae1c3aee59f2932f6b3ef89d33fbd6ba703e71e6f`,
-`ea7561c35c4eaf60045616da05b3ebd34a0bda5c7f27f0d6a816028ab57204ae`,
-`f49baff3873b6b52224e032abec7c07108eb213ce713093d8cdcc2765d9423c3`, and
-`2a00dd838b111297b5e447cad987afb434cdb85a5b536f80d7f784209e83cfd7`.
+| Browser-visible metric |      N=24 median, baseline → candidate |     N=216 median, baseline → candidate |
+| ---------------------- | -------------------------------------: | -------------------------------------: |
+| Leaf edit-to-paint     | 4,164.24 → 1,563.94 ms (62.44% faster) | 8,430.09 → 1,730.00 ms (79.48% faster) |
+| Entry edit-to-paint    | 4,147.11 → 1,515.13 ms (63.47% faster) | 8,366.31 → 1,614.24 ms (80.71% faster) |
+| Data edit-to-paint     | 4,152.85 → 1,530.71 ms (63.14% faster) | 8,380.80 → 1,647.49 ms (80.34% faster) |
+| Recovery               | 2,176.27 → 1,465.26 ms (32.67% faster) | 2,731.67 → 1,631.83 ms (40.26% faster) |
 
-The v2 report is complete, quiet-admitted, fully sampled, source-stable, and has zero correctness
-errors or misses. All four causal metrics passed their 10% and positive paired-CI rules:
+All eight causal comparisons clear the 10% median threshold with strictly positive paired
+bootstrap 95% confidence intervals. Recovery p95 is 1,637.13 ms at N=24 and 1,815.28 ms at N=216;
+syntax-error p95 is 120.20 and 147.29 ms. Those absolute targets, every syntax median/p95 guardrail,
+and every ready/edit RSS median/p95 guardrail pass.
 
-| metric   | baseline median | candidate median | improvement | paired 95% CI, baseline - candidate | candidate p95 |
-| -------- | --------------: | ---------------: | ----------: | ----------------------------------: | ------------: |
-| leaf     |    11,130.41 ms |      3,397.15 ms |      69.48% |             [7,629.99, 7,782.36] ms |   3,730.93 ms |
-| entry    |    11,194.65 ms |      3,415.42 ms |      69.49% |             [7,566.21, 7,866.44] ms |   3,830.38 ms |
-| data     |    11,263.92 ms |      2,897.18 ms |      74.28% |             [8,267.34, 8,417.75] ms |   3,349.61 ms |
-| recovery |     5,231.83 ms |      2,898.58 ms |      44.60% |             [2,217.10, 2,449.73] ms |   3,348.32 ms |
+The sole failed condition is N=216 fresh-ready p95: 155,835.58 → 164,261.47 ms is a 5.4069%
+regression against the preregistered 5% maximum. Its median regression is 2.0667% and passes; N=24
+fresh-ready p95 regresses only 1.7228% and passes. The N=24 report therefore says `accept`, while the
+complete N=216 report correctly says `reject`.
 
-Every syntax, ready-latency, ready-RSS, and edit-RSS guardrail passed, but candidate recovery p95 was
-3,348.32 ms, above the preregistered 2,000 ms ceiling. The correct v2 verdict is therefore
-**reject**. That report measured source-checkout commands and contains no lane-specific packed
-product proof, so it does not accept or reject the candidate at the production package boundary.
+Both reports contain the exact four-cell `B,S,S,B` schedule, 15 fresh-ready samples, 30 measured
+edits per class, and three warmups per lane. All host admissions were comparable; product-boundary
+verification covered all eight cells; and there were zero adapter errors, unproven cells, misses,
+browser failures, unexpected browser errors, or state-loss events. This is a measured guardrail
+rejection, not missing evidence, and an identical rerun cannot authorize integration.
+
+## Ready-neutral follow-up
+
+The next candidate may retain the causal edit-path work while avoiding eager construction of
+reuse facts during initial compilation and avoiding charging that work to fresh-ready latency. It
+is a new sealed candidate, not a retry of `336925d40`, and must independently pass the same full
+packed-product N=24 and N=216 contract before integration.

@@ -149,12 +149,22 @@ benchmarks/harness/{report,run,scenarios}.test.mjs --reporter=dot` passed 41/41.
     ranked async proof convergence first for ordinary edits (52% N=24 and 66% N=216 CPU) and query
     identity resolution first for recovery (75%/68%); Vite transform and SSR generation stayed
     below 1%. Custody and the complete ranking are in `docs/performance/dev-edit-profile.md`.
-- [ ] Decide the profile-driven dev critical-path candidate at the packed-product boundary for both
+- [x] Decide the profile-driven dev critical-path candidate at the packed-product boundary for both
       N=24 and N=216, and integrate it only if both reports satisfy the preregistered causal,
       correctness, absolute-latency, and RSS rules.
-  - Current evidence: exact source `1e1300962bcb2862d29a65d7c6bf5ab2bfd67b52` is running in
-    [workflow `31821573222`](https://github.com/kovojs/kovo/actions/runs/31821573222); no result may
-    be recorded until both `kovo-perf-dev-generation-n24` and `-n216` artifacts authenticate.
+  - Rejected; do not integrate `336925d40`. [Run
+    `31821573222`](https://github.com/kovojs/kovo/actions/runs/31821573222) artifacts
+    [`9228112748`](https://github.com/kovojs/kovo/actions/runs/31821573222/artifacts/9228112748)
+    and
+    [`9230349567`](https://github.com/kovojs/kovo/actions/runs/31821573222/artifacts/9230349567)
+    authenticated both packed corpora with zero correctness misses. All causal wins and other
+    guardrails passed, but N=216 fresh-ready p95 regressed 5.4069% (155,835.58 → 164,261.47 ms)
+    against the 5% limit; full hashes and metrics are in
+    `docs/performance/dev-critical-path-spike.md`.
+- [ ] Decide the newly sealed ready-neutral refinement that avoids eager initial-compile reuse-fact
+      construction and charging on fresh-ready. Run the same full packed-product N=24 and N=216
+      contract independently; do not rerun the identical rejected patch to fish for a different
+      result.
 - [x] Spike authenticated in-session closure reuse for `kovo check --watch` by exposing serializable
       producer seams for trust/static/style facts in `build-export.ts`.
   - SPEC §11.4 constraints: always freshly evaluate app modules and rebuild runtime/app objects;
