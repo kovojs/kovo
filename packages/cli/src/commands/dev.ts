@@ -89,6 +89,7 @@ const AUTHORITY_BEARING_AUTHORED_PLUGIN_HOOKS = [
 ] as const;
 const SUPPORTED_AUTHORED_CLIENT_PLUGIN_HOOKS = ['load', 'resolveId', 'transform'] as const;
 const IGNORED_NON_DEV_CONFIG_KEYS = ['build', 'fmt', 'lint', 'run', 'test'] as const;
+const KOVO_DEV_ATOMIC_SAVE_WATCH_IGNORE = '**/.kovo-perf-save-*.tmp';
 
 /** @internal Parsed options for the supported `kovo dev` runner. */
 export interface KovoDevOptions {
@@ -855,6 +856,13 @@ function trustedLiveDevConfig(
   plugins: PluginOption[],
 ): InlineConfig {
   const server: NonNullable<InlineConfig['server']> = {};
+  // The benchmark adapter and editor-style save path publish complete source revisions through a
+  // POSIX sibling-temp rename. Vite invokes legacy `handleHotUpdate` for a transient file's write
+  // event before Kovo can classify its final extension; if the rename wins that read, Vite mounts
+  // an unrelated ENOENT overlay over the intentional source diagnostic. Ignore only the exact
+  // framework-owned staging namespace. The renamed `.ts`/`.tsx` target remains watched and owns
+  // the real edit, diagnostic, recovery, revision, and state-preservation semantics (SPEC §9.5.1).
+  server.watch = { ignored: KOVO_DEV_ATOMIC_SAVE_WATCH_IGNORE };
   if (authoredServer.host !== undefined) server.host = authoredServer.host;
   if (authoredServer.port !== undefined) server.port = authoredServer.port;
   if (authoredServer.strictPort !== undefined) server.strictPort = authoredServer.strictPort;

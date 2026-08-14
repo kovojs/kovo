@@ -84,7 +84,7 @@ export const DEV_CRITICAL_PATH_CANDIDATE = Object.freeze({
 
 const ADAPTER_SCHEMA = 'kovo-dev-loop-report/v1';
 const CORPUS_SCHEMA = 'kovo-dev-corpus/v1';
-const EDIT_SAVE_POSTURE = 'posix-sibling-temp-write-rename/v1';
+const EDIT_SAVE_POSTURE = 'posix-sibling-.kovo-perf-save-*.tmp-write-rename+exact-watch-ignore/v2';
 const DEFAULT_BOOTSTRAP_ITERATIONS = 10_000;
 const DEFAULT_EDIT_SAMPLES = 30;
 const DEFAULT_HOST_SETTLE_MAX_MS = 30_000;

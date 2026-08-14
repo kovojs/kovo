@@ -116,14 +116,17 @@ bounded error summary. The outer result is `unproven` unless all four serialized
 present, measured, and correct.
 
 The generated workload also authenticates `editSavePosture` as
-`posix-sibling-temp-write-rename/v1`. Every measured edit and source restoration is written to a
-unique sibling `.tmp` file and renamed over the watched target only after all bytes exist. This
-removes the truncate/partial-write observation window without changing the write-to-paint timing
-boundary: measured write time includes both the temporary write and rename. Temporary files use a
-non-source suffix and are removed on success or failure; the post-run source census still rejects
-any survivor. The hosted decision lane is pinned to Ubuntu, and macOS provides the same
-same-filesystem rename guarantee; this declaration makes no Windows atomicity claim. Both Kovo and
-Next.js consume the identical generated save posture and adapter.
+`posix-sibling-.kovo-perf-save-*.tmp-write-rename+exact-watch-ignore/v2`. Every measured edit and
+source restoration is written to a unique, source-extension-free sibling
+`.kovo-perf-save-<pid>-<revision>.tmp` and renamed over the watched target only after all bytes
+exist. The supported Kovo runner ignores only that exact staging namespace; the renamed `.tsx`
+target remains watched and owns the real diagnostic and recovery. This removes both the
+truncate/partial-write window and the transient-file ENOENT overlay race without changing the
+write-to-paint timing boundary: measured write time includes both the temporary write and rename.
+Temporary files are removed on success or failure, and the post-run source census still rejects any
+survivor. The hosted decision lane is pinned to Ubuntu, and macOS provides the same same-filesystem
+rename guarantee; this declaration makes no Windows atomicity claim. Both Kovo and Next.js consume
+the identical generated save posture and adapter.
 
 Fresh-ready timing begins before the dev process starts. The adapter first polls the authenticated
 ready route from Node, within that same process-to-paint duration and deadline, and records the

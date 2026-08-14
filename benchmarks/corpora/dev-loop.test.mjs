@@ -89,6 +89,9 @@ describe('single-entrant developer-loop adapter', () => {
     });
 
     expect(path.dirname(temporaryPath)).toBe(root);
+    expect(path.basename(temporaryPath)).toMatch(/^\.kovo-perf-save-\d+-\d+\.tmp$/u);
+    expect(path.basename(temporaryPath)).not.toContain(path.basename(target));
+    expect(path.basename(temporaryPath)).not.toContain('.tsx');
     expect(path.extname(temporaryPath)).toBe('.tmp');
     expect(await readFile(target, 'utf8')).toBe(replacement);
     expect((await readdir(root)).filter((entry) => entry.endsWith('.tmp'))).toEqual([]);
@@ -304,6 +307,22 @@ describe('single-entrant developer-loop adapter', () => {
     const [manifestPath] = await generateCorpora({ outDir: root, sizes: [24] });
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
     manifest.workload.editSavePosture = 'direct-truncate-write/v1';
+    manifest.shapeDigest = createHash('sha256')
+      .update(JSON.stringify(manifest.workload))
+      .digest('hex');
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+    await expect(loadCorpusManifest(manifestPath)).rejects.toThrow(
+      'Corpus workload does not authenticate the atomic edit/save posture',
+    );
+  });
+
+  it('rejects a re-digested manifest that widens the exact staging watch ignore', async () => {
+    const root = await temporaryRoot();
+    const [manifestPath] = await generateCorpora({ outDir: root, sizes: [24] });
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+    manifest.workload.editSavePosture =
+      'posix-sibling-.kovo-perf-save-*.tmp-write-rename+all-tmp-watch-ignore/v2';
     manifest.shapeDigest = createHash('sha256')
       .update(JSON.stringify(manifest.workload))
       .digest('hex');

@@ -4,6 +4,8 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
+  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -56,7 +58,7 @@ const DEV_READY_HOST_DOOR_TEST_TIMEOUT_MS = DEV_READY_PROBE_PROCESS_TIMEOUT_MS *
 const DEV_READY_HMR_TEST_TIMEOUT_MS =
   DEV_READY_PROBE_PROCESS_TIMEOUT_MS +
   DEV_HMR_INITIAL_RESPONSE_INFRASTRUCTURE_TIMEOUT_MS +
-  DEV_HMR_TRANSITION_INFRASTRUCTURE_TIMEOUT_MS * 3 +
+  DEV_HMR_TRANSITION_INFRASTRUCTURE_TIMEOUT_MS * 4 +
   DEV_HMR_LAST_GOOD_REQUEST_TIMEOUT_MS +
   DEV_PROCESS_SHUTDOWN_TIMEOUT_MS;
 
@@ -351,7 +353,12 @@ export default app.assemble({
       expect(result, workerFailure(result)).toMatchObject({
         ok: true,
         response: { body: expect.stringContaining('<main>Bootstrap safe</main>'), status: 200 },
-        server: { host: '127.0.0.1', port, strictPort: true },
+        server: {
+          host: '127.0.0.1',
+          port,
+          strictPort: true,
+          watchIgnored: '**/.kovo-perf-save-*.tmp',
+        },
       });
     },
     DEV_READY_WORKER_TEST_TIMEOUT_MS,
@@ -984,7 +991,7 @@ throw new Error('candidate evaluation failed');
   );
 
   it(
-    'keeps the last-good graph alive through a KV235 component edit and recovers',
+    'keeps the last-good graph alive through atomic syntax/KV235 edits and recovers',
     async () => {
       const root = devFixture('kv235-runner-hmr');
       const appFile = join(root, 'src/app.tsx');
@@ -1025,6 +1032,21 @@ export default app.assemble({
         'utf8',
       );
       writeFileSync(componentFile, SOURCE_VARIANTS[0], 'utf8');
+      const syntaxErrorSource = SOURCE_VARIANTS[0].replace(
+        'data-revision="zero"',
+        'data-revision={',
+      );
+      expect(syntaxErrorSource).not.toBe(SOURCE_VARIANTS[0]);
+      let saveRevision = 0;
+      const atomicReplaceComponent = (source: string): void => {
+        saveRevision += 1;
+        const temporary = join(
+          componentDirectory,
+          `.kovo-perf-save-${String(process.pid)}-${String(saveRevision)}.tmp`,
+        );
+        writeFileSync(temporary, source, { encoding: 'utf8', flag: 'wx' });
+        renameSync(temporary, componentFile);
+      };
       const port = await reservePort();
       const child = spawnKovoDev(root, port, false, false, './src/app.tsx');
       const output = collectKovoDevOutput(child, port, 'src/app.tsx');
@@ -1042,7 +1064,20 @@ export default app.assemble({
           ),
         ).resolves.toContain('Kovo KV235 dev recovery fixture');
 
-        writeFileSync(componentFile, SOURCE_DIAGNOSTIC_VARIANT, 'utf8');
+        atomicReplaceComponent(syntaxErrorSource);
+        const syntaxDiagnosticBody = await fetchBodyContaining(
+          url,
+          'KV245',
+          child,
+          output,
+          DEV_HMR_TRANSITION_INFRASTRUCTURE_TIMEOUT_MS,
+          fetch,
+          500,
+        );
+        expect(syntaxDiagnosticBody).toContain('counter-island.tsx');
+        assertKovoDevChildRunning(child, output, 'syntax teaching diagnostic recovery');
+
+        atomicReplaceComponent(SOURCE_DIAGNOSTIC_VARIANT);
         const diagnosticBody = await fetchBodyContaining(
           url,
           'KV235',
@@ -1055,7 +1090,7 @@ export default app.assemble({
         expect(diagnosticBody).toContain('counter-island.tsx');
         assertKovoDevChildRunning(child, output, 'KV235 teaching diagnostic recovery');
 
-        writeFileSync(componentFile, SOURCE_VARIANTS[1], 'utf8');
+        atomicReplaceComponent(SOURCE_VARIANTS[1]);
         await expect(
           fetchBodyContaining(
             url,
@@ -1065,6 +1100,10 @@ export default app.assemble({
             DEV_HMR_TRANSITION_INFRASTRUCTURE_TIMEOUT_MS,
           ),
         ).resolves.toContain('Kovo KV235 dev recovery fixture');
+        expect(
+          readdirSync(componentDirectory).filter((entry) => entry.startsWith('.kovo-perf-save-')),
+        ).toEqual([]);
+        expect(output.combined()).not.toMatch(/ENOENT[^\n]*\.kovo-perf-save-/u);
       } finally {
         await stopChild(child);
       }
@@ -1224,7 +1263,12 @@ type KovoDevWorkerResult =
       ok: true;
       readyReport: string;
       response?: { body: string; status: number };
-      server: { host?: boolean | string; port?: number; strictPort?: boolean };
+      server: {
+        host?: boolean | string;
+        port?: number;
+        strictPort?: boolean;
+        watchIgnored?: string | readonly string[];
+      };
     };
 
 async function runKovoDevWorker(

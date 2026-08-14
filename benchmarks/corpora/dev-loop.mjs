@@ -3114,7 +3114,7 @@ export async function atomicReplaceCorpusSource(filePath, source, dependencies =
   atomicCorpusSourceWrite += 1;
   const temporaryPath = path.join(
     path.dirname(filePath),
-    `.${path.basename(filePath)}.kovo-perf-save-${String(process.pid)}-${String(atomicCorpusSourceWrite)}.tmp`,
+    `.kovo-perf-save-${String(process.pid)}-${String(atomicCorpusSourceWrite)}.tmp`,
   );
   const writeTemporary = dependencies.writeFile ?? writeFile;
   const replace = dependencies.rename ?? rename;

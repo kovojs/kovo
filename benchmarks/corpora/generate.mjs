@@ -10,7 +10,8 @@ export { DEV_PORT_ALLOCATION_POSTURE } from '../harness/dev-port-allocation.mjs'
 
 export const CORPUS_SCHEMA = 'kovo-dev-corpus/v1';
 export const SUPPORTED_SIZES = Object.freeze([24, 216]);
-export const EDIT_SAVE_POSTURE = 'posix-sibling-temp-write-rename/v1';
+export const EDIT_SAVE_POSTURE =
+  'posix-sibling-.kovo-perf-save-*.tmp-write-rename+exact-watch-ignore/v2';
 export const EDIT_STATE_POSTURE = 'refresh-surfaces-sibling-to-local-state/v1';
 export const DEV_SESSION_PORT_STRIDE = 128;
 export const EDIT_REFRESH_SURFACES = Object.freeze({

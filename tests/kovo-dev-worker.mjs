@@ -40,6 +40,7 @@ try {
         host: handle.server.config.server.host,
         port: handle.server.config.server.port,
         strictPort: handle.server.config.server.strictPort,
+        watchIgnored: handle.server.config.server.watch?.ignored,
       },
     };
   } finally {

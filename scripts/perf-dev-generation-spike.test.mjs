@@ -429,7 +429,7 @@ describe('dev-generation candidate comparator', () => {
       componentImportFanout: 24,
       devPortAllocationPosture: 'unique-exact-port-outside-host-ephemeral/v2',
       editClasses: EDIT_CLASSES,
-      editSavePosture: 'posix-sibling-temp-write-rename/v1',
+      editSavePosture: 'posix-sibling-.kovo-perf-save-*.tmp-write-rename+exact-watch-ignore/v2',
       routes: 4,
       stateSurface: 'local-counter',
       workloadModules: 24,
@@ -459,7 +459,7 @@ describe('dev-generation candidate comparator', () => {
     expect(inspectGeneratedDevCorpus(manifestPath, root)).toMatchObject({
       devPortAllocationPosture: 'unique-exact-port-outside-host-ephemeral/v2',
       editClasses: EDIT_CLASSES,
-      editSavePosture: 'posix-sibling-temp-write-rename/v1',
+      editSavePosture: 'posix-sibling-.kovo-perf-save-*.tmp-write-rename+exact-watch-ignore/v2',
       modules: 24,
       routes: 4,
       shapeDigest: `sha256:${manifest.shapeDigest}`,
@@ -1839,7 +1839,7 @@ function corpusIdentity() {
   return {
     devPortAllocationPosture: 'unique-exact-port-outside-host-ephemeral/v2',
     editClasses: EDIT_CLASSES,
-    editSavePosture: 'posix-sibling-temp-write-rename/v1',
+    editSavePosture: 'posix-sibling-.kovo-perf-save-*.tmp-write-rename+exact-watch-ignore/v2',
     manifestDigest: digest('4'),
     manifestPath: 'benchmarks/kovo/.corpora/kovo/n24/manifest.json',
     modules: 24,
