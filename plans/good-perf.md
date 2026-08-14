@@ -81,7 +81,8 @@ baseline`; never benchmark concurrent worktrees.
 | Default critical path        | keep ≤7 KB                    | no >5% FCP/LCP regression                   |
 | Matched L1 session bytes     | establish baseline            | ≤50% of Next                                |
 | Matched L1 mobile navigation | ≤2x Next                      | parity within paired noise                  |
-| Cached Brotli throughput     | ≥10% better than current Kovo | within 10% of Next HIT                      |
+| Cached identity HIT          | establish baseline            | within 10% of Next identity HIT             |
+| Proved Brotli cache          | ≥10% over uncached Kovo       | no cross-framework claim without matched br |
 | Forced-dynamic throughput    | ≥10% better than current Kovo | within 1.25x of Next dynamic                |
 
 ## Phase 0 — make the comparison authoritative
@@ -100,8 +101,9 @@ scripts/perf-gate.test.mjs --reporter=dot` passed 63/63, syntax checks passed, a
     content parity and a zero-script/action Kovo L0 document.
 - [x] Add a matched L1 fixture: real mutable cart/email/order state and confirmation in both
       frameworks, with Kovo query/state interaction and enhanced navigation actually installed.
-  - Evidence: `node benchmarks/matched-fixture-gate.mjs` exercised mutable cart/email/order state
-    and document-parts navigation in both entrants with zero gate errors.
+  - Evidence: `node benchmarks/matched-fixture-gate.mjs` exercised Kovo's mutable
+    cart/email/order state and document-parts navigation; the serialized comparison correctness
+    smoke separately exercised both entrants with zero gate errors.
 - [x] Add generated equal-shape developer corpora at 24 and 216 modules with the same route count,
       approximate LOC, import fan-out, and leaf/entry/data edits.
   - Evidence: `pnpm exec vitest --run benchmarks/corpora/generate.test.mjs
@@ -125,10 +127,12 @@ benchmarks/harness/{report,run,scenarios}.test.mjs --reporter=dot` passed 41/41.
 
 - [ ] Ratify current-head dev ready/edit/error/recovery/RSS baselines against matched Next at N=24
       and N=216; use 15 fresh starts and 30 measured edits after three warmups per edit class.
-- [ ] Re-run the narrow fresh-generation spike `04a976394` in alternating quiet-host cycles.
-  - Spike evidence: its bundle proxy removes 25/177 modules and 788,308/2,034,129 emitted bytes
-    (38.8%); four 7-edit runs landed 28/28, but medians reversed with host load, so latency is
-    unresolved and the branch must not merge on current evidence.
+- [ ] Run repaired fresh-generation candidate `7a20bf666` (the correctness-complete descendant of
+      the exploratory `04a976394` idea) in alternating quiet-host cycles.
+  - Historical spike evidence: the original bundle proxy removed 25/177 modules and
+    788,308/2,034,129 emitted bytes (38.8%); four 7-edit runs landed 28/28, but medians reversed with
+    host load. Only the exact repaired candidate's full browser-visible decision can authorize a
+    merge.
 - [ ] Profile exact edit-to-paint windows after the matched baseline and rank self time, allocation,
       module evaluation, Vite transform, SSR generation, and asynchronous proof convergence. Retire any
       hypothesis not present in the current top five.
@@ -194,15 +198,19 @@ benchmarks/corpora/dev-loop.test.mjs --reporter=dot` passed 39/39. Current-head 
     authenticated `3010e8df3…d87b4a132`, 84 windows/42 B,S,S,B pairs and four profiles; zero
     misses, +29.08% median throughput with paired 95% CI `[+26.07%, +30.23%]`, all p95 cells
     improved, byte-identical bodies, and loader profile share fell from 14.89%/21.57% to 0.02%.
-- [ ] Run the matched L0/L1 browser matrix before changing navigation or runtime emission. Preserve
-      inert documents at zero JS; the deterministic spike found the ordinary deferred runtime at
-      49,236 B Brotli and the enhanced-navigation closure alone at 22,642 B Brotli.
+- [ ] Freeze and run the current matched L0/L1 browser matrix before any further navigation or
+      runtime-emission change. Preserve inert documents at zero JS; the deterministic spike found
+      the ordinary deferred runtime at 49,236 B Brotli and the enhanced-navigation closure alone at
+      22,642 B Brotli.
   - Evidence: `node benchmarks/matched-fixture-gate.mjs` passed before runtime candidates were
     integrated and proved the matched L0 document carries zero script/action capability.
 - [ ] Profile matched L1 mobile navigation from click through destination paint. Attribute server,
-      transfer, document-parts decode/build, morph, style, layout, and paint separately.
-  - Evidence: `55299dcc8`; the trace schema now reports server, transfer, response processing,
-    document-parts decode/build, DOM apply, style/layout, and destination paint with one boundary.
+      transfer, the trace-observable combined response-processing/DOM-apply envelope,
+      style/layout, and paint; keep JS-internal decode/build and morph boundaries explicitly
+      unsupported unless both entrants gain equivalent instrumentation.
+  - Evidence: `55299dcc8`; the trace schema reports server, transfer, combined response
+    processing/DOM apply, style/layout, and destination paint with one boundary and rejects invented
+    JS-internal phase splits.
 - [x] Revisit opt-in Speculation Rules only after repairing the rejected spike's compiler/runtime
       pattern disagreement and fail-open page indirection. `spec/07-navigation.md` default-off remains
       normative until a SPEC change is reviewed; never merge the historical branch as-is.
