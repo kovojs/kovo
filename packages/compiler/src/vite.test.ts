@@ -1,4 +1,5 @@
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { createServer as createHttpServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -3452,19 +3453,27 @@ export const RegionB = component({
     ws.send.mockClear();
 
     await plugin.handleHotUpdate?.({
-      file: '/workspace/app/src/a.tsx',
-      read: async () => 'component(recovered-a)',
-      server,
-    });
-    expect(ws.send.mock.calls.map(([payload]) => payload.type)).toEqual(['custom']);
-    expect(ws.send).not.toHaveBeenCalledWith({ type: 'update', updates: [] });
-
-    await plugin.handleHotUpdate?.({
       file: '/workspace/app/src/b.tsx',
       read: async () => 'component(recovered-b)',
       server,
     });
+    expect(ws.send.mock.calls.map(([payload]) => payload.type)).toEqual(['error', 'custom']);
+    expect(ws.send).toHaveBeenNthCalledWith(1, {
+      err: expect.objectContaining({
+        id: 'src/a.tsx',
+        message: expect.stringContaining('A is broken'),
+      }),
+      type: 'error',
+    });
+    expect(ws.send).not.toHaveBeenCalledWith({ type: 'update', updates: [] });
+
+    await plugin.handleHotUpdate?.({
+      file: '/workspace/app/src/a.tsx',
+      read: async () => 'component(recovered-a)',
+      server,
+    });
     expect(ws.send.mock.calls.map(([payload]) => payload.type)).toEqual([
+      'error',
       'custom',
       'update',
       'custom',
@@ -3724,6 +3733,299 @@ export const RegionB = component({
       type: 'custom',
     });
     expect(JSON.parse(serialized[2]!).err.message).toContain(injectedMessage);
+  });
+
+  it('serializes diagnostic recovery and full-reload frames without inherited toJSON authority', async () => {
+    const diagnostic = compilerDiagnostic('KV201', {
+      fileName: 'src/counter.tsx',
+      message: kv201.message,
+    });
+    const previous = hmrMetadata({ factHash: 'before' });
+    const recovered = hmrMetadata({
+      clientHref: '/c/__v/22222222/src/counter.client.js',
+      factHash: 'after',
+    });
+    const unsafe = hmrMetadata({ factHash: 'unsafe', liveTargetFacts: [] });
+    const plugin = createKovoVitePlugin(
+      vi
+        .fn()
+        .mockReturnValueOnce(compileResult(previous, 'export const before = true;'))
+        .mockReturnValueOnce({
+          diagnostics: [diagnostic],
+          files: [],
+          hmrImpact: null,
+          renderPlanFingerprint: null,
+          renderPlanFingerprintInput: {},
+        })
+        .mockReturnValueOnce(compileResult(recovered, 'export const after = true;'))
+        .mockReturnValueOnce(compileResult(unsafe, 'export const unsafe = true;')),
+    );
+    const serialized: string[] = [];
+    const ws = {
+      send: vi.fn((payload: unknown) => {
+        serialized.push(JSON.stringify(payload));
+      }),
+    };
+    const server = {
+      config: { root: '/workspace/app' },
+      middlewares: { use() {} },
+      ws,
+    };
+    plugin.configureServer?.(server);
+    await plugin.transform('component(initial)', '/workspace/app/src/counter.tsx');
+
+    const objectToJson = Object.getOwnPropertyDescriptor(Object.prototype, 'toJSON');
+    const arrayToJson = Object.getOwnPropertyDescriptor(Array.prototype, 'toJSON');
+    let poisonHits = 0;
+    try {
+      Object.defineProperty(Object.prototype, 'toJSON', {
+        configurable: true,
+        value() {
+          poisonHits += 1;
+          return { data: { forged: true }, event: 'kovo:full-reload', type: 'custom' };
+        },
+      });
+      Object.defineProperty(Array.prototype, 'toJSON', {
+        configurable: true,
+        value() {
+          poisonHits += 1;
+          return ['forged'];
+        },
+      });
+      await plugin.handleHotUpdate?.({
+        file: '/workspace/app/src/counter.tsx',
+        read: async () => 'component(broken)',
+        server,
+      });
+      await plugin.handleHotUpdate?.({
+        file: '/workspace/app/src/counter.tsx',
+        read: async () => 'component(recovered)',
+        server,
+      });
+      await plugin.handleHotUpdate?.({
+        file: '/workspace/app/src/counter.tsx',
+        read: async () => 'component(unsafe)',
+        server,
+      });
+    } finally {
+      if (objectToJson === undefined) {
+        delete (Object.prototype as { toJSON?: unknown }).toJSON;
+      } else {
+        Object.defineProperty(Object.prototype, 'toJSON', objectToJson);
+      }
+      if (arrayToJson === undefined) {
+        delete (Array.prototype as { toJSON?: unknown }).toJSON;
+      } else {
+        Object.defineProperty(Array.prototype, 'toJSON', arrayToJson);
+      }
+    }
+
+    expect(poisonHits).toBe(0);
+    expect(serialized.map((payload) => JSON.parse(payload).type)).toEqual([
+      'update',
+      'custom',
+      'error',
+      'update',
+      'custom',
+      'custom',
+      'full-reload',
+    ]);
+    expect(JSON.parse(serialized[4]!)).toMatchObject({
+      data: { impact: 'componentRefresh', sourceFile: 'src/counter.tsx' },
+      event: 'kovo:component-render',
+      type: 'custom',
+    });
+    expect(JSON.parse(serialized[5]!)).toMatchObject({
+      data: { impact: 'fullReload', sourceFile: 'src/counter.tsx' },
+      event: 'kovo:full-reload',
+      type: 'custom',
+    });
+  });
+
+  it('preserves exact native and custom frames through the real Vite websocket serializer', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-vite-real-hmr-wire-'));
+    const diagnostic = compilerDiagnostic('KV201', {
+      fileName: 'src/counter.tsx',
+      message: kv201.message,
+    });
+    const previous = hmrMetadata({ factHash: 'before' });
+    const recovered = hmrMetadata({
+      clientHref: '/c/__v/22222222/src/counter.client.js',
+      factHash: 'after',
+    });
+    const unsafe = hmrMetadata({ factHash: 'unsafe', liveTargetFacts: [] });
+    const plugin = createKovoVitePlugin(
+      vi
+        .fn()
+        .mockReturnValueOnce(compileResult(previous, 'export const before = true;'))
+        .mockReturnValueOnce({
+          diagnostics: [diagnostic],
+          files: [],
+          hmrImpact: null,
+          renderPlanFingerprint: null,
+          renderPlanFingerprintInput: {},
+        })
+        .mockReturnValueOnce(compileResult(recovered, 'export const after = true;'))
+        .mockReturnValueOnce(compileResult(unsafe, 'export const unsafe = true;')),
+    );
+    const portProbe = createHttpServer();
+    await new Promise<void>((resolveListen, rejectListen) => {
+      portProbe.once('error', rejectListen);
+      portProbe.listen(0, '127.0.0.1', () => {
+        portProbe.off('error', rejectListen);
+        resolveListen();
+      });
+    });
+    const address = portProbe.address();
+    if (address === null || typeof address === 'string') {
+      throw new Error('Vite HMR port probe did not bind a TCP address.');
+    }
+    const port = address.port;
+    await new Promise<void>((resolveClose, rejectClose) => {
+      portProbe.close((error) => (error ? rejectClose(error) : resolveClose()));
+    });
+
+    const { createServer } = await import('vite-plus');
+    const server = await createServer({
+      configFile: false,
+      plugins: [plugin],
+      root,
+      server: { host: '127.0.0.1', port, strictPort: true },
+    });
+    let socket: WebSocket | undefined;
+    const objectToJson = Object.getOwnPropertyDescriptor(Object.prototype, 'toJSON');
+    const arrayToJson = Object.getOwnPropertyDescriptor(Array.prototype, 'toJSON');
+    const frames: unknown[] = [];
+    let poisonHits = 0;
+    try {
+      await server.listen();
+      socket = new WebSocket(
+        `ws://127.0.0.1:${port}/?token=${server.config.webSocketToken}`,
+        'vite-hmr',
+      );
+      socket.addEventListener('message', (event) => {
+        if (typeof event.data !== 'string') {
+          throw new TypeError('Vite HMR websocket emitted a non-text frame.');
+        }
+        frames.push(JSON.parse(event.data));
+      });
+      await new Promise<void>((resolveOpen, rejectOpen) => {
+        socket?.addEventListener('open', () => resolveOpen(), { once: true });
+        socket?.addEventListener('error', () => rejectOpen(new Error('Vite HMR socket failed.')), {
+          once: true,
+        });
+      });
+      await vi.waitFor(() => expect(frames).toEqual([{ type: 'connected' }]));
+
+      await plugin.transform('component(initial)', join(root, 'src/counter.tsx'));
+      try {
+        Object.defineProperty(Object.prototype, 'toJSON', {
+          configurable: true,
+          value() {
+            poisonHits += 1;
+            return 'forged-object-frame';
+          },
+        });
+        Object.defineProperty(Array.prototype, 'toJSON', {
+          configurable: true,
+          value() {
+            poisonHits += 1;
+            return ['forged-array-frame'];
+          },
+        });
+        await plugin.handleHotUpdate?.({
+          file: join(root, 'src/counter.tsx'),
+          read: async () => 'component(broken)',
+          server,
+        });
+        await plugin.handleHotUpdate?.({
+          file: join(root, 'src/counter.tsx'),
+          read: async () => 'component(recovered)',
+          server,
+        });
+        await plugin.handleHotUpdate?.({
+          file: join(root, 'src/counter.tsx'),
+          read: async () => 'component(unsafe)',
+          server,
+        });
+      } finally {
+        if (objectToJson === undefined) {
+          delete (Object.prototype as { toJSON?: unknown }).toJSON;
+        } else {
+          Object.defineProperty(Object.prototype, 'toJSON', objectToJson);
+        }
+        if (arrayToJson === undefined) {
+          delete (Array.prototype as { toJSON?: unknown }).toJSON;
+        } else {
+          Object.defineProperty(Array.prototype, 'toJSON', arrayToJson);
+        }
+      }
+
+      await vi.waitFor(() => expect(frames).toHaveLength(8));
+      expect(poisonHits).toBe(0);
+      expect(frames).toEqual([
+        { type: 'connected' },
+        { type: 'update', updates: [] },
+        {
+          data: {
+            diagnostics: [{ code: 'KV201', message: kv201.message, severity: kv201.severity }],
+            impact: 'diagnosticError',
+            liveTargets: [],
+            oldClientHref: '/c/__v/11111111/src/counter.client.js',
+            reasons: ['diagnostics'],
+            sourceFile: 'src/counter.tsx',
+          },
+          event: 'kovo:diagnostics',
+          type: 'custom',
+        },
+        {
+          err: {
+            id: 'src/counter.tsx',
+            message: [
+              'Kovo Vite transform failed with 1 error diagnostic.',
+              `KV201 src/counter.tsx ${kv201.message}`,
+            ].join('\n\n'),
+            plugin: 'kovo',
+            stack: '',
+          },
+          type: 'error',
+        },
+        { type: 'update', updates: [] },
+        {
+          data: {
+            component: { domLeaf: 'Counter', registryKey: 'Counter' },
+            diagnostics: [],
+            impact: 'componentRefresh',
+            liveTargets: ['counter'],
+            newClientHref: '/c/__v/22222222/src/counter.client.js',
+            oldClientHref: '/c/__v/11111111/src/counter.client.js',
+            reasons: ['handler-only'],
+            sourceFile: 'src/counter.tsx',
+          },
+          event: 'kovo:component-render',
+          type: 'custom',
+        },
+        {
+          data: {
+            component: { domLeaf: 'Counter', registryKey: 'Counter' },
+            diagnostics: [],
+            impact: 'fullReload',
+            liveTargets: [],
+            newClientHref: '/c/__v/11111111/src/counter.client.js',
+            oldClientHref: '/c/__v/22222222/src/counter.client.js',
+            reasons: ['missing-facts'],
+            sourceFile: 'src/counter.tsx',
+          },
+          event: 'kovo:full-reload',
+          type: 'custom',
+        },
+        { type: 'full-reload' },
+      ]);
+    } finally {
+      socket?.close();
+      await server.close();
+      rmSync(root, { force: true, recursive: true });
+    }
   });
 
   it('delegates unsafe Kovo hot updates to Vite full reload', async () => {
