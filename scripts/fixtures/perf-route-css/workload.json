@@ -6,7 +6,13 @@
     {
       "id": "stylesheet",
       "file": "benchmarks/kovo/src/styles.css",
-      "expectedDigest": "sha256:713cffba81912d9c0f415e989481f32db022773729cbcf6ece70a01fd8f75c0c"
+      "expectedDigest": "sha256:5220da7b4cb35e65f9da9bb379c50924f421f833622ad891a8a0b0d04546a86f",
+      "evidence": [
+        {
+          "text": "[popover]:not(:popover-open) {\n  display: none;\n}",
+          "occurrences": 1
+        }
+      ]
     },
     {
       "id": "routes",
@@ -45,10 +51,18 @@
     {
       "id": "matched-fixture",
       "file": "benchmarks/shared/matched-fixture.json",
-      "expectedDigest": "sha256:81c57cbd937a1e7014cf337a2deb34abf30dae2b8f23bed548b898b15840787a",
+      "expectedDigest": "sha256:d25225ead82bd307b6ceba10b8a2db5404ef8aa3af9acb6231b5e5719383a919",
       "evidence": [
         {
           "text": "\"schema\": \"kovo-benchmark-matched-fixture/v1\"",
+          "occurrences": 1
+        },
+        {
+          "text": "\"serverSemantic\": {",
+          "occurrences": 1
+        },
+        {
+          "text": "\"basePath\": \"/matched/l0\"",
           "occurrences": 1
         },
         {
