@@ -13,12 +13,15 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   closeSync,
+  constants as fsConstants,
+  fstatSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
   openSync,
   readdirSync,
   readFileSync,
+  readlinkSync,
   realpathSync,
   rmSync,
   unlinkSync,
@@ -211,6 +214,22 @@ export function authenticateGenerationCandidateRoots(options, dependencies = {})
 
   const baselineCommit = git(baselineRoot, ['rev-parse', 'HEAD']);
   const spikeCommit = git(spikeRoot, ['rev-parse', 'HEAD']);
+  const baselineObjectFormat = gitObjectFormat(baselineRoot, git);
+  const spikeObjectFormat = gitObjectFormat(spikeRoot, git);
+  const candidateObjectFormat = gitObjectFormat(candidateRepository, git);
+  if (
+    baselineObjectFormat !== spikeObjectFormat ||
+    baselineObjectFormat !== candidateObjectFormat
+  ) {
+    throw new Error('candidate repositories must use one exact Git object format');
+  }
+  const objectFormat = candidateObjectFormat;
+  if (!validFullGitObjectId(baselineCommit, objectFormat)) {
+    throw new Error('baseline worktree commit is not one full Git object ID');
+  }
+  if (!validFullGitObjectId(spikeCommit, objectFormat)) {
+    throw new Error('spike worktree commit is not one full Git object ID');
+  }
   const baselineDirtyPaths = gitDirtyPaths(baselineRoot, git);
   const spikeDirtyPaths = gitDirtyPaths(spikeRoot, git);
   if (baselineDirtyPaths.length > 0 || spikeDirtyPaths.length > 0) {
@@ -266,6 +285,10 @@ export function authenticateGenerationCandidateRoots(options, dependencies = {})
   const candidateParent = git(candidateRepository, ['rev-parse', `${candidate.parent}^{commit}`]);
   const candidateParentTree = git(candidateRepository, ['rev-parse', `${candidate.parent}^{tree}`]);
   if (
+    !validFullGitObjectId(candidate.commit, objectFormat) ||
+    !validFullGitObjectId(candidate.tree, objectFormat) ||
+    !validFullGitObjectId(candidate.parent, objectFormat) ||
+    !validFullGitObjectId(candidate.parentTree, objectFormat) ||
     candidateRefCommit !== candidate.commit ||
     candidateCommit !== candidate.commit ||
     candidateTree !== candidate.tree ||
@@ -299,6 +322,9 @@ export function authenticateGenerationCandidateRoots(options, dependencies = {})
       entry.commit,
     ]).split(' ');
     if (
+      !validFullGitObjectId(entry.commit, objectFormat) ||
+      !validFullGitObjectId(entry.parent, objectFormat) ||
+      !validFullGitObjectId(entry.tree, objectFormat) ||
       commit !== entry.commit ||
       parent !== entry.parent ||
       tree !== entry.tree ||
@@ -338,7 +364,12 @@ export function authenticateGenerationCandidateRoots(options, dependencies = {})
       '1',
       appliedCommit,
     ]).split(' ');
-    if (!sameStrings(appliedParents, [appliedCommit, appliedParent])) {
+    if (
+      !validFullGitObjectId(appliedCommit, objectFormat) ||
+      !validFullGitObjectId(appliedParent, objectFormat) ||
+      !validFullGitObjectId(appliedTree, objectFormat) ||
+      !sameStrings(appliedParents, [appliedCommit, appliedParent])
+    ) {
       throw new Error('spike series must contain only the exact linear applied commits');
     }
     const sourceStepPaths = changedPaths(candidateRepository, entry.parent, entry.commit, git);
@@ -356,6 +387,7 @@ export function authenticateGenerationCandidateRoots(options, dependencies = {})
       sourceStepPaths,
       git,
       readBlob,
+      objectFormat,
     );
     const appliedChanges = pathBlobChanges(
       spikeRoot,
@@ -364,6 +396,7 @@ export function authenticateGenerationCandidateRoots(options, dependencies = {})
       appliedStepPaths,
       git,
       readBlob,
+      objectFormat,
     );
     if (canonicalJson(appliedChanges) !== canonicalJson(sourceChanges)) {
       throw new Error('spike commits do not preserve the exact candidate path/blob/byte changes');
@@ -415,6 +448,7 @@ export function authenticateGenerationCandidateRoots(options, dependencies = {})
     expectedPaths,
     git,
     readBlob,
+    objectFormat,
   );
   const appliedEndpoints = pathBlobChanges(
     spikeRoot,
@@ -423,6 +457,7 @@ export function authenticateGenerationCandidateRoots(options, dependencies = {})
     expectedPaths,
     git,
     readBlob,
+    objectFormat,
   );
   if (canonicalJson(appliedEndpoints) !== canonicalJson(sourceEndpoints)) {
     throw new Error('spike range does not preserve the exact candidate path/blob/byte delta');
@@ -447,12 +482,14 @@ export function authenticateGenerationCandidateRoots(options, dependencies = {})
   const sourceDelta = candidateDeltaEvidence({
     endpoints: sourceEndpoints,
     hostPatch: sourceHostPatch,
+    objectFormat,
     paths: sourcePaths,
     series: sourceSeries,
   });
   const appliedDelta = candidateDeltaEvidence({
     endpoints: appliedEndpoints,
     hostPatch: appliedHostPatch,
+    objectFormat,
     paths: observedPaths,
     series: appliedSeries,
   });
@@ -466,9 +503,10 @@ export function authenticateGenerationCandidateRoots(options, dependencies = {})
     throw new Error('profile-driven candidate ref changed during authentication');
   }
   return {
-    baseline: { commit: baselineCommit, root: baselineRoot },
+    baseline: { commit: baselineCommit, objectFormat, root: baselineRoot },
     candidate: {
       commit: candidate.commit,
+      objectFormat,
       parent: candidate.parent,
       parentTree: candidate.parentTree,
       paths: [...candidate.paths],
@@ -481,6 +519,7 @@ export function authenticateGenerationCandidateRoots(options, dependencies = {})
     spike: {
       commit: spikeCommit,
       appliedDelta,
+      objectFormat,
       parent: baselineCommit,
       root: spikeRoot,
       series: spikeSeries,
@@ -2152,7 +2191,212 @@ function gitOutput(root, args) {
 
 function gitDirtyPaths(root, git) {
   const status = git(root, ['status', '--porcelain=v1', '--untracked-files=all']);
-  return status === '' ? [] : status.split(/\r?\n/u);
+  if (status !== '') return status.split(/\r?\n/u);
+  try {
+    verifyTrackedWorktreeCensus(root, git);
+    return [];
+  } catch (error) {
+    return [`tracked worktree census: ${errorMessage(error)}`];
+  }
+}
+
+function verifyTrackedWorktreeCensus(root, git) {
+  const objectFormat = gitObjectFormat(root, git);
+  const flags = parseTrackedFlags(git(root, ['ls-files', '-v', '-z']));
+  const indexEntries = parseIndexEntries(git(root, ['ls-files', '--stage', '-z']), objectFormat);
+  const headEntries = parseTreeEntries(
+    git(root, ['ls-tree', '-r', '-z', '--full-tree', 'HEAD']),
+    objectFormat,
+  );
+  if (canonicalJson(indexEntries) !== canonicalJson(headEntries)) {
+    throw new Error('tracked index census differs from committed HEAD');
+  }
+  if (
+    flags.length !== indexEntries.length ||
+    flags.some((entry, index) => entry.tag !== 'H' || entry.path !== indexEntries[index]?.path)
+  ) {
+    throw new Error('tracked index contains assume-unchanged, skip-worktree, or other flags');
+  }
+  for (const entry of indexEntries) verifyTrackedWorktreeEntry(root, entry, objectFormat);
+}
+
+function parseTrackedFlags(output) {
+  const entries = nulRecords(output, 'tracked index flags').map((record) => {
+    if (record.length < 3 || record[1] !== ' ') {
+      throw new Error('tracked index flag record is malformed');
+    }
+    return { path: exactTrackedPath(record.slice(2)), tag: record[0] };
+  });
+  return exactTrackedEntries(entries, 'tracked index flags');
+}
+
+function parseIndexEntries(output, objectFormat) {
+  const entries = nulRecords(output, 'tracked index').map((record) => {
+    const separator = record.indexOf('\t');
+    const metadata = separator > 0 ? record.slice(0, separator).split(' ') : [];
+    if (
+      metadata.length !== 3 ||
+      metadata[2] !== '0' ||
+      !validTrackedMode(metadata[0]) ||
+      !validFullGitObjectId(metadata[1], objectFormat)
+    ) {
+      throw new Error('tracked index entry is malformed or not stage zero');
+    }
+    return {
+      mode: metadata[0],
+      objectId: metadata[1],
+      path: exactTrackedPath(record.slice(separator + 1)),
+    };
+  });
+  return exactTrackedEntries(entries, 'tracked index');
+}
+
+function parseTreeEntries(output, objectFormat) {
+  const entries = nulRecords(output, 'committed tree').map((record) => {
+    const separator = record.indexOf('\t');
+    const metadata = separator > 0 ? record.slice(0, separator).split(' ') : [];
+    if (
+      metadata.length !== 3 ||
+      metadata[1] !== 'blob' ||
+      !validTrackedMode(metadata[0]) ||
+      !validFullGitObjectId(metadata[2], objectFormat)
+    ) {
+      throw new Error('committed tree contains an unsupported or malformed tracked entry');
+    }
+    return {
+      mode: metadata[0],
+      objectId: metadata[2],
+      path: exactTrackedPath(record.slice(separator + 1)),
+    };
+  });
+  return exactTrackedEntries(entries, 'committed tree');
+}
+
+function nulRecords(output, label) {
+  if (output === '') return [];
+  if (!output.endsWith('\0')) throw new Error(`${label} output is not NUL terminated`);
+  return output.slice(0, -1).split('\0');
+}
+
+function exactTrackedEntries(entries, label) {
+  const sorted = [...entries].sort((left, right) =>
+    left.path < right.path ? -1 : left.path > right.path ? 1 : 0,
+  );
+  if (new Set(sorted.map((entry) => entry.path)).size !== sorted.length) {
+    throw new Error(`${label} path census contains duplicates`);
+  }
+  return sorted;
+}
+
+function exactTrackedPath(relativePath) {
+  if (
+    !nonEmptyString(relativePath) ||
+    relativePath.includes('\0') ||
+    path.isAbsolute(relativePath) ||
+    relativePath.split('/').some((part) => part === '' || part === '.' || part === '..')
+  ) {
+    throw new Error('tracked path is malformed or escapes the worktree');
+  }
+  return relativePath;
+}
+
+function validTrackedMode(mode) {
+  return mode === '100644' || mode === '100755' || mode === '120000';
+}
+
+function verifyTrackedWorktreeEntry(root, entry, objectFormat) {
+  const absolute = path.resolve(root, entry.path);
+  if (!isWithin(root, absolute)) throw new Error(`tracked path escapes worktree: ${entry.path}`);
+  const bytes =
+    entry.mode === '120000'
+      ? readStableTrackedSymlink(absolute, entry.path)
+      : readStableTrackedRegularFile(absolute, entry.path, entry.mode);
+  if (gitBlobObjectId(bytes, objectFormat) !== entry.objectId) {
+    throw new Error(`tracked worktree bytes differ from committed HEAD: ${entry.path}`);
+  }
+}
+
+function readStableTrackedRegularFile(absolute, relativePath, expectedMode) {
+  const pathBefore = lstatSync(absolute);
+  if (!pathBefore.isFile() || pathBefore.isSymbolicLink()) {
+    throw new Error(`tracked regular file type differs from committed HEAD: ${relativePath}`);
+  }
+  let descriptor;
+  try {
+    descriptor = openSync(absolute, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0));
+    const descriptorBefore = fstatSync(descriptor);
+    if (!sameTrackedStat(pathBefore, descriptorBefore) || !descriptorBefore.isFile()) {
+      throw new Error(`tracked regular file changed while opening: ${relativePath}`);
+    }
+    const bytes = readFileSync(descriptor);
+    const descriptorAfter = fstatSync(descriptor);
+    const pathAfter = lstatSync(absolute);
+    if (
+      !sameTrackedStat(descriptorBefore, descriptorAfter) ||
+      !sameTrackedStat(descriptorAfter, pathAfter) ||
+      bytes.byteLength !== descriptorAfter.size
+    ) {
+      throw new Error(`tracked regular file changed while reading: ${relativePath}`);
+    }
+    const observedMode = (descriptorAfter.mode & 0o111) === 0 ? '100644' : '100755';
+    if (observedMode !== expectedMode) {
+      throw new Error(`tracked worktree mode differs from committed HEAD: ${relativePath}`);
+    }
+    return bytes;
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
+  }
+}
+
+function readStableTrackedSymlink(absolute, relativePath) {
+  const before = lstatSync(absolute);
+  if (!before.isSymbolicLink()) {
+    throw new Error(`tracked symlink type differs from committed HEAD: ${relativePath}`);
+  }
+  const bytes = readlinkSync(absolute, { encoding: 'buffer' });
+  const after = lstatSync(absolute);
+  if (!sameTrackedStat(before, after) || bytes.byteLength !== after.size) {
+    throw new Error(`tracked symlink changed while reading: ${relativePath}`);
+  }
+  return bytes;
+}
+
+function sameTrackedStat(left, right) {
+  return (
+    left.dev === right.dev &&
+    left.ino === right.ino &&
+    left.mode === right.mode &&
+    left.nlink === right.nlink &&
+    left.size === right.size &&
+    left.mtimeMs === right.mtimeMs &&
+    left.ctimeMs === right.ctimeMs
+  );
+}
+
+function gitObjectFormat(root, git) {
+  const objectFormat = git(root, ['rev-parse', '--show-object-format']);
+  if (objectFormat !== 'sha1' && objectFormat !== 'sha256') {
+    throw new Error('Git object format must be exactly sha1 or sha256');
+  }
+  return objectFormat;
+}
+
+function validFullGitObjectId(objectId, objectFormat) {
+  const length = objectFormat === 'sha1' ? 40 : objectFormat === 'sha256' ? 64 : 0;
+  return (
+    typeof objectId === 'string' && objectId.length === length && /^[0-9a-f]+$/u.test(objectId)
+  );
+}
+
+function gitBlobObjectId(bytes, objectFormat) {
+  if (!Buffer.isBuffer(bytes)) throw new TypeError('Git blob identity requires exact bytes');
+  if (objectFormat !== 'sha1' && objectFormat !== 'sha256') {
+    throw new TypeError('Git blob identity requires sha1 or sha256 object format');
+  }
+  return createHash(objectFormat)
+    .update(Buffer.from(`blob ${String(bytes.byteLength)}\0`))
+    .update(bytes)
+    .digest('hex');
 }
 
 function gitPatchBytes(root, from, to) {
@@ -2222,13 +2466,15 @@ function gitPatchId(root, from, to) {
   if (result.status !== 0 || result.signal || result.error) {
     throw new Error(`could not calculate patch-id: ${boundedDiagnostic(result.stderr)}`);
   }
-  const match = /^([0-9a-f]{40})\s+[0-9a-f]{40}$/u.exec(String(result.stdout).trim());
+  const match = /^([0-9a-f]{40}|[0-9a-f]{64})\s+(?:[0-9a-f]{40}|[0-9a-f]{64})$/u.exec(
+    String(result.stdout).trim(),
+  );
   if (match === null) throw new Error('git patch-id returned malformed evidence');
   return match[1];
 }
 
 function gitBlobBytes(root, objectId) {
-  if (!/^[0-9a-f]{40,64}$/u.test(objectId)) {
+  if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u.test(objectId)) {
     throw new TypeError('candidate blob object ID is malformed');
   }
   const result = spawnSync('git', ['-C', root, 'cat-file', 'blob', objectId], {
@@ -2242,15 +2488,15 @@ function gitBlobBytes(root, objectId) {
   return Buffer.from(result.stdout);
 }
 
-function pathBlobChanges(root, from, to, paths, git, readBlob) {
+function pathBlobChanges(root, from, to, paths, git, readBlob, objectFormat) {
   return paths.map((relativePath) => ({
-    after: pathBlobDescriptor(root, to, relativePath, git, readBlob),
-    before: pathBlobDescriptor(root, from, relativePath, git, readBlob),
+    after: pathBlobDescriptor(root, to, relativePath, git, readBlob, objectFormat),
+    before: pathBlobDescriptor(root, from, relativePath, git, readBlob, objectFormat),
     path: relativePath,
   }));
 }
 
-function pathBlobDescriptor(root, commit, relativePath, git, readBlob) {
+function pathBlobDescriptor(root, commit, relativePath, git, readBlob, objectFormat) {
   const output = git(root, ['ls-tree', '--full-tree', commit, '--', relativePath]);
   const separator = output.indexOf('\t');
   const metadata = separator > 0 ? output.slice(0, separator).split(' ') : [];
@@ -2259,7 +2505,7 @@ function pathBlobDescriptor(root, commit, relativePath, git, readBlob) {
     metadata.length !== 3 ||
     (metadata[0] !== '100644' && metadata[0] !== '100755') ||
     metadata[1] !== 'blob' ||
-    !/^[0-9a-f]{40,64}$/u.test(metadata[2] ?? '') ||
+    !validFullGitObjectId(metadata[2], objectFormat) ||
     observedPath !== relativePath
   ) {
     throw new Error(`candidate path is not one exact regular blob at ${commit}: ${relativePath}`);
@@ -2267,6 +2513,9 @@ function pathBlobDescriptor(root, commit, relativePath, git, readBlob) {
   const bytes = readBlob(root, metadata[2]);
   if (!Buffer.isBuffer(bytes)) {
     throw new TypeError('candidate blob reader did not return bytes');
+  }
+  if (gitBlobObjectId(bytes, objectFormat) !== metadata[2]) {
+    throw new Error(`candidate blob bytes do not match their Git object ID: ${relativePath}`);
   }
   return {
     byteLength: bytes.byteLength,
@@ -2286,9 +2535,10 @@ function hostPatchEvidence(root, from, to, patch, patchId) {
   };
 }
 
-function candidateDeltaEvidence({ endpoints, hostPatch, paths, series }) {
+function candidateDeltaEvidence({ endpoints, hostPatch, objectFormat, paths, series }) {
   const content = {
     endpoints,
+    objectFormat,
     paths,
     schema: DEV_GENERATION_CANDIDATE_DELTA_SCHEMA,
     series: series.map((entry) => ({

@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
+  chmodSync,
   linkSync,
   mkdtempSync,
   mkdirSync,
@@ -216,13 +217,19 @@ describe('dev-generation candidate comparator', () => {
     );
 
     expect(binding).toMatchObject({
-      baseline: { commit: fixture.baselineCommit, root: realpathSync(fixture.baseline) },
+      baseline: {
+        commit: fixture.baselineCommit,
+        objectFormat: 'sha1',
+        root: realpathSync(fixture.baseline),
+      },
       candidate: {
+        objectFormat: 'sha1',
         paths: fixture.candidate.paths,
         ref: fixture.candidate.ref,
         series: fixture.candidate.series,
         sourceDelta: {
           contentSha256: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
+          objectFormat: 'sha1',
           schema: DEV_GENERATION_CANDIDATE_DELTA_SCHEMA,
         },
       },
@@ -230,8 +237,10 @@ describe('dev-generation candidate comparator', () => {
         commit: fixture.spikeCommit,
         appliedDelta: {
           contentSha256: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
+          objectFormat: 'sha1',
           schema: DEV_GENERATION_CANDIDATE_DELTA_SCHEMA,
         },
+        objectFormat: 'sha1',
         parent: fixture.baselineCommit,
         series: fixture.spikeSeries,
       },
@@ -325,6 +334,217 @@ describe('dev-generation candidate comparator', () => {
         spikeRoot: fixture.spike,
       }),
     ).toThrow(/path\/blob\/byte/u);
+  });
+
+  it('rejects forged blob-reader bytes that do not match their object IDs', () => {
+    const fixture = candidateFixture();
+    expect(() =>
+      authenticateGenerationCandidateRoots(
+        {
+          baselineRoot: fixture.baseline,
+          candidate: fixture.candidate,
+          candidateRepository: fixture.repository,
+          spikeRoot: fixture.spike,
+        },
+        {
+          ...fixture.dependencies,
+          readBlob: () => Buffer.from('forged-identical-bytes'),
+        },
+      ),
+    ).toThrow(/blob|object|hash/u);
+  });
+
+  it.each([41, 63])('rejects a non-full %i-hex Git object ID', (length) => {
+    const fixture = candidateFixture();
+    const git = (root, args) => {
+      const output = fixture.dependencies.git(root, args);
+      return args[0] === 'ls-tree' && args[1] === '--full-tree'
+        ? output.replace(
+            / blob ([0-9a-f]{40})\t/u,
+            (_match, objectId) => ` blob ${objectId.padEnd(length, 'a')}\t`,
+          )
+        : output;
+    };
+    expect(() =>
+      authenticateGenerationCandidateRoots(
+        {
+          baselineRoot: fixture.baseline,
+          candidate: fixture.candidate,
+          candidateRepository: fixture.repository,
+          spikeRoot: fixture.spike,
+        },
+        {
+          ...fixture.dependencies,
+          git,
+          readBlob: (root, objectId) => fixture.dependencies.readBlob(root, objectId.slice(0, 40)),
+        },
+      ),
+    ).toThrow(/object ID|regular blob/u);
+  });
+
+  it('authenticates full 64-hex blob and commit identities in a SHA-256 repository', () => {
+    const fixture = realRebasedCandidateFixture({ objectFormat: 'sha256' });
+    const binding = authenticateGenerationCandidateRoots({
+      baselineRoot: fixture.baseline,
+      candidate: fixture.candidate,
+      candidateRepository: fixture.repository,
+      spikeRoot: fixture.spike,
+    });
+
+    expect(binding).toMatchObject({
+      baseline: { objectFormat: 'sha256' },
+      candidate: {
+        commit: expect.stringMatching(/^[0-9a-f]{64}$/u),
+        objectFormat: 'sha256',
+        sourceDelta: { objectFormat: 'sha256' },
+      },
+      spike: { appliedDelta: { objectFormat: 'sha256' }, objectFormat: 'sha256' },
+    });
+  });
+
+  it('rejects tracked byte drift hidden by an assume-unchanged index flag', () => {
+    const fixture = realRebasedCandidateFixture();
+    execFileSync('git', ['update-index', '--assume-unchanged', 'one.ts'], {
+      cwd: fixture.spike,
+    });
+    writeFileSync(path.join(fixture.spike, 'one.ts'), 'export const forged = true;\n');
+    expect(
+      execFileSync('git', ['status', '--porcelain=v1', '--untracked-files=all'], {
+        cwd: fixture.spike,
+        encoding: 'utf8',
+      }),
+    ).toBe('');
+    expect(() =>
+      authenticateGenerationCandidateRoots({
+        baselineRoot: fixture.baseline,
+        candidate: fixture.candidate,
+        candidateRepository: fixture.repository,
+        spikeRoot: fixture.spike,
+      }),
+    ).toThrow(/clean|worktree|blob/u);
+  });
+
+  it('rejects tracked byte drift hidden by a skip-worktree index flag', () => {
+    const fixture = realRebasedCandidateFixture();
+    execFileSync('git', ['update-index', '--skip-worktree', 'one.ts'], { cwd: fixture.spike });
+    writeFileSync(path.join(fixture.spike, 'one.ts'), 'export const forged = true;\n');
+    expect(
+      execFileSync('git', ['status', '--porcelain=v1', '--untracked-files=all'], {
+        cwd: fixture.spike,
+        encoding: 'utf8',
+      }),
+    ).toBe('');
+    expect(() =>
+      authenticateGenerationCandidateRoots({
+        baselineRoot: fixture.baseline,
+        candidate: fixture.candidate,
+        candidateRepository: fixture.repository,
+        spikeRoot: fixture.spike,
+      }),
+    ).toThrow(/clean|worktree|flags/u);
+  });
+
+  it('rejects a tracked mode change hidden by core.fileMode=false', () => {
+    const fixture = realRebasedCandidateFixture();
+    execFileSync('git', ['config', 'core.fileMode', 'false'], { cwd: fixture.spike });
+    chmodSync(path.join(fixture.spike, 'one.ts'), 0o755);
+    expect(
+      execFileSync('git', ['status', '--porcelain=v1', '--untracked-files=all'], {
+        cwd: fixture.spike,
+        encoding: 'utf8',
+      }),
+    ).toBe('');
+    expect(() =>
+      authenticateGenerationCandidateRoots({
+        baselineRoot: fixture.baseline,
+        candidate: fixture.candidate,
+        candidateRepository: fixture.repository,
+        spikeRoot: fixture.spike,
+      }),
+    ).toThrow(/clean|worktree|mode/u);
+  });
+
+  it.each(['D', 'A', 'T', 'R100'])('rejects %s path status from injected diff output', (status) => {
+    const fixture = candidateFixture();
+    const git = (root, args) => {
+      if (args.includes('diff') && args.includes('--name-status')) {
+        return status === 'R100' ? 'R100\tone.ts\ttwo.ts' : `${status}\tone.ts`;
+      }
+      return fixture.dependencies.git(root, args);
+    };
+    expect(() =>
+      authenticateGenerationCandidateRoots(
+        {
+          baselineRoot: fixture.baseline,
+          candidate: fixture.candidate,
+          candidateRepository: fixture.repository,
+          spikeRoot: fixture.spike,
+        },
+        { ...fixture.dependencies, git },
+      ),
+    ).toThrow(/simple modification/u);
+  });
+
+  it('rejects symlink-mode path descriptors from injected ls-tree output', () => {
+    const fixture = candidateFixture();
+    const git = (root, args) => {
+      const output = fixture.dependencies.git(root, args);
+      return args[0] === 'ls-tree' && args[1] === '--full-tree'
+        ? output.replace(/^100644/u, '120000')
+        : output;
+    };
+    expect(() =>
+      authenticateGenerationCandidateRoots(
+        {
+          baselineRoot: fixture.baseline,
+          candidate: fixture.candidate,
+          candidateRepository: fixture.repository,
+          spikeRoot: fixture.spike,
+        },
+        { ...fixture.dependencies, git },
+      ),
+    ).toThrow(/regular blob/u);
+  });
+
+  it('rejects source and applied merge topology independently', () => {
+    for (const lane of ['source', 'applied']) {
+      const fixture = candidateFixture();
+      const first = lane === 'source' ? fixture.candidate.series[0].commit : fixture.spikeSeries[0];
+      const root = lane === 'source' ? fixture.repository : fixture.spike;
+      const git = (observedRoot, args) =>
+        observedRoot === root && args.join(' ') === `rev-list --parents -n 1 ${first}`
+          ? `${first} ${lane === 'source' ? fixture.candidate.parent : fixture.baselineCommit} ${'9'.repeat(40)}`
+          : fixture.dependencies.git(observedRoot, args);
+      expect(() =>
+        authenticateGenerationCandidateRoots(
+          {
+            baselineRoot: fixture.baseline,
+            candidate: fixture.candidate,
+            candidateRepository: fixture.repository,
+            spikeRoot: fixture.spike,
+          },
+          { ...fixture.dependencies, git },
+        ),
+      ).toThrow(/object identity|exact linear/u);
+    }
+  });
+
+  it.each([
+    ['unsorted', ['two.ts', 'one.ts']],
+    ['duplicate', ['one.ts', 'one.ts', 'two.ts']],
+  ])('rejects an %s declared path census', (_label, paths) => {
+    const fixture = candidateFixture();
+    expect(() =>
+      authenticateGenerationCandidateRoots(
+        {
+          baselineRoot: fixture.baseline,
+          candidate: { ...fixture.candidate, paths },
+          candidateRepository: fixture.repository,
+          spikeRoot: fixture.spike,
+        },
+        fixture.dependencies,
+      ),
+    ).toThrow(/exact sorted census/u);
   });
 
   it('rejects candidate object, series, ref, host-diff, blob-byte, path, and worktree drift', () => {
@@ -493,7 +713,7 @@ describe('dev-generation candidate comparator', () => {
           },
         },
       ),
-    ).toThrow(/path\/blob\/byte/u);
+    ).toThrow(/path\/blob\/byte|blob bytes/u);
 
     const pathDrift = candidateFixture();
     expect(() =>
@@ -1587,14 +1807,15 @@ function candidateFixture({ spikeStatus = '' } = {}) {
   const firstCommit = 'c'.repeat(40);
   const secondCommit = 'd'.repeat(40);
   const tipCommit = 'e'.repeat(40);
+  const candidateParent = '9'.repeat(40);
   const candidate = {
     commit: tipCommit,
-    parent: 'parent',
+    parent: candidateParent,
     parentTree: '0'.repeat(40),
     paths: ['one.ts', 'two.ts'],
     ref: 'refs/heads/perf-spike/candidate',
     series: [
-      { commit: firstCommit, parent: 'parent', tree: '3'.repeat(40) },
+      { commit: firstCommit, parent: candidateParent, tree: '3'.repeat(40) },
       { commit: secondCommit, parent: firstCommit, tree: '4'.repeat(40) },
       { commit: tipCommit, parent: secondCommit, tree: '5'.repeat(40) },
     ],
@@ -1630,6 +1851,12 @@ function candidateFixture({ spikeStatus = '' } = {}) {
     [spikeSeries[1], { 'one.ts': 'one-1', 'two.ts': 'two-1' }],
     [spikeSeries[2], { 'one.ts': 'one-2', 'two.ts': 'two-1' }],
   ]);
+  for (const [relativePath, label] of Object.entries(appliedStates.get(baselineCommit))) {
+    writeFileSync(path.join(baseline, relativePath), pathBytes.get(label));
+  }
+  for (const [relativePath, label] of Object.entries(appliedStates.get(spikeCommit))) {
+    writeFileSync(path.join(spike, relativePath), pathBytes.get(label));
+  }
   const changedByRange = new Map([
     [`${candidate.parent}..${firstCommit}`, ['one.ts']],
     [`${firstCommit}..${secondCommit}`, ['two.ts']],
@@ -1646,6 +1873,9 @@ function candidateFixture({ spikeStatus = '' } = {}) {
     [command(spike, ['rev-parse', '--show-toplevel']), spike],
     [command(baseline, ['rev-parse', 'HEAD']), baselineCommit],
     [command(spike, ['rev-parse', 'HEAD']), spikeCommit],
+    [command(baseline, ['rev-parse', '--show-object-format']), 'sha1'],
+    [command(spike, ['rev-parse', '--show-object-format']), 'sha1'],
+    [command(repository, ['rev-parse', '--show-object-format']), 'sha1'],
     [command(baseline, ['status', '--porcelain=v1', '--untracked-files=all']), ''],
     [command(spike, ['status', '--porcelain=v1', '--untracked-files=all']), spikeStatus],
     [command(spike, ['rev-parse', 'HEAD~3']), baselineCommit],
@@ -1703,6 +1933,30 @@ function candidateFixture({ spikeStatus = '' } = {}) {
   ]);
   const git = (directory, args) => {
     const key = command(directory, args);
+    const worktreeState =
+      directory === baseline
+        ? appliedStates.get(baselineCommit)
+        : directory === spike
+          ? appliedStates.get(spikeCommit)
+          : null;
+    if (worktreeState !== null && args.join(' ') === 'ls-files -v -z') {
+      return `${Object.keys(worktreeState)
+        .sort()
+        .map((relativePath) => `H ${relativePath}`)
+        .join('\0')}\0`;
+    }
+    if (worktreeState !== null && args.join(' ') === 'ls-files --stage -z') {
+      return `${Object.entries(worktreeState)
+        .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+        .map(([relativePath, label]) => `100644 ${objects.get(label)} 0\t${relativePath}`)
+        .join('\0')}\0`;
+    }
+    if (worktreeState !== null && args.join(' ') === 'ls-tree -r -z --full-tree HEAD') {
+      return `${Object.entries(worktreeState)
+        .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+        .map(([relativePath, label]) => `100644 blob ${objects.get(label)}\t${relativePath}`)
+        .join('\0')}\0`;
+    }
     if (args[args.indexOf('diff') + 1] === '--name-status') {
       const separator = args.indexOf('--');
       const from = args[separator - 2];
@@ -1739,7 +1993,7 @@ function candidateFixture({ spikeStatus = '' } = {}) {
   };
 }
 
-function realRebasedCandidateFixture({ sourcePathDrift = false } = {}) {
+function realRebasedCandidateFixture({ objectFormat = 'sha1', sourcePathDrift = false } = {}) {
   const container = temporaryDirectory('kovo-dev-generation-rebased-candidate-');
   const repository = path.join(container, 'repository');
   const baseline = path.join(container, 'baseline');
@@ -1752,7 +2006,11 @@ function realRebasedCandidateFixture({ sourcePathDrift = false } = {}) {
       stdio: ['pipe', 'pipe', 'pipe'],
       ...options,
     });
-  git(repository, ['init', '--quiet']);
+  git(repository, [
+    'init',
+    '--quiet',
+    ...(objectFormat === 'sha256' ? ['--object-format=sha256'] : []),
+  ]);
   git(repository, ['config', 'user.name', 'Kovo test']);
   git(repository, ['config', 'user.email', 'kovo-test@invalid.example']);
   const oneBase = [
@@ -1882,9 +2140,10 @@ function candidateBindingFixture(baselineRoot, spikeRoot, baselineCommit, spikeC
     tree: appliedTrees[index],
   }));
   return {
-    baseline: { commit: baselineCommit, root: baselineRoot },
+    baseline: { commit: baselineCommit, objectFormat: 'sha1', root: baselineRoot },
     candidate: {
       commit: sourceCommits[2],
+      objectFormat: 'sha1',
       parent: sourceParent,
       parentTree: 'b'.repeat(40),
       paths: ['one.ts'],
@@ -1894,6 +2153,7 @@ function candidateBindingFixture(baselineRoot, spikeRoot, baselineCommit, spikeC
         contentSha256,
         endpoints,
         hostPatch,
+        objectFormat: 'sha1',
         paths: ['one.ts'],
         schema: DEV_GENERATION_CANDIDATE_DELTA_SCHEMA,
         series: sourceSeries,
@@ -1906,11 +2166,13 @@ function candidateBindingFixture(baselineRoot, spikeRoot, baselineCommit, spikeC
         contentSha256,
         endpoints,
         hostPatch,
+        objectFormat: 'sha1',
         paths: ['one.ts'],
         schema: DEV_GENERATION_CANDIDATE_DELTA_SCHEMA,
         series: appliedSeries,
       },
       commit: spikeCommit,
+      objectFormat: 'sha1',
       parent: baselineCommit,
       root: spikeRoot,
       series: appliedCommits,

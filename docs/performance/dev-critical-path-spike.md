@@ -62,9 +62,21 @@ commits above the selected baseline, produced by cherry-picking the bound commit
 durable ref and all three source commit, parent, and tree identities must match. For every source
 and applied commit boundary, v6 also authenticates the exact simple-modification path set and a
 canonical before/after census containing each regular blob's mode, object ID, byte length, and
-SHA-256. The combined source and applied censuses must be byte-for-byte equal under canonical JSON;
-for the series above their content digest is
-`sha256:fc022810f961fe5b8fc54d89609bef27cd01127a15c241047bc6d8460cd8e41d`.
+SHA-256. The source, baseline, and applied repositories must all report the same exact Git object
+format (`sha1` for this series); only a full 40-hex SHA-1 or full 64-hex SHA-256 object ID is
+admissible. Every blob returned by Git is independently reframed as `blob <byte-length>\0<bytes>`
+and hashed with that repository format before its separate SHA-256 and byte length are recorded.
+The combined source and applied censuses must be byte-for-byte equal under canonical JSON; for the
+series above their object-format-bound content digest is
+`sha256:73d211d9d5018ae499c4bfc1b2b325c000939ae11ecad37cf4679153a22b831b`.
+
+Every clean-state admission is stronger than `git status`. Without changing the index, the runner
+requires an exact stage-zero index-to-HEAD path/mode/object census, rejects assume-unchanged,
+skip-worktree, and other nonordinary index tags, then reads every tracked regular file or symlink
+and independently verifies its live mode and Git-framed object identity. Descriptor/path identity
+is stable across each read. This prevents a clean-looking index flag, `core.fileMode=false`, or a
+hidden tracked-byte mutation from changing what packed preparation builds. Ordinary staged,
+unstaged, and untracked status checks and the before/after source-stability checks remain mandatory.
 
 Raw `git diff` bytes and stable patch IDs remain same-host equivalence diagnostics, not durable
 candidate identity. Git 2.50.1 with `diff.algorithm=histogram` rendered the combined source delta as
@@ -134,7 +146,7 @@ When `--out` is present, every child adapter report remains under the adjacent `
 Failed children retain bounded process status, report availability, byte count, SHA-256, schema,
 verdict, and diagnostics. The outer report embeds every successful child report and binds source,
 locks, corpus shape and bytes, tool bytes, port allocation, host admission, and the exact candidate
-patch. Missing or extra cells cannot disappear into aggregation.
+delta. Missing or extra cells cannot disappear into aggregation.
 
 ## Preregistered acceptance
 

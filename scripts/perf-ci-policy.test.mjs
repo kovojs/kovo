@@ -655,6 +655,12 @@ describe('realistic performance CI policy', () => {
     expect(devGenerationRunner).toContain("'--unified=3'");
     expect(devGenerationRunner).toContain("'-O/dev/null'");
     expect(devGenerationRunner).toContain('pathBlobChanges(');
+    expect(devGenerationRunner).toContain("['rev-parse', '--show-object-format']");
+    expect(devGenerationRunner).toContain("['ls-files', '-v', '-z']");
+    expect(devGenerationRunner).toContain("['ls-files', '--stage', '-z']");
+    expect(devGenerationRunner).toContain("['ls-tree', '-r', '-z', '--full-tree', 'HEAD']");
+    expect(devGenerationRunner).toContain('verifyTrackedWorktreeCensus(');
+    expect(devGenerationRunner).toContain('gitBlobObjectId(bytes, objectFormat)');
     expect(devGenerationRunner).toContain('contentSha256: sha256(canonicalJson(content))');
     expect(devGenerationRunner).not.toContain('patchBytes: 113_296');
     expect(devGenerationRunner).not.toContain(
