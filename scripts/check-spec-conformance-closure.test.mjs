@@ -1447,6 +1447,16 @@ function conformanceBypass(value: unknown): DiagnosticDocumentDiagnostic {
       'runtime module loader authority requires an exact full-file capability summary',
     );
 
+    const widenedDevWatch = replaceProductionFile('packages/cli/src/commands/dev.ts', (text) =>
+      text.replace(
+        "const KOVO_DEV_ATOMIC_SAVE_WATCH_IGNORE = '**/.kovo-perf-save-*.tmp';",
+        "const KOVO_DEV_ATOMIC_SAVE_WATCH_IGNORE = '**/*';",
+      ),
+    );
+    expect(evaluate({ productionFiles: widenedDevWatch }).findings.join('\n')).toContain(
+      'runtime module loader authority requires an exact full-file capability summary',
+    );
+
     const removed = replaceProductionFile('packages/cli/src/add-catalog.ts', (text) =>
       text
         .replace("import { createRequire } from 'node:module';\n", '')

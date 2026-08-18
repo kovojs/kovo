@@ -152,7 +152,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/cli/src/commands/dev.ts',
-    '85bdac253966d5769e8c627620cb00fbdd10780f6e5d215ab9799d96a3e519c6',
+    '48ee99e619edfa2da63548edc52953619439620b7cba3d1f112801558990993e',
   ],
   [
     'packages/cli/src/commands/sound-subset.mjs',
