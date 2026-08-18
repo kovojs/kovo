@@ -2084,6 +2084,14 @@ export function derivePerformancePublication(
         throw new TypeError(`derived budget is invalid: ${budgetFindings.join('; ')}`);
       }
       const evaluation = config.evaluate(budget, evidence.holdout.report);
+      const evaluationFindings = holdoutEvaluationIntegrityFindings(
+        evaluation,
+        budget,
+        evidence.holdout.report,
+      );
+      if (evaluationFindings.length > 0) {
+        throw new TypeError(`holdout evaluation is malformed: ${evaluationFindings.join('; ')}`);
+      }
       const independentFindings = independentHoldoutFindings(
         baseline,
         evidence.holdout,
@@ -3248,6 +3256,81 @@ function upperTargetCheck(id, observed, limit, kind) {
 
 function targetOperator(id) {
   return id.includes('/requestsPerSecond.') ? '>=' : '<=';
+}
+
+function holdoutEvaluationIntegrityFindings(evaluation, budget, candidate) {
+  if (!ownRecord(evaluation)) return ['holdout evaluation is unavailable'];
+  const findings = [];
+  if (evaluation.budget !== budget?.digest) {
+    findings.push('holdout evaluation budget identity differs');
+  }
+  if (
+    evaluation.candidate?.execution !== candidate?.execution?.digest ||
+    evaluation.candidate?.sourceCommit !== candidate?.source?.commit
+  ) {
+    findings.push('holdout evaluation candidate identity differs');
+  }
+  const checks = Array.isArray(evaluation.checks) ? evaluation.checks : [];
+  if (!Array.isArray(evaluation.checks)) {
+    findings.push('holdout evaluation check census is unavailable');
+  } else if (checks.length === 0 && evaluation.verdict?.status !== 'unproven') {
+    findings.push('proved holdout evaluation check census is empty');
+  }
+  const checkIds = checks.map((check) => check?.id);
+  if (checkIds.some((id) => !nonEmptyString(id))) {
+    findings.push('holdout evaluation check identity is malformed');
+  }
+  if (new Set(checkIds).size !== checkIds.length) {
+    findings.push('holdout evaluation check identities are duplicated');
+  }
+  if (
+    checks.some(
+      (check) =>
+        !ownRecord(check) ||
+        !nonEmptyString(check.kind) ||
+        !Number.isFinite(check.limit) ||
+        !['pass', 'fail'].includes(check.status) ||
+        !Number.isFinite(check.observed ?? check.value),
+    )
+  ) {
+    findings.push('holdout evaluation check is malformed');
+  }
+  const failures = evaluation.verdict?.failures;
+  const reasons = evaluation.verdict?.reasons;
+  if (
+    !Array.isArray(failures) ||
+    failures.some((failure) => !nonEmptyString(failure)) ||
+    new Set(failures).size !== failures.length
+  ) {
+    findings.push('holdout evaluation failures are malformed or duplicated');
+  }
+  if (
+    !Array.isArray(reasons) ||
+    reasons.some((reason) => !nonEmptyString(reason)) ||
+    new Set(reasons).size !== reasons.length
+  ) {
+    findings.push('holdout evaluation reasons are malformed or duplicated');
+  }
+  const expectedFailures = checks
+    .filter((check) => check?.status === 'fail' && nonEmptyString(check?.id))
+    .map((check) => check.id)
+    .sort((left, right) => left.localeCompare(right));
+  const suppliedFailures = Array.isArray(failures)
+    ? [...failures].sort((left, right) => String(left).localeCompare(String(right)))
+    : [];
+  if (canonicalJson(suppliedFailures) !== canonicalJson(expectedFailures)) {
+    findings.push('holdout evaluation failures do not match its failed checks');
+  }
+  const expectedStatus =
+    Array.isArray(reasons) && reasons.length > 0
+      ? 'unproven'
+      : expectedFailures.length > 0
+        ? 'regression'
+        : 'pass';
+  if (evaluation.verdict?.status !== expectedStatus) {
+    findings.push('holdout evaluation verdict is not derived from its checks and reasons');
+  }
+  return [...new Set(findings)].sort((left, right) => left.localeCompare(right));
 }
 
 function independentHoldoutFindings(baseline, holdout, sourceCommit) {
@@ -4829,6 +4912,28 @@ function targetAssessmentFindings(value, familyName) {
           findings.push(`${familyName} ${phase} target check limits differ from policy`);
         }
       }
+    } else if (familyName.startsWith('build-')) {
+      const expectedCensus = buildTargetCheckSpecifications(familyName);
+      const observedCensus = assessment.checks.map((check) => ({
+        id: check?.id,
+        kind: check?.kind,
+        limit: check?.limit,
+        operator: check?.operator,
+      }));
+      if (canonicalJson(observedCensus) !== canonicalJson(expectedCensus)) {
+        findings.push(`${familyName} ${phase} target check census differs from policy`);
+      }
+    } else if (familyName === 'check') {
+      const expectedCensus = checkTargetCheckSpecifications(phase);
+      const observedCensus = assessment.checks.map((check) => ({
+        id: check?.id,
+        kind: check?.kind,
+        limit: check?.limit,
+        operator: check?.operator,
+      }));
+      if (canonicalJson(observedCensus) !== canonicalJson(expectedCensus)) {
+        findings.push(`${familyName} ${phase} target check census differs from policy`);
+      }
     }
     let expectedAssessment;
     try {
@@ -4921,6 +5026,41 @@ function devTargetCheckSpecifications(familyName) {
       operator: '<=',
     },
   ];
+}
+
+function buildTargetCheckSpecifications(familyName) {
+  const corpusSize = familyName === 'build-n24' ? 24 : familyName === 'build-n216' ? 216 : null;
+  return BUILD_MODES.flatMap((mode) => {
+    const prefix = `corpus-n${String(corpusSize)}/build/${mode}/`;
+    return [
+      {
+        id: `${prefix}durationMs.median-vs-next`,
+        kind: 'milestone',
+        limit: 6,
+        operator: '<=',
+      },
+      {
+        id: `${prefix}peakRssBytes.median-vs-next`,
+        kind: 'milestone',
+        limit: 2,
+        operator: '<=',
+      },
+    ];
+  });
+}
+
+function checkTargetCheckSpecifications(phase) {
+  const suffix = phase === 'baseline' ? 'ratified-p95-target' : 'absolute-target';
+  return [
+    ['check.appSourceTrust.marginalScalingExponent', 1.3],
+    ['check.peakRssBytes', 3 * 1024 ** 3],
+    ['check.total.marginalScalingExponent', 1],
+  ].map(([metric, limit]) => ({
+    id: `${metric}.${suffix}`,
+    kind: 'target',
+    limit,
+    operator: '<=',
+  }));
 }
 
 function evaluationReferenceFindings(value, familyName, targetAssessment) {

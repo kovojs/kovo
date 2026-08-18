@@ -771,9 +771,91 @@ describe('seven-family performance publication gate', () => {
     });
   });
 
+  it('does not let an unknown failed check borrow a known follow-on failure identity', () => {
+    const authenticated = authenticatedFixture();
+    const options = fixtureDerivationOptions();
+    options.operations.server = {
+      ...options.operations.server,
+      evaluate: (budget, candidate) => {
+        const evaluation = fixtureEvaluation('server', budget, candidate);
+        const id =
+          'matched-runtime/server/dynamic-detail-identity-c32/requestsPerSecond.median-vs-next';
+        evaluation.checks.push({
+          id,
+          kind: 'future-kind',
+          limit: 1,
+          status: 'fail',
+          value: 2,
+        });
+        evaluation.verdict = { failures: [id], reasons: [], status: 'regression' };
+        return evaluation;
+      },
+    };
+
+    const result = derivePerformancePublication(authenticated, options);
+
+    expect(result.publication.families.server.status).toBe('unproven');
+    expect(result.publication.verdict.status).toBe('unproven');
+    expect(result.publication.verdict.reasons.join('\n')).toMatch(
+      /holdout evaluation check identities are duplicated/u,
+    );
+  });
+
+  it('does not let a failed check disappear from the evaluation verdict', () => {
+    const authenticated = authenticatedFixture();
+    const options = fixtureDerivationOptions();
+    options.operations.server = {
+      ...options.operations.server,
+      evaluate: (budget, candidate) => {
+        const evaluation = fixtureEvaluation('server', budget, candidate);
+        evaluation.checks.push({
+          id: 'server/future-unclassified-check',
+          kind: 'future-kind',
+          limit: 1,
+          status: 'fail',
+          value: 2,
+        });
+        return evaluation;
+      },
+    };
+
+    const result = derivePerformancePublication(authenticated, options);
+
+    expect(result.publication.families.server.status).toBe('unproven');
+    expect(result.publication.verdict.status).toBe('unproven');
+    expect(result.publication.verdict.reasons.join('\n')).toMatch(
+      /holdout evaluation failures do not match its failed checks/u,
+    );
+  });
+
+  it('preserves a coherent unproven holdout evaluation with no checks', () => {
+    const authenticated = authenticatedFixture();
+    const options = fixtureDerivationOptions();
+    options.operations.server = {
+      ...options.operations.server,
+      evaluate: (budget, candidate) => ({
+        ...fixtureEvaluation('server', budget, candidate),
+        checks: [],
+        verdict: {
+          failures: [],
+          reasons: ['candidate comparison evidence is unavailable'],
+          status: 'unproven',
+        },
+      }),
+    };
+
+    const result = derivePerformancePublication(authenticated, options);
+
+    expect(result.publication.families.server.status).toBe('unproven');
+    expect(result.publication.verdict).toMatchObject({
+      reasons: ['server holdout candidate comparison evidence is unavailable'],
+      status: 'unproven',
+    });
+  });
+
   it.each([
-    ['build-n24', 'build-n24.target'],
-    ['check', 'check.target'],
+    ['build-n24', 'corpus-n24/build/clean/durationMs.median-vs-next'],
+    ['check', 'check.appSourceTrust.marginalScalingExponent.absolute-target'],
   ])('keeps %s milestone/product failures publication-blocking', (familyName, id) => {
     const authenticated = authenticatedFixture();
     const options = fixtureDerivationOptions();
@@ -1467,6 +1549,52 @@ describe('seven-family performance publication gate', () => {
     );
   });
 
+  it.each(['build-n24', 'check'])(
+    'rejects a resealed %s completion-check relabel in the aggregate validator',
+    (familyName) => {
+      const authenticated = authenticatedFixture();
+      const options = fixtureDerivationOptions();
+      options.operations[familyName] = {
+        ...options.operations[familyName],
+        evaluate: (budget, candidate) => {
+          const evaluation = fixtureEvaluation(familyName, budget, candidate);
+          const check = evaluation.checks[0];
+          check.status = 'fail';
+          check.value = check.limit + 1;
+          evaluation.verdict = {
+            failures: [check.id],
+            reasons: [],
+            status: 'regression',
+          };
+          return evaluation;
+        },
+      };
+      const publication = derivePerformancePublication(authenticated, options).publication;
+      const family = publication.families[familyName];
+      const id = family.targetAssessment.holdout.checks[0].id;
+      const holdout = family.targetAssessment.holdout;
+      holdout.checks[0].kind = 'competitive-target';
+      holdout.checks[0].publicationImpact = 'follow-on';
+      holdout.blockingFailures = [];
+      holdout.blockingStatus = 'not-applicable';
+      holdout.followOnFailures = [id];
+      holdout.followOnStatus = 'fail';
+      family.targetAssessment.blockingFailures = [];
+      family.targetAssessment.blockingStatus = 'pass';
+      family.targetAssessment.followOnFailures = [`holdout:${id}`];
+      family.targetAssessment.followOnStatus = 'fail';
+      family.holdoutEvaluation.blockingFailures = [];
+      family.holdoutEvaluation.followOnFailures = [id];
+      family.status = 'pass';
+      publication.verdict = { failures: [], reasons: [], status: 'publishable' };
+      resealPublication(publication);
+
+      expect(performancePublicationFindings(publication)).toContain(
+        `${familyName} holdout target check census differs from policy`,
+      );
+    },
+  );
+
   it('rejects a resealed deletion of one complete family document set', () => {
     const authenticated = authenticatedFixture();
     const options = fixtureDerivationOptions();
@@ -1951,15 +2079,19 @@ function fixtureEvaluation(familyName, budget, candidate) {
         }))
       : familyName.startsWith('dev-')
         ? fixtureDevEvaluationChecks(budget)
-        : [
-            {
-              id: `${familyName}.target`,
-              kind,
-              limit: 2,
-              status: 'pass',
-              value: 1,
-            },
-          ];
+        : familyName.startsWith('build-')
+          ? fixtureBuildEvaluationChecks(budget)
+          : familyName === 'check'
+            ? fixtureCheckEvaluationChecks(budget)
+            : [
+                {
+                  id: `${familyName}.target`,
+                  kind,
+                  limit: 2,
+                  status: 'pass',
+                  value: 1,
+                },
+              ];
   return {
     budget: budget.digest,
     candidate: { execution: candidate.execution.digest, sourceCommit: candidate.source.commit },
@@ -1967,6 +2099,38 @@ function fixtureEvaluation(familyName, budget, candidate) {
     schema: `fixture-${familyName}-evaluation/v1`,
     verdict: { failures: [], reasons: [], status: 'pass' },
   };
+}
+
+function fixtureBuildEvaluationChecks(budget) {
+  return ['clean', 'unchanged', 'edit'].flatMap((mode) => {
+    const prefix = `corpus-n${String(budget.subject.corpusSize)}/build/${mode}/`;
+    return [
+      {
+        id: `${prefix}durationMs.median-vs-next`,
+        kind: 'milestone',
+        limit: 6,
+        status: 'pass',
+        value: 1,
+      },
+      {
+        id: `${prefix}peakRssBytes.median-vs-next`,
+        kind: 'milestone',
+        limit: 2,
+        status: 'pass',
+        value: 1,
+      },
+    ];
+  });
+}
+
+function fixtureCheckEvaluationChecks(budget) {
+  return Object.entries(budget.metrics).map(([metric, entry]) => ({
+    id: `${metric}.absolute-target`,
+    kind: 'target',
+    limit: entry.targetMaximum,
+    status: 'pass',
+    value: entry.baseline.p95,
+  }));
 }
 
 function fixtureDevEvaluationChecks(budget) {
